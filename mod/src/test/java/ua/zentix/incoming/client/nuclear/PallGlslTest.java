@@ -152,6 +152,34 @@ class PallGlslTest {
         }
     }
 
+    /**
+     * Докуда идёт луч пелены ({@code pallClip} в {@code fx_pall}): в слое-экспоненте с ослаблением у глаза sigma и толщей
+     * tau по вертикали луч с косинусом mu к вертикали набирает толщу 12 ровно там; выходит из слоя, не набрав 12, — не
+     * обрывается; почти горизонтальный — 12/sigma, и никогда не ближе. Нет пыли у глаза — не обрывается.
+     */
+    @Test
+    void clipWhereDepthReachesTwelve() {
+        GlslFunction f = GlslFunction.parse(read("core/fx_pall.fsh"), "pallClip");
+        assertTrue(f.call(Map.of("sigma", 0.0, "tau", 5.0, "mu", 0.0)) >= 1e6);
+        // глаз ниже грубой карты рельефа: толщи под ним нет, пыль у глаза есть — как в ровной пыли
+        for (double mu : new double[]{0, 0.3, 1}) assertEquals(12 / 0.06, f.call(Map.of("sigma", 0.06, "tau", 0.0, "mu", mu)), 1e-9);
+        for (double sigma : new double[]{0.003, 0.06, 0.5}) {
+            for (double tau : new double[]{0.1, 2, 30, 400}) {
+                for (double mu : new double[]{0, 1e-7, 1e-4, 0.01, 0.1, 0.4, 1}) {
+                    double clip = f.call(Map.of("sigma", sigma, "tau", tau, "mu", mu));
+                    String at = "sigma " + sigma + ", tau " + tau + ", mu " + mu;
+                    assertTrue(clip >= 12 / sigma * (1 - 1e-6), at + ": ближе, чем в ровной пыли");
+                    if (tau <= 12 * mu) {
+                        assertTrue(clip >= 1e6, at + ": луч выходит из слоя, не набрав 12");
+                        continue;
+                    }
+                    double depth = mu == 0 ? sigma * clip : tau / mu * (1 - Math.exp(-clip * mu * sigma / tau));
+                    assertEquals(12, depth, 1e-3, at);
+                }
+            }
+        }
+    }
+
     /** Свет шара на пыли в {@code fx_pall} ({@code pallBallShare}) — закон {@link CloudPuffs#ball}: L·R²/d², у поверхности — L. */
     @Test
     void ballLightMatchesJava() {

@@ -116,14 +116,17 @@ float pallWater(sampler2D ground, vec4 G, vec2 rel) {
 }
 
 // Поле слота S в точке p (от глаза), без шума (среднее по шуму — оно); ground, G — карта рельефа и воды слота, W — вода
-// слота; floorUp — пол слоя под точкой (верх рельефа, блоки над землёй под эпицентром; 0 — земля под эпицентром): от него
-// считается slab. Вещество — по воде там, откуда его подняло (PallField: пыль, снесённая на воду, остаётся пылью): пыль и брызги —
+// слота; floorUp — пол слоя под точкой (верх рельефа по карте, блоки над землёй под эпицентром; 0 — земля под
+// эпицентром): от него считается slab, и над холмом слой встаёт от него — пыль поднимает ветер с его склона (в долину
+// она стекает: там слой от земли под эпицентром, pallProfile; PallField.sigma — то же). Вещество — по воде там, откуда его подняло (PallField: пыль, снесённая на воду, остаётся пылью): пыль и брызги —
 // у точки за вычетом сноса (доля по возрасту пыли — по узлу самой точки, PallField.source), где читается и таблица; мгла — у её источника на оси шлейфа (над водой пожаров нет), только
 // если она здесь есть; базисная волна — вода, поднятая у эпицентра, над чем бы ни катилась (W.z = 0 — её нет). Без воды
 // под пеленой (W.w = 0) карта не читается.
 PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3 p, float floorUp) {
     vec2 q = p.xz - S[0].xy;
-    float above = p.y - S[0].z, reach = S[0].w;
+    float hill = max(floorUp, 0.0);
+    float above = p.y - S[0].z - hill, reach = S[0].w;
+    floorUp -= hill;
     vec2 lift = q - S[1].xy * texture(table, vec2(min(length(q) / reach, 1.0), S[2].w)).a;
     float r = length(lift);
     float ud = r / reach;
@@ -196,6 +199,13 @@ vec2 pallBox(vec3 dir, vec3 lo, vec3 hi) {
 // верх рельефа под точкой xz (от глаза) — от глаза по y (PallGround.at)
 float pallGroundAt(sampler2D ground, mat4 S, vec4 G, vec2 xz) {
     return S[0].z + textureLod(ground, (xz - S[0].xy) / (2.0 * G.x) + 0.5, 0.0).r;
+}
+
+// Рельеф под точкой xz (от глаза) над землёй под эпицентром, блоки: пол слоя пелены (pallField: floorUp); карты нет —
+// земля под эпицентром
+float pallRelief(sampler2D ground, mat4 S, vec4 G, vec2 xz) {
+    if (G.x <= 0.0) return 0.0;
+    return pallGroundAt(ground, S, G, xz) - S[0].z;
 }
 
 // Где луч dir из глаза (единичный) уходит под рельеф слота, до end; 1e9 — не уходит. Мира за пикселем нет: луч прошёл
@@ -451,7 +461,7 @@ float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, fl
         float ds = (sp.y - sp.x) / float(steps);
         for (int i = 0; i < steps; i++) {
             vec3 q = dir * (sp.x + (float(i) + 0.5) * ds);
-            float floorUp = G.x > 0.0 ? pallGroundAt(ground, S, G, q.xz) - S[0].z : 0.0;
+            float floorUp = pallRelief(ground, S, G, q.xz);
             WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp);
             if (h.P.w > 0.0) tau += h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y) * ds;
         }

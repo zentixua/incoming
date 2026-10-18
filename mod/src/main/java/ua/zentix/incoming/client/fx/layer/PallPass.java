@@ -316,8 +316,11 @@ public final class PallPass {
         public float glowOnSmoke;
         /** Цвет тонкой пелены на экране (rgb) — для квадратов слоя перед частицами; w — 1, если пелена есть. */
         public final Vector4f ambient = new Vector4f();
-        /** Дальше стольких блоков луч не идёт (в густой пыли у глаза — что за ней, всё равно не видно). */
-        public float clip;
+        /**
+         * Пыль у глаза: ослабление там (1/блок) и толща по вертикали над глазом и под ним до земли — докуда идёт луч
+         * ({@code pallClip} в {@code fx_pall}: дальше толщи 12 по лучу не видно ничего). Нули — луч не обрывается.
+         */
+        public final Vector3f eyeDust = new Vector3f();
         public Quality quality = Quality.MEDIUM;
         /** Огненный шторм слотов. */
         public final Fire fire0 = new Fire(), fire1 = new Fire();
@@ -621,7 +624,8 @@ public final class PallPass {
         m.safeGetUniform("PallHot0").set(f.hot0.x, f.hot0.y, f.hot0.z, f.hot0.w);
         m.safeGetUniform("PallHot1").set(f.hot1.x, f.hot1.y, f.hot1.z, f.hot1.w);
         m.safeGetUniform("PallGlowOnSmoke").set(f.glowOnSmoke);
-        m.safeGetUniform("PallFrame").set((float) (frame % 4096), step.steps, factor, f.clip);
+        m.safeGetUniform("PallFrame").set((float) (frame % 4096), step.steps, factor, f.eyeDust.x);
+        m.safeGetUniform("PallEyeTau").set(f.eyeDust.y, f.eyeDust.z);
         m.safeGetUniform("PallFire0").set(fireSlot0);
         m.safeGetUniform("PallFire1").set(fireSlot1);
         m.safeGetUniform("PallFireMin").set(f.fireMin.x, f.fireMin.y, f.fireMin.z);

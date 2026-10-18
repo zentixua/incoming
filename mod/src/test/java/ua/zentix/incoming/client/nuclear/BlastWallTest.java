@@ -246,4 +246,31 @@ class BlastWallTest {
         assertTrue(w.slot(t, wall));
         assertTrue(puffs.pallLight(MushroomModel.shape(t, 15, 0, true, GROUND.metres(w.wall(t).head())), glow));
     }
+
+    /** Верх хвоста головы за двумя полуширинами вала — {@link BlastWall#TAIL} её высоты: с него встаёт пелена. */
+    @Test
+    void tailTopIsTail() {
+        double a = 40, top = 120, s = 1.5 * a * 3.5;
+        assertTrue(BlastWall.inside(s, BlastWall.TAIL * top * 0.99, a, top) > 0);
+        assertTrue(BlastWall.inside(s, BlastWall.TAIL * top * 1.01, a, top) < 0);
+    }
+
+    /** Толща головы по вертикали ({@link BlastWall#tau}) — интеграл её ослабления по высоте. */
+    @Test
+    void verticalDepthIsTheIntegral() {
+        BlastWall w = new BlastWall(GROUND, false);
+        float[] s = new float[BlastWall.SLOT];
+        assertTrue(w.slot(6, s) && s[3] > 0);
+        double head = s[0], a = s[1], top = s[2];
+        for (double back : new double[]{0.2, 1, 2.5}) {
+            double r = head - back * 1.5 * a;
+            for (double eye : new double[]{-0.3 * top, 0, 0.4 * top}) {
+                double up = 0, down = 0, ds = top / 20000;
+                for (double z = eye + ds / 2; z < top; z += ds) up += BlastWall.sigma(s, r, 0, z, 0) * ds;
+                for (double z = ds / 2 + Math.min(eye, 0); z < eye; z += ds) down += BlastWall.sigma(s, r, 0, z, 0) * ds;
+                assertEquals(up, BlastWall.tau(s, r, 0, eye, Double.POSITIVE_INFINITY, 0), 0.02 * up + 1e-9, back + ", " + eye);
+                if (eye > 0) assertEquals(down, BlastWall.tau(s, r, 0, 0, eye, 0), 0.02 * down + 1e-9, back + ", " + eye);
+            }
+        }
+    }
 }

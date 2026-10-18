@@ -60,6 +60,8 @@ public final class NukePall {
             | FrustumIntersection.PLANE_MASK_NY | FrustumIntersection.PLANE_MASK_PY | FrustumIntersection.PLANE_MASK_NZ;
     /** Ослабление у камеры (1/блок), из него — водяной пыли, и глухость 0..1 — для звукового потока. */
     private static volatile float sigma, mist, muffle;
+    /** Толща пыли у камеры по вертикали — над ней и под ней до земли (пелена и голова стены): докуда идёт луч ({@link #frame}). */
+    private static volatile float tauUp, tauDown;
     private static volatile double earX, earY, earZ;
 
     private NukePall() {}
@@ -87,23 +89,27 @@ public final class NukePall {
         List<ClientNuclear.Active> all = ClientNuclear.detonations();
         FireStorms.tick(all);
         if (all.isEmpty()) {
-            sigma = mist = muffle = 0;
+            sigma = mist = muffle = tauUp = tauDown = 0;
             NukeAsh.tick(level, cam, 0, 0, null);
             return;
         }
         PallPass.prepare();
-        double s = 0, wet = 0, densest = 0, dust = 0, headMax = 0, headWet = 0;
+        double s = 0, wet = 0, densest = 0, dust = 0, headMax = 0, headWet = 0, up = 0, down = 0;
         // пепел и ветер — от подрыва, чья пелена у камеры гуще всех; пелена на экране — от самой густой головы стены
         ClientNuclear.Active nearest = null, headAt = null;
         for (ClientNuclear.Active a : all) {
             double ticks = a.ticks(0);
             Detonation d = a.d;
             double dx = cam.x - d.burst().x, dz = cam.z - d.burst().z;
+            // глаз над землёй под эпицентром и рельеф под ним (карта пелены)
+            double eye = cam.y - d.groundY(), floor = a.ground.at(cam.x, cam.z);
             // голова стены пыли у камеры — средняя, как в кадре (рельеф и вода под камерой — по карте пелены)
             double head = 0, wetHere = 0;
             if (a.wall.slot(a.seconds(0), WALL_TICK) && WALL_TICK[3] > 0) {
                 wetHere = a.ground.hasWater() ? a.ground.water(cam.x, cam.z) : 0;
-                head = BlastWall.sigma(WALL_TICK, dx, dz, cam.y - d.groundY() - a.ground.at(cam.x, cam.z), wetHere);
+                head = BlastWall.sigma(WALL_TICK, dx, dz, eye - floor, wetHere);
+                up += BlastWall.tau(WALL_TICK, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wetHere);
+                down += BlastWall.tau(WALL_TICK, dx, dz, 0, eye - floor, wetHere);
                 if (head > headMax) {
                     headMax = head;
                     headWet = wetHere;
@@ -113,18 +119,24 @@ public final class NukePall {
             boolean pall = a.pall.visible(ticks);
             if (!pall && head <= 0) continue;
             PallField.Water water = water(a);
-            double here = head + (pall ? a.pall.sigma(dx, dz, cam.y - d.groundY(), ticks, water) : 0);
+            double here = head + (pall ? a.pall.sigma(dx, dz, eye, floor, ticks, water) : 0);
+            if (pall) {
+                up += a.pall.tau(dx, dz, eye, Double.POSITIVE_INFINITY, floor, ticks, water);
+                down += a.pall.tau(dx, dz, floor, eye, floor, ticks, water);
+            }
             if (here > densest) {
                 densest = here;
                 nearest = a;
             }
             s += here;
             // над водой голова — брызги
-            wet += head * wetHere + (pall ? a.pall.mist(dx, dz, cam.y - d.groundY(), ticks, water) : 0);
+            wet += head * wetHere + (pall ? a.pall.mist(dx, dz, eye, floor, ticks, water) : 0);
             dust = Math.max(dust, a.pall.ashRate(dx, dz, ticks, water));
         }
         sigma = (float) s;
         mist = (float) wet;
+        tauUp = (float) up;
+        tauDown = (float) down;
         if (headAt != null && !drawsHead(headAt, cam)) NukeDust.veil(headAt, cam, headMax, headWet > 0.5);
         if (muffles()) {
             // глухость меняется плавно: пелена накрывает за секунды
@@ -147,7 +159,7 @@ public final class NukePall {
     }
 
     static void reset() {
-        sigma = mist = muffle = 0;
+        sigma = mist = muffle = tauUp = tauDown = 0;
         PallPass.reset();
         NukeAsh.reset();
     }
@@ -226,9 +238,10 @@ public final class NukePall {
         MushroomField.fire(partial, f);
         float clouds = level.effects().getCloudHeight();
         FireStorms.frame(SLOTTED, k, eye, partial, frustum, Float.isNaN(clouds) ? 1e6f : (float) (clouds - eye.y), f);
-        // дальше 12 толщ пыли у глаза луч не идёт; выключенная пелена не рисуется — и гриб за ней не прячет
-        float s = q == PallPass.Quality.OFF ? 0 : sigma;
-        f.clip = s > 1e-4f ? 12 / s : 1e6f;
+        // докуда идёт луч — по пыли у глаза и её толще над ним и под ним (pallClip); выключенная пелена не рисуется — и
+        // гриб за ней не прячет
+        if (q == PallPass.Quality.OFF) f.eyeDust.zero();
+        else f.eyeDust.set(sigma, tauUp, tauDown);
         return f;
     }
 
@@ -293,11 +306,12 @@ public final class NukePall {
         p.drift(ticks, DRIFT);
         double plume = p.plume(ticks);
         float cx = (float) (d.burst().x - eye.x), cz = (float) (d.burst().z - eye.z), ground = (float) (d.groundY() - eye.y);
-        // рамка: снос пыли и шлейф мглы — в любую сторону от эпицентра, ниже земли под ним — долины на всю высоту; голова
-        // стены — на рельефе карты (pallWallSpans), облако Вильсона — вокруг точки подрыва
+        // рамка: снос пыли и шлейф мглы — в любую сторону от эпицентра, ниже земли под ним — долины на всю высоту, над
+        // холмами слой — от их склонов (pallField); голова стены — на рельефе карты (pallWallSpans), облако Вильсона —
+        // вокруг точки подрыва
         float r = (float) Math.max(p.extent(ticks), Math.max(a.wall.reach(seconds) + 1, a.wall.wilsonReach(seconds)));
         LO.set(cx - r, (float) (ground - top), cz - r);
-        HI.set(cx + r, (float) (ground + top * 1.05), cz + r);
+        HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + top * 1.05), cz + r);
         if (WALL[3] > 0) {
             LO.y = Math.min(LO.y, ground + Math.min(a.ground.low(), 0) - 0.5f * WALL[2]);
             HI.y = Math.max(HI.y, ground + Math.max(a.ground.high(), 0) + WALL[2]);
@@ -560,10 +574,10 @@ public final class NukePall {
                     a.ground.waterShare(), a.ground.hasLand(), a.ground.hasWater(), Math.toDegrees(a.d.windDir()), Math.hypot(w[0], w[1]),
                     a.ground.water(a.d.burst().x + from[0], a.d.burst().z + from[1]));
         }
-        return String.format(java.util.Locale.ROOT, "sigma at camera %.4f /block (visibility %.0f blocks; mist %.4f), muffle %.2f, ash %d, quality %s, "
+        return String.format(java.util.Locale.ROOT, "sigma at camera %.4f /block (visibility %.0f blocks; mist %.4f), depth up %.2f down %.2f, muffle %.2f, ash %d, quality %s, "
                         + "light: sky %.3f, fires %.2f × %.2f, ball r %.0f blocks, black body %.3g %.3g %.3g, under the pall: %s, surge r %.0f top %.0f sigma %.4f, "
                         + "frames: %s; mushrooms %d (exposure %.0f); firestorm: %s",
-                sigma, sigma > 1e-5f ? 3.912 / sigma : Double.POSITIVE_INFINITY, mist, muffle, NukeAsh.alive(), quality(),
+                sigma, sigma > 1e-5f ? 3.912 / sigma : Double.POSITIVE_INFINITY, mist, tauUp, tauDown, muffle, NukeAsh.alive(), quality(),
                 f.skyLight.y, f.glowOnSmoke, f.glow0.y, f.glow0.x, f.hot0.x, f.hot0.y, f.hot0.z, under, f.water0.x, f.water0.y, f.water0.z,
                 mc.level == null ? "-" : PallPass.describe(), f.mushroomCount, f.exposure, FireStorms.describe());
     }

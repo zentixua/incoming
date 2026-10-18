@@ -141,6 +141,10 @@ public final class ClientScenario {
     private boolean shadowView;
     /** Сценарий {@code mushroom}: свет шара на земле ночью ({@code INCOMING_MUSHROOM=glow}). */
     private boolean glowView;
+    /** Сценарий {@code mushroom}: вид видео хоста над Newisle ({@code INCOMING_MUSHROOM=film}). */
+    private boolean filmView;
+    /** Сценарий {@code mushroom} с {@code film}: зритель (до входа в мир — неизвестен). */
+    private volatile Vec3 filmEye;
     /** Раз в сколько тиков звук в лог. */
     private int soundEvery = 10;
     /** Ядерный подрыв у воды ({@code nuke-water}, {@code nuke-lake}): кадры от подрыва ({@link #waterEvents}). */
@@ -612,6 +616,12 @@ public final class ClientScenario {
      * Свет шара на земле ночью ({@code INCOMING_MUSHROOM=glow}): подрыв в 3 км к востоку, зритель на высоте 200
      * смотрит на восток и вниз — на земле перед ним свет шара, сам шар у верха кадра; кадры {@code pall_glow_<секунды>s}
      * от 1 до 14 с: белый, жёлтый, оранжевый свет и темнота, когда шапка свернулась.
+     * <p>
+     * Вид видео хоста ({@code INCOMING_MUSHROOM=film}): воздушные 15 кт (оптимальная высота, ~590 м) в {@link #FILM_M}
+     * блоках над сушей, днём; зритель-наблюдатель (волна его не сносит) в 40 блоках над землёй смотрит на эпицентр на
+     * 20° вверх. Кадры {@code pall_film_<секунды>s} каждые 2 с с 4-й по 40-ю (стена пыли проходит зрителя на ~7 с, потом
+     * он в пыли: гриб, ножка и шапка должны оставаться видны), потом {@code pall_film_up_*} на 55° вверх — ножка
+     * дорастает до шапки.
      */
     private void planMushroom() {
         mushroom = true;
@@ -640,33 +650,30 @@ public final class ClientScenario {
             at(400, () -> cmd("incoming nuke now at 3000.5 320 0.5 15 ground"));
             return;
         }
-        at(20, () -> {
-            // эпицентр в 10 км — на суше по генератору (у зерна сценария к северу море: подрыв там водяной, и столб воды
-            // закрывал бы шар): первое направление, где суша под эпицентром и в 600 блоках вокруг (юбка, пелена), а нет
-            // такого — где больше суши, но под эпицентром суша прежде всего. Сразу, до телепорта: шум генератора читают
-            // и потоки генерации мира одновременно
-            var level = Minecraft.getInstance().getSingleplayerServer().overworld();
-            var gen = level.getChunkSource().getGenerator();
-            var random = level.getChunkSource().randomState();
-            int bestYaw = 180, best = -1;
-            for (int k = 0; k < 36 && best < 18; k++) {
-                int yaw = 180 + 10 * k;
-                double sx = -Math.sin(Math.toRadians(yaw)), sz = Math.cos(Math.toRadians(yaw));
-                int land = 0;
-                for (int i = 0; i < 9; i++) {
-                    double r = i == 0 ? 0 : 600, a = Math.PI / 4 * i;
-                    int x = (int) Math.round(10000 * sx + r * Math.cos(a)), z = (int) Math.round(10000 * sz + r * Math.sin(a));
-                    if (gen.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random) >= 64) land += i == 0 ? 10 : 1;
-                }
-                if (land > best) {
-                    best = land;
-                    bestYaw = yaw;
-                }
-            }
-            mushroomYaw = bestYaw;
-            Incoming.LOG.info("SCENARIO mushroom burst to yaw {} (epicentre on land {}, {} of 8 points around)", bestYaw, best >= 10,
-                    best % 10);
-        });
+        if ("film".equals(System.getenv("INCOMING_MUSHROOM"))) {
+            filmView = true;
+            at(20, () -> mushroomYaw = landYaw(FILM_M));
+            at(40, () -> {
+                String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
+                ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
+                var level = Minecraft.getInstance().getSingleplayerServer().overworld();
+                int ground = level.getChunkSource().getGenerator().getBaseHeight(0, 0, Heightmap.Types.WORLD_SURFACE_WG, level,
+                        level.getChunkSource().randomState());
+                filmEye = new Vec3(0.5, ground + 40, 0.5);
+                cmd("time set 2500");
+                cmd("weather clear");
+                cmd("gamerule doDaylightCycle false");
+                cmd("gamemode spectator");
+                filmLook(-20);
+                hover = true;
+            });
+            at(400, () -> {
+                double x = 0.5 - FILM_M * Math.sin(Math.toRadians(mushroomYaw)), z = 0.5 + FILM_M * Math.cos(Math.toRadians(mushroomYaw));
+                cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f 320 %.1f 15 air", x, z));
+            });
+            return;
+        }
+        at(20, () -> mushroomYaw = landYaw(10000));
         at(40, () -> {
             String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
             ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
@@ -679,6 +686,44 @@ public final class ClientScenario {
             double x = 0.5 - 10000 * Math.sin(Math.toRadians(mushroomYaw)), z = 0.5 + 10000 * Math.cos(Math.toRadians(mushroomYaw));
             cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f 320 %.1f 15 ground", x, z));
         });
+    }
+
+    /** Сценарий {@code mushroom} с {@code film}: от зрителя до эпицентра по земле, блоков (камера видео хоста над Newisle). */
+    private static final double FILM_M = 1383;
+
+    /** Сценарий {@code mushroom} с {@code film}: зритель на месте, взгляд на эпицентр с этим наклоном. */
+    private void filmLook(int pitch) {
+        cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %d %d", filmEye.x, filmEye.y, filmEye.z, mushroomYaw, pitch));
+    }
+
+    /**
+     * Куда от зрителя в {@code dist} блоках суша по генератору (поворот, как у игрока): первое направление от севера по
+     * часовой, где суша под эпицентром и в 600 блоках вокруг (юбка, пелена), а нет такого — где больше суши, но под
+     * эпицентром суша прежде всего.
+     */
+    private int landYaw(double dist) {
+        // у зерна сценария к северу море: подрыв там водяной, и столб воды закрывал бы шар. Сразу, до телепорта: шум
+        // генератора читают и потоки генерации мира одновременно
+        var level = Minecraft.getInstance().getSingleplayerServer().overworld();
+        var gen = level.getChunkSource().getGenerator();
+        var random = level.getChunkSource().randomState();
+        int bestYaw = 180, best = -1;
+        for (int k = 0; k < 36 && best < 18; k++) {
+            int yaw = 180 + 10 * k;
+            double sx = -Math.sin(Math.toRadians(yaw)), sz = Math.cos(Math.toRadians(yaw));
+            int land = 0;
+            for (int i = 0; i < 9; i++) {
+                double r = i == 0 ? 0 : 600, a = Math.PI / 4 * i;
+                int x = (int) Math.round(dist * sx + r * Math.cos(a)), z = (int) Math.round(dist * sz + r * Math.sin(a));
+                if (gen.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random) >= 64) land += i == 0 ? 10 : 1;
+            }
+            if (land > best) {
+                best = land;
+                bestYaw = yaw;
+            }
+        }
+        Incoming.LOG.info("SCENARIO mushroom burst to yaw {} (epicentre on land {}, {} of 8 points around)", bestYaw, best >= 10, best % 10);
+        return bestYaw;
     }
 
     /** Сценарий {@code mushroom}: кадры — от прихода подрыва к клиенту. */
@@ -703,6 +748,17 @@ public final class ClientScenario {
         if (glowView) {
             for (int s : new int[]{1, 2, 3, 5, 7, 9, 11, 14}) pallShot(tick + 20 * s, "glow_" + s + "s");
             at(tick + 20 * 14 + 20, () -> {
+                Incoming.LOG.info("SCENARIO done");
+                Minecraft.getInstance().stop();
+            });
+            return;
+        }
+        if (filmView) {
+            for (int s = 4; s <= 40; s += 2) pallShot(tick + 20 * s, "film_" + s + "s");
+            // шапка выше кадра: взгляд вверх, кадр — через 3 с (пелена копит свет по кадрам)
+            at(tick + 20 * 41, () -> filmLook(-55));
+            for (int s : new int[]{44, 50, 60, 90}) pallShot(tick + 20 * s, "film_up_" + s + "s");
+            at(tick + 20 * 90 + 20, () -> {
                 Incoming.LOG.info("SCENARIO done");
                 Minecraft.getInstance().stop();
             });

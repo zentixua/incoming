@@ -14,11 +14,15 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * прихода фронта ({@link Detonation#arrivalTicks}), как и сервер.
  * <p>
  * <b>Пыль.</b> Где прошёл фронт, земля и обломки поднимают пыль: покрытие {@link #cover} растёт с давлением на земле
- * от {@link #COVER_FROM_PSI} (сдувает пыль и сухую землю) до {@link #COVER_FULL_PSI} (рушатся дома). Пелена встаёт за
- * фронтом сразу на {@link #RISE_FROM_M} м и растёт к высоте {@link #topMetres} (у центра 150 м у 15 кт, к краю — десятки метров)
+ * от {@link #COVER_FROM_PSI} (сдувает пыль и сухую землю) до {@link #COVER_FULL_PSI} (рушатся дома). Пелена за фронтом
+ * сразу стоит там, куда пыль подняла голова стены ({@link BlastWall}: верх её хвоста, {@link BlastWall#TAIL} высоты стены —
+ * у 15 кт на 1,4 км 64 м): голова — передний край той же поднятой пыли, и после неё пыль не опускается, чтобы потом снова
+ * встать. Дальше растёт к высоте {@link #topMetres} (у центра 150 м у 15 кт, к краю — десятки метров), если та выше,
  * со скоростью вначале {@link #RISE_SPEED} м/с, за минуты клубится ещё на треть выше ({@link #rise}), и густа несколько минут ({@link #DENSE_S}, e-кратно; в самой густой видно на {@link #DENSE_VISIBILITY_M} м), её
  * сносит ветер подрыва ({@link #DRIFT}) — с того мига, как её подняло: у фронта пыль ещё на месте, где её подняло, а не
- * снесена на весь путь ветра с подрыва ({@link #source}).
+ * снесена на весь путь ветра с подрыва ({@link #source}). Высота — от земли под точкой там, где она выше земли под
+ * эпицентром (холм: пыль поднимает ветер с его склона), а в долину пыль стекает — там слой от земли под эпицентром
+ * ({@link #profile}).
  * <p>
  * <b>Мгла.</b> Над зоной поджига (световой импульс от {@link ThermalModel#IGNITE}) горит город: дымная мгла
  * (видно на {@link #HAZE_VISIBILITY_M} м) встаёт за пару минут и держится до утра ({@link #hazeEndTicks}; утро — по часам
@@ -49,15 +53,10 @@ public final class PallField {
     /** Видимость в дымной мгле над горящим городом, м. */
     static final double HAZE_VISIBILITY_M = 900;
     /**
-     * Пыль за фронтом сразу стоит на столько метров (у 15 кт): её поднял сам напор — пыль у фронта выше 30 м
-     * (Glasstone &amp; Dolan, §3.81: «precursor» пыли выше 100 футов).
-     */
-    static final double RISE_FROM_M = 25;
-    /**
-     * …и растёт к своей высоте ({@link #topMetres}) со скоростью вначале столько м/с, потом всё медленнее — оценка по
-     * базисной волне, которая клубится вверх десятки секунд и минуты (G&amp;D §2.73: у «Бейкера» быстро 270 м и 550 м
-     * к 4-й минуте; §2.84: у «Уаху» её ход за 10 с падает со 120 до 30 км/ч): камера в сотне метров над городом в первые
-     * секунды видит волну и город и только потом тонет в пыли.
+     * Пыль за головой стены (сразу — на верху её хвоста, {@link BlastWall#TAIL}) растёт к своей высоте ({@link #topMetres})
+     * со скоростью вначале столько м/с, потом всё медленнее — оценка по базисной волне, которая клубится вверх десятки
+     * секунд и минуты (G&amp;D §2.73: у «Бейкера» быстро 270 м и 550 м к 4-й минуте; §2.84: у «Уаху» её ход за 10 с
+     * падает со 120 до 30 км/ч).
      */
     static final double RISE_SPEED = 4;
     /** Густая пыль оседает e-кратно за столько секунд (реальных). */
@@ -121,9 +120,12 @@ public final class PallField {
     private final double reach;
     /** Радиус зоны пожаров по земле, блоки (0 — пожаров нет). */
     private final double fireReach;
-    /** По узлам: приход фронта (тики), покрытие 0..1, высота пелены (блоки), доля зоны пожаров 0..1, срыв брызг над водой 0..1. */
-    private final double[] arrival = new double[BINS], cover = new double[BINS], top = new double[BINS], fire = new double[BINS],
-            spray = new double[BINS];
+    /**
+     * По узлам: приход фронта (тики), покрытие 0..1, высота пелены и высота, на которой она встаёт за головой стены
+     * (блоки), доля зоны пожаров 0..1, срыв брызг над водой 0..1.
+     */
+    private final double[] arrival = new double[BINS], cover = new double[BINS], top = new double[BINS], from = new double[BINS],
+            fire = new double[BINS], spray = new double[BINS];
     /**
      * Вода под эпицентром 0..1 ({@code NukeWater.under}: чанк, плитка карты или догадка по уровню моря) и насколько подрыв
      * «водяной» ({@link WaterModel#wetBurst} × она) — пишет тик клиента ({@link #water}); до решения — суша.
@@ -131,8 +133,8 @@ public final class PallField {
     private double under, wet;
     /** Когда пыль осела и у края таблицы (туда фронт пришёл позже всего) — тики после подрыва ({@link #dustEnvelope}). */
     private final double dustEnd;
-    /** Пыль за фронтом сразу стоит на этой высоте (блоки) и растёт со скоростью вначале столько блоков в секунду. */
-    private final double riseFrom, riseSpeed;
+    /** Пелена растёт со скоростью вначале столько блоков в секунду. */
+    private final double riseSpeed;
     /** Когда мгла гаснет по прошедшим тикам — тики после подрыва (утро, если часы мира идут ровно). */
     private final long hazeEnd;
     /**
@@ -165,7 +167,6 @@ public final class PallField {
                 : groundRange(ThermalModel.rangeForFluence(ThermalModel.IGNITE, d.yieldKt(), d.surface(), d.visibility()), hob);
         this.fireReach = d.blocks(ignite);
         this.reach = Math.max(1, d.blocks(Math.max(coverM, ignite)) * 1.02);
-        this.riseFrom = Math.max(MIN_TOP_BLOCKS, d.blocks(RISE_FROM_M * ys));
         this.riseSpeed = d.blocks(RISE_SPEED);
         for (int i = 0; i < BINS; i++) {
             double rb = radius(i), rm = d.metres(rb);
@@ -175,6 +176,7 @@ public final class PallField {
             cover[i] = cover(BlastModel.psi(kpa));
             spray[i] = WaterModel.spray(BlastModel.windSpeed(kpa));
             top[i] = Math.max(MIN_TOP_BLOCKS, d.blocks(topMetres(rm, ys)));
+            from[i] = Math.max(MIN_TOP_BLOCKS, d.blocks(BlastWall.TAIL * BlastWall.wallHeight(rm, ys)));
             fire[i] = ignite <= 0 ? 0 : 1 - smooth(ignite * 0.85, ignite * 1.05, rm);
         }
         this.dustEnd = arrival[BINS - 1] + 20 * DENSE_S * Math.log(1 / GONE);
@@ -423,7 +425,7 @@ public final class PallField {
     void dust(int i, double ticks, double[] out) {
         double age = age(i, ticks);
         out[0] = cover[i] <= 0 ? 0 : perBlock(SIGMA_DENSE) * Math.pow(cover[i], 1.3) * dustEnvelope(age);
-        out[1] = Math.max(rise(top[i], riseFrom, riseSpeed, age), 0.05 * top[i]);
+        out[1] = Math.max(rise(Math.max(top[i], from[i]), from[i], riseSpeed, age), 0.05 * top[i]);
         out[2] = fire[i] * smooth(30, 300, age);
         out[3] = spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i] * sprayEnvelope(age);
     }
@@ -541,49 +543,93 @@ public final class PallField {
      * Ослабление в точке без шума (среднее по шуму — 1), 1/блок: пыль и брызги (снесённые ветром с того мига, как их
      * подняло, {@link #source}; что из них — по воде там, откуда их подняло), мгла (шлейф по ветру; над водой у её источника пожаров нет) и базисная волна — так же, как
      * {@code pallField} в {@code pall.glsl} по таблице. Точка — от эпицентра по земле (dx, dz, блоки) и высота над землёй
-     * под эпицентром (блоки), {@code water} — доля воды под пеленой ({@link PallGround}). Для того, что у камеры: звук,
-     * пепел, докуда идёт луч пелены.
+     * под эпицентром (блоки); {@code floorUp} — рельеф под ней над землёй под эпицентром (блоки, карта {@link PallGround}):
+     * над холмом слой — от его склона, в долине — от земли под эпицентром ({@link #profile}); {@code water} — доля воды под
+     * пеленой ({@link PallGround}). Для того, что у камеры: звук, пепел, докуда идёт луч пелены.
      */
-    public double sigma(double dx, double dz, double above, double ticks, Water water) {
-        double[] m = new double[2];
-        medium(dx, dz, above, ticks, water, m);
-        return m[0] + m[1];
+    public double sigma(double dx, double dz, double above, double floorUp, double ticks, Water water) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        double h = above - Math.max(floorUp, 0);
+        return (l[0] + l[1]) * profile(h / l[2]) + l[3] * profile(h / l[4]) + l[5] * profile(h / l[6]);
     }
 
     /** Из {@link #sigma} — водяная пыль: брызги и базисная волна, 1/блок. */
-    public double mist(double dx, double dz, double above, double ticks, Water water) {
-        double[] m = new double[2];
-        medium(dx, dz, above, ticks, water, m);
-        return m[1];
+    public double mist(double dx, double dz, double above, double floorUp, double ticks, Water water) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        double h = above - Math.max(floorUp, 0);
+        return l[1] * profile(h / l[2]) + l[5] * profile(h / l[6]);
     }
 
-    /** {@link #sigma} по веществу: в {@code out} — пыль с мглой и водяная пыль, 1/блок. */
-    private void medium(double dx, double dz, double above, double ticks, Water water, double[] out) {
+    /**
+     * Толща пелены по вертикали над точкой (dx, dz) от высоты {@code from} до {@code to} (блоки над землёй под эпицентром,
+     * {@code to} — хоть бесконечность): интеграл {@link #sigma} по высоте. Сколько пыли над глазом и под ним до земли —
+     * докуда идёт луч пелены ({@link NukePall}).
+     */
+    public double tau(double dx, double dz, double from, double to, double floorUp, double ticks, Water water) {
+        if (!(to > from)) return 0;
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        double lift = Math.max(floorUp, 0), a = from - lift, b = to - lift;
+        return (l[0] + l[1]) * between(a, b, l[2]) + l[3] * between(a, b, l[4]) + l[5] * between(a, b, l[6]);
+    }
+
+    /**
+     * Интеграл {@link #profile} по высоте от a до b (блоки) у слоя высотой top (блоки): по Симпсону, порознь ниже и выше
+     * земли (там излом), — точнее приближения {@link #column} (у тонкого слоя под глазом его ошибка — десятки процентов).
+     */
+    private static double between(double a, double b, double top) {
+        double lo = Math.max(a / top, -1), hi = Math.min(b / top, 1);
+        return top * (simpson(lo, Math.min(hi, 0)) + simpson(Math.max(lo, 0), hi));
+    }
+
+    private static double simpson(double lo, double hi) {
+        if (!(hi > lo)) return 0;
+        int n = 32;
+        double h = (hi - lo) / n, sum = profile(lo) + profile(hi);
+        for (int k = 1; k < n; k++) sum += (k % 2 == 1 ? 4 : 2) * profile(lo + k * h);
+        return sum * h / 3;
+    }
+
+    /** Чисел в {@link #layers}. */
+    private static final int LAYERS = 7;
+
+    /**
+     * Слои пелены над точкой (dx, dz) — ослабление у земли (1/блок; на высоте — × {@link #profile} доли верха) и верх
+     * (блоки), в {@code out}: пыль, водяная пыль (брызги; верх у них общий), верх пыли, мгла, её верх, базисная волна, её
+     * верх. Слоя нет — ослабление 0, верх 1.
+     */
+    private void layers(double dx, double dz, double ticks, Water water, double[] out) {
+        out[0] = out[1] = out[3] = out[5] = 0;
+        out[2] = out[4] = out[6] = 1;
         double[] w = new double[2], v = new double[4];
         source(dx, dz, ticks, w);
-        double dry = 0, mist = 0;
-        double lx = w[0], lz = w[1], lift = Math.hypot(lx, lz), ud = lift / reach;
+        double lx = w[0], lz = w[1], ud = Math.hypot(lx, lz) / reach;
         if (ud < 1) {
             dust(bin(ud * reach), ticks, v);
-            double k = edge(ud) * profile(above / Math.max(v[1], 1)), wet = v[0] + v[3] > 0 ? water.at(lx, lz) : 0;
-            dry += v[0] * (1 - wet) * k;
-            mist += v[3] * wet * k;
+            double e = edge(ud), wet = v[0] + v[3] > 0 ? water.at(lx, lz) : 0;
+            out[0] = v[0] * (1 - wet) * e;
+            out[1] = v[3] * wet * e;
+            out[2] = Math.max(v[1], 1);
         }
         double len = plume(ticks), ux = Math.cos(d.windDir()), uz = Math.sin(d.windDir());
         double along = Math.max(0, Math.min(len, dx * ux + dz * uz));
         double sx = dx - ux * along, sz = dz - uz * along, uh = Math.hypot(sx, sz) / reach;
         if (uh < 1) {
             haze(bin(uh * reach), ticks, v);
-            if (v[0] > 0) dry += v[0] * (1 - water.at(sx, sz)) * plumeThin(along, len) * edge(uh) * profile(above / Math.max(v[1], 1));
+            if (v[0] > 0) {
+                out[3] = v[0] * (1 - water.at(sx, sz)) * plumeThin(along, len) * edge(uh);
+                out[4] = Math.max(v[1], 1);
+            }
         }
         double[] s = new double[3];
         if (surge(ticks, s)) {
             drift(ticks, w);
             double u = Math.hypot(dx - w[0], dz - w[1]) / s[0];
-            mist += s[2] * surgeProfile(u) * profile(above / Math.max(s[1] * surgeTop(u), 1));
+            out[5] = s[2] * surgeProfile(u);
+            out[6] = Math.max(s[1] * surgeTop(u), 1);
         }
-        out[0] = dry;
-        out[1] = mist;
     }
 
     /**
