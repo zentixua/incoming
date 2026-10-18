@@ -161,6 +161,8 @@ class PallGlslTest {
     void clipWhereDepthReachesTwelve() {
         GlslFunction f = GlslFunction.parse(read("core/fx_pall.fsh"), "pallClip");
         assertTrue(f.call(Map.of("sigma", 0.0, "tau", 5.0, "mu", 0.0)) >= 1e6);
+        // глаз ниже грубой карты рельефа: толщи под ним нет, пыль у глаза есть — как в ровной пыли
+        for (double mu : new double[]{0, 0.3, 1}) assertEquals(12 / 0.06, f.call(Map.of("sigma", 0.06, "tau", 0.0, "mu", mu)), 1e-9);
         for (double sigma : new double[]{0.003, 0.06, 0.5}) {
             for (double tau : new double[]{0.1, 2, 30, 400}) {
                 for (double mu : new double[]{0, 1e-7, 1e-4, 0.01, 0.1, 0.4, 1}) {
