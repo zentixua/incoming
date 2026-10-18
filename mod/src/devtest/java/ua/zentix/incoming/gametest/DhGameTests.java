@@ -172,8 +172,9 @@ public final class DhGameTests {
     /**
      * След подрыва вдали за тяжёлой зоной ({@link FarLods#scorch}): чанк не в мире, до которого дошла волна, уходит в DH
      * копией с диска со следом на земле — трава сгорела, биом опалён, ниже земли всё как было, — и не раньше волны.
-     * Чанк — данные сохранения поля травы площадки, записанные на диск вдали, где мира нет; эпицентр — в 40 блоках
-     * (в масштабе ~2,2 км: ~9 кал/см²). Сервер идёт в темпе игры: чанки читает поток ввода-вывода.
+     * Чанк — данные сохранения поля травы площадки, записанные на диск вдали, где мира нет; эпицентр — в 32 блоках
+     * (в масштабе ~1,76 км: ~9 кал/см² с пропусканием воздуха по Glasstone). Сервер идёт в темпе игры: чанки читает поток
+     * ввода-вывода.
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "dh_scorch", skyAccess = true)
     public static void farScorchReachesDh(GameTestHelper h) {
@@ -204,7 +205,7 @@ public final class DhGameTests {
         });
         double scale = 0.0182;
         int ground = h.absolutePos(CENTER).getY() + 1;
-        Vec3 burst = new Vec3(far.getMiddleBlockX() + 0.5 - 40, ground + ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(15) * scale, far.getMiddleBlockZ() + 0.5);
+        Vec3 burst = new Vec3(far.getMiddleBlockX() + 0.5 - 32, ground + ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(15) * scale, far.getMiddleBlockZ() + 0.5);
         Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), burst, ground, 15, false, level.getGameTime(), 0, 0, 20_000, 7, (float) scale, false,
                 Detonation.OLD_WAVE);
         Vec3 mid = new Vec3(far.getMiddleBlockX() + 0.5, ground, far.getMiddleBlockZ() + 0.5);
