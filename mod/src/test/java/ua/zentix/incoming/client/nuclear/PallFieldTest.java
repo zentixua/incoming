@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.PallPass;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,6 +20,11 @@ class PallFieldTest {
     /** Те же 15 кт, но сервер не поджигал (вода, высокий подрыв): ни мглы, ни её пепла — только пыль и брызги. */
     private static final Detonation NO_FIRES = new Detonation(4, new Vec3(0, 64, 0), 64, 15, true, 0, 0.5f, 8, 20_000, 7, 1f, false, 0.42f,
             Detonation.NO_DAY_TIME, false);
+    /** 15 кт у земли без ветра, фронт в игре — как у модели: голова и пелена на одном месте. */
+    private static final Detonation CALM = new Detonation(6, new Vec3(0, 64, 0), 64, 15, true, 0, 0, 0, 20_000, 7, 1f, false, 1f);
+    /** Хиросима: 15 кт на 592 м (DS02: 16 кт на 600 м), без ветра и пожаров — одна пыль. */
+    private static final Detonation HIROSHIMA = new Detonation(7, new Vec3(0, 64 + 592, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 1f, false, 1f,
+            Detonation.NO_DAY_TIME, false);
     private static final long NOON = 6000;
 
     @Test
@@ -25,19 +32,62 @@ class PallFieldTest {
         assertEquals(PallPass.WIDTH, PallField.BINS);
     }
 
-    /** Покрытие пылью растёт с давлением: слабее 0,6 psi — нет, с 6 psi — полное. */
+    /**
+     * Пыль таблицы — слой {@link DustModel} узла: толща над землёй (ослабление у земли × столб профиля × верх) — толща
+     * слоя без той, что ещё в голове стены, и без той, что в огненном шаре на земле; верх — верх слоя в блоках (не ниже
+     * {@link PallField#MIN_TOP_BLOCKS}).
+     */
     @Test
-    void coverRisesWithPressure() {
-        assertEquals(0, PallField.cover(0.3));
-        assertEquals(0, PallField.cover(0.6));
-        assertEquals(1, PallField.cover(6), 1e-9);
-        assertEquals(1, PallField.cover(40), 1e-9);
-        double prev = 0;
-        for (double psi = 0.6; psi <= 7; psi += 0.05) {
-            double c = PallField.cover(psi);
-            assertTrue(c >= prev - 1e-12, psi + " psi");
-            prev = c;
+    void dustRowIsTheDustLayer() {
+        Detonation quarter = new Detonation(5, new Vec3(0, 64, 0), 64, 15, true, 0, 0.5f, 8, 20_000, 7, 0.25f, false, 0.42f);
+        PallField p = new PallField(quarter, NOON);
+        double[] v = new double[4];
+        int inBall = 0;
+        for (int i : new int[]{3, 20, 60}) {
+            double arrival = arrival(p, i);
+            // положительная фаза — своя на каждой дальности
+            DustModel.Column c = p.layer(i);
+            double positive = c.positive();
+            for (double age : new double[]{0.3, 1.2, 2, 30, 600}) {
+                double ticks = arrival + 20 * quarter.scale() * age;
+                p.dust(i, ticks, v);
+                boolean ball = quarter.metres(p.radius(i)) < FireballModel.groundRadius(ticks / (20 * quarter.scale()), 0, 15, true);
+                if (ball) inBall++;
+                double depth = ball ? 0 : c.depth(age) * (1 - BlastWall.handoff(age / positive));
+                assertEquals(c.depth(age) < PallField.GONE_DEPTH ? 0 : depth, v[0] * PallField.column(0) * v[1], 1e-6 * depth + 1e-12, i + ", " + age + " с");
+                assertEquals(Math.max(PallField.MIN_TOP_BLOCKS, quarter.blocks(c.height(age))), v[1], 1e-9);
+            }
+            p.dust(i, arrival + 20 * quarter.scale() * 0.9 * positive, v);
+            assertEquals(0, v[0], "пыль моложе фазы волны — в голове стены");
         }
+        assertTrue(inBall > 0, "узлы под шаром не проверены");
+    }
+
+    /**
+     * В огненном шаре на земле ({@link FireballModel#groundRadius}) ни пыли пелены, ни брызг — там шар; пелена встаёт
+     * из-под него, когда он всплывает.
+     */
+    @Test
+    void noPallInTheFireball() {
+        PallField p = new PallField(CALM, NOON);
+        double[] v = new double[4];
+        int inside = 0;
+        for (double t = 0.3; t <= 8; t += 0.1) {
+            double ball = FireballModel.groundRadius(t, 0, 15, true);
+            for (int i = 0; i < PallField.BINS && CALM.metres(p.radius(i)) < ball; i++) {
+                p.dust(i, 20 * t, v);
+                assertEquals(0, v[0], t + " с: пыль пелены в шаре в " + CALM.metres(p.radius(i)) + " м");
+                p.spray(i, 20 * t, v);
+                assertEquals(0, v[0], t + " с: брызги в шаре в " + CALM.metres(p.radius(i)) + " м");
+                inside++;
+            }
+        }
+        assertTrue(inside > 100, "узлов под шаром " + inside);
+        assertEquals(0, FireballModel.groundRadius(8, 0, 15, true), "шар не всплыл");
+        p.dust(1, 20 * 8, v);
+        assertTrue(v[0] > 0, "шар всплыл, а пелены у эпицентра нет");
+        p.spray(1, 20 * 8, v);
+        assertTrue(v[0] > 0, "шар всплыл, а брызг у эпицентра нет");
     }
 
     /** Столб над точкой (тень, свет неба) — интеграл профиля по высоте до верха, с ошибкой меньше 0,01. */
@@ -64,13 +114,37 @@ class PallFieldTest {
         }
     }
 
-    /** У 15 кт пелена над центром — 150 м, к краю — десятки метров; у 1 кт — ниже. */
+    /**
+     * Верх пелены — верх слоя: через секунды после фронта — десятки метров, потом его поднимает нагретая земля, и он не
+     * опускается; у 1 кт — ниже (Rosenblatt, обзор §5).
+     */
     @Test
-    void heightAtCentreAndEdge() {
-        assertEquals(150, PallField.topMetres(0, 1), 1e-9);
-        assertTrue(PallField.topMetres(1000, 1) > 80 && PallField.topMetres(1000, 1) < 110);
-        assertTrue(PallField.topMetres(5000, 1) < 35);
-        assertTrue(PallField.topMetres(0, Math.cbrt(1 / 15.0)) < 70);
+    void heightRisesOverHeatedGround() {
+        PallField p = new PallField(HIROSHIMA, NOON);
+        PallField small = new PallField(new Detonation(8, new Vec3(0, 64 + 592 * Math.cbrt(1 / 15.0), 0), 64, 1, false, 0, 0, 0, 20_000, 7, 1f,
+                false, 1f, Detonation.NO_DAY_TIME, false), NOON);
+        double[] v = new double[4];
+        int i = (int) (1000 / p.reach() * PallField.BINS);
+        double arrival = arrival(p, i), prev = 0;
+        for (double age = 1.5; age <= 1800; age += 0.5) {
+            p.dust(i, arrival + 20 * age, v);
+            assertTrue(v[1] >= prev - 1e-9, age + " с: верх пыли опустился");
+            prev = v[1];
+        }
+        p.dust(i, arrival + 20 * 5, v);
+        assertTrue(v[1] > 60 && v[1] < 150, "в 1 км через 5 с верх " + v[1]);
+        p.dust(i, arrival + 20 * 600, v);
+        assertTrue(v[1] > 120 && v[1] < 350, "в 1 км через 10 минут верх " + v[1]);
+        double[] s = new double[4];
+        int j = (int) (1000 * Math.cbrt(1 / 15.0) / small.reach() * PallField.BINS);
+        small.dust(j, arrival(small, j) + 20 * 600, s);
+        assertTrue(s[1] < 0.7 * v[1], "у 1 кт не ниже: " + s[1]);
+    }
+
+    /** Приход фронта к узлу i, тики. */
+    private static double arrival(PallField p, int i) {
+        Detonation d = p.detonation();
+        return d.arrivalTicks(d.blocks(Math.hypot(d.metres(p.radius(i)), Math.max(0, d.hobMetres()))));
     }
 
     /** Пыль встаёт только там, где прошёл фронт волны: до него — ничего. */
@@ -84,6 +158,8 @@ class PallFieldTest {
                 double r = p.radius(i);
                 p.dust(i, ticks, v);
                 if (r > front * 1.01) assertEquals(0, v[0], "r = " + r + " впереди фронта " + front + " через " + ticks + " тиков");
+                p.spray(i, ticks, v);
+                if (r > front * 1.01) assertEquals(0, v[0], "брызги впереди фронта, r = " + r);
             }
             int behind = (int) (Math.min(front * 0.5, p.reach() * 0.5) / p.reach() * PallField.BINS);
             p.dust(behind, ticks, v);
@@ -92,35 +168,35 @@ class PallFieldTest {
     }
 
     /**
-     * Пелена встаёт там, куда пыль подняла голова стены, — на верху её хвоста ({@link BlastWall#TAIL} высоты стены), а не
-     * ниже, чтобы потом снова расти: голова — передний край той же поднятой пыли. Дальше верх только растёт, к своей
-     * высоте ({@link PallField#topMetres}), если та выше, и с клубами не выше её × 1,35. У 15 кт в 400 м — сразу ~140 м, в
-     * 1,4 км — 64 м и к 20-й секунде ~78 м: камера на холме в 40 м над землёй под эпицентром — в пыли сразу за головой.
+     * Голова стены и пелена — один слой: голова — пыль моложе положительной фазы, пелена — старше, место переходит от
+     * головы к пелене за полфазы ({@link BlastWall#handoff}). Толща над землёй у головы и пелены вместе — толща слоя
+     * ({@link DustModel.Column#depth}) везде за фронтом: ни щели, ни двойной пыли на стыке. Поднятое в клине — по прямой
+     * между его краем и концом (у 1 км слой к эпицентру растёт быстрее прямой — до +18 %), на стыке — до −11 %.
      */
     @Test
-    void dustStaysWhereTheHeadLiftedIt() {
-        PallField p = new PallField(GROUND, NOON);
-        double[] v = new double[4];
-        for (double metres : new double[]{400, 1400}) {
+    void headAndPallAreOneLayer() {
+        PallField p = new PallField(CALM, NOON);
+        BlastWall w = new BlastWall(CALM, false);
+        float[] s = new float[BlastWall.SLOT];
+        int checked = 0;
+        for (double metres : new double[]{1000, 1500, 2500}) {
             int i = (int) (metres / p.reach() * PallField.BINS);
-            double r = p.radius(i), arrival = GROUND.arrivalTicks(r);
-            double from = BlastWall.TAIL * BlastWall.wallHeight(r, 1), high = Math.max(PallField.topMetres(r, 1), from) * 1.35;
-            double prev = 0;
-            for (double age = 0.05; age <= 600; age += 0.25) {
-                p.dust(i, arrival + 20 * age, v);
-                assertTrue(v[1] >= prev - 1e-9, metres + " м, " + age + " с: верх пыли опустился");
-                assertTrue(v[1] <= high + 1e-9, metres + " м, " + age + " с: выше своей высоты " + v[1]);
-                prev = v[1];
+            double r = p.radius(i), arrival = arrival(p, i);
+            for (double t = arrival / 20 + 0.02; t < arrival / 20 + 6 * p.layer(i).positive(); t += 0.02) {
+                if (!w.slot(t, s)) continue;
+                double u = (s[0] - r) / s[1], ticks = 20 * t;
+                if (u < 0.05) continue;
+                double head = BlastWall.tau(s, r, 0, 0, Double.POSITIVE_INFINITY, 0);
+                double pall = p.tau(r, 0, 0, Double.POSITIVE_INFINITY, 0, ticks, PallField.Water.DRY);
+                double layer = p.layer(i).depth(t - arrival / 20);
+                assertEquals(layer, head + pall, 0.2 * layer, metres + " м, u = " + u + ": голова " + head + " + пелена " + pall);
+                if (u > 0.9 && metres > 2000) assertEquals(layer, head + pall, 0.06 * layer, metres + " м, u = " + u + ": стык");
+                if (u < 0.9) assertEquals(0, pall, 1e-12, "пелена в клине головы");
+                if (u > 1.6) assertEquals(0, head, 1e-12, "голова за клином");
+                checked++;
             }
-            p.dust(i, arrival + 1, v);
-            assertEquals(from, v[1], 1, metres + " м: сразу за головой");
         }
-        int i = (int) (1400 / p.reach() * PallField.BINS);
-        double arrival = GROUND.arrivalTicks(p.radius(i));
-        p.dust(i, arrival + 20 * 20, v);
-        assertTrue(v[1] > 70 && v[1] < 85, "в 1,4 км через 20 с верх на " + v[1] + " м");
-        p.dust(i, arrival + 1, v);
-        assertTrue(v[1] > 60, "в 1,4 км сразу за головой верх на " + v[1] + " м");
+        assertTrue(checked > 100, "проверок " + checked);
     }
 
     /**
@@ -159,20 +235,44 @@ class PallFieldTest {
         }
     }
 
-    /** У центра в самой густой пыли видно на ~40 м; через 5 минут — в разы дальше, через полчаса пыли нет. */
+    /**
+     * Свет на земле под пеленой против открытого дня (зелёный канал, солнце на 40°): прямое солнце сквозь толщу и рассеянный
+     * пылью свет ({@link PallLight#diffuse}, альбедо — цвет пыли {@link NukePall#DUST}).
+     */
+    private static double groundLight(double tau) {
+        double g = PallLight.truncated(PallLight.DUST_G), w = PallLight.albedo(PallLight.linear(NukePall.DUST[1]), g);
+        double sky = PallLight.SKY * PallLight.linear(0.65), sun = 1 - sky, mu = Math.sin(Math.toRadians(40));
+        return (mu * sun * Math.exp(-tau / mu) + PallLight.diffuse(w, g, tau, tau, PallLight.LAND, mu, sun, 1, 0, sky, 0, -2.0 / 3)) / (mu * sun + sky);
+    }
+
+    /** Свет на земле под пеленой Хиросимы в {@code metres} м от эпицентра через {@code age} с после фронта. */
+    private static double hiroshimaLight(PallField p, double metres, double age) {
+        int i = (int) (metres / p.reach() * PallField.BINS);
+        double ticks = arrival(p, i) + 20 * age;
+        return groundLight(p.tau(p.radius(i), 0, 0, Double.POSITIVE_INFINITY, 0, ticks, PallField.Water.DRY));
+    }
+
+    /**
+     * Хиросима (15 кт на 592 м): у Фудзии в 1,42 км — «около двадцати минут» тьмы (Hersey 1946): свет на земле под пеленой
+     * меньше тысячной дня с первых секунд до 20-й минуты, к 30-й светлее; у Танимото в 3,2 км — сумерки первые минуты
+     * (не ночь); у Такакуры в 300 м — светлеет за минуты (пыль уходит в ножку). Через час над 1,4 км почти ясно.
+     */
     @Test
-    void denseForMinutesThenSettles() {
-        PallField p = new PallField(GROUND, NOON);
-        double[] v = new double[4];
-        int centre = 2;
-        double arrival = GROUND.arrivalTicks(p.radius(centre));
-        p.dust(centre, arrival + 60, v);
-        double visibility = Sight.KOSCHMIEDER / v[0];
-        assertTrue(visibility > 35 && visibility < 60, "видно на " + visibility + " м через 3 с");
-        p.dust(centre, arrival + 20 * 300, v);
-        assertTrue(Sight.KOSCHMIEDER / v[0] > 200, "через 5 минут пыль всё ещё густая");
-        p.dust(centre, arrival + 20 * 1800, v);
-        assertEquals(0, v[0]);
+    void darkForTwentyMinutesAtHiroshima() {
+        PallField p = new PallField(HIROSHIMA, NOON);
+        for (double age = 5; age <= 20 * 60; age += 10) {
+            double l = hiroshimaLight(p, 1420, age);
+            assertTrue(l < 1e-3, "1,42 км, " + age + " с: свет " + l);
+        }
+        assertTrue(hiroshimaLight(p, 1420, 30 * 60) > 1e-3, "1,42 км к 30-й минуте всё ещё ночь: " + hiroshimaLight(p, 1420, 30 * 60));
+        assertTrue(hiroshimaLight(p, 1420, 60 * 60) > 0.2, "1,42 км через час " + hiroshimaLight(p, 1420, 60 * 60));
+        for (double age = 5; age <= 180; age += 5) {
+            double l = hiroshimaLight(p, 3200, age);
+            assertTrue(l > 1e-3 && l < 0.05, "3,2 км, " + age + " с: свет " + l);
+        }
+        assertTrue(hiroshimaLight(p, 300, 30) < 1e-3, "у эпицентра сразу не темно");
+        assertTrue(hiroshimaLight(p, 300, 600) > 3e-3, "у эпицентра через 10 минут всё ещё ночь: " + hiroshimaLight(p, 300, 600));
+        assertTrue(p.visible(20 * 3600), "через час пыль осела везде");
     }
 
     /** Мгла над горящим городом держится до утра (время суток 0 — 6:00), но не меньше 5 минут. */
@@ -190,7 +290,9 @@ class PallFieldTest {
         assertTrue(v[0] > 0 && v[2] > 0, "в полночь город горит");
         p.haze(1, 6100, v);
         assertEquals(0, v[0], 1e-12);
-        assertFalse(p.visible(40000));
+        // пыль висит часами (мелкая), но и она оседает
+        assertTrue(p.visible(40000), "через полчаса пыль уже осела");
+        assertFalse(p.visible(20 * 3600 * 7), "через 7 часов пелена есть");
     }
 
     /** Часы мира идут ровно с тиков {@code from} до {@code to}: время суток — {@code day0} плюс тики. */
@@ -231,12 +333,12 @@ class PallFieldTest {
         PallField dawn = new PallField(GROUND, 23000);
         clock(dawn, 23000, 0, 300);
         dawn.daylight(301, 301, 24000);
-        assertFalse(dawn.visible(301 + PallField.HAZE_FADE_TICKS + 20 * 60 * 30), "мгла ждала бы следующего утра");
+        assertEquals(0, haze(dawn, 301 + PallField.HAZE_FADE_TICKS + 1), 1e-12, "мгла ждала бы следующего утра");
         // без сна — правило 5 минут: восход через минуту не гасит её, гаснет к следующему утру
         PallField natural = new PallField(GROUND, 23000);
         clock(natural, 23000, 0, 3000);
         assertTrue(haze(natural, 3000) > 0);
-        assertTrue(natural.visible(24000));
+        assertTrue(haze(natural, 24000) > 0);
     }
 
     /** /time set day ночью — день: мгла гаснет; /time add — утро ближе; сервер отводит часы назад в сумерки — нет. */
@@ -363,15 +465,23 @@ class PallFieldTest {
         assertTrue(p.visible(20000));
     }
 
-    /** Без пожаров (высокий подрыв: поджига на земле нет) мглы нет — пелена кончается с пылью, а не утром. */
+    /**
+     * Без пожаров (высокий подрыв: поджига на земле нет) мглы нет — пелена кончается с пылью, а не утром: когда она видна,
+     * от времени суток подрыва не зависит.
+     */
     @Test
     void withoutFiresNoHazeUntilMorning() {
         Detonation high = new Detonation(3, new Vec3(0, 64 + 3000, 0), 64, 15, false, 0, 0.5f, 8, 20_000, 7, 1f, false, 0.42f);
-        PallField p = new PallField(high, 23000);
-        assertTrue(p.reach() > 100, "пыль есть");
-        assertEquals(0, haze(p, 20 * 300), 1e-12);
-        assertTrue(p.visible(200));
-        assertFalse(p.visible(24000), "утро через 25000 тиков, а пыль уже осела");
+        PallField dawn = new PallField(high, 23000), dusk = new PallField(high, 12000);
+        assertTrue(dawn.reach() > 100, "пыль есть");
+        assertEquals(0, haze(dawn, 20 * 300), 1e-12);
+        assertTrue(dawn.visible(200));
+        boolean ended = false;
+        for (int t = 200; t < 20 * 3600 * 7; t += 200) {
+            assertEquals(dusk.visible(t), dawn.visible(t), "тик " + t);
+            ended |= !dawn.visible(t);
+        }
+        assertTrue(ended, "пыль не оседает");
         assertTrue(new PallField(GROUND, 23000).visible(24000));
     }
 
@@ -380,7 +490,7 @@ class PallFieldTest {
     void sigmaFollowsTheTable() {
         PallField p = new PallField(GROUND, NOON);
         double ticks = 20 * 120;
-        float[] row = new float[8 * PallField.BINS];
+        float[] row = new float[4 * PallField.ROWS * PallField.BINS];
         p.row(ticks, true, false, row);
         double[] w = new double[2];
         p.drift(ticks, w);
@@ -393,34 +503,39 @@ class PallFieldTest {
         w[1] *= k;
         double s = p.sigma(w[0] + ux * r, w[1] + uz * r, 0, 0, ticks, PallField.Water.DRY);
         assertTrue(s >= row[4 * i] * 0.98, "пыль у земли " + s + " < таблицы " + row[4 * i]);
-        assertTrue(s <= row[4 * i] + row[4 * (PallField.BINS + 2)] * 1.01 + 1e-9);
+        assertTrue(s <= row[4 * i] + row[4 * (2 * PallField.BINS + 2)] * 1.01 + 1e-9);
         // выше пелены — ничего
         assertEquals(0, p.sigma(w[0] + ux * r, w[1] + uz * r, row[4 * i + 1] * 2 + 400, 0, ticks, PallField.Water.DRY), 1e-12);
         assertTrue(w[0] > 0 && w[1] > 0, "ветер на 0,5 рад — снос по +x и +z");
     }
 
     /**
-     * Ветер несёт пыль с того мига, как её подняло: край пелены — на фронте в любую сторону от эпицентра (там же звук,
+     * Ветер несёт пыль с того мига, как её подняло: край пыли — на фронте в любую сторону от эпицентра (там же звук,
      * тряска, отброс и обломки), а не сдвинут на весь путь ветра с подрыва — по ветру пыль вставала бы до прихода волны,
-     * против ветра — позже.
+     * против ветра — позже. У фронта пыль — голова стены (кольцо вокруг эпицентра), за ней — пелена.
      */
     @Test
     void dustEdgeStaysOnTheFrontInWind() {
         PallField p = new PallField(GROUND, NOON);
         int i = 110;
-        double hob = Math.max(0, GROUND.hobMetres());
-        double a0 = GROUND.arrivalTicks(GROUND.blocks(Math.hypot(GROUND.metres(p.radius(i)), hob)));
-        double a1 = GROUND.arrivalTicks(GROUND.blocks(Math.hypot(GROUND.metres(p.radius(i + 1)), hob)));
-        double ticks = 0.5 * (a0 + a1);
+        double ticks = 0.5 * (arrival(p, i) + arrival(p, i + 1));
         double[] w = new double[2];
         p.drift(ticks, w);
         assertTrue(Math.hypot(w[0], w[1]) > 2.5 * (p.radius(1) - p.radius(0)), "снос с подрыва — больше двух узлов: " + Math.hypot(w[0], w[1]));
+        // пелена — пыль старше полутора положительных фаз на месте
+        int behind = i;
+        while (behind > 0 && ticks - arrival(p, behind) < 20 * GROUND.scale() * 1.6 * p.layer(behind).positive()) behind--;
+        assertTrue(behind < i && behind > i - 20, "пелена за " + (i - behind) + " узлов");
         double ux = Math.cos(GROUND.windDir()), uz = Math.sin(GROUND.windDir());
         for (int side : new int[]{1, -1}) {
-            double behind = side * p.radius(i), ahead = side * p.radius(i + 2);
-            assertTrue(p.sigma(ux * behind, uz * behind, 0, 0, ticks, PallField.Water.DRY) > 0, "за фронтом пыль, сторона " + side);
+            double back = side * p.radius(behind), ahead = side * p.radius(i + 2);
+            assertTrue(p.sigma(ux * back, uz * back, 0, 0, ticks, PallField.Water.DRY) > 0, "за фронтом пыль, сторона " + side);
             assertEquals(0, p.sigma(ux * ahead, uz * ahead, 0, 0, ticks, PallField.Water.DRY), 1e-12, "перед фронтом пыли нет, сторона " + side);
         }
+        // голова — у самого фронта, кольцом вокруг эпицентра
+        BlastWall wall = new BlastWall(GROUND, false);
+        double head = wall.wall(ticks / (20 * GROUND.scale())).head();
+        assertTrue(head > p.radius(i) - 1 && head < p.radius(i + 1) + 1, "голова на " + head + " при фронте у узла " + i);
     }
 
     /** Меньший удар — меньше пелена. */
@@ -428,7 +543,7 @@ class PallFieldTest {
     void smallerYieldSmallerPall() {
         assertTrue(new PallField(SMALL, NOON).reach() < 0.6 * new PallField(GROUND, NOON).reach());
         double reach = new PallField(GROUND, NOON).reach();
-        assertTrue(reach > 4500 && reach < 6000, "пелена 15 кт до " + reach + " блоков");
+        assertTrue(reach > 4500 && reach < 7500, "пелена 15 кт до " + reach + " блоков");
     }
 
     /** Пепел сыплется не раньше волны, у центра — через минуту есть, бумага — только где рушились дома. */
@@ -453,41 +568,69 @@ class PallFieldTest {
         PallField p = new PallField(GROUND, NOON);
         double[] v = new double[4];
         int i = 20;
-        p.dust(i, 20 * 30, v);
-        assertTrue(v[3] > 0.2 * PallField.SIGMA_SPRAY && v[3] <= PallField.SIGMA_SPRAY, "брызги через полминуты " + v[3]);
+        p.spray(i, 20 * 30, v);
+        assertTrue(v[0] > 0.2 * PallField.SIGMA_SPRAY && v[0] <= PallField.SIGMA_SPRAY, "брызги через полминуты " + v[0]);
+        p.spray(i, 20 * 240, v);
+        assertEquals(0, v[0], 1e-12, "брызги выпали");
         p.dust(i, 20 * 240, v);
-        assertEquals(0, v[3], 1e-12, "брызги выпали");
         assertTrue(v[0] > 0, "а пыль ещё висит");
-        // фронт у края пелены — к 33 с: через минуту он прошёл, а ветра за ним на брызги мало
-        p.dust(PallField.BINS - 1, 20 * 60, v);
-        assertEquals(0, v[3], 1e-12, "у края пелены брызг нет");
+        // у края пелены ветра за фронтом на брызги мало
+        p.spray(PallField.BINS - 1, arrival(p, PallField.BINS - 1) + 20 * 10, v);
+        assertEquals(0, v[0], 1e-12, "у края пелены брызг нет");
         // брызги реже самой густой пыли и белые (их цвет и рассеяние — в шейдере)
         assertTrue(PallField.SIGMA_SPRAY < PallField.SIGMA_DENSE);
     }
 
     /**
+     * Брызги — свой слой со своей высотой: встают на высоту срыва гребней ({@link WaterModel#sprayHeight}), крупные капли
+     * выпадают — верх опускается к {@link PallField#SPRAY_SINK} её; с пылью и её ростом над нагретой землёй не связан.
+     */
+    @Test
+    void sprayHasItsOwnHeight() {
+        assertEquals(10, PallField.sprayTop(10, 0), 1e-12);
+        assertEquals(10 * PallField.SPRAY_SINK, PallField.sprayTop(10, 1e4), 1e-9);
+        double prev = 10;
+        for (double age = 1; age < 300; age += 1) {
+            assertTrue(PallField.sprayTop(10, age) < prev);
+            prev = PallField.sprayTop(10, age);
+        }
+        PallField p = new PallField(GROUND, NOON);
+        double[] dust = new double[4], spray = new double[4];
+        int i = 20;
+        double arrival = arrival(p, i);
+        double wind = GROUND.groundWind(p.radius(i));
+        for (double age : new double[]{5, 30, 90}) {
+            p.dust(i, arrival + 20 * age, dust);
+            p.spray(i, arrival + 20 * age, spray);
+            assertEquals(Math.max(1, PallField.sprayTop(Math.max(1, GROUND.blocks(WaterModel.sprayHeight(wind))), age)), spray[1], 1e-9);
+            assertTrue(spray[1] < dust[1], age + " с: брызги " + spray[1] + " не ниже пыли " + dust[1]);
+        }
+    }
+
+    /**
      * Чего под пеленой нет ({@link PallGround#hasLand}, {@link PallGround#hasWater}), того нет и в таблице: подрыв посреди
-     * моря — без пыли и мглы, над сушей — без брызг; высота слоя остаётся (брызги — в слое пыли).
+     * моря — без пыли и мглы, над сушей — без брызг; верх слоёв остаётся.
      */
     @Test
     void tableHoldsOnlyWhatIsUnderThePall() {
         PallField p = new PallField(GROUND, NOON);
-        float[] row = new float[8 * PallField.BINS];
+        float[] row = new float[4 * PallField.ROWS * PallField.BINS];
+        int dustRow = PallField.DUST_ROW * PallField.BINS, sprayRow = PallField.SPRAY_ROW * PallField.BINS, hazeRow = PallField.HAZE_ROW * PallField.BINS;
         p.row(20 * 120, true, false, row);
         boolean dust = false, haze = false;
         for (int i = 0; i < PallField.BINS; i++) {
-            assertEquals(0, row[4 * i + 3], 0, "брызги над сушей, узел " + i);
-            dust |= row[4 * i] > 0;
-            haze |= row[4 * (PallField.BINS + i)] > 0;
+            assertEquals(0, row[4 * (sprayRow + i)], 0, "брызги над сушей, узел " + i);
+            dust |= row[4 * (dustRow + i)] > 0;
+            haze |= row[4 * (hazeRow + i)] > 0;
         }
         assertTrue(dust && haze);
         p.row(20 * 30, false, true, row);
         boolean spray = false;
         for (int i = 0; i < PallField.BINS; i++) {
-            assertEquals(0, row[4 * i], 0, "пыль над морем, узел " + i);
-            assertEquals(0, row[4 * (PallField.BINS + i)], 0, "мгла над морем, узел " + i);
-            assertTrue(row[4 * i + 1] > 0, "высота слоя, узел " + i);
-            spray |= row[4 * i + 3] > 0;
+            assertEquals(0, row[4 * (dustRow + i)], 0, "пыль над морем, узел " + i);
+            assertEquals(0, row[4 * (hazeRow + i)], 0, "мгла над морем, узел " + i);
+            assertTrue(row[4 * (dustRow + i) + 1] > 0 && row[4 * (sprayRow + i) + 1] > 0, "верх слоя, узел " + i);
+            spray |= row[4 * (sprayRow + i)] > 0;
         }
         assertTrue(spray);
     }

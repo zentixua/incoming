@@ -257,6 +257,20 @@ public final class ClientNuclear {
         a.sounds.debris(p.pieces());
     }
 
+    /**
+     * Прогреть то, что подрыв строит в потоке кадра в миг прихода пакета ({@link Active}: стена пыли и пелена — законы
+     * слоя пыли {@code DustModel}, таблицы прихода фронта): загрузка классов и компиляция горячих мест, у подрывов у земли
+     * и в воздухе. Без этого первый подрыв за запуск стоит кадру втрое дороже. Звать в фоне, раз за запуск
+     * ({@code IncomingClient.login}).
+     */
+    public static void warm() {
+        for (boolean surface : new boolean[]{true, false}) {
+            Detonation d = new Detonation(-1, new Vec3(0, surface ? 64 : 564, 0), 64, 15, surface, 0, 0, 5, 20_000, 0, 1, false, 1);
+            new BlastWall(d, false);
+            new PallField(d, 0);
+        }
+    }
+
     public static void reset() {
         stopAll();
         DETONATIONS.clear();
@@ -315,7 +329,8 @@ public final class ClientNuclear {
             // вода под эпицентром — до карты под пеленой: та заполняет неизвестное ею
             NukeWater.resolve(a, level);
             double wall = a.wall.reach(a.seconds(0));
-            if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, heights, water);
+            double seen = Math.hypot(eye.x - a.d.burst().x, eye.z - a.d.burst().z);
+            if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, seen, heights, water);
             // смерчи огненного шторма — по рельефу под ними
             if (heights != null) a.storm.track(a.ticks(1) / 20.0, heights);
             NukeWater.tick(a, level, eye);

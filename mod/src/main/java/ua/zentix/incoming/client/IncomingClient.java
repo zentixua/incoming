@@ -274,11 +274,19 @@ public final class IncomingClient {
     /**
      * Шум объёма ядерного гриба — в фоне со входа в мир (около секунды одного ядра, раз за запуск игры): огненный шар —
      * объём гриба с первого мига, и подрыв без предупреждения о пуске ({@code /incoming nuke now}) иначе первую секунду
-     * был бы без тела.
+     * был бы без тела. Там же, раз за запуск, — прогрев того, что подрыв строит в потоке кадра ({@link ClientNuclear#warm}:
+     * стена пыли и пелена).
      */
     private static void login(ClientPlayerNetworkEvent.LoggingIn e) {
         PallPass.prepare();
+        if (!nukeWarmed) {
+            nukeWarmed = true;
+            net.minecraft.Util.backgroundExecutor().execute(ClientNuclear::warm);
+        }
     }
+
+    /** Подрыв прогрет ({@link #login}). */
+    private static boolean nukeWarmed;
 
     private static void logout(ClientPlayerNetworkEvent.LoggingOut e) {
         ClientSounds.reset();

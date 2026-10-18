@@ -18,11 +18,14 @@ import java.util.stream.IntStream;
  * и луч кончался бы у самого глаза — под горизонтом ровный срез без пелены. Второй канал — доля воды в клетке: из чего
  * пелена ({@link PallField}: над сушей пыль, над водой брызги; шейдер берёт её там, откуда вещество подняло).
  * <p>
- * Квадрат {@link #SIDE}² клеток вокруг эпицентра на всю рамку пелены ({@link PallField#extent}) и голову стены пыли (растёт — карта
- * перекладывается на крупнее, известное остаётся). Тик клиента замеряет {@link #PER_TICK} клеток по кругу, от эпицентра
- * наружу, — по четырём колонкам в клетке, тем, что знает клиент ({@code heights}, {@code water}: свои чанки, плитки карты
- * рельефа — с Distant Horizons и вдали); раз увиденная клетка остаётся такой, какой её видели (ушёл игрок — чанки
- * выгрузились). Что под эпицентром, известно всегда (землю знает сервер, воду — {@code NukeWater.under}: чанк, плитка карты
+ * Квадрат {@link #SIDE}² клеток вокруг эпицентра на пелену у её источника ({@link PallField#sourceExtent}: таблица,
+ * шлейф мглы, базисная волна), голову стены пыли и камеру с запасом {@link #AROUND_EYE_M} (растёт — карта
+ * перекладывается на крупнее, известное остаётся), но не шире всей рамки пелены ({@link PallField#extent}). Снос за час
+ * уносит пыль на десятки километров: карта на весь снос огрубела бы до полукилометра в клетке и у камеры, а дальше её
+ * края рельеф — как у края (пол слоя, конец луча), вещество — по месту, откуда пыль подняло (оно у источника, на
+ * карте). Тик клиента замеряет {@link #PER_TICK} клеток по кругу, от эпицентра наружу, — по четырём колонкам в клетке,
+ * тем, что знает клиент ({@code heights}, {@code water}: свои чанки, плитки карты рельефа — с Distant Horizons и
+ * вдали); раз увиденная клетка остаётся такой, какой её видели (ушёл игрок — чанки выгрузились). Что под эпицентром, известно всегда (землю знает сервер, воду — {@code NukeWater.under}: чанк, плитка карты
  * или уровень моря). Неизвестное заполняется по известному — каждый канал по своей природе:
  * <ul>
  * <li>высота — поле сплошное: средним известного вокруг (pull-push, {@link #pullPush}: средние по уменьшенным копиям,
@@ -49,6 +52,8 @@ public final class PallGround {
     static final int FILL_TICKS = 20;
     /** Рамка пелены выросла за карту — новая карта с этим запасом. */
     static final double GROW = 1.25;
+    /** Рельеф вокруг камеры на карте — на столько метров (× масштаб удара): там пол слоя и конец луча видны вблизи. */
+    static final double AROUND_EYE_M = 2000;
     /** Воды или суши меньше этой доли во всей карте — её под пеленой нет ({@link #hasWater}, {@link #hasLand}). */
     static final float TRACE = 1e-3f;
     private static final int LEVELS = Integer.numberOfTrailingZeros(SIDE) + 1;
@@ -64,6 +69,7 @@ public final class PallGround {
     }
 
     private final PallField pall;
+    private final Detonation d;
     private final double cx, cz, groundY;
     /** Полсторона карты и клетка, блоки. */
     private double half, cell;
@@ -94,13 +100,19 @@ public final class PallGround {
     private static final int EPICENTRE = SIDE * SIDE;
 
     PallGround(Detonation d, PallField pall) {
+        this(d, pall, 0);
+    }
+
+    /** Карта полстороны {@code half} блоков (0 — по рамке пелены): проверки заполнения — на карте своих клеток. */
+    PallGround(Detonation d, PallField pall, double half) {
         this.pall = pall;
+        this.d = d;
         this.cx = d.burst().x;
         this.cz = d.burst().z;
         this.groundY = d.groundY();
         Arrays.fill(known, Float.NaN);
         Arrays.fill(knownWet, Float.NaN);
-        resize(pall.extent(0) * GROW);
+        resize(half > 0 ? half : pall.extent(0) * GROW);
         fill();
     }
 
@@ -125,14 +137,15 @@ public final class PallGround {
     }
 
     /**
-     * Тик клиента: рамка пелены к {@code ticks} (тики после подрыва) или голова стены пыли ({@code wall} — докуда она,
-     * блоки, {@link BlastWall#reach}: её тающий край идёт до 0,3 psi, вдвое дальше пыли пелены) выросли за карту —
-     * переложить; следующие клетки —
+     * Тик клиента: пелена у источника к {@code ticks} (тики после подрыва), голова стены пыли ({@code wall} — докуда она,
+     * блоки, {@link BlastWall#reach}: её тающий край идёт до 0,3 psi, вдвое дальше пыли пелены) или камера с запасом
+     * ({@code eye} — до неё от эпицентра по земле, блоки; не дальше всей рамки пелены) вышли за карту — переложить;
+     * следующие клетки —
      * по {@code heights} и {@code water} (null — не знать: измерение с потолком; карта остаётся как есть); узнали новое —
      * заполнить заново, но не чаще раза в {@link #FILL_TICKS} тиков; вода под эпицентром решилась иначе — сразу.
      */
-    void survey(double ticks, double wall, @Nullable Sightline.Heights heights, @Nullable FarTerrain.Water water) {
-        double extent = Math.max(pall.extent(ticks), wall);
+    void survey(double ticks, double wall, double eye, @Nullable Sightline.Heights heights, @Nullable FarTerrain.Water water) {
+        double extent = Math.max(wall, Math.min(pall.extent(ticks), Math.max(pall.sourceExtent(ticks), eye + d.blocks(AROUND_EYE_M))));
         // карта и её полсторона уходят в кадр вместе: переложенная — сразу заполнена
         boolean grew = extent > half;
         if (grew) resize(extent * GROW);

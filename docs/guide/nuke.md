@@ -28,9 +28,11 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
 
 Everyone within 20 km of the target hears a siren in advance. Then come the flash, the fireball and the mushroom cloud.
 The blast wave itself is invisible. The wind right behind it lifts what lies on the ground (dust and earth, smoke over a
-burning town, spray over water) and rolls it forward as a churning wall, like a dust storm. At 15 kt the wall is about
-150 m tall 1 km from the burst and about 50 m tall 4 km out; farther away it thins out and fades at about 10 km, where
-the wind is too weak to lift dust. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
+burning town, spray over water) and rolls it forward as a churning wall, like a dust storm. The wall is the youngest
+dust of the pall: right at the front it hugs the ground, and behind it the dust grows thicker and taller. At 15 kt it is
+30–40 m tall 1 km from the burst and about 60 m tall 4 km out. After an air burst it stays dense out to about 4.5 km,
+thins out beyond and fades at about 8 km, where the wind is too weak to lift dust; after a ground burst it is dense out
+to about 3.5 km and fades at about 7 km. Inside the wall it is dark. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
 In its first seconds the fireball lights the top of the wall orange, even by day.
 The wave breaks buildings as it reaches them: their pieces fly with the dust. The ground doesn't shake before the
 wave. When it reaches you, the wind behind it pushes you while you stand: your
@@ -59,12 +61,15 @@ A burning town lights the foot of the column orange from below, and the cap high
 so in rain, the cloud fades into the haze. Most haze lies in the lowest kilometre or two of air, so the cap high above
 stays clearer than the foot of the column at the same distance.
 
-Behind the wave a pall of dust climbs over the town for a minute or two, up to about 200 m high at 15 kt and lower
+Behind the wave the dust keeps rising as a pall: within seconds to 50–100 m, and over the next minute the ground
+heated by the flash lifts it higher. For a 15 kt air burst it tops out at about 230 m 1 km from the burst, 150 m at 1.4 km and lower
 toward the edge. From a rooftop near the blast you first see the wave cross the town, then the dust swallows you. At
 night the fireball first lights it as bright as day for several seconds, then the fires light it orange. The top of
 the dust wall is lit the same way, and the side of the wall away from the fireball stays dark. The pall's clumps are
-lighter on the side facing the light and darker in their folds. In the thick of it you see only some 40 m and sounds are
-muffled. The dust also fills the valleys around the town. It settles over a few minutes and drifts downwind. Where the
+lighter on the side facing the light and darker in their folds. Inside it you see only a few metres, it is dark even at noon, and sounds are
+muffled. At 15 kt it stays dark about 20 minutes 1.4 km from the burst, as in Hiroshima; within half a kilometre of the
+burst it clears in minutes, drawn up into the column of the mushroom cloud. The dust also fills the valleys around the
+town. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for about an hour and a half, a little longer after an air burst. Where the
 light of the fireball set the town on fire, a firestorm builds up over a few minutes. Columns of smoke rise over the
 burning blocks, lean downwind and merge higher up into a ceiling of smoke over the town. At night the fires light it
 orange-red from below, and the glow flickers; from a couple of kilometres away the town glows under its smoke, and the
@@ -107,7 +112,8 @@ grass, leaves and wood in the light start to smoke before the wave comes.
 
 Over water the wave raises no dust. It runs across the water as a dark ring of ripples, with a wall of spray behind it
 where the wind is strong, and white foam near the centre. Behind the wave the air over the water fills with white spray
-instead of a dust pall. It thins within a minute and is gone in about three. Dust that the wind carries from the shore
+instead of a dust pall. It stays low, at the height the wind tears it off the crests, sinks as the big drops fall, thins
+within a minute and is gone in about three. Dust that the wind carries from the shore
 out over the water stays brown, and spray carried ashore stays white. A burst on the water or just above it throws up
 a hollow column of water, about a kilometre high at 15 kt within a few seconds. Its top opens into a crown of spray,
 and the rising mushroom cloud covers it after about ten seconds. Right behind the wave a thin white cloud of

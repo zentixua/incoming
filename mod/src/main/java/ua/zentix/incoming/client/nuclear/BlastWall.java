@@ -2,54 +2,46 @@ package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.util.Mth;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.CloudModel;
+import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.nuclear.model.FireballModel;
+import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 /**
- * Стена пыли ударной волны (DESIGN-nuke §6): что поднимает ветер за фронтом. Сам фронт не виден — это скачок давления
- * в прозрачном воздухе; за ним воздух дует от эпицентра (Ренкин–Гюгонио, {@link BlastModel#windSpeed}: 72 м/с при 5 psi,
- * 17 м/с при 1 psi) и срывает то, что лежит на земле: пыль и грунт, обломки, дым того, что уже горит от светового
- * импульса, над водой — брызги с гребней ({@link WaterModel#spray}). Своего вещества у волны нет.
+ * Голова слоя пыли ударной волны (DESIGN-nuke §6): самая молодая, низкая и густая часть того же слоя, что потом стоит
+ * пеленой ({@link PallField}), — законы одни ({@link DustModel}). Сам фронт не виден — это скачок давления в прозрачном
+ * воздухе; ветер за ним вдоль земли ({@link Detonation#groundWind}) поднимает с земли пыль и обломки, над водой —
+ * брызги ({@link WaterModel#spray}). Своего вещества у волны нет.
  * <p>
- * Пыль встаёт не на самом фронте: ветру нужно время её сорвать и поднять ({@link #LIFT_S}), передний край пыли идёт за
- * фронтом на его путь за это время, брызги — ещё дальше ({@link WaterModel#SPRAY_LAG}). Сколько пыли — по ветру
- * ({@link #lift}): густота растёт как квадрат скорости сверх порога срыва, стена непрозрачна от штормового ветра, а у
- * порога (~5 м/с, ~0,3 psi) её нет. Голова стены — вал, как у пыльной бури (хабуба) или струи вдоль стенки: у земли
- * воздух за фронтом дует быстрее, чем выше, у переднего края пыль идёт вверх, поверху — назад ({@link #rollPhase}).
- * Голова — то, где пыль поднимается сейчас, она идёт с фронтом; поднятая пыль за ней остаётся хвостом головы и пеленой
- * ({@link PallField}: покрытие по давлению на земле).
+ * Голова — клин от фронта назад до места, где кончилась положительная фаза (своя на каждой дальности, {@link HobBlast},
+ * {@link #length}; у наземного первые ~0,6 с — короче: голова с переходом к пелене не заходит в огненный шар на земле,
+ * {@link #underBall}): у переднего края пыли ещё нет, и слой нулевой высоты; назад поднятое растёт как импульс скоростного
+ * напора ({@link DustModel#lifted}), а верх — как пыльный пограничный слой Kuhl, u^(5/6) ({@link #top}); поэтому
+ * густота у земли — больше всего у самого края, на десятой части клина (в 2,6 раза гуще, чем в его конце,
+ * {@link #shape}), а столб над землёй растёт назад. За клином пыль остаётся слоем пелены (её таблица — та же пыль,
+ * {@link PallField}): голова отдаёт ей место на полдлины клина ({@link #handoff}). Где ветер больше не поднимает пыль,
+ * густоты у края нет, и голова сходит на нет, отрываясь от фронта, — пыль стоит (MET: «перестала идти по земле на
+ * 945 м»).
  * <p>
- * Высота и вал — законы прежних клубов стены ({@code CloudPuffs}; шаг 4 плана «гриб и шар — объёмом»); стена — объём
- * в проходе пелены ({@code PallPass}: {@code pallWall} в {@code pall.glsl}, числа слота — {@link #slot}). Метры и секунды
- * модели; в мир — через {@link Detonation#blocks}.
+ * Клин — объём в проходе пелены ({@code PallPass}: {@code pallWall*} в {@code pall.glsl}, числа слота — {@link #slot}),
+ * с вихрями слоя (шум, повёрнутый на угол вала, {@link #rollPhase}). Метры и секунды модели; в мир — через
+ * {@link Detonation#blocks}.
  */
 public final class BlastWall {
     /**
-     * Голова стены в момент: передний край пыли (блоки от эпицентра по земле), её высота (блоки) и густота 0..1 (0 — стены
-     * нет: ещё не встала или осела).
+     * Голова в момент: передний край пыли (блоки от эпицентра по земле), верх клина (блоки) и густота 0..1 против самой
+     * густой пыли пелены прежде ({@link PallField#SIGMA_DENSE}, видно на 40 м; 0 — головы нет).
      */
     public record Wall(double head, double height, double density) {
         static final Wall NONE = new Wall(0, 0, 0);
     }
 
-    /**
-     * За сколько секунд модели после фронта ветер поднимает пыль: передний край пыли идёт за фронтом на его путь за это
-     * время. Оценка: сальтация на сухом грунте разгоняется за доли секунды, а видимой стене нужна толща запылённого
-     * воздуха; вдали (фронт в игре — 0,42 скорости звука) это ~35 м.
-     */
-    static final double LIFT_S = 0.25;
-    /** Ветер, с которого он срывает пыль с сухого грунта (по шкале Бофорта 4 — «поднимает пыль»), м/с. */
-    static final double LIFT_FROM = 5;
-    /** Ветер, при котором стена — самая густая пыль пелены (видно на 40 м, как в хабубе), м/с. */
-    static final double LIFT_FULL = 20;
-    /** Радиус вала — доля высоты стены; у эпицентра — не больше четверти радиуса головы. */
-    static final double ROLL = 0.42, ROLL_NEAR = 0.25;
+    /** Радиус вала — доля верха клина: вихри слоя — его толщины (Kuhl §3); им вал крутится. */
+    static final double ROLL = 0.42;
     /** Самый быстрый оборот вала, рад/с: у эпицентра воздух за фронтом — сотни метров в секунду, вал мельтешил бы. */
     static final double ROLL_MAX = 1.5;
-    /** Голова отстаёт от фронта (там, где ветер уже не срывает пыль) и расплывается со скоростью столько м/с. */
-    static final double SETTLE_SPEED = 12;
-    /** Плитка шума клубов головы — доля её высоты: клубы (четверть плитки) — около пятой части высоты. */
+    /** Плитка шума клубов головы — доля верха клина: клубы (четверть плитки) — около пятой его части. */
     static final double TILE = 0.9;
     /**
      * Клубы головы — две фазы шума (Neyret 2003): у каждой окружность головы в плитках постоянна, пока голова не вырастет
@@ -57,6 +49,12 @@ public final class BlastWall {
      * растущем кольце либо скользили бы вдоль него со скоростью фронта, либо растягивались в разы.
      */
     static final double PHASE_GROWTH = 1.25;
+    /** Голова отдаёт место пелене от конца клина (доля его длины) до этой доли ({@link #handoff}). */
+    static final double HANDOFF_FROM = 1, HANDOFF_TO = 1.5;
+    /** Головы нет, когда ослабление в ней слабее этого, 1/м (видно на 4 км). */
+    static final double GONE = 1e-3;
+    /** Узлов таблицы слоя по дальности. */
+    private static final int NODES = 256;
     /** Узлов таблицы угла вала по времени. */
     private static final int ROLL_NODES = 256;
     /** Облако Вильсона: середина оболочки — доля радиуса фронта (за фронтом, в фазе разрежения), полутолщина — доля. */
@@ -69,8 +67,16 @@ public final class BlastWall {
     private final Detonation d;
     /** Высота подрыва над землёй, м; мощность — кубическим корнем от 15 кт (масштаб форм). */
     private final double hob, ys;
-    /** Докуда голова идёт с фронтом — ветер за ним ещё срывает пыль ({@link #LIFT_FROM}, ~0,3 psi), м по земле. */
-    private final double ringStop;
+    /** Докуда таблица слоя по земле, м. */
+    private final double tableM;
+    /**
+     * Слой по дальности (узлы от 0 до {@link #tableM}): толща всего поднятого ({@link DustModel.Column#lifted}) и когда на
+     * месте кончается положительная фаза — приход фронта в игре и фаза на месте ({@link DustModel.Column#positive}), с
+     * модели (не убывает с дальностью).
+     */
+    private final double[] lifted = new double[NODES], phaseEnd = new double[NODES];
+    /** Положительная фаза в конце таблицы, с модели: за таблицей конец клина — путь фронта за неё. */
+    private final double lastPositive;
     /** Влажный воздух — облако Вильсона есть ({@link CloudModel#wilsonCloud}). */
     private final boolean humid;
     /** Угол вала по времени ({@link #rollPhase}): секунды модели и угол, рад. */
@@ -85,7 +91,17 @@ public final class BlastWall {
         this.humid = humid;
         hob = Math.max(0, d.hobMetres());
         ys = Math.cbrt(d.yieldKt() / 15);
-        ringStop = d.metres(d.groundRange(BlastModel.kpa(0.3)));
+        tableM = Math.max(1, HobBlast.rangeFor(0.2, hob, d.yieldKt()));
+        double positive = 0;
+        for (int i = 0; i < NODES; i++) {
+            double g = tableM * i / (NODES - 1);
+            DustModel.Column c = DustModel.column(g, hob, d.yieldKt(), d.surface(), d.visibility(), DustModel.Surface.REFERENCE);
+            lifted[i] = c.lifted();
+            positive = c.positive();
+            phaseEnd[i] = arrival(g) + positive;
+            if (i > 0) phaseEnd[i] = Math.max(phaseEnd[i], phaseEnd[i - 1]);
+        }
+        lastPositive = positive;
         // угол вала — интеграл скорости оборота по времени (средней точкой), узлы гуще в начале
         double end = CloudPuffs.lifeSeconds(d);
         for (int i = 1; i <= ROLL_NODES; i++) {
@@ -105,18 +121,17 @@ public final class BlastWall {
         return level.getBiome(pos).value().getModifiedClimateSettings().downfall();
     }
 
-    /**
-     * Высота стены пыли, м: 300 у центра, ~155 на 1 км и ~60 на 3 км у 15 кт — по приведённой дальности (как и давление),
-     * поэтому у любой мощности та же форма.
-     */
-    static double wallHeight(double groundM, double ys) {
-        double x = groundM / (900 * ys);
-        return (40 + 260 / (1 + x * x)) * ys;
+    /** Таблица слоя на {@code groundM} м от эпицентра (линейно между узлами; дальше таблицы — пыли нет). */
+    private double at(double[] table, double groundM) {
+        double x = Math.max(0, groundM) / tableM * (NODES - 1);
+        if (x >= NODES - 1) return 0;
+        int i = (int) x;
+        return Mth.lerp(x - i, table[i], table[i + 1]);
     }
 
-    /** Радиус вала головы, м, у переднего края пыли на {@code head} м от эпицентра. */
-    double rollRadius(double head) {
-        return Math.max(1, Math.min(ROLL * wallHeight(head, ys), ROLL_NEAR * head));
+    /** Приход фронта в игре на {@code groundM} м от эпицентра по земле, секунды модели. */
+    private double arrival(double groundM) {
+        return d.arrivalTicks(d.slantOf(d.blocks(groundM))) / (20 * d.scale());
     }
 
     /** Фронт по земле в момент t (секунды модели), м: наклонная дальность фронта в игре — по земле. */
@@ -126,41 +141,100 @@ public final class BlastWall {
         return Math.sqrt(Math.max(0, front * front - hob * hob));
     }
 
-    /**
-     * Передний край пыли по земле в момент t (секунды модели), м: фронт {@link #LIFT_S} назад, пока ветер за ним срывает
-     * пыль; дальше голова отстаёт и расплывается ({@link #SETTLE_SPEED}).
-     */
+    /** Передний край пыли по земле в момент t (секунды модели), м: сам фронт в игре — пыль встаёт сразу за ним. */
     double head(double t) {
-        return Math.min(shock(t - LIFT_S), ringStop) + SETTLE_SPEED * settle(t);
-    }
-
-    /** Сколько секунд голова уже отстаёт (фронт за ней прошёл место, где ветер ещё срывает пыль). */
-    double settle(double t) {
-        return shock(t - LIFT_S) >= ringStop ? t - LIFT_S - timeTo(ringStop) : 0;
+        return shock(t);
     }
 
     /**
-     * Скорость оборота вала, рад/с: воздух за фронтом (давление у головы) на радиус вала, не быстрее {@link #ROLL_MAX}.
-     * Фронт в игре вдали медленнее настоящего ({@code FrontProfile}), а вал крутит сам воздух у головы — его скорость
-     * настоящая.
+     * Длина клина в момент t, м: от фронта в игре до места, где положительная фаза на месте уже кончилась ({@link #tail}),
+     * — за краем пыль моложе своей фазы, её поднимает ветер волны; пока фаза не кончилась нигде — весь путь фронта.
+     * Голова с переходом к пелене ({@link #HANDOFF_TO} длин) — не в огненном шаре на земле ({@link #underBall}): там шар,
+     * а не пыль, и клин короче — до места, где пыль ещё моложе своей фазы ({@link #backAge}).
+     */
+    double length(double t) {
+        double shock = shock(t), len = shock - tail(t), ball = underBall(t);
+        if (ball > 0) len = Math.min(len, (shock - ball) / HANDOFF_TO);
+        return Math.max(1e-3, len);
+    }
+
+    /**
+     * Докуда по земле от эпицентра в момент t (секунды модели) лежит огненный шар, м; 0 — земли он не касается
+     * ({@link FireballModel#groundRadius}: тот же шар, что в грибе). У наземного 15 кт фронт выходит из шара к ~0,13 с
+     * (первые 2 мс он на метр впереди шара — голова там в сантиметр высотой), клин доходит до конца фазы к ~0,6 с, шар
+     * отрывается от земли к ~3,6 с; воздушного (592 м) шар земли не касается.
+     */
+    double underBall(double t) {
+        return FireballModel.groundRadius(t, hob, d.yieldKt(), d.surface());
+    }
+
+    /** Конец клина по земле в момент t (секунды модели), м. */
+    private double back(double t) {
+        return Math.max(0, shock(t) - length(t));
+    }
+
+    /**
+     * Возраст пыли в конце клина в момент t, секунды модели: с прихода фронта в игре, не больше положительной фазы на месте
+     * (с модели).
+     */
+    private double backSeconds(double t) {
+        double back = back(t);
+        return Mth.clamp(t - arrival(back), 0, HobBlast.positivePhaseSeconds(back, hob, d.yieldKt()));
+    }
+
+    /**
+     * Какая доля положительной фазы на месте прошла к моменту t там, где кончается клин, 0..1: 1 — клин до конца фазы
+     * ({@link #tail}). Пока фаза не кончилась нигде, клин — весь путь фронта, и пыль в его конце (у эпицентра) моложе своей
+     * фазы; у огненного шара клин короче — тоже. Такая пыль ниже и тоньше: пограничный слой за свежим фронтом начинается
+     * с нулевой толщины.
+     */
+    double backAge(double t) {
+        double back = back(t);
+        return Mth.clamp((t - arrival(back)) / Math.max(1e-9, HobBlast.positivePhaseSeconds(back, hob, d.yieldKt())), 0, 1);
+    }
+
+    /**
+     * Докуда по земле к моменту t (секунды модели) положительная фаза кончилась, м: где приход фронта в игре и фаза на
+     * месте вместе — не позже t (0 — нигде). За таблицей — путь фронта за фазу в её конце.
+     */
+    double tail(double t) {
+        if (t <= phaseEnd[0]) return 0;
+        if (t >= phaseEnd[NODES - 1]) return Math.max(tableM, shock(t - lastPositive));
+        int lo = 0, hi = NODES - 1;
+        while (hi - lo > 1) {
+            int m = (lo + hi) >>> 1;
+            if (phaseEnd[m] <= t) lo = m;
+            else hi = m;
+        }
+        double f = (t - phaseEnd[lo]) / Math.max(1e-12, phaseEnd[hi] - phaseEnd[lo]);
+        return tableM * (lo + Mth.clamp(f, 0, 1)) / (NODES - 1);
+    }
+
+    /**
+     * Верх клина в момент t, м: верх слоя там, где кончается клин, в возрасте пыли там — пыльный пограничный слой по пути
+     * фронта по своей нормали за местом ({@link DustModel#waveTop}; к концу фазы — {@link DustModel.Column#first}).
+     */
+    double height(double t) {
+        // не ниже миллиметра, как длина клина: делители шейдера (smoothstep по верху) не вырождаются
+        return Math.max(1e-3, DustModel.waveTop(back(t), hob, d.yieldKt(), backSeconds(t)));
+    }
+
+    /** Ослабление у земли в конце фазы волны там, где пыль подняло на {@code groundM}, при верхе {@code top} (1/м). */
+    private double sigma(double groundM, double top) {
+        return at(lifted, groundM) / (PallField.column(0) * Math.max(top, 1e-3));
+    }
+
+    /**
+     * Скорость оборота вала, рад/с: воздух за фронтом на радиус вала, не быстрее {@link #ROLL_MAX}. Фронт в игре вдали
+     * медленнее настоящего ({@code FrontProfile}), а вал крутит сам воздух у головы — его скорость настоящая.
      */
     double rollSpeed(double t) {
-        double head = head(t);
-        return Math.min(ROLL_MAX, wind(head) / rollRadius(head));
+        return Math.min(ROLL_MAX, wind(head(t)) / Math.max(1, ROLL * height(t)));
     }
 
     /** Ветер сразу за фронтом вдоль земли на {@code groundM} от эпицентра по земле, м/с. */
     double wind(double groundM) {
-        return d.groundWind(d.blocks(groundM));
-    }
-
-    /**
-     * Сколько пыли поднимает ветер {@code u} (м/с) — доля самой густой 0..1, от {@link #LIFT_FROM} до {@link #LIFT_FULL}:
-     * вынос пыли с земли растёт как куб динамической скорости сверх порога срыва (Gillette; Marticorena &amp; Bergametti),
-     * а густота в голове, через которую ветер её несёт, — как вынос на скорость: u² − u₀².
-     */
-    static double lift(double u) {
-        return Mth.clamp((u * u - LIFT_FROM * LIFT_FROM) / (LIFT_FULL * LIFT_FULL - LIFT_FROM * LIFT_FROM), 0, 1);
+        return d.groundWind(d.blocks(Math.max(0, groundM)));
     }
 
     /** Угол вала в момент t (секунды модели), рад: растёт — у переднего края пыль идёт вверх, поверху — назад. */
@@ -175,30 +249,43 @@ public final class BlastWall {
     }
 
     /**
-     * Густота головы 0..1 в момент t: сколько пыли поднимает ветер у головы ({@link #lift}); встаёт за полторы секунды
-     * после того, как пыль начала подниматься.
+     * Ослабление пыли у земли в конце фазы волны в момент t (1/м): у переднего края (пыль, которую волна поднимает сейчас)
+     * и в конце клина — в {@code into}; ослабление брызг над водой — третьим. Вернёт наибольшее; пока фронт в огненном
+     * шаре ({@link #underBall}) — нули: головы ещё нет.
      */
-    double density(double t) {
-        double head = head(t);
-        if (head <= 0) return 0;
-        return lift(wind(head)) * smooth(LIFT_S, LIFT_S + 1.5, t);
+    double sigmas(double t, double[] into) {
+        double edge = head(t), len = length(t), top = height(t);
+        if (edge <= underBall(t)) {
+            java.util.Arrays.fill(into, 0, 3, 0);
+            return 0;
+        }
+        // клин короче фазы (у шара, или фаза ещё нигде не кончилась): пыль в конце подняла лишь долю поднятого за фазу
+        // (DustModel.lifted), а верх ниже — слой в возрасте этой пыли (height); у края — та же доля фазы: поднятое у фронта
+        // растёт с возрастом линейно
+        double age = backAge(t);
+        into[0] = age * sigma(edge, top);
+        into[1] = DustModel.lifted(age) * sigma(Math.max(0, edge - len), top);
+        into[2] = PallField.SIGMA_SPRAY * WaterModel.spray(wind(Math.max(0, edge - 0.5 * len)));
+        return Math.max(into[0], Math.max(into[1], into[2]));
     }
 
-    /** Голова стены в момент t (секунды модели): блоки и густота. */
+    /** Голова в момент t (секунды модели): блоки и густота против самой густой пыли пелены прежде. */
     public Wall wall(double t) {
-        double head = head(t), k = density(t);
-        if (head <= 0 || k <= 0) return Wall.NONE;
-        return new Wall(d.blocks(head), d.blocks(wallHeight(head, ys)), k);
+        double[] s = new double[3];
+        if (t <= 0 || sigmas(t, s) < GONE) return Wall.NONE;
+        return new Wall(d.blocks(head(t)), d.blocks(height(t)), Math.min(1, Math.max(s[0], s[1]) / PallField.SIGMA_DENSE));
     }
 
     /**
      * Числа слота стены для {@code pall.glsl} в момент t (секунды модели), блоки и 1/блок; false — ни головы, ни облака
-     * Вильсона (в {@code into} нули). Голова — mat4 по столбцам ({@code pallWall}):
+     * Вильсона (в {@code into} нули). Голова — mat4 по столбцам ({@code pallWall*}):
      * <ul>
-     *     <li>[0..3] — передний край пыли от эпицентра, радиус вала, верх головы, ослабление в её самой густой части;</li>
-     *     <li>[4..7] — угол вала (рад); брызги над водой: отставание от края пыли, доля высоты, ослабление;</li>
+     *     <li>[0..3] — передний край пыли от эпицентра, длина клина, его верх в конце; ослабление-масштаб (1/блок; 0 — головы
+     *     нет);</li>
+     *     <li>[4..7] — угол вала (рад); брызги над водой: отставание от края пыли, доля верха, ослабление (1/блок);</li>
      *     <li>[8..11] — две фазы клубов: окружность головы в плитках у каждой, вес первой, плитка шума;</li>
-     *     <li>[12..15] — номера фаз (у каждой свои клубы), 0, 0.</li>
+     *     <li>[12..15] — номера фаз (у каждой свои клубы); ослабление пыли у земли в конце фазы волны у переднего края и в
+     *     конце клина — доли масштаба.</li>
      * </ul>
      * [16..19] — облако Вильсона ({@code pallWilson}): радиус середины оболочки от точки подрыва, полутолщина, ослабление в
      * середине (0 — облака нет), высота точки подрыва над землёй под эпицентром.
@@ -206,28 +293,35 @@ public final class BlastWall {
     public boolean slot(double t, float[] into) {
         java.util.Arrays.fill(into, 0, SLOT, 0f);
         boolean any = false;
-        double head = head(t), k = density(t);
-        if (head > 0 && k > 0) {
+        double[] s = new double[3];
+        double ref = t > 0 ? sigmas(t, s) : 0;
+        if (ref >= GONE) {
             any = true;
-            double a = rollRadius(head), height = wallHeight(head, ys);
+            double head = head(t), len = length(t), top = height(t);
             into[0] = (float) d.blocks(head);
-            into[1] = (float) d.blocks(a);
-            into[2] = (float) d.blocks(height);
-            into[3] = (float) (PallField.SIGMA_DENSE / d.scale() * k);
+            into[1] = (float) d.blocks(len);
+            into[2] = (float) d.blocks(top);
+            into[3] = (float) (ref / d.scale());
             into[4] = (float) (rollPhase(t) % (2 * Math.PI));
-            // над водой — брызги: ниже стены пыли, позади тёмного кольца на путь головы за SPRAY_LAG
-            double u = wind(head);
-            into[5] = (float) d.blocks(Math.max(0, head - head(Math.max(0, t - WaterModel.SPRAY_LAG))));
-            into[6] = (float) Mth.clamp(WaterModel.sprayHeight(u) / Math.max(1, height), 0.15, 1);
-            into[7] = (float) (PallField.SIGMA_SPRAY / d.scale() * WaterModel.spray(u) * smooth(LIFT_S, LIFT_S + 1.5, t));
+            // над водой — брызги: ниже пыли (высота срыва гребней), позади края пыли на путь фронта за SPRAY_LAG, но тоже
+            // не в огненном шаре на земле: у него — ближе к фронту
+            double u = wind(Math.max(0, head - 0.5 * len)), ball = underBall(t);
+            double lag = Math.max(0, head - head(Math.max(0, t - WaterModel.SPRAY_LAG)));
+            if (ball > 0) lag = Math.min(lag, Math.max(0, head - ball - HANDOFF_TO * len));
+            into[5] = (float) d.blocks(lag);
+            into[6] = (float) Mth.clamp(WaterModel.sprayHeight(u) / Math.max(1, top), 0.15, 1);
+            into[7] = (float) (s[2] / d.scale());
             double psi = Math.log(Math.max(head, 1)) / Math.log(PHASE_GROWTH);
             for (int j = 0; j < 2; j++) {
                 double phase = psi + 0.5 * j, n = Math.floor(phase);
-                into[8 + j] = (float) around(Math.pow(PHASE_GROWTH, n - 0.5 * j));
+                // окружность — у середины фазы (там её вес полный): к началу клубы вдоль кольца короче, к концу — длиннее
+                into[8 + j] = (float) around(Math.pow(PHASE_GROWTH, n + 0.5 - 0.5 * j));
                 into[12 + j] = (float) (n % 64);
                 if (j == 0) into[10] = (float) (1 - Math.abs(2 * (phase - n) - 1));
             }
-            into[11] = (float) d.blocks(TILE * height);
+            into[11] = (float) d.blocks(TILE * top);
+            into[14] = (float) (s[0] / ref);
+            into[15] = (float) (s[1] / ref);
         }
         double wilson = wilson(t);
         if (wilson > 0) {
@@ -244,10 +338,13 @@ public final class BlastWall {
 
     /**
      * Окружность головы радиуса {@code head} м в плитках шума — целое: плитка повторяется, шва на кольце нет. Фаза клубов
-     * держит её, пока голова растёт.
+     * держит её, пока голова растёт. Плитка — та же, что в слоте ({@code [11]}: {@link #TILE} верха клина), в тот миг,
+     * когда голова была на {@code head}: иначе клубы вдоль кольца шли бы длиннее, чем поперёк.
      */
     double around(double head) {
-        return Math.max(1, Math.round(2 * Math.PI * head / (TILE * wallHeight(head, ys))));
+        // плитка шейдера — не мельче блока (wallNoise в fx_pall: max(V[2].w, 1))
+        double tile = Math.max(d.metres(1), TILE * height(arrival(head)));
+        return Math.max(1, Math.round(2 * Math.PI * head / tile));
     }
 
     /**
@@ -260,9 +357,10 @@ public final class BlastWall {
         return smooth(0.15 * ys, 0.5 * ys, t) * (1 - smooth(1.5 * ys, 3.5 * ys, t));
     }
 
-    /** Докуда по земле от эпицентра (без сноса) может быть стена в момент t, блоки; 0 — стены нет. */
+    /** Докуда по земле от эпицентра (без сноса) может быть голова в момент t, блоки; 0 — головы нет. */
     public double reach(double t) {
-        return density(t) > 0 ? d.blocks(head(t)) : 0;
+        double[] s = new double[3];
+        return t > 0 && sigmas(t, s) >= GONE ? d.blocks(head(t)) : 0;
     }
 
     /** Докуда от точки подрыва может быть облако Вильсона в момент t, блоки; 0 — облака нет. */
@@ -271,74 +369,84 @@ public final class BlastWall {
         return d.blocks((WILSON_AT + 2 * WILSON_WIDTH) * d.metres(d.frontRadius(t * 20 * d.scale())));
     }
 
-    /** Клубы выедают огибающую головы с края на эту долю ({@code WALL_BITE} в {@code pall.glsl}). */
-    static final double BITE = 0.45;
-    /**
-     * Верх хвоста головы за двумя полуширинами вала, доля высоты стены ({@link #inside}: 1 − 0,45): на нём пыль остаётся
-     * за головой, с него встаёт пелена ({@link PallField}).
-     */
-    static final double TAIL = 0.55;
+    // ---------------------------------------------------------------- законы клина (общие с шейдером: pallWall* в pall.glsl)
 
-    /**
-     * Насколько точка внутри огибающей головы: 1 — ось вала, 0 — край, меньше — снаружи. {@code s} — за передним краем
-     * пыли (блоки; впереди — меньше нуля), {@code z} — над рельефом (блоки), {@code a} — радиус вала, {@code top} — верх
-     * головы. Вал — полушириной 1,5·a за краем, во всю высоту: спереди у земли — стоячая стена (пыль встаёт с земли сразу
-     * во всю высоту вала), сверху скруглён; за серединой вала хвост ниже, к 0,55 высоты — поднятая пыль, что осталась за
-     * головой. Копия {@code pallWallInside}.
-     */
-    static double inside(double s, double z, double a, double top) {
-        double w = 1.5 * a, b = 0.5 * top;
-        double x = (s - w) / Math.max(w, 0.001), y = (z - b) / Math.max(b, 0.001);
-        if (x >= 0) return 1 - Math.max(y / (1 - 0.9 * smooth(0, 2, x)), 0);
-        if (y <= 0) return 1 + x;
-        return 1 - Math.sqrt(x * x + y * y);
+    /** Верх клина по доле u его длины за краем — доля верха в конце: u^(5/6) (Kuhl), за клином — весь. Копия {@code pallWallTop}. */
+    static double top(double u) {
+        return Math.pow(Mth.clamp(u, 0, 1), 5 / 6.0);
     }
 
     /**
-     * Хвост и низ головы 0..1: хвост тает с 0,6 до 2 полуширин вала за его серединой (дальше поднятая пыль — пелена,
-     * {@link PallField}), под рельефом карты — глубже четверти высоты (карта грубее мира). Копия {@code pallWallFade}.
+     * Густота у земли по доле u клина — против густоты в его конце: поднятое к этой доле фазы ({@link DustModel#lifted}) в
+     * слое верха {@link #top}; столб над землёй растёт назад как поднятое. Самая густая — у u ≈ 0,1 (в 2,6 раза), за клином —
+     * 1. Копия {@code pallWallShape}.
      */
-    static double fade(double s, double z, double a, double top) {
-        double w = 1.5 * a;
-        return (1 - smooth(0.6, 2, (s - w) / Math.max(w, 0.001))) * smooth(-0.5 * top, -0.25 * top, z);
+    static double shape(double u) {
+        if (u <= 0) return 0;
+        double x = Math.min(u, 1);
+        return DustModel.lifted(x) / Math.pow(Math.max(x, 1e-4), 5 / 6.0);
     }
 
-    /** Доля густоты головы без шума (среднее по клубам). Копия {@code pallWallMean}. */
-    static double mean(double s, double z, double a, double top) {
-        return Mth.clamp(inside(s, z, a, top) / BITE, 0, 1) * fade(s, z, a, top);
+    /** Доля головы за клином: от {@link #HANDOFF_FROM} до {@link #HANDOFF_TO} его длины место переходит к пелене. Копия {@code pallWallFade}. */
+    static double handoff(double u) {
+        return 1 - smooth(HANDOFF_FROM, HANDOFF_TO, u);
+    }
+
+    /**
+     * Доля густоты головы без шума (среднее по клубам) против густоты у земли в конце клина: {@code s} — за передним краем
+     * пыли (блоки; впереди — меньше нуля), {@code z} — над рельефом (блоки), {@code len} — длина клина, {@code top} — его
+     * верх в конце. По высоте — профиль пелены ({@link PallField#profile}) до верха клина здесь; под рельефом карты — до
+     * половины верха (карта грубее мира). Копия {@code pallWallMean}.
+     */
+    static double mean(double s, double z, double len, double top) {
+        double u = s / Math.max(len, 0.001);
+        if (u <= 0) return 0;
+        double h = top * top(u), k = shape(u) * handoff(u);
+        if (z < 0) return k * smooth(-0.5 * top, -0.25 * top, z);
+        return k * PallField.profile(z / Math.max(h, 0.001));
     }
 
     /**
      * Ослабление средней головы (без клубов) в точке, 1/блок — как {@code pallWallAt} и {@code pallWallMean}: {@code slot}
-     * — числа {@link #slot}, {@code relX}, {@code relZ} — точка от эпицентра со сносом пелены (блоки), {@code up} — над
-     * рельефом под ней, {@code wet} — доля воды под ней (над водой голова — брызги).
+     * — числа {@link #slot}, {@code relX}, {@code relZ} — точка от эпицентра (блоки), {@code up} — над рельефом под ней,
+     * {@code wet} — доля воды под ней (над водой голова — брызги: ниже и позади края пыли).
      */
     static double sigma(float[] slot, double relX, double relZ, double up, double wet) {
         if (slot[3] <= 0) return 0;
-        double s = slot[0] - Math.hypot(relX, relZ);
-        if (s < -1 || s > 4.5 * slot[1] + slot[5] || up > slot[2] || up < -0.5 * slot[2]) return 0;
-        double f = 1 + (slot[6] - 1) * wet;
-        double a = slot[1] * f, top = slot[2] * f, back = slot[5] * wet, k = slot[3] + (slot[7] - slot[3]) * wet;
-        return k * mean(s - back, up, a, top);
+        double s = slot[0] - Math.hypot(relX, relZ), len = slot[1], top = slot[2];
+        if (s < -1 || s > HANDOFF_TO * len + slot[5] || up > top || up < -0.5 * top) return 0;
+        double back = slot[5] * wet, at = s - back;
+        double k = density(slot, at, wet);
+        return k * mean(at, up, len, top * (1 + (slot[6] - 1) * wet));
+    }
+
+    /** Ослабление-множитель головы {@code s} блоков за краем (с отставанием брызг): пыль — от края к концу клина, брызги — свои. */
+    private static double density(float[] slot, double s, double wet) {
+        double u = Mth.clamp(s / Math.max(slot[1], 0.001), 0, 1);
+        double dust = slot[3] * (slot[14] + (slot[15] - slot[14]) * u);
+        return dust + (slot[7] - dust) * wet;
     }
 
     /**
      * Толща средней головы по вертикали над точкой от {@code from} до {@code to} (блоки над рельефом под ней; {@code to} —
-     * хоть бесконечность): интеграл {@link #sigma} по высоте, 16 шагов по той части, где голова есть. Сколько пыли головы
-     * над глазом и под ним — докуда идёт луч пелены ({@link NukePall}).
+     * хоть бесконечность): интеграл {@link #sigma} по высоте — по Симпсону порознь под рельефом и над ним (там излом), до
+     * верха клина в этом месте. Сколько пыли головы над глазом и под ним — докуда идёт луч пелены ({@link NukePall}).
      */
     static double tau(float[] slot, double relX, double relZ, double from, double to, double wet) {
         if (slot[3] <= 0) return 0;
-        double top = slot[2] * (1 + (slot[6] - 1) * wet), a = Math.max(from, -0.5 * top), b = Math.min(to, top);
-        if (!(b > a)) return 0;
-        double ds = (b - a) / 16, sum = 0;
-        for (int i = 0; i < 16; i++) sum += sigma(slot, relX, relZ, a + (i + 0.5) * ds, wet);
-        return sum * ds;
+        double s = slot[0] - Math.hypot(relX, relZ), len = slot[1];
+        double full = slot[2] * (1 + (slot[6] - 1) * wet), back = slot[5] * wet;
+        double here = full * top((s - back) / Math.max(len, 0.001));
+        return simpson(slot, relX, relZ, Math.max(from, -0.5 * full), Math.min(to, 0), wet)
+                + simpson(slot, relX, relZ, Math.max(from, 0), Math.min(to, here), wet);
     }
 
-    /** Когда фронт дошёл до радиуса {@code groundM} по земле, с модели (фронт — как у сервера, {@link Detonation#arrivalTicks}). */
-    private double timeTo(double groundM) {
-        return d.arrivalTicks(d.blocks(Math.hypot(groundM, hob))) / (20 * d.scale());
+    private static double simpson(float[] slot, double relX, double relZ, double a, double b, double wet) {
+        if (!(b > a)) return 0;
+        int n = 16;
+        double h = (b - a) / n, sum = sigma(slot, relX, relZ, a, wet) + sigma(slot, relX, relZ, b, wet);
+        for (int k = 1; k < n; k++) sum += (k % 2 == 1 ? 4 : 2) * sigma(slot, relX, relZ, a + k * h, wet);
+        return sum * h / 3;
     }
 
     static double smooth(double e0, double e1, double x) {

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.VolumeNoise;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 
 import javax.imageio.ImageIO;
@@ -31,6 +32,8 @@ class PallGlslTest {
     private static final String GLSL = read("include/pall.glsl");
     /** 15 кт у земли, масштаб 1, стена пыли вдали — 0,42 скорости звука. */
     private static final Detonation GROUND = new Detonation(1, new Vec3(0, 64, 0), 64, 15, true, 0, 0.5f, 8, 20_000, 7, 1f, false, 0.42f);
+    /** Те же 15 кт в воздухе, в 500 м над землёй. */
+    private static final Detonation AIR = new Detonation(2, new Vec3(0, 64 + 500, 0), 64, 15, false, 0, 0.5f, 8, 20_000, 9, 1f, false, 0.42f);
 
     private static String read(String path) {
         try (InputStream in = PallGlslTest.class.getResourceAsStream("/assets/incoming/shaders/" + path)) {
@@ -52,24 +55,221 @@ class PallGlslTest {
         }
     }
 
-    /** Голова стены пыли без шума — та же, что в Java ({@link BlastWall#inside}, {@link BlastWall#fade}, {@link BlastWall#mean}). */
+    /**
+     * Клин головы стены без шума — тот же, что в Java: поднятое по доле фазы ({@link DustModel#lifted}), верх, густота у
+     * земли и переход к пелене ({@link BlastWall#top}, {@link BlastWall#shape}, {@link BlastWall#handoff}) и средняя
+     * голова ({@link BlastWall#mean}).
+     */
     @Test
     void wallHeadMatchesJava() {
-        GlslFunction inside = GlslFunction.parse(GLSL, "pallWallInside"), fade = GlslFunction.parse(GLSL, "pallWallFade"), mean = GlslFunction.parse(GLSL, "pallWallMean");
-        assertEquals(BlastWall.BITE, scalar(GLSL, "WALL_BITE"), 0);
-        for (double a : new double[]{3, 25, 80}) {
-            for (double top = 10; top <= 300; top += 58) {
-                for (double s = -10; s <= 8 * a; s += a / 7) {
-                    for (double z = -0.6 * top; z <= 1.2 * top; z += top / 23) {
-                        Map<String, Double> args = Map.of("s", s, "z", z, "a", a, "top", top, "WALL_BITE", BlastWall.BITE);
-                        String at = a + ", " + top + ": " + s + ", " + z;
-                        assertEquals(BlastWall.inside(s, z, a, top), inside.call(args), 1e-9, at);
-                        assertEquals(BlastWall.fade(s, z, a, top), fade.call(args), 1e-9, at);
-                        assertEquals(BlastWall.mean(s, z, a, top), mean.call(args), 1e-9, at);
+        GlslFunction lifted = GlslFunction.parse(GLSL, "pallLifted"), top = GlslFunction.parse(GLSL, "pallWallTop"),
+                shape = GlslFunction.parse(GLSL, "pallWallShape"), fade = GlslFunction.parse(GLSL, "pallWallFade"),
+                mean = GlslFunction.parse(GLSL, "pallWallMean");
+        for (double u = -0.5; u <= 3; u += 0.001) {
+            String at = "u = " + u;
+            assertEquals(DustModel.lifted(u), lifted.call(Map.of("s", u)), 1e-6, at);
+            assertEquals(BlastWall.top(u), top.call(Map.of("u", u)), 1e-6, at);
+            assertEquals(BlastWall.shape(u), shape.call(Map.of("u", u)), 1e-6, at);
+            assertEquals(BlastWall.handoff(u), fade.call(Map.of("u", u)), 1e-9, at);
+        }
+        for (double len : new double[]{3, 25, 300}) {
+            for (double h = 10; h <= 300; h += 58) {
+                for (double s = -10; s <= 2 * len; s += len / 37) {
+                    for (double z = -0.6 * h; z <= 1.2 * h; z += h / 23) {
+                        Map<String, Double> args = Map.of("s", s, "z", z, "len", len, "top", h);
+                        assertEquals(BlastWall.mean(s, z, len, h), mean.call(args), 1e-6, len + ", " + h + ": " + s + ", " + z);
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Голова стены в точке — та же, что в Java ({@link BlastWall#sigma}): рамка ({@code pallWallInside}), ослабление от края
+     * к концу клина или брызг над водой ({@code pallWallDensity}), сдвиг и верх брызг ({@code pallWallAt}), средняя голова
+     * ({@code pallWallMean}). У каждой выборки толщ к свету ({@code wallMove}: {@code wallChord}, {@code wallChordNear}, тень
+     * клубов в {@code wall}) — своё ослабление, как у {@code NukePall.chord}, а не точки, откуда идёт луч: от края к концу
+     * клина оно меняется в разы. Шейдер собирается тем же текстом, что в файле (числа слота — по столбцам mat4), и
+     * сверяется с Java по слотам головы подрыва у земли и в воздухе, в точках и в точках, сдвинутых лучом. Переход к пелене
+     * за клином — одна постоянная с Java ({@link BlastWall#HANDOFF_TO}) у рамки, у кольца отрезков ({@code pallWallSpans})
+     * и у луча к свету ({@code wall}, {@link NukePall#dustLight}).
+     */
+    @Test
+    void wallHeadSigmaMatchesJava() {
+        assertEquals(BlastWall.HANDOFF_FROM, scalar(GLSL, "PALL_WALL_HANDOFF_FROM"), 0);
+        assertEquals(BlastWall.HANDOFF_TO, scalar(GLSL, "PALL_WALL_HANDOFF_TO"), 0);
+        String fx = read("core/fx_pall.fsh");
+        String at = body(GLSL, "WallAt pallWallAt("), move = body(fx, "WallAt wallMove("), chord = body(fx, "float wallChord("),
+                near = body(fx, "float wallChordNear("), wall = body(fx, "void wall("), spans = body(GLSL, "vec4 pallWallSpans(");
+        // где точка: s — за краем пыли от оси кольца, z — над рельефом; сдвинутая — от своего места, вода и рельеф те же
+        assertTrue(at.contains("h.s = V[0].x - length(h.rel);"), "pallWallAt: s — не от оси кольца");
+        assertTrue(move.contains("m.rel = h.rel + v.xz;") && move.contains("m.s = V[0].x - length(m.rel);") && move.contains("m.z = h.z + v.y;"),
+                "wallMove: сдвиг — не по лучу");
+        assertTrue(spans.contains("inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y, 0.0)"), "кольцо отрезков — не до рамки головы");
+        assertTrue(wall.contains("float reach = PALL_WALL_HANDOFF_TO * h.P.x + h.P.y,"), "луч к свету — не до рамки головы");
+        assertTrue(chord.contains("return sum * ds;") && near.contains("return sum * len;"), "толща к свету — с ослаблением точки, откуда луч");
+        // толща к свету и тень клубов — выборки сдвинутых точек, каждая со своим ослаблением
+        String sample = glsl(match(chord, "sum \\+= (.+?);"));
+        assertEquals(sample + " * (b - a)", glsl(match(near, "sum \\+= (.+?);")), "wallChordNear: выборка не та, что у wallChord");
+        assertEquals(sample, glsl(match(wall, "float m1 = (.+?);")), "тень клубов: выборка не та, что у толщ");
+        assertEquals(sample, glsl(match(wall, "float m2 = (.+?);")), "тень клубов: выборка не та, что у толщ");
+        assertEquals(sample, glsl(match(wall, "float hm = (.+?);")), "голова в точке: не та же выборка");
+        String[] stop = match(at, "if \\((.+?)\\) return h;").split("\\|\\|"), p = args(match(at, "h\\.P = vec4\\(([^;]+)\\); return h;"));
+        String lag = glsl(match(at, "float lag = (.+?);")), numbers = "float Px = " + glsl(p[0]) + ", Py = " + glsl(p[1]) + ", Pz = " + glsl(p[2]) + ";";
+        StringBuilder test = new StringBuilder(GLSL).append("\nfloat headAt(float pts, float ptz, float ptwet").append(SLOT_PARAMS).append(") {\n");
+        for (String c : stop) test.append("if (").append(glsl(c)).append(") return 0.0;\n");
+        test.append("float lag = ").append(lag).append(";\n").append(numbers).append("\nfloat Pw = ").append(glsl(p[3])).append(";\nreturn ")
+                .append(sample).append(";\n}\n");
+        test.append("float headMoved(float pts, float ptz, float ptwet").append(SLOT_PARAMS).append(") {\nfloat lag = ").append(lag).append(";\n")
+                .append(numbers).append("\nfloat Pw = ").append(glsl(match(move, "m\\.P\\.w = (.+?);"))).append(";\nreturn ").append(sample).append(";\n}\n");
+        GlslFunction head = GlslFunction.parse(test.toString(), "headAt"), moved = GlslFunction.parse(test.toString(), "headMoved");
+        float[] slot = new float[BlastWall.SLOT];
+        int points = 0, inside = 0, steps = 0;
+        double[][] rays = {{0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {0.6, 0.8, 0}, {-0.8, 0.2, 0.566}};
+        for (Detonation d : new Detonation[]{GROUND, AIR}) {
+            BlastWall w = new BlastWall(d, false);
+            for (double t : new double[]{0.5, 1.5, 4, 9, 16}) {
+                if (!w.slot(t, slot) || slot[3] <= 0) continue;
+                double len = slot[1], top = slot[2], back = BlastWall.HANDOFF_TO * len + slot[5];
+                for (double s = -4; s <= back + 4; s += (back + 8) / 41) {
+                    for (double z = -0.7 * top; z <= 1.15 * top; z += top / 17) {
+                        for (double wet : new double[]{0, 0.35, 1}) {
+                            double angle = 0.3 + s / 97, r = slot[0] - s, x = r * Math.cos(angle), y = r * Math.sin(angle);
+                            double want = BlastWall.sigma(slot, x, y, z, wet), shader = head.call(args(slot, slot[0] - Math.hypot(x, y), z, wet));
+                            String where = d.surface() + ", " + t + " с: s = " + s + ", z = " + z + ", вода " + wet;
+                            assertEquals(want, shader, 1e-4 * Math.abs(want) + 1e-7, where);
+                            points++;
+                            if (want > 0) inside++;
+                            else continue;
+                            // из точки в голове — лучом вверх, вниз и в стороны: у неё самой, на полклина и дальше клина
+                            for (double[] v : rays) {
+                                for (double l : new double[]{0.1 * top, 0.5 * len, 1.3 * len}) {
+                                    double mx = x + v[0] * Math.cos(angle) * l - v[2] * Math.sin(angle) * l, my = y + v[0] * Math.sin(angle) * l + v[2] * Math.cos(angle) * l;
+                                    double mz = z + v[1] * l, javaM = BlastWall.sigma(slot, mx, my, mz, wet);
+                                    double shaderM = moved.call(args(slot, slot[0] - Math.hypot(mx, my), mz, wet));
+                                    assertEquals(javaM, shaderM, 1e-4 * Math.abs(javaM) + 1e-7, where + ", луч " + java.util.Arrays.toString(v) + " на " + l);
+                                    steps++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(points > 10_000 && inside > 1_000 && steps > 20_000, points + " точек, в голове " + inside + ", выборок лучей " + steps);
+    }
+
+    /**
+     * Брызги над водой — своя строка таблицы слота (своя высота, свой верх): {@link PallField#row} пишет пыль, брызги и мглу
+     * строками {@link PallField#DUST_ROW}, {@link PallField#SPRAY_ROW}, {@link PallField#HAZE_ROW}, слот указывает на них
+     * шейдеру ({@link NukePall#tableRows}: S[2].z, S[3].w, S[2].w), а {@code pallField} читает брызги там — одна выборка
+     * таблицы сверх пыли и мглы, только у подрыва с водой под пеленой — и кладёт их, как {@link PallField#sigma}: у края — как
+     * пыль, над водой — вместо неё, со своим верхом.
+     */
+    @Test
+    void sprayHasItsOwnRow() {
+        PallField p = new PallField(GROUND, 6000);
+        float[] row = new float[4 * PallField.ROWS * PallField.BINS];
+        double[] v = new double[4];
+        boolean spray = false;
+        for (double ticks : new double[]{40, 400, 2400}) {
+            p.row(ticks, true, true, row);
+            for (int i = 0; i < PallField.BINS; i++) {
+                p.dust(i, ticks, v);
+                for (int k = 0; k < 4; k++) assertEquals((float) v[k], row[4 * (PallField.DUST_ROW * PallField.BINS + i) + k], 0, "пыль, узел " + i);
+                p.spray(i, ticks, v);
+                for (int k = 0; k < 4; k++) assertEquals((float) v[k], row[4 * (PallField.SPRAY_ROW * PallField.BINS + i) + k], 0, "брызги, узел " + i);
+                spray |= v[0] > 0;
+                p.haze(i, ticks, v);
+                for (int k = 0; k < 4; k++) assertEquals((float) v[k], row[4 * (PallField.HAZE_ROW * PallField.BINS + i) + k], 0, "мгла, узел " + i);
+            }
+        }
+        assertTrue(spray, "брызг нет ни в одном узле");
+        for (int k = 0; k < 2; k++) {
+            org.joml.Matrix4f m = new org.joml.Matrix4f();
+            NukePall.tableRows(m, k);
+            assertEquals((PallField.ROWS * k + PallField.DUST_ROW + 0.5) / ua.zentix.incoming.client.fx.layer.PallPass.ROWS, m.m22(), 1e-7, "слот " + k + ": пыль");
+            assertEquals((PallField.ROWS * k + PallField.SPRAY_ROW + 0.5) / ua.zentix.incoming.client.fx.layer.PallPass.ROWS, m.m33(), 1e-7, "слот " + k + ": брызги");
+            assertEquals((PallField.ROWS * k + PallField.HAZE_ROW + 0.5) / ua.zentix.incoming.client.fx.layer.PallPass.ROWS, m.m23(), 1e-7, "слот " + k + ": мгла");
+        }
+        assertEquals(2 * PallField.ROWS, ua.zentix.incoming.client.fx.layer.PallPass.ROWS, "строк таблицы — не на два слота");
+        String f = body(GLSL, "PallAt pallField(");
+        assertTrue(f.contains("vec4 dust = texture(table, vec2(min(ud, 1.0), S[2].z));"), "пыль — не своей строкой");
+        assertTrue(f.contains("vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));"), "мгла — не своей строкой");
+        int water = f.indexOf("if (W.w > 0.5) {"), read = f.indexOf("vec4 spray = texture(table, vec2(min(ud, 1.0), S[3].w));");
+        assertTrue(water >= 0 && read > water, "брызги — не своей строкой или читаются и без воды под пеленой");
+        assertEquals(1, occurrences(f, "S[3].w"), "строку брызг — не одной выборкой");
+        // как PallField.layers и sigma: брызги у края — как пыль, над водой вместо пыли, верх — свой не ниже блока
+        for (String law : new String[]{"ss = spray.r * edge;", "topS = max(spray.g, 1.0);", "if (sd + ss > 0.0) wet = pallWater(ground, G, lift);",
+                "sd *= 1.0 - wet;", "ss *= wet;", "hs = above / topS;", "ss * pallProfile(hs)", "ss * topS * pallColumn(hs)"}) {
+            assertTrue(f.contains(law), "брызги пелены — не как в Java: нет «" + law + "»");
+        }
+    }
+
+    /** Параметры слота стены у функций проверки: числа mat4 головы по столбцам. */
+    private static final String SLOT_PARAMS;
+
+    static {
+        StringBuilder b = new StringBuilder();
+        for (int c = 0; c < 4; c++) for (String r : new String[]{"x", "y", "z", "w"}) b.append(", float V").append(c).append(r);
+        SLOT_PARAMS = b.toString();
+    }
+
+    /** Аргументы функции проверки головы: точка (за краем пыли, над рельефом, вода) и числа головы слота [0..15]. */
+    private static Map<String, Double> args(float[] slot, double s, double z, double wet) {
+        Map<String, Double> a = new HashMap<>();
+        a.put("pts", s);
+        a.put("ptz", z);
+        a.put("ptwet", wet);
+        String[] rows = {"x", "y", "z", "w"};
+        for (int i = 0; i < 16; i++) a.put("V" + i / 4 + rows[i % 4], (double) slot[i]);
+        return a;
+    }
+
+    /**
+     * Выражение шейдера — в имена функции проверки: {@code V[c].r} — {@code Vcr}; у точки ({@code h}, {@code m},
+     * {@code h1}, …) — {@code Px}…{@code Pw}, {@code pts}, {@code ptz}, {@code ptwet}.
+     */
+    private static String glsl(String e) {
+        e = e.replaceAll("V\\[(\\d)]\\.([xyzw])", "V$1$2");
+        e = e.replaceAll("\\b[hm]\\d?\\.P\\.([xyzw])\\b", "P$1");
+        return e.replaceAll("\\b[hm]\\d?\\.(s|z|wet)\\b", "pt$1").strip();
+    }
+
+    /** Аргументы вызова верхнего уровня (через запятые вне скобок). */
+    private static String[] args(String list) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        int depth = 0, from = 0;
+        for (int i = 0; i < list.length(); i++) {
+            char c = list.charAt(i);
+            if (c == '(') depth++;
+            if (c == ')') depth--;
+            if (c == ',' && depth == 0) {
+                out.add(list.substring(from, i).strip());
+                from = i + 1;
+            }
+        }
+        out.add(list.substring(from).strip());
+        return out.toArray(String[]::new);
+    }
+
+    /** Первая группа первого совпадения в тексте. */
+    private static String match(String text, String regex) {
+        Matcher m = Pattern.compile(regex).matcher(text);
+        if (!m.find()) throw new AssertionError("в шейдере нет «" + regex + "»");
+        return m.group(1);
+    }
+
+    /** Тело функции шейдера с этим началом объявления, пробелы — по одному. */
+    private static String body(String source, String header) {
+        int at = source.indexOf(header);
+        if (at < 0) throw new AssertionError("в шейдере нет " + header);
+        int open = source.indexOf('{', at), depth = 1, i = open + 1;
+        for (; depth > 0; i++) {
+            if (source.charAt(i) == '{') depth++;
+            if (source.charAt(i) == '}') depth--;
+        }
+        return source.substring(open + 1, i - 1).replaceAll("\\s+", " ");
     }
 
     @Test
@@ -342,14 +542,14 @@ class PallGlslTest {
             for (double share : new double[]{0.01, 0.03, 0.05, 0.2, 0.5, 0.8, 0.97}) {
                 double r = head * share;
                 float[] here = slot.clone();
-                here[0] = (float) (r + 1.5 * here[1]);
+                here[0] = (float) (r + here[1]);
                 // середина шапки снесена ветром (CloudPuffs.pallLight), точка — на 0,9 высоты головы над r
                 double wind = GROUND.windDir(), lx = Math.cos(wind) * wall[2] - r, ly = wall[7] - 0.9 * here[2], lz = Math.sin(wind) * wall[2];
                 double toBall = Math.sqrt(lx * lx + ly * ly + lz * lz);
                 double a = ball.call(Map.of("radius", (double) wall[0], "d", toBall)) * night.exposure;
                 double b = burn.call(Map.of("r", r, "up", 0.0, "glow", (double) wall[1], "fireR", (double) wall[3]));
                 double mu = ly / toBall;
-                // верх головы стены, будь она здесь (точка — посреди её толщи), — до неё пелена здесь и была ею
+                // верх головы стены, будь здесь конец клина (точка — посреди её толщи), — до неё пелена здесь и была ею
                 NukePall.dustLight(here, wall, night, wind, r, 0.9 * here[2], 0, 0.9 * here[2], high);
                 double sum = 0, fires = 0;
                 double[] side = new double[3], top = new double[3], luma = {0.2126, 0.7152, 0.0722};
