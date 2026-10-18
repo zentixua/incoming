@@ -1,6 +1,7 @@
 package ua.zentix.incoming;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.Util;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
@@ -23,6 +24,7 @@ import ua.zentix.incoming.legacy.LegacyMigration;
 import ua.zentix.incoming.legacy.OldNamespace;
 import ua.zentix.incoming.net.IncomingNetwork;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
+import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.nuclear.world.FarLods;
@@ -74,6 +76,8 @@ public final class Incoming {
 
         container.registerConfig(ModConfig.Type.SERVER, IncomingConfig.SERVER_SPEC);
         container.registerConfig(ModConfig.Type.CLIENT, IncomingConfig.CLIENT_SPEC);
+        // таблица давления ядерки (~25 мс) — в фоне при загрузке, а не в потоке игры или сервера при первом подрыве
+        Util.backgroundExecutor().execute(HobBlast::warm);
 
         modBus.addListener(IncomingNetwork::register);
         modBus.addListener(SamBlockEntity::registerCapabilities);

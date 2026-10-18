@@ -29,7 +29,7 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
 Everyone within 20 km of the target hears a siren in advance. Then come the flash, the fireball and the mushroom cloud.
 The blast wave itself is invisible. The wind right behind it lifts what lies on the ground (dust and earth, smoke over a
 burning town, spray over water) and rolls it forward as a churning wall, like a dust storm. At 15 kt the wall is about
-150 m tall 1 km from the burst and about 50 m tall 4 km out; farther away it thins out and fades at about 9 km, where
+150 m tall 1 km from the burst and about 50 m tall 4 km out; farther away it thins out and fades at about 10 km, where
 the wind is too weak to lift dust. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
 In its first seconds the fireball lights the top of the wall orange, even by day.
 The wave breaks buildings as it reaches them: their pieces fly with the dust. The
@@ -70,8 +70,8 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 
 ![Fireball and blast wave over a town](img/nuke-wave.jpg)
 
-At 15 kt the wave kills out to about 0.4 km, the light of the fireball burns bare skin out to about 3.4 km, and windows
-break out to 6 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
+At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns bare skin out to about 3.4 km, and windows
+break out to 8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
 game time, like radiation sickness (a game hour is 50 seconds): after a 15 kt ground burst it starts to come down about
 7 game minutes later, and later farther downwind. Its radiation drops tenfold by the seventh game hour and a
 hundredfold by the third game day.
@@ -111,7 +111,11 @@ thick part you see only some 50 m, and it thins out over a quarter of an hour.
 The blast is as loud as the pressure where you stand: with distance it fades the way ordinary explosions do, and a
 hill between you, rain, or a sunny day (the warm ground bends sound up, so far away it is quieter than at night) make
 it quieter still. Far away it comes as a single sharp crack, duller the farther you are, with a deep boom behind it,
-and the gust of wind after the wave dies down within a second or two. Then the blast echoes back from the hills,
+and the gust of wind after the wave dies down within a second or two. Closer in, where the wave hurts your ears
+(from about 0.75 psi, a few kilometres from a 15 kt burst), everything goes muffled and your ears ring. Most of your
+hearing comes back within a few game hours and all of it within a game day; if you were close, it takes game days,
+and weeks if you survived right next to the burst. The ringing fades with it, and sleep counts. From 5 psi the wave can tear your eardrums: then you hear muffled
+for game weeks. Dying or leaving the world brings your hearing back. Then the blast echoes back from the hills,
 forests and towns around you: every slope that faces both the burst and you sends it back, later the farther it is. Animals around
 the burst go quiet for a few minutes. Indoors the echoes are as muffled as the blast itself. Mobs run away from the
 flash and the blast wave, then calm down; tamed, named and leashed mobs stay put, and mobs under cover don't run from

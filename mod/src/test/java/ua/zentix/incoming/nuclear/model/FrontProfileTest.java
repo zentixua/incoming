@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FrontProfileTest {
-    private static final ArrivalTable MODEL = ArrivalTable.of(15, 20000);
+    private static final ArrivalTable MODEL = ArrivalTable.of(15, 0, 20000);
 
     /** Медленная скорость дальней зоны ({@code nuclear.wave_speed} 0.42, прежняя по умолчанию) и ещё более старая, 3 блока за тик. */
     private static final double SLOW = 0.42 * FrontProfile.SOUND_SPEED, OLD = 3;
@@ -15,7 +15,7 @@ class FrontProfileTest {
     private record Case(double scale, double from, double sound, double far, FrontProfile p) {
         static Case of(double scale, boolean surface, double far) {
             double from = FrontProfile.slowFrom(FireballModel.maxRadius(15, surface) * scale);
-            double sound = BlastModel.rangeForOverpressure(BlastModel.kpa(0.3), 15) * scale;
+            double sound = HobBlast.rangeFor(0.3, 0, 15) * scale;
             return new Case(scale, from, sound, far, FrontProfile.of(MODEL, scale, from, sound, sound * 1.5, far));
         }
 

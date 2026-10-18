@@ -8,13 +8,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ArrivalTableTest {
-    private static final ArrivalTable T15 = ArrivalTable.of(15, 20000);
+    private static final ArrivalTable T15 = ArrivalTable.of(15, 0, 20000), AIR = ArrivalTable.of(15, 592, 20000);
 
-    /** Время прихода фронта для 15 кт из раздела 1.1, допуск 15%. */
+    /** Время прихода фронта наземного 15 кт из раздела 1.1 (Броуд, PT; стандарт DNA для 2W даёт те же 0.07 с на 200 м), допуск 15%. */
     @ParameterizedTest
-    @CsvSource({"200, 0.09", "1000, 1.6", "2000, 4.3", "5000, 12.8", "10000, 27"})
+    @CsvSource({"200, 0.07", "1000, 1.6", "2000, 4.3", "5000, 12.8", "10000, 27"})
     void arrivalTimes15kt(double rangeM, double seconds) {
         assertEquals(seconds, T15.arrivalSeconds(rangeM), seconds * 0.15);
+    }
+
+    /** Воздушный 15 кт на 592 м: на землю — по Броуду на той же наклонной дальности, под подрывом — свободный воздух. */
+    @Test
+    void airBurstReachesTheGroundByBrode() {
+        for (double g : new double[]{0, 300, 1000, 5000}) {
+            double s = Math.hypot(g, 592);
+            assertEquals(HobBlast.arrivalSeconds(g, 592, 15), AIR.arrivalSeconds(s), 0.005, g + " м");
+        }
+        assertEquals(HobBlast.freeAirArrivalSeconds(300, 15), AIR.arrivalSeconds(300), 0.01);
     }
 
     @Test
@@ -35,11 +45,13 @@ class ArrivalTableTest {
 
     @Test
     void monotonic() {
-        double prev = -1;
-        for (double s = 0; s < 60; s += 0.05) {
-            double r = T15.radiusAt(s);
-            assertTrue(r > prev || s == 0);
-            prev = r;
+        for (ArrivalTable t : new ArrivalTable[]{T15, AIR}) {
+            double prev = -1;
+            for (double s = 0; s < 60; s += 0.05) {
+                double r = t.radiusAt(s);
+                assertTrue(r > prev || s == 0);
+                prev = r;
+            }
         }
     }
 }

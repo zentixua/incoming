@@ -269,21 +269,25 @@ public final class ClientSounds {
      * (её задаёт вызывающий), но направление честное — точка в 3 блоках от уха в сторону источника.
      * По дороге воздух съедает верха, холм или дом между — глушит ({@link SoundFilters}).
      */
-    public static void atEar(SoundEvent event, Vec3 source, float volume, float pitch) {
-        atEar(event, source, volume, pitch, SoundSource.AMBIENT);
+    public static SoundInstance atEar(SoundEvent event, Vec3 source, float volume, float pitch) {
+        return atEar(event, source, volume, pitch, SoundSource.AMBIENT);
     }
 
     /**
      * Ядерный удар по ушам: как {@link #atEar}, но по ползунку «Общая громкость» — его не должно быть тише
      * от того, что «Окружение» у игрока убавлено.
+     *
+     * @return отданный звук
      */
-    public static void atEarLoud(SoundEvent event, Vec3 source, float volume, float pitch) {
-        atEar(event, source, volume, pitch, SoundSource.MASTER);
+    public static SoundInstance atEarLoud(SoundEvent event, Vec3 source, float volume, float pitch) {
+        return atEar(event, source, volume, pitch, SoundSource.MASTER);
     }
 
     /** Как {@link #atEarLoud(SoundEvent, Vec3, float, float)}, но вариант записи выбирает зерно (эхо от рельефа повторяет ту же запись). */
-    public static void atEarLoud(SoundEvent event, Vec3 source, float volume, float pitch, long seed) {
-        play(loudShot(event, source, volume, pitch, seed));
+    public static SoundInstance atEarLoud(SoundEvent event, Vec3 source, float volume, float pitch, long seed) {
+        SoundInstance s = loudShot(event, source, volume, pitch, seed);
+        play(s);
+        return s;
     }
 
     /**
@@ -312,8 +316,8 @@ public final class ClientSounds {
         play(sound);
     }
 
-    private static void atEar(SoundEvent event, Vec3 source, float volume, float pitch, SoundSource category) {
-        atEar(event, source, volume, pitch, category, RANDOM);
+    private static SoundInstance atEar(SoundEvent event, Vec3 source, float volume, float pitch, SoundSource category) {
+        return atEar(event, source, volume, pitch, category, RANDOM);
     }
 
     /**
@@ -324,8 +328,10 @@ public final class ClientSounds {
         atEar(event, source, volume, pitch, SoundSource.AMBIENT, RandomSource.create(seed));
     }
 
-    private static void atEar(SoundEvent event, Vec3 source, float volume, float pitch, SoundSource category, RandomSource random) {
-        play(shot(event, source, volume, pitch, category, random));
+    private static SoundInstance atEar(SoundEvent event, Vec3 source, float volume, float pitch, SoundSource category, RandomSource random) {
+        SoundInstance s = shot(event, source, volume, pitch, category, random);
+        play(s);
+        return s;
     }
 
     private static SoundInstance shot(SoundEvent event, Vec3 source, float volume, float pitch, SoundSource category, RandomSource random) {

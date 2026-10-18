@@ -85,8 +85,7 @@ public final class BlastWall {
         this.humid = humid;
         hob = Math.max(0, d.hobMetres());
         ys = Math.cbrt(d.yieldKt() / 15);
-        double stop = BlastModel.rangeForOverpressure(BlastModel.kpa(0.3), d.yieldKt());
-        ringStop = Math.sqrt(Math.max(0, stop * stop - hob * hob));
+        ringStop = d.metres(d.groundRange(BlastModel.kpa(0.3)));
         // угол вала — интеграл скорости оборота по времени (средней точкой), узлы гуще в начале
         double end = CloudPuffs.lifeSeconds(d);
         for (int i = 1; i <= ROLL_NODES; i++) {
@@ -150,9 +149,9 @@ public final class BlastWall {
         return Math.min(ROLL_MAX, wind(head) / rollRadius(head));
     }
 
-    /** Ветер сразу за фронтом на {@code groundM} от эпицентра по земле, м/с. */
+    /** Ветер сразу за фронтом вдоль земли на {@code groundM} от эпицентра по земле, м/с. */
     double wind(double groundM) {
-        return BlastModel.windSpeed(BlastModel.overpressureKpa(Math.max(1, Math.hypot(groundM, hob)), d.yieldKt()));
+        return d.groundWind(d.blocks(groundM));
     }
 
     /**
