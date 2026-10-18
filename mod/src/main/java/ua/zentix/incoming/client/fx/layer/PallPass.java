@@ -80,8 +80,8 @@ import java.util.concurrent.CompletionException;
 public final class PallPass {
     /** Узлов таблицы по радиусу (ширина текстуры). */
     public static final int WIDTH = 128;
-    /** Строк таблицы: пыль и мгла двух подрывов. */
-    public static final int ROWS = 4;
+    /** Строк таблицы: пыль, брызги и мгла двух подрывов. */
+    public static final int ROWS = 6;
     /**
      * Блок текстуры трёхмерного шума: за двенадцатью двумерными, которые привязывает {@code ShaderInstance}
      * ({@code Sampler0}–{@code Sampler11}).

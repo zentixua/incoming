@@ -74,7 +74,7 @@ class NukeWaterTest {
             assertTrue(s[7] > 0, t + " с: брызг нет");
             assertTrue(BlastWall.sigma(s, head - 0.25 * lag, 0, low, 0) > 0, t + " с: пыли у головы нет");
             assertEquals(0, BlastWall.sigma(s, head - 0.7 * lag, 0, low, 1), t + " с: брызги впереди, у тёмного кольца");
-            assertTrue(BlastWall.sigma(s, head - lag - 0.5 * s[1] * s[6], 0, low, 1) > 0, t + " с: брызг за кольцом нет");
+            assertTrue(BlastWall.sigma(s, head - lag - 0.5 * s[1], 0, low, 1) > 0, t + " с: брызг за кольцом нет");
         }
     }
 

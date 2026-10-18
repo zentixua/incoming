@@ -16,6 +16,11 @@ class PallGroundTest {
     /** 15 кт у земли на высоте 109, масштаб 1. */
     private static final Detonation GROUND = new Detonation(1, new Vec3(0, 109, 0), 109, 15, true, 0, 0.5f, 8, 20_000, 7, 1f, false, 0.42f);
     private static final Sightline.Heights UNKNOWN = (x, z) -> Double.NaN;
+    /**
+     * Полсторона карты кадров {@code nuke-water} и {@code pall-low}, блоки: положения берега и долины ниже — в её клетках
+     * (заполнение карты не зависит от рамки пелены).
+     */
+    private static final double FRAME_HALF = 6417;
 
     private static PallGround ground() {
         return new PallGround(GROUND, new PallField(GROUND, 6000));
@@ -82,7 +87,8 @@ class PallGroundTest {
     void coastContinuesAndOpenSeaStaysSea() {
         PallField pall = new PallField(GROUND, 6000);
         pall.water(1, 1);
-        PallGround g = new PallGround(GROUND, pall);
+        PallGround g = new PallGround(GROUND, pall, FRAME_HALF);
+        assertEquals(FRAME_HALF, g.half(), 1e-9);
         // зритель в (−1500, 0), берег — x = −1540, море к +x
         FarTerrain.Water shore = (x, z) -> Math.hypot(x + 1500, z) < 250 ? (x > -1540 ? 1 : 0) : Double.NaN;
         surveyAll(g, UNKNOWN, shore);
@@ -148,7 +154,8 @@ class PallGroundTest {
      */
     @Test
     void unknownTakesTheKnownAround() {
-        PallGround g = ground();
+        PallGround g = new PallGround(GROUND, new PallField(GROUND, 6000), FRAME_HALF);
+        assertEquals(FRAME_HALF, g.half(), 1e-9);
         Sightline.Heights valley = (x, z) -> Math.hypot(x + 400, z) < 192 ? 63 : Double.NaN;
         surveyAll(g, valley);
         assertEquals(-46, g.at(-400, 0), 1);

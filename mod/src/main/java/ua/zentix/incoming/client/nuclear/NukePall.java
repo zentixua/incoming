@@ -34,7 +34,7 @@ public final class NukePall {
     static final double MUFFLE_PER_SIGMA = 25;
 
     private static final PallPass.Frame FRAME = new PallPass.Frame();
-    private static final float[] ROW = new float[2 * PallPass.WIDTH * 4];
+    private static final float[] ROW = new float[PallField.ROWS * PallPass.WIDTH * 4];
     private static final double[] DRIFT = new double[2], SURGE = new double[3];
     private static final Vector3f LO = new Vector3f(), HI = new Vector3f(), CULL = new Vector3f();
     private static final float[] GLOW = new float[8];
@@ -289,9 +289,9 @@ public final class NukePall {
         p.row(ticks, a.ground.hasLand(), water, ROW);
         double top = 1;
         boolean any = false;
-        for (int i = 0; i < 2 * PallPass.WIDTH; i++) {
-            // пыль или мгла; брызги (у узлов мглы — нули)
-            any |= ROW[4 * i] > 0 || ROW[4 * i + 3] > 0;
+        for (int i = 0; i < PallField.ROWS * PallPass.WIDTH; i++) {
+            // пыль, брызги или мгла
+            any |= ROW[4 * i] > 0;
             top = Math.max(top, ROW[4 * i + 1]);
         }
         if (p.surge(ticks, SURGE)) {
@@ -324,8 +324,11 @@ public final class NukePall {
         org.joml.Matrix4f m = k == 0 ? f.slot0 : f.slot1;
         m.m00(cx).m01(cz).m02(ground).m03((float) p.reach());
         m.m10((float) DRIFT[0]).m11((float) DRIFT[1]).m12((float) plume).m13(1);
-        m.m20((float) Math.cos(d.windDir())).m21((float) Math.sin(d.windDir())).m22((2 * k + 0.5f) / PallPass.ROWS).m23((2 * k + 1.5f) / PallPass.ROWS);
-        m.m30((float) (PallField.SIGMA_DENSE / d.scale())).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0)).m33(0);
+        // строки таблицы слота: пыль, брызги, мгла (PallField.row)
+        int first = PallField.ROWS * k;
+        m.m20((float) Math.cos(d.windDir())).m21((float) Math.sin(d.windDir())).m22((first + 0.5f) / PallPass.ROWS).m23((first + 2.5f) / PallPass.ROWS);
+        m.m30((float) (PallField.SIGMA_DENSE / d.scale())).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0))
+                .m33((first + 1.5f) / PallPass.ROWS);
         // вода слота: базисная волна и есть ли под пеленой вода (иначе шейдер карту воды не читает)
         (k == 0 ? f.water0 : f.water1).set((float) SURGE[0], (float) SURGE[1], (float) SURGE[2], water ? 1 : 0);
         // свет шара и пожаров на пыли (CloudPuffs.pallLight)
@@ -463,16 +466,17 @@ public final class NukePall {
      */
     static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, float[] into) {
         double rx = gx, rz = gz, len = Math.hypot(rx, rz);
-        double top = wall[2], reach = 4.5 * wall[1] + top, s = wall[0] - len;
+        double top = wall[2], reach = BlastWall.HANDOFF_TO * wall[1] + top, s = wall[0] - len, toTop = Math.max(top - up, 0);
         double ox = len > 1e-3 ? rx / len : 1, oz = len > 1e-3 ? rz / len : 0;
-        double above = chord(wall, rx, rz, up, 0, 1, 0, Math.max(top - up, 0), 4);
-        double side = chord(wall, rx, rz, up, ox, 0, oz, Math.max(s, 0) + 1, 4);
-        double below = chord(wall, rx, rz, up, 0, -1, 0, Math.max(up + 0.5 * top, 0), 2);
+        // над точкой — до верха клина здесь, к краю — докуда клин выше точки, к свету — не выше верха головы (fx_pall: wall)
+        double above = chord(wall, rx, rz, up, 0, 1, 0, Math.max(top * BlastWall.top(s / Math.max(wall[1], 1e-3)) - up, 0), 4);
+        double side = chord(wall, rx, rz, up, ox, 0, oz, Math.max(s - wall[1] * Math.pow(Mth.clamp(up / Math.max(top, 1e-3), 0, 1), 1.2), 0), 4);
+        double below = chord(wall, rx, rz, up, 0, -1, 0, Math.max(up, 0), 2);
         double depth = Math.min(above, side), slab = depth + below;
-        double toSun = chord(wall, rx, rz, up, sky.sx, sky.sy, 0, reach, 4);
+        double toSun = chordNear(wall, rx, rz, up, sky.sx, sky.sy, 0, toLight(sky.sy, toTop, reach), 4);
         double lx = Math.cos(wind) * glow[2] - gx, ly = glow[7] - gy, lz = Math.sin(wind) * glow[2] - gz;
         double ll = Math.max(Math.sqrt(lx * lx + ly * ly + lz * lz), 1e-3);
-        double toBall = chord(wall, rx, rz, up, lx / ll, ly / ll, lz / ll, reach, 4);
+        double toBall = chordNear(wall, rx, rz, up, lx / ll, ly / ll, lz / ll, toLight(ly / ll, toTop, reach), 4);
         // рассеянный свет шара входит через ближнюю освещённую им сторону головы (fx_pall: capDeep): к шару — на толщу к
         // нему; сверху — на толщу над точкой и ту толщу головы перед шаром, что его пучок к верху над точкой ещё проходит
         // (шар низко и за головой: к верху у переднего края пучок идёт сквозь всю голову)
@@ -502,6 +506,14 @@ public final class NukePall {
         PallLight.screen(lin, into);
     }
 
+    /**
+     * Длина луча к свету сквозь голову: по направлению с подъёмом {@code vy} — до её верха ({@code toTop} над точкой), не
+     * дальше {@code reach}; почти вдоль земли — {@code reach}. Клин низкий и длинный: шаги на всю его длину шли бы над ним.
+     */
+    private static double toLight(double vy, double toTop, double reach) {
+        return vy > 0.05 ? Math.min(reach, toTop / vy) : reach;
+    }
+
     /** Толща средней головы стены ({@link BlastWall#sigma}) от точки по направлению (vx, vy, vz) на длину len, n шагов ({@code wallChord}). */
     private static double chord(float[] wall, double rx, double rz, double up, double vx, double vy, double vz, double len, int n) {
         double sum = 0, ds = len / n;
@@ -510,6 +522,16 @@ public final class NukePall {
             sum += BlastWall.sigma(wall, rx + vx * l, rz + vz * l, up + vy * l, 0);
         }
         return sum * ds;
+    }
+
+    /** {@link #chord}, но клетки гуще у точки (границы — по квадрату номера), как {@code wallChordNear}: к свету. */
+    private static double chordNear(float[] wall, double rx, double rz, double up, double vx, double vy, double vz, double len, int n) {
+        double sum = 0, nn = n * n;
+        for (int i = 0; i < n; i++) {
+            double a = i * i / nn, b = (i + 1) * (i + 1) / nn, l = 0.5 * (a + b) * len;
+            sum += BlastWall.sigma(wall, rx + vx * l, rz + vz * l, up + vy * l, 0) * (b - a);
+        }
+        return sum * len;
     }
 
     /**

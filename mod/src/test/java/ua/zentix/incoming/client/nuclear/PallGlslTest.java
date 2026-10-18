@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.VolumeNoise;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 
 import javax.imageio.ImageIO;
@@ -52,20 +53,29 @@ class PallGlslTest {
         }
     }
 
-    /** Голова стены пыли без шума — та же, что в Java ({@link BlastWall#inside}, {@link BlastWall#fade}, {@link BlastWall#mean}). */
+    /**
+     * Клин головы стены без шума — тот же, что в Java: поднятое по доле фазы ({@link DustModel#lifted}), верх, густота у
+     * земли и переход к пелене ({@link BlastWall#top}, {@link BlastWall#shape}, {@link BlastWall#handoff}) и средняя
+     * голова ({@link BlastWall#mean}).
+     */
     @Test
     void wallHeadMatchesJava() {
-        GlslFunction inside = GlslFunction.parse(GLSL, "pallWallInside"), fade = GlslFunction.parse(GLSL, "pallWallFade"), mean = GlslFunction.parse(GLSL, "pallWallMean");
-        assertEquals(BlastWall.BITE, scalar(GLSL, "WALL_BITE"), 0);
-        for (double a : new double[]{3, 25, 80}) {
-            for (double top = 10; top <= 300; top += 58) {
-                for (double s = -10; s <= 8 * a; s += a / 7) {
-                    for (double z = -0.6 * top; z <= 1.2 * top; z += top / 23) {
-                        Map<String, Double> args = Map.of("s", s, "z", z, "a", a, "top", top, "WALL_BITE", BlastWall.BITE);
-                        String at = a + ", " + top + ": " + s + ", " + z;
-                        assertEquals(BlastWall.inside(s, z, a, top), inside.call(args), 1e-9, at);
-                        assertEquals(BlastWall.fade(s, z, a, top), fade.call(args), 1e-9, at);
-                        assertEquals(BlastWall.mean(s, z, a, top), mean.call(args), 1e-9, at);
+        GlslFunction lifted = GlslFunction.parse(GLSL, "pallLifted"), top = GlslFunction.parse(GLSL, "pallWallTop"),
+                shape = GlslFunction.parse(GLSL, "pallWallShape"), fade = GlslFunction.parse(GLSL, "pallWallFade"),
+                mean = GlslFunction.parse(GLSL, "pallWallMean");
+        for (double u = -0.5; u <= 3; u += 0.001) {
+            String at = "u = " + u;
+            assertEquals(DustModel.lifted(u), lifted.call(Map.of("s", u)), 1e-6, at);
+            assertEquals(BlastWall.top(u), top.call(Map.of("u", u)), 1e-6, at);
+            assertEquals(BlastWall.shape(u), shape.call(Map.of("u", u)), 1e-6, at);
+            assertEquals(BlastWall.handoff(u), fade.call(Map.of("u", u)), 1e-9, at);
+        }
+        for (double len : new double[]{3, 25, 300}) {
+            for (double h = 10; h <= 300; h += 58) {
+                for (double s = -10; s <= 2 * len; s += len / 37) {
+                    for (double z = -0.6 * h; z <= 1.2 * h; z += h / 23) {
+                        Map<String, Double> args = Map.of("s", s, "z", z, "len", len, "top", h);
+                        assertEquals(BlastWall.mean(s, z, len, h), mean.call(args), 1e-6, len + ", " + h + ": " + s + ", " + z);
                     }
                 }
             }
@@ -342,14 +352,14 @@ class PallGlslTest {
             for (double share : new double[]{0.01, 0.03, 0.05, 0.2, 0.5, 0.8, 0.97}) {
                 double r = head * share;
                 float[] here = slot.clone();
-                here[0] = (float) (r + 1.5 * here[1]);
+                here[0] = (float) (r + here[1]);
                 // середина шапки снесена ветром (CloudPuffs.pallLight), точка — на 0,9 высоты головы над r
                 double wind = GROUND.windDir(), lx = Math.cos(wind) * wall[2] - r, ly = wall[7] - 0.9 * here[2], lz = Math.sin(wind) * wall[2];
                 double toBall = Math.sqrt(lx * lx + ly * ly + lz * lz);
                 double a = ball.call(Map.of("radius", (double) wall[0], "d", toBall)) * night.exposure;
                 double b = burn.call(Map.of("r", r, "up", 0.0, "glow", (double) wall[1], "fireR", (double) wall[3]));
                 double mu = ly / toBall;
-                // верх головы стены, будь она здесь (точка — посреди её толщи), — до неё пелена здесь и была ею
+                // верх головы стены, будь здесь конец клина (точка — посреди её толщи), — до неё пелена здесь и была ею
                 NukePall.dustLight(here, wall, night, wind, r, 0.9 * here[2], 0, 0.9 * here[2], high);
                 double sum = 0, fires = 0;
                 double[] side = new double[3], top = new double[3], luma = {0.2126, 0.7152, 0.0722};

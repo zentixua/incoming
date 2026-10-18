@@ -94,13 +94,18 @@ public final class PallGround {
     private static final int EPICENTRE = SIDE * SIDE;
 
     PallGround(Detonation d, PallField pall) {
+        this(d, pall, 0);
+    }
+
+    /** Карта полстороны {@code half} блоков (0 — по рамке пелены): проверки заполнения — на карте своих клеток. */
+    PallGround(Detonation d, PallField pall, double half) {
         this.pall = pall;
         this.cx = d.burst().x;
         this.cz = d.burst().z;
         this.groundY = d.groundY();
         Arrays.fill(known, Float.NaN);
         Arrays.fill(knownWet, Float.NaN);
-        resize(pall.extent(0) * GROW);
+        resize(half > 0 ? half : pall.extent(0) * GROW);
         fill();
     }
 

@@ -7,10 +7,11 @@
 //   [1] = (снос ветром x, z того, что подняло в миг подрыва, блоки — у пыли и брызг его доля по их возрасту (строка мглы,
 //          a), у базисной волны весь; длина шлейфа мглы, блоки; 1 — слот есть)
 //   [2] = (ветер x, z — единичный; v строки пыли в таблице; v строки мглы)
-//   [3] = (ослабление самой густой пыли, 1/блок; плитка шума, блоки; секунды после подрыва; 0)
-// Таблица: по ширине — радиус 0..reach, строки — пыль (ослабление у земли, высота, доля дыма, ослабление брызг над
-// водой — в том же слое) и мгла (ослабление, высота, свет пожаров снизу; доля сноса пыли того же радиуса —
-// PallField.share: ветер несёт пыль с прихода фронта, у фронта она на месте).
+//   [3] = (ослабление густой пыли — мера густоты клубов, 1/блок; плитка шума, блоки; секунды после подрыва; v строки брызг)
+// Таблица: по ширине — радиус 0..reach, строки — пыль (ослабление у земли, высота, доля дыма; 0), брызги над водой
+// (ослабление у воды, их высота — свой слой; 0; 0) и мгла (ослабление, высота, свет пожаров снизу; доля сноса пыли того
+// же радиуса — PallField.share: ветер несёт пыль с прихода фронта, у фронта она на месте). Пыль и брызги моложе
+// положительной фазы — голова стены (pallWall*), таблица у фронта их отдаёт ей.
 // Вода слота W — vec4: (радиус базисной волны, её верх — блоки; её ослабление в самой густой части, 1/блок, 0 — волны нет;
 // 1 — под пеленой есть вода и её карта — канал g карты рельефа слота, PallGround; 0 — всюду суша).
 
@@ -71,7 +72,7 @@ struct PallAt {
     // доля дыма в пыли; свет пожаров снизу
     float smoke;
     float fire;
-    // высота точки в долях пелены: пыль с брызгами, мгла
+    // высота точки в долях пелены: пыль, мгла
     vec2 height;
     // доля самой густой пыли (с водяной пылью — по всему поднятому)
     float dense;
@@ -132,7 +133,7 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     float ud = r / reach;
     vec4 dust = texture(table, vec2(min(ud, 1.0), S[2].z));
     float topD = max(dust.g, 1.0), edge = pallEdge(ud);
-    float sd = dust.r * edge, ss = dust.a * edge;
+    float sd = dust.r * edge, ss = 0.0, topS = 1.0;
     float len = S[1].z, along = clamp(dot(q, S[2].xy), 0.0, len);
     vec2 source = q - S[2].xy * along;
     float uh = length(source) / reach;
@@ -140,6 +141,10 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     float topH = max(haze.g, 1.0), sh = haze.r * (1.0 - 0.5 * along / max(len, 1.0)) * pallEdge(uh), fire = haze.b;
     float wet = 0.0, sg = 0.0, topG = 1.0;
     if (W.w > 0.5) {
+        // брызги — своя строка таблицы (своя высота): её читает только подрыв, под пеленой которого есть вода
+        vec4 spray = texture(table, vec2(min(ud, 1.0), S[3].w));
+        ss = spray.r * edge;
+        topS = max(spray.g, 1.0);
         if (sd + ss > 0.0) wet = pallWater(ground, G, lift);
         sd *= 1.0 - wet;
         ss *= wet;
@@ -157,13 +162,12 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     }
     PallAt a;
     a.height = vec2(above / topD, above / topH);
-    float hg = above / topG;
-    a.sigma = vec3(sd * pallProfile(a.height.x), sh * pallProfile(a.height.y), ss * pallProfile(a.height.x) + sg * pallProfile(hg));
+    float hg = above / topG, hs = above / topS;
+    a.sigma = vec3(sd * pallProfile(a.height.x), sh * pallProfile(a.height.y), ss * pallProfile(hs) + sg * pallProfile(hg));
     a.column = vec3(sd * topD * pallColumn(a.height.x), sh * topH * pallColumn(a.height.y),
-            ss * topD * pallColumn(a.height.x) + sg * topG * pallColumn(hg));
-    float floorD = pallColumn(min(a.height.x, floorUp / topD));
-    a.slab = vec3(sd * topD * floorD, sh * topH * pallColumn(min(a.height.y, floorUp / topH)),
-            ss * topD * floorD + sg * topG * pallColumn(min(hg, floorUp / topG)));
+            ss * topS * pallColumn(hs) + sg * topG * pallColumn(hg));
+    a.slab = vec3(sd * topD * pallColumn(min(a.height.x, floorUp / topD)), sh * topH * pallColumn(min(a.height.y, floorUp / topH)),
+            ss * topS * pallColumn(min(hs, floorUp / topS)) + sg * topG * pallColumn(min(hg, floorUp / topG)));
     a.smoke = dust.b;
     a.fire = fire * exp(-3.0 * max(a.height.y, 0.0));
     a.dense = (sd + ss + sg) / max(S[3].x, 1e-6);
@@ -347,50 +351,59 @@ float pallDiffuse(float w, float g, float tau, float tc, float ground, float mu1
     return i0 + c * i1;
 }
 
-// ---------------------------------------------------------------- стена пыли (client/nuclear/BlastWall)
-// Голова стены — вал у земли за фронтом ударной волны, кольцом вокруг эпицентра (со сносом пыли, как у пелены): то,
-// что ветер за фронтом поднимает сейчас. Законы огибающей — копии BlastWall (PallGlslTest сверяет). Слот стены V — mat4
-// по столбцам (BlastWall.slot):
-//   [0] = (передний край пыли от эпицентра, радиус вала, верх головы — блоки; ослабление в самой густой части, 1/блок;
-//          0 — головы нет)
-//   [1] = (угол вала, рад; над водой — брызги: отставание от края пыли, блоки; доля высоты; ослабление, 1/блок)
+// ---------------------------------------------------------------- голова слоя пыли (client/nuclear/BlastWall)
+// Голова — самая молодая, низкая и густая часть того же слоя пыли, что пелена (законы — nuclear/model/DustModel): клин за
+// фронтом ударной волны на его путь за положительную фазу, кольцом вокруг эпицентра (пыль у фронта ветер ещё не снёс —
+// PallField.share). У переднего края слой нулевой высоты, назад поднятое растёт как импульс скоростного напора, верх — как
+// u^(5/6) (Kuhl); за клином место переходит к таблице пелены. Законы — копии BlastWall (PallGlslTest сверяет). Слот
+// стены V — mat4 по столбцам (BlastWall.slot):
+//   [0] = (передний край пыли от эпицентра, длина клина, его верх в конце — блоки; ослабление-масштаб, 1/блок; 0 — головы
+//          нет)
+//   [1] = (угол вала, рад; над водой — брызги: отставание от края пыли, блоки; доля верха; ослабление, 1/блок)
 //   [2] = (клубы — две фазы шума вдоль кольца: окружность головы в плитках у каждой; вес первой; плитка шума, блоки)
-//   [3] = (номера фаз — у каждой свои клубы; 0; 0)
+//   [3] = (номера фаз — у каждой свои клубы; ослабление пыли у земли в конце фазы волны у края и в конце клина — доли
+//          масштаба)
 // Облако Вильсона слота — vec4 (там же): радиус середины оболочки от точки подрыва, её полутолщина (блоки), ослабление
 // в середине (1/блок; 0 — облака нет), высота точки подрыва над землёй под эпицентром.
 
-// Клубы выедают край головы на эту долю огибающей внутрь (по шуму 0..1: впадины — глубже); мягкость края клуба
-const float WALL_BITE = 0.45;
-const float WALL_SOFT = 0.12;
-
-// Насколько точка внутри огибающей головы (BlastWall.inside): 1 — ось вала, 0 — край, меньше — снаружи. s — за передним
-// краем пыли (блоки; впереди — меньше нуля), z — над рельефом (блоки), a — радиус вала, top — верх головы. Вал —
-// полушириной 1,5 a за краем, во всю высоту: спереди у земли — стоячая стена, сверху скруглён; за серединой вала хвост
-// ниже, к 0,55 высоты.
-float pallWallInside(float s, float z, float a, float top) {
-    float w = 1.5 * a, b = 0.5 * top;
-    float x = (s - w) / max(w, 0.001), y = (z - b) / max(b, 0.001);
-    if (x >= 0.0) return 1.0 - max(y / (1.0 - 0.9 * smoothstep(0.0, 2.0, x)), 0.0);
-    if (y <= 0.0) return 1.0 + x;
-    return 1.0 - sqrt(x * x + y * y);
+// Поднятое к доле s положительной фазы (DustModel.lifted): импульс скоростного напора, ∫(1 − x)²e^(−2x)dx на весь
+float pallLifted(float s) {
+    float x = clamp(s, 0.0, 1.0), y = 1.0 - x;
+    return (0.25 - exp(-2.0 * x) * (y * y / 2.0 - y / 2.0 + 0.25)) / 0.2161662;
 }
 
-// Хвост и низ головы 0..1 (BlastWall.fade): хвост тает с 0,6 до 2 полуширин вала за его серединой (дальше пыль — пелена),
-// под рельефом карты — глубже четверти высоты (карта грубее мира: в низинах под ней голова не висит)
-float pallWallFade(float s, float z, float a, float top) {
-    float w = 1.5 * a;
-    return (1.0 - smoothstep(0.6, 2.0, (s - w) / max(w, 0.001))) * smoothstep(-0.5 * top, -0.25 * top, z);
+// Верх клина по доле u его длины за краем, доля верха в конце (BlastWall.top): u^(5/6), за клином — весь
+float pallWallTop(float u) {
+    return pow(clamp(u, 0.0, 1.0), 0.8333333);
 }
 
-// Доля густоты головы без шума (среднее по клубам): край выеден клубами на WALL_BITE (BlastWall.mean)
-float pallWallMean(float s, float z, float a, float top) {
-    return clamp(pallWallInside(s, z, a, top) / WALL_BITE, 0.0, 1.0) * pallWallFade(s, z, a, top);
+// Густота у земли по доле u клина против густоты в его конце (BlastWall.shape): поднятое в слое верха pallWallTop
+float pallWallShape(float u) {
+    if (u <= 0.0) return 0.0;
+    float x = min(u, 1.0);
+    return pallLifted(x) / pow(max(x, 0.0001), 0.8333333);
+}
+
+// Доля головы за клином (BlastWall.handoff): от его конца до полутора длин место переходит к пелене
+float pallWallFade(float u) {
+    return 1.0 - smoothstep(1.0, 1.5, u);
+}
+
+// Доля густоты головы без шума (BlastWall.mean): s — за передним краем пыли (блоки; впереди — меньше нуля), z — над
+// рельефом (блоки), len — длина клина, top — его верх в конце. По высоте — профиль пелены до верха клина здесь; под
+// рельефом карты — до половины верха (карта грубее мира: в низинах под ней голова не висит)
+float pallWallMean(float s, float z, float len, float top) {
+    float u = s / max(len, 0.001);
+    if (u <= 0.0) return 0.0;
+    float h = top * pallWallTop(u), k = pallWallShape(u) * pallWallFade(u);
+    if (z < 0.0) return k * smoothstep(-0.5 * top, -0.25 * top, z);
+    return k * pallProfile(z / max(h, 0.001));
 }
 
 // Голова стены в точке
 struct WallAt {
-    // с поправкой на воду под точкой: радиус вала, верх головы, сдвиг назад (блоки), ослабление (1/блок); P.w = 0 — точка
-    // вне головы
+    // с поправкой на воду под точкой: длина клина, его верх в конце, сдвиг назад (блоки), ослабление (1/блок); P.w = 0 —
+    // точка вне головы
     vec4 P;
     // за передним краем пыли и над рельефом, блоки
     float s;
@@ -402,7 +415,8 @@ struct WallAt {
 };
 
 // Голова стены слота S, V в точке p (от глаза): floorUp — верх рельефа под точкой над землёй под эпицентром (блоки),
-// ground, G, W — карта рельефа и воды слота и её числа, вода слота (воду карта читает, только если она под пеленой есть)
+// ground, G, W — карта рельефа и воды слота и её числа, вода слота (воду карта читает, только если она под пеленой есть).
+// Ослабление пыли — от края к концу клина (пыль, поднятая ближе к эпицентру, — своей густоты), брызг — своё
 WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp) {
     WallAt h;
     h.rel = p.xz - S[0].xy;
@@ -410,21 +424,23 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     h.z = p.y - S[0].z - floorUp;
     h.wet = 0.0;
     h.P = vec4(V[0].y, V[0].z, 0.0, 0.0);
-    float back = 4.5 * V[0].y + V[1].y;
+    float back = 1.5 * V[0].y + V[1].y;
     if (V[0].w <= 0.0 || h.s < -1.0 || h.s > back || h.z > V[0].z || h.z < -0.5 * V[0].z) return h;
     if (W.w > 0.5) h.wet = pallWater(ground, G, p.xz - S[0].xy);
-    float f = mix(1.0, V[1].z, h.wet);
-    h.P = vec4(V[0].y * f, V[0].z * f, V[1].y * h.wet, mix(V[0].w, V[1].w, h.wet));
+    float lag = V[1].y * h.wet;
+    float dust = V[0].w * mix(V[3].z, V[3].w, clamp((h.s - lag) / max(V[0].y, 0.001), 0.0, 1.0));
+    h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, mix(dust, V[1].w, h.wet));
     return h;
 }
 
-// Отрезки луча dir из глаза на [ta, tb], где может быть голова слота: кольцо от переднего края пыли до конца хвоста (с
-// брызгами), по высоте — от низа карты рельефа до её верха с головой. (x, y) и (z, w) — вход и выход; выход ≤ входа — мимо
+// Отрезки луча dir из глаза на [ta, tb], где может быть голова слота: кольцо от переднего края пыли до полутора длин клина
+// за ним (с брызгами), по высоте — от низа карты рельефа до её верха с головой. (x, y) и (z, w) — вход и выход; выход ≤
+// входа — мимо
 vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     vec4 none = vec4(1.0, 0.0, 1.0, 0.0);
     if (V[0].w <= 0.0 || S[1].w < 0.5) return none;
     vec2 c = S[0].xy;
-    float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - 4.5 * V[0].y - V[1].y, 0.0);
+    float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - 1.5 * V[0].y - V[1].y, 0.0);
     // по высоте: карта рельефа (нет её — земля под эпицентром) с головой
     float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top;
     if (abs(dir.y) > 1e-6) {
