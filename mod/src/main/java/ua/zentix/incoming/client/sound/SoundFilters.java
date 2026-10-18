@@ -61,7 +61,11 @@ public final class SoundFilters {
      * ведёт {@link #loops}. Только поток клиента; ключи слабые.
      */
     private static final Map<SoundInstance, float[]> LOOPS = new WeakHashMap<>();
-    /** Меньше этого фильтр петли не меняется (вызовы OpenAL в каждом тике на каждую петлю — лишние). */
+    /**
+     * Меньше этого фильтр петли не меняется (вызовы OpenAL в каждом тике на каждую петлю — лишние). Только без Sound
+     * Physics: с её {@code update_moving_sounds} она раз в несколько тиков ставит петле свой фильтр вместо нашего, и наш
+     * нужен каждый тик (у порванных перепонок он не меняется неделями игры).
+     */
     private static final float LOOP_STEP = 0.005f;
     /**
      * Слух вернулся разом (смерть, перемотка повтора, настройка): вернуть фильтр всем чужим петлям, и тем, что начались в
@@ -80,8 +84,13 @@ public final class SoundFilters {
 
     /** Воздух и преграды — наши (нет своего конфига «выкл» и нет Sound Physics). */
     static boolean pathEffects() {
+        return !soundPhysics() && IncomingConfig.CLIENT.soundMuffling.get();
+    }
+
+    /** Стоит ли Sound Physics Remastered. */
+    private static boolean soundPhysics() {
         if (soundPhysics == null) soundPhysics = ModList.get().isLoaded("sound_physics_remastered");
-        return !soundPhysics && IncomingConfig.CLIENT.soundMuffling.get();
+        return soundPhysics;
     }
 
     /** Доля верхов, дошедшая по воздуху за d блоков. */
@@ -220,7 +229,7 @@ public final class SoundFilters {
             boolean on = g < 0.999f || h < 0.999f;
             float[] was = LOOPS.get(sound);
             if (!on && was == null && !all) continue;
-            if (on && was != null && Math.abs(g - was[0]) < LOOP_STEP && Math.abs(h - was[1]) < LOOP_STEP) continue;
+            if (on && was != null && !soundPhysics() && Math.abs(g - was[0]) < LOOP_STEP && Math.abs(h - was[1]) < LOOP_STEP) continue;
             if (on) LOOPS.put(sound, new float[]{g, h});
             else LOOPS.remove(sound);
             e.getValue().execute(channel -> {
@@ -255,8 +264,7 @@ public final class SoundFilters {
         /** Громкость и доля верхов, которые он только что поставил звуку; null — его нет, он выключен или не прочитать. */
         @Nullable
         static float[] now() {
-            if (soundPhysics == null) soundPhysics = ModList.get().isLoaded("sound_physics_remastered");
-            if (!soundPhysics || !find()) return null;
+            if (!soundPhysics() || !find()) return null;
             try {
                 if (!Boolean.TRUE.equals(get.invoke(enabled))) return null;
                 int id = direct.getInt(null);
