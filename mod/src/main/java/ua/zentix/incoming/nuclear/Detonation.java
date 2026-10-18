@@ -211,7 +211,7 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return BlastModel.windSpeed(groundOverpressureKpa(groundBlocks)) * Math.sqrt(HobBlast.alongGround(g, groundHob(), yieldKt));
     }
 
-    /** Положительная фаза в точке, с модели (на земле — по Броуду). */
+    /** Положительная фаза в точке, с модели: от 2 psi — по Броуду, ниже 1 psi — Кинни–Грэхем у слушателя, между — смесь. */
     public double positivePhaseSeconds(Vec3 p) {
         double h = heightAbove(p), s = metres(p.distanceTo(burst));
         return HobBlast.positivePhaseSeconds(Math.sqrt(Math.max(0, s * s - h * h)), h, yieldKt);

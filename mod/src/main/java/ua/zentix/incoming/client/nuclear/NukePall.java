@@ -15,6 +15,7 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.PallPass;
+import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.nuclear.Detonation;
 
 import java.util.ArrayList;
@@ -89,7 +90,8 @@ public final class NukePall {
         List<ClientNuclear.Active> all = ClientNuclear.detonations();
         FireStorms.tick(all);
         if (all.isEmpty()) {
-            sigma = mist = muffle = tauUp = tauDown = 0;
+            unmuffle();
+            sigma = mist = tauUp = tauDown = 0;
             NukeAsh.tick(level, cam, 0, 0, null);
             return;
         }
@@ -143,7 +145,7 @@ public final class NukePall {
             float target = (float) (1 - Math.exp(-MUFFLE_PER_SIGMA * s));
             muffle += (target - muffle) * 0.1f;
         } else {
-            muffle = 0;
+            unmuffle();
         }
         earX = cam.x;
         earY = cam.y;
@@ -159,9 +161,16 @@ public final class NukePall {
     }
 
     static void reset() {
-        sigma = mist = muffle = tauUp = tauDown = 0;
+        unmuffle();
+        sigma = mist = tauUp = tauDown = 0;
         PallPass.reset();
         NukeAsh.reset();
+    }
+
+    /** Пелена больше не глушит, разом (перемотка повтора, выход, настройка): петлям — фильтр без неё. */
+    private static void unmuffle() {
+        if (muffle > 0.01f) SoundFilters.restoreLoops();
+        muffle = 0;
     }
 
     /**

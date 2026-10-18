@@ -118,6 +118,7 @@ public final class IncomingClient {
         NeoForge.EVENT_BUS.addListener(IncomingClient::hideCrosshair);
         NeoForge.EVENT_BUS.addListener(IncomingClient::login);
         NeoForge.EVENT_BUS.addListener(IncomingClient::logout);
+        NeoForge.EVENT_BUS.addListener(ClientNuclear::respawned);
         NeoForge.EVENT_BUS.addListener(ClientFlights::onJoin);
         NeoForge.EVENT_BUS.addListener(ClientFlights::onLeave);
         NeoForge.EVENT_BUS.addListener(ClientFlights::onLevelUnload);

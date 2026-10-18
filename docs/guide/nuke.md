@@ -116,7 +116,11 @@ thick part you see only some 50 m, and it thins out over a quarter of an hour.
 The blast is as loud as the pressure where you stand: with distance it fades the way ordinary explosions do, and a
 hill between you, rain, or a sunny day (the warm ground bends sound up, so far away it is quieter than at night) make
 it quieter still. Far away it comes as a single sharp crack, duller the farther you are, with a deep boom behind it,
-and the gust of wind after the wave dies down within a second or two. Then the blast echoes back from the hills,
+and the gust of wind after the wave dies down within a second or two. Closer in, where the wave hurts your ears
+(from about 0.75 psi, a few kilometres from a 15 kt burst), everything goes muffled and your ears ring. Most of your
+hearing comes back within a few game hours and all of it within a game day; if you were close, it takes game days,
+and weeks if you survived right next to the burst. The ringing fades with it, and sleep counts. From 5 psi the wave can tear your eardrums: then you hear muffled
+for game weeks. Dying or leaving the world brings your hearing back. Then the blast echoes back from the hills,
 forests and towns around you: every slope that faces both the burst and you sends it back, later the farther it is. Animals around
 the burst go quiet for a few minutes. Indoors the echoes are as muffled as the blast itself. Mobs run away from the
 flash and the blast wave, then calm down; tamed, named and leashed mobs stay put, and mobs under cover don't run from

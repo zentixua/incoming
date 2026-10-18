@@ -806,7 +806,6 @@ def nuke():
         glass.append(norm(fade(syn.reverb(g, t60=0.9, mix=0.25, hi=8000), 0.001, 0.4), -16.5, 0.8))
     variants("nuke.glass", "subtitles.incoming.nuke.glass", "nuke_glass", glass)
 
-    write("nuke_tinnitus", syn.nuke_tinnitus(), "nuke.tinnitus")
     rain = mix((F(cut(src(860133), 2, 45), lo=80), 1.0), (syn.black_rain(43.0)[:int(43 * SR)], 0.55))
     write("nuke_rain", norm(loop(rain, 12.0, 1.0), -15.6), "nuke.rain", "subtitles.incoming.nuke.rain")
 
@@ -823,12 +822,13 @@ def nuke():
 
 def after():
     """После ядерного удара — синтез (записей нет): удар фронта вдали (запись на случай без своих источников OpenAL),
-    гул горящего города (петли), обрушения в руинах. Ветер в огонь — петля урагана nuke_wind (раздел nuke) под своим
-    субтитром."""
+    звон в ушах (петля), гул горящего города (петли), обрушения в руинах. Ветер в огонь — петля урагана nuke_wind (раздел
+    nuke) под своим субтитром."""
     # 2 кт за 5 км (0,3 psi, фаза 0,73 с) и 15 кт за 25 км (0,12 psi, 1,66 с) — BlastModel
     cracks = [syn.nuke_crack_far(4.0, t_plus=tp, pa=pa) for tp, pa in [(0.73, 2060.0), (1.66, 800.0)]]
     variants("nuke.crack_far", "subtitles.incoming.nuke.blast", "nuke_crack_far", cracks)
     PRELOAD.add("nuke.crack_far")
+    write("nuke_tinnitus", syn.nuke_tinnitus(), "nuke.tinnitus")
     fires = [norm(loop(syn.nuke_fire(14.0), 12.0, 1.0), -15.5) for _ in range(2)]
     variants("nuke.fire", "subtitles.incoming.nuke.fire", "nuke_fire", fires)
     EVENTS["nuke.fire_wind"] = ("subtitles.incoming.nuke.fire_wind", ["nuke_wind"])

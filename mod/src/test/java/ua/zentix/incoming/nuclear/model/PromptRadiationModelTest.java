@@ -21,7 +21,7 @@ class PromptRadiationModelTest {
 
     @Test
     void smallYieldRadiationOutrangesBlast() {
-        // 1 кт: смертельная доза дальше, чем 5 psi (440 м); у 1 Мт — наоборот
+        // 1 кт: смертельная доза дальше, чем 5 psi (465 м); у 1 Мт — наоборот
         double ld50 = SicknessModel.LD50 * PromptRadiationModel.REM_PER_GY;
         assertTrue(PromptRadiationModel.doseRem(HobBlast.rangeFor(5, 0, 1), 1) > ld50);
         assertTrue(PromptRadiationModel.doseRem(HobBlast.rangeFor(5, 0, 1000), 1000) < ld50);
