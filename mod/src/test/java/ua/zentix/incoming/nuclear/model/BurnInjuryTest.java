@@ -77,4 +77,26 @@ class BurnInjuryTest {
         assertEquals(12, BurnInjury.shockHours(1), 1e-9);
         assertEquals(Math.sqrt(0.5 * 12), BurnInjury.shockHours(0.5), 1e-9);
     }
+
+    /** Ступени потери здоровья: десятые доли вверх, от 0,9 до шока — 0,9. */
+    @Test
+    void levelRoundsUpToTenthsAndHoldsNinetyUntilShock() {
+        assertEquals(0, BurnInjury.level(0));
+        assertEquals(4, BurnInjury.level(0.396));
+        assertEquals(4, BurnInjury.level(0.4));
+        assertEquals(9, BurnInjury.level(0.95));
+        assertEquals(BurnInjury.SHOCK_LEVEL, BurnInjury.level(1));
+    }
+
+    /** Рана — только прибавка ступени к прежним ожогам. */
+    @Test
+    void woundIsOnlyTheRiseOfTheLevel() {
+        assertEquals(0.4, BurnInjury.wound(-1, 4), 1e-12, "первые ожоги");
+        assertEquals(0.9, BurnInjury.wound(-1, BurnInjury.level(0.95)), 1e-12, "от 0,9 до шока — 0,9");
+        assertEquals(0.2, BurnInjury.wound(4, 6), 1e-12, "тяжелее прежних — прибавка");
+        assertEquals(0.05, BurnInjury.wound(9, BurnInjury.SHOCK_LEVEL), 1e-12, "шок после 0,9 — до 5 %");
+        assertEquals(1 - BurnInjury.SHOCK_LEFT, BurnInjury.wound(-1, BurnInjury.SHOCK_LEVEL), 1e-12, "шок сразу");
+        assertEquals(0, BurnInjury.wound(6, 4), "слабее прежних");
+        assertEquals(0, BurnInjury.wound(4, 4), "те же");
+    }
 }

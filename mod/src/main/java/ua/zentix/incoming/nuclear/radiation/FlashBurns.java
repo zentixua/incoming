@@ -88,14 +88,13 @@ public final class FlashBurns {
         MobEffectInstance had = e.getEffect(ModEffects.BURNS);
         int before = had == null ? -1 : had.getAmplifier();
         if (before >= BurnsEffect.SHOCK) return;
-        int amplifier = BurnsEffect.level(BurnInjury.shock(degree == 2 ? skin : 0, degree == 3 ? skin : 0));
+        int amplifier = BurnInjury.level(BurnInjury.shock(degree == 2 ? skin : 0, degree == 3 ? skin : 0));
         int ticks = amplifier == BurnsEffect.SHOCK
                 ? (int) Math.round(BurnInjury.shockHours(unit(HashCommon.mix(h))) * TICKS_PER_HOUR)
                 : (int) Math.round(BurnInjury.HEAL_DAYS[degree - 1] * TICKS_PER_DAY);
         // сперва рана, потом предел здоровья: иначе предел срезал бы здоровье, и рана отняла бы ту же долю второй раз.
-        // Рана — до предела, который ожоги оставят вместе с прежними (те уже отняли свою долю: здоровье без них — до их
-        // предела)
-        float dmg = (float) (BurnsEffect.wound(before, amplifier) * unburned(e));
+        // Рана — до предела, который ожоги оставят вместе с прежними: прежние свою долю уже отняли
+        float dmg = (float) (BurnInjury.wound(before, amplifier) * unburned(e));
         if (dmg >= 0.5f && !(e instanceof Player p && p.getAbilities().invulnerable)) {
             e.hurt(ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_THERMAL, null, owner), dmg);
         }

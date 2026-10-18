@@ -36,6 +36,9 @@ public final class BurnInjury {
     public static final double SHOCK_THIRD = 25, SHOCK_SECOND = 30;
     /** Когда наступает шок, игровые часы. */
     public static final double SHOCK_FROM_H = 0.5, SHOCK_TO_H = 12;
+    /** Ступень потери здоровья у ожогового шока ({@link #level}): здоровья остаётся {@link #SHOCK_LEFT}. */
+    public static final int SHOCK_LEVEL = 10;
+    public static final double SHOCK_LEFT = 0.05;
     /**
      * Заживление, игровые дни: 1-я степень — около недели без следа (§12.53, как солнечный ожог; срок — клиника, оценка),
      * 2-я — одна-две недели (§12.54), 3-я — несколько недель, со шрамом (§12.55).
@@ -86,6 +89,27 @@ public final class BurnInjury {
     /** Доля порога шока: ожоги 2-й и 3-й степени на {@code second} и {@code third} % тела; от 1 — шок. */
     public static double shock(double second, double third) {
         return second / SHOCK_SECOND + third / SHOCK_THIRD;
+    }
+
+    /**
+     * Ступень потери здоровья для ожогов, которые составляют долю {@code share} порога шока: десятые доли с округлением
+     * вверх, от 0,9 до шока — 9 (0,9); от 1 — шок, {@link #SHOCK_LEVEL}.
+     */
+    public static int level(double share) {
+        return share >= 1 ? SHOCK_LEVEL : (int) Math.min(SHOCK_LEVEL - 1, Math.max(0, Math.ceil(share * 10 - 1e-9)));
+    }
+
+    /** Доля здоровья, которую отнимают ожоги ступени {@code level} (меньше нуля — ожогов нет). */
+    public static double lost(int level) {
+        return level >= SHOCK_LEVEL ? 1 - SHOCK_LEFT : Math.max(0, level) / 10.0;
+    }
+
+    /**
+     * Рана ожогов ступени {@code level} поверх прежних ступени {@code before} (−1 — их нет): доля здоровья без ожогов,
+     * на которую ступень выросла; не тяжелее прежних — ноль (те же ожоги второй раз ничего не отнимают).
+     */
+    public static double wound(int before, int level) {
+        return level <= before ? 0 : lost(level) - lost(before);
     }
 
     /** Через сколько игровых часов наступает шок у человека со случайностью {@code u} 0..1 (равномерно по логарифму). */

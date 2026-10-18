@@ -11,6 +11,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.animal.Chicken;
 import net.minecraft.world.entity.animal.Cod;
 import net.minecraft.world.entity.animal.Cow;
 import net.minecraft.world.entity.player.Player;
@@ -48,9 +49,9 @@ public final class BurnGameTests {
      * второй раз ничего не отнимает. При 20 кал/см² у жителя загорается одежда. Разбойник в железе не обожжён и не
      * горит, в коже — горит (плотная ткань загорается), но кожа под ней цела. Ниже самого низкого порога — ничего,
      * треска под водой, ещё не тикавшая, — тоже. Игрока, которого правила не дают ранить, вспышка подрыва игрока не
-     * трогает, а другого — жжёт и поджигает рубашку. Второй подрыв не трогает идущий шок. Новый ожог слабее прежнего
-     * заживает своим сроком: прежний кончился — предел нового. Шок в конце срока убивает и под огнестойкостью с
-     * сопротивлением V.
+     * трогает, а другого — жжёт и поджигает рубашку. Второй подрыв не трогает идущий шок; рана поверх прежних ожогов —
+     * от здоровья без них. Новый ожог слабее прежнего заживает своим сроком: прежний кончился — предел нового. Шок в
+     * конце срока убивает и под огнестойкостью с сопротивлением V.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_burns", skyAccess = true)
     public static void burnsByDegreeClothesAndShock(GameTestHelper h) {
@@ -82,7 +83,7 @@ public final class BurnGameTests {
         FlashBurns.burn(h.getLevel(), d, leather, 20, null);
         FlashBurns.burn(h.getLevel(), d, faint, BurnInjury.lowest(YIELD) * 0.99, null);
 
-        h.assertTrue(level(cow) == BurnsEffect.SHOCK && cow.getMaxHealth() <= Math.max(1, 10 * BurnsEffect.SHOCK_LEFT) + 1e-3 && cow.getHealth() <= 10 * BurnsEffect.SHOCK_LEFT + 1e-3, "корова при " + fmt(third) + " кал/см² без шока: " + about(cow));
+        h.assertTrue(level(cow) == BurnsEffect.SHOCK && cow.getMaxHealth() <= Math.max(1, 10 * BurnInjury.SHOCK_LEFT) + 1e-3 && cow.getHealth() <= 10 * BurnInjury.SHOCK_LEFT + 1e-3, "корова при " + fmt(third) + " кал/см² без шока: " + about(cow));
         h.assertFalse(cow.isOnFire(), "корова загорелась: горит только одежда");
         h.assertTrue(level(villager) == 4 && Math.abs(villager.getMaxHealth() - 12) < 1e-3 && villager.getHealth() > 11.9f,
                 "житель в рубашке при " + fmt(third) + " кал/см²: " + about(villager));
@@ -107,6 +108,21 @@ public final class BurnGameTests {
         FlashBurns.burn(level, d, enemy, 30, launcher);
         h.assertTrue(level(ally) < 0 && !ally.isOnFire(), "игрока, которого правила не дают ранить, обожгло: " + about(ally) + (ally.isOnFire() ? ", горит" : ""));
         h.assertTrue(level(enemy) >= 0 && enemy.isOnFire(), "игрока, которого правила дают ранить, не обожгло: " + about(enemy) + (enemy.isOnFire() ? "" : ", не горит"));
+
+        // поверх прежних ожогов рана — от здоровья без них: у коровы с пределом 60 % шок оставляет 5 % от 10, а у курицы
+        // с 0,9 (предел здоровья ваниль не опускает ниже единицы) шок отнимает 5 % от 4 — меньше полуединицы, без раны
+        Cow burned = still(h, EntityType.COW, 36, 28);
+        burned.addEffect(new MobEffectInstance(ModEffects.BURNS, 24_000, 4));
+        burned.setHealth(6);
+        FlashBurns.burn(level, d, burned, third, null);
+        h.assertTrue(level(burned) == BurnsEffect.SHOCK && Math.abs(burned.getHealth() - 10 * BurnInjury.SHOCK_LEFT) < 1e-3,
+                "корова с ожогами 40 % после шока: " + about(burned));
+        Chicken chicken = still(h, EntityType.CHICKEN, 32, 28);
+        chicken.addEffect(new MobEffectInstance(ModEffects.BURNS, 24_000, 9));
+        chicken.setHealth(0.4f);
+        FlashBurns.burn(level, d, chicken, third, null);
+        h.assertTrue(chicken.isAlive() && level(chicken) == BurnsEffect.SHOCK && chicken.getHealth() > 0.39f,
+                "курица с ожогами 90 % после шока: " + about(chicken) + (chicken.isAlive() ? "" : ", умерла"));
 
         healing.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, 6));
         FlashBurns.burn(level, d, healing, third, null);
