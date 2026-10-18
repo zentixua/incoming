@@ -112,6 +112,11 @@ public final class ReplayFilm {
     private final java.util.Map<String, Path> skins;
     /** Тряска камеры моделью мода у ядерных планов, доля (INCOMING_FILM_SHAKE, по умолчанию 1). */
     private final double nukeShake;
+    /**
+     * Броня людей в кадре выключена ({@code INCOMING_FILM_ARMOR=off}): форма и шлем бойцов записаны в повтор и закрывают
+     * их скины (вопрос Артёму 18.10) — снимаются у клиента повтора перед каждым кадром, запись та же.
+     */
+    private final boolean armorOff;
     private final ArrayDeque<Coverage.Spec> queue = new ArrayDeque<>();
     private final List<String> best = new ArrayList<>();
     /** Метка этого вывода в строках report.jsonl: файл копит строки всех выводов, отчёт берёт последний вывод плана. */
@@ -229,6 +234,7 @@ public final class ReplayFilm {
         hold = Integer.parseInt(System.getenv().getOrDefault("INCOMING_FILM_HOLD", "20"));
         skins = readSkins(System.getenv("INCOMING_FILM_SKINS"));
         nukeShake = Double.parseDouble(System.getenv().getOrDefault("INCOMING_FILM_SHAKE", "1.0"));
+        armorOff = "off".equals(System.getenv("INCOMING_FILM_ARMOR"));
         String only = System.getenv("INCOMING_FILM_SHOTS");
         List<String> pick = only == null || only.isBlank() ? null : Arrays.asList(only.split(","));
         // снятые в прошлый запуск (render/best.txt) не переснимаются, если их не назвали: запуск после падения идёт дальше;
@@ -342,12 +348,24 @@ public final class ReplayFilm {
     }
 
     private void onStage(RenderLevelStageEvent e) {
+        // до людей кадра: снаряжение приходит пакетами повтора и при перемотке снова, поэтому — каждый кадр
+        if (armorOff && e.getStage() == RenderLevelStageEvent.Stage.AFTER_SKY && mc.level != null) {
+            for (var p : mc.level.players()) {
+                if (p == mc.player) continue;
+                for (var slot : ARMOR) {
+                    if (!p.getItemBySlot(slot).isEmpty()) p.setItemSlot(slot, net.minecraft.world.item.ItemStack.EMPTY);
+                }
+            }
+        }
         if (qa != null) qa.onStage(e);
         if (shown != null && e.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL && FlashbackApi.exporting()) {
             double t = FlashbackApi.exportTick();
             if (!Double.isNaN(t)) shown.tick((int) Math.floor(t));
         }
     }
+
+    private static final net.minecraft.world.entity.EquipmentSlot[] ARMOR = {net.minecraft.world.entity.EquipmentSlot.HEAD,
+            net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.entity.EquipmentSlot.FEET};
 
     private void closeShown() {
         if (shown != null) {
