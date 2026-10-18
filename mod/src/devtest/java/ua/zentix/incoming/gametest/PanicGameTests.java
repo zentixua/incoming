@@ -41,7 +41,7 @@ public final class PanicGameTests {
 
     /**
      * Подрыв 0,1 кт высоко над землёй к западу от площадки (видно над стеной из барьеров), масштаб — такой, что у мобов
-     * {@link #PSI}. Вспышку (свет по одной сущности, как в {@code PulseJob}) видят коровы, кадавр и житель — все
+     * {@link #PSI}. Вспышку (свет по одной сущности, как в {@code PulseJob}) видят коровы, кадавр, житель и попугай — все
      * паникуют; волна продлевает панику. За 10 с каждый уходит на восток, дальше от эпицентра, а когда срок вышел, цель
      * бегства у всех снята. Свои не бегут ни разу: сидящий ручной волк и лошадь с хозяином. Корова в стеклянном загоне
      * 1×1 паникует, но путь ищет всё реже (запертая — не чаще {@link #PENNED_SEARCHES} раз за всю панику).
@@ -55,6 +55,8 @@ public final class PanicGameTests {
         mobs.add(h.spawn(EntityType.COW, new BlockPos(30, 12, 38)));
         mobs.add(h.spawn(EntityType.HUSK, new BlockPos(26, 12, 32)));
         mobs.add(h.spawn(EntityType.VILLAGER, new BlockPos(34, 12, 30)));
+        // летун: у его навигации место — сама твёрдая клетка, на которую садиться
+        mobs.add(h.spawn(EntityType.PARROT, new BlockPos(28, 12, 36)));
         // свои: ручной волк сидит по приказу, у лошади есть хозяин
         UUID owner = UUID.randomUUID();
         Wolf wolf = h.spawn(EntityType.WOLF, new BlockPos(22, 12, 20));

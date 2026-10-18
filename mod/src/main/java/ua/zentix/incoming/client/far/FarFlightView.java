@@ -389,7 +389,7 @@ public final class FarFlightView {
             if (!track.fromServer()) continue;
             double dx = POS[0] - cam.x, dy = POS[1] - cam.y, dz = POS[2] - cam.z;
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            double tr = Sight.transmittance(d, view.range());
+            double tr = view.air(d, dy);
             float vis = Mth.lerp(view.partial(), f.visPrev, f.vis);
             double length = f.look.size() / (d * view.pixel());
             double model = modelShare(length);
@@ -409,7 +409,7 @@ public final class FarFlightView {
             Flame flame = stage.flame();
             if (flame != null && vis > 0) {
                 flameAt(track, t, flame, dx, dy, dz, OUT);
-                double bd = OUT[0], ft = Sight.transmittance(bd, view.range());
+                double bd = OUT[0], ft = view.air(bd, BACK[1]);
                 int fc = flame.color();
                 float open = Mth.lerp(view.partial(), f.openPrev, f.open);
                 out.light(BACK[0], BACK[1], BACK[2], flame.radius(), Sight.adapted(flame.brightness(), view.ambient()) * ft, ft, view.pixel(),
@@ -480,7 +480,7 @@ public final class FarFlightView {
      */
     private static void end(Trail s, double age, double dx, double dy, double dz, int light, FarView view, int slot) {
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        double t = Sight.transmittance(d, view.range());
+        double t = view.air(d, dy);
         ribbon(s.width(age), d, view.pixel(), OUT);
         float shade = s.shade(age);
         EX[slot] = dx;

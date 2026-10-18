@@ -33,9 +33,12 @@ public final class ClientNuclear {
     public static final class Active {
         public final Detonation d;
         public final boolean live;
+        /** Свет шара и пожаров на пыли и вода под эпицентром ({@link CloudPuffs}). */
         public final CloudPuffs puffs;
-        /** Подрыв на воде: столб, кольцо тумана, базисная волна ({@link NukeWater}). */
-        final WaterPuffs water;
+        /** Стена пыли ударной волны: голова-вал и облако Вильсона ({@link BlastWall}; рисует пелена, {@link NukePall}). */
+        public final BlastWall wall;
+        /** Вода под подрывом ({@link NukeWater#resolve}): столб в объёме гриба, базисная волна в пелене. */
+        final BurstWater water;
         /**
          * Пелена после волны ({@link NukePall}): «до утра» — от времени суток в миг подрыва и по часам мира после него
          * ({@link PallField#daylight}).
@@ -51,21 +54,21 @@ public final class ClientNuclear {
         final NukeSounds.Schedule sounds;
 
         Active(Detonation d, boolean live, long clientNow) {
-            this(d, live, clientNow, new CloudPuffs(d), new WaterPuffs(d, WaterPuffs.count(d)), null, null, null);
+            this(d, live, clientNow, new CloudPuffs(d), new BlastWall(d), new BurstWater(), null, null, null);
         }
 
         /** Тот же подрыв после перемотки повтора: прошлое, без вспышки и звука, возраст — по часам этого места записи. */
         Active(Active a, long clientNow) {
-            this(a.d, false, clientNow, a.puffs, a.water, a.pall, a.storm, a.ground);
-            puffs.untrack();
+            this(a.d, false, clientNow, a.puffs, a.wall, a.water, a.pall, a.storm, a.ground);
         }
 
-        private Active(Detonation d, boolean live, long clientNow, CloudPuffs puffs, WaterPuffs water, @Nullable PallField pall,
+        private Active(Detonation d, boolean live, long clientNow, CloudPuffs puffs, BlastWall wall, BurstWater water, @Nullable PallField pall,
                 @Nullable FireStorm storm, @Nullable PallGround ground) {
             this.d = d;
             this.live = live;
             this.before = live ? 0 : Math.max(0, clientNow - d.gameTime());
             this.puffs = puffs;
+            this.wall = wall;
             this.water = water;
             ClientLevel level = Minecraft.getInstance().level;
             if (pall != null) {
@@ -80,7 +83,8 @@ public final class ClientNuclear {
             // первый замер часов — сразу: вошедший после сна не видит мглы и кадр до тика
             if (level != null) this.pall.daylight(ticks(0), level.getGameTime(), level.getDayTime());
             this.storm = storm != null ? storm : new FireStorm(d, this.pall);
-            // рельеф тот же: известное остаётся
+            // рельеф тот же: известное остаётся; новая карта заполняется с водой под эпицентром
+            if (ground == null) NukeWater.resolve(this, level);
             this.ground = ground != null ? ground : new PallGround(d, this.pall);
             this.sounds = new NukeSounds.Schedule(this);
         }
@@ -261,8 +265,8 @@ public final class ClientNuclear {
     // ---------------------------------------------------------------- тик
 
     /**
-     * Верх рельефа для пыли у земли; null — в измерении с потолком (верх карты высот там — потолок, а не земля: пыль
-     * остаётся на высоте эпицентра). Над пустотой (Энд) рельефа нет — клуб остаётся на прежней высоте.
+     * Верх рельефа под пеленой и смерчами; null — в измерении с потолком (верх карты высот там — потолок, а не земля).
+     * Над пустотой (Энд) рельефа нет — NaN.
      */
     @Nullable
     private static Sightline.Heights ground(ClientLevel level) {
@@ -283,7 +287,8 @@ public final class ClientNuclear {
         CLOCK.tick(now);
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         Sightline.Heights heights = ground(level);
-        double near = mc.options.getEffectiveRenderDistance() * 16.0;
+        // вода сверху колонок — для карты под пеленой (из чего пелена); под потолком (Незер) её нет, как и рельефа
+        FarTerrain.Water water = heights == null ? null : FarTerrain.water(level);
         // мир заморожен (/tick freeze): подрыв стоит, как частицы и руины на сервере (их время — часы мира)
         boolean runs = level.tickRateManager().runsNormally();
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
@@ -292,14 +297,14 @@ public final class ClientNuclear {
             a.age++;
             a.sounds.tick();
             a.pall.daylight(a.ticks(0), level.getGameTime(), level.getDayTime());
-            // рельеф под пеленой — для её луча, за которым нет мира (в измерении с потолком — земля под эпицентром)
-            if (a.pall.visible(a.ticks(0))) a.ground.survey(a.ticks(0), heights);
-            // пыль у земли встаёт на рельеф там, где будет к концу следующего кадра
-            if (heights != null) {
-                a.puffs.track(a.seconds(1), heights, eye.x, eye.z, near);
-                // смерчи огненного шторма — по рельефу под ними
-                a.storm.track(a.ticks(1) / 20.0, heights);
-            }
+            // рельеф и вода под пеленой — для её луча, за которым нет мира, и вещества (в измерении с потолком — земля под
+            // эпицентром)
+            // вода под эпицентром — до карты под пеленой: та заполняет неизвестное ею
+            NukeWater.resolve(a, level);
+            double wall = a.wall.reach(a.seconds(0));
+            if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, heights, water);
+            // смерчи огненного шторма — по рельефу под ними
+            if (heights != null) a.storm.track(a.ticks(1) / 20.0, heights);
             NukeWater.tick(a, level, eye);
             NukeDust.front(a, eye);
             if (a.ticks(0) > lifeTicks(a.d) && !a.pall.visible(a.ticks(0))) {

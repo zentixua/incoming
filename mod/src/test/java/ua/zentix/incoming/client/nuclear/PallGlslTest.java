@@ -2,21 +2,22 @@ package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.VolumeNoise;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.MushroomModel;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,34 +45,73 @@ class PallGlslTest {
     void sceneDistanceKeepsOnlyTheWorldInFront() {
         // расстояние до мира за пикселем (SceneDepth): негодное — NaN, бесконечность, за глазом (чужая глубина LOD) —
         // как небо, 1e9: иначе луч пелены шёл бы сквозь NaN, и пиксель кадра выходил чёрным
-        Function f = Function.parse(GLSL, "pallScene");
+        GlslFunction f = GlslFunction.parse(GLSL, "pallScene");
         for (double d : new double[] {0, 0.5, 64, 3000, 9.9e7}) assertEquals(d, f.call(Map.of("d", d)), 0, "d = " + d);
         for (double d : new double[] {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, -0.01, -5000, 1e8, 1e9, 3e38}) {
             assertEquals(1e9, f.call(Map.of("d", d)), 0, "d = " + d);
         }
     }
 
+    /** Голова стены пыли без шума — та же, что в Java ({@link BlastWall#inside}, {@link BlastWall#fade}, {@link BlastWall#mean}). */
+    @Test
+    void wallHeadMatchesJava() {
+        GlslFunction inside = GlslFunction.parse(GLSL, "pallWallInside"), fade = GlslFunction.parse(GLSL, "pallWallFade"), mean = GlslFunction.parse(GLSL, "pallWallMean");
+        assertEquals(BlastWall.BITE, scalar(GLSL, "WALL_BITE"), 0);
+        for (double a : new double[]{3, 25, 80}) {
+            for (double top = 10; top <= 300; top += 58) {
+                for (double s = -10; s <= 8 * a; s += a / 7) {
+                    for (double z = -0.6 * top; z <= 1.2 * top; z += top / 23) {
+                        Map<String, Double> args = Map.of("s", s, "z", z, "a", a, "top", top, "WALL_BITE", BlastWall.BITE);
+                        String at = a + ", " + top + ": " + s + ", " + z;
+                        assertEquals(BlastWall.inside(s, z, a, top), inside.call(args), 1e-9, at);
+                        assertEquals(BlastWall.fade(s, z, a, top), fade.call(args), 1e-9, at);
+                        assertEquals(BlastWall.mean(s, z, a, top), mean.call(args), 1e-9, at);
+                    }
+                }
+            }
+        }
+    }
+
     @Test
     void profileMatchesJava() {
-        Function f = Function.parse(GLSL, "pallProfile");
+        GlslFunction f = GlslFunction.parse(GLSL, "pallProfile");
         for (double x = -1.5; x <= 1.5; x += 0.005) assertEquals(PallField.profile(x), f.call(Map.of("x", x)), 1e-9, "x = " + x);
     }
 
     @Test
     void columnMatchesJava() {
-        Function f = Function.parse(GLSL, "pallColumn");
+        GlslFunction f = GlslFunction.parse(GLSL, "pallColumn");
         for (double x = -1.5; x <= 1.5; x += 0.005) assertEquals(PallField.column(x), f.call(Map.of("x", x)), 1e-9, "x = " + x);
     }
 
     @Test
     void edgeMatchesJava() {
-        Function f = Function.parse(GLSL, "pallEdge");
+        GlslFunction f = GlslFunction.parse(GLSL, "pallEdge");
         for (double u = 0; u <= 1.2; u += 0.002) assertEquals(PallField.edge(u), f.call(Map.of("u", u)), 1e-9, "u = " + u);
     }
 
     @Test
+    void surgeMatchesJava() {
+        GlslFunction f = GlslFunction.parse(GLSL, "pallSurge"), top = GlslFunction.parse(GLSL, "pallSurgeTop");
+        for (double u = 0; u <= 1.3; u += 0.002) {
+            assertEquals(PallField.surgeProfile(u), f.call(Map.of("u", u)), 1e-9, "u = " + u);
+            assertEquals(PallField.surgeTop(u), top.call(Map.of("u", u)), 1e-9, "u = " + u);
+        }
+    }
+
+    /**
+     * Водяная пыль пелены ({@code MIST} в {@code fx_pall.fsh}) — того же белого, что стена брызг над водой
+     * ({@link CloudPuffs#SPRAY}): пелена за фронтом над водой продолжает её цвет, как бурая пыль — стену над сушей.
+     */
+    @Test
+    void mistIsTheSprayWallColour() {
+        double[] mist = vec3(read("core/fx_pall.fsh"), "MIST");
+        for (int c = 0; c < 3; c++) assertEquals((CloudPuffs.SPRAY >> (16 - 8 * c) & 0xFF) / 255.0, mist[c], 0.5 / 255, "канал " + c);
+    }
+
+    @Test
     void shapeMatchesJava() {
-        Function f = Function.parse(GLSL, "pallShape");
+        GlslFunction f = GlslFunction.parse(GLSL, "pallShape");
         for (double r = 0; r <= 1; r += 0.05) {
             for (double g = 0; g <= 1; g += 0.05) {
                 for (double fill = 0; fill <= 1; fill += 0.1) {
@@ -82,22 +122,51 @@ class PallGlslTest {
         }
     }
 
+    /**
+     * Дымка до гриба, пелены и стены ({@code pallAir}) — та же, что у дальней картинки ({@link Sight.Air}): воздух кадра в
+     * блоках модели ({@code MushroomField.air}) при любом масштабе, вверх, вниз и вдоль земли.
+     */
     @Test
-    void litMatchesJava() {
-        Function f = Function.parse(GLSL, "pallLit");
-        for (double r = 0; r <= 4000; r += 50) {
-            for (double up = 0; up <= 1; up += 0.25) {
-                for (double overhead : new double[]{0, 0.5, 1}) {
-                    assertEquals(CloudPuffs.lit(r, up, overhead, 1560), f.call(Map.of("r", r, "up", up, "overhead", overhead, "lightR", 1560.0)), 1e-9,
-                            "r = " + r + ", up = " + up + ", overhead = " + overhead);
+    void airMatchesJava() {
+        GlslFunction depth = GlslFunction.parse(GLSL, "pallAirDepth");
+        double heights = scalar(GLSL, "PALL_AIR_HEIGHTS");
+        assertEquals(Sight.HAZE_HEIGHT / Sight.AIR_HEIGHT, heights, 1e-7);
+        for (double scale : new double[] {1, 0.25}) {
+            Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, 15, false, 0, 0.5f, 8, 20_000, 7, (float) scale, false, 0.42f);
+            for (double eyeY : new double[] {40, 70, 300}) {
+                Vec3 eye = new Vec3(0, eyeY, 0);
+                for (double range : new double[] {Sight.CLEAR, Sight.RAIN, Sight.THUNDER}) {
+                    org.joml.Vector4f air = new org.joml.Vector4f();
+                    MushroomField.air(d, eye, range, air);
+                    Sight.Air metres = MushroomField.air(d, eye, range);
+                    for (double t : new double[] {0, 5, 400, 6000, 30000}) {
+                        for (double dy : new double[] {-0.3, -1e-6, 0, 1e-6, 0.2, 0.9}) {
+                            double glsl = Math.exp(-depth.call(Map.of("t", t, "dy", dy, "haze", (double) air.x, "clean", (double) air.y,
+                                    "weather", (double) air.z, "kh", (double) air.w, "PALL_AIR_HEIGHTS", heights)));
+                            double java = metres.transmittance(d.metres(t), d.metres(dy * t));
+                            assertEquals(java, glsl, 1e-5 + 1e-5 * java, "масштаб " + scale + ", глаз " + eyeY + ", t " + t + ", dy " + dy);
+                        }
+                    }
                 }
+            }
+        }
+    }
+
+    /** Свет шара на пыли в {@code fx_pall} ({@code pallBallShare}) — закон {@link CloudPuffs#ball}: L·R²/d², у поверхности — L. */
+    @Test
+    void ballLightMatchesJava() {
+        GlslFunction f = GlslFunction.parse(read("core/fx_pall.fsh"), "pallBallShare");
+        for (double radius : new double[]{0, 40, 150, 600}) {
+            for (double d = 0; d <= 4000; d += 50) {
+                assertEquals(CloudPuffs.ball(1, radius, d), f.call(Map.of("radius", radius, "d", d)), 1e-12,
+                        "radius = " + radius + ", d = " + d);
             }
         }
     }
 
     @Test
     void burnMatchesJava() {
-        Function f = Function.parse(GLSL, "pallBurn");
+        GlslFunction f = GlslFunction.parse(GLSL, "pallBurn");
         for (double r = 0; r <= 4000; r += 25) {
             for (double up = 0; up <= 1; up += 0.25) {
                 for (double fireR : new double[]{0, 1900}) {
@@ -108,41 +177,199 @@ class PallGlslTest {
         }
     }
 
-    /**
-     * Пелена за фронтом продолжает стену пыли ночью: свет тонкой пыли за головой стены по законам шейдера (свет стены
-     * {@code pallLit}, {@code pallBurn} с числами {@link CloudPuffs#pallLight}, сила {@link CloudPuffs#glowOnSmoke}, свет
-     * неба на пыли {@code DUST} из {@code fx_pall.fsh} — не темнее {@link NukePall#nightSky}) — тот же, что у клуба стены там
-     * же ({@link CloudPuffs#wallColor}), и не тёмный: у эпицентра пыль в отсвете шара и пожаров. Своё зарево пожаров
-     * пелены ({@code PallFireLight}) разгорается позже, с минуту, — его здесь нет.
-     */
+    /** Свет и экран шейдера ({@code pallLinear}, {@code pallDisplay}, {@code pallLift}) — те же, что в {@link PallLight}. */
     @Test
-    void pallBehindTheFrontTakesTheWallLight() {
-        Function lit = Function.parse(GLSL, "pallLit"), burn = Function.parse(GLSL, "pallBurn");
-        double[] dust = vec3(read("core/fx_pall.fsh"), "DUST"), fire = vec3(read("core/fx_pall.fsh"), "FIRE");
-        CloudPuffs puffs = new CloudPuffs(GROUND, 600, false);
-        float ambient = 0.17f;
-        double k = CloudPuffs.glowOnSmoke(ambient), sky = NukePall.nightSky(ambient, 1);
-        float[] light = new float[8], wall = new float[3];
-        for (double t : new double[]{2, 6, 10, 20, 40}) {
-            assertTrue(puffs.pallLight(t, light));
-            double head = puffs.wall(t).head();
-            for (double share : new double[]{0.2, 0.5, 0.8, 0.97}) {
-                double r = head * share;
-                for (double up : new double[]{0.05, 0.3, 0.6, 0.9}) {
-                    double a = lit.call(Map.of("r", r, "up", up, "overhead", (double) light[0], "lightR", (double) light[2]));
-                    double b = burn.call(Map.of("r", r, "up", up, "glow", (double) light[1], "fireR", (double) light[3]));
-                    assertTrue(puffs.wallColor(t, r, up, 1, ambient, wall));
-                    double sum = 0;
-                    for (int c = 0; c < 3; c++) {
-                        double hot = b > a ? fire[c] : light[4 + c];
-                        double pall = Math.min(1, dust[c] * sky + hot * Math.max(a, b) * k);
-                        sum += pall;
-                        assertEquals(wall[c], pall, 0.06, t + " с, " + r + " блоков, высота " + up + ", канал " + c);
+    void displayMatchesJava() {
+        GlslFunction linear = GlslFunction.parse(GLSL, "pallLinear"), display = GlslFunction.parse(GLSL, "pallDisplay"), lift = GlslFunction.parse(GLSL, "pallLift");
+        for (double v = 0; v <= 1.5; v += 0.01) {
+            assertEquals(PallLight.linear(v), linear.call(Map.of("v", v)), 1e-12, "v = " + v);
+            assertEquals(PallLight.display(v), display.call(Map.of("v", v)), 1e-6 * (1 + v), "v = " + v);
+            for (double base : new double[]{0.12, 0.17, 0.6, 1}) {
+                assertEquals(PallLight.lift(base, v), lift.call(Map.of("base", base, "x", v)), 1e-12, "небо " + base + ", отсвет " + v);
+            }
+        }
+    }
+
+    /** Мелкие клубы шейдера — те же, что у {@link VolumeNoise#detail}. */
+    @Test
+    void detailMatchesJava() {
+        GlslFunction f = GlslFunction.parse(GLSL, "pallDetail");
+        for (double r = 0; r <= 1; r += 0.002) assertEquals(VolumeNoise.detail(r), f.call(Map.of("r", r)), 1e-9, "r = " + r);
+    }
+
+    /** Затухание рассеянного света и сам свет в слое ({@code pallK}, {@code pallDiffuse}) — те же, что в {@link PallLight}. */
+    @Test
+    void lightMatchesJava() {
+        GlslFunction k = GlslFunction.parse(GLSL, "pallK"), f = GlslFunction.parse(GLSL, "pallDiffuse");
+        // у тёмного дыма (0,55, 0,48) k > 1: пучок гаснет как рассеянный свет при μ = 1/k
+        double[] albedos = {1, 0.9989, 0.97, 0.9, 0.76, 0.55, 0.48};
+        double[] phases = {0.3333, 0.375, 0.4595};
+        for (double w : albedos) {
+            for (double g : phases) {
+                assertEquals(PallLight.k(w, g), k.call(Map.of("w", w, "g", g)), 1e-12, "w = " + w + ", g = " + g);
+                for (double tc : new double[]{0.01, 0.7, 3, 12}) {
+                    for (double share : new double[]{0, 0.4, 1}) {
+                        // 0,95 и 0,975 — в полосе kμ ≈ 1 у тёмного дыма (сдвиг пучка, pallBeamMu)
+                        for (double mu1 : new double[]{0.12, 0.6, 0.95, 0.975, 1}) {
+                            for (double f2 : new double[]{0, 0.5}) {
+                                for (double top : new double[]{0, 0.2}) {
+                                    for (double bottom : new double[]{0, 0.7}) {
+                                        for (double c : new double[]{-2.0 / 3, 0.2, 2.0 / 3}) {
+                                            double tau = share * tc, ground = bottom > 0 ? 0.2 : 0.06;
+                                            double java = PallLight.diffuse(w, g, tau, tc, ground, mu1, 0.8, 0.35, f2, top, bottom, c);
+                                            Map<String, Double> args = new HashMap<>(Map.of("w", w, "g", g, "tau", tau, "tc", tc, "ground", ground,
+                                                    "mu1", mu1, "f1", 0.8, "mu2", 0.35, "f2", f2, "top", top));
+                                            args.put("bottom", bottom);
+                                            args.put("c", c);
+                                            // 2/3 в шейдере — 0,6666667: при почти непоглощающем веществе (матрица почти вырождена) это 10⁻⁵
+                                            assertEquals(java, f.call(args), 1e-4 * (1 + Math.abs(java)), "w = " + w + ", g = " + g + ", τc = " + tc
+                                                    + ", τ = " + tau + ", μ1 = " + mu1 + ", f2 = " + f2 + ", верх " + top + ", низ " + bottom + ", c = " + c);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    if (r < 1000) assertTrue(sum / 3 > 0.25, t + " с, " + r + " блоков: пелена у эпицентра тёмная, " + sum / 3);
                 }
             }
         }
+    }
+
+    /**
+     * Вещество шейдера ({@code PALL_*_W}, {@code PALL_*_G} в {@code pall.glsl}) — из цветов толстого слоя {@code fx_pall.fsh}
+     * в линейном ({@link PallLight#albedo}, асимметрия {@link PallLight#truncated}): толстая пелена на экране того же цвета,
+     * что стена пыли и брызг (R∞ альбедо — её цвет). Сажа и пламя смерча в линейном ({@code *_LINEAR}) — те же цвета.
+     */
+    @Test
+    void materialsHaveTheirColours() {
+        String fx = read("core/fx_pall.fsh");
+        String[][] materials = {{"DUST", "DUST"}, {"SMOKE", "DUST"}, {"HAZE", "DUST"}, {"MIST", "MIST"}, {"SOOT", "SOOT"}};
+        Map<String, Double> full = Map.of("DUST", PallLight.DUST_G, "MIST", PallLight.MIST_G, "SOOT", PallLight.SOOT_G);
+        for (String[] m : materials) {
+            double g = scalar(GLSL, "PALL_" + m[1] + "_G");
+            assertEquals(PallLight.truncated(full.get(m[1])), g, 1e-7, m[0]);
+            double[] colour = vec3(fx, m[0]), w = vec3(GLSL, "PALL_" + m[0] + "_W");
+            for (int c = 0; c < 3; c++) {
+                assertEquals(PallLight.albedo(PallLight.linear(colour[c]), g), w[c], 1e-7, m[0] + ", канал " + c);
+                assertEquals(colour[c], PallLight.display(PallLight.reflectance(w[c], g)), 1e-4, m[0] + ", канал " + c);
+            }
+        }
+        for (String m : new String[]{"SOOT", "WHIRL_FIRE"}) {
+            double[] colour = vec3(fx, m), linear = vec3(fx, m + "_LINEAR");
+            for (int c = 0; c < 3; c++) assertEquals(PallLight.linear(colour[c]), linear[c], 1e-7, m + ", канал " + c);
+        }
+        assertEquals(PallLight.LAND, scalar(GLSL, "PALL_LAND"), 0);
+        assertEquals(PallLight.SEA, scalar(GLSL, "PALL_SEA"), 0);
+        // пыль у камеры (NukePall.dustLight) — тех же веществ и того же пламени
+        double[] dust = vec3(fx, "DUST"), smoke = vec3(fx, "SMOKE"), fire = vec3(fx, "FIRE");
+        for (int c = 0; c < 3; c++) {
+            assertEquals(dust[c], NukePall.DUST[c], 0, "канал " + c);
+            assertEquals(smoke[c], NukePall.SMOKE[c], 0, "дым, канал " + c);
+            assertEquals(fire[c], NukePall.FIRE[c], 0, "пламя, канал " + c);
+        }
+    }
+
+    /**
+     * Пелена за фронтом ночью — в том же свете, что голова стены перед ней: толстая пыль ({@code PALL_DUST_W}) в свете шара
+     * и пожаров по законам шейдера (pallDiffuse; шар — чёрное тело, как у тела гриба, pallBallShare × привыкание глаза;
+     * пожары — сила {@link CloudPuffs#glowOnSmoke}, делённая на цвет пыли {@code DUST}, на экране поверх света неба — в
+     * линейном разностью, pallLift; свет неба — {@link NukePall#nightSky} в линейном; итог — на экране, pallDisplay).
+     * Сверху, под шаром и шапкой в первые секунды (пучок, pallBallLight), — того же цвета, что верх
+     * головы стены там же ({@link NukePall#dustLight} — свет головы, как в кадре), с точностью до трети: голова — не
+     * плоский слой. И не тёмная у эпицентра. Своё зарево пожаров пелены ({@code PallFireLight}) разгорается позже, с минуту,
+     * — его здесь нет.
+     * <p>
+     * Свет пожаров — не ярче пламени ({@code pallFlame}, {@link PallLight#flame}). Ночью над зоной пожаров отсвет на экране
+     * уже цвета огня ({@code FIRE}), а такой цвет у пыли свет дать не может — обращение через цвет пыли дало бы свет втрое
+     * ярче огня. Там пелена у пола — пыль в свете самого пламени: сбоку не ярче пламени и того же оттенка (красный, за ним
+     * зелёный, синий), в красном — не меньше 0,6 его: не тёмный занавес над пожарами.
+     */
+    @Test
+    void pallBehindTheFrontTakesTheWallLight() {
+        GlslFunction burn = GlslFunction.parse(GLSL, "pallBurn"), light = GlslFunction.parse(GLSL, "pallDiffuse"),
+                lift = GlslFunction.parse(GLSL, "pallLift"), display = GlslFunction.parse(GLSL, "pallDisplay"), linear = GlslFunction.parse(GLSL, "pallLinear");
+        assertTrue(GLSL.replaceAll("\\s+", " ").contains("vec3 pallFlame(float base, vec3 x, vec3 flame) { return min(pallLift3(base, x), "
+                + "vec3(pallLinear(flame.r), pallLinear(flame.g), pallLinear(flame.b))); }"), "pallFlame — не PallLight.flame");
+        String fx = read("core/fx_pall.fsh");
+        GlslFunction ball = GlslFunction.parse(fx, "pallBallShare");
+        double[] dust = vec3(fx, "DUST"), fire = vec3(fx, "FIRE"), w = vec3(GLSL, "PALL_DUST_W");
+        assertEquals(PallLight.CROSS, scalar(fx, "CROSS"), 0, "к белому — как PallLight.screen");
+        double g = scalar(GLSL, "PALL_DUST_G");
+        CloudPuffs puffs = new CloudPuffs(GROUND);
+        BlastWall blast = new BlastWall(GROUND, false);
+        float ambient = 0.17f;
+        double k = CloudPuffs.glowOnSmoke(ambient), sky = linear.call(Map.of("v", (double) NukePall.nightSky(ambient, 1))), tc = 8;
+        float[] wall = new float[8], high = new float[3], slot = new float[BlastWall.SLOT];
+        NukePall.Sky night = new NukePall.Sky();
+        night.sy = -1;
+        java.util.Arrays.fill(night.sky, (float) sky);
+        night.base = ambient;
+        night.exposure = (float) Sight.adapted(1, ambient);
+        night.glowOnSmoke = (float) k;
+        int checked = 0, burning = 0;
+        for (double t : new double[]{2, 6, 10, 20, 40}) {
+            assertTrue(puffs.pallLight(MushroomModel.shape(t, 15, 0, true, GROUND.metres(blast.wall(t).head())), wall));
+            assertTrue(blast.slot(t, slot));
+            double head = blast.wall(t).head();
+            for (double share : new double[]{0.01, 0.03, 0.05, 0.2, 0.5, 0.8, 0.97}) {
+                double r = head * share;
+                float[] here = slot.clone();
+                here[0] = (float) (r + 1.5 * here[1]);
+                // середина шапки снесена ветром (CloudPuffs.pallLight), точка — на 0,9 высоты головы над r
+                double wind = GROUND.windDir(), lx = Math.cos(wind) * wall[2] - r, ly = wall[7] - 0.9 * here[2], lz = Math.sin(wind) * wall[2];
+                double toBall = Math.sqrt(lx * lx + ly * ly + lz * lz);
+                double a = ball.call(Map.of("radius", (double) wall[0], "d", toBall)) * night.exposure;
+                double b = burn.call(Map.of("r", r, "up", 0.0, "glow", (double) wall[1], "fireR", (double) wall[3]));
+                double mu = ly / toBall;
+                // верх головы стены, будь она здесь (точка — посреди её толщи), — до неё пелена здесь и была ею
+                NukePall.dustLight(here, wall, night, wind, r, 0.9 * here[2], 0, 0.9 * here[2], high);
+                double sum = 0, fires = 0;
+                double[] side = new double[3], top = new double[3], luma = {0.2126, 0.7152, 0.0722};
+                // отсвет пожаров на пыли — уже цвет огня: свет пелены — пламя (pallFlame)
+                boolean flames = false;
+                for (int c = 0; c < 3; c++) {
+                    flames |= lift.call(Map.of("base", (double) ambient, "x", fire[c] * b * k / dust[c])) > linear.call(Map.of("v", fire[c]));
+                }
+                for (int c = 0; c < 3; c++) {
+                    double capF = wall[4 + c] * a;
+                    double burnF = Math.min(lift.call(Map.of("base", (double) ambient, "x", fire[c] * b * k / dust[c])),
+                            linear.call(Map.of("v", fire[c])));
+                    fires += luma[c] * burnF;
+                    Map<String, Double> args = new HashMap<>(Map.of("w", w[c], "g", g, "tc", tc, "ground", PallLight.LAND, "mu1", 1.0,
+                            "f1", 0.0, "mu2", Math.max(mu, 0.12), "f2", capF, "top", sky, "bottom", burnF));
+                    args.put("tau", tc);
+                    args.put("c", -2.0 / 3);
+                    // пелена срезает плечом (fx_pall: shoulder): ярче 1 — как 1
+                    double below = Math.min(1, display.call(Map.of("v", light.call(args))));
+                    args.put("c", 0.0);
+                    side[c] = display.call(Map.of("v", w[c] * light.call(args)));
+                    args.put("tau", 0.0);
+                    args.put("c", 2.0 / 3);
+                    top[c] = light.call(args);
+                    sum += Math.max(below, Math.min(1, display.call(Map.of("v", top[c]))));
+                }
+                if (mu > 0.9 && t <= 10) {
+                    // на экран — как у пелены (к белому, плечо): под шаром в первые секунды пересвечено
+                    float[] shown = new float[3];
+                    PallLight.screen(top, shown);
+                    for (int c = 0; c < 3; c++) {
+                        assertEquals(high[c], shown[c], 0.03 + 0.3 * high[c], t + " с, " + r + " блоков, сверху, канал " + c);
+                        checked++;
+                    }
+                }
+                // пожары светят ярче шара (fx_pall: главный свет — снизу; оба — линейный свет на белой стене)
+                if (flames && fires > (luma[0] * wall[4] + luma[1] * wall[5] + luma[2] * wall[6]) * a) {
+                    String at = t + " с, " + r + " блоков, у пола сбоку: ";
+                    for (int c = 0; c < 3; c++) assertTrue(side[c] <= fire[c] + 0.03, at + "ярче пламени в канале " + c + ", " + side[c]);
+                    assertTrue(side[0] > side[1] && side[1] > side[2], at + "не цвета огня");
+                    assertTrue(side[0] >= 0.6 * fire[0], at + "тёмная против пламени, " + side[0]);
+                    burning++;
+                }
+                if (r < 1000) assertTrue(sum / 3 > 0.25, t + " с, " + r + " блоков: пелена у эпицентра тёмная, " + sum / 3);
+            }
+        }
+        assertTrue(checked > 15, "сравнений с верхом стены " + checked);
+        assertTrue(burning > 10, "сравнений у пола над пожарами " + burning);
     }
 
     /**
@@ -152,7 +379,7 @@ class PallGlslTest {
      */
     @Test
     void glowFormulaIsThePicture() throws IOException {
-        Function f = Function.parse(read("core/fx.fsh"), "glowAlpha");
+        GlslFunction f = GlslFunction.parse(read("core/fx.fsh"), "glowAlpha");
         BufferedImage img;
         try (InputStream in = PallGlslTest.class.getResourceAsStream("/assets/incoming/textures/far/glow.png")) {
             assertNotNull(in, "far/glow.png");
@@ -169,6 +396,50 @@ class PallGlslTest {
         }
     }
 
+    /**
+     * Как {@code fx_pall} складывает свет, и как он и {@code fx_pall_composite} переводят его в экран, — по тексту
+     * шейдеров: части проверены по отдельности, а собирает их {@code main}, который тест не считает. Огонь в точке — все
+     * огни вместе под одним пределом пламени (каждый в своём пределе, а сумма была ярче огня); пожары под пылью — тоже в
+     * пределе; толща над точкой — весь столб слоя; свет пелены в экран — один раз на канал, ярче белого — в долю пикселя
+     * при настоящем пропускании; тень на мире — один раз.
+     */
+    @Test
+    void pallPutsItsLightTogetherOnce() {
+        String march = read("core/fx_pall.fsh"), composite = read("core/fx_pall_composite.fsh");
+        assertTrue(march.contains("vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);"),
+                "огонь в точке — одной суммой под пределом пламени");
+        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire);"), "свет точки — рассеянный, пучки и огонь");
+        assertTrue(march.contains("+ min(below * exp(-gSootK * self) + (0.5 + 0.75 * PALL_SOOT_G * mv) * glow + around, gFlame);"),
+                "огонь на дыме шторма — одной суммой под пределом пламени");
+        assertTrue(march.contains("burnLight = pallFlame(") && march.contains("s.burn += burnLight;"), "пожары под пылью — не ярче пламени");
+        assertTrue(march.contains("s.tau += f.column.x + f.column.y + f.column.z;"), "толща над точкой — весь столб слоя");
+        assertEquals(3, occurrences(march, "pallDisplay("), "свет пелены в экран — один раз на канал");
+        assertTrue(march.contains("shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover"),
+                "на выходе — экран с плечом");
+        assertTrue(march.contains("shownCover = min(cover * lum, 1.0);"), "пересвет — в долю пикселя, не больше всего пикселя");
+        assertTrue(march.contains("vec4 res = vec4(shown, min(transmit + lost, 1.0));"),
+                "пропускание кадра — настоящее и при пересвете");
+        assertEquals(4, occurrences(composite, "pallDisplay("), "тень на мире в экран — один раз, мир в свете шаров — раз на канал");
+        assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen);"), "тень на мире — в экран, вдали тает в дымке и тумане");
+        assertTrue(composite.contains("pall.a *= kept;"), "без света шаров тень — множитель мира в смешивании");
+        assertTrue(composite.contains("pall = vec4(pall.rgb + pall.a * shown, 0.0);"), "мир в свете шаров — за пеленой, пиксель целиком");
+        assertEquals(scalar(march, "CROSS"), scalar(composite, "CROSS"), "пересвет к белому — как у вещества");
+        assertArrayEquals(vec3(march, "LUMA"), vec3(composite, "LUMA"));
+    }
+
+    private static int occurrences(String text, String what) {
+        int n = 0;
+        for (int i = text.indexOf(what); i >= 0; i = text.indexOf(what, i + 1)) n++;
+        return n;
+    }
+
+    /** Константа {@code const float name = a;} шейдера. */
+    private static double scalar(String source, String name) {
+        Matcher m = Pattern.compile("const\\s+float\\s+" + name + "\\s*=\\s*([^;]+);").matcher(source);
+        if (!m.find()) throw new AssertionError("нет const float " + name);
+        return Double.parseDouble(m.group(1).strip());
+    }
+
     /** Константа {@code const vec3 name = vec3(a, b, c);} шейдера. */
     private static double[] vec3(String source, String name) {
         Matcher m = Pattern.compile("const\\s+vec3\\s+" + name + "\\s*=\\s*vec3\\(([^)]*)\\)").matcher(source);
@@ -179,8 +450,8 @@ class PallGlslTest {
 
     @Test
     void fireLawsMatchJava() {
-        Function bend = Function.parse(GLSL, "fireBend"), width = Function.parse(GLSL, "fireWidth"), lod = Function.parse(GLSL, "fireLod"),
-                glow = Function.parse(GLSL, "fireGlowLod"), column = Function.parse(GLSL, "fireColumn");
+        GlslFunction bend = GlslFunction.parse(GLSL, "fireBend"), width = GlslFunction.parse(GLSL, "fireWidth"), lod = GlslFunction.parse(GLSL, "fireLod"),
+                glow = GlslFunction.parse(GLSL, "fireGlowLod"), column = GlslFunction.parse(GLSL, "fireColumn");
         for (double h = -60; h <= 400; h += 0.5) {
             assertEquals(FireStorm.bend(h, FireStorm.BEND_HEIGHT), bend.call(Map.of("h", h, "hb", FireStorm.BEND_HEIGHT)), 1e-9, "h = " + h);
             for (double cell : new double[]{4, 32}) {
@@ -190,167 +461,6 @@ class PallGlslTest {
                 assertEquals(FireStorm.lod(w, cell), lod.call(Map.of("w", w, "cell", cell)), 1e-9, "w = " + w);
             }
             assertEquals(FireStorm.column(h, 260), column.call(Map.of("h", h, "top", 260.0)), 1e-9, "h = " + h);
-        }
-    }
-
-    /**
-     * Функция GLSL из чисел в число: объявления {@code float a = …, b = …;}, {@code if (условие) return …;},
-     * {@code return …;}; в выражениях — числа, переменные (у vec2 — {@code n.x}), + − * /, сравнения и встроенные
-     * {@code smoothstep, clamp, min, max, exp, log2, pow, abs, sqrt}.
-     */
-    private record Function(List<String> tokens) {
-        private static final Pattern TOKEN = Pattern.compile("\\s*(\\d+\\.?\\d*(?:[eE][-+]?\\d+)?|\\.\\d+|[A-Za-z_]\\w*(?:\\.[xyzw]+)?|<=|>=|==|[-+*/(),;{}<>=])");
-
-        static Function parse(String source, String name) {
-            Matcher m = Pattern.compile("float\\s+" + name + "\\s*\\([^)]*\\)\\s*\\{").matcher(source);
-            if (!m.find()) throw new AssertionError("в pall.glsl нет float " + name);
-            int depth = 1, i = m.end();
-            for (; depth > 0; i++) {
-                if (source.charAt(i) == '{') depth++;
-                if (source.charAt(i) == '}') depth--;
-            }
-            String body = source.substring(m.end(), i - 1);
-            List<String> tokens = new ArrayList<>();
-            Matcher t = TOKEN.matcher(body);
-            int at = 0;
-            while (at < body.length() && t.find(at) && t.start() == at) {
-                tokens.add(t.group(1));
-                at = t.end();
-            }
-            if (!body.substring(at).isBlank()) throw new AssertionError(name + ": не разобрать «" + body.substring(at).trim() + "»");
-            return new Function(tokens);
-        }
-
-        double call(Map<String, Double> args) {
-            return new Run(tokens, new HashMap<>(args)).body();
-        }
-    }
-
-    private static final class Run {
-        private final List<String> t;
-        private final Map<String, Double> vars;
-        private int i;
-
-        Run(List<String> tokens, Map<String, Double> vars) {
-            this.t = tokens;
-            this.vars = vars;
-        }
-
-        double body() {
-            while (i < t.size()) {
-                String w = next();
-                switch (w) {
-                    case "float" -> {
-                        do {
-                            String name = next();
-                            expect("=");
-                            vars.put(name, expr());
-                        } while (take(","));
-                        expect(";");
-                    }
-                    case "if" -> {
-                        expect("(");
-                        boolean c = condition();
-                        expect(")");
-                        expect("return");
-                        double v = expr();
-                        expect(";");
-                        if (c) return v;
-                    }
-                    case "return" -> {
-                        double v = expr();
-                        expect(";");
-                        return v;
-                    }
-                    default -> throw new AssertionError("не знаю инструкцию " + w);
-                }
-            }
-            throw new AssertionError("нет return");
-        }
-
-        private boolean condition() {
-            double a = expr();
-            String op = next();
-            double b = expr();
-            return switch (op) {
-                case "<" -> a < b;
-                case "<=" -> a <= b;
-                case ">" -> a > b;
-                case ">=" -> a >= b;
-                case "==" -> a == b;
-                default -> throw new AssertionError("не знаю сравнение " + op);
-            };
-        }
-
-        private double expr() {
-            double v = term();
-            while (i < t.size() && (t.get(i).equals("+") || t.get(i).equals("-"))) v = next().equals("+") ? v + term() : v - term();
-            return v;
-        }
-
-        private double term() {
-            double v = unary();
-            while (i < t.size() && (t.get(i).equals("*") || t.get(i).equals("/"))) v = next().equals("*") ? v * unary() : v / unary();
-            return v;
-        }
-
-        private double unary() {
-            if (take("-")) return -unary();
-            if (take("(")) {
-                double v = expr();
-                expect(")");
-                return v;
-            }
-            String w = next();
-            if (Character.isDigit(w.charAt(0)) || w.charAt(0) == '.') return Double.parseDouble(w);
-            if (take("(")) {
-                List<Double> a = new ArrayList<>();
-                if (!take(")")) {
-                    do a.add(expr());
-                    while (take(","));
-                    expect(")");
-                }
-                return builtin(w, a);
-            }
-            Double v = vars.get(w);
-            if (v == null) throw new AssertionError("нет переменной " + w);
-            return v;
-        }
-
-        private static double builtin(String name, List<Double> a) {
-            return switch (name) {
-                case "smoothstep" -> {
-                    double f = Math.max(0, Math.min(1, (a.get(2) - a.get(0)) / (a.get(1) - a.get(0))));
-                    yield f * f * (3 - 2 * f);
-                }
-                case "clamp" -> Math.max(a.get(1), Math.min(a.get(2), a.get(0)));
-                case "min" -> Math.min(a.get(0), a.get(1));
-                case "max" -> Math.max(a.get(0), a.get(1));
-                case "exp" -> Math.exp(a.get(0));
-                case "log2" -> Math.log(a.get(0)) / Math.log(2);
-                case "pow" -> Math.pow(a.get(0), a.get(1));
-                case "abs" -> Math.abs(a.get(0));
-                case "sqrt" -> Math.sqrt(a.get(0));
-                default -> throw new AssertionError("не знаю функцию " + name);
-            };
-        }
-
-        private String next() {
-            if (i >= t.size()) throw new AssertionError("конец функции раньше времени");
-            return t.get(i++);
-        }
-
-        private boolean take(String w) {
-            if (i < t.size() && t.get(i).equals(w)) {
-                i++;
-                return true;
-            }
-            return false;
-        }
-
-        private void expect(String w) {
-            String got = next();
-            if (!got.equals(w)) throw new AssertionError("ждал «" + w + "», а там «" + got + "»");
         }
     }
 }

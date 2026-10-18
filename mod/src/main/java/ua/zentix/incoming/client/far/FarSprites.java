@@ -108,18 +108,7 @@ public final class FarSprites {
      * (r, g, b) с непрозрачностью a (уже с дымкой воздуха).
      */
     public void puff(double dx, double dy, double dz, double half, float rot, int tex, float r, float g, float b, float a) {
-        puff(dx, dy, dz, half, rot, tex, r, g, b, a, 0, 0, 0, 0);
-    }
-
-    /**
-     * Клуб, который ещё и светится изнутри (накал гриба, пожары под стеной пыли): поверх своего дыма — свет (gr, gg, gb)
-     * силы ga, он ничего не закрывает. Свет клуба позади закрывают клубы перед ним.
-     */
-    public void puff(double dx, double dy, double dz, double half, float rot, int tex, float r, float g, float b, float a, float gr, float gg,
-                     float gb, float ga) {
-        if (billboard(dx, dy, dz, half, rot, FxAtlas.puff(tex), r * a + gr * ga, g * a + gg * ga, b * a + gb * ga, a, (float) half * FxQuads.SOFT)) {
-            counts[0]++;
-        }
+        if (billboard(dx, dy, dz, half, rot, FxAtlas.puff(tex), r * a, g * a, b * a, a, (float) half * FxQuads.SOFT)) counts[0]++;
     }
 
     /**
@@ -225,6 +214,21 @@ public final class FarSprites {
         float a = (float) (t * body * shape);
         if (shape > 0 && billboard(dx, dy, dz, half, rot, sprite, a, a, a, a, (float) (radius * BODY_SOFT), BALL_FRONT * radius)) counts[1]++;
         glare(dx, dy, dz, radius, out, seen, r, g, b, glare, shown);
+    }
+
+    /**
+     * Блик и вуаль яркого тела ({@link #light}) без самого тела: тело рисует объём (огненный шар ядерного удара —
+     * в проходе пелены, {@code fx_pall}), свет в глазу — здесь, с пробой видимости тела ({@link SourceProbes}: мир,
+     * пелена и стена пыли, грибы перед ним).
+     *
+     * @param seen  яркость тела против белого экрана (с привыканием глаза и воздухом)
+     * @param shown тело на экране (доля белого): блик и вуаль не ярче
+     * @param out   числа {@link Sight#light} (5)
+     */
+    public void eyeLight(double dx, double dy, double dz, double radius, double seen, double pixel, float r, float g, float b, double shown,
+                         double[] out) {
+        Sight.light(radius, seen, Math.sqrt(dx * dx + dy * dy + dz * dz), pixel, out);
+        glare(dx, dy, dz, radius, out, seen, r, g, b, 1, shown);
     }
 
     /** Ядро {@link #light} кругом: свой свет поверх того, что за ним; пересвет — к белому, тусклее белого — тает. */

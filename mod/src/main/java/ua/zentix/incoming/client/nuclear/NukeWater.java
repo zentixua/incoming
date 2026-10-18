@@ -25,9 +25,11 @@ import java.util.OptionalInt;
 /**
  * Ядерная волна на воде (DESIGN-nuke §6, «Вода»): тёмное кольцо фронта на воде — рябь под ветром за фронтом, с пеной
  * у эпицентра (наклейка на воду в слое эффектов, {@link WaterDecal}: профиль кольца по модели считается здесь, на кадр);
- * стена брызг за фронтом у камеры (частицы, {@link FxBudget#SPRAY}); подрыв на воде — столб, кольцо тумана и базисная
- * волна ({@link WaterPuffs}). Пыль у земли над водой не встаёт: стена и шлейф там — брызги и водяная пыль
- * ({@link CloudPuffs#water}), частицы пыли у камеры — только над сушей ({@link NukeDust#front}).
+ * капли с гребней за фронтом у камеры (частицы, {@link FxBudget#SPRAY}; водяную пыль там рисует голова стены в пелене,
+ * {@link #front}); подрыв на воде — столб воды с короной в объёме
+ * гриба ({@link MushroomField}) и базисная волна в пелене ({@link PallField#water}). Пыль у земли над водой не встаёт:
+ * голова стены там — брызги и водяная пыль ({@link BlastWall}, вода — по карте под пеленой, {@link PallGround}), частицы
+ * пыли у камеры — только над сушей ({@link NukeDust#front}).
  * <p>
  * Вода ли где-то — только из того, что у клиента уже есть: чанки клиента, плитки рельефа карты ({@link FarTerrain#water}).
  * Вода под эпицентром далеко за прорисовкой (ни чанка, ни плитки) — по высоте: земля ровно на уровне моря — море.
@@ -112,20 +114,23 @@ public final class NukeWater {
         return u.sure() || age > (live ? GUESS_TICKS : GUESS_TICKS_PAST);
     }
 
-    /**
-     * Тик подрыва: вода под эпицентром (пока не известна наверняка и подрыв молод — заново), вода под пылью у земли
-     * ({@link CloudPuffs#water}), брызги у камеры.
-     */
+    /** Тик подрыва после {@link #resolve}: брызги у камеры. */
     static void tick(ClientNuclear.Active a, ClientLevel level, Vec3 eye) {
-        WaterPuffs w = a.water;
-        if (!w.settled()) {
-            Under u = under(level, a.d);
-            w.wet(u.water() * WaterModel.wetBurst(a.d.hobMetres(), a.d.yieldKt()));
-            a.puffs.burst(u.water(), w.wet());
-            if (settles(u, a.age(), a.live)) w.settle(u.source());
-        }
-        if (!level.dimensionType().hasCeiling()) a.puffs.water(a.seconds(1), FarTerrain.water(level));
         front(a, level, eye);
+    }
+
+    /**
+     * Вода под эпицентром, пока не известна наверняка и подрыв молод, — заново: пелене (базисная волна, вода там, где её карта
+     * ничего не знает), грибу (пар и брызги) и брызгам. Зовётся и при создании подрыва до его карты под пеленой: иначе вошедший в разгар подрыва в море первые
+     * тики видел бы над морем бурую пыль (до решения под эпицентром — суша).
+     */
+    static void resolve(ClientNuclear.Active a, @Nullable ClientLevel level) {
+        BurstWater w = a.water;
+        if (w.settled()) return;
+        Under u = under(level, a.d);
+        w.set(u.water(), u.water() * WaterModel.wetBurst(a.d.hobMetres(), a.d.yieldKt()));
+        a.pall.water(u.water(), w.wet());
+        if (settles(u, a.age(), a.live)) w.settle(u.source());
     }
 
     /** Вода ли сверху колонки загруженного чанка (верхний блок карты высот {@code MOTION_BLOCKING} — вода). */
@@ -156,8 +161,10 @@ public final class NukeWater {
 
     /**
      * Брызги у камеры: пока фронт по воде ближе {@link NukeDust#NEAR} к камере — по его дуге над водой (загруженные
-     * чанки) встают клубы водяной пыли на высоту, на которую ветер за фронтом срывает гребни
-     * ({@link WaterModel#sprayHeight}), и летят капли; гуще, где ветер сильнее.
+     * чанки) с гребней летят капли; гуще, где ветер сильнее. Саму водяную пыль на высоту, на которую ветер за фронтом
+     * срывает гребни ({@link WaterModel#sprayHeight}), рисует пелена объёмом — голова стены над водой
+     * ({@link NukePall#drawsHead}), как и пыль у камеры над сушей ({@link NukeDust}); клубы — только запасные, когда
+     * пелена её не рисует, и гладкие: клуб шире экрана у глаза ближайшим пикселем — лесенка квадратов на весь кадр.
      */
     private static void front(ClientNuclear.Active a, ClientLevel level, Vec3 eye) {
         lastSpots = 0;
@@ -174,9 +181,12 @@ public final class NukeWater {
         double half = l < 1 ? Math.PI : Math.acos(Mth.clamp((l * l + r * r - NukeDust.NEAR * NukeDust.NEAR) / (2 * l * r), -1, 1));
         double toward = Math.atan2(ez, ex);
         double speed = Math.min(SPRAY_SPEED, d.frontRadius(ticks + 1) - slant);
-        // брызги встают позади тёмного кольца: на путь фронта за время подъёма брызг (WaterModel.SPRAY_LAG)
-        double lag = Math.max(0, slant - d.frontRadius(Math.max(0, ticks - WaterModel.SPRAY_LAG * 20 * d.scale())));
+        // брызги встают позади тёмного кольца там же, где их рисует голова стены (BlastWall.slot): позади края пыли (фронт
+        // BlastWall.LIFT_S назад) на путь головы за время подъёма брызг (WaterModel.SPRAY_LAG)
+        double back = (BlastWall.LIFT_S + WaterModel.SPRAY_LAG) * 20 * d.scale();
+        double lag = Math.max(0, slant - d.frontRadius(Math.max(0, ticks - back)));
         int n = Math.min(MAX_SPOTS, (int) Math.round(2 * half * r / STEP * spray * Fx.density(eye)));
+        boolean puffs = !NukePall.drawsHead(a, eye);
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int i = 0; i < n; i++) {
             double ang = toward + (RANDOM.nextDouble() * 2 - 1) * half;
@@ -192,11 +202,13 @@ public final class NukeWater {
             // водяная пыль: пелена у самой воды (клубы прозрачные и крупные — сливаются, а не висят шарами), выше —
             // реже и крупнее, катится с фронтом медленнее его
             double up = Math.pow(RANDOM.nextDouble(), 2.2), h = height * 0.85 * up;
-            double v = speed * (0.35 + 0.45 * RANDOM.nextDouble());
-            Fx.smoke().vel(cos * v, (0.03 + 0.12 * RANDOM.nextDouble()) * (1 - up), sin * v)
-                    .size((float) (2 + 0.1 * h), (float) (6 + Math.min(14, height * 0.3) + 4 * RANDOM.nextDouble())).growFast()
-                    .life(40 + RANDOM.nextInt(50)).color(SPRAY_DARK, SPRAY_LIGHT).alpha((float) (0.22 + 0.25 * spray)).drag(0.94f)
-                    .wind(0).fadeIn(6).fadeFrom(0.3f).budget(FxBudget.SPRAY).spawn(level, x, surface + 0.3 + h, z);
+            if (puffs) {
+                double v = speed * (0.35 + 0.45 * RANDOM.nextDouble());
+                Fx.smoke().vel(cos * v, (0.03 + 0.12 * RANDOM.nextDouble()) * (1 - up), sin * v)
+                        .size((float) (2 + 0.1 * h), (float) (6 + Math.min(14, height * 0.3) + 4 * RANDOM.nextDouble())).growFast()
+                        .life(40 + RANDOM.nextInt(50)).color(SPRAY_DARK, SPRAY_LIGHT).alpha((float) (0.22 + 0.25 * spray)).drag(0.94f)
+                        .smooth().wind(0).fadeIn(6).fadeFrom(0.3f).budget(FxBudget.SPRAY).spawn(level, x, surface + 0.3 + h, z);
+            }
             // капли с гребней: летят с ветром и падают
             if (RANDOM.nextDouble() < 0.4 + 0.6 * spray) {
                 for (int k = 0; k < 2; k++) {
@@ -207,6 +219,11 @@ public final class NukeWater {
                 }
             }
         }
+    }
+
+    /** Кольца всех подрывов на воде в кадр ({@link #decal}); после {@code WaterDecal.begin}. */
+    public static void decals(float partial) {
+        for (ClientNuclear.Active a : ClientNuclear.detonations()) decal(a, partial);
     }
 
     /**
@@ -241,14 +258,20 @@ public final class NukeWater {
         return most > 0.004f;
     }
 
-    /** Строка сценария: вода под подрывами, колец на воде в последнем кадре, мест брызг за тик, частиц брызг и пыли у земли. */
+    /**
+     * Строка сценария: наклейка на воду, мест брызг за тик, частиц брызг и пыли у земли; по подрывам — вода под ним, столб
+     * (верх, наружный радиус, доля воды, что ещё не упала; м модели), базисная волна, голова стены.
+     */
     public static String describe() {
         StringBuilder sb = new StringBuilder();
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
-            int[] n = a.water.visible(a.seconds(0));
-            CloudPuffs.Wall w = a.puffs.wall(a.seconds(0));
-            sb.append(String.format(Locale.ROOT, " [#%d t=%.1fs wet=%.2f (%s) column=%d mist=%d surge=%d wall=%.0f spray-ground=%d]", a.d.id(),
-                    a.seconds(0), a.water.wet(), a.water.source(), n[0], n[1], n[2], w.head(), a.puffs.wetGround()));
+            double t = a.seconds(0);
+            WaterModel.Column c = a.water.wet() > 0 ? WaterModel.column(t, a.d.yieldKt()) : null;
+            String column = c == null ? "none" : String.format(Locale.ROOT, "top %.0f m, r %.0f m, water %.2f", c.top(), c.outer(), c.water());
+            BlastWall.Wall w = a.wall.wall(t);
+            sb.append(String.format(Locale.ROOT, " [#%d t=%.1fs wet=%.2f (%s) column %s, surge r %.0f m, wall=%.0f]", a.d.id(),
+                    t, a.water.wet(), a.water.source(), column, WaterModel.surgeRadius(t, a.d.yieldKt()) * (a.water.wet() > 0 ? 1 : 0),
+                    w.head()));
         }
         Minecraft mc = Minecraft.getInstance();
         int live = mc.level == null ? 0 : ua.zentix.incoming.client.fx.particle.FxPool.INSTANCE.live(FxBudget.SPRAY);

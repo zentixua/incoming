@@ -292,7 +292,7 @@ public final class FxParticle {
         double px = Mth.lerp(partial, xo, x) - frame.cam.x, py = Mth.lerp(partial, yo, y) - frame.cam.y, pz = Mth.lerp(partial, zo, z) - frame.cam.z;
         double d = Math.sqrt(px * px + py * py + pz * pz);
         // дымка воздуха — та же, что у дальней картинки; к краю прорисовки частицу сменяет дальняя картинка
-        float a = aCol * frame.haze(d) * frame.near(d);
+        float a = aCol * frame.haze(d, py) * frame.near(d);
         if (a <= 0.004f) return;
         if (chainGap > 0) {
             double cos = d < 1e-6 ? 1 : (px * chainX + py * chainY + pz * chainZ) / d;

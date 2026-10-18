@@ -3,11 +3,13 @@ package ua.zentix.incoming.client.far;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import ua.zentix.incoming.client.fx.layer.FxLayer;
 import ua.zentix.incoming.client.fx.layer.FxLights;
 import ua.zentix.incoming.client.fx.layer.FxQuads;
 import ua.zentix.incoming.client.fx.layer.SourceProbes;
+import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.client.nuclear.NukeRenderer;
 import ua.zentix.incoming.client.render.FarDraw;
 
@@ -15,10 +17,9 @@ import java.util.Arrays;
 
 /**
  * Снаряды и взрывы вдали: дальше прорисовки частиц и сущностей нет, а под шейдерами Iris виден только этап после мира.
- * Кадр: что видно из {@link FarBlasts} и {@link FarFlightView} и клубы ядерного гриба и стены пыли
- * ({@link NukeRenderer#clouds}) собираются в {@link FarSprites} — квадратами в общий проход слоя эффектов
- * ({@link FxLayer}), вместе с ближними частицами; модели снарядов рисуются в свой атлас ({@code FarModels}), их плитки —
- * квадратами того же прохода.
+ * Кадр: что видно из {@link FarBlasts} и {@link FarFlightView}, собирается в {@link FarSprites} — квадратами в общий
+ * проход слоя эффектов ({@link FxLayer}), вместе с ближними частицами; модели снарядов рисуются в свой атлас
+ * ({@code FarModels}), их плитки — квадратами того же прохода.
  */
 public final class FarRenderer {
     private static final FarSprites SPRITES = new FarSprites();
@@ -43,7 +44,7 @@ public final class FarRenderer {
             FarBlasts.collect(view, SPRITES, lights);
             FarFlightView.collect(view, SPRITES);
         }
-        NukeRenderer.clouds(view, SPRITES);
+        NukeRenderer.fireballs(view, SPRITES, lights);
         SPRITES.counts(LAST_FRAME);
     }
 
@@ -71,9 +72,11 @@ public final class FarRenderer {
         double pixel = 2 / (e.getProjectionMatrix().m11() * Math.max(1, mc.getWindow().getHeight()));
         double edge = Math.atan(0.5 * pixel * Math.hypot(mc.getWindow().getWidth(), mc.getWindow().getHeight()));
         float ambient = FarView.ambient(level, partial);
-        return new FarView(FarDraw.eye(e), camera.getLookVector(), camera.getLeftVector(), camera.getUpVector(), partial,
-                mc.gameRenderer.getDepthFar() * 0.97, pixel, edge, ambient, Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial)),
-                mc.options.getEffectiveRenderDistance() * 16.0, level.effects().getCloudHeight(), level.getRainLevel(partial));
+        Vec3 eye = FarDraw.eye(e);
+        double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
+        return new FarView(eye, camera.getLookVector(), camera.getLeftVector(), camera.getUpVector(), partial,
+                mc.gameRenderer.getDepthFar() * 0.97, pixel, edge, ambient, range, mc.options.getEffectiveRenderDistance() * 16.0,
+                level.effects().getCloudHeight(), level.getRainLevel(partial), Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, range));
     }
 
     /**

@@ -8,11 +8,13 @@
         { "name": "Sampler3" },
         { "name": "Sampler4" },
         { "name": "Sampler5" },
-        { "name": "Sampler6" }
+        { "name": "Sampler6" },
+        { "name": "Sampler7" }
     ],
     "uniforms": [
         { "name": "InvViewProj", "type": "matrix4x4", "count": 16, "values": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] },
         { "name": "PallForward", "type": "float", "count": 3, "values": [0.0, 0.0, -1.0] },
+        { "name": "PallAir", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
         { "name": "PallSlot0", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
         { "name": "PallSlot1", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
         { "name": "PallMin", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
@@ -21,6 +23,7 @@
         { "name": "PallSunLight", "type": "float", "count": 3, "values": [1.0, 1.0, 1.0] },
         { "name": "PallSkyLight", "type": "float", "count": 3, "values": [0.5, 0.6, 0.8] },
         { "name": "PallFireLight", "type": "float", "count": 3, "values": [1.0, 0.4, 0.1] },
+        { "name": "PallBase", "type": "float", "count": 1, "values": [1.0] },
         { "name": "PallGlow0", "type": "float", "count": 4, "values": [0.0, 0.0, 1.0, 1.0] },
         { "name": "PallGlow1", "type": "float", "count": 4, "values": [0.0, 0.0, 1.0, 1.0] },
         { "name": "PallHot0", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
@@ -36,6 +39,13 @@
         { "name": "PallWhirlLean", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
         { "name": "PallGround0", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
         { "name": "PallGround1", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
-        { "name": "PallFloorFrom", "type": "float", "count": 1, "values": [160.0] }
+        { "name": "PallFloorFrom", "type": "float", "count": 1, "values": [160.0] },
+        { "name": "PallWater0", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallWater1", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallWall0", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallWall1", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallWilson0", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallWilson1", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallExposure", "type": "float", "count": 1, "values": [1.0] }
     ]
 }
