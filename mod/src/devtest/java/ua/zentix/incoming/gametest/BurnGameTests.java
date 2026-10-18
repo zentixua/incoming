@@ -1,8 +1,10 @@
 package ua.zentix.incoming.gametest;
 
+import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntityType;
@@ -15,6 +17,10 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.scores.Scoreboard;
+import net.neoforged.neoforge.common.util.FakePlayer;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
@@ -26,7 +32,7 @@ import ua.zentix.incoming.nuclear.radiation.FlashBurns;
 import ua.zentix.incoming.registry.ModEffects;
 
 import java.util.Locale;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.UUID;
 
 /** Ожоги светом шара по телу ({@link FlashBurns}): степень, одежда, броня, шок. */
 @GameTestHolder(Incoming.MOD_ID)
@@ -42,8 +48,9 @@ public final class BurnGameTests {
      * (9,9 % тела): отнято 40 % здоровья, предел — 60 % (вверх до десятой доли), одежда не загорелась; та же вспышка
      * второй раз ничего не отнимает. При 20 кал/см² у жителя загорается одежда. Разбойник в железе не обожжён и не
      * горит, в коже — горит (плотная ткань загорается), но кожа под ней цела. Ниже самого низкого порога — ничего,
-     * треска под водой — тоже. Второй подрыв не отодвигает шок. Шок в конце срока убивает и под огнестойкостью с
-     * сопротивлением V.
+     * треска под водой, ещё не тикавшая, — тоже. Игрока своей команды без огня по своим вспышка его подрыва не трогает.
+     * Второй подрыв не трогает идущий шок. Новый ожог слабее прежнего заживает своим сроком: прежний кончился — предел
+     * нового. Шок в конце срока убивает и под огнестойкостью с сопротивлением V.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_burns", skyAccess = true)
     public static void burnsByDegreeClothesAndShock(GameTestHelper h) {
@@ -58,12 +65,15 @@ public final class BurnGameTests {
         Cow shocked = still(h, EntityType.COW, 44, 20);
         Cow resisting = still(h, EntityType.COW, 20, 28);
         Cow twice = still(h, EntityType.COW, 24, 28);
-        // треска в лунке воды за стеклом: глаза под водой со следующего тика
+        Mob healing = still(h, EntityType.VILLAGER, 28, 28);
+        // треска в лунке воды за стеклом: признак «под водой» у неё встанет только в её первом тике
         BlockPos pond = new BlockPos(48, 12, 20);
         h.setBlock(pond, Blocks.WATER);
         for (BlockPos side : new BlockPos[]{pond.east(), pond.west(), pond.north(), pond.south()}) h.setBlock(side, Blocks.GLASS);
         Cod cod = h.spawn(EntityType.COD, pond);
         cod.setNoAi(true);
+        FlashBurns.burn(h.getLevel(), d, cod, 30, null);
+        h.assertTrue(level(cod) < 0 && !cod.isOnFire(), "треска под водой обожжена: " + about(cod));
 
         FlashBurns.burn(h.getLevel(), d, cow, third, null);
         FlashBurns.burn(h.getLevel(), d, villager, third, null);
@@ -87,21 +97,38 @@ public final class BurnGameTests {
         twice.addEffect(new MobEffectInstance(ModEffects.BURNS, 40, BurnsEffect.SHOCK));
         FlashBurns.burn(h.getLevel(), d, twice, third, null);
         MobEffectInstance left = twice.getEffect(ModEffects.BURNS);
-        h.assertTrue(left != null && left.getAmplifier() == BurnsEffect.SHOCK && left.getDuration() <= 40, "второй подрыв отодвинул шок: " + left);
+        h.assertTrue(left != null && left.getAmplifier() == BurnsEffect.SHOCK && left.getDuration() == 40, "второй подрыв сдвинул шок: " + left);
+
+        ServerLevel level = h.getLevel();
+        FakePlayer victim = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "burns_ally"));
+        FakePlayer launcher = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "burns_launcher"));
+        victim.moveTo(h.absoluteVec(new Vec3(32.5, 12, 36.5)));
+        Scoreboard board = level.getScoreboard();
+        PlayerTeam team = board.addPlayerTeam("incoming_burns");
+        try {
+            team.setAllowFriendlyFire(false);
+            board.addPlayerToTeam(victim.getScoreboardName(), team);
+            board.addPlayerToTeam(launcher.getScoreboardName(), team);
+            FlashBurns.burn(level, d, victim, 30, launcher);
+            h.assertTrue(level(victim) < 0 && !victim.isOnFire(), "вспышка своего обожгла игрока: " + about(victim) + (victim.isOnFire() ? ", горит" : ""));
+        } finally {
+            board.removePlayerTeam(team);
+        }
+
+        healing.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, 6));
+        FlashBurns.burn(level, d, healing, third, null);
+        h.assertTrue(level(healing) == 6, "ожог слабее прежнего сменил прежний сразу: " + about(healing));
 
         shocked.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, BurnsEffect.SHOCK));
         resisting.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 200));
         resisting.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 200, 4));
         resisting.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, BurnsEffect.SHOCK));
-        AtomicBoolean dived = new AtomicBoolean();
-        h.runAfterDelay(3, () -> {
-            FlashBurns.burn(h.getLevel(), d, cod, 30, null);
-            dived.set(true);
-        });
         h.succeedWhen(() -> {
             h.assertFalse(shocked.isAlive(), "шок не убил");
             h.assertFalse(resisting.isAlive(), "шок не убил под огнестойкостью и сопротивлением V");
-            h.assertTrue(dived.get() && level(cod) < 0 && !cod.isOnFire(), "треска под водой обожжена: " + about(cod));
+            MobEffectInstance healed = healing.getEffect(ModEffects.BURNS);
+            h.assertTrue(healed != null && healed.getAmplifier() == 4 && healed.getDuration() > 24_000,
+                    "прежний ожог кончился, а предел не новый: " + healed);
         });
     }
 

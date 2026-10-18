@@ -132,8 +132,8 @@ near them, ruins collapsing nearby, and now and then an explosion in the burning
   and arms, and an animal over its whole side. Iron armour stops the light; leather catches fire later than a shirt.
   Burns take a share of your health and keep it until they heal: two game weeks for blisters, five for deep burns.
   Deep burns over a quarter of the body, or blisters over 30 % of it, bring shock: you die within 12 game hours. The
-  flash alone burns a dressed player far less than that; burning clothes are what kill, so get into water. Milk and
-  potions do not heal burns.
+  flash alone burns a dressed player far less than that, but burning clothes keep burning like any fire: get into
+  water. Milk and potions do not heal burns.
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through

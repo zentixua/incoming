@@ -1,8 +1,10 @@
 package ua.zentix.incoming.nuclear.radiation;
 
 import it.unimi.dsi.fastutil.HashCommon;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.EntityTypeTags;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
@@ -18,6 +20,7 @@ import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ArmorMaterials;
 import net.minecraft.world.item.ElytraItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.material.FluidState;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BurnInjury;
@@ -40,7 +43,9 @@ import ua.zentix.incoming.registry.ModEffects;
  * огонь, пока её не потушить (§12.60: ожоги пламенем под одеждой).
  *
  * <p>Второй подрыв обжигает ту же сторону тела: отнятая доля — большая из двух, а не сумма, рана — только прибавка;
- * срок шока — меньший из двух.
+ * каждый ожог заживает своим сроком (предел — от самого тяжёлого из незаживших), шок, который уже идёт, — прежним.
+ * Игрока, которого правила не дают ранить (без PvP, своя команда), вспышка подрыва другого игрока не трогает вовсе —
+ * ни кожу, ни одежду, как стрела.
  */
 public final class FlashBurns {
     /** Доля кожи по слотам стороной к шару, % (правило девяток, половина): голова, туловище с руками, ноги, ступни. */
@@ -56,8 +61,9 @@ public final class FlashBurns {
 
     /** Ожоги от импульса {@code q} кал/см² у глаз сущности, которая видит шар. */
     public static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable Entity owner) {
-        if (e.fireImmune() || e instanceof ArmorStand || e instanceof AbstractGolem || e.isInvulnerable() || e.isUnderWater()
+        if (e.fireImmune() || e instanceof ArmorStand || e instanceof AbstractGolem || e.isInvulnerable() || underWater(level, e)
                 || e.hasEffect(MobEffects.FIRE_RESISTANCE) || q < BurnInjury.lowest(d.yieldKt())) return;
+        if (e instanceof Player victim && owner instanceof Player attacker && !victim.canHarmPlayer(attacker)) return;
         // своя кожа у каждого и у каждого подрыва, одна на все степени
         long h = HashCommon.mix(e.getUUID().getMostSignificantBits() ^ HashCommon.mix(e.getUUID().getLeastSignificantBits() ^ d.id() * 0x9E3779B97F4A7C15L));
         double z = Fragility.inverse(unit(h));
@@ -79,23 +85,35 @@ public final class FlashBurns {
         if (degree == 0 || skin <= 0 || e.getType().is(EntityTypeTags.UNDEAD)) return;
         MobEffectInstance had = e.getEffect(ModEffects.BURNS);
         int before = had == null ? -1 : had.getAmplifier();
+        if (before >= BurnsEffect.SHOCK) return;
         double lost = before < 0 ? 0 : -BurnsEffect.lost(before);
-        double share = Math.max(BurnInjury.shock(degree == 2 ? skin : 0, degree == 3 ? skin : 0), before >= BurnsEffect.SHOCK ? 1 : lost);
-        int amplifier = BurnsEffect.level(share);
+        int amplifier = BurnsEffect.level(BurnInjury.shock(degree == 2 ? skin : 0, degree == 3 ? skin : 0));
         int ticks = amplifier == BurnsEffect.SHOCK
                 ? (int) Math.round(BurnInjury.shockHours(unit(HashCommon.mix(h))) * TICKS_PER_HOUR)
                 : (int) Math.round(BurnInjury.HEAL_DAYS[degree - 1] * TICKS_PER_DAY);
-        if (amplifier == BurnsEffect.SHOCK && before >= BurnsEffect.SHOCK) ticks = Math.min(ticks, had.getDuration());
-        // сперва рана, потом предел здоровья: иначе предел срезал бы здоровье, и рана отняла бы ту же долю второй раз;
-        // прежние ожоги уже отняли свою долю — здоровье без них — до их предела
-        double whole = before >= BurnsEffect.SHOCK ? 0 : e.getMaxHealth() / (1 - lost);
-        float dmg = (float) ((Math.min(share, 1 - BurnsEffect.SHOCK_LEFT) - Math.min(lost, 1 - BurnsEffect.SHOCK_LEFT)) * whole);
+        // сперва рана, потом предел здоровья: иначе предел срезал бы здоровье, и рана отняла бы ту же долю второй раз.
+        // Рана — до предела, который ожоги оставят вместе с прежними (те уже отняли свою долю: здоровье без них — до их
+        // предела)
+        double whole = e.getMaxHealth() / (1 - lost);
+        float dmg = (float) ((-BurnsEffect.lost(Math.max(amplifier, before)) - lost) * whole);
         if (dmg >= 0.5f && !(e instanceof Player p && p.getAbilities().invulnerable)) {
-            // игрока, которого правила не дают ранить (без PvP, своя команда), ожоги не трогают
-            if (!e.hurt(ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_THERMAL, null, owner), dmg) && e instanceof Player) return;
+            e.hurt(ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_THERMAL, null, owner), dmg);
         }
-        // без частиц вокруг (в первом лице они лезут в глаза), только значок
+        // свой срок у каждого ожога: эффект слабее прежнего и дольше ваниль держит под ним и открывает, когда тот кончится.
+        // Без частиц вокруг (в первом лице они лезут в глаза), только значок
         if (e.isAlive()) e.addEffect(new MobEffectInstance(ModEffects.BURNS, ticks, amplifier, false, false, true));
+    }
+
+    /**
+     * Глаза под водой — по самому миру, как {@code Entity.updateFluidOnEyes}: признак воды у сущности ставит только её
+     * тик, а импульс берёт и тех, кто ещё не тикал (свежий чанк, чанк без тика сущностей).
+     */
+    private static boolean underWater(ServerLevel level, LivingEntity e) {
+        double y = e.getEyeY() - 0.11111111;
+        BlockPos pos = BlockPos.containing(e.getX(), y, e.getZ());
+        if (level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4) == null) return false;
+        FluidState water = level.getFluidState(pos);
+        return water.is(FluidTags.WATER) && pos.getY() + water.getHeight(level, pos) > y;
     }
 
     /** Одеты ли люди: игрок, жители и торговец, разбойники, ведьма. */
