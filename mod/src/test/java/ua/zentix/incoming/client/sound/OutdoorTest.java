@@ -78,6 +78,32 @@ class OutdoorTest {
     }
 
     @Test
+    void shadowStartsWhereTheRayGrazesTheGround() {
+        assertEquals(1000, Outdoor.shadowFrom(2, 1.7), 1e-9);
+        // r = √(2R)·(√hs + √hr): с крыши в 20 м тень дальше, подрыв на 600 м уводит её за 9 км
+        assertTrue(Outdoor.shadowFrom(2, 20) > 2000);
+        assertEquals(9480, Outdoor.shadowFrom(600, 1.6), 50);
+        assertEquals(0, Outdoor.shadow(false, new Outdoor.Path(5000, 0, 600, 1.6, 0.5, 0.5, 1, 0, 0)), 1e-9);
+        assertEquals(10, Outdoor.shadow(false, new Outdoor.Path(40_000, 0, 600, 1.6, 0.5, 0.5, 1, 0, 0)), 1e-9);
+    }
+
+    @Test
+    void pressureVolumeHalvesTheDecibelsOfPressure() {
+        double full = 6895;
+        Outdoor.Path open = new Outdoor.Path(3000, 0, 600, 1.6, 0.5, 0.5, 0, 0, 0);
+        assertEquals(0, Outdoor.losses(open), 1e-12);
+        assertEquals(1, Outdoor.pressureVolume(full, full, open), 1e-6);
+        assertEquals(1, Outdoor.pressureVolume(5 * full, full, open), 1e-6);
+        // 20 дБ давления — 10 дБ громкости, как −3 дБ на удвоение расстояния у обычных взрывов
+        assertEquals(Math.pow(10, -10 / 20.0), Outdoor.pressureVolume(full / 10, full, open), 1e-6);
+        // за холмом в дождь — минус половина их децибел
+        Outdoor.Path hill = new Outdoor.Path(3000, 2, 600, 1.6, 0.5, 0.5, 0, 1, 0);
+        assertTrue(Outdoor.losses(hill) > 3);
+        assertEquals(Math.pow(10, -10 / 20.0 - Outdoor.losses(hill) / 40), Outdoor.pressureVolume(full / 10, full, hill), 1e-6);
+        assertEquals(0, Outdoor.pressureVolume(0, full, open), 0);
+    }
+
+    @Test
     void volumeContinuesTheNearModelAtItsEdge() {
         for (double[] k : KINDS) {
             for (double g : new double[]{0, 0.5, 1}) {

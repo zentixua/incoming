@@ -4,25 +4,36 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.client.far.FarTerrain;
+import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.client.fx.CameraShake;
+import ua.zentix.incoming.client.sound.AmbientLoop;
+import ua.zentix.incoming.client.sound.BlastPulse;
+import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.ClientSounds;
+import ua.zentix.incoming.client.sound.Outdoor;
+import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.client.sound.SirenSound;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.registry.ModSounds;
+import ua.zentix.incoming.warhead.GroundMaterial;
 
 
 /**
  * Звук ядерного удара (DESIGN-nuke §5). Свет приходит сразу, звук — с фронтом ударной волны: каждый тик клиент
  * сравнивает радиус фронта ({@link Detonation#frontRadius}) со своим расстоянием до эпицентра, и когда фронт
- * дошёл — удар, рёв, ветер, звон стёкол, раскаты. Громкость и тембр — от давления у слушателя, а не от
- * ванильного затухания; направление честное (точка в 3 блоках от уха в сторону эпицентра).
+ * дошёл — удар, ветер за фронтом, звон стёкол, потом эхо от рельефа. Громкость и тембр — от давления у слушателя и
+ * пути звука, а не от ванильного затухания; направление честное (точка в 3 блоках от уха в сторону эпицентра).
  */
 public final class NukeSounds {
     /** Вход боеголовки виден последние 3 с — беззвучно: на 7 км/с её звук придёт уже после взрыва. */
@@ -80,6 +91,7 @@ public final class NukeSounds {
         StringBuilder sb = new StringBuilder();
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
             sb.append(String.format(java.util.Locale.ROOT, "#%d t=%.0f ", a.d.id(), a.ticks(0)));
+            sb.append(a.sounds.describe());
             if (a.sounds.echoes != null) sb.append(a.sounds.echoes.describe()).append("; ");
             sb.append(a.sounds.after.describe()).append(" | ");
         }
@@ -136,15 +148,38 @@ public final class NukeSounds {
 
     /** Звуки одного подрыва у этого слушателя. */
     static final class Schedule {
+        /**
+         * С какого давления у уха прямой удар — в полную громкость, Па: 1 psi (ближние ракурсы обычных взрывов полны
+         * при 1,1–2,2 psi у края своей полной громкости,
+         * {@link ua.zentix.incoming.client.sound.BlastMix.Profile#flat}). Громче динамики не сыграют — дальше
+         * громкость не растёт (кроме удара фронта вблизи, он и так перегружен).
+         */
+        static final double FULL_PA = 1000 * BlastModel.kpa(1);
+        /** Ветер, при котором петля урагана звучит в полную громкость, м/с: её запись — ураган (12 баллов Бофорта, от 33 м/с). */
+        static final double WIND_FULL = 33;
+        /** Петля ветра уходит, когда прошло столько положительных фаз: обратный ветер в разрежении стих. */
+        static final double WIND_PHASES = 5;
+        /** Тише — звук не запускать. */
+        private static final float AUDIBLE = 0.005f;
+        /** Окна лопаются от 0,34 psi падающей волны (у стекла отражённое — вдвое): край руин, {@link Detonation#RUIN_EDGE_KPA}. */
+        static final double GLASS_PSI = BlastModel.psi(Detonation.RUIN_EDGE_KPA);
+
         private final ClientNuclear.Active a;
         private final Detonation d;
         private final boolean live;
-        private final RandomSource random;
         private boolean arrived, rumbled, shook;
         private long arrivalTick;
         private double psi;
-        private final double[] rumbles;
-        private int nextRumble;
+        /** Положительная фаза у слушателя, тики игры. */
+        private double phaseTicks;
+        /** Наибольший ветер за фронтом у слушателя, м/с. */
+        private double windPeak;
+        @Nullable
+        private AmbientLoop wind;
+        /** Что дошло прямым ударом (для строки сценария): громкость, нарастание фронта, удар — своим источником или записью. */
+        private float heard;
+        private double riseMs;
+        private boolean pulse;
         /** Эхо от рельефа — только вживую. */
         @Nullable
         final NukeEchoes echoes;
@@ -155,17 +190,16 @@ public final class NukeSounds {
             this.a = a;
             this.d = a.d;
             this.live = a.live;
-            this.random = RandomSource.create(d.seed() ^ 0x5EED);
-            rumbles = new double[3 + random.nextInt(3)];
-            for (int i = 0; i < rumbles.length; i++) rumbles[i] = 5 + random.nextDouble() * 55;
-            java.util.Arrays.sort(rumbles);
             this.echoes = live ? new NukeEchoes(a) : null;
             this.after = new NukeAfter(a);
         }
 
-        /** Подрыв убран (смена измерения, возрождение, перемотка повтора, срок): эхо и петли горящего города — прочь. */
+        /** Подрыв убран (смена измерения, возрождение, перемотка повтора, срок): удар, эхо, ветер и петли горящего города — прочь. */
         void stop() {
             if (echoes != null) echoes.stop();
+            OwnSources.stop(this);
+            if (wind != null) wind.end();
+            wind = null;
             after.end();
         }
 
@@ -195,22 +229,16 @@ public final class NukeSounds {
                 return;
             }
             if (echoes != null) echoes.tick();
-            double after = (now - arrivalTick) / 20.0;
-            if (now - arrivalTick == 2 && psi >= 0.3) {
-                ClientSounds.atEarLoud(ModSounds.NUKE_ROAR.get(), d.burst(), (float) Mth.clamp(psi / 3, 0.35, 1), 1);
-                ClientSounds.atEarLoud(ModSounds.NUKE_ROAR.get(), d.burst().add(0, -200, 0), (float) Mth.clamp(psi / 4, 0.3, 1), 0.8f);
-            }
             // стена пыли проходит мимо игрока секунды три
             if (now - arrivalTick < 60 && psi >= 0.5) NukeDust.gust(a, ear, psi, (int) (now - arrivalTick));
-            if (nextRumble < rumbles.length && after >= rumbles[nextRumble]) {
-                float v = (float) (Mth.clamp(0.3 + psi / 8, 0.2, 0.9) * (1 - 0.15 * nextRumble));
-                // отражение от рельефа приходит с разных сторон: со склона, который эхом гремит в это время, иначе с любой
-                double ang = random.nextDouble() * Math.PI * 2, echo = echoes == null ? Double.NaN : echoes.rumbleAzimuth(after);
-                if (!Double.isNaN(echo)) ang = echo;
-                ClientSounds.atEar(ModSounds.NUKE_RUMBLE.get(), ear.add(Math.cos(ang) * 50, 0, Math.sin(ang) * 50), v, 0.9f + random.nextFloat() * 0.2f);
-                CameraShake.quake(20);
-                nextRumble++;
-            }
+            wind(ear, now - arrivalTick);
+        }
+
+        /** Строка {@code SCENARIO}: что дошло прямым ударом; пусто — фронт ещё не дошёл. */
+        String describe() {
+            if (!arrived) return "";
+            return String.format(java.util.Locale.ROOT, "direct %.2f psi vol %.3f t+ %.2fs rise %.3fms %s wind %.1fm/s; ", psi, heard,
+                    phaseTicks / 20, riseMs, pulse ? "pulse" : "file", windPeak);
         }
 
         /**
@@ -248,40 +276,99 @@ public final class NukeSounds {
         }
 
         /**
-         * Фронт у слушателя: оглушающий удар (N-волна; несколько источников вместе — одному OpenAL не даёт громче
-         * единицы), тряска, ветер, стёкла, оглушение (пыль у глаза — по голове стены, {@link NukeDust#veil}). Вдали — хлопок N-волны (верха съел воздух) и
-         * глухой удар; эхо от рельефа повторяет запись удара ({@link NukeEchoes}). Всё по «Общей громкости».
+         * Фронт у слушателя. Громкость — по пиковому давлению у уха и пути звука, как у обычных взрывов
+         * ({@link Outdoor#pressureVolume}: холм между, зона тени днём, дождь), всё по «Общей громкости». Вдали (меньше
+         * 1 psi) удар фронта — дорожка из модели ({@link BlastPulse}: один скачок, его крутизна по давлению,
+         * положительная фаза по Кинни–Грэхему) своим источником с начала прямого удара, и запись далёкого огромного
+         * взрыва ({@code nuke.boom_far}) — раскат; эхо от рельефа повторяет её ({@link NukeEchoes}). Вблизи — оглушающий
+         * удар (несколько источников вместе — одному OpenAL не даёт громче единицы). Тряска, ветер за фронтом, стёкла,
+         * оглушение (пыль у глаза — по голове стены, {@link NukeDust#veil}).
          */
         private void arrive(Vec3 ear) {
+            Minecraft mc = Minecraft.getInstance();
             Vec3 b = d.burst();
-            Vec3 side = new Vec3(b.z - ear.z, 0, ear.x - b.x).normalize().scale(40);
+            double dist = ear.distanceTo(b), pa = 1000 * d.overpressureKpa(ear);
+            phaseTicks = Math.max(1, 20 * d.scale() * BlastModel.positivePhaseSeconds(Math.max(1, d.metres(dist)), d.yieldKt()));
+            windPeak = BlastModel.windSpeed(pa / 1000);
+            Outdoor.Path path = path(ear, dist);
+            float v = path == null ? 1 : Outdoor.pressureVolume(pa, FULL_PA, path);
+            float highs = path == null ? 1 : BlastSounds.highs(path);
+            heard = v;
             long boom = echoes == null ? d.seed() : echoes.seed;
-            float echo = psi >= 1 ? 1 : (float) Mth.clamp(0.35 + psi, 0.35, 1), tone = psi >= 1 ? 0.75f : 1;
-            // эхо ждёт настоящего начала прямого удара: ожидание — до play (с готовым буфером звук стартует сразу)
-            SoundInstance direct = ClientSounds.loudShot(ModSounds.NUKE_BOOM_FAR.get(), b, echo, tone, boom);
+            float tone = psi >= 1 ? 0.75f : 1;
+            // эхо и удар фронта ждут настоящего начала прямого удара: ожидание — до play (с готовым буфером звук стартует сразу)
+            SoundInstance direct = ClientSounds.loudShot(ModSounds.NUKE_BOOM_FAR.get(), b, v, tone, boom, 1, highs);
             if (echoes != null) echoes.expect(arrivalTick, direct);
             if (psi >= 1) {
-                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b, 1, 1);
-                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.add(side), 1, 0.92f);
-                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.subtract(side), 1, 0.85f);
+                Vec3 side = new Vec3(b.z - ear.z, 0, ear.x - b.x).normalize().scale(40);
+                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b, v, 1);
+                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.add(side), v, 0.92f);
+                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.subtract(side), v, 0.85f);
                 ClientSounds.start(direct);
-                ClientSounds.atEarLoud(ModSounds.BLAST_NEAR.get(), b, 1, 0.55f);
-            } else {
-                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, echo, 1, boom);
+                ClientSounds.atEarLoud(ModSounds.BLAST_NEAR.get(), b, v, 0.55f);
+            } else if (v >= AUDIBLE) {
+                OwnSources.Anchor start = OwnSources.anchor(this, direct, a::ticks, arrivalTick);
+                // холм и зона тени срезают верха и у скачка; воздух — нет: крутизну скачка держит сама волна
+                float front = path == null || !IncomingConfig.CLIENT.soundMuffling.get() ? 1 : Outdoor.highs(path);
+                riseMs = 1000 * BlastPulse.riseSeconds(pa);
+                pulse = OwnSources.play(this, start, 0, Math.atan2(b.z - ear.z, b.x - ear.x), v,
+                        BlastPulse.render(pa, phaseTicks / 20, front), BlastPulse.RATE, true);
+                // своих источников нет (заняты, OpenAL не готов) — запись удара
+                if (!pulse) ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, v, 1, boom);
                 ClientSounds.start(direct);
-                ClientSounds.atEarLoud(ModSounds.NUKE_BOOM_FAR.get(), b.add(side), echo * 0.8f, 0.85f);
-                ClientSounds.atEarLoud(ModSounds.BLAST_FAR.get(), b, echo, 0.6f);
             }
-            if (echoes != null) echoes.arrive(ear, echo, tone);
+            if (echoes != null) echoes.arrive(ear, v, tone);
             CameraShake.nuke(psi, ear.subtract(b));
             CameraShake.quake((int) Mth.clamp(20 + psi * 8, 20, 120));
-            if (psi >= 0.5) {
-                ClientSounds.atEarLoud(ModSounds.NUKE_WIND.get(), d.burst(), (float) Mth.clamp(psi / 4, 0.4, 1), 1);
-                if (psi < 12) ClientSounds.atEar(ModSounds.NUKE_GLASS.get(), ear.add(0, 2, 0), (float) Mth.clamp(psi / 3, 0.3, 0.9), 1);
+            if (windPeak / WIND_FULL >= AUDIBLE && mc.options.getSoundSourceVolume(SoundSource.MASTER) > 0) {
+                wind = new AmbientLoop(ModSounds.NUKE_WIND.get(), SoundSource.MASTER, 1, d.seed(), 1);
+                wind(ear, 0);
+                mc.getSoundManager().play(wind);
             }
+            if (psi >= GLASS_PSI) ClientSounds.atEar(ModSounds.NUKE_GLASS.get(), ear.add(0, 2, 0), (float) Mth.clamp(psi / 3, 0.3, 0.9), 1);
             if (psi >= 2 && IncomingConfig.CLIENT.nukeTinnitus.get()) {
                 Deafness.start((int) (20 * Mth.clamp(8 + psi, 10, 20)), psi);
             }
+        }
+
+        /**
+         * Ветер за фронтом у уха. Воздух за слабой волной идёт за давлением (u = p/ρc): порыв со фронтом, спад за
+         * положительную фазу и слабый обратный ветер в разрежении. Шум ветра у уха — по скоростному напору (давление
+         * шума ∝ ρu², Strasberg 1988, JASA 83), в игре — половина его децибел, громкость ∝ u. Ветер — у самого уха:
+         * без затухания по дороге.
+         */
+        private void wind(Vec3 ear, long ticks) {
+            if (wind == null) return;
+            if (ticks > WIND_PHASES * phaseTicks) {
+                wind.end();
+                wind = null;
+                return;
+            }
+            double u = windPeak * Math.abs(BlastPulse.friedlander(ticks, phaseTicks));
+            wind.set(ear, d.burst(), (float) Math.min(1, u / WIND_FULL), 0);
+        }
+
+        /**
+         * Путь звука от подрыва до уха ({@link Outdoor}): кромка рельефа на прямой от источника, источник — точка
+         * подрыва, у наземного — над землёй на 0,4 радиуса шара (как у обычных взрывов в {@code FarBlasts}); земля под
+         * эпицентром — вода или грунт поверхности, если клиент знает чанк.
+         */
+        @Nullable
+        private Outdoor.Path path(Vec3 ear, double dist) {
+            ClientLevel level = Minecraft.getInstance().level;
+            if (level == null) return null;
+            Vec3 b = d.burst();
+            double hs = Math.max(b.y - d.groundY(), 0.4 * d.fireballRadius());
+            double z = Sightline.trace(FarTerrain.of(level), b.x, d.groundY() + hs, b.z, ear.x, ear.y, ear.z).pathDifference();
+            int x = Mth.floor(b.x), zz = Mth.floor(b.z);
+            double land = 0.5;
+            LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, zz >> 4, false);
+            if (chunk != null) {
+                int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, zz & 15);
+                GroundMaterial g = GroundMaterial.of(chunk.getBlockState(new BlockPos(x, top, zz)));
+                if (g != null) land = g.porosity;
+            }
+            return BlastSounds.path(dist, z, hs, (1 - a.water.under()) * land);
         }
     }
 

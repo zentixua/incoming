@@ -22,9 +22,10 @@ import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Свои источники OpenAL — для эха от рельефа ({@link EchoMix}): мимо звукового движка Minecraft, чтобы Sound Physics
- * Remastered, который ставит свои фильтры EFX всем источникам движка, не накладывал на отражения свои отражения,
- * и чтобы дорожка из своих отсчётов (а не файла ресурсов) начиналась точно в свой кадр.
+ * Свои источники OpenAL — для эха от рельефа ({@link EchoMix}) и удара фронта ядерки ({@link BlastPulse}): мимо
+ * звукового движка Minecraft, чтобы Sound Physics Remastered, который ставит свои фильтры EFX всем источникам движка,
+ * не накладывал на отражения свои отражения, и чтобы дорожка из своих отсчётов (а не файла ресурсов) начиналась точно
+ * в свой кадр.
  * <p>
  * Источник стоит в 3 блоках от уха в сторону своей стороны света (как {@link ClientSounds#atEar}), без затухания
  * по расстоянию; громкость — категория «Общая» (общая громкость — усиление слушателя, его ставит движок). Фильтр
@@ -45,6 +46,11 @@ public final class OwnSources {
     static final int MAX = 12;
     /** Отставание старта больше этого (с) — начать с середины, а не сначала. */
     private static final double LATE = 0.03;
+    /**
+     * Голос, который играется целиком ({@code whole}), опоздал больше этого (с) — не играть: удар фронта через секунду
+     * после прямого звука был бы вторым ударом.
+     */
+    private static final double WHOLE_LATE = 1;
     /** Сколько тиков ждать, что движок запустит звук начала; не запустил — начало по тику. */
     private static final double ANCHOR_WAIT = 40;
     /** Фильтр голоса меняется, когда громкость или верха ушли дальше этого. */
@@ -108,6 +114,8 @@ public final class OwnSources {
         final float gain;
         final short[] pcm;
         final int rate;
+        /** Играть с начала, даже опоздав: у удара фронта скачок — в первые миллисекунды, середина без него — тишина. */
+        final boolean whole;
         /** Громкость и верха за преградой в сторону голоса (1 — открыто); заново — когда голос зазвучит. */
         float blockedGain, blockedHighs;
         int source, buffer;
@@ -117,8 +125,9 @@ public final class OwnSources {
         /** Что стоит в фильтре голоса (NaN — ещё ничего). */
         float filterGain = Float.NaN, filterHighs = Float.NaN;
 
-        Voice(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, float open) {
+        Voice(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, boolean whole, float open) {
             this.owner = owner;
+            this.whole = whole;
             this.anchor = anchor;
             this.after = after;
             this.azimuth = azimuth;
@@ -169,9 +178,17 @@ public final class OwnSources {
      * @return false — мест нет или OpenAL не готов
      */
     public static boolean play(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate) {
+        return play(owner, anchor, after, azimuth, gain, pcm, rate, false);
+    }
+
+    /**
+     * Как {@link #play(Object, Anchor, double, double, float, short[], int)}; {@code whole} — опоздавший голос играть с
+     * начала, а не с середины (кадр у клиента бывает длиннее, чем фронт в дорожке).
+     */
+    public static boolean play(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, boolean whole) {
         if (pcm.length == 0 || VOICES.size() >= MAX || !ready()) return false;
         // преграда — при старте голоса (frame): до него он ждёт до ~24 с
-        Voice v = new Voice(owner, anchor, after, azimuth, gain, pcm, rate, 1);
+        Voice v = new Voice(owner, anchor, after, azimuth, gain, pcm, rate, whole, 1);
         try {
             v.buffer = AL10.alGenBuffers();
             if (v.buffer == 0 || !AL10.alIsBuffer(v.buffer)) {
@@ -266,12 +283,12 @@ public final class OwnSources {
             if (Double.isNaN(at)) continue;
             double late = (v.anchor.clock.ticks(partial) - at) / 20;
             if (late < 0) continue;
-            if (late > v.pcm.length / (double) v.rate) {
+            if (late > (v.whole ? WHOLE_LATE : v.pcm.length / (double) v.rate)) {
                 free(v);
                 it.remove();
                 continue;
             }
-            if (late > LATE) AL10.alSourcef(v.source, AL11.AL_SEC_OFFSET, (float) late);
+            if (late > LATE && !v.whole) AL10.alSourcef(v.source, AL11.AL_SEC_OFFSET, (float) late);
             // голос ждал до ~24 с: игрок мог войти в дом или выйти — преграда по месту уха сейчас
             v.obstruct(SoundFilters.openToward(ear, v.azimuth));
             if (efx) filter(v, k);
