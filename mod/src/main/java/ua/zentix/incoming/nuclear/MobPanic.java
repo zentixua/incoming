@@ -18,6 +18,7 @@ import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.ai.util.GoalUtils;
+import net.minecraft.world.entity.ai.util.LandRandomPos;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.Tags;
@@ -30,8 +31,8 @@ import java.util.EnumSet;
  * Паника мобов (DESIGN-nuke §4): кто видел вспышку или кого накрыла волна, бежит прочь от эпицентра, а потом
  * успокаивается. Каждому {@link PathfinderMob} при входе в мир — своя цель {@link Flee} (самая важная, движение):
  * пока срок паники не вышел, она раз в 2–3 секунды ищет место в 8–16 блоках прочь от эпицентра ({@link #place}: рядом
- * с мобом, чанки там готовы) и путь туда. Мобы с мозгом (жители,
- * пиглины, козы) ходят по памяти {@link MemoryModuleType#WALK_TARGET} — цель кладёт туда место, а идёт мозг; своё
+ * с мобом, чанки там готовы) и путь туда. Мобы с мозгом (жители, пиглины, козы) ходят по памяти
+ * {@link MemoryModuleType#WALK_TARGET} — цель кладёт туда место, а идёт мозг; своё
  * занятие «паника» у жителя не включается (оно зовёт големов). Скорость у всех похожая — ~0,38 блока за тик,
  * как у коровы в панике; боссы не бегут. Не бегут и свои: прирученные и чьи-то (сидящий волк или кошка убежали бы за
  * сотни блоков и сели там, а «за хозяином» их не вернёт), на поводке, с именем.
@@ -210,10 +211,12 @@ public final class MobPanic {
 
     /**
      * Место бегства: {@link #TRIES} мест прочь от эпицентра (±{@link #CONE}) в {@link #REACH}/2…{@link #REACH} блоках, у
-     * каждого — ближайшая к высоте моба клетка, куда ему можно прийти ({@link #stand}); из годных — дальше всех от
-     * эпицентра. Не ванильный {@link DefaultRandomPos#getPosAway}: тот берёт высоту наугад (на ровной земле годна одна из 15,
-     * и поиск часто ничего не находит), разброс — до ±90° (бег вбок) и даёт места под самыми ногами (путь в шаг) — моб,
-     * приняв это за загон, стоял секунды.
+     * каждого — ближайшая к высоте моба годная клетка ({@link #stand}); из годных — дальше всех от эпицентра. Не ванильный
+     * {@link DefaultRandomPos#getPosAway}: тот берёт высоту наугад (на ровной земле годна одна из 15, и поиск часто ничего
+     * не находит), разброс — до ±90° (бег вбок) и даёт места под самыми ногами (путь в шаг) — моб, приняв это за загон,
+     * стоял секунды. Годных нет — ванильный {@link LandRandomPos#getPosAway}: он поднимает место из твёрдого блока наверх.
+     * Летунам без своей проверки места (попугай, тихоня: у их навигации «устойчиво» — сама клетка, на которой можно
+     * стоять, а она же для пути закрыта) годно только так.
      */
     @Nullable
     static BlockPos place(PathfinderMob mob, Vec3 from) {
@@ -232,13 +235,15 @@ public final class MobPanic {
                 farthest = gone;
             }
         }
-        return best;
+        if (best != null) return best;
+        Vec3 land = LandRandomPos.getPosAway(mob, REACH, Y_REACH, from);
+        return land == null ? null : BlockPos.containing(land);
     }
 
     /**
-     * Ближайшая к высоте y клетка столбца (0, +1, −1, +2 …, до {@link #Y_REACH}), куда моб может прийти, — те же проверки,
-     * что у ванильного места бегства: в мире, в пределах привязки, есть на чём стоять (по навигации моба: у рыбы — вода),
-     * без штрафа пути.
+     * Ближайшая к высоте y клетка столбца (0, +1, −1, +2 …, до {@link #Y_REACH}), годная для цели, — те же проверки, что
+     * у ванильного места бегства: в мире, в пределах привязки, устойчива для навигации моба (у ходящих — есть на чём
+     * стоять, у рыбы — не сплошной блок), без штрафа пути. Дойдёт ли моб, решает поиск пути.
      */
     @Nullable
     private static BlockPos stand(PathfinderMob mob, int x, int y, int z, boolean restricted) {
