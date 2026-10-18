@@ -170,9 +170,52 @@ class MushroomModelTest {
     /** Ножка шире всего у земли (раструб пыли) или у шапки: рамка гриба берёт её края. */
     @Test
     void stemIsWidestAtItsEnds() {
-        for (double dust : new double[]{0, 0.3, 1}) {
-            double ends = Math.max(MushroomModel.stemRadius(0, 30, dust), MushroomModel.stemRadius(1, 30, dust));
-            for (double w = 0; w <= 1; w += 0.01) assertTrue(MushroomModel.stemRadius(w, 30, dust) <= ends + 1e-9, "w = " + w);
+        for (double flare : new double[]{0, 10, 40}) {
+            double ends = Math.max(MushroomModel.stemRadius(0, 30, flare), MushroomModel.stemRadius(1, 30, flare));
+            for (double w = 0; w <= 1; w += 0.01) assertTrue(MushroomModel.stemRadius(w, 30, flare) <= ends + 1e-9, "w = " + w);
+        }
+    }
+
+    /**
+     * Ножка по мощности (Glasstone и Dolan 2.17): до 20 кт её радиус — около половины радиуса шапки, у мегатонн ножка
+     * в 5–10 раз уже облака; в среднем по высоте ножка шириной в {@code stemR}. Под шаром до сворачивания — его тонкий
+     * след, свернувшись, — доля G&D.
+     */
+    @Test
+    void stemFollowsGlasstone() {
+        assertEquals(0.5, MushroomModel.stemShare(2), 1e-12);
+        assertEquals(0.5, MushroomModel.stemShare(20), 1e-12);
+        assertEquals(0.2, MushroomModel.stemShare(1000), 1e-12);
+        assertEquals(0.1, MushroomModel.stemShare(30000), 1e-12);
+        for (double y = 1; y < 1e5; y *= 1.3) assertTrue(MushroomModel.stemShare(y * 1.3) <= MushroomModel.stemShare(y) + 1e-12, y + " кт");
+        double mean = 0;
+        for (int i = 0; i < 1000; i++) mean += MushroomModel.stemRadius((i + 0.5) / 1000, 1, 0) / 1000;
+        assertEquals(1, mean, 1e-3, "средний радиус ножки");
+        for (double y : new double[]{1, 2, 15, 1000}) {
+            for (boolean surface : new boolean[]{false, true}) {
+                double hob = surface ? 0 : 3 * FireballModel.maxRadius(y, false), tr = MushroomModel.rollUpSeconds(y, surface);
+                MushroomModel.Shape ball = MushroomModel.shape(0.2 * tr, y, hob, surface, 1e9);
+                assertEquals(MushroomModel.BALL_STEM * ball.capR(), ball.stemR(), 1e-9, y + " кт: ножка под шаром");
+                MushroomModel.Shape s = MushroomModel.shape(CloudModel.stabilizationSeconds(y), y, hob, surface, 1e9);
+                assertEquals(MushroomModel.stemShare(y) * s.capR(), s.stemR(), 1e-9, y + " кт: ножка свернувшейся шапки");
+            }
+        }
+    }
+
+    /** Юбка выходит за низ ножки с раструбом, пока пыль у земли не осела: широкая ножка килотонн её не накрывает. */
+    @Test
+    void skirtSticksOutOfTheStem() {
+        for (double y : new double[]{1, 2, 15, 1000}) {
+            for (boolean surface : new boolean[]{false, true}) {
+                double hob = surface ? 0 : 3 * FireballModel.maxRadius(y, false);
+                for (double t : new double[]{10, 30, 60, CloudModel.stabilizationSeconds(y)}) {
+                    MushroomModel.Shape s = MushroomModel.shape(t, y, hob, surface, 1e9);
+                    double foot = MushroomModel.stemRadius(0, s.stemR(), MushroomModel.dustFlare(s));
+                    double body = MushroomModel.stemRadius(0, s.stemR(), 0);
+                    assertTrue(foot <= Math.max(MushroomModel.DUST_BASE * s.capR(), body) + 1e-9, y + " кт, " + t + " с: раструб шире круга пыли");
+                    assertTrue(s.skirtR() + s.skirtW() > 1.2 * foot, y + " кт, " + t + " с: юбка под ножкой");
+                }
+            }
         }
     }
 

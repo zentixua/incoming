@@ -13,7 +13,7 @@
 //   3 = (полуоси сечения кольца по горизонтали и вертикали; середина купола; его полуось по горизонтали)
 //   4 = (полуось купола по вертикали; ослабление шапки, 1/блок; плитка клубов шапки, блоки; секунды после подрыва)
 //   5 = (альбедо ω' шапки rgb; асимметрия g')
-//   6 = (верх ножки; её радиус; доля пыли у земли; толща ножки поперёк)
+//   6 = (верх ножки; её радиус, средний по высоте; раструб пыли у земли сверх низа ножки; толща ножки поперёк)
 //   7 = (ω' ножки rgb; g')
 //   8 = (середина юбки по земле; её полуширина; высота; ослабление, 1/блок)
 //   9 = (ω' юбки rgb; g')
@@ -97,7 +97,7 @@ struct Mush {
     vec4 capMat;
     float stemTop;
     float stemR;
-    float lowDust;
+    float stemFlare;
     float stemTau;
     vec4 stemMat;
     float skirtR;
@@ -150,11 +150,12 @@ float mushShare(float h, float endTop) {
     return clamp(h / max(endTop, 1.0), 0.0, 1.0);
 }
 
-// радиус ножки на доле её высоты w (MushroomModel.stemRadius): шире у шапки и у земли — раструб пыли, оседает с lowDust
-float mushStemR(float w, float stemR, float lowDust) {
+// радиус ножки на доле её высоты w (MushroomModel.stemRadius): в среднем stemR, у шапки шире на треть, у земли — раструб
+// пыли flare сверх низа ножки
+float mushStemR(float w, float stemR, float flare) {
     float x = clamp(w, 0.0, 1.0);
     float base = pow(1.0 - x, 6.0);
-    return stemR * (0.75 + 0.9 * x * x) + stemR * 1.6 * base * lowDust;
+    return stemR * (0.85 + 0.45 * x * x) + flare * base;
 }
 
 // мера места в сечении кольца: 1 — на его краю (rho — от оси по горизонтали, y — от середины кольца)
@@ -261,7 +262,7 @@ float mushColumnUnit(Mush m) {
 
 // радиус ножки на высоте h места тела
 float mushStemAt(Mush m, float h) {
-    return mushStemR(h / max(m.capBot, 1.0), m.stemR, m.lowDust);
+    return mushStemR(h / max(m.capBot, 1.0), m.stemR, m.stemFlare);
 }
 
 // Место в узоре клубов шапки (от её оси и середины по высоте, блоки) для места q тела, если ядро кольца с тех пор обошло
@@ -342,8 +343,8 @@ float mushGap(Mush m, vec3 q) {
         gap = min(ring, dome) - MUSH_CAP_REACH * mushCapUnit(m);
     }
     if (m.stemTau > 0.0) {
-        // наклон радиуса ножки с клубами: раструб у земли (−9,6·пыль) и у шапки (+1,8) на высоту шапки
-        float slope = (1.0 + MUSH_STEM_REACH) * m.stemR * max(1.8, 9.6 * m.lowDust) / max(m.capBot, 1.0);
+        // наклон радиуса ножки с клубами: раструб у земли (−6·раструб) и у шапки (+0,9·радиус) на высоту шапки
+        float slope = (1.0 + MUSH_STEM_REACH) * max(0.9 * m.stemR, 6.0 * m.stemFlare) / max(m.capBot, 1.0);
         float radial = (rho - (1.0 + MUSH_STEM_REACH) * mushStemAt(m, q.y)) / sqrt(1.0 + slope * slope);
         gap = min(gap, max(radial, max(q.y - m.stemTop, -0.02 * m.capBot - q.y)));
     }

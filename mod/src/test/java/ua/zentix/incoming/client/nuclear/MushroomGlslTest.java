@@ -47,10 +47,10 @@ class MushroomGlslTest {
     @Test
     void stemRadiusMatchesJava() {
         GlslFunction f = GlslFunction.parse(GLSL, "mushStemR");
-        for (double dust : new double[]{0, 0.4, 1}) {
+        for (double flare : new double[]{0, 15, 59}) {
             for (double w = -0.2; w <= 1.2; w += 0.01) {
-                assertEquals(MushroomModel.stemRadius(w, 37, dust), f.call(Map.of("w", w, "stemR", 37.0, "lowDust", dust)), 1e-9,
-                        "w = " + w + ", пыль " + dust);
+                assertEquals(MushroomModel.stemRadius(w, 37, flare), f.call(Map.of("w", w, "stemR", 37.0, "flare", flare)), 1e-9,
+                        "w = " + w + ", раструб " + flare);
             }
         }
     }
