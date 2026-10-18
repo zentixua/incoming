@@ -77,16 +77,32 @@ class FireballModelTest {
         assertTrue(FireballModel.radius(1e4, y, false) <= 1.3 * max + 1e-9);
     }
 
+    /**
+     * Шар всплывает, как верх облака (один закон): с высоты подрыва со скоростью верха — у 15 кт ~79 м/с, у 1 Мт ~139
+     * (Glasstone и Dolan, табл. 2.12: в первую минуту в среднем ~134), — и тормозит: к стабилизации (3τ) — до двадцатой доли;
+     * его верх не выше верха облака.
+     */
     @Test
     void risesAndSlowsDown() {
-        double y = 15, hob = 580;
-        assertEquals(hob, FireballModel.centreHeight(0, hob, y), 0);
-        double v0 = (FireballModel.centreHeight(1, hob, y) - hob);
-        assertEquals(FireballModel.riseSpeed(y), v0, 2);
-        assertTrue(v0 > 88 && v0 < 100);
-        double late = FireballModel.centreHeight(300, hob, y) - FireballModel.centreHeight(299, hob, y);
-        assertTrue(late < v0 / 5);
-        assertTrue(FireballModel.centreHeight(1e5, hob, y) <= CloudModel.stabilizedTop(y));
+        for (double y : new double[]{1, 15, 1000}) {
+            for (boolean surface : new boolean[]{false, true}) {
+                double hob = surface ? 0 : 240 * Math.cbrt(y);
+                assertEquals(hob, FireballModel.centreHeight(0, hob, y, surface), 0);
+                double v0 = FireballModel.centreHeight(1, hob, y, surface) - hob;
+                assertEquals(FireballModel.riseSpeed(y, surface), v0, 0.01 * v0);
+                assertEquals(CloudModel.riseSpeed(0, hob, y, surface), FireballModel.riseSpeed(y, surface), 1e-9);
+                double stab = CloudModel.stabilizationSeconds(y);
+                double late = FireballModel.centreHeight(stab, hob, y, surface) - FireballModel.centreHeight(stab - 1, hob, y, surface);
+                assertTrue(late < v0 / 15, y + " кт");
+                for (double t = 0.01; t < 1e4; t *= 1.1) {
+                    double ballTop = FireballModel.centreHeight(t, hob, y, surface) + FireballModel.radius(t, y, surface);
+                    assertTrue(ballTop <= CloudModel.top(t, hob, y, surface) + 1e-6, y + " кт, " + t + " с: шар выше облака");
+                }
+            }
+        }
+        double v15 = FireballModel.riseSpeed(15, false);
+        assertTrue(v15 > 70 && v15 < 90, "15 кт: " + v15);
+        assertEquals(134, FireballModel.riseSpeed(1000, false), 134 * 0.1);
     }
 
     private static double tMin(double y) {

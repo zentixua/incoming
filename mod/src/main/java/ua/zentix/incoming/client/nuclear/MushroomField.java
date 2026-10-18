@@ -11,7 +11,6 @@ import ua.zentix.incoming.client.fx.layer.PallPass;
 import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
-import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
@@ -72,13 +71,16 @@ public final class MushroomField {
     /** Плитка клубов столба — доля его радиуса до сужения: струи стенки и купола короны шириной в толщину стенки. */
     static final double COLUMN_TILE = 1.2;
     /**
-     * Цвет толстого слоя (на экране; альбедо — по нему, как у пелены): шапка молодая — бурый дым с NO₂, остывшая —
-     * облако капель и льда, белое, как водяная пыль (с асимметрией капель {@link #G_WATER}), а с грунтом
-     * ({@link MushroomModel#soil}) — серое от пыли; ножка — пыль с дымом; юбка — пыль земли (как стена пыли); пар —
-     * у подрыва над водой.
+     * Цвет толстого слоя (на экране; альбедо — по нему, как у пелены): шапка с грунтом ({@link MushroomModel#soil}) без
+     * NO₂ — серая от пыли (её поглощение — сверх NO₂, {@link #capMatter}); ножка — пыль с дымом; юбка — пыль земли (как
+     * стена пыли); пар — у подрыва над водой. Шапка без грунта — капли и NO₂ ({@link #capMatter}), цвета у неё нет.
      */
-    static final int CAP_YOUNG = 0x8C5A46, CAP_OLD = CloudPuffs.SPRAY, CAP_DUSTY = 0xC9C4BE, STEM = 0x8E7F70, SKIRT = 0x9C8A74,
-            STEAM = 0xD9D9D6;
+    static final int CAP_DUSTY = 0xC9C4BE, STEM = 0x8E7F70, SKIRT = 0x9C8A74, STEAM = 0xD9D9D6;
+    /**
+     * Доля пара в ослаблении шапки при полной воде под подрывом и свернувшемся кольце ({@link #capMatter}). <b>Оценка</b>:
+     * сколько воды поднимает шар над водой, в источниках нет; число — прежняя доля пара в цвете слоя.
+     */
+    static final double STEAM_SHARE = 0.45;
     /** Асимметрия рассеяния пыли и дыма гриба — как у пелены. */
     static final double G = 0.6;
     /**
@@ -105,7 +107,7 @@ public final class MushroomField {
     private static final float[] BB = blackBody();
     private static final double[] BALL = new double[4], CENTRE = new double[3], BALL_WEIGHT = new double[BALLS];
     private static final Vector4f COLUMN = new Vector4f();
-    private static final double[] RGB = new double[3], DRIFT = new double[2], RAYS = new double[3], AXIS_A = new double[3],
+    private static final double[] RGB = new double[3], CAP = new double[4], DRIFT = new double[2], RAYS = new double[3], AXIS_A = new double[3],
             AXIS_B = new double[3], RECT = new double[4];
     private static final Vector3f LO = new Vector3f(), HI = new Vector3f();
     private static final int[] ORDER = new int[MUSHROOMS];
@@ -302,12 +304,9 @@ public final class MushroomField {
      * выпукла).
      */
     static double reach(MushroomModel.Shape s) {
-        double cap = 0;
-        if (s.capTau() > 0) {
-            double u = capUnit(s);
-            cap = Math.max(s.ringR() + s.ringA() * (1 + REACH_CAP * u / Math.min(s.ringA(), s.ringB())),
-                    s.domeR() * (1 + REACH_CAP * u / Math.min(s.domeR(), s.domeH())));
-        }
+        double u = capUnit(s);
+        double cap = Math.max(s.ringR() + s.ringA() * (1 + REACH_CAP * u / Math.min(s.ringA(), s.ringB())),
+                s.domeR() * (1 + REACH_CAP * u / Math.min(s.domeR(), s.domeH())));
         double flare = MushroomModel.dustFlare(s);
         double stem = s.stemTau() > 0
                 ? (1 + REACH_STEM) * Math.max(MushroomModel.stemRadius(0, s.stemR(), flare), MushroomModel.stemRadius(1, s.stemR(), flare)) : 0;
@@ -504,31 +503,30 @@ public final class MushroomField {
         double top = d.blocks(top(s, c)), end = Math.max(d.blocks(s.endTop()), 1);
         double boundR = boundRadius(d.blocks(reach(s, c)), Math.hypot(w[0], w[1]), top, end);
         double ringA = d.blocks(s.ringA()), ringB = d.blocks(s.ringB());
-        // ослабление шапки: толща поперёк меньшего поперечника сечения кольца
+        // вещество шапки (капли, NO₂, грунт; над водой шар поднимает воду, а не грунт) и её ослабление: толща поперёк
+        // меньшего поперечника сечения кольца на этот поперечник в блоках
+        double wet = a.water.wet(), soil = MushroomModel.soil(y, d.hobMetres(), d.surface()) * (1 - a.water.under());
         double across = 2 * Math.min(ringA, ringB);
-        double capSigma = s.capTau() / Math.max(across, 1);
+        // пар — с водой, которую подхватывает сворачивающееся кольцо: у шара его нет
+        double capSigma = capTau(s, capMatter(s, soil, wet * MushroomModel.rollUp(t, y, d.surface()), CAP)) / Math.max(across, 1);
         double skirtSigma = s.skirtTau() / Math.max(2 * d.blocks(Math.min(s.skirtW(), s.skirtH())), 1);
         double tCore = MushroomModel.coreTemperature(t, y, d.surface());
-        double wet = a.water.wet();
         put(into, o, 0, d.burst().x - eye.x, d.burst().z - eye.z, d.groundY() - eye.y, 1);
         put(into, o, 1, w[0], w[1], d.blocks(s.endTop()), boundR);
         put(into, o, 2, d.blocks(s.capY()), d.blocks(s.capR()), d.blocks(s.ringR()), top);
         put(into, o, 3, ringA, ringB, d.blocks(s.domeY()), d.blocks(s.domeR()));
         // плитка клубов шапки — два меньших поперечника сечения: клуб — пузырь в полсечения
         put(into, o, 4, d.blocks(s.domeH()), capSigma, Math.max(across, 1), t);
-        // над водой шар поднимает воду, а не грунт
-        double condensed = MushroomModel.condensed(t), soil = MushroomModel.soil(y, d.hobMetres(), d.surface()) * (1 - a.water.under());
-        int cap = mix(mix(CAP_YOUNG, mix(CAP_OLD, CAP_DUSTY, soil), condensed), STEAM, 0.45 * wet);
-        // капли конденсата рассеивают вперёд сильнее дыма и пыли
-        matter(into, o, 5, cap, G + (G_WATER - G) * condensed * (1 - soil));
+        put(into, o, 5, CAP[0], CAP[1], CAP[2], CAP[3]);
         put(into, o, 6, d.blocks(s.stemTop()), d.blocks(s.stemR()), d.blocks(MushroomModel.dustFlare(s)), s.stemTau());
         matter(into, o, 7, mix(STEM, STEAM, 0.8 * wet));
         put(into, o, 8, d.blocks(s.skirtR()), d.blocks(s.skirtW()), d.blocks(s.skirtH()), skirtSigma);
         matter(into, o, 9, mix(SKIRT, CloudPuffs.SPRAY, a.water.under()));
-        // воздух ножки поднимается с подъёмом шара (втягивается кольцом): клубы — вверх
         put(into, o, 10, MushroomModel.AMBIENT_K, tCore - MushroomModel.AMBIENT_K, d.blocks(s.capBottom()), Math.max(1, 3 * d.blocks(s.stemR())));
-        // пожары под грибом: верх дыма шторма и радиус зоны пожаров (свет — fire, после света кадра)
-        put(into, o, 11, d.blocks(0.3 * FireballModel.riseSpeed(y) * t), a.pall.hazeTop(), a.pall.fireReach(), 0);
+        // струи ножки — вверх с воздухом, который тянет кольцо (MushroomModel.stemRise); пожары под грибом: верх дыма шторма
+        // (тот же, до которого встают его столбы в пелене, FireStorms.slot) и радиус зоны пожаров (свет — fire, после света
+        // кадра)
+        put(into, o, 11, d.blocks(MushroomModel.stemRise(t, d.hobMetres(), y, d.surface())), a.pall.hazeTop(), a.pall.fireReach(), 0);
         // часы кипения шапки (свет пожаров под грибом — fire, после света кадра)
         put(into, o, 12, 0, 0, 0, churn(d).at(t));
         // столб воды: ослабление стенки — её толща поперёк на её толщину, × вода, что ещё не упала и уже не пар, × насколько
@@ -574,6 +572,71 @@ public final class MushroomField {
         return CHURN.computeIfAbsent(d, k -> MushroomModel.churn(k.yieldKt(), k.hobMetres(), k.surface()));
     }
 
+    /**
+     * Вещество шапки из её содержимого ({@link MushroomModel}: капли, NO₂) и доли грунта {@code soil}: в {@code out} —
+     * альбедо ω' по каналам R, G, B и асимметрия g' (дельта-Эддингтон, {@link PallLight}), возвращает ослабление σ',
+     * 1/м. Капли рассеивают (σ, асимметрия {@link #G_WATER}), NO₂ поглощает по каналам (сечение × молекулы в кубометре),
+     * грунт поглощает как шапка цвета {@link #CAP_DUSTY} без NO₂. После усечения пика вперёд рассеяние σ·(1 − g²), а
+     * поглощение остаётся: ω' = σ(1 − g²) / (σ(1 − g²) + Σ поглощений) — то же, что (1 − f)ω/(1 − fω).
+     * <p>
+     * <b>Оценка</b>: с грунтом асимметрия идёт от капель к пыли пелены ({@link #G} = 0,6) долей грунта — замеров рассеяния
+     * пыльной шапки нет. Рассеянию после усечения это даёт σ(1 − 0,36) против σ(1 − 0,72): у шапки наземного подрыва
+     * σ' в 2,3 раза больше, чем у шапки из одних капель той же водности.
+     * <p>
+     * Ослабление одно на все каналы (шейдер ведёт луч одной толщей) — по зелёному. Поглощение NO₂ в красном и синем от
+     * него отличается: у шара (капель нет) — в разы; у только что свернувшегося кольца 15 кт σ' в красном на 17 % меньше
+     * зелёного, в синем — на 74 % больше; через минуту — на 1,4 и 6 %. Цвет при этом — по ω' каждого канала.
+     * Шар до капель — только NO₂: поглощает и светит своим светом (ω' = 0).
+     * <p>
+     * Пар над водой — капли воды, которую кольцо подхватывает, сворачиваясь: {@code steam} — доля воды под подрывом × доля
+     * кольца ({@link MushroomModel#rollUp}). Смесь веществ: ω' = (σs₁ + σs₂)/(σe₁ + σe₂) — среднее ω' по долям
+     * ослабления; пару — доля {@link #STEAM_SHARE}·steam ослабления шапки, его ω' — по цвету толстого слоя {@link #STEAM}.
+     * Ослабление и асимметрия — шапки: пар — капли, как и её капли. Прежде пар смешивался в цвете слоя на экране, и
+     * обращение отражения Эддингтона, зажатого в нуль (у ω' &lt; 1/(4 − 3g') оно ниже нуля, {@link #wallReflectance}),
+     * поднимало в первый же кадр пара каждый канал до ω' = 0,38: свечение края падало до ×0,77, свежее кольцо 1 кт серело.
+     */
+    static double capMatter(MushroomModel.Shape s, double soil, double steam, double[] out) {
+        double g = G_WATER + (G - G_WATER) * Math.clamp(soil, 0, 1), gt = PallLight.truncated(g);
+        double scatter = s.capDrops() * (1 - g * g), green = 0, share = Math.clamp(STEAM_SHARE * steam, 0, 1);
+        for (int i = 0; i < 3; i++) {
+            double dusty = PallLight.albedo(PallLight.linear(channel(CAP_DUSTY, i)), gt);
+            double absorb = MushroomModel.capAbsorption(s, i) + soil * scatter * (1 / dusty - 1);
+            double w = scatter / Math.max(scatter + absorb, 1e-30);
+            out[i] = w + (steamAlbedo(i, gt) - w) * share;
+            if (i == 1) green = absorb;
+        }
+        out[3] = gt;
+        return scatter + green;
+    }
+
+    /** Альбедо ω' пара в канале i при асимметрии g' — по цвету его толстого слоя {@link #STEAM}. */
+    static double steamAlbedo(int i, double g) {
+        return PallLight.albedo(PallLight.linear(channel(STEAM, i)), g);
+    }
+
+    /**
+     * Отражение полубесконечного слоя вещества шапки в рассеянном свете, R∞ ({@code mushWallR} в {@code mushroom.glsl}:
+     * стенки ложбин между клубами): два потока в замыкании полусферического среднего (Toon et al. 1989, табл. 1) —
+     * (1 − s)/(1 + s), s = √((1 − ω')/(1 − ω'g')), от 0 у одного поглощения до 1 у одного рассеяния. У замыкания Эддингтона
+     * ({@link PallLight#reflectance}) обратное рассеяние γ₂ = (ω(4 − 3g) − 1)/4 при ω' &lt; 1/(4 − 3g') меньше нуля, и R∞
+     * уходит ниже нуля (у ω' = 0 — до −0,07): у свежего кольца 1 кт зелёный и синий вышли бы −0,02 и −0,06 вместо 0,05
+     * и 0,02, у 15 кт синий — 0,006 вместо 0,08.
+     */
+    static double wallReflectance(double w, double g) {
+        double s = Math.sqrt(Math.max(1 - w, 0) / Math.max(1 - w * g, 1e-4));
+        return (1 - s) / (1 + s);
+    }
+
+    /** Канал i (0 — R, 1 — G, 2 — B) цвета RGB, 0..1. */
+    private static double channel(int rgb, int i) {
+        return ((rgb >> (16 - 8 * i)) & 0xFF) / 255.0;
+    }
+
+    /** Толща шапки поперёк меньшего поперечника сечения кольца при ослаблении {@code sigma} (1/м, {@link #capMatter}). */
+    static double capTau(MushroomModel.Shape s, double sigma) {
+        return sigma * 2 * Math.min(s.ringA(), s.ringB());
+    }
+
     /** Вещество по цвету толстого слоя (на экране): альбедо ω' по каналам и асимметрия g' — как у пелены ({@link PallLight}). */
     private static void matter(float[] into, int o, int texel, int rgb) {
         matter(into, o, texel, rgb, G);
@@ -582,7 +645,7 @@ public final class MushroomField {
     /** То же с асимметрией рассеяния g вещества. */
     private static void matter(float[] into, int o, int texel, int rgb, double asymmetry) {
         double g = PallLight.truncated(asymmetry);
-        for (int i = 0; i < 3; i++) RGB[i] = PallLight.albedo(PallLight.linear(((rgb >> (16 - 8 * i)) & 0xFF) / 255.0), g);
+        for (int i = 0; i < 3; i++) RGB[i] = PallLight.albedo(PallLight.linear(channel(rgb, i)), g);
         put(into, o, texel, RGB[0], RGB[1], RGB[2], g);
     }
 

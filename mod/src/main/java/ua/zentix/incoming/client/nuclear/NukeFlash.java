@@ -23,6 +23,7 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.model.EyeInjury;
 import ua.zentix.incoming.nuclear.model.FireballModel;
+import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 
@@ -60,6 +61,15 @@ public final class NukeFlash {
     private static long ticks, endTick;
     /** Предел силы вспышки на экране при «без вспышек молний». */
     private static final float CALM_FLASH = 0.4f;
+    /**
+     * Засветка неба при полном пропускании воздуха, доля белого экрана, и засветка, с которой мир освещён вспышкой
+     * ({@link #lightUpWorld}). <b>Оценки</b>, не выведены: обе — доли экрана, а не свет; засветка — без мощности и без
+     * 1/d², предел ей — только воздух (Glasstone, рис. 7.104; дальше половины видимости — продолжение подбора). Поэтому
+     * мир вспыхивает до ~5,3 видимости при любой мощности, а свет шара во втором максимуме там ({@code MushroomModel.light}
+     * сквозь тот же воздух) — у 1 кт 0,5 % полуденного, у 15 кт 4,5 %, у 1 Мт 90 %: ночью (глаз привык к темноте,
+     * {@code Sight.adapted}) это вспышка, днём у малых мощностей вдали засветка сильнее, чем физика.
+     */
+    private static final double SKY_GLARE = 0.6, WORLD_FLASH = 0.05;
     /** Доля импульса, которую рассеивает небо к тому, кто шар не видит (оценка). */
     private static final double SCATTERED = 0.15;
     /** Вуаль засветки в начале (полю не разглядеть почти ничего) и время, за которое светлый послеобраз темнеет, с. */
@@ -83,8 +93,10 @@ public final class NukeFlash {
         boolean sees = NuclearWarhead.sees(mc.level, d, p);
         double q = d.fluence(eye);
         double distM = d.metres(eye.distanceTo(d.burst()));
-        // кроме настоящего светового импульса — ослеплённое небо: у 15 кт видно за сотни километров
-        double sky = Math.min(1, q / 2 + 0.6 * Math.exp(-distM / d.visibility()));
+        // кроме настоящего светового импульса — ослеплённое небо (SKY_GLARE): свет шара, рассеянный воздухом, — пропускание
+        // прямого и рассеянного света вместе (ThermalModel.transmittance, как у светового импульса), а не пучка: блик шара
+        // (NukeRenderer.fireballs) — пучок, засвеченное небо — рассеянный свет
+        double sky = Math.min(1, q / 2 + SKY_GLARE * ThermalModel.transmittance(distM, d.visibility()));
         lightUpWorld(mc.level, d, sky);
         double s = sky;
         Vec3 look = p.getViewVector(1);
@@ -153,11 +165,12 @@ public final class NukeFlash {
 
     /**
      * Мир освещён вспышкой, как молнией: ванильная вспышка неба (свет неба у всех блоков — полный, как днём) на
-     * 1.5–3 с × ∛(Y/15), у всех, кому видно засвеченное небо (ясно — до ~50 км). Выключенная вспышка в настройках
-     * или ванильное «без вспышек молний» ({@link #calmFlash}) — без неё.
+     * 1.5–3 с × ∛(Y/15), у всех, кому видно засвеченное небо (засветка не меньше {@link #WORLD_FLASH}: у воздушного
+     * подрыва на 240·∛Y м в ясную погоду 1 и 15 кт — до ~107 км, 1 Мт — до ~119 км; в дождь — 27, 28 и 44 км; в грозу — 6,
+     * 7 и 17 км). Выключенная вспышка в настройках или ванильное «без вспышек молний» ({@link #calmFlash}) — без неё.
      */
     private static void lightUpWorld(ClientLevel level, Detonation d, double sky) {
-        if (sky < 0.05 || IncomingConfig.CLIENT.flash.get() <= 0 || calmFlash()) return;
+        if (sky < WORLD_FLASH || IncomingConfig.CLIENT.flash.get() <= 0 || calmFlash()) return;
         int flash = (int) (20 * (1.5 + 1.5 * sky) * Math.cbrt(d.yieldKt() / 15));
         level.setSkyFlashTime(Math.max(level.getSkyFlashTime(), flash));
     }

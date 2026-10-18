@@ -125,8 +125,10 @@ class MushroomModelTest {
         assertEquals(0, early.ringR(), 0);
         assertEquals(FireballModel.radius(0.5, 15, true), early.capR(), 1e-9);
         assertEquals(FireballModel.radius(0.5, 15, true), early.ringB(), 1e-9);
-        assertEquals(FireballModel.centreHeight(0.5, 0, 15), early.capY(), 1e-9);
-        assertEquals(MushroomModel.TAU_CAP, early.capTau(), 1e-9);
+        assertEquals(FireballModel.centreHeight(0.5, 0, 15, true), early.capY(), 1e-9);
+        // шар — горячий газ без капель, непрозрачный своим NO₂: поперёк в зелёном толща больше пяти
+        assertEquals(0, early.capDrops(), 0);
+        assertTrue(MushroomModel.capAbsorption(early, 1) * 2 * early.capR() > 5, "шар прозрачен");
         assertTrue(early.domeY() + early.domeH() < early.capY() + early.ringB(), "купол внутри шара");
         for (double t = 1; t < MushroomModel.lifeSeconds(15); t += 3) {
             MushroomModel.Shape s = MushroomModel.shape(t, 15, 0, true, 2_000);
@@ -143,7 +145,8 @@ class MushroomModelTest {
         assertTrue(air.stemTop() < air.capBottom(), "воздушный: ножка у шапки уже через 5 с");
         MushroomModel.Shape late = MushroomModel.shape(60, 15, 0, true, 5_000);
         assertEquals(MushroomModel.RING * late.capR(), late.ringR(), 1e-9);
-        assertTrue(late.capTau() > 10, "шапка через минуту густая: " + late.capTau());
+        double tau = late.capDrops() * 2 * Math.min(late.ringA(), late.ringB());
+        assertTrue(tau > 30, "шапка через минуту густая: " + tau);
     }
 
     /**
@@ -255,15 +258,129 @@ class MushroomModelTest {
 
     private static double rate(double kt, double t) {
         MushroomModel.Shape s = MushroomModel.shape(t, kt, 0, true, 0);
-        return s == null ? 0 : MushroomModel.churnRate(s, CloudModel.riseSpeed(t, 0, kt));
+        return s == null ? 0 : MushroomModel.churnRate(s, CloudModel.riseSpeed(t, 0, kt, true));
     }
 
-    /** Скорость подъёма верха облака — производная его высоты. */
+    /**
+     * Вещество шапки. Капли: σ = 3·LWC/(2·ρw·r_e) — 0,075 1/м при 0,5 г/м³ и 10 мкм, приходят с кольцом (у шара их нет),
+     * и шапка 15 кт после подъёма — τ ≈ 130 поперёк сечения кольца, в пределах 30–450 для кучевого облака такой высоты.
+     * NO₂: весь, что дал подрыв (доля NOx на мощность), — в объёме шапки; поглощает в синем в восемь раз сильнее, чем в
+     * красном (Bogumil et al. 2003).
+     */
+    @Test
+    void capHoldsDropsAndTheNo2OfTheBurst() {
+        assertEquals(0.075, MushroomModel.DROP_SIGMA, 1e-12);
+        for (double kt : new double[]{1, 15, 1000}) {
+            double hob = 240 * Math.cbrt(kt), tr = MushroomModel.rollUpSeconds(kt, false);
+            assertEquals(0, MushroomModel.shape(0.2 * tr, kt, hob, false, 1e9).capDrops(), 0, kt + " кт: капли в шаре");
+            MushroomModel.Shape rolled = MushroomModel.shape(tr, kt, hob, false, 1e9);
+            assertEquals(MushroomModel.DROP_SIGMA, rolled.capDrops(), 1e-12, kt + " кт: капли в кольце");
+            for (double t = 0.5; t < MushroomModel.lifeSeconds(kt); t *= 1.7) {
+                MushroomModel.Shape s = MushroomModel.shape(t, kt, hob, false, 1e9);
+                double molecules = s.capNo2() * MushroomModel.capVolume(s);
+                assertEquals(MushroomModel.NO2_SHARE * MushroomModel.NOX_PER_KT * kt * s.life(), molecules, 1e-9 * molecules, kt + " кт, " + t + " с");
+                assertTrue(MushroomModel.capAbsorption(s, 0) < MushroomModel.capAbsorption(s, 1)
+                        && MushroomModel.capAbsorption(s, 1) < MushroomModel.capAbsorption(s, 2), kt + " кт, " + t + " с: NO₂ бурый");
+            }
+        }
+        assertEquals(8.1, MushroomModel.NO2_CROSS[2] / MushroomModel.NO2_CROSS[0], 0.1);
+        double stab = CloudModel.stabilizationSeconds(15);
+        MushroomModel.Shape s = MushroomModel.shape(stab, 15, 592, false, 1e9);
+        double tau = s.capDrops() * 2 * Math.min(s.ringA(), s.ringB());
+        assertTrue(tau > 100 && tau < 200, "15 кт после подъёма: τ " + tau);
+        // объём шапки — сфероид: у шара — его объём
+        MushroomModel.Shape ball = MushroomModel.shape(0.5, 15, 592, false, 1e9);
+        assertEquals(4.0 / 3 * Math.PI * Math.pow(ball.capR(), 3), MushroomModel.capVolume(ball), 1e-6 * MushroomModel.capVolume(ball));
+    }
+
+    /** Скорость подъёма верха облака — производная его высоты; шар всплывает с той же скоростью. */
     @Test
     void riseSpeedIsTheSlopeOfTheTop() {
-        for (double t = 0.5; t < 600; t += 7.3) {
-            double slope = (CloudModel.top(t + 1e-3, 0, 15) - CloudModel.top(t - 1e-3, 0, 15)) / 2e-3;
-            assertEquals(slope, CloudModel.riseSpeed(t, 0, 15), 1e-4 * Math.max(slope, 1), t + " с");
+        for (boolean surface : new boolean[]{false, true}) {
+            for (double t = 0.5; t < 600; t += 7.3) {
+                double slope = (CloudModel.top(t + 1e-3, 0, 15, surface) - CloudModel.top(t - 1e-3, 0, 15, surface)) / 2e-3;
+                assertEquals(slope, CloudModel.riseSpeed(t, 0, 15, surface), 1e-4 * Math.max(slope, 1), t + " с");
+                double ball = (FireballModel.centreHeight(t + 1e-3, 0, 15, surface) - FireballModel.centreHeight(t - 1e-3, 0, 15, surface)) / 2e-3;
+                assertEquals(slope, ball, 1e-4 * Math.max(slope, 1), t + " с: шар");
+            }
+        }
+    }
+
+    /**
+     * Гриб виден, пока поднимается и пока турбулентность его рассеивает: пары частиц расходятся на радиус шапки,
+     * ⟨r²⟩ = g·ε·t³ (Ричардсон — Обухов). Рассеяние растёт с размером облака, поэтому и жизнь растёт с мощностью — везде
+     * от 0,1 кт до 1 Мт, хотя 1 кт стабилизируется вдвое дольше 15 кт (τ «Уоспа»): прежние 4 стабилизации давали 1 кт
+     * 45 минут, а 15 кт — 24. 15 кт — 27 минут, 1 Мт — больше часа («около часа или больше», Glasstone и Dolan, §2.15).
+     * Первую половину рассеяния гриб виден целиком, к концу — нет.
+     */
+    @Test
+    void lifeGrowsWithYield() {
+        double prev = 0;
+        for (double kt = 0.1; kt <= 1000.001; kt *= 1.02) {
+            double life = MushroomModel.lifeSeconds(kt), r = CloudModel.capRadius(kt), td = MushroomModel.dispersalSeconds(kt);
+            assertTrue(life > prev, kt + " кт: " + life + " с после " + prev);
+            assertEquals(CloudModel.stabilizationSeconds(kt) + td, life, 1e-9, kt + " кт");
+            assertEquals(r * r, MushroomModel.RICHARDSON * MushroomModel.DISSIPATION * td * td * td, 1e-9 * r * r, kt + " кт");
+            prev = life;
+        }
+        assertEquals(27 * 60, MushroomModel.lifeSeconds(15), 60, "15 кт");
+        assertTrue(MushroomModel.lifeSeconds(1) < MushroomModel.lifeSeconds(15), "1 кт");
+        assertTrue(MushroomModel.lifeSeconds(1000) > 3600, "1 Мт: " + MushroomModel.lifeSeconds(1000));
+        for (double kt : new double[]{1, 15, 1000}) {
+            double stab = CloudModel.stabilizationSeconds(kt), td = MushroomModel.dispersalSeconds(kt);
+            assertEquals(1, MushroomModel.shape(stab + 0.5 * td - 1, kt, 0, true, 1e9).life(), 0, kt + " кт: середина рассеяния");
+            assertEquals(0.5, MushroomModel.shape(stab + 0.75 * td, kt, 0, true, 1e9).life(), 1e-9, kt + " кт: тает");
+            assertNull(MushroomModel.shape(MushroomModel.lifeSeconds(kt) + 1e-3, kt, 0, true, 1e9), kt + " кт: рассеялся");
+        }
+    }
+
+    /**
+     * Струи ножки поднимаются с воздухом, который тянет кольцо, — долей {@link MushroomModel#STEM_INFLOW} скорости подъёма
+     * облака: в миг подрыва — эта доля её, к стабилизации встают (весь путь — та же доля пути верха), а не идут со
+     * скоростью в миг подрыва всю жизнь гриба.
+     */
+    @Test
+    void stemRisesWithTheCloud() {
+        for (double kt : new double[]{1, 15, 1000}) {
+            for (boolean surface : new boolean[]{false, true}) {
+                double hob = surface ? 0 : 240 * Math.cbrt(kt), life = MushroomModel.lifeSeconds(kt);
+                String at = kt + " кт, " + (surface ? "наземный" : "воздушный");
+                assertEquals(0, MushroomModel.stemRise(0, hob, kt, surface), 1e-9, at);
+                double v0 = MushroomModel.stemRise(1e-3, hob, kt, surface) / 1e-3, rise = CloudModel.riseSpeed(0, hob, kt, surface);
+                assertEquals(MushroomModel.STEM_INFLOW * rise, v0, 1e-3 * v0, at + ": в миг подрыва");
+                double all = MushroomModel.STEM_INFLOW * (CloudModel.top(1e6, hob, kt, surface) - CloudModel.top(0, hob, kt, surface));
+                assertEquals(all, MushroomModel.stemRise(life, hob, kt, surface), 0.01 * all, at + ": к концу жизни");
+                double prev = 0;
+                for (double t = 1; t < life; t += 10) {
+                    double h = MushroomModel.stemRise(t, hob, kt, surface);
+                    assertTrue(h >= prev && h <= all + 1e-9, at + ", " + t + " с: " + h);
+                    prev = h;
+                }
+            }
+        }
+    }
+
+    /**
+     * Подъём — один закон у шара и облака: верх гриба и середина кольца шапки никогда не опускаются — ни пока шар
+     * сворачивается в кольцо (форма идёт от шара к шапке), ни потом. Воздушный подрыв и наземный, 1, 15 и 1000 кт.
+     */
+    @Test
+    void topAndRingNeverGoDown() {
+        for (double kt : new double[]{1, 15, 1000}) {
+            for (boolean surface : new boolean[]{false, true}) {
+                double hob = surface ? 0 : 240 * Math.cbrt(kt), life = MushroomModel.lifeSeconds(kt);
+                MushroomModel.Shape prev = null;
+                for (double t = 0.005; t < life; t += t < 60 ? 0.005 : 0.5) {
+                    MushroomModel.Shape s = MushroomModel.shape(t, kt, hob, surface, 1e9);
+                    if (s == null) break;
+                    if (prev != null) {
+                        String at = kt + " кт, " + (surface ? "наземный" : "воздушный") + ", " + t + " с";
+                        assertTrue(s.top() >= prev.top() - 1e-9, at + ": верх опустился " + prev.top() + " → " + s.top());
+                        assertTrue(s.capY() >= prev.capY() - 1e-9, at + ": кольцо опустилось " + prev.capY() + " → " + s.capY());
+                    }
+                    prev = s;
+                }
+            }
         }
     }
 }

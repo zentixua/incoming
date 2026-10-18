@@ -33,7 +33,7 @@ class BlastWallTest {
         for (double t = 0.05; t <= 20; t += 0.05) {
             assertEquals(w.shock(t), w.head(t), 1e-9, t + " с");
             double tail = w.tail(t), ball = w.underBall(t);
-            double r = FireballModel.radius(t, GROUND.yieldKt(), true), y = FireballModel.centreHeight(t, 0, GROUND.yieldKt());
+            double r = FireballModel.radius(t, GROUND.yieldKt(), true), y = FireballModel.centreHeight(t, 0, GROUND.yieldKt(), true);
             assertEquals(Math.sqrt(Math.max(0, r * r - y * y)), ball, 1e-9, t + " с: край шара на земле");
             double len = w.shock(t) - tail;
             if (ball > 0) len = Math.min(len, (w.shock(t) - ball) / BlastWall.HANDOFF_TO);

@@ -20,8 +20,46 @@ public final class MushroomModel {
     static final double G = 9.81;
     /** Большой радиус кольца шапки — эта доля её радиуса (как у прежних клубов шапки). */
     public static final double RING = 0.55;
-    /** Оптическая толща поперёк сечения кольца шапки (по меньшему поперечнику): густое облако, видно на ~5% сечения. */
-    static final double TAU_CAP = 40;
+    /**
+     * Вещество шапки — капли и NO₂ (G&D §2.08: облако сперва красное или красно-бурое от оксидов азота, белеет, когда в
+     * нём конденсируется вода; Taylor и Minge 1963, AFSC 61-142-1, с. 201–202: в отражённом свете облако белое от капель,
+     * в проходящем — красно-бурое от NO₂, и внутри него бурый свет). Цвет и толща — из этих двух, без часов: отражение
+     * облака — рассеяние капель против поглощения NO₂ на пути света в нём, а NO₂ редеет, пока шапка растёт. Физика даёт:
+     * свернувшееся кольцо в отражённом свете — охра (у 15 кт на экране ~0,60 0,48 0,31, оттенок 35°), насквозь —
+     * красно-бурое (17°); через минуту-две снаружи почти белое. Красно-бурым в отражённом свете кольцо не бывает ни при
+     * какой доле NO₂: у сильного поглощения отражение ∝ ω' ∝ 1/σ по каналу — оттенок 29°, темнее, но не краснее.
+     * <p>
+     * Капли: ослабление σ = 3·LWC/(2·ρw·r_e) — толща облака τ = 3·LWP/(2·ρw·r_e) (Stephens 1978) на единицу пути, при
+     * сечении капли вдвое больше её площади (капли много больше длины волны). <b>Оценки</b> (замеров водности шапки нет):
+     * водность {@link #WATER} 0,5 г/м³ — середина 0,1–1 г/м³ кучевых облаков, эффективный радиус {@link #DROP_RADIUS} 10
+     * мкм — как у кучевых. Шапка 15 кт после подъёма (1,7 км поперёк сечения кольца) — τ ≈ 130, у 1 кт (0,6 км) — ≈ 47.
+     * Капли приходят с воздухом, который шапка подхватывает, сворачиваясь в кольцо: шар — горячий газ без капель, доля
+     * капель — доля кольца {@link #rollUp} (оценка: срока конденсации в источниках нет).
+     */
+    static final double WATER = 0.5e-3, DROP_RADIUS = 10e-6, WATER_DENSITY = 1000;
+    /** Ослабление каплями шапки, 1/м (0,075): {@code 3·WATER/(2·WATER_DENSITY·DROP_RADIUS)}. */
+    public static final double DROP_SIGMA = 1.5 * WATER / (WATER_DENSITY * DROP_RADIUS);
+    /**
+     * Молекул NOx на килотонну мощности: 10²⁹ — NRC 1985 («The Effects on the Atmosphere of a Major Nuclear Exchange»,
+     * гл. 6, с. 107–126: 10³² молекул NO на мегатонну); Gilmore 1975 (JGR 80, 4553) — 0,8·10³² от нагрева ударной волной,
+     * до 1,5·10³² с перемешиванием. Оценка: у малых мощностей замеров нет, закон — пропорционально мощности.
+     */
+    static final double NOX_PER_KT = 1e29;
+    /**
+     * Доля NO₂ в NOx шапки, оценка: замеров нет. Окисление 2NO + O₂ за подъём шапки 15 кт даёт около 2 % (скорость
+     * ∝ [NO]², а NO редеет с ростом шапки), озон и атомы кислорода у шара (G&D §2.123) — больше. 0,1 — с проверкой по
+     * наблюдениям ({@code MushroomFieldTest}): шапка 15 кт после подъёма в отражённом свете почти белая, в проходящем —
+     * бурая (Taylor и Minge), свет сквозь свернувшееся кольцо — красно-бурый (G&D). При 0,3 шапка после подъёма осталась бы
+     * бежевой (синий — 0,72 красного), при 0,03 свет сквозь кольцо — оранжево-бурый (оттенок 31°), а не красно-бурый.
+     */
+    static final double NO2_SHARE = 0.1;
+    /**
+     * Сечение поглощения NO₂ по каналам кадра R, G, B, м² на молекулу: Bogumil et al. 2003 (J. Photochem. Photobiol. A 157,
+     * 167), 243 K (воздух на высоте шапки), среднее по полосе канала — положительная часть функции sRGB (CIE 1931 → sRGB)
+     * × свет Солнца (Планк 5 800 K). Vandaele et al. 1998 (294 K) — то же в пределах 2 %. В синем NO₂ поглощает в восемь
+     * раз сильнее, чем в красном, — отсюда бурый.
+     */
+    public static final double[] NO2_CROSS = {5.74e-24, 1.33e-23, 4.64e-23};
     /** Толща поперёк ножки у наземного подрыва; у юбки — у низкого подрыва. */
     static final double TAU_STEM = 4, TAU_SKIRT = 2;
     /** За сколько секунд (e-кратно) оседает пыль у земли: воздушный подрыв, наземный (как у стены пыли). */
@@ -45,7 +83,8 @@ public final class MushroomModel {
     /**
      * Гриб в момент t.
      *
-     * @param life      доля гриба 0..1: до 2,5 стабилизаций — весь, к 4 рассеивается
+     * @param life      доля гриба 0..1: до половины рассеяния после стабилизации — весь, к его концу
+     *                  ({@link #lifeSeconds}) — ноль
      * @param top       верх облака (у шара — его верх)
      * @param capBottom низ шапки (у шара — его низ)
      * @param capY      середина шапки по высоте (у шара — его середина)
@@ -56,7 +95,9 @@ public final class MushroomModel {
      * @param domeY     середина купола над кольцом
      * @param domeR     полуось купола по горизонтали
      * @param domeH     полуось купола по вертикали
-     * @param capTau    толща шапки поперёк меньшего поперечника сечения (с долей гриба): шар и шапка непрозрачны
+     * @param capDrops  ослабление каплями шапки, 1/м ({@link #DROP_SIGMA} × доля кольца × доля гриба, растекаясь — редеет
+     *                  как площадь)
+     * @param capNo2    молекул NO₂ в кубометре шапки (весь NO₂ подрыва в её объёме, {@link #capVolume}, × доля гриба)
      * @param stemTop   верх ножки (догоняет низ шапки)
      * @param stemR     радиус ножки, средний по высоте ({@link #stemShare} радиуса шапки; у шапки шире, у земли — раструб пыли)
      * @param stemTau   толща ножки поперёк (с видимостью, оседанием пыли не считая раструба)
@@ -68,12 +109,42 @@ public final class MushroomModel {
      * @param endTop    верх облака после стабилизации: снос ветром — по доле этой высоты
      */
     public record Shape(double t, double life, double top, double capBottom, double capY, double capR, double ringR, double ringA,
-                        double ringB, double domeY, double domeR, double domeH, double capTau, double stemTop, double stemR,
+                        double ringB, double domeY, double domeR, double domeH, double capDrops, double capNo2, double stemTop, double stemR,
                         double stemTau, double lowDust, double skirtR, double skirtW, double skirtH, double skirtTau, double endTop) {}
 
-    /** Сколько секунд гриб виден: стабилизируется, растекается и рассеивается (4 стабилизации). */
+    /**
+     * Постоянная Ричардсона — Обухова: пары частиц в турбулентности расходятся как ⟨r²⟩ = g·ε·t³, g ≈ 0,5 (Ott и Mann 2000,
+     * JFM 422, 207; Sawford 2001, Annu. Rev. Fluid Mech. 33, 289).
+     */
+    static final double RICHARDSON = 0.5;
+    /**
+     * Скорость диссипации турбулентной энергии там, где стоит облако, м²/с³. <b>Оценка</b>: замеров у облаков испытаний нет.
+     * Выбрана так, чтобы гриб 15 кт жил около прежнего (27 минут, было 24), — наибольшее круглое значение, при котором
+     * жизнь растёт с мощностью везде: при ε больше 4,2·10⁻³ сразу выше 1 кт стабилизация укорачивается (τ «Уоспа» вдвое
+     * дольше, чем у «Грейбла») быстрее, чем удлиняется рассеяние, и гриб 1,2 кт жил бы на секунды меньше гриба 1 кт (при
+     * прежних 24 минутах у 15 кт — ε = 6,2·10⁻³). В спокойной свободной тропосфере ε — 10⁻⁵–10⁻⁴, в кучевых облаках и
+     * при слабой болтанке — 10⁻³–10⁻²: облако после подъёма само ещё турбулентно. Сверка: облако 1 Мт видно 68 минут —
+     * «около часа или больше» (Glasstone и Dolan, §2.15).
+     */
+    static final double DISSIPATION = 4e-3;
+
+    /**
+     * Сколько секунд гриб виден: поднимается до стабилизации ({@link CloudModel#stabilizationSeconds}), потом турбулентность
+     * воздуха рассеивает его ({@link #dispersalSeconds}): 0,1 кт — 17 минут, 1 кт — 22, 15 кт — 27, 1 Мт — 68. Рассеяние
+     * растёт с размером облака, а не с тем, как медленно оно поднималось.
+     */
     public static double lifeSeconds(double yieldKt) {
-        return 4 * CloudModel.stabilizationSeconds(yieldKt);
+        return CloudModel.stabilizationSeconds(yieldKt) + dispersalSeconds(yieldKt);
+    }
+
+    /**
+     * За сколько секунд турбулентность рассеивает остановившееся облако: пары его частиц расходятся на радиус шапки после
+     * стабилизации R ({@link CloudModel#capRadius}) — относительная дисперсия Ричардсона — Обухова, ⟨r²⟩ = g·ε·t³, и
+     * t = (R²/(g·ε))^⅓ ({@link #RICHARDSON}, {@link #DISSIPATION}): 1 кт — 10,6 минуты, 15 кт — 21, 1 Мт — 61.
+     */
+    public static double dispersalSeconds(double yieldKt) {
+        double r = CloudModel.capRadius(yieldKt);
+        return Math.cbrt(r * r / (RICHARDSON * DISSIPATION));
     }
 
     /**
@@ -123,8 +194,12 @@ public final class MushroomModel {
 
     /**
      * Видимая температура шара и шапки снаружи, K: перепад ядра × {@link #edgeShare}. Пока шар — его температура
-     * ({@link FireballModel#temperature}); свернувшись, он темнеет снаружи: край смешан с воздухом, а ядро за толщей
-     * шапки (τ ≈ 40) не видно. У 15 кт через 9 с — ~1 250 K, через 12 с — ~830 K.
+     * ({@link FireballModel#temperature}); свернувшись, он темнеет снаружи: край смешан с воздухом, а ядро — в глубине
+     * шапки. Толща поперёк сечения кольца (σ' по зелёному, {@code MushroomField.capMatter}) от сворачивания до
+     * стабилизации — у 1 кт 5–13, у 15 кт 11–36, у 1 Мт 37–140, до ядра — половина её: у 1 кт ядро ночью просвечивает,
+     * у мегатонны — нет. Шейдер ослабляет свечение ядра по пути к глазу прямым путём, e^(−τ'); двумя потоками оно
+     * выходило бы и рассеянным, как e^(−kτ') ({@code PallLight.k}): в красном через 30 с у 1 кт — втрое больше, у 15 кт —
+     * в ~200 раз (не сделано, DESIGN-nuke). У 15 кт через 9 с — ~1 250 K, через 12 с — ~830 K.
      */
     public static double edgeTemperature(double t, double yieldKt, boolean surface) {
         return AMBIENT_K + (coreTemperature(t, yieldKt, surface) - AMBIENT_K) * edgeShare(t, yieldKt, surface);
@@ -152,11 +227,20 @@ public final class MushroomModel {
     }
 
     /**
-     * Доля конденсата и остывшего дыма в цвете шапки 0..1: бурый дым с NO₂ к белёсому облаку за минуту (G&D 2.08: бурый
-     * цвет оксидов азота уходит, когда остывшая шапка поднимается и в ней конденсируется вода).
+     * Объём шапки, м³: сфероид с её радиусом и высотой, (2/3)·π·R²·h — у шара его объём, у свернувшегося кольца с куполом
+     * — на 5 % меньше суммы тора и полукупола.
      */
-    public static double condensed(double t) {
-        return clamp(t / 60, 0, 1);
+    public static double capVolume(Shape s) {
+        return volume(s.capR(), s.top() - s.capBottom());
+    }
+
+    private static double volume(double r, double h) {
+        return 2.0 / 3 * Math.PI * r * r * h;
+    }
+
+    /** Поглощение NO₂ шапки в канале кадра c (0 — R, 1 — G, 2 — B), 1/м. */
+    public static double capAbsorption(Shape s, int c) {
+        return s.capNo2() * NO2_CROSS[c];
     }
 
     /**
@@ -181,14 +265,15 @@ public final class MushroomModel {
     public static Shape shape(double t, double yieldKt, double hobM, boolean surface, double groundFrontM) {
         if (t <= 0) return null;
         double stab = CloudModel.stabilizationSeconds(yieldKt);
-        double life = clamp(1 - (t - 2.5 * stab) / (1.5 * stab), 0, 1);
+        // рассеяние: первую половину его облако видно целиком, за вторую тает (оценка: тот же вид, что был у прежней жизни
+        // в 4 стабилизации, — целиком до 2,5)
+        double life = clamp(2 * (1 - Math.max(0, t - stab) / dispersalSeconds(yieldKt)), 0, 1);
         if (life <= 0) return null;
         double hob = Math.max(0, hobM);
         double rf = FireballModel.maxRadius(yieldKt, surface);
-        double start = hob + FireballModel.maxRadius(yieldKt, false);
-        double endTop = Math.max(start, CloudModel.stabilizedTop(yieldKt));
-        double top = CloudModel.top(t, hob, yieldKt);
-        double capBot = Math.max(hob, CloudModel.capBottom(t, hob, yieldKt));
+        double start = CloudModel.start(hob, yieldKt, surface), endTop = CloudModel.end(hob, yieldKt, surface);
+        double top = CloudModel.top(t, hob, yieldKt, surface);
+        double capBot = Math.max(hob, CloudModel.capBottom(t, hob, yieldKt, surface));
         double rise = clamp((top - start) / Math.max(1, endTop - start), 0, 1);
         double spread = 1 + 0.25 * clamp((t - stab) / stab, 0, 2);
         double capR = (rf * 1.1 + (CloudModel.capRadius(yieldKt) - rf * 1.1) * Math.pow(rise, 0.8)) * spread;
@@ -203,7 +288,7 @@ public final class MushroomModel {
         // внутри), дальше каждое число формы идёт от шара к шапке той же долей roll — одна форма, без смены картинки.
         // Шар для наземного — полусфера: середина на земле, низ под ней
         double roll = rollUp(t, yieldKt, surface);
-        double ballR = FireballModel.radius(t, yieldKt, surface), ballY = FireballModel.centreHeight(t, hob, yieldKt);
+        double ballR = FireballModel.radius(t, yieldKt, surface), ballY = FireballModel.centreHeight(t, hob, yieldKt, surface);
         capR = lerp(ballR, capR, roll);
         capBot = lerp(ballY - ballR, capBot, roll);
         capH = lerp(2 * ballR, capH, roll);
@@ -212,9 +297,11 @@ public final class MushroomModel {
         double ringR = RING * capR * roll, ringA = capR - ringR, ringB = lerp(ballR, 0.4 * capH, roll);
         double domeR = 0.6 * capR * Math.sqrt(Math.max(roll, 0.05)), domeH = 0.35 * capH, domeY = lerp(ballY, capBot + 0.6 * capH, roll);
         double tau = t / FireballModel.secondMaximumSeconds(yieldKt);
-        // толща поперёк сечения постоянна, пока шапка поднимается (вещество растёт с подхваченным воздухом); растекаясь
-        // наковальней, она редеет как площадь. Шар — непрозрачное излучающее тело: та же толща
-        double capTau = TAU_CAP * life / (spread * spread);
+        // капли — с подхваченным воздухом, пока шар сворачивается в кольцо; растекаясь наковальней, шапка редеет как
+        // площадь. NO₂ подрыва — во всём её объёме: шар (через секунду поперёк в зелёном τ ≈ 8 у 1 кт, 15 у 15 кт, 52 у
+        // 1 Мт) непрозрачен им
+        double capDrops = DROP_SIGMA * roll * life / (spread * spread);
+        double capNo2 = NO2_SHARE * NOX_PER_KT * yieldKt * life / Math.max(volume(capR, capH), 1);
         // ножка входит в выемку под куполом (воздух поднимается сквозь кольцо; у килотонн она шире купола и занимает весь
         // низ шапки внутри кольца). Под шаром она — его след, со сворачиванием расходится до доли G&D. У наземного шар
         // касается земли, и пыль уходит вверх за ним сразу: ножка — его след, без разрыва под шапкой. У воздушного пыль
@@ -231,7 +318,7 @@ public final class MushroomModel {
         double skirtR = 0.6 * outer, skirtW = Math.max(1, 0.25 * outer);
         double skirtH = Math.max(1, Math.min(capBot * 0.12, 350 * Math.cbrt(yieldKt / 15)) * smooth(0, 30, t));
         double skirtTau = outer <= 0 ? 0 : TAU_SKIRT * smooth(0.5, 3, t) * (hob <= rf * 4 ? 1 : 0.5) * lowDust * life;
-        return new Shape(t, life, top, capBot, capY, capR, ringR, ringA, ringB, domeY, domeR, domeH, capTau, stemTop,
+        return new Shape(t, life, top, capBot, capY, capR, ringR, ringA, ringB, domeY, domeR, domeH, capDrops, capNo2, stemTop,
                 capR * lerp(BALL_STEM, stemShare(yieldKt), roll), stemTau, lowDust, skirtR, skirtW, skirtH, skirtTau, endTop);
     }
 
@@ -284,7 +371,7 @@ public final class MushroomModel {
         for (int i = 1; i <= CHURN_NODES; i++) {
             double t = end * i * i / ((double) CHURN_NODES * CHURN_NODES);
             Shape s = shape(t, yieldKt, hob, surface, 0);
-            double rate = s == null ? 0 : churnRate(s, CloudModel.riseSpeed(t, hob, yieldKt));
+            double rate = s == null ? 0 : churnRate(s, CloudModel.riseSpeed(t, hob, yieldKt, surface));
             // у подрыва (t = 0) шапки ещё нет, обращение — как в первом узле
             if (i == 1) last = rate;
             turns[i] = turns[i - 1] + 0.5 * (last + rate) * (t - prev);
@@ -332,6 +419,23 @@ public final class MushroomModel {
     public static double stemRadius(double w, double stemR, double flare) {
         double x = clamp(w, 0, 1), base = Math.pow(1 - x, 6);
         return stemR * (0.85 + 0.45 * x * x) + flare * base;
+    }
+
+    /**
+     * Скорость воздуха в ножке — эта доля скорости подъёма облака ({@link #stemRise}). <b>Оценка</b>: замеров потока в
+     * ножке нет; число — прежнее.
+     */
+    static final double STEM_INFLOW = 0.3;
+
+    /**
+     * На сколько поднялся воздух ножки к моменту t, м: кольцо тянет его вверх долей {@link #STEM_INFLOW} скорости подъёма
+     * облака ({@link CloudModel#riseSpeed}), путь — её интеграл, та же доля подъёма верха. По нему струи ножки идут вверх
+     * ({@code stemRise} в {@code mushroom.glsl}) и встают, когда облако стабилизируется: у 15 кт за первую минуту — на
+     * 1,1 км (вначале 24 м/с), всего — 2,9 км; у 1 кт — на 0,4 км (7 м/с), всего — 1,7 км. Прежде струи шли со скоростью
+     * в миг подрыва всю жизнь гриба — и над остановившимся облаком.
+     */
+    public static double stemRise(double t, double hobM, double yieldKt, boolean surface) {
+        return STEM_INFLOW * (CloudModel.top(t, hobM, yieldKt, surface) - CloudModel.top(0, hobM, yieldKt, surface));
     }
 
     /** Снос ветром на высоте h, доля пути ветра за время t: верх сносит сильнее низа (как у прежних клубов). */

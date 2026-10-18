@@ -10,6 +10,7 @@ import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
+import ua.zentix.incoming.nuclear.model.ThermalModel;
 
 /**
  * Небо и туман: в миг вспышки — белые, потом янтарные, пока шар ярче неба ({@link #amber}: днём — секунды, ночью —
@@ -56,9 +57,10 @@ public final class NukeSky {
 
     /**
      * Янтарное небо от подрыва у камеры 0..1 — свет шара и шапки у глаза ({@link MushroomModel#light}: чёрное тело их
-     * видимой температуры, как (R/d)²) против света неба, к которому привык глаз ({@link Sight#adapted}), сквозь дымку:
-     * днём — секунды, пока шар ярче неба, ночью — дольше, пока светится шапка; засвеченное небо видно, как и вспышку,
-     * за десятки километров.
+     * видимой температуры, как (R/d)²) против света неба, к которому привык глаз ({@link Sight#adapted}), сквозь воздух
+     * ({@link ThermalModel#transmittance}: прямой и рассеянный свет вместе — янтарное небо и есть свет шара, рассеянный
+     * воздухом): днём — секунды, пока шар ярче неба, ночью — дольше, пока светится шапка; засвеченное небо видно, как и
+     * вспышку, за десятки километров.
      */
     static float amber(ClientNuclear.Active a, Vec3 cam, float partial) {
         MushroomModel.Shape s = MushroomField.shape(a, partial);
@@ -68,8 +70,11 @@ public final class NukeSky {
         double dist = d.metres(Math.sqrt(Mth.square(CENTRE[0] - cam.x) + Mth.square(CENTRE[1] - cam.y) + Mth.square(CENTRE[2] - cam.z)));
         ClientLevel level = Minecraft.getInstance().level;
         float ambient = level == null ? 1 : FarView.ambient(level, partial);
-        // свет шара у глаза против света неба, к которому привык глаз, сквозь дымку: наравне с небом — небо наполовину янтарное
-        double lit = Sight.adapted(MushroomModel.light(s, d.yieldKt(), d.surface(), dist), ambient) * Math.exp(-dist / d.visibility());
+        // свет шара у глаза против света неба, к которому привык глаз, сквозь воздух по погоде в миг подрыва (как засветка
+        // неба вспышкой, NukeFlash: вспышка и янтарное небо — один свет) — не пучком, как блик шара (NukeRenderer.fireballs),
+        // а со светом, рассеянным по пути: наравне с небом — небо наполовину янтарное
+        double air = ThermalModel.transmittance(dist, d.visibility());
+        double lit = Sight.adapted(MushroomModel.light(s, d.yieldKt(), d.surface(), dist), ambient) * air;
         return (float) (lit / (1 + lit));
     }
 
