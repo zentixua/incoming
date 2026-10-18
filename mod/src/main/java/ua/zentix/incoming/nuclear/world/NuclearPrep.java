@@ -4,6 +4,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
@@ -27,6 +28,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -168,6 +170,9 @@ public final class NuclearPrep {
         final long detonateTime;
         @Nullable
         Detonation geometry;
+        /** Раскладка зоны ({@link #layout}), пока строится в фоне; null — уже на месте или ещё не начата. */
+        @Nullable
+        CompletableFuture<Layout> layout;
         /** Чанки тяжёлой зоны, ближние первыми (зона за волной). */
         long[] order = new long[0];
         /** Чанки в памяти в радиусе руин, ближние первыми: им план заранее. */
@@ -185,14 +190,14 @@ public final class NuclearPrep {
         long planBytes;
         boolean capped;
         long nextZoneReport;
-        final List<Tile> tiles = new ArrayList<>();
-        final Long2ObjectOpenHashMap<Tile> tileOf = new Long2ObjectOpenHashMap<>();
+        List<Tile> tiles = new ArrayList<>();
+        Long2ObjectOpenHashMap<Tile> tileOf = new Long2ObjectOpenHashMap<>();
         /** Квадраты, которым нужен ответ по чанку (свой или кольцо соседа). */
-        final Long2ObjectOpenHashMap<List<Tile>> askedBy = new Long2ObjectOpenHashMap<>();
+        Long2ObjectOpenHashMap<List<Tile>> askedBy = new Long2ObjectOpenHashMap<>();
         /** Памяти мало: руины заранее больше не строятся, квадраты зоны за волной грузят только чанки с готовым планом. */
         boolean heapStop;
         /** Очередь чанков на чтение с диска и ответы (приходят из потока ввода-вывода). */
-        final LongArrayList toScan = new LongArrayList();
+        LongArrayList toScan = new LongArrayList();
         int nextScan, scanning;
         final ConcurrentLinkedQueue<long[]> scanned = new ConcurrentLinkedQueue<>();
         /**
@@ -360,8 +365,15 @@ public final class NuclearPrep {
             if (!Terrain.ready(level, BlockPos.containing(s.target()))) return;
             p.geometry = NuclearWarhead.geometry(level, s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
                     IncomingConfig.SERVER.nukeEffectsScale.get().floatValue());
-            layout(p);
+            Detonation g = p.geometry;
+            // раскладка — в фоне: у 15 кт в зоне ~33 тыс. чанков и ~1400 квадратов, в тике это 50–65 мс
+            p.layout = CompletableFuture.supplyAsync(() -> layout(g), Util.backgroundExecutor());
             p.ruins = new RuinContext(level, p.geometry);
+        }
+        if (p.layout != null) {
+            Layout l = p.layout.getNow(null);
+            if (l == null) return;
+            install(p, l);
         }
         long now = level.getGameTime();
         if (now >= p.nextRefresh) {
@@ -688,9 +700,21 @@ public final class NuclearPrep {
         return lo;
     }
 
-    /** Чанки зоны по расстоянию и квадраты загрузки по расстоянию. */
-    private static void layout(Prep p) {
-        Detonation d = p.geometry;
+    /** Раскладка тяжёлой зоны: чанки и квадраты загрузки по расстоянию, и какие квадраты ждут ответа по какому чанку. */
+    private record Layout(long[] order, List<Tile> tiles, Long2ObjectOpenHashMap<Tile> tileOf, Long2ObjectOpenHashMap<List<Tile>> askedBy,
+                          LongArrayList toScan) {}
+
+    private static void install(Prep p, Layout l) {
+        p.layout = null;
+        p.order = l.order;
+        p.tiles = l.tiles;
+        p.tileOf = l.tileOf;
+        p.askedBy = l.askedBy;
+        p.toScan = l.toScan;
+    }
+
+    /** Чанки зоны по расстоянию и квадраты загрузки по расстоянию; без мира — в фоне. */
+    private static Layout layout(Detonation d) {
         double radius = heavyRadius(d) + 16;
         int cx = Mth.floor(d.burst().x) >> 4, cz = Mth.floor(d.burst().z) >> 4, r = Mth.ceil(radius / 16) + 1;
         LongArrayList in = new LongArrayList();
@@ -705,28 +729,29 @@ public final class NuclearPrep {
         long[] keyed = new long[order.length];
         for (int i = 0; i < order.length; i++) keyed[i] = (long) (horizontal(new ChunkPos(order[i]), d) * 16) << 20 | i;
         java.util.Arrays.sort(keyed);
-        p.order = new long[order.length];
-        for (int i = 0; i < order.length; i++) p.order[i] = order[(int) (keyed[i] & 0xFFFFF)];
+        Layout l = new Layout(new long[order.length], new ArrayList<>(), new Long2ObjectOpenHashMap<>(), new Long2ObjectOpenHashMap<>(), new LongArrayList());
+        for (int i = 0; i < order.length; i++) l.order[i] = order[(int) (keyed[i] & 0xFFFFF)];
         LongOpenHashSet seen = new LongOpenHashSet();
-        for (long c : p.order) {
+        for (long c : l.order) {
             ChunkPos pos = new ChunkPos(c);
             ChunkPos centre = new ChunkPos(Math.floorDiv(pos.x, TILE) * TILE + TILE_RADIUS, Math.floorDiv(pos.z, TILE) * TILE + TILE_RADIUS);
             if (!seen.add(centre.toLong())) continue;
             Tile t = new Tile(centre);
-            p.tiles.add(t);
+            l.tiles.add(t);
             for (int dx = -WINDOWS_REACH; dx <= WINDOWS_REACH; dx++) {
                 for (int dz = -WINDOWS_REACH; dz <= WINDOWS_REACH; dz++) {
                     long k = ChunkPos.asLong(centre.x + dx, centre.z + dz);
-                    if (Math.abs(dx) <= TILE_RADIUS && Math.abs(dz) <= TILE_RADIUS) p.tileOf.put(k, t);
-                    List<Tile> asked = p.askedBy.get(k);
+                    if (Math.abs(dx) <= TILE_RADIUS && Math.abs(dz) <= TILE_RADIUS) l.tileOf.put(k, t);
+                    List<Tile> asked = l.askedBy.get(k);
                     if (asked == null) {
-                        p.askedBy.put(k, asked = new ArrayList<>(1));
-                        p.toScan.add(k);
+                        l.askedBy.put(k, asked = new ArrayList<>(1));
+                        l.toScan.add(k);
                     }
                     asked.add(t);
                 }
             }
         }
+        return l;
     }
 
     /** Горизонтальное расстояние от эпицентра до ближайшей точки чанка. */
@@ -1030,6 +1055,8 @@ public final class NuclearPrep {
     Handoff handOff(ServerLevel level, Detonation d, long now) {
         for (Prep p : preps) {
             if (!preparedFor(p, d)) continue;
+            // раскладка ещё в фоне (место подрыва стало известно за тик-другой до него): дождаться, иначе зоны за волной нет
+            if (p.layout != null) install(p, p.layout.join());
             p.detonation = d.id();
             p.handedOff = now;
             p.farAtDetonation = java.util.Arrays.stream(p.order).filter(c -> level.getChunkSource().getChunkNow(ChunkPos.getX(c), ChunkPos.getZ(c)) == null).toArray();
