@@ -70,11 +70,11 @@ public final class BlastWall {
     /** Докуда таблица слоя по земле, м. */
     private final double tableM;
     /**
-     * Слой по дальности (узлы от 0 до {@link #tableM}): толща всего поднятого ({@link DustModel.Column#lifted}), верх к
-     * концу фазы волны, м ({@link DustModel.Column#first}), положительная фаза на месте, с модели
-     * ({@link DustModel.Column#positive}), и когда она кончается — приход фронта в игре и фаза (не убывает с дальностью).
+     * Слой по дальности (узлы от 0 до {@link #tableM}): толща всего поднятого ({@link DustModel.Column#lifted}) и когда на
+     * месте кончается положительная фаза — приход фронта в игре и фаза на месте ({@link DustModel.Column#positive}), с
+     * модели (не убывает с дальностью).
      */
-    private final double[] lifted = new double[NODES], first = new double[NODES], positive = new double[NODES], phaseEnd = new double[NODES];
+    private final double[] lifted = new double[NODES], phaseEnd = new double[NODES];
     /** Положительная фаза в конце таблицы, с модели: за таблицей конец клина — путь фронта за неё. */
     private final double lastPositive;
     /** Влажный воздух — облако Вильсона есть ({@link CloudModel#wilsonCloud}). */
@@ -92,16 +92,16 @@ public final class BlastWall {
         hob = Math.max(0, d.hobMetres());
         ys = Math.cbrt(d.yieldKt() / 15);
         tableM = Math.max(1, HobBlast.rangeFor(0.2, hob, d.yieldKt()));
+        double positive = 0;
         for (int i = 0; i < NODES; i++) {
             double g = tableM * i / (NODES - 1);
             DustModel.Column c = DustModel.column(g, hob, d.yieldKt(), d.surface(), d.visibility(), DustModel.Surface.REFERENCE);
             lifted[i] = c.lifted();
-            first[i] = c.first();
-            positive[i] = c.positive();
-            phaseEnd[i] = arrival(g) + positive[i];
+            positive = c.positive();
+            phaseEnd[i] = arrival(g) + positive;
             if (i > 0) phaseEnd[i] = Math.max(phaseEnd[i], phaseEnd[i - 1]);
         }
-        lastPositive = positive[NODES - 1];
+        lastPositive = positive;
         // угол вала — интеграл скорости оборота по времени (средней точкой), узлы гуще в начале
         double end = CloudPuffs.lifeSeconds(d);
         for (int i = 1; i <= ROLL_NODES; i++) {
@@ -127,11 +127,6 @@ public final class BlastWall {
         if (x >= NODES - 1) return 0;
         int i = (int) x;
         return Mth.lerp(x - i, table[i], table[i + 1]);
-    }
-
-    /** То же, но дальше таблицы — её последний узел (верх и фаза слоя есть и там, где пыли уже мало). */
-    private double near(double[] table, double groundM) {
-        return groundM >= tableM ? table[NODES - 1] : at(table, groundM);
     }
 
     /** Приход фронта в игре на {@code groundM} м от эпицентра по земле, секунды модели. */
@@ -173,6 +168,20 @@ public final class BlastWall {
         return FireballModel.groundRadius(t, hob, d.yieldKt(), d.surface());
     }
 
+    /** Конец клина по земле в момент t (секунды модели), м. */
+    private double back(double t) {
+        return Math.max(0, shock(t) - length(t));
+    }
+
+    /**
+     * Возраст пыли в конце клина в момент t, секунды модели: с прихода фронта в игре, не больше положительной фазы на месте
+     * (с модели).
+     */
+    private double backSeconds(double t) {
+        double back = back(t);
+        return Mth.clamp(t - arrival(back), 0, HobBlast.positivePhaseSeconds(back, hob, d.yieldKt()));
+    }
+
     /**
      * Какая доля положительной фазы на месте прошла к моменту t там, где кончается клин, 0..1: 1 — клин до конца фазы
      * ({@link #tail}). Пока фаза не кончилась нигде, клин — весь путь фронта, и пыль в его конце (у эпицентра) моложе своей
@@ -180,8 +189,8 @@ public final class BlastWall {
      * с нулевой толщины.
      */
     double backAge(double t) {
-        double back = Math.max(0, shock(t) - length(t));
-        return Mth.clamp((t - arrival(back)) / Math.max(1e-9, near(positive, back)), 0, 1);
+        double back = back(t);
+        return Mth.clamp((t - arrival(back)) / Math.max(1e-9, HobBlast.positivePhaseSeconds(back, hob, d.yieldKt())), 0, 1);
     }
 
     /**
@@ -202,13 +211,12 @@ public final class BlastWall {
     }
 
     /**
-     * Верх клина в момент t, м: верх слоя там, где кончается клин, в его возрасте — пыльный пограничный слой по пути фронта
-     * за местом ({@link DustModel.Column#height}: к концу фазы — {@link DustModel.Column#first}, раньше — доля фазы
-     * ({@link #backAge}) в степени 5/6).
+     * Верх клина в момент t, м: верх слоя там, где кончается клин, в возрасте пыли там — пыльный пограничный слой по пути
+     * фронта по своей нормали за местом ({@link DustModel#waveTop}; к концу фазы — {@link DustModel.Column#first}).
      */
     double height(double t) {
         // не ниже миллиметра, как длина клина: делители шейдера (smoothstep по верху) не вырождаются
-        return Math.max(1e-3, near(first, Math.max(0, head(t) - length(t))) * Math.pow(backAge(t), 5 / 6.0));
+        return Math.max(1e-3, DustModel.waveTop(back(t), hob, d.yieldKt(), backSeconds(t)));
     }
 
     /** Ослабление у земли в конце фазы волны там, где пыль подняло на {@code groundM}, при верхе {@code top} (1/м). */
@@ -252,7 +260,7 @@ public final class BlastWall {
             return 0;
         }
         // клин короче фазы (у шара, или фаза ещё нигде не кончилась): пыль в конце подняла лишь долю поднятого за фазу
-        // (DustModel.lifted), а верх ниже — доля фазы в степени 5/6 (height); у края — та же доля фазы: поднятое у фронта
+        // (DustModel.lifted), а верх ниже — слой в возрасте этой пыли (height); у края — та же доля фазы: поднятое у фронта
         // растёт с возрастом линейно
         double age = backAge(t);
         into[0] = age * sigma(edge, top);

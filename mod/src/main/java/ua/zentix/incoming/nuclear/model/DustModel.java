@@ -17,10 +17,11 @@ package ua.zentix.incoming.nuclear.model;
  * <p>
  * <b>Высота.</b> В фазе волны слой растёт, как турбулентный пыльный пограничный слой за фронтом (Kuhl и др. 1992,
  * ур. 17): h = c·R^(1/6)·(U_s·τ)^(5/6) — у переднего края ноль, назад толще; c = {@link #TOP_C} — видимый верх (у Kuhl
- * плотное ядро — 0,0256; GRABLE — 6–25 м у фронта в первые десятые секунды). U_s·τ — путь фронта за точкой (у Kuhl
- * фронт постоянной скорости, Mirels — так же): фронт замедляется, и это его настоящий путь за фазу ({@link #run}), а не
- * скорость в миг прихода × фаза — у эпицентра наземного та за фазу дала бы тысячи километров и верх в 18 км. Потом слой
- * поднимает нагретая вспышкой земля (конвективный слой с вовлечением, Deardorff/Tennekes): к
+ * плотное ядро — 0,0256; GRABLE — 6–25 м у фронта в первые десятые секунды). U_s·τ — путь самого фронта по своей
+ * нормали за точкой (у Kuhl фронт постоянной скорости, Mirels — так же), в возрасте пыли ({@link #run}, {@link #waveTop}):
+ * фронт замедляется, и это не скорость в миг прихода × время — у эпицентра наземного та за фазу дала бы тысячи
+ * километров и верх в 18 км; под воздушным подрывом — не путь следа фронта по земле, который бежит быстрее фронта. Потом
+ * слой поднимает нагретая вспышкой земля (конвективный слой с вовлечением, Deardorff/Tennekes): к
  * h_b = √(2(1 + 2A)·f_h·E / (ρ c_p γ)) за {@link #RISE_S}; E — свет вспышки на ровную землю ({@link ThermalModel}).
  * <p>
  * <b>Оседание и уход.</b> Пять корзин по размеру (по MET и MISERS BLUFF II): каждая оседает из перемешанного слоя
@@ -204,33 +205,78 @@ public final class DustModel {
      * (наземный — {@code surfaceBurst}), видимость воздуха {@code visibilityM} (свет вспышки), поверхность {@code surface}.
      */
     public static Column column(double groundM, double hobM, double yieldKt, boolean surfaceBurst, double visibilityM, Surface surface) {
-        double hob = Math.max(0, hobM), ground = Math.max(0, groundM), slant = Math.max(1, Math.hypot(ground, hob));
+        double hob = Math.max(0, hobM), ground = Math.max(0, groundM);
         double kpa = BlastModel.kpa(HobBlast.psi(ground, hob, yieldKt)), ys = Math.cbrt(yieldKt / 15);
         // ветер выноса — положительная фаза давления, а не напора (оценка, soil)
         double positive = HobBlast.positivePhaseSeconds(ground, hob, yieldKt), along = HobBlast.alongGround(ground, hob, yieldKt);
         double soil = Math.min(surface.supply(), soil(kpa, along, positive, surface.threshold()));
         double debris = surface.debris() * destroyed(BlastModel.psi(kpa));
-        // U_s·τ у Kuhl — путь фронта за точкой (у него скорость фронта постоянна); фронт замедляется, и путь за фазу —
-        // настоящий (run), а не скорость в миг прихода × фаза: у эпицентра та — тысячи км/с, и верх уходил на километры
-        double wave = TOP_C * Math.pow(slant, 1 / 6.0) * Math.pow(run(ground, hob, yieldKt, positive) / Math.max(1e-9, positive), 5 / 6.0);
+        double first = waveTop(ground, hob, yieldKt, positive);
         // свет вспышки на ровную землю: от шара (не ближе его радиуса), с косинусом к вертикали
         double ball = FireballModel.maxRadius(yieldKt, surfaceBurst), high = Math.max(hob, ball);
         double lit = Math.max(Math.hypot(ground, high), ball);
         double heat = ThermalModel.fluenceCalPerCm2(lit, yieldKt, surfaceBurst, visibilityM) * CAL_PER_CM2 * high / lit;
         double buoyant = Math.min(TOP_MAX * ys, Math.sqrt(2 * (1 + 2 * ENTRAIN) * HEAT_SHARE * heat / (RHO_CP * LAPSE)));
         double stem = 1 - smooth(0.5 * STEM_M * ys, STEM_M * ys, ground);
-        return new Column(positive, soil, debris, wave, buoyant, stem, STEM_FROM_S * ys);
+        return new Column(positive, soil, debris, first, buoyant, stem, STEM_FROM_S * ys, ground, hob, yieldKt);
     }
 
     /**
-     * Путь фронта по земле за {@code seconds} с после того, как он прошёл {@code groundM} м от эпицентра, м (приход —
-     * {@link HobBlast#arrivalSeconds}): столько прошёл над местом поток за фронтом — длина, с которой растёт пограничный
-     * слой. Фронт замедляется, и путь короче скорости в миг прихода × время: у наземного 15 кт за фазу у эпицентра — 440
-     * м, а не 2·10⁶. Ложным положением (Иллинойс), до 0,1 %.
+     * Верх слоя в фазе волны на {@code groundM} м от эпицентра по земле в возрасте пыли {@code seconds} с (с прихода
+     * фронта), м: пыльный пограничный слой Kuhl, h = c·R^(1/6)·x^(5/6), R — наклонная дальность (не меньше метра), x — путь
+     * фронта по своей нормали за местом ({@link #run}). За свежим фронтом — ноль.
+     */
+    public static double waveTop(double groundM, double hobM, double yieldKt, double seconds) {
+        double slant = Math.max(1, Math.hypot(Math.max(0, groundM), Math.max(0, hobM)));
+        return TOP_C * Math.pow(slant, 1 / 6.0) * Math.pow(run(groundM, hobM, yieldKt, seconds), 5 / 6.0);
+    }
+
+    /**
+     * Путь фронта по своей нормали за {@code seconds} с после того, как он прошёл {@code groundM} м от эпицентра по земле,
+     * м: U_s·τ у Kuhl и Mirels (у них фронт постоянной скорости) — сколько прошёл над местом сам фронт; с этой длины растёт
+     * пограничный слой. Фронт замедляется: у эпицентра наземного 15 кт за фазу — 440 м, а не скорость в миг прихода × фаза
+     * (2·10⁶ м). Под воздушным подрывом при правильном отражении след фронта на земле ({@link #trace}) бежит быстрее самого
+     * фронта (у эпицентра — бесконечно быстро), а воздух за фронтом идёт к земле, и вдоль неё — лишь доля cos α: путь
+     * следа — не путь потока. Путь по нормали — ∫cos α по пути следа ({@link #normalPath}): у правильного отражения это
+     * приращение наклонной дальности падающей волны (у 15 кт на 592 м за фазу под подрывом — 189 м против 509 м следа),
+     * в области Маха — путь ножки по земле, между — переход {@link HobBlast#alongGround}; cos α — корень доли напора вдоль
+     * земли, той же, что у ветра выноса ({@link #soil}).
      */
     static double run(double groundM, double hobM, double yieldKt, double seconds) {
         if (seconds <= 0) return 0;
-        double from = Math.max(0, groundM), target = HobBlast.arrivalSeconds(from, hobM, yieldKt) + seconds;
+        double from = Math.max(0, groundM);
+        return normalPath(from, from + trace(from, hobM, yieldKt, seconds), hobM, yieldKt);
+    }
+
+    /**
+     * ∫cos α dx по земле от {@code fromM} до {@code toM} м от эпицентра, м: cos α = √{@link HobBlast#alongGround} — на
+     * сколько фронт продвигается по своей нормали за шаг следа по земле. У правильного отражения (ближе 0,8 начала
+     * области Маха) cos α = x/√(x² + H²), и интеграл — приращение наклонной дальности; в области Маха cos α = 1; в
+     * переходе — по Симпсону. У наземного — сам путь.
+     */
+    static double normalPath(double fromM, double toM, double hobM, double yieldKt) {
+        double hob = Math.max(0, hobM);
+        if (hob <= 0 || toM <= fromM) return Math.max(0, toM - fromM);
+        double xm = HobBlast.machStem(hob, yieldKt), regular = 0.8 * xm, path = 0;
+        if (fromM < regular) path += Math.hypot(Math.min(toM, regular), hob) - Math.hypot(fromM, hob);
+        if (toM > xm) path += toM - Math.max(fromM, xm);
+        double a = Math.max(fromM, regular), b = Math.min(toM, xm);
+        if (b > a) {
+            int n = 8;
+            double h = (b - a) / n, sum = Math.sqrt(HobBlast.alongGround(a, hob, yieldKt)) + Math.sqrt(HobBlast.alongGround(b, hob, yieldKt));
+            for (int k = 1; k < n; k++) sum += (k % 2 == 1 ? 4 : 2) * Math.sqrt(HobBlast.alongGround(a + k * h, hob, yieldKt));
+            path += sum * h / 3;
+        }
+        return path;
+    }
+
+    /**
+     * Путь следа фронта по земле за {@code seconds} с после того, как он прошёл {@code fromM} м от эпицентра, м (приход —
+     * {@link HobBlast#arrivalSeconds}). Ложным положением (Иллинойс), до 0,1 %.
+     */
+    static double trace(double fromM, double hobM, double yieldKt, double seconds) {
+        if (seconds <= 0) return 0;
+        double from = Math.max(0, fromM), target = HobBlast.arrivalSeconds(from, hobM, yieldKt) + seconds;
         // вдали фронт — со скоростью звука: путь не меньше; ближе — быстрее, и конец ищется удвоением
         double lo = 0, flo = -seconds, hi = BlastModel.SOUND_SPEED * seconds;
         double fhi = HobBlast.arrivalSeconds(from + hi, hobM, yieldKt) - target;
@@ -274,20 +320,16 @@ public final class DustModel {
     }
 
     /**
-     * Слой пыли в одном месте: положительная фаза t₊ на месте (с), поднятый грунт и пыль обломков (кг/м²), закон верха
-     * в фазе волны (h = wave·τ^(5/6), м: wave — по средней скорости фронта за фазу на месте, {@link #run}), верх над
-     * нагретой землёй h_b (м), доля подсоса в ножку 0..1 и когда он начинается (с). Возраст — секунды модели с прихода
-     * фронта.
+     * Слой пыли в одном месте: положительная фаза t₊ на месте (с), поднятый грунт и пыль обломков (кг/м²), верх к концу
+     * фазы волны (м, {@link #waveTop}), верх над нагретой землёй h_b (м), доля подсоса в ножку 0..1 и когда он начинается
+     * (с); само место — по земле от эпицентра и высота подрыва (м), мощность (кт): по ним верх в фазе волны. Возраст —
+     * секунды модели с прихода фронта.
      */
-    public record Column(double positive, double soil, double debris, double wave, double buoyant, double stem, double stemFrom) {
+    public record Column(double positive, double soil, double debris, double first, double buoyant, double stem, double stemFrom,
+                         double ground, double hob, double yieldKt) {
         /** Вся поднятая пыль, кг/м². */
         public double mass() {
             return soil + debris;
-        }
-
-        /** Верх к концу фазы волны, м. */
-        public double first() {
-            return wave * Math.pow(positive, 5 / 6.0);
         }
 
         /** Верх, до которого слой дорастает, м. */
@@ -296,10 +338,13 @@ public final class DustModel {
             return Math.sqrt(h * h + buoyant * buoyant);
         }
 
-        /** Верх слоя в возрасте {@code age} с, м: в фазе волны — как пыльный слой Kuhl, потом — над нагретой землёй. */
+        /**
+         * Верх слоя в возрасте {@code age} с, м: в фазе волны — пыльный слой Kuhl по пути фронта за местом в этом возрасте
+         * ({@link #waveTop}; к концу фазы — {@link #first}), потом — над нагретой землёй.
+         */
         public double height(double age) {
             if (age <= 0) return 0;
-            if (age <= positive) return wave * Math.pow(age, 5 / 6.0);
+            if (age <= positive) return waveTop(ground, hob, yieldKt, age);
             double h = first(), x = Math.min((age - positive) / RISE_S, 1);
             return Math.sqrt(h * h + buoyant * buoyant * x);
         }

@@ -88,50 +88,70 @@ class BlastWallTest {
 
     /**
      * Верх головы — пыльный пограничный слой за свежим фронтом (Kuhl и др. 1992, ур. 17; Mirels): в конце клина
-     * h = c·R^(1/6)·x^(5/6), x — путь фронта модели за этим местом, пока пыль там не старше своей фазы (у Kuhl и Mirels фронт
-     * постоянной скорости, x = U_s·τ). За свежим фронтом слой начинается с нулевой толщины и растёт с путём: у эпицентра —
-     * метры, а не километры. Логарифмическая сетка времени с 0,1 мс до 30 с, 1 кт, 15 кт и 1 Мт, наземные и низкие
-     * воздушные: верх не выше закона, а где клин доходит до конца фазы — сам закон; всплесков нет.
+     * h = c·R^(1/6)·x^(5/6), x — путь фронта модели по своей нормали за этим местом в возрасте пыли там, не старше её фазы
+     * (у Kuhl и Mirels фронт постоянной скорости, x = U_s·τ). Под воздушным подрывом при правильном отражении это
+     * приращение наклонной дальности, а не путь следа фронта по земле (у эпицентра тот бесконечно быстрый), в области Маха —
+     * путь ножки. За свежим фронтом слой начинается с нулевой толщины и растёт с путём: у эпицентра — метры, а не километры.
+     * Логарифмическая сетка времени с 0,1 мс до 30 с, 1 кт, 15 кт и 1 Мт, наземные, низкие и высокие воздушные: верх — закон
+     * в возрасте пыли в игре и не выше закона с приходом модели; всплесков нет, а пока огненный шар не на земле, верх не
+     * проседает (клин тянется к эпицентру, а пыль в его конце только старше; у шара на земле верх проседает, когда шар
+     * обгоняет голову и когда садится на землю).
      */
     @Test
     void headTopIsTheBoundaryLayer() {
         // мощность, кт; высота подрыва, м; масштаб
-        double[][] bursts = {{1, 0, 1}, {1, 28, 1}, {15, 0, 1}, {15, 0, 0.25}, {15, 83, 1}, {1000, 0, 1}, {1000, 80, 1}, {1000, 333, 1}};
+        double[][] bursts = {{1, 0, 1}, {1, 28, 1}, {1, 240, 1}, {15, 0, 1}, {15, 0, 0.25}, {15, 83, 1}, {15, 592, 1}, {15, 592, 0.25},
+                {1000, 0, 1}, {1000, 80, 1}, {1000, 333, 1}};
         for (double[] b : bursts) {
             double yield = b[0], hob = b[1];
             Detonation d = new Detonation(1, new Vec3(0, 64 + hob * b[2], 0), 64, yield, hob == 0, 0, 0, 0, 20_000, 7, (float) b[2], false, 1);
             BlastWall w = new BlastWall(d, false);
             String burst = yield + " кт на " + hob + " м, масштаб " + b[2] + ", ";
             double[] tops = new double[111];
+            boolean[] ball = new boolean[tops.length];
             int heads = 0, ends = 0;
             for (int k = 0; k < tops.length; k++) {
                 double t = 1e-4 * Math.pow(10, 0.05 * k);
                 BlastWall.Wall wall = w.wall(t);
                 tops[k] = Double.NaN;
+                ball[k] = w.underBall(t) > 0;
                 if (wall == BlastWall.Wall.NONE) continue;
                 double top = d.metres(wall.height()), back = Math.max(0, w.head(t) - w.length(t));
-                double age = Math.min(t - HobBlast.arrivalSeconds(back, hob, yield), HobBlast.positivePhaseSeconds(back, hob, yield));
-                double law = DustModel.TOP_C * Math.pow(Math.max(1, Math.hypot(back, hob)), 1 / 6.0) * Math.pow(run(back, hob, yield, age), 5 / 6.0);
+                double positive = HobBlast.positivePhaseSeconds(back, hob, yield);
+                // возраст пыли в конце клина: с прихода фронта модели и с прихода фронта в игре (по наклонной дальности)
+                double model = Math.min(t - HobBlast.arrivalSeconds(back, hob, yield), positive);
+                double game = Math.min(t - d.arrivalTicks(d.slantOf(d.blocks(back))) / (20 * d.scale()), positive);
+                double law = law(back, hob, yield, model), inGame = law(back, hob, yield, game);
                 assertTrue(top <= 1.02 * law + 0.01, burst + t + " с: верх " + top + " м выше пограничного слоя (" + law + " м)");
-                if (w.backAge(t) >= 1) {
-                    assertEquals(law, top, 0.02 * law, burst + t + " с: верх в конце фазы — не пограничный слой");
-                    ends++;
-                }
+                assertEquals(inGame, top, 0.02 * inGame + 0.01, burst + t + " с: верх — не пограничный слой в возрасте пыли");
+                if (w.backAge(t) >= 1) ends++;
                 tops[k] = top;
                 heads++;
             }
-            assertTrue(heads > 40 && ends > 10, burst + "голова на " + heads + " узлах сетки, клин до конца фазы — на " + ends);
-            // всплеск — верх выше обоих соседей по сетке (×1,12 по времени) больше чем на четверть
-            for (int k = 1; k + 1 < tops.length; k++) {
-                if (Double.isNaN(tops[k - 1] + tops[k] + tops[k + 1])) continue;
+            assertTrue(heads > 20 && ends > 10, burst + "голова на " + heads + " узлах сетки, клин до конца фазы — на " + ends);
+            for (int k = 1; k < tops.length; k++) {
                 double t = 1e-4 * Math.pow(10, 0.05 * k);
-                assertTrue(tops[k] <= 1.25 * Math.max(tops[k - 1], tops[k + 1]) + 0.05,
-                        burst + t + " с: всплеск верха " + tops[k] + " м среди " + tops[k - 1] + " и " + tops[k + 1]);
+                // всплеск — верх выше обоих соседей по сетке (×1,12 по времени) больше чем на четверть
+                if (k + 1 < tops.length && !Double.isNaN(tops[k - 1] + tops[k] + tops[k + 1]))
+                    assertTrue(tops[k] <= 1.25 * Math.max(tops[k - 1], tops[k + 1]) + 0.05,
+                            burst + t + " с: всплеск верха " + tops[k] + " м среди " + tops[k - 1] + " и " + tops[k + 1]);
+                // проседание — верх ниже, чем на прошлом узле, больше чем на 2 % и 5 см
+                if (!Double.isNaN(tops[k - 1] + tops[k]) && !ball[k - 1] && !ball[k])
+                    assertTrue(tops[k] >= 0.98 * tops[k - 1] - 0.05, burst + t + " с: верх просел с " + tops[k - 1] + " до " + tops[k] + " м");
             }
         }
     }
 
-    /** Путь фронта модели по земле за {@code seconds} с после того, как он прошёл {@code groundM} м, — делением пополам. */
+    /** Пыльный пограничный слой на {@code groundM} м от эпицентра по земле в возрасте пыли {@code seconds} с, м. */
+    private static double law(double groundM, double hob, double yield, double seconds) {
+        return DustModel.TOP_C * Math.pow(Math.max(1, Math.hypot(groundM, hob)), 1 / 6.0) * Math.pow(run(groundM, hob, yield, seconds), 5 / 6.0);
+    }
+
+    /**
+     * Путь фронта модели по своей нормали за {@code seconds} с после того, как он прошёл {@code groundM} м по земле: докуда
+     * за это время дошёл его след на земле — делением пополам, путь по нормали — ∫√{@link HobBlast#alongGround} по пути
+     * следа средними точками (на сколько фронт продвигается по своей нормали за метр следа).
+     */
     private static double run(double groundM, double hob, double yield, double seconds) {
         if (seconds <= 0) return 0;
         double target = HobBlast.arrivalSeconds(groundM, hob, yield) + seconds, lo = 0, hi = 1;
@@ -141,7 +161,10 @@ class BlastWallTest {
             if (HobBlast.arrivalSeconds(groundM + m, hob, yield) < target) lo = m;
             else hi = m;
         }
-        return 0.5 * (lo + hi);
+        int n = 400;
+        double step = 0.5 * (lo + hi) / n, path = 0;
+        for (int i = 0; i < n; i++) path += Math.sqrt(HobBlast.alongGround(groundM + (i + 0.5) * step, hob, yield)) * step;
+        return path;
     }
 
     /**
@@ -220,40 +243,49 @@ class BlastWallTest {
     /**
      * Клубы вдоль кольца — две фазы: у каждой окружность в плитках целая (плитка шума без шва на кольце) и постоянна, пока
      * фаза видна; номер и окружность фазы меняются только там, где её вес — ноль, а веса двух фаз в сумме — 1. Клуб вдоль
-     * кольца в полном весе фазы — длиной в плитку слота (верх клина в тот же миг), а не растянут.
+     * кольца в полном весе фазы — длиной в плитку слота (верх клина в тот же миг), а не растянут. Наземный 15 кт и
+     * воздушные 15 кт на 592 м и 1 кт на 240 м, с первой головы до последней.
      */
     @Test
     void phasesChangeOnlyWhenHidden() {
-        BlastWall w = new BlastWall(GROUND, false);
-        float[] prev = new float[BlastWall.SLOT], now = new float[BlastWall.SLOT];
-        assertTrue(w.slot(0.4, prev));
-        int changes = 0;
-        for (double t = 0.41; t <= 60 && w.slot(t, now); t += 0.01) {
-            // за шаг вес фазы меняется не больше чем на 2·Δψ (ψ — логарифм головы по основанию роста фазы)
-            double step = 2 * Math.abs(Math.log(now[0] / prev[0])) / Math.log(BlastWall.PHASE_GROWTH) + 1e-4;
-            for (int j = 0; j < 2; j++) {
-                float weight = j == 0 ? now[10] : 1 - now[10];
-                assertTrue(weight >= 0 && weight <= 1);
-                assertEquals(Math.rint(now[8 + j]), now[8 + j], 0, "окружность не целая");
-                assertTrue(now[8 + j] >= 1);
-                // клуб вдоль кольца против плитки поперёк: в полном весе — один к одному, за фазу — не больше √1,25 и
-                // поправки верха
-                double stretch = 2 * Math.PI * now[0] / now[8 + j] / now[11];
-                if (weight > 0.95) assertEquals(1, stretch, 0.03, t + " с: клубы фазы " + j + " вдоль кольца в " + stretch + " раза длиннее");
-                // пока клин у шара короче фазы, верх растёт с возрастом пыли быстрее кольца — клубы вдоль него короче
-                // (головы тогда — метры), окружность фазы та же
-                if (weight > 0.05 && w.backAge(t) >= 1)
-                    assertTrue(stretch > 0.85 && stretch < 1.18, t + " с: клубы фазы " + j + " вдоль кольца в " + stretch + " раза длиннее");
-                if (now[12 + j] != prev[12 + j]) {
-                    changes++;
-                    assertTrue(weight <= step, t + " с: фаза " + j + " сменилась при весе " + weight);
-                } else {
-                    assertEquals(prev[8 + j], now[8 + j], 0, t + " с: окружность фазы " + j + " сменилась без смены фазы");
+        Detonation[] bursts = {GROUND,
+                new Detonation(1, new Vec3(0, 64 + 592 * 0.25, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 0.25f, false, Detonation.OLD_WAVE),
+                new Detonation(1, new Vec3(0, 64 + 240 * 0.25, 0), 64, 1, false, 0, 0, 0, 20_000, 7, 0.25f, false, Detonation.OLD_WAVE)};
+        for (Detonation d : bursts) {
+            BlastWall w = new BlastWall(d, false);
+            String burst = d.yieldKt() + " кт на " + d.hobMetres() + " м, ";
+            float[] prev = new float[BlastWall.SLOT], now = new float[BlastWall.SLOT];
+            double t = 0.01;
+            while (t < 10 && !(w.slot(t, prev) && prev[3] > 0)) t += 0.01;
+            assertTrue(prev[3] > 0, burst + "головы нет");
+            int changes = 0;
+            for (t += 0.01; t <= 60 && w.slot(t, now) && now[3] > 0; t += 0.01) {
+                // за шаг вес фазы меняется не больше чем на 2·Δψ (ψ — логарифм головы по основанию роста фазы)
+                double step = 2 * Math.abs(Math.log(now[0] / prev[0])) / Math.log(BlastWall.PHASE_GROWTH) + 1e-4;
+                for (int j = 0; j < 2; j++) {
+                    float weight = j == 0 ? now[10] : 1 - now[10];
+                    assertTrue(weight >= 0 && weight <= 1);
+                    assertEquals(Math.rint(now[8 + j]), now[8 + j], 0, burst + "окружность не целая");
+                    assertTrue(now[8 + j] >= 1);
+                    // клуб вдоль кольца против плитки поперёк (плитка шейдера — не мельче блока): в полном весе — один к
+                    // одному, за фазу — не больше √1,25 и поправки верха
+                    double stretch = 2 * Math.PI * now[0] / now[8 + j] / Math.max(1, now[11]);
+                    String at = burst + t + " с: клубы фазы " + j + " вдоль кольца в " + stretch + " раза длиннее";
+                    if (weight > 0.95) assertEquals(1, stretch, 0.03, at);
+                    // пока огненный шар на земле и клин у него короче фазы, верх растёт с возрастом пыли быстрее кольца —
+                    // клубы вдоль него короче (головы тогда — метры), окружность фазы та же
+                    if (weight > 0.05 && (w.underBall(t) <= 0 || w.backAge(t) >= 1)) assertTrue(stretch > 0.85 && stretch < 1.18, at);
+                    if (now[12 + j] != prev[12 + j]) {
+                        changes++;
+                        assertTrue(weight <= step, burst + t + " с: фаза " + j + " сменилась при весе " + weight);
+                    } else {
+                        assertEquals(prev[8 + j], now[8 + j], 0, burst + t + " с: окружность фазы " + j + " сменилась без смены фазы");
+                    }
                 }
+                System.arraycopy(now, 0, prev, 0, now.length);
             }
-            System.arraycopy(now, 0, prev, 0, now.length);
+            assertTrue(changes > 4, burst + "фазы почти не менялись: " + changes);
         }
-        assertTrue(changes > 4, "фазы почти не менялись: " + changes);
     }
 
     /**
