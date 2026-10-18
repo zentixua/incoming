@@ -7,6 +7,7 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
+import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 
 import java.util.Arrays;
@@ -20,9 +21,9 @@ class BlastWallTest {
 
     /**
      * Голова — пыль сразу за фронтом в игре (сам фронт не виден), клин — до места, где положительная фаза на месте уже
-     * кончилась (приход фронта в игре и фаза там — момент t), и не дальше края огненного шара на земле (пока фронт в шаре —
-     * головы нет); густая до ~1 psi, пока ветер волны поднимает пыль, и сходит на нет там, где поднимать нечего (у 15 кт
-     * между 0,6 и 0,3 psi), — отрывается от фронта.
+     * кончилась (приход фронта в игре и фаза там — момент t); голова с переходом к пелене — не в огненном шаре на земле
+     * (пока фронт в шаре — головы нет, у шара клин короче, и пыль в его конце моложе фазы); густая до ~1 psi, пока ветер
+     * волны поднимает пыль, и сходит на нет там, где поднимать нечего (у 15 кт между 0,6 и 0,3 psi), — отрывается от фронта.
      */
     @Test
     void headRidesTheFront() {
@@ -34,11 +35,14 @@ class BlastWallTest {
             double tail = w.tail(t), ball = w.underBall(t);
             double r = FireballModel.radius(t, GROUND.yieldKt(), true), y = FireballModel.centreHeight(t, 0, GROUND.yieldKt());
             assertEquals(Math.sqrt(Math.max(0, r * r - y * y)), ball, 1e-9, t + " с: край шара на земле");
-            assertEquals(Math.max(1e-3, w.shock(t) - Math.max(tail, ball)), w.length(t), 1e-9, t + " с: клин — от фронта до конца фазы или края шара");
+            double len = w.shock(t) - tail;
+            if (ball > 0) len = Math.min(len, (w.shock(t) - ball) / BlastWall.HANDOFF_TO);
+            assertEquals(Math.max(1e-3, len), w.length(t), 1e-9, t + " с: клин — от фронта до конца фазы, переход к пелене — до края шара");
             if (w.wall(t) != BlastWall.Wall.NONE) {
-                // верх — слоя там, где кончается клин (у края шара — десятки метров, а не слой у эпицентра в 18 км)
+                // верх — слоя там, где кончается клин (у края шара — метры, а не слой у эпицентра в 18 км)
                 assertTrue(GROUND.metres(w.wall(t).height()) < 120, t + " с: верх клина " + GROUND.metres(w.wall(t).height()) + " м");
-                if (ball > tail) inBall++;
+                assertTrue(w.head(t) - BlastWall.HANDOFF_TO * w.length(t) >= ball - 1e-6, t + " с: переход головы к пелене — в шаре");
+                if (ball > 0 && w.backAge(t) < 1) inBall++;
             }
             if (t < firstEnd) {
                 assertEquals(0, tail, 1e-12, t + " с: фаза ещё нигде не кончилась");
@@ -49,7 +53,7 @@ class BlastWallTest {
             ends++;
         }
         assertTrue(ends > 300, "проверок конца клина " + ends);
-        assertTrue(inBall > 3, "клин у края шара — " + inBall + " проверок");
+        assertTrue(inBall > 3, "клин короче фазы у края шара — " + inBall + " проверок");
         // пока фронт в огненном шаре, головы нет; вышел — пыль сразу за ним
         assertEquals(BlastWall.Wall.NONE, w.wall(0.05), "голова внутри шара");
         assertTrue(w.shock(0.05) < w.underBall(0.05));
@@ -80,6 +84,89 @@ class BlastWallTest {
         double range = GROUND.metres(GROUND.groundRange(kpa)), t = from;
         while (w.head(t) < range) t += 0.01;
         return t;
+    }
+
+    /**
+     * Верх головы — пыльный пограничный слой за свежим фронтом (Kuhl и др. 1992, ур. 17; Mirels): в конце клина
+     * h = c·R^(1/6)·x^(5/6), x — путь фронта модели за этим местом, пока пыль там не старше своей фазы (у Kuhl и Mirels фронт
+     * постоянной скорости, x = U_s·τ). За свежим фронтом слой начинается с нулевой толщины и растёт с путём: у эпицентра —
+     * метры, а не километры. Логарифмическая сетка времени с 0,1 мс до 30 с, 1 кт, 15 кт и 1 Мт, наземные и низкие
+     * воздушные: верх не выше закона, а где клин доходит до конца фазы — сам закон; всплесков нет.
+     */
+    @Test
+    void headTopIsTheBoundaryLayer() {
+        // мощность, кт; высота подрыва, м; масштаб
+        double[][] bursts = {{1, 0, 1}, {1, 28, 1}, {15, 0, 1}, {15, 0, 0.25}, {15, 83, 1}, {1000, 0, 1}, {1000, 80, 1}, {1000, 333, 1}};
+        for (double[] b : bursts) {
+            double yield = b[0], hob = b[1];
+            Detonation d = new Detonation(1, new Vec3(0, 64 + hob * b[2], 0), 64, yield, hob == 0, 0, 0, 0, 20_000, 7, (float) b[2], false, 1);
+            BlastWall w = new BlastWall(d, false);
+            String burst = yield + " кт на " + hob + " м, масштаб " + b[2] + ", ";
+            double[] tops = new double[111];
+            int heads = 0, ends = 0;
+            for (int k = 0; k < tops.length; k++) {
+                double t = 1e-4 * Math.pow(10, 0.05 * k);
+                BlastWall.Wall wall = w.wall(t);
+                tops[k] = Double.NaN;
+                if (wall == BlastWall.Wall.NONE) continue;
+                double top = d.metres(wall.height()), back = Math.max(0, w.head(t) - w.length(t));
+                double age = Math.min(t - HobBlast.arrivalSeconds(back, hob, yield), HobBlast.positivePhaseSeconds(back, hob, yield));
+                double law = DustModel.TOP_C * Math.pow(Math.max(1, Math.hypot(back, hob)), 1 / 6.0) * Math.pow(run(back, hob, yield, age), 5 / 6.0);
+                assertTrue(top <= 1.02 * law + 0.01, burst + t + " с: верх " + top + " м выше пограничного слоя (" + law + " м)");
+                if (w.backAge(t) >= 1) {
+                    assertEquals(law, top, 0.02 * law, burst + t + " с: верх в конце фазы — не пограничный слой");
+                    ends++;
+                }
+                tops[k] = top;
+                heads++;
+            }
+            assertTrue(heads > 40 && ends > 10, burst + "голова на " + heads + " узлах сетки, клин до конца фазы — на " + ends);
+            // всплеск — верх выше обоих соседей по сетке (×1,12 по времени) больше чем на четверть
+            for (int k = 1; k + 1 < tops.length; k++) {
+                if (Double.isNaN(tops[k - 1] + tops[k] + tops[k + 1])) continue;
+                double t = 1e-4 * Math.pow(10, 0.05 * k);
+                assertTrue(tops[k] <= 1.25 * Math.max(tops[k - 1], tops[k + 1]) + 0.05,
+                        burst + t + " с: всплеск верха " + tops[k] + " м среди " + tops[k - 1] + " и " + tops[k + 1]);
+            }
+        }
+    }
+
+    /** Путь фронта модели по земле за {@code seconds} с после того, как он прошёл {@code groundM} м, — делением пополам. */
+    private static double run(double groundM, double hob, double yield, double seconds) {
+        if (seconds <= 0) return 0;
+        double target = HobBlast.arrivalSeconds(groundM, hob, yield) + seconds, lo = 0, hi = 1;
+        while (HobBlast.arrivalSeconds(groundM + hi, hob, yield) < target) hi *= 2;
+        for (int i = 0; i < 60; i++) {
+            double m = 0.5 * (lo + hi);
+            if (HobBlast.arrivalSeconds(groundM + m, hob, yield) < target) lo = m;
+            else hi = m;
+        }
+        return 0.5 * (lo + hi);
+    }
+
+    /**
+     * В огненном шаре на земле пыли нет: голова с переходом к пелене и полосой брызг над водой — за краем шара
+     * ({@link BlastWall#underBall}); средняя голова в шаре — ноль и над сушей, и над водой.
+     */
+    @Test
+    void noHeadInTheFireball() {
+        BlastWall w = new BlastWall(GROUND, false);
+        float[] s = new float[BlastWall.SLOT];
+        int checked = 0;
+        for (double t = 0.1; t <= 6; t += 0.02) {
+            double ball = GROUND.blocks(w.underBall(t));
+            if (ball <= 0 || !w.slot(t, s) || s[3] <= 0) continue;
+            assertTrue(s[0] - BlastWall.HANDOFF_TO * s[1] - s[5] >= ball - 0.01, t + " с: голова или брызги в шаре");
+            // до самого края — без него: там конец перехода к пелене, и float слота даёт 1e-10
+            for (double r = 0; r < 0.999 * ball; r += 0.05 * ball) {
+                for (double wet : new double[]{0, 0.5, 1}) {
+                    for (double up : new double[]{-0.3, 0.05, 0.5})
+                        assertEquals(0, BlastWall.sigma(s, r, 0, up * s[2], wet), t + " с: голова в шаре в " + r + " блоках от эпицентра");
+                }
+            }
+            checked++;
+        }
+        assertTrue(checked > 20, "проверок у шара " + checked);
     }
 
     /**
@@ -153,7 +240,10 @@ class BlastWallTest {
                 // поправки верха
                 double stretch = 2 * Math.PI * now[0] / now[8 + j] / now[11];
                 if (weight > 0.95) assertEquals(1, stretch, 0.03, t + " с: клубы фазы " + j + " вдоль кольца в " + stretch + " раза длиннее");
-                if (weight > 0.05) assertTrue(stretch > 0.85 && stretch < 1.18, t + " с: клубы фазы " + j + " вдоль кольца в " + stretch + " раза длиннее");
+                // пока клин у шара короче фазы, верх растёт с возрастом пыли быстрее кольца — клубы вдоль него короче
+                // (головы тогда — метры), окружность фазы та же
+                if (weight > 0.05 && w.backAge(t) >= 1)
+                    assertTrue(stretch > 0.85 && stretch < 1.18, t + " с: клубы фазы " + j + " вдоль кольца в " + stretch + " раза длиннее");
                 if (now[12 + j] != prev[12 + j]) {
                     changes++;
                     assertTrue(weight <= step, t + " с: фаза " + j + " сменилась при весе " + weight);

@@ -81,6 +81,17 @@ public final class FireballModel {
         return Solve.clamp(k, AMBIENT_K, HOTTEST_K);
     }
 
+    /**
+     * Докуда по земле от эпицентра лежит шар в момент t, м ({@link #radius} на высоте {@link #centreHeight}); 0 — земли он
+     * не касается. Там нет поднятой волной пыли — там шар: стена пыли и пелена ({@code BlastWall}, {@code PallField})
+     * начинаются за ним.
+     */
+    public static double groundRadius(double t, double hobM, double yieldKt, boolean surfaceBurst) {
+        if (t <= 0) return 0;
+        double r = radius(t, yieldKt, surfaceBurst), y = centreHeight(t, Math.max(0, hobM), yieldKt);
+        return Math.sqrt(Math.max(0, r * r - y * y));
+    }
+
     /** Скорость всплытия шара, м/с: ~95 для 15 кт, слабо растёт с мощностью. */
     public static double riseSpeed(double yieldKt) {
         return 95 * Math.pow(yieldKt / 15, 0.04);

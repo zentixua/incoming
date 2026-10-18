@@ -4,6 +4,7 @@ import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
@@ -429,11 +430,15 @@ public final class PallField {
     }
 
     /**
-     * Доля пыли узла i в таблице (пелена) против головы стены: пыль моложе положительной фазы на месте — голова, за
-     * полфазы место переходит к пелене ({@link BlastWall#handoff}).
+     * Доля пыли узла i в таблице (пелена) против головы стены в момент {@code ticks}: пыль моложе положительной фазы на
+     * месте — голова, за полфазы место переходит к пелене ({@link BlastWall#handoff}). Где на земле огненный шар
+     * ({@link FireballModel#groundRadius}, как у головы — {@link BlastWall#underBall}), пыли нет: там шар, пелена встаёт
+     * из-под него, когда он всплывает.
      */
-    private double pallShare(int i, double ageS) {
-        return 1 - BlastWall.handoff(ageS / columns[i].positive());
+    private double pallShare(int i, double ticks) {
+        double t = ticks / (20.0 * d.scale());
+        if (d.metres(radius(i)) < FireballModel.groundRadius(t, Math.max(0, d.hobMetres()), d.yieldKt(), d.surface())) return 0;
+        return 1 - BlastWall.handoff(seconds(i, ticks) / columns[i].positive());
     }
 
     /**
@@ -445,7 +450,7 @@ public final class PallField {
         double age = seconds(i, ticks), depth = columns[i].depth(age);
         out[1] = Math.max(d.blocks(columns[i].height(age)), MIN_TOP_BLOCKS);
         // столб профиля — column(0) верха: толща над землёй ровно та, что у слоя, и при нижнем пределе верха
-        out[0] = depth < GONE_DEPTH ? 0 : depth / (column(0) * out[1]) * pallShare(i, age);
+        out[0] = depth < GONE_DEPTH ? 0 : depth / (column(0) * out[1]) * pallShare(i, ticks);
         out[2] = fire[i] * smooth(30, 300, age(i, ticks));
         out[3] = 0;
     }
@@ -456,7 +461,7 @@ public final class PallField {
      */
     void spray(int i, double ticks, double[] out) {
         double age = seconds(i, ticks);
-        out[0] = spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i] * sprayEnvelope(age) * pallShare(i, age);
+        out[0] = spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i] * sprayEnvelope(age) * pallShare(i, ticks);
         out[1] = Math.max(sprayTop(sprayFrom[i], age), 1);
         out[2] = out[3] = 0;
     }

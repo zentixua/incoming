@@ -15,11 +15,11 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * брызги ({@link WaterModel#spray}). Своего вещества у волны нет.
  * <p>
  * Голова — клин от фронта назад до места, где кончилась положительная фаза (своя на каждой дальности, {@link HobBlast},
- * {@link #length}; у наземного первые полсекунды — до края огненного шара на земле, {@link #underBall}): у переднего
- * края пыли ещё нет, и слой нулевой высоты; назад поднятое растёт как импульс скоростного напора
- * ({@link DustModel#lifted}), а верх — как пыльный пограничный слой Kuhl, u^(5/6) ({@link #top}); поэтому густота у
- * земли — больше всего у самого края, на десятой части клина (в 2,6 раза гуще, чем в его конце, {@link #shape}), а
- * столб над землёй растёт назад. За клином пыль остаётся слоем пелены (её таблица — та же пыль,
+ * {@link #length}; у наземного первые ~0,6 с — короче: голова с переходом к пелене не заходит в огненный шар на земле,
+ * {@link #underBall}): у переднего края пыли ещё нет, и слой нулевой высоты; назад поднятое растёт как импульс скоростного
+ * напора ({@link DustModel#lifted}), а верх — как пыльный пограничный слой Kuhl, u^(5/6) ({@link #top}); поэтому
+ * густота у земли — больше всего у самого края, на десятой части клина (в 2,6 раза гуще, чем в его конце,
+ * {@link #shape}), а столб над землёй растёт назад. За клином пыль остаётся слоем пелены (её таблица — та же пыль,
  * {@link PallField}): голова отдаёт ей место на полдлины клина ({@link #handoff}). Где ветер больше не поднимает пыль,
  * густоты у края нет, и голова сходит на нет, отрываясь от фронта, — пыль стоит (MET: «перестала идти по земле на
  * 945 м»).
@@ -71,10 +71,10 @@ public final class BlastWall {
     private final double tableM;
     /**
      * Слой по дальности (узлы от 0 до {@link #tableM}): толща всего поднятого ({@link DustModel.Column#lifted}), верх к
-     * концу фазы волны, м ({@link DustModel.Column#first}), и когда на месте кончается положительная фаза — приход
-     * фронта в игре и фаза на месте ({@link DustModel.Column#positive}), с модели (не убывает с дальностью).
+     * концу фазы волны, м ({@link DustModel.Column#first}), положительная фаза на месте, с модели
+     * ({@link DustModel.Column#positive}), и когда она кончается — приход фронта в игре и фаза (не убывает с дальностью).
      */
-    private final double[] lifted = new double[NODES], first = new double[NODES], phaseEnd = new double[NODES];
+    private final double[] lifted = new double[NODES], first = new double[NODES], positive = new double[NODES], phaseEnd = new double[NODES];
     /** Положительная фаза в конце таблицы, с модели: за таблицей конец клина — путь фронта за неё. */
     private final double lastPositive;
     /** Влажный воздух — облако Вильсона есть ({@link CloudModel#wilsonCloud}). */
@@ -92,17 +92,16 @@ public final class BlastWall {
         hob = Math.max(0, d.hobMetres());
         ys = Math.cbrt(d.yieldKt() / 15);
         tableM = Math.max(1, HobBlast.rangeFor(0.2, hob, d.yieldKt()));
-        double positive = 0;
         for (int i = 0; i < NODES; i++) {
             double g = tableM * i / (NODES - 1);
             DustModel.Column c = DustModel.column(g, hob, d.yieldKt(), d.surface(), d.visibility(), DustModel.Surface.REFERENCE);
             lifted[i] = c.lifted();
             first[i] = c.first();
-            positive = c.positive();
-            phaseEnd[i] = d.arrivalTicks(d.slantOf(d.blocks(g))) / (20 * d.scale()) + positive;
+            positive[i] = c.positive();
+            phaseEnd[i] = arrival(g) + positive[i];
             if (i > 0) phaseEnd[i] = Math.max(phaseEnd[i], phaseEnd[i - 1]);
         }
-        lastPositive = positive;
+        lastPositive = positive[NODES - 1];
         // угол вала — интеграл скорости оборота по времени (средней точкой), узлы гуще в начале
         double end = CloudPuffs.lifeSeconds(d);
         for (int i = 1; i <= ROLL_NODES; i++) {
@@ -130,6 +129,16 @@ public final class BlastWall {
         return Mth.lerp(x - i, table[i], table[i + 1]);
     }
 
+    /** То же, но дальше таблицы — её последний узел (верх и фаза слоя есть и там, где пыли уже мало). */
+    private double near(double[] table, double groundM) {
+        return groundM >= tableM ? table[NODES - 1] : at(table, groundM);
+    }
+
+    /** Приход фронта в игре на {@code groundM} м от эпицентра по земле, секунды модели. */
+    private double arrival(double groundM) {
+        return d.arrivalTicks(d.slantOf(d.blocks(groundM))) / (20 * d.scale());
+    }
+
     /** Фронт по земле в момент t (секунды модели), м: наклонная дальность фронта в игре — по земле. */
     double shock(double t) {
         if (t <= 0) return 0;
@@ -144,28 +153,35 @@ public final class BlastWall {
 
     /**
      * Длина клина в момент t, м: от фронта в игре до места, где положительная фаза на месте уже кончилась ({@link #tail}),
-     * — за краем пыль моложе своей фазы, её поднимает ветер волны; пока фаза не кончилась нигде — весь путь фронта. Не
-     * дальше края огненного шара на земле ({@link #underBall}): там шар, а не пыль.
+     * — за краем пыль моложе своей фазы, её поднимает ветер волны; пока фаза не кончилась нигде — весь путь фронта.
+     * Голова с переходом к пелене ({@link #HANDOFF_TO} длин) — не в огненном шаре на земле ({@link #underBall}): там шар,
+     * а не пыль, и клин короче — до места, где пыль ещё моложе своей фазы ({@link #backAge}).
      */
     double length(double t) {
-        return Math.max(1e-3, shock(t) - back(t));
-    }
-
-    /** Конец клина по земле в момент t (секунды модели), м: конец фазы ({@link #tail}) или край шара на земле, что дальше. */
-    double back(double t) {
-        return Math.max(tail(t), underBall(t));
+        double shock = shock(t), len = shock - tail(t), ball = underBall(t);
+        if (ball > 0) len = Math.min(len, (shock - ball) / HANDOFF_TO);
+        return Math.max(1e-3, len);
     }
 
     /**
-     * Докуда по земле от эпицентра в момент t (секунды модели) лежит огненный шар, м; 0 — земли он не касается. Шар — тот
-     * же, что в грибе ({@code MushroomModel.shape}): радиус {@link FireballModel#radius}, середина
-     * {@link FireballModel#centreHeight} (у наземного — на земле, всплывает). У наземного 15 кт фронт выходит из шара к
-     * ~0,15 с, а клин целиком — к ~0,5 с; воздушного (592 м) шар земли не касается.
+     * Докуда по земле от эпицентра в момент t (секунды модели) лежит огненный шар, м; 0 — земли он не касается
+     * ({@link FireballModel#groundRadius}: тот же шар, что в грибе). У наземного 15 кт фронт выходит из шара к ~0,13 с
+     * (первые 2 мс он на метр впереди шара — голова там в сантиметр высотой), клин доходит до конца фазы к ~0,6 с, шар
+     * отрывается от земли к ~3,6 с; воздушного (592 м) шар земли не касается.
      */
     double underBall(double t) {
-        if (t <= 0) return 0;
-        double r = FireballModel.radius(t, d.yieldKt(), d.surface()), y = FireballModel.centreHeight(t, hob, d.yieldKt());
-        return Math.sqrt(Math.max(0, r * r - y * y));
+        return FireballModel.groundRadius(t, hob, d.yieldKt(), d.surface());
+    }
+
+    /**
+     * Какая доля положительной фазы на месте прошла к моменту t там, где кончается клин, 0..1: 1 — клин до конца фазы
+     * ({@link #tail}). Пока фаза не кончилась нигде, клин — весь путь фронта, и пыль в его конце (у эпицентра) моложе своей
+     * фазы; у огненного шара клин короче — тоже. Такая пыль ниже и тоньше: пограничный слой за свежим фронтом начинается
+     * с нулевой толщины.
+     */
+    double backAge(double t) {
+        double back = Math.max(0, shock(t) - length(t));
+        return Mth.clamp((t - arrival(back)) / Math.max(1e-9, near(positive, back)), 0, 1);
     }
 
     /**
@@ -185,10 +201,14 @@ public final class BlastWall {
         return tableM * (lo + Mth.clamp(f, 0, 1)) / (NODES - 1);
     }
 
-    /** Верх клина в момент t, м: верх слоя к концу фазы волны там, где кончается клин ({@link DustModel.Column#first}). */
+    /**
+     * Верх клина в момент t, м: верх слоя там, где кончается клин, в его возрасте — пыльный пограничный слой по пути фронта
+     * за местом ({@link DustModel.Column#height}: к концу фазы — {@link DustModel.Column#first}, раньше — доля фазы
+     * ({@link #backAge}) в степени 5/6).
+     */
     double height(double t) {
-        double first = at(this.first, Math.max(0, head(t) - length(t)));
-        return first > 0 ? first : this.first[0];
+        // не ниже миллиметра, как длина клина: делители шейдера (smoothstep по верху) не вырождаются
+        return Math.max(1e-3, near(first, Math.max(0, head(t) - length(t))) * Math.pow(backAge(t), 5 / 6.0));
     }
 
     /** Ослабление у земли в конце фазы волны там, где пыль подняло на {@code groundM}, при верхе {@code top} (1/м). */
@@ -231,8 +251,12 @@ public final class BlastWall {
             java.util.Arrays.fill(into, 0, 3, 0);
             return 0;
         }
-        into[0] = sigma(edge, top);
-        into[1] = sigma(Math.max(0, edge - len), top);
+        // клин короче фазы (у шара, или фаза ещё нигде не кончилась): пыль в конце подняла лишь долю поднятого за фазу
+        // (DustModel.lifted), а верх ниже — доля фазы в степени 5/6 (height); у края — та же доля фазы: поднятое у фронта
+        // растёт с возрастом линейно
+        double age = backAge(t);
+        into[0] = age * sigma(edge, top);
+        into[1] = DustModel.lifted(age) * sigma(Math.max(0, edge - len), top);
         into[2] = PallField.SIGMA_SPRAY * WaterModel.spray(wind(Math.max(0, edge - 0.5 * len)));
         return Math.max(into[0], Math.max(into[1], into[2]));
     }
@@ -271,9 +295,12 @@ public final class BlastWall {
             into[2] = (float) d.blocks(top);
             into[3] = (float) (ref / d.scale());
             into[4] = (float) (rollPhase(t) % (2 * Math.PI));
-            // над водой — брызги: ниже пыли (высота срыва гребней), позади края пыли на путь фронта за SPRAY_LAG
-            double u = wind(Math.max(0, head - 0.5 * len));
-            into[5] = (float) d.blocks(Math.max(0, head - head(Math.max(0, t - WaterModel.SPRAY_LAG))));
+            // над водой — брызги: ниже пыли (высота срыва гребней), позади края пыли на путь фронта за SPRAY_LAG, но тоже
+            // не в огненном шаре на земле: у него — ближе к фронту
+            double u = wind(Math.max(0, head - 0.5 * len)), ball = underBall(t);
+            double lag = Math.max(0, head - head(Math.max(0, t - WaterModel.SPRAY_LAG)));
+            if (ball > 0) lag = Math.min(lag, Math.max(0, head - ball - HANDOFF_TO * len));
+            into[5] = (float) d.blocks(lag);
             into[6] = (float) Mth.clamp(WaterModel.sprayHeight(u) / Math.max(1, top), 0.15, 1);
             into[7] = (float) (s[2] / d.scale());
             double psi = Math.log(Math.max(head, 1)) / Math.log(PHASE_GROWTH);
@@ -307,8 +334,9 @@ public final class BlastWall {
      * когда голова была на {@code head}: иначе клубы вдоль кольца шли бы длиннее, чем поперёк.
      */
     double around(double head) {
-        double t = d.arrivalTicks(d.slantOf(d.blocks(head))) / (20 * d.scale());
-        return Math.max(1, Math.round(2 * Math.PI * head / (TILE * height(t))));
+        // плитка шейдера — не мельче блока (wallNoise в fx_pall: max(V[2].w, 1))
+        double tile = Math.max(d.metres(1), TILE * height(arrival(head)));
+        return Math.max(1, Math.round(2 * Math.PI * head / tile));
     }
 
     /**

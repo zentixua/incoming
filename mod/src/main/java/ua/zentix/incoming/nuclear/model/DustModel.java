@@ -17,9 +17,11 @@ package ua.zentix.incoming.nuclear.model;
  * <p>
  * <b>Высота.</b> В фазе волны слой растёт, как турбулентный пыльный пограничный слой за фронтом (Kuhl и др. 1992,
  * ур. 17): h = c·R^(1/6)·(U_s·τ)^(5/6) — у переднего края ноль, назад толще; c = {@link #TOP_C} — видимый верх (у Kuhl
- * плотное ядро — 0,0256; GRABLE — 6–25 м у фронта в первые десятые секунды). Потом слой поднимает нагретая вспышкой
- * земля (конвективный слой с вовлечением, Deardorff/Tennekes): к h_b = √(2(1 + 2A)·f_h·E / (ρ c_p γ)) за
- * {@link #RISE_S}; E — свет вспышки на ровную землю ({@link ThermalModel}).
+ * плотное ядро — 0,0256; GRABLE — 6–25 м у фронта в первые десятые секунды). U_s·τ — путь фронта за точкой (у Kuhl
+ * фронт постоянной скорости, Mirels — так же): фронт замедляется, и это его настоящий путь за фазу ({@link #run}), а не
+ * скорость в миг прихода × фаза — у эпицентра наземного та за фазу дала бы тысячи километров и верх в 18 км. Потом слой
+ * поднимает нагретая вспышкой земля (конвективный слой с вовлечением, Deardorff/Tennekes): к
+ * h_b = √(2(1 + 2A)·f_h·E / (ρ c_p γ)) за {@link #RISE_S}; E — свет вспышки на ровную землю ({@link ThermalModel}).
  * <p>
  * <b>Оседание и уход.</b> Пять корзин по размеру (по MET и MISERS BLUFF II): каждая оседает из перемешанного слоя
  * dm/dt = −v·m/h; мелкие уходят разбавлением и выносом за {@link #FINE_S} (подобрано: Хиросима, 1,42 км — темно ~20
@@ -63,7 +65,7 @@ public final class DustModel {
     /** Пыль обломков: от этого давления на земле, psi, и полная — с этого (рушатся дома). */
     static final double DEBRIS_FROM_PSI = 0.6, DEBRIS_FULL_PSI = 6;
     /** Видимый верх слоя в фазе волны, доля закона Kuhl (у него плотное ядро — 0,0256). */
-    static final double TOP_C = 0.1;
+    public static final double TOP_C = 0.1;
     /**
      * Слой над нагретой землёй: вовлечение A, доля света вспышки, что греет воздух f_h (обзор: 0,1–0,3), рост температуры
      * с высотой в устойчивом утреннем воздухе γ, К/м (3,5–9,8 К/км), ρ·c_p воздуха, Дж/(м³·К).
@@ -78,7 +80,7 @@ public final class DustModel {
      * Выше этого (× ∛(Y/15)) слой над нагретой землёй не встаёт, м: у эпицентра свет вспышки на землю — десятки МДж/м², и
      * закон дал бы километры; выше — уже ножка и шапка гриба. Оценка: у эпицентра верха обзор не даёт, в 1 км у него
      * 120–350 м — предел чуть выше верха этой оценки, у эпицентра слой не ниже, чем в километре. У 15 кт он действует
-     * ближе ~550 м к воздушному подрыву (592 м) и ~450 м к наземному (в 1 км закон даёт 222 и 127 м); там пыль и так
+     * ближе ~530 м к воздушному подрыву (592 м) и ~420 м к наземному (в 1 км закон даёт 222 и 127 м); там пыль и так
      * уходит в ножку ({@link #STEM_M}).
      */
     static final double TOP_MAX = 400;
@@ -208,7 +210,9 @@ public final class DustModel {
         double positive = HobBlast.positivePhaseSeconds(ground, hob, yieldKt), along = HobBlast.alongGround(ground, hob, yieldKt);
         double soil = Math.min(surface.supply(), soil(kpa, along, positive, surface.threshold()));
         double debris = surface.debris() * destroyed(BlastModel.psi(kpa));
-        double wave = TOP_C * Math.pow(slant, 1 / 6.0) * Math.pow(BlastModel.frontSpeed(kpa), 5 / 6.0);
+        // U_s·τ у Kuhl — путь фронта за точкой (у него скорость фронта постоянна); фронт замедляется, и путь за фазу —
+        // настоящий (run), а не скорость в миг прихода × фаза: у эпицентра та — тысячи км/с, и верх уходил на километры
+        double wave = TOP_C * Math.pow(slant, 1 / 6.0) * Math.pow(run(ground, hob, yieldKt, positive) / Math.max(1e-9, positive), 5 / 6.0);
         // свет вспышки на ровную землю: от шара (не ближе его радиуса), с косинусом к вертикали
         double ball = FireballModel.maxRadius(yieldKt, surfaceBurst), high = Math.max(hob, ball);
         double lit = Math.max(Math.hypot(ground, high), ball);
@@ -216,6 +220,47 @@ public final class DustModel {
         double buoyant = Math.min(TOP_MAX * ys, Math.sqrt(2 * (1 + 2 * ENTRAIN) * HEAT_SHARE * heat / (RHO_CP * LAPSE)));
         double stem = 1 - smooth(0.5 * STEM_M * ys, STEM_M * ys, ground);
         return new Column(positive, soil, debris, wave, buoyant, stem, STEM_FROM_S * ys);
+    }
+
+    /**
+     * Путь фронта по земле за {@code seconds} с после того, как он прошёл {@code groundM} м от эпицентра, м (приход —
+     * {@link HobBlast#arrivalSeconds}): столько прошёл над местом поток за фронтом — длина, с которой растёт пограничный
+     * слой. Фронт замедляется, и путь короче скорости в миг прихода × время: у наземного 15 кт за фазу у эпицентра — 440
+     * м, а не 2·10⁶. Ложным положением (Иллинойс), до 0,1 %.
+     */
+    static double run(double groundM, double hobM, double yieldKt, double seconds) {
+        if (seconds <= 0) return 0;
+        double from = Math.max(0, groundM), target = HobBlast.arrivalSeconds(from, hobM, yieldKt) + seconds;
+        // вдали фронт — со скоростью звука: путь не меньше; ближе — быстрее, и конец ищется удвоением
+        double lo = 0, flo = -seconds, hi = BlastModel.SOUND_SPEED * seconds;
+        double fhi = HobBlast.arrivalSeconds(from + hi, hobM, yieldKt) - target;
+        while (fhi < 0) {
+            lo = hi;
+            flo = fhi;
+            hi *= 2;
+            fhi = HobBlast.arrivalSeconds(from + hi, hobM, yieldKt) - target;
+        }
+        double x = hi;
+        int kept = 0;
+        for (int i = 0; i < 60 && hi - lo > 1e-3 * hi; i++) {
+            x = hi - fhi * (hi - lo) / (fhi - flo);
+            double fx = HobBlast.arrivalSeconds(from + x, hobM, yieldKt) - target;
+            if (fx == 0) return x;
+            // конец, что держится второй шаг подряд, — вполовину его значения (иначе ложное положение ползёт к корню с
+            // одной стороны); kept: 1 — держится hi, −1 — lo
+            if (fx > 0) {
+                hi = x;
+                fhi = fx;
+                if (kept < 0) flo *= 0.5;
+                kept = -1;
+            } else {
+                lo = x;
+                flo = fx;
+                if (kept > 0) fhi *= 0.5;
+                kept = 1;
+            }
+        }
+        return x;
     }
 
     /**
@@ -230,8 +275,9 @@ public final class DustModel {
 
     /**
      * Слой пыли в одном месте: положительная фаза t₊ на месте (с), поднятый грунт и пыль обломков (кг/м²), закон верха
-     * в фазе волны (h = wave·τ^(5/6), м), верх над нагретой землёй h_b (м), доля подсоса в ножку 0..1 и когда он
-     * начинается (с). Возраст — секунды модели с прихода фронта.
+     * в фазе волны (h = wave·τ^(5/6), м: wave — по средней скорости фронта за фазу на месте, {@link #run}), верх над
+     * нагретой землёй h_b (м), доля подсоса в ножку 0..1 и когда он начинается (с). Возраст — секунды модели с прихода
+     * фронта.
      */
     public record Column(double positive, double soil, double debris, double wave, double buoyant, double stem, double stemFrom) {
         /** Вся поднятая пыль, кг/м². */

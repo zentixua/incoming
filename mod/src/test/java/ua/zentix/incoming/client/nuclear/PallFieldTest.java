@@ -6,6 +6,7 @@ import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.PallPass;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,27 +34,60 @@ class PallFieldTest {
 
     /**
      * Пыль таблицы — слой {@link DustModel} узла: толща над землёй (ослабление у земли × столб профиля × верх) — толща
-     * слоя без той, что ещё в голове стены, верх — верх слоя в блоках (не ниже {@link PallField#MIN_TOP_BLOCKS}).
+     * слоя без той, что ещё в голове стены, и без той, что в огненном шаре на земле; верх — верх слоя в блоках (не ниже
+     * {@link PallField#MIN_TOP_BLOCKS}).
      */
     @Test
     void dustRowIsTheDustLayer() {
         Detonation quarter = new Detonation(5, new Vec3(0, 64, 0), 64, 15, true, 0, 0.5f, 8, 20_000, 7, 0.25f, false, 0.42f);
         PallField p = new PallField(quarter, NOON);
         double[] v = new double[4];
+        int inBall = 0;
         for (int i : new int[]{3, 20, 60}) {
             double arrival = arrival(p, i);
             // положительная фаза — своя на каждой дальности
             DustModel.Column c = p.layer(i);
             double positive = c.positive();
             for (double age : new double[]{0.3, 1.2, 2, 30, 600}) {
-                p.dust(i, arrival + 20 * quarter.scale() * age, v);
-                double depth = c.depth(age) * (1 - BlastWall.handoff(age / positive));
+                double ticks = arrival + 20 * quarter.scale() * age;
+                p.dust(i, ticks, v);
+                boolean ball = quarter.metres(p.radius(i)) < FireballModel.groundRadius(ticks / (20 * quarter.scale()), 0, 15, true);
+                if (ball) inBall++;
+                double depth = ball ? 0 : c.depth(age) * (1 - BlastWall.handoff(age / positive));
                 assertEquals(c.depth(age) < PallField.GONE_DEPTH ? 0 : depth, v[0] * PallField.column(0) * v[1], 1e-6 * depth + 1e-12, i + ", " + age + " с");
                 assertEquals(Math.max(PallField.MIN_TOP_BLOCKS, quarter.blocks(c.height(age))), v[1], 1e-9);
             }
             p.dust(i, arrival + 20 * quarter.scale() * 0.9 * positive, v);
             assertEquals(0, v[0], "пыль моложе фазы волны — в голове стены");
         }
+        assertTrue(inBall > 0, "узлы под шаром не проверены");
+    }
+
+    /**
+     * В огненном шаре на земле ({@link FireballModel#groundRadius}) ни пыли пелены, ни брызг — там шар; пелена встаёт
+     * из-под него, когда он всплывает.
+     */
+    @Test
+    void noPallInTheFireball() {
+        PallField p = new PallField(CALM, NOON);
+        double[] v = new double[4];
+        int inside = 0;
+        for (double t = 0.3; t <= 8; t += 0.1) {
+            double ball = FireballModel.groundRadius(t, 0, 15, true);
+            for (int i = 0; i < PallField.BINS && CALM.metres(p.radius(i)) < ball; i++) {
+                p.dust(i, 20 * t, v);
+                assertEquals(0, v[0], t + " с: пыль пелены в шаре в " + CALM.metres(p.radius(i)) + " м");
+                p.spray(i, 20 * t, v);
+                assertEquals(0, v[0], t + " с: брызги в шаре в " + CALM.metres(p.radius(i)) + " м");
+                inside++;
+            }
+        }
+        assertTrue(inside > 100, "узлов под шаром " + inside);
+        assertEquals(0, FireballModel.groundRadius(8, 0, 15, true), "шар не всплыл");
+        p.dust(1, 20 * 8, v);
+        assertTrue(v[0] > 0, "шар всплыл, а пелены у эпицентра нет");
+        p.spray(1, 20 * 8, v);
+        assertTrue(v[0] > 0, "шар всплыл, а брызг у эпицентра нет");
     }
 
     /** Столб над точкой (тень, свет неба) — интеграл профиля по высоте до верха, с ошибкой меньше 0,01. */
