@@ -14,7 +14,6 @@ import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxBudget;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -166,10 +165,10 @@ public final class NukeDust {
                         .life(50 + RANDOM.nextInt(50)).color(from, to).prelit().alpha(0.8f).drag(0.95f).smooth()
                         .collide().wind(0).fadeIn(3).fadeFrom(0.45f).budget(FxBudget.GROUND).spawn(level, x, y, z);
             }
-            double kpa = d.overpressureKpa(new Vec3(x, top, z));
-            double psi = BlastModel.psi(kpa);
+            Vec3 at = new Vec3(x, top, z);
+            double psi = d.psi(at);
             if (psi < 1) continue;
-            double thrown = Detonation.throwSpeed(kpa);
+            double thrown = Detonation.throwSpeed(d.dynamicPressureKpa(at));
             if (RANDOM.nextFloat() < 0.6f) {
                 // клочья мусора: мелкие, тёмные, тяжёлые — летят дальше пыли и падают
                 double u = thrown * (0.4 + 0.7 * RANDOM.nextDouble());
@@ -205,7 +204,7 @@ public final class NukeDust {
             double dist = Math.max(DEBRIS_FULL, c.distanceTo(eye));
             if (RANDOM.nextFloat() > Fx.density(c) * DEBRIS_FULL * DEBRIS_FULL / (dist * dist)) continue;
             int delay = Mth.clamp((int) Math.ceil(wait), 0, Fragments.DELAY_MAX);
-            double kpa = d.overpressureKpa(c), v = Detonation.throwSpeed(kpa);
+            double v = Detonation.throwSpeed(d.dynamicPressureKpa(c));
             double ax = c.x - d.burst().x, az = c.z - d.burst().z, len = Math.sqrt(ax * ax + az * az);
             if (len < 1e-3) {
                 ax = 1;

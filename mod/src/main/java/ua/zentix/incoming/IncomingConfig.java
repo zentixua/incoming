@@ -175,10 +175,10 @@ public final class IncomingConfig {
             nukeEffectsScale = b.comment("Scale of all radii: 1.0 is true to life (1 block = 1 m); lower for small worlds.")
                     .translation("incoming.config.nuke_effects_scale").defineInRange("effects_scale", 1.0, 0.005, 1.0);
             nukeWaveSpeed = b.comment("Speed of the blast wave and its dust wall away from the fireball, as a share of the speed of sound",
-                            "(1.0 is true to life). Lower gives the server more time to build ruins ahead of the wave and lets players",
-                            "watch the wall roll in. Near the fireball the wave is always true to life; beyond the dust wall only the sound",
-                            "travels on, at the speed of sound.")
-                    .translation("incoming.config.nuke_wave_speed").defineInRange("wave_speed", 0.42, 0.15, 1.0);
+                            "(1.0 is true to life). Lower is not true to life: it gives the server more time to build ruins ahead of the",
+                            "wave and lets players watch the wall roll in. Near the fireball the wave is always true to life; beyond the",
+                            "dust wall only the sound travels on, at the speed of sound.")
+                    .translation("incoming.config.nuke_wave_speed").defineInRange("wave_speed", 1.0, 0.15, 1.0);
             nukeBlockDamage = b.comment("The blast wave destroys buildings and trees. Off: no ruins and no crater.")
                     .translation("incoming.config.nuke_block_damage").define("block_damage", true);
             nukeFires = b.comment("The thermal pulse starts fires.")
@@ -187,7 +187,7 @@ public final class IncomingConfig {
                     .translation("incoming.config.nuke_tree_fall").define("tree_fall", true);
             nukeCrater = b.comment("A ground burst digs a crater.")
                     .translation("incoming.config.nuke_crater").define("crater", true);
-            nukeFallout = b.comment("Radioactive fallout after a ground burst.")
+            nukeFallout = b.comment("Radioactive fallout: the trail downwind of a ground burst and what black rain washes down after any burst.")
                     .translation("incoming.config.nuke_fallout").define("fallout", true);
             nukeRadiation = b.comment("Radiation dose and radiation sickness for players.")
                     .translation("incoming.config.nuke_radiation").define("radiation", true);
@@ -195,7 +195,7 @@ public final class IncomingConfig {
                             "sickness in the same stages as players. Off: prompt radiation kills mobs at once (from 1000 rem) or takes",
                             "half their health (from 400 rem), and fallout does not affect them.")
                     .translation("incoming.config.nuke_mob_radiation").define("mob_radiation", true);
-            nukeBlackRain = b.comment("Black rain in the fallout trail (contaminates until washed off with water).")
+            nukeBlackRain = b.comment("Black rain from the fires contaminates skin and clothes until washed off with water.")
                     .translation("incoming.config.nuke_black_rain").define("black_rain", true);
             nukeFlightTime = b.comment("ICBM flight from launch to detonation, ticks (about 30 minutes in reality). A non-operator strike takes at least 1800 (90 s of alarm).")
                     .translation("incoming.config.nuke_flight_time").defineInRange("flight_time", 1800, 200, 72_000);

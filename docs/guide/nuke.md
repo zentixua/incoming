@@ -30,8 +30,8 @@ Everyone within 20 km of the target hears a siren in advance. Then come the flas
 The blast wave itself is invisible. The wind right behind it lifts what lies on the ground (dust and earth, smoke over a
 burning town, spray over water) and rolls it forward as a churning wall, like a dust storm. The wall is the youngest
 dust of the pall: right at the front it hugs the ground, and behind it the dust grows thicker and taller. At 15 kt it is
-about 50 m tall a second behind the front; it stays dense out to about 4 km, thins out beyond and fades at 6–7 km, where
-the wind is too weak to lift dust. Inside the wall it is dark. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
+30–40 m tall 1 km from the burst and about 60 m tall 4 km out; it stays dense out to about 4 km, thins out beyond and
+fades at 7–8 km, where the wind is too weak to lift dust. Inside the wall it is dark. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
 In its first seconds the fireball lights the top of the wall orange, even by day.
 The wave breaks buildings as it reaches them: their pieces fly with the dust. The
 ground shakes harder and harder as the wall comes closer. When the wall reaches you, it throws
@@ -55,15 +55,15 @@ A burning town lights the foot of the column orange from below, and the cap high
 so in rain, the cloud fades into the haze. Most haze lies in the lowest kilometre or two of air, so the cap high above
 stays clearer than the foot of the column at the same distance.
 
-Behind the wave the dust keeps rising as a pall: within seconds to 60–150 m, and over the next minute the ground
-heated by the flash lifts it higher. For a 15 kt air burst it tops out at about 250 m 1 km from the burst, 160 m at 1.4 km and lower
+Behind the wave the dust keeps rising as a pall: within seconds to 50–100 m, and over the next minute the ground
+heated by the flash lifts it higher. For a 15 kt air burst it tops out at about 230 m 1 km from the burst, 150 m at 1.4 km and lower
 toward the edge. From a rooftop near the blast you first see the wave cross the town, then the dust swallows you. At
 night the fireball first lights it as bright as day for several seconds, then the fires light it orange. The top of
 the dust wall is lit the same way, and the side of the wall away from the fireball stays dark. The pall's clumps are
 lighter on the side facing the light and darker in their folds. Inside it you see only a few metres, it is dark even at noon, and sounds are
 muffled. At 15 kt it stays dark about 20 minutes 1.4 km from the burst, as in Hiroshima; within half a kilometre of the
 burst it clears in minutes, drawn up into the column of the mushroom cloud. The dust also fills the valleys around the
-town. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for an hour or two. Where the
+town. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for about an hour and a half. Where the
 light of the fireball set the town on fire, a firestorm builds up over a few minutes. Columns of smoke rise over the
 burning blocks, lean downwind and merge higher up into a ceiling of smoke over the town. At night the fires light it
 orange-red from below, and the glow flickers; from a couple of kilometres away the town glows under its smoke, and the
@@ -74,9 +74,15 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 
 ![Fireball and blast wave over a town](img/nuke-wave.jpg)
 
-At 15 kt the wave kills out to about 0.4 km, the light of the fireball burns out to 3.4 km, and windows break out to
-6 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind, with black rain.
-Fallout starts to come down about 7 minutes after a 15 kt burst, and later farther downwind.
+At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns out to 3.1 km, and windows break out to
+8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
+game time, like radiation sickness (a game hour is 50 seconds): after a 15 kt ground burst it starts to come down about
+7 game minutes later, and later farther downwind. Its radiation drops tenfold by the seventh game hour and a
+hundredfold by the third game day.
+
+About 80 seconds after the burst, black rain starts to fall from the smoke of the fires: over the burning
+town and in a wide strip downwind, for about six minutes in each place, in step with the firestorm. After an air burst
+it is only weakly radioactive. In the fallout trail of a ground burst it brings the fallout down onto you.
 
 ![A town after a 15 kt strike: ruins and fires](img/nuke-ruins.jpg)
 
@@ -107,8 +113,11 @@ condensation hangs over the water for a second or two. The column then narrows a
 about twenty seconds, and the falling water rolls out as a white base surge for minutes. It is a bright mist: in its
 thick part you see only some 50 m, and it thins out over a quarter of an hour.
 
-Far away the blast comes as a sharp double crack and a deep boom, and then echoes back from the hills, forests and
-towns around you: every slope that faces both the burst and you sends it back, later the farther it is. Animals around
+The blast is as loud as the pressure where you stand: with distance it fades the way ordinary explosions do, and a
+hill between you, rain, or a sunny day (the warm ground bends sound up, so far away it is quieter than at night) make
+it quieter still. Far away it comes as a single sharp crack, duller the farther you are, with a deep boom behind it,
+and the gust of wind after the wave dies down within a second or two. Then the blast echoes back from the hills,
+forests and towns around you: every slope that faces both the burst and you sends it back, later the farther it is. Animals around
 the burst go quiet for a few minutes. Indoors the echoes are as muffled as the blast itself. Mobs run away from the
 flash and the blast wave, then calm down; tamed, named and leashed mobs stay put, and mobs under cover don't run from
 the wave. The town keeps burning for minutes: you hear the fires roar from where they burn, wind pulled into the fire
@@ -117,11 +126,18 @@ near them, ruins collapsing nearby, and now and then an explosion in the burning
 ## How to survive
 
 - **Get underground.** The wave leaves natural ground alone: caves and bunkers stand, and earth stops both the light
-  and the radiation.
+  and the radiation. A block of stone cuts the radiation of the burst about a hundredfold, a block of earth about
+  thirtyfold. A trench or a wall stops what comes straight from the fireball, but not the part the air scatters down
+  from the sky.
 - **Do not look at the fireball.** Its light kills and burns only those under open sky who can see it.
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
-- **Leave the fallout trail.** Water washes the dust off you (rain does not). Radiation sickness starts later, and milk
-  does not cure it.
+- **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
+  roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
+  and an open doorway lets it in. Water washes the dust off you (rain does not).
+- **Radiation sickness** starts hours later and keeps game time: nausea and vomiting, then days or weeks of feeling
+  well, then weeks of weakness, from 2 Gy without natural healing. Whether it kills depends on the dose: below 2 Gy
+  almost nobody dies, at 4.5 Gy half, from 10 Gy everyone, and the higher the dose, the sooner (from 50 Gy within a
+  game day or two). Milk does not cure it.
 
 A Geiger Counter in hand clicks and shows your dose. Operators give it out.

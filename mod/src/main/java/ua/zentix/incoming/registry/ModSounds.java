@@ -58,9 +58,7 @@ public final class ModSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_LAUNCH = register("nuke.launch");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_CRACK = register("nuke.crack");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_BOOM_FAR = register("nuke.boom_far");
-    public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_ROAR = register("nuke.roar");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_WIND = register("nuke.wind");
-    public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_RUMBLE = register("nuke.rumble");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_GLASS = register("nuke.glass");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_TINNITUS = register("nuke.tinnitus");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_RAIN = register("nuke.rain");

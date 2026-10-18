@@ -18,19 +18,30 @@ class BlastWallTest {
     private static final Detonation GROUND = new Detonation(1, new Vec3(0, 64, 0), 64, 15, true, 0, 0, 0, 20_000, 7, 0.25f, false, Detonation.OLD_WAVE);
 
     /**
-     * Голова — пыль сразу за фронтом в игре (сам фронт не виден), клин на его путь за положительную фазу; густая, пока
-     * ветер волны поднимает пыль, и сходит на нет там, где поднимать нечего (у 15 кт к ~0,3 psi), — отрывается от фронта.
+     * Голова — пыль сразу за фронтом в игре (сам фронт не виден), клин — до места, где положительная фаза на месте уже
+     * кончилась (приход фронта в игре и фаза там — момент t); густая, пока ветер волны поднимает пыль, и сходит на нет там,
+     * где поднимать нечего (у 15 кт к ~0,3 psi), — отрывается от фронта.
      */
     @Test
     void headRidesTheFront() {
         BlastWall w = new BlastWall(GROUND, false);
-        double positive = BlastModel.positivePhaseSeconds(15);
+        double scale = 20 * GROUND.scale(), firstEnd = GROUND.arrivalTicks(0) / scale + column(0).positive();
+        int ends = 0;
         for (double t = 0.05; t <= 20; t += 0.05) {
             assertEquals(w.shock(t), w.head(t), 1e-9, t + " с");
-            assertEquals(Math.max(1e-3, w.shock(t) - w.shock(t - positive)), w.length(t), 1e-9, t + " с: клин — путь фронта за фазу");
+            double tail = w.tail(t);
+            assertEquals(Math.max(1e-3, w.shock(t) - tail), w.length(t), 1e-9, t + " с: клин — от фронта до конца фазы");
+            if (t < firstEnd) {
+                assertEquals(0, tail, 1e-12, t + " с: фаза ещё нигде не кончилась");
+                continue;
+            }
+            double end = GROUND.arrivalTicks(GROUND.slantOf(GROUND.blocks(tail))) / scale + column(tail).positive();
+            assertEquals(t, end, 0.01, t + " с: в конце клина (" + tail + " м) фаза кончилась в " + end + " с");
+            ends++;
         }
+        assertTrue(ends > 300, "проверок конца клина " + ends);
         assertTrue(w.wall(0.1).density() > 0, "у самого фронта пыли нет");
-        double rangeHigh = BlastModel.rangeForOverpressure(BlastModel.kpa(1.5), 15), rangeLow = BlastModel.rangeForOverpressure(BlastModel.kpa(0.32), 15);
+        double rangeHigh = GROUND.metres(GROUND.groundRange(BlastModel.kpa(1.5))), rangeLow = GROUND.metres(GROUND.groundRange(BlastModel.kpa(0.32)));
         double t = 0.5;
         while (GROUND.metres(w.wall(t).head()) < rangeHigh) t += 0.01;
         assertEquals(1, w.wall(t).density(), 1e-9, "у 1,5 psi голова не густая");
@@ -65,6 +76,11 @@ class BlastWallTest {
         assertEquals(1, BlastWall.handoff(1), 1e-12);
         assertEquals(0, BlastWall.handoff(BlastWall.HANDOFF_TO), 1e-12);
         assertEquals(0.5, BlastWall.handoff(0.5 * (BlastWall.HANDOFF_FROM + BlastWall.HANDOFF_TO)), 1e-12);
+    }
+
+    /** Слой {@link DustModel} подрыва {@link #GROUND} на {@code groundM} м от эпицентра. */
+    private static DustModel.Column column(double groundM) {
+        return DustModel.column(groundM, GROUND.hobMetres(), GROUND.yieldKt(), GROUND.surface(), GROUND.visibility(), DustModel.Surface.REFERENCE);
     }
 
     /** Вал головы крутится в одну сторону и не быстрее {@link BlastWall#ROLL_MAX}. */

@@ -34,7 +34,6 @@ import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
-import ua.zentix.incoming.nuclear.model.PromptRadiationModel;
 import ua.zentix.incoming.nuclear.model.Yield;
 import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.grid.GridLights;
@@ -62,6 +61,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import ua.zentix.incoming.nuclear.radiation.MobFallout;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
+import ua.zentix.incoming.nuclear.radiation.Shielding;
 import ua.zentix.incoming.registry.ModEffects;
 import java.util.Comparator;
 
@@ -398,12 +398,12 @@ public final class NuclearGameTests {
 
     /**
      * Тонкие столбы 30 блоков (терракота, медь, цепь через два стекла — фасад из окон с перемычками) в эпицентре 15 кт
-     * и там, где у земли 5–10 и 2.5–4.5 psi (1 блок = 33 м): стёкла выбиты, перемычки над ними не висят — от столба остаются
+     * и там, где у земли 5–10 и 2.5–4.5 psi (1 блок ≈ 67 м): стёкла выбиты, перемычки над ними не висят — от столба остаются
      * только низ и завал, ни одного блока над пустотой (не цепочки точек в небе над руинами).
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_columns", skyAccess = true)
     public static void thinColumnsFall(GameTestHelper h) {
-        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.03, 15, 0.03f);
+        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.015, 15, 0.015f);
         BlockPos mid = null, far = null;
         for (int dx = 2; dx <= 30; dx++) {
             double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx))));
@@ -526,17 +526,19 @@ public final class NuclearGameTests {
      * <p>
      * Почему так. Отдельно стоящая стена 20 блоков в блок толщиной при 4.5 psi опрокидывается целиком, как и
      * настоящая, — поэтому стены в доме с поперечными стенами и перекрытиями; над окном проверяются 12 рядов.
-     * Давление берётся у стены над окном (8 блоков
-     * над землёй), а не у земли: проверяется элемент там, и при низком подрыве у земли давление меньше. Место —
-     * первое от эпицентра, где давление опустилось до 4.5 psi (нижняя граница 3.5 — только чтобы шаг поиска не
-     * проскочил полосу); масштаб 0.022 — чтобы оно с обоими домами помещалось на площадке.
+     * Давление берётся у стены над окном (8 блоков над землёй): проверяется элемент там. Место — первое от эпицентра,
+     * где давление опустилось до 4.5 psi (нижняя граница 3.5 — только чтобы шаг поиска не проскочил полосу); масштаб
+     * 0.018 — чтобы оно с обоими домами помещалось на площадке. Подрыв у земли: у настоящего дома в 1,6 км от
+     * воздушного 15 кт давление по его высоте почти одно (стебель Маха), а на площадке дом в 20 блоков — 1,1 км
+     * высотой, выше воздушного подрыва (11 блоков), и низ дома был бы под 6–7 psi; у наземного — 4.9 у земли, 4.3 над
+     * окном, 3.1 под крышей.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_window", skyAccess = true)
     public static void wallAboveWindowStandsOnlyWithPiers(GameTestHelper h) {
-        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.022, 15, 0.022f);
+        Detonation d = detonation(h, CENTER, 0, 15, 0.018f);
         BlockPos far = null;
         for (int dx = 2; dx <= 26 && far == null; dx++) {
-            // давление у стены над окном (подрыв низко: у земли оно меньше)
+            // давление у стены над окном
             double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx).above(8))));
             if (psi >= 3.5 && psi <= 4.5) far = CENTER.east(dx);
         }
@@ -767,7 +769,7 @@ public final class NuclearGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_facade", skyAccess = true)
     public static void slabStairPaneFacadeFalls(GameTestHelper h) {
-        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.03, 15, 0.03f);
+        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.02, 15, 0.02f);
         BlockPos mid = null;
         for (int dx = 2; dx <= 30 && mid == null; dx++) {
             double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx))));
@@ -1774,19 +1776,26 @@ public final class NuclearGameTests {
     }
 
     /**
-     * Мобы болеют, как игроки: 60 Гр — эффект болезни сразу, смерть через игровой час (1000 тиков), а не в момент
-     * дозы; нежить не болеет; в следе осадков моб набирает дозу (порциями под бюджетом, {@link MobFallout}).
+     * Мобы болеют, как игроки: 1000 Гр (мозговая форма) — эффект болезни сразу, смерть через 0,4 игрового часа (400
+     * тиков), а не в момент дозы; нежить не болеет; в следе осадков моб набирает дозу (порциями под бюджетом,
+     * {@link MobFallout}). Больной — в каменной будке: осадки до него не доходят, и срок болезни не сдвигает их доза.
      */
     @GameTest(template = "range", timeoutTicks = 1300, batch = "nuke_mob_radiation", skyAccess = true)
     public static void mobsGetRadiationSickness(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Cow sick = h.spawn(EntityType.COW, CENTER.east(10));
+        BlockPos booth = CENTER.east(10);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                for (int dy = 0; dy <= 2; dy++) if (dx != 0 || dz != 0 || dy == 2) h.setBlock(booth.offset(dx, dy, dz), Blocks.STONE);
+            }
+        }
+        Cow sick = h.spawn(EntityType.COW, booth);
         Cow grazing = h.spawn(EntityType.COW, CENTER.west(3));
         var zombie = h.spawn(EntityType.ZOMBIE, CENTER.north(10));
         h.assertTrue(RadiationTicker.affectsMob(sick), "корова не облучается");
         h.assertFalse(RadiationTicker.affectsMob(zombie), "нежить облучается");
-        RadiationTicker.addDose(sick, 60);
-        h.assertTrue(sick.hasEffect(ModEffects.RADIATION_SICKNESS), "у коровы с 60 Гр нет лучевой болезни");
+        RadiationTicker.addDose(sick, 1000);
+        h.assertTrue(sick.hasEffect(ModEffects.RADIATION_SICKNESS), "у коровы с 1000 Гр нет лучевой болезни");
         // наземный подрыв с осадками двумя игровыми часами раньше; корова у эпицентра — в самом следе
         BlockPos g = h.absolutePos(CENTER);
         Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
@@ -1797,12 +1806,12 @@ public final class NuclearGameTests {
         h.onEachTick(() -> {
             clock.start(IncomingConfig.SERVER.nukeTimeBudgetMs.get() * 1_000_000L);
             fallout.work(level, List.of(d), clock);
-            if (level.getGameTime() - start < 900) h.assertTrue(sick.isAlive(), "моб с 60 Гр умер раньше срока болезни");
+            if (level.getGameTime() - start < 380) h.assertTrue(sick.isAlive(), "моб с 1000 Гр умер раньше срока болезни");
         });
         h.succeedWhen(() -> {
             h.assertTrue(RadiationTicker.dose(grazing).doseGy() > 0, "в следе осадков моб не набрал дозы");
             h.assertTrue(RadiationTicker.dose(zombie).doseGy() == 0, "нежить набрала дозу");
-            h.assertFalse(sick.isAlive(), "моб с 60 Гр ещё жив");
+            h.assertFalse(sick.isAlive(), "моб с 1000 Гр ещё жив");
         });
     }
 
@@ -1838,13 +1847,16 @@ public final class NuclearGameTests {
                 h.assertTrue(ticks > 2 * MobFallout.PERIOD, "обход короче двух периодов: " + ticks + " тиков — проверка ни о чём");
                 double gain = Double.longBitsToDouble(gains.get(i)[1]);
                 double expected = d.falloutRate(grazing.getX(), grazing.getZ(), t - d.gameTime())
-                        * RadiationTicker.roofShielding(level, grazing.blockPosition()) * RadiationTicker.GY_PER_R * ticks / 1000.0;
+                        * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R * ticks / 1000.0;
                 h.assertTrue(Math.abs(gain / expected - 1) < 0.05, "за обход " + ticks + " тиков доза " + gain + " Гр, ждали " + expected);
             }
         });
     }
 
-    /** Подвал под тремя блоками камня: проникающая радиация ослаблена больше чем в 100 раз. */
+    /**
+     * Радиация первой минуты: под тремя блоками камня ослаблена больше чем в 100 раз; за стеной от низкого подрыва остаётся
+     * рассеянная воздухом часть, что приходит с неба (окоп спасает не целиком).
+     */
     @GameTest(template = "range", timeoutTicks = 20, batch = "nuke_shielding", skyAccess = true)
     public static void basementShieldsPromptRadiation(GameTestHelper h) {
         BlockPos cellar = CENTER.east(5);
@@ -1852,11 +1864,41 @@ public final class NuclearGameTests {
         Vec3 inside = Vec3.atCenterOf(h.absolutePos(cellar));
         Vec3 outside = Vec3.atCenterOf(h.absolutePos(CENTER.west(5)));
         Vec3 burst = inside.add(0, 50, 0);
-        double open = NuclearWarhead.shielding(h.getLevel(), outside, outside.add(0, 50, 0));
-        double roof = NuclearWarhead.shielding(h.getLevel(), inside, burst);
+        double open = Shielding.prompt(h.getLevel(), outside, outside.add(0, 50, 0));
+        double roof = Shielding.prompt(h.getLevel(), inside, burst);
         h.assertTrue(open > 0.99, "на открытом месте есть экран: " + open);
         h.assertTrue(roof < 0.01, "три блока камня ослабили только до " + roof);
-        h.assertTrue(PromptRadiationModel.shielding(3, 0, 0, 0, 0) < 0.01, "модель экранирования");
+        // стена в два блока к подрыву у самой земли далеко на юге
+        BlockPos trench = CENTER.west(12);
+        for (int dx = -2; dx <= 2; dx++) for (int dy = 0; dy < 2; dy++) h.setBlock(trench.offset(dx, dy, 1), Blocks.STONE);
+        Vec3 crouch = Vec3.atCenterOf(h.absolutePos(trench));
+        double behind = Shielding.prompt(h.getLevel(), crouch, crouch.add(0, 0.2, 2000));
+        h.assertTrue(behind > 0.1 && behind < 0.4, "за стеной от низкого подрыва: " + behind);
+        h.succeed();
+    }
+
+    /**
+     * Осадки лежат на всём, что открыто небу, и светят сквозь крышу и стены: в каменном доме (стены и крыша в блок) —
+     * меньше тысячной доли открытого места, у стены дома снаружи — заметно меньше, чем в поле, но больше половины.
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "nuke_fallout_shielding", skyAccess = true)
+    public static void houseShieldsFallout(GameTestHelper h) {
+        BlockPos hut = CENTER.east(10);
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                for (int dy = 0; dy <= 3; dy++) {
+                    boolean shell = Math.abs(dx) == 3 || Math.abs(dz) == 3 || dy == 3;
+                    if (shell) h.setBlock(hut.offset(dx, dy, dz), Blocks.STONE);
+                }
+            }
+        }
+        ServerLevel level = h.getLevel();
+        double inside = Shielding.fallout(level, Vec3.atBottomCenterOf(h.absolutePos(hut)).add(0, 0.9, 0));
+        double field = Shielding.fallout(level, Vec3.atBottomCenterOf(h.absolutePos(CENTER.west(10))).add(0, 0.9, 0));
+        double byWall = Shielding.fallout(level, Vec3.atBottomCenterOf(h.absolutePos(hut.west(4))).add(0, 0.9, 0));
+        h.assertTrue(field > 0.99, "в поле есть защита: " + field);
+        h.assertTrue(inside < 0.001, "в каменном доме осталось " + inside);
+        h.assertTrue(byWall > 0.5 && byWall < 0.95, "у стены снаружи: " + byWall);
         h.succeed();
     }
 

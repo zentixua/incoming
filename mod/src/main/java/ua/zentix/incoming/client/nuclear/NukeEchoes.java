@@ -18,7 +18,6 @@ import ua.zentix.incoming.client.sound.EchoMix;
 import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.client.sound.TerrainEcho;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.registry.ModSounds;
 
 import java.io.InputStream;
@@ -183,7 +182,7 @@ final class NukeEchoes {
         };
     }
 
-    /** Фронт подрыва для эха: приход — как у фронта игры, давление — модель Кинни — Грэма. */
+    /** Фронт подрыва для эха: приход — как у фронта игры, давление — на земле эпицентра на той же наклонной дальности. */
     static TerrainEcho.Blast blast(Detonation d) {
         return new TerrainEcho.Blast() {
             @Override
@@ -193,7 +192,7 @@ final class NukeEchoes {
 
             @Override
             public double pressure(double blocks) {
-                return BlastModel.overpressureKpa(Math.max(1, d.metres(blocks)), d.yieldKt());
+                return d.groundOverpressureKpa(d.groundOf(blocks));
             }
         };
     }
@@ -218,21 +217,6 @@ final class NukeEchoes {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    /**
-     * Откуда слышен раскат через {@code seconds} после удара: сильнейшее отражение вблизи этого времени (±3 с); NaN —
-     * эха нет (сторону выберет случай).
-     */
-    double rumbleAzimuth(double seconds) {
-        EchoMix.Mix m = done;
-        if (m == null || m.tracks().isEmpty()) return Double.NaN;
-        TerrainEcho.Reflection best = null;
-        for (TerrainEcho.Reflection r : found) {
-            if (Math.abs(r.delay() / 20 - seconds) > 3) continue;
-            if (best == null || r.energy() > best.energy()) best = r;
-        }
-        return best == null ? Double.NaN : best.azimuth();
     }
 
     /** Строка {@code SCENARIO}: лучи, отражения и сильнейшие из них (задержка, сторона, уровень). */

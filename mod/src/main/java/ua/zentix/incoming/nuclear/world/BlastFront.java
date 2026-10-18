@@ -103,7 +103,8 @@ final class BlastFront {
         Set<Integer> active = new HashSet<>();
         for (Detonation d : detonations) {
             long since = now - d.gameTime();
-            if (since >= 0 && since <= d.arrivalTicks(d.radiusMax()) + positivePhaseTicks(d) + 2) {
+            double reach = d.blastReach();
+            if (since >= 0 && since <= d.arrivalTicks(reach) + d.positivePhaseTicks(reach) + 2) {
                 advance(level, d, since);
                 active.add(d.id());
             }
@@ -113,9 +114,9 @@ final class BlastFront {
     }
 
     private void advance(ServerLevel level, Detonation d, long since) {
-        double[] done = reached.computeIfAbsent(d.id(), k -> new double[]{d.frontRadius(since - 1), d.frontRadius(since - 1 - positivePhaseTicks(d))});
+        double[] done = reached.computeIfAbsent(d.id(), k -> new double[]{d.frontRadius(since - 1), d.phaseEndRadius(since - 1)});
         double r = d.frontRadius(since);
-        double back = d.frontRadius(since - positivePhaseTicks(d));
+        double back = d.phaseEndRadius(since);
         if (r <= done[0] && back <= done[1]) return;
         // снимок списка: удар может убить моба, и из него выпадет лут — живую карту сущностей трогать нельзя
         double reach = Math.max(r, back);
@@ -169,10 +170,6 @@ final class BlastFront {
         aircraft.clear();
     }
 
-    private static double positivePhaseTicks(Detonation d) {
-        return BlastModel.positivePhaseSeconds(d.yieldKt()) * 20 * d.scale();
-    }
-
     /**
      * Удар волны. Смертельно с 12 psi (у людей в жизни — обрушение зданий и удар о препятствия; 20 psi — никто не
      * выживает), 5 psi — почти смертельно, 1–3 psi — ранения стеклом и броском. В укрытии (нет прямой видимости
@@ -180,14 +177,14 @@ final class BlastFront {
      */
     private static void hit(ServerLevel level, Detonation d, LivingEntity e, @Nullable Entity owner) {
         double kpa = d.overpressureKpa(e.position());
+        if (kpa < Detonation.HIT_KPA) return;
         double psi = BlastModel.psi(kpa);
-        if (psi < 0.3) return;
         boolean cover = !Detonation.underOpenSky(level, e.getEyePosition()) && !NuclearWarhead.sees(level, d, e);
         boolean immune = e instanceof Player p && p.getAbilities().invulnerable;
         float dmg = psi >= LETHAL_PSI ? Float.MAX_VALUE : (float) (1.6 * Math.pow(psi, 1.35));
         if (cover) dmg *= 0.3f;
         if (psi >= 0.7 && !immune) e.hurt(ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_BLAST, null, owner), dmg);
-        double v = Detonation.throwSpeed(kpa) * (cover ? 0.2 : 1) * (1 - e.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE));
+        double v = Detonation.throwSpeed(d.dynamicPressureKpa(e.position())) * (cover ? 0.2 : 1) * (1 - e.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE));
         Vec3 away = new Vec3(e.getX() - d.burst().x, 0, e.getZ() - d.burst().z);
         away = away.lengthSqr() < 1e-4 ? Vec3.ZERO : away.normalize();
         e.push(away.x * v, 0.3 * v, away.z * v);

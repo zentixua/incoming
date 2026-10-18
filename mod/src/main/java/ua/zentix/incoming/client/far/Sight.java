@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.far;
 
+import ua.zentix.incoming.util.Visibility;
+
 /**
  * Видимость вдали без Minecraft: дымка по Кошмидеру и яркие точки с сохранением светового потока.
  * <ul>
@@ -15,8 +17,8 @@ package ua.zentix.incoming.client.far;
 public final class Sight {
     /** −ln 0,02: порог контраста глаза, по которому определена дальность видимости. */
     public static final double KOSCHMIEDER = 3.912;
-    /** Дальность видимости, блоков (= метров): ясно, сильный дождь, гроза. */
-    public static final double CLEAR = 20_000, RAIN = 3_000, THUNDER = 1_500;
+    /** Дальность видимости, блоков (= метров): ясно, дождь, гроза — та же, что у света вспышки ({@link Visibility}). */
+    public static final double CLEAR = Visibility.CLEAR, RAIN = Visibility.RAIN, THUNDER = Visibility.THUNDER;
     /**
      * Мельче этого пятно не рисуется: полтора пикселя в поперечнике — свет и заслон те же, что у настоящего угла, только
      * бледнее во столько же раз (как звёзды в движках); пятно в пиксель мерцало бы, переходя между пикселями.

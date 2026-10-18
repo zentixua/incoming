@@ -2,24 +2,25 @@ package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.util.Mth;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.CloudModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 /**
  * Голова слоя пыли ударной волны (DESIGN-nuke §6): самая молодая, низкая и густая часть того же слоя, что потом стоит
  * пеленой ({@link PallField}), — законы одни ({@link DustModel}). Сам фронт не виден — это скачок давления в прозрачном
- * воздухе; ветер за ним ({@link BlastModel#windSpeed}) поднимает с земли пыль и обломки, над водой — брызги
- * ({@link WaterModel#spray}). Своего вещества у волны нет.
+ * воздухе; ветер за ним вдоль земли ({@link Detonation#groundWind}) поднимает с земли пыль и обломки, над водой —
+ * брызги ({@link WaterModel#spray}). Своего вещества у волны нет.
  * <p>
- * Голова — клин за фронтом на его путь за положительную фазу ({@link #length}): у переднего края пыли ещё нет, и слой
- * нулевой высоты; назад поднятое растёт как импульс скоростного напора ({@link DustModel#lifted}), а верх — как пыльный
- * пограничный слой Kuhl, u^(5/6) ({@link #top}); поэтому густота у земли — больше всего у самого края, на десятой
- * части клина (в 2,6 раза гуще, чем в его конце, {@link #shape}), а столб над землёй растёт назад. За клином пыль
- * остаётся слоем пелены (её таблица — та же пыль, {@link PallField}): голова отдаёт ей место на полдлины клина
- * ({@link #handoff}). Где ветер больше не поднимает пыль, густоты у края нет, и голова сходит на нет, отрываясь от фронта,
- * — пыль стоит (MET: «перестала идти по земле на 945 м»).
+ * Голова — клин от фронта назад до места, где кончилась положительная фаза (своя на каждой дальности, {@link HobBlast},
+ * {@link #length}): у переднего края пыли ещё нет, и слой нулевой высоты; назад поднятое растёт как импульс скоростного
+ * напора ({@link DustModel#lifted}), а верх — как пыльный пограничный слой Kuhl, u^(5/6) ({@link #top}); поэтому
+ * густота у земли — больше всего у самого края, на десятой части клина (в 2,6 раза гуще, чем в его конце,
+ * {@link #shape}), а столб над землёй растёт назад. За клином пыль остаётся слоем пелены (её таблица — та же пыль,
+ * {@link PallField}): голова отдаёт ей место на полдлины клина ({@link #handoff}). Где ветер больше не поднимает пыль,
+ * густоты у края нет, и голова сходит на нет, отрываясь от фронта, — пыль стоит (MET: «перестала идти по земле на
+ * 945 м»).
  * <p>
  * Клин — объём в проходе пелены ({@code PallPass}: {@code pallWall*} в {@code pall.glsl}, числа слота — {@link #slot}),
  * с вихрями слоя (шум, повёрнутый на угол вала, {@link #rollPhase}). Метры и секунды модели; в мир — через
@@ -64,15 +65,16 @@ public final class BlastWall {
     private final Detonation d;
     /** Высота подрыва над землёй, м; мощность — кубическим корнем от 15 кт (масштаб форм). */
     private final double hob, ys;
-    /** Положительная фаза, с модели: столько пыль поднимается за фронтом. */
-    private final double positive;
     /** Докуда таблица слоя по земле, м. */
     private final double tableM;
     /**
-     * Слой по дальности (узлы от 0 до {@link #tableM}): толща всего поднятого ({@link DustModel.Column#lifted}) и верх к
-     * концу фазы волны, м ({@link DustModel.Column#first}).
+     * Слой по дальности (узлы от 0 до {@link #tableM}): толща всего поднятого ({@link DustModel.Column#lifted}), верх к
+     * концу фазы волны, м ({@link DustModel.Column#first}), и когда на месте кончается положительная фаза — приход
+     * фронта в игре и фаза на месте ({@link DustModel.Column#positive}), с модели (не убывает с дальностью).
      */
-    private final double[] lifted = new double[NODES], first = new double[NODES];
+    private final double[] lifted = new double[NODES], first = new double[NODES], phaseEnd = new double[NODES];
+    /** Положительная фаза в конце таблицы, с модели: за таблицей конец клина — путь фронта за неё. */
+    private final double lastPositive;
     /** Влажный воздух — облако Вильсона есть ({@link CloudModel#wilsonCloud}). */
     private final boolean humid;
     /** Угол вала по времени ({@link #rollPhase}): секунды модели и угол, рад. */
@@ -87,14 +89,18 @@ public final class BlastWall {
         this.humid = humid;
         hob = Math.max(0, d.hobMetres());
         ys = Math.cbrt(d.yieldKt() / 15);
-        positive = BlastModel.positivePhaseSeconds(d.yieldKt());
-        double stop = BlastModel.rangeForOverpressure(BlastModel.kpa(0.2), d.yieldKt());
-        tableM = Math.max(1, Math.sqrt(Math.max(0, stop * stop - hob * hob)));
+        tableM = Math.max(1, HobBlast.rangeFor(0.2, hob, d.yieldKt()));
+        double positive = 0;
         for (int i = 0; i < NODES; i++) {
-            DustModel.Column c = DustModel.column(tableM * i / (NODES - 1), hob, d.yieldKt(), d.surface(), d.visibility(), DustModel.Surface.REFERENCE);
+            double g = tableM * i / (NODES - 1);
+            DustModel.Column c = DustModel.column(g, hob, d.yieldKt(), d.surface(), d.visibility(), DustModel.Surface.REFERENCE);
             lifted[i] = c.lifted();
             first[i] = c.first();
+            positive = c.positive();
+            phaseEnd[i] = d.arrivalTicks(d.slantOf(d.blocks(g))) / (20 * d.scale()) + positive;
+            if (i > 0) phaseEnd[i] = Math.max(phaseEnd[i], phaseEnd[i - 1]);
         }
+        lastPositive = positive;
         // угол вала — интеграл скорости оборота по времени (средней точкой), узлы гуще в начале
         double end = CloudPuffs.lifeSeconds(d);
         for (int i = 1; i <= ROLL_NODES; i++) {
@@ -135,11 +141,28 @@ public final class BlastWall {
     }
 
     /**
-     * Длина клина в момент t, м: путь фронта в игре за последнюю положительную фазу — за краем пыль моложе фазы, её
-     * поднимает ветер волны; в первую фазу — весь путь фронта.
+     * Длина клина в момент t, м: от фронта в игре до места, где положительная фаза на месте уже кончилась ({@link #tail}),
+     * — за краем пыль моложе своей фазы, её поднимает ветер волны; пока фаза не кончилась нигде — весь путь фронта.
      */
     double length(double t) {
-        return Math.max(1e-3, shock(t) - shock(t - positive));
+        return Math.max(1e-3, shock(t) - tail(t));
+    }
+
+    /**
+     * Докуда по земле к моменту t (секунды модели) положительная фаза кончилась, м: где приход фронта в игре и фаза на
+     * месте вместе — не позже t (0 — нигде). За таблицей — путь фронта за фазу в её конце.
+     */
+    double tail(double t) {
+        if (t <= phaseEnd[0]) return 0;
+        if (t >= phaseEnd[NODES - 1]) return Math.max(tableM, shock(t - lastPositive));
+        int lo = 0, hi = NODES - 1;
+        while (hi - lo > 1) {
+            int m = (lo + hi) >>> 1;
+            if (phaseEnd[m] <= t) lo = m;
+            else hi = m;
+        }
+        double f = (t - phaseEnd[lo]) / Math.max(1e-12, phaseEnd[hi] - phaseEnd[lo]);
+        return tableM * (lo + Mth.clamp(f, 0, 1)) / (NODES - 1);
     }
 
     /** Верх клина в момент t, м: верх слоя к концу фазы волны там, где кончается клин ({@link DustModel.Column#first}). */
@@ -161,9 +184,9 @@ public final class BlastWall {
         return Math.min(ROLL_MAX, wind(head(t)) / Math.max(1, ROLL * height(t)));
     }
 
-    /** Ветер сразу за фронтом на {@code groundM} от эпицентра по земле, м/с. */
+    /** Ветер сразу за фронтом вдоль земли на {@code groundM} от эпицентра по земле, м/с. */
     double wind(double groundM) {
-        return BlastModel.windSpeed(BlastModel.overpressureKpa(Math.max(1, Math.hypot(groundM, hob)), d.yieldKt()));
+        return d.groundWind(d.blocks(Math.max(0, groundM)));
     }
 
     /** Угол вала в момент t (секунды модели), рад: растёт — у переднего края пыль идёт вверх, поверху — назад. */
@@ -281,11 +304,6 @@ public final class BlastWall {
     public double wilsonReach(double t) {
         if (wilson(t) <= 0) return 0;
         return d.blocks((WILSON_AT + 2 * WILSON_WIDTH) * d.metres(d.frontRadius(t * 20 * d.scale())));
-    }
-
-    /** Положительная фаза, с модели: голова — пыль моложе её ({@link PallField} отдаёт ей место). */
-    double positive() {
-        return positive;
     }
 
     // ---------------------------------------------------------------- законы клина (общие с шейдером: pallWall* в pall.glsl)

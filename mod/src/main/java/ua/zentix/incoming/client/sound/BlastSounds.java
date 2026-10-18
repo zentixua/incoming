@@ -56,27 +56,46 @@ public final class BlastSounds {
      * @return что дошло (для лога); {@code null} — мира нет
      */
     public static Outdoor.@Nullable Heard far(int kind, Vec3 pos, double r0, double hs, GroundMaterial ground, double d, double z, long seed) {
+        Outdoor.Path path = path(d, z, hs, ground.porosity);
+        if (path == null) return null;
+        BlastMix.Profile mix = BlastMix.of(kind);
+        Outdoor.Heard heard = Outdoor.hear(r0, mix == null ? BUNKER_FAR_FLOOR : BlastMix.v640(mix), path);
+        float v = heard.volume();
+        if (v < 0.005f) return heard;
+        float highs = highs(path);
+        if (mix == null) ClientSounds.atEar(ModSounds.BOMB_DEEP.get(), pos, v, 1, seed, 1, highs);
+        else ClientSounds.atEar(ModSounds.BLAST_FAR.get(), pos, v, BlastMix.pitch(mix, seed), seed, 1, highs);
+        return heard;
+    }
+
+    /**
+     * Путь звука от взрыва до уха для {@link Outdoor}: земля у слушателя — верх колонки под ухом (чанк под камерой у
+     * клиента всегда есть), день или ночь, дождь и гроза сейчас.
+     *
+     * @param d  до уха, блоков
+     * @param z  разность хода через кромку рельефа, блоков (0 — прямая видимость)
+     * @param hs высота источника над землёй, блоков
+     * @param gs пористость земли у источника
+     * @return {@code null} — мира нет
+     */
+    public static Outdoor.@Nullable Path path(double d, double z, double hs, double gs) {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
         if (level == null) return null;
         Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
-        // земля у слушателя: верх колонки под ухом (чанк под камерой у клиента всегда есть)
         int x = Mth.floor(ear.x), zz = Mth.floor(ear.z);
         int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, zz);
         GroundMaterial under = GroundMaterial.of(level.getBlockState(new BlockPos(x, top - 1, zz)));
         DimensionType type = level.dimensionType();
         // день: земля греет воздух, звук загибает вверх; нет солнца (Незер, Энд) — как ночью
         double day = type.hasSkyLight() && !type.hasFixedTime() ? Outdoor.day(Mth.cos(level.getTimeOfDay(1) * Mth.TWO_PI)) : 0;
-        Outdoor.Path path = new Outdoor.Path(d, z, hs, Math.max(1.5, ear.y - top), ground.porosity, under == null ? 0.5 : under.porosity,
+        return new Outdoor.Path(d, z, hs, Math.max(1.5, ear.y - top), gs, under == null ? 0.5 : under.porosity,
                 day, level.getRainLevel(1), level.getThunderLevel(1));
-        BlastMix.Profile mix = BlastMix.of(kind);
-        Outdoor.Heard heard = Outdoor.hear(r0, mix == null ? BUNKER_FAR_FLOOR : BlastMix.v640(mix), path);
-        float v = heard.volume();
-        if (v < 0.005f) return heard;
-        float highs = SoundFilters.pathEffects() ? heard.highs() * ClientSounds.farAir(d) : 1;
-        if (mix == null) ClientSounds.atEar(ModSounds.BOMB_DEEP.get(), pos, v, 1, seed, 1, highs);
-        else ClientSounds.atEar(ModSounds.BLAST_FAR.get(), pos, v, BlastMix.pitch(mix, seed), seed, 1, highs);
-        return heard;
+    }
+
+    /** Доля верхов записи раската по пути {@link Outdoor} и воздуху; путь звука считает Sound Physics или он выключен — 1. */
+    public static float highs(Outdoor.Path path) {
+        return SoundFilters.pathEffects() ? Outdoor.highs(path) * ClientSounds.farAir(path.d()) : 1;
     }
 
     /** Взрыв на поверхности — фронт дошёл до уха: шахед (big = false) или крылатая ракета. */

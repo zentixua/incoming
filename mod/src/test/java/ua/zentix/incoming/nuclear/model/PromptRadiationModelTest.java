@@ -1,31 +1,39 @@
 package ua.zentix.incoming.nuclear.model;
 
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PromptRadiationModelTest {
-    @Test
-    void lethalDoseRange15kt() {
-        assertEquals(500, PromptRadiationModel.doseRem(1300, 15), 1e-6);
-        assertTrue(PromptRadiationModel.doseRem(1200, 15) > 500);
-        assertTrue(PromptRadiationModel.doseRem(1400, 15) < 500);
-        assertEquals(2.9e9, PromptRadiationModel.K, 0.01e9);
+    /**
+     * Керма в свободном воздухе у Нагасаки (21 кт, 503 м; RERF): гамма 7,8 / 0,89 / 0,13 / 0,021 Гр на 1 / 1,5 / 2 /
+     * 2,5 км от эпицентра и нейтроны — до 10 % сверху. Допуск 25 %.
+     */
+    @ParameterizedTest
+    @CsvSource({"1000, 7.8", "1500, 0.89", "2000, 0.13", "2500, 0.021"})
+    void nagasakiKerma(double groundM, double gammaGy) {
+        double gy = PromptRadiationModel.doseRem(Math.hypot(groundM, 503), 21) / PromptRadiationModel.REM_PER_GY;
+        assertEquals(gammaGy * 1.05, gy, gammaGy * 0.25);
     }
 
     @Test
     void smallYieldRadiationOutrangesBlast() {
-        // 1 кт: 500 бэр на ~760 м, дальше, чем 5 psi (440 м); у 1 Мт — наоборот
-        assertEquals(500, PromptRadiationModel.doseRem(760, 1), 25);
-        assertTrue(PromptRadiationModel.doseRem(BlastModel.rangeForOverpressure(BlastModel.kpa(5), 1), 1) > 500);
-        assertTrue(PromptRadiationModel.doseRem(BlastModel.rangeForOverpressure(BlastModel.kpa(5), 1000), 1000) < 500);
+        // 1 кт: смертельная доза дальше, чем 5 psi (440 м); у 1 Мт — наоборот
+        double ld50 = SicknessModel.LD50 * PromptRadiationModel.REM_PER_GY;
+        assertTrue(PromptRadiationModel.doseRem(HobBlast.rangeFor(5, 0, 1), 1) > ld50);
+        assertTrue(PromptRadiationModel.doseRem(HobBlast.rangeFor(5, 0, 1000), 1000) < ld50);
     }
 
+    /** G&D табл. 8.41: полметра бетона гасит радиацию первой минуты в 10 раз, гамму осадков — почти в 1000. */
     @Test
-    void shielding() {
-        assertEquals(0.001, PromptRadiationModel.shielding(3, 0, 0, 0, 0), 1e-12);
-        assertEquals(1, PromptRadiationModel.shielding(0, 0, 0, 0, 0), 0);
-        assertEquals(0.2 * 0.3 * 0.6 * 0.9, PromptRadiationModel.shielding(0, 1, 1, 1, 1), 1e-12);
+    void transmissionByMass() {
+        assertEquals(1, PromptRadiationModel.transmission(0, PromptRadiationModel.HALF_PROMPT), 0);
+        assertEquals(0.5, PromptRadiationModel.transmission(PromptRadiationModel.HALF_PROMPT, PromptRadiationModel.HALF_PROMPT), 1e-12);
+        double concrete = 0.5 * 2300;
+        assertEquals(0.1, PromptRadiationModel.transmission(concrete, PromptRadiationModel.HALF_PROMPT), 0.03);
+        assertEquals(0.002, PromptRadiationModel.transmission(concrete, PromptRadiationModel.HALF_FALLOUT), 0.001);
     }
 }

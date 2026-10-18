@@ -38,11 +38,13 @@ class SightTest {
         // над всей дымкой остаётся чистый воздух: за 100 км вверх видно, но не всё
         double space = Sight.Air.at(0, Sight.CLEAR).transmittance(1e5, 1e5);
         assertTrue(space > 0.6 && space < 0.85, "вверх сквозь атмосферу: " + space);
-        // в ливень у моря всё вместе — по дальности видимости; капли и облака по высоте не редеют — шапка в ливень не видна
-        Sight.Air rain = Sight.Air.at(0, Sight.RAIN);
+        // в дождь у моря всё вместе — по дальности видимости; капли и облака по высоте не редеют — шапку в дождь видно едва,
+        // в грозу не видно
+        Sight.Air rain = Sight.Air.at(0, Sight.RAIN), storm = Sight.Air.at(0, Sight.THUNDER);
         assertEquals(Sight.KOSCHMIEDER / Sight.RAIN, rain.haze() + rain.clean() + rain.weather(), 1e-12);
         assertEquals(0, sea.weather(), 0);
-        assertTrue(rain.transmittance(d, 5000) < 0.01, "шапка в ливень: " + rain.transmittance(d, 5000));
+        assertTrue(rain.transmittance(d, 5000) < 0.05, "шапка в дождь: " + rain.transmittance(d, 5000));
+        assertTrue(storm.transmittance(d, 5000) < 1e-4, "шапка в грозу: " + storm.transmittance(d, 5000));
     }
 
     @Test

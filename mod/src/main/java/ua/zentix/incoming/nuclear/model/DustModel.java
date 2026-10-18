@@ -4,9 +4,11 @@ package ua.zentix.incoming.nuclear.model;
  * Пыль, которую поднимает ударная волна (DESIGN-nuke §6): один слой от фронта до пелены, а не стена и пелена порознь.
  * Законы — из обзора литературы «Blast-lofted dust» (дизайн «ядерка уровня кино», §8); метры, секунды модели, килограммы.
  * <p>
- * <b>Вынос.</b> За фронтом дует ветер Ренкина–Гюгонио ({@link BlastModel#windSpeed}), спадающий за положительную фазу
- * ({@link BlastModel#positivePhaseSeconds}) как (1 − τ/t₊)·e^(−τ/t₊). Динамическая скорость у земли — по шероховатой
- * пластине Шлихтинга на x метров за фронтом (Gaj &amp; Small 1991, ур. 7): u* = U/√2·B^(−1,25), B = 2,87 + 1,58·lg(x/K_s).
+ * <b>Вынос.</b> Давление на земле, положительная фаза t₊ на месте и доля напора вдоль земли — по высоте подрыва
+ * ({@link HobBlast}). За фронтом вдоль земли дует ветер Ренкина–Гюгонио ({@link BlastModel#windSpeed}) × √доли (у
+ * правильного отражения под подрывом воздух идёт к земле под углом), спадающий за фазу как (1 − τ/t₊)·e^(−τ/t₊).
+ * Динамическая скорость у земли — по шероховатой пластине Шлихтинга на x метров за фронтом (Gaj &amp; Small 1991,
+ * ур. 7): u* = U/√2·B^(−1,25), B = 2,87 + 1,58·lg(x/K_s).
  * С u* ≥ 10 порогов срыва грунт уходит во взвесь — вынос F = 1,80·ρ·U^1,24 / (u*ₜₕ^0,24·B^2,8) (там же, ур. 8, по
  * Mirels 1984; ~1 кг/(м²·с) при 43 м/с над рыхлым песком); от порога до 10 порогов — сальтация, F ∝ u*³(1 − u*ₜₕ²/u*²)
  * (§3.1), с постоянной, при которой вынос непрерывен на 10 порогах. Вынос за фазу — не больше запаса грунта
@@ -81,7 +83,7 @@ public final class DustModel {
      * Мелкие уходят e-кратно за столько секунд — разбавление, вынос ветром, подсос к пожарам; подобрано по Хиросиме
      * (Hersey: Фудзии в 1,42 км — «около двадцати минут в потемневшем утре»), оседание мелких — часы.
      */
-    static final double FINE_S = 1000;
+    static final double FINE_S = 800;
     /**
      * Подсос в ножку: в пределах {@link #STEM_M}·∛(Y/15) м от эпицентра (за половиной — слабее), с {@link #STEM_FROM_S}
      * ·∛(Y/15) с, e-кратно за {@link #STEM_S} с. Оценка: Такакура в 300 м — «небо стало светлеть» через минуты.
@@ -100,10 +102,11 @@ public final class DustModel {
      */
     public record Surface(double threshold, double supply, double debris) {
         /**
-         * Сухой суглинистый песок, запас — сантиметр грунта (15 кг/м²), город из дерева, глины и штукатурки — 0,5 кг/м²
-         * пыли обломков (подобрано: в 1,4 км у 15 кт на 592 м темно ~20 минут, в 3,2 км — сумерки, как в Хиросиме).
+         * Сухой суглинистый песок, запас — сантиметр грунта (15 кг/м²), город из дерева, глины и штукатурки — 0,1 кг/м²
+         * пыли обломков (подобрано по давлению на земле {@link HobBlast} вместе с {@link DustModel#FINE_S}: в 1,4 км
+         * у 15 кт на 592 м темно ~20 минут, в 3,2 км — сумерки, как в Хиросиме).
          */
-        public static final Surface REFERENCE = new Surface(0.34, 15, 0.5);
+        public static final Surface REFERENCE = new Surface(0.34, 15, 0.1);
     }
 
     /** Гладкая ступень 0..1 от e0 до e1. */
@@ -154,11 +157,12 @@ public final class DustModel {
     }
 
     /**
-     * Грунт, поднятый за положительную фазу (кг/м²) под давлением фронта {@code kpa}: вынос по ветру, спадающему за фазу,
-     * на x = U_s·τ метров за фронтом (середины {@value #LIFT_STEPS} шагов); без предела запаса.
+     * Грунт, поднятый за положительную фазу (кг/м²) под давлением фронта {@code kpa}: вынос по ветру вдоль земли (доля
+     * напора {@code along}), спадающему за фазу, на x = U_s·τ метров за фронтом (середины {@value #LIFT_STEPS} шагов); без
+     * предела запаса.
      */
-    static double soil(double kpa, double positiveS, double threshold) {
-        double u0 = BlastModel.windSpeed(kpa), front = BlastModel.frontSpeed(kpa), rho = shockedAir(kpa);
+    static double soil(double kpa, double along, double positiveS, double threshold) {
+        double u0 = BlastModel.windSpeed(kpa) * Math.sqrt(Math.max(0, along)), front = BlastModel.frontSpeed(kpa), rho = shockedAir(kpa);
         double m = 0, dt = positiveS / LIFT_STEPS;
         for (int i = 0; i < LIFT_STEPS; i++) {
             double t = (i + 0.5) * dt, x = t / positiveS;
@@ -182,9 +186,9 @@ public final class DustModel {
      */
     public static Column column(double groundM, double hobM, double yieldKt, boolean surfaceBurst, double visibilityM, Surface surface) {
         double hob = Math.max(0, hobM), ground = Math.max(0, groundM), slant = Math.max(1, Math.hypot(ground, hob));
-        double kpa = BlastModel.overpressureKpa(slant, yieldKt), ys = Math.cbrt(yieldKt / 15);
-        double positive = BlastModel.positivePhaseSeconds(yieldKt);
-        double soil = Math.min(surface.supply(), soil(kpa, positive, surface.threshold()));
+        double kpa = BlastModel.kpa(HobBlast.psi(ground, hob, yieldKt)), ys = Math.cbrt(yieldKt / 15);
+        double positive = HobBlast.positivePhaseSeconds(ground, hob, yieldKt), along = HobBlast.alongGround(ground, hob, yieldKt);
+        double soil = Math.min(surface.supply(), soil(kpa, along, positive, surface.threshold()));
         double debris = surface.debris() * destroyed(BlastModel.psi(kpa));
         double wave = TOP_C * Math.pow(slant, 1 / 6.0) * Math.pow(BlastModel.frontSpeed(kpa), 5 / 6.0);
         // свет вспышки на ровную землю: от шара (не ближе его радиуса), с косинусом к вертикали
@@ -201,15 +205,14 @@ public final class DustModel {
      * пыли меньше. Подрыв и поверхность — как у {@link #column}.
      */
     public static double reach(double hobM, double yieldKt, boolean surfaceBurst, double visibilityM, Surface surface, double depth) {
-        double hob = Math.max(0, hobM), far = BlastModel.rangeForOverpressure(BlastModel.kpa(0.1), yieldKt);
-        double farGround = Math.sqrt(Math.max(0, far * far - hob * hob));
-        return Solve.decreasingRoot(r -> column(r, hob, yieldKt, surfaceBurst, visibilityM, surface).lifted(), depth, 1, Math.max(farGround, 2));
+        double hob = Math.max(0, hobM), far = HobBlast.rangeFor(0.1, hob, yieldKt);
+        return Solve.decreasingRoot(r -> column(r, hob, yieldKt, surfaceBurst, visibilityM, surface).lifted(), depth, 1, Math.max(far, 2));
     }
 
     /**
-     * Слой пыли в одном месте: положительная фаза t₊ (с), поднятый грунт и пыль обломков (кг/м²), закон верха в фазе волны
-     * (h = wave·τ^(5/6), м), верх над нагретой землёй h_b (м), доля подсоса в ножку 0..1 и когда он начинается (с).
-     * Возраст — секунды модели с прихода фронта.
+     * Слой пыли в одном месте: положительная фаза t₊ на месте (с), поднятый грунт и пыль обломков (кг/м²), закон верха
+     * в фазе волны (h = wave·τ^(5/6), м), верх над нагретой землёй h_b (м), доля подсоса в ножку 0..1 и когда он
+     * начинается (с). Возраст — секунды модели с прихода фронта.
      */
     public record Column(double positive, double soil, double debris, double wave, double buoyant, double stem, double stemFrom) {
         /** Вся поднятая пыль, кг/м². */

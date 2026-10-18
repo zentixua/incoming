@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.PallPass;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
@@ -40,13 +39,14 @@ class PallFieldTest {
     void dustRowIsTheDustLayer() {
         Detonation quarter = new Detonation(5, new Vec3(0, 64, 0), 64, 15, true, 0, 0.5f, 8, 20_000, 7, 0.25f, false, 0.42f);
         PallField p = new PallField(quarter, NOON);
-        double positive = BlastModel.positivePhaseSeconds(15);
         double[] v = new double[4];
         for (int i : new int[]{3, 20, 60}) {
             double arrival = arrival(p, i);
+            // положительная фаза — своя на каждой дальности
+            DustModel.Column c = p.layer(i);
+            double positive = c.positive();
             for (double age : new double[]{0.3, 1.2, 2, 30, 600}) {
                 p.dust(i, arrival + 20 * quarter.scale() * age, v);
-                DustModel.Column c = p.layer(i);
                 double depth = c.depth(age) * (1 - BlastWall.handoff(age / positive));
                 assertEquals(c.depth(age) < PallField.GONE_DEPTH ? 0 : depth, v[0] * PallField.column(0) * v[1], 1e-6 * depth + 1e-12, i + ", " + age + " с");
                 assertEquals(Math.max(PallField.MIN_TOP_BLOCKS, quarter.blocks(c.height(age))), v[1], 1e-9);
@@ -148,7 +148,7 @@ class PallFieldTest {
         for (double metres : new double[]{1000, 1500, 2500}) {
             int i = (int) (metres / p.reach() * PallField.BINS);
             double r = p.radius(i), arrival = arrival(p, i);
-            for (double t = arrival / 20 + 0.02; t < arrival / 20 + 6 * w.positive(); t += 0.02) {
+            for (double t = arrival / 20 + 0.02; t < arrival / 20 + 6 * p.layer(i).positive(); t += 0.02) {
                 if (!w.slot(t, s)) continue;
                 double u = (s[0] - r) / s[1], ticks = 20 * t;
                 if (u < 0.05) continue;
@@ -488,10 +488,9 @@ class PallFieldTest {
         double[] w = new double[2];
         p.drift(ticks, w);
         assertTrue(Math.hypot(w[0], w[1]) > 2.5 * (p.radius(1) - p.radius(0)), "снос с подрыва — больше двух узлов: " + Math.hypot(w[0], w[1]));
-        // пелена — пыль старше полутора фаз волны
-        double positive = BlastModel.positivePhaseSeconds(GROUND.yieldKt());
+        // пелена — пыль старше полутора положительных фаз на месте
         int behind = i;
-        while (behind > 0 && ticks - arrival(p, behind) < 20 * GROUND.scale() * 1.6 * positive) behind--;
+        while (behind > 0 && ticks - arrival(p, behind) < 20 * GROUND.scale() * 1.6 * p.layer(behind).positive()) behind--;
         assertTrue(behind < i && behind > i - 20, "пелена за " + (i - behind) + " узлов");
         double ux = Math.cos(GROUND.windDir()), uz = Math.sin(GROUND.windDir());
         for (int side : new int[]{1, -1}) {
@@ -565,7 +564,7 @@ class PallFieldTest {
         double[] dust = new double[4], spray = new double[4];
         int i = 20;
         double arrival = arrival(p, i);
-        double wind = BlastModel.windSpeed(BlastModel.overpressureKpa(Math.max(1, GROUND.metres(p.radius(i))), 15));
+        double wind = GROUND.groundWind(p.radius(i));
         for (double age : new double[]{5, 30, 90}) {
             p.dust(i, arrival + 20 * age, dust);
             p.spray(i, arrival + 20 * age, spray);

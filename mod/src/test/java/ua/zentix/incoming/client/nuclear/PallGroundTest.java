@@ -17,10 +17,10 @@ class PallGroundTest {
     private static final Detonation GROUND = new Detonation(1, new Vec3(0, 109, 0), 109, 15, true, 0, 0.5f, 8, 20_000, 7, 1f, false, 0.42f);
     private static final Sightline.Heights UNKNOWN = (x, z) -> Double.NaN;
     /**
-     * Полсторона карты кадров {@code nuke-water} и {@code pall-low}, блоки: положения берега и долины ниже — в её клетках
-     * (заполнение карты не зависит от рамки пелены).
+     * Полсторона карты проверок заполнения ниже, блоки: где лягут берег и долина, решают клетки, а рамку пелены (и с ней
+     * карту) двигают законы пыли — заполнение от них не зависит.
      */
-    private static final double FRAME_HALF = 6417;
+    private static final double FILL_HALF = 6550;
 
     private static PallGround ground() {
         return new PallGround(GROUND, new PallField(GROUND, 6000));
@@ -87,8 +87,8 @@ class PallGroundTest {
     void coastContinuesAndOpenSeaStaysSea() {
         PallField pall = new PallField(GROUND, 6000);
         pall.water(1, 1);
-        PallGround g = new PallGround(GROUND, pall, FRAME_HALF);
-        assertEquals(FRAME_HALF, g.half(), 1e-9);
+        PallGround g = new PallGround(GROUND, pall, FILL_HALF);
+        assertEquals(FILL_HALF, g.half(), 1e-9);
         // зритель в (−1500, 0), берег — x = −1540, море к +x
         FarTerrain.Water shore = (x, z) -> Math.hypot(x + 1500, z) < 250 ? (x > -1540 ? 1 : 0) : Double.NaN;
         surveyAll(g, UNKNOWN, shore);
@@ -102,10 +102,17 @@ class PallGroundTest {
         for (double[] p : new double[][]{{-3000, 0}, {-2500, 800}, {-2500, -800}, {-5000, 300}}) {
             assertEquals(0, g.water(p[0], p[1]), 0.02, "суша " + p[0] + " " + p[1]);
         }
-        // вдоль берега вдали — где он, неизвестно: клетка берега наполовину вода, и её доля расходится клином
-        for (double[] p : new double[][]{{-2300, 1600}, {-2300, -1600}}) {
-            double w = g.water(p[0], p[1]);
-            assertTrue(w > 0.2 && w < 0.8, "берег вдали " + p[0] + " " + p[1] + ": " + w);
+        // вдоль берега вдали, где он неизвестен, суша переходит в море один раз (доля воды не убывает), а не
+        // пятнами; где именно — по ближайшему известному, от того, как берег лёг на клетки
+        for (double z : new double[]{1600, -1600}) {
+            double prev = g.water(-3000, z);
+            assertEquals(0, prev, 0.02, "суша вдали " + z);
+            for (double x = -3000; x <= -900; x += 10) {
+                double w = g.water(x, z);
+                assertTrue(w >= prev - 1e-6, "берег вдали " + x + " " + z + ": " + w + " после " + prev);
+                prev = w;
+            }
+            assertEquals(1, prev, 0.02, "море вдали " + z);
         }
     }
 
@@ -154,8 +161,8 @@ class PallGroundTest {
      */
     @Test
     void unknownTakesTheKnownAround() {
-        PallGround g = new PallGround(GROUND, new PallField(GROUND, 6000), FRAME_HALF);
-        assertEquals(FRAME_HALF, g.half(), 1e-9);
+        PallGround g = new PallGround(GROUND, new PallField(GROUND, 6000), FILL_HALF);
+        assertEquals(FILL_HALF, g.half(), 1e-9);
         Sightline.Heights valley = (x, z) -> Math.hypot(x + 400, z) < 192 ? 63 : Double.NaN;
         surveyAll(g, valley);
         assertEquals(-46, g.at(-400, 0), 1);

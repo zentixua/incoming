@@ -11,8 +11,8 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * Пелена после ударной волны (план «ядерка уровня кино», шаг 2): поле плотности пыли и дыма одного подрыва по радиусу
  * от эпицентра и времени. Его рисует объём слоя эффектов ({@code fx/layer/PallPass}: лучи по полю, умноженному на
  * трёхмерный шум), по нему же видимость, звук, пепел и тень у камеры ({@link NukePall}). Чистая математика по модели
- * подрыва, без мира и без нового пакета: что волна поднимает, клиент знает из давления ({@link BlastModel}) и прихода
- * фронта ({@link Detonation#arrivalTicks}), как и сервер.
+ * подрыва, без мира и без нового пакета: что волна поднимает, клиент знает из давления на земле
+ * ({@link Detonation#groundOverpressureKpa}) и прихода фронта ({@link Detonation#arrivalTicks}), как и сервер.
  * <p>
  * <b>Пыль</b> — тот же слой, что голова стены у фронта ({@link BlastWall}), по одним законам ({@link DustModel}): что
  * подняла волна (грунт по ветру за фронтом и пыль обломков там, где рушатся дома), верх слоя (у фронта — десятки метров,
@@ -124,8 +124,6 @@ public final class PallField {
     private final double reach;
     /** Радиус зоны пожаров по земле, блоки (0 — пожаров нет). */
     private final double fireReach;
-    /** Положительная фаза волны, с модели: пыль моложе её — голова ({@link BlastWall}). */
-    private final double positive;
     /** По узлам — слой пыли ({@link DustModel}). */
     private final DustModel.Column[] columns = new DustModel.Column[BINS];
     /**
@@ -167,7 +165,6 @@ public final class PallField {
         this.lastGame = burstGame;
         this.lastDay = burstDay;
         double hob = Math.max(0, d.hobMetres()), y = d.yieldKt();
-        this.positive = BlastModel.positivePhaseSeconds(y);
         DustModel.Surface surface = DustModel.Surface.REFERENCE;
         double dustM = DustModel.reach(hob, y, d.surface(), d.visibility(), surface, GONE_DEPTH);
         // сервер не поджигает (Detonation.fires) — зоны пожаров нет: ни мглы над ними, ни их зарева, ни шторма
@@ -178,8 +175,8 @@ public final class PallField {
         for (int i = 0; i < BINS; i++) {
             double rm = d.metres(radius(i)), slant = Math.hypot(rm, hob);
             arrival[i] = d.arrivalTicks(d.blocks(slant));
-            double kpa = BlastModel.overpressureKpa(Math.max(1, slant), y), wind = BlastModel.windSpeed(kpa);
-            destroyed[i] = DustModel.destroyed(BlastModel.psi(kpa));
+            double wind = d.groundWind(radius(i));
+            destroyed[i] = DustModel.destroyed(BlastModel.psi(d.groundOverpressureKpa(radius(i))));
             spray[i] = WaterModel.spray(wind);
             sprayFrom[i] = Math.max(1, d.blocks(WaterModel.sprayHeight(wind)));
             columns[i] = DustModel.column(rm, hob, y, d.surface(), d.visibility(), surface);
@@ -198,7 +195,8 @@ public final class PallField {
     }
 
     /** Через сколько секунд модели после фронта слой тоньше {@link #GONE_DEPTH} (толща после фазы волны только убывает). */
-    private double settledBy(DustModel.Column c) {
+    private static double settledBy(DustModel.Column c) {
+        double positive = c.positive();
         if (c.depth(positive) < GONE_DEPTH) return positive;
         double lo = positive, hi = 6 * 3600;
         if (c.depth(hi) >= GONE_DEPTH) return hi;
@@ -427,11 +425,11 @@ public final class PallField {
     }
 
     /**
-     * Доля пыли узла i в таблице (пелена) против головы стены: пыль моложе положительной фазы — голова, за полфазы место
-     * переходит к пелене ({@link BlastWall#handoff}).
+     * Доля пыли узла i в таблице (пелена) против головы стены: пыль моложе положительной фазы на месте — голова, за
+     * полфазы место переходит к пелене ({@link BlastWall#handoff}).
      */
-    private double pallShare(double ageS) {
-        return 1 - BlastWall.handoff(ageS / positive);
+    private double pallShare(int i, double ageS) {
+        return 1 - BlastWall.handoff(ageS / columns[i].positive());
     }
 
     /**
@@ -443,7 +441,7 @@ public final class PallField {
         double age = seconds(i, ticks), depth = columns[i].depth(age);
         out[1] = Math.max(d.blocks(columns[i].height(age)), MIN_TOP_BLOCKS);
         // столб профиля — column(0) верха: толща над землёй ровно та, что у слоя, и при нижнем пределе верха
-        out[0] = depth < GONE_DEPTH ? 0 : depth / (column(0) * out[1]) * pallShare(age);
+        out[0] = depth < GONE_DEPTH ? 0 : depth / (column(0) * out[1]) * pallShare(i, age);
         out[2] = fire[i] * smooth(30, 300, age(i, ticks));
         out[3] = 0;
     }
@@ -454,7 +452,7 @@ public final class PallField {
      */
     void spray(int i, double ticks, double[] out) {
         double age = seconds(i, ticks);
-        out[0] = spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i] * sprayEnvelope(age) * pallShare(age);
+        out[0] = spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i] * sprayEnvelope(age) * pallShare(i, age);
         out[1] = Math.max(sprayTop(sprayFrom[i], age), 1);
         out[2] = out[3] = 0;
     }

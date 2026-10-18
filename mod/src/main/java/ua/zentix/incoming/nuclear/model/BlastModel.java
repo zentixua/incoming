@@ -1,8 +1,9 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Ударная волна: избыточное давление по Кинни–Грэхему, скоростной напор, скорость фронта.
- * Дальность наклонная, в метрах (= блоках); мощность ядерного подрыва в килотоннах, обычного заряда — в кг ТНТ.
+ * Ударная волна: соотношения Ренкина–Гюгонио за фронтом (скоростной напор, ветер, скорость фронта) и давление наземного
+ * взрыва обычного заряда по Кинни–Грэхему. Давление ядерного подрыва — {@link HobBlast} (по высоте подрыва).
+ * Дальность наклонная, в метрах (= блоках); заряд — в кг ТНТ.
  */
 public final class BlastModel {
     /** Атмосферное давление, кПа. */
@@ -11,27 +12,15 @@ public final class BlastModel {
     public static final double SOUND_SPEED = 343.0;
     /** кПа в одном psi. */
     public static final double KPA_PER_PSI = 6.895;
-    /** Доля энергии в волне. */
-    private static final double BLAST_FRACTION = 0.5;
-    /** Усиление отражением от земли. */
+    /** Усиление наземного взрыва отражением от земли (часть энергии уходит в воронку и грунт — не вдвое). */
     private static final double GROUND_REFLECTION = 1.8;
 
     private BlastModel() {
     }
 
-    /** Эквивалент для волны, кг ТНТ: W = 0.5·Y·10⁶·1.8. */
-    static double chargeKg(double yieldKt) {
-        return BLAST_FRACTION * yieldKt * 1e6 * GROUND_REFLECTION;
-    }
-
-    /** Избыточное давление на наклонной дальности R, кПа. */
-    public static double overpressureKpa(double slantRangeM, double yieldKt) {
-        return kinneyGraham(slantRangeM, chargeKg(yieldKt));
-    }
-
     /**
      * Избыточное давление наземного взрыва обычного заряда {@code tntKg} кг ТНТ на наклонной дальности R, кПа: волна
-     * от земли отражается, как у ядерного подрыва ({@link #GROUND_REFLECTION}).
+     * от земли отражается ({@link #GROUND_REFLECTION}).
      */
     public static double surfaceOverpressureKpa(double slantRangeM, double tntKg) {
         return kinneyGraham(slantRangeM, tntKg * GROUND_REFLECTION);
@@ -58,12 +47,6 @@ public final class BlastModel {
         return psi * KPA_PER_PSI;
     }
 
-    /** Дальность, где давление падает до {@code kpa} (0, если такого давления нет даже у центра). */
-    public static double rangeForOverpressure(double kpa, double yieldKt) {
-        if (kpa >= overpressureKpa(0, yieldKt)) return 0;
-        return Solve.decreasingRoot(r -> overpressureKpa(r, yieldKt), kpa, 1e-3, 1e8);
-    }
-
     /** Скоростной напор за фронтом, кПа: q = 2.5·P² / (7·P0 + P). */
     public static double dynamicPressureKpa(double overpressureKpa) {
         return 2.5 * overpressureKpa * overpressureKpa / (7 * P0 + overpressureKpa);
@@ -83,8 +66,18 @@ public final class BlastModel {
         return SOUND_SPEED * 5 * x / 7 / Math.sqrt(1 + 6 * x / 7);
     }
 
-    /** Длительность положительной фазы на средних дальностях, с. */
-    public static double positivePhaseSeconds(double yieldKt) {
-        return 0.4 * Math.cbrt(yieldKt);
+    /**
+     * Длительность положительной фазы у слушателя на наклонной дальности R, с: Кинни–Грэхем для ядерного взрыва
+     * (KG85 NE, табл. XI; формула и проверка по таблице — Garcés 2019, Infrasound Monitoring for Atmospheric Studies,
+     * гл. 8, прил. 4: 2 кт на 8 км — 0,67 с, 1 т на 1 км — 0,057 с), отражение от земли — как у давления
+     * ({@link #GROUND_REFLECTION}): W = 1.8·Y кт, Z = R / ∛W, м/кт^⅓. Таблица — от Z = 35 (ближе — как на её краю), до
+     * 5000; дальше формула выходит на постоянную 0,77·∛W (как ANSI S2.20: 1 кт на 10 км — 0,52 с, на 100 км — 0,93).
+     */
+    public static double positivePhaseSeconds(double slantRangeM, double yieldKt) {
+        double w = Math.cbrt(GROUND_REFLECTION * Math.max(1e-6, yieldKt));
+        double z = Math.max(35, slantRangeM / w);
+        double a = z / 100, b = z / 285;
+        return w * 0.18 * Math.sqrt(1 + a * a * a) / (Math.sqrt(1 + z / 40) * Math.pow(1 + Math.pow(b, 5), 1 / 6.0)
+                * Math.pow(1 + z / 50_000, 1 / 6.0));
     }
 }
