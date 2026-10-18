@@ -274,6 +274,11 @@ public final class BlastWall {
 
     /** Клубы выедают огибающую головы с края на эту долю ({@code WALL_BITE} в {@code pall.glsl}). */
     static final double BITE = 0.45;
+    /**
+     * Верх хвоста головы за двумя полуширинами вала, доля высоты стены ({@link #inside}: 1 − 0,45): на нём пыль остаётся
+     * за головой, с него встаёт пелена ({@link PallField}).
+     */
+    static final double TAIL = 0.55;
 
     /**
      * Насколько точка внутри огибающей головы: 1 — ось вала, 0 — край, меньше — снаружи. {@code s} — за передним краем
@@ -316,6 +321,20 @@ public final class BlastWall {
         double f = 1 + (slot[6] - 1) * wet;
         double a = slot[1] * f, top = slot[2] * f, back = slot[5] * wet, k = slot[3] + (slot[7] - slot[3]) * wet;
         return k * mean(s - back, up, a, top);
+    }
+
+    /**
+     * Толща средней головы по вертикали над точкой от {@code from} до {@code to} (блоки над рельефом под ней; {@code to} —
+     * хоть бесконечность): интеграл {@link #sigma} по высоте, 16 шагов по той части, где голова есть. Сколько пыли головы
+     * над глазом и под ним — докуда идёт луч пелены ({@link NukePall}).
+     */
+    static double tau(float[] slot, double relX, double relZ, double from, double to, double wet) {
+        if (slot[3] <= 0) return 0;
+        double top = slot[2] * (1 + (slot[6] - 1) * wet), a = Math.max(from, -0.5 * top), b = Math.min(to, top);
+        if (!(b > a)) return 0;
+        double ds = (b - a) / 16, sum = 0;
+        for (int i = 0; i < 16; i++) sum += sigma(slot, relX, relZ, a + (i + 0.5) * ds, wet);
+        return sum * ds;
     }
 
     /** Когда фронт дошёл до радиуса {@code groundM} по земле, с модели (фронт — как у сервера, {@link Detonation#arrivalTicks}). */

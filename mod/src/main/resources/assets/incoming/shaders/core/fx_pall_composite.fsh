@@ -69,14 +69,14 @@ out vec4 fragColor;
 vec4 pallOver(vec3 p) {
     float tau = 0.0, w = 0.0, g = 0.0, water = 0.0;
     if (PallSlot0[1].w > 0.5) {
-        PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, p, 0.0);
+        PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, p, pallRelief(Sampler5, PallSlot0, PallGround0, p.xz));
         tau += f.column.x + f.column.y + f.column.z;
         w += f.column.x * mix(PALL_DUST_W.g, PALL_SMOKE_W.g, f.smoke) + f.column.y * PALL_HAZE_W.g + f.column.z * PALL_MIST_W.g;
         g += (f.column.x + f.column.y) * PALL_DUST_G + f.column.z * PALL_MIST_G;
         water += (f.column.x + f.column.y) * f.wet + f.column.z;
     }
     if (PallSlot1[1].w > 0.5) {
-        PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, p, 0.0);
+        PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, p, pallRelief(Sampler6, PallSlot1, PallGround1, p.xz));
         tau += f.column.x + f.column.y + f.column.z;
         w += f.column.x * mix(PALL_DUST_W.g, PALL_SMOKE_W.g, f.smoke) + f.column.y * PALL_HAZE_W.g + f.column.z * PALL_MIST_W.g;
         g += (f.column.x + f.column.y) * PALL_DUST_G + f.column.z * PALL_MIST_G;

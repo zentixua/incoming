@@ -92,31 +92,71 @@ class PallFieldTest {
     }
 
     /**
-     * Верх пыли за фронтом растёт со скоростью, а не встаёт сразу: в 400 м от 15 кт сразу ~25 м (пыль, поднятая напором),
-     * через 5 с — ниже 50, через 20 с — до 100, к минуте — выше 120 (камера в 120 м над городом тонет в пыли), а выше
-     * своей высоты с клубами ({@link PallField#topMetres} × 1,35) — никогда; всё время растёт.
+     * Пелена встаёт там, куда пыль подняла голова стены, — на верху её хвоста ({@link BlastWall#TAIL} высоты стены), а не
+     * ниже, чтобы потом снова расти: голова — передний край той же поднятой пыли. Дальше верх только растёт, к своей
+     * высоте ({@link PallField#topMetres}), если та выше, и с клубами не выше её × 1,35. У 15 кт в 400 м — сразу ~140 м, в
+     * 1,4 км — 64 м и к 20-й секунде ~78 м: камера на холме в 40 м над землёй под эпицентром — в пыли сразу за головой.
      */
     @Test
-    void dustTopClimbsBehindTheFront() {
+    void dustStaysWhereTheHeadLiftedIt() {
         PallField p = new PallField(GROUND, NOON);
         double[] v = new double[4];
-        int i = (int) (400 / p.reach() * PallField.BINS);
-        double r = p.radius(i), arrival = GROUND.arrivalTicks(r), top = PallField.topMetres(r, 1);
-        double prev = 0;
-        for (double age = 0.05; age <= 600; age += 0.25) {
-            p.dust(i, arrival + 20 * age, v);
-            assertTrue(v[1] >= prev - 1e-9, age + " с: верх пыли опустился");
-            assertTrue(v[1] <= top * 1.35 + 1e-9, age + " с: выше своей высоты " + v[1]);
-            prev = v[1];
+        for (double metres : new double[]{400, 1400}) {
+            int i = (int) (metres / p.reach() * PallField.BINS);
+            double r = p.radius(i), arrival = GROUND.arrivalTicks(r);
+            double from = BlastWall.TAIL * BlastWall.wallHeight(r, 1), high = Math.max(PallField.topMetres(r, 1), from) * 1.35;
+            double prev = 0;
+            for (double age = 0.05; age <= 600; age += 0.25) {
+                p.dust(i, arrival + 20 * age, v);
+                assertTrue(v[1] >= prev - 1e-9, metres + " м, " + age + " с: верх пыли опустился");
+                assertTrue(v[1] <= high + 1e-9, metres + " м, " + age + " с: выше своей высоты " + v[1]);
+                prev = v[1];
+            }
+            p.dust(i, arrival + 1, v);
+            assertEquals(from, v[1], 1, metres + " м: сразу за головой");
         }
-        p.dust(i, arrival + 1, v);
-        assertEquals(PallField.RISE_FROM_M, v[1], 1);
-        p.dust(i, arrival + 20 * 5, v);
-        assertTrue(v[1] > 30 && v[1] < 50, "через 5 с верх на " + v[1] + " м");
+        int i = (int) (1400 / p.reach() * PallField.BINS);
+        double arrival = GROUND.arrivalTicks(p.radius(i));
         p.dust(i, arrival + 20 * 20, v);
-        assertTrue(v[1] > 60 && v[1] < 100, "через 20 с верх на " + v[1] + " м");
-        p.dust(i, arrival + 20 * 60, v);
-        assertTrue(v[1] > 120, "через минуту верх на " + v[1] + " м");
+        assertTrue(v[1] > 70 && v[1] < 85, "в 1,4 км через 20 с верх на " + v[1] + " м");
+        p.dust(i, arrival + 1, v);
+        assertTrue(v[1] > 60, "в 1,4 км сразу за головой верх на " + v[1] + " м");
+    }
+
+    /**
+     * Над холмом слой встаёт от его склона (пыль поднимает ветер с него): точка в 40 блоках над землёй под эпицентром на
+     * холме в 38 — как в 2 блоках над ровной землёй; в долине — как был (пыль стекает туда от земли под эпицентром).
+     */
+    @Test
+    void layerFollowsHillsNotValleys() {
+        PallField p = new PallField(GROUND, NOON);
+        double ticks = GROUND.arrivalTicks(1400) + 20 * 10;
+        assertTrue(p.sigma(1400, 0, 2, 0, ticks, PallField.Water.DRY) > 0);
+        assertEquals(p.sigma(1400, 0, 2, 0, ticks, PallField.Water.DRY), p.sigma(1400, 0, 40, 38, ticks, PallField.Water.DRY), 1e-12);
+        assertEquals(p.sigma(1400, 0, -20, 0, ticks, PallField.Water.DRY), p.sigma(1400, 0, -20, -30, ticks, PallField.Water.DRY), 1e-12);
+    }
+
+    /** Толща по вертикали ({@link PallField#tau}) — интеграл ослабления по высоте: над глазом и под ним до земли, и на холме. */
+    @Test
+    void verticalDepthIsTheIntegral() {
+        PallField p = new PallField(GROUND, NOON);
+        for (double metres : new double[]{300, 1400, 2500}) {
+            for (double age : new double[]{2, 20, 300}) {
+                double ticks = GROUND.arrivalTicks(metres) + 20 * age;
+                for (double floor : new double[]{-30, 0, 38}) {
+                    for (double eye : new double[]{floor + 2, floor + 60}) {
+                        double up = 0, down = 0, ds = 0.05;
+                        for (double h = eye + ds / 2; h < eye + 2000; h += ds) up += p.sigma(metres, 0, h, floor, ticks, PallField.Water.DRY) * ds;
+                        for (double h = floor + ds / 2; h < eye; h += ds) down += p.sigma(metres, 0, h, floor, ticks, PallField.Water.DRY) * ds;
+                        String at = metres + " м, " + age + " с, пол " + floor + ", глаз " + eye;
+                        double tu = p.tau(metres, 0, eye, Double.POSITIVE_INFINITY, floor, ticks, PallField.Water.DRY);
+                        double td = p.tau(metres, 0, floor, eye, floor, ticks, PallField.Water.DRY);
+                        assertEquals(up, tu, 0.005 * up + 1e-6, at + ": над глазом");
+                        assertEquals(down, td, 0.005 * down + 1e-6, at + ": под глазом");
+                    }
+                }
+            }
+        }
     }
 
     /** У центра в самой густой пыли видно на ~40 м; через 5 минут — в разы дальше, через полчаса пыли нет. */
@@ -351,11 +391,11 @@ class PallFieldTest {
         assertTrue(k > 0.9 && k < 1, "пыль узла i — с прихода фронта: " + k);
         w[0] *= k;
         w[1] *= k;
-        double s = p.sigma(w[0] + ux * r, w[1] + uz * r, 0, ticks, PallField.Water.DRY);
+        double s = p.sigma(w[0] + ux * r, w[1] + uz * r, 0, 0, ticks, PallField.Water.DRY);
         assertTrue(s >= row[4 * i] * 0.98, "пыль у земли " + s + " < таблицы " + row[4 * i]);
         assertTrue(s <= row[4 * i] + row[4 * (PallField.BINS + 2)] * 1.01 + 1e-9);
         // выше пелены — ничего
-        assertEquals(0, p.sigma(w[0] + ux * r, w[1] + uz * r, row[4 * i + 1] * 2 + 400, ticks, PallField.Water.DRY), 1e-12);
+        assertEquals(0, p.sigma(w[0] + ux * r, w[1] + uz * r, row[4 * i + 1] * 2 + 400, 0, ticks, PallField.Water.DRY), 1e-12);
         assertTrue(w[0] > 0 && w[1] > 0, "ветер на 0,5 рад — снос по +x и +z");
     }
 
@@ -378,8 +418,8 @@ class PallFieldTest {
         double ux = Math.cos(GROUND.windDir()), uz = Math.sin(GROUND.windDir());
         for (int side : new int[]{1, -1}) {
             double behind = side * p.radius(i), ahead = side * p.radius(i + 2);
-            assertTrue(p.sigma(ux * behind, uz * behind, 0, ticks, PallField.Water.DRY) > 0, "за фронтом пыль, сторона " + side);
-            assertEquals(0, p.sigma(ux * ahead, uz * ahead, 0, ticks, PallField.Water.DRY), 1e-12, "перед фронтом пыли нет, сторона " + side);
+            assertTrue(p.sigma(ux * behind, uz * behind, 0, 0, ticks, PallField.Water.DRY) > 0, "за фронтом пыль, сторона " + side);
+            assertEquals(0, p.sigma(ux * ahead, uz * ahead, 0, 0, ticks, PallField.Water.DRY), 1e-12, "перед фронтом пыли нет, сторона " + side);
         }
     }
 
@@ -467,21 +507,21 @@ class PallFieldTest {
         PallField.Water east = (dx, dz) -> dx > 400 ? 1 : 0;
         double qx = w[0] + 300, qz = w[1];
         assertTrue(qx > 400, "точка над водой");
-        double dust = p.sigma(qx, qz, 0, ticks, PallField.Water.DRY);
+        double dust = p.sigma(qx, qz, 0, 0, ticks, PallField.Water.DRY);
         assertTrue(dust > 0);
-        assertEquals(dust, p.sigma(qx, qz, 0, ticks, east), 1e-12, "пыль, снесённая на воду, — пыль");
-        assertEquals(0, p.mist(qx, qz, 0, ticks, east), 1e-12);
+        assertEquals(dust, p.sigma(qx, qz, 0, 0, ticks, east), 1e-12, "пыль, снесённая на воду, — пыль");
+        assertEquals(0, p.mist(qx, qz, 0, 0, ticks, east), 1e-12);
         // поднято в (600, 0) над водой — брызги, пыли нет
         double mx = w[0] + 600;
-        assertTrue(p.mist(mx, w[1], 0, ticks, east) > 0);
-        assertEquals(p.mist(mx, w[1], 0, ticks, east), p.sigma(mx, w[1], 0, ticks, east), 1e-12, "над водой пыли нет");
+        assertTrue(p.mist(mx, w[1], 0, 0, ticks, east) > 0);
+        assertEquals(p.mist(mx, w[1], 0, 0, ticks, east), p.sigma(mx, w[1], 0, 0, ticks, east), 1e-12, "над водой пыли нет");
         // море к −x от x = 100: поднято в (50, 0) над водой, снесено на берег
         PallField.Water west = (dx, dz) -> dx < 100 ? 1 : 0;
         double bx = w[0] + 50;
         assertTrue(bx > 100, "точка над сушей");
-        double mist = p.mist(bx, w[1], 0, ticks, west);
+        double mist = p.mist(bx, w[1], 0, 0, ticks, west);
         assertTrue(mist > 0, "брызги, снесённые на берег, — брызги");
-        assertEquals(mist, p.sigma(bx, w[1], 0, ticks, west), 1e-12);
+        assertEquals(mist, p.sigma(bx, w[1], 0, 0, ticks, west), 1e-12);
     }
 
     /**
@@ -524,8 +564,8 @@ class PallFieldTest {
         // над сушей у края волны (вода под пеленой не важна) — туман; за краем — нет
         double[] w = new double[2];
         p.drift(20 * 120, w);
-        assertTrue(p.mist(w[0] + 0.9 * r, w[1], 0, 20 * 120, PallField.Water.DRY) > 0.5 * s[2]);
-        assertEquals(0, p.mist(w[0] + 1.1 * r, w[1], 0, 20 * 120, PallField.Water.DRY), 1e-12);
+        assertTrue(p.mist(w[0] + 0.9 * r, w[1], 0, 0, 20 * 120, PallField.Water.DRY) > 0.5 * s[2]);
+        assertEquals(0, p.mist(w[0] + 1.1 * r, w[1], 0, 0, 20 * 120, PallField.Water.DRY), 1e-12);
         // наполовину «водяной» — вдвое реже
         p.water(1, 0.5);
         assertTrue(p.surge(20 * 120, s));
@@ -541,7 +581,7 @@ class PallFieldTest {
         assertEquals(0, p.paperRate(600, 0, 20 * 30, sea), 1e-12);
         assertEquals(0, p.ashRate(1000, 0, 20 * 60 * 8, sea), 1e-12);
         double late = 20 * 60 * 8;
-        assertTrue(p.sigma(1000, 0, 0, late, PallField.Water.DRY) > 0, "над сушей мгла и пыль");
-        assertEquals(0, p.sigma(1000, 0, 0, late, sea), 1e-12, "над морем брызги давно выпали");
+        assertTrue(p.sigma(1000, 0, 0, 0, late, PallField.Water.DRY) > 0, "над сушей мгла и пыль");
+        assertEquals(0, p.sigma(1000, 0, 0, 0, late, sea), 1e-12, "над морем брызги давно выпали");
     }
 }

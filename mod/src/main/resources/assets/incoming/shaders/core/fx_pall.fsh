@@ -65,8 +65,11 @@ uniform vec4 PallHot0;
 uniform vec4 PallHot1;
 // сила этого отсвета на дыме при свете неба кадра (CloudPuffs.glowOnSmoke)
 uniform float PallGlowOnSmoke;
-// x: номер кадра (сдвиг шагов), y: шагов, z: во сколько раз кадр мельче полного, w: дальше стольких блоков луч не идёт
+// x: номер кадра (сдвиг шагов), y: шагов, z: во сколько раз кадр мельче полного, w: ослабление пыли у глаза (1/блок)
 uniform vec4 PallFrame;
+// толща пыли у глаза по вертикали: x — над ним, y — под ним до земли (NukePall.tick): с w у PallFrame — докуда идёт луч
+// (pallClip)
+uniform vec2 PallEyeTau;
 // огненный шторм (client/nuclear/FireStorm, pall.glsl): карты огня слотов (R — пламя, G — дым столбов, B — G × подъём;
 // уменьшенные копии — скопления источников), слоты огня, рамка шторма (там шаги луча гуще); смерчи кадра (до четырёх,
 // по столбцу: основание и радиус ядра; высота, сила, секунды, закрутка; наклон, пламя, зерно — PallPass.Frame)
@@ -366,7 +369,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     if (S[1].w < 0.5) return;
     // пол слоя — рельеф под точкой (карта PallGround): в долине пелена над ней — тоже слой, и пожары и земля под ней —
     // на дне, а не на уровне земли под эпицентром; карты нет — земля под эпицентром
-    float floorUp = R.x > 0.0 ? pallGroundAt(ground, S, R, p.xz) - S[0].z : 0.0;
+    float floorUp = pallRelief(ground, S, R, p.xz);
     PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp);
     WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp);
     vec3 dustW = mix(PALL_DUST_W, PALL_SMOKE_W, f.smoke);
@@ -683,6 +686,21 @@ vec4 whirl(int i, vec3 dir, float ta, float tb, float jitter, vec3 lit, vec3 fir
 // где шаг u (0..1) луча [t0, t1] с рамкой шторма [fa, fb] на нём: доля a шагов — до шторма (гуще у глаза), b — в нём
 // (ровно; если шторм начинается у глаза — тоже гуще у глаза), остальные — за ним. Без шторма (a = 1, fa = t1) —
 // просто гуще у глаза
+// Докуда идёт луч пелены от глаза: дальше толщи 12 по лучу (e^−12) не видно ничего, и шаги туда не тратятся. Пыль у
+// глаза — слой: sigma — ослабление у глаза, tau — его толща по вертикали в сторону луча (над глазом или под ним до земли),
+// mu — модуль косинуса луча к вертикали. Слой — экспонента той же толщи: по лучу толща растёт как
+// tau/mu·(1 − e^(−t·mu·sigma/tau)), не больше tau/mu, — луч, который выходит из слоя, не набрав 12 (на шапку гриба
+// над пылью у земли), не обрывается. Почти горизонтальный — 12/sigma, как в ровной пыли, и обрыв никогда не ближе
+// него. Обрыв по одной пыли у глаза резал шапку в километрах над тонким слоем пыли: гриб пропадал, как только камеру
+// накрывала пелена. Грибы луч не обрывает вовсе: за густой пылью они кончаются по пропусканию
+float pallClip(float sigma, float tau, float mu) {
+    if (sigma <= 1e-4) return 1e6;
+    if (tau <= 12.0 * mu) return 1e6;
+    float x = 12.0 * mu / tau;
+    if (x < 1e-3) return 12.0 / sigma * (1.0 + 0.5 * x);
+    return -8.317766 * log2(1.0 - x) / (x * sigma);
+}
+
 float along(float u, float t0, float fa, float fb, float t1, float a, float b) {
     if (u < a) {
         float x = u / a;
@@ -1115,17 +1133,18 @@ void main() {
     vec2 span = pallBox(dir, PallMin, PallMax);
     float jitter = fract(texelFetch(Sampler2, ivec2(mod(low, 64.0)), 0).r + PallFrame.x * 0.618034);
     gJitter = jitter;
+    float clip = dir.y >= 0.0 ? pallClip(PallFrame.w, PallEyeTau.x, dir.y) : pallClip(PallFrame.w, PallEyeTau.y, -dir.y);
     if (scene < 1e8) {
         scene /= axis;
     } else if (span.y > span.x) {
         // мира за пикселем нет (за дальностью прорисовки, за краем LOD Distant Horizons и между ними): луч кончается на
         // рельефе под пеленой (PallGround), а не у плоскости земли под эпицентром — из долины ниже неё он уходил бы
         // под неё у самого глаза, и под горизонтом была бы пустота без пелены
-        float end = min(span.y, span.x + PallFrame.w);
+        float end = min(span.y, span.x + clip);
         scene = min(pallFloor(Sampler5, PallSlot0, PallGround0, dir, PallFloorFrom, end, FLOOR_STEPS, jitter),
                 pallFloor(Sampler6, PallSlot1, PallGround1, dir, PallFloorFrom, end, FLOOR_STEPS, jitter));
     }
-    float t0 = span.x, t1 = min(min(span.y, scene), t0 + PallFrame.w);
+    float t0 = span.x, t1 = min(min(span.y, scene), t0 + clip);
     vec3 sunDir = PallSun.xyz;
     gDir = dir;
     gSun = sunDir;
@@ -1176,14 +1195,14 @@ void main() {
     if (w0.w <= 0.0) gWilsonIn.y = 1e9;
     if (w1.y <= 0.0) gWilsonIn.z = 1e9;
     if (w1.w <= 0.0) gWilsonIn.w = 1e9;
-    // грибы: их отрезки луча (до мира за пикселем и не дальше, чем видно в пыли у глаза) и общий
+    // грибы: их отрезки луча (до мира за пикселем) и общий
     float m0 = 1e9, m1 = -1.0;
     gMushes = 0;
     for (int k = 0; k < MUSHROOMS; k++) {
         if (!mushOn(Sampler7, k)) break;
         gMush[k] = mushLoad(Sampler7, k);
         vec2 sp = mushSpan(gMush[k], dir);
-        sp.y = min(sp.y, min(scene, PallFrame.w));
+        sp.y = min(sp.y, scene);
         gMushSpan[k] = sp;
         gMushes += 1;
         if (sp.y <= sp.x) continue;
