@@ -70,7 +70,7 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 
 ![Fireball and blast wave over a town](img/nuke-wave.jpg)
 
-At 15 kt the wave kills out to about 0.4 km, the light of the fireball burns out to 3.4 km, and windows break out to
+At 15 kt the wave kills out to about 0.4 km, the light of the fireball burns out to 3.1 km, and windows break out to
 6 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind, with black rain.
 Fallout starts to come down about 7 minutes after a 15 kt burst, and later farther downwind.
 

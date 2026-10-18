@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class FrontProfileTest {
     private static final ArrivalTable MODEL = ArrivalTable.of(15, 20000);
 
-    /** Скорость дальней зоны по умолчанию ({@code nuclear.wave_speed} 0.42) и прежняя, 3 блока за тик. */
-    private static final double DEFAULT = 0.42 * FrontProfile.SOUND_SPEED, OLD = 3;
+    /** Медленная скорость дальней зоны ({@code nuclear.wave_speed} 0.42, прежняя по умолчанию) и ещё более старая, 3 блока за тик. */
+    private static final double SLOW = 0.42 * FrontProfile.SOUND_SPEED, OLD = 3;
 
     /** Профиль 15 кт в масштабе {@code scale} со скоростью дальней зоны {@code far}, как его строит {@code Detonation}. */
     private record Case(double scale, double from, double sound, double far, FrontProfile p) {
@@ -24,7 +24,7 @@ class FrontProfileTest {
         }
     }
 
-    private static final Case SMALL = Case.of(0.3, false, DEFAULT), LIFE = Case.of(1, false, DEFAULT), LIFE_SURFACE = Case.of(1, true, DEFAULT),
+    private static final Case SMALL = Case.of(0.3, false, SLOW), LIFE = Case.of(1, false, SLOW), LIFE_SURFACE = Case.of(1, true, SLOW),
             LIFE_OLD = Case.of(1, false, OLD), SMALL_OLD = Case.of(0.3, false, OLD), LIFE_REAL = Case.of(1, false, FrontProfile.SOUND_SPEED);
     private static final Case[] ALL = {SMALL, LIFE, LIFE_SURFACE, LIFE_OLD, SMALL_OLD, LIFE_REAL};
 
