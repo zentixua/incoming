@@ -308,9 +308,9 @@ public final class MushroomField {
             cap = Math.max(s.ringR() + s.ringA() * (1 + REACH_CAP * u / Math.min(s.ringA(), s.ringB())),
                     s.domeR() * (1 + REACH_CAP * u / Math.min(s.domeR(), s.domeH())));
         }
+        double flare = MushroomModel.dustFlare(s);
         double stem = s.stemTau() > 0
-                ? (1 + REACH_STEM) * Math.max(MushroomModel.stemRadius(0, s.stemR(), MushroomModel.dustFlare(s)),
-                MushroomModel.stemRadius(1, s.stemR(), MushroomModel.dustFlare(s))) : 0;
+                ? (1 + REACH_STEM) * Math.max(MushroomModel.stemRadius(0, s.stemR(), flare), MushroomModel.stemRadius(1, s.stemR(), flare)) : 0;
         double skirt = s.skirtTau() > 0 ? s.skirtR() + s.skirtW() * (1 + REACH_SKIRT * skirtUnit(s) / Math.min(s.skirtW(), s.skirtH())) : 0;
         return Math.max(1, Math.max(cap, Math.max(stem, skirt)));
     }

@@ -32,8 +32,13 @@ public final class MushroomModel {
      */
     private static final double[] STEM_Y = {20, 1000, 10000};
     private static final double[] STEM_SHARE = {0.5, 0.2, 0.1};
-    /** Раструб пыли у земли сверх ножки — эта доля радиуса шапки, пока пыль не осела ({@link #dustFlare}). */
-    static final double DUST_FLARE = 0.256;
+    /**
+     * Ножка под шаром, пока он не свернулся в кольцо, — эта доля его радиуса: след всплывающего шара, кольца, которое
+     * тянет её вширь, ещё нет; со сворачиванием — к {@link #stemShare}.
+     */
+    static final double BALL_STEM = 0.16;
+    /** Низ ножки, пока пыль у земли не осела, — не уже этой доли радиуса шапки: раструб пыли ({@link #dustFlare}). */
+    static final double DUST_BASE = 0.376;
 
     private MushroomModel() {}
 
@@ -53,7 +58,7 @@ public final class MushroomModel {
      * @param domeH     полуось купола по вертикали
      * @param capTau    толща шапки поперёк меньшего поперечника сечения (с долей гриба): шар и шапка непрозрачны
      * @param stemTop   верх ножки (догоняет низ шапки)
-     * @param stemR     радиус ножки в середине ({@link #stemShare} радиуса шапки; у шапки шире, у земли — раструб пыли)
+     * @param stemR     радиус ножки, средний по высоте ({@link #stemShare} радиуса шапки; у шапки шире, у земли — раструб пыли)
      * @param stemTau   толща ножки поперёк (с видимостью, оседанием пыли не считая раструба)
      * @param lowDust   доля пыли у земли 0..1 (оседает): раструб ножки и юбка
      * @param skirtR    радиус середины юбки по земле
@@ -210,23 +215,24 @@ public final class MushroomModel {
         // толща поперёк сечения постоянна, пока шапка поднимается (вещество растёт с подхваченным воздухом); растекаясь
         // наковальней, она редеет как площадь. Шар — непрозрачное излучающее тело: та же толща
         double capTau = TAU_CAP * life / (spread * spread);
-        // ножка входит в выемку под куполом (воздух поднимается сквозь кольцо). У наземного шар касается земли, и пыль
+        // ножка входит в выемку под куполом (воздух поднимается сквозь кольцо; у килотонн она шире купола и занимает весь
+        // низ шапки внутри кольца). Под шаром она — его след, со сворачиванием расходится до доли G&D. У наземного шар касается земли, и пыль
         // уходит вверх за ним сразу: ножка — его след, без разрыва под шапкой. У воздушного пыль поднимают с земли ветры
         // за фронтом, и столб догоняет шапку за десятую часть подъёма; у высокого — тоньше и бледнее
         double catchUp = 0.1 * stab * smooth(rf, 2 * rf, hob);
         double stemTop = (capBot + 0.3 * capH) * (catchUp <= 0 ? 1 : clamp(t / catchUp, 0, 1));
-        double stemShare = hob <= rf ? 1 : clamp(1.5 - hob / (rf * 4.8), 0.44, 1);
-        double stemTau = TAU_STEM * stemShare * smooth(4, 20, tau) * life;
+        double dense = hob <= rf ? 1 : clamp(1.5 - hob / (rf * 4.8), 0.44, 1);
+        double stemTau = TAU_STEM * dense * smooth(4, 20, tau) * life;
         double lowDust = Math.exp(-Math.max(0, t - stab * 0.1) / (hob <= rf ? DUST_SETTLE_SURFACE : DUST_SETTLE_AIR));
         // юбка — пыль у основания ножки, поднятая за фронтом: её край без клубов — на 0,85 пути фронта по земле (с клубами
-        // — до него), не дальше 0,7 радиуса шапки. Пока фронт не дошёл до земли (воздушный), поднимать её нечему — юбки
+        // — до него), не дальше 0,7 радиуса шапки (за низом ножки с раструбом, DUST_BASE, и у килотонн — 0,43). Пока фронт не дошёл до земли (воздушный), поднимать её нечему — юбки
         // нет; сечение — не меньше метра (единица клубов юбки делит)
         double outer = Math.min(Math.max(0, groundFrontM), capR * 0.7);
         double skirtR = 0.6 * outer, skirtW = Math.max(1, 0.25 * outer);
         double skirtH = Math.max(1, Math.min(capBot * 0.12, 350 * Math.cbrt(yieldKt / 15)) * smooth(0, 30, t));
         double skirtTau = outer <= 0 ? 0 : TAU_SKIRT * smooth(0.5, 3, t) * (hob <= rf * 4 ? 1 : 0.5) * lowDust * life;
         return new Shape(t, life, top, capBot, capY, capR, ringR, ringA, ringB, domeY, domeR, domeH, capTau, stemTop,
-                capR * stemShare(yieldKt), stemTau, lowDust, skirtR, skirtW, skirtH, skirtTau, endTop);
+                capR * lerp(BALL_STEM, stemShare(yieldKt), roll), stemTau, lowDust, skirtR, skirtW, skirtH, skirtTau, endTop);
     }
 
     /**
@@ -245,11 +251,12 @@ public final class MushroomModel {
     }
 
     /**
-     * Раструб пыли у земли сверх радиуса ножки, м: пыль, которую втягивает подъём ножки, — до {@link #DUST_FLARE} радиуса
-     * шапки, оседает с {@code lowDust}. По шапке, а не по ножке: пыль поднимает волна подрыва.
+     * Раструб пыли у земли сверх низа ножки, м: пыль, которую втягивает подъём у земли, тянется с круга в
+     * {@link #DUST_BASE} радиуса шапки (её поднимает волна подрыва, не ножка) и оседает с {@code lowDust}. Ножка шире
+     * этого круга (килотонны после сворачивания) — раструба нет: иначе он накрыл бы юбку.
      */
     public static double dustFlare(Shape s) {
-        return DUST_FLARE * s.capR() * s.lowDust();
+        return Math.max(0, DUST_BASE * s.capR() - stemRadius(0, s.stemR(), 0)) * s.lowDust();
     }
 
     /**
@@ -320,7 +327,7 @@ public final class MushroomModel {
     /**
      * Радиус ножки на доле её высоты w (0 — земля, 1 — низ шапки): в среднем по высоте — {@code stemR}, к шапке шире на
      * треть (её тянет кольцо: у 2 кт край шапки выступает за ножку на треть своего радиуса) и у земли — раструб пыли
-     * {@code flare} ({@link #dustFlare}). {@code mushStemR} в {@code mushroom.glsl} — то же.
+     * {@code flare} сверх низа ножки ({@link #dustFlare}). {@code mushStemR} в {@code mushroom.glsl} — то же.
      */
     public static double stemRadius(double w, double stemR, double flare) {
         double x = clamp(w, 0, 1), base = Math.pow(1 - x, 6);
