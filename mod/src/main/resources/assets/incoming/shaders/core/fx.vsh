@@ -83,7 +83,7 @@ float pall(vec3 p) {
     float len = length(p);
     if (PallAmbient.w < 0.5 || len < 1e-3) return 1.0;
     vec3 dir = p / len;
-    return pallThrough(dir, len) * mushTransmit(Sampler11, dir, len, 6);
+    return pallThrough(dir, len) * mushTransmit(Sampler11, dir, len, 6, PallAir);
 }
 
 void main() {

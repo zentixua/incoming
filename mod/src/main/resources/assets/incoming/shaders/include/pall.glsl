@@ -28,11 +28,6 @@ const vec3 PALL_SOOT_W = vec3(0.4368484, 0.4180439, 0.4008365);
 const float PALL_DUST_G = 0.375;
 const float PALL_MIST_G = 0.4594595;
 const float PALL_SOOT_G = 0.3333333;
-// Воздух кадра (PallPass, Sight.Air) в блоках модели (в effects_scale раз мельче метров): дымка и чистый воздух у глаза,
-// 1/блок; 1 / масштаб их высоты, 1/блок. Дымка вдали: гриб, пелена и стена тают в небе за ними — по воздуху до них,
-// который редеет с высотой (шапка в 5 км видна сквозь дымку нижних километров, а не сквозь 5 км дымки у земли)
-uniform vec4 PallAir;
-
 // Средняя по отрезку доля ослабления у его начала, когда отрезок поднимается на x масштабов высоты: (1 − e^−x) / x
 // (Sight.along)
 float pallAlong(float x) {
@@ -47,9 +42,12 @@ float pallAirDepth(float t, float dy, float haze, float clean, float kh, float k
     return t * (haze * pallAlong(rise * kh) + clean * pallAlong(rise * kc));
 }
 
-// Доля света точки в t блоках от глаза по лучу с вертикальной долей dy, дошедшая через воздух кадра (PallAir)
-float pallAir(float t, float dy) {
-    return exp(-pallAirDepth(t, dy, PallAir.x, PallAir.y, PallAir.z, PallAir.w));
+// Доля света точки в t блоках от глаза по лучу с вертикальной долей dy, дошедшая через воздух кадра air (uniform PallAir:
+// PallPass, Sight.Air в блоках модели — в effects_scale раз мельче метров): дымка и чистый воздух у глаза, 1/блок;
+// 1 / масштаб их высоты, 1/блок. Дымка вдали: гриб, пелена и стена тают в небе за ними — по воздуху до них, который
+// редеет с высотой (шапка в 5 км видна сквозь дымку нижних километров, а не сквозь 5 км дымки у земли)
+float pallAir(vec4 air, float t, float dy) {
+    return exp(-pallAirDepth(t, dy, air.x, air.y, air.z, air.w));
 }
 
 // альбедо земли под пеленой: суша и вода (PallLight.LAND, SEA)

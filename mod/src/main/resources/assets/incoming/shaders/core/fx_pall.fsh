@@ -41,6 +41,8 @@ uniform sampler3D PallNoise;
 
 uniform mat4 InvViewProj;
 uniform vec3 PallForward;
+// воздух кадра (pall.glsl: pallAir)
+uniform vec4 PallAir;
 uniform mat4 PallSlot0;
 uniform mat4 PallSlot1;
 uniform vec3 PallMin;
@@ -741,7 +743,7 @@ float gTauEye;
 // (как у гриба, pallAir) берёт долю 1 − air их непрозрачности: там видно то, что за всем лучом, — в lost; пропускание
 // по лучу остаётся настоящим
 void passMatter(float t, vec3 l, float tr, inout vec3 light, inout float transmit, inout float lost) {
-    float air = pallAir(t, gDir.y), seen = transmit + lost;
+    float air = pallAir(PallAir, t, gDir.y), seen = transmit + lost;
     light += seen * air * l;
     lost = lost * tr + seen * (1.0 - air) * (1.0 - tr);
     transmit *= tr;
@@ -1287,7 +1289,7 @@ void main() {
                 ds = min(ds, m1 - tm);
                 passesBefore(tm, light, transmit, lost);
                 // дымка воздуха до шага (pallAir): свет и непрозрачность гриба вдали тают в небе за ним
-                float tr = exp(-r.w * ds), air = pallAir(tm, dir.y);
+                float tr = exp(-r.w * ds), air = pallAir(PallAir, tm, dir.y);
                 light += transmit * air * r.rgb * (1.0 - tr) / r.w;
                 lost += transmit * (1.0 - air) * (1.0 - tr);
                 transmit *= tr;

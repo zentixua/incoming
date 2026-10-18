@@ -43,7 +43,7 @@ float probeMush(sampler2D data, vec3 center, float radius) {
             vec4 s = mushMean(m, mushLocal(m, dir * t));
             tau += (step(t, capEnd) * s.x + s.y + s.z + s.w) * ds;
         }
-        through *= 1.0 - pallAir(0.5 * (span.x + span.y), dir.y) * (1.0 - exp(-tau));
+        through *= 1.0 - pallAir(PallAir, 0.5 * (span.x + span.y), dir.y) * (1.0 - exp(-tau));
     }
     return through;
 }

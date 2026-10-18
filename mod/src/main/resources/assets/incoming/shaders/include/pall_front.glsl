@@ -9,6 +9,8 @@ uniform mat4 PallSlot1;
 uniform vec3 PallMin;
 uniform vec3 PallMax;
 uniform vec4 PallAmbient;
+// воздух кадра (pall.glsl: pallAir)
+uniform vec4 PallAir;
 // рельеф и вода под пеленой слотов, их числа и вода слотов: из чего пелена перед точкой
 uniform sampler2D Sampler9;
 uniform sampler2D Sampler10;
@@ -33,7 +35,7 @@ float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir
         vec2 sp = k == 0 ? spans.xy : spans.zw;
         if (sp.y <= sp.x) continue;
         float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4);
-        through *= 1.0 - pallAir(0.5 * (sp.x + sp.y), dir.y) * (1.0 - exp(-tau));
+        through *= 1.0 - pallAir(PallAir, 0.5 * (sp.x + sp.y), dir.y) * (1.0 - exp(-tau));
     }
     return through;
 }
@@ -41,7 +43,7 @@ float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir
 // Облако Вильсона слота перед точкой (до end): доля, которую пропускают оба прохода луча, каждый в дымке у своего места
 float pallWilsonThrough(mat4 S, vec4 L, vec3 dir, float end) {
     vec4 w = pallWilson(S, L, dir, end);
-    return (1.0 - pallAir(w.x, dir.y) * (1.0 - exp(-w.y))) * (1.0 - pallAir(w.z, dir.y) * (1.0 - exp(-w.w)));
+    return (1.0 - pallAir(PallAir, w.x, dir.y) * (1.0 - exp(-w.y))) * (1.0 - pallAir(PallAir, w.z, dir.y) * (1.0 - exp(-w.w)));
 }
 
 // Сколько пропускает пелена между глазом и точкой dir·len (без грибов): шесть шагов по полю без шума (среднее по шуму —
@@ -65,7 +67,7 @@ float pallThrough(vec3 dir, float len) {
             PallAt f = pallField(Sampler5, Sampler10, PallSlot1, PallGround1, PallWater1, q, 0.0);
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
-        through *= 1.0 - pallAir(t, dir.y) * (1.0 - exp(-tau));
+        through *= 1.0 - pallAir(PallAir, t, dir.y) * (1.0 - exp(-tau));
     }
     return through * pallWallThrough(Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, dir, t0, t1)
             * pallWallThrough(Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, dir, t0, t1)

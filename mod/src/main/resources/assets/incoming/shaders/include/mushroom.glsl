@@ -414,8 +414,9 @@ vec3 mushBlackBody(sampler2D data, float kelvin) {
     return texture(data, vec2(x, (float(MUSH_BB_ROW) + 0.5) / size.y)).rgb;
 }
 
-// Пропускание гриба k вдоль луча dir на [0, len] без шума (steps шагов) — квадраты слоя перед частицей
-float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
+// Пропускание гриба k вдоль луча dir на [0, len] без шума (steps шагов) — квадраты слоя перед частицей; air — воздух
+// кадра (pallAir)
+float mushTransmit(sampler2D data, vec3 dir, float len, int steps, vec4 air) {
     float through = 1.0;
     for (int k = 0; k < MUSHROOMS; k++) {
         if (!mushOn(data, k)) continue;
@@ -429,7 +430,7 @@ float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
         }
         // гриб в дымке воздуха тает в небе за ним (pallAir): его свет и непрозрачность × доля, дошедшая через воздух, а не
         // цвет тумана — то, что за ним, видно сильнее
-        through *= 1.0 - pallAir(0.5 * (span.x + span.y), dir.y) * (1.0 - exp(-tau));
+        through *= 1.0 - pallAir(air, 0.5 * (span.x + span.y), dir.y) * (1.0 - exp(-tau));
     }
     return through;
 }
