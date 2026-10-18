@@ -197,14 +197,15 @@ public final class ScorchGameTests {
      * над дальним от блока структуры углом площадки: свет от подрыва за её краем шёл бы сквозь постройки соседних партий
      * (их порядок и место в каждой части CI свои — тень на всю площадку). Сравниваются чанки целиком на площадке (в
      * крайних — стена барьеров и соседи), где волна не ломает и растений: у ближнего столба давление ниже того, от
-     * которого отражённое на открытой грани достаёт до их порога (~3,1 psi).
+     * которого отражённое на открытой грани достаёт до их порога (~3,1 psi, у 15 кт — 2,1 км). Масштаб (1 блок — 71 м) —
+     * чтобы таких чанков было не меньше 5 при любом сдвиге площадки к сетке чанков (место площадки случайное).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_scorch_far", skyAccess = true)
     public static void scorchWithoutRuinsSameAsRuins(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         fillBiome(h, 0, 63, Biomes.PLAINS);
         plants(h);
-        double scale = 0.0182;
+        double scale = 0.014;
         Detonation d = NuclearGameTests.detonation(h, new BlockPos(60, 12, 60), Yield.optimalBurstHeight(15) * scale, 15, (float) scale);
         int changed = 0, biomes = 0, compared = 0;
         double plantBreak = RuinPlanner.testPlantBreakPsi();
