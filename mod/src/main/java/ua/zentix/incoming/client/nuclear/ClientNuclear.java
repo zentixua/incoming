@@ -12,6 +12,7 @@ import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -262,6 +263,8 @@ public final class ClientNuclear {
         radiation = null;
         CLOCK.reset();
         NukeFlash.reset();
+        // ожоги сетчатки — состояние игрока на сервере: перемотка их не трогает, выход — забывает (вход пришлёт заново)
+        NukeFlash.scars(RetinaScars.NONE);
         NukeSounds.reset();
         NukeSky.reset();
         Deafness.reset();

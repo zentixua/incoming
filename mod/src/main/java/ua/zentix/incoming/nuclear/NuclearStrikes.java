@@ -18,6 +18,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.IcbmEntity;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
@@ -248,6 +249,7 @@ public final class NuclearStrikes {
         if (e.getEntity() instanceof ServerPlayer p) {
             sync(p);
             RadiationTicker.sync(p);
+            FlashEyes.sync(p);
         }
     }
 
@@ -255,11 +257,12 @@ public final class NuclearStrikes {
         if (e.getEntity() instanceof ServerPlayer p) {
             sync(p);
             RadiationTicker.sync(p);
+            FlashEyes.sync(p);
         }
     }
 
     /**
-     * После смерти доза сброшена (attachment не копируется) — счётчику это нужно сказать. Возрождение может быть
+     * После смерти доза и ожоги сетчатки сброшены (attachment не копируется) — клиенту это нужно сказать. Возрождение может быть
      * в другом измерении (умер в Незере — встал в верхнем мире), а {@code PlayerChangedDimensionEvent} при этом
      * не приходит: подрывы и летящие МБР — тоже заново.
      */
@@ -267,6 +270,7 @@ public final class NuclearStrikes {
         if (e.getEntity() instanceof ServerPlayer p) {
             sync(p);
             RadiationTicker.sync(p);
+            FlashEyes.sync(p);
         }
     }
 

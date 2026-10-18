@@ -1,6 +1,7 @@
 package ua.zentix.incoming.nuclear.world;
 
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
@@ -8,6 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
+import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,11 +46,15 @@ final class PulseJob {
         return d;
     }
 
-    /** Живые сущности в радиусе света и радиации, ближние первыми. */
+    /** Живые сущности в радиусе света и радиации и игроки в пределах ожога сетчатки, ближние первыми. */
     private static List<LivingEntity> inRange(ServerLevel level, Detonation d) {
-        double range = NuclearWarhead.exposureRange(d);
+        double range = NuclearWarhead.exposureRange(d), eyes = FlashEyes.reach(d);
         List<LivingEntity> in = new ArrayList<>(level.getEntitiesOfClass(LivingEntity.class, AABB.ofSize(d.burst(), range * 2, range * 2, range * 2),
                 e -> e.distanceToSqr(d.burst()) <= range * range));
+        for (ServerPlayer p : level.players()) {
+            double r = p.distanceToSqr(d.burst());
+            if (r > range * range && r <= eyes * eyes) in.add(p);
+        }
         in.sort(Comparator.comparingDouble(e -> e.distanceToSqr(d.burst())));
         return in;
     }

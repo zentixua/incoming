@@ -25,6 +25,7 @@ import ua.zentix.incoming.nuclear.model.PromptRadiationModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.Yield;
 import ua.zentix.incoming.nuclear.radiation.FlashBurns;
+import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
@@ -110,7 +111,11 @@ public final class NuclearWarhead {
         return s.source() == Terrain.Source.CHUNK ? s : null;
     }
 
-    /** Дальше этого (блоки) ни свет, ни проникающая радиация сущностей не трогают: ожоги 1-й степени у самых чувствительных или 50 бэр. */
+    /**
+     * Дальше этого (блоки) ни свет, ни проникающая радиация сущностей не трогают: ожоги 1-й степени у самых
+     * чувствительных или 50 бэр. Ожог сетчатки достаёт дальше — игроков до него {@link PulseJob} добирает сам
+     * ({@link FlashEyes#reach}).
+     */
     public static double exposureRange(Detonation d) {
         double burnRange = d.blocks(ThermalModel.rangeForFluence(BurnInjury.lowest(d.yieldKt()), d.yieldKt(), d.surface(), d.visibility()));
         double radRange = d.blocks(radiusForDose(d.yieldKt(), 50));
@@ -129,11 +134,15 @@ public final class NuclearWarhead {
         if (living instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
         Vec3 eye = living.getEyePosition();
         if (sees(level, d, living)) {
+            if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player);
             FlashBurns.burn(level, d, living, d.fluence(eye), owner);
             // видел вспышку — бежит прочь
             MobPanic.flash(d, living, level.getGameTime());
         }
-        double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt()) * Shielding.prompt(level, eye, d.burst());
+        double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt());
+        // без защиты меньше бэра — лучей защиты не нужно (игроки до дальности ожога сетчатки — за десятки километров)
+        if (rem < 1) return true;
+        rem *= Shielding.prompt(level, eye, d.burst());
         if (rem < 1) return true;
         float gy = (float) (rem / PromptRadiationModel.REM_PER_GY);
         if (living instanceof ServerPlayer player) {
