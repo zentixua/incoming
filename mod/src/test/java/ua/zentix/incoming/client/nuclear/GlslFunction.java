@@ -10,13 +10,23 @@ import java.util.regex.Pattern;
 
 /**
  * Функция GLSL из чисел в число: объявления {@code float a = …, b = …;}, {@code if (условие) return …;},
- * {@code return …;}; в выражениях — числа, переменные (у vec2 — {@code n.x}), + − * /, сравнения, встроенные
- * {@code smoothstep, clamp, min, max, exp, log2, pow, abs, sqrt, sign, floor, fract, sin, cos} и такие же функции того же файла.
+ * {@code return …;}; в выражениях — числа, переменные (у vec2 — {@code n.x}) и постоянные файла {@code const float}, + − * /,
+ * сравнения, встроенные {@code smoothstep, clamp, mix, min, max, exp, log2, pow, abs, sqrt, sign, floor, fract, sin, cos} и
+ * такие же функции того же файла.
  */
 record GlslFunction(List<String> tokens, List<String> params, String source) {
     private static final Pattern TOKEN = Pattern.compile("\\s*(\\d+\\.?\\d*(?:[eE][-+]?\\d+)?|\\.\\d+|[A-Za-z_]\\w*(?:\\.[xyzw]+)?|<=|>=|==|[-+*/(),;{}<>=])");
 
+    /** Разобранные функции: тот же текст (тот же объект строки) и имя — та же функция; вложенные вызовы разбираются раз. */
+    private static final Map<List<Object>, GlslFunction> PARSED = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Постоянные файла {@code const float} так же. */
+    private static final Map<List<Object>, Double> CONSTANTS = new java.util.concurrent.ConcurrentHashMap<>();
+
     static GlslFunction parse(String source, String name) {
+        return PARSED.computeIfAbsent(List.of(source, name), k -> parseNew(source, name));
+    }
+
+    private static GlslFunction parseNew(String source, String name) {
         Matcher m = Pattern.compile("float\\s+" + name + "\\s*\\(([^)]*)\\)\\s*\\{").matcher(source);
         if (!m.find()) throw new AssertionError("в шейдере нет float " + name);
         List<String> params = new ArrayList<>();
@@ -46,7 +56,7 @@ record GlslFunction(List<String> tokens, List<String> params, String source) {
     }
 
     private static final class Run {
-        private static final Set<String> BUILTIN = Set.of("smoothstep", "clamp", "min", "max", "exp", "log2", "pow", "abs", "sqrt", "sign", "floor", "fract", "sin", "cos");
+        private static final Set<String> BUILTIN = Set.of("smoothstep", "clamp", "mix", "min", "max", "exp", "log2", "pow", "abs", "sqrt", "sign", "floor", "fract", "sin", "cos");
         private final List<String> t;
         private final Map<String, Double> vars;
         private final String source;
@@ -135,8 +145,17 @@ record GlslFunction(List<String> tokens, List<String> params, String source) {
                 return function(w, a);
             }
             Double v = vars.get(w);
-            if (v == null) throw new AssertionError("нет переменной " + w);
+            if (v == null) v = constant(w);
             return v;
+        }
+
+        /** Постоянная файла {@code const float NAME = число;}. */
+        private double constant(String name) {
+            return CONSTANTS.computeIfAbsent(List.of(source, name), k -> {
+                Matcher m = Pattern.compile("const\\s+float\\s+" + Pattern.quote(name) + "\\s*=\\s*([^;]+);").matcher(source);
+                if (!m.find()) throw new AssertionError("нет переменной " + name);
+                return Double.parseDouble(m.group(1).strip());
+            });
         }
 
         /** Встроенная функция или функция того же файла (её параметры — по порядку). */
@@ -156,6 +175,7 @@ record GlslFunction(List<String> tokens, List<String> params, String source) {
                     yield f * f * (3 - 2 * f);
                 }
                 case "clamp" -> Math.max(a.get(1), Math.min(a.get(2), a.get(0)));
+                case "mix" -> a.get(0) * (1 - a.get(2)) + a.get(1) * a.get(2);
                 case "min" -> Math.min(a.get(0), a.get(1));
                 case "max" -> Math.max(a.get(0), a.get(1));
                 case "exp" -> Math.exp(a.get(0));

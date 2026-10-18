@@ -30,8 +30,9 @@ Everyone within 20 km of the target hears a siren in advance. Then come the flas
 The blast wave itself is invisible. The wind right behind it lifts what lies on the ground (dust and earth, smoke over a
 burning town, spray over water) and rolls it forward as a churning wall, like a dust storm. The wall is the youngest
 dust of the pall: right at the front it hugs the ground, and behind it the dust grows thicker and taller. At 15 kt it is
-30–40 m tall 1 km from the burst and about 60 m tall 4 km out; it stays dense out to about 4 km, thins out beyond and
-fades at 7–8 km, where the wind is too weak to lift dust. Inside the wall it is dark. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
+30–40 m tall 1 km from the burst and about 60 m tall 4 km out. After an air burst it stays dense out to about 4.5 km,
+thins out beyond and fades at about 8 km, where the wind is too weak to lift dust; after a ground burst it is dense out
+to about 3.5 km and fades at about 7 km. Inside the wall it is dark. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
 In its first seconds the fireball lights the top of the wall orange, even by day.
 The wave breaks buildings as it reaches them: their pieces fly with the dust. The
 ground shakes harder and harder as the wall comes closer. When the wall reaches you, it throws
@@ -63,7 +64,7 @@ the dust wall is lit the same way, and the side of the wall away from the fireba
 lighter on the side facing the light and darker in their folds. Inside it you see only a few metres, it is dark even at noon, and sounds are
 muffled. At 15 kt it stays dark about 20 minutes 1.4 km from the burst, as in Hiroshima; within half a kilometre of the
 burst it clears in minutes, drawn up into the column of the mushroom cloud. The dust also fills the valleys around the
-town. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for about an hour and a half. Where the
+town. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for about an hour and a half, a little longer after an air burst. Where the
 light of the fireball set the town on fire, a firestorm builds up over a few minutes. Columns of smoke rise over the
 burning blocks, lean downwind and merge higher up into a ceiling of smoke over the town. At night the fires light it
 orange-red from below, and the glow flickers; from a couple of kilometres away the town glows under its smoke, and the

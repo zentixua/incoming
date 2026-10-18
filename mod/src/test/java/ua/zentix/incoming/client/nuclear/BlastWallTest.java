@@ -6,6 +6,7 @@ import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 
 import java.util.Arrays;
@@ -19,18 +20,26 @@ class BlastWallTest {
 
     /**
      * Голова — пыль сразу за фронтом в игре (сам фронт не виден), клин — до места, где положительная фаза на месте уже
-     * кончилась (приход фронта в игре и фаза там — момент t); густая, пока ветер волны поднимает пыль, и сходит на нет там,
-     * где поднимать нечего (у 15 кт к ~0,3 psi), — отрывается от фронта.
+     * кончилась (приход фронта в игре и фаза там — момент t), и не дальше края огненного шара на земле (пока фронт в шаре —
+     * головы нет); густая до ~1 psi, пока ветер волны поднимает пыль, и сходит на нет там, где поднимать нечего (у 15 кт
+     * между 0,6 и 0,3 psi), — отрывается от фронта.
      */
     @Test
     void headRidesTheFront() {
         BlastWall w = new BlastWall(GROUND, false);
         double scale = 20 * GROUND.scale(), firstEnd = GROUND.arrivalTicks(0) / scale + column(0).positive();
-        int ends = 0;
+        int ends = 0, inBall = 0;
         for (double t = 0.05; t <= 20; t += 0.05) {
             assertEquals(w.shock(t), w.head(t), 1e-9, t + " с");
-            double tail = w.tail(t);
-            assertEquals(Math.max(1e-3, w.shock(t) - tail), w.length(t), 1e-9, t + " с: клин — от фронта до конца фазы");
+            double tail = w.tail(t), ball = w.underBall(t);
+            double r = FireballModel.radius(t, GROUND.yieldKt(), true), y = FireballModel.centreHeight(t, 0, GROUND.yieldKt());
+            assertEquals(Math.sqrt(Math.max(0, r * r - y * y)), ball, 1e-9, t + " с: край шара на земле");
+            assertEquals(Math.max(1e-3, w.shock(t) - Math.max(tail, ball)), w.length(t), 1e-9, t + " с: клин — от фронта до конца фазы или края шара");
+            if (w.wall(t) != BlastWall.Wall.NONE) {
+                // верх — слоя там, где кончается клин (у края шара — десятки метров, а не слой у эпицентра в 18 км)
+                assertTrue(GROUND.metres(w.wall(t).height()) < 120, t + " с: верх клина " + GROUND.metres(w.wall(t).height()) + " м");
+                if (ball > tail) inBall++;
+            }
             if (t < firstEnd) {
                 assertEquals(0, tail, 1e-12, t + " с: фаза ещё нигде не кончилась");
                 continue;
@@ -40,14 +49,37 @@ class BlastWallTest {
             ends++;
         }
         assertTrue(ends > 300, "проверок конца клина " + ends);
-        assertTrue(w.wall(0.1).density() > 0, "у самого фронта пыли нет");
-        double rangeHigh = GROUND.metres(GROUND.groundRange(BlastModel.kpa(1.5))), rangeLow = GROUND.metres(GROUND.groundRange(BlastModel.kpa(0.32)));
-        double t = 0.5;
-        while (GROUND.metres(w.wall(t).head()) < rangeHigh) t += 0.01;
-        assertEquals(1, w.wall(t).density(), 1e-9, "у 1,5 psi голова не густая");
-        while (w.head(t) < rangeLow) t += 0.05;
+        assertTrue(inBall > 3, "клин у края шара — " + inBall + " проверок");
+        // пока фронт в огненном шаре, головы нет; вышел — пыль сразу за ним
+        assertEquals(BlastWall.Wall.NONE, w.wall(0.05), "голова внутри шара");
+        assertTrue(w.shock(0.05) < w.underBall(0.05));
+        assertEquals(0, w.reach(0.05));
+        assertTrue(w.wall(0.3).density() > 0, "у самого фронта пыли нет");
+        assertEquals(0, w.underBall(6), "шар всплыл — земли не касается");
+        // густая (не прозрачнее самой густой пыли пелены) до ~1 psi: у 1,5 psi — с запасом, у 0,6 — уже реже; сходит на нет
+        // между 0,6 и 0,3 psi
+        double[] s = new double[3];
+        double t = 0.3;
+        t = until(w, t, BlastModel.kpa(1.5));
+        double dense = w.sigmas(t, s) / PallField.SIGMA_DENSE;
+        assertTrue(dense > 1.5, "у 1,5 psi голова лишь " + dense + " густоты пелены");
+        assertEquals(1, w.wall(t).density(), 1e-9);
+        double thin = t;
+        while (w.wall(thin).density() >= 1) thin += 0.01;
+        double atThin = BlastModel.psi(GROUND.groundOverpressureKpa(GROUND.blocks(w.head(thin))));
+        assertTrue(atThin < 1.5 && atThin > 0.6, "густая до " + atThin + " psi");
+        t = until(w, thin, BlastModel.kpa(0.6));
+        assertTrue(w.wall(t).density() > 0 && w.wall(t).density() < 1, "у 0,6 psi голова " + w.wall(t).density());
+        t = until(w, t, BlastModel.kpa(0.32));
         assertEquals(BlastWall.Wall.NONE, w.wall(t), "у 0,3 psi голова ещё есть");
         assertEquals(0, w.reach(t));
+    }
+
+    /** Первый миг с {@code from} (шаг 0,01 с), когда голова дошла до давления {@code kpa} на земле. */
+    private static double until(BlastWall w, double from, double kpa) {
+        double range = GROUND.metres(GROUND.groundRange(kpa)), t = from;
+        while (w.head(t) < range) t += 0.01;
+        return t;
     }
 
     /**
@@ -100,7 +132,8 @@ class BlastWallTest {
 
     /**
      * Клубы вдоль кольца — две фазы: у каждой окружность в плитках целая (плитка шума без шва на кольце) и постоянна, пока
-     * фаза видна; номер и окружность фазы меняются только там, где её вес — ноль, а веса двух фаз в сумме — 1.
+     * фаза видна; номер и окружность фазы меняются только там, где её вес — ноль, а веса двух фаз в сумме — 1. Клуб вдоль
+     * кольца в полном весе фазы — длиной в плитку слота (верх клина в тот же миг), а не растянут.
      */
     @Test
     void phasesChangeOnlyWhenHidden() {
@@ -116,6 +149,11 @@ class BlastWallTest {
                 assertTrue(weight >= 0 && weight <= 1);
                 assertEquals(Math.rint(now[8 + j]), now[8 + j], 0, "окружность не целая");
                 assertTrue(now[8 + j] >= 1);
+                // клуб вдоль кольца против плитки поперёк: в полном весе — один к одному, за фазу — не больше √1,25 и
+                // поправки верха
+                double stretch = 2 * Math.PI * now[0] / now[8 + j] / now[11];
+                if (weight > 0.95) assertEquals(1, stretch, 0.03, t + " с: клубы фазы " + j + " вдоль кольца в " + stretch + " раза длиннее");
+                if (weight > 0.05) assertTrue(stretch > 0.85 && stretch < 1.18, t + " с: клубы фазы " + j + " вдоль кольца в " + stretch + " раза длиннее");
                 if (now[12 + j] != prev[12 + j]) {
                     changes++;
                     assertTrue(weight <= step, t + " с: фаза " + j + " сменилась при весе " + weight);

@@ -55,6 +55,30 @@ class DustModelTest {
     }
 
     /**
+     * Поднятое за фазу ({@link DustModel#soil}: закон выноса с тем, что от шага не зависит, вне цикла, и без шагов после
+     * того, как ветер упал ниже порога) — та же сумма {@link DustModel#flux} по серединам шагов, что по самому закону.
+     */
+    @Test
+    void soilIsTheFluxIntegral() {
+        int checked = 0;
+        for (double psi = 0.3; psi < 200; psi *= 1.3) {
+            double kpa = BlastModel.kpa(psi), rho = DustModel.shockedAir(kpa), front = BlastModel.frontSpeed(kpa);
+            for (double along : new double[]{0.2, 1}) {
+                for (double threshold : new double[]{0.28, 0.34, 0.78, 3}) {
+                    double positive = 0.3 + psi / 40, u0 = BlastModel.windSpeed(kpa) * Math.sqrt(along), want = 0, dt = positive / 200;
+                    for (int i = 0; i < 200; i++) {
+                        double t = (i + 0.5) * dt, x = t / positive;
+                        want += DustModel.flux(rho, u0 * (1 - x) * Math.exp(-x), front * t, threshold) * dt;
+                    }
+                    assertEquals(want, DustModel.soil(kpa, along, positive, threshold), 1e-12 * want, psi + " psi, " + along + ", " + threshold);
+                    if (want > 0) checked++;
+                }
+            }
+        }
+        assertTrue(checked > 50, "с выносом — " + checked);
+    }
+
+    /**
      * Трава и посевы (u*ₜₕ от 3 м/с, Gaj &amp; Small §2.2): в 1,4 км (6 psi) ветер волны их почти не трогает — меньше 2 %
      * того, что отдаёт рыхлый песок (сотни грамм).
      */

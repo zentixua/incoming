@@ -33,7 +33,7 @@ class PallGroundTest {
 
     /** Весь круг замеров по {@code heights} и {@code water} и заполнение. */
     private static void surveyAll(PallGround g, Sightline.Heights heights, FarTerrain.Water water) {
-        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, heights, water);
+        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, 0, heights, water);
         g.fill();
     }
 
@@ -67,7 +67,7 @@ class PallGroundTest {
         surveyAll(g, UNKNOWN);
         int version = g.version();
         pall.water(1, 1);
-        g.survey(0, 0, UNKNOWN, null);
+        g.survey(0, 0, 0, UNKNOWN, null);
         assertEquals(version + 1, g.version(), "вода под эпицентром — сразу");
         assertTrue(g.hasWater());
         assertFalse(g.hasLand());
@@ -193,29 +193,39 @@ class PallGroundTest {
         Sightline.Heights hills = (x, z) -> 80 + 30 * Math.sin(x / 700.0) * Math.cos(z / 900.0);
         surveyAll(g, hills);
         int version = g.version();
-        for (int i = 0; i < 3 * PallGround.FILL_TICKS; i++) g.survey(0, 0, hills, null);
+        for (int i = 0; i < 3 * PallGround.FILL_TICKS; i++) g.survey(0, 0, 0, hills, null);
         assertEquals(version, g.version(), "то же самое — без заполнения");
         g.fill();
         version = g.version();
         Sightline.Heights raised = (x, z) -> hills.at(x, z) + 10;
-        for (int i = 1; i < PallGround.FILL_TICKS; i++) g.survey(0, 0, raised, null);
+        for (int i = 1; i < PallGround.FILL_TICKS; i++) g.survey(0, 0, 0, raised, null);
         assertEquals(version, g.version(), "новое раньше срока — ждёт");
-        g.survey(0, 0, raised, null);
+        g.survey(0, 0, 0, raised, null);
         assertEquals(version + 1, g.version(), "в срок — заполнена");
     }
 
-    /** Рамка пелены выросла (снос, шлейф) — карта крупнее, известное в ней остаётся. */
+    /**
+     * Карта — на пелену у источника (таблица, шлейф мглы) и камеру, а не на весь снос: через полчаса пыль снесло за карту,
+     * а камера у эпицентра — карта только на выросший шлейф; камера ушла по ветру — карта крупнее и накрывает её с запасом
+     * (не шире всей пелены), известное в ней остаётся.
+     */
     @Test
     void growingKeepsWhatIsKnown() {
-        PallGround g = ground();
+        PallGround g = new PallGround(GROUND, new PallField(GROUND, 6000));
         Sightline.Heights hills = (x, z) -> 80 + 30 * Math.sin(x / 700.0) * Math.cos(z / 900.0);
         surveyAll(g, hills);
         double half = g.half(), a = g.at(600, 400);
         PallField pall = new PallField(GROUND, 6000);
-        double late = 20 * 600;
-        assertTrue(pall.extent(late) > half, "через 10 минут пелена шире карты");
-        g.survey(late, 0, UNKNOWN, null);
-        assertTrue(g.half() >= pall.extent(late), "карта накрывает пелену");
+        double late = 20 * 1800;
+        g.survey(late, 0, 0, UNKNOWN, null);
+        double source = pall.sourceExtent(late);
+        assertTrue(source > half, "шлейф мглы за полчаса не вырос за карту");
+        assertEquals(PallGround.GROW * source, g.half(), 1e-9, "камера у эпицентра: карта — не на пелену у источника");
+        assertTrue(pall.extent(late) > 1.25 * g.half(), "через полчаса пыль не снесло за карту");
+        double eye = 0.9 * pall.extent(late);
+        g.survey(late, 0, eye, UNKNOWN, null);
+        assertTrue(g.half() >= Math.min(pall.extent(late), eye + GROUND.blocks(PallGround.AROUND_EYE_M)), "камера по ветру — не на карте");
+        assertTrue(g.half() <= PallGround.GROW * pall.extent(late) + 1e-9, "карта шире пелены");
         assertEquals(a, g.at(600, 400), 6, "известное осталось (на клетках крупнее)");
         assertEquals(80 + 30 * Math.sin(600 / 700.0) * Math.cos(400 / 900.0) - 109, g.at(600, 400), 6);
     }

@@ -194,13 +194,16 @@ public final class PallField {
         return Math.sqrt(Math.max(0, slant * slant - hob * hob));
     }
 
-    /** Через сколько секунд модели после фронта слой тоньше {@link #GONE_DEPTH} (толща после фазы волны только убывает). */
+    /**
+     * Через сколько секунд модели после фронта слой тоньше {@link #GONE_DEPTH} (толща после фазы волны только убывает), до
+     * секунды: пелену строит поток кадра в миг подрыва.
+     */
     private static double settledBy(DustModel.Column c) {
         double positive = c.positive();
         if (c.depth(positive) < GONE_DEPTH) return positive;
         double lo = positive, hi = 6 * 3600;
         if (c.depth(hi) >= GONE_DEPTH) return hi;
-        for (int k = 0; k < 40; k++) {
+        while (hi - lo > 1) {
             double m = 0.5 * (lo + hi);
             if (c.depth(m) >= GONE_DEPTH) lo = m;
             else hi = m;
@@ -397,8 +400,9 @@ public final class PallField {
         return (ticks - arrival[i]) / (20.0 * d.scale());
     }
 
-    /** Строк таблицы на подрыв: пыль, брызги, мгла. */
+    /** Строк таблицы на подрыв: пыль, брызги, мгла — по порядку. */
     public static final int ROWS = 3;
+    static final int DUST_ROW = 0, SPRAY_ROW = 1, HAZE_ROW = 2;
 
     /**
      * Строка таблицы в момент {@code ticks} после подрыва (тики клиента): по {@link #BINS} узлам 12 чисел — пыль
@@ -413,14 +417,14 @@ public final class PallField {
         for (int i = 0; i < BINS; i++) {
             dust(i, ticks, v);
             if (!land) v[0] = 0;
-            for (int k = 0; k < 4; k++) out[4 * i + k] = (float) v[k];
+            for (int k = 0; k < 4; k++) out[4 * (DUST_ROW * BINS + i) + k] = (float) v[k];
             spray(i, ticks, v);
             if (!water) v[0] = 0;
-            for (int k = 0; k < 4; k++) out[4 * (BINS + i) + k] = (float) v[k];
+            for (int k = 0; k < 4; k++) out[4 * (SPRAY_ROW * BINS + i) + k] = (float) v[k];
             haze(i, ticks, v);
             // мглы и пожаров под ней над открытым морем нет (доля сноса пыли — для брызг)
             if (!land) v[0] = v[2] = 0;
-            for (int k = 0; k < 4; k++) out[4 * (2 * BINS + i) + k] = (float) v[k];
+            for (int k = 0; k < 4; k++) out[4 * (HAZE_ROW * BINS + i) + k] = (float) v[k];
         }
     }
 
@@ -547,8 +551,20 @@ public final class PallField {
     public double extent(double ticks) {
         double[] s = new double[3];
         boolean surge = surge(ticks, s);
-        double wide = surge ? Math.max(reach, 1.05 * s[0]) : reach;
-        return wide + d.blocks(d.windSpeed()) * DRIFT * (surge ? ticks : Math.min(ticks, dustEnd)) / 20.0 + plume(ticks);
+        return atSource(ticks, surge, s) + d.blocks(d.windSpeed()) * DRIFT * (surge ? ticks : Math.min(ticks, dustEnd)) / 20.0;
+    }
+
+    /**
+     * {@link #extent} без сноса: таблица (или базисная волна, если она шире) и шлейф мглы — пелена у своего источника, где
+     * её подняло. Карта рельефа под пеленой ({@link PallGround}) — на неё и камеру, а не на весь снос.
+     */
+    public double sourceExtent(double ticks) {
+        double[] s = new double[3];
+        return atSource(ticks, surge(ticks, s), s);
+    }
+
+    private double atSource(double ticks, boolean surge, double[] s) {
+        return (surge ? Math.max(reach, 1.05 * s[0]) : reach) + plume(ticks);
     }
 
     /** Длина шлейфа мглы по ветру к моменту {@code ticks}, блоки: растёт с ветром, не длиннее {@link #PLUME_MAX} зон пожаров. */

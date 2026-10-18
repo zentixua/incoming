@@ -384,9 +384,32 @@ float pallWallShape(float u) {
     return pallLifted(x) / pow(max(x, 0.0001), 0.8333333);
 }
 
-// Доля головы за клином (BlastWall.handoff): от его конца до полутора длин место переходит к пелене
+// Где голова за клином переходит к пелене, в длинах клина от переднего края пыли (BlastWall.HANDOFF_FROM, HANDOFF_TO):
+// от его конца до полутора длин
+const float PALL_WALL_HANDOFF_FROM = 1.0;
+const float PALL_WALL_HANDOFF_TO = 1.5;
+
+// Доля головы за клином (BlastWall.handoff)
 float pallWallFade(float u) {
-    return 1.0 - smoothstep(1.0, 1.5, u);
+    return 1.0 - smoothstep(PALL_WALL_HANDOFF_FROM, PALL_WALL_HANDOFF_TO, u);
+}
+
+// Точка в рамке головы (BlastWall.sigma): s — за передним краем пыли, z — над рельефом (блоки), len, top — длина и верх
+// клина слота, lag — отставание брызг слота. Вне — 0, внутри — 1
+float pallWallInside(float s, float z, float len, float top, float lag) {
+    if (s < -1.0) return 0.0;
+    if (s > PALL_WALL_HANDOFF_TO * len + lag) return 0.0;
+    if (z > top) return 0.0;
+    if (z < -0.5 * top) return 0.0;
+    return 1.0;
+}
+
+// Ослабление-множитель головы s блоков за краем пыли с отставанием брызг (BlastWall.density): пыль — от доли edge у края
+// до end в конце клина длины len (× scale; пыль, поднятая ближе к эпицентру, — своей густоты), брызги spray — свои; wet —
+// доля воды под точкой
+float pallWallDensity(float s, float len, float scale, float edge, float end, float spray, float wet) {
+    float dust = scale * (edge + (end - edge) * clamp(s / max(len, 0.001), 0.0, 1.0));
+    return dust + (spray - dust) * wet;
 }
 
 // Доля густоты головы без шума (BlastWall.mean): s — за передним краем пыли (блоки; впереди — меньше нуля), z — над
@@ -402,8 +425,8 @@ float pallWallMean(float s, float z, float len, float top) {
 
 // Голова стены в точке
 struct WallAt {
-    // с поправкой на воду под точкой: длина клина, его верх в конце, сдвиг назад (блоки), ослабление (1/блок); P.w = 0 —
-    // точка вне головы
+    // с поправкой на воду под точкой: длина клина, его верх в конце, сдвиг назад (блоки), ослабление здесь
+    // (pallWallDensity, 1/блок); P.w = 0 — точка вне головы
     vec4 P;
     // за передним краем пыли и над рельефом, блоки
     float s;
@@ -424,12 +447,10 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     h.z = p.y - S[0].z - floorUp;
     h.wet = 0.0;
     h.P = vec4(V[0].y, V[0].z, 0.0, 0.0);
-    float back = 1.5 * V[0].y + V[1].y;
-    if (V[0].w <= 0.0 || h.s < -1.0 || h.s > back || h.z > V[0].z || h.z < -0.5 * V[0].z) return h;
+    if (V[0].w <= 0.0 || pallWallInside(h.s, h.z, V[0].y, V[0].z, V[1].y) <= 0.0) return h;
     if (W.w > 0.5) h.wet = pallWater(ground, G, p.xz - S[0].xy);
     float lag = V[1].y * h.wet;
-    float dust = V[0].w * mix(V[3].z, V[3].w, clamp((h.s - lag) / max(V[0].y, 0.001), 0.0, 1.0));
-    h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, mix(dust, V[1].w, h.wet));
+    h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, pallWallDensity(h.s - lag, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, h.wet));
     return h;
 }
 
@@ -440,7 +461,7 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     vec4 none = vec4(1.0, 0.0, 1.0, 0.0);
     if (V[0].w <= 0.0 || S[1].w < 0.5) return none;
     vec2 c = S[0].xy;
-    float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - 1.5 * V[0].y - V[1].y, 0.0);
+    float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y, 0.0);
     // по высоте: карта рельефа (нет её — земля под эпицентром) с головой
     float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top;
     if (abs(dir.y) > 1e-6) {

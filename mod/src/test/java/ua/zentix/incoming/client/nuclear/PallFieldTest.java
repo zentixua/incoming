@@ -581,7 +581,7 @@ class PallFieldTest {
     void tableHoldsOnlyWhatIsUnderThePall() {
         PallField p = new PallField(GROUND, NOON);
         float[] row = new float[4 * PallField.ROWS * PallField.BINS];
-        int dustRow = 0, sprayRow = PallField.BINS, hazeRow = 2 * PallField.BINS;
+        int dustRow = PallField.DUST_ROW * PallField.BINS, sprayRow = PallField.SPRAY_ROW * PallField.BINS, hazeRow = PallField.HAZE_ROW * PallField.BINS;
         p.row(20 * 120, true, false, row);
         boolean dust = false, haze = false;
         for (int i = 0; i < PallField.BINS; i++) {

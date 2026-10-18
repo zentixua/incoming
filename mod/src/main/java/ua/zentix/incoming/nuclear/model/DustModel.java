@@ -76,7 +76,10 @@ public final class DustModel {
     static final double RISE_S = 60;
     /**
      * Выше этого (× ∛(Y/15)) слой над нагретой землёй не встаёт, м: у эпицентра свет вспышки на землю — десятки МДж/м², и
-     * закон дал бы километры; выше — уже ножка и шапка гриба. Оценка: верх оценки обзора в 1 км (350 м).
+     * закон дал бы километры; выше — уже ножка и шапка гриба. Оценка: у эпицентра верха обзор не даёт, в 1 км у него
+     * 120–350 м — предел чуть выше верха этой оценки, у эпицентра слой не ниже, чем в километре. У 15 кт он действует
+     * ближе ~550 м к воздушному подрыву (592 м) и ~450 м к наземному (в 1 км закон даёт 222 и 127 м); там пыль и так
+     * уходит в ножку ({@link #STEM_M}).
      */
     static final double TOP_MAX = 400;
     /**
@@ -159,21 +162,35 @@ public final class DustModel {
     /**
      * Грунт, поднятый за положительную фазу (кг/м²) под давлением фронта {@code kpa}: вынос по ветру вдоль земли (доля
      * напора {@code along}), спадающему за фазу, на x = U_s·τ метров за фронтом (середины {@value #LIFT_STEPS} шагов); без
-     * предела запаса.
+     * предела запаса. Оценка: ветер дует положительную фазу давления {@code positiveS} и спадает по её форме
+     * (1 − x)·e^(−x), а обзор (§8.1) связывает вынос с фазой скоростного напора — она обычно несколько длиннее; своей
+     * длины фазы напора по высоте подрыва у модели нет.
      */
     static double soil(double kpa, double along, double positiveS, double threshold) {
         double u0 = BlastModel.windSpeed(kpa) * Math.sqrt(Math.max(0, along)), front = BlastModel.frontSpeed(kpa), rho = shockedAir(kpa);
+        // закон flux, но то, что от шага не зависит, — вне цикла: клиент строит слои сотнями в миг подрыва. Сальтация —
+        // c·u*³(1 − u*ₜₕ²/u*²) с c из взвеси на 10 порогах: c·u*³ = salt·u*³/b^1,25 (b^1,24·1,25 / b^2,8 = 1/b^1,25)
+        double edge = SUSPEND * threshold, low = Math.pow(threshold, 0.24);
+        double salt = 1.80 * rho * Math.pow(edge * Math.sqrt(2), 1.24) / (low * edge * edge * edge * (1 - 1 / (SUSPEND * SUSPEND)));
         double m = 0, dt = positiveS / LIFT_STEPS;
         for (int i = 0; i < LIFT_STEPS; i++) {
-            double t = (i + 0.5) * dt, x = t / positiveS;
-            m += flux(rho, u0 * (1 - x) * Math.exp(-x), front * t, threshold) * dt;
+            double t = (i + 0.5) * dt, x = t / positiveS, wind = u0 * (1 - x) * Math.exp(-x);
+            double b = plate(front * t), bq = Math.pow(b, 1.25), us = wind / (Math.sqrt(2) * bq);
+            // ветер за фазу спадает, а слой над землёй растёт: ниже порога — и до конца фазы
+            if (us <= threshold) break;
+            double f = us >= edge ? 1.80 * rho * Math.pow(wind, 1.24) / (low * Math.pow(b, 2.80))
+                    : salt * us * us * us * (1 - threshold * threshold / (us * us)) / bq;
+            m += f * dt;
         }
         return m;
     }
 
     /**
      * Доля поднятого к доле s положительной фазы 0..1: импульс скоростного напора ∫(1 − x)²e^(−2x)dx (напор — как квадрат
-     * ветра), на весь импульс фазы. Сразу за фронтом — 0, к концу фазы — 1; у фронта растёт как 4,6·s.
+     * ветра), на весь импульс фазы. Сразу за фронтом — 0, к концу фазы — 1; у фронта растёт как 4,6·s. Оценка: это форма
+     * импульса напора, а не закона выноса, которым {@link #soil} считает всю массу (сальтация ∝ u*³, взвесь ∝ U^1,24, и
+     * ниже порога — ноль): тот к концу фазы спадает быстрее, и у края клина поднятого на деле больше. Форма — одна на все
+     * дальности (голова — клин {@code BlastWall}), а по закону выноса она была бы своей у каждой.
      */
     public static double lifted(double s) {
         double x = Math.max(0, Math.min(1, s)), y = 1 - x;
@@ -187,6 +204,7 @@ public final class DustModel {
     public static Column column(double groundM, double hobM, double yieldKt, boolean surfaceBurst, double visibilityM, Surface surface) {
         double hob = Math.max(0, hobM), ground = Math.max(0, groundM), slant = Math.max(1, Math.hypot(ground, hob));
         double kpa = BlastModel.kpa(HobBlast.psi(ground, hob, yieldKt)), ys = Math.cbrt(yieldKt / 15);
+        // ветер выноса — положительная фаза давления, а не напора (оценка, soil)
         double positive = HobBlast.positivePhaseSeconds(ground, hob, yieldKt), along = HobBlast.alongGround(ground, hob, yieldKt);
         double soil = Math.min(surface.supply(), soil(kpa, along, positive, surface.threshold()));
         double debris = surface.debris() * destroyed(BlastModel.psi(kpa));
@@ -202,11 +220,12 @@ public final class DustModel {
 
     /**
      * Докуда по земле волна поднимает пыль толщей {@code depth} и больше (оптическая, у слоя к концу фазы волны), м; дальше
-     * пыли меньше. Подрыв и поверхность — как у {@link #column}.
+     * пыли меньше. Подрыв и поверхность — как у {@link #column}. До метра: каждый шаг — слой целиком (интеграл выноса),
+     * а клиент строит пелену в миг подрыва ({@code PallField}).
      */
     public static double reach(double hobM, double yieldKt, boolean surfaceBurst, double visibilityM, Surface surface, double depth) {
         double hob = Math.max(0, hobM), far = HobBlast.rangeFor(0.1, hob, yieldKt);
-        return Solve.decreasingRoot(r -> column(r, hob, yieldKt, surfaceBurst, visibilityM, surface).lifted(), depth, 1, Math.max(far, 2));
+        return Solve.decreasingRoot(r -> column(r, hob, yieldKt, surfaceBurst, visibilityM, surface).lifted(), depth, 1, Math.max(far, 2), 1);
     }
 
     /**

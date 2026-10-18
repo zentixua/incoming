@@ -333,11 +333,9 @@ public final class NukePall {
         org.joml.Matrix4f m = k == 0 ? f.slot0 : f.slot1;
         m.m00(cx).m01(cz).m02(ground).m03((float) p.reach());
         m.m10((float) DRIFT[0]).m11((float) DRIFT[1]).m12((float) plume).m13(1);
-        // строки таблицы слота: пыль, брызги, мгла (PallField.row)
-        int first = PallField.ROWS * k;
-        m.m20((float) Math.cos(d.windDir())).m21((float) Math.sin(d.windDir())).m22((first + 0.5f) / PallPass.ROWS).m23((first + 2.5f) / PallPass.ROWS);
-        m.m30((float) (PallField.SIGMA_DENSE / d.scale())).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0))
-                .m33((first + 1.5f) / PallPass.ROWS);
+        m.m20((float) Math.cos(d.windDir())).m21((float) Math.sin(d.windDir()));
+        m.m30((float) (PallField.SIGMA_DENSE / d.scale())).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0));
+        tableRows(m, k);
         // вода слота: базисная волна и есть ли под пеленой вода (иначе шейдер карту воды не читает)
         (k == 0 ? f.water0 : f.water1).set((float) SURGE[0], (float) SURGE[1], (float) SURGE[2], water ? 1 : 0);
         // свет шара и пожаров на пыли (CloudPuffs.pallLight)
@@ -513,6 +511,19 @@ public final class NukePall {
         }
         // на экран — как пелена (fx_pall: к белому, плечо)
         PallLight.screen(lin, into);
+    }
+
+    /**
+     * Строки таблицы слота k ({@link PallField#row}) в его mat4 (по столбцам, как {@code mat4} шейдера): пыль — S[2].z, мгла
+     * — S[2].w, брызги — S[3].w ({@code pallField}).
+     */
+    static void tableRows(org.joml.Matrix4f m, int k) {
+        m.m22(tableRow(k, PallField.DUST_ROW)).m23(tableRow(k, PallField.HAZE_ROW)).m33(tableRow(k, PallField.SPRAY_ROW));
+    }
+
+    /** Середина строки {@code row} таблицы слота k в текстуре таблицы пелены, по высоте 0..1. */
+    static float tableRow(int k, int row) {
+        return (PallField.ROWS * k + row + 0.5f) / PallPass.ROWS;
     }
 
     /**

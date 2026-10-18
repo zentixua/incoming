@@ -279,12 +279,14 @@ float wallAt(mat4 V, WallAt h, float fine, float dense) {
     return h.P.w * m * pallShape(n.xy, fill) * n.z;
 }
 
-// точка h, сдвинутая на v (блоки): та же вода и тот же рельеф под ней
+// точка h, сдвинутая на v (блоки): та же вода и тот же рельеф под ней, ослабление — своё (от края к концу клина, вне
+// рамки — 0), как BlastWall.sigma у каждой выборки
 WallAt wallMove(mat4 V, WallAt h, vec3 v) {
     WallAt m = h;
     m.rel = h.rel + v.xz;
     m.s = V[0].x - length(m.rel);
     m.z = h.z + v.y;
+    m.P.w = pallWallInside(m.s, m.z, V[0].y, V[0].z, V[1].y) * pallWallDensity(m.s - m.P.z, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, m.wet);
     return m;
 }
 
@@ -293,9 +295,9 @@ float wallChord(mat4 V, WallAt h, vec3 v, float len, int n) {
     float sum = 0.0, ds = len / float(n);
     for (int i = 0; i < n; i++) {
         WallAt m = wallMove(V, h, v * ((float(i) + 0.5) * ds));
-        sum += pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y);
+        sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y);
     }
-    return sum * ds * h.P.w;
+    return sum * ds;
 }
 
 // То же, но клетки гуще у точки (границы — по квадрату номера): луч к свету выходит из низкого клина у самой точки, а
@@ -305,9 +307,9 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
     for (int i = 0; i < n; i++) {
         float a = float(i * i) / nn, b = float((i + 1) * (i + 1)) / nn;
         WallAt m = wallMove(V, h, v * (0.5 * (a + b) * len));
-        sum += pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y) * (b - a);
+        sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y) * (b - a);
     }
-    return sum * len * h.P.w;
+    return sum * len;
 }
 
 // Голова стены слота в точке (h — pallWallAt) — в s. Это та же пыль, что пелена, только гуще и с валом: тот же свет
@@ -330,15 +332,15 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float fireR
     float dev = 0.0;
     if (hd > 0.0) {
         WallAt h1 = wallMove(V, h, keyDir * (0.06 * tile)), h2 = wallMove(V, h, keyDir * (0.2 * tile));
-        float m1 = h.P.w * pallWallMean(h1.s - h1.P.z, h1.z, h1.P.x, h1.P.y);
-        float m2 = h.P.w * pallWallMean(h2.s - h2.P.z, h2.z, h2.P.x, h2.P.y);
+        float m1 = h1.P.w * pallWallMean(h1.s - h1.P.z, h1.z, h1.P.x, h1.P.y);
+        float m2 = h2.P.w * pallWallMean(h2.s - h2.P.z, h2.z, h2.P.x, h2.P.y);
         dev = ((hd - hm) * 0.03 + (wallAt(V, h1, 0.0, dense) - m1) * 0.1 + (wallAt(V, h2, 0.0, dense) - m2) * 0.17) * tile;
         dev = clamp(dev, -3.0, 6.0);
     }
     // толща средней головы над точкой (до верха клина здесь), до её переднего края (докуда клин выше точки) и под точкой
     // до рельефа (там земля и пожары; голова под картой — только запас на её грубость); к свету — через всю голову, но не
     // выше её верха: клин низкий и длинный, и шаги на всю его длину шли бы над ним (NukePall.dustLight — то же)
-    float reach = 1.5 * h.P.x + h.P.y, s0 = h.s - h.P.z, toTop = max(h.P.y - h.z, 0.0);
+    float reach = PALL_WALL_HANDOFF_TO * h.P.x + h.P.y, s0 = h.s - h.P.z, toTop = max(h.P.y - h.z, 0.0);
     vec2 out1 = h.rel / max(length(h.rel), 1e-3);
     float up = wallChord(V, h, vec3(0.0, 1.0, 0.0), max(h.P.y * pallWallTop(s0 / max(h.P.x, 0.001)) - h.z, 0.0), 4);
     float side = wallChord(V, h, vec3(out1.x, 0.0, out1.y), max(s0 - h.P.x * pow(clamp(h.z / max(h.P.y, 0.001), 0.0, 1.0), 1.2), 0.0), 4);
