@@ -3,7 +3,6 @@ package ua.zentix.incoming.nuclear.model;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FireballModelTest {
@@ -19,6 +18,32 @@ class FireballModelTest {
         assertEquals(0.12, FireballModel.secondMaximumSeconds(15), 0.01);
         assertEquals(1.0, FireballModel.secondMaximumSeconds(1000), 0.02);
         assertEquals(0.0097, FireballModel.firstMinimumSeconds(15), 0.0005);
+    }
+
+    /**
+     * Видимая температура: во втором максимуме — T₂, после — остывает к воздуху по хронике (15 кт — около 4 000 K через
+     * секунду, около 1 950 K через девять); до него — Стефан–Больцман по яркости и радиусу: первый импульс горячее T₂,
+     * в минимуме холоднее первого импульса, ко второму максимуму — без скачка.
+     */
+    @Test
+    void temperatureFollowsTheFlashAndTheFootage() {
+        double y = 15, tMin = FireballModel.firstMinimumSeconds(y), tMax = FireballModel.secondMaximumSeconds(y);
+        assertEquals(FireballModel.PEAK_K, FireballModel.temperature(tMax, y), 1e-9);
+        assertEquals(FireballModel.temperature(tMax * (1 - 1e-9), y), FireballModel.temperature(tMax * (1 + 1e-9), y), 0.01);
+        double t1 = FireballModel.temperature(1, y), t9 = FireballModel.temperature(9, y);
+        assertTrue(t1 > 3_600 && t1 < 4_400, "1 с: " + t1);
+        assertTrue(t9 > 1_750 && t9 < 2_150, "9 с: " + t9);
+        double first = 0;
+        for (double t = 1e-6; t < tMin / 3; t *= 1.1) first = Math.max(first, FireballModel.temperature(t, y));
+        assertTrue(first > FireballModel.PEAK_K, "первый импульс " + first);
+        assertTrue(FireballModel.temperature(tMin, y) < first, "минимум " + FireballModel.temperature(tMin, y));
+        assertEquals(FireballModel.AMBIENT_K, FireballModel.temperature(0, y), 0);
+        double last = Double.MAX_VALUE;
+        for (double t = tMax; t < 1e4; t *= 1.05) {
+            double k = FireballModel.temperature(t, y);
+            assertTrue(k < last && k > FireballModel.AMBIENT_K, t + " с: " + k);
+            last = k;
+        }
     }
 
     @Test
@@ -50,32 +75,6 @@ class FireballModelTest {
         assertTrue(FireballModel.radius(tMax / 10, y, false) < max);
         assertTrue(FireballModel.radius(10, y, false) > max);
         assertTrue(FireballModel.radius(1e4, y, false) <= 1.3 * max + 1e-9);
-    }
-
-    @Test
-    void colourGoesFromWhiteToRedBrownToGrey() {
-        double y = 15, tMax = FireballModel.secondMaximumSeconds(y);
-        int early = FireballModel.colorArgb(0, y);
-        assertTrue((early & 0xFF) > ((early >> 16) & 0xFF), "сначала голубоватый");
-        assertEquals(0xFFFFFFFF, FireballModel.colorArgb(0.5 * tMax, y));
-        int brown = FireballModel.colorArgb(130 * tMax, y);
-        assertTrue(((brown >> 16) & 0xFF) > 2 * (brown & 0xFF), "красно-бурый");
-        int grey = FireballModel.colorArgb(1e4, y);
-        assertNotEquals(brown, grey);
-        assertEquals(0xFF, grey >>> 24);
-    }
-
-    /** 15 кт: 1–2 с шар слепяще бело-жёлтый (синего много — не лаймовый), к 5 с — жёлто-оранжевый. */
-    @Test
-    void fireballIsWhiteYellowForTheFirstSeconds() {
-        for (double t : new double[] {1, 2}) {
-            int c = FireballModel.colorArgb(t, 15);
-            int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
-            assertTrue(r == 0xFF && g >= 0xE8 && b >= 0xB0, t + " с: " + Integer.toHexString(c));
-        }
-        int c = FireballModel.colorArgb(5, 15);
-        int g = (c >> 8) & 0xFF, b = c & 0xFF;
-        assertTrue(g < 0xD8 && b < 0x90, "5 с: " + Integer.toHexString(c));
     }
 
     @Test

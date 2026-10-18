@@ -4,6 +4,7 @@ import com.mojang.blaze3d.shaders.FogShape;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.joml.FrustumIntersection;
+import org.joml.Vector4f;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
 
@@ -15,7 +16,6 @@ public final class FxFrame {
     public final Vec3 cam;
     public final FrustumIntersection frustum;
     private final FarView view;
-    private final double range;
     private final float fogStart, fogEnd;
     private final boolean cylinder;
 
@@ -23,15 +23,17 @@ public final class FxFrame {
         this.cam = view.camera();
         this.frustum = frustum;
         this.view = view;
-        this.range = view.range();
         this.fogStart = fog.start;
         this.fogEnd = fog.end;
         this.cylinder = fog.shape == FogShape.CYLINDER;
     }
 
-    /** Сколько света частицы доходит через воздух ({@link Sight#transmittance}): та же дымка, что у дальней картинки. */
-    public float haze(double d) {
-        return (float) Sight.transmittance(d, range);
+    /**
+     * Сколько света частицы в d блоках, на dy выше глаза, доходит через воздух ({@link FarView#air}): та же дымка, что у
+     * дальней картинки.
+     */
+    public float haze(double d, double dy) {
+        return (float) view.air(d, dy);
     }
 
     /**
@@ -58,5 +60,15 @@ public final class FxFrame {
         float start, end;
         FogShape shape = FogShape.SPHERE;
         final float[] color = new float[4];
+
+        /**
+         * Дымка воздуха и этот туман для того, что ложится на сам мир (наклейка на воду, тень пелены и грибов; {@code Haze}
+         * шейдеров): x — ослабление воздуха по дальности видимости {@code range}, 1/блок ({@link Sight}); y, z — начало
+         * и конец тумана (нет тумана — дальше всего); w — 1, если туман цилиндром. В {@code out}.
+         */
+        Vector4f haze(double range, Vector4f out) {
+            boolean on = end > start;
+            return out.set((float) (Sight.KOSCHMIEDER / range), on ? start : 1e9f, on ? end : 2e9f, shape == FogShape.CYLINDER ? 1 : 0);
+        }
     }
 }

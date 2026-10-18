@@ -24,6 +24,7 @@ import net.minecraft.world.entity.animal.Pig;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -41,6 +42,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.entity.flight.ProximityFuse;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SplitGuard;
 import ua.zentix.incoming.entity.BomberEntity;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
@@ -61,6 +63,7 @@ import ua.zentix.incoming.net.C2S;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.registry.ModEntities;
+import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.strike.AreaLoader;
 import ua.zentix.incoming.strike.ChunkTickets;
 import ua.zentix.incoming.strike.FarFlights;
@@ -126,6 +129,34 @@ public final class StrikeGameTests {
     private static final BlockPos RANGE_CENTER = new BlockPos(32, 11, 32);
 
     private StrikeGameTests() {}
+
+    /**
+     * Неровный навес над округой стрелка {@code c} (±48 блоков, дальше всех мест пусковой {@code LaunchSite}): полосы на
+     * двух высотах над самым высоким блоком округи — под ним нет неба, на нём нет ровного места. Высота — от самого
+     * высокого блока, а не от стрелка: сетка GameTest не убирает площадки прошлых партий, и место нашлось бы на соседней
+     * выше навеса (CI 16.10, другой состав части: пусковая на y −17 у края площадки над навесом на −46). После проверки
+     * навес убирается: над чужой постройкой он выше, чем расчищает площадка следующей партии, и шахед соседней проверки
+     * разбивался о него (CI 16.10, {@code drone_dive_mast} сразу после {@code operator_route}).
+     */
+    private static void roofOver(GameTestHelper h, BlockPos c) {
+        ServerLevel level = h.getLevel();
+        int top = c.getY();
+        for (int x = -48; x <= 48; x++) for (int z = -48; z <= 48; z++) {
+            BlockPos q = c.offset(x, 0, z);
+            if (Terrain.ready(level, q)) top = Math.max(top, level.getHeight(Heightmap.Types.MOTION_BLOCKING, q.getX(), q.getZ()));
+        }
+        List<BlockPos> roof = new ArrayList<>();
+        for (int x = -48; x <= 48; x++) for (int z = -48; z <= 48; z++) {
+            BlockPos r = new BlockPos(c.getX() + x, top + (Math.floorMod(x, 3) == 0 ? 10 : 13), c.getZ() + z);
+            if (Terrain.ready(level, r) && level.getBlockState(r).isAir()) {
+                level.setBlock(r, Blocks.STONE.defaultBlockState(), 2);
+                roof.add(r);
+            }
+        }
+        afterTest(h, () -> roof.forEach(r -> {
+            if (Terrain.ready(level, r) && level.getBlockState(r).is(Blocks.STONE)) level.setBlock(r, Blocks.AIR.defaultBlockState(), 2);
+        }));
+    }
 
     /** Верх блока цели. */
     private static Vec3 top(GameTestHelper h, BlockPos block) {
@@ -900,11 +931,7 @@ public final class StrikeGameTests {
         h.assertTrue(Math.abs(first.x - gate.x) < 1.5 && Math.abs(first.z - gate.z) < 1.5, "первая точка не на курсе пусковой: " + first + " против " + gate);
         launcher.discard();
         // навес над всей округой, полосами на двух высотах: ни одного места под пусковую ни под ним, ни на нём
-        BlockPos c = BlockPos.containing(shooter.position());
-        for (int x = -48; x <= 48; x++) for (int z = -48; z <= 48; z++) {
-            BlockPos r = c.offset(x, Math.floorMod(x, 3) == 0 ? 10 : 13, z);
-            if (Terrain.ready(level, r)) level.setBlock(r, Blocks.STONE.defaultBlockState(), 2);
-        }
+        roofOver(h, BlockPos.containing(shooter.position()));
         StrikeProjectile far = StrikeService.launchGuided(level, WeaponType.DRONE, point, 0, shooter, Waypoints.NONE);
         h.assertTrue(far != null && far.isVirtual(), "без места пусковой шахед не зашёл издалека: " + far);
         h.assertTrue(level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive).isEmpty(), "пусковая поставлена под навес");
@@ -942,11 +969,7 @@ public final class StrikeGameTests {
         h.assertTrue(p.rangeLeft() >= 1.5 * planned, "запас хода " + p.rangeLeft() + " меньше полутора путей по точкам " + planned);
         launcher.discard();
         // места пусковой нет — заход издалека
-        BlockPos c = BlockPos.containing(shooter.position());
-        for (int x = -48; x <= 48; x++) for (int z = -48; z <= 48; z++) {
-            BlockPos r = c.offset(x, Math.floorMod(x, 3) == 0 ? 10 : 13, z);
-            if (Terrain.ready(level, r)) level.setBlock(r, Blocks.STONE.defaultBlockState(), 2);
-        }
+        roofOver(h, BlockPos.containing(shooter.position()));
         StrikeProjectile far = StrikeService.launchGuided(level, WeaponType.DRONE, point, 0, shooter, via);
         h.assertTrue(far != null && far.isVirtual(), "без места пусковой шахед по маршруту не зашёл издалека: " + far);
         Vec3 entry = via.afar(point, WeaponType.DRONE.spec().route().finalLeg());
@@ -1069,6 +1092,72 @@ public final class StrikeGameTests {
                         && mine.stream().filter(l -> !l.ordered()).count() == LaunchSite.MAX_PER_OWNER,
                 "пусковых на местах пуска " + mine.stream().filter(LauncherEntity::ordered).count() + ", за владельцем " + mine.stream().filter(l -> !l.ordered()).count());
         h.succeed();
+    }
+
+    /**
+     * Место пуска с карты пульта ({@code C2S.Fire#from}, {@link ServerActions#launchSiteProblem}): его выбирает только
+     * оператор (или хост), не дальше {@code map_range} от себя, в границах мира. Приказ оператора с пульта идёт по правилам
+     * (боеприпас снят), пусковая встаёт на месте пуска — его, и его «Отбой» её убирает.
+     */
+    @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_from_map", skyAccess = true)
+    public static void designatorLaunchSite(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Vec3 point = top(h, RUNWAY_TARGET);
+        Vec3 from = h.absoluteVec(new Vec3(16.5, 0, 60.5));
+        StrikeGameTests.afterTest(h, () -> {
+            level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(64)).forEach(Entity::discard);
+            level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64)).forEach(Entity::discard);
+        });
+        Vec3 stand = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 130)));
+        FakePlayer player = new Ranked(level, "site_player", 0);
+        player.moveTo(stand);
+        Ranked op = new Ranked(level, "site_operator", 2);
+        op.moveTo(stand);
+
+        h.assertTrue(key(ServerActions.launchSiteProblem(player, from)).equals("incoming.map.launch.ops_only"), "место пуска принято не у оператора");
+        h.assertTrue(ServerActions.launchSiteProblem(op, from) == null, "место пуска оператора рядом не принято");
+        double range = IncomingConfig.SERVER.mapRange.get();
+        h.assertTrue(key(ServerActions.launchSiteProblem(op, stand.add(range + 10, 0, 0))).equals("incoming.map.launch.out_of_range"),
+                "место пуска дальше map_range принято");
+        h.assertTrue(outsideWorld(ServerActions.launchSiteProblem(op, new Vec3(Double.NaN, 0, from.z))), "место пуска NaN не названо вне мира");
+
+        Item shahed = ModItems.SHAHED.get();
+        MunitionGameTests.give(op, shahed, 1);
+        ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
+        h.assertTrue(ServerActions.strike(op, WeaponType.DRONE, 1, 0, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, new LaunchOrigin.Place(from), true),
+                "приказ оператора с места пуска не принят");
+        h.assertTrue(MunitionGameTests.held(op, shahed) == 0, "приказ с пульта не снял боеприпас: осталось " + MunitionGameTests.held(op, shahed));
+        List<LauncherEntity> launchers = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive);
+        h.assertTrue(launchers.size() == 1 && flat(launchers.getFirst().position(), from) < PLACE_SLACK, "пусковая не на месте пуска " + from + ": "
+                + launchers.stream().map(Entity::position).toList());
+        LauncherEntity launcher = launchers.getFirst();
+        h.assertTrue(launcher.ordered() && op.getUUID().equals(launcher.ownerId()), "пусковая места пуска: на месте " + launcher.ordered() + ", владелец " + launcher.ownerId());
+        List<StrikeProjectile> onRail = level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(64), launcher::serves);
+        h.assertTrue(onRail.size() == 1 && op.getUUID().equals(onRail.getFirst().ownerId()), "на пусковой не шахед оператора: " + onRail.size());
+
+        ServerActions.recall(level.getServer(), op.getUUID(), op.getGameProfile().getName());
+        h.assertTrue(level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive).isEmpty(), "«Отбой» не убрал пусковую места пуска");
+        h.succeed();
+    }
+
+    /** Игрок GameTest с правами {@code level} (оператор — 2): пакетов не шлёт, в списке игроков его нет. */
+    private static final class Ranked extends FakePlayer {
+        private final int level;
+
+        Ranked(ServerLevel world, String name, int level) {
+            super(world, new GameProfile(UUID.randomUUID(), name));
+            this.level = level;
+        }
+
+        @Override
+        protected int getPermissionLevel() {
+            return level;
+        }
+    }
+
+    /** Ключ перевода строки отказа; пусто — отказа нет. */
+    private static String key(@Nullable Component problem) {
+        return problem != null && problem.getContents() instanceof TranslatableContents t ? t.getKey() : "";
     }
 
     /**
@@ -2859,6 +2948,7 @@ public final class StrikeGameTests {
             // падает вперёд по курсу (+z), не рулит: вбок не уходит, вперёд — не дальше двух высот падения
             h.assertTrue(entry[0].z > from.z && entry[0].z - from.z < 2 * (from.y - ground[0]) && Math.abs(entry[0].x - from.x) < 8,
                     "бомба вошла в грунт не на своём пути: " + entry[0].subtract(from));
+            assertFlightReleased(h, id);
         });
     }
 
@@ -2922,6 +3012,8 @@ public final class StrikeGameTests {
             // вход на 1 блок выше точки попадания (дым из скважины); попадание — верх плиты
             h.assertTrue(Math.abs(entry[0].y - 1 - (roof + 1)) < 2, "бомба вошла не в плиту над собой: y=" + (int) entry[0].y + ", плита " + roof);
             h.assertTrue(Math.abs(entry[0].z - risenZ[0]) < 4, "бомба вошла в плиту не там, где плита встала над ней: " + (entry[0].z - risenZ[0]));
+            // под плитой — воздух до земли: бомба проходит его в грунте и уходит в соседние чанки
+            assertFlightReleased(h, id);
         });
     }
 
@@ -3014,6 +3106,7 @@ public final class StrikeGameTests {
             h.assertTrue(raised[0], "цель не поднялась");
             h.assertFalse(flight(level, id) != null, "ракета ещё летит, до цели " + (int) last[0].distanceTo(high));
             h.assertTrue(last[0].distanceTo(high) < 24, "ракета взорвалась не у цели: " + last[0].subtract(high));
+            assertFlightReleased(h, id);
         });
     }
 
@@ -3022,6 +3115,24 @@ public final class StrikeGameTests {
     private static StrikeProjectile flight(ServerLevel level, UUID id) {
         return VirtualFlights.get(level).flights().stream().filter(v -> v.getUUID().equals(id)).findFirst()
                 .orElseGet(() -> level.getEntity(id) instanceof StrikeProjectile e && !e.isRemoved() ? e : null);
+    }
+
+    /**
+     * Полёт кончился — снаряда нет ни в мире, ни вне его — и удары отработали, а у мода не осталось ни одного тикета
+     * с ключом снаряда: ни своих чанков ({@code incoming_projectile}), ни района цели и полосы ({@code incoming_flight}),
+     * ни их тикетов загрузки. Снаряд, который застрял в мире там, где не тикает, держал бы их до остановки сервера.
+     */
+    private static void assertFlightReleased(GameTestHelper h, UUID id) {
+        ServerLevel level = h.getLevel();
+        StrikeProjectile p = flight(level, id);
+        if (p != null) {
+            BlockPos at = p.blockPosition();
+            throw new GameTestAssertException("снаряд не кончился: " + (p.isVirtual() ? "вне мира" : level.isPositionEntityTicking(at) ? "в мире" : "в мире без тика")
+                    + " на " + at.toShortString() + ", фаза " + p.flightPhase() + "; его тикеты " + TicketProbe.types(level, id));
+        }
+        h.assertTrue(StrikeWorld.get(level).impacts().size() == 0, "удары ещё в очереди");
+        List<String> left = TicketProbe.types(level, id);
+        h.assertTrue(left.isEmpty(), "после полёта остались его тикеты: " + left + "; районы " + StrikeWorld.get(level).areas().describe());
     }
 
     /** Снаряд под «рельефом» на 60 блоков выше цели над местом пуска долетает до цели и взрывается у неё. */
@@ -3039,6 +3150,7 @@ public final class StrikeGameTests {
             h.assertFalse(flight(level, id) != null, "снаряд ещё летит, до цели " + (int) last[0].distanceTo(aim));
             h.assertTrue(last[0].distanceTo(aim) < 24, "снаряд взорвался не у цели: " + last[0].subtract(aim));
             assertCrater(h, RUNWAY_TARGET, "у цели");
+            assertFlightReleased(h, id);
         });
     }
 

@@ -1,4 +1,4 @@
-"""Монтаж Newisle (newisle_cut.py): какие папки идут в монтаж и план монтажа по настоящему листу аниматика.
+"""Монтаж Newisle (newisle_cut.py): какие папки идут в монтаж и план монтажа по настоящему монтажному листу.
 
     python3 -m unittest discover -s tools/trailer/tests
 """
@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import newisle_cut as C  # noqa: E402
 
-SHEET = C.load(os.path.join(C.SCENES, "newisle-animatic.json"))
+SHEET = C.load(C.SHEET)
 TAKES = C.load(os.path.join(C.SCENES, "newisle-takes.json"))
 
 
@@ -36,6 +36,13 @@ class NewisleCutTest(unittest.TestCase):
             for p in plans[1:]:
                 self.assertNotIn(p, dirs, "FAIL в монтаж не идёт")
             self.assertNotIn("zz", dirs, "пропущенный дубль в монтаж не идёт")
+            # последняя попытка: выведенный план конвейер взял в монтаж с предупреждением — в best.txt у него FAIL
+            with open(os.path.join(ok["rec"], "render", "best.txt"), "a") as f:
+                f.write(f"{plans[-1]} /x/{plans[-1]}/tripod FAIL удар виден 5%\n")
+            if len(plans) > 1:
+                ok["plans"] = {plans[-1]: ["PASS", "предупреждение: удар виден 5%"]}
+                dirs = C.shot_dirs(state, TAKES)
+                self.assertEqual(f"/x/{plans[-1]}/tripod", dirs[plans[-1]], "PASS с предупреждением — в монтаж")
 
     def test_plan_follows_sheet_and_fills_holes(self):
         need = [s["plan"] for s in SHEET["shots"] if "plan" in s]
@@ -51,13 +58,63 @@ class NewisleCutTest(unittest.TestCase):
         self.assertEqual("fill", by_plan[need[1]]["kind"], "неснятый — заливкой")
         self.assertIn("not shot", by_plan[need[1]]["text"]["lines"][0])
         self.assertEqual(need[2], by_plan[need[2]]["take"])
+        hook = C.plan_of(SHEET, {need[0]: "/r/hook", need[2]: "/r/x"})["cuts"]
+        self.assertEqual("start+2.0", next(c for c in hook if c.get("plan") == need[0])["anchor"], "якорь куска — из листа")
+        self.assertEqual("start", by_plan[need[2]]["anchor"])
         self.assertNotIn(need[0], plan["takes"])
         self.assertTrue(all(c["kind"] == "fill" for c in cuts if "card" in str(c.get("id", ""))))
+        styles = {tuple(c["text"]["lines"]): c["text"]["style"] for c in cuts
+                  if "card" in str(c.get("id", "")) and c.get("text")}
+        self.assertEqual("title", styles.get(("INCOMING",)), "название — кеглем логотипа, а не строкой титров")
+        self.assertTrue(all(v == "end" for k, v in styles.items() if k != ("INCOMING",)))
         ids = {c.get("id") or c.get("take") for c in cuts}
         for piece in plan["music"]:
             self.assertIn(piece["start"], ids)
             self.assertLess(piece["from"], piece["to"])
         json.dumps(plan)
+
+    def test_sheet_90_fits_track_and_gates(self):
+        """Лист: все планы есть в дублях (второй кусок плана «n31@wide» — план n31), вторая часть трека накрывает ролик до
+        конца (длина может расти — Артём 17.10), музыка на ударах трека, ворота монтажа чисты."""
+        known = {p for t in TAKES["takes"] for s in t.get("shots", []) for p in s.get("plans", [])}
+        known |= {p for t in TAKES["takes"] for p in (t.get("cover") or {})}
+        need = [s["plan"] for s in SHEET["shots"] if "plan" in s]
+        self.assertEqual([], [p for p in need if p.split("@")[0] not in known], "план листа без дубля")
+        wave_part = SHEET["music"]["parts"][-1]
+        self.assertLessEqual(sum(s["dur"] for s in SHEET["shots"]) - wave_part["at"], wave_part["end"] - wave_part["track"] + 0.5,
+                             "трек кончается раньше ролика")
+        plan = C.plan_of(SHEET, {p: f"/r/{p}" for p in need}, music="m.mp3")
+        war, wave = plan["music"]
+        self.assertEqual(("n38", 144, 192, 4, 0.4), (war["start"], war["from"], war["to"], war["grid"], war["ring"]))
+        # ядерная часть 18.10: музыка снова входит на стене пыли (n65), удар трека 3:17,8 — когда она доходит до толпы (n66)
+        self.assertEqual(("n65", 198, 4), (wave["start"], wave["from"], wave["grid"]))
+        cut_checks = C.cut_checks
+        self.assertEqual([], cut_checks.letterbox_clash(SHEET, TAKES))
+        self.assertEqual([], cut_checks.duplicates(SHEET))
+        self.assertEqual([], cut_checks.chat_gate(SHEET, TAKES, C.REPO), "строка второго ключа успевает прочитаться")
+
+    def test_nuke_finale_one_clock(self):
+        """Ядерный финал (Артём 18.10): время только вперёд, вспышка в кадре один раз. Планы разных дублей и мест стоят
+        от отметки подрыва своего дубля подряд, без зазоров и повторов; куски на сетке музыки — целыми долями сетки
+        (конец склейки не сдвигается), удар трека 3:17,8 — когда пыль доходит до толпы (`dust_at` листа)."""
+        shots = [s for s in SHEET["shots"] if str(s.get("anchor", "")).startswith("mark:detonation")]
+        self.assertGreaterEqual(len(shots), 6)
+        at = [float(s["anchor"][len("mark:detonation"):] or 0) for s in shots]
+        self.assertEqual(1, sum(1 for a, s in zip(at, shots) if a <= 0 < a + s["dur"] or a == 0), "вспышка — в одном куске")
+        for (a, s), b in zip(zip(at, shots), at[1:]):
+            self.assertAlmostEqual(a + s["dur"], b, places=3, msg=f"{s['plan']}: следующий кусок не с конца этого")
+        i = SHEET["shots"].index(shots[0])
+        self.assertEqual([s["plan"] for s in shots], [s.get("plan") for s in SHEET["shots"][i:i + len(shots)]], "подряд в листе")
+        wave = SHEET["music"]["parts"][-1]
+        plan = C.plan_of(SHEET, {s["plan"]: f"/r/{s['plan']}" for s in SHEET["shots"] if "plan" in s}, music="m.mp3")
+        start = plan["music"][-1]["start"]
+        k = next(j for j, s in enumerate(shots) if s["plan"] == start)
+        step = SHEET["bar"] / wave["grid"]
+        for s in shots[k:]:
+            self.assertAlmostEqual(0, (s["dur"] / step + 0.5) % 1 - 0.5, places=3, msg=f"{s['plan']}: не целыми долями сетки")
+        hit = (round((197.8 - C.BEAT0) / C.BEAT) - plan["music"][-1]["from"]) * C.BEAT
+        dust = next(s["dust_at"] for s in shots if "dust_at" in s)
+        self.assertAlmostEqual(at[k] + hit, dust, delta=0.05, msg="удар трека не на пыли у толпы")
 
     def test_live_plans_wait_for_artem(self):
         live = C.live_plans(TAKES)

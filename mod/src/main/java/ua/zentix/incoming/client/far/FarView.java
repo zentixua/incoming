@@ -24,9 +24,10 @@ import org.joml.Vector3f;
  * @param world   докуда мир рисует сам (дальность прорисовки, блоков): ближе дальняя картинка уступает частицам
  * @param clouds  высота облаков измерения, блоков ({@code NaN} — облаков нет: Незер, Энд)
  * @param rain    дождь 0..1: облака сплошные
+ * @param air     воздух от глаза ({@link Sight.Air}: дымка редеет с высотой) — по дальности видимости и высоте глаза
  */
 public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up, float partial, double far, double pixel, double edge,
-                      float ambient, double range, double world, double clouds, float rain) {
+                      float ambient, double range, double world, double clouds, float rain, Sight.Air air) {
     /** Свет неба мира 0,12..1: днём 1, ночью 0,17, ночью в грозу 0,12. */
     public static float ambient(ClientLevel level, float partial) {
         return Mth.clamp(level.getSkyDarken(partial) * 1.1f - 0.05f, 0.12f, 1f);
@@ -39,6 +40,11 @@ public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up,
     public static float adaptation(ClientLevel level, Vec3 eye, float partial) {
         float sky = level.getBrightness(LightLayer.SKY, BlockPos.containing(eye)) / 15f;
         return Mth.lerp(sky, 0.12f, ambient(level, partial));
+    }
+
+    /** Доля света точки в d блоках от глаза и на dy блоков выше него, дошедшая через воздух ({@link Sight.Air}). */
+    public double air(double d, double dy) {
+        return air.transmittance(d, dy);
     }
 
     /**

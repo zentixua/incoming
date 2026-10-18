@@ -108,18 +108,7 @@ public final class FarSprites {
      * (r, g, b) с непрозрачностью a (уже с дымкой воздуха).
      */
     public void puff(double dx, double dy, double dz, double half, float rot, int tex, float r, float g, float b, float a) {
-        puff(dx, dy, dz, half, rot, tex, r, g, b, a, 0, 0, 0, 0);
-    }
-
-    /**
-     * Клуб, который ещё и светится изнутри (накал гриба, пожары под стеной пыли): поверх своего дыма — свет (gr, gg, gb)
-     * силы ga, он ничего не закрывает. Свет клуба позади закрывают клубы перед ним.
-     */
-    public void puff(double dx, double dy, double dz, double half, float rot, int tex, float r, float g, float b, float a, float gr, float gg,
-                     float gb, float ga) {
-        if (billboard(dx, dy, dz, half, rot, FxAtlas.puff(tex), r * a + gr * ga, g * a + gg * ga, b * a + gb * ga, a, (float) half * FxQuads.SOFT)) {
-            counts[0]++;
-        }
+        if (billboard(dx, dy, dz, half, rot, FxAtlas.puff(tex), r * a, g * a, b * a, a, (float) half * FxQuads.SOFT)) counts[0]++;
     }
 
     /**
@@ -174,14 +163,16 @@ public final class FarSprites {
         double cos = (dx * fx + dy * fy + dz * fz) / Math.max(d, 1e-9);
         // не ближе, чем у камеры гаснет любой квадрат слоя (fx.fsh: полностью виден с 1,5 блока по оси взгляда)
         double front = Math.max(d - deep, AIR_NEAR / Math.max(cos, 0.1));
+        out.glowShape(true);
         if (front >= d) {
             if (billboard(dx, dy, dz, radius * GLOW, 0, FxAtlas.glow(), r * a, g * a, b * a, 0, 0)) counts[2]++;
-            return;
+        } else {
+            double unfold = FarDraw.fold(front, far), k = front / d * unfold;
+            out.billboard((float) (dx * k), (float) (dy * k), (float) (dz * k), (float) d, (float) (radius * GLOW * k), 0, FxAtlas.glow(), Math.min(1, r * a),
+                    Math.min(1, g * a), Math.min(1, b * a), 0, (float) (d - front), (float) unfold, LightTexture.FULL_BRIGHT, 0);
+            counts[2]++;
         }
-        double unfold = FarDraw.fold(front, far), k = front / d * unfold;
-        out.billboard((float) (dx * k), (float) (dy * k), (float) (dz * k), (float) d, (float) (radius * GLOW * k), 0, FxAtlas.glow(), Math.min(1, r * a),
-                Math.min(1, g * a), Math.min(1, b * a), 0, (float) (d - front), (float) unfold, LightTexture.FULL_BRIGHT, 0);
-        counts[2]++;
+        out.glowShape(false);
     }
 
     /**
@@ -225,6 +216,21 @@ public final class FarSprites {
         glare(dx, dy, dz, radius, out, seen, r, g, b, glare, shown);
     }
 
+    /**
+     * Блик и вуаль яркого тела ({@link #light}) без самого тела: тело рисует объём (огненный шар ядерного удара —
+     * в проходе пелены, {@code fx_pall}), свет в глазу — здесь, с пробой видимости тела ({@link SourceProbes}: мир,
+     * пелена и стена пыли, грибы перед ним).
+     *
+     * @param seen  яркость тела против белого экрана (с привыканием глаза и воздухом)
+     * @param shown тело на экране (доля белого): блик и вуаль не ярче
+     * @param out   числа {@link Sight#light} (5)
+     */
+    public void eyeLight(double dx, double dy, double dz, double radius, double seen, double pixel, float r, float g, float b, double shown,
+                         double[] out) {
+        Sight.light(radius, seen, Math.sqrt(dx * dx + dy * dy + dz * dz), pixel, out);
+        glare(dx, dy, dz, radius, out, seen, r, g, b, 1, shown);
+    }
+
     /** Ядро {@link #light} кругом: свой свет поверх того, что за ним; пересвет — к белому, тусклее белого — тает. */
     private void core(double dx, double dy, double dz, double[] o, double t, float r, float g, float b, double w) {
         double s = o[2], k = Math.min(1, s) * w, white = s > 1 ? Math.min(1, Math.log(s) / Math.log(Sight.WHITE)) : 0;
@@ -258,8 +264,10 @@ public final class FarSprites {
             return;
         }
         out.seenBy(probe);
+        out.glowShape(true);
         out.billboard((float) (dx * k), (float) (dy * k), (float) (dz * k), (float) d, (float) (radius * GLOW * k), 0, FxAtlas.glow(), Math.min(1, r * a),
                 Math.min(1, g * a), Math.min(1, b * a), 0, 0, (float) k, LightTexture.FULL_BRIGHT, 0);
+        out.glowShape(false);
         out.seenBy(0);
         counts[2]++;
     }
@@ -303,11 +311,13 @@ public final class FarSprites {
         float soft = (float) Math.max(halfA, halfB), ua = (float) ka, ub = (float) kb;
         FxAtlas.Sprite s = FxAtlas.glow();
         float v = s.vMid();
+        out.glowShape(true);
         out.quad((float) Math.max(da, db));
         out.vertex(x0 - px * ha, y0 - py * ha, z0 - pz * ha, s.u0(), v, cr * aa, cg * aa, cb * aa, aa, soft, ua, lightA, 0);
         out.vertex(x0 + px * ha, y0 + py * ha, z0 + pz * ha, s.u1(), v, cr * aa, cg * aa, cb * aa, aa, soft, ua, lightA, 0);
         out.vertex(x1 + nx * hb, y1 + ny * hb, z1 + nz * hb, s.u1(), v, cr * ab, cg * ab, cb * ab, ab, soft, ub, lightB, 0);
         out.vertex(x1 - nx * hb, y1 - ny * hb, z1 - nz * hb, s.u0(), v, cr * ab, cg * ab, cb * ab, ab, soft, ub, lightB, 0);
+        out.glowShape(false);
         counts[3]++;
         joint[0] = nx;
         joint[1] = ny;

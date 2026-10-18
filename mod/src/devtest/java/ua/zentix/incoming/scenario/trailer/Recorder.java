@@ -115,8 +115,13 @@ final class Recorder implements SoundEventListener {
 
     /** Отметка для монтажа (удар, подрыв…) в текущий момент плана. */
     void mark(String what) {
+        mark(what, time);
+    }
+
+    /** Отметка в момент {@code at} плана (тики от начала; до начала — меньше нуля). */
+    void mark(String what, double at) {
         if (shot == null) return;
-        write(String.format(Locale.ROOT, "{\"type\":\"mark\",\"shot\":\"%s\",\"t\":%.3f,\"what\":\"%s\"}", shot, time, what));
+        write(String.format(Locale.ROOT, "{\"type\":\"mark\",\"shot\":\"%s\",\"t\":%.3f,\"what\":\"%s\"}", shot, at, what));
     }
 
     /** Тиков игры на кадр видео в текущем плане. */

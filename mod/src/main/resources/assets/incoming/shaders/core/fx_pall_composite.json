@@ -1,0 +1,38 @@
+{
+    "vertex": "incoming:fx_depth",
+    "fragment": "incoming:fx_pall_composite",
+    "samplers": [
+        { "name": "Sampler0" },
+        { "name": "Sampler1" },
+        { "name": "Sampler2" },
+        { "name": "Sampler3" },
+        { "name": "Sampler4" },
+        { "name": "Sampler5" },
+        { "name": "Sampler6" },
+        { "name": "Sampler7" },
+        { "name": "Sampler8" },
+        { "name": "Sampler9" }
+    ],
+    "uniforms": [
+        { "name": "InvViewProj", "type": "matrix4x4", "count": 16, "values": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] },
+        { "name": "PallForward", "type": "float", "count": 3, "values": [0.0, 0.0, -1.0] },
+        { "name": "PallSlot0", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallSlot1", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallSun", "type": "float", "count": 4, "values": [0.0, 1.0, 0.0, 0.0] },
+        { "name": "PallSunLight", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
+        { "name": "PallSkyLight", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
+        { "name": "PallFrame", "type": "float", "count": 4, "values": [0.0, 0.0, 2.0, 0.0] },
+        { "name": "PallFire0", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallFire1", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallGround0", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallGround1", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallFloorFrom", "type": "float", "count": 1, "values": [160.0] },
+        { "name": "PallWater0", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallWater1", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "Haze", "type": "float", "count": 4, "values": [0.0, 1e9, 2e9, 0.0] },
+        { "name": "PallBalls", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallBallLight", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallOpenSky", "type": "float", "count": 3, "values": [1.0, 1.0, 1.0] },
+        { "name": "PallFaceShade", "type": "float", "count": 4, "values": [1.0, 0.5, 0.8, 0.6] }
+    ]
+}

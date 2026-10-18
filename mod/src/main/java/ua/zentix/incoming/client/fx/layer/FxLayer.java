@@ -12,10 +12,13 @@ import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import org.jetbrains.annotations.Nullable;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
+import org.joml.Vector4f;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.far.FarRenderer;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.fx.particle.FxPool;
+import ua.zentix.incoming.client.nuclear.NukePall;
+import ua.zentix.incoming.client.nuclear.NukeWater;
 import ua.zentix.incoming.client.render.DhDepth;
 import ua.zentix.incoming.client.render.FarDraw;
 
@@ -46,6 +49,7 @@ public final class FxLayer {
     private static final FxLights LIGHTS = new FxLights();
     private static final SourceProbes PROBES = new SourceProbes();
     private static final FxFrame.Fog FOG = new FxFrame.Fog();
+    private static final Vector4f HAZE = new Vector4f();
     private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), VIEW = new Matrix4f();
     private static final FrustumIntersection FRUSTUM = new FrustumIntersection();
     @Nullable
@@ -94,6 +98,26 @@ public final class FxLayer {
             SourceProbes.shader = null;
             Incoming.LOG.error("Source probe shader failed to load: glare of hidden distant fire is not dimmed", ex);
         }
+        try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_water"), DefaultVertexFormat.POSITION), s -> WaterDecal.shader = s);
+        } catch (IOException ex) {
+            WaterDecal.shader = null;
+            Incoming.LOG.error("Water decal shader failed to load: no dark blast ring on water", ex);
+        }
+        try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall"), DefaultVertexFormat.POSITION), s -> PallPass.march = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_resolve"), DefaultVertexFormat.POSITION), s -> PallPass.resolve = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_composite"), DefaultVertexFormat.POSITION), s -> PallPass.composite = s);
+        } catch (IOException ex) {
+            PallPass.march = PallPass.resolve = PallPass.composite = null;
+            Incoming.LOG.error("Nuclear dust pall shaders failed to load: no dust pall", ex);
+        }
+        try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_mush_shadow"), DefaultVertexFormat.POSITION), s -> PallPass.shadow = s);
+        } catch (IOException ex) {
+            PallPass.shadow = null;
+            Incoming.LOG.error("Mushroom shadow shader failed to load: no mushroom shadow on the ground", ex);
+        }
     }
 
     /** Раз в тик клиента (не на паузе): секундная сводка времени кадра. */
@@ -104,6 +128,7 @@ public final class FxLayer {
             lastClean = cleanMax / 1e6;
             lastCleanCpu = cleanCpu / 1e6;
             lastCollected = collected;
+            PallPass.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;
             frames = ticks = collected = 0;
         }
@@ -144,6 +169,8 @@ public final class FxLayer {
         if (warmup) FarRenderer.warmup();
         FRUSTUM.set(FarDraw.viewProjection(e, view.camera(), VIEW_PROJECTION));
         QUADS.begin(view.left(), view.up());
+        WaterDecal.begin(level, e.getCamera());
+        NukeWater.decals(view.partial());
         LIGHTS.begin();
         PROBES.begin();
         QUADS.nearestTexels(true);
@@ -158,25 +185,49 @@ public final class FxLayer {
             for (int i = 0; i < 4; i++) QUADS.vertex(i % 2, i / 2, -16, 0, 0, 0, 0, 0, 0, 1, 1, LightTexture.FULL_BRIGHT, 0);
             QUADS.seenBy(0);
         }
+        PallPass.Frame pall = NukePall.frame(level, view.camera(), view.partial(), FRUSTUM);
         lastQuads = QUADS.size();
-        if (QUADS.size() == 0) return;
+        if (QUADS.size() == 0 && pall == null && !WaterDecal.active()) {
+            PallPass.reset();
+            return;
+        }
         int models = FarRenderer.renderModels();
         int scene = SceneDepth.update(e.getProjectionMatrix());
-        int seen = PROBES.update(scene, FarDraw.view(e, view.camera(), VIEW), e.getProjectionMatrix(), view.pixel());
+        FarDraw.view(e, view.camera(), VIEW);
         LightTexture light = mc.gameRenderer.lightTexture();
         FarDraw.begin(e, view.camera());
         try {
+            // наклейка на воду — под пеленой и квадратами: пыль, брызги и дым над водой ложатся на неё
+            if (WaterDecal.active()) WaterDecal.draw(e, view, scene, FOG);
+            // пелена — до квадратов: они ложатся на неё со своей долей пелены перед ними (fx.vsh)
+            boolean pallDrawn = pall != null && scene >= 0 && PallPass.draw(pall, scene, VIEW, e.getProjectionMatrix(), view.camera(),
+                    FOG.haze(view.range(), HAZE));
+            if (!pallDrawn) PallPass.reset();
+            PallPass.Frame front = pallDrawn ? pall : PallPass.empty();
+            // пробы — после пелены: её проход кладёт карты и таблицу грибов кадра, а проба берёт пропускание пелены и грибов
+            int seen = PROBES.update(scene, front, pallDrawn, VIEW, e.getProjectionMatrix(), view.pixel());
             RenderSystem.setShader(() -> s);
             RenderSystem.setShaderTexture(0, atlas);
             RenderSystem.setShaderTexture(1, scene >= 0 ? scene : atlas);
             RenderSystem.setShaderTexture(3, models > 0 ? models : atlas);
             RenderSystem.setShaderTexture(4, seen >= 0 ? seen : atlas);
+            RenderSystem.setShaderTexture(6, pallDrawn ? PallPass.frame() : atlas);
+            // карты огненного шторма: свет пожаров снизу на квадратах слоя
+            int fire0 = pallDrawn ? PallPass.fireMap(0) : -1, fire1 = pallDrawn ? PallPass.fireMap(1) : -1;
+            RenderSystem.setShaderTexture(7, fire0 >= 0 ? fire0 : atlas);
+            RenderSystem.setShaderTexture(8, fire1 >= 0 ? fire1 : atlas);
+            // пелена, стена пыли и грибы перед квадратом (pall_front.glsl): таблица, карты рельефа и воды, грибы кадра
+            PallPass.bindFront(s, front, pallDrawn, atlas);
             light.turnOnLightLayer();
             s.safeGetUniform("FxFogColor").set(FOG.color[0], FOG.color[1], FOG.color[2], FOG.color[3]);
             s.safeGetUniform("FxScene").set(scene >= 0 ? 1f : 0f);
             s.safeGetUniform("FxProbes").set(seen >= 0 ? 1f : 0f);
+            FxAtlas.Sprite glow = FxAtlas.glow();
+            s.safeGetUniform("FxGlow").set(glow.u0(), glow.v0(), glow.u1(), glow.v1());
             s.safeGetUniform("FxBalls").set(LIGHTS.balls);
             s.safeGetUniform("FxBallLight").set(LIGHTS.light);
+            s.safeGetUniform("PallFire0").set(fire0 >= 0 ? front.fire0.params : PallPass.empty().fire0.params);
+            s.safeGetUniform("PallFire1").set(fire1 >= 0 ? front.fire1.params : PallPass.empty().fire1.params);
             RenderSystem.enableBlend();
             RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
                     GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
