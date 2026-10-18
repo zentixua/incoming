@@ -378,24 +378,8 @@ public final class NuclearWorld {
             }
             shadows.removeFirst();
         }
-        long scorchStart = System.nanoTime();
-        lastPulseNanos = scorchStart - pulseStart;
-        // свет по земле — до волны (её руины ставятся по миру до вспышки поверх него); подрывы — каждый своим ходом:
-        // слой второго подрыва не ждёт, пока первый дождётся своих фоновых планов
-        for (java.util.Iterator<FlashScorch> it = scorches.iterator(); it.hasNext(); ) {
-            FlashScorch job = it.next();
-            try {
-                if (job.work(level, now, clock)) it.remove();
-            } catch (RuntimeException e) {
-                Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception; dropped (the wave brings it with the ruins)",
-                        job.detonation().id(), e);
-                job.cancel();
-                it.remove();
-            }
-        }
-        if (!unburnt.isEmpty()) burnOut(level);
         long frontStart = System.nanoTime();
-        lastScorchNanos = frontStart - scorchStart;
+        lastPulseNanos = frontStart - pulseStart;
         try {
             blast.advance(level, events.detonations(), now);
             blast.work(level, clock, id -> pulses.stream().noneMatch(p -> p.detonation().id() == id));
@@ -411,8 +395,27 @@ public final class NuclearWorld {
         long scarStart = System.nanoTime();
         lastCraterNanos = scarStart - craterStart;
         scars.work(level, now, clock);
+        long scorchStart = System.nanoTime();
+        lastScarNanos = scorchStart - scarStart;
+        // свет по земле — после руин, до которых дошла волна, из того, что они оставили от бюджета: когда фронт проходит
+        // за тик много чанков, слои вспышки вдали, поставленные вперёд, задерживали руины у фронта на тики (25 единиц
+        // тика — слоям, руинам — ни одной). Слой, к которому волна уже пришла, не нужен: чанк получает всё с руинами
+        // (они ставятся по миру до вспышки). Подрывы — каждый своим ходом: слой второго подрыва не ждёт, пока первый
+        // дождётся своих фоновых планов
+        for (java.util.Iterator<FlashScorch> it = scorches.iterator(); it.hasNext(); ) {
+            FlashScorch job = it.next();
+            try {
+                if (job.work(level, now, clock)) it.remove();
+            } catch (RuntimeException e) {
+                Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception; dropped (the wave brings it with the ruins)",
+                        job.detonation().id(), e);
+                job.cancel();
+                it.remove();
+            }
+        }
+        if (!unburnt.isEmpty()) burnOut(level);
         long prepStart = System.nanoTime();
-        lastScarNanos = prepStart - scarStart;
+        lastScorchNanos = prepStart - scorchStart;
         // руины заранее — из того, что осталось от бюджета: волна уже идущего подрыва важнее
         try {
             prep.tick(level, events, scars, clock);

@@ -36,6 +36,7 @@ import ua.zentix.incoming.nuclear.MobPanic;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
+import ua.zentix.incoming.nuclear.model.BlastInjury;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.Yield;
@@ -2098,12 +2099,14 @@ public final class NuclearGameTests {
 
     /**
      * Волна по телам (15 кт у земли, 1 блок = 1 м, взрыв к западу, у тел 8 psi): корову в поле бросает на восток; корову
-     * со стеной в 2 блоках за спиной бросает о стену — ранена тяжело или погибла (череп ломается с 7 м/с, а к стене она
-     * летит быстрее); в закрытой каменной будке волны нет; в доме с дверью на восток давление есть, а ветра нет — не
-     * бросает. Засыпанная завалом — погибла или потеряла не меньше половины здоровья. Окно перед коровой ранит её
-     * осколками и тогда, когда руины его уже выбили (фронт застал его целым); ковёр под ногами — не стена за спиной, а
-     * камень вплотную — стена; под кроной, за кустом, который прячет шар, — ветер (листву волна продувает). Запомненные
-     * окно и стена — пока тело к приходу фронта не ушло от них (окно — 2 блока, стена — полблока).
+     * со стеной в 2 блоках за спиной бросает о стену — к стене она летит ~6 м/с (перелом черепа: у половины — с 5,5 м/с),
+     * тяжёлое ранение у неё — почти у 80 % (в поле — кувырки, меньше 30 %), и здоровья она теряет не меньше этой доли
+     * (сколько сверх — решает её случайность, {@code BlastInjury.lostShare}); в закрытой каменной будке волны нет; в
+     * доме с дверью на восток давление есть, а ветра нет — не бросает. Засыпанная завалом — погибла или потеряла не
+     * меньше половины здоровья. Окно перед коровой ранит её осколками и тогда, когда руины его уже выбили (фронт застал
+     * его целым); ковёр под ногами — не стена за спиной, а камень вплотную — стена; под кроной, за кустом, который
+     * прячет шар, — ветер (листву волна продувает). Запомненные окно и стена — пока тело к приходу фронта не ушло от них
+     * (окно — 2 блока, стена — полблока).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_blast_bodies", skyAccess = true)
     public static void blastHitsBodiesByPhysics(GameTestHelper h) {
@@ -2145,10 +2148,13 @@ public final class NuclearGameTests {
         h.setBlock(rubble, Blocks.GRAVEL);
         h.setBlock(rubble.above(), Blocks.GRAVEL);
         h.assertTrue(BlastBody.buried(level, cows[4]), "корова в гравии не засыпана");
+        BlastBody.Wound field = BlastBody.wound(level, d, cows[0], null), wall = BlastBody.wound(level, d, cows[1], null);
+        h.assertTrue(field != null && field.injury() < 0.3, "корову в поле ранило, как о стену" + psi + ": " + field);
+        h.assertTrue(wall != null && wall.injury() > 0.75, "корову бросило о стену слабо" + psi + ": " + wall);
         for (int i = 0; i < 4; i++) BlastBody.hit(level, d, cows[i], null, null);
         BlastBody.bury(level, d, cows[4], null);
         h.assertTrue(cows[0].getDeltaMovement().x > 0.2, "корову в поле не бросило на восток" + psi + ": " + cows[0].getDeltaMovement());
-        h.assertTrue(!cows[1].isAlive() || cows[1].getHealth() <= 0.06f * cows[1].getMaxHealth(),
+        h.assertTrue(!cows[1].isAlive() || cows[1].getHealth() <= (1 - Math.min(BlastInjury.CASUALTY_SHARE, wall.injury())) * cows[1].getMaxHealth() + 1e-3,
                 "корова, брошенная о стену, почти цела" + psi + ": " + cows[1].getHealth());
         h.assertTrue(cows[2].getHealth() == cows[2].getMaxHealth() && cows[2].getDeltaMovement().lengthSqr() < 1e-6,
                 "волна дошла в закрытую будку");
