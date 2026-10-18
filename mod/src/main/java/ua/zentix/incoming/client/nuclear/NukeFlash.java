@@ -180,9 +180,9 @@ public final class NukeFlash {
         return Minecraft.getInstance().options.hideLightningFlash().get();
     }
 
-    /** Световой импульс, с модели: за 10·t_max излучается ~80% энергии второго импульса. */
+    /** Световой импульс, с модели ({@link FireballModel#pulseSeconds}). */
     static double pulseSeconds(double yieldKt) {
-        return 10 * FireballModel.secondMaximumSeconds(yieldKt);
+        return FireballModel.pulseSeconds(yieldKt);
     }
 
     static void tick() {

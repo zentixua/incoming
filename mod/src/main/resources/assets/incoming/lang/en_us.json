@@ -333,7 +333,7 @@
   "incoming.config.nuke_ruin_threads": "Ruin planner threads",
   "incoming.config.nuke_ruin_threads.tooltip": "Background threads that build ruin plans from chunk snapshots and read far chunks from disk; 0 uses all cores but three (server, rendering, world I/O), and the mod lowers or raises how many work by server tick time",
   "incoming.config.nuke_max_fires": "Maximum fires per detonation",
-  "incoming.config.nuke_max_fires.tooltip": "Fires lit by the thermal pulse of one detonation, at most.",
+  "incoming.config.nuke_max_fires.tooltip": "Fires of one detonation that burn on after the blast wave, at most. The thermal pulse also lights the ones the wave blows out.",
   "incoming.config.nuke_warning_radius": "Alarm radius, blocks",
   "incoming.config.nuke_warning_radius.tooltip": "Players this close to the target hear the nuclear alarm and see the countdown.",
   "incoming.config.nuke_dust_quality": "Mushroom cloud, dust wall and pall",

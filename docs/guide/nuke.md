@@ -99,10 +99,12 @@ it is only weakly radioactive. In the fallout trail of a ground burst it brings 
 
 ![A town after a 15 kt strike: ruins and fires](img/nuke-ruins.jpg)
 
-The land around the burst is scorched. Near the centre the wave strips the turf down to bare dirt. Farther out the
-light burns grass, flowers and crops in patches and leaves black char where it was strongest, and the grass, leaves and
-water around turn yellow-brown and grey. The edge is ragged, not a ring. The scorched colours stay for good, also in
-Distant Horizons terrain.
+The land around the burst is scorched. The light does its part within the flash itself, about a second at 15 kt, before
+the blast wave comes: it burns grass, flowers and crops in patches, leaves black char where it was strongest, melts
+snow, turns the grass, leaves and water around yellow-brown and grey, and starts fires. The wave then strips the turf
+near the centre down to bare dirt and blows out about half of the fires where it is strong. The edge is ragged, not a
+ring. Away from players the scorch shows together with the ruins. The scorched colours stay for good, also in Distant
+Horizons terrain.
 
 After an ICBM strike, Distant Horizons terrain shows the ruins of the hardest-hit area as the wave reaches them: the
 server prepares them while the missile flies. At 15 kt the far edge of that area may show later. After a cruise

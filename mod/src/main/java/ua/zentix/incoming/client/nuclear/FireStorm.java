@@ -20,13 +20,15 @@ import java.util.concurrent.CompletableFuture;
  * зарево снизу, огненные смерчи) и пламя на поверхностях ({@code fx_pall_composite}).
  * <p>
  * <b>Источники.</b> Очаги поджига собраны в источники по сетке {@link #CELL} блоков. Доля горящего в клетке — по тому же
- * закону, что у руин и звука ({@link FireField}, {@code RuinPlanner.fire}): min(1, q/20), меньше там, где волна сбивает
- * огонь (от 2 psi), на {@link FireField#SHARE} места есть чему гореть; свет — не порогом, а с горючестью района: районы
- * (шум мира, пятна по {@link #DISTRICT_BLOCKS}, зерно — подрыва) горят по-разному, клетки внутри — тоже
+ * закону, что у сервера и звука ({@link FireField}, {@code RuinPlanner.fire}): свет зажигает min(1, q/20), на
+ * {@link FireField#SHARE} места есть чему гореть, а волна с приходом сбивает часть огня (от 2 psi — половину): сила
+ * клетки до волны — {@link Grid#before}, после — {@link Grid#strength}; свет — не порогом, а с горючестью района:
+ * районы (шум мира, пятна по {@link #DISTRICT_BLOCKS}, зерно — подрыва) горят по-разному, клетки внутри — тоже
  * (логнормальный разброс {@link #SIGMA_SPOT}), и край зоны поджига рваный. Сила клетки — сколько её площади горит
- * (0..несколько), время — приход волны к ней и разброс поджига до {@link #IGNITE_SPREAD_S}. Настоящих блоков огня у
- * сервера — не больше 20 000 на подрыв (их видит {@link FireWatch}), а визуально горит вся зона поджига: «живой огонь
- * ванили по всей карте» план не делает.
+ * (0..несколько), поджиг — вспышкой (когда свет там набрал порог, {@link Detonation#flashTicks}: как слой вспышки у
+ * сервера, {@code FlashScorch}) и разброс поджига до {@link #IGNITE_SPREAD_S}. Настоящих блоков огня у сервера — не
+ * больше 20 000 на подрыв после волны (до неё — и те, что она собьёт; их видит {@link FireWatch}), а визуально горит вся зона поджига: «живой огонь ванили по всей
+ * карте» план не делает.
  * <p>
  * <b>Время.</b> По настоящим секундам после поджига клетки, как пелена: занимается за {@link #FLAME_RISE_S} с с долей
  * {@link #START} от полной, разгорается в шторм e-кратно за {@link #GROW_S} с, с {@link #PEAK_S} с (у каждой клетки
@@ -59,8 +61,10 @@ public final class FireStorm {
     static final double SIGMA_EDGE = 0.35;
     /** Порог поджига ({@code RuinPlanner.fire}). */
     static final double FULL_Q = 20;
-    /** Клетки загораются в течение стольких секунд после волны (большинство — сразу). */
+    /** Клетки загораются в течение стольких секунд после вспышки (большинство — сразу). */
     static final double IGNITE_SPREAD_S = 30;
+    /** Волна сбивает огонь клетки за столько тиков от прихода. */
+    static final double BLOW_TICKS = 20;
     /** Пламя в клетке занимается за столько секунд — до доли {@link #START} от полной силы. */
     static final double FLAME_RISE_S = 12, START = 0.3;
     /** Разгорается в шторм e-кратно за столько секунд. */
@@ -163,14 +167,31 @@ public final class FireStorm {
         static final double DRIFT = 1.5;
     }
 
-    /** Сетка источников: клетки зоны (номер в карте), сила, поджиг (тики после подрыва), начало спада (с). */
-    record Grid(int side, double cell, int[] index, float[] strength, float[] column, float[] start, float[] peak, double total,
-                List<Whirl> whirls) {
+    /**
+     * Сетка источников: клетки зоны (номер в карте), сила после волны и до неё, поджиг и приход волны (тики после
+     * подрыва), начало спада (с).
+     */
+    record Grid(int side, double cell, int[] index, float[] strength, float[] column, float[] before, float[] start, float[] arrival, float[] peak,
+                double total, List<Whirl> whirls) {
         /** Последний поджиг, тики после подрыва. */
         double lastStart() {
             double last = 0;
             for (float s : start) last = Math.max(last, s);
             return last;
+        }
+
+        /** Последний приход волны к клетке, где она сбивает огонь, тики после подрыва. */
+        double lastBlow() {
+            double last = 0;
+            for (int k = 0; k < arrival.length; k++) if (before[k] != strength[k]) last = Math.max(last, arrival[k]);
+            return last;
+        }
+
+        /** Сила клетки {@code k} через {@code ticks} после подрыва: до волны — {@link #before}, за {@link #BLOW_TICKS} — к {@link #strength}. */
+        double strengthAt(int k, double ticks) {
+            if (ticks <= arrival[k]) return before[k];
+            if (ticks >= arrival[k] + BLOW_TICKS) return strength[k];
+            return before[k] + (strength[k] - before[k]) * smooth(arrival[k], arrival[k] + BLOW_TICKS, ticks);
         }
     }
 
@@ -186,7 +207,8 @@ public final class FireStorm {
     private int version;
     /** Сколько горит в последнем заполнении (сумма пламени по клеткам). */
     private double burning;
-    private double filledAt = Double.NaN, lastStart = Double.NaN;
+    /** Время последнего {@link #fill}; до какого времени шторм молод ({@link #young}), тики после подрыва. */
+    private double filledAt = Double.NaN, youngUntil = Double.NaN;
     /** Доверие модели огня (пожары у сервера включены): 0..1, пишет тик клиента ({@link #trust}, плавно). */
     private double gate;
     /**
@@ -432,10 +454,13 @@ public final class FireStorm {
         return true;
     }
 
-    /** Где-то огонь ещё занимается или встаёт столб: с последнего поджига прошло меньше двух подъёмов столба. */
+    /**
+     * Где-то огонь ещё занимается, встаёт столб или волна сбивает огонь: с последнего поджига прошло меньше двух подъёмов
+     * столба или волна ещё идёт по зоне.
+     */
     private boolean young(Grid g, double ticks) {
-        if (Double.isNaN(lastStart)) lastStart = g.lastStart();
-        return ticks < lastStart + 20 * 2 * Math.max(COLUMN_RISE_S, FLAME_RISE_S);
+        if (Double.isNaN(youngUntil)) youngUntil = Math.max(g.lastStart() + 20 * 2 * Math.max(COLUMN_RISE_S, FLAME_RISE_S), g.lastBlow() + BLOW_TICKS);
+        return ticks < youngUntil;
     }
 
     /** Утро: за последнюю минуту до конца мглы пелены всё гаснет. */
@@ -457,19 +482,21 @@ public final class FireStorm {
             double peak = g.peak[k];
             int i = g.index[k] * CHANNELS;
             double wet = dry == null ? 1 : dry[k];
-            double sm = g.column[k] * smoke(age, peak) * night * wet;
-            out[i] = (float) (g.strength[k] * flame(age, peak) * night * wet);
+            double s = g.strengthAt(k, ticks);
+            double sm = (s == g.strength[k] ? g.column[k] : Math.pow(s, COLUMN_POWER)) * smoke(age, peak) * night * wet;
+            out[i] = (float) (s * flame(age, peak) * night * wet);
             out[i + 1] = (float) sm;
             out[i + 2] = (float) (sm * Math.min(1, age / COLUMN_RISE_S));
         }
     }
 
     /**
-     * Сетка источников подрыва: клетки в зоне поджига {@code reach} (блоки по земле от эпицентра), сила по закону руин
-     * с горючестью района и клетки, поджиг — по приходу волны; смерчи. Чистая функция подрыва (зерно — его).
+     * Сетка источников подрыва: клетки в зоне поджига {@code reach} (блоки по земле от эпицентра), сила по закону
+     * поджига с горючестью района и клетки, поджиг — вспышкой, часть огня сбивает волна; смерчи. Чистая функция подрыва
+     * (зерно — его).
      */
     static Grid build(Detonation d, double reach) {
-        if (reach <= 0) return new Grid(0, CELL, new int[0], new float[0], new float[0], new float[0], new float[0], 0, List.of());
+        if (reach <= 0) return empty(CELL, 0);
         // клетка — 32 блока, у малого масштаба удара — мельче: в зоне не меньше 24 клеток поперёк
         double cell = Math.max(2, Math.min(CELL, 2 * reach / 24));
         int side = Math.min(MAX_SIDE, 2 * (int) Math.ceil(reach * 1.05 / cell) + 2);
@@ -507,11 +534,12 @@ public final class FireStorm {
                 count++;
             }
         }
-        if (count == 0) return new Grid(side, cell, new int[0], new float[0], new float[0], new float[0], new float[0], 0, List.of());
+        if (count == 0) return empty(cell, side);
         // районы — к среднему 0 и разбросу 1 по клеткам зоны: z ~ N(0, 1)
         double mean = sum / count, std = Math.sqrt(Math.max(1e-9, sum2 / count - mean * mean));
         int[] index = new int[count];
-        float[] strength = new float[count], column = new float[count], start = new float[count], peak = new float[count];
+        float[] strength = new float[count], column = new float[count], before = new float[count], start = new float[count], arrival = new float[count],
+                peak = new float[count];
         int k = 0;
         double total = 0;
         for (int j = 0; j < side; j++) {
@@ -524,18 +552,20 @@ public final class FireStorm {
                 Vec3 p = new Vec3(b.x + x, d.groundY() + 1, b.z + z);
                 double q = d.fluence(p) * Math.exp(SIGMA_EDGE * district - SIGMA_EDGE * SIGMA_EDGE / 2);
                 if (q < ThermalModel.IGNITE) continue;
-                // волна сбивает часть огня (у руин — половину от 2 psi): плавно, без кольца на карте
-                double chance = Math.min(1, q / FULL_Q) * (1 - 0.5 * smooth(1.5, 2.5, d.psi(p)));
+                // свет зажигает, волна потом сбивает часть огня (у сервера — половину от 2 psi): плавно, без кольца на карте
+                double chance = Math.min(1, q / FULL_Q), keep = 1 - (1 - FireField.BLOWN_KEEP) * smooth(1.5, 2.5, d.psi(p));
                 double fuel = Math.exp(SIGMA_DISTRICT * district - SIGMA_DISTRICT * SIGMA_DISTRICT / 2);
                 long h = hash(seed, i, j);
                 double spot = Math.exp(SIGMA_SPOT * gauss(h) - SIGMA_SPOT * SIGMA_SPOT / 2);
-                double s = FireField.SHARE * chance * fuel * spot;
-                if (s < 0.02) continue;
+                double lit = FireField.SHARE * chance * fuel * spot, s = lit * keep;
+                if (lit < 0.02) continue;
                 index[k] = c;
                 strength[k] = (float) s;
                 column[k] = (float) Math.pow(s, COLUMN_POWER);
+                before[k] = (float) lit;
                 double u = unit(h >>> 17);
-                start[k] = (float) (d.arrivalTicks(Math.hypot(r, b.y - d.groundY())) + 20 * IGNITE_SPREAD_S * u * u);
+                start[k] = (float) (d.flashTicks(d.fluence(p), ThermalModel.IGNITE) + 20 * IGNITE_SPREAD_S * u * u);
+                arrival[k] = (float) d.arrivalTicks(Math.hypot(r, b.y - d.groundY()));
                 peak[k] = (float) (PEAK_S * (0.7 + 0.6 * unit(h >>> 34)));
                 total += s;
                 k++;
@@ -544,9 +574,16 @@ public final class FireStorm {
         index = Arrays.copyOf(index, k);
         strength = Arrays.copyOf(strength, k);
         column = Arrays.copyOf(column, k);
+        before = Arrays.copyOf(before, k);
         start = Arrays.copyOf(start, k);
+        arrival = Arrays.copyOf(arrival, k);
         peak = Arrays.copyOf(peak, k);
-        return new Grid(side, cell, index, strength, column, start, peak, total, whirls(d, seed, side, cell, half, reach, index, strength, start, total));
+        return new Grid(side, cell, index, strength, column, before, start, arrival, peak, total,
+                whirls(d, seed, side, cell, half, reach, index, strength, start, total));
+    }
+
+    private static Grid empty(double cell, int side) {
+        return new Grid(side, cell, new int[0], new float[0], new float[0], new float[0], new float[0], new float[0], new float[0], 0, List.of());
     }
 
     /** Смерчей на подрыв: от суммы сил (у 15 кт — три, у 1 кт — один), не больше {@link #MAX_WHIRLS}. */

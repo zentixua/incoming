@@ -421,7 +421,8 @@ public final class FarLods {
             DiskShots.Read read = r.scorch.read();
             cost += read.cost();
             try {
-                made.add(ChunkShot.fromDisk(read.primed(Blast.SERVER), null));
+                // след для копии LOD, не руины: чанк со слоем вспышки его уже получил, огонь слоя плану не мешает
+                made.add(ChunkShot.fromDisk(read.primed(Blast.SERVER), null, null, false));
                 taken.add(r);
             } catch (RuntimeException e) {
                 // состояние блока мода, у которого свойства бросают: без копии, а не «Exception ticking world»

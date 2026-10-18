@@ -27,9 +27,25 @@ public final class ColumnScar {
         /** Поджигает ли подрыв (свежий — да, забытый — только выжигает). */
         final boolean ignites;
         int fires;
+        /**
+         * Огонь слоя вспышки в счёте, по чанкам, где руины ещё не встали ({@code RuinPlan.write}): руины поверх слоя без
+         * его плана ({@link FlashScorch#marked}: руины подрыва забыты после простоя) не знают, какой огонь чанка в счёте, — он
+         * уходит из счёта весь, а входит тот, что горит дальше. Счётчик после перезапуска — новый, слоя чанка он не брал.
+         */
+        final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap layer = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
 
         public Budget(boolean ignites) {
             this.ignites = ignites;
+        }
+
+        /** Для проверок: пожаров в счёте. */
+        public int firesForTest() {
+            return fires;
+        }
+
+        /** Для проверок: огня слоя вспышки чанка в счёте ({@link #layer}). */
+        public int layerForTest(net.minecraft.world.level.ChunkPos chunk) {
+            return layer.get(chunk.toLong());
         }
     }
 

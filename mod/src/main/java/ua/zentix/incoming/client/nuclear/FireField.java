@@ -11,18 +11,28 @@ import java.util.List;
 /**
  * Где и сколько горит после подрыва — модель клиента для звука горящего города и вторичных взрывов (сам огонь ставит
  * сервер, клиент видит только блоки огня в своих чанках). Кольца вокруг эпицентра шириной {@link #RING}: в кольце
- * горит доля колонок по той же вероятности, что у руин ({@code RuinPlanner.fire}: min(1, q/20), вдвое меньше от
- * 2 psi, q — свет на земле, к краю руин след света сходит на нет), на {@link #SHARE} колонок есть чему гореть. Огонь
- * встаёт с фронтом (руины ставит волна), сервер зажигает не больше {@link #MAX_FIRES} на подрыв по порядку прихода
- * волны — модель режет кольца там же. Сколько горит потом — {@link #envelope}: разгорается {@link #RISE} тиков,
- * потом гаснет со временем {@link #TAU}. Что на деле горит рядом, клиент сверяет по своим чанкам ({@link FireWatch}).
+ * свет зажигает долю колонок по той же вероятности, что у сервера ({@code RuinPlanner.fire}: min(1, q/20), q — свет на
+ * земле, к краю руин след света сходит на нет), на {@link #SHARE} колонок есть чему гореть. Огонь встаёт со вспышкой
+ * (слой вспышки сервера, {@code FlashScorch}: место — когда свет там набрал порог поджига, {@link Detonation#flashTicks}),
+ * волна с её приходом сбивает от 2 psi половину ({@link #keep}). Предел пожаров подрыва у сервера ({@link #MAX_FIRES})
+ * — на то, что горит после волны ({@code RuinPlan.write}): в счёт идёт только огонь, который волна не собьёт, а слой
+ * вспышки зажигает, пока таких меньше предела, и сбиваемый — без счёта. Модель режет кольца от эпицентра тем же счётом,
+ * что у слоя: зажигает столько же и до того же кольца (до волны — и то, что она собьёт: у эпицентра от 2 psi вдвое
+ * больше предела), а с волной оставляет то, что оставил бы слой без руин. Руин модель не знает — это её известный
+ * предел: огонь слоя в счёте, который руины гасят (завал, обвал), уходит из счёта сервера, и руины дальше кольца, где
+ * слой упёрся в предел и не зажёг ничего, ставят свои пожары. В городе после волны у сервера горит и за последним
+ * кольцом модели (у 15 кт в воздухе — дальше ~146 блоков), а у модели там пусто; рядом с игроком это поправляют
+ * {@link FireWatch} (настоящий огонь своих чанков) и {@code NukeAfter.trust}, вдали — нет. Сколько горит потом —
+ * {@link #envelope}: разгорается {@link #RISE} тиков от
+ * поджига, потом гаснет со временем {@link #TAU}. Что на деле горит рядом, клиент сверяет по своим чанкам
+ * ({@link FireWatch}).
  */
 final class FireField {
     /** Ширина кольца, блоков. */
     static final double RING = 32;
     /** Доля колонок, где огню есть на чём встать (трава, земля, дерево — не камень и не вода). */
     static final double SHARE = 0.6;
-    /** Пожаров на подрыв у сервера по умолчанию ({@code fires_per_detonation}); клиент своё число сервера не знает. */
+    /** Пожаров подрыва после волны у сервера по умолчанию ({@code fires_per_detonation}); клиент своё число сервера не знает. */
     static final int MAX_FIRES = 20_000;
     /** Огонь разгорается, тиков. */
     static final double RISE = 20 * 20;
@@ -34,34 +44,66 @@ final class FireField {
     private static final double EDGE_FADE = 0.2;
 
     final Detonation d;
-    /** Ожидаемых пожаров в кольце (после среза по {@link #MAX_FIRES}). */
+    /** Зажжённых вспышкой пожаров в кольце, со сбиваемыми волной (срез по {@link #MAX_FIRES} — по тем, что останутся). */
+    final double[] lit;
+    /** Доля их, что волна не сбивает (1 или {@code RuinPlanner.BLOWN_KEEP} от 2 psi). */
+    final double[] keep;
+    /** Пожаров в кольце после волны ({@link #lit} × {@link #keep}): то, что горит потом; всего — не больше {@link #MAX_FIRES}. */
     final double[] fires;
-    /** Приход фронта к середине кольца, тиков после подрыва. */
-    final double[] arrival;
+    /**
+     * Поджиг кольца вспышкой и приход фронта к земле в середине кольца (по наклонной от точки подрыва: у воздушного
+     * подрыва волна доходит до земли под ним через секунду, а свет — сразу), тиков после подрыва.
+     */
+    final double[] ignite, arrival;
+    /** Пожаров после волны всего. */
     final double total;
 
     FireField(Detonation d) {
         this.d = d;
-        double ruin = d.ruinRadius(), inner = d.surface() ? d.fireballRadius() * 0.8 : 0;
-        int rings = (int) Math.ceil(ruin / RING);
-        double[] f = new double[rings];
-        double[] at = new double[rings];
-        double sum = 0;
+        int rings = (int) Math.ceil(d.ruinRadius() / RING);
+        double[] l = new double[rings], k = new double[rings], f = new double[rings], ig = new double[rings], at = new double[rings];
+        double after = 0;
         for (int i = 0; i < rings; i++) {
-            double r = (i + 0.5) * RING;
-            at[i] = d.arrivalTicks(r);
-            if (r < inner || sum >= MAX_FIRES) continue;
-            Vec3 p = new Vec3(d.burst().x + r, d.groundY() + 1, d.burst().z);
-            double q = d.fluence(p) * edge(r, ruin);
-            if (q < ThermalModel.IGNITE) continue;
-            double chance = Math.min(1, q / FULL_Q) * (d.psi(p) >= 2 ? 0.5 : 1);
-            double area = Math.PI * (Math.pow((i + 1) * RING, 2) - Math.pow(i * RING, 2));
-            f[i] = Math.min(MAX_FIRES - sum, SHARE * chance * area);
-            sum += f[i];
+            double r = radius(i);
+            at[i] = d.arrivalTicks(Math.hypot(r, d.burst().y - d.groundY()));
+            k[i] = 1;
+            double places = after < MAX_FIRES ? candidates(d, i) : 0;
+            if (places <= 0) continue;
+            k[i] = keepAt(d, i);
+            // в счёте сервера — только несбиваемые: на кольце, где он полон, — их остаток и сбиваемые между ними
+            f[i] = Math.min(MAX_FIRES - after, places * k[i]);
+            l[i] = f[i] / k[i];
+            ig[i] = d.flashTicks(d.fluence(new Vec3(d.burst().x + r, d.groundY() + 1, d.burst().z)), ThermalModel.IGNITE);
+            after += f[i];
         }
+        this.lit = l;
+        this.keep = k;
         this.fires = f;
+        this.ignite = ig;
         this.arrival = at;
-        this.total = sum;
+        this.total = after;
+    }
+
+    /** Доля пожаров, которых волна не сбивает от 2 psi ({@code RuinPlanner.BLOWN_KEEP}). */
+    static final double BLOWN_KEEP = 0.5;
+
+    /**
+     * Сколько мест кольца {@code ring} зажгла бы вспышка без предела пожаров: доля колонок, где огню есть на чём встать,
+     * по вероятности света в середине кольца ({@code RuinPlanner.fire}); в огненном шаре у земли и где свет ниже порога
+     * поджига — 0.
+     */
+    static double candidates(Detonation d, int ring) {
+        double r = radius(ring), ruin = d.ruinRadius();
+        if (d.surface() && r < d.fireballRadius() * 0.8) return 0;
+        double q = d.fluence(new Vec3(d.burst().x + r, d.groundY() + 1, d.burst().z)) * edge(r, ruin);
+        if (q < ThermalModel.IGNITE) return 0;
+        double area = Math.PI * (Math.pow((ring + 1) * RING, 2) - Math.pow(ring * RING, 2));
+        return SHARE * Math.min(1, q / FULL_Q) * area;
+    }
+
+    /** Доля огня кольца {@code ring}, которую волна не собьёт: {@link #BLOWN_KEEP} от 2 psi в середине кольца, иначе 1. */
+    static double keepAt(Detonation d, int ring) {
+        return d.psi(new Vec3(d.burst().x + radius(ring), d.groundY() + 1, d.burst().z)) >= 2 ? BLOWN_KEEP : 1;
     }
 
     private static double edge(double r, double ruin) {
@@ -73,15 +115,15 @@ final class FireField {
         return (ring + 0.5) * RING;
     }
 
-    /** Доля огня, что горит через {@code ticks} после того, как его зажгла волна. */
+    /** Доля огня, что горит через {@code ticks} после того, как его зажгла вспышка. */
     static double envelope(double ticks) {
         if (ticks <= 0) return 0;
         return ticks < RISE ? ticks / RISE : Math.exp(-(ticks - RISE) / TAU);
     }
 
-    /** Сколько горит в кольце через {@code ticks} после подрыва. */
+    /** Сколько горит в кольце через {@code ticks} после подрыва: зажжённое вспышкой, с приходом волны — без сбитого. */
     double burning(int ring, double ticks) {
-        return fires[ring] * envelope(ticks - arrival[ring]);
+        return lit[ring] * envelope(ticks - ignite[ring]) * (ticks < arrival[ring] ? 1 : keep[ring]);
     }
 
     /** Сколько горит всего. */
@@ -93,13 +135,13 @@ final class FireField {
 
     /** Огонь кончился: тиков после подрыва, когда от него осталось меньше 2 %. */
     double endTicks() {
-        return lastArrival() + RISE + TAU * Math.log(50);
+        return lastIgnition() + RISE + TAU * Math.log(50);
     }
 
-    /** Приход волны к последнему кольцу с огнём, тики после подрыва. */
-    double lastArrival() {
+    /** Поджиг последнего кольца с огнём (вспышка), тики после подрыва. */
+    double lastIgnition() {
         double last = 0;
-        for (int i = 0; i < fires.length; i++) if (fires[i] > 0) last = arrival[i];
+        for (int i = 0; i < lit.length; i++) if (lit[i] > 0) last = Math.max(last, ignite[i]);
         return last;
     }
 

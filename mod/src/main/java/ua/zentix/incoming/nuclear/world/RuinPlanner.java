@@ -153,8 +153,9 @@ public final class RuinPlanner {
     }
 
     /**
-     * Для проверок: план чанка по снимку, прочитанному с диска ({@link DiskShots}), фоновыми потоками — чанк и его
-     * соседи записаны так, как их записал бы мир ({@code ChunkSerializer.write}), и разобраны как чанки не в памяти.
+     * Для проверок: план чанка по снимкам, прочитанным с диска ({@link DiskShots}), решателем фоновых потоков — чанк и его
+     * соседи записаны так, как их записал бы мир ({@code ChunkSerializer.write}), и разобраны как чанки не в памяти;
+     * окно — только из них (снимок чанка в памяти, {@link RuinContext#shot}, заменил бы снимок с диска).
      */
     public static RuinPlan planFromDisk(ServerLevel level, Detonation d, LevelChunk chunk) {
         return planFromDisk(level, d, chunk, java.util.function.UnaryOperator.identity());
@@ -174,8 +175,18 @@ public final class RuinPlanner {
                 ctx.putDisk(level, read);
             }
         }
-        if (!ctx.submitDisk(level, c)) throw new IllegalStateException("ruin background threads busy");
-        return await(level, ctx, chunk);
+        return fromCachedDisk(level, ctx, c);
+    }
+
+    /** План чанка по окну из снимков с диска в кэше {@code ctx} ({@link RuinContext#putDisk}), решателем фоновых потоков. */
+    private static RuinPlan fromCachedDisk(ServerLevel level, RuinContext ctx, ChunkPos c) {
+        RuinContext.Grid g = ctx.cachedGridForTest(level, c);
+        for (int dx = -RuinContext.Grid.R; dx <= RuinContext.Grid.R; dx++) {
+            for (int dz = -RuinContext.Grid.R; dz <= RuinContext.Grid.R; dz++) {
+                if (g.at(dx, dz) == null || !g.at(dx, dz).fromDisk()) throw new IllegalStateException("window of " + c + " not from disk at " + dx + ", " + dz);
+            }
+        }
+        return finish(g, Collapse.solve(g));
     }
 
     /**
@@ -194,6 +205,36 @@ public final class RuinPlanner {
         window[1] = ctx.windowAbsent;
         if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
         return await(level, ctx, chunk);
+    }
+
+    /**
+     * Для проверок: план чанка, где стоит слой вспышки, как его строят руины подрыва, у которых снимков уже нет (вытеснены,
+     * взяты заново): все снимки и разломы руин подрыва — прочь, снимки окна заново — по миру до вспышки
+     * ({@link RuinPlan#unflash}). {@code way}: 0 — в потоке сервера, 1 — фоновыми потоками, 2 — с диска: чанк и соседи
+     * записаны, как их записал бы мир, разобраны ({@link DiskShots}) и окно — только из них (решатель — тот же, что у
+     * фоновых потоков).
+     */
+    public static RuinPlan testPlanOverFlash(ServerLevel level, Detonation d, LevelChunk chunk, int way) {
+        RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
+        ctx.dropShotsForTest();
+        if (way == 0) return plan(level, ctx, chunk);
+        if (way == 1) {
+            if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
+            return await(level, ctx, chunk);
+        }
+        ChunkPos c = chunk.getPos();
+        for (int dx = -REACH; dx <= REACH; dx++) {
+            for (int dz = -REACH; dz <= REACH; dz++) {
+                LevelChunk n = level.getChunkSource().getChunkNow(c.x + dx, c.z + dz);
+                if (n == null) throw new IllegalStateException("neighbour " + (c.x + dx) + ", " + (c.z + dz) + " not loaded");
+                DiskShots.Read read = DiskShots.parse(level, n.getPos(), net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, n));
+                if (read.skip() != null) throw new IllegalStateException("chunk from disk not parsed: " + read.skip());
+                ctx.putDisk(level, read);
+            }
+        }
+        RuinPlan plan = fromCachedDisk(level, ctx, c);
+        ctx.dropShotsForTest();
+        return plan;
     }
 
     private static RuinPlan await(ServerLevel level, RuinContext ctx, LevelChunk chunk) {
@@ -282,10 +323,10 @@ public final class RuinPlanner {
         if (g.fires()) {
             for (int k = 0; k < c.leaves.size(); k++) {
                 m.set(c.leaves.getLong(k));
-                if (d.psi(Vec3.atCenterOf(m)) < 3 && g.lit(m) >= 10) s.fire(m.getX(), m.getY(), m.getZ(), 1.0);
+                if (d.psi(Vec3.atCenterOf(m)) < 3 && g.lit(m) >= 10) s.fire(m.getX(), m.getY(), m.getZ(), 1.0, 1.0);
             }
         }
-        double[] heat = land(g, s, c.ground, c.removed, c.wood);
+        double[] heat = land(g, s, c.ground, c.removed, c.wood, false);
         Blast own = c.blast();
         if (own != null) for (int i = 0; i < own.trees().size(); i++) lay(s, own.trees().get(i), own.treeLogs().get(i));
         // после всего, что ложится на землю (завал, стволы)
@@ -303,8 +344,30 @@ public final class RuinPlanner {
      * который потом загрузят, получает свои руины целиком, и его земля та же, если волна у него ничего не обрушила.
      */
     static RuinPlan scorch(RuinContext.Grid g) {
-        ChunkShot shot = g.at(0, 0);
-        Sections s = new Sections(shot, g.view());
+        Sections s = new Sections(g.at(0, 0), g.view());
+        return s.finish(g.ctx(), new long[0], groundPass(g, s, false));
+    }
+
+    /**
+     * Слой вспышки чанка (любой поток): то, что с ним делает один свет, — в миг вспышки, до волны ({@link FlashScorch}).
+     * Как {@link #scorch}, но без напора: дёрн не сдирается (это волна), пожары — все, что зажёг свет (min(1, q/20), без
+     * доли, которую сбивает волна), а те, что волна потом собьёт (от 2 psi — половину, тем же броском хеша, что у руин), —
+     * в списке плана ({@link RuinPlan#blown}): их гасит подмена руин. Гарь на гранях — того, что свет не изменил, по
+     * окну чанка и соседей в памяти (соседа нет — грань у края открыта). Там, где волна ничего не сломала, руины по
+     * миру до вспышки меняют те же места на то же (GameTest {@code flashScorchesBeforeTheWaveAndRuinsMatch}): подмена на
+     * волне меняет сверх слоя только то, что сделала волна.
+     */
+    static RuinPlan flash(RuinContext.Grid g) {
+        Sections s = new Sections(g.at(0, 0), g.view());
+        RuinPlan plan = s.finish(g.ctx(), new long[0], groundPass(g, s, true));
+        if (plan != RuinPlan.EMPTY) plan.flash(FlashFaces.chars(g, s));
+        return plan;
+    }
+
+    /** Земля чанка без руин ({@link #scorch}, {@link #flash}): свет, напор (кроме {@code flash}), снег; ступени биома. */
+    @Nullable
+    private static ScorchedBiomes.Cells groundPass(RuinContext.Grid g, Sections s, boolean flash) {
+        ChunkShot shot = s.shot;
         // дно — как у обрушения (Collapse.yb): на 16 ниже самой низкой опоры (вода — опора), под глубокой
         // водой земли нет; окно обрушения — и соседи, здесь — один чанк
         int low = Integer.MAX_VALUE;
@@ -312,9 +375,9 @@ public final class RuinPlanner {
         int bottom = low == Integer.MAX_VALUE ? s.minY : Math.max(s.minY, low - 16);
         int[] ground = new int[256];
         for (int column = 0; column < 256; column++) ground[column] = groundOf(s, column & 15, column >> 4, bottom);
-        double[] heat = land(g, s, ground, null, null);
+        double[] heat = land(g, s, ground, null, null, flash);
         for (int column = 0; column < 256; column++) if (ground[column] != Integer.MIN_VALUE) snowy(s, column & 15, ground[column], column >> 4);
-        return s.finish(g.ctx(), new long[0], biomes(g.ctx().noise, ground, heat, shot.x << 4, shot.z << 4));
+        return biomes(g.ctx().noise, ground, heat, shot.x << 4, shot.z << 4);
     }
 
     /**
@@ -335,14 +398,15 @@ public final class RuinPlanner {
     /**
      * Земля по столбцам (любой поток): завал, где рухнула постройка, содранный дёрн, свет — гарь, выжженная трава,
      * сгоревшие растения, пожары, тринитит и вскипевшая вода в огненном шаре. {@code removed}, {@code wood} — сколько
-     * снесено над столбцом и из них деревянных (null — ничего не снесено: {@link #scorch}).
+     * снесено над столбцом и из них деревянных (null — ничего не снесено: {@link #scorch}). {@code flash} — один свет, без
+     * напора ({@link #flash}): дёрн не сдирается, пожары — все зажжённые светом, а сбитые потом волной помечены.
      *
      * @return свет на земле столбцов с учётом склона — для ступеней биома
      */
-    private static double[] land(RuinContext.Grid g, Sections s, int[] groundOf, @Nullable int[] removed, @Nullable int[] wood) {
+    private static double[] land(RuinContext.Grid g, Sections s, int[] groundOf, @Nullable int[] removed, @Nullable int[] wood, boolean flash) {
         Detonation d = g.ctx().d;
         WorldNoise noise = g.ctx().noise;
-        boolean blockDamage = g.blockDamage(), fires = g.fires();
+        boolean blockDamage = g.blockDamage() && !flash, fires = g.fires();
         int x0 = s.chunkX << 4, z0 = s.chunkZ << 4;
         double[] heat = new double[256];
         for (int column = 0; column < 256; column++) {
@@ -365,7 +429,7 @@ public final class RuinPlanner {
             }
             boolean stripped = ground(s, noise, lx, ground, lz, x, z, q, groundPsi, blockDamage);
             plants(s, noise, lx, ground, lz, x, z, q, stripped);
-            if (fires && q >= ThermalModel.IGNITE) fire(s, lx, ground, lz, x, z, q, groundPsi);
+            if (fires && q >= ThermalModel.IGNITE) fire(s, lx, ground, lz, x, z, q, groundPsi, flash);
         }
         return heat;
     }
@@ -557,13 +621,23 @@ public final class RuinPlanner {
         for (BlockState st : SNOWY_GROUND) if (under.getBlock() == st.getBlock()) s.set(lx, ground, lz, st.setValue(BlockStateProperties.SNOWY, now));
     }
 
-    /** Пожар на земле, где свет поджёг горючее (вероятность растёт со светом), а волна сбила огонь не везде (≥ 2 psi). */
-    private static void fire(Sections s, int lx, int ground, int lz, int x, int z, double q, double psi) {
+    /**
+     * Пожар на земле, где свет поджёг горючее (вероятность растёт со светом), а волна сбила огонь не везде (от 2 psi
+     * остаётся {@link #BLOWN_KEEP}). {@code flash} — слой вспышки: кандидат — с вероятностью света, доля, что не собьёт
+     * волна, — отдельно.
+     */
+    private static void fire(Sections s, int lx, int ground, int lz, int x, int z, double q, double psi, boolean flash) {
         if (ground + 1 >= s.maxY) return;
-        double chance = Math.min(1, q / 20) * (psi >= 2 ? 0.5 : 1);
+        double lit = Math.min(1, q / 20), keep = psi >= 2 ? BLOWN_KEEP : 1;
         Blast.Props now = s.props(lx, ground, lz);
-        if (s.get(lx, ground + 1, lz).isAir() && (now.is(Blast.Props.FLAMMABLE) || now.is(Blast.Props.DIRT))) s.fire(x, ground + 1, z, chance);
+        if (s.get(lx, ground + 1, lz).isAir() && (now.is(Blast.Props.FLAMMABLE) || now.is(Blast.Props.DIRT))) {
+            if (flash) s.fire(x, ground + 1, z, lit, keep);
+            else s.fire(x, ground + 1, z, lit * keep, 1);
+        }
     }
+
+    /** Доля пожаров, которых волна не сбивает там, где давление у земли не меньше 2 psi. */
+    static final double BLOWN_KEEP = 0.5;
 
     /** Поваленный ствол: брёвна лёжа по направлению от эпицентра, по поверхности. */
     private static void lay(Sections s, long[] tree, BlockState log) {
@@ -597,9 +671,13 @@ public final class RuinPlanner {
         final int minY, maxY, sections, chunkX, chunkZ;
         /** Изменения: номер секции {@code << 12} | место в секции. */
         private final Int2ObjectOpenHashMap<BlockState> changes = new Int2ObjectOpenHashMap<>();
-        /** Кандидаты в пожары: позиция и вероятность. */
+        /**
+         * Кандидаты в пожары: позиция, вероятность и доля огня, которую не собьёт волна (у слоя вспышки; у руин — 1: их
+         * вероятность — уже после волны).
+         */
         final LongArrayList fires = new LongArrayList();
-        final it.unimi.dsi.fastutil.doubles.DoubleArrayList fireChance = new it.unimi.dsi.fastutil.doubles.DoubleArrayList();
+        final it.unimi.dsi.fastutil.doubles.DoubleArrayList fireChance = new it.unimi.dsi.fastutil.doubles.DoubleArrayList(),
+                fireKeep = new it.unimi.dsi.fastutil.doubles.DoubleArrayList();
         /** Брёвна поваленных деревьев в соседних чанках: место (высота — по поверхности при подмене) и состояние. */
         final LongArrayList outside = new LongArrayList();
         final List<BlockState> outsideState = new ArrayList<>();
@@ -642,10 +720,11 @@ public final class RuinPlanner {
             changed.add(k);
         }
 
-        void fire(int x, int y, int z, double chance) {
+        void fire(int x, int y, int z, double chance, double keep) {
             if (chance <= 0) return;
             fires.add(BlockPos.asLong(x, y, z));
             fireChance.add(chance);
+            fireKeep.add(keep);
         }
 
         /** Состояние по координатам мира после плана: вне чанка — воздух (огонь выбирает вид по соседям в чанке). */
@@ -689,18 +768,22 @@ public final class RuinPlanner {
             int n = 0;
             for (int k = 0; k < cells.length; k++) if (k == 0 || cells[k] != cells[k - 1]) cells[n++] = cells[k];
             // пожары: бросок — хешем места (план и подрыв совпадают), место — где огонь удержится на руинах
-            IntArrayList fireCells = new IntArrayList();
+            IntArrayList fireCells = new IntArrayList(), blown = new IntArrayList();
             List<BlockState> fireStates = new ArrayList<>();
             for (int k = 0; k < fires.size(); k++) {
                 long f = fires.getLong(k);
                 int fx = BlockPos.getX(f), fy = BlockPos.getY(f), fz = BlockPos.getZ(f);
-                if (hash(fx, fy, fz, 29) >= fireChance.getDouble(k)) continue;
+                double roll = hash(fx, fy, fz, 29), chance = fireChance.getDouble(k);
+                if (roll >= chance) continue;
                 int i = (fy - minY) >> 4;
                 if (i < 0 || i >= sections) continue;
                 BlockState fire = fireAt(fx, fy, fz);
                 if (fire == null) continue;
-                fireCells.add(i << RuinPlan.SECTION_SHIFT | (fy & 15) << 8 | (fz & 15) << 4 | fx & 15);
+                int cell = i << RuinPlan.SECTION_SHIFT | (fy & 15) << 8 | (fz & 15) << 4 | fx & 15;
+                fireCells.add(cell);
                 fireStates.add(fire);
+                // тот же бросок, что у руин (у них вероятность — chance · keep): волна сбивает то, чего руины не зажгли бы
+                if (roll >= chance * fireKeep.getDouble(k)) blown.add(cell);
             }
             ChunkPos pos = new ChunkPos(chunkX, chunkZ);
             if (n == 0 && fireCells.isEmpty() && outside.isEmpty() && fluidTicks.length == 0) return RuinPlan.nothing(ctx, biomes);
@@ -757,9 +840,11 @@ public final class RuinPlanner {
                 fireOut[k] = fireCells.getInt(k) | idx << RuinPlan.STATE_SHIFT;
             }
             if (kept == 0 && fireOut.length == 0 && outside.isEmpty() && fluidTicks.length == 0) return RuinPlan.nothing(ctx, biomes);
-            return new RuinPlan(java.util.Arrays.copyOf(cells, kept), hashes, states.toArray(new BlockState[0]), java.util.Arrays.copyOf(olds, kept), fireOut, heights,
-                    lightAt.toLongArray(), shot.prints.clone(), shot.normalPrints(view),
+            RuinPlan plan = new RuinPlan(java.util.Arrays.copyOf(cells, kept), hashes, states.toArray(new BlockState[0]), java.util.Arrays.copyOf(olds, kept), fireOut,
+                    heights, lightAt.toLongArray(), shot.prints.clone(), shot.normalPrints(view),
                     outside.isEmpty() ? null : outside, outside.isEmpty() ? null : outsideState, ctx, fluidTicks, biomes);
+            if (!blown.isEmpty()) plan.blown(blown.toIntArray());
+            return plan;
         }
 
         /**

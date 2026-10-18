@@ -2,6 +2,7 @@ package ua.zentix.incoming.nuclear.world;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -42,10 +43,17 @@ public final class NuclearWorld {
     private final List<PulseJob> pulses = new ArrayList<>();
     /** Силуэты вспышки по подрывам ({@link FlashShadows}): тела сняты в тике подрыва. */
     private final List<FlashShadows> shadows = new ArrayList<>();
+    /** Свет по земле в миг вспышки ({@link FlashScorch}): слой вспышки чанков в памяти, до волны. */
+    private final List<FlashScorch> scorches = new ArrayList<>();
     private final List<CraterJob> craters = new ArrayList<>();
     private final MobFallout mobFallout = new MobFallout();
     private final BlastFront blast = new BlastFront();
-    private long lastFrontNanos, lastPulseNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos;
+    private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos;
+    /**
+     * Чанки с огнём слоя вспышки забытого подрыва (руин не будет), загруженные с тех пор: огню — тики в тике мира
+     * ({@link FlashScorch#burnOut}; при загрузке чанка тики ещё не ставятся).
+     */
+    private final it.unimi.dsi.fastutil.longs.LongOpenHashSet unburnt = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
     /** Недорытые воронки из сохранения подхвачены (после загрузки мира). */
     private boolean restored;
     /** Игровое время мира, когда медленный тик в последний раз писался в лог. */
@@ -101,6 +109,18 @@ public final class NuclearWorld {
         return ctx;
     }
 
+    /** Руины подрыва, если они ещё в памяти (не заводит новых). */
+    @Nullable
+    RuinContext ruinsIfKept(int detonation) {
+        return ruins.get(detonation);
+    }
+
+    /** Для проверок: забыть руины подрыва, как после простоя или перезапуска (слой вспышки остаётся только отметкой чанка). */
+    public void forgetRuinsForTest(int detonation) {
+        RuinContext ctx = ruins.remove(detonation);
+        if (ctx != null) ctx.cancelTasks();
+    }
+
     /** Давно не брали и нет работы, кроме ждущих соседей, — забыть (память разломов и старых блоков руин). */
     private void sweepRuins(long now) {
         if (now % RUINS_SWEEP != 0) return;
@@ -123,7 +143,7 @@ public final class NuclearWorld {
      * берут не весь общий бюджет).
      */
     public boolean busy() {
-        return !pulses.isEmpty() || !shadows.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy();
+        return !pulses.isEmpty() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy();
     }
 
     /** Работ очереди руин, осмотренных в последнем тике (проверки бюджета). */
@@ -170,11 +190,11 @@ public final class NuclearWorld {
     }
 
     /**
-     * Сколько заняли в последнем тике фронт по сущностям и аппаратам, свет и радиация, воронки, очередь руин, руины заранее
-     * и осадки у мобов, нс.
+     * Сколько заняли в последнем тике фронт по сущностям и аппаратам, свет и радиация (с силуэтами вспышки), слой вспышки
+     * на земле, воронки, очередь руин, руины заранее и осадки у мобов, нс.
      */
     public long[] lastNanos() {
-        return new long[]{lastFrontNanos, lastPulseNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos};
+        return new long[]{lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos};
     }
 
     /** Очередь руин в последнем тике: «inspected N, waited M» (строка медленного ядерного тика). */
@@ -215,6 +235,8 @@ public final class NuclearWorld {
         // тела перед стенами — снимком сейчас: импульс (PulseJob) и волна их потом обожгут, убьют или сдвинут
         FlashShadows flash = FlashShadows.of(level, d);
         if (flash != null) shadows.add(flash);
+        // свет по земле — за время импульса, до волны: выгоревшее, гарь, пожары (чанки — первой единицей работы)
+        scorches.add(new FlashScorch(d));
         blast.onDetonation(d, owner);
         NuclearPrep.Handoff ready = prep.handOff(level, d, level.getGameTime());
         if (ready != null) {
@@ -239,10 +261,14 @@ public final class NuclearWorld {
         NuclearEvents events = NuclearEvents.get(level);
         for (Detonation d : events.past()) scars.offer(chunk, d);
         for (Detonation d : events.detonations()) scars.offer(chunk, d);
+        // огонь слоя вспышки ждёт руин без тиков: подрыв забыт — руин не будет, огню пора гореть
+        if (FlashScorch.forgotten(chunk, events)) unburnt.add(chunk.getPos().toLong());
     }
 
     public void onChunkUnload(ServerLevel level, LevelChunk chunk) {
         scars.drop(level, chunk.getPos());
+        // отметка слоя сохранена с чанком: следующая загрузка решит заново
+        unburnt.remove(chunk.getPos().toLong());
         // фоновые планы выгруженного чанка: снимки не того чанка, которым он загрузится
         for (RuinContext ctx : ruins.values()) ctx.forget(chunk.getPos().toLong());
         prep.forget(chunk.getPos().toLong());
@@ -295,6 +321,9 @@ public final class NuclearWorld {
         ruins.clear();
         pulses.clear();
         shadows.clear();
+        scorches.forEach(FlashScorch::cancel);
+        scorches.clear();
+        unburnt.clear();
         craters.forEach(c -> c.release(level));
         craters.clear();
         blast.clear();
@@ -303,6 +332,21 @@ public final class NuclearWorld {
     }
 
     // ---------------------------------------------------------------- тик
+
+    /** Огонь слоя вспышки забытых подрывов — гореть (чанки, ушедшие из полной загрузки, ждут следующего тика). */
+    private void burnOut(ServerLevel level) {
+        for (var it = unburnt.longIterator(); it.hasNext(); ) {
+            long key = it.nextLong();
+            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
+            if (chunk == null) continue;
+            it.remove();
+            try {
+                FlashScorch.burnOut(level, chunk);
+            } catch (RuntimeException e) {
+                Incoming.LOG.error("Flash scorch: fires of chunk {} could not be scheduled", new ChunkPos(key), e);
+            }
+        }
+    }
 
     /** @param clock бюджет тика сервера, общий для всех измерений (уже запущен) */
     public void tick(ServerLevel level, WorkClock clock) {
@@ -334,8 +378,24 @@ public final class NuclearWorld {
             }
             shadows.removeFirst();
         }
+        long scorchStart = System.nanoTime();
+        lastPulseNanos = scorchStart - pulseStart;
+        // свет по земле — до волны (её руины ставятся по миру до вспышки поверх него); подрывы — каждый своим ходом:
+        // слой второго подрыва не ждёт, пока первый дождётся своих фоновых планов
+        for (java.util.Iterator<FlashScorch> it = scorches.iterator(); it.hasNext(); ) {
+            FlashScorch job = it.next();
+            try {
+                if (job.work(level, now, clock)) it.remove();
+            } catch (RuntimeException e) {
+                Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception; dropped (the wave brings it with the ruins)",
+                        job.detonation().id(), e);
+                job.cancel();
+                it.remove();
+            }
+        }
+        if (!unburnt.isEmpty()) burnOut(level);
         long frontStart = System.nanoTime();
-        lastPulseNanos = frontStart - pulseStart;
+        lastScorchNanos = frontStart - scorchStart;
         try {
             blast.advance(level, events.detonations(), now);
             blast.work(level, clock, id -> pulses.stream().noneMatch(p -> p.detonation().id() == id));

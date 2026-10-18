@@ -163,11 +163,11 @@ final class NukeAfter {
         modelLoaded = modelHere;
         modelRest = rest;
         seenLoaded = seen[0];
-        // сверка: модель против огня в своих чанках, плавно (огонь встаёт с волной и гаснет не сразу)
+        // сверка: модель против огня в своих чанках, плавно (огонь встаёт со вспышкой, волна сбивает часть, гаснет не сразу)
         if (modelHere >= TRUST_MIN) {
             trust += 0.2 * (Math.min(4, seen[0] / modelHere) - trust);
             // шторму — только пока огонь молод: ванильный потом прогорает по-своему, а шторм горит до утра
-            if (t < f.lastArrival() + FireField.RISE + 0.7 * FireField.TAU) a.storm.seen(trust);
+            if (t < f.lastIgnition() + FireField.RISE + 0.7 * FireField.TAU) a.storm.seen(trust);
         }
         for (int q = 0; q < QUADRANTS; q++) {
             roarVolume[q] = power[q] <= 0 ? 0 : (float) Math.min(ROAR_MAX, V_REF * Math.pow(power[q] / I_REF, 0.25));
