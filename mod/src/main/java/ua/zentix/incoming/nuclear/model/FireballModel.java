@@ -10,7 +10,7 @@ public final class FireballModel {
     /** Показатель спада второго импульса: при 3.75 за 10·t_max излучается ~80% его энергии. */
     private static final double PULSE_EXP = 3.75;
     /** Шар дорастает до этой доли от максимума, дальше растёт медленно, остывая. */
-    private static final double LATE_GROWTH_CAP = 1.3;
+    static final double LATE_GROWTH_CAP = 1.3;
 
     /** Видимая температура шара во втором максимуме, K (G&D 2.110: ~7 500–8 000 K почти без зависимости от мощности). */
     public static final double PEAK_K = 7700;
@@ -88,23 +88,26 @@ public final class FireballModel {
      */
     public static double groundRadius(double t, double hobM, double yieldKt, boolean surfaceBurst) {
         if (t <= 0) return 0;
-        double r = radius(t, yieldKt, surfaceBurst), y = centreHeight(t, Math.max(0, hobM), yieldKt);
+        double r = radius(t, yieldKt, surfaceBurst), y = centreHeight(t, Math.max(0, hobM), yieldKt, surfaceBurst);
         return Math.sqrt(Math.max(0, r * r - y * y));
     }
 
-    /** Скорость всплытия шара, м/с: ~95 для 15 кт, слабо растёт с мощностью. */
-    public static double riseSpeed(double yieldKt) {
-        return 95 * Math.pow(yieldKt / 15, 0.04);
+    /**
+     * Скорость всплытия шара сразу после подрыва, м/с: та же, что у верха облака ({@link CloudModel#riseSpeed}) — 1 кт
+     * ~25, 15 кт ~79, 1 Мт ~139, через 10 с — 130 (Glasstone и Dolan: у шара 1 Мт через 10 с — 76–107, §2.05, у верха —
+     * в среднем ~134 за первую минуту, §2.12).
+     */
+    public static double riseSpeed(double yieldKt, boolean surface) {
+        return CloudModel.riseSpeed(0, 0, yieldKt, surface);
     }
 
     /**
-     * Высота центра шара (потом — центра шапки), м: стартует с высоты подрыва со скоростью
-     * {@link #riseSpeed} и экспоненциально тормозит к 0.8 высоты верха стабилизированного облака.
+     * Высота центра шара (потом — центра шапки), м: стартует с высоты подрыва и поднимается, как верх облака
+     * ({@link CloudModel#top}: та же экспонента, тот же путь) — один закон подъёма у шара и облака, и верх шара (не выше
+     * {@link #LATE_GROWTH_CAP} радиуса над центром) не обгоняет верх облака.
      */
-    public static double centreHeight(double t, double hobM, double yieldKt) {
-        double target = Math.max(hobM, 0.8 * CloudModel.stabilizedTop(yieldKt));
-        double span = target - hobM;
-        if (span <= 0 || t <= 0) return hobM;
-        return hobM + span * (1 - Math.exp(-t * riseSpeed(yieldKt) / span));
+    public static double centreHeight(double t, double hobM, double yieldKt, boolean surface) {
+        if (t <= 0) return hobM;
+        return hobM + CloudModel.top(t, hobM, yieldKt, surface) - CloudModel.top(0, hobM, yieldKt, surface);
     }
 }

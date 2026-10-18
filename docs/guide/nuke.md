@@ -27,7 +27,8 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
 ![Mushroom cloud over a town, the dust wall moving out below](img/nuke.jpg)
 
 Everyone within 20 km of the target hears a siren in advance. Then come the flash, the fireball and the mushroom cloud.
-The blast wave itself is invisible. The wind right behind it lifts what lies on the ground (dust and earth, smoke over a
+The flash lights up the sky and the land like lightning, in clear weather up to about 100 km away, in rain up to
+about 30 km. The blast wave itself is invisible. The wind right behind it lifts what lies on the ground (dust and earth, smoke over a
 burning town, spray over water) and rolls it forward as a churning wall, like a dust storm. The wall is the youngest
 dust of the pall: right at the front it hugs the ground, and behind it the dust grows thicker and taller. At 15 kt it is
 30–40 m tall 1 km from the burst and about 60 m tall 4 km out. After an air burst it stays dense out to about 4.5 km,
@@ -50,10 +51,14 @@ up, its outside mixes with cold air, turns dark red and then into brown smoke. D
 and its light falls on the dust and smoke around it. By day it outshines the sky only for its first few seconds; at
 night its red glow lasts a few seconds longer. At night it also lights the land for kilometres around: white at first,
 then yellow and orange, dark again within about ten seconds at 15 kt; slopes facing it are bright, slopes turned away
-stay dark. The cap is a dense cloud of round billows, reddish brown at first from the nitrogen oxides in it, then
-white within about a minute as water condenses in it, like an ordinary cloud. When the fireball touches dry land, the
-cap carries soil and stays grey with dust. While the cloud climbs, the cap keeps rolling: gas goes up
-through its middle, out over the top and down the outside, and billows swell out of it and sink back. The faster the
+stay dark. The cap is a dense cloud of round billows. When it rolls up, the nitrogen dioxide in it makes it
+ochre, a yellowish brown, and the light that comes through it reddish brown. Then water condenses in it, and as the cap
+grows the dioxide in it thins out: from outside it turns beige and is almost white within one to two minutes at 15 kt,
+like an ordinary cloud. Seen from below, where light comes through it, it stays brown. A 1 kt cap is darker at first,
+thinner, and lets more light through: at night its hot core glows through it. When the fireball touches dry
+land, the cap carries soil and stays grey with dust. At 15 kt the cloud climbs to about 10 km in six to seven minutes.
+At 1 kt it climbs to about 6 km, more slowly: after eight minutes it is still rising, and it stops after about eleven. Then the turbulence of the air mixes it away, and a bigger cloud takes longer: a 15 kt cloud is gone after about 27 minutes, a 1 kt cloud after about 22. While the cloud climbs, the cap keeps rolling: gas goes up through its middle, out over
+the top and down the outside, and billows swell out of it and sink back. The faster the
 cloud climbs, the faster it rolls; when the cloud stops rising, the cap stops too. The sun lights one side of it, and
 the folds between the billows stay darker. By day the cloud casts its shadow on the land: under the thick cap only the
 sky lights the ground. A column of dust rises from the ground into the cap, and a skirt of dust spreads around its foot.

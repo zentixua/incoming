@@ -3,7 +3,6 @@ package ua.zentix.incoming.client.nuclear;
 import net.minecraft.util.Mth;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
-import ua.zentix.incoming.nuclear.model.CloudModel;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 
@@ -38,9 +37,9 @@ public final class CloudPuffs {
         fireGround = Math.sqrt(Math.max(0, slant * slant - hob * hob));
     }
 
-    /** Сколько секунд модели гриб виден: стабилизируется, растекается и рассеивается. */
+    /** Сколько секунд модели гриб виден: поднимается и рассеивается ({@link MushroomModel#lifeSeconds}). */
     public static double lifeSeconds(Detonation d) {
-        return 4 * CloudModel.stabilizationSeconds(d.yieldKt());
+        return MushroomModel.lifeSeconds(d.yieldKt());
     }
 
     /**

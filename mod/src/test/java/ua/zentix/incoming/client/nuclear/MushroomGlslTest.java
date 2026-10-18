@@ -55,6 +55,17 @@ class MushroomGlslTest {
         }
     }
 
+    /** Отражение стенок ложбин шапки ({@code mushWallR}) — то же, что в Java ({@link MushroomField#wallReflectance}). */
+    @Test
+    void wallReflectanceMatchesJava() {
+        GlslFunction f = GlslFunction.parse(GLSL, "mushWallR");
+        for (double g = 0; g <= 0.61; g += 0.05) {
+            for (double w = 0; w <= 1; w += 0.01) {
+                assertEquals(MushroomField.wallReflectance(w, g), f.call(Map.of("w", w, "g", g)), 1e-9, "ω' " + w + ", g' " + g);
+            }
+        }
+    }
+
     @Test
     void driftShareMatchesJava() {
         GlslFunction f = GlslFunction.parse(GLSL, "mushShare");
@@ -157,23 +168,42 @@ class MushroomGlslTest {
 
     /**
      * Прямую карты тени дальше толщи MUSH_SHADOW_DARK не считают, и вывод на кадр берёт свет под ней как под этой толщей:
-     * сквозь неё и у самого белого вещества гриба (водяная пыль юбки, пар шапки) проходит меньше процента света солнца —
+     * сквозь неё и у самого белого вещества гриба (водяная пыль юбки, капли и пар шапки) проходит меньше процента света солнца —
      * прямым пучком и рассеянным вперёд, даже если облако закрывает всё полушарие у низкого солнца (косинус пучка у вывода
      * на кадр — не меньше 0,12).
      */
     @Test
     void shadowCutLosesUnderAPercent() {
         double dark = constants().get("MUSH_SHADOW_DARK"), dust = PallLight.truncated(MushroomField.G);
-        // вещество гриба — с асимметрией пыли пелены, остывшая шапка и столб воды — капель
-        double[][] matter = {{MushroomField.CAP_YOUNG, dust}, {MushroomField.CAP_DUSTY, dust}, {MushroomField.STEM, dust}, {MushroomField.SKIRT, dust},
+        // вещество гриба — с асимметрией пыли пелены, столб воды — капель
+        double[][] matter = {{MushroomField.CAP_DUSTY, dust}, {MushroomField.STEM, dust}, {MushroomField.SKIRT, dust},
                 {MushroomField.STEAM, dust}, {CloudPuffs.SPRAY, dust}, {CloudPuffs.SPRAY, PallLight.truncated(MushroomField.G_WATER)}};
         for (double[] at : matter) {
             int rgb = (int) at[0];
-            double g = at[1], w = PallLight.albedo(PallLight.linear(((rgb >> 8) & 0xFF) / 255.0), g);
-            for (double mu = 0.12; mu <= 1; mu += 0.01) {
-                double through = MushroomField.shadowThrough(dark, 0, 1, w, g, mu);
-                assertTrue(through < 0.01, String.format(Locale.ROOT, "%06X, g %.3f, солнце %.2f: %.4f", rgb, g, mu, through));
+            double g = at[1];
+            assertDark(dark, PallLight.albedo(PallLight.linear(((rgb >> 8) & 0xFF) / 255.0), g), g, String.format(Locale.ROOT, "%06X", rgb));
+        }
+        // шапка — капли и NO₂ (карта тени берёт зелёный): самая белая по мощностям и времени
+        double[] w = new double[4];
+        double white = 0, g = 0;
+        for (double kt : new double[] {0.1, 1, 15, 100, 1000, 10_000}) {
+            for (double t = 1; t < MushroomModel.lifeSeconds(kt); t *= 1.3) {
+                MushroomModel.Shape s = MushroomModel.shape(t, kt, 240 * Math.cbrt(kt), false, 1e9);
+                if (s == null) continue;
+                MushroomField.capMatter(s, 0, 0, w);
+                if (w[1] > white) {
+                    white = w[1];
+                    g = w[3];
+                }
             }
+        }
+        assertDark(dark, white, g, String.format(Locale.ROOT, "шапка, ω' %.4f", white));
+    }
+
+    private static void assertDark(double dark, double w, double g, String what) {
+        for (double mu = 0.12; mu <= 1; mu += 0.01) {
+            double through = MushroomField.shadowThrough(dark, 0, 1, w, g, mu);
+            assertTrue(through < 0.01, String.format(Locale.ROOT, "%s, g %.3f, солнце %.2f: %.4f", what, g, mu, through));
         }
     }
 
