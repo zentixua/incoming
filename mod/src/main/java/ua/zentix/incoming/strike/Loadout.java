@@ -23,8 +23,9 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
      */
     public record Nuke(int yieldKt, boolean airBurst, boolean onCarrier) {
         /**
-         * Наибольшая мощность, кт. Больше — тяжёлая зона (от 5 psi у земли) не помещается в память и бюджет разрушений:
-         * руины отстали бы от фронта волны. Старые пульты и сохранения с большей мощностью урезаются до неё.
+         * Наибольшая мощность, кт. Тяжёлая зона (от 5 psi у земли) растёт как Y^⅔: у 15 кт — около 32 тыс. чанков, у
+         * мощнее она не помещается в память и бюджет разрушений, и руины отстали бы от фронта волны. Старые пульты и
+         * сохранения с большей мощностью урезаются до неё.
          */
         public static final int MAX_YIELD = 15;
         public static final Nuke DEFAULT = new Nuke(15, true, false);

@@ -12,6 +12,7 @@ import ua.zentix.incoming.nuclear.model.BlackRainModel;
 import ua.zentix.incoming.nuclear.model.FalloutModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.FrontProfile;
+import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.util.StreamCodecs;
 import ua.zentix.incoming.util.Terrain;
@@ -136,6 +137,8 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
      * отражённого, то есть от ~0.34 psi падающего (у слабой волны отражённое — вдвое больше).
      */
     public static final double RUIN_EDGE_KPA = BlastModel.kpa(0.34);
+    /** Слабее этого волна не бьёт и не пугает ({@code BlastFront}) и не поднимает пыль (край стены пыли): 0.3 psi. */
+    public static final double HIT_KPA = BlastModel.kpa(0.3);
 
     // ---------------------------------------------------------------- масштаб
 
@@ -155,20 +158,111 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
 
     // ---------------------------------------------------------------- волна
 
+    /**
+     * Давление волны в точке, кПа — по высоте подрыва над ней ({@link HobBlast}): дальность по земле — от оси подрыва,
+     * высота — подрыв над точкой. Точка выше подрыва — как у земли на наклонной дальности (полусфера наземного).
+     */
     public double overpressureKpa(Vec3 p) {
-        return BlastModel.overpressureKpa(Math.max(1, metres(p.distanceTo(burst))), yieldKt);
+        double h = heightAbove(p), s = metres(p.distanceTo(burst));
+        return BlastModel.kpa(HobBlast.psi(Math.sqrt(Math.max(0, s * s - h * h)), h, yieldKt));
     }
 
     public double psi(Vec3 p) {
         return BlastModel.psi(overpressureKpa(p));
     }
 
+    /** Давление на земле эпицентра в {@code groundBlocks} блоках по земле от него, кПа. */
+    public double groundOverpressureKpa(double groundBlocks) {
+        return BlastModel.kpa(HobBlast.psi(metres(groundBlocks), groundHob(), yieldKt));
+    }
+
+    /** Дальность по земле эпицентра, где давление падает до {@code kpa}, блоки (0 — такого нет и под подрывом). */
+    public double groundRange(double kpa) {
+        return blocks(HobBlast.rangeFor(BlastModel.psi(kpa), groundHob(), yieldKt));
+    }
+
+    /** Наклонная дальность до точки земли эпицентра в {@code groundBlocks} блоках по земле от него, блоки. */
+    public double slantOf(double groundBlocks) {
+        return Math.hypot(groundBlocks, blocks(groundHob()));
+    }
+
+    /** Дальность по земле эпицентра до точки на наклонной дальности {@code slantBlocks}, блоки (ближе высоты подрыва — 0). */
+    public double groundOf(double slantBlocks) {
+        double h = blocks(groundHob());
+        return Math.sqrt(Math.max(0, slantBlocks * slantBlocks - h * h));
+    }
+
     /**
-     * С какой скоростью волна давлением {@code kpa} бросает незакреплённое — существо, сорванный обломок, блоков за тик:
-     * по скоростному напору за фронтом, не больше 6.
+     * Скоростной напор за фронтом вдоль земли в точке, кПа: по давлению (Ренкин–Гюгонио), у правильного отражения под
+     * подрывом — только его доля вдоль земли ({@link HobBlast#alongGround}).
      */
-    public static double throwSpeed(double kpa) {
-        return Math.min(6.0, 0.8 * Math.sqrt(BlastModel.dynamicPressureKpa(kpa)));
+    public double dynamicPressureKpa(Vec3 p) {
+        return BlastModel.dynamicPressureKpa(overpressureKpa(p)) * along(p);
+    }
+
+    /** Ветер сразу за фронтом вдоль земли в точке, м/с. */
+    public double blastWind(Vec3 p) {
+        return BlastModel.windSpeed(overpressureKpa(p)) * Math.sqrt(along(p));
+    }
+
+    /** Ветер сразу за фронтом вдоль земли эпицентра в {@code groundBlocks} блоках по земле от него, м/с. */
+    public double groundWind(double groundBlocks) {
+        double g = metres(groundBlocks);
+        return BlastModel.windSpeed(groundOverpressureKpa(groundBlocks)) * Math.sqrt(HobBlast.alongGround(g, groundHob(), yieldKt));
+    }
+
+    /** Положительная фаза в точке, с модели: от 2 psi — по Броуду, ниже 1 psi — Кинни–Грэхем у слушателя, между — смесь. */
+    public double positivePhaseSeconds(Vec3 p) {
+        double h = heightAbove(p), s = metres(p.distanceTo(burst));
+        return HobBlast.positivePhaseSeconds(Math.sqrt(Math.max(0, s * s - h * h)), h, yieldKt);
+    }
+
+    /** Положительная фаза на земле эпицентра в {@code groundBlocks} блоках по земле от него, с модели. */
+    public double groundPositivePhaseSeconds(double groundBlocks) {
+        return HobBlast.positivePhaseSeconds(metres(groundBlocks), groundHob(), yieldKt);
+    }
+
+    /** Положительная фаза на земле на наклонной дальности {@code slantBlocks} от подрыва, тики игры. */
+    public double positivePhaseTicks(double slantBlocks) {
+        return groundPositivePhaseSeconds(groundOf(slantBlocks)) * 20 * scale;
+    }
+
+    /**
+     * Докуда (наклонная дальность, блоки) через {@code ticks} после подрыва уже прошла положительная фаза: где приход
+     * фронта и фаза за ним вместе — не позже {@code ticks}.
+     */
+    public double phaseEndRadius(double ticks) {
+        double lo = 0, hi = frontRadius(ticks);
+        if (hi <= 0 || arrivalTicks(lo) + positivePhaseTicks(lo) > ticks) return 0;
+        for (int i = 0; i < 40; i++) {
+            double m = 0.5 * (lo + hi);
+            if (arrivalTicks(m) + positivePhaseTicks(m) <= ticks) lo = m;
+            else hi = m;
+        }
+        return lo;
+    }
+
+    private double along(Vec3 p) {
+        double h = heightAbove(p), s = metres(p.distanceTo(burst));
+        return HobBlast.alongGround(Math.sqrt(Math.max(0, s * s - h * h)), h, yieldKt);
+    }
+
+    /** Высота подрыва над точкой, м (не меньше 0). */
+    private double heightAbove(Vec3 p) {
+        return Math.max(0, metres(burst.y - p.y));
+    }
+
+    /** Высота подрыва над землёй эпицентра, м (не меньше 0). */
+    private double groundHob() {
+        return Math.max(0, hobMetres());
+    }
+
+    /**
+     * С какой скоростью волна скоростным напором {@code qKpa} бросает незакреплённое — существо, сорванный обломок,
+     * блоков за тик, не больше 6.
+     */
+    public static double throwSpeed(double qKpa) {
+        return Math.min(6.0, 0.8 * Math.sqrt(qKpa));
     }
 
     /** Таблица прихода фронта (кэш на подрыв). */
@@ -191,13 +285,22 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return front().radiusAt(ticks);
     }
 
-    /** Докуда что-то вообще меняется (блоки): стёкла или ожоги 1-й степени — что дальше. */
+    /** Докуда по земле что-то вообще меняется (блоки): стёкла или ожоги 1-й степени — что дальше. */
     public double radiusMax() {
         return Caches.radiusMax(this);
     }
 
     /**
-     * Докуда идут руины (блоки): до {@link #RUIN_EDGE_KPA}, где отражённое давление ещё бьёт стекло, и не ближе
+     * Докуда волна ещё бьёт ({@link #HIT_KPA}) — наклонная дальность, блоки: у земли и над ней. Точка над землёй — точка
+     * земли с подрывом ниже ({@link #overpressureKpa}), поэтому наибольшая дальность — по высотам от земли до подрыва:
+     * у высокого подрыва давление над землёй доходит дальше, чем на ней, а под ним на земле его может не быть вовсе.
+     */
+    public double blastReach() {
+        return Caches.blastReach(this);
+    }
+
+    /**
+     * Докуда по земле идут руины (блоки): до {@link #RUIN_EDGE_KPA}, где отражённое давление ещё бьёт стекло, и не ближе
      * {@link #radiusMax}. Не дальше 1.5 {@link #radiusMax} (0.34 psi против 0.5) — докуда посчитан приход фронта.
      */
     public double ruinRadius() {
@@ -278,22 +381,39 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         private static final java.util.Map<Detonation, FrontProfile> FRONT = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, Double> RADIUS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, Double> RUINS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+        private static final java.util.Map<Detonation, Double> REACH = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+        /** Высот между землёй и подрывом в {@link #blastReach}. */
+        private static final int REACH_HEIGHTS = 32;
         private static final java.util.Map<Detonation, BlackRainModel> RAIN = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
         static double ruinRadius(Detonation d) {
-            return RUINS.computeIfAbsent(d, x -> Math.min(x.radiusMax() * 1.5,
-                    Math.max(x.radiusMax(), x.blocks(BlastModel.rangeForOverpressure(RUIN_EDGE_KPA, x.yieldKt)))));
+            return RUINS.computeIfAbsent(d, x -> Math.min(x.radiusMax() * 1.5, Math.max(x.radiusMax(), x.groundRange(RUIN_EDGE_KPA))));
         }
 
         static ArrivalTable arrival(Detonation d) {
-            return ARRIVAL.computeIfAbsent(d, x -> ArrivalTable.of(x.yieldKt, Math.max(1000, x.metres(x.radiusMax()) * 1.5)));
+            return ARRIVAL.computeIfAbsent(d, x -> ArrivalTable.of(x.yieldKt, x.groundHob(), Math.max(1000, x.metres(tableRange(x)))));
         }
 
         static FrontProfile front(Detonation d) {
             // у эпицентра — как у модели: вспышка и шар не меняются; за стеной пыли (0.3 psi) — только звук
             return FRONT.computeIfAbsent(d, x -> FrontProfile.of(x.arrival(), x.scale, FrontProfile.slowFrom(x.fireballRadius()),
-                    x.blocks(BlastModel.rangeForOverpressure(BlastModel.kpa(0.3), x.yieldKt)), x.radiusMax() * 1.5,
-                    x.wave * FrontProfile.SOUND_SPEED));
+                    x.slantOf(x.groundRange(HIT_KPA)), tableRange(x), x.wave * FrontProfile.SOUND_SPEED));
+        }
+
+        /** Докуда таблицы прихода фронта, блоки: руины (до 1.5 {@link #radiusMax}) и всё, что волна ещё бьёт. */
+        private static double tableRange(Detonation d) {
+            return Math.max(d.radiusMax() * 1.5, d.blastReach());
+        }
+
+        static double blastReach(Detonation d) {
+            return REACH.computeIfAbsent(d, x -> {
+                double hob = x.groundHob(), psi = BlastModel.psi(HIT_KPA), m = 0;
+                for (int i = 0; i <= REACH_HEIGHTS; i++) {
+                    double h = hob * i / REACH_HEIGHTS, g = HobBlast.rangeFor(psi, h, x.yieldKt);
+                    if (g > 0) m = Math.max(m, Math.hypot(g, h));
+                }
+                return x.blocks(m);
+            });
         }
 
         static BlackRainModel blackRain(Detonation d) {
@@ -308,9 +428,8 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
 
         static double radiusMax(Detonation d) {
             return RADIUS.computeIfAbsent(d, x -> {
-                double blast = BlastModel.rangeForOverpressure(FAR_KPA, x.yieldKt);
                 double light = ThermalModel.rangeForFluence(ThermalModel.BURN_1, x.yieldKt, x.surface, x.visibility);
-                return x.blocks(Math.max(blast, light));
+                return Math.max(x.groundRange(FAR_KPA), x.groundOf(x.blocks(light)));
             });
         }
     }

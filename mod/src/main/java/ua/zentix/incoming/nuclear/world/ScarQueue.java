@@ -653,12 +653,9 @@ public final class ScarQueue {
         return nearest(p, d) <= d.ruinRadius();
     }
 
-    /** Наклонная дальность от точки подрыва до ближайшего места чанка на уровне земли. */
+    /** Дальность по земле от эпицентра до ближайшего места чанка: {@link Detonation#ruinRadius} — тоже по земле. */
     private static double nearest(ChunkPos p, Detonation d) {
-        double x = Math.max(p.getMinBlockX(), Math.min(d.burst().x, p.getMaxBlockX() + 1));
-        double z = Math.max(p.getMinBlockZ(), Math.min(d.burst().z, p.getMaxBlockZ() + 1));
-        double dx = x - d.burst().x, dz = z - d.burst().z, dy = d.burst().y - d.groundY();
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        return NuclearPrep.horizontal(p, d);
     }
 
     /**

@@ -21,10 +21,10 @@ class PromptRadiationModelTest {
 
     @Test
     void smallYieldRadiationOutrangesBlast() {
-        // 1 кт: смертельная доза дальше, чем 5 psi (440 м); у 1 Мт — наоборот
+        // 1 кт: смертельная доза дальше, чем 5 psi (465 м); у 1 Мт — наоборот
         double ld50 = SicknessModel.LD50 * PromptRadiationModel.REM_PER_GY;
-        assertTrue(PromptRadiationModel.doseRem(BlastModel.rangeForOverpressure(BlastModel.kpa(5), 1), 1) > ld50);
-        assertTrue(PromptRadiationModel.doseRem(BlastModel.rangeForOverpressure(BlastModel.kpa(5), 1000), 1000) < ld50);
+        assertTrue(PromptRadiationModel.doseRem(HobBlast.rangeFor(5, 0, 1), 1) > ld50);
+        assertTrue(PromptRadiationModel.doseRem(HobBlast.rangeFor(5, 0, 1000), 1000) < ld50);
     }
 
     /** G&D табл. 8.41: полметра бетона гасит радиацию первой минуты в 10 раз, гамму осадков — почти в 1000. */

@@ -51,7 +51,7 @@ class BlastWallTest {
             assertEquals(w.shock(t - BlastWall.LIFT_S), w.head(t), 1e-9, t + " с");
             assertTrue(w.head(t) < w.shock(t), t + " с: голова на фронте или впереди");
         }
-        double rangeHigh = BlastModel.rangeForOverpressure(BlastModel.kpa(1.5), 15), rangeLow = BlastModel.rangeForOverpressure(BlastModel.kpa(0.32), 15);
+        double rangeHigh = GROUND.metres(GROUND.groundRange(BlastModel.kpa(1.5))), rangeLow = GROUND.metres(GROUND.groundRange(BlastModel.kpa(0.32)));
         double t = 0.5;
         while (w.head(t) < rangeHigh) t += 0.01;
         assertEquals(1, w.density(t), 1e-9, "у 1,5 psi голова не самая густая");

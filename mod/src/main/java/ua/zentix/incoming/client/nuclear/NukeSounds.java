@@ -249,7 +249,7 @@ public final class NukeSounds {
          * Фронт у слушателя. Громкость — по пиковому давлению у уха и пути звука, как у обычных взрывов
          * ({@link Outdoor#pressureVolume}: холм между, зона тени днём, дождь), всё по «Общей громкости». Вдали (меньше
          * 1 psi) удар фронта — дорожка из модели ({@link BlastPulse}: один скачок, его крутизна по давлению,
-         * положительная фаза по Кинни–Грэхему) своим источником с начала прямого удара, и запись далёкого огромного
+         * положительная фаза модели, {@link Detonation#positivePhaseSeconds}) своим источником с начала прямого удара, и запись далёкого огромного
          * взрыва ({@code nuke.boom_far}) — раскат; эхо от рельефа повторяет её ({@link NukeEchoes}). Вблизи — оглушающий
          * удар (несколько источников вместе — одному OpenAL не даёт громче единицы). Ветер за фронтом (звук и наклон тела,
          * {@link #sway}), стёкла, слух ({@link Deafness}; пыль у глаза — по голове стены, {@link NukeDust#veil}).
@@ -258,8 +258,8 @@ public final class NukeSounds {
             Minecraft mc = Minecraft.getInstance();
             Vec3 b = d.burst();
             double dist = ear.distanceTo(b), pa = 1000 * d.overpressureKpa(ear);
-            phaseTicks = Math.max(1, 20 * d.scale() * BlastModel.positivePhaseSeconds(Math.max(1, d.metres(dist)), d.yieldKt()));
-            windPeak = BlastModel.windSpeed(pa / 1000);
+            phaseTicks = Math.max(1, 20 * d.scale() * d.positivePhaseSeconds(ear));
+            windPeak = d.blastWind(ear);
             Outdoor.Path path = path(ear, dist);
             float v = path == null ? 1 : Outdoor.pressureVolume(pa, FULL_PA, path);
             float highs = path == null ? 1 : BlastSounds.highs(path);

@@ -29,7 +29,7 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
 Everyone within 20 km of the target hears a siren in advance. Then come the flash, the fireball and the mushroom cloud.
 The blast wave itself is invisible. The wind right behind it lifts what lies on the ground (dust and earth, smoke over a
 burning town, spray over water) and rolls it forward as a churning wall, like a dust storm. At 15 kt the wall is about
-150 m tall 1 km from the burst and about 50 m tall 4 km out; farther away it thins out and fades at about 9 km, where
+150 m tall 1 km from the burst and about 50 m tall 4 km out; farther away it thins out and fades at about 10 km, where
 the wind is too weak to lift dust. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
 In its first seconds the fireball lights the top of the wall orange, even by day.
 The wave breaks buildings as it reaches them: their pieces fly with the dust. The ground doesn't shake before the
@@ -73,8 +73,8 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 
 ![Fireball and blast wave over a town](img/nuke-wave.jpg)
 
-At 15 kt the wave kills out to about 0.4 km, the light of the fireball burns out to 3.1 km, and windows break out to
-6 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
+At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns out to 3.1 km, and windows break out to
+8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
 game time, like radiation sickness (a game hour is 50 seconds): after a 15 kt ground burst it starts to come down about
 7 game minutes later, and later farther downwind. Its radiation drops tenfold by the seventh game hour and a
 hundredfold by the third game day.

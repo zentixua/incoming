@@ -398,12 +398,12 @@ public final class NuclearGameTests {
 
     /**
      * Тонкие столбы 30 блоков (терракота, медь, цепь через два стекла — фасад из окон с перемычками) в эпицентре 15 кт
-     * и там, где у земли 5–10 и 2.5–4.5 psi (1 блок = 33 м): стёкла выбиты, перемычки над ними не висят — от столба остаются
+     * и там, где у земли 5–10 и 2.5–4.5 psi (1 блок ≈ 67 м): стёкла выбиты, перемычки над ними не висят — от столба остаются
      * только низ и завал, ни одного блока над пустотой (не цепочки точек в небе над руинами).
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_columns", skyAccess = true)
     public static void thinColumnsFall(GameTestHelper h) {
-        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.03, 15, 0.03f);
+        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.015, 15, 0.015f);
         BlockPos mid = null, far = null;
         for (int dx = 2; dx <= 30; dx++) {
             double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx))));
@@ -526,17 +526,19 @@ public final class NuclearGameTests {
      * <p>
      * Почему так. Отдельно стоящая стена 20 блоков в блок толщиной при 4.5 psi опрокидывается целиком, как и
      * настоящая, — поэтому стены в доме с поперечными стенами и перекрытиями; над окном проверяются 12 рядов.
-     * Давление берётся у стены над окном (8 блоков
-     * над землёй), а не у земли: проверяется элемент там, и при низком подрыве у земли давление меньше. Место —
-     * первое от эпицентра, где давление опустилось до 4.5 psi (нижняя граница 3.5 — только чтобы шаг поиска не
-     * проскочил полосу); масштаб 0.022 — чтобы оно с обоими домами помещалось на площадке.
+     * Давление берётся у стены над окном (8 блоков над землёй): проверяется элемент там. Место — первое от эпицентра,
+     * где давление опустилось до 4.5 psi (нижняя граница 3.5 — только чтобы шаг поиска не проскочил полосу); масштаб
+     * 0.018 — чтобы оно с обоими домами помещалось на площадке. Подрыв у земли: у настоящего дома в 1,6 км от
+     * воздушного 15 кт давление по его высоте почти одно (стебель Маха), а на площадке дом в 20 блоков — 1,1 км
+     * высотой, выше воздушного подрыва (11 блоков), и низ дома был бы под 6–7 psi; у наземного — 4.9 у земли, 4.3 над
+     * окном, 3.1 под крышей.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_window", skyAccess = true)
     public static void wallAboveWindowStandsOnlyWithPiers(GameTestHelper h) {
-        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.022, 15, 0.022f);
+        Detonation d = detonation(h, CENTER, 0, 15, 0.018f);
         BlockPos far = null;
         for (int dx = 2; dx <= 26 && far == null; dx++) {
-            // давление у стены над окном (подрыв низко: у земли оно меньше)
+            // давление у стены над окном
             double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx).above(8))));
             if (psi >= 3.5 && psi <= 4.5) far = CENTER.east(dx);
         }
@@ -593,7 +595,7 @@ public final class NuclearGameTests {
     }
 
     /**
-     * 15 кт у земли, 1 блок = 40 м, в 240 м (~80 psi): бункер под двумя блоками грунта не тронут
+     * 15 кт у земли, 1 блок = 40 м, в 240 м (~135 psi): бункер под двумя блоками грунта не тронут
      * (под сводом нет воздуха с небом — перепада нет), столб обсидиана и коренная порода стоят (прочность ≥ 50 и
      * неразрушимое), свободно стоящее узкое ядро 4×4×40 из кальцита опрокидывается и рушится целиком.
      */
@@ -767,7 +769,7 @@ public final class NuclearGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_facade", skyAccess = true)
     public static void slabStairPaneFacadeFalls(GameTestHelper h) {
-        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.03, 15, 0.03f);
+        Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.02, 15, 0.02f);
         BlockPos mid = null;
         for (int dx = 2; dx <= 30 && mid == null; dx++) {
             double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx))));
