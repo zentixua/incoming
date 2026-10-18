@@ -86,6 +86,55 @@ class HearingModelTest {
         assertTrue(HearingModel.loudnessLoss(20) < 10);
     }
 
+    /** Энергия фронта, у которой сдвиг через 2 минуты — {@code shift} дБ. */
+    private static double exposureFor(double shift) {
+        double trauma = HearingModel.exposure(5 * PSI);
+        return HearingModel.ONSET_EXPOSURE + shift / 50 * (trauma - HearingModel.ONSET_EXPOSURE);
+    }
+
+    /**
+     * Волны в пределах 2 минут — одна доза (энергии складываются: две равные — +3 дБ энергии); позже у каждой своя прямая,
+     * и слабая поздняя волна не сокращает сильной ранней, а сильная поздняя — своя, с начала.
+     */
+    @Test
+    void severalWavesAddWithinTwoMinutesAndKeepTheLongestRecovery() {
+        HearingModel.Ear ear = new HearingModel.Ear();
+        double e = exposureFor(30);
+        ear.blast(e, 0);
+        ear.blast(e, 1 / 60.0);
+        assertEquals(HearingModel.shift(e + 10 * Math.log10(2)), ear.shift(1 / 60.0 + HearingModel.FIRST_HOURS), 1e-9);
+        assertTrue(HearingModel.shift(e + 10 * Math.log10(2)) > 38);
+
+        // 40 дБ и через полминуты 45 — одна доза сильнее 45: восстановление дольше, чем у 45 (22,6 ч)
+        ear = new HearingModel.Ear();
+        ear.blast(exposureFor(40), 0);
+        ear.blast(exposureFor(45), 0.5 / 60);
+        assertTrue(ear.shift(0.5 / 60 + HearingModel.recoveryHours(45)) > 0);
+
+        // 60 дБ, через 10 часов 15 — сдвиг идёт по прямой 60 дБ до её конца (64 ч)
+        ear = new HearingModel.Ear();
+        ear.blast(exposureFor(60), 0);
+        ear.blast(exposureFor(15), 10);
+        assertEquals(HearingModel.shiftAfter(60, 26), ear.shift(26), 1e-9);
+        assertEquals(HearingModel.shiftAfter(60, 63), ear.shift(63), 1e-9);
+        assertTrue(ear.shift(63) > 0);
+
+        // 20 дБ, через час 50 — с 50, с начала
+        ear = new HearingModel.Ear();
+        ear.blast(exposureFor(20), 0);
+        ear.blast(exposureFor(50), 1);
+        assertEquals(50, ear.shift(1 + HearingModel.FIRST_HOURS), 1e-9);
+        assertEquals(0, ear.shift(1 + HearingModel.recoveryHours(50) + 0.01), 0);
+        assertTrue(!ear.any());
+
+        // две волны чуть тише порога рядом — вместе выше
+        ear = new HearingModel.Ear();
+        ear.blast(HearingModel.ONSET_EXPOSURE - 1, 0);
+        assertEquals(0, ear.shift(0), 0);
+        ear.blast(HearingModel.ONSET_EXPOSURE - 1, 0.5 / 60);
+        assertTrue(ear.shift(0.5 / 60 + HearingModel.FIRST_HOURS) > 0);
+    }
+
     @Test
     void normalDistribution() {
         assertEquals(0.5, HearingModel.normal(0), 1e-7);

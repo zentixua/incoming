@@ -147,6 +147,16 @@ public final class Outdoor {
         return (float) Math.min(1, Math.pow(10, -extra / 20));
     }
 
+    /**
+     * Доля верхов против низов, которую по дороге потеряло само давление ударной волны: преграда и зона тени, без
+     * земли. У волны отражение от земли — уже в её давлении (у земли — одна волна с отражённой, ножка Маха), а не
+     * встречная интерференция звука над мягкой землёй, как у {@link #highs}.
+     */
+    public static float pressureHighs(Path p) {
+        double extra = obstacle(true, p) + shadow(true, p) - obstacle(false, p) - shadow(false, p);
+        return (float) Math.min(1, Math.pow(10, -extra / 20));
+    }
+
     public static Heard hear(double r0, double v640, Path p) {
         return new Heard(volume(r0, v640, p), highs(p), margin(r0, p), obstacle(false, p), shadow(false, p), masking(p),
                 ground(true, p) - ground(false, p));

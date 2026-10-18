@@ -1,5 +1,9 @@
 package ua.zentix.incoming.nuclear.model;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 /**
  * Слух после ударной волны: временный сдвиг порога слышимости (TTS), его восстановление, разрыв барабанных перепонок.
  * <ul>
@@ -38,8 +42,10 @@ public final class HearingModel {
     static final double RUPTURE_ONSET_KPA = BlastModel.kpa(5);
     /** Доля сдвига верхов на низах. */
     static final double LOW_SHARE = 1 / 3.0;
-    /** Восстановление: от скольких часов идёт прямая (2 минуты) и за сколько проходит сдвиг до 40 дБ. */
-    static final double FIRST_HOURS = 2 / 60.0, FULL_HOURS = 16, SLOW_FROM = 40;
+    /** С какого часа идёт прямая восстановления (2 минуты); волны в пределах стольких часов — одна доза ({@link Ear}). */
+    public static final double FIRST_HOURS = 2 / 60.0;
+    /** Восстановление: за сколько часов проходит сдвиг до {@code SLOW_FROM} дБ. */
+    static final double FULL_HOURS = 16, SLOW_FROM = 40;
     /** Перепонки: медиана, psi; 1 % — при 5 psi (z = −2,326). */
     static final double RUPTURE_MEDIAN_PSI = 15, RUPTURE_SIGMA = Math.log(3) / 2.326;
     /** Кондуктивная потеря при разрыве, дБ: низы и верха. */
@@ -109,5 +115,56 @@ public final class HearingModel {
         double poly = t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
         double tail = Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI) * poly;
         return z >= 0 ? 1 - tail : tail;
+    }
+
+    /**
+     * Волны у одного уха. Волны в пределах 2 минут (часов {@link #FIRST_HOURS}) — одна доза: энергии складываются (равная
+     * энергия, ISO 1999), сдвиг — от суммы и с последней. Дальше у каждой дозы своя прямая восстановления, а сдвиг —
+     * наибольший из них: вторая доза поверх ещё не прошедшего сдвига его не сокращает и не складывается с ним
+     * (приближение: данных о сложении сдвигов от разных доз нет).
+     */
+    public static final class Ear {
+        /** Больше стольких доз не держим: уходит та, у которой сдвиг сейчас меньше. */
+        private static final int MOST = 16;
+        /** Доза: энергия, дБ·с, и час её последней волны. */
+        private final List<double[]> doses = new ArrayList<>();
+
+        /** Волна с энергией слышимого фронта {@code exposure}, дБ·с, в час {@code hour} часов слуха. */
+        public void blast(double exposure, double hour) {
+            double e = exposure;
+            for (Iterator<double[]> it = doses.iterator(); it.hasNext(); ) {
+                double[] d = it.next();
+                if (hour - d[1] > FIRST_HOURS) continue;
+                e = 10 * Math.log10(Math.pow(10, e / 10) + Math.pow(10, d[0] / 10));
+                it.remove();
+            }
+            doses.add(new double[]{e, hour});
+            if (doses.size() > MOST) {
+                double[] least = doses.get(0);
+                for (double[] d : doses) if (shiftAfter(HearingModel.shift(d[0]), hour - d[1]) < shiftAfter(HearingModel.shift(least[0]), hour - least[1])) least = d;
+                doses.remove(least);
+            }
+        }
+
+        /** Сдвиг верхов в час {@code hour}, дБ; прошедшие дозы уходят (кроме тех, с которыми ещё сложится новая волна). */
+        public double shift(double hour) {
+            double most = 0;
+            for (Iterator<double[]> it = doses.iterator(); it.hasNext(); ) {
+                double[] d = it.next();
+                double s = shiftAfter(HearingModel.shift(d[0]), hour - d[1]);
+                if (s <= 0 && hour - d[1] > FIRST_HOURS) it.remove();
+                else most = Math.max(most, s);
+            }
+            return most;
+        }
+
+        /** Есть ли ещё дозы. */
+        public boolean any() {
+            return !doses.isEmpty();
+        }
+
+        public void clear() {
+            doses.clear();
+        }
     }
 }

@@ -7,6 +7,7 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
+import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.Detonation;
@@ -323,6 +324,7 @@ public final class ClientNuclear {
         Deafness.tick(level);
         NukeDust.tick();
         NukePall.tick(level, eye);
+        SoundFilters.loops();
         Geiger.tick();
     }
 

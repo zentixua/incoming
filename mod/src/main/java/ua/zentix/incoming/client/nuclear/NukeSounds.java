@@ -299,23 +299,25 @@ public final class NukeSounds {
             float tone = psi >= 1 ? 0.75f : 1;
             // эхо и удар фронта ждут настоящего начала прямого удара: ожидание — до play (с готовым буфером звук стартует сразу)
             SoundInstance direct = ClientSounds.loudShot(ModSounds.NUKE_BOOM_FAR.get(), b, v, tone, boom, 1, highs);
+            // звуки самой волны слышит ухо, каким оно было до неё (слух — в конце, hurtEars)
+            Deafness.before(direct);
             if (echoes != null) echoes.expect(arrivalTick, direct);
             if (psi >= 1) {
                 Vec3 side = new Vec3(b.z - ear.z, 0, ear.x - b.x).normalize().scale(40);
-                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b, v, 1);
-                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.add(side), v, 0.92f);
-                ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.subtract(side), v, 0.85f);
+                Deafness.before(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b, v, 1));
+                Deafness.before(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.add(side), v, 0.92f));
+                Deafness.before(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.subtract(side), v, 0.85f));
                 ClientSounds.start(direct);
-                ClientSounds.atEarLoud(ModSounds.BLAST_NEAR.get(), b, v, 0.55f);
+                Deafness.before(ClientSounds.atEarLoud(ModSounds.BLAST_NEAR.get(), b, v, 0.55f));
             } else if (v >= AUDIBLE) {
                 OwnSources.Anchor start = OwnSources.anchor(this, direct, a::ticks, arrivalTick);
                 // холм и зона тени срезают верха и у скачка; воздух — нет: крутизну скачка держит сама волна
                 float front = path == null || !IncomingConfig.CLIENT.soundMuffling.get() ? 1 : Outdoor.highs(path);
                 riseMs = 1000 * BlastPulse.riseSeconds(pa);
                 pulse = OwnSources.play(this, start, 0, Math.atan2(b.z - ear.z, b.x - ear.x), v,
-                        BlastPulse.render(pa, phaseTicks / 20, front), BlastPulse.RATE, true);
+                        BlastPulse.render(pa, phaseTicks / 20, front), BlastPulse.RATE, true, true);
                 // своих источников нет (заняты, OpenAL не готов) — запись удара
-                if (!pulse) ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, v, 1, boom);
+                if (!pulse) Deafness.before(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, v, 1, boom));
                 ClientSounds.start(direct);
             }
             if (echoes != null) echoes.arrive(ear, v, tone);
@@ -326,17 +328,18 @@ public final class NukeSounds {
                 wind(ear, 0);
                 mc.getSoundManager().play(wind);
             }
-            if (psi >= GLASS_PSI) ClientSounds.atEar(ModSounds.NUKE_GLASS.get(), ear.add(0, 2, 0), (float) Mth.clamp(psi / 3, 0.3, 0.9), 1);
+            if (psi >= GLASS_PSI) Deafness.before(ClientSounds.atEar(ModSounds.NUKE_GLASS.get(), ear.add(0, 2, 0), (float) Mth.clamp(psi / 3, 0.3, 0.9), 1));
             if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(pa, path);
         }
 
         /**
          * Слух: энергия слышимого фронта у уха ({@link HearingModel#exposure}) — за вычетом того, что съел путь: холм и зона
-         * тени гасят давление и сильнее верха, а A-энергия фронта — на 1–3 кГц, поэтому на потерю низов и долю верхов.
-         * Перепонки — по давлению с потерей пути. В доме — как снаружи: окна давно выбиты (0,34 psi), волна входит в дом.
+         * тени гасят давление и сильнее верха, а A-энергия фронта — на 1–3 кГц, поэтому на потерю низов и долю верхов
+         * ({@link Outdoor#pressureHighs}: без земли — у волны отражение от неё уже в давлении). Перепонки — по давлению с
+         * потерей пути. В доме — как снаружи: окна давно выбиты (0,34 psi), волна входит в дом.
          */
         private void hurtEars(double pa, Outdoor.@Nullable Path path) {
-            double lost = path == null ? 0 : Outdoor.pressureLoss(path), highs = path == null ? 1 : Outdoor.highs(path);
+            double lost = path == null ? 0 : Outdoor.pressureLoss(path), highs = path == null ? 1 : Outdoor.pressureHighs(path);
             Deafness.blast(HearingModel.exposure(pa) - lost + 20 * Math.log10(Math.max(1e-3, highs)), pa / 1000 * Math.pow(10, -lost / 20), d.seed());
         }
 

@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.sound;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.ChannelAccess;
+import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.player.Player;
@@ -55,6 +56,11 @@ public final class SoundFilters {
      * тик, и его доля — отсюда. Только звуковой поток; ключи слабые — звук забыт, запись уходит.
      */
     private static final Map<SoundInstance, float[]> SPR_AT_START = new WeakHashMap<>();
+    /**
+     * Чужие петли (вода и Незер вокруг, маяк, вагонетка, петли модов), которым сейчас стоит наш фильтр, и какой: его
+     * ведёт {@link #loops}. Только поток клиента; ключи слабые.
+     */
+    private static final Map<SoundInstance, float[]> LOOPS = new WeakHashMap<>();
 
     private SoundFilters() {}
 
@@ -157,16 +163,16 @@ public final class SoundFilters {
             gain = m.lowpassGain();
             highs = m.lowpassHighs();
         }
-        // оглушение: только короткие звуки — фильтр остаётся на источнике до конца, а петли мы ведём сами
-        if (!(sound instanceof Muffled) && sound.isLooping()) return;
         float m = NukePall.muffle(sound);
         gain *= Deafness.gain(sound) * (1 - 0.3f * m);
         highs *= Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
         boolean ours = gain < 0.999f || highs < 0.999f;
+        // петли ведём каждый тик (наши — хозяин, чужие — loops): их фильтр Sound Physics нужен и потом
+        boolean kept = sound instanceof Muffled || sound.isLooping();
         // Sound Physics Remastered поставил свой фильтр этому звуку только что (в начале Channel.play, событие — сразу
         // после него, в той же задаче звукового потока): наш — поверх его, а не вместо
-        float[] spr = ours || sound instanceof Muffled ? Spr.now() : null;
-        if (spr != null && sound instanceof Muffled) SPR_AT_START.put(sound, spr);
+        float[] spr = ours || kept ? Spr.now() : null;
+        if (spr != null && kept) SPR_AT_START.put(sound, spr);
         if (ours) {
             if (spr != null) {
                 gain *= spr[0];
@@ -187,6 +193,33 @@ public final class SoundFilters {
             if (spr != null) set(channel.source, g * spr[0], h * spr[1]);
             else set(channel.source, g, h);
         });
+    }
+
+    /**
+     * Тик клиента: фильтр оглушения и пелены на чужих петлях. Фильтр на источнике остаётся до конца звука, а петля
+     * звучит, пока её не снимут: начатая до волны, она звучала бы чисто часы оглушения, а начатая в оглушении — глухо и
+     * после. Ставится, пока он не 1, и один раз — когда снова 1 (фильтр Sound Physics с её старта — обратно); новые
+     * оценки Sound Physics для таких петель ({@code updateMovingSounds}) он, пока стоит, перекрывает, как у наших петель.
+     */
+    public static void loops() {
+        SoundEngine engine = Minecraft.getInstance().getSoundManager().soundEngine;
+        for (Map.Entry<SoundInstance, ChannelAccess.ChannelHandle> e : engine.instanceToChannel.entrySet()) {
+            SoundInstance sound = e.getKey();
+            if (sound instanceof Muffled || !sound.isLooping()) continue;
+            float m = NukePall.muffle(sound);
+            float g = Deafness.gain(sound) * (1 - 0.3f * m), h = Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
+            boolean on = g < 0.999f || h < 0.999f;
+            float[] was = LOOPS.get(sound);
+            if (!on && was == null) continue;
+            if (on) LOOPS.put(sound, new float[]{g, h});
+            else LOOPS.remove(sound);
+            e.getValue().execute(channel -> {
+                float[] spr = SPR_AT_START.get(sound);
+                if (spr != null) set(channel.source, g * spr[0], h * spr[1]);
+                else if (on) set(channel.source, g, h);
+                else AL10.alSourcei(channel.source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
+            });
+        }
     }
 
     /**
