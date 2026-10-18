@@ -10,7 +10,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Cow;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Items;
@@ -59,6 +61,7 @@ import org.jetbrains.annotations.Nullable;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
+import ua.zentix.incoming.nuclear.radiation.BurnsEffect;
 import ua.zentix.incoming.nuclear.radiation.MobFallout;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
@@ -1465,7 +1468,7 @@ public final class NuclearGameTests {
      * Свет и проникающая радиация — не в тике подрыва, а под бюджетом, ближние первыми: сразу после подрыва
      * 40 коров в 300 м (1 кт, 1 блок = 10 м) ещё целы, потом импульс проходит по всем за несколько тиков, ни один
      * тик не выходит за бюджет (считающие часы, как в {@link #detonationRunsBudgetedQueue}). 31 кал/см² на открытом
-     * месте — смертельные ожоги.
+     * месте — ожог 3-й степени на всей стороне к шару: ожоговый шок.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_pulse", skyAccess = true)
     public static void lightPulseRunsUnderBudget(GameTestHelper h) {
@@ -1484,12 +1487,17 @@ public final class NuclearGameTests {
         int budgetMs = IncomingConfig.SERVER.nukeTimeBudgetMs.get();
         h.succeedWhen(() -> {
             h.assertTrue(w.pulseJobs() == 0, "импульс ещё идёт");
-            long alive = cows.stream().filter(Cow::isAlive).count();
-            h.assertTrue(alive == 0, "живых коров в 300 м: " + alive);
+            long whole = cows.stream().filter(c -> c.isAlive() && !shocked(c)).count();
+            h.assertTrue(whole == 0, "коров в 300 м без ожогового шока: " + whole);
             h.assertTrue(clock.maxUnitsPerTick() <= budgetMs, "за тик " + clock.maxUnitsPerTick() + " единиц по 1 мс при бюджете " + budgetMs + " мс");
             NuclearWorld.useClock(level.getServer(), new WorkClock());
             NuclearStrikes.clear(level);
         });
+    }
+
+    private static boolean shocked(LivingEntity e) {
+        MobEffectInstance burns = e.getEffect(ModEffects.BURNS);
+        return burns != null && burns.getAmplifier() == BurnsEffect.SHOCK;
     }
 
     /**
