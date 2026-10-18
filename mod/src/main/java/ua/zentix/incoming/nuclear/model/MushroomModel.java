@@ -147,6 +147,18 @@ public final class MushroomModel {
     }
 
     /**
+     * Доля грунта в веществе шапки 0..1. Шар касается земли (наземный подрыв; воздушный — не выше радиуса шара) — потоки
+     * под шапкой втягивают в неё поднятую землю, и остывшее облако бурое от пыли; выше двух радиусов в шапке только
+     * конденсат и пары бомбы, и она белеет, как обычное облако (G&D 2.08); между — плавно, как у ножки, что догоняет
+     * шапку ({@link #shape}).
+     */
+    public static double soil(double yieldKt, double hobM, boolean surface) {
+        if (surface) return 1;
+        double rf = FireballModel.maxRadius(yieldKt, false);
+        return 1 - smooth(rf, 2 * rf, Math.max(0, hobM));
+    }
+
+    /**
      * Гриб в момент t (секунды после подрыва) у подрыва мощностью {@code yieldKt} на высоте {@code hobM} над землёй;
      * {@code groundFrontM} — докуда по земле дошёл фронт (у клиента — по его профилю фронта). Шапка — огненный шар
      * ({@link FireballModel#radius}, {@link FireballModel#centreHeight}), который по {@link #rollUp} сворачивается в кольцо

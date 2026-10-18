@@ -724,8 +724,6 @@ float gSootSun;
 vec3 gFlame;
 float gPixel;
 float gJitter;
-// ослабление воздуха по погоде, 1/блок (слот: [3].w) — дымка вдали, как у гриба (mushAir)
-float gAir;
 // смерчи: свет и пропускание каждого и где луч в него входит (main); так же — проходы облака Вильсона (по два на слот)
 mat4 gWhirlLight;
 vec4 gWhirlIn;
@@ -740,10 +738,10 @@ float gTauEye;
 
 // Вещество с непрозрачностью 1 − tr и светом l (уже × непрозрачность) в t от глаза — в луч. Пелену, смерчи и облако
 // Вильсона глаз видит и там, где гриб растаял в дымке (lost): их свет — с долей transmit + lost. Дымка воздуха до t
-// (как у гриба, mushAir) берёт долю 1 − air их непрозрачности: там видно то, что за всем лучом, — в lost; пропускание
+// (как у гриба, pallAir) берёт долю 1 − air их непрозрачности: там видно то, что за всем лучом, — в lost; пропускание
 // по лучу остаётся настоящим
 void passMatter(float t, vec3 l, float tr, inout vec3 light, inout float transmit, inout float lost) {
-    float air = exp(-gAir * t), seen = transmit + lost;
+    float air = pallAir(t, gDir.y), seen = transmit + lost;
     light += seen * air * l;
     lost = lost * tr + seen * (1.0 - air) * (1.0 - tr);
     transmit *= tr;
@@ -1115,7 +1113,6 @@ void main() {
     vec2 span = pallBox(dir, PallMin, PallMax);
     float jitter = fract(texelFetch(Sampler2, ivec2(mod(low, 64.0)), 0).r + PallFrame.x * 0.618034);
     gJitter = jitter;
-    gAir = PallSlot0[1].w > 0.5 ? PallSlot0[3].w : PallSlot1[3].w;
     if (scene < 1e8) {
         scene /= axis;
     } else if (span.y > span.x) {
@@ -1144,7 +1141,7 @@ void main() {
     vec3 whirlFlame = max(gFlame, WHIRL_FIRE_LINEAR);
     vec3 light = vec3(0.0);
     float transmit = 1.0;
-    // доля, которую закрыл бы гриб, но съела дымка воздуха до него (mushAir): там видно то, что за всем лучом (небо, мир
+    // доля, которую закрыл бы гриб, но съела дымка воздуха до него (pallAir): там видно то, что за всем лучом (небо, мир
     // вдали), а не глубина самого гриба — пропускание по лучу остаётся настоящим, и задние клубы за передними не видны
     float lost = 0.0;
     // смерчи: отрезок луча и свет каждого — заранее, в луч пелены — когда шаг дойдёт до входа (до мира за пикселем)
@@ -1289,9 +1286,8 @@ void main() {
                 ds = clamp(0.5 / r.w, dsMin, dsMax);
                 ds = min(ds, m1 - tm);
                 passesBefore(tm, light, transmit, lost);
-                // дымка воздуха до шага (mushAir; погода и масштаб — одни на все грибы): свет и непрозрачность гриба вдали тают в
-                // небе за ним
-                float tr = exp(-r.w * ds), air = mushAir(gMush[0], tm);
+                // дымка воздуха до шага (pallAir): свет и непрозрачность гриба вдали тают в небе за ним
+                float tr = exp(-r.w * ds), air = pallAir(tm, dir.y);
                 light += transmit * air * r.rgb * (1.0 - tr) / r.w;
                 lost += transmit * (1.0 - air) * (1.0 - tr);
                 transmit *= tr;

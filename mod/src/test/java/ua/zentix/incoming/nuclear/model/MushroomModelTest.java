@@ -56,6 +56,22 @@ class MushroomModelTest {
      * нет и доли процента дня.
      */
     @Test
+    void capCarriesSoilOnlyWhenTheBallTouchesTheGround() {
+        double rf = FireballModel.maxRadius(2, false);
+        assertEquals(1, MushroomModel.soil(2, 0, true), 0);
+        assertEquals(1, MushroomModel.soil(2, 500, true), 0, "наземный — всегда с грунтом");
+        assertEquals(1, MushroomModel.soil(2, rf, false), 1e-12, "шар касается земли");
+        // 2 кт на 302 м (шар 92 м): в шапке только конденсат — остывшая она белая
+        assertEquals(0, MushroomModel.soil(2, 302, false), 0);
+        double last = 1;
+        for (double h = 0; h <= 3 * rf; h += rf / 16) {
+            double s = MushroomModel.soil(2, h, false);
+            assertTrue(s <= last, "выше — грунта не больше: " + h);
+            last = s;
+        }
+    }
+
+    @Test
     void ballLightsItsSurroundings() {
         MushroomModel.Shape s = MushroomModel.shape(1, 15, 0, true, 300);
         double surface = BlackBody.luminance(MushroomModel.edgeTemperature(1, 15, true));

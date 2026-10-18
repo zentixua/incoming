@@ -18,7 +18,7 @@
 //   8 = (середина юбки по земле; её полуширина; высота; ослабление, 1/блок)
 //   9 = (ω' юбки rgb; g')
 //  10 = (воздух вокруг, K; перепад температуры ядра, K; низ шапки; плитка клубов ножки)
-//  11 = (подъём клубов ножки, блоки; верх дыма пожаров; радиус зоны пожаров; ослабление воздуха, 1/блок — дымка вдали)
+//  11 = (подъём клубов ножки, блоки; верх дыма пожаров; радиус зоны пожаров; 0)
 //  12 = (свет пожаров под грибом rgb, как у пелены: карта огня шторма и свет кадра; часы кипения шапки, рад)
 //  13 = (середина стенки столба воды по радиусу; её полутолщина; верх стенки — середина короны; ослабление, 1/блок;
 //        0 — столба нет)
@@ -112,7 +112,6 @@ struct Mush {
     float stemRise;
     float fireTop;
     float fireR;
-    float airSigma;
     vec3 fire;
     float churn;
     float colMid;
@@ -137,7 +136,7 @@ Mush mushLoad(sampler2D data, int k) {
     // эпицентр в таблице — x, z и земля по y (как у слота пелены): в место — x, y, z
     return Mush(t0.xzy, t1.xy, t1.z, t1.w, t2.x, t2.y, t2.z, t2.w, t3.x, t3.y, t3.z, t3.w, t4.x, t4.y, t4.z, t4.w,
             texelFetch(data, ivec2(5, k), 0), t6.x, t6.y, t6.z, t6.w, texelFetch(data, ivec2(7, k), 0), t8.x, t8.y, t8.z, t8.w,
-            texelFetch(data, ivec2(9, k), 0), t10.x, t10.y, t10.z, t10.w, t11.x, t11.y, t11.z, t11.w, t12.rgb, t12.w,
+            texelFetch(data, ivec2(9, k), 0), t10.x, t10.y, t10.z, t10.w, t11.x, t11.y, t11.z, t12.rgb, t12.w,
             t13.x, t13.y, t13.z, t13.w, texelFetch(data, ivec2(14, k), 0), t15.x, t15.y, t15.z, t15.w, t16.x, t16.y);
 }
 
@@ -415,12 +414,6 @@ vec3 mushBlackBody(sampler2D data, float kelvin) {
     return texture(data, vec2(x, (float(MUSH_BB_ROW) + 0.5) / size.y)).rgb;
 }
 
-// Дымка воздуха до гриба на расстоянии d, блоки (Кошмидер, по погоде мира — как у всего дальнего, Sight): гриб тает
-// в небе за ним — его свет и непрозрачность × эта доля, а не цвет тумана
-float mushAir(Mush m, float d) {
-    return exp(-m.airSigma * d);
-}
-
 // Пропускание гриба k вдоль луча dir на [0, len] без шума (steps шагов) — квадраты слоя перед частицей
 float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
     float through = 1.0;
@@ -434,8 +427,9 @@ float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
         for (int i = 0; i < steps; i++) {
             tau += dot(mushMean(m, mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds))), vec4(1.0)) * ds;
         }
-        // гриб в дымке воздуха тает в небе за ним (mushAir): то, что за ним, видно сильнее
-        through *= 1.0 - mushAir(m, 0.5 * (span.x + span.y)) * (1.0 - exp(-tau));
+        // гриб в дымке воздуха тает в небе за ним (pallAir): его свет и непрозрачность × доля, дошедшая через воздух, а не
+        // цвет тумана — то, что за ним, видно сильнее
+        through *= 1.0 - pallAir(0.5 * (span.x + span.y), dir.y) * (1.0 - exp(-tau));
     }
     return through;
 }

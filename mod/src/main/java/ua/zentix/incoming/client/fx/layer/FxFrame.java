@@ -16,7 +16,6 @@ public final class FxFrame {
     public final Vec3 cam;
     public final FrustumIntersection frustum;
     private final FarView view;
-    private final double range;
     private final float fogStart, fogEnd;
     private final boolean cylinder;
 
@@ -24,15 +23,17 @@ public final class FxFrame {
         this.cam = view.camera();
         this.frustum = frustum;
         this.view = view;
-        this.range = view.range();
         this.fogStart = fog.start;
         this.fogEnd = fog.end;
         this.cylinder = fog.shape == FogShape.CYLINDER;
     }
 
-    /** Сколько света частицы доходит через воздух ({@link Sight#transmittance}): та же дымка, что у дальней картинки. */
-    public float haze(double d) {
-        return (float) Sight.transmittance(d, range);
+    /**
+     * Сколько света частицы в d блоках, на dy выше глаза, доходит через воздух ({@link FarView#air}): та же дымка, что у
+     * дальней картинки.
+     */
+    public float haze(double d, double dy) {
+        return (float) view.air(d, dy);
     }
 
     /**

@@ -164,8 +164,8 @@ class MushroomGlslTest {
     @Test
     void shadowCutLosesUnderAPercent() {
         double dark = constants().get("MUSH_SHADOW_DARK"), dust = PallLight.truncated(MushroomField.G);
-        // вещество гриба — с асимметрией пыли пелены, столб воды — капель
-        double[][] matter = {{MushroomField.CAP_YOUNG, dust}, {MushroomField.CAP_OLD, dust}, {MushroomField.STEM, dust}, {MushroomField.SKIRT, dust},
+        // вещество гриба — с асимметрией пыли пелены, остывшая шапка и столб воды — капель
+        double[][] matter = {{MushroomField.CAP_YOUNG, dust}, {MushroomField.CAP_DUSTY, dust}, {MushroomField.STEM, dust}, {MushroomField.SKIRT, dust},
                 {MushroomField.STEAM, dust}, {CloudPuffs.SPRAY, dust}, {CloudPuffs.SPRAY, PallLight.truncated(MushroomField.G_WATER)}};
         for (double[] at : matter) {
             int rgb = (int) at[0];

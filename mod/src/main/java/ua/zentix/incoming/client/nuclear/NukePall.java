@@ -181,10 +181,12 @@ public final class NukePall {
         if (all.isEmpty()) return null;
         PallPass.Quality q = quality();
         PallPass.Frame f = FRAME;
-        double air = Sight.KOSCHMIEDER / Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
+        double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial)), air = Sight.KOSCHMIEDER / range;
+        // воздух до грибов, пелены и стены — в метрах модели (масштаб у всех подрывов один)
+        MushroomField.air(all.get(0).d, eye, range, f.air);
         // свет кадра — до грибов: днём в кадр идёт и гриб, чья тень в нём (MushroomField.frame)
         light(level, eye, partial, f);
-        f.mushroomCount = MushroomField.frame(all, eye, partial, frustum, air, f.sun, level.getMinBuildHeight(), level.getMaxBuildHeight(), f.mushrooms);
+        f.mushroomCount = MushroomField.frame(all, eye, partial, frustum, f.sun, level.getMinBuildHeight(), level.getMaxBuildHeight(), f.mushrooms);
         // свет шаров на мире — от всех подрывов: шар за спиной освещает землю перед глазом
         openSky(level, f.openSky, f.faceShade);
         double open = 0.2126 * PallLight.linear(f.openSky.x) + 0.7152 * PallLight.linear(f.openSky.y) + 0.0722 * PallLight.linear(f.openSky.z);
@@ -214,7 +216,7 @@ public final class NukePall {
         f.max.set(-Float.MAX_VALUE);
         int k = 0;
         float bottom = (float) (level.getMinBuildHeight() - eye.y);
-        for (int i = 0; i < visible.size() && k < 2; i++) if (slot(visible.get(i), k, eye, partial, frustum, bottom, air, f)) SLOTTED[k++] = visible.get(i);
+        for (int i = 0; i < visible.size() && k < 2; i++) if (slot(visible.get(i), k, eye, partial, frustum, bottom, f)) SLOTTED[k++] = visible.get(i);
         if (k == 0 && f.mushroomCount == 0 && !f.ballsLit) return null;
         // без пелены — рамка нулевая: луч в неё не входит (перевёрнутая рамка вышла бы всем лучом)
         if (k == 0) {
@@ -264,9 +266,8 @@ public final class NukePall {
      * или воды ({@link PallGround}), — того нет и в таблице: подрыв посреди моря, когда брызги выпали, а волна растаяла,
      * слота не занимает. {@code bottom} — низ мира от глаза: в кадре подрыв и тогда, когда видна только земля под пеленой,
      * — днём на ней тень пелены ({@code fx_pall_composite}), а долина или карьер под эпицентром бывают глубже низа пелены.
-     * {@code air} — ослабление воздуха по погоде, 1/м ({@code Sight}): пелена вдали тает в дымке, как гриб.
      */
-    private static boolean slot(ClientNuclear.Active a, int k, Vec3 eye, float partial, FrustumIntersection frustum, float bottom, double air,
+    private static boolean slot(ClientNuclear.Active a, int k, Vec3 eye, float partial, FrustumIntersection frustum, float bottom,
                                 PallPass.Frame f) {
         Detonation d = a.d;
         PallField p = a.pall;
@@ -310,7 +311,7 @@ public final class NukePall {
         m.m00(cx).m01(cz).m02(ground).m03((float) p.reach());
         m.m10((float) DRIFT[0]).m11((float) DRIFT[1]).m12((float) plume).m13(1);
         m.m20((float) Math.cos(d.windDir())).m21((float) Math.sin(d.windDir())).m22((2 * k + 0.5f) / PallPass.ROWS).m23((2 * k + 1.5f) / PallPass.ROWS);
-        m.m30((float) (PallField.SIGMA_DENSE / d.scale())).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0)).m33((float) (air / d.scale()));
+        m.m30((float) (PallField.SIGMA_DENSE / d.scale())).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0)).m33(0);
         // вода слота: базисная волна и есть ли под пеленой вода (иначе шейдер карту воды не читает)
         (k == 0 ? f.water0 : f.water1).set((float) SURGE[0], (float) SURGE[1], (float) SURGE[2], water ? 1 : 0);
         // свет шара и пожаров на пыли (CloudPuffs.pallLight)

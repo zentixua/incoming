@@ -50,9 +50,46 @@ public final class Sight {
         return 1 / sigma;
     }
 
-    /** Доля света (и собственного контраста тёмного), дошедшая через d блоков воздуха. */
+    /** Доля света (и собственного контраста тёмного), дошедшая через d блоков воздуха у уровня моря вдоль земли. */
     public static double transmittance(double d, double range) {
         return Math.exp(-KOSCHMIEDER * d / range);
+    }
+
+    /**
+     * Ослабление чистого воздуха (рассеяние Рэлея) у уровня моря, 1/м: 550 нм (Bucholtz 1995) — без дымки видно на 340 км.
+     * Остальное ослабление по дальности видимости — дымка (аэрозоль и капли).
+     */
+    public static final double RAYLEIGH = 1.16e-5;
+    /**
+     * Масштабы высоты, м: дымка — в нижних километрах (пограничный слой; Elterman 1968, как у неба в движках — Nishita
+     * 1993), чистый воздух — плотность атмосферы. Дальность видимости — у земли: на шапку гриба в 5 км луч идёт почти
+     * над всей дымкой, и равная по всей высоте дымка прятала бы её втрое сильнее настоящей.
+     */
+    public static final double HAZE_HEIGHT = 1200, AIR_HEIGHT = 8000;
+
+    /**
+     * Воздух от глаза: ослабление у глаза, 1/м, — дымка {@code haze} и чистый воздух {@code clean} ({@link #at}).
+     */
+    public record Air(double haze, double clean) {
+        /** У глаза на высоте {@code eye} м над уровнем моря (ниже — как на нём): у моря сумма — 3,912 / range. */
+        public static Air at(double eye, double range) {
+            double h = Math.max(0, eye), total = KOSCHMIEDER / range, air = Math.min(RAYLEIGH, total);
+            return new Air((total - air) * Math.exp(-h / HAZE_HEIGHT), air * Math.exp(-h / AIR_HEIGHT));
+        }
+
+        /**
+         * Доля света, дошедшая через d м до точки на {@code rise} м выше глаза (ниже — меньше нуля): дымка и чистый воздух
+         * редеют с высотой ({@link Sight#HAZE_HEIGHT}, {@link Sight#AIR_HEIGHT}); вдоль земли у моря — как
+         * {@link Sight#transmittance(double, double)}.
+         */
+        public double transmittance(double d, double rise) {
+            return Math.exp(-d * (haze * along(rise / HAZE_HEIGHT) + clean * along(rise / AIR_HEIGHT)));
+        }
+    }
+
+    /** Средняя по отрезку доля ослабления у его начала, когда отрезок поднимается на x масштабов высоты: (1 − e^−x) / x. */
+    static double along(double x) {
+        return Math.abs(x) < 1e-4 ? 1 - 0.5 * x : -Math.expm1(-x) / x;
     }
 
     /**

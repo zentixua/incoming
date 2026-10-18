@@ -400,7 +400,7 @@ public final class FarBlasts {
     private static void light(Event e, FarView view, FarSprites out, FxLights lights, double age, double bx, double by, double bz, double d, double w,
                               double line) {
         Look k = e.look;
-        double t = Sight.transmittance(d, view.range());
+        double t = view.air(d, by);
         if (k.fireball() <= 0 || t < Sight.THRESHOLD) return;
         double r = k.fireball();
         if (age < k.ballTicks()) {
@@ -526,7 +526,7 @@ public final class FarBlasts {
         double r = k.fireball();
         if (r <= 0 || age >= Math.max(k.flashTicks(), k.ballTicks()) || Double.isNaN(view.clouds())) return;
         double h = Math.max(SKY_LOW, view.clouds() - e.y), rs = SKY_SPREAD * h, share = e.near ? smoothstep(rs, 3 * rs, d) : 1;
-        double gy = by + h, dc = Math.sqrt(bx * bx + gy * gy + bz * bz), t = Sight.transmittance(dc, view.range());
+        double gy = by + h, dc = Math.sqrt(bx * bx + gy * gy + bz * bz), t = view.air(dc, gy);
         if (share <= 0 || t < Sight.THRESHOLD) return;
         double vis = visible(h, rs, line);
         if (vis <= 0) return;
@@ -578,7 +578,7 @@ public final class FarBlasts {
             double shear = 0.3 + 0.7 * f * rise;
             double px = bx + e.ox[i] * r * SPREAD + windX * shear, py = by + h, pz = bz + e.oz[i] * r * SPREAD + windZ * shear;
             double d = Math.sqrt(px * px + py * py + pz * pz);
-            double t = Sight.transmittance(d, view.range());
+            double t = view.air(d, py);
             if (t < Sight.THRESHOLD) continue;
             // глаз входит в клуб — клуб тает: квадрат клуба в десятки блоков у самой камеры закрывал бы весь экран и гас
             // рывком, когда глаз проходит его середину
