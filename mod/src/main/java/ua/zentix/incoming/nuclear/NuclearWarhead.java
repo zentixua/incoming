@@ -3,7 +3,6 @@ package ua.zentix.incoming.nuclear;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -12,7 +11,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -27,11 +25,11 @@ import ua.zentix.incoming.nuclear.model.PromptRadiationModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.Yield;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
+import ua.zentix.incoming.nuclear.radiation.Shielding;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEffects;
-import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.UUID;
@@ -71,7 +69,7 @@ public final class NuclearWarhead {
         RandomSource random = SCENARIO ? RandomSource.create(SCENARIO_SEED + id) : level.random;
         Detonation d = new Detonation(id, g.burst(), g.groundY(), yieldKt, g.surface(),
                 level.getGameTime(), (float) (random.nextDouble() * Math.PI * 2), 5 + random.nextFloat() * 10,
-                g.visibility(), random.nextLong(), scale, g.surface() && IncomingConfig.SERVER.nukeFallout.get(),
+                g.visibility(), random.nextLong(), scale, IncomingConfig.SERVER.nukeFallout.get(),
                 IncomingConfig.SERVER.nukeWaveSpeed.get().floatValue(), level.getDayTime(),
                 IncomingConfig.SERVER.nukeFires.get() && IncomingConfig.SERVER.nukeMaxFires.get() > 0);
         events.add(d);
@@ -135,13 +133,13 @@ public final class NuclearWarhead {
             // видел вспышку — бежит прочь
             MobPanic.flash(d, living, level.getGameTime());
         }
-        double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt()) * shielding(level, eye, d.burst());
+        double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt()) * Shielding.prompt(level, eye, d.burst(), d.scale());
         if (rem < 1) return true;
         float gy = (float) (rem / PromptRadiationModel.REM_PER_GY);
         if (living instanceof ServerPlayer player) {
             if (IncomingConfig.SERVER.nukeRadiation.get()) RadiationTicker.addDose(player, gy);
         } else if (IncomingConfig.SERVER.nukeMobRadiation.get()) {
-            // мобы болеют, как игроки: от 10 Гр — смерть за сутки, от 50 Гр — за час (нежить и стойки брони не болеют)
+            // мобы болеют, как игроки (нежить и стойки брони не болеют)
             if (RadiationTicker.affectsMob(living)) RadiationTicker.addDose(living, gy);
         } else if (rem >= 1000) {
             living.hurt(ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, owner), Float.MAX_VALUE);
@@ -178,30 +176,6 @@ public final class NuclearWarhead {
         // луч по блокам — только по загруженным чанкам: сервер не должен грузить мир ради проверки
         if (Terrain.readyAlong(level, eye, near) && level.clip(new ClipContext(eye, near, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, e)).getType() != HitResult.Type.MISS) return false;
         return ThermalShadow.visible(level, d.burst(), near);
-    }
-
-    /**
-     * Экранирование проникающей радиации (DESIGN §1.5): шагаем по лучу к точке подрыва на 64 блока
-     * (не дальше загруженных чанков), каждый встреченный блок ослабляет по материалу.
-     */
-    public static double shielding(Level level, Vec3 from, Vec3 burst) {
-        Vec3 dir = burst.subtract(from).normalize();
-        int stone = 0, earth = 0, water = 0, wood = 0, glass = 0;
-        BlockPos last = null;
-        for (double s = 0.5; s < 64 && stone + earth + water + wood + glass < 16; s += 0.5) {
-            BlockPos p = BlockPos.containing(from.add(dir.scale(s)));
-            if (p.equals(last)) continue;
-            last = p;
-            if (!Terrain.ready(level, p)) break;
-            BlockState b = level.getBlockState(p);
-            if (b.isAir()) continue;
-            if (!b.getFluidState().isEmpty()) water++;
-            else if (b.is(BlockTags.LEAVES) || b.is(ModTags.SHATTERS)) glass++;
-            else if (b.is(BlockTags.LOGS) || b.is(BlockTags.PLANKS)) wood++;
-            else if (b.is(BlockTags.DIRT) || b.is(BlockTags.SAND) || b.is(net.minecraft.world.level.block.Blocks.GRAVEL)) earth++;
-            else if (!b.getCollisionShape(level, p).isEmpty()) stone++;
-        }
-        return PromptRadiationModel.shielding(stone, earth, water, wood, glass);
     }
 
     /** Дальность, где доза проникающей радиации падает до {@code rem}, м (бисекция по монотонной модели). */

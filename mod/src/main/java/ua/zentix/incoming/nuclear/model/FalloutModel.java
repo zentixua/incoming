@@ -17,9 +17,9 @@ package ua.zentix.incoming.nuclear.model;
  * порядок контуров NUKEMAP (модель Миллера) для этого случая.
  * Всё умножается на долю наземного подрыва {@link #surfaceFraction()}.
  *
- * <p>Время: осадки приходят в точку через (путь по ветру)/(скорость ветра) реальных секунд, но не раньше, чем
- * из облака долетят самые крупные частицы ({@link #firstArrivalSeconds}); спад идёт по игровым часам (закон
- * Уэя–Вигнера t^−1.2, правило 7–10) — см. {@link #doseRate}.
+ * <p>Время — игровые часы (1000 тиков; сутки — 20 минут): осадки приходят в точку через (путь по ветру)/(скорость
+ * ветра), но не раньше, чем из облака долетят самые крупные частицы ({@link #firstArrivalHours}), и спадают по закону
+ * Уэя–Вигнера t^−1.2 (правило 7–10) — см. {@link #doseRate}.
  */
 public record FalloutModel(double yieldKt, double hobM, double windDirRad, double windSpeedMps) {
     /** Мощность дозы на оси следа у эпицентра в H+1, Р/ч. */
@@ -33,7 +33,7 @@ public record FalloutModel(double yieldKt, double hobM, double windDirRad, doubl
     /** Пятно эпицентра: доля от PEAK_H1 и радиус в долях R_ш. */
     private static final double GZ_PEAK = 0.5;
     private static final double GZ_RADIUS = 0.6;
-    /** Раньше этого (игровые часы) спад не считается, иначе t^−1.2 уходит в бесконечность. */
+    /** Раньше этого (часы) спад не считается: закон Уэя–Вигнера верен с получаса, а t^−1.2 у нуля бесконечен. */
     public static final double MIN_DECAY_HOURS = 0.5;
     /** Закон спада Уэя–Вигнера. */
     public static final double DECAY_EXP = 1.2;
@@ -74,31 +74,30 @@ public record FalloutModel(double yieldKt, double hobM, double windDirRad, doubl
     }
 
     /**
-     * Самые ранние осадки, реальные секунды: 4·Y^0.2 мин (15 кт — 7 мин, 1 Мт — 16 мин) — столько падают из облака
-     * и ножки самые крупные частицы (модель Миллера, 1963; Glasstone 9.50, 9.64). Под облаком и против ветра раньше
-     * этого осадков нет.
+     * Самые ранние осадки, часы: 4·Y^0.2 мин (15 кт — 7 мин, 1 Мт — 16 мин) — столько падают из облака и ножки самые
+     * крупные частицы (модель Миллера, 1963; Glasstone 9.50, 9.64). Под облаком и против ветра раньше этого осадков
+     * нет.
      */
-    public double firstArrivalSeconds() {
-        return FIRST_ARRIVAL_MIN * 60 * Math.pow(yieldKt, FIRST_ARRIVAL_EXP);
+    public double firstArrivalHours() {
+        return FIRST_ARRIVAL_MIN / 60 * Math.pow(yieldKt, FIRST_ARRIVAL_EXP);
     }
 
     /**
-     * Через сколько реальных секунд после подрыва осадки ложатся в (x, z): путь по ветру / скорость, но не раньше
-     * {@link #firstArrivalSeconds}.
+     * Через сколько часов после подрыва осадки ложатся в (x, z): путь по ветру / скорость, но не раньше
+     * {@link #firstArrivalHours}.
      */
-    public double arrivalSeconds(double x, double z) {
+    public double arrivalHours(double x, double z) {
         double down = x * Math.cos(windDirRad) + z * Math.sin(windDirRad);
-        return Math.max(firstArrivalSeconds(), Math.max(down, 0) / wind());
+        return Math.max(firstArrivalHours(), Math.max(down, 0) / wind() / 3600);
     }
 
     /**
-     * Мощность дозы, Р/ч. {@code secondsSinceDetonation} — реальные секунды (для прихода осадков),
-     * {@code gameHoursSinceDetonation} — игровые часы (1000 тиков) для спада: Ḋ = Ḋ₁·t^−1.2,
-     * t не меньше {@link #MIN_DECAY_HOURS}. До прихода осадков — 0.
+     * Мощность дозы через {@code hoursSinceDetonation} часов, Р/ч: Ḋ = Ḋ₁·t^−1.2, t не меньше {@link #MIN_DECAY_HOURS}
+     * (закон верен с получаса); до прихода осадков — 0.
      */
-    public double doseRate(double x, double z, double secondsSinceDetonation, double gameHoursSinceDetonation) {
-        if (secondsSinceDetonation < arrivalSeconds(x, z)) return 0;
-        double t = Math.max(gameHoursSinceDetonation, MIN_DECAY_HOURS);
+    public double doseRate(double x, double z, double hoursSinceDetonation) {
+        if (hoursSinceDetonation < arrivalHours(x, z)) return 0;
+        double t = Math.max(hoursSinceDetonation, MIN_DECAY_HOURS);
         return doseRateAtH1(x, z) * Math.pow(t, -DECAY_EXP);
     }
 

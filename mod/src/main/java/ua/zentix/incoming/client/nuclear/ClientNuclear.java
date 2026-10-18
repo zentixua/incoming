@@ -9,7 +9,6 @@ import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.NuclearEvents;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -321,13 +320,12 @@ public final class ClientNuclear {
     }
 
     /**
-     * Подрыв исчезает с клиента, когда гриб рассеялся и звук дошёл до дальних слушателей (Distant Horizons: 20 км),
-     * а подрыв с осадками — когда его забудет и сервер (далеко по ветру осадки и чёрный дождь приходят через десятки
-     * игровых часов).
+     * Подрыв исчезает с клиента, когда гриб рассеялся, звук дошёл до дальних слушателей (Distant Horizons: 20 км) и
+     * кончился чёрный дождь (осадки клиент не рисует: мощность дозы для счётчика шлёт сервер).
      */
     private static double lifeTicks(Detonation d) {
-        double cloudTicks = Math.max(CloudPuffs.lifeSeconds(d) * 20 * d.scale(), d.arrivalTicks(d.blocks(20_000)) + 200);
-        return d.hasFallout() ? Math.max(cloudTicks, NuclearEvents.FORGET_AFTER) : cloudTicks;
+        return Math.max(Math.max(CloudPuffs.lifeSeconds(d) * 20 * d.scale(), d.arrivalTicks(d.blocks(20_000)) + 200),
+                d.blackRainEndTicks());
     }
 
     // ---------------------------------------------------------------- для рисования и звука

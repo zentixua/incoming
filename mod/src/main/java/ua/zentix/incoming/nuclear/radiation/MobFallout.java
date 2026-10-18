@@ -14,13 +14,14 @@ import java.util.List;
 /**
  * Осадки у мобов (DESIGN-nuke §4). У игроков доза идёт раз в секунду; мобов в загруженном мире тысячи, поэтому
  * раз в {@link #PERIOD} тиков — снимок мобов уровня, и каждому доза за прошедшее время по мощности осадков в его
- * точке с крышей над головой. И снимок, и каждый моб — единицы работы под общим бюджетом ядерной работы
- * ({@link WorkClock}), как свет и разрушения. Заражение одеждой и чёрный дождь — только у игроков.
+ * точке с защитой стенами и крышей ({@link Shielding#fallout}). И снимок, и каждый моб — единицы работы под общим
+ * бюджетом ядерной работы ({@link WorkClock}), как свет и разрушения. Заражение одеждой и чёрный дождь — только у
+ * игроков.
  */
 public final class MobFallout {
     /** Раз в сколько тиков мобы получают дозу осадков (10 с — 0.2 игрового часа). */
     public static final int PERIOD = 200;
-    /** Мощность меньше этой (Р/ч) — фон, крышу над мобом не проверяем. */
+    /** Мощность меньше этой (Р/ч) — фон, защиту моба не считаем. */
     private static final double BACKGROUND = 0.01;
 
     @Nullable
@@ -60,14 +61,19 @@ public final class MobFallout {
     }
 
     private void expose(ServerLevel level, List<Detonation> detonations, Mob mob, long now) {
-        // снимок старше тика: чанк моба мог уйти из полной загрузки, а крыша читается блоками
+        // снимок старше тика: чанк моба мог уйти из полной загрузки, а защита читается блоками
         if (!mob.isAlive() || !Terrain.ready(level, mob.blockPosition())) return;
-        double field = 0;
+        double field = 0, strongest = 0, scale = 1;
         for (Detonation d : detonations) {
-            if (d.hasFallout()) field += d.falloutRate(mob.getX(), mob.getZ(), now - d.gameTime());
+            double f = d.falloutRate(mob.getX(), mob.getZ(), now - d.gameTime());
+            field += f;
+            if (f > strongest) {
+                strongest = f;
+                scale = d.scale();
+            }
         }
         if (field < BACKGROUND) return;
-        double rate = field * RadiationTicker.roofShielding(level, mob.blockPosition());
+        double rate = field * Shielding.fallout(level, RadiationTicker.middle(mob), scale);
         RadiationTicker.addDose(mob, (float) (rate * RadiationTicker.GY_PER_R * hours));
     }
 
