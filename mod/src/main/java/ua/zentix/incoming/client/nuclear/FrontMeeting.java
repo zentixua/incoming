@@ -2,11 +2,13 @@ package ua.zentix.incoming.client.nuclear;
 
 /**
  * Когда фронт подрыва встречает слушателя и тело игрока — без Minecraft (проверяется юнит-тестом). Звук слышит камера
- * (там слушатель движка), а бьёт по ушам и толкает ветер — тело: камера снаряда облетает попадание в 30–40 блоках от
- * эпицентра, а игрок стоит за километры. Камера на игроке (вид от первого и третьего лица) — фронт у неё и у тела
- * один, по телу: звуки волны и удар по ушам — в один тик (звуки волны слышно, как до неё, {@link Deafness#before}).
- * Слушатель снова впереди фронта (камера вернулась к игроку, перенос) встретит его снова; камера вернулась к телу,
- * которое фронт уже прошёл, — фронт мимо неё прошёл, его не слышно.
+ * (там слушатель движка), а бьёт по ушам и толкает ветер — тело: камера снаряда облетает место взрыва в 32–42 блоках,
+ * а игрок стоит за километры. Камера на игроке (вид от первого и третьего лица) или рядом с ним (ближе к взрыву или
+ * дальше не больше, чем фронт проходит за тик) встречает фронт с телом, по телу: звуки волны и удар по ушам — в один
+ * тик (звуки волны слышно, как до неё, {@link Deafness#before}). Фронт встречает слушателя и тело, только когда прошёл
+ * их в этот тик: перенесённых за фронт (камера вернулась к телу, которое фронт уже прошёл, облёт попадания после того,
+ * как фронт оттуда ушёл) он не встретил. Слушатель снова впереди фронта (камера вернулась к игроку, перенос) встретит
+ * его снова; тело — один раз.
  */
 final class FrontMeeting {
     /**
@@ -18,6 +20,8 @@ final class FrontMeeting {
     static final int AGAIN = 1, HEARD = 2, HIT = 4;
 
     private boolean heard, hit;
+    /** Радиус фронта в прошлый тик; до первого — минус бесконечность (слушатель внутри шара слышит сразу). */
+    private double last = Double.NEGATIVE_INFINITY;
 
     /**
      * Тик: где фронт и где слушатель с телом.
@@ -29,8 +33,8 @@ final class FrontMeeting {
      * @return что случилось ({@link #AGAIN}, {@link #HEARD}, {@link #HIT}), в этом порядке
      */
     int tick(double front, double ear, double body, boolean attached) {
-        boolean onBody = attached && !Double.isNaN(body), wasHit = hit;
-        double at = onBody ? body : ear;
+        double step = Double.isInfinite(last) ? 0 : front - last;
+        double at = !Double.isNaN(body) && (attached || Math.abs(ear - body) <= step) ? body : ear;
         int out = 0;
         if (heard && front < at - AHEAD) {
             heard = false;
@@ -38,12 +42,13 @@ final class FrontMeeting {
         }
         if (!heard && front >= at) {
             heard = true;
-            if (!(onBody && wasHit)) out |= HEARD;
+            if (last < at) out |= HEARD;
         }
-        if (!hit && body <= front) {
+        if (!hit && body <= front && last < body) {
             hit = true;
             out |= HIT;
         }
+        last = front;
         return out;
     }
 

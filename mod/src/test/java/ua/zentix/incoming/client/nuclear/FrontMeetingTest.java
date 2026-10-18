@@ -28,6 +28,18 @@ class FrontMeetingTest {
     }
 
     /**
+     * Камера не на игроке, но рядом (съёмочная камера в 3 блоках от него): фронт за тик проходит 17 блоков, и она
+     * встречает его с телом, в один тик.
+     */
+    @Test
+    void cameraNearThePlayerMeetsTheFrontWithTheBody() {
+        for (double ear : new double[]{1003.2, 996.8}) {
+            FrontMeeting m = new FrontMeeting();
+            for (int r = 0; r < 1500; r += 17) assertEquals(r == 1003 ? HEARD | HIT : 0, m.tick(r, ear, 1000, false), "камера в " + ear + ", фронт " + r);
+        }
+    }
+
+    /**
      * Камера снаряда облетает попадание: фронт у неё сразу, по ушам игрока за 3 км — когда дойдёт до него. Камера
      * вернулась к игроку, а фронт до него ещё не дошёл — слушатель встретит его снова, вместе с телом.
      */
@@ -39,6 +51,20 @@ class FrontMeetingTest {
         assertEquals(AGAIN, m.tick(701, 3000, 3000, true), "камера вернулась к игроку");
         out = walk(m, 702, 3100, 3000, 3000, true);
         for (int r = 702; r <= 3100; r++) assertEquals(r == 3000 ? HEARD | HIT : 0, out[r], "у игрока, фронт " + r);
+    }
+
+    /**
+     * Залп: облёт первого попадания встретил фронт, камера ушла к следующему снаряду впереди фронта, а облёт следующего
+     * попадания — снова у места взрыва, которое фронт давно прошёл: удар не повторяется.
+     */
+    @Test
+    void cameraBackAtTheBurstHearsNothing() {
+        FrontMeeting m = new FrontMeeting();
+        int[] out = walk(m, 0, 100, 40, 3000, false);
+        for (int r = 0; r <= 100; r++) assertEquals(r == 40 ? HEARD : 0, out[r], "первый облёт, фронт " + r);
+        assertEquals(AGAIN, m.tick(101, 2000, 3000, false), "камера на следующем снаряде");
+        out = walk(m, 102, 400, 40, 3000, false);
+        for (int r = 102; r <= 400; r++) assertEquals(0, out[r], "второй облёт, фронт " + r);
     }
 
     /**
@@ -55,16 +81,50 @@ class FrontMeetingTest {
         assertTrue(m.heard());
     }
 
-    /** Камера летит вровень с фронтом, то чуть впереди, то позади: удар один, пока она не ушла вперёд на 64 блока. */
+    /**
+     * От первого лица: фронт прошёл игрока, игрока перенесло далеко вперёд фронта — он слышит фронт снова, когда тот
+     * его догонит, а по ушам бьёт один раз.
+     */
+    @Test
+    void playerAheadAgainHearsTheFrontAgain() {
+        FrontMeeting m = new FrontMeeting();
+        int[] out = walk(m, 0, 1010, 1000, 1000, true);
+        assertEquals(HEARD | HIT, out[1000]);
+        assertEquals(AGAIN, m.tick(1011, 2000, 2000, true), "перенос вперёд фронта");
+        out = walk(m, 1012, 2100, 2000, 2000, true);
+        for (int r = 1012; r <= 2100; r++) assertEquals(r == 2000 ? HEARD : 0, out[r], "фронт " + r);
+    }
+
+    /** Игрока перенесло туда, где фронт уже прошёл: ни удара, ни звука. */
+    @Test
+    void playerMovedBehindTheFrontIsNotHit() {
+        FrontMeeting m = new FrontMeeting();
+        walk(m, 0, 500, 3000, 3000, true);
+        int[] out = walk(m, 501, 4000, 300, 300, true);
+        for (int r = 501; r <= 4000; r++) assertEquals(0, out[r], "фронт " + r);
+    }
+
+    /**
+     * Камера летит вровень с фронтом, то впереди до 60 блоков, то позади: удар один. Ушла вперёд больше чем на
+     * {@link FrontMeeting#AHEAD} — встретит фронт снова.
+     */
     @Test
     void cameraAlongTheFrontHearsItOnce() {
+        // насколько камера впереди фронта, по радиусу фронта: ломаная по точкам
+        double[][] ahead = {{0, 30}, {500, 30}, {600, -20}, {800, 60}, {1000, -10}, {1200, 70}, {1400, -10}};
         FrontMeeting m = new FrontMeeting();
-        int heard = 0;
-        for (int r = 0; r <= 2000; r++) {
-            if ((m.tick(r, Math.max(1, r + (r % 7 == 0 ? -3 : 30)), Double.NaN, false) & HEARD) != 0) heard++;
+        int heard = 0, again = 0;
+        for (int r = 0; r <= 1400; r++) {
+            int i = 0;
+            while (ahead[i + 1][0] < r) i++;
+            double k = (r - ahead[i][0]) / (ahead[i + 1][0] - ahead[i][0]), a = ahead[i][1] + k * (ahead[i + 1][1] - ahead[i][1]);
+            int out = m.tick(r, r + a, Double.NaN, false);
+            if ((out & HEARD) != 0) heard++;
+            if ((out & AGAIN) != 0) again++;
+            if (r == 1100) assertEquals(1, heard, "до второго отрыва");
         }
-        assertEquals(1, heard);
-        assertEquals(AGAIN, m.tick(2001, 2001 + FrontMeeting.AHEAD + 1, Double.NaN, false));
+        assertEquals(2, heard);
+        assertEquals(1, again);
     }
 
     /** Игрока нет (выход из мира в тот же тик): только звук у камеры. */

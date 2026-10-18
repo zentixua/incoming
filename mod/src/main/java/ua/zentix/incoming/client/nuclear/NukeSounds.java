@@ -223,7 +223,7 @@ public final class NukeSounds {
 
         /**
          * Звук волны — у слушателя (камера), удар по ушам и ветер — у тела игрока ({@link FrontMeeting}): в камере
-         * снаряда, которая облетает попадание, ухо камеры получало удар вплотную у игрока за километры.
+         * снаряда, которая облетает место взрыва, ухо камеры получало удар вплотную у игрока за километры.
          */
         void tick() {
             after.tick();
@@ -231,7 +231,8 @@ public final class NukeSounds {
             Minecraft mc = Minecraft.getInstance();
             LocalPlayer p = mc.player;
             Vec3 ear = mc.gameRenderer.getMainCamera().getPosition(), b = d.burst();
-            Vec3 body = p == null ? null : p.getEyePosition();
+            // наблюдатель тела не имеет: глазами другой сущности игрок у клиента стоит, где начал смотреть, — тело у камеры
+            Vec3 body = p == null ? null : p.isSpectator() ? ear : p.getEyePosition();
             long now = (long) a.ticks(0);
             int met = meeting.tick(d.frontRadius(now), ear.distanceTo(b), body == null ? Double.NaN : body.distanceTo(b),
                     p != null && mc.getCameraEntity() == p);
@@ -268,6 +269,8 @@ public final class NukeSounds {
             SoundManager sounds = Minecraft.getInstance().getSoundManager();
             for (SoundInstance s : shots) sounds.stop(s);
             shots.clear();
+            // здесь фронта не было: пыль у глаза — с новой встречей
+            psi = 0;
             OwnSources.stop(this);
             if (wind != null) wind.end();
             wind = null;
