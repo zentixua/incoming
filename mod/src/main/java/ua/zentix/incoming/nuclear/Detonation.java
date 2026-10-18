@@ -258,8 +258,8 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
     }
 
     /**
-     * С какой скоростью волна скоростным напором {@code qKpa} бросает незакреплённое — существо, сорванный обломок,
-     * блоков за тик, не больше 6.
+     * С какой скоростью волна скоростным напором {@code qKpa} бросает сорванный обломок (куски снесённого у клиента),
+     * блоков за тик, не больше 6. Тела бросает {@code BlastBody} по сопротивлению тела.
      */
     public static double throwSpeed(double qKpa) {
         return Math.min(6.0, 0.8 * Math.sqrt(qKpa));
