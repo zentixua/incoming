@@ -8,8 +8,10 @@ package ua.zentix.incoming.client.sound;
  * хода через кромку ({@code Sightline}). Кромка заменяет эффект земли: Abar = Dz − Agr, не меньше нуля (ф. 12).</li>
  * <li>Земля (табл. 3): у источника и у слушателя на 63 Гц As = Ar = −1,5 дБ, на 2 кГц −1,5·(1 − G); посередине
  * Am = −3q и −3q·(1 − Gm). Твёрдая земля отражает — громче; рыхлая гасит верха.</li>
- * <li>Днём земля греет воздух, звук загибает вверх: дальше 1 км зона тени, к 4 км до 20 дБ верхов и 10 дБ низов;
- * ночью инверсия — тени нет.</li>
+ * <li>Днём земля греет воздух, звук загибает вверх: лучи от источника на высоте hs к уху на высоте hr касаются земли
+ * на r = √(2R)·(√hs + √hr) (R — радиус кривизны луча), дальше — зона тени, к 4r до 20 дБ верхов и 10 дБ низов. R
+ * такой, что у взрыва на 2 м и уха на 1,7 м r = 1 км (у земли воздух холодает почти как в сухоадиабатическом
+ * градиенте, ~0,9 °C на 100 м); подрыв на высоте 600 м уводит тень за 9 км. Ночью инверсия — тени нет.</li>
  * <li>Дождь шумит и прячет далёкое: +3 дБ, гроза — ещё +3.</li>
  * </ul>
  * Запас слышимости M = 20·lg(R0/d) − потери низов; R0 — докуда взрыв слышно в обычных условиях, отражение от земли
@@ -24,8 +26,11 @@ public final class Outdoor {
     public static final double LOW = 343.0 / 63, HIGH = 343.0 / 2000;
     /** Дифракция через одну кромку — не больше, дБ (ISO 9613-2, п. 7.4). */
     static final double BARRIER_CAP = 20;
-    /** Зона тени днём: начинается и набирает глубину к, блоков; глубина у верхов и низов, дБ. */
-    static final double SHADOW_FROM = 1000, SHADOW_FULL = 4000, SHADOW_HIGH = 20, SHADOW_LOW = 10;
+    /**
+     * Зона тени днём: √(2R) — r = √(2R)·(√hs + √hr) у источника на 2 м и уха на 1,7 м ровно 1 км, м^½; глубину
+     * набирает к {@link #SHADOW_DEEP} r; глубина у верхов и низов, дБ.
+     */
+    static final double SHADOW_ROOT = 1000 / (Math.sqrt(2) + Math.sqrt(1.7)), SHADOW_DEEP = 4, SHADOW_HIGH = 20, SHADOW_LOW = 10;
     /** Дождь и гроза прячут далёкое, дБ на уровень 0..1. */
     static final double RAIN = 3, THUNDER = 3;
     /** Последние децибелы запаса — громкость плавно к нулю. */
@@ -78,9 +83,15 @@ public final class Outdoor {
         return p.z > 0 ? Math.max(0, barrier(p.z, high ? HIGH : LOW) - ground(high, p)) : 0;
     }
 
-    /** Зона тени днём, дБ: звук загибает вверх, и дальше 1 км у земли его всё меньше. */
+    /** Где днём начинается зона тени, блоков: там луч от источника к уху касается земли. */
+    static double shadowFrom(double hs, double hr) {
+        return SHADOW_ROOT * (Math.sqrt(Math.max(0, hs)) + Math.sqrt(Math.max(0, hr)));
+    }
+
+    /** Зона тени днём, дБ: звук загибает вверх, и дальше касания луча с землёй у земли его всё меньше. */
     static double shadow(boolean high, Path p) {
-        return p.day * smoothstep(SHADOW_FROM, SHADOW_FULL, p.d) * (high ? SHADOW_HIGH : SHADOW_LOW);
+        double from = shadowFrom(p.hs, p.hr);
+        return p.day * smoothstep(from, SHADOW_DEEP * from, p.d) * (high ? SHADOW_HIGH : SHADOW_LOW);
     }
 
     /** Дождь и гроза, дБ. */
@@ -93,9 +104,14 @@ public final class Outdoor {
         return smoothstep(0, 0.5, sunSine);
     }
 
+    /** Потери низов по дороге сверх разлёта, дБ: преграда, зона тени, дождь (земля на низах уже в R0 и в давлении). */
+    public static double losses(Path p) {
+        return obstacle(false, p) + shadow(false, p) + masking(p);
+    }
+
     /** Запас слышимости, дБ: земля на низах уже в R0. */
     public static double margin(double r0, Path p) {
-        return 20 * Math.log10(r0 / p.d) - obstacle(false, p) - shadow(false, p) - masking(p);
+        return 20 * Math.log10(r0 / p.d) - losses(p);
     }
 
     /**
@@ -108,6 +124,16 @@ public final class Outdoor {
         double m = margin(r0, p);
         double v = v640 * Math.pow(10, (m - 20 * Math.log10(r0 / NEAR)) / 40) * smoothstep(0, FADE, m);
         return (float) Math.min(1, v);
+    }
+
+    /**
+     * Громкость в игре по пиковому давлению у уха {@code pa} (на открытом пути, с отражением от земли — как у модели
+     * волны): громкость {@code full} давления — 1, тише — на половину децибел давления, как у ближней модели обычных
+     * взрывов ({@link BlastMix}: −3 дБ на удвоение) и у {@link #volume}, потери по дороге — так же. Угасания у порога
+     * слышимости нет: так считается взрыв, который слышен много дальше, чем идёт мир (ядерный подрыв).
+     */
+    public static float pressureVolume(double pa, double full, Path p) {
+        return (float) Math.min(1, Math.sqrt(Math.max(0, pa) / full) * Math.pow(10, -losses(p) / 40));
     }
 
     /** Доля верхов против низов (дождь глушит обе полосы одинаково — не в счёт); воздух — отдельно. */

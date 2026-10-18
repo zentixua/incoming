@@ -220,21 +220,6 @@ final class NukeEchoes {
         }
     }
 
-    /**
-     * Откуда слышен раскат через {@code seconds} после удара: сильнейшее отражение вблизи этого времени (±3 с); NaN —
-     * эха нет (сторону выберет случай).
-     */
-    double rumbleAzimuth(double seconds) {
-        EchoMix.Mix m = done;
-        if (m == null || m.tracks().isEmpty()) return Double.NaN;
-        TerrainEcho.Reflection best = null;
-        for (TerrainEcho.Reflection r : found) {
-            if (Math.abs(r.delay() / 20 - seconds) > 3) continue;
-            if (best == null || r.energy() > best.energy()) best = r;
-        }
-        return best == null ? Double.NaN : best.azimuth();
-    }
-
     /** Строка {@code SCENARIO}: лучи, отражения и сильнейшие из них (задержка, сторона, уровень). */
     String describe() {
         StringBuilder sb = new StringBuilder(String.format(Locale.ROOT, "echo rays %d/%d (slowest tick %.2f ms) taps %d", nextRay, TerrainEcho.RAYS,

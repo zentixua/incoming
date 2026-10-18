@@ -294,6 +294,16 @@ public final class ClientSounds {
         return shot(event, source, volume, pitch, SoundSource.MASTER, RandomSource.create(seed));
     }
 
+    /**
+     * Как {@link #loudShot(SoundEvent, Vec3, float, float, long)}, но фильтр пути задаёт вызывающий (что между — холм,
+     * земля, погода, воздух — уже посчитал {@link Outdoor}): без луча по блокам и без своего воздуха.
+     */
+    public static SoundInstance loudShot(SoundEvent event, Vec3 source, float volume, float pitch, long seed, float gain, float highs) {
+        Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        return new Shot(event.getLocation(), SoundSource.MASTER, volume, pitch, RandomSource.create(seed), SoundInstance.Attenuation.NONE,
+                toward(ear, source), false, gain, highs);
+    }
+
     /** Отдать звук движку. */
     public static void start(SoundInstance sound) {
         play(sound);

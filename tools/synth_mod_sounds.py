@@ -2,10 +2,11 @@
 """Синтез для звуков мода Incoming (numpy, фиксированный сид — результат воспроизводим): библиотека для
 tools/build_sounds.py, который смешивает эти слои с настоящими записями и пишет файлы.
 
-Синтез даёт то, чего нет в записях или что в них срезано: инфранизкий «удар в грудь» взрывов, N-волну и лязг
+Синтез даёт то, чего нет в записях или что в них срезано: инфранизкий «удар в грудь» взрывов, удар и лязг
 ядерного фронта, скрежет бурения бетона, звон в ушах, сигнал захвата цели; остальное — подмес к записям.
 """
 import numpy as np
+from scipy.signal import lfilter
 
 SR = 32000
 rng = np.random.default_rng(42)
@@ -345,17 +346,6 @@ def nuke_boom_far(dur=14.0):
     return norm(reverb(x, t60=4.0, mix=0.5, hi=600), -12)
 
 
-def nuke_roar(dur=25.0):
-    """Низкий рёв огненного шара и ветра (20–120 Гц) с медленной модуляцией; быстро нарастает, долго стихает."""
-    n = int(dur * SR)
-    t = np.arange(n) / SR
-    low = F(rng.standard_normal(n), lo=20, hi=120)
-    wind = F(rng.standard_normal(n), lo=150, hi=900, bells=[(300, 4, 0.8)])
-    x = low / np.std(low) * env_noise(n, 0.6, 0.45) * env_noise(n, 3, 0.2) + 0.25 * wind / np.std(wind) * env_noise(n, 1.5, 0.5)
-    env = np.minimum(1, t / 0.25) * np.where(t < 4, 1, np.cos(np.pi / 2 * (t - 4) / (dur - 4)) ** 2)
-    return norm(x * env, -11)
-
-
 def hurricane(dur=9.0):
     """Ураганный ветер: порывы, завывание на нескольких узких полосах, низкий гул, шелест."""
     n = int(dur * SR)
@@ -367,21 +357,6 @@ def hurricane(dur=9.0):
     rumble = F(rng.standard_normal(n), lo=20, hi=120)
     hiss = F(rng.standard_normal(n), lo=2000, hi=7000)
     return x + 0.7 * rumble / np.std(rumble) * env_noise(n, 1.0, 0.4) + 0.2 * hiss / np.std(hiss) * env_noise(n, 2, 0.6)
-
-
-def nuke_rumble(dur=10.0):
-    """Раскаты после удара: случайные низкие перекаты, всё тише; клиент играет несколько раз с разным тоном."""
-    n = int(dur * SR)
-    t = np.arange(n) / SR
-    E = np.zeros(n)
-    for t0 in np.sort(rng.uniform(0.0, 6.5, 9)):
-        att, dec = rng.uniform(0.15, 0.5), rng.uniform(0.6, 1.8)
-        s = t - t0
-        E += (s > 0) * rng.uniform(0.4, 1) * np.exp(-t0 / 5) * np.minimum(1, np.maximum(s, 0) / att) * np.exp(-np.maximum(s - att, 0) / dec)
-    r = F(rng.standard_normal(n), lo=18, hi=220, bells=[(45, 5, 0.8)]) * E
-    grit = F(rng.standard_normal(n), lo=300, hi=1200) * E ** 2
-    x = (r / np.std(r) + 0.1 * grit / np.std(grit)) * np.clip((dur - t) / 1.5, 0, 1)
-    return norm(reverb(x, t60=3.5, mix=0.55, hi=500), -13)
 
 
 def nuke_glass(dur=3.0, count=180):
@@ -444,24 +419,24 @@ def geiger_click():
 
 # ---------------------------------------------------------------- после удара: хлопок вдали, город горит
 
-def nuke_crack_far(dur=4.0, n_wave=0.32, bounce=0.022):
-    """Хлопок ядерного фронта за несколько километров: N-волна (скачок вверх, спад, скачок обратно через n_wave с),
-    её копия от земли через bounce с — двойной хлопок; воздух скруглил скачки (верха выше ~1,5 кГц съедены). Дальше —
-    короткий глухой отзвук; долгий раскат — у nuke.boom_far, с которым он звучит."""
+def nuke_crack_far(dur=4.0, t_plus=1.2, pa=345.0):
+    """Удар фронта ядерного подрыва за километры — запись на случай, когда игре нечем сыграть дорожку из модели
+    (client/sound/BlastPulse: у неё давление и фаза — у слушателя, здесь — типичные). Слабая ударная волна: один
+    скачок давления pa, плавный спад положительной фазы t_plus и разрежение (импульс Фридлендера); хвостового скачка
+    N-волны нет — он вырастает лишь за сотню километров. Нарастание фронта 0,17/pa с (крутизну держит сама волна,
+    по замерам звуковых ударов), ниже 20 Гц слух не слышит — срез Баттерворта второго порядка, причинный: у удара
+    ничего до фронта."""
     n = int(dur * SR)
     t = np.arange(n) / SR
-    t0 = 0.004
-    s = t - t0
-    nw = np.where((s >= 0) & (s <= n_wave), 1 - 2 * s / n_wave, 0.0)
-    x = nw + 0.6 * np.interp(t - bounce, t, nw, left=0)
-    x = F(x, lo=12, hi=1500)
-    x[:int(t0 * SR)] = 0
-    thump = F(rng.standard_normal(n), lo=25, hi=160) * np.exp(-np.maximum(s, 0) / 0.35) * (s > 0)
-    rattle = F(rng.standard_normal(n), lo=300, hi=1800) * np.exp(-np.maximum(s - n_wave, 0) / 0.05) * (s > n_wave)
-    x = x / np.max(np.abs(x)) + 0.25 * thump / np.max(np.abs(thump)) + 0.08 * rattle / np.max(np.abs(rattle))
-    x *= np.clip((dur - t) / 1.0, 0, 1)
-    x = reverb(x, t60=1.6, mix=0.18, pre=0.04, hi=900)
-    return 0.89 * x / np.max(np.abs(x))
+    theta = max(0.5 / SR, 0.17 / pa / (2 * np.arctanh(0.8)))
+    s = t - (4 * theta + 0.002)
+    x = 0.5 * (1 + np.tanh(s / theta)) * (1 - np.maximum(s, 0) / t_plus) * np.exp(-np.maximum(s, 0) / t_plus)
+    k = np.tan(np.pi * 20 / SR)
+    q = np.sqrt(0.5)
+    a0 = 1 + k / q + k * k
+    x = lfilter(np.array([1, -2, 1]) / a0, [1, 2 * (k * k - 1) / a0, (1 - k / q + k * k) / a0], x)
+    x *= np.clip((dur - t) / (dur / 4), 0, 1)
+    return 0.98 * x / np.max(np.abs(x))
 
 
 def nuke_fire(dur=14.0):
