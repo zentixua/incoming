@@ -36,7 +36,9 @@ The wave breaks buildings as it reaches them: their pieces fly with the dust. Th
 wave. When it reaches you, the wind behind it pushes you while you stand: your
 view leans away from the burst and comes back over a few seconds. At 1 psi that is a few degrees, more from a bigger
 burst, whose wind blows longer. From about 1–2 psi the wind is stronger than anyone can stand against, sooner when you
-face the burst and the bigger it is, and your view stops at the edge of balance. In a jump the wind doesn't lean you.
+face the burst and the bigger it is, and your view stops at the edge of balance until the wind weakens. After the wave
+passes, the air flows back toward the burst for a few seconds. Behind a strong wave, from about 4 psi, this weaker wind
+leans you toward the burst by several degrees. In a jump the wind doesn't lean you.
 Where only the sound reaches, the wave doesn't move you at all. A wall or a house between you and the burst shelters you
 from the wind.
 

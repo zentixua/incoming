@@ -6,6 +6,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ViewportEvent;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix3d;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.model.BodySway;
 
@@ -22,8 +23,10 @@ import java.util.List;
  * <p>
  * Ядерная волна камеру не трясёт, а наклоняет: ветер за фронтом толкает стоящего, и тело отклоняется по ветру и
  * выпрямляется ({@link BodySway} — маятник с равновесием); голова — с телом. Наклоны от нескольких волн складываются
- * (маятник при малых углах линеен). Дальше границы устойчивости человек шагает или падает — камера стоит на ней. В
- * воздухе (прыжок) тело на ноги не опирается — наклона нет, пока снова не встанет.
+ * (маятник при малых углах линеен). Дальше границы устойчивости человек шагает — наклон стоит на ней. В воздухе
+ * (прыжок) тело на ноги не опирается — наклона нет, пока снова не встанет. Наклон тела — поворот камеры вокруг
+ * горизонтали мира поперёк наклона, как есть: курс камеры вертится вокруг вертикали мира, поэтому сложить наклон с
+ * курсом, тангажем и креном по отдельности нельзя — у взгляда вниз поворот вбок ушёл бы во вращение картинки.
  */
 public final class CameraShake {
     /** Удар взрывной волны: сколько тиков ещё трясёт. */
@@ -42,7 +45,7 @@ public final class CameraShake {
 
     /**
      * Наклон тела ветром одной волны, рад ({@link BodySway#RATE} отсчётов в секунду), с тика {@code from}; куда дул её
-     * ветер — от взрыва вдоль земли (x, z, до 1 — под самым взрывом в сторону не дует).
+     * ветер — от взрыва вдоль земли (x, z, единичный).
      */
     private record Sway(double[] tilt, long from, double pushX, double pushZ) {}
 
@@ -57,16 +60,31 @@ public final class CameraShake {
     }
 
     /**
-     * Ветер ядерной волны качнул тело ({@link BodySway#tilt}); {@code away} — от взрыва к игроку. Наклон ложится поверх
-     * того, что осталось от прежних волн.
+     * Ветер ядерной волны качнул тело ({@link BodySway#tilt}): скоростной напор за фронтом вдоль земли {@code qPa}, Па,
+     * с положительной фазой {@code tPlus}, с; {@code away} — от взрыва к игроку (ветер дует от эпицентра), {@code yaw} —
+     * куда игрок смотрит, °. Наклон ложится поверх того, что осталось от прежних волн. Возвращает наклон тела по ветру,
+     * рад.
      */
-    public static void sway(double[] tilt, Vec3 away) {
-        if (tilt.length < 2) return;
-        // напор у земли дует вдоль неё от эпицентра; под самим воздушным взрывом в сторону не дует — доля по горизонтали
-        // (косинус угла на взрыв)
-        Vec3 n = away.lengthSqr() > 1e-9 ? away.normalize() : Vec3.ZERO;
+    public static double[] sway(double qPa, double tPlus, Vec3 away, double yaw) {
+        double flat = Math.hypot(away.x, away.z);
+        if (!(flat > 1e-6)) return new double[0];
+        double x = away.x / flat, z = away.z / flat;
+        double[] tilt = BodySway.tilt(qPa, tPlus, edge(yaw, x, z), edge(yaw, -x, -z));
+        if (tilt.length < 2) return tilt;
         if (SWAYS.size() >= SWAYS_MAX) SWAYS.remove(0);
-        SWAYS.add(new Sway(tilt, ticks, n.x, n.z));
+        SWAYS.add(new Sway(tilt, ticks, x, z));
+        return tilt;
+    }
+
+    /**
+     * Граница устойчивости, рад, для наклона в сторону (x, z) мира, когда игрок смотрит по курсу {@code yaw}°: вперёд
+     * {@link BodySway#FORWARD}, назад {@link BodySway#BACK}, вбок {@link BodySway#SIDE}, наискось — эллипсом между ними.
+     */
+    static double edge(double yaw, double x, double z) {
+        double r = Math.toRadians(yaw), sin = Math.sin(r), cos = Math.cos(r);
+        double ahead = -sin * x + cos * z, side = -cos * x - sin * z, len = Math.hypot(ahead, side);
+        if (!(len > 0)) return BodySway.FORWARD;
+        return len / Math.hypot(ahead / (ahead > 0 ? BodySway.FORWARD : BodySway.BACK), side / BodySway.SIDE);
     }
 
     /** Стоит ли игрок на ногах: на земле и его не несёт ({@link #carried}). */
@@ -99,7 +117,7 @@ public final class CameraShake {
     public static void apply(ViewportEvent.ComputeCameraAngles e) {
         double k = IncomingConfig.CLIENT.cameraShake.get();
         if (k <= 0 || shake <= 0 && quake <= 0 && SWAYS.isEmpty() || Minecraft.getInstance().isPaused()) return;
-        double[] o = offsets(e.getPartialTick(), e.getYaw(), e.getPitch(), k);
+        double[] o = offsets(e.getPartialTick(), e.getYaw(), e.getPitch(), e.getRoll(), k);
         e.setYaw(e.getYaw() + (float) o[0]);
         e.setPitch(e.getPitch() + (float) o[1]);
         e.setRoll(e.getRoll() + (float) o[2]);
@@ -107,9 +125,10 @@ public final class CameraShake {
 
     /**
      * Поворот камеры тряской в кадре, ° (курс, тангаж — вниз больше нуля, крен — верх вправо больше нуля), при курсе
-     * {@code cameraYaw} и тангаже {@code cameraPitch} камеры; {@code k} — сила тряски из настроек.
+     * {@code cameraYaw}, тангаже {@code cameraPitch} и крене {@code cameraRoll} камеры; {@code k} — сила тряски из
+     * настроек.
      */
-    static double[] offsets(double partial, double cameraYaw, double cameraPitch, double k) {
+    static double[] offsets(double partial, double cameraYaw, double cameraPitch, double cameraRoll, double k) {
         double t = ticks + partial;
         // амплитуды: курс/тангаж, °
         double yaw = 0, pitch = 0;
@@ -139,26 +158,37 @@ public final class CameraShake {
             leanX += tilt * s.pushX;
             leanZ += tilt * s.pushZ;
         }
-        double w = k * (standingBefore + (standing - standingBefore) * partial);
-        if (w > 0 && (leanX != 0 || leanZ != 0)) {
-            // тело отклоняется по ветру от взрыва — в лицо запрокидывает голову, в спину клонит вниз, сбоку наклоняет от
-            // взрыва
-            double r = Math.toRadians(cameraYaw), sin = Math.sin(r), cos = Math.cos(r);
-            double ahead = w * (-sin * leanX + cos * leanZ), side = w * (-cos * leanX - sin * leanZ);
-            // дальше границы устойчивости (вперёд, назад, вбок — эллипсом между ними) человек шагает или падает — камера
-            // стоит на ней
-            double edge = Math.hypot(ahead / Math.toDegrees(ahead > 0 ? BodySway.FORWARD : BodySway.BACK), side / Math.toDegrees(BodySway.SIDE));
-            if (edge > 1) {
-                ahead /= edge;
-                side /= edge;
-            }
-            pitch += ahead;
-            // наклон вбок — поворот вокруг горизонтали вперёд: у взгляда вниз это курс, а не крен
-            double b = Math.toRadians(cameraPitch);
-            roll += side * Math.cos(b);
-            yaw -= side * Math.sin(b);
+        double w = k * (standingBefore + (standing - standingBefore) * partial), lean = w * Math.hypot(leanX, leanZ);
+        if (!(lean > 0)) return new double[]{yaw, pitch, roll};
+        // тело отклоняется по ветру от взрыва — в лицо запрокидывает голову, в спину клонит вниз, сбоку наклоняет от
+        // взрыва; дальше границы устойчивости человек шагает — наклон стоит на ней
+        double x = leanX / Math.hypot(leanX, leanZ), z = leanZ / Math.hypot(leanX, leanZ);
+        lean = Math.min(lean, Math.toDegrees(edge(cameraYaw, x, z)));
+        double[] to = leaned(cameraYaw + yaw, cameraPitch + pitch, cameraRoll + roll, lean, x, z);
+        return new double[]{Mth.wrapDegrees(to[0] - cameraYaw), to[1] - cameraPitch, Mth.wrapDegrees(to[2] - cameraRoll)};
+    }
+
+    /**
+     * Камера с курсом {@code yaw}, тангажем {@code pitch} и креном {@code roll} (°) после наклона тела на {@code lean}° в
+     * сторону (x, z) мира (единичную): поворот вокруг горизонтали поперёк наклона — верх камеры уходит туда, куда клонится
+     * тело. Возвращает курс, тангаж и крен, которые дают этот поворот у {@code Camera.setRotation}:
+     * {@code rotationYXZ(π − курс, −тангаж, −крен)}.
+     */
+    static double[] leaned(double yaw, double pitch, double roll, double lean, double x, double z) {
+        Matrix3d m = new Matrix3d().rotation(Math.toRadians(lean), z, 0, -x)
+                .mul(new Matrix3d().rotationYXZ(Math.PI - Math.toRadians(yaw), -Math.toRadians(pitch), -Math.toRadians(roll)));
+        // разложение R = Ry(a)·Rx(b)·Rz(c); у JOML mCR — столбец C, строка R
+        double b = Math.asin(Mth.clamp(-m.m21(), -1, 1)), a, c;
+        if (Math.cos(b) > 1e-7) {
+            a = Math.atan2(m.m20(), m.m22());
+            c = Math.atan2(m.m01(), m.m11());
+        } else {
+            // взгляд ровно в зенит или надир: курс и крен вертят картинку вокруг одной оси — крен оставляем прежним
+            c = -Math.toRadians(roll);
+            double turn = Math.atan2(-m.m02(), m.m00());
+            a = b < 0 ? turn - c : turn + c;
         }
-        return new double[]{yaw, pitch, roll};
+        return new double[]{180 - Math.toDegrees(a), -Math.toDegrees(b), -Math.toDegrees(c)};
     }
 
     /** Гладкое «дрожание» из двух синусов разной частоты (Гц при 20 тиках/с), амплитуда ~1. */

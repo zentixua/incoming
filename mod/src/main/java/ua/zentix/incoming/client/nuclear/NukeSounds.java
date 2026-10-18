@@ -290,7 +290,7 @@ public final class NukeSounds {
                 ClientSounds.start(direct);
             }
             if (echoes != null) echoes.arrive(ear, v, tone);
-            sway(mc, ear, pa);
+            sway(mc, ear);
             if (windPeak / WIND_FULL >= AUDIBLE && mc.options.getSoundSourceVolume(SoundSource.MASTER) > 0) {
                 wind = new AmbientLoop(ModSounds.NUKE_WIND.get(), SoundSource.MASTER, 1, d.seed(), 1);
                 wind(ear, 0);
@@ -313,19 +313,19 @@ public final class NukeSounds {
 
         /**
          * Ветер за фронтом толкает стоящего: тело отклоняется по ветру и выпрямляется ({@link BodySway}), камера — с ним
-         * ({@link CameraShake#sway}). Напор — скоростной напор за фронтом по давлению у уха (Ренкин–Гюгонио), его фаза —
-         * у слушателя. За стеной, домом или холмом в сторону взрыва (лучи {@link SoundFilters#openRays}) — в её
-         * ветровой тени: напор — по доле открытых лучей. Кого ветер несёт целиком (верхом, вплавь, в полёте), того не
+         * ({@link CameraShake#sway}). Напор — скоростной напор за фронтом вдоль земли у уха
+         * ({@link Detonation#dynamicPressureKpa}: под воздушным подрывом — только его доля вдоль земли), фаза — у
+         * слушателя. За стеной, домом или холмом в сторону взрыва (лучи {@link SoundFilters#openRays}) — в её ветровой
+         * тени: напор — по доле открытых лучей. Кого ветер несёт целиком (верхом, вплавь, в полёте), того не
          * качает — бросок считает сервер; в прыжке наклона нет, пока игрок не встанет ({@link CameraShake#standing}).
          */
-        private void sway(Minecraft mc, Vec3 ear, double pa) {
+        private void sway(Minecraft mc, Vec3 ear) {
             LocalPlayer p = mc.player;
             if (p == null || CameraShake.carried(p)) return;
             Vec3 b = d.burst();
             swayOpen = SoundFilters.openRays(ear, Math.atan2(b.z - ear.z, b.x - ear.x));
-            double[] tilt = BodySway.tilt(1000 * BlastModel.dynamicPressureKpa(pa / 1000) * swayOpen, phaseTicks / 20);
+            double[] tilt = CameraShake.sway(1000 * d.dynamicPressureKpa(ear) * swayOpen, phaseTicks / 20, ear.subtract(b), p.getYRot());
             swayPeak = Math.toDegrees(BodySway.peak(tilt, 0));
-            CameraShake.sway(tilt, ear.subtract(b));
         }
 
         /**
