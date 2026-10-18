@@ -95,6 +95,33 @@ class FrontMeetingTest {
         for (int r = 1012; r <= 2100; r++) assertEquals(r == 2000 ? HEARD : 0, out[r], "фронт " + r);
     }
 
+    /**
+     * Навстречу фронту: игрок бежит к взрыву (0,28 блока за тик), камера снаряда летит к нему (4 и 25 блоков за тик), а
+     * фронт проходит 17 блоков за тик — точка пересекает фронт между тиками, и встреча одна, при любом сдвиге фронта.
+     */
+    @Test
+    void movingTowardTheBurstMeetsTheFront() {
+        for (double speed : new double[]{0.28, 4, 25}) {
+            for (double shift = 0; shift < 17; shift += 0.25) {
+                FrontMeeting player = new FrontMeeting(), camera = new FrontMeeting();
+                int onPlayer = 0, onCamera = 0, hits = 0;
+                for (int t = 0; t < 400; t++) {
+                    double front = shift + 17 * t, at = Math.max(0, 1000 - speed * t);
+                    int out = player.tick(front, at, at, true);
+                    if (out == (HEARD | HIT)) onPlayer++;
+                    else assertEquals(0, out, "игрок, " + speed + " блока за тик, сдвиг " + shift + ", тик " + t);
+                    out = camera.tick(front, at, 5000, false);
+                    if ((out & HEARD) != 0) onCamera++;
+                    if ((out & HIT) != 0) hits++;
+                }
+                String what = speed + " блока за тик, сдвиг " + shift;
+                assertEquals(1, onPlayer, what + ": игрок");
+                assertEquals(1, onCamera, what + ": камера");
+                assertEquals(1, hits, what + ": тело за камерой");
+            }
+        }
+    }
+
     /** Игрока перенесло туда, где фронт уже прошёл: ни удара, ни звука. */
     @Test
     void playerMovedBehindTheFrontIsNotHit() {

@@ -16,12 +16,16 @@ final class FrontMeeting {
      * с фронтом) удар не повторяется каждые несколько тиков.
      */
     static final double AHEAD = 64;
+    /** Сдвиг дальше стольких блоков за тик — перенос, а не движение: перенесённого за фронт фронт не прошёл. */
+    static final double JUMP = 64;
     /** Что случилось в тик: прежняя встреча слушателя снята, фронт у слушателя, фронт у тела. */
     static final int AGAIN = 1, HEARD = 2, HIT = 4;
 
     private boolean heard, hit;
     /** Радиус фронта в прошлый тик; до первого — минус бесконечность (слушатель внутри шара слышит сразу). */
     private double last = Double.NEGATIVE_INFINITY;
+    /** Где были слушатель и тело в прошлый тик (от подрыва); NaN — не было. */
+    private double lastAt = Double.NaN, lastBody = Double.NaN;
 
     /**
      * Тик: где фронт и где слушатель с телом.
@@ -42,14 +46,24 @@ final class FrontMeeting {
         }
         if (!heard && front >= at) {
             heard = true;
-            if (last < at) out |= HEARD;
+            if (passed(at, lastAt)) out |= HEARD;
         }
-        if (!hit && body <= front && last < body) {
+        if (!hit && body <= front && passed(body, lastBody)) {
             hit = true;
             out |= HIT;
         }
         last = front;
+        lastAt = at;
+        lastBody = body;
         return out;
+    }
+
+    /**
+     * Фронт прошёл точку в этот тик: был до неё, где она сейчас, или она была впереди фронта и шла к взрыву (тогда она
+     * пересекает фронт между тиками). Перенос дальше {@link #JUMP} за тик — не движение.
+     */
+    private boolean passed(double now, double before) {
+        return last < now || last < before && Math.abs(now - before) <= JUMP;
     }
 
     /** Фронт уже у слушателя. */
