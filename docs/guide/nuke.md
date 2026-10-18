@@ -151,7 +151,7 @@ near them, ruins collapsing nearby, and now and then an explosion in the burning
   50 seconds at 3 km by day, several minutes at 10 km at night. If you were looking towards the fireball, its image
   burns a blind spot into your eyes for good, at 15 kt out to about 30 km by day and 50 km at night. The spot moves
   with your gaze and is fainter off to the side; it goes away only when you die. Creative and spectator players are
-  not blinded.
+  not blinded and don't see the spots.
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
   roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
   and an open doorway lets it in. Water washes the dust off you (rain does not).

@@ -2,6 +2,7 @@ package ua.zentix.incoming.nuclear.radiation;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -24,9 +25,19 @@ public final class FlashEyes {
 
     private FlashEyes() {}
 
-    /** Насколько глаз у {@code eye} привык к темноте: 0 — день, 1 — темнота (свет неба и блоков у глаза). */
+    /** Насколько глаз у {@code eye} привык к темноте: 0 — день, 1 — ночь (свет неба и блоков у глаза). */
     public static double darkness(Level level, Vec3 eye) {
-        return EyeInjury.darkness(level.getMaxLocalRawBrightness(BlockPos.containing(eye)));
+        return EyeInjury.darkness(level.getMaxLocalRawBrightness(BlockPos.containing(eye), skyDarken(level)));
+    }
+
+    /**
+     * На сколько ступеней (0..11) небо сейчас темнее дня, как {@code Level.updateSkyBrightness}: клиент ваниль считает
+     * его только при входе в мир, и ночь у клиента была бы днём.
+     */
+    static int skyDarken(Level level) {
+        double rain = 1 - level.getRainLevel(1) * 5 / 16.0, thunder = 1 - level.getThunderLevel(1) * 5 / 16.0;
+        double sun = 0.5 + 2 * Mth.clamp(Mth.cos(level.getTimeOfDay(1) * (float) (Math.PI * 2)), -0.25, 0.25);
+        return (int) ((1 - sun * rain * thunder) * 11);
     }
 
     /** Докуда (блоки) сетчатка может обжечься у смотревшего на шар — самый тёмный глаз. */
@@ -34,8 +45,12 @@ public final class FlashEyes {
         return d.blocks(EyeInjury.retinaRange(d.yieldKt(), 1, d.visibility()));
     }
 
-    /** Игрок {@code p}, который видит шар: ожог сетчатки, если смотрел в его сторону и был в пределах ожога. */
+    /**
+     * Игрок {@code p}, который видит шар: ожог сетчатки, если смотрел в его сторону и был в пределах ожога; у спящего
+     * глаза закрыты.
+     */
     public static void flash(Level level, Detonation d, ServerPlayer p) {
+        if (p.isSleeping()) return;
         RetinaScars.Scar scar = scar(d, p, darkness(level, p.getEyePosition()));
         if (scar == null) return;
         RetinaScars next = scars(p).with(scar);

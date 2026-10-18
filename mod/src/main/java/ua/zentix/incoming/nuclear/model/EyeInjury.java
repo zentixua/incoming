@@ -41,14 +41,19 @@ public final class EyeInjury {
     public static final double FULL_BLEACH_TD_S = 1.5e7;
     /** Альбедо земли перед глазом, световая отдача света шара (~6000 К), лм/Вт. */
     private static final double GROUND_ALBEDO = 0.2, LUMENS_PER_WATT = 93;
+    /** На сколько ступеней света ночное небо темнее дневного ({@code Level.updateSkyBrightness}). */
+    private static final double NIGHT_DARKEN = 11;
     /** Зрачок, мм: днём и у привыкшего к темноте. */
     private static final double PUPIL_DAY_MM = 3, PUPIL_NIGHT_MM = 7;
 
     private EyeInjury() {}
 
-    /** Насколько глаз привык к темноте (0 — день, 1 — темнота) при свете у глаза 0..15 (больший из неба и блоков). */
+    /**
+     * Насколько глаз привык к темноте (0 — день, 1 — ночь) при свете у глаза 0..15 (больший из неба и блоков): ночью
+     * небо темнее дня на 11 ступеней, и свет неба под открытым небом — 4; ещё темнее (подвал, пещера) — тоже ночь.
+     */
     public static double darkness(int light) {
-        return 1 - Math.max(0, Math.min(15, light)) / 15.0;
+        return clamp((15 - light) / NIGHT_DARKEN);
     }
 
     /**
@@ -71,7 +76,11 @@ public final class EyeInjury {
         return Math.exp(Math.log(day) + (Math.log(night) - Math.log(day)) * clamp(dark));
     }
 
-    /** Импульс у глаза, при котором выцветает всё поле (свет освещённой земли перед глазом), кал/см². */
+    /**
+     * Импульс у глаза, при котором выцветает всё поле (свет освещённой земли перед глазом), кал/см². Земля здесь
+     * освещена всем импульсом, как поверхность лицом к шару: у низкого шара прямого света на ровную землю меньше (доля —
+     * синус его высоты над горизонтом), но небо вокруг шара светится рассеянным, — оценка сверху.
+     */
     static double fullBleachFluence(double dark) {
         double pupil = PUPIL_DAY_MM + (PUPIL_NIGHT_MM - PUPIL_DAY_MM) * clamp(dark);
         double area = Math.PI * pupil * pupil / 4;
@@ -83,7 +92,8 @@ public final class EyeInjury {
     /**
      * До какой наклонной дальности, м, обжигается сетчатка смотревшего на шар при видимости {@code visibilityM}: энергия
      * на единицу площади изображения от дальности не зависит, её отнимает только воздух (§12.86), поэтому граница — та же
-     * прозрачность воздуха, что на дальности рисунка в ясную погоду.
+     * прозрачность воздуха, что на дальности рисунка в ясную погоду. Рисунок — для воздушного подрыва; у наземного свет
+     * шара тусклее (доля света и больший шар), но данных о сетчатке для него нет — та же дальность, оценка сверху.
      */
     public static double retinaRange(double yieldKt, double dark, double visibilityM) {
         double day = slant(at(RETINA_DAY_MI, yieldKt)), night = slant(at(RETINA_NIGHT_MI, yieldKt));

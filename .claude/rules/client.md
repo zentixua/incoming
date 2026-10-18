@@ -98,6 +98,9 @@ paths:
   оглушение EFX, счётчик Гейгера, отсчёты и тревога, двухшаговый пуск).
 
 ## Подводные камни
+- `ClientLevel` считает темноту неба (`Level.skyDarken`, `updateSkyBrightness`) только в конструкторе, при входе в
+  мир: `getMaxLocalRawBrightness(pos)` у клиента весь вечер дневной. Свет неба у глаза по времени суток —
+  `getMaxLocalRawBrightness(pos, FlashEyes.skyDarken(level))` (формула ванили; на сервере она та же).
 - Клиент получает только карты высот `MOTION_BLOCKING` и `WORLD_SURFACE`; `…_NO_LEAVES` есть лишь на сервере —
   в клиентском коде (и в общем, что зовёт клиент) только `MOTION_BLOCKING`.
 - Под шейдерами Iris (у хоста Complementary) всё, что нарисовано до конца мира, проходит через проходы шейдерпака, и его

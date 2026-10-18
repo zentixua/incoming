@@ -4,6 +4,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -18,7 +19,7 @@ import java.util.UUID;
 
 /**
  * Световой импульс и проникающая радиация по сущностям (DESIGN-nuke §1.4, §1.5) — под общим бюджетом тика,
- * ближние к подрыву первыми. Импульс и в жизни не мгновенный: максимум у 15 кт через 0.04·W^0.44 ≈ 0.14 с, основная
+ * игроки и ближние к подрыву первыми. Импульс и в жизни не мгновенный: максимум у 15 кт через 0.04·W^0.44 ≈ 0.14 с, основная
  * энергия приходит за десяток таких времён (Glasstone §7.85), так что пара тиков на сотни сущностей — честно.
  * Разом в тике подрыва (ожоги, смерти, лут) сервер вставал бы на сотни миллисекунд.
  * <p>
@@ -46,7 +47,10 @@ final class PulseJob {
         return d;
     }
 
-    /** Живые сущности в радиусе света и радиации и игроки в пределах ожога сетчатки, ближние первыми. */
+    /**
+     * Живые сущности в радиусе света и радиации и игроки в пределах ожога сетчатки: игроки первыми (пятно сетчатки — по
+     * взгляду как можно ближе к мигу вспышки, где и послеобраз у клиента), потом ближние.
+     */
     private static List<LivingEntity> inRange(ServerLevel level, Detonation d) {
         double range = NuclearWarhead.exposureRange(d), eyes = FlashEyes.reach(d);
         List<LivingEntity> in = new ArrayList<>(level.getEntitiesOfClass(LivingEntity.class, AABB.ofSize(d.burst(), range * 2, range * 2, range * 2),
@@ -55,7 +59,7 @@ final class PulseJob {
             double r = p.distanceToSqr(d.burst());
             if (r > range * range && r <= eyes * eyes) in.add(p);
         }
-        in.sort(Comparator.comparingDouble(e -> e.distanceToSqr(d.burst())));
+        in.sort(Comparator.comparing((LivingEntity e) -> !(e instanceof Player)).thenComparingDouble(e -> e.distanceToSqr(d.burst())));
         return in;
     }
 

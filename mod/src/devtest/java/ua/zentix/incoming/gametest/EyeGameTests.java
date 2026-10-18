@@ -6,6 +6,8 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.util.FakePlayer;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -55,7 +57,7 @@ public final class EyeGameTests {
      * Через свет по одной сущности, как у импульса: смотревший вверх на шар в 4 км (ожогов кожи и дозы там нет)
      * получает пятно, вторая вспышка — второе, больше {@link RetinaScars#MAX} не помнится; в творческом режиме — нет.
      */
-    @GameTest(template = "range", batch = "nuke_eyes", skyAccess = true)
+    @GameTest(template = "range", batch = "nuke_eyes_flash", skyAccess = true)
     public static void flashAddsScarsToPlayer(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         FakePlayer p = player(h, 0, -45);
@@ -72,6 +74,35 @@ public final class EyeGameTests {
         creative.setGameMode(GameType.CREATIVE);
         NuclearWarhead.expose(level, d, creative, null);
         h.assertTrue(FlashEyes.scars(creative).isEmpty(), "в творческом режиме обжёг сетчатку");
+        h.succeed();
+    }
+
+    /**
+     * Хребет в 100 блоках от игрока, шар за 2 км за ним: редкие точки тени по карте высот (через 130 блоков) хребет
+     * перешагнули бы, плотная проверка у глаза его видит. Хребет — за площадкой к +X, своими блоками (чанки грузит тест),
+     * после проверки убирается.
+     */
+    @GameTest(template = "range", batch = "nuke_eyes_terrain", skyAccess = true)
+    public static void ridgeNearFarPlayerHidesFireball(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        FakePlayer p = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "incoming_ridge"));
+        Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(4, 13, 32)));
+        p.moveTo(at.x, at.y, at.z, -90, 0);
+        // вверх на 1 блок на каждые 2 вбок: над стеной из барьеров вокруг площадки
+        Detonation d = detonation(h, p.getEyePosition().add(2000, 1000, 0), 1);
+        BlockPos from = h.absolutePos(new BlockPos(100, 13, 24)), to = h.absolutePos(new BlockPos(107, 80, 40));
+        // готовые чанки от игрока до хребта: плотная проверка идёт до первого неготового
+        BlockPos start = h.absolutePos(new BlockPos(0, 13, 24));
+        for (int cx = Math.min(start.getX(), to.getX()) >> 4; cx <= Math.max(start.getX(), to.getX()) >> 4; cx++) {
+            for (int cz = Math.min(from.getZ(), to.getZ()) >> 4; cz <= Math.max(from.getZ(), to.getZ()) >> 4; cz++) level.getChunk(cx, cz);
+        }
+        h.assertTrue(NuclearWarhead.sees(level, d, p), "без хребта шар не виден — проверка ни о чём");
+        try {
+            for (BlockPos b : BlockPos.betweenClosed(from, to)) level.setBlock(b, Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+            h.assertFalse(NuclearWarhead.sees(level, d, p), "шар виден сквозь хребет в 100 блоках");
+        } finally {
+            for (BlockPos b : BlockPos.betweenClosed(from, to)) level.setBlock(b, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
         h.succeed();
     }
 

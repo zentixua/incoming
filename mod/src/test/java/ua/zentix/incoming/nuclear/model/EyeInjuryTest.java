@@ -53,9 +53,12 @@ class EyeInjuryTest {
         assertEquals(EyeInjury.retinaRange(15, 0, V) / 2, EyeInjury.retinaRange(15, 0, V / 2), 1e-6);
     }
 
+    /** Свет у глаза: днём 15, ночью под открытым небом 4 (небо темнее на 11) — ночь, темнее — тоже. */
     @Test
     void darknessByLight() {
         assertEquals(0, EyeInjury.darkness(15));
+        assertEquals(1, EyeInjury.darkness(4));
+        assertEquals(5 / 11.0, EyeInjury.darkness(10), 1e-12);
         assertEquals(1, EyeInjury.darkness(0));
         assertEquals(1, EyeInjury.darkness(-3));
         assertEquals(0, EyeInjury.darkness(20));

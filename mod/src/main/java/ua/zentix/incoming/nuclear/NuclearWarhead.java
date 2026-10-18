@@ -46,6 +46,8 @@ public final class NuclearWarhead {
      * из {@code level.random}, чтобы кадры пелены и гриба сравнивались от прогона к прогону. В игре — как было.
      */
     private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
+    /** Докуда от глаза (блоки) рельеф между ним и шаром проверяется по карте высот плотно, и с каким шагом. */
+    private static final double NEAR_TERRAIN = 512, TERRAIN_STEP = 8;
     private static final long SCENARIO_SEED = 0x5CE7A510L;
 
     private NuclearWarhead() {}
@@ -160,7 +162,7 @@ public final class NuclearWarhead {
 
     /**
      * Видит ли сущность огненный шар: рядом — честный луч по блокам (стены, крыша), дальше — по карте высот
-     * (холмы, дома), чтобы не гнать луч на километры.
+     * (холмы, дома): до {@link #NEAR_TERRAIN} — плотно, за ним — редкими точками, чтобы не гнать луч на километры.
      */
     public static boolean sees(Level level, Detonation d, LivingEntity e) {
         Vec3 eye = e.getEyePosition();
@@ -169,6 +171,14 @@ public final class NuclearWarhead {
         Vec3 near = eye.add(dir.scale(Math.min(1, 48 / Math.max(len, 1e-3))));
         // луч по блокам — только по загруженным чанкам: сервер не должен грузить мир ради проверки
         if (Terrain.readyAlong(level, eye, near) && level.clip(new ClipContext(eye, near, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, e)).getType() != HitResult.Type.MISS) return false;
+        // редкие точки ThermalShadow у дальнего глаза проходят мимо рельефа рядом (хребет в сотне метров при шаре за
+        // 30 км): от луча до NEAR_TERRAIN — каждые TERRAIN_STEP блоков по карте высот, пока чанки готовы
+        Vec3 until = Terrain.readyUntil(level, near, eye.add(dir.scale(Math.min(1, NEAR_TERRAIN / Math.max(len, 1e-3)))));
+        Vec3 span = until.subtract(near);
+        for (double s = TERRAIN_STEP, n = span.length(); s < n; s += TERRAIN_STEP) {
+            Vec3 p = near.add(span.scale(s / n));
+            if (Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(p.x), Mth.floor(p.z)) > p.y + 0.5) return false;
+        }
         return ThermalShadow.visible(level, d.burst(), near);
     }
 

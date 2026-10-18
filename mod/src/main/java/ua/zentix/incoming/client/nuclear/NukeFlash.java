@@ -37,9 +37,11 @@ import java.util.List;
  *
  * <p>Глаза (G&amp;D §12.83–12.88): засветка всего поля — вуаль по {@link EyeInjury#dazzleSeconds} от импульса у глаза
  * (видел шар — весь, не видел, но под открытым небом — рассеянный небом, под крышей — нет) и того, привык ли глаз к
- * темноте: сперва светлый послеобраз, через секунды — серая днём, чёрная ночью, гаснет к концу срока. Ожоги сетчатки —
- * постоянные тёмные пятна там, где на сетчатке был шар (с сервера, {@link FlashEyes}); ходят со взглядом. Творческий
- * режим и наблюдатель глаз не теряют (ранений у них нет), белый экран и послеобраз у них те же.
+ * темноте: сперва светлый послеобраз, через секунды — серая днём, чёрная ночью, гаснет к концу срока; чем короче
+ * засветка, тем вуаль слабее. Ожоги сетчатки — постоянные тёмные пятна там, где на сетчатке был шар (с сервера,
+ * {@link FlashEyes}); ходят со взглядом. Творческий режим и наблюдатель — не глаза, а камера (ранений у них нет): ни
+ * засветки, ни пятен, пока игрок в этом режиме (пятна остаются за ним), белый экран и послеобраз у них те же; в повторе
+ * Flashback зритель — наблюдатель. Спящий глаза закрыл. Смерть засветку снимает.
  */
 public final class NukeFlash {
     @Nullable
@@ -90,7 +92,7 @@ public final class NukeFlash {
         boolean inView = sees && angle < 60;
         s *= inView ? 1 : sees ? 0.45 : 0.3;
         s *= IncomingConfig.CLIENT.flash.get();
-        if (!p.isCreative() && !p.isSpectator()) dazzle(mc.level, d, eye, sees ? q : Detonation.underOpenSky(mc.level, eye) ? q * SCATTERED : 0);
+        if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, sees ? q : Detonation.underOpenSky(mc.level, eye) ? q * SCATTERED : 0);
         // «без вспышек молний»: без засветки мира, белый экран — неполный
         if (calmFlash()) s = Math.min(s, CALM_FLASH);
         if (s <= strength && current != null) return;
@@ -120,7 +122,7 @@ public final class NukeFlash {
         if (start + seconds * 20 <= veilStart + veilSeconds * 20) return;
         veilStart = start;
         veilSeconds = seconds;
-        veilStrength = k;
+        veilStrength = k * (float) Math.min(1, seconds / EyeInjury.EDGE_S);
         veilDark = (float) dark;
     }
 
@@ -179,6 +181,17 @@ public final class NukeFlash {
         }
     }
 
+    /** Глаза, а не камера: не творческий режим и не наблюдатель (и не зритель повтора). */
+    private static boolean eyes(@Nullable LocalPlayer p) {
+        return p != null && !p.isCreative() && !p.isSpectator();
+    }
+
+    /** Возрождение после смерти: засветку и послеобраз умерших глаз новое тело не несёт (пятна сетчатки шлёт сервер). */
+    public static void respawned() {
+        afterLeft = 0;
+        veilSeconds = 0;
+    }
+
     static void reset() {
         current = null;
         strength = 0;
@@ -205,8 +218,10 @@ public final class NukeFlash {
         float partial = delta.getGameTimeDeltaPartialTick(false);
         int w = g.guiWidth(), h = g.guiHeight();
         NukeDust.render(g);
-        if (!scars.isEmpty()) scars(g, w, h);
-        veil(g, partial, w, h);
+        if (eyes(Minecraft.getInstance().player)) {
+            if (!scars.isEmpty()) scars(g, w, h);
+            veil(g, partial, w, h);
+        }
         if (afterLeft > 0 && current != null) afterimage(g, partial, w, h);
         float white = whiteness(partial);
         if (white > 0.004f) {
@@ -247,13 +262,14 @@ public final class NukeFlash {
     }
 
     /**
-     * Вуаль засветки: пока идёт импульс — во всю силу, потом гаснет к концу срока как (1 − t/T)²; цвет — светлый
-     * послеобраз, который за секунды темнеет (днём к серому, ночью к чёрному: привыкший к темноте глаз не видит тусклого).
+     * Вуаль засветки: с конца импульса (сам импульс — белый экран {@link #whiteness}) гаснет к концу срока как
+     * (1 − t/T)²; цвет — светлый послеобраз, который за секунды темнеет (днём к серому, ночью к чёрному: привыкший к
+     * темноте глаз не видит тусклого).
      */
     private static void veil(GuiGraphics g, float partial, int w, int h) {
         if (veilSeconds <= 0) return;
-        double t = Math.max(0, (ticks + partial - veilStart) / 20);
-        if (t >= veilSeconds) return;
+        double t = (ticks + partial - veilStart) / 20;
+        if (t < 0 || t >= veilSeconds) return;
         double life = 1 - t / veilSeconds;
         float a = (float) (VEIL * life * life * veilStrength);
         if (a <= 0.004f) return;
