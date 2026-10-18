@@ -3,7 +3,9 @@ package ua.zentix.incoming.nuclear.radiation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -47,10 +49,11 @@ public final class FlashEyes {
 
     /**
      * Игрок {@code p}, который видит шар: ожог сетчатки, если смотрел в его сторону и был в пределах ожога; у спящего
-     * глаза закрыты.
+     * глаза закрыты. Игрока, которого правила не дают ранить пустившему {@code owner} (без PvP, своя команда), ожог не
+     * трогает, как и ожог кожи ({@link FlashBurns}).
      */
-    public static void flash(Level level, Detonation d, ServerPlayer p) {
-        if (p.isSleeping()) return;
+    public static void flash(Level level, Detonation d, ServerPlayer p, @Nullable Entity owner) {
+        if (p.isSleeping() || owner instanceof Player attacker && !p.canHarmPlayer(attacker)) return;
         RetinaScars.Scar scar = scar(d, p, darkness(level, p.getEyePosition()));
         if (scar == null) return;
         RetinaScars next = scars(p).with(scar);

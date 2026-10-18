@@ -136,7 +136,7 @@ public final class NuclearWarhead {
         if (living instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
         Vec3 eye = living.getEyePosition();
         if (sees(level, d, living)) {
-            if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player);
+            if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player, owner);
             FlashBurns.burn(level, d, living, d.fluence(eye), owner);
             // видел вспышку — бежит прочь
             MobPanic.flash(d, living, level.getGameTime());

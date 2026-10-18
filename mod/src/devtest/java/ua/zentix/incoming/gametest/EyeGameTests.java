@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -56,6 +57,7 @@ public final class EyeGameTests {
     /**
      * Через свет по одной сущности, как у импульса: смотревший вверх на шар в 4 км (ожогов кожи и дозы там нет)
      * получает пятно, вторая вспышка — второе, больше {@link RetinaScars#MAX} не помнится; в творческом режиме — нет.
+     * Подрыв игрока не обжигает сетчатку тому, кого правила не дают ранить (без PvP, своя команда), как и кожу.
      */
     @GameTest(template = "range", batch = "nuke_eyes_flash", skyAccess = true)
     public static void flashAddsScarsToPlayer(GameTestHelper h) {
@@ -74,6 +76,11 @@ public final class EyeGameTests {
         creative.setGameMode(GameType.CREATIVE);
         NuclearWarhead.expose(level, d, creative, null);
         h.assertTrue(FlashEyes.scars(creative).isEmpty(), "в творческом режиме обжёг сетчатку");
+        FakePlayer owner = player(h, 0, 0), friend = player(h, 0, -45, false), enemy = player(h, 0, -45, true);
+        NuclearWarhead.expose(level, d, friend, owner);
+        h.assertTrue(FlashEyes.scars(friend).isEmpty(), "подрыв игрока обжёг сетчатку тому, кого правила не дают ранить");
+        NuclearWarhead.expose(level, d, enemy, owner);
+        h.assertValueEqual(FlashEyes.scars(enemy).scars().size(), 1, "пятен от подрыва игрока у того, кого можно ранить");
         h.succeed();
     }
 
@@ -108,7 +115,20 @@ public final class EyeGameTests {
 
     /** Игрок над серединой площадки, взгляд — поворот и наклон (0, 0 — на юг, +Z). */
     private static FakePlayer player(GameTestHelper h, float yaw, float pitch) {
-        FakePlayer p = new FakePlayer(h.getLevel(), new GameProfile(UUID.randomUUID(), "incoming_eyes"));
+        return place(h, new FakePlayer(h.getLevel(), new GameProfile(UUID.randomUUID(), "incoming_eyes")), yaw, pitch);
+    }
+
+    /** Игрок, которого правила игры (PvP, команды) дают или не дают ранить другим игрокам. */
+    private static FakePlayer player(GameTestHelper h, float yaw, float pitch, boolean harmable) {
+        return place(h, new FakePlayer(h.getLevel(), new GameProfile(UUID.randomUUID(), "incoming_eyes")) {
+            @Override
+            public boolean canHarmPlayer(Player other) {
+                return harmable;
+            }
+        }, yaw, pitch);
+    }
+
+    private static FakePlayer place(GameTestHelper h, FakePlayer p, float yaw, float pitch) {
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER.above()));
         p.moveTo(at.x, at.y, at.z, yaw, pitch);
         p.setYHeadRot(yaw);
