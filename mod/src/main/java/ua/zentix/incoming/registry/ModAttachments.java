@@ -10,6 +10,7 @@ import ua.zentix.incoming.defense.DefenseWorld;
 import ua.zentix.incoming.grid.BlackoutWorld;
 import ua.zentix.incoming.grid.Blackouts;
 import ua.zentix.incoming.nuclear.radiation.RadiationDose;
+import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 import ua.zentix.incoming.nuclear.world.FarLods;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.WorkClock;
@@ -30,6 +31,10 @@ public final class ModAttachments {
     /** Доза и заражение игрока; смерть сбрасывает (не копируется). */
     public static final Supplier<AttachmentType<RadiationDose>> RADIATION = REGISTER.register("radiation",
             () -> AttachmentType.builder(() -> RadiationDose.NONE).serialize(RadiationDose.CODEC).build());
+
+    /** Ожоги сетчатки игрока — слепые пятна от вспышки; смерть сбрасывает (не копируется). */
+    public static final Supplier<AttachmentType<RetinaScars>> RETINA = REGISTER.register("retina",
+            () -> AttachmentType.builder(() -> RetinaScars.NONE).serialize(RetinaScars.CODEC, s -> !s.isEmpty()).build());
 
     /** Чанк: номер последнего ядерного подрыва, чьи повреждения к нему уже применены. */
     public static final Supplier<AttachmentType<Integer>> CHUNK_SCAR = REGISTER.register("chunk_scar",

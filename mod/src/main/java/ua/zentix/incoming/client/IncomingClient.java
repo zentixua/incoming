@@ -420,6 +420,12 @@ public final class IncomingClient {
         }
 
         @Override
+        public void retinaScars(S2C.RetinaScars p) {
+            // состояние глаз, не событие: и из перемотки повтора
+            NukeFlash.scars(p.scars());
+        }
+
+        @Override
         public void flights(S2C.Flights p) {
             ClientFlights.update(p);
         }

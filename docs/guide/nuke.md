@@ -145,6 +145,13 @@ near them, ruins collapsing nearby, and now and then an explosion in the burning
   water. Milk and potions do not heal burns.
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
+- **The flash blinds.** It dazzles everyone who sees the fireball, and more weakly everyone under the open sky it lights
+  up: the whole view goes bright, then grey by day or black at night, and clears over seconds or minutes. The closer
+  you are, the longer it lasts, and at night, when your eyes have got used to the dark, far longer: at 15 kt about
+  50 seconds at 3 km by day, several minutes at 10 km at night. If you were looking towards the fireball, its image
+  burns a blind spot into your eyes for good, at 15 kt out to about 30 km by day and 50 km at night. The spot moves
+  with your gaze and is fainter off to the side; it goes away only when you die. In creative and spectator mode you
+  still see the white flash and its afterimage, but your sight is not dimmed and the spots are hidden.
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
   roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
   and an open doorway lets it in. Water washes the dust off you (rain does not).

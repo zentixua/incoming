@@ -492,6 +492,18 @@ public final class S2C {
         }
     }
 
+    /** Ожоги сетчатки игрока — все пятна целиком ({@link ua.zentix.incoming.nuclear.radiation.FlashEyes}). */
+    public record RetinaScars(ua.zentix.incoming.nuclear.radiation.RetinaScars scars) implements CustomPacketPayload {
+        public static final Type<RetinaScars> TYPE = new Type<>(Incoming.id("retina_scars"));
+        public static final StreamCodec<ByteBuf, RetinaScars> CODEC = ua.zentix.incoming.nuclear.radiation.RetinaScars.STREAM_CODEC
+                .map(RetinaScars::new, RetinaScars::scars);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     /**
      * Конец тика сервера повтора Flashback ({@link ua.zentix.incoming.compat.FlashbackReplay}): место в записи и идёт ли
      * перемотка. Пакеты, пришедшие до метки, прочитаны в этом тике; только повтор, в игре её нет.
