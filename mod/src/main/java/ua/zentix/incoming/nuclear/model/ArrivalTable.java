@@ -1,8 +1,10 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Время прихода фронта ударной волны: интеграл dR/U по логарифмической сетке (1000 узлов от 1 м),
- * между узлами — линейная интерполяция, за таблицей — скорость звука.
+ * Время прихода фронта ударной волны по наклонной дальности от подрыва: на землю — по Броуду ({@link HobBlast#arrivalSeconds},
+ * дальность по земле при той же наклонной), ближе высоты подрыва (в воздухе под ним) — свободный воздух
+ * ({@link HobBlast#freeAirArrivalSeconds}, сшито с Броудом под подрывом). Узлы — логарифмическая сетка (1000 от 1 м),
+ * между ними — линейно, за таблицей — скорость звука.
  */
 public final class ArrivalTable {
     private static final int NODES = 1000;
@@ -18,17 +20,21 @@ public final class ArrivalTable {
         this.time = time;
     }
 
-    public static ArrivalTable of(double yieldKt, double maxRangeM) {
-        double max = Math.max(maxRangeM, FIRST_NODE_M * 2);
+    /**
+     * @param hobM высота подрыва над землёй, м (0 — наземный)
+     */
+    public static ArrivalTable of(double yieldKt, double hobM, double maxRangeM) {
+        double hob = Math.max(0, hobM), max = Math.max(maxRangeM, FIRST_NODE_M * 2);
         double[] r = new double[NODES + 1];
         double[] t = new double[NODES + 1];
         double step = Math.log(max / FIRST_NODE_M) / (NODES - 1);
-        double prevSlowness = 1 / BlastModel.frontSpeed(BlastModel.overpressureKpa(0, yieldKt));
+        // свободный воздух под подрывом сшит с приходом на землю под ним (расходятся на доли процента)
+        double stitch = hob <= 0 ? 1 : HobBlast.arrivalSeconds(0, hob, yieldKt) / HobBlast.freeAirArrivalSeconds(hob, yieldKt);
         for (int i = 1; i <= NODES; i++) {
             r[i] = FIRST_NODE_M * Math.exp(step * (i - 1));
-            double slowness = 1 / BlastModel.frontSpeed(BlastModel.overpressureKpa(r[i], yieldKt));
-            t[i] = t[i - 1] + (r[i] - r[i - 1]) * 0.5 * (slowness + prevSlowness);
-            prevSlowness = slowness;
+            t[i] = r[i] < hob ? HobBlast.freeAirArrivalSeconds(r[i], yieldKt) * stitch
+                    : HobBlast.arrivalSeconds(Math.sqrt(r[i] * r[i] - hob * hob), hob, yieldKt);
+            t[i] = Math.max(t[i], t[i - 1] + 1e-12);
         }
         return new ArrivalTable(r, t);
     }

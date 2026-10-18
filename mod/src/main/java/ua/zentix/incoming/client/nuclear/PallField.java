@@ -161,7 +161,7 @@ public final class PallField {
         this.lastGame = burstGame;
         this.lastDay = burstDay;
         double hob = Math.max(0, d.hobMetres()), ys = Math.cbrt(d.yieldKt() / 15);
-        double coverM = groundRange(BlastModel.rangeForOverpressure(BlastModel.kpa(COVER_FROM_PSI), d.yieldKt()), hob);
+        double coverM = d.metres(d.groundRange(BlastModel.kpa(COVER_FROM_PSI)));
         // сервер не поджигает (Detonation.fires) — зоны пожаров нет: ни мглы над ними, ни их зарева, ни шторма
         double ignite = !d.fires() ? 0
                 : groundRange(ThermalModel.rangeForFluence(ThermalModel.IGNITE, d.yieldKt(), d.surface(), d.visibility()), hob);
@@ -172,9 +172,8 @@ public final class PallField {
             double rb = radius(i), rm = d.metres(rb);
             double slant = Math.hypot(rm, hob);
             arrival[i] = d.arrivalTicks(d.blocks(slant));
-            double kpa = BlastModel.overpressureKpa(Math.max(1, slant), d.yieldKt());
-            cover[i] = cover(BlastModel.psi(kpa));
-            spray[i] = WaterModel.spray(BlastModel.windSpeed(kpa));
+            cover[i] = cover(BlastModel.psi(d.groundOverpressureKpa(rb)));
+            spray[i] = WaterModel.spray(d.groundWind(rb));
             top[i] = Math.max(MIN_TOP_BLOCKS, d.blocks(topMetres(rm, ys)));
             from[i] = Math.max(MIN_TOP_BLOCKS, d.blocks(BlastWall.TAIL * BlastWall.wallHeight(rm, ys)));
             fire[i] = ignite <= 0 ? 0 : 1 - smooth(ignite * 0.85, ignite * 1.05, rm);
