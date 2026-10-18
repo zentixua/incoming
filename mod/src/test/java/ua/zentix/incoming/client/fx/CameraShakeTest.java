@@ -62,7 +62,7 @@ class CameraShakeTest {
                         int top = 0;
                         for (int i = 0; i < t.length; i++) if (t[i] > t[top]) top = i;
                         for (int tick = 0; tick < top / STEP; tick++) CameraShake.tick(true);
-                        double[] o = CameraShake.offsets((top % STEP) / (double) STEP, yaw, pitch, roll, 1);
+                        double[] o = CameraShake.offsets((top % STEP) / (double) STEP, yaw, pitch, roll, yaw, 1);
                         Vector3d[] got = camera(yaw + o[0], pitch + o[1], roll + o[2]), was = camera(yaw, pitch, roll);
                         double flat = Math.hypot(away.x, away.z);
                         Quaterniond lean = new Quaterniond().rotationAxis(t[top], away.z / flat, 0, -away.x / flat);
@@ -79,7 +79,7 @@ class CameraShakeTest {
         int top = 0;
         for (int i = 0; i < t.length; i++) if (t[i] > t[top]) top = i;
         for (int tick = 0; tick < top / STEP; tick++) CameraShake.tick(true);
-        double[] o = CameraShake.offsets((top % STEP) / (double) STEP, 0, 90, 0, 1);
+        double[] o = CameraShake.offsets((top % STEP) / (double) STEP, 0, 90, 0, 0, 1);
         Vector3d look = camera(o[0], 90 + o[1], o[2])[0];
         assertEquals(Math.toDegrees(t[top]), angle(look, new Vector3d(0, -1, 0)), 1e-6);
         assertTrue(look.x < 0, "взгляд вниз уходит вправо: " + look);
@@ -107,7 +107,7 @@ class CameraShakeTest {
             for (int i = 0; i < waves; i++) sway(5, 15, away);
             double edge = Math.toDegrees(CameraShake.edge(0, away.x / Math.sqrt(2), away.z / Math.sqrt(2))), most = 0;
             for (int tick = 0; tick < 20 * 20; tick++) {
-                double[] o = CameraShake.offsets(0, 0, 0, 0, 1);
+                double[] o = CameraShake.offsets(0, 0, 0, 0, 0, 1);
                 most = Math.max(most, angle(camera(o[0], o[1], o[2])[1], new Vector3d(0, 1, 0)) / edge);
                 CameraShake.tick(true);
             }
@@ -135,7 +135,7 @@ class CameraShakeTest {
                         Quaterniond prev = null;
                         for (int tick = 0; tick * STEP < t.length + 20; tick++) {
                             for (int f = 0; f < 10; f++) {
-                                double[] o = CameraShake.offsets(f / 10.0, yaw, pitch, 0, 1);
+                                double[] o = CameraShake.offsets(f / 10.0, yaw, pitch, 0, yaw, 1);
                                 Quaterniond q = rotation(yaw + o[0], pitch + o[1], o[2]);
                                 if (prev != null) most = Math.max(most, Math.toDegrees(2 * Math.acos(Math.min(1, Math.abs(q.dot(prev))))));
                                 prev = q;
@@ -145,12 +145,32 @@ class CameraShakeTest {
                         String what = kt + " кт, " + psi + " psi, курс " + yaw + ", тангаж " + pitch;
                         assertTrue(most < 0.5, what + ": " + most + "° за кадр");
                         if (psi == 1) assertTrue(most * 200 < 30, what + ": " + most * 200 + " °/с");
-                        double[] o = CameraShake.offsets(0.5, yaw, pitch, 0, 1);
+                        double[] o = CameraShake.offsets(0.5, yaw, pitch, 0, yaw, 1);
                         assertEquals(0, Math.abs(o[0]) + Math.abs(o[1]) + Math.abs(o[2]), 1e-12, what + ": тело выпрямилось, а камера нет");
                     }
                 }
             }
         }
+        CameraShake.reset();
+    }
+
+    /**
+     * Наклон — тела игрока: камера не на нём (камера снаряда) наклона не показывает; граница устойчивости — по тому, куда
+     * смотрит тело, а не камера: вид спереди от третьего лица смотрит назад, а спиной к взрыву тело клонится вперёд до 8°.
+     */
+    @Test
+    void leanIsTheBodys() {
+        CameraShake.reset();
+        sway(5, 15, new Vec3(0, 0, 1));
+        double front = 0;
+        for (int tick = 0; tick < 20 * 20; tick++) {
+            double[] o = CameraShake.offsets(0.5, 0, 0, 0, Double.NaN, 1);
+            assertEquals(0, Math.abs(o[0]) + Math.abs(o[1]) + Math.abs(o[2]), 1e-12, "камера не на игроке");
+            o = CameraShake.offsets(0.5, 180, 0, 0, 0, 1);
+            front = Math.max(front, angle(camera(180 + o[0], o[1], o[2])[1], new Vector3d(0, 1, 0)));
+            CameraShake.tick(true);
+        }
+        assertEquals(Math.toDegrees(BodySway.FORWARD), front, 1e-6, "вид спереди: граница — тела");
         CameraShake.reset();
     }
 
@@ -160,11 +180,11 @@ class CameraShakeTest {
         CameraShake.reset();
         double[] first = sway(1, 2, new Vec3(0, 0, 1));
         for (int i = 0; i < 10; i++) CameraShake.tick(true);
-        double before = CameraShake.offsets(0, 0, 0, 0, 1)[1];
+        double before = CameraShake.offsets(0, 0, 0, 0, 0, 1)[1];
         double[] second = sway(0.5, 2, new Vec3(0, 0, 1));
-        assertEquals(before, CameraShake.offsets(0, 0, 0, 0, 1)[1], 1e-9, "в миг прихода");
+        assertEquals(before, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "в миг прихода");
         for (int i = 0; i < 10; i++) CameraShake.tick(true);
-        assertEquals(Math.toDegrees(first[20 * STEP] + second[10 * STEP]), CameraShake.offsets(0, 0, 0, 0, 1)[1], 1e-9);
+        assertEquals(Math.toDegrees(first[20 * STEP] + second[10 * STEP]), CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
         CameraShake.reset();
     }
 
@@ -174,11 +194,11 @@ class CameraShakeTest {
         CameraShake.reset();
         double[] t = sway(1, 2, new Vec3(0, 0, 1));
         for (int i = 0; i < 10; i++) CameraShake.tick(true);
-        assertTrue(CameraShake.offsets(0, 0, 0, 0, 1)[1] > 0.1);
+        assertTrue(CameraShake.offsets(0, 0, 0, 0, 0, 1)[1] > 0.1);
         for (int i = 0; i < 6; i++) CameraShake.tick(false);
-        assertEquals(0, CameraShake.offsets(0.5, 0, 0, 0, 1)[1], 1e-12);
+        assertEquals(0, CameraShake.offsets(0.5, 0, 0, 0, 0, 1)[1], 1e-12);
         for (int i = 0; i < 6; i++) CameraShake.tick(true);
-        assertEquals(Math.toDegrees(t[22 * STEP]), CameraShake.offsets(0, 0, 0, 0, 1)[1], 1e-9);
+        assertEquals(Math.toDegrees(t[22 * STEP]), CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
         CameraShake.reset();
     }
 
@@ -191,7 +211,7 @@ class CameraShakeTest {
         double[] t = sway(psi, kt, away), e = {0, 0, 0};
         for (int tick = 0; tick * STEP < t.length; tick++) {
             for (int f = 0; f < 10; f++) {
-                double[] o = CameraShake.offsets(f / 10.0, 0, 0, 0, k);
+                double[] o = CameraShake.offsets(f / 10.0, 0, 0, 0, 0, k);
                 e[0] = Math.min(e[0], o[1]);
                 e[1] = Math.max(e[1], o[1]);
                 e[2] = Math.min(e[2], o[2]);

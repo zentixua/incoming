@@ -116,8 +116,12 @@ public final class CameraShake {
 
     public static void apply(ViewportEvent.ComputeCameraAngles e) {
         double k = IncomingConfig.CLIENT.cameraShake.get();
-        if (k <= 0 || shake <= 0 && quake <= 0 && SWAYS.isEmpty() || Minecraft.getInstance().isPaused()) return;
-        double[] o = offsets(e.getPartialTick(), e.getYaw(), e.getPitch(), e.getRoll(), k);
+        Minecraft mc = Minecraft.getInstance();
+        if (k <= 0 || shake <= 0 && quake <= 0 && SWAYS.isEmpty() || mc.isPaused()) return;
+        // наклон — тела игрока: камере снаряда и глазам другой сущности его не видно
+        Player p = mc.player;
+        double body = p != null && mc.getCameraEntity() == p ? p.getViewYRot((float) e.getPartialTick()) : Double.NaN;
+        double[] o = offsets(e.getPartialTick(), e.getYaw(), e.getPitch(), e.getRoll(), body, k);
         e.setYaw(e.getYaw() + (float) o[0]);
         e.setPitch(e.getPitch() + (float) o[1]);
         e.setRoll(e.getRoll() + (float) o[2]);
@@ -125,10 +129,11 @@ public final class CameraShake {
 
     /**
      * Поворот камеры тряской в кадре, ° (курс, тангаж — вниз больше нуля, крен — верх вправо больше нуля), при курсе
-     * {@code cameraYaw}, тангаже {@code cameraPitch} и крене {@code cameraRoll} камеры; {@code k} — сила тряски из
-     * настроек.
+     * {@code cameraYaw}, тангаже {@code cameraPitch} и крене {@code cameraRoll} камеры; {@code bodyYaw} — куда смотрит
+     * игрок, ° (по нему граница устойчивости: вид спереди от третьего лица смотрит назад), NaN — камера не на игроке,
+     * наклона тела нет; {@code k} — сила тряски из настроек.
      */
-    static double[] offsets(double partial, double cameraYaw, double cameraPitch, double cameraRoll, double k) {
+    static double[] offsets(double partial, double cameraYaw, double cameraPitch, double cameraRoll, double bodyYaw, double k) {
         double t = ticks + partial;
         // амплитуды: курс/тангаж, °
         double yaw = 0, pitch = 0;
@@ -159,11 +164,11 @@ public final class CameraShake {
             leanZ += tilt * s.pushZ;
         }
         double w = k * (standingBefore + (standing - standingBefore) * partial), lean = w * Math.hypot(leanX, leanZ);
-        if (!(lean > 0)) return new double[]{yaw, pitch, roll};
+        if (!(lean > 0) || Double.isNaN(bodyYaw)) return new double[]{yaw, pitch, roll};
         // тело отклоняется по ветру от взрыва — в лицо запрокидывает голову, в спину клонит вниз, сбоку наклоняет от
         // взрыва; дальше границы устойчивости человек шагает — наклон стоит на ней
         double x = leanX / Math.hypot(leanX, leanZ), z = leanZ / Math.hypot(leanX, leanZ);
-        lean = Math.min(lean, Math.toDegrees(edge(cameraYaw, x, z)));
+        lean = Math.min(lean, Math.toDegrees(edge(bodyYaw, x, z)));
         double[] to = leaned(cameraYaw + yaw, cameraPitch + pitch, cameraRoll + roll, lean, x, z);
         return new double[]{Mth.wrapDegrees(to[0] - cameraYaw), to[1] - cameraPitch, Mth.wrapDegrees(to[2] - cameraRoll)};
     }
