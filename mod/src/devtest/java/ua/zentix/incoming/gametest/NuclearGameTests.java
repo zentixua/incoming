@@ -17,6 +17,7 @@ import net.minecraft.world.entity.animal.Cow;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
@@ -31,12 +32,14 @@ import ua.zentix.incoming.entity.IcbmEntity;
 import ua.zentix.incoming.entity.LauncherEntity;
 import ua.zentix.incoming.guidance.Route;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.MobPanic;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.Yield;
+import ua.zentix.incoming.nuclear.world.BlastBody;
 import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.grid.GridLights;
 import net.minecraft.world.level.block.state.BlockState;
@@ -1505,8 +1508,8 @@ public final class NuclearGameTests {
     /**
      * Перезапуск посреди волны: {@link NuclearWorld} не сохраняется, фронт по сущностям заводится заново — и отсчёт
      * у него от фронта прошлого тика, а не от эпицентра. 0.1 кт, 1 блок = 20 м: через 2 тика после подрыва фронт
-     * между 22 и 40 блоками; корова в 10 блоках (5 psi — смерть, если ударить) им уже пройдена и второй раз
-     * не бьётся, корову в 26 блоках (1.2 psi) волна ранит.
+     * между 22 и 40 блоками; корова в 10 блоках им уже пройдена и второй раз не бьётся, корову в 26 блоках волна
+     * пугает (ранить её при ~1 psi такая короткая волна не может — G&D, гл. 12).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_restart_front", skyAccess = true)
     public static void frontAfterRestartSkipsEntitiesInside(GameTestHelper h) {
@@ -1521,8 +1524,8 @@ public final class NuclearGameTests {
         // как после перезапуска: ядерные очереди мира — с чистого листа, подрыв — из сохранения
         level.removeData(ModAttachments.NUCLEAR_WORLD);
         h.succeedWhen(() -> {
-            h.assertTrue(ahead.getHealth() < ahead.getMaxHealth(), "волна не дошла до коровы впереди фронта");
-            h.assertTrue(inside.isAlive() && inside.getHealth() == inside.getMaxHealth(), "фронт второй раз ударил корову, которую уже прошёл");
+            h.assertTrue(MobPanic.panicking(ahead), "волна не дошла до коровы впереди фронта");
+            h.assertTrue(!MobPanic.panicking(inside) && inside.getHealth() == inside.getMaxHealth(), "фронт второй раз ударил корову, которую уже прошёл");
             NuclearStrikes.clear(level);
         });
     }
@@ -2091,5 +2094,125 @@ public final class NuclearGameTests {
         m.setNuclear(warhead);
         VirtualFlights.launch(level, m);
         return m;
+    }
+
+    /**
+     * Волна по телам (15 кт у земли, 1 блок = 1 м, взрыв к западу, у тел 8 psi): корову в поле бросает на восток; корову
+     * со стеной в 2 блоках за спиной бросает о стену — ранена тяжело или погибла (череп ломается с 7 м/с, а к стене она
+     * летит быстрее); в закрытой каменной будке волны нет; в доме с дверью на восток давление есть, а ветра нет — не
+     * бросает. Засыпанная завалом — погибла или потеряла не меньше половины здоровья. Окно перед коровой ранит её
+     * осколками и тогда, когда руины его уже выбили (фронт застал его целым); ковёр под ногами — не стена за спиной, а
+     * камень вплотную — стена; под кроной, за кустом, который прячет шар, — ветер (листву волна продувает). Запомненные
+     * окно и стена — пока тело к приходу фронта не ушло от них (окно — 2 блока, стена — полблока).
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_blast_bodies", skyAccess = true)
+    public static void blastHitsBodiesByPhysics(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos open = CENTER.north(12), walled = CENTER.north(4), booth = CENTER.south(4), hut = CENTER.south(14), rubble = CENTER.west(10);
+        for (int dy = 0; dy <= 2; dy++) {
+            for (int dz = -1; dz <= 1; dz++) h.setBlock(walled.offset(2, dy, dz), Blocks.STONE);
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                for (int dy = 0; dy <= 2; dy++) if (dx != 0 || dz != 0 || dy == 2) h.setBlock(booth.offset(dx, dy, dz), Blocks.STONE);
+            }
+        }
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                for (int dy = 0; dy <= 3; dy++) {
+                    boolean wall = Math.abs(dx) == 2 || Math.abs(dz) == 2;
+                    boolean door = dx == 2 && dz == 0 && dy <= 1;
+                    if (dy == 3 || wall && !door) h.setBlock(hut.offset(dx, dy, dz), Blocks.STONE);
+                }
+            }
+        }
+        Cow[] cows = new Cow[5];
+        BlockPos[] at = {open, walled, booth, hut, rubble};
+        for (int i = 0; i < cows.length; i++) {
+            cows[i] = h.spawn(EntityType.COW, at[i]);
+            cows[i].setNoAi(true);
+        }
+        Vec3 target = Vec3.atBottomCenterOf(h.absolutePos(open));
+        double lo = 10, hi = 20_000;
+        for (int i = 0; i < 50; i++) {
+            double mid = 0.5 * (lo + hi);
+            if (blastFromWest(h, target, mid).psi(target) > 8) lo = mid;
+            else hi = mid;
+        }
+        Detonation d = blastFromWest(h, target, hi);
+        String psi = String.format(Locale.ROOT, " (%.1f psi)", d.psi(cows[1].position()));
+        h.assertTrue(BlastBody.free(level, level.getChunkAt(cows[4].blockPosition())).contains(cows[4]), "корову до завала уже засыпало");
+        h.setBlock(rubble, Blocks.GRAVEL);
+        h.setBlock(rubble.above(), Blocks.GRAVEL);
+        h.assertTrue(BlastBody.buried(level, cows[4]), "корова в гравии не засыпана");
+        for (int i = 0; i < 4; i++) BlastBody.hit(level, d, cows[i], null, null);
+        BlastBody.bury(level, d, cows[4], null);
+        h.assertTrue(cows[0].getDeltaMovement().x > 0.2, "корову в поле не бросило на восток" + psi + ": " + cows[0].getDeltaMovement());
+        h.assertTrue(!cows[1].isAlive() || cows[1].getHealth() <= 0.06f * cows[1].getMaxHealth(),
+                "корова, брошенная о стену, почти цела" + psi + ": " + cows[1].getHealth());
+        h.assertTrue(cows[2].getHealth() == cows[2].getMaxHealth() && cows[2].getDeltaMovement().lengthSqr() < 1e-6,
+                "волна дошла в закрытую будку");
+        h.assertTrue(Math.abs(cows[3].getDeltaMovement().x) < 1e-6, "в доме без окна к взрыву корову бросило ветром");
+        h.assertTrue(!cows[4].isAlive() || cows[4].getHealth() <= 0.5f * cows[4].getMaxHealth(),
+                "засыпанная корова почти цела: " + cows[4].getHealth());
+        aroundBodies(h, d);
+        h.succeed();
+    }
+
+    /** Окно, стена и крона у тела ({@link #blastHitsBodiesByPhysics}): к востоку от прежних коров, взрыв — к западу. */
+    private static void aroundBodies(GameTestHelper h, Detonation d) {
+        ServerLevel level = h.getLevel();
+        BlockPos glazed = CENTER.east(10), carpeted = CENTER.east(10).north(10), canopy = CENTER.east(10).south(10), backed = CENTER.east(20);
+        for (int dy = 0; dy <= 2; dy++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                h.setBlock(glazed.offset(-2, dy, dz), Blocks.GLASS);
+                h.setBlock(backed.offset(1, dy, dz), Blocks.STONE);
+            }
+        }
+        for (int dx = 0; dx <= 3; dx++) h.setBlock(carpeted.east(dx), Blocks.WHITE_CARPET);
+        BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true);
+        for (int a = -1; a <= 1; a++) {
+            for (int b = -1; b <= 1; b++) h.setBlock(canopy.offset(a, 2, b), leaves);
+            h.setBlock(canopy.offset(-1, 0, a), leaves);
+            h.setBlock(canopy.offset(-1, 1, a), leaves);
+        }
+        Cow behindGlass = still(h, Vec3.atBottomCenterOf(glazed)), onCarpet = still(h, Vec3.atBottomCenterOf(carpeted).add(0, 1 / 16.0, 0)),
+                underTree = still(h, Vec3.atBottomCenterOf(canopy)), atWall = still(h, Vec3.atBottomCenterOf(backed));
+        BlastBody.Before window = BlastBody.before(level, d, behindGlass);
+        h.assertTrue(window.glass(), "стекло в 2 блоках перед коровой не видно");
+        for (int dy = 0; dy <= 2; dy++) {
+            for (int dz = -1; dz <= 1; dz++) h.setBlock(glazed.offset(-2, dy, dz), Blocks.AIR);
+        }
+        BlastBody.Wound remembered = BlastBody.wound(level, d, behindGlass, window), now = BlastBody.wound(level, d, behindGlass, null);
+        h.assertTrue(remembered != null && now != null && remembered.injury() > now.injury(),
+                "выбитое руинами окно, которое застал фронт, не ранит осколками: " + remembered + " / " + now);
+        // к приходу фронта корова отошла: в 1,5 блока окно ещё перед ней, в 3 — уже нет
+        BlastBody.Wound walked = BlastBody.wound(level, d, behindGlass, window.drifted(window.at().add(0, 0, 1.5)));
+        BlastBody.Wound away = BlastBody.wound(level, d, behindGlass, window.drifted(window.at().add(0, 0, 3)));
+        h.assertTrue(walked != null && walked.injury() == remembered.injury(), "в 1,5 блока от запомненного места окно забыто");
+        h.assertTrue(away != null && away.injury() == now.injury(), "в 3 блоках от запомненного места окно ещё помнится");
+        // стена за спиной вплотную: на полблока от запомненного места ещё отражает, на блок — уже нет
+        BlastBody.Before wall = new BlastBody.Before(onCarpet.position(), true, false, 0);
+        BlastBody.Wound against = BlastBody.wound(level, d, onCarpet, wall.drifted(onCarpet.position().add(0, 0, 0.4)));
+        BlastBody.Wound off = BlastBody.wound(level, d, onCarpet, wall.drifted(onCarpet.position().add(0, 0, 1)));
+        h.assertTrue(against != null && off != null && against.injury() > off.injury(),
+                "запомненная стена за спиной не подняла давление на лёгкие: " + against + " / " + off);
+        h.assertFalse(BlastBody.before(level, d, onCarpet).backed(), "ковёр под ногами — стена за спиной");
+        h.assertTrue(BlastBody.before(level, d, atWall).backed(), "камень вплотную за спиной — не стена");
+        h.assertFalse(NuclearWarhead.sees(level, d, underTree), "куст не прячет шар — проверка ни о чём");
+        BlastBody.Wound tree = BlastBody.wound(level, d, underTree, null);
+        h.assertTrue(tree != null && tree.wind() && tree.throwSpeed() > 0, "под кроной нет ветра волны: " + tree);
+    }
+
+    private static Cow still(GameTestHelper h, Vec3 at) {
+        Cow cow = h.spawn(EntityType.COW, at);
+        cow.setNoAi(true);
+        return cow;
+    }
+
+    /** 15 кт у земли в {@code distance} блоках к западу от {@code target}, 1 блок = 1 м. */
+    private static Detonation blastFromWest(GameTestHelper h, Vec3 target, double distance) {
+        return new Detonation(IDS.incrementAndGet(), new Vec3(target.x - distance, target.y, target.z), target.y, 15, true,
+                h.getLevel().getGameTime(), 0, 0, 20_000, 7, 1, false, Detonation.OLD_WAVE);
     }
 }

@@ -7,6 +7,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -879,6 +880,13 @@ public final class ScarQueue {
         return inspected;
     }
 
+    /** Кого из живых до руин ({@link BlastBody#free}) руины засыпали — завал. */
+    private static void buried(ServerLevel level, Detonation d, List<LivingEntity> free) {
+        for (LivingEntity e : free) {
+            if (e.isAlive() && BlastBody.buried(level, e)) NuclearWorld.get(level).buried(d, e);
+        }
+    }
+
     /**
      * Руины в чанке: по готовому плану, если он ещё верен, иначе — план по чанку как есть. План на месте ждёт разломов
      * окна: холодный разлом соседа — своя единица работы; false — посчитан он, руины — следующей единицей.
@@ -893,9 +901,12 @@ public final class ScarQueue {
         if (seen) st[2] = Math.max(st[2], lag);
         else st[5] = Math.max(st[5], lag);
         if (plan != null) {
+            List<LivingEntity> free = BlastBody.free(level, chunk);
+            if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
             long t0 = System.nanoTime();
             if (plan.apply(level, chunk, d, budget)) {
                 long took = System.nanoTime() - t0;
+                buried(level, d, free);
                 thrown(level, d, chunk, plan);
                 diagSource = "prepared";
                 appliedPrepared++;
@@ -946,7 +957,11 @@ public final class ScarQueue {
             diagSource = "server thread";
             server = true;
         }
-        if (!plan.apply(level, chunk, d, budget) && !server) {
+        List<LivingEntity> free = BlastBody.free(level, chunk);
+        if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
+        boolean applied = plan.apply(level, chunk, d, budget);
+        if (applied) buried(level, d, free);
+        if (!applied && !server) {
             // блоки на местах плана сменились, пока его строили фоновые потоки: заново — в потоке сервера, по чанку как есть
             // (без этого чанк остался бы целым с отметкой руин). План потока сервера построен в этом же тике — он верен
             stalePlans++;

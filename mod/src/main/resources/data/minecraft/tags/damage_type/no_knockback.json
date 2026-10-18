@@ -2,6 +2,8 @@
   "values": [
     "incoming:nuclear_thermal",
     "incoming:player_nuclear_thermal",
-    "incoming:burn_shock"
+    "incoming:burn_shock",
+    "incoming:nuclear_blast",
+    "incoming:player_nuclear_blast"
   ]
 }
