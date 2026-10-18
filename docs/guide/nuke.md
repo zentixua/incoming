@@ -106,7 +106,7 @@ The blast is as loud as the pressure where you stand: with distance it fades the
 hill between you, rain, or a sunny day (the warm ground bends sound up, so far away it is quieter than at night) make
 it quieter still. Far away it comes as a single sharp crack, duller the farther you are, with a deep boom behind it,
 and the gust of wind after the wave dies down within a second or two. Closer in, where the wave hurts your ears
-(about 0.75 psi, around 4 km from a 15 kt burst), everything goes muffled and your ears ring; your hearing comes back
+(from about 0.75 psi, a few kilometres from a 15 kt burst), everything goes muffled and your ears ring; your hearing comes back
 over a few game hours, longer the closer you were, and sleep counts. From 5 psi the wave can tear your eardrums: then
 you hear muffled for game weeks, or until you die. Then the blast echoes back from the hills,
 forests and towns around you: every slope that faces both the burst and you sends it back, later the farther it is. Animals around
