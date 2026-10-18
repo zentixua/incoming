@@ -18,7 +18,6 @@ import ua.zentix.incoming.client.sound.EchoMix;
 import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.client.sound.TerrainEcho;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.registry.ModSounds;
 
 import java.io.InputStream;
@@ -183,7 +182,7 @@ final class NukeEchoes {
         };
     }
 
-    /** Фронт подрыва для эха: приход — как у фронта игры, давление — модель Кинни — Грэма. */
+    /** Фронт подрыва для эха: приход — как у фронта игры, давление — на земле эпицентра на той же наклонной дальности. */
     static TerrainEcho.Blast blast(Detonation d) {
         return new TerrainEcho.Blast() {
             @Override
@@ -193,7 +192,7 @@ final class NukeEchoes {
 
             @Override
             public double pressure(double blocks) {
-                return BlastModel.overpressureKpa(Math.max(1, d.metres(blocks)), d.yieldKt());
+                return d.groundOverpressureKpa(d.groundOf(blocks));
             }
         };
     }

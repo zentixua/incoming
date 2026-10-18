@@ -4,7 +4,6 @@ import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,7 +22,7 @@ class NukeWaterTest {
         float[] dark = new float[WaterDecal.SAMPLES], foam = new float[WaterDecal.SAMPLES];
         double ticks = 400, r = SEA.frontRadius(ticks);
         assertTrue(NukeWater.profile(SEA, ticks, r, 0, dark, foam));
-        double wind = BlastModel.windSpeed(BlastModel.overpressureKpa(r, 15));
+        double wind = SEA.groundWind(SEA.groundOf(r));
         assertEquals(WaterModel.darkness(wind, 0, NukeWater.BAND, NukeWater.CALM), dark[0], 0.02);
         assertTrue(dark[0] > 0.3, "у фронта в " + Math.round(r) + " м темно: " + dark[0]);
         assertTrue(dark[WaterDecal.SAMPLES / 2] < dark[0]);

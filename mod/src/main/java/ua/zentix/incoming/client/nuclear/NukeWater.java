@@ -16,7 +16,6 @@ import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxBudget;
 import ua.zentix.incoming.client.map.TerrainTiles;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 import java.util.Locale;
@@ -154,9 +153,9 @@ public final class NukeWater {
         return wet >= 3;
     }
 
-    /** Ветер за фронтом на наклонной дальности {@code slant} блоков, м/с. */
+    /** Ветер за фронтом вдоль земли на наклонной дальности {@code slant} блоков, м/с. */
     private static double wind(Detonation d, double slant) {
-        return BlastModel.windSpeed(BlastModel.overpressureKpa(d.metres(slant), d.yieldKt()));
+        return d.groundWind(d.groundOf(slant));
     }
 
     /**

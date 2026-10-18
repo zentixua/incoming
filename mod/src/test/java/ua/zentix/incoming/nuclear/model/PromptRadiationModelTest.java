@@ -18,8 +18,8 @@ class PromptRadiationModelTest {
     void smallYieldRadiationOutrangesBlast() {
         // 1 кт: 500 бэр на ~760 м, дальше, чем 5 psi (440 м); у 1 Мт — наоборот
         assertEquals(500, PromptRadiationModel.doseRem(760, 1), 25);
-        assertTrue(PromptRadiationModel.doseRem(BlastModel.rangeForOverpressure(BlastModel.kpa(5), 1), 1) > 500);
-        assertTrue(PromptRadiationModel.doseRem(BlastModel.rangeForOverpressure(BlastModel.kpa(5), 1000), 1000) < 500);
+        assertTrue(PromptRadiationModel.doseRem(HobBlast.rangeFor(5, 0, 1), 1) > 500);
+        assertTrue(PromptRadiationModel.doseRem(HobBlast.rangeFor(5, 0, 1000), 1000) < 500);
     }
 
     @Test
