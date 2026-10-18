@@ -190,8 +190,9 @@ public final class NuclearPrep {
         long planBytes;
         boolean capped;
         long nextZoneReport;
+        /** Чанки за краем тяжёлой зоны в {@link RuinPlanner#REACH} от неё: планов заранее у них нет. */
+        long[] edge = new long[0];
         List<Tile> tiles = new ArrayList<>();
-        Long2ObjectOpenHashMap<Tile> tileOf = new Long2ObjectOpenHashMap<>();
         /** Квадраты, которым нужен ответ по чанку (свой или кольцо соседа). */
         Long2ObjectOpenHashMap<List<Tile>> askedBy = new Long2ObjectOpenHashMap<>();
         /** Памяти мало: руины заранее больше не строятся, квадраты зоны за волной грузят только чанки с готовым планом. */
@@ -414,7 +415,7 @@ public final class NuclearPrep {
         LongArrayList fresh = new LongArrayList();
         for (ChunkHolder holder : level.getChunkSource().chunkMap.getChunks()) {
             ChunkPos c = holder.getPos();
-            if (p.considered.contains(c.toLong()) || nearest(c, d) > radius || NuclearTickets.inMemory(level, c.toLong()) == null) continue;
+            if (p.considered.contains(c.toLong()) || horizontal(c, d) > radius || NuclearTickets.inMemory(level, c.toLong()) == null) continue;
             p.considered.add(c.toLong());
             p.everInMemory.add(c.toLong());
             fresh.add(c.toLong());
@@ -489,15 +490,7 @@ public final class NuclearPrep {
         if (p.format == null) {
             p.format = DiskShots.Format.of(level);
             // за краем тяжёлой зоны планов заранее нет: снимки соседей их не ждут
-            LongOpenHashSet zone = new LongOpenHashSet(p.order);
-            for (long c : p.order) {
-                for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
-                    for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
-                        long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
-                        if (!zone.contains(k)) p.ruins.markNoPlan(k);
-                    }
-                }
-            }
+            for (long k : p.edge) p.ruins.markNoPlan(k);
         }
         // ответы с диска: снимок — в руины (состояния — в таблицу свойств), одна единица работы на чанк
         for (DiskShots.Read r; clock.canStart() && shared.canStart() && (r = p.reads.poll()) != null; ) {
@@ -701,19 +694,18 @@ public final class NuclearPrep {
     }
 
     /** Раскладка тяжёлой зоны: чанки и квадраты загрузки по расстоянию, и какие квадраты ждут ответа по какому чанку. */
-    private record Layout(long[] order, List<Tile> tiles, Long2ObjectOpenHashMap<Tile> tileOf, Long2ObjectOpenHashMap<List<Tile>> askedBy,
-                          LongArrayList toScan) {}
+    private record Layout(long[] order, long[] edge, List<Tile> tiles, Long2ObjectOpenHashMap<List<Tile>> askedBy, LongArrayList toScan) {}
 
     private static void install(Prep p, Layout l) {
         p.layout = null;
         p.order = l.order;
+        p.edge = l.edge;
         p.tiles = l.tiles;
-        p.tileOf = l.tileOf;
         p.askedBy = l.askedBy;
         p.toScan = l.toScan;
     }
 
-    /** Чанки зоны по расстоянию и квадраты загрузки по расстоянию; без мира — в фоне. */
+    /** Чанки зоны по расстоянию, край за ней и квадраты загрузки по расстоянию; без мира — в фоне. */
     private static Layout layout(Detonation d) {
         double radius = heavyRadius(d) + 16;
         int cx = Mth.floor(d.burst().x) >> 4, cz = Mth.floor(d.burst().z) >> 4, r = Mth.ceil(radius / 16) + 1;
@@ -729,7 +721,16 @@ public final class NuclearPrep {
         long[] keyed = new long[order.length];
         for (int i = 0; i < order.length; i++) keyed[i] = (long) (horizontal(new ChunkPos(order[i]), d) * 16) << 20 | i;
         java.util.Arrays.sort(keyed);
-        Layout l = new Layout(new long[order.length], new ArrayList<>(), new Long2ObjectOpenHashMap<>(), new Long2ObjectOpenHashMap<>(), new LongArrayList());
+        LongOpenHashSet zone = new LongOpenHashSet(order), edge = new LongOpenHashSet();
+        for (long c : order) {
+            for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+                for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
+                    long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
+                    if (!zone.contains(k)) edge.add(k);
+                }
+            }
+        }
+        Layout l = new Layout(new long[order.length], edge.toLongArray(), new ArrayList<>(), new Long2ObjectOpenHashMap<>(), new LongArrayList());
         for (int i = 0; i < order.length; i++) l.order[i] = order[(int) (keyed[i] & 0xFFFFF)];
         LongOpenHashSet seen = new LongOpenHashSet();
         for (long c : l.order) {
@@ -741,7 +742,6 @@ public final class NuclearPrep {
             for (int dx = -WINDOWS_REACH; dx <= WINDOWS_REACH; dx++) {
                 for (int dz = -WINDOWS_REACH; dz <= WINDOWS_REACH; dz++) {
                     long k = ChunkPos.asLong(centre.x + dx, centre.z + dz);
-                    if (Math.abs(dx) <= TILE_RADIUS && Math.abs(dz) <= TILE_RADIUS) l.tileOf.put(k, t);
                     List<Tile> asked = l.askedBy.get(k);
                     if (asked == null) {
                         l.askedBy.put(k, asked = new ArrayList<>(1));
@@ -1056,7 +1056,16 @@ public final class NuclearPrep {
         for (Prep p : preps) {
             if (!preparedFor(p, d)) continue;
             // раскладка ещё в фоне (место подрыва стало известно за тик-другой до него): дождаться, иначе зоны за волной нет
-            if (p.layout != null) install(p, p.layout.join());
+            if (p.layout != null) {
+                try {
+                    install(p, p.layout.join());
+                } catch (RuntimeException e) {
+                    Incoming.LOG.error("Ruin preparation for strike #{} failed with an exception; dropped", p.strike, e);
+                    failed.add(p.strike);
+                    p.draining = true;
+                    continue;
+                }
+            }
             p.detonation = d.id();
             p.handedOff = now;
             p.farAtDetonation = java.util.Arrays.stream(p.order).filter(c -> level.getChunkSource().getChunkNow(ChunkPos.getX(c), ChunkPos.getZ(c)) == null).toArray();
