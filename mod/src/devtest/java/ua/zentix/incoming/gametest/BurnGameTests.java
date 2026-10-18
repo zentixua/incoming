@@ -13,13 +13,12 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.animal.Cod;
 import net.minecraft.world.entity.animal.Cow;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.scores.PlayerTeam;
-import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.neoforge.common.util.FakePlayer;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -48,9 +47,10 @@ public final class BurnGameTests {
      * (9,9 % тела): отнято 40 % здоровья, предел — 60 % (вверх до десятой доли), одежда не загорелась; та же вспышка
      * второй раз ничего не отнимает. При 20 кал/см² у жителя загорается одежда. Разбойник в железе не обожжён и не
      * горит, в коже — горит (плотная ткань загорается), но кожа под ней цела. Ниже самого низкого порога — ничего,
-     * треска под водой, ещё не тикавшая, — тоже. Игрока своей команды без огня по своим вспышка его подрыва не трогает.
-     * Второй подрыв не трогает идущий шок. Новый ожог слабее прежнего заживает своим сроком: прежний кончился — предел
-     * нового. Шок в конце срока убивает и под огнестойкостью с сопротивлением V.
+     * треска под водой, ещё не тикавшая, — тоже. Игрока, которого правила не дают ранить, вспышка подрыва игрока не
+     * трогает, а другого — жжёт и поджигает рубашку. Второй подрыв не трогает идущий шок. Новый ожог слабее прежнего
+     * заживает своим сроком: прежний кончился — предел нового. Шок в конце срока убивает и под огнестойкостью с
+     * сопротивлением V.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_burns", skyAccess = true)
     public static void burnsByDegreeClothesAndShock(GameTestHelper h) {
@@ -100,20 +100,13 @@ public final class BurnGameTests {
         h.assertTrue(left != null && left.getAmplifier() == BurnsEffect.SHOCK && left.getDuration() == 40, "второй подрыв сдвинул шок: " + left);
 
         ServerLevel level = h.getLevel();
-        FakePlayer victim = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "burns_ally"));
         FakePlayer launcher = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "burns_launcher"));
-        victim.moveTo(h.absoluteVec(new Vec3(32.5, 12, 36.5)));
-        Scoreboard board = level.getScoreboard();
-        PlayerTeam team = board.addPlayerTeam("incoming_burns");
-        try {
-            team.setAllowFriendlyFire(false);
-            board.addPlayerToTeam(victim.getScoreboardName(), team);
-            board.addPlayerToTeam(launcher.getScoreboardName(), team);
-            FlashBurns.burn(level, d, victim, 30, launcher);
-            h.assertTrue(level(victim) < 0 && !victim.isOnFire(), "вспышка своего обожгла игрока: " + about(victim) + (victim.isOnFire() ? ", горит" : ""));
-        } finally {
-            board.removePlayerTeam(team);
-        }
+        Player ally = player(h, "burns_ally", false, 32.5, 36.5);
+        Player enemy = player(h, "burns_enemy", true, 36.5, 36.5);
+        FlashBurns.burn(level, d, ally, 30, launcher);
+        FlashBurns.burn(level, d, enemy, 30, launcher);
+        h.assertTrue(level(ally) < 0 && !ally.isOnFire(), "игрока, которого правила не дают ранить, обожгло: " + about(ally) + (ally.isOnFire() ? ", горит" : ""));
+        h.assertTrue(level(enemy) >= 0 && enemy.isOnFire(), "игрока, которого правила дают ранить, не обожгло: " + about(enemy) + (enemy.isOnFire() ? "" : ", не горит"));
 
         healing.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, 6));
         FlashBurns.burn(level, d, healing, third, null);
@@ -130,6 +123,18 @@ public final class BurnGameTests {
             h.assertTrue(healed != null && healed.getAmplifier() == 4 && healed.getDuration() > 24_000,
                     "прежний ожог кончился, а предел не новый: " + healed);
         });
+    }
+
+    /** Игрок, которого правила игры (PvP, команды) дают или не дают ранить другим игрокам. */
+    private static Player player(GameTestHelper h, String name, boolean harmable, double x, double z) {
+        Player p = new FakePlayer(h.getLevel(), new GameProfile(UUID.randomUUID(), name)) {
+            @Override
+            public boolean canHarmPlayer(Player other) {
+                return harmable;
+            }
+        };
+        p.moveTo(h.absoluteVec(new Vec3(x, 12, z)));
+        return p;
     }
 
     private static <T extends Mob> T still(GameTestHelper h, EntityType<T> type, int x, int z) {

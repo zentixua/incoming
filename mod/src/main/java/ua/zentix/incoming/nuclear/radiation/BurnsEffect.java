@@ -1,5 +1,6 @@
 package ua.zentix.incoming.nuclear.radiation;
 
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -24,10 +25,12 @@ public class BurnsEffect extends MobEffect {
     public static final int SHOCK = 10;
     /** Сколько здоровья оставляет шок. */
     public static final double SHOCK_LEFT = 0.05;
+    /** Модификатор предела здоровья. */
+    static final ResourceLocation ID = Incoming.id("burns");
 
     public BurnsEffect() {
         super(MobEffectCategory.HARMFUL, 0xB5461E);
-        addAttributeModifier(Attributes.MAX_HEALTH, Incoming.id("burns"), AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, BurnsEffect::lost);
+        addAttributeModifier(Attributes.MAX_HEALTH, ID, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, BurnsEffect::lost);
     }
 
     /** Множитель здоровья ожогов уровня {@code amplifier} — доля, которую они отняли, со знаком минус. */
@@ -42,6 +45,14 @@ public class BurnsEffect extends MobEffect {
      */
     public static int level(double share) {
         return share >= 1 ? SHOCK : (int) Math.min(SHOCK - 1, Math.max(0, Math.ceil(share * 10 - 1e-9)));
+    }
+
+    /**
+     * Рана новых ожогов уровня {@code amplifier} поверх прежних уровня {@code before} (−1 — их нет): доля здоровья без
+     * ожогов, которую отнимает прибавка предела; новые не тяжелее прежних — ноль.
+     */
+    static double wound(int before, int amplifier) {
+        return amplifier <= before ? 0 : lost(before) - lost(amplifier);
     }
 
     @Override
