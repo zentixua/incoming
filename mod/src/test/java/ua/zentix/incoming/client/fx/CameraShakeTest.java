@@ -204,7 +204,7 @@ class CameraShakeTest {
 
     /**
      * Поворот камеры, как его строит {@code Camera.setRotation}, — в double: во float у JOML курс около 0 (половина угла
-     * около 90°, косинус — из синуса) сам по себе ошибается на тысячные доли градуса.
+     * около 90°, косинус — из синуса) сам по себе ошибается до трёх сотых градуса.
      */
     private static Quaterniond rotation(double yaw, double pitch, double roll) {
         return new Quaterniond().rotationYXZ(Math.PI - Math.toRadians(yaw), -Math.toRadians(pitch), -Math.toRadians(roll));

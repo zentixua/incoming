@@ -39,8 +39,8 @@ burst, whose wind blows longer. From about 1–2 psi the wind is stronger than a
 face the burst and the bigger it is, and your view stops at the edge of balance until the wind weakens. After the wave
 passes, the air flows back toward the burst for a few seconds. Behind a strong wave, from about 4 psi, this weaker wind
 leans you toward the burst by several degrees. In a jump the wind doesn't lean you.
-Where only the sound reaches, the wave doesn't move you at all. A wall or a house between you and the burst shelters you
-from the wind.
+Where only the sound reaches, it leans you by less than a degree. A wall or a house between you and the burst shelters
+you from the wind.
 
 The fireball shines white with brighter and darker patches boiling over it, and turns yellow and orange as it cools. It
 rises and rolls into a ring of hot gas: the cap of the mushroom cloud, the same body from the first moment. As it rolls
