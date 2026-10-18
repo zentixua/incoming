@@ -1,12 +1,18 @@
 package ua.zentix.incoming.nuclear.model;
 
+import java.util.Arrays;
+
 /**
  * Стоящий человек под ветром ударной волны — без Minecraft (проверяется юнит-тестом). Тело — перевёрнутый маятник на
  * щиколотках, который держит равновесие: собственные жёсткость и вязкость мышц и обратная связь по наклону и его
- * скорости с задержкой (модель независимых каналов, Peterka 2002, J Neurophysiol 88; числа здоровых взрослых — Pasma
- * et al. 2017, Front. Comput. Neurosci. 11:99, табл. 1). Толкает ветер за фронтом: лобовое сопротивление q·Cd·A на
- * высоте центра масс (Cd стоящего — 1,0–1,3, Hoerner 1965; площадь спереди — около 0,6 м²); напор — квадрат ветра, а ветер
- * у слабой волны идёт за давлением (u = p/ρc): по фазе Фридлендера, в разрежении — слабый обратный.
+ * скорости с задержкой, которую мышцы отдают моментом через свою активацию — звено второго порядка (модель независимых
+ * каналов: Peterka 2002, J Neurophysiol 88; с активацией — van der Kooij &amp; Peterka 2011; все числа — Pasma et al.
+ * 2017, Front. Comput. Neurosci. 11:99, табл. 1 и (A4); затухание активации — относительное, член 2βω₀s: в (A4)
+ * напечатано sβω₀², у безразмерного β это не та размерность). Положительной обратной связи по моменту той модели
+ * (K_F, τ_F 17,4 с) нет: за секунды качания она меняет наклон меньше чем на процент. Толкает ветер за фронтом: лобовое
+ * сопротивление q·Cd·A на высоте центра масс (Cd стоящего — 1,0–1,3, Hoerner 1965; площадь спереди — около 0,6 м²);
+ * напор — квадрат ветра, а ветер у слабой волны идёт за давлением (u = p/ρc): по фазе Фридлендера, в разрежении —
+ * слабый обратный.
  * <p>
  * Земля под ногами тело не наклоняет. Воздушный толчок (airslap) ведёт грунт у поверхности вниз, а не вбок (Glasstone &
  * Dolan 1977, §6.13–6.14), его скорость повторяет давление (§6.84) и равна p/ρc грунта: у 1 psi — около сантиметра в
@@ -15,8 +21,9 @@ package ua.zentix.incoming.nuclear.model;
  * волны, и посчитать его нечем (§6.84: простого способа нет); его нет.
  * <p>
  * Наклон дальше границы устойчивости (центр масс над краем стопы: вперёд 8°, назад 4,5°, вбок 8° — McCollum & Leen
- * 1989, J Motor Behav 21) человек не удерживает: шагает или падает. Это — от ~1,5 psi (у 15 кт — фаза около
- * секунды); что дальше, маятник с равновесием не описывает.
+ * 1989, J Motor Behav 21) человек не удерживает: шагает или падает. Лицом к волне это — от ~0,9 psi у 15 кт (фаза
+ * 1,2 с) и ~1,25 psi у 2 кт (0,6 с), спиной — от ~1,3 и ~1,7 psi: у подрыва больше ветер дует дольше. Что дальше,
+ * маятник с равновесием не описывает.
  */
 public final class BodySway {
     /** Масса тела, кг. */
@@ -29,6 +36,8 @@ public final class BodySway {
     static final double MUSCLE_K = 40.5, MUSCLE_B = 68.8;
     /** Обратная связь равновесия: по наклону, Н·м/рад, по его скорости, Н·м·с/рад, и её задержка, с. */
     static final double GAIN_P = 943.9, GAIN_D = 313.5, DELAY = 0.097;
+    /** Активация мышц: собственная частота, рад/с, и относительное затухание. */
+    static final double ACTIVATION_W = 16.8, ACTIVATION_DAMPING = 0.99;
     /** Лобовое сопротивление стоящего, м²: площадь 0,6 м² × Cd 1,1. */
     static final double DRAG_AREA = 0.66;
     static final double G = 9.81;
@@ -55,29 +64,37 @@ public final class BodySway {
     public static double[] tilt(double qPa, double tPlus) {
         if (!(qPa > 0) || !(tPlus > 0)) return new double[0];
         int steps = (int) Math.ceil(LONGEST / STEP), lag = (int) Math.round(DELAY / STEP), every = (int) Math.round(1.0 / (RATE * STEP));
-        double[] th = new double[steps + 1], om = new double[steps + 1];
-        double mgh = MASS * G * HEIGHT, peak = 0;
-        int end = steps;
+        // наклон и его скорость за задержку назад (кольцом; до волны тело стоит — нули)
+        double[] thBack = new double[lag], omBack = new double[lag];
+        double[] out = new double[steps / every + 2];
+        int n = 1;
+        double mgh = MASS * G * HEIGHT, peak = 0, th = 0, om = 0, torque = 0, torqueRate = 0;
+        double w2 = ACTIVATION_W * ACTIVATION_W, damp = 2 * ACTIVATION_DAMPING * ACTIVATION_W;
         for (int i = 0; i < steps; i++) {
             double t = i * STEP, x = t / tPlus, f = (1 - x) * Math.exp(-x);
             // ветер — за давлением, напор — его квадрат со знаком
             double push = qPa * f * Math.abs(f) * DRAG_AREA * HEIGHT;
-            int j = Math.max(0, i - lag);
-            double hold = GAIN_P * th[j] + GAIN_D * om[j] + MUSCLE_K * th[i] + MUSCLE_B * om[i];
-            double a = (mgh * Math.sin(th[i]) - hold + push) / INERTIA;
-            om[i + 1] = om[i] + a * STEP;
-            th[i + 1] = th[i] + om[i + 1] * STEP;
-            peak = Math.max(peak, Math.abs(th[i + 1]));
-            // ветер стих (разрежение за три фазы — меньше 0,3 % напора) и тело стоит
-            if (t > 3 * tPlus && Math.abs(th[i + 1]) < STILL && Math.abs(om[i + 1]) < STILL) {
-                end = i + 1;
+            int k = i % lag;
+            double command = GAIN_P * thBack[k] + GAIN_D * omBack[k];
+            thBack[k] = th;
+            omBack[k] = om;
+            // команда равновесия становится моментом через активацию мышц
+            torqueRate += (w2 * (command - torque) - damp * torqueRate) * STEP;
+            torque += torqueRate * STEP;
+            double a = (mgh * Math.sin(th) - torque - MUSCLE_K * th - MUSCLE_B * om + push) / INERTIA;
+            om += a * STEP;
+            th += om * STEP;
+            peak = Math.max(peak, Math.abs(th));
+            boolean sample = (i + 1) % every == 0;
+            if (sample) out[n++] = th;
+            // ветер стих (разрежение за три фазы — меньше 1 % напора) и тело стоит
+            if (t > 3 * tPlus && Math.abs(th) < STILL && Math.abs(om) < STILL) {
+                if (!sample) out[n++] = th;
                 break;
             }
         }
         if (peak < STILL) return new double[0];
-        double[] out = new double[end / every + 1];
-        for (int k = 0; k < out.length; k++) out[k] = th[Math.min(end, k * every)];
-        return out;
+        return Arrays.copyOf(out, n);
     }
 
     /** Наибольший наклон, рад, с отсчёта {@code from}. */

@@ -34,9 +34,11 @@ the wind is too weak to lift dust. Far away, and more so in rain, the wall fades
 In its first seconds the fireball lights the top of the wall orange, even by day.
 The wave breaks buildings as it reaches them: their pieces fly with the dust. The ground doesn't shake before the
 wave: nothing you can feel comes ahead of it. When it reaches you, the wind behind it pushes you while you stand: your
-view leans away from the burst and comes back over a few seconds. At 1 psi that is two or three degrees; from about
-1.5–2 psi the wind is stronger than anyone can stand against, and your view stops at the edge of balance. Where only the
-sound reaches, the wave doesn't move you at all. A wall or a house between you and the burst shelters you from the wind.
+view leans away from the burst and comes back over a few seconds. At 1 psi that is a few degrees, more from a bigger
+burst, whose wind blows longer. From about 1–2 psi the wind is stronger than anyone can stand against, sooner when you
+face the burst and the bigger it is, and your view stops at the edge of balance. In a jump the wind doesn't lean you.
+Where only the sound reaches, the wave doesn't move you at all. A wall or a house between you and the burst shelters you
+from the wind.
 
 The fireball shines white with brighter and darker patches boiling over it, and turns yellow and orange as it cools. It
 rises and rolls into a ring of hot gas: the cap of the mushroom cloud, the same body from the first moment. As it rolls

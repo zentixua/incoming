@@ -234,7 +234,7 @@ public final class IncomingClient {
             Fragments.tick();
         }
         Effects.tick();
-        CameraShake.tick();
+        CameraShake.tick(CameraShake.standing(mc.player));
         Flash.tick();
         Alerts.tick();
         RadarScope.tick();

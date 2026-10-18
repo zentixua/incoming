@@ -315,13 +315,12 @@ public final class NukeSounds {
          * Ветер за фронтом толкает стоящего: тело отклоняется по ветру и выпрямляется ({@link BodySway}), камера — с ним
          * ({@link CameraShake#sway}). Напор — скоростной напор за фронтом по давлению у уха (Ренкин–Гюгонио), его фаза —
          * у слушателя. За стеной, домом или холмом в сторону взрыва (лучи {@link SoundFilters#openRays}) — в её
-         * ветровой тени: напор — по доле открытых лучей. Кого ветер несёт целиком (в воздухе, верхом, вплавь, в полёте),
-         * того не качает — бросок считает сервер.
+         * ветровой тени: напор — по доле открытых лучей. Кого ветер несёт целиком (верхом, вплавь, в полёте), того не
+         * качает — бросок считает сервер; в прыжке наклона нет, пока игрок не встанет ({@link CameraShake#standing}).
          */
         private void sway(Minecraft mc, Vec3 ear, double pa) {
             LocalPlayer p = mc.player;
-            if (p == null || !p.onGround() || p.isPassenger() || p.isSwimming() || p.isFallFlying() || p.isSleeping()
-                || p.getAbilities().flying) return;
+            if (p == null || CameraShake.carried(p)) return;
             Vec3 b = d.burst();
             swayOpen = SoundFilters.openRays(ear, Math.atan2(b.z - ear.z, b.x - ear.x));
             double[] tilt = BodySway.tilt(1000 * BlastModel.dynamicPressureKpa(pa / 1000) * swayOpen, phaseTicks / 20);

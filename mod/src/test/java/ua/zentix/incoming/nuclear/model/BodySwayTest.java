@@ -15,7 +15,7 @@ class BodySwayTest {
         return Math.toDegrees(BodySway.peak(BodySway.tilt(q(psi), tPlus), 0));
     }
 
-    /** Далёкая волна (0,1 psi — ветер 2,3 м/с на полсекунды) тело не двигает: меньше десятой градуса. */
+    /** Далёкая волна (0,1 psi — ветер 1,7 м/с на секунды) тело не двигает: меньше десятой градуса. */
     @Test
     void farWaveLeavesTheBodyStill() {
         for (double tPlus : new double[]{0.3, 1, 2}) {
@@ -26,17 +26,19 @@ class BodySwayTest {
     }
 
     /**
-     * 1 psi (ветер 17 м/с, Бофорт 8 «мешает идти», на фазу волны) качает на градусы, но человек стоит: в пределах
-     * устойчивости назад (4,5°) при фазе до секунды. С 2 psi (ветер 31 м/с, порыв урагана) и фазой от 0,8 с — за
-     * пределом и вперёд: человек шагает или падает.
+     * 1 psi (ветер 16 м/с, Бофорт 7–8 «мешает идти», на фазу волны) качает на градусы, но человек стоит: у 1–2 кт (фаза
+     * 0,5–0,6 с) — в пределах устойчивости и назад (4,5°), у 15 кт (1,2 с) — только спиной к волне (8° вперёд), лицом к
+     * ней он отступает на шаг. С 2 psi (ветер 31 м/с, порыв урагана) — за пределом и вперёд: человек шагает или падает.
      */
     @Test
     void onePsiSwaysTwoPsiKnocksDown() {
-        for (double tPlus : new double[]{0.3, 0.6, 1}) {
+        for (double tPlus : new double[]{0.3, 0.5, 0.6}) {
             double a = peakDeg(1, tPlus);
             assertTrue(a > 0.5 && a < Math.toDegrees(BodySway.BACK), "1 psi, фаза " + tPlus + " с: " + a);
         }
-        for (double tPlus : new double[]{0.8, 1.5}) {
+        double a15 = peakDeg(1, 1.2);
+        assertTrue(a15 > Math.toDegrees(BodySway.BACK) && a15 < Math.toDegrees(BodySway.FORWARD), "1 psi, фаза 1,2 с: " + a15);
+        for (double tPlus : new double[]{0.5, 0.8, 1.5}) {
             double a = peakDeg(2, tPlus);
             assertTrue(a > Math.toDegrees(BodySway.FORWARD), "2 psi, фаза " + tPlus + " с: " + a);
         }
