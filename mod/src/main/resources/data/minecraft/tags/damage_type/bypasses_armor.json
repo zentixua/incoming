@@ -4,6 +4,7 @@
     "incoming:radiation",
     "incoming:player_radiation",
     "incoming:nuclear_thermal",
-    "incoming:player_nuclear_thermal"
+    "incoming:player_nuclear_thermal",
+    "incoming:burn_shock"
   ]
 }

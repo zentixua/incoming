@@ -29,6 +29,8 @@ public final class ModDamageTypes {
     public static final ResourceKey<DamageType> NUCLEAR_BLAST = key("nuclear_blast");
     public static final ResourceKey<DamageType> NUCLEAR_THERMAL = key("nuclear_thermal");
     public static final ResourceKey<DamageType> RADIATION = key("radiation");
+    /** Смерть от ожогового шока в конце срока ожогов ({@link ua.zentix.incoming.nuclear.radiation.BurnsEffect}). */
+    public static final ResourceKey<DamageType> BURN_SHOCK = key("burn_shock");
     public static final ResourceKey<DamageType> DEBRIS = key("debris");
     public static final ResourceKey<DamageType> PLAYER_NUCLEAR_BLAST = key("player_nuclear_blast");
     public static final ResourceKey<DamageType> PLAYER_NUCLEAR_THERMAL = key("player_nuclear_thermal");

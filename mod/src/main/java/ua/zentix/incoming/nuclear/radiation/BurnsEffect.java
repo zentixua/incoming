@@ -15,8 +15,9 @@ import java.util.Set;
 /**
  * Ожоги светом шара ({@link FlashBurns}): эффект длится, пока ожоги заживают, и всё это время здоровье не поднимается
  * выше того, что ожоги оставили. Уровень — десятые доли здоровья, которые ожоги отняли ({@link #lost}); уровень
- * {@link #SHOCK} — ожоговый шок: здоровья 5 %, в конце срока обожжённый умирает. Ни молоко, ни другие средства ожоги не
- * лечат.
+ * {@link #SHOCK} — ожоговый шок: здоровья 5 %, в конце срока обожжённый умирает (урон {@code burn_shock}: ни броня,
+ * ни огнестойкость, ни сопротивление, ни чары его не убавляют). Ни молоко, ни другие средства ожоги не лечат; тотем
+ * бессмертия спасает, как от любой смерти.
  */
 public class BurnsEffect extends MobEffect {
     /** Уровень эффекта у обожжённого, которого ждёт шок. */
@@ -34,9 +35,12 @@ public class BurnsEffect extends MobEffect {
         return amplifier >= SHOCK ? SHOCK_LEFT - 1 : -Math.max(0, amplifier) / 10.0;
     }
 
-    /** Уровень эффекта для ожогов, которые отняли долю {@code share} здоровья (от 1 — шок). */
+    /**
+     * Уровень эффекта для ожогов, которые отняли долю {@code share} здоровья (от 1 — шок): десятые доли с округлением
+     * вверх — предел не выше того, что ожоги оставили, и те же ожоги второй раз ничего не отнимают.
+     */
     public static int level(double share) {
-        return share >= 1 ? SHOCK : (int) Math.max(0, Math.floor(share * 10));
+        return share >= 1 ? SHOCK : (int) Math.min(SHOCK - 1, Math.max(0, Math.ceil(share * 10 - 1e-9)));
     }
 
     @Override
@@ -46,7 +50,7 @@ public class BurnsEffect extends MobEffect {
 
     @Override
     public boolean applyEffectTick(LivingEntity e, int amplifier) {
-        e.hurt(ModDamageTypes.source(e.level(), ModDamageTypes.NUCLEAR_THERMAL, null, null), Float.MAX_VALUE);
+        e.hurt(ModDamageTypes.source(e.level(), ModDamageTypes.BURN_SHOCK, null, null), Float.MAX_VALUE);
         return true;
     }
 

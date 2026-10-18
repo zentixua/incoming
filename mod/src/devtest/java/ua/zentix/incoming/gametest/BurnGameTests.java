@@ -4,14 +4,17 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.animal.Cod;
 import net.minecraft.world.entity.animal.Cow;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
@@ -23,6 +26,7 @@ import ua.zentix.incoming.nuclear.radiation.FlashBurns;
 import ua.zentix.incoming.registry.ModEffects;
 
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Ожоги светом шара по телу ({@link FlashBurns}): степень, одежда, броня, шок. */
 @GameTestHolder(Incoming.MOD_ID)
@@ -34,10 +38,12 @@ public final class BurnGameTests {
 
     /**
      * 15 кт, импульс, при котором ожог 3-й степени у любого: корова (кожа на половине тела стороной к шару) — шок,
-     * здоровья 5 % (предел здоровья — не меньше единицы, как у ванили); житель в рубашке — 3-я степень на лице и руках (9,9 % тела): отнято 40 % здоровья, предел — 70 %,
-     * одежда не загорелась. При 20 кал/см² у жителя загорается одежда. Разбойник в железе не обожжён и не горит, в
-     * коже — горит (плотная ткань загорается), но кожа под ней цела. Ниже самого низкого порога — ничего. Шок в конце
-     * срока убивает.
+     * здоровья 5 % (предел здоровья — не меньше единицы, как у ванили); житель в рубашке — 3-я степень на лице и руках
+     * (9,9 % тела): отнято 40 % здоровья, предел — 60 % (вверх до десятой доли), одежда не загорелась; та же вспышка
+     * второй раз ничего не отнимает. При 20 кал/см² у жителя загорается одежда. Разбойник в железе не обожжён и не
+     * горит, в коже — горит (плотная ткань загорается), но кожа под ней цела. Ниже самого низкого порога — ничего,
+     * треска под водой — тоже. Второй подрыв не отодвигает шок. Шок в конце срока убивает и под огнестойкостью с
+     * сопротивлением V.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_burns", skyAccess = true)
     public static void burnsByDegreeClothesAndShock(GameTestHelper h) {
@@ -50,6 +56,14 @@ public final class BurnGameTests {
         Mob leather = dressed(still(h, EntityType.PILLAGER, 36, 20), Items.LEATHER_HELMET, Items.LEATHER_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS);
         Cow faint = still(h, EntityType.COW, 40, 20);
         Cow shocked = still(h, EntityType.COW, 44, 20);
+        Cow resisting = still(h, EntityType.COW, 20, 28);
+        Cow twice = still(h, EntityType.COW, 24, 28);
+        // треска в лунке воды за стеклом: глаза под водой со следующего тика
+        BlockPos pond = new BlockPos(48, 12, 20);
+        h.setBlock(pond, Blocks.WATER);
+        for (BlockPos side : new BlockPos[]{pond.east(), pond.west(), pond.north(), pond.south()}) h.setBlock(side, Blocks.GLASS);
+        Cod cod = h.spawn(EntityType.COD, pond);
+        cod.setNoAi(true);
 
         FlashBurns.burn(h.getLevel(), d, cow, third, null);
         FlashBurns.burn(h.getLevel(), d, villager, third, null);
@@ -60,16 +74,35 @@ public final class BurnGameTests {
 
         h.assertTrue(level(cow) == BurnsEffect.SHOCK && cow.getMaxHealth() <= Math.max(1, 10 * BurnsEffect.SHOCK_LEFT) + 1e-3 && cow.getHealth() <= 10 * BurnsEffect.SHOCK_LEFT + 1e-3, "корова при " + fmt(third) + " кал/см² без шока: " + about(cow));
         h.assertFalse(cow.isOnFire(), "корова загорелась: горит только одежда");
-        h.assertTrue(level(villager) == 3 && Math.abs(villager.getMaxHealth() - 14) < 1e-3 && villager.getHealth() < 12.2f && villager.getHealth() > 11.9f,
+        h.assertTrue(level(villager) == 4 && Math.abs(villager.getMaxHealth() - 12) < 1e-3 && villager.getHealth() > 11.9f,
                 "житель в рубашке при " + fmt(third) + " кал/см²: " + about(villager));
         h.assertFalse(villager.isOnFire(), "рубашка жителя загорелась при " + fmt(third) + " кал/см²");
-        h.assertTrue(burning.isOnFire() && level(burning) == 3, "житель при 20 кал/см²: " + about(burning) + (burning.isOnFire() ? "" : ", одежда не горит"));
+        FlashBurns.burn(h.getLevel(), d, villager, third, null);
+        h.assertTrue(level(villager) == 4 && villager.getHealth() > 11.9f, "та же вспышка второй раз ранила жителя: " + about(villager));
+        h.assertTrue(burning.isOnFire() && level(burning) == 4, "житель при 20 кал/см²: " + about(burning) + (burning.isOnFire() ? "" : ", одежда не горит"));
         h.assertTrue(level(iron) < 0 && !iron.isOnFire(), "разбойник в железе обожжён: " + about(iron));
         h.assertTrue(level(leather) < 0 && leather.isOnFire(), "разбойник в коже при 20 кал/см²: " + about(leather) + (leather.isOnFire() ? "" : ", кожа не горит"));
         h.assertTrue(level(faint) < 0 && faint.getHealth() == faint.getMaxHealth(), "корова ниже порога обожжена: " + about(faint));
 
+        twice.addEffect(new MobEffectInstance(ModEffects.BURNS, 40, BurnsEffect.SHOCK));
+        FlashBurns.burn(h.getLevel(), d, twice, third, null);
+        MobEffectInstance left = twice.getEffect(ModEffects.BURNS);
+        h.assertTrue(left != null && left.getAmplifier() == BurnsEffect.SHOCK && left.getDuration() <= 40, "второй подрыв отодвинул шок: " + left);
+
         shocked.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, BurnsEffect.SHOCK));
-        h.succeedWhen(() -> h.assertFalse(shocked.isAlive(), "шок не убил"));
+        resisting.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 200));
+        resisting.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 200, 4));
+        resisting.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, BurnsEffect.SHOCK));
+        AtomicBoolean dived = new AtomicBoolean();
+        h.runAfterDelay(3, () -> {
+            FlashBurns.burn(h.getLevel(), d, cod, 30, null);
+            dived.set(true);
+        });
+        h.succeedWhen(() -> {
+            h.assertFalse(shocked.isAlive(), "шок не убил");
+            h.assertFalse(resisting.isAlive(), "шок не убил под огнестойкостью и сопротивлением V");
+            h.assertTrue(dived.get() && level(cod) < 0 && !cod.isOnFire(), "треска под водой обожжена: " + about(cod));
+        });
     }
 
     private static <T extends Mob> T still(GameTestHelper h, EntityType<T> type, int x, int z) {
