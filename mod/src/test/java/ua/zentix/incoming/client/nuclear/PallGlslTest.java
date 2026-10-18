@@ -353,10 +353,11 @@ class PallGlslTest {
                 NukePall.dustLight(here, wall, night, wind, r, 0.9 * here[2], 0, 0.9 * here[2], high);
                 double sum = 0, fires = 0;
                 double[] side = new double[3], top = new double[3], luma = {0.2126, 0.7152, 0.0722};
-                // отсвет пожаров на пыли — уже цвет огня: свет пелены — пламя (pallFlame)
-                boolean flames = false;
+                // отсвет пожаров на пыли — уже цвет огня во всех каналах: свет пелены — пламя (pallFlame); у края зоны пожаров,
+                // где насыщен только синий, пелена в красном и должна быть темнее пламени
+                boolean flames = true;
                 for (int c = 0; c < 3; c++) {
-                    flames |= lift.call(Map.of("base", (double) ambient, "x", fire[c] * b * k / dust[c])) > linear.call(Map.of("v", fire[c]));
+                    flames &= lift.call(Map.of("base", (double) ambient, "x", fire[c] * b * k / dust[c])) > linear.call(Map.of("v", fire[c]));
                 }
                 for (int c = 0; c < 3; c++) {
                     double capF = wall[4 + c] * a;
