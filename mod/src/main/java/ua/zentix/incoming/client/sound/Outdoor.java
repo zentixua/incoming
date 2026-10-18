@@ -106,7 +106,12 @@ public final class Outdoor {
 
     /** Потери низов по дороге сверх разлёта, дБ: преграда, зона тени, дождь (земля на низах уже в R0 и в давлении). */
     public static double losses(Path p) {
-        return obstacle(false, p) + shadow(false, p) + masking(p);
+        return pressureLoss(p) + masking(p);
+    }
+
+    /** Сколько по дороге потеряло само давление на низах, дБ: преграда и зона тени (дождь прячет звук, давление — нет). */
+    public static double pressureLoss(Path p) {
+        return obstacle(false, p) + shadow(false, p);
     }
 
     /** Запас слышимости, дБ: земля на низах уже в R0. */
@@ -139,6 +144,18 @@ public final class Outdoor {
     /** Доля верхов против низов (дождь глушит обе полосы одинаково — не в счёт); воздух — отдельно. */
     public static float highs(Path p) {
         double extra = ground(true, p) + obstacle(true, p) + shadow(true, p) - ground(false, p) - obstacle(false, p) - shadow(false, p);
+        return (float) Math.min(1, Math.pow(10, -extra / 20));
+    }
+
+    /**
+     * Доля верхов против низов, которую по дороге потеряло само давление ударной волны: кромка (дифракция без земли)
+     * и зона тени. Земли нет ни в какой полосе: у волны отражение от земли — уже в её давлении (у земли — одна волна с
+     * отражённой, ножка Маха), а не встречная интерференция звука над мягкой землёй, как у {@link #highs}; и за кромкой
+     * — тоже ({@link #obstacle} вычитает землю, и за холмом трава давала бы верхам волны на 4–5 дБ больше камня).
+     */
+    public static float pressureHighs(Path p) {
+        double edge = p.z > 0 ? barrier(p.z, HIGH) - barrier(p.z, LOW) : 0;
+        double extra = edge + shadow(true, p) - shadow(false, p);
         return (float) Math.min(1, Math.pow(10, -extra / 20));
     }
 
