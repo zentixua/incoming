@@ -102,25 +102,21 @@ public final class RadiationTicker {
 
     private static void tick(ServerLevel level, ServerPlayer p, NuclearEvents events) {
         long now = level.getGameTime();
-        double field = 0, strongest = 0, scale = 1;
+        double field = 0;
         boolean blackRain = false;
         for (Detonation d : events.detonations()) {
-            double f = d.falloutRate(p.getX(), p.getZ(), now - d.gameTime());
-            field += f;
-            if (f > strongest) {
-                strongest = f;
-                scale = d.scale();
-            }
+            field += d.falloutRate(p.getX(), p.getZ(), now - d.gameTime());
             if (d.blackRain(p.getX(), p.getZ(), now - d.gameTime())) blackRain = true;
         }
         RadiationDose r = dose(p);
         double contamination = r.contamination();
         if (blackRain && IncomingConfig.SERVER.nukeBlackRain.get() && Detonation.underOpenSky(level, p.getEyePosition())) {
-            contamination = Math.min(contamination + field * 0.05, field * 2);
+            // дождь пачкает, а не смывает: заражение растёт к двойной мощности поля, но не убывает
+            contamination = Math.max(contamination, Math.min(contamination + field * 0.05, field * 2));
         }
         if (p.isInWater()) contamination *= 0.8;
         if (contamination < 0.01) contamination = 0;
-        double rate = (field > 0 ? field * Shielding.fallout(level, middle(p), scale) : 0) + contamination;
+        double rate = (field >= MobFallout.BACKGROUND ? field * Shielding.fallout(level, middle(p)) : 0) + contamination;
         // в творческом режиме счётчик показывает поле, но доза не копится и болезни нет
         double gy = r.doseGy() + (p.isCreative() ? 0 : rate * GY_PER_R * HOURS_PER_SECOND);
         long exposed = r.isExposed() || gy < 1 ? r.exposedAt() : now;

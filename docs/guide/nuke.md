@@ -76,7 +76,7 @@ game time, like radiation sickness (a game hour is 50 seconds): after a 15 kt gr
 7 game minutes later, and later farther downwind. Its radiation drops tenfold by the seventh game hour and a
 hundredfold by the third game day.
 
-About a minute and a half after the burst, black rain starts to fall from the smoke of the fires: over the burning
+About 80 seconds after the burst, black rain starts to fall from the smoke of the fires: over the burning
 town and in a wide strip downwind, for about six minutes in each place, in step with the firestorm. After an air burst
 it is only weakly radioactive. In the fallout trail of a ground burst it brings the fallout down onto you.
 
@@ -125,7 +125,7 @@ near them, ruins collapsing nearby, and now and then an explosion in the burning
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
-  roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95 %, glass almost nothing,
+  roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
   and an open doorway lets it in. Water washes the dust off you (rain does not).
 - **Radiation sickness** starts hours later and keeps game time: nausea and vomiting, then days or weeks of feeling
   well, then weeks of weakness, from 2 Gy without natural healing. Whether it kills depends on the dose: below 2 Gy

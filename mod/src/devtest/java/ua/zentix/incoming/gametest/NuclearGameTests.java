@@ -1845,7 +1845,7 @@ public final class NuclearGameTests {
                 h.assertTrue(ticks > 2 * MobFallout.PERIOD, "обход короче двух периодов: " + ticks + " тиков — проверка ни о чём");
                 double gain = Double.longBitsToDouble(gains.get(i)[1]);
                 double expected = d.falloutRate(grazing.getX(), grazing.getZ(), t - d.gameTime())
-                        * Shielding.fallout(level, RadiationTicker.middle(grazing), d.scale()) * RadiationTicker.GY_PER_R * ticks / 1000.0;
+                        * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R * ticks / 1000.0;
                 h.assertTrue(Math.abs(gain / expected - 1) < 0.05, "за обход " + ticks + " тиков доза " + gain + " Гр, ждали " + expected);
             }
         });
@@ -1862,15 +1862,15 @@ public final class NuclearGameTests {
         Vec3 inside = Vec3.atCenterOf(h.absolutePos(cellar));
         Vec3 outside = Vec3.atCenterOf(h.absolutePos(CENTER.west(5)));
         Vec3 burst = inside.add(0, 50, 0);
-        double open = Shielding.prompt(h.getLevel(), outside, outside.add(0, 50, 0), 1);
-        double roof = Shielding.prompt(h.getLevel(), inside, burst, 1);
+        double open = Shielding.prompt(h.getLevel(), outside, outside.add(0, 50, 0));
+        double roof = Shielding.prompt(h.getLevel(), inside, burst);
         h.assertTrue(open > 0.99, "на открытом месте есть экран: " + open);
         h.assertTrue(roof < 0.01, "три блока камня ослабили только до " + roof);
         // стена в два блока к подрыву у самой земли далеко на юге
         BlockPos trench = CENTER.west(12);
         for (int dx = -2; dx <= 2; dx++) for (int dy = 0; dy < 2; dy++) h.setBlock(trench.offset(dx, dy, 1), Blocks.STONE);
         Vec3 crouch = Vec3.atCenterOf(h.absolutePos(trench));
-        double behind = Shielding.prompt(h.getLevel(), crouch, crouch.add(0, 0.2, 2000), 1);
+        double behind = Shielding.prompt(h.getLevel(), crouch, crouch.add(0, 0.2, 2000));
         h.assertTrue(behind > 0.1 && behind < 0.4, "за стеной от низкого подрыва: " + behind);
         h.succeed();
     }
@@ -1891,9 +1891,9 @@ public final class NuclearGameTests {
             }
         }
         ServerLevel level = h.getLevel();
-        double inside = Shielding.fallout(level, Vec3.atBottomCenterOf(h.absolutePos(hut)).add(0, 0.9, 0), 1);
-        double field = Shielding.fallout(level, Vec3.atBottomCenterOf(h.absolutePos(CENTER.west(10))).add(0, 0.9, 0), 1);
-        double byWall = Shielding.fallout(level, Vec3.atBottomCenterOf(h.absolutePos(hut.west(4))).add(0, 0.9, 0), 1);
+        double inside = Shielding.fallout(level, Vec3.atBottomCenterOf(h.absolutePos(hut)).add(0, 0.9, 0));
+        double field = Shielding.fallout(level, Vec3.atBottomCenterOf(h.absolutePos(CENTER.west(10))).add(0, 0.9, 0));
+        double byWall = Shielding.fallout(level, Vec3.atBottomCenterOf(h.absolutePos(hut.west(4))).add(0, 0.9, 0));
         h.assertTrue(field > 0.99, "в поле есть защита: " + field);
         h.assertTrue(inside < 0.001, "в каменном доме осталось " + inside);
         h.assertTrue(byWall > 0.5 && byWall < 0.95, "у стены снаружи: " + byWall);

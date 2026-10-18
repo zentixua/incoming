@@ -76,7 +76,7 @@ class SicknessModelTest {
         assertTrue(SicknessModel.noRegeneration(d));
     }
 
-    /** Кишечная форма (10–50 Гр): смерть через 5–14 дней. */
+    /** Кишечная форма (10–50 Гр): смерть через дни — 12 при 10 Гр, около двух при 40 (к мозговой форме короче). */
     @Test
     void gastrointestinalDays() {
         for (double d : new double[]{10, 20, 40}) {

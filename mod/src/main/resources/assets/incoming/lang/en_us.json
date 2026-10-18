@@ -260,7 +260,7 @@
   "incoming.remote.yield": "%s kt %s",
   "incoming.remote.burst.air": "Burst: air",
   "incoming.remote.burst.ground": "Burst: ground",
-  "incoming.remote.burst.tooltip": "Air: widest destruction, almost no fallout. Ground: crater, trinitite and a fallout trail with black rain",
+  "incoming.remote.burst.tooltip": "Air: widest destruction and fires, black rain is only weakly radioactive. Ground: crater, trinitite and a fallout trail downwind",
   "incoming.yield.tactical": "(tactical)",
   "incoming.yield.hiroshima": "(Hiroshima)",
   "incoming.geiger.rate": "☢ %s",

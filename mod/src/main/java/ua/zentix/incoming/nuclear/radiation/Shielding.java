@@ -5,7 +5,6 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -18,11 +17,13 @@ import ua.zentix.incoming.util.Terrain;
 
 /**
  * Защита от радиации блоками: ослабление по массе вещества на пути (кг/м², {@link PromptRadiationModel#transmission}).
- * Блок — метр вещества своей плотности ({@link #density}); путь луча в каждом блоке — по сетке (Amanatides–Woo), а не
- * шагами: угол стены срезает мало. Чанки читаются только готовые ({@link Terrain#ready}): за неготовым — воздух.
+ * Блок — метр вещества своей плотности ({@link #density}) при любом {@code effects_scale}: масштаб сжимает радиусы
+ * подрыва, а стены, окна и кроны вокруг тела остаются своего размера. Путь луча в каждом блоке — по сетке
+ * (Amanatides–Woo), а не шагами: угол стены срезает мало. Чанки читаются только готовые ({@link Terrain#ready}): за
+ * неготовым — воздух.
  */
 public final class Shielding {
-    /** Луч к подрыву — не дальше стольких блоков (дальше — рельеф, его проверяет тень света). */
+    /** Луч к подрыву — не дальше стольких блоков: защита — то, что рядом с телом (стены, подвал, окоп), а не рельеф вдали. */
     private static final double PROMPT_RANGE = 64;
     /** Рассеянная воздухом часть радиации первой минуты: приходит с неба, а не по прямой от шара (оценка). */
     private static final double SKY_SHARE = 0.3;
@@ -45,15 +46,15 @@ public final class Shielding {
      * (вверх и под 45° к подрыву), остальное — по прямой к подрыву. Окоп и подвал без потолка спасают от прямого, но не
      * от рассеянного.
      */
-    public static double prompt(Level level, Vec3 eye, Vec3 burst, double scale) {
+    public static double prompt(Level level, Vec3 eye, Vec3 burst) {
         Vec3 dir = burst.subtract(eye);
         double len = dir.length();
         Vec3 to = len > PROMPT_RANGE ? eye.add(dir.scale(PROMPT_RANGE / len)) : burst;
-        double direct = PromptRadiationModel.transmission(mass(level, eye, to, scale), PromptRadiationModel.HALF_PROMPT);
+        double direct = PromptRadiationModel.transmission(mass(level, eye, to), PromptRadiationModel.HALF_PROMPT);
         double h = Math.hypot(dir.x, dir.z);
         Vec3 slant = h < 1e-6 ? new Vec3(0, 1, 0) : new Vec3(dir.x / h, 1, dir.z / h).normalize();
-        double sky = 0.5 * (PromptRadiationModel.transmission(mass(level, eye, eye.add(0, SKY_RANGE, 0), scale), PromptRadiationModel.HALF_PROMPT)
-                + PromptRadiationModel.transmission(mass(level, eye, eye.add(slant.scale(SKY_RANGE)), scale), PromptRadiationModel.HALF_PROMPT));
+        double sky = 0.5 * (PromptRadiationModel.transmission(mass(level, eye, eye.add(0, SKY_RANGE, 0)), PromptRadiationModel.HALF_PROMPT)
+                + PromptRadiationModel.transmission(mass(level, eye, eye.add(slant.scale(SKY_RANGE))), PromptRadiationModel.HALF_PROMPT));
         return (1 - SKY_SHARE) * direct + SKY_SHARE * sky;
     }
 
@@ -64,12 +65,12 @@ public final class Shielding {
      * {@link #AZIMUTHS} направлениям — точка открытой поверхности (карта высот) и луч к ней, дальнее последнего кольца —
      * по его лучам. Под крышей осадки светят сквозь крышу и стены, в яме — сквозь край ямы, в пещере — сквозь толщу.
      */
-    public static double fallout(Level level, Vec3 at, double scale) {
+    public static double fallout(Level level, Vec3 at) {
         double total = Math.log1p(Mth.square(AIR_RANGE_M / BODY_M));
         double sum = 0;
         for (int k = 0; k < RINGS.length; k++) {
-            double lo = Math.log1p(Mth.square(EDGES[k] / scale / BODY_M));
-            double hi = k + 1 < EDGES.length ? Math.log1p(Mth.square(EDGES[k + 1] / scale / BODY_M)) : total;
+            double lo = Math.log1p(Mth.square(EDGES[k] / BODY_M));
+            double hi = k + 1 < EDGES.length ? Math.log1p(Mth.square(EDGES[k + 1] / BODY_M)) : total;
             double weight = Math.max(0, hi - lo) / total / AZIMUTHS;
             for (int i = 0; i < AZIMUTHS; i++) {
                 double a = (i + 0.5 * (k & 1)) * Math.PI * 2 / AZIMUTHS;
@@ -78,7 +79,7 @@ public final class Shielding {
                 if (Terrain.ready(level, x >> 4, z >> 4)) {
                     double top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x, z);
                     Vec3 source = new Vec3(at.x + Math.cos(a) * RINGS[k], top + 0.05, at.z + Math.sin(a) * RINGS[k]);
-                    t = PromptRadiationModel.transmission(mass(level, at, source, scale), PromptRadiationModel.HALF_FALLOUT);
+                    t = PromptRadiationModel.transmission(mass(level, at, source), PromptRadiationModel.HALF_FALLOUT);
                 }
                 sum += weight * t;
             }
@@ -86,8 +87,8 @@ public final class Shielding {
         return sum;
     }
 
-    /** Масса вещества на отрезке, кг/м²: плотность каждого блока × путь в нём (блок — 1/scale метра). */
-    public static double mass(Level level, Vec3 from, Vec3 to, double scale) {
+    /** Масса вещества на отрезке, кг/м²: плотность каждого блока × путь в нём. */
+    public static double mass(Level level, Vec3 from, Vec3 to) {
         double dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
         double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (len < 1e-9) return 0;
@@ -110,7 +111,7 @@ public final class Shielding {
                 if (!Terrain.ready(level, chunkX, chunkZ)) break;
             }
             if (y >= level.getMinBuildHeight() && y < level.getMaxBuildHeight()) {
-                mass += density(level, p.set(x, y, z)) * (next - t) * len / scale;
+                mass += density(level, p.set(x, y, z)) * (next - t) * len;
             }
             t = next;
             if (tx <= ty && tx <= tz) {
@@ -139,7 +140,7 @@ public final class Shielding {
         double liquid = fluid.isEmpty() ? 0 : fluid.is(FluidTags.LAVA) ? 2600 : 1000;
         VoxelShape shape = s.getCollisionShape(level, p);
         if (shape.isEmpty()) return liquid;
-        double fill = Block.isShapeFullBlock(shape) ? 1 : volume(shape);
+        double fill = s.isCollisionShapeFullBlock(level, p) ? 1 : volume(shape);
         return material(level, p, s) * fill + liquid * (1 - fill);
     }
 

@@ -21,8 +21,8 @@ import java.util.List;
 public final class MobFallout {
     /** Раз в сколько тиков мобы получают дозу осадков (10 с — 0.2 игрового часа). */
     public static final int PERIOD = 200;
-    /** Мощность меньше этой (Р/ч) — фон, защиту моба не считаем. */
-    private static final double BACKGROUND = 0.01;
+    /** Мощность меньше этой (Р/ч) — фон: дозы от неё нет, защиту не считаем (у игроков так же). */
+    static final double BACKGROUND = 0.01;
 
     @Nullable
     private List<? extends Mob> mobs;
@@ -63,17 +63,10 @@ public final class MobFallout {
     private void expose(ServerLevel level, List<Detonation> detonations, Mob mob, long now) {
         // снимок старше тика: чанк моба мог уйти из полной загрузки, а защита читается блоками
         if (!mob.isAlive() || !Terrain.ready(level, mob.blockPosition())) return;
-        double field = 0, strongest = 0, scale = 1;
-        for (Detonation d : detonations) {
-            double f = d.falloutRate(mob.getX(), mob.getZ(), now - d.gameTime());
-            field += f;
-            if (f > strongest) {
-                strongest = f;
-                scale = d.scale();
-            }
-        }
+        double field = 0;
+        for (Detonation d : detonations) field += d.falloutRate(mob.getX(), mob.getZ(), now - d.gameTime());
         if (field < BACKGROUND) return;
-        double rate = field * Shielding.fallout(level, RadiationTicker.middle(mob), scale);
+        double rate = field * Shielding.fallout(level, RadiationTicker.middle(mob));
         RadiationTicker.addDose(mob, (float) (rate * RadiationTicker.GY_PER_R * hours));
     }
 

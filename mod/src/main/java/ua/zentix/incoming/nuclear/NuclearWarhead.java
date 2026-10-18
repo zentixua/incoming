@@ -133,7 +133,7 @@ public final class NuclearWarhead {
             // видел вспышку — бежит прочь
             MobPanic.flash(d, living, level.getGameTime());
         }
-        double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt()) * Shielding.prompt(level, eye, d.burst(), d.scale());
+        double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt()) * Shielding.prompt(level, eye, d.burst());
         if (rem < 1) return true;
         float gy = (float) (rem / PromptRadiationModel.REM_PER_GY);
         if (living instanceof ServerPlayer player) {
