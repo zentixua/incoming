@@ -8,6 +8,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.nuclear.model.ArrivalTable;
 import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.nuclear.model.BlackRainModel;
 import ua.zentix.incoming.nuclear.model.FalloutModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.FrontProfile;
@@ -33,7 +34,8 @@ import ua.zentix.incoming.util.Terrain;
  * @param windSpeed скорость ветра, м/с
  * @param visibility видимость, м (ясно 20 км, дождь 5, гроза 1) — ослабление света
  * @param seed      сид случайных деталей (одинаковый у всех клиентов)
- * @param fallout   есть радиоактивный след (наземный подрыв и включены осадки)
+ * @param fallout   осадки включены (настройка {@code nuclear.fallout} в миг подрыва): след наземного подрыва и
+ *                  радиоактивность чёрного дождя; у подрыва из сохранения прежней сборки — только у наземного
  * @param wave      скорость стены пыли вдали от шара, доля скорости звука (настройка {@code nuclear.wave_speed} в момент подрыва)
  * @param dayTime   время суток мира в миг подрыва (тики, как {@code Level.getDayTime}): у него мгла над пожарами ждёт
  *                  утра; {@link #NO_DAY_TIME} — неизвестно (подрыв из сохранения или повтора прежней сборки)
@@ -220,38 +222,45 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return new FalloutModel(yieldKt, hobMetres(), windDir, windSpeed);
     }
 
-    /** Есть ли у подрыва радиоактивный след. */
-    public boolean hasFallout() {
-        return fallout && falloutModel().surfaceFraction() > 0;
+    /** Чёрный дождь от пожаров этого подрыва (без пожаров — без дождя). */
+    public BlackRainModel blackRainModel() {
+        return Caches.blackRain(this);
     }
 
     /**
-     * Мощность дозы осадков в точке, Р/ч.
+     * Есть ли у подрыва радиоактивные осадки (включены в миг подрыва): след наземного или то, что вымыл на землю
+     * чёрный дождь.
+     */
+    public boolean hasFallout() {
+        return fallout && (falloutModel().surfaceFraction() > 0 || blackRainModel().fireRadiusM() > 0);
+    }
+
+    /**
+     * Мощность дозы осадков в точке, Р/ч: след наземного подрыва и вымытое чёрным дождём; всё по игровым часам.
      *
-     * @param ticksSince игровые тики после подрыва (и время прихода осадков, и спад: 1000 тиков = 1 игровой час)
+     * @param ticksSince игровые тики после подрыва (1000 тиков = 1 час)
      */
     public double falloutRate(double x, double z, long ticksSince) {
         if (!hasFallout()) return 0;
-        double seconds = ticksSince / (20.0 * scale);
-        double hours = ticksSince / 1000.0;
-        return falloutModel().doseRate(metres(x - burst.x), metres(z - burst.z), seconds, hours);
+        double hours = ticksSince / 1000.0, mx = metres(x - burst.x), mz = metres(z - burst.z);
+        double rain = blackRainModel().depositH1(mx, mz, ticksSince / 20.0);
+        double decay = Math.pow(Math.max(hours, FalloutModel.MIN_DECAY_HOURS), -FalloutModel.DECAY_EXP);
+        return falloutModel().doseRate(mx, mz, hours) + rain * decay;
     }
 
-    /** Сколько игровых часов после прихода осадков в следе идёт чёрный дождь. */
-    public static final double BLACK_RAIN_HOURS = 2.5;
-    /** Чёрный дождь там, где мощность дозы в следе от 1 Р/ч. */
-    public static final double BLACK_RAIN_RATE = 1;
-
-    /** Через сколько игровых тиков после подрыва осадки ложатся в точку (реальное время модели × {@code scale}). */
+    /** Через сколько игровых тиков после подрыва след наземного подрыва ложится в точку. */
     public double falloutArrivalTicks(double x, double z) {
-        return falloutModel().arrivalSeconds(metres(x - burst.x), metres(z - burst.z)) * 20 * scale;
+        return falloutModel().arrivalHours(metres(x - burst.x), metres(z - burst.z)) * 1000;
     }
 
-    /** Идёт ли в точке чёрный дождь: след осадков уже дошёл и ещё не выпал (одинаково на сервере и клиенте). */
+    /** Идёт ли в точке чёрный дождь (одинаково на сервере и клиенте): часы — огненного шторма, секунды тиков. */
     public boolean blackRain(double x, double z, long ticksSince) {
-        if (!hasFallout() || falloutRate(x, z, ticksSince) < BLACK_RAIN_RATE) return false;
-        double hours = (ticksSince - falloutArrivalTicks(x, z)) / 1000.0;
-        return hours >= 0 && hours < BLACK_RAIN_HOURS;
+        return blackRainModel().raining(metres(x - burst.x), metres(z - burst.z), ticksSince / 20.0);
+    }
+
+    /** Через сколько игровых тиков после подрыва чёрный дождь кончается везде. */
+    public double blackRainEndTicks() {
+        return blackRainModel().endSeconds() * 20;
     }
 
     /**
@@ -269,6 +278,7 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         private static final java.util.Map<Detonation, FrontProfile> FRONT = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, Double> RADIUS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, Double> RUINS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+        private static final java.util.Map<Detonation, BlackRainModel> RAIN = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
         static double ruinRadius(Detonation d) {
             return RUINS.computeIfAbsent(d, x -> Math.min(x.radiusMax() * 1.5,
@@ -284,6 +294,16 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
             return FRONT.computeIfAbsent(d, x -> FrontProfile.of(x.arrival(), x.scale, FrontProfile.slowFrom(x.fireballRadius()),
                     x.blocks(BlastModel.rangeForOverpressure(BlastModel.kpa(0.3), x.yieldKt)), x.radiusMax() * 1.5,
                     x.wave * FrontProfile.SOUND_SPEED));
+        }
+
+        static BlackRainModel blackRain(Detonation d) {
+            return RAIN.computeIfAbsent(d, x -> {
+                // зона пожаров — где свет поджигает (как у руин и огненного шторма клиента); сервер не поджигает — её нет
+                double hob = Math.max(0, x.hobMetres());
+                double slant = ThermalModel.rangeForFluence(ThermalModel.IGNITE, x.yieldKt, x.surface, x.visibility);
+                double fire = x.fires ? Math.sqrt(Math.max(0, slant * slant - hob * hob)) : 0;
+                return new BlackRainModel(x.yieldKt, fire, x.windDir, x.windSpeed, 1 - x.falloutModel().surfaceFraction());
+            });
         }
 
         static double radiusMax(Detonation d) {
