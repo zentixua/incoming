@@ -41,10 +41,10 @@ public final class NukeFlash {
     /** Послеобраз: сколько тиков ещё и сколько было всего. */
     private static int afterLeft, afterTotal;
     /**
-     * Где послеобраз на сетчатке: направление на шар в миг вспышки относительно взгляда — тангенсы углов вправо и вверх —
-     * и угловой полуразмер пятна (тангенс). Пятно — ожог сетчатки, поэтому оно ходит вместе со взглядом, а не стоит в мире.
+     * Где послеобраз на сетчатке: место на экране в миг вспышки (доли ширины и высоты) и полуразмер пятна (доля высоты).
+     * Пятно — ожог сетчатки, поэтому оно ходит вместе со взглядом, а не стоит в мире.
      */
-    private static float afterRight, afterUp, afterSize;
+    private static float afterX, afterY, afterSize;
     private static long ticks, endTick;
     /** Предел силы вспышки на экране при «без вспышек молний». */
     private static final float CALM_FLASH = 0.4f;
@@ -76,16 +76,41 @@ public final class NukeFlash {
         strength = (float) s;
         recovery = Mth.clamp(2 + 0.6 * Math.log1p(q), 2, 4);
         endTick = ticks + (long) Math.ceil(pulseSeconds(d.yieldKt()) * 20 * d.scale() + recovery * 20);
-        float[] spot = inView && q >= 0.05 ? ScreenProjection.project(d.burst()) : null;
+        // пятно больше видимого шара: глаз «размазывает» засветку
+        float[] spot = inView && q >= 0.05 ? retina(mc, p, d.burst(), Math.max(d.fireballRadius(), 30) * 2.2) : null;
         if (spot != null) {
             // 5–30 с по световому импульсу (кал/см²)
             afterTotal = afterLeft = (int) (20 * Mth.clamp(5 + q * 2.5, 5, 30));
-            afterRight = (2 * spot[0] - 1) / (2 * ScreenProjection.horizontalScale());
-            afterUp = (1 - 2 * spot[1]) / (2 * ScreenProjection.verticalScale());
-            // пятно больше видимого шара: глаз «размазывает» засветку
-            afterSize = (float) (Math.max(d.fireballRadius(), 30) / spot[2] * 2.2);
+            afterX = spot[0];
+            afterY = spot[1];
+            afterSize = spot[2];
         }
         if (sees && q >= ThermalModel.BURN_1) ua.zentix.incoming.client.fx.CameraShake.blast(6);
+    }
+
+    /**
+     * Где на экране глаз самого игрока видит шар радиуса {@code radius} в точке {@code at}: по его глазу и взгляду, а не по
+     * камере кадра (камера снаряда, вид от третьего лица смотрят не его глазами). Масштаб — проекция кадра, если кадр —
+     * его глаза (поле зрения с подзорной трубой, бегом), иначе — его поле зрения из настроек.
+     *
+     * @return {x, y — доли ширины и высоты экрана; полуразмер — доля высоты} или null, если шар у него за спиной
+     */
+    @Nullable
+    private static float[] retina(Minecraft mc, LocalPlayer p, Vec3 at, double radius) {
+        Vec3 f = p.getViewVector(1), to = at.subtract(p.getEyePosition());
+        double depth = to.dot(f);
+        if (depth <= 1e-3) return null;
+        double yaw = Math.toRadians(p.getYRot());
+        Vec3 right = new Vec3(-Math.cos(yaw), 0, -Math.sin(yaw)), up = right.cross(f);
+        double sx, sy;
+        if (mc.getCameraEntity() == p && mc.options.getCameraType().isFirstPerson()) {
+            sx = ScreenProjection.horizontalScale();
+            sy = ScreenProjection.verticalScale();
+        } else {
+            sy = 0.5 / Math.tan(Math.toRadians(mc.options.fov().get()) / 2);
+            sx = sy * mc.getWindow().getHeight() / Math.max(1, mc.getWindow().getWidth());
+        }
+        return new float[]{(float) (0.5 + to.dot(right) / depth * sx), (float) (0.5 - to.dot(up) / depth * sy), (float) (radius / depth * sy)};
     }
 
     /**
@@ -151,19 +176,19 @@ public final class NukeFlash {
 
     /**
      * Послеобраз — оранжевое пятно там, где шар был на сетчатке в миг вспышки, медленно гаснет; двигается вместе со
-     * взглядом, как настоящий: повернул голову — пятно в том же месте экрана, а шар уходит. Место — тангенсы углов от
-     * взгляда, на экран — по нынешней проекции (смена поля зрения, бег, подзорная труба не сдвигают его на сетчатке).
+     * взглядом, как настоящий: повернул голову — пятно в том же месте экрана, а шар уходит. Место и размер на экране —
+     * из мига вспышки: смена поля зрения (подзорная труба, бег) его не двигает, как и сетчатку.
      * Складывается со светом: обычным смешиванием тёмное ядро пятна ложилось бы поверх ещё светящегося шара тёмной
      * точкой (шар всплывает, а пятно остаётся там, где была вспышка).
      */
     private static void afterimage(GuiGraphics g, float partial, int w, int h) {
-        float px = Mth.clamp(afterSize * ScreenProjection.verticalScale() * h, 14, 400);
+        float px = Mth.clamp(afterSize * h, 14, 400);
         float life = (afterLeft - partial) / afterTotal;
         float a = Mth.clamp(life * 1.3f, 0, 0.6f) * Math.min(1, strength * 1.5f);
         if (a <= 0.01f) return;
         ShaderInstance shader = NukeRenderer.flare;
         if (shader == null) return;
-        float x = (0.5f + afterRight * ScreenProjection.horizontalScale()) * w, y = (0.5f - afterUp * ScreenProjection.verticalScale()) * h;
+        float x = afterX * w, y = afterY * h;
         RenderSystem.setShader(() -> shader);
         RenderSystem.enableBlend();
         RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
