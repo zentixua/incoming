@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.sound;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.ChannelAccess;
+import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.player.Player;
@@ -55,6 +56,22 @@ public final class SoundFilters {
      * тик, и его доля — отсюда. Только звуковой поток; ключи слабые — звук забыт, запись уходит.
      */
     private static final Map<SoundInstance, float[]> SPR_AT_START = new WeakHashMap<>();
+    /**
+     * Чужие петли (вода и Незер вокруг, маяк, вагонетка, петли модов), которым сейчас стоит наш фильтр, и какой: его
+     * ведёт {@link #loops}. Только поток клиента; ключи слабые.
+     */
+    private static final Map<SoundInstance, float[]> LOOPS = new WeakHashMap<>();
+    /**
+     * Меньше этого фильтр петли не меняется (вызовы OpenAL в каждом тике на каждую петлю — лишние). Только без Sound
+     * Physics: с её {@code update_moving_sounds} она раз в несколько тиков ставит петле свой фильтр вместо нашего, и наш
+     * нужен каждый тик (у порванных перепонок он не меняется неделями игры).
+     */
+    private static final float LOOP_STEP = 0.005f;
+    /**
+     * Слух вернулся разом (смерть, перемотка повтора, настройка): вернуть фильтр всем чужим петлям, и тем, что начались в
+     * оглушении после прошлого {@link #loops} и в {@link #LOOPS} ещё не попали. Только поток клиента.
+     */
+    private static boolean restoreAll;
 
     private SoundFilters() {}
 
@@ -67,8 +84,13 @@ public final class SoundFilters {
 
     /** Воздух и преграды — наши (нет своего конфига «выкл» и нет Sound Physics). */
     static boolean pathEffects() {
+        return !soundPhysics() && IncomingConfig.CLIENT.soundMuffling.get();
+    }
+
+    /** Стоит ли Sound Physics Remastered. */
+    private static boolean soundPhysics() {
         if (soundPhysics == null) soundPhysics = ModList.get().isLoaded("sound_physics_remastered");
-        return !soundPhysics && IncomingConfig.CLIENT.soundMuffling.get();
+        return soundPhysics;
     }
 
     /** Доля верхов, дошедшая по воздуху за d блоков. */
@@ -157,16 +179,16 @@ public final class SoundFilters {
             gain = m.lowpassGain();
             highs = m.lowpassHighs();
         }
-        // оглушение: только короткие звуки — фильтр остаётся на источнике до конца, а петли мы ведём сами
-        if (!(sound instanceof Muffled) && sound.isLooping()) return;
-        float k = Deafness.depth(sound), m = NukePall.muffle(sound);
-        gain *= (1 - 0.55f * k) * (1 - 0.3f * m);
-        highs *= Math.max(0.01f, (1 - 0.99f * k) * (1 - 0.75f * m));
+        float m = NukePall.muffle(sound);
+        gain *= Deafness.gain(sound) * (1 - 0.3f * m);
+        highs *= Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
         boolean ours = gain < 0.999f || highs < 0.999f;
+        // петли ведём каждый тик (наши — хозяин, чужие — loops): их фильтр Sound Physics нужен и потом
+        boolean kept = sound instanceof Muffled || sound.isLooping();
         // Sound Physics Remastered поставил свой фильтр этому звуку только что (в начале Channel.play, событие — сразу
         // после него, в той же задаче звукового потока): наш — поверх его, а не вместо
-        float[] spr = ours || sound instanceof Muffled ? Spr.now() : null;
-        if (spr != null && sound instanceof Muffled) SPR_AT_START.put(sound, spr);
+        float[] spr = ours || kept ? Spr.now() : null;
+        if (spr != null && kept) SPR_AT_START.put(sound, spr);
         if (ours) {
             if (spr != null) {
                 gain *= spr[0];
@@ -180,13 +202,49 @@ public final class SoundFilters {
     static void update(SoundInstance sound, float gain, float highs) {
         ChannelAccess.ChannelHandle handle = Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.get(sound);
         if (handle == null) return;
-        float k = Deafness.depth(sound), m = NukePall.muffle(sound);
-        float g = gain * (1 - 0.55f * k) * (1 - 0.3f * m), h = highs * Math.max(0.01f, (1 - 0.99f * k) * (1 - 0.75f * m));
+        float m = NukePall.muffle(sound);
+        float g = gain * Deafness.gain(sound) * (1 - 0.3f * m), h = highs * Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
         handle.execute(channel -> {
             float[] spr = SPR_AT_START.get(sound);
             if (spr != null) set(channel.source, g * spr[0], h * spr[1]);
             else set(channel.source, g, h);
         });
+    }
+
+    /**
+     * Тик клиента: фильтр оглушения и пелены на чужих петлях. Фильтр на источнике остаётся до конца звука, а петля
+     * звучит, пока её не снимут: начатая до волны, она звучала бы чисто часы оглушения, а начатая в оглушении — глухо и
+     * после. Ставится, пока он не 1, и один раз — когда снова 1 (фильтр Sound Physics с её старта — обратно); новые
+     * оценки Sound Physics для таких петель ({@code updateMovingSounds}) он, пока стоит, перекрывает, как у наших петель.
+     */
+    public static void loops() {
+        SoundEngine engine = Minecraft.getInstance().getSoundManager().soundEngine;
+        boolean all = restoreAll;
+        restoreAll = false;
+        for (Map.Entry<SoundInstance, ChannelAccess.ChannelHandle> e : engine.instanceToChannel.entrySet()) {
+            SoundInstance sound = e.getKey();
+            if (sound instanceof Muffled || !sound.isLooping()) continue;
+            float m = NukePall.muffle(sound);
+            float g = Deafness.gain(sound) * (1 - 0.3f * m), h = Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
+            boolean on = g < 0.999f || h < 0.999f;
+            float[] was = LOOPS.get(sound);
+            if (!on && was == null && !all) continue;
+            if (on && was != null && !soundPhysics() && Math.abs(g - was[0]) < LOOP_STEP && Math.abs(h - was[1]) < LOOP_STEP) continue;
+            if (on) LOOPS.put(sound, new float[]{g, h});
+            else LOOPS.remove(sound);
+            e.getValue().execute(channel -> {
+                float[] spr = SPR_AT_START.get(sound);
+                if (spr != null) set(channel.source, g * spr[0], h * spr[1]);
+                else if (on) set(channel.source, g, h);
+                // свой фильтр ставили, только если EFX есть (без него AL_DIRECT_FILTER — ошибка, её принял бы движок)
+                else if (filter > 0) AL10.alSourcei(channel.source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
+            });
+        }
+    }
+
+    /** Слух вернулся разом: следующий {@link #loops} вернёт фильтр всем чужим петлям. Поток клиента. */
+    public static void restoreLoops() {
+        restoreAll = true;
     }
 
     /**
@@ -206,8 +264,7 @@ public final class SoundFilters {
         /** Громкость и доля верхов, которые он только что поставил звуку; null — его нет, он выключен или не прочитать. */
         @Nullable
         static float[] now() {
-            if (soundPhysics == null) soundPhysics = ModList.get().isLoaded("sound_physics_remastered");
-            if (!soundPhysics || !find()) return null;
+            if (!soundPhysics() || !find()) return null;
             try {
                 if (!Boolean.TRUE.equals(get.invoke(enabled))) return null;
                 int id = direct.getInt(null);
