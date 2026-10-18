@@ -309,7 +309,8 @@ public final class MushroomField {
                     s.domeR() * (1 + REACH_CAP * u / Math.min(s.domeR(), s.domeH())));
         }
         double stem = s.stemTau() > 0
-                ? (1 + REACH_STEM) * Math.max(MushroomModel.stemRadius(0, s.stemR(), s.lowDust()), MushroomModel.stemRadius(1, s.stemR(), s.lowDust())) : 0;
+                ? (1 + REACH_STEM) * Math.max(MushroomModel.stemRadius(0, s.stemR(), MushroomModel.dustFlare(s)),
+                MushroomModel.stemRadius(1, s.stemR(), MushroomModel.dustFlare(s))) : 0;
         double skirt = s.skirtTau() > 0 ? s.skirtR() + s.skirtW() * (1 + REACH_SKIRT * skirtUnit(s) / Math.min(s.skirtW(), s.skirtH())) : 0;
         return Math.max(1, Math.max(cap, Math.max(stem, skirt)));
     }
@@ -520,7 +521,7 @@ public final class MushroomField {
         int cap = mix(mix(CAP_YOUNG, mix(CAP_OLD, CAP_DUSTY, soil), condensed), STEAM, 0.45 * wet);
         // капли конденсата рассеивают вперёд сильнее дыма и пыли
         matter(into, o, 5, cap, G + (G_WATER - G) * condensed * (1 - soil));
-        put(into, o, 6, d.blocks(s.stemTop()), d.blocks(s.stemR()), s.lowDust(), s.stemTau());
+        put(into, o, 6, d.blocks(s.stemTop()), d.blocks(s.stemR()), d.blocks(MushroomModel.dustFlare(s)), s.stemTau());
         matter(into, o, 7, mix(STEM, STEAM, 0.8 * wet));
         put(into, o, 8, d.blocks(s.skirtR()), d.blocks(s.skirtW()), d.blocks(s.skirtH()), skirtSigma);
         matter(into, o, 9, mix(SKIRT, CloudPuffs.SPRAY, a.water.under()));

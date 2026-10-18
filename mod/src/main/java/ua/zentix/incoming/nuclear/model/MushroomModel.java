@@ -26,6 +26,14 @@ public final class MushroomModel {
     static final double TAU_STEM = 4, TAU_SKIRT = 2;
     /** За сколько секунд (e-кратно) оседает пыль у земли: воздушный подрыв, наземный (как у стены пыли). */
     public static final double DUST_SETTLE_AIR = 90, DUST_SETTLE_SURFACE = 240;
+    /**
+     * Радиус ножки — доля радиуса шапки по мощности (Glasstone и Dolan 2.17): до 20 кт — около половины, с мощностью доля
+     * падает, у мегатонн ножка в 5–10 раз уже облака. Между узлами — линейно по логарифму мощности.
+     */
+    private static final double[] STEM_Y = {20, 1000, 10000};
+    private static final double[] STEM_SHARE = {0.5, 0.2, 0.1};
+    /** Раструб пыли у земли сверх ножки — эта доля радиуса шапки, пока пыль не осела ({@link #dustFlare}). */
+    static final double DUST_FLARE = 0.256;
 
     private MushroomModel() {}
 
@@ -45,7 +53,7 @@ public final class MushroomModel {
      * @param domeH     полуось купола по вертикали
      * @param capTau    толща шапки поперёк меньшего поперечника сечения (с долей гриба): шар и шапка непрозрачны
      * @param stemTop   верх ножки (догоняет низ шапки)
-     * @param stemR     радиус ножки в середине (у шапки шире, у земли — раструб пыли)
+     * @param stemR     радиус ножки в середине ({@link #stemShare} радиуса шапки; у шапки шире, у земли — раструб пыли)
      * @param stemTau   толща ножки поперёк (с видимостью, оседанием пыли не считая раструба)
      * @param lowDust   доля пыли у земли 0..1 (оседает): раструб ножки и юбка
      * @param skirtR    радиус середины юбки по земле
@@ -218,7 +226,30 @@ public final class MushroomModel {
         double skirtH = Math.max(1, Math.min(capBot * 0.12, 350 * Math.cbrt(yieldKt / 15)) * smooth(0, 30, t));
         double skirtTau = outer <= 0 ? 0 : TAU_SKIRT * smooth(0.5, 3, t) * (hob <= rf * 4 ? 1 : 0.5) * lowDust * life;
         return new Shape(t, life, top, capBot, capY, capR, ringR, ringA, ringB, domeY, domeR, domeH, capTau, stemTop,
-                capR * 0.16, stemTau, lowDust, skirtR, skirtW, skirtH, skirtTau, endTop);
+                capR * stemShare(yieldKt), stemTau, lowDust, skirtR, skirtW, skirtH, skirtTau, endTop);
+    }
+
+    /**
+     * Радиус ножки в долях радиуса шапки (Glasstone и Dolan 2.17): до 20 кт — 0,5, к 1 Мт — 0,2, к 10 Мт и выше — 0,1
+     * (ножка в 5–10 раз уже облака).
+     */
+    public static double stemShare(double yieldKt) {
+        if (yieldKt <= STEM_Y[0]) return STEM_SHARE[0];
+        for (int i = 1; i < STEM_Y.length; i++) {
+            if (yieldKt <= STEM_Y[i]) {
+                double f = Math.log(yieldKt / STEM_Y[i - 1]) / Math.log(STEM_Y[i] / STEM_Y[i - 1]);
+                return STEM_SHARE[i - 1] + (STEM_SHARE[i] - STEM_SHARE[i - 1]) * f;
+            }
+        }
+        return STEM_SHARE[STEM_SHARE.length - 1];
+    }
+
+    /**
+     * Раструб пыли у земли сверх радиуса ножки, м: пыль, которую втягивает подъём ножки, — до {@link #DUST_FLARE} радиуса
+     * шапки, оседает с {@code lowDust}. По шапке, а не по ножке: пыль поднимает волна подрыва.
+     */
+    public static double dustFlare(Shape s) {
+        return DUST_FLARE * s.capR() * s.lowDust();
     }
 
     /**
@@ -287,12 +318,13 @@ public final class MushroomModel {
     }
 
     /**
-     * Радиус ножки на доле её высоты w (0 — земля, 1 — низ шапки): шире у шапки (её тянет кольцо) и у земли — раструб пыли,
-     * который оседает с {@code lowDust}. {@code mushStemR} в {@code mushroom.glsl} — то же.
+     * Радиус ножки на доле её высоты w (0 — земля, 1 — низ шапки): в среднем по высоте — {@code stemR}, к шапке шире на
+     * треть (её тянет кольцо: у 2 кт край шапки выступает за ножку на треть своего радиуса) и у земли — раструб пыли
+     * {@code flare} ({@link #dustFlare}). {@code mushStemR} в {@code mushroom.glsl} — то же.
      */
-    public static double stemRadius(double w, double stemR, double lowDust) {
+    public static double stemRadius(double w, double stemR, double flare) {
         double x = clamp(w, 0, 1), base = Math.pow(1 - x, 6);
-        return stemR * (0.75 + 0.9 * x * x) + stemR * 1.6 * base * lowDust;
+        return stemR * (0.85 + 0.45 * x * x) + flare * base;
     }
 
     /** Снос ветром на высоте h, доля пути ветра за время t: верх сносит сильнее низа (как у прежних клубов). */
