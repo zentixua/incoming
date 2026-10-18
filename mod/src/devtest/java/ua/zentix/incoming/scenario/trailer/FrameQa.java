@@ -227,7 +227,12 @@ final class FrameQa {
         Frame fr = new Frame(t, ready, in, x, y, share, seen, clear, cloud, far, drawn, engine, fromEntity, smoke, dh, light, veil);
         frames.add(fr);
         sound.frame(t - start, cam);
-        while (!marks.isEmpty() && marks.peekFirst().t() <= t) sound.mark(marks.pollFirst().what());
+        // отметка — в своё время от начала окна, и до окна (меньше нуля): монтаж ставит ядерные планы разных дублей от
+        // отметки detonation (одни часы от вспышки), а в окнах после вспышки она прежде вставала в 0
+        while (!marks.isEmpty() && marks.peekFirst().t() <= t) {
+            EventLog.Mark m = marks.pollFirst();
+            sound.mark(m.what(), m.t() - start);
+        }
         // фронт ядерного взрыва дошёл до камеры вывода — отметка монтажу (живой план ставит её сам, War.watch; у плана
         // из повтора её в журнале нет, 13.10: p48–p50 «нет mark:front»)
         if (!front && !ClientNuclear.detonations().isEmpty() && War.frontIn(eye) <= 0) {

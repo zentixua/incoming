@@ -28,7 +28,7 @@ EYES = ["#4a2e1c", "#2b1d14", "#3a6ea5", "#4b7a3a", "#6b7b86", "#7a5a2a"]
 STYLES = ["short", "buzz", "side", "long", "curly", "bald", "short", "bun"]
 BEARDS = ["none", "stubble", "none", "mustache", "beard", "none", "stubble"]
 
-# роли групп: приставка имени бота → роль (бои: West/East — стороны fight, 0 — Юг, 1 — Север: T24 c2_fight_s/n)
+# роли групп: приставка имени бота → роль (бои: West/East — стороны fight, 0 — Юг, 1 — Север: T24 a_fight_w/e)
 GROUPS = {
     "Des": "desert", "Cit": "civil", "Und": "civil", "Str": "civil", "Civ": "civil2", "Hill": "civil2",
     "Crew": "south", "Mg": "north", "West": "south", "East": "north", "Roof": "south", "Off": "officer",

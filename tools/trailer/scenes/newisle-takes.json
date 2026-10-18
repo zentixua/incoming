@@ -4,12 +4,13 @@
  "limits": {"retries": 2, "stall_seconds": 600, "heap_share": 0.95, "take_factor": 2.0, "night_hours": 9.5, "disk_floor_gb": 4, "ram_floor_gb": 3, "client_gb": 10, "pause_minutes": 30, "flights_wait_s": 120, "launch_lag": {"missile": 2.2}},
  "smoke": ["T02", "T04", "T24"],
  "places": {
-  "c2_fight_s": {"line": [-783, 742], "step": [2, 0], "n": 4},
-  "c2_fight_n": {"line": [-783, 704], "step": [2, 0], "n": 4},
-  "c2_civil": {"at": [-805, 711], "above": 0},
-  "c2_flee": {"at": [-850, 712], "above": 0},
-  "c2_grid": {"at": [-790, 722], "above": 0},
-  "c2_hill": {"at": [-558, 908], "above": 0},
+  "a_fight_w": {"line": [-1553.5, 72.5], "step": [0.7, 1.4], "n": 4},
+  "a_fight_e": {"line": [-1524.5, 72.5], "step": [-0.7, 1.4], "n": 4},
+  "a_grid": {"at": [-1545, 76], "above": 0},
+  "a_flee": {"at": [-1597, 75], "above": 0},
+  "b_village": {"at": [1222, -1019], "above": 0},
+  "b_flee": {"at": [1243, -1018], "above": 0},
+  "c_hill": {"at": [-2525, 853], "above": 0},
   "c1_metro_in": [-144, 12],
   "station_floor": [-141, 55, 8],
   "station_box": {"min": [-172, 48, -12], "max": [-116, 64, 28]},
@@ -530,40 +531,52 @@
    "after": [{"do": "nuke.clear"}]
   },
   {
-   "id": "T24", "title": "Конец света: бой в Городе 2 встаёт у вспышки, мирные бегут, одеяло пыли", "from": "chain", "clock": "night", "siren": true, "minutes": 16,
+   "id": "T24", "title": "Конец света, место A: уличный бой в городке за горами встаёт у вспышки", "from": "chain", "clock": "night", "siren": true, "minutes": 16,
    "stage": [
     {"do": "silo.build", "at": "silo", "depth": 30, "size": 5},
     {"do": "silo.open"},
-    {"do": "fight", "west": "c2_fight_s", "east": "c2_fight_n", "creative": true},
-    {"do": "crowd", "group": "civil", "at": "c2_civil", "n": 14, "spread": 6, "roam": 1.5, "prefix": "Civ", "creative": true},
-    {"do": "grid.node", "at": "c2_grid", "r": 70},
-    {"do": "gunners", "group": "roof", "at": {"at": [-745, 658], "above": 0}, "n": 5, "spread": 3, "prefix": "Roof", "gun": "pointblank:ak47", "creative": true},
-    {"do": "grid.node", "at": {"at": [-745, 640], "above": 0}, "r": 90},
+    {"do": "fight", "west": "a_fight_w", "east": "a_fight_e", "creative": true},
+    {"do": "grid.node", "at": "a_grid", "r": 60},
     {"do": "settle"},
     {"do": "fight.arm"},
     {"do": "nuke.order", "by": "player", "pad": "silo", "at_place": "gz", "kt": 2},
     {"do": "wait", "s": 2}
    ],
    "shots": [
-    {"plans": ["n33"], "seconds": 4, "camera": "player", "hud": true, "stage_player": {"at": "camera:n33", "look": "c1_core"}, "when": {"kind": "warning", "below": 30}},
-    {"plans": ["n60", "n61", "n62", "n63", "n64", "n65"], "offsets": {"n61": 2.0, "n62": 3.2, "n63": 4.6, "n64": 2.6, "n65": 3.6}, "seconds": 12, "when": {"kind": "warning", "below": 2.0}, "ready": [{"do": "fight.start"}], "cues": [{"at": 2.0, "do": "fight.adopt", "side": "west", "group": "south"}, {"at": 2.0, "do": "fight.adopt", "side": "east", "group": "north"}, {"at": 2.05, "do": "crowd.cower", "group": "south", "from": "gz"}, {"at": 2.05, "do": "crowd.cower", "group": "north", "from": "gz"}, {"at": 2.05, "do": "crowd.cower", "group": "civil", "from": "gz"}, {"at": 2.6, "do": "crowd.flee", "group": "civil", "to": "c2_flee", "stagger": [0, 0.8]}, {"at": 2.7, "do": "crowd.watch", "group": "south", "look": {"at": [-167, -4], "above": 300}, "jitter": 20}, {"at": 2.7, "do": "crowd.watch", "group": "north", "look": {"at": [-167, -4], "above": 300}, "jitter": 20}, {"at": 4.3, "do": "crowd.watch", "group": "south", "look": {"at": [-780, 704], "above": 2}, "jitter": 2}, {"at": 4.3, "do": "crowd.watch", "group": "north", "look": {"at": [-780, 742], "above": 2}, "jitter": 2}, {"at": 5.6, "do": "crowd.flee", "group": "north", "to": "c2_flee", "stagger": [0, 1.6]}, {"at": 6.0, "do": "crowd.flee", "group": "south", "to": "c2_flee", "stagger": [0.4, 2.0]}, {"at": 2.05, "do": "crowd.cower", "group": "roof", "from": "gz"}, {"at": 2.7, "do": "crowd.watch", "group": "roof", "look": {"at": [-167, -4], "above": 300}, "jitter": 15}], "cover": {"n60": {"subject": "scene"}, "n61": {"subject": "scene"}, "n62": {"subject": "nuke", "need": "NUKE"}, "n63": {"subject": "scene"}, "n64": {"subject": "scene"}, "n65": {"subject": "nuke", "need": "NUKE"}}}
+    {"plans": ["n33"], "seconds": 4, "camera": "player", "hud": true, "stage_player": {"at": "camera:n33", "look": "c1_core"}, "when": {"kind": "warning", "below": 45}},
+    {"plans": ["n60", "n61", "n62", "n63"], "offsets": {"n61": 2.2, "n62": 4.7, "n63": 6.7}, "seconds": 10, "when": {"kind": "warning", "below": 2.5}, "ready": [{"do": "fight.start"}], "cues": [{"at": 2.5, "do": "fight.adopt", "side": "west", "group": "south"}, {"at": 2.5, "do": "fight.adopt", "side": "east", "group": "north"}, {"at": 2.55, "do": "crowd.cower", "group": "south", "from": "gz"}, {"at": 2.55, "do": "crowd.cower", "group": "north", "from": "gz"}, {"at": 4.1, "do": "crowd.watch", "group": "south", "look": {"at": [-167, -4], "above": 300}, "jitter": 20}, {"at": 4.1, "do": "crowd.watch", "group": "north", "look": {"at": [-167, -4], "above": 300}, "jitter": 20}, {"at": 7.1, "do": "crowd.watch", "group": "south", "look": {"at": [-1525.5, 74.5], "above": 1.6}, "jitter": 1.5}, {"at": 7.1, "do": "crowd.watch", "group": "north", "look": {"at": [-1552.5, 74.5], "above": 1.6}, "jitter": 1.5}, {"at": 7.7, "do": "crowd.flee", "group": "north", "to": "a_flee", "stagger": [0, 1.0]}, {"at": 8.0, "do": "crowd.flee", "group": "south", "to": "a_flee", "stagger": [0.2, 1.2]}], "cover": {"n60": {"subject": "scene"}, "n61": {"subject": "scene"}, "n62": {"subject": "nuke", "need": "NUKE"}, "n63": {"subject": "scene"}}}
    ],
-   "after": [{"do": "fight.remove"}, {"do": "crowd.remove", "group": "civil"}, {"do": "crowd.remove", "group": "south"}, {"do": "crowd.remove", "group": "north"}, {"do": "crowd.remove", "group": "roof"}]
+   "after": [{"do": "fight.remove"}, {"do": "crowd.remove", "group": "south"}, {"do": "crowd.remove", "group": "north"}]
   },
   {
-   "id": "T25", "title": "Финал: толпа на холме у Города 2, ты среди неё — одеяло пыли идёт на вас", "from": "branch:T22", "clock": "night", "siren": true, "minutes": 12,
-   "artem": {"mark": "camera:n66", "stand": [-557.5, 910.5], "look": "c1_core", "hints": ["Ночь, открытый склон у залива юго-восточнее Города 2. Встань в толпе лицом к Городу 1 (через залив, на северо-восток).", "Нажми Enter — начнём.", "Смотри на Город 1. Будет вспышка — можешь пригнуться и отвернуться, потом смотри на гриб. Волна пойдёт через город на вас: стой и смотри, пока экран не станет чёрным. Двигайся, как живой человек, — на тебе держится кадр."]},
+   "id": "T24b", "title": "Конец света, место B: жители деревни бегут прочь от света", "from": "branch:T22", "clock": "night", "siren": true, "minutes": 10,
    "stage": [
     {"do": "silo.build", "at": "silo", "depth": 30, "size": 5},
     {"do": "silo.open"},
-    {"do": "crowd", "group": "hill", "at": "c2_hill", "n": 14, "spread": 5, "roam": 0.5, "prefix": "Hill", "creative": true},
+    {"do": "crowd", "group": "village", "at": "b_village", "n": 10, "spread": 6, "roam": 1.5, "prefix": "Civ", "creative": true},
+    {"do": "settle"},
+    {"do": "nuke.order", "by": "player", "pad": "silo", "at_place": "gz", "kt": 2},
+    {"do": "wait", "s": 2}
+   ],
+   "shots": [
+    {"plans": ["n64"], "offsets": {"n64": 7.0}, "seconds": 10.5, "when": {"kind": "warning", "below": 0.5}, "cues": [{"at": 0.55, "do": "crowd.cower", "group": "village", "from": "gz"}, {"at": 1.7, "do": "crowd.watch", "group": "village", "look": {"at": [-167, -4], "above": 300}, "jitter": 25}, {"at": 4.8, "do": "crowd.flee", "group": "village", "to": "b_flee", "stagger": [0, 2.2]}], "cover": {"n64": {"subject": "scene"}}}
+   ],
+   "after": [{"do": "crowd.remove", "group": "village"}]
+  },
+  {
+   "id": "T25", "title": "Финал, место C: толпа в деревне на холме, ты среди неё — пыль идёт через хребет на вас", "from": "branch:T22", "clock": "night", "siren": true, "minutes": 12,
+   "artem": {"mark": "camera:n66", "stand": [-2527.5, 851.5], "look": "c1_core", "hints": ["Ночь, деревня на холме на западе острова, за рекой и хребтом от Города 1. Встань в толпе лицом на восток-северо-восток, к Городу 1.", "Нажми Enter — начнём.", "Смотри на восток. Будет вспышка — можешь пригнуться и отвернуться, потом смотри на гриб. Пыль перевалит через хребет и пойдёт по долине на вас: стой и смотри, пока экран не станет чёрным. Двигайся, как живой человек, — на тебе держится кадр."]},
+   "stage": [
+    {"do": "silo.build", "at": "silo", "depth": 30, "size": 5},
+    {"do": "silo.open"},
+    {"do": "crowd", "group": "hill", "at": "c_hill", "n": 14, "spread": 5, "roam": 0.5, "prefix": "Hill", "creative": true},
     {"do": "settle"},
     {"do": "crowd.watch", "group": "hill", "at": {"at": [-167, -4], "above": 120}, "jitter": 12},
     {"do": "nuke.order", "by": "player", "pad": "silo", "at_place": "gz", "kt": 2},
     {"do": "wait", "s": 2}
    ],
    "shots": [
-    {"plans": ["n66"], "seconds": 8, "when": {"kind": "front", "at": "c2_hill", "lead": 5.0}, "cues": [{"at": 1.0, "do": "crowd.watch", "group": "hill", "look": {"at": [-167, -4], "above": 250}, "jitter": 12}], "cover": {"n66": {"subject": "nuke", "need": "NUKE"}}}
+    {"plans": ["n66", "n65"], "offsets": {"n66": 12.3, "n65": 9.4}, "seconds": 17.5, "when": {"kind": "warning", "below": 0.5}, "cues": [{"at": 0.55, "do": "crowd.cower", "group": "hill", "from": "gz"}, {"at": 1.9, "do": "crowd.watch", "group": "hill", "look": {"at": [-167, -4], "above": 250}, "jitter": 12}], "cover": {"n65": {"subject": "nuke", "need": "NUKE"}, "n66": {"subject": "nuke", "need": "NUKE"}}}
    ],
    "after": [{"do": "crowd.remove", "group": "hill"}]
   }

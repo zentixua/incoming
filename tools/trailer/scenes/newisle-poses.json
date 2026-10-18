@@ -1304,31 +1304,31 @@
  },
  {
   "id": "n60",
-  "title": "Night: North and South soldiers fight in a City 2 street",
+  "title": "Night: North and South soldiers fight down a town street",
   "time": "night",
   "camera": "fixed",
   "frames": [
    {
     "t": 0.0,
     "eye": [
-     -779.5,
-     64.6,
-     731.5
+     -1517.5,
+     76.6,
+     75.5
     ],
-    "yaw": 1.5,
-    "pitch": -0.0,
-    "fov": 60.0
+    "yaw": 91.7,
+    "pitch": -1.5,
+    "fov": 45.0
    }
   ],
   "target": [
-   -780.0,
-   66.0,
-   742.0
+   -1552.0,
+   76.6,
+   74.0
   ],
-  "distance": 20.0,
+  "distance": 34.5,
   "sight": true,
   "ok": true,
-  "notes": "улица x −780 (земля 62) между цепями, на уровне лиц: бой Юга (z 742) в кадре"
+  "notes": "ядерная сцена 18.10 на одних часах от вспышки (места A, B, C): поза проверена лучами по блокам nw-T22-a0 (люди и гриб открыты)"
  },
  {
   "id": "n61",
@@ -1339,41 +1339,41 @@
    {
     "t": 0.0,
     "eye": [
-     -780.5,
-     64.6,
-     735.5
+     -1544.5,
+     76.4,
+     74.5
     ],
-    "yaw": -4.4,
-    "pitch": -0.0,
+    "yaw": 90.0,
+    "pitch": -7.6,
     "fov": 35.0
    }
   ],
   "target": [
-   -780.0,
-   66.0,
-   742.0
+   -1552.0,
+   76.4,
+   74.0
   ],
-  "distance": 8.5,
+  "distance": 7.5,
   "sight": true,
   "ok": true,
-  "notes": "6,5 блока до лиц цепи Юга, свет эпицентра — из-за камеры через крыши"
+  "notes": "ядерная сцена 18.10 на одних часах от вспышки (места A, B, C): поза проверена лучами по блокам nw-T22-a0 (люди и гриб открыты)"
  },
  {
   "id": "n62",
-  "title": "Night: from behind, the soldiers' silhouettes and the mushroom; the street lights die",
+  "title": "Night: from behind, the soldiers' silhouettes and the mushroom at the end of the street",
   "time": "night",
   "camera": "fixed",
   "frames": [
    {
     "t": 0.0,
     "eye": [
-     -748.5,
-     131.6,
-     665.5
+     -1539.5,
+     76.1,
+     75.0
     ],
-    "yaw": -139.0,
-    "pitch": -8.2,
-    "fov": 25.0
+    "yaw": -91.9,
+    "pitch": -11.3,
+    "fov": 40.0
    }
   ],
   "target": [
@@ -1381,82 +1381,82 @@
    266.0,
    -4.0
   ],
-  "distance": 994.8,
+  "distance": 1374.8,
   "sight": true,
   "ok": true,
-  "notes": "крыша высотки Города 2 (−750…−741, 650–665, верх 128–130): за спинами солдат, луч на гриб чистый; внизу кварталы с гаснущими фонарями"
+  "notes": "ядерная сцена 18.10 на одних часах от вспышки (места A, B, C): поза проверена лучами по блокам nw-T22-a0 (люди и гриб открыты)"
  },
  {
   "id": "n63",
-  "title": "Night: enemies look at each other, lower their rifles, one runs",
+  "title": "Night: enemies look at each other, lower their rifles and run; the dust comes down the street",
   "time": "night",
   "camera": "fixed",
   "frames": [
    {
     "t": 0.0,
     "eye": [
-     -781.5,
-     64.6,
-     747.5
+     -1559.5,
+     77.6,
+     79.5
     ],
-    "yaw": -178.0,
-    "pitch": -0.0,
+    "yaw": -104.3,
+    "pitch": -0.8,
     "fov": 50.0
    }
   ],
   "target": [
-   -780.0,
-   66.0,
-   723.0
+   -1538.0,
+   77.6,
+   74.0
   ],
-  "distance": 11.6,
+  "distance": 22.2,
   "sight": true,
   "ok": true,
-  "notes": "из-за спин цепи Юга вдоль улицы на цепь Севера: враги смотрят друг на друга"
+  "notes": "ядерная сцена 18.10 на одних часах от вспышки (места A, B, C): поза проверена лучами по блокам nw-T22-a0 (люди и гриб открыты)"
  },
  {
   "id": "n64",
-  "title": "Night: civilians flee down a City 2 street away from the light",
+  "title": "Night: villagers flee from the light toward the camera",
   "time": "night",
   "camera": "fixed",
   "frames": [
    {
     "t": 0.0,
     "eye": [
-     -848.5,
-     64.6,
-     711.5
+     1250.5,
+     74.4,
+     -1015.5
     ],
-    "yaw": -91.3,
-    "pitch": -1.2,
+    "yaw": 81.9,
+    "pitch": 5.5,
     "fov": 55.0
    }
   ],
   "target": [
-   -805.0,
-   66.0,
-   711.0
+   1222.0,
+   74.4,
+   -1019.0
   ],
-  "distance": 43.5,
+  "distance": 28.7,
   "sight": true,
   "ok": true,
-  "notes": "улица z 710 (земля 62): жители бегут на запад, на камеру"
+  "notes": "ядерная сцена 18.10 на одних часах от вспышки (места A, B, C): поза проверена лучами по блокам nw-T22-a0 (люди и гриб открыты)"
  },
  {
   "id": "n65",
-  "title": "Night: from above, the dust blanket rolls over the bay toward City 2",
+  "title": "Night: low over the forest, the dust wall rolls at the camera",
   "time": "night",
   "camera": "fixed",
   "frames": [
    {
     "t": 0.0,
     "eye": [
-     -520,
-     230,
-     420
+     -2240.5,
+     98,
+     662.5
     ],
-    "yaw": -140.2,
-    "pitch": 16.2,
+    "yaw": -107.8,
+    "pitch": -1.6,
     "fov": 50.0
    }
   ],
@@ -1465,49 +1465,60 @@
    66.0,
    -4.0
   ],
-  "distance": 575.6,
+  "distance": 2178.0,
   "sight": true,
   "ok": true,
-  "notes": "ядерная сцена 17.10 (данные к перезаписи T24/T25): поза по замыслу, лучи по блокам — перед записью"
+  "notes": "ядерная сцена 18.10 на одних часах от вспышки (места A, B, C): поза проверена лучами по блокам nw-T22-a0 (люди и гриб открыты)"
  },
  {
   "id": "n66",
-  "title": "Night: the crowd on the hill by City 2 watches the wave come, and you are among them",
+  "title": "Night: the crowd in the hill village watches the dust come over the ridge, and you are among them",
   "time": "night",
   "camera": "path",
   "frames": [
    {
     "t": 0.0,
     "eye": [
-     -562.7,
-     74.2,
-     919.0
+     -2539.5,
+     111.0,
+     857.5
     ],
-    "yaw": -156.8,
-    "pitch": -9.9,
-    "fov": 50.0
+    "yaw": -110.0,
+    "pitch": -3.2,
+    "fov": 40.0
    },
    {
-    "t": 5.0,
+    "t": 12.5,
     "eye": [
-     -564.3,
-     76.2,
-     922.7
+     -2539.5,
+     111.0,
+     857.5
     ],
-    "yaw": -156.8,
-    "pitch": -9.8,
-    "fov": 50.0
+    "yaw": -110.0,
+    "pitch": -3.2,
+    "fov": 40.0
    },
    {
-    "t": 12.0,
+    "t": 16.4,
     "eye": [
-     -564.3,
-     76.2,
-     922.7
+     -2542.5,
+     112.5,
+     859.0
     ],
-    "yaw": -156.8,
-    "pitch": -9.8,
-    "fov": 50.0
+    "yaw": -110.0,
+    "pitch": -3.1,
+    "fov": 40.0
+   },
+   {
+    "t": 20.0,
+    "eye": [
+     -2542.5,
+     112.5,
+     859.0
+    ],
+    "yaw": -110.0,
+    "pitch": -3.1,
+    "fov": 40.0
    }
   ],
   "target": [
@@ -1515,10 +1526,10 @@
    66.0,
    -4.0
   ],
-  "distance": 1004.3,
+  "distance": 2524.1,
   "sight": true,
   "ok": true,
-  "notes": "ядерная сцена 17.10 (данные к перезаписи T24/T25): поза по замыслу, лучи по блокам — перед записью"
+  "notes": "ядерная сцена 18.10 на одних часах от вспышки (места A, B, C): поза проверена лучами по блокам nw-T22-a0 (люди и гриб открыты)"
  },
  {
   "id": "n34",

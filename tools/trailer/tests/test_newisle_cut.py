@@ -86,12 +86,35 @@ class NewisleCutTest(unittest.TestCase):
         plan = C.plan_of(SHEET, {p: f"/r/{p}" for p in need}, music="m.mp3")
         war, wave = plan["music"]
         self.assertEqual(("n38", 144, 192, 4, 0.4), (war["start"], war["from"], war["to"], war["grid"], war["ring"]))
-        # ядерная часть 17.10: музыка снова входит на одеяле пыли (n65), удар трека 3:17,8 — когда оно доходит до толпы (n66)
-        self.assertEqual(("n65", 196, 4), (wave["start"], wave["from"], wave["grid"]))
+        # ядерная часть 18.10: музыка снова входит на стене пыли (n65), удар трека 3:17,8 — когда она доходит до толпы (n66)
+        self.assertEqual(("n65", 198, 4), (wave["start"], wave["from"], wave["grid"]))
         cut_checks = C.cut_checks
         self.assertEqual([], cut_checks.letterbox_clash(SHEET, TAKES))
         self.assertEqual([], cut_checks.duplicates(SHEET))
         self.assertEqual([], cut_checks.chat_gate(SHEET, TAKES, C.REPO), "строка второго ключа успевает прочитаться")
+
+    def test_nuke_finale_one_clock(self):
+        """Ядерный финал (Артём 18.10): время только вперёд, вспышка в кадре один раз. Планы разных дублей и мест стоят
+        от отметки подрыва своего дубля подряд, без зазоров и повторов; куски на сетке музыки — целыми долями сетки
+        (конец склейки не сдвигается), удар трека 3:17,8 — когда пыль доходит до толпы (`dust_at` листа)."""
+        shots = [s for s in SHEET["shots"] if str(s.get("anchor", "")).startswith("mark:detonation")]
+        self.assertGreaterEqual(len(shots), 6)
+        at = [float(s["anchor"][len("mark:detonation"):] or 0) for s in shots]
+        self.assertEqual(1, sum(1 for a, s in zip(at, shots) if a <= 0 < a + s["dur"] or a == 0), "вспышка — в одном куске")
+        for (a, s), b in zip(zip(at, shots), at[1:]):
+            self.assertAlmostEqual(a + s["dur"], b, places=3, msg=f"{s['plan']}: следующий кусок не с конца этого")
+        i = SHEET["shots"].index(shots[0])
+        self.assertEqual([s["plan"] for s in shots], [s.get("plan") for s in SHEET["shots"][i:i + len(shots)]], "подряд в листе")
+        wave = SHEET["music"]["parts"][-1]
+        plan = C.plan_of(SHEET, {s["plan"]: f"/r/{s['plan']}" for s in SHEET["shots"] if "plan" in s}, music="m.mp3")
+        start = plan["music"][-1]["start"]
+        k = next(j for j, s in enumerate(shots) if s["plan"] == start)
+        step = SHEET["bar"] / wave["grid"]
+        for s in shots[k:]:
+            self.assertAlmostEqual(0, (s["dur"] / step + 0.5) % 1 - 0.5, places=3, msg=f"{s['plan']}: не целыми долями сетки")
+        hit = (round((197.8 - C.BEAT0) / C.BEAT) - plan["music"][-1]["from"]) * C.BEAT
+        dust = next(s["dust_at"] for s in shots if "dust_at" in s)
+        self.assertAlmostEqual(at[k] + hit, dust, delta=0.05, msg="удар трека не на пыли у толпы")
 
     def test_live_plans_wait_for_artem(self):
         live = C.live_plans(TAKES)
