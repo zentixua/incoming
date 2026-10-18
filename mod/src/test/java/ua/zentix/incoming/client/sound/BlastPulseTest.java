@@ -36,7 +36,7 @@ class BlastPulseTest {
         // после фронта ничего сравнимого: хвостового скачка через t+ нет
         int after = peakAt + BlastPulse.RATE / 20;
         for (int i = after; i < pcm.length; i++) assertTrue(Math.abs(pcm[i]) < 0.1 * Short.MAX_VALUE, () -> "второй удар");
-        assertTrue(pcm.length <= BlastPulse.RATE * BlastPulse.MAX_SECONDS + 1);
+        assertTrue(pcm.length <= BlastPulse.RATE * (BlastPulse.TAIL + 0.02));
         assertEquals(0, pcm[pcm.length - 1], 1);
     }
 

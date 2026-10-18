@@ -32,8 +32,8 @@ import ua.zentix.incoming.warhead.GroundMaterial;
 /**
  * Звук ядерного удара (DESIGN-nuke §5). Свет приходит сразу, звук — с фронтом ударной волны: каждый тик клиент
  * сравнивает радиус фронта ({@link Detonation#frontRadius}) со своим расстоянием до эпицентра, и когда фронт
- * дошёл — удар, рёв, ветер, звон стёкол, раскаты. Громкость и тембр — от давления у слушателя, а не от
- * ванильного затухания; направление честное (точка в 3 блоках от уха в сторону эпицентра).
+ * дошёл — удар, ветер за фронтом, звон стёкол, потом эхо от рельефа. Громкость и тембр — от давления у слушателя и
+ * пути звука, а не от ванильного затухания; направление честное (точка в 3 блоках от уха в сторону эпицентра).
  */
 public final class NukeSounds {
     /** Вход боеголовки виден последние 3 с — беззвучно: на 7 км/с её звук придёт уже после взрыва. */
@@ -312,7 +312,7 @@ public final class NukeSounds {
                 float front = path == null || !IncomingConfig.CLIENT.soundMuffling.get() ? 1 : Outdoor.highs(path);
                 riseMs = 1000 * BlastPulse.riseSeconds(pa);
                 pulse = OwnSources.play(this, start, 0, Math.atan2(b.z - ear.z, b.x - ear.x), v,
-                        BlastPulse.render(pa, phaseTicks / 20, front), BlastPulse.RATE);
+                        BlastPulse.render(pa, phaseTicks / 20, front), BlastPulse.RATE, true);
                 // своих источников нет (заняты, OpenAL не готов) — запись удара
                 if (!pulse) ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, v, 1, boom);
                 ClientSounds.start(direct);

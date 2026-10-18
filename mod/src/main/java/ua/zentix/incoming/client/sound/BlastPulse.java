@@ -13,7 +13,9 @@ package ua.zentix.incoming.client.sound;
  * меньше, Gionfriddo 1991), то есть ~0,17 Па·с: 0,01 psi — 2,5 мс (глухой удар), 0,1 psi — 0,25 мс (хлёсткий). Что
  * съели холм и зона тени — доля верхов на 2 кГц ({@link Outdoor#highs}) — однополюсный срез с той же долей на 2 кГц.
  * Ниже 20 Гц слух не слышит: положительная фаза в секунду — инфразвук, его толчок ощущают, а не слышат, — он снят
- * фильтром Баттерворта второго порядка, чтобы дорожка не тратила запас громкости на неслышимое.
+ * фильтром Баттерворта второго порядка, чтобы дорожка не тратила запас громкости на неслышимое. Слышен от удара один
+ * фронт — щелчок в десятки миллисекунд (через 50 мс после пика остаётся меньше 2 % при любой фазе), поэтому дорожка —
+ * {@link #TAIL} с после фронта: дальше в ней только срезанный инфразвук.
  */
 public final class BlastPulse {
     /** Частота дорожки, Гц: фронт в сотые доли миллисекунды. */
@@ -24,8 +26,8 @@ public final class BlastPulse {
     static final double HEARING_HZ = 20;
     /** Полоса, по которой {@link Outdoor} считает верха, Гц. */
     static final double HIGHS_HZ = 2000;
-    /** Дорожка не длиннее, с. */
-    static final double MAX_SECONDS = 4;
+    /** Дорожка после фронта, с. */
+    static final double TAIL = 0.25;
     /** Пик дорожки: громкость возвращает усиление источника. */
     static final double PEAK = 0.98;
 
@@ -54,7 +56,7 @@ public final class BlastPulse {
         // фронт Тейлора ½(1 + th(t/θ)): от 10 до 90 % — 2·arth(0,8)·θ
         double theta = Math.max(0.5 / RATE, rise / (2 * 1.0986));
         double t0 = 4 * theta + 0.002;
-        int n = (int) Math.ceil(RATE * Math.min(MAX_SECONDS, t0 + Math.max(0.5, 2.5 * tPlus)));
+        int n = (int) Math.ceil(RATE * (t0 + TAIL));
         double[] x = new double[n];
         for (int i = 0; i < n; i++) {
             double t = (double) i / RATE - t0;

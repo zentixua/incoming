@@ -18,7 +18,7 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
     /** Хозяин молчит столько тиков — петля уходит. */
     private static final int ORPHAN = 10;
 
-    private final float slew;
+    private float slew;
     private float target, highs = 1;
     private int quiet;
     private boolean ending;
@@ -54,10 +54,11 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
         quiet = 0;
     }
 
-    /** Стихнуть и уйти. */
+    /** Стихнуть и уйти: не быстрее обычного, даже у петли с быстрым подходом (без щелчка). */
     public void end() {
         ending = true;
         target = 0;
+        slew = Math.min(slew, SLEW);
     }
 
     /**

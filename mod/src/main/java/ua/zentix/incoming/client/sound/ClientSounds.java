@@ -296,12 +296,15 @@ public final class ClientSounds {
 
     /**
      * Как {@link #loudShot(SoundEvent, Vec3, float, float, long)}, но фильтр пути задаёт вызывающий (что между — холм,
-     * земля, погода, воздух — уже посчитал {@link Outdoor}): без луча по блокам и без своего воздуха.
+     * земля, погода, воздух — уже посчитал {@link Outdoor}): без луча до источника и без своего воздуха. Преграда у самого
+     * уха (стены и крыша дома, {@link SoundFilters#openToward}: 12 блоков в сторону источника; рельеф {@code Sightline}
+     * считает дальше 16 блоков) — своя; путь звука считает Sound Physics или он выключен — без неё.
      */
     public static SoundInstance loudShot(SoundEvent event, Vec3 source, float volume, float pitch, long seed, float gain, float highs) {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        float open = SoundFilters.pathEffects() ? SoundFilters.openToward(ear, Math.atan2(source.z - ear.z, source.x - ear.x)) : 1;
         return new Shot(event.getLocation(), SoundSource.MASTER, volume, pitch, RandomSource.create(seed), SoundInstance.Attenuation.NONE,
-                toward(ear, source), false, gain, highs);
+                toward(ear, source), false, gain * SoundFilters.blockedGain(open), highs * SoundFilters.blockedHighs(open));
     }
 
     /** Отдать звук движку. */
