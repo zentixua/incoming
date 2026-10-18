@@ -135,6 +135,8 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
      * отражённого, то есть от ~0.34 psi падающего (у слабой волны отражённое — вдвое больше).
      */
     public static final double RUIN_EDGE_KPA = BlastModel.kpa(0.34);
+    /** Слабее этого волна не бьёт и не пугает ({@code BlastFront}) и не поднимает пыль (край стены пыли): 0.3 psi. */
+    public static final double HIT_KPA = BlastModel.kpa(0.3);
 
     // ---------------------------------------------------------------- масштаб
 
@@ -287,6 +289,15 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
     }
 
     /**
+     * Докуда волна ещё бьёт ({@link #HIT_KPA}) — наклонная дальность, блоки: у земли и над ней. Точка над землёй — точка
+     * земли с подрывом ниже ({@link #overpressureKpa}), поэтому наибольшая дальность — по высотам от земли до подрыва:
+     * у высокого подрыва давление над землёй доходит дальше, чем на ней, а под ним на земле его может не быть вовсе.
+     */
+    public double blastReach() {
+        return Caches.blastReach(this);
+    }
+
+    /**
      * Докуда по земле идут руины (блоки): до {@link #RUIN_EDGE_KPA}, где отражённое давление ещё бьёт стекло, и не ближе
      * {@link #radiusMax}. Не дальше 1.5 {@link #radiusMax} (0.34 psi против 0.5) — докуда посчитан приход фронта.
      */
@@ -361,19 +372,38 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         private static final java.util.Map<Detonation, FrontProfile> FRONT = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, Double> RADIUS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, Double> RUINS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+        private static final java.util.Map<Detonation, Double> REACH = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+        /** Высот между землёй и подрывом в {@link #blastReach}. */
+        private static final int REACH_HEIGHTS = 32;
 
         static double ruinRadius(Detonation d) {
             return RUINS.computeIfAbsent(d, x -> Math.min(x.radiusMax() * 1.5, Math.max(x.radiusMax(), x.groundRange(RUIN_EDGE_KPA))));
         }
 
         static ArrivalTable arrival(Detonation d) {
-            return ARRIVAL.computeIfAbsent(d, x -> ArrivalTable.of(x.yieldKt, x.groundHob(), Math.max(1000, x.metres(x.radiusMax()) * 1.5)));
+            return ARRIVAL.computeIfAbsent(d, x -> ArrivalTable.of(x.yieldKt, x.groundHob(), Math.max(1000, x.metres(tableRange(x)))));
         }
 
         static FrontProfile front(Detonation d) {
             // у эпицентра — как у модели: вспышка и шар не меняются; за стеной пыли (0.3 psi) — только звук
             return FRONT.computeIfAbsent(d, x -> FrontProfile.of(x.arrival(), x.scale, FrontProfile.slowFrom(x.fireballRadius()),
-                    x.slantOf(x.groundRange(BlastModel.kpa(0.3))), x.radiusMax() * 1.5, x.wave * FrontProfile.SOUND_SPEED));
+                    x.slantOf(x.groundRange(HIT_KPA)), tableRange(x), x.wave * FrontProfile.SOUND_SPEED));
+        }
+
+        /** Докуда таблицы прихода фронта, блоки: руины (до 1.5 {@link #radiusMax}) и всё, что волна ещё бьёт. */
+        private static double tableRange(Detonation d) {
+            return Math.max(d.radiusMax() * 1.5, d.blastReach());
+        }
+
+        static double blastReach(Detonation d) {
+            return REACH.computeIfAbsent(d, x -> {
+                double hob = x.groundHob(), psi = BlastModel.psi(HIT_KPA), m = 0;
+                for (int i = 0; i <= REACH_HEIGHTS; i++) {
+                    double h = hob * i / REACH_HEIGHTS, g = HobBlast.rangeFor(psi, h, x.yieldKt);
+                    if (g > 0) m = Math.max(m, Math.hypot(g, h));
+                }
+                return x.blocks(m);
+            });
         }
 
         static double radiusMax(Detonation d) {

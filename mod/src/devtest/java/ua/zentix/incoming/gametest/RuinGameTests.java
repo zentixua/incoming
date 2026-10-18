@@ -299,12 +299,14 @@ public final class RuinGameTests {
      * Перекрытие с одной дырой (стеклянный блок в плите, волна выбивает его сверху) при ~3 psi: дыра не режет щелей.
      * Плита из кирпича 9×9 — выпадает только стекло; такая же 15×15, где у середины опора дальше пролёта кирпича, —
      * тоже (опора стала длиннее меньше чем на 3); каменная 9×9 (грунт в постройке — кладка без арматуры, держится,
-     * только пока опора не удлинилась) — выпадает не больше соседей дыры.
+     * только пока опора не удлинилась) — выпадает не больше соседей дыры. Подрыв у земли: воздушный на площадке
+     * (масштаб ~0.02) — в 12 блоках над ней, и низ ближней стены коробки был бы под 5 psi (отражённое 12 — кладка
+     * ломается, плита теряет опору), а у настоящего дома в 2 км от воздушного 15 кт давление по высоте почти одно.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_floor_hole", skyAccess = true)
     public static void floorWithHoleHasNoSlits(GameTestHelper h) {
         BlockPos masonry = new BlockPos(40, 12, 4), wide = new BlockPos(40, 12, 16), stone = new BlockPos(40, 12, 34);
-        Detonation d = atPsi(h, new BlockPos(8, 12, 24), true, wide.offset(7, 5, 7), 3);
+        Detonation d = atPsi(h, new BlockPos(8, 12, 24), false, wide.offset(7, 5, 7), 3);
         floor(h, masonry, 9, Blocks.STONE_BRICKS, 2, 4);
         floor(h, wide, 15, Blocks.STONE_BRICKS, 6, 7);
         floor(h, stone, 9, Blocks.STONE, 2, 4);

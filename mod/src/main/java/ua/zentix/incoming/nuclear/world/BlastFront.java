@@ -103,7 +103,8 @@ final class BlastFront {
         Set<Integer> active = new HashSet<>();
         for (Detonation d : detonations) {
             long since = now - d.gameTime();
-            if (since >= 0 && since <= d.arrivalTicks(d.radiusMax()) + d.positivePhaseTicks(d.radiusMax()) + 2) {
+            double reach = d.blastReach();
+            if (since >= 0 && since <= d.arrivalTicks(reach) + d.positivePhaseTicks(reach) + 2) {
                 advance(level, d, since);
                 active.add(d.id());
             }
@@ -176,8 +177,8 @@ final class BlastFront {
      */
     private static void hit(ServerLevel level, Detonation d, LivingEntity e, @Nullable Entity owner) {
         double kpa = d.overpressureKpa(e.position());
+        if (kpa < Detonation.HIT_KPA) return;
         double psi = BlastModel.psi(kpa);
-        if (psi < 0.3) return;
         boolean cover = !Detonation.underOpenSky(level, e.getEyePosition()) && !NuclearWarhead.sees(level, d, e);
         boolean immune = e instanceof Player p && p.getAbilities().invulnerable;
         float dmg = psi >= LETHAL_PSI ? Float.MAX_VALUE : (float) (1.6 * Math.pow(psi, 1.35));
