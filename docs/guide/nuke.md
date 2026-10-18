@@ -44,8 +44,8 @@ and its light falls on the dust and smoke around it. By day it outshines the sky
 night its red glow lasts a few seconds longer. At night it also lights the land for kilometres around: white at first,
 then yellow and orange, dark again within about ten seconds at 15 kt; slopes facing it are bright, slopes turned away
 stay dark. The cap is a dense cloud of round billows, reddish brown at first from the nitrogen oxides in it, then
-white within about a minute as water condenses in it, like an ordinary cloud. When the fireball touches the ground, the
-cap carries soil and stays dusty grey-brown. While the cloud climbs, the cap keeps rolling: gas goes up
+white within about a minute as water condenses in it, like an ordinary cloud. When the fireball touches dry land, the
+cap carries soil and stays grey with dust. While the cloud climbs, the cap keeps rolling: gas goes up
 through its middle, out over the top and down the outside, and billows swell out of it and sink back. The faster the
 cloud climbs, the faster it rolls; when the cloud stops rising, the cap stops too. The sun lights one side of it, and
 the folds between the billows stay darker. By day the cloud casts its shadow on the land: under the thick cap only the

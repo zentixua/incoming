@@ -129,18 +129,20 @@ class PallGlslTest {
     @Test
     void airMatchesJava() {
         GlslFunction depth = GlslFunction.parse(GLSL, "pallAirDepth");
+        double heights = scalar(GLSL, "PALL_AIR_HEIGHTS");
+        assertEquals(Sight.HAZE_HEIGHT / Sight.AIR_HEIGHT, heights, 1e-7);
         for (double scale : new double[] {1, 0.25}) {
             Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, 15, false, 0, 0.5f, 8, 20_000, 7, (float) scale, false, 0.42f);
             for (double eyeY : new double[] {40, 70, 300}) {
                 Vec3 eye = new Vec3(0, eyeY, 0);
-                for (double range : new double[] {Sight.CLEAR, Sight.RAIN}) {
+                for (double range : new double[] {Sight.CLEAR, Sight.RAIN, Sight.THUNDER}) {
                     org.joml.Vector4f air = new org.joml.Vector4f();
                     MushroomField.air(d, eye, range, air);
                     Sight.Air metres = MushroomField.air(d, eye, range);
                     for (double t : new double[] {0, 5, 400, 6000, 30000}) {
                         for (double dy : new double[] {-0.3, -1e-6, 0, 1e-6, 0.2, 0.9}) {
                             double glsl = Math.exp(-depth.call(Map.of("t", t, "dy", dy, "haze", (double) air.x, "clean", (double) air.y,
-                                    "kh", (double) air.z, "kc", (double) air.w)));
+                                    "weather", (double) air.z, "kh", (double) air.w, "PALL_AIR_HEIGHTS", heights)));
                             double java = metres.transmittance(d.metres(t), d.metres(dy * t));
                             assertEquals(java, glsl, 1e-5 + 1e-5 * java, "масштаб " + scale + ", глаз " + eyeY + ", t " + t + ", dy " + dy);
                         }

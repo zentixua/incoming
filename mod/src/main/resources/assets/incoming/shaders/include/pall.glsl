@@ -28,24 +28,29 @@ const vec3 PALL_SOOT_W = vec3(0.4368484, 0.4180439, 0.4008365);
 const float PALL_DUST_G = 0.375;
 const float PALL_MIST_G = 0.4594595;
 const float PALL_SOOT_G = 0.3333333;
+// Масштаб высоты чистого воздуха в масштабах высоты дымки (Sight.HAZE_HEIGHT / AIR_HEIGHT)
+const float PALL_AIR_HEIGHTS = 0.15;
+
 // Средняя по отрезку доля ослабления у его начала, когда отрезок поднимается на x масштабов высоты: (1 − e^−x) / x
-// (Sight.along)
+// (Sight.along). Вниз больше 80 масштабов — как 80: e^80 ещё в float, а свет оттуда и так не доходит
 float pallAlong(float x) {
     if (abs(x) < 1e-3) return 1.0 - 0.5 * x;
-    return (1.0 - exp(-x)) / x;
+    float y = max(x, -80.0);
+    return (1.0 - exp(-y)) / y;
 }
 
-// Толща воздуха от глаза на t блоков по лучу с вертикальной долей dy (Sight.Air.transmittance): дымка и чистый воздух
-// у глаза — haze, clean (1/блок), kh, kc — 1 / масштаб их высоты (1/блок)
-float pallAirDepth(float t, float dy, float haze, float clean, float kh, float kc) {
-    float rise = dy * t;
-    return t * (haze * pallAlong(rise * kh) + clean * pallAlong(rise * kc));
+// Толща воздуха от глаза на t блоков по лучу с вертикальной долей dy (Sight.Air.transmittance): у глаза дымка, чистый
+// воздух и погода — haze, clean, weather (1/блок); kh — 1 / масштаб высоты дымки (1/блок). Отрезок за глазом (t < 0) —
+// пустой
+float pallAirDepth(float t, float dy, float haze, float clean, float weather, float kh) {
+    float d = max(t, 0.0), rise = dy * d * kh;
+    return d * (haze * pallAlong(rise) + clean * pallAlong(rise * PALL_AIR_HEIGHTS) + weather);
 }
 
 // Доля света точки в t блоках от глаза по лучу с вертикальной долей dy, дошедшая через воздух кадра air (uniform PallAir:
-// PallPass, Sight.Air в блоках модели — в effects_scale раз мельче метров): дымка и чистый воздух у глаза, 1/блок;
-// 1 / масштаб их высоты, 1/блок. Дымка вдали: гриб, пелена и стена тают в небе за ними — по воздуху до них, который
-// редеет с высотой (шапка в 5 км видна сквозь дымку нижних километров, а не сквозь 5 км дымки у земли)
+// PallPass, Sight.Air в блоках модели — в effects_scale раз мельче метров): дымка, чистый воздух и погода у глаза,
+// 1/блок; 1 / масштаб высоты дымки, 1/блок. Дымка вдали: гриб, пелена и стена тают в небе за ними — по воздуху до них,
+// который редеет с высотой (шапка в 5 км видна сквозь дымку нижних километров, а не сквозь 5 км дымки у земли)
 float pallAir(vec4 air, float t, float dy) {
     return exp(-pallAirDepth(t, dy, air.x, air.y, air.z, air.w));
 }

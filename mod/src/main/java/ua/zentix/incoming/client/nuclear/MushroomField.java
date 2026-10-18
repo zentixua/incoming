@@ -74,7 +74,7 @@ public final class MushroomField {
     /**
      * Цвет толстого слоя (на экране; альбедо — по нему, как у пелены): шапка молодая — бурый дым с NO₂, остывшая —
      * облако капель и льда, белое, как водяная пыль (с асимметрией капель {@link #G_WATER}), а с грунтом
-     * ({@link MushroomModel#soil}) — серо-бурое от пыли; ножка — пыль с дымом; юбка — пыль земли (как стена пыли); пар —
+     * ({@link MushroomModel#soil}) — серое от пыли; ножка — пыль с дымом; юбка — пыль земли (как стена пыли); пар —
      * у подрыва над водой.
      */
     static final int CAP_YOUNG = 0x8C5A46, CAP_OLD = CloudPuffs.SPRAY, CAP_DUSTY = 0xC9C4BE, STEM = 0x8E7F70, SKIRT = 0x9C8A74,
@@ -515,7 +515,8 @@ public final class MushroomField {
         put(into, o, 3, ringA, ringB, d.blocks(s.domeY()), d.blocks(s.domeR()));
         // плитка клубов шапки — два меньших поперечника сечения: клуб — пузырь в полсечения
         put(into, o, 4, d.blocks(s.domeH()), capSigma, Math.max(across, 1), t);
-        double condensed = MushroomModel.condensed(t), soil = MushroomModel.soil(y, d.hobMetres(), d.surface());
+        // над водой шар поднимает воду, а не грунт
+        double condensed = MushroomModel.condensed(t), soil = MushroomModel.soil(y, d.hobMetres(), d.surface()) * (1 - a.water.under());
         int cap = mix(mix(CAP_YOUNG, mix(CAP_OLD, CAP_DUSTY, soil), condensed), STEAM, 0.45 * wet);
         // капли конденсата рассеивают вперёд сильнее дыма и пыли
         matter(into, o, 5, cap, G + (G_WATER - G) * condensed * (1 - soil));
@@ -557,12 +558,14 @@ public final class MushroomField {
         return Sight.Air.at(d.metres(eye.y - WaterDecal.SEA_LEVEL), range);
     }
 
-    /** То же шейдерам ({@code pall.glsl}: {@code PallAir}) в блоках: дымка и чистый воздух у глаза, 1 / масштаб их высоты. */
+    /**
+     * То же шейдерам ({@code pall.glsl}: {@code PallAir}) в блоках: дымка, чистый воздух и погода у глаза, 1 / масштаб
+     * высоты дымки.
+     */
     static void air(Detonation d, Vec3 eye, double range, Vector4f out) {
         Sight.Air a = air(d, eye, range);
         double scale = d.scale();
-        out.set((float) (a.haze() / scale), (float) (a.clean() / scale), (float) (1 / (Sight.HAZE_HEIGHT * scale)),
-                (float) (1 / (Sight.AIR_HEIGHT * scale)));
+        out.set((float) (a.haze() / scale), (float) (a.clean() / scale), (float) (a.weather() / scale), (float) (1 / (Sight.HAZE_HEIGHT * scale)));
     }
 
     /** Часы кипения шапки подрыва ({@link MushroomModel#churn}): таблица — одна на подрыв, пока он жив. */

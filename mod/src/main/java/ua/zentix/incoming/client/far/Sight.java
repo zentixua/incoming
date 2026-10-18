@@ -61,29 +61,34 @@ public final class Sight {
      */
     public static final double RAYLEIGH = 1.16e-5;
     /**
-     * Масштабы высоты, м: дымка — в нижних километрах (пограничный слой; Elterman 1968, как у неба в движках — Nishita
-     * 1993), чистый воздух — плотность атмосферы. Дальность видимости — у земли: на шапку гриба в 5 км луч идёт почти
-     * над всей дымкой, и равная по всей высоте дымка прятала бы её втрое сильнее настоящей.
+     * Масштабы высоты, м: дымка ясного дня — в нижних километрах (пограничный слой; Elterman 1968, как у неба в движках —
+     * Nishita 1993), чистый воздух — плотность атмосферы. Дальность видимости — у земли: на шапку гриба в 5 км луч идёт
+     * почти над всей дымкой, и равная по всей высоте дымка прятала бы её втрое сильнее настоящей.
      */
     public static final double HAZE_HEIGHT = 1200, AIR_HEIGHT = 8000;
 
     /**
-     * Воздух от глаза: ослабление у глаза, 1/м, — дымка {@code haze} и чистый воздух {@code clean} ({@link #at}).
+     * Воздух от глаза: ослабление у глаза, 1/м, — дымка ясного дня {@code haze}, чистый воздух {@code clean} и погода
+     * {@code weather} — дождь и гроза сверх ясного дня ({@link #at}).
      */
-    public record Air(double haze, double clean) {
-        /** У глаза на высоте {@code eye} м над уровнем моря (ниже — как на нём): у моря сумма — 3,912 / range. */
+    public record Air(double haze, double clean, double weather) {
+        /**
+         * У глаза на высоте {@code eye} м над уровнем моря (ниже — как на нём): у моря сумма — 3,912 / range. Погода по
+         * высоте не редеет: капли идут от облаков, а выше их низа луч идёт в самих облаках — шапка над ними в дождь не видна.
+         */
         public static Air at(double eye, double range) {
-            double h = Math.max(0, eye), total = KOSCHMIEDER / range, air = Math.min(RAYLEIGH, total);
-            return new Air((total - air) * Math.exp(-h / HAZE_HEIGHT), air * Math.exp(-h / AIR_HEIGHT));
+            double h = Math.max(0, eye), clear = KOSCHMIEDER / CLEAR, air = Math.min(RAYLEIGH, clear);
+            return new Air((clear - air) * Math.exp(-h / HAZE_HEIGHT), air * Math.exp(-h / AIR_HEIGHT),
+                    Math.max(0, KOSCHMIEDER / range - clear));
         }
 
         /**
          * Доля света, дошедшая через d м до точки на {@code rise} м выше глаза (ниже — меньше нуля): дымка и чистый воздух
-         * редеют с высотой ({@link Sight#HAZE_HEIGHT}, {@link Sight#AIR_HEIGHT}); вдоль земли у моря — как
+         * редеют с высотой ({@link Sight#HAZE_HEIGHT}, {@link Sight#AIR_HEIGHT}), погода — нет; вдоль земли у моря — как
          * {@link Sight#transmittance(double, double)}.
          */
         public double transmittance(double d, double rise) {
-            return Math.exp(-d * (haze * along(rise / HAZE_HEIGHT) + clean * along(rise / AIR_HEIGHT)));
+            return Math.exp(-d * (haze * along(rise / HAZE_HEIGHT) + clean * along(rise / AIR_HEIGHT) + weather));
         }
     }
 

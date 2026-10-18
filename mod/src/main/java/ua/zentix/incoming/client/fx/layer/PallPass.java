@@ -332,8 +332,8 @@ public final class PallPass {
         /** Рельеф и вода под пеленой слотов. */
         public final Ground ground0 = new Ground(), ground1 = new Ground();
         /**
-         * Воздух кадра ({@code pall.glsl}: {@code PallAir}; {@code MushroomField#air}): дымка и чистый воздух у глаза,
-         * 1/блок, и 1 / масштаб их высоты, 1/блок — гриб, пелена и стена вдали тают в дымке до них.
+         * Воздух кадра ({@code pall.glsl}: {@code PallAir}; {@code MushroomField#air}): дымка, чистый воздух и погода у
+         * глаза, 1/блок, и 1 / масштаб высоты дымки, 1/блок — гриб, пелена и стена вдали тают в дымке до них.
          */
         public final Vector4f air = new Vector4f();
         /**

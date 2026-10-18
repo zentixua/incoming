@@ -50,11 +50,6 @@ class MushroomModelTest {
         }
     }
 
-    /**
-     * Свет шара и шапки вокруг ({@link MushroomModel#light}): у поверхности — яркость чёрного тела её видимой температуры,
-     * дальше — как (R/d)²; днём через секунду шар 15 кт в 5 км светит ярче солнца, а через 20 с свернувшаяся шапка — уже
-     * нет и доли процента дня.
-     */
     @Test
     void capCarriesSoilOnlyWhenTheBallTouchesTheGround() {
         double rf = FireballModel.maxRadius(2, false);
@@ -71,6 +66,11 @@ class MushroomModelTest {
         }
     }
 
+    /**
+     * Свет шара и шапки вокруг ({@link MushroomModel#light}): у поверхности — яркость чёрного тела её видимой температуры,
+     * дальше — как (R/d)²; днём через секунду шар 15 кт в 5 км светит ярче солнца, а через 20 с свернувшаяся шапка — уже
+     * нет и доли процента дня.
+     */
     @Test
     void ballLightsItsSurroundings() {
         MushroomModel.Shape s = MushroomModel.shape(1, 15, 0, true, 300);
