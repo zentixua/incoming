@@ -7,6 +7,7 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
+import ua.zentix.incoming.client.fx.CameraShake;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
@@ -232,9 +233,14 @@ public final class ClientNuclear {
         NukePall.reset();
     }
 
-    /** Игрок возродился после смерти: слух — у тела, у нового он целый. Смена измерения — тот же клон, слух остаётся. */
+    /**
+     * Игрок возродился после смерти: слух и наклон ветром — у тела, новое цело и стоит. Смена измерения — тот же клон,
+     * слух остаётся.
+     */
     public static void respawned(ClientPlayerNetworkEvent.Clone e) {
-        if (e.getOldPlayer().isDeadOrDying()) Deafness.reset();
+        if (!e.getOldPlayer().isDeadOrDying()) return;
+        Deafness.reset();
+        CameraShake.reset();
     }
 
     public static void radiation(S2C.Radiation p) {
