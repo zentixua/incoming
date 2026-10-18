@@ -8,6 +8,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.registry.ModSounds;
 
@@ -89,7 +90,7 @@ public final class Deafness {
         long day = level.getDayTime(), game = level.getGameTime(), jump = 0;
         // время суток ушло вперёд сверх игрового, а игровое шло как обычно, — прошло время (сон, /time add)
         if (lastLevel.get() == level && Math.abs(game - lastGame - 1) <= DAY_JUMP) jump = day - lastDay - (game - lastGame);
-        lastLevel = new WeakReference<>(level);
+        if (lastLevel.get() != level) lastLevel = new WeakReference<>(level);
         lastDay = day;
         lastGame = game;
         if (!mc.isPaused()) clock += 1 + (jump > DAY_JUMP ? jump : 0);
@@ -136,6 +137,7 @@ public final class Deafness {
 
     /** Слух — снова как был: выход из мира, перемотка повтора, возрождение. */
     static void reset() {
+        if (gain < 1 || highs < 1) SoundFilters.restoreLoops();
         EAR.clear();
         shiftNow = 0;
         rupturedAt = -1;

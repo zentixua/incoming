@@ -103,6 +103,26 @@ class OutdoorTest {
         assertEquals(0, Outdoor.pressureVolume(0, full, open), 0);
     }
 
+    /**
+     * Верха давления волны: на открытом пути ночью — все, за кромкой — разница дифракции верхов и низов, днём в тени —
+     * её разница; земля (камень или трава) ни там, ни там не в счёт.
+     */
+    @Test
+    void pressureHighsLoseOnlyToTheEdgeAndTheShadow() {
+        for (double g : new double[]{0, 0.5, 1}) {
+            assertEquals(1, Outdoor.pressureHighs(new Outdoor.Path(3500, 0, 40, 1.6, g, g, 0, 0, 0)), 1e-6, "открыто, G " + g);
+            for (double z : new double[]{0.05, 1}) {
+                double edge = Outdoor.barrier(z, Outdoor.HIGH) - Outdoor.barrier(z, Outdoor.LOW);
+                assertTrue(edge > 0);
+                assertEquals(Math.pow(10, -edge / 20), Outdoor.pressureHighs(new Outdoor.Path(3500, z, 40, 1.6, g, g, 0, 0, 0)),
+                        1e-6, "кромка " + z + ", G " + g);
+            }
+            Outdoor.Path shade = new Outdoor.Path(40_000, 0, 600, 1.6, g, g, 1, 0, 0);
+            assertEquals(Math.pow(10, -(Outdoor.shadow(true, shade) - Outdoor.shadow(false, shade)) / 20), Outdoor.pressureHighs(shade),
+                    1e-6, "тень, G " + g);
+        }
+    }
+
     @Test
     void volumeContinuesTheNearModelAtItsEdge() {
         for (double[] k : KINDS) {

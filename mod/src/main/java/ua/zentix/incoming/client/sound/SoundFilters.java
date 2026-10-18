@@ -61,6 +61,13 @@ public final class SoundFilters {
      * ведёт {@link #loops}. Только поток клиента; ключи слабые.
      */
     private static final Map<SoundInstance, float[]> LOOPS = new WeakHashMap<>();
+    /** Меньше этого фильтр петли не меняется (вызовы OpenAL в каждом тике на каждую петлю — лишние). */
+    private static final float LOOP_STEP = 0.005f;
+    /**
+     * Слух вернулся разом (смерть, перемотка повтора, настройка): вернуть фильтр всем чужим петлям, и тем, что начались в
+     * оглушении после прошлого {@link #loops} и в {@link #LOOPS} ещё не попали. Только поток клиента.
+     */
+    private static boolean restoreAll;
 
     private SoundFilters() {}
 
@@ -203,6 +210,8 @@ public final class SoundFilters {
      */
     public static void loops() {
         SoundEngine engine = Minecraft.getInstance().getSoundManager().soundEngine;
+        boolean all = restoreAll;
+        restoreAll = false;
         for (Map.Entry<SoundInstance, ChannelAccess.ChannelHandle> e : engine.instanceToChannel.entrySet()) {
             SoundInstance sound = e.getKey();
             if (sound instanceof Muffled || !sound.isLooping()) continue;
@@ -210,16 +219,23 @@ public final class SoundFilters {
             float g = Deafness.gain(sound) * (1 - 0.3f * m), h = Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
             boolean on = g < 0.999f || h < 0.999f;
             float[] was = LOOPS.get(sound);
-            if (!on && was == null) continue;
+            if (!on && was == null && !all) continue;
+            if (on && was != null && Math.abs(g - was[0]) < LOOP_STEP && Math.abs(h - was[1]) < LOOP_STEP) continue;
             if (on) LOOPS.put(sound, new float[]{g, h});
             else LOOPS.remove(sound);
             e.getValue().execute(channel -> {
                 float[] spr = SPR_AT_START.get(sound);
                 if (spr != null) set(channel.source, g * spr[0], h * spr[1]);
                 else if (on) set(channel.source, g, h);
-                else AL10.alSourcei(channel.source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
+                // свой фильтр ставили, только если EFX есть (без него AL_DIRECT_FILTER — ошибка, её принял бы движок)
+                else if (filter > 0) AL10.alSourcei(channel.source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
             });
         }
+    }
+
+    /** Слух вернулся разом: следующий {@link #loops} вернёт фильтр всем чужим петлям. Поток клиента. */
+    public static void restoreLoops() {
+        restoreAll = true;
     }
 
     /**
