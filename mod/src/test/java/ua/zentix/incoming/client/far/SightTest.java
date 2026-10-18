@@ -19,6 +19,33 @@ class SightTest {
     }
 
     @Test
+    void hazeThinsWithHeight() {
+        // вдоль земли у моря — Кошмидер по дальности видимости
+        Sight.Air sea = Sight.Air.at(0, Sight.CLEAR);
+        for (double d : new double[] {0, 100, 5000, Sight.CLEAR}) {
+            assertEquals(Sight.transmittance(d, Sight.CLEAR), sea.transmittance(d, 0), 1e-12);
+        }
+        // шапка 2 кт к третьей минуте: середина на 5 км, глаз у моря в 2,6 км от эпицентра — 5,6 км воздуха. Почти вся
+        // дымка — в нижних километрах: видно три четверти света шапки, а не треть, как сквозь 5,6 км дымки у земли
+        double d = Math.hypot(2600, 5000);
+        assertEquals(0.33, Sight.transmittance(d, Sight.CLEAR), 0.01);
+        assertEquals(0.75, sea.transmittance(d, 5000), 0.03);
+        // вниз — гуще, вверх — реже; с горы дымки меньше, чем у моря
+        assertTrue(sea.transmittance(3000, 300) > sea.transmittance(3000, 0));
+        Sight.Air hill = Sight.Air.at(500, Sight.CLEAR);
+        assertTrue(hill.transmittance(3000, -300) < hill.transmittance(3000, 0));
+        assertTrue(hill.transmittance(3000, 0) > sea.transmittance(3000, 0));
+        // над всей дымкой остаётся чистый воздух: за 100 км вверх видно, но не всё
+        double space = Sight.Air.at(0, Sight.CLEAR).transmittance(1e5, 1e5);
+        assertTrue(space > 0.6 && space < 0.85, "вверх сквозь атмосферу: " + space);
+        // в ливень у моря всё вместе — по дальности видимости; капли и облака по высоте не редеют — шапка в ливень не видна
+        Sight.Air rain = Sight.Air.at(0, Sight.RAIN);
+        assertEquals(Sight.KOSCHMIEDER / Sight.RAIN, rain.haze() + rain.clean() + rain.weather(), 1e-12);
+        assertEquals(0, sea.weather(), 0);
+        assertTrue(rain.transmittance(d, 5000) < 0.01, "шапка в ливень: " + rain.transmittance(d, 5000));
+    }
+
+    @Test
     void largeDimPointIsDrawnAsItIs() {
         double[] out = new double[2];
         Sight.point(5, 0.6, 1, 100, PIXEL, out);

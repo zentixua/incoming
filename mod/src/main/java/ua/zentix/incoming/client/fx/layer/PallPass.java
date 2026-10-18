@@ -332,6 +332,11 @@ public final class PallPass {
         /** Рельеф и вода под пеленой слотов. */
         public final Ground ground0 = new Ground(), ground1 = new Ground();
         /**
+         * Воздух кадра ({@code pall.glsl}: {@code PallAir}; {@code MushroomField#air}): дымка, чистый воздух и погода у
+         * глаза, 1/блок, и 1 / масштаб высоты дымки, 1/блок — гриб, пелена и стена вдали тают в дымке до них.
+         */
+        public final Vector4f air = new Vector4f();
+        /**
          * Вода слотов ({@code pall.glsl}): радиус и верх базисной волны (блоки), её ослабление в самой густой части
          * (1/блок; нули — волны нет), 1 — под пеленой есть вода (шейдер читает её карту), 0 — нет.
          */
@@ -484,6 +489,7 @@ public final class PallPass {
         RenderSystem.setShaderTexture(9, ground0 >= 0 ? ground0 : fallback);
         RenderSystem.setShaderTexture(10, ground1 >= 0 ? ground1 : fallback);
         RenderSystem.setShaderTexture(11, drawn ? mushrooms : fallback);
+        s.safeGetUniform("PallAir").set(front.air.x, front.air.y, front.air.z, front.air.w);
         s.safeGetUniform("PallSlot0").set(front.slot0);
         s.safeGetUniform("PallSlot1").set(front.slot1);
         s.safeGetUniform("PallMin").set(front.min.x, front.min.y, front.min.z);
@@ -600,6 +606,7 @@ public final class PallPass {
         RenderSystem.setShaderTexture(7, mushrooms);
         m.safeGetUniform("InvViewProj").set(INVERSE);
         m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
+        m.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);
         m.safeGetUniform("PallSlot0").set(f.slot0);
         m.safeGetUniform("PallSlot1").set(f.slot1);
         m.safeGetUniform("PallMin").set(f.min.x, f.min.y, f.min.z);

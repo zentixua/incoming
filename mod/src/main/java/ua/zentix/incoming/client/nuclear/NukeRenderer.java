@@ -139,7 +139,7 @@ public final class NukeRenderer {
             float lr = (float) (BALL[0] / BALL[3]), lg = (float) (BALL[1] / BALL[3]), lb = (float) (BALL[2] / BALL[3]);
             double top = Math.max(BALL[0], Math.max(BALL[1], BALL[2]));
             float cr = (float) Math.pow(BALL[0] / top, 1 / 2.2), cg = (float) Math.pow(BALL[1] / top, 1 / 2.2), cb = (float) Math.pow(BALL[2] / top, 1 / 2.2);
-            double air = Sight.transmittance(d.metres(dist), view.range()), seen = surface * air;
+            double air = MushroomField.air(d, cam, view.range()).transmittance(d.metres(dist), d.metres(dy)), seen = surface * air;
             // огонь шара на экране (доля белого): свет вокруг и блик не ярче его
             double shown = Math.min(1, Math.pow(seen, 1 / 2.2));
             lights.add(dx, dy, dz, r, surface, Math.min(1, Math.pow(surface, 1 / 2.2)), lr, lg, lb);

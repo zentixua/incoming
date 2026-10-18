@@ -6,7 +6,9 @@ import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
+import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.PallPass;
+import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.FireballModel;
@@ -71,9 +73,12 @@ public final class MushroomField {
     static final double COLUMN_TILE = 1.2;
     /**
      * Цвет толстого слоя (на экране; альбедо — по нему, как у пелены): шапка молодая — бурый дым с NO₂, остывшая —
-     * белёсый конденсат; ножка — пыль с дымом; юбка — пыль земли (как стена пыли); пар — у подрыва над водой.
+     * облако капель и льда, белое, как водяная пыль (с асимметрией капель {@link #G_WATER}), а с грунтом
+     * ({@link MushroomModel#soil}) — серое от пыли; ножка — пыль с дымом; юбка — пыль земли (как стена пыли); пар —
+     * у подрыва над водой.
      */
-    static final int CAP_YOUNG = 0x8C5A46, CAP_OLD = 0xC9C4BE, STEM = 0x8E7F70, SKIRT = 0x9C8A74, STEAM = 0xD9D9D6;
+    static final int CAP_YOUNG = 0x8C5A46, CAP_OLD = CloudPuffs.SPRAY, CAP_DUSTY = 0xC9C4BE, STEM = 0x8E7F70, SKIRT = 0x9C8A74,
+            STEAM = 0xD9D9D6;
     /** Асимметрия рассеяния пыли и дыма гриба — как у пелены. */
     static final double G = 0.6;
     /**
@@ -140,11 +145,10 @@ public final class MushroomField {
     /**
      * Грибы кадра в строки таблицы {@code into} (строки 0..{@link #MUSHROOMS}−1, по {@link #TEXELS} текселей; строка без
      * гриба — нули): самые крупные на экране, чья рамка в пирамиде видимости ({@code frustum} — от глаза, без дальней
-     * плоскости) или, днём, тень на мире в ней (такие — после всех, что видны сами). {@code airSigma} — ослабление воздуха по погоде мира, 1/м ({@code Sight}:
-     * дымка вдали); {@code sun} — направление на солнце и сила дня ({@code PallSun}), {@code bottom}, {@code top} — низ
+     * плоскости) или, днём, тень на мире в ней (такие — после всех, что видны сами). {@code sun} — направление на солнце и сила дня ({@code PallSun}), {@code bottom}, {@code top} — низ
      * и верх мира (y): тень ложится на всё, что между ними. Возвращает число грибов.
      */
-    public static int frame(List<ClientNuclear.Active> all, Vec3 eye, float partial, FrustumIntersection frustum, double airSigma, Vector4f sun,
+    public static int frame(List<ClientNuclear.Active> all, Vec3 eye, float partial, FrustumIntersection frustum, Vector4f sun,
                             double bottom, double top, float[] into) {
         for (int k = 0; k < MUSHROOMS; k++) java.util.Arrays.fill(into, k * WIDTH * 4, k * WIDTH * 4 + TEXELS * 4, 0f);
         shadowSun(sun.x, sun.y, sun.z, RAYS);
@@ -177,7 +181,7 @@ public final class MushroomField {
         for (int k = 0; k < MUSHROOMS; k++) {
             ClientNuclear.Active a = k < n ? all.get(ORDER[k]) : null;
             ROW[k] = a;
-            if (a != null) write(a, shape(a, partial), eye, partial, airSigma, day, top, into, k * WIDTH * 4);
+            if (a != null) write(a, shape(a, partial), eye, partial, day, top, into, k * WIDTH * 4);
         }
         return n;
     }
@@ -489,7 +493,7 @@ public final class MushroomField {
      * Гриб в строку таблицы с {@code o} ({@code mushroom.glsl}: таблица грибов); днём ({@code day}) — и плитка его карты
      * тени, верхний слой которой — верх мира {@code worldTop} (y).
      */
-    private static void write(ClientNuclear.Active a, MushroomModel.Shape s, Vec3 eye, float partial, double airSigma, boolean day, double worldTop,
+    private static void write(ClientNuclear.Active a, MushroomModel.Shape s, Vec3 eye, float partial, boolean day, double worldTop,
                               float[] into, int o) {
         Detonation d = a.d;
         double t = s.t(), y = d.yieldKt();
@@ -511,17 +515,19 @@ public final class MushroomField {
         put(into, o, 3, ringA, ringB, d.blocks(s.domeY()), d.blocks(s.domeR()));
         // плитка клубов шапки — два меньших поперечника сечения: клуб — пузырь в полсечения
         put(into, o, 4, d.blocks(s.domeH()), capSigma, Math.max(across, 1), t);
-        int cap = mix(mix(CAP_YOUNG, CAP_OLD, MushroomModel.condensed(t)), STEAM, 0.45 * wet);
-        matter(into, o, 5, cap);
+        // над водой шар поднимает воду, а не грунт
+        double condensed = MushroomModel.condensed(t), soil = MushroomModel.soil(y, d.hobMetres(), d.surface()) * (1 - a.water.under());
+        int cap = mix(mix(CAP_YOUNG, mix(CAP_OLD, CAP_DUSTY, soil), condensed), STEAM, 0.45 * wet);
+        // капли конденсата рассеивают вперёд сильнее дыма и пыли
+        matter(into, o, 5, cap, G + (G_WATER - G) * condensed * (1 - soil));
         put(into, o, 6, d.blocks(s.stemTop()), d.blocks(s.stemR()), s.lowDust(), s.stemTau());
         matter(into, o, 7, mix(STEM, STEAM, 0.8 * wet));
         put(into, o, 8, d.blocks(s.skirtR()), d.blocks(s.skirtW()), d.blocks(s.skirtH()), skirtSigma);
         matter(into, o, 9, mix(SKIRT, CloudPuffs.SPRAY, a.water.under()));
         // воздух ножки поднимается с подъёмом шара (втягивается кольцом): клубы — вверх
         put(into, o, 10, MushroomModel.AMBIENT_K, tCore - MushroomModel.AMBIENT_K, d.blocks(s.capBottom()), Math.max(1, 3 * d.blocks(s.stemR())));
-        // пожары под грибом: верх дыма шторма и радиус зоны пожаров (свет — fire, после света кадра); дымка воздуха —
-        // по настоящей дальности, как у дальнего (в блоках гриб меньше в effects_scale раз)
-        put(into, o, 11, d.blocks(0.3 * FireballModel.riseSpeed(y) * t), a.pall.hazeTop(), a.pall.fireReach(), airSigma / d.scale());
+        // пожары под грибом: верх дыма шторма и радиус зоны пожаров (свет — fire, после света кадра)
+        put(into, o, 11, d.blocks(0.3 * FireballModel.riseSpeed(y) * t), a.pall.hazeTop(), a.pall.fireReach(), 0);
         // часы кипения шапки (свет пожаров под грибом — fire, после света кадра)
         put(into, o, 12, 0, 0, 0, churn(d).at(t));
         // столб воды: ослабление стенки — её толща поперёк на её толщину, × вода, что ещё не упала и уже не пар, × насколько
@@ -542,6 +548,24 @@ public final class MushroomField {
             put(into, o, SHADOW_RECT, RECT[0], RECT[1], RECT[2], RECT[3]);
             put(into, o, SHADOW_TOP, Math.max(worldTop - d.groundY(), 16), 0, 0, 0);
         }
+    }
+
+    /**
+     * Воздух от глаза до гриба подрыва d ({@link Sight.Air}: дымка редеет с высотой) — в метрах модели: в блоках гриб
+     * мельче в effects_scale раз, а дымка до него — как до настоящего, на настоящей высоте над морем.
+     */
+    static Sight.Air air(Detonation d, Vec3 eye, double range) {
+        return Sight.Air.at(d.metres(eye.y - WaterDecal.SEA_LEVEL), range);
+    }
+
+    /**
+     * То же шейдерам ({@code pall.glsl}: {@code PallAir}) в блоках: дымка, чистый воздух и погода у глаза, 1 / масштаб
+     * высоты дымки.
+     */
+    static void air(Detonation d, Vec3 eye, double range, Vector4f out) {
+        Sight.Air a = air(d, eye, range);
+        double scale = d.scale();
+        out.set((float) (a.haze() / scale), (float) (a.clean() / scale), (float) (a.weather() / scale), (float) (1 / (Sight.HAZE_HEIGHT * scale)));
     }
 
     /** Часы кипения шапки подрыва ({@link MushroomModel#churn}): таблица — одна на подрыв, пока он жив. */

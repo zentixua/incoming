@@ -267,7 +267,7 @@ class FarFlightViewTest {
     void modelOutsideTheScreenIsNotDrawn() {
         // экран — конус в 30° от середины до угла, взгляд на север (−Z)
         FarView view = new FarView(Vec3.ZERO, new Vector3f(0, 0, -1), new Vector3f(-1, 0, 0), new Vector3f(0, 1, 0), 0, 1000, PIXEL,
-                Math.toRadians(30), 1, 20000, 192, 192, 0);
+                Math.toRadians(30), 1, 20000, 192, 192, 0, Sight.Air.at(0, 20000));
         assertTrue(FarFlightView.inFrame(view, 0, 0, -500, 500, 2));
         assertTrue(FarFlightView.inFrame(view, at(29)[0], 0, at(29)[1], 500, 2));
         assertFalse(FarFlightView.inFrame(view, at(35)[0], 0, at(35)[1], 500, 2), "в 35° мелкая модель за краем");
