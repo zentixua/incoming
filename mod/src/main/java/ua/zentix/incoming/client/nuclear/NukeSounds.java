@@ -3,7 +3,9 @@ package ua.zentix.incoming.client.nuclear;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
@@ -22,13 +24,17 @@ import ua.zentix.incoming.client.sound.ClientSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
 import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.client.sound.SirenSound;
+import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.nuclear.model.BodySway;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Звук ядерного удара (DESIGN-nuke §5). Свет приходит сразу, звук — с фронтом ударной волны: каждый тик клиент
@@ -168,9 +174,11 @@ public final class NukeSounds {
         private final ClientNuclear.Active a;
         private final Detonation d;
         private final boolean live;
-        private boolean arrived, rumbled, shook;
+        /** Где фронт встретил слушателя и тело игрока. */
+        private final FrontMeeting meeting = new FrontMeeting();
         private long arrivalTick;
-        private double psi;
+        /** Давление фронта у слушателя и у тела, psi. */
+        private double psi, bodyPsi = -1;
         /** Положительная фаза у слушателя, тики игры. */
         private double phaseTicks;
         /** Наибольший ветер за фронтом у слушателя, м/с. */
@@ -181,9 +189,13 @@ public final class NukeSounds {
         private float heard;
         private double riseMs;
         private boolean pulse;
+        /** Наибольший наклон тела ветром волны, °, и доля лучей к взрыву без стены (для строки сценария). */
+        private double swayPeak, swayOpen = -1;
+        /** Звуки волны у слушателя: он снова впереди фронта — они прочь ({@link #again}). */
+        private final List<SoundInstance> shots = new ArrayList<>();
         /** Эхо от рельефа — только вживую. */
         @Nullable
-        final NukeEchoes echoes;
+        NukeEchoes echoes;
         /** Горящий город — в любом возрасте подрыва. */
         final NukeAfter after;
 
@@ -209,26 +221,33 @@ public final class NukeSounds {
             after.ruins(pieces);
         }
 
+        /**
+         * Звук волны — у слушателя (камера), удар по ушам и ветер — у тела игрока ({@link FrontMeeting}): в камере
+         * снаряда, которая облетает место взрыва, ухо камеры получало удар вплотную у игрока за километры.
+         */
         void tick() {
             after.tick();
             if (!live) return;
-            Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+            Minecraft mc = Minecraft.getInstance();
+            LocalPlayer p = mc.player;
+            Vec3 ear = mc.gameRenderer.getMainCamera().getPosition(), b = d.burst();
+            // наблюдатель тела не имеет: глазами другой сущности игрок у клиента стоит, где начал смотреть, — тело у камеры
+            Vec3 body = p == null ? null : p.isSpectator() ? ear : p.getEyePosition();
             long now = (long) a.ticks(0);
-            double since = now;
-            if (!shook) seismic(ear, since);
-            if (!arrived) {
-                double dist = ear.distanceTo(d.burst());
-                if (d.frontRadius(since) < dist) {
-                    approach(ear, d.arrivalTicks(dist) - since);
-                    if (echoes != null) echoes.approach(ear);
-                    return;
-                }
-                arrived = true;
+            int met = meeting.tick(d.frontRadius(now), ear.distanceTo(b), body == null ? Double.NaN : body.distanceTo(b),
+                    p != null && mc.getCameraEntity() == p);
+            if ((met & FrontMeeting.AGAIN) != 0) again();
+            if ((met & FrontMeeting.HEARD) != 0) {
                 arrivalTick = now;
                 psi = d.psi(ear);
-                arrive(ear);
+                arrive(ear, (met & FrontMeeting.HIT) != 0);
+            }
+            if ((met & FrontMeeting.HIT) != 0 && p != null && body != null) hit(p, body);
+            if (!meeting.heard()) {
+                if (echoes != null) echoes.approach(ear);
                 return;
             }
+            if ((met & FrontMeeting.HEARD) != 0) return;
             if (echoes != null) echoes.tick();
             // стена пыли проходит мимо игрока секунды три
             if (now - arrivalTick < 60 && psi >= 0.5) NukeDust.gust(a, ear, psi, (int) (now - arrivalTick));
@@ -237,43 +256,35 @@ public final class NukeSounds {
 
         /** Строка {@code SCENARIO}: что дошло прямым ударом; пусто — фронт ещё не дошёл. */
         String describe() {
-            if (!arrived) return "";
-            return String.format(java.util.Locale.ROOT, "direct %.2f psi vol %.3f t+ %.2fs rise %.3fms %s wind %.1fm/s; ", psi, heard,
-                    phaseTicks / 20, riseMs, pulse ? "pulse" : "file", windPeak);
+            if (!meeting.heard()) return "";
+            return String.format(java.util.Locale.ROOT, "direct %.2f psi vol %.3f t+ %.2fs rise %.3fms %s wind %.1fm/s body %.2f psi sway %.2fdeg open %.2f; ",
+                    psi, heard, phaseTicks / 20, riseMs, pulse ? "pulse" : "file", windPeak, bodyPsi, swayPeak, swayOpen);
         }
 
         /**
-         * Наземный взрыв: толчок грунта дошёл раньше волны в воздухе ({@link CameraShake#seismic}) — с ним низкий гул
-         * (у воздушного — гул с первой дрожью перед стеной пыли, {@link #approach}).
+         * Слушатель снова впереди фронта (камера вернулась к игроку, перенос): звуки волны у прежнего места, ветер и эхо —
+         * прочь, фронт он встретит снова.
          */
-        private void seismic(Vec3 ear, double since) {
-            if (!d.surface()) {
-                shook = true;
-                return;
-            }
-            double metres = d.metres(ear.distanceTo(d.burst()));
-            if (since < CameraShake.seismicTicks(metres, d.scale())) return;
-            shook = true;
-            double amp = CameraShake.seismicAmplitude(metres, d.yieldKt());
-            if (amp <= 0) return;
-            CameraShake.seismic(amp);
-            if (!rumbled) {
-                rumbled = true;
-                ClientSounds.atEar(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), (float) Mth.clamp(amp / 4, 0.4, 1), 0.7f);
+        private void again() {
+            SoundManager sounds = Minecraft.getInstance().getSoundManager();
+            for (SoundInstance s : shots) sounds.stop(s);
+            shots.clear();
+            // здесь фронта не было: пыль у глаза — с новой встречей
+            psi = 0;
+            OwnSources.stop(this);
+            if (wind != null) wind.end();
+            wind = null;
+            if (echoes != null) {
+                echoes.stop();
+                echoes = new NukeEchoes(a);
             }
         }
 
-        /**
-         * Стена пыли подходит: земля дрожит всё сильнее ({@link CameraShake#approach}), с первой дрожью — низкий гул
-         * толчка грунта (он бежит по земле быстрее волны в воздухе).
-         */
-        private void approach(Vec3 ear, double eta) {
-            double p = d.psi(ear);
-            CameraShake.approach(p, eta);
-            if (!rumbled && p >= 1 && eta < CameraShake.approachTicks(p)) {
-                rumbled = true;
-                ClientSounds.atEar(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), (float) Mth.clamp(p / 5, 0.4, 1), 0.7f);
-            }
+        /** Звук самой волны у слушателя; бьёт она в тот же тик и по ушам игрока ({@code hit}) — его слышно, как до неё. */
+        private SoundInstance wave(SoundInstance sound, boolean hit) {
+            if (hit) Deafness.before(sound);
+            shots.add(sound);
+            return sound;
         }
 
         /**
@@ -282,10 +293,11 @@ public final class NukeSounds {
          * 1 psi) удар фронта — дорожка из модели ({@link BlastPulse}: один скачок, его крутизна по давлению,
          * положительная фаза модели, {@link Detonation#positivePhaseSeconds}) своим источником с начала прямого удара, и запись далёкого огромного
          * взрыва ({@code nuke.boom_far}) — раскат; эхо от рельефа повторяет её ({@link NukeEchoes}). Вблизи — оглушающий
-         * удар (несколько источников вместе — одному OpenAL не даёт громче единицы). Тряска, ветер за фронтом, стёкла,
-         * слух ({@link Deafness}; пыль у глаза — по голове стены, {@link NukeDust#veil}).
+         * удар (несколько источников вместе — одному OpenAL не даёт громче единицы). Шум ветра за фронтом, стёкла (пыль у
+         * глаза — по голове стены, {@link NukeDust#veil}). Слух и наклон — у тела ({@link #hit}); {@code hit} — фронт в этот
+         * тик и у тела: звуки волны слышно, как до неё.
          */
-        private void arrive(Vec3 ear) {
+        private void arrive(Vec3 ear, boolean hit) {
             Minecraft mc = Minecraft.getInstance();
             Vec3 b = d.burst();
             double dist = ear.distanceTo(b), pa = 1000 * d.overpressureKpa(ear);
@@ -299,41 +311,48 @@ public final class NukeSounds {
             float tone = psi >= 1 ? 0.75f : 1;
             // эхо и удар фронта ждут настоящего начала прямого удара: ожидание — до play (с готовым буфером звук стартует сразу)
             SoundInstance direct = ClientSounds.loudShot(ModSounds.NUKE_BOOM_FAR.get(), b, v, tone, boom, 1, highs);
-            // звуки самой волны слышит ухо, каким оно было до неё (слух — в конце, hurtEars)
-            Deafness.before(direct);
+            // звуки самой волны слышит ухо, каким оно было до неё (слух — после, hurtEars)
+            wave(direct, hit);
             if (echoes != null) echoes.expect(arrivalTick, direct);
             if (psi >= 1) {
                 Vec3 side = new Vec3(b.z - ear.z, 0, ear.x - b.x).normalize().scale(40);
-                Deafness.before(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b, v, 1));
-                Deafness.before(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.add(side), v, 0.92f));
-                Deafness.before(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.subtract(side), v, 0.85f));
+                wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b, v, 1), hit);
+                wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.add(side), v, 0.92f), hit);
+                wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.subtract(side), v, 0.85f), hit);
                 ClientSounds.start(direct);
-                Deafness.before(ClientSounds.atEarLoud(ModSounds.BLAST_NEAR.get(), b, v, 0.55f));
+                wave(ClientSounds.atEarLoud(ModSounds.BLAST_NEAR.get(), b, v, 0.55f), hit);
             } else if (v >= AUDIBLE) {
                 OwnSources.Anchor start = OwnSources.anchor(this, direct, a::ticks, arrivalTick);
                 // холм и зона тени срезают верха и у скачка; воздух — нет: крутизну скачка держит сама волна
                 float front = path == null || !IncomingConfig.CLIENT.soundMuffling.get() ? 1 : Outdoor.highs(path);
                 riseMs = 1000 * BlastPulse.riseSeconds(pa);
                 pulse = OwnSources.play(this, start, 0, Math.atan2(b.z - ear.z, b.x - ear.x), v,
-                        BlastPulse.render(pa, phaseTicks / 20, front), BlastPulse.RATE, true, true);
+                        BlastPulse.render(pa, phaseTicks / 20, front), BlastPulse.RATE, true, hit);
                 // своих источников нет (заняты, OpenAL не готов) — запись удара
-                if (!pulse) Deafness.before(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, v, 1, boom));
+                if (!pulse) wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, v, 1, boom), hit);
                 ClientSounds.start(direct);
             }
             if (echoes != null) echoes.arrive(ear, v, tone);
-            CameraShake.nuke(psi, ear.subtract(b));
-            CameraShake.quake((int) Mth.clamp(20 + psi * 8, 20, 120));
             if (windPeak / WIND_FULL >= AUDIBLE && mc.options.getSoundSourceVolume(SoundSource.MASTER) > 0) {
                 wind = new AmbientLoop(ModSounds.NUKE_WIND.get(), SoundSource.MASTER, 1, d.seed(), 1);
                 wind(ear, 0);
                 mc.getSoundManager().play(wind);
             }
-            if (psi >= GLASS_PSI) Deafness.before(ClientSounds.atEar(ModSounds.NUKE_GLASS.get(), ear.add(0, 2, 0), (float) Mth.clamp(psi / 3, 0.3, 0.9), 1));
-            if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(pa, path);
+            if (psi >= GLASS_PSI) wave(ClientSounds.atEar(ModSounds.NUKE_GLASS.get(), ear.add(0, 2, 0), (float) Mth.clamp(psi / 3, 0.3, 0.9), 1), hit);
         }
 
         /**
-         * Слух: энергия слышимого фронта у уха ({@link HearingModel#exposure}) — за вычетом того, что съел путь: холм и зона
+         * Фронт у тела игрока: слух ({@link #hurtEars}) и наклон ({@link #sway}) — по месту игрока, его давлению, пути к
+         * нему и его фазе, а не по камере.
+         */
+        private void hit(LocalPlayer p, Vec3 body) {
+            bodyPsi = d.psi(body);
+            sway(p, body, Math.max(1, 20 * d.scale() * d.positivePhaseSeconds(body)));
+            if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(1000 * d.overpressureKpa(body), path(body, body.distanceTo(d.burst())));
+        }
+
+        /**
+         * Слух: энергия слышимого фронта у уха игрока ({@link HearingModel#exposure}) — за вычетом того, что съел путь: холм и зона
          * тени гасят давление и сильнее верха, а A-энергия фронта — на 1–3 кГц, поэтому на потерю низов и долю верхов
          * ({@link Outdoor#pressureHighs}: без земли — у волны отражение от неё уже в давлении). Перепонки — по давлению с
          * потерей пути. В доме — как снаружи: окна давно выбиты (0,34 psi), волна входит в дом.
@@ -341,6 +360,22 @@ public final class NukeSounds {
         private void hurtEars(double pa, Outdoor.@Nullable Path path) {
             double lost = path == null ? 0 : Outdoor.pressureLoss(path), highs = path == null ? 1 : Outdoor.pressureHighs(path);
             Deafness.blast(HearingModel.exposure(pa) - lost + 20 * Math.log10(Math.max(1e-3, highs)), pa / 1000 * Math.pow(10, -lost / 20), d.seed());
+        }
+
+        /**
+         * Ветер за фронтом толкает стоящего: тело отклоняется по ветру и выпрямляется ({@link BodySway}), камера — с ним
+         * ({@link CameraShake#sway}). Напор — скоростной напор за фронтом вдоль земли у тела
+         * ({@link Detonation#dynamicPressureKpa}: под воздушным подрывом — только его доля вдоль земли), {@code phase} —
+         * положительная фаза у тела, тики. За стеной, домом или холмом в сторону взрыва (лучи {@link SoundFilters#openRays})
+         * — в её ветровой тени: напор — по доле открытых лучей. Кого ветер несёт целиком (верхом, вплавь, в полёте), того
+         * не качает — бросок считает сервер; в прыжке наклона нет, пока игрок не встанет ({@link CameraShake#standing}).
+         */
+        private void sway(LocalPlayer p, Vec3 body, double phase) {
+            if (CameraShake.carried(p)) return;
+            Vec3 b = d.burst();
+            swayOpen = SoundFilters.openRays(body, Math.atan2(b.z - body.z, b.x - body.x));
+            double[] tilt = CameraShake.sway(1000 * d.dynamicPressureKpa(body) * swayOpen, phase / 20, body.subtract(b), p.getYRot());
+            swayPeak = Math.toDegrees(BodySway.peak(tilt, 0));
         }
 
         /**

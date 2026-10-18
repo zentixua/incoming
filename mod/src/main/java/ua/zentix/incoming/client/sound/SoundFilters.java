@@ -125,9 +125,17 @@ public final class SoundFilters {
      * выключено настройкой — 1.
      */
     static float openToward(Vec3 ear, double azimuth) {
+        return IncomingConfig.CLIENT.soundMuffling.get() ? openRays(ear, azimuth) : 1;
+    }
+
+    /**
+     * Доля лучей {@link #openToward} в сторону {@code azimuth}, что не упёрлись в твёрдое, — без настройки звука (ветровая
+     * тень стены у ядерной волны). Мира или игрока нет — 1.
+     */
+    public static float openRays(Vec3 ear, double azimuth) {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
-        if (!IncomingConfig.CLIENT.soundMuffling.get() || mc.level == null || player == null) return 1;
+        if (mc.level == null || player == null) return 1;
         int open = 0;
         for (double pitch : TOWARD_PITCH) {
             double c = Math.cos(pitch) * TOWARD_REACH;

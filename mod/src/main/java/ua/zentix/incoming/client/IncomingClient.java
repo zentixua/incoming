@@ -234,7 +234,7 @@ public final class IncomingClient {
             Fragments.tick();
         }
         Effects.tick();
-        CameraShake.tick();
+        CameraShake.tick(CameraShake.standing(mc.player));
         Flash.tick();
         Alerts.tick();
         RadarScope.tick();
@@ -425,6 +425,12 @@ public final class IncomingClient {
         @Override
         public void radiation(S2C.Radiation p) {
             ClientNuclear.radiation(p);
+        }
+
+        @Override
+        public void retinaScars(S2C.RetinaScars p) {
+            // состояние глаз, не событие: и из перемотки повтора
+            NukeFlash.scars(p.scars());
         }
 
         @Override

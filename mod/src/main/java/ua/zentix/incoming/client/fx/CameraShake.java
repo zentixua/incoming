@@ -2,19 +2,31 @@ package ua.zentix.incoming.client.fx;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ViewportEvent;
+import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix3d;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.nuclear.model.BodySway;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Тряска камеры без сдвига прицела: крутится только камера (курс, тангаж, крен), взгляд игрока остаётся на месте —
  * тряска самого взгляда сбивала бы прицел.
  * <p>
- * Глаз видит скорость поворота: размах A° на частоте f — до 2π·f·A °/с (на каждом кадре — её доля). Поэтому дрожь
- * земли и ядерная волна, у которых размах — градусы, медленные, как у тела: голову качает само тело (основной тон ниже
- * ~6 Гц), а частую дрожь земли оно до глаз почти не доносит. Ядерная волна — толчок от взрыва (тело отклоняется по
- * ветру) и порывы ветра за фронтом, а не частое дёрганье: десятки градусов десять раз в секунду — тысячи градусов
- * в секунду, на экране — мельтешение вместо удара. Размахи меняются без скачков: скачок на кадр — тот же рывок.
+ * Глаз видит скорость поворота: размах A° на частоте f — до 2π·f·A °/с (на каждом кадре — её доля). Поэтому толчки
+ * грунта у обычных взрывов медленные, как у тела: голову качает само тело (основной тон ниже ~6 Гц), а частую дрожь
+ * земли оно до глаз почти не доносит. Размахи меняются без скачков: скачок на кадр — тот же рывок.
+ * <p>
+ * Ядерная волна камеру не трясёт, а наклоняет: ветер за фронтом толкает стоящего, и тело отклоняется по ветру и
+ * выпрямляется ({@link BodySway} — маятник с равновесием); голова — с телом. Наклоны от нескольких волн складываются
+ * (маятник при малых углах линеен). Дальше границы устойчивости человек шагает — наклон стоит на ней. В воздухе
+ * (прыжок) тело на ноги не опирается — наклона нет, пока снова не встанет. Наклон тела — поворот камеры вокруг
+ * горизонтали мира поперёк наклона, как есть: курс камеры вертится вокруг вертикали мира, поэтому сложить наклон с
+ * курсом, тангажем и креном по отдельности нельзя — у взгляда вниз поворот вбок ушёл бы во вращение картинки.
  */
 public final class CameraShake {
     /** Удар взрывной волны: сколько тиков ещё трясёт. */
@@ -22,31 +34,20 @@ public final class CameraShake {
     /** Толчки грунта (подземный взрыв, бурение): медленнее и мягче. */
     private static int quake;
     private static long ticks;
-    /** Ядерная волна: тиков ещё и всего, размах толчка, °, и куда дует напор у земли (x, z от взрыва, до 1). */
-    private static int nuke, nukeTotal;
-    private static double nukeAmp, pushX, pushZ;
+    /** Ядерные волны, что качают тело сейчас. */
+    private static final List<Sway> SWAYS = new ArrayList<>();
+    /** Больше стольких волн сразу — самая старая уходит. */
+    private static final int SWAYS_MAX = 8;
+    /** Насколько игрок стоит на ногах (1 — стоит, 0 — в воздухе), в прошлом тике и сейчас. */
+    private static double standing = 1, standingBefore = 1;
+    /** Насколько за тик меняется опора: тело встаёт на ноги и отрывается от них за четверть секунды. */
+    private static final double STANDING_STEP = 0.2;
+
     /**
-     * Толчок волны доходит до наибольшего за столько тиков и гладко отпускает (тело отклонилось и выпрямилось за
-     * полсекунды): фаза сжатия у килотонн в сотнях метров — десятые доли секунды.
+     * Наклон тела ветром одной волны, рад ({@link BodySway#RATE} отсчётов в секунду), с тика {@code from}; куда дул её
+     * ветер — от взрыва вдоль земли (x, z, единичный).
      */
-    static final double JOLT_TICKS = 3;
-    /** Порывы ветра за фронтом: размах — эта доля толчка, набирается за два {@link #JOLT_TICKS}. */
-    static final double BUFFET_SHARE = 0.35;
-    /** Подходящая ядерная волна: размах дрожи в прошлый и в этот тик, °; без новых — гаснет за полсекунды. */
-    private static double approachPrev, approach;
-    static final double APPROACH_FADE = 0.6;
-    /**
-     * Перед приходом волны размах дрожи доходит до этой доли удара: дрожь мельче толчка и медленнее его по скорости
-     * поворота — сильнее всего бьёт сама волна.
-     */
-    static final double APPROACH_SHARE = 0.25;
-    /** Толчок грунта от наземного ядерного взрыва: сколько тиков ещё, сколько всего и размах, °. */
-    private static int seismic, seismicTotal;
-    private static double seismicAmp;
-    /** Скорость толчка в грунте, м/с (продольная волна в наносах — 1–2 км/с): приходит раньше волны в воздухе. */
-    public static final double SEISMIC_SPEED = 1500;
-    /** Слабее стольких градусов толчок не ощущается. */
-    static final double SEISMIC_MIN = 0.3;
+    private record Sway(double[] tilt, long from, double pushX, double pushZ) {}
 
     private CameraShake() {}
 
@@ -59,112 +60,80 @@ public final class CameraShake {
     }
 
     /**
-     * Приход ядерной волны: толчок от взрыва и порывы ветра, которые гаснут до 10 с. Размах — от давления у игрока
-     * ({@link #nukeAmplitude}); {@code away} — от взрыва к игроку.
+     * Ветер ядерной волны качнул тело ({@link BodySway#tilt}): скоростной напор за фронтом вдоль земли {@code qPa}, Па,
+     * с положительной фазой {@code tPlus}, с; {@code away} — от взрыва к игроку (ветер дует от эпицентра), {@code yaw} —
+     * куда игрок смотрит, °. Наклон ложится поверх того, что осталось от прежних волн. Возвращает наклон тела по ветру,
+     * рад.
      */
-    public static void nuke(double psi, Vec3 away) {
-        double amp = nukeAmplitude(psi);
-        int ticks = (int) Mth.clamp(40 + psi * 12, 40, 200);
-        if (amp >= nukeAmp * Math.max(0, (double) nuke / Math.max(1, nukeTotal))) {
-            nukeAmp = amp;
-            nuke = nukeTotal = ticks;
-            // напор у земли дует вдоль неё от эпицентра; под самим воздушным взрывом ветра в сторону нет — доля по
-            // горизонтали (косинус угла на взрыв)
-            Vec3 n = away.lengthSqr() > 1e-9 ? away.normalize() : Vec3.ZERO;
-            pushX = n.x;
-            pushZ = n.z;
-        }
-    }
-
-    /** Размах толчка ядерной волны, °: 1 psi — 4°, 5 psi — 9°, 20 psi — 13°, слабее 1 psi — от 2,5°. */
-    static double nukeAmplitude(double psi) {
-        return psi < 1 ? 2.5 + 1.5 * Math.max(0, psi) : Mth.clamp(4 + 7 * Math.log10(psi), 2.5, 16);
-    }
-
-    /** За сколько тиков до прихода ядерной волны начинает дрожать земля: 3 с при 1 psi, 10 с — с 7 psi. */
-    public static double approachTicks(double psi) {
-        return Mth.clamp(60 + 20 * psi, 60, 200);
+    public static double[] sway(double qPa, double tPlus, Vec3 away, double yaw) {
+        double flat = Math.hypot(away.x, away.z);
+        if (!(flat > 1e-6)) return new double[0];
+        double x = away.x / flat, z = away.z / flat;
+        double[] tilt = BodySway.tilt(qPa, tPlus, edge(yaw, x, z), edge(yaw, -x, -z));
+        if (tilt.length < 2) return tilt;
+        if (SWAYS.size() >= SWAYS_MAX) SWAYS.remove(0);
+        SWAYS.add(new Sway(tilt, ticks, x, z));
+        return tilt;
     }
 
     /**
-     * Размах дрожи, пока ядерная волна подходит, °, за {@code eta} тиков до неё: с {@link #approachTicks} — от нуля, к её
-     * приходу — {@link #APPROACH_SHARE} удара, по квадрату (всё сильнее и сильнее); слабее 0,5 psi не трясёт.
+     * Граница устойчивости, рад, для наклона в сторону (x, z) мира, когда игрок смотрит по курсу {@code yaw}°: вперёд
+     * {@link BodySway#FORWARD}, назад {@link BodySway#BACK}, вбок {@link BodySway#SIDE}, наискось — эллипсом между ними.
      */
-    static double approachAmplitude(double psi, double eta) {
-        double total = approachTicks(psi);
-        if (psi < 0.5 || eta >= total) return 0;
-        double f = 1 - Math.max(0, eta) / total;
-        return nukeAmplitude(psi) * APPROACH_SHARE * f * f;
+    static double edge(double yaw, double x, double z) {
+        double r = Math.toRadians(yaw), sin = Math.sin(r), cos = Math.cos(r);
+        double ahead = -sin * x + cos * z, side = -cos * x - sin * z, len = Math.hypot(ahead, side);
+        if (!(len > 0)) return BodySway.FORWARD;
+        return len / Math.hypot(ahead / (ahead > 0 ? BodySway.FORWARD : BodySway.BACK), side / BodySway.SIDE);
     }
 
-    /**
-     * Ядерная волна давлением psi у игрока придёт через {@code eta} тиков: в этот тик земля дрожит ({@link #approachAmplitude}).
-     * Толчок грунта бежит быстрее волны в воздухе, а стену пыли видно издалека — дрожь нарастает, пока она подходит.
-     */
-    public static void approach(double psi, double eta) {
-        approach = Math.max(approach, approachAmplitude(psi, eta));
+    /** Стоит ли игрок на ногах: на земле и его не несёт ({@link #carried}). */
+    public static boolean standing(@Nullable Player p) {
+        return p != null && p.onGround() && !carried(p);
     }
 
-    /**
-     * Толчок грунта от наземного ядерного взрыва: резкий удар снизу и дрожь на 1,5–3 с, раньше волны в воздухе
-     * ({@link #seismicTicks}). Размах — {@link #seismicAmplitude}.
-     */
-    public static void seismic(double deg) {
-        if (deg < SEISMIC_MIN) return;
-        int t = (int) Mth.clamp(30 + deg * 6, 30, 66);
-        if (deg >= seismicAmp * Math.max(0, (double) seismic / Math.max(1, seismicTotal))) {
-            seismicAmp = deg;
-            seismic = seismicTotal = t;
-        }
+    /** Ветер несёт игрока целиком или тот не стоит вовсе: верхом, вплавь, в полёте, во сне. */
+    public static boolean carried(Player p) {
+        return p.isPassenger() || p.isSwimming() || p.isFallFlying() || p.isSleeping() || p.getAbilities().flying;
     }
 
-    /**
-     * Размах толчка грунта, °, на {@code metres} от наземного взрыва {@code kt} килотонн: по приведённой дальности
-     * Z = R / W^⅓ (как давление волны) — 3° на 500 м/кт^⅓, спадает как Z^−1,3, не больше 6°; слабее
-     * {@link #SEISMIC_MIN} — 0. У 15 кт: 1 км — 4°, 3 км — 1°, 5 км — 0,5°, дальше 7 км не ощущается.
-     */
-    public static double seismicAmplitude(double metres, double kt) {
-        double z = Math.max(1, metres) / Math.cbrt(Math.max(1e-3, kt));
-        double a = Math.min(6, 3 * Math.pow(z / 500, -1.3));
-        return a < SEISMIC_MIN ? 0 : a;
-    }
-
-    /** Через сколько тиков после подрыва толчок грунта дойдёт до {@code metres} (масштаб удара — блоков на метр). */
-    public static double seismicTicks(double metres, double scale) {
-        return metres / SEISMIC_SPEED * 20 * scale;
-    }
-
-    public static void tick() {
+    /** Тик клиента; {@code onFeet} — игрок стоит на ногах ({@link #standing}). */
+    public static void tick(boolean onFeet) {
         ticks++;
-        approachPrev = approach;
-        approach = approach < 0.01 ? 0 : approach * APPROACH_FADE;
-        if (seismic > 0) seismic--;
         if (shake > 0) shake--;
         if (quake > 0) quake--;
-        if (nuke > 0) nuke--;
+        standingBefore = standing;
+        standing = Mth.clamp(standing + (onFeet ? STANDING_STEP : -STANDING_STEP), 0, 1);
+        SWAYS.removeIf(s -> (ticks - s.from) / 20.0 * BodySway.RATE >= s.tilt.length - 1);
     }
 
     public static void reset() {
-        shake = quake = nuke = seismic = 0;
-        approachPrev = approach = 0;
+        shake = quake = 0;
+        SWAYS.clear();
+        standing = standingBefore = 1;
         ticks = 0;
     }
 
     public static void apply(ViewportEvent.ComputeCameraAngles e) {
         double k = IncomingConfig.CLIENT.cameraShake.get();
-        if (k <= 0 || shake <= 0 && quake <= 0 && nuke <= 0 && seismic <= 0 && approach <= 0 && approachPrev <= 0
-            || Minecraft.getInstance().isPaused()) return;
-        double[] o = offsets(e.getPartialTick(), e.getYaw());
-        e.setYaw(e.getYaw() + (float) (o[0] * k));
-        e.setPitch(e.getPitch() + (float) (o[1] * k));
-        e.setRoll(e.getRoll() + (float) (o[2] * k));
+        Minecraft mc = Minecraft.getInstance();
+        if (k <= 0 || shake <= 0 && quake <= 0 && SWAYS.isEmpty() || mc.isPaused()) return;
+        // наклон — тела игрока: камере снаряда и глазам другой сущности его не видно
+        Player p = mc.player;
+        double body = p != null && mc.getCameraEntity() == p ? p.getViewYRot((float) e.getPartialTick()) : Double.NaN;
+        double[] o = offsets(e.getPartialTick(), e.getYaw(), e.getPitch(), e.getRoll(), body, k);
+        e.setYaw(e.getYaw() + (float) o[0]);
+        e.setPitch(e.getPitch() + (float) o[1]);
+        e.setRoll(e.getRoll() + (float) o[2]);
     }
 
     /**
      * Поворот камеры тряской в кадре, ° (курс, тангаж — вниз больше нуля, крен — верх вправо больше нуля), при курсе
-     * камеры {@code cameraYaw}.
+     * {@code cameraYaw}, тангаже {@code cameraPitch} и крене {@code cameraRoll} камеры; {@code bodyYaw} — куда смотрит
+     * игрок, ° (по нему граница устойчивости: вид спереди от третьего лица смотрит назад), NaN — камера не на игроке,
+     * наклона тела нет; {@code k} — сила тряски из настроек.
      */
-    static double[] offsets(double partial, double cameraYaw) {
+    static double[] offsets(double partial, double cameraYaw, double cameraPitch, double cameraRoll, double bodyYaw, double k) {
         double t = ticks + partial;
         // амплитуды: курс/тангаж, °
         double yaw = 0, pitch = 0;
@@ -181,37 +150,50 @@ public final class CameraShake {
             pitch += a[1] * fade * wobble(t, 6.7, 4.4);
         }
         double roll = yaw * 0.6;
-        double near = approachPrev + (approach - approachPrev) * partial;
-        if (near > 0) {
-            // земля дрожит под ногами: мельче удара, с креном
-            yaw += near * wobble(t, 3.7, 0.9);
-            pitch += near * 0.9 * wobble(t, 4.6, 2.6);
-            roll += near * 0.5 * wobble(t, 3.0, 4.0);
+        yaw *= k;
+        pitch *= k;
+        roll *= k;
+        // наклон тела по ветру всех волн, ° по осям мира
+        double leanX = 0, leanZ = 0;
+        for (Sway s : SWAYS) {
+            double f = (ticks - s.from + partial) / 20 * BodySway.RATE;
+            int i = (int) f;
+            if (i + 1 >= s.tilt.length) continue;
+            double tilt = Math.toDegrees(s.tilt[i] + (s.tilt[i + 1] - s.tilt[i]) * (f - i));
+            leanX += tilt * s.pushX;
+            leanZ += tilt * s.pushZ;
         }
-        if (seismic > 0) {
-            // толчок снизу: резкий, больше тангажом и креном, гаснет за пару секунд
-            double age = seismicTotal - seismic + partial;
-            double a = seismicAmp * Math.exp(-age / (seismicTotal * 0.3)) * Math.min(1, age / 2);
-            yaw += a * 0.5 * wobble(t, 4.6, 1.9);
-            pitch += a * wobble(t, 5.4, 0.6);
-            roll += a * 0.8 * wobble(t, 4.0, 3.3);
+        double w = k * (standingBefore + (standing - standingBefore) * partial), lean = w * Math.hypot(leanX, leanZ);
+        if (!(lean > 0) || Double.isNaN(bodyYaw)) return new double[]{yaw, pitch, roll};
+        // тело отклоняется по ветру от взрыва — в лицо запрокидывает голову, в спину клонит вниз, сбоку наклоняет от
+        // взрыва; дальше границы устойчивости человек шагает — наклон стоит на ней
+        double x = leanX / Math.hypot(leanX, leanZ), z = leanZ / Math.hypot(leanX, leanZ);
+        lean = Math.min(lean, Math.toDegrees(edge(bodyYaw, x, z)));
+        double[] to = leaned(cameraYaw + yaw, cameraPitch + pitch, cameraRoll + roll, lean, x, z);
+        return new double[]{Mth.wrapDegrees(to[0] - cameraYaw), to[1] - cameraPitch, Mth.wrapDegrees(to[2] - cameraRoll)};
+    }
+
+    /**
+     * Камера с курсом {@code yaw}, тангажем {@code pitch} и креном {@code roll} (°) после наклона тела на {@code lean}° в
+     * сторону (x, z) мира (единичную): поворот вокруг горизонтали поперёк наклона — верх камеры уходит туда, куда клонится
+     * тело. Возвращает курс, тангаж и крен, которые дают этот поворот у {@code Camera.setRotation}:
+     * {@code rotationYXZ(π − курс, −тангаж, −крен)}.
+     */
+    static double[] leaned(double yaw, double pitch, double roll, double lean, double x, double z) {
+        Matrix3d m = new Matrix3d().rotation(Math.toRadians(lean), z, 0, -x)
+                .mul(new Matrix3d().rotationYXZ(Math.PI - Math.toRadians(yaw), -Math.toRadians(pitch), -Math.toRadians(roll)));
+        // разложение R = Ry(a)·Rx(b)·Rz(c); у JOML mCR — столбец C, строка R
+        double b = Math.asin(Mth.clamp(-m.m21(), -1, 1)), a, c;
+        if (Math.cos(b) > 1e-7) {
+            a = Math.atan2(m.m20(), m.m22());
+            c = Math.atan2(m.m01(), m.m11());
+        } else {
+            // взгляд ровно в зенит или надир: курс и крен вертят картинку вокруг одной оси — крен оставляем прежним
+            c = -Math.toRadians(roll);
+            double turn = Math.atan2(-m.m02(), m.m00());
+            a = b < 0 ? turn - c : turn + c;
         }
-        if (nuke > 0) {
-            double age = nukeTotal - nuke + partial;
-            // толчок: тело отклоняется по ветру от взрыва — в лицо запрокидывает голову, в спину клонит вниз, сбоку
-            // наклоняет от взрыва; к наибольшему за JOLT_TICKS без скачка скорости и гладко обратно
-            double u = age / JOLT_TICKS, jolt = nukeAmp * u * u * Math.exp(2 * (1 - u));
-            double r = Math.toRadians(cameraYaw), sin = Math.sin(r), cos = Math.cos(r);
-            pitch += jolt * (-sin * pushX + cos * pushZ);
-            roll += jolt * (-cos * pushX - sin * pushZ);
-            // порывы ветра за фронтом: медленнее и мельче толчка, набираются вместе с ним и гаснут за время волны
-            double in = Mth.clamp(age / (2 * JOLT_TICKS), 0, 1);
-            double a = nukeAmp * BUFFET_SHARE * in * in * (3 - 2 * in) * Math.exp(-age / (nukeTotal * 0.35));
-            yaw += a * wobble(t, 2.4, 0.4);
-            pitch += a * 0.8 * wobble(t, 3.3, 2.2);
-            roll += a * 0.9 * wobble(t, 2.0, 5.1);
-        }
-        return new double[]{yaw, pitch, roll};
+        return new double[]{180 - Math.toDegrees(a), -Math.toDegrees(b), -Math.toDegrees(c)};
     }
 
     /** Гладкое «дрожание» из двух синусов разной частоты (Гц при 20 тиках/с), амплитуда ~1. */

@@ -4,7 +4,8 @@ English · [Русский](ru/camera.md)
 
 Press `N` while your projectile is in flight and watch the strike through its camera: the flight from on board and the
 impact. Press `N` again for the next projectile; Shift exits. While you are in the camera, your character stays where
-it is.
+it is. You hear what the camera hears, but the blast wave of a nuclear strike hurts your ears and pushes you only when
+it reaches your character.
 
 ![Cruise missile camera: a map at long range, onboard video closer in, the impact](img/camera.webp)
 

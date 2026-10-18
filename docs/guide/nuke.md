@@ -34,10 +34,15 @@ dust of the pall: right at the front it hugs the ground, and behind it the dust 
 thins out beyond and fades at about 8 km, where the wind is too weak to lift dust; after a ground burst it is dense out
 to about 3.5 km and fades at about 7 km. Inside the wall it is dark. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
 In its first seconds the fireball lights the top of the wall orange, even by day.
-The wave breaks buildings as it reaches them: their pieces fly with the dust. The
-ground shakes harder and harder as the wall comes closer. When the wall reaches you, it throws
-your view away from the burst, and the wind behind it keeps rocking you. After a ground burst a short jolt comes through
-the ground first, seconds before the wave.
+The wave breaks buildings as it reaches them: their pieces fly with the dust. The ground doesn't shake before the
+wave. When it reaches you, the wind behind it pushes you while you stand: your
+view leans away from the burst and comes back over a few seconds. At 1 psi that is a few degrees, more from a bigger
+burst, whose wind blows longer. From about 1–2 psi the wind is stronger than anyone can stand against, sooner when you
+face the burst and the bigger it is, and your view stops at the edge of balance until the wind weakens. After the wave
+passes, the air flows back toward the burst for a few seconds. Behind a strong wave, from about 4 psi, this weaker wind
+leans you toward the burst by several degrees. In a jump the wind doesn't lean you.
+Where only the sound reaches, it leans you by less than a degree. A wall or a house between you and the burst shelters
+you from the wind.
 
 The fireball shines white with brighter and darker patches boiling over it, and turns yellow and orange as it cools. It
 rises and rolls into a ring of hot gas: the cap of the mushroom cloud, the same body from the first moment. As it rolls
@@ -75,8 +80,8 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 
 ![Fireball and blast wave over a town](img/nuke-wave.jpg)
 
-At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns out to 3.1 km, and windows break out to
-8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
+At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns bare skin out to about 3.4 km, and windows
+break out to 8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
 game time, like radiation sickness (a game hour is 50 seconds): after a 15 kt ground burst it starts to come down about
 7 game minutes later, and later farther downwind. Its radiation drops tenfold by the seventh game hour and a
 hundredfold by the third game day.
@@ -134,9 +139,25 @@ near them, ruins collapsing nearby, and now and then an explosion in the burning
   and the radiation. A block of stone cuts the radiation of the burst about a hundredfold, a block of earth about
   thirtyfold. A trench or a wall stops what comes straight from the fireball, but not the part the air scatters down
   from the sky.
-- **Do not look at the fireball.** Its light kills and burns only those under open sky who can see it.
+- **Do not look at the fireball.** Its light reaches only those who can see it, under open sky or through a window, and
+  burns the side of the body that faces it.
+- **Burns** depend on the yield: the pulse of a bigger burst is longer, and skin takes more of it. At 15 kt bare skin
+  reddens out to about 3.4 km, blisters out to 2.6 km and burns through out to 2.1 km; a cotton shirt catches fire out
+  to 1.6 km (water puts it out). Clothes shield you until they catch fire, so a dressed player is burned on the face
+  and arms, and an animal over its whole side. Iron armour stops the light; leather catches fire later than a shirt.
+  Burns take a share of your health and keep it until they heal: two game weeks for blisters, five for deep burns.
+  Deep burns over a quarter of the body, or blisters over 30 % of it, bring shock: you die within 12 game hours. The
+  flash alone burns a dressed player far less than that, but burning clothes keep burning like any fire: get into
+  water. Milk and potions do not heal burns.
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
+- **The flash blinds.** It dazzles everyone who sees the fireball, and more weakly everyone under the open sky it lights
+  up: the whole view goes bright, then grey by day or black at night, and clears over seconds or minutes. The closer
+  you are, the longer it lasts, and at night, when your eyes have got used to the dark, far longer: at 15 kt about
+  50 seconds at 3 km by day, several minutes at 10 km at night. If you were looking towards the fireball, its image
+  burns a blind spot into your eyes for good, at 15 kt out to about 30 km by day and 50 km at night. The spot moves
+  with your gaze and is fainter off to the side; it goes away only when you die. In creative and spectator mode you
+  still see the white flash and its afterimage, but your sight is not dimmed and the spots are hidden.
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
   roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
   and an open doorway lets it in. Water washes the dust off you (rain does not).

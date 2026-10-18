@@ -7,10 +7,12 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
+import ua.zentix.incoming.client.fx.CameraShake;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -232,9 +234,15 @@ public final class ClientNuclear {
         NukePall.reset();
     }
 
-    /** Игрок возродился после смерти: слух — у тела, у нового он целый. Смена измерения — тот же клон, слух остаётся. */
+    /**
+     * Игрок возродился после смерти: слух, глаза и наклон ветром — у тела, новое цело и стоит. Смена измерения (и выход
+     * из Энда) — тот же клон, слух и глаза остаются.
+     */
     public static void respawned(ClientPlayerNetworkEvent.Clone e) {
-        if (e.getOldPlayer().isDeadOrDying()) Deafness.reset();
+        if (!e.getOldPlayer().isDeadOrDying()) return;
+        Deafness.reset();
+        CameraShake.reset();
+        NukeFlash.respawned();
     }
 
     public static void radiation(S2C.Radiation p) {
@@ -270,6 +278,8 @@ public final class ClientNuclear {
         radiation = null;
         CLOCK.reset();
         NukeFlash.reset();
+        // ожоги сетчатки — состояние игрока на сервере: перемотка их не трогает, выход — забывает (вход пришлёт заново)
+        NukeFlash.scars(RetinaScars.NONE);
         NukeSounds.reset();
         NukeSky.reset();
         Deafness.reset();

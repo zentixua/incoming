@@ -202,7 +202,7 @@ public final class NuclearWorld {
      */
     public void onDetonation(ServerLevel level, Detonation d, @Nullable UUID owner) {
         pulses.add(new PulseJob(level, d, owner));
-        // тела перед стенами — снимком сейчас: импульс (PulseJob) их убьёт и уронит
+        // тела перед стенами — снимком сейчас: импульс (PulseJob) и волна их потом обожгут, убьют или сдвинут
         FlashShadows flash = FlashShadows.of(level, d);
         if (flash != null) shadows.add(flash);
         blast.onDetonation(d, owner);

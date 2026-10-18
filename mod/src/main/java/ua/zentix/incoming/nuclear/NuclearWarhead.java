@@ -5,7 +5,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -20,16 +19,18 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.grid.Blackouts;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.nuclear.model.BurnInjury;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.PromptRadiationModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.Yield;
+import ua.zentix.incoming.nuclear.radiation.FlashBurns;
+import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
 import ua.zentix.incoming.registry.ModDamageTypes;
-import ua.zentix.incoming.registry.ModEffects;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.UUID;
@@ -45,6 +46,8 @@ public final class NuclearWarhead {
      * из {@code level.random}, чтобы кадры пелены и гриба сравнивались от прогона к прогону. В игре — как было.
      */
     private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
+    /** Докуда от глаза (блоки) рельеф между ним и шаром проверяется по карте высот плотно, и с каким шагом. */
+    private static final double NEAR_TERRAIN = 512, TERRAIN_STEP = 8;
     private static final long SCENARIO_SEED = 0x5CE7A510L;
 
     private NuclearWarhead() {}
@@ -110,9 +113,13 @@ public final class NuclearWarhead {
         return s.source() == Terrain.Source.CHUNK ? s : null;
     }
 
-    /** Дальше этого (блоки) ни свет, ни проникающая радиация сущностей не трогают: ожоги 1-й степени или 50 бэр. */
+    /**
+     * Дальше этого (блоки) ни свет, ни проникающая радиация сущностей не трогают: ожоги 1-й степени у самых
+     * чувствительных или 50 бэр. Ожог сетчатки достаёт дальше — игроков до него {@link PulseJob} добирает сам
+     * ({@link FlashEyes#reach}).
+     */
     public static double exposureRange(Detonation d) {
-        double burnRange = d.blocks(ThermalModel.rangeForFluence(ThermalModel.BURN_1, d.yieldKt(), d.surface(), d.visibility()));
+        double burnRange = d.blocks(ThermalModel.rangeForFluence(BurnInjury.lowest(d.yieldKt()), d.yieldKt(), d.surface(), d.visibility()));
         double radRange = d.blocks(radiusForDose(d.yieldKt(), 50));
         return Math.max(burnRange, radRange);
     }
@@ -129,11 +136,15 @@ public final class NuclearWarhead {
         if (living instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
         Vec3 eye = living.getEyePosition();
         if (sees(level, d, living)) {
-            burn(level, d, living, d.fluence(eye), owner);
+            if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player, owner);
+            FlashBurns.burn(level, d, living, d.fluence(eye), owner);
             // видел вспышку — бежит прочь
             MobPanic.flash(d, living, level.getGameTime());
         }
-        double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt()) * Shielding.prompt(level, eye, d.burst());
+        double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt());
+        // без защиты меньше бэра — лучей защиты не нужно (игроки до дальности ожога сетчатки — за десятки километров)
+        if (rem < 1) return true;
+        rem *= Shielding.prompt(level, eye, d.burst());
         if (rem < 1) return true;
         float gy = (float) (rem / PromptRadiationModel.REM_PER_GY);
         if (living instanceof ServerPlayer player) {
@@ -150,23 +161,8 @@ public final class NuclearWarhead {
     }
 
     /**
-     * Ожоги по кал/см² (DESIGN §1.4): с 3 — поджог и эффект ожогов, с 8 (ожоги 3-й степени) — тяжёлый урон,
-     * с 10 — смертельно: обожжено всё открытое тело. Тень (стена, холм, крыша) спасает целиком.
-     */
-    private static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable Entity owner) {
-        if (q < ThermalModel.BURN_1) return;
-        e.igniteForSeconds((float) Math.min(20, q));
-        // без частиц вокруг (в первом лице они лезут в глаза), только значок
-        e.addEffect(new MobEffectInstance(ModEffects.BURNS, (int) Math.min(20 * 600, q * 20 * 30), q >= ThermalModel.BURN_3 ? 1 : 0, false, false, true));
-        if (q >= ThermalModel.BURN_3) {
-            float dmg = q >= 10 ? Float.MAX_VALUE : (float) ((q - ThermalModel.BURN_3) * 4 + 8);
-            e.hurt(ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_THERMAL, null, owner), dmg);
-        }
-    }
-
-    /**
      * Видит ли сущность огненный шар: рядом — честный луч по блокам (стены, крыша), дальше — по карте высот
-     * (холмы, дома), чтобы не гнать луч на километры.
+     * (холмы, дома): до {@link #NEAR_TERRAIN} — плотно, за ним — редкими точками, чтобы не гнать луч на километры.
      */
     public static boolean sees(Level level, Detonation d, LivingEntity e) {
         Vec3 eye = e.getEyePosition();
@@ -175,6 +171,14 @@ public final class NuclearWarhead {
         Vec3 near = eye.add(dir.scale(Math.min(1, 48 / Math.max(len, 1e-3))));
         // луч по блокам — только по загруженным чанкам: сервер не должен грузить мир ради проверки
         if (Terrain.readyAlong(level, eye, near) && level.clip(new ClipContext(eye, near, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, e)).getType() != HitResult.Type.MISS) return false;
+        // редкие точки ThermalShadow у дальнего глаза проходят мимо рельефа рядом (хребет в сотне метров при шаре за
+        // 30 км): от луча до NEAR_TERRAIN — каждые TERRAIN_STEP блоков по карте высот, пока чанки готовы
+        Vec3 until = Terrain.readyUntil(level, near, eye.add(dir.scale(Math.min(1, NEAR_TERRAIN / Math.max(len, 1e-3)))));
+        Vec3 span = until.subtract(near);
+        for (double s = TERRAIN_STEP, n = span.length(); s < n; s += TERRAIN_STEP) {
+            Vec3 p = near.add(span.scale(s / n));
+            if (Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(p.x), Mth.floor(p.z)) > p.y + 0.5) return false;
+        }
         return ThermalShadow.visible(level, d.burst(), near);
     }
 
