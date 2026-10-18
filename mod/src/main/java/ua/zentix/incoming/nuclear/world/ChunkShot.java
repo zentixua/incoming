@@ -97,8 +97,20 @@ final class ChunkShot {
         }
     }
 
+    /**
+     * Снимок мира до вспышки чанка, где стоит слой вспышки подрыва ({@link RuinPlan#unflash}, {@link RuinPlan#unfire}):
+     * отпечатки живых секций с точностью до погашенных ламп у секций, которые правка снимка меняла ({@link #liveKnown}), —
+     * сверка с чанком идёт по ним, а не по блокам снимка; у остальных секций снимок и чанк одно и то же. null — снимок
+     * как есть.
+     */
+    @Nullable
+    private long[] liveNormals;
+    @Nullable
+    private boolean[] liveKnown;
+
     private ChunkShot(int x, int z, int id, @Nullable RuinPlan old, boolean ruined, int minY,
-                      PalettedContainer<BlockState>[] states, int[] heights, @Nullable int[] sky) {
+                      PalettedContainer<BlockState>[] states, int[] heights, @Nullable int[] sky, @Nullable long[] livePrints,
+                      @Nullable long[] liveNormals, @Nullable boolean[] liveKnown) {
         this.x = x;
         this.z = z;
         this.id = id;
@@ -110,7 +122,9 @@ final class ChunkShot {
         this.heights = heights;
         this.sky = sky;
         this.prints = new long[states.length];
-        for (int i = 0; i < states.length; i++) prints[i] = rawPrint(states[i]);
+        for (int i = 0; i < states.length; i++) prints[i] = livePrints != null ? livePrints[i] : rawPrint(states[i]);
+        this.liveNormals = liveNormals;
+        this.liveKnown = liveKnown;
         long size = 0;
         for (PalettedContainer<BlockState> c : states) {
             if (c == null) continue;
@@ -159,12 +173,24 @@ final class ChunkShot {
         }
     }
 
-    /** Снимок чанка в памяти (поток сервера): {@code applied} — руины чанка уже стоят (их план — или null, если отпущен). */
+    /**
+     * Снимок чанка в памяти (поток сервера): {@code applied} — руины чанка уже стоят (их план — или null, если отпущен);
+     * {@code flash} — в чанке стоит слой вспышки подрыва ({@link RuinPlan#applyFlash}): снимок — мир до вспышки
+     * ({@link RuinPlan#unflash}), сверка с чанком — по живым секциям; {@code unfire} — слой стоит, а его плана нет
+     * ({@link FlashScorch#marked}): огонь чанка в снимке — воздух ({@link RuinPlan#unfire}).
+     */
     @SuppressWarnings("unchecked")
-    static ChunkShot take(LevelChunk chunk, @Nullable RuinContext.Applied applied) {
+    static ChunkShot take(LevelChunk chunk, @Nullable RuinContext.Applied applied, @Nullable RuinPlan flash, boolean unfire) {
         LevelChunkSection[] live = chunk.getSections();
         PalettedContainer<BlockState>[] states = (PalettedContainer<BlockState>[]) new PalettedContainer<?>[live.length];
-        for (int i = 0; i < live.length; i++) if (!live[i].hasOnlyAir()) states[i] = live[i].getStates().copy();
+        boolean[] own = flash != null || unfire ? new boolean[live.length] : null;
+        for (int i = 0; i < live.length; i++) {
+            if (live[i].hasOnlyAir()) continue;
+            // копию, которую правит слой вспышки, — свою (у copy() обработчик роста палитры — живая секция)
+            boolean edit = flash != null ? flash.touches(i) : unfire && ua.zentix.incoming.util.Palettes.contains(live[i].getStates(), FIRE);
+            states[i] = edit ? RuinPlan.copyStates(live[i].getStates()) : live[i].getStates().copy();
+            if (own != null) own[i] = edit;
+        }
         int[] heights = new int[RuinPlan.HEIGHTMAP_TYPES.length * 256];
         for (int t = 0; t < RuinPlan.HEIGHTMAP_TYPES.length; t++) {
             Heightmap map = chunk.getOrCreateHeightmapUnprimed(RuinPlan.HEIGHTMAP_TYPES[t]);
@@ -173,19 +199,67 @@ final class ChunkShot {
         int[] sky = new int[256];
         var sources = chunk.getSkyLightSources();
         for (int c = 0; c < 256; c++) sky[c] = sources.get(c);
+        long[] livePrints = null, liveNormals = null;
+        if (own != null) {
+            // отпечатки — живых секций; с точностью до ламп — только у правленых (у остальных снимок и есть чанк)
+            livePrints = new long[live.length];
+            liveNormals = new long[live.length];
+            for (int i = 0; i < live.length; i++) {
+                livePrints[i] = rawPrint(live[i]);
+                if (own[i]) liveNormals[i] = normalPrint(live[i]);
+            }
+            if (flash != null) flash.unflash(states, chunk.getMinBuildHeight(), heights, sky);
+            else RuinPlan.unfire(states, own, chunk.getMinBuildHeight(), heights, sky);
+        }
         ChunkPos pos = chunk.getPos();
         return new ChunkShot(pos.x, pos.z, System.identityHashCode(chunk), applied == null ? null : applied.plan(),
-                applied != null, chunk.getMinBuildHeight(), states, heights, sky);
+                applied != null, chunk.getMinBuildHeight(), states, heights, sky, livePrints, liveNormals, own);
     }
+
+    private static final java.util.function.Predicate<BlockState> FIRE = s -> s.getBlock() instanceof BaseFireBlock;
 
     /**
      * Снимок чанка с диска (поток сервера: его состояния — в таблицу), см. {@link DiskShots}; {@code applied} — руины
      * чанка уже стоят (чанк был в памяти после подрыва и ушёл ниже полной загрузки): исходный мир мест его плана — из
-     * плана, как у снимка из памяти.
+     * плана, как у снимка из памяти; {@code flash} — слой вспышки стоял, когда чанк был в памяти: мир до вспышки;
+     * {@code unfire} — слой стоит (отметка в данных чанка), а его плана нет: огонь — воздух, как у снимка из памяти
+     * ({@link #take}).
      */
-    static ChunkShot fromDisk(DiskShots.Read read, @Nullable RuinContext.Applied applied) {
+    static ChunkShot fromDisk(DiskShots.Read read, @Nullable RuinContext.Applied applied, @Nullable RuinPlan flash, boolean unfire) {
+        PalettedContainer<BlockState>[] states = read.states();
+        int[] heights = read.heights();
+        if (flash != null || unfire) {
+            states = states.clone();
+            boolean[] own = new boolean[states.length];
+            for (int i = 0; i < states.length; i++) {
+                own[i] = states[i] != null && (flash != null ? flash.touches(i) : ua.zentix.incoming.util.Palettes.contains(states[i], FIRE));
+                if (own[i]) states[i] = RuinPlan.copyStates(states[i]);
+            }
+            heights = heights.clone();
+            if (flash != null) flash.unflash(states, read.minY(), heights, null);
+            else RuinPlan.unfire(states, own, read.minY(), heights, null);
+        }
         return new ChunkShot(read.pos().x, read.pos().z, 0, applied == null ? null : applied.plan(), applied != null,
-                read.minY(), read.states(), read.heights(), null);
+                read.minY(), states, heights, null, null, null, null);
+    }
+
+    /**
+     * Слой вспышки {@code flash} встал в чанк этого снимка (поток сервера; снимок был верен до него): снимок остаётся миром
+     * до вспышки, а сверка с чанком у секций слоя — по ним после слоя (остальные слой не трогал). Номер снимка тот же:
+     * разломы и планы по нему остаются верны.
+     */
+    void relive(LevelChunk chunk, RuinPlan flash) {
+        LevelChunkSection[] live = chunk.getSections();
+        if (liveNormals == null) {
+            liveNormals = new long[sections];
+            liveKnown = new boolean[sections];
+        }
+        for (int i = 0; i < sections; i++) {
+            if (!flash.touches(i)) continue;
+            prints[i] = rawPrint(live[i]);
+            liveNormals[i] = normalPrint(live[i]);
+            liveKnown[i] = true;
+        }
     }
 
     /**
@@ -204,10 +278,12 @@ final class ChunkShot {
     private boolean sameBlocks(LevelChunk chunk) {
         LevelChunkSection[] live = chunk.getSections();
         if (live.length != sections) return false;
+        long[] normals = liveNormals;
+        boolean[] known = liveKnown;
         for (int i = 0; i < sections; i++) {
             long p = rawPrint(live[i]);
             if (p == prints[i]) continue;
-            if (normalPrint(live[i]) != normalPrint(states[i], RuinPlan::normal)) return false;
+            if (normalPrint(live[i]) != (normals != null && known[i] ? normals[i] : normalPrint(states[i], RuinPlan::normal))) return false;
             prints[i] = p;
         }
         return true;

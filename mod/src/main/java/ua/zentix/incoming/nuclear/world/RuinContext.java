@@ -78,8 +78,74 @@ final class RuinContext {
         }
         Applied a = applied.get(key);
         ChunkShot s = shots.get(key);
-        if (s == null || !s.current(c, a)) putShot(key, s = ChunkShot.take(c, a));
+        if (s == null || !s.current(c, a)) {
+            RuinPlan flash = flashed.get(key);
+            // слой вспышки стоит, а его план забыт (руины подрыва забыли, перезапуск): огонь в снимке — воздух
+            putShot(key, s = ChunkShot.take(c, a, flash, flash == null && a == null && FlashScorch.marked(c, d.id())));
+        }
         return s;
+    }
+
+    // ---------------------------------------------------------------- слой вспышки
+
+    /**
+     * Слои вспышки, что стоят в чанках ({@link RuinPlan#applyFlash}; поток сервера): руины подрыва строятся по миру до
+     * вспышки — план сверяет чанк по нему ({@link RuinPlan#current}), снимки чанка — мир до вспышки
+     * ({@link ChunkShot#take}). Держится, пока держатся старые блоки руин чанка ({@link #applied}).
+     */
+    private final Long2ObjectOpenHashMap<RuinPlan> flashed = new Long2ObjectOpenHashMap<>();
+    /** Сколько байт держат планы слоёв вспышки ({@link #flashed}). */
+    private long flashedBytes;
+
+    /** Слой вспышки, что стоит в чанке; null — нет. */
+    @Nullable
+    RuinPlan flashed(long chunk) {
+        return flashed.get(chunk);
+    }
+
+    /**
+     * Перед слоем вспышки в чанке (поток сервера): карта высот тени света — мира до вспышки (если её ещё не сняли).
+     *
+     * @return снимок чанка в кэше верен (останется миром до вспышки — {@link #flashed(LevelChunk, RuinPlan, boolean)})
+     */
+    boolean beforeFlash(ServerLevel level, LevelChunk chunk) {
+        ChunkPos pos = chunk.getPos();
+        captureHeights(level, pos.x, pos.z);
+        ChunkShot s = shots.get(pos.toLong());
+        return s != null && !s.fromDisk() && s.current(chunk, applied.get(pos.toLong()));
+    }
+
+    /**
+     * Слой вспышки встал в чанк (поток сервера). Снимок в кэше, верный до слоя, остаётся миром до вспышки и сверяется
+     * дальше по чанку со слоем ({@link ChunkShot#relive}): разломы и планы по нему верны; иначе снимок берётся заново.
+     */
+    void flashed(LevelChunk chunk, RuinPlan plan, boolean shotCurrent) {
+        long key = chunk.getPos().toLong();
+        RuinPlan was = flashed.put(key, plan);
+        flashedBytes += plan.bytes() - (was == null ? 0 : was.bytes());
+        ChunkShot s = shots.get(key);
+        if (s == null) return;
+        if (shotCurrent) s.relive(chunk, plan);
+        else dropShot(key);
+    }
+
+    /**
+     * Снимки для слоя вспышки чанка (поток сервера): сам чанк и соседи, что в памяти целиком (гарь на гранях у края
+     * смотрит соседа; соседа нет — грань открыта), — из кэша руин подрыва, их же потом берут руины. Чанк в памяти.
+     */
+    Grid flashGrid(ServerLevel level, ChunkPos centre, boolean background) {
+        ChunkShot[] g = new ChunkShot[Grid.SIDE * Grid.SIDE];
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (level.getChunkSource().getChunkNow(centre.x + dx, centre.z + dz) == null) continue;
+                g[(dz + Grid.R) * Grid.SIDE + dx + Grid.R] = shot(level, centre.x + dx, centre.z + dz);
+            }
+        }
+        captureBand(level, centre);
+        RuinPlanner.ensureOwnStates();
+        Blast.PropsView view = background ? Blast.publish() : Blast.SERVER;
+        return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, view,
+                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
     }
 
     /**
@@ -93,7 +159,10 @@ final class RuinContext {
         // высоты для тени — только вместе со снимком: у оставленного живого снимка они сняты из памяти
         if (now == null || now.fromDisk() || level.getChunkSource().getChunkNow(read.pos().x, read.pos().z) == null) {
             DiskShots.Read primed = read.primed(Blast.SERVER);
-            putShot(key, ChunkShot.fromDisk(primed, applied.get(key)));
+            Applied a = applied.get(key);
+            RuinPlan flash = flashed.get(key);
+            // слой вспышки стоит, а его план забыт: огонь в снимке — воздух, как у чанка в памяти ({@link #shot})
+            putShot(key, ChunkShot.fromDisk(primed, a, flash, flash == null && a == null && FlashScorch.marks(primed.flashLayer(), d.id())));
             putHeights(key, primed.motion());
         }
     }
@@ -199,9 +268,16 @@ final class RuinContext {
         shotBytes += shot.bytes - (was == null ? 0 : was.bytes);
     }
 
-    private void dropShot(long key) {
+    void dropShot(long key) {
         ChunkShot was = shots.remove(key);
         if (was != null) shotBytes -= was.bytes;
+    }
+
+    /** Для проверок: все снимки и разломы — прочь, как у руин подрыва, которые взялись за чанки заново. */
+    void dropShotsForTest() {
+        shots.clear();
+        shotBytes = 0;
+        blasts.clear();
     }
 
     /** Есть ли снимок чанка (из памяти или с диска). */
@@ -267,10 +343,12 @@ final class RuinContext {
         return ThermalShadow.visible(d.burst(), p, (x, z) -> height(x, z, minY));
     }
 
-    /** Сколько байт держат снимки (память подрыва). */
-    /** Сколько байт держат снимки и карты высот подрыва (память подрыва, к пределу планов). */
+    /**
+     * Сколько байт держат снимки, карты высот и планы слоёв вспышки подрыва (память подрыва, к пределу планов
+     * {@link NuclearPrep#PLANS_CAP}).
+     */
     long shotBytes() {
-        return shotBytes + heights.size() * 1100L;
+        return shotBytes + heights.size() * 1100L + flashedBytes;
     }
 
     /**
@@ -339,6 +417,21 @@ final class RuinContext {
         RuinPlanner.ensureOwnStates();
         Blast.PropsView view = background ? Blast.publish() : Blast.SERVER;
         return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, view,
+                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
+    }
+
+    /**
+     * Для проверок: окно чанка только из снимков в кэше (прочитанных с диска, {@link #putDisk}), для фонового решателя:
+     * {@link #shot} заменил бы снимок с диска чанка, который в памяти, снимком из памяти.
+     */
+    Grid cachedGridForTest(ServerLevel level, ChunkPos centre) {
+        ChunkShot[] g = new ChunkShot[Grid.SIDE * Grid.SIDE];
+        for (int dz = -Grid.R; dz <= Grid.R; dz++) {
+            for (int dx = -Grid.R; dx <= Grid.R; dx++) g[(dz + Grid.R) * Grid.SIDE + dx + Grid.R] = shots.get(ChunkPos.asLong(centre.x + dx, centre.z + dz));
+        }
+        captureBand(level, centre);
+        RuinPlanner.ensureOwnStates();
+        return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, Blast.publish(),
                 IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
     }
 
@@ -570,6 +663,9 @@ final class RuinContext {
         forget(pos, 2, stood, k -> {
             Applied a = applied.get(k);
             if (a != null && a.plan != null) applied.put(k, new Applied(null, a.motion));
+            // мир до вспышки чанка больше никому не нужен: окна вокруг построены
+            RuinPlan f = flashed.remove(k);
+            if (f != null) flashedBytes -= f.bytes();
         });
     }
 

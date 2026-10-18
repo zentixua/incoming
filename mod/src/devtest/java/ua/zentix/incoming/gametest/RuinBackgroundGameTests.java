@@ -12,6 +12,7 @@ import net.minecraft.server.network.PlayerChunkSender;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.Vec3;
@@ -25,12 +26,17 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
+import ua.zentix.incoming.nuclear.model.Yield;
 import ua.zentix.incoming.nuclear.world.ChunkSendGate;
+import ua.zentix.incoming.nuclear.world.ColumnScar;
+import ua.zentix.incoming.nuclear.world.FlashScorch;
 import ua.zentix.incoming.nuclear.world.NuclearPrep;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.RuinPlan;
 import ua.zentix.incoming.nuclear.world.RuinPlanner;
+import ua.zentix.incoming.nuclear.world.RuinWorkers;
 import ua.zentix.incoming.nuclear.world.ScarQueue;
+import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.registry.ModAttachments;
 
 import java.io.IOException;
@@ -89,7 +95,8 @@ public final class RuinBackgroundGameTests {
      * свойств ({@code getBlock}, {@code getValue}, {@code hasProperty}, {@code getFluidState}, {@code setValue},
      * {@code isAir}): остальное — из таблицы свойств, заполненной в потоке сервера. Обход — по графу вызовов от корней
      * фоновых задач (план: {@code Collapse.solve}, {@code Blast.solve}, {@code RuinPlanner.finish}, лямбды задач
-     * {@code RuinContext}; разбор чанка с диска: {@code DiskShots.parse}) через все классы мода, с телами лямбд. Чтение
+     * {@code RuinContext}; след без руин и слой вспышки: {@code RuinPlanner.scorch}, {@code RuinPlanner.flash}; разбор
+     * чанка с диска: {@code DiskShots.parse}) через все классы мода, с телами лямбд. Чтение
      * изменяемого статического поля мода и запись в статическое поле вне {@code <clinit>} — тоже ошибка. Вызов через
      * {@code Blast.PropsView} не обходится: в фоне это опубликованная таблица ({@code Blast.publish}), а его реализация
      * для потока сервера ({@code Blast.SERVER}) сама ловится правилом «{@code Blast.props} — только в потоке сервера».
@@ -99,7 +106,7 @@ public final class RuinBackgroundGameTests {
         String pkg = "ua/zentix/incoming/nuclear/world/";
         // корни: класс, метод, описание (null — все перегрузки); DiskShots.parse(ServerLevel, …) — для проверок, в потоке сервера
         String[][] roots = {{"Collapse", "solve", null}, {"Blast", "solve", null}, {"RuinPlanner", "finish", null}, {"RuinPlanner", "scorch", null},
-                {"DiskShots", "parse", "(L" + pkg + "DiskShots$Format;Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/CompoundTag;)L" + pkg + "DiskShots$Read;"}};
+                {"RuinPlanner", "flash", null}, {"DiskShots", "parse", "(L" + pkg + "DiskShots$Format;Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/CompoundTag;)L" + pkg + "DiskShots$Read;"}};
         Set<String> forbiddenOwners = Set.of("net/minecraft/world/level/Level", "net/minecraft/server/level/ServerLevel",
                 "net/minecraft/world/level/chunk/LevelChunk", "net/minecraft/world/level/chunk/ChunkAccess",
                 "net/minecraft/world/level/chunk/LevelChunkSection", "net/minecraft/world/level/BlockGetter",
@@ -255,8 +262,107 @@ public final class RuinBackgroundGameTests {
         }
         h.assertTrue(cells > 0, "город не разрушен: сравнивать нечего");
         h.assertTrue(charred > 0, "гари вспышки в городе нет: сравнивать нечего");
-        Incoming.LOG.info("Руины с диска: {} планов совпали, {} мест, {} обугленных граней", compared, cells, charred);
+        // слой вспышки стоит, а руин подрыва в памяти нет (перезапуск, руины забыты после простоя): огонь слоя на крышах
+        // в чанке и у соседей его окна, отметка слоя — в чанке и в его данных на диске; огонь в снимке — воздух обоими
+        // путями, иначе крыша с огнём поднимала бы поверхность мира на блок только в снимке с диска
+        List<LevelChunk> pad = padChunks(h);
+        int[] marked = flashOverCity(h, d, pad);
+        int layerCompared = 0, ruinFires = 0;
+        try {
+            for (int rx : new int[]{24, 40}) {
+                for (int rz : new int[]{24, 40}) {
+                    ChunkPos c = new ChunkPos(h.absolutePos(new BlockPos(rx, 1, rz)));
+                    LevelChunk chunk = level.getChunk(c.x, c.z);
+                    h.assertTrue(FlashScorch.marked(chunk, d.id()), "у чанка " + c + " нет отметки слоя вспышки: случай не тот");
+                    RuinPlan memory = RuinPlanner.planFresh(level, d, chunk, true), disk = RuinPlanner.planFromDisk(level, d, chunk);
+                    String diff = memory.differs(disk);
+                    if (diff == null) diff = flashDiffers(memory, disk);
+                    h.assertTrue(diff == null, "план чанка " + c + " с огнём слоя вспышки (отметка, плана слоя нет) с диска не такой, как по чанку в памяти:" + diff);
+                    layerCompared++;
+                    ruinFires += memory.fireCount();
+                }
+            }
+        } finally {
+            unflashCity(level, d, pad);
+        }
+        h.assertTrue(ruinFires > 0, "у руин поверх огня слоя своих пожаров нет: сравнивать нечего");
+        Incoming.LOG.info("Руины с диска: {} планов совпали, {} мест, {} обугленных граней; поверх слоя вспышки по отметке — {} планов совпали "
+                + "({} чанков с отметкой, {} пожаров слоя; пожаров руин {})", compared, cells, charred, layerCompared, marked[0], marked[1], ruinFires);
         h.succeed();
+    }
+
+    /** Чанки площадки (в памяти: квартал на ней строится через мир). */
+    private static List<LevelChunk> padChunks(GameTestHelper h) {
+        BlockPos a = h.absolutePos(BlockPos.ZERO), b = h.absolutePos(new BlockPos(63, 0, 63));
+        List<LevelChunk> out = new ArrayList<>();
+        for (int cx = Math.min(a.getX(), b.getX()) >> 4; cx <= Math.max(a.getX(), b.getX()) >> 4; cx++) {
+            for (int cz = Math.min(a.getZ(), b.getZ()) >> 4; cz <= Math.max(a.getZ(), b.getZ()) >> 4; cz++) out.add(h.getLevel().getChunk(cx, cz));
+        }
+        return out;
+    }
+
+    /**
+     * Слой вспышки над кварталом {@code RuinCostGameTests.city}: доски на крышах (огню есть на чём встать), слой — во всех
+     * чанках площадки, потом руины подрыва забыты — в чанках остаются огонь и отметка слоя. [0] — чанков с отметкой,
+     * [1] — пожаров слоя.
+     */
+    private static int[] flashOverCity(GameTestHelper h, Detonation d, List<LevelChunk> pad) {
+        ServerLevel level = h.getLevel();
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        for (LevelChunk c : pad) {
+            for (int lx = 0; lx < 16; lx++) {
+                for (int lz = 0; lz < 16; lz++) {
+                    int x = c.getPos().getMinBlockX() + lx, z = c.getPos().getMinBlockZ() + lz;
+                    int y = c.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, lx, lz);
+                    if (c.getBlockState(m.set(x, y, z)).is(Blocks.SMOOTH_STONE)) level.setBlock(m.set(x, y + 1, z), Blocks.OAK_PLANKS.defaultBlockState(), 2);
+                }
+            }
+        }
+        long[] keys = pad.stream().mapToLong(c -> c.getPos().toLong()).toArray();
+        FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
+        WorkClock clock = WorkClock.counting(1_000_000L);
+        boolean done = false;
+        for (int i = 0; i < 40 && !done; i++) {
+            clock.start(10_000_000_000L);
+            done = flash.work(level, d.gameTime() + 10_000, clock);
+            if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+        }
+        h.assertTrue(done, "слой вспышки над кварталом не кончился");
+        NuclearWorld.get(level).forgetRuinsForTest(d.id());
+        int[] out = new int[2];
+        for (LevelChunk c : pad) {
+            if (FlashScorch.marked(c, d.id())) out[0]++;
+            out[1] += fires(c, null);
+        }
+        h.assertTrue(out[1] > 0, "слой вспышки не зажёг крыш: случай не тот");
+        return out;
+    }
+
+    /** Огонь слоя и отметки — прочь (доски остаются: квартал свой у партии), руины подрыва — забыты. */
+    private static void unflashCity(ServerLevel level, Detonation d, List<LevelChunk> pad) {
+        NuclearWorld.get(level).forgetRuinsForTest(d.id());
+        for (LevelChunk c : pad) {
+            fires(c, level);
+            c.removeData(ModAttachments.FLASH_LAYER);
+        }
+    }
+
+    /** Блоков огня в чанке; с {@code level} — и гасит их (через мир, без обновлений соседей). */
+    private static int fires(LevelChunk chunk, @org.jetbrains.annotations.Nullable ServerLevel level) {
+        var sections = chunk.getSections();
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        int n = 0;
+        for (int i = 0; i < sections.length; i++) {
+            if (sections[i].hasOnlyAir()) continue;
+            for (int k = 0; k < 4096; k++) {
+                if (!(sections[i].getBlockState(k & 15, k >> 8, (k >> 4) & 15).getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock)) continue;
+                n++;
+                if (level == null) continue;
+                m.set(chunk.getPos().getMinBlockX() + (k & 15), chunk.getMinBuildHeight() + (i << 4) + (k >> 8), chunk.getPos().getMinBlockZ() + ((k >> 4) & 15));
+                level.setBlock(m, Blocks.AIR.defaultBlockState(), 2 | 16);
+            }
+        }
+        return n;
     }
 
     /**
@@ -782,6 +888,194 @@ public final class RuinBackgroundGameTests {
         h.assertTrue(plan.needsNeighbours(level, under), "чанку у аппарата подмена не ждёт соседей: Sable прочитал бы их синхронно");
         LevelChunk x = level.getChunk(far.x, far.z);
         h.assertFalse(plan.needsNeighbours(level, x), "дальнему чанку без аппаратов подмена ждёт соседей");
+    }
+
+    /**
+     * Слой вспышки у аппарата Sable: Sable на каждое место читает соседей (до 2 блоков), а слою вспышки самому соседи не
+     * нужны — у чанка, чьи соседи не в памяти, слой не встаёт (его принесут руины, когда соседи будут), блоки чанка те
+     * же, соседи не загружены. Без аппарата тот же чанк слой получает и без соседей. X — край загруженного мира (тикет
+     * радиуса 0) в 12 чанках к +Z от площадки (там пусто: следующие ряды площадок ставятся позже): в досягаемости физики
+     * аппарата над площадкой ({@code SableTerrain.watched}), но не в его чанках. Чужой аппарат рядом (прежние партии) —
+     * X уже у аппарата, и проверяется только он. Без Sable — только первая половина.
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_flash_edge", skyAccess = true)
+    public static void flashLayerWaitsNeighboursAtCraft(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        var chunks = level.getChunkSource();
+        ChunkPos pad = new ChunkPos(h.absolutePos(NuclearGameTests.CENTER));
+        ChunkPos x = new ChunkPos(pad.x, pad.z + 12);
+        BlockPos base = new BlockPos(x.getMinBlockX(), 200, x.getMinBlockZ());
+        StrikeGameTests.afterTest(h, () -> {
+            // поле — прочь: оно затеняло бы площадки следующих рядов
+            if (chunks.getChunkNow(x.x, x.z) != null) field(level, base, false);
+            chunks.removeRegionTicket(NuclearGameTests.HOLD, x, 0, x);
+            NuclearStrikes.clear(level);
+        });
+        // X — сразу (сервер GameTest тикает быстрее фоновой генерации), тикет держит его полным, соседей — нет
+        chunks.addRegionTicket(NuclearGameTests.HOLD, x, 0, x);
+        level.getChunk(x.x, x.z);
+        int[][] before = new int[1][];
+        boolean[] foreign = new boolean[1];
+        h.startSequence()
+                .thenExecute(() -> {
+                    LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
+                    h.assertTrue(chunk != null, "X не загружен");
+                    field(level, base, true);
+                    neighboursUnloaded(chunks, x, "до слоя");
+                    before[0] = blocks(chunk);
+                    foreign[0] = ua.zentix.incoming.compat.SableTerrain.watched(level, chunk);
+                    FlashScorch f = flashOver(h, base, x);
+                    if (foreign[0]) {
+                        h.assertTrue(f.appliedChunks() == 0 && f.waitingChunks() == 1, "слой у чужого аппарата без соседей: встал в " + f.appliedChunks()
+                                + ", ждали " + f.waitingChunks());
+                        h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "слой у чужого аппарата без соседей поменял блоки: "
+                                + firstDifference(chunk, before[0], blocks(chunk)));
+                    } else {
+                        h.assertTrue(f.appliedChunks() == 1, "без аппарата слой у края не встал (ждали соседей: " + f.waitingChunks() + ")");
+                        if (java.util.Arrays.equals(blocks(chunk), before[0])) {
+                            Vec3 at = Vec3.atCenterOf(base.offset(8, 2, 8));
+                            h.fail(String.format(java.util.Locale.ROOT, "слой ничего не выжег: случай не тот (свет у поля %.0f кал/см², %.1f psi, шар на %.1f блока выше; след без руин — %d мест)",
+                                    f.detonation().fluence(at), f.detonation().psi(at), f.detonation().burst().y - at.y,
+                                    RuinPlanner.testScorch(level, f.detonation(), chunk).changedBlocks()));
+                        }
+                        restore(level, chunk, before[0]);
+                    }
+                    neighboursUnloaded(chunks, x, "после слоя");
+                })
+                .thenExecute(() -> {
+                    if (!foreign[0]) assembleCraft(h);
+                })
+                .thenWaitUntil(() -> h.assertFalse(sable() && !foreign[0] && ua.zentix.incoming.compat.SubLevels.near(level, craftCentre(h), 8).isEmpty(),
+                        "аппарат собирается"))
+                .thenExecute(() -> {
+                    if (!sable() || foreign[0]) return;
+                    LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
+                    h.assertTrue(ua.zentix.incoming.compat.SableTerrain.watched(level, chunk), "X вне досягаемости аппарата: случай не тот");
+                    neighboursUnloaded(chunks, x, "у аппарата до слоя");
+                    FlashScorch f = flashOver(h, base, x);
+                    h.assertTrue(f.appliedChunks() == 0 && f.waitingChunks() == 1, "слой у аппарата без соседей: встал в " + f.appliedChunks() + ", ждали " + f.waitingChunks());
+                    h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "слой у аппарата без соседей поменял блоки: "
+                            + firstDifference(chunk, before[0], blocks(chunk)));
+                    neighboursUnloaded(chunks, x, "у аппарата после слоя");
+                    Incoming.LOG.info("Слой вспышки у аппарата Sable ждёт соседей: без аппарата встал, у аппарата — нет");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * Слой вспышки у аппарата Sable, чьи соседи были в памяти, когда слой ушёл в фон, и ушли из неё, пока он строился:
+     * запись проверяет соседей снова ({@code RuinPlan.waitsNeighbours} перед записью) и не встаёт — блоки чанка те же,
+     * соседи не загружены. Проверка до фона пройдена (соседи были), поэтому ждал он только записи. X — как у
+     * {@link #flashLayerWaitsNeighboursAtCraft}, у своего аппарата или чужого. Без Sable — нечего проверять.
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_flash_edge_write", skyAccess = true)
+    public static void flashLayerRechecksNeighboursBeforeWrite(GameTestHelper h) {
+        if (!sable()) {
+            h.succeed();
+            return;
+        }
+        ServerLevel level = h.getLevel();
+        var chunks = level.getChunkSource();
+        ChunkPos pad = new ChunkPos(h.absolutePos(NuclearGameTests.CENTER));
+        ChunkPos x = new ChunkPos(pad.x, pad.z + 12);
+        BlockPos base = new BlockPos(x.getMinBlockX(), 200, x.getMinBlockZ());
+        StrikeGameTests.afterTest(h, () -> {
+            if (chunks.getChunkNow(x.x, x.z) != null) field(level, base, false);
+            chunks.removeRegionTicket(NuclearGameTests.HOLD, x, 1, x);
+            chunks.removeRegionTicket(NuclearGameTests.HOLD, x, 0, x);
+            NuclearStrikes.clear(level);
+        });
+        chunks.addRegionTicket(NuclearGameTests.HOLD, x, 0, x);
+        level.getChunk(x.x, x.z);
+        int[][] before = new int[1][];
+        FlashScorch[] flash = new FlashScorch[1];
+        long[] now = new long[1];
+        h.startSequence()
+                .thenExecute(() -> {
+                    LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
+                    h.assertTrue(chunk != null, "X не загружен");
+                    field(level, base, true);
+                    if (!ua.zentix.incoming.compat.SableTerrain.watched(level, chunk)) assembleCraft(h);
+                })
+                .thenWaitUntil(() -> h.assertTrue(ua.zentix.incoming.compat.SableTerrain.watched(level, chunks.getChunkNow(x.x, x.z)), "аппарат собирается"))
+                .thenExecute(() -> {
+                    // соседи X — в памяти: проверка до фона пройдена, слой строится
+                    chunks.addRegionTicket(NuclearGameTests.HOLD, x, 1, x);
+                    for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) level.getChunk(x.x + dx, x.z + dz);
+                    h.assertTrue(ua.zentix.incoming.nuclear.world.NuclearTickets.neighbourhoodLoaded(level, x, 1), "соседи X не в памяти до слоя");
+                    before[0] = blocks(chunks.getChunkNow(x.x, x.z));
+                    Detonation d = flashDetonation(h, base);
+                    flash[0] = FlashScorch.forTest(d, new long[]{x.toLong()}, new ColumnScar.Budget(false));
+                    now[0] = d.gameTime() + 1_000;
+                    WorkClock clock = WorkClock.counting(1_000_000L);
+                    clock.start(10_000_000_000L);
+                    h.assertFalse(flash[0].work(level, now[0], clock), "слой не ушёл в фон");
+                    h.assertTrue(flash[0].waitingChunks() == 0, "слой ждал соседей до фона, хотя они в памяти");
+                    RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+                    // соседи уходят из памяти, пока слой готов, но ещё не записан
+                    chunks.removeRegionTicket(NuclearGameTests.HOLD, x, 1, x);
+                })
+                .thenWaitUntil(() -> neighboursUnloaded(chunks, x, "после отпуска их тикета"))
+                .thenExecute(() -> {
+                    LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
+                    WorkClock clock = WorkClock.counting(1_000_000L);
+                    clock.start(10_000_000_000L);
+                    h.assertTrue(flash[0].work(level, now[0], clock), "слой не кончился");
+                    h.assertTrue(flash[0].appliedChunks() == 0 && flash[0].waitingChunks() == 1, "запись слоя у аппарата без соседей: встал в "
+                            + flash[0].appliedChunks() + ", ждали " + flash[0].waitingChunks());
+                    h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "запись слоя у аппарата без соседей поменяла блоки: "
+                            + firstDifference(chunk, before[0], blocks(chunk)));
+                    neighboursUnloaded(chunks, x, "после записи слоя");
+                    Incoming.LOG.info("Слой вспышки у аппарата Sable: соседи ушли, пока он строился, — запись его не поставила");
+                })
+                .thenSucceed();
+    }
+
+    /** Поле травы в воздухе над X: камень, дёрн, трава — в двух блоках от края (Sable читает соседей смены); или прочь. */
+    private static void field(ServerLevel level, BlockPos base, boolean grow) {
+        BlockState air = Blocks.AIR.defaultBlockState();
+        for (int lx = 2; lx <= 13; lx++) {
+            for (int lz = 2; lz <= 13; lz++) {
+                level.setBlock(base.offset(lx, 0, lz), grow ? Blocks.STONE.defaultBlockState() : air, 2 | 16);
+                level.setBlock(base.offset(lx, 1, lz), grow ? Blocks.GRASS_BLOCK.defaultBlockState() : air, 2 | 16);
+                level.setBlock(base.offset(lx, 2, lz), grow ? Blocks.SHORT_GRASS.defaultBlockState() : air, 2 | 16);
+            }
+        }
+    }
+
+    /** Ни один сосед X не загружен целиком: иначе случай не воспроизведён (или слой их загрузил). */
+    private static void neighboursUnloaded(net.minecraft.server.level.ServerChunkCache chunks, ChunkPos x, String when) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if ((dx != 0 || dz != 0) && chunks.getChunkNow(x.x + dx, x.z + dz) != null) {
+                    throw new net.minecraft.gametest.framework.GameTestAssertException("сосед X " + (x.x + dx) + ", " + (x.z + dz) + " загружен " + when);
+                }
+            }
+        }
+    }
+
+    /** Слой вспышки одного чанка {@code x} от подрыва низко над полем (свет выжигает траву), до конца. */
+    private static FlashScorch flashOver(GameTestHelper h, BlockPos base, ChunkPos x) {
+        Detonation d = flashDetonation(h, base);
+        FlashScorch f = FlashScorch.forTest(d, new long[]{x.toLong()}, new ColumnScar.Budget(false));
+        WorkClock clock = WorkClock.counting(1_000_000L);
+        boolean done = false;
+        for (int i = 0; i < 20 && !done; i++) {
+            clock.start(10_000_000_000L);
+            done = f.work(h.getLevel(), d.gameTime() + 1_000, clock);
+            if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+        }
+        h.assertTrue(done, "слой вспышки не кончился");
+        return f;
+    }
+
+    /** Подрыв низко над полем в {@code base} (свет выжигает траву), по месту в мире. */
+    private static Detonation flashDetonation(GameTestHelper h, BlockPos base) {
+        // по месту в мире, без relativePos: у GameTestHelper relativePos и absolutePos — не обратные друг другу
+        double scale = 0.0182;
+        BlockPos g = base.offset(8, 2, 8);
+        return new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + Yield.optimalBurstHeight(15) * scale, g.getZ() + 0.5),
+                g.getY(), 15, false, h.getLevel().getGameTime(), 0, 0, 20_000, 7, (float) scale, false, Detonation.OLD_WAVE);
     }
 
     /** Все места чанка (номера состояний), снизу вверх по секциям. */

@@ -129,7 +129,7 @@ public final class ScarQueue {
      * подмен за тик, больше, чем фронт открывает игроку (около 10 чанков за тик); к тику — не больше 6 мс и только пока
      * видимые ждут или волна подходит к ним (проверка заранее).
      */
-    private static final long SEEN_BUSY_NANOS = 6_000_000L;
+    static final long SEEN_BUSY_NANOS = 6_000_000L;
     /** Через сколько тиков снова проверить чанк, который (или чьи соседи) сейчас ниже полной загрузки. */
     private static final int NEIGHBOUR_RETRY = 10;
     /**
@@ -543,6 +543,12 @@ public final class ScarQueue {
         seenForTest = chunks;
     }
 
+    /** Чанк видим игроку по подмене проверки ({@link #seenForTest}). */
+    static boolean seenInTest(long chunk) {
+        java.util.function.LongPredicate test = seenForTest;
+        return test != null && test.test(chunk);
+    }
+
     /** Есть ли чанки, которые, может быть, нельзя отдавать игрокам (быстрая проверка перед перебором). */
     public boolean mayWithhold() {
         return !jobs.isEmpty();
@@ -615,6 +621,14 @@ public final class ScarQueue {
         logs.remove(pos.toLong());
     }
 
+    /**
+     * Счётчик пожаров подрыва ({@code fires_per_detonation}): общий у руин и слоя вспышки ({@link FlashScorch}). Забытый
+     * подрыв (чанк впервые загрузился спустя дни) выжигает, но не поджигает: пожары давно бы догорели.
+     */
+    ColumnScar.Budget budget(ServerLevel level, Detonation d) {
+        return budgets.computeIfAbsent(d.id(), k -> new ColumnScar.Budget(!NuclearEvents.get(level).isPast(k)));
+    }
+
     /** Счётчики пожаров только для подрывов, которые ещё помнятся. */
     public void retainBudgets(java.util.Set<Integer> detonations) {
         budgets.keySet().retainAll(detonations);
@@ -650,8 +664,20 @@ public final class ScarQueue {
         budgets.clear();
     }
 
-    private static boolean inRange(ChunkPos p, Detonation d) {
+    /** Чанк в радиусе руин подрыва (дальность по земле до ближнего места чанка): до него дойдут руины. */
+    static boolean inRange(ChunkPos p, Detonation d) {
         return nearest(p, d) <= d.ruinRadius();
+    }
+
+    /**
+     * У чанка уже есть план руин подрыва — готовый заранее, отложенный до соседей или фоновый (в работе или готовый):
+     * снимок чанка ему больше не нужен ({@link FlashScorch}).
+     */
+    boolean hasPlan(RuinContext ctx, Detonation d, long chunk) {
+        Long2ObjectOpenHashMap<RuinPlan> plans = prepared.get(d.id());
+        if (plans != null && plans.containsKey(chunk)) return true;
+        Parked kept = parked.get(chunk);
+        return kept != null && kept.detonation() == d.id() || ctx.running(chunk);
     }
 
     /** Дальность по земле от эпицентра до ближайшего места чанка: {@link Detonation#ruinRadius} — тоже по земле. */
@@ -852,7 +878,7 @@ public final class ScarQueue {
         if (plan == null && kept != null && kept.detonation() == d.id()) return false;
         long[] st = preparedStats.computeIfAbsent(d.id(), k -> new long[STATS]);
         if (plan != null) {
-            if (plan.current(chunk)) return true;
+            if (plan.current(chunk, d)) return true;
             plans.remove(job.chunk);
             stalePlans++;
             st[1]++;
@@ -903,11 +929,12 @@ public final class ScarQueue {
         if (plan != null) {
             List<LivingEntity> free = BlastBody.free(level, chunk);
             if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
+            List<S2C.NukeDebris.Piece> debris = debris(level, chunk, plan);
             long t0 = System.nanoTime();
             if (plan.apply(level, chunk, d, budget)) {
                 long took = System.nanoTime() - t0;
                 buried(level, d, free);
-                thrown(level, d, chunk, plan);
+                thrown(level, d, chunk, debris);
                 diagSource = "prepared";
                 appliedPrepared++;
                 st[0]++;
@@ -959,6 +986,7 @@ public final class ScarQueue {
         }
         List<LivingEntity> free = BlastBody.free(level, chunk);
         if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
+        List<S2C.NukeDebris.Piece> debris = debris(level, chunk, plan);
         boolean applied = plan.apply(level, chunk, d, budget);
         if (applied) buried(level, d, free);
         if (!applied && !server) {
@@ -976,7 +1004,7 @@ public final class ScarQueue {
             st[15] = Math.max(st[15], lag);
         }
         long took = System.nanoTime() - t0;
-        thrown(level, d, chunk, plan);
+        thrown(level, d, chunk, debris);
         appliedFresh++;
         st[6]++;
         if (seen) st[25] = Math.max(st[25], lag);
@@ -987,16 +1015,23 @@ public final class ScarQueue {
     }
 
     /**
-     * Обломки снесённого ({@link RuinPlan#thrown}, до {@link #THROWN_PER_CHUNK} мест) — игрокам, которые видят чанк: руины
-     * у них встали в этом же тике, куски их блоков разлетаются, когда до места дойдёт фронт.
+     * Обломки снесённого ({@link RuinPlan#thrown}, до {@link #THROWN_PER_CHUNK} мест), если чанк видят игроки, — до подмены:
+     * подмена, после которой весь квадрат 5×5 вокруг чанка стоит, забывает слой вспышки чанка ({@link RuinContext#applied}),
+     * а места, которые слой уже сменил (сгоревшее со вспышкой), не разлетаются.
      */
-    private static void thrown(ServerLevel level, Detonation d, LevelChunk chunk, RuinPlan plan) {
-        List<ServerPlayer> players = level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false);
-        if (players.isEmpty()) return;
-        List<S2C.NukeDebris.Piece> pieces = plan.thrown(chunk, THROWN_PER_CHUNK);
+    private static List<S2C.NukeDebris.Piece> debris(ServerLevel level, LevelChunk chunk, RuinPlan plan) {
+        if (level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false).isEmpty()) return List.of();
+        return plan.thrown(chunk, THROWN_PER_CHUNK);
+    }
+
+    /**
+     * Обломки снесённого ({@link #debris}) — игрокам, которые видят чанк: руины у них встали в этом же тике, куски их блоков
+     * разлетаются, когда до места дойдёт фронт.
+     */
+    private static void thrown(ServerLevel level, Detonation d, LevelChunk chunk, List<S2C.NukeDebris.Piece> pieces) {
         if (pieces.isEmpty()) return;
         S2C.NukeDebris packet = new S2C.NukeDebris(d.id(), pieces);
-        for (ServerPlayer p : players) PacketDistributor.sendToPlayer(p, packet);
+        for (ServerPlayer p : level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false)) PacketDistributor.sendToPlayer(p, packet);
     }
 
     /** Есть готовый план чанка по подрыву: построенный заранее или собранный и ждущий соседей. */
@@ -1154,8 +1189,7 @@ public final class ScarQueue {
             byDue.add(job);
             return LOOKED;
         }
-        // забытый подрыв (чанк впервые загрузился спустя дни) выжигает, но не поджигает: пожары давно бы догорели
-        ColumnScar.Budget budget = budgets.computeIfAbsent(d.id(), k -> new ColumnScar.Budget(!NuclearEvents.get(level).isPast(k)));
+        ColumnScar.Budget budget = budget(level, d);
         if (submit) {
             // плана нет: снимки — этой единицей, план — в фоне; работа ждёт его в background
             if (ctx.submit(level, chunk, priority)) this.background.add(job);

@@ -21,6 +21,29 @@ class FireballModelTest {
     }
 
     /**
+     * Световой импульс — 10·t_max (у 15 кт 1,24 с): излученная доля растёт от 0 до 1, к максимуму яркости — около пятой
+     * части; обратная функция (когда свет набрал долю) — та же кривая.
+     */
+    @Test
+    void thermalPulseFractionAndItsInverse() {
+        assertEquals(1.24, FireballModel.pulseSeconds(15), 0.01);
+        assertEquals(0, FireballModel.thermalFraction(0), 0);
+        assertEquals(1, FireballModel.thermalFraction(10), 0);
+        assertEquals(0, FireballModel.thermalTau(0), 0);
+        assertEquals(10, FireballModel.thermalTau(1), 0);
+        double last = 0;
+        for (double tau = 0.01; tau < 10; tau += 0.01) {
+            double f = FireballModel.thermalFraction(tau);
+            assertTrue(f > last, "растёт: " + tau);
+            last = f;
+            assertEquals(tau, FireballModel.thermalTau(f), 1e-6, "обратная");
+        }
+        double atMax = FireballModel.thermalFraction(1), half = FireballModel.thermalTau(0.5);
+        assertTrue(atMax > 0.1 && atMax < 0.3, "к максимуму: " + atMax);
+        assertTrue(half > 1.5 && half < 2.5, "половина — к τ " + half);
+    }
+
+    /**
      * Видимая температура: во втором максимуме — T₂, после — остывает к воздуху по хронике (15 кт — около 4 000 K через
      * секунду, около 1 950 K через девять); до него — Стефан–Больцман по яркости и радиусу: первый импульс горячее T₂,
      * в минимуме холоднее первого импульса, ко второму максимуму — без скачка.

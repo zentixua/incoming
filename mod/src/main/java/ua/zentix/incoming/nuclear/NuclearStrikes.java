@@ -218,10 +218,10 @@ public final class NuclearStrikes {
         long t3 = System.nanoTime();
         if (t3 - t0 > SLOW_TICK_NS && world.slowLogDue(now)) {
             long[] w = world.lastNanos();
-            Incoming.LOG.warn("Nuclear tick {} ms: strikes {} ms, front {} ms, light {} ms, craters {} ms, ruin queue {} ms ({}), pre-built ruins {} ms, "
-                            + "mob fallout {} ms, radiation {} ms",
-                    (t3 - t0) / 1_000_000, (t1 - t0) / 1_000_000, w[0] / 1_000_000, w[1] / 1_000_000, w[2] / 1_000_000, w[3] / 1_000_000, world.scarSummary(),
-                    w[4] / 1_000_000, w[5] / 1_000_000, (t3 - t2) / 1_000_000);
+            Incoming.LOG.warn("Nuclear tick {} ms: strikes {} ms, front {} ms, light {} ms, flash scorch {} ms, craters {} ms, ruin queue {} ms ({}), "
+                            + "pre-built ruins {} ms, mob fallout {} ms, radiation {} ms",
+                    (t3 - t0) / 1_000_000, (t1 - t0) / 1_000_000, w[0] / 1_000_000, w[1] / 1_000_000, w[2] / 1_000_000, w[3] / 1_000_000,
+                    w[4] / 1_000_000, world.scarSummary(), w[5] / 1_000_000, w[6] / 1_000_000, (t3 - t2) / 1_000_000);
         }
     }
 

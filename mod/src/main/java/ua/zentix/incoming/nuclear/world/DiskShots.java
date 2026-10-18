@@ -27,7 +27,10 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 import net.minecraft.world.level.chunk.storage.ChunkStorage;
+import net.neoforged.neoforge.attachment.AttachmentHolder;
+import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.registry.ModAttachments;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -56,11 +59,13 @@ final class DiskShots {
     /**
      * Прочитанный чанк: секции (null — воздух), первый свободный по картам {@link RuinPlan#HEIGHTMAP_TYPES}
      * ({@code вид * 256 + столбец}); {@code unprimed} — карты, которых на диске не было (бит {@code 1 << вид}: их значения
-     * ещё не посчитаны, {@link #primed}); {@code skip} — почему не годится (тогда остальное пусто).
+     * ещё не посчитаны, {@link #primed}); {@code skip} — почему не годится (тогда остальное пусто); {@code flashLayer} —
+     * отметка слоя вспышки в данных чанка ({@code FLASH_LAYER}: номер подрыва, чей огонь слоя стоит без руин; 0 — нет):
+     * снимок для руин этого подрыва читает огонь воздухом, как снимок чанка в памяти ({@link ChunkShot#fromDisk}).
      */
-    record Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip) {
+    record Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip, int flashLayer) {
         static Read skipped(ChunkPos pos, String why) {
-            return new Read(pos, 0, empty(), new int[0], 0, why);
+            return new Read(pos, 0, empty(), new int[0], 0, why, 0);
         }
 
         /**
@@ -97,7 +102,7 @@ final class DiskShots {
                     }
                 }
             }
-            return new Read(pos, minY, states, out, 0, null);
+            return new Read(pos, minY, states, out, 0, null, flashLayer);
         }
 
         /**
@@ -123,11 +128,12 @@ final class DiskShots {
 
     /** Что нужно разбору чанка из мира (снимается в потоке сервера: сам разбор мира не читает). */
     record Format(ChunkMap storage, ResourceKey<Level> dimension, Optional<ResourceKey<MapCodec<? extends ChunkGenerator>>> generator,
-                  int minSection, int sections, int minY, int height, Registry<Biome> biomes) {
+                  int minSection, int sections, int minY, int height, Registry<Biome> biomes, String flashLayerKey) {
         static Format of(ServerLevel level) {
             return new Format(level.getChunkSource().chunkMap, level.dimension(), level.getChunkSource().getGenerator().getTypeNameForDataFixer(),
                     level.getMinSection(), level.getSectionsCount(), level.getMinBuildHeight(), level.getHeight(),
-                    level.registryAccess().registryOrThrow(Registries.BIOME));
+                    level.registryAccess().registryOrThrow(Registries.BIOME),
+                    String.valueOf(NeoForgeRegistries.ATTACHMENT_TYPES.getKey(ModAttachments.FLASH_LAYER.get())));
         }
     }
 
@@ -162,7 +168,12 @@ final class DiskShots {
             PalettedContainer<BlockState> c = parsed.get();
             if (c.maybeHas(st -> !st.isAir())) states[index] = c;
         }
-        return new Read(pos, f.minY, states, heights, unprimed, null);
+        return new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag));
+    }
+
+    /** Отметка слоя вспышки в данных чанка (attachment, как его пишет NeoForge: {@code neoforge:attachments}); 0 — нет. */
+    private static int flashLayer(Format f, CompoundTag tag) {
+        return tag.getCompound(AttachmentHolder.ATTACHMENTS_NBT_KEY).getInt(f.flashLayerKey);
     }
 
     @SuppressWarnings("unchecked")
@@ -290,7 +301,7 @@ final class DiskShots {
             PalettedContainer<BlockState> c = sections.sections()[i].getStates();
             if (c.maybeHas(st -> !st.isAir())) states[i] = c;
         }
-        return new Scorch(sections, new Read(pos, f.minY, states, heights, unprimed, null));
+        return new Scorch(sections, new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag)));
     }
 
     private static Scorch skippedScorch(ChunkPos pos, String why) {

@@ -214,7 +214,7 @@ public final class IncomingConfig {
                             "from disk). 0: automatic, all cores but three (server thread, rendering, world I/O and generation;", "on a dedicated server all but two), at least one. The mod adjusts how many of them work",
                             "to the server tick. The server thread only snapshots chunks and places finished ruins.")
                     .translation("incoming.config.nuke_ruin_threads").defineInRange("ruin_threads", 0, 0, 256);
-            nukeMaxFires = b.comment("Largest number of fires from one detonation.")
+            nukeMaxFires = b.comment("Largest number of fires from one detonation that burn on after the blast wave (the flash also lights the ones the wave blows out).")
                     .translation("incoming.config.nuke_max_fires").defineInRange("fires_per_detonation", 20_000, 0, 100_000);
             nukeWarningRadius = b.comment("Players within this many blocks of the target hear the nuclear alarm.")
                     .translation("incoming.config.nuke_warning_radius").defineInRange("warning_radius", 20_000, 100, 1_000_000);

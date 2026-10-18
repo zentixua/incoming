@@ -16,4 +16,8 @@ paths:
   исключение (`compat/SplitGuard`); GameTest `sableSplitGuardApplied` проверяет, что он встал.
 - Sable на каждое изменение блока читает соседние блоки (физика аппаратов), у твёрдого соседа — и его соседей, до 2 блоков
   (`NuclearTickets.SABLE_REACH`): менять блоки только там, где готовы и соседние чанки (`NuclearTickets.neighbourhoodLoaded`,
-  `aroundLoaded`), иначе он синхронно грузит соседа.
+  `aroundLoaded`), иначе он синхронно грузит соседа. Запись мимо `setBlock` (руины, слой вспышки) сообщает ему каждое
+  место сама (`SableTerrain.changed`) — то же правило: слой вспышки у аппарата без загруженных соседей не встаёт
+  (`FlashScorch`: до фона и снова перед записью — соседи могли уйти, пока он строился; GameTest
+  `flashLayerWaitsNeighboursAtCraft`, `flashLayerRechecksNeighboursBeforeWrite`), его приносят руины, которые соседей
+  дожидаются.

@@ -280,6 +280,20 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return front().arrivalTicks(blocks);
     }
 
+    /** Световой импульс в игре, тиков после подрыва ({@link FireballModel#pulseSeconds} в масштабе удара, как у вспышки клиента). */
+    public double pulseTicks() {
+        return FireballModel.pulseSeconds(yieldKt) * 20 * scale;
+    }
+
+    /**
+     * Когда место, куда за весь импульс приходит {@code q} кал/см², набирает {@code need}, тиков после подрыва: по
+     * излученной доле импульса ({@link FireballModel#thermalFraction}). Не набирает за весь импульс — к его концу.
+     * По нему встаёт след света на земле и пожары у сервера ({@code FlashScorch}) и их начало у клиента.
+     */
+    public double flashTicks(double q, double need) {
+        return FireballModel.thermalTau(q <= need ? 1 : need / q) / 10 * pulseTicks();
+    }
+
     /** Радиус фронта (блоки) через {@code ticks} после подрыва. */
     public double frontRadius(double ticks) {
         return front().radiusAt(ticks);

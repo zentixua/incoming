@@ -40,6 +40,13 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<Integer>> CHUNK_SCAR = REGISTER.register("chunk_scar",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).build());
 
+    /**
+     * Чанк: номер подрыва, чей слой вспышки зажёг в нём огонь, а руины ещё не встали ({@code FlashScorch}): огонь слоя
+     * без тиков, руины, построенные без плана слоя (после перезапуска), гасят или ведут его. Сохраняется с чанком.
+     */
+    public static final Supplier<AttachmentType<Integer>> FLASH_LAYER = REGISTER.register("flash_layer",
+            () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).build());
+
     /** Чанк: следы вспышки на гранях — гарь и силуэты ({@link ua.zentix.incoming.nuclear.flash.FlashMarks}); сохраняются с чанком. */
     public static final Supplier<AttachmentType<ua.zentix.incoming.nuclear.flash.FlashMarks>> FLASH_MARKS = REGISTER.register("flash_marks",
             () -> AttachmentType.builder(() -> ua.zentix.incoming.nuclear.flash.FlashMarks.EMPTY)

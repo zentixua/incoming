@@ -40,6 +40,62 @@ public final class FireballModel {
     }
 
     /**
+     * Световой импульс, с: 10·t_max — за это время второй импульс излучает ~80 % своей энергии (у 15 кт — 1,24 с), дальше
+     * шар светит слабо. Вспышка у клиента, след света на земле и поджиг у сервера ({@code FlashScorch}) — за это время.
+     */
+    public static double pulseSeconds(double yieldKt) {
+        return 10 * secondMaximumSeconds(yieldKt);
+    }
+
+    /** Шагов таблицы излучённой доли на τ от 0 до 10. */
+    private static final int THERMAL_STEPS = 2000;
+    /** Излучённая вторым импульсом энергия к τ = 10·i/{@link #THERMAL_STEPS} — доля излученной к концу импульса (τ = 10). */
+    private static final double[] THERMAL = thermalTable();
+
+    private static double[] thermalTable() {
+        double[] out = new double[THERMAL_STEPS + 1];
+        double h = 10.0 / THERMAL_STEPS, last = 0;
+        for (int i = 1; i <= THERMAL_STEPS; i++) {
+            double now = second(i * h);
+            out[i] = out[i - 1] + (last + now) * h / 2;
+            last = now;
+        }
+        for (int i = 1; i <= THERMAL_STEPS; i++) out[i] /= out[THERMAL_STEPS];
+        return out;
+    }
+
+    /** Второй импульс по τ = t/t_max: (p/2)·τ² / (1 + (p−2)/2·τ^p), как в {@link #brightness}. */
+    private static double second(double tau) {
+        return PULSE_EXP / 2 * tau * tau / (1 + (PULSE_EXP - 2) / 2 * Math.pow(tau, PULSE_EXP));
+    }
+
+    /**
+     * Доля светового импульса, излученная к τ = t/t_max: энергия второго импульса (мощность — его яркость) к τ от
+     * излученной за весь импульс ({@link #pulseSeconds}, τ = 10). Первый импульс — доли процента энергии, не в счёте.
+     */
+    public static double thermalFraction(double tau) {
+        if (tau <= 0) return 0;
+        if (tau >= 10) return 1;
+        double x = tau / 10 * THERMAL_STEPS;
+        int i = (int) x;
+        return THERMAL[i] + (THERMAL[i + 1] - THERMAL[i]) * (x - i);
+    }
+
+    /** Обратная {@link #thermalFraction}: τ = t/t_max, к которому излучена доля {@code fraction} импульса (0..10). */
+    public static double thermalTau(double fraction) {
+        if (fraction <= 0) return 0;
+        if (fraction >= 1) return 10;
+        int lo = 0, hi = THERMAL_STEPS;
+        while (hi - lo > 1) {
+            int mid = (lo + hi) >>> 1;
+            if (THERMAL[mid] < fraction) lo = mid;
+            else hi = mid;
+        }
+        double span = THERMAL[hi] - THERMAL[lo];
+        return 10.0 * (lo + (span <= 0 ? 0 : (fraction - THERMAL[lo]) / span)) / THERMAL_STEPS;
+    }
+
+    /**
      * Нормированная яркость 0..1: резкий первый импульс (спад к минимуму за t_min), затем широкий второй
      * максимум в t_max: f(τ) = (p/2)·τ² / (1 + (p−2)/2·τ^p), τ = t/t_max, дальше медленный спад к нулю.
      */

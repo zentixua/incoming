@@ -142,4 +142,24 @@ final class HeapWatch {
     static int strikes(int strikes, long live, long limit) {
         return live > limit ? strikes + 1 : 0;
     }
+
+    /**
+     * Свой счёт замеров подряд выше предела (поток сервера): у каждого, кто бережёт память ({@code FlashScorch}), — свой,
+     * как у руин заранее. Один замер — ещё не нехватка: в старом поколении бывает немного несобранного.
+     */
+    static final class Tracker {
+        private long lastMeasured;
+        private int strikes;
+
+        /** Живой объём кучи выше предела в двух замерах подряд. */
+        boolean tight() {
+            HeapWatch watch = get();
+            long measured = watch.measured();
+            if (measured != lastMeasured) {
+                lastMeasured = measured;
+                strikes = HeapWatch.strikes(strikes, watch.live(), watch.limit());
+            }
+            return strikes >= 2;
+        }
+    }
 }

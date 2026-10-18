@@ -16,7 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Огненный шторм ({@link FireStorm}): источники по сетке — по закону поджига руин и звука, с горючестью районов; поджиг —
- * не раньше волны; пламя и дым разгораются, стихают и гаснут к утру; карта; смерчи — редкие, короткие, у сильных очагов.
+ * вспышкой, волна сбивает часть огня; пламя и дым разгораются, стихают и гаснут к утру; карта; смерчи — редкие, короткие,
+ * у сильных очагов.
  */
 class FireStormTest {
     private static final Detonation AIR = new Detonation(1, new Vec3(0, 64 + 500, 0), 64, 15, false, 0, 0.5f, 6, 20_000, 7, 1, false, 1);
@@ -45,23 +46,27 @@ class FireStormTest {
             double inner = d.surface() ? 0.8 * d.fireballRadius() : 0;
             // там, где поджигает всё (q ≥ 20 у любого района), средняя сила — доля «есть чему гореть» за вычетом
             // сбитого волной: районы и клетки в среднем ×1
-            double sum = 0, expected = 0;
+            double sum = 0, expected = 0, sumBefore = 0, expectedBefore = 0;
             int n = 0;
             for (int k = 0; k < g.index().length; k++) {
                 double[] xz = centre(g, g.index()[k]);
                 double r = Math.hypot(xz[0], xz[1]);
                 assertTrue(r <= reach * 1.05 + 1e-6 && r >= inner - 1e-6, "клетка вне зоны: " + r);
-                assertTrue(g.strength()[k] >= 0.02f, "слабые клетки отброшены");
+                assertTrue(g.before()[k] >= 0.02f, "слабые клетки отброшены");
+                assertTrue(g.strength()[k] <= g.before()[k] && g.strength()[k] >= FireField.BLOWN_KEEP * g.before()[k] - 1e-6, "волна сбивает не больше половины");
                 assertEquals(Math.pow(g.strength()[k], FireStorm.COLUMN_POWER), g.column()[k], 1e-5, "столб — сила в степени");
                 Vec3 p = new Vec3(d.burst().x + xz[0], d.groundY() + 1, d.burst().z + xz[1]);
                 if (d.fluence(p) * Math.exp(-3 * FireStorm.SIGMA_EDGE) >= FireStorm.FULL_Q) {
                     sum += g.strength()[k];
                     expected += FireField.SHARE * (1 - 0.5 * FireStorm.smooth(1.5, 2.5, d.psi(p)));
+                    sumBefore += g.before()[k];
+                    expectedBefore += FireField.SHARE;
                     n++;
                 }
             }
             assertTrue(n > 200, "клеток, где поджигает всё: " + n);
             assertTrue(sum / expected > 0.8 && sum / expected < 1.25, "средняя сила против закона: " + sum / expected);
+            assertTrue(sumBefore / expectedBefore > 0.8 && sumBefore / expectedBefore < 1.25, "до волны — против закона: " + sumBefore / expectedBefore);
             // край зоны рваный: у границы поджига горят не все клетки
             double edgeIn = 0, edgeAll = 0;
             for (int j = 0; j < g.side(); j++) {
@@ -82,20 +87,52 @@ class FireStormTest {
         FireStorm.Grid a = grid(AIR), b = grid(AIR), c = grid(new Detonation(4, AIR.burst(), 64, 15, false, 0, 0.5f, 6, 20_000, 8, 1, false, 1));
         assertArrayEquals(a.index(), b.index());
         assertArrayEquals(a.strength(), b.strength());
+        assertArrayEquals(a.before(), b.before());
         assertArrayEquals(a.start(), b.start());
+        assertArrayEquals(a.arrival(), b.arrival());
         assertEquals(a.whirls(), b.whirls());
         assertFalse(Arrays.equals(a.strength(), c.strength()), "у другого зерна — другие районы");
     }
 
     @Test
-    void cellsIgniteNotBeforeTheWave() {
+    void cellsIgniteWithTheFlash() {
         FireStorm.Grid g = grid(AIR);
+        int early = 0;
         for (int k = 0; k < g.index().length; k++) {
             double[] xz = centre(g, g.index()[k]);
             double wave = AIR.arrivalTicks(Math.hypot(Math.hypot(xz[0], xz[1]), AIR.burst().y - AIR.groundY()));
-            assertTrue(g.start()[k] >= wave - 1e-3 && g.start()[k] <= wave + 20 * FireStorm.IGNITE_SPREAD_S + 1, "поджиг " + g.start()[k] + ", волна " + wave);
+            Vec3 p = new Vec3(AIR.burst().x + xz[0], AIR.groundY() + 1, AIR.burst().z + xz[1]);
+            double flash = AIR.flashTicks(AIR.fluence(p), ThermalModel.IGNITE);
+            assertTrue(flash >= 0 && flash <= AIR.pulseTicks() + 1e-6, "свет набирает порог за импульс: " + flash);
+            assertTrue(g.start()[k] >= flash - 1e-3 && g.start()[k] <= flash + 20 * FireStorm.IGNITE_SPREAD_S + 1, "поджиг " + g.start()[k] + ", вспышка " + flash);
+            assertEquals(wave, g.arrival()[k], 1e-2, "волна");
+            if (g.start()[k] < wave) early++;
             assertTrue(g.peak()[k] >= 0.7 * FireStorm.PEAK_S - 1e-3 && g.peak()[k] <= 1.3 * FireStorm.PEAK_S + 1e-3);
         }
+        assertTrue(early > g.index().length / 10, "клетки, загоревшиеся до волны: " + early + " из " + g.index().length);
+    }
+
+    @Test
+    void waveBlowsOutPartOfTheFireThatTheFlashLit() {
+        FireStorm.Grid g = grid(AIR);
+        double end = 20 * 60 * 15;
+        float[] map = new float[g.side() * g.side() * FireStorm.CHANNELS];
+        int checked = 0;
+        for (int k = 0; k < g.index().length && checked < 50; k++) {
+            if (g.before()[k] <= g.strength()[k] || g.start()[k] + 40 >= g.arrival()[k]) continue;
+            checked++;
+            assertEquals(g.before()[k], g.strengthAt(k, g.arrival()[k] - 1), 1e-6, "до волны — всё зажжённое");
+            assertEquals(g.strength()[k], g.strengthAt(k, g.arrival()[k] + FireStorm.BLOW_TICKS), 1e-6, "после — без сбитого");
+            double mid = g.strengthAt(k, g.arrival()[k] + FireStorm.BLOW_TICKS / 2);
+            assertTrue(mid < g.before()[k] && mid > g.strength()[k], "сбивает плавно: " + mid);
+            double ticks = (g.start()[k] + g.arrival()[k]) / 2;
+            FireStorm.fill(g, ticks, end, null, map);
+            int c = g.index()[k];
+            double age = (ticks - g.start()[k]) / 20;
+            assertEquals(g.before()[k] * FireStorm.flame(age, g.peak()[k]), map[4 * c], 1e-5);
+            assertTrue(map[4 * c] > 0, "горит до волны");
+        }
+        assertTrue(checked > 0, "есть клетки, которые волна сбивает уже горящими");
     }
 
     @Test
@@ -147,7 +184,7 @@ class FireStormTest {
             assertTrue(map[4 * c + 2] <= map[4 * c + 1] + 1e-7, "подъём — доля подачи");
         }
         for (int c = 0; c < cell.length; c++) if (!cell[c]) assertEquals(0, map[4 * c] + map[4 * c + 1] + map[4 * c + 2], 0, "вне зоны пусто");
-        // до волны — ничего, к утру — гаснет всё
+        // до вспышки — ничего, к утру — гаснет всё
         FireStorm.fill(g, 0, end, null, map);
         for (float v : map) assertEquals(0, v, 0);
         FireStorm.fill(g, end, end, null, map);
