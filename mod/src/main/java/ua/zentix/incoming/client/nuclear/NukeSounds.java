@@ -25,6 +25,7 @@ import ua.zentix.incoming.client.sound.SirenSound;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
@@ -95,7 +96,7 @@ public final class NukeSounds {
             if (a.sounds.echoes != null) sb.append(a.sounds.echoes.describe()).append("; ");
             sb.append(a.sounds.after.describe()).append(" | ");
         }
-        return sb.isEmpty() ? "" : sb + ua.zentix.incoming.client.sound.OwnSources.describe() + " " + FireWatch.describe();
+        return sb.isEmpty() ? "" : sb + ua.zentix.incoming.client.sound.OwnSources.describe() + " " + FireWatch.describe() + " " + Deafness.describe();
     }
 
     /**
@@ -282,7 +283,7 @@ public final class NukeSounds {
          * положительная фаза по Кинни–Грэхему) своим источником с начала прямого удара, и запись далёкого огромного
          * взрыва ({@code nuke.boom_far}) — раскат; эхо от рельефа повторяет её ({@link NukeEchoes}). Вблизи — оглушающий
          * удар (несколько источников вместе — одному OpenAL не даёт громче единицы). Тряска, ветер за фронтом, стёкла,
-         * оглушение (пыль у глаза — по голове стены, {@link NukeDust#veil}).
+         * слух ({@link Deafness}; пыль у глаза — по голове стены, {@link NukeDust#veil}).
          */
         private void arrive(Vec3 ear) {
             Minecraft mc = Minecraft.getInstance();
@@ -326,9 +327,17 @@ public final class NukeSounds {
                 mc.getSoundManager().play(wind);
             }
             if (psi >= GLASS_PSI) ClientSounds.atEar(ModSounds.NUKE_GLASS.get(), ear.add(0, 2, 0), (float) Mth.clamp(psi / 3, 0.3, 0.9), 1);
-            if (psi >= 2 && IncomingConfig.CLIENT.nukeTinnitus.get()) {
-                Deafness.start((int) (20 * Mth.clamp(8 + psi, 10, 20)), psi);
-            }
+            if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(pa, path);
+        }
+
+        /**
+         * Слух: энергия слышимого фронта у уха ({@link HearingModel#exposure}) — за вычетом того, что съел путь: холм и зона
+         * тени гасят давление и сильнее верха, а A-энергия фронта — на 1–3 кГц, поэтому на потерю низов и долю верхов.
+         * Перепонки — по давлению с потерей пути. В доме — как снаружи: окна давно выбиты (0,34 psi), волна входит в дом.
+         */
+        private void hurtEars(double pa, Outdoor.@Nullable Path path) {
+            double lost = path == null ? 0 : Outdoor.pressureLoss(path), highs = path == null ? 1 : Outdoor.highs(path);
+            Deafness.blast(HearingModel.exposure(pa) - lost + 20 * Math.log10(Math.max(1e-3, highs)), pa / 1000 * Math.pow(10, -lost / 20), d.seed());
         }
 
         /**

@@ -317,7 +317,8 @@ public final class IncomingConfig {
                             "OFF leaves only the dust close around you and falling ash: no dust wall, no pall or base surge, and it does not muffle",
                             "sounds. The fireball, the mushroom cloud and the water column stay, at LOW.")
                     .translation("incoming.config.nuke_dust_quality").defineEnum("nuke_dust_quality", DustQuality.MEDIUM);
-            nukeTinnitus = b.comment("Ringing ears and muffled hearing after a nearby blast wave.")
+            nukeTinnitus = b.comment("Hearing damage from a blast wave strong enough to hurt the ears (from about 0.75 psi): muffled hearing and",
+                            "ringing ears that recover over game hours; from 5 psi torn eardrums, muffled for game weeks or until you die.")
                     .translation("incoming.config.nuke_tinnitus").define("nuke_tinnitus", true);
             soundMuffling = b.comment("Strike sounds lose high tones with distance and are muffled behind hills and walls (with Sound Physics Remastered, that mod does it);",
                             "inside the nuclear dust pall, distant sounds are muffled too.")

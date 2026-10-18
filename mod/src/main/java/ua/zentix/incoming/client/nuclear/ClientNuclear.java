@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.nuclear;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
@@ -231,6 +232,11 @@ public final class ClientNuclear {
         NukePall.reset();
     }
 
+    /** Игрок возродился после смерти: слух — у тела, у нового он целый. Смена измерения — тот же клон, слух остаётся. */
+    public static void respawned(ClientPlayerNetworkEvent.Clone e) {
+        if (e.getOldPlayer().isDeadOrDying()) Deafness.reset();
+    }
+
     public static void radiation(S2C.Radiation p) {
         radiation = p;
     }
@@ -314,7 +320,7 @@ public final class ClientNuclear {
         NukeSky.tick(level);
         NukeSounds.tick();
         NukeFlash.tick();
-        Deafness.tick();
+        Deafness.tick(level);
         NukeDust.tick();
         NukePall.tick(level, eye);
         Geiger.tick();

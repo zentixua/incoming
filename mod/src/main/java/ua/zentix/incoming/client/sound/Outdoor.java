@@ -106,7 +106,12 @@ public final class Outdoor {
 
     /** Потери низов по дороге сверх разлёта, дБ: преграда, зона тени, дождь (земля на низах уже в R0 и в давлении). */
     public static double losses(Path p) {
-        return obstacle(false, p) + shadow(false, p) + masking(p);
+        return pressureLoss(p) + masking(p);
+    }
+
+    /** Сколько по дороге потеряло само давление на низах, дБ: преграда и зона тени (дождь прячет звук, давление — нет). */
+    public static double pressureLoss(Path p) {
+        return obstacle(false, p) + shadow(false, p);
     }
 
     /** Запас слышимости, дБ: земля на низах уже в R0. */

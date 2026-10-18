@@ -159,9 +159,9 @@ public final class SoundFilters {
         }
         // оглушение: только короткие звуки — фильтр остаётся на источнике до конца, а петли мы ведём сами
         if (!(sound instanceof Muffled) && sound.isLooping()) return;
-        float k = Deafness.depth(sound), m = NukePall.muffle(sound);
-        gain *= (1 - 0.55f * k) * (1 - 0.3f * m);
-        highs *= Math.max(0.01f, (1 - 0.99f * k) * (1 - 0.75f * m));
+        float m = NukePall.muffle(sound);
+        gain *= Deafness.gain(sound) * (1 - 0.3f * m);
+        highs *= Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
         boolean ours = gain < 0.999f || highs < 0.999f;
         // Sound Physics Remastered поставил свой фильтр этому звуку только что (в начале Channel.play, событие — сразу
         // после него, в той же задаче звукового потока): наш — поверх его, а не вместо
@@ -180,8 +180,8 @@ public final class SoundFilters {
     static void update(SoundInstance sound, float gain, float highs) {
         ChannelAccess.ChannelHandle handle = Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.get(sound);
         if (handle == null) return;
-        float k = Deafness.depth(sound), m = NukePall.muffle(sound);
-        float g = gain * (1 - 0.55f * k) * (1 - 0.3f * m), h = highs * Math.max(0.01f, (1 - 0.99f * k) * (1 - 0.75f * m));
+        float m = NukePall.muffle(sound);
+        float g = gain * Deafness.gain(sound) * (1 - 0.3f * m), h = highs * Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
         handle.execute(channel -> {
             float[] spr = SPR_AT_START.get(sound);
             if (spr != null) set(channel.source, g * spr[0], h * spr[1]);

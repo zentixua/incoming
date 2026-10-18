@@ -212,7 +212,7 @@ public final class OwnSources {
             AL10.alSourcei(v.source, 0xD000, AL10.AL_NONE);
             AL10.alSourcef(v.source, AL10.AL_MAX_GAIN, 16);
             AL10.alSourcef(v.source, AL10.AL_GAIN, gain);
-            if (effects()) filter(v, Deafness.depth());
+            if (effects()) filter(v, Deafness.gain(), Deafness.highs());
         } catch (RuntimeException | LinkageError e) {
             Incoming.LOG.warn("Own OpenAL source failed: {}", e.toString());
             free(v);
@@ -266,7 +266,7 @@ public final class OwnSources {
             paused = false;
         }
         Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
-        float k = Deafness.depth();
+        float deafGain = Deafness.gain(), deafHighs = Deafness.highs();
         boolean efx = effects();
         for (Iterator<Voice> it = VOICES.iterator(); it.hasNext(); ) {
             Voice v = it.next();
@@ -277,7 +277,7 @@ public final class OwnSources {
             }
             AL10.alSource3f(v.source, AL10.AL_POSITION, (float) (ear.x + Math.cos(v.azimuth) * 3), (float) ear.y,
                     (float) (ear.z + Math.sin(v.azimuth) * 3));
-            if (efx) filter(v, k);
+            if (efx) filter(v, deafGain, deafHighs);
             if (v.started) continue;
             double at = v.anchor.zero + v.after;
             if (Double.isNaN(at)) continue;
@@ -291,7 +291,7 @@ public final class OwnSources {
             if (late > LATE && !v.whole) AL10.alSourcef(v.source, AL11.AL_SEC_OFFSET, (float) late);
             // голос ждал до ~24 с: игрок мог войти в дом или выйти — преграда по месту уха сейчас
             v.obstruct(SoundFilters.openToward(ear, v.azimuth));
-            if (efx) filter(v, k);
+            if (efx) filter(v, deafGain, deafHighs);
             AL10.alSourcePlay(v.source);
             v.started = true;
             started++;
@@ -307,11 +307,11 @@ public final class OwnSources {
     }
 
     /**
-     * Фильтр голоса на прямом пути и на посыле: преграда в его сторону и оглушение {@code k}. Параметры фильтра
-     * источник копирует, когда фильтр ставят: один объект фильтра — на все голоса.
+     * Фильтр голоса на прямом пути и на посыле: преграда в его сторону и слух ({@link Deafness}: громкость и доля верхов).
+     * Параметры фильтра источник копирует, когда фильтр ставят: один объект фильтра — на все голоса.
      */
-    private static void filter(Voice v, float k) {
-        float gain = v.blockedGain * (1 - 0.55f * k), highs = v.blockedHighs * Math.max(0.01f, 1 - 0.99f * k);
+    private static void filter(Voice v, float deafGain, float deafHighs) {
+        float gain = v.blockedGain * deafGain, highs = v.blockedHighs * Math.max(0.01f, deafHighs);
         if (Math.abs(gain - v.filterGain) < FILTER_STEP && Math.abs(highs - v.filterHighs) < FILTER_STEP) return;
         v.filterGain = gain;
         v.filterHighs = highs;
