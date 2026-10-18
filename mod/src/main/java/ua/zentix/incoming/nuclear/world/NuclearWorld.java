@@ -59,6 +59,16 @@ public final class NuclearWorld {
         return scars;
     }
 
+    /** Руины чанка вот-вот встанут: тела рядом запоминают окно и стену, какими их застанет фронт. */
+    void beforeRuins(ServerLevel level, Detonation d, net.minecraft.world.level.chunk.LevelChunk chunk) {
+        blast.remember(level, d, chunk);
+    }
+
+    /** Руины чанка засыпали тело: завал — в очередь ударов волны. */
+    void buried(Detonation d, net.minecraft.world.entity.LivingEntity e) {
+        blast.bury(d, e);
+    }
+
     /** Место подрыва для руин: готовились к нему — место подготовки ({@link NuclearPrep#planned}), иначе {@code fresh}. */
     public Detonation planned(Detonation fresh) {
         return prep.planned(fresh);

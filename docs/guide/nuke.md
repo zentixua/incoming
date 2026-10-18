@@ -80,8 +80,10 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 
 ![Fireball and blast wave over a town](img/nuke-wave.jpg)
 
-At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns bare skin out to about 3.4 km, and windows
-break out to 8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
+In a 15 kt air burst the wave kills half of those it throws against a wall out to about 0.85 km, and a few out to
+1.45 km; in an open field it rarely kills and mostly knocks you down and rolls you over the ground. A 15 kt ground
+burst kills half of those in the open out to about 0.4 km. The light of the fireball burns bare skin out to about
+3.4 km, and windows break out to 8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
 game time, like radiation sickness (a game hour is 50 seconds): after a 15 kt ground burst it starts to come down about
 7 game minutes later, and later farther downwind. Its radiation drops tenfold by the seventh game hour and a
 hundredfold by the third game day.
@@ -135,10 +137,13 @@ near them, ruins collapsing nearby, and now and then an explosion in the burning
 
 ## How to survive
 
-- **Get underground.** The wave leaves natural ground alone: caves and bunkers stand, and earth stops both the light
-  and the radiation. A block of stone cuts the radiation of the burst about a hundredfold, a block of earth about
-  thirtyfold. A trench or a wall stops what comes straight from the fireball, but not the part the air scatters down
-  from the sky.
+- **Get underground.** The wave leaves natural ground alone and does not get into a closed bunker or cave, and earth
+  stops both the light and the radiation. A block of stone cuts the radiation of the burst about a hundredfold, a
+  block of earth about thirtyfold. A trench or a wall stops what comes straight from the fireball, but not the part
+  the air scatters down from the sky.
+- **Keep away from walls and windows.** The wave hurts mostly by throwing you against something hard and with glass
+  from windows between you and the burst. A wall right behind you reflects the wave and at least doubles the pressure
+  on your lungs. A house that collapses buries those inside: dig yourself out before you suffocate.
 - **Do not look at the fireball.** Its light reaches only those who can see it, under open sky or through a window, and
   burns the side of the body that faces it.
 - **Burns** depend on the yield: the pulse of a bigger burst is longer, and skin takes more of it. At 15 kt bare skin

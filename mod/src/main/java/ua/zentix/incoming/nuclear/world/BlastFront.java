@@ -1,26 +1,28 @@
 package ua.zentix.incoming.nuclear.world;
 
 import dev.ryanhcode.sable.companion.SubLevelAccess;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.ints.IntSet;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.NuclearWarhead;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModSounds;
@@ -38,8 +40,11 @@ import java.util.UUID;
 import java.util.function.IntPredicate;
 
 /**
- * Фронт ударной волны по сущностям и аппаратам (DESIGN-nuke §4): кольцо между прошлым и текущим радиусом — урон
- * по давлению, бросок от эпицентра по скоростному напору; через положительную фазу — лёгкий обратный ветер к центру.
+ * Фронт ударной волны по сущностям и аппаратам (DESIGN-nuke §4): кольцо между прошлым и текущим радиусом — удар по
+ * телу ({@link BlastBody}: лёгкие, бросок с ударом, стёкла), через положительную фазу — лёгкий обратный ветер к центру
+ * (только тех, кого достал прямой ветер: в доме без окна к шару и в бункере его нет); тела, которые засыпали руины
+ * чанка, — завал (тоже {@link BlastBody}). Руины чанка встают на тик раньше фронта: тела рядом запоминают окно и стену,
+ * какими их застанет фронт ({@link #remember}).
  * <p>
  * Где фронт за тик, считается каждый тик (снимок сущностей в круге — доли миллисекунды), а удары по тем, кого он
  * накрыл, — очередь под общим бюджетом ({@link WorkClock}), ближние первыми. Удар — это урон, а урон — смерть,
@@ -53,8 +58,6 @@ import java.util.function.IntPredicate;
  * по давлению), сущностей не трогает (их волна бьёт сама, по давлению) и слушается {@code block_damage}.
  */
 final class BlastFront {
-    /** С какого давления волна убивает сразу (вне укрытия). */
-    private static final double LETHAL_PSI = 12;
     /** С какого давления волна бьёт по аппарату. */
     private static final double AIRCRAFT_PSI = 3;
     /**
@@ -64,8 +67,12 @@ final class BlastFront {
      */
     private static final float MAX_AIRCRAFT_POWER = 60;
 
-    /** @param owner кто запустил (урон записывается на него), null — неизвестно */
-    private record Hit(Detonation d, LivingEntity entity, @Nullable UUID owner) {}
+    /**
+     * @param owner  кто запустил (урон записывается на него), null — неизвестно
+     * @param buried завал: руины засыпали тело ({@link BlastBody#bury}), иначе удар фронта
+     * @param before окно и стена до руин, со сдвигом тела к приходу фронта; null — не запомнены
+     */
+    private record Hit(Detonation d, LivingEntity entity, @Nullable UUID owner, boolean buried, BlastBody.@Nullable Before before) {}
 
     /** Взрыв по аппарату: в ближайшей к эпицентру точке аппарата, когда его накрыл фронт. */
     private record AircraftHit(Detonation d, Vec3 at, float power) {}
@@ -78,6 +85,17 @@ final class BlastFront {
     private final Map<Integer, double[]> reached = new HashMap<>();
     /** Кто запустил подрыв (по номеру), пока идёт его фронт. После перезапуска неизвестен: урон без виновника. */
     private final Map<Integer, UUID> owners = new HashMap<>();
+    /** Окно и стена у тел (по номеру подрыва, затем сущности), какими их застал фронт: до руин их чанков. */
+    private final Map<Integer, Int2ObjectMap<BlastBody.Before>> before = new HashMap<>();
+    /** Кого фронт этого подрыва застал в ветре (номера сущностей): только их тянет обратный ветер. */
+    private final Map<Integer, IntSet> windy = new HashMap<>();
+    /**
+     * Кого фронт этого подрыва уже накрыл (номера сущностей): второй раз не бьёт — брошенное тело может обогнать
+     * медленный фронт и снова оказаться перед ним.
+     */
+    private final Map<Integer, IntSet> struck = new HashMap<>();
+    /** Удары фронта в очереди: номер подрыва и сущности ({@link #key}). */
+    private final LongOpenHashSet queued = new LongOpenHashSet();
     /** Кого фронт накрыл, а удар ещё не нанесён: по тикам прихода, в тике — от ближних к дальним. */
     private final ArrayDeque<Hit> hits = new ArrayDeque<>();
     /** Аппараты, которые фронт накрыл, а взрыва по ним ещё не было: по тикам прихода. */
@@ -111,6 +129,9 @@ final class BlastFront {
         }
         reached.keySet().retainAll(active);
         owners.keySet().retainAll(active);
+        before.keySet().retainAll(active);
+        windy.keySet().retainAll(active);
+        struck.keySet().retainAll(active);
     }
 
     private void advance(ServerLevel level, Detonation d, long since) {
@@ -121,14 +142,22 @@ final class BlastFront {
         // снимок списка: удар может убить моба, и из него выпадет лут — живую карту сущностей трогать нельзя
         double reach = Math.max(r, back);
         List<LivingEntity> ring = new ArrayList<>();
+        IntSet hitBy = struck.computeIfAbsent(d.id(), k -> new IntOpenHashSet());
         for (LivingEntity living : level.getEntitiesOfClass(LivingEntity.class, AABB.ofSize(d.burst(), reach * 2, reach * 2, reach * 2))) {
             if (!living.isAlive() || living.isSpectator() || living.isPassenger()) continue;
             double dist = living.position().distanceTo(d.burst());
-            if (dist >= done[0] && dist < r) ring.add(living);
-            else if (dist >= done[1] && dist < back) suck(d, living);
+            if (dist >= done[0] && dist < r) {
+                if (hitBy.add(living.getId())) ring.add(living);
+            } else if (dist >= done[1] && dist < back) suck(level, d, living);
         }
         ring.sort(Comparator.comparingDouble(e -> e.distanceToSqr(d.burst())));
-        for (LivingEntity e : ring) hits.add(new Hit(d, e, owners.get(d.id())));
+        Int2ObjectMap<BlastBody.Before> seen = before.get(d.id());
+        for (LivingEntity e : ring) {
+            // сдвиг тела от места, где запомнило окно и стену, — к приходу фронта, а не к удару: удар ждёт импульса и бюджета
+            BlastBody.Before b = seen == null ? null : seen.remove(e.getId());
+            hits.add(new Hit(d, e, owners.get(d.id()), false, b == null ? null : b.drifted(e.position())));
+            queued.add(key(d, e));
+        }
         sweepAircraft(level, d, done[0], r);
         done[0] = Math.max(done[0], r);
         done[1] = Math.max(done[1], back);
@@ -148,55 +177,82 @@ final class BlastFront {
         }
         while (!hits.isEmpty() && lit.test(hits.peekFirst().d().id()) && clock.canStart()) {
             Hit h = hits.removeFirst();
+            if (!h.buried()) queued.remove(key(h.d(), h.entity()));
             // за время в очереди моб мог умереть, выгрузиться или сесть в лодку — как при снимке
             LivingEntity e = h.entity();
             if (!e.isAlive() || e.isSpectator() || e.isPassenger()) continue;
             long t0 = clock.begin();
-            hit(level, h.d(), e, h.owner() == null ? null : level.getPlayerByUUID(h.owner()));
+            Entity owner = h.owner() == null ? null : level.getPlayerByUUID(h.owner());
+            if (h.buried()) BlastBody.bury(level, h.d(), e, owner);
+            else {
+                // руины встали, пока удар ждал в очереди: запомнено уже после прихода фронта
+                Int2ObjectMap<BlastBody.Before> seen = before.get(h.d().id());
+                BlastBody.Before late = h.before() != null || seen == null ? null : seen.remove(e.getId());
+                BlastBody.Before b = h.before() != null ? h.before() : late == null ? null : late.drifted(e.position());
+                if (BlastBody.hit(level, h.d(), e, owner, b)) windy.computeIfAbsent(h.d().id(), k -> new IntOpenHashSet()).add(e.getId());
+            }
             clock.end(t0);
         }
+    }
+
+    /**
+     * Руины чанка вот-вот встанут: тела в нём и рядом (окно до {@link BlastBody#GLASS_REACH} — может быть и в этом
+     * чанке), до которых фронт ещё не дошёл или чей удар ещё в очереди, запоминают окно и стену. Запомненное первым —
+     * мир, тронутый меньше всего.
+     */
+    void remember(ServerLevel level, Detonation d, LevelChunk chunk) {
+        double[] done = reached.get(d.id());
+        if (done == null) return;
+        Int2ObjectMap<BlastBody.Before> seen = before.computeIfAbsent(d.id(), k -> new Int2ObjectOpenHashMap<>());
+        int x = chunk.getPos().getMinBlockX(), z = chunk.getPos().getMinBlockZ();
+        double r = BlastBody.GLASS_REACH + 1;
+        for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class,
+                new AABB(x - r, level.getMinBuildHeight(), z - r, x + 16 + r, level.getMaxBuildHeight(), z + 16 + r))) {
+            if (!e.isAlive() || e.isSpectator() || e.isPassenger() || seen.containsKey(e.getId())) continue;
+            // фронт уже прошёл: удар нанесён или ждёт в очереди с прежним миром — тогда запомнить его сейчас и нужно
+            if (e.position().distanceTo(d.burst()) < done[0] && !queued.contains(key(d, e))) continue;
+            if (d.overpressureKpa(e.position()) < Detonation.HIT_KPA) continue;
+            seen.put(e.getId(), BlastBody.before(level, d, e));
+        }
+    }
+
+    /** Руины засыпали тело: удар завалом — в очередь, за ударами фронта этого тика. */
+    void bury(Detonation d, LivingEntity e) {
+        hits.add(new Hit(d, e, owners.get(d.id()), true, null));
     }
 
     /** Отбой. */
     void clear() {
         reached.clear();
         owners.clear();
+        before.clear();
+        windy.clear();
+        struck.clear();
         dropHits();
     }
 
     /** Удары в очереди — сбросить; докуда фронт прошёл, остаётся (иначе он заново ударил бы всех внутри). */
     void dropHits() {
         hits.clear();
+        queued.clear();
         aircraft.clear();
     }
 
-    /**
-     * Удар волны. Смертельно с 12 psi (у людей в жизни — обрушение зданий и удар о препятствия; 20 psi — никто не
-     * выживает), 5 psi — почти смертельно, 1–3 psi — ранения стеклом и броском. В укрытии (нет прямой видимости
-     * и крыша над головой) урон ×0.3, бросок ×0.2. Творческий режим урона не получает, но волна швыряет и его.
-     */
-    private static void hit(ServerLevel level, Detonation d, LivingEntity e, @Nullable Entity owner) {
-        double kpa = d.overpressureKpa(e.position());
-        if (kpa < Detonation.HIT_KPA) return;
-        double psi = BlastModel.psi(kpa);
-        boolean cover = !Detonation.underOpenSky(level, e.getEyePosition()) && !NuclearWarhead.sees(level, d, e);
-        boolean immune = e instanceof Player p && p.getAbilities().invulnerable;
-        float dmg = psi >= LETHAL_PSI ? Float.MAX_VALUE : (float) (1.6 * Math.pow(psi, 1.35));
-        if (cover) dmg *= 0.3f;
-        if (psi >= 0.7 && !immune) e.hurt(ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_BLAST, null, owner), dmg);
-        double v = Detonation.throwSpeed(d.dynamicPressureKpa(e.position())) * (cover ? 0.2 : 1) * (1 - e.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE));
-        Vec3 away = new Vec3(e.getX() - d.burst().x, 0, e.getZ() - d.burst().z);
-        away = away.lengthSqr() < 1e-4 ? Vec3.ZERO : away.normalize();
-        e.push(away.x * v, 0.3 * v, away.z * v);
-        e.hurtMarked = true;
-        // в укрытии (пещера, бункер, ферма мобов под крышей) волна не пугает: бежать оттуда некуда
-        if (!cover) ua.zentix.incoming.nuclear.MobPanic.wave(d, e, level.getGameTime());
+    private static long key(Detonation d, LivingEntity e) {
+        return (long) d.id() << 32 | e.getId() & 0xFFFFFFFFL;
     }
 
-    /** Обратный ветер: воздух возвращается к эпицентру и тянет за собой. */
-    private static void suck(Detonation d, LivingEntity e) {
+    /**
+     * Обратный ветер: воздух возвращается к эпицентру и тянет за собой тех, кого достал прямой ветер. Удар ещё в
+     * очереди (ждёт импульса и бюджета) — ветер по небу над телом.
+     */
+    private void suck(ServerLevel level, Detonation d, LivingEntity e) {
         double psi = d.psi(e.position());
         if (psi < 1) return;
+        IntSet blown = windy.get(d.id());
+        boolean wind = blown != null && blown.contains(e.getId())
+                || queued.contains(key(d, e)) && BlastBody.windAt(level, e.getEyePosition());
+        if (!wind) return;
         Vec3 to = new Vec3(d.burst().x - e.getX(), 0, d.burst().z - e.getZ());
         if (to.lengthSqr() < 1e-4) return;
         to = to.normalize().scale(Math.min(0.6, 0.08 * psi));
