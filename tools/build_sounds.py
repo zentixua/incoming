@@ -756,8 +756,8 @@ def sirens():
 # ================================================================ ядерный удар
 
 def nuke():
-    """Ядерный удар. Вблизи — удар фронта (громче грома, перегружен), рёв огненного шара, ураган, звон стекла;
-    вдали — глухой удар и долгие раскаты. Пуск МБР — Titan со стола."""
+    """Ядерный удар. Вблизи — удар фронта (громче грома, перегружен), ураган за ним, звон стекла; вдали — глухой удар
+    огромного взрыва (раскаты по рельефу — эхо в игре, NukeEchoes). Пуск МБР — Titan со стола."""
     t = src(675750)
     ln = align(cut(t, 3.0, 42))
     ln = mix((ln, 1.0), (pad(sub_thump(2.5, 34, 5, 0.8), len(ln)), 0.25))
@@ -784,25 +784,10 @@ def nuke():
         far.append(norm(fade(x, 0.002, 3.0), -12.8))
     variants("nuke.boom_far", "subtitles.incoming.nuke.blast", "nuke_boom_far", far)
 
-    # рёв: огненный шар и поднятый им ураган — рокот стартующей ракеты за 20 км и шторм
-    rr = cut(src(613855), 8, 40)
-    storm = F(cut(src(438346), 20, 52), lo=40, hi=3000)
-    x = mix((F(rr, lo=18, hi=2500), 1.0), (storm, 0.45), (syn.nuke_roar(32.0)[:len(rr)], 0.6))
-    tt = np.arange(len(x)) / SR
-    x *= np.minimum(1, tt / 0.25) * np.where(tt < 5, 1, np.cos(np.pi / 2 * np.clip((tt - 5) / (tt[-1] - 5), 0, 1)) ** 2)
-    write("nuke_roar", norm(x, -11.5), "nuke.roar", "subtitles.incoming.nuke.roar")
-
-    # ураганный ветер (петля)
+    # ураганный ветер (петля): ветер за фронтом, громкость — по его скорости у слушателя (NukeSounds)
     w = mix((F(cut(src(438880), 10.5, 43), lo=40), 1.0), (F(cut(src(438346), 20, 52.5), lo=60), 0.8),
             (syn.hurricane(32.5)[:int(32.5 * SR)], 0.35))
     write("nuke_wind", norm(loop(w, 10.0, 1.0), -11.5), "nuke.wind", "subtitles.incoming.nuke.wind")
-
-    # раскаты грома с разных сторон
-    rum = []
-    for fid, a, b, r in [(267551, 1.0, 14.0, 0.8), (267551, 14.0, 30.0, 0.75), (243782, 3.5, 17.0, 0.85)]:
-        s = F(speed(cut(src(fid), a, b), r), lo=18, hi=700)
-        rum.append(norm(fade(s, 0.2, 2.0), -13))
-    variants("nuke.rumble", "subtitles.incoming.nuke.rumble", "nuke_rumble", rum)
 
     # стёкла: окна вылетают по всей улице — много разбитых стёкол вразнобой
     shards = [cut(src(758207), 0, 1.9), cut(src(336425), 0, 3.6), cut(src(453499), 1.0, 4.7),
@@ -837,9 +822,11 @@ def nuke():
 
 
 def after():
-    """После ядерного удара — синтез (записей нет): хлопок N-волны вдали, гул горящего города (петли), обрушения в
-    руинах. Ветер в огонь — петля урагана nuke_wind (раздел nuke) под своим субтитром."""
-    cracks = [syn.nuke_crack_far(4.0, n_wave=nw, bounce=b) for nw, b in [(0.30, 0.020), (0.42, 0.031)]]
+    """После ядерного удара — синтез (записей нет): удар фронта вдали (запись на случай без своих источников OpenAL),
+    гул горящего города (петли), обрушения в руинах. Ветер в огонь — петля урагана nuke_wind (раздел nuke) под своим
+    субтитром."""
+    # 2 кт за 5 км (0,3 psi, фаза 0,73 с) и 15 кт за 25 км (0,12 psi, 1,66 с) — BlastModel
+    cracks = [syn.nuke_crack_far(4.0, t_plus=tp, pa=pa) for tp, pa in [(0.73, 2060.0), (1.66, 800.0)]]
     variants("nuke.crack_far", "subtitles.incoming.nuke.blast", "nuke_crack_far", cracks)
     PRELOAD.add("nuke.crack_far")
     fires = [norm(loop(syn.nuke_fire(14.0), 12.0, 1.0), -15.5) for _ in range(2)]
@@ -920,8 +907,8 @@ ORDER = ["drone.engine", "drone.engine.far", "launch.booster", "booster.engine",
          "missile.engine.rear", "missile.dive", "missile.engine.far", "missile.whistle", "bomber.engine",
          "bomber.engine.far", "bomb.fall", "bomb.fall.far", "bomb.drill", "siren", "blast.near", "blast.sub",
          "blast.far", "blast.mid", "blast.tail", "debris.fall", "blast.fire", "bomb.crack", "bomb.impact", "bomb.quake", "bomb.deep", "bomb.vent", "bomb.cave",
-         "designator.lock", "silent", "nuke.alarm", "nuke.launch", "nuke.crack", "nuke.boom_far", "nuke.roar",
-         "nuke.wind", "nuke.rumble", "nuke.glass", "nuke.tinnitus", "nuke.rain", "nuke.crack_far", "nuke.fire",
+         "designator.lock", "silent", "nuke.alarm", "nuke.launch", "nuke.crack", "nuke.boom_far",
+         "nuke.wind", "nuke.glass", "nuke.tinnitus", "nuke.rain", "nuke.crack_far", "nuke.fire",
          "nuke.fire_wind", "nuke.collapse", "geiger.click", "rocket.launch",
          "rocket.incoming", "rocket.blast", "loiter.engine",
          "loiter.engine.far", "loiter.dive", "loiter.launch", "grid.fail", "grid.spark", "grid.hum", "grid.power_down",

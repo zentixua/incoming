@@ -18,12 +18,19 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
     /** Хозяин молчит столько тиков — петля уходит. */
     private static final int ORPHAN = 10;
 
+    private float slew;
     private float target, highs = 1;
     private int quiet;
     private boolean ending;
 
     public AmbientLoop(SoundEvent event, SoundSource source, float pitch, long seed) {
+        this(event, source, pitch, seed, SLEW);
+    }
+
+    /** {@code slew} — на столько громкость подходит к цели за тик (1 — сразу: порыв ветра за фронтом волны). */
+    public AmbientLoop(SoundEvent event, SoundSource source, float pitch, long seed, float slew) {
         super(event, source, RandomSource.create(seed));
+        this.slew = slew;
         looping = true;
         delay = 0;
         volume = 0.001f;
@@ -47,10 +54,11 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
         quiet = 0;
     }
 
-    /** Стихнуть и уйти. */
+    /** Стихнуть и уйти: не быстрее обычного, даже у петли с быстрым подходом (без щелчка). */
     public void end() {
         ending = true;
         target = 0;
+        slew = Math.min(slew, SLEW);
     }
 
     /**
@@ -65,7 +73,7 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
     @Override
     public void tick() {
         if (++quiet > ORPHAN) end();
-        volume += Math.max(-SLEW, Math.min(SLEW, target - volume));
+        volume += Math.max(-slew, Math.min(slew, target - volume));
         if (ending && volume <= 0.002f) {
             stop();
             return;

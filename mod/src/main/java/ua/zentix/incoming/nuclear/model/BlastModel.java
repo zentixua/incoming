@@ -65,4 +65,19 @@ public final class BlastModel {
         double x = Math.max(0, overpressureKpa) / P0;
         return SOUND_SPEED * 5 * x / 7 / Math.sqrt(1 + 6 * x / 7);
     }
+
+    /**
+     * Длительность положительной фазы у слушателя на наклонной дальности R, с: Кинни–Грэхем для ядерного взрыва
+     * (KG85 NE, табл. XI; формула и проверка по таблице — Garcés 2019, Infrasound Monitoring for Atmospheric Studies,
+     * гл. 8, прил. 4: 2 кт на 8 км — 0,67 с, 1 т на 1 км — 0,057 с), отражение от земли — как у давления
+     * ({@link #GROUND_REFLECTION}): W = 1.8·Y кт, Z = R / ∛W, м/кт^⅓. Таблица — от Z = 35 (ближе — как на её краю), до
+     * 5000; дальше формула выходит на постоянную 0,77·∛W (как ANSI S2.20: 1 кт на 10 км — 0,52 с, на 100 км — 0,93).
+     */
+    public static double positivePhaseSeconds(double slantRangeM, double yieldKt) {
+        double w = Math.cbrt(GROUND_REFLECTION * Math.max(1e-6, yieldKt));
+        double z = Math.max(35, slantRangeM / w);
+        double a = z / 100, b = z / 285;
+        return w * 0.18 * Math.sqrt(1 + a * a * a) / (Math.sqrt(1 + z / 40) * Math.pow(1 + Math.pow(b, 5), 1 / 6.0)
+                * Math.pow(1 + z / 50_000, 1 / 6.0));
+    }
 }

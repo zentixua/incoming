@@ -389,33 +389,11 @@
       }
     ]
   },
-  "nuke.roar": {
-    "subtitle": "subtitles.incoming.nuke.roar",
-    "sounds": [
-      {
-        "name": "incoming:nuke_roar"
-      }
-    ]
-  },
   "nuke.wind": {
     "subtitle": "subtitles.incoming.nuke.wind",
     "sounds": [
       {
         "name": "incoming:nuke_wind"
-      }
-    ]
-  },
-  "nuke.rumble": {
-    "subtitle": "subtitles.incoming.nuke.rumble",
-    "sounds": [
-      {
-        "name": "incoming:nuke_rumble_1"
-      },
-      {
-        "name": "incoming:nuke_rumble_2"
-      },
-      {
-        "name": "incoming:nuke_rumble_3"
       }
     ]
   },

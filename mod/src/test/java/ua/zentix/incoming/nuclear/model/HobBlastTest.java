@@ -11,13 +11,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Волна у земли по высоте подрыва: числа — Brode 1987 (ур. 62, подпрограмма PT), Glasstone &amp; Dolan 1977 (рис. 3.73,
- * 3.75, 3.76) и стандарт DNA (glasstone, MIT); сводка — design/nuke-film/sources-check.md, §1.
+ * 3.75) и стандарт DNA (glasstone, MIT); сводка — docs/DESIGN-nuke.md, §1.1.
  */
 class HobBlastTest {
     /** 15 кт на 592 м (как Хиросима: 240 м/кт^⅓). */
     private static final double W = 15, H = 592;
 
-    /** Уравнение 62 до 2 psi: дальности по земле у 15 кт на 592 м (точно, ±1 %) и у 2 кт на 302 м (× ∛(2/15)). */
+    /**
+     * Уравнение 62 до 2 psi: дальности по земле у 15 кт на 592 м (числа самой формулы, сверенные с glasstone, ±1 %) и у
+     * 2 кт на 302 м (× ∛(2/15)). Независимая проверка — с кривыми Glasstone &amp; Dolan ниже.
+     */
     @ParameterizedTest
     @CsvSource({"20, 358", "10, 998", "5, 1603", "2, 2833"})
     void brodeRanges(double psi, double metres) {
@@ -57,7 +60,10 @@ class HobBlastTest {
         }
     }
 
-    /** Наземный: как в таблице 1.1 DESIGN-nuke (те же источники), в пределах 10 %. */
+    /**
+     * Наземный: в пределах 10 % от Кинни–Грэхема с отражением ×1.8 (прежняя модель мода; у наземного взрыва она с
+     * данными сходилась) — у 15 кт таблица 1.1 DESIGN-nuke теперь 545 м и 1.15 км против 570 м и 1.09 км здесь.
+     */
     @ParameterizedTest
     @CsvSource({
             "1, 20, 230", "1, 5, 440", "1, 3, 590", "1, 1, 1300", "1, 0.5, 2400",
@@ -84,7 +90,7 @@ class HobBlastTest {
         }
     }
 
-    /** Таблица — от точной формулы не дальше 0.5 % от 0.05 до 3000 psi. */
+    /** Таблица — от точной формулы не дальше 0.6 % от 0.05 до 3000 psi. */
     @Test
     void tableMatchesFormula() {
         Random random = new Random(1);
@@ -99,7 +105,7 @@ class HobBlastTest {
             if (exact < 0.05 || exact > 3000) continue;
             // 1 кт: кфут/кт^⅓ в метры
             double table = HobBlast.psi(x * 304.8, y * 304.8, 1);
-            assertEquals(exact, table, exact * 0.005, () -> x + ", " + y);
+            assertEquals(exact, table, exact * 0.006, () -> x + ", " + y);
         }
     }
 
@@ -134,11 +140,28 @@ class HobBlastTest {
         assertEquals(HobBlast.arrivalSeconds(0, H, W), HobBlast.freeAirArrivalSeconds(H, W), 0.01);
     }
 
-    /** Положительная фаза на земле (Броуд, PT; G&amp;D рис. 3.76 — в пределах 15 %). */
+    /**
+     * Положительная фаза на земле у 15 кт на 592 м — числа самой модели: до 2 psi (2.8 км) — Броуд (PT), ниже 1 psi
+     * (4.5 км) — Кинни–Грэхем у слушателя (сверен с Гарсесом и ANSI S2.20 в {@code BlastModelTest}).
+     */
     @ParameterizedTest
-    @CsvSource({"0, 0.45", "1000, 0.74", "2000, 0.93", "10000, 1.15"})
+    @CsvSource({"0, 0.45", "1000, 0.74", "2000, 0.93", "5000, 1.29", "10000, 1.44"})
     void positivePhase(double groundM, double seconds) {
         assertEquals(seconds, HobBlast.positivePhaseSeconds(groundM, H, W), 0.01);
+    }
+
+    /** Фаза растёт с дальностью при любой высоте подрыва (с 300 м: ближе — огненный шар), и стык Броуда с Кинни–Грэхемом — без ступеньки. */
+    @Test
+    void positivePhaseLengthensWithoutStep() {
+        for (double h : new double[]{0, 150, 592, 2000}) {
+            double prev = 0;
+            for (double g = 300; g < 200_000; g *= 1.01) {
+                double t = HobBlast.positivePhaseSeconds(g, h, W), was = prev, at = g;
+                assertTrue(t >= was * 0.999, () -> h + " м, " + at + " м: " + t + " < " + was);
+                assertTrue(was == 0 || t <= was * 1.03, () -> "ступенька: " + h + " м, " + at + " м");
+                prev = t;
+            }
+        }
     }
 
     /**

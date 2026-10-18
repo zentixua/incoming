@@ -71,7 +71,7 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 ![Fireball and blast wave over a town](img/nuke-wave.jpg)
 
 At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns out to 3.1 km, and windows break out to
-8–9 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind, with black rain.
+8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind, with black rain.
 Fallout starts to come down about 7 minutes after a 15 kt burst, and later farther downwind.
 
 ![A town after a 15 kt strike: ruins and fires](img/nuke-ruins.jpg)
@@ -102,8 +102,11 @@ condensation hangs over the water for a second or two. The column then narrows a
 about twenty seconds, and the falling water rolls out as a white base surge for minutes. It is a bright mist: in its
 thick part you see only some 50 m, and it thins out over a quarter of an hour.
 
-Far away the blast comes as a sharp double crack and a deep boom, and then echoes back from the hills, forests and
-towns around you: every slope that faces both the burst and you sends it back, later the farther it is. Animals around
+The blast is as loud as the pressure where you stand: with distance it fades the way ordinary explosions do, and a
+hill between you, rain, or a sunny day (the warm ground bends sound up, so far away it is quieter than at night) make
+it quieter still. Far away it comes as a single sharp crack, duller the farther you are, with a deep boom behind it,
+and the gust of wind after the wave dies down within a second or two. Then the blast echoes back from the hills,
+forests and towns around you: every slope that faces both the burst and you sends it back, later the farther it is. Animals around
 the burst go quiet for a few minutes. Indoors the echoes are as muffled as the blast itself. Mobs run away from the
 flash and the blast wave, then calm down; tamed, named and leashed mobs stay put, and mobs under cover don't run from
 the wave. The town keeps burning for minutes: you hear the fires roar from where they burn, wind pulled into the fire
