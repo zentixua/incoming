@@ -22,7 +22,6 @@ import ua.zentix.incoming.client.render.ScreenProjection;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.model.FireballModel;
-import ua.zentix.incoming.nuclear.model.ThermalModel;
 
 /**
  * Вспышка ядерного взрыва на экране (DESIGN-nuke §6): белый экран, пока идёт световой импульс (~10·t_max: 15 кт —
@@ -85,7 +84,6 @@ public final class NukeFlash {
             afterY = spot[1];
             afterSize = spot[2];
         }
-        if (sees && q >= ThermalModel.BURN_1) ua.zentix.incoming.client.fx.CameraShake.blast(6);
     }
 
     /**

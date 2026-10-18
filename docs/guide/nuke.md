@@ -32,10 +32,11 @@ burning town, spray over water) and rolls it forward as a churning wall, like a 
 150 m tall 1 km from the burst and about 50 m tall 4 km out; farther away it thins out and fades at about 9 km, where
 the wind is too weak to lift dust. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
 In its first seconds the fireball lights the top of the wall orange, even by day.
-The wave breaks buildings as it reaches them: their pieces fly with the dust. The
-ground shakes harder and harder as the wall comes closer. When the wall reaches you, it throws
-your view away from the burst, and the wind behind it keeps rocking you. After a ground burst a short jolt comes through
-the ground first, seconds before the wave.
+The wave breaks buildings as it reaches them: their pieces fly with the dust. The ground doesn't shake before the
+wave: nothing you can feel comes ahead of it. When it reaches you, the wind behind it pushes you while you stand: your
+view leans away from the burst and comes back over a few seconds. At 1 psi that is two or three degrees; from about
+1.5–2 psi the wind is stronger than anyone can stand against, and your view stops at the edge of balance. Where only the
+sound reaches, the wave doesn't move you at all. A wall or a house between you and the burst shelters you from the wind.
 
 The fireball shines white with brighter and darker patches boiling over it, and turns yellow and orange as it cools. It
 rises and rolls into a ring of hot gas: the cap of the mushroom cloud, the same body from the first moment. As it rolls

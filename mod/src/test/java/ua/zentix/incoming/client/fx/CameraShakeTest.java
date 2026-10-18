@@ -2,140 +2,104 @@ package ua.zentix.incoming.client.fx;
 
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
-import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.nuclear.model.BodySway;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CameraShakeTest {
-    /**
-     * Пока ядерная волна подходит, земля дрожит всё сильнее: до {@link CameraShake#approachTicks} — нет, потом размах
-     * только растёт и к приходу волны — доля {@link CameraShake#APPROACH_SHARE} удара; слабее 0,5 psi не трясёт.
-     */
-    @Test
-    void shakeGrowsAsWaveApproaches() {
-        for (double psi : new double[]{0.6, 1, 3, 10, 40}) {
-            double total = CameraShake.approachTicks(psi);
-            assertEquals(0, CameraShake.approachAmplitude(psi, total + 1));
-            double prev = 0;
-            for (double eta = total; eta >= 0; eta -= 1) {
-                double a = CameraShake.approachAmplitude(psi, eta);
-                assertTrue(a >= prev, psi + " psi, за " + eta + " тиков: размах падает");
-                prev = a;
-            }
-            assertEquals(CameraShake.nukeAmplitude(psi) * CameraShake.APPROACH_SHARE, prev, 1e-9, psi + " psi");
-        }
-        assertEquals(0, CameraShake.approachAmplitude(0.4, 0));
-        assertTrue(CameraShake.approachTicks(7) > CameraShake.approachTicks(1), "сильная волна слышна раньше");
+    /** Наклон тела ветром волны давлением {@code psi} с фазой 0,8 с. */
+    private static double[] tilt(double psi) {
+        return BodySway.tilt(1000 * BlastModel.dynamicPressureKpa(BlastModel.kpa(psi)), 0.8);
     }
 
     /**
-     * Толчок грунта от наземного взрыва: у 15 кт в километре — около 4°, спадает с расстоянием, дальше 7 км
-     * не ощущается; меньший взрыв — слабее; с километра доходит раньше волны в воздухе.
+     * Ядерная волна наклоняет камеру по ветру от взрыва: взрыв впереди — запрокидывает, позади — клонит вниз, справа —
+     * наклоняет влево, на наклон тела; воздушный взрыв впереди под 45° — тоже назад, слабее (напор у земли дует вдоль неё).
      */
     @Test
-    void seismicJoltBeforeTheWave() {
-        assertEquals(4, CameraShake.seismicAmplitude(1000, 15), 0.5);
-        double prev = Double.MAX_VALUE;
-        for (double m = 300; m < 9000; m += 100) {
-            double a = CameraShake.seismicAmplitude(m, 15);
-            assertTrue(a <= prev, m + " м");
-            assertTrue(a <= 6);
-            prev = a;
-        }
-        assertEquals(0, CameraShake.seismicAmplitude(7500, 15));
-        assertTrue(CameraShake.seismicAmplitude(1000, 1) < CameraShake.seismicAmplitude(1000, 15));
-        Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, 15, true, 0, 0, 5, 20_000, 7, 1f, false, 0.42f);
-        // у самого шара волна в воздухе сверхзвуковая и обгоняет толчок; с километра — толчок раньше
-        for (double m = 1000; m <= 7000; m += 500) {
-            assertTrue(CameraShake.seismicTicks(m, d.scale()) < d.arrivalTicks(d.blocks(m)) - 10, m + " м: толчок не раньше волны");
-        }
+    void nukeWindLeansAwayFromTheBurst() {
+        double[] t = tilt(1);
+        double peak = Math.toDegrees(BodySway.peak(t, 0));
+        assertTrue(peak > 0.5 && peak < Math.toDegrees(BodySway.BACK), "1 psi: " + peak);
+        assertEquals(-peak, extreme(t, new Vec3(0, 0, -1))[0], 0.05 * peak, "взрыв впереди — назад");
+        assertEquals(peak, extreme(t, new Vec3(0, 0, 1))[1], 0.05 * peak, "взрыв позади — вниз");
+        assertEquals(-peak, extreme(t, new Vec3(1, 0, 0))[2], 0.05 * peak, "взрыв справа — влево");
+        double above = extreme(t, new Vec3(0, -1, -1))[0];
+        assertTrue(above < -0.5 * peak && above > -0.8 * peak, "над головой впереди — назад слабее: " + above);
     }
 
     /**
-     * Ядерная волна толкает, а не крутит: камера отклоняется по ветру от взрыва (взрыв впереди — запрокидывает, справа —
-     * наклоняет влево, позади — клонит вниз) на размах {@link CameraShake#nukeAmplitude} при любой фазе дрожи; воздушный
-     * взрыв впереди под 45° — тоже назад, слабее (напор у земли дует вдоль неё).
+     * Дальше границы устойчивости камера не уходит: лицом к сильной волне — не больше 4,5° назад, спиной — не больше 8°
+     * вперёд, боком — 8°; и до неё доходит.
      */
     @Test
-    void nukeWaveShovesAwayFromTheBurst() {
-        for (double psi : new double[]{0.5, 1, 3, 10, 40}) {
-            double amp = CameraShake.nukeAmplitude(psi);
-            for (int phase = 0; phase < 20; phase++) {
-                String at = psi + " psi, фаза " + phase;
-                assertTrue(extreme(psi, new Vec3(0, 0, -1), phase)[0] < -0.75 * amp, at + ": взрыв впереди — назад");
-                assertTrue(extreme(psi, new Vec3(0, 0, 1), phase)[1] > 0.75 * amp, at + ": взрыв позади — вниз");
-                assertTrue(extreme(psi, new Vec3(1, 0, 0), phase)[2] < -0.75 * amp, at + ": взрыв справа — влево");
-                assertTrue(extreme(psi, new Vec3(0, -1, -1), phase)[0] < -0.5 * amp, at + ": над головой впереди — назад");
-            }
-        }
+    void nukeWindStopsAtTheBalanceLimit() {
+        double[] t = tilt(5);
+        assertEquals(-Math.toDegrees(BodySway.BACK), extreme(t, new Vec3(0, 0, -1))[0], 1e-9);
+        assertEquals(Math.toDegrees(BodySway.FORWARD), extreme(t, new Vec3(0, 0, 1))[1], 1e-9);
+        assertEquals(-Math.toDegrees(BodySway.SIDE), extreme(t, new Vec3(1, 0, 0))[2], 1e-9);
     }
 
     /**
-     * Дрожь перед волной, её приход и ветер за ней — без рывков, при любой фазе дрожи и любом курсе: у 2 кт в 430 блоках
-     * (8 psi, финал трейлера; прежде — ~830°/с) камера не поворачивается быстрее 200°/с, даже при 40 psi — быстрее
-     * 300°/с; дрожь перед волной не быстрее толчка. Толчки грунта от ударов волны ({@link CameraShake#quake}) — свои,
-     * мельче, здесь их нет.
+     * Без рывков: до 5 psi при любом курсе за кадр в 1/10 тика камера поворачивается меньше чем на градус, а у 1 psi —
+     * не быстрее 30°/с (тело качается за секунды); после того как тело выпрямилось, поворота нет. Сильнее (20 psi —
+     * смерть почти для всех) напор швыряет тело к границе устойчивости за сотые доли секунды — так и камеру.
      */
     @Test
-    void approachArrivalAndWindDoNotJerk() {
-        Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, 2, true, 0, 0, 5, 20_000, 7, 1f, false, 0.42f);
-        Vec3 ear = new Vec3(430, 66, 0);
-        double trailer = d.psi(ear);
-        for (double psi : new double[]{0.6, 1, 3, trailer, 10, 40}) {
-            double most = 0, before = 0;
-            for (int phase = 0; phase < 40; phase++) {
-                for (double yaw = 0; yaw < 360; yaw += 45) {
-                    double[] r = fastest(psi, ear.subtract(d.burst()), yaw, phase);
-                    most = Math.max(most, r[0]);
-                    before = Math.max(before, r[1]);
+    void nukeWindDoesNotJerkAndEnds() {
+        for (double psi : new double[]{0.5, 1, 2, 5}) {
+            double[] t = tilt(psi);
+            for (double yaw = 0; yaw < 360; yaw += 45) {
+                CameraShake.reset();
+                CameraShake.sway(t, new Vec3(0.3, -0.2, 1));
+                double most = 0;
+                double[] prev = null;
+                for (int tick = 0; tick * (BodySway.RATE / 20) < t.length + 20; tick++) {
+                    for (int f = 0; f < 10; f++) {
+                        double[] o = CameraShake.offsets(f / 10.0, yaw);
+                        if (prev != null) most = Math.max(most, Math.sqrt(sq(o[0] - prev[0]) + sq(o[1] - prev[1]) + sq(o[2] - prev[2])));
+                        prev = o;
+                    }
+                    CameraShake.tick();
                 }
-            }
-            assertTrue(most < (psi == trailer ? 200 : 300), psi + " psi: " + most);
-            double jolt = CameraShake.nukeAmplitude(psi) * 2 * 0.293 * Math.exp(2 * 0.707) * 0.707 / (CameraShake.JOLT_TICKS / 20);
-            assertTrue(before < jolt, psi + " psi: дрожь " + before + " °/с, толчок " + jolt);
-        }
-    }
-
-    /**
-     * Самый быстрый поворот, °/с, от подхода ядерной волны давлением psi, её прихода и ветра за ней — и отдельно до
-     * прихода: тики, как у клиента (тряска, потом подрыв), с {@code phase} тиков тряски раньше, кадры по 1/10 тика
-     * (поворот за кадр × 200 — за секунду).
-     */
-    private static double[] fastest(double psi, Vec3 away, double cameraYaw, int phase) {
-        CameraShake.reset();
-        for (int i = 0; i < phase; i++) CameraShake.tick();
-        double most = 0, before = 0;
-        double[] prev = null;
-        int ahead = (int) CameraShake.approachTicks(psi);
-        for (int tick = -ahead; tick < 200; tick++) {
-            CameraShake.tick();
-            if (tick < 0) CameraShake.approach(psi, -tick);
-            else if (tick == 0) CameraShake.nuke(psi, away);
-            for (int f = 0; f < 10; f++) {
-                double[] o = CameraShake.offsets(f / 10.0, cameraYaw);
-                if (prev != null) {
-                    double turn = Math.sqrt(sq(o[0] - prev[0]) + sq(o[1] - prev[1]) + sq(o[2] - prev[2])) * 200;
-                    most = Math.max(most, turn);
-                    if (tick < 0) before = Math.max(before, turn);
-                }
-                prev = o;
+                assertTrue(most < 1, psi + " psi, курс " + yaw + ": " + most + "° за кадр");
+                if (psi == 1) assertTrue(most * 200 < 30, "1 psi: " + most * 200 + " °/с");
+                double[] o = CameraShake.offsets(0.5, yaw);
+                assertEquals(0, Math.abs(o[0]) + Math.abs(o[1]) + Math.abs(o[2]), 1e-12, psi + " psi: тело выпрямилось, а камера нет");
             }
         }
         CameraShake.reset();
-        return new double[]{most, before};
+    }
+
+    /** Новая волна слабее того, что осталось от прежней, наклон не сбивает; сильнее — заменяет. */
+    @Test
+    void strongerWaveTakesOver() {
+        double[] strong = tilt(2), weak = tilt(0.5);
+        CameraShake.reset();
+        CameraShake.sway(strong, new Vec3(0, 0, 1));
+        for (int i = 0; i < 10; i++) CameraShake.tick();
+        double before = CameraShake.offsets(0, 0)[1];
+        CameraShake.sway(weak, new Vec3(0, 0, 1));
+        assertEquals(before, CameraShake.offsets(0, 0)[1], 1e-12);
+        CameraShake.reset();
+        CameraShake.sway(weak, new Vec3(0, 0, 1));
+        for (int i = 0; i < 10; i++) CameraShake.tick();
+        CameraShake.sway(strong, new Vec3(0, 0, 1));
+        assertEquals(0, CameraShake.offsets(0, 0)[1], 1e-12, "сильная волна — с начала");
+        CameraShake.reset();
     }
 
     /**
-     * Наименьший и наибольший тангаж и наименьший крен за первую секунду волны при курсе 0 (на +z), после {@code phase}
-     * тиков дрожи: {мин. тангаж, макс. тангаж, мин. крен}.
+     * Наименьший и наибольший тангаж и наименьший крен, пока тело качается, при курсе 0 (на +z):
+     * {мин. тангаж, макс. тангаж, мин. крен}.
      */
-    private static double[] extreme(double psi, Vec3 away, int phase) {
+    private static double[] extreme(double[] tilt, Vec3 away) {
         CameraShake.reset();
-        for (int i = 0; i < phase; i++) CameraShake.tick();
-        CameraShake.nuke(psi, away);
+        CameraShake.sway(tilt, away);
         double[] e = {0, 0, 0};
-        for (int tick = 0; tick < 20; tick++) {
+        for (int tick = 0; tick * (BodySway.RATE / 20) < tilt.length; tick++) {
             for (int f = 0; f < 10; f++) {
                 double[] o = CameraShake.offsets(f / 10.0, 0);
                 e[0] = Math.min(e[0], o[1]);
