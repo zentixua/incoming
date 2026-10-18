@@ -1,6 +1,8 @@
 package ua.zentix.incoming.nuclear;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.OwnableEntity;
@@ -13,7 +15,9 @@ import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.MemoryStatus;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
+import net.minecraft.world.entity.ai.util.GoalUtils;
 import net.minecraft.world.entity.ai.util.LandRandomPos;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
@@ -26,9 +30,9 @@ import java.util.EnumSet;
 /**
  * Паника мобов (DESIGN-nuke §4): кто видел вспышку или кого накрыла волна, бежит прочь от эпицентра, а потом
  * успокаивается. Каждому {@link PathfinderMob} при входе в мир — своя цель {@link Flee} (самая важная, движение):
- * пока срок паники не вышел, она раз в 2–3 секунды ищет место в 16 блоках дальше от эпицентра (как ванильная паника
- * от удара — {@link DefaultRandomPos#getPosAway}, только рядом с мобом: чанки там готовы). Мобы с мозгом (жители,
- * пиглины, козы) ходят по памяти {@link MemoryModuleType#WALK_TARGET} — цель кладёт туда место, а идёт мозг; своё
+ * пока срок паники не вышел, она раз в 2–3 секунды ищет место в 8–16 блоках прочь от эпицентра ({@link #place}: рядом
+ * с мобом, чанки там готовы) и путь туда. Мобы с мозгом (жители, пиглины, козы) ходят по памяти
+ * {@link MemoryModuleType#WALK_TARGET} — цель кладёт туда место, а идёт мозг; своё
  * занятие «паника» у жителя не включается (оно зовёт големов). Скорость у всех похожая — ~0,38 блока за тик,
  * как у коровы в панике; боссы не бегут. Не бегут и свои: прирученные и чьи-то (сидящий волк или кошка убежали бы за
  * сотни блоков и сели там, а «за хозяином» их не вернёт), на поводке, с именем.
@@ -36,7 +40,9 @@ import java.util.EnumSet;
  * Будят цель вспышка ({@link NuclearWarhead#expose}: кто видит шар) и волна ({@code BlastFront}: от 0,3 psi, не в
  * укрытии), обе — в своих единицах работы под бюджетом тика. Старт и новые пути — вразнобой по номеру сущности. Поиск
  * пути — не чаще раза в {@link #MIN_REPATH} тиков, у запертого (загон, ферма мобов, рыба в пруду: путь кончается там,
- * где он стоит) — всё реже: каждый поиск — до 20 попыток места и полный поиск пути.
+ * где он стоит, или места нет) — всё реже: каждый поиск — до {@link #TRIES} мест и полный поиск пути. В воздухе (только
+ * что появился, подброшен волной) моб, что ходит по земле, путь не ищет — ждёт земли: путь по земле из воздуха не
+ * строится, и это не загон.
  */
 public final class MobPanic {
     /** Наибольшая цель: вперёд любой ходьбы. */
@@ -45,8 +51,11 @@ public final class MobPanic {
     public static final int FLASH = 200, FLASH_SPREAD = 200, WAVE = 400, WAVE_SPREAD = 400;
     /** Скорость бега, блоков за тик. */
     static final double SPEED = 0.38;
-    /** Как далеко искать место (по горизонтали и вертикали). */
+    /** Как далеко искать место (по горизонтали — от половины до REACH, по вертикали — до Y_REACH). */
     private static final int REACH = 16, Y_REACH = 7;
+    /** Мест на поиск и их разброс от направления прочь от эпицентра, рад. */
+    private static final int TRIES = 8;
+    private static final double CONE = Math.PI / 4;
     /** Новый путь — не раньше стольких тиков после прошлого; обычно — через {@link #REPATH} (+ разброс по номеру). */
     static final int MIN_REPATH = 20, REPATH = 40;
     /** Путь, что уводит меньше чем на столько блоков, — моб заперт: следующий поиск вдвое позже (до ×4). */
@@ -175,23 +184,22 @@ public final class MobPanic {
         }
 
         private void path() {
+            Vec3 away = from;
+            if (away == null || mob.getNavigation() instanceof GroundPathNavigation && !mob.onGround() && !mob.isInLiquid()) return;
             sincePath = 0;
             searches++;
-            Vec3 away = from;
-            if (away == null) return;
-            Vec3 to = DefaultRandomPos.getPosAway(mob, REACH, Y_REACH, away);
-            if (to == null) to = LandRandomPos.getPosAway(mob, REACH, Y_REACH, away);
+            BlockPos to = place(mob, away);
             boolean gone = false;
             if (to != null) {
                 double attr = mob.getAttributeValue(Attributes.MOVEMENT_SPEED);
                 float speed = (float) Math.max(0.6, Math.min(2.0, attr > 0 ? SPEED / attr : 1));
                 if (brain()) {
-                    walking = new WalkTarget(BlockPos.containing(to), speed, 1);
+                    walking = new WalkTarget(to, speed, 1);
                     mob.getBrain().setMemory(MemoryModuleType.WALK_TARGET, walking);
                     gone = true;
                 } else {
                     // как PathNavigation.moveTo(x, y, z, speed): дойти до клетки рядом с местом
-                    Path p = mob.getNavigation().createPath(to.x, to.y, to.z, 1);
+                    Path p = mob.getNavigation().createPath(to, 1);
                     gone = p != null && p.getEndNode() != null
                             && p.getEndNode().distanceTo(mob.blockPosition()) >= STUCK && mob.getNavigation().moveTo(p, speed);
                 }
@@ -199,6 +207,53 @@ public final class MobPanic {
             stuck = gone ? 0 : Math.min(stuck + 1, 2);
             repath = (REPATH << stuck) + Math.floorMod(mob.getId(), 20);
         }
+    }
+
+    /**
+     * Место бегства: {@link #TRIES} мест прочь от эпицентра (±{@link #CONE}) в {@link #REACH}/2…{@link #REACH} блоках, у
+     * каждого — ближайшая к высоте моба годная клетка ({@link #stand}); из годных — дальше всех от эпицентра. Не ванильный
+     * {@link DefaultRandomPos#getPosAway}: тот берёт высоту наугад (на ровной земле годна одна из 15, и поиск часто ничего
+     * не находит), разброс — до ±90° (бег вбок) и даёт места под самыми ногами (путь в шаг) — моб, приняв это за загон,
+     * стоял секунды. Годных нет — ванильный {@link LandRandomPos#getPosAway}: он поднимает место из твёрдого блока наверх.
+     * Летунам без своей проверки места (попугай, тихоня: у их навигации «устойчиво» — сама клетка, на которой можно
+     * стоять, а она же для пути закрыта) годно только так.
+     */
+    @Nullable
+    static BlockPos place(PathfinderMob mob, Vec3 from) {
+        RandomSource r = mob.getRandom();
+        double away = Math.atan2(mob.getZ() - from.z, mob.getX() - from.x);
+        boolean restricted = GoalUtils.mobRestricted(mob, REACH);
+        BlockPos best = null;
+        double farthest = -1;
+        for (int i = 0; i < TRIES; i++) {
+            double a = away + (2 * r.nextDouble() - 1) * CONE, d = REACH * (0.5 + 0.5 * r.nextDouble());
+            BlockPos p = stand(mob, Mth.floor(mob.getX() + d * Math.cos(a)), mob.getBlockY(), Mth.floor(mob.getZ() + d * Math.sin(a)), restricted);
+            if (p == null) continue;
+            double gone = Math.hypot(p.getX() + 0.5 - from.x, p.getZ() + 0.5 - from.z);
+            if (gone > farthest) {
+                best = p;
+                farthest = gone;
+            }
+        }
+        if (best != null) return best;
+        Vec3 land = LandRandomPos.getPosAway(mob, REACH, Y_REACH, from);
+        return land == null ? null : BlockPos.containing(land);
+    }
+
+    /**
+     * Ближайшая к высоте y клетка столбца (0, +1, −1, +2 …, до {@link #Y_REACH}), годная для цели, — те же проверки, что
+     * у ванильного места бегства: в мире, в пределах привязки, устойчива для навигации моба (у ходящих — есть на чём
+     * стоять, у рыбы — не сплошной блок), без штрафа пути. Дойдёт ли моб, решает поиск пути.
+     */
+    @Nullable
+    private static BlockPos stand(PathfinderMob mob, int x, int y, int z, boolean restricted) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int k = 0; k <= 2 * Y_REACH; k++) {
+            p.set(x, y + (k % 2 == 0 ? -k / 2 : (k + 1) / 2), z);
+            if (!GoalUtils.isOutsideLimits(p, mob) && !GoalUtils.isRestricted(restricted, mob, p)
+                    && !GoalUtils.isNotStable(mob.getNavigation(), p) && !GoalUtils.hasMalus(mob, p)) return p.immutable();
+        }
+        return null;
     }
 
     /** Свой моб: прирученный или чей-то (лошадь, лама), на поводке, с именем — не бежит. */
