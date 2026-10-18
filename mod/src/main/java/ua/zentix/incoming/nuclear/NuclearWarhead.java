@@ -5,7 +5,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -20,16 +19,17 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.grid.Blackouts;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.nuclear.model.BurnInjury;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.PromptRadiationModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.Yield;
+import ua.zentix.incoming.nuclear.radiation.FlashBurns;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
 import ua.zentix.incoming.registry.ModDamageTypes;
-import ua.zentix.incoming.registry.ModEffects;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.UUID;
@@ -110,9 +110,9 @@ public final class NuclearWarhead {
         return s.source() == Terrain.Source.CHUNK ? s : null;
     }
 
-    /** Дальше этого (блоки) ни свет, ни проникающая радиация сущностей не трогают: ожоги 1-й степени или 50 бэр. */
+    /** Дальше этого (блоки) ни свет, ни проникающая радиация сущностей не трогают: ожоги 1-й степени у самых чувствительных или 50 бэр. */
     public static double exposureRange(Detonation d) {
-        double burnRange = d.blocks(ThermalModel.rangeForFluence(ThermalModel.BURN_1, d.yieldKt(), d.surface(), d.visibility()));
+        double burnRange = d.blocks(ThermalModel.rangeForFluence(BurnInjury.lowest(d.yieldKt()), d.yieldKt(), d.surface(), d.visibility()));
         double radRange = d.blocks(radiusForDose(d.yieldKt(), 50));
         return Math.max(burnRange, radRange);
     }
@@ -129,7 +129,7 @@ public final class NuclearWarhead {
         if (living instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
         Vec3 eye = living.getEyePosition();
         if (sees(level, d, living)) {
-            burn(level, d, living, d.fluence(eye), owner);
+            FlashBurns.burn(level, d, living, d.fluence(eye), owner);
             // видел вспышку — бежит прочь
             MobPanic.flash(d, living, level.getGameTime());
         }
@@ -147,21 +147,6 @@ public final class NuclearWarhead {
             living.hurt(ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, owner), living.getMaxHealth() * 0.5f);
         }
         return true;
-    }
-
-    /**
-     * Ожоги по кал/см² (DESIGN §1.4): с 3 — поджог и эффект ожогов, с 8 (ожоги 3-й степени) — тяжёлый урон,
-     * с 10 — смертельно: обожжено всё открытое тело. Тень (стена, холм, крыша) спасает целиком.
-     */
-    private static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable Entity owner) {
-        if (q < ThermalModel.BURN_1) return;
-        e.igniteForSeconds((float) Math.min(20, q));
-        // без частиц вокруг (в первом лице они лезут в глаза), только значок
-        e.addEffect(new MobEffectInstance(ModEffects.BURNS, (int) Math.min(20 * 600, q * 20 * 30), q >= ThermalModel.BURN_3 ? 1 : 0, false, false, true));
-        if (q >= ThermalModel.BURN_3) {
-            float dmg = q >= 10 ? Float.MAX_VALUE : (float) ((q - ThermalModel.BURN_3) * 4 + 8);
-            e.hurt(ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_THERMAL, null, owner), dmg);
-        }
     }
 
     /**

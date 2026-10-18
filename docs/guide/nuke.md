@@ -70,8 +70,8 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 
 ![Fireball and blast wave over a town](img/nuke-wave.jpg)
 
-At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns out to 3.1 km, and windows break out to
-8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
+At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns bare skin out to about 3.4 km, and windows
+break out to 8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
 game time, like radiation sickness (a game hour is 50 seconds): after a 15 kt ground burst it starts to come down about
 7 game minutes later, and later farther downwind. Its radiation drops tenfold by the seventh game hour and a
 hundredfold by the third game day.
@@ -128,7 +128,16 @@ near them, ruins collapsing nearby, and now and then an explosion in the burning
   and the radiation. A block of stone cuts the radiation of the burst about a hundredfold, a block of earth about
   thirtyfold. A trench or a wall stops what comes straight from the fireball, but not the part the air scatters down
   from the sky.
-- **Do not look at the fireball.** Its light kills and burns only those under open sky who can see it.
+- **Do not look at the fireball.** Its light reaches only those who can see it, under open sky or through a window, and
+  burns the side of the body that faces it.
+- **Burns** depend on the yield: the pulse of a bigger burst is longer, and skin takes more of it. At 15 kt bare skin
+  reddens out to about 3.4 km, blisters out to 2.6 km and burns through out to 2.1 km; a cotton shirt catches fire out
+  to 1.6 km (water puts it out). Clothes shield you until they catch fire, so a dressed player is burned on the face
+  and arms, and an animal over its whole side. Iron armour stops the light; leather catches fire later than a shirt.
+  Burns take a share of your health and keep it until they heal: two game weeks for blisters, five for deep burns.
+  Deep burns over a quarter of the body, or blisters over 30 % of it, bring shock: you die within 12 game hours. The
+  flash alone burns a dressed player far less than that, but burning clothes keep burning like any fire: get into
+  water. Milk and potions do not heal burns.
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
