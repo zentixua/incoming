@@ -71,8 +71,14 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 ![Fireball and blast wave over a town](img/nuke-wave.jpg)
 
 At 15 kt the wave kills out to about 0.9 km, the light of the fireball burns out to 3.1 km, and windows break out to
-8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind, with black rain.
-Fallout starts to come down about 7 minutes after a 15 kt burst, and later farther downwind.
+8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
+game time, like radiation sickness (a game hour is 50 seconds): after a 15 kt ground burst it starts to come down about
+7 game minutes later, and later farther downwind. Its radiation drops tenfold by the seventh game hour and a
+hundredfold by the third game day.
+
+About 80 seconds after the burst, black rain starts to fall from the smoke of the fires: over the burning
+town and in a wide strip downwind, for about six minutes in each place, in step with the firestorm. After an air burst
+it is only weakly radioactive. In the fallout trail of a ground burst it brings the fallout down onto you.
 
 ![A town after a 15 kt strike: ruins and fires](img/nuke-ruins.jpg)
 
@@ -115,11 +121,18 @@ near them, ruins collapsing nearby, and now and then an explosion in the burning
 ## How to survive
 
 - **Get underground.** The wave leaves natural ground alone: caves and bunkers stand, and earth stops both the light
-  and the radiation.
+  and the radiation. A block of stone cuts the radiation of the burst about a hundredfold, a block of earth about
+  thirtyfold. A trench or a wall stops what comes straight from the fireball, but not the part the air scatters down
+  from the sky.
 - **Do not look at the fireball.** Its light kills and burns only those under open sky who can see it.
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
-- **Leave the fallout trail.** Water washes the dust off you (rain does not). Radiation sickness starts later, and milk
-  does not cure it.
+- **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
+  roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
+  and an open doorway lets it in. Water washes the dust off you (rain does not).
+- **Radiation sickness** starts hours later and keeps game time: nausea and vomiting, then days or weeks of feeling
+  well, then weeks of weakness, from 2 Gy without natural healing. Whether it kills depends on the dose: below 2 Gy
+  almost nobody dies, at 4.5 Gy half, from 10 Gy everyone, and the higher the dose, the sooner (from 50 Gy within a
+  game day or two). Milk does not cure it.
 
 A Geiger Counter in hand clicks and shows your dose. Operators give it out.
