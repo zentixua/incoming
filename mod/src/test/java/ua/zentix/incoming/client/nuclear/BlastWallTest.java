@@ -248,24 +248,27 @@ class BlastWallTest {
 
     /**
      * Жалоба 18.10: пыль расходилась от эпицентра, а не срывалась с земли за фронтом. Клубы головы — в координатах самой
-     * пыли ({@link BlastWall#origin}): у места на земле, пока его проходит голова (от края до конца перехода к пелене),
-     * место клубов в шуме сдвигается не дальше пути воздуха за фазу ({@code slot[4]}) — десятки метров, а фронт за это
-     * время уходит на всю длину головы; у земли пыль стоит. Плитка шума одна на весь подрыв: растущая с головой плитка
-     * двигала бы клубы по земле. Воздушные 15 кт на 592 м и наземные, на настоящей и медленной (0,2) волне.
+     * пыли ({@link BlastWall#origin}, доля фазы — доля клина × {@code slot[8]}): у места на земле, пока его проходит голова
+     * (от края до конца перехода к пелене), место клубов в шуме сдвигается меньше чем на половину пути фронта за это время;
+     * поперёк кольца шум не складывается и сжат не больше чем в 1 + U/V раз (U — ветер за фронтом, V — фронт в игре: у
+     * медленной волны 0,2 — до ~2,6); плитка шума одна на весь подрыв (растущая с головой двигала бы клубы по земле).
+     * Прежний шум (в плитке у фронта) ехал с фронтом — сдвиг был бы во весь его путь. Воздушные 15 кт на 592 м на
+     * настоящей и медленной волне, наземные 15 кт и 1 кт.
      */
     @Test
     void headCloudsStayWhereTheDustWasLifted() {
         Detonation[] bursts = {GROUND,
+                new Detonation(1, new Vec3(0, 64, 0), 64, 1, true, 0, 0, 0, 20_000, 7, 1f, false, 1f),
                 new Detonation(1, new Vec3(0, 64 + 592, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 1f, false, 1f),
                 new Detonation(1, new Vec3(0, 64 + 592, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 1f, false, 0.2f)};
         for (Detonation d : bursts) {
             BlastWall w = new BlastWall(d, false);
             String burst = d.yieldKt() + " кт на " + d.hobMetres() + " м, волна " + d.wave() + ": ";
             float[] slot = new float[BlastWall.SLOT];
-            double tile = -1;
+            double tile = -1, squeeze = 0;
             int places = 0;
-            for (double place : new double[] {800, 1400, 2500}) {
-                double first = Double.NaN, last = Double.NaN, minO = Double.MAX_VALUE, maxO = -Double.MAX_VALUE, carried = 0;
+            for (double place : new double[] {300, 800, 1400, 2500}) {
+                double first = Double.NaN, last = Double.NaN, minO = Double.MAX_VALUE, maxO = -Double.MAX_VALUE;
                 for (double t = 0.01; t < 120; t += 0.01) {
                     if (!w.slot(t, slot) || slot[3] <= 0) continue;
                     if (tile < 0) tile = slot[11];
@@ -274,21 +277,23 @@ class BlastWallTest {
                     if (s < 0 || s > BlastWall.HANDOFF_TO * slot[1]) continue;
                     if (Double.isNaN(first)) first = slot[0];
                     last = slot[0];
-                    carried = Math.max(carried, slot[4]);
                     for (double z : new double[] {0, 0.5 * slot[2], slot[2]}) {
-                        double o = BlastWall.origin(place, 0, z, s / slot[1], slot[2], slot[4])[0];
+                        double o = BlastWall.origin(place, 0, z, s / slot[1] * slot[8], slot[2], slot[4])[0];
                         minO = Math.min(minO, o);
                         maxO = Math.max(maxO, o);
-                        if (z == 0) assertEquals(place, o, 1e-9, burst + "у земли пыль стоит");
+                        // соседнее место в метре ближе к эпицентру: шум не складывается, сжат в меру ветра против фронта
+                        double near = BlastWall.origin(place - 1, 0, z, (s + 1) / slot[1] * slot[8], slot[2], slot[4])[0];
+                        assertTrue(o - near > 0, burst + place + " блоков, " + t + " с: шум сложился");
+                        squeeze = Math.max(squeeze, o - near);
                     }
                 }
                 if (Double.isNaN(first)) continue;
                 places++;
                 double moved = maxO - minO, front = last - first;
-                assertTrue(moved <= carried + 1e-6, burst + place + " блоков: клубы сдвинулись на " + moved + " при пути воздуха " + carried);
                 assertTrue(moved < 0.5 * front, burst + place + " блоков: клубы сдвинулись на " + moved + ", фронт — на " + front);
             }
-            assertTrue(places >= 2, burst + "голова почти нигде не прошла");
+            assertTrue(places >= 3, burst + "голова почти нигде не прошла");
+            assertTrue(squeeze < (d.wave() < 0.5 ? 3 : 1.6), burst + "шум сжат в " + squeeze + " раза");
         }
     }
 

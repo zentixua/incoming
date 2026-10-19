@@ -90,7 +90,6 @@ class PallFieldTest {
         assertTrue(v[0] > 0, "шар всплыл, а брызг у эпицентра нет");
     }
 
-    /** Столб над точкой (тень, свет неба) — интеграл профиля по высоте до верха, с ошибкой меньше 0,01. */
     /**
      * Жалоба 18.10: с высоты пелена выглядела золотистыми и тёмными клочьями, а не одним одеялом. Перемешанный слой
      * ({@link PallField#mixed}, {@link PallField#clumps}) с буграми верха ({@link PallField#BUMPS}) у 15 кт на 592 м через
@@ -114,7 +113,7 @@ class PallFieldTest {
         }
         assertTrue(thick > 10, "толстой пелены почти нет: " + thick + " узлов");
         assertEquals(0, PallField.mixed(0));
-        assertEquals(0, PallField.clumps(0, PallField.mixed(0)), 1e-12, "молодой слой — без просветов");
+        assertEquals(0, PallField.clumps(0, PallField.mixed(0)), 1e-12, "молодой слой — клочья с полными просветами");
         for (double shape = 0; shape <= 3.5; shape += 0.5) {
             for (double after = 0; after <= 600; after += 30) {
                 double m = PallField.mixed(after), c = PallField.clumps(shape, m);
@@ -124,6 +123,7 @@ class PallFieldTest {
         }
     }
 
+    /** Столб над точкой (тень, свет неба) — интеграл профиля по высоте до верха, с ошибкой меньше 0,01. */
     @Test
     void columnIsIntegralOfProfile() {
         for (double x = -1.4; x <= 1.2; x += 0.05) {

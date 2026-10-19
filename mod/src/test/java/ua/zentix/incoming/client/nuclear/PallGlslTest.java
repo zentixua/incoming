@@ -324,12 +324,12 @@ class PallGlslTest {
             assertTrue(origin.contains(law), "место пыли головы — не как в Java: нет «" + law + "»");
         }
         String wall = body(read("core/fx_pall.fsh"), "float wallAt(");
-        assertTrue(wall.contains("wallNoise(pallWallOrigin(h.rel, h.z, u, h.P.y, V[1].x) / max(V[2].w, 1.0)"), "шум головы — не в координатах пыли");
+        assertTrue(wall.contains("wallNoise(pallWallOrigin(h.rel, h.z, u * V[2].x, h.P.y, V[1].x) / max(V[2].w, 1.0)"), "шум головы — не в координатах пыли");
     }
 
     /**
      * Пелена — одно одеяло: колебания густоты перемешанного слоя ({@code pallMixed}) и неровность его верха
-     * ({@code PALL_BUMPS}, третье число {@code pallField}) — те же, что в Java ({@link PallField#clumps},
+     * ({@code PALL_BUMPS}, последний параметр {@code pallField}) — те же, что в Java ({@link PallField#clumps},
      * {@link PallField#MIXED}, {@link PallField#BUMPS}); бугры — верх слоя ({@code topD}), а не дыры в нём, и их берёт
      * луч пелены.
      */

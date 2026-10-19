@@ -165,7 +165,7 @@ float coarseAt(mat4 S, vec3 q, float fill) {
 
 // Бугры верха слоя пыли в точке p (PallField.BUMPS): термики над нагретой землёй — шагом втрое крупнее клубов (у
 // конвективного слоя — около полутора его высот), снесены с пылью, сменяются за оборот вихря (~минута, DustModel.RISE_S:
-// четверть плитки шума за 60 с); 1 ± PALL_BUMPS, в среднем 1 (канал равномерен). Верх, а не дыры: ложбина между буграми —
+// четверть плитки шума за 60 с — секунд игры, не модели: у малого масштаба удара часы модели быстрее, оценка); 1 ± PALL_BUMPS, в среднем 1 (канал равномерен). Верх, а не дыры: ложбина между буграми —
 // всё ещё верх слоя, и свет в ней — как у верха (pallField: толща над точкой — того же слоя)
 float topBumps(mat4 S, vec3 p) {
     float tile = S[3].y, t = S[3].z;
@@ -233,8 +233,11 @@ vec3 shoulder(vec3 c) {
 // ---------------------------------------------------------------- голова слоя пыли (pall.glsl: pallWall*)
 
 // Клубы головы в месте q плитки V[2].w — в координатах самой пыли (pallWallOrigin): (x, y) — каналы плитки 0..1 (клубы
-// и мелкие края, равномерно, как у плитки), (z) — мелкие клубы (множитель, в среднем 1; fine — их доля, как у пелены)
+// и мелкие края, равномерно, как у плитки), (z) — мелкие клубы (множитель, в среднем 1; fine — их доля, как у пелены).
+// Плитка сдвинута по крупному шуму, как у пелены (warpAt): на кольце в километры её повтор с высоты виден решёткой
 vec3 wallNoise(vec3 q, float fine) {
+    vec2 w = texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rg - 0.5;
+    q += vec3(w.x, 0.0, w.y) * 0.3;
     vec2 n = textureLod(PallNoise, q, 0.0).rg;
     float detail = fine > 0.0 ? fineAt(q) : 1.0;
     return vec3(n, mix(1.0, detail, fine));
@@ -249,7 +252,7 @@ float wallAt(mat4 V, WallAt h, float fine, float dense) {
     float m = pallWallMean(s, h.z, h.P.x, h.P.y);
     if (m <= 0.0 || h.P.w <= 0.0) return 0.0;
     float u = s / max(h.P.x, 0.001);
-    vec3 n = wallNoise(pallWallOrigin(h.rel, h.z, u, h.P.y, V[1].x) / max(V[2].w, 1.0) + vec3(0.618034, 0.414214, 0.732051), fine);
+    vec3 n = wallNoise(pallWallOrigin(h.rel, h.z, u * V[2].x, h.P.y, V[1].x) / max(V[2].w, 1.0) + vec3(0.618034, 0.414214, 0.732051), fine);
     float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, h.z / max(h.P.y * pallWallTop(u), 0.001)));
     return h.P.w * m * pallShape(n.xy, fill) * n.z;
 }

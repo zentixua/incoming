@@ -293,7 +293,8 @@ public final class BlastWall {
      *     нет);</li>
      *     <li>[4..7] — путь пыли с ветром за фронтом ({@link #carried(double)}); брызги над водой: отставание от края
      *     пыли, доля верха, ослабление (1/блок);</li>
-     *     <li>[8..11] — 0, 0, 0; плитка шума клубов ({@link #TILE});</li>
+     *     <li>[8..11] — какая доля фазы прошла в конце клина ({@link #backAge}: доля клина u — доля фазы u × она), 0, 0;
+     *     плитка шума клубов ({@link #TILE});</li>
      *     <li>[12..15] — 0, 0; ослабление пыли у земли в конце фазы волны у переднего края и в конце клина — доли
      *     масштаба.</li>
      * </ul>
@@ -321,6 +322,7 @@ public final class BlastWall {
             into[5] = (float) d.blocks(lag);
             into[6] = (float) Mth.clamp(WaterModel.sprayHeight(u) / Math.max(1, top), 0.15, 1);
             into[7] = (float) (s[2] / d.scale());
+            into[8] = (float) backAge(t);
             // плитка шейдера — не мельче блока
             into[11] = (float) Math.max(1, d.blocks(tileM));
             into[14] = (float) (s[0] / ref);
