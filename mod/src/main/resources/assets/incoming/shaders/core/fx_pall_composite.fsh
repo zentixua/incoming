@@ -216,11 +216,11 @@ float pallTau(vec3 dir, float ta, float tb) {
         vec3 q = dir * (ta + (float(i) + 0.5) * ds);
         float s = 0.0;
         if (PallSlot0[1].w > 0.5) {
-            PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler5, PallSlot0, PallGround0, q.xz));
+            PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler5, PallSlot0, PallGround0, q.xz), 1.0);
             s += f.sigma.x + f.sigma.y + f.sigma.z;
         }
         if (PallSlot1[1].w > 0.5) {
-            PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler6, PallSlot1, PallGround1, q.xz));
+            PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler6, PallSlot1, PallGround1, q.xz), 1.0);
             s += f.sigma.x + f.sigma.y + f.sigma.z;
         }
         tau += s * pallOpenHere(q) * ds;

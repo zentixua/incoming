@@ -134,6 +134,53 @@ class ShaderSourceTest {
         assertTrue(up.contains("pallLattice(") && up.contains("pallAlike(") && up.contains("pallTau("), "fx_pall_composite: upsample без решётки, сходства или остатка по полю");
     }
 
+    /**
+     * Вызов функции из {@code include} — с тем числом аргументов, что у неё объявлено. Шейдер с неверным вызовом не
+     * собирается только в игре (сборка и GameTest шейдеры не компилируют), и проход пропадает целиком: после слияния, что
+     * добавило {@code pallField} аргумент, вызов с прежним числом в выводе пелены на кадр снял бы всю пелену.
+     */
+    @Test
+    void everyCallMatchesItsDeclaration() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI()), include = core.resolveSibling("include");
+        java.util.Map<String, Integer> arity = new java.util.HashMap<>();
+        Pattern decl = Pattern.compile("(?m)^\\w+\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*\\{");
+        List<Path> files = new ArrayList<>();
+        try (Stream<Path> a = Files.list(include); Stream<Path> b = Files.list(core)) {
+            files.addAll(a.filter(f -> f.toString().endsWith(".glsl")).sorted().toList());
+            files.addAll(b.filter(f -> f.toString().endsWith(".fsh") || f.toString().endsWith(".vsh")).sorted().toList());
+        }
+        for (Path f : files) {
+            if (!f.getParent().equals(include)) continue;
+            Matcher m = decl.matcher(blankComments(Files.readString(f)));
+            while (m.find()) arity.put(m.group(1), m.group(2).isBlank() ? 0 : m.group(2).split(",").length);
+        }
+        assertTrue(arity.containsKey("pallField") && arity.containsKey("pallOpen"), "функции include не найдены: " + arity.keySet());
+        List<String> bad = new ArrayList<>();
+        for (Path f : files) {
+            String text = blankComments(Files.readString(f));
+            for (var e : arity.entrySet()) {
+                Matcher m = Pattern.compile("(?<![\\w.])" + e.getKey() + "\\s*\\(").matcher(text);
+                while (m.find()) {
+                    // объявление самой функции — не вызов
+                    int line = text.lastIndexOf('\n', m.start()) + 1;
+                    if (decl.matcher(text.substring(line, Math.min(text.length(), text.indexOf('\n', m.end()) < 0 ? text.length() : text.indexOf('\n', m.end()) + 1))).lookingAt()) continue;
+                    int depth = 1, args = 0, i = m.end();
+                    boolean any = false;
+                    for (; i < text.length() && depth > 0; i++) {
+                        char c = text.charAt(i);
+                        if (c == '(') depth++;
+                        else if (c == ')') depth--;
+                        else if (c == ',' && depth == 1) args++;
+                        if (depth > 0 && !Character.isWhitespace(c)) any = true;
+                    }
+                    int n = any ? args + 1 : 0;
+                    if (n != e.getValue()) bad.add(f.getFileName() + ": " + e.getKey() + " с " + n + " аргументами, объявлено " + e.getValue());
+                }
+            }
+        }
+        assertTrue(bad.isEmpty(), "вызовы не по объявлению: " + bad);
+    }
+
     /** Тело функции, что объявлена с {@code head}. */
     private static String body(String source, String head) {
         int at = source.indexOf(head);
