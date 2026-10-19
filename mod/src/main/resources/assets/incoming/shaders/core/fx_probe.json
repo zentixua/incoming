@@ -19,6 +19,8 @@
         { "name": "PallMin", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "PallMax", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "PallAmbient", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
+        { "name": "PallOpenAt", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
+        { "name": "PallOpenWrap", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "PallGround0", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
         { "name": "PallGround1", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
         { "name": "PallWater0", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },

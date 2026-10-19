@@ -80,7 +80,9 @@ air mixes it, and from above, from a hill or a plane, the old pall is one even b
 with only gentle humps on its top. Inside it you see only a few metres, it is dark even at noon, and sounds are
 muffled. At 15 kt it stays dark about 20 minutes 1.4 km from the burst, as in Hiroshima; within half a kilometre of the
 burst it clears in minutes, drawn up into the column of the mushroom cloud. The dust also fills the valleys around the
-town. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for about an hour and a half, a little longer after an air burst. Where the
+town. It does not get into the mine, cave or cellar you are in: the air there stays clear and sounds are
+not muffled by the dust; only near a shaft or an opening to the sky does some dust drift in, thinning over about 15
+blocks. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for about an hour and a half, a little longer after an air burst. Where the
 light of the fireball set the town on fire, a firestorm builds up over a few minutes. Columns of smoke rise over the
 burning blocks, lean downwind and merge higher up into a ceiling of smoke over the town. At night the fires light it
 orange-red from below, and the glow flickers; from a couple of kilometres away the town glows under its smoke, and the

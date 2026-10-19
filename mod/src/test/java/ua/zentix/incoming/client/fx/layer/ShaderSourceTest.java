@@ -102,6 +102,97 @@ class ShaderSourceTest {
         assertTrue(bad.isEmpty(), "uniform без JSON или JSON без uniform: " + bad);
     }
 
+    /**
+     * Пыль пелены — вещество наружного воздуха: луч пелены ({@code fx_pall}: шаг {@code pallStep}), пелена перед
+     * квадратами слоя и пробами ({@code pall_front.glsl}: {@code pallThrough}) и тень пелены на мире
+     * ({@code fx_pall_composite}) берут долю наружного воздуха в точке ({@code pallOpen}, {@link OpenAir}). Без неё пелена
+     * стояла в штольне и пещере под ней — луч в несколько блоков до стены шёл сквозь густую пыль (сценарий клиента
+     * {@code pall-mine}).
+     */
+    @Test
+    void pallKnowsWhereTheOpenAirIs() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI()), include = core.resolveSibling("include");
+        assertTrue(body(Files.readString(core.resolve("fx_pall.fsh")), "void pallStep(").contains("pallOpenHere("), "fx_pall: pallStep без pallOpen");
+        assertTrue(body(Files.readString(include.resolve("pall_front.glsl")), "float pallThrough(").contains("pallOpenHere("), "pall_front: pallThrough без pallOpen");
+        assertTrue(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main(").contains("pallOpenHere("), "fx_pall_composite: тень без pallOpen");
+    }
+
+    /**
+     * Кадр пелены мельче полного: у края предмета на фоне пелены пелена фона не ложится на предмет. Накопление
+     * ({@code fx_pall_resolve}) берёт прошлое в решётке лучей ({@code pallLattice}) и зажимает его соседями того же
+     * расстояния до мира ({@code pallAlike}); вывод ({@code fx_pall_composite}: {@code upsample}) у предмета уже шага
+     * лучей ищет ближайший по расстоянию луч и досчитывает остаток по полю без шума ({@code pallTau}). Без этого решётка
+     * в 5 блоках тонула в пелене за ней, а по контуру блоков шла кайма её цвета (сценарий клиента {@code pall-mine},
+     * {@code INCOMING_PALL=LOW}).
+     */
+    @Test
+    void pallKeepsTheBackgroundOffTheEdges() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        String resolve = body(Files.readString(core.resolve("fx_pall_resolve.fsh")), "void main(");
+        assertTrue(resolve.contains("pallLattice(") && resolve.contains("pallAlike("), "fx_pall_resolve: прошлое не в решётке лучей или пределы без расстояния");
+        String up = body(Files.readString(core.resolve("fx_pall_composite.fsh")), "vec4 upsample(");
+        assertTrue(up.contains("pallLattice(") && up.contains("pallAlike(") && up.contains("pallTau("), "fx_pall_composite: upsample без решётки, сходства или остатка по полю");
+    }
+
+    /**
+     * Вызов функции из {@code include} — с тем числом аргументов, что у неё объявлено. Шейдер с неверным вызовом не
+     * собирается только в игре (сборка и GameTest шейдеры не компилируют), и проход пропадает целиком: после слияния, что
+     * добавило {@code pallField} аргумент, вызов с прежним числом в выводе пелены на кадр снял бы всю пелену.
+     */
+    @Test
+    void everyCallMatchesItsDeclaration() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI()), include = core.resolveSibling("include");
+        java.util.Map<String, Integer> arity = new java.util.HashMap<>();
+        Pattern decl = Pattern.compile("(?m)^\\w+\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*\\{");
+        List<Path> files = new ArrayList<>();
+        try (Stream<Path> a = Files.list(include); Stream<Path> b = Files.list(core)) {
+            files.addAll(a.filter(f -> f.toString().endsWith(".glsl")).sorted().toList());
+            files.addAll(b.filter(f -> f.toString().endsWith(".fsh") || f.toString().endsWith(".vsh")).sorted().toList());
+        }
+        for (Path f : files) {
+            if (!f.getParent().equals(include)) continue;
+            Matcher m = decl.matcher(blankComments(Files.readString(f)));
+            while (m.find()) arity.put(m.group(1), m.group(2).isBlank() ? 0 : m.group(2).split(",").length);
+        }
+        assertTrue(arity.containsKey("pallField") && arity.containsKey("pallOpen"), "функции include не найдены: " + arity.keySet());
+        List<String> bad = new ArrayList<>();
+        for (Path f : files) {
+            String text = blankComments(Files.readString(f));
+            for (var e : arity.entrySet()) {
+                Matcher m = Pattern.compile("(?<![\\w.])" + e.getKey() + "\\s*\\(").matcher(text);
+                while (m.find()) {
+                    // объявление самой функции — не вызов
+                    int line = text.lastIndexOf('\n', m.start()) + 1;
+                    if (decl.matcher(text.substring(line, Math.min(text.length(), text.indexOf('\n', m.end()) < 0 ? text.length() : text.indexOf('\n', m.end()) + 1))).lookingAt()) continue;
+                    int depth = 1, args = 0, i = m.end();
+                    boolean any = false;
+                    for (; i < text.length() && depth > 0; i++) {
+                        char c = text.charAt(i);
+                        if (c == '(') depth++;
+                        else if (c == ')') depth--;
+                        else if (c == ',' && depth == 1) args++;
+                        if (depth > 0 && !Character.isWhitespace(c)) any = true;
+                    }
+                    int n = any ? args + 1 : 0;
+                    if (n != e.getValue()) bad.add(f.getFileName() + ": " + e.getKey() + " с " + n + " аргументами, объявлено " + e.getValue());
+                }
+            }
+        }
+        assertTrue(bad.isEmpty(), "вызовы не по объявлению: " + bad);
+    }
+
+    /** Тело функции, что объявлена с {@code head}. */
+    private static String body(String source, String head) {
+        int at = source.indexOf(head);
+        assertTrue(at >= 0, "нет " + head);
+        int open = source.indexOf('{', at), depth = 1, i = open + 1;
+        for (; depth > 0; i++) {
+            if (source.charAt(i) == '{') depth++;
+            if (source.charAt(i) == '}') depth--;
+        }
+        return source.substring(open, i);
+    }
+
     /** Текст шейдера с файлами {@code #moj_import <incoming:…>} на их местах (каждый раз — один, как у ванили). */
     private static String withImports(Path include, String source, Set<String> seen) throws IOException {
         Matcher m = Pattern.compile("(?m)^\\s*#moj_import\\s*<incoming:([\\w./]+)>").matcher(source);

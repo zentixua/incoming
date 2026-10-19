@@ -261,6 +261,30 @@ float pallFloor(sampler2D ground, mat4 S, vec4 G, vec3 dir, float from, float en
     return 1e9;
 }
 
+// Окно наружного воздуха у глаза (client/fx/layer/OpenAir), блоки
+const vec3 PALL_OPEN_SIZE = vec3(96.0, 64.0, 96.0);
+
+// Доля наружного воздуха в точке p (от глаза): свет неба Minecraft / 15 в блоке точки (OpenAir) — пыль, мгла и голова
+// стены там, где воздух связан с открытым небом; в штольне — нет. at — нижний угол окна от глаза (w — 1, если окно
+// есть), wrap — где этот угол в текстуре (окно в ней по модулю размера). За окном — выше грубой карты рельефа слота S
+// (ground, G: pallRelief) наружный воздух, ниже — доля того блока, где луч из глаза вышел из окна.
+float pallOpen(sampler3D open, vec4 at, vec3 wrap, sampler2D ground, mat4 S, vec4 G, vec3 p) {
+    if (at.w < 0.5) return 1.0;
+    vec3 q = p - at.xyz;
+    if (any(lessThan(q, vec3(0.0))) || any(greaterThanEqual(q, PALL_OPEN_SIZE))) {
+        // над рельефом — открыто (пелена за устьем штольни видна из её глубины); под ним — по лучу: все места пелены и
+        // тени — на лучах из глаза, а луч идёт по воздуху, и длинная штольня и большая пещера за окном остаются закрытыми
+        if (p.y > S[0].z + pallRelief(ground, S, G, p.xz)) return 1.0;
+        vec3 e = -at.xyz, d = q - e, t = vec3(1e9);
+        if (abs(d.x) > 1e-6) t.x = (step(0.0, d.x) * PALL_OPEN_SIZE.x - e.x) / d.x;
+        if (abs(d.y) > 1e-6) t.y = (step(0.0, d.y) * PALL_OPEN_SIZE.y - e.y) / d.y;
+        if (abs(d.z) > 1e-6) t.z = (step(0.0, d.z) * PALL_OPEN_SIZE.z - e.z) / d.z;
+        q = clamp(e + d * clamp(min(min(t.x, t.y), t.z), 0.0, 1.0), vec3(0.5), PALL_OPEN_SIZE - 0.5);
+    }
+    // целочисленно: mod по float на краю (x = 96 при обратной величине на ulp меньше) давал бы 96 — за текстурой
+    return texelFetch(open, (ivec3(floor(q)) + ivec3(wrap)) % ivec3(PALL_OPEN_SIZE), 0).r;
+}
+
 // Расстояние до мира за пикселем (SceneDepth), годное для пелены: неба, а ещё NaN, бесконечность и «за глазом» (чужая
 // глубина LOD, дальняя плоскость) — 1e9, мира за пикселем нет. Иначе луч шёл бы сквозь километры пыли или NaN
 // попадал бы в накопленную пелену — чёрный кадр.
@@ -268,6 +292,46 @@ float pallScene(float d) {
     if (d < 0.0) return 1e9;
     if (d < 1e8) return d;
     return 1e9;
+}
+
+// Насколько расстояния d и e до мира — одно место (1 — одно, к 0 — разные): вес пикселя кадра пелены у соседа по
+// экрану (fx_pall_resolve, fx_pall_composite) — у края предмета пелена неба не ложится на стену и наоборот
+float pallAlike(float d, float e) {
+    float rel = abs(d - e) / max(min(d, e), 0.1);
+    return 1.0 / (1.0 + 400.0 * rel * rel);
+}
+
+// Наклон обратного расстояния до мира у пикселя at полного кадра (на пиксель по x и y): у плоскости 1/расстояние по экрану
+// линейно, и место соседа на той же поверхности — pallAhead. На каждой оси — разность с тем соседом, что ближе к
+// самому пикселю: на краю предмета другой сосед — фон
+vec2 pallSlope(sampler2D scene, ivec2 at, ivec2 size, float depth) {
+    float w = 1.0 / depth;
+    float r = 1.0 / pallScene(texelFetch(scene, clamp(at + ivec2(1, 0), ivec2(0), size - 1), 0).r) - w;
+    float l = w - 1.0 / pallScene(texelFetch(scene, clamp(at - ivec2(1, 0), ivec2(0), size - 1), 0).r);
+    float u = 1.0 / pallScene(texelFetch(scene, clamp(at + ivec2(0, 1), ivec2(0), size - 1), 0).r) - w;
+    float d = w - 1.0 / pallScene(texelFetch(scene, clamp(at - ivec2(0, 1), ivec2(0), size - 1), 0).r);
+    vec2 s = vec2(r, u);
+    if (abs(l) < abs(r)) s.x = l;
+    if (abs(d) < abs(u)) s.y = d;
+    // гребень или щель в пиксель (оба соседа — другое место, по разные стороны дальше допуска pallAlike, 5 %): наклона
+    // поверхности тут не узнать, наклон через край вёл бы «то же место» к фону
+    if (l * r < 0.0 && min(abs(l), abs(r)) > 0.05 * w) s.x = 0.0;
+    if (d * u < 0.0 && min(abs(d), abs(u)) > 0.05 * w) s.y = 0.0;
+    return s;
+}
+
+// Расстояние до мира, какое было бы на той же поверхности, что у пикселя (расстояние depth, наклон slope — pallSlope), в
+// offset пикселях полного кадра от него: сосед — то же место, если его расстояние близко к этому (pallAlike), а не к
+// расстоянию самого пикселя: у земли вдали под скользящим лучом расстояние за несколько пикселей меняется на десятки
+// процентов, и без наклона ровная земля выходила «краем» у каждого ряда лучей
+float pallAhead(float depth, vec2 slope, vec2 offset) {
+    return 1.0 / max(1.0 / depth + dot(slope, offset), 1e-9);
+}
+
+// Место p по оси (пиксели полного кадра, середина пикселя — +0,5) в решётке лучей кадра пелены, в factor раз мельче: луч
+// его пикселя t идёт через середину пикселя полного кадра floor((t + 0,5)·factor) (fx_pall) — целое t там, где луч
+float pallLattice(float p, float factor) {
+    return (p - 0.5 - floor(0.5 * factor)) / factor;
 }
 
 // Пиксель пелены годен: свет конечен (и в половинной точности кадра), пропускание 0..1; NaN не годен.

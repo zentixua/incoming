@@ -5,7 +5,10 @@
 
 // Пелена: накопление по кадрам (client/fx/layer/PallPass). Луч этого кадра сдвинут синим шумом — зерно; с прошлыми
 // кадрами в том же месте мира (перенос по глубине мира за пикселем, не дальше рамки пелены) оно сглаживается. Прошлое
-// зажато в пределы соседей этого кадра: где пелена на экране сдвинулась (её край за домом), след не тянется. Негодное
+// зажато в пределы соседей этого кадра на том же расстоянии до мира (pallAlike): где пелена на экране сдвинулась (её
+// край за домом), след не тянется. Соседи за краем предмета — другое место (небо за стеной, стена перед небом): с ними в
+// пределах прошлое на краю предмета при движении взгляда брало пелену фона (выборка прошлого — между пикселями), и по
+// контуру блоков на фоне пелены оставалась её кайма в пиксель кадра пелены (2–4 пикселя экрана). Негодное
 // (NaN, бесконечность — и луч, который fx_pall пометил негодным, альфа −1) в накопленное не попадает: негодный луч
 // этого кадра — пиксель берёт прошлое, негодное прошлое — пиксель начинает заново с этого кадра. Иначе одна точка NaN
 // расползалась бы по накопленному через соседей и выборку прошлого, и пелена за секунды становилась чёрной. Гриб на луче
@@ -40,19 +43,32 @@ void main() {
         fragColor = curOk ? cur : vec4(0.0, 0.0, 0.0, 1.0);
         return;
     }
-    // пределы прошлого — по годным соседям этого кадра
-    vec4 lo = vec4(1e9), hi = vec4(-1e9);
+    ivec2 fullSize = textureSize(Sampler2, 0);
+    ivec2 full = clamp(ivec2((vec2(px) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
+    float depth = pallScene(texelFetch(Sampler2, full, 0).r);
+    // пределы прошлого — по годным соседям этого кадра там же, где этот пиксель (на его поверхности по расстоянию до мира,
+    // pallAhead; сам — всегда); нет ни одного годного там же — по всем годным (как без края: этот кадр негоден, а
+    // прошлое есть)
+    vec2 slope = pallSlope(Sampler2, full, fullSize, depth);
+    vec4 lo = vec4(1e9), hi = vec4(-1e9), loAll = vec4(1e9), hiAll = vec4(-1e9);
     for (int y = -1; y <= 1; y++) {
         for (int x = -1; x <= 1; x++) {
-            vec4 n = texelFetch(Sampler0, clamp(px + ivec2(x, y), ivec2(0), size - 1), 0);
+            ivec2 q = clamp(px + ivec2(x, y), ivec2(0), size - 1);
+            vec4 n = texelFetch(Sampler0, q, 0);
             if (!pallValid(n)) continue;
+            loAll = min(loAll, n);
+            hiAll = max(hiAll, n);
+            ivec2 qf = clamp(ivec2((vec2(q) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
+            float d = pallScene(texelFetch(Sampler2, qf, 0).r);
+            if (q != px && pallAlike(d, pallAhead(depth, slope, vec2(qf - full))) < 0.5) continue;
             lo = min(lo, n);
             hi = max(hi, n);
         }
     }
-    ivec2 fullSize = textureSize(Sampler2, 0);
-    ivec2 full = clamp(ivec2((vec2(px) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
-    float depth = pallScene(texelFetch(Sampler2, full, 0).r);
+    if (any(greaterThan(lo, hi))) {
+        lo = loAll;
+        hi = hiAll;
+    }
     vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
@@ -69,7 +85,11 @@ void main() {
     vec2 uv = prev.xy / prev.w * 0.5 + 0.5;
     // прошлого в этом месте нет (за глазом, вне кадра) — или оно негодно: пиксель начинает заново
     bool seen = prev.w > 0.0 && all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
-    vec4 past = seen ? texture(Sampler1, uv) : vec4(0.0);
+    // луч пикселя кадра пелены идёт через середину пикселя кадра full (fx_pall), а не через середину своего пикселя:
+    // прошлое — в той же решётке лучей (pallLattice), иначе и при неподвижном взгляде выборка шла бы между пикселями, и
+    // прошлое каждый кадр размывалось бы с соседями
+    vec2 lattice = vec2(pallLattice(uv.x * float(fullSize.x), PallFrame.z), pallLattice(uv.y * float(fullSize.y), PallFrame.z));
+    vec4 past = seen ? texture(Sampler1, (lattice + 0.5) / vec2(size)) : vec4(0.0);
     bool pastOk = seen && pallValid(past) && all(lessThanEqual(lo, hi));
     if (!curOk) {
         fragColor = pastOk ? past : vec4(0.0, 0.0, 0.0, 1.0);

@@ -25,6 +25,16 @@ uniform vec4 PallWilson0;
 uniform vec4 PallWilson1;
 // грибы кадра (mushroom.glsl, MushroomField): что гриб закрывает перед точкой
 uniform sampler2D Sampler11;
+// наружный воздух у глаза (pall.glsl: pallOpen, client/fx/layer/OpenAir); свой блок текстуры
+uniform sampler3D PallOpen;
+uniform vec4 PallOpenAt;
+uniform vec3 PallOpenWrap;
+
+// доля наружного воздуха в точке p (pall.glsl: pallOpen) — рельеф за окном по карте первого слота, что есть
+float pallOpenHere(vec3 p) {
+    if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler9, PallSlot0, PallGround0, p);
+    return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler10, PallSlot1, PallGround1, p);
+}
 
 // Голова стены слота перед точкой на [t0, t1]: доля, которую она пропускает, — по каждому её отрезку на луче
 // (pallWallSpans), в дымке воздуха у его середины (pallAir)
@@ -34,7 +44,8 @@ float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir
     for (int k = 0; k < 2; k++) {
         vec2 sp = k == 0 ? spans.xy : spans.zw;
         if (sp.y <= sp.x) continue;
-        float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4);
+        // голова стены — тоже вещество наружного воздуха (как в луче пелены, fx_pall: pallStep)
+        float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4) * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
         through *= 1.0 - pallAir(PallAir, 0.5 * (sp.x + sp.y), dir.y) * (1.0 - exp(-tau));
     }
     return through;
@@ -67,7 +78,7 @@ float pallThrough(vec3 dir, float len) {
             PallAt f = pallField(Sampler5, Sampler10, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler10, PallSlot1, PallGround1, q.xz), 1.0);
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
-        through *= 1.0 - pallAir(PallAir, t, dir.y) * (1.0 - exp(-tau));
+        through *= 1.0 - pallAir(PallAir, t, dir.y) * (1.0 - exp(-tau * pallOpenHere(q)));
     }
     return through * pallWallThrough(Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, dir, t0, t1)
             * pallWallThrough(Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, dir, t0, t1)
