@@ -46,18 +46,28 @@ void main() {
     ivec2 fullSize = textureSize(Sampler2, 0);
     ivec2 full = clamp(ivec2((vec2(px) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
     float depth = pallScene(texelFetch(Sampler2, full, 0).r);
-    // пределы прошлого — по годным соседям этого кадра там же, где этот пиксель (по расстоянию до мира; сам — всегда)
-    vec4 lo = vec4(1e9), hi = vec4(-1e9);
+    // пределы прошлого — по годным соседям этого кадра там же, где этот пиксель (на его поверхности по расстоянию до мира,
+    // pallAhead; сам — всегда); нет ни одного годного там же — по всем годным (как без края: этот кадр негоден, а
+    // прошлое есть)
+    vec2 slope = pallSlope(Sampler2, full, fullSize, depth);
+    vec4 lo = vec4(1e9), hi = vec4(-1e9), loAll = vec4(1e9), hiAll = vec4(-1e9);
     for (int y = -1; y <= 1; y++) {
         for (int x = -1; x <= 1; x++) {
             ivec2 q = clamp(px + ivec2(x, y), ivec2(0), size - 1);
             vec4 n = texelFetch(Sampler0, q, 0);
             if (!pallValid(n)) continue;
-            float d = pallScene(texelFetch(Sampler2, clamp(ivec2((vec2(q) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1), 0).r);
-            if (q != px && pallAlike(d, depth) < 0.5) continue;
+            loAll = min(loAll, n);
+            hiAll = max(hiAll, n);
+            ivec2 qf = clamp(ivec2((vec2(q) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
+            float d = pallScene(texelFetch(Sampler2, qf, 0).r);
+            if (q != px && pallAlike(d, pallAhead(depth, slope, vec2(qf - full))) < 0.5) continue;
             lo = min(lo, n);
             hi = max(hi, n);
         }
+    }
+    if (any(greaterThan(lo, hi))) {
+        lo = loAll;
+        hi = hiAll;
     }
     vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);

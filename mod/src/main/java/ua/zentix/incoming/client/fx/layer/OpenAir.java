@@ -18,6 +18,7 @@ import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
 
+import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -36,7 +37,8 @@ import java.util.Arrays;
  * Окно — по секциям 16³, в текстуре по модулю размера (секция мира (x, y, z) всегда в одном месте текстуры): глаз
  * перешёл в соседнюю секцию — заполняются только вошедшие в окно секции, и каждый кадр перечитывается
  * {@link #REFRESH} секций по кругу (свет меняется — ударная волна ломает стены и кровлю): всё окно — за 36 кадров.
- * Чанка у клиента нет — наружный воздух.
+ * Пока пелены нет в кадре, окно не обновляется, но и не сбрасывается (вернётся в кадр — без перезаполнения всего окна);
+ * сбрасывается при смене мира. Чанка у клиента нет — наружный воздух.
  */
 public final class OpenAir {
     /** Окно, блоки: по горизонтали и по вертикали (кратно 16). */
@@ -57,6 +59,11 @@ public final class OpenAir {
     private static boolean ready;
     /** Глаз кадра, от которого шейдеры считают места. */
     private static Vec3 eye = Vec3.ZERO;
+    /**
+     * Мир, чьи секции в окне (другой мир — окно заново: секции с теми же местами — не его); слабой ссылкой — вышедший мир
+     * окно не держит.
+     */
+    private static WeakReference<ClientLevel> world = new WeakReference<>(null);
 
     private OpenAir() {}
 
@@ -65,7 +72,12 @@ public final class OpenAir {
      * своих лучей; false — окна нет (шейдер считает весь воздух наружным).
      */
     static boolean update(ClientLevel level, Vec3 eye) {
-        if (!ensure()) return ready = false;
+        // в измерении без неба (Энд) свет неба — ноль везде: там окна нет, весь воздух — наружный
+        if (!level.dimensionType().hasSkyLight() || !ensure()) return ready = false;
+        if (level != world.get()) {
+            Arrays.fill(STORED, Long.MIN_VALUE);
+            world = new WeakReference<>(level);
+        }
         OpenAir.eye = eye;
         int ex = (int) Math.floor(eye.x), ey = (int) Math.floor(eye.y), ez = (int) Math.floor(eye.z);
         x0 = start(ex, SIZE_XZ);
@@ -73,7 +85,13 @@ public final class OpenAir {
         z0 = start(ez, SIZE_XZ);
         int sx0 = x0 >> 4, sy0 = y0 >> 4, sz0 = z0 >> 4;
         LayerLightEventListener sky = level.getLightEngine().getLayerListener(LightLayer.SKY);
-        // строки секции — по 16 байт: выравнивание распаковки (4) их не трогает
+        // распаковка — плотная: ваниль оставляет длину строки и пропуски от своих картинок (карты, буквы шрифта), и
+        // драйвер читал бы за 4 КБ секции; строки секции — по 16 байт, выравнивание (4) их не трогает
+        GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
+        GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
+        GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
+        GL11.glPixelStorei(GL12.GL_UNPACK_IMAGE_HEIGHT, 0);
+        GL11.glPixelStorei(GL12.GL_UNPACK_SKIP_IMAGES, 0);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, texture);
         int i = 0, all = SX * SY * SX;
         for (int sx = sx0; sx < sx0 + SX; sx++) {
@@ -107,7 +125,7 @@ public final class OpenAir {
     private static void fill(ClientLevel level, LayerLightEventListener sky, int sx, int sy, int sz) {
         section.clear();
         if (level.getChunkSource().getChunkNow(sx, sz) == null || sy < level.getMinSection() || sy >= level.getMaxSection()) {
-            // чанка нет — не знаем, что там: наружный воздух; выше и ниже мира — тоже воздух (выше — небо)
+            // чанка нет — не знаем, что там: наружный воздух; выше мира — небо, ниже — закрыто
             byte open = sy < level.getMinSection() ? 0 : (byte) 255;
             for (int k = 0; k < 4096; k++) section.put(k, open);
             return;
@@ -146,12 +164,6 @@ public final class OpenAir {
         ProgramManager.glUseProgram(s.getId());
         Uniform.uploadInteger(Uniform.glGetUniformLocation(s.getId(), "PallOpen"), UNIT);
         ProgramManager.glUseProgram(program);
-    }
-
-    /** Смена мира: прежнее окно — не этого мира. */
-    static void reset() {
-        Arrays.fill(STORED, Long.MIN_VALUE);
-        ready = false;
     }
 
     private static boolean ensure() {

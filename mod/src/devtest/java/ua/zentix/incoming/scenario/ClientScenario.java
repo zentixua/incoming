@@ -1308,7 +1308,9 @@ public final class ClientScenario {
             int g = where.ground, y = where.deep;
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone hollow", x - 2, y - 1, z - 3, x + 40, y + 4, z + 3));
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:glowstone", x - 1, y + 4, z - 2, x + 39, y + 4, z + 2));
-            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", x + 36, y, z - 1, x + 38, g + 3, z + 1));
+            // шахта — до неба над её устьем (рельеф там бывает выше, чем у камеры)
+            int top = Math.max(g, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x + 37, z));
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", x + 36, y, z - 1, x + 38, top + 3, z + 1));
             fences(x, g, z);
             Incoming.LOG.info("SCENARIO pall-mine ground {} tunnel floor {} shaft at x {}..{}", g, y, x + 36, x + 38);
         });
@@ -1328,18 +1330,19 @@ public final class ClientScenario {
         at(t + 360, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -12", x + 0.5, where.ground + 2.6, z + 0.5)));
         int[] ages = {120, 240};
         for (int i = 0; i < ages.length; i++) {
-            int age = ages[i], at = t + 370 + 200 * i;
+            int age = ages[i], at = t + 370 + 220 * i, turn = at + 104 + OFF_WAIT;
             at(at, () -> fsSkip(age));
             pallShot(at + 100, "mine_rim_" + age + "s");
             offShot(at + 100, "mine_rim_" + age + "s_off", OFF_WAIT);
-            // и взгляд в движении (накопление пелены переносит прошлое на новое место): 0,25° за тик две секунды до кадра
+            // и взгляд в движении (накопление пелены переносит прошлое на новое место): 0,25° за тик две секунды до кадра —
+            // после кадра без пелены (выключенная пелена сбрасывает накопленное)
             for (int k = 0; k <= 40; k++) {
                 float yaw = -100 + 0.25f * k;
-                at(at + 120 + k, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %.2f -12", x + 0.5, where.ground + 2.6, z + 0.5, yaw)));
+                at(turn + k, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %.2f -12", x + 0.5, where.ground + 2.6, z + 0.5, yaw)));
             }
-            pallShot(at + 160, "mine_rim_" + age + "s_turning");
+            pallShot(turn + 40, "mine_rim_" + age + "s_turning");
         }
-        at(t + 370 + 200 * ages.length, () -> {
+        at(t + 370 + 220 * ages.length, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });

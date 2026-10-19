@@ -1075,6 +1075,5 @@ public final class PallPass {
         FIRE_NOW[0] = FIRE_NOW[1] = -1;
         GROUND_SOURCE[0] = GROUND_SOURCE[1] = null;
         GROUND_NOW[0] = GROUND_NOW[1] = -1;
-        OpenAir.reset();
     }
 }

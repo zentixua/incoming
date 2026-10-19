@@ -275,6 +275,29 @@ float pallAlike(float d, float e) {
     return 1.0 / (1.0 + 400.0 * rel * rel);
 }
 
+// Наклон обратного расстояния до мира у пикселя at полного кадра (на пиксель по x и y): у плоскости 1/расстояние по экрану
+// линейно, и место соседа на той же поверхности — pallAhead. На каждой оси — разность с тем соседом, что ближе к
+// самому пикселю: на краю предмета другой сосед — фон
+vec2 pallSlope(sampler2D scene, ivec2 at, ivec2 size, float depth) {
+    float w = 1.0 / depth;
+    float r = 1.0 / pallScene(texelFetch(scene, clamp(at + ivec2(1, 0), ivec2(0), size - 1), 0).r) - w;
+    float l = w - 1.0 / pallScene(texelFetch(scene, clamp(at - ivec2(1, 0), ivec2(0), size - 1), 0).r);
+    float u = 1.0 / pallScene(texelFetch(scene, clamp(at + ivec2(0, 1), ivec2(0), size - 1), 0).r) - w;
+    float d = w - 1.0 / pallScene(texelFetch(scene, clamp(at - ivec2(0, 1), ivec2(0), size - 1), 0).r);
+    vec2 s = vec2(r, u);
+    if (abs(l) < abs(r)) s.x = l;
+    if (abs(d) < abs(u)) s.y = d;
+    return s;
+}
+
+// Расстояние до мира, какое было бы на той же поверхности, что у пикселя (расстояние depth, наклон slope — pallSlope), в
+// offset пикселях полного кадра от него: сосед — то же место, если его расстояние близко к этому (pallAlike), а не к
+// расстоянию самого пикселя: у земли вдали под скользящим лучом расстояние за несколько пикселей меняется на десятки
+// процентов, и без наклона ровная земля выходила «краем» у каждого ряда лучей
+float pallAhead(float depth, vec2 slope, vec2 offset) {
+    return 1.0 / max(1.0 / depth + dot(slope, offset), 1e-9);
+}
+
 // Место p по оси (пиксели полного кадра, середина пикселя — +0,5) в решётке лучей кадра пелены, в factor раз мельче: луч
 // его пикселя t идёт через середину пикселя полного кадра floor((t + 0,5)·factor) (fx_pall) — целое t там, где луч
 float pallLattice(float p, float factor) {

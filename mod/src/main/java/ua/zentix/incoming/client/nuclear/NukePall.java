@@ -137,9 +137,9 @@ public final class NukePall {
             wet += head * wetHere + (pall ? a.pall.mist(dx, dz, eye, floor, ticks, water) : 0);
             dust = Math.max(dust, a.pall.ashRate(dx, dz, ticks, water));
         }
-        // под землёй пыли нет: у глаза — доля наружного воздуха, как у луча пелены (свет неба / 15, fx/layer/OpenAir) —
-        // в штольне пыль не глушит звук, не обрывает луч и не встаёт пеленой у камеры
-        double open = level.getBrightness(LightLayer.SKY, BlockPos.containing(cam)) / 15.0;
+        // под землёй пыли нет: у глаза — доля наружного воздуха, как у луча пелены (свет неба / 15, fx/layer/OpenAir; в
+        // измерении без неба — весь воздух) — в штольне пыль не глушит звук, не обрывает луч и не встаёт пеленой у камеры
+        double open = level.dimensionType().hasSkyLight() ? level.getBrightness(LightLayer.SKY, BlockPos.containing(cam)) / 15.0 : 1;
         s *= open;
         wet *= open;
         headMax *= open;

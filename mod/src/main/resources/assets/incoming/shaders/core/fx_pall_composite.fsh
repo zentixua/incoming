@@ -218,10 +218,14 @@ float pallTau(vec3 dir, float ta, float tb) {
     return tau;
 }
 
-// Пиксель кадра пелены t (в его пределах) и расстояние до мира, через которое прошёл его луч (fx_pall: середина пикселя
-// полного кадра floor((t + 0,5)·factor))
+// Пиксель полного кадра, через середину которого прошёл луч пикселя t кадра пелены (fx_pall: floor((t + 0,5)·factor)),
+// и расстояние до мира там
+ivec2 rayPixel(ivec2 t, ivec2 fullSize) {
+    return clamp(ivec2((vec2(t) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
+}
+
 float sampleDepth(ivec2 t, ivec2 fullSize) {
-    return pallScene(texelFetch(Sampler1, clamp(ivec2((vec2(t) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1), 0).r);
+    return pallScene(texelFetch(Sampler1, rayPixel(t, fullSize), 0).r);
 }
 
 // Пелена пикселя full с расстоянием до мира depth (по оси взгляда) по направлению dir — из кадра пелены, в factor раз
@@ -235,13 +239,13 @@ float sampleDepth(ivec2 t, ivec2 fullSize) {
 vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) {
     vec2 at = vec2(pallLattice(float(full.x) + 0.5, PallFrame.z), pallLattice(float(full.y) + 0.5, PallFrame.z));
     ivec2 base = ivec2(floor(at));
-    vec2 f = at - vec2(base);
+    vec2 f = at - vec2(base), slope = pallSlope(Sampler1, full, fullSize, depth);
     vec4 sum = vec4(0.0);
     float total = 0.0, same = 0.0;
     for (int j = 0; j <= 1; j++) {
         for (int i = 0; i <= 1; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
-            float a = pallAlike(sampleDepth(t, fullSize), depth);
+            float a = pallAlike(sampleDepth(t, fullSize), pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
             // билинейный вес без «?:» внутри выражения: Veil теряет скобки вокруг него (ShaderSourceTest)
             float w = mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j));
             same = max(same, a);
@@ -257,7 +261,7 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
     for (int j = -1; j <= 2; j++) {
         for (int i = -1; i <= 2; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
-            float d = sampleDepth(t, fullSize), a = pallAlike(d, depth);
+            float d = sampleDepth(t, fullSize), a = pallAlike(d, pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
             if (a > bestAlike) {
                 bestAlike = a;
                 best = t;
@@ -266,14 +270,22 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
         }
     }
     vec4 v = texelFetch(Sampler0, best, 0);
-    // неба или пустоты за пикселем — дальше рамки пелены; там поле без шума не досчитать: как есть
-    if (bestAlike > 0.5 || max(depth, bestDepth) >= 1e8) return v;
+    // неба или пустоты за пикселем — дальше рамки пелены; там поле без шума не досчитать: как есть. Свет на
+    // непрозрачность у луча, где пелены почти нет, не знаем (как fx.fsh): тоже как есть
+    if (bestAlike > 0.5 || max(depth, bestDepth) >= 1e8 || 1.0 - v.a < 0.02 || depth == bestDepth) return v;
     float axis = max(dot(dir, PallForward), 1e-3);
-    float near = min(depth, bestDepth) / axis, far = max(depth, bestDepth) / axis;
-    float tau = pallTau(dir, near, far);
-    float a = clamp(depth < bestDepth ? v.a * exp(tau) : v.a * exp(-tau), 0.0, 1.0);
-    // свет на непрозрачность у луча, где пелены почти нет, не знаем (как fx.fsh): остаётся как есть
-    if (1.0 - v.a < 0.02) return v;
+    float a;
+    if (depth > bestDepth) {
+        a = v.a * exp(-pallTau(dir, bestDepth / axis, depth / axis));
+    } else if (v.a >= 0.02) {
+        // пиксель ближе луча: его пелена — часть пелены луча
+        a = v.a * exp(min(pallTau(dir, depth / axis, bestDepth / axis), 80.0));
+    } else {
+        // луч почти непрозрачен (у кадра RGBA16F пропускание за толщей ~17 — ноль, и e^τ из нуля его не вернёт) —
+        // пропускание до пикселя по полю без шума
+        a = exp(-pallTau(dir, 0.0, depth / axis));
+    }
+    a = clamp(a, 0.0, 1.0);
     return vec4(v.rgb * ((1.0 - a) / (1.0 - v.a)), a);
 }
 

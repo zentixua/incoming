@@ -38,7 +38,8 @@ float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir
     for (int k = 0; k < 2; k++) {
         vec2 sp = k == 0 ? spans.xy : spans.zw;
         if (sp.y <= sp.x) continue;
-        float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4);
+        // голова стены — тоже вещество наружного воздуха (как в луче пелены, fx_pall: pallStep)
+        float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4) * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, dir * (0.5 * (sp.x + sp.y)));
         through *= 1.0 - pallAir(PallAir, 0.5 * (sp.x + sp.y), dir.y) * (1.0 - exp(-tau));
     }
     return through;
