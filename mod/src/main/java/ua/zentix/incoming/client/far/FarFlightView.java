@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -327,6 +328,11 @@ public final class FarFlightView {
         f.openPrev = f.open;
         FlightTrack track = f.track;
         if (track.isDead()) return;
+        // у сущности луч нужен только блику факела: без огня в этой фазе — не тратить его
+        if (!track.fromServer() && f.look.stage(FlightPhase.byId(track.phase(now - 1))).flame() == null) {
+            f.sighted = false;
+            return;
+        }
         if (f.sighted && (now + f.owner) % SIGHT_PERIOD != 0 || !track.predict(now - 1, POS)) {
             f.vis += Mth.clamp(f.visTarget - f.vis, -FADE, FADE);
             f.open += Mth.clamp(f.openTarget - f.open, -FADE, FADE);
@@ -401,12 +407,14 @@ public final class FarFlightView {
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
             double tr = view.air(d, dy);
             float vis = Mth.lerp(view.partial(), f.visPrev, f.vis);
-            Flame flame = stage.flame();
+            // с борта своего двигателя не видно: сущность камеры не рисуется, и струи нет — нет и света
+            Flame flame = entity && onboard(track) ? null : stage.flame();
             double flamePx = 0, flameAlpha = 0;
             if (flame != null && vis > 0) {
                 double jet = flame.length(track.phaseAge(t));
                 flameAt(track, t, flame.back(jet), dx, dy, dz, OUT);
-                double bd = OUT[0], ft = view.air(bd, BACK[1]), core = flameCore(entity, view, bd);
+                // доля ядра — по дальности корпуса, как струя у рендерера сущности: вместе ровно один факел
+                double bd = OUT[0], ft = view.air(bd, BACK[1]), core = flameCore(entity, view, d);
                 int fc = flame.color();
                 float open = Mth.lerp(view.partial(), f.openPrev, f.open);
                 out.light(BACK[0], BACK[1], BACK[2], flame.radius(jet), Sight.adapted(flame.brightness(), view.ambient()) * ft, ft, view.pixel(),
@@ -455,6 +463,13 @@ public final class FarFlightView {
         }
     }
 
+    /** Камера — на этом снаряде, с его борта (вид от первого лица). */
+    private static boolean onboard(FlightTrack track) {
+        Minecraft mc = Minecraft.getInstance();
+        Entity camera = mc.getCameraEntity();
+        return camera != null && mc.options.getCameraType().isFirstPerson() && camera.getUUID().equals(track.id);
+    }
+
     /** Поза модели в момент t по пути (место — уже в {@link #POS}). */
     private static void pose(FlightTrack track, double t, boolean coarse) {
         ProjectilePose p = POSE;
@@ -492,16 +507,18 @@ public final class FarFlightView {
         return entity ? view.farShare(d) : 1;
     }
 
-    /** Середина факела back блоков позади корпуса по ходу ({@link #BACK}, от камеры); out[0] — её дальность. */
+    /**
+     * Середина факела back блоков позади корпуса по оси носа ({@link #BACK}, от камеры); out[0] — её дальность. Ось — по
+     * курсу и тангажу пути, как у модели и струи вблизи ({@code ProjectilePose#rotation}), а не по ходу: на поджиге
+     * снаряд ещё стоит, и свет лёг бы на середину корпуса.
+     */
     private static void flameAt(FlightTrack track, double t, double back, double dx, double dy, double dz, double[] out) {
-        // ход — от точки тиком раньше к нынешней (за последним пакетом — по прямой к предсказанной)
-        double px = POS[0], py = POS[1], pz = POS[2];
-        track.at(t - 1, BACK);
-        double mx = px - BACK[0], my = py - BACK[1], mz = pz - BACK[2];
-        double len = Math.sqrt(mx * mx + my * my + mz * mz), k = len > 1e-6 ? back / len : 0;
-        BACK[0] = dx - mx * k;
-        BACK[1] = dy - my * k;
-        BACK[2] = dz - mz * k;
+        track.angles(t, ANGLES);
+        double yaw = Math.toRadians(ANGLES[0]), pitch = Math.toRadians(ANGLES[1]);
+        double nx = -Math.sin(yaw) * Math.cos(pitch), ny = -Math.sin(pitch), nz = Math.cos(yaw) * Math.cos(pitch);
+        BACK[0] = dx - nx * back;
+        BACK[1] = dy - ny * back;
+        BACK[2] = dz - nz * back;
         out[0] = Math.max(1e-3, Math.sqrt(BACK[0] * BACK[0] + BACK[1] * BACK[1] + BACK[2] * BACK[2]));
     }
 

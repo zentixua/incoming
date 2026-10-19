@@ -2052,7 +2052,8 @@ public final class ClientScenario {
         int t = 300, pass = 0;
         for (String light : new String[]{"night", "day"}) {
             String time = light.equals("day") ? "time set 6000" : "time set 18000";
-            at(t - 20, () -> cmd(time));
+            at(t, () -> cmd(time));
+            t += 20;
             for (FarShow s : show) {
                 for (double frac : new double[]{0.5, 0.85, 0.97}) t = flameShot(t, s, light, frac, true, ++pass);
                 for (double frac : new double[]{0.97, 1.1, 1.4}) t = flameShot(t, s, light, frac, false, ++pass);

@@ -118,6 +118,7 @@ class FarLookTest {
             }
         }
     }
+
     /** Все факелы паспорта: у каждой сущности полёта во всех фазах. */
     private static List<Flame> flames() {
         List<Flame> out = new ArrayList<>();
