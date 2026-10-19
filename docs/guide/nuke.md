@@ -38,11 +38,11 @@ In its first seconds the fireball lights the top of the wall orange, even by day
 The wave breaks buildings as it reaches them: their pieces fly with the dust. The ground doesn't shake before the
 wave. When it reaches you, the front hits you at once: your view jerks away from the burst in the same instant. Then
 the wind behind it keeps pushing you while you stand, and your view leans further and comes back over a few seconds. At 1 psi that is a few degrees, more from a bigger
-burst, whose wind blows longer. From about 1–1.5 psi the blow and the wind are stronger than anyone can stand against, sooner
+burst, whose wind blows longer. From about 0.8–1.4 psi the blow and the wind are stronger than anyone can stand against, sooner
 when you face the burst and the bigger it is, and your view stops at the edge of balance until the wind weakens. After the wave
 passes, the air flows back toward the burst for a few seconds. Behind a strong wave, from about 4 psi, this weaker wind
 leans you toward the burst by several degrees. In a jump the wind doesn't lean you.
-Where only the sound reaches, the wave moves your view by less than a degree. A wall or a house between you and the burst shelters
+Where only the sound reaches, the wave moves your view by about a degree or less. A wall or a house between you and the burst shelters
 you from the wind.
 
 The fireball shines white with brighter and darker patches boiling over it, and turns yellow and orange as it cools. It
