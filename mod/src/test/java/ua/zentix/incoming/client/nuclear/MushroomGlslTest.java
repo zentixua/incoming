@@ -5,6 +5,8 @@ import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
+import ua.zentix.incoming.nuclear.model.ThermalModel;
+import ua.zentix.incoming.nuclear.model.Yield;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -230,7 +232,7 @@ class MushroomGlslTest {
 
     /**
      * 15 кт в воздухе, зритель в 4 км, ясно (жалоба 18.10: в первые секунды «второе солнце» даёт резкие тени по всей
-     * карте). По физике шар во втором максимуме — диск в ~6° на высоте ~9°, свет на грань к нему — в ~220 раз ярче полудня
+     * карте). По физике шар во втором максимуме — диск в ~6° на высоте ~9°, свет на грань к нему — в ~250 раз ярче полудня
      * (Glasstone и Dolan: P_max = 4·W^0,56 кт/с — то же), через 2 с — в ~2,6 раза. Грань, отвёрнутая от шара, видит
      * освещённую им землю, боковая и верх — ещё и небо вокруг шара, рассеянное воздухом: во втором максимуме и они
      * в разы ярче полудня (на экране белые, как и грань к шару), а не при одном дневном свете в 200 раз темнее
@@ -238,7 +240,7 @@ class MushroomGlslTest {
      */
     @Test
     void ballLightsWhatFacesAway() {
-        double kt = 15, hob = 592, range = 4000, sd = Sight.KOSCHMIEDER * Math.hypot(range, hob) / 20_000;
+        double kt = 15, hob = Yield.optimalBurstHeight(kt), range = 4000, sd = Sight.KOSCHMIEDER * Math.hypot(range, hob) / ThermalModel.VISIBILITY_CLEAR;
         for (double t : new double[]{FireballModel.secondMaximumSeconds(kt), 2}) {
             MushroomModel.Shape s = MushroomModel.shape(t, kt, hob, false, 0);
             double d = Math.hypot(range, s.capY()), vy = s.capY() / d, flat = Math.sqrt(1 - vy * vy);

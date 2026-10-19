@@ -63,16 +63,17 @@ public final class CameraShake {
 
     /**
      * Фронт ядерной волны ударил тело и ветер за ним качнул его ({@link BodySway#tilt}): давление фронта {@code pPa} и
-     * скоростной напор за фронтом вдоль земли {@code qPa}, Па, с положительной фазой {@code tPlus}, с; {@code late} —
+     * скоростной напор за фронтом вдоль земли {@code qPa}, Па, доля открытого к взрыву {@code open} (ветровая тень), с
+     * положительной фазой {@code tPlus}, с; {@code late} —
      * сколько тиков назад (0..1) фронт прошёл тело; {@code away} — от взрыва к игроку (ветер дует от эпицентра),
      * {@code yaw} — куда игрок смотрит, °. Наклон ложится поверх того, что осталось от прежних волн. Возвращает наклон
      * тела по ветру, рад.
      */
-    public static double[] sway(double pPa, double qPa, double tPlus, double late, Vec3 away, double yaw) {
+    public static double[] sway(double pPa, double qPa, double open, double tPlus, double late, Vec3 away, double yaw) {
         double flat = Math.hypot(away.x, away.z);
         if (!(flat > 1e-6)) return new double[0];
         double x = away.x / flat, z = away.z / flat;
-        double[] tilt = BodySway.tilt(pPa, qPa, tPlus, edge(yaw, x, z), edge(yaw, -x, -z));
+        double[] tilt = BodySway.tilt(pPa, qPa, open, tPlus, edge(yaw, x, z), edge(yaw, -x, -z));
         if (tilt.length < 2) return tilt;
         if (SWAYS.size() >= SWAYS_MAX) SWAYS.remove(0);
         SWAYS.add(new Sway(tilt, ticks - Mth.clamp(late, 0, 1), x, z));

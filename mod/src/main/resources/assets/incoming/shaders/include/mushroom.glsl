@@ -425,7 +425,7 @@ float mushBallFalloff(float d2, float r2) {
 // отражённый землёй с альбедо albedo свет шара на горизонталь — на грань по доле земли, что она видит, (1 − ny)/2. Под
 // пеленой: прямое и рассеянное у шара — сквозь неё (through, e^(−τ/μ)), рассеянное ею вниз на горизонталь — diffuse на
 // единицу света над ней, на грань — по доле неба (1 + ny)/2. vy — синус высоты шара над горизонтом точки. Тени рельефа и
-// построек нет.
+// построек нет. Ближе ~0,05 V формула Glasstone ниже прямого — рассеянного нет (MushroomField.ballFace).
 float mushBallFace(float nv, float vy, float ny, float sd, float albedo, float through, float diffuse) {
     float direct = exp(-sd);
     float scattered = max(exp(-pow(max(sd, 0.0) / 3.912, 0.544)) - direct, 0.0);

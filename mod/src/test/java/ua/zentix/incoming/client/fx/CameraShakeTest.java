@@ -28,7 +28,7 @@ class CameraShakeTest {
     /** Волна {@code psi} от {@code kt} качнула игрока, что смотрит по курсу 0 (на +z); {@code away} — от взрыва к нему. */
     private static double[] sway(double psi, double kt, Vec3 away) {
         double[] w = wave(psi, kt);
-        return CameraShake.sway(w[2], w[0], w[1], 0, away, 0);
+        return CameraShake.sway(w[2], w[0], 1, w[1], 0, away, 0);
     }
 
     /**
@@ -59,7 +59,7 @@ class CameraShakeTest {
                 for (double pitch : new double[]{-90, -45, 0, 30, 60, 85, 89.9, 90}) {
                     for (double roll : new double[]{0, 10}) {
                         CameraShake.reset();
-                        double[] w = wave(1, 2), t = CameraShake.sway(w[2], w[0], w[1], 0, away, yaw);
+                        double[] w = wave(1, 2), t = CameraShake.sway(w[2], w[0], 1, w[1], 0, away, yaw);
                         int top = 0;
                         for (int i = 0; i < t.length; i++) if (t[i] > t[top]) top = i;
                         for (int tick = 0; tick < top / STEP; tick++) CameraShake.tick(true);
@@ -131,7 +131,7 @@ class CameraShakeTest {
                 for (double pitch : new double[]{30, 89.9}) {
                     for (double yaw = 0; yaw < 360; yaw += 45) {
                         CameraShake.reset();
-                        double[] w = wave(psi, kt), t = CameraShake.sway(w[2], w[0], w[1], 0, new Vec3(0.3, -0.2, 1), yaw);
+                        double[] w = wave(psi, kt), t = CameraShake.sway(w[2], w[0], 1, w[1], 0, new Vec3(0.3, -0.2, 1), yaw);
                         double most = 0;
                         Quaterniond prev = null;
                         for (int tick = 0; tick * STEP < t.length + 20; tick++) {
@@ -196,7 +196,7 @@ class CameraShakeTest {
     @Test
     void swayStartsWhenTheFrontPassed() {
         CameraShake.reset();
-        double[] w = wave(1, 2), t = CameraShake.sway(w[2], w[0], w[1], 0.5, new Vec3(0, 0, 1), 0);
+        double[] w = wave(1, 2), t = CameraShake.sway(w[2], w[0], 1, w[1], 0.5, new Vec3(0, 0, 1), 0);
         double half = Math.toDegrees(t[STEP / 2] + (t[STEP / 2 + 1] - t[STEP / 2]) * (STEP / 2.0 - STEP / 2));
         assertEquals(half, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
         assertTrue(half > 0, "полтика удара — уже наклон");

@@ -38,8 +38,8 @@ In its first seconds the fireball lights the top of the wall orange, even by day
 The wave breaks buildings as it reaches them: their pieces fly with the dust. The ground doesn't shake before the
 wave. When it reaches you, the front hits you at once: your view jerks away from the burst in the same instant. Then
 the wind behind it keeps pushing you while you stand, and your view leans further and comes back over a few seconds. At 1 psi that is a few degrees, more from a bigger
-burst, whose wind blows longer. From about 1–2 psi the wind is stronger than anyone can stand against, sooner when you
-face the burst and the bigger it is, and your view stops at the edge of balance until the wind weakens. After the wave
+burst, whose wind blows longer. From about 1–1.5 psi the blow and the wind are stronger than anyone can stand against, sooner
+when you face the burst and the bigger it is, and your view stops at the edge of balance until the wind weakens. After the wave
 passes, the air flows back toward the burst for a few seconds. Behind a strong wave, from about 4 psi, this weaker wind
 leans you toward the burst by several degrees. In a jump the wind doesn't lean you.
 Where only the sound reaches, the wave moves your view by less than a degree. A wall or a house between you and the burst shelters
@@ -50,10 +50,10 @@ rises and rolls into a ring of hot gas: the cap of the mushroom cloud, the same 
 up, its outside mixes with cold air, turns dark red and then into brown smoke. Dust in front of the fireball hides it,
 and its light falls on the dust and smoke around it. By day it outshines the sky only for its first few seconds; at
 night its red glow lasts a few seconds longer. It also lights the land for kilometres around: white at first,
-then yellow and orange, dark again within about ten seconds at 15 kt. 4 km from 15 kt, at its brightest, a tenth of a
-second after the flash, it lights the land about 200 times brighter than the sun does, and everything there turns
-white; it stays brighter than the sun for about three seconds. Slopes facing it are the brightest. Slopes turned away from it are lit by the air glowing around
-it and by the lit ground. Hills and houses don't shade its light yet. The cap is a dense cloud of round billows. When it rolls up, the nitrogen dioxide in it makes it
+then yellow and orange, dark again within about ten seconds at 15 kt. 4 km from a 15 kt burst, at its brightest, a tenth
+of a second after the flash, a slope facing it gets about 250 times the light of the noon sun and flat ground about 70
+times, and everything there turns white. Slopes facing it stay brighter than noon for about three seconds, flat ground
+for about two. Slopes turned away from it are lit by its light scattered in the air and by the lit ground. Hills and houses don't shade its light yet. The cap is a dense cloud of round billows. When it rolls up, the nitrogen dioxide in it makes it
 ochre, a yellowish brown, and the light that comes through it reddish brown. Then water condenses in it, and as the cap
 grows the dioxide in it thins out: from outside it turns beige and is almost white within one to two minutes at 15 kt,
 like an ordinary cloud. Seen from below, where light comes through it, it stays brown. A 1 kt cap is darker at first,

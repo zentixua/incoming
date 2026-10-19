@@ -13,7 +13,7 @@ class BodySwayTest {
 
     /** Наклон спиной к волне: по ветру — вперёд, назад — к взрыву. */
     private static double[] tilt(double psi, double tPlus) {
-        return BodySway.tilt(1000 * BlastModel.kpa(psi), q(psi), tPlus, BodySway.FORWARD, BodySway.BACK);
+        return BodySway.tilt(1000 * BlastModel.kpa(psi), q(psi), 1, tPlus, BodySway.FORWARD, BodySway.BACK);
     }
 
     private static double peakDeg(double psi, double tPlus) {
@@ -52,7 +52,7 @@ class BodySwayTest {
         }
         double a15 = peakDeg(1, phase(1, 15));
         assertTrue(a15 > Math.toDegrees(BodySway.BACK) && a15 < Math.toDegrees(BodySway.FORWARD), "1 psi, 15 кт: " + a15);
-        double face = Math.toDegrees(BodySway.peak(BodySway.tilt(1000 * BlastModel.kpa(1), q(1), phase(1, 15), BodySway.BACK, BodySway.FORWARD), 0));
+        double face = Math.toDegrees(BodySway.peak(BodySway.tilt(1000 * BlastModel.kpa(1), q(1), 1, phase(1, 15), BodySway.BACK, BodySway.FORWARD), 0));
         assertEquals(Math.toDegrees(BodySway.BACK), face, 1e-3, "1 psi, 15 кт, лицом к волне");
         for (double tPlus : new double[]{0.5, 0.8, 1.5}) {
             // край — между отсчётами (шаг счёта 1 мс, отсчёт — 10 мс)
@@ -72,8 +72,11 @@ class BodySwayTest {
         assertEquals(11.3, BodySway.jolt(p, q(1)), 0.2);
         assertEquals(BodySway.jolt(p, q(1)) * Math.sqrt(0.5), BodySway.jolt(p, q(1) / 2), 1e-9);
         assertEquals(0, BodySway.jolt(0, q(1)));
+        // за стеной (половина лучей к взрыву открыта) — половина удара, доля вдоль земли та же
+        double[] open = tilt(1, 0.5), half = BodySway.tilt(p, q(1), 0.5, 0.5, BodySway.FORWARD, BodySway.BACK);
+        assertEquals(open[1] / 2, half[1], 1e-12);
         for (double psi : new double[]{0.3, 1, 3, 10}) {
-            double[] t = tilt(psi, phase(psi, 15)), wind = BodySway.tilt(0, q(psi), phase(psi, 15), BodySway.FORWARD, BodySway.BACK);
+            double[] t = tilt(psi, phase(psi, 15)), wind = BodySway.tilt(0, q(psi), 1, phase(psi, 15), BodySway.FORWARD, BodySway.BACK);
             // скорость удара — с первого отсчёта; ветер потом ещё разгоняет тело, но с места оно трогается не с нуля
             double hit = BodySway.jolt(1000 * BlastModel.kpa(psi), q(psi)) * BodySway.HEIGHT / BodySway.INERTIA / BodySway.RATE;
             assertTrue(t[1] >= 0.95 * hit && t[1] >= 0.25 * fastest(t), psi + " psi: удар не сразу, " + Math.toDegrees(t[1]) * BodySway.RATE + "°/с");
@@ -100,7 +103,7 @@ class BodySwayTest {
         for (double[] e : new double[][]{{BodySway.FORWARD, BodySway.BACK}, {BodySway.BACK, BodySway.FORWARD}}) {
             for (double psi : new double[]{2, 3, 5, 10, 20}) {
                 double tPlus = phase(psi, 15);
-                double[] t = BodySway.tilt(1000 * BlastModel.kpa(psi), q(psi), tPlus, e[0], e[1]);
+                double[] t = BodySway.tilt(1000 * BlastModel.kpa(psi), q(psi), 1, tPlus, e[0], e[1]);
                 int held = 0, top = -1, low = 0;
                 for (int i = 0; i < t.length; i++) {
                     if (t[i] == e[0]) {
