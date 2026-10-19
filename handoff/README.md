@@ -35,10 +35,32 @@ All four are independent and can run at the same time. They touch neighbouring f
 | 3 | Wave jolt and flash contrast | wave arrival is a smooth lean instead of one sharp jolt; at 3–5 km from 15 kt the first seconds have extreme contrast and hard shadows across the map | `client/fx/CameraShake`, nuke flash light (`FxLights`, `ClientNuclear`), shadows from the fireball |
 | 4 | Rocket flames at render distance | flames are visible from far away but seem to vanish once the rocket enters render distance | `client/far/FarFlightView`, `FarRenderer`, `client/fx/Exhaust`, `client/render/PlumeRenderer` |
 
+## Artem's working principles (from his project instructions; they apply to every line you write)
+
+- **First principles.** Every decision (code, effects, physics, framing) comes from how the thing really works: real
+  laws of physics, real measured data, the real cause of the problem. Do not tune by eye and do not copy someone
+  else's solution without understanding why it works. Where a law is known only approximately, say so plainly.
+- **Fix the cause, never hide the symptom.** Prefer the architectural fix that closes the whole class of problems over
+  a patch for one case. No workarounds, no special cases for one situation, no magic numbers without a source.
+- **Picture and sound come out of the model.** If a frame looks wrong, fix the model, never tune the frame.
+- **Deviations from physics only as a setting or Artem's explicit decision, labelled as not real.** No quiet
+  deviations. Already labelled: `wave_speed` 0.20 on his servers (mod default 1.0), firestorm compressed ~15×, long
+  processes on the game clock, cloud fine detail is noise, all land is one dry soil type (see `physics-audit.md`).
+- **Real data with its source next to it** (comment in code or the source table). Missing data: a marked estimate.
+- **Features full and permanent**, not demos. Reuse what exists (the mod's own volume pass, `FxLights`, `BlastModel`,
+  open libraries already used such as FastNoiseLite) before building anything new.
+- **His complaints must never come back**: each fix gets a test or check that would have caught it. A bug CI missed
+  gets a test or a CI check, not a manual step.
+- **Effort by risk, small steps, fail fast**: run a short scenario or one seed before a long run. For every step ask
+  what breaks without it; if nothing clear, skip it.
+- **Honest**: report measured numbers, say what you could not check (shaders, his GPU), hide nothing.
+- Code and comments in Russian, like the rest of the repo; public texts (guide, release notes) English first, Russian
+  second, plain and exact, current state only, no "was/now" history.
+
 ## Rules for every session
 
 1. Read `CLAUDE.md` and the `.claude/rules/` files of your area first (`client.md`, `client-fx.md`, `nuclear.md`,
-   `client-scenario.md`, `gametest.md`); they win over this folder.
+   `client-scenario.md`, `gametest.md`); they win over this folder where they differ on code conventions.
 2. First principles: find the real cause and the real physics. Fix the cause, never tune the frame to hide it; prefer
    the fix that closes the whole class of problems. Where the law is only approximate, say so in the PR.
 3. Complaints phrased as "check whether it should be like this": derive what physics says first (use
