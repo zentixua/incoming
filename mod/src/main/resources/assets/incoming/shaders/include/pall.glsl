@@ -254,9 +254,18 @@ const vec3 PALL_OPEN_SIZE = vec3(96.0, 64.0, 96.0);
 // есть), wrap — где этот угол в текстуре (окно в ней по модулю размера). Вне окна — наружный воздух.
 float pallOpen(sampler3D open, vec4 at, vec3 wrap, vec3 p) {
     if (at.w < 0.5) return 1.0;
-    vec3 q = floor(p - at.xyz);
-    if (any(lessThan(q, vec3(0.0))) || any(greaterThanEqual(q, PALL_OPEN_SIZE))) return 1.0;
-    return texelFetch(open, ivec3(mod(q + wrap, PALL_OPEN_SIZE)), 0).r;
+    vec3 q = p - at.xyz;
+    if (any(lessThan(q, vec3(0.0))) || any(greaterThanEqual(q, PALL_OPEN_SIZE))) {
+        // за окном — доля того блока, где луч из глаза вышел из окна: все места пелены и тени — на лучах из глаза, а луч
+        // идёт по воздуху; длинная штольня и большая пещера за окном так и остаются закрытыми, устье — открытым
+        vec3 e = -at.xyz, d = q - e, t = vec3(1e9);
+        if (abs(d.x) > 1e-6) t.x = (step(0.0, d.x) * PALL_OPEN_SIZE.x - e.x) / d.x;
+        if (abs(d.y) > 1e-6) t.y = (step(0.0, d.y) * PALL_OPEN_SIZE.y - e.y) / d.y;
+        if (abs(d.z) > 1e-6) t.z = (step(0.0, d.z) * PALL_OPEN_SIZE.z - e.z) / d.z;
+        q = clamp(e + d * clamp(min(min(t.x, t.y), t.z), 0.0, 1.0), vec3(0.5), PALL_OPEN_SIZE - 0.5);
+    }
+    // целочисленно: mod по float на краю (x = 96 при обратной величине на ulp меньше) давал бы 96 — за текстурой
+    return texelFetch(open, (ivec3(floor(q)) + ivec3(wrap)) % ivec3(PALL_OPEN_SIZE), 0).r;
 }
 
 // Расстояние до мира за пикселем (SceneDepth), годное для пелены: неба, а ещё NaN, бесконечность и «за глазом» (чужая
@@ -287,6 +296,10 @@ vec2 pallSlope(sampler2D scene, ivec2 at, ivec2 size, float depth) {
     vec2 s = vec2(r, u);
     if (abs(l) < abs(r)) s.x = l;
     if (abs(d) < abs(u)) s.y = d;
+    // гребень или щель в пиксель (оба соседа — другое место, по разные стороны дальше допуска pallAlike, 5 %): наклона
+    // поверхности тут не узнать, наклон через край вёл бы «то же место» к фону
+    if (l * r < 0.0 && min(abs(l), abs(r)) > 0.05 * w) s.x = 0.0;
+    if (d * u < 0.0 && min(abs(d), abs(u)) > 0.05 * w) s.y = 0.0;
     return s;
 }
 

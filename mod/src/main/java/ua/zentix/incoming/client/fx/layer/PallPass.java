@@ -695,6 +695,8 @@ public final class PallPass {
         c.safeGetUniform("PallGround1").set(groundSlot1.x, groundSlot1.y, groundSlot1.z, groundSlot1.w);
         c.safeGetUniform("PallWater0").set(f.water0.x, f.water0.y, f.water0.z, f.water0.w);
         c.safeGetUniform("PallWater1").set(f.water1.x, f.water1.y, f.water1.z, f.water1.w);
+        c.safeGetUniform("PallWall0").set(f.wall0);
+        c.safeGetUniform("PallWall1").set(f.wall1);
         c.safeGetUniform("PallFloorFrom").set(f.floorFrom);
         c.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
         c.safeGetUniform("PallBalls").set(balls ? f.balls : NO_FIRE);

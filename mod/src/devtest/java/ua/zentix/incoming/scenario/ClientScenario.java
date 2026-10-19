@@ -1292,7 +1292,8 @@ public final class ClientScenario {
     /**
      * Сценарий pall-mine (днём, 1500 блоков от наземных 15 кт): за фронтом (через 8 с, когда волна прошла) у камеры —
      * забор, решётки и столб в 3–5 блоках перед пеленой (тонкое перед далёким: под шейдерпаком, который сглаживает края,
-     * по контуру не должно быть каймы фона без пелены), под ней в 24 блоках — штольня 40 блоков на восток со светящимся потолком и шахта в её конце до неба.
+     * по контуру не должно быть каймы фона без пелены), под ней в 24 блоках — штольня 80 блоков на восток (дальше окна
+     * наружного воздуха, OpenAir) со светящимся потолком и шахта в её конце до неба.
      * Кадры через 20 с после фронта: у земли, в штольне вдоль неё (пелены там быть не должно: под землёй пыли нет),
      * со дна шахты вверх (шахта открыта небу — пыль в ней есть), и через 2 и 4 минуты у земли — забор и столб на фоне
      * пелены, которая редеет и уходит по ветру;
@@ -1306,13 +1307,13 @@ public final class ClientScenario {
             where.ground = Math.max(mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), 63) - 1;
             where.deep = where.ground - 24;
             int g = where.ground, y = where.deep;
-            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone hollow", x - 2, y - 1, z - 3, x + 40, y + 4, z + 3));
-            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:glowstone", x - 1, y + 4, z - 2, x + 39, y + 4, z + 2));
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone hollow", x - 2, y - 1, z - 3, x + 80, y + 4, z + 3));
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:glowstone", x - 1, y + 4, z - 2, x + 79, y + 4, z + 2));
             // шахта — до неба над её устьем (рельеф там бывает выше, чем у камеры)
-            int top = Math.max(g, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x + 37, z));
-            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", x + 36, y, z - 1, x + 38, top + 3, z + 1));
+            int top = Math.max(g, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x + 77, z));
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", x + 76, y, z - 1, x + 78, top + 3, z + 1));
             fences(x, g, z);
-            Incoming.LOG.info("SCENARIO pall-mine ground {} tunnel floor {} shaft at x {}..{}", g, y, x + 36, x + 38);
+            Incoming.LOG.info("SCENARIO pall-mine ground {} tunnel floor {} shaft at x {}..{}", g, y, x + 76, x + 78);
         });
         // этапы — через 120 тиков: переход, кадр через 60 (туман чёрного дождя у камеры в штольне тает ~1,5 с, NukeSky),
         // кадр без пелены — после него
@@ -1323,7 +1324,7 @@ public final class ClientScenario {
         at(t + 120, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 0", x + 0.5, where.deep + 1.6, z + 0.5)));
         pallShot(t + 180, "mine_tunnel");
         offShot(t + 180, "mine_tunnel_off", OFF_WAIT);
-        at(t + 240, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -70", x + 37.5, where.deep + 1.6, z + 0.5)));
+        at(t + 240, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -70", x + 77.5, where.deep + 1.6, z + 0.5)));
         pallShot(t + 300, "mine_shaft");
         offShot(t + 300, "mine_shaft_off", OFF_WAIT);
         // край блоков на фоне пелены: пелена у камеры редеет и уходит по ветру, забор и столб — на её фоне

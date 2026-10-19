@@ -21,6 +21,9 @@ import org.lwjgl.system.MemoryUtil;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 /**
  * Где у камеры наружный воздух: свет неба Minecraft в окне 96×64×96 блоков вокруг глаза — трёхмерной текстурой (R8,
@@ -64,6 +67,11 @@ public final class OpenAir {
      * окно не держит.
      */
     private static WeakReference<ClientLevel> world = new WeakReference<>(null);
+    /**
+     * Шейдеры, чьей программе номер блока окна уже задан (по объекту, слабо: номер программы после перезагрузки шейдеров
+     * бывает прежним, а программа — новая).
+     */
+    private static final Set<ShaderInstance> UNIT_SET = Collections.newSetFromMap(new WeakHashMap<>());
 
     private OpenAir() {}
 
@@ -159,11 +167,14 @@ public final class OpenAir {
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, on ? texture : 0);
         GlStateManager._activeTexture(unit);
-        // номер блока — в саму программу; текущую вернуть (ShaderInstance помнит, какая текущая, и не переключает)
-        int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-        ProgramManager.glUseProgram(s.getId());
-        Uniform.uploadInteger(Uniform.glGetUniformLocation(s.getId(), "PallOpen"), UNIT);
-        ProgramManager.glUseProgram(program);
+        // номер блока — в саму программу, раз на шейдер (он — состояние программы); текущую
+        // вернуть (ShaderInstance помнит, какая текущая, и не переключает)
+        if (UNIT_SET.add(s)) {
+            int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+            ProgramManager.glUseProgram(s.getId());
+            Uniform.uploadInteger(Uniform.glGetUniformLocation(s.getId(), "PallOpen"), UNIT);
+            ProgramManager.glUseProgram(program);
+        }
     }
 
     private static boolean ensure() {

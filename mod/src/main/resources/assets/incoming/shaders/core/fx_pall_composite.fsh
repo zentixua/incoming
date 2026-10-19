@@ -47,6 +47,9 @@ uniform vec4 PallGround1;
 uniform float PallFloorFrom;
 uniform vec4 PallWater0;
 uniform vec4 PallWater1;
+// голова стены пыли слотов (client/nuclear/BlastWall): остаток пелены по полю у пикселя без своего луча (pallTau)
+uniform mat4 PallWall0;
+uniform mat4 PallWall1;
 // грибы кадра (MushroomField) и их карта тени от солнца (fx_mush_shadow)
 uniform sampler2D Sampler7;
 uniform sampler2D Sampler8;
@@ -198,8 +201,9 @@ vec3 flames(sampler2D map, mat4 S, mat4 F, vec3 p, float dist, float pixel) {
     return near * (hot * e + F[3].rgb * (0.12 * F[1].w * around));
 }
 
-// Толща пелены без шума по лучу dir от глаза на [ta, tb] — шесть шагов по полю обоих слотов (как пелена перед
-// квадратами слоя, pall_front.glsl: pallThrough), с долей наружного воздуха (pallOpen)
+// Толща пелены без шума по лучу dir от глаза на [ta, tb] — шесть шагов по полю обоих слотов и голова стены (как пелена
+// перед квадратами слоя, pall_front.glsl: pallThrough), с долей наружного воздуха (pallOpen); облако Вильсона — нет
+// (тонкая оболочка на секунды)
 float pallTau(vec3 dir, float ta, float tb) {
     float tau = 0.0, ds = (tb - ta) / 6.0;
     for (int i = 0; i < 6; i++) {
@@ -214,6 +218,18 @@ float pallTau(vec3 dir, float ta, float tb) {
             s += f.sigma.x + f.sigma.y + f.sigma.z;
         }
         tau += s * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, q) * ds;
+    }
+    // голова стены пыли — по её отрезкам на луче (как пелена перед квадратами слоя, pall_front.glsl: pallWallThrough)
+    for (int k = 0; k < 2; k++) {
+        mat4 S = k == 0 ? PallSlot0 : PallSlot1, V = k == 0 ? PallWall0 : PallWall1;
+        vec4 G = k == 0 ? PallGround0 : PallGround1, W = k == 0 ? PallWater0 : PallWater1;
+        vec4 spans = pallWallSpans(S, V, G, dir, ta, tb);
+        for (int j = 0; j < 2; j++) {
+            vec2 sp = j == 0 ? spans.xy : spans.zw;
+            if (sp.y <= sp.x) continue;
+            float wall = k == 0 ? pallWallTau(Sampler5, S, V, G, W, dir, sp.x, sp.y, 4) : pallWallTau(Sampler6, S, V, G, W, dir, sp.x, sp.y, 4);
+            tau += wall * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, dir * (0.5 * (sp.x + sp.y)));
+        }
     }
     return tau;
 }
@@ -242,6 +258,7 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
     vec2 f = at - vec2(base), slope = pallSlope(Sampler1, full, fullSize, depth);
     vec4 sum = vec4(0.0);
     float total = 0.0, same = 0.0;
+    bool clear = true;
     for (int j = 0; j <= 1; j++) {
         for (int i = 0; i <= 1; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
@@ -250,12 +267,15 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
             float w = mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j));
             same = max(same, a);
             w *= a + 1e-4;
-            sum += texelFetch(Sampler0, t, 0) * w;
+            vec4 v = texelFetch(Sampler0, t, 0);
+            clear = clear && 1.0 - v.a < 0.02;
+            sum += v * w;
             total += w;
         }
     }
-    // хоть один луч прошёл то же место (сходство больше половины) — он и есть
-    if (same > 0.5) return sum / total;
+    // хоть один луч прошёл то же место (сходство больше половины) — он и есть; и ни у одного из четырёх пелены почти нет
+    // (свет на непрозрачность не узнать, как в fx.fsh) — пиксель тоже без неё, искать дальше нечего
+    if (same > 0.5 || clear) return sum / total;
     ivec2 best = clamp(base, ivec2(0), lowSize - 1);
     float bestAlike = -1.0, bestDepth = depth;
     for (int j = -1; j <= 2; j++) {
