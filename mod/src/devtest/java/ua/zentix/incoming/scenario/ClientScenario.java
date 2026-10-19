@@ -211,6 +211,7 @@ public final class ClientScenario {
         else if ("loiter".equals(mode)) planLoiter();
         else if ("models".equals(mode)) planModels();
         else if ("far-models".equals(mode)) planFarModels();
+        else if ("flame-edge".equals(mode)) planFlameEdge();
         else if ("hud".equals(mode)) planHud();
         else if ("map".equals(mode)) planMap();
         else if ("target-map".equals(mode)) planTargetMap();
@@ -2027,6 +2028,96 @@ public final class ClientScenario {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });
+    }
+
+    /**
+     * Факел на краю прорисовки ({@code flame-edge}): ракета «Града» и ракета на ускорителе ночью и днём, сбоку, на одной
+     * линии от зрителя — сущностью (клиентская копия) на 0,5, 0,85 и 0,97 прорисовки и путём по пакетам на 0,97, 1,1 и
+     * 1,4. Кадры {@code flame_<свет>_<снаряд>_<сотые прорисовки>_<entity|far>} (на 0,97 — одна поза обоими путями):
+     * факел — одна картинка по обе стороны края; строка {@code SCENARIO flame-edge} — его свет (ядро, доля, блик, вуаль).
+     */
+    private void planFlameEdge() {
+        List<FarShow> show = List.of(
+                new FarShow("rocket", WeaponType.ROCKET, false, ua.zentix.incoming.entity.FlightPhase.BOOST, -20, 0, 1),
+                new FarShow("missile", WeaponType.MISSILE, false, ua.zentix.incoming.entity.FlightPhase.BOOST, -10, 0, 1));
+        at(40, () -> {
+            cmd("gamemode creative");
+            cmd("gamerule doDaylightCycle false");
+            cmd("gamerule doWeatherCycle false");
+            cmd("weather clear");
+            Minecraft.getInstance().options.hideGui = true;
+            Minecraft.getInstance().options.cloudStatus().set(net.minecraft.client.CloudStatus.OFF);
+            hover = true;
+        });
+        int t = 300, pass = 0;
+        for (String light : new String[]{"night", "day"}) {
+            String time = light.equals("day") ? "time set 6000" : "time set 18000";
+            at(t - 20, () -> cmd(time));
+            for (FarShow s : show) {
+                for (double frac : new double[]{0.5, 0.85, 0.97}) t = flameShot(t, s, light, frac, true, ++pass);
+                for (double frac : new double[]{0.97, 1.1, 1.4}) t = flameShot(t, s, light, frac, false, ++pass);
+            }
+        }
+        at(t, () -> {
+            Incoming.LOG.info("SCENARIO done");
+            Minecraft.getInstance().stop();
+        });
+    }
+
+    /**
+     * Кадр {@link #planFlameEdge}: снаряд s летит со скоростью s.speed по своему курсу и в тике кадра стоит прямо впереди
+     * на frac прорисовки (по горизонтали, на 4° выше глаза) — клиентской копией сущности или путём по пакетам. Возвращает
+     * тик после кадра.
+     */
+    private int flameShot(int t, FarShow s, String light, double frac, boolean entity, int pass) {
+        String name = String.format(java.util.Locale.ROOT, "flame_%s_%s_%03d_%s", light, s.name(), Math.round(frac * 100), entity ? "entity" : "far");
+        int shotAt = t + 40;
+        Vec3 dir = Vec3.directionFromRotation(s.pitch(), FAR_YAW), v = dir.scale(s.speed());
+        // место в тике кадра — по дальности прорисовки, известной только в игре
+        Vec3[] at = new Vec3[1];
+        StrikeProjectile[] shown = new StrikeProjectile[1];
+        java.util.UUID id = new java.util.UUID(0xF1AL, pass);
+        farStand(t - 6);
+        for (int k = t; k <= shotAt + 2; k++) {
+            int tk = k;
+            at(tk, () -> {
+                Minecraft mc = Minecraft.getInstance();
+                if (at[0] == null) {
+                    double d = frac * mc.options.getEffectiveRenderDistance() * 16.0;
+                    at[0] = FAR_EYE.add(0, d * Math.tan(Math.toRadians(4)), -d);
+                }
+                Vec3 p = at[0].add(v.scale(tk - shotAt));
+                if (!entity) {
+                    if ((tk - t) % ua.zentix.incoming.net.S2C.FarFlights.PERIOD == 0) {
+                        ua.zentix.incoming.client.flight.FlightTracks.received(new ua.zentix.incoming.net.S2C.FarFlights(List.of(
+                                farFlight(id, s, at[0], tk - shotAt, tk - t + 40))));
+                    }
+                    return;
+                }
+                if (shown[0] == null) {
+                    StrikeProjectile e = (s.weapon() == WeaponType.ROCKET ? ua.zentix.incoming.registry.ModEntities.ROCKET.get()
+                            : ua.zentix.incoming.registry.ModEntities.CRUISE_MISSILE.get()).create(mc.level);
+                    showPhase(e, s.phase(), at[0].add(dir.scale(5000)));
+                    shown[0] = e;
+                    e.moveTo(p.x, p.y, p.z, FAR_YAW, s.pitch());
+                    mc.level.addEntity(e);
+                }
+                StrikeProjectile e = shown[0];
+                e.setDeltaMovement(v);
+                e.moveTo(p.x, p.y, p.z, FAR_YAW, s.pitch());
+                e.yRotO = FAR_YAW;
+                e.xRotO = s.pitch();
+            });
+        }
+        at(shotAt - 1, () -> Incoming.LOG.info("SCENARIO flame-edge {}: {}", name, FarRenderer.describe()));
+        shot(shotAt, name);
+        // следующий кадр — на той же линии: шлейфы этого снимаются вместе с путём
+        at(shotAt + 4, () -> {
+            if (shown[0] != null) shown[0].discard();
+            ua.zentix.incoming.client.flight.FlightTracks.reset();
+            FarRenderer.reset();
+        });
+        return shotAt + 10;
     }
 
     /**

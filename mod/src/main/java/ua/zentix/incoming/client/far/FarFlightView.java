@@ -45,7 +45,10 @@ import java.util.Map;
  * углового размера, а мельче пятна {@link Sight#MIN_PIXELS} — пятно, бледнее во столько же раз ({@link Sight#body}):
  * закрыто то же небо; между — плавный переход. Свой цвет при свете неба, дымка — в непрозрачности ({@link Sight}).</li>
  * <li>Факел — свет ({@link Sight#light}) позади корпуса: днём — искра, ночью глаз привык к темноте — блик и вуаль на
- * километры. Маршевый турбовентиляторный двигатель ракеты и мотор шахеда ночью не светят — у них факела почти нет.</li>
+ * километры. Маршевый турбовентиляторный двигатель ракеты и мотор шахеда ночью не светят — у них факела почти нет.
+ * Факел один вблизи и вдали ({@link Flame}): и у сущности блик и вуаль — здесь, а ядро света с 0,8 прорисовки сменяет её
+ * струю ({@link #flameCore}): иначе на краю прорисовки, где сущность появляется, факел вдали гас бы целиком, а струя
+ * там — в тумане и без блика.</li>
  * <li>Шлейф — лента через точки пути от сопел ({@link TrailPoints}), одна вблизи и вдали, от пуска до конца следа (там
  * сходит на нет): расплывается, сносится ветром мода, поднимается и тает своим сроком, поэтому висит и после того, как снаряд пролетел или
  * взорвался. Мест частиц она не занимает: залп в сотни ракет не рвёт следы. Свет — карта освещения мира в точке
@@ -81,7 +84,7 @@ public final class FarFlightView {
     private static int owners;
     /** Тик обхода путей (чей путь не встретился — забыт). */
     private static long pass;
-    /** Снарядов, которые рисуются вдали (путь по пакетам, полёт не кончился). */
+    /** Снарядов в полёте (вдали — корпус и факел, вблизи у сущности — свет факела). */
     private static int active;
     @Nullable
     private static ClientLevel level;
@@ -115,6 +118,11 @@ public final class FarFlightView {
     private static Far nearest;
     private static double nearD, nearT, nearBody, nearBodyAlpha, nearFlame, nearFlameAlpha, nearModel;
     private static boolean nearCoarse;
+    /** Факелов в кадре (и у сущностей); ближний: дальность, доля ядра, ядро в пикселях и его непрозрачность, блик, вуаль. */
+    private static int flames;
+    @Nullable
+    private static Far flameOf;
+    private static double flameD, flameShare, flameCorePx, flameCoreAlpha, flameGlarePx, flameVeilPx;
 
     private FarFlightView() {}
 
@@ -217,7 +225,7 @@ public final class FarFlightView {
                 close(f, now);
             }
             sight(f, now, eye, world);
-            if (f.track.fromServer() && !f.track.isDead()) active++;
+            if (!f.track.isDead()) active++;
         }
         if (frozen) POINTS.hold();
         else POINTS.expire(now - 1);
@@ -318,7 +326,7 @@ public final class FarFlightView {
         f.visPrev = f.vis;
         f.openPrev = f.open;
         FlightTrack track = f.track;
-        if (!track.fromServer() || track.isDead()) return;
+        if (track.isDead()) return;
         if (f.sighted && (now + f.owner) % SIGHT_PERIOD != 0 || !track.predict(now - 1, POS)) {
             f.vis += Mth.clamp(f.visTarget - f.vis, -FADE, FADE);
             f.open += Mth.clamp(f.openTarget - f.open, -FADE, FADE);
@@ -351,6 +359,8 @@ public final class FarFlightView {
         flights = 0;
         points = 0;
         nearest = null;
+        flames = 0;
+        flameOf = null;
         Arrays.fill(COUNT, 0);
         double t = FlightTracks.now() - 1 + (frozen() ? 0 : view.partial());
         Vec3 cam = view.camera();
@@ -385,12 +395,36 @@ public final class FarFlightView {
                     segment(out, TrailPoints.index(c), HEAD + j);
                 }
             }
-            // корпус и факел вблизи рисуют модель и PlumeRenderer
-            if (!track.fromServer()) continue;
+            // есть сущность — корпус рисует её модель, струю факела — PlumeRenderer; свет факела — здесь
+            boolean entity = !track.fromServer();
             double dx = POS[0] - cam.x, dy = POS[1] - cam.y, dz = POS[2] - cam.z;
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
             double tr = view.air(d, dy);
             float vis = Mth.lerp(view.partial(), f.visPrev, f.vis);
+            Flame flame = stage.flame();
+            double flamePx = 0, flameAlpha = 0;
+            if (flame != null && vis > 0) {
+                double jet = flame.length(track.phaseAge(t));
+                flameAt(track, t, flame.back(jet), dx, dy, dz, OUT);
+                double bd = OUT[0], ft = view.air(bd, BACK[1]), core = flameCore(entity, view, bd);
+                int fc = flame.color();
+                float open = Mth.lerp(view.partial(), f.openPrev, f.open);
+                out.light(BACK[0], BACK[1], BACK[2], flame.radius(jet), Sight.adapted(flame.brightness(), view.ambient()) * ft, ft, view.pixel(),
+                        channel(fc, 0), channel(fc, 1), channel(fc, 2), vis * core, vis * open, LIGHT);
+                flamePx = 2 * LIGHT[0] / (bd * view.pixel());
+                flameAlpha = Math.min(1, LIGHT[2]) * vis * core;
+                flames++;
+                if (flameOf == null || bd < flameD) {
+                    flameOf = f;
+                    flameD = bd;
+                    flameShare = core;
+                    flameCorePx = flamePx;
+                    flameCoreAlpha = flameAlpha;
+                    flameGlarePx = 2 * LIGHT[3] / (bd * view.pixel());
+                    flameVeilPx = 2 * LIGHT[4] / (bd * view.pixel());
+                }
+            }
+            if (entity) continue;
             double length = f.look.size() / (d * view.pixel());
             double model = modelShare(length);
             if (model > 0 && vis > 0 && inFrame(view, dx, dy, dz, d, FarModels.TILE_RADIUS * f.look.size())) {
@@ -405,18 +439,6 @@ public final class FarFlightView {
             float a = (float) (OUT[1] * vis * tr * (1 - model)), lit = view.ambient();
             out.disc(dx, dy, dz, OUT[0], channel(c, 0) * lit, channel(c, 1) * lit, channel(c, 2) * lit, a);
             double bodyPx = 2 * OUT[0] / (d * view.pixel());
-            double flamePx = 0, flameAlpha = 0;
-            Flame flame = stage.flame();
-            if (flame != null && vis > 0) {
-                flameAt(track, t, flame, dx, dy, dz, OUT);
-                double bd = OUT[0], ft = view.air(bd, BACK[1]);
-                int fc = flame.color();
-                float open = Mth.lerp(view.partial(), f.openPrev, f.open);
-                out.light(BACK[0], BACK[1], BACK[2], flame.radius(), Sight.adapted(flame.brightness(), view.ambient()) * ft, ft, view.pixel(),
-                        channel(fc, 0), channel(fc, 1), channel(fc, 2), vis, vis * open, LIGHT);
-                flamePx = 2 * LIGHT[0] / (bd * view.pixel());
-                flameAlpha = Math.min(1, LIGHT[2]) * vis;
-            }
             flights++;
             COUNT[track.bomber ? B2 : track.weapon.ordinal()]++;
             if (nearest == null || d < nearD) {
@@ -461,13 +483,22 @@ public final class FarFlightView {
         return (dx * f.x() + dy * f.y() + dz * f.z()) / d >= Math.cos(angle);
     }
 
-    /** Середина факела — позади корпуса по ходу ({@link #BACK}, от камеры); out[0] — её дальность. */
-    private static void flameAt(FlightTrack track, double t, Flame flame, double dx, double dy, double dz, double[] out) {
+    /**
+     * Доля ядра света факела на дальности d: путь по пакетам — всё (струи нет), у сущности — с 0,8 прорисовки
+     * ({@link FarView#farShare}), а ближе ядро — её струя ({@code PlumeRenderer} тает той же долей). Блик и вуаль — на
+     * любой дальности: на краю прорисовки факел один.
+     */
+    static double flameCore(boolean entity, FarView view, double d) {
+        return entity ? view.farShare(d) : 1;
+    }
+
+    /** Середина факела back блоков позади корпуса по ходу ({@link #BACK}, от камеры); out[0] — её дальность. */
+    private static void flameAt(FlightTrack track, double t, double back, double dx, double dy, double dz, double[] out) {
         // ход — от точки тиком раньше к нынешней (за последним пакетом — по прямой к предсказанной)
         double px = POS[0], py = POS[1], pz = POS[2];
         track.at(t - 1, BACK);
         double mx = px - BACK[0], my = py - BACK[1], mz = pz - BACK[2];
-        double len = Math.sqrt(mx * mx + my * my + mz * mz), k = len > 1e-6 ? flame.back() / len : 0;
+        double len = Math.sqrt(mx * mx + my * my + mz * mz), k = len > 1e-6 ? back / len : 0;
         BACK[0] = dx - mx * k;
         BACK[1] = dy - my * k;
         BACK[2] = dz - mz * k;
@@ -559,7 +590,7 @@ public final class FarFlightView {
      * Пусто — вдали ничего нет.
      */
     public static String describe() {
-        if (isEmpty() || flights == 0 && points == 0) return "";
+        if (isEmpty() || flights == 0 && points == 0 && flames == 0) return "";
         StringBuilder sb = new StringBuilder("projectiles ").append(flights);
         if (flights > 0) {
             sb.append(" (");
@@ -579,6 +610,12 @@ public final class FarFlightView {
             if (nearFlame > 0) sb.append(String.format(Locale.ROOT, ", flame %.1f px α %.2f", nearFlame, nearFlameAlpha));
             if (f.visTarget < 1) sb.append(", behind terrain");
         }
+        Far g = flameOf;
+        if (g != null) {
+            sb.append(String.format(Locale.ROOT, "; flames %d, nearest %s (%s): %.0f blocks, core %.1f px α %.2f share %.2f, glare %.1f px, veil %.1f px",
+                    flames, g.track.bomber ? "b2" : g.track.weapon.getSerializedName(), g.track.fromServer() ? "packets" : "entity", flameD, flameCorePx,
+                    flameCoreAlpha, flameShare, flameGlarePx, flameVeilPx));
+        }
         return sb.append("; trail ").append(points).append(" points").toString();
     }
 
@@ -591,6 +628,8 @@ public final class FarFlightView {
         flights = 0;
         points = 0;
         nearest = null;
+        flames = 0;
+        flameOf = null;
         level = null;
         heights = null;
     }

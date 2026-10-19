@@ -52,6 +52,11 @@ public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up,
      * прорисовки её нет (там частицы), к краю прорисовки, где туман съедает частицы, — вся.
      */
     public double farShare(double d) {
+        return farShare(d, world);
+    }
+
+    /** {@link #farShare(double)} при дальности прорисовки world блоков. */
+    public static double farShare(double d, double world) {
         double a = 0.8 * world, t = (d - a) / Math.max(1, world - a);
         t = Math.max(0, Math.min(1, t));
         return t * t * (3 - 2 * t);
