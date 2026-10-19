@@ -28,9 +28,11 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
 
 Everyone within 20 km of the target hears a siren in advance. Then come the flash, the fireball and the mushroom cloud.
 The flash lights up the sky and the land like lightning, in clear weather up to about 100 km away, in rain up to
-about 30 km. The blast wave itself is invisible. The wind right behind it lifts what lies on the ground (dust and earth, smoke over a
-burning town, spray over water) and rolls it forward as a churning wall, like a dust storm. The wall is the youngest
-dust of the pall: right at the front it hugs the ground, and behind it the dust grows thicker and taller. At 15 kt it is
+about 30 km. The blast wave itself is invisible. The wind right behind it tears up what lies on the ground (dust and earth, smoke over a
+burning town, spray over water) as a churning wall. The dust doesn't fly out with the wave: the wind carries it only a
+few tens of metres and it stays where it was torn up, while the wave runs on and tears up more ahead, so the wall rolls
+over the land like a dust storm. The wall is the youngest dust of the pall: right at the front it hugs the ground, and
+behind it the dust grows thicker and taller. At 15 kt it is
 30–40 m tall 1 km from the burst and about 60 m tall 4 km out. After an air burst it stays dense out to about 4.5 km,
 thins out beyond and fades at about 8 km, where the wind is too weak to lift dust; after a ground burst it is dense out
 to about 3.5 km and fades at about 7 km. Inside the wall it is dark. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
@@ -70,8 +72,10 @@ Behind the wave the dust keeps rising as a pall: within seconds to 50–100 m, a
 heated by the flash lifts it higher. For a 15 kt air burst it tops out at about 230 m 1 km from the burst, 150 m at 1.4 km and lower
 toward the edge. From a rooftop near the blast you first see the wave cross the town, then the dust swallows you. At
 night the fireball first lights it as bright as day for several seconds, then the fires light it orange. The top of
-the dust wall is lit the same way, and the side of the wall away from the fireball stays dark. The pall's clumps are
-lighter on the side facing the light and darker in their folds. Inside it you see only a few metres, it is dark even at noon, and sounds are
+the dust wall is lit the same way, and the side of the wall away from the fireball stays dark. The young pall is
+torn into clumps, lighter on the side facing the light and darker in their folds; within a minute or two the rising
+air mixes it, and from above, from a hill or a plane, the old pall is one even blanket, like fog seen from a plane,
+with only gentle humps on its top. Inside it you see only a few metres, it is dark even at noon, and sounds are
 muffled. At 15 kt it stays dark about 20 minutes 1.4 km from the burst, as in Hiroshima; within half a kilometre of the
 burst it clears in minutes, drawn up into the column of the mushroom cloud. The dust also fills the valleys around the
 town. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for about an hour and a half, a little longer after an air burst. Where the
