@@ -60,11 +60,11 @@ float pallThrough(vec3 dir, float len) {
         vec3 q = dir * t;
         // по полной толще всего вещества — как луч объёма (водяная пыль тоже гасит то, что за ней)
         if (PallSlot0[1].w > 0.5) {
-            PallAt f = pallField(Sampler5, Sampler9, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler9, PallSlot0, PallGround0, q.xz));
+            PallAt f = pallField(Sampler5, Sampler9, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler9, PallSlot0, PallGround0, q.xz), 1.0);
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
         if (PallSlot1[1].w > 0.5) {
-            PallAt f = pallField(Sampler5, Sampler10, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler10, PallSlot1, PallGround1, q.xz));
+            PallAt f = pallField(Sampler5, Sampler10, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler10, PallSlot1, PallGround1, q.xz), 1.0);
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
         through *= 1.0 - pallAir(PallAir, t, dir.y) * (1.0 - exp(-tau));

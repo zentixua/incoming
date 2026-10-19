@@ -91,6 +91,39 @@ class PallFieldTest {
     }
 
     /** Столб над точкой (тень, свет неба) — интеграл профиля по высоте до верха, с ошибкой меньше 0,01. */
+    /**
+     * Жалоба 18.10: с высоты пелена выглядела золотистыми и тёмными клочьями, а не одним одеялом. Перемешанный слой
+     * ({@link PallField#mixed}, {@link PallField#clumps}) с буграми верха ({@link PallField#BUMPS}) у 15 кт на 592 м через
+     * 6–7 минут: где средняя толща слоя над землёй не меньше 3 / (0,8·(1 − BUMPS)) ≈ 5,4, самый тонкий столб
+     * (просвет клубов в ложбине между буграми) — не тоньше 3: земля сквозь него — не больше 5 % (e^(−3)), и свет толстого слоя сверху от толщи уже почти не
+     * зависит — одеяло ровное. Молодой слой у фронта ещё не перемешан — клочья с просветами (Kuhl §3.5).
+     */
+    @Test
+    void oldPallIsOneBlanket() {
+        PallField p = new PallField(HIROSHIMA, NOON);
+        double[] v = new double[4];
+        int thick = 0;
+        for (int i = 0; i < PallField.BINS; i++) {
+            p.dust(i, 8000, v);
+            double tau = v[0] * PallField.column(0) * v[1];
+            if (tau < 3 / (PallField.clumps(0, 1) * (1 - PallField.BUMPS))) continue;
+            thick++;
+            assertTrue(v[3] > 0.95, "узел " + i + ": слой не перемешан за 6 минут: " + v[3]);
+            double thinnest = tau * PallField.clumps(0, v[3]) * (1 - PallField.BUMPS);
+            assertTrue(thinnest >= 3, "узел " + i + ": в просвете толща " + thinnest + " при средней " + tau);
+        }
+        assertTrue(thick > 10, "толстой пелены почти нет: " + thick + " узлов");
+        assertEquals(0, PallField.mixed(0));
+        assertEquals(0, PallField.clumps(0, PallField.mixed(0)), 1e-12, "молодой слой — без просветов");
+        for (double shape = 0; shape <= 3.5; shape += 0.5) {
+            for (double after = 0; after <= 600; after += 30) {
+                double m = PallField.mixed(after), c = PallField.clumps(shape, m);
+                assertTrue(Math.abs(c - 1) <= Math.abs(shape - 1) + 1e-12, "колебания растут");
+                assertTrue(Math.abs(c - 1) >= PallField.MIXED * Math.abs(shape - 1) - 1e-12, "колебания ниже перемешанного слоя");
+            }
+        }
+    }
+
     @Test
     void columnIsIntegralOfProfile() {
         for (double x = -1.4; x <= 1.2; x += 0.05) {

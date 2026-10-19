@@ -78,6 +78,8 @@ struct PallAt {
     float dense;
     // доля воды там, откуда подняло пыль и брызги (в первые секунды, пока снос мал, — под точкой)
     float wet;
+    // насколько слой пыли перемешан (PallField.mixed): клочья молодого слоя расходятся (pallMixed)
+    float mixed;
 };
 
 // доля густоты у земли на высоте x пелены (PallField.profile)
@@ -123,7 +125,8 @@ float pallWater(sampler2D ground, vec4 G, vec2 rel) {
 // у точки за вычетом сноса (доля по возрасту пыли — по узлу самой точки, PallField.source), где читается и таблица; мгла — у её источника на оси шлейфа (над водой пожаров нет), только
 // если она здесь есть; базисная волна — вода, поднятая у эпицентра, над чем бы ни катилась (W.z = 0 — её нет). Без воды
 // под пеленой (W.w = 0) карта не читается.
-PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3 p, float floorUp) {
+// bumps — верх слоя пыли над точкой в долях верха таблицы (бугры верха, PallField.BUMPS; без шума — 1)
+PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3 p, float floorUp, float bumps) {
     vec2 q = p.xz - S[0].xy;
     float hill = max(floorUp, 0.0);
     float above = p.y - S[0].z - hill, reach = S[0].w;
@@ -132,7 +135,7 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     float r = length(lift);
     float ud = r / reach;
     vec4 dust = texture(table, vec2(min(ud, 1.0), S[2].z));
-    float topD = max(dust.g, 1.0), edge = pallEdge(ud);
+    float topD = max(dust.g, 1.0) * bumps, edge = pallEdge(ud);
     float sd = dust.r * edge, ss = 0.0, topS = 1.0;
     float len = S[1].z, along = clamp(dot(q, S[2].xy), 0.0, len);
     vec2 source = q - S[2].xy * along;
@@ -172,7 +175,19 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     a.fire = fire * exp(-3.0 * max(a.height.y, 0.0));
     a.dense = (sd + ss + sg) / max(S[3].x, 1e-6);
     a.wet = wet;
+    a.mixed = dust.a;
     return a;
+}
+
+// Неровность верха слоя пыли (PallField.BUMPS): верх над точкой — (1 ± она) верха таблицы
+const float PALL_BUMPS = 0.3;
+// Колебания густоты перемешанного слоя — доля прежних (PallField.MIXED)
+const float PALL_MIXED = 0.2;
+
+// Клубы пелены в перемешанном слое (PallField.clumps): множитель густоты shape (в среднем 1), колебания убывают от клочьев
+// молодого слоя к PALL_MIXED по mixed; среднее — 1
+float pallMixed(float shape, float mixed) {
+    return 1.0 + (shape - 1.0) * (1.0 - (1.0 - PALL_MIXED) * mixed);
 }
 
 // Форма клубов по шуму (VolumeNoise.shape): n — каналы плитки (клубы, мелкие края), fill — насколько пелена сплошная;
@@ -375,6 +390,23 @@ float pallLifted(float s) {
 // Верх клина по доле u его длины за краем, доля верха в конце (BlastWall.top): u^(5/6), за клином — весь
 float pallWallTop(float u) {
     return pow(clamp(u, 0.0, 1.0), 0.8333333);
+}
+
+// Доля пути пыли с ветром за фронтом за долю u положительной фазы (BlastWall.carriedShare): u·e^(1 − u), за фазой — 1
+float pallWallCarried(float u) {
+    float x = clamp(u, 0.0, 1.0);
+    return x * exp(1.0 - x);
+}
+
+// Место пыли головы в координатах её самой (BlastWall.origin): точка (rel — от эпицентра по земле, z — над рельефом,
+// блоки) за вычетом пути с ветром за фронтом — carried (блоки) за долю u фазы; у земли воздух стоит, выше идёт по закону
+// 1/7 турбулентного пограничного слоя (z против верха в конце клина top), вверх — 0,02–0,08 пути (Kuhl §3.4: вертикальная
+// скорость в слое — 0,02 u∞ у дна и 0,04–0,12 у верха). (x, высота, z), блоки
+vec3 pallWallOrigin(vec2 rel, float z, float u, float top, float carried) {
+    float zr = clamp(z / max(top, 0.001), 0.0, 1.0);
+    float x = carried * pallWallCarried(u) * pow(zr, 1.0 / 7.0);
+    vec2 out1 = rel / max(length(rel), 1e-3);
+    return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);
 }
 
 // Густота у земли по доле u клина против густоты в его конце (BlastWall.shape): поднятое в слое верха pallWallTop
