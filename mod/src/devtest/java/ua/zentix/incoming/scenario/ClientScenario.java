@@ -143,6 +143,8 @@ public final class ClientScenario {
     private boolean glowView;
     /** Сценарий {@code mushroom}: вид видео хоста над Newisle ({@code INCOMING_MUSHROOM=film}). */
     private boolean filmView;
+    /** Сценарий {@code mushroom}: свет шара на земле днём в 4 км ({@code INCOMING_MUSHROOM=flash}). */
+    private boolean flashView;
     /** Сценарий {@code mushroom} с {@code film}: зритель (до входа в мир — неизвестен). */
     private volatile Vec3 filmEye;
     /** Раз в сколько тиков звук в лог. */
@@ -622,6 +624,11 @@ public final class ClientScenario {
      * 20° вверх. Кадры {@code pall_film_<секунды>s} каждые 2 с с 4-й по 40-ю (стена пыли проходит зрителя на ~7 с, потом
      * он в пыли: гриб, ножка и шапка должны оставаться видны), потом {@code pall_film_up_*} на 55° вверх — ножка
      * дорастает до шапки.
+     * <p>
+     * Свет шара днём ({@code INCOMING_MUSHROOM=flash}; жалоба 18.10: в 3–5 км «второе солнце» и резкие тени по всей карте):
+     * воздушные 15 кт в {@link #FLASH_M} блоках над сушей, утро, ясно; зритель-наблюдатель в 30 блоках над землёй смотрит
+     * поперёк направления на взрыв (шар слева за кадром) и вниз — склоны к шару и отвёрнутые от него в одном кадре.
+     * Кадры {@code pall_flash_<тики>t} до вспышки и через 2–60 тиков.
      */
     private void planMushroom() {
         mushroom = true;
@@ -648,6 +655,27 @@ public final class ClientScenario {
                 hover = true;
             });
             at(400, () -> cmd("incoming nuke now at 3000.5 320 0.5 15 ground"));
+            return;
+        }
+        if ("flash".equals(System.getenv("INCOMING_MUSHROOM"))) {
+            flashView = true;
+            at(20, () -> mushroomYaw = landYaw(FLASH_M));
+            at(40, () -> {
+                var level = Minecraft.getInstance().getSingleplayerServer().overworld();
+                int ground = level.getChunkSource().getGenerator().getBaseHeight(0, 0, Heightmap.Types.WORLD_SURFACE_WG, level,
+                        level.getChunkSource().randomState());
+                cmd("time set 2500");
+                cmd("weather clear");
+                cmd("gamerule doDaylightCycle false");
+                cmd("gamemode spectator");
+                cmd(String.format(java.util.Locale.ROOT, "tp @s 0.5 %d 0.5 %d 25", ground + 30, mushroomYaw + 90));
+                hover = true;
+            });
+            pallShot(395, "flash_before");
+            at(400, () -> {
+                double x = 0.5 - FLASH_M * Math.sin(Math.toRadians(mushroomYaw)), z = 0.5 + FLASH_M * Math.cos(Math.toRadians(mushroomYaw));
+                cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f 320 %.1f 15 air", x, z));
+            });
             return;
         }
         if ("film".equals(System.getenv("INCOMING_MUSHROOM"))) {
@@ -687,6 +715,9 @@ public final class ClientScenario {
             cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f 320 %.1f 15 ground", x, z));
         });
     }
+
+    /** Сценарий {@code mushroom} с {@code flash}: от зрителя до эпицентра по земле, блоков. */
+    private static final double FLASH_M = 4000;
 
     /** Сценарий {@code mushroom} с {@code film}: от зрителя до эпицентра по земле, блоков (камера видео хоста над Newisle). */
     private static final double FILM_M = 1383;
@@ -748,6 +779,14 @@ public final class ClientScenario {
         if (glowView) {
             for (int s : new int[]{1, 2, 3, 5, 7, 9, 11, 14}) pallShot(tick + 20 * s, "glow_" + s + "s");
             at(tick + 20 * 14 + 20, () -> {
+                Incoming.LOG.info("SCENARIO done");
+                Minecraft.getInstance().stop();
+            });
+            return;
+        }
+        if (flashView) {
+            for (int t : new int[]{2, 4, 6, 10, 20, 40, 60}) pallShot(tick + t, "flash_" + t + "t");
+            at(tick + 80, () -> {
                 Incoming.LOG.info("SCENARIO done");
                 Minecraft.getInstance().stop();
             });
