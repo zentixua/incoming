@@ -145,8 +145,12 @@ public final class ClientScenario {
     private boolean glowView;
     /** Сценарий {@code mushroom}: вид видео хоста над Newisle ({@code INCOMING_MUSHROOM=film}). */
     private boolean filmView;
+    /** Сценарий {@code mushroom}: свет шара на земле днём в 4 км ({@code INCOMING_MUSHROOM=flash}). */
+    private boolean flashView;
     /** Сценарий {@code mushroom} с {@code film}: зритель (до входа в мир — неизвестен). */
     private volatile Vec3 filmEye;
+    /** Сценарий {@code mushroom}: пыль с земли и пелена с разных высот ({@code INCOMING_MUSHROOM=blanket}). */
+    private boolean blanketView;
     /** Раз в сколько тиков звук в лог. */
     private int soundEvery = 10;
     /** Ядерный подрыв у воды ({@code nuke-water}, {@code nuke-lake}): кадры от подрыва ({@link #waterEvents}). */
@@ -217,6 +221,7 @@ public final class ClientScenario {
         else if ("loiter".equals(mode)) planLoiter();
         else if ("models".equals(mode)) planModels();
         else if ("far-models".equals(mode)) planFarModels();
+        else if ("flame-edge".equals(mode)) planFlameEdge();
         else if ("hud".equals(mode)) planHud();
         else if ("map".equals(mode)) planMap();
         else if ("target-map".equals(mode)) planTargetMap();
@@ -628,6 +633,11 @@ public final class ClientScenario {
      * 20° вверх. Кадры {@code pall_film_<секунды>s} каждые 2 с с 4-й по 40-ю (стена пыли проходит зрителя на ~7 с, потом
      * он в пыли: гриб, ножка и шапка должны оставаться видны), потом {@code pall_film_up_*} на 55° вверх — ножка
      * дорастает до шапки.
+     * <p>
+     * Свет шара днём ({@code INCOMING_MUSHROOM=flash}; жалоба 18.10: в 3–5 км «второе солнце» и резкие тени по всей карте):
+     * воздушные 15 кт в {@link #FLASH_M} блоках над сушей, утро, ясно; зритель-наблюдатель в 30 блоках над землёй смотрит
+     * поперёк направления на взрыв (шар слева за кадром) и вниз — склоны к шару и отвёрнутые от него в одном кадре.
+     * Кадры {@code pall_flash_<тики>t} до вспышки и через 2–60 тиков.
      */
     private void planMushroom() {
         mushroom = true;
@@ -654,6 +664,58 @@ public final class ClientScenario {
                 hover = true;
             });
             at(400, () -> cmd("incoming nuke now at 3000.5 320 0.5 15 ground"));
+            return;
+        }
+        if ("blanket".equals(System.getenv("INCOMING_MUSHROOM"))) {
+            blanketView = true;
+            at(20, () -> mushroomYaw = landYaw(BLANKET_M));
+            at(40, () -> {
+                String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
+                ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
+                // как на серверах хоста: волна вдали медленнее настоящей
+                ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(System.getenv().getOrDefault("INCOMING_WAVE_SPEED", "0.2")));
+                // глаз — над рельефом первых 800 блоков к эпицентру (холм у глаза закрыл бы стену)
+                var level = Minecraft.getInstance().getSingleplayerServer().overworld();
+                var gen = level.getChunkSource().getGenerator();
+                double sx = -Math.sin(Math.toRadians(mushroomYaw)), sz = Math.cos(Math.toRadians(mushroomYaw));
+                int ground = 0;
+                for (int i = 0; i <= 40; i++) {
+                    ground = Math.max(ground, gen.getBaseHeight((int) Math.round(20 * i * sx), (int) Math.round(20 * i * sz),
+                            Heightmap.Types.WORLD_SURFACE_WG, level, level.getChunkSource().randomState()));
+                }
+                filmEye = new Vec3(0.5, ground + 20, 0.5);
+                cmd("time set 2500");
+                cmd("weather clear");
+                cmd("gamerule doDaylightCycle false");
+                cmd("gamemode spectator");
+                filmLook(2);
+                hover = true;
+            });
+            at(400, () -> {
+                double x = 0.5 - BLANKET_M * Math.sin(Math.toRadians(mushroomYaw)), z = 0.5 + BLANKET_M * Math.cos(Math.toRadians(mushroomYaw));
+                cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f 320 %.1f 15 air", x, z));
+            });
+            return;
+        }
+        if ("flash".equals(System.getenv("INCOMING_MUSHROOM"))) {
+            flashView = true;
+            at(20, () -> mushroomYaw = landYaw(FLASH_M));
+            at(40, () -> {
+                var level = Minecraft.getInstance().getSingleplayerServer().overworld();
+                int ground = level.getChunkSource().getGenerator().getBaseHeight(0, 0, Heightmap.Types.WORLD_SURFACE_WG, level,
+                        level.getChunkSource().randomState());
+                cmd("time set 2500");
+                cmd("weather clear");
+                cmd("gamerule doDaylightCycle false");
+                cmd("gamemode spectator");
+                cmd(String.format(java.util.Locale.ROOT, "tp @s 0.5 %d 0.5 %d 25", ground + 30, mushroomYaw + 90));
+                hover = true;
+            });
+            pallShot(395, "flash_before");
+            at(400, () -> {
+                double x = 0.5 - FLASH_M * Math.sin(Math.toRadians(mushroomYaw)), z = 0.5 + FLASH_M * Math.cos(Math.toRadians(mushroomYaw));
+                cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f 320 %.1f 15 air", x, z));
+            });
             return;
         }
         if ("film".equals(System.getenv("INCOMING_MUSHROOM"))) {
@@ -694,8 +756,27 @@ public final class ClientScenario {
         });
     }
 
+    /** Сценарий {@code mushroom} с {@code flash}: от зрителя до эпицентра по земле, блоков. */
+    private static final double FLASH_M = 4000;
+
     /** Сценарий {@code mushroom} с {@code film}: от зрителя до эпицентра по земле, блоков (камера видео хоста над Newisle). */
     private static final double FILM_M = 1383;
+
+    /** Сценарий {@code mushroom} с {@code blanket}: от зрителя до эпицентра по земле, блоков. */
+    private static final double BLANKET_M = 3000;
+    /** Сценарий {@code mushroom} с {@code blanket}: высоты зрителя над землёй, блоков (у земли, чуть над пеленой — до самолёта). */
+    private static final int[] BLANKET_UP = {60, 150, 400, 1000, 2500};
+
+    /**
+     * Сценарий {@code mushroom} с {@code blanket}: зритель над землёй на {@code up} блоков, в {@code back} блоках от эпицентра
+     * (на линии к прежнему месту), взгляд на землю под эпицентром, но не выше 8° вниз.
+     */
+    private void blanketLook(int up, double back) {
+        double k = back / BLANKET_M;
+        double x = filmEye.x + (1 - k) * -BLANKET_M * Math.sin(Math.toRadians(mushroomYaw)), z = filmEye.z + (1 - k) * BLANKET_M * Math.cos(Math.toRadians(mushroomYaw));
+        double pitch = Math.max(8, Math.toDegrees(Math.atan2(up - 20, back)));
+        cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %d %.1f", x, filmEye.y - 20 + up, z, mushroomYaw, pitch));
+    }
 
     /** Сценарий {@code mushroom} с {@code film}: зритель на месте, взгляд на эпицентр с этим наклоном. */
     private void filmLook(int pitch) {
@@ -754,6 +835,36 @@ public final class ClientScenario {
         if (glowView) {
             for (int s : new int[]{1, 2, 3, 5, 7, 9, 11, 14}) pallShot(tick + 20 * s, "glow_" + s + "s");
             at(tick + 20 * 14 + 20, () -> {
+                Incoming.LOG.info("SCENARIO done");
+                Minecraft.getInstance().stop();
+            });
+            return;
+        }
+        if (blanketView) {
+            // пыль с земли: фронт идёт к зрителю (у 0,2 скорости звука — ~45 с до него)
+            for (int s = 6; s <= 54; s += 6) pallShot(tick + 20 * s, "blanket_ground_" + s + "s");
+            // пелена с высоты: через минуту и через пять; кадр — через 3 с после переноса (пелена копит свет по кадрам)
+            int t = tick + 20 * 60;
+            for (int minute : new int[]{1, 5}) {
+                if (minute == 5) t = Math.max(t, tick + 20 * 300);
+                for (int up : BLANKET_UP) {
+                    at(t, () -> blanketLook(up, BLANKET_M));
+                    pallShot(t + 60, "blanket_" + minute + "m_up" + up);
+                    t += 100;
+                }
+                at(t, () -> blanketLook(1000, 1500));
+                pallShot(t + 60, "blanket_" + minute + "m_over1000");
+                t += 100;
+            }
+            at(t + 20, () -> {
+                Incoming.LOG.info("SCENARIO done");
+                Minecraft.getInstance().stop();
+            });
+            return;
+        }
+        if (flashView) {
+            for (int t : new int[]{2, 4, 6, 10, 20, 40, 60}) pallShot(tick + t, "flash_" + t + "t");
+            at(tick + 80, () -> {
                 Incoming.LOG.info("SCENARIO done");
                 Minecraft.getInstance().stop();
             });
@@ -2113,6 +2224,97 @@ public final class ClientScenario {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });
+    }
+
+    /**
+     * Факел на краю прорисовки ({@code flame-edge}): ракета «Града» и ракета на ускорителе ночью и днём, сбоку, на одной
+     * линии от зрителя — сущностью (клиентская копия) на 0,5, 0,85 и 0,97 прорисовки и путём по пакетам на 0,97, 1,1 и
+     * 1,4. Кадры {@code flame_<свет>_<снаряд>_<сотые прорисовки>_<entity|far>} (на 0,97 — одна поза обоими путями):
+     * факел — одна картинка по обе стороны края; строка {@code SCENARIO flame-edge} — его свет (ядро, доля, блик, вуаль).
+     */
+    private void planFlameEdge() {
+        List<FarShow> show = List.of(
+                new FarShow("rocket", WeaponType.ROCKET, false, ua.zentix.incoming.entity.FlightPhase.BOOST, -20, 0, 1),
+                new FarShow("missile", WeaponType.MISSILE, false, ua.zentix.incoming.entity.FlightPhase.BOOST, -10, 0, 1));
+        at(40, () -> {
+            cmd("gamemode creative");
+            cmd("gamerule doDaylightCycle false");
+            cmd("gamerule doWeatherCycle false");
+            cmd("weather clear");
+            Minecraft.getInstance().options.hideGui = true;
+            Minecraft.getInstance().options.cloudStatus().set(net.minecraft.client.CloudStatus.OFF);
+            hover = true;
+        });
+        int t = 300, pass = 0;
+        for (String light : new String[]{"night", "day"}) {
+            String time = light.equals("day") ? "time set 6000" : "time set 18000";
+            at(t, () -> cmd(time));
+            t += 20;
+            for (FarShow s : show) {
+                for (double frac : new double[]{0.5, 0.85, 0.97}) t = flameShot(t, s, light, frac, true, ++pass);
+                for (double frac : new double[]{0.97, 1.1, 1.4}) t = flameShot(t, s, light, frac, false, ++pass);
+            }
+        }
+        at(t, () -> {
+            Incoming.LOG.info("SCENARIO done");
+            Minecraft.getInstance().stop();
+        });
+    }
+
+    /**
+     * Кадр {@link #planFlameEdge}: снаряд s летит со скоростью s.speed по своему курсу и в тике кадра стоит прямо впереди
+     * на frac прорисовки (по горизонтали, на 4° выше глаза) — клиентской копией сущности или путём по пакетам. Возвращает
+     * тик после кадра.
+     */
+    private int flameShot(int t, FarShow s, String light, double frac, boolean entity, int pass) {
+        String name = String.format(java.util.Locale.ROOT, "flame_%s_%s_%03d_%s", light, s.name(), Math.round(frac * 100), entity ? "entity" : "far");
+        int shotAt = t + 40;
+        Vec3 dir = Vec3.directionFromRotation(s.pitch(), FAR_YAW), v = dir.scale(s.speed());
+        // место в тике кадра — по дальности прорисовки, известной только в игре
+        Vec3[] at = new Vec3[1];
+        StrikeProjectile[] shown = new StrikeProjectile[1];
+        java.util.UUID id = new java.util.UUID(0xF1AL, pass);
+        farStand(t - 6);
+        for (int k = t; k <= shotAt + 2; k++) {
+            int tk = k;
+            at(tk, () -> {
+                Minecraft mc = Minecraft.getInstance();
+                if (at[0] == null) {
+                    double d = frac * mc.options.getEffectiveRenderDistance() * 16.0;
+                    at[0] = FAR_EYE.add(0, d * Math.tan(Math.toRadians(4)), -d);
+                }
+                Vec3 p = at[0].add(v.scale(tk - shotAt));
+                if (!entity) {
+                    if ((tk - t) % ua.zentix.incoming.net.S2C.FarFlights.PERIOD == 0) {
+                        ua.zentix.incoming.client.flight.FlightTracks.received(new ua.zentix.incoming.net.S2C.FarFlights(List.of(
+                                farFlight(id, s, at[0], tk - shotAt, tk - t + 40))));
+                    }
+                    return;
+                }
+                if (shown[0] == null) {
+                    StrikeProjectile e = (s.weapon() == WeaponType.ROCKET ? ua.zentix.incoming.registry.ModEntities.ROCKET.get()
+                            : ua.zentix.incoming.registry.ModEntities.CRUISE_MISSILE.get()).create(mc.level);
+                    showPhase(e, s.phase(), at[0].add(dir.scale(5000)));
+                    shown[0] = e;
+                    e.moveTo(p.x, p.y, p.z, FAR_YAW, s.pitch());
+                    mc.level.addEntity(e);
+                }
+                StrikeProjectile e = shown[0];
+                e.setDeltaMovement(v);
+                e.moveTo(p.x, p.y, p.z, FAR_YAW, s.pitch());
+                e.yRotO = FAR_YAW;
+                e.xRotO = s.pitch();
+            });
+        }
+        at(shotAt - 1, () -> Incoming.LOG.info("SCENARIO flame-edge {}: {}", name, FarRenderer.describe()));
+        shot(shotAt, name);
+        // следующий кадр — на той же линии: шлейфы этого снимаются вместе с путём
+        at(shotAt + 4, () -> {
+            if (shown[0] != null) shown[0].discard();
+            ua.zentix.incoming.client.flight.FlightTracks.reset();
+            FarRenderer.reset();
+        });
+        return shotAt + 10;
     }
 
     /**

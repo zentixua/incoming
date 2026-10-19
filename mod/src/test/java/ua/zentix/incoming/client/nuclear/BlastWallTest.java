@@ -225,66 +225,87 @@ class BlastWallTest {
         return DustModel.column(groundM, GROUND.hobMetres(), GROUND.yieldKt(), GROUND.surface(), GROUND.visibility(), DustModel.Surface.REFERENCE);
     }
 
-    /** Вал головы крутится в одну сторону и не быстрее {@link BlastWall#ROLL_MAX}. */
+    /**
+     * Доля пути пыли с ветром за фронтом ({@link BlastWall#carriedShare}) — интеграл скорости частиц Фридлендера: с нуля у
+     * фронта, у края растёт со скоростью e (полный ветер за фронтом), к концу фазы ветер стихает (наклон — ноль), за фазой
+     * пыль стоит.
+     */
     @Test
-    void headRollsSteadily() {
-        BlastWall w = new BlastWall(GROUND, false);
-        assertEquals(0, w.rollPhase(0));
+    void dustIsCarriedOnlyByTheWindOfThePhase() {
+        assertEquals(0, BlastWall.carriedShare(0));
+        assertEquals(0, BlastWall.carriedShare(-1));
+        assertEquals(1, BlastWall.carriedShare(1), 1e-12);
+        assertEquals(1, BlastWall.carriedShare(5));
+        assertEquals(Math.E, BlastWall.carriedShare(1e-6) / 1e-6, 1e-4);
+        assertEquals(0, (BlastWall.carriedShare(1) - BlastWall.carriedShare(1 - 1e-4)) / 1e-4, 1e-3);
         double prev = 0;
-        for (double t = 0.05; t <= 600; t += 0.05) {
-            double phase = w.rollPhase(t);
-            assertTrue(phase >= prev - 1e-9, t + " с: вал крутится назад");
-            assertTrue(phase - prev <= BlastWall.ROLL_MAX * 0.05 + 1e-6, t + " с: быстрее предела " + (phase - prev) / 0.05);
-            prev = phase;
+        for (double u = 0.01; u <= 1; u += 0.01) {
+            double c = BlastWall.carriedShare(u);
+            assertTrue(c > prev, "u = " + u);
+            prev = c;
         }
-        assertTrue(w.rollPhase(10) > Math.PI, "за 10 с вал не обернулся и наполовину: " + w.rollPhase(10));
     }
 
     /**
-     * Клубы вдоль кольца — две фазы: у каждой окружность в плитках целая (плитка шума без шва на кольце) и постоянна, пока
-     * фаза видна; номер и окружность фазы меняются только там, где её вес — ноль, а веса двух фаз в сумме — 1. Клуб вдоль
-     * кольца в полном весе фазы — длиной в плитку слота (верх клина в тот же миг), а не растянут. Наземный 15 кт и
-     * воздушные 15 кт на 592 м и 1 кт на 240 м, с первой головы до последней.
+     * Жалоба 18.10: пыль расходилась от эпицентра, а не срывалась с земли за фронтом. Клубы головы — в координатах самой
+     * пыли ({@link BlastWall#origin}, доля фазы — доля клина × {@code slot[8]}): у места на земле, пока его проходит голова
+     * (от края до конца перехода к пелене), место клубов в шуме сдвигается меньше чем на половину пути фронта за это время;
+     * поперёк кольца шум не складывается и сжат не больше чем в 1 + U/V раз (U — ветер за фронтом, V — фронт в игре: у
+     * медленной волны 0,2 — до ~2,6); плитка шума одна на весь подрыв (растущая с головой двигала бы клубы по земле).
+     * Прежний шум (в плитке у фронта) ехал с фронтом — сдвиг был бы во весь его путь. Воздушные 15 кт на 592 м на
+     * настоящей и медленной волне, наземные 15 кт и 1 кт.
      */
     @Test
-    void phasesChangeOnlyWhenHidden() {
+    void headCloudsStayWhereTheDustWasLifted() {
         Detonation[] bursts = {GROUND,
-                new Detonation(1, new Vec3(0, 64 + 592 * 0.25, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 0.25f, false, Detonation.OLD_WAVE),
-                new Detonation(1, new Vec3(0, 64 + 240 * 0.25, 0), 64, 1, false, 0, 0, 0, 20_000, 7, 0.25f, false, Detonation.OLD_WAVE)};
+                new Detonation(1, new Vec3(0, 64, 0), 64, 1, true, 0, 0, 0, 20_000, 7, 1f, false, 1f),
+                new Detonation(1, new Vec3(0, 64 + 592, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 1f, false, 1f),
+                new Detonation(1, new Vec3(0, 64 + 592, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 1f, false, 0.2f)};
         for (Detonation d : bursts) {
             BlastWall w = new BlastWall(d, false);
-            String burst = d.yieldKt() + " кт на " + d.hobMetres() + " м, ";
-            float[] prev = new float[BlastWall.SLOT], now = new float[BlastWall.SLOT];
-            double t = 0.01;
-            while (t < 10 && !(w.slot(t, prev) && prev[3] > 0)) t += 0.01;
-            assertTrue(prev[3] > 0, burst + "головы нет");
-            int changes = 0;
-            for (t += 0.01; t <= 60 && w.slot(t, now) && now[3] > 0; t += 0.01) {
-                // за шаг вес фазы меняется не больше чем на 2·Δψ (ψ — логарифм головы по основанию роста фазы)
-                double step = 2 * Math.abs(Math.log(now[0] / prev[0])) / Math.log(BlastWall.PHASE_GROWTH) + 1e-4;
-                for (int j = 0; j < 2; j++) {
-                    float weight = j == 0 ? now[10] : 1 - now[10];
-                    assertTrue(weight >= 0 && weight <= 1);
-                    assertEquals(Math.rint(now[8 + j]), now[8 + j], 0, burst + "окружность не целая");
-                    assertTrue(now[8 + j] >= 1);
-                    // клуб вдоль кольца против плитки поперёк (плитка шейдера — не мельче блока): в полном весе — один к
-                    // одному, за фазу — не больше √1,25 и поправки верха
-                    double stretch = 2 * Math.PI * now[0] / now[8 + j] / Math.max(1, now[11]);
-                    String at = burst + t + " с: клубы фазы " + j + " вдоль кольца в " + stretch + " раза длиннее";
-                    if (weight > 0.95) assertEquals(1, stretch, 0.03, at);
-                    // пока огненный шар на земле и клин у него короче фазы, верх растёт с возрастом пыли быстрее кольца —
-                    // клубы вдоль него короче (головы тогда — метры), окружность фазы та же
-                    if (weight > 0.05 && (w.underBall(t) <= 0 || w.backAge(t) >= 1)) assertTrue(stretch > 0.85 && stretch < 1.18, at);
-                    if (now[12 + j] != prev[12 + j]) {
-                        changes++;
-                        assertTrue(weight <= step, burst + t + " с: фаза " + j + " сменилась при весе " + weight);
-                    } else {
-                        assertEquals(prev[8 + j], now[8 + j], 0, burst + t + " с: окружность фазы " + j + " сменилась без смены фазы");
+            String burst = d.yieldKt() + " кт на " + d.hobMetres() + " м, волна " + d.wave() + ": ";
+            float[] slot = new float[BlastWall.SLOT];
+            double tile = -1, squeeze = 0;
+            int places = 0;
+            for (double place : new double[] {300, 800, 1400, 2500}) {
+                double first = Double.NaN, last = Double.NaN, minO = Double.MAX_VALUE, maxO = -Double.MAX_VALUE;
+                for (double t = 0.01; t < 120; t += 0.01) {
+                    if (!w.slot(t, slot) || slot[3] <= 0) continue;
+                    if (tile < 0) tile = slot[11];
+                    assertEquals(tile, slot[11], 0, burst + t + " с: плитка шума головы меняется");
+                    double s = slot[0] - place;
+                    if (s < 0 || s > BlastWall.HANDOFF_TO * slot[1]) continue;
+                    if (Double.isNaN(first)) first = slot[0];
+                    last = slot[0];
+                    for (double z : new double[] {0, 0.5 * slot[2], slot[2]}) {
+                        double o = BlastWall.origin(place, 0, z, s / slot[1] * slot[8], slot[2], slot[4])[0];
+                        minO = Math.min(minO, o);
+                        maxO = Math.max(maxO, o);
+                        // соседнее место в метре ближе к эпицентру: шум не складывается, сжат в меру ветра против фронта
+                        double near = BlastWall.origin(place - 1, 0, z, (s + 1) / slot[1] * slot[8], slot[2], slot[4])[0];
+                        assertTrue(o - near > 0, burst + place + " блоков, " + t + " с: шум сложился");
+                        squeeze = Math.max(squeeze, o - near);
                     }
                 }
-                System.arraycopy(now, 0, prev, 0, now.length);
+                if (Double.isNaN(first)) continue;
+                places++;
+                double moved = maxO - minO, front = last - first;
+                assertTrue(moved < 0.5 * front, burst + place + " блоков: клубы сдвинулись на " + moved + ", фронт — на " + front);
             }
-            assertTrue(changes > 4, burst + "фазы почти не менялись: " + changes);
+            assertTrue(places >= 3, burst + "голова почти нигде не прошла");
+            assertTrue(squeeze < (d.wave() < 0.5 ? 3 : 1.6), burst + "шум сжат в " + squeeze + " раза");
+        }
+    }
+
+    /** Путь воздуха за фазу у 15 кт на 592 м — десятки метров (ветер 43 м/с за фронтом в 1,4 км, фаза 0,83 с — 13 м). */
+    @Test
+    void airRunIsTensOfMetres() {
+        Detonation air = new Detonation(1, new Vec3(0, 64 + 592, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 1f, false, 1f);
+        BlastWall w = new BlastWall(air, false);
+        float[] slot = new float[BlastWall.SLOT];
+        for (double t = 1; t < 10; t += 1) {
+            if (!w.slot(t, slot) || slot[3] <= 0) continue;
+            assertTrue(slot[4] > 1 && slot[4] < 60, t + " с: путь воздуха " + slot[4]);
         }
     }
 
@@ -308,7 +329,9 @@ class BlastWallTest {
         assertEquals(sigmas[1] / ref, s[15], 1e-6);
         assertEquals(sigmas[2] / GROUND.scale(), s[7], 1e-6);
         assertEquals(1, Math.max(Math.max(s[14], s[15]), s[7] / s[3]), 1e-6, "масштаб — наибольшее");
-        assertEquals(BlastWall.TILE * s[2], s[11], 1e-3);
+        // плитка — у наибольшего верха слоя к концу фазы: не мельче, чем у верха клина сейчас (постоянна —
+        // headCloudsStayWhereTheDustWasLifted)
+        assertTrue(s[11] >= BlastWall.TILE * s[2] - 1e-3, "плитка " + s[11] + " мельче клина " + s[2]);
         // верх клина — десятки метров, как у пыльного слоя в конце фазы волны (Kuhl, GRABLE)
         assertTrue(GROUND.metres(s[2]) > 25 && GROUND.metres(s[2]) < 80, "верх клина " + GROUND.metres(s[2]) + " м");
         assertEquals(0, s[18], "облако Вильсона в сухом воздухе");

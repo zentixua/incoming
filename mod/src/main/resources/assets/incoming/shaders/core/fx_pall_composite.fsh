@@ -76,14 +76,14 @@ out vec4 fragColor;
 vec4 pallOver(vec3 p) {
     float tau = 0.0, w = 0.0, g = 0.0, water = 0.0;
     if (PallSlot0[1].w > 0.5) {
-        PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, p, pallRelief(Sampler5, PallSlot0, PallGround0, p.xz));
+        PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, p, pallRelief(Sampler5, PallSlot0, PallGround0, p.xz), 1.0);
         tau += f.column.x + f.column.y + f.column.z;
         w += f.column.x * mix(PALL_DUST_W.g, PALL_SMOKE_W.g, f.smoke) + f.column.y * PALL_HAZE_W.g + f.column.z * PALL_MIST_W.g;
         g += (f.column.x + f.column.y) * PALL_DUST_G + f.column.z * PALL_MIST_G;
         water += (f.column.x + f.column.y) * f.wet + f.column.z;
     }
     if (PallSlot1[1].w > 0.5) {
-        PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, p, pallRelief(Sampler6, PallSlot1, PallGround1, p.xz));
+        PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, p, pallRelief(Sampler6, PallSlot1, PallGround1, p.xz), 1.0);
         tau += f.column.x + f.column.y + f.column.z;
         w += f.column.x * mix(PALL_DUST_W.g, PALL_SMOKE_W.g, f.smoke) + f.column.y * PALL_HAZE_W.g + f.column.z * PALL_MIST_W.g;
         g += (f.column.x + f.column.y) * PALL_DUST_G + f.column.z * PALL_MIST_G;
@@ -114,10 +114,10 @@ float shade(vec3 p, vec4 over) {
 }
 
 // Свет огненных шаров на мире в точке p (от глаза) с нормалью n, линейный, на белой стене (как PallSunLight): ламбертов шар
-// (MushroomModel.light) светит на грань к нему как L·R²/max(d², R²) по косинусу к ней, гаснет в воздухе по пути; сквозь
-// пелену над точкой (over) — прямой пучок e^(−τ/μ) и рассеянный ею вниз (два потока, как солнце в shade), на грань — по
-// доле неба, что она видит, (1 + n.y)/2. Теней рельефа и построек нет: за холмом и домом шар светит так же (тёмен только
-// склон, отвёрнутый от него).
+// (MushroomModel.light) светит как L·R²/max(d², R²) — прямым пучком по косинусу к грани, рассеянным воздухом с неба вокруг
+// себя и отражённым от освещённой им земли (mushBallFace); сквозь пелену над точкой (over) — прямой пучок e^(−τ/μ) и
+// рассеянный ею вниз (два потока, как солнце в shade), на грань — по доле неба, что она видит, (1 + n.y)/2. Теней рельефа и
+// построек нет: за холмом и домом шар светит так же (тёмен только склон, отвёрнутый от него).
 vec3 ballLight(vec3 p, vec3 n, vec4 over) {
     vec3 sum = vec3(0.0);
     for (int i = 0; i < 4; i++) {
@@ -126,13 +126,13 @@ vec3 ballLight(vec3 p, vec3 n, vec4 over) {
         vec3 l = b.xyz - p;
         float d2 = dot(l, l), d = sqrt(d2);
         vec3 v = l / max(d, 1e-3);
-        float e = mushBallFalloff(d2, b.w * b.w) * exp(-PallBallLight[i].w * d);
-        float face = max(dot(n, v), 0.0), mu = max(v.y, 0.12);
+        float mu = max(v.y, 0.12), through = 1.0, diffuse = 0.0;
         if (over.x > 1e-5) {
-            face = face * exp(-over.x / mu) + max(pallDiffuse(over.y, over.z, over.x, over.x, over.w, mu, 1.0, 1.0, 0.0, 0.0, 0.0, -0.6666667), 0.0)
-                    * 0.5 * (1.0 + n.y);
+            through = exp(-over.x / mu);
+            diffuse = max(pallDiffuse(over.y, over.z, over.x, over.x, over.w, mu, 1.0, 1.0, 0.0, 0.0, 0.0, -0.6666667), 0.0);
         }
-        sum += PallBallLight[i].rgb * (e * face);
+        float face = mushBallFace(dot(n, v), v.y, n.y, PallBallLight[i].w * d, over.w, through, diffuse);
+        sum += PallBallLight[i].rgb * (mushBallFalloff(d2, b.w * b.w) * face);
     }
     return sum;
 }

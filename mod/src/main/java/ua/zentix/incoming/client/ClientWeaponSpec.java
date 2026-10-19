@@ -39,12 +39,11 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
      * @param engines       сопла маршевого двигателя (у B-2 — четыре инверсионных следа, у бомбы — срыв потока с хвоста)
      * @param boosterNozzle срез сопла ускорителя; null — ускорителя нет
      * @param boosterSmoke  размер дыма ускорителя (шахед меньше ракеты)
-     * @param boosterPlume  начало факела ускорителя (у шахеда он под хвостом, чуть ближе среза)
-     * @param enginePlume   начало факела маршевого двигателя (или ступени МБР, двигателя РСЗО); null — факела нет
-     * @param far           как сущность выглядит вдали, где её у клиента нет
+     * @param far           огонь и дым по фазам полёта ({@link Flame} — факел вблизи и вдали) и вид вдали, где сущности у
+     *                      клиента нет
      */
     public record ClientAirframe(WeaponModels.Look model, List<EngineSound.Layer> layers, List<At> engines, @Nullable At boosterNozzle, float boosterSmoke,
-                                 @Nullable At boosterPlume, @Nullable At enginePlume, FarLook far) {
+                                 FarLook far) {
         /** Сопло маршевого двигателя — только у оружия с соплами ({@link #engines} не пуст; у «Ланцета» их нет). */
         public At engine() {
             return engines.getFirst();
@@ -94,10 +93,10 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     public record SpentBooster(Supplier<WeaponModels.Mesh> mesh, float lift, float dy, float dz) {}
 
     /**
-     * Сущность полёта вдали, где её у клиента нет ({@code client.far.FarFlightView}): корпус — та же модель, что вблизи
-     * ({@code client.render.FarModels}), мельче пары пикселей — мягкая тёмная точка; факел — свет. Вблизи то же рисуют
-     * модель и {@code PlumeRenderer}: числа сняты с них. Шлейф ({@link Trail}) — лента по точкам пути вблизи и вдали,
-     * одна от пуска до конца следа.
+     * Огонь и дым сущности полёта по фазам и её вид вдали, где её у клиента нет ({@code client.far.FarFlightView}):
+     * корпус — та же модель, что вблизи ({@code client.render.FarModels}), мельче пары пикселей — мягкая тёмная точка.
+     * Факел ({@link Flame}) — один вблизи и вдали: струя ({@code PlumeRenderer}) и свет. Шлейф ({@link Trail}) — лента
+     * по точкам пути вблизи и вдали, одна от пуска до конца следа.
      *
      * @param size     наибольший размер корпуса (размах или длина модели), блоков: длина модели на экране (переход
      *                 точка → модель, упрощённые копии) и шар её плитки ({@code FarModels.TILE_RADIUS} × size — модель
@@ -120,21 +119,75 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
         }
     }
 
-    /** Что видно вдали в одной фазе: свет факела и шлейф; null — нет. */
+    /** Огонь и дым в одной фазе: факел и шлейф; null — нет. */
     public record Stage(@Nullable Flame flame, @Nullable Trail trail) {
         public static final Stage NONE = new Stage(null, null);
     }
 
     /**
-     * Факел вдали — свет с сохранением потока ({@code client.far.Sight#light}): мельче пикселя он не пропадает, а
-     * бледнеет; ярче белого — расплывается бликом. Ночью глаз привыкает к темноте, и тот же факел против неё ярче.
+     * Факел двигателя — один вблизи и вдали, из этих чисел.
+     * <ul>
+     * <li>Вблизи — струя ({@code PlumeRenderer}): полоса от среза сопла назад на длину струи, белое ядро полуширины
+     * {@code width} на 0,6 длины и оранжевый край в 2,6 раза шире, ореол у среза; сложением, яркость струи —
+     * {@code intensity} (экран не ярче белого).</li>
+     * <li>В глазу и вдали — свет ({@code client.far.Sight#light}) яркостью {@code brightness} против белого экрана:
+     * ядро — круг {@link #radius}, мельче пикселя не пропадает, а бледнеет; ярче белого — блик, ночью (глаз привык
+     * к темноте) — и вуаль на градусы. Блик и вуаль — на любой дальности, ядро сменяет струю с 0,8 прорисовки
+     * ({@code client.far.FarFlightView}): на краю прорисовки факел один.</li>
+     * </ul>
      *
-     * @param radius     радиус круга той же площади, что факел сбоку (длина × поперечник струи вблизи), блоков
-     * @param back       середина факела позади центра корпуса (срез сопла плюс половина струи), блоков
-     * @param brightness яркость против белого экрана днём
-     * @param color      цвет света
+     * @param start      срез сопла — начало струи, в осях снаряда
+     * @param length     длина струи, блоков
+     * @param width      полуширина белого ядра струи, блоков
+     * @param intensity  яркость струи вблизи (доля её цвета при сложении)
+     * @param diamonds   струя с «алмазами» скачков уплотнения
+     * @param core       цвет ядра
+     * @param outer      цвет края
+     * @param brightness яркость света против белого экрана днём
+     * @param from       длина струи в начале фазы (растёт к {@code length}); {@code length} — сразу во всю длину
+     * @param growth     рост струи за тик фазы, блоков
      */
-    public record Flame(double radius, double back, double brightness, int color) {}
+    public record Flame(At start, double length, double width, float intensity, boolean diamonds, int core, int outer, double brightness,
+                        double from, double growth) {
+        /** Яркое пламя (ускоритель, двигатель РСЗО, ступень МБР): белое ядро, оранжевый край, во всю длину сразу. */
+        static Flame bright(At start, double length, double width, boolean diamonds, double brightness) {
+            return new Flame(start, length, width, 1, diamonds, 0xFFF4E0, 0xFF8A30, brightness, length, 0);
+        }
+
+        /** Та же струя, но в начале фазы длиной from и растёт на growth за тик. */
+        Flame growing(double from, double growth) {
+            return new Flame(start, length, width, intensity, diamonds, core, outer, brightness, from, growth);
+        }
+
+        /** Длина струи через phaseAge тиков фазы, блоков. */
+        public double length(double phaseAge) {
+            return Math.min(length, from + growth * Math.max(0, phaseAge));
+        }
+
+        /**
+         * Радиус ядра света при длине струи length: круг площади length × {@code width}. Столько белого и даёт струя
+         * сбоку: две полосы с их текстурой ({@code textures/fx/plume.png}, средняя яркость 0,225) — 1,15·length·width.
+         */
+        public double radius(double length) {
+            return Math.sqrt(length * width / Math.PI);
+        }
+
+        /** Радиус ядра во всю длину струи. */
+        public double radius() {
+            return radius(length);
+        }
+
+        /** Середина струи длины length позади центра корпуса (срез сопла плюс половина струи), блоков. */
+        public double back(double length) {
+            return -start.z() + length / 2;
+        }
+
+        /** Цвет света — середина между ядром и краем струи. */
+        public int color() {
+            int r = ((core >> 16 & 255) + (outer >> 16 & 255)) / 2, g = ((core >> 8 & 255) + (outer >> 8 & 255)) / 2, b = ((core & 255) + (outer & 255)) / 2;
+            return r << 16 | g << 8 | b;
+        }
+    }
 
     /**
      * Шлейф — лента через точки пути от сопла ({@link ClientAirframe#trailNozzles}), вблизи и вдали одна
@@ -208,23 +261,27 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
         }
     }
 
-    /** Свет факела: середина между белым ядром (0xFFF4E0) и оранжевым краем (0xFF8A30) струи вблизи. */
-    private static final int FLAME_LIGHT = 0xFFBF88;
-    /** Ускоритель шахеда: струя 2,2 × 0,26 блока от среза в 1,9 позади центра. */
-    private static final Flame DRONE_BOOSTER_FLAME = new Flame(0.3, 3, 15, FLAME_LIGHT);
-    /** Ускоритель ракеты: 4 × 0,5 от среза в 3,4. */
-    private static final Flame MISSILE_BOOSTER_FLAME = new Flame(0.56, 5.4, 20, FLAME_LIGHT);
     /**
-     * Маршевый ТРД ракеты — тусклое свечение 1 × 0,28 от среза в 2,9 (ядро 0xFFD8A0, край 0xFF5A18); в пике — 2 × 0,36,
-     * ярче. Вдали почти не светит: выхлоп ТРД — сотни градусов, а не пламя (ночью над городом ракету слышно, а не видно);
-     * ночью глаз, привыкший к темноте, видит искру.
+     * Ускоритель шахеда: струя 2,2 × 0,26 блока от среза под хвостом (чуть ближе среза сопла); на поджиге вырастает
+     * за полсекунды.
      */
-    private static final Flame MISSILE_SUSTAINER_FLAME = new Flame(0.21, 3.4, 0.05, 0xFF995C),
-            MISSILE_DIVE_FLAME = new Flame(0.34, 3.9, 0.15, 0xFFA970);
-    /** Двигатель реактивного снаряда: 3 × 0,3 от среза в 1,5. */
-    private static final Flame ROCKET_FLAME = new Flame(0.38, 3, 20, FLAME_LIGHT);
-    /** Ступень «Минитмена»: 18 × 2,2 с алмазами от среза в 9,7. */
-    private static final Flame ICBM_FLAME = new Flame(2.5, 18.7, 25, FLAME_LIGHT);
+    private static final Flame DRONE_BOOSTER_FLAME = Flame.bright(new At(0, -0.29, -1.93), 2.2, 0.13, false, 15);
+    /** Ускоритель ракеты: 4 × 0,5 с алмазами от среза в 3,44; на поджиге вырастает за полсекунды. */
+    private static final Flame MISSILE_BOOSTER_FLAME = Flame.bright(new At(0, 0, -3.44), 4, 0.25, true, 20);
+    /**
+     * Маршевый ТРД ракеты — тусклое свечение 1 × 0,28 от среза в 2,88; в пике — 2 × 0,36, ярче (форсаж для прорыва
+     * ПВО — художественно). Вдали почти не светит: выхлоп ТРД — сотни градусов, а не пламя (ночью над городом ракету
+     * слышно, а не видно); ночью глаз, привыкший к темноте, видит искру.
+     */
+    private static final Flame MISSILE_SUSTAINER_FLAME = new Flame(new At(0, 0, -2.88), 1, 0.14, 0.55f, false, 0xFFD8A0, 0xFF5A18, 0.05, 1, 0),
+            MISSILE_DIVE_FLAME = new Flame(new At(0, 0, -2.88), 2, 0.18, 0.9f, false, 0xFFE8C0, 0xFF6A20, 0.15, 2, 0);
+    /** Двигатель реактивного снаряда: 3 × 0,3 от среза в 1,5, вспыхивает сразу (поджиг — доли секунды; в трубе его не видно). */
+    private static final Flame ROCKET_FLAME = Flame.bright(new At(0, 0, -1.5), 3, 0.15, false, 20);
+    /**
+     * Ступень «Минитмена»: струя Ø 2,2 с алмазами от среза в 9,7, на разгоне длиннее — с 14 блоков на 0,15 за тик до 24
+     * (поджиг — 40 тиков, {@code IcbmEntity}: к разгону струя уже 20).
+     */
+    private static final Flame ICBM_FLAME = Flame.bright(new At(0, 0, -9.7), 24, 1.1, true, 25);
 
     /** Ускоритель шахеда: густой белый дым ({@code size(0,5·k, 3,5·k)}, k = 0,55), висит 13–19 с. */
     private static final Trail DRONE_BOOSTER_TRAIL = new Trail(2, 320, 0.4, 2.7, 0xF2EFEA, 0xC4C0BA, 0.85f, 2, 0.5f, 1, 0.0015f);
@@ -248,19 +305,20 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     private static final Trail BOMB_WAKE = new Trail(2, 24, 0.3, 1.3, 0xDADCE0, 0xF2F2F2, 0.3f, 1, 0.2f, 1, 0);
 
     /** Шахед: 3,6 м, размах 2,6; дельта-крыло ~4,7 м² и корпус Ø 0,45. */
-    private static final FarLook DRONE_FAR = new FarLook(3.6, 3.6, 0x3C3E42, null, new Stage(DRONE_BOOSTER_FLAME, DRONE_BOOSTER_TRAIL),
+    private static final FarLook DRONE_FAR = new FarLook(3.6, 3.6, 0x3C3E42, new Stage(DRONE_BOOSTER_FLAME.growing(0, 0.22), DRONE_BOOSTER_TRAIL),
+            new Stage(DRONE_BOOSTER_FLAME, DRONE_BOOSTER_TRAIL),
             new Stage(null, DRONE_EXHAUST), new Stage(null, DRONE_DIVE_EXHAUST));
     /** «Томагавк»: 5,9 м, с ускорителем 6,2, Ø 0,52, размах 2,7. */
-    private static final FarLook MISSILE_FAR = new FarLook(6.2, 3.1, 0x6E7276, null, new Stage(MISSILE_BOOSTER_FLAME, MISSILE_BOOSTER_TRAIL),
+    private static final FarLook MISSILE_FAR = new FarLook(6.2, 3.1, 0x6E7276, new Stage(MISSILE_BOOSTER_FLAME.growing(0, 0.4), MISSILE_BOOSTER_TRAIL),
+            new Stage(MISSILE_BOOSTER_FLAME, MISSILE_BOOSTER_TRAIL),
             new Stage(MISSILE_SUSTAINER_FLAME, MISSILE_HAZE), new Stage(MISSILE_DIVE_FLAME, MISSILE_HAZE));
     /** B-2: размах 52 м, крыло 478 м² в плане. */
     private static final FarLook BOMBER_FAR = new FarLook(52, 250, 0x2E3034, null, Stage.NONE, new Stage(null, CONTRAIL), null);
     /** GBU-57: 6,2 м, Ø 0,8. */
     private static final FarLook BOMB_FAR = new FarLook(6.2, 3.9, 0x55595E, null, Stage.NONE, new Stage(null, BOMB_WAKE), null);
-    /** Ступень «Минитмена» горит весь полёт. */
-    private static final Stage ICBM_STAGE = new Stage(ICBM_FLAME, ICBM_TRAIL);
-    /** «Минитмен III»: 18,3 м, Ø 1,7. */
-    private static final FarLook ICBM_FAR = new FarLook(18.3, 24, 0xD8D6D0, null, ICBM_STAGE, ICBM_STAGE, null);
+    /** «Минитмен III»: 18,3 м, Ø 1,7; ступень горит весь полёт. */
+    private static final FarLook ICBM_FAR = new FarLook(18.3, 24, 0xD8D6D0, new Stage(ICBM_FLAME.growing(14, 0.15), ICBM_TRAIL),
+            new Stage(ICBM_FLAME.growing(20, 0.15), ICBM_TRAIL), new Stage(ICBM_FLAME.growing(20, 0.15), ICBM_TRAIL), null);
     /** Снаряд «Града»: 2,9 м, Ø 0,12; поджиг — в трубе, след — с переднего среза; после выгорания — без огня и следа. */
     private static final FarLook ROCKET_FAR = new FarLook(2.9, 0.28, 0x4E5446, new Stage(ROCKET_FLAME, null), new Stage(ROCKET_FLAME, ROCKET_TRAIL),
             Stage.NONE, null);
@@ -269,39 +327,39 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
 
     public static final ClientWeaponSpec DRONE = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::drone, List.of(EngineSound.Layer.DRONE_NEAR, EngineSound.Layer.DRONE_FAR, EngineSound.Layer.BOOSTER),
-                    List.of(new At(0, 0.03, -1.95)), new At(0, -0.29, -1.95), 0.55f, new At(0, -0.29, -1.93), null, DRONE_FAR),
+                    List.of(new At(0, 0.03, -1.95)), new At(0, -0.29, -1.95), 0.55f, DRONE_FAR),
             null, BoosterVoice.SOLID, LaunchCue.BOOSTER, true,
             new SpentBooster(() -> WeaponModels.Mesh.DRONE_BOOSTER, 0.1f, 0.29f, 1.22f));
 
     public static final ClientWeaponSpec MISSILE = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::missile, List.of(EngineSound.Layer.MISSILE_FRONT, EngineSound.Layer.MISSILE_REAR, EngineSound.Layer.MISSILE_DIVE,
                     EngineSound.Layer.MISSILE_FAR, EngineSound.Layer.MISSILE_WHISTLE, EngineSound.Layer.BOOSTER),
-                    List.of(new At(0, 0, -3.2)), new At(0, 0, -3.45), 0.8f, new At(0, 0, -3.44), new At(0, 0, -2.88), MISSILE_FAR),
+                    List.of(new At(0, 0, -3.2)), new At(0, 0, -3.45), 0.8f, MISSILE_FAR),
             null, BoosterVoice.SOLID_LOW, LaunchCue.BOOSTER_LOW, true,
             new SpentBooster(() -> WeaponModels.Mesh.MISSILE_BOOSTER, 0.24f, 0, 3.15f));
 
     public static final ClientWeaponSpec BUNKER = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::bomber, List.of(EngineSound.Layer.BOMBER_NEAR, EngineSound.Layer.BOMBER_FAR),
                     List.of(new At(3.2, 0.3, -9.5), new At(1.9, 0.3, -9.3), new At(-1.9, 0.3, -9.3), new At(-3.2, 0.3, -9.5)),
-                    null, 0, null, null, BOMBER_FAR),
+                    null, 0, BOMBER_FAR),
             new ClientAirframe(WeaponModels::bomb, List.of(EngineSound.Layer.BOMB_NEAR, EngineSound.Layer.BOMB_FAR, EngineSound.Layer.BOMB_DRILL),
-                    List.of(new At(0, 0, -5.2)), null, 0, null, null, BOMB_FAR),
+                    List.of(new At(0, 0, -5.2)), null, 0, BOMB_FAR),
             BoosterVoice.SOLID, LaunchCue.BOOSTER, true, null);
 
     public static final ClientWeaponSpec NUKE = new ClientWeaponSpec(
-            new ClientAirframe(WeaponModels::icbm, List.of(EngineSound.Layer.BOOSTER), List.of(new At(0, 0, -10)), null, 0, null, new At(0, 0, -9.7), ICBM_FAR),
+            new ClientAirframe(WeaponModels::icbm, List.of(EngineSound.Layer.BOOSTER), List.of(new At(0, 0, -10)), null, 0, ICBM_FAR),
             null, BoosterVoice.ICBM, LaunchCue.NONE, false, null);
 
     /** РСЗО: рёв двигателя, пока горит; дальше снаряд летит по инерции и воет рассекаемым воздухом. */
     public static final ClientWeaponSpec ROCKET = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::rocket, List.of(EngineSound.Layer.BOOSTER, EngineSound.Layer.ROCKET_AIR), List.of(new At(0, 0, -1.5)),
-                    null, 0, null, new At(0, 0, -1.5), ROCKET_FAR),
+                    null, 0, ROCKET_FAR),
             null, BoosterVoice.ROCKET, LaunchCue.ROCKET_TUBE, true, null);
 
     /** Барражирующий: тот же винт, но маленький электромотор — выше и тише (см. {@code EngineSound}). */
     public static final ClientWeaponSpec LOITER = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::loiter, List.of(EngineSound.Layer.LOITER_NEAR, EngineSound.Layer.LOITER_FAR, EngineSound.Layer.LOITER_DIVE,
-                    EngineSound.Layer.BOOSTER), List.of(), null, 0, null, null, LOITER_FAR),
+                    EngineSound.Layer.BOOSTER), List.of(), null, 0, LOITER_FAR),
             null, BoosterVoice.NONE, LaunchCue.CATAPULT, false, null);
 
     /** Клиентский паспорт оружия. */

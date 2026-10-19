@@ -328,7 +328,7 @@ public final class NukePall {
         // вокруг точки подрыва
         float r = (float) Math.max(p.extent(ticks), Math.max(a.wall.reach(seconds) + 1, a.wall.wilsonReach(seconds)));
         LO.set(cx - r, (float) (ground - top), cz - r);
-        HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + top * 1.05), cz + r);
+        HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + top * (1 + PallField.BUMPS) * 1.05), cz + r);
         if (WALL[3] > 0) {
             LO.y = Math.min(LO.y, ground + Math.min(a.ground.low(), 0) - 0.5f * WALL[2]);
             HI.y = Math.max(HI.y, ground + Math.max(a.ground.high(), 0) + WALL[2]);

@@ -191,6 +191,8 @@ public final class NukeSounds {
         private boolean pulse;
         /** Наибольший наклон тела ветром волны, °, и доля лучей к взрыву без стены (для строки сценария). */
         private double swayPeak, swayOpen = -1;
+        /** Скорость наклона сразу за фронтом — удар фронта, °/с (для строки сценария). */
+        private double swayRate;
         /** Звуки волны у слушателя: он снова впереди фронта — они прочь ({@link #again}). */
         private final List<SoundInstance> shots = new ArrayList<>();
         /** Эхо от рельефа — только вживую. */
@@ -257,8 +259,8 @@ public final class NukeSounds {
         /** Строка {@code SCENARIO}: что дошло прямым ударом; пусто — фронт ещё не дошёл. */
         String describe() {
             if (!meeting.heard()) return "";
-            return String.format(java.util.Locale.ROOT, "direct %.2f psi vol %.3f t+ %.2fs rise %.3fms %s wind %.1fm/s body %.2f psi sway %.2fdeg open %.2f; ",
-                    psi, heard, phaseTicks / 20, riseMs, pulse ? "pulse" : "file", windPeak, bodyPsi, swayPeak, swayOpen);
+            return String.format(java.util.Locale.ROOT, "direct %.2f psi vol %.3f t+ %.2fs rise %.3fms %s wind %.1fm/s body %.2f psi sway %.2fdeg jolt %.1fdeg/s open %.2f; ",
+                    psi, heard, phaseTicks / 20, riseMs, pulse ? "pulse" : "file", windPeak, bodyPsi, swayPeak, swayRate, swayOpen);
         }
 
         /**
@@ -363,19 +365,25 @@ public final class NukeSounds {
         }
 
         /**
-         * Ветер за фронтом толкает стоящего: тело отклоняется по ветру и выпрямляется ({@link BodySway}), камера — с ним
-         * ({@link CameraShake#sway}). Напор — скоростной напор за фронтом вдоль земли у тела
+         * Фронт бьёт стоящего, ветер за ним толкает: тело отклоняется по ветру и выпрямляется ({@link BodySway}), камера —
+         * с ним ({@link CameraShake#sway}); удар — с прихода фронта к телу, а не с тика, в котором его заметили. Давление —
+         * фронта у тела, напор — скоростной напор за фронтом вдоль земли у тела
          * ({@link Detonation#dynamicPressureKpa}: под воздушным подрывом — только его доля вдоль земли), {@code phase} —
          * положительная фаза у тела, тики. За стеной, домом или холмом в сторону взрыва (лучи {@link SoundFilters#openRays})
-         * — в её ветровой тени: напор — по доле открытых лучей. Кого ветер несёт целиком (верхом, вплавь, в полёте), того
+         * — в её ветровой тени: удар и ветер — по доле открытых лучей (оценка: фронт огибает преграду, но толкает уже не
+         * вдоль земли). Кого ветер несёт целиком (верхом, вплавь, в полёте), того
          * не качает — бросок считает сервер; в прыжке наклона нет, пока игрок не встанет ({@link CameraShake#standing}).
          */
         private void sway(LocalPlayer p, Vec3 body, double phase) {
             if (CameraShake.carried(p)) return;
             Vec3 b = d.burst();
             swayOpen = SoundFilters.openRays(body, Math.atan2(b.z - body.z, b.x - body.x));
-            double[] tilt = CameraShake.sway(1000 * d.dynamicPressureKpa(body) * swayOpen, phase / 20, body.subtract(b), p.getYRot());
+            // фронт прошёл тело между прошлым тиком и этим: удар — с его прихода
+            double late = a.ticks(0) - d.arrivalTicks(body.distanceTo(b));
+            double[] tilt = CameraShake.sway(1000 * d.overpressureKpa(body), 1000 * d.dynamicPressureKpa(body), swayOpen, phase / 20, late,
+                    body.subtract(b), p.getYRot());
             swayPeak = Math.toDegrees(BodySway.peak(tilt, 0));
+            swayRate = tilt.length < 2 ? 0 : Math.toDegrees(tilt[1]) * BodySway.RATE;
         }
 
         /**

@@ -17,17 +17,18 @@ class CameraShakeTest {
 
     /**
      * Волна на земле, где давление {@code psi}, от воздушного подрыва {@code kt} на лучшей высоте: {скоростной напор вдоль
-     * земли, Па; положительная фаза, с}.
+     * земли, Па; положительная фаза, с; давление фронта, Па}.
      */
     private static double[] wave(double psi, double kt) {
         double h = Yield.optimalBurstHeight(kt), g = HobBlast.rangeFor(psi, h, kt);
-        return new double[]{1000 * BlastModel.dynamicPressureKpa(BlastModel.kpa(psi)) * HobBlast.alongGround(g, h, kt), HobBlast.positivePhaseSeconds(g, h, kt)};
+        return new double[]{1000 * BlastModel.dynamicPressureKpa(BlastModel.kpa(psi)) * HobBlast.alongGround(g, h, kt), HobBlast.positivePhaseSeconds(g, h, kt),
+                1000 * BlastModel.kpa(psi)};
     }
 
     /** Волна {@code psi} от {@code kt} качнула игрока, что смотрит по курсу 0 (на +z); {@code away} — от взрыва к нему. */
     private static double[] sway(double psi, double kt, Vec3 away) {
         double[] w = wave(psi, kt);
-        return CameraShake.sway(w[0], w[1], away, 0);
+        return CameraShake.sway(w[2], w[0], 1, w[1], 0, away, 0);
     }
 
     /**
@@ -38,12 +39,12 @@ class CameraShakeTest {
     @Test
     void nukeWindLeansAwayFromTheBurst() {
         CameraShake.reset();
-        double peak = Math.toDegrees(BodySway.peak(sway(1, 2, new Vec3(0, 0, -1)), 0));
-        assertTrue(peak > 0.5 && peak < Math.toDegrees(BodySway.BACK), "1 psi: " + peak);
-        assertEquals(-peak, extreme(1, 2, new Vec3(0, 0, -1), 1)[0], 1e-6, "взрыв впереди — назад");
-        assertEquals(peak, extreme(1, 2, new Vec3(0, 0, 1), 1)[1], 1e-6, "взрыв позади — вниз");
-        assertEquals(-peak, extreme(1, 2, new Vec3(1, 0, 0), 1)[2], 1e-6, "взрыв справа — влево");
-        assertEquals(-peak, extreme(1, 2, new Vec3(0, -1, -1), 1)[0], 1e-6, "над головой впереди — тоже назад");
+        double peak = Math.toDegrees(BodySway.peak(sway(0.6, 2, new Vec3(0, 0, -1)), 0));
+        assertTrue(peak > 0.5 && peak < Math.toDegrees(BodySway.BACK), "0,6 psi: " + peak);
+        assertEquals(-peak, extreme(0.6, 2, new Vec3(0, 0, -1), 1)[0], 1e-6, "взрыв впереди — назад");
+        assertEquals(peak, extreme(0.6, 2, new Vec3(0, 0, 1), 1)[1], 1e-6, "взрыв позади — вниз");
+        assertEquals(-peak, extreme(0.6, 2, new Vec3(1, 0, 0), 1)[2], 1e-6, "взрыв справа — влево");
+        assertEquals(-peak, extreme(0.6, 2, new Vec3(0, -1, -1), 1)[0], 1e-6, "над головой впереди — тоже назад");
     }
 
     /**
@@ -58,7 +59,7 @@ class CameraShakeTest {
                 for (double pitch : new double[]{-90, -45, 0, 30, 60, 85, 89.9, 90}) {
                     for (double roll : new double[]{0, 10}) {
                         CameraShake.reset();
-                        double[] w = wave(1, 2), t = CameraShake.sway(w[0], w[1], away, yaw);
+                        double[] w = wave(1, 2), t = CameraShake.sway(w[2], w[0], 1, w[1], 0, away, yaw);
                         int top = 0;
                         for (int i = 0; i < t.length; i++) if (t[i] > t[top]) top = i;
                         for (int tick = 0; tick < top / STEP; tick++) CameraShake.tick(true);
@@ -130,7 +131,7 @@ class CameraShakeTest {
                 for (double pitch : new double[]{30, 89.9}) {
                     for (double yaw = 0; yaw < 360; yaw += 45) {
                         CameraShake.reset();
-                        double[] w = wave(psi, kt), t = CameraShake.sway(w[0], w[1], new Vec3(0.3, -0.2, 1), yaw);
+                        double[] w = wave(psi, kt), t = CameraShake.sway(w[2], w[0], 1, w[1], 0, new Vec3(0.3, -0.2, 1), yaw);
                         double most = 0;
                         Quaterniond prev = null;
                         for (int tick = 0; tick * STEP < t.length + 20; tick++) {
@@ -185,6 +186,20 @@ class CameraShakeTest {
         assertEquals(before, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "в миг прихода");
         for (int i = 0; i < 10; i++) CameraShake.tick(true);
         assertEquals(Math.toDegrees(first[20 * STEP] + second[10 * STEP]), CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
+        CameraShake.reset();
+    }
+
+    /**
+     * Удар — с прихода фронта к телу, а не с тика, в котором его заметили: фронт прошёл тело полтика назад — в первом
+     * кадре этого тика тело уже клонится на полтика наклона; с прихода — с самого начала (не с 0, не позже).
+     */
+    @Test
+    void swayStartsWhenTheFrontPassed() {
+        CameraShake.reset();
+        double[] w = wave(1, 2), t = CameraShake.sway(w[2], w[0], 1, w[1], 0.5, new Vec3(0, 0, 1), 0);
+        double half = Math.toDegrees(t[STEP / 2] + (t[STEP / 2 + 1] - t[STEP / 2]) * (STEP / 2.0 - STEP / 2));
+        assertEquals(half, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
+        assertTrue(half > 0, "полтика удара — уже наклон");
         CameraShake.reset();
     }
 

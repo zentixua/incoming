@@ -326,6 +326,48 @@ class PallGlslTest {
         for (int c = 0; c < 3; c++) assertEquals((CloudPuffs.SPRAY >> (16 - 8 * c) & 0xFF) / 255.0, mist[c], 0.5 / 255, "канал " + c);
     }
 
+    /**
+     * Клубы головы — в координатах самой пыли: доля пути с ветром за фазу ({@code pallWallCarried}) — та же, что в Java
+     * ({@link BlastWall#carriedShare}), место пыли ({@code pallWallOrigin}) — тот же закон, что {@link BlastWall#origin}, и
+     * шум головы берёт его, а не место за фронтом (клубы ехали бы с фронтом — жалоба 18.10).
+     */
+    @Test
+    void headNoiseIsInDustCoordinates() {
+        GlslFunction carried = GlslFunction.parse(GLSL, "pallWallCarried");
+        for (double u = -0.5; u <= 3; u += 0.001) assertEquals(BlastWall.carriedShare(u), carried.call(Map.of("u", u)), 1e-6, "u = " + u);
+        String origin = body(GLSL, "vec3 pallWallOrigin(");
+        for (String law : new String[]{"float zr = clamp(z / max(top, 0.001), 0.0, 1.0);", "float x = carried * pallWallCarried(u) * pow(zr, 1.0 / 7.0);",
+                "return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);"}) {
+            assertTrue(origin.contains(law), "место пыли головы — не как в Java: нет «" + law + "»");
+        }
+        String wall = body(read("core/fx_pall.fsh"), "float wallAt(");
+        assertTrue(wall.contains("wallNoise(pallWallOrigin(h.rel, h.z, u * V[2].x, h.P.y, V[1].x) / max(V[2].w, 1.0)"), "шум головы — не в координатах пыли");
+    }
+
+    /**
+     * Пелена — одно одеяло: колебания густоты перемешанного слоя ({@code pallMixed}) и неровность его верха
+     * ({@code PALL_BUMPS}, последний параметр {@code pallField}) — те же, что в Java ({@link PallField#clumps},
+     * {@link PallField#MIXED}, {@link PallField#BUMPS}); бугры — верх слоя ({@code topD}), а не дыры в нём, и их берёт
+     * луч пелены.
+     */
+    @Test
+    void blanketMatchesJava() {
+        assertEquals(PallField.BUMPS, scalar(GLSL, "PALL_BUMPS"), 1e-7);
+        assertEquals(PallField.MIXED, scalar(GLSL, "PALL_MIXED"), 1e-7);
+        GlslFunction mixed = GlslFunction.parse(GLSL, "pallMixed");
+        for (double shape = 0; shape <= 3.5; shape += 0.05) {
+            for (double m = 0; m <= 1; m += 0.05) {
+                assertEquals(PallField.clumps(shape, m), mixed.call(Map.of("shape", shape, "mixed", m, "PALL_MIXED", PallField.MIXED)), 1e-9);
+            }
+        }
+        String f = body(GLSL, "PallAt pallField(");
+        assertTrue(f.contains("float topD = max(dust.g, 1.0) * bumps,"), "бугры — не верх слоя");
+        assertTrue(f.contains("a.mixed = dust.a;"), "перемешанность — не из таблицы");
+        String fx = read("core/fx_pall.fsh");
+        assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));"), "луч пелены — без бугров верха");
+        assertTrue(body(fx, "float topBumps(").contains("return 1.0 + PALL_BUMPS * (2.0 * n - 1.0);"), "бугры — не 1 ± PALL_BUMPS");
+    }
+
     @Test
     void shapeMatchesJava() {
         GlslFunction f = GlslFunction.parse(GLSL, "pallShape");
