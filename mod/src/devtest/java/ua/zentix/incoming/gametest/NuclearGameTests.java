@@ -94,14 +94,25 @@ public final class NuclearGameTests {
      * слой засыпается. Без засыпки опоры у площадки нет и до удара — так проверяется постройка на «висящей» земле.
      */
     static Detonation detonation(GameTestHelper h, BlockPos at, double hob, double yieldKt, float scale, boolean fill) {
-        ServerLevel level = h.getLevel();
-        if (fill) {
-            for (BlockPos p : BlockPos.betweenClosed(BlockPos.ZERO, new BlockPos(63, 0, 63))) {
-                BlockPos a = h.absolutePos(p);
-                if (level.getBlockState(a).isAir()) level.setBlock(a, Blocks.STONE.defaultBlockState(), 2);
-            }
-        }
+        if (fill) fill(h);
         return raw(h, at, hob, yieldKt, scale);
+    }
+
+    /**
+     * То же с засыпкой, но над местом в мире {@code ground}, а не площадки: проверке, которой место подрыва задаёт сетка
+     * чанков (у GameTestHelper relativePos и absolutePos — не обратные друг другу).
+     */
+    static Detonation detonationAt(GameTestHelper h, BlockPos ground, double hob, double yieldKt, float scale) {
+        fill(h);
+        return rawAt(h, ground, hob, yieldKt, scale);
+    }
+
+    private static void fill(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        for (BlockPos p : BlockPos.betweenClosed(BlockPos.ZERO, new BlockPos(63, 0, 63))) {
+            BlockPos a = h.absolutePos(p);
+            if (level.getBlockState(a).isAir()) level.setBlock(a, Blocks.STONE.defaultBlockState(), 2);
+        }
     }
 
     /**
@@ -112,7 +123,10 @@ public final class NuclearGameTests {
     static final java.util.concurrent.atomic.AtomicInteger IDS = new java.util.concurrent.atomic.AtomicInteger(1_000_000);
 
     private static Detonation raw(GameTestHelper h, BlockPos at, double hob, double yieldKt, float scale) {
-        BlockPos g = h.absolutePos(at);
+        return rawAt(h, h.absolutePos(at), hob, yieldKt, scale);
+    }
+
+    private static Detonation rawAt(GameTestHelper h, BlockPos g, double hob, double yieldKt, float scale) {
         return new Detonation(IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + hob, g.getZ() + 0.5), g.getY(),
                 yieldKt, hob <= 0, h.getLevel().getGameTime(), 0, 0, 20_000, 7, scale, false, Detonation.OLD_WAVE);
     }

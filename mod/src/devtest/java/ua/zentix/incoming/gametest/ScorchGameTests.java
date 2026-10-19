@@ -248,7 +248,8 @@ public final class ScorchGameTests {
      * вспышки {@code FlashScorch}), а после волны в нём тот же мир, что дал бы один план руин по миру до вспышки, — через
      * очередь руин (план в фоне по снимкам чанков, на которых уже стоит слой). Чанк B, ближний к эпицентру из тех, до
      * кого волна доходит после слоя (сильнее волна — сбивает часть огня), — планом, готовым до вспышки в руинах подрыва
-     * (как у подготовки руин за полёт МБР): он не устаревает от слоя и даёт тот же мир. Подрыв — над дальним углом площадки, как в {@link #scorchWithoutRuinsSameAsRuins};
+     * (как у подготовки руин за полёт МБР): он не устаревает от слоя и даёт тот же мир. Подрыв — за углом трёх на три чанков
+     * площадки, место — от сетки чанков ({@link #gridSide});
      * масштаб — такой, чтобы у земли в середине A было 15 кал/см². Слой — только чанкам целиком на площадке: огонь за
      * её краем горел бы у соседних партий.
      */
@@ -257,16 +258,21 @@ public final class ScorchGameTests {
         ServerLevel level = h.getLevel();
         fillBiome(h, 0, 63, Biomes.PLAINS);
         plants(h);
-        BlockPos zero = new BlockPos(60, 12, 60), g = h.absolutePos(zero);
+        // Чанки и подрыв — от сетки чанков, а не от площадки: площадка встаёт где угодно относительно сетки, а в масштабе
+        // проверки слой у A встаёт на 1-м тике (свет набирает порог за 0,1 тика), волна к чанкам — через 0,6–3 тика, и
+        // срок волны в тиках (ScarQueue.due) у соседей A то 1, то 2: при ~5 % сдвигов площадки (CI 19.10, выпуск 3.4.1)
+        // ни один чанк, кроме A, не получал волну позже слоя. От сетки картина одна при любой раскладке партий: 3 × 3
+        // чанка целиком на площадке и подрыв на их диагонали в 6 блоках за углом: B получает волну через 2,0 тика, двое
+        // соседей A — через 2,3, A — через 2,8.
         BlockPos lo = h.absolutePos(BlockPos.ZERO), hi = h.absolutePos(new BlockPos(63, 0, 63));
+        int[] sx = gridSide(Math.min(lo.getX(), hi.getX()), Math.max(lo.getX(), hi.getX()));
+        int[] sz = gridSide(Math.min(lo.getZ(), hi.getZ()), Math.max(lo.getZ(), hi.getZ()));
+        BlockPos g = new BlockPos(sx[1], h.absolutePos(new BlockPos(0, 12, 0)).getY(), sz[1]);
         List<LevelChunk> inside = new ArrayList<>();
-        for (LevelChunk chunk : NuclearGameTests.chunks(h)) {
-            ChunkPos c = chunk.getPos();
-            if (c.getMinBlockX() >= Math.min(lo.getX(), hi.getX()) && c.getMaxBlockX() <= Math.max(lo.getX(), hi.getX())
-                    && c.getMinBlockZ() >= Math.min(lo.getZ(), hi.getZ()) && c.getMaxBlockZ() <= Math.max(lo.getZ(), hi.getZ())) inside.add(chunk);
+        for (int cx = sx[0]; cx < sx[0] + 3; cx++) {
+            for (int cz = sz[0]; cz < sz[0] + 3; cz++) inside.add(level.getChunk(cx, cz));
         }
         inside.sort(Comparator.comparingDouble(c -> Math.hypot(c.getPos().getMiddleBlockX() - g.getX(), c.getPos().getMiddleBlockZ() - g.getZ())));
-        h.assertTrue(inside.size() >= 4, "чанков целиком на площадке " + inside.size());
         LevelChunk a = inside.get(inside.size() - 1);
         Vec3 midA = new Vec3(a.getPos().getMiddleBlockX() + 0.5, g.getY() + 1, a.getPos().getMiddleBlockZ() + 0.5);
         // масштаб: 15 кал/см² у земли в середине A (меньше масштаб — больше метров в блоке, меньше света)
@@ -278,7 +284,7 @@ public final class ScorchGameTests {
             if (probe.fluence(midA) > 15) sHi = s;
             else sLo = s;
         }
-        Detonation d = NuclearGameTests.detonation(h, zero, Yield.optimalBurstHeight(15) * sHi, 15, (float) sHi);
+        Detonation d = NuclearGameTests.detonationAt(h, g, Yield.optimalBurstHeight(15) * sHi, 15, (float) sHi);
         // слой A встаёт, когда свет у ближней к шару точки A набрал порог поджига (как в FlashScorch); ближние чанки — не позже
         double nx = Mth.clamp(d.burst().x, a.getPos().getMinBlockX(), a.getPos().getMaxBlockX() + 1);
         double nz = Mth.clamp(d.burst().z, a.getPos().getMinBlockZ(), a.getPos().getMaxBlockZ() + 1);
@@ -653,6 +659,17 @@ public final class ScorchGameTests {
                 }
             }
         }
+    }
+
+    /**
+     * По одной оси площадки {@code [a, b]}: первый из трёх чанков целиком на ней и место подрыва в 6 блоках за ними — со
+     * стороны, где у площадки запас больше (из 16 блоков сверх трёх чанков на эту сторону приходится не меньше 8). Отступы
+     * 6 и 5 — одно расстояние до середин чанков с обеих сторон ({@code getMiddleBlockX} + 0,5 — не середина чанка).
+     */
+    private static int[] gridSide(int a, int b) {
+        int first = (a + 15) >> 4, last = ((b + 1) >> 4) - 1;
+        int after = b - ((first + 3) << 4) + 1, before = ((last - 2) << 4) - a;
+        return after >= before ? new int[]{first, ((first + 3) << 4) + 5} : new int[]{last - 2, ((last - 2) << 4) - 5};
     }
 
     /** Верх площадки в чанке: выжженной земли (земля, гарь), пожаров над ней, уцелевших растений. */
