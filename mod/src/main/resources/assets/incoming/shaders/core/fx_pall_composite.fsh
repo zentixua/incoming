@@ -201,6 +201,12 @@ vec3 flames(sampler2D map, mat4 S, mat4 F, vec3 p, float dist, float pixel) {
     return near * (hot * e + F[3].rgb * (0.12 * F[1].w * around));
 }
 
+// доля наружного воздуха в точке p (pall.glsl: pallOpen) — рельеф за окном по карте первого слота, что есть
+float pallOpenHere(vec3 p) {
+    if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot0, PallGround0, p);
+    return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler6, PallSlot1, PallGround1, p);
+}
+
 // Толща пелены без шума по лучу dir от глаза на [ta, tb] — шесть шагов по полю обоих слотов и голова стены (как пелена
 // перед квадратами слоя, pall_front.glsl: pallThrough), с долей наружного воздуха (pallOpen); облако Вильсона — нет
 // (тонкая оболочка на секунды)
@@ -217,7 +223,7 @@ float pallTau(vec3 dir, float ta, float tb) {
             PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler6, PallSlot1, PallGround1, q.xz));
             s += f.sigma.x + f.sigma.y + f.sigma.z;
         }
-        tau += s * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, q) * ds;
+        tau += s * pallOpenHere(q) * ds;
     }
     // голова стены пыли — по её отрезкам на луче (как пелена перед квадратами слоя, pall_front.glsl: pallWallThrough)
     for (int k = 0; k < 2; k++) {
@@ -228,7 +234,7 @@ float pallTau(vec3 dir, float ta, float tb) {
             vec2 sp = j == 0 ? spans.xy : spans.zw;
             if (sp.y <= sp.x) continue;
             float wall = k == 0 ? pallWallTau(Sampler5, S, V, G, W, dir, sp.x, sp.y, 4) : pallWallTau(Sampler6, S, V, G, W, dir, sp.x, sp.y, 4);
-            tau += wall * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, dir * (0.5 * (sp.x + sp.y)));
+            tau += wall * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
         }
     }
     return tau;
@@ -259,10 +265,12 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
     vec4 sum = vec4(0.0);
     float total = 0.0, same = 0.0;
     bool clear = true;
+    float farRay = 0.0;
     for (int j = 0; j <= 1; j++) {
         for (int i = 0; i <= 1; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
-            float a = pallAlike(sampleDepth(t, fullSize), pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
+            float d = sampleDepth(t, fullSize), a = pallAlike(d, pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
+            farRay = max(farRay, d);
             // билинейный вес без «?:» внутри выражения: Veil теряет скобки вокруг него (ShaderSourceTest)
             float w = mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j));
             same = max(same, a);
@@ -273,9 +281,10 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
             total += w;
         }
     }
-    // хоть один луч прошёл то же место (сходство больше половины) — он и есть; и ни у одного из четырёх пелены почти нет
-    // (свет на непрозрачность не узнать, как в fx.fsh) — пиксель тоже без неё, искать дальше нечего
-    if (same > 0.5 || clear) return sum / total;
+    // хоть один луч прошёл то же место (сходство больше половины) — он и есть; у четырёх пелены почти нет, а пиксель не
+    // дальше их (свет на непрозрачность не узнать, как в fx.fsh) — и у пикселя её нет, искать дальше нечего. Пиксель
+    // дальше (фон в щели между прутьями) — свой луч ищется: пелена ближних прутьев не его
+    if (same > 0.5 || (clear && depth <= farRay * 1.05)) return sum / total;
     ivec2 best = clamp(base, ivec2(0), lowSize - 1);
     float bestAlike = -1.0, bestDepth = depth;
     for (int j = -1; j <= 2; j++) {
@@ -349,7 +358,7 @@ void main() {
         float seen = exp(-Haze.x * length(p)) * (1.0 - smoothstep(Haze.y, Haze.z, fd));
         vec4 over = pallOver(p);
         // тень пелены — на свете неба и солнца: в штольне и пещере мир светят факелы (место — блок воздуха перед поверхностью)
-        float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, p - 0.5 * dir));
+        float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpenHere(p - 0.5 * dir));
         vec3 added = vec3(0.0), n = vec3(0.0, 1.0, 0.0);
         if (balls) {
             n = sceneNormal(full, fullSize, p);

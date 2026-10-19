@@ -809,6 +809,12 @@ void passesBefore(float t, inout vec3 light, inout float transmit, inout float l
     }
 }
 
+
+// доля наружного воздуха в точке p (pall.glsl: pallOpen) — рельеф за окном по карте первого слота, что есть
+float pallOpenHere(vec3 p) {
+    if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot0, PallGround0, p);
+    return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler6, PallSlot1, PallGround1, p);
+}
 // Шаг пелены на [ta, ta + ds]: её свет в луч. grid — шаг сетки луча здесь (обычной или головы стены, меньший): шаг,
 // урезанный входом в отрезок головы или его концом, случаен от кадра к кадру (сдвиг сетки), и то, что луч различает,
 // по нему мигало бы
@@ -818,7 +824,7 @@ void pallStep(float ta, float ds, float grid, inout vec3 light, inout float tran
     float muS = gMuS, c = gC, mv = gMv;
     vec3 p = dir * ta;
     // под землёй (в штольне, пещере) пыли нет: вещество — доля наружного воздуха в точке
-    float open = pallOpen(PallOpen, PallOpenAt, PallOpenWrap, p);
+    float open = pallOpenHere(p);
     if (open <= 0.0) return;
     // меньшее, что луч здесь различает: ширина пикселя или треть шага
     float cone = max(ta * gPixel, 0.35 * grid);

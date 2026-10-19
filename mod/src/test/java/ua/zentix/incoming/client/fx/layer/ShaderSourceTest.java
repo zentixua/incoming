@@ -112,9 +112,9 @@ class ShaderSourceTest {
     @Test
     void pallKnowsWhereTheOpenAirIs() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI()), include = core.resolveSibling("include");
-        assertTrue(body(Files.readString(core.resolve("fx_pall.fsh")), "void pallStep(").contains("pallOpen("), "fx_pall: pallStep без pallOpen");
-        assertTrue(body(Files.readString(include.resolve("pall_front.glsl")), "float pallThrough(").contains("pallOpen("), "pall_front: pallThrough без pallOpen");
-        assertTrue(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main(").contains("pallOpen("), "fx_pall_composite: тень без pallOpen");
+        assertTrue(body(Files.readString(core.resolve("fx_pall.fsh")), "void pallStep(").contains("pallOpenHere("), "fx_pall: pallStep без pallOpen");
+        assertTrue(body(Files.readString(include.resolve("pall_front.glsl")), "float pallThrough(").contains("pallOpenHere("), "pall_front: pallThrough без pallOpen");
+        assertTrue(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main(").contains("pallOpenHere("), "fx_pall_composite: тень без pallOpen");
     }
 
     /**

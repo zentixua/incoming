@@ -666,7 +666,7 @@ class PallGlslTest {
         assertTrue(march.contains("vec4 res = vec4(shown, min(transmit + lost, 1.0));"),
                 "пропускание кадра — настоящее и при пересвете");
         assertEquals(4, occurrences(composite, "pallDisplay("), "тень на мире в экран — один раз, мир в свете шаров — раз на канал");
-        assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, p - 0.5 * dir));"),
+        assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpenHere(p - 0.5 * dir));"),
                 "тень на мире — в экран, вдали тает в дымке и тумане, под землёй её нет");
         assertTrue(composite.contains("pall.a *= kept;"), "без света шаров тень — множитель мира в смешивании");
         assertTrue(composite.contains("pall = vec4(pall.rgb + pall.a * shown, 0.0);"), "мир в свете шаров — за пеленой, пиксель целиком");
