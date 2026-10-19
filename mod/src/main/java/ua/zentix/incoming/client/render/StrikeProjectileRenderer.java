@@ -1,20 +1,24 @@
 package ua.zentix.incoming.client.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
+import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.fx.Exhaust;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 
 /**
  * Снаряд — модель {@link WeaponModels}, повёрнутая по курсу и тангажу, плюс крен в вираже. Позиция приходит каждый
- * тик и плавно интерполируется между тиками. За соплом — факел двигателя ({@link PlumeRenderer}).
+ * тик и плавно интерполируется между тиками. За соплом — струя факела двигателя ({@link PlumeRenderer}); его свет
+ * (блик, вуаль, с края прорисовки и ядро) — у {@code client.far.FarFlightView}.
  */
 public class StrikeProjectileRenderer<T extends StrikeProjectile> extends EntityRenderer<T> {
     private final WeaponModels.Look look;
@@ -36,7 +40,14 @@ public class StrikeProjectileRenderer<T extends StrikeProjectile> extends Entity
         pose.mulPose(rotation);
         look.render(state, pose, parts.into(buffers, packedLight));
         Exhaust.Plume plume = Exhaust.plume(entity, partialTick);
-        if (plume != null) PlumeRenderer.render(plume, pose, buffers, rotation, entity.getPosition(partialTick), entityRenderDispatcher.camera);
+        if (plume != null) {
+            // с 0,8 прорисовки струю сменяет свет того же факела дальней картинки (FarFlightView): к краю, где туман
+            // Minecraft и шейдерпака съедает сущность, факел — уже он
+            Vec3 at = entity.getPosition(partialTick);
+            double world = Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0;
+            float near = (float) (1 - FarView.farShare(at.distanceTo(entityRenderDispatcher.camera.getPosition()), world));
+            if (near > 0) PlumeRenderer.render(plume.dimmed(near), pose, buffers, rotation, at, entityRenderDispatcher.camera);
+        }
         pose.popPose();
         super.render(entity, entityYaw, partialTick, pose, buffers, packedLight);
     }

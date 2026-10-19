@@ -275,6 +275,22 @@ class FarFlightViewTest {
         assertFalse(FarFlightView.inFrame(view, 0, 0, 500, 500, 2), "за спиной");
     }
 
+    @Test
+    void flameIsOneAcrossTheRenderDistanceEdge() {
+        // сущность появляется на краю прорисовки: ядро света факела там уже всё, ближе его сменяет струя той же долей,
+        // путь по пакетам — всегда весь свет; блик и вуаль — у обоих (FarFlightView.collect)
+        double world = 192;
+        FarView view = new FarView(Vec3.ZERO, new Vector3f(0, 0, -1), new Vector3f(-1, 0, 0), new Vector3f(0, 1, 0), 0, 1000, PIXEL,
+                Math.toRadians(30), 1, 20000, world, 192, 0, Sight.Air.at(0, 20000));
+        for (double d = 0; d <= 2 * world; d += 4) {
+            double jet = 1 - FarView.farShare(d, world), core = FarFlightView.flameCore(true, view, d);
+            assertEquals(1, jet + core, 1e-12, "на " + d + ": струя и ядро вместе — один факел");
+            assertEquals(1, FarFlightView.flameCore(false, view, d), 1e-12, "по пакетам — весь свет");
+            if (d <= 0.8 * world) assertEquals(0, core, 1e-12, "вблизи ядро — струя");
+            if (d >= world) assertEquals(1, core, 1e-12, "на краю — как по пакетам");
+        }
+    }
+
     /** Точка в 500 блоках под углом deg от взгляда на север: x и z. */
     private static double[] at(double deg) {
         return new double[]{500 * Math.sin(Math.toRadians(deg)), -500 * Math.cos(Math.toRadians(deg))};

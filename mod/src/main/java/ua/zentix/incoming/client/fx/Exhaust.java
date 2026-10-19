@@ -34,7 +34,12 @@ import java.util.WeakHashMap;
  */
 public final class Exhaust {
     /** Факел в системе снаряда: срез сопла в (0, {@code y}, {@code z}) (нос по +Z), длина и радиус в блоках, яркость, «алмазы». */
-    public record Plume(float y, float z, float length, float radius, float intensity, boolean diamonds, int core, int outer) {}
+    public record Plume(float y, float z, float length, float radius, float intensity, boolean diamonds, int core, int outer) {
+        /** Та же струя, тусклее в k раз (на краю прорисовки её сменяет свет факела вдали). */
+        public Plume dimmed(float k) {
+            return new Plume(y, z, length, radius, intensity * k, diamonds, core, outer);
+        }
+    }
 
     private static final class State {
         Vec3 lastNozzle;
@@ -66,36 +71,19 @@ public final class Exhaust {
         }
     }
 
-    /** Факел двигателя сейчас или null — не горит. */
+    /**
+     * Факел двигателя сейчас или null — не горит: струя факела фазы из паспорта ({@link ClientWeaponSpec.Flame}, тот же,
+     * что свет факела вдали), длина — по возрасту фазы, с мерцанием.
+     */
     @Nullable
     public static Plume plume(StrikeProjectile e, float partial) {
         if (!e.isActive()) return null;
-        float flicker = 0.9f + 0.1f * Mth.sin((e.age() + partial) * 2.7f) * Mth.sin((e.age() + partial) * 1.3f + 1);
         FlightPhase ph = e.flightPhase();
-        if (ph == FlightPhase.READY && !(e instanceof IcbmEntity)) return null;
-        ClientWeaponSpec.ClientAirframe nozzles = nozzles(e);
-        ClientWeaponSpec.At engine = nozzles.enginePlume(), booster = nozzles.boosterPlume();
-        if (ph.boosterLit() && e instanceof RocketEntity) {
-            // РСЗО: короткая яркая струя, вспыхивает сразу (поджиг — доли секунды); в трубе её не видно
-            return new Plume((float) engine.y(), (float) engine.z(), 3.0f * flicker, 0.15f, 1, false, 0xFFF4E0, 0xFF8A30);
-        }
-        if (ph.boosterLit() && (e instanceof DroneEntity || e instanceof CruiseMissileEntity)) {
-            // твердотопливный ускоритель: на поджиге струя вырастает за полсекунды, дальше — ровный яркий факел
-            float grow = ph == FlightPhase.IGNITION ? Math.min(1, (e.phaseAge() + partial) / 10f) : 1;
-            return e instanceof DroneEntity
-                    ? new Plume((float) booster.y(), (float) booster.z(), 2.2f * grow * flicker, 0.13f, 1, false, 0xFFF4E0, 0xFF8A30)
-                    : new Plume((float) booster.y(), (float) booster.z(), 4.0f * grow * flicker, 0.25f, 1, true, 0xFFF4E0, 0xFF8A30);
-        }
-        return switch (e) {
-            // «Минитмен»: 18 м струи с алмазами, на разгоне длиннее
-            case IcbmEntity i -> new Plume((float) engine.y(), (float) engine.z(), (14 + Math.min(10, i.age() * 0.15f)) * flicker, 1.1f, 1, true,
-                    0xFFF4E0, 0xFF8A30);
-            // маршевый ТРД почти невидим — тусклое свечение; в пике ярче (форсаж для прорыва ПВО — художественно)
-            case CruiseMissileEntity m -> ph == FlightPhase.TERMINAL
-                    ? new Plume((float) engine.y(), (float) engine.z(), 2.0f * flicker, 0.18f, 0.9f, false, 0xFFE8C0, 0xFF6A20)
-                    : new Plume((float) engine.y(), (float) engine.z(), 1.0f * flicker, 0.14f, 0.55f, false, 0xFFD8A0, 0xFF5A18);
-            default -> null;
-        };
+        ClientWeaponSpec.Flame f = nozzles(e).far().stage(ph).flame();
+        if (f == null) return null;
+        float flicker = 0.9f + 0.1f * Mth.sin((e.age() + partial) * 2.7f) * Mth.sin((e.age() + partial) * 1.3f + 1);
+        return new Plume((float) f.start().y(), (float) f.start().z(), (float) f.length(e.phaseAge() + partial) * flicker, (float) f.width(),
+                f.intensity(), f.diamonds(), f.core(), f.outer());
     }
 
     /** Сопла сущности из клиентского паспорта (у B-2 и его бомбы — свои). */
