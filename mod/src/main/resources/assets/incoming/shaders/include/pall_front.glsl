@@ -25,6 +25,10 @@ uniform vec4 PallWilson0;
 uniform vec4 PallWilson1;
 // грибы кадра (mushroom.glsl, MushroomField): что гриб закрывает перед точкой
 uniform sampler2D Sampler11;
+// наружный воздух у глаза (pall.glsl: pallOpen, client/fx/layer/OpenAir); свой блок текстуры
+uniform sampler3D PallOpen;
+uniform vec4 PallOpenAt;
+uniform vec3 PallOpenWrap;
 
 // Голова стены слота перед точкой на [t0, t1]: доля, которую она пропускает, — по каждому её отрезку на луче
 // (pallWallSpans), в дымке воздуха у его середины (pallAir)
@@ -67,7 +71,7 @@ float pallThrough(vec3 dir, float len) {
             PallAt f = pallField(Sampler5, Sampler10, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler10, PallSlot1, PallGround1, q.xz));
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
-        through *= 1.0 - pallAir(PallAir, t, dir.y) * (1.0 - exp(-tau));
+        through *= 1.0 - pallAir(PallAir, t, dir.y) * (1.0 - exp(-tau * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, q)));
     }
     return through * pallWallThrough(Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, dir, t0, t1)
             * pallWallThrough(Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, dir, t0, t1)

@@ -56,6 +56,23 @@ class PallGlslTest {
     }
 
     /**
+     * Решётка лучей кадра пелены (fx_pall: луч пикселя t — через середину пикселя полного кадра floor((t + 0,5)·factor)):
+     * место середины этого пикселя в ней — ровно t, и накопление (fx_pall_resolve) берёт прошлое в нём же, без
+     * размытия с соседями. Со смещением на полпикселя полного кадра прошлое каждый кадр смешивалось с соседями и у края
+     * предмета брало пелену фона — кайма по контуру блоков.
+     */
+    @Test
+    void historyIsReadWhereTheRayWent() {
+        GlslFunction lattice = GlslFunction.parse(GLSL, "pallLattice");
+        for (int factor = 2; factor <= 4; factor++) {
+            for (int t = 0; t < 40; t++) {
+                double ray = Math.floor((t + 0.5) * factor) + 0.5;
+                assertEquals(t, lattice.call(Map.of("p", ray, "factor", (double) factor)), 1e-9, "factor " + factor + ", t " + t);
+            }
+        }
+    }
+
+    /**
      * Клин головы стены без шума — тот же, что в Java: поднятое по доле фазы ({@link DustModel#lifted}), верх, густота у
      * земли и переход к пелене ({@link BlastWall#top}, {@link BlastWall#shape}, {@link BlastWall#handoff}) и средняя
      * голова ({@link BlastWall#mean}).
@@ -649,7 +666,8 @@ class PallGlslTest {
         assertTrue(march.contains("vec4 res = vec4(shown, min(transmit + lost, 1.0));"),
                 "пропускание кадра — настоящее и при пересвете");
         assertEquals(4, occurrences(composite, "pallDisplay("), "тень на мире в экран — один раз, мир в свете шаров — раз на канал");
-        assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen);"), "тень на мире — в экран, вдали тает в дымке и тумане");
+        assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, p - 0.5 * dir));"),
+                "тень на мире — в экран, вдали тает в дымке и тумане, под землёй её нет");
         assertTrue(composite.contains("pall.a *= kept;"), "без света шаров тень — множитель мира в смешивании");
         assertTrue(composite.contains("pall = vec4(pall.rgb + pall.a * shown, 0.0);"), "мир в свете шаров — за пеленой, пиксель целиком");
         assertEquals(scalar(march, "CROSS"), scalar(composite, "CROSS"), "пересвет к белому — как у вещества");

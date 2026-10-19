@@ -246,6 +246,19 @@ float pallFloor(sampler2D ground, mat4 S, vec4 G, vec3 dir, float from, float en
     return 1e9;
 }
 
+// Окно наружного воздуха у глаза (client/fx/layer/OpenAir), блоки
+const vec3 PALL_OPEN_SIZE = vec3(96.0, 64.0, 96.0);
+
+// Доля наружного воздуха в точке p (от глаза): свет неба Minecraft / 15 в блоке точки (OpenAir) — пыль, мгла и голова
+// стены там, где воздух связан с открытым небом; в штольне — нет. at — нижний угол окна от глаза (w — 1, если окно
+// есть), wrap — где этот угол в текстуре (окно в ней по модулю размера). Вне окна — наружный воздух.
+float pallOpen(sampler3D open, vec4 at, vec3 wrap, vec3 p) {
+    if (at.w < 0.5) return 1.0;
+    vec3 q = floor(p - at.xyz);
+    if (any(lessThan(q, vec3(0.0))) || any(greaterThanEqual(q, PALL_OPEN_SIZE))) return 1.0;
+    return texelFetch(open, ivec3(mod(q + wrap, PALL_OPEN_SIZE)), 0).r;
+}
+
 // Расстояние до мира за пикселем (SceneDepth), годное для пелены: неба, а ещё NaN, бесконечность и «за глазом» (чужая
 // глубина LOD, дальняя плоскость) — 1e9, мира за пикселем нет. Иначе луч шёл бы сквозь километры пыли или NaN
 // попадал бы в накопленную пелену — чёрный кадр.
@@ -253,6 +266,19 @@ float pallScene(float d) {
     if (d < 0.0) return 1e9;
     if (d < 1e8) return d;
     return 1e9;
+}
+
+// Насколько расстояния d и e до мира — одно место (1 — одно, к 0 — разные): вес пикселя кадра пелены у соседа по
+// экрану (fx_pall_resolve, fx_pall_composite) — у края предмета пелена неба не ложится на стену и наоборот
+float pallAlike(float d, float e) {
+    float rel = abs(d - e) / max(min(d, e), 0.1);
+    return 1.0 / (1.0 + 400.0 * rel * rel);
+}
+
+// Место p по оси (пиксели полного кадра, середина пикселя — +0,5) в решётке лучей кадра пелены, в factor раз мельче: луч
+// его пикселя t идёт через середину пикселя полного кадра floor((t + 0,5)·factor) (fx_pall) — целое t там, где луч
+float pallLattice(float p, float factor) {
+    return (p - 0.5 - floor(0.5 * factor)) / factor;
 }
 
 // Пиксель пелены годен: свет конечен (и в половинной точности кадра), пропускание 0..1; NaN не годен.

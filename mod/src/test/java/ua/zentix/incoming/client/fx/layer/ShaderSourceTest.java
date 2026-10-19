@@ -102,6 +102,50 @@ class ShaderSourceTest {
         assertTrue(bad.isEmpty(), "uniform без JSON или JSON без uniform: " + bad);
     }
 
+    /**
+     * Пыль пелены — вещество наружного воздуха: луч пелены ({@code fx_pall}: шаг {@code pallStep}), пелена перед
+     * квадратами слоя и пробами ({@code pall_front.glsl}: {@code pallThrough}) и тень пелены на мире
+     * ({@code fx_pall_composite}) берут долю наружного воздуха в точке ({@code pallOpen}, {@link OpenAir}). Без неё пелена
+     * стояла в штольне и пещере под ней — луч в несколько блоков до стены шёл сквозь густую пыль (сценарий клиента
+     * {@code pall-mine}).
+     */
+    @Test
+    void pallKnowsWhereTheOpenAirIs() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI()), include = core.resolveSibling("include");
+        assertTrue(body(Files.readString(core.resolve("fx_pall.fsh")), "void pallStep(").contains("pallOpen("), "fx_pall: pallStep без pallOpen");
+        assertTrue(body(Files.readString(include.resolve("pall_front.glsl")), "float pallThrough(").contains("pallOpen("), "pall_front: pallThrough без pallOpen");
+        assertTrue(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main(").contains("pallOpen("), "fx_pall_composite: тень без pallOpen");
+    }
+
+    /**
+     * Кадр пелены мельче полного: у края предмета на фоне пелены пелена фона не ложится на предмет. Накопление
+     * ({@code fx_pall_resolve}) берёт прошлое в решётке лучей ({@code pallLattice}) и зажимает его соседями того же
+     * расстояния до мира ({@code pallAlike}); вывод ({@code fx_pall_composite}: {@code upsample}) у предмета уже шага
+     * лучей ищет ближайший по расстоянию луч и досчитывает остаток по полю без шума ({@code pallTau}). Без этого решётка
+     * в 5 блоках тонула в пелене за ней, а по контуру блоков шла кайма её цвета (сценарий клиента {@code pall-mine},
+     * {@code INCOMING_PALL=LOW}).
+     */
+    @Test
+    void pallKeepsTheBackgroundOffTheEdges() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        String resolve = body(Files.readString(core.resolve("fx_pall_resolve.fsh")), "void main(");
+        assertTrue(resolve.contains("pallLattice(") && resolve.contains("pallAlike("), "fx_pall_resolve: прошлое не в решётке лучей или пределы без расстояния");
+        String up = body(Files.readString(core.resolve("fx_pall_composite.fsh")), "vec4 upsample(");
+        assertTrue(up.contains("pallLattice(") && up.contains("pallAlike(") && up.contains("pallTau("), "fx_pall_composite: upsample без решётки, сходства или остатка по полю");
+    }
+
+    /** Тело функции, что объявлена с {@code head}. */
+    private static String body(String source, String head) {
+        int at = source.indexOf(head);
+        assertTrue(at >= 0, "нет " + head);
+        int open = source.indexOf('{', at), depth = 1, i = open + 1;
+        for (; depth > 0; i++) {
+            if (source.charAt(i) == '{') depth++;
+            if (source.charAt(i) == '}') depth--;
+        }
+        return source.substring(open, i);
+    }
+
     /** Текст шейдера с файлами {@code #moj_import <incoming:…>} на их местах (каждый раз — один, как у ванили). */
     private static String withImports(Path include, String source, Set<String> seen) throws IOException {
         Matcher m = Pattern.compile("(?m)^\\s*#moj_import\\s*<incoming:([\\w./]+)>").matcher(source);

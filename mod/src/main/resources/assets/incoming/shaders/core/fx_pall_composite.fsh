@@ -35,6 +35,10 @@ uniform sampler2D Sampler4;
 uniform mat4 PallFire0;
 uniform mat4 PallFire1;
 uniform sampler3D PallNoise;
+// наружный воздух у глаза (pall.glsl: pallOpen, client/fx/layer/OpenAir); свой блок текстуры
+uniform sampler3D PallOpen;
+uniform vec4 PallOpenAt;
+uniform vec3 PallOpenWrap;
 // рельеф и вода под пеленой слотов (pall.glsl: pallFloor, pallWater), вода слотов — как в fx_pall
 uniform sampler2D Sampler5;
 uniform sampler2D Sampler6;
@@ -194,29 +198,92 @@ vec3 flames(sampler2D map, mat4 S, mat4 F, vec3 p, float dist, float pixel) {
     return near * (hot * e + F[3].rgb * (0.12 * F[1].w * around));
 }
 
-void main() {
-    ivec2 fullSize = textureSize(Sampler1, 0), lowSize = textureSize(Sampler0, 0);
-    ivec2 full = ivec2(gl_FragCoord.xy);
-    float depth = pallScene(texelFetch(Sampler1, clamp(full, ivec2(0), fullSize - 1), 0).r);
-    vec2 at = gl_FragCoord.xy / PallFrame.z - 0.5;
+// Толща пелены без шума по лучу dir от глаза на [ta, tb] — шесть шагов по полю обоих слотов (как пелена перед
+// квадратами слоя, pall_front.glsl: pallThrough), с долей наружного воздуха (pallOpen)
+float pallTau(vec3 dir, float ta, float tb) {
+    float tau = 0.0, ds = (tb - ta) / 6.0;
+    for (int i = 0; i < 6; i++) {
+        vec3 q = dir * (ta + (float(i) + 0.5) * ds);
+        float s = 0.0;
+        if (PallSlot0[1].w > 0.5) {
+            PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler5, PallSlot0, PallGround0, q.xz));
+            s += f.sigma.x + f.sigma.y + f.sigma.z;
+        }
+        if (PallSlot1[1].w > 0.5) {
+            PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler6, PallSlot1, PallGround1, q.xz));
+            s += f.sigma.x + f.sigma.y + f.sigma.z;
+        }
+        tau += s * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, q) * ds;
+    }
+    return tau;
+}
+
+// Пиксель кадра пелены t (в его пределах) и расстояние до мира, через которое прошёл его луч (fx_pall: середина пикселя
+// полного кадра floor((t + 0,5)·factor))
+float sampleDepth(ivec2 t, ivec2 fullSize) {
+    return pallScene(texelFetch(Sampler1, clamp(ivec2((vec2(t) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1), 0).r);
+}
+
+// Пелена пикселя full с расстоянием до мира depth (по оси взгляда) по направлению dir — из кадра пелены, в factor раз
+// мельче: из четырёх ближних лучей (их решётка — pallLattice) с весом по сходству их расстояния до мира с depth — у края
+// дома пелена неба не ложится на стену и наоборот. Предмет уже шага лучей (решётка, забор, листва, край блока вдали —
+// у кадра в 4 раза мельче это 1–3 пикселя) своего луча часто не имеет: среди четырёх нет ни одного того же места, и
+// пиксель брал пелену фона (решётка в 5 блоках тонула в пелене за ней, по краю — кайма её цвета), а фон в щели между
+// прутьями — пелену прутьев (без своей пелены — светлые точки). Тогда — ближайший по расстоянию луч из 4×4 вокруг
+// (фон в щели свой луч там находит), а остаток — по полю без шума: пропускание — × e^(∓толща между его местом и этим),
+// свет — та же доля на непрозрачность (цвет пелены как вещества тот же: так квадраты слоя берут пелену перед собой, fx.fsh).
+vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) {
+    vec2 at = vec2(pallLattice(float(full.x) + 0.5, PallFrame.z), pallLattice(float(full.y) + 0.5, PallFrame.z));
     ivec2 base = ivec2(floor(at));
     vec2 f = at - vec2(base);
     vec4 sum = vec4(0.0);
-    float total = 0.0;
+    float total = 0.0, same = 0.0;
     for (int j = 0; j <= 1; j++) {
         for (int i = 0; i <= 1; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
-            ivec2 tf = clamp(ivec2((vec2(t) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
-            float d = pallScene(texelFetch(Sampler1, tf, 0).r);
-            float rel = abs(d - depth) / max(min(d, depth), 0.1);
+            float a = pallAlike(sampleDepth(t, fullSize), depth);
             // билинейный вес без «?:» внутри выражения: Veil теряет скобки вокруг него (ShaderSourceTest)
             float w = mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j));
-            w *= 1.0 / (1.0 + 400.0 * rel * rel) + 1e-4;
+            same = max(same, a);
+            w *= a + 1e-4;
             sum += texelFetch(Sampler0, t, 0) * w;
             total += w;
         }
     }
-    vec4 pall = sum / total;
+    // хоть один луч прошёл то же место (сходство больше половины) — он и есть
+    if (same > 0.5) return sum / total;
+    ivec2 best = clamp(base, ivec2(0), lowSize - 1);
+    float bestAlike = -1.0, bestDepth = depth;
+    for (int j = -1; j <= 2; j++) {
+        for (int i = -1; i <= 2; i++) {
+            ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
+            float d = sampleDepth(t, fullSize), a = pallAlike(d, depth);
+            if (a > bestAlike) {
+                bestAlike = a;
+                best = t;
+                bestDepth = d;
+            }
+        }
+    }
+    vec4 v = texelFetch(Sampler0, best, 0);
+    // неба или пустоты за пикселем — дальше рамки пелены; там поле без шума не досчитать: как есть
+    if (bestAlike > 0.5 || max(depth, bestDepth) >= 1e8) return v;
+    float axis = max(dot(dir, PallForward), 1e-3);
+    float near = min(depth, bestDepth) / axis, far = max(depth, bestDepth) / axis;
+    float tau = pallTau(dir, near, far);
+    float a = clamp(depth < bestDepth ? v.a * exp(tau) : v.a * exp(-tau), 0.0, 1.0);
+    // свет на непрозрачность у луча, где пелены почти нет, не знаем (как fx.fsh): остаётся как есть
+    if (1.0 - v.a < 0.02) return v;
+    return vec4(v.rgb * ((1.0 - a) / (1.0 - v.a)), a);
+}
+
+void main() {
+    ivec2 fullSize = textureSize(Sampler1, 0), lowSize = textureSize(Sampler0, 0);
+    ivec2 full = ivec2(gl_FragCoord.xy);
+    float depth = pallScene(texelFetch(Sampler1, clamp(full, ivec2(0), fullSize - 1), 0).r);
+    vec2 ndc0 = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
+    vec4 far0 = InvViewProj * vec4(ndc0, 1.0, 1.0);
+    vec4 pall = upsample(full, fullSize, lowSize, depth, normalize(far0.xyz / far0.w));
     if (PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
         vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0), nextPoint = InvViewProj * vec4(ndc + vec2(0.0, 2.0 / float(fullSize.y)), 1.0, 1.0);
@@ -249,7 +316,8 @@ void main() {
         float fd = Haze.w > 0.5 ? max(length(p.xz), abs(p.y)) : length(p);
         float seen = exp(-Haze.x * length(p)) * (1.0 - smoothstep(Haze.y, Haze.z, fd));
         vec4 over = pallOver(p);
-        float kept = mix(1.0, pallDisplay(shade(p, over)), seen);
+        // тень пелены — на свете неба и солнца: в штольне и пещере мир светят факелы (место — блок воздуха перед поверхностью)
+        float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpen(PallOpen, PallOpenAt, PallOpenWrap, p - 0.5 * dir));
         vec3 added = vec3(0.0), n = vec3(0.0, 1.0, 0.0);
         if (balls) {
             n = sceneNormal(full, fullSize, p);

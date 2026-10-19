@@ -507,6 +507,7 @@ public final class PallPass {
         s.safeGetUniform("PallWall1").set(front.wall1);
         s.safeGetUniform("PallWilson0").set(front.wilson0.x, front.wilson0.y, front.wilson0.z, front.wilson0.w);
         s.safeGetUniform("PallWilson1").set(front.wilson1.x, front.wilson1.y, front.wilson1.z, front.wilson1.w);
+        OpenAir.bind(s, drawn);
     }
 
     /**
@@ -540,6 +541,7 @@ public final class PallPass {
         if (timer()) poll(System.nanoTime());
         Step step = LADDER[DETAIL.level];
         if (!ensure(w, h, step.factor)) return false;
+        boolean open = mc.level != null && OpenAir.update(mc.level, eye);
         tableBuffer.clear();
         tableBuffer.put(f.table).flip();
         GlStateManager._bindTexture(table);
@@ -643,6 +645,7 @@ public final class PallPass {
         m.safeGetUniform("PallWilson1").set(f.wilson1.x, f.wilson1.y, f.wilson1.z, f.wilson1.w);
         m.safeGetUniform("PallFloorFrom").set(f.floorFrom);
         m.safeGetUniform("PallExposure").set(f.exposure);
+        OpenAir.bind(m, open);
         quad(m, true);
 
         // 2. накопление: из прошлого накопленного — в другое
@@ -698,6 +701,7 @@ public final class PallPass {
         c.safeGetUniform("PallBallLight").set(f.ballLight);
         c.safeGetUniform("PallOpenSky").set(f.openSky.x, f.openSky.y, f.openSky.z);
         c.safeGetUniform("PallFaceShade").set(f.faceShade.x, f.faceShade.y, f.faceShade.z, f.faceShade.w);
+        OpenAir.bind(c, open);
         // пламя на поверхностях мерцает по трёхмерному шуму
         quad(c, true);
         RenderSystem.enableDepthTest();
@@ -1071,5 +1075,6 @@ public final class PallPass {
         FIRE_NOW[0] = FIRE_NOW[1] = -1;
         GROUND_SOURCE[0] = GROUND_SOURCE[1] = null;
         GROUND_NOW[0] = GROUND_NOW[1] = -1;
+        OpenAir.reset();
     }
 }

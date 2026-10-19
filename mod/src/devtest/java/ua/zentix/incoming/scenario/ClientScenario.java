@@ -1231,7 +1231,7 @@ public final class ClientScenario {
         }
         at(600, () -> {
             Minecraft mc = Minecraft.getInstance();
-            int x = (int) Math.floor(FRONT_GZ.x - 400), z = (int) Math.floor(FRONT_GZ.z);
+            int x = (int) Math.floor(FRONT_GZ.x - (frontMine ? 1500 : 400)), z = (int) Math.floor(FRONT_GZ.z);
             int ground = Math.max(mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), 63);
             int above = low ? 8 : frontMine ? 3 : 120;
             frontAt = new Vec3(x + 0.5, ground + above, z + 0.5);
@@ -1286,12 +1286,17 @@ public final class ClientScenario {
         });
     }
 
+    /** Кадр без пелены — через столько тиков: с шейдерпаком на программном OpenGL кадр рисуется реже. */
+    private static final int OFF_WAIT = System.getenv("INCOMING_SHADERS") != null ? 40 : 16;
+
     /**
-     * Сценарий pall-mine (днём, 400 блоков от наземных 15 кт): за фронтом (через 8 с, когда волна прошла) у камеры —
-     * ряды забора и решёток перед пеленой (тонкое перед далёким: кайма по контуру — признак апскейла кадра пелены без
-     * глубины), под ней в 24 блоках — штольня 40 блоков на восток со светящимся потолком и шахта в её конце до неба.
+     * Сценарий pall-mine (днём, 1500 блоков от наземных 15 кт): за фронтом (через 8 с, когда волна прошла) у камеры —
+     * забор, решётки и столб в 3–5 блоках перед пеленой (тонкое перед далёким: под шейдерпаком, который сглаживает края,
+     * по контуру не должно быть каймы фона без пелены), под ней в 24 блоках — штольня 40 блоков на восток со светящимся потолком и шахта в её конце до неба.
      * Кадры через 20 с после фронта: у земли, в штольне вдоль неё (пелены там быть не должно: под землёй пыли нет),
-     * со дна шахты вверх (пелена — только над её устьем); у каждого — тот же миг без пелены ({@code _off}).
+     * со дна шахты вверх (шахта открыта небу — пыль в ней есть), и через 2 и 4 минуты у земли — забор и столб на фоне
+     * пелены, которая редеет и уходит по ветру;
+     * у каждого — тот же миг без пелены ({@code _off}).
      */
     private void mineShots(int front) {
         int x = (int) Math.floor(frontAt.x), z = (int) Math.floor(frontAt.z);
@@ -1304,25 +1309,50 @@ public final class ClientScenario {
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone hollow", x - 2, y - 1, z - 3, x + 40, y + 4, z + 3));
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:glowstone", x - 1, y + 4, z - 2, x + 39, y + 4, z + 2));
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", x + 36, y, z - 1, x + 38, g + 3, z + 1));
-            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_fence", x + 7, g + 1, z - 8, x + 7, g + 4, z + 8));
-            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:iron_bars", x + 12, g + 1, z - 10, x + 12, g + 6, z + 10));
-            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x + 20, g + 1, z + 4, x + 20, g + 12, z + 4));
+            fences(x, g, z);
             Incoming.LOG.info("SCENARIO pall-mine ground {} tunnel floor {} shaft at x {}..{}", g, y, x + 36, x + 38);
         });
+        // этапы — через 120 тиков: переход, кадр через 60 (туман чёрного дождя у камеры в штольне тает ~1,5 с, NukeSky),
+        // кадр без пелены — после него
         int t = front + 400;
-        at(t - 4, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -6", x + 0.5, where.ground + 2.6, z + 0.5)));
+        at(t - 60, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -12", x + 0.5, where.ground + 2.6, z + 0.5)));
         pallShot(t, "mine_surface");
-        offShot(t, "mine_surface_off");
-        at(t + 20, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 0", x + 0.5, where.deep + 1.6, z + 0.5)));
-        pallShot(t + 40, "mine_tunnel");
-        offShot(t + 40, "mine_tunnel_off");
-        at(t + 60, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -70", x + 34.5, where.deep + 1.6, z + 0.5)));
-        pallShot(t + 80, "mine_shaft");
-        offShot(t + 80, "mine_shaft_off");
-        at(t + 120, () -> {
+        offShot(t, "mine_surface_off", OFF_WAIT);
+        at(t + 120, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 0", x + 0.5, where.deep + 1.6, z + 0.5)));
+        pallShot(t + 180, "mine_tunnel");
+        offShot(t + 180, "mine_tunnel_off", OFF_WAIT);
+        at(t + 240, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -70", x + 37.5, where.deep + 1.6, z + 0.5)));
+        pallShot(t + 300, "mine_shaft");
+        offShot(t + 300, "mine_shaft_off", OFF_WAIT);
+        // край блоков на фоне пелены: пелена у камеры редеет и уходит по ветру, забор и столб — на её фоне
+        at(t + 360, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -12", x + 0.5, where.ground + 2.6, z + 0.5)));
+        int[] ages = {120, 240};
+        for (int i = 0; i < ages.length; i++) {
+            int age = ages[i], at = t + 370 + 200 * i;
+            at(at, () -> fsSkip(age));
+            pallShot(at + 100, "mine_rim_" + age + "s");
+            offShot(at + 100, "mine_rim_" + age + "s_off", OFF_WAIT);
+            // и взгляд в движении (накопление пелены переносит прошлое на новое место): 0,25° за тик две секунды до кадра
+            for (int k = 0; k <= 40; k++) {
+                float yaw = -100 + 0.25f * k;
+                at(at + 120 + k, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %.2f -12", x + 0.5, where.ground + 2.6, z + 0.5, yaw)));
+            }
+            pallShot(at + 160, "mine_rim_" + age + "s_turning");
+        }
+        at(t + 370 + 200 * ages.length, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });
+    }
+
+    /**
+     * Сценарий pall-mine: забор, решётки и столб в 3–5 блоках к востоку от камеры над землёй {@code g} — тонкое и край блока
+     * перед пеленой (в густой пелене видно на несколько блоков).
+     */
+    private void fences(int x, int g, int z) {
+        cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_fence", x + 3, g + 1, z - 6, x + 3, g + 3, z - 1));
+        cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:iron_bars", x + 5, g + 1, z - 6, x + 5, g + 6, z + 6));
+        cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x + 4, g + 1, z + 2, x + 4, g + 9, z + 2));
     }
 
     /**
@@ -1330,14 +1360,19 @@ public final class ClientScenario {
      * 8 тиков): что пелена делает с кадром — свет стены пыли и мира за ней.
      */
     private void offShot(int t, String name) {
+        offShot(t, name, 8);
+    }
+
+    /** То же, снимок — через {@code wait} тиков (с шейдерпаком на программном OpenGL кадр рисуется реже). */
+    private void offShot(int t, String name, int wait) {
         var quality = ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality;
         var was = new Object() { ua.zentix.incoming.IncomingConfig.Client.DustQuality q; };
         at(t + 2, () -> {
             was.q = quality.get();
             quality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.OFF);
         });
-        shot(t + 10, "pall_" + name);
-        at(t + 11, () -> quality.set(was.q));
+        shot(t + 2 + wait, "pall_" + name);
+        at(t + 3 + wait, () -> quality.set(was.q));
     }
 
     /**

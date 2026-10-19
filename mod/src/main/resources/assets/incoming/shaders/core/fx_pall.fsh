@@ -38,6 +38,10 @@ uniform sampler2D Sampler1;
 uniform sampler2D Sampler2;
 // клубы (R) и мелкие края (G), плитка без швов (VolumeNoise); свой блок текстуры — PallPass
 uniform sampler3D PallNoise;
+// наружный воздух у глаза (pall.glsl: pallOpen, client/fx/layer/OpenAir); свой блок текстуры
+uniform sampler3D PallOpen;
+uniform vec4 PallOpenAt;
+uniform vec3 PallOpenWrap;
 
 uniform mat4 InvViewProj;
 uniform vec3 PallForward;
@@ -813,6 +817,9 @@ void pallStep(float ta, float ds, float grid, inout vec3 light, inout float tran
     vec3 dir = gDir, sunDir = gSun;
     float muS = gMuS, c = gC, mv = gMv;
     vec3 p = dir * ta;
+    // под землёй (в штольне, пещере) пыли нет: вещество — доля наружного воздуха в точке
+    float open = pallOpen(PallOpen, PallOpenAt, PallOpenWrap, p);
+    if (open <= 0.0) return;
     // меньшее, что луч здесь различает: ширина пикселя или треть шага
     float cone = max(ta * gPixel, 0.35 * grid);
     Sample s = emptySample();
@@ -873,7 +880,7 @@ void pallStep(float ta, float ds, float grid, inout vec3 light, inout float tran
                 + min(below * exp(-gSootK * self) + (0.5 + 0.75 * PALL_SOOT_G * mv) * glow + around, gFlame);
         emit += soot * PALL_SOOT_W * sootLit;
     }
-    float tr = exp(-st * ds);
+    float tr = exp(-st * open * ds);
     passMatter(ta, emit * (1.0 - tr) / st, tr, light, transmit, lost);
 }
 
