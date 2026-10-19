@@ -12,6 +12,7 @@ import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
+import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 import java.util.List;
@@ -249,6 +250,30 @@ public final class MushroomField {
                     (float) (airSigma / d.scale())));
         }
         return seen;
+    }
+
+    /**
+     * Свет шара на грани мира ({@code mushBallFace} в {@code mushroom.glsl}) — доля света шара на белой стене лицом к нему
+     * без воздуха: прямой пучок e^(−σd) по косинусу {@code nv} к грани; рассеянный воздухом — что доходит прямым и
+     * рассеянным вместе ({@link ThermalModel#transmittance}, Glasstone рис. 7.104) без прямого, с неба вокруг шара, на
+     * грань — (1 + nv)/2 (оценка: рассеянное вперёд светит со стороны шара); отражённый землёй с альбедо {@code albedo}
+     * свет шара на горизонталь (шар на высоте с синусом {@code vy}) — по доле земли, что видит грань, (1 − ny)/2. Под
+     * пеленой — прямое и рассеянное у шара сквозь неё ({@code through}) и рассеянное ею вниз на горизонталь
+     * ({@code diffuse} на единицу света над ней), на грань — (1 + ny)/2; без пелены — 1 и 0. {@code sd} — σd воздуха до
+     * шара (σ = 3,912/V).
+     * <p>
+     * Без рассеянного и отражённого грани, отвёрнутые от шара, оставались при одном дневном свете, а грани к нему в 3–5 км
+     * у 15 кт в первые полсекунды — в 100–200 раз ярче полудня (жалоба 18.10: «второе солнце», резкие тени по всей
+     * карте): в ясную погоду в 4 км рассеянное — 0,2 света шара (прямое — 0,46), земля возвращает пятую долю того, что на
+     * неё упало.
+     */
+    static double ballFace(double nv, double vy, double ny, double sd, double albedo, double through, double diffuse) {
+        double direct = Math.exp(-sd);
+        double scattered = Math.max(ThermalModel.transmittance(Math.max(sd, 0), Sight.KOSCHMIEDER) - direct, 0);
+        double beam = direct * Math.max(nv, 0) + scattered * 0.5 * (1 + nv);
+        double ground = direct * Math.max(vy, 0) + scattered * 0.5 * (1 + vy);
+        double sky = (direct + scattered) * diffuse;
+        return beam * through + sky * 0.5 * (1 + ny) + albedo * (ground * through + sky) * 0.5 * (1 - ny);
     }
 
     /**

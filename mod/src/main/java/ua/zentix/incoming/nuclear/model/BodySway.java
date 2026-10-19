@@ -14,6 +14,16 @@ import java.util.Arrays;
  * напор — квадрат ветра, а ветер у слабой волны идёт за давлением (u = p/ρc): по фазе Фридлендера, в разрежении —
  * слабый обратный.
  * <p>
+ * Первым тело бьёт сам фронт (нагрузка при обтекании — diffraction loading, Glasstone &amp; Dolan 1977, гл. IV): давление за фронтом
+ * встаёт меньше чем за миллисекунду, на грудь — отражённое (G&amp;D, ур. 3.56.1) и спадает к давлению торможения за 3S/U
+ * (S — половина ширины тела, U — скорость фронта), а спину оно обходит за L/U (L — толщина тела) и нарастает там ещё
+ * 4S/U. Пока волна обтекает тело, разница давлений толкает его — ~2 мс, против секунды ветра: это удар, тело получает
+ * скорость наклона сразу ({@link #jolt}). У 1 psi — 11 Н·с (8°/с), у 3,5 psi (15 кт в 2 км) — 38 Н·с (27°/с), против
+ * 20–40 Н·с ветра за всю фазу. Размеры тела — ANSUR II (Gordon et al. 2014): толщина груди ~0,25 м, ширина плеч ~0,4 м;
+ * та же нагрузка у зданий (идеализация G&amp;D для прямоугольника), у тела она — оценка. Голова идёт с телом: своя
+ * нагрузка на голову (площадь ~0,03 м², масса ~4,5 кг) даёт ей ту же скорость, что тело даёт ей на её высоте, — до
+ * вдвое; шеи и её качания модель не считает.
+ * <p>
  * Земля под ногами тело не наклоняет. Воздушный толчок (airslap) приходит вместе с волной и ведёт грунт резко вниз,
  * потом отчасти обратно (Glasstone &amp; Dolan 1977, §6.12–6.16); скорость грунта — p/ρc (плоская волна в грунте,
  * ρc — оценка): у 1 psi 0,2–0,9 см/с и сдвиг 1–4 мм, у ~6 psi — 1,5–5 см/с и до 1,6 см. Тело толчок чувствует, но
@@ -45,8 +55,12 @@ public final class BodySway {
     static final double GAIN_P = 943.9, GAIN_D = 313.5, DELAY = 0.097;
     /** Активация мышц: собственная частота, рад/с, и относительное затухание. */
     static final double ACTIVATION_W = 16.8, ACTIVATION_DAMPING = 0.99;
-    /** Лобовое сопротивление стоящего, м²: площадь 0,6 м² × Cd 1,1. */
-    static final double DRAG_AREA = 0.66;
+    /** Площадь тела спереди, м². */
+    static final double AREA = 0.6;
+    /** Лобовое сопротивление стоящего, м²: площадь × Cd 1,1. */
+    static final double DRAG_AREA = AREA * 1.1;
+    /** Толщина тела вдоль волны и половина его ширины, м: путь фронта до спины и путь разгрузки груди (ANSUR II). */
+    static final double DEPTH = 0.25, HALF_WIDTH = 0.2;
     static final double G = 9.81;
     /** Отсчётов наклона в секунду. */
     public static final int RATE = 100;
@@ -66,19 +80,21 @@ public final class BodySway {
      * не стих и тело не выпрямилось. Пустой — ветер не наклонил тело и на {@link #STILL}. Дальше границы устойчивости
      * наклон не уходит: стоит на ней, пока равновесие не перебарывает ветер.
      *
+     * @param pPa   давление фронта у тела (падающее), Па
      * @param qPa   скоростной напор за фронтом вдоль земли, Па
      * @param tPlus положительная фаза, с
      * @param edge  граница устойчивости по ветру, рад
      * @param back  граница против ветра (туда тело возвращается и туда толкает обратный ветер разрежения), рад
      */
-    public static double[] tilt(double qPa, double tPlus, double edge, double back) {
+    public static double[] tilt(double pPa, double qPa, double tPlus, double edge, double back) {
         if (!(qPa > 0) || !(tPlus > 0)) return new double[0];
         int steps = (int) Math.ceil(LONGEST / STEP), lag = (int) Math.round(DELAY / STEP), every = (int) Math.round(1.0 / (RATE * STEP));
         // наклон и его скорость за задержку назад (кольцом; до волны тело стоит — нули)
         double[] thBack = new double[lag], omBack = new double[lag];
         double[] out = new double[steps / every + 2];
         int n = 1;
-        double mgh = MASS * G * HEIGHT, peak = 0, th = 0, om = 0, torque = 0, torqueRate = 0;
+        // удар фронта — короче шага счёта и задержки равновесия: скорость наклона сразу
+        double mgh = MASS * G * HEIGHT, peak = 0, th = 0, om = jolt(pPa, qPa) * HEIGHT / INERTIA, torque = 0, torqueRate = 0;
         double w2 = ACTIVATION_W * ACTIVATION_W, damp = 2 * ACTIVATION_DAMPING * ACTIVATION_W;
         for (int i = 0; i < steps; i++) {
             double t = i * STEP, x = t / tPlus, f = (1 - x) * Math.exp(-x);
@@ -115,6 +131,24 @@ public final class BodySway {
         }
         if (peak < STILL) return new double[0];
         return Arrays.copyOf(out, n);
+    }
+
+    /**
+     * Удар фронта по телу вдоль земли, Н·с: импульс разницы давлений на грудь и спину, пока волна обтекает тело, сверх
+     * ветра ({@link #tilt} считает напор с прихода фронта). Грудь: отражённое p_r спадает к p + q за 3S/U — сверх ветра
+     * (p_r − p − q)·3S/2U; спина: давления нет L/U и оно нарастает к p за 4S/U — p·(L + 2S)/U. Фаза давления (секунды)
+     * за эти миллисекунды не спадает. Под воздушным подрывом фронт падает на землю наклонно: вдоль земли — доля cos α,
+     * а {@code qPa} уже несёт cos²α (напор вдоль земли против напора Ренкина–Гюгонио у этого давления).
+     *
+     * @param pPa давление фронта у тела (падающее), Па
+     * @param qPa скоростной напор за фронтом вдоль земли, Па
+     */
+    public static double jolt(double pPa, double qPa) {
+        if (!(pPa > 0) || !(qPa > 0)) return 0;
+        double kpa = pPa / 1000, full = 1000 * BlastModel.dynamicPressureKpa(kpa), u = BlastModel.frontSpeed(kpa);
+        double along = Math.sqrt(Math.min(1, qPa / full)), reflected = 1000 * BlastInjury.reflectedKpa(kpa);
+        double front = Math.max(0, reflected - pPa - full) * 1.5 * HALF_WIDTH / u, rear = pPa * (DEPTH + 2 * HALF_WIDTH) / u;
+        return AREA * along * (front + rear);
     }
 
     /** Наибольший наклон, рад, с отсчёта {@code from}. */

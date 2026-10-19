@@ -418,6 +418,23 @@ float mushBallFalloff(float d2, float r2) {
     return r2 / max(d2, r2);
 }
 
+// Свет шара на грани мира — доля света шара на белой стене лицом к нему без воздуха (MushroomField.ballFace): прямой
+// пучок e^(−σd) по косинусу к грани (nv — косинус между нормалью грани и направлением на шар); рассеянный воздухом —
+// сколько света импульса доходит прямым и рассеянным вместе (Glasstone 1964, рис. 7.104: e^(−(D/V)^0,544), D/V = σd/3,912)
+// без прямого, с неба вокруг шара — на грань по (1 + nv)/2 (оценка: рассеянное вперёд светит со стороны шара); и
+// отражённый землёй с альбедо albedo свет шара на горизонталь — на грань по доле земли, что она видит, (1 − ny)/2. Под
+// пеленой: прямое и рассеянное у шара — сквозь неё (through, e^(−τ/μ)), рассеянное ею вниз на горизонталь — diffuse на
+// единицу света над ней, на грань — по доле неба (1 + ny)/2. vy — синус высоты шара над горизонтом точки. Тени рельефа и
+// построек нет.
+float mushBallFace(float nv, float vy, float ny, float sd, float albedo, float through, float diffuse) {
+    float direct = exp(-sd);
+    float scattered = max(exp(-pow(max(sd, 0.0) / 3.912, 0.544)) - direct, 0.0);
+    float beam = direct * max(nv, 0.0) + scattered * 0.5 * (1.0 + nv);
+    float ground = direct * max(vy, 0.0) + scattered * 0.5 * (1.0 + vy);
+    float sky = (direct + scattered) * diffuse;
+    return beam * through + sky * 0.5 * (1.0 + ny) + albedo * (ground * through + sky) * 0.5 * (1.0 - ny);
+}
+
 // Свет чёрного тела температуры T в единицах кадра (белая стена в полдень — 1), линейный rgb (BlackBody)
 vec3 mushBlackBody(sampler2D data, float kelvin) {
     vec2 size = vec2(textureSize(data, 0));

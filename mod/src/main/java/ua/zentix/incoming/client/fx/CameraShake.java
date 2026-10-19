@@ -21,8 +21,10 @@ import java.util.List;
  * грунта у обычных взрывов медленные, как у тела: голову качает само тело (основной тон ниже ~6 Гц), а частую дрожь
  * земли оно до глаз почти не доносит. Размахи меняются без скачков: скачок на кадр — тот же рывок.
  * <p>
- * Ядерная волна камеру не трясёт, а наклоняет: ветер за фронтом толкает стоящего, и тело отклоняется по ветру и
- * выпрямляется ({@link BodySway} — маятник с равновесием); голова — с телом. Наклоны от нескольких волн складываются
+ * Ядерная волна камеру не трясёт, а наклоняет: фронт бьёт стоящего разом (за миллисекунды обтекания тело получает
+ * скорость наклона), ветер за ним толкает дальше, и тело отклоняется по ветру и выпрямляется ({@link BodySway} — маятник
+ * с равновесием); голова — с телом. Наклон идёт с самого прихода фронта к телу, а не с начала тика, в котором его
+ * заметили: удар — на кадре, где он был. Наклоны от нескольких волн складываются
  * (маятник при малых углах линеен). Дальше границы устойчивости человек шагает — наклон стоит на ней. В воздухе
  * (прыжок) тело на ноги не опирается — наклона нет, пока снова не встанет. Наклон тела — поворот камеры вокруг
  * горизонтали мира поперёк наклона, как есть: курс камеры вертится вокруг вертикали мира, поэтому сложить наклон с
@@ -44,10 +46,10 @@ public final class CameraShake {
     private static final double STANDING_STEP = 0.2;
 
     /**
-     * Наклон тела ветром одной волны, рад ({@link BodySway#RATE} отсчётов в секунду), с тика {@code from}; куда дул её
-     * ветер — от взрыва вдоль земли (x, z, единичный).
+     * Наклон тела ударом и ветром одной волны, рад ({@link BodySway#RATE} отсчётов в секунду), с мига {@code from} (тики
+     * клиента, с долей); куда дул её ветер — от взрыва вдоль земли (x, z, единичный).
      */
-    private record Sway(double[] tilt, long from, double pushX, double pushZ) {}
+    private record Sway(double[] tilt, double from, double pushX, double pushZ) {}
 
     private CameraShake() {}
 
@@ -60,19 +62,20 @@ public final class CameraShake {
     }
 
     /**
-     * Ветер ядерной волны качнул тело ({@link BodySway#tilt}): скоростной напор за фронтом вдоль земли {@code qPa}, Па,
-     * с положительной фазой {@code tPlus}, с; {@code away} — от взрыва к игроку (ветер дует от эпицентра), {@code yaw} —
-     * куда игрок смотрит, °. Наклон ложится поверх того, что осталось от прежних волн. Возвращает наклон тела по ветру,
-     * рад.
+     * Фронт ядерной волны ударил тело и ветер за ним качнул его ({@link BodySway#tilt}): давление фронта {@code pPa} и
+     * скоростной напор за фронтом вдоль земли {@code qPa}, Па, с положительной фазой {@code tPlus}, с; {@code late} —
+     * сколько тиков назад (0..1) фронт прошёл тело; {@code away} — от взрыва к игроку (ветер дует от эпицентра),
+     * {@code yaw} — куда игрок смотрит, °. Наклон ложится поверх того, что осталось от прежних волн. Возвращает наклон
+     * тела по ветру, рад.
      */
-    public static double[] sway(double qPa, double tPlus, Vec3 away, double yaw) {
+    public static double[] sway(double pPa, double qPa, double tPlus, double late, Vec3 away, double yaw) {
         double flat = Math.hypot(away.x, away.z);
         if (!(flat > 1e-6)) return new double[0];
         double x = away.x / flat, z = away.z / flat;
-        double[] tilt = BodySway.tilt(qPa, tPlus, edge(yaw, x, z), edge(yaw, -x, -z));
+        double[] tilt = BodySway.tilt(pPa, qPa, tPlus, edge(yaw, x, z), edge(yaw, -x, -z));
         if (tilt.length < 2) return tilt;
         if (SWAYS.size() >= SWAYS_MAX) SWAYS.remove(0);
-        SWAYS.add(new Sway(tilt, ticks, x, z));
+        SWAYS.add(new Sway(tilt, ticks - Mth.clamp(late, 0, 1), x, z));
         return tilt;
     }
 
@@ -158,7 +161,7 @@ public final class CameraShake {
         for (Sway s : SWAYS) {
             double f = (ticks - s.from + partial) / 20 * BodySway.RATE;
             int i = (int) f;
-            if (i + 1 >= s.tilt.length) continue;
+            if (f < 0 || i + 1 >= s.tilt.length) continue;
             double tilt = Math.toDegrees(s.tilt[i] + (s.tilt[i + 1] - s.tilt[i]) * (f - i));
             leanX += tilt * s.pushX;
             leanZ += tilt * s.pushZ;

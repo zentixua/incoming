@@ -1,6 +1,9 @@
 package ua.zentix.incoming.client.nuclear;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.client.far.Sight;
+import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 
 import java.io.IOException;
@@ -204,6 +207,52 @@ class MushroomGlslTest {
         for (double mu = 0.12; mu <= 1; mu += 0.01) {
             double through = MushroomField.shadowThrough(dark, 0, 1, w, g, mu);
             assertTrue(through < 0.01, String.format(Locale.ROOT, "%s, g %.3f, солнце %.2f: %.4f", what, g, mu, through));
+        }
+    }
+
+    /** Свет шара на грани мира ({@code mushBallFace}) — закон {@link MushroomField#ballFace}. */
+    @Test
+    void ballFaceMatchesJava() {
+        GlslFunction f = GlslFunction.parse(GLSL, "mushBallFace");
+        for (double nv = -1; nv <= 1; nv += 0.25) {
+            for (double vy : new double[]{-0.1, 0, 0.15, 0.7}) {
+                for (double ny : new double[]{-1, 0, 1}) {
+                    for (double sd : new double[]{0, 0.05, 0.4, 0.8, 3}) {
+                        for (double[] pall : new double[][]{{1, 0}, {0.3, 0.25}}) {
+                            Map<String, Double> args = Map.of("nv", nv, "vy", vy, "ny", ny, "sd", sd, "albedo", 0.2, "through", pall[0], "diffuse", pall[1]);
+                            assertEquals(MushroomField.ballFace(nv, vy, ny, sd, 0.2, pall[0], pall[1]), f.call(args), 1e-6, args.toString());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 15 кт в воздухе, зритель в 4 км, ясно (жалоба 18.10: в первые секунды «второе солнце» даёт резкие тени по всей
+     * карте). По физике шар во втором максимуме — диск в ~6° на высоте ~9°, свет на грань к нему — в ~220 раз ярче полудня
+     * (Glasstone и Dolan: P_max = 4·W^0,56 кт/с — то же), через 2 с — в ~2,6 раза. Грань, отвёрнутая от шара, видит
+     * освещённую им землю, боковая и верх — ещё и небо вокруг шара, рассеянное воздухом: во втором максимуме и они
+     * в разы ярче полудня (на экране белые, как и грань к шару), а не при одном дневном свете в 200 раз темнее
+     * грани к шару; через 2 с — грань к шару ярче боковой в 5–6 раз.
+     */
+    @Test
+    void ballLightsWhatFacesAway() {
+        double kt = 15, hob = 592, range = 4000, sd = Sight.KOSCHMIEDER * Math.hypot(range, hob) / 20_000;
+        for (double t : new double[]{FireballModel.secondMaximumSeconds(kt), 2}) {
+            MushroomModel.Shape s = MushroomModel.shape(t, kt, hob, false, 0);
+            double d = Math.hypot(range, s.capY()), vy = s.capY() / d, flat = Math.sqrt(1 - vy * vy);
+            double e = BlackBody.luminance(MushroomModel.edgeTemperature(t, kt, false)) * s.capR() * s.capR() / (d * d);
+            double toward = e * MushroomField.ballFace(flat, vy, 0, sd, 0.2, 1, 0), away = e * MushroomField.ballFace(-flat, vy, 0, sd, 0.2, 1, 0);
+            double side = e * MushroomField.ballFace(0, vy, 0, sd, 0.2, 1, 0), top = e * MushroomField.ballFace(vy, vy, 1, sd, 0.2, 1, 0);
+            String at = String.format(Locale.ROOT, "%.2f с: к шару %.1f, прочь %.2f, вбок %.2f, верх %.2f полудня", t, toward, away, side, top);
+            if (t < 1) {
+                assertTrue(toward > 150 && toward < 300, at);
+                assertTrue(away > 3 && side > 20 && top > 20, at);
+            } else {
+                assertTrue(toward > 1.5 && toward < 4, at);
+                assertTrue(toward / side > 3 && toward / side < 7, at);
+            }
         }
     }
 
