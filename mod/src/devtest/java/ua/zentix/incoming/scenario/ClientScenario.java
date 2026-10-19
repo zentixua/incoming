@@ -84,6 +84,8 @@ public final class ClientScenario {
      */
     private boolean front, frontLow;
     private Vec3 frontAt = Vec3.ZERO;
+    /** Сценарий pall-mine: пелена днём у земли, в штольне под ней и в шахте к небу ({@link #mineShots}). */
+    private boolean frontMine;
     private int detTick = -1;
     /** Ядерный сценарий: точка в следе осадков и игровой тик, когда туда идти (−1 — не ждём). */
     private Vec3 falloutSpot = Vec3.ZERO;
@@ -201,6 +203,10 @@ public final class ClientScenario {
         else if ("firestorm".equals(mode)) planFirestorm();
         else if ("wall".equals(mode)) planWall();
         else if ("pall-front".equals(mode) || "pall-low".equals(mode)) planPallFront("pall-low".equals(mode));
+        else if ("pall-mine".equals(mode)) {
+            frontMine = true;
+            planPallFront(false);
+        }
         else if ("fx".equals(mode) || "fx-night".equals(mode) || "fx-late".equals(mode)) planFx("fx-night".equals(mode), "fx-late".equals(mode));
         else if ("launch".equals(mode)) planLaunch();
         else if ("replay".equals(mode)) {
@@ -1202,7 +1208,7 @@ public final class ClientScenario {
             String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
             ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
             Minecraft.getInstance().options.fov().set(50);
-            cmd("time set 18000");
+            cmd(frontMine ? "time set 6000" : "time set 18000");
             cmd("weather clear");
             cmd("forceload add 64 -1616 303 -1385");
             if (low) cmd(String.format(java.util.Locale.ROOT, "forceload add %d %d %d %d", (int) FRONT_GZ.x - 8, (int) FRONT_GZ.z - 8,
@@ -1227,7 +1233,7 @@ public final class ClientScenario {
             Minecraft mc = Minecraft.getInstance();
             int x = (int) Math.floor(FRONT_GZ.x - 400), z = (int) Math.floor(FRONT_GZ.z);
             int ground = Math.max(mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), 63);
-            int above = low ? 8 : 120;
+            int above = low ? 8 : frontMine ? 3 : 120;
             frontAt = new Vec3(x + 0.5, ground + above, z + 0.5);
             cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -3", frontAt.x, frontAt.y, frontAt.z));
             Incoming.LOG.info("SCENARIO pall-front camera at {} ({} above ground {})", xyz(frontAt), above, ground);
@@ -1257,7 +1263,9 @@ public final class ClientScenario {
         int arrive = (int) Math.ceil(d.arrivalTicks(cam.distanceTo(d.burst())));
         Incoming.LOG.info("SCENARIO detonation at tick {}, burst {}, ground {}, front at the camera in {} ticks", tick, xyz(d.burst()),
                 String.format(java.util.Locale.ROOT, "%.0f", d.groundY()), arrive);
-        if (frontLow) {
+        if (frontMine) {
+            mineShots(tick + arrive);
+        } else if (frontLow) {
             for (int s : new int[]{5, 20, 60}) {
                 int t = tick + arrive + 20 * s;
                 // волна сносит камеру: перед кадром — снова на место
@@ -1273,6 +1281,45 @@ public final class ClientScenario {
             }
         }
         at(tick + arrive + 1240, () -> {
+            Incoming.LOG.info("SCENARIO done");
+            Minecraft.getInstance().stop();
+        });
+    }
+
+    /**
+     * Сценарий pall-mine (днём, 400 блоков от наземных 15 кт): за фронтом (через 8 с, когда волна прошла) у камеры —
+     * ряды забора и решёток перед пеленой (тонкое перед далёким: кайма по контуру — признак апскейла кадра пелены без
+     * глубины), под ней в 24 блоках — штольня 40 блоков на восток со светящимся потолком и шахта в её конце до неба.
+     * Кадры через 20 с после фронта: у земли, в штольне вдоль неё (пелены там быть не должно: под землёй пыли нет),
+     * со дна шахты вверх (пелена — только над её устьем); у каждого — тот же миг без пелены ({@code _off}).
+     */
+    private void mineShots(int front) {
+        int x = (int) Math.floor(frontAt.x), z = (int) Math.floor(frontAt.z);
+        var where = new Object() { int ground, deep; };
+        at(front + 160, () -> {
+            Minecraft mc = Minecraft.getInstance();
+            where.ground = Math.max(mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), 63) - 1;
+            where.deep = where.ground - 24;
+            int g = where.ground, y = where.deep;
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone hollow", x - 2, y - 1, z - 3, x + 40, y + 4, z + 3));
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:glowstone", x - 1, y + 4, z - 2, x + 39, y + 4, z + 2));
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", x + 36, y, z - 1, x + 38, g + 3, z + 1));
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_fence", x + 7, g + 1, z - 8, x + 7, g + 4, z + 8));
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:iron_bars", x + 12, g + 1, z - 10, x + 12, g + 6, z + 10));
+            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x + 20, g + 1, z + 4, x + 20, g + 12, z + 4));
+            Incoming.LOG.info("SCENARIO pall-mine ground {} tunnel floor {} shaft at x {}..{}", g, y, x + 36, x + 38);
+        });
+        int t = front + 400;
+        at(t - 4, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -6", x + 0.5, where.ground + 2.6, z + 0.5)));
+        pallShot(t, "mine_surface");
+        offShot(t, "mine_surface_off");
+        at(t + 20, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 0", x + 0.5, where.deep + 1.6, z + 0.5)));
+        pallShot(t + 40, "mine_tunnel");
+        offShot(t + 40, "mine_tunnel_off");
+        at(t + 60, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -70", x + 34.5, where.deep + 1.6, z + 0.5)));
+        pallShot(t + 80, "mine_shaft");
+        offShot(t + 80, "mine_shaft_off");
+        at(t + 120, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });
