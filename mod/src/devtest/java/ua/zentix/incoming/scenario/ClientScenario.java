@@ -660,15 +660,21 @@ public final class ClientScenario {
                 ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
                 // как на серверах хоста: волна вдали медленнее настоящей
                 ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(System.getenv().getOrDefault("INCOMING_WAVE_SPEED", "0.2")));
+                // глаз — над рельефом первых 800 блоков к эпицентру (холм у глаза закрыл бы стену)
                 var level = Minecraft.getInstance().getSingleplayerServer().overworld();
-                int ground = level.getChunkSource().getGenerator().getBaseHeight(0, 0, Heightmap.Types.WORLD_SURFACE_WG, level,
-                        level.getChunkSource().randomState());
+                var gen = level.getChunkSource().getGenerator();
+                double sx = -Math.sin(Math.toRadians(mushroomYaw)), sz = Math.cos(Math.toRadians(mushroomYaw));
+                int ground = 0;
+                for (int i = 0; i <= 40; i++) {
+                    ground = Math.max(ground, gen.getBaseHeight((int) Math.round(20 * i * sx), (int) Math.round(20 * i * sz),
+                            Heightmap.Types.WORLD_SURFACE_WG, level, level.getChunkSource().randomState()));
+                }
                 filmEye = new Vec3(0.5, ground + 20, 0.5);
                 cmd("time set 2500");
                 cmd("weather clear");
                 cmd("gamerule doDaylightCycle false");
                 cmd("gamemode spectator");
-                filmLook(-2);
+                filmLook(2);
                 hover = true;
             });
             at(400, () -> {
