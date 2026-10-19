@@ -147,6 +147,8 @@ public final class ClientScenario {
     private boolean flashView;
     /** Сценарий {@code mushroom} с {@code film}: зритель (до входа в мир — неизвестен). */
     private volatile Vec3 filmEye;
+    /** Сценарий {@code mushroom}: пыль с земли и пелена с разных высот ({@code INCOMING_MUSHROOM=blanket}). */
+    private boolean blanketView;
     /** Раз в сколько тиков звук в лог. */
     private int soundEvery = 10;
     /** Ядерный подрыв у воды ({@code nuke-water}, {@code nuke-lake}): кадры от подрыва ({@link #waterEvents}). */
@@ -658,6 +660,37 @@ public final class ClientScenario {
             at(400, () -> cmd("incoming nuke now at 3000.5 320 0.5 15 ground"));
             return;
         }
+        if ("blanket".equals(System.getenv("INCOMING_MUSHROOM"))) {
+            blanketView = true;
+            at(20, () -> mushroomYaw = landYaw(BLANKET_M));
+            at(40, () -> {
+                String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
+                ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
+                // как на серверах хоста: волна вдали медленнее настоящей
+                ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(System.getenv().getOrDefault("INCOMING_WAVE_SPEED", "0.2")));
+                // глаз — над рельефом первых 800 блоков к эпицентру (холм у глаза закрыл бы стену)
+                var level = Minecraft.getInstance().getSingleplayerServer().overworld();
+                var gen = level.getChunkSource().getGenerator();
+                double sx = -Math.sin(Math.toRadians(mushroomYaw)), sz = Math.cos(Math.toRadians(mushroomYaw));
+                int ground = 0;
+                for (int i = 0; i <= 40; i++) {
+                    ground = Math.max(ground, gen.getBaseHeight((int) Math.round(20 * i * sx), (int) Math.round(20 * i * sz),
+                            Heightmap.Types.WORLD_SURFACE_WG, level, level.getChunkSource().randomState()));
+                }
+                filmEye = new Vec3(0.5, ground + 20, 0.5);
+                cmd("time set 2500");
+                cmd("weather clear");
+                cmd("gamerule doDaylightCycle false");
+                cmd("gamemode spectator");
+                filmLook(2);
+                hover = true;
+            });
+            at(400, () -> {
+                double x = 0.5 - BLANKET_M * Math.sin(Math.toRadians(mushroomYaw)), z = 0.5 + BLANKET_M * Math.cos(Math.toRadians(mushroomYaw));
+                cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f 320 %.1f 15 air", x, z));
+            });
+            return;
+        }
         if ("flash".equals(System.getenv("INCOMING_MUSHROOM"))) {
             flashView = true;
             at(20, () -> mushroomYaw = landYaw(FLASH_M));
@@ -723,6 +756,22 @@ public final class ClientScenario {
     /** Сценарий {@code mushroom} с {@code film}: от зрителя до эпицентра по земле, блоков (камера видео хоста над Newisle). */
     private static final double FILM_M = 1383;
 
+    /** Сценарий {@code mushroom} с {@code blanket}: от зрителя до эпицентра по земле, блоков. */
+    private static final double BLANKET_M = 3000;
+    /** Сценарий {@code mushroom} с {@code blanket}: высоты зрителя над землёй, блоков (у земли, чуть над пеленой — до самолёта). */
+    private static final int[] BLANKET_UP = {60, 150, 400, 1000, 2500};
+
+    /**
+     * Сценарий {@code mushroom} с {@code blanket}: зритель над землёй на {@code up} блоков, в {@code back} блоках от эпицентра
+     * (на линии к прежнему месту), взгляд на землю под эпицентром, но не выше 8° вниз.
+     */
+    private void blanketLook(int up, double back) {
+        double k = back / BLANKET_M;
+        double x = filmEye.x + (1 - k) * -BLANKET_M * Math.sin(Math.toRadians(mushroomYaw)), z = filmEye.z + (1 - k) * BLANKET_M * Math.cos(Math.toRadians(mushroomYaw));
+        double pitch = Math.max(8, Math.toDegrees(Math.atan2(up - 20, back)));
+        cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %d %.1f", x, filmEye.y - 20 + up, z, mushroomYaw, pitch));
+    }
+
     /** Сценарий {@code mushroom} с {@code film}: зритель на месте, взгляд на эпицентр с этим наклоном. */
     private void filmLook(int pitch) {
         cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %d %d", filmEye.x, filmEye.y, filmEye.z, mushroomYaw, pitch));
@@ -780,6 +829,28 @@ public final class ClientScenario {
         if (glowView) {
             for (int s : new int[]{1, 2, 3, 5, 7, 9, 11, 14}) pallShot(tick + 20 * s, "glow_" + s + "s");
             at(tick + 20 * 14 + 20, () -> {
+                Incoming.LOG.info("SCENARIO done");
+                Minecraft.getInstance().stop();
+            });
+            return;
+        }
+        if (blanketView) {
+            // пыль с земли: фронт идёт к зрителю (у 0,2 скорости звука — ~45 с до него)
+            for (int s = 6; s <= 54; s += 6) pallShot(tick + 20 * s, "blanket_ground_" + s + "s");
+            // пелена с высоты: через минуту и через пять; кадр — через 3 с после переноса (пелена копит свет по кадрам)
+            int t = tick + 20 * 60;
+            for (int minute : new int[]{1, 5}) {
+                if (minute == 5) t = Math.max(t, tick + 20 * 300);
+                for (int up : BLANKET_UP) {
+                    at(t, () -> blanketLook(up, BLANKET_M));
+                    pallShot(t + 60, "blanket_" + minute + "m_up" + up);
+                    t += 100;
+                }
+                at(t, () -> blanketLook(1000, 1500));
+                pallShot(t + 60, "blanket_" + minute + "m_over1000");
+                t += 100;
+            }
+            at(t + 20, () -> {
                 Incoming.LOG.info("SCENARIO done");
                 Minecraft.getInstance().stop();
             });

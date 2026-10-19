@@ -163,6 +163,17 @@ float coarseAt(mat4 S, vec3 q, float fill) {
     return pallShape(vec2(r, g), fill);
 }
 
+// Бугры верха слоя пыли в точке p (PallField.BUMPS): термики над нагретой землёй — шагом втрое крупнее клубов (у
+// конвективного слоя — около полутора его высот), снесены с пылью, сменяются за оборот вихря (~минута, DustModel.RISE_S:
+// четверть плитки шума за 60 с — секунд игры, не модели: у малого масштаба удара часы модели быстрее, оценка); 1 ± PALL_BUMPS, в среднем 1 (канал равномерен). Верх, а не дыры: ложбина между буграми —
+// всё ещё верх слоя, и свет в ней — как у верха (pallField: толща над точкой — того же слоя)
+float topBumps(mat4 S, vec3 p) {
+    float tile = S[3].y, t = S[3].z;
+    vec2 q = vec2(p.x - S[0].x - S[1].x, p.z - S[0].y - S[1].y) / tile;
+    float n = texture(PallNoise, vec3(q.x * 0.3 + 0.41, 0.23 + t * (0.25 / 60.0), q.y * 0.3 + 0.17)).r;
+    return 1.0 + PALL_BUMPS * (2.0 * n - 1.0);
+}
+
 // мелкие клубы в месте q плитки (множитель крупных)
 float fineAt(vec3 q) {
     return pallDetail(textureLod(PallNoise, q * 4.0 + vec3(0.53, 0.29, 0.17), 0.0).r);
@@ -221,60 +232,27 @@ vec3 shoulder(vec3 c) {
 
 // ---------------------------------------------------------------- голова слоя пыли (pall.glsl: pallWall*)
 
-// Ось вала — на эту долю длины клина за краем, на половине верха клина там: вихри слоя крутятся у переднего края
-const float WALL_AXIS = 0.3;
-
-// Клубы головы: (x, y) — каналы плитки 0..1 (клубы и мелкие края, равномерно, как у плитки), (z) — мелкие клубы
-// (множитель, в среднем 1; fine — их доля, как у пелены). Шум в плитке V[2].w — у вала (доля roll) в плитке, повёрнутой с
-// ним (rolled — от оси вала), за ним в неподвижной (still — от оси кольца и над рельефом: поднятая пыль остаётся позади
-// головы); вдоль кольца — две фазы (BlastWall.slot): клубы стоят на своём угле theta и растут с головой, фаза, что
-// растянулась, сменяется новой с другими клубами, пока другая в полной силе. Смесь — с прежним разбросом (иначе в середине
-// смены клубы бледнели бы вдвое). Смесь, а не выбор сильнейшей: выбор менял бы клубы скачком — на кадре шов
-vec3 wallNoise(mat4 V, vec2 rolled, vec2 still, float theta, float roll, float fine) {
-    vec2 sum = vec2(0.0);
-    float norm = 0.0, dsum = 0.0, dnorm = 0.0, tile = max(V[2].w, 1.0);
-    for (int j = 0; j < 2; j++) {
-        float wj = j == 0 ? V[2].z : 1.0 - V[2].z;
-        if (wj < 0.02) continue;
-        float arc = theta * 0.1591549 * V[2][j];
-        vec3 off = fract(vec3(V[3][j]) * vec3(0.618034, 0.414214, 0.732051));
-        vec3 qr = vec3(rolled / tile, arc) + off, qs = vec3(still / tile, arc) + off.zxy;
-        float a = wj * roll, b = wj * (1.0 - roll);
-        if (a > 0.02) {
-            sum += a * (textureLod(PallNoise, qr, 0.0).rg - 0.5);
-            norm += a * a;
-        }
-        if (b > 0.02) {
-            sum += b * (textureLod(PallNoise, qs, 0.0).rg - 0.5);
-            norm += b * b;
-        }
-        // мелкие клубы — так же смесью обеих плиток (выбор по roll давал шов посреди головы)
-        if (fine > 0.0 && a > 0.02) {
-            dsum += a * (fineAt(qr) - 1.0);
-            dnorm += a * a;
-        }
-        if (fine > 0.0 && b > 0.02) {
-            dsum += b * (fineAt(qs) - 1.0);
-            dnorm += b * b;
-        }
-    }
-    float detail = dnorm > 0.0 ? max(1.0 + dsum / sqrt(dnorm), 0.0) : 1.0;
-    return vec3(clamp(0.5 + sum / sqrt(max(norm, 1e-6)), 0.0, 1.0), mix(1.0, detail, fine));
+// Клубы головы в месте q плитки V[2].w — в координатах самой пыли (pallWallOrigin): (x, y) — каналы плитки 0..1 (клубы
+// и мелкие края, равномерно, как у плитки), (z) — мелкие клубы (множитель, в среднем 1; fine — их доля, как у пелены).
+// Плитка сдвинута по крупному шуму, как у пелены (warpAt): на кольце в километры её повтор с высоты виден решёткой
+vec3 wallNoise(vec3 q, float fine) {
+    vec2 w = texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rg - 0.5;
+    q += vec3(w.x, 0.0, w.y) * 0.3;
+    vec2 n = textureLod(PallNoise, q, 0.0).rg;
+    float detail = fine > 0.0 ? fineAt(q) : 1.0;
+    return vec3(n, mix(1.0, detail, fine));
 }
 
 // Голова в точке h (pallWallAt) с клубами: ослабление, 1/блок. Клубы — как у пелены (pallShape: среднее 1, густая пыль
 // сплошнее — fill по густоте против dense, к верху клина реже), в них — мелкие клубы, пока луч их различает (fine; у тени
-// клубов — 0). У переднего края шум повёрнут вокруг оси вала на его угол: пыль у края идёт вверх, поверху — назад
+// клубов — 0). Шум — в месте, откуда пыль подняло (pallWallOrigin): клубы встают за фронтом там, где он сорвал пыль, и
+// там остаются; против уходящего фронта пыль у края идёт вверх и назад — вал
 float wallAt(mat4 V, WallAt h, float fine, float dense) {
     float s = h.s - h.P.z;
     float m = pallWallMean(s, h.z, h.P.x, h.P.y);
     if (m <= 0.0 || h.P.w <= 0.0) return 0.0;
     float u = s / max(h.P.x, 0.001);
-    vec2 q = vec2(s - WALL_AXIS * h.P.x, h.z - 0.5 * h.P.y * pallWallTop(WALL_AXIS));
-    float c = cos(V[1].x), sn = sin(V[1].x);
-    vec2 rolled = vec2(q.x * c - q.y * sn, q.x * sn + q.y * c);
-    float roll = 1.0 - smoothstep(0.4, 1.0, u);
-    vec3 n = wallNoise(V, rolled, vec2(length(h.rel), h.z), atan(h.rel.y, h.rel.x), roll, fine);
+    vec3 n = wallNoise(pallWallOrigin(h.rel, h.z, u * V[2].x, h.P.y, V[1].x) / max(V[2].w, 1.0) + vec3(0.618034, 0.414214, 0.732051), fine);
     float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, h.z / max(h.P.y * pallWallTop(u), 0.001)));
     return h.P.w * m * pallShape(n.xy, fill) * n.z;
 }
@@ -392,7 +370,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // пол слоя — рельеф под точкой (карта PallGround): в долине пелена над ней — тоже слой, и пожары и земля под ней —
     // на дне, а не на уровне земли под эпицентром; карты нет — земля под эпицентром
     float floorUp = pallRelief(ground, S, R, p.xz);
-    PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp);
+    PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));
     WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp);
     vec3 dustW = mix(PALL_DUST_W, PALL_SMOKE_W, f.smoke);
     s.tau += f.column.x + f.column.y + f.column.z;
@@ -439,8 +417,9 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // пикселя и шага: их среднее, 1, без выборки)
     float tile = S[3].y, fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
     vec3 q = clumpUv(S, p, warp);
-    float coarse = coarseAt(S, q, fill), detail = fine > 0.0 ? fineAt(q) : 1.0;
-    float shape = coarse * mix(1.0, detail, fine);
+    // клочья молодого слоя расходятся, пока он перемешивается (pallMixed): старая пелена сверху — ровное одеяло
+    float raw = coarseAt(S, q, fill), detail = fine > 0.0 ? fineAt(q) : 1.0;
+    float coarse = pallMixed(raw, f.mixed), shape = pallMixed(raw * mix(1.0, detail, fine), f.mixed);
     s.clumps = shape;
     float d = f.sigma.x * shape, h = f.sigma.y * mix(1.0, shape, 0.5), m = f.sigma.z * shape;
     // Тень своего и соседних клубов: толща к главному свету против средней (clumpShade). Густота — крупные × мелкие, и
@@ -451,11 +430,11 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // стороной клуба и тёмной. Выборок шума на тень: крупных — по две (по два канала), мелких — по одной и только пока
     // луч их различает
     float sigmaShade = f.sigma.x + f.sigma.z;
-    float clump = clumpShade(coarse, coarseAt(S, clumpUv(S, p + keyDir * (0.06 * tile), warp), fill),
-            coarseAt(S, clumpUv(S, p + keyDir * (0.22 * tile), warp), fill)) * sigmaShade * tile;
+    float clump = clumpShade(coarse, pallMixed(coarseAt(S, clumpUv(S, p + keyDir * (0.06 * tile), warp), fill), f.mixed),
+            pallMixed(coarseAt(S, clumpUv(S, p + keyDir * (0.22 * tile), warp), fill), f.mixed)) * sigmaShade * tile;
     if (fine > 0.0) {
-        clump += fine * clumpShade(detail, fineAt(clumpUv(S, p + keyDir * (0.015 * tile), warp)),
-                fineAt(clumpUv(S, p + keyDir * (0.055 * tile), warp))) * sigmaShade * coarse * (0.25 * tile);
+        clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(fineAt(clumpUv(S, p + keyDir * (0.015 * tile), warp)), f.mixed),
+                pallMixed(fineAt(clumpUv(S, p + keyDir * (0.055 * tile), warp)), f.mixed)) * sigmaShade * coarse * (0.25 * tile);
     }
     // тень — каждому свету, насколько он со стороны главного
     s.shadeSun += clump * max(dot(keyDir, sunDir), 0.0);
