@@ -83,6 +83,20 @@ class TrailModelTest {
     }
 
     @Test
+    void ribbonIsDrawnAtHalfTheCentreOpacity() {
+        Trail t = trail(WeaponType.ROCKET, FlightPhase.BOOST);
+        double[] out = new double[4];
+        double age = 20, u = 4, inv = TrailModel.inverseSpeed(300, u);
+        double sigma = TrailModel.sigma(t, age, Stability.D, u, 0);
+        double tau = TrailModel.smoke(t, inv) / (Math.sqrt(2 * Math.PI) * sigma);
+        TrailModel.look(t, age, inv, 0, u, 0, 0, 0.012, Stability.D, out);
+        assertEquals(1 - Math.exp(-tau), out[1], 1e-9, "непрозрачность середины");
+        // на краю ленты непрозрачность — половина середины
+        double y = out[0] / 2, edge = 1 - Math.exp(-tau * Math.exp(-y * y / (2 * sigma * sigma)));
+        assertEquals(out[1] / 2, edge, 1e-9);
+    }
+
+    @Test
     void slowerVehicleLaysThickerTrail() {
         Trail t = trail(WeaponType.ROCKET, FlightPhase.BOOST);
         assertEquals(2 * TrailModel.smoke(t, TrailModel.inverseSpeed(400, 5)), TrailModel.smoke(t, TrailModel.inverseSpeed(200, 5)), 1e-12);
