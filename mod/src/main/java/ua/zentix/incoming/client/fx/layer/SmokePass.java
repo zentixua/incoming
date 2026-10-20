@@ -6,7 +6,6 @@ import com.mojang.blaze3d.shaders.ProgramManager;
 import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferUploader;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
@@ -215,15 +214,5 @@ public final class SmokePass {
         Incoming.LOG.info("Blast smoke grid: {} cascades of {}³ cells ({} m), {} MB", SmokeGrid.CASCADES, n,
                 java.util.Arrays.toString(SmokeGrid.CELL), 2 * n * n * n * SmokeGrid.CASCADES * 8 / (1024 * 1024));
         return true;
-    }
-
-    /** Окно Minecraft закрывается — не нужно: текстуры живут до выхода из игры. */
-    static int texture() {
-        return grid;
-    }
-
-    @SuppressWarnings("unused")
-    private static Minecraft mc() {
-        return Minecraft.getInstance();
     }
 }

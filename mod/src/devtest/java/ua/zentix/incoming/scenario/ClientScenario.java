@@ -212,6 +212,7 @@ public final class ClientScenario {
             planPallFront(false);
         }
         else if ("fx".equals(mode) || "fx-night".equals(mode) || "fx-late".equals(mode)) planFx("fx-night".equals(mode), "fx-late".equals(mode));
+        else if ("smoke-salvo".equals(mode) || "smoke-salvo-pall".equals(mode) || "smoke-column".equals(mode)) planSmoke(mode);
         else if ("launch".equals(mode)) planLaunch();
         else if ("replay".equals(mode)) {
             replay = true;
@@ -291,6 +292,7 @@ public final class ClientScenario {
         if (front) frontEvents();
         if (city != null) city.tick(tick);
         if (fx != null) fxEvents();
+        smokeEvents();
         if (onboard != null) onboardEvents();
         // модели крупным планом: дым выхлопа и шлейфы закрыли бы их
         if (models) {
@@ -1654,6 +1656,105 @@ public final class ClientScenario {
         });
         at(300, this::nextFx);
     }
+
+    /**
+     * Дым обычных взрывов объёмом (сетка дыма, {@code client/fx/smoke}): {@code smoke-salvo} — пакет «Града» (40 снарядов
+     * с разбросом 15) по равнине в 30 блоках перед зрителем, днём; кадры {@code smoke_salvo_<секунды>s} от первого разрыва
+     * до минуты. {@code smoke-salvo-pall} — тот же залп в живой пелене наземных 15 кт в 2,5 км (худший случай для бюджета
+     * видеокарты: объём дыма и пелена в одном кадре); строки {@code SCENARIO smoke} — время прохода пелены на видеокарте
+     * (на llvmpipe — только для сравнения). {@code smoke-column} — шахед по равнине, через 30 с зритель пролетает сквозь
+     * его облако (облако — по той же модели: центр, снос ветром): кадры {@code smoke_column_*} снаружи, на входе, в
+     * середине и над ним. Раз в секунду — строка {@code SCENARIO smoke}: источники и клубы сетки, проход пелены.
+     */
+    private void planSmoke(String mode) {
+        boolean salvo = !"smoke-column".equals(mode), withPall = "smoke-salvo-pall".equals(mode);
+        at(40, () -> {
+            cmd("time set 6000");
+            cmd("weather clear");
+            cmd("gamerule doDaylightCycle false");
+            Minecraft.getInstance().options.hideGui = true;
+            var server = Minecraft.getInstance().getSingleplayerServer();
+            server.execute(() -> {
+                var found = server.overworld().findClosestBiome3d(b -> b.is(net.minecraft.world.level.biome.Biomes.PLAINS),
+                        net.minecraft.core.BlockPos.ZERO.atY(64), 6400, 32, 64);
+                var at = found == null ? net.minecraft.core.BlockPos.ZERO : found.getFirst();
+                Minecraft.getInstance().execute(() -> cmd(String.format(java.util.Locale.ROOT, "tp @s %d 170 %d 0 40", at.getX(), at.getZ())));
+            });
+        });
+        at(240, () -> {
+            quickFlights();
+            aimAhead(90);
+            eye = salvo ? target.add(0, 10, -30) : target.add(0, 25, -120);
+            Minecraft.getInstance().player.getAbilities().flying = true;
+            hover = true;
+            cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", eye.x, eye.y, eye.z, target.x, target.y + (salvo ? 6 : 40), target.z));
+        });
+        int start = 300;
+        if (withPall) {
+            at(start, () -> cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f 15 ground", target.x, target.y, target.z - 2500)));
+            start += 1400;
+        }
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.ExplosionEvent.Start e) -> {
+            if (!e.getLevel().isClientSide() && smokeBlastTick < 0 && smokeArmed && e.getExplosion().center().distanceTo(target) < 60) smokeBlastTick = tick;
+        });
+        at(start, () -> {
+            smokeArmed = true;
+            if (salvo) cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 40 15 at %.1f %.1f %.1f", target.x, target.y, target.z));
+            else cmd(String.format(java.util.Locale.ROOT, "incoming drone at %.1f %.1f %.1f", target.x, target.y, target.z));
+        });
+        for (int t = 20; t <= 20000; t += 20) {
+            at(t, () -> {
+                Incoming.LOG.info("SCENARIO smoke sources {}, pall {}, layer {}", ua.zentix.incoming.client.fx.smoke.SmokeGrid.sources(),
+                        ua.zentix.incoming.client.fx.layer.PallPass.describe(), ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming());
+            });
+        }
+        smokeMode = mode;
+    }
+
+    /** Кадры {@link #planSmoke} от первого взрыва у цели. */
+    private void smokeEvents() {
+        if (smokeMode == null || smokeBlastTick < 0 || smokeShotsPlanned) return;
+        smokeShotsPlanned = true;
+        int b = smokeBlastTick;
+        Incoming.LOG.info("SCENARIO smoke first blast at tick {}", b);
+        if (!"smoke-column".equals(smokeMode)) {
+            String name = "smoke-salvo-pall".equals(smokeMode) ? "smoke_salvo_pall" : "smoke_salvo";
+            for (int s : new int[]{1, 3, 6, 12, 20, 30, 45, 60}) shot(b + 20 * s, name + "_" + s + "s");
+            at(b + 20 * 62, () -> {
+                Incoming.LOG.info("SCENARIO done");
+                Minecraft.getInstance().stop();
+            });
+            return;
+        }
+        // облако шахеда через 30 с: центр по той же модели (снос ветром, высота), зритель пролетает его по ветру
+        shot(b + 20, "smoke_column_1s");
+        shot(b + 100, "smoke_column_5s");
+        shot(b + 300, "smoke_column_15s");
+        int at = b + 600;
+        double t = 30;
+        var model = new ua.zentix.incoming.client.fx.smoke.CloudModel(ua.zentix.incoming.client.fx.BlastSource.of(ua.zentix.incoming.strike.WeaponType.DRONE),
+                ua.zentix.incoming.client.fx.smoke.CloudModel.Air.of(1, 0, ua.zentix.incoming.client.far.FarBlasts.WIND_X,
+                        ua.zentix.incoming.client.far.FarBlasts.WIND_Z, 0.5));
+        Vec3 c = target.add(model.driftX(t), model.height(t), model.driftZ(t));
+        double r = model.radius(t);
+        Incoming.LOG.info("SCENARIO smoke column at 30 s: centre {} radius {}", xyz(c), Math.round(r));
+        double[][] path = {{-3, 0}, {-1.5, 0}, {-0.6, 0}, {0, 0}, {0.6, 0}, {0, 2.2}};
+        String[] names = {"outside", "near", "entering", "centre", "leaving", "above"};
+        for (int i = 0; i < path.length; i++) {
+            Vec3 e = c.add(0, path[i][1] * r, path[i][0] * r);
+            int when = at + 4 * i;
+            at(when, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", e.x, e.y, e.z, c.x, c.y, c.z + 2 * r)));
+            shot(when + 3, "smoke_column_" + names[i]);
+        }
+        at(at + 40, () -> {
+            Incoming.LOG.info("SCENARIO done");
+            Minecraft.getInstance().stop();
+        });
+    }
+
+    private String smokeMode;
+    private int smokeBlastTick = -1;
+    private boolean smokeArmed, smokeShotsPlanned;
 
     /**
      * Замер подрыва на копии мира игрока (tools/prod_client.py nuke-profile --world …): 15 кт в воздухе в 300 блоках

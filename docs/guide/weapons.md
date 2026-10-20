@@ -59,6 +59,27 @@ An intercontinental ballistic missile lifts off behind you, and 90 seconds later
 It climbs like a real ICBM: slowly off the pad, faster as its fuel burns, and stays in the sky for about nine seconds.
 Everything about it is in [Nuclear strike](nuke.md).
 
+## What a blast looks like
+
+The fireball, smoke and dust of every strike are drawn as a volume: you can fly into a cloud, the sun lights its thin
+edges, its hot core glows at night, and it casts a shadow on the ground. Its size, rise and colour come from the charge
+and the fuel left in the tanks:
+
+- **Shahed**: a short flash, then an orange ball of burning petrol about 18 blocks across that burns out in under
+  2 seconds, black smoke above it and dust the colour of the ground below. The cloud rises a few hundred blocks and drifts
+  with the wind.
+- **Cruise missile**: a bigger flash and a fuel ball about 38 blocks across that burns for about 3 seconds; its own
+  charge gives little soot, so the smoke is mostly from the burning fuel, with a lot of dust.
+- **Grad**: a flash and a small grey-black puff with dust, no fuel ball. A salvo leaves a field of puffs that merge and
+  drift downwind.
+- **Lancet**: a small flash and a cloud a few tens of blocks high.
+
+In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
+night, when cold air near the ground holds it down. A cloud stays visible for
+minutes, until it has spread too thin to see. Close up only solid things fly as particles: sparks, hot fragments with
+smoke trails and clods of earth. Past about 600 blocks the same cloud is drawn as flat puffs. The bomb's underground
+blast looks as before.
+
 ## No room for the launcher
 
 The launcher sets up next to you. If there is no room around you, the designator says "No room for a launcher…" and

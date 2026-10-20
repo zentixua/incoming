@@ -2,6 +2,7 @@ package ua.zentix.incoming.client.fx.smoke;
 
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.DustModel;
 
 /**
  * Облако обычного взрыва по законам, без Minecraft: что поднялось, куда и как долго его видно — из заряда, топлива, грунта
@@ -72,6 +73,11 @@ public final class CloudModel {
     public static final double CRATER_D = 0.65, CRATER_DEPTH = 0.25, SOIL_DENSITY = 1600;
     /** Доля грунта воронки, что уходит в воздух пылью мельче ~50 мкм, — оценка. */
     public static final double DUST_LOFTED = 0.02;
+    /**
+     * Доля пыли воронки, что встаёт с облаком (остальное — у земли, вал пыли от ветра за фронтом), и доля пыли облака в
+     * ножке, пока облако поднимается (тает с его подъёмом), — оценки: замеров разделения пыли у малых зарядов нет.
+     */
+    public static final double CLOUD_SHARE = 0.5, STEM_SHARE = 0.3;
     /** Облако видно, пока его толща поперёк середины больше этого (порог контраста 0,02). */
     public static final double SEEN = 0.02;
     /** Дольше этого облако не живёт, с (дальше оно — дымка над районом). */
@@ -149,6 +155,8 @@ public final class CloudModel {
     public final double fireSeconds;
     /** Подъём по шагам {@link #DT}: высота центра, радиус, скорость, g'; снос по x и z. */
     private final double[] z, r, w, gp, dx, dz;
+    /** Наибольшая скорость подъёма, м/с. */
+    final double maxRise;
     /** Наибольшая высота центра и время, когда она достигнута, с; радиус там. */
     public final double topZ, topSeconds, topR;
     /** Сколько облако видно, с. */
@@ -218,6 +226,9 @@ public final class CloudModel {
         }
         int top = 0;
         for (int i = 1; i < n; i++) if (z[i] > z[top]) top = i;
+        double fastest = 0;
+        for (double v : w) fastest = Math.max(fastest, v);
+        maxRise = fastest;
         topZ = z[top];
         topR = r[top];
         topSeconds = top * DT;
@@ -395,7 +406,7 @@ public final class CloudModel {
      * Σκ'·m / (2π·σh·σv) по веществам облака (у земли — своё облако, не в счёт).
      */
     public double tau(double t) {
-        double ext = SOOT_K * soot + ua.zentix.incoming.nuclear.model.DustModel.K_MIX * 0.5 * dust;
+        double ext = SOOT_K * soot + ua.zentix.incoming.nuclear.model.DustModel.K_MIX * CLOUD_SHARE * dust * DustModel.aloft(t, height(t));
         return ext / (2 * Math.PI * sigmaH(t) * sigmaV(t));
     }
 
@@ -413,10 +424,14 @@ public final class CloudModel {
         return lo;
     }
 
-    /** Доля облака, что ещё видна в возрасте t (к концу жизни тает к нулю): вещество в клубах — до {@link #life}. */
+    /**
+     * Доля вещества облака, что рисуется в возрасте t: облако, истончившееся до порога видимости, к концу жизни и так не
+     * видно — 1; облако, что дожило до {@link #LIFE_MAX} густым, уходит плавно за последнюю десятую жизни (без скачка).
+     */
     double fade(double t) {
-        double u = t / life;
-        return u >= 1 ? 0 : 1 - u * u * u;
+        if (t >= life) return 0;
+        if (life < LIFE_MAX) return 1;
+        return Math.min(1, (life - t) / (0.1 * life));
     }
 
     /**
@@ -432,8 +447,9 @@ public final class CloudModel {
         double k = kelvin(t), up = rise(t);
         // огненная стадия: шары светят своим радиусом и температурой — шар продуктов детонации (сажа взрывчатки), шар
         // топлива (сажа топлива); пыль облака — в большем
-        double cloudDust = 0.5 * dust;
-        double stemShare = 0.3 * Math.exp(-t / Math.max(topSeconds, 1));
+        // пыль облака оседает из него (корзины DustModel), ножку питает подъём облака — тает с его скоростью
+        double cloudDust = CLOUD_SHARE * dust * DustModel.aloft(t, cy);
+        double stemShare = STEM_SHARE * Math.min(1, up / Math.max(maxRise, 1e-6));
         double he = heBallRadius(t), fuel = fuelBallRadius(t);
         double heSoot = source.tntKg() * source.explosive().freeCarbon() * SOOT_SURVIVES, fuelSoot = soot - heSoot;
         if (he > 0 || fuel > 0) {
@@ -465,11 +481,15 @@ public final class CloudModel {
                 out.blob(cx * lean, h, cz * lean, ss, ss, 0, mass, 0, T_AIR + (k - T_AIR) * f * 0.5, up * f);
             }
         }
-        // пыль у земли: кольцо вала расползается к радиусу облака Чёрча (4,7·W^0,375) и дальше по ветру, оседает
-        double base = Math.max(2, 4.7 * Math.pow(source.tntKg(), 0.375) * Math.min(1, Math.sqrt(t / 5)) + spreadH(air.spread(), after(t + topSeconds) * 0.2));
-        double settle = Math.exp(-t / 120);
-        out.blob(cx * air.wind(2) / air.wind(cy), 0.3 * base, cz * air.wind(2) / air.wind(cy), base, Math.max(1, 0.35 * base), 0,
-                cloudDust * settle * fade, 0, T_AIR, 0);
+        // пыль у земли: вал, который ветер за фронтом гонит до радиуса облака Чёрча (R = 4,7·W^0,375 м; σ = R/√5, как у
+        // термика) со скоростью звука, дальше — расплывание Бриггса по пути ветра; высота — начальный шар, оседает корзинами
+        double c = ua.zentix.incoming.nuclear.model.BlastModel.SOUND_SPEED;
+        double church = 4.7 * Math.pow(source.tntKg(), 0.375) / Math.sqrt(5);
+        double x = Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(2)) * t;
+        double bh = Math.hypot(church * Math.min(1, t * c / Math.max(church, 1e-6)), spreadH(air.spread(), x));
+        double bv = Math.max(radius(0) / Math.sqrt(5), spreadV(air.spread(), x));
+        double ground = (1 - CLOUD_SHARE) * dust * DustModel.aloft(t, 2 * bv);
+        out.blob(cx * air.wind(2) / air.wind(cy), bv, cz * air.wind(2) / air.wind(cy), Math.max(bh, 0.5), bv, 0, ground * fade, 0, T_AIR, 0);
     }
 
     /**
