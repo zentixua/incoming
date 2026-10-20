@@ -120,6 +120,9 @@ public final class FxLayer {
         }
     }
 
+    /** Время всего слоя на видеокарте: наклейка на воду, пелена, пробы, квадраты. */
+    private static final GpuTimer GPU = new GpuTimer();
+
     /** Раз в тик клиента (не на паузе): секундная сводка времени кадра. */
     public static void tick() {
         if (++ticks >= 20) {
@@ -129,6 +132,7 @@ public final class FxLayer {
             lastCleanCpu = cleanCpu / 1e6;
             lastCollected = collected;
             PallPass.second();
+            GPU.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;
             frames = ticks = collected = 0;
         }
@@ -196,6 +200,7 @@ public final class FxLayer {
         FarDraw.view(e, view.camera(), VIEW);
         LightTexture light = mc.gameRenderer.lightTexture();
         FarDraw.begin(e, view.camera());
+        int timed = GPU.begin();
         try {
             // наклейка на воду — под пеленой и квадратами: пыль, брызги и дым над водой ложатся на неё
             if (WaterDecal.active()) WaterDecal.draw(e, view, scene, FOG);
@@ -235,6 +240,7 @@ public final class FxLayer {
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
             QUADS.draw();
+            GPU.end(timed);
         } finally {
             light.turnOffLightLayer();
             FarDraw.end();
@@ -258,8 +264,9 @@ public final class FxLayer {
 
     /** Время кадра слоя за прошлую секунду — для строки сценария. */
     public static String describeTiming() {
-        return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), depth: %s",
-                lastQuads, lastMean, lastMax, lastClean, Math.max(0, lastCleanCpu), lastCollected, SceneDepth.describe());
+        return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
+                + "GPU %.3f ms (longest %.3f, %d frames), depth: %s", lastQuads, lastMean, lastMax, lastClean, Math.max(0, lastCleanCpu), lastCollected,
+                GPU.lastMean, GPU.lastMax, GPU.lastFrames, SceneDepth.describe());
     }
 
     /** Выход из мира или смена измерения. */
