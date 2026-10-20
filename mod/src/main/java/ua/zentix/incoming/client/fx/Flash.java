@@ -9,6 +9,8 @@ import ua.zentix.incoming.IncomingConfig;
  * яркость зависит от расстояния и прямой видимости, затухает за несколько тиков.
  */
 public final class Flash {
+    /** Слабее этого вспышки на экране нет. */
+    public static final float FLOOR = 0.01f;
     private static float intensity;
     private static float decay = 0.75f;
     private static int color = 0xFFF4D0;
@@ -27,7 +29,7 @@ public final class Flash {
 
     public static void tick() {
         intensity *= decay;
-        if (intensity < 0.01f) intensity = 0;
+        if (intensity < FLOOR) intensity = 0;
     }
 
     public static void reset() {

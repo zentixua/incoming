@@ -11,12 +11,10 @@ import ua.zentix.incoming.client.fx.particle.FxBudget;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
- * Картинка обычного взрыва из частиц {@link Fx}, по кадрам как на съёмках: огненный шар — анимация от вспышки
- * до сажи размером и временем по заряду ({@link FarBlasts.Look}, как вдали), который «остывает» в чёрный клубящийся
- * дым и всплывает; раскалённые осколки с дымными хвостами; пыль цвета грунта, которую волна гонит по земле
- * (самой волны днём не видно — кольца нет); догорание в воронке. Свет вспышки и шара (блик, вуаль, зарево) и столб дыма,
- * который тянет вверх и сносит ветром, рисует {@link FarBlasts} на любой дальности: столб стоит минуты, частицы — полминуты.
- * Размер дыма задаёт {@code r} (блоки).
+ * Твёрдое обычного взрыва — частицами {@link Fx}: раскалённые осколки с дымными хвостами, искры, догорание в воронке
+ * (языки пламени и угли). Дым, пыль и огненный шар — объём сетки дыма ({@code client/fx/smoke}: облако по модели взрыва,
+ * его источник — событие {@code FarBlasts}); здесь их нет. Осколки и искры — по размеру огненного шара модели
+ * ({@code r}, блоки). Прорыв бомбы из-под земли ({@link #burst}) — прежняя картинка из частиц.
  */
 final class Explosions {
     private Explosions() {}
@@ -24,7 +22,29 @@ final class Explosions {
     /** Бугров вокруг главного шара. */
     static final int LOBES = 4;
 
-    /** Мгновенная часть: огненный шар, осколки и пыль (t = 0). */
+    /**
+     * Мгновенная часть наземного взрыва (t = 0) — только твёрдое: раскалённые осколки с дымными хвостами (их дым тоньше
+     * клетки сетки — частицами, как куски у ядерки) и искры; число — по радиусу шара r (как прежде по радиусу картинки).
+     */
+    static void solids(ClientLevel level, Vec3 c, float r, RandomSource rnd) {
+        float k = Fx.density(c);
+        Fx.Spec tail = Fx.smoke().size(r * 0.12f, r * 0.55f).life(140).color(0x3A3430, 0x8A8279).alpha(0.55f).glow(0.6f, 5).drag(0.93f)
+                .rise(0.003f).fadeIn(1).fadeFrom(0.35f).budget(FxBudget.DEBRIS);
+        int n = Math.round(9 * r / 4 * k) + 3;
+        for (int i = 0; i < n; i++) {
+            Vec3 d = dir(rnd, 0.35);
+            Fx.spark().vel(d.scale(0.9 + rnd.nextDouble() * 1.1)).size(0.16f, 0.08f).life(28 + rnd.nextInt(24)).gravity(0.045f).drag(0.985f)
+                    .streak(1.5f).trail(tail, 0.45f, 0.85f).spawn(level, c.add(0, r * 0.3, 0));
+        }
+        n = Math.round(60 * r / 4 * k) + 10;
+        for (int i = 0; i < n; i++) {
+            Vec3 d = dir(rnd, 0.0);
+            Fx.spark().vel(d.scale(0.4 + rnd.nextDouble() * 1.3)).life(10 + rnd.nextInt(30)).gravity(0.04f).drag(0.96f)
+                    .spawn(level, c.add(0, r * 0.3, 0));
+        }
+    }
+
+    /** Мгновенная часть прорыва бомбы (прежняя картинка): огненный шар, осколки и пыль (t = 0). */
     static void burst(ClientLevel level, Vec3 c, float r, FarBlasts.Look look, GroundMaterial mat, RandomSource rnd) {
         float k = Fx.density(c);
         fireball(level, c, look.fireball(), look.ballTicks(), rnd);
@@ -95,9 +115,8 @@ final class Explosions {
     }
 
     /**
-     * Догорание в воронке: языки пламени с дымком (группа клубов у земли), изредка стреляют угли. Столб дыма над ним —
-     * {@link FarBlasts}: ножка из частиц (клуб за тик, полминуты) вблизи была бы вторым, низким столбом, который у края
-     * прорисовки сменялся бы настоящим.
+     * Догорание в воронке: языки пламени (мельче клетки сетки дыма), изредка стреляют угли. Дым над ним — облако модели
+     * в сетке дыма.
      *
      * @param t         тик после взрыва (≥ 1)
      * @param fireTicks сколько тиков горит
@@ -110,8 +129,6 @@ final class Explosions {
                 Vec3 p = c.add(rnd.nextGaussian() * r * 0.5, 0.3, rnd.nextGaussian() * r * 0.5);
                 Fx.fire().vel(0, 0.06 + 0.05 * rnd.nextDouble(), 0).size(r * 0.1f, r * 0.22f).life(12 + rnd.nextInt(10)).rise(0.004f)
                         .budget(FxBudget.GROUND).spawn(level, p);
-                Fx.smoke().vel(0, 0.1, 0).size(r * 0.12f, r * 0.6f).life(140 + rnd.nextInt(80)).color(0x2C2826, 0x6C6660).alpha(0.6f)
-                        .glow(0.5f, 6).rise(0.006f).fadeFrom(0.4f).budget(FxBudget.GROUND).spawn(level, p.add(0, r * 0.15, 0));
             }
             if (rnd.nextFloat() < (1 - f) * 0.3f) {
                 Fx.spark().vel(rnd.nextGaussian() * 0.05, 0.08 + 0.1 * rnd.nextDouble(), rnd.nextGaussian() * 0.05).size(0.06f, 0.03f)
@@ -121,27 +138,17 @@ final class Explosions {
         }
     }
 
-    /** Вторичный подрыв в воронке (боекомплект, топливо). */
+    /**
+     * Вторичный подрыв в воронке (боекомплект, топливо): языки огня и искры; его дым и жар — часть облака взрыва в сетке
+     * дыма (топливо, что горит в нём, — уже в модели облака).
+     */
     static void cookoff(ClientLevel level, Vec3 p, float r, RandomSource rnd) {
-        Fx.fireball().size(r * 0.8f, r * 0.9f).life(8).spawn(level, p.add(0, r * 0.3, 0));
         for (int i = 0; i < 8; i++) {
             Vec3 d = dir(rnd, 0.3);
             Fx.fire().vel(d.scale(r * 0.08)).size(r * 0.25f, r * 0.6f).growFast().life(8 + rnd.nextInt(8)).drag(0.8f).spawn(level, p.add(0, r * 0.3, 0));
-            Fx.smoke().vel(d.scale(r * 0.05).add(0, 0.1, 0)).size(r * 0.3f, r * 0.9f).growFast().life(200 + rnd.nextInt(100)).color(0x26221F, 0x6A645E)
-                    .alpha(0.85f).glow(1, 8).drag(0.9f).rise(0.01f).fadeFrom(0.45f).spawn(level, p.add(0, r * 0.3, 0));
         }
         for (int i = 0; i < 25; i++) {
             Fx.spark().vel(dir(rnd, 0.2).scale(0.3 + rnd.nextDouble())).life(10 + rnd.nextInt(20)).gravity(0.04f).spawn(level, p.add(0, 0.5, 0));
-        }
-    }
-
-    /** Облако конденсации: белая полусфера на фронте, видна мгновение (во влажном воздухе у мощных зарядов). */
-    static void condensation(ClientLevel level, Vec3 c, float radius, RandomSource rnd) {
-        int n = Math.round(60 * Fx.density(c));
-        for (int i = 0; i < n; i++) {
-            Vec3 d = dir(rnd, 0.05);
-            Fx.smoke().vel(d.scale(1.6)).size(radius * 0.12f, radius * 0.22f).life(10).color(0xF2F4F6, 0xFFFFFF).alpha(0.35f)
-                    .drag(0.75f).fadeIn(1).fadeFrom(0.2f).wind(0).spawn(level, c.add(d.scale(radius * 0.4)));
         }
     }
 

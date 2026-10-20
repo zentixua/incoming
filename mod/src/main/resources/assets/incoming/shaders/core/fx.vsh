@@ -2,6 +2,7 @@
 
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
+#moj_import <incoming:smoke.glsl>
 #moj_import <incoming:pall_front.glsl>
 
 // Слой эффектов (client/fx/layer): дым, пламя, искры, вспышки и всё дальнее одним проходом после мира.
@@ -76,14 +77,14 @@ vec3 firelight(sampler2D map, mat4 S, mat4 F, vec3 p) {
     return F[3].rgb * (0.5 * F[1].w * flame * exp(-max(h, 0.0) / F[0].z));
 }
 
-// Пелена и грибы перед точкой p (настоящей, от глаза): объём пелены уже на кадре (PallPass) — до мира за пикселем;
-// квадрат ближе мира должен быть за той их частью, что между ним и глазом (pallThrough; грибы — так же, по своему полю
-// без шума)
+// Пелена, грибы и дым взрывов перед точкой p (настоящей, от глаза): объём пелены уже на кадре (PallPass) — до мира за
+// пикселем; квадрат ближе мира должен быть за той их частью, что между ним и глазом (pallThrough; грибы — так же, по своему
+// полю без шума, дым — по сетке, smokeThrough)
 float pall(vec3 p) {
     float len = length(p);
     if (PallAmbient.w < 0.5 || len < 1e-3) return 1.0;
     vec3 dir = p / len;
-    return pallThrough(dir, len) * mushTransmit(Sampler11, dir, len, 6, PallAir);
+    return pallThrough(dir, len) * mushTransmit(Sampler11, dir, len, 6, PallAir) * smokeThrough(dir, len);
 }
 
 void main() {

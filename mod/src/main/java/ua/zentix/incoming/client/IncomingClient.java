@@ -228,6 +228,7 @@ public final class IncomingClient {
         ClientSounds.tick();
         FarRenderer.tick();
         FxLayer.tick();
+        ua.zentix.incoming.client.fx.smoke.SmokeGrid.tick();
         // частицы — после тика мира, как ванильный движок; в заморозке стоят
         if (mc.level.tickRateManager().runsNormally()) {
             FxPool.INSTANCE.tick(mc.level);
@@ -250,6 +251,7 @@ public final class IncomingClient {
         ClientSounds.reset();
         FlightTracks.reset();
         FarRenderer.reset();
+        ua.zentix.incoming.client.fx.smoke.SmokeGrid.reset();
         FxPool.INSTANCE.clear();
         Effects.clear();
         CameraShake.reset();
@@ -292,6 +294,7 @@ public final class IncomingClient {
         ClientSounds.reset();
         FlightTracks.logout();
         FarRenderer.reset();
+        ua.zentix.incoming.client.fx.smoke.SmokeGrid.reset();
         FxPool.INSTANCE.clear();
         FxLayer.reset();
         Fragments.reset();

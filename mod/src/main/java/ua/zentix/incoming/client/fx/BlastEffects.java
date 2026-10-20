@@ -16,19 +16,22 @@ import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxBudget;
+import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.sound.BlastEchoes;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.util.Particles;
 import ua.zentix.incoming.warhead.BunkerCover;
 import ua.zentix.incoming.warhead.GroundMaterial;
 import ua.zentix.incoming.warhead.Warheads;
 
 /**
- * Что видят и слышат игроки при взрывах:
- * вспышка, огненный шар и «гриб», фонтан грунта цвета местности, кольцо пыли и сфера конденсации,
- * догорание; звук, слух и толчок тела приходят вместе с фронтом ударной волны (17 блоков за тик).
+ * Что видят и слышат игроки при взрывах вблизи: вспышка по модели облака ({@link CloudModel}), твёрдое частицами —
+ * осколки, искры, комья грунта, языки пламени, пока горит топливо; огненный шар, дым, пыль и облако конденсации — объём
+ * сетки дыма (облако модели — источник сетки, его ведёт {@link FarBlasts}). Звук, слух и толчок тела приходят вместе
+ * с фронтом ударной волны (17 блоков за тик). Бомба под землёй — прежняя картинка.
  */
 public final class BlastEffects {
     private BlastEffects() {}
@@ -38,17 +41,19 @@ public final class BlastEffects {
      * дальше {@link FarBlasts#NEAR} ведёт {@link FarBlasts} (пакеты приходят до {@code far_range}).
      */
     public static void blast(S2C.Blast p) {
+        // одно облако на взрыв: у объёма, у картинки вдали и у вспышки с частицами здесь
+        CloudModel cloud = FarBlasts.add(p);
         if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.byId(p.material()), p.seed(), BlastSource.of(p)));
         else if (FarBlasts.near(p.pos())) {
             GroundMaterial mat = GroundMaterial.byId(p.material());
+            if (cloud == null && p.kind() != S2C.Blast.BUNKER) cloud = FarBlasts.model(p);
             switch (p.kind()) {
-                case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), BlastSource.of(p)));
+                case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), cloud));
                 case S2C.Blast.BUNKER -> Effects.add(new Bunker(p.pos(), mat, p.surfaceY(), p.seed()));
-                case S2C.Blast.ROCKET -> Effects.add(new Drone(p.pos(), mat, p.seed(), true, BlastSource.of(p)));
-                default -> Effects.add(new Drone(p.pos(), mat, p.seed(), false, BlastSource.of(p)));
+                case S2C.Blast.ROCKET -> Effects.add(new Drone(p.pos(), mat, p.seed(), true, cloud));
+                default -> Effects.add(new Drone(p.pos(), mat, p.seed(), false, cloud));
             }
         }
-        FarBlasts.add(p);
     }
 
     /**
@@ -86,6 +91,16 @@ public final class BlastEffects {
     }
 
     // ---------------------------------------------------------------- общее
+
+    /** Ближе этого вспышка взрыва по модели — в полную силу, блоков: радиус шара продуктов детонации. */
+    static double flashNear(CloudModel m) {
+        return m.heBall;
+    }
+
+    /** Дальше этого вспышки нет, блоков: вуаль спадает как радиус шара / d и здесь слабее {@link Flash#FLOOR}. */
+    static double flashRange(CloudModel m) {
+        return flashNear(m) * FlashFalloff.PEAK / Flash.FLOOR;
+    }
 
     /**
      * Фронт звука и ударной волны: срабатывает у слушателя (камера) один раз, когда до него дошёл, — звук; у тела
@@ -177,8 +192,30 @@ public final class BlastEffects {
             flash(level, pos, near, range, decay);
         }
 
+        /**
+         * Вспышка по модели облака: свет — шар продуктов детонации ({@link CloudModel#heBall}, ближе его радиуса — полная
+         * сила; дальше вуаль спадает как радиус/d и пропадает там, где она слабее {@link Flash#FLOOR}), гаснет, как
+         * остывает шар (чёрное тело от {@link CloudModel#HE_BALL_HOT} к {@link CloudModel#HE_BALL_END} за его жизнь),
+         * цвета чёрного тела в начале.
+         */
+        void flash(ClientLevel level, CloudModel m) {
+            double near = flashNear(m), range = flashRange(m);
+            double fall = BlackBody.luminance(CloudModel.HE_BALL_END) / BlackBody.luminance(CloudModel.HE_BALL_HOT);
+            float decay = (float) Math.exp(Math.log(fall) / Math.max(1, 20 * m.heBallSeconds));
+            double[] c = new double[4];
+            BlackBody.light(CloudModel.HE_BALL_HOT, c);
+            double top = Math.max(c[0], Math.max(c[1], c[2]));
+            int rgb = (int) Math.round(255 * c[0] / top) << 16 | (int) Math.round(255 * c[1] / top) << 8 | (int) Math.round(255 * c[2] / top);
+            flash(level, pos, near, range, decay, rgb);
+        }
+
         /** То же с источником света в {@code at}. */
         void flash(ClientLevel level, Vec3 at, double near, double range, float decay) {
+            flash(level, at, near, range, decay, 0xFFF1C8);
+        }
+
+        /** То же своего цвета. */
+        void flash(ClientLevel level, Vec3 at, double near, double range, float decay, int rgb) {
             Minecraft mc = Minecraft.getInstance();
             Player player = mc.player;
             if (player == null) return;
@@ -194,14 +231,13 @@ public final class BlastEffects {
                     .getType() == HitResult.Type.MISS;
             double cos = d < 1e-6 ? 1 : new Vec3(camera.getLookVector()).dot(to) / d;
             float s = FlashFalloff.strength(d, near, range, cos, visible) * daylight;
-            if (s > 0) Flash.trigger(s, decay, 0xFFF1C8);
+            if (s > 0) Flash.trigger(s, decay, rgb);
         }
 
-        /** Фонтан грунта из воронки и пылевое облако цвета местности (fx/spray). */
+        /** Фонтан грунта из воронки — комья цвета местности (fx/spray); пыль — объём облака в сетке дыма. */
         void spray(ClientLevel level, int scale) {
             Particles.burst(level, FxParticles.block(mat), pos.add(0, 1, 0), 1.5, 1.5, 1.5, scale == 1 ? 0.9 : 1.3, scale == 1 ? 350 : 900);
             Particles.burst(level, FxParticles.block(mat), pos.add(0, 3, 0), 4, 3, 4, 0.4, scale == 1 ? 150 : 400);
-            Particles.burst(level, FxParticles.dust(mat, 4), pos.add(0, 1.5, 0), 5, 1.2, 5, 0.02, scale == 1 ? 150 : 400);
             if (mat.isWater()) {
                 Particles.burst(level, ParticleTypes.SPLASH, pos.add(0, 1, 0), 3, 3, 3, 0.8, scale == 1 ? 700 : 1800);
                 Particles.burst(level, ParticleTypes.BUBBLE_POP, pos.add(0, 1, 0), 4, 2, 4, 0.3, scale == 1 ? 150 : 400);
@@ -209,32 +245,36 @@ public final class BlastEffects {
         }
     }
 
-    // ================================================================ шахед (fx)
+    // ================================================================ шахед, «Ланцет», «Град» (fx)
 
     static final class Drone extends Timeline {
-        /** Радиус огненного шара, блоки (≈ 50 кг ВВ). */
-        static final float R = 5f;
-        /** Вспышка: ближе — полная сила, дальше второго — её нет, блоки. */
-        static final double FLASH_NEAR = 3 * R, FLASH_RANGE = 240;
-
-        /** Снаряд РСЗО: картинка та же, звук свой — сухой разрыв; пожара в воронке нет (заряд меньше). */
+        /** Облако по модели: вспышка, размер шара для осколков и искр, сколько горит топливо. */
+        private final CloudModel model;
+        /** Снаряд РСЗО: звук свой — сухой разрыв. */
         private final boolean rocket;
 
-        Drone(Vec3 pos, GroundMaterial mat, long seed, boolean rocket, BlastSource source) {
-            super(pos, mat, seed, source);
+        Drone(Vec3 pos, GroundMaterial mat, long seed, boolean rocket, CloudModel model) {
+            super(pos, mat, seed, model.source);
             this.rocket = rocket;
+            this.model = model;
+        }
+
+        /** Радиус огненного шара модели, блоки: по нему осколки, искры и языки пламени. */
+        float radius() {
+            return (float) Math.max(0.5 * model.fuelBall, model.heBall);
         }
 
         @Override
         boolean run(ClientLevel level, int t) {
             if (t == 0) {
-                flash(level, FLASH_NEAR, FLASH_RANGE, 0.72f);
-                Explosions.burst(level, pos, R, rocket ? FarBlasts.ROCKET : FarBlasts.DRONE, mat, random);
+                flash(level, model);
+                Explosions.solids(level, pos, radius(), random);
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 2, 1, 2, 0, 30);
                 return true;
             }
             if (t == 1) spray(level, 1);
-            Explosions.burn(level, pos, R, t, 220, random);
+            // языки пламени — пока горит топливо (шар топлива, CCPS)
+            Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * model.fuelBallSeconds), random);
             if (t == 8 && !rocket) BlastSounds.fire(pos, 1.1f);
             if (t == 20) BlastSounds.debris(pos, rocket ? 40 : 60, rocket ? 1.25f : 1.1f);
             return t < 240;
@@ -287,30 +327,30 @@ public final class BlastEffects {
     // ================================================================ крылатая ракета (mfx)
 
     static final class Missile extends Timeline {
-        /** Радиус огненного шара, блоки (≈ 450 кг ВВ). */
-        static final float R = 8.5f;
-        /** Вспышка: ближе — полная сила, дальше второго — её нет, блоки. */
-        static final double FLASH_NEAR = 3 * R, FLASH_RANGE = 400;
+        /** Облако по модели: вспышка, размер шара, сколько горит топливо. */
+        private final CloudModel model;
 
-        Missile(Vec3 pos, GroundMaterial mat, long seed, BlastSource source) {
-            super(pos, mat, seed, source);
+        Missile(Vec3 pos, GroundMaterial mat, long seed, CloudModel model) {
+            super(pos, mat, seed, model.source);
+            this.model = model;
+        }
+
+        float radius() {
+            return (float) Math.max(0.5 * model.fuelBall, model.heBall);
         }
 
         @Override
         boolean run(ClientLevel level, int t) {
             if (t == 0) {
-                flash(level, FLASH_NEAR, FLASH_RANGE, 0.8f);
-                Explosions.burst(level, pos, R, FarBlasts.MISSILE, mat, random);
+                flash(level, model);
+                Explosions.solids(level, pos, radius(), random);
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 4, 2, 4, 0, 80);
                 return true;
             }
-            if (t == 1) {
-                spray(level, 2);
-                Explosions.condensation(level, pos.add(0, 2, 0), 30, random);
-            }
-            Explosions.burn(level, pos, R, t, 320, random);
+            if (t == 1) spray(level, 2);
+            Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * model.fuelBallSeconds), random);
             for (Warheads.Secondary s : Warheads.MISSILE_SECONDARIES) {
-                // вторичные подрывы сервера (ванильных клубов у них нет): огонь, дым и искры там же и тогда же
+                // вторичные подрывы сервера (ванильных клубов у них нет): огонь и искры там же и тогда же
                 if (s.tick() == t) Explosions.cookoff(level, pos.add(s.dx(), s.dy(), s.dz()), s.power(), random);
             }
             switch (t) {

@@ -2,6 +2,7 @@
 
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
+#moj_import <incoming:smoke.glsl>
 
 // Пелена после ударной волны (client/fx/layer/PallPass): луч из глаза через пиксель кадра пониженного разрешения —
 // до мира за пикселем (SceneDepth, с LOD Distant Horizons; мира нет — до рельефа под пеленой, PallGround) или до выхода
@@ -105,6 +106,14 @@ uniform vec4 PallWilson1;
 uniform sampler2D Sampler7;
 // во сколько раз ярче кажется свет при свете неба кадра (Sight.adapted): свечение гриба — в значениях кадра
 uniform float PallExposure;
+// дым обычных взрывов (smoke.glsl): место глаза в плитке шума клубов — по модулю SMOKE_TILE (xyz), часы, с (w); ветер у
+// дыма, блоков/с (xyz, у вещества на высоте сотни блоков) и период двухфазного шума, с (w); огненные шары, что светят на
+// дым (как FxLights): столбец i — центр от глаза и радиус (0 — нет), свет на белой стене у его поверхности (rgb, линейный,
+// с привыканием глаза)
+uniform vec4 SmokeNoise;
+uniform vec4 SmokeWind;
+uniform mat4 SmokeBalls;
+uniform mat4 SmokeBallLight;
 
 out vec4 fragColor;
 
@@ -1134,6 +1143,102 @@ vec4 mushStep(float t, float cone, out float gap) {
     return sum;
 }
 
+// ---------------------------------------------------------------- дым обычных взрывов (smoke.glsl)
+// Плитка клубов дыма, блоков, и плитка мелких (вчетверо мельче)
+const float SMOKE_TILE = 32.0;
+
+// Клубы дыма в точке p (от глаза) — множитель густоты, в среднем 1 (pallShape, pallDetail: тот же шум, что у пелены).
+// Шум идёт с веществом: двухфазное обновление (Neyret 2003) — две выборки, снесённые со скоростью вещества v (ветер и
+// подъём из сетки) на долю периода, со сдвигом на полпериода, вес — треугольником по фазе: ни одна выборка не уходит
+// дальше периода × скорость, а сумма весов — 1. Мелкие клубы — пока луч их различает (cone — ширина пикселя или треть
+// шага).
+float smokeClumps(vec3 p, vec3 v, float cone) {
+    float period = SmokeWind.w, phase = SmokeNoise.w / period;
+    vec3 base = (p + SmokeNoise.xyz) / SMOKE_TILE;
+    float sum = 0.0;
+    for (int k = 0; k < 2; k++) {
+        float f = fract(phase + 0.5 * float(k));
+        float weight = 1.0 - abs(2.0 * f - 1.0);
+        vec3 q = base - v * (f * period / SMOKE_TILE) + vec3(0.37, 0.13, 0.71) * float(k);
+        vec3 n = texture(PallNoise, q).rgb;
+        float shape = pallShape(n.rg, 0.5);
+        if (cone < SMOKE_TILE / 32.0) shape *= pallDetail(textureLod(PallNoise, q * 4.0 + vec3(0.53, 0.29, 0.17), 0.0).r);
+        sum += weight * shape;
+    }
+    return sum;
+}
+
+// Шаг дыма в месте t луча: ослабление (w) и свет на единицу пути (rgb) — функция источника × ослабление. Вещество — сажа,
+// пыль и капли сетки (альбедо и асимметрия — по долям ослабления), клубы — шумом; свет — как у тела гриба (mushAt): два
+// потока Эддингтона вдоль солнца (толща к солнцу и от него — по сетке без шума, четыре выборки) и по вертикали (небо
+// сверху, земля снизу), прямой пучок солнца с фазой Хеньи–Гринстейна; свет огненных шаров кадра (L·R²/d²) с фазой;
+// своё свечение — Кирхгоф: (1 − ω')·B(T), чёрное тело температуры газа в точке (строка тела таблицы грибов). Под землёй
+// (в штольне, доме) дыма нет: доля наружного воздуха в окне у глаза. gap — сколько по пустому до следующей выборки
+// (0 — вещество здесь, smokeGap), cell — клетка каскада там.
+vec4 smokeStep(float t, float cone, out float gap, out float cell) {
+    vec3 p = gDir * t;
+    vec4 a = smokeFetch(p, 0.0);
+    float sigma = a.x + a.y + a.z;
+    if (sigma < 1e-5) {
+        gap = smokeGap(p, gDir, cell);
+        return vec4(0.0);
+    }
+    gap = 0.0;
+    cell = smokeCell(p);
+    float open = 1.0;
+    if (PallOpenAt.w > 0.5) {
+        vec3 o = p - PallOpenAt.xyz;
+        if (all(greaterThanEqual(o, vec3(0.0))) && all(lessThan(o, PALL_OPEN_SIZE))) open = pallOpenHere(p);
+    }
+    if (open <= 0.0) return vec4(0.0);
+    vec4 b = smokeFetch(p, 1.0);
+    float rise = b.w / sigma;
+    vec3 v = vec3(SmokeWind.x, SmokeWind.y + rise, SmokeWind.z);
+    float clumps = smokeClumps(p, v, cone);
+    float st = sigma * clumps * open;
+    if (st <= 1e-7) return vec4(0.0);
+    vec3 dustW = b.rgb / max(a.y, 1e-7);
+    vec3 w = (a.x * SMOKE_SOOT_W + a.y * dustW + a.z * SMOKE_DROP_W) / sigma;
+    float g = (a.x * SMOKE_SOOT_G + a.y * SMOKE_DUST_G + a.z * SMOKE_DROP_G) / sigma;
+    // толщи к свету по сетке без шума: у точки — с её клубами (тень клуба на себе), дальше — среднее поле
+    float h = 2.0 * cell;
+    float self = st * h;
+    float up = self + smokeSigma(p + vec3(0.0, 3.0 * h, 0.0)) * 5.0 * h;
+    float down = self + smokeSigma(p - vec3(0.0, 3.0 * h, 0.0)) * 5.0 * h;
+    vec3 light = vec3(0.0);
+    if (PallSun.w > 0.0) {
+        float toSun = self + smokeSigma(p + gSun * h) * 1.5 * h + smokeSigma(p + gSun * 4.0 * h) * 4.5 * h;
+        float away = self + smokeSigma(p - gSun * 3.0 * h) * 5.0 * h;
+        float cs = g * dot(-gDir, gSun);
+        light += vec3(pallDiffuse(w.r, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.r, 1.0, 0.0, 0.0, 0.0, cs),
+                pallDiffuse(w.g, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.g, 1.0, 0.0, 0.0, 0.0, cs),
+                pallDiffuse(w.b, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.b, 1.0, 0.0, 0.0, 0.0, cs));
+        light += PallSunLight * (0.25 * hg(g, gC) * exp(-toSun));
+    }
+    vec3 land = PallSunLight * (PALL_LAND * max(PallSun.y, 0.0));
+    float cv = g * gMv;
+    vec3 sky = PallSkyLight, bottom = land * exp(-min((up + down) / gMuS, 30.0));
+    vec3 vertical = vec3(pallDiffuse(w.r, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.r, bottom.r, cv),
+            pallDiffuse(w.g, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.g, bottom.g, cv),
+            pallDiffuse(w.b, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.b, bottom.b, cv));
+    light += max(vertical, vec3(0.0));
+    // огненные шары кадра: ламбертов шар радиуса R светит как L·R²/max(d², R²), сквозь дым на полпути (однократное
+    // рассеяние; изнутри облако светит его же свечение — ниже)
+    for (int i = 0; i < 4; i++) {
+        float r = SmokeBalls[i].w;
+        if (r <= 0.0) continue;
+        vec3 c = SmokeBalls[i].xyz - p;
+        float d2 = max(dot(c, c), r * r), d = sqrt(d2);
+        vec3 l = SmokeBallLight[i].rgb * (r * r / d2);
+        float through = smokeSigma(p + 0.5 * c) * max(d - r, 0.0);
+        light += l * (0.25 * hg(g, dot(gDir, c / max(d, 1e-3))) * exp(-min(through, 30.0)));
+    }
+    // свечение газа: Кирхгоф — поглощённая доля излучает свет чёрного тела своей температуры
+    float kelvin = SMOKE_AIR_K + a.w * 1000.0 / sigma;
+    vec3 bb = kelvin > 600.0 ? mushBlackBody(Sampler7, kelvin) * PallExposure : vec3(0.0);
+    return vec4(st * (w * light + (1.0 - w) * bb), st);
+}
+
 void main() {
     vec2 low = gl_FragCoord.xy;
     ivec2 full = ivec2((floor(low) + 0.5) * PallFrame.z);
@@ -1283,12 +1388,43 @@ void main() {
         dsMax = max((m1 - m0) / 6.0, dsMin);
         tm = m0 + jitter * dsMin;
     }
-    for (int it = 0; it < pallSteps + mSteps; it++) {
+    // дым обычных взрывов: свой ход по сетке (smoke.glsl) — шаг по клетке каскада в точке и по густоте, по пустому — до
+    // клетки, не мельче пикселя; отрезок — рамка дыма до мира за пикселем
+    // шаги по пустым клеткам внутри коробок каскадов — своим счётом (не больше трёх пересечений коробки по N клеток):
+    // иначе пустота между облаками залпа съела бы шаги, и дым за ней не рисовался бы ничем
+    int sk = 0, sSteps = steps + 16, se = 0, sEmpty = 3 * SMOKE_N;
+    float s0 = 1e9, s1 = -1.0, ts = 1e9;
+    if (smokeOn()) {
+        vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
+        s0 = max(ss.x, 0.0);
+        s1 = min(ss.y, scene);
+        if (s1 > s0) ts = s0 + jitter * min(smokeCell(dir * s0), 0.25 * (s1 - s0));
+    }
+    for (int it = 0; it < pallSteps + mSteps + sSteps + sEmpty; it++) {
         bool pallLeft = i < pallSteps && ta < t1;
         // гриб за почти непрозрачным для себя же лучом не виден и в дымке (его свет — с долей transmit)
         bool mushLeft = mk < mSteps && tm < m1 && transmit >= 0.005;
-        if (!pallLeft && !mushLeft) break;
-        if (pallLeft && (!mushLeft || ta <= tm)) {
+        bool smokeLeft = sk < sSteps && se < sEmpty && ts < s1 && transmit >= 0.005;
+        if (!pallLeft && !mushLeft && !smokeLeft) break;
+        if (smokeLeft && (!pallLeft || ts < ta) && (!mushLeft || ts < tm)) {
+            float cone = max(ts * gPixel, 0.0);
+            float gap, cell;
+            vec4 r = smokeStep(ts, cone, gap, cell);
+            // по пустому — до следующей клетки или коробки каскада (со сдвигом кадра на долю клетки); в веществе — на
+            // полтолщи, от полклетки до двух, не мельче пикселя
+            float ds = gap > 0.0 ? gap + jitter * cell : clamp(0.5 / max(r.w, 1e-6), 0.5 * cell, 2.0 * cell);
+            ds = min(max(ds, 0.35 * cone), max(s1 - ts, 1e-3));
+            if (r.w > 1e-7) {
+                passesBefore(ts, light, transmit, lost);
+                float tr = exp(-r.w * ds), air = pallAir(PallAir, ts, dir.y);
+                light += transmit * air * r.rgb * (1.0 - tr) / r.w;
+                lost += transmit * (1.0 - air) * (1.0 - tr);
+                transmit *= tr;
+            }
+            ts += ds;
+            if (gap > 0.0) se += 1;
+            else sk += 1;
+        } else if (pallLeft && (!mushLeft || ta <= tm)) {
             // конец шага: обычная граница или вход в отрезок головы, а в нём — ближняя из границы его сетки (или выхода) и
             // обычной: у глаза обычные гуще сетки головы, и стена, проходящая сквозь зрителя, не теряла бы ближнюю пыль
             float next = nextBase, grid = nextBase - lastBase;

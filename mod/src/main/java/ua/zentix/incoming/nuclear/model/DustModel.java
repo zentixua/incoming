@@ -55,6 +55,17 @@ public final class DustModel {
         K_MIX = sum;
     }
 
+    /**
+     * Доля пыли смеси корзин, что ещё в воздухе через {@code seconds} у слоя высотой {@code height} м: каждая корзина
+     * выпадает из перемешанного слоя e-кратно за высоту / скорость оседания ({@link #SETTLE}). Облака обычных взрывов
+     * ({@code client/fx/smoke/CloudModel}).
+     */
+    public static double aloft(double seconds, double height) {
+        double h = Math.max(height, 1), sum = 0;
+        for (int i = 0; i < SHARE.length; i++) sum += SHARE[i] * Math.exp(-SETTLE[i] * Math.max(seconds, 0) / h);
+        return sum;
+    }
+
     /** Шероховатость K_s пластины Шлихтинга, м (Gaj &amp; Small, ур. 7). */
     static final double ROUGHNESS = 0.05;
     /** Грунт уходит во взвесь с u* в столько порогов срыва (Owen 1964, через Gaj &amp; Small §3.2). */
