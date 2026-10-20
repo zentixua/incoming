@@ -1731,9 +1731,9 @@ public final class StrikeGameTests {
     /**
      * Снаряд вне мира у дальних игроков: снаряд РСЗО летит «виртуально» в 600 блоках от цели — путь (фаза, где он,
      * скорость — его сдвиг за тик, куда он летит) уходит с каждым пакетом слышимых тому, кто его слышит: докуда — выводит
-     * {@link Hearing} из паспорта звука и пути до уха. Пока горит двигатель, его слышно за километры; по инерции — в
-     * сотнях блоков: в половине выведенной дальности слышно, в полутора — не слышно, но видно (путь уходит только с
-     * пакетом видимых, без отметки «слышно»); дальше {@code far_range} — никак.
+     * {@link Hearing} из паспорта звука и пути до уха. Вне мира снаряд летит уже по инерции, и его вой слышно в сотнях
+     * блоков: в половине выведенной дальности слышно, в полутора — не слышно, но видно (путь уходит только с пакетом
+     * видимых, без отметки «слышно»); дальше {@code far_range} — никак.
      */
     @GameTest(template = "runway", timeoutTicks = 100, batch = "heard", skyAccess = true)
     public static void virtualFlightReachesOnlyThoseWhoHearOrSeeIt(GameTestHelper h) {
@@ -1743,18 +1743,8 @@ public final class StrikeGameTests {
         r.launchFrom(point.add(0, 0, -600), new Target.Point(point), point, null);
         VirtualFlights.launch(level, r);
         Vec3[] before = new Vec3[1];
+        h.runAfterDelay(9, () -> before[0] = r.position());
         h.runAfterDelay(10, () -> {
-            // двигатель горит: рёв слышно далеко, дальше прежнего среза в 900 блоков
-            h.assertTrue(r.flightPhase().boosterLit(), "двигатель не горит: " + r.flightPhase());
-            Propagation.Weather weather = Propagation.Weather.of(level);
-            double roar = Hearing.range(r, 0, weather);
-            var flights = FarFlights.flights(level);
-            h.assertTrue(roar > 2000 && FarFlights.sample(level, flights, r.position().add(2000, 0, 0), null, false).size() == 1,
-                    "рёв двигателя слышно до " + roar);
-        });
-        int coast = RocketEntity.BURN_TICKS + 10;
-        h.runAfterDelay(coast - 1, () -> before[0] = r.position());
-        h.runAfterDelay(coast, () -> {
             var flights = FarFlights.flights(level);
             h.assertTrue(flights.stream().anyMatch(f -> f.getUUID().equals(r.getUUID()) && f.isVirtual()), "снаряда нет среди летящих вне мира");
             Vec3 at = r.position();

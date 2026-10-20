@@ -26,7 +26,8 @@ against air defense send a salvo or route it around.
 
 ![Lancet catapult](img/weapon-lancet-launcher.jpg)
 
-A small drone launched from a catapult. It circles over the target while you pick what to hit in its
+A small drone launched from a catapult. Its electric motor is quiet: it is heard only a few hundred blocks away. It
+circles over the target while you pick what to hit in its
 [camera](camera.md#lancet), and does not miss. The blast is small: enough for a vehicle, a player or a single house.
 
 ## Cruise missile

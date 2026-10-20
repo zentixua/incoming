@@ -13,8 +13,12 @@ is announced to everyone within 20 km.
 | ⚠ MISSILE THREAT ⚠ | cruise missile, Grad | 15 and 8 s |
 | ☢ MISSILE ATTACK ☢ | ICBM | 90 s, with a countdown |
 
-Projectiles can be heard and seen from far away, up to 8 km. Sound travels at the speed of sound: a distant flash
-shows up before you hear the explosion.
+Projectiles can be seen from up to 8 km away. How far you hear one depends on its engine and on the weather. On a quiet
+night a Shahed is heard about 2.5 km away, a Lancet only a few hundred blocks away, and a cruise missile's turbine or a
+burning rocket motor many kilometres away. By day the warm ground bends sound upwards, and in rain the noise hides it,
+so you hear everything from closer. Sound travels at the speed of sound: a distant flash shows up before you hear the
+explosion, and you hear a fast projectile only shortly before it arrives. A projectile faster than sound gives no
+warning: first you hear the crack of its shock wave, then its own sound.
 
 ## Cover
 
