@@ -10,7 +10,7 @@ Each player has their own, stored in `config/incoming-client.toml`.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Camera shake | 1 | 0: no shake |
+| Camera shake | 1 | how hard blast waves jolt and lean the view; 0: no shake |
 | Flash brightness | 1 | 0: no on-screen flash from explosions |
 | Show strikes in flight | on | list of your projectiles and marks in the world |
 | Projectile camera on launch | off | the camera shows every launch by itself |

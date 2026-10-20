@@ -1,6 +1,9 @@
 package ua.zentix.incoming.client.sound;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.nuclear.model.HearingModel;
+import ua.zentix.incoming.strike.WeaponType;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,8 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Далёкий взрыв под открытым небом по ISO 9613-2: кромка, земля, зона тени днём, дождь, громкость в игре. */
 class OutdoorTest {
     /** Докуда слышно и громкость ближней модели на её краю: шахед, крылатая ракета, РСЗО, бомба. */
-    private static final double[][] KINDS = {{20_000, BlastMix.v640(BlastMix.DRONE)}, {40_000, BlastMix.v640(BlastMix.MISSILE)},
-            {15_000, BlastMix.v640(BlastMix.ROCKET)}, {30_000, BlastSounds.BUNKER_FAR_FLOOR}};
+    private static final double[][] KINDS = {kind(WeaponType.DRONE), kind(WeaponType.MISSILE), kind(WeaponType.ROCKET), kind(WeaponType.LOITER),
+            {BlastSounds.BUNKER_RANGE, BlastSounds.BUNKER_FAR_FLOOR}};
+
+    /** Докуда слышно взрыв оружия и громкость ближней модели на её краю. */
+    private static double[] kind(WeaponType w) {
+        BlastSource s = BlastSource.of(w, false);
+        return new double[]{HearingModel.audibleRangeM(s.chargeKg()), BlastMix.v640(s)};
+    }
 
     /** Источник на 2 м, ухо на 1,7 м, одна земля у обоих, сухо. */
     private static Outdoor.Path path(double d, double z, double g, double day) {

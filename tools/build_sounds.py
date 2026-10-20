@@ -24,12 +24,11 @@
 Как собран каждый звук:
 - петли моторов (шахед, ракета, B-2, свист бомбы, ветер, дождь) — стационарный кусок записи без шва (хвост плавно
   вклеен в начало): клиент крутит их бесконечно и сам ставит громкость, тон и Доплер;
-- взрывы (раздел blasts) — из оригиналов, по ракурсам: вблизи, на средней дистанции, вдали, удар низа и эхо вокруг
-  (стерео); клиент сводит их по расстоянию (client/sound/BlastMix). Без мягкого ограничителя: громкость — мгновенная
+- взрывы (раздел blasts) — из оригиналов, по ракурсам: вблизи, на средней дистанции, вдали и удар низа; клиент сводит
+  их по давлению и воздуху у уха, тон — по заряду (client/sound/BlastMix), эхо — от рельефа (client/sound/BlastEchoes). Без мягкого ограничителя: громкость — мгновенная
   громкость EBU R128 (master), пики — прозрачный ограничитель не глубже 6 дБ; удар — с первого отсчёта файла;
 - то, чего не записать (бурение бетонобойной бомбы, звон в ушах, захват цели), — синтез из synth_mod_sounds.py.
-Звуки моно (Minecraft размещает в пространстве только моно), кроме эха взрывов: оно звучит вокруг слушателя, а не
-из точки, и играется без места в мире.
+Звуки моно (Minecraft размещает в пространстве только моно).
 У каждого раздела свой генератор случайных чисел (от имени раздела): правка одного раздела не меняет другие.
 """
 import json
@@ -98,13 +97,8 @@ SOURCES = {
     165808: ("sidohzen", "Explosion with debris - authentic. 4kg TNT", CC0, "165/165808_2872744"),
     811474: ("deleted_user_9900733", "UAV explosion in the city", CC0, "811/811474_9900733"),
     125937: ("alienistcog", "merrimack-st-demolition.aif", CC0, "125/125937_296888"),
-    160794: ("Evan Cruder", "120527 08 Dynamite 4 [double].WAV", CC0, "160/160794_1241124"),
     82682: ("juskiddink", "Quarry blasting.wav", BY4, "82/82682_649468"),
     866989: ("tim.kahn", "EXPLReal_Centennial Mills Watertower Demolition", BY4, "866/866989_7037"),
-    426163: ("Nanashi", "M224 Mortar Impact Medium Distance 02", BY4, "426/426163_61794"),
-    426164: ("Nanashi", "M224 Mortar Impact Medium Distance 01", BY4, "426/426164_61794"),
-    426166: ("Nanashi", "M224 Mortar Impact Distant 01", BY4, "426/426166_61794"),
-    426167: ("Nanashi", "M224 Mortar Impact Distant 03", BY4, "426/426167_61794"),
     182431: ("qubodup", "Explosive 1 v2 [DOD 130303].flac", CC0, "182/182431_71257"),
     741174: ("qubodup", "Huge Explosion", CC0, "741/741174_71257"),
     741175: ("qubodup", "Massive Explosion", CC0, "741/741175_71257"),
@@ -373,16 +367,10 @@ def friedlander(dur, positive, b=1.2):
     return (1 - t / positive) * np.exp(-b * t / positive)
 
 
-def widen(x, side):
-    """Ширина стерео: боковой сигнал (L − R) × side — эхо от домов и склонов приходит со всех сторон."""
-    m, s = (x[:, 0] + x[:, 1]) / 2, (x[:, 0] - x[:, 1]) / 2 * side
-    return np.stack([m + s, m - s], axis=1)
-
-
 # ---------------------------------------------------------------- петли моторов
 
 # Громкость петель моторов, LUFS (наибольшая мгновенная, как у взрывов): тише ближнего ракурса взрыва своего снаряда
-# (NEAR_LUFS, ROCKET_LUFS) — взрыв громче снаряда, который в него влетел (петли с мягким ограничителем выходят громче
+# (NEAR_LUFS) — взрыв громче снаряда, который в него влетел (петли с мягким ограничителем выходят громче
 # взрывов, −6…−9 LUFS). Слои одного мотора — одной громкости: клиент сводит их по мощности (EngineSound.share).
 DRONE_LUFS, MISSILE_LUFS, LOITER_LUFS, ROCKET_AIR_LUFS = -15.0, -13.0, -16.0, -20.0
 # Мгновенная громкость ровной петли ходит не больше чем на столько, дБ (СКО по окнам 400 мс): у ровных петель
@@ -610,7 +598,7 @@ def bomber():
 
 # Громкость ракурсов взрыва, LUFS (наибольшая мгновенная, EBU R128; у удара низа — без взвешивания, дБ): каждый вариант
 # сведён ровно на неё (level), клиент сводит ракурсы по расстоянию с этими же числами (client/sound/BlastMix).
-NEAR_LUFS, MID_LUFS, FAR_LUFS, TAIL_LUFS, ROCKET_LUFS, SUB_DB = -13.5, -13.5, -15.0, -15.0, -16.0, -10.0
+NEAR_LUFS, MID_LUFS, FAR_LUFS, SUB_DB = -13.5, -13.5, -15.0, -10.0
 
 # Записи взрывов: (id, начало, конец, канал) — из каждой три ракурса одного и того же взрыва: вблизи, на средней
 # дистанции и вдали. Ракурсы одного варианта клиент выбирает одним зерном (одинаковое число вариантов), поэтому
@@ -631,16 +619,16 @@ def level(sigs, lufs, meter=None):
 
 
 def blasts():
-    """Взрывы по ракурсам — из оригиналов без потерь, без перегруженных записей. Клиент сводит ракурсы по расстоянию
-    (BlastMix): вблизи — удар и тело взрыва, ниже — «удар в грудь», вокруг — эхо (стерео); дальше — средний ракурс
-    с эхом от склонов и домов, вдали — раскат без верхов. Вариант выбирает зерно взрыва."""
-    PRELOAD.update(["blast.near", "blast.mid", "blast.far", "blast.sub", "blast.tail", "rocket.blast"])
+    """Взрывы по ракурсам — из оригиналов без потерь, без перегруженных записей. Клиент сводит ракурсы по давлению и
+    воздуху у уха (BlastMix): вблизи — удар и тело взрыва, ниже — «удар в грудь»; дальше — средний ракурс с эхом от
+    склонов и домов, вдали — раскат без верхов. Вариант выбирает зерно взрыва."""
+    PRELOAD.update(["blast.near", "blast.mid", "blast.far", "blast.sub"])
     near, mid, far = [], [], []
     for fid, a, b, ch in BLASTS:
         x = src(fid, orig=True) if ch is None else src(fid, orig=True, stereo=True)[:, ch]
         x = F(onset(cut(x, a, b), -30), lo=35)
         t = np.arange(len(x)) / SR
-        # вблизи: удар и тело взрыва, эхо на 10 дБ за секунду тише (его даёт blast.tail); ударная волна — форма
+        # вблизи: удар и тело взрыва, эхо на 10 дБ за секунду тише (его дают склоны вокруг — эхо клиента); ударная волна — форма
         # Фридлендера, которую записи издалека теряют (положительная фаза ~8 мс — заряд ~50 кг в двух десятках метров)
         n = x[:int(4.2 * SR)] * 10 ** (-10 * np.clip(t[:int(4.2 * SR)] - 0.35, 0, None) / 20)
         shock = F(friedlander(0.15, 0.008), hi=9000)
@@ -668,28 +656,6 @@ def blasts():
         x = mix((s, 1.0), (thump, 0.8), (rumble, 0.4))
         subs.append(master(fade(x, 0, 1.0), SUB_DB, meter=low_level))
     variants("blast.sub", "subtitles.incoming.blast", "blast_sub", level(subs, SUB_DB, low_level), level=0.2)
-
-    # эхо вокруг: те же записи после удара — отражения от склонов, домов и леса, стерео шире; играется без места
-    # в мире (прямой звук идёт из точки взрыва, эхо приходит со всех сторон)
-    tails = []
-    for fid, a, b, side, hi in [(866989, 181.0, 189.0, 1.0, None), (251401, 0.0, 9.5, 1.6, None),
-                                (811474, 5.1, 15.0, 2.0, None), (125937, 10.0, 18.0, 1.4, None),
-                                (160794, 4.95, 13.0, 1.6, 6000)]:
-        x = onset(cut(src(fid, stereo=True, orig=True), a, b), -30)
-        t = np.arange(len(x)) / SR
-        rise = np.clip((t - 0.08) / 0.32, 0, 1)
-        x = chans(F, x * (rise * rise * (3 - 2 * rise))[:, None], lo=60, hi=hi)  # прямой звук убран, низ — у blast.sub
-        x = widen(chans(gate_hiss, x), side)
-        tails.append(master(chans(trim_tail, x, -50, 0.8), TAIL_LUFS))
-    variants("blast.tail", None, "blast_tail", level(tails, TAIL_LUFS), level=0.2)
-
-    # разрывы РСЗО (122 мм): миномётные мины в 600–900 м — сухой удар и короткий раскат
-    rockets = []
-    for fid, a, b in [(426164, 0.0, 1.6), (426163, 0.0, 1.9), (426167, 0.0, 1.05), (426167, 1.05, 2.0),
-                      (426166, 0.0, 1.1)]:
-        x = F(onset(cut(src(fid, orig=True), a, b)), lo=30)
-        rockets.append(master(fade(x, 0, 0.15), ROCKET_LUFS))
-    variants("rocket.blast", "subtitles.incoming.blast", "rocket_blast", level(rockets, ROCKET_LUFS), level=0.2)
 
     # обломки: камни и земля падают на рядом стоящих
     deb = []
@@ -906,11 +872,11 @@ def grid():
 ORDER = ["drone.engine", "drone.engine.far", "launch.booster", "booster.engine", "booster.separate", "missile.engine",
          "missile.engine.rear", "missile.dive", "missile.engine.far", "missile.whistle", "bomber.engine",
          "bomber.engine.far", "bomb.fall", "bomb.fall.far", "bomb.drill", "siren", "blast.near", "blast.sub",
-         "blast.far", "blast.mid", "blast.tail", "debris.fall", "blast.fire", "bomb.crack", "bomb.impact", "bomb.quake", "bomb.deep", "bomb.vent", "bomb.cave",
+         "blast.far", "blast.mid", "debris.fall", "blast.fire", "bomb.crack", "bomb.impact", "bomb.quake", "bomb.deep", "bomb.vent", "bomb.cave",
          "designator.lock", "silent", "nuke.alarm", "nuke.launch", "nuke.crack", "nuke.boom_far",
          "nuke.wind", "nuke.glass", "nuke.tinnitus", "nuke.rain", "nuke.crack_far", "nuke.fire",
          "nuke.fire_wind", "nuke.collapse", "geiger.click", "rocket.launch",
-         "rocket.incoming", "rocket.blast", "loiter.engine",
+         "rocket.incoming", "loiter.engine",
          "loiter.engine.far", "loiter.dive", "loiter.launch", "grid.fail", "grid.spark", "grid.hum", "grid.power_down",
          "grid.power_up"]
 

@@ -27,7 +27,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | craigsmith | [S10-19 Falling wooden beam; big interior crash; house collapses; long.wav](https://freesound.org/s/675967/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | csengeri | [Close lightning strike 2018 07 07](https://freesound.org/s/434359/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | deleted_user_9900733 | [UAV explosion in the city](https://freesound.org/s/811474/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| Evan Cruder | [120527 08 Dynamite 4 [double].WAV](https://freesound.org/s/160794/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | felix.blume | [Dynamite explosion in the mountain](https://freesound.org/s/251401/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | felix.blume | [Big dynamite explosion in an open mine (Chile)](https://freesound.org/s/475780/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | felix.blume | [Rocket Launch Rumble at Canaveral](https://freesound.org/s/613855/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
@@ -40,10 +39,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | kyles | [neon tube smash explode shatter glass debris.flac](https://freesound.org/s/453499/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | LukaCafuka | [Glass panel shattering](https://freesound.org/s/758207/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | minian89 | [four_jet_engines.wav](https://freesound.org/s/152567/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| Nanashi | [M224 Mortar Impact Medium Distance 02](https://freesound.org/s/426163/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| Nanashi | [M224 Mortar Impact Medium Distance 01](https://freesound.org/s/426164/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| Nanashi | [M224 Mortar Impact Distant 01](https://freesound.org/s/426166/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| Nanashi | [M224 Mortar Impact Distant 03](https://freesound.org/s/426167/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | nicotep | [EDF_Electrical_substation](https://freesound.org/s/547900/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Nox_Sound | [Foley_Stones_Falls_Debris_Stereo_DR05.wav](https://freesound.org/s/550342/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | OBXJohn | [Gym Lights Powering Up](https://freesound.org/s/262509/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |

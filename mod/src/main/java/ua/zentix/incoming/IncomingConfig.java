@@ -259,7 +259,8 @@ public final class IncomingConfig {
             b.translation("incoming.config.visibility").push("visibility");
             farRange = b.comment("How far players see and hear projectiles in flight and conventional blasts, blocks. Beyond render distance they show",
                             "as a model (a dot when smaller than a couple of pixels), flame, trail, fireball and smoke column; sound arrives with",
-                            "the speed-of-sound delay. Haze hides them anyway further out; a lower value sends fewer packets to players.")
+                            "the speed-of-sound delay. Haze hides them anyway further out; a lower value sends fewer packets to players.",
+                            "A blast is also sent as far as its sound carries on a quiet night, which depends on its charge.")
                     .translation("incoming.config.far_range").defineInRange("far_range", 8000, 640, 32_000);
             b.pop();
 

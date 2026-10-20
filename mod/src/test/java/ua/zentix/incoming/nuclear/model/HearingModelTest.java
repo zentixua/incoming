@@ -141,4 +141,63 @@ class HearingModelTest {
         assertEquals(0.97725, HearingModel.normal(2), 1e-5);
         assertEquals(0.01, HearingModel.normal(-2.326), 1e-4);
     }
+
+    /** Один закон: у долгой волны (ядерная, фаза от 0,2 с) энергия всей волны — энергия скачка, нынешние числа ядерки. */
+    @Test
+    void longWaveEnergyIsTheStepEnergy() {
+        for (double pa : new double[]{200, 5000, 30_000}) {
+            for (double t : new double[]{0.2, 0.6, 1.3}) {
+                assertEquals(HearingModel.exposure(pa), HearingModel.exposure(pa, t), 0.02, pa + " Па, фаза " + t);
+            }
+        }
+        // интеграл A-энергии скачка — та самая постоянная
+        assertEquals(HearingModel.STEP_A, HearingModel.exposure(1, 1e6) - 20 * Math.log10(1 / HearingModel.REFERENCE_PA), 0.01);
+    }
+
+    /**
+     * Обычный взрыв: фаза — миллисекунды, слышна вся волна, и её энергия меньше энергии скачка того же пика. Порог тот
+     * же — суточная доза: у шахеда сдвиг начинается в ~75 м (пик там ~168 дБ, 0,8 psi), у «Ланцета» — в ~35 м; дальше
+     * сдвига нет, ближе — есть.
+     */
+    @Test
+    void conventionalBlastShiftsHearingOnlyInsideTheThreshold() {
+        for (double[] c : new double[][]{{50, 75}, {3, 33}, {450, 150}}) {
+            double kg = c[0], onset = onset(kg);
+            assertEquals(c[1], onset, 0.15 * c[1], kg + " кг: порог сдвига");
+            assertEquals(0, HearingModel.shift(exposureAt(kg, 1.1 * onset)), 1e-9, kg + " кг: дальше порога сдвига нет");
+            assertTrue(HearingModel.shift(exposureAt(kg, 0.8 * onset)) > 1, kg + " кг: ближе порога — сдвиг");
+            double pa = 1000 * BlastModel.surfaceOverpressureKpa(onset, kg);
+            assertTrue(HearingModel.exposure(pa, BlastModel.chemicalPhaseSeconds(onset, kg, true)) < HearingModel.exposure(pa), "меньше скачка");
+            assertTrue(20 * Math.log10(pa / HearingModel.REFERENCE_PA) > 160, kg + " кг: пик на пороге");
+        }
+    }
+
+    /** Докуда слышно: дальше с зарядом; у ракеты — дальше прежних 8 км пакетов; на этой дальности энергия — фон ночи. */
+    @Test
+    void audibleRangeGrowsWithChargeAndEndsAtTheNightBackground() {
+        double prev = 0;
+        for (double kg : new double[]{3, 6.4, 50, 450}) {
+            double r = HearingModel.audibleRangeM(kg);
+            assertTrue(r > prev, kg + " кг: " + r);
+            assertEquals(HearingModel.QUIET_NIGHT_A + 10 * Math.log10(HearingModel.INTEGRATION_S), HearingModel.blastExposureAt(kg, r), 0.05);
+            prev = r;
+        }
+        assertTrue(HearingModel.audibleRangeM(450) > 8000);
+        assertEquals(0, HearingModel.audibleRangeM(0));
+    }
+
+    private static double exposureAt(double kg, double m) {
+        return HearingModel.exposure(1000 * BlastModel.surfaceOverpressureKpa(m, kg), BlastModel.chemicalPhaseSeconds(m, kg, true));
+    }
+
+    /** Где энергия волны заряда {@code kg} у уха — порог сдвига, м. */
+    private static double onset(double kg) {
+        double lo = 1, hi = 10_000;
+        for (int i = 0; i < 60; i++) {
+            double mid = Math.sqrt(lo * hi);
+            if (exposureAt(kg, mid) > HearingModel.ONSET_EXPOSURE) lo = mid;
+            else hi = mid;
+        }
+        return lo;
+    }
 }

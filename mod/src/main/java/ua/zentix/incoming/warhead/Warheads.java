@@ -39,6 +39,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModTags;
@@ -505,7 +506,9 @@ public final class Warheads {
             // высоту поверхности клиент берёт только у бомбы (BunkerBlast, BlastEffects): здесь — точка удара, без чтения
             // высоты, которое у неготового чанка грузило бы его или ждало загрузки
             float surface = (float) pos.y;
-            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, IncomingConfig.SERVER.farRange.get(),
+            // видно — до far_range, слышно — докуда звук взрыва его заряда тихой ночью выше фона (HearingModel)
+            double reach = Math.max(IncomingConfig.SERVER.farRange.get(), HearingModel.audibleRangeM(weapon.spec().charge()));
+            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
                     new S2C.Blast(kind, pos, mat.ordinal(), surface, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID), weapon.id()));
             main = List.of(explode(level, area, List.of(), pos, power(weapon), false, direct, owner, null));
         }

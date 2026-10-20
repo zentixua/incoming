@@ -13,12 +13,21 @@ is announced to everyone within 20 km.
 | ⚠ MISSILE THREAT ⚠ | cruise missile, Grad | 15 and 8 s |
 | ☢ MISSILE ATTACK ☢ | ICBM | 90 s, with a countdown |
 
-Projectiles can be heard and seen from far away, up to 8 km. Sound travels at the speed of sound: a distant flash
-shows up before you hear the explosion.
+Projectiles in flight can be heard and seen from far away, up to 8 km. An explosion is heard as far as its charge
+carries: on a quiet night even a Lancet or a Grad rocket rumbles tens of kilometres away, a cruise missile farther; by
+day, behind hills and in rain much less. A small charge sounds short and sharp, a big one low and long. Sound travels at
+the speed of sound: a distant flash shows up before you hear the explosion, and its echo comes back from hills later
+still.
 
 ## Cover
 
 A blast hits everyone within its radius, you included, and debris flies far.
+
+The blast wave reaches further than the damage. When it passes you, it shoves you with one sharp jolt: a Shahed within
+about 20 blocks knocks you off balance, a few hundred blocks away you barely feel it. A wave strong enough to hurt the
+ears muffles your hearing and makes your ears ring for game hours, like after a nuclear blast: a Shahed within about 75
+blocks, a Lancet within about 35, a cruise missile within about 150. A wall, a house or a hill between you and the blast
+softens both. Hearing damage can be turned off in the [settings](settings.md).
 
 - **Get underground.** Earth and thick walls stop a blast; underground and under water even glass stays intact.
 - **The bunker buster** goes through about 30 blocks of stone and explodes inside. Only depth protects against it, or

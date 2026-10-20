@@ -68,7 +68,7 @@ paths:
     волны; только вживую).
   - `MobPanic` — паника мобов: своя цель бегства каждому `PathfinderMob` при входе в мир, будят вспышка
     (`NuclearWarhead.expose`) и волна (`BlastBody.hit`).
-- `client/nuclear/` после удара: `NukeEchoes` — эхо от рельефа (геометрия `client/sound/TerrainEcho`, сведение
+- `client/nuclear/` после удара: `NukeEchoes` — эхо от рельефа (общий `client/sound/BlastEchoes`, геометрия `TerrainEcho`, сведение
   `EchoMix`, игра — `OwnSources`), `NukeAfter` — горящий город (модель огня `FireField`, огонь в своих чанках
   `FireWatch`, гул и ветер в огонь, обрушения, вторичные взрывы), `AnimalSilence` — тишина животных.
 
