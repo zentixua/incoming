@@ -111,9 +111,11 @@ public final class FlightTrack implements Acoustics.Path {
 
     private void put(long tick, Sample s) {
         if (first < 0) first = tick;
-        if (last >= 0 && tick == last + 1 && tick > first) {
-            int j = (int) (last % CAPACITY);
-            maxSpeed = Math.max(maxSpeed, Math.sqrt(sq(s.pos.x - xs[j]) + sq(s.pos.y - ys[j]) + sq(s.pos.z - zs[j])));
+        // сдвиг от прошлой точки (у поправки того же тика — от точки перед ней), блоков за тик
+        long from = tick > last ? last : previous;
+        if (from >= 0 && from >= first && tick > from) {
+            int j = (int) (from % CAPACITY);
+            maxSpeed = Math.max(maxSpeed, Math.sqrt(sq(s.pos.x - xs[j]) + sq(s.pos.y - ys[j]) + sq(s.pos.z - zs[j])) / (tick - from));
         }
         maxSpeed = Math.max(maxSpeed, s.vel.length());
         last = tick;

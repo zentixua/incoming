@@ -26,7 +26,7 @@ public record Spectrum(double[] bands) {
         return bands[b];
     }
 
-    /** На сколько A-уровень мощности ниже уровня без взвешивания, дБ (≤ 0). */
+    /** На сколько A-уровень мощности отличается от уровня без взвешивания, дБ (у низких спектров — меньше нуля). */
     public double aWeighting() {
         double sum = 0;
         for (int b = 0; b < bands.length; b++) sum += Math.pow(10, (bands[b] + Propagation.A_WEIGHT[b]) / 10);

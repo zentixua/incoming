@@ -129,6 +129,29 @@ class AcousticsTest {
     }
 
     @Test
+    void rootIsFoundEvenWhenTheSpeedBoundIsFarTooHigh() {
+        // скачок пути между тиками завышает скорость сверху: шаги поиска мельчают, но корень в 19 км находится
+        Acoustics.Path still = new Acoustics.Path() {
+            @Override
+            public void at(double t, double[] out) {
+                out[0] = 19_000;
+                out[1] = out[2] = 0;
+            }
+
+            @Override
+            public double start() {
+                return -1300;
+            }
+
+            @Override
+            public double maxSpeed() {
+                return 1000;
+            }
+        };
+        assertEquals(-19_000 / Acoustics.SPEED, Acoustics.emissionTime(still, 0, 0, 0, 0), 1e-3);
+    }
+
+    @Test
     void approachingSourceSoundsHigherRecedingLower() {
         double c = Acoustics.SPEED;
         // приближается со скоростью c/2: частота ×2; удаляется с c/2: ×2/3

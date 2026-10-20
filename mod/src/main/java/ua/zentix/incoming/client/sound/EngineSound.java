@@ -62,9 +62,9 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         BOMB_DRILL(() -> ModSounds.BOMB_DRILL.get(), Noise.Part.DRILL, 0),
         /** Стартовый ускоритель шахеда и ракеты, двигатель МБР и снаряда РСЗО; этот же слой отмечает поджиг и отделение. */
         BOOSTER(() -> ModSounds.BOOSTER_ENGINE.get(), Noise.Part.MOTOR, 0),
-        /** Снаряд РСЗО после того, как догорел двигатель: вой рассекаемого воздуха. */
+        /** Снаряд РСЗО: вой рассекаемого воздуха (пока горит двигатель — под его рёвом, после — один). */
         ROCKET_AIR(() -> ModSounds.ROCKET_INCOMING.get(), Noise.Part.BODY, 0),
-        /** Барражирующий боеприпас: электромотор с винтом вблизи и вдали, ветер в пике. */
+        /** Барражирующий боеприпас: электромотор с винтом вблизи и вдали, рассекаемый воздух (громче мотора — в пике). */
         LOITER_NEAR(() -> ModSounds.LOITER_ENGINE.get(), Noise.Part.ENGINE, 0),
         LOITER_FAR(() -> ModSounds.LOITER_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
         LOITER_DIVE(() -> ModSounds.LOITER_DIVE.get(), Noise.Part.BODY, 0);
@@ -85,7 +85,8 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         /** Громкость и тон слоя для того, что слушатель слышит сейчас (до сглаживания). */
         Tone tone(FlightTrack track, Emission e) {
             Noise noise = noise(track);
-            Emission.Heard heard = e.heard(noise, part, track.drilling());
+            boolean drilling = e.phase() == FlightPhase.DRILL.ordinal();
+            Emission.Heard heard = e.heard(noise, part, drilling);
             if (heard.level() == Noise.SILENT) return Tone.SILENT;
             FlightPhase ph = FlightPhase.byId(e.phase());
             double d = e.distance(), age = e.phaseAge(), v = e.velocity().length();
@@ -135,7 +136,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
             }
             double gain = Loudness.gain(level, heard.margin() + level - heard.level()) * share;
             // дальняя запись уже прошла FAR_AIR воздуха: фильтр — только сверх него
-            double highs = this.air > 0 ? Math.min(1, heard.highs() / e.heardAt(noise, part, track.drilling(), this.air)) : heard.highs();
+            double highs = this.air > 0 ? Math.min(1, heard.highs() / e.heardAt(noise, part, drilling, this.air)) : heard.highs();
             // камера снаряда: слушатель сидит на нём самом — мотор в упор, но не оглушающе (не физика: камера —
             // взгляд оператора, а не уши на корпусе)
             if (e.onboard()) gain *= 0.5;

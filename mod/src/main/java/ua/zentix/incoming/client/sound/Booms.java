@@ -39,7 +39,8 @@ final class Booms {
      * или долгая) и тон, растягивающий её до длительности волны; {@code null} — снаряд тогда шёл не быстрее звука.
      */
     static Crack crack(FlightTrack track, double te, Vec3 ear, Propagation.Weather weather) {
-        if (te < track.start() + 2) return null;
+        // и не на продолжении пути после последней записи: там он лишь дотянут по последней скорости
+        if (te < track.start() + 2 || te > track.lastTick() || !track.covers(te)) return null;
         Noise.Body body = EngineSound.noise(track).body();
         Vec3 v = track.velocity(te);
         double mach = v.length() / Acoustics.SPEED;

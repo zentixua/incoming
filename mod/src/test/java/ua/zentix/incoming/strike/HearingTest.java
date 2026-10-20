@@ -58,11 +58,19 @@ class HearingTest {
         assertTrue(shahed < bomber, "B-2 " + bomber);
         assertTrue(booster > shahed, "ускоритель " + booster);
         assertTrue(gradLaunch > gradAir, "сход " + gradLaunch + ", вой " + gradAir);
-        assertTrue(icbm >= gradLaunch && icbm >= booster && icbm >= missile, "МБР " + icbm);
-        // и никто не слышен дальше, чем клиент помнит путь
-        for (double r : new double[] {lancet, shahed, missile, bomber, booster, gradLaunch, gradAir, icbm}) {
-            assertTrue(r <= Hearing.RANGE, "дальность " + r);
-        }
+        // ракетные двигатели слышно дальше, чем клиент помнит путь (Hearing.RANGE): их порядок — по запасу над фоном
+        // на одном расстоянии
+        double boosterAt = margin(WeaponSpec.DRONE.airframe(), FlightPhase.BOOST, 1), gradAt = margin(WeaponSpec.ROCKET.airframe(), FlightPhase.BOOST, 2);
+        double icbmAt = margin(WeaponSpec.NUKE.airframe(), FlightPhase.BOOST, 5), missileAt = margin(WeaponSpec.MISSILE.airframe(), FlightPhase.CRUISE, 4);
+        assertTrue(icbmAt > gradAt && icbmAt > boosterAt && icbmAt > missileAt, "МБР " + icbmAt + ", «Град» " + gradAt + ", ускоритель " + boosterAt);
+        assertTrue(icbm >= gradLaunch && icbm >= booster && icbm >= missile);
+        // дальность — там, где звук тонет в фоне, а не предел памяти пути: у моторов на маршруте она меньше предела
+        for (double r : new double[] {lancet, shahed, gradAir}) assertTrue(r < Hearing.RANGE, "дальность " + r);
+    }
+
+    /** Насколько шум громче фона ночью в 15 км, дБ. */
+    private static double margin(WeaponSpec.Airframe a, FlightPhase ph, double speed) {
+        return a.noise().margin(ph, 200, speed, false, Propagation.Path.over(15_000, 50, NIGHT));
     }
 
     @Test

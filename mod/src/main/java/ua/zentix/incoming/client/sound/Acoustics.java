@@ -56,6 +56,14 @@ public final class Acoustics {
             t = t1;
             f = f1;
         }
+        // шагов не хватило (скорость сверху завышена: скачок пути между тиками) — дальше ровно по тику, корни — так же
+        while (n < out.length && t > start) {
+            double t1 = Math.max(start, t - 1);
+            double f1 = f(path, now, lx, ly, lz, t1, p);
+            if (f1 == 0 || f1 > 0 != f > 0) out[n++] = refine(path, now, lx, ly, lz, t1, f1, t, p);
+            t = t1;
+            f = f1;
+        }
         return n;
     }
 
