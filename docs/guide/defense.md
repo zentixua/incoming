@@ -14,8 +14,8 @@ is announced to everyone within 20 km.
 | ☢ MISSILE ATTACK ☢ | ICBM | 90 s, with a countdown |
 
 Projectiles in flight can be heard and seen from far away, up to 8 km. An explosion is heard as far as its charge
-carries: on a quiet night even a Lancet or a Grad rocket rumbles tens of kilometres away, a cruise missile farther; by
-day, behind hills and in rain much less. A small charge sounds short and sharp, a big one low and long. Sound travels at
+carries: on a quiet night even a Lancet or a Grad rocket rumbles tens of kilometres away, up to 32 km, the farthest the
+mod sends anything; by day, behind hills and in rain much less. A small charge sounds short and sharp, a big one low and long. Sound travels at
 the speed of sound: a distant flash shows up before you hear the explosion, and its echo comes back from hills later
 still.
 

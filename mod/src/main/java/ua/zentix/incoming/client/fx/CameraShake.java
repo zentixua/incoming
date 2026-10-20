@@ -65,10 +65,19 @@ public final class CameraShake {
      * тела по ветру, рад.
      */
     public static double[] sway(double pPa, double qPa, double open, double tPlus, double late, Vec3 away, double yaw) {
+        return sway(pPa, qPa, open, tPlus, tPlus, late, away, yaw);
+    }
+
+    /**
+     * Как {@link #sway(double, double, double, double, double, Vec3, double)}, но удар обтекания спадает по своей фазе
+     * {@code hitPhase}, с: у ядерной волны фаза ветра в игре — время модели × {@code effects_scale}, а обтекание тела —
+     * настоящие миллисекунды, и фаза удара — фаза модели.
+     */
+    public static double[] sway(double pPa, double qPa, double open, double tPlus, double hitPhase, double late, Vec3 away, double yaw) {
         double flat = Math.hypot(away.x, away.z);
         if (!(flat > 1e-6)) return new double[0];
         double x = away.x / flat, z = away.z / flat;
-        double[] tilt = BodySway.tilt(pPa, qPa, open, tPlus, edge(yaw, x, z), edge(yaw, -x, -z));
+        double[] tilt = BodySway.tilt(pPa, qPa, open, tPlus, hitPhase, edge(yaw, x, z), edge(yaw, -x, -z));
         if (tilt.length < 2) return tilt;
         if (SWAYS.size() >= SWAYS_MAX) SWAYS.remove(0);
         SWAYS.add(new Sway(tilt, ticks - Mth.clamp(late, 0, 1), x, z));

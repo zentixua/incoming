@@ -133,6 +133,7 @@ public final class ClientSounds {
     /** Раз в тик после {@link FlightTracks#tick}: слои звука у каждого пути, громкости, каналы. */
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
+        BlastSounds.tick();
         if (mc.level == null) {
             reset();
             return;

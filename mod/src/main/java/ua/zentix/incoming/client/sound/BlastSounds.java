@@ -10,6 +10,7 @@ import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.fx.BlastHit;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.nuclear.Deafness;
@@ -56,6 +57,12 @@ public final class BlastSounds {
     private static final List<BlastEchoes> ECHOES = new ArrayList<>();
     /** Тише — слой не запускать. */
     private static final float AUDIBLE = 0.005f;
+    /**
+     * Тики клиента: часы взрывов, по которым эхо и удар у уха ждут начала прямого звука. Свои, а не возраст эффекта
+     * взрыва: эффект кончается, а голоса эха, что встают позже, ждут этих часов — с остановленными они не зазвучали
+     * бы никогда и держали свои источники.
+     */
+    private static long ticks;
     /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
     private static String last = "";
     @Nullable
@@ -63,9 +70,12 @@ public final class BlastSounds {
 
     private BlastSounds() {}
 
-    /** Докуда слышно взрыв в обычных условиях (R0 у {@link Outdoor}), блоков. */
+    /**
+     * Докуда слышно взрыв в обычных условиях (R0 у {@link Outdoor}), блоков: по заряду, но не дальше, чем сервер
+     * шлёт взрывы ({@link IncomingConfig#FAR_RANGE_MAX}).
+     */
     public static double range(BlastSource s) {
-        return s.underground() ? BUNKER_RANGE : HearingModel.audibleRangeM(s.chargeKg());
+        return s.underground() ? BUNKER_RANGE : Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(s.chargeKg()));
     }
 
     /**
@@ -148,12 +158,13 @@ public final class BlastSounds {
     }
 
     /**
-     * Обычный взрыв (на земле или в воздухе) — фронт дошёл до уха в тик {@code tick} по часам взрыва: ракурсы записи и
+     * Обычный взрыв (на земле или в воздухе) — фронт дошёл до уха сейчас (часы взрыва — {@link #clock}): ракурсы записи и
      * «удар в грудь» ({@link BlastMix}), удар у уха из модели своим источником ({@link BlastPulse}), эхо от рельефа
      * ({@code echoes}, null — без него) — от настоящего начала самого громкого ракурса. Звуки самой волны слышит ухо,
      * каким оно было до неё ({@link Deafness#before}): слух, если волна его бьёт, — после.
      */
-    public static void arrive(BlastSource s, Vec3 pos, long seed, OwnSources.Clock clock, double tick, @Nullable BlastEchoes echoes) {
+    public static void arrive(BlastSource s, Vec3 pos, long seed, OwnSources.Clock clock, @Nullable BlastEchoes echoes) {
+        double tick = clock.ticks(0);
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         double d = ear.distanceTo(pos), pa = BlastMix.pressure(s, d), loudness = BlastMix.loudness(pa);
         BlastMix.Layers l = BlastMix.at(s, d);
@@ -201,10 +212,23 @@ public final class BlastSounds {
         return last + (e == null ? "" : "; " + e.describe()) + "; " + BlastHit.describe();
     }
 
+    /** Часы взрыва, родившегося сейчас: тики с этого мига, с долей. */
+    public static OwnSources.Clock clock() {
+        long born = ticks;
+        return partial -> ticks - born + partial;
+    }
+
+    /** Тик клиента. */
+    static void tick() {
+        ticks++;
+    }
+
     /** Отбой, перемотка повтора, выход из мира: эхо, что ещё готовилось, забыть (его голоса снимает {@link OwnSources#reset}). */
     static void reset() {
         ECHOES.forEach(BlastEchoes::stop);
         ECHOES.clear();
+        lastEchoes = null;
+        last = "";
     }
 
     /** Бетонобойная бомба взорвалась под землёй. underground — слушатель сам под землёй (в той же толще). */

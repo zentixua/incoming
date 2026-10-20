@@ -89,6 +89,15 @@ public final class BodySway {
      * @param back  граница против ветра (туда тело возвращается и туда толкает обратный ветер разрежения), рад
      */
     public static double[] tilt(double pPa, double qPa, double open, double tPlus, double edge, double back) {
+        return tilt(pPa, qPa, open, tPlus, tPlus, edge, back);
+    }
+
+    /**
+     * Как {@link #tilt(double, double, double, double, double, double)}, но удар фронта спадает по своей фазе
+     * {@code hitPhase}, с ({@link #jolt(double, double, double)}): у ядерной волны в игре фаза ветра растянута
+     * {@code effects_scale}, а обтекание тела — настоящие миллисекунды.
+     */
+    public static double[] tilt(double pPa, double qPa, double open, double tPlus, double hitPhase, double edge, double back) {
         if (!(qPa > 0) || !(open > 0) || !(tPlus > 0)) return new double[0];
         int steps = (int) Math.ceil(LONGEST / STEP), lag = (int) Math.round(DELAY / STEP), every = (int) Math.round(1.0 / (RATE * STEP));
         // наклон и его скорость за задержку назад (кольцом; до волны тело стоит — нули)
@@ -96,7 +105,7 @@ public final class BodySway {
         double[] out = new double[steps / every + 2];
         int n = 1;
         // удар фронта — короче шага счёта и задержки равновесия: скорость наклона сразу
-        double mgh = MASS * G * HEIGHT, peak = 0, th = 0, om = open * jolt(pPa, qPa, tPlus) * HEIGHT / INERTIA, torque = 0, torqueRate = 0;
+        double mgh = MASS * G * HEIGHT, peak = 0, th = 0, om = open * jolt(pPa, qPa, hitPhase) * HEIGHT / INERTIA, torque = 0, torqueRate = 0;
         double w2 = ACTIVATION_W * ACTIVATION_W, damp = 2 * ACTIVATION_DAMPING * ACTIVATION_W;
         for (int i = 0; i < steps; i++) {
             double t = i * STEP;

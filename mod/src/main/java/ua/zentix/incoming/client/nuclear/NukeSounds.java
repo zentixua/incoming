@@ -156,9 +156,8 @@ public final class NukeSounds {
     /** Звуки одного подрыва у этого слушателя. */
     static final class Schedule {
         /**
-         * С какого давления у уха прямой удар — в полную громкость, Па: 1 psi (ближние ракурсы обычных взрывов полны
-         * при 1,1–2,2 psi у края своей полной громкости,
-         * {@link ua.zentix.incoming.client.sound.BlastMix.Profile#flat}). Громче динамики не сыграют — дальше
+         * С какого давления у уха прямой удар — в полную громкость, Па: 1 psi, как у обычных взрывов
+         * ({@link ua.zentix.incoming.client.sound.BlastMix#FULL_PA}). Громче динамики не сыграют — дальше
          * громкость не растёт (кроме удара фронта вблизи, он и так перегружен).
          */
         static final double FULL_PA = 1000 * BlastModel.kpa(1);
@@ -381,8 +380,8 @@ public final class NukeSounds {
             swayOpen = SoundFilters.openRays(body, Math.atan2(b.z - body.z, b.x - body.x));
             // фронт прошёл тело между прошлым тиком и этим: удар — с его прихода
             double late = a.ticks(0) - d.arrivalTicks(body.distanceTo(b));
-            double[] tilt = CameraShake.sway(1000 * d.overpressureKpa(body), 1000 * d.dynamicPressureKpa(body), swayOpen, phase / 20, late,
-                    body.subtract(b), p.getYRot());
+            double[] tilt = CameraShake.sway(1000 * d.overpressureKpa(body), 1000 * d.dynamicPressureKpa(body), swayOpen, phase / 20,
+                    d.positivePhaseSeconds(body), late, body.subtract(b), p.getYRot());
             swayPeak = Math.toDegrees(BodySway.peak(tilt, 0));
             swayRate = tilt.length < 2 ? 0 : Math.toDegrees(tilt[1]) * BodySway.RATE;
         }
