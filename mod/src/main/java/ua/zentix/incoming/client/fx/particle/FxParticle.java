@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.fx.particle;
 
+import ua.zentix.incoming.client.fx.ClientAir;
+import ua.zentix.incoming.client.fx.plume.Air;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LightTexture;
@@ -41,6 +43,7 @@ public final class FxParticle {
     private float r0, g0, b0, r1, g1, b1, colorCurve, alpha;
     private int fadeIn, fadeAfter;
     private float fadeFrom, glow, glowTicks, drag, rise, gravity, wind, driftX, driftZ;
+    private Fx.@org.jetbrains.annotations.Nullable Thermal thermal;
     private boolean paper, prelit;
     private boolean collide, smooth;
     /** Цепочка клубов ({@link Fx.Spec#chain}): направление пути и шаг между клубами; шаг 0 — не цепочка. */
@@ -91,6 +94,7 @@ public final class FxParticle {
         wind = s.wind;
         driftX = s.driftX;
         driftZ = s.driftZ;
+        thermal = s.thermal;
         paper = s.paper;
         prelit = s.prelit;
         collide = s.collide;
@@ -129,9 +133,13 @@ public final class FxParticle {
             return;
         }
         // горячее всплывает быстро, остывшее — едва
-        yd += rise * (0.15 + 0.85 * Math.exp(-age / 40.0)) - gravity;
-        xd += Fx.WIND_X * wind + driftX;
-        zd += Fx.WIND_Z * wind + driftZ;
+        if (thermal != null) yd = thermal.lift(age) - thermal.lift(age - 1);
+        else yd += rise * (0.15 + 0.85 * Math.exp(-age / 40.0)) - gravity;
+        // ветер мира: воздух тянет частицу к своей скорости (у установившейся — скорость ветра × парусность)
+        Air air = ClientAir.now();
+        double push = wind == 0 ? 0 : air.speed(y) / 20 * wind * (1 - drag) / drag;
+        xd += air.wind().x() * push + driftX;
+        zd += air.wind().z() * push + driftZ;
         if (kind == Fx.Kind.FLAKE && !onGround) {
             // хлопья вьются, падая
             xd += 0.003 * Mth.sin(age * 0.21f + variant);

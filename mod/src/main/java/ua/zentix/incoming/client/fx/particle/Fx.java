@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.fx.particle;
 
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.ParticleStatus;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -16,8 +17,10 @@ import ua.zentix.incoming.registry.ModParticles;
  * рождается в своём пуле ({@link FxPool}), без пакетов и без ванильного ограничения «не дальше 32 блоков».
  */
 public final class Fx {
-    /** Ветер (блоки/тик² на единицу парусности): дым и пыль сносит, столбы дыма наклоняются. */
-    public static final double WIND_X = 0.0022, WIND_Z = 0.0011;
+    /** Подъём клуба следа к возрасту в тиках, блоков ({@code TrailModel.rise}). */
+    public interface Thermal {
+        double lift(double ticks);
+    }
 
     private Fx() {}
 
@@ -140,6 +143,8 @@ public final class Fx {
         float rise, gravity, wind = 1, spin = 0.03f;
         /** Свой постоянный снос (блоки/тик²): ветер подрыва, а не общий ветер частиц. */
         float driftX, driftZ;
+        /** Всплытие тёплого следа по его закону (вместо {@link #rise}); null — нет. */
+        @Nullable Thermal thermal;
         /** Хлопья: клочок бумаги (светлый прямоугольник), а не пепел. */
         boolean paper;
         /** Цвет уже освещён ({@link #prelit}): карта освещения его не темнит. */
@@ -282,6 +287,12 @@ public final class Fx {
 
         public Spec gravity(float g) {
             gravity = g;
+            return this;
+        }
+
+        /** Клуб всплывает вместе со своим следом ({@link Thermal}). */
+        public Spec thermal(@Nullable Thermal t) {
+            thermal = t;
             return this;
         }
 

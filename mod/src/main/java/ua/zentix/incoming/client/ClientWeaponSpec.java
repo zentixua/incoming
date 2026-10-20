@@ -1,10 +1,17 @@
 package ua.zentix.incoming.client;
 
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.client.fx.plume.Flame;
+import ua.zentix.incoming.client.fx.plume.FlameModel;
+import ua.zentix.incoming.client.fx.plume.Motor;
+import ua.zentix.incoming.client.fx.plume.Smoke;
+import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.client.render.WeaponModels;
 import ua.zentix.incoming.client.sound.EngineSound;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.util.StandardAtmosphere;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -38,7 +45,7 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
      * @param layers        слои звука мотора
      * @param engines       сопла маршевого двигателя (у B-2 — четыре инверсионных следа, у бомбы — срыв потока с хвоста)
      * @param boosterNozzle срез сопла ускорителя; null — ускорителя нет
-     * @param boosterSmoke  размер дыма ускорителя (шахед меньше ракеты)
+     * @param boosterSmoke  размер облака у пусковой на старте (шахед меньше ракеты; облако старта — не след)
      * @param far           огонь и дым по фазам полёта ({@link Flame} — факел вблизи и вдали) и вид вдали, где сущности у
      *                      клиента нет
      */
@@ -52,6 +59,11 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
         /** Откуда идут шлейфы: пока горит ускоритель — от его среза (если он есть), иначе от каждого сопла. */
         public List<At> trailNozzles(boolean booster) {
             return booster && boosterNozzle != null ? List.of(boosterNozzle) : engines;
+        }
+
+        /** Срез сопла, из которого бьёт факел фазы: ускоритель или первое маршевое. */
+        public At nozzle(Stage stage) {
+            return stage.booster() && boosterNozzle != null ? boosterNozzle : engine();
         }
     }
 
@@ -119,209 +131,144 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
         }
     }
 
-    /** Огонь и дым в одной фазе: факел и шлейф; null — нет. */
-    public record Stage(@Nullable Flame flame, @Nullable Trail trail) {
-        public static final Stage NONE = new Stage(null, null);
-    }
-
     /**
-     * Факел двигателя — один вблизи и вдали, из этих чисел.
-     * <ul>
-     * <li>Вблизи — струя ({@code PlumeRenderer}): полоса от среза сопла назад на длину струи, белое ядро полуширины
-     * {@code width} на 0,6 длины и оранжевый край в 2,6 раза шире, ореол у среза; сложением, яркость струи —
-     * {@code intensity} (экран не ярче белого).</li>
-     * <li>В глазу и вдали — свет ({@code client.far.Sight#light}) яркостью {@code brightness} против белого экрана:
-     * ядро — круг {@link #radius}, мельче пикселя не пропадает, а бледнеет; ярче белого — блик, ночью (глаз привык
-     * к темноте) — и вуаль на градусы. Блик и вуаль — на любой дальности, ядро сменяет струю с 0,8 прорисовки
-     * ({@code client.far.FarFlightView}): на краю прорисовки факел один.</li>
-     * </ul>
+     * Огонь и дым в одной фазе: какой двигатель горит и из какого сопла. Факел ({@link FlameModel}) и след
+     * ({@code TrailModel}) — из данных двигателя по законам, одни вблизи и вдали.
      *
-     * @param start      срез сопла — начало струи, в осях снаряда
-     * @param length     длина струи, блоков
-     * @param width      полуширина белого ядра струи, блоков
-     * @param intensity  яркость струи вблизи (доля её цвета при сложении)
-     * @param diamonds   струя с «алмазами» скачков уплотнения
-     * @param core       цвет ядра
-     * @param outer      цвет края
-     * @param brightness яркость света против белого экрана днём
-     * @param from       длина струи в начале фазы (растёт к {@code length}); {@code length} — сразу во всю длину
-     * @param growth     рост струи за тик фазы, блоков
+     * @param motor   двигатель; null — ничего не горит
+     * @param booster горит стартовый ускоритель (сопло — {@link ClientAirframe#boosterNozzle}), иначе маршевые сопла
+     * @param trail   след; null — его нет (поджиг РСЗО в трубе: след — с переднего среза)
      */
-    public record Flame(At start, double length, double width, float intensity, boolean diamonds, int core, int outer, double brightness,
-                        double from, double growth) {
-        /** Яркое пламя (ускоритель, двигатель РСЗО, ступень МБР): белое ядро, оранжевый край, во всю длину сразу. */
-        static Flame bright(At start, double length, double width, boolean diamonds, double brightness) {
-            return new Flame(start, length, width, 1, diamonds, 0xFFF4E0, 0xFF8A30, brightness, length, 0);
+    public record Stage(@Nullable Motor motor, boolean booster, @Nullable Trail trail) {
+        public static final Stage NONE = new Stage(null, false, null);
+
+        /** Горит двигатель и оставляет след (точка ленты — раз в step тиков). */
+        static Stage burning(Motor motor, boolean booster, int step) {
+            return new Stage(motor, booster, Trail.of(motor, step));
         }
 
-        /** Та же струя, но в начале фазы длиной from и растёт на growth за тик. */
-        Flame growing(double from, double growth) {
-            return new Flame(start, length, width, intensity, diamonds, core, outer, brightness, from, growth);
-        }
-
-        /** Длина струи через phaseAge тиков фазы, блоков. */
-        public double length(double phaseAge) {
-            return Math.min(length, from + growth * Math.max(0, phaseAge));
-        }
-
-        /**
-         * Радиус ядра света при длине струи length: круг площади length × {@code width}. Столько белого и даёт струя
-         * сбоку: две полосы с их текстурой ({@code textures/fx/plume.png}, средняя яркость 0,225) — 1,15·length·width.
-         */
-        public double radius(double length) {
-            return Math.sqrt(length * width / Math.PI);
-        }
-
-        /** Радиус ядра во всю длину струи. */
-        public double radius() {
-            return radius(length);
-        }
-
-        /** Середина струи длины length позади центра корпуса (срез сопла плюс половина струи), блоков. */
-        public double back(double length) {
-            return -start.z() + length / 2;
-        }
-
-        /** Цвет света — середина между ядром и краем струи. */
-        public int color() {
-            int r = ((core >> 16 & 255) + (outer >> 16 & 255)) / 2, g = ((core >> 8 & 255) + (outer >> 8 & 255)) / 2, b = ((core & 255) + (outer & 255)) / 2;
-            return r << 16 | g << 8 | b;
+        /** Факел на высоте мира y; null — не горит или не видно. */
+        @Nullable
+        public Flame flame(double y) {
+            return motor == null ? null : FlameModel.at(motor, y - Air.SEA);
         }
     }
 
+    // ---------------------------------------------------------------- двигатели
+    //
+    // Числа — из открытых данных, где они есть (источник рядом); чего нет — ⚠ оценка с диапазоном. Сопло, у которого
+    // размер не опубликован, — расчётное: на срезе давление воздуха той высоты, на которую сопло рассчитано (у
+    // ускорителей — земля, у первых ступеней — несколько километров). Тепло ракетного топлива в воздухе —
+    // c_p·(T₀ − 288 K); КПД ракеты на старте (тяга × скорость против тепла) меньше 0,1 — взят 0.
+
     /**
-     * Шлейф — лента через точки пути от сопла ({@link ClientAirframe#trailNozzles}), вблизи и вдали одна
-     * ({@code client.far.FarFlightView}): каждая точка со своим возрастом расплывается, сносится ветром и тает, как
-     * клубы дыма (размер растёт как 1 − (1 − f)³, цвет — по f^0,6, непрозрачность ровная от проявления до
-     * {@code fadeFrom}, дальше линейно в ноль; f — доля жизни). Ширина — видимая ширина следа: клуб
-     * {@code size(a, b)} — квадрат в 2a…2b блоков, плотная часть мягкой текстуры — около 0,7 его. Вблизи поверх
-     * густых шлейфов — редкие клубы {@code Exhaust} для объёма.
-     *
-     * @param step     точка пути — раз в столько тиков
-     * @param life     тиков жизни точки (сколько в среднем живут клубы вблизи)
-     * @param width0   видимая ширина у сопла, блоков
-     * @param width1   к концу жизни
-     * @param color0   цвет у сопла
-     * @param color1   к концу жизни
-     * @param alpha    непрозрачность ленты (клубы перекрываются — лента плотнее одного клуба)
-     * @param fadeIn   тиков проявления
-     * @param fadeFrom с какой доли жизни тает
-     * @param wind     парусность, как {@code Fx.Spec#wind}
-     * @param rise     подъём тёплого дыма, как {@code Fx.Spec#rise}
+     * Горючее в продуктах на срезе (догорает в воздухе), доли массы: смесевое с алюминием — CO ~0,22, H₂ ~0,02;
+     * двухосновное — CO ~0,40, H₂ ~0,01 (⚠ типовые равновесные составы продуктов на срезе, по изделиям не опубликованы).
      */
-    public record Trail(int step, int life, double width0, double width1, int color0, int color1, float alpha, int fadeIn,
-                        float fadeFrom, float wind, float rise) {
-        /** Сопротивление клубов шлейфа вблизи ({@code Fx.Spec#drag}). */
-        static final double DRAG = 0.9;
-        /** Скорость сноса клуба — ветер × это (установившаяся при сопротивлении {@link #DRAG}); столько же тиков он разгоняется. */
-        static final double TERMINAL = DRAG / (1 - DRAG);
+    private static final double COMPOSITE_CO = 0.22, COMPOSITE_H2 = 0.02, DOUBLE_BASE_CO = 0.40, DOUBLE_BASE_H2 = 0.01;
 
-        /** Доля жизни на возрасте age, 0..1. */
-        public double fraction(double age) {
-            return Math.max(0, Math.min(1, age / life));
-        }
-
-        /** Точка уже растаяла. */
-        public boolean expired(double age) {
-            return age >= life;
-        }
-
-        /** Видимая ширина на возрасте age, блоков. */
-        public double width(double age) {
-            double k = 1 - fraction(age);
-            return width0 + (width1 - width0) * (1 - k * k * k);
-        }
-
-        /** Непрозрачность на возрасте age. */
-        public float opacity(double age) {
-            if (age < 0 || expired(age)) return 0;
-            double f = fraction(age);
-            double in = fadeIn <= 0 ? 1 : Math.min(1, age / fadeIn);
-            double out = f < fadeFrom ? 1 : 1 - (f - fadeFrom) / (1 - fadeFrom);
-            return (float) (alpha * in * Math.max(0, out));
-        }
-
-        /** Доля пути от цвета у сопла к цвету в конце, 0..1. */
-        public float shade(double age) {
-            return (float) Math.pow(fraction(age), 0.6);
-        }
-
-        /** Сколько ветров ({@code Fx.WIND_X}, {@code Fx.WIND_Z}) снесло точку за age тиков (с отставанием на разгон). */
-        public double drift(double age) {
-            return wind * TERMINAL * Math.max(0, age - TERMINAL);
-        }
-
-        /**
-         * На сколько блоков поднялась точка за age тиков: как клуб — подъём {@code rise} слабеет до 0,15 за ~40 тиков
-         * ({@code FxParticle.tick}), скорость — установившаяся при сопротивлении {@link #DRAG}, с отставанием на разгон.
-         */
-        public double lift(double age) {
-            double a = Math.max(0, age - TERMINAL);
-            return rise * TERMINAL * (0.15 * a + 0.85 * 40 * (1 - Math.exp(-a / 40)));
-        }
+    /** Доля Al₂O₃ в продуктах топлива с долей алюминия al: 2 Al → Al₂O₃ (102/54 = 1,89). */
+    private static double alumina(double al) {
+        return al * 102.0 / 54.0;
     }
 
-    /**
-     * Ускоритель шахеда: струя 2,2 × 0,26 блока от среза под хвостом (чуть ближе среза сопла); на поджиге вырастает
-     * за полсекунды.
-     */
-    private static final Flame DRONE_BOOSTER_FLAME = Flame.bright(new At(0, -0.29, -1.93), 2.2, 0.13, false, 15);
-    /** Ускоритель ракеты: 4 × 0,5 с алмазами от среза в 3,44; на поджиге вырастает за полсекунды. */
-    private static final Flame MISSILE_BOOSTER_FLAME = Flame.bright(new At(0, 0, -3.44), 4, 0.25, true, 20);
-    /**
-     * Маршевый ТРД ракеты — тусклое свечение 1 × 0,28 от среза в 2,88; в пике — 2 × 0,36, ярче (форсаж для прорыва
-     * ПВО — художественно). Вдали почти не светит: выхлоп ТРД — сотни градусов, а не пламя (ночью над городом ракету
-     * слышно, а не видно); ночью глаз, привыкший к темноте, видит искру.
-     */
-    private static final Flame MISSILE_SUSTAINER_FLAME = new Flame(new At(0, 0, -2.88), 1, 0.14, 0.55f, false, 0xFFD8A0, 0xFF5A18, 0.05, 1, 0),
-            MISSILE_DIVE_FLAME = new Flame(new At(0, 0, -2.88), 2, 0.18, 0.9f, false, 0xFFE8C0, 0xFF6A20, 0.15, 2, 0);
-    /** Двигатель реактивного снаряда: 3 × 0,3 от среза в 1,5, вспыхивает сразу (поджиг — доли секунды; в трубе его не видно). */
-    private static final Flame ROCKET_FLAME = Flame.bright(new At(0, 0, -1.5), 3, 0.15, false, 20);
-    /**
-     * Ступень «Минитмена»: струя Ø 2,2 с алмазами от среза в 9,7, на разгоне длиннее — с 14 блоков на 0,15 за тик до 24
-     * (поджиг — 40 тиков, {@code IcbmEntity}: к разгону струя уже 20).
-     */
-    private static final Flame ICBM_FLAME = Flame.bright(new At(0, 0, -9.7), 24, 1.1, true, 25);
+    /** Твёрдотопливный двигатель с соплом, рассчитанным на высоту design метров (давление стандартной атмосферы). */
+    private static Motor solid(String name, int nozzles, double flow, double velocity, double temperature, double gamma, double molarMass,
+                               double design, Smoke smoke, double smokeIndex, double co, double h2, double water) {
+        double r = Motor.matchedRadius(nozzles, flow, velocity, temperature, gamma, molarMass, StandardAtmosphere.pressure(design));
+        return solidWithExit(name, nozzles, flow, velocity, temperature, gamma, molarMass, r, smoke, smokeIndex, co, h2, water);
+    }
 
-    /** Ускоритель шахеда: густой белый дым ({@code size(0,5·k, 3,5·k)}, k = 0,55), висит 13–19 с. */
-    private static final Trail DRONE_BOOSTER_TRAIL = new Trail(2, 320, 0.4, 2.7, 0xF2EFEA, 0xC4C0BA, 0.85f, 2, 0.5f, 1, 0.0015f);
-    /** Ускоритель ракеты: тот же дым, k = 0,8. */
-    private static final Trail MISSILE_BOOSTER_TRAIL = new Trail(2, 320, 0.55, 3.9, 0xF2EFEA, 0xC4C0BA, 0.85f, 2, 0.5f, 1, 0.0015f);
-    /** Поршневой мотор шахеда: тонкий сизый выхлоп на 2 с; в пике гуще и дольше. */
-    private static final Trail DRONE_EXHAUST = new Trail(4, 40, 0.4, 1.7, 0x6A6C72, 0xB6B8BE, 0.18f, 2, 0.2f, 1, 0.002f),
-            DRONE_DIVE_EXHAUST = new Trail(4, 60, 0.4, 2.2, 0x6A6C72, 0xB6B8BE, 0.3f, 2, 0.2f, 1, 0.002f);
-    /** Горячий след ТРД ракеты: едва заметная дымка на 3 с. */
-    private static final Trail MISSILE_HAZE = new Trail(4, 60, 0.3, 2, 0xB8B4AE, 0xDADAD8, 0.16f, 2, 0.25f, 1, 0.001f);
-    /** Реактивный снаряд, пока горит двигатель: плотный серо-белый след дугой, висит 21–31 с. */
-    private static final Trail ROCKET_TRAIL = new Trail(2, 520, 0.6, 3.6, 0xEDEAE4, 0xB2AEA8, 0.85f, 2, 0.55f, 1, 0.0012f);
-    /** «Минитмен»: густой белый столб ({@code size(1,8, 8)}), висит 45–60 с и сносится ветром. */
-    private static final Trail ICBM_TRAIL = new Trail(4, 1050, 2.5, 11, 0xF2EFEA, 0xBDBAB6, 0.9f, 2, 0.55f, 1, 0.0015f);
+    /** Твёрдотопливный двигатель с известным радиусом среза сопла exitRadius, м. */
+    private static Motor solidWithExit(String name, int nozzles, double flow, double velocity, double temperature, double gamma, double molarMass,
+                                       double exitRadius, Smoke smoke, double smokeIndex, double co, double h2, double water) {
+        double cp = gamma * Motor.R / ((gamma - 1) * molarMass);
+        return new Motor(name, nozzles, flow, flow, velocity, temperature, gamma, molarMass, exitRadius, smoke, smokeIndex, co, h2, water,
+                cp * (temperature - StandardAtmosphere.T0), 0);
+    }
+
+    /** Воздушно-реактивный или поршневой: выхлоп дозвуковой, на срезе — давление воздуха у земли; молярная масса — воздуха. */
+    private static Motor breathing(String name, double exhaust, double fuel, double velocity, double temperature, double gamma, double soot,
+                                   double water, double heat, double efficiency) {
+        double r = Motor.matchedRadius(1, exhaust, velocity, temperature, gamma, AIR_MOLAR, StandardAtmosphere.P0);
+        return new Motor(name, 1, exhaust, fuel, velocity, temperature, gamma, AIR_MOLAR, r, Smoke.SOOT, soot, 0, 0, water, heat, efficiency);
+    }
+
+    /** Молярная масса воздуха, кг/моль. */
+    private static final double AIR_MOLAR = 0.028_96;
+
     /**
-     * Инверсионный след каждого из четырёх двигателей B-2 (сопла в ±1,9 и ±3,2 блока от оси, клубы {@code size(0,35, 2,8)}):
-     * расплываясь, они сливаются в одну полосу.
+     * Ускоритель шахеда (РДТТ на рельсе, сбрасывается): данных нет — ⚠ оценка по старту: 200 кг до ~35 м/с за ~2 с
+     * под углом ~15° — тяга ~4 кН (3–8 кН), 2 кг/с при 2 100 м/с (удельный импульс ~215 с малого РДТТ); смесевое топливо
+     * с ~10 % алюминия (⚠), 3 000 K, γ 1,15, 27 г/моль; сопло — на землю.
      */
-    private static final Trail CONTRAIL = new Trail(4, 500, 0.5, 3.9, 0xFFFFFF, 0xE6EAF0, 0.6f, 8, 0.4f, 0.6f, 0);
-    /** Срыв потока с хвоста падающей бомбы: на секунду. */
-    private static final Trail BOMB_WAKE = new Trail(2, 24, 0.3, 1.3, 0xDADCE0, 0xF2F2F2, 0.3f, 1, 0.2f, 1, 0);
+    static final Motor DRONE_BOOSTER = solid("drone booster", 1, 2, 2_100, 3_000, 1.15, 0.027, 0, Smoke.ALUMINA, alumina(0.10), COMPOSITE_CO, COMPOSITE_H2, 0.09);
+    /**
+     * Ускоритель «Томагавка» (Mk 106 / Mk 135): работает ~12 с (после него запускается маршевый; встречается и ~7 с),
+     * масса ~270 кг; тяга не опубликована — ⚠ оценка: ~150 кг топлива за 12 с, 12,5 кг/с при 2 350 м/с (240 с) — 29 кН;
+     * смесевое с ~16 % алюминия (⚠), 3 200 K, γ 1,14 (двухфазный, у топлив с алюминием 1,13–1,18), 28 г/моль; сопло — на
+     * землю.
+     */
+    static final Motor MISSILE_BOOSTER = solid("missile booster", 1, 12.5, 2_350, 3_200, 1.14, 0.028, 0, Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
+    /**
+     * Маршевый ТРДД «Томагавка» Williams F107-WR-402, ~3,1 кН: расход воздуха ~6 кг/с (⚠), струя ~500 м/с и ~700 K
+     * (⚠, смешанный выхлоп), топливо JP-10 ~0,054 кг/с (⚠, удельный расход ~0,7 фунт/(фунт·ч)); C₁₀H₁₆: 1,06 кг воды
+     * на кг и 42,1 МДж/кг; сажа ~0,03 г/кг (⚠); КПД 0,33 (тяга × 245 м/с против тепла топлива).
+     */
+    static final Motor MISSILE_SUSTAINER = breathing("missile turbofan", 6, 0.054, 500, 700, 1.38, 3e-5, 1.06, 42.1e6, 0.33);
+    /**
+     * Двухтактный MD-550 шахеда (копия Limbach L550E, ~37 кВт): удельный расход ~0,45 кг/кВт·ч (⚠) — 4,6 г/с бензина,
+     * выхлоп ~70 г/с при ~1 000 K и ~50 м/с (⚠); сажа и масло двухтакта ~1 г/кг (⚠); вода ~1,35 кг/кг бензина,
+     * 43,5 МДж/кг; КПД ~0,13 (0,7 винта × 37 кВт против тепла топлива).
+     */
+    static final Motor DRONE_ENGINE = breathing("drone piston", 0.07, 0.0046, 50, 1_000, 1.35, 1e-3, 1.35, 43.5e6, 0.13);
+    /**
+     * Каждый из четырёх F118-GE-100 B-2 (~77 кН на взлёте): на крейсере ~0,25 кг/с керосина и ~60 кг/с выхлопа при
+     * ~450 м/с и ~700 K (⚠ оценки); керосин — 1,25 кг воды на кг и 43,2 МДж/кг (Schumann 1996), КПД 0,3 (там же, у
+     * двигателей того поколения), сажа ~0,04 г/кг (⚠).
+     */
+    static final Motor BOMBER_ENGINE = breathing("bomber turbofan", 60, 0.25, 450, 700, 1.38, 4e-5, 1.25, 43.2e6, 0.3);
+    /**
+     * Двигатель реактивного снаряда 9М22У: ~20 кг топлива (66,6 → ~46,6 кг, ⚠) за ~1,9 с (⚠) — 10,5 кг/с; 690 м/с к
+     * выгоранию по Циолковскому требуют не меньше 1 930 м/с истечения — взято 2 000 (~205 с; у двухосновных 200–230);
+     * двухосновное (баллиститное, ⚠ по советской практике), ~2 800 K, γ 1,22, 24 г/моль; дым — соли стабилизаторов ~2 %
+     * (⚠); сопло — под калибр 122 мм, радиус среза 5,5 см (⚠): на давление у земли оно не помещается (нужно ~10 см),
+     * струя недорасширена.
+     */
+    static final Motor ROCKET_MOTOR = solidWithExit("grad motor", 1, 10.5, 2_000, 2_800, 1.22, 0.024, 0.055, Smoke.SALTS, 0.02, DOUBLE_BASE_CO, DOUBLE_BASE_H2, 0.12);
+    /**
+     * Первая ступень «Минитмена III» (M55, смесевое: перхлорат аммония, алюминий, связка PBAA): 903,7 кН (USAF),
+     * 20 780 кг за 61 с (Fetter) — 340,7 кг/с при 2 652 м/с; четыре сопла, ⚠ рассчитаны на ~3 км (у земли
+     * перерасширены); ~3 300 K, γ 1,14, 28 г/моль, ~16 % алюминия (⚠).
+     */
+    static final Motor ICBM_STAGE = solid("icbm stage", 4, 20_780 / 61.0, 903_700 / (20_780 / 61.0), 3_300, 1.14, 0.028, 3_000,
+            Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
+
+    /**
+     * Двухрежимный РДТТ зенитной ракеты ({@code InterceptorSpec.SAM}, как 9М96): данных о двигателе нет — ⚠ оценка:
+     * разгон 15 кг/с при 2 350 м/с (~35 кН на ракету ~330 кг), смесевое с ~16 % алюминия, сопло рассчитано на землю;
+     * маршевый режим — тот же заряд и сопло, расход ~3 кг/с (⚠), давление в камере ниже — струя перерасширена.
+     */
+    public static final Motor SAM_BOOST = solid("sam boost", 1, 15, 2_350, 3_200, 1.14, 0.028, 0, Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
+    public static final Motor SAM_SUSTAIN = solidWithExit("sam sustain", 1, 3, 2_350, 3_200, 1.14, 0.028, SAM_BOOST.exitRadius(), Smoke.ALUMINA,
+            alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
 
     /** Шахед: 3,6 м, размах 2,6; дельта-крыло ~4,7 м² и корпус Ø 0,45. */
-    private static final FarLook DRONE_FAR = new FarLook(3.6, 3.6, 0x3C3E42, new Stage(DRONE_BOOSTER_FLAME.growing(0, 0.22), DRONE_BOOSTER_TRAIL),
-            new Stage(DRONE_BOOSTER_FLAME, DRONE_BOOSTER_TRAIL),
-            new Stage(null, DRONE_EXHAUST), new Stage(null, DRONE_DIVE_EXHAUST));
+    private static final FarLook DRONE_FAR = new FarLook(3.6, 3.6, 0x3C3E42, null, Stage.burning(DRONE_BOOSTER, true, 2),
+            Stage.burning(DRONE_ENGINE, false, 4), null);
     /** «Томагавк»: 5,9 м, с ускорителем 6,2, Ø 0,52, размах 2,7. */
-    private static final FarLook MISSILE_FAR = new FarLook(6.2, 3.1, 0x6E7276, new Stage(MISSILE_BOOSTER_FLAME.growing(0, 0.4), MISSILE_BOOSTER_TRAIL),
-            new Stage(MISSILE_BOOSTER_FLAME, MISSILE_BOOSTER_TRAIL),
-            new Stage(MISSILE_SUSTAINER_FLAME, MISSILE_HAZE), new Stage(MISSILE_DIVE_FLAME, MISSILE_HAZE));
-    /** B-2: размах 52 м, крыло 478 м² в плане. */
-    private static final FarLook BOMBER_FAR = new FarLook(52, 250, 0x2E3034, null, Stage.NONE, new Stage(null, CONTRAIL), null);
-    /** GBU-57: 6,2 м, Ø 0,8. */
-    private static final FarLook BOMB_FAR = new FarLook(6.2, 3.9, 0x55595E, null, Stage.NONE, new Stage(null, BOMB_WAKE), null);
+    private static final FarLook MISSILE_FAR = new FarLook(6.2, 3.1, 0x6E7276, null, Stage.burning(MISSILE_BOOSTER, true, 2),
+            Stage.burning(MISSILE_SUSTAINER, false, 4), null);
+    /** B-2: размах 52 м, крыло 478 м² в плане; след каждого из четырёх двигателей — инверсия, когда она встаёт. */
+    private static final FarLook BOMBER_FAR = new FarLook(52, 250, 0x2E3034, null, Stage.NONE, Stage.burning(BOMBER_ENGINE, false, 4), null);
+    /** GBU-57: 6,2 м, Ø 0,8; двигателя нет — ни огня, ни следа. */
+    private static final FarLook BOMB_FAR = new FarLook(6.2, 3.9, 0x55595E, null, Stage.NONE, Stage.NONE, null);
     /** «Минитмен III»: 18,3 м, Ø 1,7; ступень горит весь полёт. */
-    private static final FarLook ICBM_FAR = new FarLook(18.3, 24, 0xD8D6D0, new Stage(ICBM_FLAME.growing(14, 0.15), ICBM_TRAIL),
-            new Stage(ICBM_FLAME.growing(20, 0.15), ICBM_TRAIL), new Stage(ICBM_FLAME.growing(20, 0.15), ICBM_TRAIL), null);
+    private static final Stage ICBM_BURN = Stage.burning(ICBM_STAGE, false, 4);
+    private static final FarLook ICBM_FAR = new FarLook(18.3, 24, 0xD8D6D0, null, ICBM_BURN, ICBM_BURN, null);
     /** Снаряд «Града»: 2,9 м, Ø 0,12; поджиг — в трубе, след — с переднего среза; после выгорания — без огня и следа. */
-    private static final FarLook ROCKET_FAR = new FarLook(2.9, 0.28, 0x4E5446, new Stage(ROCKET_FLAME, null), new Stage(ROCKET_FLAME, ROCKET_TRAIL),
-            Stage.NONE, null);
+    private static final FarLook ROCKET_FAR = new FarLook(2.9, 0.28, 0x4E5446, new Stage(ROCKET_MOTOR, false, null),
+            Stage.burning(ROCKET_MOTOR, false, 2), Stage.NONE, null);
     /** «Ланцет» (модель ×1,5): 2,5 м, Ø 0,45, два креста крыльев; катапульта и электромотор — без огня и дыма. */
     private static final FarLook LOITER_FAR = new FarLook(2.5, 1.4, 0x6A7066, null, Stage.NONE, Stage.NONE, null);
 

@@ -3,9 +3,9 @@ package ua.zentix.incoming.client.far;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
+import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLights;
-import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.sound.Acoustics;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
@@ -61,8 +61,6 @@ public final class FarBlasts {
     static final int SOUND_WAIT = 2400;
     /** Источник для луча и звука — над точкой удара, блоков (как вспышка ближней картинки). */
     static final double LIFT = 1.5;
-    /** Дрейф клубов: скорость, на которой ветер {@link Fx} уравновешен сопротивлением дыма столба (drag 0,95). */
-    static final double DRIFT = 1 / (1 - 0.95);
     /** Плотность клуба; разброс клубов от оси столба, радиусов. */
     static final double OPACITY = 0.85, SPREAD = 0.4;
     /**
@@ -564,7 +562,6 @@ public final class FarBlasts {
         float sr = (float) (DARK[0] + (AGED[0] - DARK[0]) * grey), sg = (float) (DARK[1] + (AGED[1] - DARK[1]) * grey),
                 sb = (float) (DARK[2] + (AGED[2] - DARK[2]) * grey);
         double opacity = OPACITY * emerge(k, age);
-        double windX = Fx.WIND_X * DRIFT * age, windZ = Fx.WIND_Z * DRIFT * age;
         double spread = 1 + 0.5 * age / k.life(), grow = 0.35 + 0.65 * rise;
         for (int i = 0; i < e.f.length; i++) {
             double f = e.f[i];
@@ -574,9 +571,11 @@ public final class FarBlasts {
             double h = height(k, f, r, rise);
             double vis = visible(h, r, line);
             if (vis <= 0) continue;
-            // выше — ветер сильнее: столб клонится
-            double shear = 0.3 + 0.7 * f * rise;
-            double px = bx + e.ox[i] * r * SPREAD + windX * shear, py = by + h, pz = bz + e.oz[i] * r * SPREAD + windZ * shear;
+            // ветер мира на высоте клуба (выше — сильнее: столб клонится); низ столба — дым, что подходит позже, и он
+            // сносится меньше, как прежде (доля shear)
+            double shear = 0.3 + 0.7 * f * rise, wy = view.camera().y + by + h;
+            double px = bx + e.ox[i] * r * SPREAD + ClientAir.windX(wy) * age * shear, py = by + h,
+                    pz = bz + e.oz[i] * r * SPREAD + ClientAir.windZ(wy) * age * shear;
             double d = Math.sqrt(px * px + py * py + pz * pz);
             double t = view.air(d, py);
             if (t < Sight.THRESHOLD) continue;
