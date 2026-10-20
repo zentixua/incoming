@@ -12,6 +12,7 @@ import ua.zentix.incoming.entity.BomberEntity;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.sound.Propagation;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -21,7 +22,7 @@ import java.util.List;
  * Снаряды, которых у клиента нет. Сущность уходит клиенту только в пределах его дальности прорисовки (и ближе дальности
  * слежения своего типа), а в полёте вне мира ({@link VirtualFlights}) её нет ни у кого, — но мотор ракеты или вой
  * снаряда РСЗО слышно дальше, а факел, шлейф и сам корпус видно ещё дальше. Каждому игроку уходят снаряды его мира,
- * которых у него нет и которые он уже может слышать ({@link Hearing#range}) или видеть ({@link #range}): слышимые —
+ * которых у него нет и которые он уже может слышать ({@link Hearing#audible}) или видеть ({@link #range}): слышимые —
  * раз в {@link S2C.FarFlights#PERIOD} тика, только видимые — раз в {@link S2C.FarFlights#FAR_PERIOD}, не больше
  * {@link #LIMIT} ближних. Клиент ведёт по ним тот же звук, что и по сущности, и рисует снаряд вдали, а когда сущность
  * появится, продолжает по ней без шва.
@@ -67,10 +68,11 @@ public final class FarFlights {
      */
     public static List<S2C.FarFlight> sample(ServerLevel level, List<StrikeProjectile> flights, Vec3 eye, @Nullable ServerPlayer player, boolean silent) {
         double sight = silent ? range() : 0;
+        Propagation.Weather weather = Propagation.Weather.of(level);
         List<Candidate> found = new ArrayList<>();
         for (StrikeProjectile p : flights) {
-            double hear = Hearing.range(p), d2 = p.position().distanceToSqr(eye);
-            boolean audible = hear > 0 && d2 <= hear * hear;
+            double d2 = p.position().distanceToSqr(eye);
+            boolean audible = Hearing.audible(p, eye, weather);
             if (!audible && d2 > sight * sight) continue;
             if (player == null || p.isVirtual() || !seenBy(level, p, player)) found.add(new Candidate(p, d2, audible));
         }

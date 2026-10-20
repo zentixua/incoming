@@ -12,7 +12,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | blukotek | [two-stroke Trabant engine 01.wav](https://freesound.org/s/412819/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G09-18-Constant Jet Noise.wav](https://freesound.org/s/437910/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G10-02-Constant Jet Noise.wav](https://freesound.org/s/437917/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| craigsmith | [G11-25_B-52 Jet Fly By.wav](https://freesound.org/s/437931/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G26-27-Huge Storm Sequence.wav](https://freesound.org/s/438346/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G32-10-Massive Electrical Discharges.wav](https://freesound.org/s/438494/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G33-32-Distant Bomb Explosion.wav](https://freesound.org/s/438538/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
@@ -56,7 +55,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | qubodup | [Massive Explosion](https://freesound.org/s/741175/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | qubodup | [Quadcopter Drone Flyby](https://freesound.org/s/854352/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | qubodup | [M142 HIMARS Rocket Launch 8 [US DoD]](https://freesound.org/s/854476/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| rcEyeSoar | [rc plane fly-by 2.wav](https://freesound.org/s/176973/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Romaner66 | [Air raid siren in Kyiv](https://freesound.org/s/676589/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | Sanderboah | [Geiger counter (dry)](https://freesound.org/s/674113/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Sclolex | [highvoltagearc.wav](https://freesound.org/s/210878/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
