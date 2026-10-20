@@ -313,7 +313,7 @@ public final class FarFlightView {
         // скорость снаряда — его путь за прошлый тик (у сущности и по пакетам одинаково); пути до t нет — скорость
         // из сущности или пакета
         double speed;
-        if (f.track.covers(t - 1)) {
+        if (t - 1 >= f.track.start() && f.track.covers(t - 1)) {
             f.track.at(t, POS);
             f.track.at(t - 1, NOZZLE);
             double dx = POS[0] - NOZZLE[0], dy = POS[1] - NOZZLE[1], dz = POS[2] - NOZZLE[2];
