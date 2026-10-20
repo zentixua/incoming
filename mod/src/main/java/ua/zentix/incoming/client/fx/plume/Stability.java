@@ -49,43 +49,46 @@ public final class Stability {
         return lerp(day, D, Math.max(0, Math.min(1, overcast)));
     }
 
-    /** σ_y на пути x метров по ветру в классе c, м. */
+    /** σ_y на пути x метров по ветру в классе c, м (между классами — линейно, как у множителя a). */
     public static double sigmaY(double c, double x) {
-        return blend(c, k -> SIGMA_Y[k] * x / Math.sqrt(1 + 0.0001 * x));
+        return between(SIGMA_Y, c) * x / Math.sqrt(1 + 0.0001 * x);
     }
 
     /** σ_z на пути x метров по ветру в классе c, м. */
     public static double sigmaZ(double c, double x) {
-        return blend(c, k -> switch (k) {
+        c = Math.max(A, Math.min(F, c));
+        int k = (int) Math.min(4, Math.floor(c));
+        double t = c - k, lo = sigmaZ(k, x);
+        return t == 0 ? lo : lo + (sigmaZ(k + 1, x) - lo) * t;
+    }
+
+    /** σ_z класса k по Бриггсу. */
+    private static double sigmaZ(int k, double x) {
+        return switch (k) {
             case 0 -> 0.20 * x;
             case 1 -> 0.12 * x;
             case 2 -> 0.08 * x / Math.sqrt(1 + 0.0002 * x);
             case 3 -> 0.06 * x / Math.sqrt(1 + 0.0015 * x);
             case 4 -> 0.03 * x / (1 + 0.0003 * x);
             default -> 0.016 * x / (1 + 0.0003 * x);
-        });
+        };
     }
 
     /** Частота Брента–Вяйсяля в классе c, 1/с. */
     public static double brunt(double c) {
-        return blend(c, k -> BRUNT[k]);
+        return between(BRUNT, c);
     }
 
     /** Показатель степенного профиля ветра в классе c. */
     public static double alpha(double c) {
-        return blend(c, k -> ALPHA[k]);
+        return between(ALPHA, c);
     }
 
-    private interface ByClass {
-        double at(int k);
-    }
-
-    private static double blend(double c, ByClass f) {
+    /** Число строки по классу c (между классами — линейно). */
+    private static double between(double[] row, double c) {
         c = Math.max(A, Math.min(F, c));
-        int k = (int) Math.floor(c);
-        if (k >= 5) return f.at(5);
-        double t = c - k;
-        return t == 0 ? f.at(k) : f.at(k) * (1 - t) + f.at(k + 1) * t;
+        int k = (int) Math.min(4, Math.floor(c));
+        return row[k] + (row[k + 1] - row[k]) * (c - k);
     }
 
     private static double column(double[] row, double u) {

@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.fx.particle;
 
 import ua.zentix.incoming.client.fx.ClientAir;
+import ua.zentix.incoming.client.fx.plume.Air;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LightTexture;
@@ -135,9 +136,10 @@ public final class FxParticle {
         if (thermal != null) yd = thermal.lift(age) - thermal.lift(age - 1);
         else yd += rise * (0.15 + 0.85 * Math.exp(-age / 40.0)) - gravity;
         // ветер мира: воздух тянет частицу к своей скорости (у установившейся — скорость ветра × парусность)
-        double push = wind * (1 - drag) / drag;
-        xd += ClientAir.windX(y) * push + driftX;
-        zd += ClientAir.windZ(y) * push + driftZ;
+        Air air = ClientAir.now();
+        double push = wind == 0 ? 0 : air.speed(y) / 20 * wind * (1 - drag) / drag;
+        xd += air.wind().x() * push + driftX;
+        zd += air.wind().z() * push + driftZ;
         if (kind == Fx.Kind.FLAKE && !onGround) {
             // хлопья вьются, падая
             xd += 0.003 * Mth.sin(age * 0.21f + variant);

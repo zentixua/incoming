@@ -1,8 +1,6 @@
 package ua.zentix.incoming.client.render;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.far.FarView;
@@ -55,8 +53,7 @@ public class InterceptorRenderer extends EntityRenderer<InterceptorEntity> {
         boolean boost = e.age() + partial <= InterceptorSpec.SAM.boostTicks();
         Flame f = FlameModel.at(boost ? ClientWeaponSpec.SAM_BOOST : ClientWeaponSpec.SAM_SUSTAIN, e.getY() - Air.SEA);
         if (f == null || !(e.level() instanceof ClientLevel level)) return null;
-        Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        return new Exhaust.Plume(0, (float) -InterceptorSpec.SAM.noseLength(), f, Sight.adapted(1, FarView.adaptation(level, eye, partial)), 1);
+        return new Exhaust.Plume(0, (float) -InterceptorSpec.SAM.noseLength(), f, Sight.adapted(1, FarView.ambient(level, partial)), 1);
     }
 
     @Override

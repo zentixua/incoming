@@ -35,9 +35,9 @@ import java.util.WeakHashMap;
 
 /**
  * Двигатели в полёте: факел (его рисует {@link ua.zentix.incoming.client.render.StrikeProjectileRenderer} по
- * {@link #plume}), облако пуска, огонь у сопла, клубы объёма у густых шлейфов. Сам шлейф и инверсионные следы —
- * лента по точкам пути ({@code client.far.FarFlightView}, вид — {@code ClientWeaponSpec.Trail}): мест частиц она не
- * занимает, поэтому залп в сотни ракет не рвёт следы на отдельные клубы.
+ * {@link #plume}), облако пуска, клубы объёма у густых шлейфов. Сам шлейф и инверсионные следы — лента по точкам пути
+ * ({@code client.far.FarFlightView}, закон — {@link TrailModel}): мест частиц она не занимает, поэтому залп в сотни
+ * ракет не рвёт следы на отдельные клубы.
  */
 public final class Exhaust {
     /**
@@ -94,8 +94,9 @@ public final class Exhaust {
         Flame f = stage.flame(e.getY());
         if (f == null) return null;
         ClientWeaponSpec.At n = a.nozzle(stage);
-        Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        return new Plume((float) n.y(), (float) n.z(), f, Sight.adapted(1, FarView.adaptation(level, eye, partial)), 1);
+        // привыкание глаза — то же, что у света этого факела вдали (FarRenderer: свет неба), иначе на 0,8 прорисовки
+        // яркость скакнула бы
+        return new Plume((float) n.y(), (float) n.z(), f, Sight.adapted(1, FarView.ambient(level, partial)), 1);
     }
 
     /** Сопла сущности из клиентского паспорта (у B-2 и его бомбы — свои). */
@@ -381,16 +382,23 @@ public final class Exhaust {
     private static final double[] BIRTH = new double[2], LOOK = new double[4];
 
     /**
+     * Клубы объёма живут не дольше этого, с: долгий след несёт лента ({@code FarFlightView}), а клуб на минуты держал бы
+     * место в группе шлейфов ({@code FxBudget.TRAIL}) — у залпов позже не рождались бы свои. Не закон дыма, а бюджет мест.
+     */
+    static final double PUFF_SECONDS = 30;
+
+    /**
      * Клуб объёма следа, который снаряд со скоростью speed (м/с) кладёт на высоте y, — по закону следа ({@link TrailModel},
-     * тот же, что у ленты): живёт, пока виден след, от ширины следа у сопла до его наибольшей видимой ширины (плотная часть
-     * клуба — около 0,7 его квадрата), цвета густого дыма, всплывает вместе со следом; null — след не виден.
+     * тот же, что у ленты): живёт, пока виден след (не дольше {@link #PUFF_SECONDS}), от ширины следа у сопла до его
+     * наибольшей видимой ширины за это время (плотная часть клуба — около 0,7 его квадрата), цвета густого дыма,
+     * всплывает вместе со следом; null — след не виден.
      */
     @Nullable
     private static Fx.Spec puff(Trail t, double speed, double y) {
         Air air = ClientAir.now();
         double u = air.speed(y), inv = TrailModel.inverseSpeed(speed, u);
         TrailModel.birth(t, inv, y, u, air, BIRTH);
-        double life = BIRTH[0], ice = BIRTH[1];
+        double life = Math.min(BIRTH[0], PUFF_SECONDS), ice = BIRTH[1];
         if (life <= 0) return null;
         TrailModel.look(t, 0.5, inv, ice, u, y, air, LOOK);
         double w0 = LOOK[0], tone = LOOK[3], w1 = w0;

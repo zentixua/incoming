@@ -13,7 +13,7 @@ import java.util.Arrays;
  * предыдущей к каждой: O(точек), без выделений.
  */
 final class TrailPoints {
-    /** Точек на все шлейфы, не больше: пакет РСЗО из 40 снарядов — 860, шлейф МБР — 270, B-2 — 500. */
+    /** Точек на все шлейфы, не больше: пакет РСЗО из 40 снарядов — 860 (тест), МБР за разгон в мире — ~50. */
     static final int CAPACITY = 16384;
     /** Нет точки. */
     static final long NONE = -1;
@@ -29,6 +29,11 @@ final class TrailPoints {
     final float[] inverse = new float[CAPACITY];
     /** Сколько точка видна и сколько держится лёд инверсии, тиков; ветер на её высоте, м/с. */
     final float[] life = new float[CAPACITY], ice = new float[CAPACITY], wind = new float[CAPACITY];
+    /**
+     * Избыток пара надо льдом там, кг/м³; масштаб всплытия, м, и частота Брента–Вяйсяля, 1/с, — при рождении
+     * ({@code TrailModel.excess}, {@code riseScale}): кадр их не пересчитывает.
+     */
+    final float[] excess = new float[CAPACITY], rise = new float[CAPACITY], brunt = new float[CAPACITY];
     /** Номер предыдущей точки той же ленты или {@link #NONE}. */
     final long[] prev = new long[CAPACITY];
     /**
@@ -48,13 +53,16 @@ final class TrailPoints {
 
     /**
      * Новая точка ленты: prev — предыдущая точка той же ленты ({@link #NONE} — лента начинается здесь); что закон следа
-     * дал ей при рождении: inverse — секунды на метр, life и ice — тики, wind — м/с.
+     * дал ей при рождении: inverse — секунды на метр, life и ice — тики, wind — м/с, excess — кг/м³, rise — м, brunt — 1/с.
      *
      * @return номер записи
      */
     long add(double x, double y, double z, long birth, Trail style, int light, int owner, long prev, float inverse, float life, float ice,
-             float wind) {
+             float wind, float excess, float rise, float brunt) {
         int i = index(next);
+        this.excess[i] = excess;
+        this.rise[i] = rise;
+        this.brunt[i] = brunt;
         this.inverse[i] = inverse;
         this.life[i] = life;
         this.ice[i] = ice;

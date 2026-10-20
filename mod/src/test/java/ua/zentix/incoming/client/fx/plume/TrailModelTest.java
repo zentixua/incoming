@@ -110,8 +110,13 @@ class TrailModelTest {
         double tlm = Contrail.thresholdSaturated(g) - 273.15;
         assertEquals(-46.46 + 9.43 * Math.log(g - 0.053) + 0.72 * Math.pow(Math.log(g - 0.053), 2), tlm, 1e-9);
         assertTrue(tlm > -44 && tlm < -40, "T_LM " + tlm);
-        // сухой воздух требует холоднее
-        assertTrue(Contrail.threshold(g, 0.3) < Contrail.thresholdSaturated(g));
+        // сухой воздух требует холоднее: у U = 0 T_LC = T_LM − e_w(T_LM)/G (Schumann 1996)
+        double tlmK = Contrail.thresholdSaturated(g);
+        assertEquals(tlmK - Contrail.waterSaturation(tlmK) / g, Contrail.threshold(g, 0), 0.05);
+        double half = Contrail.threshold(g, 0.5);
+        assertTrue(half < tlmK && half > Contrail.threshold(g, 0), "между сухим и насыщенным: " + half);
+        // и в ясную погоду (U = 0,5) на 11 км след встаёт
+        assertTrue(Contrail.forms(b2, StandardAtmosphere.temperature(11_000), StandardAtmosphere.pressure(11_000), 0.5));
         // 170 м над морем (сегодняшний B-2): +14 °C — никогда; 11 км (−56,5 °C), насыщено — встаёт
         double h1 = 170, h2 = 11_000;
         assertFalse(Contrail.forms(b2, StandardAtmosphere.temperature(h1), StandardAtmosphere.pressure(h1), 1));

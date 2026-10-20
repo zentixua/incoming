@@ -571,9 +571,11 @@ public final class FarBlasts {
             double h = height(k, f, r, rise);
             double vis = visible(h, r, line);
             if (vis <= 0) continue;
-            // ветер мира на высоте клуба (выше — сильнее: столб клонится)
-            double wy = view.camera().y + by + h;
-            double px = bx + e.ox[i] * r * SPREAD + ClientAir.windX(wy) * age, py = by + h, pz = bz + e.oz[i] * r * SPREAD + ClientAir.windZ(wy) * age;
+            // ветер мира на высоте клуба (выше — сильнее: столб клонится); низ столба — дым, что подходит позже, и он
+            // сносится меньше, как прежде (доля shear)
+            double shear = 0.3 + 0.7 * f * rise, wy = view.camera().y + by + h;
+            double px = bx + e.ox[i] * r * SPREAD + ClientAir.windX(wy) * age * shear, py = by + h,
+                    pz = bz + e.oz[i] * r * SPREAD + ClientAir.windZ(wy) * age * shear;
             double d = Math.sqrt(px * px + py * py + pz * pz);
             double t = view.air(d, py);
             if (t < Sight.THRESHOLD) continue;

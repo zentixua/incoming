@@ -41,8 +41,9 @@ public final class Contrail {
         double hi = tlm, lo = tlm - 80, ew = waterSaturation(tlm);
         for (int i = 0; i < 60; i++) {
             double t = (hi + lo) / 2, f = ew - u * waterSaturation(t) - g * (tlm - t);
-            if (f > 0) lo = t;
-            else hi = t;
+            // f растёт с температурой: у T_LM больше нуля, на 80 K холоднее — меньше
+            if (f > 0) hi = t;
+            else lo = t;
         }
         return lo;
     }

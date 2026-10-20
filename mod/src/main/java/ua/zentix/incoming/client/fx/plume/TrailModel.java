@@ -37,6 +37,8 @@ public final class TrailModel {
     static final double ALPHA = 0.5;
     /** Теплоёмкость воздуха, Дж/(кг·K). */
     static final double CP_AIR = 1004;
+    /** Плавучесть на метр следа на ватт-секунду тепла: g/(ρ·c_p·T) у земли, м³/(с²·Дж/м). */
+    private static final double BUOYANCY = 9.80665 / (StandardAtmosphere.density(0) * CP_AIR * StandardAtmosphere.T0);
     /** Самое долгое, что живёт след, с: дальше — не дольше игровых суток. */
     static final double LONGEST = 1200;
     /** Безразмерное всплытие s(τ) до вершины, шаг τ. */
@@ -80,7 +82,7 @@ public final class TrailModel {
     }
 
     /** Избыток пара над насыщением надо льдом на высоте y мира, кг/м³ (0 — не пересыщен). */
-    static double excess(double y, Air air) {
+    public static double excess(double y, Air air) {
         return Math.max(0, -Contrail.iceDeficit(StandardAtmosphere.temperature(y - Air.SEA), air.humidity()));
     }
 
@@ -119,9 +121,20 @@ public final class TrailModel {
      * out[2] — подъём, м; out[3] — отражение густого дыма (линейно, {@link Smoke#reflectance}).
      */
     public static void look(Trail t, double age, double inverseSpeed, double iceLife, double wind, double y, Air air, double[] out) {
-        double lift = rise(t, age, inverseSpeed, air.brunt());
-        double sigma = sigma(t, age, air.stability(), wind, lift);
-        double smoke = smoke(t, inverseSpeed), ice = age < iceLife ? ice(t, inverseSpeed, excess(y, air), sigma) : 0, e = smoke + ice;
+        double n = air.brunt();
+        look(t, age, inverseSpeed, iceLife, wind, excess(y, air), riseScale(t, inverseSpeed, n), n, air.stability(), out);
+    }
+
+    /**
+     * То же по числам, которые точка получила при рождении (кадр обходит тысячи точек: здесь нет ни кубических корней,
+     * ни давления насыщения): избыток пара excess ({@link #excess}), масштаб всплытия riseScale ({@link #riseScale}) при
+     * частоте brunt, класс устойчивости stability.
+     */
+    public static void look(Trail t, double age, double inverseSpeed, double iceLife, double wind, double excess, double riseScale, double brunt,
+                            double stability, double[] out) {
+        double lift = riseScale * risen(brunt * age);
+        double sigma = sigma(t, age, stability, wind, lift);
+        double smoke = smoke(t, inverseSpeed), ice = age < iceLife ? ice(t, inverseSpeed, excess, sigma) : 0, e = smoke + ice;
         double tau = e / (Math.sqrt(2 * Math.PI) * sigma);
         out[2] = lift;
         Smoke s = t.motor().smoke();
@@ -144,11 +157,14 @@ public final class TrailModel {
 
     /** Подъём тёплого следа через age секунд в воздухе с частотой Брента–Вяйсяля brunt, м. */
     public static double rise(Trail t, double age, double inverseSpeed, double brunt) {
+        return age <= 0 ? 0 : riseScale(t, inverseSpeed, brunt) * risen(brunt * age);
+    }
+
+    /** Масштаб всплытия L = (3b/N²)^⅓, b = B/(πα²): подъём — L·s(N·t), м. */
+    public static double riseScale(Trail t, double inverseSpeed, double brunt) {
         double heat = t.motor().heatFlow() * inverseSpeed;
-        if (heat <= 0 || age <= 0) return 0;
-        double b = 9.80665 * heat / (StandardAtmosphere.density(0) * CP_AIR * StandardAtmosphere.T0) / (Math.PI * ALPHA * ALPHA);
-        double scale = Math.cbrt(3 * b / (brunt * brunt));
-        return scale * risen(brunt * age);
+        if (heat <= 0 || brunt <= 0) return 0;
+        return Math.cbrt(3 * BUOYANCY * heat / (Math.PI * ALPHA * ALPHA) / (brunt * brunt));
     }
 
     /** σ, до которой середина следа с ослаблением e на метр видна. */
@@ -203,7 +219,7 @@ public final class TrailModel {
 
     /** Функция ошибок (Abramowitz, Stegun 7.1.26, погрешность 1,5·10⁻⁷). */
     static double erf(double x) {
-        double t = 1 / (1 + 0.3275911 * x);
+        double t = 1 / (1 + 0.3275911 * Math.abs(x));
         double y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
         return x >= 0 ? y : -y;
     }
