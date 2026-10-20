@@ -171,10 +171,12 @@ class SmokeGridTest {
         assertEquals(0, SmokeGrid.resolved(1, 2), 1e-12);
         assertEquals(0.5, SmokeGrid.resolved(1.5, 2), 1e-12);
         assertEquals(0, SmokeGrid.resolved(5, 0), 1e-12);
-        assertEquals(2, SmokeGrid.cellFor(0.5, 0.5, 0.5, 10, 0, 0, 0, 0, 0, 1, 1), 0);
-        assertEquals(8, SmokeGrid.cellFor(0.5, 0.5, 0.5, 100, 0, 0, 0, 0, 0, 1, 1), 0);
-        assertEquals(8, SmokeGrid.cellFor(0.5, 0.5, 0.5, 10, 0, 0, 60, 0, 0, 1, 1), 0, "длинный отрезок у глаза — в каскад, где он весь");
-        assertEquals(0, SmokeGrid.cellFor(0.5, 0.5, 0.5, 5000, 0, 0, 0, 0, 0, 1, 1), 0);
+        double[] c = new double[3 * SmokeGrid.CASCADES];
+        SmokeGrid.corners(0.5, 0.5, 0.5, c);
+        assertEquals(2, SmokeGrid.cellFor(c, 10.5, 0.5, 0.5, 0, 0, 0, 1, 1), 0);
+        assertEquals(8, SmokeGrid.cellFor(c, 100.5, 0.5, 0.5, 0, 0, 0, 1, 1), 0);
+        assertEquals(8, SmokeGrid.cellFor(c, 10.5, 0.5, 0.5, 60, 0, 0, 1, 1), 0, "длинный отрезок у глаза — в каскад, где он весь");
+        assertEquals(0, SmokeGrid.cellFor(c, 5000.5, 0.5, 0.5, 0, 0, 0, 1, 1), 0);
     }
 
     /** Иссякший источник уходит; объём рисует облако у глаза и не рисует на краю сетки. */

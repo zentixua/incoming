@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.nuclear;
 
+import ua.zentix.incoming.client.fx.FireWatch;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
@@ -73,8 +74,8 @@ public final class NukeSounds {
     }
 
     /**
-     * Петля чёрного дождя — после {@link NukeSky#tick}, который решает, идёт ли он у камеры; сирены; пока где-то горит
-     * от подрыва — огонь в своих чанках ({@link FireWatch}).
+     * Петля чёрного дождя — после {@link NukeSky#tick}, который решает, идёт ли он у камеры; сирены. Огонь в своих чанках
+     * ({@link FireWatch}) смотрит тик клиента — всегда: по нему и дым над любыми пожарами.
      */
     static void tick() {
         Minecraft mc = Minecraft.getInstance();
@@ -83,14 +84,6 @@ public final class NukeSounds {
             mc.getSoundManager().play(rainLoop);
         }
         sirens();
-        boolean burning = false;
-        for (ClientNuclear.Active a : ClientNuclear.detonations()) burning |= a.sounds.after.burning();
-        if (burning && mc.level != null) {
-            Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
-            FireWatch.tick(mc.level, (int) Math.floor(eye.x) >> 4, (int) Math.floor(eye.z) >> 4, mc.options.getEffectiveRenderDistance());
-        } else {
-            FireWatch.idle();
-        }
     }
 
     /** Строка {@code SCENARIO}: эхо и горящий город каждого подрыва; пусто — подрывов нет. */

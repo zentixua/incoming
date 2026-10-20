@@ -184,14 +184,16 @@ public final class LaunchCloud implements SmokeGrid.Source {
         if (thermal == null) return true;
         double t = Math.max(0, seconds - born);
         if (t >= life) return false;
+        // облако, что дожило до предела густым, уходит за последнюю десятую жизни (как облако взрыва)
+        double fade = life < CloudModel.LIFE_MAX ? 1 : Math.min(1, (life - t) / (0.1 * life));
         double cx = sumX / heat + thermal.driftX(t), cz = sumZ / heat + thermal.driftZ(t), cy = groundY + thermal.height(t);
-        double cloudDust = CloudModel.CLOUD_SHARE * dust * DustModel.aloft(t, thermal.height(t));
-        out.blob(cx, cy, cz, thermal.sigmaH(t), thermal.sigmaV(t), soot, cloudDust, water, dustR, dustG, dustB,
+        double cloudDust = CloudModel.CLOUD_SHARE * dust * DustModel.aloft(t, thermal.height(t)) * fade;
+        out.blob(cx, cy, cz, thermal.sigmaH(t), thermal.sigmaV(t), soot * fade, cloudDust, water * fade, dustR, dustG, dustB,
                 thermal.kelvin(t), thermal.rise(t));
         double x = Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(2)) * t;
         double s0 = thermal.r0 / Math.sqrt(5);
         double bh = Math.max(s0, CloudModel.spreadH(air.spread(), x)), bv = Math.max(s0, CloudModel.spreadV(air.spread(), x));
-        double ground = (1 - CloudModel.CLOUD_SHARE) * dust * DustModel.aloft(t, 2 * bv);
+        double ground = (1 - CloudModel.CLOUD_SHARE) * dust * DustModel.aloft(t, 2 * bv) * fade;
         double lean = air.wind(2) * t;
         out.blob(sumX / heat + air.windX() * lean, groundY + bv, sumZ / heat + air.windZ() * lean, bh, bv, 0, ground, 0, dustR, dustG, dustB,
                 CloudModel.T_AIR, 0);

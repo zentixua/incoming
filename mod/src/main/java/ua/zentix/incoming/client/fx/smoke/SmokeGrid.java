@@ -352,20 +352,22 @@ public final class SmokeGrid {
         return -1;
     }
 
-    /**
-     * Клетка каскада, в который ляжет клуб σ (sh, sv) с центром (dx, dy, dz) от глаза и полуотрезком (ax, ay, az), м; 0 — ни в
-     * какой. Углы каскадов — как у кадра ({@link #build}).
-     */
-    public static float cellFor(double eyeX, double eyeY, double eyeZ, double dx, double dy, double dz, double ax, double ay, double az,
-                                double sh, double sv) {
-        double[] corner = new double[CASCADES * 3];
+    /** Углы каскадов в мире у глаза (как у кадра, {@link #build}) — в out (3 числа на каскад). */
+    public static void corners(double eyeX, double eyeY, double eyeZ, double[] out) {
         for (int c = 0; c < CASCADES; c++) {
             double cell = CELL[c];
-            corner[3 * c] = Math.floor(eyeX / cell - N / 2.0) * cell;
-            corner[3 * c + 1] = Math.floor(eyeY / cell - N / 2.0) * cell;
-            corner[3 * c + 2] = Math.floor(eyeZ / cell - N / 2.0) * cell;
+            out[3 * c] = Math.floor(eyeX / cell - N / 2.0) * cell;
+            out[3 * c + 1] = Math.floor(eyeY / cell - N / 2.0) * cell;
+            out[3 * c + 2] = Math.floor(eyeZ / cell - N / 2.0) * cell;
         }
-        int k = cascade(corner, eyeX + dx, eyeY + dy, eyeZ + dz, ax, ay, az, sh, sv);
+    }
+
+    /**
+     * Клетка каскада, в который ляжет клуб σ (sh, sv) с центром (x, y, z) в мире и полуотрезком (ax, ay, az), м, при углах
+     * каскадов corner ({@link #corners}); 0 — ни в какой.
+     */
+    public static float cellFor(double[] corner, double x, double y, double z, double ax, double ay, double az, double sh, double sv) {
+        int k = cascade(corner, x, y, z, ax, ay, az, sh, sv);
         return k < 0 ? 0 : CELL[k];
     }
 

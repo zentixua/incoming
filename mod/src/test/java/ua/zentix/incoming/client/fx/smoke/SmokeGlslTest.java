@@ -47,6 +47,9 @@ class SmokeGlslTest {
         assertEquals(SmokeGrid.DROP_G, c.get("SMOKE_DROP_G"), 1e-6);
         assertEquals(SmokeGrid.AIR_K, c.get("SMOKE_AIR_K"), 1e-3);
         assertEquals(SmokeGrid.N, constants(read("core/fx_smoke_fill.fsh")).get("SMOKE_N"), 0);
+        // клуб по отрезку: короче — точка, как у Java (SmokeGrid.line)
+        assertEquals(SmokeGrid.LINE_POINT, constants(read("core/fx_smoke_fill.fsh")).get("SMOKE_LINE_POINT"), 1e-9);
+        assertTrue(read("core/fx_smoke_fill.fsh").contains("1.061405429") && read("core/fx_smoke_fill.fsh").contains("0.3275911"), "erf 7.1.26");
         // строк таблицы клубов у заполнения — столько же, сколько пишет Java
         String fill = read("core/fx_smoke_fill.fsh");
         for (int row = 0; row < SmokeGrid.BLOB_ROWS; row++) assertTrue(fill.contains("ivec2(i, " + row + ")"), "строка " + row);

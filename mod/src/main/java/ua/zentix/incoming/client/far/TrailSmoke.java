@@ -105,7 +105,7 @@ final class TrailSmoke implements SmokeGrid.Source {
      * Можно ли продолжить отрезок r до точки (x, y, z) с сечением sigma, массой на метр perMetre в каскаде с клеткой cell:
      * прямо, сечение и масса на метр — в {@link #MERGE} раза, тот же каскад, не больше {@link #RUN_POINTS} точек.
      */
-    static boolean extends_(int r, double x, double y, double z, double sigma, double perMetre, float cell) {
+    static boolean continues(int r, double x, double y, double z, double sigma, double perMetre, float cell) {
         if (POINTS[r] >= RUN_POINTS || CELL[r] != cell) return false;
         double lo = Math.min(SMIN[r], sigma), hi = Math.max(SMAX[r], sigma);
         if (hi > MERGE * lo) return false;

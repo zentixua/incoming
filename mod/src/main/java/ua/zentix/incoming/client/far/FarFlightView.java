@@ -471,7 +471,7 @@ public final class FarFlightView {
     private static final int[] RUN = new int[TrailPoints.CAPACITY], RUN_AT = new int[TrailPoints.CAPACITY];
     /** σ сечения точки и скорость её подъёма в кадре, м и м/с. */
     private static final float[] SIG = new float[TrailPoints.CAPACITY], RIS = new float[TrailPoints.CAPACITY];
-    private static final double[] MATTER = new double[2], START = new double[4];
+    private static final double[] MATTER = new double[2], START = new double[4], CORNERS = new double[3 * SmokeGrid.CASCADES];
 
     /** Время кадра у путей: тик пути и доля (как у {@link #collect}). */
     private static double frameTime(float partial) {
@@ -489,6 +489,7 @@ public final class FarFlightView {
         if (POINTS.isEmpty()) return;
         int frame = TrailSmoke.frame;
         double t = frameTime(partial);
+        SmokeGrid.corners(eye.x, eye.y, eye.z, CORNERS);
         for (long sn = POINTS.first(), end = POINTS.end(); sn < end; sn++) {
             int i = TrailPoints.index(sn);
             Trail style = POINTS.style[i];
@@ -502,13 +503,14 @@ public final class FarFlightView {
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
             double x = POINTS.x[i] + air.wind().x() * drift, y = POINTS.y[i] + lift, z = POINTS.z[i] + air.wind().z() * drift;
             double dx = x - eye.x, dy = y - eye.y, dz = z - eye.z;
-            float cell = SmokeGrid.cellFor(eye.x, eye.y, eye.z, dx, dy, dz, 0, 0, 0, sigma, sigma);
-            double share = SmokeGrid.volumeShare(dx, dy, dz) * SmokeGrid.resolved(sigma, cell);
+            double edge = SmokeGrid.volumeShare(dx, dy, dz);
+            float cell = edge > 0 ? SmokeGrid.cellFor(CORNERS, x, y, z, 0, 0, 0, sigma, sigma) : 0;
+            double share = edge * SmokeGrid.resolved(sigma, cell);
             SHARE[i] = (float) share;
             SHARE_AT[i] = frame;
             SIG[i] = (float) sigma;
-            RIS[i] = (float) ((TrailModel.rise(style, age / 20 + 0.05, POINTS.inverse[i], POINTS.brunt[i])
-                    - TrailModel.rise(style, age / 20, POINTS.inverse[i], POINTS.brunt[i])) / 0.05);
+            // скорость подъёма — для шума клубов в объёме; вне объёма не нужна
+            RIS[i] = share <= 0 ? 0 : (float) ((TrailModel.rise(style, age / 20 + 0.05, POINTS.inverse[i], POINTS.brunt[i]) - lift) / 0.05);
             long p = POINTS.prev[i];
             if (!POINTS.holds(p)) continue;
             int pi = TrailPoints.index(p);
@@ -529,7 +531,7 @@ public final class FarFlightView {
             double perMetre = (soot + water) / Math.max(len, 1e-6);
             TrailSmoke smoke = TrailSmoke.of(POINTS.owner[i]);
             int before = RUN_AT[pi] == frame ? RUN[pi] : -1, r = before;
-            if (r < 0 || !TrailSmoke.extends_(r, x, y, z, sigma, perMetre, cell)) {
+            if (r < 0 || !TrailSmoke.continues(r, x, y, z, sigma, perMetre, cell)) {
                 // новый отрезок — от места точки p в этом кадре (конец прежнего отрезка или её место)
                 if (before >= 0) {
                     r = TrailSmoke.open(smoke, TrailSmoke.EX[before], TrailSmoke.EY[before], TrailSmoke.EZ[before], SIG[pi], RIS[pi], cell);
