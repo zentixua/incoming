@@ -2,57 +2,88 @@ package ua.zentix.incoming.client.sound;
 
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.client.flight.FlightTrack;
+import ua.zentix.incoming.entity.FlightPhase;
+import ua.zentix.incoming.sound.Noise;
+import ua.zentix.incoming.sound.Propagation;
+import ua.zentix.incoming.sound.Spectrum;
+import ua.zentix.incoming.strike.Hearing;
 
 /**
  * Что слушатель слышит от снаряда в этот тик: «запаздывающий» момент излучения {@code time} и всё, что из него
  * выводят слои звука ({@link EngineSound.Layer#tone}) — положение, расстояние, направление на ухо, скорость, Доплер,
- * фаза полёта, сколько до цели и насколько он идёт на неё ({@link #towardAim}). Считается раз в тик на снаряд, общий
- * для всех его слоёв.
+ * фаза полёта и путь звука до уха ({@link #heard}: уровень каждой шумящей части после пути). Считается раз в тик на
+ * снаряд, общий для всех его слоёв.
  *
- * @param nx        единичный вектор от источника к уху
- * @param radial    проекция скорости на него (больше нуля — снаряд идёт на слушателя)
- * @param towardAim насколько снаряд идёт на цель, 0..1 ({@link #toward})
- * @param onboard   слушатель сидит на самом снаряде (камера снаряда)
+ * @param nx      единичный вектор от источника к уху
+ * @param radial  проекция скорости на него (больше нуля — снаряд идёт на слушателя)
+ * @param height  высота источника над землёй под слушателем, м ({@link Hearing#height})
+ * @param onboard слушатель сидит на самом снаряде (камера снаряда)
  */
 record Emission(double time, double x, double y, double z, double distance, double nx, double ny, double nz, Vec3 velocity,
-                double radial, double doppler, int phase, double phaseAge, double aimDistance, double towardAim, boolean onboard) {
-    /**
-     * Курс по горизонтали не дальше этого угла от направления на цель — снаряд идёт на неё (заход по прямой), дальше
-     * {@link #ASIDE_DEG} — обходит маршрут сбоку; между — плавно. Первое плечо обхода ({@code Route.plan}) уходит
-     * от направления на цель на 38° и больше — оно за краем.
-     */
-    static final double TOWARD_AIM_DEG = 15, ASIDE_DEG = 35;
+                double radial, double doppler, int phase, double phaseAge, double height, Propagation.Weather weather, boolean onboard,
+                Heard[] parts) {
     /** Слушатель впереди снаряда, если тот идёт на него не дальше этого угла от курса; позади — с {@link #BEHIND_DEG}. */
     static final double AHEAD_DEG = 45, BEHIND_DEG = 100;
-    private static final double TOWARD_AIM_COS = Math.cos(Math.toRadians(TOWARD_AIM_DEG)), ASIDE_COS = Math.cos(Math.toRadians(ASIDE_DEG));
     private static final double AHEAD_COS = Math.cos(Math.toRadians(AHEAD_DEG)), BEHIND_COS = Math.cos(Math.toRadians(BEHIND_DEG));
 
+    /**
+     * Шумящая часть у уха после пути по открытому воздуху: мощность звука у источника, A-уровень у уха, насколько она
+     * громче фона в самой выгодной октаве ({@link Propagation#margin}) и доля верхов (октава 4 кГц против всего звука).
+     */
+    record Heard(double power, double level, double margin, double highs) {
+        static final Heard SILENT = new Heard(Noise.SILENT, Noise.SILENT, Double.NEGATIVE_INFINITY, 1);
+    }
 
     /** Слышимое из момента te: его данные о снаряде должны быть ({@link FlightTrack#covers}). */
-    static Emission at(FlightTrack track, double te, Vec3 ear, boolean onboard) {
+    static Emission at(FlightTrack track, double te, Vec3 ear, boolean onboard, Propagation.Weather weather) {
         double[] p = new double[3];
         track.at(te, p);
         double dx = ear.x - p[0], dy = ear.y - p[1], dz = ear.z - p[2];
         double d = Math.max(0.5, Math.sqrt(dx * dx + dy * dy + dz * dz));
         double nx = dx / d, ny = dy / d, nz = dz / d;
         Vec3 v = track.velocity(te);
-        Vec3 aim = track.aim(te);
-        double ax = aim.x - p[0], az = aim.z - p[2];
         return new Emission(te, p[0], p[1], p[2], d, nx, ny, nz, v, v.x * nx + v.y * ny + v.z * nz,
                 Acoustics.doppler(v.x, v.y, v.z, nx, ny, nz), track.phase(te), track.phaseAge(te),
-                Math.sqrt(ax * ax + sq(aim.y - p[1]) + az * az), toward(v.x, v.z, ax, az), onboard);
+                Hearing.height(new Vec3(p[0], p[1], p[2]), ear), weather, onboard, new Heard[Noise.Part.values().length]);
+    }
+
+    /** Путь звука до уха: ухо на {@link Propagation#EAR} над лугом, источник — на {@link #height}. */
+    Propagation.Path path(double distance) {
+        return Propagation.Path.over(distance, height, weather);
+    }
+
+    /** Часть {@code part} шума снаряда у уха (считается раз за тик). */
+    Heard heard(Noise noise, Noise.Part part, boolean drilling) {
+        Heard h = parts[part.ordinal()];
+        if (h != null) return h;
+        double lw = noise.power(part, FlightPhase.byId(phase), phaseAge, velocity.length(), drilling);
+        if (lw == Noise.SILENT) h = Heard.SILENT;
+        else {
+            Spectrum spectrum = noise.spectrum(part);
+            double[] bands = new double[Propagation.BANDS];
+            double level = Propagation.level(lw, spectrum, path(distance), bands);
+            h = new Heard(lw, level, Propagation.margin(bands, weather), highs(lw, spectrum, distance));
+        }
+        parts[part.ordinal()] = h;
+        return h;
     }
 
     /**
-     * Насколько курс (vx, vz) идёт на точку (ax, az) от снаряда, по горизонтали: 1 — не дальше {@link #TOWARD_AIM_DEG},
-     * 0 — дальше {@link #ASIDE_DEG}, между — плавно (на повороте маршрута свист подлёта не включается рывком); над самой
-     * целью — 1.
+     * Доля верхов части {@code part}, как если бы до уха было {@code distance} блоков (та же высота источника и погода):
+     * сколько их съел бы путь, уже вошедший в дальнюю запись.
      */
-    static double toward(double vx, double vz, double ax, double az) {
-        double a = Math.sqrt(ax * ax + az * az), v = Math.sqrt(vx * vx + vz * vz);
-        if (a < 1) return 1;
-        if (v < 1.0e-6) return 0;
-        return Acoustics.smoothstep(ASIDE_COS, TOWARD_AIM_COS, (vx * ax + vz * az) / (v * a));
+    double heardAt(Noise noise, Noise.Part part, boolean drilling, double distance) {
+        double lw = noise.power(part, FlightPhase.byId(phase), phaseAge, velocity.length(), drilling);
+        return lw == Noise.SILENT ? 1 : highs(lw, noise.spectrum(part), distance);
+    }
+
+    /** Доля верхов: насколько октава 4 кГц ослабла по пути сильнее, чем звук в целом (EFX глушит их выше 5 кГц). */
+    private double highs(double lw, Spectrum spectrum, double distance) {
+        double[] bands = new double[Propagation.BANDS];
+        double level = Propagation.level(lw, spectrum, path(distance), bands);
+        int hf = Propagation.BANDS - 2;
+        double emitted = lw + spectrum.aWeighting(), lost4k = lw + spectrum.z(hf) + Propagation.aWeight(hf) - bands[hf];
+        return Math.min(1, Math.pow(10, -(lost4k - (emitted - level)) / 20));
     }
 
     /**
@@ -63,10 +94,6 @@ record Emission(double time, double x, double y, double z, double distance, doub
     double ahead() {
         double v = velocity.length();
         return v < 1.0e-6 ? 0 : Acoustics.smoothstep(BEHIND_COS, AHEAD_COS, radial / v);
-    }
-
-    private static double sq(double x) {
-        return x * x;
     }
 
     Vec3 position() {

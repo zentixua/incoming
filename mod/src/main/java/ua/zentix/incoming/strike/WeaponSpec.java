@@ -14,9 +14,10 @@ import ua.zentix.incoming.guidance.BombDrop;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.registry.ModItems;
+import ua.zentix.incoming.sound.Noise;
+import ua.zentix.incoming.sound.Spectra;
 
 import java.util.function.Supplier;
-import java.util.function.ToDoubleFunction;
 
 /**
  * Паспорт оружия: всё, чем один вид оружия отличается от другого, — в одном описании на вид ({@link WeaponType#spec()}).
@@ -250,13 +251,13 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * @param visibleLeg    последние столько блоков до цели снаряд летит в мире, когда у цели есть игрок
      *                      ({@link FlightTickets#approach}); 0 — только район цели
      * @param attack        геометрия атаки управляемого снаряда
-     * @param audible       докуда слышно снаряд в этой фазе, блоков, без затухания {@link Hearing#FADE} (0 — не слышно)
+     * @param noise         чем шумит: двигатели, корпус, старт ({@link Noise}); докуда его слышно — {@link Hearing}
      * @param radar         как его видит и бьёт ЗРК ({@code defense.Radar})
      */
     public record Airframe(Supplier<EntityType<? extends StrikeProjectile>> entity, double cruiseSpeed, double diveSpeed,
                            double turnRate, double climbTurnRate, double cruiseHeight, double clearance, double reliefLookahead, double noseLength,
                            float health, double range, double reachPad, @Nullable LaunchProfile launchProfile, double visibleLeg,
-                           Attack attack, ToDoubleFunction<FlightPhase> audible, Signature radar) {
+                           Attack attack, Noise noise, Signature radar) {
         /** Радиус разворота на скорости {@code speed} с пределом поворота на маршруте ({@link #turnRadius(double, double)}). */
         public double turnRadius(double speed) {
             return WeaponSpec.turnRadius(speed, turnRate);
@@ -308,11 +309,6 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
         return sirenSeconds * 20;
     }
 
-    /** Стартовый участок: на пусковой или горит ускоритель. */
-    private static boolean launching(FlightPhase ph) {
-        return ph.onLauncher() || ph.boosterLit();
-    }
-
     /** Сила взрыва боевой части (настройка мира). */
     public float blastPower() {
         return power.get().get();
@@ -322,6 +318,73 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     public int salvoGap(RandomSource random) {
         return salvo.gapMin() + random.nextInt(salvo.gapMax() - salvo.gapMin() + 1);
     }
+
+    // ---- паспорта звука ({@link Noise}): числа изделий с источниками; «О» — оценка, выведена из других чисел или по классу
+
+    /**
+     * Шахед: MD-550 — копия Limbach L550E, двухтактный оппозитный четырёхцилиндровый 548 см³, 37 кВт на 7500 об/мин
+     * (Wikipedia «Limbach L550E»), толкающий двухлопастной винт прямо на валу: лопасти 250 Гц, вал 125 Гц; крейсер
+     * 185 км/ч = 51 м/с (Wikipedia «HESA Shahed 136»). Громкость — по классу: сверхлёгкие самолёты 15–30 л. с. на полном
+     * газу дают ~70 дБА в 150 м под собой (F. W. J. van Deventer, «Noise aspects of ultralights and model airplanes»,
+     * Proc. IOA): L<sub>WA</sub> = 70 + 20·lg 150 + 11 − 3 (отражение от земли у микрофона) ≈ 121,5 дБА на ~16,4 кВт
+     * (22 л. с.). На месте полный газ — 0,8 номинала оборотов, в пике раскрутка не выше 1,1 (О). Ускоритель — тяга ~5 кН
+     * (О: ~200 кг до ~25 м/с² разгона), истечение ~2000 м/с (О, смесевое топливо). Корпус ~0,5 × 3,5 м (О по фото,
+     * длина — Wikipedia); в записи обтекания — его крейсер. Отстрел ускорителя ~125 дБА (О).
+     */
+    static final Noise DRONE_NOISE = new Noise(
+            new Noise.Propeller(37_000, 7500, 2, 51, 0.8, 1.1, 121.5, 16_400, Spectra.DRONE_ENGINE),
+            new Noise.Rocket(5000, 2000, Spectra.BOOSTER_ENGINE),
+            new Noise.Body(0.5, 3.5, 51, Spectra.BOMB_FALL), Double.NaN, Double.NaN, 125);
+
+    /**
+     * «Томагавк»: маршевый ТРДД Williams F107-WR-402, 3,1 кН, ускоритель Atlantic Research Mk 106 — 26,7 кН 12 с
+     * (designation-systems.net, «Raytheon BGM-109 Tomahawk»); скорость струи F107 на месте ~510 м/с (О: расход
+     * ~6,1 кг/с при двухконтурности ~1), раскрутка от малого газа 0,55 за 2,5 с (О); истечение ускорителя ~2400 м/с
+     * (О, удельный импульс смесевого топлива ~245 с). Корпус 0,52 × 5,56 м (Wikipedia).
+     */
+    static final Noise MISSILE_NOISE = new Noise(
+            new Noise.Jet(3100, 510, 1, 0.55, 50, Spectra.MISSILE_ENGINE_REAR),
+            new Noise.Rocket(26_700, 2400, Spectra.BOOSTER_ENGINE),
+            new Noise.Body(0.52, 5.56, 250, Spectra.BOMB_FALL), Double.NaN, Double.NaN, 125);
+
+    /**
+     * B-2: четыре ТРДД F118-GE-100 по 77 кН (Wikipedia «Northrop B-2 Spirit»), скорость струи ~570 м/с (О: расход
+     * ~135 кг/с при двухконтурности 0,76); тяга — на месте, верхняя оценка (на эшелоне двигатели прикрыты).
+     */
+    static final Noise BOMBER_NOISE = new Noise(new Noise.Jet(77_000, 570, 4, 0.55, 50, Spectra.BOMBER_ENGINE),
+            null, null, Double.NaN, Double.NaN, Double.NaN);
+
+    /**
+     * GBU-57 MOP: 6,2 × 0,8 м (Wikipedia); запись падения — ветер на KC-135 (~230 м/с, О). Бурение породы ~125 дБА
+     * (О: сильнее тяжёлого отбойника).
+     */
+    static final Noise BOMB_NOISE = new Noise(null, null, new Noise.Body(0.8, 6.2, 230, Spectra.BOMB_FALL), 125, Double.NaN, Double.NaN);
+
+    /**
+     * МБР: первая ступень «Минитмена» — тяга 903,7 кН, истечение 903 700 · 61 с / 20 780 кг = 2653 м/с (числа
+     * {@code Ascent} ниже); корпус 1,67 × 18,2 м (USAF Fact Sheet LGM-30G).
+     */
+    static final Noise ICBM_NOISE = new Noise(null, new Noise.Rocket(903_700, 903_700.0 * 61 / 20_780, Spectra.BOOSTER_ENGINE),
+            new Noise.Body(1.67, 18.2, 500, Spectra.BOMB_FALL), Double.NaN, Double.NaN, Double.NaN);
+
+    /**
+     * «Град», 9М22У: 122 мм × 2,87 м (Wikipedia «BM-21 Grad»); двигатель — 20,45 кг топлива, ~1870 м/с истечения и
+     * ~21 кН (О: импульс 52,4 кН·с на 28 кг у модели РДТТ БМ-21 — JST-UD, Вьетнам; ~1,8 с работы); запись воя — мины на
+     * подлёте (~150 м/с, О).
+     */
+    static final Noise ROCKET_NOISE = new Noise(null, new Noise.Rocket(21_000, 1870, Spectra.BOOSTER_ENGINE),
+            new Noise.Body(0.122, 2.87, 150, Spectra.ROCKET_INCOMING), Double.NaN, Double.NaN, Double.NaN);
+
+    /**
+     * «Ланцет-3»: электромотор с толкающим двухлопастным винтом, 110 км/ч = 30,6 м/с (Wikipedia «ZALA Lancet»); на
+     * сопротивление ~0,5 кВт, на валу ~0,8 кВт (О: КПД винта ~0,65), ~9000 об/мин (О: винт ~0,36 м с концами на
+     * 0,5 М) — лопасти ~300 Гц. Громкость — по классу: мультикоптеры от любительских до тяжёлых — 72,8–97,5 дБ мощности
+     * звука в висении (измерения восьми типов, Корея), ~0,8 кВт — у верхнего края: 95 дБА (О). На катапульте — 0,85
+     * номинала, в пике винт раскручивается до 1,15 (О). Корпус ~0,2 × 1,65 м (О); запись пике — пролёт р/у самолёта
+     * ~40 м/с (О). Катапульта ~120 дБА (О).
+     */
+    static final Noise LOITER_NOISE = new Noise(new Noise.Propeller(800, 9000, 2, 30.6, 0.85, 1.15, 95, 800, Spectra.LOITER_ENGINE),
+            null, new Noise.Body(0.2, 1.65, 40, Spectra.LOITER_DIVE), Double.NaN, 120, Double.NaN);
 
     /**
      * Дрон-камикадзе в духе Shahed-136: ≈150 км/ч, крейсер над рельефом, пикирование на цель с разгоном до 3 блоков/тик.
@@ -335,7 +398,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             new Route(() -> IncomingConfig.SERVER.droneFlightTime, 300, 0, 0, 3, 40, 30_000), Tracking.CAMERA, LauncherRack.DRONE, Blast.DRONE, 50, 30, false, 0.6f,
             new Airframe(() -> ModEntities.DRONE.get(), 2.1, 3.0, 3.0, 1.6, 45, 20, 256, 1.83, 12, 900 * 2.1, 4.3,
                     new LaunchProfile(8, 38, 0.075, 8, -9), 0, new Attack(16, 0, 0),
-                    ph -> launching(ph) ? Hearing.BOOSTER : Hearing.ENGINE, new Signature(1.0, true)),
+                    DRONE_NOISE, new Signature(1.0, true)),
             null, Munition.single(() -> ModItems.SHAHED.get()), null);
 
     /**
@@ -352,7 +415,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             new Route(() -> IncomingConfig.SERVER.missileFlightTime, 500, 0, 0, 1.5, 120, 30_000), Tracking.POINT, LauncherRack.MISSILE, Blast.MISSILE, 450, 275, false, 0.5f,
             new Airframe(() -> ModEntities.CRUISE_MISSILE.get(), 4.0, 5.0, 3.0, 2.0, 12, 12, 256, 2.96, 8, 700 * 4.0, 6.5,
                     new LaunchProfile(6, 40, 0.09, 8, -14), 256, new Attack(64, 160, 185),
-                    ph -> launching(ph) ? Hearing.BOOSTER : Hearing.WHISTLE, new Signature(0.7, true)),
+                    MISSILE_NOISE, new Signature(0.7, true)),
             null, Munition.single(() -> ModItems.CRUISE_MISSILE.get()), null);
 
     /**
@@ -364,10 +427,10 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             () -> IncomingConfig.SERVER.bunkerPower, Launch.BOMBER,
             new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 85, 0, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, 0, 0, true, 0.5f,
             new Airframe(() -> ModEntities.BOMBER.get(), 12, 12, 1.0, 1.0, 170, 30, 0, 8.5, 0, 120 * 12, 0, null, 0, Attack.NONE,
-                    ph -> Hearing.JET, new Signature(0.15, true)),
+                    BOMBER_NOISE, new Signature(0.15, true)),
             new Airframe(() -> ModEntities.BUNKER_BUSTER.get(), BombDrop.MAX_SPEED, BombDrop.MAX_SPEED, 0, 0, 0, 12, 0, BombDrop.NOSE, 0, 300 * BombDrop.MAX_SPEED,
                     BombDrop.REACH_PAD, null, 0, Attack.NONE,
-                    ph -> Hearing.ENGINE, new Signature(0.1, false)),
+                    BOMB_NOISE, new Signature(0.1, false)),
             Munition.single(() -> ModItems.BUNKER_BUSTER.get()), null);
 
     /**
@@ -388,7 +451,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             () -> IncomingConfig.SERVER.bunkerPower, Launch.ICBM,
             new Route(null, 0, 0, 0, 0, 0, 0), Tracking.POINT, null, Blast.NONE, 0, 0, false, 0.5f,
             new Airframe(() -> ModEntities.ICBM.get(), 25, 25, 0, 0, 0, 12, 0, 9, 0, 600 * 25, 0, null, 0, Attack.NONE,
-                    ph -> ph.boosterLit() ? Hearing.ICBM : 0, new Signature(1.0, false)),
+                    ICBM_NOISE, new Signature(1.0, false)),
             null, Munition.single(() -> ModItems.ICBM.get()), new Ascent(903_700, 36_030, 20_780, 61, 60, 85, 320));
 
     /**
@@ -402,7 +465,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             () -> IncomingConfig.SERVER.rocketPower, Launch.ROCKET,
             new Route(null, 0, 600, 0.01, 0, 0, 0), Tracking.POINT, LauncherRack.ROCKET, Blast.ROCKET, 6.4, 0, false, 0.5f,
             new Airframe(() -> ModEntities.ROCKET.get(), 4, 4, 0, 0, 0, 4, 0, 1.45, 2, 2400 * 4, 1.5, null, 0, Attack.NONE,
-                    ph -> launching(ph) ? Hearing.ROCKET_LAUNCH : Hearing.ROCKET_AIR, new Signature(1.0, false)),
+                    ROCKET_NOISE, new Signature(1.0, false)),
             null, new Munition(() -> ModItems.GRAD_ROCKETS.get(), LauncherRack.ROCKET.slots()), null);
 
     /**
@@ -417,6 +480,6 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             new Route(null, 0, 500, 0, 0, 32, 15_000), Tracking.CAMERA, LauncherRack.LOITER, Blast.DRONE, 3, 0, false, 0.5f,
             new Airframe(() -> ModEntities.LOITER.get(), 1.6, 4.0, 3.0, 2.0, 45, 25, 35, 1.3, 4, 2400 * 1.6, 3.0,
                     new LaunchProfile(4, 10, 0.16, 4, -8), 0, Attack.NONE,
-                    ph -> ph.onLauncher() ? Hearing.ENGINE : Hearing.LOITER_DIVE, new Signature(0.5, true)),
+                    LOITER_NOISE, new Signature(0.5, true)),
             null, Munition.single(() -> ModItems.LANCET.get()), null);
 }

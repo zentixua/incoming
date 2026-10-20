@@ -5,8 +5,11 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.ClientWeaponSpec.FarLook;
-import ua.zentix.incoming.client.ClientWeaponSpec.Trail;
-import ua.zentix.incoming.client.ClientWeaponSpec.Flame;
+import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.client.fx.plume.Flame;
+import ua.zentix.incoming.client.fx.plume.Stability;
+import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
+import ua.zentix.incoming.util.Wind;
 import ua.zentix.incoming.client.flight.FlightTrack;
 import ua.zentix.incoming.client.render.FarModels;
 import ua.zentix.incoming.entity.FlightPhase;
@@ -20,6 +23,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,29 +78,24 @@ class FarFlightViewTest {
 
     @Test
     void rocketMotorIsSparkByDayAndGlareAtNight() {
-        Flame flame = far(WeaponType.ROCKET).stage(FlightPhase.BOOST).flame();
+        Flame flame = far(WeaponType.ROCKET).stage(FlightPhase.BOOST).flame(Air.SEA);
         assertNotNull(flame);
         double d = 2000, t = Sight.transmittance(d, Sight.CLEAR);
         double[] day = new double[5], night = new double[5];
-        Sight.light(flame.radius(), Sight.adapted(flame.brightness(), 1) * t, d, PIXEL, day);
-        Sight.light(flame.radius(), Sight.adapted(flame.brightness(), 0.17) * t, d, PIXEL, night);
+        Sight.light(flame.lightRadius(), Sight.adapted(flame.brightness(), 1) * t, d, PIXEL, day);
+        Sight.light(flame.lightRadius(), Sight.adapted(flame.brightness(), 0.17) * t, d, PIXEL, night);
         assertTrue(day[2] < 1 && day[4] == 0, "днём — искра без вуали: " + day[2]);
         assertTrue(night[2] > 1 && night[4] / d > 0.01, "ночью — блик и вуаль: " + night[2] + ", " + Math.toDegrees(night[4] / d) + "°");
         // ночью видно и за 8 км
         double far = 8000;
-        Sight.light(flame.radius(), Sight.adapted(flame.brightness(), 0.17) * Sight.transmittance(far, Sight.CLEAR), far, PIXEL, night);
+        Sight.light(flame.lightRadius(), Sight.adapted(flame.brightness(), 0.17) * Sight.transmittance(far, Sight.CLEAR), far, PIXEL, night);
         assertTrue(night[2] > 1, "за 8 км ночью: " + night[2]);
     }
 
     @Test
-    void cruiseMissileEngineBarelyGlowsAtNight() {
-        // выхлоп ТРД — не пламя: ночью искра, без вуали
-        Flame flame = far(WeaponType.MISSILE).stage(FlightPhase.CRUISE).flame();
-        assertNotNull(flame);
-        double d = 2000, t = Sight.transmittance(d, Sight.CLEAR);
-        double[] out = new double[5];
-        Sight.light(flame.radius(), Sight.adapted(flame.brightness(), 0.17) * t, d, PIXEL, out);
-        assertEquals(0, out[4], "без вуали");
+    void cruiseMissileEngineDoesNotGlow() {
+        // выхлоп ТРДД — ~700 K без частиц: ни днём, ни ночью
+        assertNull(far(WeaponType.MISSILE).stage(FlightPhase.CRUISE).flame(Air.SEA));
     }
 
     // ---------------------------------------------------------------- точки шлейфа по пути
@@ -145,26 +144,18 @@ class FarFlightViewTest {
     }
 
     @Test
-    void boosterTrailHandsOverToEngineExhaust() {
+    void boosterTrailEndsWhereThePistonLeavesNone() {
+        // дым ускорителя — лентой до его выгорания; выхлоп поршня на этой скорости не виден — после него точек нет
         FarLook look = far(WeaponType.DRONE);
         FlightTrack t = track(WeaponType.DRONE, 0, 40, tick -> tick <= 20 ? FlightPhase.BOOST : FlightPhase.CRUISE);
         TrailPoints p = new TrailPoints();
         FarFlightView.sample(new FarFlightView.Far(t, 1), 40, p);
         List<Point> pts = points(p);
-        Trail booster = look.stage(FlightPhase.BOOST).trail(), exhaust = look.stage(FlightPhase.CRUISE).trail();
-        int switched = 0;
-        for (int i = 1; i < pts.size(); i++) {
-            Point a = pts.get(i - 1), b = pts.get(i);
-            if (a.style == booster && b.style == exhaust) {
-                switched++;
-                assertEquals(a.tick, b.tick, "лента ускорителя кончается там, где начинается выхлоп");
-                assertEquals(TrailPoints.NONE, b.prev, "это другая лента");
-                assertTrue(a.last, "лента ускорителя там сходит на нет");
-                assertTrue(!b.last, "а выхлоп только начинается");
-            }
-        }
-        assertEquals(1, switched);
-        assertSame(exhaust, pts.getLast().style);
+        Trail booster = look.stage(FlightPhase.BOOST).trail();
+        assertFalse(pts.isEmpty());
+        for (Point pt : pts) assertSame(booster, pt.style);
+        assertTrue(pts.getLast().last, "лента ускорителя сходит на нет");
+        assertTrue(pts.getLast().tick <= 22);
     }
 
     @Test
@@ -214,15 +205,35 @@ class FarFlightViewTest {
         assertEquals(TrailPoints.NONE, pts.getFirst().prev);
     }
 
-    @Test
-    void bomberLeavesAContrailFromEachEngine() {
+    /** Путь B-2 на высоте y мира. */
+    private static FlightTrack bomber(double y) {
         FlightTrack t = new FlightTrack(ID, WeaponType.BUNKER, true);
         for (long tick = 0; tick <= 40; tick += 2) {
-            t.record(tick, new S2C.FarFlight(ID, WeaponType.BUNKER.id(), true, false, true, new Vec3(0, 300, tick * 12.0), new Vec3(0, 0, 12), 0, 0, 0,
+            t.record(tick, new S2C.FarFlight(ID, WeaponType.BUNKER.id(), true, false, true, new Vec3(0, y, tick * 12.0), new Vec3(0, 0, 12), 0, 0, 0,
                     FlightPhase.CRUISE.ordinal(), 0, new Vec3(0, 60, 9000)));
         }
+        return t;
+    }
+
+    @Test
+    void bomberLeavesNoContrailWhereAirIsWarm() {
+        // сегодняшние 300 блоков — +14 °C: по Шмидту–Эпплману инверсии нет
         TrailPoints p = new TrailPoints();
-        FarFlightView.sample(new FarFlightView.Far(t, 1), 40, p);
+        FarFlightView.sample(new FarFlightView.Far(bomber(300), 1), 40, p);
+        assertTrue(p.isEmpty());
+    }
+
+    @Test
+    void bomberLeavesAContrailFromEachEngine() {
+        // на 11 км во влажном воздухе инверсия встаёт у каждого из четырёх двигателей
+        Air before = FarFlightView.air;
+        FarFlightView.air = new Air(new Wind(0, 10), Stability.D, 1);
+        TrailPoints p = new TrailPoints();
+        try {
+            FarFlightView.sample(new FarFlightView.Far(bomber(Air.SEA + 11_000), 1), 40, p);
+        } finally {
+            FarFlightView.air = before;
+        }
         List<ClientWeaponSpec.At> engines = ClientWeaponSpec.of(WeaponType.BUNKER).airframe(false).engines();
         List<Point> pts = points(p);
         assertEquals(engines.size() * 11, pts.size(), "у каждого сопла точка раз в 4 тика");

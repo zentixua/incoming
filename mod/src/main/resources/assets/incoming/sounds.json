@@ -594,5 +594,23 @@
         "name": "incoming:grid_power_up_2"
       }
     ]
+  },
+  "sonic.crack": {
+    "subtitle": "subtitles.incoming.sonic",
+    "sounds": [
+      {
+        "name": "incoming:sonic_crack",
+        "preload": true
+      }
+    ]
+  },
+  "sonic.boom": {
+    "subtitle": "subtitles.incoming.sonic",
+    "sounds": [
+      {
+        "name": "incoming:sonic_boom",
+        "preload": true
+      }
+    ]
   }
 }

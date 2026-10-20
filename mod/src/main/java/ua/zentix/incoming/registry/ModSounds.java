@@ -31,6 +31,9 @@ public final class ModSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> BOOSTER_SEPARATE = register("booster.separate");
     public static final DeferredHolder<SoundEvent, SoundEvent> ROCKET_LAUNCH = register("rocket.launch");
     public static final DeferredHolder<SoundEvent, SoundEvent> ROCKET_INCOMING = register("rocket.incoming");
+    /** N-волна сверхзвукового снаряда: короткая (сухой треск) и долгая (двойной удар). */
+    public static final DeferredHolder<SoundEvent, SoundEvent> SONIC_CRACK = register("sonic.crack");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SONIC_BOOM = register("sonic.boom");
     public static final DeferredHolder<SoundEvent, SoundEvent> LOITER_ENGINE = register("loiter.engine");
     public static final DeferredHolder<SoundEvent, SoundEvent> LOITER_ENGINE_FAR = register("loiter.engine.far");
     public static final DeferredHolder<SoundEvent, SoundEvent> LOITER_DIVE = register("loiter.dive");

@@ -1,5 +1,13 @@
 package ua.zentix.incoming.client.render;
 
+import net.minecraft.client.multiplayer.ClientLevel;
+import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.client.ClientWeaponSpec;
+import ua.zentix.incoming.client.far.FarView;
+import ua.zentix.incoming.client.far.Sight;
+import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.client.fx.plume.Flame;
+import ua.zentix.incoming.client.fx.plume.FlameModel;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.culling.Frustum;
@@ -30,20 +38,22 @@ public class InterceptorRenderer extends EntityRenderer<InterceptorEntity> {
         pose.pushPose();
         pose.mulPose(rotation);
         WeaponModels.Mesh.INTERCEPTOR_BODY.draw(pose, buffers, packedLight);
-        PlumeRenderer.render(plume(e, partialTick), pose, buffers, rotation, e.getPosition(partialTick), entityRenderDispatcher.camera);
+        Exhaust.Plume plume = plume(e, partialTick);
+        if (plume != null) PlumeRenderer.render(plume, pose, buffers, rotation, e.getPosition(partialTick), entityRenderDispatcher.camera);
         pose.popPose();
         super.render(e, entityYaw, partialTick, pose, buffers, packedLight);
     }
 
-    /** Факел: срез сопла — у хвоста модели; на разгоне длиннее и ярче, дальше — маршевый режим. */
+    /**
+     * Факел: срез сопла — у хвоста модели; на разгоне и в маршевом режиме — свой режим двигателя
+     * ({@link ClientWeaponSpec#SAM_BOOST}, {@link ClientWeaponSpec#SAM_SUSTAIN}) по закону факела; null — не видно.
+     */
+    @Nullable
     static Exhaust.Plume plume(InterceptorEntity e, float partial) {
-        float t = e.age() + partial;
-        float flicker = 0.9f + 0.1f * Mth.sin(t * 2.9f) * Mth.sin(t * 1.4f + 1);
-        boolean boost = t <= InterceptorSpec.SAM.boostTicks();
-        float tail = (float) -InterceptorSpec.SAM.noseLength();
-        return boost
-                ? new Exhaust.Plume(0, tail, 5.0f * flicker, 0.2f, 1, true, 0xFFF4E0, 0xFF8A30)
-                : new Exhaust.Plume(0, tail, 2.6f * flicker, 0.15f, 0.85f, false, 0xFFF0D0, 0xFF7A28);
+        boolean boost = e.age() + partial <= InterceptorSpec.SAM.boostTicks();
+        Flame f = FlameModel.at(boost ? ClientWeaponSpec.SAM_BOOST : ClientWeaponSpec.SAM_SUSTAIN, e.getY() - Air.SEA);
+        if (f == null || !(e.level() instanceof ClientLevel level)) return null;
+        return new Exhaust.Plume(0, (float) -InterceptorSpec.SAM.noseLength(), f, Sight.adapted(1, FarView.ambient(level, partial)), 1);
     }
 
     @Override

@@ -11,7 +11,11 @@ import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.flight.FlightTrack;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.registry.ModSounds;
-import ua.zentix.incoming.strike.Hearing;
+import ua.zentix.incoming.sound.Noise;
+import ua.zentix.incoming.sound.Propagation;
+import ua.zentix.incoming.sound.Spectra;
+import ua.zentix.incoming.sound.Spectrum;
+import ua.zentix.incoming.strike.WeaponSpec;
 
 import java.util.Locale;
 import java.util.function.Supplier;
@@ -19,8 +23,9 @@ import java.util.function.Supplier;
 /**
  * Непрерывный звук снаряда: движок каждый тик получает от нас положение, громкость и тон.
  * Положение и скорость берутся в «запаздывающий» момент (звук идёт к уху со скоростью 343 м/с, {@link Emission}),
- * отсюда Доплер и задержка; громкость ~1/d с полутоном дальности (ближний и дальний слой звука плавно сменяют друг
- * друга) — {@link Layer#tone}. Воздух по дороге съедает верха, холм или дом между снарядом и ухом глушит
+ * отсюда Доплер и задержка. Громкость — от мощности звука шумящей части снаряда (паспорт {@link Noise}: мотор,
+ * ускоритель, обтекание, бурение — по его скорости и оборотам) и пути до уха ({@link Propagation}: разлёт, воздух,
+ * земля, тень днём; фон), в игре — {@link Loudness}; холм или дом между снарядом и ухом глушит, а верха съедает путь
  * ({@link SoundFilters}).
  * <p>
  * Слой звучит (держит канал OpenAL), только пока его слышно: запускает и отпускает его {@link ClientSounds}
@@ -28,164 +33,139 @@ import java.util.function.Supplier;
  * он нарастает с нуля тем же сглаживанием, без щелчка.
  */
 public final class EngineSound extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
-    /** Слои звука: какой файл и как его громкость зависит от расстояния, ракурса и фазы полёта. */
+    /**
+     * Дальние записи — ближние, прошедшие столько метров воздуха ({@code tools/build_sounds.py}: {@code FAR_M}):
+     * дальше ближняя запись с фильтром EFX уже не похожа на дальний звук (EFX глушит верха одной полкой, а воздух —
+     * по октавам), поэтому ближняя уступает дальней между половиной этого расстояния и им самим.
+     */
+    static final double FAR_AIR = 500;
+
+    /**
+     * Слои звука: какая запись, какую часть шума снаряда она играет ({@link Noise.Part}) и как делит её с соседними
+     * записями той же части — ближняя и дальняя, спереди и сзади (доли по мощности, {@link #share}).
+     */
     public enum Layer {
-        DRONE_NEAR(() -> ModSounds.DRONE_ENGINE.get()),
-        DRONE_FAR(() -> ModSounds.DRONE_ENGINE_FAR.get()),
-        MISSILE_FRONT(() -> ModSounds.MISSILE_ENGINE.get()),
-        MISSILE_REAR(() -> ModSounds.MISSILE_ENGINE_REAR.get()),
-        MISSILE_DIVE(() -> ModSounds.MISSILE_DIVE.get()),
-        MISSILE_FAR(() -> ModSounds.MISSILE_ENGINE_FAR.get()),
-        MISSILE_WHISTLE(() -> ModSounds.MISSILE_WHISTLE.get()),
-        BOMBER_NEAR(() -> ModSounds.BOMBER_ENGINE.get()),
-        BOMBER_FAR(() -> ModSounds.BOMBER_ENGINE_FAR.get()),
-        BOMB_NEAR(() -> ModSounds.BOMB_FALL.get()),
-        BOMB_FAR(() -> ModSounds.BOMB_FALL_FAR.get()),
-        BOMB_DRILL(() -> ModSounds.BOMB_DRILL.get()),
-        /** Стартовый ускоритель шахеда и ракеты, двигатель МБР; этот же слой отмечает поджиг и отделение ускорителя. */
-        BOOSTER(() -> ModSounds.BOOSTER_ENGINE.get()),
-        /** Снаряд РСЗО после того, как догорел двигатель: вой рассекаемого воздуха — над головой и на подлёте. */
-        ROCKET_AIR(() -> ModSounds.ROCKET_INCOMING.get()),
-        /** Барражирующий боеприпас: электромотор с винтом вблизи и вдали, вой винта и ветер в пике. */
-        LOITER_NEAR(() -> ModSounds.LOITER_ENGINE.get()),
-        LOITER_FAR(() -> ModSounds.LOITER_ENGINE_FAR.get()),
-        LOITER_DIVE(() -> ModSounds.LOITER_DIVE.get());
+        DRONE_NEAR(() -> ModSounds.DRONE_ENGINE.get(), Noise.Part.ENGINE, 0),
+        DRONE_FAR(() -> ModSounds.DRONE_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
+        /** Крылатая ракета вблизи: спереди — свист вентилятора, сзади — рёв струи, в пике — пронзительный свист. */
+        MISSILE_FRONT(() -> ModSounds.MISSILE_ENGINE.get(), Noise.Part.ENGINE, 0),
+        MISSILE_REAR(() -> ModSounds.MISSILE_ENGINE_REAR.get(), Noise.Part.ENGINE, 0),
+        MISSILE_DIVE(() -> ModSounds.MISSILE_DIVE.get(), Noise.Part.ENGINE, 0),
+        /** Вдали сбоку и сзади — гул струи. */
+        MISSILE_FAR(() -> ModSounds.MISSILE_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
+        /** Вдали впереди — вой вентилятора: его уносит вперёд, на подлёте его слышно издалека. */
+        MISSILE_WHISTLE(() -> ModSounds.MISSILE_WHISTLE.get(), Noise.Part.ENGINE, 0),
+        BOMBER_NEAR(() -> ModSounds.BOMBER_ENGINE.get(), Noise.Part.ENGINE, 0),
+        BOMBER_FAR(() -> ModSounds.BOMBER_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
+        BOMB_NEAR(() -> ModSounds.BOMB_FALL.get(), Noise.Part.BODY, 0),
+        BOMB_FAR(() -> ModSounds.BOMB_FALL_FAR.get(), Noise.Part.BODY, FAR_AIR),
+        BOMB_DRILL(() -> ModSounds.BOMB_DRILL.get(), Noise.Part.DRILL, 0),
+        /** Стартовый ускоритель шахеда и ракеты, двигатель МБР и снаряда РСЗО; этот же слой отмечает поджиг и отделение. */
+        BOOSTER(() -> ModSounds.BOOSTER_ENGINE.get(), Noise.Part.MOTOR, 0),
+        /** Снаряд РСЗО: вой рассекаемого воздуха (пока горит двигатель — под его рёвом, после — один). */
+        ROCKET_AIR(() -> ModSounds.ROCKET_INCOMING.get(), Noise.Part.BODY, 0),
+        /** Барражирующий боеприпас: электромотор с винтом вблизи и вдали, рассекаемый воздух (громче мотора — в пике). */
+        LOITER_NEAR(() -> ModSounds.LOITER_ENGINE.get(), Noise.Part.ENGINE, 0),
+        LOITER_FAR(() -> ModSounds.LOITER_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
+        LOITER_DIVE(() -> ModSounds.LOITER_DIVE.get(), Noise.Part.BODY, 0);
 
         /** Звук из реестра берётся, только когда слой запускают: громкость и тон считаются и без реестров (юнит-тесты). */
         final Supplier<SoundEvent> event;
+        /** Какую часть шума играет. */
+        final Noise.Part part;
+        /** Сколько метров воздуха уже в записи ({@link #FAR_AIR} у дальних, 0 у ближних). */
+        final double air;
 
-        Layer(Supplier<SoundEvent> event) {
+        Layer(Supplier<SoundEvent> event, Noise.Part part, double air) {
             this.event = event;
+            this.part = part;
+            this.air = air;
         }
 
         /** Громкость и тон слоя для того, что слушатель слышит сейчас (до сглаживания). */
         Tone tone(FlightTrack track, Emission e) {
-            double d = e.distance(), dop = e.doppler(), age = e.phaseAge();
-            int phase = e.phase();
-            Vec3 v = e.velocity();
-            double gain;
-            double pitch = dop;
+            Noise noise = noise(track);
+            boolean drilling = e.phase() == FlightPhase.DRILL.ordinal();
+            Emission.Heard heard = e.heard(noise, part, drilling);
+            if (heard.level() == Noise.SILENT) return Tone.SILENT;
+            FlightPhase ph = FlightPhase.byId(e.phase());
+            double d = e.distance(), age = e.phaseAge(), v = e.velocity().length();
+            // направленность — по мощности до перевода в громкость: обтекание и вентилятор уносит вперёд
+            double level = heard.level();
+            double share = 1;
+            double pitch = e.doppler();
             switch (this) {
-                case DRONE_NEAR, DRONE_FAR -> {
-                    double w = near(d, 60, 160);
-                    gain = Acoustics.gain(d, 60, 0.12, Hearing.ENGINE) * share(this == DRONE_NEAR ? w : 1 - w) * spool(phase, age, true);
-                    pitch *= spoolPitch(phase, age, true);
-                    // в пике мотор выходит на полный газ — тон растёт за полсекунды, а не скачком
-                    if (phase == FlightPhase.TERMINAL.ordinal()) pitch *= 1 + 0.12 * Math.min(1, age / REV);
-                }
-                case LOITER_NEAR, LOITER_FAR -> {
-                    // маленький электромотор: тонкий вой, слышно ближе шахеда; в пике винт на полном газу — выше тоном,
-                    // а громче всего воздух (слой LOITER_DIVE)
-                    double w = near(d, 35, 110);
-                    boolean dive = phase == FlightPhase.TERMINAL.ordinal();
-                    double rev = dive ? Math.min(1, age / REV) : 0;
-                    gain = Acoustics.gain(d, 35, 0.12, Hearing.LOITER) * share(this == LOITER_NEAR ? w : 1 - w) * spool(phase, age, true)
-                            * (1 - 0.4 * rev);
-                    pitch *= spoolPitch(phase, age, true) * (1 + 0.15 * rev);
-                }
-                case LOITER_DIVE -> {
-                    boolean dive = phase == FlightPhase.TERMINAL.ordinal();
-                    gain = dive ? Acoustics.gain(d, 45, 0.1, Hearing.LOITER_DIVE) * Math.min(1, age / 10) : 0;
+                case DRONE_NEAR, DRONE_FAR, LOITER_NEAR, LOITER_FAR, BOMBER_NEAR, BOMBER_FAR -> {
+                    share = share(this.air > 0 ? 1 - near(d) : near(d));
+                    pitch *= noise.engine().revs(ph, age, v);
                 }
                 case MISSILE_FRONT, MISSILE_REAR, MISSILE_DIVE -> {
-                    // спереди — свист вентилятора, сзади — рёв струи, в пике — пронзительный свист
                     Vec3 f = track.forward(e.time());
                     double front = (1 + f.x * e.nx() + f.y * e.ny() + f.z * e.nz()) / 2;
-                    boolean dive = phase == FlightPhase.TERMINAL.ordinal();
+                    boolean dive = ph == FlightPhase.TERMINAL;
                     double w = switch (this) {
                         case MISSILE_FRONT -> dive ? 0 : front;
                         case MISSILE_DIVE -> dive ? front : 0;
                         default -> 1 - front;
                     };
-                    gain = Acoustics.gain(d, 90, 0.12, Hearing.ENGINE) * share(near(d, 60, 170)) * share(w) * spool(phase, age, false);
-                    pitch *= spoolPitch(phase, age, false);
+                    share = share(near(d)) * share(w);
+                    pitch *= noise.engine().revs(ph, age, v);
                 }
-                case MISSILE_FAR -> {
-                    // вдали не тише «пола» до среза ближнего гула, дальше ~1/d до километра с лишним
-                    gain = Math.max(Acoustics.gain(d, 90, 0.12, Hearing.ENGINE), Acoustics.gain(d, 90, 0, Hearing.JET))
-                            * share(1 - near(d, 60, 170)) * spool(phase, age, false);
-                    pitch *= spoolPitch(phase, age, false);
+                case MISSILE_FAR, MISSILE_WHISTLE -> {
+                    double ahead = e.ahead();
+                    share = share(1 - near(d)) * share(this == MISSILE_WHISTLE ? ahead : 1 - ahead);
+                    pitch *= noise.engine().revs(ph, age, v);
                 }
-                case MISSILE_WHISTLE -> {
-                    // подлёт: всё время, пока ракета идёт на цель (заход по прямой, а не обход сбоку) и на слушателя, —
-                    // свист слышно издалека, как дальний гул (верха по дороге съедает воздух), тон падает на последних
-                    // WHISTLE_DROP блоках до цели; кроме того рвёт воздух над тем, мимо кого она проходит: слышно, пока
-                    // идёт на слушателя, и тон падает при пролёте
-                    double wd = e.aimDistance();
-                    // курс на цель и на слушателя — доли (Emission): на поворотах маршрута и на пролёте свист нарастает
-                    // и стихает, а не включается и не обрывается
-                    double attack = launched(phase) ? Acoustics.gain(d, 110, 0, Hearing.WHISTLE) * e.towardAim() * e.ahead() : 0;
-                    double flyby = launched(phase) ? Acoustics.airflow(d, v.length(), e.radial(), 40, 4, Hearing.AIRFLOW) * 0.6 : 0;
-                    gain = Math.max(attack, flyby);
-                    double attackPitch = (0.6 + 1.4 * Math.min(1, wd / WHISTLE_DROP)) * Math.sqrt(dop);
-                    // файл — вой вентилятора вдвое ниже настоящего (tools/build_sounds.py): тон 2 — как есть
-                    pitch = gain > 0 ? (attack * attackPitch + flyby * 1.6 * Math.sqrt(dop)) / (attack + flyby) : attackPitch;
+                case BOMB_NEAR, BOMB_FAR -> {
+                    share = share(this.air > 0 ? 1 - near(d) : near(d));
+                    level += airflow(e);
+                    pitch *= noise.body().pitch(v);
                 }
-                case BOMBER_NEAR -> gain = Acoustics.gain(d, 120, 0.12, Hearing.BOMBER) * share(near(d, 120, 260));
-                case BOMBER_FAR -> gain = Math.max(Acoustics.gain(d, 120, 0.12, Hearing.BOMBER), Acoustics.gain(d, 120, 0, Hearing.JET))
-                        * share(1 - near(d, 120, 260));
-                case BOMB_NEAR -> gain = track.drilling() ? 0 : Acoustics.gain(d, 40, 0.12, Hearing.ENGINE) * share(near(d, 45, 140));
-                case BOMB_FAR -> gain = track.drilling() ? 0 : Acoustics.gain(d, 40, 0.12, Hearing.ENGINE) * share(1 - near(d, 45, 140));
-                case BOMB_DRILL -> {
-                    gain = track.drilling() ? Math.max(0, 1 - d / 96) : 0;
-                    pitch = 0.85;
+                case ROCKET_AIR, LOITER_DIVE -> {
+                    level += airflow(e);
+                    pitch *= noise.body().pitch(v);
                 }
-                case BOOSTER -> {
-                    FlightPhase ph = FlightPhase.byId(phase);
-                    ClientWeaponSpec.BoosterVoice voice = ClientWeaponSpec.of(track.weapon).booster();
-                    gain = switch (voice) {
-                        // катапульта — без огня: только разовый удар и свист (launchEvents)
-                        case NONE -> 0;
-                        case ICBM -> {
-                            // «Минитмен»: низкий рёв твердотопливной ступени, слышно за километр
-                            pitch *= 0.7;
-                            yield ph.boosterLit() ? Acoustics.gain(d, 400, 0.15, Hearing.ICBM) : 0;
-                        }
-                        case ROCKET -> {
-                            // маленький двигатель реактивного снаряда: резкое шипение, выше тоном; разовый «фш-ш» — в launchEvents
-                            pitch *= 1.3;
-                            yield ph.boosterLit() ? Acoustics.gain(d, 60, 0.05, Hearing.ROCKET_BOOSTER) * 0.6 : 0;
-                        }
-                        case SOLID, SOLID_LOW -> {
-                            // ускоритель — поверх разового рёва старта у пусковой: этот слой уходит вместе со снарядом
-                            if (voice == ClientWeaponSpec.BoosterVoice.SOLID_LOW) pitch *= 0.9;
-                            double ramp = ph == FlightPhase.IGNITION ? Math.min(1, age / 6) : 1;
-                            yield ph.boosterLit() ? Acoustics.gain(d, 150, 0.1, Hearing.BOOSTER) * 0.6 * ramp : 0;
-                        }
-                    };
-                }
-                case ROCKET_AIR -> {
-                    // по инерции: вой воздуха по всей дуге, от выгорания двигателя до падения, и слышно его так же
-                    // далеко, как двигатель; громче, пока снаряд идёт на слушателя. Громкость по скорости — только
-                    // у медленного снаряда: скорости в игре — десятая доля настоящих (у «Града» до 700 м/с), и на
-                    // вершине дуги (2–3 блока/тик) он рвёт воздух так же. У точки падения, пока он идёт на слушателя,
-                    // — ещё и громче к земле
-                    FlightPhase ph = FlightPhase.byId(phase);
-                    boolean coasting = ph == FlightPhase.CRUISE || ph == FlightPhase.TERMINAL;
-                    double wd = e.aimDistance();
-                    double incoming = ph == FlightPhase.TERMINAL
-                            ? Acoustics.gain(d, 70, 0.1, Hearing.ROCKET_AIR) * (0.35 + 0.65 * Math.max(0, 1 - wd / INCOMING))
-                            * (1 - Acoustics.smoothstep(0.75 * INCOMING, INCOMING, wd)) * e.ahead() : 0;
-                    gain = coasting ? Math.max(incoming, Acoustics.airflow(d, v.length(), e.radial(), 50, 2, Hearing.ROCKET_AIR)) : 0;
-                    pitch = Math.sqrt(dop);
-                }
-                default -> gain = 0;
+                case BOMB_DRILL -> pitch = 0.85;
+                case BOOSTER -> pitch *= switch (ClientWeaponSpec.of(track.weapon).booster()) {
+                    // голос записи: одна запись на все твердотопливные двигатели, тон — по их величине
+                    case ICBM -> 0.7;
+                    case ROCKET -> 1.3;
+                    case SOLID_LOW -> 0.9;
+                    case SOLID, NONE -> 1;
+                };
             }
-            // камера снаряда: слушатель сидит на нём самом — мотор в упор, но не оглушающе
+            double gain = Loudness.gain(level, heard.margin() + level - heard.level()) * share;
+            // дальняя запись уже прошла FAR_AIR воздуха: фильтр — только сверх него
+            double highs = this.air > 0 ? Math.min(1, heard.highs() / e.heardAt(noise, part, drilling, this.air)) : heard.highs();
+            // камера снаряда: слушатель сидит на нём самом — мотор в упор, но не оглушающе (не физика: камера —
+            // взгляд оператора, а не уши на корпусе)
             if (e.onboard()) gain *= 0.5;
-            return new Tone(gain, Math.max(0.5, Math.min(2.0, pitch)));
+            // предел тона у Minecraft — 0,5…2 (SoundEngine): дальше тон не уходит
+            return new Tone(gain, Math.max(0.5, Math.min(2.0, pitch)), highs);
         }
     }
 
-    /** Тон свиста крылатой ракеты падает на стольких последних блоках до цели. */
-    private static final double WHISTLE_DROP = 260;
-    /** Снаряд РСЗО воет громче к земле на стольких последних блоках до точки падения (нарастает с этого края плавно). */
-    private static final double INCOMING = 220;
-    /** Мотор шахеда и барражирующего выходит на полный газ в пике за столько тиков. */
-    private static final double REV = 10;
+    /** Шум снаряда этого пути: паспорт его аппарата (у B-2 — самолёт, у его бомбы — бомба). */
+    static Noise noise(FlightTrack track) {
+        WeaponSpec spec = track.weapon.spec();
+        return !track.bomber && spec.payload() != null ? spec.payload().noise() : spec.airframe().noise();
+    }
 
-    /** Громкость и тон слоя в этот тик. */
-    record Tone(double gain, double pitch) {}
+    /**
+     * Направленность шума обтекания, дБ: на подлёте громче всего, вслед — 0,3 по мощности (шум уносит вперёд; доля —
+     * оценка, у вихрей за кормой).
+     */
+    static double airflow(Emission e) {
+        double v = e.velocity().length();
+        if (v < 1.0e-6) return 0;
+        double front = (1 + e.radial() / v) / 2;
+        return 10 * Math.log10(0.3 + 0.7 * front * front);
+    }
+
+    /** Громкость, тон и доля верхов слоя в этот тик. */
+    record Tone(double gain, double pitch, double highs) {
+        static final Tone SILENT = new Tone(0, 1, 1);
+    }
 
     private final FlightTrack track;
     private final Occlusion occlusion;
@@ -264,7 +244,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
                 Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
                 float open = occlusion.open(ClientSounds.now(), ear, heard.position());
                 filterGain = SoundFilters.blockedGain(open);
-                filterHighs = SoundFilters.air(heard.distance()) * SoundFilters.blockedHighs(open);
+                filterHighs = (SoundFilters.pathEffects() ? (float) tone.highs() : 1) * SoundFilters.blockedHighs(open);
                 SoundFilters.update(this, filterGain, filterHighs);
             }
         }
@@ -274,76 +254,62 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
     /**
      * Разовые звуки старта в момент, когда их фронт дошёл до уха: поджиг ускорителя (удар и рёв у пусковой)
      * и отделение (хлопок пиропатронов и лязг замков), у РСЗО — сход каждого снаряда с трубы, у барражирующего —
-     * катапульта. Зовётся, когда слушатель услышал смену фазы: {@code prev} — прошлая услышанная, −1 — ещё никакой.
-     * У МБР свой звук пуска ({@code NukeSounds}).
+     * катапульта. Громкость — от мощности звука события (ускоритель на полной тяге, катапульта и отстрел — из паспорта
+     * {@link Noise}) и пути до уха. Зовётся, когда слушатель услышал смену фазы: {@code prev} — прошлая услышанная, −1 —
+     * ещё никакой. У МБР свой звук пуска ({@code NukeSounds}).
      */
     static void launchEvents(FlightTrack track, Emission e, int prev) {
         ClientWeaponSpec spec = ClientWeaponSpec.of(track.weapon);
         if (spec.launch() == ClientWeaponSpec.LaunchCue.NONE) return;
+        Noise noise = noise(track);
         FlightPhase ph = FlightPhase.byId(e.phase());
-        double age = e.phaseAge(), d = e.distance();
+        double age = e.phaseAge();
         Vec3 at = e.position();
         // поджиг: при смене фазы или если снаряд попал в поле зрения уже на поджиге
         if (ph == FlightPhase.IGNITION && (prev >= 0 || age < 5)) {
+            double motor = noise.motor() == null ? Noise.SILENT : noise.motor().power(FlightPhase.BOOST, 0);
             switch (spec.launch()) {
                 case ROCKET_TUBE -> {
                     // сход реактивного снаряда: резкое «фш-ш» с треском; очередь по полсекунды сливается в рёв залпа
-                    float v = (float) Acoustics.gain(d, 100, 0.08, Hearing.ROCKET_LAUNCH);
+                    float v = shot(motor, Spectra.ROCKET_LAUNCH, e);
                     if (v > 0.01f) ClientSounds.atEar(ModSounds.ROCKET_LAUNCH.get(), at, v, 0.94f + (float) Math.random() * 0.12f);
                 }
                 case CATAPULT -> {
                     // катапульта барражирующего: удар поршня и свист направляющей
-                    float v = (float) Acoustics.gain(d, 40, 0.05, Hearing.ENGINE);
+                    float v = shot(noise.catapult() - Spectra.LOITER_LAUNCH.aWeighting(), Spectra.LOITER_LAUNCH, e);
                     if (v > 0.01f) ClientSounds.atEar(ModSounds.LOITER_LAUNCH.get(), at, v, 0.95f + (float) Math.random() * 0.1f);
                 }
                 case BOOSTER, BOOSTER_LOW -> {
-                    float v = (float) Acoustics.gain(d, 150, 0.1, Hearing.BOOSTER);
+                    float v = shot(motor, Spectra.LAUNCH_BOOSTER, e);
                     if (v > 0.01f) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, v, spec.launch() == ClientWeaponSpec.LaunchCue.BOOSTER_LOW ? 0.92f : 1.05f);
                 }
                 case NONE -> {}
             }
         } else if (ph == FlightPhase.CLIMB && prev >= 0 && FlightPhase.byId(prev).boosterLit() && spec.separates()) {
-            float v = (float) Acoustics.gain(d, 40, 0, 250);
+            float v = shot(noise.separation() - Spectra.BOOSTER_SEPARATE.aWeighting(), Spectra.BOOSTER_SEPARATE, e);
             if (v > 0.01f) ClientSounds.atEar(ModSounds.BOOSTER_SEPARATE.get(), at, v, 1);
         }
     }
 
-    /**
-     * Маршевый мотор на старте, доля громкости. Шахед молотит винтом ещё на пусковой (на малом газу, под рёвом
-     * ускорителя), после отделения выходит на полный газ; турбина ракеты запускается только после отделения
-     * и раскручивается за ~2,5 с.
-     */
-    private static double spool(int phase, double age, boolean drone) {
-        FlightPhase ph = FlightPhase.byId(phase);
-        if (ph.launching()) return drone ? (ph == FlightPhase.READY ? 0.3 : 0.45) : 0;
-        if (ph != FlightPhase.CLIMB) return 1;
-        return drone ? 0.45 + 0.55 * Math.min(1, age / 30) : Acoustics.smoothstep(0, 50, age);
+    /** Громкость разового звука мощностью {@code lw} (без взвешивания) со спектром его записи у этого уха. */
+    private static float shot(double lw, Spectrum spectrum, Emission e) {
+        if (Double.isNaN(lw) || lw == Noise.SILENT) return 0;
+        double[] bands = new double[Propagation.BANDS];
+        double level = Propagation.level(lw, spectrum, e.path(e.distance()), bands);
+        double v = Loudness.gain(level, Propagation.margin(bands, e.weather()));
+        return (float) (e.onboard() ? v * 0.5 : v);
     }
 
-    /** Множитель тона маршевого мотора на старте (обороты растут). */
-    private static double spoolPitch(int phase, double age, boolean drone) {
-        FlightPhase ph = FlightPhase.byId(phase);
-        if (ph.launching()) return drone ? (ph == FlightPhase.READY ? 0.72 : 0.8) : 0.55;
-        if (ph != FlightPhase.CLIMB) return 1;
-        return drone ? 0.8 + 0.2 * Math.min(1, age / 30) : 0.55 + 0.45 * Acoustics.smoothstep(0, 50, age);
-    }
-
-    /** Ракета уже сошла с пусковой и отстрелила ускоритель. */
-    private static boolean launched(int phase) {
-        FlightPhase ph = FlightPhase.byId(phase);
-        return !ph.onLauncher() && !ph.boosterLit();
-    }
-
-    /** Вес ближнего слоя: 1 ближе a, 0 дальше b. */
-    private static double near(double d, double a, double b) {
-        return 1 - Acoustics.smoothstep(a, b, d);
+    /** Вес ближней записи: 1 ближе половины {@link #FAR_AIR}, 0 с самого {@link #FAR_AIR}. */
+    static double near(double d) {
+        return 1 - Acoustics.smoothstep(FAR_AIR / 2, FAR_AIR, d);
     }
 
     /**
      * Доля слоя в переходе между разными записями (ближняя и дальняя, спереди и сзади): доли {@code w} и {@code 1 − w}
      * складываются по мощности (корень), а не по амплитуде. Записи разные и не коррелированы, поэтому при весах
      * 0,5 и 0,5 сумма по амплитуде тише на 3 дБ: ракета проседала бы на пролёте прямо над головой и на смене ближнего
-     * гула дальним (60–170 блоков), становясь тише, хотя приближается.
+     * гула дальним, становясь тише, хотя приближается.
      */
     static double share(double w) {
         return Math.sqrt(Math.max(0, w));

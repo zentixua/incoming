@@ -13,6 +13,7 @@ import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.flight.FlightTrack;
 import ua.zentix.incoming.client.flight.FlightTracks;
+import ua.zentix.incoming.sound.Propagation;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,8 +28,9 @@ import java.util.UUID;
  * Звук снарядов на клиенте. У каждого снаряда свой независимый набор зацикленных звуков (без общих ячеек
  * и перебивающих друг друга свистов); задержку и Доплер считает {@link EngineSound}.
  * Путь снаряда — {@link FlightTracks}: по сущности, а пока её у клиента нет (далеко или летит вне мира) — по пакетам
- * сервера; один и тот же звук по UUID переходит с одного на другое. Дальше среза слышимости ({@code Hearing})
- * громкость слоёв — ноль: путь, который сервер шлёт только ради картинки вдали, канала не занимает.
+ * сервера; один и тот же звук по UUID переходит с одного на другое. Где звук тонет в фоне ({@code Hearing}, тот же
+ * расчёт, что у сервера), громкость слоёв — ноль: путь, который сервер шлёт только ради картинки вдали, канала не
+ * занимает.
  * <p>
  * Каждый тик здесь считается, что слышно от каждого снаряда ({@link Emission}) и как громко каждый его слой;
  * звучат (держат канал OpenAL) только слышимые слои и не больше {@link VoiceBudget#CAP} сразу.
@@ -57,6 +59,8 @@ public final class ClientSounds {
         /** Есть слой ускорителя: смену фазы отмечают разовые звуки старта ({@link EngineSound#launchEvents}). */
         final boolean launchEvents;
         int heardPhase = -1;
+        /** Звук снаряда дошёл до уха в прошлый тик (у сверхзвукового — слушатель уже внутри конуса Маха). */
+        boolean reached;
 
         Tracked(FlightTrack track, List<EngineSound.Layer> layers) {
             this.track = track;
@@ -168,18 +172,24 @@ public final class ClientSounds {
     private static List<Voice> hear(Minecraft mc) {
         Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
         Entity camera = mc.getCameraEntity();
+        Propagation.Weather weather = Propagation.Weather.of(mc.level);
         List<Voice> voices = new ArrayList<>();
         double tick = now();
+        double[] roots = new double[1];
         for (Tracked t : TRACKS.values()) {
             FlightTrack track = t.track;
-            double te = Acoustics.emissionTime(track, tick, ear.x, ear.y, ear.z);
+            // звук ещё не дошёл (или слушатель вне конуса Маха) — момента излучения нет, слои молчат
+            boolean reached = Acoustics.emissions(track, tick, ear.x, ear.y, ear.z, roots) > 0;
+            double te = reached ? roots[0] : Double.NaN;
+            if (reached && !t.reached) Booms.reached(track, te, ear, weather);
+            t.reached = reached;
             if (track.isDead() && te >= track.deathTick() + FADE) {
                 // фронт взрыва дошёл и мотор стих: дальше слушатель слышит уже сам взрыв
                 t.kill();
                 continue;
             }
             // данных о снаряде на этот момент нет (взорвался или ушёл из слуха) — слои стихают, не дёргая источник
-            Emission e = track.covers(te) ? Emission.at(track, te, ear, camera != null && camera.getUUID().equals(track.id)) : null;
+            Emission e = track.covers(te) ? Emission.at(track, te, ear, camera != null && camera.getUUID().equals(track.id), weather) : null;
             if (e != null && t.launchEvents && e.phase() != t.heardPhase) {
                 EngineSound.launchEvents(track, e, t.heardPhase);
                 t.heardPhase = e.phase();

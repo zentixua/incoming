@@ -6,6 +6,7 @@ import net.minecraft.world.entity.Entity;
 import ua.zentix.incoming.entity.BomberEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.strike.Hearing;
 import ua.zentix.incoming.strike.WeaponType;
 
 import java.util.Collection;
@@ -29,10 +30,10 @@ public final class FlightTracks {
      */
     private static final int STALE = 40;
     /**
-     * Кончившийся полёт помнится столько: звук идёт до уха не дольше (дальше всех слышно свист крылатой ракеты, 3080
-     * блоков, ~180 тиков), шлейф вдали за это время тает.
+     * Кончившийся полёт помнится столько: звук идёт до уха не дольше ({@link Hearing#MAX_DELAY}), шлейф вдали за это
+     * время тает.
      */
-    public static final int RINGOUT = 200;
+    public static final int RINGOUT = Hearing.MAX_DELAY;
     private static long tick;
     /** Мир, в котором записаны пути: смена измерения — новый мир, прошлые пути там не летят. */
     private static ClientLevel world;

@@ -26,7 +26,8 @@ against air defense send a salvo or route it around.
 
 ![Lancet catapult](img/weapon-lancet-launcher.jpg)
 
-A small drone launched from a catapult. It circles over the target while you pick what to hit in its
+A small drone launched from a catapult. Its electric motor is quiet: it is heard only a few hundred blocks away. It
+circles over the target while you pick what to hit in its
 [camera](camera.md#lancet), and does not miss. The blast is small: enough for a vehicle, a player or a single house.
 
 ## Cruise missile
@@ -58,6 +59,25 @@ underground. Use it on bunkers and underground bases. SAM radar detects the B-2 
 An intercontinental ballistic missile lifts off behind you, and 90 seconds later its warhead detonates at the target.
 It climbs like a real ICBM: slowly off the pad, faster as its fuel burns, and stays in the sky for about nine seconds.
 Everything about it is in [Nuclear strike](nuke.md).
+
+## Flames and smoke trails
+
+Every engine flame and smoke trail is worked out from the motor's data, the same way for every weapon, and looks the
+same up close and far away.
+
+- **Rocket motors** (the Shahed's and the cruise missile's boosters, the Grad rocket, the ICBM stage) have a short hot
+  core at the nozzle and a brighter orange flame behind it, where the exhaust burns in the air. Its length and colour
+  come from the motor. The Grad and the ICBM show shock diamonds near the ground. At night the cooling tail glows
+  further back, and the flame lights the smoke around it.
+- **Engines without a flame**: the Shahed's piston engine, the cruise missile's jet engine and the Lancet's electric
+  motor show no flame and leave no visible smoke.
+- **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a
+  greyer trail. A slower rocket leaves a denser trail. The hot trail rises a little. By day it spreads and fades sooner;
+  on a calm night it stays narrow and hangs much longer.
+- **Wind**: smoke drifts with the world's wind, the same wind that carries nuclear fallout. Each game day has its own
+  wind, and it turns slowly from one day to the next. Near the ground it is weaker, most of all at night.
+- **Contrails**: the B-2 leaves a contrail only where the air is cold enough for one to form. At the height it flies
+  now the air is too warm, so it leaves none. The falling bomb leaves no trail.
 
 ## No room for the launcher
 
