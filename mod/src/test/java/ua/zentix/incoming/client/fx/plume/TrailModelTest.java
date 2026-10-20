@@ -101,6 +101,8 @@ class TrailModelTest {
         Trail t = trail(WeaponType.ROCKET, FlightPhase.BOOST);
         assertEquals(2 * TrailModel.smoke(t, TrailModel.inverseSpeed(400, 5)), TrailModel.smoke(t, TrailModel.inverseSpeed(200, 5)), 1e-12);
         assertEquals(1 / 5.0, TrailModel.inverseSpeed(0, 5), 1e-12, "на пусковой продукты уносит ветер");
+        assertTrue(TrailModel.laid(6, 5) && !TrailModel.laid(4, 5), "след — пока снаряд обгоняет ветер, медленнее — облако старта");
+        assertTrue(!TrailModel.laid(0.5, 0), "в штиль — не медленнее самого слабого ветра шлейфа");
         assertEquals(1 / TrailModel.CALM, TrailModel.inverseSpeed(0, 0), 1e-12, "в штиль — не гуще, чем при самом слабом ветре шлейфа");
     }
 

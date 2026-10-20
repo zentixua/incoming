@@ -325,7 +325,8 @@ public final class FarFlightView {
             f.track.at(t, POS);
             f.track.offset(t, f.nozzles.get(k), POS);
             double u = air.speed(POS[1]), inv = TrailModel.inverseSpeed(speed, u);
-            TrailModel.birth(style, inv, POS[1], u, air, BIRTH);
+            if (TrailModel.laid(speed, u)) TrailModel.birth(style, inv, POS[1], u, air, BIRTH);
+            else BIRTH[0] = 0;
             if (BIRTH[0] <= 0) {
                 points.finish(f.chain[k]);
                 f.chain[k] = TrailPoints.NONE;

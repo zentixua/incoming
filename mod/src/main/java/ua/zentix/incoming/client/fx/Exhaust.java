@@ -397,6 +397,7 @@ public final class Exhaust {
     private static Fx.Spec puff(Trail t, double speed, double y) {
         Air air = ClientAir.now();
         double u = air.speed(y), inv = TrailModel.inverseSpeed(speed, u);
+        if (!TrailModel.laid(speed, u)) return null;
         TrailModel.birth(t, inv, y, u, air, BIRTH);
         double life = Math.min(BIRTH[0], PUFF_SECONDS), ice = BIRTH[1];
         if (life <= 0) return null;
