@@ -155,4 +155,45 @@ class BodySwayTest {
             assertEquals(0, t[0], 1e-12);
         }
     }
+
+    /** Наклон стоящего от наземного взрыва заряда {@code kg} на {@code m} метрах лицом к взрыву, °: тот же маятник, давление и фаза — Кинни–Грэхем. */
+    private static double conventional(double kg, double m) {
+        double pa = 1000 * BlastModel.surfaceOverpressureKpa(m, kg), q = 1000 * BlastModel.dynamicPressureKpa(pa / 1000);
+        return Math.toDegrees(BodySway.peak(BodySway.tilt(pa, q, 1, BlastModel.chemicalPhaseSeconds(m, kg, true), BodySway.BACK, BodySway.FORWARD), 0));
+    }
+
+    /**
+     * Обычный взрыв толкает одним резким ударом с приходом фронта (фаза — миллисекунды, ветер за ней почти ничего не
+     * добавляет): шахед в 20 м сбивает с ног (наклон — до края устойчивости), в 300 м — десятые доли градуса, как
+     * обычное покачивание стоящего.
+     */
+    @Test
+    void shahedKnocksDownAtTwentyMetresAndBarelyTouchesAtThreeHundred() {
+        assertEquals(Math.toDegrees(BodySway.BACK), conventional(50, 20), 1e-3);
+        double far = conventional(50, 300);
+        assertTrue(far < 0.5, "шахед в 300 м: " + far + "°");
+        double pa = 1000 * BlastModel.surfaceOverpressureKpa(60, 50), q = 1000 * BlastModel.dynamicPressureKpa(pa / 1000);
+        double[] t = BodySway.tilt(pa, q, 1, BlastModel.chemicalPhaseSeconds(60, 50, true), BodySway.FORWARD, BodySway.BACK);
+        // удар — сразу: скорость наклона с первого отсчёта, ветер за фазой в 16 мс её почти не прибавляет
+        assertTrue(t.length > 1 && t[1] > 0);
+        double hitOnly = BodySway.jolt(pa, q, BlastModel.chemicalPhaseSeconds(60, 50, true)) * 0.83 / 66;
+        assertEquals(hitOnly, t[1] * BodySway.RATE, 0.25 * hitOnly);
+    }
+
+    /** Напор по фазе — среднее за шаг из первообразной: совпадает с численным интегралом, и за фазой меняет знак. */
+    @Test
+    void windShareIsTheMeanOfTheDynamicPressure() {
+        for (double[] r : new double[][]{{0, 0.1}, {0.5, 1.5}, {1, 3}, {0, 10}}) {
+            int n = 100_000;
+            double sum = 0;
+            for (int i = 0; i < n; i++) {
+                double x = r[0] + (i + 0.5) / n * (r[1] - r[0]), f = (1 - x) * Math.exp(-x);
+                sum += f * Math.abs(f);
+            }
+            assertEquals(sum / n, BodySway.windShare(r[0], r[1]), 1e-7);
+        }
+        assertTrue(BodySway.windShare(1.2, 2) < 0);
+        // удар у долгой волны — прежний
+        assertEquals(BodySway.jolt(6895, q(1)), BodySway.jolt(6895, q(1), 1e9), 1e-6);
+    }
 }

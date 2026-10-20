@@ -156,9 +156,8 @@ public final class NukeSounds {
     /** Звуки одного подрыва у этого слушателя. */
     static final class Schedule {
         /**
-         * С какого давления у уха прямой удар — в полную громкость, Па: 1 psi (ближние ракурсы обычных взрывов полны
-         * при 1,1–2,2 psi у края своей полной громкости,
-         * {@link ua.zentix.incoming.client.sound.BlastMix.Profile#flat}). Громче динамики не сыграют — дальше
+         * С какого давления у уха прямой удар — в полную громкость, Па: 1 psi, как у обычных взрывов
+         * ({@link ua.zentix.incoming.client.sound.BlastMix#FULL_PA}). Громче динамики не сыграют — дальше
          * громкость не растёт (кроме удара фронта вблизи, он и так перегружен).
          */
         static final double FULL_PA = 1000 * BlastModel.kpa(1);
@@ -350,18 +349,19 @@ public final class NukeSounds {
         private void hit(LocalPlayer p, Vec3 body) {
             bodyPsi = d.psi(body);
             sway(p, body, Math.max(1, 20 * d.scale() * d.positivePhaseSeconds(body)));
-            if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(1000 * d.overpressureKpa(body), path(body, body.distanceTo(d.burst())));
+            if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(1000 * d.overpressureKpa(body), d.positivePhaseSeconds(body), path(body, body.distanceTo(d.burst())));
         }
 
         /**
-         * Слух: энергия слышимого фронта у уха игрока ({@link HearingModel#exposure}) — за вычетом того, что съел путь: холм и зона
+         * Слух: энергия слышимого у уха игрока ({@link HearingModel#exposure(double, double)}: волна с положительной фазой
+         * модели {@code tPlus}, с; у фазы в доли секунды и больше — энергия скачка) — за вычетом того, что съел путь: холм и зона
          * тени гасят давление и сильнее верха, а A-энергия фронта — на 1–3 кГц, поэтому на потерю низов и долю верхов
          * ({@link Outdoor#pressureHighs}: без земли — у волны отражение от неё уже в давлении). Перепонки — по давлению с
          * потерей пути. В доме — как снаружи: окна давно выбиты (0,34 psi), волна входит в дом.
          */
-        private void hurtEars(double pa, Outdoor.@Nullable Path path) {
+        private void hurtEars(double pa, double tPlus, Outdoor.@Nullable Path path) {
             double lost = path == null ? 0 : Outdoor.pressureLoss(path), highs = path == null ? 1 : Outdoor.pressureHighs(path);
-            Deafness.blast(HearingModel.exposure(pa) - lost + 20 * Math.log10(Math.max(1e-3, highs)), pa / 1000 * Math.pow(10, -lost / 20), d.seed());
+            Deafness.blast(HearingModel.exposure(pa, tPlus) - lost + 20 * Math.log10(Math.max(1e-3, highs)), pa / 1000 * Math.pow(10, -lost / 20), d.seed());
         }
 
         /**
@@ -380,8 +380,8 @@ public final class NukeSounds {
             swayOpen = SoundFilters.openRays(body, Math.atan2(b.z - body.z, b.x - body.x));
             // фронт прошёл тело между прошлым тиком и этим: удар — с его прихода
             double late = a.ticks(0) - d.arrivalTicks(body.distanceTo(b));
-            double[] tilt = CameraShake.sway(1000 * d.overpressureKpa(body), 1000 * d.dynamicPressureKpa(body), swayOpen, phase / 20, late,
-                    body.subtract(b), p.getYRot());
+            double[] tilt = CameraShake.sway(1000 * d.overpressureKpa(body), 1000 * d.dynamicPressureKpa(body), swayOpen, phase / 20,
+                    d.positivePhaseSeconds(body), late, body.subtract(b), p.getYRot());
             swayPeak = Math.toDegrees(BodySway.peak(tilt, 0));
             swayRate = tilt.length < 2 ? 0 : Math.toDegrees(tilt[1]) * BodySway.RATE;
         }

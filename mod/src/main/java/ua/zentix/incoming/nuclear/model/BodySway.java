@@ -89,6 +89,15 @@ public final class BodySway {
      * @param back  граница против ветра (туда тело возвращается и туда толкает обратный ветер разрежения), рад
      */
     public static double[] tilt(double pPa, double qPa, double open, double tPlus, double edge, double back) {
+        return tilt(pPa, qPa, open, tPlus, tPlus, edge, back);
+    }
+
+    /**
+     * Как {@link #tilt(double, double, double, double, double, double)}, но удар фронта спадает по своей фазе
+     * {@code hitPhase}, с ({@link #jolt(double, double, double)}): у ядерной волны в игре фаза ветра растянута
+     * {@code effects_scale}, а обтекание тела — настоящие миллисекунды.
+     */
+    public static double[] tilt(double pPa, double qPa, double open, double tPlus, double hitPhase, double edge, double back) {
         if (!(qPa > 0) || !(open > 0) || !(tPlus > 0)) return new double[0];
         int steps = (int) Math.ceil(LONGEST / STEP), lag = (int) Math.round(DELAY / STEP), every = (int) Math.round(1.0 / (RATE * STEP));
         // наклон и его скорость за задержку назад (кольцом; до волны тело стоит — нули)
@@ -96,12 +105,12 @@ public final class BodySway {
         double[] out = new double[steps / every + 2];
         int n = 1;
         // удар фронта — короче шага счёта и задержки равновесия: скорость наклона сразу
-        double mgh = MASS * G * HEIGHT, peak = 0, th = 0, om = open * jolt(pPa, qPa) * HEIGHT / INERTIA, torque = 0, torqueRate = 0;
+        double mgh = MASS * G * HEIGHT, peak = 0, th = 0, om = open * jolt(pPa, qPa, hitPhase) * HEIGHT / INERTIA, torque = 0, torqueRate = 0;
         double w2 = ACTIVATION_W * ACTIVATION_W, damp = 2 * ACTIVATION_DAMPING * ACTIVATION_W;
         for (int i = 0; i < steps; i++) {
-            double t = i * STEP, x = t / tPlus, f = (1 - x) * Math.exp(-x);
-            // ветер — за давлением, напор — его квадрат со знаком
-            double push = open * qPa * f * Math.abs(f) * DRAG_AREA * HEIGHT;
+            double t = i * STEP;
+            // ветер — за давлением, напор — его квадрат со знаком; среднее за шаг: у обычного взрыва фаза — несколько шагов
+            double push = open * qPa * windShare(t / tPlus, (t + STEP) / tPlus) * DRAG_AREA * HEIGHT;
             int k = i % lag;
             double command = GAIN_P * thBack[k] + GAIN_D * omBack[k];
             thBack[k] = th;
@@ -136,21 +145,64 @@ public final class BodySway {
     }
 
     /**
+     * Среднее f·|f| (напор по фазе Фридлендера f = (1 − x)·e^(−x), со знаком) на доле фазы от {@code x0} до {@code x1}:
+     * ∫(1 − x)²e^(−2x)dx = −e^(−2x)·((1 − x)²/2 − (1 − x)/2 + 1/4), за x = 1 — с обратным знаком.
+     */
+    static double windShare(double x0, double x1) {
+        return (windImpulse(x1) - windImpulse(x0)) / (x1 - x0);
+    }
+
+    /** ∫₀ˣ f·|f| dx. */
+    private static double windImpulse(double x) {
+        double one = antiderivative(1) - antiderivative(0);
+        return x <= 1 ? antiderivative(x) - antiderivative(0) : 2 * one - (antiderivative(x) - antiderivative(0));
+    }
+
+    private static double antiderivative(double x) {
+        double u = 1 - x;
+        return -Math.exp(-2 * x) * (u * u / 2 - u / 2 + 0.25);
+    }
+
+    /** Удар фронта у долгой волны (фаза много дольше обтекания тела, ядерный подрыв): {@link #jolt(double, double, double)} при t₊ → ∞. */
+    public static double jolt(double pPa, double qPa) {
+        return jolt(pPa, qPa, Double.POSITIVE_INFINITY);
+    }
+
+    /**
      * Удар фронта по телу вдоль земли, Н·с: импульс разницы давлений на грудь и спину, пока волна обтекает тело, сверх
      * ветра ({@link #tilt} считает напор с прихода фронта). Грудь: отражённое p_r спадает к p + q за 3S/U — сверх ветра
      * (p_r − p − q)·3S/2U; спина: давления нет L/U и оно нарастает к p за 4S/U — p·(L + 2S)/U. Фаза давления (секунды)
      * за эти миллисекунды не спадает. Под воздушным подрывом фронт падает на землю наклонно: вдоль земли — доля cos α,
-     * а {@code qPa} уже несёт cos²α (напор вдоль земли против напора Ренкина–Гюгонио у этого давления).
+     * а {@code qPa} уже несёт cos²α (напор вдоль земли против напора Ренкина–Гюгонио у этого давления). Фаза
+     * обычного взрыва — миллисекунды, сравнимые с обтеканием: давление за эти миллисекунды спадает по Фридлендеру, и
+     * обе разницы берутся с его долей в каждый миг (у ядерной фазы в секунды — меньше 0,5 %).
      *
-     * @param pPa давление фронта у тела (падающее), Па
-     * @param qPa скоростной напор за фронтом вдоль земли, Па
+     * @param pPa   давление фронта у тела (падающее), Па
+     * @param qPa   скоростной напор за фронтом вдоль земли, Па
+     * @param tPlus положительная фаза, с
      */
-    public static double jolt(double pPa, double qPa) {
-        if (!(pPa > 0) || !(qPa > 0)) return 0;
+    public static double jolt(double pPa, double qPa, double tPlus) {
+        if (!(pPa > 0) || !(qPa > 0) || !(tPlus > 0)) return 0;
         double kpa = pPa / 1000, full = 1000 * BlastModel.dynamicPressureKpa(kpa), u = BlastModel.frontSpeed(kpa);
         double along = Math.sqrt(Math.min(1, qPa / full)), reflected = 1000 * BlastInjury.reflectedKpa(kpa);
-        double front = Math.max(0, reflected - pPa - full) * 1.5 * HALF_WIDTH / u, rear = pPa * (DEPTH + 2 * HALF_WIDTH) / u;
+        double clear = 3 * HALF_WIDTH / u, behind = DEPTH / u, rise = 4 * HALF_WIDTH / u;
+        // грудь: избыток отражённого спадает к нулю за 3S/U; спина: давления нет L/U, потом оно нарастает к p за 4S/U
+        double front = Math.max(0, reflected - pPa - full) * weighted(clear, 0, tPlus, 1), rear = pPa * (weighted(behind, 0, tPlus, 0) + weighted(rise, behind, tPlus, 1));
         return AREA * along * (front + rear);
+    }
+
+    /**
+     * ∫ доли давления по Фридлендеру на отрезке длиной {@code span} с мига {@code from}, с весом, спадающим к концу
+     * отрезка ({@code fall} = 1: 1 − s/span) или ровным (0), с.
+     */
+    private static double weighted(double span, double from, double tPlus, double fall) {
+        int n = 64;
+        double sum = 0;
+        for (int i = 0; i < n; i++) {
+            double s = (i + 0.5) / n * span, x = (from + s) / tPlus;
+            sum += (1 - fall * s / span) * (1 - x) * Math.exp(-x);
+        }
+        return sum * span / n;
     }
 
     /** Наибольший наклон, рад, с отсчёта {@code from}. */

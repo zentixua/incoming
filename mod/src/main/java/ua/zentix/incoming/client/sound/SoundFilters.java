@@ -26,6 +26,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.nuclear.Deafness;
 import ua.zentix.incoming.client.nuclear.NukePall;
+import ua.zentix.incoming.sound.Air;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -45,8 +46,11 @@ import java.util.WeakHashMap;
  * источника OpenAL один, и наш на минуты пелены снимал бы с каждого звука его преграды.
  */
 public final class SoundFilters {
-    /** Затухание верхов в воздухе, дБ на блок (≈ 35 дБ/км на 4–5 кГц при обычной влажности). */
-    private static final double AIR_DB_PER_BLOCK = 0.035;
+    /**
+     * Затухание верхов в воздухе, дБ на блок: ISO 9613-1 на 5 кГц — там, где фильтр EFX меряет верха (≈ 33 дБ/км при
+     * 20 °C и 70%, {@link Air}).
+     */
+    private static final double AIR_DB_PER_BLOCK = Air.alpha(5000);
 
     /** Номер фильтра OpenAL (создаётся в звуковом потоке при первой нужде), −1 — EFX нет. */
     private static volatile int filter;

@@ -21,7 +21,7 @@ class FarBlastsTest {
             model(WeaponType.MISSILE));
 
     private static CloudModel model(WeaponType w) {
-        return new CloudModel(BlastSource.of(w), CloudModel.Air.STANDARD);
+        return new CloudModel(BlastSource.of(w, false), CloudModel.Air.STANDARD);
     }
 
     /** Верх стабилизированного облака по Чёрчу (1969): 92,6·W^¼ м, W — кг ТНТ. */
@@ -50,7 +50,7 @@ class FarBlastsTest {
     @Test
     void cloudsRiseByTheirHeat() {
         for (CloudModel m : MODELS) {
-            double top = m.topZ + m.topR, church = church(m.source.tntKg());
+            double top = m.topZ + m.topR, church = church(m.source.chargeKg());
             if (m.source.fuelKg() > 0) assertTrue(top > 1.5 * church, m.source + ": верх " + top + " при Чёрче " + church);
             else assertEquals(1, top / church, 0.15, m.source + ": верх " + top + " при Чёрче " + church);
         }

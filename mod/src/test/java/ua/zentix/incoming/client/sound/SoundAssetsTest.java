@@ -23,17 +23,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Звуки, собранные tools/build_sounds.py, сходятся с кодом: каждое событие ModSounds есть в sounds.json, каждый
- * файл есть и он моно (Minecraft размещает в пространстве только моно — стерео звучал бы «в голове»; стерео — только
- * эхо взрыва, которое и играется без места), авторы записей лежат рядом со звуками.
+ * файл есть и он моно (Minecraft размещает в пространстве только моно — стерео звучал бы «в голове»), авторы записей
+ * лежат рядом со звуками.
  */
 class SoundAssetsTest {
     private static final String ASSETS = "/assets/incoming/";
-    /** Звуки без места в мире ({@code ClientSounds.around}) — стерео. */
-    private static final Set<String> STEREO = Set.of("blast.tail");
     /** Ракурсы одного взрыва: вариант выбирает одно зерно, поэтому вариантов поровну. */
     private static final List<String> PERSPECTIVES = List.of("blast.near", "blast.mid", "blast.far");
     /** Взрывы играются в тик прихода фронта: файлы разобраны заранее, без задержки на первом звуке. */
-    private static final List<String> PRELOAD = List.of("blast.near", "blast.mid", "blast.far", "blast.sub", "blast.tail", "rocket.blast");
+    private static final List<String> PRELOAD = List.of("blast.near", "blast.mid", "blast.far", "blast.sub");
 
     @Test
     void everyEventHasMonoFiles() throws IOException {
@@ -45,7 +43,7 @@ class SoundAssetsTest {
                 String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
                 String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
                 try (InputStream in = open(file)) {
-                    assertEquals(STEREO.contains(e.getKey()) ? 2 : 1, vorbisChannels(in.readNBytes(4096)), file + ": каналы");
+                    assertEquals(1, vorbisChannels(in.readNBytes(4096)), file + ": каналы");
                 }
             }
         }

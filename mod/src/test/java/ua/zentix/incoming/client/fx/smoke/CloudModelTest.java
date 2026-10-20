@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.fx.smoke;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 
 import java.util.ArrayList;
@@ -14,12 +15,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Облако обычного взрыва по законам: подъём MTT, Чёрч, шар топлива CCPS, вещество, цвет огня, жизнь. */
 class CloudModelTest {
     private static CloudModel model(WeaponType w, CloudModel.Air air) {
-        return new CloudModel(BlastSource.of(w), air);
+        return new CloudModel(BlastSource.of(w, false), air);
     }
 
     /** Источник: заряд и топливо без огненной стадии (малое тепло и шар) — подъём почти как от точечного термика. */
     private static CloudModel point(double tntKg, CloudModel.Air air) {
-        return new CloudModel(new BlastSource(WeaponType.ROCKET, tntKg, 0, BlastSource.Fuel.NONE, BlastSource.Explosive.RDX), air);
+        return new CloudModel(new BlastSource(WeaponType.MISSILE, tntKg, 0, true, false), air);
     }
 
     /**
@@ -72,7 +73,7 @@ class CloudModelTest {
     void fuelFireballFollowsCcps() {
         for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
             CloudModel m = model(w, CloudModel.Air.STANDARD);
-            double mass = BlastSource.of(w).fuelKg();
+            double mass = BlastSource.of(w, false).fuelKg();
             assertEquals(5.8 * Math.cbrt(mass), m.fuelBall, 1e-9);
             assertEquals(0.45 * Math.cbrt(mass), m.fuelBallSeconds, 1e-9);
             assertEquals(1, m.radius(0) / (0.5 * m.fuelBall), 0.15, w + ": начальный радиус " + m.radius(0) + " при шаре CCPS " + 0.5 * m.fuelBall);
@@ -123,7 +124,7 @@ class CloudModelTest {
         assertEquals(-0.216, BlastSource.Explosive.RDX.oxygenBalance(), 0.002);
         CloudModel rocket = model(WeaponType.ROCKET, CloudModel.Air.STANDARD), missile = model(WeaponType.MISSILE, CloudModel.Air.STANDARD);
         assertEquals(6.4 * 0.185 * CloudModel.SOOT_SURVIVES, rocket.soot, 1e-3);
-        assertEquals(280 * BlastSource.Fuel.JP10.sootYield, missile.soot, 1e-9, "гексоген сажи не даёт");
+        assertEquals(WeaponSpec.MISSILE.fuelAtImpact() * BlastSource.Fuel.JP10.sootYield, missile.soot, 1e-9, "гексоген сажи не даёт");
         assertTrue(missile.dust > 10 * rocket.dust, "пыль — объём воронки ∝ W");
     }
 

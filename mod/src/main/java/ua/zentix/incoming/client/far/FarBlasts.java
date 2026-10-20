@@ -6,9 +6,9 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLights;
-import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.client.sound.Acoustics;
@@ -61,12 +61,8 @@ public final class FarBlasts {
     static final int RING_RAYS = 6;
     static final double RING = 0.7;
     private static final double[] DISC = new double[3];
-    /** Звук, до уха которого фронт так и не дошёл (слушатель уходит быстрее звука), дольше не ждём, тиков. */
-    static final int SOUND_WAIT = 2400;
     /** Источник для луча и звука — над точкой удара, блоков (как вспышка ближней картинки). */
     static final double LIFT = 1.5;
-    /** Дрейф клубов: скорость, на которой ветер {@link Fx} уравновешен сопротивлением дыма столба (drag 0,95). */
-    static final double DRIFT = 1 / (1 - 0.95);
     /** Плотность клуба; разброс клубов от оси столба, радиусов. */
     static final double OPACITY = 0.85, SPREAD = 0.4;
     /**
@@ -125,25 +121,10 @@ public final class FarBlasts {
     public static final Look BUNKER_BREACH = new Look(9, 60, 3, 20, 210, 2400, 18, 55, 14, 4200, 0.5f);
     public static final Look BUNKER_DEEP = new Look(0, 0, 0, 0, 110, 500, 14, 32, 12, 3000, 1);
 
-    /**
-     * Докуда взрыв слышно в обычных условиях ({@code R0} у {@link Outdoor}), блоков — по виду пакета: это звук (его
-     * выводят из заряда законы звука, не картинка), числа — прежние.
-     */
-    static double audible(int kind) {
-        return switch (kind) {
-            case S2C.Blast.MISSILE -> 40_000;
-            case S2C.Blast.ROCKET -> 15_000;
-            case S2C.Blast.BUNKER -> 30_000;
-            default -> 20_000;
-        };
-    }
-
     /** Размер клуба столба бомбы — от и сколько сверху (доля номинального); разброс места клуба по высоте — доля шага. */
     static final double SIZE_MIN = 0.85, SIZE_SPAN = 0.3, JITTER = 0.3;
     /** Клубов модели в облаке не больше (огненный шар, облако, ножка, пыль у земли — {@link CloudModel#blobs}). */
     static final int BLOBS = 12;
-    /** Ветер у облаков: скорость, на которой ветер частиц {@link Fx} уравновешен сопротивлением дыма (drag 0,95), м/с. */
-    public static final double WIND_X = Fx.WIND_X / (1 - 0.95) * 20, WIND_Z = Fx.WIND_Z / (1 - 0.95) * 20;
 
     private static final ArrayDeque<Event> EVENTS = new ArrayDeque<>();
     /** Числа на кадр без выделения: точка {@link Sight#point}, свет {@link Sight#light} и цвет шара. */
@@ -163,7 +144,8 @@ public final class FarBlasts {
     /** Один взрыв: где, какой, его облако (модель или прежняя картинка бомбы), случайное и последний луч по рельефу. */
     private static final class Event implements SmokeGrid.Source {
         final ClientLevel level;
-        final int kind;
+        /** Что взорвалось: звук по заряду. */
+        final BlastSource source;
         /** Бомба под землёй — прежняя картинка; у остальных null. */
         @Nullable
         final Look look;
@@ -186,6 +168,11 @@ public final class FarBlasts {
         final float[] f, ox, oz, size, rot, spin, shade, dust;
         final byte[] tex;
         boolean soundPending;
+        /**
+         * Дольше не ждём звука, до уха которого фронт так и не дошёл (слушатель уходит быстрее звука), тиков: путь звука
+         * на всю дальность слышимости ({@link BlastSounds#range}).
+         */
+        final long soundWait;
         /** Шар светит (в прошлом кадре): лучи по блокам к шару ({@link #clear}) стоит обновлять. */
         boolean glows = true;
         long traced;
@@ -201,10 +188,11 @@ public final class FarBlasts {
         /** Клубы облака в этом кадре легли в сетку ({@link SmokeGrid.Source#placed}); нет — объём его не рисует. */
         boolean inGrid = true;
 
-        Event(ClientLevel level, int kind, @Nullable Look look, @Nullable CloudModel model, double x, double y, double z, GroundMaterial ground,
-              long seed, boolean near) {
+        Event(ClientLevel level, BlastSource source, @Nullable Look look, @Nullable CloudModel model, double x, double y, double z,
+              GroundMaterial ground, long seed, boolean near) {
             this.level = level;
-            this.kind = kind;
+            this.source = source;
+            this.soundWait = (long) Math.ceil(BlastSounds.range(source) / Acoustics.SPEED);
             this.look = look;
             this.model = model;
             this.x = x;
@@ -405,7 +393,7 @@ public final class FarBlasts {
         } else {
             model = new CloudModel(BlastSource.of(p), air(level, pos));
         }
-        Event e = new Event(level, p.kind(), look, model, pos.x, y, pos.z, GroundMaterial.byId(p.material()), p.seed(), near(pos));
+        Event e = new Event(level, BlastSource.of(p), look, model, pos.x, y, pos.z, GroundMaterial.byId(p.material()), p.seed(), near(pos));
         trace(e, FarTerrain.of(level), camera());
         clear(e, camera());
         if (EVENTS.size() >= CAP) EVENTS.pollFirst().alive = false;
@@ -424,7 +412,7 @@ public final class FarBlasts {
     }
 
     /**
-     * Воздух в месте взрыва: день по высоте солнца (как свет пелены), дождь, ветер ({@link #WIND_X}, {@link #WIND_Z}) и
+     * Воздух в месте взрыва: день по высоте солнца (как свет пелены), дождь, ветер мира в 10 м над морем ({@link ClientAir}) и
      * влажность — у воды 1, иначе — осадки биома (как облако Вильсона ядерки).
      */
     static CloudModel.Air air(ClientLevel level, Vec3 pos) {
@@ -434,7 +422,13 @@ public final class FarBlasts {
         net.minecraft.core.BlockPos at = net.minecraft.core.BlockPos.containing(pos);
         double humidity = !level.getFluidState(at).isEmpty() || !level.getFluidState(at.below()).isEmpty() ? 1
                 : level.getBiome(at).value().getModifiedClimateSettings().downfall();
-        return CloudModel.Air.of(day, level.getRainLevel(1), WIND_X, WIND_Z, humidity);
+        return CloudModel.Air.of(day, level.getRainLevel(1), wind10(true), wind10(false), humidity);
+    }
+
+    /** Ветер мира в 10 м над морем вдоль x (или z), м/с — опорный ветер модели облака ({@link CloudModel.Air}). */
+    public static double wind10(boolean x) {
+        double y = ua.zentix.incoming.client.fx.plume.Air.SEA + 10;
+        return 20 * (x ? ClientAir.windX(y) : ClientAir.windZ(y));
     }
 
     /** Раз в тик: забыть прошедшее и чужое измерение, звук — когда дошёл фронт, лучи по рельефу — по очереди. */
@@ -453,7 +447,7 @@ public final class FarBlasts {
         while (it.hasNext()) {
             Event e = it.next();
             long age = clock - e.born;
-            if (e.level != level || age > e.life() && (!e.soundPending || age > SOUND_WAIT)) {
+            if (e.level != level || age > e.life() && (!e.soundPending || age > e.soundWait)) {
                 e.alive = false;
                 it.remove();
                 continue;
@@ -464,7 +458,7 @@ public final class FarBlasts {
                     e.soundPending = false;
                     trace(e, heights, ear);
                     hear(e, d, age);
-                } else if (age > SOUND_WAIT) {
+                } else if (age > e.soundWait) {
                     e.soundPending = false;
                 }
             }
@@ -480,7 +474,7 @@ public final class FarBlasts {
     }
 
     private static void hear(Event e, double d, long age) {
-        Outdoor.Heard heard = BlastSounds.far(e.kind, new Vec3(e.x, e.y + LIFT, e.z), audible(e.kind), Math.max(1, 0.4 * e.ballRadius()),
+        Outdoor.Heard heard = BlastSounds.far(e.source, new Vec3(e.x, e.y + LIFT, e.z), Math.max(1, 0.4 * e.ballRadius()),
                 e.ground, d, e.path, e.seed);
         if (heard == null) return;
         lastHeard = heard;
@@ -815,7 +809,6 @@ public final class FarBlasts {
         float sr = (float) (DARK[0] + (AGED[0] - DARK[0]) * grey), sg = (float) (DARK[1] + (AGED[1] - DARK[1]) * grey),
                 sb = (float) (DARK[2] + (AGED[2] - DARK[2]) * grey);
         double opacity = OPACITY * emerge(k, age);
-        double windX = Fx.WIND_X * DRIFT * age, windZ = Fx.WIND_Z * DRIFT * age;
         double spread = 1 + 0.5 * age / k.life(), grow = 0.35 + 0.65 * rise;
         for (int i = 0; i < e.f.length; i++) {
             double f = e.f[i];
@@ -825,9 +818,11 @@ public final class FarBlasts {
             double h = height(k, f, r, rise);
             double vis = visible(h, r, line);
             if (vis <= 0) continue;
-            // выше — ветер сильнее: столб клонится
-            double shear = 0.3 + 0.7 * f * rise;
-            double px = bx + e.ox[i] * r * SPREAD + windX * shear, py = by + h, pz = bz + e.oz[i] * r * SPREAD + windZ * shear;
+            // ветер мира на высоте клуба (выше — сильнее: столб клонится); низ столба — дым, что подходит позже, и он
+            // сносится меньше, как прежде (доля shear)
+            double shear = 0.3 + 0.7 * f * rise, wy = view.camera().y + by + h;
+            double px = bx + e.ox[i] * r * SPREAD + ClientAir.windX(wy) * age * shear, py = by + h,
+                    pz = bz + e.oz[i] * r * SPREAD + ClientAir.windZ(wy) * age * shear;
             double d = Math.sqrt(px * px + py * py + pz * pz);
             double t = view.air(d, py);
             if (t < Sight.THRESHOLD) continue;

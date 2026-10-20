@@ -8,6 +8,8 @@ import ua.zentix.incoming.strike.Loadout;
  * Экран настроек — штатный NeoForge (Моды → Incoming → Настроить).
  */
 public final class IncomingConfig {
+    /** Дальше этого, блоков, сервер не шлёт ничего далёкого: полёты и взрывы ({@code visibility.far_range} — до него). */
+    public static final int FAR_RANGE_MAX = 32_000;
     public static final Server SERVER;
     public static final ModConfigSpec SERVER_SPEC;
     public static final Client CLIENT;
@@ -259,8 +261,9 @@ public final class IncomingConfig {
             b.translation("incoming.config.visibility").push("visibility");
             farRange = b.comment("How far players see and hear projectiles in flight and conventional blasts, blocks. Beyond render distance they show",
                             "as a model (a dot when smaller than a couple of pixels), flame, trail, fireball and smoke column; sound arrives with",
-                            "the speed-of-sound delay. Haze hides them anyway further out; a lower value sends fewer packets to players.")
-                    .translation("incoming.config.far_range").defineInRange("far_range", 8000, 640, 32_000);
+                            "the speed-of-sound delay. Haze hides them anyway further out; a lower value sends fewer packets to players.",
+                            "A blast is also sent as far as its sound carries on a quiet night, which depends on its charge, up to " + FAR_RANGE_MAX + " blocks.")
+                    .translation("incoming.config.far_range").defineInRange("far_range", 8000, 640, FAR_RANGE_MAX);
             b.pop();
 
             b.translation("incoming.config.air_defense").push("air_defense");

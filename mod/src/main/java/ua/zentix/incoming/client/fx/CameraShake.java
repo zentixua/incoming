@@ -18,10 +18,11 @@ import java.util.List;
  * тряска самого взгляда сбивала бы прицел.
  * <p>
  * Глаз видит скорость поворота: размах A° на частоте f — до 2π·f·A °/с (на каждом кадре — её доля). Поэтому толчки
- * грунта у обычных взрывов медленные, как у тела: голову качает само тело (основной тон ниже ~6 Гц), а частую дрожь
- * земли оно до глаз почти не доносит. Размахи меняются без скачков: скачок на кадр — тот же рывок.
+ * грунта (подземный взрыв, бурение — {@link #quake}, по пакету сервера) медленные, как у тела: голову качает само тело
+ * (основной тон ниже ~6 Гц), а частую дрожь земли оно до глаз почти не доносит. Размахи меняются без скачков: скачок на
+ * кадр — тот же рывок.
  * <p>
- * Ядерная волна камеру не трясёт, а наклоняет: фронт бьёт стоящего разом (за миллисекунды обтекания тело получает
+ * Ударная волна — ядерная и обычного взрыва — камеру не трясёт, а наклоняет: фронт бьёт стоящего разом (за миллисекунды обтекания тело получает
  * скорость наклона), ветер за ним толкает дальше, и тело отклоняется по ветру и выпрямляется ({@link BodySway} — маятник
  * с равновесием); голова — с телом. Наклон идёт с самого прихода фронта к телу, а не с начала тика, в котором его
  * заметили: удар — на кадре, где он был. Наклоны от нескольких волн складываются
@@ -31,12 +32,10 @@ import java.util.List;
  * курсом, тангажем и креном по отдельности нельзя — у взгляда вниз поворот вбок ушёл бы во вращение картинки.
  */
 public final class CameraShake {
-    /** Удар взрывной волны: сколько тиков ещё трясёт. */
-    private static int shake;
     /** Толчки грунта (подземный взрыв, бурение): медленнее и мягче. */
     private static int quake;
     private static long ticks;
-    /** Ядерные волны, что качают тело сейчас. */
+    /** Волны, что качают тело сейчас. */
     private static final List<Sway> SWAYS = new ArrayList<>();
     /** Больше стольких волн сразу — самая старая уходит. */
     private static final int SWAYS_MAX = 8;
@@ -53,16 +52,12 @@ public final class CameraShake {
 
     private CameraShake() {}
 
-    public static void blast(int ticks) {
-        shake = Math.max(shake, ticks);
-    }
-
     public static void quake(int ticks) {
         quake = Math.max(quake, ticks);
     }
 
     /**
-     * Фронт ядерной волны ударил тело и ветер за ним качнул его ({@link BodySway#tilt}): давление фронта {@code pPa} и
+     * Фронт волны (ядерной или обычного взрыва) ударил тело и ветер за ним качнул его ({@link BodySway#tilt}): давление фронта {@code pPa} и
      * скоростной напор за фронтом вдоль земли {@code qPa}, Па, доля открытого к взрыву {@code open} (ветровая тень), с
      * положительной фазой {@code tPlus}, с; {@code late} —
      * сколько тиков назад (0..1) фронт прошёл тело; {@code away} — от взрыва к игроку (ветер дует от эпицентра),
@@ -70,10 +65,19 @@ public final class CameraShake {
      * тела по ветру, рад.
      */
     public static double[] sway(double pPa, double qPa, double open, double tPlus, double late, Vec3 away, double yaw) {
+        return sway(pPa, qPa, open, tPlus, tPlus, late, away, yaw);
+    }
+
+    /**
+     * Как {@link #sway(double, double, double, double, double, Vec3, double)}, но удар обтекания спадает по своей фазе
+     * {@code hitPhase}, с: у ядерной волны фаза ветра в игре — время модели × {@code effects_scale}, а обтекание тела —
+     * настоящие миллисекунды, и фаза удара — фаза модели.
+     */
+    public static double[] sway(double pPa, double qPa, double open, double tPlus, double hitPhase, double late, Vec3 away, double yaw) {
         double flat = Math.hypot(away.x, away.z);
         if (!(flat > 1e-6)) return new double[0];
         double x = away.x / flat, z = away.z / flat;
-        double[] tilt = BodySway.tilt(pPa, qPa, open, tPlus, edge(yaw, x, z), edge(yaw, -x, -z));
+        double[] tilt = BodySway.tilt(pPa, qPa, open, tPlus, hitPhase, edge(yaw, x, z), edge(yaw, -x, -z));
         if (tilt.length < 2) return tilt;
         if (SWAYS.size() >= SWAYS_MAX) SWAYS.remove(0);
         SWAYS.add(new Sway(tilt, ticks - Mth.clamp(late, 0, 1), x, z));
@@ -104,7 +108,6 @@ public final class CameraShake {
     /** Тик клиента; {@code onFeet} — игрок стоит на ногах ({@link #standing}). */
     public static void tick(boolean onFeet) {
         ticks++;
-        if (shake > 0) shake--;
         if (quake > 0) quake--;
         standingBefore = standing;
         standing = Mth.clamp(standing + (onFeet ? STANDING_STEP : -STANDING_STEP), 0, 1);
@@ -112,7 +115,7 @@ public final class CameraShake {
     }
 
     public static void reset() {
-        shake = quake = 0;
+        quake = 0;
         SWAYS.clear();
         standing = standingBefore = 1;
         ticks = 0;
@@ -121,7 +124,7 @@ public final class CameraShake {
     public static void apply(ViewportEvent.ComputeCameraAngles e) {
         double k = IncomingConfig.CLIENT.cameraShake.get();
         Minecraft mc = Minecraft.getInstance();
-        if (k <= 0 || shake <= 0 && quake <= 0 && SWAYS.isEmpty() || mc.isPaused()) return;
+        if (k <= 0 || quake <= 0 && SWAYS.isEmpty() || mc.isPaused()) return;
         // наклон — тела игрока: камере снаряда и глазам другой сущности его не видно
         Player p = mc.player;
         double body = p != null && mc.getCameraEntity() == p ? p.getViewYRot((float) e.getPartialTick()) : Double.NaN;
@@ -141,12 +144,6 @@ public final class CameraShake {
         double t = ticks + partial;
         // амплитуды: курс/тангаж, °
         double yaw = 0, pitch = 0;
-        if (shake > 0) {
-            double[] a = shake >= 26 ? new double[]{5, 3.5} : shake >= 18 ? new double[]{3, 2} : shake >= 8 ? new double[]{1.5, 1} : new double[]{0.6, 0.4};
-            double fade = Math.min(1, shake / 4.0);
-            yaw += a[0] * fade * wobble(t, 9.7, 0.0);
-            pitch += a[1] * fade * wobble(t, 12.3, 1.7);
-        }
         if (quake > 0) {
             double[] a = quake >= 50 ? new double[]{1.6, 1.1} : quake >= 24 ? new double[]{0.9, 0.6} : new double[]{0.35, 0.25};
             double fade = Math.min(1, quake / 6.0);

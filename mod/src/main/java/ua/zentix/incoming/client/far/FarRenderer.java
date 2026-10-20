@@ -42,7 +42,7 @@ public final class FarRenderer {
         SPRITES.begin(view, out, probes);
         if (!FarBlasts.isEmpty() || !FarFlightView.isEmpty()) {
             FarBlasts.collect(view, SPRITES, lights);
-            FarFlightView.collect(view, SPRITES);
+            FarFlightView.collect(view, SPRITES, lights);
         }
         NukeRenderer.fireballs(view, SPRITES, lights);
         SPRITES.counts(LAST_FRAME);

@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.sound;
 
+import ua.zentix.incoming.sound.Propagation;
+
 /**
  * Как далёкий взрыв доходит до уха под открытым небом — ISO 9613-2 в двух полосах, без Minecraft (проверяется
  * юнит-тестами). Низы (63 Гц) несут сам раскат и решают, слышно ли его; верха (2 кГц) — насколько он глухой.
@@ -26,11 +28,6 @@ public final class Outdoor {
     public static final double LOW = 343.0 / 63, HIGH = 343.0 / 2000;
     /** Дифракция через одну кромку — не больше, дБ (ISO 9613-2, п. 7.4). */
     static final double BARRIER_CAP = 20;
-    /**
-     * Зона тени днём: √(2R) — r = √(2R)·(√hs + √hr) у источника на 2 м и уха на 1,7 м ровно 1 км, м^½; глубину
-     * набирает к {@link #SHADOW_DEEP} r; глубина у верхов и низов, дБ.
-     */
-    static final double SHADOW_ROOT = 1000 / (Math.sqrt(2) + Math.sqrt(1.7)), SHADOW_DEEP = 4, SHADOW_HIGH = 20, SHADOW_LOW = 10;
     /** Дождь и гроза прячут далёкое, дБ на уровень 0..1. */
     static final double RAIN = 3, THUNDER = 3;
     /** Последние децибелы запаса — громкость плавно к нулю. */
@@ -83,15 +80,14 @@ public final class Outdoor {
         return p.z > 0 ? Math.max(0, barrier(p.z, high ? HIGH : LOW) - ground(high, p)) : 0;
     }
 
-    /** Где днём начинается зона тени, блоков: там луч от источника к уху касается земли. */
+    /** Где днём начинается зона тени, блоков: там луч от источника к уху касается земли ({@link Propagation#shadowFrom}). */
     static double shadowFrom(double hs, double hr) {
-        return SHADOW_ROOT * (Math.sqrt(Math.max(0, hs)) + Math.sqrt(Math.max(0, hr)));
+        return Propagation.shadowFrom(hs, hr);
     }
 
-    /** Зона тени днём, дБ: звук загибает вверх, и дальше касания луча с землёй у земли его всё меньше. */
+    /** Зона тени днём, дБ: звук загибает вверх, и дальше касания луча с землёй у земли его всё меньше (на 63 Гц и 2 кГц). */
     static double shadow(boolean high, Path p) {
-        double from = shadowFrom(p.hs, p.hr);
-        return p.day * smoothstep(from, SHADOW_DEEP * from, p.d) * (high ? SHADOW_HIGH : SHADOW_LOW);
+        return Propagation.shadow(high ? 2000 : 63, p.d, p.hs, p.hr, p.day);
     }
 
     /** Дождь и гроза, дБ. */
@@ -99,9 +95,9 @@ public final class Outdoor {
         return RAIN * p.rain + THUNDER * p.thunder;
     }
 
-    /** Насколько сейчас день для рефракции: по синусу высоты солнца — у горизонта и ниже 0, к 30° — 1. */
+    /** Насколько сейчас день для рефракции ({@link Propagation#day}). */
     public static double day(double sunSine) {
-        return smoothstep(0, 0.5, sunSine);
+        return Propagation.day(sunSine);
     }
 
     /** Потери низов по дороге сверх разлёта, дБ: преграда, зона тени, дождь (земля на низах уже в R0 и в давлении). */

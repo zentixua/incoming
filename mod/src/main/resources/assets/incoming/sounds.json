@@ -239,30 +239,6 @@
       }
     ]
   },
-  "blast.tail": {
-    "sounds": [
-      {
-        "name": "incoming:blast_tail_1",
-        "preload": true
-      },
-      {
-        "name": "incoming:blast_tail_2",
-        "preload": true
-      },
-      {
-        "name": "incoming:blast_tail_3",
-        "preload": true
-      },
-      {
-        "name": "incoming:blast_tail_4",
-        "preload": true
-      },
-      {
-        "name": "incoming:blast_tail_5",
-        "preload": true
-      }
-    ]
-  },
   "debris.fall": {
     "subtitle": "subtitles.incoming.debris",
     "sounds": [
@@ -517,31 +493,6 @@
       }
     ]
   },
-  "rocket.blast": {
-    "subtitle": "subtitles.incoming.blast",
-    "sounds": [
-      {
-        "name": "incoming:rocket_blast_1",
-        "preload": true
-      },
-      {
-        "name": "incoming:rocket_blast_2",
-        "preload": true
-      },
-      {
-        "name": "incoming:rocket_blast_3",
-        "preload": true
-      },
-      {
-        "name": "incoming:rocket_blast_4",
-        "preload": true
-      },
-      {
-        "name": "incoming:rocket_blast_5",
-        "preload": true
-      }
-    ]
-  },
   "loiter.engine": {
     "subtitle": "subtitles.incoming.loiter",
     "sounds": [
@@ -641,6 +592,24 @@
       },
       {
         "name": "incoming:grid_power_up_2"
+      }
+    ]
+  },
+  "sonic.crack": {
+    "subtitle": "subtitles.incoming.sonic",
+    "sounds": [
+      {
+        "name": "incoming:sonic_crack",
+        "preload": true
+      }
+    ]
+  },
+  "sonic.boom": {
+    "subtitle": "subtitles.incoming.sonic",
+    "sounds": [
+      {
+        "name": "incoming:sonic_boom",
+        "preload": true
       }
     ]
   }

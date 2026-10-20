@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.fx;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.util.RandomSource;
@@ -10,12 +11,15 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxBudget;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
+import ua.zentix.incoming.client.sound.BlastEchoes;
 import ua.zentix.incoming.client.sound.BlastSounds;
+import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.util.Particles;
@@ -26,8 +30,8 @@ import ua.zentix.incoming.warhead.Warheads;
 /**
  * Что видят и слышат игроки при взрывах вблизи: вспышка по модели облака ({@link CloudModel}), твёрдое частицами —
  * осколки, искры, комья грунта, языки пламени, пока горит топливо; огненный шар, дым, пыль и облако конденсации — объём
- * сетки дыма (облако модели — источник сетки, его ведёт {@link FarBlasts}). Звук и тряска приходят вместе с фронтом ударной
- * волны (17 блоков за тик). Бомба под землёй — прежняя картинка.
+ * сетки дыма (облако модели — источник сетки, его ведёт {@link FarBlasts}). Звук, слух и толчок тела приходят вместе
+ * с фронтом ударной волны (17 блоков за тик). Бомба под землёй — прежняя картинка.
  */
 public final class BlastEffects {
     private BlastEffects() {}
@@ -39,7 +43,8 @@ public final class BlastEffects {
     public static void blast(S2C.Blast p) {
         // одно облако на взрыв: у объёма, у картинки вдали и у вспышки с частицами здесь
         CloudModel cloud = FarBlasts.add(p);
-        if (FarBlasts.near(p.pos())) {
+        if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.byId(p.material()), p.seed(), BlastSource.of(p)));
+        else if (FarBlasts.near(p.pos())) {
             GroundMaterial mat = GroundMaterial.byId(p.material());
             if (cloud == null && p.kind() != S2C.Blast.BUNKER) cloud = FarBlasts.model(p);
             switch (p.kind()) {
@@ -56,7 +61,33 @@ public final class BlastEffects {
      * сбила — ещё и горящее топливо цели. Хлопок и лёгкая тряска — с фронтом. Дальше {@link FarBlasts#NEAR} — ничего: разрыв мал.
      */
     public static void intercept(S2C.Intercept p) {
-        if (FarBlasts.near(p.pos())) Effects.add(new Airburst(p.pos(), p.seed(), p.kill()));
+        if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.STONE, p.seed(), BlastSource.air(Airburst.CHARGE_KG)));
+        else if (FarBlasts.near(p.pos())) Effects.add(new Airburst(p.pos(), p.seed(), p.kill()));
+    }
+
+    /**
+     * Камера далеко (камера снаряда), а тело игрока ближе {@link FarBlasts#NEAR}: картинку и звук ведёт {@link FarBlasts}
+     * у камеры, а волна у самого игрока всё равно бьёт по ушам и толкает ({@link Body}).
+     */
+    private static boolean bodyOnly(Vec3 pos) {
+        Player player = Minecraft.getInstance().player;
+        return !FarBlasts.near(pos) && player != null && player.getEyePosition().distanceTo(pos) <= FarBlasts.NEAR;
+    }
+
+    /** Только фронт у тела игрока ({@link BlastHit}): без картинки, звука и эха — их ведёт дальняя модель у камеры. */
+    static final class Body extends Timeline {
+        Body(Vec3 pos, GroundMaterial mat, long seed, BlastSource source) {
+            super(pos, mat, seed, source, false);
+        }
+
+        @Override
+        boolean run(ClientLevel level, int t) {
+            return t <= 60;
+        }
+
+        @Override
+        void arrive(ClientLevel level, int band) {
+        }
     }
 
     // ---------------------------------------------------------------- общее
@@ -71,39 +102,84 @@ public final class BlastEffects {
         return flashNear(m) * FlashFalloff.PEAK / Flash.FLOOR;
     }
 
-    /** Фронт звука и ударной волны: срабатывает у слушателя один раз, когда до него дошёл. */
+    /**
+     * Фронт звука и ударной волны: срабатывает у слушателя (камера) один раз, когда до него дошёл, — звук; у тела
+     * игрока — слух и наклон тела ({@link BlastHit}). Обычный взрыв ({@code source} не null) звучит по заряду
+     * ({@link BlastSounds#arrive}), его эхо ищет склоны, пока фронт идёт ({@link BlastEchoes}).
+     */
     abstract static class Timeline implements Effects.Effect {
         final Vec3 pos;
         final GroundMaterial mat;
         final RandomSource random;
         /** Зерно взрыва: по нему же звук выбирает вариант записи. */
         final long seed;
-        private boolean arrived;
+        /** Что взорвалось; null — у взрыва свои звуки ({@link #arrive}). */
+        @Nullable
+        final BlastSource source;
+        @Nullable
+        private final BlastEchoes echoes;
+        private boolean arrived, hit, over;
+        /** Часы взрыва, по которым эхо и удар у уха ждут начала прямого звука ({@link BlastSounds#clock}). */
+        private final OwnSources.Clock clock = BlastSounds.clock();
 
-        Timeline(Vec3 pos, GroundMaterial mat, long seed) {
+        Timeline(Vec3 pos, GroundMaterial mat, long seed, @Nullable BlastSource source) {
+            this(pos, mat, seed, source, true);
+        }
+
+        /** @param heard у камеры звучит (эхо ищет склоны); нет — только фронт у тела ({@link Body}) */
+        Timeline(Vec3 pos, GroundMaterial mat, long seed, @Nullable BlastSource source, boolean heard) {
             this.pos = pos;
             this.mat = mat;
             this.seed = seed;
             this.random = RandomSource.create(seed);
+            this.source = source;
+            this.echoes = source == null || !heard ? null : BlastSounds.echoes(source, pos, seed, clock);
         }
 
         @Override
         public final boolean tick(ClientLevel level, int t) {
+            Minecraft mc = Minecraft.getInstance();
             if (!arrived) {
-                Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+                Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
                 double d = ear.distanceTo(pos);
                 if (d <= Warheads.FRONT_SPEED * t || t > 60) {
                     arrived = true;
                     if (t <= 60) arrive(level, (int) (d / Warheads.FRONT_SPEED) + 1);
+                } else if (echoes != null) {
+                    echoes.approach(ear);
                 }
             }
-            return run(level, t);
+            if (arrived && echoes != null) echoes.tick();
+            // тело — после звуков: их слышит ухо, каким оно было до волны
+            LocalPlayer player = mc.player;
+            if (!hit && source != null && player != null) {
+                Vec3 body = player.getEyePosition();
+                double d = body.distanceTo(pos);
+                if (d <= Warheads.FRONT_SPEED * t) {
+                    hit = true;
+                    BlastHit.hit(source, pos, mat, seed, player, body, t - d / Warheads.FRONT_SPEED);
+                } else if (t > 60) {
+                    hit = true;
+                }
+            }
+            boolean more = run(level, t);
+            if (!more && !over) {
+                over = true;
+                if (echoes != null) echoes.release();
+            }
+            return more;
         }
 
         abstract boolean run(ClientLevel level, int t);
 
-        /** @param band пояс фронта: 1 — ближе 17 блоков, 2 — 17..34 … */
-        abstract void arrive(ClientLevel level, int band);
+        /**
+         * Фронт у слушателя: у обычного взрыва — его звук по заряду ({@link BlastSounds#arrive}).
+         *
+         * @param band пояс фронта: 1 — ближе 17 блоков, 2 — 17..34 …
+         */
+        void arrive(ClientLevel level, int band) {
+            if (source != null) BlastSounds.arrive(source, pos, seed, clock, echoes);
+        }
 
         /**
          * Вспышка на экране: свет мгновенный, сила — {@link FlashFalloff} по расстоянию, взгляду и прямой видимости
@@ -178,7 +254,7 @@ public final class BlastEffects {
         private final boolean rocket;
 
         Drone(Vec3 pos, GroundMaterial mat, long seed, boolean rocket, CloudModel model) {
-            super(pos, mat, seed);
+            super(pos, mat, seed, model.source);
             this.rocket = rocket;
             this.model = model;
         }
@@ -204,13 +280,6 @@ public final class BlastEffects {
             return t < 240;
         }
 
-        @Override
-        void arrive(ClientLevel level, int band) {
-            if (rocket) BlastSounds.rocket(pos, seed);
-            else BlastSounds.surface(pos, false, seed);
-            int shake = band == 1 ? 26 : band == 2 ? 22 : band <= 4 ? 16 : band <= 8 ? 10 : 0;
-            if (shake > 0) CameraShake.blast(shake);
-        }
     }
 
     // ================================================================ разрыв зенитной ракеты
@@ -218,11 +287,16 @@ public final class BlastEffects {
     static final class Airburst extends Timeline {
         /** Радиус клуба огня, блоки (осколочно-фугасная часть ~20 кг). */
         static final float R = 2.5f;
+        /**
+         * Заряд разрыва, кг ТНТ — для звука, слуха и удара по телу. Оценка сверху: вся боевая часть ~20 кг, хотя ВВ в
+         * осколочной части — её доля (зенитной ракеты в паспорте нет).
+         */
+        static final double CHARGE_KG = 20;
         static final double FLASH_NEAR = 3 * R, FLASH_RANGE = 160;
         private final boolean kill;
 
         Airburst(Vec3 pos, long seed, boolean kill) {
-            super(pos, GroundMaterial.STONE, seed);
+            super(pos, GroundMaterial.STONE, seed, BlastSource.air(CHARGE_KG));
             this.kill = kill;
         }
 
@@ -248,12 +322,6 @@ public final class BlastEffects {
             return t < 61;
         }
 
-        @Override
-        void arrive(ClientLevel level, int band) {
-            BlastSounds.rocket(pos, seed);
-            if (band == 1) CameraShake.blast(10);
-            else if (band == 2) CameraShake.blast(6);
-        }
     }
 
     // ================================================================ крылатая ракета (mfx)
@@ -263,7 +331,7 @@ public final class BlastEffects {
         private final CloudModel model;
 
         Missile(Vec3 pos, GroundMaterial mat, long seed, CloudModel model) {
-            super(pos, mat, seed);
+            super(pos, mat, seed, model.source);
             this.model = model;
         }
 
@@ -304,12 +372,6 @@ public final class BlastEffects {
             BlastSounds.cookoff(p);
         }
 
-        @Override
-        void arrive(ClientLevel level, int band) {
-            BlastSounds.surface(pos, true, seed);
-            int shake = band == 1 ? 34 : band == 2 ? 30 : band == 3 ? 26 : band <= 6 ? 22 : band <= 10 ? 16 : band <= 16 ? 10 : 0;
-            if (shake > 0) CameraShake.blast(shake);
-        }
     }
 
     // ================================================================ бетонобойная бомба (bfx)
@@ -324,7 +386,7 @@ public final class BlastEffects {
         private final boolean breach;
 
         Bunker(Vec3 pos, GroundMaterial mat, float surfaceY, long seed) {
-            super(pos, mat, seed);
+            super(pos, mat, seed, null);
             this.surface = new Vec3(pos.x, surfaceY, pos.z);
             this.depth = BunkerCover.depth((int) surfaceY, pos.y);
             this.breach = BunkerCover.breaches((int) surfaceY, pos.y);
@@ -388,9 +450,8 @@ public final class BlastEffects {
         void arrive(ClientLevel level, int band) {
             Player player = Minecraft.getInstance().player;
             boolean sky = player != null && level.canSeeSky(BlockPos.containing(player.getEyePosition()));
+            // землю трясёт сервер (S2C.Quake): заряда бомбы в паспорте нет — волну у тела считать не по чему
             BlastSounds.bunker(pos, band, !sky);
-            if (!sky && band <= 4) CameraShake.blast(band == 1 ? 34 : band == 2 ? 30 : 26);
-            else if (band <= 8) CameraShake.blast(16);
         }
     }
 
@@ -400,7 +461,7 @@ public final class BlastEffects {
     public static void bunkerImpact(S2C.BunkerImpact p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
         Vec3 pos = p.pos();
-        Effects.add(new Timeline(pos, mat, 0) {
+        Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
                 if (t == 0) {
@@ -427,7 +488,7 @@ public final class BlastEffects {
     public static void vent(S2C.Vent p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
         Vec3 pos = p.pos();
-        Effects.add(new Timeline(pos, mat, 0) {
+        Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
                 RandomSource rnd = level.random;
@@ -466,7 +527,7 @@ public final class BlastEffects {
     /** Свод над полостью обрушился: гул и пыль над провалом. */
     public static void collapse(S2C.Collapse p) {
         Vec3 pos = p.pos();
-        Effects.add(new Timeline(pos, GroundMaterial.byId(p.material()), 0) {
+        Effects.add(new Timeline(pos, GroundMaterial.byId(p.material()), 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
                 if (t < 6) {

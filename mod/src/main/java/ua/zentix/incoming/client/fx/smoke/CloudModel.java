@@ -166,17 +166,17 @@ public final class CloudModel {
         this.source = source;
         this.air = air;
         double fuelHeat = source.fuelKg() * source.fuel().heatJPerKg * (1 - RADIANT);
-        double heat = source.tntKg() * HE_HEAT + fuelHeat;
+        double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
-        double crater = CRATER_D * Math.cbrt(source.tntKg());
+        double crater = CRATER_D * Math.cbrt(source.chargeKg());
         double craterVolume = Math.PI / 8 * crater * crater * CRATER_DEPTH * crater;
         dust = craterVolume * SOIL_DENSITY * DUST_LOFTED;
-        soot = source.tntKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + source.fuelKg() * source.fuel().sootYield;
+        soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + source.fuelKg() * source.fuel().sootYield;
         double m3 = Math.cbrt(source.fuelKg());
         fuelBall = 5.8 * m3;
         fuelBallSeconds = 0.45 * m3;
-        heBall = 1.7 * Math.cbrt(source.tntKg());
-        heBallSeconds = 0.2 * Math.pow(source.tntKg(), 0.35);
+        heBall = 1.7 * Math.cbrt(source.chargeKg());
+        heBallSeconds = 0.2 * Math.pow(source.chargeKg(), 0.35);
         fireSeconds = Math.max(fuelBallSeconds, heBallSeconds);
         // начальный объём: в нём тепло держит температуру шара (у ideal gas при том же давлении g' = g·(1 − T_a/T))
         double ballK = source.fuelKg() > 0 ? FUEL_BALL_K : HE_BALL_END;
@@ -460,7 +460,7 @@ public final class CloudModel {
         double cloudDust = CLOUD_SHARE * dust * DustModel.aloft(t, cy);
         double stemShare = STEM_SHARE * Math.min(1, up / Math.max(maxRise, 1e-6));
         double he = heBallRadius(t), fuel = fuelBallRadius(t);
-        double heSoot = source.tntKg() * source.explosive().freeCarbon() * SOOT_SURVIVES, fuelSoot = soot - heSoot;
+        double heSoot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES, fuelSoot = soot - heSoot;
         if (he > 0 || fuel > 0) {
             boolean heBig = he > fuel;
             if (he > 0) {
@@ -493,7 +493,7 @@ public final class CloudModel {
         // пыль у земли: вал, который ветер за фронтом гонит до радиуса облака Чёрча (R = 4,7·W^0,375 м; σ = R/√5, как у
         // термика) со скоростью звука, дальше — расплывание Бриггса по пути ветра; высота — начальный шар, оседает корзинами
         double c = ua.zentix.incoming.nuclear.model.BlastModel.SOUND_SPEED;
-        double church = 4.7 * Math.pow(source.tntKg(), 0.375) / Math.sqrt(5);
+        double church = 4.7 * Math.pow(source.chargeKg(), 0.375) / Math.sqrt(5);
         double x = Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(2)) * t;
         double bh = Math.hypot(church * Math.min(1, t * c / Math.max(church, 1e-6)), spreadH(air.spread(), x));
         double bv = Math.max(radius(0) / Math.sqrt(5), spreadV(air.spread(), x));
@@ -508,7 +508,7 @@ public final class CloudModel {
     public double condensation() {
         if (condensationR < 0) {
             condensationR = ua.zentix.incoming.nuclear.model.CloudModel.wilsonCloud(air.humidity())
-                    ? ua.zentix.incoming.nuclear.model.BlastModel.rangeForSurfaceOverpressure(20, source.tntKg()) : 0;
+                    ? ua.zentix.incoming.nuclear.model.BlastModel.rangeForSurfaceOverpressure(20, source.chargeKg()) : 0;
         }
         return condensationR;
     }
@@ -517,7 +517,7 @@ public final class CloudModel {
     public double condensationSeconds() {
         if (condensationLife < 0) {
             double r = condensation();
-            condensationLife = r <= 0 ? 0 : 10 * ua.zentix.incoming.nuclear.model.BlastModel.positivePhaseSeconds(r, source.tntKg() * 1e-6);
+            condensationLife = r <= 0 ? 0 : 10 * ua.zentix.incoming.nuclear.model.BlastModel.positivePhaseSeconds(r, source.chargeKg() * 1e-6);
         }
         return condensationLife;
     }

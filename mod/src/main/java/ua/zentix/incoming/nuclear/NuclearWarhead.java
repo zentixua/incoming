@@ -32,6 +32,7 @@ import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.util.Terrain;
+import ua.zentix.incoming.util.Wind;
 
 import java.util.UUID;
 
@@ -70,8 +71,10 @@ public final class NuclearWarhead {
         Detonation g = NuclearWorld.get(level).planned(geometry(level, target, yieldKt, airBurst, scale));
         int id = events.nextId();
         RandomSource random = SCENARIO ? RandomSource.create(SCENARIO_SEED + id) : level.random;
+        // ветер — ветра мира (тот же у дыма и шлейфов на клиенте)
+        Wind wind = Wind.at(level.getGameTime());
         Detonation d = new Detonation(id, g.burst(), g.groundY(), yieldKt, g.surface(),
-                level.getGameTime(), (float) (random.nextDouble() * Math.PI * 2), 5 + random.nextFloat() * 10,
+                level.getGameTime(), (float) wind.direction(), (float) wind.speed(),
                 g.visibility(), random.nextLong(), scale, IncomingConfig.SERVER.nukeFallout.get(),
                 IncomingConfig.SERVER.nukeWaveSpeed.get().floatValue(), level.getDayTime(),
                 IncomingConfig.SERVER.nukeFires.get() && IncomingConfig.SERVER.nukeMaxFires.get() > 0);

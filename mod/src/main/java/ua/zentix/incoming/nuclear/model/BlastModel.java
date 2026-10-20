@@ -26,6 +26,30 @@ public final class BlastModel {
         return kinneyGraham(slantRangeM, tntKg * GROUND_REFLECTION);
     }
 
+    /** Избыточное давление заряда {@code tntKg} кг ТНТ в свободном воздухе (разрыв в воздухе, без отражения от земли), кПа. */
+    public static double freeAirOverpressureKpa(double slantRangeM, double tntKg) {
+        return kinneyGraham(slantRangeM, tntKg);
+    }
+
+    /** Давление обычного заряда на наклонной дальности, кПа: на земле ({@link #surfaceOverpressureKpa}) или в воздухе. */
+    public static double overpressureKpa(double slantRangeM, double tntKg, boolean surface) {
+        return surface ? surfaceOverpressureKpa(slantRangeM, tntKg) : freeAirOverpressureKpa(slantRangeM, tntKg);
+    }
+
+    /**
+     * Положительная фаза волны обычного заряда {@code tntKg} кг ТНТ на наклонной дальности R, с: Кинни–Грэхем для
+     * химического ВВ (Kinney &amp; Graham 1985, «Explosive Shocks in Air»; формула — по handoff ref/formulas.md §3, с
+     * книгой в этой работе не сверена): t₊/∛W = 980·(1 + (Z/0,54)¹⁰) / ((1 + (Z/0,02)³)·(1 + (Z/0,74)⁶)·√(1 + (Z/6,9)²)) мс/кг^⅓,
+     * Z = R/∛W; на земле — W × {@link #GROUND_REFLECTION}, как у давления. Вдали формула выходит на постоянную 4,2 мс·∛W
+     * (у 50 кг на земле — 19 мс), вблизи — миллисекунды: у обычного взрыва вся фаза слышна, у ядерного вдали — нет.
+     */
+    public static double chemicalPhaseSeconds(double slantRangeM, double tntKg, boolean surface) {
+        double w = Math.cbrt(Math.max(1e-9, surface ? tntKg * GROUND_REFLECTION : tntKg));
+        double z = Math.max(1e-6, slantRangeM / w);
+        double a = z / 0.02, b = z / 0.74;
+        return 1e-3 * w * 980 * (1 + Math.pow(z / 0.54, 10)) / ((1 + a * a * a) * (1 + Math.pow(b, 6)) * Math.sqrt(1 + (z / 6.9) * (z / 6.9)));
+    }
+
     /** Дальность, где давление наземного взрыва заряда {@code tntKg} падает до {@code kpa} (0 — нет заряда или давления). */
     public static double rangeForSurfaceOverpressure(double kpa, double tntKg) {
         if (tntKg <= 0 || kpa >= surfaceOverpressureKpa(0, tntKg)) return 0;

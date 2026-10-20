@@ -313,6 +313,8 @@ public final class ClientScenario {
             if (!far.isEmpty()) Incoming.LOG.info("SCENARIO far {}", far);
             String nuke = ua.zentix.incoming.client.nuclear.NukeSounds.describe();
             if (!nuke.isEmpty()) Incoming.LOG.info("SCENARIO nuke-sound {}", nuke);
+            String blast = ua.zentix.incoming.client.sound.BlastSounds.describe();
+            if (!blast.isEmpty()) Incoming.LOG.info("SCENARIO blast-sound {}", blast);
         }
     }
 
@@ -1732,9 +1734,9 @@ public final class ClientScenario {
         shot(b + 300, "smoke_column_15s");
         int at = b + 600;
         double t = 30;
-        var model = new ua.zentix.incoming.client.fx.smoke.CloudModel(ua.zentix.incoming.client.fx.BlastSource.of(ua.zentix.incoming.strike.WeaponType.DRONE),
-                ua.zentix.incoming.client.fx.smoke.CloudModel.Air.of(1, 0, ua.zentix.incoming.client.far.FarBlasts.WIND_X,
-                        ua.zentix.incoming.client.far.FarBlasts.WIND_Z, 0.5));
+        var model = new ua.zentix.incoming.client.fx.smoke.CloudModel(ua.zentix.incoming.client.fx.BlastSource.of(ua.zentix.incoming.strike.WeaponType.DRONE, false),
+                ua.zentix.incoming.client.fx.smoke.CloudModel.Air.of(1, 0, ua.zentix.incoming.client.far.FarBlasts.wind10(true),
+                        ua.zentix.incoming.client.far.FarBlasts.wind10(false), 0.5));
         Vec3 c = target.add(model.driftX(t), model.height(t), model.driftZ(t));
         double r = model.radius(t);
         Incoming.LOG.info("SCENARIO smoke column at 30 s: centre {} radius {}", xyz(c), Math.round(r));

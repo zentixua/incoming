@@ -28,51 +28,39 @@ public final class S2C {
     private S2C() {}
 
     /**
-     * Взрыв: вид (0 — шахед, 1 — ракета, 2 — бомба под землёй, 3 — снаряд РСЗО), грунт, высота поверхности над точкой, сид
-     * и снаряд, который взорвался: его путь у клиента кончается в этот тик, и мотор звучит, пока до уха не дойдёт фронт
-     * взрыва, а не стихает раньше. {@code weapon} — {@code WeaponType.id} оружия, чей заряд взорвался: по паспорту клиент
-     * берёт заряд, остаток топлива и состав взрывчатки (картинка и звук по ним, {@code client.fx.BlastSource}); вид
-     * {@code kind} говорит только, как взрыв идёт (на поверхности, под землёй).
+     * Взрыв: вид (0 — шахед, 1 — ракета, 2 — бомба под землёй, 3 — снаряд РСЗО — как взрыв происходит), грунт, высота
+     * поверхности над точкой, сид, снаряд, который взорвался (его путь у клиента кончается в этот тик, и мотор звучит,
+     * пока до уха не дойдёт фронт взрыва, а не стихает раньше), и оружие ({@code WeaponType.id}): заряд и топливо —
+     * в его паспорте, клиент берёт их оттуда ({@code client.fx.BlastSource}).
      * <p>
-     * Формат только растёт с конца (replay.md): {@code weapon} дописан в конец пакета и в повторе, записанном до него,
-     * читается как {@link #UNKNOWN} — оружие тогда по виду ({@link #weaponType}).
+     * Формат только растёт с конца (replay.md): оружие дописано в конец; в повторе, записанном до него, его нет
+     * ({@link #NO_WEAPON}) — оно выводится из вида, как вид тогда и выбирали ({@link #weaponType}).
      */
     public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) implements CustomPacketPayload {
         public static final int DRONE = 0, MISSILE = 1, BUNKER = 2, ROCKET = 3;
-        /** Оружие не названо (повтор до поля {@code weapon}). */
-        public static final int UNKNOWN = -1;
+        /** Оружия в пакете нет (повтор, записанный до этого поля). */
+        public static final int NO_WEAPON = -1;
         public static final Type<Blast> TYPE = new Type<>(Incoming.id("blast"));
-        private static final StreamCodec<ByteBuf, Integer> WEAPON = StreamCodecs.trailing(ByteBufCodecs.VAR_INT, UNKNOWN);
-        public static final StreamCodec<ByteBuf, Blast> CODEC = new StreamCodec<>() {
-            @Override
-            public Blast decode(ByteBuf b) {
-                int kind = ByteBufCodecs.VAR_INT.decode(b);
-                Vec3 pos = StreamCodecs.VEC3.decode(b);
-                int material = ByteBufCodecs.VAR_INT.decode(b);
-                float surfaceY = ByteBufCodecs.FLOAT.decode(b);
-                long seed = ByteBufCodecs.VAR_LONG.decode(b);
-                Optional<UUID> projectile = ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC).decode(b);
-                return new Blast(kind, pos, material, surfaceY, seed, projectile, WEAPON.decode(b));
-            }
-
-            @Override
-            public void encode(ByteBuf b, Blast p) {
-                ByteBufCodecs.VAR_INT.encode(b, p.kind);
-                StreamCodecs.VEC3.encode(b, p.pos);
-                ByteBufCodecs.VAR_INT.encode(b, p.material);
-                ByteBufCodecs.FLOAT.encode(b, p.surfaceY);
-                ByteBufCodecs.VAR_LONG.encode(b, p.seed);
-                ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC).encode(b, p.projectile);
-                WEAPON.encode(b, p.weapon);
-            }
-        };
+        private static final StreamCodec<ByteBuf, Optional<UUID>> PROJECTILE = ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC);
+        private static final StreamCodec<ByteBuf, Integer> WEAPON = StreamCodecs.trailing(ByteBufCodecs.VAR_INT, NO_WEAPON);
+        public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.of((b, p) -> {
+            ByteBufCodecs.VAR_INT.encode(b, p.kind);
+            StreamCodecs.VEC3.encode(b, p.pos);
+            ByteBufCodecs.VAR_INT.encode(b, p.material);
+            ByteBufCodecs.FLOAT.encode(b, p.surfaceY);
+            ByteBufCodecs.VAR_LONG.encode(b, p.seed);
+            PROJECTILE.encode(b, p.projectile);
+            WEAPON.encode(b, p.weapon);
+        }, b -> new Blast(ByteBufCodecs.VAR_INT.decode(b), StreamCodecs.VEC3.decode(b), ByteBufCodecs.VAR_INT.decode(b),
+                ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b)));
 
         /**
-         * Оружие взрыва: названное пакетом, а в повторе до поля {@code weapon} — по виду (шахед, ракета, бомба, РСЗО; так
-         * их и рисовали до него).
+         * Оружие, которое взорвалось. Нет в пакете ({@link #NO_WEAPON}) — по виду, как его выбирал сервер до этого поля
+         * (шахед и «Ланцет» оба шли видом шахеда).
          */
         public WeaponType weaponType() {
-            if (weapon != UNKNOWN) return WeaponType.byId(weapon);
+            WeaponType[] all = WeaponType.values();
+            if (weapon >= 0 && weapon < all.length) return all[weapon];
             return switch (kind) {
                 case MISSILE -> WeaponType.MISSILE;
                 case BUNKER -> WeaponType.BUNKER;

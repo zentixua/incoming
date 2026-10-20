@@ -7,6 +7,13 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.ClientWeaponSpec;
+import ua.zentix.incoming.client.far.FarView;
+import ua.zentix.incoming.client.far.Sight;
+import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.client.fx.plume.Flame;
+import ua.zentix.incoming.client.fx.plume.FlameModel;
+import ua.zentix.incoming.client.fx.plume.TrailModel;
+import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxBudget;
 import ua.zentix.incoming.defense.InterceptorSpec;
@@ -28,21 +35,27 @@ import java.util.WeakHashMap;
 
 /**
  * Двигатели в полёте: факел (его рисует {@link ua.zentix.incoming.client.render.StrikeProjectileRenderer} по
- * {@link #plume}), облако пуска, огонь у сопла, клубы объёма у густых шлейфов. Сам шлейф и инверсионные следы —
- * лента по точкам пути ({@code client.far.FarFlightView}, вид — {@code ClientWeaponSpec.Trail}): мест частиц она не
- * занимает, поэтому залп в сотни ракет не рвёт следы на отдельные клубы.
+ * {@link #plume}), облако пуска, клубы объёма у густых шлейфов. Сам шлейф и инверсионные следы — лента по точкам пути
+ * ({@code client.far.FarFlightView}, закон — {@link TrailModel}): мест частиц она не занимает, поэтому залп в сотни
+ * ракет не рвёт следы на отдельные клубы.
  */
 public final class Exhaust {
-    /** Факел в системе снаряда: срез сопла в (0, {@code y}, {@code z}) (нос по +Z), длина и радиус в блоках, яркость, «алмазы». */
-    public record Plume(float y, float z, float length, float radius, float intensity, boolean diamonds, int core, int outer) {
+    /**
+     * Факел в системе снаряда: срез сопла в (0, {@code y}, {@code z}) (нос по +Z), факел на высоте снаряда, привыкание
+     * глаза {@code adapt} (яркость × adapt — во сколько раз он ярче белого экрана, {@code Sight.adapted}) и доля струи
+     * {@code near} (с 0,8 прорисовки струю сменяет свет того же факела вдали).
+     */
+    public record Plume(float y, float z, Flame flame, double adapt, float near) {
         /** Та же струя, тусклее в k раз (на краю прорисовки её сменяет свет факела вдали). */
         public Plume dimmed(float k) {
-            return new Plume(y, z, length, radius, intensity * k, diamonds, core, outer);
+            return new Plume(y, z, flame, adapt, near * k);
         }
     }
 
     private static final class State {
         Vec3 lastNozzle;
+        /** Тик игры, когда сопло было в {@link #lastNozzle}. */
+        long lastTick;
         /** Сопло на прошлом тике: с борта клубы кладутся с отставанием на тик (см. {@link #volume}). */
         Vec3 heldNozzle;
         /** Камера игрока — на этом снаряде (видео с борта). */
@@ -72,18 +85,20 @@ public final class Exhaust {
     }
 
     /**
-     * Факел двигателя сейчас или null — не горит: струя факела фазы из паспорта ({@link ClientWeaponSpec.Flame}, тот же,
-     * что свет факела вдали), длина — по возрасту фазы, с мерцанием.
+     * Факел двигателя сейчас или null — не горит: факел фазы из паспорта по законам ({@link FlameModel}: тот же, что свет
+     * факела вдали) на высоте снаряда. Пульсаций нет: турбулентность струи — тысячи герц, за кадр она усредняется.
      */
     @Nullable
     public static Plume plume(StrikeProjectile e, float partial) {
-        if (!e.isActive()) return null;
-        FlightPhase ph = e.flightPhase();
-        ClientWeaponSpec.Flame f = nozzles(e).far().stage(ph).flame();
+        if (!e.isActive() || !(e.level() instanceof ClientLevel level)) return null;
+        ClientWeaponSpec.ClientAirframe a = nozzles(e);
+        ClientWeaponSpec.Stage stage = a.far().stage(e.flightPhase());
+        Flame f = stage.flame(e.getY());
         if (f == null) return null;
-        float flicker = 0.9f + 0.1f * Mth.sin((e.age() + partial) * 2.7f) * Mth.sin((e.age() + partial) * 1.3f + 1);
-        return new Plume((float) f.start().y(), (float) f.start().z(), (float) f.length(e.phaseAge() + partial) * flicker, (float) f.width(),
-                f.intensity(), f.diamonds(), f.core(), f.outer());
+        ClientWeaponSpec.At n = a.nozzle(stage);
+        // привыкание глаза — то же, что у света этого факела вдали (FarRenderer: свет неба), иначе на 0,8 прорисовки
+        // яркость скакнула бы
+        return new Plume((float) n.y(), (float) n.z(), f, Sight.adapted(1, FarView.ambient(level, partial)), 1);
     }
 
     /** Сопла сущности из клиентского паспорта (у B-2 и его бомбы — свои). */
@@ -150,17 +165,8 @@ public final class Exhaust {
                     .drag(0.88f).glow(0.7f, 4).rise(0.002f).fadeIn(1).fadeFrom(0.5f).spin(0.01f).budget(FxBudget.GROUND).spawn(level, s.muzzle);
         }
         if (age < 6) backblast(level, s.pad, back, 2, r);
-        // языки огня летят вместе со снарядом и чуть отстают — иначе за ним остаются огненные бусины
-        Vec3 motion = s.lastNozzle == null ? Vec3.ZERO : nozzle.subtract(s.lastNozzle);
-        // плотный след (лента): у сопла подсвечен, дальше серо-белый, висит полминуты; клубы чуть шире ленты и бледнее
-        // её — неровный край и плотность, а не бусины поверх
-        Fx.Spec puff = Fx.smoke().size(0.7f, 3.6f).life(420 + r.nextInt(200)).color(0xEDEAE4, 0xB2AEA8)
-                .colorCurve(0.6f).alpha(VOLUME_ALPHA).drag(0.9f).glow(0.85f, 4).rise(0.0012f).fadeIn(2).fadeFrom(0.55f).spin(0.012f);
-        volume(level, s, nozzle, puff, r);
-        for (int i = 0; i < 2; i++) {
-            Fx.fire().vel(motion.scale(0.85).add(back.scale(0.2 + r.nextDouble() * 0.3)).add(r.nextGaussian() * 0.04, r.nextGaussian() * 0.04, r.nextGaussian() * 0.04))
-                    .size(0.25f, 0.7f).life(2 + r.nextInt(2)).alpha(0.85f).drag(0.95f).spawn(level, nozzle);
-        }
+        // след — лента; клубы объёма поверх неё — по тому же закону следа
+        volume(level, s, nozzle, nozzles(e).far().stage(ph).trail(), r);
     }
 
     /** Выхлоп из заднего среза трубы: бьёт назад, в землю под пакетом, и растекается по ней. */
@@ -177,11 +183,10 @@ public final class Exhaust {
 
     // ---------------------------------------------------------------- крылатая ракета
 
-    /** Горячий след ТРД — лентой; в пике — ещё и пар на корпусе (конденсация на околозвуке). */
+    /** ТРДД огня и дыма не даёт (его след — по закону, {@code TrailModel}); в пике — пар на корпусе (конденсация на околозвуке). */
     private static void missile(ClientLevel level, CruiseMissileEntity e, State s) {
         if (!e.isActive() || booster(level, e, s)) return;
         RandomSource r = level.random;
-        Vec3 nozzle = at(e, nozzles(e).engine());
         // «воротник» пара вокруг корпуса виден только снаружи; с борта он у самого объектива
         if (e.flightPhase() == FlightPhase.TERMINAL && !s.onboard) {
             for (int i = 0; i < 3; i++) {
@@ -190,10 +195,6 @@ public final class Exhaust {
                 Fx.smoke().size(0.3f, 1.2f).life(8).color(0xF4F6F8, 0xFFFFFF).alpha(0.45f).fadeIn(1).fadeFrom(0.2f).drag(0.8f)
                         .wind(0).spawn(level, p);
             }
-        }
-        if (e.flightPhase() == FlightPhase.POP_UP || e.flightPhase() == FlightPhase.TERMINAL) {
-            Fx.spark().vel(e.getDeltaMovement().scale(0.3).add(r.nextGaussian() * 0.1, r.nextGaussian() * 0.1, r.nextGaussian() * 0.1))
-                    .life(6 + r.nextInt(6)).size(0.06f, 0.03f).spawn(level, nozzle);
         }
     }
 
@@ -215,13 +216,7 @@ public final class Exhaust {
         Vec3 nozzle = at(e, nozzles.boosterNozzle());
         Vec3 back = Local.offset(e.getYRot(), e.getXRot(), 0, 0, -1);
         if (s.pad == null) s.pad = nozzle;
-        Fx.Spec puff = Fx.smoke().size(0.5f * scale, 3.5f * scale).life(260 + r.nextInt(120)).color(0xF2EFEA, 0xC4C0BA).colorCurve(0.6f)
-                .alpha(VOLUME_ALPHA).drag(0.9f).glow(0.8f, 5).rise(0.0015f).fadeIn(2).fadeFrom(0.5f).spin(0.01f);
-        volume(level, s, nozzle, puff, r);
-        for (int i = 0; i < 2; i++) {
-            Fx.fire().vel(back.scale(0.4 + r.nextDouble() * 0.4).add(r.nextGaussian() * 0.05, r.nextGaussian() * 0.05, r.nextGaussian() * 0.05))
-                    .size(0.4f * scale, 1.2f * scale).life(3 + r.nextInt(3)).alpha(0.85f).drag(0.7f).spawn(level, nozzle);
-        }
+        volume(level, s, nozzle, nozzles.far().stage(ph).trail(), r);
         if (ph == FlightPhase.IGNITION || e.phaseAge() < 8) {
             // струя бьёт в пусковую: дым отражается и стелется по земле вокруг
             int n = Fx.count(ph == FlightPhase.IGNITION ? 6 : 3, s.pad);
@@ -247,17 +242,7 @@ public final class Exhaust {
     private static void icbm(ClientLevel level, IcbmEntity e, State s) {
         RandomSource r = level.random;
         Vec3 nozzle = at(e, nozzles(e).engine());
-        // скорость ракеты за тик: языки огня летят вместе с ней и отстают, а не висят в воздухе
-        Vec3 motion = s.lastNozzle == null ? Vec3.ZERO : nozzle.subtract(s.lastNozzle);
-        Fx.Spec puff = Fx.smoke().size(1.8f, 8).life(900 + r.nextInt(300)).color(0xF2EFEA, 0xBDBAB6).colorCurve(0.6f)
-                .alpha(VOLUME_ALPHA).drag(0.9f).glow(0.9f, 6).rise(0.0015f).fadeIn(2).fadeFrom(0.55f).spin(0.01f);
-        volume(level, s, nozzle, puff, r);
-        // языки огня и искры из сопла
-        Vec3 back = Local.offset(e.getYRot(), e.getXRot(), 0, 0, -1);
-        for (int i = 0; i < 3; i++) {
-            Fx.fire().vel(motion.scale(0.8).add(back.scale(0.6 + r.nextDouble() * 0.6)).add(r.nextGaussian() * 0.08, r.nextGaussian() * 0.08, r.nextGaussian() * 0.08))
-                    .size(0.9f, 2.2f).life(4 + r.nextInt(4)).alpha(0.8f).drag(0.7f).spawn(level, nozzle);
-        }
+        volume(level, s, nozzle, nozzles(e).far().stage(e.flightPhase()).trail(), r);
         if (s.pad == null) s.pad = e.position().add(0, -9, 0);
         int age = e.age();
         if (age < 140) launchCloud(level, s.pad, age, r);
@@ -379,19 +364,58 @@ public final class Exhaust {
      * оставался бы виден всегда (светлые точки и овалы на ленте); следующий отрезок длиннее, и шаг его клуба — весь
      * отрезок.
      */
-    private static void volume(ClientLevel level, State s, Vec3 nozzle, Fx.Spec puff, RandomSource r) {
+    private static void volume(ClientLevel level, State s, Vec3 nozzle, @Nullable Trail trail, RandomSource r) {
         Vec3 held = s.heldNozzle;
         s.heldNozzle = nozzle;
         Vec3 to = s.onboard ? held : nozzle;
         if (to == null) return;
         Vec3 from = s.lastNozzle == null || s.lastNozzle.distanceToSqr(to) > 80 * 80 ? to : s.lastNozzle;
+        long now = level.getGameTime(), ticks = Math.max(1, now - s.lastTick);
         s.lastNozzle = to;
-        if (from.distanceToSqr(to) < 1e-6) return;
+        s.lastTick = now;
+        if (trail == null || from.distanceToSqr(to) < 1e-6) return;
+        // отрезок бывает и за несколько тиков (тик без пакета сервера): скорость — путь на тики
+        Fx.Spec puff = puff(trail, from.distanceTo(to) * 20 / ticks, to.y);
+        if (puff == null) return;
         puff.budget(FxBudget.TRAIL).smooth().chain(to.x - from.x, to.y - from.y, to.z - from.z, from.distanceTo(to) / VOLUME_PUFFS_PER_TICK);
         for (int i = 0; i < VOLUME_PUFFS_PER_TICK; i++) {
             double k = (i + r.nextDouble()) / VOLUME_PUFFS_PER_TICK;
             puff.spawn(level, Mth.lerp(k, from.x, to.x), Mth.lerp(k, from.y, to.y), Mth.lerp(k, from.z, to.z));
         }
+    }
+
+    private static final double[] BIRTH = new double[2], LOOK = new double[4];
+
+    /**
+     * Клубы объёма живут не дольше этого, с: долгий след несёт лента ({@code FarFlightView}), а клуб на минуты держал бы
+     * место в группе шлейфов ({@code FxBudget.TRAIL}) — у залпов позже не рождались бы свои. Не закон дыма, а бюджет мест.
+     */
+    static final double PUFF_SECONDS = 30;
+
+    /**
+     * Клуб объёма следа, который снаряд со скоростью speed (м/с) кладёт на высоте y, — по закону следа ({@link TrailModel},
+     * тот же, что у ленты): живёт, пока виден след (не дольше {@link #PUFF_SECONDS}), от ширины следа у сопла до его
+     * наибольшей видимой ширины за это время (плотная часть клуба — около 0,7 его квадрата), цвета густого дыма,
+     * всплывает вместе со следом; null — след не виден.
+     */
+    @Nullable
+    private static Fx.Spec puff(Trail t, double speed, double y) {
+        Air air = ClientAir.now();
+        double u = air.speed(y), inv = TrailModel.inverseSpeed(speed, u);
+        if (!TrailModel.laid(speed, u)) return null;
+        TrailModel.birth(t, inv, y, u, air, BIRTH);
+        double life = Math.min(BIRTH[0], PUFF_SECONDS), ice = BIRTH[1];
+        if (life <= 0) return null;
+        TrailModel.look(t, 0.5, inv, ice, u, y, air, LOOK);
+        double w0 = LOOK[0], tone = LOOK[3], w1 = w0;
+        for (int k = 1; k <= 8; k++) {
+            TrailModel.look(t, life * k / 8, inv, ice, u, y, air, LOOK);
+            w1 = Math.max(w1, LOOK[0]);
+        }
+        int grey = (int) Math.round(255 * FlameModel.srgb(tone)), c = grey << 16 | grey << 8 | grey;
+        double brunt = air.brunt();
+        return Fx.smoke().size((float) (w0 / 1.4), (float) (w1 / 1.4)).life((int) Math.ceil(life * 20)).color(c, c).alpha(VOLUME_ALPHA)
+                .drag(0.9f).fadeIn(2).fadeFrom(0.5f).spin(0.01f).thermal(ticks -> TrailModel.rise(t, ticks / 20, inv, brunt));
     }
 
     /** Клубы по отрезку от прошлого положения сопла до нынешнего через {@code step} блоков (со случайным сдвигом). */

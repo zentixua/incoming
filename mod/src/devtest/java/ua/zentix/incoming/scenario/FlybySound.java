@@ -18,7 +18,6 @@ import ua.zentix.incoming.client.flight.FlightTrack;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.guidance.Route;
 import ua.zentix.incoming.registry.ModEntities;
-import ua.zentix.incoming.strike.Hearing;
 import ua.zentix.incoming.strike.VirtualFlights;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.target.Target;
@@ -44,16 +43,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * Случаи (по порядку, каждый ждёт, пока его снаряды отзвучат):
  * <ul>
- *   <li>{@code approach} — крылатая ракета заходит из 1,8 км прямо на зрителя (он в 30 блоках сбоку от цели): свист
- *       подлёта слышно с дальнего края (звук, изданный за ~1,5 км), он нарастает до удара;</li>
+ *   <li>{@code approach} — крылатая ракета заходит из 1,8 км прямо на зрителя (он в 30 блоках сбоку от цели): вой
+ *       вентилятора (его уносит вперёд) слышно с дальнего края (звук, изданный за ~1,5 км), мотор нарастает до удара;</li>
  *   <li>{@code dogleg} — ракета на обходе маршрута (пуск в 2 км до цели, точка обхода в 580 блоках сбоку): зритель
- *       в 40 блоках от середины первого плеча, ракета идёт мимо него курсом в сторону от цели — свиста подлёта нет,
- *       только мотор и шорох воздуха рядом;</li>
- *   <li>{@code pass} — ракета идёт на цель в 700 блоках за зрителем и проходит в 60 блоках сбоку: свист на подлёте,
+ *       в 40 блоках от середины первого плеча, ракета идёт мимо него курсом в сторону от цели — мотор слышно;</li>
+ *   <li>{@code pass} — ракета идёт на цель в 700 блоках за зрителем и проходит в 60 блоках сбоку: вой на подлёте,
  *       после пролёта стихает плавно; мотор на подлёте только громче, вслед только тише и звучит, пока до уха не дойдёт
  *       взрыв;</li>
- *   <li>{@code grad} — залп РСЗО из 32 снарядов, пусковая в 300 блоках позади, цели в 300 ± 150 впереди: вой всю дугу
- *       у каждого снаряда, каналов не больше {@code VoiceBudget.CAP};</li>
+ *   <li>{@code grad} — ночью залп РСЗО из 32 снарядов, пусковая в 300 блоках позади, цели в 300 ± 150 впереди: вой
+ *       снарядов, прошедших рядом, не дальше выведенной дальности, каналов не больше {@code VoiceBudget.CAP};</li>
  *   <li>{@code far} — ракета и шахед издалека на зрителя: сперва вне мира (путь по пакетам сервера, {@code s}), потом
  *       сущностью ({@code e}) — звук переходит без перезапуска и скачка громкости.</li>
  * </ul>
@@ -76,8 +74,11 @@ final class FlybySound {
     private static final int RINGOUT = 140;
     /** Дольше этого случай не ждёт своих снарядов (сервер в облаке отстаёт). */
     private static final int TIMEOUT = 4000;
-    /** Громкость слоя, с которой его считаем слышным в проверках. */
-    private static final double HEARD = 0.02;
+    /**
+     * Громкость слоя, с которой его считаем слышным в проверках: с неё слой берёт канал ({@code VoiceBudget.AUDIBLE}) —
+     * громкость звука на уровне фона тихой ночи ({@code Loudness}).
+     */
+    private static final double HEARD = 0.005;
     /** Снарядов в залпе РСЗО. */
     private static final int GRAD = 32;
 
@@ -334,8 +335,14 @@ final class FlybySound {
                     VirtualFlights.launch(level, p);
                     Incoming.LOG.info("SCENARIO flyby dogleg маршрут {} → {}", xyz(start), p.getUUID());
                 }
-                case "grad" -> run(server, rotated + "salvo rocket " + GRAD + " 150 " + at);
+                case "grad" -> {
+                    // ночью: днём вой снаряда на нынешней скорости (~80 м/с) тонет в фоне уже за ~270 блоков, а пусковая
+                    // в 300 блоках (Hearing по паспорту звука)
+                    run(server, "time set 18000");
+                    run(server, rotated + "salvo rocket " + GRAD + " 150 " + at);
+                }
                 case "far" -> {
+                    run(server, "time set 6000");
                     c.missileFlightTime.set(missileSeconds());
                     c.droneFlightTime.set(30);
                     run(server, rotated + "drone " + at);
@@ -452,7 +459,7 @@ final class FlybySound {
         if (s == null || stage != Stage.RUN && stage != Stage.RINGOUT || s.isLooping() || !Incoming.MOD_ID.equals(s.getLocation().getNamespace())) return;
         Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         String path = s.getLocation().getPath();
-        if (path.startsWith("blast.") || path.equals("rocket.blast")) blasts.add(caseTick);
+        if (path.startsWith("blast.")) blasts.add(caseTick);
         Incoming.LOG.info("SCENARIO play {} {} d={} t={} ms={}", current, path, f0(new Vec3(s.getX(), s.getY(), s.getZ()).distanceTo(cam)),
                 caseTick, System.currentTimeMillis());
     }
@@ -476,49 +483,56 @@ final class FlybySound {
 
     private void checkApproach() {
         List<Sample> w = layer("missile_whistle");
-        // 0.05: слабее — ещё звук первой точки пути, пока настоящий идёт к уху (путь начинается на краю слышимости)
-        Sample first = w.stream().filter(s -> s.vol >= 0.05).findFirst().orElse(null);
+        Sample first = w.stream().filter(s -> s.vol >= HEARD).findFirst().orElse(null);
         if (first == null) {
-            check("whistle_heard", "FAIL", "свиста подлёта не было");
+            check("whistle_heard", "FAIL", "воя вентилятора на подлёте не было");
             return;
         }
         Integer impact = impactOf("missile");
         int warning = impact == null ? -1 : impact - first.t;
         // звук обгоняет ракету на d·(1/v − 1/c): с 1500 блоков — ~290 тиков
         int expected = (int) (first.d * (1 / WeaponSpec.MISSILE.airframe().cruiseSpeed() - 1 / ua.zentix.incoming.client.sound.Acoustics.SPEED));
-        check("whistle_from", first.d >= 1000 ? "PASS" : "FAIL", "свист слышно с " + f0(first.d) + " блоков (слышимая точка), громкость " + f3(first.vol));
-        check("whistle_warning", warning >= expected * 0.8 ? "PASS" : "FAIL", "свист за " + warning + " тиков до удара (ожидание ~" + expected + ")");
-        double far = maxVol(w, 800, 1300), near = maxVol(w, 60, 400);
-        check("whistle_rises", near > far ? "PASS" : "FAIL", "свист вдали (800–1300) " + f3(far) + ", вблизи (60–400) " + f3(near));
+        check("whistle_from", first.d >= 1000 ? "PASS" : "FAIL", "вой слышно с " + f0(first.d) + " блоков (слышимая точка), громкость " + f3(first.vol));
+        check("whistle_warning", warning >= expected * 0.8 ? "PASS" : "FAIL", "вой за " + warning + " тиков до удара (ожидание ~" + expected + ")");
+        // мотор целиком (вблизи вой вентилятора — уже ближняя запись спереди) ближе громче
+        double far = enginePower(800, 1300), near = enginePower(60, 400);
+        check("engine_rises", near > far ? "PASS" : "FAIL", "мотор вдали (800–1300) " + f3(far) + ", вблизи (60–400) " + f3(near));
+    }
+
+    /** Наибольшая громкость мотора ракеты (все слои по мощности) в тик, когда слышимая точка — между a и b блоков. */
+    private double enginePower(double a, double b) {
+        Map<Integer, double[]> byTick = new java.util.TreeMap<>();
+        for (Sample s : samples) {
+            if (!s.layer.startsWith("missile_")) continue;
+            double[] p = byTick.computeIfAbsent(s.t, k -> new double[] {0, s.d});
+            p[0] += s.vol * s.vol;
+        }
+        return Math.sqrt(byTick.values().stream().filter(p -> p[1] >= a && p[1] <= b).mapToDouble(p -> p[0]).max().orElse(0));
     }
 
     private void checkDogleg() {
-        List<Sample> w = layer("missile_whistle");
-        // только до ближайшей точки: вслед затихает обтекание пролёта (на 350 блоках ~0,02), это не свист атаки
-        // обтекание слышно до AIRFLOW и гаснет ещё FADE блоков; свист атаки был бы слышен дальше (срез JET)
-        int closest = w.stream().min((a, b) -> Double.compare(a.d, b.d)).map(Sample::t).orElse(Integer.MAX_VALUE);
-        double outside = w.stream().filter(s -> s.t <= closest && s.d > Hearing.AIRFLOW + Hearing.FADE).mapToDouble(Sample::vol).max().orElse(0);
-        check("no_attack_whistle", outside < HEARD ? "PASS" : "FAIL", "свист дальше " + (int) (Hearing.AIRFLOW + Hearing.FADE) + " блоков (только подлёт на цель): " + f3(outside));
-        double engine = samples.stream().filter(s -> s.layer.startsWith("missile_") && !s.layer.equals("missile_whistle")).mapToDouble(Sample::vol).max().orElse(0);
-        check("engine_heard", engine >= HEARD ? "PASS" : "WARN", "мотор на обходе: " + f3(engine));
+        // ракета на обходе идёт мимо зрителя курсом в сторону от цели: мотор слышно, и только по расстоянию и ракурсу —
+        // вой вентилятора вперёд по курсу от того, куда она летит, не зависит
+        double engine = samples.stream().filter(s -> s.layer.startsWith("missile_")).mapToDouble(Sample::vol).max().orElse(0);
+        check("engine_heard", engine >= HEARD ? "PASS" : "FAIL", "мотор на обходе: " + f3(engine));
     }
 
     private void checkPass() {
         List<Sample> w = layer("missile_whistle");
         Sample peak = w.stream().max((a, b) -> Double.compare(a.vol, b.vol)).orElse(null);
-        if (peak == null || peak.vol < 0.1) {
-            check("whistle_heard", "FAIL", "свист на подлёте " + (peak == null ? 0 : f3(peak.vol)));
+        if (peak == null || peak.vol < HEARD) {
+            check("whistle_heard", "FAIL", "вой на подлёте " + (peak == null ? 0 : f3(peak.vol)));
             return;
         }
         int fade = w.stream().filter(s -> s.t > peak.t && s.vol < 0.1 * peak.vol).mapToInt(Sample::t).findFirst().orElse(Integer.MAX_VALUE) - peak.t;
         check("whistle_fades", fade >= 6 ? "PASS" : "FAIL", "после пика " + f3(peak.vol) + " до 10% за " + (fade == Integer.MAX_VALUE - peak.t ? "∞" : fade) + " тиков");
-        // мотор: сумма мощностей слоёв на подлёте не падает, вслед не растёт (запас 1 дБ на сглаживание громкости).
-        // Ближе 170 блоков слои «спереди»/«сзади» выбирает угол к курсу (выхлоп сзади громче), мощность там не функция
-        // расстояния; их переход проверяет EngineSoundTest, здесь — только дальний слой и его передача ближним
-        final double nearZone = 170;
+        // мотор: сумма мощностей слоёв на подлёте не падает, вслед не растёт (запас 1 дБ на сглаживание громкости);
+        // слои делят одну мощность по расстоянию и ракурсу (EngineSound.share), поэтому её ход — функция расстояния
+        // и ближе: проверка до 30 блоков (ещё ближе слышимая точка меняется быстрее сглаживания громкости)
+        final double nearZone = 30;
         Map<Integer, double[]> byTick = new java.util.TreeMap<>();
         for (Sample s : samples) {
-            if (!s.layer.startsWith("missile_") || s.layer.equals("missile_whistle")) continue;
+            if (!s.layer.startsWith("missile_")) continue;
             double[] a = byTick.computeIfAbsent(s.t, k -> new double[] {0, Double.MAX_VALUE});
             a[0] += s.vol * s.vol;
             a[1] = Math.min(a[1], s.d);
@@ -551,19 +565,19 @@ final class FlybySound {
     }
 
     private void checkGrad() {
+        // вой снаряда по инерции — шум обтекания, ∝ U⁶ (Noise.Body): на нынешней скорости (40–80 м/с, вдесятеро ниже
+        // настоящей) его слышно лишь в сотне-другой блоков, и слышат только снаряды, прошедшие рядом; с настоящей
+        // скоростью он громче на десятки децибел — тогда и треск конуса Маха
         List<UUID> rockets = caseOf.entrySet().stream().filter(en -> en.getValue().equals(current)).map(Map.Entry::getKey).toList();
         long heard = rockets.stream().filter(id -> samples.stream().anyMatch(s -> s.id.equals(id) && s.layer.equals("rocket_air") && s.vol >= HEARD)).count();
-        check("each_rocket_howls", heard >= Math.ceil(rockets.size() * 0.9) ? "PASS" : "FAIL", "выли после выгорания " + heard + " из " + rockets.size()
-                + " (заказано " + GRAD + ")");
-        // от первого воя до последнего удара рёв или вой слышно без перерыва
-        int from = samples.stream().filter(s -> s.layer.equals("rocket_air") && s.vol >= HEARD).mapToInt(Sample::t).min().orElse(-1);
-        int to = rockets.stream().map(goneAt::get).filter(java.util.Objects::nonNull).mapToInt(Integer::intValue).max().orElse(-1);
-        int gaps = 0;
-        for (int t = from; from >= 0 && t <= to; t++) {
-            final int tt = t;
-            if (samples.stream().noneMatch(s -> s.t == tt && s.vol >= HEARD)) gaps++;
-        }
-        check("no_silence", gaps <= 2 ? "PASS" : "FAIL", "тиков тишины между первым воем (" + from + ") и последним ударом (" + to + "): " + gaps);
+        check("rockets_howl", heard > 0 ? "PASS" : "FAIL", "выли после выгорания " + heard + " из " + rockets.size() + " (заказано " + GRAD + ")");
+        // дальше выведенной дальности (по паспорту звука, ночью, снаряд до 200 блоков над ухом, скорость — до полуторной
+        // маршевой) вой не слышен
+        ua.zentix.incoming.sound.Noise noise = WeaponSpec.ROCKET.airframe().noise();
+        double range = ua.zentix.incoming.strike.Hearing.range(noise, ua.zentix.incoming.entity.FlightPhase.CRUISE, 100,
+                WeaponSpec.ROCKET.airframe().cruiseSpeed() * 1.5, false, 200, ua.zentix.incoming.sound.Propagation.Weather.NIGHT);
+        double farthest = samples.stream().filter(s -> s.layer.equals("rocket_air") && s.vol >= HEARD).mapToDouble(Sample::d).max().orElse(0);
+        check("howl_within_range", farthest <= range ? "PASS" : "FAIL", "вой слышно с " + f0(farthest) + " блоков, слышимость — до " + f0(range));
     }
 
     private void checkFar() {

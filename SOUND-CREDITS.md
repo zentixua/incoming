@@ -12,7 +12,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | blukotek | [two-stroke Trabant engine 01.wav](https://freesound.org/s/412819/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G09-18-Constant Jet Noise.wav](https://freesound.org/s/437910/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G10-02-Constant Jet Noise.wav](https://freesound.org/s/437917/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| craigsmith | [G11-25_B-52 Jet Fly By.wav](https://freesound.org/s/437931/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G26-27-Huge Storm Sequence.wav](https://freesound.org/s/438346/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G32-10-Massive Electrical Discharges.wav](https://freesound.org/s/438494/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G33-32-Distant Bomb Explosion.wav](https://freesound.org/s/438538/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
@@ -27,7 +26,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | craigsmith | [S10-19 Falling wooden beam; big interior crash; house collapses; long.wav](https://freesound.org/s/675967/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | csengeri | [Close lightning strike 2018 07 07](https://freesound.org/s/434359/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | deleted_user_9900733 | [UAV explosion in the city](https://freesound.org/s/811474/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| Evan Cruder | [120527 08 Dynamite 4 [double].WAV](https://freesound.org/s/160794/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | felix.blume | [Dynamite explosion in the mountain](https://freesound.org/s/251401/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | felix.blume | [Big dynamite explosion in an open mine (Chile)](https://freesound.org/s/475780/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | felix.blume | [Rocket Launch Rumble at Canaveral](https://freesound.org/s/613855/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
@@ -40,10 +38,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | kyles | [neon tube smash explode shatter glass debris.flac](https://freesound.org/s/453499/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | LukaCafuka | [Glass panel shattering](https://freesound.org/s/758207/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | minian89 | [four_jet_engines.wav](https://freesound.org/s/152567/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| Nanashi | [M224 Mortar Impact Medium Distance 02](https://freesound.org/s/426163/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| Nanashi | [M224 Mortar Impact Medium Distance 01](https://freesound.org/s/426164/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| Nanashi | [M224 Mortar Impact Distant 01](https://freesound.org/s/426166/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| Nanashi | [M224 Mortar Impact Distant 03](https://freesound.org/s/426167/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | nicotep | [EDF_Electrical_substation](https://freesound.org/s/547900/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Nox_Sound | [Foley_Stones_Falls_Debris_Stereo_DR05.wav](https://freesound.org/s/550342/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | OBXJohn | [Gym Lights Powering Up](https://freesound.org/s/262509/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
@@ -56,7 +50,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | qubodup | [Massive Explosion](https://freesound.org/s/741175/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | qubodup | [Quadcopter Drone Flyby](https://freesound.org/s/854352/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | qubodup | [M142 HIMARS Rocket Launch 8 [US DoD]](https://freesound.org/s/854476/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| rcEyeSoar | [rc plane fly-by 2.wav](https://freesound.org/s/176973/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Romaner66 | [Air raid siren in Kyiv](https://freesound.org/s/676589/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | Sanderboah | [Geiger counter (dry)](https://freesound.org/s/674113/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Sclolex | [highvoltagearc.wav](https://freesound.org/s/210878/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |

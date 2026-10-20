@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.sound;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.nuclear.model.FrontProfile;
 
@@ -129,5 +130,33 @@ class TerrainEchoTest {
     @Test
     void unknownTerrainGivesNoEcho() {
         assertTrue(TerrainEcho.trace((x, z) -> Double.NaN, 0, 66, 0, -3000, 65, 0, SOUND).isEmpty());
+    }
+
+    /**
+     * Обычный взрыв рядом (шахед в 100 м на западе, давление — Кинни–Грэхем, фронт — со скоростью звука): эхо от обрыва в
+     * 400–600 м на востоке приходит через лишний путь / скорость звука — секунды после удара, тише прямого.
+     */
+    @Test
+    void conventionalBlastEchoArrivesByThePathAtTheSpeedOfSound() {
+        TerrainEcho.Blast shahed = new TerrainEcho.Blast() {
+            @Override
+            public double arrivalTicks(double blocks) {
+                return blocks / Acoustics.SPEED;
+            }
+
+            @Override
+            public double pressure(double blocks) {
+                return BlastModel.surfaceOverpressureKpa(blocks, 50);
+            }
+        };
+        List<TerrainEcho.Reflection> all = TerrainEcho.trace(cliff(400), 0, 66, 0, -100, 65, 0, shahed);
+        TerrainEcho.Reflection top = all.stream().max(Comparator.comparingDouble(TerrainEcho.Reflection::energy)).orElseThrow();
+        assertTrue(top.x() >= 400 && top.x() <= 600, "со склона: " + top.x());
+        double r1 = Math.sqrt(Math.pow(top.x() + 100, 2) + Math.pow(top.y() - 65, 2) + top.z() * top.z());
+        double r2 = Math.sqrt(top.x() * top.x() + Math.pow(top.y() - 66, 2) + top.z() * top.z());
+        double re = Math.sqrt(100 * 100 + 1);
+        assertEquals((r1 + r2 - re) / Acoustics.SPEED, top.delay(), 1e-6, "задержка — лишний путь со скоростью звука");
+        assertTrue(top.delay() / 20 > 2 && top.delay() / 20 < 4, "в секундах: " + top.delay() / 20);
+        assertTrue(top.energy() < 1, "тише прямого");
     }
 }

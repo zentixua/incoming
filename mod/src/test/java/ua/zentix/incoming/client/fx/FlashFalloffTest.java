@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FlashFalloffTest {
     /** Вспышки ракеты и шахеда — по модели облака их заряда (шар продуктов детонации). */
-    private static final CloudModel MISSILE = new CloudModel(BlastSource.of(WeaponType.MISSILE), CloudModel.Air.STANDARD),
-            DRONE = new CloudModel(BlastSource.of(WeaponType.DRONE), CloudModel.Air.STANDARD);
+    private static final CloudModel MISSILE = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), CloudModel.Air.STANDARD),
+            DRONE = new CloudModel(BlastSource.of(WeaponType.DRONE, false), CloudModel.Air.STANDARD);
     private static final double MISSILE_NEAR = BlastEffects.flashNear(MISSILE), MISSILE_RANGE = BlastEffects.flashRange(MISSILE);
     private static final double DRONE_NEAR = BlastEffects.flashNear(DRONE), DRONE_RANGE = BlastEffects.flashRange(DRONE);
 

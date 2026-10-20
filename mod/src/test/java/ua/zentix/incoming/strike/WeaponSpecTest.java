@@ -71,24 +71,6 @@ class WeaponSpecTest {
         assertEquals(29, glassRange(WeaponSpec.LOITER), 3);
     }
 
-    /**
-     * Топливо к удару — оценка из паспорта (ref/passport.md): у кого его нет (батарея, выгоревший двигатель, бомба), там
-     * 0; шахед — середина 10–50 кг бензина, ракета — 220–350 кг JP-10 по шару топлива; без наземного взрыва топлива нет.
-     */
-    @Test
-    void fuelAtImpactIsFromThePassport() {
-        assertEquals(30, WeaponSpec.DRONE.fuelAtImpact());
-        assertEquals(280, WeaponSpec.MISSILE.fuelAtImpact());
-        assertEquals(0, WeaponSpec.LOITER.fuelAtImpact());
-        assertEquals(0, WeaponSpec.ROCKET.fuelAtImpact());
-        for (WeaponType t : WeaponType.values()) {
-            WeaponSpec w = t.spec();
-            assertTrue(w.fuelAtImpact() >= 0, t::toString);
-            if (w.blast() == WeaponSpec.Blast.NONE) assertEquals(0, w.fuelAtImpact(), t::toString);
-            else assertTrue(w.charge() > 0, t::toString);
-        }
-    }
-
     private static double glassRange(WeaponSpec w) {
         return BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI), w.charge());
     }
@@ -223,5 +205,21 @@ class WeaponSpecTest {
         assertEquals(LauncherRack.ROCKET.slots(), WeaponSpec.ROCKET.munition().rounds());
         assertEquals(40, WeaponSpec.ROCKET.munition().rounds());
         assertTrue(WeaponSpec.ROCKET.salvo().count() <= WeaponSpec.ROCKET.munition().rounds());
+    }
+
+    /**
+     * Взрыв на земле — с зарядом; топливо к удару — у тех, кто летит на нём (шахед — бензин, ракета — JP-10), у
+     * «Ланцета» (батарея), «Града» (двигатель выгорел), бомбы и боеголовки — ноль. Числа и их источник — в Javadoc паспорта.
+     */
+    @Test
+    void surfaceBlastsHaveChargeAndFuelAtImpact() {
+        for (WeaponType w : WeaponType.values()) {
+            WeaponSpec s = w.spec();
+            if (s.blast() != WeaponSpec.Blast.NONE) assertTrue(s.charge() > 0, w + ": заряд " + s.charge());
+            assertTrue(s.fuelAtImpact() >= 0 && Double.isFinite(s.fuelAtImpact()), w + ": топливо " + s.fuelAtImpact());
+        }
+        assertEquals(30, WeaponSpec.DRONE.fuelAtImpact());
+        assertEquals(275, WeaponSpec.MISSILE.fuelAtImpact());
+        for (WeaponSpec s : List.of(WeaponSpec.LOITER, WeaponSpec.ROCKET, WeaponSpec.BUNKER, WeaponSpec.NUKE)) assertEquals(0, s.fuelAtImpact());
     }
 }

@@ -1,16 +1,20 @@
 package ua.zentix.incoming.client.sound;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.strike.WeaponType;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Моторы под громким взрывом: насколько уходят вниз, сколько держатся, как возвращаются. */
 class DuckingTest {
+    private static final BlastSource SHAHED = BlastSource.of(WeaponType.DRONE, false);
+
     @Test
     void distantBlastLeavesEnginesAlone() {
         Ducking d = new Ducking();
-        d.blast(BlastMix.loudness(BlastMix.DRONE, 600));
+        d.blast(BlastMix.loudness(BlastMix.pressure(SHAHED, Outdoor.NEAR)));
         assertEquals(1, d.factor(), 1e-6);
     }
 
@@ -39,7 +43,7 @@ class DuckingTest {
         d.blast(BlastMix.NEAR_LUFS);
         for (int i = 0; i < 10; i++) d.tick();
         float before = d.factor();
-        double quieter = BlastMix.loudness(BlastMix.DRONE, 150);
+        double quieter = BlastMix.loudness(BlastMix.pressure(SHAHED, 150));
         Ducking alone = new Ducking();
         alone.blast(quieter);
         assertTrue(alone.factor() < 0.9 && alone.factor() > before, "сам по себе он приглушает, но меньше");
