@@ -10,6 +10,7 @@ import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.client.fx.BlastHit;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.nuclear.Deafness;
 import ua.zentix.incoming.nuclear.model.BlastModel;
@@ -19,6 +20,7 @@ import ua.zentix.incoming.warhead.GroundMaterial;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Что слышно от взрыва на разном расстоянии — картинку рисует {@code client.fx.BlastEffects}, звук весь здесь.
@@ -54,6 +56,10 @@ public final class BlastSounds {
     private static final List<BlastEchoes> ECHOES = new ArrayList<>();
     /** Тише — слой не запускать. */
     private static final float AUDIBLE = 0.005f;
+    /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
+    private static String last = "";
+    @Nullable
+    private static BlastEchoes lastEchoes;
 
     private BlastSounds() {}
 
@@ -170,17 +176,29 @@ public final class BlastSounds {
         if (l.sub() >= AUDIBLE) shots.add(ClientSounds.shot(ModSounds.BLAST_SUB.get(), pos, l.sub(), pitch, seed ^ SUB_SALT));
         // эхо и удар у уха ждут настоящего начала прямого звука: ожидание — до play
         if (echoes != null) echoes.expect(tick, loudest);
+        boolean pulse = false;
         if (l.pulse() >= AUDIBLE) {
             Object owner = new Object();
             OwnSources.Anchor start = OwnSources.anchor(owner, loudest, clock, tick);
-            OwnSources.play(owner, start, 0, Math.atan2(pos.z - ear.z, pos.x - ear.x), l.pulse(),
+            pulse = OwnSources.play(owner, start, 0, Math.atan2(pos.z - ear.z, pos.x - ear.x), l.pulse(),
                     BlastPulse.render(pa, BlastMix.phase(s, d), 1), BlastPulse.RATE, true, true);
         }
+        last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
+                s.weapon() == null ? "air" : s.weapon().name(), s.chargeKg(), d, pa, 20 * Math.log10(Math.max(pa, 1e-9) / 2e-5), 1000 * BlastMix.phase(s, d),
+                loudness, pitch, l.near(), l.mid(), l.far(), l.sub(), l.pulse(), pulse ? "played" : "-", echoes == null ? "-" : "on");
+        if (echoes != null) lastEchoes = echoes;
         for (SoundInstance shot : shots) {
             Deafness.before(shot);
             ClientSounds.start(shot);
         }
         if (echoes != null) echoes.arrive(ear, BlastMix.uncapped(loudness - BlastMix.FAR_LUFS), pitch);
+    }
+
+    /** Строка {@code SCENARIO blast-sound}: последний обычный взрыв у уха и его эхо; пусто — взрывов не было. */
+    public static String describe() {
+        if (last.isEmpty()) return "";
+        BlastEchoes e = lastEchoes;
+        return last + (e == null ? "" : "; " + e.describe()) + "; " + BlastHit.describe();
     }
 
     /** Отбой, перемотка повтора, выход из мира: эхо, что ещё готовилось, забыть (его голоса снимает {@link OwnSources#reset}). */

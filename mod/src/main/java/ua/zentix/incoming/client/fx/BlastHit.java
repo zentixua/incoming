@@ -13,8 +13,11 @@ import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.nuclear.model.BodySway;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.warhead.GroundMaterial;
+
+import java.util.Locale;
 
 /**
  * Фронт обычного взрыва у тела игрока — тем же законам, что у ядерной волны ({@code NukeSounds.Schedule.hit}): слух по
@@ -23,19 +26,34 @@ import ua.zentix.incoming.warhead.GroundMaterial;
  * {@code BodySway}). Давление и фаза — Кинни–Грэхем ({@link BlastModel}) у тела, а не у камеры: камера снаряда облетает
  * взрыв, игрок стоит в стороне.
  */
-final class BlastHit {
+public final class BlastHit {
+    /** Последний фронт у тела (строка сценария клиента). */
+    private static String last = "-";
+
     private BlastHit() {}
+
+    /** Последний фронт обычного взрыва у тела: давление, фаза, энергия у уха, сдвиг порога, наклон. */
+    public static String describe() {
+        return last;
+    }
 
     /**
      * @param late сколько тиков назад (0..1) фронт прошёл тело
      */
     static void hit(BlastSource s, Vec3 pos, GroundMaterial ground, long seed, LocalPlayer player, Vec3 body, double late) {
         double d = Math.max(0.5, body.distanceTo(pos)), pa = BlastMix.pressure(s, d), tPlus = BlastMix.phase(s, d);
+        double exposure = HearingModel.exposure(pa, tPlus);
         if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(pos, ground, body, d, pa, tPlus, seed);
-        if (CameraShake.carried(player)) return;
-        // за стеной, домом или холмом в сторону взрыва — в его ветровой тени (лучи у тела)
-        float open = SoundFilters.openRays(body, Math.atan2(pos.z - body.z, pos.x - body.x));
-        CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), open, tPlus, late, body.subtract(pos), player.getYRot());
+        double lean = 0;
+        float open = 0;
+        if (!CameraShake.carried(player)) {
+            // за стеной, домом или холмом в сторону взрыва — в его ветровой тени (лучи у тела)
+            open = SoundFilters.openRays(body, Math.atan2(pos.z - body.z, pos.x - body.x));
+            lean = Math.toDegrees(BodySway.peak(CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), open, tPlus, late,
+                    body.subtract(pos), player.getYRot()), 0));
+        }
+        last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg",
+                d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean);
     }
 
     /**
