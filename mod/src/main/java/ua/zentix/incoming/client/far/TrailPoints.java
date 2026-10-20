@@ -1,12 +1,13 @@
 package ua.zentix.incoming.client.far;
 
-import ua.zentix.incoming.client.ClientWeaponSpec.Trail;
+import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 
 import java.util.Arrays;
 
 /**
  * Точки шлейфов — один круговой буфер на все снаряды: когда он полон, новая точка затирает самую старую (у самых
- * старых следов раньше тает хвост — новые не рвутся). У точки — место, тик рождения, вид шлейфа ({@link Trail}), свет
+ * старых следов раньше тает хвост — новые не рвутся). У точки — место, тик рождения, вид шлейфа ({@link Trail}) и то, что
+ * закон следа ({@code TrailModel}) дал ей при рождении (секунды на метр следа, срок жизни, срок льда, ветер там), свет
  * мира в ней, чей это шлейф и предыдущая точка той же ленты — по номеру записи за всё время: связь верна, пока та не
  * затёрта и не растаяла ({@link #holds}). Кадр обходит живые точки один раз от старых к новым и кладёт отрезок от
  * предыдущей к каждой: O(точек), без выделений.
@@ -24,6 +25,10 @@ final class TrailPoints {
     /** Вид шлейфа; null — точки нет (растаяла или снята отбоем). */
     final Trail[] style = new Trail[CAPACITY];
     final int[] owner = new int[CAPACITY];
+    /** Секунды на метр следа ({@code TrailModel.inverseSpeed}): от скорости снаряда, когда он клал точку. */
+    final float[] inverse = new float[CAPACITY];
+    /** Сколько точка видна и сколько держится лёд инверсии, тиков; ветер на её высоте, м/с. */
+    final float[] life = new float[CAPACITY], ice = new float[CAPACITY], wind = new float[CAPACITY];
     /** Номер предыдущей точки той же ленты или {@link #NONE}. */
     final long[] prev = new long[CAPACITY];
     /**
@@ -42,12 +47,18 @@ final class TrailPoints {
     }
 
     /**
-     * Новая точка ленты: prev — предыдущая точка той же ленты ({@link #NONE} — лента начинается здесь).
+     * Новая точка ленты: prev — предыдущая точка той же ленты ({@link #NONE} — лента начинается здесь); что закон следа
+     * дал ей при рождении: inverse — секунды на метр, life и ice — тики, wind — м/с.
      *
      * @return номер записи
      */
-    long add(double x, double y, double z, long birth, Trail style, int light, int owner, long prev) {
+    long add(double x, double y, double z, long birth, Trail style, int light, int owner, long prev, float inverse, float life, float ice,
+             float wind) {
         int i = index(next);
+        this.inverse[i] = inverse;
+        this.life[i] = life;
+        this.ice[i] = ice;
+        this.wind[i] = wind;
         this.x[i] = x;
         this.y[i] = y;
         this.z[i] = z;
@@ -92,7 +103,7 @@ final class TrailPoints {
     void expire(double now) {
         while (first < next) {
             int i = index(first);
-            if (style[i] != null && !style[i].expired(now - birth[i])) return;
+            if (style[i] != null && now - birth[i] < life[i]) return;
             style[i] = null;
             first++;
         }
