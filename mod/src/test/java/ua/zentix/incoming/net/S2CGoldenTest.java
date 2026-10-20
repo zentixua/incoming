@@ -98,7 +98,8 @@ class S2CGoldenTest {
     private static List<Golden<?>> cases() {
         return List.of(
                 golden(S2C.Blast.TYPE, S2C.Blast.CODEC,
-                        new S2C.Blast(S2C.Blast.ROCKET, P, 3, 70.5f, -42L, Optional.of(A))),
+                        new S2C.Blast(S2C.Blast.ROCKET, P, 3, 70.5f, -42L, Optional.of(A), S2C.Blast.NO_WEAPON),
+                        new S2C.Blast(S2C.Blast.ROCKET, P, 3, 70.5f, -42L, Optional.of(A), 4)),
                 golden(S2C.BunkerImpact.TYPE, S2C.BunkerImpact.CODEC, new S2C.BunkerImpact(P, 2)),
                 golden(S2C.Vent.TYPE, S2C.Vent.CODEC, new S2C.Vent(Q, 1)),
                 golden(S2C.Collapse.TYPE, S2C.Collapse.CODEC, new S2C.Collapse(P, 4)),

@@ -506,7 +506,7 @@ public final class Warheads {
             // высоты, которое у неготового чанка грузило бы его или ждало загрузки
             float surface = (float) pos.y;
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, IncomingConfig.SERVER.farRange.get(),
-                    new S2C.Blast(kind, pos, mat.ordinal(), surface, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID)));
+                    new S2C.Blast(kind, pos, mat.ordinal(), surface, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID), weapon.id()));
             main = List.of(explode(level, area, List.of(), pos, power(weapon), false, direct, owner, null));
         }
 
@@ -626,7 +626,8 @@ public final class Warheads {
             int cover = surfaceAbove(level, c);
 
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, IncomingConfig.SERVER.farRange.get(),
-                    new S2C.Blast(S2C.Blast.BUNKER, pos, mat.ordinal(), cover, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID)));
+                    new S2C.Blast(S2C.Blast.BUNKER, pos, mat.ordinal(), cover, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID),
+                            WeaponType.BUNKER.id()));
 
             // каверна: порода вокруг заряда в неровных комьях «ослаблена» — взрыв выгрызает полость рваной формы
             for (int i = 0; i < 12; i++) {

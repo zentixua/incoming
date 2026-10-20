@@ -206,4 +206,20 @@ class WeaponSpecTest {
         assertEquals(40, WeaponSpec.ROCKET.munition().rounds());
         assertTrue(WeaponSpec.ROCKET.salvo().count() <= WeaponSpec.ROCKET.munition().rounds());
     }
+
+    /**
+     * Взрыв на земле — с зарядом; топливо к удару — у тех, кто летит на нём (шахед — бензин, ракета — JP-10), у
+     * «Ланцета» (батарея), «Града» (двигатель выгорел), бомбы и боеголовки — ноль. Числа и их источник — в Javadoc паспорта.
+     */
+    @Test
+    void surfaceBlastsHaveChargeAndFuelAtImpact() {
+        for (WeaponType w : WeaponType.values()) {
+            WeaponSpec s = w.spec();
+            if (s.blast() != WeaponSpec.Blast.NONE) assertTrue(s.charge() > 0, w + ": заряд " + s.charge());
+            assertTrue(s.fuelAtImpact() >= 0 && Double.isFinite(s.fuelAtImpact()), w + ": топливо " + s.fuelAtImpact());
+        }
+        assertEquals(30, WeaponSpec.DRONE.fuelAtImpact());
+        assertEquals(275, WeaponSpec.MISSILE.fuelAtImpact());
+        for (WeaponSpec s : List.of(WeaponSpec.LOITER, WeaponSpec.ROCKET, WeaponSpec.BUNKER, WeaponSpec.NUKE)) assertEquals(0, s.fuelAtImpact());
+    }
 }
