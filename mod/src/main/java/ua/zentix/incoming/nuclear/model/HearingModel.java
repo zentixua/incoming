@@ -3,6 +3,8 @@ package ua.zentix.incoming.nuclear.model;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Слух после ударной волны: временный сдвиг порога слышимости (TTS), его восстановление, разрыв барабанных перепонок.
@@ -14,6 +16,13 @@ import java.util.List;
  * обзоры NASA); там же и порог: суточная доза шума — 85 дБА за 8 ч (ISO 1999, NIOSH), LAE 129,6 дБ, — у фронта ~0,75
  * psi. Предел пика 140 дБ (CHABA, NIOSH) — для выстрелов, у которых вся энергия в слышимом, — к долгой волне не
  * подходит.</li>
+ * <li>Один закон для любой волны: энергия слышимого — A-энергия самой волны у уха, импульса Фридлендера с пиком p и
+ * положительной фазой t₊ ({@link #exposure(double, double)}). У далёкой ядерной волны (фаза в секунды) спектр выше
+ * 100 Гц — спектр скачка, и это ровно «пик − 38,7 дБ» ({@link #exposure(double)} — её предел при t₊ → ∞; у фазы 0,2 с
+ * разница меньше 0,01 дБ). У обычного взрыва фаза — миллисекунды: слышна вся волна, энергия меньше, чем у скачка того
+ * же пика (у 50 кг в 100 м — на 0,2 дБ, у 3 кг в 1 км — на 7 дБ). Порог — тот же: равная энергия, 85 дБА за 8 ч. Предел
+ * пика 140 дБ (CHABA, NIOSH) — допуск для сотни выстрелов в день, а не порог сдвига от одной волны: у шахеда начало
+ * сдвига (LAE 129,6 дБ) — в ~75 м, пик там ~168 дБ.</li>
  * <li>Сдвиг через 2 минуты у верхов (4 кГц): от нуля на пороге до {@link #TRAUMA_SHIFT} дБ у порога разрыва перепонок
  * (5 psi — акустическая травма), между — прямая в децибелах энергии (~3 дБ сдвига на дБ). Приближение: данных о TTS
  * от одной долгой волны мало, опоры — порог и травма. На низах (до 1 кГц) импульс сдвигает порог меньше —
@@ -55,10 +64,117 @@ public final class HearingModel {
     /** Громкость звуков игры и порог дискомфорта, дБ: между ними — рекрутмент. */
     static final double LEVEL = 70, DISCOMFORT = 100;
 
+    /** Фон тихой ночью за городом, дБА (оценка: сельская местность ночью — 25–35 дБА). */
+    static final double QUIET_NIGHT_A = 30;
+    /** Время, за которое слух складывает энергию короткого звука, с (временная суммация, ~200 мс). */
+    static final double INTEGRATION_S = 0.2;
+    /**
+     * Поглощение воздухом по ISO 9613-1 при 20 °C и 70 % влажности, дБ/км, на 63 Гц … 8 кГц — та же таблица, что в
+     * {@code tools/build_sounds.py} ({@code AIR_DB_KM}); между — по логарифмам, ниже 63 и выше 8 кГц — как f².
+     */
+    private static final double[] AIR_HZ = {63, 125, 250, 500, 1000, 2000, 4000, 8000}, AIR_DB_KM = {0.1, 0.3, 1.1, 2.8, 5.0, 9.0, 22.9, 76.6};
+    /** Частоты интеграла энергии, Гц: от инфразвука до верха слуха, по логарифму. */
+    private static final double[] F = new double[480];
+    private static final double[] A2 = new double[F.length], DF = new double[F.length];
+    /** Дальность слышимости по заряду: закон дорогой, а зарядов в игре несколько. */
+    private static final Map<Double, Double> AUDIBLE = new ConcurrentHashMap<>();
+
+    static {
+        double lo = Math.log(1), hi = Math.log(40_000);
+        for (int i = 0; i < F.length; i++) F[i] = Math.exp(lo + (hi - lo) * i / (F.length - 1));
+        for (int i = 0; i < F.length; i++) {
+            double a = aWeight(F[i]);
+            A2[i] = a * a;
+            // трапеции по логарифмической сетке
+            DF[i] = 0.5 * ((i + 1 < F.length ? F[i + 1] : F[i]) - (i > 0 ? F[i - 1] : F[i]));
+        }
+    }
+
     private HearingModel() {
     }
 
-    /** Энергия слышимого фронта волны с пиком {@code pa} Па, дБ·с (LAE). */
+    /**
+     * A-коррекция (МЭК 61672-1), доля амплитуды: R_A(f) = 12194²·f⁴ / ((f² + 20,6²)·√((f² + 107,7²)(f² + 737,9²))·(f² +
+     * 12194²)), +2,00 дБ — 1 на 1 кГц.
+     */
+    public static double aWeight(double f) {
+        double f2 = f * f;
+        double ra = 12194.0 * 12194 * f2 * f2 / ((f2 + 20.6 * 20.6) * Math.sqrt((f2 + 107.7 * 107.7) * (f2 + 737.9 * 737.9)) * (f2 + 12194.0 * 12194));
+        return ra * Math.pow(10, 2.0 / 20);
+    }
+
+    /**
+     * A-энергия волны у уха, дБ·с (LAE): импульс Фридлендера (1 − t/t₊)·e^(−t/t₊) с пиком {@code pa} Па (фронт —
+     * скачок: нарастание в доли миллисекунды у давлений, где энергия вредит, на неё не влияет), спектр
+     * |P(ω)| = p·t₊·ωt₊ / (1 + (ωt₊)²), E = 2∫A²(f)|P(f)|² df.
+     *
+     * @param tPlus положительная фаза у уха, с
+     */
+    public static double exposure(double pa, double tPlus) {
+        return 20 * Math.log10(Math.max(pa, 1e-9) / REFERENCE_PA) + 10 * Math.log10(shape(tPlus, 0));
+    }
+
+    /**
+     * Доля энергии волны с единичным пиком и фазой {@code tPlus}, что слух берёт (с A-коррекцией), с·Па²/Па²; путь
+     * {@code metres} ест верха по ISO 9613-1 (0 — у источника).
+     */
+    private static double shape(double tPlus, double metres) {
+        double sum = 0, t = Math.max(1e-6, tPlus);
+        for (int i = 0; i < F.length; i++) {
+            double wt = 2 * Math.PI * F[i] * t, spectrum = t * wt / (1 + wt * wt);
+            double air = metres > 0 ? Math.pow(10, -airDbPerKm(F[i]) * metres / 1000 / 10) : 1;
+            sum += A2[i] * spectrum * spectrum * air * DF[i];
+        }
+        return 2 * sum;
+    }
+
+    /** Поглощение воздухом на частоте f, дБ/км (ISO 9613-1, {@link #AIR_DB_KM}). */
+    static double airDbPerKm(double f) {
+        if (f <= AIR_HZ[0]) return AIR_DB_KM[0] * (f / AIR_HZ[0]) * (f / AIR_HZ[0]);
+        int n = AIR_HZ.length - 1;
+        if (f >= AIR_HZ[n]) return AIR_DB_KM[n] * (f / AIR_HZ[n]) * (f / AIR_HZ[n]);
+        int i = 0;
+        while (f > AIR_HZ[i + 1]) i++;
+        double u = Math.log(f / AIR_HZ[i]) / Math.log(AIR_HZ[i + 1] / AIR_HZ[i]);
+        return Math.exp(Math.log(AIR_DB_KM[i]) + u * Math.log(AIR_DB_KM[i + 1] / AIR_DB_KM[i]));
+    }
+
+    /**
+     * A-энергия волны наземного взрыва заряда {@code tntKg} кг ТНТ на расстоянии {@code metres}, дБ·с: давление и фаза
+     * — Кинни–Грэхем ({@link BlastModel}), по дороге воздух ест верха (ISO 9613-1). Земли, рельефа и ветра нет — их
+     * считает путь у слушателя ({@code client.sound.Outdoor}).
+     */
+    public static double blastExposureAt(double tntKg, double metres) {
+        double pa = 1000 * BlastModel.surfaceOverpressureKpa(metres, tntKg), tPlus = BlastModel.chemicalPhaseSeconds(metres, tntKg, true);
+        return 20 * Math.log10(Math.max(pa, 1e-12) / REFERENCE_PA) + 10 * Math.log10(shape(tPlus, metres));
+    }
+
+    /**
+     * Докуда слышно наземный взрыв заряда {@code tntKg} кг ТНТ тихой ночью, м: там его A-энергия падает до энергии
+     * фона ({@link #QUIET_NIGHT_A}) за время суммации слуха ({@link #INTEGRATION_S}) — 23 дБ·с. Это R0 дальней модели
+     * звука (запас слышимости 20·lg(R0/d) минус потери пути) и дальность, до которой сервер шлёт пакет взрыва. Верхняя
+     * оценка: мир плоский, без турбулентности и волновода; днём зона тени, холмы, дождь — у слушателя. 0 — заряда нет.
+     */
+    public static double audibleRangeM(double tntKg) {
+        if (!(tntKg > 0)) return 0;
+        return AUDIBLE.computeIfAbsent(tntKg, HearingModel::solveAudible);
+    }
+
+    private static double solveAudible(double tntKg) {
+        double threshold = QUIET_NIGHT_A + 10 * Math.log10(INTEGRATION_S), lo = 1, hi = 1e7;
+        if (blastExposureAt(tntKg, hi) >= threshold) return hi;
+        for (int i = 0; i < 60; i++) {
+            double mid = Math.sqrt(lo * hi);
+            if (blastExposureAt(tntKg, mid) > threshold) lo = mid;
+            else hi = mid;
+        }
+        return lo;
+    }
+
+    /**
+     * Энергия слышимого фронта долгой волны с пиком {@code pa} Па, дБ·с (LAE): предел {@link #exposure(double, double)}
+     * при положительной фазе много дольше слышимого (t₊ → ∞) — скачок.
+     */
     public static double exposure(double pa) {
         return 20 * Math.log10(Math.max(pa, 1e-9) / REFERENCE_PA) + STEP_A;
     }

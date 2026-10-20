@@ -21,7 +21,6 @@ craigsmith - "S32-27 Titan missile launch; long.wav" - CC0 1.0 - https://freesou
 craigsmith - "S10-19 Falling wooden beam; big interior crash; house collapses; long.wav" - CC0 1.0 - https://freesound.org/s/675967/
 csengeri - "Close lightning strike 2018 07 07" - CC0 1.0 - https://freesound.org/s/434359/
 deleted_user_9900733 - "UAV explosion in the city" - CC0 1.0 - https://freesound.org/s/811474/
-Evan Cruder - "120527 08 Dynamite 4 [double].WAV" - CC0 1.0 - https://freesound.org/s/160794/
 felix.blume - "Dynamite explosion in the mountain" - CC0 1.0 - https://freesound.org/s/251401/
 felix.blume - "Big dynamite explosion in an open mine (Chile)" - CC0 1.0 - https://freesound.org/s/475780/
 felix.blume - "Rocket Launch Rumble at Canaveral" - CC0 1.0 - https://freesound.org/s/613855/
@@ -34,10 +33,6 @@ kyles - "switch big breaker metal click on, off" - CC0 1.0 - https://freesound.o
 kyles - "neon tube smash explode shatter glass debris.flac" - CC0 1.0 - https://freesound.org/s/453499/
 LukaCafuka - "Glass panel shattering" - CC0 1.0 - https://freesound.org/s/758207/
 minian89 - "four_jet_engines.wav" - CC0 1.0 - https://freesound.org/s/152567/
-Nanashi - "M224 Mortar Impact Medium Distance 02" - CC BY 4.0 - https://freesound.org/s/426163/
-Nanashi - "M224 Mortar Impact Medium Distance 01" - CC BY 4.0 - https://freesound.org/s/426164/
-Nanashi - "M224 Mortar Impact Distant 01" - CC BY 4.0 - https://freesound.org/s/426166/
-Nanashi - "M224 Mortar Impact Distant 03" - CC BY 4.0 - https://freesound.org/s/426167/
 nicotep - "EDF_Electrical_substation" - CC0 1.0 - https://freesound.org/s/547900/
 Nox_Sound - "Foley_Stones_Falls_Debris_Stereo_DR05.wav" - CC0 1.0 - https://freesound.org/s/550342/
 OBXJohn - "Gym Lights Powering Up" - CC0 1.0 - https://freesound.org/s/262509/

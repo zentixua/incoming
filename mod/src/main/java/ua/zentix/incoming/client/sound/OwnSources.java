@@ -43,7 +43,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class OwnSources {
     /** Своих источников не больше: остальные — у движка (у OpenAL Soft всего 256). */
-    static final int MAX = 12;
+    public static final int MAX = 12;
     /** Отставание старта больше этого (с) — начать с середины, а не сначала. */
     private static final double LATE = 0.03;
     /**
@@ -164,6 +164,11 @@ public final class OwnSources {
         if (sound == null) a.zero = tick;
         else ANCHORS.add(a);
         return a;
+    }
+
+    /** Сколько своих источников свободно сейчас. */
+    public static int free() {
+        return MAX - VOICES.size();
     }
 
     /** Поток звука: движок запустил звук — начало тех, кто его ждёт. */

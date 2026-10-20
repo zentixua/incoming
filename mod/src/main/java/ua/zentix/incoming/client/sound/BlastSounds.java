@@ -10,20 +10,30 @@ import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.client.fx.BlastHit;
+import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.client.nuclear.Deafness;
+import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 /**
- * Что слышно от взрыва на разном расстоянии — картинку и тряску рисует {@code client.fx.BlastEffects}, звук весь здесь.
- * Всё приходит со фронтом, громкость задаём сами, а не ванильным затуханием.
+ * Что слышно от взрыва на разном расстоянии — картинку рисует {@code client.fx.BlastEffects}, звук весь здесь.
+ * Всё приходит со фронтом, громкость задаём сами, а не ванильным затуханием; заряд — из паспорта оружия
+ * ({@link BlastSource}).
  * <ul>
- * <li>ближе {@link Outdoor#NEAR} блоков — ракурсы одной записи по расстоянию ({@link BlastMix}): вблизи удар и тело
- * взрыва с «ударом в грудь» снизу, дальше — запись с эхом от склонов и домов, вдали — раскат без верхов; эхо вокруг —
- * стерео без места в мире; воздух и преграды глушат верха ({@link SoundFilters});</li>
- * <li>дальше — дальний ракурс по модели распространения {@link Outdoor} ({@link #far}).</li>
+ * <li>ближе {@link Outdoor#NEAR} блоков — ракурсы одной записи по давлению и воздуху у уха, тон и длина — по заряду
+ * ({@link BlastMix}), с «ударом в грудь» снизу; удар у уха там, где ближний ракурс уходит, — дорожка из модели своим
+ * источником ({@link BlastPulse}); эхо от рельефа — {@link BlastEchoes}; воздух и преграды глушат верха
+ * ({@link SoundFilters});</li>
+ * <li>дальше — дальний ракурс по модели распространения {@link Outdoor} ({@link #far}), докуда слышно — по заряду
+ * ({@link HearingModel#audibleRangeM}).</li>
  * </ul>
  * Вариант записи выбирает зерно взрыва (пакет {@code S2C.Blast}): каждый взрыв звучит по-своему, а его ракурсы — одна
  * запись. Моторы снарядов под громкий взрыв уходят вниз ({@link Ducking}).
@@ -31,23 +41,49 @@ import java.util.Deque;
 public final class BlastSounds {
     /** Громкость глухого удара бомбы из-под земли — и на краю ближней модели, с неё продолжается {@link #far}. */
     static final float BUNKER_FAR_FLOOR = 1;
-    /** Соль зерна «удара в грудь» и эха: их варианты (их меньше) не привязаны к варианту ракурсов. */
-    private static final long SUB_SALT = 0x5DEECE66DL, ECHO_SALT = 0x9E3779B97F4A7C15L;
-    /** Эха звучат не больше стольких сразу: залп РСЗО — десятки разрывов, а эхо — длинное стерео на канал. */
-    static final int ECHO_CAP = 4;
-    private static final Deque<SoundInstance> ECHOES = new ArrayDeque<>();
+    /**
+     * Докуда слышно взрыв бомбы под землёй, блоков: заряда бомбы в паспорте пока нет (0 — её взрыв считает сервер
+     * своими силами, {@code WeaponSpec.BUNKER}), поэтому — прежняя дальность (не из модели), пока паспорт его не получит.
+     */
+    static final double BUNKER_RANGE = 30_000;
+    /** Соль зерна «удара в грудь»: его вариантов меньше, они не привязаны к варианту ракурсов. */
+    private static final long SUB_SALT = 0x5DEECE66DL;
+    /**
+     * Своих источников на эхо: набор эха — {@link EchoMix#SECTORS} дорожек; новый набор — когда на него есть места
+     * сверх уже начатых и сверх остатка {@link OwnSources#MAX} по наборам (его держат удары у уха, {@link BlastPulse}).
+     */
+    static final int PULSE_RESERVE = OwnSources.MAX % EchoMix.SECTORS;
+    /** Эхо, которое ещё ищет склоны или сводит дорожки. */
+    private static final List<BlastEchoes> ECHOES = new ArrayList<>();
     /** Тише — слой не запускать. */
     private static final float AUDIBLE = 0.005f;
+    /**
+     * Тики клиента: часы взрывов, по которым эхо и удар у уха ждут начала прямого звука. Свои, а не возраст эффекта
+     * взрыва: эффект кончается, а голоса эха, что встают позже, ждут этих часов — с остановленными они не зазвучали
+     * бы никогда и держали свои источники.
+     */
+    private static long ticks;
+    /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
+    private static String last = "";
+    @Nullable
+    private static BlastEchoes lastEchoes;
 
     private BlastSounds() {}
 
     /**
-     * Взрыв дальше {@link Outdoor#NEAR}: дальний ракурс, с той громкостью, что у ближней модели на её краю
-     * ({@link BlastMix#v640}), у бомбы — глухой удар из-под земли. Громкость и верха — {@link Outdoor}: что между
-     * (кромка по лучу рельефа {@code z}), земля у взрыва и у слушателя, день или ночь, дождь.
+     * Докуда слышно взрыв в обычных условиях (R0 у {@link Outdoor}), блоков: по заряду, но не дальше, чем сервер
+     * шлёт взрывы ({@link IncomingConfig#FAR_RANGE_MAX}).
+     */
+    public static double range(BlastSource s) {
+        return s.underground() ? BUNKER_RANGE : Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(s.chargeKg()));
+    }
+
+    /**
+     * Взрыв дальше {@link Outdoor#NEAR}: дальний ракурс с той громкостью, что у ближней модели на её краю
+     * ({@link BlastMix#v640}), тоном по заряду, у бомбы — глухой удар из-под земли. Громкость и верха — {@link Outdoor}:
+     * что между (кромка по лучу рельефа {@code z}), земля у взрыва и у слушателя, день или ночь, дождь.
      *
-     * @param kind   вид пакета {@code S2C.Blast}
-     * @param r0     докуда этот взрыв слышно в обычных условиях, блоков
+     * @param s      что взорвалось
      * @param hs     высота источника над землёй, блоков
      * @param ground грунт у взрыва
      * @param d      до уха, блоков
@@ -55,16 +91,15 @@ public final class BlastSounds {
      * @param seed   зерно взрыва
      * @return что дошло (для лога); {@code null} — мира нет
      */
-    public static Outdoor.@Nullable Heard far(int kind, Vec3 pos, double r0, double hs, GroundMaterial ground, double d, double z, long seed) {
+    public static Outdoor.@Nullable Heard far(BlastSource s, Vec3 pos, double hs, GroundMaterial ground, double d, double z, long seed) {
         Outdoor.Path path = path(d, z, hs, ground.porosity);
         if (path == null) return null;
-        BlastMix.Profile mix = BlastMix.of(kind);
-        Outdoor.Heard heard = Outdoor.hear(r0, mix == null ? BUNKER_FAR_FLOOR : BlastMix.v640(mix), path);
+        Outdoor.Heard heard = Outdoor.hear(range(s), s.underground() ? BUNKER_FAR_FLOOR : BlastMix.v640(s), path);
         float v = heard.volume();
-        if (v < 0.005f) return heard;
+        if (v < AUDIBLE) return heard;
         float highs = highs(path);
-        if (mix == null) ClientSounds.atEar(ModSounds.BOMB_DEEP.get(), pos, v, 1, seed, 1, highs);
-        else ClientSounds.atEar(ModSounds.BLAST_FAR.get(), pos, v, BlastMix.pitch(mix, seed), seed, 1, highs);
+        if (s.underground()) ClientSounds.atEar(ModSounds.BOMB_DEEP.get(), pos, v, 1, seed, 1, highs);
+        else ClientSounds.atEar(ModSounds.BLAST_FAR.get(), pos, v, BlastMix.pitch(s.chargeKg()), seed, 1, highs);
         return heard;
     }
 
@@ -98,41 +133,102 @@ public final class BlastSounds {
         return SoundFilters.pathEffects() ? Outdoor.highs(path) * ClientSounds.farAir(path.d()) : 1;
     }
 
-    /** Взрыв на поверхности — фронт дошёл до уха: шахед (big = false) или крылатая ракета. */
-    public static void surface(Vec3 pos, boolean big, long seed) {
-        play(big ? BlastMix.MISSILE : BlastMix.DRONE, ModSounds.BLAST_NEAR.get(), pos, seed);
+    /**
+     * Эхо от рельефа этого взрыва ({@link BlastEchoes}: лучи ищут склоны, пока фронт идёт) — если на него есть свои
+     * источники ({@link #PULSE_RESERVE}); иначе null: залп РСЗО — десятки разрывов, эхо слышно у тех, кому хватило мест.
+     * Зерно — вариант дальнего ракурса этого взрыва; часы — часы взрыва у клиента.
+     */
+    public static @Nullable BlastEchoes echoes(BlastSource s, Vec3 pos, long seed, OwnSources.Clock clock) {
+        ECHOES.removeIf(BlastEchoes::settled);
+        if (OwnSources.free() - EchoMix.SECTORS * ECHOES.size() < EchoMix.SECTORS + PULSE_RESERVE) return null;
+        double kg = s.chargeKg();
+        BlastEchoes e = new BlastEchoes(clock, pos, new TerrainEcho.Blast() {
+            @Override
+            public double arrivalTicks(double blocks) {
+                return blocks / Acoustics.SPEED;
+            }
+
+            @Override
+            public double pressure(double blocks) {
+                return BlastModel.overpressureKpa(blocks, kg, s.surface());
+            }
+        }, ModSounds.BLAST_FAR.get(), seed);
+        ECHOES.add(e);
+        return e;
     }
 
     /**
-     * Снаряд РСЗО (~20 кг ВВ): вблизи — сухой жёсткий разрыв, вдали — короткий раскат. Залп ложится очередью,
-     * поэтому тон каждого разрыва чуть свой — цепочка не звучит одним и тем же звуком.
+     * Обычный взрыв (на земле или в воздухе) — фронт дошёл до уха сейчас (часы взрыва — {@link #clock}): ракурсы записи и
+     * «удар в грудь» ({@link BlastMix}), удар у уха из модели своим источником ({@link BlastPulse}), эхо от рельефа
+     * ({@code echoes}, null — без него) — от настоящего начала самого громкого ракурса. Звуки самой волны слышит ухо,
+     * каким оно было до неё ({@link Deafness#before}): слух, если волна его бьёт, — после.
      */
-    public static void rocket(Vec3 pos, long seed) {
-        play(BlastMix.ROCKET, ModSounds.ROCKET_BLAST.get(), pos, seed);
+    public static void arrive(BlastSource s, Vec3 pos, long seed, OwnSources.Clock clock, @Nullable BlastEchoes echoes) {
+        double tick = clock.ticks(0);
+        Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        double d = ear.distanceTo(pos), pa = BlastMix.pressure(s, d), loudness = BlastMix.loudness(pa);
+        BlastMix.Layers l = BlastMix.at(s, d);
+        float pitch = BlastMix.pitch(s.chargeKg());
+        ClientSounds.ducked(loudness);
+        List<SoundInstance> shots = new ArrayList<>(4);
+        SoundInstance loudest = null;
+        float most = 0;
+        float[] volumes = {l.near(), l.mid(), l.far()};
+        SoundEvent[] events = {ModSounds.BLAST_NEAR.get(), ModSounds.BLAST_MID.get(), ModSounds.BLAST_FAR.get()};
+        for (int i = 0; i < 3; i++) {
+            if (volumes[i] < AUDIBLE) continue;
+            SoundInstance shot = ClientSounds.shot(events[i], pos, volumes[i], pitch, seed);
+            shots.add(shot);
+            if (volumes[i] > most) {
+                most = volumes[i];
+                loudest = shot;
+            }
+        }
+        if (l.sub() >= AUDIBLE) shots.add(ClientSounds.shot(ModSounds.BLAST_SUB.get(), pos, l.sub(), pitch, seed ^ SUB_SALT));
+        // эхо и удар у уха ждут настоящего начала прямого звука: ожидание — до play
+        if (echoes != null) echoes.expect(tick, loudest);
+        boolean pulse = false;
+        if (l.pulse() >= AUDIBLE) {
+            Object owner = new Object();
+            OwnSources.Anchor start = OwnSources.anchor(owner, loudest, clock, tick);
+            pulse = OwnSources.play(owner, start, 0, Math.atan2(pos.z - ear.z, pos.x - ear.x), l.pulse(),
+                    BlastPulse.render(pa, BlastMix.phase(s, d), 1), BlastPulse.RATE, true, true);
+        }
+        last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
+                s.weapon() == null ? "air" : s.weapon().name(), s.chargeKg(), d, pa, 20 * Math.log10(Math.max(pa, 1e-9) / 2e-5), 1000 * BlastMix.phase(s, d),
+                loudness, pitch, l.near(), l.mid(), l.far(), l.sub(), l.pulse(), pulse ? "played" : "-", echoes == null ? "-" : "on");
+        if (echoes != null) lastEchoes = echoes;
+        for (SoundInstance shot : shots) {
+            Deafness.before(shot);
+            ClientSounds.start(shot);
+        }
+        if (echoes != null) echoes.arrive(ear, BlastMix.uncapped(loudness - BlastMix.FAR_LUFS), pitch);
     }
 
-    /** Слои взрыва по расстоянию до уха ({@link BlastMix}); near — ближний ракурс. */
-    private static void play(BlastMix.Profile mix, SoundEvent near, Vec3 pos, long seed) {
-        double d = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition().distanceTo(pos);
-        BlastMix.Layers l = BlastMix.at(mix, d);
-        float pitch = BlastMix.pitch(mix, seed);
-        ClientSounds.ducked(BlastMix.loudness(mix, d));
-        if (l.near() >= AUDIBLE) ClientSounds.atEar(near, pos, l.near(), pitch, seed);
-        if (l.mid() >= AUDIBLE) ClientSounds.atEar(ModSounds.BLAST_MID.get(), pos, l.mid(), pitch, seed);
-        if (l.far() >= AUDIBLE) ClientSounds.atEar(ModSounds.BLAST_FAR.get(), pos, l.far(), pitch, seed);
-        if (l.sub() >= AUDIBLE) ClientSounds.atEar(ModSounds.BLAST_SUB.get(), pos, l.sub(), pitch, seed ^ SUB_SALT);
-        if (l.echo() >= AUDIBLE && echoFree())
-            ECHOES.add(ClientSounds.around(ModSounds.BLAST_TAIL.get(), l.echo(), pitch, seed ^ ECHO_SALT, ClientSounds.farAir(d)));
+    /** Строка {@code SCENARIO blast-sound}: последний обычный взрыв у уха и его эхо; пусто — взрывов не было. */
+    public static String describe() {
+        if (last.isEmpty()) return "";
+        BlastEchoes e = lastEchoes;
+        return last + (e == null ? "" : "; " + e.describe()) + "; " + BlastHit.describe();
     }
 
-    /**
-     * Есть место ещё одному эху: смолкшие и не запущенные (движку не хватило канала) забываются. Звучит — значит держит
-     * канал: {@code SoundManager.isActive} остаётся true у звука, которого движок лишился при громкости категории 0.
-     */
-    private static boolean echoFree() {
-        var channels = Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel;
-        ECHOES.removeIf(s -> !channels.containsKey(s));
-        return ECHOES.size() < ECHO_CAP;
+    /** Часы взрыва, родившегося сейчас: тики с этого мига, с долей. */
+    public static OwnSources.Clock clock() {
+        long born = ticks;
+        return partial -> ticks - born + partial;
+    }
+
+    /** Тик клиента. */
+    static void tick() {
+        ticks++;
+    }
+
+    /** Отбой, перемотка повтора, выход из мира: эхо, что ещё готовилось, забыть (его голоса снимает {@link OwnSources#reset}). */
+    static void reset() {
+        ECHOES.forEach(BlastEchoes::stop);
+        ECHOES.clear();
+        lastEchoes = null;
+        last = "";
     }
 
     /** Бетонобойная бомба взорвалась под землёй. underground — слушатель сам под землёй (в той же толще). */

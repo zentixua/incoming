@@ -311,6 +311,8 @@ public final class ClientScenario {
             if (!far.isEmpty()) Incoming.LOG.info("SCENARIO far {}", far);
             String nuke = ua.zentix.incoming.client.nuclear.NukeSounds.describe();
             if (!nuke.isEmpty()) Incoming.LOG.info("SCENARIO nuke-sound {}", nuke);
+            String blast = ua.zentix.incoming.client.sound.BlastSounds.describe();
+            if (!blast.isEmpty()) Incoming.LOG.info("SCENARIO blast-sound {}", blast);
         }
     }
 

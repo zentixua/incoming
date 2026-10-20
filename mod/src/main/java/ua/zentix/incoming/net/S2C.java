@@ -14,6 +14,7 @@ import net.neoforged.neoforge.network.codec.NeoForgeStreamCodecs;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.Yield;
+import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.util.StreamCodecs;
 
@@ -27,17 +28,46 @@ public final class S2C {
     private S2C() {}
 
     /**
-     * Взрыв: вид (0 — шахед, 1 — ракета, 2 — бомба под землёй, 3 — снаряд РСЗО), грунт, высота поверхности над точкой, сид
-     * и снаряд, который взорвался: его путь у клиента кончается в этот тик, и мотор звучит, пока до уха не дойдёт фронт
-     * взрыва, а не стихает раньше.
+     * Взрыв: вид (0 — шахед, 1 — ракета, 2 — бомба под землёй, 3 — снаряд РСЗО — как взрыв происходит), грунт, высота
+     * поверхности над точкой, сид, снаряд, который взорвался (его путь у клиента кончается в этот тик, и мотор звучит,
+     * пока до уха не дойдёт фронт взрыва, а не стихает раньше), и оружие ({@code WeaponType.id}): заряд и топливо —
+     * в его паспорте, клиент берёт их оттуда ({@code client.fx.BlastSource}).
+     * <p>
+     * Формат только растёт с конца (replay.md): оружие дописано в конец; в повторе, записанном до него, его нет
+     * ({@link #NO_WEAPON}) — оно выводится из вида, как вид тогда и выбирали ({@link #weaponType}).
      */
-    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile) implements CustomPacketPayload {
+    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) implements CustomPacketPayload {
         public static final int DRONE = 0, MISSILE = 1, BUNKER = 2, ROCKET = 3;
+        /** Оружия в пакете нет (повтор, записанный до этого поля). */
+        public static final int NO_WEAPON = -1;
         public static final Type<Blast> TYPE = new Type<>(Incoming.id("blast"));
-        public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT, Blast::kind, StreamCodecs.VEC3, Blast::pos, ByteBufCodecs.VAR_INT, Blast::material,
-                ByteBufCodecs.FLOAT, Blast::surfaceY, ByteBufCodecs.VAR_LONG, Blast::seed,
-                ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC), Blast::projectile, Blast::new);
+        private static final StreamCodec<ByteBuf, Optional<UUID>> PROJECTILE = ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC);
+        private static final StreamCodec<ByteBuf, Integer> WEAPON = StreamCodecs.trailing(ByteBufCodecs.VAR_INT, NO_WEAPON);
+        public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.of((b, p) -> {
+            ByteBufCodecs.VAR_INT.encode(b, p.kind);
+            StreamCodecs.VEC3.encode(b, p.pos);
+            ByteBufCodecs.VAR_INT.encode(b, p.material);
+            ByteBufCodecs.FLOAT.encode(b, p.surfaceY);
+            ByteBufCodecs.VAR_LONG.encode(b, p.seed);
+            PROJECTILE.encode(b, p.projectile);
+            WEAPON.encode(b, p.weapon);
+        }, b -> new Blast(ByteBufCodecs.VAR_INT.decode(b), StreamCodecs.VEC3.decode(b), ByteBufCodecs.VAR_INT.decode(b),
+                ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b)));
+
+        /**
+         * Оружие, которое взорвалось. Нет в пакете ({@link #NO_WEAPON}) — по виду, как его выбирал сервер до этого поля
+         * (шахед и «Ланцет» оба шли видом шахеда).
+         */
+        public WeaponType weaponType() {
+            WeaponType[] all = WeaponType.values();
+            if (weapon >= 0 && weapon < all.length) return all[weapon];
+            return switch (kind) {
+                case MISSILE -> WeaponType.MISSILE;
+                case BUNKER -> WeaponType.BUNKER;
+                case ROCKET -> WeaponType.ROCKET;
+                default -> WeaponType.DRONE;
+            };
+        }
 
         @Override
         public Type<? extends CustomPacketPayload> type() {

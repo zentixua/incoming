@@ -40,6 +40,8 @@ import java.util.function.Supplier;
  * @param blast      картинка и вторичные подрывы наземного взрыва ({@code Warheads})
  * @param charge     заряд боевой части в тротиловом эквиваленте, кг: по давлению его волны наземный взрыв выбивает
  *                   стёкла ({@code Warheads}); 0 — наземного взрыва нет ({@link Blast#NONE})
+ * @param fuelAtImpact топливо, что осталось в баке к удару, кг: сгорает огненным шаром взрыва (картинка и звук
+ *                   клиента). Данные, а не логика полёта: полёт его не читает. Оценка у каждого оружия — в его Javadoc
  * @param penetrates бьёт на глубине точки (бомба ищет пещеру под целью), а не по поверхности
  * @param confirmPitch тон щелчка пульта, когда пуск принят
  * @param airframe   сущность, которой летит оружие (у B-2 — сам бомбардировщик)
@@ -49,7 +51,7 @@ import java.util.function.Supplier;
  */
 public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo salvo, Warhead warhead,
                          Supplier<ModConfigSpec.IntValue> power, Launch launch, Route route, Tracking tracking, @Nullable LauncherRack rack,
-                         Blast blast, double charge, boolean penetrates, float confirmPitch, Airframe airframe, @Nullable Airframe payload,
+                         Blast blast, double charge, double fuelAtImpact, boolean penetrates, float confirmPitch, Airframe airframe, @Nullable Airframe payload,
                          Munition munition, @Nullable Ascent ascent) {
 
     /** Как оружие пускается. */
@@ -388,11 +390,12 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * Дрон-камикадзе в духе Shahed-136: ≈150 км/ч, крейсер над рельефом, пикирование на цель с разгоном до 3 блоков/тик.
      * Стартовый ускоритель горит ~2 с и сбрасывается. Боевая часть — 50 кг: стёкла выбивает до ~70 блоков. По точкам
      * оператора — до 30 км пути (~12 минут полёта): втрое дальше карты пульта по умолчанию. Навигация спутниковая и
-     * инерциальная: промах — СКО 3 блока по каждой оси (в среднем ~3,5 блока от цели).
+     * инерциальная: промах — СКО 3 блока по каждой оси (в среднем ~3,5 блока от цели). Топливо к удару — оценка
+     * 30 кг бензина: середина 10–50 кг, сколько остаётся в зависимости от пройденного пути (handoff passport, шахед).
      */
     public static final WeaponSpec DRONE = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 25, Salvo.gaps(20, 40), Warhead.CONVENTIONAL,
             () -> IncomingConfig.SERVER.dronePower, Launch.GUIDED,
-            new Route(() -> IncomingConfig.SERVER.droneFlightTime, 300, 0, 0, 3, 40, 30_000), Tracking.CAMERA, LauncherRack.DRONE, Blast.DRONE, 50, false, 0.6f,
+            new Route(() -> IncomingConfig.SERVER.droneFlightTime, 300, 0, 0, 3, 40, 30_000), Tracking.CAMERA, LauncherRack.DRONE, Blast.DRONE, 50, 30, false, 0.6f,
             new Airframe(() -> ModEntities.DRONE.get(), 2.1, 3.0, 3.0, 1.6, 45, 20, 256, 1.83, 12, 900 * 2.1, 4.3,
                     new LaunchProfile(8, 38, 0.075, 8, -9), 0, new Attack(16, 0, 0),
                     DRONE_NOISE, new Signature(1.0, true)),
@@ -404,11 +407,12 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * маршевой: дальше разгоняет турбина, без рывка вниз. Последние 256 блоков — в мире: больше дальности прорисовки
      * 12 чанков, чтобы подлёт с её края был виден и при меньшей дистанции симуляции. Боевая часть — 450 кг, как у «Калибра»
      * и Х-101: стёкла выбивает до ~150 блоков. По точкам оператора — до 30 км пути (~6 минут полёта). Точнее шахеда
-     * (сверка с рельефом и камерой на подлёте): промах — СКО 1,5 блока по оси.
+     * (сверка с рельефом и камерой на подлёте): промах — СКО 1,5 блока по оси. Топливо к удару — оценка 275 кг JP-10:
+     * середина 200–350 кг, что дают «сотни кг» и размер огненного шара по оценке паспорта (handoff passport, «Томагавк»).
      */
     public static final WeaponSpec MISSILE = new WeaponSpec(WeaponType.SirenKind.MISSILE, 15, Salvo.gaps(15, 30), new Warhead(false, true, true),
             () -> IncomingConfig.SERVER.missilePower, Launch.GUIDED,
-            new Route(() -> IncomingConfig.SERVER.missileFlightTime, 500, 0, 0, 1.5, 120, 30_000), Tracking.POINT, LauncherRack.MISSILE, Blast.MISSILE, 450, false, 0.5f,
+            new Route(() -> IncomingConfig.SERVER.missileFlightTime, 500, 0, 0, 1.5, 120, 30_000), Tracking.POINT, LauncherRack.MISSILE, Blast.MISSILE, 450, 275, false, 0.5f,
             new Airframe(() -> ModEntities.CRUISE_MISSILE.get(), 4.0, 5.0, 3.0, 2.0, 12, 12, 256, 2.96, 8, 700 * 4.0, 6.5,
                     new LaunchProfile(6, 40, 0.09, 8, -14), 256, new Attack(64, 160, 185),
                     MISSILE_NOISE, new Signature(0.7, true)),
@@ -417,11 +421,11 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     /**
      * B-2 на эшелоне +170 над местом падения бомбы, 12 блоков/тик, разворот 1°/тик (радиус ~690 блоков), сброс за ~85
      * блоков до цели; бетонобойная бомба пробивает грунт и взрывается под землёй. Бомба со спутниковым наведением:
-     * промах — СКО 1,5 блока по оси.
+     * промах — СКО 1,5 блока по оси. Топлива у бомбы нет.
      */
     public static final WeaponSpec BUNKER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(60, 80), new Warhead(false, true, false),
             () -> IncomingConfig.SERVER.bunkerPower, Launch.BOMBER,
-            new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 85, 0, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, 0, true, 0.5f,
+            new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 85, 0, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, 0, 0, true, 0.5f,
             new Airframe(() -> ModEntities.BOMBER.get(), 12, 12, 1.0, 1.0, 170, 30, 0, 8.5, 0, 120 * 12, 0, null, 0, Attack.NONE,
                     BOMBER_NOISE, new Signature(0.15, true)),
             new Airframe(() -> ModEntities.BUNKER_BUSTER.get(), BombDrop.MAX_SPEED, BombDrop.MAX_SPEED, 0, 0, 0, 12, 0, BombDrop.NOSE, 0, 300 * BombDrop.MAX_SPEED,
@@ -441,11 +445,11 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * вбок она уходила бы из готовых чанков у места пуска. Сила
      * взрыва — {@code bunkerPower}: своей настройки у МБР нет, её подрыв ядерный (мощность — килотонны {@code Loadout.Nuke}),
      * а поле паспорта обязательно. Промаха нет: у настоящей МБР он в сотни метров, но при ядерном заряде ничего не меняет,
-     * а подрыв точно в отметке совпадает с её сиреной и предупреждением.
+     * а подрыв точно в отметке совпадает с её сиреной и предупреждением. Топлива к удару нет (боеголовка).
      */
     public static final WeaponSpec NUKE = new WeaponSpec(WeaponType.SirenKind.NUCLEAR, 0, Salvo.gaps(200, 300), new Warhead(true, false, true),
             () -> IncomingConfig.SERVER.bunkerPower, Launch.ICBM,
-            new Route(null, 0, 0, 0, 0, 0, 0), Tracking.POINT, null, Blast.NONE, 0, false, 0.5f,
+            new Route(null, 0, 0, 0, 0, 0, 0), Tracking.POINT, null, Blast.NONE, 0, 0, false, 0.5f,
             new Airframe(() -> ModEntities.ICBM.get(), 25, 25, 0, 0, 0, 12, 0, 9, 0, 600 * 25, 0, null, 0, Attack.NONE,
                     ICBM_NOISE, new Signature(1.0, false)),
             null, Munition.single(() -> ModItems.ICBM.get()), new Ascent(903_700, 36_030, 20_780, 61, 60, 85, 320));
@@ -454,11 +458,12 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * РСЗО в духе БМ-21 «Град»: неуправляемые реактивные снаряды по баллистике с пакета из 40 труб, залп очередью
      * по полсекунды; одиночным не стреляет — пульт ставит очередь из 12 по площади 15 блоков; без стреляющего рядом
      * пакет стоит в 600 блоках от цели. Заряд снаряда 9М22У — 6,4 кг ВВ: стёкла выбивает до ~37 блоков. Боеприпас —
-     * пакет на все трубы пусковой (40 снарядов, как перезарядка БМ-21): залп тратит из него по снаряду.
+     * пакет на все трубы пусковой (40 снарядов, как перезарядка БМ-21): залп тратит из него по снаряду. Топлива к удару
+     * нет: двигатель выгорает за секунду-другую после схода.
      */
     public static final WeaponSpec ROCKET = new WeaponSpec(WeaponType.SirenKind.MISSILE, 8, new Salvo(8, 12, 12, 15), Warhead.CONVENTIONAL,
             () -> IncomingConfig.SERVER.rocketPower, Launch.ROCKET,
-            new Route(null, 0, 600, 0.01, 0, 0, 0), Tracking.POINT, LauncherRack.ROCKET, Blast.ROCKET, 6.4, false, 0.5f,
+            new Route(null, 0, 600, 0.01, 0, 0, 0), Tracking.POINT, LauncherRack.ROCKET, Blast.ROCKET, 6.4, 0, false, 0.5f,
             new Airframe(() -> ModEntities.ROCKET.get(), 4, 4, 0, 0, 0, 4, 0, 1.45, 2, 2400 * 4, 1.5, null, 0, Attack.NONE,
                     ROCKET_NOISE, new Signature(1.0, false)),
             null, new Munition(() -> ModItems.GRAD_ROCKETS.get(), LauncherRack.ROCKET.slots()), null);
@@ -468,10 +473,11 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * круг на 45 блоков выше неё, пикирование с разгоном до 4 блоков/тик; без стреляющего рядом — издалека, с 500 блоков.
      * Боевая часть — 3 кг, как у «Ланцета-3»: стёкла выбивает до ~29 блоков. По точкам оператора — до 15 км пути
      * (~8 минут полёта): ближнее оружие, вдвое короче шахеда. Наводится камерой (оператора или своей): промаха нет.
+     * Топлива нет: мотор электрический (батарея).
      */
     public static final WeaponSpec LOITER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(40, 60), Warhead.CONVENTIONAL,
             () -> IncomingConfig.SERVER.loiterPower, Launch.LOITER,
-            new Route(null, 0, 500, 0, 0, 32, 15_000), Tracking.CAMERA, LauncherRack.LOITER, Blast.DRONE, 3, false, 0.5f,
+            new Route(null, 0, 500, 0, 0, 32, 15_000), Tracking.CAMERA, LauncherRack.LOITER, Blast.DRONE, 3, 0, false, 0.5f,
             new Airframe(() -> ModEntities.LOITER.get(), 1.6, 4.0, 3.0, 2.0, 45, 25, 35, 1.3, 4, 2400 * 1.6, 3.0,
                     new LaunchProfile(4, 10, 0.16, 4, -8), 0, Attack.NONE,
                     LOITER_NOISE, new Signature(0.5, true)),

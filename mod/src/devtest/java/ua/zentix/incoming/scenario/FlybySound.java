@@ -459,7 +459,7 @@ final class FlybySound {
         if (s == null || stage != Stage.RUN && stage != Stage.RINGOUT || s.isLooping() || !Incoming.MOD_ID.equals(s.getLocation().getNamespace())) return;
         Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         String path = s.getLocation().getPath();
-        if (path.startsWith("blast.") || path.equals("rocket.blast")) blasts.add(caseTick);
+        if (path.startsWith("blast.")) blasts.add(caseTick);
         Incoming.LOG.info("SCENARIO play {} {} d={} t={} ms={}", current, path, f0(new Vec3(s.getX(), s.getY(), s.getZ()).distanceTo(cam)),
                 caseTick, System.currentTimeMillis());
     }

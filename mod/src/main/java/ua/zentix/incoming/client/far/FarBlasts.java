@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.far;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
+import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLights;
@@ -57,8 +58,6 @@ public final class FarBlasts {
     static final int RING_RAYS = 6;
     static final double RING = 0.7;
     private static final double[] DISC = new double[3];
-    /** Звук, до уха которого фронт так и не дошёл (слушатель уходит быстрее звука), дольше не ждём, тиков. */
-    static final int SOUND_WAIT = 2400;
     /** Источник для луча и звука — над точкой удара, блоков (как вспышка ближней картинки). */
     static final double LIFT = 1.5;
     /** Плотность клуба; разброс клубов от оси столба, радиусов. */
@@ -120,16 +119,15 @@ public final class FarBlasts {
      * @param puffs      клубов в столбе
      * @param life       сколько тиков столб виден
      * @param dust       доля пыли грунта: 1 — весь столб пыль, меньше — дым, пыль у основания
-     * @param audible    докуда слышно в обычных условиях ({@code R0} у {@link Outdoor}), блоков
      */
     public record Look(float fireball, double flash, int flashTicks, int ballTicks, int burnTicks, double column, int riseTicks, double base,
-                       double top, int puffs, int life, float dust, double audible) {}
+                       double top, int puffs, int life, float dust) {}
 
-    public static final Look DRONE = new Look(5, 40, 3, 13, 1200, 150, 2400, 10, 40, 12, 3600, 0.25f, 20_000);
-    public static final Look MISSILE = new Look(11, 60, 4, 30, 600, 270, 2400, 18, 70, 14, 4800, 0.2f, 40_000);
-    public static final Look ROCKET = new Look(3.5f, 30, 2, 8, 0, 105, 2400, 7, 26, 10, 3000, 0.45f, 15_000);
-    public static final Look BUNKER_BREACH = new Look(9, 60, 3, 20, 0, 210, 2400, 18, 55, 14, 4200, 0.5f, 30_000);
-    public static final Look BUNKER_DEEP = new Look(0, 0, 0, 0, 0, 110, 500, 14, 32, 12, 3000, 1, 30_000);
+    public static final Look DRONE = new Look(5, 40, 3, 13, 1200, 150, 2400, 10, 40, 12, 3600, 0.25f);
+    public static final Look MISSILE = new Look(11, 60, 4, 30, 600, 270, 2400, 18, 70, 14, 4800, 0.2f);
+    public static final Look ROCKET = new Look(3.5f, 30, 2, 8, 0, 105, 2400, 7, 26, 10, 3000, 0.45f);
+    public static final Look BUNKER_BREACH = new Look(9, 60, 3, 20, 0, 210, 2400, 18, 55, 14, 4200, 0.5f);
+    public static final Look BUNKER_DEEP = new Look(0, 0, 0, 0, 0, 110, 500, 14, 32, 12, 3000, 1);
     /** Размер клуба — от и сколько сверху (доля номинального); разброс места клуба по высоте — доля шага. */
     static final double SIZE_MIN = 0.85, SIZE_SPAN = 0.3, JITTER = 0.3;
 
@@ -151,7 +149,8 @@ public final class FarBlasts {
     /** Один взрыв: где, какой, всё случайное его столба и последний луч по рельефу. */
     private static final class Event {
         final ClientLevel level;
-        final int kind;
+        /** Что взорвалось: звук по заряду. */
+        final BlastSource source;
         final Look look;
         /** Основание: точка удара, у бомбы — поверхность над зарядом. */
         final double x, y, z;
@@ -167,6 +166,11 @@ public final class FarBlasts {
         final byte[] tex;
         boolean soundPending;
         /**
+         * Дольше не ждём звука, до уха которого фронт так и не дошёл (слушатель уходит быстрее звука), тиков: путь звука
+         * на всю дальность слышимости ({@link BlastSounds#range}).
+         */
+        final long soundWait;
+        /**
          * Шар светит или пожар рисуется здесь (в прошлом кадре): лучи по блокам к шару ({@link #clear}) стоит обновлять.
          * Столбу они не нужны, а лучей до 7 на взрыв, и столб в прорисовке живёт минуты.
          */
@@ -177,9 +181,10 @@ public final class FarBlasts {
         /** Шар в прорисовке не закрыт блоками (доля двух лучей, {@link #clear}): блик и вуаль у глаза глубина не режет. */
         float open = 1;
 
-        Event(ClientLevel level, int kind, Look look, double x, double y, double z, GroundMaterial ground, long seed, boolean near) {
+        Event(ClientLevel level, BlastSource source, Look look, double x, double y, double z, GroundMaterial ground, long seed, boolean near) {
             this.level = level;
-            this.kind = kind;
+            this.source = source;
+            this.soundWait = (long) Math.ceil(BlastSounds.range(source) / Acoustics.SPEED);
             this.look = look;
             this.x = x;
             this.y = y;
@@ -246,7 +251,7 @@ public final class FarBlasts {
                 default -> DRONE;
             };
         }
-        Event e = new Event(level, p.kind(), look, pos.x, y, pos.z, GroundMaterial.byId(p.material()), p.seed(), near(pos));
+        Event e = new Event(level, BlastSource.of(p), look, pos.x, y, pos.z, GroundMaterial.byId(p.material()), p.seed(), near(pos));
         trace(e, FarTerrain.of(level), camera());
         clear(e, camera());
         if (EVENTS.size() >= CAP) EVENTS.pollFirst();
@@ -269,7 +274,7 @@ public final class FarBlasts {
         while (it.hasNext()) {
             Event e = it.next();
             long age = clock - e.born;
-            if (e.level != level || age > e.look.life() && (!e.soundPending || age > SOUND_WAIT)) {
+            if (e.level != level || age > e.look.life() && (!e.soundPending || age > e.soundWait)) {
                 it.remove();
                 continue;
             }
@@ -279,7 +284,7 @@ public final class FarBlasts {
                     e.soundPending = false;
                     trace(e, heights, ear);
                     hear(e, d, age);
-                } else if (age > SOUND_WAIT) {
+                } else if (age > e.soundWait) {
                     e.soundPending = false;
                 }
             }
@@ -295,7 +300,7 @@ public final class FarBlasts {
     }
 
     private static void hear(Event e, double d, long age) {
-        Outdoor.Heard heard = BlastSounds.far(e.kind, new Vec3(e.x, e.y + LIFT, e.z), e.look.audible(), Math.max(1, 0.4 * e.look.fireball()),
+        Outdoor.Heard heard = BlastSounds.far(e.source, new Vec3(e.x, e.y + LIFT, e.z), Math.max(1, 0.4 * e.look.fireball()),
                 e.ground, d, e.path, e.seed);
         if (heard == null) return;
         lastHeard = heard;

@@ -137,6 +137,7 @@ public final class ClientSounds {
     /** Раз в тик после {@link FlightTracks#tick}: слои звука у каждого пути, громкости, каналы. */
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
+        BlastSounds.tick();
         if (mc.level == null) {
             reset();
             return;
@@ -261,6 +262,7 @@ public final class ClientSounds {
         TRACKS.values().forEach(Tracked::kill);
         TRACKS.clear();
         DUCK.reset();
+        BlastSounds.reset();
         OwnSources.reset();
     }
 
@@ -321,6 +323,14 @@ public final class ClientSounds {
                 toward(ear, source), false, gain * SoundFilters.blockedGain(open), highs * SoundFilters.blockedHighs(open));
     }
 
+    /**
+     * Звук {@link #atEar(SoundEvent, Vec3, float, float, long)} (вариант записи — по зерну, категория «Окружение»), ещё
+     * не отданный движку ({@link #start}): кто ждёт его начала, заводит ожидание до {@code play}.
+     */
+    public static SoundInstance shot(SoundEvent event, Vec3 source, float volume, float pitch, long seed) {
+        return shot(event, source, volume, pitch, SoundSource.AMBIENT, RandomSource.create(seed));
+    }
+
     /** Отдать звук движку. */
     public static void start(SoundInstance sound) {
         play(sound);
@@ -360,19 +370,6 @@ public final class ClientSounds {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         play(new Shot(event.getLocation(), SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), SoundInstance.Attenuation.NONE,
                 toward(ear, source), false, gain, highs));
-    }
-
-    /**
-     * Звук без места в мире — отовсюду сразу (эхо взрыва: отражения от склонов, домов и леса приходят со всех сторон;
-     * стерео играется как есть). Вариант выбирает зерно, верха — {@code highs}.
-     *
-     * @return звук, чтобы следить, звучит ли он ещё
-     */
-    static SoundInstance around(SoundEvent event, float volume, float pitch, long seed, float highs) {
-        Shot s = new Shot(event.getLocation(), SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), SoundInstance.Attenuation.NONE,
-                Vec3.ZERO, true, 1, highs);
-        play(s);
-        return s;
     }
 
     /** Верха записи раската, дошедшие по воздуху: дальние записи уже глухие — воздух добавляет не больше −12 дБ. */

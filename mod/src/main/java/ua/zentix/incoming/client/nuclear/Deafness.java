@@ -19,8 +19,8 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Слух игрока после ударной волны (DESIGN-nuke §5, законы — {@link HearingModel}): сдвиг порога по энергии слышимого
- * фронта у уха, восстановление по игровым часам (час — 1000 тиков), разрыв перепонок. Все звуки игры глуше — фильтр
+ * Слух игрока после ударной волны — ядерной и обычного взрыва (DESIGN-nuke §5, законы — {@link HearingModel}): сдвиг
+ * порога по энергии слышимого у уха, восстановление по игровым часам (час — 1000 тиков), разрыв перепонок. Все звуки игры глуше — фильтр
  * нижних частот OpenAL EFX ({@link ua.zentix.incoming.client.sound.SoundFilters}, свои источники —
  * {@link ua.zentix.incoming.client.sound.OwnSources}): низы — на потерю громкости в улитке и кондуктивную, верха —
  * сверх того на разницу верхов и низов. Пока сдвиг есть, звенит в ушах. Громкость категорий игрока не трогается.
@@ -66,11 +66,11 @@ public final class Deafness {
     private Deafness() {}
 
     /**
-     * Волна дошла до уха: {@code exposure} — энергия её слышимого фронта, дБ·с ({@link HearingModel#exposure}, за вычетом
-     * того, что съел путь), {@code kpa} — давление у уха, {@code seed} — зерно подрыва (перепонки рвутся одинаково при
-     * повторе того же подрыва).
+     * Волна дошла до уха: {@code exposure} — энергия её слышимого, дБ·с ({@link HearingModel#exposure(double, double)}, за
+     * вычетом того, что съел путь), {@code kpa} — давление у уха, {@code seed} — зерно взрыва (перепонки рвутся одинаково
+     * при повторе того же взрыва).
      */
-    static void blast(double exposure, double kpa, long seed) {
+    public static void blast(double exposure, double kpa, long seed) {
         EAR.blast(exposure, clock / HOUR_TICKS);
         // порванные и ещё не зажившие рвутся снова — заживать с начала
         Minecraft mc = Minecraft.getInstance();
