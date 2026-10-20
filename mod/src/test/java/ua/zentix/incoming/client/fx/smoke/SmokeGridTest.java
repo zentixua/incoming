@@ -150,6 +150,31 @@ class SmokeGridTest {
         assertEquals(510, f.count);
     }
 
+    /** Облако, чей клуб ушёл за все каскады (снос ветром), в сетку не идёт вовсе — рисует себя само, а не обрезком. */
+    @Test
+    void cloudPastTheLastCascadeLeavesWhole() {
+        SmokeGrid.Source drifted = new SmokeGrid.Source() {
+            Boolean placed;
+
+            @Override
+            public boolean emit(double seconds, SmokeGrid.Sink out) {
+                out.blob(100, 50, 0, 20, 10, 1, 0, 0, 0.8f, 0.8f, 0.8f, 300, 0);
+                out.blob(3000, 50, 0, 20, 10, 1, 0, 0, 0.8f, 0.8f, 0.8f, 300, 0);
+                return true;
+            }
+
+            @Override
+            public void placed(boolean inGrid) {
+                placed = inGrid;
+                assertEquals(false, inGrid);
+            }
+        };
+        Cloud near = new Cloud(10, 3);
+        SmokeGrid.Frame f = frame(0, 0, 0, drifted, near);
+        assertEquals(3, f.count, "только клубы ближнего облака");
+        assertEquals(Boolean.TRUE, near.placed);
+    }
+
     /**
      * Коробка каскада — где его клубы (три σ), внутри каскада; каскад без клубов пуст (шейдер его не читает и проходит
      * без шагов по клетке).

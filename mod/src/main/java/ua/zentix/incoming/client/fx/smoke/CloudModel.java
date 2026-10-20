@@ -330,6 +330,9 @@ public final class CloudModel {
         return t < fuelBallSeconds ? 0.5 * fuelBall * Math.min(1, Math.sqrt(t / (0.2 * fuelBallSeconds))) : 0;
     }
 
+    /** Свет одного тела для {@link #ballLight} (зовут с потока отрисовки каждый кадр — без новых массивов). */
+    private final double[] light = new double[4];
+
     /**
      * Свет поверхности светящегося шара радиуса {@link #ballRadius} в возрасте t — в {@code out} (r, g, b, яркость Y; белая
      * стена в полдень — 1): шары продуктов детонации и топлива вместе, каждый — чёрное тело своей температуры с долей
@@ -339,7 +342,7 @@ public final class CloudModel {
         java.util.Arrays.fill(out, 0, 4, 0);
         double big = ballRadius(t);
         if (big <= 0) return;
-        double[] c = new double[4];
+        double[] c = light;
         double he = heBallRadius(t), fuel = fuelBallRadius(t);
         if (he > 0) {
             BlackBody.light(heBallKelvin(t), c);

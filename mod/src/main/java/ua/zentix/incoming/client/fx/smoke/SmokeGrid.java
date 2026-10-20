@@ -82,6 +82,11 @@ public final class SmokeGrid {
          * других): тогда облако рисует себя само.
          */
         default void placed(boolean inGrid) {}
+
+        /** Источник иссяк и без кадра (тик сетки убирает его, даже если кадров нет). */
+        default boolean ended() {
+            return false;
+        }
     }
 
     /** Куда источник кладёт клубы. */
@@ -164,9 +169,10 @@ public final class SmokeGrid {
         return (ticks + partial) / 20.0;
     }
 
-    /** Тик клиента (не на паузе). */
+    /** Тик клиента (не на паузе); иссякшие источники уходят и без кадров (слой эффектов может не рисоваться вовсе). */
     public static void tick() {
         ticks++;
+        SOURCES.removeIf(Source::ended);
     }
 
     /** Смена мира, перемотка повтора: источников нет. */
@@ -277,6 +283,10 @@ public final class SmokeGrid {
         int room = MAX_BLOBS;
         for (int k : order) {
             if (count[k] <= 0 || over[k] || count[k] > room) continue;
+            // клуб источника за всеми каскадами — источник не в сетке целиком (облако рисует себя само, а не обрезком)
+            boolean all = true;
+            for (int i = first[k]; i < first[k] + count[k] && all; i++) all = cascade(corner, STAGE_BLOBS, i * STAGE) >= 0;
+            if (!all) continue;
             room -= count[k];
             in[k] = true;
             for (int i = first[k]; i < first[k] + count[k]; i++) {
@@ -286,38 +296,45 @@ public final class SmokeGrid {
                         (float) b[at + 8], (float) b[at + 9], (float) b[at + 10], b[at + 11], b[at + 12]);
             }
         }
-        for (int k = 0; k < n; k++) if (count[k] >= 0) sources.get(k).placed(in[k] || count[k] == 0);
+        for (int k = 0; k < n; k++) if (count[k] >= 0) sources.get(k).placed(in[k] || count[k] == 0 && !over[k]);
         for (int k = n - 1; k >= 0; k--) if (count[k] < 0) sources.remove(k);
         layers(f);
+    }
+
+    /** Каскад клуба черновика с началом {@code at} в {@code b} ({@link #cascade(double[], double, double, double, double, double)}). */
+    private static int cascade(double[] corner, double[] b, int at) {
+        return cascade(corner, b[at], b[at + 1], b[at + 2], b[at + 3], b[at + 4]);
+    }
+
+    /**
+     * Каскад клуба с центром (x, y, z) и σ (sh, sv): самый мелкий, где он весь (три σ, смазанный на полклетки) и не шире
+     * {@link #SPAN} клеток σ; последний — если центр в нём (края за ним срежет текстура); −1 — за всеми.
+     */
+    private static int cascade(double[] corner, double x, double y, double z, double sh, double sv) {
+        for (int k = 0; k < CASCADES; k++) {
+            double cell = CELL[k], half = 0.5 * cell;
+            double h = Math.sqrt(sh * sh + half * half), v = Math.sqrt(sv * sv + half * half);
+            double span = N * cell;
+            if (k == CASCADES - 1) {
+                boolean inside = x >= corner[3 * k] && x < corner[3 * k] + span && z >= corner[3 * k + 2] && z < corner[3 * k + 2] + span
+                        && y >= corner[3 * k + 1] && y < corner[3 * k + 1] + span;
+                return inside ? k : -1;
+            }
+            boolean inside = x - REACH * h >= corner[3 * k] && x + REACH * h <= corner[3 * k] + span
+                    && z - REACH * h >= corner[3 * k + 2] && z + REACH * h <= corner[3 * k + 2] + span
+                    && y - REACH * v >= corner[3 * k + 1] && y + REACH * v <= corner[3 * k + 1] + span;
+            if (inside && Math.max(h, v) <= SPAN * cell) return k;
+        }
+        return -1;
     }
 
     /** Клуб — в таблицу и в свой каскад; вне всех каскадов, пустой или сверх таблицы — нет. */
     private static void put(Frame f, double[] corner, double ex, double ey, double ez, double x, double y, double z, double sh, double sv,
                             double soot, double dust, double water, float dr, float dg, float db, double kelvin, double rise) {
         if (f.count >= MAX_BLOBS) return;
-        int c = -1;
-        double h = 0, v = 0;
-        for (int k = 0; k < CASCADES; k++) {
-            double cell = CELL[k], half = 0.5 * cell;
-            h = Math.sqrt(sh * sh + half * half);
-            v = Math.sqrt(sv * sv + half * half);
-            double span = N * cell;
-            boolean inside = x - REACH * h >= corner[3 * k] && x + REACH * h <= corner[3 * k] + span
-                    && z - REACH * h >= corner[3 * k + 2] && z + REACH * h <= corner[3 * k + 2] + span
-                    && y - REACH * v >= corner[3 * k + 1] && y + REACH * v <= corner[3 * k + 1] + span;
-            if (k == CASCADES - 1) {
-                // в последнем — если центр в нём: края за ним срежет текстура
-                inside = x >= corner[3 * k] && x < corner[3 * k] + span && z >= corner[3 * k + 2] && z < corner[3 * k + 2] + span
-                        && y >= corner[3 * k + 1] && y < corner[3 * k + 1] + span;
-                if (inside) c = k;
-                break;
-            }
-            if (inside && Math.max(h, v) <= SPAN * cell) {
-                c = k;
-                break;
-            }
-        }
+        int c = cascade(corner, x, y, z, sh, sv);
         if (c < 0) return;
+        double half = 0.5 * CELL[c], h = Math.sqrt(sh * sh + half * half), v = Math.sqrt(sv * sv + half * half);
         int i = f.count++;
         f.cascade[i] = c;
         double peak = 1 / (Math.pow(2 * Math.PI, 1.5) * h * h * v);

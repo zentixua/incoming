@@ -322,23 +322,31 @@ public final class FarBlasts {
             });
         }
 
-        /** Доля облака, что отдаётся сетке дыма у камеры (по месту облака). */
-        double share(Vec3 eye) {
+        /**
+         * Доля облака возраста t, с, что отдаётся сетке дыма у камеры — по месту его головы (снос ветром и подъём): облако,
+         * ушедшее по ветру за сотни метров, уходит из сетки к квадратам по тому, где оно есть, а не где был удар.
+         */
+        double share(Vec3 eye, double t) {
             if (model == null) return 0;
-            return SmokeGrid.volumeShare(x - eye.x, y + model.topZ * 0.5 - eye.y, z - eye.z);
+            return SmokeGrid.volumeShare(x + model.driftX(t) - eye.x, y + model.height(t) - eye.y, z + model.driftZ(t) - eye.z);
         }
 
         /**
          * Доля облака, что рисует объём: отданная сетке, если сетка нарисована и клубы облака в неё легли; остальное —
          * квадраты клубов здесь.
          */
-        double volume(Vec3 eye) {
-            return inGrid && SmokeGrid.on() ? share(eye) : 0;
+        double volume(Vec3 eye, double t) {
+            return inGrid && SmokeGrid.on() ? share(eye, t) : 0;
         }
 
         @Override
         public void placed(boolean inGrid) {
             this.inGrid = inGrid;
+        }
+
+        @Override
+        public boolean ended() {
+            return !alive || level != Minecraft.getInstance().level;
         }
 
         /** Источник сетки дыма: клубы модели в мире, долей объёма. */
@@ -347,7 +355,7 @@ public final class FarBlasts {
             if (!alive || model == null || level != Minecraft.getInstance().level) return false;
             double t = seconds - bornSeconds;
             if (t >= model.life) return false;
-            double share = share(camera());
+            double share = share(camera(), t);
             if (share <= 0) return true;
             model.blobs(t, (bx, by, bz, sh, sv, soot, dustKg, water, kelvin, rise) -> out.blob(x + bx, y + by, z + bz, sh, sv, soot * share,
                     dustKg * share, water * share, dustR, dustG, dustB, kelvin, rise));
@@ -557,7 +565,7 @@ public final class FarBlasts {
             double bx = e.x - cam.x, by = e.y - cam.y, bz = e.z - cam.z;
             double d = e.distanceTo(cam);
             // доля тела шара здесь: у облака модели — то, что не рисует объём; у бомбы — вблизи его рисуют частицы
-            double w = e.model != null ? 1 - e.volume(cam) : e.near ? view.farShare(d) : 1;
+            double w = e.model != null ? 1 - e.volume(cam, age / 20) : e.near ? view.farShare(d) : 1;
             e.glows = age < e.ballTicks();
             // линия, ниже которой место взрыва закрыто рельефом, — над основанием (тела в прорисовке закрывает и глубина)
             double line = e.hidden > 0 ? LIFT + e.hidden : 0;
@@ -568,6 +576,10 @@ public final class FarBlasts {
         }
     }
 
+    /** Веса и столбец шаров {@link #fireballs} (каждый кадр — без новых объектов). */
+    private static final double[] WEIGHT = new double[4];
+    private static final org.joml.Vector4f COLUMN = new org.joml.Vector4f();
+
     /**
      * Огненные шары, что светят на дым сетки и на мир ({@code fx_pall}: {@code SmokeBalls}, вывод на кадр:
      * {@code PallBalls}): до четырёх самых заметных шаров облаков модели (свет у глаза — яркость × R²/d²) в свободные
@@ -577,9 +589,9 @@ public final class FarBlasts {
      */
     public static boolean fireballs(Vec3 eye, float partial, double exposure, double air, Matrix4f centres, Matrix4f light) {
         double now = clock + partial;
-        double[] weight = new double[4];
+        double[] weight = WEIGHT;
         boolean any = false;
-        org.joml.Vector4f column = new org.joml.Vector4f();
+        org.joml.Vector4f column = COLUMN;
         for (int i = 0; i < 4; i++) {
             centres.getColumn(i, column);
             weight[i] = column.w > 0 ? Double.MAX_VALUE : 0;
