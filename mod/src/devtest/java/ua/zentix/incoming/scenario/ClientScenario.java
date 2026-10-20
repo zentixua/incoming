@@ -212,7 +212,7 @@ public final class ClientScenario {
             planPallFront(false);
         }
         else if ("fx".equals(mode) || "fx-night".equals(mode) || "fx-late".equals(mode)) planFx("fx-night".equals(mode), "fx-late".equals(mode));
-        else if ("smoke-salvo".equals(mode) || "smoke-salvo-pall".equals(mode) || "smoke-column".equals(mode)) planSmoke(mode);
+        else if ("smoke-salvo".equals(mode) || "smoke-salvo-pall".equals(mode) || "smoke-column".equals(mode) || "smoke-fire".equals(mode)) planSmoke(mode);
         else if ("launch".equals(mode)) planLaunch();
         else if ("replay".equals(mode)) {
             replay = true;
@@ -1669,9 +1669,11 @@ public final class ClientScenario {
      * середине и над ним. Раз в секунду — строка {@code SCENARIO smoke}: источники и клубы сетки, проход пелены.
      */
     private void planSmoke(String mode) {
-        boolean salvo = !"smoke-column".equals(mode), withPall = "smoke-salvo-pall".equals(mode);
+        boolean fire = "smoke-fire".equals(mode);
+        boolean salvo = !"smoke-column".equals(mode) && !fire, withPall = "smoke-salvo-pall".equals(mode);
         at(40, () -> {
-            cmd("time set 6000");
+            // дым над горящим домом — ночью: пламя светит на дым снизу
+            cmd(fire && !"day".equals(System.getenv("INCOMING_SMOKE_FIRE")) ? "time set 18000" : "time set 6000");
             cmd("weather clear");
             cmd("gamerule doDaylightCycle false");
             Minecraft.getInstance().options.hideGui = true;
@@ -1686,12 +1688,24 @@ public final class ClientScenario {
         at(240, () -> {
             quickFlights();
             aimAhead(90);
-            eye = salvo ? target.add(0, 10, -30) : target.add(0, 25, -120);
+            eye = salvo ? target.add(0, 10, -30) : fire ? target.add(0, 12, -60) : target.add(0, 25, -120);
             Minecraft.getInstance().player.getAbilities().flying = true;
             hover = true;
-            cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", eye.x, eye.y, eye.z, target.x, target.y + (salvo ? 6 : 40), target.z));
+            if (fire) {
+                // чанки дома держит сервер: fill в незагруженном месте не делает ничего
+                cmd(String.format(java.util.Locale.ROOT, "forceload add %d %d %d %d", (int) target.x - 16, (int) target.z - 16, (int) target.x + 16,
+                        (int) target.z + 16));
+                cmd("gamerule doFireTick true");
+            }
+            cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", eye.x, eye.y, eye.z, target.x,
+                    target.y + (salvo ? 6 : fire ? 20 : 40), target.z));
         });
-        int start = 300;
+        int start = fire ? 400 : 300;
+        if (fire) {
+            // деревянный дом 15×7×15 на цели: шахед бьёт в его крышу, стены остаются гореть
+            at(340, () -> cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_planks hollow", (int) target.x - 7,
+                    (int) target.y, (int) target.z - 7, (int) target.x + 7, (int) target.y + 6, (int) target.z + 7)));
+        }
         if (withPall) {
             at(start, () -> cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f 15 ground", target.x, target.y, target.z - 2500)));
             start += 1400;
@@ -1702,12 +1716,13 @@ public final class ClientScenario {
         at(start, () -> {
             smokeArmed = true;
             if (salvo) cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 40 15 at %.1f %.1f %.1f", target.x, target.y, target.z));
-            else cmd(String.format(java.util.Locale.ROOT, "incoming drone at %.1f %.1f %.1f", target.x, target.y, target.z));
+            else cmd(String.format(java.util.Locale.ROOT, "incoming drone at %.1f %.1f %.1f", target.x, target.y + (fire ? 6 : 0), target.z));
         });
         for (int t = 20; t <= 20000; t += 20) {
             at(t, () -> {
-                Incoming.LOG.info("SCENARIO smoke sources {}, pall {}, layer {}", ua.zentix.incoming.client.fx.smoke.SmokeGrid.sources(),
-                        ua.zentix.incoming.client.fx.layer.PallPass.describe(), ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming());
+                Incoming.LOG.info("SCENARIO smoke sources {}, pall {}, layer {}, {}", ua.zentix.incoming.client.fx.smoke.SmokeGrid.sources(),
+                        ua.zentix.incoming.client.fx.layer.PallPass.describe(), ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(),
+                        ua.zentix.incoming.client.fx.FireSmoke.describe());
             });
         }
         smokeMode = mode;
@@ -1719,6 +1734,31 @@ public final class ClientScenario {
         smokeShotsPlanned = true;
         int b = smokeBlastTick;
         Incoming.LOG.info("SCENARIO smoke first blast at tick {}", b);
+        if ("smoke-fire".equals(smokeMode)) {
+            // загорелось ли от удара: нет — огонь на крыше ставит сценарий (дым идёт за любым огнём; откуда он — дело сервера)
+            at(b + 60, () -> {
+                int seen = ua.zentix.incoming.client.fx.FireWatch.total();
+                Incoming.LOG.info("SCENARIO smoke fire after blast: {} fire blocks seen", seen);
+                if (seen < 8) {
+                    // огонь в доме: держится тот, что у досок (огонь без опоры гаснет сам)
+                    Incoming.LOG.info("SCENARIO smoke fire placed by the scenario inside the house");
+                    cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:fire replace minecraft:air", (int) target.x - 6,
+                            (int) target.y + 1, (int) target.z - 6, (int) target.x + 6, (int) target.y + 5, (int) target.z + 6));
+                }
+            });
+            String light = "day".equals(System.getenv("INCOMING_SMOKE_FIRE")) ? "smoke_fire_day_" : "smoke_fire_";
+            for (int s : new int[]{5, 15, 30, 60, 90}) shot(b + 20 * s, light + s + "s");
+            // издали: в ~200 блоках и выше (чанки там уже есть — тот же край прорисовки)
+            at(b + 20 * 95, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", target.x - 80,
+                    target.y + 30, target.z - 180, target.x, target.y + 60, target.z)));
+            shot(b + 20 * 100, light + "far_100s");
+            shot(b + 20 * 120, light + "far_120s");
+            at(b + 20 * 122, () -> {
+                Incoming.LOG.info("SCENARIO done");
+                Minecraft.getInstance().stop();
+            });
+            return;
+        }
         if (!"smoke-column".equals(smokeMode)) {
             String name = "smoke-salvo-pall".equals(smokeMode) ? "smoke_salvo_pall" : "smoke_salvo";
             for (int s : new int[]{1, 3, 6, 12, 20, 30, 45, 60}) shot(b + 20 * s, name + "_" + s + "s");
@@ -3315,7 +3355,17 @@ public final class ClientScenario {
         });
         at(1500, () -> cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 12 12 at %.1f %.1f %.1f", target.x, target.y, target.z)));
         for (int t = 1510; t <= 1900; t += 8) shot(t, "rocket_view");
-        at(1910, () -> {
+        // третий залп — сбоку от пусковой: облако старта (продукты, пока струя бьёт в землю, и поднятая пыль) и начало следов
+        at(1905, () -> {
+            var mc = Minecraft.getInstance();
+            var near = mc.level.getEntitiesOfClass(ua.zentix.incoming.entity.LauncherEntity.class, mc.player.getBoundingBox().inflate(200));
+            Vec3 pad = near.isEmpty() ? new Vec3(13, 204, -19) : near.getFirst().position();
+            Incoming.LOG.info("SCENARIO rocket pad at {}", xyz(pad));
+            cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", pad.x - 32, pad.y + 6, pad.z - 14, pad.x, pad.y + 4, pad.z));
+        });
+        at(1925, () -> cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 12 12 at %.1f %.1f %.1f", target.x, target.y, target.z)));
+        for (int t = 1935; t <= 2335; t += 10) shot(t, "rocket_pad");
+        at(2345, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });

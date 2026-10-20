@@ -6,7 +6,8 @@
 // (r, g, b) и Σ ослабление × подъём (м/с). Клуб уже в своём каскаде со своими σ (смазан на полклетки, SmokeGrid.put).
 
 // таблица клубов (SmokeGrid.BLOB_ROWS строк по клубу): 0 — центр от глаза, σh; 1 — σv, пиковые ослабления сажи, пыли,
-// капель; 2 — альбедо пыли; 3 — ΔT (кК), подъём
+// капель; 2 — альбедо пыли, x полуотрезка; 3 — ΔT (кК), подъём, y и z полуотрезка (клуб, размазанный по отрезку,
+// SmokeGrid.line)
 uniform sampler2D Sampler0;
 // каскады: столбец c — угол от глаза и клетка
 uniform mat4 SmokeCorner;
@@ -23,6 +24,29 @@ const float SMOKE_N = 64.0;
 const float SMOKE_CAP = 128.0;
 // подъём для шума клубов — не больше, м/с (то же основание)
 const float SMOKE_RISE_CAP = 64.0;
+// короче этого (в σ) отрезок — точка (SmokeGrid.LINE_POINT)
+const float SMOKE_LINE_POINT = 0.05;
+
+// erf по Абрамовицу и Стиган 7.1.26 (SmokeGrid.erf)
+float smokeErf(float x) {
+    float ax = abs(x);
+    float t = 1.0 / (1.0 + 0.3275911 * ax);
+    float y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-ax * ax);
+    return sign(x) * y;
+}
+
+// гаусс по отрезку против гаусса в точке у точки q (в осях, где σ — единица) при полуотрезке a там (SmokeGrid.line)
+float smokeLine(vec3 q, vec3 a) {
+    float len = length(a);
+    if (len < SMOKE_LINE_POINT) {
+        return exp(-0.5 * dot(q, q));
+    }
+    vec3 u = a / len;
+    float along = dot(q, u);
+    float across = dot(q, q) - along * along;
+    // далеко по оси разность erf уходит в ошибку приближения (1,5·10⁻⁷) — не ниже нуля
+    return exp(-0.5 * max(across, 0.0)) * 1.2533141 / (2.0 * len) * max(0.0, smokeErf((len - along) * 0.70710678) + smokeErf((len + along) * 0.70710678));
+}
 
 void main() {
     int i = int(floor(blob + 0.5));
@@ -33,8 +57,8 @@ void main() {
     vec4 C = SmokeCorner[int(SmokeSlice.x + 0.5)];
     vec3 cell = vec3(px - page * SMOKE_N, SmokeSlice.y, floor(gl_FragCoord.y)) + 0.5;
     vec3 p = C.xyz + cell * C.w;
-    vec3 d = p - b0.xyz;
-    float e = exp(-0.5 * (dot(d.xz, d.xz) / (b0.w * b0.w) + d.y * d.y / (b1.x * b1.x)));
+    vec3 s = vec3(b0.w, b1.x, b0.w);
+    float e = smokeLine((p - b0.xyz) / s, vec3(b2.w, b3.z, b3.w) / s);
     vec3 ext = b1.yzw * e;
     float total = ext.x + ext.y + ext.z;
     float k = min(1.0, SMOKE_CAP / max(total, 1e-12));

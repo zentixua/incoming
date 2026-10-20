@@ -4,6 +4,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.far.FarBlasts;
+import ua.zentix.incoming.client.far.FarFlightView;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.PallPass;
 import ua.zentix.incoming.client.fx.layer.SmokePass;
@@ -31,6 +32,8 @@ public final class SmokeFrame {
      */
     public static void build(Vec3 eye, float partial) {
         SmokeGrid.enable(PallPass.available() && SmokePass.available());
+        // отрезки следов объёмом — до раскладки: лента того же кадра берёт остальную толщу
+        FarFlightView.prepareVolume(eye, partial);
         grid = SmokeGrid.frame(eye.x, eye.y, eye.z, SmokeGrid.seconds(partial));
     }
 
@@ -59,6 +62,8 @@ public final class SmokeFrame {
         f.smokeBalls.zero();
         f.smokeBallLight.zero();
         FarBlasts.fireballs(eye, partial, f.exposure, 0, f.smokeBalls, f.smokeBallLight);
+        // пламя пожаров светит на свой дым снизу — в свободные места
+        ua.zentix.incoming.client.fx.FireSmoke.lights(eye, f.exposure, 0, f.smokeBalls, f.smokeBallLight);
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
         if (FarBlasts.fireballs(eye, partial, f.exposure, Sight.KOSCHMIEDER / range, f.balls, f.ballLight)) f.ballsLit = true;
         return f;

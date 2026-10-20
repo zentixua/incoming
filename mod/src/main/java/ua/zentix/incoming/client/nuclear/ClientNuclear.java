@@ -371,6 +371,20 @@ public final class ClientNuclear {
         return DETONATIONS.isEmpty() && WARNINGS.isEmpty();
     }
 
+    /**
+     * Огонь в (x, z) — пожары ядерного подрыва: в квадрате карты его огненного шторма ({@link FireStorm#half}, вся зона
+     * поджига): их дым — шторм, не дым обычных пожаров ({@code fx/FireSmoke}).
+     */
+    public static boolean stormFire(double x, double z) {
+        for (Active a : DETONATIONS.values()) {
+            double half = a.storm.half();
+            if (half <= 0) continue;
+            var b = a.d.burst();
+            if (Math.abs(x - b.x) <= half && Math.abs(z - b.z) <= half) return true;
+        }
+        return false;
+    }
+
     public static Iterable<S2C.NukeWarning> warnings() {
         return WARNINGS.values();
     }

@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
@@ -229,6 +230,11 @@ public final class IncomingClient {
         FarRenderer.tick();
         FxLayer.tick();
         ua.zentix.incoming.client.fx.smoke.SmokeGrid.tick();
+        // огонь в своих чанках — дым над пожарами (и звук горящего города ядерки)
+        Vec3 fireEye = mc.gameRenderer.getMainCamera().getPosition();
+        ua.zentix.incoming.client.fx.FireWatch.tick(mc.level, (int) Math.floor(fireEye.x) >> 4, (int) Math.floor(fireEye.z) >> 4,
+                mc.options.getEffectiveRenderDistance());
+        ua.zentix.incoming.client.fx.FireSmoke.tick(mc.level);
         // частицы — после тика мира, как ванильный движок; в заморозке стоят
         if (mc.level.tickRateManager().runsNormally()) {
             FxPool.INSTANCE.tick(mc.level);
@@ -252,6 +258,7 @@ public final class IncomingClient {
         FlightTracks.reset();
         FarRenderer.reset();
         ua.zentix.incoming.client.fx.smoke.SmokeGrid.reset();
+        ua.zentix.incoming.client.fx.FireSmoke.reset();
         FxPool.INSTANCE.clear();
         Effects.clear();
         CameraShake.reset();
@@ -295,6 +302,7 @@ public final class IncomingClient {
         FlightTracks.logout();
         FarRenderer.reset();
         ua.zentix.incoming.client.fx.smoke.SmokeGrid.reset();
+        ua.zentix.incoming.client.fx.FireSmoke.reset();
         FxPool.INSTANCE.clear();
         FxLayer.reset();
         Fragments.reset();

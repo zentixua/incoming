@@ -100,6 +100,85 @@ class SmokeGridTest {
         }
     }
 
+    /**
+     * Клуб по отрезку (след, столб над пожаром): в клетках — та же масса, что у клуба (шейдер заполнения считает
+     * {@link SmokeGrid#line}), прямоугольники слоёв покрывают весь отрезок, а нулевой отрезок — точка.
+     */
+    @Test
+    void segmentHoldsItsMassAlongItsLength() {
+        for (double[] at : new double[][]{{5, 3, -7, 20, 8, -6, 1.5, 1.5}, {150, 40, 100, 60, 30, 0, 6, 6}, {-30, 10, 20, 0, 25, 0, 2, 2}}) {
+            double ax = at[3], ay = at[4], az = at[5];
+            SmokeGrid.Frame f = frame(0, 0, 0, (t, out) -> {
+                out.segment(at[0], at[1], at[2], ax, ay, az, at[6], at[7], 0, 1, 0, 0.8f, 0.7f, 0.6f, 288, 0);
+                return true;
+            });
+            assertEquals(1, f.count);
+            int c = f.cascade[0];
+            float cell = f.corner[4 * c + 3];
+            float[] b = f.blobs;
+            int m = SmokeGrid.MAX_BLOBS;
+            double h = b[3], v = b[m * 4], dust = b[m * 4 + 2], sum = 0;
+            assertEquals(ax, b[(2 * m) * 4 + 3], 1e-4);
+            assertEquals(ay, b[(3 * m) * 4 + 2], 1e-4);
+            assertEquals(az, b[(3 * m) * 4 + 3], 1e-4);
+            double sa = Math.sqrt(ax * ax / (h * h) + ay * ay / (v * v) + az * az / (h * h));
+            // клетки, которые слои покрывают
+            boolean[] covered = new boolean[SmokeGrid.N * SmokeGrid.N * SmokeGrid.N];
+            for (int l = c * SmokeGrid.N; l < (c + 1) * SmokeGrid.N; l++) {
+                for (int k = f.layerStart[l]; k < f.layerStart[l + 1]; k += 6) {
+                    float x0 = f.vertices[3 * k], z0 = f.vertices[3 * k + 1], x1 = f.vertices[3 * (k + 2)], z1 = f.vertices[3 * (k + 2) + 1];
+                    if (x0 >= 0) continue;
+                    int cx0 = Math.round((x0 + 1) * SmokeGrid.N), cx1 = Math.round((x1 + 1) * SmokeGrid.N);
+                    int cz0 = Math.round((z0 + 1) / 2 * SmokeGrid.N), cz1 = Math.round((z1 + 1) / 2 * SmokeGrid.N);
+                    for (int x = cx0; x < cx1; x++) for (int z = cz0; z < cz1; z++) covered[(x * SmokeGrid.N + (l - c * SmokeGrid.N)) * SmokeGrid.N + z] = true;
+                }
+            }
+            double outside = 0;
+            for (int x = 0; x < SmokeGrid.N; x++) {
+                for (int y = 0; y < SmokeGrid.N; y++) {
+                    for (int z = 0; z < SmokeGrid.N; z++) {
+                        double px = f.corner[4 * c] + (x + 0.5) * cell - b[0], py = f.corner[4 * c + 1] + (y + 0.5) * cell - b[1],
+                                pz = f.corner[4 * c + 2] + (z + 0.5) * cell - b[2];
+                        double qx = px / h, qy = py / v, qz = pz / h, q2 = qx * qx + qy * qy + qz * qz;
+                        double along = sa < SmokeGrid.LINE_POINT ? 0 : (qx * ax / h + qy * ay / v + qz * az / h) / sa;
+                        double e = dust * Math.exp(-0.5 * Math.max(0, q2 - along * along)) * SmokeGrid.line(sa, sa < SmokeGrid.LINE_POINT ? Math.sqrt(q2) : along);
+                        sum += e;
+                        if (!covered[(x * SmokeGrid.N + y) * SmokeGrid.N + z]) outside += e;
+                    }
+                }
+            }
+            double k = SmokeGrid.dustK(0.8f, 0.7f, 0.6f);
+            assertEquals(k, sum * cell * cell * cell, 0.02 * k, "отрезок в каскаде " + c);
+            assertTrue(outside * cell * cell * cell < 0.01 * k, "вне прямоугольников слоёв — " + outside * cell * cell * cell / k);
+        }
+        // отрезок к нулю — точка
+        for (double q : new double[]{0, 0.7, 2}) {
+            assertEquals(Math.exp(-0.5 * q * q), SmokeGrid.line(SmokeGrid.LINE_POINT * 1.001, q), 2e-3);
+            assertEquals(Math.exp(-0.5 * q * q), SmokeGrid.line(0, q), 1e-12);
+        }
+        // erf — с точностью Абрамовица и Стиган
+        assertEquals(0.8427007929, SmokeGrid.erf(1), 2e-7);
+        assertEquals(-0.5204998778, SmokeGrid.erf(-0.5), 2e-7);
+    }
+
+    /**
+     * Доля сечения, что верно показывает каскад: σ не меньше клетки — вся, не больше полклетки — нет; клетка — по месту
+     * клуба (у глаза мелкий каскад, дальше крупнее, за сеткой — ни одного).
+     */
+    @Test
+    void resolvedShareFollowsTheCascadeCell() {
+        assertEquals(1, SmokeGrid.resolved(2, 2), 1e-12);
+        assertEquals(0, SmokeGrid.resolved(1, 2), 1e-12);
+        assertEquals(0.5, SmokeGrid.resolved(1.5, 2), 1e-12);
+        assertEquals(0, SmokeGrid.resolved(5, 0), 1e-12);
+        double[] c = new double[3 * SmokeGrid.CASCADES];
+        SmokeGrid.corners(0.5, 0.5, 0.5, c);
+        assertEquals(2, SmokeGrid.cellFor(c, 10.5, 0.5, 0.5, 0, 0, 0, 1, 1), 0);
+        assertEquals(8, SmokeGrid.cellFor(c, 100.5, 0.5, 0.5, 0, 0, 0, 1, 1), 0);
+        assertEquals(8, SmokeGrid.cellFor(c, 10.5, 0.5, 0.5, 60, 0, 0, 1, 1), 0, "длинный отрезок у глаза — в каскад, где он весь");
+        assertEquals(0, SmokeGrid.cellFor(c, 5000.5, 0.5, 0.5, 0, 0, 0, 1, 1), 0);
+    }
+
     /** Иссякший источник уходит; объём рисует облако у глаза и не рисует на краю сетки. */
     @Test
     void sourcesEndAndShareFadesAtTheEdge() {

@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.nuclear;
 
+import ua.zentix.incoming.client.fx.FireWatch;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -94,7 +95,7 @@ final class NukeAfter {
         return field;
     }
 
-    /** Горит ли ещё что-то от этого подрыва (тогда {@link FireWatch} смотрит чанки). */
+    /** Горит ли ещё что-то от этого подрыва (звук горящего города). */
     boolean burning() {
         double t = a.ticks(0);
         return t > 0 && t < field().endTicks() && field().total > 0;

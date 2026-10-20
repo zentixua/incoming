@@ -81,6 +81,12 @@ minutes, until it has spread too thin to see. Close up only solid things fly as 
 smoke trails and clods of earth. Past about 600 blocks the same cloud is drawn as flat puffs. The bomb's underground
 blast looks as before.
 
+Whatever the blast sets on fire keeps smoking. Over every chunk with burning blocks a column of black smoke rises, leans
+downwind and stretches out with it; a bigger fire sends it higher. By day it climbs higher than on a calm night, when
+it stays low and drifts flat. At night the flames light the smoke from below. The column grows from the fire at the
+speed of the wind, and when the fire goes out the last of the smoke drifts away. Where the fire comes from is up to the
+server: the smoke follows any fire your game shows, not only fires from strikes.
+
 ## Flames and smoke trails
 
 Every engine flame and smoke trail is worked out from the motor's data, the same way for every weapon, and looks the
@@ -95,6 +101,12 @@ same up close and far away.
 - **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a
   greyer trail. A slower rocket leaves a denser trail. The hot trail rises a little. By day it spreads and fades sooner;
   on a calm night it stays narrow and hangs much longer.
+- **Launch cloud**: while a rocket's exhaust still hits the ground, its smoke stays at the launcher, together with the
+  dust it blows up, and rises and drifts as one warm cloud. A Shahed leaves a short white puff at the rail, a cruise
+  missile's booster a bigger one. Each Grad rocket adds its own cloud, so a full salvo buries the launcher in smoke and
+  dust that hang and drift downwind. Stone and concrete raise no dust. The ICBM leaves a large cloud at the pad.
+- **Near and far**: close to you a trail is part of the same smoke volume as blast clouds, so you can fly through it;
+  further away, and while it is still too thin for the volume, it is drawn as a ribbon. Both carry the same smoke.
 - **Wind**: smoke drifts with the world's wind, the same wind that carries nuclear fallout. Each game day has its own
   wind, and it turns slowly from one day to the next. Near the ground it is weaker, most of all at night.
 - **Contrails**: the B-2 leaves a contrail only where the air is cold enough for one to form. At the height it flies

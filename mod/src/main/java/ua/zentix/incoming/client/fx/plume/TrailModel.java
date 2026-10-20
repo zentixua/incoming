@@ -142,9 +142,18 @@ public final class TrailModel {
      */
     public static void look(Trail t, double age, double inverseSpeed, double iceLife, double wind, double excess, double riseScale, double brunt,
                             double stability, double[] out) {
+        look(t, age, inverseSpeed, iceLife, wind, excess, riseScale, brunt, stability, 1, out);
+    }
+
+    /**
+     * То же для доли mass вещества точки (остальное рисует объём сетки дыма у глаза): толща — mass × толщи дыма и льда
+     * (и лёд из пара подмешанного воздуха), сечение и подъём — те же.
+     */
+    public static void look(Trail t, double age, double inverseSpeed, double iceLife, double wind, double excess, double riseScale, double brunt,
+                            double stability, double mass, double[] out) {
         double lift = riseScale * risen(brunt * age);
         double sigma = sigma(t, age, stability, wind, lift);
-        double smoke = smoke(t, inverseSpeed), ice = age < iceLife ? ice(t, inverseSpeed, excess, sigma) : 0, e = smoke + ice;
+        double smoke = mass * smoke(t, inverseSpeed), ice = age < iceLife ? mass * ice(t, inverseSpeed, excess, sigma) : 0, e = smoke + ice;
         double tau = e / (Math.sqrt(2 * Math.PI) * sigma);
         out[2] = lift;
         Smoke s = t.motor().smoke();
