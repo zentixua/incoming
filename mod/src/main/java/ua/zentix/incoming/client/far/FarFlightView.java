@@ -547,7 +547,11 @@ public final class FarFlightView {
                     point(pi, style, t, START);
                     r = TrailSmoke.open(smoke, START[0], START[1], START[2], SIG[pi], RIS[pi], cell);
                 }
-                if (r < 0) continue;
+                if (r < 0) {
+                    // отрезков кадра больше нет: кусок — лентой целиком
+                    SHARE[i] = 0;
+                    continue;
+                }
             }
             TrailSmoke.add(r, x, y, z, sigma, soot, water, RIS[i], perMetre);
             RUN[i] = r;

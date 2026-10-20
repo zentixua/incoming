@@ -48,6 +48,8 @@ public final class LaunchCloud implements SmokeGrid.Source {
     private boolean gone;
     /** Тепло, с которым термик построен последний раз, и начало подачи — для пересборки ({@link #REBUILD}). */
     private double builtHeat;
+    /** Часы сетки последней подачи, с: пока подача идёт, термик пересобирается только по {@link #REBUILD}. */
+    private double lastFeed;
     /** Доля облака в объёме сетки в этом кадре и легло ли оно в сетку ({@link #shown}). */
     private double share;
     private boolean inGrid;
@@ -118,6 +120,7 @@ public final class LaunchCloud implements SmokeGrid.Source {
         sumZ += q * (z + jz * l);
         sumT += q * dT;
         sumR += q * (SPREAD * l + motor.exitRadius());
+        lastFeed = SmokeGrid.seconds(0);
         if (thermal == null || heat >= REBUILD * builtHeat) build();
         return true;
     }
@@ -211,7 +214,8 @@ public final class LaunchCloud implements SmokeGrid.Source {
     public boolean emit(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
         if (thermal == null) return true;
-        if (heat > builtHeat) build();
+        // подача кончилась (два тика без неё) — термик по всему теплу
+        if (heat > builtHeat && seconds - lastFeed > 0.1) build();
         double t = Math.max(0, seconds - born);
         if (t >= life) return false;
         // облако, что дожило до предела густым, уходит за последнюю десятую жизни (как облако взрыва)
