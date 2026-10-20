@@ -1390,7 +1390,9 @@ void main() {
     }
     // дым обычных взрывов: свой ход по сетке (smoke.glsl) — шаг по клетке каскада в точке и по густоте, по пустому — до
     // клетки, не мельче пикселя; отрезок — рамка дыма до мира за пикселем
-    int sk = 0, sSteps = steps + 16;
+    // шаги по пустым клеткам внутри коробок каскадов — своим счётом (не больше трёх пересечений коробки по N клеток):
+    // иначе пустота между облаками залпа съела бы шаги, и дым за ней не рисовался бы ничем
+    int sk = 0, sSteps = steps + 16, se = 0, sEmpty = 3 * SMOKE_N;
     float s0 = 1e9, s1 = -1.0, ts = 1e9;
     if (smokeOn()) {
         vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
@@ -1398,11 +1400,11 @@ void main() {
         s1 = min(ss.y, scene);
         if (s1 > s0) ts = s0 + jitter * min(smokeCell(dir * s0), 0.25 * (s1 - s0));
     }
-    for (int it = 0; it < pallSteps + mSteps + sSteps; it++) {
+    for (int it = 0; it < pallSteps + mSteps + sSteps + sEmpty; it++) {
         bool pallLeft = i < pallSteps && ta < t1;
         // гриб за почти непрозрачным для себя же лучом не виден и в дымке (его свет — с долей transmit)
         bool mushLeft = mk < mSteps && tm < m1 && transmit >= 0.005;
-        bool smokeLeft = sk < sSteps && ts < s1 && transmit >= 0.005;
+        bool smokeLeft = sk < sSteps && se < sEmpty && ts < s1 && transmit >= 0.005;
         if (!pallLeft && !mushLeft && !smokeLeft) break;
         if (smokeLeft && (!pallLeft || ts < ta) && (!mushLeft || ts < tm)) {
             float cone = max(ts * gPixel, 0.0);
@@ -1420,7 +1422,8 @@ void main() {
                 transmit *= tr;
             }
             ts += ds;
-            sk += 1;
+            if (gap > 0.0) se += 1;
+            else sk += 1;
         } else if (pallLeft && (!mushLeft || ta <= tm)) {
             // конец шага: обычная граница или вход в отрезок головы, а в нём — ближняя из границы его сетки (или выхода) и
             // обычной: у глаза обычные гуще сетки головы, и стена, проходящая сквозь зрителя, не теряла бы ближнюю пыль

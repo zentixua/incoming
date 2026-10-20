@@ -425,13 +425,18 @@ public final class SmokeGrid {
     }
 
     private static int quad(float[] v, int at, float ax, float ay, float bx, float by, int blob) {
-        float[] xs = {ax, bx, bx, ax, bx, ax}, ys = {ay, ay, by, ay, by, by};
-        for (int k = 0; k < 6; k++) {
-            v[3 * at] = xs[k];
-            v[3 * at + 1] = ys[k];
-            v[3 * at + 2] = blob;
-            at++;
-        }
-        return at;
+        at = vertex(v, at, ax, ay, blob);
+        at = vertex(v, at, bx, ay, blob);
+        at = vertex(v, at, bx, by, blob);
+        at = vertex(v, at, ax, ay, blob);
+        at = vertex(v, at, bx, by, blob);
+        return vertex(v, at, ax, by, blob);
+    }
+
+    private static int vertex(float[] v, int at, float x, float y, int blob) {
+        v[3 * at] = x;
+        v[3 * at + 1] = y;
+        v[3 * at + 2] = blob;
+        return at + 1;
     }
 }

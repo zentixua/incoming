@@ -506,14 +506,22 @@ public final class CloudModel {
      * волны, где давление ещё 20 кПа (Кинни–Грэхем; оценка), живёт {@link #condensationSeconds}: радиус, м; 0 — нет.
      */
     public double condensation() {
-        if (!ua.zentix.incoming.nuclear.model.CloudModel.wilsonCloud(air.humidity())) return 0;
-        return ua.zentix.incoming.nuclear.model.BlastModel.rangeForSurfaceOverpressure(20, source.tntKg());
+        if (condensationR < 0) {
+            condensationR = ua.zentix.incoming.nuclear.model.CloudModel.wilsonCloud(air.humidity())
+                    ? ua.zentix.incoming.nuclear.model.BlastModel.rangeForSurfaceOverpressure(20, source.tntKg()) : 0;
+        }
+        return condensationR;
     }
 
     /** Сколько живёт облако конденсации, с: 10 положительных фаз волны на его радиусе (оценка). */
     public double condensationSeconds() {
-        double r = condensation();
-        if (r <= 0) return 0;
-        return 10 * ua.zentix.incoming.nuclear.model.BlastModel.positivePhaseSeconds(r, source.tntKg() * 1e-6);
+        if (condensationLife < 0) {
+            double r = condensation();
+            condensationLife = r <= 0 ? 0 : 10 * ua.zentix.incoming.nuclear.model.BlastModel.positivePhaseSeconds(r, source.tntKg() * 1e-6);
+        }
+        return condensationLife;
     }
+
+    /** Радиус и жизнь облака конденсации — один раз (зовут каждый кадр); −1 — ещё не считались. */
+    private double condensationR = -1, condensationLife = -1;
 }

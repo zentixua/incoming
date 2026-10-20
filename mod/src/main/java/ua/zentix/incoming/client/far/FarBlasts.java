@@ -365,7 +365,8 @@ public final class FarBlasts {
 
         /**
          * Облако конденсации ({@link CloudModel#condensation}): оболочка капель на полусфере радиуса r за фронтом волны —
-         * кольцо клубов по полусфере, толщина — десятая радиуса; капли — водность 0,5 г/м³ (оценка), тают к концу жизни.
+         * кольцо клубов по полусфере, толщина — десятая радиуса, слой капель — пятая (оценка формы); капли — водность 0,5 г/м³
+         * (оценка), тают к концу жизни.
          */
         private void condensation(double t, double share, SmokeGrid.Sink out) {
             double r = model.condensation(), life = model.condensationSeconds();
