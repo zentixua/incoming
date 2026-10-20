@@ -20,7 +20,7 @@ import java.util.Locale;
  * ({@link SmokeGrid.Sink#segment}); свет пламени снизу — шаром в свободные места света сетки ({@link #lights}). Откуда
  * огонь — дело сервера (поджиг и горение не трогаются): дым идёт за тем, что горит. Шлейф растёт от очага со скоростью
  * ветра, а погасший очаг отпускает его: шлейф уходит по ветру и тает, как ушёл бы настоящий дым. Пакета нет: огонь
- * клиент видит сам.
+ * клиент видит сам. Пожары горящего ядерного подрыва — не здесь: их дым — огненный шторм ({@code FireStorm}).
  */
 public final class FireSmoke implements SmokeGrid.Source {
     /** Отрезков шлейфа: гуще у очага, где ось круче (места — квадратично по пути). */
@@ -71,6 +71,8 @@ public final class FireSmoke implements SmokeGrid.Source {
         double now = SmokeGrid.seconds(0);
         int pass = clock;
         FireWatch.forEachGroup((chunk, fx, fy, fz, n) -> {
+            // пожары ядерного подрыва дымят огненным штормом ({@code FireStorm}) — не здесь
+            if (ua.zentix.incoming.client.nuclear.ClientNuclear.stormFire(fx, fz)) return;
             FireSmoke f = FIRES.get(chunk);
             if (f == null || !Double.isNaN(f.end)) {
                 f = new FireSmoke(fx, fy, fz, n, now);

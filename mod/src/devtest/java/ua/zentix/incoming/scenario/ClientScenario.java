@@ -1673,7 +1673,7 @@ public final class ClientScenario {
         boolean salvo = !"smoke-column".equals(mode) && !fire, withPall = "smoke-salvo-pall".equals(mode);
         at(40, () -> {
             // дым над горящим домом — ночью: пламя светит на дым снизу
-            cmd(fire ? "time set 18000" : "time set 6000");
+            cmd(fire && !"day".equals(System.getenv("INCOMING_SMOKE_FIRE")) ? "time set 18000" : "time set 6000");
             cmd("weather clear");
             cmd("gamerule doDaylightCycle false");
             Minecraft.getInstance().options.hideGui = true;
@@ -1746,12 +1746,13 @@ public final class ClientScenario {
                             (int) target.y + 1, (int) target.z - 6, (int) target.x + 6, (int) target.y + 5, (int) target.z + 6));
                 }
             });
-            for (int s : new int[]{5, 15, 30, 60, 90}) shot(b + 20 * s, "smoke_fire_" + s + "s");
-            // издали: в 300 блоках против ветра и выше
-            at(b + 20 * 95, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", target.x - 150,
-                    target.y + 40, target.z - 260, target.x, target.y + 40, target.z)));
-            shot(b + 20 * 100, "smoke_fire_far_100s");
-            shot(b + 20 * 120, "smoke_fire_far_120s");
+            String light = "day".equals(System.getenv("INCOMING_SMOKE_FIRE")) ? "smoke_fire_day_" : "smoke_fire_";
+            for (int s : new int[]{5, 15, 30, 60, 90}) shot(b + 20 * s, light + s + "s");
+            // издали: в ~200 блоках и выше (чанки там уже есть — тот же край прорисовки)
+            at(b + 20 * 95, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", target.x - 80,
+                    target.y + 30, target.z - 180, target.x, target.y + 60, target.z)));
+            shot(b + 20 * 100, light + "far_100s");
+            shot(b + 20 * 120, light + "far_120s");
             at(b + 20 * 122, () -> {
                 Incoming.LOG.info("SCENARIO done");
                 Minecraft.getInstance().stop();

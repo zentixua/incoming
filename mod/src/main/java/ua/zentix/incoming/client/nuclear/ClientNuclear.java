@@ -371,6 +371,20 @@ public final class ClientNuclear {
         return DETONATIONS.isEmpty() && WARNINGS.isEmpty();
     }
 
+    /**
+     * Огонь в (x, z) — пожары горящего ядерного подрыва (как у звука горящего города, {@code NukeAfter}: в радиусе руин
+     * + 64 от эпицентра): их дым — огненный шторм ({@link FireStorm}), не дым обычных пожаров ({@code fx/FireSmoke}).
+     */
+    public static boolean stormFire(double x, double z) {
+        for (Active a : DETONATIONS.values()) {
+            if (!a.sounds.after.burning()) continue;
+            var b = a.d.burst();
+            double reach = a.d.ruinRadius() + 64;
+            if ((x - b.x) * (x - b.x) + (z - b.z) * (z - b.z) <= reach * reach) return true;
+        }
+        return false;
+    }
+
     public static Iterable<S2C.NukeWarning> warnings() {
         return WARNINGS.values();
     }
