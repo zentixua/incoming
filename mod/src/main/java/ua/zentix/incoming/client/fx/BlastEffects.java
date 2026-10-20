@@ -38,7 +38,8 @@ public final class BlastEffects {
      * дальше {@link FarBlasts#NEAR} ведёт {@link FarBlasts} (пакеты приходят до {@code far_range}).
      */
     public static void blast(S2C.Blast p) {
-        if (near(p.pos())) {
+        if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.byId(p.material()), p.seed(), BlastSource.of(p)));
+        else if (FarBlasts.near(p.pos())) {
             GroundMaterial mat = GroundMaterial.byId(p.material());
             switch (p.kind()) {
                 case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), BlastSource.of(p)));
@@ -55,16 +56,33 @@ public final class BlastEffects {
      * сбила — ещё и горящее топливо цели. Хлопок и лёгкая тряска — с фронтом. Дальше {@link FarBlasts#NEAR} — ничего: разрыв мал.
      */
     public static void intercept(S2C.Intercept p) {
-        if (near(p.pos())) Effects.add(new Airburst(p.pos(), p.seed(), p.kill()));
+        if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.STONE, p.seed(), BlastSource.air(Airburst.CHARGE_KG)));
+        else if (FarBlasts.near(p.pos())) Effects.add(new Airburst(p.pos(), p.seed(), p.kill()));
     }
 
     /**
-     * Ближе {@link FarBlasts#NEAR} к камере (частицы и звук) или к телу игрока: из камеры снаряда за километры волна
-     * у самого игрока всё равно бьёт по ушам и толкает ({@link BlastHit}).
+     * Камера далеко (камера снаряда), а тело игрока ближе {@link FarBlasts#NEAR}: картинку и звук ведёт {@link FarBlasts}
+     * у камеры, а волна у самого игрока всё равно бьёт по ушам и толкает ({@link Body}).
      */
-    private static boolean near(Vec3 pos) {
+    private static boolean bodyOnly(Vec3 pos) {
         Player player = Minecraft.getInstance().player;
-        return FarBlasts.near(pos) || player != null && player.getEyePosition().distanceTo(pos) <= FarBlasts.NEAR;
+        return !FarBlasts.near(pos) && player != null && player.getEyePosition().distanceTo(pos) <= FarBlasts.NEAR;
+    }
+
+    /** Только фронт у тела игрока ({@link BlastHit}): без картинки, звука и эха — их ведёт дальняя модель у камеры. */
+    static final class Body extends Timeline {
+        Body(Vec3 pos, GroundMaterial mat, long seed, BlastSource source) {
+            super(pos, mat, seed, source, false);
+        }
+
+        @Override
+        boolean run(ClientLevel level, int t) {
+            return t <= 60;
+        }
+
+        @Override
+        void arrive(ClientLevel level, int band) {
+        }
     }
 
     // ---------------------------------------------------------------- общее
@@ -90,12 +108,17 @@ public final class BlastEffects {
         private final OwnSources.Clock clock = BlastSounds.clock();
 
         Timeline(Vec3 pos, GroundMaterial mat, long seed, @Nullable BlastSource source) {
+            this(pos, mat, seed, source, true);
+        }
+
+        /** @param heard у камеры звучит (эхо ищет склоны); нет — только фронт у тела ({@link Body}) */
+        Timeline(Vec3 pos, GroundMaterial mat, long seed, @Nullable BlastSource source, boolean heard) {
             this.pos = pos;
             this.mat = mat;
             this.seed = seed;
             this.random = RandomSource.create(seed);
             this.source = source;
-            this.echoes = source == null ? null : BlastSounds.echoes(source, pos, seed, clock);
+            this.echoes = source == null || !heard ? null : BlastSounds.echoes(source, pos, seed, clock);
         }
 
         @Override
