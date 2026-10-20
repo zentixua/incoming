@@ -355,7 +355,7 @@ public final class FarFlightView {
         FlightTrack track = f.track;
         if (track.isDead()) return;
         // у сущности луч нужен только блику факела: без огня в этой фазе — не тратить его
-        if (!track.fromServer() && f.look.stage(FlightPhase.byId(track.phase(now - 1))).motor() == null) {
+        if (!track.fromServer() && !hasFlame(f, now - 1)) {
             f.sighted = false;
             return;
         }
@@ -376,6 +376,12 @@ public final class FarFlightView {
         f.sighted = true;
         f.vis += Mth.clamp(f.visTarget - f.vis, -FADE, FADE);
         f.open += Mth.clamp(f.openTarget - f.open, -FADE, FADE);
+    }
+
+    /** Горит ли у снаряда видимый факел в тике t (на его высоте). */
+    private static boolean hasFlame(Far f, long t) {
+        f.track.at(t, POS);
+        return f.look.stage(FlightPhase.byId(f.track.phase(t))).flame(POS[1]) != null;
     }
 
     /** Блоки мира клиента закрывают точку от глаза (луч до первого блока с формой для взгляда). */
