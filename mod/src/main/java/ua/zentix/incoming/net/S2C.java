@@ -14,6 +14,7 @@ import net.neoforged.neoforge.network.codec.NeoForgeStreamCodecs;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.Yield;
+import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.util.StreamCodecs;
 
@@ -29,15 +30,56 @@ public final class S2C {
     /**
      * Взрыв: вид (0 — шахед, 1 — ракета, 2 — бомба под землёй, 3 — снаряд РСЗО), грунт, высота поверхности над точкой, сид
      * и снаряд, который взорвался: его путь у клиента кончается в этот тик, и мотор звучит, пока до уха не дойдёт фронт
-     * взрыва, а не стихает раньше.
+     * взрыва, а не стихает раньше. {@code weapon} — {@code WeaponType.id} оружия, чей заряд взорвался: по паспорту клиент
+     * берёт заряд, остаток топлива и состав взрывчатки (картинка и звук по ним, {@code client.fx.BlastSource}); вид
+     * {@code kind} говорит только, как взрыв идёт (на поверхности, под землёй).
+     * <p>
+     * Формат только растёт с конца (replay.md): {@code weapon} дописан в конец пакета и в повторе, записанном до него,
+     * читается как {@link #UNKNOWN} — оружие тогда по виду ({@link #weaponType}).
      */
-    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile) implements CustomPacketPayload {
+    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) implements CustomPacketPayload {
         public static final int DRONE = 0, MISSILE = 1, BUNKER = 2, ROCKET = 3;
+        /** Оружие не названо (повтор до поля {@code weapon}). */
+        public static final int UNKNOWN = -1;
         public static final Type<Blast> TYPE = new Type<>(Incoming.id("blast"));
-        public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT, Blast::kind, StreamCodecs.VEC3, Blast::pos, ByteBufCodecs.VAR_INT, Blast::material,
-                ByteBufCodecs.FLOAT, Blast::surfaceY, ByteBufCodecs.VAR_LONG, Blast::seed,
-                ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC), Blast::projectile, Blast::new);
+        private static final StreamCodec<ByteBuf, Integer> WEAPON = StreamCodecs.trailing(ByteBufCodecs.VAR_INT, UNKNOWN);
+        public static final StreamCodec<ByteBuf, Blast> CODEC = new StreamCodec<>() {
+            @Override
+            public Blast decode(ByteBuf b) {
+                int kind = ByteBufCodecs.VAR_INT.decode(b);
+                Vec3 pos = StreamCodecs.VEC3.decode(b);
+                int material = ByteBufCodecs.VAR_INT.decode(b);
+                float surfaceY = ByteBufCodecs.FLOAT.decode(b);
+                long seed = ByteBufCodecs.VAR_LONG.decode(b);
+                Optional<UUID> projectile = ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC).decode(b);
+                return new Blast(kind, pos, material, surfaceY, seed, projectile, WEAPON.decode(b));
+            }
+
+            @Override
+            public void encode(ByteBuf b, Blast p) {
+                ByteBufCodecs.VAR_INT.encode(b, p.kind);
+                StreamCodecs.VEC3.encode(b, p.pos);
+                ByteBufCodecs.VAR_INT.encode(b, p.material);
+                ByteBufCodecs.FLOAT.encode(b, p.surfaceY);
+                ByteBufCodecs.VAR_LONG.encode(b, p.seed);
+                ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC).encode(b, p.projectile);
+                WEAPON.encode(b, p.weapon);
+            }
+        };
+
+        /**
+         * Оружие взрыва: названное пакетом, а в повторе до поля {@code weapon} — по виду (шахед, ракета, бомба, РСЗО; так
+         * их и рисовали до него).
+         */
+        public WeaponType weaponType() {
+            if (weapon != UNKNOWN) return WeaponType.byId(weapon);
+            return switch (kind) {
+                case MISSILE -> WeaponType.MISSILE;
+                case BUNKER -> WeaponType.BUNKER;
+                case ROCKET -> WeaponType.ROCKET;
+                default -> WeaponType.DRONE;
+            };
+        }
 
         @Override
         public Type<? extends CustomPacketPayload> type() {

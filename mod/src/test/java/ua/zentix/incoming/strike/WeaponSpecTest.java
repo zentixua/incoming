@@ -71,6 +71,24 @@ class WeaponSpecTest {
         assertEquals(29, glassRange(WeaponSpec.LOITER), 3);
     }
 
+    /**
+     * Топливо к удару — оценка из паспорта (ref/passport.md): у кого его нет (батарея, выгоревший двигатель, бомба), там
+     * 0; шахед — середина 10–50 кг бензина, ракета — 220–350 кг JP-10 по шару топлива; без наземного взрыва топлива нет.
+     */
+    @Test
+    void fuelAtImpactIsFromThePassport() {
+        assertEquals(30, WeaponSpec.DRONE.fuelAtImpact());
+        assertEquals(280, WeaponSpec.MISSILE.fuelAtImpact());
+        assertEquals(0, WeaponSpec.LOITER.fuelAtImpact());
+        assertEquals(0, WeaponSpec.ROCKET.fuelAtImpact());
+        for (WeaponType t : WeaponType.values()) {
+            WeaponSpec w = t.spec();
+            assertTrue(w.fuelAtImpact() >= 0, t::toString);
+            if (w.blast() == WeaponSpec.Blast.NONE) assertEquals(0, w.fuelAtImpact(), t::toString);
+            else assertTrue(w.charge() > 0, t::toString);
+        }
+    }
+
     private static double glassRange(WeaponSpec w) {
         return BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI), w.charge());
     }

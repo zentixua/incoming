@@ -246,8 +246,9 @@ final class NukeAfter {
             if (!d.fires() || trust < 0.2) continue;
             double y = FarTerrain.of(level).at((int) Math.floor(s.x()), (int) Math.floor(s.z()));
             if (Double.isNaN(y) || y <= level.getMinBuildHeight() + 1) y = d.groundY() + 1;
+            // не оружие, а то, что горит в городе: вид как у шахеда или ракеты (UNKNOWN — оружие по виду)
             BlastEffects.blast(new S2C.Blast(s.big() ? S2C.Blast.MISSILE : S2C.Blast.DRONE, new Vec3(s.x(), y + 0.5, s.z()),
-                    GroundMaterial.BRICK.ordinal(), (float) y, s.seed(), Optional.empty()));
+                    GroundMaterial.BRICK.ordinal(), (float) y, s.seed(), Optional.empty(), S2C.Blast.UNKNOWN));
             fired++;
         }
     }
