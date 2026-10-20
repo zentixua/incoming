@@ -7,6 +7,7 @@ import ua.zentix.incoming.client.sound.Acoustics;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.strike.Hearing;
 import ua.zentix.incoming.strike.WeaponType;
 
 import java.util.UUID;
@@ -23,10 +24,10 @@ import java.util.UUID;
  */
 public final class FlightTrack implements Acoustics.Path {
     /**
-     * Тиков истории: звук с самого дальнего слышимого снаряда (свист крылатой ракеты, {@link ua.zentix.incoming.strike.Hearing#WHISTLE} + FADE =
-     * 3080 блоков) идёт до уха ~180 тиков.
+     * Тиков истории: звук идёт до уха не дольше {@link Hearing#MAX_DELAY} (дальше {@link Hearing#RANGE} сервер путь не
+     * шлёт), и ещё запас на пакеты, которые доходят неровно.
      */
-    private static final int CAPACITY = 256;
+    private static final int CAPACITY = Hearing.MAX_DELAY + 64;
     /** Разрыв в данных длиннее — это уже другой полёт в поле слуха: история начинается заново. */
     private static final int MAX_GAP = 8;
 
@@ -45,6 +46,8 @@ public final class FlightTrack implements Acoustics.Path {
     /** Точка пути перед последней (от неё строится прямая до последней). */
     private long previous = -1;
     private long death = Long.MAX_VALUE;
+    /** Быстрее этого снаряд за всю историю не двигался, блоков/тик: по скорости и по сдвигу между тиками. */
+    private double maxSpeed;
     /**
      * На сколько тиков после последней записи звук ещё можно тянуть с неё: по сущности запись каждый тик, так что 1;
      * по пакетам — до следующего пакета (и тик на неровную доставку). Дальше данных нет (взорвался или ушёл из слуха) —
@@ -108,6 +111,11 @@ public final class FlightTrack implements Acoustics.Path {
 
     private void put(long tick, Sample s) {
         if (first < 0) first = tick;
+        if (last >= 0 && tick == last + 1 && tick > first) {
+            int j = (int) (last % CAPACITY);
+            maxSpeed = Math.max(maxSpeed, Math.sqrt(sq(s.pos.x - xs[j]) + sq(s.pos.y - ys[j]) + sq(s.pos.z - zs[j])));
+        }
+        maxSpeed = Math.max(maxSpeed, s.vel.length());
         last = tick;
         int i = (int) (tick % CAPACITY);
         xs[i] = s.pos.x;
@@ -169,6 +177,15 @@ public final class FlightTrack implements Acoustics.Path {
 
     public long lastTick() {
         return last;
+    }
+
+    @Override
+    public double maxSpeed() {
+        return maxSpeed;
+    }
+
+    private static double sq(double x) {
+        return x * x;
     }
 
     @Override
