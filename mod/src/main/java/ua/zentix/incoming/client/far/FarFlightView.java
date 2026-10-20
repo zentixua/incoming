@@ -347,8 +347,10 @@ public final class FarFlightView {
         Vec3 fwd = f.track.forward(t);
         if (!LaunchCloud.impinges(stage.motor(), NOZZLE[1] - ground, -fwd.y)) return;
         if (f.cloud == null || f.cloud.ended()) {
+            // верхний блок под соплом: грунт — его рыхлость и цвет; не грунт (бетон, гладкий камень, блоки модов) — пыли нет
             BlockPos at = BlockPos.containing(NOZZLE[0], ground - 0.5, NOZZLE[2]);
-            GroundMaterial mat = GroundMaterial.sample(lv, at);
+            GroundMaterial known = GroundMaterial.of(lv.getBlockState(at));
+            GroundMaterial mat = known != null ? known : GroundMaterial.STONE;
             Vec3 pos = new Vec3(NOZZLE[0], ground, NOZZLE[2]);
             // часы сетки на тике t пути: путь отстаёт от часов клиента на (now − t) тиков
             double seconds = SmokeGrid.seconds(0) - Math.max(0, FlightTracks.now() - t) / 20.0;
