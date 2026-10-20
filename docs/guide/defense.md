@@ -18,8 +18,7 @@ night a Shahed is heard about 2.5 km away, a Lancet only a few hundred blocks aw
 burning rocket motor many kilometres away. By day the warm ground bends sound upwards, and in rain the noise hides it,
 so you hear everything from closer. Sound travels at the speed of sound: a distant flash shows up before you hear the
 explosion, and you hear a fast projectile only shortly before it arrives. A projectile faster than sound is not heard
-until its shock wave reaches you: first comes the crack, then its own sound. Of today's weapons only the ICBM climbs
-that fast.
+until its shock wave reaches you: first comes the crack, then its own sound. None of today's weapons fly that fast.
 
 ## Cover
 

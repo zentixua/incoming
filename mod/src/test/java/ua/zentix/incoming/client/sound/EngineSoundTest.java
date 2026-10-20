@@ -218,6 +218,8 @@ class EngineSoundTest {
             }
             reached |= r;
         }
+        // за последней записью путь лишь дотянут по скорости — там хлопка нет
+        assertNull(Booms.crack(t, t.lastTick() + 1, EAR, NIGHT));
         // конус догоняет ухо, когда снаряд прошёл h·√(M² − 1) за ним
         double overhead = 3000 / v, expected = overhead + 100 * Math.sqrt(1.4 * 1.4 - 1) / v;
         assertEquals(expected, boomAt, 1.5, "N-волна на тике");
