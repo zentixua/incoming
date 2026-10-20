@@ -49,6 +49,13 @@
         { "name": "PallWall1", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
         { "name": "PallWilson0", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
         { "name": "PallWilson1", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
-        { "name": "PallExposure", "type": "float", "count": 1, "values": [1.0] }
+        { "name": "PallExposure", "type": "float", "count": 1, "values": [1.0] },
+        { "name": "SmokeCascade", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "SmokeMin", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
+        { "name": "SmokeMax", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
+        { "name": "SmokeNoise", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "SmokeWind", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 2.0] },
+        { "name": "SmokeBalls", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "SmokeBallLight", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] }
     ]
 }

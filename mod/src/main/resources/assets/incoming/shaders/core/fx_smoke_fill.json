@@ -1,0 +1,11 @@
+{
+    "vertex": "incoming:fx_smoke_fill",
+    "fragment": "incoming:fx_smoke_fill",
+    "samplers": [
+        { "name": "Sampler0" }
+    ],
+    "uniforms": [
+        { "name": "SmokeCorner", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+        { "name": "SmokeSlice", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] }
+    ]
+}

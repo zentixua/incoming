@@ -27,6 +27,7 @@ import org.lwjgl.opengl.GL33;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryUtil;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.client.nuclear.MushroomField;
 import ua.zentix.incoming.compat.FlashbackReplay;
 
@@ -376,6 +377,15 @@ public final class PallPass {
          * в пикселе мира, и вывод на кадр снимает его с цвета блока под светом шара.
          */
         public final Vector4f faceShade = new Vector4f(1, 0.5f, 0.8f, 0.6f);
+        /** Сетка дыма обычных взрывов этого кадра ({@code client/fx/smoke}); null — дыма нет. */
+        @Nullable
+        public SmokeGrid.Frame smoke;
+        /**
+         * Шум клубов дыма ({@code fx_pall}: {@code SmokeNoise}, {@code SmokeWind}) и огненные шары, что светят на дым
+         * ({@code SmokeBalls}, {@code SmokeBallLight}).
+         */
+        public final Vector4f smokeNoise = new Vector4f(), smokeWind = new Vector4f(0, 0, 0, 2);
+        public final Matrix4f smokeBalls = new Matrix4f().zero(), smokeBallLight = new Matrix4f().zero();
     }
 
     @Nullable
@@ -508,6 +518,7 @@ public final class PallPass {
         s.safeGetUniform("PallWilson0").set(front.wilson0.x, front.wilson0.y, front.wilson0.z, front.wilson0.w);
         s.safeGetUniform("PallWilson1").set(front.wilson1.x, front.wilson1.y, front.wilson1.z, front.wilson1.w);
         OpenAir.bind(s, drawn);
+        SmokePass.bind(s, drawn ? f.smoke : null);
     }
 
     /**
@@ -589,6 +600,10 @@ public final class PallPass {
         RenderSystem.disableBlend();
         RenderSystem.colorMask(true, true, true, true);
 
+        // сетка дыма обычных взрывов — до лучей (её читают все проходы)
+        SmokePass.begin();
+        if (f.smoke != null) SmokePass.fill(f.smoke);
+
         // 0. карта тени грибов от солнца — плитки грибов кадра одна над другой
         if (shade) {
             GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, shadowFbo);
@@ -645,7 +660,12 @@ public final class PallPass {
         m.safeGetUniform("PallWilson1").set(f.wilson1.x, f.wilson1.y, f.wilson1.z, f.wilson1.w);
         m.safeGetUniform("PallFloorFrom").set(f.floorFrom);
         m.safeGetUniform("PallExposure").set(f.exposure);
+        m.safeGetUniform("SmokeNoise").set(f.smokeNoise.x, f.smokeNoise.y, f.smokeNoise.z, f.smokeNoise.w);
+        m.safeGetUniform("SmokeWind").set(f.smokeWind.x, f.smokeWind.y, f.smokeWind.z, f.smokeWind.w);
+        m.safeGetUniform("SmokeBalls").set(f.smokeBalls);
+        m.safeGetUniform("SmokeBallLight").set(f.smokeBallLight);
         OpenAir.bind(m, open);
+        SmokePass.bind(m, f.smoke);
         quad(m, true);
 
         // 2. накопление: из прошлого накопленного — в другое
@@ -660,6 +680,7 @@ public final class PallPass {
         r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
         r.safeGetUniform("PallReproject").set(dx, dy, dz, history ? 1f : 0f);
         r.safeGetUniform("PallFrame").set(0f, 0f, factor, REPROJECT_MAX);
+        SmokePass.bind(r, f.smoke);
         quad(r, false);
         latest = next - 1;
 
@@ -704,6 +725,7 @@ public final class PallPass {
         c.safeGetUniform("PallOpenSky").set(f.openSky.x, f.openSky.y, f.openSky.z);
         c.safeGetUniform("PallFaceShade").set(f.faceShade.x, f.faceShade.y, f.faceShade.z, f.faceShade.w);
         OpenAir.bind(c, open);
+        SmokePass.bind(c, f.smoke);
         // пламя на поверхностях мерцает по трёхмерному шуму
         quad(c, true);
         RenderSystem.enableDepthTest();

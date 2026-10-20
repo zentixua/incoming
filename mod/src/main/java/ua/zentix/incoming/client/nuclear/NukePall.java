@@ -263,6 +263,53 @@ public final class NukePall {
     }
 
     /**
+     * Кадр прохода пелены без ядерки — для дыма обычных взрывов ({@code client/fx/smoke/BlastClouds}): воздух, солнце, небо,
+     * свет неба на экране и привыкание глаза — как у {@link #frame}; пелены, грибов, шаров, шторма, стены и воды нет (их
+     * числа — нули). Качество — как у грибов при выключенной пелене: не ниже LOW (дыма другого нет).
+     */
+    public static PallPass.Frame lightFrame(ClientLevel level, Vec3 eye, float partial) {
+        PallPass.Frame f = FRAME;
+        double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
+        Sight.Air a = Sight.Air.at(eye.y - ua.zentix.incoming.client.fx.layer.WaterDecal.SEA_LEVEL, range);
+        f.air.set((float) a.haze(), (float) a.clean(), (float) a.weather(), (float) (1 / Sight.HAZE_HEIGHT));
+        light(level, eye, partial, f);
+        openSky(level, f.openSky, f.faceShade);
+        java.util.Arrays.fill(f.mushrooms, 0f);
+        f.mushroomCount = 0;
+        f.balls.zero();
+        f.ballLight.zero();
+        f.ballsLit = false;
+        PallPass.Quality q = quality();
+        f.quality = q == PallPass.Quality.OFF ? PallPass.Quality.LOW : q;
+        f.slot0.zero();
+        f.slot1.zero();
+        f.glow0.zero();
+        f.glow1.zero();
+        f.hot0.zero();
+        f.hot1.zero();
+        f.ground0.clear();
+        f.ground1.clear();
+        f.water0.zero();
+        f.water1.zero();
+        f.wall0.zero();
+        f.wall1.zero();
+        f.wilson0.zero();
+        f.wilson1.zero();
+        f.fire0.clear();
+        f.fire1.clear();
+        f.fireMin.set(1);
+        f.fireMax.set(-1);
+        f.whirlPos.zero();
+        f.whirlShape.zero();
+        f.whirlLean.zero();
+        f.floorFrom = Math.max(16, Minecraft.getInstance().options.getEffectiveRenderDistance() * 16 - 24);
+        f.min.zero();
+        f.max.zero();
+        f.eyeDust.zero();
+        return f;
+    }
+
+    /**
      * Свет открытого неба на белом блоке, как его рисует Minecraft, на экране — в {@code out}: карта освещения кадра
      * (небо 15, свет блоков 0; время суток, яркость в настройках, зелья, измерение), и затенение граней блоков измерения
      * в {@code shade} (верх, низ, север и юг, запад и восток). По ним вывод на кадр узнаёт цвет мира под светом шара:

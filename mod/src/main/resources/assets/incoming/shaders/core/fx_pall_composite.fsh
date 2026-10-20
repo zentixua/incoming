@@ -2,6 +2,7 @@
 
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
+#moj_import <incoming:smoke.glsl>
 
 // Пелена — на кадр (client/fx/layer/PallPass): смешивание ONE, SRC_ALPHA — свет пелены плюс мир за ней, ослабленный
 // и в тени пелены и грибов. Кадр пелены мельче полного: из четырёх ближних его пикселей — с весом по сходству расстояния
@@ -93,7 +94,7 @@ vec4 pallOver(vec3 p) {
     return vec4(tau, w / n, g / n, mix(PALL_LAND, PALL_SEA, clamp(water / n, 0.0, 1.0)));
 }
 
-// Тень пелены и грибов на освещённом солнцем мире в точке p (от глаза): во сколько раз они над ней меняют свет на земле
+// Тень пелены, грибов и дыма взрывов (smokeSun: толща сетки к солнцу) на освещённом солнцем мире в точке p (от глаза): во сколько раз они над ней меняют свет на земле
 // против солнца и неба без них. Грибы — высоко над пеленой, свет проходит их первыми: карта тени даёт долю света солнца,
 // что они пропускают к точке, — прямой пучок сквозь их толщу и рассеянный ими вперёд с той долей, с которой облако
 // видно с земли (fx_mush_shadow; рассеянное вперёд приходит с неба у солнца — дальше оно идёт как пучок). Пелена — у
@@ -105,7 +106,7 @@ vec4 pallOver(vec3 p) {
 float shade(vec3 p, vec4 over) {
     if (PallSun.w <= 0.0) return 1.0;
     float mu = max(PallSun.y, 0.12), sun = PallSunLight.g, sky = PallSkyLight.g;
-    float beam = sun * mushShadow(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p), skyIn = sky;
+    float beam = sun * mushShadow(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p) * smokeSun(p, PallSun.xyz), skyIn = sky;
     float down = mu * beam + skyIn;
     if (over.x > 1e-5) {
         down = mu * beam * exp(-over.x / mu) + pallDiffuse(over.y, over.z, over.x, over.x, over.w, mu, beam, 1.0, 0.0, skyIn, 0.0, -0.6666667);

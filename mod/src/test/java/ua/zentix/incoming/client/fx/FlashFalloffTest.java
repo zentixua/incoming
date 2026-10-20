@@ -1,13 +1,18 @@
 package ua.zentix.incoming.client.fx;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.client.fx.smoke.CloudModel;
+import ua.zentix.incoming.strike.WeaponType;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FlashFalloffTest {
-    private static final double MISSILE_NEAR = BlastEffects.Missile.FLASH_NEAR, MISSILE_RANGE = BlastEffects.Missile.FLASH_RANGE;
-    private static final double DRONE_NEAR = BlastEffects.Drone.FLASH_NEAR, DRONE_RANGE = BlastEffects.Drone.FLASH_RANGE;
+    /** Вспышки ракеты и шахеда — по модели облака их заряда (шар продуктов детонации). */
+    private static final CloudModel MISSILE = new CloudModel(BlastSource.of(WeaponType.MISSILE), CloudModel.Air.STANDARD),
+            DRONE = new CloudModel(BlastSource.of(WeaponType.DRONE), CloudModel.Air.STANDARD);
+    private static final double MISSILE_NEAR = BlastEffects.flashNear(MISSILE), MISSILE_RANGE = BlastEffects.flashRange(MISSILE);
+    private static final double DRONE_NEAR = BlastEffects.flashNear(DRONE), DRONE_RANGE = BlastEffects.flashRange(DRONE);
 
     /** Вблизи, лицом к взрыву — полная сила (0.85), за преградой — 0.3. */
     @Test
@@ -17,11 +22,12 @@ class FlashFalloffTest {
         assertEquals(0.85f, FlashFalloff.strength(0, DRONE_NEAR, DRONE_RANGE, 1, true), 0.01f);
     }
 
-    /** Вплотную взрыв слепит, куда ни смотри: сбоку и за спиной у шахеда в 3 блоках — не меньше 0.75. */
+    /** Вплотную взрыв слепит, куда ни смотри: сбоку и за спиной у шахеда в его огненном шаре — не меньше 0.75. */
     @Test
     void blastAtHandBlindsWhateverTheView() {
-        assertEquals(0.85f * 0.8f + 0.85f * 0.2f * 0.5f, FlashFalloff.strength(3, DRONE_NEAR, DRONE_RANGE, -1, true), 0.01f);
-        assertTrue(FlashFalloff.strength(3, DRONE_NEAR, DRONE_RANGE, -1, true) >= 0.75f);
+        double at = 0.15 * DRONE_NEAR;
+        assertEquals(0.85f * (0.5f + 0.5f * (float) (1 - at / DRONE_NEAR)), FlashFalloff.strength(at, DRONE_NEAR, DRONE_RANGE, -1, true), 0.01f);
+        assertTrue(FlashFalloff.strength(at, DRONE_NEAR, DRONE_RANGE, -1, true) >= 0.75f);
         float prev = 0;
         for (double d = DRONE_NEAR; d >= 0; d -= 0.5) {
             float s = FlashFalloff.strength(d, DRONE_NEAR, DRONE_RANGE, 0, true);
