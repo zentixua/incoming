@@ -54,6 +54,8 @@ public final class Exhaust {
 
     private static final class State {
         Vec3 lastNozzle;
+        /** Тик игры, когда сопло было в {@link #lastNozzle}. */
+        long lastTick;
         /** Сопло на прошлом тике: с борта клубы кладутся с отставанием на тик (см. {@link #volume}). */
         Vec3 heldNozzle;
         /** Камера игрока — на этом снаряде (видео с борта). */
@@ -368,9 +370,12 @@ public final class Exhaust {
         Vec3 to = s.onboard ? held : nozzle;
         if (to == null) return;
         Vec3 from = s.lastNozzle == null || s.lastNozzle.distanceToSqr(to) > 80 * 80 ? to : s.lastNozzle;
+        long now = level.getGameTime(), ticks = Math.max(1, now - s.lastTick);
         s.lastNozzle = to;
+        s.lastTick = now;
         if (trail == null || from.distanceToSqr(to) < 1e-6) return;
-        Fx.Spec puff = puff(trail, from.distanceTo(to) * 20, to.y);
+        // отрезок бывает и за несколько тиков (тик без пакета сервера): скорость — путь на тики
+        Fx.Spec puff = puff(trail, from.distanceTo(to) * 20 / ticks, to.y);
         if (puff == null) return;
         puff.budget(FxBudget.TRAIL).smooth().chain(to.x - from.x, to.y - from.y, to.z - from.z, from.distanceTo(to) / VOLUME_PUFFS_PER_TICK);
         for (int i = 0; i < VOLUME_PUFFS_PER_TICK; i++) {

@@ -126,8 +126,9 @@ public final class TrailModel {
     }
 
     /**
-     * Вид точки, рождённой на высоте y мира, в возрасте age секунд: out[0] — видимая ширина, м; out[1] — непрозрачность;
-     * out[2] — подъём, м; out[3] — отражение густого дыма (линейно, {@link Smoke#reflectance}).
+     * Вид точки, рождённой на высоте y мира, в возрасте age секунд: out[0] — ширина на половине непрозрачности середины, м;
+     * out[1] — непрозрачность середины; out[2] — подъём, м; out[3] — отражение густого дыма (линейно,
+     * {@link Smoke#reflectance}).
      */
     public static void look(Trail t, double age, double inverseSpeed, double iceLife, double wind, double y, Air air, double[] out) {
         double n = air.brunt();

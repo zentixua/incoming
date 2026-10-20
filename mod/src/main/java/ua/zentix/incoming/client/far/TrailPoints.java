@@ -34,6 +34,8 @@ final class TrailPoints {
      * ({@code TrailModel.excess}, {@code riseScale}): кадр их не пересчитывает.
      */
     final float[] excess = new float[CAPACITY], rise = new float[CAPACITY], brunt = new float[CAPACITY];
+    /** Класс устойчивости при рождении: по нему посчитан срок жизни — по нему и расплывание. */
+    final float[] stability = new float[CAPACITY];
     /** Номер предыдущей точки той же ленты или {@link #NONE}. */
     final long[] prev = new long[CAPACITY];
     /**
@@ -53,13 +55,14 @@ final class TrailPoints {
 
     /**
      * Новая точка ленты: prev — предыдущая точка той же ленты ({@link #NONE} — лента начинается здесь); что закон следа
-     * дал ей при рождении: inverse — секунды на метр, life и ice — тики, wind — м/с, excess — кг/м³, rise — м, brunt — 1/с.
+     * дал ей при рождении: inverse — секунды на метр, life и ice — тики, wind — м/с, excess — кг/м³, rise — м, brunt — 1/с, stability — класс.
      *
      * @return номер записи
      */
     long add(double x, double y, double z, long birth, Trail style, int light, int owner, long prev, float inverse, float life, float ice,
-             float wind, float excess, float rise, float brunt) {
+             float wind, float excess, float rise, float brunt, float stability) {
         int i = index(next);
+        this.stability[i] = stability;
         this.excess[i] = excess;
         this.rise[i] = rise;
         this.brunt[i] = brunt;

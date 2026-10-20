@@ -23,9 +23,9 @@ class TrailPointsTest {
     @Test
     void pointsMeltByTheirOwnLifetime() {
         TrailPoints p = new TrailPoints();
-        long a = p.add(0, 0, 0, 100, STYLE, 0, 1, TrailPoints.NONE, 0, SHORT, 0, 0, 0, 0, 0);
-        long b = p.add(1, 0, 0, 100, STYLE, 0, 2, TrailPoints.NONE, 0, LONG, 0, 0, 0, 0, 0);
-        long c = p.add(2, 0, 0, 101, STYLE, 0, 1, a, 0, SHORT, 0, 0, 0, 0, 0);
+        long a = p.add(0, 0, 0, 100, STYLE, 0, 1, TrailPoints.NONE, 0, SHORT, 0, 0, 0, 0, 0, 0);
+        long b = p.add(1, 0, 0, 100, STYLE, 0, 2, TrailPoints.NONE, 0, LONG, 0, 0, 0, 0, 0, 0);
+        long c = p.add(2, 0, 0, 101, STYLE, 0, 1, a, 0, SHORT, 0, 0, 0, 0, 0, 0);
         p.expire(139);
         assertTrue(p.holds(a) && p.holds(c), "короткий ещё жив");
         p.expire(140);
@@ -41,7 +41,7 @@ class TrailPointsTest {
     void frozenWorldStopsAgeing() {
         // /tick freeze на 30 тиков: точка 100-го тика тает к 170-му, а не к 140-му
         TrailPoints p = new TrailPoints();
-        long a = p.add(0, 0, 0, 100, STYLE, 0, 1, TrailPoints.NONE, 0, SHORT, 0, 0, 0, 0, 0);
+        long a = p.add(0, 0, 0, 100, STYLE, 0, 1, TrailPoints.NONE, 0, SHORT, 0, 0, 0, 0, 0, 0);
         for (int i = 0; i < 30; i++) p.hold();
         p.expire(169);
         assertTrue(p.holds(a), "в заморозке не стареет");
@@ -52,13 +52,13 @@ class TrailPointsTest {
     @Test
     void finishedRibbonEndsUntilThePathResumes() {
         TrailPoints p = new TrailPoints();
-        long a = p.add(0, 0, 0, 0, STYLE, 0, 1, TrailPoints.NONE, 0, LONG, 0, 0, 0, 0, 0);
-        long b = p.add(1, 0, 0, 4, STYLE, 0, 1, a, 0, LONG, 0, 0, 0, 0, 0);
+        long a = p.add(0, 0, 0, 0, STYLE, 0, 1, TrailPoints.NONE, 0, LONG, 0, 0, 0, 0, 0, 0);
+        long b = p.add(1, 0, 0, 4, STYLE, 0, 1, a, 0, LONG, 0, 0, 0, 0, 0, 0);
         p.finish(b);
         assertTrue(p.last[TrailPoints.index(b)], "лента кончилась: там сходит на нет");
         assertFalse(p.last[TrailPoints.index(a)]);
         // путь снова есть — лента продолжилась, прошлый конец больше не конец
-        long c = p.add(2, 0, 0, 8, STYLE, 0, 1, b, 0, LONG, 0, 0, 0, 0, 0);
+        long c = p.add(2, 0, 0, 8, STYLE, 0, 1, b, 0, LONG, 0, 0, 0, 0, 0, 0);
         assertFalse(p.last[TrailPoints.index(b)]);
         assertFalse(p.last[TrailPoints.index(c)]);
         p.finish(TrailPoints.NONE);
@@ -69,7 +69,7 @@ class TrailPointsTest {
         TrailPoints p = new TrailPoints();
         long prev = TrailPoints.NONE, firstLink = TrailPoints.NONE;
         for (int i = 0; i < TrailPoints.CAPACITY + 10; i++) {
-            prev = p.add(i, 0, 0, i, STYLE, 0, 1, prev, 0, LONG, 0, 0, 0, 0, 0);
+            prev = p.add(i, 0, 0, i, STYLE, 0, 1, prev, 0, LONG, 0, 0, 0, 0, 0, 0);
             if (i == 10) firstLink = prev;
         }
         assertEquals(10, p.first(), "затёрты десять самых старых");
@@ -83,8 +83,8 @@ class TrailPointsTest {
     @Test
     void cancelledFlightTrailVanishesAtOnce() {
         TrailPoints p = new TrailPoints();
-        long a = p.add(0, 0, 0, 0, STYLE, 0, 7, TrailPoints.NONE, 0, LONG, 0, 0, 0, 0, 0);
-        long b = p.add(0, 0, 0, 0, STYLE, 0, 8, TrailPoints.NONE, 0, LONG, 0, 0, 0, 0, 0);
+        long a = p.add(0, 0, 0, 0, STYLE, 0, 7, TrailPoints.NONE, 0, LONG, 0, 0, 0, 0, 0, 0);
+        long b = p.add(0, 0, 0, 0, STYLE, 0, 8, TrailPoints.NONE, 0, LONG, 0, 0, 0, 0, 0, 0);
         p.kill(7);
         assertNull(p.style[TrailPoints.index(a)]);
         assertNotNull(p.style[TrailPoints.index(b)], "чужой шлейф остаётся");

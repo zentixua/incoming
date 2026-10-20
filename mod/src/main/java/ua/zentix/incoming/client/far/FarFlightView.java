@@ -335,7 +335,7 @@ public final class FarFlightView {
             double brunt = air.brunt();
             f.chain[k] = points.add(POS[0], POS[1], POS[2], t, style, light.at(POS[0], POS[1], POS[2]), f.owner, f.chain[k], (float) inv,
                     (float) (BIRTH[0] * 20), (float) (BIRTH[1] * 20), (float) u, (float) TrailModel.excess(POS[1], air),
-                    (float) TrailModel.riseScale(style, inv, brunt), (float) brunt);
+                    (float) TrailModel.riseScale(style, inv, brunt), (float) brunt, (float) air.stability());
         }
         f.chainTick = t;
         f.started = true;
@@ -412,7 +412,7 @@ public final class FarFlightView {
         flames = 0;
         flameOf = null;
         Arrays.fill(COUNT, 0);
-        double t = FlightTracks.now() - 1 + (frozen() ? 0 : view.partial()), stability = air.stability();
+        double t = FlightTracks.now() - 1 + (frozen() ? 0 : view.partial());
         Vec3 cam = view.camera();
         for (long s = POINTS.first(), end = POINTS.end(); s < end; s++) {
             int i = TrailPoints.index(s);
@@ -421,7 +421,7 @@ public final class FarFlightView {
             double age = Math.max(0, t - POINTS.birth[i]);
             if (age >= POINTS.life[i]) continue;
             TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i], POINTS.brunt[i],
-                    stability, LOOK);
+                    POINTS.stability[i], LOOK);
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
             end(LOOK, POINTS.x[i] + air.wind().x() * drift - cam.x, POINTS.y[i] + LOOK[2] - cam.y, POINTS.z[i] + air.wind().z() * drift - cam.z,
                     POINTS.light[i], view, i);
@@ -445,7 +445,7 @@ public final class FarFlightView {
                     track.offset(t, f.nozzles.get(j), NOZZLE);
                     int ci = TrailPoints.index(c);
                     TrailModel.look(trail, 0, POINTS.inverse[ci], POINTS.ice[ci] / 20, POINTS.wind[ci], POINTS.excess[ci], POINTS.rise[ci],
-                            POINTS.brunt[ci], stability, LOOK);
+                            POINTS.brunt[ci], POINTS.stability[ci], LOOK);
                     end(LOOK, NOZZLE[0] - cam.x, NOZZLE[1] - cam.y, NOZZLE[2] - cam.z, POINTS.light[ci], view, HEAD + j);
                     segment(out, TrailPoints.index(c), HEAD + j);
                 }
