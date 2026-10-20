@@ -36,6 +36,8 @@ final class TrailPoints {
     final float[] excess = new float[CAPACITY], rise = new float[CAPACITY], brunt = new float[CAPACITY];
     /** Класс устойчивости при рождении: по нему посчитан срок жизни — по нему и расплывание. */
     final float[] stability = new float[CAPACITY];
+    /** Облако старта, которому принадлежит вещество точки (струя тогда била в землю); null — след. */
+    final ua.zentix.incoming.client.fx.smoke.LaunchCloud[] cloud = new ua.zentix.incoming.client.fx.smoke.LaunchCloud[CAPACITY];
     /** Номер предыдущей точки той же ленты или {@link #NONE}. */
     final long[] prev = new long[CAPACITY];
     /**
@@ -78,6 +80,7 @@ final class TrailPoints {
         this.style[i] = style;
         this.owner[i] = owner;
         this.prev[i] = prev;
+        cloud[i] = null;
         last[i] = false;
         // лента продолжилась (путь снова есть) — прошлый конец уже не конец
         if (holds(prev)) last[index(prev)] = false;
@@ -116,6 +119,7 @@ final class TrailPoints {
             int i = index(first);
             if (style[i] != null && now - birth[i] < life[i]) return;
             style[i] = null;
+            cloud[i] = null;
             first++;
         }
     }
@@ -135,6 +139,7 @@ final class TrailPoints {
 
     void clear() {
         Arrays.fill(style, null);
+        Arrays.fill(cloud, null);
         first = next;
     }
 }

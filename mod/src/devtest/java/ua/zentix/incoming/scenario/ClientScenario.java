@@ -3355,7 +3355,17 @@ public final class ClientScenario {
         });
         at(1500, () -> cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 12 12 at %.1f %.1f %.1f", target.x, target.y, target.z)));
         for (int t = 1510; t <= 1900; t += 8) shot(t, "rocket_view");
-        at(1910, () -> {
+        // третий залп — сбоку от пусковой: облако старта (продукты, пока струя бьёт в землю, и поднятая пыль) и начало следов
+        at(1905, () -> {
+            var mc = Minecraft.getInstance();
+            var near = mc.level.getEntitiesOfClass(ua.zentix.incoming.entity.LauncherEntity.class, mc.player.getBoundingBox().inflate(200));
+            Vec3 pad = near.isEmpty() ? new Vec3(13, 204, -19) : near.getFirst().position();
+            Incoming.LOG.info("SCENARIO rocket pad at {}", xyz(pad));
+            cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", pad.x - 32, pad.y + 6, pad.z - 14, pad.x, pad.y + 4, pad.z));
+        });
+        at(1925, () -> cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 12 12 at %.1f %.1f %.1f", target.x, target.y, target.z)));
+        for (int t = 1935; t <= 2335; t += 10) shot(t, "rocket_pad");
+        at(2345, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });

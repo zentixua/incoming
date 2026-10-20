@@ -64,6 +64,8 @@ public final class FireWatch {
                 cursor = 0;
                 phase = (phase + 1) % SAMPLE;
                 prune(lvl);
+                // окно — только в круге обхода: огонь за ним не пересматривается и не гас бы
+                WINDOW.keySet().removeIf(c -> Math.abs(ChunkPos.getX(c) - cx) > radius || Math.abs(ChunkPos.getZ(c) - cz) > radius);
             }
             int x = cx - radius + i % side, z = cz - radius + i / side;
             LevelChunk chunk = lvl.getChunkSource().getChunk(x, z, false);

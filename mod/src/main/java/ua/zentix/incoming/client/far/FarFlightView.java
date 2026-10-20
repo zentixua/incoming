@@ -68,8 +68,9 @@ import java.util.Map;
  * взорвался. Мест частиц она не занимает: залп в сотни ракет не рвёт следы. Свет — карта освещения мира в точке
  * (вне загруженного мира — открытое небо). В сетке дыма у глаза ({@link SmokeGrid}) след — объём той же массы и того же
  * расплывания ({@link TrailSmoke}): точке — доля объёма по краю сетки и по тому, разрешает ли клетка каскада её сечение
- * ({@link SmokeGrid#resolved}), ленте — остальная толща. Пока струя бьёт в землю ({@link LaunchCloud#impinges}),
- * продукты двигателя — облако старта ({@link LaunchCloud}), а не лента.</li>
+ * ({@link SmokeGrid#resolved}), ленте — остальная толща. Пока струя ускорителя бьёт в землю
+ * ({@link LaunchCloud#impinges}), продукты двигателя — облако старта ({@link LaunchCloud}): точки ленты тех тиков несут
+ * только ту долю облака, что объём не рисует ({@link LaunchCloud#shown}).</li>
  * <li>За рельефом дальше прорисовки (ближе закрывает глубина) — луч {@link Sightline} раз в {@link #SIGHT_PERIOD}
  * тика: корпус и факел плавно гаснут.</li>
  * </ul>
@@ -294,7 +295,8 @@ public final class FarFlightView {
             FlightPhase phase = FlightPhase.byId(track.phase(t));
             ClientWeaponSpec.Stage stage = f.look.stage(phase);
             f.impinging = false;
-            if (launch != null && stage.motor() != null) launch.at(f, t, stage);
+            // облако старта — только на старте (горит ускоритель): струя маршевого у склона — не старт
+            if (launch != null && stage.motor() != null && phase.boosterLit()) launch.at(f, t, stage);
             Trail style = stage.trail();
             boolean booster = phase.boosterLit() && f.airframe.boosterNozzle() != null;
             if (style != f.style || style != null && booster != f.booster) {
@@ -330,8 +332,9 @@ public final class FarFlightView {
     }
 
     /**
-     * Облако старта в тике пути t: струя двигателя фазы бьёт в землю раньше своей длины Мортона — продукты за тик идут в
-     * облако ({@link LaunchCloud#feed}), и точек ленты в этом тике нет. Земля — карта высот чанка клиента, вне чанков —
+     * Облако старта в тике пути t (горит ускоритель): струя двигателя фазы бьёт в землю раньше своей длины Мортона —
+     * продукты за тик идут в облако ({@link LaunchCloud#feed}), а точки ленты этого тика — его ({@code TrailPoints.cloud}).
+     * Земля — карта высот чанка клиента, вне чанков —
      * рельеф дальней картинки; неизвестна — облака нет. Сопло — фазы (ускоритель или маршевое), струя — назад по оси.
      */
     private static void launch(Far f, long t, ClientWeaponSpec.Stage stage) {
@@ -386,7 +389,7 @@ public final class FarFlightView {
             double u = air.speed(POS[1]), inv = TrailModel.inverseSpeed(speed, u);
             if (TrailModel.laid(speed, u)) TrailModel.birth(style, inv, POS[1], u, air, BIRTH);
             else BIRTH[0] = 0;
-            if (BIRTH[0] <= 0 || f.impinging) {
+            if (BIRTH[0] <= 0) {
                 points.finish(f.chain[k]);
                 f.chain[k] = TrailPoints.NONE;
                 continue;
@@ -395,6 +398,8 @@ public final class FarFlightView {
             f.chain[k] = points.add(POS[0], POS[1], POS[2], t, style, light.at(POS[0], POS[1], POS[2]), f.owner, f.chain[k], (float) inv,
                     (float) (BIRTH[0] * 20), (float) (BIRTH[1] * 20), (float) u, (float) TrailModel.excess(POS[1], air),
                     (float) TrailModel.riseScale(style, inv, brunt), (float) brunt, (float) air.stability());
+            // струя бьёт в землю: вещество точки — облака старта (лента рисует ту его долю, что не в объёме)
+            points.cloud[TrailPoints.index(f.chain[k])] = f.impinging ? f.cloud : null;
         }
         f.chainTick = t;
         f.started = true;
@@ -503,7 +508,8 @@ public final class FarFlightView {
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
             double x = POINTS.x[i] + air.wind().x() * drift, y = POINTS.y[i] + lift, z = POINTS.z[i] + air.wind().z() * drift;
             double dx = x - eye.x, dy = y - eye.y, dz = z - eye.z;
-            double edge = SmokeGrid.volumeShare(dx, dy, dz);
+            // точка облака старта: её вещество — в облаке, не в объёме следа
+            double edge = POINTS.cloud[i] != null ? 0 : SmokeGrid.volumeShare(dx, dy, dz);
             float cell = edge > 0 ? SmokeGrid.cellFor(CORNERS, x, y, z, 0, 0, 0, sigma, sigma) : 0;
             double share = edge * SmokeGrid.resolved(sigma, cell);
             SHARE[i] = (float) share;
@@ -581,9 +587,11 @@ public final class FarFlightView {
             double age = Math.max(0, t - POINTS.birth[i]);
             if (age >= POINTS.life[i]) continue;
             // доля объёма в сетке дыма — её; ленте — остальная толща (масса × (1 − доля))
-            double volume = SHARE_AT[i] == TrailSmoke.frame && TrailSmoke.volume(POINTS.owner[i]) ? SHARE[i] : 0;
-            TrailModel.look(style, age / 20, POINTS.inverse[i] * (1 - volume), POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i],
-                    POINTS.brunt[i], POINTS.stability[i], LOOK);
+            // точка в облаке старта — его доля в объёме; иначе — доля объёма следа
+            LaunchCloud pad = POINTS.cloud[i];
+            double volume = pad != null ? pad.shown() : SHARE_AT[i] == TrailSmoke.frame && TrailSmoke.volume(POINTS.owner[i]) ? SHARE[i] : 0;
+            TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i],
+                    POINTS.brunt[i], POINTS.stability[i], 1 - volume, LOOK);
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
             end(LOOK, POINTS.x[i] + air.wind().x() * drift - cam.x, POINTS.y[i] + LOOK[2] - cam.y, POINTS.z[i] + air.wind().z() * drift - cam.z,
                     POINTS.light[i], view, i);

@@ -46,6 +46,17 @@ public final class LaunchCloud implements SmokeGrid.Source {
     private double life;
     private final double[] matter = new double[2];
     private boolean gone;
+    /** Тепло, с которым термик построен последний раз, и начало подачи — для пересборки ({@link #REBUILD}). */
+    private double builtHeat;
+    /** Доля облака в объёме сетки в этом кадре и легло ли оно в сетку ({@link #shown}). */
+    private double share;
+    private boolean inGrid;
+
+    /**
+     * Термик пересобирается, когда тепло выросло с прошлой сборки в столько раз: высота ∝ Q^¼ — ошибка подъёма ≤ 6 %
+     * (сборка — тысячи шагов РК4; у МБР подача — сотни тиков); после подачи — по всему теплу ({@link #emit}).
+     */
+    static final double REBUILD = 1.25;
 
     /**
      * @param groundY высота земли у пусковой
@@ -107,10 +118,28 @@ public final class LaunchCloud implements SmokeGrid.Source {
         sumZ += q * (z + jz * l);
         sumT += q * dT;
         sumR += q * (SPREAD * l + motor.exitRadius());
+        if (thermal == null || heat >= REBUILD * builtHeat) build();
+        return true;
+    }
+
+    /** Термик по всему поданному теплу. */
+    private void build() {
         double t0 = CloudModel.T_AIR + sumT / heat;
         thermal = new Thermal(Thermal.buoyancy(heat), CloudModel.G * (1 - CloudModel.T_AIR / t0), Math.max(0.5, sumR / heat), air);
+        builtHeat = heat;
         life = lifeSeconds();
-        return true;
+    }
+
+    /** Доля облака, что рисует объём сетки в этом кадре (остальное — лента его точек, {@code FarFlightView}). */
+    public double shown() {
+        // растаявшее облако унесло и вещество своих точек
+        if (ended()) return 1;
+        return inGrid && SmokeGrid.on() ? share : 0;
+    }
+
+    @Override
+    public void placed(boolean inGrid) {
+        this.inGrid = inGrid;
     }
 
     /** Облако что-то получило. */
@@ -182,11 +211,16 @@ public final class LaunchCloud implements SmokeGrid.Source {
     public boolean emit(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
         if (thermal == null) return true;
+        if (heat > builtHeat) build();
         double t = Math.max(0, seconds - born);
         if (t >= life) return false;
         // облако, что дожило до предела густым, уходит за последнюю десятую жизни (как облако взрыва)
         double fade = life < CloudModel.LIFE_MAX ? 1 : Math.min(1, (life - t) / (0.1 * life));
         double cx = sumX / heat + thermal.driftX(t), cz = sumZ / heat + thermal.driftZ(t), cy = groundY + thermal.height(t);
+        // доля объёма — по месту облака у глаза (как у облака взрыва): дальше края сетки его вещество несёт лента
+        share = SmokeGrid.volumeShare(cx - SmokeGrid.eyeX(), cy - SmokeGrid.eyeY(), cz - SmokeGrid.eyeZ());
+        fade *= share;
+        if (fade <= 0) return true;
         double cloudDust = CloudModel.CLOUD_SHARE * dust * DustModel.aloft(t, thermal.height(t)) * fade;
         out.blob(cx, cy, cz, thermal.sigmaH(t), thermal.sigmaV(t), soot * fade, cloudDust, water * fade, dustR, dustG, dustB,
                 thermal.kelvin(t), thermal.rise(t));

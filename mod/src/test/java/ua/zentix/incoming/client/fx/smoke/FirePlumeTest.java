@@ -51,4 +51,25 @@ class FirePlumeTest {
         // у очага горячо, выше — воздух
         assertTrue(p.excess(1) > 100 && p.excess(50) < 10, p.excess(1) + " " + p.excess(50));
     }
+
+    /**
+     * Дым в воздухе несёт силу очага в миг выхода: история — значение между записями по прямой, у ослабевшего очага дым
+     * на пути x — прежний (x/u секунд назад), а не нынешний; и после того, как буфер обошёл круг.
+     */
+    @Test
+    void smokeKeepsTheStrengthItLeftWith() {
+        History h = new History(8);
+        assertEquals(0, h.at(5), 0);
+        for (int t = 0; t < 20; t++) h.record(t, t < 10 ? 200 : 10);
+        assertEquals(10, h.at(19), 0);
+        assertEquals(10, h.at(30), 0, "позже последней — последняя");
+        assertEquals(10, h.at(3), 0, "буфер помнит последние 8 записей: раньше первой из них — первая");
+        // очаг 200 блоков 10 с, потом 10: в ветре 4 м/с дым в 30 м от очага через 12 с — ещё от 200 блоков
+        History fire = new History(64);
+        for (int t = 0; t <= 12; t++) fire.record(t, t < 10 ? 200 : 10);
+        assertEquals(105, fire.at(9.5), 1e-9, "между записями — по прямой");
+        double u = 4;
+        assertEquals(200, fire.at(12 - 30 / u), 1e-9);
+        assertEquals(10, fire.at(12 - 4 / u), 1e-9);
+    }
 }

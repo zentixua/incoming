@@ -234,8 +234,27 @@ public final class SmokeGrid {
     private static final double[] STAGE_BLOBS = new double[STAGED * STAGE];
     private static int staged;
 
+    /** Глаз кадра, что сейчас раскладывается (источники берут его в {@link Source#emit}). */
+    private static double frameX, frameY, frameZ;
+
+    /** Глаз кадра сетки (x, y, z) — у источников в {@link Source#emit} и после. */
+    public static double eyeX() {
+        return frameX;
+    }
+
+    public static double eyeY() {
+        return frameY;
+    }
+
+    public static double eyeZ() {
+        return frameZ;
+    }
+
     /** То же для своего списка источников и кадра (юнит-тест). */
     static void build(List<Source> sources, Frame f, double eyeX, double eyeY, double eyeZ, double seconds) {
+        frameX = eyeX;
+        frameY = eyeY;
+        frameZ = eyeZ;
         f.count = 0;
         Arrays.fill(f.min, Float.MAX_VALUE);
         Arrays.fill(f.max, -Float.MAX_VALUE);
@@ -389,7 +408,7 @@ public final class SmokeGrid {
      */
     public static double line(double a, double q) {
         if (a < LINE_POINT) return Math.exp(-0.5 * q * q);
-        return Math.sqrt(Math.PI / 2) / (2 * a) * (erf((a - q) / Math.sqrt(2)) + erf((a + q) / Math.sqrt(2)));
+        return Math.sqrt(Math.PI / 2) / (2 * a) * Math.max(0, erf((a - q) / Math.sqrt(2)) + erf((a + q) / Math.sqrt(2)));
     }
 
     /** Короче этого (в σ) отрезок — точка: разность erf у коротких теряет точность в половинной точности шейдера. */

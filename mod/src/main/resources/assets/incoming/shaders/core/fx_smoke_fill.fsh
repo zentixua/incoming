@@ -44,7 +44,8 @@ float smokeLine(vec3 q, vec3 a) {
     vec3 u = a / len;
     float along = dot(q, u);
     float across = dot(q, q) - along * along;
-    return exp(-0.5 * max(across, 0.0)) * 1.2533141 / (2.0 * len) * (smokeErf((len - along) * 0.70710678) + smokeErf((len + along) * 0.70710678));
+    // далеко по оси разность erf уходит в ошибку приближения (1,5·10⁻⁷) — не ниже нуля
+    return exp(-0.5 * max(across, 0.0)) * 1.2533141 / (2.0 * len) * max(0.0, smokeErf((len - along) * 0.70710678) + smokeErf((len + along) * 0.70710678));
 }
 
 void main() {
