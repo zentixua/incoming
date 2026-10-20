@@ -7,13 +7,17 @@
 // Страница 0: ослабление сажи, пыли и капель (1/блок) и Σ ослабление × ΔT (кК); страница 1: Σ ослабление пыли × её
 // альбедо ω' (rgb) и Σ ослабление × подъём (блоков/с). Каскад c (столбец c SmokeCascade): угол от глаза (xyz) и клетка
 // (w); у каждого каскада свои клубы — плотность в точке — сумма каскадов, где она есть. SmokeCascade[3].x — 1, если
-// сетка в этом кадре заполнена.
+// сетка в этом кадре заполнена. Коробка каскада c (SmokeLo[c], SmokeHi[c]: от глаза, w у SmokeLo — 1, если в каскаде
+// есть клубы) — где его клубы (три σ) внутри каскада: вне её каскад пуст, и ни выборок, ни шагов по клетке там нет.
 
 uniform sampler3D SmokeGrid;
 uniform mat4 SmokeCascade;
 // рамка всего дыма от глаза
 uniform vec3 SmokeMin;
 uniform vec3 SmokeMax;
+// коробки каскадов от глаза (столбец c)
+uniform mat4 SmokeLo;
+uniform mat4 SmokeHi;
 
 const int SMOKE_N = 64;
 const int SMOKE_CASCADES = 3;
@@ -30,16 +34,20 @@ bool smokeOn() {
     return SmokeCascade[3].x > 0.5;
 }
 
-// Страница page (0 или 1) сетки в точке p (от глаза): сумма каскадов, в которых точка есть; у края каскада — по крайней
-// клетке (клубы каскада до края не доходят: SmokeGrid кладёт клуб в каскад, только если он там весь)
+// Точка p (от глаза) в коробке клубов каскада c
+bool smokeIn(vec3 p, int c) {
+    return SmokeLo[c].w > 0.5 && all(greaterThanEqual(p, SmokeLo[c].xyz)) && all(lessThanEqual(p, SmokeHi[c].xyz));
+}
+
+// Страница page (0 или 1) сетки в точке p (от глаза): сумма каскадов, в чьих коробках точка есть; у края каскада — по
+// крайней клетке (клубы каскада до края не доходят: SmokeGrid кладёт клуб в каскад, только если он там весь)
 vec4 smokeFetch(vec3 p, float page) {
     vec4 sum = vec4(0.0);
     float n = float(SMOKE_N);
     for (int c = 0; c < SMOKE_CASCADES; c++) {
+        if (!smokeIn(p, c)) continue;
         vec4 C = SmokeCascade[c];
-        vec3 l = (p - C.xyz) / C.w;
-        if (any(lessThan(l, vec3(0.0))) || any(greaterThan(l, vec3(n)))) continue;
-        l = clamp(l, vec3(0.5), vec3(n - 0.5));
+        vec3 l = clamp((p - C.xyz) / C.w, vec3(0.5), vec3(n - 0.5));
         sum += textureLod(SmokeGrid, vec3((page * n + l.x) / (2.0 * n), l.z / n, (float(c) * n + l.y) / (float(SMOKE_CASCADES) * n)), 0.0);
     }
     return sum;
@@ -51,15 +59,34 @@ float smokeSigma(vec3 p) {
     return s.x + s.y + s.z;
 }
 
-// Клетка самого мелкого каскада, где есть точка p, блоков (вне сетки — клетка последнего)
+// Клетка самого мелкого каскада, в чьей коробке есть точка p, блоков (вне коробок — клетка последнего)
 float smokeCell(vec3 p) {
-    float n = float(SMOKE_N);
     for (int c = 0; c < SMOKE_CASCADES; c++) {
-        vec4 C = SmokeCascade[c];
-        vec3 l = (p - C.xyz) / C.w;
-        if (all(greaterThanEqual(l, vec3(0.0))) && all(lessThanEqual(l, vec3(n)))) return C.w;
+        if (smokeIn(p, c)) return SmokeCascade[c].w;
     }
     return SmokeCascade[SMOKE_CASCADES - 1].w;
+}
+
+// Пустое место у точки p на луче dir: в коробке — шаг на клетку её каскада (gap = cell); вне коробок — до входа в
+// ближнюю впереди (gap; cell — клетка её каскада); впереди коробок нет — 1e9
+float smokeGap(vec3 p, vec3 dir, out float cell) {
+    for (int c = 0; c < SMOKE_CASCADES; c++) {
+        if (smokeIn(p, c)) {
+            cell = SmokeCascade[c].w;
+            return cell;
+        }
+    }
+    float best = 1e9;
+    cell = SmokeCascade[SMOKE_CASCADES - 1].w;
+    for (int c = 0; c < SMOKE_CASCADES; c++) {
+        if (SmokeLo[c].w < 0.5) continue;
+        vec2 s = pallBox(dir, SmokeLo[c].xyz - p, SmokeHi[c].xyz - p);
+        if (s.y > s.x && s.x < best) {
+            best = s.x;
+            cell = SmokeCascade[c].w;
+        }
+    }
+    return best;
 }
 
 // Толща дыма на отрезке от a по dir длиной len — steps выборок среднего поля в серединах равных частей

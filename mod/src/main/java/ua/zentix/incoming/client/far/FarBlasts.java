@@ -198,6 +198,8 @@ public final class FarBlasts {
         final double[] blobs = new double[BLOBS * 10];
         /** Источник сетки ещё нужен (событие живо). */
         boolean alive = true;
+        /** Клубы облака в этом кадре легли в сетку ({@link SmokeGrid.Source#placed}); нет — объём его не рисует. */
+        boolean inGrid = true;
 
         Event(ClientLevel level, int kind, @Nullable Look look, @Nullable CloudModel model, double x, double y, double z, GroundMaterial ground,
               long seed, boolean near) {
@@ -320,10 +322,23 @@ public final class FarBlasts {
             });
         }
 
-        /** Доля облака, что рисует объём (сетка дыма у камеры); остальное — квадраты клубов здесь. */
-        double volume(Vec3 eye) {
-            if (model == null || !SmokeGrid.on()) return 0;
+        /** Доля облака, что отдаётся сетке дыма у камеры (по месту облака). */
+        double share(Vec3 eye) {
+            if (model == null) return 0;
             return SmokeGrid.volumeShare(x - eye.x, y + model.topZ * 0.5 - eye.y, z - eye.z);
+        }
+
+        /**
+         * Доля облака, что рисует объём: отданная сетке, если сетка нарисована и клубы облака в неё легли; остальное —
+         * квадраты клубов здесь.
+         */
+        double volume(Vec3 eye) {
+            return inGrid && SmokeGrid.on() ? share(eye) : 0;
+        }
+
+        @Override
+        public void placed(boolean inGrid) {
+            this.inGrid = inGrid;
         }
 
         /** Источник сетки дыма: клубы модели в мире, долей объёма. */
@@ -332,7 +347,7 @@ public final class FarBlasts {
             if (!alive || model == null || level != Minecraft.getInstance().level) return false;
             double t = seconds - bornSeconds;
             if (t >= model.life) return false;
-            double share = volume(camera());
+            double share = share(camera());
             if (share <= 0) return true;
             model.blobs(t, (bx, by, bz, sh, sv, soot, dustKg, water, kelvin, rise) -> out.blob(x + bx, y + by, z + bz, sh, sv, soot * share,
                     dustKg * share, water * share, dustR, dustG, dustB, kelvin, rise));
@@ -365,11 +380,12 @@ public final class FarBlasts {
     /**
      * Пакет взрыва пришёл (свет — сразу, звук — когда дойдёт): облако по модели ({@link BlastSource}, воздух — по свету
      * дня, погоде и биому в месте взрыва) — источник сетки дыма у камеры и картинка здесь. Бомба под землёй — прежняя
-     * картинка.
+     * картинка. Облако модели — тому, кто рисует взрыв вблизи (null — бомба или мира нет).
      */
-    public static void add(S2C.Blast p) {
+    @Nullable
+    public static CloudModel add(S2C.Blast p) {
         ClientLevel level = Minecraft.getInstance().level;
-        if (level == null) return;
+        if (level == null) return null;
         Vec3 pos = p.pos();
         Look look = null;
         CloudModel model = null;
@@ -386,6 +402,7 @@ public final class FarBlasts {
         if (EVENTS.size() >= CAP) EVENTS.pollFirst().alive = false;
         EVENTS.addLast(e);
         if (model != null) SmokeGrid.add(e);
+        return model;
     }
 
     /**
@@ -739,7 +756,7 @@ public final class FarBlasts {
             // огненные шары (горячее воздуха на сотни градусов) рисует light — своим телом
             if (e.blobs[at + 8] > CloudModel.T_AIR_K + 300) continue;
             double sh = e.blobs[at + 3], sv = e.blobs[at + 4], soot = e.blobs[at + 5], dustKg = e.blobs[at + 6], water = e.blobs[at + 7];
-            double ks = SmokeGrid.SOOT_K * soot, kd = ua.zentix.incoming.nuclear.model.DustModel.K_MIX * dustKg, kw = SmokeGrid.DROP_K * water;
+            double ks = SmokeGrid.SOOT_K * soot, kd = SmokeGrid.dustK(e.dustR, e.dustG, e.dustB) * dustKg, kw = SmokeGrid.DROP_K * water;
             double ext = ks + kd + kw;
             if (ext <= 0) continue;
             double tau = ext / (2 * Math.PI * sh * sv);

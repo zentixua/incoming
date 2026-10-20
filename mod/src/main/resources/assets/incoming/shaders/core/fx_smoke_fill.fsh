@@ -18,6 +18,11 @@ in float blob;
 out vec4 fragColor;
 
 const float SMOKE_N = 64.0;
+// Ослабление клуба в клетке — не больше, 1/м: шаг хода по веществу — от полклетки (≥ 1 м), толща шага ≥ 64 — непрозрачно
+// так же, как при большем; предел держит сумму клубов в половинной точности (до 65504) и с весом подъёма
+const float SMOKE_CAP = 128.0;
+// подъём для шума клубов — не больше, м/с (то же основание)
+const float SMOKE_RISE_CAP = 64.0;
 
 void main() {
     int i = int(floor(blob + 0.5));
@@ -32,5 +37,8 @@ void main() {
     float e = exp(-0.5 * (dot(d.xz, d.xz) / (b0.w * b0.w) + d.y * d.y / (b1.x * b1.x)));
     vec3 ext = b1.yzw * e;
     float total = ext.x + ext.y + ext.z;
-    fragColor = page < 0.5 ? vec4(ext, total * b3.x) : vec4(ext.y * b2.rgb, total * b3.y);
+    float k = min(1.0, SMOKE_CAP / max(total, 1e-12));
+    ext *= k;
+    total *= k;
+    fragColor = page < 0.5 ? vec4(ext, total * b3.x) : vec4(ext.y * b2.rgb, total * min(b3.y, SMOKE_RISE_CAP));
 }

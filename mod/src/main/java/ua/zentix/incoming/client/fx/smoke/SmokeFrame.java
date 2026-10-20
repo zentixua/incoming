@@ -20,19 +20,30 @@ public final class SmokeFrame {
     /** Высота, на которой берётся ветер для шума клубов, блоков (облака — сотни блоков над землёй). */
     static final double NOISE_WIND_HEIGHT = 100;
 
+    /** Сетка этого кадра ({@link #build}). */
+    private static SmokeGrid.Frame grid;
+
     private SmokeFrame() {}
 
     /**
-     * Кадр прохода пелены с дымом: {@code pall} — кадр ядерки ({@link NukePall#frame}, null — ядерки нет). Объём
+     * Сетка дыма кадра у глаза — до сбора квадратов дальней картинки: облака, чьи клубы не легли в сетку
+     * ({@link SmokeGrid.Source#placed}), рисуют себя квадратами в том же кадре.
+     */
+    public static void build(Vec3 eye, float partial) {
+        SmokeGrid.enable(PallPass.available() && SmokePass.available());
+        grid = SmokeGrid.frame(eye.x, eye.y, eye.z, SmokeGrid.seconds(partial));
+    }
+
+    /**
+     * Кадр прохода пелены с дымом этого кадра ({@link #build}): {@code pall} — кадр ядерки ({@link NukePall#frame}, null —
+     * ядерки нет). Объём
      * невозможен (шейдеры не собрались) — облака взрывов целиком рисуют квадраты ({@link SmokeGrid#on}). null — ни пелены,
      * ни дыма.
      */
     @Nullable
     public static PallPass.Frame frame(ClientLevel level, Vec3 eye, float partial, @Nullable PallPass.Frame pall) {
         boolean on = PallPass.available() && SmokePass.available();
-        SmokeGrid.enable(on);
-        SmokeGrid.Frame grid = SmokeGrid.frame(eye.x, eye.y, eye.z, SmokeGrid.seconds(partial));
-        if (!on || grid.empty()) {
+        if (!on || grid == null || grid.empty()) {
             if (pall != null) pall.smoke = null;
             return pall;
         }

@@ -1742,11 +1742,12 @@ public final class ClientScenario {
         String[] names = {"outside", "near", "entering", "centre", "leaving", "above"};
         for (int i = 0; i < path.length; i++) {
             Vec3 e = c.add(0, path[i][1] * r, path[i][0] * r);
-            int when = at + 4 * i;
+            // по 20 тиков на место: кадр на llvmpipe идёт до секунды, снимок должен застать камеру на месте
+            int when = at + 20 * i;
             at(when, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", e.x, e.y, e.z, c.x, c.y, c.z + 2 * r)));
             shot(when + 3, "smoke_column_" + names[i]);
         }
-        at(at + 40, () -> {
+        at(at + 20 * path.length + 20, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });

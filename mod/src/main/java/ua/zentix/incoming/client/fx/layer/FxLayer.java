@@ -18,6 +18,7 @@ import ua.zentix.incoming.client.far.FarRenderer;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.fx.particle.FxPool;
 import ua.zentix.incoming.client.fx.smoke.SmokeFrame;
+import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.client.nuclear.NukePall;
 import ua.zentix.incoming.client.nuclear.NukeWater;
 import ua.zentix.incoming.client.render.DhDepth;
@@ -183,6 +184,7 @@ public final class FxLayer {
         QUADS.nearestTexels(true);
         FxPool.INSTANCE.collect(new FxFrame(view, FRUSTUM, FOG), QUADS, view.partial());
         QUADS.nearestTexels(false);
+        SmokeFrame.build(view.camera(), view.partial());
         FarRenderer.collect(view, QUADS, LIGHTS, PROBES);
         if (warmup) {
             // невидимый квадрат: ни света, ни заслона — кадр проходит весь путь до первого настоящего, с пробой источника
@@ -212,6 +214,8 @@ public final class FxLayer {
             boolean pallDrawn = pall != null && scene >= 0 && PallPass.draw(pall, scene, VIEW, e.getProjectionMatrix(), view.camera(),
                     FOG.haze(view.range(), HAZE));
             if (!pallDrawn) PallPass.reset();
+            // облака, чей объём не вышел (кадр пелены не нарисован), со следующего кадра — квадратами
+            SmokeGrid.drawn(pall == null || pall.smoke == null || pallDrawn && SmokePass.filled());
             PallPass.Frame front = pallDrawn ? pall : PallPass.empty();
             // пробы — после пелены: её проход кладёт карты и таблицу грибов кадра, а проба берёт пропускание пелены и грибов
             int seen = PROBES.update(scene, front, pallDrawn, VIEW, e.getProjectionMatrix(), view.pixel());

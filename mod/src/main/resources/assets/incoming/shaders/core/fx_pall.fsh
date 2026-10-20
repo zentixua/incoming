@@ -1173,17 +1173,18 @@ float smokeClumps(vec3 p, vec3 v, float cone) {
 // потока Эддингтона вдоль солнца (толща к солнцу и от него — по сетке без шума, четыре выборки) и по вертикали (небо
 // сверху, земля снизу), прямой пучок солнца с фазой Хеньи–Гринстейна; свет огненных шаров кадра (L·R²/d²) с фазой;
 // своё свечение — Кирхгоф: (1 − ω')·B(T), чёрное тело температуры газа в точке (строка тела таблицы грибов). Под землёй
-// (в штольне, доме) дыма нет: доля наружного воздуха в окне у глаза. gap — сколько до вещества (0 — оно здесь).
-vec4 smokeStep(float t, float cone, out float gap) {
+// (в штольне, доме) дыма нет: доля наружного воздуха в окне у глаза. gap — сколько по пустому до следующей выборки
+// (0 — вещество здесь, smokeGap), cell — клетка каскада там.
+vec4 smokeStep(float t, float cone, out float gap, out float cell) {
     vec3 p = gDir * t;
     vec4 a = smokeFetch(p, 0.0);
     float sigma = a.x + a.y + a.z;
-    float cell = smokeCell(p);
     if (sigma < 1e-5) {
-        gap = cell;
+        gap = smokeGap(p, gDir, cell);
         return vec4(0.0);
     }
     gap = 0.0;
+    cell = smokeCell(p);
     float open = 1.0;
     if (PallOpenAt.w > 0.5) {
         vec3 o = p - PallOpenAt.xyz;
@@ -1405,11 +1406,11 @@ void main() {
         if (!pallLeft && !mushLeft && !smokeLeft) break;
         if (smokeLeft && (!pallLeft || ts < ta) && (!mushLeft || ts < tm)) {
             float cone = max(ts * gPixel, 0.0);
-            float gap;
-            vec4 r = smokeStep(ts, cone, gap);
-            float cell = smokeCell(dir * ts);
-            // по пустому — на клетку (со сдвигом кадра); в веществе — на полтолщи, от полклетки до двух, не мельче пикселя
-            float ds = gap > 0.0 ? cell * (1.0 + jitter) : clamp(0.5 / max(r.w, 1e-6), 0.5 * cell, 2.0 * cell);
+            float gap, cell;
+            vec4 r = smokeStep(ts, cone, gap, cell);
+            // по пустому — до следующей клетки или коробки каскада (со сдвигом кадра на долю клетки); в веществе — на
+            // полтолщи, от полклетки до двух, не мельче пикселя
+            float ds = gap > 0.0 ? gap + jitter * cell : clamp(0.5 / max(r.w, 1e-6), 0.5 * cell, 2.0 * cell);
             ds = min(max(ds, 0.35 * cone), max(s1 - ts, 1e-3));
             if (r.w > 1e-7) {
                 passesBefore(ts, light, transmit, lost);

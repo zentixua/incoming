@@ -182,7 +182,8 @@ public final class CloudModel {
         double ballK = source.fuelKg() > 0 ? FUEL_BALL_K : HE_BALL_END;
         double g0 = G * (1 - T_AIR / ballK);
         double volume = buoyancy / g0;
-        double r0 = Math.cbrt(3 * volume / (4 * Math.PI));
+        // не меньше полуметра: шар мельче блока не различим, а R = 0 (заряда нет) делил бы на ноль
+        double r0 = Math.max(0.5, Math.cbrt(3 * volume / (4 * Math.PI)));
         int n = (int) Math.ceil(Math.PI / air.n() / DT) + 1;
         z = new double[n];
         r = new double[n];
@@ -192,6 +193,7 @@ public final class CloudModel {
         dz = new double[n];
         // MTT в переменных u = R³, m = R³W, f = R³g'; центр — от половины радиуса над землёй (наземный шар — полусфера)
         double u = r0 * r0 * r0, m = 0, f = u * g0, h = 0.5 * r0, x = 0, y = 0;
+        double[] k1 = new double[4], k2 = new double[4], k3 = new double[4], k4 = new double[4];
         for (int i = 0; i < n; i++) {
             double rr = Math.cbrt(u);
             z[i] = h;
@@ -201,9 +203,10 @@ public final class CloudModel {
             dx[i] = x;
             dz[i] = y;
             // РК4 по (u, m, f, h)
-            double[] k1 = rate(u, m, f), k2 = rate(u + 0.5 * DT * k1[0], m + 0.5 * DT * k1[1], f + 0.5 * DT * k1[2]);
-            double[] k3 = rate(u + 0.5 * DT * k2[0], m + 0.5 * DT * k2[1], f + 0.5 * DT * k2[2]);
-            double[] k4 = rate(u + DT * k3[0], m + DT * k3[1], f + DT * k3[2]);
+            rate(u, m, f, k1);
+            rate(u + 0.5 * DT * k1[0], m + 0.5 * DT * k1[1], f + 0.5 * DT * k1[2], k2);
+            rate(u + 0.5 * DT * k2[0], m + 0.5 * DT * k2[1], f + 0.5 * DT * k2[2], k3);
+            rate(u + DT * k3[0], m + DT * k3[1], f + DT * k3[2], k4);
             u += DT / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
             m += DT / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
             f += DT / 6 * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2]);
@@ -235,11 +238,14 @@ public final class CloudModel {
         life = lifeSeconds();
     }
 
-    /** Скорости d/dt (u, m, f, h) термика MTT при m = R³W, f = R³g'. */
-    private double[] rate(double u, double m, double f) {
+    /** Скорости d/dt (u, m, f, h) термика MTT при m = R³W, f = R³g' — в {@code out}. */
+    private void rate(double u, double m, double f, double[] out) {
         double rr = Math.cbrt(u);
         double wv = m / u;
-        return new double[]{3 * ALPHA * rr * rr * wv, f, -air.n() * air.n() * m, wv};
+        out[0] = 3 * ALPHA * rr * rr * wv;
+        out[1] = f;
+        out[2] = -air.n() * air.n() * m;
+        out[3] = wv;
     }
 
     /** Номер шага подъёма для возраста t, с (за таблицей — последний). */

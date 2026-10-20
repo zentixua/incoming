@@ -37,16 +37,18 @@ public final class BlastEffects {
      * дальше {@link FarBlasts#NEAR} ведёт {@link FarBlasts} (пакеты приходят до {@code far_range}).
      */
     public static void blast(S2C.Blast p) {
+        // одно облако на взрыв: у объёма, у картинки вдали и у вспышки с частицами здесь
+        CloudModel cloud = FarBlasts.add(p);
         if (FarBlasts.near(p.pos())) {
             GroundMaterial mat = GroundMaterial.byId(p.material());
+            if (cloud == null && p.kind() != S2C.Blast.BUNKER) cloud = FarBlasts.model(p);
             switch (p.kind()) {
-                case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), FarBlasts.model(p)));
+                case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), cloud));
                 case S2C.Blast.BUNKER -> Effects.add(new Bunker(p.pos(), mat, p.surfaceY(), p.seed()));
-                case S2C.Blast.ROCKET -> Effects.add(new Drone(p.pos(), mat, p.seed(), true, FarBlasts.model(p)));
-                default -> Effects.add(new Drone(p.pos(), mat, p.seed(), false, FarBlasts.model(p)));
+                case S2C.Blast.ROCKET -> Effects.add(new Drone(p.pos(), mat, p.seed(), true, cloud));
+                default -> Effects.add(new Drone(p.pos(), mat, p.seed(), false, cloud));
             }
         }
-        FarBlasts.add(p);
     }
 
     /**

@@ -37,8 +37,15 @@ public final class SmokeGrid {
     public static final float SPAN = 4;
     /** Клуб в каскаде — до стольких σ от центра. */
     public static final float REACH = 3;
-    /** Клубов в кадре не больше (ширина таблицы клубов); дальние лишние не рисуются. */
+    /**
+     * Клубов в кадре не больше (ширина таблицы клубов). Не помещаются — уходят источники дальше всех от глаза, целиком
+     * ({@link Source#placed}): их рисуют сами (квадраты {@code FarBlasts}), а не половиной облака.
+     */
     public static final int MAX_BLOBS = 512;
+    /** Клубов, что источники могут отдать за кадр до раскладки (сверх — источник не в сетке). */
+    static final int STAGED = 8 * MAX_BLOBS;
+    /** Чисел на клуб в черновике: 13 параметров {@link Sink#blob} и номер источника. */
+    private static final int STAGE = 14;
     /** Строк таблицы клубов: центр и σ по горизонтали; σ по вертикали и пиковые ослабления; альбедо пыли; ΔT и подъём. */
     public static final int BLOB_ROWS = 4;
     /** Вершин на клуб в слое: два прямоугольника (страницы) по два треугольника. */
@@ -69,6 +76,12 @@ public final class SmokeGrid {
      */
     public interface Source {
         boolean emit(double seconds, Sink out);
+
+        /**
+         * Итог раскладки этого кадра: true — клубы источника в сетке; false — нет ни одного (таблица полна, а он дальше
+         * других): тогда облако рисует себя само.
+         */
+        default void placed(boolean inGrid) {}
     }
 
     /** Куда источник кладёт клубы. */
@@ -93,6 +106,8 @@ public final class SmokeGrid {
         public final float[] corner = new float[CASCADES * 4];
         /** Рамка всего дыма от глаза; min > max — дыма нет. */
         public final float[] min = new float[3], max = new float[3];
+        /** Коробка клубов каждого каскада от глаза (x, y, z по каскаду) внутри каскада; lo > hi — каскад пуст. */
+        public final float[] boxLo = new float[CASCADES * 3], boxHi = new float[CASCADES * 3];
         /** Вершины прямоугольников клубов по слоям (x, y — NDC, z — номер клуба) и начало слоя в них (по вершинам). */
         public float[] vertices = new float[4096 * 3];
         public final int[] layerStart = new int[CASCADES * N + 1];
@@ -111,13 +126,21 @@ public final class SmokeGrid {
 
     /** Объём рисуется (шейдеры и сетка в порядке, {@code SmokeFrame}); нет — облака взрывов вдали и вблизи рисуют квадраты. */
     private static boolean enabled;
+    /** Проход пелены нарисовал сетку в прошлом кадре ({@code FxLayer}): нет — облака рисуют квадраты, как без объёма. */
+    private static boolean drawn = true;
 
     public static void enable(boolean on) {
         enabled = on;
     }
 
+    /** Объём есть и в прошлом кадре был нарисован. */
     public static boolean on() {
-        return enabled;
+        return enabled && drawn;
+    }
+
+    /** Итог кадра слоя эффектов: сетку нарисовал проход пелены (или дыма не было — тогда объёму ничто не мешает). */
+    public static void drawn(boolean yes) {
+        drawn = yes;
     }
 
     /**
@@ -156,6 +179,19 @@ public final class SmokeGrid {
         return SOURCES.size();
     }
 
+    /** Доля рассеяния вперёд пыли f = g² (асимметрия 0,6): её дельта-Эддингтон убирает из ослабления. */
+    static final double DUST_F = 0.36;
+
+    /**
+     * Ослабление пыли на массу σ' после дельта-Эддингтона, м²/кг: {@code DustModel.K_MIX}·(1 − ωf), ω — альбедо
+     * однократного рассеяния, обращённое из ω' ({@link #dustAlbedo}) среднего канала (ослабление у клуба одно на все
+     * каналы).
+     */
+    public static double dustK(float wr, float wg, float wb) {
+        double wp = (wr + wg + wb) / 3.0, w = wp / (1 - DUST_F + DUST_F * wp);
+        return ua.zentix.incoming.nuclear.model.DustModel.K_MIX * (1 - w * DUST_F);
+    }
+
     /** Альбедо ω' пыли цвета грунта (r, g, b на экране) — обращение отражения толстого слоя двух потоков (как у пелены). */
     public static float dustAlbedo(float display) {
         double r = Math.pow(Math.max(display, 0), 2.2);
@@ -173,11 +209,17 @@ public final class SmokeGrid {
         return f;
     }
 
+    /** Черновик клубов кадра: {@link #STAGE} чисел на клуб; источники по порядку и их ближний край. */
+    private static final double[] STAGE_BLOBS = new double[STAGED * STAGE];
+    private static int staged;
+
     /** То же для своего списка источников и кадра (юнит-тест). */
     static void build(List<Source> sources, Frame f, double eyeX, double eyeY, double eyeZ, double seconds) {
         f.count = 0;
         Arrays.fill(f.min, Float.MAX_VALUE);
         Arrays.fill(f.max, -Float.MAX_VALUE);
+        Arrays.fill(f.boxLo, Float.MAX_VALUE);
+        Arrays.fill(f.boxHi, -Float.MAX_VALUE);
         double[] corner = new double[CASCADES * 3];
         for (int c = 0; c < CASCADES; c++) {
             double cell = CELL[c];
@@ -189,16 +231,70 @@ public final class SmokeGrid {
             f.corner[4 * c + 2] = (float) (corner[3 * c + 2] - eyeZ);
             f.corner[4 * c + 3] = (float) cell;
         }
-        Sink sink = (x, y, z, sh, sv, soot, dust, water, dr, dg, db, kelvin, rise) -> put(f, corner, eyeX, eyeY, eyeZ, x, y, z, sh, sv, soot, dust, water,
-                dr, dg, db, kelvin, rise);
-        sources.removeIf(s -> !s.emit(seconds, sink));
+        // клубы — в черновик: ближний край каждого источника и сколько клубов он дал
+        staged = 0;
+        int n = sources.size();
+        double[] near = new double[n];
+        int[] first = new int[n + 1], count = new int[n];
+        boolean[] over = new boolean[n];
+        for (int k = 0; k < n; k++) {
+            int src = k;
+            near[k] = Double.MAX_VALUE;
+            first[k] = staged;
+            Sink sink = (x, y, z, sh, sv, soot, dust, water, dr, dg, db, kelvin, rise) -> {
+                if (soot + dust + water <= 0 || !(sh > 0) || !(sv > 0)) return;
+                if (staged >= STAGED) {
+                    over[src] = true;
+                    return;
+                }
+                double[] b = STAGE_BLOBS;
+                int at = staged++ * STAGE;
+                b[at] = x;
+                b[at + 1] = y;
+                b[at + 2] = z;
+                b[at + 3] = sh;
+                b[at + 4] = sv;
+                b[at + 5] = soot;
+                b[at + 6] = dust;
+                b[at + 7] = water;
+                b[at + 8] = dr;
+                b[at + 9] = dg;
+                b[at + 10] = db;
+                b[at + 11] = kelvin;
+                b[at + 12] = rise;
+                b[at + 13] = src;
+                double dx = x - eyeX, dy = y - eyeY, dz = z - eyeZ;
+                near[src] = Math.min(near[src], Math.max(0, Math.sqrt(dx * dx + dy * dy + dz * dz) - REACH * Math.max(sh, sv)));
+            };
+            boolean alive = sources.get(k).emit(seconds, sink);
+            count[k] = alive ? staged - first[k] : -1;
+        }
+        // в таблицу — источники от ближнего к дальнему, пока помещаются целиком
+        Integer[] order = new Integer[n];
+        for (int k = 0; k < n; k++) order[k] = k;
+        Arrays.sort(order, (a, b) -> Double.compare(near[a], near[b]));
+        boolean[] in = new boolean[n];
+        int room = MAX_BLOBS;
+        for (int k : order) {
+            if (count[k] <= 0 || over[k] || count[k] > room) continue;
+            room -= count[k];
+            in[k] = true;
+            for (int i = first[k]; i < first[k] + count[k]; i++) {
+                double[] b = STAGE_BLOBS;
+                int at = i * STAGE;
+                put(f, corner, eyeX, eyeY, eyeZ, b[at], b[at + 1], b[at + 2], b[at + 3], b[at + 4], b[at + 5], b[at + 6], b[at + 7],
+                        (float) b[at + 8], (float) b[at + 9], (float) b[at + 10], b[at + 11], b[at + 12]);
+            }
+        }
+        for (int k = 0; k < n; k++) if (count[k] >= 0) sources.get(k).placed(in[k] || count[k] == 0);
+        for (int k = n - 1; k >= 0; k--) if (count[k] < 0) sources.remove(k);
         layers(f);
     }
 
     /** Клуб — в таблицу и в свой каскад; вне всех каскадов, пустой или сверх таблицы — нет. */
     private static void put(Frame f, double[] corner, double ex, double ey, double ez, double x, double y, double z, double sh, double sv,
                             double soot, double dust, double water, float dr, float dg, float db, double kelvin, double rise) {
-        if (f.count >= MAX_BLOBS || soot + dust + water <= 0 || !(sh > 0) || !(sv > 0)) return;
+        if (f.count >= MAX_BLOBS) return;
         int c = -1;
         double h = 0, v = 0;
         for (int k = 0; k < CASCADES; k++) {
@@ -227,7 +323,7 @@ public final class SmokeGrid {
         double peak = 1 / (Math.pow(2 * Math.PI, 1.5) * h * h * v);
         float[] b = f.blobs;
         set(b, 0, i, (float) (x - ex), (float) (y - ey), (float) (z - ez), (float) h);
-        set(b, 1, i, (float) v, (float) (SOOT_K * soot * peak), (float) (ua.zentix.incoming.nuclear.model.DustModel.K_MIX * dust * peak),
+        set(b, 1, i, (float) v, (float) (SOOT_K * soot * peak), (float) (dustK(dr, dg, db) * dust * peak),
                 (float) (DROP_K * water * peak));
         set(b, 2, i, dr, dg, db, 0);
         set(b, 3, i, (float) (Math.max(0, kelvin - AIR_K) / 1000), (float) rise, 0, 0);
@@ -239,6 +335,20 @@ public final class SmokeGrid {
         f.max[0] = Math.max(f.max[0], px + rx);
         f.max[1] = Math.max(f.max[1], py + ry);
         f.max[2] = Math.max(f.max[2], pz + rx);
+        // коробка каскада — в его границах (в последнем клуб может выходить за край)
+        double span = N * CELL[c];
+        double[] lo = {x - REACH * h, y - REACH * v, z - REACH * h}, hi = {x + REACH * h, y + REACH * v, z + REACH * h};
+        double[] eye = {ex, ey, ez};
+        for (int a = 0; a < 3; a++) {
+            double from = corner[3 * c + a];
+            f.boxLo[3 * c + a] = Math.min(f.boxLo[3 * c + a], (float) (Math.max(lo[a], from) - eye[a]));
+            f.boxHi[3 * c + a] = Math.max(f.boxHi[3 * c + a], (float) (Math.min(hi[a], from + span) - eye[a]));
+        }
+    }
+
+    /** В каскаде {@code c} кадра есть клубы. */
+    public static boolean occupied(Frame f, int c) {
+        return f.boxLo[3 * c] <= f.boxHi[3 * c];
     }
 
     private static void set(float[] b, int row, int i, float x, float y, float z, float w) {

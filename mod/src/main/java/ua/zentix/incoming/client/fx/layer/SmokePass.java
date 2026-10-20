@@ -11,6 +11,7 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
@@ -49,7 +50,7 @@ public final class SmokePass {
     }
 
     /** Есть ли в этом кадре сетка (заполнена {@link #fill}). */
-    static boolean filled() {
+    public static boolean filled() {
         return filled;
     }
 
@@ -94,12 +95,14 @@ public final class SmokePass {
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
         RenderSystem.disableDepthTest();
         RenderSystem.depthMask(false);
+        s.setSampler("Sampler0", blobs);
+        s.safeGetUniform("SmokeCorner").set(cornerMatrix(f));
+        s.apply();
+        // сложение — после apply: программа без своего смешивания в JSON выключила бы его
         RenderSystem.enableBlend();
         RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE, GlStateManager.SourceFactor.ONE,
                 GlStateManager.DestFactor.ONE);
-        RenderSystem.setShaderTexture(0, blobs);
-        s.safeGetUniform("SmokeCorner").set(cornerMatrix(f));
-        s.apply();
+        RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
         int slice = Uniform.glGetUniformLocation(s.getId(), "SmokeSlice");
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, sliceFbo);
         BufferUploader.invalidate();
@@ -127,6 +130,8 @@ public final class SmokePass {
     }
 
     private static final org.joml.Matrix4f CORNER = new org.joml.Matrix4f();
+    /** Коробки клубов каскадов ({@code smoke.glsl}: {@code SmokeLo}, {@code SmokeHi}): столбец c, w у нижней — 1, если каскад не пуст. */
+    private static final org.joml.Matrix4f BOX_LO = new org.joml.Matrix4f(), BOX_HI = new org.joml.Matrix4f();
 
     /** Каскады кадра ({@code smoke.glsl}): столбец c — угол от глаза и клетка; столбец 3: x — 1, если сетка есть. */
     static org.joml.Matrix4f cornerMatrix(SmokeGrid.Frame f) {
@@ -147,13 +152,22 @@ public final class SmokePass {
     static void bind(ShaderInstance s, @Nullable SmokeGrid.Frame f) {
         boolean on = filled && f != null && !f.empty();
         s.safeGetUniform("SmokeCascade").set(on ? cornerMatrix(f) : CORNER.zero());
+        BOX_LO.zero();
+        BOX_HI.zero();
         if (on) {
             s.safeGetUniform("SmokeMin").set(f.min[0], f.min[1], f.min[2]);
             s.safeGetUniform("SmokeMax").set(f.max[0], f.max[1], f.max[2]);
+            for (int c = 0; c < SmokeGrid.CASCADES; c++) {
+                if (!SmokeGrid.occupied(f, c)) continue;
+                BOX_LO.setColumn(c, new org.joml.Vector4f(f.boxLo[3 * c], f.boxLo[3 * c + 1], f.boxLo[3 * c + 2], 1));
+                BOX_HI.setColumn(c, new org.joml.Vector4f(f.boxHi[3 * c], f.boxHi[3 * c + 1], f.boxHi[3 * c + 2], 0));
+            }
         } else {
             s.safeGetUniform("SmokeMin").set(0f, 0f, 0f);
             s.safeGetUniform("SmokeMax").set(0f, 0f, 0f);
         }
+        s.safeGetUniform("SmokeLo").set(BOX_LO);
+        s.safeGetUniform("SmokeHi").set(BOX_HI);
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, on ? grid : 0);
