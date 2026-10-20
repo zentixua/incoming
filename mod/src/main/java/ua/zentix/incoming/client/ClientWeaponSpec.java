@@ -45,7 +45,7 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
      * @param layers        слои звука мотора
      * @param engines       сопла маршевого двигателя (у B-2 — четыре инверсионных следа, у бомбы — срыв потока с хвоста)
      * @param boosterNozzle срез сопла ускорителя; null — ускорителя нет
-     * @param boosterSmoke  размер облака у пусковой на старте (шахед меньше ракеты; облако старта — не след)
+     * @param boosterSmoke  размер вспышки поджига ускорителя (шахед меньше ракеты; облако старта — объём, {@code LaunchCloud})
      * @param far           огонь и дым по фазам полёта ({@link Flame} — факел вблизи и вдали) и вид вдали, где сущности у
      *                      клиента нет
      */

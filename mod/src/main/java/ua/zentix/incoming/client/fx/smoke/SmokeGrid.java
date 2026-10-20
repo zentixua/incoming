@@ -17,6 +17,11 @@ import java.util.List;
  * есть. Шва на краю каскада нет: клуб у края уже в следующем. Клеткой мельче клуба гаусс не дробится: σ клуба в каскаде
  * — √(σ² + (клетка/2)²), масса та же.
  * <p>
+ * <b>Отрезок.</b> Клуб бывает размазан по отрезку от c − a до c + a ({@link Sink#segment}): плотность — среднее гаусса по
+ * его центрам на отрезке, ρ = m·G₀·e^(−q⊥²/2)·√(π/2)/(2A)·[erf((A − q∥)/√2) + erf((A + q∥)/√2)] в осях, где σ — единица
+ * (A — длина a там, q∥ и q⊥ — вдоль и поперёк него; {@link #line}). След и столб дыма — несколько отрезков, а не сотни
+ * клубов цепочкой: шаг цепочки больше σ давал бы бусы.
+ * <p>
  * <b>Текстура</b> — RGBA16F (2N × N × N·каскады): по x — две страницы, по y (слои) — высота, по z — z мира. Страница 0:
  * ослабление сажи, пыли и капель (1/м, σ' после дельта-Эддингтона) и Σ ослабление × ΔT (кК); страница 1: Σ ослабление
  * пыли × её альбедо ω' (r, g, b) и Σ ослабление × скорость подъёма (м/с) — по ним шум клубов идёт с веществом.
@@ -44,9 +49,12 @@ public final class SmokeGrid {
     public static final int MAX_BLOBS = 512;
     /** Клубов, что источники могут отдать за кадр до раскладки (сверх — источник не в сетке). */
     static final int STAGED = 8 * MAX_BLOBS;
-    /** Чисел на клуб в черновике: 13 параметров {@link Sink#blob} и номер источника. */
-    private static final int STAGE = 14;
-    /** Строк таблицы клубов: центр и σ по горизонтали; σ по вертикали и пиковые ослабления; альбедо пыли; ΔT и подъём. */
+    /** Чисел на клуб в черновике: 16 параметров {@link Sink#segment} и номер источника. */
+    private static final int STAGE = 17;
+    /**
+     * Строк таблицы клубов: центр и σ по горизонтали; σ по вертикали и пиковые ослабления; альбедо пыли и x полуотрезка;
+     * ΔT, подъём, y и z полуотрезка.
+     */
     public static final int BLOB_ROWS = 4;
     /** Вершин на клуб в слое: два прямоугольника (страницы) по два треугольника. */
     static final int VERTICES = 12;
@@ -92,11 +100,18 @@ public final class SmokeGrid {
     /** Куда источник кладёт клубы. */
     public interface Sink {
         /**
-         * Гауссов клуб: центр в мире (x, y, z), σ по горизонтали и вертикали, м; массы сажи, пыли и капель, кг; альбедо
-         * ω' пыли по каналам (после дельта-Эддингтона, {@link #dustAlbedo}); температура газа, K; подъём, м/с.
+         * Гауссов клуб, размазанный по отрезку от центра − (ax, ay, az) до центра + (ax, ay, az) (см. {@link SmokeGrid}):
+         * центр в мире (x, y, z), полуотрезок, м; σ по горизонтали и вертикали, м; массы сажи, пыли и капель на весь отрезок, кг;
+         * альбедо ω' пыли по каналам (после дельта-Эддингтона, {@link #dustAlbedo}); температура газа, K; подъём, м/с.
          */
-        void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water,
-                  float dustR, float dustG, float dustB, double kelvin, double rise);
+        void segment(double x, double y, double z, double ax, double ay, double az, double sh, double sv, double soot, double dust,
+                     double water, float dustR, float dustG, float dustB, double kelvin, double rise);
+
+        /** Гауссов клуб в точке (отрезок нулевой длины). */
+        default void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water,
+                          float dustR, float dustG, float dustB, double kelvin, double rise) {
+            segment(x, y, z, 0, 0, 0, sh, sv, soot, dust, water, dustR, dustG, dustB, kelvin, rise);
+        }
     }
 
     /** Кадр сетки: клубы, их каскады и слои — то, что {@code SmokePass} кладёт в видеопамять. */
@@ -247,7 +262,7 @@ public final class SmokeGrid {
             int src = k;
             near[k] = Double.MAX_VALUE;
             first[k] = staged;
-            Sink sink = (x, y, z, sh, sv, soot, dust, water, dr, dg, db, kelvin, rise) -> {
+            Sink sink = (x, y, z, ax, ay, az, sh, sv, soot, dust, water, dr, dg, db, kelvin, rise) -> {
                 if (soot + dust + water <= 0 || !(sh > 0) || !(sv > 0)) return;
                 if (staged >= STAGED) {
                     over[src] = true;
@@ -268,9 +283,13 @@ public final class SmokeGrid {
                 b[at + 10] = db;
                 b[at + 11] = kelvin;
                 b[at + 12] = rise;
-                b[at + 13] = src;
+                b[at + 13] = ax;
+                b[at + 14] = ay;
+                b[at + 15] = az;
+                b[at + 16] = src;
                 double dx = x - eyeX, dy = y - eyeY, dz = z - eyeZ;
-                near[src] = Math.min(near[src], Math.max(0, Math.sqrt(dx * dx + dy * dy + dz * dz) - REACH * Math.max(sh, sv)));
+                double reach = REACH * Math.max(sh, sv) + Math.sqrt(ax * ax + ay * ay + az * az);
+                near[src] = Math.min(near[src], Math.max(0, Math.sqrt(dx * dx + dy * dy + dz * dz) - reach));
             };
             boolean alive = sources.get(k).emit(seconds, sink);
             count[k] = alive ? staged - first[k] : -1;
@@ -292,8 +311,8 @@ public final class SmokeGrid {
             for (int i = first[k]; i < first[k] + count[k]; i++) {
                 double[] b = STAGE_BLOBS;
                 int at = i * STAGE;
-                put(f, corner, eyeX, eyeY, eyeZ, b[at], b[at + 1], b[at + 2], b[at + 3], b[at + 4], b[at + 5], b[at + 6], b[at + 7],
-                        (float) b[at + 8], (float) b[at + 9], (float) b[at + 10], b[at + 11], b[at + 12]);
+                put(f, corner, eyeX, eyeY, eyeZ, b[at], b[at + 1], b[at + 2], b[at + 13], b[at + 14], b[at + 15], b[at + 3], b[at + 4],
+                        b[at + 5], b[at + 6], b[at + 7], (float) b[at + 8], (float) b[at + 9], (float) b[at + 10], b[at + 11], b[at + 12]);
             }
         }
         for (int k = 0; k < n; k++) if (count[k] >= 0) sources.get(k).placed(in[k] || count[k] == 0 && !over[k]);
@@ -301,16 +320,20 @@ public final class SmokeGrid {
         layers(f);
     }
 
-    /** Каскад клуба черновика с началом {@code at} в {@code b} ({@link #cascade(double[], double, double, double, double, double)}). */
+    /** Каскад клуба черновика с началом {@code at} в {@code b} ({@link #cascade(double[], double, double, double, double, double, double, double, double)}). */
     private static int cascade(double[] corner, double[] b, int at) {
-        return cascade(corner, b[at], b[at + 1], b[at + 2], b[at + 3], b[at + 4]);
+        return cascade(corner, b[at], b[at + 1], b[at + 2], b[at + 13], b[at + 14], b[at + 15], b[at + 3], b[at + 4]);
     }
 
     /**
-     * Каскад клуба с центром (x, y, z) и σ (sh, sv): самый мелкий, где он весь (три σ, смазанный на полклетки) и не шире
-     * {@link #SPAN} клеток σ; последний — если центр в нём (края за ним срежет текстура); −1 — за всеми.
+     * Каскад клуба с центром (x, y, z), полуотрезком (ax, ay, az) и σ (sh, sv): самый мелкий, где он весь (три σ, смазанный
+     * на полклетки, и отрезок) и не шире {@link #SPAN} клеток σ; последний — если центр в нём (края за ним срежет текстура);
+     * −1 — за всеми.
      */
-    private static int cascade(double[] corner, double x, double y, double z, double sh, double sv) {
+    private static int cascade(double[] corner, double x, double y, double z, double ax, double ay, double az, double sh, double sv) {
+        ax = Math.abs(ax);
+        ay = Math.abs(ay);
+        az = Math.abs(az);
         for (int k = 0; k < CASCADES; k++) {
             double cell = CELL[k], half = 0.5 * cell;
             double h = Math.sqrt(sh * sh + half * half), v = Math.sqrt(sv * sv + half * half);
@@ -320,19 +343,69 @@ public final class SmokeGrid {
                         && y >= corner[3 * k + 1] && y < corner[3 * k + 1] + span;
                 return inside ? k : -1;
             }
-            boolean inside = x - REACH * h >= corner[3 * k] && x + REACH * h <= corner[3 * k] + span
-                    && z - REACH * h >= corner[3 * k + 2] && z + REACH * h <= corner[3 * k + 2] + span
-                    && y - REACH * v >= corner[3 * k + 1] && y + REACH * v <= corner[3 * k + 1] + span;
+            double rx = REACH * h + ax, ry = REACH * v + ay, rz = REACH * h + az;
+            boolean inside = x - rx >= corner[3 * k] && x + rx <= corner[3 * k] + span
+                    && z - rz >= corner[3 * k + 2] && z + rz <= corner[3 * k + 2] + span
+                    && y - ry >= corner[3 * k + 1] && y + ry <= corner[3 * k + 1] + span;
             if (inside && Math.max(h, v) <= SPAN * cell) return k;
         }
         return -1;
     }
 
+    /**
+     * Клетка каскада, в который ляжет клуб σ (sh, sv) с центром (dx, dy, dz) от глаза и полуотрезком (ax, ay, az), м; 0 — ни в
+     * какой. Углы каскадов — как у кадра ({@link #build}).
+     */
+    public static float cellFor(double eyeX, double eyeY, double eyeZ, double dx, double dy, double dz, double ax, double ay, double az,
+                                double sh, double sv) {
+        double[] corner = new double[CASCADES * 3];
+        for (int c = 0; c < CASCADES; c++) {
+            double cell = CELL[c];
+            corner[3 * c] = Math.floor(eyeX / cell - N / 2.0) * cell;
+            corner[3 * c + 1] = Math.floor(eyeY / cell - N / 2.0) * cell;
+            corner[3 * c + 2] = Math.floor(eyeZ / cell - N / 2.0) * cell;
+        }
+        int k = cascade(corner, eyeX + dx, eyeY + dy, eyeZ + dz, ax, ay, az, sh, sv);
+        return k < 0 ? 0 : CELL[k];
+    }
+
+    /**
+     * Доля сечения σ, что объём сетки показывает верно в каскаде с клеткой cell: клетка расширяет сечение до
+     * √(σ² + (клетка/2)²) — при σ не меньше клетки шире на ≤ 12 %, вся доля; при σ не больше полклетки — на ≥ 41 %, доли
+     * нет (тонкое рисует лента следа); между — плавно. Не настройка картинки, а предел разрешения каскада.
+     */
+    public static double resolved(double sigma, double cell) {
+        if (cell <= 0) return 0;
+        double t = Math.max(0, Math.min(1, (sigma / cell - 0.5) / 0.5));
+        return t * t * (3 - 2 * t);
+    }
+
+    /**
+     * Множитель гаусса по отрезку против гаусса в точке (та же масса и σ) у точки на расстоянии q∥ вдоль отрезка от центра,
+     * в осях, где σ — единица; A — длина полуотрезка там: √(π/2)/(2A)·[erf((A − q∥)/√2) + erf((A + q∥)/√2)], к A → 0 —
+     * e^(−q∥²/2). Поперёк — свой множитель e^(−q⊥²/2). Та же формула — в {@code fx_smoke_fill} ({@code SmokeGlslTest}).
+     */
+    public static double line(double a, double q) {
+        if (a < LINE_POINT) return Math.exp(-0.5 * q * q);
+        return Math.sqrt(Math.PI / 2) / (2 * a) * (erf((a - q) / Math.sqrt(2)) + erf((a + q) / Math.sqrt(2)));
+    }
+
+    /** Короче этого (в σ) отрезок — точка: разность erf у коротких теряет точность в половинной точности шейдера. */
+    public static final double LINE_POINT = 0.05;
+
+    /** erf по Абрамовицу и Стиган 7.1.26 (ошибка ≤ 1,5·10⁻⁷), как в шейдере. */
+    static double erf(double x) {
+        double ax = Math.abs(x), t = 1 / (1 + 0.3275911 * ax);
+        double y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-ax * ax);
+        return Math.signum(x) * y;
+    }
+
     /** Клуб — в таблицу и в свой каскад; вне всех каскадов, пустой или сверх таблицы — нет. */
-    private static void put(Frame f, double[] corner, double ex, double ey, double ez, double x, double y, double z, double sh, double sv,
-                            double soot, double dust, double water, float dr, float dg, float db, double kelvin, double rise) {
+    private static void put(Frame f, double[] corner, double ex, double ey, double ez, double x, double y, double z, double ax, double ay,
+                            double az, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
+                            double kelvin, double rise) {
         if (f.count >= MAX_BLOBS) return;
-        int c = cascade(corner, x, y, z, sh, sv);
+        int c = cascade(corner, x, y, z, ax, ay, az, sh, sv);
         if (c < 0) return;
         double half = 0.5 * CELL[c], h = Math.sqrt(sh * sh + half * half), v = Math.sqrt(sv * sv + half * half);
         int i = f.count++;
@@ -342,19 +415,19 @@ public final class SmokeGrid {
         set(b, 0, i, (float) (x - ex), (float) (y - ey), (float) (z - ez), (float) h);
         set(b, 1, i, (float) v, (float) (SOOT_K * soot * peak), (float) (dustK(dr, dg, db) * dust * peak),
                 (float) (DROP_K * water * peak));
-        set(b, 2, i, dr, dg, db, 0);
-        set(b, 3, i, (float) (Math.max(0, kelvin - AIR_K) / 1000), (float) rise, 0, 0);
-        float rx = (float) (REACH * h), ry = (float) (REACH * v);
+        set(b, 2, i, dr, dg, db, (float) ax);
+        set(b, 3, i, (float) (Math.max(0, kelvin - AIR_K) / 1000), (float) rise, (float) ay, (float) az);
+        float rx = (float) (REACH * h + Math.abs(ax)), ry = (float) (REACH * v + Math.abs(ay)), rz = (float) (REACH * h + Math.abs(az));
         float px = (float) (x - ex), py = (float) (y - ey), pz = (float) (z - ez);
         f.min[0] = Math.min(f.min[0], px - rx);
         f.min[1] = Math.min(f.min[1], py - ry);
-        f.min[2] = Math.min(f.min[2], pz - rx);
+        f.min[2] = Math.min(f.min[2], pz - rz);
         f.max[0] = Math.max(f.max[0], px + rx);
         f.max[1] = Math.max(f.max[1], py + ry);
-        f.max[2] = Math.max(f.max[2], pz + rx);
+        f.max[2] = Math.max(f.max[2], pz + rz);
         // коробка каскада — в его границах (в последнем клуб может выходить за край)
         double span = N * CELL[c];
-        double[] lo = {x - REACH * h, y - REACH * v, z - REACH * h}, hi = {x + REACH * h, y + REACH * v, z + REACH * h};
+        double[] lo = {x - rx, y - ry, z - rz}, hi = {x + rx, y + ry, z + rz};
         double[] eye = {ex, ey, ez};
         for (int a = 0; a < 3; a++) {
             double from = corner[3 * c + a];
@@ -387,9 +460,9 @@ public final class SmokeGrid {
         for (int i = 0; i < f.count; i++) {
             int c = f.cascade[i];
             float cell = f.corner[4 * c + 3];
-            float y = f.blobs[(i) * 4 + 1], v = f.blobs[(MAX_BLOBS + i) * 4];
-            lo[i] = Math.max(0, (int) Math.floor((y - REACH * v - f.corner[4 * c + 1]) / cell));
-            hi[i] = Math.min(N - 1, (int) Math.floor((y + REACH * v - f.corner[4 * c + 1]) / cell));
+            float y = f.blobs[(i) * 4 + 1], v = f.blobs[(MAX_BLOBS + i) * 4], ay = Math.abs(f.blobs[(3 * MAX_BLOBS + i) * 4 + 2]);
+            lo[i] = Math.max(0, (int) Math.floor((y - REACH * v - ay - f.corner[4 * c + 1]) / cell));
+            hi[i] = Math.min(N - 1, (int) Math.floor((y + REACH * v + ay - f.corner[4 * c + 1]) / cell));
             for (int s = lo[i]; s <= hi[i]; s++) count[c * N + s]++;
         }
         int total = 0;
@@ -405,8 +478,9 @@ public final class SmokeGrid {
             int c = f.cascade[i];
             float cell = f.corner[4 * c + 3];
             float x = f.blobs[i * 4], z = f.blobs[i * 4 + 2], h = f.blobs[i * 4 + 3];
-            float x0 = clampCell((x - REACH * h - f.corner[4 * c]) / cell), x1 = clampCell((x + REACH * h - f.corner[4 * c]) / cell + 1);
-            float z0 = clampCell((z - REACH * h - f.corner[4 * c + 2]) / cell), z1 = clampCell((z + REACH * h - f.corner[4 * c + 2]) / cell + 1);
+            float sx = Math.abs(f.blobs[(2 * MAX_BLOBS + i) * 4 + 3]), sz = Math.abs(f.blobs[(3 * MAX_BLOBS + i) * 4 + 3]);
+            float x0 = clampCell((x - REACH * h - sx - f.corner[4 * c]) / cell), x1 = clampCell((x + REACH * h + sx - f.corner[4 * c]) / cell + 1);
+            float z0 = clampCell((z - REACH * h - sz - f.corner[4 * c + 2]) / cell), z1 = clampCell((z + REACH * h + sz - f.corner[4 * c + 2]) / cell + 1);
             if (x1 <= x0 || z1 <= z0) continue;
             for (int s = lo[i]; s <= hi[i]; s++) {
                 int l = c * N + s;

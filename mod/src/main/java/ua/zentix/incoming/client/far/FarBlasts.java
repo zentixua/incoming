@@ -415,7 +415,7 @@ public final class FarBlasts {
      * Воздух в месте взрыва: день по высоте солнца (как свет пелены), дождь, ветер мира в 10 м над морем ({@link ClientAir}) и
      * влажность — у воды 1, иначе — осадки биома (как облако Вильсона ядерки).
      */
-    static CloudModel.Air air(ClientLevel level, Vec3 pos) {
+    public static CloudModel.Air air(ClientLevel level, Vec3 pos) {
         float sun = net.minecraft.util.Mth.cos(level.getTimeOfDay(1) * net.minecraft.util.Mth.TWO_PI);
         boolean sky = level.dimensionType().hasSkyLight() && !level.dimensionType().hasCeiling();
         double day = sky ? Math.max(0, Math.min(1, (sun + 0.06) / 0.24)) : 0;
