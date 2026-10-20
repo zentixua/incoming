@@ -310,8 +310,17 @@ public final class FarFlightView {
      * Точки лент у всех сопел в тике t: что им даёт закон следа — по скорости снаряда в этом тике и воздуху. Невидимая точка (след на этой скорости и высоте не виден) ленту обрывает: следующая видимая начнёт новую.
      */
     private static void put(Far f, TrailPoints points, long t, Trail style, Light light) {
-        // скорость снаряда — из сущности или пакета (блоков за тик), м/с
-        double speed = f.track.velocity(t).length() * 20;
+        // скорость снаряда — его путь за прошлый тик (у сущности и по пакетам одинаково); пути до t нет — скорость
+        // из сущности или пакета
+        double speed;
+        if (f.track.covers(t - 1)) {
+            f.track.at(t, POS);
+            f.track.at(t - 1, NOZZLE);
+            double dx = POS[0] - NOZZLE[0], dy = POS[1] - NOZZLE[1], dz = POS[2] - NOZZLE[2];
+            speed = Math.sqrt(dx * dx + dy * dy + dz * dz) * 20;
+        } else {
+            speed = f.track.velocity(t).length() * 20;
+        }
         for (int k = 0, n = Math.min(MAX_NOZZLES, f.nozzles.size()); k < n; k++) {
             f.track.at(t, POS);
             f.track.offset(t, f.nozzles.get(k), POS);
