@@ -53,7 +53,9 @@ paths:
   радара — на карту стороны (`Sightings.spot`, `Source.RADAR`; своих не отмечает — карта рисует отмеченное чужим).
 - Вид и звук: `entity/InterceptorEntity` — только над готовым тикающим чанком, ставится на место полёта каждый тик,
   не сохраняется; модель `interceptor_body` (`tools/gen_models.py`, вдали не рисуется), шлейф и факел —
-  `Exhaust.interceptor`, мотор — `client/sound/InterceptorSound` (петля ускорителя, Доплер).
+  `Exhaust.interceptor`, мотор — `client/sound/InterceptorSound` (закон источника РДТТ `Noise.Rocket` по тяге и
+  истечению паспорта, путь `Propagation`, громкость `Loudness`, запаздывание `Acoustics.emissionTime` по своему пути
+  мест вида — как у `EngineSound`; петля ускорителя, голос 1,2).
 
 ## Подводные камни
 - Цели — только снаряды мода (решение Артёма: ПВО против ударов мода). Игроков, мобов, снаряды с седоком и аппараты
