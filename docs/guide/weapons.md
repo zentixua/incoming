@@ -59,12 +59,14 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   gases hit everyone.
 - **Fragments.** The steel casing of the warhead breaks into thousands of pieces. Their masses follow Mott's law for
   the casing's thickness and diameter, their starting speed Gurney's law for the charge and casing mass, and the air
-  slows each one by its size. They fly out in a belt across the warhead's axis, tilted forward by the speed of the
-  impact: a warhead diving at 60° sends half of the belt into the ground on one side and up into the air on the
-  other. A fragment stops in the first body or solid block on its way. It hurts by its impact energy: from about 79 J
+  slows each one by its size. They fly out in a belt across the warhead's axis. The detonation running from the nose to
+  the tail tilts the belt back (Taylor's angle), the warhead's own speed tilts it forward: the Shahed's and Lancet's
+  belts lean about 9° back, the Grad's about 6° forward. A warhead diving at 60° sends half of the belt into the ground
+  on one side and up into the air on the other. A fragment stops in the first body or solid block on its way. It hurts by its impact energy: from about 79 J
   (the US safety board's threshold for a hazardous fragment) it can wound badly, and a heavy, fast one can kill.
-  Fragments go through glass and break it, chip brick and stone walls (the block becomes its cracked version), and stop
-  in earth, wood, leaves and water. Nobody behind a wall is hit. The fragments do not glow: the steel comes out at roughly 500–700 K,
+  Fragments go through glass and break it, chip stone bricks, deepslate bricks and tiles, polished blackstone bricks
+  and nether bricks (the block becomes its cracked version; other blocks have no cracked look and stay as they are),
+  and stop in earth, wood, leaves and water. A shield held towards the blast stops them. Nobody behind a wall is hit. The fragments do not glow: the steel comes out at roughly 500–700 K,
   below the 798 K at which metal starts to glow, so you see where fragments hit (sparks on stone and metal, puffs of
   dust from earth and wood, glass) rather than the fragments themselves.
 

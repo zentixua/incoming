@@ -47,8 +47,8 @@ import java.util.function.BooleanSupplier;
  */
 public final class FragmentStrike implements UnitQueue.Job {
     /** Лучи одной единицы — не дольше, нс (и хоть {@link #MIN_RAYS}). */
-    static final long TRACE_NANOS = 4_000_000;
-    static final int MIN_RAYS = 64;
+    static final long TRACE_NANOS = 2_000_000;
+    static final int MIN_RAYS = 32;
     static final int BLOCK_PORTION = 64;
     static final int BODY_PORTION = 8;
     /**
@@ -165,8 +165,9 @@ public final class FragmentStrike implements UnitQueue.Job {
         List<Body> out = new ArrayList<>();
         for (Entity e : level.getAllEntities()) {
             if (!(e instanceof LivingEntity le) || !le.isAlive() || le.isSpectator()) continue;
-            if (le.getBoundingBox().distanceToSqr(centre) > r2) continue;
-            out.add(new Body(le, le.getBoundingBox()));
+            double d2 = le.getBoundingBox().distanceToSqr(centre);
+            if (d2 > r2) continue;
+            out.add(new Body(le, le.getBoundingBox(), Math.sqrt(d2)));
         }
         return out;
     }
@@ -187,6 +188,7 @@ public final class FragmentStrike implements UnitQueue.Job {
             Body hit = null;
             double at = range;
             for (Body b : bodies) {
+                if (b.near > at) continue;
                 double t = enter(b.box, centre, f.dir(), at);
                 if (t >= 0 && t < at && r.nextDouble() < BODY_FILL) {
                     at = t;
@@ -318,11 +320,14 @@ public final class FragmentStrike implements UnitQueue.Job {
     private static final class Body {
         final LivingEntity entity;
         final AABB box;
+        /** Ближняя точка рамки от взрыва, м: дальше пути осколка — не проверять. */
+        final double near;
         double hits, noDeath = 1, noInjury = 1;
 
-        Body(LivingEntity entity, AABB box) {
+        Body(LivingEntity entity, AABB box, double near) {
             this.entity = entity;
             this.box = box;
+            this.near = near;
         }
 
         void add(double joules, double weight) {

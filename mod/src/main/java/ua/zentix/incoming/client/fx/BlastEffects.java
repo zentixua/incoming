@@ -49,11 +49,14 @@ public final class BlastEffects {
         else if (FarBlasts.near(p.pos())) {
             GroundMaterial mat = GroundMaterial.byId(p.material());
             if (cloud == null && p.kind() != S2C.Blast.BUNKER) cloud = FarBlasts.model(p);
+            // осколки — только у боевой части оружия; взрыв без оружия в пакете (вторичные подрывы после ядерки, повтор
+            // до этого поля) корпуса не имеет
+            Vec3 axis = p.weapon() == S2C.Blast.NO_WEAPON ? null : p.axis();
             switch (p.kind()) {
-                case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), p.axis(), cloud));
+                case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), axis, cloud));
                 case S2C.Blast.BUNKER -> Effects.add(new Bunker(p.pos(), mat, p.surfaceY(), p.seed()));
-                case S2C.Blast.ROCKET -> Effects.add(new Drone(p.pos(), mat, p.seed(), p.axis(), true, cloud));
-                default -> Effects.add(new Drone(p.pos(), mat, p.seed(), p.axis(), false, cloud));
+                case S2C.Blast.ROCKET -> Effects.add(new Drone(p.pos(), mat, p.seed(), axis, true, cloud));
+                default -> Effects.add(new Drone(p.pos(), mat, p.seed(), axis, false, cloud));
             }
         }
     }
@@ -297,15 +300,20 @@ public final class BlastEffects {
         }
     }
 
-    /** Удары осколков взрыва ({@link FragmentHits}): лучи — в тик взрыва, удары — в тик прилёта каждого. */
+    /**
+     * Удары осколков взрыва ({@link FragmentHits}): лучи — в тик взрыва, удары — в тик прилёта каждого. Ось null —
+     * осколков нет.
+     */
     static final class FragmentQueue {
-        private final Vec3 pos, axis;
+        private final Vec3 pos;
+        @Nullable
+        private final Vec3 axis;
         private final long seed;
         private final BlastSource source;
         private java.util.List<FragmentHits.Hit> hits;
         private int next;
 
-        FragmentQueue(Vec3 pos, Vec3 axis, long seed, BlastSource source) {
+        FragmentQueue(Vec3 pos, @Nullable Vec3 axis, long seed, BlastSource source) {
             this.pos = pos;
             this.axis = axis;
             this.seed = seed;
@@ -313,7 +321,7 @@ public final class BlastEffects {
         }
 
         void tick(ClientLevel level, int t, RandomSource random) {
-            if (hits == null) hits = FragmentHits.of(level, source.weapon(), pos, axis, seed);
+            if (hits == null) hits = axis == null ? java.util.List.of() : FragmentHits.of(level, source.weapon(), pos, axis, seed);
             while (next < hits.size() && hits.get(next).tick() <= t) FragmentHits.show(level, hits.get(next++), random);
         }
     }
@@ -327,7 +335,7 @@ public final class BlastEffects {
         private final boolean rocket;
         private final FragmentQueue fragments;
 
-        Drone(Vec3 pos, GroundMaterial mat, long seed, Vec3 axis, boolean rocket, CloudModel model) {
+        Drone(Vec3 pos, GroundMaterial mat, long seed, @Nullable Vec3 axis, boolean rocket, CloudModel model) {
             super(pos, mat, seed, model.source);
             this.rocket = rocket;
             this.model = model;
@@ -408,7 +416,7 @@ public final class BlastEffects {
 
         private final FragmentQueue fragments;
 
-        Missile(Vec3 pos, GroundMaterial mat, long seed, Vec3 axis, CloudModel model) {
+        Missile(Vec3 pos, GroundMaterial mat, long seed, @Nullable Vec3 axis, CloudModel model) {
             super(pos, mat, seed, model.source);
             this.model = model;
             this.fragments = new FragmentQueue(pos, axis, seed, model.source);

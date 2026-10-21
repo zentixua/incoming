@@ -37,7 +37,8 @@ import java.util.SplittableRandom;
  *   Дрейпера (798 K), и сам в полёте не светится (оценка; накалены лишь тонкие поверхности разрыва — микросекунды).
  *   Видно, куда осколки попали: искры о камень и металл, пыль из грунта.</li>
  * </ul>
- * Урон — по энергии удара: {@link #injury}, {@link #death}.
+ * Урон — по энергии удара: {@link #injury}, {@link #death}. Счёт — {@link StrictMath}: у хоста и у друга на другом
+ * процессоре осколки одни до бита.
  *
  * @param count       осколков N₀
  * @param mu          масса Мотта μ, кг (средняя — 2μ)
@@ -118,7 +119,7 @@ public record FragmentModel(double count, double mu, double speed, double taylor
         double length = vHe / (Math.PI * inner * inner);
         double beta = w.explosive() / w.caseMass();
         double v0 = gurney * Math.sqrt(beta / (1 + beta / 2));
-        double sqrtMu = mott * Math.pow(t, 5.0 / 6) * Math.cbrt(d) * (1 + t / d);
+        double sqrtMu = mott * StrictMath.pow(t, 5.0 / 6) * StrictMath.cbrt(d) * (1 + t / d);
         double mu = sqrtMu * sqrtMu;
         return new FragmentModel(w.caseMass() / (2 * mu), mu, v0, v0 / (2 * detonation), impactSpeed, t, d, length);
     }
@@ -134,12 +135,12 @@ public record FragmentModel(double count, double mu, double speed, double taylor
 
     /** Доля осколков тяжелее {@code m} кг. */
     public double shareAbove(double m) {
-        return Math.exp(-Math.sqrt(Math.max(0, m) / mu));
+        return StrictMath.exp(-Math.sqrt(Math.max(0, m) / mu));
     }
 
     /** Средняя площадь осколка массой {@code m}, м². */
     public static double area(double m) {
-        return AREA_SHAPE * Math.pow(m / STEEL, 2.0 / 3);
+        return AREA_SHAPE * StrictMath.pow(m / STEEL, 2.0 / 3);
     }
 
     /** Путь, на котором скорость осколка массой {@code m} падает в e раз, м. */
@@ -149,19 +150,19 @@ public record FragmentModel(double count, double mu, double speed, double taylor
 
     /** Скорость осколка массой {@code m}, начавшего с {@code v}, через {@code s} м, м/с. */
     public static double speedAt(double v, double m, double s) {
-        return v * Math.exp(-s / dragLength(m));
+        return v * StrictMath.exp(-s / dragLength(m));
     }
 
     /** Время, за которое осколок пролетает {@code s} м, с: v = V·e^(−x/L) ⇒ t = L/V·(e^(s/L) − 1). */
     public static double timeTo(double v, double m, double s) {
         double l = dragLength(m);
-        return l / v * Math.expm1(s / l);
+        return l / v * StrictMath.expm1(s / l);
     }
 
     /** Путь, на котором энергия осколка падает до {@code joules}, м (0 — уже ниже). */
     public static double rangeTo(double v, double m, double joules) {
         double ve = Math.sqrt(2 * joules / m);
-        return v <= ve ? 0 : dragLength(m) * Math.log(v / ve);
+        return v <= ve ? 0 : dragLength(m) * StrictMath.log(v / ve);
     }
 
     /** Энергия осколка, Дж. */
@@ -199,7 +200,7 @@ public record FragmentModel(double count, double mu, double speed, double taylor
      * дальше осколков нет.
      */
     public double reach() {
-        double lnN = Math.log(Math.max(2, count));
+        double lnN = StrictMath.log(Math.max(2, count));
         double m = mu * lnN * lnN;
         return Math.min(MAX_RANGE, rangeTo(speed + impactSpeed, m, STOP_J));
     }
@@ -250,7 +251,7 @@ public record FragmentModel(double count, double mu, double speed, double taylor
     public Fragment fragment(long seed, int i, Vec3 axis) {
         SplittableRandom r = new SplittableRandom(seed ^ (0x9E3779B97F4A7C15L * (i + 1)));
         double u = 1 - r.nextDouble();
-        double ln = -Math.log(u);
+        double ln = -StrictMath.log(u);
         double m = mu * ln * ln;
         // нормаль к стенке, наклонённая к хвосту углом Тейлора, с разбросом пояса
         double polar = Math.PI / 2 + taylor + BELT_SIGMA * gaussian(r);
@@ -258,15 +259,15 @@ public record FragmentModel(double count, double mu, double speed, double taylor
         Vec3 a = axis.lengthSqr() < 1e-12 ? new Vec3(0, -1, 0) : axis.normalize();
         Vec3 p = Math.abs(a.y) < 0.9 ? a.cross(new Vec3(0, 1, 0)).normalize() : a.cross(new Vec3(1, 0, 0)).normalize();
         Vec3 q = a.cross(p);
-        Vec3 side = p.scale(Math.cos(az)).add(q.scale(Math.sin(az)));
-        Vec3 v = a.scale(speed * Math.cos(polar) + impactSpeed).add(side.scale(speed * Math.sin(polar)));
+        Vec3 side = p.scale(StrictMath.cos(az)).add(q.scale(StrictMath.sin(az)));
+        Vec3 v = a.scale(speed * StrictMath.cos(polar) + impactSpeed).add(side.scale(speed * StrictMath.sin(polar)));
         double s = v.length();
         return new Fragment(v.scale(1 / s), m, s);
     }
 
     private static double gaussian(SplittableRandom r) {
         double u1 = 1 - r.nextDouble(), u2 = r.nextDouble();
-        return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        return Math.sqrt(-2 * StrictMath.log(u1)) * StrictMath.cos(2 * Math.PI * u2);
     }
 
     /**

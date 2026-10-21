@@ -506,9 +506,13 @@ public final class Warheads {
         return Math.max(StagedExplosion.breakReach(tntKg), Math.max(crater, FuelFireball.diameter(fuelKg) / 2)) + EDGE;
     }
 
-    /** Ось боевой части у удара: курс снаряда; снаряда нет или он стоит — вниз. */
+    /**
+     * Ось боевой части у удара: последний шаг снаряда; стоял (ждал свой район) — куда смотрит нос; снаряда нет — вниз.
+     */
     static Vec3 axis(@Nullable Entity projectile) {
-        Vec3 v = projectile == null ? Vec3.ZERO : projectile.getDeltaMovement();
+        if (projectile == null) return S2C.Blast.DOWN;
+        Vec3 v = projectile.getDeltaMovement();
+        if (v.lengthSqr() < 1e-8) v = projectile.getLookAngle();
         return v.lengthSqr() < 1e-8 ? S2C.Blast.DOWN : v.normalize();
     }
 
@@ -567,12 +571,14 @@ public final class Warheads {
             main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(), direct, owner)) : List.of();
             // заряд на аппарате: воронку и шар топлива там не ставить — это корпус, а не земля. Снаряд отдаёт точку удара о
             // аппарат уже в мире (StrikeProjectile: SubLevels.toWorld), поэтому — и аппарат, чей габарит у точки
-            onCraft = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)))
-                    || !SubLevels.near(level, pos, 1).isEmpty();
+            inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
+            onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
         }
 
         /** Взрыв на аппарате Sable. */
         private final boolean onCraft;
+        /** Точка взрыва — в сетке плотов Sable (координаты аппарата, а не мира). */
+        private final boolean inPlots;
         /** Зерно взрыва (оно же в пакете взрыва): по нему осколки у сервера и клиента одни. */
         private final long seed;
         /** Ось боевой части — курс снаряда у удара. */
@@ -597,7 +603,8 @@ public final class Warheads {
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
                     l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));
             FragmentModel fragments = FragmentModel.of(weapon.spec());
-            if (fragments != null) FragmentStrike.queue(level, area, main, this::happened, fragments, pos, axis, seed, direct, owner,
+            // в сетке плотов Sable лучи шли бы по блокам аппарата: осколки аппараты не ломают
+            if (fragments != null && !inPlots) FragmentStrike.queue(level, area, main, this::happened, fragments, pos, axis, seed, direct, owner,
                     IncomingConfig.SERVER.shatterGlass.get(), IncomingConfig.SERVER.blockDamage.get());
             if (IncomingConfig.SERVER.shatterGlass.get()) shatterGlass(level, missile);
             return false;

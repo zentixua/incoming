@@ -25,7 +25,9 @@ import java.util.List;
  * Сам осколок в полёте не виден: стальной, ~500–700 K — ниже точки Дрейпера, мельче сантиметра и быстрее звука.
  * Видно удар: о камень и металл быстрый осколок высекает искры (горящие частицы стали), из грунта и дерева выбивает
  * облачко пыли и щепы, из стекла — осколки стекла. Сколько лучей показывать — по доле частиц ({@link Fx#density}),
- * не больше {@link #SHOWN}, и не дальше {@link #RANGE}.
+ * не больше {@link #SHOWN} (вдали — меньше), не дальше {@link #RANGE} от взрыва и не больше {@link #TICK_BUDGET} за тик
+ * на все взрывы. Луч клиента идёт в тик взрыва, по блокам, которые главный взрыв сервера ещё не снёс: в зоне, где
+ * волна ломает стены, удары показаны и на стенах, которые сейчас рухнут; дальше — там же, где выбоины сервера.
  */
 final class FragmentHits {
     private FragmentHits() {}
@@ -34,6 +36,12 @@ final class FragmentHits {
     static final int SHOWN = 256;
     /** Дальше клиент осколок не ведёт, блоков: облачко и искры там мельче пикселя, а лучи стоили бы кадра. */
     static final double RANGE = 96;
+    /** Камера дальше этого от взрыва — ударов не видно (облачко в полблока мельче пикселя), блоков. */
+    static final double SEEN = 200;
+    /** Лучей на всех взрывах за тик клиента не больше (залп «Градов» в одном тике). */
+    static final int TICK_BUDGET = 1024;
+    private static long budgetTick = Long.MIN_VALUE;
+    private static int budgetLeft;
     /**
      * Искры о твёрдое — от этой скорости удара, м/с (оценка: сталь о камень высекает искры и при десятках м/с, яркие
      * вспышки удара — от сотен).
@@ -48,7 +56,17 @@ final class FragmentHits {
         List<Hit> out = new ArrayList<>();
         FragmentModel model = weapon == null ? null : FragmentModel.of(weapon.spec());
         if (model == null) return out;
-        int n = Math.min(model.traced(), Fx.count(SHOWN, pos));
+        net.minecraft.client.Camera cam = net.minecraft.client.Minecraft.getInstance().gameRenderer.getMainCamera();
+        double d = cam.getPosition().distanceTo(pos);
+        if (d > SEEN) return out;
+        long now = level.getGameTime();
+        if (now != budgetTick) {
+            budgetTick = now;
+            budgetLeft = TICK_BUDGET;
+        }
+        // вдали удар мельче: лучей — меньше по расстоянию (вблизи — все SHOWN)
+        int n = Math.min(Math.min(model.traced(), budgetLeft), (int) (Fx.count(SHOWN, pos) * Math.min(1, RANGE / Math.max(d, 1))));
+        budgetLeft -= n;
         for (int i = 0; i < n; i++) {
             FragmentModel.Fragment f = model.fragment(seed, i, axis);
             double range = Math.min(RANGE, f.range());
