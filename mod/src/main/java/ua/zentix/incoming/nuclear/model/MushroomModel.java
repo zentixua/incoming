@@ -60,8 +60,8 @@ public final class MushroomModel {
      * раз сильнее, чем в красном, — отсюда бурый.
      */
     public static final double[] NO2_CROSS = {5.74e-24, 1.33e-23, 4.64e-23};
-    /** Толща поперёк ножки у наземного подрыва; у юбки — у низкого подрыва. */
-    static final double TAU_STEM = 4, TAU_SKIRT = 2;
+    /** Толща юбки поперёк у низкого подрыва (у ножки — по массе пыли, {@link StemDust}). */
+    static final double TAU_SKIRT = 2;
     /** За сколько секунд (e-кратно) оседает пыль у земли: воздушный подрыв, наземный (как у стены пыли). */
     public static final double DUST_SETTLE_AIR = 90, DUST_SETTLE_SURFACE = 240;
     /**
@@ -263,6 +263,14 @@ public final class MushroomModel {
      * null — гриба ещё нет или он уже рассеялся.
      */
     public static Shape shape(double t, double yieldKt, double hobM, boolean surface, double groundFrontM) {
+        return shape(t, yieldKt, hobM, surface, groundFrontM, StemDust.of(yieldKt, hobM, surface, StemDust.CLEAR));
+    }
+
+    /**
+     * То же с пылью ножки подрыва ({@link StemDust}: по его видимости — свет вспышки греет землю); null — таблица ещё
+     * считается, ножка без пыли.
+     */
+    public static Shape shape(double t, double yieldKt, double hobM, boolean surface, double groundFrontM, @org.jetbrains.annotations.Nullable StemDust dust) {
         if (t <= 0) return null;
         double stab = CloudModel.stabilizationSeconds(yieldKt);
         // рассеяние: первую половину его облако видно целиком, за вторую тает (оценка: тот же вид, что был у прежней жизни
@@ -303,13 +311,13 @@ public final class MushroomModel {
         double capDrops = DROP_SIGMA * roll * life / (spread * spread);
         double capNo2 = NO2_SHARE * NOX_PER_KT * yieldKt * life / Math.max(volume(capR, capH), 1);
         // ножка входит в выемку под куполом (воздух поднимается сквозь кольцо; у килотонн она шире купола и занимает весь
-        // низ шапки внутри кольца). Под шаром она — его след, со сворачиванием расходится до доли G&D. У наземного шар
-        // касается земли, и пыль уходит вверх за ним сразу: ножка — его след, без разрыва под шапкой. У воздушного пыль
-        // поднимают с земли ветры за фронтом, и столб догоняет шапку за десятую часть подъёма; у высокого — тоньше и бледнее
-        double catchUp = 0.1 * stab * smooth(rf, 2 * rf, hob);
-        double stemTop = (capBot + 0.3 * capH) * (catchUp <= 0 ? 1 : clamp(t / catchUp, 0, 1));
-        double dense = hob <= rf ? 1 : clamp(1.5 - hob / (rf * 4.8), 0.44, 1);
-        double stemTau = TAU_STEM * dense * smooth(4, 20, tau) * life;
+        // низ шапки внутри кольца). Под шаром она — его след, со сворачиванием расходится до доли G&D. Её вещество — пыль,
+        // которую подсос забрал из слоя у эпицентра (StemDust): у наземного шар касается земли, и ножка — его след без
+        // разрыва под шапкой; у воздушного пыль идёт вверх с воздухом ножки от начала подсоса и может не догнать шапку —
+        // столб пыли тогда висит под ней (NRC 1985, с. 22)
+        double stemR = capR * lerp(BALL_STEM, stemShare(yieldKt), roll);
+        double stemTop = hob <= rf ? capBot + 0.3 * capH : dust == null ? 0 : Math.min(capBot + 0.3 * capH, dust.top(t));
+        double stemTau = dust == null ? 0 : dust.tau(t, stemR) * smooth(4, 20, tau) * life;
         double lowDust = Math.exp(-Math.max(0, t - stab * 0.1) / (hob <= rf ? DUST_SETTLE_SURFACE : DUST_SETTLE_AIR));
         // юбка — пыль у основания ножки, поднятая за фронтом: её край без клубов — на 0,85 пути фронта по земле (с клубами
         // — до него), не дальше 0,7 радиуса шапки (за низом ножки с раструбом, DUST_BASE, и у килотонн — 0,43). Пока фронт
@@ -319,7 +327,7 @@ public final class MushroomModel {
         double skirtH = Math.max(1, Math.min(capBot * 0.12, 350 * Math.cbrt(yieldKt / 15)) * smooth(0, 30, t));
         double skirtTau = outer <= 0 ? 0 : TAU_SKIRT * smooth(0.5, 3, t) * (hob <= rf * 4 ? 1 : 0.5) * lowDust * life;
         return new Shape(t, life, top, capBot, capY, capR, ringR, ringA, ringB, domeY, domeR, domeH, capDrops, capNo2, stemTop,
-                capR * lerp(BALL_STEM, stemShare(yieldKt), roll), stemTau, lowDust, skirtR, skirtW, skirtH, skirtTau, endTop);
+                stemR, stemTau, lowDust, skirtR, skirtW, skirtH, skirtTau, endTop);
     }
 
     /**

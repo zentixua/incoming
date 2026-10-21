@@ -103,7 +103,9 @@ public final class DustModel {
     static final double FINE_S = 800;
     /**
      * Подсос в ножку: в пределах {@link #STEM_M}·∛(Y/15) м от эпицентра (за половиной — слабее), с {@link #STEM_FROM_S}
-     * ·∛(Y/15) с, e-кратно за {@link #STEM_S} с. Оценка: Такакура в 300 м — «небо стало светлеть» через минуты.
+     * ·∛(Y/15) с у воздушного подрыва (у шара на земле — сразу; между радиусом шара и двумя — плавно), e-кратно за
+     * {@link #STEM_S} с. Оценка: Такакура в 300 м — «небо стало светлеть» через минуты. Эту пыль получает ножка
+     * ({@link StemDust}).
      */
     static final double STEM_M = 1000, STEM_FROM_S = 10, STEM_S = 90;
     /** cal/см² → Дж/м². */
@@ -229,7 +231,10 @@ public final class DustModel {
         double heat = ThermalModel.fluenceCalPerCm2(lit, yieldKt, surfaceBurst, visibilityM) * CAL_PER_CM2 * high / lit;
         double buoyant = Math.min(TOP_MAX * ys, Math.sqrt(2 * (1 + 2 * ENTRAIN) * HEAT_SHARE * heat / (RHO_CP * LAPSE)));
         double stem = 1 - smooth(0.5 * STEM_M * ys, STEM_M * ys, ground);
-        return new Column(positive, soil, debris, first, buoyant, stem, STEM_FROM_S * ys, ground, hob, yieldKt);
+        // нисходящий поток шара у оси глушит подсос первые секунды — у подрыва, чей шар не касается земли; шар на земле
+        // (наземный и низкий) сам уносит пыль вверх с самого начала (StemDust)
+        double from = STEM_FROM_S * ys * smooth(ball, 2 * ball, hob);
+        return new Column(positive, soil, debris, first, buoyant, stem, from, ground, hob, yieldKt);
     }
 
     /**

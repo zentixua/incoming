@@ -458,7 +458,7 @@ float pallWallTop(float u) {
 
 // Доля пути пыли с ветром за фронтом за долю u положительной фазы (BlastWall.carriedShare): u·e^(1 − u), за фазой — 1
 float pallWallCarried(float u) {
-    float x = clamp(u, 0.0, 1.0);
+    float x = max(u, 0.0);
     return x * exp(1.0 - x);
 }
 
