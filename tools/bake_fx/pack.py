@@ -127,7 +127,8 @@ def fireball(src, out):
         save_rgba(tile[..., :3] ** (1 / 2.2), tile[..., 3], os.path.join(out, f"fireball_{k:02d}.png"))
         yy, xx = np.mgrid[0:TILE, 0:TILE]
         disc = (xx - TILE / 2 + 0.5) ** 2 + (yy - TILE / 2 + 0.5) ** 2 < (TILE / 2 / FIREBALL) ** 2
-        shown = tile[..., :3] * tile[..., 3:4]
+        # огонь на экране — в мере экрана (степень 1/2,2), как у прежнего шара (gen_particles: ball.json)
+        shown = np.clip(tile[..., :3], 0, None) ** (1 / 2.2) * np.clip(tile[..., 3:4], 0, 1)
         fire.append(round(float((shown @ np.array([0.2126, 0.7152, 0.0722]))[disc].mean()), 4))
         burn.append(round(times[i] / burn_s, 4))
         kelv.append(round(kel[i], 1))
@@ -168,6 +169,11 @@ def puff(src, out):
         growth.append(round(float(half / r0), 4))
         a = crop(alpha, cx, cy, half)
         rgb = {name: crop(np.stack([np.clip(light[s] * norm, 0, 1) for s in sides], -1), cx, cy, half) for name, sides in (("a", SIDES_A), ("b", SIDES_B))}
+        # край кадра — к нулю (последние 8 % радиуса): кадр по краю вещества 0,05, и на густом клубе срез у края квадрата
+        # шёл прямой чертой
+        yy, xx = np.mgrid[0:TILE, 0:TILE]
+        rr = np.hypot(xx - TILE / 2 + 0.5, yy - TILE / 2 + 0.5) / (TILE / 2)
+        a = a * np.clip((1 - rr) / 0.08, 0, 1)
         tiles.append((a, rgb))
     for k, (a, rgb) in enumerate(tiles):
         for name in ("a", "b"):

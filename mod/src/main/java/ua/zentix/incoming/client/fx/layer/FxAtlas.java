@@ -83,7 +83,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     private static volatile float[] ballShown = full();
     private static final ResourceLocation FIREBALL_LIGHT = Incoming.id("textures/fx/particle/fireball.json"),
             PUFF6_DATA = Incoming.id("textures/fx/particle/puff6.json");
-    /** Кадры шара: огонь на экране ({@link #fireLight}), время в долях горения и температура; пока не прочитаны — запасные. */
+    /** Кадры шара: огонь на экране ({@link #fireLightAt}), время в долях горения и температура; пока не прочитаны — запасные. */
     private static volatile Fireball fireball = Fireball.FALLBACK;
     /** Рост клуба в кадрах (во сколько раз край вещества больше, чем в первом); пока не прочитан — запасной. */
     private static volatile float[] puffGrowth = linear(1, 3);
@@ -221,6 +221,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         double k0 = at(f.kelvin, end);
         if (kelvin >= k0) return end;
         int next = from + 1;
+        if (next > n - 1) return n - 1;
         while (next < n - 1 && f.kelvin[next] > kelvin) next++;
         if (next == from + 1) return end + (next - end) * (k0 - kelvin) / Math.max(k0 - f.kelvin[next], 1e-6);
         return next - 1 + (f.kelvin[next - 1] - kelvin) / Math.max(f.kelvin[next - 1] - f.kelvin[next], 1e-6);
@@ -231,7 +232,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return FIREBALL[Math.clamp((int) frame, 0, FIREBALL_FRAMES - 1)];
     }
 
-    /** Огонь шара на экране в кадре {@code frame} ({@link #fireLight}), между кадрами — плавно. */
+    /** Огонь шара на экране в кадре {@code frame} ({@link #fireLightAt}), между кадрами — плавно. */
     public static float fireLightAt(double frame) {
         return (float) at(fireball.fire, frame);
     }

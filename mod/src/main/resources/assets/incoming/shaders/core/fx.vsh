@@ -110,7 +110,8 @@ vec3 ballsToward(vec3 p, out vec3 dir) {
         vec3 v = FxBalls[i].xyz - p;
         float d2 = max(dot(v, v), r * r), reach = BALL_REACH * r * BALL_REACH * r;
         vec3 add = FxBallLight[i].rgb * (r * r / d2) * (1.0 - smoothstep(0.25 * reach, reach, d2));
-        add = add / (1.0 + sky * dot(add, LUMA) / max(FxBallLight[i].w, 1e-4));
+        // на экране свет шара — цвет вершины (× свет неба) × степень 1/2,2 линейного: предел огня w (на экране) — в той же мере
+        add = add / (1.0 + dot(add, LUMA) / pow(max(FxBallLight[i].w, 1e-4) / sky, 2.2));
         sum += add;
         d += dot(add, LUMA) * v / sqrt(max(dot(v, v), 1e-6));
     }

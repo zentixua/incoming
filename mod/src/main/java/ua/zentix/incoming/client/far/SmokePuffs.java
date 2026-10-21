@@ -21,7 +21,8 @@ import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
  * <li><b>Кадр</b> — тот, где симуляция выросла во столько же раз, во сколько вещество источника с выброса
  * ({@link SmokeGrid.Source#puffGrowth}, {@link FxAtlas#puffFrame}), у каждого клуба кучки со своим сдвигом.</li>
  * </ul>
- * Светящийся газ (горячее точки Дрейпера) рисует сам источник — огненным шаром или пламенем, здесь его нет. Отрезок
+ * Светящийся газ (горячее точки Дрейпера) у источника, что рисует тело огня ({@link SmokeGrid.Source#drawsGlow}: облако
+ * взрыва — огненным шаром), здесь не рисуется: дым проступает той же долей, что тело тает. Отрезок
  * ({@link SmokeGrid.Sink#segment}: след, шлейф пожара) — клубы вдоль него через ~σ.
  */
 final class SmokePuffs {
@@ -62,6 +63,7 @@ final class SmokePuffs {
         /** Кадр клуба по росту вещества (с дробью). */
         private double age;
         private long seed;
+        private boolean glow;
         private int index;
 
         void begin(FarView view, FarSprites out, SmokeGrid.Source source, double seconds) {
@@ -70,6 +72,7 @@ final class SmokePuffs {
             this.source = source;
             this.age = FxAtlas.puffFrame(source.puffGrowth(seconds));
             this.seed = source.seed();
+            this.glow = source.drawsGlow();
             this.index = 0;
         }
 
@@ -78,7 +81,7 @@ final class SmokePuffs {
                             double water, float dustR, float dustG, float dustB, double kelvin, double rise) {
             int at = index++;
             // светящийся газ — тело огня у источника; остывая, он проступает дымом той же долей, что тело тает
-            double smoke = 1 - CloudModel.glowShare(kelvin);
+            double smoke = glow ? 1 - CloudModel.glowShare(kelvin) : 1;
             if (smoke <= 0 || soot + dust + water <= 0 || !(sh > 0) || !(sv > 0)) return;
             soot *= smoke;
             dust *= smoke;

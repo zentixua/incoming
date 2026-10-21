@@ -312,6 +312,12 @@ public final class FarBlasts {
             return seed;
         }
 
+        /** Огненный шар — тело огня ({@link #light}): горячие клубы модели — его, не дым. */
+        @Override
+        public boolean drawsGlow() {
+            return true;
+        }
+
         /** Во сколько раз облако выросло с начала (σ по горизонтали) — кадр запечённого клуба. */
         @Override
         public double puffGrowth(double seconds) {
@@ -693,7 +699,7 @@ public final class FarBlasts {
                 (float) (BB[2] / m));
     }
 
-    /** Огонь языков пламени лужи на экране (доля белого): свет пламени вокруг не ярче (как у шара, {@link FxAtlas#fireLight}). */
+    /** Огонь языков пламени лужи на экране (доля белого): свет пламени вокруг не ярче (как у шара, {@link FxAtlas#fireLightAt}). */
     static final double POOL_FIRE = 0.8;
 
     /**
@@ -743,7 +749,7 @@ public final class FarBlasts {
      * {@link #behind}.
      *
      * @param light яркость шара против белого экрана, без привыкания глаза
-     * @param fire  огонь шара на экране ({@link FxAtlas#fireLight}): зарево не ярче
+     * @param fire  огонь шара на экране ({@link FxAtlas#fireLightAt}): зарево не ярче
      */
     private static void halo(FarView view, FarSprites out, double gx, double gy, double gz, double rad, double light, double fire, double t, float[] c) {
         double d = Math.sqrt(gx * gx + gy * gy + gz * gz);

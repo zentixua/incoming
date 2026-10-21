@@ -131,16 +131,6 @@ public final class LaunchCloud implements SmokeGrid.Source {
         life = lifeSeconds();
     }
 
-    /**
-     * Облако старта — масштаба сетки, если уже в начале (σ термика всего поданного тепла) не у́же двух клеток её мелкого
-     * каскада: у МБР (~7 м) — объём, у «Града», крылатой ракеты и шахеда (1,5–2,5 м) — клубы слоя. Сетка ещё и
-     * в каждом кадре берёт его, только пока его клетка разрешает ({@link SmokeGrid#RESOLVE}).
-     */
-    @Override
-    public boolean volume() {
-        return thermal != null && thermal.sigmaH(0) >= SmokeGrid.RESOLVE * SmokeGrid.CELL[0];
-    }
-
     /** Зерно клубов — по месту и началу подачи (у двух облаков рядом — разные клубы). */
     @Override
     public long seed() {

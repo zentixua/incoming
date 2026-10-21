@@ -330,9 +330,10 @@ public final class FarSprites {
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
         // длина отрезка на экране (поперёк луча к его середине) против его ширины: торцом — круг
         double seg = Math.sqrt(tx * tx + ty * ty + tz * tz), across = len / Math.max(Math.sqrt(mx * mx + my * my + mz * mz), 1e-9);
-        // торцом — только когда отрезок и луч почти параллельны (sin < 0,5): сбоку короткий отрезок широкого старого следа —
-        // лента, иначе диски соседних отрезков ложились бы друг на друга и густили след
-        double side = across < 0.5 * seg ? endOn(across, 0.5 * (halfA * ka + halfB * kb) / RIBBON) : 1;
+        // торцом — только когда отрезок и луч почти параллельны (sin до 0,35, к 0,5 — плавно к ленте): сбоку короткий отрезок
+        // широкого старого следа — лента, иначе диски соседних отрезков ложились бы друг на друга и густили след
+        double tilt = Math.max(0, Math.min(1, (across / Math.max(seg, 1e-9) - 0.35) / 0.15));
+        double side = Math.max(endOn(across, 0.5 * (halfA * ka + halfB * kb) / RIBBON), tilt * tilt * (3 - 2 * tilt));
         if (side < 1) {
             // торец трубки: круг её ширины, толща вдоль взгляда — длина отрезка в ширинах (непрозрачность ленты — поперёк)
             double halfW = 0.5 * (halfA * ka + halfB * kb) / RIBBON, a = 0.5 * (Math.min(1, alphaA) + Math.min(1, alphaB));
