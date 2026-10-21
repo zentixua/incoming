@@ -36,6 +36,7 @@ import ua.zentix.incoming.guidance.Craft;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
 import ua.zentix.incoming.guidance.Route;
+import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.strike.CameraLink;
 import ua.zentix.incoming.strike.ChunkTickets;
@@ -122,6 +123,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     protected int age;
     /** Сколько урона ещё выдержит; -1 — не задано (берётся {@link #maxHealth()}). */
     protected float health = -1;
+    /** Воздух, закреплённый зерном сценария ({@link #seed}); null — воздух мира. */
+    @Nullable
+    private Air pinnedAir;
     /** Удержание высоты: сглаженная заданная высота. */
     protected final AltitudeHold altitude = new AltitudeHold();
     /** Снаряд глазами автопилота ({@code guidance}): датчики и органы управления. */
@@ -375,10 +379,23 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
     /**
      * Зерно своей случайности снаряда (круг барража, сторона ухода B-2) — до {@link #launch}: сценарии полёта
-     * (GameTest) повторяют полёт точно. В игре не зовётся: у каждого снаряда своё случайное зерно.
+     * (GameTest) повторяют полёт точно. Оно же закрепляет воздух снаряда ({@link #air}): ветер мира зависит от времени
+     * игры, а партия сценария идёт в разное время (части CI). В игре не зовётся: у каждого снаряда своё случайное зерно
+     * и воздух мира.
      */
     public void seed(long seed) {
         random.setSeed(seed);
+        pinnedAir = Air.of(Math.floorMod(seed, 30L * 24_000), 1, 0, 0);
+    }
+
+    /** Снаряд, который этот выпускает (бомба B-2), летит в том же воздухе: и закреплённом сценарием. */
+    final void shareAir(StrikeProjectile child) {
+        child.pinnedAir = pinnedAir;
+    }
+
+    /** Воздух, в котором летит снаряд: воздух мира сейчас, у сценария полёта — закреплённый зерном ({@link #seed}). */
+    protected final Air air() {
+        return pinnedAir != null ? pinnedAir : Air.of(level());
     }
 
     /** Ядерная боевая часть (только для носителей, которые её несут). */

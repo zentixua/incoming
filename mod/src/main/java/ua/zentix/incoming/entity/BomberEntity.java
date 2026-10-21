@@ -196,6 +196,7 @@ public class BomberEntity extends StrikeProjectile {
         if (bomb == null) return;
         bomb.drop(position().add(0, -BombDrop.DROP_BELOW, 0), flight.yaw(), drop, goal, ownerId());
         bomb.setNuclear(nuclear);
+        shareAir(bomb);
         // по UUID бомбы из предупреждений снаряда находится её B-2
         Incoming.LOG.info("B-2 {} dropped bomb {} at {}, {} blocks from the aim point, {} above it (off-world {})", getUUID(), bomb.getUUID(),
                 blockPosition(), Math.round(position().subtract(drop).horizontalDistance()), Math.round(getY() - drop.y), isVirtual());

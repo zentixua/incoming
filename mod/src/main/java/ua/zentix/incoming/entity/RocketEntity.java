@@ -349,7 +349,7 @@ public class RocketEntity extends StrikeProjectile {
 
     /** Ветер, который знает расчёт огня ({@link #groundWindOnly}). */
     private Ballistics.Wind known() {
-        Air air = Air.of(level());
+        Air air = air();
         return groundWindOnly ? Ballistics.Wind.ground(air) : Ballistics.Wind.of(air);
     }
 
@@ -402,7 +402,7 @@ public class RocketEntity extends StrikeProjectile {
     private void fly(Vec3 to) {
         double h = Math.max(0.05, v0.horizontalDistance()), d = Math.sqrt(to.subtract(start).horizontalDistanceSqr());
         int ticks = (int) Math.min(6000, 3 * d / h + 400) + OVERSHOOT_TICKS;
-        path = Ballistics.fly(start, v0, FLIGHT.drag(), Ballistics.Wind.of(Air.of(level())), to.y - BELOW_IMPACT, ticks);
+        path = Ballistics.fly(start, v0, FLIGHT.drag(), Ballistics.Wind.of(air()), to.y - BELOW_IMPACT, ticks);
         double k = path.arrival(start, to);
         flightTicks = Double.isNaN(k) ? Math.max(1, path.ticks()) : Math.max(1, (int) Math.ceil(k));
         landing = Double.isNaN(k) ? to : path.at(k);

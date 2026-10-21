@@ -113,7 +113,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         }
         Vec3 aim = tracker.point();
         speed = BombDrop.steer(flight, position(), speed, aim);
-        Air air = Air.of(level);
+        Air air = air();
         double y = getY();
         windDrift = BombDrop.drift(windDrift, new Vec3(air.windX(y) / 20, 0, air.windZ(y) / 20), speed);
         advance(level, aim, airframe().reachPad());
