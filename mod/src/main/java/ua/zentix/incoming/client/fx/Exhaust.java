@@ -7,6 +7,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.ClientWeaponSpec;
+import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.plume.Air;
@@ -16,6 +17,12 @@ import ua.zentix.incoming.client.fx.plume.TrailModel;
 import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxBudget;
+import ua.zentix.incoming.client.fx.layer.FxLights;
+import ua.zentix.incoming.client.fx.smoke.CloudModel;
+import ua.zentix.incoming.client.fx.smoke.FirePlume;
+import ua.zentix.incoming.client.fx.smoke.Puffs;
+import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
+import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.entity.BomberEntity;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
@@ -264,8 +271,53 @@ public final class Exhaust {
     // ---------------------------------------------------------------- обломки
 
     private static final Map<DebrisEntity, Vec3> DEBRIS = new WeakHashMap<>();
+    /** Дым горящих обломков — выбросами модели облака ({@link Puffs}), по обломку. */
+    private static final Map<DebrisEntity, Burning> BURNING = new WeakHashMap<>();
 
-    /** Горящий обломок: языки огня и жирный чёрный дым по всему пути; остывший — пыльный след, пока летит. */
+    /**
+     * Горящий обломок: дерево горит гранью ~1 м² ({@link FirePlume#BLOCK_WATTS}, как блок огня у дыма пожаров), за каждые
+     * {@link #PUFF_S} с полёта — выброс тепла и сажи древесины ({@link FirePlume#SOOT_PER_JOULE}) термиком с места обломка.
+     * Газ над пламенем — избыток на оси по Хескестаду у вершины пламени ({@link FirePlume#excess}).
+     */
+    private static final class Burning {
+        final Puffs smoke;
+        double fed;
+        Vec3 at = Vec3.ZERO;
+
+        Burning(Puffs smoke, double seconds) {
+            this.smoke = smoke;
+            this.fed = seconds;
+        }
+    }
+
+    private static final double[] BB = new double[4];
+
+    /**
+     * Пламя горящих обломков светит на дым, частицы и ленты вокруг ({@link FxLights}): шар чёрного тела пламени
+     * ({@link FirePlume#FLAME_K}) радиусом в полвысоты пламени по Хескестаду, с привыканием глаза кадра.
+     */
+    public static void lights(FarView view, FxLights lights) {
+        if (BURNING.isEmpty()) return;
+        double now = SmokeGrid.seconds(view.partial()), r = 0.5 * DEBRIS_FLAME.flameHeight();
+        BlackBody.light(FirePlume.FLAME_K, BB);
+        double m = Math.max(BB[0], Math.max(BB[1], BB[2]));
+        Vec3 cam = view.camera();
+        for (Burning b : BURNING.values()) {
+            if (now - b.fed > 2 * PUFF_S + 0.1) continue;
+            lights.add(b.at.x - cam.x, b.at.y + r - cam.y, b.at.z - cam.z, r, Sight.adapted(BB[3], view.ambient()), FireSmoke.FLAME_ON_SCREEN,
+                    (float) (BB[0] / m), (float) (BB[1] / m), (float) (BB[2] / m));
+        }
+    }
+
+    /** Выброс дыма горящего обломка — раз в столько секунд пути (клуб у обломка — ~0,5 м, на скорости обломка ~10 м/с — через ~σ). */
+    static final double PUFF_S = 0.1;
+    /** Пламя обломка: грань дерева, очаг ~1 м² ({@link FirePlume}). */
+    static final FirePlume DEBRIS_FLAME = new FirePlume(1, FirePlume.CALM, 3);
+
+    /**
+     * Горящий обломок: языки огня частицами (светящееся тело) и дым — выбросами модели облака ({@link Burning}), свет пламени —
+     * на дым и частицы вокруг ({@link #lights}); остывший — пыльный след, пока летит.
+     */
     public static void debris(DebrisEntity e) {
         if (!(e.level() instanceof ClientLevel level)) return;
         Vec3 p = e.position().add(0, 0.5, 0);
@@ -274,10 +326,21 @@ public final class Exhaust {
         RandomSource r = level.random;
         if (e.isHot()) {
             Fx.fire().vel(r.nextGaussian() * 0.02, 0.04, r.nextGaussian() * 0.02).size(0.35f, 0.6f).life(8 + r.nextInt(6)).spawn(level, p);
-            Fx.Spec smoke = Fx.smoke().vel(0, 0.03, 0).size(0.35f, 1.8f).life(90 + r.nextInt(50)).color(0x221E1C, 0x5E5854).alpha(0.7f)
-                    .glow(0.5f, 4).rise(0.005f).fadeIn(2).fadeFrom(0.35f).budget(FxBudget.DEBRIS);
-            if (moving) segment(level, from, p, smoke, 0.8, r);
-            else if (r.nextInt(3) == 0) smoke.spawn(level, p);
+            double now = SmokeGrid.seconds(0);
+            Burning b = BURNING.get(e);
+            if (b == null) {
+                b = new Burning(new Puffs(FarBlasts.air(level, p), 0.2f, 0.19f, 0.18f, e.getUUID().getLeastSignificantBits()), now);
+                BURNING.put(e, b);
+                SmokeGrid.add(b.smoke);
+            }
+            b.at = p;
+            double dt = now - b.fed;
+            if (dt >= PUFF_S) {
+                double watts = FirePlume.BLOCK_WATTS * dt, top = DEBRIS_FLAME.flameHeight();
+                b.smoke.add(p.x, p.y + top, p.z, now, FirePlume.CONVECTIVE * watts, CloudModel.T_AIR_K + DEBRIS_FLAME.excess(top), 0.5,
+                        FirePlume.SOOT_PER_JOULE * watts, 0, 0, Double.NaN);
+                b.fed = now;
+            }
         } else if (moving) {
             segment(level, from, p, Fx.smoke().size(0.2f, 0.8f).life(40).color(0x8A8278, 0xA8A098).alpha(0.35f).fadeFrom(0.3f).budget(FxBudget.DEBRIS), 1.2, r);
         }

@@ -190,6 +190,9 @@ public final class FxLayer {
         QUADS.nearestTexels(false);
         SmokeFrame.build(view.camera(), view.partial());
         FarRenderer.collect(view, QUADS, LIGHTS, PROBES);
+        // пламя пожаров и горящих обломков светит на дым и частицы вокруг
+        ua.zentix.incoming.client.fx.FireSmoke.lights(view, LIGHTS);
+        ua.zentix.incoming.client.fx.Exhaust.lights(view, LIGHTS);
         if (warmup) {
             // невидимый квадрат: ни света, ни заслона — кадр проходит весь путь до первого настоящего, с пробой источника
             // перед глазом (проба считается, квадрат её берёт)
