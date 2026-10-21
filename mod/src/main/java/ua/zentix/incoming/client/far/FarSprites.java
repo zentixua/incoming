@@ -134,7 +134,16 @@ public final class FarSprites {
      * ближе квадрата и так).
      */
     public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a) {
-        if (billboard(dx, dy, dz, half, 0, FxAtlas.white(), r * a, g * a, b * a, a, 0)) counts[0]++;
+        veil(dx, dy, dz, half, r, g, b, a, LightTexture.FULL_BRIGHT);
+    }
+
+    /** То же со светом мира {@code light} (упакованный, для карты освещения): вещество ленты следа освещает мир у глаза. */
+    public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light) {
+        if (a < 0.002f) return;
+        double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        out.billboard((float) dx, (float) dy, (float) dz, (float) d, (float) half, 0, FxAtlas.white(), Math.min(1, r * a), Math.min(1, g * a),
+                Math.min(1, b * a), Math.min(1, a), 0, 1, light, 0);
+        counts[0]++;
     }
 
     /**
@@ -330,6 +339,20 @@ public final class FarSprites {
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
         // длина отрезка на экране (поперёк луча к его середине) против его ширины: торцом — круг
         double seg = Math.sqrt(tx * tx + ty * ty + tz * tz), across = len / Math.max(Math.sqrt(mx * mx + my * my + mz * mz), 1e-9);
+        // глаз у самой трубки (ближе двух полуширин к отрезку): лента — плоскость через глаз; её вещество вокруг глаза —
+        // вуалью: толща по взгляду — путь в трубке (длина отрезка или ширина на синус угла к нему) в ширинах
+        double hw = 0.5 * (halfA * ka + halfB * kb) / RIBBON, gap = distance(x0, y0, z0, tx, ty, tz);
+        double inside = 1 - smoothstep(hw, 2 * hw, gap);
+        if (inside > 0) {
+            double sin = Math.sqrt(Math.max(0, 1 - sq((tx * fx + ty * fy + tz * fz) / Math.max(seg, 1e-9))));
+            double path = Math.min(seg, 2 * hw / Math.max(sin, 0.1));
+            double a = 0.5 * (Math.min(1, alphaA) + Math.min(1, alphaB));
+            float k = (float) (inside * (1 - Math.pow(1 - Math.min(a, 0.999), Math.max(1, path / (2 * Math.max(hw, 1e-6))))));
+            if (k > 0.004f) veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, VEIL_AT * 4, Math.min(1, r), Math.min(1, g), Math.min(1, b), k, lightA);
+            alphaA *= (float) (1 - inside);
+            alphaB *= (float) (1 - inside);
+            if (alphaA < 0.002f && alphaB < 0.002f) return false;
+        }
         // торцом — только когда отрезок и луч почти параллельны (sin до 0,35, к 0,5 — плавно к ленте): сбоку короткий отрезок
         // широкого старого следа — лента, иначе диски соседних отрезков ложились бы друг на друга и густили след
         double tilt = Math.max(0, Math.min(1, (across / Math.max(seg, 1e-9) - 0.35) / 0.15));
@@ -379,6 +402,21 @@ public final class FarSprites {
         joint[1] = ny;
         joint[2] = nz;
         return true;
+    }
+
+    /** Вуаль трубки следа вокруг глаза — на столько блоков перед ним (как у облаков, {@link SmokePuffs#VEIL_AT}). */
+    static final double VEIL_AT = SmokePuffs.VEIL_AT;
+
+    /** Расстояние от глаза (начало координат) до отрезка от (x0, y0, z0) длиной (tx, ty, tz). */
+    static double distance(double x0, double y0, double z0, double tx, double ty, double tz) {
+        double t2 = tx * tx + ty * ty + tz * tz;
+        double u = t2 < 1e-12 ? 0 : Math.max(0, Math.min(1, -(x0 * tx + y0 * ty + z0 * tz) / t2));
+        double px = x0 + tx * u, py = y0 + ty * u, pz = z0 + tz * u;
+        return Math.sqrt(px * px + py * py + pz * pz);
+    }
+
+    private static double sq(double v) {
+        return v * v;
     }
 
     /**
