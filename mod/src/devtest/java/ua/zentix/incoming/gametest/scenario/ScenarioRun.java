@@ -118,6 +118,8 @@ final class ScenarioRun {
     /** Точка неподвижной цели, куда снаряд должен попасть (null — цель движется или пропала). */
     @Nullable
     private Vec3 stationaryAim;
+    /** Дальность стрельбы РСЗО, блоков: допуск попадания — с её рассеиванием ({@link WeaponSpec.Ballistic#sigma}). */
+    private double rocketRange;
     private double retargetShift;
     /** Маршрут оператора ({@code WAYPOINTS}) и сколько его точек снаряд уже прошёл. */
     private Waypoints via = Waypoints.NONE;
@@ -409,10 +411,14 @@ final class ScenarioRun {
         return e;
     }
 
-    /** Точка падения РСЗО: рассеивание ~1% дальности по нормали, как {@code StrikeService.scatter}. */
+    /**
+     * Точка падения РСЗО — сама точка, как у {@code StrikeService}: рассеивание (разброс схода и ветер) — у снаряда в
+     * полёте; дальность — для допуска попадания ({@link #checkHit}). Сдвиг {@code p.scatter()} по-прежнему тянется из
+     * зерна (прочие возмущения сценария не сдвигаются), но не применяется.
+     */
     private Vec3 scatter(Vec3 from, Vec3 point) {
-        double sigma = Math.max(1, Math.sqrt(from.distanceToSqr(point.x, from.y, point.z)) * 0.01);
-        aim = point.add(p.scatter().scale(sigma));
+        rocketRange = Math.sqrt(from.distanceToSqr(point.x, from.y, point.z));
+        aim = point;
         return aim;
     }
 
@@ -750,6 +756,9 @@ final class ScenarioRun {
         double step = tracks.values().stream().mapToDouble(tr -> tr.lastStep).max().orElse(0);
         // запас взрывателя сверх шага, как в advance (паспорт)
         double reach = step + s.launch().weapon.spec().airframe().reachPad() + 1;
+        // неуправляемый: ещё три СКО рассеивания по каждой оси
+        WeaponSpec.Ballistic b = s.launch().weapon.spec().airframe().ballistic();
+        if (b != null) reach += 3 * Math.sqrt(2) * b.sigma(rocketRange);
         double miss = outcome.at.distanceTo(stationaryAim);
         h.assertTrue(miss <= reach, String.format(Locale.ROOT, "взрыв в %.1f блоках от неподвижной цели (дальность %.1f) у %s",
                 miss, reach, rel(outcome.at)));

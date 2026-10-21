@@ -349,7 +349,19 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * @param spreadAngle разброс схода: СКО направления, ° (игровое: рассеивание залпа)
      * @param spreadSpeed разброс схода: СКО скорости, доля
      */
-    public record Ballistic(double drag, double spreadAngle, double spreadSpeed) {}
+    public record Ballistic(double drag, double spreadAngle, double spreadSpeed) {
+        /** Снос ветром, который расчёт огня не знает (наверху ветер сильнее, чем у земли), — доля дальности (оценка сверху). */
+        static final double UNKNOWN_WIND = 0.01;
+
+        /**
+         * СКО точки падения по каждой оси на дальности {@code range} блоков — оценка сверху: разброс направления и скорости
+         * схода (у навесной траектории дальность меняется со скоростью примерно в той же доле) и снос ветром
+         * ({@link #UNKNOWN_WIND}); не меньше блока, 0 — разброса нет.
+         */
+        public double sigma(double range) {
+            return spreadAngle == 0 && spreadSpeed == 0 ? 0 : Math.max(1, range * (Math.toRadians(spreadAngle) + spreadSpeed + UNKNOWN_WIND));
+        }
+    }
 
     /**
      * Снаряд на экране радара ЗРК ({@code defense.Radar}): с какой дальности его видно и тратит ли ЗРК на него ракету.

@@ -168,6 +168,8 @@ class FlightModelTest {
         double sigmaX = Math.sqrt(sx / n), sigmaZ = Math.sqrt(sz / n);
         assertTrue(sigmaX > 2 && sigmaX < 10, "по направлению σ " + sigmaX);
         assertTrue(sigmaZ > 2 && sigmaZ < 12, "по дальности σ " + sigmaZ);
+        // оценка паспорта — сверху, вместе со сносом ветром
+        assertTrue(b.sigma(600) >= Math.max(sigmaX, sigmaZ) + land.x / 2, "оценка σ " + b.sigma(600));
     }
 
     /** Бомба: тяжесть вдоль пути разгоняет, сопротивление ограничивает — к пределу √(g/drag), не выше. */

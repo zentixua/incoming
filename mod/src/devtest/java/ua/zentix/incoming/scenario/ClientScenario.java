@@ -3201,14 +3201,12 @@ public final class ClientScenario {
     /**
      * Допуск промаха по карте: {@link #MAP_MAX_MISS} и три СКО промаха — рассеивания неуправляемого (РСЗО) на
      * {@code range} блоков от стреляющего и промаха пуска из паспорта (у шахеда σ 3 блока по каждой оси: попадание в 3–4
-     * блоках от точки — его обычный разброс). Рассеивание РСЗО — разброс схода ({@link WeaponSpec.Ballistic}: угол на
-     * дальность) и снос ветром, который расчёт огня не знает (~1 % дальности), не меньше блока.
+     * блоках от точки — его обычный разброс). Рассеивание РСЗО — {@link WeaponSpec.Ballistic#sigma}.
      */
     private static double allowedMiss(@org.jetbrains.annotations.Nullable WeaponType weapon, double range) {
         if (weapon == null) return MAP_MAX_MISS;
         WeaponSpec.Ballistic b = weapon.spec().striker().ballistic();
-        double scatter = b == null || b.spreadAngle() == 0 ? 0 : Math.max(1, range * (Math.toRadians(b.spreadAngle()) + b.spreadSpeed() + 0.01));
-        return MAP_MAX_MISS + 3 * Math.hypot(scatter, weapon.spec().route().error());
+        return MAP_MAX_MISS + 3 * Math.hypot(b == null ? 0 : b.sigma(range), weapon.spec().route().error());
     }
     /** Точка, выбранная на карте (сценарий target-map); её читает и поток сервера. */
     @org.jetbrains.annotations.Nullable
