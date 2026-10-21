@@ -71,13 +71,13 @@ class BlastModelTest {
         assertEquals(0, BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(1), 0), 0);
     }
 
-    /** Стекло (0,8 psi) у наземного взрыва шахеда (50 кг) вылетает до ~73 м, ракеты (450 кг) — до ~150 м. */
+    /** Стекло (0,8 psi) у наземного взрыва шахеда (50 кг) вылетает до ~73 м, ракеты (~150 кг ТНТ) — до ~105 м. */
     @Test
     void surfaceRangeForGlass() {
         double kpa = BlastModel.kpa(0.8);
         double drone = BlastModel.rangeForSurfaceOverpressure(kpa, 50);
         assertEquals(73, drone, 2);
         assertEquals(0.8, BlastModel.psi(BlastModel.surfaceOverpressureKpa(drone, 50)), 1e-6);
-        assertEquals(152, BlastModel.rangeForSurfaceOverpressure(kpa, 450), 3);
+        assertEquals(105, BlastModel.rangeForSurfaceOverpressure(kpa, 150), 3);
     }
 }

@@ -10,6 +10,9 @@ import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.client.render.WeaponModels;
 import ua.zentix.incoming.client.sound.EngineSound;
 import ua.zentix.incoming.entity.FlightPhase;
+import ua.zentix.incoming.defense.InterceptorSpec;
+import ua.zentix.incoming.strike.Article;
+import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.util.StandardAtmosphere;
 
@@ -156,7 +159,9 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
 
     // ---------------------------------------------------------------- двигатели
     //
-    // Числа — из открытых данных, где они есть (источник рядом); чего нет — ⚠ оценка с диапазоном. Сопло, у которого
+    // Тяга, расход и скорость истечения — из паспорта изделия ({@link Article}: одно число на сервер и клиент, источник —
+    // там); здесь — только то, что нужно картинке: температура, состав продуктов, дым. Числа — из открытых данных, где
+    // они есть (источник рядом); чего нет — ⚠ оценка с диапазоном. Сопло, у которого
     // размер не опубликован, — расчётное: на срезе давление воздуха той высоты, на которую сопло рассчитано (у
     // ускорителей — земля, у первых ступеней — несколько километров). Тепло ракетного топлива в воздухе —
     // c_p·(T₀ − 288 K); КПД ракеты на старте (тяга × скорость против тепла) меньше 0,1 — взят 0.
@@ -170,6 +175,12 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     /** Доля Al₂O₃ в продуктах топлива с долей алюминия al: 2 Al → Al₂O₃ (102/54 = 1,89). */
     private static double alumina(double al) {
         return al * 102.0 / 54.0;
+    }
+
+    /** Твёрдотопливный двигатель паспорта: расход и истечение — из {@link Article.SolidMotor}. */
+    private static Motor solid(String name, Article.SolidMotor m, double temperature, double gamma, double molarMass,
+                               double design, Smoke smoke, double smokeIndex, double co, double h2, double water) {
+        return solid(name, 1, m.flow(), m.exhaust(), temperature, gamma, molarMass, design, smoke, smokeIndex, co, h2, water);
     }
 
     /** Твёрдотопливный двигатель с соплом, рассчитанным на высоту design метров (давление стандартной атмосферы). */
@@ -198,59 +209,57 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     private static final double AIR_MOLAR = 0.028_96;
 
     /**
-     * Ускоритель шахеда (РДТТ на рельсе, сбрасывается): данных нет — ⚠ оценка по старту: 200 кг до ~35 м/с за ~2 с
-     * под углом ~15° — тяга ~4 кН (3–8 кН), 2 кг/с при 2 100 м/с (удельный импульс ~215 с малого РДТТ); смесевое топливо
-     * с ~10 % алюминия (⚠), 3 000 K, γ 1,15, 27 г/моль; сопло — на землю.
+     * Ускоритель шахеда ({@link WeaponSpec#DRONE_BOOSTER}): смесевое топливо с ~10 % алюминия (⚠), 3 000 K, γ 1,15,
+     * 27 г/моль; сопло — на землю.
      */
-    static final Motor DRONE_BOOSTER = solid("drone booster", 1, 2, 2_100, 3_000, 1.15, 0.027, 0, Smoke.ALUMINA, alumina(0.10), COMPOSITE_CO, COMPOSITE_H2, 0.09);
+    static final Motor DRONE_BOOSTER = solid("drone booster", WeaponSpec.DRONE_BOOSTER, 3_000, 1.15, 0.027, 0, Smoke.ALUMINA, alumina(0.10), COMPOSITE_CO, COMPOSITE_H2, 0.09);
     /**
-     * Ускоритель «Томагавка» (Mk 106 / Mk 135): работает ~12 с (после него запускается маршевый; встречается и ~7 с),
-     * масса ~270 кг; тяга не опубликована — ⚠ оценка: ~150 кг топлива за 12 с, 12,5 кг/с при 2 350 м/с (240 с) — 29 кН;
-     * смесевое с ~16 % алюминия (⚠), 3 200 K, γ 1,14 (двухфазный, у топлив с алюминием 1,13–1,18), 28 г/моль; сопло — на
-     * землю.
+     * Ускоритель «Томагавка» ({@link WeaponSpec#MISSILE_BOOSTER}): смесевое с ~16 % алюминия (⚠), 3 200 K, γ 1,14
+     * (двухфазный, у топлив с алюминием 1,13–1,18), 28 г/моль; сопло — на землю.
      */
-    static final Motor MISSILE_BOOSTER = solid("missile booster", 1, 12.5, 2_350, 3_200, 1.14, 0.028, 0, Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
+    static final Motor MISSILE_BOOSTER = solid("missile booster", WeaponSpec.MISSILE_BOOSTER, 3_200, 1.14, 0.028, 0, Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
     /**
-     * Маршевый ТРДД «Томагавка» Williams F107-WR-402, ~3,1 кН: расход воздуха ~6 кг/с (⚠), струя ~500 м/с и ~700 K
-     * (⚠, смешанный выхлоп), топливо JP-10 ~0,054 кг/с (⚠, удельный расход ~0,7 фунт/(фунт·ч)); C₁₀H₁₆: 1,06 кг воды
-     * на кг и 42,1 МДж/кг; сажа ~0,03 г/кг (⚠); КПД 0,33 (тяга × 245 м/с против тепла топлива).
+     * Маршевый ТРДД «Томагавка» ({@link WeaponSpec#MISSILE_TURBOFAN}: расход воздуха, струя, топливо): смешанный выхлоп
+     * ~700 K (⚠); JP-10 (C₁₀H₁₆): 1,06 кг воды на кг и 42,1 МДж/кг; сажа ~0,03 г/кг (⚠); КПД 0,33 (тяга × 245 м/с
+     * против тепла топлива).
      */
-    static final Motor MISSILE_SUSTAINER = breathing("missile turbofan", 6, 0.054, 500, 700, 1.38, 3e-5, 1.06, 42.1e6, 0.33);
+    static final Motor MISSILE_SUSTAINER = breathing("missile turbofan", WeaponSpec.MISSILE_TURBOFAN.airflow(),
+            WeaponSpec.MISSILE_TURBOFAN.fuelFlow(), WeaponSpec.MISSILE_TURBOFAN.jet(), 700, 1.38, 3e-5, 1.06, 42.1e6, 0.33);
     /**
-     * Двухтактный MD-550 шахеда (копия Limbach L550E, ~37 кВт): удельный расход ~0,45 кг/кВт·ч (⚠) — 4,6 г/с бензина,
-     * выхлоп ~70 г/с при ~1 000 K и ~50 м/с (⚠); сажа и масло двухтакта ~1 г/кг (⚠); вода ~1,35 кг/кг бензина,
-     * 43,5 МДж/кг; КПД ~0,13 (0,7 винта × 37 кВт против тепла топлива).
+     * Двухтактный MD-550 шахеда (расход бензина — {@link WeaponSpec#DRONE_PISTON}): выхлоп ~70 г/с при ~1 000 K и
+     * ~50 м/с (⚠); сажа и масло двухтакта ~1 г/кг (⚠); вода ~1,35 кг/кг бензина, 43,5 МДж/кг; КПД ~0,13 (0,7 винта ×
+     * 37 кВт против тепла топлива).
      */
-    static final Motor DRONE_ENGINE = breathing("drone piston", 0.07, 0.0046, 50, 1_000, 1.35, 1e-3, 1.35, 43.5e6, 0.13);
+    static final Motor DRONE_ENGINE = breathing("drone piston", 0.07, WeaponSpec.DRONE_PISTON.fuelFlow(), 50, 1_000, 1.35, 1e-3, 1.35, 43.5e6, 0.13);
     /**
-     * Каждый из четырёх F118-GE-100 B-2 (~77 кН на взлёте): на крейсере ~0,25 кг/с керосина и ~60 кг/с выхлопа при
-     * ~450 м/с и ~700 K (⚠ оценки); керосин — 1,25 кг воды на кг и 43,2 МДж/кг (Schumann 1996), КПД 0,3 (там же, у
+     * Каждый из четырёх F118-GE-100 B-2 ({@link WeaponSpec#BOMBER_TURBOFANS}: тяга на месте, расход топлива на крейсере):
+     * на эшелоне ~60 кг/с выхлопа при ~450 м/с и ~700 K (⚠ оценки: воздух там вчетверо реже, чем у земли, — расход и
+     * струя ниже паспортных на месте); керосин — 1,25 кг воды на кг и 43,2 МДж/кг (Schumann 1996), КПД 0,3 (там же, у
      * двигателей того поколения), сажа ~0,04 г/кг (⚠).
      */
-    static final Motor BOMBER_ENGINE = breathing("bomber turbofan", 60, 0.25, 450, 700, 1.38, 4e-5, 1.25, 43.2e6, 0.3);
+    static final Motor BOMBER_ENGINE = breathing("bomber turbofan", 60, WeaponSpec.BOMBER_TURBOFANS.fuelFlow(), 450, 700, 1.38, 4e-5, 1.25, 43.2e6, 0.3);
     /**
-     * Двигатель реактивного снаряда 9М22У: ~20 кг топлива (66,6 → ~46,6 кг, ⚠) за ~1,9 с (⚠) — 10,5 кг/с; 690 м/с к
-     * выгоранию по Циолковскому требуют не меньше 1 930 м/с истечения — взято 2 000 (~205 с; у двухосновных 200–230);
-     * двухосновное (баллиститное, ⚠ по советской практике), ~2 800 K, γ 1,22, 24 г/моль; дым — соли стабилизаторов ~2 %
+     * Двигатель реактивного снаряда 9М22У (расход и истечение — {@link WeaponSpec#ROCKET_MOTOR}): двухосновное (баллиститное, ⚠ по советской практике), ~2 800 K, γ 1,22, 24 г/моль; дым — соли стабилизаторов ~2 %
      * (⚠); сопло — под калибр 122 мм, радиус среза 5,5 см (⚠): на давление у земли оно не помещается (нужно ~10 см),
      * струя недорасширена.
      */
-    static final Motor ROCKET_MOTOR = solidWithExit("grad motor", 1, 10.5, 2_000, 2_800, 1.22, 0.024, 0.055, Smoke.SALTS, 0.02, DOUBLE_BASE_CO, DOUBLE_BASE_H2, 0.12);
+    static final Motor ROCKET_MOTOR = solidWithExit("grad motor", 1, WeaponSpec.ROCKET_MOTOR.flow(), WeaponSpec.ROCKET_MOTOR.exhaust(), 2_800, 1.22, 0.024, 0.055, Smoke.SALTS, 0.02, DOUBLE_BASE_CO, DOUBLE_BASE_H2, 0.12);
     /**
-     * Первая ступень «Минитмена III» (M55, смесевое: перхлорат аммония, алюминий, связка PBAA): 903,7 кН (USAF),
-     * 20 780 кг за 61 с (Fetter) — 340,7 кг/с при 2 652 м/с; четыре сопла, ⚠ рассчитаны на ~3 км (у земли
+     * Первая ступень «Минитмена III» (M55, смесевое: перхлорат аммония, алюминий, связка PBAA; тяга, топливо и время
+     * работы — {@link WeaponSpec.Ascent} МБР): 340,7 кг/с при 2 652 м/с; четыре сопла, ⚠ рассчитаны на ~3 км (у земли
      * перерасширены); ~3 300 K, γ 1,14, 28 г/моль, ~16 % алюминия (⚠).
      */
-    static final Motor ICBM_STAGE = solid("icbm stage", 4, 20_780 / 61.0, 903_700 / (20_780 / 61.0), 3_300, 1.14, 0.028, 3_000,
+    static final Motor ICBM_STAGE = solid("icbm stage", 4, WeaponSpec.NUKE.ascent().flow(), WeaponSpec.NUKE.ascent().exhaust(), 3_300, 1.14, 0.028, 3_000,
             Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
 
     /**
-     * Двухрежимный РДТТ зенитной ракеты ({@code InterceptorSpec.SAM}, как 9М96): данных о двигателе нет — ⚠ оценка:
-     * разгон 15 кг/с при 2 350 м/с (~35 кН на ракету ~330 кг), смесевое с ~16 % алюминия, сопло рассчитано на землю;
-     * маршевый режим — тот же заряд и сопло, расход ~3 кг/с (⚠), давление в камере ниже — струя перерасширена.
+     * Двухрежимный РДТТ зенитной ракеты 9М96 (расход и истечение режимов — {@link InterceptorSpec.Passport}): смесевое
+     * с ~16 % алюминия (⚠), сопло рассчитано на землю; маршевый режим — тот же заряд и сопло, давление в камере ниже —
+     * струя перерасширена.
      */
-    public static final Motor SAM_BOOST = solid("sam boost", 1, 15, 2_350, 3_200, 1.14, 0.028, 0, Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
-    public static final Motor SAM_SUSTAIN = solidWithExit("sam sustain", 1, 3, 2_350, 3_200, 1.14, 0.028, SAM_BOOST.exitRadius(), Smoke.ALUMINA,
+    public static final Motor SAM_BOOST = solid("sam boost", InterceptorSpec.SAM.passport().boost(), 3_200, 1.14, 0.028, 0, Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
+    public static final Motor SAM_SUSTAIN = solidWithExit("sam sustain", 1, InterceptorSpec.SAM.passport().sustain().flow(),
+            InterceptorSpec.SAM.passport().sustain().exhaust(), 3_200, 1.14, 0.028, SAM_BOOST.exitRadius(), Smoke.ALUMINA,
             alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
 
     /** Шахед: 3,6 м, размах 2,6; дельта-крыло ~4,7 м² и корпус Ø 0,45. */
@@ -269,8 +278,8 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     /** Снаряд «Града»: 2,9 м, Ø 0,12; поджиг — в трубе, след — с переднего среза; после выгорания — без огня и следа. */
     private static final FarLook ROCKET_FAR = new FarLook(2.9, 0.28, 0x4E5446, new Stage(ROCKET_MOTOR, false, null),
             Stage.burning(ROCKET_MOTOR, false, 2), Stage.NONE, null);
-    /** «Ланцет» (модель ×1,5): 2,5 м, Ø 0,45, два креста крыльев; катапульта и электромотор — без огня и дыма. */
-    private static final FarLook LOITER_FAR = new FarLook(2.5, 1.4, 0x6A7066, null, Stage.NONE, Stage.NONE, null);
+    /** «Ланцет»: 1,65 м, Ø 0,2, два креста крыльев; катапульта и электромотор — без огня и дыма. */
+    private static final FarLook LOITER_FAR = new FarLook(1.65, 0.62, 0x6A7066, null, Stage.NONE, Stage.NONE, null);
 
     public static final ClientWeaponSpec DRONE = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::drone, List.of(EngineSound.Layer.DRONE_NEAR, EngineSound.Layer.DRONE_FAR, EngineSound.Layer.BOOSTER),
