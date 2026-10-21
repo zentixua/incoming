@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Факел — цилиндр струи: строго сзади по оси видно его сечение, а не отрезок поперёк (3.5.0: полосы вдоль оси с торца
  * сходили в «палку», ореол у сопла был убран). Площадь квадратов факела с торца — не меньше круга сечения пламени
- * (у ореола — его поток, {@link PlumeRenderer#HALO}), сбоку — не меньше площади струи сбоку.
+ * (у круга сечения — его поток: {@code far/disc} закрывает 0,632 квадрата, {@link PlumeRenderer#HALO}), сбоку — не меньше площади струи сбоку.
  */
 class PlumeRendererTest {
     /** Площадь квадратов слоёв на плоскости поперёк взгляда view (ореол — с долей, что закрывает его картинка). */
@@ -25,7 +25,7 @@ class PlumeRendererTest {
         PlumeRenderer.layout(f, 0, cam, left, up, (layer, a, b, c, d) -> {
             Vector3f ab = new Vector3f(b).sub(a), ad = new Vector3f(d).sub(a);
             double projected = Math.abs(new Vector3f(ab).cross(ad).dot(view));
-            sum[0] += layer < 3 ? projected : projected * 0.086;
+            sum[0] += layer < 3 ? projected : projected * 0.632;
         });
         return sum[0];
     }

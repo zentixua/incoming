@@ -22,9 +22,9 @@ import ua.zentix.incoming.client.fx.plume.FlameModel;
  * струя, а не плоская картинка), в три слоя — остывающий хвост во всю видимую длину, пламя догорания и ядро до конца
  * сверхзвуковой части. Ширина слоя — средняя по его длине (площадь сбоку та же, что у света вдали). Струя — цилиндр:
  * сбоку видна её длина, с торца — сечение. Полоса вдоль оси с торца сходит в отрезок поперёк (вид строго сзади —
- * «палка»), поэтому у среза сопла — ещё сечение струи лицом к камере: ореол пламени догорания (полуширина в конце пламени)
- * и ядро (полуширина у среза), ореол {@code fx/halo} — того же светового потока, что круг сечения ({@link #HALO}). Сбоку
- * они — свечение у сопла, как у настоящей струи. Геометрия — {@link #layout} (её площадь с торца и сбоку сверяет
+ * «палка»), поэтому у среза сопла — ещё сечение струи лицом к камере: круг пламени догорания (полуширина в конце пламени)
+ * и ядро (полуширина у среза), круг {@code far/disc} того же потока, что сечение ({@link #HALO}). Сбоку они — свечение у
+ * сопла, как у настоящей струи. Геометрия — {@link #layout} (её площадь с торца и сбоку сверяет
  * {@code PlumeRendererTest}). Яркость — свет чёрного тела с
  * привыканием глаза ({@code Sight.adapted}): что ярче белого экрана, рисуется во всю силу и белеет, как у света вдали
  * ({@code FarSprites}, пересвет {@code Sight.WHITE} — белый). Блика и вуали здесь нет — они у света факела
@@ -34,12 +34,13 @@ import ua.zentix.incoming.client.fx.plume.FlameModel;
 public final class PlumeRenderer {
     private static final ResourceLocation PLUME = Incoming.id("textures/fx/plume.png");
     private static final ResourceLocation DIAMONDS = Incoming.id("textures/fx/plume_diamonds.png");
-    private static final ResourceLocation HALO_TEXTURE = Incoming.id("textures/fx/halo.png");
+    private static final ResourceLocation HALO_TEXTURE = Incoming.id("textures/far/disc.png");
     /**
-     * Полуразмер квадрата ореола на радиус сечения: {@code fx/halo} закрывает 0,086 квадрата — поток круга радиуса r при
-     * той же яркости даёт квадрат √(π/(4·0,086)) ≈ 3 r.
+     * Полуразмер квадрата сечения на его радиус: круг {@code far/disc} с мягким краем — того же потока, что круг радиуса r
+     * ({@link ua.zentix.incoming.client.far.FarSprites#DISC}). Не ореол {@code fx/halo}: его хвост в три радиуса — свечение
+     * вокруг, а не струя, и с торца факел выходил «солнцем» (свет в глазу вокруг — блик и вуаль у {@code FarFlightView}).
      */
-    static final float HALO = 3.0f;
+    static final float HALO = (float) ua.zentix.incoming.client.far.FarSprites.DISC;
 
     /** Куда {@link #layout} кладёт квадраты: четыре угла (система снаряда), слой (0–2 — полосы, 3–4 — сечения). */
     interface Quads {
@@ -86,7 +87,7 @@ public final class PlumeRenderer {
 
     /**
      * Квадраты факела f со срезом сопла на z0 (система снаряда, нос по +Z) для камеры cam и осей экрана left, up там же:
-     * полосы хвоста, пламени и ядра вдоль оси, повёрнутые к камере, и сечения — ореол пламени и ядро у среза лицом
+     * полосы хвоста, пламени и ядра вдоль оси, повёрнутые к камере, и сечения — круги пламени и ядра у среза лицом
      * к камере.
      */
     static void layout(Flame f, float z0, Vector3f cam, Vector3f left, Vector3f up, Quads out) {

@@ -382,7 +382,8 @@ public final class FarBlasts {
                 // 1 на вершине и 12 по кругам на 30° и 60° над землёй
                 double el = i == 0 ? Math.PI / 2 : (i <= 6 ? Math.PI / 6 : Math.PI / 3), az = i * Math.PI / 3 + (i > 6 ? Math.PI / 6 : 0);
                 double cx = r * Math.cos(el) * Math.cos(az), cy = r * Math.sin(el), cz = r * Math.cos(el) * Math.sin(az);
-                out.blob(x + cx, y + cy, z + cz, s * 2, s, 0, 0, water, 0.9f, 0.9f, 0.9f, CloudModel.T_AIR_K, 0);
+                // клуб оболочки — шар её толщины (сплющенный вдвое шёл бы на экране кольцами-эллипсами)
+                out.blob(x + cx, y + cy, z + cz, 1.5 * s, 1.5 * s, 0, 0, water, 0.9f, 0.9f, 0.9f, CloudModel.T_AIR_K, 0);
             }
         }
     }
