@@ -10,15 +10,14 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Сирена гражданской обороны на месте в мире — петля, пока идёт тревога. Тон сирены — скорость её ротора: включённая,
- * она раскручивается (тон и громкость растут), выключенная ({@link #off}) — сбегает и смолкает сама. Громкость
- * по расстоянию — линейно до {@link #RANGE}, как ванильное затухание LINEAR, но своя: ваниль берёт дальность LINEAR
- * из громкости один раз при запуске, а у раскручивающейся сирены громкость растёт с нуля. Воздух и преграды между
- * сиреной и ухом — каждый тик ({@link SoundFilters}), как у мотора снаряда: тревога длится весь полёт МБР, и слушатель
- * за это время выходит из дома и заходит обратно.
+ * она раскручивается (тон и громкость растут), выключенная ({@link #off}) — сбегает и смолкает сама; мощность звука —
+ * как у ротора на полной скорости ({@link Sources#NUKE_ALARM}) × квадрат доли скорости. Громкость у уха — закон
+ * источника ({@link Sources#volume}: путь ISO 9613 и фон), каждый тик: ваниль берёт дальность затухания из громкости
+ * один раз при запуске, а у раскручивающейся сирены громкость растёт с нуля. Воздух и преграды между сиреной и ухом —
+ * каждый тик ({@link SoundFilters}), как у мотора снаряда: тревога длится весь полёт МБР, и слушатель за это время
+ * выходит из дома и заходит обратно.
  */
 public final class SirenSound extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
-    /** Дальше стольких блоков сирену не слышно. */
-    static final double RANGE = 320;
     /** Доля пути скорости ротора к полной за тик: раскрутка — ~3 с. */
     static final float SPIN_UP = 0.05f;
     /** Доля скорости, которую ротор теряет за тик на выбеге: смолкает за ~4 с. */
@@ -95,7 +94,7 @@ public final class SirenSound extends AbstractTickableSoundInstance implements S
         }
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         double d = ear.distanceTo(at);
-        this.volume = (float) (power * Math.max(0, 1 - d / RANGE));
+        this.volume = power <= 0 ? 0 : Sources.volume(Sources.NUKE_ALARM.power(Sources.NUKE_ALARM.lwA() + 10 * Math.log10(power)), at);
         // ваниль не играет ниже половины тона: на нём ротор и смолкает
         this.pitch = tone * (0.5f + 0.5f * speed);
         if (volume > VoiceBudget.AUDIBLE) {

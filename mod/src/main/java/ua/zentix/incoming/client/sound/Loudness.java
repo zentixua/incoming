@@ -19,6 +19,12 @@ import ua.zentix.incoming.sound.Propagation;
  * </ul>
  */
 final class Loudness {
+    /**
+     * Громкость, к которой собраны петли моторов и разовые звуки старта, LUFS (наибольшая мгновенная) — та же, что
+     * {@code ENGINE_LUFS} в {@code tools/build_sounds.py} ({@code LoudnessTest} сверяет).
+     */
+    static final double ENGINE_LUFS = -19;
+
     /** A-уровень у уха, который звучит громкостью 1, дБА. */
     static final double REF = Propagation.NIGHT + 40 * Math.log10(1 / VoiceBudget.AUDIBLE);
 
@@ -28,6 +34,14 @@ final class Loudness {
      * Громкость в игре звука с A-уровнем {@code level} у уха, который громче фона на {@code margin} дБ в самой выгодной
      * октаве ({@link Propagation#margin}).
      */
+    /**
+     * Множитель громкости файла громкостью {@code lufs}, приводящий его к {@link #ENGINE_LUFS}: громкость в игре задаёт
+     * уровень у уха, а не то, как громко собран файл (звуки источника, {@link Sources}).
+     */
+    static double fileGain(double lufs) {
+        return Math.pow(10, (ENGINE_LUFS - lufs) / 20);
+    }
+
     static double gain(double level, double margin) {
         if (!(margin > 0)) return 0;
         return Math.min(1, Math.pow(10, (level - REF) / 40)) * Propagation.smoothstep(0, Propagation.FADE, margin);

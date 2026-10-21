@@ -359,12 +359,29 @@ public final class BlastEffects {
             if (t == 1) ejecta(level, model.source.chargeKg());
             // лужа топлива, что не сгорела шаром, горит в воронке
             Explosions.pool(level, pos, model.poolRadius, model.poolFlame(), model.poolShare(t / 20.0), random);
-            if (t == 8 && !rocket) BlastSounds.fire(pos, 1.1f);
-            if (t == 20) BlastSounds.debris(pos, rocket ? 40 : 60, rocket ? 1.25f : 1.1f);
+            crater(model, pos, t, rocket ? 1.25f : 1.1f);
             return t < Math.max(240, 20 * model.poolSeconds);
         }
 
     }
+
+    /**
+     * Звук воронки по модели облака: выброс падает обратно — через секунду (О: полёт выброса на высоту порядка диаметра
+     * воронки), масса — воронка без пыли, что ушла в воздух; гул огня, пока горит лужа топлива, — по её теплу сейчас,
+     * запись заново, когда прошлая кончилась ({@link #FIRE_REPEAT}).
+     */
+    static void crater(CloudModel model, Vec3 pos, int t, float pitch) {
+        double charge = model.source.chargeKg();
+        if (t == 20 && charge > 0) {
+            double kg = CraterModel.chargeVolume(charge, CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY * (1 - CloudModel.DUST_LOFTED);
+            BlastSounds.debris(pos, kg, 2 * CraterModel.chargeRadius(charge, CraterModel.Soil.DRY), pitch);
+        }
+        double share = model.poolShare(t / 20.0);
+        if (t >= 8 && (t - 8) % FIRE_REPEAT == 0 && share > 0) BlastSounds.fire(pos, model.poolWatts * share, pitch);
+    }
+
+    /** Запись гула огня — 14 с с краями: следующая — через столько тиков. */
+    static final int FIRE_REPEAT = 260;
 
     // ================================================================ разрыв зенитной ракеты
 
@@ -438,13 +455,7 @@ public final class BlastEffects {
             if (t == 1) ejecta(level, model.source.chargeKg());
             // вторичных подрывов нет: вторичное — топливо (лужа в воронке) и горящие обломки сервера
             Explosions.pool(level, pos, model.poolRadius, model.poolFlame(), model.poolShare(t / 20.0), random);
-            switch (t) {
-                case 10 -> BlastSounds.fire(pos, 0.9f);
-                case 150 -> BlastSounds.fire(pos, 0.85f);
-                case 20 -> BlastSounds.debris(pos, 90, 0.9f);
-                case 34 -> BlastSounds.debris(pos, 90, 0.8f);
-                default -> {}
-            }
+            crater(model, pos, t, 0.9f);
             return t < Math.max(340, 20 * model.poolSeconds);
         }
 
@@ -506,7 +517,12 @@ public final class BlastEffects {
                         .life(200).color(Explosions.rgb(mat), 0x9A948E).alpha(0.45f).rise(0.002f).budget(FxBudget.GROUND)
                         .spawn(level, surface.add(random.nextGaussian() * 3, 0.5, random.nextGaussian() * 3));
             }
-            if (t == 30) BlastSounds.debris(surface, 60, 0.75f);
+            // осыпь провала: грунт над полостью — не больше воронки наземного взрыва того же заряда (оценка сверху)
+            if (t == 30) {
+                double kg = ua.zentix.incoming.strike.WeaponSpec.BUNKER.striker().article().warhead().tnt();
+                BlastSounds.debris(surface, CraterModel.chargeVolume(kg, CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY,
+                        CraterModel.chargeDepth(kg, CraterModel.Soil.DRY), 0.75f);
+            }
             return t < 300;
         }
 

@@ -26,7 +26,8 @@ class HearingTest {
     void shahedIsHeardForKilometresAtNightAndCloserByDay() {
         WeaponSpec.Airframe drone = WeaponSpec.DRONE.airframe();
         double night = cruise(drone, NIGHT), day = cruise(drone, NOON);
-        assertTrue(night > 2000, "ночью " + night);
+        // в тихую погоду мотор шахеда слышно дальше 10 км (computingonline.net 2024, очевидцы): ночью — порядок этого
+        assertTrue(night > 8000 && night < 14_000, "ночью " + night);
         assertTrue(day < night * 0.8, "днём " + day + ", ночью " + night);
         // звук обгоняет шахед: с края слышимости ночью его слышно задолго до прихода
         double lead = night * (1 / drone.cruiseSpeed() - 1 / (Noise.SOUND / 20)) / 20;
@@ -44,8 +45,9 @@ class HearingTest {
 
     @Test
     void rangesKeepTheOrderOfTheOldCutoffsWhereTheyWereRight() {
-        // прежние срезы: «Ланцет» 200 < мотор шахеда 300 < гул турбины 1500; ускоритель 600 > мотор; сход снаряда РСЗО 900
-        // > его вой 500; ступень МБР — дальше всех
+        // прежние срезы: «Ланцет» 200 < мотор шахеда 300; ускоритель 600 > мотор; сход снаряда РСЗО 900 > его вой 500;
+        // ступень МБР — дальше всех. Гул турбины ракеты (1500) — уже не дальше шахеда: двухтакт без глушителя слышно
+        // дальше 10 км, а ТРДД ракеты на бреющем — за несколько километров
         double lancet = range(WeaponSpec.LOITER.airframe(), FlightPhase.LOITER, WeaponSpec.LOITER.airframe().cruiseSpeed(), 45, NIGHT);
         double shahed = cruise(WeaponSpec.DRONE.airframe(), NIGHT);
         double missile = cruise(WeaponSpec.MISSILE.airframe(), NIGHT);
@@ -54,7 +56,7 @@ class HearingTest {
         double gradLaunch = range(WeaponSpec.ROCKET.airframe(), FlightPhase.BOOST, 2, 5, NIGHT);
         double gradAir = range(WeaponSpec.ROCKET.airframe(), FlightPhase.CRUISE, 4, 100, NIGHT);
         double icbm = range(WeaponSpec.NUKE.airframe(), FlightPhase.BOOST, 5, 50, NIGHT);
-        assertTrue(lancet < shahed && shahed < missile, lancet + " < " + shahed + " < " + missile);
+        assertTrue(lancet < shahed && lancet < missile, lancet + " < " + shahed + ", " + missile);
         assertTrue(shahed < bomber, "B-2 " + bomber);
         assertTrue(booster > shahed, "ускоритель " + booster);
         assertTrue(gradLaunch > gradAir, "сход " + gradLaunch + ", вой " + gradAir);

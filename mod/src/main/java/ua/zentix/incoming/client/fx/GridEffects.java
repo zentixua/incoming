@@ -2,20 +2,21 @@ package ua.zentix.incoming.client.fx;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.client.fx.particle.Fx;
-import ua.zentix.incoming.client.sound.ClientSounds;
+import ua.zentix.incoming.client.sound.Sources;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.registry.ModSounds;
-import ua.zentix.incoming.warhead.Warheads;
 
 /**
  * Подстанция выходит из строя: несколько голубых вспышек дуги подряд (ночью их видно над городом издалека),
- * фонтан искр, потом густой дым горящего масла трансформатора. Звук пробоя приходит со скоростью звука.
+ * фонтан искр, потом горит масло трансформатора — дым и свет пламени очагом модели облака ({@link FireSmoke#substation}).
+ * Звук пробоя приходит со скоростью звука, громкость — по закону источника ({@link Sources}).
  */
 public final class GridEffects {
     /** Дальше вспышка дуги не освещает экран. */
@@ -33,28 +34,20 @@ public final class GridEffects {
         // вспышки дуги: первая сразу, ещё две-три — вразнобой в первые полторы секунды (дуга перебрасывается)
         int[] arcs = new int[3 + rnd.nextInt(2)];
         for (int i = 1; i < arcs.length; i++) arcs[i] = arcs[i - 1] + 3 + rnd.nextInt(10);
+        // пробой слышно со скоростью звука, громкость — мощность пробоя и путь до уха
+        Sources.play(ModSounds.GRID_FAIL.get(), pos, Sources.GRID_FAIL, 0.95f + rnd.nextFloat() * 0.1f);
         Effects.add(new Effects.Effect() {
-            private boolean heard;
-
             @Override
             public boolean tick(ClientLevel level, int t) {
                 Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
                 double d = ear.distanceTo(pos);
-                if (!heard && d <= Warheads.FRONT_SPEED * t) {
-                    heard = true;
-                    ClientSounds.atEar(ModSounds.GRID_FAIL.get(), pos, (float) Math.max(0.15, 1.6 * (1 - d / 320)), 0.95f + rnd.nextFloat() * 0.1f);
-                }
                 for (int a : arcs) {
                     if (a == t) arc(level, pos, rnd, d, a == 0 ? 1 : 0.6f);
                 }
                 if (t < 40 && t % 2 == 0) sparks(level, pos, rnd, t < 10 ? 6 : 2);
-                if (t >= 4 && t < 200) {
-                    float f = t / 200f;
-                    Fx.smoke().vel(rnd.nextGaussian() * 0.03, 0.25 + 0.2 * rnd.nextDouble(), rnd.nextGaussian() * 0.03).size(0.5f, 3.5f)
-                            .life(160 + rnd.nextInt(80)).color(0x1C1A1A, 0x55504C).alpha(0.8f * (1 - 0.5f * f)).glow(t < 20 ? 0.6f : 0, 6)
-                            .drag(0.95f).rise(0.004f).fadeIn(3).fadeFrom(0.5f).spawn(level, pos.add(rnd.nextGaussian() * 0.3, 0.6, rnd.nextGaussian() * 0.3));
-                }
-                return t < 200 || !heard && t < 400;
+                // масло трансформатора загорается после пробоя: дым и свет пламени — очаг модели облака, пока подстанция выбита
+                if (t == 4) FireSmoke.substation(level, BlockPos.containing(pos));
+                return t < 40;
             }
         });
     }
@@ -79,8 +72,25 @@ public final class GridEffects {
         }
     }
 
+    /**
+     * Случайный тик подстанции у игрока: работает — гул трансформатора; выбита — горит масло (дым — {@link FireSmoke#substation},
+     * у вошедшего после выхода из строя — отсюда) и иногда трещит дуга. Громкость — закон источника ({@link Sources}).
+     */
+    public static void substation(BlockPos pos, boolean powered, boolean spark, float pitch) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) return;
+        Vec3 at = new Vec3(pos.getX() + 0.5, pos.getY() + 0.9, pos.getZ() + 0.5);
+        if (powered) {
+            Sources.play(ModSounds.GRID_HUM.get(), at, Sources.GRID_HUM, pitch);
+            return;
+        }
+        FireSmoke.substation(level, pos);
+        if (spark) Sources.play(ModSounds.GRID_SPARK.get(), at, Sources.GRID_SPARK, pitch);
+    }
+
     /** Квартал погас или загорелся: щелчок и гул там, где его слышно. */
     public static void district(S2C.GridDistrict p) {
-        ClientSounds.at(p.on() ? ModSounds.GRID_POWER_UP.get() : ModSounds.GRID_POWER_DOWN.get(), p.pos(), 3f, 0.9f + RANDOM.nextFloat() * 0.2f);
+        Sources.play(p.on() ? ModSounds.GRID_POWER_UP.get() : ModSounds.GRID_POWER_DOWN.get(), p.pos(), p.on() ? Sources.GRID_POWER_UP : Sources.GRID_POWER_DOWN,
+                0.9f + RANDOM.nextFloat() * 0.2f);
     }
 }

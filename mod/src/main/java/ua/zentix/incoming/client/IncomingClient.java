@@ -477,6 +477,11 @@ public final class IncomingClient {
         }
 
         @Override
+        public void substation(net.minecraft.core.BlockPos pos, boolean powered, boolean spark, float pitch) {
+            GridEffects.substation(pos, powered, spark, pitch);
+        }
+
+        @Override
         public void intercept(S2C.Intercept p) {
             Replay.event("intercept", live -> {
                 if (!live) return;
