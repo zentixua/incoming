@@ -297,7 +297,7 @@
   "incoming.config.nuke_default_yield": "Мощность /incoming nuke по умолчанию, кт",
   "incoming.config.nuke_default_yield.tooltip": "Мощность, когда в команде нет числа. 15 кт — бомба Хиросимы. В пульте мощность выбирается кнопкой.",
   "incoming.config.nuke_max_yield": "Наибольшая мощность, кт",
-  "incoming.config.nuke_max_yield.tooltip": "Мощность выше этой снижается до неё. В пульте — 1 и 15 кт.",
+  "incoming.config.nuke_max_yield.tooltip": "Мощность выше этой снижается до неё. Ползунок пульта — любая целая мощность от 1 до 15 кт.",
   "incoming.config.nuke_effects_scale": "Масштаб радиусов",
   "incoming.config.nuke_effects_scale.tooltip": "1.0 — как в жизни (1 блок = 1 м). Меньше — для маленьких миров",
   "incoming.config.nuke_wave_speed": "Скорость волны",

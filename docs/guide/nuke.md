@@ -2,7 +2,7 @@
 
 English · [Русский](ru/nuke.md)
 
-A 1 or 15 kt nuclear warhead on an ICBM, a cruise missile or a B-2 bomb: flash, mushroom cloud, blast wave, fires, and
+A nuclear warhead of 1 to 15 kt on an ICBM, a cruise missile or a B-2 bomb: flash, mushroom cloud, blast wave, fires, and
 with a ground burst a crater and a fallout trail. The radii match a real explosion, with one block equal to one meter.
 
 ## How to launch
@@ -10,9 +10,9 @@ with a ground burst a crater and a fallout trail. The radii match a real explosi
 By default only operators can.
 
 1. You need an ICBM item, or a missile or bomb plus a Nuclear Warhead ([recipes](munitions.md#recipes)).
-2. On the console: the Nuclear weapon, or the "Warhead: ☢ nuclear" button of the Missile and the Bomb; yield 1 or
-   15 kt; for the ICBM and the missile an air burst (wider destruction) or a ground burst (crater and fallout trail).
-   The bomb explodes underground.
+2. On the console: the Nuclear weapon, or the "Warhead: ☢ nuclear" button of the Missile and the Bomb; the yield
+   slider, any whole number from 1 kt ("tactical") to 15 kt ("Hiroshima"); for the ICBM and the missile an air burst
+   (wider destruction) or a ground burst (crater and fallout trail). The bomb explodes underground.
 3. LMB in the binoculars or FIRE. A 3-second countdown follows, and LMB again cancels it.
 
 The ICBM lifts off behind you and flies for 90 seconds.

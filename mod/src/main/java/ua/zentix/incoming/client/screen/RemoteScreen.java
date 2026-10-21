@@ -5,6 +5,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.IntConsumer;
+import java.util.function.IntFunction;
 
 /**
  * Экран пульта (вместо меню в чате): оружие, количество, разброс и цель — куда смотрю, вокруг меня,
@@ -123,14 +125,16 @@ public class RemoteScreen extends Screen {
             WeaponSpec.Warhead warhead = loadout.weapon().spec().warhead();
             List<Cell> nuke = new ArrayList<>();
             if (!warhead.always()) nuke.add(new Cell(warheadButton(n, 0, y, 0)));
-            List<Component> yields = new ArrayList<>(List.of(yieldLabel(n.yieldKt())));
-            for (Yield v : Yield.values()) yields.add(yieldLabel((int) v.kt()));
-            nuke.add(new Cell(Button.builder(yields.getFirst(),
-                    b -> set(loadout.withNuke(new Loadout.Nuke(nextYield(n.yieldKt()), n.airBurst(), n.onCarrier())))).bounds(0, y, 0, 20).build(), yields));
+            // мощность — любое целое от 1 до MAX_YIELD, как у команды и Loadout.Nuke (сервер урежет до max_yield);
+            // подписи пресетов — у своих значений; ширина ряда — по самой длинной подписи
+            List<Component> yields = new ArrayList<>();
+            for (int kt = 1; kt <= Loadout.Nuke.MAX_YIELD; kt++) yields.add(yieldLabel(kt));
+            nuke.add(new Cell(new IntSlider(0, y, 0, 20, RemoteScreen::yieldLabel, 1, Loadout.Nuke.MAX_YIELD, n.yieldKt(),
+                    v -> commit(loadout.withNuke(loadout.nuke().withYield(v)))), yields));
             if (warhead.chooseBurst()) {
                 Component air = Component.translatable("incoming.remote.burst.air"), ground = Component.translatable("incoming.remote.burst.ground");
                 nuke.add(new Cell(Button.builder(n.airBurst() ? air : ground,
-                        b -> set(loadout.withNuke(new Loadout.Nuke(n.yieldKt(), !n.airBurst(), n.onCarrier())))).bounds(0, y, 0, 20)
+                        b -> set(loadout.withNuke(loadout.nuke().withAirBurst(!loadout.nuke().airBurst())))).bounds(0, y, 0, 20)
                         .tooltip(Tooltip.create(Component.translatable("incoming.remote.burst.tooltip"))).build(), List.of(air, ground)));
             }
             row(nuke, x0);
@@ -254,16 +258,9 @@ public class RemoteScreen extends Screen {
         Component text = n.onCarrier()
                 ? Component.translatable("incoming.remote.warhead.nuclear").withStyle(ChatFormatting.GOLD)
                 : Component.translatable("incoming.remote.warhead.conventional");
-        return Button.builder(text, b -> set(loadout.withNuke(n.withOnCarrier(!n.onCarrier())))).bounds(x, y, w, 20)
+        // ползунок мощности рядом меняет пульт без перестройки экрана: состояние — на миг нажатия, не n
+        return Button.builder(text, b -> set(loadout.withNuke(loadout.nuke().withOnCarrier(!loadout.nuke().onCarrier())))).bounds(x, y, w, 20)
                 .tooltip(Tooltip.create(Component.translatable("incoming.remote.warhead.tooltip"))).build();
-    }
-
-    /** Следующий пресет мощности (1 кт → 15 → 1 кт); сервер урежет до max_yield. */
-    private static int nextYield(int kt) {
-        for (Yield y : Yield.values()) {
-            if (y.kt() > kt) return (int) y.kt();
-        }
-        return (int) Yield.values()[0].kt();
     }
 
     /** «15 кт (Хиросима)»; у мощности не из пресетов — без имени. */
@@ -280,8 +277,8 @@ public class RemoteScreen extends Screen {
     }
 
     /** Кнопка ряда {@link #row} и все надписи, какие она показывает: ширина — по самой длинной, ряд не прыгает при переключении. */
-    private record Cell(Button button, List<Component> texts) {
-        Cell(Button button) {
+    private record Cell(AbstractWidget button, List<Component> texts) {
+        Cell(AbstractWidget button) {
             this(button, List.of(button.getMessage()));
         }
     }
@@ -299,7 +296,7 @@ public class RemoteScreen extends Screen {
         for (int i = 0; i < n; i++) {
             // остаток делится нарастающим итогом: ряд кончается ровно у края окна
             int w = spare >= 0 ? need[i] + spare * (i + 1) / n - spare * i / n : free * (i + 1) / n - free * i / n;
-            Button b = cells.get(i).button();
+            AbstractWidget b = cells.get(i).button();
             b.setX(x);
             b.setWidth(w);
             addRenderableWidget(b);
@@ -470,14 +467,18 @@ public class RemoteScreen extends Screen {
      * или сдвинули стрелками; пока тянут мышью — только подпись.
      */
     private static final class IntSlider extends AbstractSliderButton {
-        private final String key;
+        private final IntFunction<Component> label;
         private final int min, max;
         private final IntConsumer onCommit;
         private int committed;
 
         IntSlider(int x, int y, int w, int h, String key, int min, int max, int value, IntConsumer onCommit) {
+            this(x, y, w, h, v -> Component.translatable(key, v), min, max, value, onCommit);
+        }
+
+        IntSlider(int x, int y, int w, int h, IntFunction<Component> label, int min, int max, int value, IntConsumer onCommit) {
             super(x, y, w, h, Component.empty(), (double) (Mth.clamp(value, min, max) - min) / (max - min));
-            this.key = key;
+            this.label = label;
             this.min = min;
             this.max = max;
             this.onCommit = onCommit;
@@ -491,7 +492,7 @@ public class RemoteScreen extends Screen {
 
         @Override
         protected void updateMessage() {
-            setMessage(Component.translatable(key, intValue()));
+            setMessage(label.apply(intValue()));
         }
 
         @Override

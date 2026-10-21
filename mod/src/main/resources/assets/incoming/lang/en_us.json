@@ -297,7 +297,7 @@
   "incoming.config.nuke_default_yield": "Default yield of /incoming nuke, kt",
   "incoming.config.nuke_default_yield.tooltip": "Yield when the command gives no number. 15 kt is the Hiroshima bomb. On the console the yield is chosen with a button.",
   "incoming.config.nuke_max_yield": "Maximum yield, kt",
-  "incoming.config.nuke_max_yield.tooltip": "A higher yield is lowered to this one. The console offers 1 and 15 kt.",
+  "incoming.config.nuke_max_yield.tooltip": "A higher yield is lowered to this one. The console slider offers any whole yield from 1 to 15 kt.",
   "incoming.config.nuke_effects_scale": "Radius scale",
   "incoming.config.nuke_effects_scale.tooltip": "1.0: true to life (1 block = 1 m). Lower for small worlds",
   "incoming.config.nuke_wave_speed": "Wave speed",

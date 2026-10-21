@@ -7,7 +7,7 @@ Six weapons, in the order the designator lists them. Each launch uses [munitions
 | | Shahed | Lancet | Missile | Grad | Bomb (B-2) | Nuclear (ICBM) |
 |---|---|---|---|---|---|---|
 | Time to impact | ≈50 s | approach plus ≈25 s circling | ≈30 s | 7–10 s | ≈40 s | 90 s |
-| Warhead, TNT | 50 kg | 3 kg | ≈150 kg | 6.4 kg per rocket | power 20 underground (TNT = 4) | 1 or 15 kt |
+| Warhead, TNT | 50 kg | 3 kg | ≈150 kg | 6.4 kg per rocket | power 20 underground (TNT = 4) | 1 to 15 kt |
 | Follows a moving target | yes, through the camera | yes, through the camera | no | no | no | no |
 | Route on the map | yes | yes | yes | no | no | no |
 | Shot down by a SAM | yes | yes | yes | no | yes | no |
