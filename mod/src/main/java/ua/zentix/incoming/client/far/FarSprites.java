@@ -348,7 +348,8 @@ public final class FarSprites {
             double sin = Math.sqrt(Math.max(0, 1 - sq((tx * fx + ty * fy + tz * fz) / Math.max(seg, 1e-9))));
             double path = Math.min(seg, 2 * hw / Math.max(sin, 0.1));
             double a = 0.5 * (Math.min(1, alphaA) + Math.min(1, alphaB));
-            float k = (float) (inside * (1 - Math.pow(1 - Math.min(a, 0.999), Math.max(1, path / (2 * Math.max(hw, 1e-6))))));
+            // толща — путь этого отрезка в ширинах, без пола: у соседних отрезков пути складываются в настоящий путь взгляда
+            float k = (float) (inside * (1 - Math.pow(1 - Math.min(a, 0.999), path / (2 * Math.max(hw, 1e-6)))));
             if (k > 0.004f) veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, VEIL_AT * 4, Math.min(1, r), Math.min(1, g), Math.min(1, b), k, lightA);
             alphaA *= (float) (1 - inside);
             alphaB *= (float) (1 - inside);
@@ -361,7 +362,7 @@ public final class FarSprites {
         if (side < 1) {
             // торец трубки: круг её ширины, толща вдоль взгляда — длина отрезка в ширинах (непрозрачность ленты — поперёк)
             double halfW = 0.5 * (halfA * ka + halfB * kb) / RIBBON, a = 0.5 * (Math.min(1, alphaA) + Math.min(1, alphaB));
-            double along = 1 - Math.pow(1 - Math.min(a, 0.999), Math.max(1, seg / (2 * Math.max(halfW, 1e-6))));
+            double along = 1 - Math.pow(1 - Math.min(a, 0.999), seg / (2 * Math.max(halfW, 1e-6)));
             float k = (float) ((1 - side) * along);
             out.glowShape(true);
             // мягкость края у мира — в настоящих блоках, как у всех квадратов (halfW — в перенесённых ближе)
