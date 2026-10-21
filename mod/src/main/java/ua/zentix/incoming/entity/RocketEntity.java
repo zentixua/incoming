@@ -66,6 +66,8 @@ public class RocketEntity extends StrikeProjectile {
     /** Точка падения — куда навели при пуске. */
     @Nullable
     private Vec3 impactAt;
+    /** Поправка этого тика к шагу по носу ({@link #drift}); вне шага — ноль. */
+    private Vec3 correction = Vec3.ZERO;
     /** Путь текущей траектории по тикам (не сохраняется: считается заново от начала и скорости схода). */
     @Nullable
     private Ballistics.Path path;
@@ -221,7 +223,12 @@ public class RocketEntity extends StrikeProjectile {
         face(v);
         speed = v.length();
         Vec3 before = position();
-        if (!advance(level, landing(), airframe().reachPad())) return;
+        // шаг по носу (углы и табличный синус) уходит от пути на доли блока за тик — поправка ставит снаряд точно в
+        // точку пути: без неё за сотни тиков он уползал бы на полблока и расчёт огня повторялся бы без причины
+        correction = at(t + step).subtract(before.add(flight.forward().scale(speed)));
+        boolean flying = advance(level, landing(), airframe().reachPad());
+        correction = Vec3.ZERO;
+        if (!flying) return;
         // вне мира у самой цели снаряд ждёт загрузки района — тогда он не сдвинулся и время траектории стоит
         if (position().distanceToSqr(before) > 1.0e-6) t += step;
     }
@@ -257,7 +264,7 @@ public class RocketEntity extends StrikeProjectile {
      * хода на него не тратит, предел ожидания общий с ожиданием у цели.
      */
     private double stretch(ServerLevel level) {
-        double want = aimAreaReady(level, impactAt) ? 1 : Math.min(1, Math.max(0, holdAt - t) / STRETCH_TICKS);
+        double want = aimAreaReady(level, landing()) ? 1 : Math.min(1, Math.max(0, holdAt - t) / STRETCH_TICKS);
         rate += Math.max(-RATE_SLEW, Math.min(RATE_SLEW, want - rate));
         stretched += 1 - rate;
         while (stretched >= 1 && !isRemoved()) {
@@ -290,6 +297,12 @@ public class RocketEntity extends StrikeProjectile {
     /** Куда снаряд падает: точка на спуске траектории; траектории ещё нет — точка цели. */
     private Vec3 landing() {
         return landing != null ? landing : impactAt != null ? impactAt : tracker.point();
+    }
+
+    /** Поправка шага сверх шага по носу ({@link #drift}): ставит снаряд точно в точку пути. */
+    @Override
+    protected Vec3 drift() {
+        return correction;
     }
 
     /** Район цели — там, куда снаряд придёт: разброс схода и ветер уводят его от точки цели. */
@@ -342,7 +355,9 @@ public class RocketEntity extends StrikeProjectile {
         // с этим наклоном точку не достать (на спуске она выше линии пути): не разгонять снаряд — прямо в неё за
         // оставшееся время, как по параболе без сопротивления (не по физике, редкий случай: уточнилась высота точки)
         if (!Ballistics.hits(from, aim, to, FLIGHT.drag(), known(), 1) || aim.length() > 2 * v.length() + 1) {
-            aim = Ballistics.launchVelocity(from, to, Math.max(8, (int) Math.ceil(flightTicks - t)));
+            // скорость, с которой парабола без сопротивления p = from + v·n − g·n²/2 (как у интегратора) за n тиков в точке
+            int n = Math.max(8, (int) Math.ceil(flightTicks - t));
+            aim = to.subtract(from).scale(1.0 / n).add(0, Ballistics.GRAVITY * n / 2, 0);
         }
         restart(from, to, aim);
     }

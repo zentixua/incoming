@@ -32,6 +32,7 @@ import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
 import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.util.Nbt;
 import ua.zentix.incoming.warhead.Warheads;
 
 import java.util.UUID;
@@ -51,7 +52,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
     private int traveled;
     private int fuse = -1;
 
-    /** Снос ветром за тик, блоков (не сохраняется: после загрузки набирается заново). */
+    /** Снос ветром за тик, блоков (сохраняется: уходя в полёт вне мира, бомба становится новой сущностью из NBT). */
     private Vec3 windDrift = Vec3.ZERO;
 
     public BunkerBusterEntity(EntityType<? extends BunkerBusterEntity> type, Level level) {
@@ -309,6 +310,8 @@ public class BunkerBusterEntity extends StrikeProjectile {
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        Vec3 d = Nbt.getVec(tag, "wind_drift");
+        windDrift = d != null ? d : Vec3.ZERO;
         goal = NbtUtils.readBlockPos(tag, "goal").orElse(null);
         energy = tag.getInt("energy");
         traveled = tag.getInt("traveled");
@@ -319,6 +322,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+        Nbt.putVec(tag, "wind_drift", windDrift);
         if (goal != null) tag.put("goal", NbtUtils.writeBlockPos(goal));
         tag.putInt("energy", energy);
         tag.putInt("traveled", traveled);
