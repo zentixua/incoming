@@ -97,7 +97,8 @@ final class ProbeScenario {
             cmd("gamerule doFireTick true");
             Minecraft.getInstance().options.hideGui = true;
             var server = Minecraft.getInstance().getSingleplayerServer();
-            server.execute(() -> {
+            // поиск мест — в своём потоке: высоты генератора считаются шумом, на потоке сервера это минуты без тиков
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
                 var level = server.overworld();
                 List<int[]> found = new ArrayList<>();
                 for (int i = 0; i < cases.size(); i++) {
@@ -107,6 +108,7 @@ final class ProbeScenario {
                     found.add(flat(p.getX(), p.getZ()));
                 }
                 sites = found;
+                Incoming.LOG.info("SCENARIO probe sites ready");
             });
         });
         at(60, this::nextCase);
@@ -155,8 +157,8 @@ final class ProbeScenario {
      * на 300 блоков к −Z не выше цели на 12; ищется кольцами до 1,5 км, не нашлось — сама точка.
      */
     private int[] flat(int x, int z) {
-        for (int r = 0; r <= 1536; r += 64) {
-            int steps = r == 0 ? 1 : Math.max(8, r / 16);
+        for (int r = 0; r <= 1024; r += 128) {
+            int steps = r == 0 ? 1 : Math.max(8, r / 32);
             for (int k = 0; k < steps; k++) {
                 double a = 2 * Math.PI * k / steps;
                 int cx = x + (int) Math.round(r * Math.cos(a)), cz = z + (int) Math.round(r * Math.sin(a));
@@ -168,18 +170,16 @@ final class ProbeScenario {
     }
 
     private boolean dryFlat(int x, int z) {
-        int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
-        for (int dx = -40; dx <= 40; dx += 10) {
-            for (int dz = -40; dz <= 40; dz += 10) {
-                int top = height(x + dx, z + dz, Heightmap.Types.WORLD_SURFACE_WG), floor = height(x + dx, z + dz, Heightmap.Types.OCEAN_FLOOR_WG);
-                if (top != floor || top <= 64) return false;
-                lo = Math.min(lo, top);
-                hi = Math.max(hi, top);
+        int at = height(x, z, Heightmap.Types.WORLD_SURFACE_WG);
+        if (at <= 64) return false;
+        for (int dx = -40; dx <= 40; dx += 20) {
+            for (int dz = -40; dz <= 40; dz += 20) {
+                int top = height(x + dx, z + dz, Heightmap.Types.WORLD_SURFACE_WG);
+                if (Math.abs(top - at) > 3) return false;
+                if (height(x + dx, z + dz, Heightmap.Types.OCEAN_FLOOR_WG) != top) return false;
             }
         }
-        if (hi - lo > 4) return false;
-        int at = height(x, z, Heightmap.Types.WORLD_SURFACE_WG);
-        for (int d = 40; d <= 300; d += 10) if (height(x, z - d, Heightmap.Types.WORLD_SURFACE_WG) > at + 12) return false;
+        for (int d = 40; d <= 300; d += 20) if (height(x, z - d, Heightmap.Types.WORLD_SURFACE_WG) > at + 12) return false;
         return true;
     }
 
