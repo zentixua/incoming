@@ -3,10 +3,13 @@ package ua.zentix.incoming.strike;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.entity.LauncherRack;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
+import ua.zentix.incoming.util.StandardAtmosphere;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -66,7 +69,7 @@ class WeaponSpecTest {
             assertEquals(w.blast() == WeaponSpec.Blast.NONE, w.charge() == 0, () -> w.blast() + ": заряд " + w.charge());
         }
         assertEquals(70, glassRange(WeaponSpec.DRONE), 7);
-        assertEquals(150, glassRange(WeaponSpec.MISSILE), 15);
+        assertEquals(105, glassRange(WeaponSpec.MISSILE), 10);
         assertEquals(37, glassRange(WeaponSpec.ROCKET), 4);
         assertEquals(29, glassRange(WeaponSpec.LOITER), 3);
     }
@@ -221,5 +224,190 @@ class WeaponSpecTest {
         assertEquals(30, WeaponSpec.DRONE.fuelAtImpact());
         assertEquals(275, WeaponSpec.MISSILE.fuelAtImpact());
         for (WeaponSpec s : List.of(WeaponSpec.LOITER, WeaponSpec.ROCKET, WeaponSpec.BUNKER, WeaponSpec.NUKE)) assertEquals(0, s.fuelAtImpact());
+    }
+
+    // ---- изделия по ТТХ: выведенные законом числа против открытых данных
+
+    private static final double RHO0 = StandardAtmosphere.density(0);
+
+    /** Все сущности полёта всех оружий (у B-2 — и бомба). */
+    private static List<WeaponSpec.Airframe> airframes() {
+        List<WeaponSpec.Airframe> out = new ArrayList<>();
+        for (WeaponType w : WeaponType.values()) {
+            out.add(w.spec().airframe());
+            if (w.spec().payload() != null) out.add(w.spec().payload());
+        }
+        return out;
+    }
+
+    /**
+     * У каждого изделия все поля — настоящие числа: массы, размеры, сопротивление, скорости; у кого бьёт — условия
+     * удара; БЧ — ТНТ не меньше нуля, корпус и ВВ не больше всей массы; топливо к удару не больше топлива на борту.
+     */
+    @Test
+    void everyAirframeHasArticle() {
+        for (WeaponSpec.Airframe a : airframes()) {
+            Article r = a.article();
+            String n = a.noise() + "";
+            for (double v : new double[]{r.dryMass(), r.launchMass(), r.length(), r.diameter(), r.span(), r.cda(), r.real().cruise(), r.real().dive()})
+                assertTrue(v > 0 && Double.isFinite(v), n);
+            assertTrue(r.launchMass() >= r.dryMass(), n);
+            assertTrue(r.real().dive() >= r.real().cruise(), n);
+            assertTrue(r.fuelAtImpact() >= 0 && r.fuelAtImpact() <= r.launchMass() - r.dryMass(), n);
+            if (r.warhead() != null) {
+                assertTrue(r.warhead().tnt() > 0 && r.warhead().explosive() > 0 && r.warhead().caseMass() >= 0, n);
+                assertTrue(r.warhead().explosive() + r.warhead().caseMass() <= r.dryMass(), n);
+            }
+            if (r.booster() != null) assertTrue(r.booster().propellant() > 0 && r.booster().jettison() >= 0, n);
+        }
+        for (WeaponType w : WeaponType.values()) {
+            WeaponSpec s = w.spec();
+            assertTrue(s.striker().article().impact() != null, w + ": условия удара");
+            if (s.blast() != WeaponSpec.Blast.NONE) assertTrue(s.striker().article().warhead() != null, w + ": БЧ");
+        }
+        assertTrue(WeaponSpec.BUNKER.airframe().article().impact() == null, "B-2 сам не бьёт");
+    }
+
+    /** Решения Артёма: ракета — «Томагавк» ~150 кг ТНТ, шахед — исходный с 50 кг; MOP — 2,4 т ВВ. */
+    @Test
+    void chargesByDecision() {
+        assertEquals(150, WeaponSpec.MISSILE.charge());
+        assertEquals(50, WeaponSpec.DRONE.charge());
+        assertEquals(6.4, WeaponSpec.ROCKET.charge());
+        assertEquals(3, WeaponSpec.LOITER.charge());
+        assertEquals(2423, WeaponSpec.BUNKER.striker().article().warhead().explosive());
+        assertEquals(0, WeaponSpec.BUNKER.charge(), "бомба рвётся под землёй: наземного взрыва нет");
+        assertEquals(0, WeaponSpec.NUKE.charge());
+    }
+
+    /** Игровые маршевые скорости — не больше настоящих (не по физике, чтобы подлёт было видно). */
+    @Test
+    void gameSpeedsBelowReal() {
+        for (WeaponSpec s : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.BUNKER)) {
+            WeaponSpec.Airframe a = s.airframe();
+            assertTrue(a.cruiseSpeed() * 20 <= a.article().real().cruise(), s.blast() + "");
+        }
+    }
+
+    /** Шахед: крейсер из мощности винта и сопротивления ηP = ½ρv³·CdA — 185 км/ч ±10 % (Wikipedia). */
+    @Test
+    void shahedCruiseFromPowerAndDrag() {
+        Article a = WeaponSpec.DRONE.airframe().article();
+        Article.Propeller p = (Article.Propeller) a.sustainer();
+        double v = Math.cbrt(2 * p.efficiency() * p.power() / (RHO0 * a.cda()));
+        assertEquals(185 / 3.6, v, 185 / 3.6 * 0.1);
+        assertEquals(a.real().cruise(), v, a.real().cruise() * 0.1);
+        assertEquals(a.real().dive(), dive(a, 90), a.real().dive() * 0.05, "отвесно");
+        assertEquals(a.impact().speed(), dive(a, a.impact().angle()), a.impact().speed() * 0.05, "удар в пике");
+    }
+
+    /** «Томагавк»: крейсер из тяги ТРДД и сопротивления T = ½ρv²·CdA — ~250 м/с ±5 % (М0,74). */
+    @Test
+    void tomahawkCruiseFromThrust() {
+        Article a = WeaponSpec.MISSILE.airframe().article();
+        double v = Math.sqrt(2 * ((Article.Turbofan) a.sustainer()).thrust() / (RHO0 * a.cda()));
+        assertEquals(250, v, 250 * 0.05);
+        // ускоритель Mk 106 разгоняет 1,6 т с места на ~210 м/с — дальше турбина
+        Article.SolidMotor b = a.booster();
+        double m0 = a.launchMass() + b.jettison();
+        double dv = b.exhaust() * Math.log(m0 / (m0 - b.propellant()));
+        assertTrue(dv > 150 && dv < a.real().cruise(), "Δv ускорителя " + dv);
+    }
+
+    /** «Ланцет»: отвесное пике 300 км/ч ±10 % из веса и CdA; удар — тот же баланс под углом удара. */
+    @Test
+    void lancetDiveFromWeight() {
+        Article a = WeaponSpec.LOITER.airframe().article();
+        assertEquals(300 / 3.6, dive(a, 90), 300 / 3.6 * 0.1);
+        assertEquals(a.impact().speed(), dive(a, a.impact().angle()), a.impact().speed() * 0.05);
+    }
+
+    /**
+     * «Град»: точка с массой, тяга двигателя паспорта, сопротивление CdA·f(M) в стандартной атмосфере — наибольшая
+     * дальность 20,38 км ±3 % (Wikipedia), к выгоранию ~690 м/с ±3 %, удар — как в паспорте.
+     */
+    @Test
+    void gradRangeWithMachDrag() {
+        Article a = WeaponSpec.ROCKET.airframe().article();
+        assertEquals(a.launchMass() - a.dryMass(), a.booster().propellant(), 0.01, "топливо — разница масс");
+        double[] best = null;
+        for (int deg = 40; deg <= 65; deg++) {
+            double[] r = fly(a, a.booster(), Math.toRadians(deg), 0, 0);
+            if (best == null || r[0] > best[0]) best = r;
+        }
+        assertEquals(20_380, best[0], 20_380 * 0.03, "дальность");
+        assertEquals(690, best[1], 690 * 0.03, "к выгоранию");
+        assertEquals(a.real().cruise(), best[1], 5);
+        assertEquals(a.impact().speed(), best[2], 5, "скорость удара");
+        assertEquals(a.impact().angle(), best[3], 1, "угол удара");
+    }
+
+    /** GBU-57: падение с высоты сброса на крейсерской скорости B-2 — удар как в паспорте (±2 %, ±1°). */
+    @Test
+    void mopDropImpact() {
+        Article bomb = WeaponSpec.BUNKER.payload().article(), b2 = WeaponSpec.BUNKER.airframe().article();
+        double[] r = fly(bomb, null, 0, b2.real().cruise(), b2.real().altitude());
+        assertEquals(bomb.impact().speed(), r[2], bomb.impact().speed() * 0.02);
+        assertEquals(bomb.impact().angle(), r[3], 1);
+        assertTrue(r[4] > 45 && r[4] < 55, "падение ~50 с: " + r[4]);
+    }
+
+    /** 9М96: Δv двигателя по Циолковскому — не меньше наибольшей скорости; БЧ 24 кг (ВВ + корпус). */
+    @Test
+    void samPassportBy9M96() {
+        InterceptorSpec.Passport p = InterceptorSpec.SAM.passport();
+        double m0 = p.launchMass();
+        assertTrue(p.boost().exhaust() * Math.log(m0 / (m0 - p.boost().propellant())) >= p.maxSpeed());
+        assertEquals(24, p.warhead().explosive() + p.warhead().caseMass(), 1e-9);
+        assertTrue(p.rangeMin() < p.rangeMax() && p.altitudeMin() < p.altitudeMax() && p.fuse() > 0);
+        assertTrue(InterceptorSpec.SAM.maxSpeed() * 20 < p.maxSpeed(), "игровая медленнее настоящей");
+    }
+
+    /** Звук и факелы берут двигатель из паспорта: одна тяга и одно истечение на изделие. */
+    @Test
+    void noiseUsesArticleMotors() {
+        assertEquals(WeaponSpec.DRONE_BOOSTER.thrust(), WeaponSpec.DRONE.airframe().noise().motor().thrust());
+        assertEquals(WeaponSpec.MISSILE_BOOSTER.exhaust(), WeaponSpec.MISSILE.airframe().noise().motor().exhaust());
+        assertEquals(WeaponSpec.ROCKET_MOTOR.thrust(), WeaponSpec.ROCKET.airframe().noise().motor().thrust());
+        assertEquals(WeaponSpec.NUKE.ascent().thrust(), WeaponSpec.NUKE.airframe().noise().motor().thrust());
+    }
+
+    /** Установившаяся скорость в пике под углом θ к горизонту: тяга винта + mg·sin θ = ½ρv²·CdA. */
+    private static double dive(Article a, double angle) {
+        double m = (a.dryMass() + a.launchMass()) / 2, lo = 1, hi = 500;
+        for (int i = 0; i < 100; i++) {
+            double v = (lo + hi) / 2;
+            double thrust = a.sustainer() instanceof Article.Propeller p ? p.thrust(v) : 0;
+            if (thrust + m * Article.G * Math.sin(Math.toRadians(angle)) > 0.5 * RHO0 * v * v * a.cda()) lo = v;
+            else hi = v;
+        }
+        return lo;
+    }
+
+    /**
+     * Точка с массой над плоской землёй: тяга двигателя (если есть) вдоль скорости, сопротивление ½ρv²·CdA·f(M) по
+     * стандартной атмосфере, шаг 0,01 с.
+     *
+     * @return дальность, м; скорость к выгоранию, м/с; скорость удара, м/с; угол удара, °; время полёта, с
+     */
+    private static double[] fly(Article a, Article.SolidMotor motor, double elevation, double v0, double h0) {
+        double dt = 0.01, x = 0, h = h0, t = 0, burnout = Double.NaN;
+        double v = Math.max(v0, 1e-3), vx = v * Math.cos(elevation), vy = v * Math.sin(elevation);
+        double burn = motor == null ? 0 : motor.burn();
+        while (true) {
+            v = Math.hypot(vx, vy);
+            double rho = StandardAtmosphere.density(Math.max(h, 0));
+            double sound = Math.sqrt(1.4 * StandardAtmosphere.R_AIR * StandardAtmosphere.temperature(Math.max(h, 0)));
+            double m = a.launchMass() - (motor == null ? 0 : motor.flow() * Math.min(t, burn));
+            double thrust = t < burn ? motor.thrust() : 0;
+            double drag = 0.5 * rho * v * v * a.cda() * Article.machFactor(v / sound);
+            vx += (thrust - drag) * vx / v / m * dt;
+            vy += ((thrust - drag) * vy / v / m - Article.G) * dt;
+            x += vx * dt;
+            h += vy * dt;
+            t += dt;
+            if (Double.isNaN(burnout) && t >= burn) burnout = Math.hypot(vx, vy);
+            if (h < 0 && t > 1) return new double[]{x, burnout, Math.hypot(vx, vy), Math.toDegrees(Math.atan2(-vy, vx)), t};
+        }
     }
 }

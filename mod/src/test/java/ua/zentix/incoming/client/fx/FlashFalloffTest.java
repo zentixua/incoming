@@ -14,11 +14,11 @@ class FlashFalloffTest {
     private static final double MISSILE_NEAR = BlastEffects.flashNear(MISSILE), MISSILE_RANGE = BlastEffects.flashRange(MISSILE);
     private static final double DRONE_NEAR = BlastEffects.flashNear(DRONE), DRONE_RANGE = BlastEffects.flashRange(DRONE);
 
-    /** Вблизи, лицом к взрыву — полная сила (0.85), за преградой — 0.3. */
+    /** На краю огненного шара, лицом к взрыву — полная сила (0.85), за преградой — 0.3. */
     @Test
     void closeBlastKeepsItsStrength() {
-        assertEquals(0.85f, FlashFalloff.strength(10, MISSILE_NEAR, MISSILE_RANGE, 1, true), 0.01f);
-        assertEquals(0.30f, FlashFalloff.strength(10, MISSILE_NEAR, MISSILE_RANGE, 1, false), 0.01f);
+        assertEquals(0.85f, FlashFalloff.strength(MISSILE_NEAR, MISSILE_NEAR, MISSILE_RANGE, 1, true), 0.01f);
+        assertEquals(0.30f, FlashFalloff.strength(MISSILE_NEAR, MISSILE_NEAR, MISSILE_RANGE, 1, false), 0.01f);
         assertEquals(0.85f, FlashFalloff.strength(0, DRONE_NEAR, DRONE_RANGE, 1, true), 0.01f);
     }
 

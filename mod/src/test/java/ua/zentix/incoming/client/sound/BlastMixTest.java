@@ -43,8 +43,8 @@ class BlastMixTest {
         for (double kg : new double[]{6.25, 10, 50, 150, 400}) {
             assertEquals(Math.cbrt(kg / BlastMix.REFERENCE_KG), 1 / BlastMix.pitch(kg), 1e-5, kg + " кг");
         }
-        // ракета (450 кг) — ниже и дольше шахеда, «Град» (6,4 кг) — выше и короче; «Ланцет» (3 кг) — у предела движка
-        assertTrue(BlastMix.pitch(450) < BlastMix.pitch(50) && BlastMix.pitch(6.4) > BlastMix.pitch(50));
+        // ракета (150 кг) — ниже и дольше шахеда, «Град» (6,4 кг) — выше и короче; «Ланцет» (3 кг) — у предела движка
+        assertTrue(BlastMix.pitch(150) < BlastMix.pitch(50) && BlastMix.pitch(6.4) > BlastMix.pitch(50));
         assertEquals(2, BlastMix.pitch(3), 1e-6);
         assertEquals(0.5, BlastMix.pitch(2400), 1e-6);
     }
