@@ -507,9 +507,26 @@ public final class Warheads {
     }
 
     /**
+     * Ось боевой части у удара: последний шаг снаряда; стоял (ждал свой район) — куда смотрит нос; снаряда нет — вниз.
+     */
+    static Vec3 axis(@Nullable Entity projectile) {
+        if (projectile == null) return S2C.Blast.DOWN;
+        Vec3 v = projectile.getDeltaMovement();
+        if (v.lengthSqr() < 1e-8) v = projectile.getLookAngle();
+        return v.lengthSqr() < 1e-8 ? S2C.Blast.DOWN : v.normalize();
+    }
+
+    /** Проверки: осколки боевой части оружия {@code weapon} из {@code at} с осью {@code axis}, без взрыва и района. */
+    public static FragmentStrike testFragments(ServerLevel level, WeaponType weapon, Vec3 at, Vec3 axis, long seed) {
+        FragmentModel model = java.util.Objects.requireNonNull(FragmentModel.of(weapon.spec()), "у оружия нет осколков");
+        return FragmentStrike.queue(level, null, List.of(), () -> true, model, at, axis, seed, null, null,
+                IncomingConfig.SERVER.shatterGlass.get(), IncomingConfig.SERVER.blockDamage.get());
+    }
+
+    /**
      * Наземный взрыв боевой части: заряд из паспорта ({@link WeaponSpec#charge}) — волна, газы, тела (главный взрыв); за
      * ним — воронка по закону обычного заряда, поджиг шаром топлива из бака ({@link WeaponSpec#fuelAtImpact}), обломки,
-     * стёкла. Вторичных подрывов и колец огня нет: вторичное — только топливо и горящие обломки.
+     * осколки корпуса ({@link FragmentStrike}), стёкла. Вторичных подрывов и колец огня нет: вторичное — только топливо и горящие обломки.
      */
     static final class SurfaceBlast implements Timeline {
         private final WeaponType weapon;
@@ -547,17 +564,25 @@ public final class Warheads {
             // дальше, чем сервер шлёт что-либо далёкое
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
                     Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(spec.charge())));
+            this.seed = level.random.nextLong();
+            this.axis = axis(direct);
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
-                    new S2C.Blast(kind, pos, mat.ordinal(), surface, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID), weapon.id()));
+                    new S2C.Blast(kind, pos, mat.ordinal(), surface, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis));
             main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(), direct, owner)) : List.of();
             // заряд на аппарате: воронку и шар топлива там не ставить — это корпус, а не земля. Снаряд отдаёт точку удара о
             // аппарат уже в мире (StrikeProjectile: SubLevels.toWorld), поэтому — и аппарат, чей габарит у точки
-            onCraft = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)))
-                    || !SubLevels.near(level, pos, 1).isEmpty();
+            inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
+            onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
         }
 
         /** Взрыв на аппарате Sable. */
         private final boolean onCraft;
+        /** Точка взрыва — в сетке плотов Sable (координаты аппарата, а не мира). */
+        private final boolean inPlots;
+        /** Зерно взрыва (оно же в пакете взрыва): по нему осколки у сервера и клиента одни. */
+        private final long seed;
+        /** Ось боевой части — курс снаряда у удара. */
+        private final Vec3 axis;
 
         /** Главный взрыв был (обработчик-приват его не отменил). */
         private boolean happened() {
@@ -577,6 +602,10 @@ public final class Warheads {
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
                     l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));
+            FragmentModel fragments = FragmentModel.of(weapon.spec());
+            // в сетке плотов Sable лучи шли бы по блокам аппарата: осколки аппараты не ломают
+            if (fragments != null && !inPlots) FragmentStrike.queue(level, area, main, this::happened, fragments, pos, axis, seed, direct, owner,
+                    IncomingConfig.SERVER.shatterGlass.get(), IncomingConfig.SERVER.blockDamage.get());
             if (IncomingConfig.SERVER.shatterGlass.get()) shatterGlass(level, missile);
             return false;
         }
