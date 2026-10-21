@@ -6,7 +6,7 @@
       "x": 0.0,
       "y": 0.5,
       "z": 0.0,
-      "hash": "57a6f79f15ca996c"
+      "hash": "a593f2696765eaff"
     },
     "bomber.point.none.0": {
       "end": "entry",
@@ -14,7 +14,7 @@
       "x": 0.0,
       "y": 0.5,
       "z": 0.0,
-      "hash": "e291dd284dee43e1"
+      "hash": "9fa822db86cd561b"
     },
     "bomber.point.quarry.0": {
       "end": "entry",
@@ -22,7 +22,7 @@
       "x": 0.0,
       "y": 0.5,
       "z": 0.0,
-      "hash": "96e6ed064e9744cd"
+      "hash": "827dda4b3754c9a8"
     },
     "bomber.point.retarget.0": {
       "end": "entry",
@@ -30,7 +30,7 @@
       "x": -95.0,
       "y": 0.5,
       "z": -145.5,
-      "hash": "67d0d6cf56ae26a2"
+      "hash": "73426cc6faf62825"
     },
     "drone_far.mob.hill.0": {
       "end": "blast",
@@ -907,66 +907,66 @@
     "rocket_far.mob.none.0": {
       "end": "blast",
       "tick": 270,
-      "x": -0.74,
+      "x": -0.8,
       "y": 0.45,
-      "z": 5.64,
-      "hash": "5454828f8c164437"
+      "z": 5.67,
+      "hash": "58410346b76dd0d7"
     },
     "rocket_far.point.hill.0": {
       "end": "blast",
       "tick": 222,
-      "x": -2.95,
+      "x": -2.86,
       "y": 0.0,
-      "z": -1.76,
-      "hash": "6f22c93018167351"
+      "z": -1.89,
+      "hash": "bde7c5bd834510be"
     },
     "rocket_far.point.none.0": {
       "end": "blast",
       "tick": 245,
       "x": 1.98,
       "y": 0.0,
-      "z": -3.06,
-      "hash": "4f5571bc0bd91e89"
+      "z": -3.07,
+      "hash": "7b673add7292a7ae"
     },
     "rocket_far.point.quarry.0": {
       "end": "blast",
-      "tick": 225,
-      "x": -2.52,
+      "tick": 226,
+      "x": -2.14,
       "y": 0.0,
-      "z": -2.23,
-      "hash": "85adb8b89ae248a4"
+      "z": -2.58,
+      "hash": "1625c3067173b854"
     },
     "rocket_tube.mob.none.0": {
       "end": "blast",
       "tick": 277,
-      "x": -4.1,
+      "x": -4.99,
       "y": 0.45,
-      "z": -3.06,
-      "hash": "a28147f84c312c88"
+      "z": -2.15,
+      "hash": "05ed9612eb6349e6"
     },
     "rocket_tube.point.hill.0": {
       "end": "blast",
-      "tick": 260,
-      "x": -4.2,
+      "tick": 259,
+      "x": -2.2,
       "y": 0.0,
-      "z": -0.44,
-      "hash": "3adeae4490f15a60"
+      "z": -5.7,
+      "hash": "8b9c442cd7216054"
     },
     "rocket_tube.point.none.0": {
       "end": "blast",
       "tick": 270,
-      "x": -1.97,
+      "x": -2.52,
       "y": 0.0,
-      "z": -9.86,
-      "hash": "741532cee115bf94"
+      "z": -10.07,
+      "hash": "7a4afcff8c86200f"
     },
     "rocket_tube.point.quarry.0": {
       "end": "blast",
       "tick": 164,
-      "x": -0.06,
+      "x": 1.76,
       "y": 0.0,
-      "z": -0.72,
-      "hash": "3d901869d11a0594"
+      "z": 0.05,
+      "hash": "99322b727a23d446"
     }
   }
 }
