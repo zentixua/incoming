@@ -243,6 +243,7 @@ public final class FxLayer {
             FxAtlas.Sprite glow = FxAtlas.glow();
             s.safeGetUniform("FxGlow").set(glow.u0(), glow.v0(), glow.u1(), glow.v1());
             s.safeGetUniform("FxBalls").set(LIGHTS.balls);
+            sun(s);
             s.safeGetUniform("FxBallLight").set(LIGHTS.light);
             s.safeGetUniform("PallFire0").set(fire0 >= 0 ? front.fire0.params : PallPass.empty().fire0.params);
             s.safeGetUniform("PallFire1").set(fire1 >= 0 ? front.fire1.params : PallPass.empty().fire1.params);
@@ -300,5 +301,24 @@ public final class FxLayer {
         long n = 0;
         for (GarbageCollectorMXBean b : PAUSES) n += Math.max(0, b.getCollectionCount());
         return n;
+    }
+
+    /**
+     * Проба гибрида: направление на солнце (днём) или луну (ночью) в мире и доля прямого света в свете неба (ясно днём
+     * ~0,75: прямой против рассеянного неба, ⚠ оценка; в дождь — 0,15), и сдвиг второй карты шестистороннего света.
+     */
+    private static void sun(net.minecraft.client.renderer.ShaderInstance s) {
+        var level = net.minecraft.client.Minecraft.getInstance().level;
+        float a = level == null ? 0 : level.getTimeOfDay(1) * net.minecraft.util.Mth.TWO_PI;
+        float x = -net.minecraft.util.Mth.sin(a), y = net.minecraft.util.Mth.cos(a);
+        float key = y >= 0 ? 0.75f : 0.5f;
+        if (y < 0) {
+            x = -x;
+            y = -y;
+        }
+        key *= net.minecraft.util.Mth.clamp(y / 0.1f, 0, 1);
+        if (level != null) key *= 1 - 0.8f * level.getRainLevel(1);
+        s.safeGetUniform("FxSun").set(x, y, 0.08f, key);
+        s.safeGetUniform("FxSix").set(FxAtlas.SIX_DV);
     }
 }

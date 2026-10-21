@@ -43,6 +43,7 @@ public final class BlastEffects {
     public static void blast(S2C.Blast p) {
         // одно облако на взрыв: у объёма, у картинки вдали и у вспышки с частицами здесь
         CloudModel cloud = FarBlasts.add(p);
+        if (cloud != null) ua.zentix.incoming.client.compat.ProbeLights.blast(p.pos(), cloud);
         if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.byId(p.material()), p.seed(), BlastSource.of(p)));
         else if (FarBlasts.near(p.pos())) {
             GroundMaterial mat = GroundMaterial.byId(p.material());
@@ -274,10 +275,10 @@ public final class BlastEffects {
             }
             if (t == 1) spray(level, 1);
             // языки пламени — пока горит топливо (шар топлива, CCPS)
-            Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * model.fuelBallSeconds), random);
+            Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * Math.max(model.fuelBallSeconds, model.poolFireSeconds())), random);
             if (t == 8 && !rocket) BlastSounds.fire(pos, 1.1f);
             if (t == 20) BlastSounds.debris(pos, rocket ? 40 : 60, rocket ? 1.25f : 1.1f);
-            return t < 240;
+            return t < Math.max(240, 20 * model.poolFireSeconds() + 1);
         }
 
     }
@@ -348,7 +349,7 @@ public final class BlastEffects {
                 return true;
             }
             if (t == 1) spray(level, 2);
-            Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * model.fuelBallSeconds), random);
+            Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * Math.max(model.fuelBallSeconds, model.poolFireSeconds())), random);
             for (Warheads.Secondary s : Warheads.MISSILE_SECONDARIES) {
                 // вторичные подрывы сервера (ванильных клубов у них нет): огонь и искры там же и тогда же
                 if (s.tick() == t) Explosions.cookoff(level, pos.add(s.dx(), s.dy(), s.dz()), s.power(), random);
@@ -361,7 +362,7 @@ public final class BlastEffects {
                 case 60, 97, 143 -> cookoff(level);
                 default -> {}
             }
-            return t < 340;
+            return t < Math.max(340, 20 * model.poolFireSeconds() + 1);
         }
 
         /** Догорание: вторичные подрывы в воронке. */

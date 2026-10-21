@@ -398,7 +398,9 @@ public final class FarBlasts {
         clear(e, camera());
         if (EVENTS.size() >= CAP) EVENTS.pollFirst().alive = false;
         EVENTS.addLast(e);
-        if (model != null) SmokeGrid.add(e);
+        // проба гибрида (handoff P): облако обычного оружия — квадраты слоя по той же модели (запечённые клубы), объём
+        // сетки дыма — только у ядерки
+        e.inGrid = false;
         return model;
     }
 
@@ -782,7 +784,37 @@ public final class FarBlasts {
             Sight.point(r, 1, 1, d, view.pixel(), POINT);
             float lit = e.shade[i] * view.ambient();
             float cr = thick(ks, kd, kw, e.dustR) * lit, cg = thick(ks, kd, kw, e.dustG) * lit, cb = thick(ks, kd, kw, e.dustB) * lit;
-            out.puff(px, py, pz, POINT[0], e.rot[i] + (float) (age * e.spin[i]), e.tex[i], cr, cg, cb, (float) (a * w * vis * POINT[1] * air * outside));
+            cluster(e, i, out, view, px, py, pz, POINT[0], sh, e.blobs[at + 4], age, cr, cg, cb, (float) (a * w * vis * POINT[1] * air * outside));
+        }
+    }
+
+    /** Клубов на гаусс модели вблизи (проба гибрида): кучка запечённых клубов вместо одного квадрата. */
+    static final int CLUSTER = 6;
+
+    /**
+     * Проба гибрида (handoff P): гаусс модели — кучка клубов из Blender с шестисторонним светом. Места клубов — случайные
+     * по зерну взрыва в пределах σ (по горизонтали и вертикали), кадр — по возрасту облака против его подъёма к вершине
+     * (клуб в симуляции тоже раскрывается), между кадрами — смесь двух квадратов. Мельче 48 пикселей на экране — один
+     * клуб. Непрозрачность кучки в середине — как у гаусса: клуб берёт её долю (в середине перекрываются ~3).
+     */
+    private static void cluster(Event e, int i, FarSprites out, FarView view, double px, double py, double pz, double half, double sh, double sv,
+                                double age, float cr, float cg, float cb, float a) {
+        double d = Math.sqrt(px * px + py * py + pz * pz);
+        boolean near = half / Math.max(d * view.pixel(), 1e-9) > 48;
+        int k = near ? CLUSTER : 1;
+        double top = e.model == null ? 20 : Math.max(e.model.topSeconds, 2);
+        double p = Math.min(1, age / 20 / top) * (FxAtlas.PUFF6_FRAMES - 1);
+        float sub = near ? (float) (1 - Math.pow(1 - Math.min(a, 0.999), 1 / 3.0)) : a;
+        SplittableRandom rnd = new SplittableRandom(e.seed * 31 + i);
+        for (int j = 0; j < k; j++) {
+            double ox = near ? rnd.nextGaussian() * 0.6 * sh : 0, oy = near ? rnd.nextGaussian() * 0.5 * sv : 0, oz = near ? rnd.nextGaussian() * 0.6 * sh : 0;
+            double size = near ? half * (0.55 + 0.25 * rnd.nextDouble()) : half;
+            double f = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, p + (near ? rnd.nextInt(3) : 0));
+            int f0 = (int) f;
+            float mix = (float) (f - f0);
+            boolean mirror = (j & 1) == 1;
+            out.puff6(px + ox, py + oy, pz + oz, size, FxAtlas.puff6(f0, mirror), cr, cg, cb, sub * (1 - mix));
+            if (mix > 0.02f) out.puff6(px + ox, py + oy, pz + oz, size, FxAtlas.puff6(f0 + 1, mirror), cr, cg, cb, sub * mix);
         }
     }
 

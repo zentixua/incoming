@@ -185,6 +185,10 @@ public final class ClientScenario {
             new StrikeProfile(); // шаги и замер тиков сервера — свои (StrikeProfile); мир — копия игрока (onScreen)
             return;
         }
+        if ("probe".equals(scenario)) {
+            new ProbeScenario(); // проба картинки и звука после 3.5.0: одни сцены в любой версии (handoff P)
+            return;
+        }
         if ("guide".equals(scenario)) {
             new GuideShots(); // кадры руководства игрока (docs/guide, tools/guide_images.sh)
             return;

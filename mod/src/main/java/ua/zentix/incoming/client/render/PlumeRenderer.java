@@ -29,6 +29,7 @@ import ua.zentix.incoming.client.fx.plume.FlameModel;
 public final class PlumeRenderer {
     private static final ResourceLocation PLUME = Incoming.id("textures/fx/plume.png");
     private static final ResourceLocation DIAMONDS = Incoming.id("textures/fx/plume_diamonds.png");
+    private static final ResourceLocation HALO = Incoming.id("textures/fx/halo.png");
 
     private PlumeRenderer() {}
 
@@ -49,6 +50,18 @@ public final class PlumeRenderer {
         strip(vc, pose, cam, p.z(), (float) f.flame(), (float) ((f.width() + f.widthAt(f.flame())) / 2), f.flameColor(), f.flameLuminance() * p.adapt(),
                 p.near());
         strip(vc, pose, cam, p.z(), (float) f.core(), (float) f.width(), f.coreColor(), f.coreLuminance() * p.adapt(), p.near());
+        // проба гибрида: вдоль оси полоса сходит на нет, а видно сечение струи — диск лицом к камере (как ореол 3.4.1),
+        // в долю того, насколько взгляд идёт по оси (сбоку его закрывают полосы); копии векторов камеры — см. client.md
+        float along = Math.abs(new Vector3f(cam).normalize().z);
+        if (along > 0.3f) {
+            float w = (along - 0.3f) / 0.7f;
+            Vector3f left = camera.getLeftVector().rotate(inv, new Vector3f()), up = camera.getUpVector().rotate(inv, new Vector3f());
+            VertexConsumer halo = buffers.getBuffer(RenderType.eyes(HALO));
+            disc(halo, pose, new Vector3f(0, 0, p.z() - (float) f.width() * 0.5f), left, up, (float) f.widthAt(f.flame()) * 1.2f, f.flameColor(),
+                    f.flameLuminance() * p.adapt() * w, p.near());
+            disc(halo, pose, new Vector3f(0, 0, p.z() - (float) f.width() * 0.3f), left, up, (float) f.width() * 1.1f, f.coreColor(),
+                    f.coreLuminance() * p.adapt() * w, p.near());
+        }
         pose.popPose();
     }
 
@@ -72,6 +85,17 @@ public final class PlumeRenderer {
         vertex(vc, pose, side.x, side.y, z1, 1, 1, rgb, k);
         vertex(vc, pose, side.x, side.y, z0, 1, 0, rgb, k);
         vertex(vc, pose, -side.x, -side.y, z0, 0, 0, rgb, k);
+    }
+
+    /** Диск сечения струи лицом к камере, полуразмер s. */
+    private static void disc(VertexConsumer vc, PoseStack pose, Vector3f at, Vector3f left, Vector3f up, float s, int color, double seen, float near) {
+        float k = (float) Math.min(1, seen) * near, white = seen > 1 ? (float) Math.min(1, Math.log(seen) / Math.log(Sight.WHITE)) : 0;
+        int rgb = whiten(color, white);
+        float lx = left.x * s, ly = left.y * s, lz = left.z * s, ux = up.x * s, uy = up.y * s, uz = up.z * s;
+        vertex(vc, pose, at.x - lx - ux, at.y - ly - uy, at.z - lz - uz, 0, 1, rgb, k);
+        vertex(vc, pose, at.x - lx + ux, at.y - ly + uy, at.z - lz + uz, 0, 0, rgb, k);
+        vertex(vc, pose, at.x + lx + ux, at.y + ly + uy, at.z + lz + uz, 1, 0, rgb, k);
+        vertex(vc, pose, at.x + lx - ux, at.y + ly - uy, at.z + lz - uz, 1, 1, rgb, k);
     }
 
     /** Цвет, белеющий на долю w (в линейном свете). */

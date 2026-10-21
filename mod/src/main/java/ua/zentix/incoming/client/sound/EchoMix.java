@@ -59,6 +59,9 @@ public final class EchoMix {
         public static final Mix NONE = new Mix(List.of(), 0, 0);
     }
 
+    /** Разброс приходов одного отражения, с (проба гибрида, ⚠ оценка: склон в десяток метров — ~25 мс). */
+    static final double VELVET = 0.025;
+
     /** Отражения → дорожки. {@code grain} — моно, {@link #RATE}, громкость как у прямого удара. */
     public static Mix render(float[] grain, List<TerrainEcho.Reflection> reflections) {
         if (grain.length == 0 || reflections.isEmpty()) return Mix.NONE;
@@ -130,8 +133,16 @@ public final class EchoMix {
             float[] g = filtered[(int) t[0]];
             int at = (int) Math.round((t[1] - first) * binSamples);
             float amp = (float) t[2];
-            int n = Math.min(g.length, length - at);
-            for (int i = 0; i < n; i++) out[at + i] += amp * g[i];
+            // проба гибрида: отражение от склона — не копия удара, а разброс приходов по его площади (разность хода по
+            // склону в десятки метров — десятки мс): бархатный шум (6 импульсов за VELVET с, знаки случайны, энергия 1)
+            // у каждого окна свой — копии не складываются в гребёнку частот
+            java.util.SplittableRandom rnd = new java.util.SplittableRandom(Double.doubleToLongBits(azimuth) * 31 + (long) t[1] * 131 + (long) t[0]);
+            for (int k = 0; k < 6; k++) {
+                int lag = at + (int) (rnd.nextDouble() * VELVET * RATE);
+                float w = (float) ((rnd.nextBoolean() ? 1 : -1) * Math.exp(-1.5 * k / 6.0) / 1.554) * amp;
+                int n = Math.min(g.length, length - lag);
+                for (int i = 0; i < n; i++) out[lag + i] += w * g[i];
+            }
         }
         float peak = 0;
         for (float x : out) peak = Math.max(peak, Math.abs(x));

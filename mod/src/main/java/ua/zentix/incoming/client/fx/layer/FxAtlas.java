@@ -38,7 +38,7 @@ import java.util.Optional;
 public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]> {
     public static final FxAtlas INSTANCE = new FxAtlas();
 
-    private static final int CELL = 64, COLS = 16, ROWS = 8, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
+    private static final int CELL = 64, COLS = 16, ROWS = 16, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
     /** Кадров огненного шара ({@code fx/particle/fireball_00…15}, 128×128): от вспышки до чёрного дыма. */
     public static final int FIREBALL_FRAMES = 16;
     private static final int FIREBALL_SIZE = 2 * CELL;
@@ -57,6 +57,13 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
 
     private static final List<Slot> SLOTS = new ArrayList<>();
     private static final Sprite[] SMOKE = new Sprite[16], FIRE = new Sprite[8], PUFFS = new Sprite[8], FIREBALL = new Sprite[FIREBALL_FRAMES];
+    /**
+     * Проба гибрида (handoff P): клуб дыма из Blender (tools/bake_fx), 16 кадров жизни; у кадра две карты света —
+     * A (справа, сверху, сзади; альфа) и B (слева, снизу, спереди) на {@link #SIX_DV} ниже по листу.
+     */
+    public static final int PUFF6_FRAMES = 16;
+    public static final float SIX_DV = 256f / (16 * 64);
+    private static final Sprite[] PUFF6 = new Sprite[PUFF6_FRAMES];
     private static final Sprite RING, FLASH, GLOW, DISC, SPARK, FLAKE, PAPER;
     private static final ResourceLocation FIREBALL_LIGHT = Incoming.id("textures/fx/particle/fireball.json");
     /** Огонь кадров шара на экране ({@link #fireLight}); пока не прочитан — без предела. */
@@ -86,6 +93,21 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
             FIREBALL[i] = slot(String.format(Locale.ROOT, "fx/particle/fireball_%02d", i), i % 8 * FIREBALL_SIZE, 4 * CELL + i / 8 * FIREBALL_SIZE,
                     FIREBALL_SIZE, FIREBALL_SIZE);
         }
+    }
+
+    static {
+        for (int i = 0; i < PUFF6_FRAMES; i++) {
+            PUFF6[i] = slot(String.format(Locale.ROOT, "fx/particle/puff6a_%02d", i), i % 8 * FIREBALL_SIZE, 8 * CELL + i / 8 * FIREBALL_SIZE,
+                    FIREBALL_SIZE, FIREBALL_SIZE);
+            slot(String.format(Locale.ROOT, "fx/particle/puff6b_%02d", i), i % 8 * FIREBALL_SIZE, 12 * CELL + i / 8 * FIREBALL_SIZE,
+                    FIREBALL_SIZE, FIREBALL_SIZE);
+        }
+    }
+
+    /** Кадр i клуба с шестисторонним светом (карта A); {@code mirror} — отражён по горизонтали (правая и левая карты меняются в шейдере). */
+    public static Sprite puff6(int i, boolean mirror) {
+        Sprite s = PUFF6[Math.clamp(i, 0, PUFF6_FRAMES - 1)];
+        return mirror ? new Sprite(s.u1, s.v0, s.u0, s.v1) : s;
     }
 
     private int id = -1;

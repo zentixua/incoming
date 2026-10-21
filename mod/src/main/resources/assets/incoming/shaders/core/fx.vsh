@@ -47,6 +47,15 @@ out float nearest;
 out float opacity;
 // сколько пропускает пелена между глазом и квадратом (её свет — в fx.fsh, по пелене на кадре)
 out float pallFront;
+// проба гибрида: клуб с шестисторонним светом (Normal.y = −¼) — свет прямой (солнце или луна), неба и огненных шаров,
+// уже умноженные на цвет вещества, и направления прямого и шаров в осях экрана (x — вправо, y — вверх, z — к глазу)
+out vec3 sixKey;
+out vec3 sixAmb;
+out vec3 sixBall;
+out vec3 sixKeyDir;
+out vec3 sixBallDir;
+// на солнце или луну в мире; w — доля прямого света в свете неба (FxLayer.sun)
+uniform vec4 FxSun;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 // дальше стольких радиусов шар не освещает (от половины — плавно к нулю): теней нет, и ночью свет шара за сотни блоков
@@ -87,6 +96,24 @@ float pall(vec3 p) {
     return pallThrough(dir, len) * mushTransmit(Sampler11, dir, len, 6, PallAir) * smokeThrough(dir, len);
 }
 
+// свет шаров на точке p (как balls) и его направление — средневзвешенное по свету
+vec3 ballsDir(vec3 p, out vec3 dir) {
+    vec3 sum = vec3(0.0);
+    vec3 d = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+        float r = FxBalls[i].w;
+        if (r <= 0.0) continue;
+        vec3 v = FxBalls[i].xyz - p;
+        float d2 = max(dot(v, v), r * r), reach = BALL_REACH * r * BALL_REACH * r;
+        vec3 add = FxBallLight[i].rgb * (r * r / d2) * (1.0 - smoothstep(0.25 * reach, reach, d2));
+        add = add / (1.0 + dot(add, LUMA) / max(FxBallLight[i].w, 1e-4));
+        sum += add;
+        d += dot(add, LUMA) * v / sqrt(max(dot(v, v), 1e-6));
+    }
+    dir = d;
+    return sum;
+}
+
 void main() {
     vec4 view = ModelViewMat * vec4(Position, 1.0);
     gl_Position = ProjMat * view;
@@ -107,6 +134,22 @@ void main() {
         seen = texelFetch(Sampler4, ivec2(i % w, i / w), 0).r;
     }
     vertexColor = vec4(Color.rgb * light.rgb, Color.a) * seen;
+    sixKey = vec3(0.0);
+    sixAmb = vec3(0.0);
+    sixBall = vec3(0.0);
+    sixKeyDir = vec3(0.0, 1.0, 0.0);
+    sixBallDir = vec3(0.0, 1.0, 0.0);
+    if (Normal.y < -0.1 && Normal.y > -0.4) {
+        // цвет вершины клуба — вещество, освещённое светом вокруг глаза (FarBlasts.cloud); шары — в долях того же света
+        sixKey = vertexColor.rgb * FxSun.w;
+        sixAmb = vertexColor.rgb * (1.0 - FxSun.w);
+        vec3 bd;
+        sixBall = vertexColor.rgb * ballsDir(Position / unfold, bd);
+        mat3 rot = mat3(ModelViewMat);
+        sixKeyDir = normalize(rot * FxSun.xyz);
+        sixBallDir = rot * bd;
+        if (dot(sixBallDir, sixBallDir) > 1e-8) sixBallDir = normalize(sixBallDir);
+    }
     // настоящее расстояние по оси взгляда: перенесённую ближе точку — обратно
     viewDistance = -view.z / unfold;
     softness = float(max(UV1.x, 0)) / 16.0;

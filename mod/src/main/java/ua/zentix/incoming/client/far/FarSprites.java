@@ -107,6 +107,14 @@ public final class FarSprites {
      * Клуб дыма или пыли (кадр tex из 4×2 {@code nuke/puffs.png}) с центром (dx, dy, dz) от камеры: свой цвет
      * (r, g, b) с непрозрачностью a (уже с дымкой воздуха).
      */
+    /** Проба гибрида: клуб из Blender с шестисторонним светом (кадр {@code sprite}, без поворота — оси карт — оси экрана). */
+    public void puff6(double dx, double dy, double dz, double half, FxAtlas.Sprite sprite, float r, float g, float b, float a) {
+        out.sixWay(true);
+        boolean drawn = billboard(dx, dy, dz, half, 0, sprite, r * a, g * a, b * a, a, (float) half * FxQuads.SOFT);
+        out.sixWay(false);
+        if (drawn) counts[0]++;
+    }
+
     public void puff(double dx, double dy, double dz, double half, float rot, int tex, float r, float g, float b, float a) {
         if (billboard(dx, dy, dz, half, rot, FxAtlas.puff(tex), r * a, g * a, b * a, a, (float) half * FxQuads.SOFT)) counts[0]++;
     }

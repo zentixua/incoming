@@ -175,7 +175,7 @@ public final class CloudModel {
         fuelBallSeconds = 0.45 * m3;
         heBall = 1.7 * Math.cbrt(source.chargeKg());
         heBallSeconds = 0.2 * Math.pow(source.chargeKg(), 0.35);
-        fireSeconds = Math.max(fuelBallSeconds, heBallSeconds);
+        burnSeconds = Math.max(fuelBallSeconds, heBallSeconds);
         // начальный объём: в нём тепло держит температуру шара (у ideal gas при том же давлении g' = g·(1 − T_a/T))
         double ballK = source.fuelKg() > 0 ? FUEL_BALL_K : HE_BALL_END;
         thermal = new Thermal(buoyancy, G * (1 - T_AIR / ballK), 0.5, air);
@@ -183,7 +183,49 @@ public final class CloudModel {
         topZ = thermal.topZ;
         topR = thermal.topR;
         topSeconds = thermal.topSeconds;
+        fireSeconds = glowEnd();
         life = lifeSeconds();
+    }
+
+    /**
+     * Проба гибрида (handoff P): после горения шар не гаснет ступенькой, а остывает — смешивается с воздухом к
+     * температуре термика: T = T_терм + (T_конца − T_терм)·e^(−(t − t_гор)/τ), τ = {@link #COOL} времени горения
+     * (⚠ оценка: время перемешивания порядка времени горения шара). Светит, пока горячее точки Дрейпера.
+     */
+    public static final double COOL = 0.6, DRAPER_K = 798;
+    /**
+     * Проба гибрида: догорание в воронке — лужа топлива: доля {@link #POOL_SHARE} топлива к удару (⚠ оценка: остальное
+     * сгорает шаром) горит на площади воронки со скоростью выгорания с единицы площади (бензин 0,055, керосин 0,039
+     * кг/(м²·с), Babrauskas, SFPE Handbook), с.
+     */
+    public static final double POOL_SHARE = 0.3;
+
+    public double poolFireSeconds() {
+        if (source.fuelKg() <= 0) return 0;
+        double crater = CRATER_D * Math.cbrt(source.chargeKg());
+        double burn = source.fuel() == BlastSource.Fuel.PETROL ? 0.055 : 0.039;
+        return POOL_SHARE * source.fuelKg() / (burn * Math.PI / 4 * crater * crater);
+    }
+
+    /** Конец горения шаров (топлива и продуктов детонации), с. */
+    public final double burnSeconds;
+
+    private double coolKelvin(double t) {
+        double end = fuelBallSeconds >= heBallSeconds && fuelBallSeconds > 0 ? FUEL_BALL_K : HE_BALL_END;
+        double th = thermal.kelvin(t);
+        return th + (end - th) * Math.exp(-(t - burnSeconds) / (COOL * Math.max(burnSeconds, 0.05)));
+    }
+
+    /** Когда остывающий шар темнее точки Дрейпера, с. */
+    private double glowEnd() {
+        double t = burnSeconds;
+        while (t < burnSeconds + 60 && coolKelvin(t) > DRAPER_K) t += 0.02;
+        return t;
+    }
+
+    /** Радиус шара в конце горения, м. */
+    private double burnRadius() {
+        return Math.max(fuelBallSeconds > 0 ? 0.5 * fuelBall : 0, heBallSeconds >= fuelBallSeconds ? heBall : 0);
     }
 
     /** Высота центра облака над точкой взрыва в возрасте t, м. */
@@ -229,6 +271,7 @@ public final class CloudModel {
 
     /** Радиус светящегося шара (большего из двух) в возрасте t, м; 0 — шары погасли. */
     public double ballRadius(double t) {
+        if (t >= burnSeconds) return t < fireSeconds ? Math.max(burnRadius(), radius(t)) : 0;
         return Math.max(fuelBallRadius(t), heBallRadius(t));
     }
 
@@ -238,7 +281,8 @@ public final class CloudModel {
      */
     public double ballKelvin(double t) {
         if (t < heBallSeconds) return heBallKelvin(t);
-        return t < fuelBallSeconds ? FUEL_BALL_K : 0;
+        if (t < fuelBallSeconds) return FUEL_BALL_K;
+        return t < fireSeconds ? coolKelvin(t) : 0;
     }
 
     /** Радиус шара продуктов детонации в возрасте t, м (0 — погас): за первые проценты жизни почти весь, как кадры шара. */
@@ -264,6 +308,10 @@ public final class CloudModel {
         double big = ballRadius(t);
         if (big <= 0) return;
         double[] c = light;
+        if (t >= burnSeconds) {
+            BlackBody.light(coolKelvin(t), out);
+            return;
+        }
         double he = heBallRadius(t), fuel = fuelBallRadius(t);
         if (he > 0) {
             BlackBody.light(heBallKelvin(t), c);
@@ -287,6 +335,10 @@ public final class CloudModel {
 
     /** Высота центра светящегося шара (большего), м. */
     public double ballHeight(double t) {
+        if (t >= burnSeconds) {
+            double end = fuelBallSeconds >= heBallSeconds && fuelBallSeconds > 0 ? fuelBallHeight(burnSeconds) : heBallHeight(burnSeconds);
+            return Math.max(end, height(t));
+        }
         return fuelBallRadius(t) >= heBallRadius(t) ? fuelBallHeight(t) : heBallHeight(t);
     }
 

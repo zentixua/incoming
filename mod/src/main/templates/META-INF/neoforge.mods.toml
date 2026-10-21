@@ -53,3 +53,7 @@ reason = "Map strike: far terrain from Distant Horizons"
 versionRange = "${dh_version_range}"
 ordering = "NONE"
 side = "CLIENT"
+
+# проба гибрида (handoff P): свет огня источником LambDynamicLights, если он стоит
+[[modproperties.incoming."yumi:entrypoints"."lambdynlights:initializer"]]
+    value = "ua.zentix.incoming.client.compat.LdlLights"

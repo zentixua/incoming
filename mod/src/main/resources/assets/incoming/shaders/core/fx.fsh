@@ -33,7 +33,23 @@ in float nearest;
 in float opacity;
 in float pallFront;
 
+in vec3 sixKey;
+in vec3 sixAmb;
+in vec3 sixBall;
+in vec3 sixKeyDir;
+in vec3 sixBallDir;
+// сдвиг второй карты шестистороннего света по листу (FxAtlas.SIX_DV)
+uniform float FxSix;
+
 out vec4 fragColor;
+
+// Шестисторонний свет (проба гибрида): a — карты справа, сверху, сзади, b — слева, снизу, спереди (каждая — свет
+// клуба от одного солнца с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по
+// косинусам; mirror — квадрат отражён: право и лево меняются
+vec3 sixLight(vec4 a, vec4 b, vec3 l, float mirror) {
+    float rx = max(l.x * mirror, 0.0), lx = max(-l.x * mirror, 0.0);
+    return vec3(a.r * rx + b.r * lx + a.g * max(l.y, 0.0) + b.g * max(-l.y, 0.0) + a.b * max(-l.z, 0.0) + b.b * max(l.z, 0.0));
+}
 
 // Частица вблизи — как из атласа Minecraft (NEAREST_MIPMAP_LINEAR): ближайший пиксель картинки и её копии вдвое
 // меньше, между ними — смесь; сглаженная, она выходила бы мыльной. Мельче копии вдвое (клуб в 32 пикселя и меньше) —
@@ -62,6 +78,8 @@ void main() {
     vec4 tex;
     if (nearest > 0.75) {
         tex = particle(texCoord0, dx, dy, lod);
+    } else if (nearest < -0.1 && nearest > -0.4) {
+        tex = textureGrad(Sampler0, texCoord0, dx, dy);
     } else if (nearest < -0.5) {
         tex = textureGrad(Sampler3, texCoord0, dx, dy);
     } else {
@@ -80,6 +98,16 @@ void main() {
     // в мутную дымку вокруг облака. Вдали (клуб мельче 16 пикселей) — без среза: дальний дым и так бледный
     if (nearest > 0.75 && tex.a * opacity < 0.1 * clamp(2.0 - lod, 0.0, 1.0)) discard;
     vec4 color = vec4(vertexColor.rgb * tex.rgb, vertexColor.a * tex.a);
+    if (nearest < -0.1 && nearest > -0.4) {
+        vec4 b = textureGrad(Sampler0, texCoord0 + vec2(0.0, FxSix), dx, dy);
+        float mirror = 1.0;
+        if (dx.x < 0.0) mirror = -1.0;
+        // рассеянный свет неба — со всех сторон: треть суммы шести карт (у плотного клуба — как свет спереди)
+        vec3 sum = tex.rgb + b.rgb;
+        vec3 lit = sixKey * sixLight(tex, b, sixKeyDir, mirror) + sixAmb * (sum.r + sum.g + sum.b) / 3.0
+                + sixBall * sixLight(tex, b, sixBallDir, mirror);
+        color = vec4(lit, vertexColor.a * tex.a);
+    }
     if (PallAmbient.w > 0.5) {
         // пелена перед квадратом: его свет ослаблен, а закрытое им — уже её свет до него (пелена на кадре — до мира).
         // Квадрат ближе мира: перед ним пелены не больше, чем на кадре до мира, — и её свет до него — доля света пелены
