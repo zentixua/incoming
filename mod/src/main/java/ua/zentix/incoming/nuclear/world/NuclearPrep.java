@@ -365,7 +365,7 @@ public final class NuclearPrep {
             // место подрыва — как у самого подрыва: земля под целью из готового чанка (его держит район цели с пуска)
             if (!Terrain.ready(level, BlockPos.containing(s.target()))) return;
             p.geometry = NuclearWarhead.geometry(level, s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
-                    IncomingConfig.SERVER.nukeEffectsScale.get().floatValue());
+                    (float) IncomingConfig.SERVER.effectsScale());
             Detonation g = p.geometry;
             // раскладка — в фоне: у 15 кт в зоне ~33 тыс. чанков и ~1400 квадратов, в тике это 50–65 мс
             p.layout = CompletableFuture.supplyAsync(() -> layout(g), Util.backgroundExecutor());

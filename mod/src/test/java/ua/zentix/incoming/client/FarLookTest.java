@@ -2,7 +2,7 @@ package ua.zentix.incoming.client;
 
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.ClientWeaponSpec.FarLook;
-import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.ClientWeaponSpec.Stage;
 import ua.zentix.incoming.entity.FlightPhase;

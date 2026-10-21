@@ -288,7 +288,7 @@ public final class LaunchSite {
             List<Vec3> path = new ArrayList<>();
             path.add(rail);
             if (lp != null) {
-                boost.add(boostSweep(rail, yaw, elevation, lp, air.noseLength()));
+                boost.add(boostSweep(rail, yaw, elevation, lp, air));
                 double climb = Math.toRadians(Math.min(elevation, -lp.boostEndPitch()));
                 double reach = ProximityFuse.ARM_DISTANCE;
                 path.add(rail.add(Local.horizontal(yaw).scale(reach)).add(0, reach * Math.tan(climb), 0));
@@ -326,16 +326,18 @@ public final class LaunchSite {
      * Путь носа на разгоне из ячейки {@code rail} — по отрезку за тик, как его заметает снаряд в полёте: закон разгона
      * паспорта ({@link WeaponSpec.LaunchProfile#boost}) и шаг носа ({@link StrikeProjectile#noseSweep}).
      */
-    private static List<Vec3[]> boostSweep(Vec3 rail, float yaw, float elevation, WeaponSpec.LaunchProfile lp, double noseLength) {
+    private static List<Vec3[]> boostSweep(Vec3 rail, float yaw, float elevation, WeaponSpec.LaunchProfile lp, WeaponSpec.Airframe air) {
         FlightController flight = new FlightController(yaw, -elevation);
-        List<Vec3[]> sweep = new ArrayList<>(lp.boostTicks());
+        List<Vec3[]> sweep = new ArrayList<>(lp.burnTicks(air));
         Vec3 pos = rail;
         double speed = 0;
-        for (int tick = 1; tick <= lp.boostTicks(); tick++) {
-            speed = lp.boost(flight, speed, tick);
+        for (int tick = 1; tick <= lp.burnTicks(air); tick++) {
+            flight.limit(speed, air.article().loadFactor());
+            speed = lp.boost(flight, speed, tick, air, pos.y);
             Vec3 dir = flight.forward();
-            sweep.add(StrikeProjectile.noseSweep(pos, dir, speed, noseLength));
+            sweep.add(StrikeProjectile.noseSweep(pos, dir, speed, air.noseLength()));
             pos = pos.add(dir.scale(speed));
+            if (!lp.boosting(tick, speed, air)) break;
         }
         return sweep;
     }

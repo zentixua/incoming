@@ -173,6 +173,8 @@ neoForge {
         }
         configureEach {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
+            // масштаб скоростей полёта запусков devtest (GameTestShards: пресет CUSTOM): -PflightSpeed=1 — как в жизни
+            if (project.hasProperty('flightSpeed')) systemProperty 'incoming.flight_speed', project.findProperty('flightSpeed').toString()
             logLevel = org.slf4j.event.Level.INFO
         }
     }

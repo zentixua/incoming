@@ -1,6 +1,5 @@
 package ua.zentix.incoming.sound;
 
-import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 
 /**
@@ -72,11 +71,12 @@ public final class Propagation {
     public record Weather(double day, double rain, double thunder) {
         public static final Weather NIGHT = new Weather(0, 0, 0), NOON = new Weather(1, 0, 0);
 
-        /** Погода мира сейчас: день — по высоте солнца (без неба или с застывшим временем — ночь, без тени). */
+        /**
+         * Погода мира сейчас: день — по высоте солнца ({@link ua.zentix.incoming.util.Air#sun}: та же функция, что у воздуха и дыма; без неба или
+         * с застывшим временем — ночь, без тени).
+         */
         public static Weather of(Level level) {
-            var type = level.dimensionType();
-            double day = type.hasSkyLight() && !type.hasFixedTime() ? Propagation.day(Mth.cos(level.getTimeOfDay(1) * Mth.TWO_PI)) : 0;
-            return new Weather(day, level.getRainLevel(1), level.getThunderLevel(1));
+            return new Weather(Propagation.day(ua.zentix.incoming.util.Air.sun(level)), level.getRainLevel(1), level.getThunderLevel(1));
         }
     }
 

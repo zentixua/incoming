@@ -5,15 +5,15 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Изделие по ТТХ: масса, размеры, сопротивление, двигатели, настоящие скорости и высоты полёта, условия удара и боевая
  * часть одной сущности полёта ({@link WeaponSpec.Airframe#article}). Одна запись на изделие, общая для сервера и
- * клиента: звук ({@code sound.Noise}) и факелы ({@code client.ClientWeaponSpec}) берут числа двигателей отсюда.
+ * клиента: звук ({@code sound.Noise}) и факелы ({@code client.ClientWeaponSpec}) берут числа двигателей отсюда, полёт
+ * ({@code guidance.PointMass}, {@code strike.FlightScale}) — массы, сопротивление, тягу, перегрузку и настоящие скорости.
  * Единицы — СИ (кг, м, с, Н); источник каждого числа — в Javadoc паспорта изделия ({@link WeaponSpec}); «О» — оценка,
  * выведенная законом из других чисел, с диапазоном.
  * <p>
  * Игровые скорости и высоты — в {@link WeaponSpec.Airframe} (блоки/тик, блоки): они не по физике, медленнее и ниже
- * настоящих, чтобы подлёт было видно на сотнях блоков игры; настоящие — здесь ({@link #real}). Всё у цели — заряд,
- * корпус БЧ, скорость и угол удара — настоящее при любой настройке. Полёт эти числа пока не читает (кроме данных
- * двигателей у звука и картинки): их берут шаги физики полёта и взрыва, тесты сверяют их с законами
- * ({@code WeaponSpecTest}).
+ * настоящих, чтобы подлёт было видно на сотнях блоков игры; настоящие — здесь ({@link #real}); между ними — настройка
+ * масштаба ({@code strike.FlightScale}). Всё у цели — заряд, корпус БЧ, скорость и угол удара — настоящее при любой
+ * настройке; тесты сверяют числа с законами ({@code WeaponSpecTest}).
  *
  * @param dryMass    масса без топлива и без сбрасываемого ускорителя, кг
  * @param launchMass масса на старте без сбрасываемого ускорителя ({@link SolidMotor#jettison}), кг: с топливом (у
@@ -28,10 +28,12 @@ import org.jetbrains.annotations.Nullable;
  * @param impact     настоящие условия удара (у МБР — входа боеголовки в атмосферу); null — сам не бьёт (B-2)
  * @param warhead    обычная боевая часть; null — её нет (B-2 — носитель, у МБР — ядерная)
  * @param fuelAtImpact топливо в баке к удару, кг: сгорает огненным шаром взрыва (картинка и звук клиента)
+ * @param loadFactor наибольшая перегрузка манёвра n (подъёмная сила / вес): повороты и пике не круче, чем даёт она
+ *                   ({@code guidance.FlightController}); 0 — не управляется (неуправляемый снаряд, МБР на разгоне)
  */
 public record Article(double dryMass, double launchMass, double length, double diameter, double span, double cda,
                       @Nullable Propulsion sustainer, @Nullable SolidMotor booster, Envelope real, @Nullable Impact impact,
-                      @Nullable Charge warhead, double fuelAtImpact) {
+                      @Nullable Charge warhead, double fuelAtImpact, double loadFactor) {
 
     /** Ускорение свободного падения, м/с². */
     public static final double G = 9.80665;

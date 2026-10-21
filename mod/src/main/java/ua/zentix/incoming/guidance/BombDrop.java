@@ -26,7 +26,10 @@ public final class BombDrop {
     public static final float MIN_DIVE = 10;
     /** Падение, когда цели под носом нет. */
     public static final float FALL_PITCH = 60;
-    /** Столько тиков бомба падает в {@link #miss} самое большее: с высоты до ~1000 блоков она на земле раньше. */
+    /**
+     * Столько тиков бомба падает в {@link #miss} самое большее сверх пути высоты на {@link #MAX_SPEED}: на разгон,
+     * доворот и пологий участок (с высоты до ~1000 блоков она на земле раньше; эшелон B-2 по масштабу — до 12 км).
+     */
     private static final int MAX_TICKS = 200;
 
     private BombDrop() {}
@@ -84,7 +87,8 @@ public final class BombDrop {
         FlightController flight = new FlightController(yaw, (float) DROP_PITCH);
         Vec3 pos = release.add(0, -DROP_BELOW, 0);
         double speed = DROP_SPEED;
-        for (int t = 0; t < MAX_TICKS; t++) {
+        int horizon = MAX_TICKS + (int) Math.ceil(Math.max(0, pos.y - ground) / MAX_SPEED);
+        for (int t = 0; t < horizon; t++) {
             speed = steer(flight, pos, speed, aim);
             if (pos.distanceTo(aim) <= speed + REACH_PAD) return 0;
             Vec3 dir = flight.forward();

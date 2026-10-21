@@ -24,21 +24,18 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.UUID;
 
 /**
- * B-2 на эшелоне +170 над местом, куда упадёт бомба (цель перенацелили выше или ниже, у цели крыша или башня —
- * эшелон меняется полого, не круче 6°): заходит издалека (большая часть пути — вне загруженного мира), идёт по прямой
- * 12 блоков/тик (240 м/с), сбрасывает бетонобойную бомбу на эшелоне за ~85 блоков до цели по горизонтали (бомба сама
- * доворачивает и входит почти отвесно) и уходит с разворотом и набором высоты. Не на эшелоне (вернулся в мир над
+ * B-2 на эшелоне над местом, куда упадёт бомба (высота паспорта по масштабу {@code strike.FlightScale}: игровая +170,
+ * настоящая — 12 км; цель перенацелили выше или ниже, у цели крыша или башня — эшелон меняется полого, не круче 6°):
+ * заходит издалека (большая часть пути — вне загруженного мира), идёт по прямой на маршевой скорости паспорта (игровая
+ * 12 блоков/тик, 240 м/с; настоящая — 250 м/с), сбрасывает бетонобойную бомбу на эшелоне за полвысоты до цели по
+ * горизонтали (бомба сама доворачивает и входит почти отвесно) и уходит с разворотом и набором высоты. Не на эшелоне (вернулся в мир над
  * холмом, точку перенацелили выше или ниже) — сбрасывает с той высоты, где он есть, дальше или ближе: B-2 проигрывает
  * падение бомбы ({@link BombDrop#releaseNow}); промах отовсюду (точка слишком близко впереди, сзади, выше него) —
  * заходит снова.
  */
 public class BomberEntity extends StrikeProjectile {
-    /** Паспорт B-2: скорость, разворот (радиус ~690 блоков), эшелон над точкой сброса. */
+    /** Паспорт B-2: скорость, перегрузка (разворот на игровой скорости — радиус ~2,6 км), эшелон над точкой сброса. */
     private static final WeaponSpec.Airframe AIR = WeaponSpec.BUNKER.airframe();
-    /** Эшелон над точкой, куда упадёт бомба. */
-    private static final double ALTITUDE = AIR.cruiseHeight();
-    /** Дальность сброса на эшелоне, по горизонтали до точки. */
-    private static final double RELEASE_DISTANCE = WeaponSpec.BUNKER.route().finalLeg();
     /** Смена эшелона: тангаж не круче этого, ° (набор и снижение B-2 — пологие). */
     private static final double LEVEL_CHANGE_PITCH = 6;
     /** Тангаж на блок ошибки эшелона, °: у эшелона — плавный выход в горизонт. */
@@ -106,12 +103,23 @@ public class BomberEntity extends StrikeProjectile {
         return (int) Math.ceil(Math.max(0, b.horizontal() - releaseLine(getY() - aim.y)) / AIR.cruiseSpeed()) + 20;
     }
 
+    /** Эшелон над точкой, куда упадёт бомба, блоков (по масштабу). */
+    private static double altitude() {
+        return AIR.cruiseHeight();
+    }
+
+    /** Дальность сброса на эшелоне, по горизонтали до точки, блоков. */
+    private static double releaseDistance() {
+        return WeaponSpec.BUNKER.finalLeg();
+    }
+
     /**
-     * Дальность сброса с высоты {@code height} над точкой: угол на точку тот же, что на эшелоне ({@link #RELEASE_DISTANCE}
-     * с {@link #ALTITUDE}). Сброс бывает и раньше — на краю окна, откуда бомба ещё попадает ({@link BombDrop#releaseNow}).
+     * Дальность сброса с высоты {@code height} над точкой: угол на точку тот же, что на эшелоне (доля высоты
+     * {@link WeaponSpec.Route#finalLeg}). Сброс бывает и раньше — на краю окна, откуда бомба ещё попадает
+     * ({@link BombDrop#releaseNow}).
      */
     public static double releaseLine(double height) {
-        return height * RELEASE_DISTANCE / ALTITUDE;
+        return height * WeaponSpec.BUNKER.route().finalLeg();
     }
 
     /**
@@ -119,7 +127,7 @@ public class BomberEntity extends StrikeProjectile {
      * @param goal    цель под землёй или null
      */
     public void launch(Vec3 pos, Vec3 surface, @Nullable BlockPos goal, @Nullable UUID owner) {
-        Vec3 start = new Vec3(pos.x, surface.y + ALTITUDE, pos.z);
+        Vec3 start = new Vec3(pos.x, surface.y + altitude(), pos.z);
         super.launch(start, new Target.Point(surface), surface, owner);
         this.goal = goal;
         this.speed = AIR.cruiseSpeed();
@@ -137,11 +145,11 @@ public class BomberEntity extends StrikeProjectile {
         double echelon = 0;
         if (!released) {
             Vec3 drop = surfaceUnder(level, aim);
-            echelon = drop.y + ALTITUDE;
+            echelon = drop.y + altitude();
             // сброс — когда бомба, сброшенная сейчас, придёт в точку, и лучше уже не будет (BombDrop.releaseNow): с одной
             // и той же черты бомба с 214 блоков перелетает точку на 42 блока, с 170 внутри черты — на 130–155, на точку
             // в 40 блоках впереди — на 111; сзади (бомба падает по курсу и назад не рулит) — не сбрасывать вовсе
-            if (ahead(drop) && BombDrop.releaseNow(position(), flight.forward().scale(speed), flight.yaw(), drop, RELEASE_DISTANCE / ALTITUDE)) {
+            if (ahead(drop) && BombDrop.releaseNow(position(), flight.forward().scale(speed), flight.yaw(), drop, WeaponSpec.BUNKER.route().finalLeg())) {
                 release(level, drop);
             }
         }
@@ -162,14 +170,15 @@ public class BomberEntity extends StrikeProjectile {
         } else {
             flight.holdPitch(Mth.clamp((getY() - echelon) * PITCH_PER_BLOCK, -LEVEL_CHANGE_PITCH, LEVEL_CHANGE_PITCH), 0.1, 0.3, 0.05);
         }
-        if (!released && b.horizontal() > RELEASE_DISTANCE + 40) {
+        accelerate(AIR.cruiseSpeed(), 0.05, Double.MAX_VALUE);
+        if (!released && b.horizontal() > releaseDistance() + 40) {
             // точка сброса внутри круга разворота (перенацелили сбоку, проскочил её): на пределе поворота он
             // кружил бы вокруг неё без конца — прямо, пока она не выйдет из круга, и новый заход
-            if (insideTurn(aim, AIR.turnRate())) flight.settleYaw(0.1);
-            else flight.steerYaw(b.yaw(), 0.1, AIR.turnRate(), 0.1);
+            if (insideTurn(aim, AIR.turnRate(speed))) flight.settleYaw(0.1);
+            else flight.steerYaw(b.yaw(), 0.1, AIR.turnRate(speed), 0.1);
         }
         Vec3 dir = flight.forward();
-        Vec3 next = position().add(dir.scale(speed));
+        Vec3 next = position().add(dir.scale(speed)).add(drift());
         if (leavesTickingChunks(level, next)) return;
         moveAlong(level, next, dir);
     }

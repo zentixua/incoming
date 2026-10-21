@@ -57,7 +57,7 @@ public final class SmokeFrame {
         f.smokeNoise.set((float) Math.floorMod((long) Math.floor(eye.x * 1024), (long) tile * 1024) / 1024f,
                 (float) Math.floorMod((long) Math.floor(eye.y * 1024), (long) tile * 1024) / 1024f,
                 (float) Math.floorMod((long) Math.floor(eye.z * 1024), (long) tile * 1024) / 1024f, (float) (seconds % (64 * PERIOD)));
-        double y = ua.zentix.incoming.client.fx.plume.Air.SEA + NOISE_WIND_HEIGHT;
+        double y = ua.zentix.incoming.util.Air.SEA + NOISE_WIND_HEIGHT;
         f.smokeWind.set((float) (20 * ua.zentix.incoming.client.fx.ClientAir.windX(y)), 0, (float) (20 * ua.zentix.incoming.client.fx.ClientAir.windZ(y)), PERIOD);
         f.smokeBalls.zero();
         f.smokeBallLight.zero();

@@ -351,7 +351,7 @@ final class ScenarioRun {
         StrikeProjectile e = guided();
         if (!via.isEmpty()) {
             WeaponSpec spec = s.launch().weapon.spec();
-            Vec3 start = via.afar(point, spec.route().finalLeg()).add(0, point.y + spec.airframe().cruiseHeight(), 0);
+            Vec3 start = via.afar(point, spec.finalLeg()).add(0, point.y + spec.airframe().cruiseHeight(), 0);
             e.launch(start, target, point, owner);
             e.setRoute(via.route(start));
             VirtualFlights.launch(level, e);
@@ -438,7 +438,7 @@ final class ScenarioRun {
         BomberEntity e = create(ModEntities.BOMBER.get());
         Vec3 surface = new Vec3(point.x, point.y - 0.5, point.z);
         aim = surface;
-        double length = WeaponSpec.BUNKER.airframe().cruiseSpeed() * p.flightTime() * 20 + WeaponSpec.BUNKER.route().finalLeg();
+        double length = WeaponSpec.BUNKER.airframe().cruiseSpeed() * p.flightTime() * 20 + WeaponSpec.BUNKER.finalLeg();
         e.launch(surface.subtract(p.approach().scale(length)), surface, null, owner);
         e.setRoute(null);
         VirtualFlights.launch(level, e);
@@ -599,7 +599,7 @@ final class ScenarioRun {
     private void passWaypoints(StrikeProjectile e, Track tr, Vec3 pos) {
         if (viaPassed >= via.size()) return;
         Vec3 wp = via.points().get(viaPassed);
-        double near = 2 * e.weapon().spec().route().capture() + tr.lastStep + 1;
+        double near = 2 * e.weapon().spec().capture() + tr.lastStep + 1;
         if (Math.hypot(pos.x - wp.x, pos.z - wp.z) <= near) viaPassed++;
     }
 
@@ -608,7 +608,7 @@ final class ScenarioRun {
      * на месте: погоня за целью, которая сама ходит по кругу, — тоже круги, но не кружение у точки (его ловит срок).
      */
     private void accumulateTurn(Track tr, StrikeProjectile e, Vec3 step) {
-        if (tr.airframe.turnRate() <= 0) return;
+        if (tr.airframe.lateral() <= 0) return;
         Vec3 aim = e.aimPoint();
         boolean aimMoved = tr.aim == null || aim.distanceToSqr(tr.aim) > 0.01;
         tr.aim = aim;
@@ -619,7 +619,8 @@ final class ScenarioRun {
         tr.heading = heading;
         if (Double.isNaN(prev) || aimMoved || e.flightPhase() == FlightPhase.LOITER) return;
         // на наборе высоты поворот медленнее — круг шире (как у самого снаряда, StrikeProjectile.insideTurn)
-        double rate = e.flightPhase() == FlightPhase.CLIMB ? tr.airframe.climbTurnRate() : tr.airframe.turnRate();
+        double v = horizontal;
+        double rate = e.flightPhase() == FlightPhase.CLIMB ? tr.airframe.climbTurnRate(v) : tr.airframe.turnRate(v);
         double radius = horizontal / Math.toRadians(rate) * 2;
         if (e.position().subtract(aim).horizontalDistance() > radius) return;
         tr.turn += Math.abs(Mth.wrapDegrees(heading - prev));

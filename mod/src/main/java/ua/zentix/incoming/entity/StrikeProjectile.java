@@ -39,6 +39,7 @@ import ua.zentix.incoming.guidance.Route;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.strike.CameraLink;
 import ua.zentix.incoming.strike.ChunkTickets;
+import ua.zentix.incoming.strike.FlightAir;
 import ua.zentix.incoming.strike.FlightLog;
 import ua.zentix.incoming.strike.FlightTickets;
 import ua.zentix.incoming.strike.Loadout;
@@ -152,6 +153,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         }
 
         @Override
+        public double mass() {
+            return StrikeProjectile.this.mass();
+        }
+
+        @Override
         public FlightPhase phase() {
             return flightPhase();
         }
@@ -236,9 +242,37 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return airframe().noseLength();
     }
 
+    /**
+     * Скорость к {@code target} блоков/тик по силам ({@link Autopilot#accelerate}): автопилот просит {@code gain}·Δv, не
+     * больше {@code maxStep} за тик.
+     */
+    protected final void accelerate(double target, double gain, double maxStep) {
+        Autopilot.accelerate(craft, airframe(), target, gain, maxStep);
+    }
+
     /** Маршевая скорость, блоков/тик: по ней считается время подлёта. */
     public final double cruiseSpeed() {
         return airframe().cruiseSpeed();
+    }
+
+    /**
+     * Масса сейчас, кг: изделие с топливом ({@link ua.zentix.incoming.strike.Article#launchMass}) за вычетом топлива,
+     * сгоревшего за время полёта на номинальном расходе маршевого (оценка: расход на малом газу не учтён), не меньше
+     * сухой.
+     */
+    protected double mass() {
+        ua.zentix.incoming.strike.Article a = airframe().article();
+        double flow = a.sustainer() instanceof ua.zentix.incoming.strike.Article.Turbofan f ? f.count() * f.fuelFlow()
+                : a.sustainer() != null ? a.sustainer().fuelFlow() : 0;
+        return Math.max(a.dryMass(), a.launchMass() - flow * age / 20.0);
+    }
+
+    /**
+     * Наибольшая перегрузка манёвра ({@link ua.zentix.incoming.strike.Article#loadFactor}): повороты не круче, чем даёт
+     * подъёмная сила ({@link FlightController#limit}).
+     */
+    protected double maneuverLoad() {
+        return airframe().article().loadFactor();
     }
 
     /** Запас хода: план полёта, а пока его нет — паспортный. */
@@ -297,9 +331,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         WeaponSpec.LaunchProfile lp = launchProfile();
         if (lp == null) return 0;
         return switch (flightPhase()) {
-            case READY -> Math.max(0, readyTicks - phaseAge()) + lp.ignitionTicks() + lp.boostTicks();
-            case IGNITION -> Math.max(0, lp.ignitionTicks() - phaseAge()) + lp.boostTicks();
-            case BOOST -> Math.max(0, lp.boostTicks() - phaseAge());
+            case READY -> Math.max(0, readyTicks - phaseAge()) + lp.ignitionTicks() + lp.burnTicks(airframe());
+            case IGNITION -> Math.max(0, lp.ignitionTicks() - phaseAge()) + lp.burnTicks(airframe());
+            case BOOST -> Math.max(0, lp.burnTicks(airframe()) - phaseAge());
             default -> 0;
         };
     }
@@ -529,6 +563,19 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return true;
     }
 
+    /**
+     * Снос воздухом за тик, блоков: что держится крылом ({@link ua.zentix.incoming.strike.Article#loadFactor} &gt; 0),
+     * летит в воздухе и несётся с ним — к скорости по носу прибавляется ветер мира на своей высоте
+     * ({@link FlightAir}); автопилот ведёт к точке по месту, поэтому снос он выбирает сам (курс с упреждением ветра).
+     * Ракету на рулях двигателя (МБР) ведёт программа, неуправляемым (РСЗО, бомба) ветер — в их баллистике.
+     */
+    protected Vec3 drift() {
+        // на направляющей и в разгоне с неё снаряд держит пусковая и тяга ускорителя (пуск — игровой)
+        if (!climbs() || maneuverLoad() <= 0 || flightPhase().launching()) return Vec3.ZERO;
+        ua.zentix.incoming.util.Air air = FlightAir.of(level());
+        return new Vec3(air.windX(getY()) / 20, 0, air.windZ(getY()) / 20);
+    }
+
     /** Можно ли перенацелить (у бомбы после сброса и у бомбардировщика — нельзя). */
     protected boolean acceptsRetarget() {
         return true;
@@ -564,6 +611,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
                 return;
             }
             if (chunks.isEmpty()) chunks.update(level, getUUID(), position(), flight.forward(), speed, lookAhead(level));
+            flight.limit(speed, maneuverLoad());
             serverTick(level);
             // взорвался или ушёл в полёт вне мира (там летит уже копия): ни сирены, ни новых тикетов
             if (isRemoved()) return;
@@ -594,6 +642,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             xo = getX();
             yo = getY();
             zo = getZ();
+            flight.limit(speed, maneuverLoad());
             serverTick(level);
             if (isRemoved()) return;
             updateVelocity();
@@ -794,9 +843,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
                 if (phaseAge() >= lp.ignitionTicks()) setPhase(FlightPhase.BOOST);
             }
             default -> {
-                speed = lp.boost(flight, speed, phaseAge());
+                speed = lp.boost(flight, speed, phaseAge(), airframe(), getY());
                 if (!advance(level, tracker.point(), 0)) return true;
-                if (phaseAge() >= lp.boostTicks()) {
+                if (!lp.boosting(phaseAge(), speed, airframe())) {
                     separate(level);
                     setPhase(FlightPhase.CLIMB);
                 }
@@ -908,7 +957,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     protected Vec3 navPoint(Vec3 aim) {
         if (route != null && !route.finished()) {
-            route.update(position(), weapon().spec().route().capture());
+            route.update(position(), weapon().spec().capture());
             Vec3 wp = route.current();
             if (wp != null) return new Vec3(wp.x, aim.y, wp.z);
             if (route.byOperator()) onRouteDone(aim);
@@ -966,7 +1015,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
     /** Держать высоту ({@link AltitudeHold}). */
     protected final void holdAltitude(double desired, double gain, double maxRate, double maxAccel) {
-        altitude.hold(flight, getY(), desired, gain, maxRate, maxAccel);
+        Autopilot.holdAltitude(craft, airframe(), desired, gain, maxRate, maxAccel);
     }
 
     /** Взрыватель взведён: снаряд отошёл от пусковой или вышел на маршевый участок ({@link ProximityFuse#armed}). */
@@ -996,7 +1045,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
         if (virtual) return advanceVirtual(level, aim, reachPad, dir);
 
-        boolean onTarget = onFinalLeg() && pos.distanceTo(aim) <= speed + reachPad;
+        // шаг за тик — скорость по носу и снос воздухом ({@link #drift})
+        Vec3 motion = dir.scale(speed).add(drift());
+        double step = motion.length();
+        Vec3 along = step > 1e-9 ? motion.scale(1 / step) : dir;
+        boolean onTarget = onFinalLeg() && pos.distanceTo(aim) <= step + reachPad;
         if (onTarget && armed()) {
             impact(level, aim, null);
             return false;
@@ -1010,7 +1063,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             return false;
         }
 
-        Vec3[] sweep = noseSweep(pos, dir, speed, noseLength());
+        Vec3[] sweep = noseSweep(pos, along, step, noseLength());
         Vec3 noseFrom = sweep[0];
         // нос не заглядывает в неготовый чанк (clip грузил бы его); туда снаряд и не шагнёт — уйдёт в полёт вне мира
         Vec3 noseTo = Terrain.readyUntil(level, noseFrom, sweep[1]);
@@ -1027,7 +1080,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
         if (armed()) {
             UUID targetId = tracker.target().subject() instanceof Target.OfEntity e ? e.uuid() : null;
-            Entity victim = ProximityFuse.victim(level, this, noseFrom, sweepEnd, speed, targetId, ownerId());
+            Entity victim = ProximityFuse.victim(level, this, noseFrom, sweepEnd, step, targetId, ownerId());
             if (victim != null) {
                 Vec3 at = victim.getBoundingBox().getCenter();
                 impact(level, ProximityFuse.closestOnSegment(noseFrom, sweepEnd, at), victim);
@@ -1040,7 +1093,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             return false;
         }
 
-        Vec3 next = pos.add(dir.scale(speed));
+        Vec3 next = pos.add(motion);
         if (next.y < level.getMinBuildHeight() - 64) {
             Incoming.LOG.warn("Projectile {} {} fell below the world at {}, removed", getType().getDescriptionId(), getUUID(), blockPosition());
             discard();
@@ -1076,18 +1129,20 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             return false;
         }
         Vec3 pos = position();
-        boolean near = onFinalLeg() && pos.distanceTo(aim) <= speed + reachPad + 48;
+        Vec3 motion = dir.scale(speed).add(drift());
+        double step = motion.length();
+        boolean near = onFinalLeg() && pos.distanceTo(aim) <= step + reachPad + 48;
         if (near && !aimAreaReady(level, aim)) {
             // ждём загрузки района (тикет взят на подлёте)
             return waitForAimArea(aim);
         }
-        if (onFinalLeg() && pos.distanceTo(aim) <= speed + reachPad) {
+        if (onFinalLeg() && pos.distanceTo(aim) <= step + reachPad) {
             // район цели тикает (иначе ждали бы выше): вернуться в мир у цели — VirtualFlights сделает это в этом же тике
             moveAlong(level, aim, dir);
             arrived = true;
             return true;
         }
-        Vec3 next = pos.add(dir.scale(speed));
+        Vec3 next = pos.add(motion);
         Vec3 ground = groundCrossing(level, aim, pos, next);
         if (ground != null) {
             // мимо цели (или цель под землёй): вне мира столкновений нет, и снаряд падал бы без взрыва до конца запаса

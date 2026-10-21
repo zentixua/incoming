@@ -974,7 +974,7 @@ public final class StrikeGameTests {
         roofOver(h, BlockPos.containing(shooter.position()));
         StrikeProjectile far = StrikeService.launchGuided(level, WeaponType.DRONE, point, 0, shooter, via);
         h.assertTrue(far != null && far.isVirtual(), "без места пусковой шахед по маршруту не зашёл издалека: " + far);
-        Vec3 entry = via.afar(point, WeaponType.DRONE.spec().route().finalLeg());
+        Vec3 entry = via.afar(point, WeaponType.DRONE.spec().finalLeg());
         h.assertTrue(flat(far.position(), entry) < 1e-6 && far.route().points().equals(via.points()),
                 "заход издалека не перед первой точкой: " + far.position() + " против " + entry + ", маршрут " + far.route().points());
         h.assertTrue(far.position().y > point.y, "заход издалека ниже цели: " + far.position().y);
@@ -2424,7 +2424,7 @@ public final class StrikeGameTests {
             Vec3 step = new Vec3(0, 0, WeaponSpec.BUNKER.airframe().cruiseSpeed());
             // подход по прямой с курсом +z; сдвиг начала — чтобы попасть в разные места окна
             for (Vec3 pos = aims[i].add(0, heights[i], -600 - 2 * i); pos.z < aims[i].z; pos = pos.add(step)) {
-                if (BombDrop.releaseNow(pos, step, 0, aims[i], WeaponSpec.BUNKER.route().finalLeg() / WeaponSpec.BUNKER.airframe().cruiseHeight())) {
+                if (BombDrop.releaseNow(pos, step, 0, aims[i], WeaponSpec.BUNKER.finalLeg() / WeaponSpec.BUNKER.airframe().cruiseHeight())) {
                     releases[i] = pos;
                     break;
                 }
@@ -2858,7 +2858,7 @@ public final class StrikeGameTests {
             if (now instanceof BomberEntity b) {
                 last[0] = b;
                 double d = b.position().subtract(expect).horizontalDistance();
-                if (onePass && !b.hasReleased() && d < WeaponSpec.BUNKER.route().finalLeg() - WeaponSpec.BUNKER.airframe().cruiseSpeed()) {
+                if (onePass && !b.hasReleased() && d < WeaponSpec.BUNKER.finalLeg() - WeaponSpec.BUNKER.airframe().cruiseSpeed()) {
                     h.fail("B-2 прошёл черту сброса без сброса (второй заход): в " + (int) d + " блоках от точки, на высоте "
                             + (int) (b.getY() - expect.y) + ", вне мира " + b.isVirtual());
                 }

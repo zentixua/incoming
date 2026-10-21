@@ -14,20 +14,58 @@ public final class Autopilot {
     /**
      * Разворот по курсу на участке полёта.
      *
-     * @param gain   усиление поворота к курсу на точку
-     * @param rate   предельная угловая скорость, °/тик (паспорт)
-     * @param accel  предельное угловое ускорение, °/тик²
-     * @param settle угловое ускорение, с которым гасится поворот при уходе на повторный заход
+     * @param gain    усиление поворота к курсу на точку
+     * @param lateral боковое ускорение, которое автопилот себе позволяет, блоков/тик²: предел изделия
+     *                ({@link WeaponSpec.Airframe#lateral}) или его доля на наборе высоты
+     * @param accel   предельное угловое ускорение, °/тик²
+     * @param settle  угловое ускорение, с которым гасится поворот при уходе на повторный заход
      */
-    public record Turn(double gain, double rate, double accel, double settle) {}
+    public record Turn(double gain, double lateral, double accel, double settle) {
+        /** Предельная угловая скорость на скорости {@code speed} блоков/тик, °/тик: боковое ускорение / v. */
+        public double rate(double speed) {
+            return speed > 1e-6 ? Math.toDegrees(lateral / speed) : 0;
+        }
+    }
+
+    /**
+     * На набор высоты автопилот тратит скорость, пока она не ниже этой доли маршевой (горка с разменом скорости на
+     * высоту); ниже — набирает не круче установившегося ({@link #climbLimit}). Логика автопилота, не закон.
+     */
+    static final double KEEP_SPEED = 0.8;
+
+    /**
+     * Скорость к {@code target} блоков/тик: автопилот просит прибавку {@code gain}·(target − v), не больше {@code maxStep}
+     * за тик, а получает то, что дают тяга, сопротивление и тяжесть ({@link Propulsion#next}); выше предельной в пике
+     * (масштаб скорости) — нет.
+     */
+    public static void accelerate(Craft c, WeaponSpec.Airframe air, double target, double gain, double maxStep) {
+        c.setSpeed(Propulsion.next(air.article(), c.speed(), c.flight().pitch(), c.position().y, c.mass(), target, gain, maxStep,
+                air.diveSpeed()));
+    }
+
+    /**
+     * Наибольший угол набора, °: на скорости выше {@link #KEEP_SPEED} маршевой — {@link AltitudeHold#MAX_CLIMB} (горка
+     * разменивает скорость на высоту), ниже — плавно к углу установившегося набора: тяга сверх сопротивления
+     * ({@link Propulsion#steadyClimb}).
+     */
+    public static double climbLimit(Craft c, WeaponSpec.Airframe air) {
+        double steady = Math.toDegrees(Math.asin(Propulsion.steadyClimb(air.article(), c.speed(), c.position().y, c.mass())));
+        double spare = Math.max(0, Math.min(1, (c.speed() / air.cruiseSpeed() - KEEP_SPEED) / 0.1));
+        return Math.min(AltitudeHold.MAX_CLIMB, steady + (AltitudeHold.MAX_CLIMB - steady) * spare);
+    }
+
+    /** Держать высоту {@code desired} с набором не круче {@link #climbLimit}. */
+    public static void holdAltitude(Craft c, WeaponSpec.Airframe air, double desired, double gain, double maxRate, double maxAccel) {
+        c.holdAltitude(desired, gain, maxRate, maxAccel, climbLimit(c, air));
+    }
 
     /** Ближе этого по горизонтали курс на точку не трогаем: над самой точкой он скачет. */
     private static final double HOLD_COURSE = 8;
 
     /**
      * Точка внутри круга разворота: с предельной угловой скоростью {@code maxRateDeg} °/тик снаряд до неё не довернёт
-     * и кружил бы вокруг неё, пока не кончится запас хода (крылатая ракета на 4 блоках/тик и 3°/тик разворачивается
-     * по кругу радиусом ~80 блоков: цель, сместившаяся вбок на атаке, остаётся внутри). Такой снаряд сначала уходит
+     * и кружил бы вокруг неё, пока не кончится запас хода (крылатая ракета на игровых 4 блоках/тик при перегрузке 3
+     * разворачивается по кругу радиусом ~230 блоков: цель, сместившаяся вбок на атаке, остаётся внутри). Такой снаряд сначала уходит
      * прямо, пока точка не выйдет из круга, и заходит снова. С запасом на разгон угловой скорости — {@link WeaponSpec#TURN_MARGIN}.
      */
     public static boolean insideTurn(Vec3 pos, Vec3 forward, double speed, Vec3 point, double maxRateDeg) {
@@ -51,8 +89,8 @@ public final class Autopilot {
      * пропала): до неё не довернуть — атака отменяется, снаряд уходит прямо и заходит снова. Ближе {@code reattackMin}
      * по горизонтали — нет: небольшой промах добирает неконтактный взрыватель, а пролетев, снаряд зайдёт снова.
      */
-    public static boolean outOfTurn(Craft c, Vec3 nav, Bearing toNav, double reattackMin, double rate) {
-        return outOfTurn(c.position(), c.flight().forward(), c.speed(), nav, toNav, reattackMin, rate);
+    public static boolean outOfTurn(Craft c, Vec3 nav, Bearing toNav, double reattackMin, Turn turn) {
+        return outOfTurn(c.position(), c.flight().forward(), c.speed(), nav, toNav, reattackMin, turn.rate(c.speed()));
     }
 
     /** То же для места {@code pos}, носа {@code forward} и скорости {@code speed} (проигрыш пути вперёд, {@link #track}). */
@@ -62,14 +100,14 @@ public final class Autopilot {
 
     /** Курс: на повторном заходе — прямо, гася поворот; иначе — на точку маршрута (над самой точкой курс не трогаем). */
     public static void steer(Craft c, boolean outOfTurn, Bearing toNav, Turn turn) {
-        steer(c.flight(), outOfTurn, toNav, turn);
+        steer(c.flight(), c.speed(), outOfTurn, toNav, turn);
     }
 
-    static void steer(FlightController flight, boolean outOfTurn, Bearing toNav, Turn turn) {
+    static void steer(FlightController flight, double speed, boolean outOfTurn, Bearing toNav, Turn turn) {
         if (outOfTurn) {
             flight.settleYaw(turn.settle());
         } else if (toNav.horizontal() > HOLD_COURSE) {
-            flight.steerYaw(toNav.yaw(), turn.gain(), turn.rate(), turn.accel());
+            flight.steerYaw(toNav.yaw(), turn.gain(), turn.rate(speed), turn.accel());
         }
     }
 
@@ -107,7 +145,7 @@ public final class Autopilot {
      * и узкий дом между ними, а фильтр высоты сглаживал бы короткий пик: ракета на бреющем и шахеды залпа бились бы в них.
      */
     public static double reliefAhead(Craft c, Vec3 nav, Turn turn, WeaponSpec.Airframe air) {
-        return climbOver(track(c, nav, turn, air.attack().reattackMin(), air.reliefLookahead()), c.speed(), c::relief);
+        return climbOver(track(c, nav, turn, air.reattackMin(), air.reliefLookahead()), c.speed(), c::relief);
     }
 
     /**
@@ -173,7 +211,7 @@ public final class Autopilot {
         for (int t = 1; t <= TRACK_TICKS && travelled < lookahead; t++) {
             Vec3 here = new Vec3(x, pos.y, z);
             Bearing toNav = Bearing.of(here, nav);
-            steer(f, outOfTurn(here, f.forward(), step, nav, toNav, reattackMin, turn.rate()), toNav, turn);
+            steer(f, step, outOfTurn(here, f.forward(), step, nav, toNav, reattackMin, turn.rate(step)), toNav, turn);
             double yaw = Math.toRadians(f.yaw()), d = Math.min(step, lookahead - travelled);
             x -= Math.sin(yaw) * d;
             z += Math.cos(yaw) * d;

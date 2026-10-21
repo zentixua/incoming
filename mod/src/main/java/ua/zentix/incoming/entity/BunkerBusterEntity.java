@@ -54,6 +54,15 @@ public class BunkerBusterEntity extends StrikeProjectile {
         super(type, level);
     }
 
+    /**
+     * Падение — по {@link BombDrop} (те же шаги проигрывает B-2 перед сбросом), без предела перегрузки: падение бомбы по
+     * силам и её перегрузка ({@code Article.loadFactor}) — шаг бомбы (S5).
+     */
+    @Override
+    protected double maneuverLoad() {
+        return 0;
+    }
+
     @Override
     public WeaponType weapon() {
         return WeaponType.BUNKER;

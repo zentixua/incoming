@@ -58,8 +58,8 @@ public final class DroneAutopilot {
     public DroneAutopilot(WeaponSpec.Airframe air) {
         this.air = air;
         // на старте разворот мягче: скорость ещё мала
-        this.climbTurn = new Autopilot.Turn(0.08, air.climbTurnRate(), 0.12, 0.12);
-        this.cruiseTurn = new Autopilot.Turn(0.15, air.turnRate(), 0.3, 0.3);
+        this.climbTurn = new Autopilot.Turn(0.08, air.lateral() * air.climbTurnShare(), 0.12, 0.12);
+        this.cruiseTurn = new Autopilot.Turn(0.15, air.lateral(), 0.3, 0.3);
     }
 
     public double cruiseAlt() {
@@ -102,13 +102,13 @@ public final class DroneAutopilot {
 
         if (ph == FlightPhase.CLIMB) {
             // винт на полных оборотах, скорость после ускорителя спадает к крейсерской
-            c.setSpeed(c.speed() + (air.cruiseSpeed() - c.speed()) * 0.04);
+            Autopilot.accelerate(c, air, air.cruiseSpeed(), 0.04, Double.MAX_VALUE);
             double terrain = relief.reliefAhead(c, nav, turn, air);
-            c.holdAltitude(Math.max(cruiseAlt, terrain + ABOVE_RELIEF), 0.10, 1.0, 0.12);
+            Autopilot.holdAltitude(c, air, Math.max(cruiseAlt, terrain + ABOVE_RELIEF), 0.10, 1.0, 0.12);
             if (c.phaseAge() > 60 && Math.abs(cruiseAlt - c.position().y) < 6) c.setPhase(FlightPhase.CRUISE);
         }
         // цель внутри круга разворота: пике отменяется, шахед уходит прямо, набирая высоту, и заходит снова
-        boolean outOfTurn = Autopilot.outOfTurn(c, nav, n, air.attack().reattackMin(), turn.rate());
+        boolean outOfTurn = Autopilot.outOfTurn(c, nav, n, air.reattackMin(), turn);
         if (outOfTurn && c.phase() == FlightPhase.TERMINAL) c.setPhase(FlightPhase.CRUISE);
         // пикирование — как только цель под нужным углом, даже если высота ещё набирается (цель рядом, перенацеливание)
         // прямая до цели — последней: луч по блокам дороже остальных условий
@@ -119,13 +119,13 @@ public final class DroneAutopilot {
         }
 
         if (c.phase() == FlightPhase.CRUISE) {
-            c.setSpeed(c.speed() + (air.cruiseSpeed() - c.speed()) * 0.05);
+            Autopilot.accelerate(c, air, air.cruiseSpeed(), 0.05, Double.MAX_VALUE);
             double terrain = relief.reliefAhead(c, nav, turn, air);
             double desired = Math.max(Math.max(Math.max(terrain, obstacleTop) + ABOVE_RELIEF, cruiseAlt), aim.y + ABOVE_TARGET);
-            c.holdAltitude(desired, 0.12, 1.2, 0.15);
+            Autopilot.holdAltitude(c, air, desired, 0.12, 1.2, 0.15);
         } else if (c.phase() == FlightPhase.TERMINAL) {
             c.flight().arcPitch(b.pitch(), c.speed(), b.distance(), DIVE_RATE, DIVE_ACCEL);
-            c.setSpeed(Math.min(air.diveSpeed(), c.speed() + 0.04));
+            Autopilot.accelerate(c, air, air.diveSpeed(), 1, 0.04);
         }
         Autopilot.steer(c, outOfTurn, n, turn);
     }

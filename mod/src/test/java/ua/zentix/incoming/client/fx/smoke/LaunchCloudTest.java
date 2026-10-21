@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.fx.smoke;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.util.Stability;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.fx.plume.Motor;
 import ua.zentix.incoming.entity.FlightPhase;
@@ -88,7 +89,7 @@ class LaunchCloudTest {
     @Test
     void cloudRisesAsAnMttThermal() {
         double heat = 2e8, b = Thermal.buoyancy(heat), f = 3 * b / (4 * Math.PI), a = CloudModel.ALPHA;
-        for (double n : new double[]{CloudModel.N_STANDARD, CloudModel.N_NIGHT}) {
+        for (double n : new double[]{CloudModel.N_STANDARD, Stability.brunt(Stability.F)}) {
             CloudModel.Air air = new CloudModel.Air(n, 0, 0, 0.14, 3, 0.5);
             Thermal t = new Thermal(b, CloudModel.G * (1 - CloudModel.T_AIR / 600), 0.5, air);
             double top = Math.pow(8 * f / (a * a * a * n * n), 0.25);

@@ -23,7 +23,7 @@ import ua.zentix.incoming.client.flight.FlightTrack;
 import ua.zentix.incoming.client.flight.FlightTracks;
 import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.FxLights;
-import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.plume.TrailModel;

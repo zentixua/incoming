@@ -23,12 +23,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WeaponSpecTest {
     private static final List<WeaponSpec> GUIDED = List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE);
 
+    /**
+     * Разворот — по перегрузке изделия: r = v²/(g·√(n² − 1)), один закон при любом масштабе скорости. На игровых
+     * скоростях шахед ~49 блоков, ракета ~230, B-2 ~2,6 км; на настоящих — 74 м, 2,25 км и 2,8 км.
+     */
     @Test
-    void turnRadiusIsSpeedOverTurnRate() {
-        // шахед ~40 блоков, ракета ~76, B-2 ~690 (описание BomberEntity)
-        assertEquals(40.1, WeaponSpec.DRONE.airframe().turnRadius(WeaponSpec.DRONE.airframe().cruiseSpeed()), 0.1);
-        assertEquals(76.4, WeaponSpec.MISSILE.airframe().turnRadius(WeaponSpec.MISSILE.airframe().cruiseSpeed()), 0.1);
-        assertEquals(687.5, WeaponSpec.BUNKER.airframe().turnRadius(WeaponSpec.BUNKER.airframe().cruiseSpeed()), 0.1);
+    void turnRadiusFromLoadFactor() {
+        try {
+            for (double x : new double[]{0, 0.5, 1}) {
+                FlightScale.pin(x);
+                for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.LOITER, WeaponSpec.BUNKER)) {
+                    WeaponSpec.Airframe a = w.airframe();
+                    double v = a.cruiseSpeed() * 20, n = a.article().loadFactor();
+                    assertEquals(v * v / (Article.G * Math.sqrt(n * n - 1)), a.turnRadius(a.cruiseSpeed()), 1e-6 * v * v, w.launch() + " x=" + x);
+                    // ω = a / v: вдвое быстрее — радиус вчетверо больше
+                    assertEquals(4 * a.turnRadius(a.cruiseSpeed()), a.turnRadius(2 * a.cruiseSpeed()), 1e-6 * v * v);
+                }
+            }
+            FlightScale.pin(0);
+            assertEquals(49, WeaponSpec.DRONE.airframe().turnRadius(WeaponSpec.DRONE.airframe().cruiseSpeed()), 1);
+            assertEquals(231, WeaponSpec.MISSILE.airframe().turnRadius(WeaponSpec.MISSILE.airframe().cruiseSpeed()), 1);
+            assertEquals(2565, WeaponSpec.BUNKER.airframe().turnRadius(WeaponSpec.BUNKER.airframe().cruiseSpeed()), 5);
+            FlightScale.pin(1);
+            assertEquals(2255, WeaponSpec.MISSILE.airframe().turnRadius(WeaponSpec.MISSILE.airframe().cruiseSpeed()), 5);
+        } finally {
+            FlightScale.pin(Double.NaN);
+        }
     }
 
     /**
@@ -113,7 +133,7 @@ class WeaponSpecTest {
     void sirenBeforeFinalLeg() {
         for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.BUNKER)) {
             double warned = w.sirenLead() * w.airframe().cruiseSpeed();
-            assertTrue(warned >= w.route().finalLeg(), "тревога за " + warned + " блоков, последний участок " + w.route().finalLeg());
+            assertTrue(warned >= w.finalLeg(), "тревога за " + warned + " блоков, последний участок " + w.finalLeg());
         }
     }
 
@@ -126,8 +146,7 @@ class WeaponSpecTest {
         for (WeaponSpec w : GUIDED) {
             WeaponSpec.Airframe a = w.airframe();
             double circle = a.turnRadius(a.cruiseSpeed()) * WeaponSpec.TURN_MARGIN;
-            assertTrue(a.attack().reattackMin() > 0 && a.attack().reattackMin() < circle,
-                    "reattackMin " + a.attack().reattackMin() + ", круг разворота " + circle);
+            assertTrue(a.reattackMin() > 0 && a.reattackMin() < circle, "reattackMin " + a.reattackMin() + ", круг разворота " + circle);
         }
     }
 
@@ -138,12 +157,18 @@ class WeaponSpecTest {
      */
     @Test
     void popUpGeometryFitsTurnAndLegs() {
-        WeaponSpec.Airframe a = WeaponSpec.MISSILE.airframe();
-        WeaponSpec.Attack attack = a.attack();
-        assertTrue(attack.terminalRange() > a.turnRadius(a.diveSpeed()) * WeaponSpec.TURN_MARGIN);
-        assertTrue(attack.terminalRange() <= WeaponSpec.MISSILE.route().finalLeg());
-        assertTrue(attack.terminalRange() <= a.visibleLeg());
-        assertTrue(attack.popUpMinRange() > attack.terminalRange());
+        try {
+            for (double x : new double[]{0, 0.5, 1}) {
+                FlightScale.pin(x);
+                WeaponSpec.Airframe a = WeaponSpec.MISSILE.airframe();
+                assertTrue(a.terminalRange() > a.turnRadius(a.diveSpeed()) * WeaponSpec.TURN_MARGIN, "x=" + x);
+                assertTrue(a.terminalRange() <= WeaponSpec.MISSILE.finalLeg(), "x=" + x);
+                assertTrue(a.terminalRange() <= a.visibleLeg(), "x=" + x);
+                assertTrue(a.popUpMinRange() > a.terminalRange(), "x=" + x);
+            }
+        } finally {
+            FlightScale.pin(Double.NaN);
+        }
     }
 
     /** Последний прямой участок вмещает два радиуса разворота: снаряд выходит из обхода на курс цели до атаки. */
@@ -151,7 +176,7 @@ class WeaponSpecTest {
     void finalLegFitsTurn() {
         for (WeaponSpec w : GUIDED) {
             WeaponSpec.Airframe a = w.airframe();
-            assertTrue(w.route().finalLeg() >= 2 * a.turnRadius(a.cruiseSpeed()), "последний участок " + w.route().finalLeg());
+            assertTrue(w.finalLeg() >= 2 * a.turnRadius(a.cruiseSpeed()), "последний участок " + w.finalLeg());
         }
     }
 
@@ -165,7 +190,7 @@ class WeaponSpecTest {
         for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.LOITER)) {
             WeaponSpec.Airframe a = w.airframe();
             double r = a.turnRadius(a.cruiseSpeed());
-            assertTrue(w.route().capture() >= 0.95 * r && w.route().capture() <= 2 * r, "захват точки " + w.route().capture() + ", радиус разворота " + r);
+            assertTrue(w.capture() >= 0.95 * r && w.capture() <= 2 * r, "захват точки " + w.capture() + ", радиус разворота " + r);
             assertTrue(w.route().reach() >= 1.5 * 10_000, "дальность по маршруту " + w.route().reach());
         }
         for (WeaponSpec w : List.of(WeaponSpec.BUNKER, WeaponSpec.NUKE, WeaponSpec.ROCKET)) assertTrue(!w.route().waypoints());

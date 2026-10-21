@@ -8,7 +8,10 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.util.ObfuscationReflectionHelper;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
+import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.strike.FlightAir;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,6 +48,24 @@ public final class GameTestShards {
         String spec = System.getProperty("incoming.gametest.shard", ""), only = System.getProperty("incoming.gametest.only", "");
         if (!only.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> only(e, only));
         if (!spec.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> select(e, spec));
+        NeoForge.EVENT_BUS.addListener((ServerStartingEvent e) -> {
+            scale();
+            // GameTest и сценарии полёта — в штиль: траектории повторяются точно (ветер — от времени игры у пуска);
+            // ветер проверяют свои тесты (FlightAir.calm(false)) и клиент сценариев
+            FlightAir.calm(e.getServer() instanceof GameTestServer);
+        });
+    }
+
+    /**
+     * Масштаб проверок — числа как есть ({@code CUSTOM}): ядерные проверки и кадры идут при настоящей волне (1.0), полёт —
+     * при игровых скоростях (0) или при {@code -Dincoming.flight_speed=…}; проверки на другом масштабе задают его сами.
+     * Общее для GameTest, сценариев полёта и клиента и стенда (все запуски devtest).
+     */
+    private static void scale() {
+        IncomingConfig.SERVER.scalePreset.set(IncomingConfig.ScalePreset.CUSTOM);
+        IncomingConfig.SERVER.nukeWaveSpeed.set(1.0);
+        IncomingConfig.SERVER.nukeEffectsScale.set(1.0);
+        IncomingConfig.SERVER.flightSpeed.set(Double.parseDouble(System.getProperty("incoming.flight_speed", "0")));
     }
 
     /** Только партии, чьё имя подходит под регулярное выражение ({@code -PgametestOnly=…}: прогон своих тестов локально). */

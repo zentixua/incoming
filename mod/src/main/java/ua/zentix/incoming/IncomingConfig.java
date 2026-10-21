@@ -26,6 +26,25 @@ public final class IncomingConfig {
 
     private IncomingConfig() {}
 
+    /**
+     * Скорость ядерной волны вдали у пресета {@link ScalePreset#GAME}, доля скорости звука: не по физике — у сервера
+     * больше времени на руины, и видно, как стена катится (решение Артёма 18.10, так на его серверах).
+     */
+    public static final double GAME_WAVE_SPEED = 0.20;
+
+    /**
+     * Пресет масштаба скоростей (настройка вида «масштаб под игру»): три числа разом — скорость полёта, скорость ядерной
+     * волны и радиусы ядерки. Всё у цели настоящее при любом.
+     */
+    public enum ScalePreset {
+        /** Игровые: полёт 0, волна {@link #GAME_WAVE_SPEED}, радиусы 1 — скорости не по физике, чтобы подлёт и волну было видно. */
+        GAME,
+        /** Как в жизни: 1, 1, 1. */
+        REAL,
+        /** Три числа как есть: {@code flight_speed}, {@code nuclear.wave_speed}, {@code nuclear.effects_scale}. */
+        CUSTOM
+    }
+
     public static final class Server {
         public final ModConfigSpec.IntValue dronePower;
         public final ModConfigSpec.IntValue missilePower;
@@ -54,6 +73,8 @@ public final class IncomingConfig {
         public final ModConfigSpec.IntValue bomberFlightTime;
         public final ModConfigSpec.IntValue loiterTime;
         public final ModConfigSpec.BooleanValue carrierNukes;
+        public final ModConfigSpec.EnumValue<ScalePreset> scalePreset;
+        public final ModConfigSpec.DoubleValue flightSpeed;
 
         public final ModConfigSpec.BooleanValue nukeEnabled;
         public final ModConfigSpec.BooleanValue nukeOpsOnly;
@@ -97,7 +118,42 @@ public final class IncomingConfig {
         public final ModConfigSpec.IntValue samRails;
         public final ModConfigSpec.IntValue samReloadSeconds;
 
+        /** Масштаб скоростей полёта по пресету: 0 — игровые (не по физике), 1 — как в жизни ({@code strike.FlightScale}). */
+        public double flightSpeed() {
+            return switch (scalePreset.get()) {
+                case GAME -> 0;
+                case REAL -> 1;
+                case CUSTOM -> flightSpeed.get();
+            };
+        }
+
+        /** Скорость ядерной волны вдали, доля скорости звука, по пресету ({@code nuclear.Detonation#wave}). */
+        public double waveSpeed() {
+            return switch (scalePreset.get()) {
+                case GAME -> GAME_WAVE_SPEED;
+                case REAL -> 1;
+                case CUSTOM -> nukeWaveSpeed.get();
+            };
+        }
+
+        /** Масштаб радиусов ядерки по пресету (1 — как в жизни). */
+        public double effectsScale() {
+            return scalePreset.get() == ScalePreset.CUSTOM ? nukeEffectsScale.get() : 1;
+        }
+
         Server(ModConfigSpec.Builder b) {
+            b.translation("incoming.config.scale").push("scale");
+            scalePreset = b.comment("Scale of speeds for play: GAME (default) slows flight and the nuclear blast wave so that you can watch them",
+                            "within a few hundred blocks; REAL is true to life; CUSTOM takes flight_speed below and nuclear.wave_speed and",
+                            "nuclear.effects_scale as they are. Everything at the target (charge, crater, penetration, damage) is true to life",
+                            "with any preset. GAME: flight_speed 0, wave_speed 0.20, effects_scale 1.0; REAL: 1, 1.0, 1.0.")
+                    .translation("incoming.config.scale_preset").defineEnum("scale_preset", ScalePreset.GAME);
+            flightSpeed = b.comment("Works with scale_preset = CUSTOM. Speeds and heights of everything that flies: 0 is game speeds and heights",
+                            "(slower and lower than real ones, not true to life: you see the approach), 1 is true to life, in between",
+                            "smoothly. Turns, gravity, drag and wind work by the same laws at any value.")
+                    .translation("incoming.config.flight_speed").defineInRange("flight_speed", 0.0, 0.0, 1.0);
+            b.pop();
+
             b.translation("incoming.config.warheads").push("warheads");
             dronePower = b.comment("Shahed blast power (TNT = 4). Above 60 freezes the server.")
                     .translation("incoming.config.drone_power").defineInRange("drone_power", 12, 1, 60);
@@ -174,13 +230,14 @@ public final class IncomingConfig {
                     .translation("incoming.config.nuke_default_yield").defineInRange("default_yield", 15, 1, Loadout.Nuke.MAX_YIELD);
             nukeMaxYield = b.comment("Largest yield, kt.")
                     .translation("incoming.config.nuke_max_yield").defineInRange("max_yield", Loadout.Nuke.MAX_YIELD, 1, Loadout.Nuke.MAX_YIELD);
-            nukeEffectsScale = b.comment("Scale of all radii: 1.0 is true to life (1 block = 1 m); lower for small worlds.")
+            nukeEffectsScale = b.comment("Works with scale.scale_preset = CUSTOM. Scale of all radii: 1.0 is true to life (1 block = 1 m); lower for small worlds.")
                     .translation("incoming.config.nuke_effects_scale").defineInRange("effects_scale", 1.0, 0.005, 1.0);
-            nukeWaveSpeed = b.comment("Speed of the blast wave and its dust wall away from the fireball, as a share of the speed of sound",
-                            "(1.0 is true to life). Lower is not true to life: it gives the server more time to build ruins ahead of the",
+            nukeWaveSpeed = b.comment("Works with scale.scale_preset = CUSTOM. Speed of the blast wave and its dust wall away from the fireball,",
+                            "as a share of the speed of sound (1.0 is true to life, 0.20 is the GAME preset). Lower is not true to life: it",
+                            "gives the server more time to build ruins ahead of the",
                             "wave and lets players watch the wall roll in. Near the fireball the wave is always true to life; beyond the",
                             "dust wall only the sound travels on, at the speed of sound.")
-                    .translation("incoming.config.nuke_wave_speed").defineInRange("wave_speed", 1.0, 0.15, 1.0);
+                    .translation("incoming.config.nuke_wave_speed").defineInRange("wave_speed", GAME_WAVE_SPEED, 0.15, 1.0);
             nukeBlockDamage = b.comment("The blast wave destroys buildings and trees. Off: no ruins and no crater.")
                     .translation("incoming.config.nuke_block_damage").define("block_damage", true);
             nukeFires = b.comment("The thermal pulse starts fires.")

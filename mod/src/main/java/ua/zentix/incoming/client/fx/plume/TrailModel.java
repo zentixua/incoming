@@ -2,6 +2,8 @@ package ua.zentix.incoming.client.fx.plume;
 
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.far.Sight;
+import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.util.Stability;
 import ua.zentix.incoming.util.StandardAtmosphere;
 
 /**

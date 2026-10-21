@@ -18,6 +18,9 @@ public interface Craft {
     /** Скорость, блоков/тик. */
     double speed();
 
+    /** Масса сейчас, кг: изделие с топливом за вычетом выгоревшего ({@link Propulsion}). */
+    double mass();
+
     void setSpeed(double speed);
 
     FlightPhase phase();
@@ -40,8 +43,8 @@ public interface Craft {
      */
     double clearAlong(Vec3 to, double margin);
 
-    /** Держать высоту {@code desired} ({@link AltitudeHold}). */
-    default void holdAltitude(double desired, double gain, double maxRate, double maxAccel) {
-        altitude().hold(flight(), position().y, desired, gain, maxRate, maxAccel);
+    /** Держать высоту {@code desired} ({@link AltitudeHold}) с набором не круче {@code maxClimb}° ({@link Autopilot#climbLimit}). */
+    default void holdAltitude(double desired, double gain, double maxRate, double maxAccel, double maxClimb) {
+        altitude().hold(flight(), position().y, desired, gain, maxRate, maxAccel, maxClimb);
     }
 }

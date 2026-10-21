@@ -3,6 +3,7 @@ package ua.zentix.incoming.guidance;
 /**
  * Удержание высоты: плавный фильтр заданной высоты (1/5 разницы за тик) и тангаж, пропорциональный
  * ошибке (1.2° на блок, от 15° вверх до 12° вниз), с ограничением угловой скорости и ускорения ({@link FlightController}).
+ * Набор круче, чем позволяет тяга, автопилот не просит ({@link Autopilot#climbLimit}).
  */
 public final class AltitudeHold {
     /** Наибольший угол набора, °. */
@@ -23,10 +24,10 @@ public final class AltitudeHold {
         filter = y;
     }
 
-    /** Держать высоту {@code desired}, находясь на {@code y}. */
-    public void hold(FlightController flight, double y, double desired, double gain, double maxRate, double maxAccel) {
+    /** Держать высоту {@code desired}, находясь на {@code y}, с набором не круче {@code maxClimb}°. */
+    public void hold(FlightController flight, double y, double desired, double gain, double maxRate, double maxAccel, double maxClimb) {
         filter += (desired - filter) / 5;
-        double climb = Math.max(-MAX_DESCENT, Math.min(MAX_CLIMB, (filter - y) * 1.2));
+        double climb = Math.max(-MAX_DESCENT, Math.min(Math.min(MAX_CLIMB, maxClimb), (filter - y) * 1.2));
         flight.holdPitch(-climb, gain, maxRate, maxAccel);
     }
 }

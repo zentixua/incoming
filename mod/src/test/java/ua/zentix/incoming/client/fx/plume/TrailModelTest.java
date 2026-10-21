@@ -5,6 +5,8 @@ import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.util.Stability;
 import ua.zentix.incoming.util.StandardAtmosphere;
 import ua.zentix.incoming.util.Wind;
 

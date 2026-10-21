@@ -212,7 +212,7 @@ public final class StrikeService {
      * стреляет, или из-за места пуска ({@code stand}; null — ни того, ни другого).
      */
     private static double entryDistance(WeaponType weapon, Vec3 point, @Nullable Vec3 stand) {
-        double base = weapon.spec().route().finalLeg();
+        double base = weapon.spec().finalLeg();
         if (stand == null) return base;
         double dx = point.x - stand.x, dz = point.z - stand.z;
         return Math.max(base, Math.sqrt(dx * dx + dz * dz) + 150);
@@ -323,7 +323,7 @@ public final class StrikeService {
         /** Перед первой точкой на последний прямой участок из паспорта: к ней снаряд подходит по курсу маршрута. */
         @Override
         public Vec3 afar(WeaponType weapon) {
-            return via.afar(point, weapon.spec().route().finalLeg());
+            return via.afar(point, weapon.spec().finalLeg());
         }
     }
 
@@ -606,7 +606,7 @@ public final class StrikeService {
         BomberEntity e = ModEntities.BOMBER.get().create(level);
         if (e == null) return null;
         WeaponSpec spec = WeaponType.BUNKER.spec();
-        double length = spec.airframe().cruiseSpeed() * spec.route().seconds() * 20 + spec.route().finalLeg();
+        double length = spec.airframe().cruiseSpeed() * spec.route().seconds() * 20 + spec.finalLeg();
         e.launch(surface.subtract(Local.horizontal(yaw).scale(length)), surface, goal, owner);
         e.setRoute(null);
         startVirtual(level, e);

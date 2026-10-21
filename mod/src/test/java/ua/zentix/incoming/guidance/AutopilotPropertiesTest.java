@@ -33,15 +33,15 @@ class AutopilotPropertiesTest {
     private static final double MAX_TURN = 720;
 
     enum Weapon {
-        DRONE(WeaponSpec.DRONE, 40), MISSILE(WeaponSpec.MISSILE, 120);
+        DRONE(WeaponSpec.DRONE), MISSILE(WeaponSpec.MISSILE);
 
         final WeaponSpec spec;
         /** Радиус захвата точки маршрута (как у сущности: {@code navPoint}). */
         final double capture;
 
-        Weapon(WeaponSpec spec, double capture) {
+        Weapon(WeaponSpec spec) {
             this.spec = spec;
-            this.capture = capture;
+            this.capture = spec.capture();
         }
     }
 
@@ -59,15 +59,28 @@ class AutopilotPropertiesTest {
         final FlightController flight = new FlightController(0, 0);
         final AltitudeHold altitude = new AltitudeHold();
         final Ground ground;
+        final WeaponSpec.Airframe air;
         Vec3 pos;
         double speed;
         FlightPhase phase = FlightPhase.CRUISE;
         int tick, phaseStart;
 
-        Model(Ground ground, Vec3 pos, double speed) {
+        Model(Ground ground, Vec3 pos, double speed, WeaponSpec.Airframe air) {
             this.ground = ground;
             this.pos = pos;
             this.speed = speed;
+            this.air = air;
+        }
+
+        /** Перед тиком автопилота, как у сущности: скорость и перегрузка — пределу поворота ({@link FlightController#limit}). */
+        void prepare() {
+            flight.limit(speed, air.article().loadFactor());
+        }
+
+        /** Масса — с полным баком (у сущности топливо выгорает: оценка снизу ускорения). */
+        @Override
+        public double mass() {
+            return air.article().launchMass();
         }
 
         @Override
@@ -237,11 +250,12 @@ class AutopilotPropertiesTest {
      */
     static String straightFlight(Ground ground, Vec3 start, FlightPhase phase, double speed, WeaponSpec.Airframe air, Vec3 aim,
                                  double passZ, Consumer<Model> fly) {
-        Model c = new Model(ground, start, speed);
+        Model c = new Model(ground, start, speed, air);
         c.phase = phase;
         c.altitude.reset(start.y);
         c.flight.set(FlightController.anglesTo(start, new Vec3(aim.x, start.y, aim.z))[0], phase == FlightPhase.CLIMB ? -14 : 0);
         for (c.tick = 0; c.tick < 4000; c.tick++) {
+            c.prepare();
             fly.accept(c);
             if (c.pos.distanceTo(aim) <= c.speed + air.reachPad()) return "hit";
             Vec3 dir = c.flight.forward();
@@ -258,6 +272,8 @@ class AutopilotPropertiesTest {
         return String.format(Locale.ROOT, "не долетел: (%.1f %.1f %.1f)", c.pos.x, c.pos.y, c.pos.z);
     }
 
+    static final long TRACE = Long.parseLong(System.getenv().getOrDefault("INCOMING_TRACE_SEED", "-1"));
+
     static Outcome fly(Scenario s) {
         SplittableRandom r = new SplittableRandom(s.seed * 31 + 7);
         WeaponSpec.Airframe air = s.weapon.spec.airframe();
@@ -273,7 +289,7 @@ class AutopilotPropertiesTest {
         MissileAutopilot missile = s.weapon == Weapon.MISSILE ? new MissileAutopilot(air) : null;
         double y = drone != null ? drone.airborneAltitude(start, aim, surface) : missile.airborneAltitude(aim, surface);
         start = new Vec3(start.x, y, start.z);
-        Model c = new Model(ground, start, air.cruiseSpeed());
+        Model c = new Model(ground, start, air.cruiseSpeed(), air);
         c.altitude.reset(y);
         if (missile != null) missile.approach(Math.sqrt(aim.subtract(start).horizontalDistanceSqr()));
 
@@ -283,7 +299,7 @@ class AutopilotPropertiesTest {
             Vec3 direct = aim.subtract(start);
             double turn = r.nextDouble(-Math.PI / 3, Math.PI / 3);
             Vec3 approach = new Vec3(direct.x * Math.cos(turn) - direct.z * Math.sin(turn), 0, direct.x * Math.sin(turn) + direct.z * Math.cos(turn));
-            route = Route.plan(start, aim, approach, distance * r.nextDouble(1, 1.5), s.weapon.spec.route().finalLeg(), r.nextBoolean() ? 1 : -1);
+            route = Route.plan(start, aim, approach, distance * r.nextDouble(1, 1.5), s.weapon.spec.finalLeg(), r.nextBoolean() ? 1 : -1);
         }
         Vec3 first = route != null && route.current() != null ? route.current() : aim;
         c.flight.set(FlightController.anglesTo(start, new Vec3(first.x, start.y, first.z))[0], 0);
@@ -310,7 +326,7 @@ class AutopilotPropertiesTest {
             if (s.aim == Aim.RETARGET_IN_TURN && !retargeted && finalLeg && Bearing.of(c.pos, aim).horizontal() < 200) {
                 // новая цель сбоку, внутри круга разворота — как перенацеливание из камеры или промах в пике
                 retargeted = true;
-                double radius = WeaponSpec.turnRadius(c.speed, air.turnRate()) * WeaponSpec.TURN_MARGIN;
+                double radius = air.turnRadius(c.speed) * WeaponSpec.TURN_MARGIN;
                 Vec3 f = c.flight.forward();
                 Vec3 fw = new Vec3(f.x, 0, f.z).normalize();
                 Vec3 side = new Vec3(-fw.z, 0, fw.x).scale(r.nextBoolean() ? 1 : -1);
@@ -327,6 +343,10 @@ class AutopilotPropertiesTest {
                 if (wp != null) nav = new Vec3(wp.x, aim.y, wp.z);
             }
             finalLeg = route == null || route.finished();
+            c.prepare();
+            if (TRACE == s.seed && s.weapon.name().equals(System.getenv("INCOMING_TRACE_W")) && c.tick % 5 == 0) System.out.printf(java.util.Locale.ROOT,
+                    "TRACE %d %s pos %.1f %.1f %.1f v %.2f pitch %.1f yaw %.1f aim %.1f %.1f %.1f gnd %.1f fin %b%n", c.tick, c.phase, c.pos.x, c.pos.y, c.pos.z, c.speed,
+                    c.flight.pitch(), c.flight.yaw(), aim.x, aim.y, aim.z, ground.at(c.pos.x, c.pos.z), finalLeg);
             if (drone != null) drone.fly(c, aim, nav, finalLeg);
             else missile.fly(c, aim, nav, finalLeg);
 
@@ -361,7 +381,7 @@ class AutopilotPropertiesTest {
             double prev = heading;
             heading = h;
             if (Double.isNaN(prev) || aimMoved) continue;
-            double rate = c.phase == FlightPhase.CLIMB ? air.climbTurnRate() : air.turnRate();
+            double rate = c.phase == FlightPhase.CLIMB ? air.climbTurnRate(c.speed) : air.turnRate(c.speed);
             if (c.pos.subtract(aim).horizontalDistance() <= horizontal / Math.toRadians(rate) * 2) {
                 turn += Math.abs(Mth.wrapDegrees(h - prev));
             }

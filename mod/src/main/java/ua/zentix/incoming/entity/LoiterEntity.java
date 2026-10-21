@@ -182,19 +182,19 @@ public class LoiterEntity extends StrikeProjectile {
 
         if (ph == FlightPhase.CLIMB) {
             // крылья раскрылись, винт тянет: набор высоты к кругу (по маршруту оператора — к его точке)
-            speed += (AIR.cruiseSpeed() - speed) * 0.08;
+            accelerate(AIR.cruiseSpeed(), 0.08, Double.MAX_VALUE);
             holdAltitude(Math.max(cruiseAlt, floor), 0.12, 1.4, 0.15);
-            flight.steerYaw(bearingTo(navPoint(aim)).yaw(), 0.08, AIR.climbTurnRate(), 0.15);
+            flight.steerYaw(bearingTo(navPoint(aim)).yaw(), 0.08, AIR.climbTurnRate(speed), 0.15);
             if (phaseAge() > 40) setPhase(FlightPhase.CRUISE);
         } else if (ph == FlightPhase.CRUISE) {
-            speed += (AIR.cruiseSpeed() - speed) * 0.05;
+            accelerate(AIR.cruiseSpeed(), 0.05, Double.MAX_VALUE);
             holdAltitude(Math.max(cruiseAlt, floor), 0.12, 1.2, 0.15);
             Vec3 nav = navPoint(aim);
             if (!onFinalLeg()) {
                 // маршрут оператора: точка за точкой, а к кругу — уже с последнего участка
-                flight.steerYaw(bearingTo(nav).yaw(), 0.15, AIR.turnRate(), 0.3);
+                flight.steerYaw(bearingTo(nav).yaw(), 0.15, AIR.turnRate(speed), 0.3);
             } else if (strikeNow) {
-                flight.steerYaw(b.yaw(), 0.15, AIR.turnRate(), 0.3);
+                flight.steerYaw(b.yaw(), 0.15, AIR.turnRate(speed), 0.3);
                 if (b.pitch() >= 30 || b.horizontal() <= orbitRadius + 15) setPhase(FlightPhase.TERMINAL);
             } else {
                 // к кругу — по тому же полю курсов, что и на круге: выход на него по касательной, без перелёта
@@ -202,7 +202,7 @@ public class LoiterEntity extends StrikeProjectile {
                 if (orbit().captured(position(), aim, tracker.velocity(), speed, flight.yaw())) setPhase(FlightPhase.LOITER);
             }
         } else if (ph == FlightPhase.LOITER) {
-            speed += (AIR.cruiseSpeed() - speed) * 0.05;
+            accelerate(AIR.cruiseSpeed(), 0.05, Double.MAX_VALUE);
             holdAltitude(Math.max(aim.y + AIR.cruiseHeight(), floor), 0.12, 1.2, 0.15);
             orbit().steer(flight, position(), aim, tracker.velocity(), speed);
             // заход в пике — когда цель под крылом (под углом 40° и круче) и время вышло
@@ -217,7 +217,7 @@ public class LoiterEntity extends StrikeProjectile {
                 setPhase(FlightPhase.LOITER);
             } else {
                 Dive.steer(flight, position(), speed, aim, tracker.velocity());
-                speed = Math.min(AIR.diveSpeed(), speed + 0.1);
+                accelerate(AIR.diveSpeed(), 1, 0.1);
             }
         }
 

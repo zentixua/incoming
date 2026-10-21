@@ -115,7 +115,7 @@ public final class NuclearStrikes {
         boolean alarm = p.position().distanceToSqr(s.target()) <= r * r;
         boolean mine = s.owner().map(p.getUUID()::equals).orElse(false);
         return new S2C.NukeWarning(s.id(), s.target(), s.launchPos(), s.launchTime(), s.detonateTime(), s.yieldKt(), s.airBurst(), alarm, mine,
-                IncomingConfig.SERVER.nukeEffectsScale.get().floatValue());
+                (float) IncomingConfig.SERVER.effectsScale());
     }
 
     /**

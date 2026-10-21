@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.fx.smoke;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.util.Stability;
 
 /**
  * Облако обычного взрыва по законам, без Minecraft: что поднялось, куда и как долго его видно — из заряда, топлива, грунта
@@ -46,9 +47,7 @@ public final class CloudModel {
     /**
      * Устойчивость стандартной атмосферы ISO 2533 до 11 км: N² = g/T·(dT/dz + g/c_p), градиент −6,5 К/км — N ≈ 0,0105 с⁻¹.
      */
-    public static final double N_STANDARD = Math.sqrt(G / T_AIR * (-0.0065 + G / CP));
-    /** Ночью у земли — инверсия: 0,02–0,04 с⁻¹ (ref/formulas.md §1), середина нижней половины — оценка. */
-    public static final double N_NIGHT = 0.025;
+    public static final double N_STANDARD = Stability.STANDARD_N;
     /**
      * Тепло взрывчатки в газе облака, Дж на кг ТНТ — по замерам облаков: верх стабилизированного облака химического
      * взрыва 92,6·W^0,25 м (W — кг ТНТ, «средняя атмосфера»; Church H. W., «Cloud Rise from High-Explosives Detonations»,
@@ -105,17 +104,12 @@ public final class CloudModel {
         public static final Air STANDARD = new Air(N_STANDARD, 0, 0, 0.14, 3, 0.5);
 
         /**
-         * Воздух по свету дня и погоде: днём (day = 1, ясно) — стандартная устойчивость выше слоя перемешивания, класс B,
-         * профиль 0,1; ночью — инверсия {@link #N_NIGHT}, класс F, 0,3 (ясно); облачность (дождь) тянет к нейтральному D:
-         * {@code ref/formulas.md} §1, таблица Паскуилла–Гиффорда.
+         * Воздух по классу устойчивости {@code stability} воздуха мира ({@link ua.zentix.incoming.util.Air}: солнце, ветер
+         * у земли, облачность — одна функция на мир, {@link Stability}): частота Брента–Вяйсяля, показатель профиля
+         * ветра и расплывание — по классу.
          */
-        public static Air of(double day, double rain, double windX, double windZ, double humidity) {
-            double d = Math.max(0, Math.min(1, day)), r = Math.max(0, Math.min(1, rain));
-            double n2 = N_NIGHT * N_NIGHT + (N_STANDARD * N_STANDARD - N_NIGHT * N_NIGHT) * Math.max(d, r);
-            double clear = 1 - r;
-            double shear = 0.14 + (d > 0.5 ? -0.04 : 0.16) * clear;
-            int spread = (int) Math.round(3 + (d > 0.5 ? -2 : 2) * clear);
-            return new Air(Math.sqrt(n2), windX, windZ, shear, spread, humidity);
+        public static Air of(double stability, double windX, double windZ, double humidity) {
+            return new Air(Stability.brunt(stability), windX, windZ, Stability.alpha(stability), (int) Math.round(stability), humidity);
         }
 
         /** Ветер на высоте z (м) над землёй: доля ветра на 10 м. */

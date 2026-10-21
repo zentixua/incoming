@@ -1775,7 +1775,7 @@ public final class ClientScenario {
         int at = b + 600;
         double t = 30;
         var model = new ua.zentix.incoming.client.fx.smoke.CloudModel(ua.zentix.incoming.client.fx.BlastSource.of(ua.zentix.incoming.strike.WeaponType.DRONE, false),
-                ua.zentix.incoming.client.fx.smoke.CloudModel.Air.of(1, 0, ua.zentix.incoming.client.far.FarBlasts.wind10(true),
+                ua.zentix.incoming.client.fx.smoke.CloudModel.Air.of(ua.zentix.incoming.util.Stability.B, ua.zentix.incoming.client.far.FarBlasts.wind10(true),
                         ua.zentix.incoming.client.far.FarBlasts.wind10(false), 0.5));
         Vec3 c = target.add(model.driftX(t), model.height(t), model.driftZ(t));
         double r = model.radius(t);
@@ -2881,7 +2881,7 @@ public final class ClientScenario {
             ua.zentix.incoming.strike.Waypoints via = routeFired;
             if (via == null || routePassed >= via.size()) return;
             Vec3 wp = via.points().get(routePassed);
-            double near = 2 * weapon.spec().route().capture() + weapon.spec().airframe().cruiseSpeed() + 1;
+            double near = 2 * weapon.spec().capture() + weapon.spec().airframe().cruiseSpeed() + 1;
             var level = e.getServer().overworld();
             java.util.List<StrikeProjectile> flying = new ArrayList<>(ua.zentix.incoming.strike.VirtualFlights.get(level).flights());
             level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(StrikeProjectile.class), q -> !q.isRemoved()).forEach(flying::add);

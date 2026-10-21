@@ -83,11 +83,12 @@ class DroneDiveTest {
         Vec3 aim = new Vec3(0, GROUND + 0.5, 0);
         Vec3 start = new Vec3(0, 0, -800);
         start = new Vec3(start.x, drone.airborneAltitude(start, aim, city), start.z);
-        AutopilotPropertiesTest.Model c = new AutopilotPropertiesTest.Model(ground, start, air.cruiseSpeed());
+        AutopilotPropertiesTest.Model c = new AutopilotPropertiesTest.Model(ground, start, air.cruiseSpeed(), air);
         c.altitude.reset(start.y);
         c.flight.set(FlightController.anglesTo(start, new Vec3(aim.x, start.y, aim.z))[0], 0);
         double maxPitch = 0;
         for (c.tick = 0; c.tick < 2000; c.tick++) {
+            c.prepare();
             drone.fly(c, aim, aim, true);
             if (c.phase == FlightPhase.TERMINAL) maxPitch = Math.max(maxPitch, c.flight.pitch());
             if (c.pos.distanceTo(aim) <= c.speed + air.reachPad()) return String.format(Locale.ROOT, "hit, тангаж до %.0f°", maxPitch);
