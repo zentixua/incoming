@@ -45,22 +45,23 @@ public final class PlumeRenderer {
         Vector3f cam = new Vector3f((float) c.x, (float) c.y, (float) c.z).rotate(inv).sub(0, p.y(), 0);
         pose.pushPose();
         pose.translate(0, p.y(), 0);
-        VertexConsumer vc = buffers.getBuffer(RenderType.eyes(f.diamonds() ? DIAMONDS : PLUME));
-        strip(vc, pose, cam, p.z(), (float) f.length(), (float) ((f.width() + f.spread()) / 2), f.tailColor(), f.tailLuminance() * p.adapt(), p.near());
-        strip(vc, pose, cam, p.z(), (float) f.flame(), (float) ((f.width() + f.widthAt(f.flame())) / 2), f.flameColor(), f.flameLuminance() * p.adapt(),
-                p.near());
-        strip(vc, pose, cam, p.z(), (float) f.core(), (float) f.width(), f.coreColor(), f.coreLuminance() * p.adapt(), p.near());
-        // проба гибрида: вдоль оси полоса сходит на нет, а видно сечение струи — диск лицом к камере (как ореол 3.4.1),
-        // в долю того, насколько взгляд идёт по оси (сбоку его закрывают полосы); копии векторов камеры — см. client.md
+        // проба гибрида: смотришь вдоль оси — полоса (проекция цилиндра струи) сходит в отрезок поперёк, а видно сечение —
+        // диск; полосы гаснут, диски того же поперечника проступают в долю взгляда вдоль оси
         float along = Math.abs(new Vector3f(cam).normalize().z);
-        if (along > 0.3f) {
-            float w = (along - 0.3f) / 0.7f;
+        float endOn = Math.clamp((along - 0.6f) / 0.35f, 0f, 1f);
+        VertexConsumer vc = buffers.getBuffer(RenderType.eyes(f.diamonds() ? DIAMONDS : PLUME));
+        float side = 1 - endOn;
+        strip(vc, pose, cam, p.z(), (float) f.length(), (float) ((f.width() + f.spread()) / 2), f.tailColor(), f.tailLuminance() * p.adapt() * side, p.near());
+        strip(vc, pose, cam, p.z(), (float) f.flame(), (float) ((f.width() + f.widthAt(f.flame())) / 2), f.flameColor(),
+                f.flameLuminance() * p.adapt() * side, p.near());
+        strip(vc, pose, cam, p.z(), (float) f.core(), (float) f.width(), f.coreColor(), f.coreLuminance() * p.adapt() * side, p.near());
+        if (endOn > 0) {
             Vector3f left = camera.getLeftVector().rotate(inv, new Vector3f()), up = camera.getUpVector().rotate(inv, new Vector3f());
             VertexConsumer halo = buffers.getBuffer(RenderType.eyes(HALO));
-            disc(halo, pose, new Vector3f(0, 0, p.z() - (float) f.width() * 0.5f), left, up, (float) f.widthAt(f.flame()) * 1.2f, f.flameColor(),
-                    f.flameLuminance() * p.adapt() * w, p.near());
-            disc(halo, pose, new Vector3f(0, 0, p.z() - (float) f.width() * 0.3f), left, up, (float) f.width() * 1.1f, f.coreColor(),
-                    f.coreLuminance() * p.adapt() * w, p.near());
+            disc(halo, pose, new Vector3f(0, 0, p.z() - (float) f.width()), left, up, (float) ((f.width() + f.widthAt(f.flame())) / 2) * 1.6f, f.flameColor(),
+                    f.flameLuminance() * p.adapt() * endOn, p.near());
+            disc(halo, pose, new Vector3f(0, 0, p.z() - (float) f.width() * 0.5f), left, up, (float) f.width() * 1.6f, f.coreColor(),
+                    f.coreLuminance() * p.adapt() * endOn, p.near());
         }
         pose.popPose();
     }

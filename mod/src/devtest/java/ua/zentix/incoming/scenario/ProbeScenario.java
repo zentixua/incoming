@@ -203,7 +203,9 @@ final class ProbeScenario {
         at(s + 120, () -> {
             Minecraft mc = Minecraft.getInstance();
             int y = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, site[0], site[1]);
-            if (y <= mc.level.getMinBuildHeight()) y = groundAt(site[0], site[1]);
+            // чанк цели мог ещё не прийти клиенту (высота −27 в прогоне B): расходится с генератором — генератор
+            int gen = groundAt(site[0], site[1]);
+            if (Math.abs(y - gen) > 12) y = gen;
             target = new Vec3(site[0] + 0.5, y, site[1] + 0.5);
             // зритель — выше рельефа на всём пути к цели (по генератору), не ниже заданной высоты над целью
             int above = grad ? 10 : dist == 50 ? 18 : 40;

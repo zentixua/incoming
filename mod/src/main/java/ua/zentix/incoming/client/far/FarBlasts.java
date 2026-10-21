@@ -784,7 +784,10 @@ public final class FarBlasts {
             Sight.point(r, 1, 1, d, view.pixel(), POINT);
             float lit = e.shade[i] * view.ambient();
             float cr = thick(ks, kd, kw, e.dustR) * lit, cg = thick(ks, kd, kw, e.dustG) * lit, cb = thick(ks, kd, kw, e.dustB) * lit;
-            cluster(e, i, out, view, px, py, pz, POINT[0], sh, e.blobs[at + 4], age, cr, cg, cb, (float) (a * w * vis * POINT[1] * air * outside));
+            // видимый край гаусса — где толща падает до 0,05: r = σ·√(2·ln(τ/0,05)); у густого облака (τ ~ 40) это ~3,7σ,
+            // а не 2σ квадрата прежних клубов (край обрезался, «ядра»)
+            double edge = Math.clamp(Math.sqrt(2 * Math.log(Math.max(tau, 0.1) / 0.05)), 1.5, 4.0) / 2;
+            cluster(e, i, out, view, px, py, pz, POINT[0] * edge, sh, e.blobs[at + 4], age, cr, cg, cb, (float) (a * w * vis * POINT[1] * air * outside));
         }
     }
 
@@ -803,7 +806,8 @@ public final class FarBlasts {
         boolean near = half / Math.max(d * view.pixel(), 1e-9) > 48;
         int k = near ? CLUSTER : 1;
         double top = e.model == null ? 20 : Math.max(e.model.topSeconds, 2);
-        double p = Math.min(1, age / 20 / top) * (FxAtlas.PUFF6_FRAMES - 1);
+        // первые кадры симуляции — плотный круглый выброс (у квадрата с тенью вышел бы шар): с четвёртого
+        double p = 3 + Math.min(1, age / 20 / top) * (FxAtlas.PUFF6_FRAMES - 4);
         float sub = near ? (float) (1 - Math.pow(1 - Math.min(a, 0.999), 1 / 3.0)) : a;
         SplittableRandom rnd = new SplittableRandom(e.seed * 31 + i);
         for (int j = 0; j < k; j++) {
