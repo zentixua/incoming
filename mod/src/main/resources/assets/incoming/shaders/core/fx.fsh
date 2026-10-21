@@ -68,6 +68,8 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     vec2 uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
     vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
     vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
+    // прозрачный край кадра (половина квадрата клуба) — без второй карты и света: цена слоя — заливка крупных клубов
+    if (mix(a0.a, a1.a, m) < 0.002) discard;
     vec4 b0 = textureGrad(Sampler0, uv0 + vec2(0.0, FxSix.x), dx, dy), b1 = textureGrad(Sampler0, uv1 + vec2(0.0, FxSix.x), dx, dy);
     // на листе — умноженная альфа и степень 1/2,2
     vec3 la0 = pow(a0.rgb / max(a0.a, 1e-3), vec3(2.2)), la1 = pow(a1.rgb / max(a1.a, 1e-3), vec3(2.2));
