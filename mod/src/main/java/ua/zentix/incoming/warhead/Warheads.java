@@ -550,8 +550,10 @@ public final class Warheads {
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
                     new S2C.Blast(kind, pos, mat.ordinal(), surface, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID), weapon.id()));
             main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(), direct, owner)) : List.of();
-            // заряд на аппарате (точка в сетке плотов): воронку и шар топлива там не ставить — это корпус, а не земля
-            onCraft = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
+            // заряд на аппарате: воронку и шар топлива там не ставить — это корпус, а не земля. Снаряд отдаёт точку удара о
+            // аппарат уже в мире (StrikeProjectile: SubLevels.toWorld), поэтому — и аппарат, чей габарит у точки
+            onCraft = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)))
+                    || !SubLevels.near(level, pos, 1).isEmpty();
         }
 
         /** Взрыв на аппарате Sable. */

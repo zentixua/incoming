@@ -537,6 +537,7 @@ final class StagedExplosion implements UnitQueue.Job {
         // обработчики начала уже видят заряд ({@link #chargeOf})
         CHARGES.put(e, charge);
         cancelled = EventHooks.onExplosionStart(level, e);
+        started = true;
         time(ExplosionStage.START, t);
         if (cancelled) return false;
         waveId = level.random.nextLong();
@@ -887,10 +888,11 @@ final class StagedExplosion implements UnitQueue.Job {
 
     /** Заряд не отменён ({@code ExplosionEvent.Start}): работа удара после главного взрыва идёт, только если он был. */
     boolean happened() {
-        return !cancelled;
+        return started && !cancelled;
     }
 
-    private boolean cancelled;
+    /** Первая единица прошла (район дождался), и обработчик-приват не отменил взрыв. */
+    private boolean started, cancelled;
 
     /** Выбранное лучами — во взрыв, сбор сущностей, {@code ExplosionEvent.Detonate}. */
     private boolean detonate(ServerLevel level) {
