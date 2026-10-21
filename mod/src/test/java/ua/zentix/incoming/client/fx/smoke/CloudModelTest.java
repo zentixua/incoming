@@ -201,7 +201,7 @@ class CloudModelTest {
         double[] light = new double[4];
         for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET, WeaponType.LOITER}) {
             for (double day : new double[]{1, 0}) {
-                CloudModel m = model(w, CloudModel.Air.of(day, 0, 0.9, 0.45, 0.5));
+                CloudModel m = model(w, air(day > 0.5 ? Stability.B : Stability.F, 0.9, 0.45, 0.5));
                 assertTrue(m.fireSeconds > m.burnSeconds, w + ": остывает после горения");
                 double rMax = 0, yMax = 0;
                 for (double t = 0.05; t < m.fireSeconds + 0.5; t += 0.05) {
