@@ -9,7 +9,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | 221Beimesche | [Glass Shattering and Falling](https://freesound.org/s/336425/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | alienistcog | [merrimack-st-demolition.aif](https://freesound.org/s/125937/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | bastipictures | [peal of thunder - distant](https://freesound.org/s/243782/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| blukotek | [two-stroke Trabant engine 01.wav](https://freesound.org/s/412819/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G09-18-Constant Jet Noise.wav](https://freesound.org/s/437910/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G10-02-Constant Jet Noise.wav](https://freesound.org/s/437917/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [G26-27-Huge Storm Sequence.wav](https://freesound.org/s/438346/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
@@ -26,6 +25,7 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | craigsmith | [S10-19 Falling wooden beam; big interior crash; house collapses; long.wav](https://freesound.org/s/675967/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | csengeri | [Close lightning strike 2018 07 07](https://freesound.org/s/434359/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | deleted_user_9900733 | [UAV explosion in the city](https://freesound.org/s/811474/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| dobroide | [20110212_paraglider.02.wav](https://freesound.org/s/114628/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | felix.blume | [Dynamite explosion in the mountain](https://freesound.org/s/251401/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | felix.blume | [Big dynamite explosion in an open mine (Chile)](https://freesound.org/s/475780/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | felix.blume | [Rocket Launch Rumble at Canaveral](https://freesound.org/s/613855/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
@@ -58,7 +58,6 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | TheLittleCrow | [Rocket Launch Boost and Burning (Version B)](https://freesound.org/s/774270/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | tim.kahn | [EXPLReal_Centennial Mills Watertower Demolition](https://freesound.org/s/866989/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | TRP | [Fridge hum whirl stops loud clunk bang](https://freesound.org/s/573936/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| wniebelski | [taxing ultralight plane.wav](https://freesound.org/s/695977/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Yoyodaman234 | [Thunder2](https://freesound.org/s/267551/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Zagge28 | [Incoming mortar 4](https://freesound.org/s/241837/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Zagge28 | [Incoming mortar 3](https://freesound.org/s/241838/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |

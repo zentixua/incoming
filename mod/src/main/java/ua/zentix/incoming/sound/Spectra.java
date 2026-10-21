@@ -7,7 +7,7 @@ package ua.zentix.incoming.sound;
  */
 public final class Spectra {
     // @spectra-begin
-    public static final Spectrum DRONE_ENGINE = Spectrum.of(-29.0, -18.6, 0.0, -1.8, -4.6, -4.6, -7.6, -10.0);
+    public static final Spectrum DRONE_ENGINE = Spectrum.of(-19.6, 0.0, -5.1, -9.6, -14.3, -19.2, -21.1, -37.7);
     public static final Spectrum LOITER_ENGINE = Spectrum.of(-53.3, -42.9, 0.0, -2.3, -3.7, -4.2, -2.1, -11.4);
     public static final Spectrum LOITER_DIVE = Spectrum.of(-27.4, -13.9, -4.9, 0.0, -0.2, -6.2, -13.6, -16.5);
     public static final Spectrum MISSILE_ENGINE = Spectrum.of(-19.6, -9.5, -8.5, -9.4, -7.1, -3.9, 0.0, -9.9);
