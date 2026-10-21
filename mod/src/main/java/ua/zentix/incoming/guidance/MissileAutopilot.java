@@ -100,7 +100,10 @@ public final class MissileAutopilot {
         if (!attack) sight.forget();
         if (masked) {
             c.setPhase(FlightPhase.POP_UP);
-        } else if (c.phase() == FlightPhase.POP_UP && (b.pitch() >= DIVE_PITCH || c.position().y >= aim.y + POP_UP_HEIGHT)) {
+        } else if (c.phase() == FlightPhase.POP_UP
+                && (sight.forced() || !popUp || b.pitch() >= DIVE_PITCH || c.position().y >= aim.y + POP_UP_HEIGHT)) {
+            // горка кончается: обычная — по углу или высоте; вынужденная атака или короткий заход (горка была только
+            // из-за закрытой прямой) — сразу
             c.setPhase(FlightPhase.TERMINAL);
         }
 

@@ -111,6 +111,7 @@ public final class DroneAutopilot {
         boolean masked = window && sight.masked(c, aim, b, air.reachPad(), DIVE_RATE, DIVE_ACCEL);
         if (!window) {
             sight.forget();
+            pathWait = 0;
             obstacleTop = Double.NEGATIVE_INFINITY;
         } else if (masked) {
             watchPath(c);

@@ -91,15 +91,14 @@ public final class Autopilot {
     /**
      * Путь, за который нос доворачивает от нынешнего тангажа до линии на цель {@code aim} с предельной угловой
      * скоростью тангажа {@code rate} °/тик и её ускорением {@code accel} °/тик²: разгон угловой скорости и торможение,
-     * при большом угле — с полкой на пределе. Угол линии — в вертикальной плоскости курса: цель под снарядом — 90°
-     * под горизонтом, позади — больше 90°. Иначе набирающая высоту ракета проходила бы над целью, а доворот считался бы
-     * не больше чем до отвесного пике, и атака не начиналась бы вовсе.
+     * при большом угле — с полкой на пределе. Цель позади (за плоскостью поперёк курса) — линия за отвесом:
+     * 180° − угол под горизонтом. Иначе набирающая высоту ракета проходила бы над целью, а доворот считался бы не больше
+     * чем до отвесного пике, и атака не начиналась бы вовсе.
      */
-    public static double turnDistance(Craft c, Vec3 aim, double rate, double accel) {
+    public static double turnDistance(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
         Vec3 pos = c.position(), f = c.flight().forward();
-        double fl = Math.hypot(f.x, f.z);
-        double ahead = fl < 1e-6 ? 0 : ((aim.x - pos.x) * f.x + (aim.z - pos.z) * f.z) / fl;
-        double los = Math.toDegrees(Math.atan2(pos.y - aim.y, ahead));
+        boolean behind = (aim.x - pos.x) * f.x + (aim.z - pos.z) * f.z < 0;
+        double los = behind ? 180 - toAim.pitch() : toAim.pitch();
         double turn = Math.max(0, los - c.flight().pitch());
         double ticks = turn <= rate * rate / accel
                 ? 2 * Math.sqrt(turn / accel)
@@ -117,7 +116,11 @@ public final class Autopilot {
      */
     public static final class Sightline {
         private boolean blocked;
-        /** Атака уже вынужденная ({@link #DIVE_MARGIN}): до конца захода прямую не мерить — иначе снаряд, довернув нос, вернулся бы в набор. */
+        /**
+         * Атака уже вынужденная ({@link #DIVE_MARGIN}): до конца захода прямую не мерить — иначе снаряд, довернув нос,
+         * вернулся бы в набор. Не сохраняется: после загрузки посреди такого пике ракета несколько тиков тянет в горку,
+         * пока путь доворота снова не станет вынужденным.
+         */
         private boolean committed;
         /** Сколько тиков не мерить прямую заново (не сохраняется: после загрузки — замер сразу). */
         private int wait;
@@ -129,7 +132,7 @@ public final class Autopilot {
          */
         public boolean masked(Craft c, Vec3 aim, Bearing toAim, double margin, double rate, double accel) {
             if (committed) return false;
-            if (toAim.distance() <= turnDistance(c, aim, rate, accel) * DIVE_MARGIN) {
+            if (toAim.distance() <= turnDistance(c, aim, toAim, rate, accel) * DIVE_MARGIN) {
                 committed = true;
                 return false;
             }
@@ -140,6 +143,11 @@ public final class Autopilot {
             blocked = c.clearAlong(aim, margin) != Double.POSITIVE_INFINITY;
             wait = SIGHT_RECHECK - 1;
             return blocked;
+        }
+
+        /** Атака вынужденная, а прямая при последнем замере была закрыта: в атаку идти сейчас же. */
+        public boolean forced() {
+            return committed && blocked;
         }
 
         /** Вне захода или новая цель: следующий заход меряет прямую сразу. */
