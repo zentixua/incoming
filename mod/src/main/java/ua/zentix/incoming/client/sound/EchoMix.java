@@ -16,7 +16,8 @@ import java.util.SplittableRandom;
  * задержкой и фазой, и от грани приходит не копия удара, а шум, растянутый на разброс пути через грань
  * ({@link TerrainEcho.Reflection#spread}). Его модель — бархатный шум (H. Järveläinen, M. Karjalainen, «Reverberation
  * modeling using velvet noise», AES 30th Conf., 2007): импульсы случайного знака в случайных местах, {@link #DENSITY}
- * в секунду, энергия грани поровну; грань уже {@code 1/DENSITY} — один импульс. Задержки — точные, до отсчёта: сетка
+ * в секунду (после фильтра воздуха — не гуще 2·срез: чаще неотличимо от сплошного шума), энергия грани поровну;
+ * грань уже одного шага — один импульс. Задержки — точные, до отсчёта: сетка
  * задержек (раньше окна по 10 мс) делала из копий одного зерна периодический ряд, гребёнку с тоном 100 Гц и
  * гармониками («дуга» в эхе 3.5.0, проба P 21.10.2026: выступы 100–600 Гц до 32 дБ над соседними частотами). Свёртка
  * — через БПФ.
@@ -35,6 +36,11 @@ public final class EchoMix {
      * (Järveläinen, Karjalainen 2007).
      */
     static final double DENSITY = 2000;
+    /**
+     * Импульсов на всё эхо не больше (производительность: память и время сведения в фоне). Ядерка над холмами набирает
+     * миллионы (грань в 96 блоков вдали — полсекунды разброса); сверх бюджета каждая грань реже поровну.
+     */
+    static final int PULSE_BUDGET = 400_000;
     static final double MAX_SECONDS = 30;
     /** Наибольший отсчёт дорожки (без перегруза при записи в 16 бит). */
     static final double PEAK = 0.98;
@@ -109,22 +115,26 @@ public final class EchoMix {
         double width = 2 * Math.PI / SECTORS;
         double sumE = 0, sumT = 0, sumT2 = 0;
         int taps = 0;
+        // импульсов на грань: по разбросу; после фильтра воздуха гуще 2·срез в секунду — тот же сплошной шум
+        double want = 0;
+        for (TerrainEcho.Reflection r : reflections) want += pulses(r, 1);
+        double thin = Math.min(1, PULSE_BUDGET / Math.max(1, want));
         for (TerrainEcho.Reflection r : reflections) {
             double seconds = r.delay() / 20;
-            if (seconds >= MAX_SECONDS || !(r.energy() > 0)) continue;
+            if (!(seconds < MAX_SECONDS) || !(r.energy() > 0)) continue;
             int variant = variant(r.extraPath());
             double a = wrap(r.azimuth()) / width;
             int k0 = (int) Math.floor(a) % SECTORS, k1 = (k0 + 1) % SECTORS;
             double f = a - Math.floor(a);
             double c = Math.cos(f * Math.PI / 2), s = Math.sin(f * Math.PI / 2);
             // грань: импульсы по её разбросу прихода, знаки и места — от места грани (тот же рельеф — то же эхо)
-            double span = Math.max(0, r.spread()) / 20;
-            int n = Math.max(1, (int) Math.ceil(span * DENSITY));
+            double span = span(r), early = Double.isFinite(r.early()) ? r.early() / 20 : seconds;
+            int n = pulses(r, thin);
             SplittableRandom rnd = new SplittableRandom(Double.doubleToLongBits(r.x()) * 31 + Double.doubleToLongBits(r.z()) * 17
                     + Double.doubleToLongBits(r.y()));
             double amp = Math.sqrt(r.energy() / n);
             for (int i = 0; i < n; i++) {
-                double t = n == 1 ? seconds : seconds + (rnd.nextDouble() - 0.5) * span;
+                double t = n == 1 ? seconds : early + rnd.nextDouble() * span;
                 double p = n == 1 ? amp : rnd.nextBoolean() ? amp : -amp;
                 long at = Math.round(Math.max(0, t) * RATE);
                 if (c > 1e-6) side(sides, k0).add(at, p * c, variant);
@@ -170,6 +180,19 @@ public final class EchoMix {
         // хвост гаснет за время, за которое приходит основная масса отражений
         double t60 = Math.max(1.5, Math.min(8, 1 + mean + 2 * spread));
         return new Mix(List.copyOf(tracks), t60, taps);
+    }
+
+    /** Разброс прихода грани, с (не больше длины дорожки; без разброса — 0). */
+    private static double span(TerrainEcho.Reflection r) {
+        double s = r.spread() / 20;
+        return s > 0 ? Math.min(MAX_SECONDS, s) : 0;
+    }
+
+    /** Импульсов у грани: по разбросу и плотности её копии зерна, реже в {@code thin} раз, не меньше одного. */
+    private static int pulses(TerrainEcho.Reflection r, double thin) {
+        int v = variant(r.extraPath());
+        double density = CUTOFF[v] > 0 ? Math.min(DENSITY, 2 * CUTOFF[v]) : DENSITY;
+        return Math.max(1, (int) Math.ceil(span(r) * density * thin));
     }
 
     private static Pulses side(Pulses[] sides, int k) {

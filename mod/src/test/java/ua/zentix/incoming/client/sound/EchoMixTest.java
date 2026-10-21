@@ -23,7 +23,7 @@ class EchoMixTest {
     }
 
     private static TerrainEcho.Reflection echo(double azimuth, double delayTicks, double energy, double extraPath) {
-        return new TerrainEcho.Reflection(delayTicks, 0, azimuth, azimuth, delayTicks, energy, extraPath, 100, 0);
+        return new TerrainEcho.Reflection(delayTicks, 0, azimuth, azimuth, delayTicks, energy, extraPath, 100, delayTicks, 0);
     }
 
     private static int peakAt(short[] pcm) {
@@ -69,7 +69,7 @@ class EchoMixTest {
     @Test
     void manyLoudEchoesAreScaledNotClipped() {
         List<TerrainEcho.Reflection> list = new java.util.ArrayList<>();
-        for (int i = 0; i < 40; i++) list.add(new TerrainEcho.Reflection(i, 0, 0, 0, 10, 0.5, 100, 100, 0));
+        for (int i = 0; i < 40; i++) list.add(new TerrainEcho.Reflection(i, 0, 0, 0, 10, 0.5, 100, 100, 10, 0));
         EchoMix.Track t = EchoMix.render(click(), list).tracks().get(0);
         int peak = 0;
         for (short s : t.pcm()) peak = Math.max(peak, Math.abs(s));
@@ -125,8 +125,8 @@ class EchoMixTest {
     @Test
     void wideFacetSpreadsItsEnergyOverItsArrivals() {
         // грань с разбросом прихода 0,1 с (2 тика): импульсы по всему разбросу, энергия та же, что у узкой
-        EchoMix.Track t = EchoMix.render(click(), List.of(new TerrainEcho.Reflection(300, 70, 20, 0, 40, 0.2, 100, 300, 2))).tracks().get(0);
-        assertEquals(40 - 1, t.start(), 0.05, "начало — край разброса");
+        EchoMix.Track t = EchoMix.render(click(), List.of(new TerrainEcho.Reflection(300, 70, 20, 0, 40, 0.2, 100, 300, 39, 2))).tracks().get(0);
+        assertEquals(39, t.start(), 0.05, "начало — самый ранний приход через грань");
         float[] g = click();
         double e = 0, ref = 0;
         for (float x : g) ref += x * x;
@@ -165,7 +165,7 @@ class EchoMixTest {
         assertTrue(comb < 0.1, "гребёнка эха рельефа: " + comb);
         // та же мера ловит сетку задержек: копии через 10 мс
         List<TerrainEcho.Reflection> grid = new java.util.ArrayList<>();
-        for (int i = 0; i < 100; i++) grid.add(new TerrainEcho.Reflection(i, 0, 0, 0, 40 + i * 0.2, 0.01 * Math.exp(-i / 30.0), 100, 300, 0));
+        for (int i = 0; i < 100; i++) grid.add(new TerrainEcho.Reflection(i, 0, 0, 0, 40 + i * 0.2, 0.01 * Math.exp(-i / 30.0), 100, 300, 40 + i * 0.2, 0));
         assertTrue(comb(EchoMix.render(white(), grid)) > 0.3, "сетка задержек — гребёнка");
     }
 

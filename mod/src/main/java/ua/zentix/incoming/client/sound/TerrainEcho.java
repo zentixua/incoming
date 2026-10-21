@@ -74,11 +74,12 @@ public final class TerrainEcho {
      * @param energy    энергия против прямого удара (с подъёмом {@link #LIFT_DB}, не больше {@link #CAP_DB})
      * @param extraPath на сколько блоков путь через склон длиннее прямого — воздух съедает верха
      * @param distance  от уха до склона, блоков
+     * @param early     самый ранний приход через грань, тиков после прямого удара
      * @param spread    разброс прихода по грани, тиков: склон отражает всей площадью, и путь через её ближний и дальний
-     *                  край, левый и правый разный — эхо от грани растянуто на столько ({@link EchoMix})
+     *                  край, левый и правый разный — эхо от грани идёт от {@code early} столько ({@link EchoMix})
      */
     public record Reflection(double x, double y, double z, double azimuth, double delay, double energy, double extraPath, double distance,
-                             double spread) {
+                             double early, double spread) {
         /** Громкость (амплитуда) против прямого удара. */
         public double gain() {
             return Math.sqrt(energy);
@@ -156,7 +157,7 @@ public final class TerrainEcho {
                 lo = Math.min(lo, d);
                 hi = Math.max(hi, d);
             }
-            out.add(new Reflection(x, top, z, phi, delay, Math.pow(10, db / 10), r1 + r2 - re, r2, hi - lo));
+            out.add(new Reflection(x, top, z, phi, delay, Math.pow(10, db / 10), r1 + r2 - re, r2, lo, hi - lo));
         }
     }
 

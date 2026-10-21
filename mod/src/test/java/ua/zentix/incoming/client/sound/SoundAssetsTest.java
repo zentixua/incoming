@@ -98,8 +98,8 @@ class SoundAssetsTest {
             EchoMix.fft(re, im, false);
             for (int i = 0; i < n / 2; i++) power[i] += re[i] * re[i] + im[i] * im[i];
         }
-        int best = 0;
-        for (int i = (int) (40.0 * n / rate); i < (int) (1200.0 * n / rate); i++) if (power[i] > power[best]) best = i;
+        int lo = (int) (40.0 * n / rate), best = lo;
+        for (int i = lo; i < (int) (1200.0 * n / rate); i++) if (power[i] > power[best]) best = i;
         double shaft = WeaponSpec.DRONE_PISTON.rpm() / 60;
         assertEquals(shaft, best * (double) rate / n, shaft * 0.03, "самый сильный тон петли — вал");
     }
