@@ -21,8 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class InterceptorFlightTest {
     private static final InterceptorSpec SPEC = InterceptorSpec.SAM;
-    /** Настройки мира по умолчанию ({@code air_defense}). */
-    private static final double RADAR = 3000, ENGAGE = 1500;
+    /** Дальности радара и огня ЗРК (паспорт). */
+    private static final double RADAR = SPEC.radarRange(), ENGAGE = SPEC.engageRange();
     /** Середина контейнера ракеты у ЗРК на блоке (0, 64, 0) — {@code SamBlockEntity.rail}. */
     private static final Vec3 RAIL = new Vec3(0.5 - 0.33, 64 + 3.25, 0.5 - 0.33);
     private static final double ALTITUDE = 100;
@@ -202,6 +202,26 @@ class InterceptorFlightTest {
     }
 
     /**
+     * Взрыватель рвёт ракету в момент ближайшего сближения: вошла в радиус, но ещё сближается — ждёт следующего тика
+     * и рвётся там, где ближе всего; пролёт дальше радиуса — не разрыв (броска кубика нет, цель летит дальше).
+     */
+    @Test
+    void fuzeFiresAtClosestApproachWithinRadius() {
+        Interceptor f = new Interceptor(SPEC, UUID.randomUUID(), null, "тест", RAIL, new Vec3(1, 0, 0));
+        // за направляющей взрыватель взведён
+        for (int i = 1; i <= SPEC.railTicks() + 1; i++) f.moveTo(f.steer(RAIL.add(1000, 0, 0)));
+        Vec3 p0 = f.position(), step = new Vec3(14, 0, 0);
+        Vec3 near = p0.add(16, 3, 0), wide = p0.add(16, SPEC.fuse() + 2, 0);
+        // конец тика — в 3,6 блока от цели, но сближение ещё идёт: ждать
+        assertEquals(-1, f.fuze(p0.add(step), near, near, 0), 0);
+        assertEquals(-1, f.fuze(p0.add(step), wide, wide, 0), 0);
+        f.moveTo(p0.add(step));
+        double s = f.fuze(p0.add(step).add(step), near, near, 0);
+        assertEquals(2.0 / 14, s, 1e-9, "разрыв — в ближайшей точке, в 3 блоках от цели");
+        assertEquals(-1, f.fuze(p0.add(step).add(step), wide, wide, 0), 0, "пролёт дальше радиуса взрывателя — не разрыв");
+    }
+
+    /**
      * Сход: ракета ЗРК — отвесно из контейнера, ракета с наклонной направляющей — вверх под её углом в сторону цели;
      * первые тики курс не меняется, на разгоне скорость растёт.
      */
@@ -210,7 +230,7 @@ class InterceptorFlightTest {
         Vec3 target = RAIL.add(-800, 50, 600);
         Vec3 dir = Interceptor.railDirection(RAIL, target, SPEC);
         assertEquals(0, dir.subtract(0, 1, 0).length(), 1e-9, "ЗРК пускает отвесно");
-        InterceptorSpec inclined = new InterceptorSpec(SPEC.railTicks(), 65, SPEC.launchSpeed(), SPEC.boostTicks(), SPEC.boostAccel(),
+        InterceptorSpec inclined = new InterceptorSpec(SPEC.radarRange(), SPEC.engageRange(), SPEC.railTicks(), 65, SPEC.launchSpeed(), SPEC.boostTicks(), SPEC.boostAccel(),
                 SPEC.maxSpeed(), SPEC.lateralG(), SPEC.fuelTicks(), SPEC.fuse(), SPEC.noseLength(), SPEC.passport());
         Vec3 slant = Interceptor.railDirection(RAIL, target, inclined);
         assertEquals(65, Math.toDegrees(Math.asin(slant.y)), 1e-9);

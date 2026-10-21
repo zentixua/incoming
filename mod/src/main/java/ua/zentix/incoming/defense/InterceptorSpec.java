@@ -4,11 +4,16 @@ import ua.zentix.incoming.guidance.Ballistics;
 import ua.zentix.incoming.strike.Article;
 
 /**
- * Паспорт зенитной ракеты: числа её полёта и изделие по ТТХ ({@link Passport}, 9М96). Числа полёта — игровые, не по
- * физике: ракета медленнее настоящей, чтобы полёт было видно; настоящие — в {@link #passport}, их берёт полёт по
- * физике (шаг ПВО). Дальности радара и огня, вероятность поражения, число направляющих и перезарядка — пока настройки
- * мира ({@code air_defense}).
+ * Паспорт ЗРК: дальности его радара и огня, числа полёта его ракеты и изделие по ТТХ ({@link Passport}, 9М96).
+ * ПВО — своя игровая модель (решение Артёма 21.10): дальности, полёт и взрыватель — игровые числа, не по физике,
+ * подобраны под масштаб игры (сотни блоков видно, ракета медленнее настоящей, чтобы полёт было видно), а не данные
+ * настоящего комплекса. Вероятности поражения нет: сбита цель, если ракета разорвалась у неё в радиусе взрывателя
+ * ({@link Interceptor}). Число направляющих и перезарядка — правила мира ({@code air_defense}).
  *
+ * @param radarRange  дальность радара, блоков (игровая): дальше снарядов не видно, малозаметные — ближе, по их
+ *                    паспорту ({@code WeaponSpec.Signature.visibility}); холм или дом между радаром и целью её
+ *                    закрывают ({@link Radar})
+ * @param engageRange дальность огня, блоков (игровая): по цели ближе неё ЗРК пускает ракету
  * @param railTicks   первые тики после схода нос держит угол направляющей и на цель не доворачивает
  * @param elevation   угол направляющей над горизонтом, градусов: ракета уходит вверх в сторону цели (90 — отвесно)
  * @param launchSpeed скорость схода, блоков/тик
@@ -22,7 +27,7 @@ import ua.zentix.incoming.strike.Article;
  * @param noseLength  полудлина корпуса, блоков (модель и срез сопла — {@code client.render.InterceptorRenderer})
  * @param passport    изделие по ТТХ
  */
-public record InterceptorSpec(int railTicks, double elevation, double launchSpeed, int boostTicks, double boostAccel, double maxSpeed,
+public record InterceptorSpec(double radarRange, double engageRange, int railTicks, double elevation, double launchSpeed, int boostTicks, double boostAccel, double maxSpeed,
                               double lateralG, int fuelTicks, double fuse, double noseLength, Passport passport) {
     /**
      * Зенитная ракета по ТТХ. Единицы — СИ; «О» — оценка, выведенная законом из других чисел, с диапазоном.
@@ -68,9 +73,13 @@ public record InterceptorSpec(int railTicks, double elevation, double launchSpee
      * (FAS, «S-400 SA-20 Triumf», https://nuke.fas.org/guide/russia/airdef/s-400.htm), у земли воздух плотнее и манёвр
      * круче. Число — предел игры: с 30 g ракета не догоняет шахед, который к пуску уже над ЗРК и пикирует за ним в цель
      * ({@code InterceptorFlightTest.catchesDivingTargetOverhead}). После схода (3 блока/тик) — поворот ~18°/тик, из отвеса
-     * к цели у горизонта — дугой ~0,3 с; на полной скорости — 4°/тик (радиус ~200 блоков). Взрыватель — 6 блоков: шахед на 2 блоках/тик она проходит за тик с запасом.
+     * к цели у горизонта — дугой ~0,3 с; на полной скорости — 4°/тик (радиус ~200 блоков). Взрыватель — 6 блоков (игровое):
+     * шахед на 2 блоках/тик она проходит за тик с запасом. Радар — 3000 блоков, огонь — 1500 (игровые, не по физике:
+     * у настоящего комплекса — десятки и сотни километров, в игре столько не видно; бывшие настройки мира
+     * {@code radar_range} и {@code engage_range} с этими значениями по умолчанию): шахед с края дальности огня летит
+     * к ЗРК больше 30 с, ракета навстречу — 5–6 с.
      */
-    public static final InterceptorSpec SAM = new InterceptorSpec(5, 90, 0.8, 30, 0.45, 14, 40, 300, 6, 2.0, M96);
+    public static final InterceptorSpec SAM = new InterceptorSpec(3000, 1500, 5, 90, 0.8, 30, 0.45, 14, 40, 300, 6, 2.0, M96);
 
     /**
      * Предел поворота за тик на скорости {@code speed}, °: боковое ускорение у ракеты одно (a = v·ω, ω = a / v), поэтому

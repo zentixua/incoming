@@ -9,6 +9,7 @@ import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.target.Sides;
+import ua.zentix.incoming.util.LineOfSight;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -17,10 +18,13 @@ import java.util.UUID;
 
 /**
  * Радар: какие снаряды мода видно из точки и чьи они. Смотрит только список снарядов мира ({@link StrikeWorld#projectiles}:
- * в мире и вне его) — мир не обходит, блоков и чанков не читает, поэтому одинаково видит и снаряд в загруженных
- * чанках, и летящий вне мира. Игроков, мобов и аппараты Create Aeronautics радар не видит: только снаряды мода.
+ * в мире и вне его) — мир не обходит, поэтому одинаково видит и снаряд в загруженных чанках, и летящий вне мира.
+ * Игроков, мобов и аппараты Create Aeronautics радар не видит: только снаряды мода.
  * <p>
- * С какой дальности снаряд видно и стоит ли он ракеты — его паспорт ({@link WeaponSpec.Signature}): B-2 малозаметен,
+ * Своя игровая модель (не по физике): видно снаряд ближе дальности радара (у малозаметного — ближе, по его паспорту
+ * {@link WeaponSpec.Signature}), если между антенной и ним прямую не закрывают земля и постройки
+ * ({@link LineOfSight}: карты высот только готовых чанков, неготовый чанк прямую не закрывает — чанков радар не
+ * грузит). Ракета на бреющем за холмом не видна, пока не выйдет из-за него. Стоит ли снаряд ракеты — тоже паспорт:
  * МБР не догнать, «Град» не стоит ракеты. Свои — тот же игрок или его команда ({@link Sides}); снаряд без владельца
  * (консоль, командный блок) — чужой. Огонь — отдельно ({@link FireControl}): тот же радар возьмёт и переносной ЗРК.
  */
@@ -53,7 +57,7 @@ public final class Radar {
     }
 
     /**
-     * Что видит радар в точке {@code at}, от ближних к дальним.
+     * Что видит радар в точке {@code at}, от ближних к дальним: ближе дальности и не за рельефом.
      *
      * @param range       дальность радара, блоков (малозаметные — ближе, по паспорту)
      * @param engageRange дальность огня, блоков
@@ -70,6 +74,7 @@ public final class Radar {
             WeaponSpec.Signature sig = p.airframe().radar();
             double d = Math.sqrt(d2);
             if (d > range * sig.visibility()) continue;
+            if (!LineOfSight.clear(level, at, p.position())) continue;
             boolean hostile = !Sides.friendly(server, owner, p.ownerId());
             // снаряд с седоком — не цель: ракета ЗРК не идёт за тем, на ком кто-то сидит
             boolean engageable = hostile && sig.intercept() && !p.isVehicle() && d <= engageRange;

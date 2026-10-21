@@ -14,12 +14,26 @@ public final class GridWalk {
         boolean visit(int x, int z);
     }
 
+    /** Клетка (x, z) и доли отрезка {@code t0..t1}, на которых он в ней: продолжать ли обход. */
+    @FunctionalInterface
+    public interface SpanVisitor {
+        boolean visit(int x, int z, double t0, double t1);
+    }
+
     /**
      * Обходит клетки размера {@code cell} от начала отрезка к концу.
      *
      * @return доля отрезка (0..1), на которой он входит в клетку, где {@code visitor} остановил обход; 1 — обойдены все
      */
     public static double walk(double fromX, double fromZ, double toX, double toZ, double cell, Visitor visitor) {
+        return walk(fromX, fromZ, toX, toZ, cell, (SpanVisitor) (x, z, t0, t1) -> visitor.visit(x, z));
+    }
+
+    /**
+     * То же, что {@link #walk(double, double, double, double, double, Visitor)}, но клетке говорят, на какой доле
+     * отрезка он в ней: от входа до выхода (у последней клетки выход — 1).
+     */
+    public static double walk(double fromX, double fromZ, double toX, double toZ, double cell, SpanVisitor visitor) {
         double dx = toX - fromX, dz = toZ - fromZ;
         int cx = cell(fromX, cell), cz = cell(fromZ, cell);
         int endX = cell(toX, cell), endZ = cell(toZ, cell);
@@ -31,8 +45,9 @@ public final class GridWalk {
         double tDeltaZ = dz == 0 ? Double.POSITIVE_INFINITY : cell / Math.abs(dz);
         double t = 0;
         while (true) {
-            if (!visitor.visit(cx, cz)) return t;
-            if (cx == endX && cz == endZ) return 1;
+            boolean last = cx == endX && cz == endZ;
+            if (!visitor.visit(cx, cz, t, last ? 1 : Math.min(1, Math.min(tMaxX, tMaxZ)))) return t;
+            if (last) return 1;
             if (tMaxX < tMaxZ) {
                 t = tMaxX;
                 tMaxX += tDeltaX;

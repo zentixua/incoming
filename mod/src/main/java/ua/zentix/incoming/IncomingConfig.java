@@ -116,9 +116,6 @@ public final class IncomingConfig {
 
         public final ModConfigSpec.IntValue farRange;
 
-        public final ModConfigSpec.IntValue samRadarRange;
-        public final ModConfigSpec.IntValue samEngageRange;
-        public final ModConfigSpec.DoubleValue samKillProbability;
         public final ModConfigSpec.IntValue samRails;
         public final ModConfigSpec.IntValue samReloadSeconds;
 
@@ -287,14 +284,6 @@ public final class IncomingConfig {
             b.pop();
 
             b.translation("incoming.config.air_defense").push("air_defense");
-            samRadarRange = b.comment("SAM radar range, blocks. Stealthy targets (B-2, low-flying cruise missile, Lancet) are detected closer.",
-                            "The owner's side gets an alert for every new hostile target on the radar.")
-                    .translation("incoming.config.sam_radar_range").defineInRange("radar_range", 3000, 64, 16_000);
-            samEngageRange = b.comment("SAM engagement range, blocks: within it the SAM fires at hostile Shaheds, cruise missiles, Lancets and B-2s",
-                            "(it does not intercept ICBMs or Grad rockets).")
-                    .translation("incoming.config.sam_engage_range").defineInRange("engage_range", 1500, 32, 8000);
-            samKillProbability = b.comment("Chance that an interceptor bursting near its target brings it down (0–1). On a miss the target flies on.")
-                    .translation("incoming.config.sam_kill_probability").defineInRange("kill_probability", 0.8, 0.0, 1.0);
             samRails = b.comment("How many missiles stand on the SAM rails ready to fire.")
                     .translation("incoming.config.sam_rails").defineInRange("rails", 4, 1, 16);
             samReloadSeconds = b.comment("Seconds to put the next missile from the SAM stock on a free rail.")

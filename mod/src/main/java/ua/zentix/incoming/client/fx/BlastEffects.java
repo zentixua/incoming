@@ -20,6 +20,7 @@ import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.sound.BlastEchoes;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.OwnSources;
+import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.net.S2C;
 import net.minecraft.world.level.block.state.BlockState;
 import ua.zentix.incoming.nuclear.model.BlackBody;
@@ -420,11 +421,8 @@ public final class BlastEffects {
     static final class Airburst extends Timeline {
         /** Радиус клуба огня, блоки (осколочно-фугасная часть ~20 кг). */
         static final float R = 2.5f;
-        /**
-         * Заряд разрыва, кг ТНТ — для звука, слуха и удара по телу. Оценка сверху: вся боевая часть ~20 кг, хотя ВВ в
-         * осколочной части — её доля (зенитной ракеты в паспорте нет).
-         */
-        static final double CHARGE_KG = 20;
+        /** Заряд разрыва, кг ТНТ — для звука, слуха и удара по телу: боевая часть ракеты ЗРК по её паспорту. */
+        static final double CHARGE_KG = InterceptorSpec.SAM.passport().warhead().tnt();
         static final double FLASH_NEAR = 3 * R, FLASH_RANGE = 160;
         private final boolean kill;
 
