@@ -31,18 +31,23 @@ public final class S2C {
      * Взрыв: вид (0 — шахед, 1 — ракета, 2 — бомба под землёй, 3 — снаряд РСЗО — как взрыв происходит), грунт, высота
      * поверхности над точкой, сид, снаряд, который взорвался (его путь у клиента кончается в этот тик, и мотор звучит,
      * пока до уха не дойдёт фронт взрыва, а не стихает раньше), и оружие ({@code WeaponType.id}): заряд и топливо —
-     * в его паспорте, клиент берёт их оттуда ({@code client.fx.BlastSource}).
+     * в его паспорте, клиент берёт их оттуда ({@code client.fx.BlastSource}); ось боевой части (курс снаряда у удара,
+     * единичный вектор): по ней и сиду клиент разлетает те же осколки, что сервер ({@code warhead.FragmentModel}).
      * <p>
-     * Формат только растёт с конца (replay.md): оружие дописано в конец; в повторе, записанном до него, его нет
+     * Формат только растёт с конца (replay.md): оружие и ось дописаны в конец; в повторе, записанном до него, его нет
      * ({@link #NO_WEAPON}) — оно выводится из вида, как вид тогда и выбирали ({@link #weaponType}).
      */
-    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) implements CustomPacketPayload {
+    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis)
+            implements CustomPacketPayload {
         public static final int DRONE = 0, MISSILE = 1, BUNKER = 2, ROCKET = 3;
         /** Оружия в пакете нет (повтор, записанный до этого поля). */
         public static final int NO_WEAPON = -1;
         public static final Type<Blast> TYPE = new Type<>(Incoming.id("blast"));
         private static final StreamCodec<ByteBuf, Optional<UUID>> PROJECTILE = ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC);
         private static final StreamCodec<ByteBuf, Integer> WEAPON = StreamCodecs.trailing(ByteBufCodecs.VAR_INT, NO_WEAPON);
+        /** Ось боевой части — вниз, если её нет в пакете (повтор, записанный до этого поля). */
+        public static final Vec3 DOWN = new Vec3(0, -1, 0);
+        private static final StreamCodec<ByteBuf, Vec3> AXIS = StreamCodecs.trailing(StreamCodecs.VEC3, DOWN);
         public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.of((b, p) -> {
             ByteBufCodecs.VAR_INT.encode(b, p.kind);
             StreamCodecs.VEC3.encode(b, p.pos);
@@ -51,8 +56,14 @@ public final class S2C {
             ByteBufCodecs.VAR_LONG.encode(b, p.seed);
             PROJECTILE.encode(b, p.projectile);
             WEAPON.encode(b, p.weapon);
+            AXIS.encode(b, p.axis);
         }, b -> new Blast(ByteBufCodecs.VAR_INT.decode(b), StreamCodecs.VEC3.decode(b), ByteBufCodecs.VAR_INT.decode(b),
-                ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b)));
+                ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b), AXIS.decode(b)));
+
+        /** Взрыв без оси боевой части (бомба, картинка после ядерки): ось вниз. */
+        public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) {
+            this(kind, pos, material, surfaceY, seed, projectile, weapon, DOWN);
+        }
 
         /**
          * Оружие, которое взорвалось. Нет в пакете ({@link #NO_WEAPON}) — по виду, как его выбирал сервер до этого поля

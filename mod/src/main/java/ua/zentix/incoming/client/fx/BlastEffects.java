@@ -50,10 +50,10 @@ public final class BlastEffects {
             GroundMaterial mat = GroundMaterial.byId(p.material());
             if (cloud == null && p.kind() != S2C.Blast.BUNKER) cloud = FarBlasts.model(p);
             switch (p.kind()) {
-                case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), cloud));
+                case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), p.axis(), cloud));
                 case S2C.Blast.BUNKER -> Effects.add(new Bunker(p.pos(), mat, p.surfaceY(), p.seed()));
-                case S2C.Blast.ROCKET -> Effects.add(new Drone(p.pos(), mat, p.seed(), true, cloud));
-                default -> Effects.add(new Drone(p.pos(), mat, p.seed(), false, cloud));
+                case S2C.Blast.ROCKET -> Effects.add(new Drone(p.pos(), mat, p.seed(), p.axis(), true, cloud));
+                default -> Effects.add(new Drone(p.pos(), mat, p.seed(), p.axis(), false, cloud));
             }
         }
     }
@@ -297,6 +297,27 @@ public final class BlastEffects {
         }
     }
 
+    /** Удары осколков взрыва ({@link FragmentHits}): лучи — в тик взрыва, удары — в тик прилёта каждого. */
+    static final class FragmentQueue {
+        private final Vec3 pos, axis;
+        private final long seed;
+        private final BlastSource source;
+        private java.util.List<FragmentHits.Hit> hits;
+        private int next;
+
+        FragmentQueue(Vec3 pos, Vec3 axis, long seed, BlastSource source) {
+            this.pos = pos;
+            this.axis = axis;
+            this.seed = seed;
+            this.source = source;
+        }
+
+        void tick(ClientLevel level, int t, RandomSource random) {
+            if (hits == null) hits = FragmentHits.of(level, source.weapon(), pos, axis, seed);
+            while (next < hits.size() && hits.get(next).tick() <= t) FragmentHits.show(level, hits.get(next++), random);
+        }
+    }
+
     // ================================================================ шахед, «Ланцет», «Град» (fx)
 
     static final class Drone extends Timeline {
@@ -304,11 +325,13 @@ public final class BlastEffects {
         private final CloudModel model;
         /** Снаряд РСЗО: звук свой — сухой разрыв. */
         private final boolean rocket;
+        private final FragmentQueue fragments;
 
-        Drone(Vec3 pos, GroundMaterial mat, long seed, boolean rocket, CloudModel model) {
+        Drone(Vec3 pos, GroundMaterial mat, long seed, Vec3 axis, boolean rocket, CloudModel model) {
             super(pos, mat, seed, model.source);
             this.rocket = rocket;
             this.model = model;
+            this.fragments = new FragmentQueue(pos, axis, seed, model.source);
         }
 
         /** Радиус огненного шара модели, блоки: по нему осколки, искры и языки пламени. */
@@ -318,9 +341,10 @@ public final class BlastEffects {
 
         @Override
         boolean run(ClientLevel level, int t) {
+            fragments.tick(level, t, random);
             if (t == 0) {
                 flash(level, model);
-                Explosions.solids(level, pos, radius(), random);
+                Explosions.solids(level, pos, radius(), model.source.fuelKg() > 0, random);
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 2, 1, 2, 0, 30);
                 return true;
             }
@@ -382,9 +406,12 @@ public final class BlastEffects {
         /** Облако по модели: вспышка, размер шара, сколько горит топливо. */
         private final CloudModel model;
 
-        Missile(Vec3 pos, GroundMaterial mat, long seed, CloudModel model) {
+        private final FragmentQueue fragments;
+
+        Missile(Vec3 pos, GroundMaterial mat, long seed, Vec3 axis, CloudModel model) {
             super(pos, mat, seed, model.source);
             this.model = model;
+            this.fragments = new FragmentQueue(pos, axis, seed, model.source);
         }
 
         float radius() {
@@ -393,9 +420,10 @@ public final class BlastEffects {
 
         @Override
         boolean run(ClientLevel level, int t) {
+            fragments.tick(level, t, random);
             if (t == 0) {
                 flash(level, model);
-                Explosions.solids(level, pos, radius(), random);
+                Explosions.solids(level, pos, radius(), model.source.fuelKg() > 0, random);
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 4, 2, 4, 0, 80);
                 return true;
             }

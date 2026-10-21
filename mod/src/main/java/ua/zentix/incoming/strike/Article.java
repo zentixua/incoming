@@ -118,9 +118,11 @@ public record Article(double dryMass, double launchMass, double length, double d
      *
      * @param tnt       заряд в тротиловом эквиваленте, кг: волна, стёкла, воронка
      * @param explosive масса ВВ, кг (тротиловый эквивалент — она × относительная сила ВВ)
-     * @param caseMass  масса корпуса БЧ, кг: осколки
+     * @param caseMass  масса корпуса БЧ, кг: осколки ({@code warhead.FragmentModel})
+     * @param diameter  наружный диаметр корпуса БЧ, м: цилиндр ВВ в стальной оболочке — толщина стенки и длина выходят
+     *                  из масс ВВ и корпуса ({@code FragmentModel})
      */
-    public record Charge(double tnt, double explosive, double caseMass) {}
+    public record Charge(double tnt, double explosive, double caseMass, double diameter) {}
 
     /**
      * Множитель сопротивления по числу Маха f(M) для оперённых тонких тел без опубликованных продувок (О, типовая
