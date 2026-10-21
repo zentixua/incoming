@@ -66,8 +66,6 @@ public final class IncomingConfig {
         public final ModConfigSpec.BooleanValue nukeMobRadiation;
         public final ModConfigSpec.BooleanValue nukeBlackRain;
         public final ModConfigSpec.IntValue nukeFlightTime;
-        public final ModConfigSpec.IntValue nukeTimeBudgetMs;
-        public final ModConfigSpec.IntValue nukePrepMsPerTick;
         public final ModConfigSpec.BooleanValue nukeFarZone;
         public final ModConfigSpec.IntValue nukeRuinThreads;
         public final ModConfigSpec.IntValue nukeMaxFires;
@@ -82,7 +80,6 @@ public final class IncomingConfig {
         public final ModConfigSpec.IntValue gridRestoreMinutes;
         public final ModConfigSpec.IntValue gridRestoreSpread;
         public final ModConfigSpec.BooleanValue gridNuke;
-        public final ModConfigSpec.IntValue gridTimeBudgetMs;
         public final ModConfigSpec.IntValue workBudgetMs;
 
         public final ModConfigSpec.IntValue farRange;
@@ -189,13 +186,6 @@ public final class IncomingConfig {
                     .translation("incoming.config.nuke_black_rain").define("black_rain", true);
             nukeFlightTime = b.comment("ICBM flight from launch to detonation, ticks (about 30 minutes in reality). A non-operator strike takes at least 1800 (90 s of alarm).")
                     .translation("incoming.config.nuke_flight_time").defineInRange("flight_time", 1800, 200, 72_000);
-            nukeTimeBudgetMs = b.comment("Limit for nuclear destruction within the total per-tick budget (performance.work_ms_per_tick), ms (1–45).",
-                            "The default 30 keeps destruction right behind the blast front at the cost of some TPS while the wave runs;",
-                            "while the blackout has work, it keeps its grid.ms_per_tick.")
-                    .translation("incoming.config.nuke_time_budget").defineInRange("destruction_ms_per_tick", 30, 1, 45);
-            nukePrepMsPerTick = b.comment("Milliseconds of each tick the server spends on building ruins in advance while the ICBM flies (0–20).",
-                            "Ruins of the near zone are built during the flight and placed as the blast front arrives.")
-                    .translation("incoming.config.nuke_prep_budget").defineInRange("prep_ms_per_tick", 8, 0, 20);
             nukeFarZone = b.comment("When players use Distant Horizons: the heavy-damage zone that is not fully generated on disk (the edge of the explored",
                             "world) is generated in the background behind the wave (at most two 5×5 squares at a time), so the ruins are",
                             "visible from afar at once. Off: ruins appear there only when a player gets there.")
@@ -233,16 +223,15 @@ public final class IncomingConfig {
                     .translation("incoming.config.grid_restore_spread").defineInRange("restore_spread_seconds", 90, 0, 3600);
             gridNuke = b.comment("A nuclear strike cuts power within its whole damage radius.")
                     .translation("incoming.config.grid_nuke").define("nuke_blackout", true);
-            gridTimeBudgetMs = b.comment("Limit for blackout lights within the total per-tick budget (performance.work_ms_per_tick), ms (1–20).")
-                    .translation("incoming.config.grid_time_budget").defineInRange("ms_per_tick", 4, 1, 20);
             b.pop();
 
             b.translation("incoming.config.performance").push("performance");
             workBudgetMs = b.comment("At most how many milliseconds of each tick the server spends on the mod's heavy work in total (5–45):",
-                            "strike destruction, then the nuke (up to destruction_ms_per_tick), then blackout lights (up to",
-                            "their ms_per_tick). The full budget comes only from time left free in the tick: a server behind schedule",
-                            "gets 2 ms for each of the three, and 6 ms more for nuclear ruins in a player's view. More: salvo damage and",
-                            "nuclear ruins appear sooner; less: a steadier tick, craters and ruins take longer to finish.")
+                            "strike destruction first, then the nuke (building ruins ahead while an ICBM flies takes at most 4/15 of the",
+                            "budget), then blackout lights (at most 2/15; the nuke leaves them that while they have work). The full budget",
+                            "comes only from time left free in the tick: a server behind schedule gets 2 ms for each of the three, and",
+                            "6 ms more for nuclear ruins in a player's view. More: salvo damage and nuclear ruins appear sooner; less: a",
+                            "steadier tick, craters and ruins take longer to finish.")
                     .translation("incoming.config.work_budget").defineInRange("work_ms_per_tick", 30, 5, 45);
             b.pop();
 

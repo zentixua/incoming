@@ -9,7 +9,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkSchedulerTest {
     private static final long MS = 1_000_000L;
-    private static final long TOTAL = 30 * MS, GRID_CAP = 4 * MS;
+    private static final long TOTAL = 30 * MS, GRID_CAP = (long) (TOTAL * WorkScheduler.GRID_SHARE);
+
+    /**
+     * Доли полос в одном бюджете при 30 мс по умолчанию — те же мс, что были отдельными настройками (4 мс блэкаута,
+     * 8 мс подготовки руин): результат GameTest блэкаута и ядерки не меняется.
+     */
+    @Test
+    void sharesKeepTheOldLimitsAtTheDefaultBudget() {
+        assertEquals(4 * MS, GRID_CAP);
+        assertEquals(8 * MS, (long) (TOTAL * WorkScheduler.PREP_SHARE));
+    }
 
     @Test
     void impactTakesAllUnlessLowerLanesWait() {
@@ -25,18 +35,17 @@ class WorkSchedulerTest {
     }
 
     /**
-     * Волна ядерки и каскад блэкаута одновременно (считающие часы, единица 1 мс, предел ядерки 30): блэкаут получает
+     * Волна ядерки и каскад блэкаута одновременно (считающие часы, единица 1 мс): блэкаут получает
      * свои 4 мс, а не одну единицу за тик; без работы у блэкаута ядерке — весь остаток.
      */
     @Test
     void nuclearLeavesGridItsShareWhileGridWaits() {
-        long nukeCap = 30 * MS;
-        assertEquals(TOTAL, WorkScheduler.nuclearBudget(TOTAL, 0, nukeCap, 0));
-        assertEquals(26 * MS, WorkScheduler.nuclearBudget(TOTAL, 0, nukeCap, GRID_CAP));
-        assertEquals(0, WorkScheduler.nuclearBudget(TOTAL, 28 * MS, nukeCap, GRID_CAP), "попадания и запас блэкаута съели срок");
+        assertEquals(TOTAL, WorkScheduler.nuclearBudget(TOTAL, 0, 0));
+        assertEquals(26 * MS, WorkScheduler.nuclearBudget(TOTAL, 0, GRID_CAP));
+        assertEquals(0, WorkScheduler.nuclearBudget(TOTAL, 28 * MS, GRID_CAP), "попадания и запас блэкаута съели срок");
         WorkClock nuclear = WorkClock.counting(MS), grid = WorkClock.counting(MS);
         for (int tick = 0; tick < 50; tick++) {
-            nuclear.start(WorkScheduler.nuclearBudget(TOTAL, 0, nukeCap, GRID_CAP));
+            nuclear.start(WorkScheduler.nuclearBudget(TOTAL, 0, GRID_CAP));
             while (nuclear.canStart()) nuclear.end(nuclear.begin());
             grid.start(WorkScheduler.remaining(TOTAL, nuclear.usedThisTickNanos(), GRID_CAP));
             while (grid.canStart()) grid.end(grid.begin());

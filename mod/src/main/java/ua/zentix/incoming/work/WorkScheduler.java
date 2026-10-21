@@ -57,6 +57,21 @@ public final class WorkScheduler {
     static final double IMPACT_SHARE_WHEN_SHARED = 2.0 / 3.0;
 
     /**
+     * Наибольшая доля общего бюджета у блэкаута; пока у него есть работа, ядерка оставляет ему её. Блэкаут — фон: его
+     * лампы стоят ещё и света у движка освещения и пересборки секций у клиентов ({@code blockChanged}), которых часы
+     * полосы не видят, а скорость, с которой гаснут кварталы, задаёт правило мира {@code grid.cascade_speed}, а не
+     * бюджет. При бюджете по умолчанию (30 мс) — 4 мс, как было, когда предел был отдельной настройкой.
+     */
+    static final double GRID_SHARE = 2.0 / 15.0;
+
+    /**
+     * Наибольшая доля общего бюджета у подготовки руин заранее, пока МБР летит ({@code NuclearPrep}; внутри полосы
+     * ядерки): до подрыва — 90 с и больше, спешить некуда, а снимки чанков и чтения с диска в потоке сервера — та же цена
+     * тика, что у разрушений волны, которые идут сейчас. При 30 мс — 8 мс, как было отдельной настройкой.
+     */
+    public static final double PREP_SHARE = 4.0 / 15.0;
+
+    /**
      * Время полос мода по тикам сервера, нс (кольцо по номеру тика, как у ванильных {@code tickTimesNanos}): из тика
      * вычитает его подстройка фоновых потоков руин ({@link #ownNanos}). Не состояние мира — замер последних тиков,
      * каждый тик переписывается, поэтому статика.
@@ -93,6 +108,16 @@ public final class WorkScheduler {
         return IncomingConfig.SERVER.workBudgetMs.get() * 1_000_000L;
     }
 
+    /** Предел блэкаута в общем бюджете, нс ({@link #GRID_SHARE}). */
+    public static long gridCapNanos() {
+        return (long) (totalNanos() * GRID_SHARE);
+    }
+
+    /** Предел подготовки руин заранее в общем бюджете, нс ({@link #PREP_SHARE}). */
+    public static long prepCapNanos() {
+        return (long) (totalNanos() * PREP_SHARE);
+    }
+
     /**
      * Бюджет полосы попаданий: весь общий, если полосам ниже нечего делать, иначе {@link #IMPACT_SHARE_WHEN_SHARED}.
      */
@@ -101,12 +126,12 @@ public final class WorkScheduler {
     }
 
     /**
-     * Бюджет ядерки: что осталось после попаданий, не больше её предела, и за вычетом предела блэкаута, пока у него
-     * есть работа ({@code gridReserve}): иначе во время волны ядерка брала бы весь срок, а каскад блэкаута ядерки шёл бы
-     * по единице за тик вместо своих мс.
+     * Бюджет ядерки: что осталось после попаданий, за вычетом предела блэкаута, пока у него есть работа
+     * ({@code gridReserve}): иначе во время волны ядерка брала бы весь срок, а каскад блэкаута ядерки шёл бы по единице
+     * за тик вместо своей доли.
      */
-    static long nuclearBudget(long total, long usedAbove, long cap, long gridReserve) {
-        return remaining(total, usedAbove + gridReserve, cap);
+    static long nuclearBudget(long total, long usedAbove, long gridReserve) {
+        return remaining(total, usedAbove + gridReserve, total);
     }
 
     /** Бюджет полосы ниже: что осталось от общего после полос выше, не больше её предела и не меньше нуля. */
@@ -136,9 +161,8 @@ public final class WorkScheduler {
         }
 
         WorkClock nuclear = NuclearWorld.clock(server);
-        long gridCap = IncomingConfig.SERVER.gridTimeBudgetMs.get() * 1_000_000L;
-        nuclear.start(nuclearBudget(total, impact.usedThisTickNanos(), IncomingConfig.SERVER.nukeTimeBudgetMs.get() * 1_000_000L,
-                Blackouts.pending(server) ? gridCap : 0), spare, busy);
+        long gridCap = (long) (total * GRID_SHARE);
+        nuclear.start(nuclearBudget(total, impact.usedThisTickNanos(), Blackouts.pending(server) ? gridCap : 0), spare, busy);
         NuclearStrikes.work(levels, nuclear);
 
         WorkClock grid = Blackouts.clock(server);
