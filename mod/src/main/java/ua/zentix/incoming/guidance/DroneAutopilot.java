@@ -22,7 +22,6 @@ public final class DroneAutopilot {
     /** Пикирование — когда цель на столько градусов под горизонтом. */
     private static final double DIVE_PITCH = 18;
     /** Пике: предельная угловая скорость тангажа, °/тик, и её предельное ускорение, °/тик². */
-    private static final double DIVE_RATE = 4.0, DIVE_ACCEL = 0.25;
     /**
      * Пока прямая до цели закрыта, свой путь вперёд на высоте полёта проверяется на столько блоков: шахед набирает
      * высоту над самой высокой частью города, где мачты и башни надо видеть заранее: набор — не круче 15°. Полоса
@@ -52,8 +51,8 @@ public final class DroneAutopilot {
     public DroneAutopilot(WeaponSpec.Airframe air) {
         this.air = air;
         // на старте разворот мягче: скорость ещё мала
-        this.climbTurn = new Autopilot.Turn(0.08, air.climbTurnRate(), 0.12, 0.12);
-        this.cruiseTurn = new Autopilot.Turn(0.15, air.turnRate(), 0.3, 0.3);
+        this.climbTurn = Autopilot.Turn.of(0.08, air.handling().climb());
+        this.cruiseTurn = Autopilot.Turn.of(0.15, air.handling().cruise());
     }
 
     public double cruiseAlt() {
@@ -96,9 +95,9 @@ public final class DroneAutopilot {
 
         if (ph == FlightPhase.CLIMB) {
             // винт на полных оборотах, скорость после ускорителя спадает к крейсерской
-            c.setSpeed(c.speed() + (air.cruiseSpeed() - c.speed()) * 0.04);
+            c.throttle(air, air.cruiseSpeed());
             double terrain = relief.reliefAhead(c, nav, turn, air);
-            c.holdAltitude(Math.max(cruiseAlt, terrain + ABOVE_RELIEF), 0.10, 1.0, 0.12);
+            c.holdAltitude(Math.max(cruiseAlt, terrain + ABOVE_RELIEF), 0.10, air.handling(), air.handling().climb());
             if (c.phaseAge() > 60 && Math.abs(cruiseAlt - c.position().y) < 6) c.setPhase(FlightPhase.CRUISE);
         }
         // цель внутри круга разворота: пике отменяется, шахед уходит прямо, набирая высоту, и заходит снова
@@ -108,7 +107,7 @@ public final class DroneAutopilot {
         // прямая до цели — последней: луч по блокам дороже остальных условий. В пике прямую не проверяем: дуга пике лежит
         // над открытой прямой, а выход из пике у шахеда медленный (тангаж крейсера — 1,2°/тик)
         boolean window = (c.phase() == FlightPhase.CRUISE || c.phase() == FlightPhase.CLIMB) && finalLeg && b.pitch() >= DIVE_PITCH && !outOfTurn;
-        boolean masked = window && sight.masked(c, aim, b, air.reachPad(), DIVE_RATE, DIVE_ACCEL);
+        boolean masked = window && sight.masked(c, aim, b, air.reachPad(), air.handling().dive().pitchRate(), air.handling().dive().pitchAccel());
         if (!window) {
             sight.forget();
             pathWait = 0;
@@ -120,13 +119,14 @@ public final class DroneAutopilot {
         }
 
         if (c.phase() == FlightPhase.CRUISE) {
-            c.setSpeed(c.speed() + (air.cruiseSpeed() - c.speed()) * 0.05);
+            c.throttle(air, air.cruiseSpeed());
             double terrain = relief.reliefAhead(c, nav, turn, air);
             double desired = Math.max(Math.max(Math.max(terrain, obstacleTop) + ABOVE_RELIEF, cruiseAlt), aim.y + ABOVE_TARGET);
-            c.holdAltitude(desired, 0.12, 1.2, 0.15);
+            c.holdAltitude(desired, 0.12, air.handling(), air.handling().cruise());
         } else if (c.phase() == FlightPhase.TERMINAL) {
-            c.flight().arcPitch(b.pitch(), c.speed(), b.distance(), DIVE_RATE, DIVE_ACCEL);
-            c.setSpeed(Math.min(air.diveSpeed(), c.speed() + 0.04));
+            WeaponSpec.Agility dive = air.handling().dive();
+            c.flight().arcPitch(b.pitch(), c.speed(), b.distance(), dive.pitchRate(), dive.pitchAccel());
+            c.throttle(air, air.diveSpeed());
         }
         Autopilot.steer(c, outOfTurn, n, turn);
     }

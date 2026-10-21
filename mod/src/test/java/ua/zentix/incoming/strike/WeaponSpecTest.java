@@ -78,14 +78,6 @@ class WeaponSpecTest {
         return BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI), w.charge());
     }
 
-    /** Рассеивание: у РСЗО СКО — 1 % дальности, не меньше блока; управляемые бьют в саму точку. */
-    @Test
-    void dispersionIsShareOfRange() {
-        assertEquals(6, WeaponSpec.ROCKET.route().sigma(600), 1e-9);
-        assertEquals(1, WeaponSpec.ROCKET.route().sigma(40), 1e-9);
-        for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.LOITER, WeaponSpec.BUNKER)) assertEquals(0, w.route().sigma(600));
-    }
-
     /**
      * Промах: у ракеты и бомбы меньше, чем у шахеда; «Ланцет» (камера), МБР и РСЗО (у неё рассеивание) — без промаха.
      * Выборка промахов шахеда — с его СКО по каждой оси, по горизонтали.

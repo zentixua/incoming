@@ -2,6 +2,7 @@ package ua.zentix.incoming.guidance;
 
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.strike.WeaponSpec;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,7 +39,7 @@ class DiveTest {
                         double heading = circling ? t * v / 16 : 1.1;
                         vel = new Vec3(Math.cos(heading) * v, 0, Math.sin(heading) * v);
                         target = target.add(vel);
-                        Dive.steer(flight, pos, speed, target, vel);
+                        Dive.steer(flight, pos, speed, target, vel, WeaponSpec.LOITER.airframe().handling().dive());
                         speed = Math.min(4, speed + 0.1);
                         pos = pos.add(flight.forward().scale(speed));
                         closest = Math.min(closest, pos.distanceTo(target));

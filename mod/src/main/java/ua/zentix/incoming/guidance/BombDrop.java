@@ -2,23 +2,29 @@ package ua.zentix.incoming.guidance;
 
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
+import ua.zentix.incoming.strike.WeaponSpec;
+import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.util.StandardAtmosphere;
 
 /**
- * Падение бетонобойной бомбы после сброса: нос по дуге на точку, разгон до {@link #MAX_SPEED}. Одни и те же шаги
+ * Падение бетонобойной бомбы после сброса: рули ведут нос по дуге на точку, скорость — от тяжести вдоль пути и
+ * сопротивления воздуха ({@link WeaponSpec.Ballistic} бомбы в паспорте), ветер сносит. Одни и те же шаги
  * у самой бомбы и у B-2, который перед сбросом проигрывает её падение ({@link #miss}): попадёт ли бомба, сброшенная
  * сейчас, с этой высоты и дальности.
  */
 public final class BombDrop {
-    /** Скорость и тангаж в момент сброса: 6 блоков/тик, нос на 10° вниз. */
+    /**
+     * Скорость и тангаж в момент сброса: 6 блоков/тик, нос на 10° вниз. Скорость — игровая, не по физике: носитель идёт
+     * 12 блоков/тик, и сброшенная бомба шла бы с его скоростью.
+     */
     public static final double DROP_SPEED = 6, DROP_PITCH = 10;
-    public static final double MAX_SPEED = 12.5, ACCEL = 0.3;
     /** Бомба ниже B-2 на столько (отделяется от брюха). */
     public static final double DROP_BELOW = 4;
     /** Запас дальности подрыва сверх шага: бомба ближе шага и этого запаса к точке — попала в неё. */
     public static final double REACH_PAD = 5.3;
     /** Длина носа: за тик бомба ищет преграду от середины носа до его конца после шага (как все снаряды). */
     public static final double NOSE = 3.1;
-    /** Край окна сброса по курсу — не дальше высоты над точкой и этого (с 20 до 490 блоков над точкой он не дальше высоты + 20). */
+    /** Край окна сброса по курсу — не дальше высоты над точкой и этого. */
     public static final double EDGE_REACH = 30;
     /** Земля выше точки на столько: B-2 целит в середину верхнего блока, бомба бьётся о его верх. */
     public static final double GROUND_ABOVE_AIM = 0.5;
@@ -38,7 +44,10 @@ public final class BombDrop {
         return Math.abs(Mth.wrapDegrees(FlightController.anglesTo(pos, aim)[0] - yaw)) >= 90;
     }
 
-    /** Шаг наведения падающей бомбы: повернуть нос; возвращает скорость на этом тике. */
+    /**
+     * Шаг наведения падающей бомбы: повернуть нос; возвращает скорость на этом тике — тяжесть вдоль пути разгоняет,
+     * сопротивление (квадратичное, плотность на высоте) тормозит.
+     */
     public static double steer(FlightController flight, Vec3 pos, double speed, Vec3 aim) {
         float[] a = FlightController.anglesTo(pos, aim);
         double dx = aim.x - pos.x, dz = aim.z - pos.z;
@@ -49,7 +58,22 @@ public final class BombDrop {
         flight.arcPitch(below ? a[1] : FALL_PITCH, speed, pos.distanceTo(aim), 7, 0.8);
         if (flight.pitch() < MIN_DIVE) flight.set(flight.yaw(), MIN_DIVE);
         if (below && horizontal > 8) flight.steerYaw(a[0], 0.15, 3.0, 0.3);
-        return Math.min(MAX_SPEED, speed + ACCEL);
+        double drag = fall().drag() * StandardAtmosphere.density(pos.y - Air.SEA) / StandardAtmosphere.density(0);
+        return Math.max(0, speed - Ballistics.GRAVITY * flight.forward().y - drag * speed * speed);
+    }
+
+    /**
+     * Снос ветром за тик: поперечная воздуху скорость бомбы тянется к ветру {@code wind} (блоков/тик) с долей
+     * drag·|v| за тик — тяжёлую быструю бомбу ветер почти не сносит.
+     */
+    public static Vec3 drift(Vec3 drift, Vec3 wind, double speed) {
+        double k = Math.min(1, fall().drag() * speed);
+        return drift.add(wind.subtract(drift).scale(k));
+    }
+
+    /** Полёт бомбы без мотора из паспорта (читается при вызове: паспорт сам ссылается на этот класс). */
+    private static WeaponSpec.Ballistic fall() {
+        return WeaponSpec.BUNKER.payload().ballistic();
     }
 
     /**

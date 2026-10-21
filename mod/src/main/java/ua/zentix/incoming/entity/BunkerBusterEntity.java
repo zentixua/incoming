@@ -31,6 +31,7 @@ import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
+import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.warhead.Warheads;
 
 import java.util.UUID;
@@ -49,6 +50,9 @@ public class BunkerBusterEntity extends StrikeProjectile {
     private int energy;
     private int traveled;
     private int fuse = -1;
+
+    /** Снос ветром за тик, блоков (не сохраняется: после загрузки набирается заново). */
+    private Vec3 windDrift = Vec3.ZERO;
 
     public BunkerBusterEntity(EntityType<? extends BunkerBusterEntity> type, Level level) {
         super(type, level);
@@ -109,7 +113,16 @@ public class BunkerBusterEntity extends StrikeProjectile {
         }
         Vec3 aim = tracker.point();
         speed = BombDrop.steer(flight, position(), speed, aim);
+        Air air = Air.of(level);
+        double y = getY();
+        windDrift = BombDrop.drift(windDrift, new Vec3(air.windX(y) / 20, 0, air.windZ(y) / 20), speed);
         advance(level, aim, airframe().reachPad());
+    }
+
+    /** Снос ветром ({@link BombDrop#drift}); в грунте — нет. */
+    @Override
+    protected Vec3 drift() {
+        return flightPhase() == FlightPhase.DRILL ? Vec3.ZERO : windDrift;
     }
 
     /**

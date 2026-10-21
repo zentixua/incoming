@@ -955,6 +955,14 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         if (Math.abs(entityData.get(DATA_SPEED) - speed) > 0.01) entityData.set(DATA_SPEED, (float) speed);
     }
 
+    /**
+     * Снос за тик сверх шага по носу, блоков: ветер, который несёт снаряд без мотора (бомба). У снаряда с мотором его нет:
+     * полёт — своя игровая модель, автопилот держит путь сам.
+     */
+    protected Vec3 drift() {
+        return Vec3.ZERO;
+    }
+
     /** Точка внутри круга разворота: до неё не довернуть ({@link Autopilot#insideTurn}). */
     protected final boolean insideTurn(Vec3 point, double maxRateDeg) {
         return Autopilot.insideTurn(position(), flight.forward(), speed, point, maxRateDeg);
@@ -964,9 +972,14 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return Bearing.of(position(), aim);
     }
 
-    /** Держать высоту ({@link AltitudeHold}). */
-    protected final void holdAltitude(double desired, double gain, double maxRate, double maxAccel) {
-        altitude.hold(flight, getY(), desired, gain, maxRate, maxAccel);
+    /** Держать высоту ({@link AltitudeHold}) с поворотами участка полёта {@code a} из паспорта. */
+    protected final void holdAltitude(double desired, double gain, WeaponSpec.Agility a) {
+        craft.holdAltitude(desired, gain, airframe().handling(), a);
+    }
+
+    /** Скорость за тик по своей модели полёта ({@link Craft#throttle}): мотор тянет к {@code target}. */
+    protected final void throttle(double target) {
+        craft.throttle(airframe(), target);
     }
 
     /** Взрыватель взведён: снаряд отошёл от пусковой или вышел на маршевый участок ({@link ProximityFuse#armed}). */
@@ -1011,6 +1024,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         }
 
         Vec3[] sweep = noseSweep(pos, dir, speed, noseLength());
+        sweep[1] = sweep[1].add(drift());
         Vec3 noseFrom = sweep[0];
         // нос не заглядывает в неготовый чанк (clip грузил бы его); туда снаряд и не шагнёт — уйдёт в полёт вне мира
         Vec3 noseTo = Terrain.readyUntil(level, noseFrom, sweep[1]);
@@ -1040,7 +1054,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             return false;
         }
 
-        Vec3 next = pos.add(dir.scale(speed));
+        Vec3 next = pos.add(dir.scale(speed)).add(drift());
         if (next.y < level.getMinBuildHeight() - 64) {
             Incoming.LOG.warn("Projectile {} {} fell below the world at {}, removed", getType().getDescriptionId(), getUUID(), blockPosition());
             discard();
@@ -1087,7 +1101,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             arrived = true;
             return true;
         }
-        Vec3 next = pos.add(dir.scale(speed));
+        Vec3 next = pos.add(dir.scale(speed)).add(drift());
         Vec3 ground = groundCrossing(level, aim, pos, next);
         if (ground != null) {
             // мимо цели (или цель под землёй): вне мира столкновений нет, и снаряд падал бы без взрыва до конца запаса

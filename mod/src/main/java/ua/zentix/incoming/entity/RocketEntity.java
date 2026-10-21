@@ -10,7 +10,9 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.guidance.Ballistics;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
+import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.target.Target;
 import ua.zentix.incoming.util.Nbt;
 import ua.zentix.incoming.util.Terrain;
@@ -19,13 +21,17 @@ import java.util.UUID;
 
 /**
  * Неуправляемый реактивный снаряд РСЗО (122 мм, как у «Града»). Стоит в трубе пакета, поджиг, сход — и дальше
- * только баллистика ({@link Ballistics}): траектория рассчитана при сходе по углу возвышения пакета и настоящему g,
- * так что на 500 блоков снаряд летит ~10 с и поднимается на сотню блоков. Двигатель горит первые
- * {@link #BURN_TICKS} (факел и плотный дым), дальше полёт по инерции; на нисходящей ветви — фаза атаки.
+ * только баллистика ({@link Ballistics}): тяжесть, сопротивление воздуха и ветер мира ({@link WeaponSpec.Ballistic},
+ * игровой коэффициент). Скорость и курс схода при угле возвышения пакета даёт расчёт огня ({@link Ballistics#aim}),
+ * который знает только ветер у земли; разброс схода — из паспорта. Так что на 500 блоков снаряд летит ~10 с,
+ * поднимается на сотню блоков, спускается круче, чем поднимался, и залп ложится с разбросом и сносом по ветру.
+ * Двигатель горит первые {@link #BURN_TICKS} (факел и плотный дым; скорость схода — сразу, не по физике: разгон в трубе
+ * и на первых метрах не считается), дальше полёт по инерции; на нисходящей ветви — фаза атаки.
  * <p>
- * В точку падения снаряд приходит ровно на тике {@code N}. Если его сдвинули (возврат из полёта вне мира поднимает над рельефом), траектория
- * пересчитывается от текущего места на оставшееся время. Цель не отслеживается: куда навели при пуске, туда и упадёт
- * (у места с карты высота уточняется один раз — {@link #settleImpact}).
+ * Путь считается при сходе на весь полёт ({@link Ballistics#fly}) и проходится по тикам. Если снаряд сдвинули (возврат
+ * из полёта вне мира поднимает над рельефом), расчёт огня повторяется от текущего места с тем же наклоном пути. Цель
+ * не отслеживается: куда навели при пуске, туда и упадёт (у места с карты высота уточняется один раз —
+ * {@link #settleImpact}).
  * <p>
  * Район точки падения грузится с постановки в трубу, снаряд сходит сразу. Если он вне мира подходит к цели, а район
  * ещё не готов, конец траектории растягивается во времени ({@link #stretch}), а не замирает в воздухе у цели.
@@ -49,9 +55,20 @@ public class RocketEntity extends StrikeProjectile {
     /** Запас хода сверх дуги траектории, тиков на маршевой скорости: снаряд, не попавший в точку, летит дальше вниз. */
     private static final int OVERSHOOT_TICKS = 200;
 
+    /** Полёт без мотора из паспорта: сопротивление и разброс схода. */
+    private static final WeaponSpec.Ballistic FLIGHT = WeaponSpec.ROCKET.airframe().ballistic();
+    /** Ниже точки падения путь считается ещё на столько блоков: промах в овраг, полёт дальше вниз. */
+    private static final double BELOW_IMPACT = 64;
+
     /** Точка падения — куда навели при пуске. */
     @Nullable
     private Vec3 impactAt;
+    /** Путь текущей траектории по тикам (не сохраняется: считается заново от начала и скорости схода). */
+    @Nullable
+    private Ballistics.Path path;
+    /** Где путь на спуске проходит высоту точки падения: туда снаряд и падает (ветер и разброс уводят от точки). */
+    @Nullable
+    private Vec3 landing;
     /** Начало текущей траектории, скорость в нём и сколько тиков лететь от него. */
     @Nullable
     private Vec3 start;
@@ -155,14 +172,14 @@ public class RocketEntity extends StrikeProjectile {
         }
         // вне мира путь кончился на поверхности: ни траектории, ни растяжения — ждать там загрузки и попасть
         if (isGrounded()) {
-            advance(level, impactAt, airframe().reachPad());
+            advance(level, landing(), airframe().reachPad());
             return;
         }
         if (start == null) solve(position(), impactAt);
 
-        // сдвинули с траектории (вернулся в мир выше рельефа) — пересчитать от текущего места на оставшееся время
+        // сдвинули с траектории (вернулся в мир выше рельефа) — расчёт огня от текущего места
         if (position().distanceToSqr(at(t)) > 0.25) {
-            restart(position(), impactAt, ticksLeft());
+            resolve(position(), impactAt);
         }
 
         if (ph == FlightPhase.BOOST && phaseAge() >= BURN_TICKS) setPhase(FlightPhase.CRUISE);
@@ -177,7 +194,7 @@ public class RocketEntity extends StrikeProjectile {
         face(v);
         speed = v.length();
         Vec3 before = position();
-        if (!advance(level, impactAt, airframe().reachPad())) return;
+        if (!advance(level, landing(), airframe().reachPad())) return;
         // вне мира у самой цели снаряд ждёт загрузки района — тогда он не сдвинулся и время траектории стоит
         if (position().distanceToSqr(before) > 1.0e-6) t += step;
     }
@@ -196,7 +213,7 @@ public class RocketEntity extends StrikeProjectile {
         impactAt = surface;
         // цель — сама точка падения с разбросом, как у пуска: у неё метка, сирена, камера и район цели
         settleAim(impactAt);
-        if (moved && start != null) restart(position(), impactAt, ticksLeft());
+        if (moved && start != null) resolve(position(), impactAt);
     }
 
     /** Темп времени траектории: 1 — как у мира, меньше — полёт вне мира растянут (для стенда). */
@@ -234,13 +251,18 @@ public class RocketEntity extends StrikeProjectile {
     }
 
     /**
-     * Путь кончается там, куда рассчитана баллистика ({@code impactAt}). Цель ракета не обновляет, и точка цели с ней
-     * совпадает; переопределение — страховка на случай, если разойдутся.
+     * Путь кончается там, где траектория на спуске проходит высоту точки падения ({@link #landing}): ветер и разброс схода
+     * уводят его от точки цели на блоки.
      */
     @Override
     @Nullable
     protected Vec3 pathEnd() {
-        return impactAt != null ? impactAt : super.pathEnd();
+        return landing != null ? landing : impactAt != null ? impactAt : super.pathEnd();
+    }
+
+    /** Куда снаряд падает: точка на спуске траектории; траектории ещё нет — точка цели. */
+    private Vec3 landing() {
+        return landing != null ? landing : impactAt;
     }
 
     /** Нос по скорости. */
@@ -250,7 +272,13 @@ public class RocketEntity extends StrikeProjectile {
     }
 
     private Vec3 at(double k) {
-        return Ballistics.at(start, v0, k);
+        return path().at(k);
+    }
+
+    /** Путь текущей траектории (после загрузки — заново от начала и скорости схода, с ветром мира сейчас). */
+    private Ballistics.Path path() {
+        if (path == null) fly(impactAt != null ? impactAt : start);
+        return path;
     }
 
     /** Последний тик траектории, на котором снаряд ещё дальше {@link #HOLD_OFF} от точки падения (0 — уже ближе). */
@@ -261,9 +289,36 @@ public class RocketEntity extends StrikeProjectile {
         return 0;
     }
 
-    /** Траектория из {@code from} в {@code to} с углом возвышения пакета; положе не выходит — круче, до 80°. */
+    /**
+     * Сход из {@code from} на {@code to}: угол возвышения пакета (положе {@link #MIN_FLIGHT} не выходит — круче, до 80°),
+     * скорость и курс — расчёт огня при ветре у земли, потом разброс схода из паспорта.
+     */
     private void solve(Vec3 from, Vec3 to) {
-        restart(from, to, Ballistics.ticksFor(from, to, elevation, MIN_FLIGHT));
+        float el = Ballistics.elevationFor(from, to, elevation, MIN_FLIGHT);
+        restart(from, to, scatter(Ballistics.aim(from, to, el, FLIGHT.drag(), Ballistics.Wind.ground(Air.of(level())))));
+    }
+
+    /**
+     * Расчёт огня заново от {@code from} (сдвинули с траектории, уточнилась высота точки): с тем же наклоном пути, что
+     * сейчас, без нового разброса.
+     */
+    private void resolve(Vec3 from, Vec3 to) {
+        Vec3 v = at(t + 1).subtract(at(t));
+        float el = (float) Math.toDegrees(Math.atan2(v.y, Math.max(1e-6, v.horizontalDistance())));
+        restart(from, to, Ballistics.aim(from, to, Math.max(-80, Math.min(80, el)), FLIGHT.drag(), Ballistics.Wind.ground(Air.of(level()))));
+    }
+
+    /** Разброс схода: направление — СКО {@link WeaponSpec.Ballistic#spreadAngle} по двум осям, скорость — {@link WeaponSpec.Ballistic#spreadSpeed}. */
+    private Vec3 scatter(Vec3 v) {
+        double speed = v.length();
+        if (speed < 1e-9) return v;
+        Vec3 dir = v.scale(1 / speed);
+        Vec3 side = new Vec3(-dir.z, 0, dir.x);
+        side = side.lengthSqr() < 1e-9 ? new Vec3(1, 0, 0) : side.normalize();
+        Vec3 up = side.cross(dir);
+        double sa = Math.toRadians(FLIGHT.spreadAngle());
+        Vec3 d = dir.add(side.scale(random.nextGaussian() * sa)).add(up.scale(random.nextGaussian() * sa)).normalize();
+        return d.scale(speed * (1 + random.nextGaussian() * FLIGHT.spreadSpeed()));
     }
 
     /**
@@ -282,18 +337,27 @@ public class RocketEntity extends StrikeProjectile {
         return Mission.of(arcFrom(t) + OVERSHOOT_TICKS * cruiseSpeed());
     }
 
-    /** Сколько тиков осталось лететь по текущей траектории — для пересчёта с текущего места (не меньше 8). */
-    private int ticksLeft() {
-        return Math.max(8, (int) Math.ceil(flightTicks - t));
+    /** Новая траектория из {@code from} со скоростью {@code v} на точку {@code to}. */
+    private void restart(Vec3 from, Vec3 to, Vec3 v) {
+        start = from;
+        v0 = v;
+        t = 0;
+        fly(to);
+        setMission(missionLeft());
+        holdAt = holdPoint(landing);
     }
 
-    private void restart(Vec3 from, Vec3 to, int ticks) {
-        start = from;
-        t = 0;
-        flightTicks = Math.max(1, ticks);
-        v0 = Ballistics.launchVelocity(from, to, flightTicks);
-        setMission(missionLeft());
-        holdAt = holdPoint(to);
+    /**
+     * Путь от {@link #start} со скоростью {@link #v0} при ветре мира сейчас — до высоты {@code to} на спуске и ещё
+     * {@link #OVERSHOOT_TICKS} или {@link #BELOW_IMPACT} ниже; время полёта и место падения — по нему.
+     */
+    private void fly(Vec3 to) {
+        double h = Math.max(0.05, v0.horizontalDistance()), d = Math.sqrt(to.subtract(start).horizontalDistanceSqr());
+        int ticks = (int) Math.min(6000, 3 * d / h + 400) + OVERSHOOT_TICKS;
+        path = Ballistics.fly(start, v0, FLIGHT.drag(), Ballistics.Wind.of(Air.of(level())), to.y - BELOW_IMPACT, ticks);
+        double k = path.landing(to.y);
+        flightTicks = Double.isNaN(k) ? Math.max(1, path.ticks()) : Math.max(1, (int) Math.ceil(k));
+        landing = Double.isNaN(k) ? to : path.at(k);
     }
 
     @Override
@@ -307,7 +371,14 @@ public class RocketEntity extends StrikeProjectile {
             v0 = Nbt.getVec(tag, "v0");
             flightTicks = tag.getInt("flight_ticks");
             t = tag.contains("t") ? tag.getDouble("t") : tag.getInt("n");
-            if (impactAt != null) holdAt = holdPoint(impactAt);
+            // путь — заново от начала и скорости схода (сохранения до сопротивления воздуха пойдут по новому закону;
+            // разойдутся с ним — расчёт огня от текущего места)
+            path = null;
+            landing = null;
+            if (impactAt != null) {
+                fly(impactAt);
+                holdAt = holdPoint(landing);
+            }
             // 2.3.x (срок жизни, ключа mission нет): на дальней дуге снаряд быстрее маршевой, и остаток срока × маршевая
             // кончался бы на полпути (5 км: ≈ 3600 блоков хода на ≈ 5700 блоков дуги) — запас по самой дуге
             if (!tag.contains("mission")) setMission(missionLeft());

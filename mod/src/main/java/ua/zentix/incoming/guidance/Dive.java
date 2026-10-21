@@ -1,6 +1,7 @@
 package ua.zentix.incoming.guidance;
 
 import net.minecraft.world.phys.Vec3;
+import ua.zentix.incoming.strike.WeaponSpec;
 
 /**
  * Пике барражирующего на цель: курс и тангаж — на точку встречи с движущейся целью (упреждение по её скорости),
@@ -8,22 +9,25 @@ import net.minecraft.world.phys.Vec3;
  * тангажа уже не хватает, и он проходит мимо, делает петлю и пикирует снова.
  */
 public final class Dive {
-    /** Пределы поворота в пике: тангаж и курс, °/тик и °/тик². */
-    private static final double PITCH_RATE = 6.0, PITCH_ACCEL = 0.6, YAW_GAIN = 0.4, YAW_RATE = 8.0, YAW_ACCEL = 1.0;
+    /** Усиление доворота курса в пике. */
+    private static final double YAW_GAIN = 0.4;
     /** Дальше упреждать не на что: скорость цели за это время уже изменится. */
     private static final double MAX_LEAD_TICKS = 60;
 
     private Dive() {}
 
-    /** Повернуть в пике на цель в {@code target}, идущую со скоростью {@code targetVelocity} (блоков за тик). */
-    public static void steer(FlightController flight, Vec3 pos, double speed, Vec3 target, Vec3 targetVelocity) {
+    /**
+     * Повернуть в пике на цель в {@code target}, идущую со скоростью {@code targetVelocity} (блоков за тик), с пределами
+     * поворотов пике из паспорта {@code dive}.
+     */
+    public static void steer(FlightController flight, Vec3 pos, double speed, Vec3 target, Vec3 targetVelocity, WeaponSpec.Agility dive) {
         Vec3 aim = intercept(pos, speed, target, targetVelocity);
         float[] a = FlightController.anglesTo(pos, aim);
-        flight.arcPitch(a[1], speed, pos.distanceTo(aim), PITCH_RATE, PITCH_ACCEL);
+        flight.arcPitch(a[1], speed, pos.distanceTo(aim), dive.pitchRate(), dive.pitchAccel());
         // с круга цель сбоку: резкий доворот с креном и пике (радиус разворота ~15 блоков); над целью — не крутиться
         double dx = aim.x - pos.x, dz = aim.z - pos.z;
-        if (dx * dx + dz * dz > 9) flight.steerYaw(a[0], YAW_GAIN, YAW_RATE, YAW_ACCEL);
-        else flight.settleYaw(YAW_ACCEL);
+        if (dx * dx + dz * dz > 9) flight.steerYaw(a[0], YAW_GAIN, dive.turnRate(), dive.turnAccel());
+        else flight.settleYaw(dive.turnAccel());
     }
 
     /**

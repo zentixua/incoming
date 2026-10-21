@@ -154,20 +154,24 @@ public class BomberEntity extends StrikeProjectile {
             discard();
             return;
         }
+        WeaponSpec.Agility egress = AIR.handling().climb(), cruise = AIR.handling().cruise();
         if (released) {
             // уход: вираж на 70° от курса и набор высоты
-            flight.holdPitch(-6, 0.05, 0.4, 0.04);
-            if (phaseAge() < 60) flight.steerYaw(flight.yaw() + 20 * breakSide, 0.08, 1.2, 0.08);
-            else flight.settleYaw(0.08);
+            flight.holdPitch(-6, 0.05, egress.pitchRate(), egress.pitchAccel());
+            if (phaseAge() < 60) flight.steerYaw(flight.yaw() + 20 * breakSide, 0.08, egress.turnRate(), egress.turnAccel());
+            else flight.settleYaw(egress.turnAccel());
         } else {
-            flight.holdPitch(Mth.clamp((getY() - echelon) * PITCH_PER_BLOCK, -LEVEL_CHANGE_PITCH, LEVEL_CHANGE_PITCH), 0.1, 0.3, 0.05);
+            flight.holdPitch(Mth.clamp((getY() - echelon) * PITCH_PER_BLOCK, -LEVEL_CHANGE_PITCH, LEVEL_CHANGE_PITCH), 0.1,
+                    cruise.pitchRate(), cruise.pitchAccel());
         }
         if (!released && b.horizontal() > RELEASE_DISTANCE + 40) {
             // точка сброса внутри круга разворота (перенацелили сбоку, проскочил её): на пределе поворота он
             // кружил бы вокруг неё без конца — прямо, пока она не выйдет из круга, и новый заход
-            if (insideTurn(aim, AIR.turnRate())) flight.settleYaw(0.1);
-            else flight.steerYaw(b.yaw(), 0.1, AIR.turnRate(), 0.1);
+            if (insideTurn(aim, AIR.turnRate())) flight.settleYaw(cruise.turnAccel());
+            else flight.steerYaw(b.yaw(), 0.1, AIR.turnRate(), cruise.turnAccel());
         }
+        // в наборе на уходе теряет скорость, на эшелоне держит маршевую
+        throttle(AIR.cruiseSpeed());
         Vec3 dir = flight.forward();
         Vec3 next = position().add(dir.scale(speed));
         if (leavesTickingChunks(level, next)) return;

@@ -1,15 +1,13 @@
 package ua.zentix.incoming.guidance;
 
+import ua.zentix.incoming.strike.WeaponSpec;
+
 /**
- * Удержание высоты: плавный фильтр заданной высоты (1/5 разницы за тик) и тангаж, пропорциональный
- * ошибке (1.2° на блок, от 15° вверх до 12° вниз), с ограничением угловой скорости и ускорения ({@link FlightController}).
+ * Удержание высоты: плавный фильтр заданной высоты (1/5 разницы за тик) и тангаж, пропорциональный ошибке (1.2° на
+ * блок, вверх — до угла набора паспорта, вниз — до угла снижения, {@link WeaponSpec.Handling}), с ограничением угловой
+ * скорости и ускорения ({@link FlightController}).
  */
 public final class AltitudeHold {
-    /** Наибольший угол набора, °. */
-    public static final double MAX_CLIMB = 15;
-    /** Наибольший угол снижения, °. */
-    private static final double MAX_DESCENT = 12;
-
     /** Сглаженная заданная высота. */
     private double filter;
 
@@ -23,10 +21,10 @@ public final class AltitudeHold {
         filter = y;
     }
 
-    /** Держать высоту {@code desired}, находясь на {@code y}. */
-    public void hold(FlightController flight, double y, double desired, double gain, double maxRate, double maxAccel) {
+    /** Держать высоту {@code desired}, находясь на {@code y}: повороты по тангажу — участка полёта {@code a}. */
+    public void hold(FlightController flight, double y, double desired, double gain, WeaponSpec.Handling h, WeaponSpec.Agility a) {
         filter += (desired - filter) / 5;
-        double climb = Math.max(-MAX_DESCENT, Math.min(MAX_CLIMB, (filter - y) * 1.2));
-        flight.holdPitch(-climb, gain, maxRate, maxAccel);
+        double climb = Math.max(-h.descentAngle(), Math.min(h.climbAngle(), (filter - y) * 1.2));
+        flight.holdPitch(-climb, gain, a.pitchRate(), a.pitchAccel());
     }
 }

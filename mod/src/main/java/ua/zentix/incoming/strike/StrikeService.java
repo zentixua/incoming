@@ -529,7 +529,7 @@ public final class StrikeService {
     /**
      * РСЗО: снаряд в трубе пакета стационарной пусковой или огневой позиции (пакет доворачивается на цель, если
      * молчит), иначе с места пуска или с позиции за вынос пусковой из паспорта ({@link WeaponSpec.Route#standoff}).
-     * Неуправляемый: своё рассеивание (паспорт, {@link WeaponSpec.Route#dispersion}), за целью не следит.
+     * Неуправляемый: рассеивание — разброс схода и ветер ({@link WeaponSpec.Ballistic}, у самого снаряда), за целью не следит.
      */
     @Nullable
     private static StrikeProjectile launchRocket(ServerLevel level, Target target, Vec3 point, float yaw, @Nullable UUID owner,
@@ -540,14 +540,14 @@ public final class StrikeService {
         if (launcher != null) {
             Slot slot = Slot.reserve(level, launcher);
             r.placeInTube(slot.rail(), launcher.yaw(), launcher.elevation(), slot.ready(), slot.hidden(), target,
-                    scatter(level, slot.rail(), point), owner);
+                    point, owner);
             return r;
         }
         if (stand.fixed() != null) return null;
         Vec3 from = stand.from();
         Vec3 start = from != null ? new Vec3(from.x, point.y, from.z)
                 : point.subtract(Local.horizontal(yaw).scale(WeaponType.ROCKET.spec().route().standoff()));
-        r.launchFrom(start, target, scatter(level, start, point), owner);
+        r.launchFrom(start, target, point, owner);
         startVirtual(level, r);
         return r;
     }
@@ -580,12 +580,6 @@ public final class StrikeService {
         e.setRoute(via.isEmpty() ? null : via.route(start));
         startVirtual(level, e);
         return e;
-    }
-
-    /** Рассеивание неуправляемого снаряда по нормали: СКО — доля дальности из паспорта (1 %: у «Града» на 20 км — сотни метров). */
-    private static Vec3 scatter(ServerLevel level, Vec3 from, Vec3 point) {
-        double sigma = WeaponType.ROCKET.spec().route().sigma(Math.sqrt(from.distanceToSqr(point.x, from.y, point.z)));
-        return point.add(level.random.nextGaussian() * sigma, 0, level.random.nextGaussian() * sigma);
     }
 
     /**

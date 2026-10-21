@@ -134,8 +134,6 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      *                      null — время полёта следует из дальности, а не задаётся
      * @param finalLeg      последний прямой участок перед целью, блоков (у B-2 — дальность сброса на эшелоне)
      * @param standoff      без стреляющего рядом пусковая стоит за столько блоков от цели (по направлению захода)
-     * @param dispersion    рассеивание неуправляемого снаряда: СКО точки падения по каждой оси — такая доля дальности
-     *                      стрельбы, не меньше блока; 0 — снаряд управляемый, точка — сама цель
      * @param error         ошибка наведения: СКО промаха по каждой оси, блоков, — снаряд целится в цель со сдвигом,
      *                      случайным для каждого пуска (спутниковая навигация, сброс с эшелона); 0 — точно в цель
      * @param capture       точка маршрута взята, когда до неё ближе стольких блоков по горизонтали (или она уже позади,
@@ -143,7 +141,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * @param reach         дальность по маршруту оператора ({@link Waypoints}): путь от него через его точки до цели не
      *                      длиннее стольких блоков; 0 — по точкам оператора не летает
      */
-    public record Route(@Nullable Supplier<ModConfigSpec.IntValue> flightSeconds, double finalLeg, double standoff, double dispersion,
+    public record Route(@Nullable Supplier<ModConfigSpec.IntValue> flightSeconds, double finalLeg, double standoff,
                         double error, double capture, double reach) {
         /** Время полёта из настроек, секунд. */
         public int seconds() {
@@ -153,11 +151,6 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
         /** Летит по точкам оператора ({@link Waypoints}). */
         public boolean waypoints() {
             return reach > 0;
-        }
-
-        /** СКО точки падения по каждой оси при стрельбе на {@code range} блоков (0 — без рассеивания). */
-        public double sigma(double range) {
-            return dispersion > 0 ? Math.max(1, range * dispersion) : 0;
         }
 
         /** Промах этого пуска ({@link #error}): сдвиг по горизонтали. */
@@ -238,14 +231,15 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     /**
      * Летательный аппарат: числа, которыми сущность снаряда отличается от других.
      *
-     * Скорости и высоты здесь — игровые, не по физике: медленнее и ниже настоящих, чтобы подлёт было видно на сотнях
-     * блоков игры; настоящие — в {@link Article#real} изделия.
+     * Скорости, высоты, повороты и разгон здесь — игровые, не по физике: полёт — своя игровая модель (решение Артёма
+     * 21.10), медленнее и ниже настоящих, чтобы подлёт было видно на сотнях блоков игры; настоящие — в {@link Article#real}
+     * изделия, полёт их не повторяет.
      *
      * @param entity        тип сущности (поставщик: паспорт не трогает реестр, пока его не спросят)
      * @param cruiseSpeed   маршевая скорость, блоков/тик (игровая, не по физике): по ней считается время подлёта
-     * @param diveSpeed     предельная скорость в пикировании (у кого пике нет — маршевая), блоков/тик (игровая, не по физике)
-     * @param turnRate      предельная скорость разворота по курсу на маршруте и в атаке, °/тик (0 — не управляется)
-     * @param climbTurnRate то же на наборе высоты после старта
+     * @param diveSpeed     предельная скорость (у кого пике нет — маршевая), блоков/тик (игровая, не по физике): быстрее не
+     *                      разгоняет ни пике, ни обмен высоты на скорость ({@link #airspeed})
+     * @param handling      повороты, набор высоты и разгон снаряда с мотором ({@link Handling}); null — мотора и рулей нет
      * @param cruiseHeight  высота крейсера, блоков (игровая, не по физике): над стартом и целью у шахеда, над целью у
      *                      «Ланцета» — круг, над рельефом у ракеты — бреющий полёт, над точкой сброса у B-2
      * @param clearance     наименьший запас высоты над рельефом, с которым снаряд возвращается в мир из полёта вне мира
@@ -262,16 +256,100 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * @param noise         чем шумит: двигатели, корпус, старт ({@link Noise}); докуда его слышно — {@link Hearing}
      * @param radar         как его видит и бьёт ЗРК ({@code defense.Radar})
      * @param article       изделие по ТТХ: масса, размеры, двигатели, настоящие скорости, условия удара, боевая часть
+     * @param ballistic     полёт без мотора: тяжесть, сопротивление и ветер ({@link Ballistic}); null — летит на моторе
      */
     public record Airframe(Supplier<EntityType<? extends StrikeProjectile>> entity, double cruiseSpeed, double diveSpeed,
-                           double turnRate, double climbTurnRate, double cruiseHeight, double clearance, double reliefLookahead, double noseLength,
+                           @Nullable Handling handling, double cruiseHeight, double clearance, double reliefLookahead, double noseLength,
                            float health, double range, double reachPad, @Nullable LaunchProfile launchProfile, double visibleLeg,
-                           Attack attack, Noise noise, Signature radar, Article article) {
+                           Attack attack, Noise noise, Signature radar, Article article, @Nullable Ballistic ballistic) {
+        /** Предельная скорость разворота по курсу на маршруте и в атаке, °/тик (0 — не управляется). */
+        public double turnRate() {
+            return handling == null ? 0 : handling.cruise().turnRate();
+        }
+
+        /** То же на наборе высоты после старта. */
+        public double climbTurnRate() {
+            return handling == null ? 0 : handling.climb().turnRate();
+        }
+
         /** Радиус разворота на скорости {@code speed} с пределом поворота на маршруте ({@link #turnRadius(double, double)}). */
         public double turnRadius(double speed) {
-            return WeaponSpec.turnRadius(speed, turnRate);
+            return WeaponSpec.turnRadius(speed, turnRate());
+        }
+
+        /**
+         * Скорость после тика ({@link Handling#speed}): мотор тянет к {@code target}, высота меняется на скорость; не
+         * быстрее {@link #diveSpeed}.
+         *
+         * @param climbSine синус угла пути к горизонту на этом тике (> 0 — вверх)
+         */
+        public double airspeed(double speed, double target, double climbSine) {
+            return Math.min(diveSpeed, handling.speed(speed, target, climbSine));
         }
     }
+
+    /**
+     * Повороты одного участка полёта (игровые числа, не по физике).
+     *
+     * @param turnRate   предельная скорость разворота по курсу, °/тик
+     * @param turnAccel  как быстро набирается и гасится разворот, °/тик²: инерция — снаряд входит в вираж и выходит из него
+     *                   плавно, крен модели — по скорости разворота ({@code FlightController.bankAngle})
+     * @param pitchRate  предельная скорость по тангажу, °/тик
+     * @param pitchAccel её набор, °/тик²
+     */
+    public record Agility(double turnRate, double turnAccel, double pitchRate, double pitchAccel) {}
+
+    /**
+     * Своя игровая модель полёта снаряда с мотором (решение Артёма 21.10): одни законы для шахеда, ракеты, «Ланцета» и
+     * B-2, числа — свои у каждого, игровые, не по физике (подобраны под блоки и под то, как полёт читается глазом;
+     * настоящие изделия так не летают 1:1). Скорость, повороты и набор меняются плавно: мгновенных поворотов и рывков
+     * скорости нет.
+     *
+     * @param climb   повороты на наборе высоты после старта (скорость ещё мала — мягче)
+     * @param cruise  на маршруте и горке
+     * @param dive    в пике
+     * @param climbAngle   наибольший угол набора, ° (скороподъёмность: v · sin угла)
+     * @param descentAngle наибольший угол снижения на маршруте, °
+     * @param accel   наибольший прирост скорости мотором, блоков/тик²
+     * @param relax   доля разницы с нужной скоростью, которую мотор и сопротивление закрывают за тик (1/тик): ниже — мотор
+     *                тянет вверх не быстрее {@code accel}, выше — сопротивление гасит лишнее
+     */
+    public record Handling(Agility climb, Agility cruise, Agility dive, double climbAngle, double descentAngle, double accel, double relax) {
+        /**
+         * Обмен высоты на скорость — игровой коэффициент, не по физике: Δv = −{@value} · g · sin γ за тик (γ — угол пути).
+         * По закону сохранения энергии было бы 1 · g; на игровых скоростях и игровом моторе, который возвращает скорость
+         * за секунду-две, этого не видно, поэтому обмен в 2,5 раза сильнее: в наборе под 15° шахед теряет ~15 %, в пике
+         * разгоняется вдвое быстрее, чем одним мотором.
+         */
+        public static final double TRADE = 2.5;
+
+        /**
+         * Скорость после тика: мотор и сопротивление тянут к {@code target} (вверх — не быстрее {@link #accel}), а набор
+         * высоты отнимает скорость, снижение прибавляет ({@link #TRADE}); потом скорость сама возвращается к нужной.
+         *
+         * @param climbSine синус угла пути к горизонту (> 0 — вверх)
+         */
+        public double speed(double speed, double target, double climbSine) {
+            double engine = (target - speed) * relax;
+            return Math.max(0, speed + Math.min(accel, engine) - TRADE * ua.zentix.incoming.guidance.Ballistics.GRAVITY * climbSine);
+        }
+    }
+
+    /**
+     * Полёт без мотора ({@code guidance.Ballistics}): «Град» после выгорания, падающая бомба. Тяжесть — настоящая,
+     * сопротивление — квадратичное по скорости относительно воздуха (ветер мира, {@code util.Air}) с плотностью
+     * стандартной атмосферы на высоте; его коэффициент — игровой, не по физике: при игровых скоростях и дальностях
+     * настоящий коэффициент изделия (ρ₀·C<sub>d</sub>A / 2m, {@link Article}) почти не виден, а коэффициент, подобранный по
+     * подобию с настоящей траекторией (масштаб длины игры к жизни), ограничил бы дальность «Града» парой километров и
+     * давал бы снос ветром в десятки процентов. Взят такой, чтобы траектория читалась (спуск круче подъёма, ветер
+     * сносит), а дальность игры не кончалась.
+     *
+     * @param drag        коэффициент сопротивления на уровне моря, 1/блок: ускорение = drag · ρ/ρ₀ · |v|·v (v — относительно
+     *                    воздуха, блоков/тик); предел скорости падения √(g/drag)
+     * @param spreadAngle разброс схода: СКО направления, ° (игровое: рассеивание залпа)
+     * @param spreadSpeed разброс схода: СКО скорости, доля
+     */
+    public record Ballistic(double drag, double spreadAngle, double spreadSpeed) {}
 
     /**
      * Снаряд на экране радара ЗРК ({@code defense.Radar}): с какой дальности его видно и тратит ли ЗРК на него ракету.
@@ -540,6 +618,50 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     static final Noise LOITER_NOISE = new Noise(new Noise.Propeller(LOITER_MOTOR.power(), LOITER_MOTOR.rpm(), LOITER_MOTOR.blades(), LOITER_ARTICLE.real().cruise(), 0.85, 1.15,
             95, 800, Spectra.LOITER_ENGINE), null, new Noise.Body(LOITER_ARTICLE.diameter(), LOITER_ARTICLE.length(), 40, Spectra.LOITER_DIVE), Double.NaN, 120, Double.NaN);
 
+    // ---- своя игровая модель полёта ({@link Handling}, {@link Ballistic}): числа игровые, не по физике
+
+    /**
+     * Шахед: разворот 3°/тик на маршруте (радиус ~40 блоков), на наборе после старта — 1,6°/тик; тангаж — мягкий,
+     * в пике до 4°/тик; мотор возвращает скорость за ~20 тиков (доля 0,05 за тик), разгон не больше 0,04 блока/тик².
+     */
+    static final Handling DRONE_HANDLING = new Handling(new Agility(1.6, 0.12, 1.0, 0.12), new Agility(3.0, 0.3, 1.2, 0.15),
+            new Agility(3.0, 0.3, 4.0, 0.25), 15, 12, 0.04, 0.05);
+
+    /**
+     * Крылатая ракета: разворот 3°/тик (радиус ~76 блоков), на наборе 2°/тик; тангаж резкий — бреющий полёт над
+     * рельефом (8°/тик), горка и пике (16°/тик); турбина разгоняет до 0,1 блока/тик².
+     */
+    static final Handling MISSILE_HANDLING = new Handling(new Agility(2.0, 0.15, 4, 0.6), new Agility(3.0, 0.3, 8, 1.8),
+            new Agility(3.0, 0.3, 16, 3.5), 15, 12, 0.1, 0.15);
+
+    /** «Ланцет»: разворот 3°/тик, на наборе 2°/тик; в пике — резкий доворот до 8°/тик с креном, тангаж до 6°/тик. */
+    static final Handling LOITER_HANDLING = new Handling(new Agility(2.0, 0.15, 1.4, 0.15), new Agility(3.0, 0.3, 1.2, 0.15),
+            new Agility(8.0, 1.0, 6.0, 0.6), 15, 12, 0.1, 0.08);
+
+    /**
+     * B-2: разворот 1°/тик (радиус ~690 блоков), тангаж до 0,3°/тик; на уходе после сброса — вираж до 1,2°/тик и набор
+     * (участок «набор»); тяжёлый — скорость меняется медленно.
+     */
+    static final Handling BOMBER_HANDLING = new Handling(new Agility(1.2, 0.08, 0.4, 0.04), new Agility(1.0, 0.1, 0.3, 0.05),
+            new Agility(1.0, 0.1, 0.3, 0.05), 15, 12, 0.02, 0.02);
+
+    /**
+     * Падение GBU-57 ({@link #BOMB_ARTICLE}): сопротивление игровое — предел скорости падения у земли √(g/drag) ≈ 11
+     * блоков/тик; с эшелона 170 блоков бомба разгоняется с 6 до ~7 блоков/тик. Разброса нет: бомба управляемая.
+     */
+    static final Ballistic BOMB_FALL = new Ballistic(2e-4, 0, 0);
+    /** Предел скорости падения бомбы у земли √(g/drag), блоков/тик ({@link #BOMB_FALL}): по нему запас хода и оценки. */
+    static final double BOMB_TERMINAL = Math.sqrt(ua.zentix.incoming.guidance.Ballistics.GRAVITY / BOMB_FALL.drag());
+
+    /**
+     * Полёт 9М22У после выгорания ({@link #ROCKET_ARTICLE}): сопротивление игровое — на 600 блоках сход ~4,2 блока/тик
+     * вместо 3,9 без него, удар под 54° вместо 50°, полёт ~12,5 с; на 2000 блоках — удар под 62°. Расчёт огня знает только
+     * ветер у земли, а наверху он сильнее: залп сносит по ветру на ~1 % дальности. Разброс схода — игровой (не по физике):
+     * СКО направления 0,4°, скорости 0,5 % — на 600 блоках ~1 % дальности, как было (у 9М22У на наибольшей дальности —
+     * 1/130 по дальности и 1/200 по направлению, Wikipedia, ru: «Град (РСЗО)»).
+     */
+    static final Ballistic ROCKET_FLIGHT = new Ballistic(3e-4, 0.4, 0.005);
+
     /**
      * Дрон-камикадзе Shahed-136 ({@link #DRONE_ARTICLE}). Игровое (не по физике): ≈150 км/ч, крейсер в 45 блоках над
      * рельефом, пикирование с разгоном до 3 блоков/тик. Стартовый ускоритель горит ~2 с (настоящий — ~2,5 с) и сбрасывается. Боевая часть —
@@ -549,10 +671,10 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     public static final WeaponSpec DRONE = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 25, Salvo.gaps(20, 40), Warhead.CONVENTIONAL,
             Launch.GUIDED,
-            new Route(() -> IncomingConfig.SERVER.droneFlightTime, 300, 0, 0, 3, 40, 30_000), Tracking.CAMERA, LauncherRack.DRONE, Blast.DRONE, false, 0.6f,
-            new Airframe(() -> ModEntities.DRONE.get(), 2.1, 3.0, 3.0, 1.6, 45, 20, 256, 1.83, 12, 900 * 2.1, 4.3,
+            new Route(() -> IncomingConfig.SERVER.droneFlightTime, 300, 0, 3, 40, 30_000), Tracking.CAMERA, LauncherRack.DRONE, Blast.DRONE, false, 0.6f,
+            new Airframe(() -> ModEntities.DRONE.get(), 2.1, 3.0, DRONE_HANDLING, 45, 20, 256, 1.83, 12, 900 * 2.1, 4.3,
                     new LaunchProfile(8, 38, 0.075, 8, -9), 0, new Attack(16, 0, 0),
-                    DRONE_NOISE, new Signature(1.0, true), DRONE_ARTICLE),
+                    DRONE_NOISE, new Signature(1.0, true), DRONE_ARTICLE, null),
             null, Munition.single(() -> ModItems.SHAHED.get()), null);
 
     /**
@@ -566,10 +688,10 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     public static final WeaponSpec MISSILE = new WeaponSpec(WeaponType.SirenKind.MISSILE, 15, Salvo.gaps(15, 30), new Warhead(false, true, true),
             Launch.GUIDED,
-            new Route(() -> IncomingConfig.SERVER.missileFlightTime, 500, 0, 0, 1.5, 120, 30_000), Tracking.POINT, LauncherRack.MISSILE, Blast.MISSILE, false, 0.5f,
-            new Airframe(() -> ModEntities.CRUISE_MISSILE.get(), 4.0, 5.0, 3.0, 2.0, 12, 12, 256, 2.96, 8, 700 * 4.0, 6.5,
+            new Route(() -> IncomingConfig.SERVER.missileFlightTime, 500, 0, 1.5, 120, 30_000), Tracking.POINT, LauncherRack.MISSILE, Blast.MISSILE, false, 0.5f,
+            new Airframe(() -> ModEntities.CRUISE_MISSILE.get(), 4.0, 5.0, MISSILE_HANDLING, 12, 12, 256, 2.96, 8, 700 * 4.0, 6.5,
                     new LaunchProfile(6, 40, 0.09, 8, -14), 256, new Attack(64, 160, 185),
-                    MISSILE_NOISE, new Signature(0.7, true), MISSILE_ARTICLE),
+                    MISSILE_NOISE, new Signature(0.7, true), MISSILE_ARTICLE, null),
             null, Munition.single(() -> ModItems.CRUISE_MISSILE.get()), null);
 
     /**
@@ -580,12 +702,12 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     public static final WeaponSpec BUNKER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(60, 80), new Warhead(false, true, false),
             Launch.BOMBER,
-            new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 85, 0, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, true, 0.5f,
-            new Airframe(() -> ModEntities.BOMBER.get(), 12, 12, 1.0, 1.0, 170, 30, 0, 8.5, 0, 120 * 12, 0, null, 0, Attack.NONE,
-                    BOMBER_NOISE, new Signature(0.15, true), BOMBER_ARTICLE),
-            new Airframe(() -> ModEntities.BUNKER_BUSTER.get(), BombDrop.MAX_SPEED, BombDrop.MAX_SPEED, 0, 0, 0, 12, 0, BombDrop.NOSE, 0, 300 * BombDrop.MAX_SPEED,
+            new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 85, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, true, 0.5f,
+            new Airframe(() -> ModEntities.BOMBER.get(), 12, 12, BOMBER_HANDLING, 170, 30, 0, 8.5, 0, 120 * 12, 0, null, 0, Attack.NONE,
+                    BOMBER_NOISE, new Signature(0.15, true), BOMBER_ARTICLE, null),
+            new Airframe(() -> ModEntities.BUNKER_BUSTER.get(), BOMB_TERMINAL, BOMB_TERMINAL, null, 0, 12, 0, BombDrop.NOSE, 0, 300 * BOMB_TERMINAL,
                     BombDrop.REACH_PAD, null, 0, Attack.NONE,
-                    BOMB_NOISE, new Signature(0.1, false), BOMB_ARTICLE),
+                    BOMB_NOISE, new Signature(0.1, false), BOMB_ARTICLE, BOMB_FALL),
             Munition.single(() -> ModItems.BUNKER_BUSTER.get()), null);
 
     /**
@@ -604,9 +726,9 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     public static final WeaponSpec NUKE = new WeaponSpec(WeaponType.SirenKind.NUCLEAR, 0, Salvo.gaps(200, 300), new Warhead(true, false, true),
             Launch.ICBM,
-            new Route(null, 0, 0, 0, 0, 0, 0), Tracking.POINT, null, Blast.NONE, false, 0.5f,
-            new Airframe(() -> ModEntities.ICBM.get(), 25, 25, 0, 0, 0, 12, 0, 9, 0, 600 * 25, 0, null, 0, Attack.NONE,
-                    ICBM_NOISE, new Signature(1.0, false), ICBM_ARTICLE),
+            new Route(null, 0, 0, 0, 0, 0), Tracking.POINT, null, Blast.NONE, false, 0.5f,
+            new Airframe(() -> ModEntities.ICBM.get(), 25, 25, null, 0, 12, 0, 9, 0, 600 * 25, 0, null, 0, Attack.NONE,
+                    ICBM_NOISE, new Signature(1.0, false), ICBM_ARTICLE, null),
             null, Munition.single(() -> ModItems.ICBM.get()), ICBM_ASCENT);
 
     /**
@@ -620,9 +742,9 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     public static final WeaponSpec ROCKET = new WeaponSpec(WeaponType.SirenKind.MISSILE, 8, new Salvo(8, 12, 12, 15), Warhead.CONVENTIONAL,
             Launch.ROCKET,
-            new Route(null, 0, 600, 0.01, 0, 0, 0), Tracking.POINT, LauncherRack.ROCKET, Blast.ROCKET, false, 0.5f,
-            new Airframe(() -> ModEntities.ROCKET.get(), 4, 4, 0, 0, 0, 4, 0, 1.45, 2, 2400 * 4, 1.5, null, 0, Attack.NONE,
-                    ROCKET_NOISE, new Signature(1.0, false), ROCKET_ARTICLE),
+            new Route(null, 0, 600, 0, 0, 0), Tracking.POINT, LauncherRack.ROCKET, Blast.ROCKET, false, 0.5f,
+            new Airframe(() -> ModEntities.ROCKET.get(), 4, 4, null, 0, 4, 0, 1.45, 2, 2400 * 4, 1.5, null, 0, Attack.NONE,
+                    ROCKET_NOISE, new Signature(1.0, false), ROCKET_ARTICLE, ROCKET_FLIGHT),
             null, new Munition(() -> ModItems.GRAD_ROCKETS.get(), LauncherRack.ROCKET.slots()), null);
 
     /**
@@ -634,9 +756,9 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     public static final WeaponSpec LOITER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(40, 60), Warhead.CONVENTIONAL,
             Launch.LOITER,
-            new Route(null, 0, 500, 0, 0, 32, 15_000), Tracking.CAMERA, LauncherRack.LOITER, Blast.DRONE, false, 0.5f,
-            new Airframe(() -> ModEntities.LOITER.get(), 1.6, 4.0, 3.0, 2.0, 45, 25, 35, 0.87, 4, 2400 * 1.6, 3.0,
+            new Route(null, 0, 500, 0, 32, 15_000), Tracking.CAMERA, LauncherRack.LOITER, Blast.DRONE, false, 0.5f,
+            new Airframe(() -> ModEntities.LOITER.get(), 1.6, 4.0, LOITER_HANDLING, 45, 25, 35, 0.87, 4, 2400 * 1.6, 3.0,
                     new LaunchProfile(4, 10, 0.16, 4, -8), 0, Attack.NONE,
-                    LOITER_NOISE, new Signature(0.5, true), LOITER_ARTICLE),
+                    LOITER_NOISE, new Signature(0.5, true), LOITER_ARTICLE, null),
             null, Munition.single(() -> ModItems.LANCET.get()), null);
 }
