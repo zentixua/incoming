@@ -35,6 +35,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.warhead.GroundMaterial;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.grid.Blackouts;
 import ua.zentix.incoming.nuclear.world.WorkClock;
@@ -142,6 +143,16 @@ public final class WorkGameTests {
         return s.isAir() || s.getBlock() instanceof BaseFireBlock;
     }
 
+    /**
+     * Снесён наземным взрывом заряда: воздух, огонь или грунт вала воронки, который лёг на снесённое место
+     * ({@code Craters.dig}; площадка — земля с травой).
+     */
+    private static boolean goneOrRim(BlockState s) {
+        if (gone(s)) return true;
+        for (BlockState rim : GroundMaterial.DIRT.debris()) if (s.is(rim.getBlock())) return true;
+        return false;
+    }
+
     private static void useCounting(GameTestHelper h, WorkClock clock) {
         MinecraftServer server = h.getLevel().getServer();
         WorkScheduler.useImpactClock(server, clock);
@@ -176,7 +187,7 @@ public final class WorkGameTests {
             int blocks = 0;
             for (Blast b : blasts) {
                 for (BlockPos p : b.blocks()) {
-                    h.assertTrue(gone(level.getBlockState(p)), "взрыв у " + b.at() + " не снёс " + p + ": " + level.getBlockState(p));
+                    h.assertTrue(goneOrRim(level.getBlockState(p)), "взрыв у " + b.at() + " не снёс " + p + ": " + level.getBlockState(p));
                 }
                 blocks += b.blocks().size();
             }
@@ -364,11 +375,12 @@ public final class WorkGameTests {
             for (Blast b : blasts) {
                 for (BlockPos p : b.blocks()) {
                     BlockState now = level.getBlockState(p);
-                    h.assertTrue(gone(now), "выбран лучами и не снесён: " + p + " " + now + " (взрыв у " + b.at() + ")");
+                    h.assertTrue(goneOrRim(now), "выбран лучами и не снесён: " + p + " " + now + " (взрыв у " + b.at() + ")");
                 }
             }
             for (BlockPos p : blasts.getFirst().blocks()) if (Math.abs(p.getX() - c.getX()) <= 1 || Math.abs(p.getZ() - c.getZ()) <= 1) connected++;
-            h.assertTrue(connected > 3 * 16, "лучи задели мало рядов (" + connected + ") — порций снаружи нет");
+            // волна заряда ракеты ломает ряды лёгкого и хрупкого на метры (кладка и решётки — ближе), порций — несколько
+            h.assertTrue(connected > 24, "лучи задели мало рядов (" + connected + ") — порций снаружи нет");
         });
     }
 

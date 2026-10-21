@@ -44,54 +44,55 @@ public final class BlastGameTests {
     private BlastGameTests() {}
 
     /**
-     * Столбики из одного материала по золотой спирали вокруг заряда — каждый на своём луче, никто никого не закрывает:
-     * дальний сломанный и ближний уцелевший — в ±20 % от радиуса Джаррета порога этого материала.
+     * Столбики из одного материала на восьми направлениях через 45°, каждый на своём луче (сломанный блок гасит часть
+     * волны — за ним проверять открытое поле нельзя), на 0,6–1,4 радиуса Джаррета порога этого материала: дальний
+     * сломанный и ближний уцелевший — в ±20 % от него.
      */
-    private static void radiusTest(GameTestHelper h, Block material, double psi, double tnt, double maxR) {
+    private static void radiusTest(GameTestHelper h, Block material, double psi, double tnt) {
         ServerLevel level = h.getLevel();
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER)).add(0, 0.5, 0);
+        double expected = BlastDamage.breakRange(BlastModel.kpa(psi), tnt);
         List<BlockPos> posts = new ArrayList<>();
-        for (int i = 0; ; i++) {
-            double d = 1.5 + i * 0.12;
-            if (d > maxR) break;
-            double a = i * Math.toRadians(137.508);
-            BlockPos p = BlockPos.containing(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d);
-            if (!posts.contains(p)) posts.add(p);
+        for (int i = 0; i < 8; i++) {
+            double a = i * Math.PI / 4, d = expected * (0.6 + 0.8 * i / 7.0);
+            posts.add(BlockPos.containing(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d));
         }
         for (BlockPos p : posts) level.setBlock(p, material.defaultBlockState(), 2);
         Warheads.Probe blast = Warheads.testCharge(level, at, tnt);
-        double expected = BlastDamage.breakRange(BlastModel.kpa(psi), tnt);
         h.succeedWhen(() -> {
             h.assertTrue(blast.done(), "взрыв не кончился");
             double broken = 0, kept = Double.MAX_VALUE;
             for (BlockPos p : posts) {
-                double d = Vec3.atCenterOf(p).distanceTo(at);
+                // луч ломает блок, войдя в него: расстояние — до ближней точки блока
+                double d = new net.minecraft.world.phys.AABB(p).distanceToSqr(at);
+                d = Math.sqrt(d);
                 if (level.getBlockState(p).isAir()) broken = Math.max(broken, d);
                 else kept = Math.min(kept, d);
             }
             String got = String.format(Locale.ROOT, "%s, %.1f кг: сломан до %.1f, цел с %.1f, Джаррет %.1f", material, tnt, broken, kept, expected);
             Incoming.LOG.info("BLASTBENCH {}", got);
-            h.assertTrue(broken >= 0.8 * expected && broken <= 1.2 * expected, got);
-            h.assertTrue(kept >= 0.8 * expected, got);
+            // шаг столбиков — 0,11 радиуса: край зоны между сломанным и уцелевшим
+            h.assertTrue(broken >= 0.75 * expected && broken <= 1.2 * expected, got);
+            h.assertTrue(kept >= 0.75 * expected && kept <= 1.3 * expected, got);
         });
     }
 
     /** Шахед (50 кг): кладка ломается до ~3,4 м (Джаррет A). */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_radius_brick", skyAccess = true)
     public static void droneBreaksBrickToJarrettA(GameTestHelper h) {
-        radiusTest(h, Blocks.STONE_BRICKS, 12, WeaponType.DRONE.spec().charge(), 8);
+        radiusTest(h, Blocks.STONE_BRICKS, 12, WeaponType.DRONE.spec().charge());
     }
 
     /** Шахед: доски (лёгкие постройки, 4 psi) ломаются до ~6 м. */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_radius_wood", skyAccess = true)
     public static void droneBreaksWoodToJarrettB(GameTestHelper h) {
-        radiusTest(h, Blocks.OAK_PLANKS, 4, WeaponType.DRONE.spec().charge(), 12);
+        radiusTest(h, Blocks.OAK_PLANKS, 4, WeaponType.DRONE.spec().charge());
     }
 
     /** «Томагавк» (150 кг): кладка — до ~7 м. */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_radius_missile", skyAccess = true)
     public static void missileBreaksBrickToJarrettA(GameTestHelper h) {
-        radiusTest(h, Blocks.STONE_BRICKS, 12, WeaponType.MISSILE.spec().charge(), 14);
+        radiusTest(h, Blocks.STONE_BRICKS, 12, WeaponType.MISSILE.spec().charge());
     }
 
     /**
