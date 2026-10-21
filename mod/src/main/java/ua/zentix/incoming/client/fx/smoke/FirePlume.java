@@ -37,8 +37,8 @@ public final class FirePlume {
     /** Порог видимости толщи. */
     static final double SEEN = CloudModel.SEEN;
 
-    /** Тепло, Вт; поток плавучести, м⁴/с³; ветер, м/с; класс устойчивости; N², 1/с²; полуразмер очага, м. */
-    public final double watts, flux, wind, stability, s, size;
+    /** Тепло, Вт; поток плавучести, м⁴/с³; ветер, м/с; класс устойчивости; N², 1/с²; полуразмер очага, м; сажи на Дж. */
+    public final double watts, flux, wind, stability, s, size, sootPerJoule;
     /** Конечный подъём, м, и путь по ветру до него, м. */
     public final double finalRise, finalX;
 
@@ -47,14 +47,24 @@ public final class FirePlume {
      * F).
      */
     public FirePlume(double blocks, double wind, double stability) {
-        watts = blocks * BLOCK_WATTS;
+        // площадь очага ~ блоков м²: радиус √(N/π)
+        this(blocks * BLOCK_WATTS, Math.sqrt(blocks / Math.PI), SOOT_PER_JOULE, wind, stability);
+    }
+
+    /**
+     * Шлейф над очагом радиуса radius (м) с тепловыделением watts (Вт), сажи на джоуль sootPerJoule (выход сажи топлива на
+     * его теплоту сгорания) — лужа топлива в воронке ({@code CloudModel#poolWatts}).
+     */
+    public FirePlume(double watts, double radius, double sootPerJoule, double wind, double stability) {
+        this.watts = watts;
+        this.sootPerJoule = sootPerJoule;
         flux = CloudModel.G * CONVECTIVE * watts / (Math.PI * CloudModel.CP * CloudModel.RHO * CloudModel.T_AIR);
         this.wind = Math.max(CALM, wind);
         this.stability = stability;
         double n = Stability.brunt(stability);
         s = n * n;
-        // площадь очага ~ блоков м²: радиус √(N/π), σ — половина
-        size = 0.5 * Math.sqrt(blocks / Math.PI);
+        // σ очага — половина радиуса
+        size = 0.5 * radius;
         finalRise = finalRise(flux, this.wind, stability, s);
         finalX = Math.pow(finalRise * this.wind / (1.6 * Math.cbrt(flux)), 1.5);
     }
@@ -93,7 +103,7 @@ public final class FirePlume {
 
     /** Сажи на метр пути по ветру, кг/м. */
     public double sootPerMetre() {
-        return watts * SOOT_PER_JOULE / wind;
+        return watts * sootPerJoule / wind;
     }
 
     /** Толща через середину шлейфа на пути x: σ_m·λ/(√(2π)·√(σ_y·σ_z)). */

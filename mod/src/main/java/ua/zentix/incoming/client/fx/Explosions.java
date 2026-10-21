@@ -11,9 +11,10 @@ import ua.zentix.incoming.client.fx.particle.FxBudget;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
- * Твёрдое обычного взрыва — частицами {@link Fx}: горящие куски с дымными хвостами (если было топливо), искры, догорание в воронке
- * (языки пламени и угли). Дым, пыль и огненный шар — объём сетки дыма ({@code client/fx/smoke}: облако по модели взрыва,
- * его источник — событие {@code FarBlasts}); здесь их нет. Удары осколков корпуса — {@link FragmentHits}. Куски и искры — по размеру огненного шара модели
+ * Твёрдое обычного взрыва — частицами {@link Fx}: горящие куски с дымными хвостами (если было топливо), искры, лужа топлива
+ * в воронке (языки пламени и угли). Дым, пыль и огненный шар — облако по модели взрыва ({@code client/fx/smoke}) у события
+ * {@code FarBlasts}: запечённые клубы и кадры шара слоя эффектов; здесь их нет. Удары осколков корпуса — {@link FragmentHits}.
+ * Куски и искры — по размеру огненного шара модели
  * ({@code r}, блоки). Прорыв бомбы из-под земли ({@link #burst}) — прежняя картинка из частиц.
  */
 final class Explosions {
@@ -119,27 +120,34 @@ final class Explosions {
         }
     }
 
+    /** Языков пламени лужи одновременно — не больше (при «Частицы: все»). */
+    static final int POOL_TONGUES = 24;
+
     /**
-     * Догорание в воронке: языки пламени (мельче клетки сетки дыма), изредка стреляют угли. Дым над ним — облако модели
-     * в сетке дыма.
-     *
-     * @param t         тик после взрыва (≥ 1)
-     * @param fireTicks сколько тиков горит
+     * Лужа топлива в воронке ({@code CloudModel}: доля топлива к удару, площадь воронки, выгорание с единицы площади):
+     * языки пламени по Хескестаду — очаг радиуса {@code radius}, пламя высотой {@code flame}; газ в пламени поднимается
+     * со скоростью порядка √(g·L) (число Фруда пламени ~1), язык живёт, пока проходит высоту пламени; языков столько,
+     * чтобы пламя над очагом было сплошным (не больше {@link #POOL_TONGUES}), × доля, что ещё горит ({@code share}).
+     * Изредка стреляют угли. Дым над лужей — шлейф облака взрыва ({@code FarBlasts}), свет пламени — {@code FxLights}.
      */
-    static void burn(ClientLevel level, Vec3 c, float r, int t, int fireTicks, RandomSource rnd) {
+    static void pool(ClientLevel level, Vec3 c, double radius, double flame, double share, RandomSource rnd) {
+        if (share <= 0 || flame <= 0) return;
         float k = Fx.density(c);
-        if (t <= fireTicks) {
-            float f = (float) t / fireTicks;
-            if (rnd.nextFloat() < (1 - f) * k * 1.5f) {
-                Vec3 p = c.add(rnd.nextGaussian() * r * 0.5, 0.3, rnd.nextGaussian() * r * 0.5);
-                Fx.fire().vel(0, 0.06 + 0.05 * rnd.nextDouble(), 0).size(r * 0.1f, r * 0.22f).life(12 + rnd.nextInt(10)).rise(0.004f)
-                        .budget(FxBudget.GROUND).spawn(level, p);
-            }
-            if (rnd.nextFloat() < (1 - f) * 0.3f) {
-                Fx.spark().vel(rnd.nextGaussian() * 0.05, 0.08 + 0.1 * rnd.nextDouble(), rnd.nextGaussian() * 0.05).size(0.06f, 0.03f)
-                        .life(30 + rnd.nextInt(40)).gravity(-0.001f).drag(0.98f).streak(0).color(0xFFC060, 0xA02000)
-                        .spawn(level, c.add(rnd.nextGaussian() * r * 0.5, 0.5, rnd.nextGaussian() * r * 0.5));
-            }
+        double up = Math.sqrt(9.80665 * flame) / 20, size = Math.max(0.35 * radius, 0.2 * flame);
+        int life = (int) Math.max(6, Math.round(flame / up));
+        // языков в пламени: объём пламени на объём языка, не больше предела
+        double alive = Math.min(POOL_TONGUES, Math.max(2, radius * radius * flame / (size * size * size))) * share * k;
+        double born = alive / life;
+        for (int n = (int) born + (rnd.nextDouble() < born - (int) born ? 1 : 0); n > 0; n--) {
+            double a = rnd.nextDouble() * Mth.TWO_PI, r = radius * Math.sqrt(rnd.nextDouble());
+            float s = (float) (size * (0.8 + 0.4 * rnd.nextDouble()));
+            Fx.fire().vel(0, up * (0.7 + 0.3 * rnd.nextDouble()), 0).size(0.6f * s, s).life(life + rnd.nextInt(Math.max(1, life / 3))).rise(0.004f)
+                    .budget(FxBudget.GROUND).spawn(level, c.add(Math.cos(a) * r, 0.3 + 0.5 * s, Math.sin(a) * r));
+        }
+        if (rnd.nextFloat() < 0.3f * share) {
+            Fx.spark().vel(rnd.nextGaussian() * 0.05, 0.08 + 0.1 * rnd.nextDouble(), rnd.nextGaussian() * 0.05).size(0.06f, 0.03f)
+                    .life(30 + rnd.nextInt(40)).gravity(-0.001f).drag(0.98f).streak(0).color(0xFFC060, 0xA02000)
+                    .spawn(level, c.add(rnd.nextGaussian() * radius * 0.5, 0.5, rnd.nextGaussian() * radius * 0.5));
         }
     }
 

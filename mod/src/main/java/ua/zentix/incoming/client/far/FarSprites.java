@@ -112,6 +112,41 @@ public final class FarSprites {
     }
 
     /**
+     * Запечённый клуб ({@link FxAtlas#puff6}: кадр sprite, смесь со следующим mix) с центром (dx, dy, dz) от камеры,
+     * полуразмерами halfA вдоль экрана и halfB вверх: цвет (r, g, b) — вещество в свете неба у глаза, его свет по сторонам —
+     * в шейдере по картам кадра; непрозрачность a (уже с дымкой воздуха). Без поворота: оси карт — оси экрана.
+     */
+    public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float r, float g, float b,
+                      float a) {
+        if (a < 0.002f) return;
+        double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
+        out.sixWay(mix);
+        out.billboard((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold),
+                (float) (halfB * unfold), 0, sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
+                (float) Math.max(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
+        out.sixWay(-1);
+        counts[0]++;
+    }
+
+    /**
+     * Вуаль вещества вокруг глаза (облако, в которое вошла камера, {@link SmokePuffs}): ровный квадрат полуразмера half лицом
+     * к камере в (dx, dy, dz) от неё — свой цвет (r, g, b) с непрозрачностью a, без мягкого края у мира (что ближе —
+     * ближе квадрата и так).
+     */
+    public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a) {
+        veil(dx, dy, dz, half, r, g, b, a, LightTexture.FULL_BRIGHT);
+    }
+
+    /** То же со светом мира {@code light} (упакованный, для карты освещения): вещество ленты следа освещает мир у глаза. */
+    public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light) {
+        if (a < 0.002f) return;
+        double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        out.billboard((float) dx, (float) dy, (float) dz, (float) d, (float) half, 0, FxAtlas.white(), Math.min(1, r * a), Math.min(1, g * a),
+                Math.min(1, b * a), Math.min(1, a), 0, 1, light, 0);
+        counts[0]++;
+    }
+
+    /**
      * Модель снаряда в позе pose с центром (dx, dy, dz) от камеры: плитка атласа {@link FarModels} квадратом поперёк луча
      * на неё, закрывает и светит долю a (дымка воздуха, видимость над рельефом, переход от точки).
      *
@@ -282,8 +317,14 @@ public final class FarSprites {
      * свет мира концов (упакованный, для карты освещения), свой цвет. Поперёк ленты — перпендикуляр к отрезку и к лучу
      * зрения (на любую его точку — тот же); joint на входе — поперёк у конца a, общий с прошлым отрезком той же ленты
      * (NaN в [0] — нет: по этому отрезку), на выходе — поперёк у конца b.
+     * <p>
+     * Смотришь вдоль отрезка — трубка дыма видна с торца: на экране она короче своей ширины, и лента вырождается —
+     * перпендикуляр к почти параллельным отрезку и лучу случаен, соседние отрезки ложатся веером полос с прямым краем
+     * (у сопла их ещё и освещает факел). Видно же сечение трубки — круг её ширины, а толща вдоль взгляда — длина отрезка
+     * против ширины. Короче ширины на экране отрезок рисуется кругом (ореол того же следа) этой толщи, длиннее —
+     * лентой, между — плавно ({@link #endOn}).
      *
-     * @return отрезок записан (joint — новый)
+     * @return отрезок записан лентой (joint — новый)
      */
     public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                           float alphaB, int lightB, float r, float g, float b, float[] joint) {
@@ -296,6 +337,46 @@ public final class FarSprites {
         float mx = (x0 + x1) * 0.5f, my = (y0 + y1) * 0.5f, mz = (z0 + z1) * 0.5f;
         float nx = ty * mz - tz * my, ny = tz * mx - tx * mz, nz = tx * my - ty * mx;
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+        // длина отрезка на экране (поперёк луча к его середине) против его ширины: торцом — круг
+        double seg = Math.sqrt(tx * tx + ty * ty + tz * tz), across = len / Math.max(Math.sqrt(mx * mx + my * my + mz * mz), 1e-9);
+        // глаз в самой трубке (ближе полуширины к оси отрезка, с полуширины — плавно): лента — плоскость через глаз; её
+        // вещество вокруг глаза — вуалью: толща по взгляду — путь в трубке (длина отрезка или ширина на синус угла к нему)
+        // в ширинах
+        double hw = 0.5 * (halfA * ka + halfB * kb) / RIBBON, gap = distance(x0, y0, z0, tx, ty, tz);
+        double inside = 1 - smoothstep(0.5 * hw, hw, gap);
+        if (inside > 0) {
+            double sin = Math.sqrt(Math.max(0, 1 - sq((tx * fx + ty * fy + tz * fz) / Math.max(seg, 1e-9))));
+            double path = Math.min(seg, 2 * hw / Math.max(sin, 0.1));
+            double a = 0.5 * (Math.min(1, alphaA) + Math.min(1, alphaB));
+            // толща — путь этого отрезка в ширинах, без пола: у соседних отрезков пути складываются в настоящий путь взгляда
+            float k = (float) (inside * (1 - Math.pow(1 - Math.min(a, 0.999), path / (2 * Math.max(hw, 1e-6)))));
+            if (k > 0.004f) veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, VEIL_AT * 4, Math.min(1, r), Math.min(1, g), Math.min(1, b), k, lightA);
+            alphaA *= (float) (1 - inside);
+            alphaB *= (float) (1 - inside);
+            if (alphaA < 0.002f && alphaB < 0.002f) return false;
+        }
+        // торцом — только когда отрезок и луч почти параллельны (sin до 0,35, к 0,5 — плавно к ленте): сбоку короткий отрезок
+        // широкого старого следа — лента, иначе диски соседних отрезков ложились бы друг на друга и густили след
+        double tilt = Math.max(0, Math.min(1, (across / Math.max(seg, 1e-9) - 0.35) / 0.15));
+        double side = Math.max(endOn(across, 0.5 * (halfA * ka + halfB * kb) / RIBBON), tilt * tilt * (3 - 2 * tilt));
+        if (side < 1) {
+            // торец трубки: круг её ширины, толща вдоль взгляда — длина отрезка в ширинах (непрозрачность ленты — поперёк)
+            double halfW = 0.5 * (halfA * ka + halfB * kb) / RIBBON, a = 0.5 * (Math.min(1, alphaA) + Math.min(1, alphaB));
+            double along = 1 - Math.pow(1 - Math.min(a, 0.999), seg / (2 * Math.max(halfW, 1e-6)));
+            float k = (float) ((1 - side) * along);
+            out.glowShape(true);
+            // мягкость края у мира — в настоящих блоках, как у всех квадратов (halfW — в перенесённых ближе)
+            out.billboard(mx, my, mz, (float) (0.5 * (da + db)), (float) (halfW * GLOW), 0, FxAtlas.glow(), Math.min(1, r) * k, Math.min(1, g) * k,
+                    Math.min(1, b) * k, k, (float) (0.5 * (halfA + halfB) / RIBBON), (float) (0.5 * (ka + kb)), lightA, 0);
+            out.glowShape(false);
+            counts[3]++;
+            if (side <= 0 || len < 1e-6f) {
+                joint[0] = Float.NaN;
+                return false;
+            }
+            alphaA *= (float) side;
+            alphaB *= (float) side;
+        }
         if (len < 1e-6f) return false;
         nx /= len;
         ny /= len;
@@ -323,6 +404,30 @@ public final class FarSprites {
         joint[1] = ny;
         joint[2] = nz;
         return true;
+    }
+
+    /** Вуаль трубки следа вокруг глаза — на столько блоков перед ним (как у облаков, {@link SmokePuffs#VEIL_AT}). */
+    static final double VEIL_AT = SmokePuffs.VEIL_AT;
+
+    /** Расстояние от глаза (начало координат) до отрезка от (x0, y0, z0) длиной (tx, ty, tz). */
+    static double distance(double x0, double y0, double z0, double tx, double ty, double tz) {
+        double t2 = tx * tx + ty * ty + tz * tz;
+        double u = t2 < 1e-12 ? 0 : Math.max(0, Math.min(1, -(x0 * tx + y0 * ty + z0 * tz) / t2));
+        double px = x0 + tx * u, py = y0 + ty * u, pz = z0 + tz * u;
+        return Math.sqrt(px * px + py * py + pz * pz);
+    }
+
+    private static double sq(double v) {
+        return v * v;
+    }
+
+    /**
+     * Доля отрезка шлейфа, что рисуется лентой, при его длине на экране across (поперёк луча зрения, блоки на месте) и
+     * полуширине трубки halfWidth: длиннее двух ширин — вся, короче ширины — круг торца ({@link #ribbon}), между — плавно.
+     */
+    static double endOn(double across, double halfWidth) {
+        double u = Math.max(0, Math.min(1, (across / Math.max(2 * halfWidth, 1e-9) - 1)));
+        return u * u * (3 - 2 * u);
     }
 
     /** Квадрат: свет (r, g, b) уже умножен на непрозрачность a; ни света, ни заслона — не пишется. */

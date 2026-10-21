@@ -13,7 +13,7 @@ import ua.zentix.incoming.nuclear.model.BlackBody;
 import java.util.Locale;
 
 /**
- * Дым над тем, что горит, — объём сетки дыма: огонь, который видит клиент ({@link FireWatch}: блоки огня в своих чанках,
+ * Дым над тем, что горит, — облако клиента (его рисуют запечённые клубы слоя эффектов, {@code far/SmokePuffs}): огонь, который видит клиент ({@link FireWatch}: блоки огня в своих чанках,
  * окно выборок), собран в очаги по чанкам (16 блоков; у ядерного шторма — клетки 32, {@code FireStorm}): у очага — шлейф
  * Бриггса ({@link FirePlume}) по ветру мира и устойчивости воздуха ({@link ClientAir}), отрезками сетки
  * ({@link SmokeGrid.Sink#segment}); свет пламени снизу — шаром в свободные места света сетки ({@link #lights}). Откуда
@@ -27,7 +27,7 @@ public final class FireSmoke implements SmokeGrid.Source {
     static final int SEGMENTS = 10;
     /** Очаги пересматриваются раз в столько тиков (окно огня меняется не быстрее обхода чанков). */
     static final int PERIOD = 20;
-    /** Шлейф — не дальше по ветру, м (дальше сетки дыма — 0,75 полустороны последнего каскада). */
+    /** Шлейф — не дальше по ветру, м (0,75 полустороны последнего каскада сетки: ~0,8 км). */
     static final double REACH = 0.75 * 0.5 * SmokeGrid.N * SmokeGrid.CELL[SmokeGrid.CASCADES - 1];
 
     private static final Long2ObjectOpenHashMap<FireSmoke> FIRES = new Long2ObjectOpenHashMap<>();
@@ -147,7 +147,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         double far = Math.min(visible, u * (seconds - start));
         if (!Double.isNaN(end) && u * (seconds - end) >= far) return false;
         if (far <= 0) return true;
-        double ex = SmokeGrid.eyeX(), ey = SmokeGrid.eyeY(), ez = SmokeGrid.eyeZ();
+        double ex = SmokeGrid.eyeX(), ez = SmokeGrid.eyeZ();
         int segments = (x - ex) * (x - ex) + (z - ez) * (z - ez) > FAR * FAR ? FAR_SEGMENTS : SEGMENTS;
         double prevX = 0, prevB = blocksAt(seconds), prevH = prevB > 0 ? new FirePlume(prevB, u, stability).rise(0) : 0;
         for (int k = 1; k <= segments; k++) {
@@ -162,10 +162,9 @@ public final class FireSmoke implements SmokeGrid.Source {
             FirePlume p = new FirePlume(bm, u, stability);
             double ax = 0.5 * (xk - x0);
             double cx = x + wx * mid, cy = y + 0.5 * (h0 + hk), cz = z + wz * mid;
-            double share = SmokeGrid.volumeShare(cx - ex, cy - ey, cz - ez);
-            if (share <= 0 || p.tau(mid) < CloudModel.SEEN) continue;
+            if (p.tau(mid) < CloudModel.SEEN) continue;
             double kelvin = CloudModel.T_AIR_K + p.excess(0.5 * (h0 + hk));
-            out.segment(cx, cy, cz, wx * ax, 0.5 * (hk - h0), wz * ax, p.sigmaY(mid), p.sigmaZ(mid), p.sootPerMetre() * 2 * ax * share, 0, 0,
+            out.segment(cx, cy, cz, wx * ax, 0.5 * (hk - h0), wz * ax, p.sigmaY(mid), p.sigmaZ(mid), p.sootPerMetre() * 2 * ax, 0, 0,
                     1, 1, 1, kelvin, p.riseSpeed(mid));
         }
         return true;
@@ -174,6 +173,11 @@ public final class FireSmoke implements SmokeGrid.Source {
     @Override
     public boolean ended() {
         return gone || !Double.isNaN(end) && SmokeGrid.seconds(0) - end > REACH / plume.wind;
+    }
+
+    @Override
+    public long seed() {
+        return Double.doubleToLongBits(start) * 31 + Double.doubleToLongBits(x) * 17 + Double.doubleToLongBits(z);
     }
 
     /**

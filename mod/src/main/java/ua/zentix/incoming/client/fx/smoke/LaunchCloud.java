@@ -6,7 +6,8 @@ import ua.zentix.incoming.nuclear.model.DustModel;
 /**
  * Облако старта у пусковой: продукты двигателя, пока его струя бьёт в землю, и пыль, которую она поднимает, — одно тёплое
  * облако ({@link Thermal}, тот же закон, что у облака взрыва): всплывает, сносится ветром и расплывается, как любое
- * облако сетки. Без Minecraft: место земли, грунт и воздух даёт вызывающий.
+ * облако клиента (его рисуют запечённые клубы слоя эффектов, {@code far/SmokePuffs}; точки ленты шлейфа этих тиков —
+ * его, лента их вещества не несёт). Без Minecraft: место земли, грунт и воздух даёт вызывающий.
  * <p>
  * <b>Когда продукты — облако, а не след.</b> Струя — струя, пока её несёт импульс: на длине Мортона L_M = M^¾/F^½
  * (M = ṁ·u/ρ — поток импульса, F = g·Q̇/(ρ·c_p·T) — поток плавучести; Morton 1959, Fischer и др. «Mixing in Inland and
@@ -50,9 +51,6 @@ public final class LaunchCloud implements SmokeGrid.Source {
     private double builtHeat;
     /** Часы сетки последней подачи, с: пока подача идёт, термик пересобирается только по {@link #REBUILD}. */
     private double lastFeed;
-    /** Доля облака в объёме сетки в этом кадре и легло ли оно в сетку ({@link #shown}). */
-    private double share;
-    private boolean inGrid;
 
     /**
      * Термик пересобирается, когда тепло выросло с прошлой сборки в столько раз: высота ∝ Q^¼ — ошибка подъёма ≤ 6 %
@@ -133,16 +131,18 @@ public final class LaunchCloud implements SmokeGrid.Source {
         life = lifeSeconds();
     }
 
-    /** Доля облака, что рисует объём сетки в этом кадре (остальное — лента его точек, {@code FarFlightView}). */
-    public double shown() {
-        // растаявшее облако унесло и вещество своих точек
-        if (ended()) return 1;
-        return inGrid && SmokeGrid.on() ? share : 0;
+    /** Зерно клубов — по месту и началу подачи (у двух облаков рядом — разные клубы). */
+    @Override
+    public long seed() {
+        return Double.doubleToLongBits(born) * 31 + Double.doubleToLongBits(groundY);
     }
 
+    /** Во сколько раз облако выросло с начала (σ по горизонтали) — кадр запечённого клуба. */
     @Override
-    public void placed(boolean inGrid) {
-        this.inGrid = inGrid;
+    public double puffGrowth(double seconds) {
+        if (thermal == null) return 1;
+        double t = Math.max(0, seconds - born);
+        return thermal.sigmaH(t) / Math.max(thermal.sigmaH(0), 1e-6);
     }
 
     /** Облако что-то получило. */
@@ -221,10 +221,6 @@ public final class LaunchCloud implements SmokeGrid.Source {
         // облако, что дожило до предела густым, уходит за последнюю десятую жизни (как облако взрыва)
         double fade = life < CloudModel.LIFE_MAX ? 1 : Math.min(1, (life - t) / (0.1 * life));
         double cx = sumX / heat + thermal.driftX(t), cz = sumZ / heat + thermal.driftZ(t), cy = groundY + thermal.height(t);
-        // доля объёма — по месту облака у глаза (как у облака взрыва): дальше края сетки его вещество несёт лента
-        share = SmokeGrid.volumeShare(cx - SmokeGrid.eyeX(), cy - SmokeGrid.eyeY(), cz - SmokeGrid.eyeZ());
-        fade *= share;
-        if (fade <= 0) return true;
         double cloudDust = CloudModel.CLOUD_SHARE * dust * DustModel.aloft(t, thermal.height(t)) * fade;
         out.blob(cx, cy, cz, thermal.sigmaH(t), thermal.sigmaV(t), soot * fade, cloudDust, water * fade, dustR, dustG, dustB,
                 thermal.kelvin(t), thermal.rise(t));

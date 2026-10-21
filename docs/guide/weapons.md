@@ -143,24 +143,27 @@ Everything about it is in [Nuclear strike](nuke.md).
 
 ## What a blast looks like
 
-The fireball, smoke and dust of every strike are drawn as a volume: you can fly into a cloud, the sun lights its thin
-edges, its hot core glows at night, and it casts a shadow on the ground. Its size, rise and colour come from the charge
-and the fuel left in the tanks:
+The size, rise, colour and light of every blast come from the charge and the fuel left in the tanks; the smoke and the
+fireball are drawn from simulations of real gas, baked in Blender, the same way up close and far away. The sun lights
+the smoke from its side and shines through its thin edges, and a fireball lights the smoke around it. When the fuel has
+burnt, the fireball does not switch off: it cools as it mixes with air, from yellow through orange and dark red into
+smoke.
 
-- **Shahed**: a short flash, then an orange ball of burning petrol about 18 blocks across that burns out in under
-  2 seconds, black smoke above it and dust the colour of the ground below. The cloud rises a few hundred blocks and drifts
-  with the wind.
-- **Cruise missile**: a bigger flash and a fuel ball about 38 blocks across that burns for about 3 seconds; its own
-  charge gives little soot, so the smoke is mostly from the burning fuel, with a lot of dust.
+- **Shahed**: a short flash, then a ball of burning petrol about 18 blocks across that burns for about 1.5 seconds and
+  glows for about another second as it cools. The petrol left in the crater burns for about 12 seconds with flames
+  about 7 blocks high and sends up a column of black smoke that leans downwind. Black smoke from the ball rises a few
+  hundred blocks, and dust the colour of the ground spreads below.
+- **Cruise missile**: a bigger flash and a fuel ball about 38 blocks across that burns for about 3 seconds; the fuel left
+  in the crater burns for over a minute. Its own charge gives little soot, so the smoke is mostly from the burning fuel,
+  with a lot of dust.
 - **Grad**: a flash and a small grey-black puff with dust, no fuel ball. A salvo leaves a field of puffs that merge and
   drift downwind.
 - **Lancet**: a small flash and a cloud a few tens of blocks high.
 
 In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
-night, when cold air near the ground holds it down. A cloud stays visible for
-minutes, until it has spread too thin to see. Close up only solid things fly as particles: sparks, clods of earth,
-the dust and sparks of fragment hits, and, where fuel was left in the tank, burning pieces with smoke trails. Past about 600 blocks the same cloud is drawn as flat puffs. The bomb's underground
-blast looks as before.
+night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
+see. Sparks, clods of earth, the dust and sparks of fragment hits, flames and, where fuel was left in the tank, burning
+pieces with smoke trails are particles. The bomb's underground blast looks as before.
 
 Whatever the blast sets on fire keeps smoking. Over every chunk with burning blocks a column of black smoke rises, leans
 downwind and stretches out with it; a bigger fire sends it higher. By day it climbs higher than on a calm night, when
@@ -186,8 +189,8 @@ same up close and far away.
   dust it blows up, and rises and drifts as one warm cloud. A Shahed leaves a short white puff at the rail, a cruise
   missile's booster a bigger one. Each Grad rocket adds its own cloud, so a full salvo buries the launcher in smoke and
   dust that hang and drift downwind. Stone and concrete raise no dust. The ICBM leaves a large cloud at the pad.
-- **Near and far**: close to you a trail is part of the same smoke volume as blast clouds, so you can fly through it;
-  further away, and while it is still too thin for the volume, it is drawn as a ribbon. Both carry the same smoke.
+- **From behind**: looking along a trail or straight at a nozzle you see the round end of the smoke and the flame, not a
+  flat strip.
 - **Wind**: smoke drifts with the world's wind, the same wind that carries nuclear fallout. Each game day has its own
   wind, and it turns slowly from one day to the next. Near the ground it is weaker, most of all at night.
 - **Contrails**: the B-2 leaves a contrail only where the air is cold enough for one to form. At the height it flies

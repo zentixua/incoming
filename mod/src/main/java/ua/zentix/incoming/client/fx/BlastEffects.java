@@ -357,11 +357,11 @@ public final class BlastEffects {
                 return true;
             }
             if (t == 1) ejecta(level, model.source.chargeKg());
-            // языки пламени — пока горит топливо (шар топлива, CCPS)
-            Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * model.fuelBallSeconds), random);
+            // лужа топлива, что не сгорела шаром, горит в воронке
+            Explosions.pool(level, pos, model.poolRadius, model.poolFlame(), model.poolShare(t / 20.0), random);
             if (t == 8 && !rocket) BlastSounds.fire(pos, 1.1f);
             if (t == 20) BlastSounds.debris(pos, rocket ? 40 : 60, rocket ? 1.25f : 1.1f);
-            return t < 240;
+            return t < Math.max(240, 20 * model.poolSeconds);
         }
 
     }
@@ -436,8 +436,8 @@ public final class BlastEffects {
                 return true;
             }
             if (t == 1) ejecta(level, model.source.chargeKg());
-            // вторичных подрывов нет: вторичное — только топливо (языки пламени шара) и горящие обломки сервера
-            Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * model.fuelBallSeconds), random);
+            // вторичных подрывов нет: вторичное — топливо (лужа в воронке) и горящие обломки сервера
+            Explosions.pool(level, pos, model.poolRadius, model.poolFlame(), model.poolShare(t / 20.0), random);
             switch (t) {
                 case 10 -> BlastSounds.fire(pos, 0.9f);
                 case 150 -> BlastSounds.fire(pos, 0.85f);
@@ -445,7 +445,7 @@ public final class BlastEffects {
                 case 34 -> BlastSounds.debris(pos, 90, 0.8f);
                 default -> {}
             }
-            return t < 340;
+            return t < Math.max(340, 20 * model.poolSeconds);
         }
 
     }

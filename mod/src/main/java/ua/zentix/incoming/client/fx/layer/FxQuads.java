@@ -20,8 +20,9 @@ import java.util.Arrays;
  * у рельефа или проба источника ({@link #seenBy}) и множитель переноса ближе ({@code UV1}), свет мира ({@code UV2}),
  * туман Minecraft ({@code Normal.x}),
  * чем брать текстуру ({@code Normal.y}: 1 — частица ближайшим пикселем, {@link #nearestTexels}; −1 — плитка атласа
- * дальних моделей, {@link #modelTiles}; ½ — ореол по формуле, {@link #glowShape}; 0 — лист слоя гладко) и непрозрачность частицы без текстуры ({@code Normal.z},
- * {@link #opacity}).
+ * дальних моделей, {@link #modelTiles}; ½ — ореол по формуле, {@link #glowShape}; −¼ — запечённый клуб с шестисторонним
+ * светом, {@link #sixWay}; 0 — лист слоя гладко) и непрозрачность частицы без текстуры или смесь кадров клуба
+ * ({@code Normal.z}, {@link #opacity}).
  */
 public final class FxQuads {
     public static final VertexFormat FORMAT = VertexFormat.builder()
@@ -81,6 +82,16 @@ public final class FxQuads {
      * поперёк, и билинейно из картинки он выходил бы ступенями квадратами по пикселю картинки (по 25 пикселей экрана:
      * излом выборки на каждом и 8 бит в бледном хвосте). Мельче — из картинки и её уменьшенных копий (гладко).
      */
+    /**
+     * Следующие квадраты — запечённый клуб с шестисторонним светом ({@link FxAtlas#puff6}, {@code Normal.y} = −¼): свет
+     * солнца или луны, неба и огненных шаров — по его картам в шейдере, между кадром и следующим — смесь mix по векторам
+     * движения ({@code Normal.z}). Меньше нуля — снова как обычно.
+     */
+    public void sixWay(float mix) {
+        nearest = (byte) (mix < 0 ? 0 : -32);
+        opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
+    }
+
     public void glowShape(boolean on) {
         nearest = (byte) (on ? 64 : 0);
         opacity = 0;

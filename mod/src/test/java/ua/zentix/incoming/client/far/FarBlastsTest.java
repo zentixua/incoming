@@ -59,12 +59,12 @@ class FarBlastsTest {
     /** Цвет облака вдали — толстый слой его вещества: сажа темнее пыли, капли — белые. */
     @Test
     void cloudColourIsItsMatter() {
-        float soot = FarBlasts.thick(1, 0, 0, 0.9f), dust = FarBlasts.thick(0, 1, 0, SmokeGrid.dustAlbedo(0.6f)), drops = FarBlasts.thick(0, 0, 1, 0.9f);
+        float soot = SmokePuffs.thick(1, 0, 0, 0.9f), dust = SmokePuffs.thick(0, 1, 0, SmokeGrid.dustAlbedo(0.6f)), drops = SmokePuffs.thick(0, 0, 1, 0.9f);
         assertTrue(soot < 0.45f, "сажа " + soot);
         assertTrue(dust > soot + 0.2f, "пыль " + dust + ", сажа " + soot);
         assertTrue(drops > 0.9f, "капли " + drops);
         // пыль грунта — цвета грунта: толстый слой пыли цвета x на экране и есть x (обращение отражения)
-        assertEquals(0.6f, FarBlasts.thick(0, 1, 0, SmokeGrid.dustAlbedo(0.6f)), 0.01f);
+        assertEquals(0.6f, SmokePuffs.thick(0, 1, 0, SmokeGrid.dustAlbedo(0.6f)), 0.01f);
     }
 
     @Test

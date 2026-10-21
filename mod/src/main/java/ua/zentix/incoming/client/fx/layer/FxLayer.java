@@ -243,6 +243,11 @@ public final class FxLayer {
             FxAtlas.Sprite glow = FxAtlas.glow();
             s.safeGetUniform("FxGlow").set(glow.u0(), glow.v0(), glow.u1(), glow.v1());
             s.safeGetUniform("FxBalls").set(LIGHTS.balls);
+            sun(s, level, view.partial());
+            s.safeGetUniform("FxAmbient").set(view.ambient());
+            float[] six = FxAtlas.puff6Light();
+            s.safeGetUniform("FxSix").set(FxAtlas.PUFF6_STEP, FxAtlas.PUFF6_TOP, FxAtlas.PUFF6_U, FxAtlas.PUFF6_V);
+            s.safeGetUniform("FxSixLight").set(six[0], six[1], six[2]);
             s.safeGetUniform("FxBallLight").set(LIGHTS.light);
             s.safeGetUniform("PallFire0").set(fire0 >= 0 ? front.fire0.params : PallPass.empty().fire0.params);
             s.safeGetUniform("PallFire1").set(fire1 >= 0 ? front.fire1.params : PallPass.empty().fire1.params);
@@ -274,6 +279,23 @@ public final class FxLayer {
             cleanMax = spent;
             cleanCpu = cpuNanos() - cpu;
         }
+    }
+
+    /**
+     * Прямой свет на запечённые клубы ({@code FxSun}): направление на солнце днём или луну ночью в мире и доля прямого
+     * света в свете неба — ясным днём 0,75 (прямой против рассеянного неба на горизонтальную площадку при высоком солнце,
+     * ⚠ оценка порядка; к горизонту — меньше), ночью от луны — 0,5 (⚠ оценка), в дождь — пятая доля (облака рассеивают).
+     */
+    private static void sun(ShaderInstance s, ClientLevel level, float partial) {
+        float a = level.getTimeOfDay(partial) * net.minecraft.util.Mth.TWO_PI;
+        float x = -net.minecraft.util.Mth.sin(a), y = net.minecraft.util.Mth.cos(a);
+        float key = y >= 0 ? 0.75f : 0.5f;
+        if (y < 0) {
+            x = -x;
+            y = -y;
+        }
+        key *= net.minecraft.util.Mth.clamp(y / 0.1f, 0, 1) * (1 - 0.8f * level.getRainLevel(partial));
+        s.safeGetUniform("FxSun").set(x, y, 0f, key);
     }
 
     /** Время кадра слоя за прошлую секунду — для строки сценария. */

@@ -66,11 +66,9 @@ import java.util.Map;
  * сходит на нет): ширина, густота, всплытие и срок — по закону следа ({@link TrailModel}) от скорости, с которой снаряд
  * клал точку, и воздуха (ветер мира, устойчивость); сносится ветром мира и висит и после того, как снаряд пролетел или
  * взорвался. Мест частиц она не занимает: залп в сотни ракет не рвёт следы. Свет — карта освещения мира в точке
- * (вне загруженного мира — открытое небо). В сетке дыма у глаза ({@link SmokeGrid}) след — объём той же массы и того же
- * расплывания ({@link TrailSmoke}): точке — доля объёма по краю сетки и по тому, разрешает ли клетка каскада её сечение
- * ({@link SmokeGrid#resolved}), ленте — остальная толща. Пока струя ускорителя бьёт в землю
- * ({@link LaunchCloud#impinges}), продукты двигателя — облако старта ({@link LaunchCloud}): точки ленты тех тиков несут
- * только ту долю облака, что объём не рисует ({@link LaunchCloud#shown}).</li>
+ * (вне загруженного мира — открытое небо). Объёма у следа нет: клетка сетки дыма (2–32 м) тонкий след не разрешает.
+ * Пока струя ускорителя бьёт в землю ({@link LaunchCloud#impinges}), продукты двигателя — облако старта
+ * ({@link LaunchCloud}, запечённые клубы слоя): точки ленты тех тиков его вещества не несут.</li>
  * <li>За рельефом дальше прорисовки (ближе закрывает глубина) — луч {@link Sightline} раз в {@link #SIGHT_PERIOD}
  * тика: корпус и факел плавно гаснут.</li>
  * </ul>
@@ -469,110 +467,9 @@ public final class FarFlightView {
                 CollisionContext.empty())).getType() != HitResult.Type.MISS;
     }
 
-    // ---------------------------------------------------------------- след объёмом
-
-    /** Доля объёма точки в кадре (0 — вся лентой) и номер кадра {@link TrailSmoke#frame}, в котором она посчитана. */
-    private static final float[] SHARE = new float[TrailPoints.CAPACITY];
-    private static final int[] SHARE_AT = new int[TrailPoints.CAPACITY];
-    /** Отрезок объёма, который кончается в точке, — и его кадр. */
-    private static final int[] RUN = new int[TrailPoints.CAPACITY], RUN_AT = new int[TrailPoints.CAPACITY];
-    /** σ сечения точки и скорость её подъёма в кадре, м и м/с. */
-    private static final float[] SIG = new float[TrailPoints.CAPACITY], RIS = new float[TrailPoints.CAPACITY];
-    private static final double[] MATTER = new double[2], START = new double[4], CORNERS = new double[3 * SmokeGrid.CASCADES];
-
     /** Время кадра у путей: тик пути и доля (как у {@link #collect}). */
     private static double frameTime(float partial) {
         return FlightTracks.now() - 1 + (frozen() ? 0 : partial);
-    }
-
-    /**
-     * Отрезки следов объёмом этого кадра — до раскладки сетки дыма ({@code SmokeFrame.build}): у каждой живой точки — место
-     * (как у ленты: снос и всплытие), сечение σ и доля объёма — по краю сетки ({@link SmokeGrid#volumeShare}) и по тому,
-     * разрешает ли клетка её каскада сечение ({@link SmokeGrid#resolved}); кусок ленты между точками — масса на метр, что
-     * положил двигатель ({@link TrailModel#smoke}, лёд — {@link TrailModel#ice}), × длину пути при рождении × среднюю долю.
-     */
-    public static void prepareVolume(Vec3 eye, float partial) {
-        TrailSmoke.begin();
-        if (POINTS.isEmpty()) return;
-        int frame = TrailSmoke.frame;
-        double t = frameTime(partial);
-        SmokeGrid.corners(eye.x, eye.y, eye.z, CORNERS);
-        for (long sn = POINTS.first(), end = POINTS.end(); sn < end; sn++) {
-            int i = TrailPoints.index(sn);
-            Trail style = POINTS.style[i];
-            if (style == null) continue;
-            double age = Math.max(0, t - POINTS.birth[i]);
-            if (age >= POINTS.life[i]) continue;
-            TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i], POINTS.brunt[i],
-                    POINTS.stability[i], LOOK);
-            double lift = LOOK[2];
-            double sigma = TrailModel.sigma(style, age / 20, POINTS.stability[i], POINTS.wind[i], lift);
-            double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
-            double x = POINTS.x[i] + air.wind().x() * drift, y = POINTS.y[i] + lift, z = POINTS.z[i] + air.wind().z() * drift;
-            double dx = x - eye.x, dy = y - eye.y, dz = z - eye.z;
-            // точка облака старта: её вещество — в облаке, не в объёме следа
-            double edge = POINTS.cloud[i] != null ? 0 : SmokeGrid.volumeShare(dx, dy, dz);
-            float cell = edge > 0 ? SmokeGrid.cellFor(CORNERS, x, y, z, 0, 0, 0, sigma, sigma) : 0;
-            double share = edge * SmokeGrid.resolved(sigma, cell);
-            SHARE[i] = (float) share;
-            SHARE_AT[i] = frame;
-            SIG[i] = (float) sigma;
-            // скорость подъёма — для шума клубов в объёме; вне объёма не нужна
-            RIS[i] = share <= 0 ? 0 : (float) ((TrailModel.rise(style, age / 20 + 0.05, POINTS.inverse[i], POINTS.brunt[i]) - lift) / 0.05);
-            long p = POINTS.prev[i];
-            if (!POINTS.holds(p)) continue;
-            int pi = TrailPoints.index(p);
-            if (SHARE_AT[pi] != frame || SHARE[pi] <= 0 && share <= 0) continue;
-            // кусок ленты p → i: масса — по пути при рождении, доля объёма — средняя концов
-            double len = Math.sqrt(sq(POINTS.x[i] - POINTS.x[pi]) + sq(POINTS.y[i] - POINTS.y[pi]) + sq(POINTS.z[i] - POINTS.z[pi]));
-            double part = 0.5 * (SHARE[pi] + share);
-            double smokeE = 0.5 * (TrailModel.smoke(style, POINTS.inverse[pi]) + TrailModel.smoke(style, POINTS.inverse[i]));
-            double soot = 0, water = 0;
-            if (style.motor().smoke() != null && smokeE > 0) {
-                Matter.of(style.motor().smoke(), smokeE / style.motor().smoke().extinction * len * part, MATTER);
-                soot = MATTER[0];
-                water = MATTER[1];
-            }
-            if (age < POINTS.ice[i]) {
-                water += TrailModel.ice(style, POINTS.inverse[i], POINTS.excess[i], sigma) * len * part / CloudModel.DROP_K;
-            }
-            double perMetre = (soot + water) / Math.max(len, 1e-6);
-            TrailSmoke smoke = TrailSmoke.of(POINTS.owner[i]);
-            int before = RUN_AT[pi] == frame ? RUN[pi] : -1, r = before;
-            if (r < 0 || !TrailSmoke.continues(r, x, y, z, sigma, perMetre, cell)) {
-                // новый отрезок — от места точки p в этом кадре (конец прежнего отрезка или её место)
-                if (before >= 0) {
-                    r = TrailSmoke.open(smoke, TrailSmoke.EX[before], TrailSmoke.EY[before], TrailSmoke.EZ[before], SIG[pi], RIS[pi], cell);
-                } else {
-                    point(pi, style, t, START);
-                    r = TrailSmoke.open(smoke, START[0], START[1], START[2], SIG[pi], RIS[pi], cell);
-                }
-                if (r < 0) {
-                    // отрезков кадра больше нет: кусок — лентой целиком
-                    SHARE[i] = 0;
-                    continue;
-                }
-            }
-            TrailSmoke.add(r, x, y, z, sigma, soot, water, RIS[i], perMetre);
-            RUN[i] = r;
-            RUN_AT[i] = frame;
-        }
-    }
-
-    private static double sq(double v) {
-        return v * v;
-    }
-
-    /** Место точки i в кадре (как у ленты) — в out[0..2]. */
-    private static void point(int i, Trail style, double t, double[] out) {
-        double age = Math.max(0, t - POINTS.birth[i]);
-        TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i], POINTS.brunt[i],
-                POINTS.stability[i], out);
-        double lift = out[2];
-        double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
-        out[0] = POINTS.x[i] + air.wind().x() * drift;
-        out[1] = POINTS.y[i] + lift;
-        out[2] = POINTS.z[i] + air.wind().z() * drift;
     }
 
     /** Шлейфы, корпуса и факелы в кадр; факелы — ещё и светом дыма и лент кадра (lights). */
@@ -592,10 +489,8 @@ public final class FarFlightView {
             if (style == null) continue;
             double age = Math.max(0, t - POINTS.birth[i]);
             if (age >= POINTS.life[i]) continue;
-            // доля объёма в сетке дыма — её; ленте — остальная толща (масса × (1 − доля))
-            // точка в облаке старта — его доля в объёме; иначе — доля объёма следа
-            LaunchCloud pad = POINTS.cloud[i];
-            double volume = pad != null ? pad.shown() : SHARE_AT[i] == TrailSmoke.frame && TrailSmoke.volume(POINTS.owner[i]) ? SHARE[i] : 0;
+            // точка в облаке старта — её вещество рисует облако (запечённые клубы), лента — нет
+            double volume = POINTS.cloud[i] != null ? 1 : 0;
             TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i],
                     POINTS.brunt[i], POINTS.stability[i], 1 - volume, LOOK);
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
@@ -878,6 +773,5 @@ public final class FarFlightView {
         heights = null;
         for (LaunchCloud c : CLOUDS) c.end();
         CLOUDS.clear();
-        TrailSmoke.reset();
     }
 }

@@ -40,6 +40,8 @@ public final class FarRenderer {
      */
     public static void collect(FarView view, FxQuads out, FxLights lights, SourceProbes probes) {
         SPRITES.begin(view, out, probes);
+        // облака (взрывов, старта, пожаров) — запечёнными клубами, вблизи и вдали
+        SmokePuffs.collect(view, SPRITES);
         if (!FarBlasts.isEmpty() || !FarFlightView.isEmpty()) {
             FarBlasts.collect(view, SPRITES, lights);
             FarFlightView.collect(view, SPRITES, lights);
