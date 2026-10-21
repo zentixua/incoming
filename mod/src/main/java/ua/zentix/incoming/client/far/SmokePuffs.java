@@ -120,7 +120,10 @@ final class SmokePuffs {
             // кучка: чем крупнее гаусс на экране, тем больше клубов и тем они мельче (кадр 128 пикселей не растягивается на
             // пол-экрана); дробная часть числа — доля последнего, без скачка
             double pixels = point[0] / Math.max(d * view.pixel(), 1e-12);
-            double many = Math.clamp(pixels / CLUSTER_PIXELS, 1, CLUSTER);
+            // крупнее экрана — подробность за его краем не видна, а заливка дорога: клубов меньше во столько раз, во сколько
+            // гаусс по площади больше экрана (полудиагональ кадра, пикселей)
+            double screen = view.edge() / Math.max(view.pixel(), 1e-12);
+            double many = Math.clamp(Math.min(pixels / CLUSTER_PIXELS, CLUSTER * Math.min(1, screen * screen / (pixels * pixels))), 1, CLUSTER);
             int count = (int) Math.ceil(many - 1e-9);
             double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many));
             // в середине перекрывается столько клубов: каждый берёт свою долю, вместе — то же пропускание

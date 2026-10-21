@@ -385,8 +385,9 @@ final class ProbeScenario {
         }
         if (hover) p.getAbilities().flying = true;
         // цена слоя эффектов раз в секунду после взрыва (бюджет: залп «Града» — не больше 2 мс видеокарты)
-        if (blastTick >= 0 && (tick - blastTick) % 20 == 0) {
-            Incoming.LOG.info("SCENARIO probe {} layer {} s: {}", current, (tick - blastTick) / 20,
+        int from = blastTick >= 0 ? blastTick : launchTick;
+        if (from >= 0 && (tick - from) % 20 == 0) {
+            Incoming.LOG.info("SCENARIO probe {} layer {} s: {}", current, (tick - from) / 20,
                     ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming());
         }
         if (current.startsWith("launch") && firedAt >= 0) launchEvents();
