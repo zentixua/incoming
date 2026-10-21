@@ -194,13 +194,18 @@ public final class CloudModel {
     public final double life;
 
     public CloudModel(BlastSource source, Air air) {
+        this(source, air, false);
+    }
+
+    /** {@code onWater} — взрыв на воде: воронки в грунте нет, пыли нет (вода — брызгами, {@link WaterBlast}). */
+    public CloudModel(BlastSource source, Air air, boolean onWater) {
         this.source = source;
         this.air = air;
         double fuelHeat = source.fuelKg() * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
-        // тот же закон воронки, что роет сервер (грунта пакет не несёт — сухой)
-        dust = CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED;
+        // тот же закон воронки, что роет сервер (грунт — сухой: пакет несёт только «вода или нет»)
+        dust = onWater ? 0 : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED;
         soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + source.fuelKg() * source.fuel().sootYield;
         fuelBall = FuelFireball.diameter(source.fuelKg());
         fuelBallSeconds = FuelFireball.seconds(source.fuelKg());

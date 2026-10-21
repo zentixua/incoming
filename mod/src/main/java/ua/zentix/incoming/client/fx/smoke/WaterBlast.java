@@ -1,0 +1,128 @@
+package ua.zentix.incoming.client.fx.smoke;
+
+import ua.zentix.incoming.nuclear.model.WaterModel;
+
+/**
+ * Обычный взрыв на воде (снаряд рвётся о гладь или сразу под ней), без Minecraft: столб брызг, корона, водяная пыль,
+ * что остаётся, когда вода падает. Метры, секунды, килограммы ТНТ.
+ * <ul>
+ * <li><b>Размер</b> — тот же закон, что у столба ядерки ({@link WaterModel}): высота и радиус столба подрыва на
+ * поверхности растут как кубический корень заряда от «Бейкера» (Glasstone и Dolan 1977, §2.47–2.65: 23 кт на 27 м —
+ * столб 1,8 км, 600 м в поперечнике; у подрыва на поверхности — доля {@code SURFACE_COLUMN}). В воде энергия ядерного
+ * подрыва, как у взрывчатки, уходит в ударную волну и пузырь (светом в воде её не уносит), поэтому закон подобия по
+ * энергии — общий. Сверка: у 9,1 кг ТНТ на лучшей глубине (10 м) столб по таблицам Michael и Swisdak — 23 м
+ * (Swisdak, «Explosion effects and properties II», NSWC TR 76-116, 1978, по WIT Trans. Built Env. 87, 2006); у того же
+ * заряда на поверхности здесь — ~8 м: подрыв на поверхности выбрасывает меньше воды (⚠ оценка через долю «Бейкера»).</li>
+ * <li><b>Время</b> — баллистика, а не подобие по энергии: у малого заряда воду держит тяжесть (число Фруда), и столб
+ * высотой H встаёт со скоростью √(2gH) за √(2H/g) и столько же падает. У «Бейкера» по этому закону — ~15 с до верха,
+ * у шахеда — ~1,7 с.</li>
+ * <li><b>Вода</b> — масса столба по массе «Бейкера» (Glasstone и Dolan, §2.52: ~1 млн т), пропорционально заряду;
+ * ослабление брызг — капли радиуса {@link #DROP_R} м: 3/(2ρr) м²/кг (геометрическая оптика); в клуб она идёт
+ * каплями сетки ({@link CloudModel#DROP_K}, капли 5 мкм) — пересчётом массы на то же ослабление. Падая, столб
+ * оставляет водяную пыль — долю {@link #MIST} мелких капель (О), её сносит ветром и расплывает, как облако.</li>
+ * </ul>
+ */
+public final class WaterBlast {
+    /** Заряд «Бейкера», кг ТНТ. */
+    static final double BAKER_KG = 23e6;
+    /** Масса воды в столбе «Бейкера», кг (Glasstone, Dolan §2.52: около миллиона тонн; ⚠ по памяти). */
+    static final double BAKER_WATER_KG = 1e9;
+    /** Радиус капель столба, м (О: брызги — миллиметры). */
+    static final double DROP_R = 0.5e-3;
+    /** Доля воды столба, что остаётся водяной пылью, когда он падает (О: 1–5 %). */
+    static final double MIST = 0.02;
+    static final double G = 9.80665;
+
+    /** Высота и радиус столба, м; время подъёма, с; вода, кг. */
+    public final double height, radius, rise, water;
+    private final CloudModel.Air air;
+
+    public WaterBlast(double tntKg, CloudModel.Air air) {
+        this.air = air;
+        double kt = tntKg / 1e6;
+        height = WaterModel.columnHeight(kt);
+        radius = WaterModel.columnRadius(kt);
+        rise = Math.sqrt(2 * height / G);
+        water = BAKER_WATER_KG * tntKg / BAKER_KG;
+    }
+
+    /** Верх столба в возрасте t, м: бросок со скоростью √(2gH) (до вершины), падение — обратно к воде. */
+    public double top(double t) {
+        if (t <= 0 || t >= 2 * rise) return 0;
+        double v0 = G * rise;
+        return v0 * t - 0.5 * G * t * t;
+    }
+
+    /** Доля воды, что ещё в столбе (не упала): до вершины — вся, к 2·подъёма — ничего. */
+    public double aloft(double t) {
+        if (t <= rise) return 1;
+        double u = Math.min(1, (t - rise) / rise);
+        return 1 - u * u;
+    }
+
+    /** Масса капель сетки (5 мкм) с тем же ослаблением, что у {@code kg} брызг столба. */
+    static double asGridDrops(double kg) {
+        return kg * 3 / (2 * 1000 * DROP_R) / CloudModel.DROP_K;
+    }
+
+    /** Сколько живёт водяная пыль после падения столба, с: пока её толща поперёк больше порога. */
+    public double mistLife() {
+        double ext = CloudModel.DROP_K * asGridDrops(MIST * water);
+        double lo = 0, hi = CloudModel.LIFE_MAX;
+        for (int i = 0; i < 30; i++) {
+            double mid = 0.5 * (lo + hi);
+            if (mistTau(mid, ext) >= CloudModel.SEEN) lo = mid;
+            else hi = mid;
+        }
+        return 2 * rise + lo;
+    }
+
+    private double mistTau(double since, double ext) {
+        double sh = mistSigmaH(since), sv = mistSigmaV(since);
+        return ext / (2 * Math.PI * sh * sv);
+    }
+
+    /** σ водяной пыли через since секунд после падения столба: радиус столба и расплывание по Бриггсу по пути ветра. */
+    double mistSigmaH(double since) {
+        double s = CloudModel.spreadH(air.spread(), path(since));
+        return Math.sqrt(radius * radius + s * s);
+    }
+
+    double mistSigmaV(double since) {
+        double s = CloudModel.spreadV(air.spread(), path(since));
+        double s0 = height / 4;
+        return Math.sqrt(s0 * s0 + s * s);
+    }
+
+    private double path(double since) {
+        return Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(height / 2)) * Math.max(0, since);
+    }
+
+    /**
+     * Клубы брызг в возрасте t от места взрыва на глади (центр от точки взрыва, м): столб — вертикальный отрезок до
+     * верха с σ поперёк в радиус столба, корона — клуб на верху шире столба (струи тормозят и раскрываются), водяная
+     * пыль — когда вода падает, у воды, сносится ветром. false — брызг уже нет.
+     */
+    public boolean blobs(double t, SmokeGrid.Sink out, double x, double y, double z) {
+        if (t < 0) return true;
+        double top = top(t), aloft = aloft(t), drops = asGridDrops(water);
+        if (top > 0 && aloft > 0) {
+            double column = 0.7 * drops * aloft, crown = 0.3 * drops * aloft;
+            double half = 0.5 * top;
+            out.segment(x, y + half, z, 0, half, 0, radius / 2, Math.max(radius / 2, 0.25 * top), 0, 0, column, 1, 1, 1, CloudModel.T_AIR_K,
+                    G * Math.max(0, rise - t));
+            // корона раскрывается к вершине: вдвое шире столба (у «Бейкера» корона ~втрое шире, WaterModel.CROWN_R — 1,4)
+            double open = Math.min(1, t / rise);
+            out.blob(x, y + top, z, radius * (0.5 + 0.5 * open), radius * 0.5, 0, 0, crown, 1, 1, 1, CloudModel.T_AIR_K, 0);
+        }
+        double since = t - rise;
+        if (since > 0) {
+            double mist = asGridDrops(MIST * water) * Math.min(1, since / rise);
+            if (t > mistLife()) return false;
+            double lean = air.wind(height / 2) * since;
+            out.blob(x + air.windX() * lean, y + Math.min(height / 2, mistSigmaV(since)), z + air.windZ() * lean, mistSigmaH(since),
+                    mistSigmaV(since), 0, 0, mist, 1, 1, 1, CloudModel.T_AIR_K, 0);
+        }
+        return true;
+    }
+}

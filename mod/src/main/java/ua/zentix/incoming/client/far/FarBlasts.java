@@ -11,6 +11,7 @@ import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLights;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
+import ua.zentix.incoming.client.fx.smoke.WaterBlast;
 import ua.zentix.incoming.client.sound.Acoustics;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
@@ -156,6 +157,9 @@ public final class FarBlasts {
         /** Основание: точка удара, у бомбы — поверхность над зарядом. */
         final double x, y, z;
         final GroundMaterial ground;
+        /** Взрыв на воде: столб брызг, корона и водяная пыль ({@link WaterBlast}); null — на суше. */
+        @Nullable
+        final WaterBlast water;
         /** Зерно взрыва: клубы и вариант записи звука. */
         final long seed;
         final long born;
@@ -199,6 +203,7 @@ public final class FarBlasts {
             this.y = y;
             this.z = z;
             this.ground = ground;
+            this.water = model != null && ground.isWater() && source.chargeKg() > 0 ? new WaterBlast(source.chargeKg(), model.air) : null;
             this.seed = seed;
             this.born = clock;
             this.bornSeconds = SmokeGrid.seconds(0);
@@ -337,12 +342,13 @@ public final class FarBlasts {
         public boolean emit(double seconds, SmokeGrid.Sink out) {
             if (!alive || model == null || level != Minecraft.getInstance().level) return false;
             double t = seconds - bornSeconds;
-            if (t >= Math.max(model.life, poolEnd())) return false;
+            if (t >= Math.max(Math.max(model.life, poolEnd()), water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
                 model.blobs(t, (bx, by, bz, sh, sv, soot, dustKg, water, kelvin, rise) -> out.blob(x + bx, y + by, z + bz, sh, sv, soot, dustKg,
                         water, dustR, dustG, dustB, kelvin, rise));
             }
             if (t < model.condensationSeconds()) condensation(t, out);
+            if (water != null) water.blobs(t, out, x, y, z);
             if (pool != null) pool(t, out);
             return true;
         }
@@ -422,7 +428,7 @@ public final class FarBlasts {
             look = BunkerCover.breaches((int) p.surfaceY(), pos.y) ? BUNKER_BREACH : BUNKER_DEEP;
             y = p.surfaceY();
         } else {
-            model = new CloudModel(BlastSource.of(p), air(level, pos));
+            model = new CloudModel(BlastSource.of(p), air(level, pos), GroundMaterial.byId(p.material()).isWater());
         }
         Event e = new Event(level, BlastSource.of(p), look, model, pos.x, y, pos.z, GroundMaterial.byId(p.material()), p.seed(), near(pos));
         trace(e, FarTerrain.of(level), camera());
@@ -440,7 +446,7 @@ public final class FarBlasts {
      */
     public static CloudModel model(S2C.Blast p) {
         ClientLevel level = Minecraft.getInstance().level;
-        return new CloudModel(BlastSource.of(p), level == null ? CloudModel.Air.STANDARD : air(level, p.pos()));
+        return new CloudModel(BlastSource.of(p), level == null ? CloudModel.Air.STANDARD : air(level, p.pos()), GroundMaterial.byId(p.material()).isWater());
     }
 
     /**
