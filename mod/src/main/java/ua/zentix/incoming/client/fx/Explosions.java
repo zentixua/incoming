@@ -11,9 +11,10 @@ import ua.zentix.incoming.client.fx.particle.FxBudget;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
- * Твёрдое обычного взрыва — частицами {@link Fx}: раскалённые осколки с дымными хвостами, искры, лужа топлива в воронке
- * (языки пламени и угли). Дым, пыль и огненный шар — облако по модели взрыва ({@code client/fx/smoke}) у события
- * {@code FarBlasts}: запечённые клубы и кадры шара слоя эффектов; здесь их нет. Осколки и искры — по размеру огненного шара модели
+ * Твёрдое обычного взрыва — частицами {@link Fx}: горящие куски с дымными хвостами (если было топливо), искры, лужа топлива
+ * в воронке (языки пламени и угли). Дым, пыль и огненный шар — облако по модели взрыва ({@code client/fx/smoke}) у события
+ * {@code FarBlasts}: запечённые клубы и кадры шара слоя эффектов; здесь их нет. Удары осколков корпуса — {@link FragmentHits}.
+ * Куски и искры — по размеру огненного шара модели
  * ({@code r}, блоки). Прорыв бомбы из-под земли ({@link #burst}) — прежняя картинка из частиц.
  */
 final class Explosions {
@@ -23,18 +24,23 @@ final class Explosions {
     static final int LOBES = 4;
 
     /**
-     * Мгновенная часть наземного взрыва (t = 0) — только твёрдое: раскалённые осколки с дымными хвостами (их дым тоньше
-     * клетки сетки — частицами, как куски у ядерки) и искры; число — по радиусу шара r (как прежде по радиусу картинки).
+     * Мгновенная часть наземного взрыва (t = 0) — твёрдое: искры продуктов взрыва и, если в баке было топливо, горящие
+     * куски корпуса, пропитанные им, с дымными хвостами (их дым тоньше клетки сетки — частицами). Осколки корпуса БЧ сами
+     * не светятся (≈500–700 K, {@code warhead.FragmentModel}) и дыма не дают — гореть нечему: их видно по ударам
+     * ({@link FragmentHits}). Число горящих кусков и искр — по радиусу шара r (оценка, как прежде по радиусу картинки).
      */
-    static void solids(ClientLevel level, Vec3 c, float r, RandomSource rnd) {
+    static void solids(ClientLevel level, Vec3 c, float r, boolean fuel, RandomSource rnd) {
         float k = Fx.density(c);
-        Fx.Spec tail = Fx.smoke().size(r * 0.12f, r * 0.55f).life(140).color(0x3A3430, 0x8A8279).alpha(0.55f).glow(0.6f, 5).drag(0.93f)
-                .rise(0.003f).fadeIn(1).fadeFrom(0.35f).budget(FxBudget.DEBRIS);
-        int n = Math.round(9 * r / 4 * k) + 3;
-        for (int i = 0; i < n; i++) {
-            Vec3 d = dir(rnd, 0.35);
-            Fx.spark().vel(d.scale(0.9 + rnd.nextDouble() * 1.1)).size(0.16f, 0.08f).life(28 + rnd.nextInt(24)).gravity(0.045f).drag(0.985f)
-                    .streak(1.5f).trail(tail, 0.45f, 0.85f).spawn(level, c.add(0, r * 0.3, 0));
+        int n;
+        if (fuel) {
+            Fx.Spec tail = Fx.smoke().size(r * 0.12f, r * 0.55f).life(140).color(0x3A3430, 0x8A8279).alpha(0.55f).glow(0.6f, 5).drag(0.93f)
+                    .rise(0.003f).fadeIn(1).fadeFrom(0.35f).budget(FxBudget.DEBRIS);
+            n = Math.round(9 * r / 4 * k) + 3;
+            for (int i = 0; i < n; i++) {
+                Vec3 d = dir(rnd, 0.35);
+                Fx.spark().vel(d.scale(0.9 + rnd.nextDouble() * 1.1)).size(0.16f, 0.08f).life(28 + rnd.nextInt(24)).gravity(0.045f).drag(0.985f)
+                        .streak(1.5f).trail(tail, 0.45f, 0.85f).spawn(level, c.add(0, r * 0.3, 0));
+            }
         }
         n = Math.round(60 * r / 4 * k) + 10;
         for (int i = 0; i < n; i++) {

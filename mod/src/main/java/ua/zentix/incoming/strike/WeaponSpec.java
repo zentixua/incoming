@@ -412,23 +412,25 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * и пике с 2–2,5 км; заявлено 60–4000 м (ГУР МО Украины, разборы Euromaidan Press 06.2025, Gwara Media) — взято
      * 2000 м. Пике — О: отвесно ~105 м/с, удар под 60° ~99 м/с (баланс тяги винта, веса и сопротивления,
      * {@code WeaponSpecTest}). БЧ — 50 кг (оценки 30–50; у поздних «Гераней» 90 — Wikipedia, ISIS): решение Артёма —
-     * исходный шахед с 50 кг ТНТ; доля ВВ не опубликована — О: ~40 кг ВВ × 1,25 и ~10 кг корпуса. Топливо к удару —
+     * исходный шахед с 50 кг ТНТ; доля ВВ не опубликована — О: ~40 кг ВВ × 1,25 и ~10 кг корпуса, корпус БЧ Ø ~0,4 м (О: в
+     * носу фюзеляжа 0,5 м). Топливо к удару —
      * О: 30 кг бензина (10–50, по пройденному пути).
      */
     static final Article DRONE_ARTICLE = new Article(150, 200, 3.5, 0.5, 2.5, 0.3, DRONE_PISTON, DRONE_BOOSTER,
-            new Article.Envelope(51.4, 105, 2000), new Article.Impact(99, 60), new Article.Charge(50, 40, 10), 30);
+            new Article.Envelope(51.4, 105, 2000), new Article.Impact(99, 60), new Article.Charge(50, 40, 10, 0.4), 30);
 
     /**
      * BGM-109 «Томагавк» Block IV: 1,3 т без ускорителя, 5,56 м, Ø 0,52 м, размах 2,67 м, М0,74 ≈ 250 м/с (880 км/ч),
      * бреющий полёт 30–50 м над рельефом (Wikipedia «Tomahawk (missile)», designation-systems.net). Топливо (TH-dimer,
      * как JP-10) не опубликовано — О: ~385 кг (1600 км × 0,060 кг/с ÷ 250 м/с). CdA 0,078 м² (О: тяга 3,1 кН равна
      * сопротивлению на 250 м/с у земли). БЧ WDU-36/B — 310 кг (designation-systems: 340), из них 120 кг PBXN-107
-     * (Wikipedia по PEO U&W): решение Артёма 18.10 — ~150 кг ТНТ (О: относительная сила PBXN-107 ~1,25). Конечный
+     * (Wikipedia по PEO U&W): решение Артёма 18.10 — ~150 кг ТНТ (О: относительная сила PBXN-107 ~1,25); корпус БЧ ~190 кг
+     * стали, Ø ~0,5 м (О: внутри корпуса ракеты 0,52 м). Конечный
      * участок — горка и пике или прямо; угол открыто не назван — О: 45° на крейсерской скорости. Топливо к удару — О:
      * 275 кг (200–350, сотни кг и размер огненного шара).
      */
     static final Article MISSILE_ARTICLE = new Article(925, 1310, 5.56, 0.52, 2.67, 0.078, MISSILE_TURBOFAN, MISSILE_BOOSTER,
-            new Article.Envelope(250, 250, 40), new Article.Impact(250, 45), new Article.Charge(150, 120, 190), 275);
+            new Article.Envelope(250, 250, 40), new Article.Impact(250, 45), new Article.Charge(150, 120, 190, 0.5), 275);
 
     /**
      * B-2 Spirit: пустой 71,7 т, взлётная до 170,6 т, длина 21 м, высота 5,2 м, размах 52,4 м, крейсер М0,85 — на
@@ -446,7 +448,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * под 64° (точка с массой в стандартной атмосфере, {@code WeaponSpecTest}). Топлива нет.
      */
     static final Article BOMB_ARTICLE = new Article(13_600, 13_600, 6.2, 0.8, 0.8, 0.15, null, null,
-            new Article.Envelope(250, 511, 12_000), new Article.Impact(511, 64), new Article.Charge(2423, 2423, 9_900), 0);
+            new Article.Envelope(250, 511, 12_000), new Article.Impact(511, 64), new Article.Charge(2423, 2423, 9_900, 0.8), 0);
 
     /**
      * LGM-30G «Минитмен III»: 36 030 кг, 18,2 × 1,67 м (USAF Fact Sheet); мод ведёт только первую ступень
@@ -463,19 +465,19 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * {@link #ROCKET_MOTOR}. CdA до звука — О: 0,0034 м² (C<sub>d</sub> 0,29): с ним и кривой {@link Article#machFactor}
      * наибольшая дальность — 20,4 км при угле 53°, к выгоранию 683 м/с, полёт 77 с, апогей 7,2 км, удар 337 м/с под 62°
      * ({@code WeaponSpecTest}). БЧ — 18,4 кг, из них 6,4 кг ВВ (Wikipedia, ru: «Град (РСЗО)»); ТНТ — по массе ВВ
-     * (как было), корпус 12 кг.
+     * (как было), корпус 12 кг, Ø 122 мм — калибр.
      */
     static final Article ROCKET_ARTICLE = new Article(46.6, 66.6, 2.87, 0.122, 0.122, 0.0034, null, ROCKET_MOTOR,
-            new Article.Envelope(683, 683, 0), new Article.Impact(337, 62), new Article.Charge(6.4, 6.4, 12), 0);
+            new Article.Envelope(683, 683, 0), new Article.Impact(337, 62), new Article.Charge(6.4, 6.4, 12, 0.122), 0);
 
     /**
      * «Ланцет-3»: 12 кг, БЧ 3 кг, 80–110 км/ч, в пике до ~300 км/ч с 600–800 м (Wikipedia «ZALA Lancet», Army
      * Recognition); длина 1,65 м (С); Ø ~0,2 и размах ~1,2 м (О по модели). CdA — О: 0,028 м² (отвесное пике 300 км/ч
      * при 12 кг). Удар — О: под 70° на ~82 м/с (баланс веса, тяги и сопротивления, {@code WeaponSpecTest}). Доля ВВ в БЧ
-     * не опубликована — О: ~2,3 кг ВВ × 1,3 = 3 кг ТНТ, корпус 0,7 кг. Топлива нет (батарея).
+     * не опубликована — О: ~2,3 кг ВВ × 1,3 = 3 кг ТНТ, корпус 0,7 кг, Ø ~0,12 м (О: внутри корпуса 0,2 м). Топлива нет (батарея).
      */
     static final Article LOITER_ARTICLE = new Article(12, 12, 1.65, 0.2, 1.2, 0.028, LOITER_MOTOR, null,
-            new Article.Envelope(30.6, 83, 700), new Article.Impact(82, 70), new Article.Charge(3, 2.3, 0.7), 0);
+            new Article.Envelope(30.6, 83, 700), new Article.Impact(82, 70), new Article.Charge(3, 2.3, 0.7, 0.12), 0);
 
     // ---- паспорта звука ({@link Noise}): законы источников из чисел двигателей выше; «О» — оценка по классу
 

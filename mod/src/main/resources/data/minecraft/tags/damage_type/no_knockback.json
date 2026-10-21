@@ -4,6 +4,7 @@
     "incoming:player_nuclear_thermal",
     "incoming:burn_shock",
     "incoming:nuclear_blast",
-    "incoming:player_nuclear_blast"
+    "incoming:player_nuclear_blast",
+    "incoming:fragment"
   ]
 }

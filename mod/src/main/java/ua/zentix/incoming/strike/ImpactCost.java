@@ -28,7 +28,9 @@ public final class ImpactCost {
         /** Прочее: огонь по кольцу, щебень и обрушение свода бомбы. */
         GROUND("fire and ground"),
         /** Ванильные взрывы: сбор сущностей, {@code ExplosionEvent.Detonate}, урон и отбрасывание. */
-        HITS("explosions: Detonate and damage");
+        HITS("explosions: Detonate and damage"),
+        /** Осколки корпуса: лучи, урон, стёкла и выбоины ({@code warhead.FragmentStrike}). */
+        FRAGMENTS("fragments");
 
         private final String label;
 
