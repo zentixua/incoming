@@ -24,7 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   <li>полёт кончается попаданием — по неподвижной цели в пределах шага и запаса взрывателя, по идущей и по
  *   перенацеленной в круг разворота тоже; до конца запаса хода и без столкновения с рельефом;</li>
  *   <li>нет кружения: у неподвижной точки цели снаряд поворачивает в радиусе разворота от неё не больше чем на 720°;</li>
- *   <li>на крейсере снаряд не ниже рельефа.</li>
+ *   <li>на крейсере снаряд не ниже рельефа;</li>
+ *   <li>рельеф, закрывший прямую до цели на заходе (цель на дне карьера, за холмом после перенацеливания, идёт вверх
+ *   по склону чаши), — тоже попадание ({@link Autopilot.Sightline}).</li>
  * </ul>
  */
 class AutopilotPropertiesTest {
@@ -134,29 +136,19 @@ class AutopilotPropertiesTest {
     }
 
     /**
-     * @param occluded на атаке (горка, пике) рельеф вставал между снарядом и целью: известный изъян — закон атаки
-     *                 рельеф на линии визирования не видит (см. {@link #KNOWN_OCCLUSION})
+     * @param occluded на заходе (горка, пике) рельеф вставал между снарядом и целью: такие полёты должны попадать
+     *                 так же, как остальные; их число — в сообщении теста
      */
     record Outcome(String end, int ticks, double miss, double turn, double clearance, Vec3 at, boolean occluded) {}
 
-    /**
-     * Известный изъян законов атаки, а не общей миссии: горка ракеты (до цели+32) считается от высоты цели, а рельеф
-     * между ракетой и целью не видит; пике шахеда ждёт свободной прямой до цели ({@link Craft#clearAlong}), но не дольше,
-     * чем нос успевает довернуть ({@code DroneAutopilot.turnDistance}). Цель на дне глубокого карьера,
-     * за холмом после перенацеливания, идущая вверх по склону чаши — снаряд на атаке задевает склон или край, не долетев
-     * (десятки блоков). Для таких полётов обязательны только конец полёта и отсутствие кружения; исправление — отдельным
-     * PR после выпуска (CLAUDE.md, «Не сделано / идеи»). Доля таких полётов — в сообщении теста; прощённых из них
-     * (не попал, а рельеф закрывал цель) не больше {@link #MAX_OCCLUDED_MISSES}, чтобы рост разбитых полётов не прошёл молча.
-     */
-    private static final String KNOWN_OCCLUSION = "рельеф закрывает цель на атаке";
-    /** Доля сценариев, где прощён промах из-за {@link #KNOWN_OCCLUSION} (сейчас ≈ 1.5 %). */
-    private static final double MAX_OCCLUDED_MISSES = 0.02;
+    /** Сколько сценариев хотя бы должны закрыть рельефом прямую до цели на заходе: иначе правило захода не проверено. */
+    private static final int MIN_OCCLUDED = 300;
 
     @Test
     void randomFlightsHitWithoutCircling() {
         List<String> failures = new ArrayList<>();
         int[] ends = new int[3];
-        int occluded = 0, forgiven = 0;
+        int occluded = 0;
         for (int i = 0; i < SCENARIOS; i++) {
             SplittableRandom r = new SplittableRandom(i);
             Scenario s = new Scenario(i, Weapon.values()[r.nextInt(2)], Relief.values()[r.nextInt(3)], Aim.values()[r.nextInt(3)], r.nextBoolean());
@@ -164,19 +156,17 @@ class AutopilotPropertiesTest {
             String why = null;
             if (o.occluded) occluded++;
             if (o.end.equals("forever") || o.end.equals("exhausted")) why = o.end;
-            else if (!o.end.equals("hit") && !o.occluded) why = o.end;
-            if (!o.end.equals("hit") && o.occluded) forgiven++;
+            else if (!o.end.equals("hit")) why = o.end;
             else if (o.turn > MAX_TURN) why = String.format(Locale.ROOT, "кружение %.0f°", o.turn);
             else if (o.clearance < 0) why = String.format(Locale.ROOT, "на крейсере ниже рельефа на %.1f", -o.clearance);
             ends[o.end.equals("hit") ? 0 : o.end.equals("exhausted") ? 1 : 2]++;
             if (why != null) failures.add(String.format(Locale.ROOT, "%s: %s на тике %d у %s, промах %.1f", s, why, o.ticks, o.at, o.miss));
         }
-        String summary = "попаданий " + ends[0] + ", без запаса " + ends[1] + ", о рельеф " + ends[2] + ", из них " + KNOWN_OCCLUSION + " — " + occluded + " (промахов из-за него " + forgiven + ")";
+        String summary = "попаданий " + ends[0] + ", без запаса " + ends[1] + ", о рельеф " + ends[2] + ", рельеф закрывал цель на заходе — " + occluded;
         System.out.println("AutopilotPropertiesTest: " + SCENARIOS + " сценариев, " + summary);
         assertTrue(failures.isEmpty(), failures.size() + " из " + SCENARIOS + " (" + summary + "):\n"
                 + String.join("\n", failures.subList(0, Math.min(15, failures.size()))));
-        assertTrue(forgiven <= MAX_OCCLUDED_MISSES * SCENARIOS, "промахов, где " + KNOWN_OCCLUSION + ", " + forgiven + " — больше "
-                + Math.round(MAX_OCCLUDED_MISSES * 100) + " % сценариев (" + summary + ")");
+        assertTrue(occluded >= MIN_OCCLUDED, "рельеф закрывал цель на заходе только в " + occluded + " сценариях (" + summary + ")");
     }
 
     /**

@@ -73,6 +73,91 @@ public final class Autopilot {
         }
     }
 
+    // ---------------------------------------------------------------- прямая до цели на заходе
+
+    /**
+     * Запас пути на доворот носа к цели (игровое число, не по физике): с закрытой прямой (цель под крышей, высотка или
+     * гребень вплотную к цели) снаряд всё равно входит в атаку, когда до цели осталось столько путей доворота
+     * ({@link #turnDistance}), — позже нос не успел бы к цели, и снаряд пролетал бы её. Пока путь длиннее, он в атаку
+     * не идёт ({@link Sightline}).
+     */
+    static final double DIVE_MARGIN = 1.5;
+    /**
+     * Закрытую прямую до цели проверять снова через столько тиков: луч по клеткам блоков — до сотен блоков, у залпа —
+     * у каждого снаряда. За паузу шахед пролетает ~8 блоков, ракета ~16: это покрывает {@link #DIVE_MARGIN}.
+     */
+    static final int SIGHT_RECHECK = 4;
+
+    /**
+     * Путь, за который нос доворачивает от нынешнего тангажа до линии на цель {@code aim} с предельной угловой
+     * скоростью тангажа {@code rate} °/тик и её ускорением {@code accel} °/тик²: разгон угловой скорости и торможение,
+     * при большом угле — с полкой на пределе. Цель позади (за плоскостью поперёк курса) — линия за отвесом:
+     * 180° − угол под горизонтом. Иначе набирающая высоту ракета проходила бы над целью, а доворот считался бы не больше
+     * чем до отвесного пике, и атака не начиналась бы вовсе.
+     */
+    public static double turnDistance(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
+        Vec3 pos = c.position(), f = c.flight().forward();
+        boolean behind = (aim.x - pos.x) * f.x + (aim.z - pos.z) * f.z < 0;
+        double los = behind ? 180 - toAim.pitch() : toAim.pitch();
+        double turn = Math.max(0, los - c.flight().pitch());
+        double ticks = turn <= rate * rate / accel
+                ? 2 * Math.sqrt(turn / accel)
+                : turn / rate + rate / accel;
+        return c.speed() * ticks;
+    }
+
+    /**
+     * Игровое правило захода (одно у шахеда и ракеты, без упреждения по идущей цели): если прямая от снаряда к цели
+     * закрыта блоками ({@link Craft#clearAlong} — только готовые чанки), снаряд в атаку не идёт, пока прямая не
+     * откроется. Ракета при этом набирает высоту горкой, а закрылась прямая в пике (цель зашла за склон) — выходит
+     * в горку снова ({@link MissileAutopilot}); шахед идёт дальше на высоте крейсера ({@link DroneAutopilot}: набор
+     * ему вредит). Не дольше, чем нос успевает довернуть к цели ({@link #DIVE_MARGIN}): ближе снаряд атакует как есть —
+     * высотку вплотную к цели и цель под крышей правило не обходит.
+     */
+    public static final class Sightline {
+        private boolean blocked;
+        /**
+         * Атака уже вынужденная ({@link #DIVE_MARGIN}): до конца захода прямую не мерить — иначе снаряд, довернув нос,
+         * вернулся бы в набор. Не сохраняется: после загрузки посреди такого пике ракета несколько тиков тянет в горку,
+         * пока путь доворота снова не станет вынужденным.
+         */
+        private boolean committed;
+        /** Сколько тиков не мерить прямую заново (не сохраняется: после загрузки — замер сразу). */
+        private int wait;
+
+        /**
+         * Прямая до {@code aim} закрыта, кроме последних {@code margin} блоков у цели (их достаёт взрыватель), и до
+         * цели дальше {@link #DIVE_MARGIN} путей доворота носа с пределами атаки {@code rate},
+         * {@code accel}: в атаку не идти. Замер — раз в {@link #SIGHT_RECHECK} тиков.
+         */
+        public boolean masked(Craft c, Vec3 aim, Bearing toAim, double margin, double rate, double accel) {
+            if (committed) return false;
+            if (toAim.distance() <= turnDistance(c, aim, toAim, rate, accel) * DIVE_MARGIN) {
+                committed = true;
+                return false;
+            }
+            if (wait > 0) {
+                wait--;
+                return blocked;
+            }
+            blocked = c.clearAlong(aim, margin) != Double.POSITIVE_INFINITY;
+            wait = SIGHT_RECHECK - 1;
+            return blocked;
+        }
+
+        /** Атака вынужденная, а прямая при последнем замере была закрыта: в атаку идти сейчас же. */
+        public boolean forced() {
+            return committed && blocked;
+        }
+
+        /** Вне захода или новая цель: следующий заход меряет прямую сразу. */
+        public void forget() {
+            wait = 0;
+            blocked = false;
+            committed = false;
+        }
+    }
+
     // ---------------------------------------------------------------- рельеф впереди
 
     /**
