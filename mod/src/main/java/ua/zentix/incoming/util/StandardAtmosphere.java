@@ -3,7 +3,8 @@ package ua.zentix.incoming.util;
 /**
  * Стандартная атмосфера ISO 2533 (она же ICAO и US 1976 до 20 км): тропосфера до 11 км — температура падает на 6,5 K/км,
  * давление p = 101 325·(T/288,15)^5,25588; от 11 до 20 км — 216,65 K, давление спадает в e раз на 6 341,6 м.
- * Высота — метры над уровнем моря (в мире — блоки над уровнем моря Minecraft).
+ * Высота — метры над уровнем моря (в мире — блоки над уровнем моря Minecraft). Полёт снарядов читает отсюда плотность
+ * (сопротивление) и скорость звука (число Маха).
  */
 public final class StandardAtmosphere {
     /** У уровня моря: температура, K, и давление, Па. */
@@ -18,6 +19,8 @@ public final class StandardAtmosphere {
     static final double SCALE11 = 6_341.62;
     /** Газовая постоянная сухого воздуха, Дж/(кг·K). */
     public static final double R_AIR = 287.053;
+    /** Показатель адиабаты воздуха. */
+    static final double GAMMA = 1.4;
 
     private StandardAtmosphere() {}
 
@@ -35,5 +38,10 @@ public final class StandardAtmosphere {
     /** Плотность воздуха на высоте h метров, кг/м³. */
     public static double density(double h) {
         return pressure(h) / (R_AIR * temperature(h));
+    }
+
+    /** Скорость звука на высоте h метров, м/с: a = √(γ·R·T) (340,3 у моря, 295,1 выше тропопаузы). */
+    public static double soundSpeed(double h) {
+        return Math.sqrt(GAMMA * R_AIR * temperature(h));
     }
 }

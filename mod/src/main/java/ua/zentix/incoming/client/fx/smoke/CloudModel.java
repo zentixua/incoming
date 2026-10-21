@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.fx.smoke;
 
 import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.util.Stability;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
@@ -59,8 +60,6 @@ public final class CloudModel {
      * Устойчивость стандартной атмосферы ISO 2533 до 11 км: N² = g/T·(dT/dz + g/c_p), градиент −6,5 К/км — N ≈ 0,0105 с⁻¹.
      */
     public static final double N_STANDARD = Math.sqrt(G / T_AIR * (-0.0065 + G / CP));
-    /** Ночью у земли — инверсия: 0,02–0,04 с⁻¹ (ref/formulas.md §1), середина нижней половины — оценка. */
-    public static final double N_NIGHT = 0.025;
     /**
      * Тепло взрывчатки в газе облака, Дж на кг ТНТ — по замерам облаков: верх стабилизированного облака химического
      * взрыва 92,6·W^0,25 м (W — кг ТНТ, «средняя атмосфера»; Church H. W., «Cloud Rise from High-Explosives Detonations»,
@@ -127,20 +126,18 @@ public final class CloudModel {
      */
     public record Air(double n, double windX, double windZ, double shear, int spread, double humidity) {
         /** Стандартная атмосфера без ветра — для проверок. */
-        public static final Air STANDARD = new Air(N_STANDARD, 0, 0, 0.14, 3, 0.5);
+        public static final Air STANDARD = of(ua.zentix.incoming.util.Air.CALM, 0.5);
 
         /**
-         * Воздух по свету дня и погоде: днём (day = 1, ясно) — стандартная устойчивость выше слоя перемешивания, класс B,
-         * профиль 0,1; ночью — инверсия {@link #N_NIGHT}, класс F, 0,3 (ясно); облачность (дождь) тянет к нейтральному D:
-         * {@code ref/formulas.md} §1, таблица Паскуилла–Гиффорда.
+         * Воздух в месте взрыва из воздуха мира ({@link ua.zentix.incoming.util.Air} — один на полёт, звук и дым): устойчивость
+         * N, показатель профиля ветра и класс расплывания — от его класса устойчивости ({@link Stability}), ветер на 10 м
+         * над землёй, влажность — его (в дождь насыщен) или 1 у воды.
+         *
+         * @param humidity влажность в месте взрыва 0..1
          */
-        public static Air of(double day, double rain, double windX, double windZ, double humidity) {
-            double d = Math.max(0, Math.min(1, day)), r = Math.max(0, Math.min(1, rain));
-            double n2 = N_NIGHT * N_NIGHT + (N_STANDARD * N_STANDARD - N_NIGHT * N_NIGHT) * Math.max(d, r);
-            double clear = 1 - r;
-            double shear = 0.14 + (d > 0.5 ? -0.04 : 0.16) * clear;
-            int spread = (int) Math.round(3 + (d > 0.5 ? -2 : 2) * clear);
-            return new Air(Math.sqrt(n2), windX, windZ, shear, spread, humidity);
+        public static Air of(ua.zentix.incoming.util.Air air, double humidity) {
+            double c = air.stability(), u = air.wind().at(10, Stability.alpha(c));
+            return new Air(air.brunt(), u * air.wind().x(), u * air.wind().z(), Stability.alpha(c), (int) Math.round(c), humidity);
         }
 
         /** Ветер на высоте z (м) над землёй: доля ветра на 10 м. */

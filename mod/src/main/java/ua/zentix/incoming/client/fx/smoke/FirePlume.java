@@ -1,6 +1,6 @@
 package ua.zentix.incoming.client.fx.smoke;
 
-import ua.zentix.incoming.client.fx.plume.Stability;
+import ua.zentix.incoming.util.Stability;
 
 /**
  * Дым над пожаром — непрерывный источник тепла и сажи, шлейф Бриггса, без Minecraft. Метры, секунды, ватты.

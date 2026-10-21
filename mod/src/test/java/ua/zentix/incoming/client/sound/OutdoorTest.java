@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.sound;
 
+import ua.zentix.incoming.util.Stability;
+import ua.zentix.incoming.sound.Propagation;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.HearingModel;
@@ -72,9 +74,11 @@ class OutdoorTest {
 
     @Test
     void daytimeShadowZoneNightInversion() {
-        assertEquals(1, Outdoor.day(1), 1e-12);
-        assertEquals(0, Outdoor.day(0), 1e-12);
-        assertEquals(0, Outdoor.day(-1), 1e-12);
+        // тень — по классу устойчивости: нейтрально и неустойчиво полная, при инверсии нет
+        assertEquals(1, Propagation.refraction(Stability.B), 1e-12);
+        assertEquals(1, Propagation.refraction(Stability.D), 1e-12);
+        assertEquals(0, Propagation.refraction(Stability.E), 1e-12);
+        assertEquals(0, Propagation.refraction(Stability.F), 1e-12);
         assertEquals(0, Outdoor.shadow(true, path(4000, 0, 0.5, 0)));
         assertEquals(20, Outdoor.shadow(true, path(4000, 0, 0.5, 1)), 1e-9);
         assertEquals(10, Outdoor.shadow(false, path(4000, 0, 0.5, 1)), 1e-9);

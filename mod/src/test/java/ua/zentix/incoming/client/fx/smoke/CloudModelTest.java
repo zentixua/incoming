@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.fx.smoke;
 
+import ua.zentix.incoming.util.Stability;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.BlackBody;
@@ -30,7 +31,7 @@ class CloudModelTest {
      */
     @Test
     void riseFollowsMttInTwoStratifications() {
-        for (double n : new double[]{CloudModel.N_STANDARD, CloudModel.N_NIGHT}) {
+        for (double n : new double[]{CloudModel.N_STANDARD, Stability.brunt(Stability.F)}) {
             CloudModel.Air air = new CloudModel.Air(n, 0, 0, 0.14, 3, 0.5);
             for (double kg : new double[]{6.4, 50, 450}) {
                 CloudModel m = point(kg, air);
@@ -48,9 +49,9 @@ class CloudModelTest {
     /** Ночью (инверсия) облако ниже, чем днём: z ∝ N^(−½). */
     @Test
     void stableNightKeepsTheCloudLower() {
-        CloudModel day = model(WeaponType.DRONE, CloudModel.Air.of(1, 0, 0.9, 0.45, 0.5)), night = model(WeaponType.DRONE, CloudModel.Air.of(0, 0, 0.9, 0.45, 0.5));
+        CloudModel day = model(WeaponType.DRONE, air(Stability.B, 0.9, 0.45, 0.5)), night = model(WeaponType.DRONE, air(Stability.F, 0.9, 0.45, 0.5));
         assertTrue(night.topZ < day.topZ, "ночью " + night.topZ + ", днём " + day.topZ);
-        assertEquals(Math.sqrt(CloudModel.N_STANDARD / CloudModel.N_NIGHT), night.topZ / day.topZ, 0.1);
+        assertEquals(Math.sqrt(CloudModel.N_STANDARD / Stability.brunt(Stability.F)), night.topZ / day.topZ, 0.1);
     }
 
     /** Облако взрывчатки в стандартной атмосфере — верх по Чёрчу (92,6·W^¼ м), закон W^¼ — сам из MTT. */
@@ -132,7 +133,7 @@ class CloudModelTest {
     @Test
     void lifeEndsWhenTheCloudIsThin() {
         for (WeaponType w : new WeaponType[]{WeaponType.ROCKET, WeaponType.LOITER, WeaponType.DRONE, WeaponType.MISSILE}) {
-            CloudModel m = model(w, CloudModel.Air.of(1, 0, 0.9, 0.45, 0.5));
+            CloudModel m = model(w, air(Stability.B, 0.9, 0.45, 0.5));
             if (m.life < CloudModel.LIFE_MAX) assertEquals(CloudModel.SEEN, m.tau(m.life), 1e-3, w.toString());
             double prev = m.tau(1);
             for (double t = 2; t < m.life; t *= 1.5) {
@@ -177,11 +178,16 @@ class CloudModelTest {
     /** Ветер сносит облако по ходу и сильнее на высоте; облако конденсации — только во влажном воздухе. */
     @Test
     void windAndHumidity() {
-        CloudModel calm = model(WeaponType.DRONE, CloudModel.Air.of(1, 0, 0, 0, 0.5)), windy = model(WeaponType.DRONE, CloudModel.Air.of(1, 0, 2, 0, 0.5));
+        CloudModel calm = model(WeaponType.DRONE, air(Stability.B, 0, 0, 0.5)), windy = model(WeaponType.DRONE, air(Stability.B, 2, 0, 0.5));
         assertEquals(0, calm.driftX(120), 1e-9);
         assertTrue(windy.driftX(120) > 2 * 120, "на высоте ветер сильнее, чем на 10 м");
-        assertEquals(0, model(WeaponType.MISSILE, CloudModel.Air.of(1, 0, 1, 0, 0.1)).condensation(), "сухо — облака конденсации нет");
-        assertTrue(model(WeaponType.MISSILE, CloudModel.Air.of(1, 0, 1, 0, 0.8)).condensation() > 10, "влажно — есть");
+        assertEquals(0, model(WeaponType.MISSILE, air(Stability.B, 1, 0, 0.1)).condensation(), "сухо — облака конденсации нет");
+        assertTrue(model(WeaponType.MISSILE, air(Stability.B, 1, 0, 0.8)).condensation() > 10, "влажно — есть");
+    }
+
+    /** Воздух места взрыва классом устойчивости и ветром на 10 м. */
+    private static CloudModel.Air air(double stability, double windX, double windZ, double humidity) {
+        return new CloudModel.Air(Stability.brunt(stability), windX, windZ, Stability.alpha(stability), (int) Math.round(stability), humidity);
     }
 
     /**

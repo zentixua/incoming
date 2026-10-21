@@ -1779,8 +1779,7 @@ public final class ClientScenario {
         int at = b + 600;
         double t = 30;
         var model = new ua.zentix.incoming.client.fx.smoke.CloudModel(ua.zentix.incoming.client.fx.BlastSource.of(ua.zentix.incoming.strike.WeaponType.DRONE, false),
-                ua.zentix.incoming.client.fx.smoke.CloudModel.Air.of(1, 0, ua.zentix.incoming.client.far.FarBlasts.wind10(true),
-                        ua.zentix.incoming.client.far.FarBlasts.wind10(false), 0.5));
+                ua.zentix.incoming.client.fx.smoke.CloudModel.Air.of(ua.zentix.incoming.client.fx.ClientAir.now(), 0.5));
         Vec3 c = target.add(model.driftX(t), model.height(t), model.driftZ(t));
         double r = model.radius(t);
         Incoming.LOG.info("SCENARIO smoke column at 30 s: centre {} radius {}", xyz(c), Math.round(r));

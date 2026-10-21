@@ -1,7 +1,7 @@
 package ua.zentix.incoming.client.fx.particle;
 
 import ua.zentix.incoming.client.fx.ClientAir;
-import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.util.Air;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LightTexture;

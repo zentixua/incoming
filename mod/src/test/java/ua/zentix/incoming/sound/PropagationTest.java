@@ -45,7 +45,7 @@ class PropagationTest {
             assertTrue(r > prev, lw + " дБ: " + r);
             prev = r;
             assertTrue(Propagation.range(lw, FLAT, 20, Propagation.Weather.NOON, 50_000) < r, "днём ближе: " + lw);
-            assertTrue(Propagation.range(lw, FLAT, 20, new Propagation.Weather(0, 1, 0), 50_000) < r, "в дождь ближе: " + lw);
+            assertTrue(Propagation.range(lw, FLAT, 20, new Propagation.Weather(0, 1, 0, 0), 50_000) < r, "в дождь ближе: " + lw);
         }
     }
 

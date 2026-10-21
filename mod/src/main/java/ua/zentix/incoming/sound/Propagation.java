@@ -65,19 +65,33 @@ public final class Propagation {
     /**
      * Погода для рефракции и фона.
      *
-     * @param day     0 — ночь (инверсия, тени нет), 1 — солнце высоко ({@link #day})
+     * @param day     0 — ночь, 1 — солнце высоко ({@link #day}): фон днём громче
      * @param rain    дождь 0..1
      * @param thunder гроза 0..1
+     * @param shadow  0..1 — насколько воздух преломляет звук вверх, в зону тени ({@link #refraction})
      */
-    public record Weather(double day, double rain, double thunder) {
-        public static final Weather NIGHT = new Weather(0, 0, 0), NOON = new Weather(1, 0, 0);
+    public record Weather(double day, double rain, double thunder, double shadow) {
+        public static final Weather NIGHT = new Weather(0, 0, 0, 0), NOON = new Weather(1, 0, 0, 1);
 
-        /** Погода мира сейчас: день — по высоте солнца (без неба или с застывшим временем — ночь, без тени). */
+        /**
+         * Погода мира сейчас: день — по высоте солнца (без неба или с застывшим временем — ночь), тень — по классу
+         * устойчивости воздуха мира ({@link Air#of(Level)}, тот же у дыма и полёта).
+         */
         public static Weather of(Level level) {
-            var type = level.dimensionType();
-            double day = type.hasSkyLight() && !type.hasFixedTime() ? Propagation.day(Mth.cos(level.getTimeOfDay(1) * Mth.TWO_PI)) : 0;
-            return new Weather(day, level.getRainLevel(1), level.getThunderLevel(1));
+            ua.zentix.incoming.util.Air air = ua.zentix.incoming.util.Air.of(level);
+            return new Weather(Propagation.day(ua.zentix.incoming.util.Air.sun(level)), level.getRainLevel(1), level.getThunderLevel(1),
+                    refraction(air.stability()));
         }
+    }
+
+    /**
+     * Насколько звук уходит вверх, в зону тени, по классу устойчивости Паскуилла: пока температура падает с высотой
+     * (неустойчиво и нейтрально, A–D: стандартная атмосфера — 6,5 K/км), скорость звука наверху меньше, и лучи
+     * загибаются вверх — тень полная; при инверсии (E–F, ясная ночь) лучи загибаются вниз — тени нет; между D и E —
+     * плавно. Ветер (тень против ветра, её нет по ветру) не учтён.
+     */
+    public static double refraction(double stability) {
+        return Math.max(0, Math.min(1, ua.zentix.incoming.util.Stability.E - stability));
     }
 
     /**
@@ -95,7 +109,7 @@ public final class Propagation {
         }
     }
 
-    /** Насколько сейчас день для рефракции: по синусу высоты солнца — у горизонта и ниже 0, к 30° — 1. */
+    /** Насколько сейчас день для фона: по синусу высоты солнца — у горизонта и ниже 0, к 30° — 1. */
     public static double day(double sunSine) {
         return smoothstep(0, 0.5, sunSine);
     }
@@ -166,7 +180,7 @@ public final class Propagation {
         double d = Math.max(1, p.d);
         double dp = Math.sqrt(Math.max(1, d * d - sq(p.hs - p.hr)));
         return divergence(d) + ALPHA[b] * d + ground(b, dp, p.hs, p.hr, p.g)
-                + shadow(OCTAVES[b], d, p.hs, p.hr, p.weather.day);
+                + shadow(OCTAVES[b], d, p.hs, p.hr, p.weather.shadow);
     }
 
     /**

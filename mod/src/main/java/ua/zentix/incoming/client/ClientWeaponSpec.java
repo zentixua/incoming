@@ -1,7 +1,7 @@
 package ua.zentix.incoming.client;
 
 import org.jetbrains.annotations.Nullable;
-import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.plume.Motor;

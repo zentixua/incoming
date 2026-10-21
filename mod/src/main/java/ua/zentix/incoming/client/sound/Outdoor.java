@@ -44,11 +44,11 @@ public final class Outdoor {
      * @param hr      высота уха над землёй, м
      * @param gs      пористость земли у источника, 0..1 ({@code GroundMaterial.porosity})
      * @param gr      пористость земли у слушателя
-     * @param day     0 — ночь (инверсия), 1 — солнце высоко ({@link #day})
+     * @param shadow  0..1 — насколько воздух загибает звук вверх, в зону тени ({@link Propagation#refraction})
      * @param rain    дождь 0..1
      * @param thunder гроза 0..1
      */
-    public record Path(double d, double z, double hs, double hr, double gs, double gr, double day, double rain, double thunder) {}
+    public record Path(double d, double z, double hs, double hr, double gs, double gr, double shadow, double rain, double thunder) {}
 
     /**
      * Что дошло: громкость в игре и верха (доля, без воздуха) и слагаемые для лога, дБ: преграда и тень — на низах,
@@ -87,17 +87,12 @@ public final class Outdoor {
 
     /** Зона тени днём, дБ: звук загибает вверх, и дальше касания луча с землёй у земли его всё меньше (на 63 Гц и 2 кГц). */
     static double shadow(boolean high, Path p) {
-        return Propagation.shadow(high ? 2000 : 63, p.d, p.hs, p.hr, p.day);
+        return Propagation.shadow(high ? 2000 : 63, p.d, p.hs, p.hr, p.shadow);
     }
 
     /** Дождь и гроза, дБ. */
     static double masking(Path p) {
         return RAIN * p.rain + THUNDER * p.thunder;
-    }
-
-    /** Насколько сейчас день для рефракции ({@link Propagation#day}). */
-    public static double day(double sunSine) {
-        return Propagation.day(sunSine);
     }
 
     /** Потери низов по дороге сверх разлёта, дБ: преграда, зона тени, дождь (земля на низах уже в R0 и в давлении). */

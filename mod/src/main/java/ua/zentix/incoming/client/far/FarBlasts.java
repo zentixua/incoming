@@ -456,24 +456,12 @@ public final class FarBlasts {
         return new CloudModel(BlastSource.of(p), level == null ? CloudModel.Air.STANDARD : air(level, p.pos()), GroundMaterial.byId(p.material()).isWater());
     }
 
-    /**
-     * Воздух в месте взрыва: день по высоте солнца (как свет пелены), дождь, ветер мира в 10 м над морем ({@link ClientAir}) и
-     * влажность — у воды 1, иначе — осадки биома (как облако Вильсона ядерки).
-     */
+    /** Воздух в месте взрыва: воздух мира ({@link ClientAir}); влажность — его, у воды 1 (облако конденсации). */
     public static CloudModel.Air air(ClientLevel level, Vec3 pos) {
-        float sun = net.minecraft.util.Mth.cos(level.getTimeOfDay(1) * net.minecraft.util.Mth.TWO_PI);
-        boolean sky = level.dimensionType().hasSkyLight() && !level.dimensionType().hasCeiling();
-        double day = sky ? Math.max(0, Math.min(1, (sun + 0.06) / 0.24)) : 0;
         net.minecraft.core.BlockPos at = net.minecraft.core.BlockPos.containing(pos);
-        double humidity = !level.getFluidState(at).isEmpty() || !level.getFluidState(at.below()).isEmpty() ? 1
-                : level.getBiome(at).value().getModifiedClimateSettings().downfall();
-        return CloudModel.Air.of(day, level.getRainLevel(1), wind10(true), wind10(false), humidity);
-    }
-
-    /** Ветер мира в 10 м над морем вдоль x (или z), м/с — опорный ветер модели облака ({@link CloudModel.Air}). */
-    public static double wind10(boolean x) {
-        double y = ua.zentix.incoming.client.fx.plume.Air.SEA + 10;
-        return 20 * (x ? ClientAir.windX(y) : ClientAir.windZ(y));
+        boolean water = !level.getFluidState(at).isEmpty() || !level.getFluidState(at.below()).isEmpty();
+        ua.zentix.incoming.util.Air air = ClientAir.now();
+        return CloudModel.Air.of(air, water ? 1 : air.humidity());
     }
 
     /** Раз в тик: забыть прошедшее и чужое измерение, звук — когда дошёл фронт, лучи по рельефу — по очереди. */
