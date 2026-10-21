@@ -365,7 +365,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     /**
      * Ускоритель шахеда (РДТТ под хвостом, сбрасывается): горит ~2–3 с (по видео пусков, Militarnyi), тяга не
-     * опубликована — О: 4,2 кН (3–6 кН) — ~230 кг с ускорителем до ~35 м/с за 2,5 с под 15°; истечение 2100 м/с
+     * опубликована — О: 4,2 кН (3–6 кН) — ~215 кг с ускорителем до ~35 м/с за 2,5 с под 15°; истечение 2100 м/с
      * (удельный импульс ~215 с малого РДТТ); ускоритель целиком ~15 кг (О).
      */
     public static final Article.SolidMotor DRONE_BOOSTER = new Article.SolidMotor(4200, 2100, 2.5, 15);
@@ -404,12 +404,17 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     public static final Article.Propeller LOITER_MOTOR = new Article.Propeller(800, 9000, 2, 0.65, 0);
 
+    /** Разгон первой ступени «Минитмена III» ({@link Ascent}, числа и источники — в {@link #NUKE}). */
+    static final Ascent ICBM_ASCENT = new Ascent(903_700, 36_030, 20_780, 61, 60, 85, 320);
+
     // ---- изделия по ТТХ ({@link Article}); игровые скорости и высоты в {@link Airframe} — не по физике
 
     /**
-     * Shahed-136: 200 кг (у «Герани-2» до 240), длина 3,5 м, размах 2,5 м, до ~185 км/ч = 51 м/с (Wikipedia «HESA Shahed
-     * 136»); корпус Ø ~0,5 м (О по фото). Топливо на старте — О: ~50 кг (30–70; бак 71 л назван только у варианта с БЧ
-     * 90 кг). CdA 0,3 м² (О, 0,27–0,34: 37 кВт × 0,7 винта при 51 м/с у земли). Высота — с 2025 года крейсер 1,5–2,8 км
+     * Shahed-136: 200 кг (у «Герани-2» до 240), длина 3,5 м, размах 2,5 м, до ~185 км/ч = 51 м/с — наибольшая, на полной
+     * мощности (Wikipedia «HESA Shahed 136»); корпус Ø ~0,5 м (О по фото). Топливо на старте — О: ~50 кг (30–70; бак 71 л
+     * назван только у варианта с БЧ 90 кг). Открытые данные здесь расходятся: на полной мощности 50 кг хватает на
+     * ~550 км (4,6 г/с), заявленные 2000–2500 км требуют втрое больше топлива или полёта на малом газу — дальность по
+     * расходу считает шаг полёта (S2), здесь она не задаётся. CdA 0,3 м² (О, 0,27–0,34: 37 кВт × 0,7 винта при 51 м/с у земли). Высота — с 2025 года крейсер 1,5–2,8 км
      * и пике с 2–2,5 км; заявлено 60–4000 м (ГУР МО Украины, разборы Euromaidan Press 06.2025, Gwara Media) — взято
      * 2000 м. Пике — О: отвесно ~105 м/с, удар под 60° ~99 м/с (баланс тяги винта, веса и сопротивления,
      * {@code WeaponSpecTest}). БЧ — 50 кг (оценки 30–50; у поздних «Гераней» 90 — Wikipedia, ISIS): решение Артёма —
@@ -456,7 +461,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * ~7,2 км/с под 22,5° к горизонту (наименьшая энергия на ~10 000 км: γ = (180° − 90°)/4, v по закону Кеплера);
      * Wikipedia «LGM-30 Minuteman» называет 7,83 км/с на конечном участке. Боевая часть ядерная — обычной нет.
      */
-    static final Article ICBM_ARTICLE = new Article(15_250, 36_030, 18.2, 1.67, 1.67, 0.66, null, null,
+    static final Article ICBM_ARTICLE = new Article(ICBM_ASCENT.launchMass() - ICBM_ASCENT.propellant(), ICBM_ASCENT.launchMass(), 18.2, 1.67, 1.67, 0.66, null, null,
             new Article.Envelope(1680, 7200, 0), new Article.Impact(7200, 22.5), null, 0);
 
     /**
@@ -500,7 +505,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     static final Noise MISSILE_NOISE = new Noise(
             new Noise.Jet(MISSILE_TURBOFAN.thrust(), MISSILE_TURBOFAN.jet(), MISSILE_TURBOFAN.count(), 0.55, 50, Spectra.MISSILE_ENGINE_REAR),
             new Noise.Rocket(MISSILE_BOOSTER.thrust(), MISSILE_BOOSTER.exhaust(), Spectra.BOOSTER_ENGINE),
-            new Noise.Body(MISSILE_ARTICLE.diameter(), MISSILE_ARTICLE.length(), 250, Spectra.BOMB_FALL), Double.NaN, Double.NaN, 125);
+            new Noise.Body(MISSILE_ARTICLE.diameter(), MISSILE_ARTICLE.length(), MISSILE_ARTICLE.real().cruise(), Spectra.BOMB_FALL), Double.NaN, Double.NaN, 125);
 
     /** B-2 ({@link #BOMBER_TURBOFANS}): тяга — на месте, верхняя оценка (на эшелоне двигатели прикрыты). */
     static final Noise BOMBER_NOISE = new Noise(new Noise.Jet(BOMBER_TURBOFANS.thrust(), BOMBER_TURBOFANS.jet(), BOMBER_TURBOFANS.count(), 0.55, 50,
@@ -511,9 +516,6 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * (О: сильнее тяжёлого отбойника).
      */
     static final Noise BOMB_NOISE = new Noise(null, null, new Noise.Body(BOMB_ARTICLE.diameter(), BOMB_ARTICLE.length(), 230, Spectra.BOMB_FALL), 125, Double.NaN, Double.NaN);
-
-    /** Разгон первой ступени «Минитмена III» ({@link Ascent}, числа и источники — в {@link #NUKE}). */
-    static final Ascent ICBM_ASCENT = new Ascent(903_700, 36_030, 20_780, 61, 60, 85, 320);
 
     /** МБР: первая ступень ({@link #ICBM_ASCENT}): истечение 903 700 · 61 с / 20 780 кг = 2653 м/с; корпус 1,67 × 18,2 м (USAF). */
     static final Noise ICBM_NOISE = new Noise(null, new Noise.Rocket(ICBM_ASCENT.thrust(), ICBM_ASCENT.exhaust(), Spectra.BOOSTER_ENGINE),
@@ -534,7 +536,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     /**
      * Дрон-камикадзе Shahed-136 ({@link #DRONE_ARTICLE}). Игровое (не по физике): ≈150 км/ч, крейсер в 45 блоках над
-     * рельефом, пикирование с разгоном до 3 блоков/тик. Стартовый ускоритель горит ~2 с и сбрасывается. Боевая часть —
+     * рельефом, пикирование с разгоном до 3 блоков/тик. Стартовый ускоритель горит ~2 с (настоящий — ~2,5 с) и сбрасывается. Боевая часть —
      * 50 кг ТНТ: стёкла выбивает до ~70 блоков. По точкам оператора — до 30 км пути (~12 минут полёта): втрое дальше
      * карты пульта по умолчанию. Навигация спутниковая и инерциальная: промах — СКО 3 блока по каждой оси (в среднем
      * ~3,5 блока от цели).

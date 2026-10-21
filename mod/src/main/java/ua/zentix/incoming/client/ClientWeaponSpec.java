@@ -253,7 +253,8 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
             Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
 
     /**
-     * Двухрежимный РДТТ зенитной ракеты 9М96 (расход и истечение режимов — {@link InterceptorSpec.Passport}): смесевое
+     * РДТТ зенитной ракеты 9М96 (расход и истечение — {@link InterceptorSpec.Passport}; второй, маршевый режим — не по
+     * физике, у 9М96 его в открытых данных нет): смесевое
      * с ~16 % алюминия (⚠), сопло рассчитано на землю; маршевый режим — тот же заряд и сопло, давление в камере ниже —
      * струя перерасширена.
      */

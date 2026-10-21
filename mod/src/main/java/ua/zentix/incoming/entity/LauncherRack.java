@@ -78,7 +78,8 @@ public enum LauncherRack {
                 yield new double[]{(LauncherEntity.ROCKET_COLUMNS - 1) * LauncherEntity.TUBE_PITCH / 2 - col * LauncherEntity.TUBE_PITCH,
                         0.3 + row * LauncherEntity.TUBE_PITCH, LauncherEntity.TUBE_LENGTH / 2};
             }
-            case LOITER -> new double[]{LauncherEntity.loiterLeft(slot), LauncherEntity.loiterUp(slot), 1.35};
+            // «Ланцет» 1,65 м: хвост — на тележке у задней стенки (0,1 м), нос — на середине направляющей
+            case LOITER -> new double[]{LauncherEntity.loiterLeft(slot), LauncherEntity.loiterUp(slot), 0.93};
             // шахеды одна над другой: центр ячейки, 2 м от оси (хвост с ускорителем — у задней стенки)
             case DRONE -> new double[]{0, 0.45 + 0.8 * slot, 2.0};
         };

@@ -39,7 +39,7 @@ public record InterceptorSpec(int railTicks, double elevation, double launchSpee
      * @param warhead     боевая часть
      * @param fuse        радиус срабатывания неконтактного взрывателя, м
      * @param boost       двигатель (расход и истечение — и для факела клиента)
-     * @param sustain     маршевый режим после игрового разгона — не по физике, см. {@link #SAM}
+     * @param sustain     маршевый режим после игрового разгона до конца игрового полёта — не по физике, см. {@link #M96}
      */
     public record Passport(double launchMass, double length, double diameter, double maxSpeed, double lateralG, double rangeMin,
                            double rangeMax, double altitudeMin, double altitudeMax, Article.Charge warhead, double fuse,
@@ -59,7 +59,7 @@ public record InterceptorSpec(int railTicks, double elevation, double launchSpee
      * разгоняется за 1,5 с и дальше горит слабым режимом 3 кг/с — не по физике, до полёта по физике (шаг ПВО).
      */
     static final Passport M96 = new Passport(420, 5.65, 0.24, 1000, 20, 1000, 120_000, 5, 30_000,
-            new Article.Charge(10, 10, 14), 5, new Article.SolidMotor(15 * 2350, 2350, 11, 0), new Article.SolidMotor(3 * 2350, 2350, 11, 0));
+            new Article.Charge(10, 10, 14), 5, new Article.SolidMotor(15 * 2350, 2350, 11, 0), new Article.SolidMotor(3 * 2350, 2350, (300 - 30) / 20.0, 0));
 
     /**
      * Ракета ЗРК 9М96 ({@link #M96}). Игровое, не по физике (медленнее настоящей — полёт видно): вертикальный пуск из

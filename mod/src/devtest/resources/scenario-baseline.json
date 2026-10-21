@@ -482,11 +482,11 @@
     },
     "loiter_rail.mob.none.0": {
       "end": "blast",
-      "tick": 804,
-      "x": 13.52,
-      "y": 2.38,
-      "z": 6.01,
-      "hash": "1f59201e0146afb8"
+      "tick": 805,
+      "x": 14.15,
+      "y": 0.45,
+      "z": 4.8,
+      "hash": "2fdd04c0129b7b83"
     },
     "loiter_rail.mob.quarry.0": {
       "end": "blast",

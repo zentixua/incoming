@@ -16,8 +16,9 @@ Times are for a nearby target. The world owner can change blast power and flight
 
 ## The real weapons
 
-Each weapon is a real one, and its size, mass, warhead and engines come from open data. The warhead sets how far the
-blast breaks glass and how the explosion looks and sounds.
+Each weapon is a real one. Its size, mass, warhead and engines come from open data; where a number is not published
+(some engines, the share of explosive in a warhead), it is worked out from the published ones by physics. The warhead
+sets how far the blast breaks glass and how the explosion looks and sounds.
 
 | | Shahed-136 | Lancet-3 | Tomahawk | Grad 9M22U | GBU-57 (from B-2) | Minuteman III |
 |---|---|---|---|---|---|---|
@@ -25,7 +26,7 @@ blast breaks glass and how the explosion looks and sounds.
 | Mass | 200 kg | 12 kg | 1.3 t (1.6 t with booster) | 66.6 kg | 13.6 t | 36 t |
 | Warhead, TNT | 50 kg | 3 kg | ≈150 kg | 6.4 kg | 2.4 t of explosive, underground | nuclear |
 | Breaks glass up to | ≈70 m | ≈29 m | ≈105 m | ≈37 m | — | — |
-| Real speed | 185 km/h | 110 km/h, ≈300 in a dive | ≈900 km/h | ≈690 m/s at burnout | ≈510 m/s at impact | — |
+| Real speed | 185 km/h | 110 km/h, ≈300 in a dive | ≈900 km/h | ≈690 m/s at burnout | ≈510 m/s at impact (calculated) | — |
 | Real flight height | 1.5–2.8 km | 600–800 m when circling | 30–50 m over the ground | apogee ≈7 km | dropped from ≈12 km | — |
 | Speed in the game | ≈150 km/h | ≈115 km/h | ≈290 km/h | by its arc | B-2 ≈860 km/h, 170 blocks up | — |
 
