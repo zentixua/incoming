@@ -1,0 +1,40 @@
+drone-day-300
+  A        frame10s={'mean': 9.83, 'p99': 19.52, 'max': 35.2, 'n': 1018} all={'mean': 9.85, 'p99': 27.73, 'max': 178.3, 'n': 6400} comb=5.51 tone=None
+  V7       frame10s={'mean': 11.41, 'p99': 40.95, 'max': 80.6, 'n': 876} all={'mean': 10.19, 'p99': 38.08, 'max': 328.0, 'n': 6171} comb=6.16 tone=None
+  V9       frame10s=None all=None comb=None tone=None
+drone-day-50
+  A        frame10s={'mean': 12.31, 'p99': 33.18, 'max': 184.0, 'n': 810} all={'mean': 10.69, 'p99': 30.81, 'max': 184.0, 'n': 5555} comb=5.73 tone=None
+  V7       frame10s={'mean': 18.29, 'p99': 75.01, 'max': 332.8, 'n': 543} all={'mean': 13.74, 'p99': 44.12, 'max': 332.8, 'n': 4327} comb=6.53 tone=None
+  V9       frame10s={'mean': 14.47, 'p99': 49.89, 'max': 227.8, 'n': 685} all={'mean': 11.87, 'p99': 39.4, 'max': 227.8, 'n': 5006} comb=6.54 tone=None
+drone-night-300
+  A        frame10s=None all=None comb=None tone=None
+  V7       frame10s={'mean': 14.34, 'p99': 46.88, 'max': 76.9, 'n': 697} all={'mean': 12.54, 'p99': 42.69, 'max': 321.7, 'n': 5045} comb=5.91 tone=None
+  V9       frame10s=None all=None comb=None tone=None
+drone-night-50
+  A        frame10s={'mean': 17.33, 'p99': 44.76, 'max': 68.6, 'n': 577} all={'mean': 14.67, 'p99': 36.14, 'max': 68.6, 'n': 4089} comb=5.81 tone=None
+  V7       frame10s={'mean': 14.33, 'p99': 47.73, 'max': 118.8, 'n': 698} all={'mean': 12.32, 'p99': 40.1, 'max': 118.8, 'n': 4823} comb=6.97 tone=None
+  V9       frame10s={'mean': 11.74, 'p99': 34.91, 'max': 41.8, 'n': 852} all={'mean': 10.34, 'p99': 31.79, 'max': 72.1, 'n': 5757} comb=6.71 tone=None
+flyby
+  A        frame10s={'mean': 1.06, 'p99': 11.61, 'max': 354.4, 'n': 12102} all={'mean': 2.75, 'p99': 21.01, 'max': 354.4, 'n': 14405} comb=None tone={'peak_hz': 88.8, 'centroid_hz': 395.1}
+  V7       frame10s={'mean': 1.81, 'p99': 16.45, 'max': 5908.9, 'n': 8719} all={'mean': 3.98, 'p99': 32.79, 'max': 5908.9, 'n': 10705} comb=None tone={'peak_hz': 75.4, 'centroid_hz': 2057.4}
+  V9       frame10s=None all=None comb=None tone=None
+grad-day
+  A        frame10s={'mean': 19.87, 'p99': 52.16, 'max': 76.9, 'n': 504} all={'mean': 15.4, 'p99': 37.37, 'max': 82.5, 'n': 6173} comb=5.56 tone=None
+  V7       frame10s={'mean': 43.45, 'p99': 116.56, 'max': 129.5, 'n': 230} all={'mean': 15.03, 'p99': 60.49, 'max': 129.5, 'n': 6331} comb=5.55 tone=None
+  V9       frame10s=None all=None comb=None tone=None
+grad-night
+  A        frame10s={'mean': 20.2, 'p99': 42.83, 'max': 71.8, 'n': 495} all={'mean': 13.92, 'p99': 33.93, 'max': 71.8, 'n': 6830} comb=5.74 tone=None
+  V7       frame10s={'mean': 29.37, 'p99': 128.54, 'max': 185.4, 'n': 340} all={'mean': 16.25, 'p99': 55.49, 'max': 188.3, 'n': 5858} comb=9.05 tone=None
+  V9       frame10s=None all=None comb=None tone=None
+launch-behind
+  A        frame10s={'mean': 11.11, 'p99': 31.18, 'max': 35.1, 'n': 450} all={'mean': 11.02, 'p99': 33.53, 'max': 306.5, 'n': 1615} comb=5.28 tone=None
+  V7       frame10s={'mean': 23.36, 'p99': 69.05, 'max': 75.4, 'n': 214} all={'mean': 18.83, 'p99': 70.25, 'max': 412.2, 'n': 948} comb=5.49 tone=None
+  V9       frame10s={'mean': 10.75, 'p99': 43.12, 'max': 60.9, 'n': 465} all={'mean': 9.78, 'p99': 41.21, 'max': 316.7, 'n': 1815} comb=6.2 tone=None
+launch-night-behind
+  A        frame10s={'mean': 11.23, 'p99': 30.89, 'max': 44.7, 'n': 444} all={'mean': 11.45, 'p99': 35.29, 'max': 260.8, 'n': 1551} comb=5.6 tone=None
+  V7       frame10s={'mean': 12.51, 'p99': 50.75, 'max': 78.0, 'n': 400} all={'mean': 13.81, 'p99': 51.2, 'max': 409.9, 'n': 1286} comb=5.71 tone=None
+  V9       frame10s={'mean': 9.14, 'p99': 30.38, 'max': 100.4, 'n': 550} all={'mean': 1.84, 'p99': 15.77, 'max': 348.8, 'n': 15541} comb=5.34 tone=None
+launch-side
+  A        frame10s={'mean': 13.96, 'p99': 47.41, 'max': 106.3, 'n': 356} all={'mean': 11.72, 'p99': 41.64, 'max': 193.2, 'n': 1514} comb=5.57 tone=None
+  V7       frame10s={'mean': 24.08, 'p99': 75.53, 'max': 127.6, 'n': 207} all={'mean': 18.99, 'p99': 74.52, 'max': 386.4, 'n': 937} comb=5.8 tone=None
+  V9       frame10s=None all=None comb=None tone=None
