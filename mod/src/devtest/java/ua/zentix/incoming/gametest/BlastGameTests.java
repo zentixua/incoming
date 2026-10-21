@@ -77,9 +77,9 @@ public final class BlastGameTests {
             }
             String got = String.format(Locale.ROOT, "%s, %.1f кг: сломан до %.1f, цел с %.1f, Джаррет %.1f", material, tnt, broken, kept, expected);
             Incoming.LOG.info("BLASTBENCH {}", got);
-            // шаг столбиков — 0,11 радиуса: край зоны между сломанным и уцелевшим
-            h.assertTrue(broken >= 0.75 * expected && broken <= 1.2 * expected, got);
-            h.assertTrue(kept >= 0.75 * expected && kept <= 1.3 * expected, got);
+            // шаг столбиков — 0,11 радиуса, разброс порогов блоков — ±15 %: край зоны между сломанным и уцелевшим
+            h.assertTrue(broken >= 0.7 * expected && broken <= 1.2 * expected, got);
+            h.assertTrue(kept >= 0.7 * expected && kept <= 1.3 * expected, got);
         });
     }
 

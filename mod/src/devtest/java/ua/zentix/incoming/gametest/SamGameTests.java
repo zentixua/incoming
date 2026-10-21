@@ -109,7 +109,7 @@ public final class SamGameTests {
         h.succeedWhen(() -> {
             h.assertTrue(a.isRemoved() && b.isRemoved(), "шахеды ещё летят: " + h.relativeVec(a.position()) + ", " + h.relativeVec(b.position()));
             h.assertTrue(log.total(FlightLog.Event.INTERCEPTED) - intercepted == 2, "сбито " + (log.total(FlightLog.Event.INTERCEPTED) - intercepted) + " из 2");
-            h.assertTrue(intact(h, new BlockPos(10, 3, 200)) && intact(h, new BlockPos(22, 3, 200)), "шахед долетел до цели");
+            h.assertTrue(!BlastLog.near(h, new BlockPos(10, 3, 200), 8) && !BlastLog.near(h, new BlockPos(22, 3, 200), 8), "шахед долетел до цели");
             h.assertTrue(launches.targets().equals(Set.of(a.getUUID(), b.getUUID())) && launches.count() == 2,
                     "ракет " + launches.count() + " по " + launches.targets());
             List<Long> at = launches.ticks();
@@ -164,7 +164,8 @@ public final class SamGameTests {
             h.assertTrue(seenFriendly.containsAll(Set.of(own.getUUID(), team.getUUID())), "радар хозяина своих не видел");
             h.assertTrue(seenHostileByStranger.containsAll(Set.of(own.getUUID(), team.getUUID())), "чужой радар не бил бы их — проверка пуста");
             h.assertTrue(owner.alerts() == 0 && mate.alerts() == 0, "тревога о своих");
-            h.assertFalse(intact(h, new BlockPos(10, 3, 200)) || intact(h, new BlockPos(22, 3, 200)), "свой шахед не долетел");
+            // подрывы у обеих целей (на камне воронки нет — по закону заряда)
+            h.assertTrue(BlastLog.near(h, new BlockPos(10, 3, 200), 8) && BlastLog.near(h, new BlockPos(22, 3, 200), 8), "свой шахед не долетел");
         });
     }
 
@@ -455,11 +456,6 @@ public final class SamGameTests {
     }
 
     /** Земля у {@code at} цела: ни одного пустого блока в слое земли 5×5 (воронки нет). */
-    private static boolean intact(GameTestHelper h, BlockPos at) {
-        for (BlockPos p : BlockPos.betweenClosed(at.offset(-2, -1, -2), at.offset(2, 0, 2))) if (h.getBlockState(p).isAir()) return false;
-        return true;
-    }
-
     private static ItemStack insert(IItemHandler cap, ItemStack stack) {
         for (int i = 0; i < cap.getSlots() && !stack.isEmpty(); i++) stack = cap.insertItem(i, stack, false);
         return stack;
