@@ -101,7 +101,9 @@ final class ProbeScenario {
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 var level = server.overworld();
                 List<int[]> found = new ArrayList<>();
-                for (int i = 0; i < cases.size(); i++) {
+                for (int k = 0; k < cases.size(); k++) {
+                    // место — по сцене, а не по её номеру в выборке: у сцены всегда одна и та же площадка
+                    int i = Math.max(0, ALL.indexOf(cases.get(k)));
                     var near = level.findClosestBiome3d(b -> b.is(net.minecraft.world.level.biome.Biomes.PLAINS),
                             new BlockPos(i * 900, 64, 0), 3200, 32, 64);
                     BlockPos p = near == null ? new BlockPos(i * 900, 64, 0) : near.getFirst();
