@@ -308,7 +308,8 @@ public final class WorkGameTests {
             StrikeWorld.get(level).impacts().finish(level);
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь не пуста после остановки");
             for (Blast b : blasts) {
-                for (BlockPos p : b.blocks()) h.assertTrue(gone(level.getBlockState(p)), "не снесён " + p + " (" + level.getBlockState(p) + ") взрыва у " + b.at());
+                // вал воронки (Craters.dig, тоже доделан остановкой) ложится и на снесённое место — по случайной добавке блоков
+                for (BlockPos p : b.blocks()) h.assertTrue(goneOrRim(level.getBlockState(p)), "не снесён " + p + " (" + level.getBlockState(p) + ") взрыва у " + b.at());
             }
             h.assertFalse(Terrain.readyAround(level, far, 32), "район вдали загрузился синхронно");
             // остановка без самой остановки: таймлайны ударов (вторичные ракеты, шахед вдали) не должны достаться другим тестам
