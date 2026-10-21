@@ -939,34 +939,34 @@
     "rocket_tube.mob.none.0": {
       "end": "blast",
       "tick": 277,
-      "x": -4.99,
+      "x": -4.15,
       "y": 0.45,
-      "z": -2.15,
-      "hash": "05ed9612eb6349e6"
+      "z": -3.0,
+      "hash": "298db0a56e31de27"
     },
     "rocket_tube.point.hill.0": {
       "end": "blast",
       "tick": 259,
-      "x": -2.2,
+      "x": -4.04,
       "y": 0.0,
-      "z": -5.7,
-      "hash": "8b9c442cd7216054"
+      "z": -0.79,
+      "hash": "27f4552e0e0f30fa"
     },
     "rocket_tube.point.none.0": {
       "end": "blast",
       "tick": 270,
-      "x": -2.52,
+      "x": -1.98,
       "y": 0.0,
-      "z": -10.07,
-      "hash": "7a4afcff8c86200f"
+      "z": -9.88,
+      "hash": "596a8e8743dfcb5a"
     },
     "rocket_tube.point.quarry.0": {
       "end": "blast",
       "tick": 164,
-      "x": 1.76,
+      "x": 0.37,
       "y": 0.0,
-      "z": 0.05,
-      "hash": "99322b727a23d446"
+      "z": -0.56,
+      "hash": "48e59b2b9ae30bd9"
     }
   }
 }
