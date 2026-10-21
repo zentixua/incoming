@@ -27,10 +27,6 @@ public final class IncomingConfig {
     private IncomingConfig() {}
 
     public static final class Server {
-        public final ModConfigSpec.IntValue dronePower;
-        public final ModConfigSpec.IntValue missilePower;
-        public final ModConfigSpec.IntValue rocketPower;
-        public final ModConfigSpec.IntValue loiterPower;
         public final ModConfigSpec.IntValue bunkerPower;
         public final ModConfigSpec.IntValue bunkerEnergy;
         public final ModConfigSpec.BooleanValue blockDamage;
@@ -99,14 +95,6 @@ public final class IncomingConfig {
 
         Server(ModConfigSpec.Builder b) {
             b.translation("incoming.config.warheads").push("warheads");
-            dronePower = b.comment("Shahed blast power (TNT = 4). Above 60 freezes the server.")
-                    .translation("incoming.config.drone_power").defineInRange("drone_power", 12, 1, 60);
-            missilePower = b.comment("Cruise missile blast power (TNT = 4).")
-                    .translation("incoming.config.missile_power").defineInRange("missile_power", 20, 1, 60);
-            rocketPower = b.comment("Blast power of each Grad rocket in a salvo (122 mm; TNT = 4).")
-                    .translation("incoming.config.rocket_power").defineInRange("rocket_power", 7, 1, 60);
-            loiterPower = b.comment("Lancet blast power (TNT = 4).")
-                    .translation("incoming.config.loiter_power").defineInRange("loiter_power", 8, 1, 60);
             bunkerPower = b.comment("Underground blast power of the bunker buster (TNT = 4).")
                     .translation("incoming.config.bunker_power").defineInRange("bunker_power", 20, 1, 60);
             bunkerEnergy = b.comment("Bunker buster penetration: 1000 ≈ 30 blocks of stone.")

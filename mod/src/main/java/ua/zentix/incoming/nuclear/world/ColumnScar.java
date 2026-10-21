@@ -73,7 +73,7 @@ public final class ColumnScar {
      * сооружение и рисует биомы прямо в потоке сервера (на стенде — 567 мс за один сундук). Волна испаряет сундук,
      * добыча не выпадает: таблица снимается до замены.
      */
-    static void replace(ServerLevel level, BlockPos pos, BlockState old, BlockState with) {
+    public static void replace(ServerLevel level, BlockPos pos, BlockState old, BlockState with) {
         if (old.hasBlockEntity()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof RandomizableContainer loot) loot.setLootTable(null);

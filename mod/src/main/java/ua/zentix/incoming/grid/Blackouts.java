@@ -13,6 +13,7 @@ import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.warhead.Warheads;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
@@ -35,6 +36,8 @@ import java.util.Locale;
 public final class Blackouts {
     /** Взрыв выбивает узел, если его центр ближе этого (блоки) плюс радиус взрыва: подстанция — площадка, не точка. */
     static final double HIT = 6;
+    /** Порог оборудования подстанции для волны обычного заряда, psi — как у лёгких деревянных построек ({@code nuke_light}; оценка). */
+    static final double EQUIPMENT_PSI = 4;
     /** Кому слышен и виден выход подстанции из строя (блоки). */
     private static final double FAILURE_RANGE = 320;
     /** Каскад ядерного удара: электромагнитный импульс и волна гасят район почти разом (блоков за тик). */
@@ -56,7 +59,10 @@ public final class Blackouts {
         if (!(e.getLevel() instanceof ServerLevel level) || !IncomingConfig.SERVER.gridEnabled.get()) return;
         if (e.getExplosion().getBlockInteraction() == Explosion.BlockInteraction.TRIGGER_BLOCK || e.getExplosion().radius() < MIN_BLAST) return;
         Vec3 at = e.getExplosion().center();
-        double reach = HIT + e.getExplosion().radius();
+        // взрыв боевой части по заряду: подстанция — оборудование на открытой площадке, выбита там, где волна ломает
+        // лёгкие постройки (4 psi, кривая давление–импульс); ванильный взрыв — по его радиусу
+        double charge = Warheads.chargeOf(e.getExplosion());
+        double reach = HIT + (charge > 0 ? Warheads.breakReach(EQUIPMENT_PSI, charge) : e.getExplosion().radius());
         List<Node> hit = new ArrayList<>();
         for (Node n : PowerGrid.get(level).nodes()) {
             if (Vec3.atCenterOf(n.pos()).distanceToSqr(at) <= reach * reach) hit.add(n);

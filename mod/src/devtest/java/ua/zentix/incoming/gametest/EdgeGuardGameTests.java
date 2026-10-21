@@ -109,13 +109,13 @@ public final class EdgeGuardGameTests {
         Vec3 at = middle(blast);
         Warheads.detonate(level, WeaponType.DRONE, at, null, null);
         h.assertFalse(Terrain.ready(level, blast.x, blast.z), "подрыв загрузил чанк точки удара " + blast);
-        // вторичные подрывы наземного взрыва — до 22 блоков от точки (SurfaceBlast): с запасом
+        // район удара шахеда — до ~23 блоков от точки (лучи волны, Warheads.chargeReach): с запасом
         double area = 32;
         h.runAfterDelay(1, () -> {
             for (int cx = Mth.floor(at.x - area) >> 4; cx <= Mth.floor(at.x + area) >> 4; cx++)
                 for (int cz = Mth.floor(at.z - area) >> 4; cz <= Mth.floor(at.z + area) >> 4; cz++) level.getChunk(cx, cz);
         });
-        // таймлайн подрыва — 12 тиков, отложенные взрывы срабатывают в первом тике готового района
+        // отложенный подрыв срабатывает в первом тике готового района
         h.runAfterDelay(40, h::succeed);
     }
 

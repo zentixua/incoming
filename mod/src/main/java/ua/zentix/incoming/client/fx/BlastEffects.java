@@ -21,7 +21,9 @@ import ua.zentix.incoming.client.sound.BlastEchoes;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.net.S2C;
+import net.minecraft.world.level.block.state.BlockState;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.util.Particles;
 import ua.zentix.incoming.warhead.BunkerCover;
 import ua.zentix.incoming.warhead.GroundMaterial;
@@ -234,7 +236,38 @@ public final class BlastEffects {
             if (s > 0) Flash.trigger(s, decay, rgb);
         }
 
-        /** Фонтан грунта из воронки — комья цвета местности (fx/spray); пыль — объём облака в сетке дыма. */
+        /**
+         * Выброс воронки заряда {@code tntKg} кг ТНТ: комья цвета местности, сколько и как быстро — по закону выброса
+         * (Housen, Schmidt, Holsapple, «Crater ejecta scaling laws», J. Geophys. Res. 88(B3), 1983): скорость кома, вылетевшего
+         * с расстояния x от центра, v = C₂·√(g·R)·(x/R)^(−1/μ), доля массы быстрее v — (v/v_R)^(−3μ); сухой грунт μ ≈ 0,41,
+         * C₂ ≈ 0,55 (оценка по их графикам для песка), из середины не ближе 0,2 R. Под 45° к горизонту (±10°, оценка).
+         * Число комьев — объём чаши ({@link CraterModel#chargeVolume}) на ком {@link #CLOD_M3}; пыль — облако модели.
+         */
+        void ejecta(ClientLevel level, double tntKg) {
+            CraterModel.Soil soil = mat.soil();
+            double rc = CraterModel.chargeRadius(tntKg, soil), volume = CraterModel.chargeVolume(tntKg, soil);
+            if (rc <= 0) return;
+            int n = (int) Math.min(MAX_CLODS, Math.round(volume / CLOD_M3 * Fx.density(pos)));
+            double vRim = EJECTA_C2 * Math.sqrt(G * rc), uMin = Math.pow(0.2, 3);
+            BlockState clod = mat.particleBlock();
+            for (int i = 0; i < n; i++) {
+                double u = uMin + (1 - uMin) * random.nextDouble();
+                double v = vRim * Math.pow(u, -1 / (3 * EJECTA_MU)) / 20;
+                double el = Math.toRadians(45 + (random.nextDouble() * 2 - 1) * 10), az = random.nextDouble() * Math.PI * 2;
+                double from = Math.cbrt(u) * rc;
+                Vec3 at = pos.add(Math.cos(az) * from, 0.5, Math.sin(az) * from);
+                int life = (int) Math.ceil(2 * v * Math.sin(el) / GRAVITY) + 20;
+                Clod p = new Clod(level, at, clod, life);
+                p.setParticleSpeed(Math.cos(az) * Math.cos(el) * v, Math.sin(el) * v, Math.sin(az) * Math.cos(el) * v);
+                Minecraft.getInstance().particleEngine.add(p);
+            }
+            if (mat.isWater()) {
+                Particles.burst(level, ParticleTypes.SPLASH, pos.add(0, 1, 0), 3, 3, 3, 0.8, 2 * n);
+                Particles.burst(level, ParticleTypes.BUBBLE_POP, pos.add(0, 1, 0), 4, 2, 4, 0.3, n / 2);
+            }
+        }
+
+        /** Фонтан грунта у входа бомбы в грунт (бетонобойная — своим законом в S5). */
         void spray(ClientLevel level, int scale) {
             Particles.burst(level, FxParticles.block(mat), pos.add(0, 1, 0), 1.5, 1.5, 1.5, scale == 1 ? 0.9 : 1.3, scale == 1 ? 350 : 900);
             Particles.burst(level, FxParticles.block(mat), pos.add(0, 3, 0), 4, 3, 4, 0.4, scale == 1 ? 150 : 400);
@@ -242,6 +275,25 @@ public final class BlastEffects {
                 Particles.burst(level, ParticleTypes.SPLASH, pos.add(0, 1, 0), 3, 3, 3, 0.8, scale == 1 ? 700 : 1800);
                 Particles.burst(level, ParticleTypes.BUBBLE_POP, pos.add(0, 1, 0), 4, 2, 4, 0.3, scale == 1 ? 150 : 400);
             }
+        }
+    }
+
+    /** Ком грунта выброса — объём, м³ (ком ~25 см; оценка), и больше комьев на взрыв не бывает (бюджет частиц). */
+    static final double CLOD_M3 = 0.25 * 0.25 * 0.25;
+    static final int MAX_CLODS = 1200;
+    /** Закон выброса Housen и др. 1983 для сухого грунта: μ и C₂ (оценка). */
+    static final double EJECTA_MU = 0.41, EJECTA_C2 = 0.55;
+    /** Тяжесть, м/с², и она же в блоках за тик². */
+    static final double G = 9.80665, GRAVITY = G / 400;
+
+    /** Ком выброса: частица блока с настоящей тяжестью и сроком на весь полёт (у ванильной — 1,6 g и до 2 с). */
+    static final class Clod extends net.minecraft.client.particle.TerrainParticle {
+        Clod(ClientLevel level, Vec3 at, BlockState state, int life) {
+            super(level, at.x, at.y, at.z, 0, 0, 0, state);
+            // ванильная частица тянет вниз 0,04 блока за тик² — 16 м/с²
+            this.gravity = (float) (GRAVITY / 0.04);
+            this.friction = 0.995f;
+            setLifetime(life);
         }
     }
 
@@ -272,7 +324,7 @@ public final class BlastEffects {
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 2, 1, 2, 0, 30);
                 return true;
             }
-            if (t == 1) spray(level, 1);
+            if (t == 1) ejecta(level, model.source.chargeKg());
             // языки пламени — пока горит топливо (шар топлива, CCPS)
             Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * model.fuelBallSeconds), random);
             if (t == 8 && !rocket) BlastSounds.fire(pos, 1.1f);
@@ -347,29 +399,17 @@ public final class BlastEffects {
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 4, 2, 4, 0, 80);
                 return true;
             }
-            if (t == 1) spray(level, 2);
+            if (t == 1) ejecta(level, model.source.chargeKg());
+            // вторичных подрывов нет: вторичное — только топливо (языки пламени шара) и горящие обломки сервера
             Explosions.burn(level, pos, radius(), t, (int) Math.ceil(20 * model.fuelBallSeconds), random);
-            for (Warheads.Secondary s : Warheads.MISSILE_SECONDARIES) {
-                // вторичные подрывы сервера (ванильных клубов у них нет): огонь и искры там же и тогда же
-                if (s.tick() == t) Explosions.cookoff(level, pos.add(s.dx(), s.dy(), s.dz()), s.power(), random);
-            }
             switch (t) {
                 case 10 -> BlastSounds.fire(pos, 0.9f);
                 case 150 -> BlastSounds.fire(pos, 0.85f);
                 case 20 -> BlastSounds.debris(pos, 90, 0.9f);
                 case 34 -> BlastSounds.debris(pos, 90, 0.8f);
-                case 60, 97, 143 -> cookoff(level);
                 default -> {}
             }
             return t < 340;
-        }
-
-        /** Догорание: вторичные подрывы в воронке. */
-        private void cookoff(ClientLevel level) {
-            Vec3 p = pos.add(random.nextIntBetweenInclusive(-6, 6), 0.5, random.nextIntBetweenInclusive(-6, 6));
-            Explosions.cookoff(level, p, 3, random);
-            Particles.burst(level, ParticleTypes.LAVA, p, 1, 0.5, 1, 0, 25);
-            BlastSounds.cookoff(p);
         }
 
     }

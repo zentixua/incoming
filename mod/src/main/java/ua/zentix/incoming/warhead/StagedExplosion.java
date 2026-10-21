@@ -3,6 +3,17 @@ package ua.zentix.incoming.warhead;
 import com.mojang.datafixers.util.Pair;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import net.minecraft.core.Direction;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.LiquidBlock;
+import ua.zentix.incoming.nuclear.model.BlastDamage;
+import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.nuclear.world.BlastBody;
+import ua.zentix.incoming.nuclear.world.BlockResponse;
+import ua.zentix.incoming.registry.ModTags;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
@@ -131,7 +142,7 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /** Что делает следующая единица. */
-    private enum Phase { START, RAYS, DETONATE, SPLIT, DAMAGE, BLOCKS }
+    private enum Phase { START, RAYS, GAS, DETONATE, SPLIT, DAMAGE, BLOCKS }
 
     /** Проверки: лучи ванильным {@code explode()} (как при аппарате рядом) — сравнить выборку своего цикла с ванильной. */
     boolean forceVanilla;
@@ -149,6 +160,23 @@ final class StagedExplosion implements UnitQueue.Job {
     int portions, largestPortion;
 
     private final BlastArea area;
+    /**
+     * Заряд боевой части по физике, кг ТНТ ({@link #charge}): волна Кинни–Грэхема ломает блоки по кривой давление–импульс
+     * ({@code BlockResponse.breaksAt}), газы держат давление в помещении, тела бьёт {@link BlastBody}. 0 — ванильный взрыв
+     * силы {@link #power} (бетонобойная бомба, её вход в грунт, проверки).
+     */
+    private final double charge;
+    /** Центр волны в мире: у взрыва на аппарате Sable — его точка в мире ({@link SubLevels#toWorld}). */
+    private Vec3 centre;
+    /** Взрыв по заряду: докуда лучи могут сломать хоть что-то и докуда волна бьёт по телам, блоков. */
+    private final double breakReach, hitReach;
+    /** Случайность тел у этого взрыва ({@code BlastBody.fate}). */
+    private long waveId;
+    /** Помещение, где взорвался заряд (газы), или null — взрыв на открытом. */
+    @Nullable
+    private Room room;
+    @Nullable
+    private BlastBody.Wave wave;
     /** Взрывы, которые должны кончиться раньше (вторичные подрывы удара ждут главный). */
     private final List<StagedExplosion> after;
     private final Vec3 at;
@@ -231,9 +259,23 @@ final class StagedExplosion implements UnitQueue.Job {
 
     StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, float power, boolean fire, boolean blocks, @Nullable Entity direct,
                     @Nullable Entity owner, @Nullable ExplosionDamageCalculator calculator) {
+        this(area, after, at, power, 0, fire, blocks, direct, owner, calculator);
+    }
+
+    /** Взрыв заряда {@code tntKg} кг ТНТ по физике. */
+    StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, double tntKg, boolean blocks, @Nullable Entity direct, @Nullable Entity owner) {
+        this(area, after, at, (float) breakReach(tntKg), tntKg, false, blocks, direct, owner, null);
+    }
+
+    private StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, float power, double charge, boolean fire, boolean blocks,
+                            @Nullable Entity direct, @Nullable Entity owner, @Nullable ExplosionDamageCalculator calculator) {
         this.area = area;
         this.after = after;
         this.at = at;
+        this.centre = at;
+        this.charge = charge;
+        this.breakReach = charge > 0 ? breakReach(charge) : 0;
+        this.hitReach = charge > 0 ? hitReach(charge) : 0;
         this.power = power;
         this.fire = fire;
         this.blocks = blocks;
@@ -285,7 +327,7 @@ final class StagedExplosion implements UnitQueue.Job {
 
     private ImpactCost.Kind kind() {
         return switch (phase) {
-            case START, RAYS -> ImpactCost.Kind.RAYS;
+            case START, RAYS, GAS -> ImpactCost.Kind.RAYS;
             case DETONATE, DAMAGE -> ImpactCost.Kind.HITS;
             case SPLIT, BLOCKS -> ImpactCost.Kind.BLOCKS;
         };
@@ -301,12 +343,13 @@ final class StagedExplosion implements UnitQueue.Job {
         switch (phase) {
             case START -> {
                 count = 1;
-                more = start(level);
+                more = charge > 0 ? startCharge(level) : start(level);
             }
-            case RAYS -> more = rays(level);
+            case RAYS -> more = charge > 0 ? chargeRays(level) : rays(level);
+            case GAS -> more = gas(level);
             case DETONATE -> more = detonate(level);
             case SPLIT -> more = split(level);
-            case DAMAGE -> more = damage(level);
+            case DAMAGE -> more = charge > 0 ? chargeDamage(level) : damage(level);
             default -> {
                 more = portion(level);
                 count = blown;
@@ -440,6 +483,417 @@ final class StagedExplosion implements UnitQueue.Job {
         return true;
     }
 
+    // ---------------------------------------------------------------- взрыв по заряду
+
+    /** Сколько клеток воздуха обходит поиск помещения у заряда: больше — взрыв на открытом (UFC: помещение — замкнутый объём). */
+    static final int ROOM_CELLS = 4000;
+    /** Блок, которому ванильный взрыв не страшен (обсидиан 1200 и защищённые блоки модов), волну держит. */
+    private static final float BLAST_PROOF = 1200;
+    /** Шаг луча, блоков: как у ванили. */
+    private static final double STEP = 0.3;
+
+    /** Докуда волна заряда {@code tntKg} может сломать хоть что-то — самый слабый блок у нижнего края разброса, блоков. */
+    static double breakReach(double tntKg) {
+        return reachFor(BlockResponse.FRAGILE_PSI, tntKg) + 1;
+    }
+
+    /** Докуда волна заряда бьёт тела: до порога осколков стекла ({@code BlastBody}: ниже него ран нет), блоков. */
+    static double hitReach(double tntKg) {
+        return BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI), tntKg);
+    }
+
+    /** Докуда в открытом поле ломается блок с порогом {@code psi} у нижнего края разброса, блоков. */
+    static double reachFor(double psi, double tntKg) {
+        double pc = BlastModel.kpa(psi);
+        double lo = 0.05, hi = 1e4;
+        if (!breaksOpen(lo, tntKg, pc)) return 0;
+        for (int i = 0; i < 60; i++) {
+            double m = Math.sqrt(lo * hi);
+            if (breaksOpen(m, tntKg, pc)) lo = m;
+            else hi = m;
+        }
+        return lo;
+    }
+
+    /** Как {@code BlockResponse.breaksAt} у нижнего края разброса: давление и импульс делятся на {@code JITTER_MIN}. */
+    private static boolean breaksOpen(double r, double tntKg, double pcKpa) {
+        double j = BlockResponse.JITTER_MIN;
+        return BlastDamage.breaks(BlastModel.surfaceOverpressureKpa(r, tntKg) / j, BlastModel.chemicalImpulse(r, tntKg, true) / j, pcKpa);
+    }
+
+    /**
+     * Первая единица взрыва по заряду: {@link Explosion} с радиусом {@link #breakReach} (его видят обработчики событий и
+     * выпадение с затуханием), {@code ExplosionEvent.Start} (приваты отменяют его, как обычно), событие {@code EXPLODE}.
+     * Ванильного пути нет: блоки аппаратов ломает тот же закон ({@link #crafts}).
+     */
+    private boolean startCharge(ServerLevel level) {
+        long t = System.nanoTime();
+        if (SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(at)))) centre = SubLevels.toWorld(level, at);
+        Explosion.BlockInteraction destroy = blocks ? Explosion.BlockInteraction.DESTROY_WITH_DECAY : Explosion.BlockInteraction.KEEP;
+        source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner);
+        Explosion e = new Explosion(level, null, source, null, centre.x, centre.y, centre.z, power, false, destroy,
+                ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
+        explosion = e;
+        // обработчики начала уже видят заряд ({@link #chargeOf})
+        CHARGES.put(e, charge);
+        cancelled = EventHooks.onExplosionStart(level, e);
+        started = true;
+        time(ExplosionStage.START, t);
+        if (cancelled) return false;
+        waveId = level.random.nextLong();
+        t = System.nanoTime();
+        level.gameEvent(null, GameEvent.EXPLODE, centre);
+        time(ExplosionStage.GAME_EVENT, t);
+        phase = Phase.RAYS;
+        return true;
+    }
+
+    /**
+     * Лучи {@code [nextRay, nextRay + raysPerUnit)} волны заряда: вдоль луча давление и импульс — Кинни–Грэхем на земле
+     * ({@link BlastModel}), блок ломается по своей кривой давление–импульс ({@code BlockResponse.breaksAt}), сломанный
+     * пропускает дальше долю волны ({@code BlockResponse.passes}), уцелевший, грунт, жидкость и неразрушимое — тень: за
+     * ними луч кончается. Приближение: волна не огибает дома, а у сломанного блока теряет ровно импульс его разрушения.
+     */
+    private boolean chargeRays(ServerLevel level) {
+        long t = System.nanoTime();
+        Explosion e = explosion;
+        int end = Math.min(rays(), nextRay + raysPerUnit);
+        // блок, в который снаряд ударил и в котором рвётся заряд, — его сносит контактный взрыв (грунт — воронка):
+        // волна идёт от его граней
+        long contact = BlockPos.containing(centre).asLong();
+        if (nextRay == 0 && Terrain.ready(level, BlockPos.of(contact))) {
+            BlockPos c = BlockPos.of(contact);
+            BlockState s = level.getBlockState(c);
+            BlockResponse response = BlockResponse.of(s);
+            if (!s.isAir() && response.kind() != BlockResponse.Kind.NONE && response.kind() != BlockResponse.Kind.GROUND
+                    && !(s.getBlock() instanceof LiquidBlock) && s.getExplosionResistance(level, c, e) < BLAST_PROOF
+                    && damage.shouldBlockExplode(e, level, c, s, 1f)) chosen.add(c);
+        }
+        for (int r = nextRay; r < end; r++) {
+            double dx = RAY_X[r], dy = RAY_Y[r], dz = RAY_Z[r];
+            double share = 1;
+            long last = contact;
+            for (double d = 0; d <= breakReach; d += STEP) {
+                double x = centre.x + dx * d, y = centre.y + dy * d, z = centre.z + dz * d;
+                BlockPos pos = BlockPos.containing(x, y, z);
+                long key = pos.asLong();
+                counts.steps++;
+                if (key == last) {
+                    counts.cached++;
+                    continue;
+                }
+                last = key;
+                if (!level.isInWorldBounds(pos) || !Terrain.ready(level, pos)) break;
+                BlockState state = level.getBlockState(pos);
+                if (state.isAir()) {
+                    counts.airSteps++;
+                    continue;
+                }
+                if (state.getBlock() instanceof LiquidBlock || state.getExplosionResistance(level, pos, e) >= BLAST_PROOF) break;
+                BlockResponse response = BlockResponse.of(state);
+                if (response.kind() == BlockResponse.Kind.NONE || response.kind() == BlockResponse.Kind.GROUND) break;
+                double range = Math.max(0.25, d);
+                double psi = BlastModel.psi(BlastModel.surfaceOverpressureKpa(range, charge)) * share;
+                double impulse = BlastModel.chemicalImpulse(range, charge, true) * share;
+                int seed = Mth.murmurHash3Mixer(Long.hashCode(key));
+                boolean breaks = damage.shouldBlockExplode(e, level, pos, state, 1f) && response.breaksAt(psi, impulse, seed);
+                // трава, цветы, посевы, факелы без формы столкновений — без массы на пути волны: сломаны они или нет,
+                // волна идёт сквозь, ничего не теряя
+                boolean massless = state.getCollisionShape(level, pos).isEmpty();
+                if (breaks) chosen.add(pos);
+                if (massless) continue;
+                if (!breaks) break;
+                share *= response.passes(psi, impulse, seed);
+                if (share < 1e-3) break;
+            }
+        }
+        nextRay = end;
+        time(ExplosionStage.RAYS, t);
+        if (nextRay >= rays()) phase = Phase.GAS;
+        return true;
+    }
+
+    /**
+     * Газы взрыва в помещении: обход воздуха от заряда не больше {@link #ROOM_CELLS} клеток. Кончился раньше — заряд в
+     * замкнутом объёме: давление газов ({@link BlastDamage#quasiStaticKpa}) давит на все стены, пока не вытечет через
+     * проёмы — стёкла, деревянные двери и люки и то, что уже пробили лучи ({@link BlastDamage#ventSeconds}); стена
+     * ломается по той же кривой, с импульсом газов. Комнату выбивает целиком — выбитый этаж.
+     */
+    private boolean gas(ServerLevel level) {
+        long t = System.nanoTime();
+        room = Room.find(level, centre, chosen);
+        if (room != null) {
+            double kpa = BlastDamage.quasiStaticKpa(charge, room.cells().size());
+            double seconds = BlastDamage.ventSeconds(room.cells().size(), room.vents());
+            double psi = BlastModel.psi(kpa), impulse = Double.isInfinite(seconds) ? Double.MAX_VALUE : kpa * 1000 * seconds;
+            room = new Room(room.cells(), room.walls(), room.vents(), kpa);
+            Explosion e = explosion;
+            for (BlockPos p : room.walls()) {
+                BlockState s = level.getBlockState(p);
+                BlockResponse response = BlockResponse.of(s);
+                if (response.kind() == BlockResponse.Kind.NONE || response.kind() == BlockResponse.Kind.GROUND) continue;
+                if (s.getExplosionResistance(level, p, e) >= BLAST_PROOF || !damage.shouldBlockExplode(e, level, p, s, 1f)) continue;
+                if (response.breaksAt(psi, impulse, Mth.murmurHash3Mixer(Long.hashCode(p.asLong())))) chosen.add(p);
+            }
+        }
+        time(ExplosionStage.RAYS, t);
+        phase = Phase.DETONATE;
+        return true;
+    }
+
+    /**
+     * Помещение заряда: клетки воздуха, стены вокруг, проёмы (м²) и давление газов, кПа.
+     */
+    record Room(LongOpenHashSet cells, List<BlockPos> walls, int vents, double kpa) {
+        /** Замкнутый объём у {@code centre}; null — воздух уходит дальше {@link #ROOM_CELLS} (взрыв на открытом) или в неготовый чанк. */
+        @Nullable
+        static Room find(ServerLevel level, Vec3 centre, Set<BlockPos> broken) {
+            LongOpenHashSet seen = new LongOpenHashSet();
+            LongOpenHashSet cells = new LongOpenHashSet();
+            LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+            List<BlockPos> walls = new ArrayList<>();
+            int vents = 0;
+            BlockPos start = BlockPos.containing(centre);
+            seen.add(start.asLong());
+            queue.enqueue(start.asLong());
+            BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+            boolean first = true;
+            while (!queue.isEmpty()) {
+                p.set(queue.dequeueLong());
+                if (!level.isInWorldBounds(p) || !Terrain.ready(level, p)) return null;
+                BlockState s = level.getBlockState(p);
+                // заряд рвётся у самой поверхности, в которую ударил: блок центра — тоже воздух помещения
+                if (!first && !passes(level, p, s)) {
+                    BlockPos wall = p.immutable();
+                    walls.add(wall);
+                    if (broken.contains(wall) || vent(s)) vents++;
+                    continue;
+                }
+                first = false;
+                cells.add(p.asLong());
+                if (cells.size() > ROOM_CELLS) return null;
+                for (Direction dir : Direction.values()) {
+                    long n = BlockPos.offset(p.asLong(), dir);
+                    if (seen.add(n)) queue.enqueue(n);
+                }
+            }
+            return new Room(cells, walls, vents, 0);
+        }
+
+        private static boolean passes(ServerLevel level, BlockPos p, BlockState s) {
+            return s.isAir() || s.getCollisionShape(level, p).isEmpty();
+        }
+
+        /** Проём: стекло и хрупкое (выбивает первым, при 0,8 psi), деревянные двери и люки. */
+        private static boolean vent(BlockState s) {
+            return s.is(ModTags.SHATTERS) || BlockResponse.of(s).thresholdPsi() <= BlockResponse.FRAGILE_PSI
+                    || s.is(BlockTags.WOODEN_DOORS) || s.is(BlockTags.WOODEN_TRAPDOORS);
+        }
+
+        boolean contains(BlockPos pos) {
+            return cells.contains(pos.asLong());
+        }
+    }
+
+    /** Волна заряда по телу ({@link BlastBody}): давление открытого поля там, куда она прошла, газы — в помещении. */
+    private BlastBody.Wave wave() {
+        if (wave == null) wave = new BlastBody.Wave() {
+            @Override
+            public Vec3 centre() {
+                return centre;
+            }
+
+            /** Волна открытого поля, а в помещении заряда — не меньше давления газов. */
+            @Override
+            public double overpressureKpa(Vec3 p) {
+                double free = BlastModel.surfaceOverpressureKpa(p.distanceTo(centre), charge);
+                return room != null && room.contains(BlockPos.containing(p)) ? Math.max(free, room.kpa()) : free;
+            }
+
+            @Override
+            public double dynamicPressureKpa(Vec3 p) {
+                return BlastModel.dynamicPressureKpa(BlastModel.surfaceOverpressureKpa(p.distanceTo(centre), charge));
+            }
+
+            @Override
+            public double windSpeed(Vec3 p) {
+                return BlastModel.windSpeed(BlastModel.surfaceOverpressureKpa(p.distanceTo(centre), charge));
+            }
+
+            @Override
+            public double phaseSeconds(Vec3 p) {
+                return BlastModel.chemicalPhaseSeconds(p.distanceTo(centre), charge, true);
+            }
+
+            @Override
+            public double hitKpa() {
+                return BlastModel.kpa(BlockResponse.FRAGILE_PSI);
+            }
+
+            @Override
+            public boolean wind(ServerLevel level, LivingEntity e) {
+                return Explosion.getSeenPercent(centre, e) > 0;
+            }
+
+            @Override
+            public boolean reaches(ServerLevel level, LivingEntity e) {
+                return room != null && (room.contains(e.blockPosition()) || room.contains(BlockPos.containing(e.getEyePosition())));
+            }
+
+            @Override
+            public long id() {
+                return waveId;
+            }
+
+            @Override
+            public net.minecraft.resources.ResourceKey<net.minecraft.world.damagesource.DamageType> damage() {
+                return ModDamageTypes.STRIKE;
+            }
+        };
+        return wave;
+    }
+
+    /**
+     * Урон по {@link #ENTITIES_PER_UNIT} сущностей волной заряда: живые — {@link BlastBody} (лёгкие, бросок напором за
+     * положительную фазу, удар о стену, осколки окна; в помещении — давление газов), остальное (предметы, рамки,
+     * вагонетки) разбивает там, где волна ломает лёгкие деревянные постройки ({@code nuke_light}, 4 psi), если оно открыто
+     * взрыву. Тела, к которым путь из центра идёт через неготовый чанк, не трогаются (луч видимости грузил бы его).
+     */
+    private boolean chargeDamage(ServerLevel level) {
+        long t = System.nanoTime();
+        Explosion e = explosion;
+        int end = Math.min(entities.size(), nextEntity + ENTITIES_PER_UNIT);
+        if (lightReach < 0) lightReach = reachFor(LIGHT_PSI, charge);
+        for (int i = nextEntity; i < end; i++) {
+            Entity entity = entities.get(i);
+            if (!entity.isAlive() || entity.level() != level || entity == direct || entity.ignoreExplosion(e)) continue;
+            if (!Terrain.readyAlong(level, centre, entity.position())) continue;
+            if (entity instanceof LivingEntity living) {
+                if (living.isSpectator() || living.isPassenger()) continue;
+                BlastBody.hit(level, wave(), living, direct, owner, null);
+            } else if (entity.distanceToSqr(centre) <= lightReach * lightReach && Explosion.getSeenPercent(centre, entity) > 0) {
+                entity.hurt(source, BREAKS_ANYTHING);
+            }
+        }
+        nextEntity = end;
+        time(ExplosionStage.DAMAGE, t);
+        if (nextEntity < entities.size()) return true;
+        entities = List.of();
+        crafts(level);
+        phase = Phase.BLOCKS;
+        return !toBlow.isEmpty();
+    }
+
+    /** Докуда волна ломает лёгкие постройки, блоков (−1 — ещё не считали). */
+    private double lightReach = -1;
+    /** Порог лёгких деревянных построек ({@code nuke_light}), psi: так же волна разбивает незакреплённые вещи. */
+    private static final double LIGHT_PSI = 4;
+    /** Урон, после которого любая сущность без здоровья (предмет, вагонетка, рамка) разбита. */
+    private static final float BREAKS_ANYTHING = 1000;
+
+    /**
+     * Аппараты Create Aeronautics в охвате: их блоки лежат в плотах Sable, и лучи по миру их не видят. Путь — как у
+     * ядерной волны ({@code BlastFront}): ванильный взрыв в центре, лучи которого Sable проводит и по блокам аппарата
+     * (и толкает его), а какой блок аппарата сломать, решает тот же закон давления и импульса по расстоянию до центра в
+     * мире ({@link CraftCharge}); сущности он не трогает. Сила — чтобы ванильный луч в воздухе дошёл до {@link #breakReach}
+     * при наименьшем множителе (0,7): дальше закон ничего не ломает. Толчок аппарата — Sable по ванильным лучам, не по
+     * физике.
+     */
+    private void crafts(ServerLevel level) {
+        float craftPower = craftPower(level, centre, charge);
+        if (craftPower <= 0) return;
+        Vec3 c = centre;
+        double tnt = charge;
+        boolean destroy = blocks;
+        Warheads.whenReady(level, c, craftReach(craftPower), l -> {
+            // пока идёт этот взрыв, обработчики событий видят заряд ({@link #chargeOf}), а список сущностей у его
+            // {@code Detonate} пуст ({@link #onDetonate}): урона и толчка от него нет, лучей видимости к телам — тоже
+            double outer = craftCharge;
+            craftCharge = tnt;
+            try {
+                l.explode(null, ModDamageTypes.source(l, ModDamageTypes.STRIKE, null, null), new CraftCharge(l, c, tnt),
+                        c.x, c.y, c.z, craftPower, false, destroy ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE,
+                        ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
+            } finally {
+                craftCharge = outer;
+            }
+        });
+    }
+
+    /** Заряд взрыва по аппаратам, который сейчас идёт в потоке сервера ({@link #crafts}); 0 — нет такого. */
+    private static double craftCharge;
+
+    /**
+     * Сила ванильного взрыва по аппаратам ({@link #crafts}): луч в воздухе при множителе 0,7 уходит на 0,7 × 1,33 силы —
+     * до самой дальней точки аппаратов в охвате волны, но не дальше охвата ({@link #breakReach}: дальше закон ничего не
+     * ломает); 0 — аппаратов нет. Сила по всему охвату читала бы мир на ~1,9 охвата и стоила бы пика тика.
+     */
+    static float craftPower(Level level, Vec3 centre, double tntKg) {
+        double reach = breakReach(tntKg), far = 0;
+        if (!SubLevels.mayHaveCraftNear(level, centre, reach)) return 0;
+        for (var sub : SubLevels.near(level, centre, reach)) {
+            AABB box = sub.boundingBox().toMojang();
+            double dx = Math.max(Math.abs(box.minX - centre.x), Math.abs(box.maxX - centre.x));
+            double dy = Math.max(Math.abs(box.minY - centre.y), Math.abs(box.maxY - centre.y));
+            double dz = Math.max(Math.abs(box.minZ - centre.z), Math.abs(box.maxZ - centre.z));
+            far = Math.max(far, Math.sqrt(dx * dx + dy * dy + dz * dz));
+        }
+        return far <= 0 ? 0 : (float) Math.min(60, Math.max(1, Math.min(reach, far) / (0.7 * 1.33)));
+    }
+
+    /** Докуда читает мир взрыв по аппаратам силы {@code power}: луч при множителе 1,3 — 1,73 силы, с запасом в блок. */
+    static double craftReach(float power) {
+        return power * 1.73 + 1;
+    }
+
+    /** Взрыв по аппаратам: только блоки плотов, по закону давления и импульса в их точке мира; без урона и толчка сущностей. */
+    private static final class CraftCharge extends ExplosionDamageCalculator {
+        private final Level level;
+        private final Vec3 centre;
+        private final double tnt;
+
+        CraftCharge(Level level, Vec3 centre, double tnt) {
+            this.level = level;
+            this.centre = centre;
+            this.tnt = tnt;
+        }
+
+        @Override
+        public boolean shouldBlockExplode(Explosion explosion, BlockGetter reader, BlockPos pos, BlockState state, float power) {
+            if (state.isAir() || !SubLevels.isInPlot(level, pos.getCenter())) return false;
+            double r = Math.max(0.25, SubLevels.toWorld(level, pos.getCenter()).distanceTo(centre));
+            return BlockResponse.of(state).breaksAt(BlastModel.psi(BlastModel.surfaceOverpressureKpa(r, tnt)),
+                    BlastModel.chemicalImpulse(r, tnt, true), Mth.murmurHash3Mixer(Long.hashCode(pos.asLong())));
+        }
+
+        @Override
+        public boolean shouldDamageEntity(Explosion explosion, Entity entity) {
+            return false;
+        }
+
+        @Override
+        public float getKnockbackMultiplier(Entity entity) {
+            return 0;
+        }
+    }
+
+    /** Заряд взрывов по заряду, пока они идут (обработчики событий: {@link #chargeOf}). */
+    private static final java.util.Map<Explosion, Double> CHARGES = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /** Заряд взрыва мода по физике, кг ТНТ; 0 — ванильный или чужой взрыв. */
+    static double chargeOf(Explosion e) {
+        Double c = CHARGES.get(e);
+        return c != null ? c : craftCharge;
+    }
+
+    /** Заряд не отменён ({@code ExplosionEvent.Start}): работа удара после главного взрыва идёт, только если он был. */
+    boolean happened() {
+        return started && !cancelled;
+    }
+
+    /** Первая единица прошла (район дождался), и обработчик-приват не отменил взрыв. */
+    private boolean started, cancelled;
+
     /** Выбранное лучами — во взрыв, сбор сущностей, {@code ExplosionEvent.Detonate}. */
     private boolean detonate(ServerLevel level) {
         Explosion e = explosion;
@@ -447,10 +901,12 @@ final class StagedExplosion implements UnitQueue.Job {
         chosen.clear();
         strength = new float[0];
         long t = System.nanoTime();
-        float f2 = power * 2.0F;
-        int x0 = Mth.floor(at.x - f2 - 1.0), x1 = Mth.floor(at.x + f2 + 1.0);
-        int y0 = Mth.floor(at.y - f2 - 1.0), y1 = Mth.floor(at.y + f2 + 1.0);
-        int z0 = Mth.floor(at.z - f2 - 1.0), z1 = Mth.floor(at.z + f2 + 1.0);
+        // взрыв по заряду бьёт тела, пока давление выше порога осколков стекла; ванильный — в 2 × силы
+        float f2 = charge > 0 ? (float) hitReach : power * 2.0F;
+        Vec3 c = centre;
+        int x0 = Mth.floor(c.x - f2 - 1.0), x1 = Mth.floor(c.x + f2 + 1.0);
+        int y0 = Mth.floor(c.y - f2 - 1.0), y1 = Mth.floor(c.y + f2 + 1.0);
+        int z0 = Mth.floor(c.z - f2 - 1.0), z1 = Mth.floor(c.z + f2 + 1.0);
         entities = new ArrayList<>(level.getEntities((Entity) null, new AABB(x0, y0, z0, x1, y1, z1)));
         time(ExplosionStage.ENTITIES, t);
         t = System.nanoTime();
@@ -603,6 +1059,10 @@ final class StagedExplosion implements UnitQueue.Job {
      * другие объекты, их не трогаем.
      */
     static void onDetonate(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        if (craftCharge > 0 && CHARGES.get(event.getExplosion()) == null) {
+            event.getAffectedEntities().clear();
+            return;
+        }
         if (driving == null || event.getExplosion() != driving || handed != null) return;
         List<Entity> list = event.getAffectedEntities();
         handed = new ArrayList<>(list);
@@ -722,6 +1182,7 @@ final class StagedExplosion implements UnitQueue.Job {
 
     @Override
     public String describe() {
+        if (charge > 0) return String.format(Locale.ROOT, "Blast of %.1f kg TNT at %d %d %d", charge, Mth.floor(at.x), Mth.floor(at.y), Mth.floor(at.z));
         return String.format(Locale.ROOT, "Explosion of power %.0f at %d %d %d", power, Mth.floor(at.x), Mth.floor(at.y), Mth.floor(at.z));
     }
 }

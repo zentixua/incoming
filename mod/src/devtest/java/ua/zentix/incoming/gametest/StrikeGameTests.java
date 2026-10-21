@@ -170,12 +170,12 @@ public final class StrikeGameTests {
         assertCrater(h, at, "");
     }
 
+    /**
+     * Снаряд взорвался у точки удара: подрыв по заряду не дальше 6 блоков ({@link BlastLog}). Воронка — по закону заряда
+     * и грунта ({@code craterMatchesChargeLaw}), у шахеда на камне её нет, поэтому полёт проверяется по подрыву.
+     */
     private static void assertCrater(GameTestHelper h, BlockPos at, String flight) {
-        int air = 0;
-        for (BlockPos p : BlockPos.betweenClosed(at.offset(-3, -2, -3), at.offset(3, 0, 3))) {
-            if (h.getBlockState(p).isAir()) air++;
-        }
-        h.assertTrue(air >= 30, "в точке удара нет воронки: пустых блоков " + air + (flight.isEmpty() ? "" : "; последнее: " + flight));
+        h.assertTrue(BlastLog.near(h, at, 6), "у точки удара нет подрыва" + (flight.isEmpty() ? "" : "; последнее: " + flight));
     }
 
     @GameTest(template = "runway", timeoutTicks = 400, batch = "drone", skyAccess = true)
@@ -2345,7 +2345,7 @@ public final class StrikeGameTests {
     public static void deferredBlastKeepsItsProjectile(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 at = Vec3.atCenterOf(FarSite.DEFERRED_BLAST.at(h));
-        // вторичные подрывы наземного взрыва — до 22 блоков от точки (SurfaceBlast): с запасом
+        // район удара — до ~23 блоков от точки (лучи волны, Warheads.chargeReach): с запасом
         double area = 32;
         h.assertFalse(Terrain.readyAround(level, at, area), "район вдали уже загружен");
         RocketEntity rocket = ModEntities.ROCKET.get().create(level);
@@ -2371,7 +2371,7 @@ public final class StrikeGameTests {
         });
         h.succeedWhen(() -> {
             h.assertTrue(foreign.isEmpty(), "взрыв без снаряда или с чужим: " + foreign);
-            h.assertTrue(own[0] >= 2, "взрывов снаряда " + own[0] + " (ждём подрыв и огненный шар)");
+            h.assertTrue(own[0] == 1, "взрывов снаряда " + own[0] + " (ждём один подрыв заряда)");
             h.assertTrue(firstAt[0] > 0, "первый взрыв снаряда на тике " + firstAt[0] + " — не отложен");
         });
     }

@@ -4,6 +4,8 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
+import ua.zentix.incoming.nuclear.model.BlastDamage;
+import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.registry.ModTags;
 
 import java.util.IdentityHashMap;
@@ -61,8 +63,29 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
     public boolean breaksAt(double psi, int jitterSeed) {
         if (thresholdPsi == NEVER) return false;
         // ±15%: соседние одинаковые блоки ломаются не по линейке
-        float j = JITTER_MIN + JITTER_SPAN * ((jitterSeed * 0x9E3779B9 >>> 8) & 0xFFFF) / 65535f;
-        return psi >= thresholdPsi * j;
+        return psi >= thresholdPsi * jitter(jitterSeed);
+    }
+
+    /**
+     * Ломается ли блок от волны обычного заряда: давление {@code psi} и импульс {@code impulsePas} (Па·с) против кривой
+     * равного разрушения его порога ({@link BlastDamage}). Разброс порога — тот же, что у {@link #breaksAt(double, int)},
+     * на обе оси. У волны ядерки импульс много выше кривой — ответ тот же, что по одному давлению.
+     */
+    public boolean breaksAt(double psi, double impulsePas, int jitterSeed) {
+        if (thresholdPsi == NEVER) return false;
+        float j = jitter(jitterSeed);
+        return BlastDamage.breaks(BlastModel.kpa(psi) / j, impulsePas / j, BlastModel.kpa(thresholdPsi));
+    }
+
+    /** Доля волны, что проходит дальше через этот блок, когда она его сломала ({@link BlastDamage#passes}); 0 — не сломала. */
+    public double passes(double psi, double impulsePas, int jitterSeed) {
+        if (thresholdPsi == NEVER) return 0;
+        float j = jitter(jitterSeed);
+        return BlastDamage.passes(BlastModel.kpa(psi) / j, impulsePas / j, BlastModel.kpa(thresholdPsi));
+    }
+
+    private static float jitter(int seed) {
+        return JITTER_MIN + JITTER_SPAN * ((seed * 0x9E3779B9 >>> 8) & 0xFFFF) / 65535f;
     }
 
     private static BlockResponse classify(BlockState s) {

@@ -38,7 +38,7 @@ server its owner does. The most useful ones are below; the rest are in the same 
 | `launch.max_salvo`, `max_spread` | 30, 150 | largest salvo and spread |
 | `launch.max_active_per_player` | 0 | how many of one player's rounds may be in progress; 0: no limit |
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
-| `warheads.*_power` | 12, 20, 7, 8, 20 | blast power of the Shahed, missile, Grad, Lancet, bomb (TNT is 4) |
+| `warheads.bunker_power` | 20 | underground blast power of the bomb (TNT is 4); the other weapons' blasts come from their warheads |
 | `world.block_damage`, `fire` | on | destruction and fires |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators launch them |
 | `nuclear.effects_scale` | 1.0 | scale of nuclear strike radii |

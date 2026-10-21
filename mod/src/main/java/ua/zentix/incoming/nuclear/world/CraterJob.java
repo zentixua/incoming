@@ -110,11 +110,7 @@ public final class CraterJob {
         NuclearTickets.hold(level, c, true);
         if (!Terrain.ready(level, c.x, c.z)) return false;
         GroundMaterial mat = GroundMaterial.sample(level, gz);
-        soil = switch (mat) {
-            case STONE, DEEPSLATE, BRICK -> CraterModel.Soil.ROCK;
-            case SAND, WATER, SNOW -> CraterModel.Soil.WET;
-            default -> CraterModel.Soil.DRY;
-        };
+        soil = mat.soil();
         rim = mat.debris();
         // продолжение после перезапуска: чанк эпицентра уже вырыт, держать его незачем
         if (next > 0) NuclearTickets.hold(level, c, false);
@@ -122,14 +118,59 @@ public final class CraterJob {
     }
 
     private void dig(ServerLevel level, int x, int z, RandomSource random) {
-        double dx = x + 0.5 - d.burst().x, dz = z + 0.5 - d.burst().z;
-        if (dx * dx + dz * dz > (double) outer * outer) return;
+        Profile p = new Profile() {
+            @Override
+            public double depth(double r) {
+                return d.blocks(CraterModel.profileDepth(d.metres(r), d.yieldKt(), soil));
+            }
+
+            @Override
+            public double rim(double r) {
+                return d.blocks(CraterModel.rimHeight(d.metres(r), d.yieldKt(), soil));
+            }
+        };
+        digColumn(level, x, z, d.burst(), outer, d.seed() % 13, p, rim, ModBlocks.TRINITITE.get().defaultBlockState(), Mode.VAPORIZE, random);
+    }
+
+    /** Как столбец воронки встаёт в блоки. */
+    public enum Mode {
+        /** Ядерка: в чаше испаряется и всё над грунтом, глубина — вниз до целого блока. */
+        VAPORIZE,
+        /**
+         * Обычный заряд: снимается только грунт (постройки над воронкой ломает волна), а глубина и вал — целым числом
+         * блоков со случайной добавкой по дробной части: у чаши мельче блока объём в среднем тот же, что у закона.
+         */
+        DIG
+    }
+
+    /** Профиль воронки: глубина чаши и высота вала над природным грунтом, блоков, на расстоянии r блоков от центра. */
+    public interface Profile {
+        double depth(double r);
+
+        double rim(double r);
+    }
+
+    /**
+     * Один столбец воронки (ядерной и обычной — один закон формы, {@link CraterModel#bowl}, {@link CraterModel#rim}):
+     * неровный край (радиус «дышит» по углу), глубина и вал — от природного грунта столбца, в чаше снимается всё над
+     * профилем (под водой яма заполняется водой), на вал ложится выброшенный грунт {@code rimStates}. Блоки меняются через
+     * {@link ColumnScar#replace}. Чанк столбца и его соседи должны быть готовы.
+     *
+     * @param outer  дальше этого от центра по горизонтали столбец не трогается, блоков
+     * @param phase  сдвиг фазы неровного края
+     * @param glaze  чем стекленеет дно (у ядерки — тринитит), null — ничем
+     * @param mode   ядерная или обычная воронка ({@link Mode})
+     */
+    public static void digColumn(ServerLevel level, int x, int z, net.minecraft.world.phys.Vec3 centre, double outer, double phase, Profile profile,
+                                 List<BlockState> rimStates, @Nullable BlockState glaze, Mode mode, RandomSource random) {
+        double dx = x + 0.5 - centre.x, dz = z + 0.5 - centre.z;
+        if (dx * dx + dz * dz > outer * outer) return;
         // неровный край: радиус «дышит» по углу
-        double wobble = 1 + 0.08 * Math.sin(Math.atan2(dz, dx) * 7 + d.seed() % 13);
-        double r = d.metres(Math.hypot(dx, dz)) / wobble;
-        double depth = d.blocks(CraterModel.profileDepth(r, d.yieldKt(), soil));
-        double lift = d.blocks(CraterModel.rimHeight(r, d.yieldKt(), soil));
-        if (depth <= 0 && lift < 1) return;
+        double wobble = 1 + 0.08 * Math.sin(Math.atan2(dz, dx) * 7 + phase);
+        double r = Math.hypot(dx, dz) / wobble;
+        double depth = profile.depth(r);
+        double lift = profile.rim(r);
+        if (depth <= 0 && (mode == Mode.VAPORIZE ? lift < 1 : lift <= 0)) return;
 
         // высоты — как у карты высот: первый воздух над блоком
         int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
@@ -137,32 +178,37 @@ public final class CraterJob {
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, 0, z);
         // итоговая поверхность = природный грунт + вал − чаша (у кромки они перекрываются)
         double relief = lift - depth;
+        if (mode == Mode.DIG) {
+            double whole = Math.floor(relief);
+            relief = whole + (random.nextDouble() < relief - whole ? 1 : 0);
+        }
         if (relief < 0) {
-            // в чаше испарилось всё: и постройки над грунтом, и грунт до профиля; под водой яма заполняется водой
+            // в чаше снято всё: и постройки над грунтом, и грунт до профиля; под водой яма заполняется водой
             int floor = Mth.floor(ground + relief);
             BlockState fill = level.getBlockState(m.setY(ground)).getFluidState().isSource()
                     ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState();
-            for (int y = top - 1; y >= floor; y--) {
+            for (int y = mode == Mode.VAPORIZE ? top - 1 : ground - 1; y >= floor; y--) {
                 BlockState s = level.getBlockState(m.setY(y));
                 if (y >= ground && !s.getFluidState().isEmpty()) continue; // сама вода над дном остаётся
                 if (!s.isAir() && s.getBlock().defaultDestroyTime() >= 0) ColumnScar.replace(level, m, s, y < ground ? fill : Blocks.AIR.defaultBlockState());
             }
             BlockState bottom = level.getBlockState(m.setY(floor - 1));
-            if (depth > lift && random.nextFloat() < 0.3f && !bottom.isAir() && bottom.getFluidState().isEmpty() && bottom.getBlock().defaultDestroyTime() >= 0) {
-                ColumnScar.replace(level, m, bottom, ModBlocks.TRINITITE.get().defaultBlockState());
+            if (glaze != null && depth > lift && random.nextFloat() < 0.3f && !bottom.isAir() && bottom.getFluidState().isEmpty()
+                    && bottom.getBlock().defaultDestroyTime() >= 0) {
+                ColumnScar.replace(level, m, bottom, glaze);
             }
-        } else if (relief >= 1 && !rim.isEmpty()) {
+        } else if (relief >= 1 && !rimStates.isEmpty()) {
             // вал: выброшенный грунт ложится поверх природного
             int crest = Mth.floor(ground + relief);
             for (int y = ground; y < crest; y++) {
                 BlockState was = level.getBlockState(m.setY(y));
-                if (was.canBeReplaced()) ColumnScar.replace(level, m, was, rim.get(random.nextInt(rim.size())));
+                if (was.canBeReplaced()) ColumnScar.replace(level, m, was, rimStates.get(random.nextInt(rimStates.size())));
             }
         }
     }
 
     /** Первый воздух над природным грунтом (ниже построек, деревьев и прочего надземного). */
-    private static int naturalSurface(ServerLevel level, int x, int z, int top) {
+    public static int naturalSurface(ServerLevel level, int x, int z, int top) {
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, 0, z);
         for (int y = top - 1; y >= Math.max(level.getMinBuildHeight(), top - MAX_DEPTH); y--) {
             if (BlockResponse.of(level.getBlockState(m.setY(y))).kind() == BlockResponse.Kind.GROUND) return y + 1;
