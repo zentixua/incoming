@@ -68,9 +68,8 @@ BY3 = "CC BY 3.0"
 
 # id Freesound → (автор, название, лицензия, превью)
 SOURCES = {
-    # шахед: двухтактный мотор с толкающим винтом — ближе всего сверхлёгкий самолёт с Rotax
-    695977: ("wniebelski", "taxing ultralight plane.wav", CC0, "695/695977_924574"),
-    412819: ("blukotek", "two-stroke Trabant engine 01.wav", CC0, "412/412819_4451798"),
+    # шахед: двухтактный мотор с винтом на номинале — мотопараплан на подлёте (вспышки ~127 Гц — у MD-550 вал 125 Гц)
+    114628: ("dobroide", "20110212_paraglider.02.wav", BY4, "114/114628_8043"),
     # крылатая ракета: реактивный двигатель на месте — ровный вой и ровный рёв (без пролёта: тон не плывёт)
     437910: ("craigsmith", "G09-18-Constant Jet Noise.wav", CC0, "437/437910_2524442"),
     437917: ("craigsmith", "G10-02-Constant Jet Noise.wav", CC0, "437/437917_2524442"),
@@ -198,8 +197,18 @@ def fade(x, fi=0.004, fo=0.08):
     return x
 
 
-def speed(x, r):
-    """Варипитч, как у плёнки: r > 1 — выше и короче, r < 1 — ниже, длиннее и «больше»."""
+# Наибольший сдвиг записи по скорости (варипитч), раз: ускоренная втрое запись мотора звучит не другим мотором на
+# других оборотах, а той же записью на перемотке — вместе с тоном уходят резонансы корпуса и выхлопа (шахед 3.5.0 —
+# «мухи», проба P 21.10.2026: петля 232 Гц против 84 Гц у 3.4.1). Решение Артёма 21.10: записи источника — в своей
+# скорости, сдвиг не больше ±25 %; нужен другой тон — другая запись.
+SHIFT_MAX = 1.25
+
+
+def speed(x, r, why=None):
+    """Варипитч, как у плёнки: r > 1 — выше и короче, r < 1 — ниже, длиннее и «больше». Больше SHIFT_MAX — только с
+    причиной why: закон (Сакс — время взрыва ∝ ∛W) или отступление «не по физике»; без неё сборка падает."""
+    if max(r, 1 / r) > SHIFT_MAX + 1e-9 and not why:
+        sys.exit(f"запись ускорена в {r:.2f} раза: больше ±{SHIFT_MAX - 1:.0%} — взять запись с нужным тоном (SHIFT_MAX)")
     fr = Fraction(r).limit_denominator(200)
     return resample_poly(x, fr.denominator, fr.numerator)
 
@@ -513,11 +522,11 @@ def variants(event, subtitle, name, sigs, **kw):
 
 # ================================================================ шахед
 
-# Шахед: MD-550 — копия Limbach L550E, двухтактный четырёхцилиндровый, 7500 об/мин, двухлопастной винт на валу
-# (паспорт звука WeaponSpec.DRONE_NOISE): лопасти — B·n/60 = 250 Гц, вспышки — у двухтакта каждый цилиндр раз за
-# оборот, n/60 × 4 = 500 Гц (ref/formulas.md §6). Петля звучит на этих оборотах; клиент ведёт тон по оборотам винта
-# (поступь винта постоянна: обороты ∝ воздушной скорости).
-DRONE_RPM, DRONE_BLADES, DRONE_CYLINDERS = 7500, 2, 4
+# Шахед: MD-550 — копия Limbach L550E, двухтактный четырёхцилиндровый, 7500 об/мин, двухлопастной винт прямо на валу
+# (паспорт звука WeaponSpec.DRONE_NOISE): вал — n/60 = 125 Гц, лопасти — 250 Гц, вспышки (каждый цилиндр раз за
+# оборот) — 500 Гц (ref/formulas.md §6). Петля звучит на этих оборотах; клиент ведёт тон по оборотам винта (поступь
+# винта постоянна: обороты ∝ воздушной скорости).
+DRONE_RPM = 7500
 
 
 def peak(x, lo, hi):
@@ -547,20 +556,17 @@ def steadiest(x, seconds, step=0.25):
 
 
 def drone():
-    """Двухтактный мотор с винтом («мопед»): сверхлёгкий самолёт на рулёжке (Rotax-двухтакт с винтом) и зерно
-    двухтактного «Трабанта», поднятые до тонов MD-550 на номинале: самый сильный тон самолёта — его лопасти,
-    у «Трабанта» — вспышки цилиндров; ускорение — отношение частот, а не на слух. Дальний — он же через FAR_M
-    воздуха."""
-    bpf = DRONE_BLADES * DRONE_RPM / 60
-    fire = DRONE_CYLINDERS * DRONE_RPM / 60
-    ul = cut(src(695977, orig=True), 14, 50)
-    tr = cut(src(412819, orig=True), 2, 30)
-    # после ускорения записи короче втрое-вчетверо, а газ в них ходит: петля — из самых ровных кусков
-    ul = steadiest(speed(ul, bpf / peak(ul, 40, 200)), 4.7)
-    tr = steadiest(speed(tr, fire / peak(tr, 80, 400)), 4.7)
-    body = mix((F(ul, lo=110, hi=12000), 1.0), (F(tr, lo=250, hi=9000), 0.35))
+    """Двухтактный мотор с винтом («мопед»): мотопараплан на подлёте, в своей скорости. Его мотор — одноцилиндровый
+    двухтакт ~7600 об/мин (вспышки 127 Гц, винт через редуктор 1:3 — 42,7 Гц), то есть вспышки — на частоте вала
+    MD-550 (125 Гц), и сдвиг — меньше 3 % (SHIFT_MAX). Тоны ниже вала срезаны: у шахеда винт прямо на валу, тонов
+    редуктора нет. Чего нет: у MD-550 четыре цилиндра — вспышки 500 Гц сильнее, чем у одноцилиндрового (⚠ записи
+    четырёхцилиндрового двухтакта с винтом под CC0/CC BY не нашлось). Дальний — он же через FAR_M воздуха."""
+    shaft = DRONE_RPM / 60
+    x = cut(src(114628, orig=True), 15, 31)  # подлёт: тон ровный (127 ± 1,5 Гц), газ не меняется; дальше — пролёт
+    x = steadiest(speed(x, shaft / peak(x, 90, 200)), 4.7)
+    body = F(x, lo=100, hi=12000)
     near = loop(body, 4.0)
-    tone_at(near, bpf, "drone_engine")
+    tone_at(near, shaft, "drone_engine")
     write("drone_engine", engine(near, ENGINE_LUFS, "drone_engine"), "drone.engine", "subtitles.incoming.drone")
     write("drone_engine_far", engine(loop(air(body, FAR_M), 4.0), ENGINE_LUFS, "drone_engine_far"), "drone.engine.far",
           "subtitles.incoming.drone")
@@ -615,7 +621,8 @@ def launch():
     # отделение ускорителя: хлопок пиропатрона и металлический лязг замков
     sep = []
     for r, f0 in [(1.7, 620), (1.9, 740)]:
-        pop = speed(cut(src(182431), 0, 1.4), r)
+        pop = speed(cut(src(182431), 0, 1.4), r, "⚠ не по физике: хлопок пиропатрона из записи взрыва выше тоном на глаз "
+                                                   "— заменить записью пиропатрона (S8)")
         n = int(1.2 * SR)
         tt = np.arange(n) / SR
         clang = sum(a * np.sin(2 * np.pi * f0 * k * tt) * np.exp(-tt / (0.25 / k ** 0.5))
@@ -641,7 +648,8 @@ def rocket():
         # хлопок воспламенения: превью съедает атаку, возвращаем короткий треск и толчок
         crack = F(rng.standard_normal(n), lo=900, hi=12000) * np.exp(-tt / 0.018)
         x = mix((body, 1.0), (crack, 0.5), (sub_thump(n / SR, 60, 20, 0.12), 0.3))
-        sigs.append(master(fade(speed(x, r), 0.001, 0.4), ENGINE_LUFS))
+        sigs.append(master(fade(speed(x, r, "⚠ не по физике: пуск HIMARS (227 мм) выше тоном под «Град» (122 мм) на "
+                                       "глаз — заменить записью пуска без сдвига (S8)"), 0.001, 0.4), ENGINE_LUFS))
     variants("rocket.launch", "subtitles.incoming.rocket", "rocket_launch", level(sigs, ENGINE_LUFS))
 
     # вой на подлёте: ровный шум со спектром снарядов над головой (середины записей, без начала и разрыва) — в самих
@@ -772,7 +780,7 @@ def blasts():
     subs = []
     for fid, a, b, ch, r in [(475780, 0.1, 6.0, 1, 1.0), (82682, 6.9, 10.4, None, 0.6)]:
         x = src(fid, orig=True) if ch is None else src(fid, orig=True, stereo=True)[:, ch]
-        s = F(speed(onset(cut(x, a, b), -30), r), lo=20, hi=200)
+        s = F(speed(onset(cut(x, a, b), -30), r, "Сакс: низ подрыва большего заряда (⚠ множитель на глаз)"), lo=20, hi=200)
         n = len(s)
         t = np.arange(n) / SR
         thump = np.sin(2 * np.pi * (50 * t - 3.75 * t * t)) * np.exp(-t / 0.4) * np.minimum(1, t / 0.002)
@@ -802,13 +810,13 @@ def bunker():
     crack = mix((pad(syn.bomb_crack(), int(2.5 * SR)), 1.0), (pad(F(cr, lo=400), int(2.5 * SR)), 0.6))
     write("bomb_crack", norm(fade(crack, 0.001, 0.3), -15.4), "bomb.crack", "subtitles.incoming.blast")
     # удар о землю: тяжёлый глухой удар (большой взрыв в два раза медленнее, без верхов) + обломки
-    imp = F(speed(cut(src(486018), 16.2, 21.1), 0.6), lo=20, hi=1800)
+    imp = F(speed(cut(src(486018), 16.2, 21.1), 0.6, "Сакс: заряд бомбы больше записанного (⚠ множитель на глаз, S5)"), lo=20, hi=1800)
     imp = mix((imp, 1.0), (pad(syn.bomb_impact(), len(imp)), 0.8), (pad(cut(src(550342), 25.0, 27.0), len(imp)), 0.25))
     write("bomb_impact", norm(fade(imp, 0.001, 0.6), -12.9), "bomb.impact", "subtitles.incoming.bomb.impact")
     # подземный взрыв: глухой, как из-под земли
     deep = []
     for fid, a, b, r in [(741174, 0, 8, 0.6), (486018, 45.15, 50.0, 0.5)]:
-        s = F(speed(cut(src(fid), a, b), r), lo=18, hi=320)
+        s = F(speed(cut(src(fid), a, b), r, "Сакс: заряд бомбы больше записанного (⚠ множитель на глаз, S5)"), lo=18, hi=320)
         s = mix((syn.reverb(s, t60=3.0, mix=0.4, hi=400), 1.0), (pad(syn.bomb_deep(), len(s)), 0.8))
         deep.append(norm(fade(s, 0.002, 1.0), -12.3))
     variants("bomb.deep", "subtitles.incoming.blast", "bomb_deep", deep)
@@ -822,7 +830,7 @@ def bunker():
               (pad(syn.bomb_cave(), len(cav)), 0.7))
     write("bomb_cave", norm(fade(cav, 0.002, 1.2), -12.8), "bomb.cave", "subtitles.incoming.blast")
     # толчок земли: низкий гром, почти инфразвук
-    q = F(speed(cut(src(267551), 1.2, 5.2), 0.5), lo=15, hi=140)
+    q = F(speed(cut(src(267551), 1.2, 5.2), 0.5, "⚠ не по физике: гром на октаву ниже — толчок земли (S5)"), lo=15, hi=140)
     q = mix((q, 1.0), (pad(syn.bomb_quake(), len(q)), 0.9))
     write("bomb_quake", norm(fade(q, 0.05, 1.5), -10.9), "bomb.quake", "subtitles.incoming.bomb.quake")
 
@@ -854,7 +862,7 @@ def nuke():
     write("nuke_launch", norm(fade(ln, 0.01, 6.0), -14.6, 0.8), "nuke.launch", "subtitles.incoming.nuke.launch")
 
     # удар фронта: огромный взрыв на октаву ниже + удар грома в упор + синтез N-волны и лязга
-    big = speed(cut(src(741175), 0, 9), 0.62)
+    big = speed(cut(src(741175), 0, 9), 0.62, "Сакс: килотонны против записанного взрыва (⚠ множитель на глаз)")
     th = cut(src(350506), 0.9, 12)
     n = int(9.0 * SR)
     crack = mix((pad(big, n), 1.0), (pad(F(th, lo=30), n), 0.6), (pad(syn.nuke_crack(9.0), n), 0.9))
@@ -867,7 +875,8 @@ def nuke():
     # далёкий подрыв: дальний взрыв на пол-октавы ниже, затем гром, катящийся по рельефу
     far = []
     for fid, a, b in [(438538, 47.81, 59.3), (438693, 72.38, 81.4)]:
-        s = F(speed(align(gate_hiss(cut(src(fid), a, b))), 0.7), lo=20, hi=1500)
+        s = F(speed(align(gate_hiss(cut(src(fid), a, b))), 0.7, "Сакс: килотонны против записанного взрыва (⚠ множитель "
+                                                                   "на глаз)"), lo=20, hi=1500)
         roll = F(cut(src(243782), 4.0, 20.0), lo=20, hi=900)
         x = mix((pad(s, int(16 * SR)), 1.0), (pad(np.pad(roll, (int(1.2 * SR), 0)), int(16 * SR)), 0.7),
                 (pad(syn.nuke_boom_far(16.0), int(16 * SR)), 0.6))

@@ -4,7 +4,6 @@ plus synthesis. CC0 = public domain; CC BY = used with attribution, modified.
 221Beimesche - "Glass Shattering and Falling" - CC0 1.0 - https://freesound.org/s/336425/
 alienistcog - "merrimack-st-demolition.aif" - CC0 1.0 - https://freesound.org/s/125937/
 bastipictures - "peal of thunder - distant" - CC0 1.0 - https://freesound.org/s/243782/
-blukotek - "two-stroke Trabant engine 01.wav" - CC0 1.0 - https://freesound.org/s/412819/
 craigsmith - "G09-18-Constant Jet Noise.wav" - CC0 1.0 - https://freesound.org/s/437910/
 craigsmith - "G10-02-Constant Jet Noise.wav" - CC0 1.0 - https://freesound.org/s/437917/
 craigsmith - "G26-27-Huge Storm Sequence.wav" - CC0 1.0 - https://freesound.org/s/438346/
@@ -21,6 +20,7 @@ craigsmith - "S32-27 Titan missile launch; long.wav" - CC0 1.0 - https://freesou
 craigsmith - "S10-19 Falling wooden beam; big interior crash; house collapses; long.wav" - CC0 1.0 - https://freesound.org/s/675967/
 csengeri - "Close lightning strike 2018 07 07" - CC0 1.0 - https://freesound.org/s/434359/
 deleted_user_9900733 - "UAV explosion in the city" - CC0 1.0 - https://freesound.org/s/811474/
+dobroide - "20110212_paraglider.02.wav" - CC BY 4.0 - https://freesound.org/s/114628/
 felix.blume - "Dynamite explosion in the mountain" - CC0 1.0 - https://freesound.org/s/251401/
 felix.blume - "Big dynamite explosion in an open mine (Chile)" - CC0 1.0 - https://freesound.org/s/475780/
 felix.blume - "Rocket Launch Rumble at Canaveral" - CC0 1.0 - https://freesound.org/s/613855/
@@ -53,7 +53,6 @@ Spennnyyy - "Extremely Close THUNDER! (no rain)" - CC BY 4.0 - https://freesound
 TheLittleCrow - "Rocket Launch Boost and Burning (Version B)" - CC0 1.0 - https://freesound.org/s/774270/
 tim.kahn - "EXPLReal_Centennial Mills Watertower Demolition" - CC BY 4.0 - https://freesound.org/s/866989/
 TRP - "Fridge hum whirl stops loud clunk bang" - CC0 1.0 - https://freesound.org/s/573936/
-wniebelski - "taxing ultralight plane.wav" - CC0 1.0 - https://freesound.org/s/695977/
 Yoyodaman234 - "Thunder2" - CC0 1.0 - https://freesound.org/s/267551/
 Zagge28 - "Incoming mortar 4" - CC0 1.0 - https://freesound.org/s/241837/
 Zagge28 - "Incoming mortar 3" - CC0 1.0 - https://freesound.org/s/241838/

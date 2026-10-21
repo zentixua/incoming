@@ -3,7 +3,10 @@ package ua.zentix.incoming.client.sound;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import it.unimi.dsi.fastutil.floats.FloatArrayList;
+import net.minecraft.client.sounds.JOrbisAudioStream;
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.strike.WeaponSpec;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -67,6 +70,38 @@ class SoundAssetsTest {
         try (InputStream in = open(ASSETS + "sounds/credits.txt")) {
             assertTrue(new String(in.readAllBytes(), StandardCharsets.UTF_8).contains("freesound.org"));
         }
+    }
+
+    /**
+     * Петля шахеда — мотор на номинальных оборотах в своей скорости: самый сильный тон — вал MD-550 ({@code
+     * WeaponSpec.DRONE_PISTON}: 7500 об/мин — 125 Гц, винт прямо на валу). У 3.5.0 запись ускорили втрое до 250 Гц —
+     * вместе с тоном ушли вверх резонансы корпуса и выхлопа («мухи», проба P 21.10.2026).
+     */
+    @Test
+    void shahedLoopSoundsAtTheShaftOrder() throws IOException {
+        float[] x;
+        int rate;
+        try (InputStream in = open(ASSETS + "sounds/drone_engine.ogg"); JOrbisAudioStream ogg = new JOrbisAudioStream(in)) {
+            rate = (int) ogg.getFormat().getSampleRate();
+            FloatArrayList samples = new FloatArrayList();
+            while (ogg.readChunk(samples::add)) {
+                // вся петля
+            }
+            x = samples.toFloatArray();
+        }
+        // средний спектр окон по 2¹⁵ отсчётов (~0,74 с): 1,35 Гц на полосу
+        int n = 1 << 15;
+        double[] power = new double[n / 2];
+        for (int s = 0; s + n <= x.length; s += n / 2) {
+            double[] re = new double[n], im = new double[n];
+            for (int i = 0; i < n; i++) re[i] = x[s + i] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / n));
+            EchoMix.fft(re, im, false);
+            for (int i = 0; i < n / 2; i++) power[i] += re[i] * re[i] + im[i] * im[i];
+        }
+        int best = 0;
+        for (int i = (int) (40.0 * n / rate); i < (int) (1200.0 * n / rate); i++) if (power[i] > power[best]) best = i;
+        double shaft = WeaponSpec.DRONE_PISTON.rpm() / 60;
+        assertEquals(shaft, best * (double) rate / n, shaft * 0.03, "самый сильный тон петли — вал");
     }
 
     private static int variants(JsonObject json, String event) {

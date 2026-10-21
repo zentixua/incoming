@@ -74,8 +74,11 @@ public final class TerrainEcho {
      * @param energy    энергия против прямого удара (с подъёмом {@link #LIFT_DB}, не больше {@link #CAP_DB})
      * @param extraPath на сколько блоков путь через склон длиннее прямого — воздух съедает верха
      * @param distance  от уха до склона, блоков
+     * @param spread    разброс прихода по грани, тиков: склон отражает всей площадью, и путь через её ближний и дальний
+     *                  край, левый и правый разный — эхо от грани растянуто на столько ({@link EchoMix})
      */
-    public record Reflection(double x, double y, double z, double azimuth, double delay, double energy, double extraPath, double distance) {
+    public record Reflection(double x, double y, double z, double azimuth, double delay, double energy, double extraPath, double distance,
+                             double spread) {
         /** Громкость (амплитуда) против прямого удара. */
         public double gain() {
             return Math.sqrt(energy);
@@ -140,13 +143,28 @@ public final class TerrainEcho {
             double tilt = 1 - n[1] * n[1];
             double e = ALBEDO * (FLAT + (1 - FLAT) * Math.min(1, tilt / STEEP)) * cos1 * omega / Math.PI * ratio * ratio;
             if (!(e > 0)) continue;
-            double delay = blast.arrivalTicks(r1) + r2 / FrontProfile.SOUND_SPEED - direct;
+            double delay = arrival(blast, x, top, z, ex, ey, ez, bx, by, bz) - direct;
             if (delay < MIN_DELAY) continue;
             if (Sightline.trace(h, bx, by, bz, x, top + 1, z).pathDifference() > 0) e *= SHADOW;
             double db = Math.min(CAP_DB, 10 * Math.log10(e) + LIFT_DB);
             if (db < FLOOR_DB) continue;
-            out.add(new Reflection(x, top, z, phi, delay, Math.pow(10, db / 10), r1 + r2 - re, r2));
+            // грань — от прошлой точки луча до этой, поперёк — ширина луча: приход через её углы
+            double lo = delay, hi = delay, half = width / 2;
+            for (int c = 0; c < 4; c++) {
+                double rc = c < 2 ? prevR : r, yc = c < 2 ? prevTop : top, ac = phi + (c % 2 == 0 ? -half : half);
+                double d = arrival(blast, ex + Math.cos(ac) * rc, yc, ez + Math.sin(ac) * rc, ex, ey, ez, bx, by, bz) - direct;
+                lo = Math.min(lo, d);
+                hi = Math.max(hi, d);
+            }
+            out.add(new Reflection(x, top, z, phi, delay, Math.pow(10, db / 10), r1 + r2 - re, r2, hi - lo));
         }
+    }
+
+    /** Через сколько тиков после подрыва удар, отражённый точкой склона, дойдёт до уха: фронт до склона, звук от него. */
+    static double arrival(Blast blast, double x, double y, double z, double ex, double ey, double ez, double bx, double by, double bz) {
+        double r1 = Math.sqrt((x - bx) * (x - bx) + (y - by) * (y - by) + (z - bz) * (z - bz));
+        double r2 = Math.sqrt((x - ex) * (x - ex) + (y - ey) * (y - ey) + (z - ez) * (z - ez));
+        return blast.arrivalTicks(r1) + r2 / FrontProfile.SOUND_SPEED;
     }
 
     /**
