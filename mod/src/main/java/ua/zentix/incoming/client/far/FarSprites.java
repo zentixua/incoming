@@ -114,13 +114,14 @@ public final class FarSprites {
     /**
      * Запечённый клуб ({@link FxAtlas#puff6}: кадр sprite, смесь со следующим mix) с центром (dx, dy, dz) от камеры,
      * полуразмерами halfA вдоль экрана и halfB вверх: цвет (r, g, b) — вещество в свете неба у глаза, его свет по сторонам —
-     * в шейдере по картам кадра; непрозрачность a (уже с дымкой воздуха). Без поворота: оси карт — оси экрана.
+     * в шейдере по картам кадра, тень в картах — в степени shade ({@link SmokePuffs#shade}); непрозрачность a (уже с дымкой
+     * воздуха). Без поворота: оси карт — оси экрана.
      */
-    public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float r, float g, float b,
-                      float a) {
+    public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
+                      float b, float a) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
-        out.sixWay(mix);
+        out.sixWay(mix, shade);
         out.billboard((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold),
                 (float) (halfB * unfold), 0, sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) Math.max(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
