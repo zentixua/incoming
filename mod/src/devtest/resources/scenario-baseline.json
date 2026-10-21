@@ -822,7 +822,7 @@
       "x": 25.3,
       "y": 31.97,
       "z": -32.24,
-      "hash": "2058d595883c7ec1"
+      "hash": "a95228dc8968d810"
     },
     "missile_rail.player.retarget.0": {
       "end": "blast",
@@ -838,15 +838,15 @@
       "x": 16.6,
       "y": 28.62,
       "z": -40.44,
-      "hash": "2a5b3a79fe2b7bda"
+      "hash": "603fa4da389d65cf"
     },
     "missile_rail.player.teleport_far.0": {
       "end": "blast",
-      "tick": 288,
+      "tick": 282,
       "x": -11.7,
       "y": 24.59,
       "z": 42.14,
-      "hash": "0630ece6cbb8ad31"
+      "hash": "166da5079a270058"
     },
     "missile_rail.player.teleport_near.0": {
       "end": "blast",
@@ -906,67 +906,67 @@
     },
     "rocket_far.mob.none.0": {
       "end": "blast",
-      "tick": 283,
-      "x": 11.75,
+      "tick": 270,
+      "x": -0.74,
       "y": 0.45,
-      "z": -3.46,
-      "hash": "1bd3534664c3119a"
+      "z": 5.64,
+      "hash": "5454828f8c164437"
     },
     "rocket_far.point.hill.0": {
       "end": "blast",
-      "tick": 230,
-      "x": 0.52,
+      "tick": 222,
+      "x": -2.95,
       "y": 0.0,
-      "z": 0.13,
-      "hash": "6c0551d85dce5e4c"
+      "z": -1.76,
+      "hash": "6f22c93018167351"
     },
     "rocket_far.point.none.0": {
       "end": "blast",
-      "tick": 250,
-      "x": 1.29,
+      "tick": 245,
+      "x": 1.98,
       "y": 0.0,
-      "z": 0.65,
-      "hash": "76f195bc2e5407e1"
+      "z": -3.06,
+      "hash": "4f5571bc0bd91e89"
     },
     "rocket_far.point.quarry.0": {
       "end": "blast",
-      "tick": 227,
-      "x": 2.69,
+      "tick": 225,
+      "x": -2.52,
       "y": 0.0,
-      "z": -1.99,
-      "hash": "6626d76740740847"
+      "z": -2.23,
+      "hash": "85adb8b89ae248a4"
     },
     "rocket_tube.mob.none.0": {
       "end": "blast",
-      "tick": 282,
-      "x": -8.63,
+      "tick": 277,
+      "x": -4.1,
       "y": 0.45,
-      "z": 4.05,
-      "hash": "0f4a03a7a6e18bcb"
+      "z": -3.06,
+      "hash": "a28147f84c312c88"
     },
     "rocket_tube.point.hill.0": {
       "end": "blast",
-      "tick": 265,
-      "x": 2.04,
+      "tick": 260,
+      "x": -4.2,
       "y": 0.0,
-      "z": -2.23,
-      "hash": "7218a3c2598620b5"
+      "z": -0.44,
+      "hash": "3adeae4490f15a60"
     },
     "rocket_tube.point.none.0": {
       "end": "blast",
-      "tick": 275,
-      "x": 1.31,
+      "tick": 270,
+      "x": -1.97,
       "y": 0.0,
-      "z": 1.64,
-      "hash": "78d57465b2d372e3"
+      "z": -9.86,
+      "hash": "741532cee115bf94"
     },
     "rocket_tube.point.quarry.0": {
       "end": "blast",
       "tick": 164,
-      "x": -2.13,
+      "x": -0.06,
       "y": 0.0,
-      "z": -5.06,
-      "hash": "785132d4b95dcbb5"
+      "z": -0.72,
+      "hash": "3d901869d11a0594"
     }
   }
 }
