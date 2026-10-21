@@ -45,14 +45,43 @@ class MissileSightlineTest {
         assertTrue(misses.isEmpty(), String.join("\n", misses));
     }
 
+    /**
+     * Цель под навесом (16×16 на 5 блоков над ней): прямая не откроется никогда. Ракета не кружит над целью, набирая
+     * высоту, а атакует, когда нос иначе не успеет, и бьёт в навес над целью — с горкой и без, на равнине и на дне
+     * карьера глубиной 30 (ракета идёт над краем, и горка поднимает её выше всего над целью).
+     */
+    @Test
+    void strikesRoofWhenTargetNeverInSight() {
+        List<String> misses = new ArrayList<>();
+        for (double pit : new double[] {0, 30}) {
+            for (double start : new double[] {800, 170}) {
+                AutopilotPropertiesTest.Ground ground = (x, z) -> {
+                    if (Math.abs(x) <= 8 && Math.abs(z) <= 8) return GROUND + 6;
+                    double q = (x * x + z * z) / (90.0 * 90.0);
+                    return q < 1 ? GROUND : GROUND + pit;
+                };
+                String end = strike(start, ground, pit + 6);
+                System.out.println("MissileSightlineTest, навес, карьер " + pit + ", заход с " + start + ": " + end);
+                if (!end.startsWith("hit") && !end.contains("в навес")) {
+                    misses.add(String.format(Locale.ROOT, "карьер %.0f, заход с %.0f: %s", pit, start, end));
+                }
+            }
+        }
+        assertTrue(misses.isEmpty(), String.join("\n", misses));
+    }
+
     /** Ракета с {@code start} блоков на бреющем полёте на цель в начале координат за домом; что вышло. */
     private static String strike(double start, double height, double before) {
-        AutopilotPropertiesTest.Ground ground = (x, z) -> Math.abs(x) <= 20 && z <= -before && z >= -before - 30 ? GROUND + height : GROUND;
+        return strike(start, (x, z) -> Math.abs(x) <= 20 && z <= -before && z >= -before - 30 ? GROUND + height : GROUND, height);
+    }
+
+    /** Ракета с {@code start} блоков на бреющем полёте (короткий заход — над крышами высотой {@code roofs}) на цель в начале координат. */
+    private static String strike(double start, AutopilotPropertiesTest.Ground ground, double roofs) {
         WeaponSpec.Airframe air = WeaponSpec.MISSILE.airframe();
         MissileAutopilot missile = new MissileAutopilot(air);
         Vec3 aim = new Vec3(0, GROUND + 0.5, 0);
         boolean popUp = start >= air.attack().popUpMinRange();
-        Vec3 from = new Vec3(0, missile.airborneAltitude(aim, popUp ? GROUND : GROUND + height), -start);
+        Vec3 from = new Vec3(0, missile.airborneAltitude(aim, popUp ? ground.at(0, -start) : Math.max(ground.at(0, -start), GROUND + roofs)), -start);
         missile.approach(start);
         AutopilotPropertiesTest.Model c = new AutopilotPropertiesTest.Model(ground, from, air.cruiseSpeed());
         c.altitude.reset(from.y);
@@ -66,8 +95,9 @@ class MissileSightlineTest {
             for (double d = 0; d <= c.speed; d += 0.5) {
                 Vec3 p = c.pos.add(dir.scale(d));
                 if (p.y < ground.at(p.x, p.z)) {
-                    return p.distanceTo(aim) <= c.speed + air.reachPad() ? "hit о землю у цели"
-                            : String.format(Locale.ROOT, "врезался в (%.0f %.0f %.0f), в %.0f блоках от цели", p.x, p.y, p.z, p.distanceTo(aim));
+                    if (p.distanceTo(aim) <= c.speed + air.reachPad()) return "hit о землю у цели";
+                    if (Math.abs(p.x) <= 8 && Math.abs(p.z) <= 8 && p.y >= GROUND + 5) return String.format(Locale.ROOT, "в навес над целью, в %.0f блоках от неё", p.distanceTo(aim));
+                    return String.format(Locale.ROOT, "врезался в (%.0f %.0f %.0f), в %.0f блоках от цели", p.x, p.y, p.z, p.distanceTo(aim));
                 }
             }
             c.pos = c.pos.add(dir.scale(c.speed));

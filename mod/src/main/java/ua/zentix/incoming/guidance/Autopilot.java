@@ -78,8 +78,8 @@ public final class Autopilot {
     /**
      * Запас пути на доворот носа к цели (игровое число, не по физике): с закрытой прямой (цель под крышей, высотка или
      * гребень вплотную к цели) снаряд всё равно входит в атаку, когда до цели осталось столько путей доворота
-     * ({@link #turnDistance}), — дальше набор высоты уже не открыл бы прямую раньше, чем нос перестанет успевать к
-     * цели, и снаряд пролетал бы её. Пока путь длиннее, он в атаку не идёт ({@link Sightline}).
+     * ({@link #turnDistance}), — позже нос не успел бы к цели, и снаряд пролетал бы её. Пока путь длиннее, он в атаку
+     * не идёт ({@link Sightline}).
      */
     static final double DIVE_MARGIN = 1.5;
     /**
@@ -89,12 +89,18 @@ public final class Autopilot {
     static final int SIGHT_RECHECK = 4;
 
     /**
-     * Путь, за который нос доворачивает от нынешнего тангажа до линии на цель {@code toAim} с предельной угловой
+     * Путь, за который нос доворачивает от нынешнего тангажа до линии на цель {@code aim} с предельной угловой
      * скоростью тангажа {@code rate} °/тик и её ускорением {@code accel} °/тик²: разгон угловой скорости и торможение,
-     * при большом угле — с полкой на пределе.
+     * при большом угле — с полкой на пределе. Угол линии — в вертикальной плоскости курса: цель под снарядом — 90°
+     * под горизонтом, позади — больше 90°. Иначе набирающая высоту ракета проходила бы над целью, а доворот считался бы
+     * не больше чем до отвесного пике, и атака не начиналась бы вовсе.
      */
-    public static double turnDistance(Craft c, Bearing toAim, double rate, double accel) {
-        double turn = Math.max(0, toAim.pitch() - c.flight().pitch());
+    public static double turnDistance(Craft c, Vec3 aim, double rate, double accel) {
+        Vec3 pos = c.position(), f = c.flight().forward();
+        double fl = Math.hypot(f.x, f.z);
+        double ahead = fl < 1e-6 ? 0 : ((aim.x - pos.x) * f.x + (aim.z - pos.z) * f.z) / fl;
+        double los = Math.toDegrees(Math.atan2(pos.y - aim.y, ahead));
+        double turn = Math.max(0, los - c.flight().pitch());
         double ticks = turn <= rate * rate / accel
                 ? 2 * Math.sqrt(turn / accel)
                 : turn / rate + rate / accel;
@@ -111,16 +117,22 @@ public final class Autopilot {
      */
     public static final class Sightline {
         private boolean blocked;
+        /** Атака уже вынужденная ({@link #DIVE_MARGIN}): до конца захода прямую не мерить — иначе снаряд, довернув нос, вернулся бы в набор. */
+        private boolean committed;
         /** Сколько тиков не мерить прямую заново (не сохраняется: после загрузки — замер сразу). */
         private int wait;
 
         /**
          * Прямая до {@code aim} закрыта, кроме последних {@code margin} блоков у цели (их достаёт взрыватель), и до
-         * цели дальше {@link #DIVE_MARGIN} путей доворота носа с пределами атаки {@code rate}, {@code accel}: снаряду
-         * надо набирать высоту. Замер — раз в {@link #SIGHT_RECHECK} тиков.
+         * цели дальше {@link #DIVE_MARGIN} путей доворота носа с пределами атаки {@code rate},
+         * {@code accel}: в атаку не идти. Замер — раз в {@link #SIGHT_RECHECK} тиков.
          */
         public boolean masked(Craft c, Vec3 aim, Bearing toAim, double margin, double rate, double accel) {
-            if (toAim.distance() <= turnDistance(c, toAim, rate, accel) * DIVE_MARGIN) return false;
+            if (committed) return false;
+            if (toAim.distance() <= turnDistance(c, aim, rate, accel) * DIVE_MARGIN) {
+                committed = true;
+                return false;
+            }
             if (wait > 0) {
                 wait--;
                 return blocked;
@@ -130,10 +142,11 @@ public final class Autopilot {
             return blocked;
         }
 
-        /** Вне захода: следующий заход меряет прямую сразу. */
+        /** Вне захода или новая цель: следующий заход меряет прямую сразу. */
         public void forget() {
             wait = 0;
             blocked = false;
+            committed = false;
         }
     }
 

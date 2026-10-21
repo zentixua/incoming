@@ -64,6 +64,7 @@ public final class MissileAutopilot {
     /** Перенацелили на {@code aim}: атака заново, горка — по новому заходу. */
     public void retarget(Craft c, Vec3 aim) {
         approach(Bearing.of(c.position(), aim).horizontal());
+        sight.forget();
         if (c.phase() == FlightPhase.TERMINAL || c.phase() == FlightPhase.POP_UP) c.setPhase(FlightPhase.CRUISE);
     }
 
