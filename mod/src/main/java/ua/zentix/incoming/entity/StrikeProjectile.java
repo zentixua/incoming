@@ -714,8 +714,13 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     protected void holdTargetArea(ServerLevel level) {
         if (tracker == null || isRemoved()) return;
         // путь вне мира кончился на поверхности: грузится место попадания, а не цель
-        Vec3 aim = grounded != null ? grounded : tracker.point();
+        Vec3 aim = grounded != null ? grounded : areaCenter();
         aimArea.hold(level, getUUID(), position(), aim, preloadDistance(), targetArea(), targetAreaTicks(), visibleLeg(), route, age);
+    }
+
+    /** Вокруг чего держится район цели: точка цели; у неуправляемого — куда он на самом деле придёт. */
+    protected Vec3 areaCenter() {
+        return tracker.point();
     }
 
     /**

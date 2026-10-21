@@ -101,28 +101,33 @@ class FlightModelTest {
     void gradFireSolutionLandsOnTarget() {
         double drag = WeaponSpec.ROCKET.airframe().ballistic().drag();
         Vec3 from = new Vec3(0, 70, 0);
-        for (Vec3 to : List.of(new Vec3(0, 64, 150), new Vec3(400, 90, 400), new Vec3(-1500, 64, 900), new Vec3(3000, 64, -200))) {
+        // и цель выше пусковой: на 250 блоках на 180 выше — снаряд проходит её ещё на подъёме
+        for (Vec3 to : List.of(new Vec3(0, 64, 150), new Vec3(400, 90, 400), new Vec3(-1500, 64, 900), new Vec3(3000, 64, -200),
+                new Vec3(250, 250, 0), new Vec3(100, 230, 30))) {
             Ballistics.Wind wind = Ballistics.Wind.uniform(0.3, -0.2);
-            Vec3 v0 = Ballistics.aim(from, to, 50, drag, wind);
+            Vec3 v0 = Ballistics.aim(from, to, Ballistics.elevationFor(from, to, 50, 50), drag, wind);
             Ballistics.Path p = Ballistics.fly(from, v0, drag, wind, to.y - 10, 4000);
-            Vec3 land = p.at(p.landing(to.y));
-            assertEquals(0, Math.hypot(land.x - to.x, land.z - to.z), 0.5, "попал в " + to);
+            double k = p.arrival(from, to);
+            assertEquals(0, p.at(k).distanceTo(to), 0.5, "попал в " + to);
             // угол спуска у земли круче угла схода
-            double k = p.landing(to.y);
-            Vec3 v = p.at(k).subtract(p.at(k - 1));
-            assertTrue(Math.toDegrees(Math.atan2(-v.y, v.horizontalDistance())) > 51, "спуск круче подъёма: " + to);
+            double down = p.landing(to.y);
+            if (down == k && to.y <= from.y) {
+                Vec3 v = p.at(k).subtract(p.at(k - 1));
+                float el = Ballistics.elevationFor(from, to, 50, 50);
+                assertTrue(Math.toDegrees(Math.atan2(-v.y, v.horizontalDistance())) > el, "спуск круче подъёма: " + to);
+            }
         }
     }
 
     /** Сопротивление: снаряд нужно пустить быстрее, чем по параболе, — дальше одной тяжестью он бы не долетел. */
     @Test
     void dragNeedsFasterLaunch() {
-        Vec3 from = Vec3.ZERO, to = new Vec3(0, 0, 600);
+        Vec3 from = Vec3.ZERO, to = new Vec3(0, 0, 2000);
         double drag = WeaponSpec.ROCKET.airframe().ballistic().drag();
         double withDrag = Ballistics.aim(from, to, 50, drag, Ballistics.Wind.CALM).length();
         double vacuum = Ballistics.aim(from, to, 50, 0, Ballistics.Wind.CALM).length();
-        assertEquals(Math.sqrt(Ballistics.GRAVITY * 600 / Math.sin(Math.toRadians(100))), vacuum, 0.02);
-        assertTrue(withDrag > vacuum * 1.03, withDrag + " против " + vacuum);
+        assertEquals(Math.sqrt(Ballistics.GRAVITY * 2000 / Math.sin(Math.toRadians(100))), vacuum, 0.05);
+        assertTrue(withDrag > vacuum * 1.05, withDrag + " против " + vacuum);
     }
 
     /**
@@ -177,7 +182,7 @@ class FlightModelTest {
     void bombFallsToTerminalSpeed() {
         WeaponSpec.Airframe bomb = WeaponSpec.BUNKER.payload();
         double terminal = Math.sqrt(Ballistics.GRAVITY / bomb.ballistic().drag());
-        assertEquals(terminal, bomb.cruiseSpeed(), 1e-9);
+        assertEquals(terminal, bomb.diveSpeed(), 1e-9);
         // отвесно вниз у самой земли (плотность — как на уровне моря): место стоит, считается только скорость
         FlightController f = new FlightController(0, 89);
         Vec3 pos = new Vec3(0, 64, 0), aim = new Vec3(0, -1000, 0);

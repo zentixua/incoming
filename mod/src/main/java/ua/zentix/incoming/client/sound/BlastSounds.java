@@ -125,7 +125,8 @@ public final class BlastSounds {
         GroundMaterial under = GroundMaterial.of(level.getBlockState(new BlockPos(x, top - 1, zz)));
         // зона тени — по устойчивости воздуха мира: днём земля греет воздух, звук загибает вверх; инверсия ночью — нет
         return new Outdoor.Path(d, z, hs, Math.max(1.5, ear.y - top), gs, under == null ? 0.5 : under.porosity,
-                Propagation.refraction(ClientAir.now().stability()), level.getRainLevel(1), level.getThunderLevel(1));
+                level.dimensionType().hasSkyLight() ? Propagation.refraction(ClientAir.now().stability()) : 0,
+                level.getRainLevel(1), level.getThunderLevel(1));
     }
 
     /** Доля верхов записи раската по пути {@link Outdoor} и воздуху; путь звука считает Sound Physics или он выключен — 1. */

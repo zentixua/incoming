@@ -104,6 +104,36 @@ public final class Ballistics {
             }
             return Double.NaN;
         }
+
+        /**
+         * Тик (дробный), когда путь по горизонтали доходит до дальности точки {@code to} от {@code from} (проекция на
+         * направление на неё); не доходит — {@code NaN}.
+         */
+        public double reaching(Vec3 from, Vec3 to) {
+            double ux = to.x - from.x, uz = to.z - from.z, d = Math.sqrt(ux * ux + uz * uz);
+            if (d < 1e-9) return 0;
+            ux /= d;
+            uz /= d;
+            double prev = (xs[0] - from.x) * ux + (zs[0] - from.z) * uz;
+            for (int i = 1; i < n; i++) {
+                double r = (xs[i] - from.x) * ux + (zs[i] - from.z) * uz;
+                if (r >= d && prev < d) return i - 1 + (d - prev) / (r - prev);
+                prev = r;
+            }
+            return Double.NaN;
+        }
+
+        /**
+         * Тик (дробный), когда снаряд приходит к точке {@code to}: на спуске на её высоте, если там он к ней не дальше,
+         * чем на дальности точки ({@link #reaching}); иначе — на её дальности (точку на холме или башне выше пути спуска
+         * снаряд проходит ещё на подъёме). {@code NaN} — ни того, ни другого.
+         */
+        public double arrival(Vec3 from, Vec3 to) {
+            double down = landing(to.y), across = reaching(from, to);
+            if (Double.isNaN(down)) return across;
+            if (Double.isNaN(across)) return down;
+            return at(down).distanceTo(to) <= at(across).distanceTo(to) + 2 ? down : across;
+        }
     }
 
     /**
@@ -151,9 +181,9 @@ public final class Ballistics {
 
     /**
      * Расчёт огня: скорость схода под углом возвышения {@code elevation} (°), с которой снаряд из {@code from} при ветре
-     * {@code wind} на спуске пройдёт высоту {@code to} над самой точкой {@code to}. Скорость и курс — Ньютоном по
-     * промаху в точке падения (производные — разностями); начальное приближение — парабола без сопротивления. Не сошлось
-     * (точка выше досягаемого) — лучшее, что нашлось.
+     * {@code wind} проходит точку {@code to}: на её дальности — на её высоте и без отклонения вбок. Скорость и курс —
+     * Ньютоном по этим двум промахам (производные — разностями; высота на дальности растёт со скоростью); начальное
+     * приближение — парабола без сопротивления. Не сошлось (точка выше досягаемого) — лучшее, что нашлось.
      */
     public static Vec3 aim(Vec3 from, Vec3 to, float elevation, double drag, Wind wind) {
         double dx = to.x - from.x, dz = to.z - from.z;
@@ -163,7 +193,8 @@ public final class Ballistics {
         double speed = denom > 0 ? Math.sqrt(GRAVITY * d * d / denom) : Math.sqrt(GRAVITY * d);
         int maxTicks = (int) Math.min(6000, 3 * d / Math.max(0.1, speed * Math.cos(el)) + 400);
         double[] miss = miss(from, to, speed, el, az, drag, wind, maxTicks);
-        for (int it = 0; it < 12 && Math.hypot(miss[0], miss[1]) > 0.02; it++) {
+        double bestSpeed = speed, bestAz = az, best = Math.hypot(miss[0], miss[1]);
+        for (int it = 0; it < 40 && best > 0.02; it++) {
             double ds = speed * 1e-3, da = 1e-4;
             double[] ms = miss(from, to, speed + ds, el, az, drag, wind, maxTicks), ma = miss(from, to, speed, el, az + da, drag, wind, maxTicks);
             double a = (ms[0] - miss[0]) / ds, b = (ma[0] - miss[0]) / da, c = (ms[1] - miss[1]) / ds, e = (ma[1] - miss[1]) / da;
@@ -173,11 +204,27 @@ public final class Ballistics {
             // не дальше половины скорости и 0,2 рад за шаг: вдали от решения производные врут
             stepS = Math.max(-0.5 * speed, Math.min(0.5 * speed, stepS));
             stepA = Math.max(-0.2, Math.min(0.2, stepA));
-            speed += stepS;
+            // не быстрее 10 начальных: точки, которой нет решения, не разгонять без конца
+            speed = Math.max(0.05, Math.min(10 * Math.sqrt(GRAVITY * d), speed + stepS));
             az += stepA;
             miss = miss(from, to, speed, el, az, drag, wind, maxTicks);
+            double m = Math.hypot(miss[0], miss[1]);
+            if (m < best) {
+                best = m;
+                bestSpeed = speed;
+                bestAz = az;
+            }
         }
-        return velocity(speed, el, az);
+        return velocity(bestSpeed, el, bestAz);
+    }
+
+    /** Снаряд из {@code from} со скоростью {@code v0} приходит к {@code to} ({@link Path#arrival}) ближе {@code tolerance}. */
+    public static boolean hits(Vec3 from, Vec3 v0, Vec3 to, double drag, Wind wind, double tolerance) {
+        double d = Math.sqrt(to.subtract(from).horizontalDistanceSqr());
+        int maxTicks = (int) Math.min(6000, 3 * d / Math.max(0.05, v0.horizontalDistance()) + 400);
+        Path p = fly(from, v0, drag, wind, Math.min(to.y, from.y) - 64, maxTicks);
+        double k = p.arrival(from, to);
+        return !Double.isNaN(k) && p.at(k).distanceTo(to) <= tolerance;
     }
 
     private static Vec3 velocity(double speed, double el, double az) {
@@ -186,21 +233,18 @@ public final class Ballistics {
     }
 
     /**
-     * Промах по горизонтали (x, z): где путь на спуске проходит высоту цели, минус сама цель. Не доходит до её высоты —
-     * от вершины пути, с промахом по высоте в сторону цели (чтобы Ньютон тянул скорость вверх).
+     * Промах на дальности точки: {высота пути там − высота точки, отклонение вбок (влево — плюс)}. Не долетает до её
+     * дальности — высота самой низкой точки пути за вычетом недолёта (растёт со скоростью, как и высота на дальности).
      */
     private static double[] miss(Vec3 from, Vec3 to, double speed, double el, double az, double drag, Wind wind, int maxTicks) {
-        Path p = fly(from, velocity(speed, el, az), drag, wind, Math.min(to.y, from.y) - 1, maxTicks);
-        double k = p.landing(to.y);
-        if (Double.isNaN(k)) {
-            int top = 0;
-            for (int i = 1; i <= p.ticks(); i++) if (p.ys[i] > p.ys[top]) top = i;
-            double short_ = to.y - p.ys[top] + 1;
-            double dx = to.x - p.xs[top], dz = to.z - p.zs[top], l = Math.max(1e-6, Math.hypot(dx, dz));
-            return new double[]{-(dx + dx / l * short_), -(dz + dz / l * short_)};
-        }
-        Vec3 at = p.at(k);
-        return new double[]{at.x - to.x, at.z - to.z};
+        double dx = to.x - from.x, dz = to.z - from.z, d = Math.max(1e-9, Math.sqrt(dx * dx + dz * dz));
+        double ux = dx / d, uz = dz / d;
+        Path p = fly(from, velocity(speed, el, az), drag, wind, Math.min(to.y, from.y) - d, maxTicks);
+        double k = p.reaching(from, to);
+        Vec3 at = p.at(Double.isNaN(k) ? p.ticks() : k);
+        double along = (at.x - from.x) * ux + (at.z - from.z) * uz, side = -(at.x - from.x) * uz + (at.z - from.z) * ux;
+        double high = at.y - to.y - (Double.isNaN(k) ? d - along : 0);
+        return new double[]{high, side};
     }
 
     /**

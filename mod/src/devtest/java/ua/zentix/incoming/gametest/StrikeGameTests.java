@@ -1379,10 +1379,11 @@ public final class StrikeGameTests {
         saved.load(tag);
 
         Vec3 start = ua.zentix.incoming.util.Nbt.getVec(tag, "start"), v0 = ua.zentix.incoming.util.Nbt.getVec(tag, "v0");
-        double arc = ua.zentix.incoming.guidance.Ballistics.at(start, v0, 11).distanceTo(ua.zentix.incoming.guidance.Ballistics.at(start, v0, t));
-        for (int k = 11; k < flightTicks; k++) {
-            arc += ua.zentix.incoming.guidance.Ballistics.at(start, v0, k + 1).distanceTo(ua.zentix.incoming.guidance.Ballistics.at(start, v0, k));
-        }
+        // путь — тем же законом, что у снаряда: тяжесть, сопротивление, ветер мира (данных стрельбы нет — ветер целиком)
+        var path = ua.zentix.incoming.guidance.Ballistics.fly(start, v0, WeaponSpec.ROCKET.airframe().ballistic().drag(),
+                ua.zentix.incoming.guidance.Ballistics.Wind.of(ua.zentix.incoming.util.Air.of(level)), point.y - 64, flightTicks + 400);
+        double arc = path.at(11).distanceTo(path.at(t));
+        for (int k = 11; k < flightTicks; k++) arc += path.at(k + 1).distanceTo(path.at(k));
         double cruise = WeaponSpec.ROCKET.airframe().cruiseSpeed();
         double old = (flightTicks + 200 - 10) * cruise;
         h.assertTrue(old < arc, "на 5 км старый перенос (" + Math.round(old) + ") уже покрывал дугу " + Math.round(arc) + " — тест ничего не ловит");
@@ -2390,11 +2391,11 @@ public final class StrikeGameTests {
     /**
      * Бомба в мире падает туда, куда её падение проигрывает B-2 перед сбросом ({@link BombDrop#miss}): и в точку
      * (с эшелона за 85 блоков), и мимо — с 214 блоков с той же черты, с 200 ближе черты и на краю
-     * окна, где нос касается земли раньше, чем бомба подходит к точке (со 100 за 64,5 и со 170 за 67).
+     * окна, где нос касается земли раньше, чем бомба подходит к точке (со 100 за 50 и со 170 за 67).
      */
     @GameTest(template = "runway", timeoutTicks = 300, batch = "bunker_predict", skyAccess = true)
     public static void bunkerBusterFallsWhereBombDropPredicts(GameTestHelper h) {
-        double[][] drops = {{170, 85}, {214, 85}, {200, 73}, {100, 64.5}, {170, 67}};
+        double[][] drops = {{170, 85}, {214, 85}, {200, 73}, {100, 50}, {170, 67}};
         Vec3[] releases = new Vec3[drops.length];
         Vec3[] aims = new Vec3[drops.length];
         double[] predicted = new double[drops.length];

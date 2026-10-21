@@ -412,11 +412,12 @@ final class ScenarioRun {
     }
 
     /**
-     * Точка падения РСЗО — сама точка, как у {@code StrikeService}: рассеивание (разброс схода и ветер) — у снаряда в
-     * полёте; дальность — для допуска попадания ({@link #checkHit}). Сдвиг {@code p.scatter()} по-прежнему тянется из
-     * зерна (прочие возмущения сценария не сдвигаются), но не применяется.
+     * Точка падения РСЗО — сама точка, как у {@code StrikeService}: рассеивание — данные стрельбы снаряда
+     * ({@link RocketEntity#fireData}: разброс схода из зерна сценария {@code p.scatter()} и ветер, который расчёт знает
+     * только у земли); дальность — для допуска попадания ({@link #checkHit}).
      */
-    private Vec3 scatter(Vec3 from, Vec3 point) {
+    private Vec3 scatter(RocketEntity r, Vec3 from, Vec3 point) {
+        r.fireData(new Vec3(p.scatter().x, p.scatter().z, 0), true);
         rocketRange = Math.sqrt(from.distanceToSqr(point.x, from.y, point.z));
         aim = point;
         return aim;
@@ -425,7 +426,7 @@ final class ScenarioRun {
     private StrikeProjectile rocketFromAfar(Vec3 point) {
         RocketEntity r = create(ModEntities.ROCKET.get());
         Vec3 from = point.subtract(p.approach().scale(p.standoff()));
-        r.launchFrom(from, target, scatter(from, point), owner);
+        r.launchFrom(from, target, scatter(r, from, point), owner);
         VirtualFlights.launch(level, r);
         return r;
     }
@@ -434,7 +435,7 @@ final class ScenarioRun {
         RocketEntity r = create(ModEntities.ROCKET.get());
         Vec3 rail = rail();
         r.placeInTube(rail, FlightController.anglesTo(rail, point)[0], LauncherEntity.elevation(WeaponType.ROCKET), p.readyTicks(), 0, target,
-                scatter(rail, point), owner);
+                scatter(r, rail, point), owner);
         add(r);
         return r;
     }

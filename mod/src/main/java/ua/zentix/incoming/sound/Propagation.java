@@ -79,8 +79,9 @@ public final class Propagation {
          */
         public static Weather of(Level level) {
             ua.zentix.incoming.util.Air air = ua.zentix.incoming.util.Air.of(level);
+            // без неба (Незер, Энд) воздух не греется солнцем и не остывает ночью: тени нет, как прежде
             return new Weather(Propagation.day(ua.zentix.incoming.util.Air.sun(level)), level.getRainLevel(1), level.getThunderLevel(1),
-                    refraction(air.stability()));
+                    level.dimensionType().hasSkyLight() ? refraction(air.stability()) : 0);
         }
     }
 

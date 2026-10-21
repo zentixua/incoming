@@ -541,12 +541,14 @@ public final class StrikeService {
             Slot slot = Slot.reserve(level, launcher);
             r.placeInTube(slot.rail(), launcher.yaw(), launcher.elevation(), slot.ready(), slot.hidden(), target,
                     point, owner);
+            r.fireData(level.random);
             return r;
         }
         if (stand.fixed() != null) return null;
         Vec3 from = stand.from();
         Vec3 start = from != null ? new Vec3(from.x, point.y, from.z)
                 : point.subtract(Local.horizontal(yaw).scale(WeaponType.ROCKET.spec().route().standoff()));
+        r.fireData(level.random);
         r.launchFrom(start, target, point, owner);
         startVirtual(level, r);
         return r;

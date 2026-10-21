@@ -662,17 +662,21 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * блоков/тик; с эшелона 170 блоков бомба разгоняется с 6 до ~7 блоков/тик. Разброса нет: бомба управляемая.
      */
     static final Ballistic BOMB_FALL = new Ballistic(2e-4, 0, 0);
-    /** Предел скорости падения бомбы у земли √(g/drag), блоков/тик ({@link #BOMB_FALL}): по нему запас хода и оценки. */
+    /**
+     * Предел скорости падения бомбы у земли √(g/drag), блоков/тик ({@link #BOMB_FALL}): её предельная скорость и запас
+     * хода; маршевая для оценок времени — скорость сброса (с эшелона бомба быстрее 7 не разгоняется).
+     */
     static final double BOMB_TERMINAL = Math.sqrt(ua.zentix.incoming.guidance.Ballistics.GRAVITY / BOMB_FALL.drag());
 
     /**
-     * Полёт 9М22У после выгорания ({@link #ROCKET_ARTICLE}): сопротивление игровое — на 600 блоках сход ~4,2 блока/тик
-     * вместо 3,9 без него, удар под 54° вместо 50°, полёт ~12,5 с; на 2000 блоках — удар под 62°. Расчёт огня знает только
-     * ветер у земли, а наверху он сильнее: залп сносит по ветру на ~1 % дальности. Разброс схода — игровой (не по физике):
+     * Полёт 9М22У после выгорания ({@link #ROCKET_ARTICLE}): сопротивление игровое — при сходе под 50° на 600 блоках
+     * сход 4,0 блока/тик вместо 3,9 без него и удар под 51°, на 2 км — 7,7 вместо 7,1 и 54°, на 10 км — 24 вместо 16 и
+     * 65° (сильнее — на 10 км понадобилось бы 76 блоков/тик). Расчёт огня по приказу знает только ветер у земли, а
+     * наверху он сильнее: залп сносит по ветру. Разброс схода — игровой (не по физике):
      * СКО направления 0,4°, скорости 0,5 % — на 600 блоках ~1 % дальности, как было (у 9М22У на наибольшей дальности —
      * 1/130 по дальности и 1/200 по направлению, Wikipedia, ru: «Град (РСЗО)»).
      */
-    static final Ballistic ROCKET_FLIGHT = new Ballistic(3e-4, 0.4, 0.005);
+    static final Ballistic ROCKET_FLIGHT = new Ballistic(1e-4, 0.4, 0.005);
 
     /**
      * Дрон-камикадзе Shahed-136 ({@link #DRONE_ARTICLE}). Игровое (не по физике): ≈150 км/ч, крейсер в 45 блоках над
@@ -717,7 +721,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 85, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, true, 0.5f,
             new Airframe(() -> ModEntities.BOMBER.get(), 12, 12, BOMBER_HANDLING, 170, 30, 0, 8.5, 0, 120 * 12, 0, null, 0, Attack.NONE,
                     BOMBER_NOISE, new Signature(0.15, true), BOMBER_ARTICLE, null),
-            new Airframe(() -> ModEntities.BUNKER_BUSTER.get(), BOMB_TERMINAL, BOMB_TERMINAL, null, 0, 12, 0, BombDrop.NOSE, 0, 300 * BOMB_TERMINAL,
+            new Airframe(() -> ModEntities.BUNKER_BUSTER.get(), BombDrop.DROP_SPEED, BOMB_TERMINAL, null, 0, 12, 0, BombDrop.NOSE, 0, 300 * BOMB_TERMINAL,
                     BombDrop.REACH_PAD, null, 0, Attack.NONE,
                     BOMB_NOISE, new Signature(0.1, false), BOMB_ARTICLE, BOMB_FALL),
             Munition.single(() -> ModItems.BUNKER_BUSTER.get()), null);
