@@ -57,6 +57,12 @@ public final class BlastGameTests {
             double a = i * Math.PI / 4, d = expected * (0.6 + 0.8 * i / 7.0);
             posts.add(BlockPos.containing(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d));
         }
+        // трава вокруг (до 1,5 радиуса): уцелевшая трава волну не держит — столбики за ней ломаются так же
+        BlockPos c = h.absolutePos(CENTER);
+        int n = (int) Math.ceil(expected * 1.5);
+        for (BlockPos p : BlockPos.betweenClosed(c.offset(-n, 0, -n), c.offset(n, 0, n))) {
+            if (level.getBlockState(p).isAir()) level.setBlock(p, Blocks.SHORT_GRASS.defaultBlockState(), 2);
+        }
         for (BlockPos p : posts) level.setBlock(p, material.defaultBlockState(), 2);
         Warheads.Probe blast = Warheads.testCharge(level, at, tnt);
         h.succeedWhen(() -> {

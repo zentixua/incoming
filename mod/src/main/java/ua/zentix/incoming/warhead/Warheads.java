@@ -529,7 +529,8 @@ public final class Warheads {
             WeaponSpec spec = weapon.spec();
             double held = chargeReach(spec.charge(), spec.fuelAtImpact());
             // аппарат рядом: взрыв по нему ванильными лучами читает мир дальше ({@code StagedExplosion.crafts})
-            if (SubLevels.mayHaveCraftNear(level, pos, StagedExplosion.breakReach(spec.charge()))) held = Math.max(held, StagedExplosion.craftReach(spec.charge()));
+            float craft = StagedExplosion.craftPower(level, pos, spec.charge());
+            if (craft > 0) held = Math.max(held, StagedExplosion.craftReach(craft));
             this.area = BlastArea.hold(level, pos, held);
             this.direct = direct;
             this.owner = ownerId == null ? null : level.getPlayerByUUID(ownerId);
@@ -548,20 +549,32 @@ public final class Warheads {
                     Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(spec.charge())));
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
                     new S2C.Blast(kind, pos, mat.ordinal(), surface, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID), weapon.id()));
-            main = List.of(charge(level, area, pos, spec.charge(), direct, owner));
+            main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(), direct, owner)) : List.of();
+            // заряд на аппарате (точка в сетке плотов): воронку и шар топлива там не ставить — это корпус, а не земля
+            onCraft = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
+        }
+
+        /** Взрыв на аппарате Sable. */
+        private final boolean onCraft;
+
+        /** Главный взрыв был (обработчик-приват его не отменил). */
+        private boolean happened() {
+            return !main.isEmpty() && main.getFirst().happened();
         }
 
         @Override
         public boolean tick(ServerLevel level) {
             boolean missile = weapon.spec().blast() == WeaponSpec.Blast.MISSILE;
-            if (IncomingConfig.SERVER.blockDamage.get()) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> Craters.dig(l, pos, weapon.spec().charge(), mat));
+            // всё после главного взрыва — только если он был: взрыв, отменённый приватом, не роет и не жжёт
+            if (main.isEmpty()) return false;
+            if (IncomingConfig.SERVER.blockDamage.get() && !onCraft) {
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat) : 0);
             }
-            if (weapon.spec().fuelAtImpact() > 0) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> Craters.ignite(l, pos, weapon.spec().fuelAtImpact()));
+            if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact()) : 0);
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
-                    l -> missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));
+                    l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));
             if (IncomingConfig.SERVER.shatterGlass.get()) shatterGlass(level, missile);
             return false;
         }

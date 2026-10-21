@@ -30,11 +30,12 @@ public final class BlastLog {
         }
     }
 
-    /** Был ли подрыв по заряду не дальше {@code radius} от {@code at} в мире теста. */
+    /** Был ли с начала теста подрыв по заряду не дальше {@code radius} от {@code at} в мире теста. */
     static boolean near(GameTestHelper h, BlockPos at, double radius) {
         Vec3 c = Vec3.atCenterOf(h.absolutePos(at));
+        long since = h.getLevel().getGameTime() - h.getTick();
         synchronized (BLASTS) {
-            for (Blast b : BLASTS) if (b.level() == h.getLevel() && b.at().distanceTo(c) <= radius) return true;
+            for (Blast b : BLASTS) if (b.level() == h.getLevel() && b.gameTime() >= since && b.at().distanceTo(c) <= radius) return true;
         }
         return false;
     }

@@ -268,7 +268,8 @@ public final class SamGameTests {
             h.assertTrue(d.isRemoved(), "шахед ещё летит");
             h.assertTrue(engageable[0], "шахед не был в дальности огня — проверка пуста");
             h.assertTrue(launches.count() == 0 && sam.ready() == 0, "пуск без ракет");
-            h.assertFalse(intact(h, new BlockPos(16, 3, 200)), "шахед не долетел до цели");
+            // подрыв у цели (на камне воронки нет — по закону заряда; ломать там нечего)
+            h.assertTrue(BlastLog.near(h, new BlockPos(16, 3, 200), 8), "шахед не долетел до цели");
         });
     }
 
