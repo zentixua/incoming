@@ -367,6 +367,18 @@ public final class FarBlasts {
     }
 
     /**
+     * Разрыв в воздухе ({@code S2C.Intercept}: боевая часть зенитной ракеты, заряд {@code source}) — то же облако модели,
+     * что у взрыва на земле, без грунта и топлива: вспышка, шар продуктов, облачко сажи, раскат вдали. Облако модели —
+     * тому, кто рисует разрыв вблизи (null — мира нет).
+     */
+    @Nullable
+    public static CloudModel airburst(Vec3 pos, BlastSource source, long seed) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) return null;
+        return cloud(level, source, new CloudModel(source, air(level, pos)), pos, GroundMaterial.STONE, seed);
+    }
+
+    /**
      * Облако взрыва в месте {@code pos} ({@link CloudModel}) — для картинки вблизи (вспышка, частицы твёрдого); то же, что
      * у события.
      */

@@ -40,7 +40,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * (дуга, горящее масло, гул и треск); {@code bomb-day-50}, {@code bomb-night-50} — бомба B-2 в грунт равнины, зритель в 50
  * блоках ({@code bomb-day-150}, {@code bomb-night-150}, {@code bomb-day-300} — в 150 и 300: у прорыва ~1 т в воздухе слой пыли
  * у земли — десятки метров, и в 50 блоках зритель внутри него), кадры от первого взрыва бомбы (у 3.4.1 — взрыв входа в
- * грунт, дальше — подрыв). У каждой сцены своё место на равнине.
+ * грунт, дальше — подрыв); {@code sam-side}, {@code sam-behind}, {@code sam-night-side} — ЗРК пускает ракету по шахеду,
+ * зритель сбоку от ЗРК и за ним (дым схода, след, звук мотора); {@code sam-burst}, {@code sam-night-burst} — ЗРК
+ * заряжается, когда шахед в ~180 блоках, разрыв — в ~70 блоках сбоку от зрителя. У каждой сцены своё место на равнине.
  * <p>
  * В лог — строки {@code SCENARIO probe …}: взрыв или старт (тик клиента, игровое время, байт в audio.wav — по нему
  * режется звук), снимки. Время каждого кадра — logs/probe-frames.txt: «сцена игровое_время мс».
@@ -53,9 +55,14 @@ final class ProbeScenario {
             // S8 — в конце: места прежних сцен — по их номеру в этом списке
             "water-day-50", "debris-night-50", "substation-night-50",
             // S5
-            "bomb-day-50", "bomb-night-50", "bomb-day-150", "bomb-night-150", "bomb-day-300");
+            "bomb-day-50", "bomb-night-50", "bomb-day-150", "bomb-night-150", "bomb-day-300",
+            // S6
+            "sam-side", "sam-behind", "sam-night-side", "sam-burst", "sam-night-burst");
     /** Кадры сцен с пожаром и подстанцией: дольше — дым горящего масла и пожара встаёт десятками секунд. */
     private static final double[] FIRE_SHOTS = {0.1, 0.5, 1, 3, 10, 30, 60};
+    /** Кадры ЗРК: секунды после схода ракеты и после разрыва. */
+    private static final double[] SAM_SHOTS = {0.25, 0.5, 1, 1.5, 2, 3, 5, 8, 15};
+    private static final double[] BURST_SHOTS = {0.1, 0.25, 0.5, 1, 2, 3, 6, 12};
     /** Кадры шахеда, секунды после взрыва. */
     private static final double[] DRONE_SHOTS = {0.1, 0.5, 1, 3, 10, 30};
     private static final double[] GRAD_SHOTS = {0.1, 0.5, 1, 3, 6, 12, 20, 30, 45, 60};
@@ -89,6 +96,11 @@ final class ProbeScenario {
     private int launchTick = -1;
     private Vec3 launchFrom = Vec3.ZERO, lastPos = Vec3.ZERO, axis = new Vec3(0, 0, 1);
     private boolean behind;
+    /** ЗРК: где стоит, ракета у клиента, тик схода, заряжен ли (сцена разрыва), тик разрыва. */
+    private BlockPos sam;
+    private net.minecraft.world.entity.Entity interceptor;
+    private int samLaunch = -1, samBurst = -1;
+    private boolean samLoaded;
     /** Пролёт: ближе всего к зрителю. */
     private StrikeProjectile drone;
     private double closest = Double.MAX_VALUE;
@@ -159,11 +171,20 @@ final class ProbeScenario {
         launchTick = -1;
         blastTick = -1;
         closest = Double.MAX_VALUE;
+        sam = null;
+        interceptor = null;
+        samLaunch = -1;
+        samBurst = -1;
+        samLoaded = false;
         Incoming.LOG.info("SCENARIO probe case {} site {} {}", current, site[0], site[1]);
         boolean night = current.contains("night");
         cmd(night ? "time set 18000" : "time set 6000");
         // зритель взрывов — наблюдатель: волна залпа отбрасывает игрока в творческом режиме (кадры из-под воды)
         cmd(current.startsWith("launch") || current.equals("flyby") ? "gamemode creative" : "gamemode spectator");
+        if (current.startsWith("sam")) {
+            planSam(tick, site, current.endsWith("burst"));
+            return;
+        }
         hover = true;
         Minecraft.getInstance().player.getAbilities().flying = true;
         // сначала над целью: чанки и высота цели у сервера и у клиента
@@ -413,6 +434,87 @@ final class ProbeScenario {
         }
     }
 
+    /**
+     * ЗРК на ровной площадке (вокруг расчищено небо), шахед идёт на него из-за 1400 блоков (разрыв — из-за 700) к точке
+     * за ним. Старт: ЗРК заряжен сразу, зритель сбоку в 45 блоках или за ним в 30 на линии пуска. Разрыв: ЗРК пуст, заряжается,
+     * когда шахед у клиента ближе 180 блоков по линии, зритель — в 70 блоках сбоку от места встречи.
+     */
+    private void planSam(int s, int[] site, boolean burst) {
+        at(s + 2, () -> cmd(String.format(Locale.ROOT, "forceload add %d %d %d %d", site[0] - 32, site[1] - 48, site[0] + 32, site[1] + 48)));
+        at(s + 120, () -> {
+            int y = groundAt(site[0], site[1]) + 1;
+            sam = new BlockPos(site[0], y, site[1]);
+            cmd(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:smooth_stone", site[0] - 20, y - 1, site[1] - 20, site[0] + 20, y - 1, site[1] + 20));
+            cmd(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", site[0] - 20, y, site[1] - 20, site[0] + 20, y + 30, site[1] + 20));
+            cmd(String.format(Locale.ROOT, "setblock %d %d %d incoming:sam{ready:%d}", site[0], y, site[1], burst ? 0 : 4));
+            hover = true;
+            if (current.endsWith("behind")) {
+                cmd(String.format(Locale.ROOT, "tp @s %d.5 %d %d.5 facing %d.5 %d %d.5", site[0], y + 3, site[1] + 30, site[0], y + 30, site[1] - 40));
+            } else if (!burst) {
+                cmd(String.format(Locale.ROOT, "tp @s %d.5 %d %d.5 facing %d.5 %d %d.5", site[0] + 45, y + 4, site[1], site[0], y + 22, site[1] - 10));
+            } else {
+                cmd(String.format(Locale.ROOT, "tp @s %d.5 %d %d.5 facing %d.5 %d %d.5", site[0] + 70, y + 30, site[1] - 110, site[0], y + 45, site[1] - 110));
+            }
+            target = new Vec3(site[0] + 0.5, y, site[1] + 250.5);
+            Incoming.LOG.info("SCENARIO probe {} sam {} {} {}", current, site[0], y, site[1]);
+        });
+        at(s + 220, () -> {
+            var c = IncomingConfig.SERVER;
+            c.launchNearPlayer.set(false);
+            firedAt = tick;
+            cmd(String.format(Locale.ROOT, "incoming salvo drone 1 0 at %.1f %.1f from %d %d", target.x, target.z, site[0], site[1] - (burst ? 700 : 1400)));
+            Incoming.LOG.info("SCENARIO probe {} fire tick {} audio {}", current, tick, audioBytes());
+        });
+    }
+
+    private void samEvents() {
+        Minecraft mc = Minecraft.getInstance();
+        if (sam == null) return;
+        Vec3 at = Vec3.atCenterOf(sam);
+        if (current.endsWith("burst") && !samLoaded) {
+            for (var e : mc.level.entitiesForRendering()) {
+                if (e instanceof StrikeProjectile sp && sp.weapon() == WeaponType.DRONE && sp.getZ() > at.z - 180 && sp.getZ() < at.z) {
+                    samLoaded = true;
+                    cmd(String.format(Locale.ROOT, "data merge block %d %d %d {ready:1}", sam.getX(), sam.getY(), sam.getZ()));
+                    Incoming.LOG.info("SCENARIO probe {} sam loaded, drone at {}", current, xyz(sp.position()));
+                }
+            }
+        }
+        if (interceptor == null && samBurst < 0) {
+            for (var e : mc.level.entitiesForRendering()) {
+                if (e instanceof ua.zentix.incoming.entity.InterceptorEntity i && i.distanceToSqr(at) < 64 * 64) interceptor = i;
+            }
+            if (interceptor != null && samLaunch < 0) {
+                samLaunch = tick;
+                Incoming.LOG.info("SCENARIO probe {} launch tick {} game {} audio {}", current, tick, mc.level.getGameTime(), audioBytes());
+                if (!current.endsWith("burst")) {
+                    int last = 0;
+                    for (double t : SAM_SHOTS) {
+                        last = (int) Math.round(t * 20);
+                        shot(tick + last, label(t));
+                    }
+                    at(tick + last + 40, this::nextCase);
+                }
+            }
+        }
+        if (interceptor != null && current.endsWith("burst") && samBurst < 0 && interceptor.isRemoved()) {
+            samBurst = tick;
+            Incoming.LOG.info("SCENARIO probe {} blast tick {} game {} audio {} at {}", current, tick, mc.level.getGameTime(), audioBytes(),
+                    xyz(interceptor.position()));
+            int last = 0;
+            for (double t : BURST_SHOTS) {
+                last = Math.max(1, (int) Math.round(t * 20));
+                shot(tick + last, label(t));
+            }
+            at(tick + last + 40, this::nextCase);
+        }
+        if (firedAt >= 0 && samLaunch < 0 && tick - firedAt > BLAST_LIMIT) {
+            Incoming.LOG.warn("SCENARIO probe {} no interceptor", current);
+            firedAt = -1;
+            nextCase();
+        }
+    }
+
     private void onTick(ClientTickEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer p = mc.player;
@@ -430,6 +532,7 @@ final class ProbeScenario {
         }
         if (current.startsWith("launch") && firedAt >= 0) launchEvents();
         if (current.equals("flyby") && firedAt >= 0) flybyEvents();
+        if (current.startsWith("sam") && firedAt >= 0) samEvents();
         if (armed && blastTick < 0 && blasts.get() > seenBlasts) {
             armed = false;
             if (current.equals("flyby")) {

@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.Entity;
 import ua.zentix.incoming.entity.BomberEntity;
+import ua.zentix.incoming.entity.InterceptorEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.Hearing;
@@ -23,6 +24,8 @@ import java.util.UUID;
  */
 public final class FlightTracks {
     private static final Map<UUID, FlightTrack> TRACKS = new HashMap<>();
+    /** Пути зенитных ракет ЗРК по виду у клиента — отдельно: оружия у них нет ({@link FlightTrack#interceptor}). */
+    private static final Map<UUID, FlightTrack> INTERCEPTORS = new HashMap<>();
     /**
      * Без новых данных столько тиков (сущность пропала, пакетов о ней нет) — полёт кончился. Молчит звук и пропадает
      * снаряд вдали раньше, как только данных на нужный момент нет ({@link FlightTrack#covers}); этот срок — чтобы
@@ -60,9 +63,21 @@ public final class FlightTracks {
         tick++;
         for (Entity e : level.entitiesForRendering()) {
             if (e instanceof StrikeProjectile p && p.isActive()) track(p.getUUID(), p.weapon(), p instanceof BomberEntity).record(tick, p);
+            else if (e instanceof InterceptorEntity i && !i.isRemoved()) {
+                FlightTrack t = INTERCEPTORS.get(i.getUUID());
+                if (t == null || t.isDead()) INTERCEPTORS.put(i.getUUID(), t = FlightTrack.interceptor(i.getUUID()));
+                t.record(tick, i);
+            }
         }
-        TRACKS.values().removeIf(t -> {
-            if (!t.isDead() && tick - t.lastTick() > STALE) t.die(tick);
+        expire(TRACKS);
+        expire(INTERCEPTORS);
+    }
+
+    /** Без данных дольше {@link #STALE} — полёт кончился; кончившийся забывается через {@link #RINGOUT}. */
+    private static void expire(Map<UUID, FlightTrack> tracks) {
+        tracks.values().removeIf(t -> {
+            // вид ракеты ЗРК пропал (разрыв или ушла из тикающих чанков): её полёт у клиента кончился в тот же тик
+            if (!t.isDead() && tick - t.lastTick() > (t.weapon == null ? 1 : STALE)) t.die(tick);
             return t.isDead() && tick - t.deathTick() > RINGOUT;
         });
     }
@@ -92,6 +107,16 @@ public final class FlightTracks {
         return Collections.unmodifiableCollection(TRACKS.values());
     }
 
+    /** Пути зенитных ракет ЗРК (звук мотора, шлейф и облако старта). */
+    public static Collection<FlightTrack> interceptors() {
+        return Collections.unmodifiableCollection(INTERCEPTORS.values());
+    }
+
+    /** Нынешний путь зенитной ракеты или {@code null}. */
+    public static FlightTrack interceptor(UUID id) {
+        return INTERCEPTORS.get(id);
+    }
+
     /** Снаряд взорвался (пакет взрыва): его полёт кончился в этот тик ({@link FlightTrack#impact}). */
     public static void impact(UUID id) {
         FlightTrack t = TRACKS.get(id);
@@ -106,6 +131,7 @@ public final class FlightTracks {
     /** Отбой с ядерными. */
     public static void reset() {
         TRACKS.clear();
+        INTERCEPTORS.clear();
     }
 
     /**

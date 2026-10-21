@@ -2,9 +2,13 @@ package ua.zentix.incoming.client.flight;
 
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.sound.Acoustics;
+import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
+import ua.zentix.incoming.entity.FlightPhase;
+import ua.zentix.incoming.entity.InterceptorEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.Hearing;
@@ -32,6 +36,8 @@ public final class FlightTrack implements Acoustics.Path {
     private static final int MAX_GAP = 8;
 
     public final UUID id;
+    /** Оружие; null — зенитная ракета ЗРК ({@link #interceptor}): её путь живёт отдельно ({@link FlightTracks#interceptors}). */
+    @Nullable
     public final WeaponType weapon;
     /** B-2 (у его бомбы то же оружие, звук и вид другие). */
     public final boolean bomber;
@@ -59,10 +65,30 @@ public final class FlightTrack implements Acoustics.Path {
     /** Бомба бурит. */
     private boolean drilling;
 
-    public FlightTrack(UUID id, WeaponType weapon, boolean bomber) {
+    public FlightTrack(UUID id, @Nullable WeaponType weapon, boolean bomber) {
         this.id = id;
         this.weapon = weapon;
         this.bomber = bomber;
+    }
+
+    /** Путь зенитной ракеты ЗРК: оружия у неё нет, вид и звук — по паспорту ЗРК. */
+    public static FlightTrack interceptor(UUID id) {
+        return new FlightTrack(id, null, false);
+    }
+
+    /**
+     * Запись по виду зенитной ракеты у клиента: сдвиг за тик — от прошлого места, фаза — разгон, пока горит двигатель
+     * разгона ({@link InterceptorSpec#boostTicks}), дальше — маршевый режим. Точки цели у неё нет: впереди путь не
+     * обрывается.
+     */
+    public void record(long tick, InterceptorEntity e) {
+        Vec3 v = e.position().subtract(e.xo, e.yo, e.zo);
+        int age = e.age();
+        boolean boost = age <= InterceptorSpec.SAM.boostTicks();
+        append(tick, new Sample(e.position(), v, e.getYRot(), e.getXRot(), 0, (boost ? FlightPhase.BOOST : FlightPhase.CRUISE).ordinal(),
+                boost ? age : age - InterceptorSpec.SAM.boostTicks(), e.position().add(v.scale(Hearing.MAX_DELAY)), false));
+        fromEntity = true;
+        slack = 1;
     }
 
     /** Запись по сущности у клиента. */

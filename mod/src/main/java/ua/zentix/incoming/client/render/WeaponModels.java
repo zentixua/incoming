@@ -281,6 +281,11 @@ public final class WeaponModels {
         if (rate > 0) parts.part(Mesh.LOITER_DISC, pose, p.coarse, Mth.clamp((rate - 0.6f) / 1.6f, 0, 1));
     }
 
+    /** Ракета ЗРК: корпус. */
+    public static void interceptor(ProjectilePose p, PoseStack pose, Parts parts) {
+        parts.part(Mesh.INTERCEPTOR_BODY, pose, p.coarse);
+    }
+
     public static void icbm(ProjectilePose p, PoseStack pose, Parts parts) {
         parts.part(Mesh.ICBM_BODY, pose, p.coarse);
     }

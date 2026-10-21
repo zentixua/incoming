@@ -48,14 +48,18 @@ paths:
   после `StrikeWorld` — цели в этом тике уже сдвинулись).
 - Сбита: `StrikeProjectile.intercepted` — БЧ не срабатывает, обломки `DebrisSpawner.wreck` со скоростью цели (только
   в тикающих чанках), снаряд вне мира просто убран; лог — «Projectiles: … shot down by a SAM at …, SAM x, y, z»
-  (`FlightLog.Event.INTERCEPTED`). Клиентам рядом — `S2C.Intercept` (вспышка, облачко и хлопок `BlastEffects.Airburst`;
-  путь сбитого кончается), своим ближе 48 блоков — `S2C.RadarScope` (экран `client/hud/RadarScope`), чужие цели
+  (`FlightLog.Event.INTERCEPTED`). Клиентам рядом — `S2C.Intercept` (облако разрыва — модель облака заряда боевой
+  части `FarBlasts.airburst`: вспышка, шар, облачко клубами слоя, раскат вдали; вблизи — искры и хлопок
+  `BlastEffects.Airburst`; путь сбитого кончается), своим ближе 48 блоков — `S2C.RadarScope` (экран `client/hud/RadarScope`), чужие цели
   радара — на карту стороны (`Sightings.spot`, `Source.RADAR`; своих не отмечает — карта рисует отмеченное чужим).
 - Вид и звук: `entity/InterceptorEntity` — только над готовым тикающим чанком, ставится на место полёта каждый тик,
-  не сохраняется; модель `interceptor_body` (`tools/gen_models.py`, вдали не рисуется), шлейф и факел —
-  `Exhaust.interceptor`, мотор — `client/sound/InterceptorSound` (закон источника РДТТ `Noise.Rocket` по тяге и
-  истечению паспорта, путь `Propagation`, громкость `Loudness`, запаздывание `Acoustics.emissionTime` по своему пути
-  мест вида — как у `EngineSound`; петля ускорителя, голос 1,2).
+  не сохраняется; модель `interceptor_body` (`tools/gen_models.py`, вдали не рисуется), факел — `PlumeRenderer`
+  (`InterceptorRenderer`), вспышка поджига и огонь у сопла — `Exhaust.interceptor`. Путь у клиента — `FlightTrack`
+  без оружия (`FlightTracks.interceptors`, отдельно от путей снарядов: оружия у неё нет), по нему — облако старта
+  (`LaunchCloud`, пока струя бьёт в землю) и след лентой (`FarFlightView`, вид — `ClientWeaponSpec.INTERCEPTOR`) тем же
+  законом, что у снарядов, и мотор — `client/sound/InterceptorSound` (закон источника РДТТ `Noise.Rocket` по тяге и
+  истечению паспорта, путь `Propagation`, громкость `Loudness`, запаздывание `Acoustics.emissionTime`; петля
+  ускорителя, голос 1,2). Сцены шлагбаума — `sam-*` в `ProbeScenario`.
 
 ## Подводные камни
 - Цели — только снаряды мода (решение Артёма: ПВО против ударов мода). Игроков, мобов, снаряды с седоком и аппараты
