@@ -2,7 +2,9 @@ package ua.zentix.incoming.client.fx.smoke;
 
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.nuclear.model.FuelFireball;
 
 /**
  * Облако обычного взрыва по законам, без Minecraft: что поднялось, куда и как долго его видно — из заряда, топлива, грунта
@@ -30,8 +32,8 @@ import ua.zentix.incoming.nuclear.model.DustModel;
  * <p>
  * <b>Вещество.</b> Сажа взрывчатки — свободный углерод продуктов детонации ({@link BlastSource.Explosive#freeCarbon}), из
  * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link BlastSource.Fuel}.
- * Пыль — грунт воронки: диаметр 0,65·W^⅓ м (середина 0,51–0,8, Ambrosini, Luccioni — ref/formulas.md §4, не сверено),
- * глубина — четверть, параболоид; в воздух уходит доля {@link #DUST_LOFTED} (оценка), половина — в облако, половина —
+ * Пыль — грунт воронки ({@link CraterModel#chargeVolume}: диаметр 0,65·W^⅓ м, глубина — четверть, параболоид — тот же
+ * закон, что роет сервер); в воздух уходит доля {@link #DUST_LOFTED} (оценка), половина — в облако, половина —
  * у земли. Ослабление на массу — сажа {@link #SOOT_K} м²/кг при альбедо 0,25 и асимметрии 0,5 (Bond, Bergstrom 2006:
  * поглощение 7,5 м²/г на 550 нм), пыль — {@code DustModel.K_MIX} (геометрическая оптика зёрен ядерной пыли), капли
  * конденсации (5 мкм) — 3Q/(2ρr) = 600 м²/кг. Облако видно, пока его толща поперёк больше {@link #SEEN} (порог
@@ -60,7 +62,7 @@ public final class CloudModel {
     /** Доля тепла огненного шара топлива, уходящая излучением: 0,25–0,4 (CCPS) — середина, оценка. */
     public static final double RADIANT = 0.3;
     /** Чёрное тело шара топлива, K: 275 кВт/м² (середина 200–350 по CCPS) = σT⁴. */
-    public static final double FUEL_BALL_K = Math.pow(275e3 / 5.670374e-8, 0.25);
+    public static final double FUEL_BALL_K = Math.pow(FuelFireball.SURFACE_POWER / 5.670374e-8, 0.25);
     /** Шар взрывчатки: в начале и в конце жизни, K (оценка). */
     public static final double HE_BALL_HOT = 3000, HE_BALL_END = 1500;
     /** Сажа: ослабление на массу (до дельта-Эддингтона), м²/кг; альбедо и асимметрия. */
@@ -69,8 +71,8 @@ public final class CloudModel {
     public static final double DROP_K = 600, DROP_G = 0.85;
     /** Сколько свободного углерода детонации остаётся сажей после догорания в шаре — оценка. */
     public static final double SOOT_SURVIVES = 0.2;
-    /** Диаметр воронки на W^⅓, м; глубина — доля диаметра; плотность грунта, кг/м³. */
-    public static final double CRATER_D = 0.65, CRATER_DEPTH = 0.25, SOIL_DENSITY = 1600;
+    /** Плотность грунта, кг/м³ (воронка — {@link CraterModel#chargeVolume}). */
+    public static final double SOIL_DENSITY = 1600;
     /** Доля грунта воронки, что уходит в воздух пылью мельче ~50 мкм, — оценка. */
     public static final double DUST_LOFTED = 0.02;
     /**
@@ -166,13 +168,11 @@ public final class CloudModel {
         double fuelHeat = source.fuelKg() * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
-        double crater = CRATER_D * Math.cbrt(source.chargeKg());
-        double craterVolume = Math.PI / 8 * crater * crater * CRATER_DEPTH * crater;
-        dust = craterVolume * SOIL_DENSITY * DUST_LOFTED;
+        // тот же закон воронки, что роет сервер (грунта пакет не несёт — сухой)
+        dust = CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED;
         soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + source.fuelKg() * source.fuel().sootYield;
-        double m3 = Math.cbrt(source.fuelKg());
-        fuelBall = 5.8 * m3;
-        fuelBallSeconds = 0.45 * m3;
+        fuelBall = FuelFireball.diameter(source.fuelKg());
+        fuelBallSeconds = FuelFireball.seconds(source.fuelKg());
         heBall = 1.7 * Math.cbrt(source.chargeKg());
         heBallSeconds = 0.2 * Math.pow(source.chargeKg(), 0.35);
         fireSeconds = Math.max(fuelBallSeconds, heBallSeconds);

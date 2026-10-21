@@ -50,6 +50,19 @@ public final class BlastModel {
         return 1e-3 * w * 980 * (1 + Math.pow(z / 0.54, 10)) / ((1 + a * a * a) * (1 + Math.pow(b, 6)) * Math.sqrt(1 + (z / 6.9) * (z / 6.9)));
     }
 
+    /**
+     * Импульс фазы сжатия обычного заряда {@code tntKg} кг ТНТ на наклонной дальности R, Па·с: Кинни–Грэхем (там же):
+     * I/∛W = 0,067·√(1 + (Z/0,23)⁴) / (Z²·∛(1 + (Z/1,55)³)) бар·мс/кг^⅓, Z = R/∛W; на земле — W × {@link #GROUND_REFLECTION}.
+     * Сверка с UFC 3-340-02 (рис. 2-7, падающий импульс): Z = 1 — 117 Па·с/кг^⅓ против ~134, Z = 10 — 20 против ~18
+     * (в пределах 15 %).
+     */
+    public static double chemicalImpulse(double slantRangeM, double tntKg, boolean surface) {
+        double w = Math.cbrt(Math.max(1e-9, surface ? tntKg * GROUND_REFLECTION : tntKg));
+        double z = Math.max(1e-3, slantRangeM / w);
+        double a = z / 0.23, b = z / 1.55;
+        return 100 * w * 0.067 * Math.sqrt(1 + a * a * a * a) / (z * z * Math.cbrt(1 + b * b * b));
+    }
+
     /** Дальность, где давление наземного взрыва заряда {@code tntKg} падает до {@code kpa} (0 — нет заряда или давления). */
     public static double rangeForSurfaceOverpressure(double kpa, double tntKg) {
         if (tntKg <= 0 || kpa >= surfaceOverpressureKpa(0, tntKg)) return 0;

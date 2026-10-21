@@ -37,8 +37,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.nuclear.model.CraterModel;
+import ua.zentix.incoming.nuclear.model.FuelFireball;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModParticles;
@@ -319,9 +322,9 @@ public final class Warheads {
         }
     }
 
-    /** Сила взрыва боевой части оружия (паспорт: настройка мира). */
-    static float power(WeaponType w) {
-        return w.spec().blastPower();
+    /** Сила подземного взрыва бетонобойной бомбы (настройка мира до закона её заряда — S5). */
+    static float bunkerPower() {
+        return IncomingConfig.SERVER.bunkerPower.get();
     }
 
     interface DamageByDistance {
@@ -462,21 +465,52 @@ public final class Warheads {
         }
     }
 
-    // ================================================================ шахед и ракета
-
-    /** Вторичный подрыв: тик после удара, сдвиг от точки удара, сила. */
-    public record Secondary(int tick, double dx, double dy, double dz, float power) {}
+    // ================================================================ шахед, ракета, «Град», «Ланцет»
 
     /**
-     * Вторичные подрывы крылатой ракеты (топливо, обломки корпуса): по ним и разрушения на сервере, и картинка у клиента
-     * ({@code BlastEffects.Missile}) — своих частиц у взрывов нет ({@link ModParticles#NONE}).
+     * Взрыв заряда {@code tntKg} кг ТНТ по физике ({@link StagedExplosion}: волна Кинни–Грэхема, кривая давление–импульс
+     * блоков, газы в помещении, тела — {@code BlastBody}) единицами в очереди попаданий.
      */
-    public static final List<Secondary> MISSILE_SECONDARIES = List.of(
-            new Secondary(3, 8, 0, -5, 5), new Secondary(3, -6, 1, 7, 5),
-            new Secondary(5, -8, 0, -7, 4), new Secondary(5, 3, 1, 9, 4),
-            new Secondary(9, 10, 0, 2, 3));
+    static StagedExplosion charge(ServerLevel level, BlastArea area, Vec3 at, double tntKg, @Nullable Entity direct, @Nullable Entity owner) {
+        boolean blocks = IncomingConfig.SERVER.blockDamage.get();
+        StagedExplosion job = new StagedExplosion(area.retain(), List.of(), at, tntKg, blocks, direct, owner);
+        area.queued(job, level.getGameTime());
+        StrikeWorld.get(level).impacts().add(level, job);
+        return job;
+    }
 
-    /** Таймлайн наземного взрыва. */
+    /** Проверки: взрыв заряда {@code tntKg} кг ТНТ по физике, со своим районом. */
+    public static Probe testCharge(ServerLevel level, Vec3 at, double tntKg) {
+        BlastArea area = BlastArea.hold(level, at, chargeReach(tntKg, 0));
+        Probe probe = new Probe(charge(level, area, at, tntKg, null, null));
+        area.release(level);
+        return probe;
+    }
+
+    /** Проверки: докуда волна заряда ломает блок с порогом {@code psi} в открытом поле (нижний край разброса), блоков. */
+    public static double breakReach(double psi, double tntKg) {
+        return StagedExplosion.reachFor(psi, tntKg);
+    }
+
+    /** Заряд взрыва мода по физике, кг ТНТ; 0 — ванильный или чужой взрыв (обработчики {@code ExplosionEvent}). */
+    public static double chargeOf(Explosion e) {
+        return StagedExplosion.chargeOf(e);
+    }
+
+    /**
+     * Район удара заряда: лучи волны ({@link StagedExplosion#breakReach}), вал воронки и шар топлива; тела дальше бьются
+     * там, где мир загружен.
+     */
+    static double chargeReach(double tntKg, double fuelKg) {
+        double crater = 2 * CraterModel.chargeRadius(tntKg, CraterModel.Soil.WET) + 1;
+        return Math.max(StagedExplosion.breakReach(tntKg), Math.max(crater, FuelFireball.diameter(fuelKg) / 2)) + EDGE;
+    }
+
+    /**
+     * Наземный взрыв боевой части: заряд из паспорта ({@link WeaponSpec#charge}) — волна, газы, тела (главный взрыв); за
+     * ним — воронка по закону обычного заряда, поджиг шаром топлива из бака ({@link WeaponSpec#fuelAtImpact}), обломки,
+     * стёкла. Вторичных подрывов и колец огня нет: вторичное — только топливо и горящие обломки.
+     */
     static final class SurfaceBlast implements Timeline {
         private final WeaponType weapon;
         private final Vec3 pos;
@@ -488,17 +522,19 @@ public final class Warheads {
         private final BlastArea area;
         /** Главный взрыв: остальная работа удара ждёт, пока он снесёт своё. */
         private final List<StagedExplosion> main;
-        private int t;
 
         SurfaceBlast(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity direct, @Nullable UUID ownerId) {
             this.weapon = weapon;
             this.pos = pos;
-            // вторичные подрывы — до 11 блоков от точки удара, силой до 5
-            this.area = BlastArea.hold(level, pos, Math.max(11 + reach(5), reach(power(weapon))));
+            WeaponSpec spec = weapon.spec();
+            double held = chargeReach(spec.charge(), spec.fuelAtImpact());
+            // аппарат рядом: взрыв по нему ванильными лучами читает мир дальше ({@code StagedExplosion.crafts})
+            if (SubLevels.mayHaveCraftNear(level, pos, StagedExplosion.breakReach(spec.charge()))) held = Math.max(held, StagedExplosion.craftReach(spec.charge()));
+            this.area = BlastArea.hold(level, pos, held);
             this.direct = direct;
             this.owner = ownerId == null ? null : level.getPlayerByUUID(ownerId);
             this.mat = GroundMaterial.sample(level, BlockPos.containing(pos));
-            int kind = switch (weapon.spec().blast()) {
+            int kind = switch (spec.blast()) {
                 case MISSILE -> S2C.Blast.MISSILE;
                 case ROCKET -> S2C.Blast.ROCKET;
                 case DRONE, NONE -> S2C.Blast.DRONE;
@@ -509,61 +545,25 @@ public final class Warheads {
             // видно — до far_range, слышно — докуда звук взрыва его заряда тихой ночью выше фона (HearingModel), но не
             // дальше, чем сервер шлёт что-либо далёкое
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
-                    Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(weapon.spec().charge())));
+                    Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(spec.charge())));
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
                     new S2C.Blast(kind, pos, mat.ordinal(), surface, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID), weapon.id()));
-            main = List.of(explode(level, area, List.of(), pos, power(weapon), false, direct, owner, null));
+            main = List.of(charge(level, area, pos, spec.charge(), direct, owner));
         }
 
         @Override
         public boolean tick(ServerLevel level) {
-            t++;
             boolean missile = weapon.spec().blast() == WeaponSpec.Blast.MISSILE;
-            if (t == 1) {
-                // огненный шар — второй, зажигательный подрыв; у ракеты ещё кольцо горящих обломков
-                explode(level, area, main, pos, missile ? 3 : 2, true, direct, owner, null);
-                if (missile) {
-                    unit(level, area, main, ImpactCost.Kind.GROUND, "Fire ring", l -> {
-                        for (int i = 0; i < 8; i++) {
-                            double a = i * Math.PI / 4;
-                            igniteGround(l, pos.x + Math.cos(a) * 7, pos.z + Math.sin(a) * 7);
-                        }
-                        return 8;
-                    });
-                }
-                unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
-                        l -> missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));
-                if (IncomingConfig.SERVER.shatterGlass.get()) shatterGlass(level, missile);
+            if (IncomingConfig.SERVER.blockDamage.get()) {
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> Craters.dig(l, pos, weapon.spec().charge(), mat));
             }
-            if (missile) {
-                for (Secondary s : MISSILE_SECONDARIES) {
-                    if (s.tick() == t) explode(level, area, main, pos.add(s.dx(), s.dy(), s.dz()), s.power(), false, direct, owner, null);
-                }
-                push(level, pos, t, new double[]{1.4, 1.0, 0.6}, e -> true, (p, band) -> {
-                    if (band == 1) {
-                        effect(p, MobEffects.CONFUSION, 10);
-                        effect(p, MobEffects.DARKNESS, 3);
-                    } else if (band == 2) {
-                        effect(p, MobEffects.CONFUSION, 6);
-                    } else {
-                        effect(p, MobEffects.CONFUSION, 3);
-                    }
-                });
-            } else {
-                switch (t) {
-                    case 3 -> {
-                        explode(level, area, main, pos.add(4, 0, -3), 3, false, direct, owner, null);
-                        explode(level, area, main, pos.add(-3, 1, 4), 3, false, direct, owner, null);
-                    }
-                    case 6 -> {
-                        explode(level, area, main, pos.add(-4, 0, -4), 4, false, direct, owner, null);
-                        explode(level, area, main, pos.add(2, 2, 5), 2, false, direct, owner, null);
-                    }
-                    default -> {}
-                }
-                push(level, pos, t, new double[]{1.1, 0.7}, e -> true, (p, band) -> effect(p, MobEffects.CONFUSION, band == 1 ? 7 : 4));
+            if (weapon.spec().fuelAtImpact() > 0) {
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> Craters.ignite(l, pos, weapon.spec().fuelAtImpact()));
             }
-            return t < 12;
+            unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
+                    l -> missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));
+            if (IncomingConfig.SERVER.shatterGlass.get()) shatterGlass(level, missile);
+            return false;
         }
 
         @Override
@@ -572,15 +572,10 @@ public final class Warheads {
         }
 
         /**
-         * Стёкла — по давлению волны заряда боевой части (у ракеты ещё листва в коробке) — единицами по секциям; звук
-         * и частицы — с первой секцией, где что-то выбито.
+         * Стёкла — по давлению волны заряда боевой части — единицами по секциям; звук и частицы — с первой секцией, где
+         * что-то выбито. Листву ломают лучи волны по её кривой, как и всё остальное.
          */
         private void shatterGlass(ServerLevel level, boolean missile) {
-            // листва у ракеты — рядом, до шара стёкол: в очереди не ждёт, пока он выбьет все свои секции
-            if (missile) {
-                Shatter.queue(level, area, main, pos, Shatter.Box.around(pos, 11, 3, 16, BlockTags.LEAVES),
-                        (l, n) -> l.playSound(null, pos.x, pos.y, pos.z, SoundEvents.GRASS_BREAK, SoundSource.BLOCKS, 4, 0.6f));
-            }
             Shatter.queue(level, area, main, pos, Shatter.Wave.of(pos, weapon.spec().charge()), (l, n) -> {
                 float vol = missile ? 6 : 4;
                 l.playSound(null, pos.x, pos.y, pos.z, SoundEvents.GLASS_BREAK, SoundSource.BLOCKS, vol, missile ? 0.7f : 0.8f);
@@ -618,7 +613,7 @@ public final class Warheads {
         BunkerBlast(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity direct, @Nullable UUID ownerId) {
             this.pos = pos;
             // подрывы — до 6 блоков от заряда силой до 12, обрушение свода — до 10 блоков вокруг устья
-            this.area = BlastArea.hold(level, pos, Math.max(6 + reach(12), reach(power(WeaponType.BUNKER))));
+            this.area = BlastArea.hold(level, pos, Math.max(6 + reach(12), reach(bunkerPower())));
             this.entry = entry;
             this.direct = direct;
             this.owner = ownerId == null ? null : level.getPlayerByUUID(ownerId);
@@ -652,7 +647,7 @@ public final class Warheads {
                 Vec3 o = pos.add(level.random.nextIntBetweenInclusive(-3, 3), level.random.nextIntBetweenInclusive(-2, 2), level.random.nextIntBetweenInclusive(-3, 3));
                 blasts.add(explode(level, area, List.of(), o, 12, false, direct, owner, weak));
             }
-            blasts.add(explode(level, area, List.of(), pos, power(WeaponType.BUNKER), false, direct, owner, weak));
+            blasts.add(explode(level, area, List.of(), pos, bunkerPower(), false, direct, owner, weak));
             main = List.copyOf(blasts);
 
             // ударная волна в породе достаёт и за камнем, без прямой видимости

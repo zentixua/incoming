@@ -53,6 +53,15 @@ public enum GroundMaterial {
     private final String[] debris;
     private List<BlockState> debrisStates;
 
+    /** Грунт для закона воронки ({@link ua.zentix.incoming.nuclear.model.CraterModel}): скала, влажный и рыхлый, сухой. */
+    public ua.zentix.incoming.nuclear.model.CraterModel.Soil soil() {
+        return switch (this) {
+            case STONE, DEEPSLATE, BRICK -> ua.zentix.incoming.nuclear.model.CraterModel.Soil.ROCK;
+            case SAND, WATER, SNOW -> ua.zentix.incoming.nuclear.model.CraterModel.Soil.WET;
+            default -> ua.zentix.incoming.nuclear.model.CraterModel.Soil.DRY;
+        };
+    }
+
     GroundMaterial(Supplier<Block> particle, float r, float g, float b, float porosity, String... debris) {
         this.particle = particle;
         this.r = r;

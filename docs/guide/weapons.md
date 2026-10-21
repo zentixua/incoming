@@ -7,18 +7,18 @@ Six weapons, in the order the designator lists them. Each launch uses [munitions
 | | Shahed | Lancet | Missile | Grad | Bomb (B-2) | Nuclear (ICBM) |
 |---|---|---|---|---|---|---|
 | Time to impact | ≈50 s | approach plus ≈25 s circling | ≈30 s | 7–10 s | ≈40 s | 90 s |
-| Blast power (TNT = 4) | 12 | 8 | 20 | 7 per rocket | 20, underground | 1 or 15 kt |
+| Warhead, TNT | 50 kg | 3 kg | ≈150 kg | 6.4 kg per rocket | power 20 underground (TNT = 4) | 1 or 15 kt |
 | Follows a moving target | yes, through the camera | yes, through the camera | no | no | no | no |
 | Route on the map | yes | yes | yes | no | no | no |
 | Shot down by a SAM | yes | yes | yes | no | yes | no |
 
-Times are for a nearby target. The world owner can change blast power and flight times.
+Times are for a nearby target. The world owner can change flight times and the bomb's underground blast power.
 
 ## The real weapons
 
 Each weapon is a real one. Its size, mass, warhead and engines come from open data; where a number is not published
 (some engines, the share of explosive in a warhead), it is worked out from the published ones by physics. The warhead
-sets how far the blast breaks glass and how the explosion looks and sounds.
+sets everything the blast does: what it breaks and how far, the crater, wounds, and how the explosion looks and sounds.
 
 | | Shahed-136 | Lancet-3 | Tomahawk | Grad 9M22U | GBU-57 (from B-2) | Minuteman III |
 |---|---|---|---|---|---|---|
@@ -26,9 +26,40 @@ sets how far the blast breaks glass and how the explosion looks and sounds.
 | Mass | 200 kg | 12 kg | 1.3 t (1.6 t with booster) | 66.6 kg | 13.6 t | 36 t |
 | Warhead, TNT | 50 kg | 3 kg | ≈150 kg | 6.4 kg | 2.4 t of explosive, underground | nuclear |
 | Breaks glass up to | ≈70 m | ≈29 m | ≈105 m | ≈37 m | — | — |
+| Breaks brick and stone walls up to | ≈3.4 m | ≈0.5 m | ≈7 m | ≈0.9 m | — | — |
+| Breaks planks, doors, fences up to | ≈6 m | ≈0.9 m | ≈12 m | ≈1.5 m | — | — |
+| Crater in soil, across | ≈2.4 m | ≈0.9 m | ≈3.5 m | ≈1.2 m | — | — |
+| Fuel left at impact | ≈30 kg | none | ≈275 kg | none | none | — |
 | Real speed | 185 km/h | 110 km/h, ≈300 in a dive | ≈900 km/h | ≈690 m/s at burnout | ≈510 m/s at impact (calculated) | — |
 | Real flight height | 1.5–2.8 km | 600–800 m when circling | 30–50 m over the ground | apogee ≈7 km | dropped from ≈12 km | — |
 | Speed in the game | ≈150 km/h | ≈115 km/h | ≈290 km/h | by its arc | B-2 ≈860 km/h, 170 blocks up | — |
+
+## What a blast does
+
+A blast is the warhead's charge in TNT, not a game explosion power. Everything follows from it:
+
+- **The shock wave** has the pressure and impulse of a real charge of that size on the ground (Kinney and Graham). A
+  block breaks when both are high enough for its material: glass and torches first, then leaves, planks and doors,
+  logs, brick and stone. The radii match the British bomb-damage data (Jarrett): a Shahed brings down brick walls within
+  about 3 m and wooden ones within about 6 m. A small charge breaks much less than its pressure alone suggests, because
+  its wave is too short for a wall to give way. A wall that survives shields what is behind it; the wave does not go
+  round houses (an approximation).
+- **Inside a room** the hot gases of the explosion keep pushing on every wall until they escape through windows and
+  doors. A Shahed that flies into a closed room blows the whole room out, the way a hit floor looks on real footage.
+- **The crater** follows the law for a charge on the ground: about 0.65·∛W metres across and a quarter of that deep,
+  a little smaller in rock, a little larger in sand and wet soil. A crater is only dug where the blast is at the ground.
+  Craters are much smaller than in earlier versions: that is the real size.
+- **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; it burns as a
+  fireball (18 m across for the Shahed, ≈38 m for the missile) and sets fire to flammable blocks that the fireball
+  touches. The Grad and the Lancet carry no fuel. Burning debris starts a fire only where it lands on something that
+  burns. There are no scripted secondary explosions.
+- **People and mobs** are hurt by the same wave as in a nuclear strike: pressure on the lungs, being thrown into a
+  wall, glass from a window. Close to a Shahed this kills; at 30 m in the open it does nothing. Someone behind a wall
+  that holds is safe from the wave; inside the room where the charge went off, the gases hit everyone.
+- **Aircraft** of Create Aeronautics lose the blocks that the same law breaks at their distance.
+
+Known limits: the injury thresholds are those for long nuclear pulses, so near a small charge they slightly overstate
+harm; fragments are not modelled yet.
 
 Speeds and flight heights in the game are not the real ones (not physical): they are lower so that you can see the
 approach within a few hundred blocks. A Grad battery stands 600 blocks from the target, not 5–20 km.

@@ -17,6 +17,8 @@ public final class ThermalModel {
     public static final double BURN_3 = 8;
     /** Воспламенение листвы, травы, шерсти. */
     public static final double IGNITE = 5;
+    /** Световой импульс, кал/см², при котором горючее загорается наверняка ({@link #ignitionShare}). */
+    public static final double IGNITE_ALL = 20;
     /** Видимость, м: ясно, дождь, гроза — та же, что у картинки ({@link Visibility}). */
     public static final double VISIBILITY_CLEAR = Visibility.CLEAR;
     public static final double VISIBILITY_RAIN = Visibility.RAIN;
@@ -25,6 +27,14 @@ public final class ThermalModel {
     private static final double TRANSMITTANCE_POWER = 0.544;
 
     private ThermalModel() {
+    }
+
+    /**
+     * Какая доля горючего загорается от светового импульса {@code q} кал/см²: ниже {@link #IGNITE} — ничего, дальше растёт
+     * до всего к {@link #IGNITE_ALL} (так зажигает руины ядерки; у обычного оружия — шар топлива).
+     */
+    public static double ignitionShare(double q) {
+        return q < IGNITE ? 0 : Math.min(1, q / IGNITE_ALL);
     }
 
     /** Плотность световой энергии на наклонной дальности R, кал/см². */

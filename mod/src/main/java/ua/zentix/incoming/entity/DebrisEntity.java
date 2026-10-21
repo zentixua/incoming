@@ -139,11 +139,21 @@ public class DebrisEntity extends Entity {
         boolean replaceable = here.canBeReplaced(new DirectionalPlaceContext(level, pos, Direction.DOWN, ItemStack.EMPTY, Direction.UP));
         boolean supported = state.canSurvive(level, pos) && !FallingBlock.isFree(level.getBlockState(pos.below()));
         if (!replaceable || !supported) return;
-        if (state.is(Blocks.FIRE) && !IncomingConfig.SERVER.fire.get()) return;
+        // горящий обломок поджигает только горючее, на котором или у которого лёг; на камне и земле он догорает сам
+        if (state.is(Blocks.FIRE) && (!IncomingConfig.SERVER.fire.get() || !touchesFuel(level, pos))) return;
         if (state.hasProperty(BlockStateProperties.WATERLOGGED) && level.getFluidState(pos).getType() == Fluids.WATER) {
             state = state.setValue(BlockStateProperties.WATERLOGGED, true);
         }
         level.setBlock(pos, state, 3);
+    }
+
+    /** Рядом горючее: огонь на этом месте будет гореть, а не погаснет сам. */
+    private static boolean touchesFuel(ServerLevel level, BlockPos pos) {
+        for (Direction d : Direction.values()) {
+            BlockPos n = pos.relative(d);
+            if (level.getBlockState(n).isFlammable(level, n, d.getOpposite())) return true;
+        }
+        return false;
     }
 
     @Override

@@ -60,8 +60,6 @@ public final class LegacyMigration {
         CompoundTag cfg = server.getCommandStorage().get(id);
         if (cfg.isEmpty()) return;
         IncomingConfig.Server s = IncomingConfig.SERVER;
-        setInt(cfg, "power", s.dronePower, 1, 60);
-        setInt(cfg, "missile_power", s.missilePower, 1, 60);
         setInt(cfg, "bunker_power", s.bunkerPower, 1, 60);
         setInt(cfg, "bunker_energy", s.bunkerEnergy, 50, 10000);
         setBool(cfg, "shatter", s.shatterGlass);

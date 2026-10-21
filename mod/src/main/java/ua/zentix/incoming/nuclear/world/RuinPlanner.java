@@ -628,7 +628,7 @@ public final class RuinPlanner {
      */
     private static void fire(Sections s, int lx, int ground, int lz, int x, int z, double q, double psi, boolean flash) {
         if (ground + 1 >= s.maxY) return;
-        double lit = Math.min(1, q / 20), keep = psi >= 2 ? BLOWN_KEEP : 1;
+        double lit = Math.min(1, q / ThermalModel.IGNITE_ALL), keep = psi >= 2 ? BLOWN_KEEP : 1;
         Blast.Props now = s.props(lx, ground, lz);
         if (s.get(lx, ground + 1, lz).isAir() && (now.is(Blast.Props.FLAMMABLE) || now.is(Blast.Props.DIRT))) {
             if (flash) s.fire(x, ground + 1, z, lit, keep);

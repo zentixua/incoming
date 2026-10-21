@@ -171,8 +171,8 @@ public final class WorkGameTests {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий: " + StrikeWorld.get(level).impacts().size());
             h.assertTrue(clock.maxTickNanos() <= total + MS, "тик " + clock.maxTickNanos() / MS + " мс при сроке " + total / MS);
             h.assertTrue(clock.ticksWorked() > 1, "всё в одном тике — бюджет не делит работу (" + clock.units() + " единиц)");
-            // пять шахедов: подрыв, огненный шар, четыре вторичных; ракета: подрыв, огненный шар, пять вторичных
-            h.assertTrue(blasts.size() == 5 * 6 + 7, "взрывов " + blasts.size());
+            // по одному подрыву заряда на удар: вторичных подрывов и взрыва огненного шара нет
+            h.assertTrue(blasts.size() == 6, "взрывов " + blasts.size());
             int blocks = 0;
             for (Blast b : blasts) {
                 for (BlockPos p : b.blocks()) {
@@ -180,7 +180,8 @@ public final class WorkGameTests {
                 }
                 blocks += b.blocks().size();
             }
-            h.assertTrue(blocks > 500, "снесено блоков " + blocks);
+            // шахеды рвутся в домах (газы выбивают комнату), ракета — в среднем доме
+            h.assertTrue(blocks > 300, "снесено блоков " + blocks);
             Incoming.LOG.info("WORKBENCH залп: {} единиц за {} тиков (до {} за тик), взрывов {}, блоков {}", clock.units(),
                     clock.ticksWorked(), clock.maxUnitsPerTick(), blasts.size(), blocks);
         });
@@ -216,8 +217,8 @@ public final class WorkGameTests {
     }
 
     /**
-     * Порядок: два шахеда в одном тике — подрывы обоих (лучи, урон) в тике удара, раньше порций блоков; огненный шар
-     * и вторичные первого — только когда его подрыв снёс всё своё.
+     * Порядок: два шахеда в одном тике — подрывы обоих (лучи, урон) в тике удара, раньше порций блоков; воронка, шар
+     * топлива и обломки первого — только когда его подрыв снёс всё своё (огонь шара — в уже снесённом).
      */
     @GameTest(template = "range", timeoutTicks = 1000, batch = "work_order", skyAccess = true)
     public static void impactUnitsKeepOrder(GameTestHelper h) {
@@ -228,23 +229,26 @@ public final class WorkGameTests {
         List<Blast> blasts = recordBlasts(h, 48);
         Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         Vec3 first = c.add(-14, 0, 0), second = c.add(14, 0, 0);
-        float power = IncomingConfig.SERVER.dronePower.get().floatValue();
+        // поленница за западной стеной первого дома: волна шахеда её не ломает (дальше 5 м — Джаррет B), шар топлива (9 м)
+        // доходит до неё, когда газы выбили стену
+        BlockPos pile = BlockPos.containing(first).offset(-7, 0, -1);
+        for (int y = 0; y < 4; y++) for (int z = 0; z < 3; z++) level.setBlock(pile.offset(0, y, z), Blocks.OAK_LOG.defaultBlockState(), 2);
         List<String> early = new ArrayList<>();
-        int[] followers = {0};
-        Consumer<ExplosionEvent.Detonate> check = e -> {
-            // после записи взрывов (LOWEST): первый в списке — подрыв первого шахеда
-            if (e.getLevel() != level || blasts.isEmpty() || e.getExplosion().radius() >= power) return;
-            if (e.getExplosion().center().distanceTo(first) > 12) return;
-            followers[0]++;
+        int[] fires = {0};
+        // огонь шара топлива первого шахеда (в его доме) — только после того, как подрыв снёс выбранное
+        Consumer<net.neoforged.neoforge.event.level.BlockEvent.NeighborNotifyEvent> onFire = e -> {
+            if (e.getLevel() != level || !(e.getState().getBlock() instanceof BaseFireBlock) || blasts.isEmpty()) return;
+            if (Vec3.atCenterOf(e.getPos()).distanceTo(first) > 12) return;
+            fires[0]++;
             for (BlockPos p : blasts.getFirst().blocks()) {
                 if (!gone(level.getBlockState(p))) {
-                    early.add("взрыв силы " + e.getExplosion().radius() + " раньше, чем снесён " + p);
+                    early.add("огонь у " + e.getPos() + " раньше, чем снесён " + p);
                     return;
                 }
             }
         };
-        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, check);
-        StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(check));
+        NeoForge.EVENT_BUS.addListener(onFire);
+        StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(onFire));
         List<Vec3> starts = new ArrayList<>();
         List<Long> startTicks = new ArrayList<>();
         Consumer<ExplosionEvent.Start> onStart = e -> {
@@ -258,12 +262,12 @@ public final class WorkGameTests {
         Warheads.detonate(level, WeaponType.DRONE, first, null, null);
         Warheads.detonate(level, WeaponType.DRONE, second, null, null);
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty() && blasts.size() == 12, "взрывов " + blasts.size());
-            h.assertTrue(blasts.get(0).at().distanceTo(first) < 0.01 && Mth.equal(blasts.get(0).radius(), power), "первым — не подрыв первого");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty() && blasts.size() == 2, "взрывов " + blasts.size());
+            h.assertTrue(blasts.get(0).at().distanceTo(first) < 0.01, "первым — не подрыв первого");
             h.assertTrue(starts.size() >= 2 && starts.get(0).distanceTo(first) < 0.01 && starts.get(1).distanceTo(second) < 0.01,
                     "первые единицы — не подрывы шахедов: " + starts);
             h.assertTrue(startTicks.get(0) == t && startTicks.get(1) == t, "подрывы начались не в тике удара: " + startTicks + " (удар " + t + ")");
-            h.assertTrue(followers[0] == 5, "огненный шар и вторичные первого: " + followers[0]);
+            h.assertTrue(fires[0] > 0, "шар топлива первого ничего не поджёг");
             h.assertTrue(early.isEmpty(), early.toString());
             h.assertTrue(clock.ticksWorked() > 1, "всё в одном тике — порядок не проверен");
         });

@@ -32,7 +32,6 @@ import java.util.function.Supplier;
  * @param sirenSeconds за сколько секунд до удара цель «видит» снаряд и включается тревога (у МБР — свой отсчёт, не этот)
  * @param salvo      залп: паузы между пусками и что ставит пульт, когда выбирают это оружие
  * @param warhead    ядерная боевая часть: всегда, по выбору или никогда
- * @param power      сила взрыва боевой части — настройка мира
  * @param launch     как пускается ({@link StrikeService#launch})
  * @param route      путь до цели: время полёта, последний прямой участок, вынос пусковой
  * @param tracking   идёт ли за движущейся целью, которую заметил игрок ({@code target.Target.Sighted})
@@ -46,7 +45,7 @@ import java.util.function.Supplier;
  * @param ascent     разгон ракетной ступени по тяге и массе (МБР); null — у оружия его нет
  */
 public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo salvo, Warhead warhead,
-                         Supplier<ModConfigSpec.IntValue> power, Launch launch, Route route, Tracking tracking, @Nullable LauncherRack rack,
+                         Launch launch, Route route, Tracking tracking, @Nullable LauncherRack rack,
                          Blast blast, boolean penetrates, float confirmPitch, Airframe airframe, @Nullable Airframe payload,
                          Munition munition, @Nullable Ascent ascent) {
 
@@ -319,11 +318,6 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
         return sirenSeconds * 20;
     }
 
-    /** Сила взрыва боевой части (настройка мира). */
-    public float blastPower() {
-        return power.get().get();
-    }
-
     /** Сущность полёта, которая бьёт по цели: бомба у B-2, иначе сам аппарат. */
     public Airframe striker() {
         return payload != null ? payload : airframe;
@@ -542,7 +536,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * ~3,5 блока от цели).
      */
     public static final WeaponSpec DRONE = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 25, Salvo.gaps(20, 40), Warhead.CONVENTIONAL,
-            () -> IncomingConfig.SERVER.dronePower, Launch.GUIDED,
+            Launch.GUIDED,
             new Route(() -> IncomingConfig.SERVER.droneFlightTime, 300, 0, 0, 3, 40, 30_000), Tracking.CAMERA, LauncherRack.DRONE, Blast.DRONE, false, 0.6f,
             new Airframe(() -> ModEntities.DRONE.get(), 2.1, 3.0, 3.0, 1.6, 45, 20, 256, 1.83, 12, 900 * 2.1, 4.3,
                     new LaunchProfile(8, 38, 0.075, 8, -9), 0, new Attack(16, 0, 0),
@@ -559,7 +553,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * 1,5 блока по оси.
      */
     public static final WeaponSpec MISSILE = new WeaponSpec(WeaponType.SirenKind.MISSILE, 15, Salvo.gaps(15, 30), new Warhead(false, true, true),
-            () -> IncomingConfig.SERVER.missilePower, Launch.GUIDED,
+            Launch.GUIDED,
             new Route(() -> IncomingConfig.SERVER.missileFlightTime, 500, 0, 0, 1.5, 120, 30_000), Tracking.POINT, LauncherRack.MISSILE, Blast.MISSILE, false, 0.5f,
             new Airframe(() -> ModEntities.CRUISE_MISSILE.get(), 4.0, 5.0, 3.0, 2.0, 12, 12, 256, 2.96, 8, 700 * 4.0, 6.5,
                     new LaunchProfile(6, 40, 0.09, 8, -14), 256, new Attack(64, 160, 185),
@@ -573,7 +567,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * 1,5 блока по оси. Топлива у бомбы нет.
      */
     public static final WeaponSpec BUNKER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(60, 80), new Warhead(false, true, false),
-            () -> IncomingConfig.SERVER.bunkerPower, Launch.BOMBER,
+            Launch.BOMBER,
             new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 85, 0, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, true, 0.5f,
             new Airframe(() -> ModEntities.BOMBER.get(), 12, 12, 1.0, 1.0, 170, 30, 0, 8.5, 0, 120 * 12, 0, null, 0, Attack.NONE,
                     BOMBER_NOISE, new Signature(0.15, true), BOMBER_ARTICLE),
@@ -592,13 +586,12 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * https://gotech.spp.umd.edu/sites/default/files/2019-08/1990-MissilePrimer.pdf). На отрыве 1,56 g, к 10 с — 1,82 g:
      * 165 м/с и ~810 м по оси. Строго отвесно 3 с (хвост выходит из шахты 25 блоков к ~1,8 с), потом наклон к курсу
      * цели до 85° над горизонтом; за потолок мира + 320 уходит через ~8,5 с на y 64, отойдя на ~30 блоков вбок: дальше
-     * вбок она уходила бы из готовых чанков у места пуска. Сила
-     * взрыва — {@code bunkerPower}: своей настройки у МБР нет, её подрыв ядерный (мощность — килотонны {@code Loadout.Nuke}),
-     * а поле паспорта обязательно. Промаха нет: у настоящей МБР он в сотни метров, но при ядерном заряде ничего не меняет,
+     * вбок она уходила бы из готовых чанков у места пуска. Подрыв
+     * ядерный (мощность — килотонны {@code Loadout.Nuke}). Промаха нет: у настоящей МБР он в сотни метров, но при ядерном заряде ничего не меняет,
      * а подрыв точно в отметке совпадает с её сиреной и предупреждением. Топлива к удару нет (боеголовка).
      */
     public static final WeaponSpec NUKE = new WeaponSpec(WeaponType.SirenKind.NUCLEAR, 0, Salvo.gaps(200, 300), new Warhead(true, false, true),
-            () -> IncomingConfig.SERVER.bunkerPower, Launch.ICBM,
+            Launch.ICBM,
             new Route(null, 0, 0, 0, 0, 0, 0), Tracking.POINT, null, Blast.NONE, false, 0.5f,
             new Airframe(() -> ModEntities.ICBM.get(), 25, 25, 0, 0, 0, 12, 0, 9, 0, 600 * 25, 0, null, 0, Attack.NONE,
                     ICBM_NOISE, new Signature(1.0, false), ICBM_ARTICLE),
@@ -614,7 +607,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * БМ-21): залп тратит из него по снаряду. Топлива к удару нет: двигатель выгорает за секунду-другую после схода.
      */
     public static final WeaponSpec ROCKET = new WeaponSpec(WeaponType.SirenKind.MISSILE, 8, new Salvo(8, 12, 12, 15), Warhead.CONVENTIONAL,
-            () -> IncomingConfig.SERVER.rocketPower, Launch.ROCKET,
+            Launch.ROCKET,
             new Route(null, 0, 600, 0.01, 0, 0, 0), Tracking.POINT, LauncherRack.ROCKET, Blast.ROCKET, false, 0.5f,
             new Airframe(() -> ModEntities.ROCKET.get(), 4, 4, 0, 0, 0, 4, 0, 1.45, 2, 2400 * 4, 1.5, null, 0, Attack.NONE,
                     ROCKET_NOISE, new Signature(1.0, false), ROCKET_ARTICLE),
@@ -628,7 +621,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * Наводится камерой (оператора или своей): промаха нет. Топлива нет: мотор электрический (батарея).
      */
     public static final WeaponSpec LOITER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(40, 60), Warhead.CONVENTIONAL,
-            () -> IncomingConfig.SERVER.loiterPower, Launch.LOITER,
+            Launch.LOITER,
             new Route(null, 0, 500, 0, 0, 32, 15_000), Tracking.CAMERA, LauncherRack.LOITER, Blast.DRONE, false, 0.5f,
             new Airframe(() -> ModEntities.LOITER.get(), 1.6, 4.0, 3.0, 2.0, 45, 25, 35, 0.87, 4, 2400 * 1.6, 3.0,
                     new LaunchProfile(4, 10, 0.16, 4, -8), 0, Attack.NONE,

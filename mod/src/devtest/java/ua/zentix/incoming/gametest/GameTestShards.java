@@ -44,6 +44,7 @@ public final class GameTestShards {
     public GameTestShards() {
         String spec = System.getProperty("incoming.gametest.shard", ""), only = System.getProperty("incoming.gametest.only", "");
         if (!only.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> only(e, only));
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, BlastLog::onStart);
         if (!spec.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> select(e, spec));
     }
 
