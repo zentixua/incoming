@@ -123,9 +123,13 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     protected int age;
     /** Сколько урона ещё выдержит; -1 — не задано (берётся {@link #maxHealth()}). */
     protected float health = -1;
-    /** Воздух, закреплённый зерном сценария ({@link #seed}); null — воздух мира. */
+    /**
+     * Воздух, закреплённый зерном сценария ({@link #seed}), и его тик игры (сохраняется: уходя в полёт вне мира, снаряд
+     * становится новой сущностью из NBT); null — воздух мира.
+     */
     @Nullable
     private Air pinnedAir;
+    private long pinnedAirTime;
     /** Удержание высоты: сглаженная заданная высота. */
     protected final AltitudeHold altitude = new AltitudeHold();
     /** Снаряд глазами автопилота ({@code guidance}): датчики и органы управления. */
@@ -385,12 +389,19 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     public void seed(long seed) {
         random.setSeed(seed);
-        pinnedAir = Air.of(Math.floorMod(seed, 30L * 24_000), 1, 0, 0);
+        pinAir(Math.floorMod(seed, 30L * 24_000));
+    }
+
+    /** Закрепить воздух снаряда на тик игры {@code gameTime}, ясный полдень ({@link #seed}). */
+    private void pinAir(long gameTime) {
+        pinnedAirTime = gameTime;
+        pinnedAir = Air.of(gameTime, 1, 0, 0);
     }
 
     /** Снаряд, который этот выпускает (бомба B-2), летит в том же воздухе: и закреплённом сценарием. */
     final void shareAir(StrikeProjectile child) {
         child.pinnedAir = pinnedAir;
+        child.pinnedAirTime = pinnedAirTime;
     }
 
     /** Воздух, в котором летит снаряд: воздух мира сейчас, у сценария полёта — закреплённый зерном ({@link #seed}). */
@@ -1470,6 +1481,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
+        if (tag.contains("pinned_air")) pinAir(tag.getLong("pinned_air"));
         flight.load(tag.getCompound("flight"));
         speed = tag.getDouble("speed");
         age = tag.getInt("age");
@@ -1494,6 +1506,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
+        if (pinnedAir != null) tag.putLong("pinned_air", pinnedAirTime);
         CompoundTag f = new CompoundTag();
         flight.save(f);
         tag.put("flight", f);
