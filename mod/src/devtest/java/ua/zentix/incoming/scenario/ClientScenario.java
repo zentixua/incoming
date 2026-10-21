@@ -167,6 +167,7 @@ public final class ClientScenario {
     public ClientScenario(IEventBus modBus) {
         String scenario = System.getProperty("incoming.scenario");
         if (scenario == null) return;
+        ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
         if (scenario.startsWith("mp-")) {
             new MultiplayerScenario("mp-a".equals(scenario)); // свой сервер, без мира сценария (tools/mp_scenario.sh)
@@ -681,6 +682,7 @@ public final class ClientScenario {
                 String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
                 ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
                 // как на серверах хоста: волна вдали медленнее настоящей
+                ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
                 ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(System.getenv().getOrDefault("INCOMING_WAVE_SPEED", "0.2")));
                 // глаз — над рельефом первых 800 блоков к эпицентру (холм у глаза закрыл бы стену)
                 var level = Minecraft.getInstance().getSingleplayerServer().overworld();

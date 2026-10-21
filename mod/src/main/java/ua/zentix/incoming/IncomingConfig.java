@@ -26,7 +26,41 @@ public final class IncomingConfig {
 
     private IncomingConfig() {}
 
+    /**
+     * Скорость ядерной волны вдали у пресета {@link ScalePreset#GAME}, доля скорости звука: не по физике — у сервера
+     * больше времени на руины, и видно, как стена катится (решение Артёма 18.10, так на его серверах).
+     */
+    public static final double GAME_WAVE_SPEED = 0.20;
+
+    /**
+     * Пресет масштаба (настройка вида «масштаб под игру»): скорость ядерной волны вдали и радиусы ядерки разом. Полёт
+     * пресет не трогает: он один, своя игровая модель (решение Артёма 21.10). Всё у цели настоящее при любом.
+     */
+    public enum ScalePreset {
+        /** Игровой: волна {@link #GAME_WAVE_SPEED} (не по физике, чтобы её было видно), радиусы 1 — как в жизни. */
+        GAME,
+        /** Как в жизни: волна 1, радиусы 1. */
+        REAL,
+        /** Числа {@code nuclear.wave_speed} и {@code nuclear.effects_scale} как есть. */
+        CUSTOM;
+
+        /** Скорость волны вдали, доля скорости звука; {@code custom} — число настройки. */
+        public double wave(double custom) {
+            return switch (this) {
+                case GAME -> GAME_WAVE_SPEED;
+                case REAL -> 1;
+                case CUSTOM -> custom;
+            };
+        }
+
+        /** Масштаб радиусов ядерки; {@code custom} — число настройки. */
+        public double radii(double custom) {
+            return this == CUSTOM ? custom : 1;
+        }
+    }
+
     public static final class Server {
+        public final ModConfigSpec.EnumValue<ScalePreset> scalePreset;
         public final ModConfigSpec.IntValue bunkerPower;
         public final ModConfigSpec.IntValue bunkerEnergy;
         public final ModConfigSpec.BooleanValue blockDamage;
@@ -90,7 +124,25 @@ public final class IncomingConfig {
         public final ModConfigSpec.IntValue samRails;
         public final ModConfigSpec.IntValue samReloadSeconds;
 
+        /** Скорость ядерной волны вдали по пресету, доля скорости звука ({@code nuclear.Detonation#wave}). */
+        public double waveSpeed() {
+            return scalePreset.get().wave(nukeWaveSpeed.get());
+        }
+
+        /** Масштаб радиусов ядерки по пресету (1 — как в жизни). */
+        public double effectsScale() {
+            return scalePreset.get().radii(nukeEffectsScale.get());
+        }
+
         Server(ModConfigSpec.Builder b) {
+            b.translation("incoming.config.scale").push("scale");
+            scalePreset = b.comment("Scale for play: GAME (default) slows the nuclear blast wave far from the fireball so that you can watch",
+                            "it roll in; REAL is true to life; CUSTOM takes nuclear.wave_speed and nuclear.effects_scale as they are.",
+                            "GAME: wave_speed 0.20, effects_scale 1.0; REAL: 1.0, 1.0. Flight is one game model with any preset;",
+                            "everything at the target (charge, crater, penetration, damage) is true to life with any preset.")
+                    .translation("incoming.config.scale_preset").defineEnum("scale_preset", ScalePreset.GAME);
+            b.pop();
+
             b.translation("incoming.config.warheads").push("warheads");
             bunkerPower = b.comment("Underground blast power of the bunker buster (TNT = 4).")
                     .translation("incoming.config.bunker_power").defineInRange("bunker_power", 20, 1, 60);
@@ -159,13 +211,13 @@ public final class IncomingConfig {
                     .translation("incoming.config.nuke_default_yield").defineInRange("default_yield", 15, 1, Loadout.Nuke.MAX_YIELD);
             nukeMaxYield = b.comment("Largest yield, kt.")
                     .translation("incoming.config.nuke_max_yield").defineInRange("max_yield", Loadout.Nuke.MAX_YIELD, 1, Loadout.Nuke.MAX_YIELD);
-            nukeEffectsScale = b.comment("Scale of all radii: 1.0 is true to life (1 block = 1 m); lower for small worlds.")
+            nukeEffectsScale = b.comment("Works with scale.scale_preset = CUSTOM. Scale of all radii: 1.0 is true to life (1 block = 1 m); lower for small worlds.")
                     .translation("incoming.config.nuke_effects_scale").defineInRange("effects_scale", 1.0, 0.005, 1.0);
-            nukeWaveSpeed = b.comment("Speed of the blast wave and its dust wall away from the fireball, as a share of the speed of sound",
-                            "(1.0 is true to life). Lower is not true to life: it gives the server more time to build ruins ahead of the",
-                            "wave and lets players watch the wall roll in. Near the fireball the wave is always true to life; beyond the",
-                            "dust wall only the sound travels on, at the speed of sound.")
-                    .translation("incoming.config.nuke_wave_speed").defineInRange("wave_speed", 1.0, 0.15, 1.0);
+            nukeWaveSpeed = b.comment("Works with scale.scale_preset = CUSTOM. Speed of the blast wave and its dust wall away from the fireball,",
+                            "as a share of the speed of sound (1.0 is true to life, 0.20 is the GAME preset). Lower is not true to life: it",
+                            "gives the server more time to build ruins ahead of the wave and lets players watch the wall roll in. Near the",
+                            "fireball the wave is always true to life; beyond the dust wall only the sound travels on, at the speed of sound.")
+                    .translation("incoming.config.nuke_wave_speed").defineInRange("wave_speed", GAME_WAVE_SPEED, 0.15, 1.0);
             nukeBlockDamage = b.comment("The blast wave destroys buildings and trees. Off: no ruins and no crater.")
                     .translation("incoming.config.nuke_block_damage").define("block_damage", true);
             nukeFires = b.comment("The thermal pulse starts fires.")

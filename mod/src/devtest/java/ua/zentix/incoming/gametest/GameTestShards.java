@@ -45,6 +45,9 @@ public final class GameTestShards {
         String spec = System.getProperty("incoming.gametest.shard", ""), only = System.getProperty("incoming.gametest.only", "");
         if (!only.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> only(e, only));
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, BlastLog::onStart);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStartingEvent e) -> {
+            if (e.getServer() instanceof GameTestServer) TestScale.realWave();
+        });
         if (!spec.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> select(e, spec));
     }
 
