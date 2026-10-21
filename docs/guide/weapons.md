@@ -54,12 +54,36 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   touches. The Grad and the Lancet carry no fuel. Burning debris starts a fire only where it lands on something that
   burns. There are no scripted secondary explosions.
 - **People and mobs** are hurt by the same wave as in a nuclear strike: pressure on the lungs, being thrown into a
-  wall, glass from a window. Close to a Shahed this kills; at 30 m in the open it does nothing. Someone behind a wall
-  that holds is safe from the wave; inside the room where the charge went off, the gases hit everyone.
+  wall, glass from a window. Close to a Shahed the wave kills; at 30 m in the open it does nothing, but fragments still
+  do (below). Someone behind a wall that holds is safe from the wave; inside the room where the charge went off, the
+  gases hit everyone.
+- **Fragments.** The steel casing of the warhead breaks into thousands of pieces. Their masses follow Mott's law for
+  the casing's thickness and diameter, their starting speed Gurney's law for the charge and casing mass, and the air
+  slows each one by its size. They fly out in a belt across the warhead's axis, tilted forward by the speed of the
+  impact: a warhead diving at 60° sends half of the belt into the ground on one side and up into the air on the
+  other. A fragment stops in the first body or solid block on its way. It hurts by its impact energy: from about 79 J
+  (the US safety board's threshold for a hazardous fragment) it can wound badly, and a heavy, fast one can kill.
+  Fragments go through glass and break it, chip brick and stone walls (the block becomes its cracked version), and stop
+  in earth, wood, leaves and water. Nobody behind a wall is hit. The fragments do not glow: the steel comes out at roughly 500–700 K,
+  below the 798 K at which metal starts to glow, so you see where fragments hit (sparks on stone and metal, puffs of
+  dust from earth and wood, glass) rather than the fragments themselves.
+
+  | | Shahed-136 | Lancet-3 | Tomahawk | Grad 9M22U |
+  |---|---|---|---|---|
+  | Fragments | ≈7200 | ≈6500 | ≈4900 | ≈5100 |
+  | Starting speed | ≈3.0 km/s | ≈3.0 km/s | ≈1.8 km/s | ≈1.6 km/s |
+  | Average fragment | ≈1.4 g | ≈0.1 g | ≈39 g | ≈2.4 g |
+  | Hazardous up to | ≈125 m | ≈55 m | ≈205 m | ≈115 m |
+
+  "Hazardous up to" is where one hazardous fragment falls on every 56 m² in the middle of the belt, the distance the
+  US safety board uses. Single heavy fragments fly much farther. The casing's shape and the share of explosive are
+  estimates for most of these warheads; real ones also have nose and base plates and sometimes ready-made fragments.
 - **Aircraft** of Create Aeronautics lose the blocks that the same law breaks at their distance.
 
 Known limits: the injury thresholds are those for long nuclear pulses, so near a small charge they slightly overstate
-harm; fragments are not modelled yet.
+harm. Fragments fly in straight lines (gravity bends a dangerous fragment's path by less than a metre), do not
+ricochet and pass through Create Aeronautics aircraft. A chipped block turns cracked as a whole, while a real
+fragment leaves a pit of a few centimetres (not physical).
 
 Speeds and flight heights in the game are not the real ones (not physical): they are lower so that you can see the
 approach within a few hundred blocks. A Grad battery stands 600 blocks from the target, not 5–20 km.
@@ -127,8 +151,8 @@ and the fuel left in the tanks:
 
 In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
 night, when cold air near the ground holds it down. A cloud stays visible for
-minutes, until it has spread too thin to see. Close up only solid things fly as particles: sparks, hot fragments with
-smoke trails and clods of earth. Past about 600 blocks the same cloud is drawn as flat puffs. The bomb's underground
+minutes, until it has spread too thin to see. Close up only solid things fly as particles: sparks, clods of earth,
+the dust and sparks of fragment hits, and, where fuel was left in the tank, burning pieces with smoke trails. Past about 600 blocks the same cloud is drawn as flat puffs. The bomb's underground
 blast looks as before.
 
 Whatever the blast sets on fire keeps smoking. Over every chunk with burning blocks a column of black smoke rises, leans
