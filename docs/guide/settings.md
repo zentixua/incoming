@@ -41,6 +41,7 @@ server its owner does. The most useful ones are below; the rest are in the same 
 | `warheads.bunker_power` | 20 | underground blast power of the bomb (TNT is 4); the other weapons' blasts come from their warheads |
 | `world.block_damage`, `fire` | on | destruction and fires |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators launch them |
-| `nuclear.effects_scale` | 1.0 | scale of nuclear strike radii |
-| `nuclear.wave_speed` | 1.0 | speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life; lower is slower than in life but gives the server more time for ruins) |
+| `scale.scale_preset` | GAME | GAME: the nuclear blast wave away from the fireball travels at 0.20 of the speed of sound (not physical: slower than in life so that you can watch it roll in, and the server has more time for ruins); REAL: true to life; CUSTOM: the two numbers below as they are. Flight is the same game model with any preset; everything at the target is real |
+| `nuclear.effects_scale` | 1.0 | with CUSTOM: scale of nuclear strike radii (1.0 is true to life) |
+| `nuclear.wave_speed` | 0.20 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
 | `grid.enabled` | on | [blackout](blackout.md) |

@@ -87,8 +87,23 @@ harm. Fragments fly in straight lines (gravity bends a dangerous fragment's path
 ricochet and pass through Create Aeronautics aircraft. A chipped block turns cracked as a whole, while a real
 fragment leaves a pit of a few centimetres (not physical).
 
-Speeds and flight heights in the game are not the real ones (not physical): they are lower so that you can see the
-approach within a few hundred blocks. A Grad battery stands 600 blocks from the target, not 5–20 km.
+## How they fly
+
+Flight is the mod's own game model, not a copy of the real weapons: the same rules for every weapon, with each one's
+own game numbers (not physical, chosen for blocks and for how a flight reads on screen). Speeds and flight heights are
+lower than the real ones so that you can see the approach within a few hundred blocks; a Grad battery stands 600
+blocks from the target, not 5–20 km. Everything at the target (charge, blast, damage) is real.
+
+- **Turns** build up and ease off smoothly; nothing turns on the spot. A Shahed or a missile banks into a turn, the
+  harder the turn the steeper the bank.
+- **Climbs and dives** trade height for speed: a drone climbing at 15° loses about 15 % of its speed, a dive speeds it up
+  faster than the engine alone, and afterwards it settles back to its cruising speed.
+- **Grad rockets** fly by gravity and air drag: the way down is steeper than the way up. The fire control knows only the
+  wind at the ground; higher up it blows harder, so a salvo lands a little downwind. Each rocket leaves its tube with a
+  small spread in angle and speed, so the impacts scatter by about 1 % of the range. The Grad also fires at targets
+  closer than its real minimum of about 5 km (not physical: the rockets leave the tubes slower than real ones).
+- **The bomb** falls under gravity and drag; its fins steer it to the aim point. It leaves the B-2 at half the bomber's
+  speed (not physical). The wind barely moves it.
 
 ## Shahed
 
