@@ -183,4 +183,64 @@ class CloudModelTest {
         assertEquals(0, model(WeaponType.MISSILE, CloudModel.Air.of(1, 0, 1, 0, 0.1)).condensation(), "сухо — облака конденсации нет");
         assertTrue(model(WeaponType.MISSILE, CloudModel.Air.of(1, 0, 1, 0, 0.8)).condensation() > 10, "влажно — есть");
     }
+
+    /**
+     * Огненный шар не гаснет ступенькой (3.5.0: свет шара топлива — полный до конца горения и в следующий миг 0): за тик
+     * радиус меняется не больше чем на пятую наибольшего (шар топлива растёт к D за пятую горения), температура — не больше чем на 300 K (вспышка продуктов детонации остывает за доли секунды), а свет, пока он больше
+     * тысячной наибольшего, не падает за тик больше чем вдесятеро (остывание по Планку быстрое: 1700 → 1500 K — в восемь раз, но без обрыва в ноль); у точки
+     * Дрейпера свет — тысячные доли. Так у всех снарядов, днём и ночью.
+     */
+    @Test
+    void fireballFadesWithoutSteps() {
+        double[] light = new double[4];
+        for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET, WeaponType.LOITER}) {
+            for (double day : new double[]{1, 0}) {
+                CloudModel m = model(w, CloudModel.Air.of(day, 0, 0.9, 0.45, 0.5));
+                assertTrue(m.fireSeconds > m.burnSeconds, w + ": остывает после горения");
+                double rMax = 0, yMax = 0;
+                for (double t = 0.05; t < m.fireSeconds + 0.5; t += 0.05) {
+                    m.ballLight(t, light);
+                    rMax = Math.max(rMax, m.ballRadius(t));
+                    yMax = Math.max(yMax, light[3]);
+                }
+                double prevR = m.ballRadius(0.05), prevK = m.ballKelvin(0.05), prevY;
+                m.ballLight(0.05, light);
+                prevY = light[3];
+                for (double t = 0.1; t < m.fireSeconds + 0.5; t += 0.05) {
+                    m.ballLight(t, light);
+                    double r = m.ballRadius(t), y = light[3], k = m.ballKelvin(t);
+                    String at = w + " день " + day + " на " + String.format(java.util.Locale.ROOT, "%.2f", t) + " с: ";
+                    // радиус — пока шар заметно светит (у точки Дрейпера его нет на экране: тело огня там уже дым)
+                    if (prevY > 1e-3 * yMax) assertTrue(Math.abs(r - prevR) <= 0.2 * rMax, at + "радиус " + prevR + " → " + r);
+                    if (k > 0 && prevK > 0) assertTrue(Math.abs(k - prevK) <= 300, at + "температура " + prevK + " → " + k);
+                    if (prevY > 1e-3 * yMax) assertTrue(y >= 0.1 * prevY, at + "свет " + prevY + " → " + y);
+                    prevR = r;
+                    prevY = y;
+                    prevK = k;
+                }
+                m.ballLight(m.fireSeconds - 0.05, light);
+                assertTrue(light[3] < 1e-3 * yMax, w + ": у точки Дрейпера свет — тысячные, " + light[3] / yMax);
+            }
+        }
+        // тело огня тает в дым и дым проступает одной долей по температуре
+        assertEquals(1, CloudModel.glowShare(CloudModel.FUEL_BALL_K), 1e-12);
+        assertEquals(0, CloudModel.glowShare(CloudModel.DRAPER_K), 1e-12);
+    }
+
+    /**
+     * Лужа топлива в воронке: горит по выгоранию с площади воронки (Babrauskas), пламя по Хескестаду; у «Града» топлива
+     * нет — и лужи нет. Шахед: секунды–десятки секунд, пламя — метры.
+     */
+    @Test
+    void poolFireBurnsFromTheFuelLeft() {
+        CloudModel drone = model(WeaponType.DRONE, CloudModel.Air.STANDARD), rocket = model(WeaponType.ROCKET, CloudModel.Air.STANDARD);
+        assertEquals(0, rocket.poolSeconds);
+        assertEquals(0, rocket.poolShare(1));
+        double area = Math.PI * drone.poolRadius * drone.poolRadius;
+        assertEquals(CloudModel.POOL_SHARE * drone.source.fuelKg() / (BlastSource.Fuel.PETROL.poolBurn * area), drone.poolSeconds, 1e-9);
+        assertTrue(drone.poolSeconds > 5 && drone.poolSeconds < 120, "шахед: лужа горит " + drone.poolSeconds + " с");
+        assertTrue(drone.poolFlame() > 1 && drone.poolFlame() < 15, "пламя " + drone.poolFlame() + " м");
+        assertEquals(1, drone.poolShare(0.5 * drone.poolSeconds), 1e-12);
+        assertEquals(0, drone.poolShare(drone.poolSeconds), 1e-12);
+    }
 }

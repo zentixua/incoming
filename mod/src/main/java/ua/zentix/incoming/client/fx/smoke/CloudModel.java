@@ -28,7 +28,17 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
  * Explosions, Flash Fires and BLEVEs»: D = 5,8·M^⅓ м, горит 0,45·M^⅓ с (M &lt; 30 т), центр поднимается к 0,75·D; излучает
  * 200–350 кВт/м² — чёрное тело {@value #FUEL_BALL_K} K (середина). Шар продуктов детонации — радиус 1,7·W^⅓ м, светит
  * 0,2·W^0,35 с (так было в {@code FarBlasts}; первоисточник не найден — оценка), 3000 K → 1500 K (продукты детонации —
- * 3000–5000 K, обзор Ciccarelli и др. в Shock Waves 2021; к концу — оценка).
+ * 3000–5000 K, обзор Ciccarelli и др. в Shock Waves 2021; к концу — оценка). Горение кончилось — шар не гаснет, а
+ * остывает подсосом воздуха: тот же термик MTT ({@link #cooling}), начатый с шара в конец горения (его радиус и
+ * температура), — температура газа T = T_a/(1 − g'/g) падает, пока шар растёт; светит, пока горячее точки Дрейпера
+ * ({@value #DRAPER_K} K), яркость — чёрное тело этой температуры (по Планку: от 1500 до 1000 K — в тысячи раз). Излучение
+ * шар остужает ещё быстрее (CCPS: 25–40 % тепла уходит светом) — здесь не считается, свечение кончается чуть позже
+ * настоящего.
+ * <p>
+ * <b>Лужа.</b> Топливо, что не сгорело шаром, растекается по воронке и горит лужей: доля {@link #POOL_SHARE} (⚠ оценка),
+ * площадь — круг воронки ({@link CraterModel#chargeRadius}), выгорание с единицы площади — у топлива
+ * ({@link BlastSource.Fuel#poolBurn}): горит {@link #poolSeconds}, тепловыделение {@link #poolWatts}. Над ней — шлейф
+ * Бриггса ({@link FirePlume}), пламя — по Хескестаду.
  * <p>
  * <b>Вещество.</b> Сажа взрывчатки — свободный углерод продуктов детонации ({@link BlastSource.Explosive#freeCarbon}), из
  * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link BlastSource.Fuel}.
@@ -82,6 +92,19 @@ public final class CloudModel {
     public static final double CLOUD_SHARE = 0.5, STEM_SHARE = 0.3;
     /** Облако видно, пока его толща поперёк середины больше этого (порог контраста 0,02). */
     public static final double SEEN = 0.02;
+    /** Точка Дрейпера: газ холоднее не светится, K. */
+    public static final double DRAPER_K = 798;
+    /**
+     * Газ горячее этого светится в полную силу тела огня: яркость чёрного тела 1200 K — около сотой шара топлива
+     * (по Вину на 555 нм), дальше остывающий шар — уже больше дым, чем огонь, K.
+     */
+    public static final double GLOW_FULL_K = 1200;
+    /**
+     * Доля топлива к удару, что не сгорает шаром, а растекается и горит лужей в воронке — ⚠ оценка: замеров у малых
+     * изделий нет. Шар CCPS считается по всей массе (как у сервера, что поджигает по нему), поэтому эта доля посчитана
+     * дважды: тепло лужи против шара мало (десятки МВт·с против сотен), в подъём облака оно не идёт.
+     */
+    public static final double POOL_SHARE = 0.1;
     /** Дольше этого облако не живёт, с (дальше оно — дымка над районом). */
     public static final double LIFE_MAX = 3600;
 
@@ -121,7 +144,7 @@ public final class CloudModel {
         }
 
         /** Ветер на высоте z (м) над землёй: доля ветра на 10 м. */
-        double wind(double z) {
+        public double wind(double z) {
             return Math.pow(Math.max(z, 1) / 10, shear);
         }
     }
@@ -151,8 +174,16 @@ public final class CloudModel {
     public final double fuelBall, fuelBallSeconds;
     /** Шар взрывчатки: радиус, м, и сколько светит, с. */
     public final double heBall, heBallSeconds;
-    /** Конец огненной стадии, с: дальше облако — остывающий термик. */
+    /** Конец горения шаров (топлива и продуктов детонации), с. */
+    public final double burnSeconds;
+    /** Конец свечения шара, с: остывший до точки Дрейпера; дальше облако — термик. */
     public final double fireSeconds;
+    /** Остывание шара после горения: термик MTT от шара в конец горения ({@link #burnSeconds}). */
+    public final Thermal cooling;
+    /** Радиус шара в конец горения, м, и высота его центра тогда. */
+    final double burnRadius, burnHeight;
+    /** Лужа топлива в воронке: масса, кг; радиус, м; сколько горит, с; тепловыделение, Вт (0 — топлива нет). */
+    public final double poolKg, poolRadius, poolSeconds, poolWatts;
     /** Подъём облака ({@link Thermal}). */
     public final Thermal thermal;
     /** Наибольшая скорость подъёма, м/с. */
@@ -175,7 +206,7 @@ public final class CloudModel {
         fuelBallSeconds = FuelFireball.seconds(source.fuelKg());
         heBall = 1.7 * Math.cbrt(source.chargeKg());
         heBallSeconds = 0.2 * Math.pow(source.chargeKg(), 0.35);
-        fireSeconds = Math.max(fuelBallSeconds, heBallSeconds);
+        burnSeconds = Math.max(fuelBallSeconds, heBallSeconds);
         // начальный объём: в нём тепло держит температуру шара (у ideal gas при том же давлении g' = g·(1 − T_a/T))
         double ballK = source.fuelKg() > 0 ? FUEL_BALL_K : HE_BALL_END;
         thermal = new Thermal(buoyancy, G * (1 - T_AIR / ballK), 0.5, air);
@@ -183,7 +214,39 @@ public final class CloudModel {
         topZ = thermal.topZ;
         topR = thermal.topR;
         topSeconds = thermal.topSeconds;
+        // остывание: шар в конец горения — термик того же тепла с его радиусом и температурой
+        boolean fuelLast = source.fuelKg() > 0 && fuelBallSeconds >= heBallSeconds;
+        burnRadius = fuelLast ? 0.5 * fuelBall : heBall;
+        burnHeight = fuelLast ? fuelBallHeight(fuelBallSeconds) : 0.45 * heBall;
+        cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), burnRadius, air);
+        fireSeconds = glowEnd();
+        poolKg = POOL_SHARE * source.fuelKg();
+        poolRadius = CraterModel.chargeRadius(source.chargeKg(), CraterModel.Soil.DRY);
+        double burn = source.fuel().poolBurn * Math.PI * poolRadius * poolRadius;
+        poolSeconds = poolKg > 0 && burn > 0 ? poolKg / burn : 0;
+        poolWatts = poolSeconds > 0 ? burn * source.fuel().heatJPerKg : 0;
         life = lifeSeconds();
+    }
+
+    /**
+     * Доля газа температуры kelvin, что светится телом огня (0 — дым): от точки Дрейпера до {@link #GLOW_FULL_K} — плавно.
+     * Тело огненного шара тает в дым и дым проступает из шара одной долей — без шва.
+     */
+    public static double glowShare(double kelvin) {
+        double u = Math.max(0, Math.min(1, (kelvin - DRAPER_K) / (GLOW_FULL_K - DRAPER_K)));
+        return u * u * (3 - 2 * u);
+    }
+
+    /** Температура остывающего шара в возрасте t ≥ {@link #burnSeconds}, K. */
+    double coolKelvin(double t) {
+        return cooling.kelvin(t - burnSeconds);
+    }
+
+    /** Когда остывающий шар холоднее точки Дрейпера, с (шаг — тик). */
+    private double glowEnd() {
+        double t = burnSeconds;
+        while (t < burnSeconds + 120 && coolKelvin(t) > DRAPER_K) t += 0.05;
+        return t;
     }
 
     /** Высота центра облака над точкой взрыва в возрасте t, м. */
@@ -212,12 +275,14 @@ public final class CloudModel {
 
     /**
      * Температура газа облака в возрасте t, K: в огненной стадии — шар (шар взрывчатки остывает от {@link #HE_BALL_HOT}
-     * к {@link #HE_BALL_END}, шар топлива держит {@link #FUEL_BALL_K}), дальше — термик: T = T_a / (1 − g'/g).
+     * к {@link #HE_BALL_END}, шар топлива держит {@link #FUEL_BALL_K}), потом — остывающий шар ({@link #cooling}), дальше —
+     * термик: T = T_a / (1 − g'/g).
      */
     public double kelvin(double t) {
         double gas = thermal.kelvin(t);
         if (t < fuelBallSeconds) return Math.max(gas, FUEL_BALL_K);
         if (t < heBallSeconds) return Math.max(gas, heBallKelvin(t));
+        if (t < fireSeconds) return Math.max(gas, coolKelvin(t));
         return gas;
     }
 
@@ -227,8 +292,12 @@ public final class CloudModel {
         return HE_BALL_HOT + (HE_BALL_END - HE_BALL_HOT) * u;
     }
 
-    /** Радиус светящегося шара (большего из двух) в возрасте t, м; 0 — шары погасли. */
+    /**
+     * Радиус светящегося шара (большего из двух) в возрасте t, м: в горении — шары, потом — остывающий шар (растёт
+     * подсосом); 0 — остыл до точки Дрейпера.
+     */
     public double ballRadius(double t) {
+        if (t >= burnSeconds) return t < fireSeconds ? cooling.radius(t - burnSeconds) : 0;
         return Math.max(fuelBallRadius(t), heBallRadius(t));
     }
 
@@ -238,7 +307,8 @@ public final class CloudModel {
      */
     public double ballKelvin(double t) {
         if (t < heBallSeconds) return heBallKelvin(t);
-        return t < fuelBallSeconds ? FUEL_BALL_K : 0;
+        if (t < fuelBallSeconds) return FUEL_BALL_K;
+        return t < fireSeconds ? coolKelvin(t) : 0;
     }
 
     /** Радиус шара продуктов детонации в возрасте t, м (0 — погас): за первые проценты жизни почти весь, как кадры шара. */
@@ -263,6 +333,10 @@ public final class CloudModel {
         java.util.Arrays.fill(out, 0, 4, 0);
         double big = ballRadius(t);
         if (big <= 0) return;
+        if (t >= burnSeconds) {
+            BlackBody.light(coolKelvin(t), out);
+            return;
+        }
         double[] c = light;
         double he = heBallRadius(t), fuel = fuelBallRadius(t);
         if (he > 0) {
@@ -287,7 +361,23 @@ public final class CloudModel {
 
     /** Высота центра светящегося шара (большего), м. */
     public double ballHeight(double t) {
+        if (t >= burnSeconds) return burnHeight + cooling.height(t - burnSeconds) - cooling.height(0);
         return fuelBallRadius(t) >= heBallRadius(t) ? fuelBallHeight(t) : heBallHeight(t);
+    }
+
+    /**
+     * Лужа топлива в возрасте t: доля тепловыделения 0..1 — полное, пока горит, к концу (последняя пятая) гаснет, как
+     * тонкий слой топлива (⚠ форма спада — оценка); 0 — лужи нет или выгорела.
+     */
+    public double poolShare(double t) {
+        if (poolSeconds <= 0 || t < 0 || t >= poolSeconds) return 0;
+        double u = (poolSeconds - t) / (0.2 * poolSeconds);
+        return u >= 1 ? 1 : u * u * (3 - 2 * u);
+    }
+
+    /** Высота пламени лужи по Хескестаду, м: L = 0,235·Q^⅖ − 1,02·D (Q — кВт), не меньше полуметра. */
+    public double poolFlame() {
+        return poolWatts <= 0 ? 0 : Math.max(0.5, 0.235 * Math.pow(poolWatts / 1e3, 0.4) - 1.02 * 2 * poolRadius);
     }
 
     /**

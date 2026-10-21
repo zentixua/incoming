@@ -32,8 +32,49 @@ in float fog;
 in float nearest;
 in float opacity;
 in float pallFront;
+in float sixKey;
+in vec3 sixBall;
+in vec3 sixKeyDir;
+in vec3 sixBallDir;
+
+// запечённый клуб (FxAtlas.puff6): x — шаг карт по листу (v), y — начало кадров (v), z и w — размер кадра (u, v)
+uniform vec4 FxSix;
+// x — наибольшее смещение векторов движения, доля кадра; y и z — средний по клубу свет спереди и средний по шести
+// сторонам в линейном (puff6.json); к среднему по шести карты приводятся
+uniform vec3 FxSixLight;
 
 out vec4 fragColor;
+
+// Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
+// с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по косинусам; mirror — квадрат
+// отражён: право и лево меняются
+float sixLight(vec3 a, vec3 b, vec3 l, float mirror) {
+    float rx = max(l.x * mirror, 0.0), lx = max(-l.x * mirror, 0.0);
+    return a.r * rx + b.r * lx + a.g * max(l.y, 0.0) + b.g * max(-l.y, 0.0) + a.b * max(-l.z, 0.0) + b.b * max(l.z, 0.0);
+}
+
+// Кадр клуба и следующий, сдвинутые вдоль векторов движения на долю смеси m (кадр k — назад на m, k + 1 — вперёд на
+// 1 − m): клуб течёт, а не проступает двойным. Карты a и b — в линейном свете, альфа — в a.w
+void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
+    vec2 tile = FxSix.zw;
+    vec2 cell = floor(vec2(uv.x / tile.x, (uv.y - FxSix.y) / tile.y));
+    vec2 origin = vec2(cell.x * tile.x, FxSix.y + cell.y * tile.y);
+    vec2 next = origin + vec2(tile.x, 0.0);
+    if (cell.x > 6.5) next = vec2(0.0, origin.y + tile.y);
+    vec2 local = uv - origin;
+    vec4 v = textureGrad(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), dx, dy);
+    vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
+    vec2 edge = 0.5 / vec2(textureSize(Sampler0, 0));
+    vec2 uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
+    vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
+    vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
+    vec4 b0 = textureGrad(Sampler0, uv0 + vec2(0.0, FxSix.x), dx, dy), b1 = textureGrad(Sampler0, uv1 + vec2(0.0, FxSix.x), dx, dy);
+    // на листе — умноженная альфа и степень 1/2,2
+    vec3 la0 = pow(a0.rgb / max(a0.a, 1e-3), vec3(2.2)), la1 = pow(a1.rgb / max(a1.a, 1e-3), vec3(2.2));
+    vec3 lb0 = pow(b0.rgb / max(b0.a, 1e-3), vec3(2.2)), lb1 = pow(b1.rgb / max(b1.a, 1e-3), vec3(2.2));
+    a = vec4(mix(la0, la1, m), mix(a0.a, a1.a, m));
+    b = mix(lb0, lb1, m);
+}
 
 // Частица вблизи — как из атласа Minecraft (NEAREST_MIPMAP_LINEAR): ближайший пиксель картинки и её копии вдвое
 // меньше, между ними — смесь; сглаженная, она выходила бы мыльной. Мельче копии вдвое (клуб в 32 пикселя и меньше) —
@@ -60,8 +101,26 @@ void main() {
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
     float lod = 0.0;
     vec4 tex;
+    bool six = nearest < -0.1 && nearest > -0.4;
+    vec3 sixLit = vec3(1.0);
     if (nearest > 0.75) {
         tex = particle(texCoord0, dx, dy, lod);
+    } else if (six) {
+        vec4 a;
+        vec3 b;
+        sixFrames(texCoord0, dx, dy, opacity, a, b);
+        float mirror = 1.0;
+        if (dx.x < 0.0) mirror = -1.0;
+        // свет неба: прямой (солнце, луна) — по сторонам, рассеянный — средний по шести; оба — против среднего по шести
+        // сторонам по клубу (цвет вершины — толстый слой вещества в рассеянном свете неба, R∞): к солнцу просвечивающий
+        // край ярче, со стороны солнца плотный клуб темнее (рассеяние вперёд). Огненные шары — по сторонам, в долях света
+        // у глаза, и не ярче огня на экране (FxLights). Сумма — в линейном, на экран — степень 1/2,2
+        float key = sixLight(a.rgb, b, sixKeyDir, mirror) / FxSixLight.z;
+        float diffuse = (a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z;
+        float sky = sixKey * key + (1.0 - sixKey) * diffuse;
+        vec3 fire = min(sixBall * (sixLight(a.rgb, b, sixBallDir, mirror) / FxSixLight.z), vec3(1.0));
+        sixLit = pow(vec3(sky), vec3(1.0 / 2.2)) + pow(max(fire, vec3(0.0)), vec3(1.0 / 2.2));
+        tex = vec4(vec3(a.a), a.a);
     } else if (nearest < -0.5) {
         tex = textureGrad(Sampler3, texCoord0, dx, dy);
     } else {
@@ -79,7 +138,7 @@ void main() {
     // частица вблизи бледнее 0,1 не рисуется, как у ванильного шейдера частиц: иначе бледные ореолы клубов складываются
     // в мутную дымку вокруг облака. Вдали (клуб мельче 16 пикселей) — без среза: дальний дым и так бледный
     if (nearest > 0.75 && tex.a * opacity < 0.1 * clamp(2.0 - lod, 0.0, 1.0)) discard;
-    vec4 color = vec4(vertexColor.rgb * tex.rgb, vertexColor.a * tex.a);
+    vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a);
     if (PallAmbient.w > 0.5) {
         // пелена перед квадратом: его свет ослаблен, а закрытое им — уже её свет до него (пелена на кадре — до мира).
         // Квадрат ближе мира: перед ним пелены не больше, чем на кадре до мира, — и её свет до него — доля света пелены

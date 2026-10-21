@@ -62,16 +62,16 @@ class FarSpritesTest {
     }
 
     /**
-     * Огненный шар вдали и вблизи — квадрат {@link FarSprites#FIREBALL} радиусов: в кадрах светящегося шара круг той же
-     * площади — его радиус в доле полного ({@link FarBlasts#growth}, от него свет вспышки и шара). Иначе шар вблизи
-     * и вдали разного размера, а блик — не от того, что видно.
+     * Огненный шар вдали и вблизи — квадрат {@link FarSprites#FIREBALL} радиусов шара модели в этот миг: в каждом кадре
+     * горения ({@code tools/bake_fx/pack.py} кадрирует по шару) круг той же площади, что непрозрачная часть, — радиус шара.
+     * Иначе шар вблизи и вдали разного размера, а блик и свет на дым — не от того, что видно.
      */
     @Test
-    void fireballFramesMatchItsGrowth() throws IOException {
-        for (int i = 0; i < FxAtlas.FIREBALL_FRAMES / 2; i++) {
+    void fireballFramesMatchItsRadius() throws IOException {
+        for (int i = 0; i < 10; i++) {
             BufferedImage img = image(String.format(Locale.ROOT, "textures/fx/particle/fireball_%02d.png", i));
             double radius = Math.sqrt(4 * opaque(img) / Math.PI) * FarSprites.FIREBALL;
-            assertEquals(FarBlasts.growth((i + 0.5) / FxAtlas.FIREBALL_FRAMES), radius, 0.08, "кадр " + i);
+            assertEquals(1, radius, 0.08, "кадр " + i);
         }
     }
 

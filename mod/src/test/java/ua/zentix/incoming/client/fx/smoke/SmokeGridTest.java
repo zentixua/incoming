@@ -16,10 +16,26 @@ class SmokeGridTest {
         return f;
     }
 
+    /** Источник масштаба сетки ({@link SmokeGrid.Source#volume}): один клуб в точке. */
     private static SmokeGrid.Source blob(double x, double y, double z, double sh, double sv) {
-        return (t, out) -> {
+        return volume((t, out) -> {
             out.blob(x, y, z, sh, sv, 1, 1, 0, 0.8f, 0.7f, 0.6f, 400, 2);
             return true;
+        });
+    }
+
+    /** Тот же источник, но масштаба сетки: только такие она берёт. */
+    private static SmokeGrid.Source volume(SmokeGrid.Source s) {
+        return new SmokeGrid.Source() {
+            @Override
+            public boolean emit(double seconds, SmokeGrid.Sink out) {
+                return s.emit(seconds, out);
+            }
+
+            @Override
+            public boolean volume() {
+                return true;
+            }
         };
     }
 
@@ -32,16 +48,19 @@ class SmokeGridTest {
         return -1;
     }
 
-    /** Малый клуб у глаза — в мелкий каскад; большой или дальний — в крупный; за последним — нет. */
+    /**
+     * Малый клуб у глаза — в мелкий каскад; большой или дальний — в крупный; за последним — нет. Клубы — не у́же двух
+     * клеток своего каскада ({@link SmokeGrid#RESOLVE}): у́же сетка не берёт.
+     */
     @Test
     void blobGoesToTheFinestCascadeThatHoldsIt() {
-        SmokeGrid.Frame f = frame(1000.3, 70.7, -500.2, blob(1010, 75, -490, 3, 3), blob(1000, 70, -500, 40, 40), blob(1150, 120, -500, 3, 3),
-                blob(1400, 120, -500, 3, 3), blob(5000, 70, 0, 3, 3));
+        SmokeGrid.Frame f = frame(1000.3, 70.7, -500.2, blob(1010, 75, -490, 5, 5), blob(1000, 70, -500, 70, 70), blob(1150, 120, -500, 20, 20),
+                blob(1400, 120, -500, 70, 70), blob(5000, 70, 0, 70, 70));
         assertEquals(4, f.count, "за последним каскадом — нет");
-        assertEquals(0, cascadeAt(f, 1010 - 1000.3, 3), "малый у глаза — в каскад 0");
-        assertEquals(2, cascadeAt(f, 1000 - 1000.3, 40), "σ 40 шире четырёх клеток каскада 1 — в каскад 2");
-        assertEquals(1, cascadeAt(f, 1150 - 1000.3, 3), "в 150 блоках — в каскад 1 (±256 м)");
-        assertEquals(2, cascadeAt(f, 1400 - 1000.3, 3), "в 400 блоках — в каскад 2 (±1024 м)");
+        assertEquals(0, cascadeAt(f, 1010 - 1000.3, 5), "малый у глаза — в каскад 0");
+        assertEquals(2, cascadeAt(f, 1000 - 1000.3, 70), "σ 70 шире четырёх клеток каскада 1 — в каскад 2");
+        assertEquals(1, cascadeAt(f, 1150 - 1000.3, 20), "в 150 блоках — в каскад 1 (±256 м)");
+        assertEquals(2, cascadeAt(f, 1400 - 1000.3, 70), "в 400 блоках — в каскад 2 (±1024 м)");
         // углы каскадов кратны клетке и обнимают глаз
         for (int c = 0; c < SmokeGrid.CASCADES; c++) {
             float cell = f.corner[4 * c + 3];
@@ -57,7 +76,7 @@ class SmokeGridTest {
      */
     @Test
     void layersCoverTheBlob() {
-        SmokeGrid.Frame f = frame(0, 0, 0, blob(5, 3, -7, 3, 2));
+        SmokeGrid.Frame f = frame(0, 0, 0, blob(5, 3, -7, 5, 4));
         int layers = 0;
         for (int l = 0; l < SmokeGrid.CASCADES * SmokeGrid.N; l++) {
             int n = f.layerStart[l + 1] - f.layerStart[l];
@@ -69,7 +88,7 @@ class SmokeGridTest {
                 assertEquals(0, f.vertices[3 * v + 2]);
             }
         }
-        double cell = SmokeGrid.CELL[0], sv = Math.sqrt(2 * 2 + 1);
+        double cell = SmokeGrid.CELL[0], sv = Math.sqrt(4 * 4 + 1);
         assertEquals(Math.floor((3 + 3 * sv - f.corner[1]) / cell) - Math.floor((3 - 3 * sv - f.corner[1]) / cell) + 1, layers);
     }
 
@@ -79,7 +98,7 @@ class SmokeGridTest {
      */
     @Test
     void cellsHoldTheBlobMass() {
-        for (double[] at : new double[][]{{5, 3, -7, 3, 2}, {150, 40, 100, 12, 8}, {600, 200, -300, 60, 40}}) {
+        for (double[] at : new double[][]{{5, 3, -7, 5, 4}, {150, 40, 100, 20, 16}, {600, 200, -300, 80, 70}}) {
             SmokeGrid.Frame f = frame(0, 0, 0, blob(at[0], at[1], at[2], at[3], at[4]));
             int c = f.cascade[0];
             float cell = f.corner[4 * c + 3];
@@ -106,12 +125,12 @@ class SmokeGridTest {
      */
     @Test
     void segmentHoldsItsMassAlongItsLength() {
-        for (double[] at : new double[][]{{5, 3, -7, 20, 8, -6, 1.5, 1.5}, {150, 40, 100, 60, 30, 0, 6, 6}, {-30, 10, 20, 0, 25, 0, 2, 2}}) {
+        for (double[] at : new double[][]{{5, 3, -7, 20, 8, -6, 4.5, 4.5}, {100, 40, 60, 60, 30, 0, 16, 16}, {-20, 10, 20, 0, 25, 0, 4.5, 4.5}}) {
             double ax = at[3], ay = at[4], az = at[5];
-            SmokeGrid.Frame f = frame(0, 0, 0, (t, out) -> {
+            SmokeGrid.Frame f = frame(0, 0, 0, volume((t, out) -> {
                 out.segment(at[0], at[1], at[2], ax, ay, az, at[6], at[7], 0, 1, 0, 0.8f, 0.7f, 0.6f, 288, 0);
                 return true;
-            });
+            }));
             assertEquals(1, f.count);
             int c = f.cascade[0];
             float cell = f.corner[4 * c + 3];
@@ -182,7 +201,7 @@ class SmokeGridTest {
     /** Иссякший источник уходит; объём рисует облако у глаза и не рисует на краю сетки. */
     @Test
     void sourcesEndAndShareFadesAtTheEdge() {
-        List<SmokeGrid.Source> list = new ArrayList<>(List.of((t, out) -> false, blob(0, 0, 0, 1, 1)));
+        List<SmokeGrid.Source> list = new ArrayList<>(List.of(volume((t, out) -> false), blob(0, 0, 0, 5, 5)));
         SmokeGrid.build(list, new SmokeGrid.Frame(), 0, 0, 0, 0);
         assertEquals(1, list.size());
         double half = 0.5 * SmokeGrid.N * SmokeGrid.CELL[SmokeGrid.CASCADES - 1];
@@ -204,13 +223,20 @@ class SmokeGridTest {
 
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
-            for (int i = 0; i < n; i++) out.blob(x, 0, i, 3, 3, 1, 0, 0, 0.8f, 0.8f, 0.8f, 300, 0);
+            // σ — не у́же двух клеток каскада на этой дальности (у глаза 2 м, до 256 м — 8, дальше — 32)
+            double sigma = x < 50 ? 5 : x < 200 ? 20 : 70;
+            for (int i = 0; i < n; i++) out.blob(x, 0, 0, sigma, sigma, 1, 0, 0, 0.8f, 0.8f, 0.8f, 300, 0);
             return true;
         }
 
         @Override
         public void placed(boolean inGrid) {
             placed = inGrid;
+        }
+
+        @Override
+        public boolean volume() {
+            return true;
         }
     }
 
@@ -247,6 +273,11 @@ class SmokeGridTest {
                 placed = inGrid;
                 assertEquals(false, inGrid);
             }
+
+            @Override
+            public boolean volume() {
+                return true;
+            }
         };
         Cloud near = new Cloud(10, 3);
         SmokeGrid.Frame f = frame(0, 0, 0, drifted, near);
@@ -260,11 +291,11 @@ class SmokeGridTest {
      */
     @Test
     void cascadeBoxesHoldTheirBlobs() {
-        SmokeGrid.Frame f = frame(0.5, 0.5, 0.5, blob(10, 5, -8, 2, 1), blob(400, 50, 0, 20, 10));
+        SmokeGrid.Frame f = frame(0.5, 0.5, 0.5, blob(10, 5, -8, 5, 4), blob(400, 50, 0, 70, 65));
         assertTrue(SmokeGrid.occupied(f, 0));
         assertTrue(!SmokeGrid.occupied(f, 1), "среднего каскада клубы не выбрали");
         assertTrue(SmokeGrid.occupied(f, 2));
-        double h = Math.sqrt(2 * 2 + 1), v = Math.sqrt(1 + 1);
+        double h = Math.sqrt(5 * 5 + 1), v = Math.sqrt(4 * 4 + 1);
         assertEquals(10 - 3 * h - 0.5, f.boxLo[0], 1e-4);
         assertEquals(5 + 3 * v - 0.5, f.boxHi[1], 1e-4);
         // в последнем каскаде коробка — в его границах
@@ -282,5 +313,107 @@ class SmokeGridTest {
         // обращение ω' → ω: ω = 0,9 даёт ω' = 0,64·0,9/(1 − 0,324)
         float wp = (float) (0.64 * 0.9 / (1 - 0.36 * 0.9));
         assertEquals(k * (1 - 0.9 * 0.36), SmokeGrid.dustK(wp, wp, wp), 1e-5 * k);
+    }
+
+    /**
+     * Облака обычного оружия в сетку не идут (3.5.0: клетка 8–32 м размазала облако в метры в кубы): источник не
+     * масштаба сетки ({@link SmokeGrid.Source#volume} нет) не отдаёт ей клубов вовсе и получает «не в сетке» — его рисуют
+     * квадраты слоя; а клуб у́же двух клеток своего каскада сетка не берёт и у источника масштаба сетки — весь источник.
+     */
+    @Test
+    void gridRefusesWhatItsCellDoesNotResolve() {
+        boolean[] asked = {false};
+        Boolean[] conventional = {null}, thin = {null}, wide = {null};
+        SmokeGrid.Source shahed = new SmokeGrid.Source() {
+            @Override
+            public boolean emit(double seconds, SmokeGrid.Sink out) {
+                asked[0] = true;
+                out.blob(5, 0, 5, 50, 50, 1, 1, 0, 0.8f, 0.8f, 0.8f, 300, 0);
+                return true;
+            }
+
+            @Override
+            public void placed(boolean inGrid) {
+                conventional[0] = inGrid;
+            }
+        };
+        // клуб σ 3 м у глаза — в каскад 0 (клетка 2 м): уже двух клеток — не разрешён; с ним в источнике — и широкий
+        SmokeGrid.Source mixed = new Placed(thin) {
+            @Override
+            public boolean emit(double seconds, SmokeGrid.Sink out) {
+                out.blob(0, 0, 0, 3, 3, 1, 0, 0, 0.8f, 0.8f, 0.8f, 300, 0);
+                out.blob(0, 0, 0, 200, 200, 1, 0, 0, 0.8f, 0.8f, 0.8f, 300, 0);
+                return true;
+            }
+        };
+        // σ 5 м у глаза — каскад 0, две с половиной клетки: берёт
+        SmokeGrid.Source resolved = new Placed(wide) {
+            @Override
+            public boolean emit(double seconds, SmokeGrid.Sink out) {
+                out.blob(0, 0, 0, 5, 5, 1, 0, 0, 0.8f, 0.8f, 0.8f, 300, 0);
+                return true;
+            }
+        };
+        SmokeGrid.Frame f = frame(0, 0, 0, shahed, mixed, resolved);
+        assertEquals(false, asked[0], "обычное облако сетке клубов не отдаёт");
+        assertEquals(Boolean.FALSE, conventional[0], "обычное облако — квадратами");
+        assertEquals(Boolean.FALSE, thin[0], "клуб у́же двух клеток — весь источник квадратами");
+        assertEquals(Boolean.TRUE, wide[0]);
+        assertEquals(1, f.count);
+        // каскад клуба σ: σ не меньше двух его клеток — при любой дальности, где он ложится
+        double[] corner = new double[3 * SmokeGrid.CASCADES];
+        SmokeGrid.corners(0, 0, 0, corner);
+        for (double sigma : new double[]{1, 3, 5, 15, 20, 40, 63, 70, 200}) {
+            for (double x : new double[]{0, 100, 300, 800}) {
+                float cell = SmokeGrid.cellFor(corner, x, 0, 0, 0, 0, 0, sigma, sigma);
+                Boolean[] got = {null};
+                frame(0, 0, 0, new Placed(got) {
+                    @Override
+                    public boolean emit(double seconds, SmokeGrid.Sink out) {
+                        out.blob(x, 0, 0, sigma, sigma, 1, 0, 0, 0.8f, 0.8f, 0.8f, 300, 0);
+                        return true;
+                    }
+                });
+                assertEquals(cell > 0 && sigma >= SmokeGrid.RESOLVE * cell, got[0], "σ " + sigma + " в " + x + " м, клетка " + cell);
+            }
+        }
+    }
+
+    /** Источник масштаба сетки, что помнит итог раскладки в box[0]. */
+    private abstract static class Placed implements SmokeGrid.Source {
+        private final Boolean[] box;
+
+        Placed(Boolean[] box) {
+            this.box = box;
+        }
+
+        @Override
+        public void placed(boolean inGrid) {
+            box[0] = inGrid;
+        }
+
+        @Override
+        public boolean volume() {
+            return true;
+        }
+    }
+
+    /**
+     * Ни одно облако обычного оружия не объявляет себя масштабом сетки: облако старта по закону — не объём, а источники в
+     * коде клиента ({@code FarBlasts}, {@code FireSmoke}, {@code LaunchCloud}) не переопределяют {@link SmokeGrid.Source#volume}.
+     * Новый источник масштаба сетки (облако в сотни метров) — сознательно сюда.
+     */
+    @Test
+    void conventionalCloudsAreNotVolume() throws java.io.IOException {
+        assertEquals(false, new LaunchCloud(CloudModel.Air.STANDARD, 64, 0.5, 0.5f, 0.5f, 0.5f, 0).volume());
+        java.nio.file.Path root = java.nio.file.Path.of("src/main/java/ua/zentix/incoming");
+        List<String> volume = new ArrayList<>();
+        try (var files = java.nio.file.Files.walk(root)) {
+            for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) files.filter(f -> f.toString().endsWith(".java"))::iterator) {
+                String text = java.nio.file.Files.readString(p);
+                if (text.contains("boolean volume()") && !p.endsWith("SmokeGrid.java")) volume.add(root.relativize(p).toString());
+            }
+        }
+        assertEquals(List.of(), volume, "источники масштаба сетки");
     }
 }

@@ -1,118 +1,141 @@
 # /// script
-# dependencies = ["numpy", "Pillow", "pypng"]
+# dependencies = ["numpy", "Pillow", "opencv-python-headless"]
 # ///
-"""Кадры Blender (tools/bake_fx/bake.py) → текстуры слоя эффектов (проба гибрида, handoff P).
+"""Кадры запекания (tools/bake_fx/bake.py) → текстуры слоя эффектов (mod/src/main/resources/assets/incoming/textures/fx/particle).
 
-  uv run tools/bake_fx/pack.py <папка запекания> <папка текстур fx/particle>
+  uv run tools/bake_fx/pack.py <папка запекания> [<папка текстур>]
 
-Огненный шар — fireball_00…15 (128×128, умноженная альфа): форма и доля горящего — из симуляции (поле flame), цвет —
-чёрное тело: температура пикселя от {T_EDGE} K у края пламени до {T_CORE} K в самом густом (⚠ оценка: в симуляции поле
-flame — доля реакции, а не температура), поверх — сажа (непрозрачность поля density). Кадр — по центру вещества, шар
-(непрозрачнее половины) — 0,7 полуразмера, как у прежних кадров (FarSprites.FIREBALL). fireball.json — огонь кадра на
-экране (средний свет пламени по шару, без сажи; FxAtlas.fireLight).
-Клуб дыма — puff6a_00…15 (R — свет справа, G — сверху, B — сзади, A — непрозрачность) и puff6b_00…15 (слева, снизу,
-спереди; A — та же): карты нормированы так, что густое место при свете спереди — 0,9; на листе — степень 1/2,2, как
-прочие картинки слоя (слой смешивает цвета экрана).
+Огненный шар — fireball_00…15 (128×128, прямая альфа: лист слоя умножает сам) и fireball.json:
+- кадры: {BURN_FRAMES} — равно по времени горения симуляции (0…t), остальные — остывание, равно по цветовой
+  температуре пламени до точки Дрейпера; у кадра — время в долях горения («burn») и цветовая температура («kelvin»):
+  мод берёт кадр по состоянию шара своей модели (горит — по времени, остывает — по температуре, FxAtlas.fireballFrame);
+- цвет: рендер — излучение по Кирхгофу (яркость против чёрного тела 1490 K, белая стена днём — 1); на лист — плёночное
+  плечо 1 − e^(−x) по каналам и примесь белого {CROSS} на единицу яркости сверх белой (пересвет), степень 1/2,2;
+- кадр — по шару (непрозрачнее половины): полуразмер — {FIREBALL} радиуса шара, как FarSprites.FIREBALL;
+- «fire» — огонь кадра на экране: средняя яркость по кругу шара (доля белого, FxAtlas.fireLight).
+Температура кадра — из яркости самого яркого пламени кадра: в рендере она — e^(c₂/λ·(1/1490 − 1/T)) (Вин на 555 нм),
+отсюда T. Цвет запекания — его же: проверка, что излучение поверхности в горении — порядка 275 кВт/м² CCPS, — в выводе.
+
+Клуб дыма — puff6a_00…15 (R — свет справа, G — сверху, B — сзади, A — непрозрачность), puff6b_00…15 (слева, снизу,
+спереди; A — та же), puff6v_00…15 (векторы движения к следующему кадру: R, G = 0,5 + смещение/(2·{FLOW}) пикселей
+кадра; A — 1) и puff6.json: рост края вещества против первого кадра («growth», мод берёт кадр по росту облака своей
+модели, FxAtlas.puffFrame), предел смещения («flow»), размер кадра и число карт. Карты — в одной мере (ярчайшее из
+всех кадров и сторон — 1, без среза); «front» и «diffuse» в puff6.json — средний по клубу свет спереди и средний по
+шести сторонам (на непрозрачность, весом непрозрачности): к ним шейдер приводит карты (белая стена — 1); на листе — степень
+1/2,2 (шейдер складывает свет в линейном). Кадр — по краю вещества
+(непрозрачность 0,05) с запасом 4 %: квадрат клуба в моде — этот край (SmokePuffs.edge).
 """
 import json
 import math
 import os
 import sys
 
+import cv2
 import numpy as np
 from PIL import Image
 
-T_EDGE, T_CORE = 1200.0, 2300.0
 TILE = 128
 FRAMES = 16
+BURN_FRAMES = 10
+FIREBALL = 1.3
+FLOW = 32.0
+DRAPER = 798.0
+C2, LAMBDA, T_REF = 1.4388e-2, 555e-9, 1490.0
+SIGMA = 5.670374e-8
+CROSS = 0.05
 
 
 def load(path):
-    """PNG Blender (16 бит, RGBA) → доли 0..1."""
-    import png
-    w, h, rows, info = png.Reader(filename=path).asDirect()
-    a = np.vstack([np.asarray(r, np.float64) for r in rows]).reshape(h, w, info["planes"])
-    if info["planes"] == 3:
-        a = np.concatenate([a, np.full((h, w, 1), 2 ** info["bitdepth"] - 1.0)], -1)
-    return a / (2 ** info["bitdepth"] - 1.0)
-
-
-def blackbody_rgb(t):
-    """Цвет чёрного тела в линейном sRGB (наибольший канал — 1), по Планку на трёх длинах волн и матрице XYZ (приближение)."""
-    lam = np.array([610e-9, 550e-9, 465e-9])
-    h, c, k = 6.626e-34, 2.998e8, 1.381e-23
-    b = 1 / (lam ** 5 * (np.exp(h * c / (lam * k * np.maximum(t, 1)[..., None])) - 1))
-    return b / b.max(axis=-1, keepdims=True)
+    return np.load(path).astype(np.float64)
 
 
 def crop(img, cx, cy, half):
-    """Квадрат с центром (cx, cy) и полуразмером half пикселей → TILE×TILE (за краем — пусто)."""
+    """Квадрат с центром (cx, cy) и полуразмером half пикселей → TILE×TILE (за краем — пусто), площадью."""
     h, w = img.shape[:2]
-    x0, y0 = int(round(cx - half)), int(round(cy - half))
     size = int(round(2 * half))
-    out = np.zeros((size, size) + img.shape[2:], img.dtype)
+    x0, y0 = int(round(cx - half)), int(round(cy - half))
+    out = np.zeros((size, size) + img.shape[2:], np.float32)
     sx0, sy0, sx1, sy1 = max(0, x0), max(0, y0), min(w, x0 + size), min(h, y0 + size)
     if sx1 > sx0 and sy1 > sy0:
         out[sy0 - y0:sy1 - y0, sx0 - x0:sx1 - x0] = img[sy0:sy1, sx0:sx1]
-    chans = [Image.fromarray(np.clip(out[..., i] * 65535, 0, 65535).astype(np.uint16).astype(np.int32), mode="I").convert("F")
-             .resize((TILE, TILE), Image.LANCZOS) for i in range(out.shape[2])]
-    return np.clip(np.stack([np.asarray(c) for c in chans], -1) / 65535.0, 0, 1)
+    return cv2.resize(out, (TILE, TILE), interpolation=cv2.INTER_AREA if size > TILE else cv2.INTER_CUBIC)
 
 
 def centre(alpha, level):
     ys, xs = np.nonzero(alpha > level)
     if len(xs) == 0:
         h, w = alpha.shape
-        return w / 2, h / 2, w / 4
+        return w / 2, h / 2, w / 4, w / 4
     wgt = alpha[ys, xs]
     cx, cy = np.average(xs, weights=wgt), np.average(ys, weights=wgt)
-    return cx, cy, math.sqrt(len(xs) / math.pi)
+    return cx, cy, math.sqrt(len(xs) / math.pi), np.hypot(xs - cx, ys - cy).max()
 
 
-def save(arr, path):
-    Image.fromarray(np.clip(arr * 255 + 0.5, 0, 255).astype(np.uint8), "RGBA").save(path)
+def save_rgba(rgb, alpha, path):
+    """Прямая альфа, 8 бит: цвет — уже на экране (с гаммой)."""
+    a = np.clip(alpha, 0, 1)
+    arr = np.concatenate([np.clip(rgb, 0, 1), a[..., None]], -1)
+    Image.fromarray(np.clip(np.nan_to_num(arr) * 255 + 0.5, 0, 255).astype(np.uint8), "RGBA").save(path, optimize=True)
+
+
+def kelvin_of(lum):
+    """Температура пламени по яркости против чёрного тела 1490 K (Вин на 555 нм)."""
+    lum = max(lum, 1e-12)
+    inv = 1 / T_REF - math.log(lum) * LAMBDA / C2
+    return 1 / inv if inv > 0 else 1e5
 
 
 def fireball(src, out):
-    flames = sorted(f for f in os.listdir(src) if f.startswith("flame_"))
-    n = len(flames)
-    data = [(load(os.path.join(src, f))[..., :3].mean(-1), load(os.path.join(src, f.replace("flame_", "soot_")))[..., 3]) for f in flames]
-    fmax = np.concatenate([d[0][d[0] > 0].ravel() for d in data if (d[0] > 0).any()]).max()
-    # кадры: от вспышки до сажи — с первого кадра, где пламя есть, до последнего, где оно ещё светит заметно
-    lit = [i for i, d in enumerate(data) if d[0].max() > 0.02 * fmax]
-    first, last = lit[0], min(n - 1, lit[-1] + 6)
-    picks = [first + round((last - first) * (i / (FRAMES - 1)) ** 1.3) for i in range(FRAMES)]
-    shown = []
+    meta = json.load(open(os.path.join(src, "meta.json")))
+    files = sorted(f for f in os.listdir(src) if f.startswith("f_") and f.endswith(".npy"))
+    fps, burn_s = meta["fps"], meta["burn_s"]
+    data = []
+    for f in files:
+        a = load(os.path.join(src, f))
+        alpha = a[..., 3]
+        rgb = a[..., :3] / np.maximum(alpha[..., None], 1e-4)
+        rgb[alpha < 1e-4] = 0
+        lum = rgb @ np.array([0.2126, 0.7152, 0.0722])
+        lit = lum[alpha > 0.5]
+        # самое яркое пламя кадра — верхняя десятая по яркости у непрозрачного
+        top = float(np.percentile(lit, 90)) if lit.size else 0.0
+        # излучение поверхности: σT⁴ пикселя по его яркости (Вин), среднее по непрозрачному
+        sep = float(np.mean(SIGMA * np.vectorize(kelvin_of)(lit) ** 4)) if lit.size else 0.0
+        data.append((rgb, alpha, lum, top, sep))
+    times = [(int(f[2:5]) - 1) / fps for f in files]
+    kel = [kelvin_of(d[3]) if d[3] > 0 else 0 for d in data]
+    # горение: кадры равно по времени до t; остывание: от конца горения равно по температуре до Дрейпера
+    burn_idx = [min(len(data) - 1, int(round(i * burn_s / BURN_FRAMES * fps))) for i in range(BURN_FRAMES)]
+    end = next((i for i, t in enumerate(times) if t >= burn_s), len(data) - 1)
+    k0 = kel[end]
+    cool = []
+    for j in range(1, FRAMES - BURN_FRAMES + 1):
+        target = k0 + (DRAPER - k0) * j / (FRAMES - BURN_FRAMES)
+        i = next((i for i in range(end, len(data)) if kel[i] <= target), len(data) - 1)
+        cool.append(max(i, cool[-1] + 1 if cool else end))
+    picks = [min(i, len(data) - 1) for i in burn_idx + cool]
+    fire, burn, kelv = [], [], []
     for k, i in enumerate(picks):
-        flame, soot = data[i]
-        f = np.clip(flame / fmax, 0, 1.5)
-        fire_a = 1 - np.exp(-3 * f)
-        bright = 1 - np.exp(-4 * f)
-        alpha = np.maximum(soot, fire_a)
-        cx, cy, r = centre(alpha, 0.5)
-        half = max(r / 0.7, 8)
-        # температура — по доле пламени от самого густого в кадре: ядро горячее края (⚠ оценка формы, не поле температуры)
-        rel = np.clip(flame / max(flame.max(), 1e-9), 0, 1)
-        t = T_EDGE + (T_CORE - T_EDGE) * rel ** 3
-        rgb = blackbody_rgb(t) * bright[..., None]
-        # сажа поверх пламени гасит его на свою непрозрачность за пламенем (половину — ⚠ оценка: сажа и пламя вперемешку)
-        dark = np.array([0.05, 0.045, 0.04])
-        colour = rgb * (1 - 0.5 * soot[..., None]) + dark * soot[..., None]
-        tile = crop(np.concatenate([colour ** (1 / 2.2), alpha[..., None]], -1), cx, cy, half)
-        pre = tile.copy()
-        pre[..., :3] *= pre[..., 3:4]
-        save(pre, os.path.join(out, f"fireball_{k:02d}.png"))
-        fire = crop(np.concatenate([rgb, np.ones_like(alpha)[..., None]], -1), cx, cy, half)
+        rgb, alpha, lum, top, _ = data[i]
+        cx, cy, r, _ = centre(alpha, 0.5)
+        half = max(r * FIREBALL, 8)
+        # пересвет: по каналам 1 − e^(−x), и ярче белого — с примесью белого (глаз насыщается по всем каналам: вспышка
+        # белёсая, а не лимонная; ⚠ доля подобрана: у прежних кадров gen_particles — 0,15, при ней шар топлива белый)
+        disp = 1 - np.exp(-rgb)
+        disp += (1 - disp) * np.clip(CROSS * np.maximum(lum - 1, 0), 0, 1)[..., None]
+        tile = crop(np.concatenate([disp, alpha[..., None]], -1), cx, cy, half)
+        save_rgba(tile[..., :3] ** (1 / 2.2), tile[..., 3], os.path.join(out, f"fireball_{k:02d}.png"))
         yy, xx = np.mgrid[0:TILE, 0:TILE]
-        disc = (xx - TILE / 2 + 0.5) ** 2 + (yy - TILE / 2 + 0.5) ** 2 < (0.7 * TILE / 2) ** 2
-        lum = fire[..., 0] * 0.2126 + fire[..., 1] * 0.7152 + fire[..., 2] * 0.0722
-        shown.append(round(float(lum[disc].mean()), 4))
-    # в тех же долях, что у прежних кадров (gen_particles.py: первый кадр — 1,14 белого): кадр на листе упирается в белое,
-    # а свет вспышки ярче; форма спада по кадрам — из симуляции
-    shown = [round(v * 1.14 / max(shown[0], 1e-6), 4) for v in shown]
+        disc = (xx - TILE / 2 + 0.5) ** 2 + (yy - TILE / 2 + 0.5) ** 2 < (TILE / 2 / FIREBALL) ** 2
+        shown = tile[..., :3] * tile[..., 3:4]
+        fire.append(round(float((shown @ np.array([0.2126, 0.7152, 0.0722]))[disc].mean()), 4))
+        burn.append(round(times[i] / burn_s, 4))
+        kelv.append(round(kel[i], 1))
+    # излучение поверхности в горении по цветовой температуре кадров горения — против CCPS 200–350 кВт/м²
+    sep = np.mean([data[i][4] for i in burn_idx]) / 1e3
     with open(os.path.join(out, "fireball.json"), "w", encoding="utf-8") as f:
-        json.dump({"fire": shown}, f)
-    print("fireball frames", picks, "fire", shown)
+        json.dump({"tile": TILE, "frames": FRAMES, "fire": fire, "burn": burn, "kelvin": kelv}, f)
+    print("fireball frames", picks, "\n  burn", burn, "\n  kelvin", kelv, "\n  fire", fire, f"\n  surface power in burning ~{sep:.0f} kW/m² (CCPS 200–350)")
 
 
 SIDES_A = ("right", "top", "back")
@@ -120,30 +143,54 @@ SIDES_B = ("left", "bottom", "front")
 
 
 def puff(src, out):
-    frames = sorted({int(f.split("_")[1][:3]) for f in os.listdir(src) if f.startswith("front_")})
-    picks = [f for f in frames if f >= 8][:FRAMES]
+    meta = json.load(open(os.path.join(src, "meta.json")))
+    picks = meta["picks"][-FRAMES:]
     maps = []
     for i in picks:
-        m = {s: load(os.path.join(src, f"{s}_{i:03d}.png")) for s in SIDES_A + SIDES_B}
+        m = {s: load(os.path.join(src, f"{s}_{i:03d}.npy")) for s in SIDES_A + SIDES_B}
         alpha = m["front"][..., 3]
-        light = {s: m[s][..., :3].mean(-1) for s in m}
+        light = {s: m[s][..., :3].mean(-1) / np.maximum(m[s][..., 3], 1e-4) for s in m}
         maps.append((alpha, light))
-    dense = np.concatenate([l["front"][a > 0.9].ravel() for a, l in maps if (a > 0.9).any()])
-    norm = 0.9 / max(np.percentile(dense, 95), 1e-6)
-    for k, (alpha, light) in enumerate(maps):
-        cx, cy, _ = centre(alpha, 0.05)
-        ys, xs = np.nonzero(alpha > 0.05)
-        half = max(np.hypot(xs - cx, ys - cy).max() * 1.04, 8) if len(xs) else 64
-        for name, sides in (("a", SIDES_A), ("b", SIDES_B)):
-            rgb = np.stack([np.clip(light[s] * norm, 0, 1) for s in sides], -1) ** (1 / 2.2)
-            tile = crop(np.concatenate([rgb, alpha[..., None]], -1), cx, cy, half)
-            tile[..., :3] *= tile[..., 3:4]
-            save(tile, os.path.join(out, f"puff6{name}_{k:02d}.png"))
-    print("puff frames", picks, "norm", round(norm, 3))
+    # карты — в одной мере на все кадры и стороны: ярчайшее (просвет края сзади) — 1, без среза
+    lit = np.concatenate([l[x][a > 0.05].ravel() for a, l in maps for x in SIDES_A + SIDES_B])
+    norm = 1 / max(np.percentile(lit, 99.5), 1e-6)
+    # к чему шейдер нормирует карты (белая стена): средний свет клуба на его непрозрачность при свете спереди и средний по
+    # шести сторонам — типичное место клуба в свете неба выходит как толстый слой его вещества (цвет — у мода)
+    num_f = sum(float(np.sum(l["front"] * a)) for a, l in maps)
+    num_d = sum(float(np.sum(np.mean([l[x] for x in SIDES_A + SIDES_B], 0) * a)) for a, l in maps)
+    den = sum(float(np.sum(a * a)) for a, l in maps)
+    front, diffuse = num_f / den * norm, num_d / den * norm
+    tiles, growth, r0 = [], [], None
+    for alpha, light in maps:
+        cx, cy, _, extent = centre(alpha, 0.05)
+        half = max(extent * 1.04, 8)
+        r0 = r0 or half
+        growth.append(round(float(half / r0), 4))
+        a = crop(alpha, cx, cy, half)
+        rgb = {name: crop(np.stack([np.clip(light[s] * norm, 0, 1) for s in sides], -1), cx, cy, half) for name, sides in (("a", SIDES_A), ("b", SIDES_B))}
+        tiles.append((a, rgb))
+    for k, (a, rgb) in enumerate(tiles):
+        for name in ("a", "b"):
+            save_rgba(np.clip(rgb[name], 0, 1) ** (1 / 2.2), a, os.path.join(out, f"puff6{name}_{k:02d}.png"))
+        # векторы движения к следующему кадру: по непрозрачности (форма), Farneback
+        if k + 1 < len(tiles):
+            prev = np.clip(a * 255, 0, 255).astype(np.uint8)
+            nxt = np.clip(tiles[k + 1][0] * 255, 0, 255).astype(np.uint8)
+            flow = cv2.calcOpticalFlowFarneback(prev, nxt, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+        else:
+            flow = np.zeros((TILE, TILE, 2), np.float32)
+        flow = np.clip(flow, -FLOW, FLOW)
+        enc = np.stack([0.5 + flow[..., 0] / (2 * FLOW), 0.5 + flow[..., 1] / (2 * FLOW), np.full((TILE, TILE), 0.5)], -1)
+        save_rgba(enc, np.ones((TILE, TILE)), os.path.join(out, f"puff6v_{k:02d}.png"))
+    with open(os.path.join(out, "puff6.json"), "w", encoding="utf-8") as f:
+        json.dump({"tile": TILE, "frames": FRAMES, "maps": "abv", "flow": FLOW, "front": round(front, 4), "diffuse": round(diffuse, 4),
+                   "growth": [float(g) for g in growth]}, f)
+    print("puff frames", picks, "norm", round(norm, 3), "front", round(front, 3), "diffuse", round(diffuse, 3), "growth", growth)
 
 
 if __name__ == "__main__":
-    bake, dest = sys.argv[1], sys.argv[2]
+    bake = sys.argv[1]
+    dest = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "../../mod/src/main/resources/assets/incoming/textures/fx/particle")
     if os.path.isdir(os.path.join(bake, "fireball")):
         fireball(os.path.join(bake, "fireball"), dest)
     if os.path.isdir(os.path.join(bake, "puff")):

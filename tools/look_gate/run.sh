@@ -11,9 +11,19 @@ INST=$ROOT/inst-$V; OUT=$ROOT/out/$V
 export JAVA_HOME=${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}
 artem() { local p; for p in $(pgrep -x java); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q 'PrismLauncher/instances/' && return 0; done; return 1; }
 while artem; do echo "$(date +%T) игра Артёма запущена — жду"; sleep 60; done
-# видеокарта — одна задача: чужая задача ноутбука идёт — ждать её конца
-others() { systemctl --user list-units 'incoming-job-*' --state=active --no-legend --plain | awk '{print $1}' | grep -v -- "-look-$V" | grep -q .; }
-while others; do echo "$(date +%T) идёт чужая задача ноутбука — жду"; sleep 30; done
+# видеокарта — одна задача: чужая задача ноутбука с клиентом или Blender — ждать её конца; лёгкие (сервер, тесты) —
+# рядом, если памяти хватает на клиент со всей сборкой (~13 ГБ)
+gpu_job() {
+  local u cg
+  for u in $(systemctl --user list-units 'incoming-job-*' --state=active --no-legend --plain | awk '{print $1}' | grep -v -- "-look-$V"); do
+    cg=$(systemctl --user show "$u" -p ControlGroup --value)
+    [ -n "$cg" ] && cat "/sys/fs/cgroup$cg/cgroup.procs" 2>/dev/null | while read -r p; do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null; echo; done \
+      | grep -qE 'kwin|blender|Xwayland|xvfb' && return 0
+  done
+  return 1
+}
+short_of_memory() { [ "$(awk '/MemAvailable/ {print int($2/1048576)}' /proc/meminfo)" -lt 13 ]; }
+while gpu_job || short_of_memory; do echo "$(date +%T) видеокарта или память заняты чужой задачей — жду"; sleep 30; done
 python3 "$TREE/tools/prod_client.py" --copy-only --dir "$INST" || exit 1
 sed -i -e 's/^fullscreen:.*/fullscreen:false/' -e 's/^soundCategory_music:.*/soundCategory_music:0.0/' "$INST/options.txt"
 if [ "$EXTRA" != - ]; then cp -v "$EXTRA"/*.jar "$INST/mods/"; fi

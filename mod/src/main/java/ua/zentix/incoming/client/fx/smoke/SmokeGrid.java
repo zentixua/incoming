@@ -5,10 +5,14 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Сетка дыма у камеры: весь дым, пыль и огонь обычных взрывов (и всё, что добавят другие источники: облака старта,
- * следы, дым пожаров — {@link #add}) — одной трёхмерной текстурой ослабления, которую проход пелены ({@code PallPass},
- * {@code fx_pall}) проходит своим ходом луча, сколько бы облаков ни было. Без Minecraft и OpenGL: здесь — кто в кадре,
- * каскады и раскладка; в видеопамять кладёт {@code fx/layer/SmokePass}.
+ * Облака клиента и сетка дыма у камеры. Источник облака ({@link Source}: облако взрыва, облако старта, дым пожара —
+ * {@link #add}) отдаёт гауссовы клубы вещества по своему закону; кто их рисует — решает масштаб. Объём сетки — одна
+ * трёхмерная текстура ослабления, которую проход пелены ({@code PallPass}, {@code fx_pall}) проходит своим ходом луча, —
+ * только для источника масштаба, который её клетка разрешает ({@link Source#volume}: облака в сотни метров и
+ * километры), и только если каждый его клуб не уже двух клеток своего каскада ({@link #RESOLVE}). Клубы обычного оружия
+ * (метры–десятки метров) клетка в 8–32 м размазала бы в кубы и мыло (3.5.0): их рисует слой эффектов запечёнными
+ * клубами ({@code far/SmokePuffs}, {@link #quads}). Без Minecraft и OpenGL: здесь — кто в кадре, каскады и раскладка; в
+ * видеопамять кладёт {@code fx/layer/SmokePass}.
  * <p>
  * <b>Каскады.</b> {@link #CASCADES} кубов по {@link #N}³ клеток вокруг глаза, клетка — {@link #CELL} м (2, 8, 32: у глаза
  * 128 м, дальше 512 м и 2 км), угол куба — кратен клетке (сетка стоит на месте мира, а не ездит с глазом). Клуб
@@ -86,6 +90,35 @@ public final class SmokeGrid {
         boolean emit(double seconds, Sink out);
 
         /**
+         * Источник того масштаба, что объём сетки разрешает (облако в сотни метров и больше): только такой идёт в сетку.
+         * Облака обычного оружия — нет: их рисуют квадраты слоя ({@link #quads}).
+         */
+        default boolean volume() {
+            return false;
+        }
+
+        /** Зерно клубов: места и кадры квадратов клуба у слоя эффектов. */
+        default long seed() {
+            return 0;
+        }
+
+        /**
+         * Во сколько раз вещество выросло с выброса (σ сейчас против σ в начале): кадр запечённого клуба у слоя эффектов —
+         * тот, где симуляция выросла во столько же ({@code FxAtlas.puffFrame}).
+         */
+        default double puffGrowth(double seconds) {
+            return 2;
+        }
+
+        /**
+         * Какая доля клуба с центром на высоте y (мир) и радиусом r видна над рельефом, что закрывает место источника вдали
+         * (в прорисовке клуб режет глубина мира): 1 — открыто.
+         */
+        default double visible(double y, double r) {
+            return 1;
+        }
+
+        /**
          * Итог раскладки этого кадра: true — клубы источника в сетке; false — нет ни одного (таблица полна, а он дальше
          * других): тогда облако рисует себя само.
          */
@@ -137,7 +170,15 @@ public final class SmokeGrid {
         }
     }
 
+    /**
+     * Клуб у́же стольких клеток своего каскада (σ) сетка не берёт: клетка расширяет его до √(σ² + (клетка/2)²) и рисует
+     * формой клетки, а не облака. Источник с таким клубом сетка отдаёт квадратам целиком.
+     */
+    public static final double RESOLVE = 2;
+
     private static final List<Source> SOURCES = new ArrayList<>();
+    /** Источники, чьи клубы легли в сетку этого кадра (остальных рисуют квадраты, {@link #quads}). */
+    private static final java.util.Set<Source> IN_GRID = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     private static final Frame FRAME = new Frame();
     /** Часы сетки: тики клиента не на паузе. */
     private static long ticks;
@@ -188,11 +229,13 @@ public final class SmokeGrid {
     public static void tick() {
         ticks++;
         SOURCES.removeIf(Source::ended);
+        IN_GRID.removeIf(Source::ended);
     }
 
     /** Смена мира, перемотка повтора: источников нет. */
     public static void reset() {
         SOURCES.clear();
+        IN_GRID.clear();
         FRAME.count = 0;
     }
 
@@ -213,10 +256,13 @@ public final class SmokeGrid {
         return ua.zentix.incoming.nuclear.model.DustModel.K_MIX * (1 - w * DUST_F);
     }
 
-    /** Альбедо ω' пыли цвета грунта (r, g, b на экране) — обращение отражения толстого слоя двух потоков (как у пелены). */
+    /**
+     * Альбедо ω' пыли цвета грунта (r, g, b на экране) — обращение отражения толстого слоя двух потоков R∞ = (1 − s)/(1 + s),
+     * s² = (1 − ω')/(1 − ω'g') (замыкание по средним полусфер, как у цвета клубов слоя, {@code SmokePuffs.thick}).
+     */
     public static float dustAlbedo(float display) {
         double r = Math.pow(Math.max(display, 0), 2.2);
-        double u = (1 - r) / (1 + r), v = 0.75 * u * u;
+        double u = (1 - r) / (1 + r), v = u * u;
         return (float) ((1 - v) / (1 - DUST_G * v));
     }
 
@@ -228,6 +274,21 @@ public final class SmokeGrid {
         Frame f = FRAME;
         build(SOURCES, f, eyeX, eyeY, eyeZ, seconds);
         return f;
+    }
+
+    /**
+     * Источники, которых объём этого кадра не рисует ({@link Source#volume} нет, клетка не разрешает, таблица полна,
+     * объёма нет), — квадратами слоя: each получает источник и отдаёт, жив ли он (false — иссяк, уходит).
+     */
+    public static void quads(java.util.function.Predicate<Source> each) {
+        for (var it = SOURCES.iterator(); it.hasNext(); ) {
+            Source s = it.next();
+            if (on() && IN_GRID.contains(s)) continue;
+            if (!each.test(s)) {
+                IN_GRID.remove(s);
+                it.remove();
+            }
+        }
     }
 
     /** Черновик клубов кадра: {@link #STAGE} чисел на клуб; источники по порядку и их ближний край. */
@@ -310,6 +371,12 @@ public final class SmokeGrid {
                 double reach = REACH * Math.max(sh, sv) + Math.sqrt(ax * ax + ay * ay + az * az);
                 near[src] = Math.min(near[src], Math.max(0, Math.sqrt(dx * dx + dy * dy + dz * dz) - reach));
             };
+            // источник не того масштаба в сетку не идёт: его клубы рисуют квадраты, emit — у них
+            if (!sources.get(k).volume()) {
+                count[k] = 0;
+                over[k] = true;
+                continue;
+            }
             boolean alive = sources.get(k).emit(seconds, sink);
             count[k] = alive ? staged - first[k] : -1;
         }
@@ -322,8 +389,9 @@ public final class SmokeGrid {
         for (int k : order) {
             if (count[k] <= 0 || over[k] || count[k] > room) continue;
             // клуб источника за всеми каскадами — источник не в сетке целиком (облако рисует себя само, а не обрезком)
+            // и клуб, у́же двух клеток своего каскада, — тоже: сетка нарисовала бы клетку, а не облако
             boolean all = true;
-            for (int i = first[k]; i < first[k] + count[k] && all; i++) all = cascade(corner, STAGE_BLOBS, i * STAGE) >= 0;
+            for (int i = first[k]; i < first[k] + count[k] && all; i++) all = resolves(corner, STAGE_BLOBS, i * STAGE);
             if (!all) continue;
             room -= count[k];
             in[k] = true;
@@ -334,9 +402,25 @@ public final class SmokeGrid {
                         b[at + 5], b[at + 6], b[at + 7], (float) b[at + 8], (float) b[at + 9], (float) b[at + 10], b[at + 11], b[at + 12]);
             }
         }
-        for (int k = 0; k < n; k++) if (count[k] >= 0) sources.get(k).placed(in[k] || count[k] == 0 && !over[k]);
+        for (int k = 0; k < n; k++) {
+            if (count[k] < 0) continue;
+            boolean placed = in[k] || count[k] == 0 && !over[k];
+            sources.get(k).placed(placed);
+            if (placed) IN_GRID.add(sources.get(k));
+            else IN_GRID.remove(sources.get(k));
+        }
+        for (int k = n - 1; k >= 0; k--) if (count[k] < 0) IN_GRID.remove(sources.get(k));
         for (int k = n - 1; k >= 0; k--) if (count[k] < 0) sources.remove(k);
         layers(f);
+    }
+
+    /**
+     * Клуб черновика с началом {@code at} в {@code b} ложится в каскад, и его σ (меньшая из двух) — не меньше
+     * {@link #RESOLVE} клеток этого каскада.
+     */
+    private static boolean resolves(double[] corner, double[] b, int at) {
+        int k = cascade(corner, b, at);
+        return k >= 0 && Math.min(b[at + 3], b[at + 4]) >= RESOLVE * CELL[k];
     }
 
     /** Каскад клуба черновика с началом {@code at} в {@code b} ({@link #cascade(double[], double, double, double, double, double, double, double, double)}). */
@@ -415,7 +499,7 @@ public final class SmokeGrid {
     public static final double LINE_POINT = 0.05;
 
     /** erf по Абрамовицу и Стиган 7.1.26 (ошибка ≤ 1,5·10⁻⁷), как в шейдере. */
-    static double erf(double x) {
+    public static double erf(double x) {
         double ax = Math.abs(x), t = 1 / (1 + 0.3275911 * ax);
         double y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-ax * ax);
         return Math.signum(x) * y;
