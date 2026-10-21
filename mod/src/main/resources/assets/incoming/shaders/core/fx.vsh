@@ -56,6 +56,8 @@ out vec3 sixKeyDir;
 out vec3 sixBallDir;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
+// свет неба у глаза на экране (FarView.ambient): им цвет вершины клуба уже умножен
+uniform float FxAmbient;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 // дальше стольких радиусов шар не освещает (от половины — плавно к нулю): теней нет, и ночью свет шара за сотни блоков
@@ -96,8 +98,10 @@ float pall(vec3 p) {
     return pallThrough(dir, len) * mushTransmit(Sampler11, dir, len, 6, PallAir) * smokeThrough(dir, len);
 }
 
-// свет огненных шаров на точке p (как balls, в долях света у глаза) и его направление — среднее по свету
+// свет огненных шаров на точке p (в долях света неба у глаза: им цвет вершины клуба уже умножен) и его направление —
+// среднее по свету; не ярче огня на экране, как у balls: предел — в той же мере (освещённость × свет неба)
 vec3 ballsToward(vec3 p, out vec3 dir) {
+    float sky = max(FxAmbient, 1e-3);
     vec3 sum = vec3(0.0);
     vec3 d = vec3(0.0);
     for (int i = 0; i < 4; i++) {
@@ -106,7 +110,7 @@ vec3 ballsToward(vec3 p, out vec3 dir) {
         vec3 v = FxBalls[i].xyz - p;
         float d2 = max(dot(v, v), r * r), reach = BALL_REACH * r * BALL_REACH * r;
         vec3 add = FxBallLight[i].rgb * (r * r / d2) * (1.0 - smoothstep(0.25 * reach, reach, d2));
-        add = add / (1.0 + dot(add, LUMA) / max(FxBallLight[i].w, 1e-4));
+        add = add / (1.0 + sky * dot(add, LUMA) / max(FxBallLight[i].w, 1e-4));
         sum += add;
         d += dot(add, LUMA) * v / sqrt(max(dot(v, v), 1e-6));
     }

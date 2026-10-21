@@ -330,15 +330,18 @@ public final class FarSprites {
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
         // длина отрезка на экране (поперёк луча к его середине) против его ширины: торцом — круг
         double seg = Math.sqrt(tx * tx + ty * ty + tz * tz), across = len / Math.max(Math.sqrt(mx * mx + my * my + mz * mz), 1e-9);
-        double side = endOn(across, 0.5 * (halfA * ka + halfB * kb) / RIBBON);
+        // торцом — только когда отрезок и луч почти параллельны (sin < 0,5): сбоку короткий отрезок широкого старого следа —
+        // лента, иначе диски соседних отрезков ложились бы друг на друга и густили след
+        double side = across < 0.5 * seg ? endOn(across, 0.5 * (halfA * ka + halfB * kb) / RIBBON) : 1;
         if (side < 1) {
             // торец трубки: круг её ширины, толща вдоль взгляда — длина отрезка в ширинах (непрозрачность ленты — поперёк)
             double halfW = 0.5 * (halfA * ka + halfB * kb) / RIBBON, a = 0.5 * (Math.min(1, alphaA) + Math.min(1, alphaB));
             double along = 1 - Math.pow(1 - Math.min(a, 0.999), Math.max(1, seg / (2 * Math.max(halfW, 1e-6))));
             float k = (float) ((1 - side) * along);
             out.glowShape(true);
+            // мягкость края у мира — в настоящих блоках, как у всех квадратов (halfW — в перенесённых ближе)
             out.billboard(mx, my, mz, (float) (0.5 * (da + db)), (float) (halfW * GLOW), 0, FxAtlas.glow(), Math.min(1, r) * k, Math.min(1, g) * k,
-                    Math.min(1, b) * k, k, (float) halfW, (float) (0.5 * (ka + kb)), lightA, 0);
+                    Math.min(1, b) * k, k, (float) (0.5 * (halfA + halfB) / RIBBON), (float) (0.5 * (ka + kb)), lightA, 0);
             out.glowShape(false);
             counts[3]++;
             if (side <= 0 || len < 1e-6f) {

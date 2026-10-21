@@ -23,7 +23,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Все текстуры слоя эффектов на одном листе 1024×1280 с уменьшенными копиями (mip-уровнями): клубы дыма и пламени,
+ * Все текстуры слоя эффектов на одном листе 1024×1536 с уменьшенными копиями (mip-уровнями): клубы дыма и пламени,
  * искра, вспышка, кольцо, кадры огненного шара (128×128), запечённый клуб дыма ({@link #puff6}: 16 кадров по три карты),
  * дальние круг, ореол и клубы. Один лист — одна текстура на весь отсортированный проход слоя
  * (частицы и дальнее вперемешку); уменьшенные копии — чтобы клуб в десяток пикселей вдали не рябил. Цвет на листе
@@ -39,7 +39,7 @@ import java.util.Optional;
 public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]> {
     public static final FxAtlas INSTANCE = new FxAtlas();
 
-    private static final int CELL = 64, COLS = 16, ROWS = 20, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
+    private static final int CELL = 64, COLS = 16, ROWS = 24, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
     /** Кадров огненного шара ({@code fx/particle/fireball_00…15}, 128×128): от вспышки до чёрного дыма. */
     public static final int FIREBALL_FRAMES = 16;
     private static final int FIREBALL_SIZE = 2 * CELL;
@@ -73,6 +73,14 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     /** Наибольшее смещение карты V, пикселей кадра 128 (так её пишет {@code tools/bake_fx/pack.py}). */
     public static final float PUFF6_FLOW = 32;
     private static final Sprite[] PUFF6 = new Sprite[PUFF6_FRAMES], PUFF6_MIRRORED = new Sprite[PUFF6_FRAMES];
+    /**
+     * Прежний процедурный огненный шар ({@code fx/particle/ball_00…15}, {@code tools/gen_particles.py}: растёт и остывает в
+     * своих кадрах по доле жизни) — у картинок, что ещё не по модели: прорыв бомбы из-под земли ({@code FarBlasts.Look}) и
+     * частицы шара ({@code Fx.fireball}: разрыв зенитной ракеты, прорыв бомбы вблизи).
+     */
+    private static final Sprite[] BALL = new Sprite[FIREBALL_FRAMES];
+    private static final ResourceLocation BALL_LIGHT = Incoming.id("textures/fx/particle/ball.json");
+    private static volatile float[] ballShown = full();
     private static final ResourceLocation FIREBALL_LIGHT = Incoming.id("textures/fx/particle/fireball.json"),
             PUFF6_DATA = Incoming.id("textures/fx/particle/puff6.json");
     /** Кадры шара: огонь на экране ({@link #fireLight}), время в долях горения и температура; пока не прочитаны — запасные. */
@@ -137,6 +145,23 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return (mirror ? PUFF6_MIRRORED : PUFF6)[Math.clamp(i, 0, PUFF6_FRAMES - 1)];
     }
 
+    static {
+        for (int i = 0; i < FIREBALL_FRAMES; i++) {
+            BALL[i] = slot(String.format(Locale.ROOT, "fx/particle/ball_%02d", i), i % 8 * FIREBALL_SIZE, 20 * CELL + i / 8 * FIREBALL_SIZE,
+                    FIREBALL_SIZE, FIREBALL_SIZE);
+        }
+    }
+
+    /** Кадр прежнего шара ({@link #BALL}) на доле жизни f (0..1): шар растёт в кадре от 0,3 до 0,7 полуразмера. */
+    public static Sprite ball(float f) {
+        return BALL[Math.clamp((int) (f * FIREBALL_FRAMES), 0, FIREBALL_FRAMES - 1)];
+    }
+
+    /** Огонь прежнего шара на экране в кадре доли жизни f ({@code ball.json}). */
+    public static float ballLight(float f) {
+        return ballShown[Math.clamp((int) (f * FIREBALL_FRAMES), 0, FIREBALL_FRAMES - 1)];
+    }
+
     private int id = -1;
 
     private FxAtlas() {}
@@ -188,14 +213,17 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     /** То же для своих кадров (юнит-тест). */
     static double fireballFrameOf(Fireball f, double burn, double kelvin) {
         int n = FIREBALL_FRAMES;
-        if (burn < 1) return at(f.burn, burn, 0, n - 1);
-        int from = 0;
-        while (from < n - 1 && f.burn[from] < 1) from++;
-        for (int i = from; i < n - 1; i++) {
-            if (kelvin >= f.kelvin[i]) return i;
-            if (kelvin >= f.kelvin[i + 1]) return i + (f.kelvin[i] - kelvin) / Math.max(f.kelvin[i] - f.kelvin[i + 1], 1e-6);
-        }
-        return n - 1;
+        // конец горения — кадр (с дробью), где время симуляции — её конец горения, и температура пламени там: остывая, кадр
+        // идёт от него к первому кадру остывания той же температуры, без скачка
+        double end = at(f.burn, 1, 0, n - 1);
+        if (burn < 1) return Math.min(at(f.burn, burn, 0, n - 1), end);
+        int from = (int) Math.floor(end);
+        double k0 = at(f.kelvin, end);
+        if (kelvin >= k0) return end;
+        int next = from + 1;
+        while (next < n - 1 && f.kelvin[next] > kelvin) next++;
+        if (next == from + 1) return end + (next - end) * (k0 - kelvin) / Math.max(k0 - f.kelvin[next], 1e-6);
+        return next - 1 + (f.kelvin[next - 1] - kelvin) / Math.max(f.kelvin[next - 1] - f.kelvin[next], 1e-6);
     }
 
     /** Кадр огненного шара номер {@code frame} (с дробью — ближайший снизу). */
@@ -227,20 +255,6 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
             if (v <= a[i + 1]) return i + (v - a[i]) / Math.max(a[i + 1] - a[i], 1e-9);
         }
         return hi;
-    }
-
-    /** Кадр огненного шара на доле жизни f (0..1): шар — 0,7 полуразмера кадра. */
-    public static Sprite fireball(float f) {
-        return FIREBALL[Math.clamp((int) (f * FIREBALL_FRAMES), 0, FIREBALL_FRAMES - 1)];
-    }
-
-    /**
-     * Огонь шара на экране в кадре доли жизни f (0..1): среднее по кругу шара без сажи, в долях белого (тот же кадр,
-     * что {@link #fireball}; {@code tools/gen_particles.py} пишет его в {@code fireball.json}). Свет шара вокруг — на дыме
-     * и пыли, блик, вуаль, зарево — не ярче: остывший в сажу шар больше ничего не освещает.
-     */
-    public static float fireLight(float f) {
-        return fireball.fire[Math.clamp((int) (f * FIREBALL_FRAMES), 0, FIREBALL_FRAMES - 1)];
     }
 
     /** Кадры шара из {@code fireball.json}: {@code {"fire": […], "burn": […], "kelvin": […]}} по 16 чисел. */
@@ -328,6 +342,8 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         for (Slot s : SLOTS) place(resources, s, sheets);
         fireball = read(resources, FIREBALL_LIGHT, FxAtlas::parseFire, Fireball.FALLBACK);
         puffGrowth = read(resources, PUFF6_DATA, FxAtlas::parseGrowth, linear(1, 3));
+        ballShown = read(resources, BALL_LIGHT, r -> numbers(JsonParser.parseReader(r).getAsJsonObject().getAsJsonArray("fire"), FIREBALL_FRAMES),
+                full());
         puffLight = read(resources, PUFF6_DATA, FxAtlas::parseLight, new float[]{PUFF6_FLOW / 128f, 0.79f, 0.5f});
         NativeImage[] levels = new NativeImage[MIPS + 1];
         for (int l = 0; l <= MIPS; l++) levels[l] = image(sheets[l], WIDTH >> l, HEIGHT >> l);

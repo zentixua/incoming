@@ -169,7 +169,7 @@ final class SmokePuffs {
 
     /** Видимый край гаусса толщи τ₀ поперёк середины, в σ: где толща падает до {@link #EDGE_TAU}. */
     static double edge(double tau) {
-        return Math.clamp(Math.sqrt(2 * Math.log(Math.max(tau, 1e-6) / EDGE_TAU)), 1.2, 4.0);
+        return Math.clamp(Math.sqrt(2 * Math.max(0, Math.log(Math.max(tau, 1e-6) / EDGE_TAU))), 1.2, 4.0);
     }
 
     /**

@@ -399,19 +399,30 @@ class SmokeGridTest {
     }
 
     /**
-     * Ни одно облако обычного оружия не объявляет себя масштабом сетки: облако старта по закону — не объём, а источники в
-     * коде клиента ({@code FarBlasts}, {@code FireSmoke}, {@code LaunchCloud}) не переопределяют {@link SmokeGrid.Source#volume}.
-     * Новый источник масштаба сетки (облако в сотни метров) — сознательно сюда.
+     * Облака обычного оружия масштабом сетки себя не объявляют: облака взрывов ({@code FarBlasts}) и дым пожаров
+     * ({@code FireSmoke}) не переопределяют {@link SmokeGrid.Source#volume}; облако старта — по своему начальному σ
+     * (шахед, ракета, «Град» — клубы, МБР — объём, как и прежде). Новый источник масштаба сетки — сознательно сюда.
      */
     @Test
     void conventionalCloudsAreNotVolume() throws java.io.IOException {
-        assertEquals(false, new LaunchCloud(CloudModel.Air.STANDARD, 64, 0.5, 0.5f, 0.5f, 0.5f, 0).volume());
+        for (ua.zentix.incoming.strike.WeaponType w : ua.zentix.incoming.strike.WeaponType.values()) {
+            var spec = ua.zentix.incoming.client.ClientWeaponSpec.of(w).airframe(false);
+            if (spec == null) continue;
+            ua.zentix.incoming.client.fx.plume.Motor m = spec.far().stage(ua.zentix.incoming.entity.FlightPhase.BOOST).motor();
+            if (m == null) continue;
+            LaunchCloud c = new LaunchCloud(CloudModel.Air.STANDARD, 64, 0.5, 0.5f, 0.5f, 0.5f, 0);
+            for (int i = 0; i < 40; i++) c.feed(m, 0.05, 0, 66, 0, 0, -1, 0);
+            if (!c.fed()) continue;
+            assertEquals(w == ua.zentix.incoming.strike.WeaponType.NUKE, c.volume(), w + ": облако старта σ " + c.thermal().sigmaH(0));
+        }
         java.nio.file.Path root = java.nio.file.Path.of("src/main/java/ua/zentix/incoming");
         List<String> volume = new ArrayList<>();
         try (var files = java.nio.file.Files.walk(root)) {
             for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) files.filter(f -> f.toString().endsWith(".java"))::iterator) {
                 String text = java.nio.file.Files.readString(p);
-                if (text.contains("boolean volume()") && !p.endsWith("SmokeGrid.java")) volume.add(root.relativize(p).toString());
+                if (text.contains("boolean volume()") && !p.endsWith("SmokeGrid.java") && !p.endsWith("LaunchCloud.java")) {
+                    volume.add(root.relativize(p).toString());
+                }
             }
         }
         assertEquals(List.of(), volume, "источники масштаба сетки");

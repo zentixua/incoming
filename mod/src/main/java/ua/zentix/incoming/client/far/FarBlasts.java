@@ -657,8 +657,8 @@ public final class FarBlasts {
             r = e.ballRadius() * growth(u);
             half = e.ballRadius() * FarSprites.FIREBALL;
             body = fade(u);
-            sprite = FxAtlas.fireball((float) u);
-            fire = FxAtlas.fireLight((float) u) * body;
+            sprite = FxAtlas.ball((float) u);
+            fire = FxAtlas.ballLight((float) u) * body;
         }
         if (r <= 0 || body <= 0) return;
         double h = e.ballHeight(age), b = e.brightness(age);

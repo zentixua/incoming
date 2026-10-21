@@ -46,11 +46,16 @@ uniform vec3 FxSixLight;
 out vec4 fragColor;
 
 // Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
-// с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по косинусам; mirror — квадрат
-// отражён: право и лево меняются
+// с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по квадратам косинусов (в сумме
+// 1 при любом направлении: по самим косинусам солнце под 45° светило бы в √2 раз сильнее, чем прямо сбоку); mirror —
+// квадрат отражён: право и лево меняются
 float sixLight(vec3 a, vec3 b, vec3 l, float mirror) {
-    float rx = max(l.x * mirror, 0.0), lx = max(-l.x * mirror, 0.0);
-    return a.r * rx + b.r * lx + a.g * max(l.y, 0.0) + b.g * max(-l.y, 0.0) + a.b * max(-l.z, 0.0) + b.b * max(l.z, 0.0);
+    vec3 q = l * l;
+    float x = l.x * mirror;
+    float side = x > 0.0 ? a.r : b.r;
+    float vertical = l.y > 0.0 ? a.g : b.g;
+    float depth = l.z < 0.0 ? a.b : b.b;
+    return side * q.x + vertical * q.y + depth * q.z;
 }
 
 // Кадр клуба и следующий, сдвинутые вдоль векторов движения на долю смеси m (кадр k — назад на m, k + 1 — вперёд на
@@ -120,8 +125,8 @@ void main() {
         float key = sixLight(a.rgb, b, sixKeyDir, mirror) / FxSixLight.z;
         float diffuse = (a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z;
         float sky = sixKey * key + (1.0 - sixKey) * diffuse;
-        vec3 fire = min(sixBall * (sixLight(a.rgb, b, sixBallDir, mirror) / FxSixLight.z), vec3(1.0));
-        sixLit = pow(vec3(sky), vec3(1.0 / 2.2)) + pow(max(fire, vec3(0.0)), vec3(1.0 / 2.2));
+        vec3 fire = sixBall * (sixLight(a.rgb, b, sixBallDir, mirror) / FxSixLight.z);
+        sixLit = pow(max(vec3(sky) + fire, vec3(0.0)), vec3(1.0 / 2.2));
         tex = vec4(vec3(a.a), a.a);
     } else if (nearest < -0.5) {
         tex = textureGrad(Sampler3, texCoord0, dx, dy);

@@ -323,7 +323,7 @@ public final class FxParticle {
             case SPARK -> FxAtlas.spark();
             case FLASH -> FxAtlas.flash();
             case RING -> FxAtlas.ring();
-            case FIREBALL -> FxAtlas.fireball((age + partial) / life);
+            case FIREBALL -> FxAtlas.ball((age + partial) / life);
             case FLAKE -> paper ? FxAtlas.paper() : FxAtlas.flake();
         };
     }
