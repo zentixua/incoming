@@ -6,9 +6,13 @@ import ua.zentix.incoming.strike.WeaponSpec;
 
 /**
  * Закон полёта шахеда после старта: набор высоты на винте, крейсер над рельефом и не ниже цели+30, пикирование по
- * дуге, когда на последнем участке цель уходит на 18° под горизонт и прямая до неё свободна от блоков (иначе шахед
- * идёт дальше и пикирует круче, пока нос ещё успевает довернуть к цели), с разгоном до скорости пике. Старт с пусковой,
- * цель и шаг полёта — у сущности; здесь — только команды органам управления ({@link Craft}).
+ * дуге, когда на последнем участке цель уходит на 18° под горизонт и прямая до неё свободна от блоков, с разгоном
+ * до скорости пике. Закрытая прямая — то же правило захода, что у ракеты ({@link Autopilot.Sightline}), но без набора:
+ * шахед идёт дальше на высоте крейсера и пикирует круче, когда прямая откроется или нос перестанет успевать к цели.
+ * Набор тут вредит: прямая над препятствием открывается под тем же углом к цели (через его верх), только нос уже задран,
+ * и пике на 4°/тик к этому углу не успевает — с набором шахед пролетал цель за домом в 45 блоках от неё и ближе
+ * ({@code DroneDiveTest}). Старт с пусковой, цель и шаг полёта — у сущности; здесь — только команды органам
+ * управления ({@link Craft}).
  */
 public final class DroneAutopilot {
     /** Над целью крейсер не ниже стольких блоков. */
@@ -20,22 +24,10 @@ public final class DroneAutopilot {
     /** Пике: предельная угловая скорость тангажа, °/тик, и её предельное ускорение, °/тик². */
     private static final double DIVE_RATE = 4.0, DIVE_ACCEL = 0.25;
     /**
-     * Запас пути на доворот носа к цели: пике с закрытой прямой (цель под крышей, за высоткой у самой цели) начинается,
-     * когда до цели осталось столько путей доворота ({@link #turnDistance}), — позже нос не успел бы, и шахед пролетал бы
-     * цель. Пока путь длиннее, пике ждёт свободной прямой: иначе над городом шахед врезался бы в высотку на линии пике
-     * за десятки блоков до цели.
-     */
-    private static final double DIVE_MARGIN = 1.5;
-    /**
-     * Закрытую прямую до цели проверять снова через столько тиков: луч — до ~200 блоков, в городе залп ждёт прямой
-     * десятки тиков. За паузу шахед пролетает ~8 блоков, это покрывает {@link #DIVE_MARGIN}.
-     */
-    private static final int LINE_RECHECK = 4;
-    /**
-     * Пока прямая до цели закрыта, свой путь вперёд на высоте полёта проверяется на столько блоков: шахед ждёт прямой
-     * над самой высокой частью города, где мачты и башни надо видеть заранее: набор — не круче 15°. Полоса рельефа
-     * ({@link Autopilot#reliefAhead}) их видит; эта проверка — вдобавок по клеткам блоков на самой прямой
-     * вперёд, раз в {@link #LINE_RECHECK} тиков. На 90 блоках набор поднимает ~20 блоков.
+     * Пока прямая до цели закрыта, свой путь вперёд на высоте полёта проверяется на столько блоков: шахед набирает
+     * высоту над самой высокой частью города, где мачты и башни надо видеть заранее: набор — не круче 15°. Полоса
+     * рельефа ({@link Autopilot#reliefAhead}) их видит; эта проверка — вдобавок по клеткам блоков на самой прямой
+     * вперёд, раз в {@link Autopilot#SIGHT_RECHECK} тиков. На 90 блоках набор поднимает ~20 блоков.
      */
     private static final double PATH_AHEAD = 90;
 
@@ -46,8 +38,10 @@ public final class DroneAutopilot {
     private final Autopilot.ReliefSensor relief = new Autopilot.ReliefSensor();
     /** Высота крейсера: не спускаемся ниже, даже если рельеф понижается. */
     private double cruiseAlt;
-    /** Сколько тиков ещё не проверять закрытую прямую до цели (не сохраняется: после загрузки — проверить сразу). */
-    private int lineWait;
+    /** Прямая до цели на заходе. */
+    private final Autopilot.Sightline sight = new Autopilot.Sightline();
+    /** Сколько тиков ещё не проверять свой путь вперёд, пока прямая до цели закрыта (не сохраняется). */
+    private int pathWait;
     /**
      * Верх препятствия на своём пути впереди, найденного, пока прямая до цели закрыта: крейсер держится над ним
      * на {@link #ABOVE_RELIEF}; {@code -Infinity} — препятствия нет. Сбрасывается вне окна пике (не сохраняется:
@@ -110,11 +104,17 @@ public final class DroneAutopilot {
         // цель внутри круга разворота: пике отменяется, шахед уходит прямо, набирая высоту, и заходит снова
         boolean outOfTurn = Autopilot.outOfTurn(c, nav, n, air.attack().reattackMin(), turn.rate());
         if (outOfTurn && c.phase() == FlightPhase.TERMINAL) c.setPhase(FlightPhase.CRUISE);
-        // пикирование — как только цель под нужным углом, даже если высота ещё набирается (цель рядом, перенацеливание)
-        // прямая до цели — последней: луч по блокам дороже остальных условий
-        boolean diveWindow = (c.phase() == FlightPhase.CRUISE || c.phase() == FlightPhase.CLIMB) && finalLeg && b.pitch() >= DIVE_PITCH && !outOfTurn;
-        if (!diveWindow) obstacleTop = Double.NEGATIVE_INFINITY;
-        if (diveWindow && (b.distance() <= turnDistance(c, b) * DIVE_MARGIN || lineClear(c, aim))) {
+        // пикирование — как только цель под нужным углом, даже если высота ещё набирается (цель рядом, перенацеливание);
+        // прямая до цели — последней: луч по блокам дороже остальных условий. В пике прямую не проверяем: дуга пике лежит
+        // над открытой прямой, а выход из пике у шахеда медленный (тангаж крейсера — 1,2°/тик)
+        boolean window = (c.phase() == FlightPhase.CRUISE || c.phase() == FlightPhase.CLIMB) && finalLeg && b.pitch() >= DIVE_PITCH && !outOfTurn;
+        boolean masked = window && sight.masked(c, aim, b, air.reachPad(), DIVE_RATE, DIVE_ACCEL);
+        if (!window) {
+            sight.forget();
+            obstacleTop = Double.NEGATIVE_INFINITY;
+        } else if (masked) {
+            watchPath(c);
+        } else {
             c.setPhase(FlightPhase.TERMINAL);
         }
 
@@ -131,17 +131,15 @@ public final class DroneAutopilot {
     }
 
     /**
-     * Прямая до цели свободна; закрытая проверяется снова через {@link #LINE_RECHECK} тиков, и тогда же — свой путь
-     * вперёд на высоте полёта ({@link #PATH_AHEAD}): верх первого препятствия на нём — в {@link #obstacleTop}
-     * (наибольший за ожидание).
+     * Пока прямая до цели закрыта, раз в {@link Autopilot#SIGHT_RECHECK} тиков проверяется свой путь вперёд на высоте
+     * полёта ({@link #PATH_AHEAD}): верх первого препятствия на нём — в {@link #obstacleTop} (наибольший за ожидание).
      */
-    private boolean lineClear(Craft c, Vec3 aim) {
-        if (lineWait > 0) {
-            lineWait--;
-            return false;
+    private void watchPath(Craft c) {
+        if (pathWait > 0) {
+            pathWait--;
+            return;
         }
-        if (c.clearAlong(aim, air.reachPad()) == Double.POSITIVE_INFINITY) return true;
-        lineWait = LINE_RECHECK - 1;
+        pathWait = Autopilot.SIGHT_RECHECK - 1;
         Vec3 f = c.flight().forward();
         Vec3 level = new Vec3(f.x, 0, f.z).normalize();
         double free = c.clearAlong(c.position().add(level.scale(PATH_AHEAD)), 0);
@@ -150,18 +148,5 @@ public final class DroneAutopilot {
             Vec3 p = c.position(), at = p.add(level.scale(free + 1));
             obstacleTop = Math.max(obstacleTop, Autopilot.reliefAlong(new double[]{p.x, p.z, at.x, at.z}, c::relief));
         }
-        return false;
-    }
-
-    /**
-     * Путь, за который нос доворачивает от нынешнего тангажа до линии на цель {@code b} в пределах пике
-     * ({@link #DIVE_RATE}, {@link #DIVE_ACCEL}): разгон угловой скорости и торможение, при большом угле — с полкой на пределе.
-     */
-    private static double turnDistance(Craft c, Bearing b) {
-        double turn = Math.max(0, b.pitch() - c.flight().pitch());
-        double ticks = turn <= DIVE_RATE * DIVE_RATE / DIVE_ACCEL
-                ? 2 * Math.sqrt(turn / DIVE_ACCEL)
-                : turn / DIVE_RATE + DIVE_RATE / DIVE_ACCEL;
-        return c.speed() * ticks;
     }
 }

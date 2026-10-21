@@ -73,6 +73,70 @@ public final class Autopilot {
         }
     }
 
+    // ---------------------------------------------------------------- прямая до цели на заходе
+
+    /**
+     * Запас пути на доворот носа к цели (игровое число, не по физике): с закрытой прямой (цель под крышей, высотка или
+     * гребень вплотную к цели) снаряд всё равно входит в атаку, когда до цели осталось столько путей доворота
+     * ({@link #turnDistance}), — дальше набор высоты уже не открыл бы прямую раньше, чем нос перестанет успевать к
+     * цели, и снаряд пролетал бы её. Пока путь длиннее, он в атаку не идёт ({@link Sightline}).
+     */
+    static final double DIVE_MARGIN = 1.5;
+    /**
+     * Закрытую прямую до цели проверять снова через столько тиков: луч по клеткам блоков — до сотен блоков, у залпа —
+     * у каждого снаряда. За паузу шахед пролетает ~8 блоков, ракета ~16: это покрывает {@link #DIVE_MARGIN}.
+     */
+    static final int SIGHT_RECHECK = 4;
+
+    /**
+     * Путь, за который нос доворачивает от нынешнего тангажа до линии на цель {@code toAim} с предельной угловой
+     * скоростью тангажа {@code rate} °/тик и её ускорением {@code accel} °/тик²: разгон угловой скорости и торможение,
+     * при большом угле — с полкой на пределе.
+     */
+    public static double turnDistance(Craft c, Bearing toAim, double rate, double accel) {
+        double turn = Math.max(0, toAim.pitch() - c.flight().pitch());
+        double ticks = turn <= rate * rate / accel
+                ? 2 * Math.sqrt(turn / accel)
+                : turn / rate + rate / accel;
+        return c.speed() * ticks;
+    }
+
+    /**
+     * Игровое правило захода (одно у шахеда и ракеты, без упреждения по идущей цели): если прямая от снаряда к цели
+     * закрыта блоками ({@link Craft#clearAlong} — только готовые чанки), снаряд в атаку не идёт, пока прямая не
+     * откроется. Ракета при этом набирает высоту горкой, а закрылась прямая в пике (цель зашла за склон) — выходит
+     * в горку снова ({@link MissileAutopilot}); шахед идёт дальше на высоте крейсера ({@link DroneAutopilot}: набор
+     * ему вредит). Не дольше, чем нос успевает довернуть к цели ({@link #DIVE_MARGIN}): ближе снаряд атакует как есть —
+     * высотку вплотную к цели и цель под крышей правило не обходит.
+     */
+    public static final class Sightline {
+        private boolean blocked;
+        /** Сколько тиков не мерить прямую заново (не сохраняется: после загрузки — замер сразу). */
+        private int wait;
+
+        /**
+         * Прямая до {@code aim} закрыта, кроме последних {@code margin} блоков у цели (их достаёт взрыватель), и до
+         * цели дальше {@link #DIVE_MARGIN} путей доворота носа с пределами атаки {@code rate}, {@code accel}: снаряду
+         * надо набирать высоту. Замер — раз в {@link #SIGHT_RECHECK} тиков.
+         */
+        public boolean masked(Craft c, Vec3 aim, Bearing toAim, double margin, double rate, double accel) {
+            if (toAim.distance() <= turnDistance(c, toAim, rate, accel) * DIVE_MARGIN) return false;
+            if (wait > 0) {
+                wait--;
+                return blocked;
+            }
+            blocked = c.clearAlong(aim, margin) != Double.POSITIVE_INFINITY;
+            wait = SIGHT_RECHECK - 1;
+            return blocked;
+        }
+
+        /** Вне захода: следующий заход меряет прямую сразу. */
+        public void forget() {
+            wait = 0;
+            blocked = false;
+        }
+    }
+
     // ---------------------------------------------------------------- рельеф впереди
 
     /**

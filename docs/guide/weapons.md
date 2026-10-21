@@ -70,7 +70,10 @@ approach within a few hundred blocks. A Grad battery stands 600 blocks from the 
 
 A kamikaze drone: it takes off from a trailer next to you, flies with a loud engine buzz and dives at the end. Use it
 on buildings and on moving targets. It can be heard long before it arrives and a SAM can shoot it down, so
-against air defense send a salvo or route it around.
+against air defense send a salvo or route it around. It dives only once it can see the target: if a hill or a
+building hides it, the drone flies on at its height and dives more steeply later. It does not aim ahead of a moving
+target. A tall building right next to the target or a roof over it can still be in the way: it then hits the
+building or the roof.
 
 ## Lancet
 
@@ -85,8 +88,10 @@ circles over the target while you pick what to hit in its
 ![Cruise missile in flight](img/weapon-missile.jpg)
 
 Flies low over the terrain and dives just before the target. A heavy strike on a target that does not move. Can carry
-a nuclear warhead. It may not get past a steep hill in front of the target or down into a deep pit: use the bomb or a
-Shahed there.
+a nuclear warhead. If a hill, the rim of a pit or a building hides the target, the missile climbs until it can see
+it and then dives. It cannot get past a building that hides the target at a steep angle right next to it (for
+example, 40 blocks taller than the target and 20 blocks from it), and it cannot reach a target under a roof: use
+the bomb there.
 
 ## Grad
 

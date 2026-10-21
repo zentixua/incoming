@@ -7,7 +7,8 @@ import ua.zentix.incoming.strike.WeaponSpec;
 /**
  * Закон полёта крылатой ракеты после старта: турбина разгоняет до маршевой, снижение на бреющий полёт над рельефом
  * и не ниже цели на высоте из паспорта, на последнем участке — горка (при длинном заходе) и пикирование по дуге
- * с разгоном до скорости пике. Старт с пусковой, цель, ядерный воздушный подрыв и шаг полёта — у сущности; здесь —
+ * с разгоном до скорости пике. Прямая до цели закрыта рельефом (цель за холмом, на дне карьера) — ракета в пике не
+ * идёт, а набирает высоту горкой, пока прямая не откроется ({@link Autopilot.Sightline}). Старт с пусковой, цель, ядерный воздушный подрыв и шаг полёта — у сущности; здесь —
  * только команды органам управления ({@link Craft}).
  */
 public final class MissileAutopilot {
@@ -17,12 +18,18 @@ public final class MissileAutopilot {
     private static final double POP_UP_HEIGHT = 32;
     /** На наборе после ускорителя — не ниже стольких блоков над рельефом впереди. */
     private static final double CLIMB_ABOVE_RELIEF = 25;
+    /** Тангаж горки, ° (вверх — отрицательный): набор над рельефом и перед пике (игровое число, не по физике). */
+    private static final double POP_UP_PITCH = -20;
+    /** Пике: предельная угловая скорость тангажа, °/тик, и её предельное ускорение, °/тик² (игровые числа). */
+    private static final double DIVE_RATE = 16, DIVE_ACCEL = 3.5;
 
     private final WeaponSpec.Airframe air;
     private final Autopilot.Turn climbTurn;
     private final Autopilot.Turn cruiseTurn;
     /** Рельеф впереди. */
     private final Autopilot.ReliefSensor relief = new Autopilot.ReliefSensor();
+    /** Прямая до цели на заходе. */
+    private final Autopilot.Sightline sight = new Autopilot.Sightline();
     /** Горка перед пикированием — только при длинном заходе. */
     private boolean popUp = true;
 
@@ -86,7 +93,13 @@ public final class MissileAutopilot {
         if (c.phase() == FlightPhase.CRUISE && finalLeg && b.horizontal() <= air.attack().terminalRange() && !outOfTurn) {
             c.setPhase(popUp ? FlightPhase.POP_UP : FlightPhase.TERMINAL);
         }
-        if (c.phase() == FlightPhase.POP_UP && (b.pitch() >= DIVE_PITCH || c.position().y >= aim.y + POP_UP_HEIGHT)) {
+        // на заходе прямая до цели закрыта: горка, пока не откроется (и из пике — тоже в горку)
+        boolean attack = c.phase() == FlightPhase.POP_UP || c.phase() == FlightPhase.TERMINAL;
+        boolean masked = attack && sight.masked(c, aim, b, air.reachPad(), DIVE_RATE, DIVE_ACCEL);
+        if (!attack) sight.forget();
+        if (masked) {
+            c.setPhase(FlightPhase.POP_UP);
+        } else if (c.phase() == FlightPhase.POP_UP && (b.pitch() >= DIVE_PITCH || c.position().y >= aim.y + POP_UP_HEIGHT)) {
             c.setPhase(FlightPhase.TERMINAL);
         }
 
@@ -96,9 +109,9 @@ public final class MissileAutopilot {
                 double terrain = relief.reliefAhead(c, nav, turn, air);
                 c.holdAltitude(Math.max(terrain + air.cruiseHeight(), aim.y + air.cruiseHeight()), 0.30, 8, 1.8);
             }
-            case POP_UP -> c.flight().holdPitch(-20, 0.30, 8, 1.8);
+            case POP_UP -> c.flight().holdPitch(POP_UP_PITCH, 0.30, 8, 1.8);
             case TERMINAL -> {
-                c.flight().arcPitch(b.pitch(), c.speed(), b.distance(), 16, 3.5);
+                c.flight().arcPitch(b.pitch(), c.speed(), b.distance(), DIVE_RATE, DIVE_ACCEL);
                 c.setSpeed(Math.min(air.diveSpeed(), c.speed() + 0.1));
             }
             default -> {}
