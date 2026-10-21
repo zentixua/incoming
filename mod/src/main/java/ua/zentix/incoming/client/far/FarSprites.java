@@ -339,10 +339,11 @@ public final class FarSprites {
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
         // длина отрезка на экране (поперёк луча к его середине) против его ширины: торцом — круг
         double seg = Math.sqrt(tx * tx + ty * ty + tz * tz), across = len / Math.max(Math.sqrt(mx * mx + my * my + mz * mz), 1e-9);
-        // глаз у самой трубки (ближе двух полуширин к отрезку): лента — плоскость через глаз; её вещество вокруг глаза —
-        // вуалью: толща по взгляду — путь в трубке (длина отрезка или ширина на синус угла к нему) в ширинах
+        // глаз в самой трубке (ближе полуширины к оси отрезка, с полуширины — плавно): лента — плоскость через глаз; её
+        // вещество вокруг глаза — вуалью: толща по взгляду — путь в трубке (длина отрезка или ширина на синус угла к нему)
+        // в ширинах
         double hw = 0.5 * (halfA * ka + halfB * kb) / RIBBON, gap = distance(x0, y0, z0, tx, ty, tz);
-        double inside = 1 - smoothstep(hw, 2 * hw, gap);
+        double inside = 1 - smoothstep(0.5 * hw, hw, gap);
         if (inside > 0) {
             double sin = Math.sqrt(Math.max(0, 1 - sq((tx * fx + ty * fy + tz * fz) / Math.max(seg, 1e-9))));
             double path = Math.min(seg, 2 * hw / Math.max(sin, 0.1));
