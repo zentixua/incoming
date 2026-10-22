@@ -56,6 +56,20 @@ class Body(unittest.TestCase):
 
     def test_heading_in_code_block_ignored(self):
         self.assertIsNone(pr_note.note("```md\n## Записка\ntext\n```\n"))
+        self.assertIsNone(pr_note.note("~~~~\n## Записка\n```\ntext\n~~~~\n"))
+        self.assertEqual(pr_note.note("```sh\nx\n```\n## Записка\nline"), "line")
+
+    def test_inline_fence_opens_no_block(self):
+        self.assertEqual(pr_note.note("```code``` in a line\n## Записка\nline"), "line")
+
+    def test_decorated_heading(self):
+        self.assertEqual(pr_note.note("## «Записка»\nline"), "line")
+        self.assertEqual(pr_note.note("## **Записка**\nline"), "line")
+
+    def test_several_sections(self):
+        body = "## Записка\n<!-- hint -->\n## Gate\nx\n## Записка\nLaw: CCPS"
+        self.assertEqual(pr_note.note(body), "Law: CCPS")
+        self.assertTrue(pr_note.check(["tools/gen_models.py"], body)[0])
 
     def test_crlf(self):
         self.assertEqual(pr_note.note("## Записка\r\nline\r\n## Next\r\n"), "line")
@@ -67,7 +81,7 @@ class Body(unittest.TestCase):
     def test_meaningful(self):
         self.assertTrue(pr_note.meaningful("Fix a typo in the HUD key, nothing to model."))
         self.assertTrue(pr_note.meaningful("- **Закон.** CCPS"))
-        for text in ("", "нет", "- нет", "N/A", "TODO", "…", "-", "**—**"):
+        for text in ("", "нет", "- нет", "N/A", "TODO", "…", "-", "**—**", "- Law:\n- **Where it holds.**\n### Закон"):
             self.assertFalse(pr_note.meaningful(text), text)
 
 

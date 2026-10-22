@@ -60,39 +60,46 @@ def player_facing(paths) -> list:
 
 
 def note(body: "str | None"):
-    """Текст раздела «Записка» без комментариев HTML; None — раздела нет.
+    """Текст разделов «Записка» без комментариев HTML; None — раздела нет.
 
-    Раздел — заголовок `##` или `###`, текст которого начинается со слова «Записка», до следующего заголовка того же
-    или более высокого уровня. Заголовки внутри блоков кода не считаются."""
-    lines = (body or "").replace("\r\n", "\n").split("\n")
+    Раздел — заголовок `##` или `###`, текст которого начинается со слова «Записка» (можно в кавычках или жирным), до
+    следующего заголовка того же или более высокого уровня. Таких разделов несколько — текст всех. Заголовки внутри
+    блоков кода не считаются."""
     fence = None
     level = None
-    found = []
-    for line in lines:
+    sections = []
+    for line in (body or "").replace("\r\n", "\n").split("\n"):
         stripped = line.strip()
         m = re.match(r"(`{3,}|~{3,})", stripped)
-        if m:
-            if fence is None:
-                fence = m.group(1)[0]
-            elif stripped.startswith(fence * 3):
-                fence = None
-        h = None if fence else re.match(r"(#{1,6})\s+(.*?)\s*#*\s*$", stripped)
+        if fence is None:
+            # ```код``` в одну строку блока не открывает
+            if m and m.group(1) not in stripped[len(m.group(1)):]:
+                fence = m.group(1)
+        elif m and m.group(1).startswith(fence) and not stripped[len(m.group(1)):].strip():
+            fence = None
+        h = None if fence or m else re.match(r"(#{1,6})\s+(.*?)\s*#*\s*$", stripped)
+        if level is not None and h and len(h.group(1)) <= level:
+            level = None
         if level is not None:
-            if h and len(h.group(1)) <= level:
-                break
-            found.append(line)
-        elif h and len(h.group(1)) in (2, 3) and re.match(HEADING + r"(?![\w])", h.group(2), re.IGNORECASE):
+            sections[-1].append(line)
+        elif h and len(h.group(1)) in (2, 3) and re.match(
+                HEADING + r"(?!\w)", h.group(2).lstrip("*_«»\"'„“ "), re.IGNORECASE):
             level = len(h.group(1))
-    if level is None:
+            sections.append([])
+    if not sections:
         return None
-    text = re.sub(r"<!--.*?(-->|\Z)", "", "\n".join(found), flags=re.DOTALL)
+    text = re.sub(r"<!--.*?(-->|\Z)", "", "\n".join("\n".join(s) for s in sections), flags=re.DOTALL)
     return text.strip()
 
 
 def meaningful(text: str) -> bool:
-    """В разделе есть хоть одна строка по делу, а не заглушка."""
+    """В разделе есть хоть одна строка по делу, а не заглушка и не подпись без текста («Закон:»)."""
     for line in text.split("\n"):
-        s = re.sub(r"^\s*(?:[-*+]|\d+[.)])\s+", "", line).strip().strip("*_`").strip()
+        raw = re.sub(r"^\s*(?:[-*+]|\d+[.)])\s+", "", line).strip()
+        bold = re.fullmatch(r"\*\*([^*]*)\*\*[:.]?", raw)
+        if raw.startswith("#") or raw.endswith(":") or (bold and len(bold.group(1).split()) <= 4):
+            continue  # подзаголовок или подпись без текста
+        s = raw.strip("*_`").strip()
         if s and s.lower().rstrip(".") not in PLACEHOLDERS and re.search(r"\w", s):
             return True
     return False
