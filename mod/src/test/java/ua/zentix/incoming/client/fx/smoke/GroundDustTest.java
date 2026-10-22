@@ -153,10 +153,34 @@ class GroundDustTest {
     @Test
     void grassHoldsTheSoil() {
         BlastSource s = BlastSource.of(WeaponType.DRONE, false);
-        CloudModel bare = new CloudModel(s, DAY, false, 0, 1), meadow = new CloudModel(s, DAY, false, 0, 0);
+        CloudModel bare = new CloudModel(s, DAY, false, 0, GroundDust.Ground.BARE), meadow = new CloudModel(s, DAY, false, 0, GroundDust.Ground.uniform(0, 1));
         assertTrue(meadow.ground.total < 0.25 * bare.ground.total, "луг " + meadow.ground.total + " против " + bare.ground.total);
         DustModel.Column far = DustModel.chemical(20, 0, CloudModel.equivalentKt(50), 6.3, DustModel.Surface.COVERED);
         assertTrue(far.soil() * DustModel.K_MIX < 0.01, "на лугу в 20 м пыли почти нет: толща " + far.soil() * DustModel.K_MIX);
+    }
+
+    /**
+     * Вода не пылит: у берега (половина секторов — вода) пыль волны лежит только над сушей — ни одного клуба пыли у земли в
+     * секторах воды (бомба у пляжа: ковёр пыли ложился и на озеро, кадры F2a).
+     */
+    @Test
+    void waterGivesNoDust() {
+        double[] loose = new double[GroundDust.SECTORS], covered = new double[GroundDust.SECTORS];
+        for (int k = 0; k < GroundDust.SECTORS / 2; k++) loose[k] = 1;
+        CloudModel m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), DAY, false, 0, new GroundDust.Ground(loose, covered));
+        int land = 0;
+        for (double t : new double[]{0.1, 1, 3}) {
+            for (double[] b : blobs(m, t)) {
+                if (b[6] <= 0 || b[5] > 0 || b[1] > 2 * b[4] + 0.5) continue;
+                double[] d = m.ground.drift(t, b[1]);
+                double ang = Math.atan2(b[2] - d[1], b[0] - d[0]);
+                if (ang < 0) ang += 2 * Math.PI;
+                int sector = (int) (ang / (2 * Math.PI) * GroundDust.SECTORS);
+                assertTrue(sector < GroundDust.SECTORS / 2, "t " + t + ": пыль над водой, сектор " + sector);
+                land++;
+            }
+        }
+        assertTrue(land > 0, "над сушей пыль есть");
     }
 
     /**

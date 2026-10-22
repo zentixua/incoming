@@ -315,10 +315,10 @@ public final class FarBlasts {
             // воронки выброса); глубже — облако из хода приходит своим пакетом (S2C.Vent)
             ua.zentix.incoming.warhead.BuriedBlast law = BlastSource.law(pos.y, p.surfaceY());
             if (!law.breaches()) return null;
-            CloudModel model = CloudModel.buried(source, air(level, pos), law, ground.isWater(), looseShare(level, pos));
+            CloudModel model = CloudModel.buried(source, air(level, pos), law, ground.isWater(), ground(level, pos));
             return cloud(level, source, model, new Vec3(pos.x, p.surfaceY(), pos.z), ground, p.seed());
         }
-        return cloud(level, source, new CloudModel(source, air(level, pos), ground.isWater(), 0, looseShare(level, pos)), pos, ground, p.seed());
+        return cloud(level, source, new CloudModel(source, air(level, pos), ground.isWater(), 0, ground(level, pos)), pos, ground, p.seed());
     }
 
     /**
@@ -345,35 +345,40 @@ public final class FarBlasts {
     public static CloudModel airburst(Vec3 pos, BlastSource source, long seed) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return null;
-        return cloud(level, source, new CloudModel(source, air(level, pos), false, heightAbove(level, pos), looseShare(level, pos)), pos,
+        return cloud(level, source, new CloudModel(source, air(level, pos), false, heightAbove(level, pos), ground(level, pos)), pos,
                 GroundMaterial.STONE, seed);
     }
 
-    /** Радиусы и направления проб поверхности вокруг взрыва ({@link #looseShare}), м. */
+    /** Радиусы проб поверхности вокруг взрыва ({@link #ground}), м; по направлению — середина каждого сектора. */
     private static final double[] PROBE_R = {3, 6, 12, 24, 48};
-    private static final int PROBE_ANGLES = 8;
 
     /**
-     * Доля голого рыхлого грунта вокруг места {@code pos} — что пыль волны срывает с порога 0,34 м/с, а не с 3 м/с
-     * ({@code GroundDust}): верхние блоки карты высот {@code MOTION_BLOCKING} в кольцах до 48 м (трава без столкновения
-     * карту не держит, верх — дёрн). Рыхлое — земля без дёрна, песок, гравий, снег, пашня; дёрн, мох, листва, камень,
-     * постройки — держат грунт. Чанков клиента нет — как у ядерки: голый грунт ({@code Surface.REFERENCE}).
+     * Что лежит вокруг места {@code pos} по секторам ({@code GroundDust.SECTORS}): верхние блоки карты высот
+     * {@code MOTION_BLOCKING} на радиусах до 48 м (трава без столкновения карту не держит, верх — дёрн). Рыхлое — земля без
+     * дёрна, песок, гравий, снег, пашня; вода — без пыли; остальное (дёрн, мох, листва, камень, постройки) держит грунт.
+     * Где у клиента нет чанков — как у ядерки: голый грунт ({@code Surface.REFERENCE}).
      */
-    static double looseShare(ClientLevel level, Vec3 pos) {
-        int loose = 0, seen = 0;
-        for (double r : PROBE_R) {
-            for (int k = 0; k < PROBE_ANGLES; k++) {
-                double a = 2 * Math.PI * (k + 0.5 * (r / 3 % 2)) / PROBE_ANGLES;
+    static ua.zentix.incoming.client.fx.smoke.GroundDust.Ground ground(ClientLevel level, Vec3 pos) {
+        int n = ua.zentix.incoming.client.fx.smoke.GroundDust.SECTORS;
+        double[] loose = new double[n], covered = new double[n];
+        for (int k = 0; k < n; k++) {
+            double a = 2 * Math.PI * (k + 0.5) / n;
+            int seen = 0, l = 0, c = 0;
+            for (double r : PROBE_R) {
                 int x = (int) Math.floor(pos.x + r * Math.cos(a)), z = (int) Math.floor(pos.z + r * Math.sin(a));
                 net.minecraft.world.level.chunk.LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
                 if (chunk == null) continue;
                 int y = chunk.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
                 net.minecraft.world.level.block.state.BlockState top = chunk.getBlockState(new net.minecraft.core.BlockPos(x, y, z));
                 seen++;
-                if (loose(top)) loose++;
+                if (!top.getFluidState().isEmpty()) continue;
+                if (loose(top)) l++;
+                else c++;
             }
+            loose[k] = seen == 0 ? 1 : (double) l / seen;
+            covered[k] = seen == 0 ? 0 : (double) c / seen;
         }
-        return seen == 0 ? 1 : (double) loose / seen;
+        return new ua.zentix.incoming.client.fx.smoke.GroundDust.Ground(loose, covered);
     }
 
     /** Рыхлый ли грунт сверху: пыль с него срывает слабый ветер. */
@@ -403,7 +408,7 @@ public final class FarBlasts {
     public static CloudModel model(S2C.Blast p) {
         ClientLevel level = Minecraft.getInstance().level;
         return new CloudModel(BlastSource.of(p), level == null ? CloudModel.Air.STANDARD : air(level, p.pos()), GroundMaterial.byId(p.material()).isWater(),
-                0, level == null ? 1 : looseShare(level, p.pos()));
+                0, level == null ? ua.zentix.incoming.client.fx.smoke.GroundDust.Ground.BARE : ground(level, p.pos()));
     }
 
     /** Воздух в месте взрыва: воздух мира ({@link ClientAir}); влажность — его, у воды 1 (облако конденсации). */

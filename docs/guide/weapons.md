@@ -237,7 +237,8 @@ smoke.
 The blast wind tears dust off the ground, the same way as the wave of a nuclear strike does. Bare dirt, sand, gravel and
 snow give it up easily: a low ring of light dust races out with the wave, a few tens of blocks for a Shahed, then
 thickens to several blocks, hangs for minutes and drifts with the wind near the ground. Grass, stone and buildings hold
-the soil, so on a meadow the dust rises only around the crater. While the cloud rises, a thin column of dust is drawn up
+the soil, so on a meadow the dust rises only around the crater, and water gives none: by a shore the dust lies only
+over the land. While the cloud rises, a thin column of dust is drawn up
 under it. An interceptor bursting in the air leaves no crater and no dust, unless it bursts low over the ground.
 
 A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
