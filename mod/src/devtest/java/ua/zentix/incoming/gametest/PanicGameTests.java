@@ -46,6 +46,34 @@ public final class PanicGameTests {
      * бегства у всех снята. Свои не бегут ни разу: сидящий ручной волк и лошадь с хозяином. Корова в стеклянном загоне
      * 1×1 паникует, но путь ищет всё реже (запертая — не чаще {@link #PENNED_SEARCHES} раз за всю панику).
      */
+    /**
+     * Место бегства летуна: попугай на ровной земле, эпицентр к западу, — своё место {@link MobPanic#awayPlace} есть
+     * каждый раз (а не ванильное наугад: то пустое, то в паре блоков, и два пустых поиска подряд откладывали бегство на
+     * 8 с — CI 22.10, попугай за 10 с не сдвинулся), это свободная клетка над опорой, и она дальше от эпицентра на
+     * половину радиуса поиска с поправкой на конус. У коровы — то же, по её навигации.
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "panic_place", skyAccess = true)
+    public static void flyerFindsItsOwnFleePlace(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Vec3 from = h.absoluteVec(new Vec3(-200, 12, 32.5));
+        for (EntityType<? extends Mob> type : List.of(EntityType.PARROT, EntityType.COW)) {
+            Mob mob = h.spawn(type, new BlockPos(32, 12, 32));
+            h.assertTrue(mob instanceof net.minecraft.world.entity.PathfinderMob, type.toShortString() + " без путей");
+            net.minecraft.world.entity.PathfinderMob pm = (net.minecraft.world.entity.PathfinderMob) mob;
+            double here = Math.hypot(mob.getX() - from.x, mob.getZ() - from.z);
+            for (int i = 0; i < 64; i++) {
+                BlockPos p = MobPanic.awayPlace(pm, from);
+                h.assertTrue(p != null, type.toShortString() + ": своего места бегства нет (поиск " + i + ")");
+                h.assertTrue(level.getBlockState(p).isAir() && level.getBlockState(p.below()).isSolid(),
+                        type.toShortString() + ": место " + h.relativePos(p) + " не над опорой: " + level.getBlockState(p) + " на " + level.getBlockState(p.below()));
+                double gone = Math.hypot(p.getX() + 0.5 - from.x, p.getZ() + 0.5 - from.z) - here;
+                h.assertTrue(gone >= 8 * Math.cos(Math.PI / 4) - 1, String.format(Locale.ROOT, "%s: место ближе к эпицентру — дальше на %.1f", type.toShortString(), gone));
+            }
+            mob.discard();
+        }
+        h.succeed();
+    }
+
     @GameTest(template = "range", timeoutTicks = 1400, batch = "nuke_panic", skyAccess = true)
     public static void mobsFleeTheBlastAndCalmDown(GameTestHelper h) {
         ServerLevel level = h.getLevel();
