@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -69,13 +70,12 @@ class PlumeContinuityTest {
 
     /**
      * Запечённый клуб на экране — почти ровный диск: радиус, где непрозрачность падает до половины середины, у кадров,
-     * что рисуют трубки, — от {@link SmokePuffs#PUFF_DISC_MIN} (самый узкий) до ~0,76, в среднем {@link SmokePuffs#PUFF_DISC}.
+     * что рисуют трубки, — {@link SmokePuffs#PUFF_DISCS} у каждого кадра, самый узкий — {@link SmokePuffs#PUFF_DISC_MIN}.
      * По ним — шаг мест трубки и доля непрозрачности клуба: новые кадры симуляции — новые числа.
      */
     @Test
     void puffDiscMatchesTheBakedFrames() throws IOException {
-        double min = 1, sum = 0;
-        int frames = 0;
+        double min = 1;
         for (int f = SmokePuffs.FIRST_FRAME; f < FxAtlas.PUFF6_FRAMES; f++) {
             BufferedImage img = image(String.format(Locale.ROOT, "textures/fx/particle/puff6a_%02d.png", f));
             int n = img.getWidth(), bins = 60;
@@ -104,11 +104,9 @@ class PlumeContinuityTest {
                 }
             }
             min = Math.min(min, half);
-            sum += half;
-            frames++;
+            assertEquals(SmokePuffs.PUFF_DISCS[f], half, 0.021, "кадр " + f);
         }
-        assertTrue(Math.abs(min - SmokePuffs.PUFF_DISC_MIN) <= 0.03, "самый узкий кадр: " + min);
-        assertTrue(Math.abs(sum / frames - SmokePuffs.PUFF_DISC) <= 0.05, "в среднем: " + sum / frames);
+        assertEquals(SmokePuffs.PUFF_DISC_MIN, min, 0.021, "самый узкий кадр");
     }
 
     /** Квадраты кадра: клубы (центр от глаза, полуразмеры, непрозрачность) и ленты (концы, полуширины, непрозрачности). */
@@ -173,7 +171,8 @@ class PlumeContinuityTest {
             @Override
             public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double bx, double by, double bz, double shb,
                              double svb, double sootB, double kelvin, double rise, double sigma0) {
-                axis.add(new double[]{ax, ay, az, Math.sqrt(sha * sva), bx, by, bz, Math.sqrt(shb * svb)});
+                double k = ua.zentix.incoming.client.fx.smoke.CloudModel.SOOT_K;
+                axis.add(new double[]{ax, ay, az, Math.sqrt(sha * sva), bx, by, bz, Math.sqrt(shb * svb), k * sootA, k * sootB});
             }
         };
         FireSmoke.lay(fuel, 0, 0, 0, 0, 1, u, stability, far, plume.size, x -> 1, x -> 1, ends);
@@ -226,7 +225,11 @@ class PlumeContinuityTest {
                 if (k < prof.length) clear *= 1 - q[5] * prof[k];
             }
             for (double[] rb : out.ribbons) clear *= 1 - ribbonAt(rb, su, sv, fwd, left, up);
-            samples.add(new double[]{path, 1 - clear, Math.max(4 * sigma, 8 * PIXEL * d)});
+            // закон у оси — 1 − e^(−τ), τ = e/(√(2π)σ), с дымкой; только где трубку рисуют одни клубы (шире порога лент)
+            double tau = p[4] / (Math.sqrt(2 * Math.PI) * sigma);
+            double law = ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma) >= FarFlightView.PUFFS_FULL * PIXEL * d
+                    ? (1 - Math.exp(-tau)) * view.air(d, py) : Double.NaN;
+            samples.add(new double[]{path, 1 - clear, Math.max(4 * sigma, 8 * PIXEL * d), law});
         }
         assertTrue(samples.size() > 20, name + ": шлейф в кадре");
         boolean ok = true;
@@ -246,8 +249,21 @@ class PlumeContinuityTest {
                 ok = false;
             }
         }
-        System.out.printf(Locale.ROOT, "%s: %d клубов, %d лент, %d точек оси, разрывов %d%n", name, out.puffs.size(), out.ribbons.size(),
-                samples.size(), gaps);
+        // непрозрачность у оси в среднем — закона (клуб берёт свою долю трубки; ⚠ диск клуба по кадрам 0,48–0,76 полуразмера —
+        // ±25 % по кадру, в среднем по оси ближе)
+        double drawn = 0, law = 0;
+        for (double[] s : samples) {
+            if (Double.isNaN(s[3])) continue;
+            drawn += s[1];
+            law += s[3];
+        }
+        double ratio = law > 0 ? drawn / law : 1;
+        if (law > 0 && (ratio < 0.75 || ratio > 1.33)) {
+            System.out.printf(Locale.ROOT, "%s: у оси %.2f закона%n", name, ratio);
+            ok = false;
+        }
+        System.out.printf(Locale.ROOT, "%s: %d клубов, %d лент, %d точек оси, разрывов %d, у оси %.2f закона%n", name, out.puffs.size(),
+                out.ribbons.size(), samples.size(), gaps, ratio);
         return ok;
     }
 
@@ -259,7 +275,8 @@ class PlumeContinuityTest {
         List<double[]> axis = new ArrayList<>();
         double step = 8, len = 160, cos = Math.cos(Math.toRadians(40)), sin = Math.sin(Math.toRadians(40));
         for (double s = 0; s < len; s += step) {
-            axis.add(new double[]{0, s * sin, s * cos, 0.5 + 9.5 * (1 - s / len), 0, (s + step) * sin, (s + step) * cos, 0.5 + 9.5 * (1 - (s + step) / len)});
+            axis.add(new double[]{0, s * sin, s * cos, 0.5 + 9.5 * (1 - s / len), 0, (s + step) * sin, (s + step) * cos, 0.5 + 9.5 * (1 - (s + step) / len),
+                    e, e});
         }
         FarView view = view(new Vec3(-range, 2, 0.5 * len * cos), at(axis, 0.5 * len));
         Record out = new Record();
@@ -298,13 +315,14 @@ class PlumeContinuityTest {
         return alpha * Math.exp(-Math.log(2) * sq(off / Math.max(half, 1e-9)));
     }
 
-    /** Точка оси на пути path вдоль кусков: x, y, z и σ. */
+    /** Точка оси на пути path вдоль кусков: x, y, z, σ и ослабление на метр оси. */
     private static double[] at(List<double[]> axis, double path) {
         for (double[] s : axis) {
             double len = Math.sqrt(sq(s[4] - s[0]) + sq(s[5] - s[1]) + sq(s[6] - s[2]));
             if (path <= len || s == axis.get(axis.size() - 1)) {
                 double t = len > 0 ? Math.min(1, path / len) : 0;
-                return new double[]{s[0] + (s[4] - s[0]) * t, s[1] + (s[5] - s[1]) * t, s[2] + (s[6] - s[2]) * t, s[3] + (s[7] - s[3]) * t};
+                return new double[]{s[0] + (s[4] - s[0]) * t, s[1] + (s[5] - s[1]) * t, s[2] + (s[6] - s[2]) * t, s[3] + (s[7] - s[3]) * t,
+                        s[8] + (s[9] - s[8]) * t};
             }
             path -= len;
         }

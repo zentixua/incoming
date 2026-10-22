@@ -264,7 +264,7 @@ final class SmokePuffs {
      * запечённых клубов: цвет толстого слоя (cr, cg, cb; до света неба у глаза), степень тени карт shade, кадр клуба age
      * (с дробью), зерно h, видимая доля vis, клубов в кучке — не больше most; vary — и одиночный клуб берёт свой кадр и
      * отражение по зерну (клубы трубки идут рядом друг с другом: одинаковые лежали бы стопкой монет). Клуб на экране —
-     * почти ровный диск радиусом {@link #PUFF_DISC} полуразмера квадрата (не гаусс): у оси его перекрывают соседи
+     * почти ровный диск радиусом {@link #puffDisc} полуразмера квадрата (не гаусс): у оси его перекрывают соседи
      * (2·диск / along), и каждый берёт свою долю непрозрачности трубки — вместе у оси выходит 1 − e^(−τ). Глаз в трубке —
      * вуаль ({@link #veil}).
      */
@@ -304,7 +304,8 @@ final class SmokePuffs {
         double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many));
         // в середине кучки перекрывается столько клубов, у оси — ещё соседние места трубки (диск клуба на экране — с полом в
         // пиксель, как он нарисован): каждый берёт свою долю, вместе — то же пропускание
-        double overlap = Math.max(1, many * size * size) * Math.max(1, 2 * PUFF_DISC * point[0] / along);
+        double disc = puffDisc(Math.max(FIRST_FRAME, age) + (count > 1 || vary ? 1 : 0));
+        double overlap = Math.max(1, many * size * size) * Math.max(1, 2 * disc * point[0] / along);
         float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
         double spread = count == 1 ? 0 : 1 - size;
         for (int j = 0; j < count; j++) {
@@ -349,11 +350,20 @@ final class SmokePuffs {
     static final int TUBE_LEVELS = 7;
     /**
      * Запечённый клуб на экране — почти ровный диск: непрозрачность падает до половины середины на этой доле полуразмера
-     * квадрата — в среднем по кадрам, что рисуют трубки ({@link #FIRST_FRAME}–15: 0,76 у молодого клуба, 0,48 у
-     * раскрытого), и у самого узкого кадра ({@code PlumeContinuityTest} мерит по картинкам). Не гаусс: гауссы через 1,2σ
-     * складываются в ровную трубку, а диски радиусом 0,5–0,9σ (край клуба тонкой трубки — 1,2σ) — в бусы.
+     * квадрата, по кадрам ({@code PlumeContinuityTest} мерит по картинкам; кадры до {@link #FIRST_FRAME} не рисуются — как
+     * первый): молодой клуб — 0,76, раскрытый — 0,48. Не гаусс: гауссы через 1,2σ складываются в ровную трубку, а диски
+     * радиусом 0,5–0,9σ (край клуба тонкой трубки — 1,2σ) — в бусы.
      */
-    static final double PUFF_DISC = 0.6, PUFF_DISC_MIN = 0.48;
+    static final double[] PUFF_DISCS = {0.76, 0.76, 0.76, 0.76, 0.72, 0.66, 0.64, 0.60, 0.58, 0.54, 0.52, 0.54, 0.52, 0.50, 0.48, 0.48};
+    /** Диск самого узкого кадра. */
+    static final double PUFF_DISC_MIN = 0.48;
+
+    /** Диск клуба (доля полуразмера) у кадра frame с дробью. */
+    static double puffDisc(double frame) {
+        double f = Math.clamp(frame, 0, PUFF_DISCS.length - 1);
+        int i = Math.min((int) f, PUFF_DISCS.length - 2);
+        return PUFF_DISCS[i] + (PUFF_DISCS[i + 1] - PUFF_DISCS[i]) * (f - i);
+    }
     /** Размах размера клубов кучки и трубки: полуразмер × 0,8–1,2. */
     static final double SIZE_LOW = 0.8;
 
