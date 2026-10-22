@@ -61,7 +61,7 @@ class HeatPassTest {
     void jetFarAwayIsTheBallOfTheSameArea() {
         Flame f = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).flame(Air.SEA);
         assertNotNull(f);
-        double[] parts = HeatPass.parts(f);
+        double[] parts = f.partAreas();
         double core = f.core(), fl = Math.max(f.flame(), core), end = f.length();
         double[] lum = {f.coreLuminance(), f.flameLuminance(), f.tailLuminance()};
         double[][] span = {{0, core}, {0, fl}, {fl, end}};
@@ -95,67 +95,77 @@ class HeatPassTest {
         assertEquals(0, HeatPass.segment(1, -3, 0, 0, -1, 0, 0, 10, 0, 1, 0, 0.01), "вся под гранью");
     }
 
-    /**
-     * Синтетический кадр: глаз в 2 м над землёй смотрит вдоль +x, пиксель — {@link #PIXEL} рад, мир — земля и ящики
-     * блоков. Глубина — расстояние вдоль взгляда до мира у середины пикселя, куда попадает точка.
-     */
-    private static final double PIXEL = 1e-3;
+    /** Окно заслонов: ящики блоков (включительно-исключительно по блокам), земля — всё ниже y = groundY. */
+    private record Box(int x0, int y0, int z0, int x1, int y1, int z1) {
+        boolean has(int x, int y, int z) {
+            return x >= x0 && x < x1 && y >= y0 && y < y1 && z >= z0 && z < z1;
+        }
+    }
 
-    private record Box(double x0, double y0, double z0, double x1, double y1, double z1) {}
+    private static final int[] SIZE = {192, 96, 192};
 
-    private static HeatPass.Depth scene(Box... boxes) {
+    private static HeatPass.Cells world(int groundY, Box... boxes) {
         return (x, y, z) -> {
-            if (x <= 0) return Double.NaN;
-            // пиксель точки и луч глаза через его середину
-            double px = Math.floor(Math.atan2(z, x) / PIXEL) + 0.5, py = Math.floor(Math.atan2(y, x) / PIXEL) + 0.5;
-            if (Math.abs(px * PIXEL) > 0.8 || Math.abs(py * PIXEL) > 0.6) return Double.NaN;
-            double dx = 1, dy = Math.tan(py * PIXEL), dz = Math.tan(px * PIXEL);
-            double best = dy < 0 ? -2 / dy : 1e9;
-            for (Box b : boxes) {
-                double tn = 0, tf = 1e9;
-                double[] o = {0, 0, 0}, d = {dx, dy, dz}, lo = {b.x0, b.y0, b.z0}, hi = {b.x1, b.y1, b.z1};
-                boolean miss = false;
-                for (int k = 0; k < 3; k++) {
-                    if (Math.abs(d[k]) < 1e-12) {
-                        if (o[k] < lo[k] || o[k] > hi[k]) miss = true;
-                        continue;
-                    }
-                    double a = (lo[k] - o[k]) / d[k], c = (hi[k] - o[k]) / d[k];
-                    tn = Math.max(tn, Math.min(a, c));
-                    tf = Math.min(tf, Math.max(a, c));
-                }
-                if (!miss && tn <= tf && tn > 0) best = Math.min(best, tn);
-            }
-            // вдоль взгляда (+x): t·dx
-            return best;
+            if (y < groundY) return true;
+            for (Box b : boxes) if (b.has(x, y, z)) return true;
+            return false;
         };
     }
 
-    private static boolean shadowed(HeatPass.Depth depth, double[] p, double[] n, double[] q) {
-        return HeatPass.shadowed(p[0], p[1], p[2], n[0], n[1], n[2], q[0], q[1], q[2], 1, 0, 0, PIXEL, 0.5, depth);
+    private static boolean shadowed(HeatPass.Cells w, double[] p, double[] q) {
+        return HeatPass.blocked(p[0], p[1], p[2], q[0], q[1], q[2], SIZE, w);
     }
 
     /**
-     * Жалоба на свет за домом: огонь за домом не освещает землю перед ним с той стороны, откуда смотрит глаз — луч к огню
-     * уходит в стену. Земля сбоку от дома, открытая огню, освещена; столб у глаза, мимо которого луч проходит позади, тени
-     * не даёт; стена толщиной в блок (полый дом) — тоже заслон.
+     * Жалоба на свет за домом: дом между огнём и землёй оставляет землю в тени — с какой стороны ни смотри (по блокам, а
+     * не по глубине кадра: ревью #399 — луч поперёк взгляда сквозь цельный дом проходил в 84 % случаев), и у цельного, и у
+     * полого дома со стенами в блок, и у холма. Земля сбоку открыта; столб рядом с лучом тени не даёт; клетка самой
+     * точки (грань, на которой она лежит) — не заслон; часть луча за окном — свободна.
      */
     @Test
-    void houseBetweenGroundAndFireCastsAShadow() {
-        double[] up = {0, 1, 0};
-        // огонь в 3 м над землёй за домом (x 60…68), земля перед домом в 50 м
-        double[] fire = {80, 1, 0}, ground = {50, -2, 0};
-        Box house = new Box(60, -2, -4, 68, 4, 4);
-        assertTrue(shadowed(scene(house), ground, up, fire), "земля перед домом за ним от огня — в тени");
-        assertFalse(shadowed(scene(), ground, up, fire), "без дома — свет");
-        assertFalse(shadowed(scene(house), new double[]{50, -2, 12}, up, new double[]{80, 1, 12}), "сбоку от дома — свет");
-        // полый дом: две стены в блок
-        Box front = new Box(60, -2, -4, 61, 4, 4), back = new Box(67, -2, -4, 68, 4, 4);
-        assertTrue(shadowed(scene(front, back), ground, up, fire), "полый дом — тоже заслон");
-        // столб у глаза: луч от земли к огню проходит в метрах позади него
-        Box pole = new Box(5, -2, -0.2, 5.4, 6, 0.2);
-        assertFalse(shadowed(scene(pole), ground, up, fire), "столб перед глазом — мимо луча");
-        // земля, видимая под скользящим углом, сама себя не затеняет
-        assertFalse(shadowed(scene(), new double[]{120, -2, 3}, up, new double[]{100, 1, 0}), "своей тени нет");
+    void blocksBetweenGroundAndFireCastAShadow() {
+        int g = 40;
+        // земля — верх блока y = 39 (y = 40 — воздух); точка на земле — чуть выше грани
+        double[] ground = {100.5, 40.02, 40.5};
+        double[] fire = {100.5, 43, 70.5};
+        Box house = new Box(96, 40, 50, 105, 45, 59);
+        assertTrue(shadowed(world(g, house), ground, fire), "цельный дом — тень");
+        Box[] hollow = {new Box(96, 40, 50, 105, 45, 51), new Box(96, 40, 58, 105, 45, 59), new Box(96, 40, 50, 97, 45, 59),
+                new Box(104, 40, 50, 105, 45, 59), new Box(96, 44, 50, 105, 45, 59)};
+        assertTrue(shadowed(world(g, hollow), ground, fire), "полый дом со стенами в блок — тень");
+        assertFalse(shadowed(world(g), ground, fire), "без дома — свет");
+        assertFalse(shadowed(world(g, house), new double[]{120.5, 40.02, 40.5}, new double[]{120.5, 43, 70.5}), "сбоку от дома — свет");
+        Box pole = new Box(102, 40, 55, 103, 50, 56);
+        assertFalse(shadowed(world(g, pole), ground, fire), "столб в полутора блоках от луча — мимо");
+        // холм: луч к огню за гребнем уходит в землю
+        Box hill = new Box(80, 40, 52, 120, 50, 60);
+        assertTrue(shadowed(world(g, hill), ground, fire), "за холмом — тень");
+        // точка на грани стены дома (клетка её — сам блок стены): своя клетка не заслон, а свет перед стеной — открыт
+        assertFalse(shadowed(world(g, house), new double[]{100.5, 42, 49.98}, new double[]{100.5, 43, 30}), "своя грань — не заслон");
+        // за окном — свободно: заслон вне окна не известен
+        assertFalse(shadowed((x, y, z) -> x >= SIZE[0] || x < 0, new double[]{100, 50, 100}, new double[]{300, 50, 100}), "за окном — свободно");
+    }
+
+    /**
+     * Струя, ушедшая в землю, сквозь неё не светит (ревью #399): у старта ракеты из 2 м под 30° ось уходит в землю на 4 м,
+     * дальше факела для прохода нет — концы частей кончаются там, свет на метр у них прежний.
+     */
+    @Test
+    void jetEndsWhereItsAxisMeetsTheGround() {
+        Flame f = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).flame(Air.SEA);
+        assertNotNull(f);
+        HeatPass.Frame frame = new HeatPass.Frame();
+        double sin = Math.sin(Math.toRadians(30)), cos = Math.cos(Math.toRadians(30)), cut = 2 / sin;
+        frame.jet(f.middle() * cos, 10 - f.middle() * sin, 0, cos, -sin, 0, f, 0, 2, cut);
+        org.joml.Vector4f c = new org.joml.Vector4f();
+        assertEquals(cut, frame.jetSize.getColumn(0, c).x, 1e-5, "конец струи — у земли");
+        assertEquals(Math.min(f.flame(), cut), frame.jetAxis.getColumn(0, c).w, 1e-5, "пламя — до земли");
+        assertEquals(Math.min(f.core(), cut), frame.jets.getColumn(0, c).w, 1e-5);
+        HeatPass.Frame whole = new HeatPass.Frame();
+        whole.jet(f.middle() * cos, 10 - f.middle() * sin, 0, cos, -sin, 0, f, 0, 2, Double.POSITIVE_INFINITY);
+        assertEquals(frame.jetFlame.getColumn(0, c).x, whole.jetFlame.getColumn(0, new org.joml.Vector4f()).x, 1e-9, "свет на метр — прежний");
+        HeatPass.Frame buried = new HeatPass.Frame();
+        buried.jet(0, 0, 0, 0, -1, 0, f, 0, 2, 0);
+        assertFalse(buried.lit(), "сопло в земле — света нет");
     }
 }

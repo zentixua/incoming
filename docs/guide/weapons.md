@@ -248,8 +248,9 @@ particles. The Shahed's burning fuel makes a fireball about as big as its column
 and smoke. Fuel that lands on water spreads too thin to keep burning, so no fire is left after the ball.
 
 The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
-an orange glow spreads over the blocks around the crater and fades as the ball cools. Houses and hills cast shadows
-from this light, as far as you see them on screen: a wall or hill outside the picture casts none. Hot gas over the fire and the fireball bends light, so whatever is behind it
+an orange glow spreads over the blocks around the crater and fades as the ball cools. Blocks cast shadows from this
+light: a house or a hill between the fire and the ground leaves it dark, even when the house is outside your view.
+Shadows are worked out for about 80 blocks around you; further away the light has none. Hot gas over the fire and the fireball bends light, so whatever is behind it
 shimmers slightly; on a normal screen it is a fraction of a pixel, best seen on sharp edges and through binoculars.
 
 In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at

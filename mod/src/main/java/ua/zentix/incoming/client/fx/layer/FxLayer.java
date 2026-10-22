@@ -249,7 +249,11 @@ public final class FxLayer {
             SmokeGrid.drawn(pall == null || pall.smoke == null || pallDrawn && SmokePass.filled());
             PallPass.Frame front = pallDrawn ? pall : PallPass.empty();
             // свет на мир и дрожание — по кадру с пеленой, до квадратов: дым и огонь слоя ложатся поверх
-            if (hot && scene >= 0) HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
+            if (hot && scene >= 0) {
+                // заслоны у глаза — к тени прямого света (блоки мира, а не глубина кадра)
+                HeatPass.solids(heat, level, view.camera());
+                HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
+            }
             // пробы — после пелены: её проход кладёт карты и таблицу грибов кадра, а проба берёт пропускание пелены и грибов
             int seen = PROBES.update(scene, front, pallDrawn, VIEW, e.getProjectionMatrix(), view.pixel());
             RenderSystem.setShader(() -> s);

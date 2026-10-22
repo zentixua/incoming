@@ -709,8 +709,11 @@ public final class FarFlightView {
         p.coarse = coarse;
     }
 
-    /** Факелы кадра для света на мир ({@link #heat}): середина от глаза, ось струи, высота середины над землёй; сам факел. */
-    private static final int LIT_MAX = 16, LIT_STRIDE = 7;
+    /**
+     * Факелы кадра для света на мир ({@link #heat}): середина от глаза, ось струи, высота середины над землёй, путь по оси
+     * от среза до земли; сам факел.
+     */
+    private static final int LIT_MAX = 16, LIT_STRIDE = 8;
     private static final double[] LIT = new double[LIT_MAX * LIT_STRIDE], LIT_W = new double[LIT_MAX];
     private static final Flame[] LIT_FLAME = new Flame[LIT_MAX];
     private static int lit;
@@ -741,6 +744,10 @@ public final class FarFlightView {
         LIT[o + 4] = jy;
         LIT[o + 5] = jz;
         LIT[o + 6] = Double.isNaN(ground) ? lr : Math.max(lr, y + cam.y - ground);
+        // где ось струи уходит в землю: земля под срезом сопла (струя от среза идёт вниз — до этой высоты)
+        double mid = flame.middle(), nx = x - jx * mid, ny = y - jy * mid, nz = z - jz * mid;
+        double under = lv == null ? Double.NaN : ground(lv, nx + cam.x, nz + cam.z);
+        LIT[o + 7] = Double.isNaN(under) || jy > -1e-6 ? Double.POSITIVE_INFINITY : Math.max(0, ny + cam.y - under) / -jy;
         LIT_FLAME[slot] = flame;
     }
 
@@ -752,7 +759,7 @@ public final class FarFlightView {
         for (int i = 0; i < lit; i++) {
             int o = LIT_STRIDE * i;
             // в глаз этого кадра факелы уже вошли — прошлым кадром ({@link #flamesAtEye})
-            heat.jet(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT_FLAME[i], air, LIT[o + 6]);
+            heat.jet(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT_FLAME[i], air, LIT[o + 6], LIT[o + 7]);
             LIT_FLAME[i] = null;
         }
         flamesAtEye = litEye;

@@ -17,9 +17,8 @@
 //   свет шара ядерки на мир (fx_pall_composite): цвет блока — пиксель, делённый на свет открытого неба (relit). Факел
 //   двигателя — три равномерных светящихся отрезка по оси струи (ядро, пламя, хвост до точки Дрейпера): прямой свет —
 //   точный интеграл по отрезку над гранью (heatSegment), рассеянный и отражённый — как у шара в середине части.
-// - Тени: прямой свет закрывают дома и рельеф в кадре — луч от точки мира к источнику по расстоянию до мира
-//   (heatShadow, HeatPass.shadowed: заслон — луч ушёл за видимую поверхность меньше чем на блок и шаг). Заслон вне кадра
-//   тени не даёт.
+// - Тени: прямой свет закрывают блоки — луч от точки мира к источнику по клеткам окна блоков вокруг глаза (heatBlocked,
+//   HeatPass.blocked; окно — Solids): заслон известен точно, в кадре он или нет. За окном теней нет.
 
 // копия кадра (линейная выборка) и расстояние до мира за пикселем
 uniform sampler2D Sampler0;
@@ -39,8 +38,11 @@ uniform mat4 HeatLightColor;
 // вихря (по модулю периода шума), пульсация показателя преломления δn (по столбцам)
 uniform mat4 HeatHot;
 uniform mat4 HeatShape;
-// вид и проекция от глаза (тень: точка луча → пиксель)
-uniform mat4 HeatViewProj;
+// заслоны у глаза (Solids, свой блок текстуры: в JSON не объявлен): нижний угол окна от глаза (xyz), есть ли окно (w);
+// где этот угол в текстуре
+uniform sampler3D HeatSolids;
+uniform vec4 HeatSolidsAt;
+uniform vec3 HeatSolidsWrap;
 // факелы: столбец i — срез сопла от глаза (xyz), конец ядра (w; 0 — нет); ось струи от сопла (xyz), конец пламени (w);
 // конец струи, полуширина у среза, её рост на метр, ослабление воздуха; свет ядра, пламени, хвоста на метр (rgb)
 uniform mat4 HeatJet;
@@ -54,9 +56,9 @@ uniform vec4 HeatFrame;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 const float CROSS = 0.15;
-// HeatPass.SHADOW_STEPS, HeatPass.BLOCK
-const int SHADOW_STEPS = 16;
-const float BLOCK = 1.0;
+// окно Solids, блоки; клеток луча тени не больше (HeatPass.SHADOW_CELLS)
+const vec3 SOLIDS_SIZE = vec3(192.0, 96.0, 192.0);
+const int SHADOW_CELLS = 160;
 // свет меньше этого (линейный на экране, ниже шага sRGB у чёрного) — тень не ищется: её не видно
 const float SHADOW_SEEN = 3e-4;
 
@@ -149,37 +151,63 @@ float heatSegment(vec3 a, vec3 u, vec2 t, vec3 n, float w2) {
     return max(c0 * k - nu * dr, 0.0);
 }
 
-// Шум для сдвига шагов тени: свой у пикселя (interleaved gradient noise, Jimenez 2014)
-float heatJitter(vec2 at) {
-    return fract(52.9829189 * fract(dot(at, vec2(0.06711056, 0.00583715))));
-}
-
-// Закрыт ли источник в q от точки мира p с нормалью n (HeatPass.shadowed): шаги луча на экран, за видимой поверхностью
-// луч на gap; заслон — ε < gap < ε + блок вдоль взгляда + шаг луча вдоль взгляда. Вне кадра и небо — свет. end — доля
-// пути до q, дальше которой не смотреть (шар: до его края)
-float heatShadow(vec3 p, vec3 n, vec3 q, float end, ivec2 size, float jitter) {
-    float pixel = HeatFrame.y;
-    float bias = max(0.02, 2.0 * pixel * length(p));
-    vec3 s0 = p + n * bias, d = (q - s0) * end;
-    float step = abs(dot(d, PallForward)) / float(SHADOW_STEPS);
-    for (int k = 1; k <= SHADOW_STEPS; k++) {
-        vec3 s = s0 + d * ((float(k) - jitter) / float(SHADOW_STEPS));
-        vec4 clip = HeatViewProj * vec4(s, 1.0);
-        if (clip.w <= 1e-4) return 1.0;
-        vec2 ndc = clip.xy / clip.w;
-        if (abs(ndc.x) > 1.0 || abs(ndc.y) > 1.0) return 1.0;
-        ivec2 px = clamp(ivec2((ndc * 0.5 + 0.5) * vec2(size)), ivec2(0), size - 1);
-        float zs = pallScene(texelFetch(Sampler1, px, 0).r);
-        if (zs >= 1e8) continue;
-        float zq = dot(s, PallForward);
-        float gap = zq - zs, eps = 2.0 * pixel * zq;
-        if (gap > eps && gap < eps + BLOCK * zq / max(length(s), 1e-6) + step) return 0.0;
+// Свободен ли путь от p до q (от глаза) от блоков-заслонов (HeatPass.blocked): 1 — да, 0 — нет. Клетки окна вдоль
+// отрезка по порядку (Amanatides, Woo 1987), часть отрезка за окном — свободна; клетка самой точки мира — её грань, не
+// заслон
+float heatBlocked(vec3 p, vec3 q) {
+    if (HeatSolidsAt.w < 0.5) return 1.0;
+    vec3 a = p - HeatSolidsAt.xyz, d = q - p;
+    float t0 = 0.0, t1 = 1.0;
+    for (int k = 0; k < 3; k++) {
+        if (abs(d[k]) < 1e-6) {
+            if (a[k] < 0.0 || a[k] >= SOLIDS_SIZE[k]) return 1.0;
+        } else {
+            float ta = -a[k] / d[k], tb = (SOLIDS_SIZE[k] - a[k]) / d[k];
+            t0 = max(t0, min(ta, tb));
+            t1 = min(t1, max(ta, tb));
+        }
+    }
+    if (t1 <= t0) return 1.0;
+    ivec3 size = ivec3(SOLIDS_SIZE), wrap = ivec3(HeatSolidsWrap);
+    ivec3 cell = clamp(ivec3(floor(a + d * t0)), ivec3(0), size - 1);
+    ivec3 dir = ivec3(sign(d));
+    vec3 inv = 1.0 / max(abs(d), vec3(1e-9)), next = vec3(1e9);
+    for (int k = 0; k < 3; k++) {
+        if (d[k] > 0.0) {
+            next[k] = (float(cell[k] + 1) - a[k]) * inv[k];
+        } else if (d[k] < 0.0) {
+            next[k] = (a[k] - float(cell[k])) * inv[k];
+        }
+    }
+    bool own = t0 <= 0.0;
+    for (int i = 0; i < SHADOW_CELLS; i++) {
+        if (!own && texelFetch(HeatSolids, (cell + wrap) % size, 0).r > 0.5) return 0.0;
+        own = false;
+        float t = next.z;
+        if (next.x <= next.y && next.x <= next.z) {
+            t = next.x;
+            cell.x += dir.x;
+            next.x += inv.x;
+        } else if (next.y <= next.z) {
+            t = next.y;
+            cell.y += dir.y;
+            next.y += inv.y;
+        } else {
+            cell.z += dir.z;
+            next.z += inv.z;
+        }
+        if (t >= t1 || any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size))) break;
     }
     return 1.0;
 }
 
+// Начало луча тени: точка мира на две ширины пикселя от грани (не меньше 2 см), чтобы её клетка была воздухом перед гранью
+vec3 heatLift(vec3 p, vec3 n) {
+    return p + n * max(0.02, 2.0 * HeatFrame.y * length(p));
+}
+
 // Свет шаров и факелов на мире в точке p (от глаза) с нормалью n, линейный, на белой стене; прямой — с тенью
-vec3 heatLight(vec3 p, vec3 n, ivec2 size, float jitter) {
+vec3 heatLight(vec3 p, vec3 n) {
     vec3 sum = vec3(0.0);
     for (int i = 0; i < 4; i++) {
         vec4 b = HeatLights[i];
@@ -192,7 +220,10 @@ vec3 heatLight(vec3 p, vec3 n, ivec2 size, float jitter) {
         vec3 c = HeatLightColor[i].rgb * mushBallFalloff(d2, b.w * b.w);
         // прямой пучок закрыт — без него (в шаре и у самого шара тени нет)
         float direct = exp(-sd) * max(nv, 0.0);
-        if (d > b.w && direct > 0.0 && dot(c, LUMA) * direct > SHADOW_SEEN) face -= direct * (1.0 - heatShadow(p, n, b.xyz, 1.0 - b.w / d, size, jitter));
+        if (d > b.w && direct > 0.0 && dot(c, LUMA) * direct > SHADOW_SEEN) {
+            vec3 from = heatLift(p, n);
+            face -= direct * (1.0 - heatBlocked(from, from + (b.xyz - from) * (1.0 - b.w / d)));
+        }
         sum += c * face;
     }
     for (int i = 0; i < 4; i++) {
@@ -232,7 +263,7 @@ vec3 heatLight(vec3 p, vec3 n, ivec2 size, float jitter) {
             weight += y;
         }
         // тень — к середине прямого света струи (по его частям)
-        if (dot(direct, LUMA) > SHADOW_SEEN && weight > 0.0) direct *= heatShadow(p, n, p + lit / weight, 1.0, size, jitter);
+        if (dot(direct, LUMA) > SHADOW_SEEN && weight > 0.0) direct *= heatBlocked(heatLift(p, n), p + lit / weight);
         sum += direct + around;
     }
     return sum;
@@ -257,7 +288,7 @@ void main() {
         // свет — на свете самого мира: дымка воздуха и туман Minecraft перед ним — нет
         float fd = Haze.w > 0.5 ? max(length(p.xz), abs(p.y)) : length(p);
         float seen = exp(-Haze.x * length(p)) * (1.0 - smoothstep(Haze.y, Haze.z, fd));
-        vec3 added = heatLight(p, n, size, heatJitter(here)) * seen;
+        vec3 added = heatLight(p, n) * seen;
         if (dot(added, LUMA) > 1e-6) {
             vec3 open = PallOpenSky * faceShade(PallFaceShade, n);
             vec3 lit = vec3(relit(world.r, 1.0, open.r, added.r), relit(world.g, 1.0, open.g, added.g), relit(world.b, 1.0, open.b, added.b));

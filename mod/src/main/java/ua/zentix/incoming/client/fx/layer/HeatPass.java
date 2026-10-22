@@ -40,10 +40,10 @@ import java.util.Arrays;
  * грань — точный интеграл по отрезку ({@link #segment}), только по части, что над гранью. Вдали он сходится к прежнему
  * шару той же площади сбоку.
  * <p>
- * <b>Тени.</b> Свет на мир перекрывают дома и рельеф: от точки мира к источнику — {@value #SHADOW_STEPS} шагов по
- * расстоянию до мира в кадре ({@link SceneDepth}, с LOD DH); шаг, у которого луч ушёл за видимую поверхность меньше чем
- * на толщину блока (1 м: всё твёрдое в мире — блоки) и шаг луча, — внутри того, что эту поверхность даёт: заслон
- * ({@link #shadowed}). Видно только то, что на экране: заслон вне кадра тени не даёт (⚠ предел способа).
+ * <b>Тени.</b> Прямой свет на мир перекрывают блоки: от точки мира к источнику — по клеткам окна заслонов вокруг глаза
+ * ({@link Solids}, {@link #blocked}): мир — блоки, заслон на пути известен точно, в кадре он или нет. По глубине кадра
+ * этого не решить (за видимой гранью — толща дома или пустота за столбом). За окном ({@value Solids#SIZE_XZ} блоков
+ * поперёк) теней нет (⚠ предел окна).
  * <p>
  * Источников — не больше четырёх каждого вида, самые заметные у глаза. Прохода нет, пока нет ни света, ни горячего газа.
  */
@@ -60,10 +60,8 @@ public final class HeatPass {
     static final double SHIFT_MIN = 0.05;
     /** Свет шара на земле под ним меньше этой доли света открытого неба — шар на мир не светит (как у ядерки). */
     static final double SEEN = 0.005;
-    /** Шагов луча тени к источнику (по кадру). */
-    static final int SHADOW_STEPS = 16;
-    /** Толщина заслона за видимой поверхностью, блоков: всё твёрдое в мире — блоки в метр. */
-    static final double BLOCK = 1;
+    /** Клеток луча тени не больше (дальше — свободно): луч через всё окно по диагонали — до 480. */
+    static final int SHADOW_CELLS = 160;
 
     @Nullable
     static ShaderInstance shader;
@@ -213,21 +211,24 @@ public final class HeatPass {
          * обнимает ядро), хвост — [пламя, конец]; свет части на метр — яркость × площадь сбоку / длина / π (тело с яркостью
          * L и площадью сбоку S даёт белой стене лицом к нему в d блоках L·S/(π·d²): у шара S = πr², отсюда L·r²/d²).
          * Свет в глаз — уже у кадра ({@link #eye}); выбор четырёх и порог — как у шара той же площади ({@link Flame#lightRadius}).
+         * cut — путь по оси от среза до земли: дальше струи нет (она растекается по земле — ⚠ свечения стенной струи
+         * нет), и сквозь землю она не светит; свет на метр у частей — прежний, короче — только их концы.
          */
-        public void jet(double x, double y, double z, double jx, double jy, double jz, Flame flame, double air, double h) {
+        public void jet(double x, double y, double z, double jx, double jy, double jz, Flame flame, double air, double h, double cut) {
             double lr = flame.lightRadius(), lum = flame.brightness();
-            if (lr <= 0 || lum <= 0 || flame.length() <= 0) return;
+            double mid = flame.middle(), core = flame.core(), fl = Math.max(flame.flame(), core), end = Math.max(flame.length(), fl);
+            double c = Math.min(cut, end);
+            if (lr <= 0 || lum <= 0 || !(c > 0)) return;
             if (lum * exposure * lr * lr / Math.max(h * h, lr * lr) < SEEN * Math.max(open, 1e-4)) return;
             double w = lum * lr * lr / Math.max(x * x + y * y + z * z, lr * lr);
             int slot = 0;
             for (int i = 1; i < 4; i++) if (jetWeight[i] < jetWeight[slot]) slot = i;
             if (w <= jetWeight[slot]) return;
             jetWeight[slot] = w;
-            double mid = flame.middle(), core = flame.core(), fl = Math.max(flame.flame(), core), end = Math.max(flame.length(), fl);
-            jets.setColumn(slot, column.set((float) (x - jx * mid), (float) (y - jy * mid), (float) (z - jz * mid), (float) core));
-            jetAxis.setColumn(slot, column.set((float) jx, (float) jy, (float) jz, (float) fl));
-            jetSize.setColumn(slot, column.set((float) end, (float) flame.width(), (float) (flame.width() / Math.max(core, 1e-6)), (float) air));
-            double[] parts = parts(flame);
+            double[] parts = flame.partAreas();
+            jets.setColumn(slot, column.set((float) (x - jx * mid), (float) (y - jy * mid), (float) (z - jz * mid), (float) Math.max(1e-3, Math.min(core, c))));
+            jetAxis.setColumn(slot, column.set((float) jx, (float) jy, (float) jz, (float) Math.min(fl, c)));
+            jetSize.setColumn(slot, column.set((float) c, (float) flame.width(), (float) (flame.width() / Math.max(core, 1e-6)), (float) air));
             part(jetCore, slot, flame.coreColor(), flame.coreLuminance(), parts[0], core);
             part(jetFlame, slot, flame.flameColor(), flame.flameLuminance(), parts[1], fl);
             part(jetTail, slot, flame.tailColor(), flame.tailLuminance(), parts[2], end - fl);
@@ -241,12 +242,6 @@ public final class HeatPass {
             double[] rgb = rgb(color, luminance * area / (length * Math.PI));
             m.setColumn(slot, column.set((float) rgb[0], (float) rgb[1], (float) rgb[2], 0));
         }
-    }
-
-    /** Площади частей факела сбоку, м²: ядро (его конус), пламя без ядра, хвост — как у {@link Flame#brightness}. */
-    static double[] parts(Flame f) {
-        double c = f.core() * f.width(), fl = Math.max(0, f.areaTo(f.flame()) - c), t = Math.max(0, f.area() - f.areaTo(f.flame()));
-        return new double[]{c, fl, t};
     }
 
     /** Линейный rgb цвета color (sRGB, наибольший канал 255) с яркостью (luma) luminance. */
@@ -292,37 +287,47 @@ public final class HeatPass {
         return new double[]{t0, t1};
     }
 
-    /**
-     * Глубина кадра для тени ({@link #shadowed}): расстояние до мира вдоль взгляда в пикселе, где точка (от глаза) на
-     * экране; NaN — точка вне кадра, 1e9 — небо.
-     */
-    public interface Depth {
-        double scene(double x, double y, double z);
+    /** Заслоны мира для {@link #blocked}: клетка (x, y, z) окна — заслон ли, или вне окна (тогда — свободно). */
+    public interface Cells {
+        boolean solid(int x, int y, int z);
     }
 
     /**
-     * Тень (зеркало {@code heatShadow} в {@code fx_heat}): закрыт ли источник в q от точки мира p с нормалью n (всё от
-     * глаза, forward — взгляд, pixel — угол пикселя, jitter — сдвиг шагов 0..1). Шаг k — точка луча s; за видимой
-     * поверхностью там (её расстояние вдоль взгляда — depth.scene) луч на gap = z(s) − z_мира. Заслон, когда
-     * ε < gap < ε + толщина блока вдоль взгляда + шаг луча вдоль взгляда (ε — два пикселя глубины): луч ушёл за видимую
-     * поверхность, а за ней — то, что её даёт (блок не тоньше метра). Ушёл дальше — луч прошёл позади предмета (столб перед
-     * камерой), не сквозь. Вне кадра и небо — свет. Начало — на два пикселя от грани по нормали (без своей тени).
+     * Свободен ли путь от a до b (координаты окна заслонов, блоки) — зеркало {@code heatBlocked} в {@code fx_heat}: клетки
+     * вдоль отрезка по порядку (Amanatides, Woo, «A fast voxel traversal algorithm», Eurographics 1987), часть за окном
+     * size — свободна, клетка самой точки a — её грань, не заслон; не больше {@link #SHADOW_CELLS} клеток.
      */
-    public static boolean shadowed(double px, double py, double pz, double nx, double ny, double nz, double qx, double qy, double qz,
-                                   double fx, double fy, double fz, double pixel, double jitter, Depth depth) {
-        double dist = Math.sqrt(px * px + py * py + pz * pz), bias = Math.max(0.02, 2 * pixel * dist);
-        double sx = px + nx * bias, sy = py + ny * bias, sz = pz + nz * bias;
-        double dx = qx - sx, dy = qy - sy, dz = qz - sz;
-        double step = Math.abs(dx * fx + dy * fy + dz * fz) / SHADOW_STEPS;
-        for (int k = 1; k <= SHADOW_STEPS; k++) {
-            double f = (k - jitter) / SHADOW_STEPS;
-            double x = sx + dx * f, y = sy + dy * f, z = sz + dz * f;
-            double zs = depth.scene(x, y, z);
-            if (Double.isNaN(zs)) return false;
-            if (zs >= 1e8) continue;
-            double zq = x * fx + y * fy + z * fz, r = Math.sqrt(x * x + y * y + z * z);
-            double gap = zq - zs, eps = 2 * pixel * zq;
-            if (gap > eps && gap < eps + BLOCK * zq / Math.max(r, 1e-6) + step) return true;
+    public static boolean blocked(double ax, double ay, double az, double bx, double by, double bz, int[] size, Cells cells) {
+        double[] a = {ax, ay, az}, d = {bx - ax, by - ay, bz - az};
+        double t0 = 0, t1 = 1;
+        for (int k = 0; k < 3; k++) {
+            if (Math.abs(d[k]) < 1e-6) {
+                if (a[k] < 0 || a[k] >= size[k]) return false;
+            } else {
+                double ta = -a[k] / d[k], tb = (size[k] - a[k]) / d[k];
+                t0 = Math.max(t0, Math.min(ta, tb));
+                t1 = Math.min(t1, Math.max(ta, tb));
+            }
+        }
+        if (t1 <= t0) return false;
+        int[] cell = new int[3], dir = new int[3];
+        double[] inv = new double[3], next = {1e9, 1e9, 1e9};
+        for (int k = 0; k < 3; k++) {
+            cell[k] = Math.max(0, Math.min(size[k] - 1, (int) Math.floor(a[k] + d[k] * t0)));
+            dir[k] = (int) Math.signum(d[k]);
+            inv[k] = 1 / Math.max(Math.abs(d[k]), 1e-9);
+            if (d[k] > 0) next[k] = (cell[k] + 1 - a[k]) * inv[k];
+            else if (d[k] < 0) next[k] = (a[k] - cell[k]) * inv[k];
+        }
+        boolean own = t0 <= 0;
+        for (int i = 0; i < SHADOW_CELLS; i++) {
+            if (!own && cells.solid(cell[0], cell[1], cell[2])) return true;
+            own = false;
+            int k = next[0] <= next[1] && next[0] <= next[2] ? 0 : next[1] <= next[2] ? 1 : 2;
+            double t = next[k];
+            cell[k] += dir[k];
+            next[k] += inv[k];
+            if (t >= t1 || cell[k] < 0 || cell[k] >= size[k]) break;
         }
         return false;
     }
@@ -374,6 +379,20 @@ public final class HeatPass {
         return Math.pow(v, 2.2);
     }
 
+    /**
+     * Окно заслонов ({@link Solids}) к этому кадру — вокруг глаза eye (места источников — от него), секции у источников
+     * света перечитываются сейчас. Зовёт слой перед проходом, если в кадре есть свет.
+     */
+    static void solids(Frame f, ClientLevel level, net.minecraft.world.phys.Vec3 eye) {
+        if (!f.lit()) return;
+        Vector4f c = new Vector4f();
+        for (int i = 0; i < 4; i++) {
+            if (f.lights.getColumn(i, c).w > 0) Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z);
+            if (f.jets.getColumn(i, c).w > 0) Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z);
+        }
+        Solids.update(level, eye);
+    }
+
     /** Нужен ли проход в этом кадре. */
     static boolean needed(Frame f) {
         return shader != null && (f.lit() || f.hotAny());
@@ -408,7 +427,7 @@ public final class HeatPass {
             LIGHT.setColumn(i, lc.set((float) (lc.x * k), (float) (lc.y * k), (float) (lc.z * k), lc.w));
         }
         s.safeGetUniform("HeatLightColor").set(LIGHT);
-        s.safeGetUniform("HeatViewProj").set(VIEW_PROJECTION);
+        Solids.bind(s);
         s.safeGetUniform("HeatJet").set(f.jets);
         s.safeGetUniform("HeatJetAxis").set(f.jetAxis);
         s.safeGetUniform("HeatJetSize").set(f.jetSize);
@@ -438,6 +457,7 @@ public final class HeatPass {
         s.apply();
         com.mojang.blaze3d.vertex.BufferUploader.draw(mesh);
         s.clear();
+        Solids.unbind();
         RenderSystem.enableDepthTest();
         return true;
     }
@@ -445,9 +465,11 @@ public final class HeatPass {
     private static final Matrix4f EXPOSED = new Matrix4f();
 
     /** Свет m (rgb по столбцам) с привыканием глаза k — в общей матрице на один вызов (uniform копирует её сразу). */
+    private static final Vector4f EXPOSED_COLUMN = new Vector4f();
+
     private static Matrix4f exposed(Matrix4f m, double k) {
         EXPOSED.set(m);
-        Vector4f c = new Vector4f();
+        Vector4f c = EXPOSED_COLUMN;
         for (int i = 0; i < 4; i++) {
             EXPOSED.getColumn(i, c);
             EXPOSED.setColumn(i, c.set((float) (c.x * k), (float) (c.y * k), (float) (c.z * k), c.w));
