@@ -1,6 +1,7 @@
 #version 150
 
 #moj_import <incoming:pall.glsl>
+#moj_import <incoming:fx_balls.glsl>
 
 // Слой эффектов (client/fx/layer). Смешивание ONE, ONE_MINUS_SRC_ALPHA: цвет — свет, уже умноженный на
 // непрозрачность, альфа — сколько закрыто того, что за частицей (у искр и ореолов 0 — свет складывается).
@@ -36,6 +37,7 @@ in float sixKey;
 in vec3 sixBall;
 in vec3 sixKeyDir;
 in vec3 sixBallDir;
+in vec3 worldPos;
 
 // запечённый клуб (FxAtlas.puff6): x — шаг карт по листу (v), y — начало кадров (v), z и w — размер кадра (u, v)
 uniform vec4 FxSix;
@@ -130,6 +132,11 @@ void main() {
         float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
         float sky = sixKey * key + (1.0 - sixKey) * diffuse;
         vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir, mirror) / FxSixLight.z, 1e-6), shade);
+        // клуб, лежащий на горизонтали (степень тени 0 — освещённый сверху верх слоя): свет шаров — в этом пикселе
+        if (-nearest * 127.0 - 13.0 < 0.5) {
+            vec3 bd;
+            fire = ballsToward(worldPos, bd);
+        }
         sixLit = pow(max(vec3(sky) + fire, vec3(0.0)), vec3(1.0 / 2.2));
         tex = vec4(vec3(a.a), a.a);
     } else if (nearest < -0.5) {

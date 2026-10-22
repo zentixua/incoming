@@ -99,12 +99,16 @@ final class SmokePuffs {
 
         private void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
                           int id) {
+            Vec3 eye = view.camera();
+            // на экране — проекция гаусса по углу взгляда (толща по лучу и высота квадрата); в мире — его σ (разброс клубов
+            // кучки, край для рельефа и для глаза внутри)
+            double across = projected(sh, sv, x - eye.x, y - eye.y, z - eye.z);
             double ks = SmokeGrid.SOOT_K * soot, kd = SmokeGrid.dustK(dr, dg, db) * dust, kw = SmokeGrid.DROP_K * water;
-            double tau = (ks + kd + kw) / (2 * Math.PI * sh * sv);
+            double tau = (ks + kd + kw) / (2 * Math.PI * sh * across);
             double a = 1 - Math.exp(-tau);
             if (a < 0.004) return;
             double edge = edge(tau);
-            double rh = edge * sh, rv = edge * sv, r = Math.max(rh, rv);
+            double rh = edge * sh, rv = edge * across, rw = edge * sv, r = Math.max(rh, rw);
             double vis = source.visible(y, r);
             if (vis <= 0) return;
             Vec3 cam = view.camera();
@@ -113,9 +117,12 @@ final class SmokePuffs {
             double air = view.air(d, py);
             if (air < Sight.THRESHOLD) return;
             // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
-            // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс
-            double outside = smoothstep(0.5 * r, r, d);
-            if (outside < 1) veil(px, py, pz, sh, sv, tau, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air);
+            // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс. «Внутри» — по эллипсоиду
+            // края (у плоского слоя пыли в сотню метров шириной и метр толщиной глаз над ним снаружи; по наибольшему
+            // радиусу он был «внутри», и вуаль слоя закрывала весь кадр)
+            double q = Math.sqrt((px * px + pz * pz) / (rh * rh) + py * py / (rw * rw));
+            double outside = smoothstep(0.5, 1, q);
+            if (outside < 1) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air);
             if (outside <= 0) return;
             Sight.point(rh, 1, 1, d, view.pixel(), point);
             double grow = point[0] / rh;
@@ -141,18 +148,50 @@ final class SmokePuffs {
             // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг
             boolean spray = sprays && kw > ks + kd;
             double clubAge = spray ? sprayAge : age;
+            // плоский клуб, на который смотрят сверху (проекция диска шире его толщи), лежит на горизонтали: квадрат лицом к
+            // камере у слоя пыли у земли стоял бы стеной над ней (кадры F2a: «плита» под шаром в 0,1 с)
+            boolean lying = lies(sh, sv, py, d);
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
-                double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rv * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
+                // лежащий клуб — на высоте середины слоя: ниже он ушёл бы под рельеф
+                double ox = gauss(hj) * spread * rh * 0.5, oy = lying ? 0 : gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
                 double k = size * (0.8 + 0.4 * unit(hj >>> 21));
                 double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, clubAge) + (count > 1 ? 2 * unit(hj >>> 28) : 0));
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
-                out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1), (float) (frame - f0),
-                        spray ? sprayShade : shade,
+                FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1);
+                // лежащий клуб сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет сбоку и
+                // сзади) нет, свет солнца, неба и огня — весь (степень тени 0; свет шаров — в каждом пикселе, fx.fsh); снизу —
+                // как обычно. Мягкость у рельефа — путь луча в слое до земли (rw / sin e), не полуразмер
+                if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
+                        Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, sprite,
+                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, sub * last);
+                else out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
                         cr, cg, cb, sub * last);
             }
         }
+    }
+
+    /**
+     * Лежит ли клуб с осями (σh, σh, σv) на горизонтали, когда глаз выше или ниже его середины на dy при расстоянии d:
+     * плоский (σh &gt; 3σv) и видный сверху — проекция диска (σh·sin e) шире его толщи (σv·cos e ≈ σv).
+     */
+    static boolean lies(double sh, double sv, double dy, double d) {
+        return sh > 3 * sv && sh * Math.abs(dy) > sv * d;
+    }
+
+    /**
+     * σ по вертикали экрана у гаусса с осями (σh, σh, σv), на который смотрят из (dx, dy, dz) от глаза: проекция гаусса —
+     * гаусс с осями σh (поперёк, по горизонтали) и √(σv²·cos²e + σh²·sin²e) (e — угол взгляда к горизонту), толща по лучу
+     * через середину — масса / (2π·σ₁·σ₂). Плоский клуб (слой пыли у земли: σh в десятки раз больше σv) сверху — круг на
+     * земле толщей слоя по лучу, сбоку — полоса; квадрат к камере высотой σv лёг бы тонкой чертой поперёк кадра (кадры
+     * шлагбаума F2a: тёмные полосы над землёй вокруг взрыва).
+     */
+    static double projected(double sh, double sv, double dx, double dy, double dz) {
+        double d2 = dx * dx + dy * dy + dz * dz;
+        if (!(d2 > 0)) return sv;
+        double sin2 = dy * dy / d2;
+        return Math.sqrt(sv * sv * (1 - sin2) + sh * sh * sin2);
     }
 
     /** Вуаль облака вокруг глаза — на столько блоков перед ним (ближе квадраты слоя тают у ближней плоскости). */
@@ -164,12 +203,11 @@ final class SmokePuffs {
      * геометрическое), непрозрачность — 1 − e^(−τ), квадратом во весь экран на {@link #VEIL_AT} блока перед глазом. Тот
      * же цвет вещества, что у клубов. Доля share — сколько клубов растаяло.
      */
-    private static void veil(double px, double py, double pz, double sh, double sv, double tau, double ks, double kd, double kw, float dr,
+    private static void veil(double px, double py, double pz, double sh, double sv, double ext, double ks, double kd, double kw, float dr,
                              float dg, float db, double share) {
         FarView view = DRAW.view;
         double fx = view.forward().x(), fy = view.forward().y(), fz = view.forward().z();
-        double a = px * fx + py * fy + pz * fz, b2 = Math.max(0, px * px + py * py + pz * pz - a * a), sigma = Math.sqrt(sh * sv);
-        double along = tau * Math.exp(-0.5 * b2 / (sigma * sigma)) * 0.5 * (1 + SmokeGrid.erf(a / (Math.sqrt(2) * sigma)));
+        double along = sightDepth(px, py, pz, sh, sv, ext, fx, fy, fz);
         float k = (float) ((1 - Math.exp(-along)) * share);
         if (k < 0.004f) return;
         float lit = view.ambient();
@@ -177,6 +215,25 @@ final class SmokePuffs {
         // во весь экран: полуразмер — с запасом на угол поля зрения до ~120°
         double half = VEIL_AT * 4;
         DRAW.out.veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, half, cr, cg, cb, k);
+    }
+
+    /**
+     * Толща по лучу взгляда из глаза (направление f, единичное) через гаусс с осями (σh, σh, σv), центр — (px, py, pz) от
+     * глаза, ослабление всей массы ext (м²): в пространстве, где гаусс — шар единичного σ, луч идёт с шагом |f'| =
+     * √((fx² + fz²)/σh² + fy²/σv²), и толща — ext/((2π)^{3/2}σh²σv)·√(π/2)/|f'|·e^(−b'²/2)·(1 + erf(a'/√2)), a' — путь до
+     * ближайшей к середине точки луча, b' — её расстояние до середины (обе — в σ). У шара — прежняя формула вуали.
+     */
+    static double sightDepth(double px, double py, double pz, double sh, double sv, double ext, double fx, double fy, double fz) {
+        double ux = fx / sh, uy = fy / sv, uz = fz / sh, len = Math.sqrt(ux * ux + uy * uy + uz * uz);
+        if (!(len > 0)) return 0;
+        ux /= len;
+        uy /= len;
+        uz /= len;
+        // середина от глаза в σ: луч из глаза — t·u, ближайшая к середине точка — t = a'
+        double cx = px / sh, cy = py / sv, cz = pz / sh;
+        double a = cx * ux + cy * uy + cz * uz, b2 = Math.max(0, cx * cx + cy * cy + cz * cz - a * a);
+        return ext / (Math.pow(2 * Math.PI, 1.5) * sh * sh * sv) * Math.sqrt(Math.PI / 2) / len * Math.exp(-0.5 * b2)
+                * (1 + SmokeGrid.erf(a / Math.sqrt(2)));
     }
 
     /** Видимый край гаусса толщи τ₀ поперёк середины, в σ: где толща падает до {@link #EDGE_TAU}. */

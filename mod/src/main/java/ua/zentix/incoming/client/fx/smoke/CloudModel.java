@@ -46,12 +46,20 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
  * <p>
  * <b>Вещество.</b> Сажа взрывчатки — свободный углерод продуктов детонации ({@link BlastSource.Explosive#freeCarbon}), из
  * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link BlastSource.Fuel}.
- * Пыль — грунт воронки ({@link CraterModel#chargeVolume}: диаметр 0,65·W^⅓ м, глубина — четверть, параболоид — тот же
- * закон, что роет сервер); в воздух уходит доля {@link #DUST_LOFTED} (оценка), половина — в облако, половина —
- * у земли. Ослабление на массу — сажа {@link #SOOT_K} м²/кг при альбедо 0,25 и асимметрии 0,5 (Bond, Bergstrom 2006:
- * поглощение 7,5 м²/г на 550 нм), пыль — {@code DustModel.K_MIX} (геометрическая оптика зёрен ядерной пыли), капли
- * конденсации (5 мкм) — 3Q/(2ρr) = 600 м²/кг. Облако видно, пока его толща поперёк больше {@link #SEEN} (порог
- * контраста Кошмидера).
+ * Пыль воронки — грунт воронки ({@link CraterModel#chargeVolume}: диаметр 0,65·W^⅓ м, глубина — четверть, параболоид —
+ * тот же закон, что роет сервер); в воздух уходит доля {@link #DUST_LOFTED} (оценка). Воронка заряда меньше его шара
+ * продуктов: выброс проходит сквозь шар, и его мелкая пыль поднимается с облаком. Воронки нет у подрыва выше
+ * {@link #CRATER_HOB} радиуса шара продуктов (разрыв в воздухе): пыли воронки нет.
+ * <p>
+ * <b>Пыль волны</b> — {@link GroundDust}: тот же закон, что у ядерки ({@code DustModel}: вынос ветром за фронтом, слой Kuhl,
+ * корзины, подсос в ножку), с высотой подрыва над землёй {@link #hob} и ядерной мощностью того же давления у земли
+ * ({@link #equivalentKt}); у разрыва в воздухе пыли нет — давление у земли ниже порога срыва. Чёрч — только размер и
+ * высота стабилизированного облака ({@link #HE_HEAT}).
+ * <p>
+ * <b>Оптика.</b> Ослабление на массу — сажа {@link #SOOT_K} м²/кг при альбедо 0,25 и асимметрии 0,5 (Bond, Bergstrom 2006:
+ * поглощение 7,5 м²/г на 550 нм), пыль — {@code DustModel.K_MIX} (геометрическая оптика зёрен ядерной пыли; что осела
+ * крупная, ослабление идёт по доле мелкой — {@code DustModel.extinctionAloft}), капли конденсации (5 мкм) — 3Q/(2ρr) =
+ * 600 м²/кг. Облако видно, пока его толща поперёк больше {@link #SEEN} (порог контраста Кошмидера).
  */
 public final class CloudModel {
     static final double G = 9.80665, RHO = 1.225, CP = 1005, T_AIR = 288.15;
@@ -88,10 +96,24 @@ public final class CloudModel {
     /** Доля грунта воронки, что уходит в воздух пылью мельче ~50 мкм, — оценка. */
     public static final double DUST_LOFTED = 0.02;
     /**
-     * Доля пыли воронки, что встаёт с облаком (остальное — у земли, вал пыли от ветра за фронтом), и доля пыли облака в
-     * ножке, пока облако поднимается (тает с его подъёмом), — оценки: замеров разделения пыли у малых зарядов нет.
+     * Облако старта ({@link LaunchCloud}): доля пыли, сорванной струёй, что встаёт с облаком (остальное — у земли), —
+     * оценка: замеров разделения пыли у стартов нет. У взрыва пыль у земли — слой волны ({@link GroundDust}).
      */
-    public static final double CLOUD_SHARE = 0.5, STEM_SHARE = 0.3;
+    public static final double CLOUD_SHARE = 0.5;
+    /**
+     * Доля энергии ядерного взрыва в ударной волне — ~0,5 (Glasstone, Dolan, «The Effects of Nuclear Weapons», 1977, §1.24:
+     * около половины — волна, треть — свет, остальное — радиация); у ВВ тротиловый эквивалент — сама волна. Давление у
+     * земли заряда W кг ТНТ — как у ядерного наземного W/0,5 кг: Броуд ({@code HobBlast}) против Кинни–Грэхема
+     * ({@code BlastModel}) дают отношение мощностей 1,4–2,4 от 1 до 50 psi у 6–1000 кг (CloudModelTest).
+     */
+    public static final double NUCLEAR_BLAST_SHARE = 0.5;
+    /**
+     * Воронки нет у подрыва выше этой доли радиуса огненного шара — тот же признак, что у ядерного
+     * ({@code CraterModel.formsCrater}: Glasstone и Dolan, 0,1 радиуса шара); у ВВ — по шару продуктов детонации
+     * ({@link #heBall}). ⚠ Порога по опытам с ВВ в наших источниках нет: у Кинни и Грэхема (1985) лишь сказано, что заряд над
+     * землёй может не дать воронки.
+     */
+    public static final double CRATER_HOB = 0.1;
     /** Облако видно, пока его толща поперёк середины больше этого (порог контраста 0,02). */
     public static final double SEEN = 0.02;
     /** Точка Дрейпера: газ холоднее не светится, K. */
@@ -178,9 +200,13 @@ public final class CloudModel {
 
     public final BlastSource source;
     public final Air air;
+    /** Высота подрыва над землёй под точкой взрыва, м (0 — удар в поверхность). */
+    public final double hob;
+    /** Пыль волны у земли и ножка. */
+    public final GroundDust ground;
     /** Плавучесть всего тепла, м⁴/с²; F = 3B/(4π). */
     public final double buoyancy;
-    /** Сажа и пыль (в облаке и у земли), кг. */
+    /** Сажа и пыль воронки (в облаке), кг. */
     public final double soot, dust;
     /** Шар топлива: диаметр, м, и сколько горит, с (0 — топлива нет). */
     public final double fuelBall, fuelBallSeconds;
@@ -211,8 +237,34 @@ public final class CloudModel {
 
     /** {@code onWater} — взрыв на воде: воронки в грунте нет, пыли нет (вода — брызгами, {@link WaterBlast}). */
     public CloudModel(BlastSource source, Air air, boolean onWater) {
+        this(source, air, onWater, 0);
+    }
+
+    /**
+     * Взрыв на высоте {@code hobM} над землёй (0 — удар в поверхность; разрыв зенитной ракеты — высота над рельефом):
+     * воронка — только если заряд её роет ({@link #CRATER_HOB}), пыль волны — по давлению у земли ({@link GroundDust}).
+     */
+    public CloudModel(BlastSource source, Air air, boolean onWater, double hobM) {
+        this(source, air, onWater, hobM, GroundDust.Ground.BARE);
+    }
+
+    /**
+     * То же над поверхностью {@code ground} вокруг по секторам: голый рыхлый грунт, дёрн или твёрдое, вода ({@link GroundDust}).
+     */
+    public CloudModel(BlastSource source, Air air, boolean onWater, double hobM, GroundDust.Ground ground) {
         // тот же закон воронки, что роет сервер (грунт — сухой: пакет несёт только «вода или нет»)
-        this(source, air, onWater ? 0 : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater);
+        this(source, air, onWater || !digs(source.chargeKg(), hobM) ? 0
+                : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater, hobM, ground);
+    }
+
+    /** Роет ли заряд {@code tntKg} кг на высоте {@code hobM} над землёй воронку ({@link #CRATER_HOB}). */
+    public static boolean digs(double tntKg, double hobM) {
+        return tntKg > 0 && hobM <= CRATER_HOB * 1.7 * Math.cbrt(tntKg);
+    }
+
+    /** Ядерная мощность, кт, с тем же давлением у земли, что у заряда {@code tntKg} кг ТНТ ({@link #NUCLEAR_BLAST_SHARE}). */
+    public static double equivalentKt(double tntKg) {
+        return Math.max(0, tntKg) * 1e-6 / NUCLEAR_BLAST_SHARE;
     }
 
     /**
@@ -220,12 +272,13 @@ public final class CloudModel {
      * размер облака — не меньше {@code size} м (пыль, поднятая не жаром, — облако такого размера у земли).
      */
     public CloudModel(BlastSource source, Air air, double dustKg, double size) {
-        this(source, air, dustKg, size, false);
+        this(source, air, dustKg, size, false, 0, GroundDust.Ground.BARE);
     }
 
-    private CloudModel(BlastSource source, Air air, double dustKg, double size, boolean onWater) {
+    private CloudModel(BlastSource source, Air air, double dustKg, double size, boolean onWater, double hobM, GroundDust.Ground surface) {
         this.source = source;
         this.air = air;
+        this.hob = Math.max(0, hobM);
         double fuelHeat = source.fuelKg() * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
@@ -256,7 +309,9 @@ public final class CloudModel {
         double burn = THIN_LAYER * source.fuel().poolBurn * Math.PI * poolRadius * poolRadius;
         poolSeconds = poolKg > 0 && burn > 0 ? poolKg / burn : 0;
         poolWatts = poolSeconds > 0 ? burn * source.fuel().heatJPerKg : 0;
-        life = lifeSeconds();
+        // пыль волны: над водой грунта нет (брызги — WaterBlast)
+        ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, surface, air);
+        life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, ground.life));
     }
 
     /**
@@ -264,7 +319,12 @@ public final class CloudModel {
      * ({@link BuriedBlast#craterVolume}; грунта пакет не несёт — сухой, как у наземного), доля {@link #DUST_LOFTED} в воздухе.
      */
     public static CloudModel buried(BlastSource source, Air air, BuriedBlast law, boolean onWater) {
-        return new CloudModel(source, air, onWater ? 0 : law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater);
+        return buried(source, air, law, onWater, GroundDust.Ground.BARE);
+    }
+
+    /** То же над поверхностью {@code ground} вокруг ({@link GroundDust}). */
+    public static CloudModel buried(BlastSource source, Air air, BuriedBlast law, boolean onWater, GroundDust.Ground ground) {
+        return new CloudModel(source, air, onWater ? 0 : law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater, 0, ground);
     }
 
     /**
@@ -461,8 +521,33 @@ public final class CloudModel {
      * Σκ'·m / (2π·σh·σv) по веществам облака (у земли — своё облако, не в счёт).
      */
     public double tau(double t) {
-        double ext = SOOT_K * soot + ua.zentix.incoming.nuclear.model.DustModel.K_MIX * CLOUD_SHARE * dust * DustModel.aloft(t, height(t));
+        double ext = SOOT_K * soot + DustModel.K_MIX * capDust(t);
         return ext / (2 * Math.PI * sigmaH(t) * sigmaV(t));
+    }
+
+    /**
+     * Пыль в облаке в возрасте t (ослабление в кг смеси {@code DustModel.K_MIX}): пыль воронки и сорванная волной под
+     * огненным шаром, что не осела из облака (слой — высота его середины), и пыль ножки, что дошла до его низа.
+     */
+    double capDust(double t) {
+        return (dust + ground.underBall(t)) * DustModel.extinctionAloft(t / Math.max(height(t), 1)) + ground.drawn(stemEntered(t));
+    }
+
+    /**
+     * До какого возраста вошедшая в ножку пыль уже дошла до низа облака в возрасте t, с: воздух ножки идёт вверх долей
+     * {@code MushroomModel.STEM_INFLOW} подъёма облака (как у ядерки), путь пыли, вошедшей в t', —
+     * доля·(высота(t) − высота(t')); низ облака — середина − 1,5σ.
+     */
+    double stemEntered(double t) {
+        double bottom = height(t) - 1.5 * sigmaV(t), k = ua.zentix.incoming.nuclear.model.MushroomModel.STEM_INFLOW;
+        if (bottom <= 0 || k * (height(t) - height(0)) < bottom) return 0;
+        double lo = 0, hi = t;
+        for (int i = 0; i < 30; i++) {
+            double mid = 0.5 * (lo + hi);
+            if (k * (height(t) - height(mid)) >= bottom) lo = mid;
+            else hi = mid;
+        }
+        return lo;
     }
 
     /** Сколько облако видно, с: пока {@link #tau} больше {@link #SEEN}, не дольше {@link #LIFE_MAX}. */
@@ -491,60 +576,54 @@ public final class CloudModel {
 
     /**
      * Клубы облака в возрасте t (с), от точки взрыва (y — от точки удара вверх): огненный шар (горячий, в огненной
-     * стадии), облако (термик: сажа и половина пыли, своя температура), ножка — след облака от земли до его низа (доля
-     * пыли облака, тает с ростом), пыль у земли (другая половина пыли: расползается и оседает). Каждый клуб несёт массу —
-     * сетка сама переводит её в ослабление.
+     * стадии), облако (термик: сажа, пыль воронки и пыль ножки, дошедшая до его низа), ножка — от земли до низа облака
+     * (пыль, что подсос забрал из слоя волны и ещё не донёс до облака), слой пыли волны у земли ({@link GroundDust}).
+     * Каждый клуб несёт массу — пыль как ослабление в кг смеси {@code DustModel.K_MIX}.
      */
     public void blobs(double t, Blobs out) {
         if (t < 0 || t >= life) return;
         double fade = fade(t);
         double cx = driftX(t), cz = driftZ(t), cy = height(t), sh = sigmaH(t), sv = sigmaV(t);
         double k = kelvin(t), up = rise(t);
+        // ножка — шар на земле: пыль идёт по всей ножке до низа облака сразу (как у ядерки, StemDust); что дошло — в облаке
+        double entered = stemEntered(t), stem = Math.max(0, ground.drawn(t) - ground.drawn(entered));
+        // низ облака над землёй (у разрыва в воздухе земля — на hob ниже точки взрыва)
+        double bottom = cy - 1.5 * sv + hob;
+        boolean stemShown = bottom > 2 && stem > 0;
+        double cloudDust = capDust(t) + (stemShown ? 0 : stem);
         // огненная стадия: шары светят своим радиусом и температурой — шар продуктов детонации (сажа взрывчатки), шар
         // топлива (сажа топлива); пыль облака — в большем
-        // пыль облака оседает из него (корзины DustModel), ножку питает подъём облака — тает с его скоростью
-        double cloudDust = CLOUD_SHARE * dust * DustModel.aloft(t, cy);
-        double stemShare = STEM_SHARE * Math.min(1, up / Math.max(maxRise, 1e-6));
         double he = heBallRadius(t), fuel = fuelBallRadius(t);
         double heSoot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES, fuelSoot = soot - heSoot;
         if (he > 0 || fuel > 0) {
             boolean heBig = he > fuel;
             if (he > 0) {
                 double s = he / Math.sqrt(5);
-                out.blob(cx, heBallHeight(t), cz, s, s, (fuel > 0 ? heSoot : soot) * fade, heBig ? cloudDust * (1 - stemShare) * fade : 0, 0,
+                out.blob(cx, heBallHeight(t), cz, s, s, (fuel > 0 ? heSoot : soot) * fade, heBig ? cloudDust * fade : 0, 0,
                         Math.max(k, heBallKelvin(t)), up);
             }
             if (fuel > 0) {
                 double s = fuel / Math.sqrt(5);
-                out.blob(cx, fuelBallHeight(t), cz, s, s, (he > 0 ? fuelSoot : soot) * fade, heBig ? 0 : cloudDust * (1 - stemShare) * fade, 0,
+                out.blob(cx, fuelBallHeight(t), cz, s, s, (he > 0 ? fuelSoot : soot) * fade, heBig ? 0 : cloudDust * fade, 0,
                         Math.max(k, FUEL_BALL_K), up);
             }
         } else {
-            out.blob(cx, cy, cz, sh, sv, soot * fade, cloudDust * (1 - stemShare) * fade, 0, k, up);
+            out.blob(cx, cy, cz, sh, sv, soot * fade, cloudDust * fade, 0, k, up);
         }
-        // ножка: от земли до низа облака, клубы через σ ножки
-        double bottom = cy - 1.5 * sv;
-        if (bottom > 2 && stemShare > 1e-3) {
+        if (stemShown) {
+            // клубы ножки — σ ножки (⚠ оценка: треть σ облака), клонится с ветром: снос на её высоте — доля сноса облака
             double ss = Math.max(0.35 * sh, 1);
             int count = (int) Math.min(8, Math.max(1, Math.round(bottom / (2 * ss))));
-            double mass = cloudDust * stemShare * fade / count;
+            double mass = stem * fade / count;
             for (int i = 0; i < count; i++) {
                 double f = (i + 0.5) / count;
-                // ножка клонится с ветром: снос на её высоте — доля сноса облака
                 double h = f * bottom;
-                double lean = air.wind(h) / air.wind(cy);
-                out.blob(cx * lean, h, cz * lean, ss, ss, 0, mass, 0, T_AIR + (k - T_AIR) * f * 0.5, up * f);
+                double lean = air.wind(h) / air.wind(cy + hob);
+                out.blob(cx * lean, h - hob, cz * lean, ss, ss, 0, mass, 0, T_AIR + (k - T_AIR) * f * 0.5, up * f);
             }
         }
-        // пыль у земли: вал, который ветер за фронтом гонит до радиуса облака Чёрча (R = 4,7·W^0,375 м; σ = R/√5, как у
-        // термика) со скоростью звука, дальше — расплывание Бриггса по пути ветра; высота — начальный шар, оседает корзинами
-        double c = ua.zentix.incoming.nuclear.model.BlastModel.SOUND_SPEED;
-        double church = 4.7 * Math.pow(source.chargeKg(), 0.375) / Math.sqrt(5);
-        double x = Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(2)) * t;
-        double bh = Math.hypot(church * Math.min(1, t * c / Math.max(church, 1e-6)), spreadH(air.spread(), x));
-        double bv = Math.max(radius(0) / Math.sqrt(5), spreadV(air.spread(), x));
-        double ground = (1 - CLOUD_SHARE) * dust * DustModel.aloft(t, 2 * bv);
-        out.blob(cx * air.wind(2) / air.wind(cy), bv, cz * air.wind(2) / air.wind(cy), Math.max(bh, 0.5), bv, 0, ground * fade, 0, T_AIR, 0);
+        // слой пыли волны у земли (на hob ниже точки взрыва)
+        ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y - hob, z, gh, gv, 0, d, 0, T_AIR, 0));
     }
 
     /**
@@ -566,6 +645,11 @@ public final class CloudModel {
             condensationLife = r <= 0 ? 0 : 10 * ua.zentix.incoming.nuclear.model.BlastModel.positivePhaseSeconds(r, source.chargeKg() * 1e-6);
         }
         return condensationLife;
+    }
+
+    /** Толща самого густого клуба слоя пыли волны в возрасте t (через середину по горизонтали). */
+    public double groundTauForTest(double t) {
+        return ground.tau(t);
     }
 
     /** Радиус и жизнь облака конденсации — один раз (зовут каждый кадр); −1 — ещё не считались. */

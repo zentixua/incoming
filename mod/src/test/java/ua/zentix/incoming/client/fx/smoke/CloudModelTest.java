@@ -159,7 +159,8 @@ class CloudModelTest {
                 assertTrue(b[5] >= CloudModel.T_AIR_K - 1e-9, "не холоднее воздуха");
             }
             assertEquals(m.soot * m.fade(t), soot, 1e-9, "t " + t);
-            assertTrue(dust <= m.dust + 1e-9, "t " + t);
+            // пыль — ослабление в кг смеси: воронка, слой волны и сорванное под шаром, не больше поднятого
+            assertTrue(dust <= m.dust + m.ground.total + m.ground.underBall(t) + 1e-9, "t " + t);
             assertTrue(blobs.get(0)[0] > 0, "облако над землёй");
         }
         // в огненной стадии — два горячих шара: продукты детонации (горячее) и топливо

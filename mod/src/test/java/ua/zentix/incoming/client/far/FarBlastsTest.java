@@ -142,4 +142,21 @@ class FarBlastsTest {
         assertTrue(Double.isFinite(p[0] + p[1] + p[2]), "глаз прямо над шаром");
     }
 
+
+    /**
+     * Пыль взрыва — цвета сухой мелкой пыли, а не блока земли (F3: толстый слой цвета влажной почвы выходил почти чёрным
+     * диском): у грунта — цвет стены пыли ядерки (та же земля, {@code DustModel.Surface.REFERENCE}), и ни у какого
+     * материала пыль не темнее его блока.
+     */
+    @org.junit.jupiter.api.Test
+    void dustTakesTheColourOfDrySoilDust() {
+        float[] dirt = FarBlasts.dustColour(ua.zentix.incoming.warhead.GroundMaterial.DIRT);
+        for (int i = 0; i < 3; i++)
+            org.junit.jupiter.api.Assertions.assertEquals(ua.zentix.incoming.client.nuclear.NukePall.DUST[i], dirt[i], 1e-6);
+        for (ua.zentix.incoming.warhead.GroundMaterial g : ua.zentix.incoming.warhead.GroundMaterial.values()) {
+            if (g.isWater()) continue; // над водой пыли нет — брызги
+            float[] c = FarBlasts.dustColour(g);
+            org.junit.jupiter.api.Assertions.assertTrue(c[0] + c[1] + c[2] >= g.r + g.g + g.b - 1e-6, g + ": пыль темнее блока");
+        }
+    }
 }

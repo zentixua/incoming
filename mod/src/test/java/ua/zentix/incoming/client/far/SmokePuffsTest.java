@@ -49,4 +49,53 @@ class SmokePuffsTest {
         assertTrue(bake.contains("SPRAY_ALBEDO, SPRAY_G = " + SmokePuffs.SPRAY_W + ", " + SmokePuffs.SPRAY_G),
                 "tools/bake_fx/bake.py: SPRAY_ALBEDO, SPRAY_G не " + SmokePuffs.SPRAY_W + ", " + SmokePuffs.SPRAY_G);
     }
+
+    /**
+     * Плоский клуб (слой пыли у земли) проецируется на экран по углу взгляда: сверху — круг шириной σh, сбоку — полоса
+     * высотой σv, между — √(σv²cos²e + σh²sin²e); у круглого — всегда σ. Квадрат к камере высотой σv при взгляде сверху
+     * лёг бы чертой поперёк кадра (кадры F2a: тёмные полосы над землёй вокруг взрыва).
+     */
+    @Test
+    void flatClubProjectsByViewAngle() {
+        double sh = 20, sv = 0.5;
+        org.junit.jupiter.api.Assertions.assertEquals(sh, SmokePuffs.projected(sh, sv, 0, -50, 0), 1e-9, "сверху");
+        org.junit.jupiter.api.Assertions.assertEquals(sv, SmokePuffs.projected(sh, sv, 50, 0, 0), 1e-9, "сбоку");
+        double e = Math.toRadians(20), d = 50;
+        double mid = SmokePuffs.projected(sh, sv, d * Math.cos(e), -d * Math.sin(e), 0);
+        org.junit.jupiter.api.Assertions.assertEquals(Math.sqrt(sv * sv * Math.pow(Math.cos(e), 2) + sh * sh * Math.pow(Math.sin(e), 2)), mid, 1e-9);
+        org.junit.jupiter.api.Assertions.assertTrue(mid > 10 * sv, "под 20° — уже не черта: " + mid);
+        org.junit.jupiter.api.Assertions.assertEquals(3, SmokePuffs.projected(3, 3, 10, -7, 2), 1e-9, "круглый");
+    }
+
+    /**
+     * Толща по лучу из глаза через гаусс: у шара — прежняя формула вуали (τ₀·e^(−b²/2σ²)·½(1 + erf(a/√2σ))); у плоского
+     * слоя (σh 40, σv 1) глаз в 18 м над ним видит толщу сверху — тонкую, а не толщу вдоль слоя (финальные кадры F2a:
+     * вуаль слоя пыли закрывала весь кадр у подстанции и у бомбы в 150 м).
+     */
+    @Test
+    void sightDepthThroughAFlatLayer() {
+        double ext = 1000, s = 5;
+        double tau0 = ext / (2 * Math.PI * s * s);
+        // глаз в середине шара, смотрит вбок: половина толщи поперёк
+        org.junit.jupiter.api.Assertions.assertEquals(0.5 * tau0, SmokePuffs.sightDepth(0, 0, 0, s, s, ext, 1, 0, 0), 1e-9);
+        // шар впереди на 10 (a = 10), смещён вбок на 3
+        double a = 10, b = 3, old = tau0 * Math.exp(-0.5 * b * b / (s * s)) * 0.5 * (1 + ua.zentix.incoming.client.fx.smoke.SmokeGrid.erf(a / (Math.sqrt(2) * s)));
+        org.junit.jupiter.api.Assertions.assertEquals(old, SmokePuffs.sightDepth(a, b, 0, s, s, ext, 1, 0, 0), 1e-9);
+        // плоский слой под глазом: вниз — толща сверху ext/(2πσh²)·(вся, слой целиком под глазом), вдоль слоя — огромная
+        double down = SmokePuffs.sightDepth(0, -18, 0, 40, 1, ext, 0, -1, 0);
+        org.junit.jupiter.api.Assertions.assertEquals(ext / (2 * Math.PI * 40 * 40), down, 1e-6);
+        double level = SmokePuffs.sightDepth(0, -18, 0, 40, 1, ext, 1, 0, 0);
+        org.junit.jupiter.api.Assertions.assertTrue(level < 1e-6, "взгляд вдоль, на 18 σ выше слоя: " + level);
+    }
+
+    /**
+     * Слой пыли у земли (σh 15, σv 0,5) из глаза в 18 м над ним и в 50 м — лежит на горизонтали (квадрат лицом к камере
+     * стоял бы над землёй «плитой» в 0,1 с, кадры F2a); тот же слой с уровня глаза и круглый клуб — лицом к камере.
+     */
+    @Test
+    void flatClubLiesWhenSeenFromAbove() {
+        org.junit.jupiter.api.Assertions.assertTrue(SmokePuffs.lies(15, 0.5, -18, 53));
+        org.junit.jupiter.api.Assertions.assertFalse(SmokePuffs.lies(15, 0.5, -1, 53), "с уровня глаза — полоса");
+        org.junit.jupiter.api.Assertions.assertFalse(SmokePuffs.lies(5, 5, -18, 53), "круглый");
+    }
 }

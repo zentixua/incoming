@@ -24,6 +24,10 @@ gpu_job() {
   return 1
 }
 short_of_memory() { [ "$(awk '/MemAvailable/ {print int($2/1048576)}' /proc/meminfo)" -lt 13 ]; }
+# очередь шлагбаумов — замком: проверка по процессам не видит чужую задачу, пока та ещё копирует инстанс и собирает jar
+# (22.10 два прогона так шли одновременно, и кадры одного сняты при 20–30 fps вместо ~80); замок держится до выхода
+mkdir -p "$ROOT"; exec 9>"$ROOT/.gpu.lock"
+until flock -n 9; do echo "$(date +%T) другой прогон шлагбаума — жду"; sleep 30; done
 while gpu_job || short_of_memory; do echo "$(date +%T) видеокарта или память заняты чужой задачей — жду"; sleep 30; done
 python3 "$TREE/tools/prod_client.py" --copy-only --dir "$INST" || exit 1
 sed -i -e 's/^fullscreen:.*/fullscreen:false/' -e 's/^soundCategory_music:.*/soundCategory_music:0.0/' "$INST/options.txt"
