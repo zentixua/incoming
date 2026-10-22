@@ -136,6 +136,16 @@ public final class WaterModel {
         return COLUMN_TOP * SURFACE_COLUMN * bakerScale(yieldKt);
     }
 
+    /** Наибольший радиус базисной волны подрыва на поверхности сверх стенки столба, м (обычный взрыв на воде — тот же закон). */
+    public static double surgeReach(double yieldKt) {
+        return SURFACE_SURGE * SURGE_RADIUS * bakerScale(yieldKt);
+    }
+
+    /** Высота базисной волны подрыва на поверхности, м. */
+    public static double surgeTop(double yieldKt) {
+        return SURFACE_SURGE * SURGE_HEIGHT * bakerScale(yieldKt);
+    }
+
     /** Толщина стенки столба, м. */
     public static double columnWall(double yieldKt) {
         return COLUMN_WALL * columnRadius(yieldKt);

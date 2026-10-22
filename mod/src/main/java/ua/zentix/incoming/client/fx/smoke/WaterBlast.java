@@ -19,7 +19,8 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * <li><b>Вода</b> — масса столба по массе «Бейкера» (Glasstone и Dolan, §2.52: ~1 млн т), пропорционально заряду;
  * ослабление брызг — капли радиуса {@link #DROP_R} м: 3/(2ρr) м²/кг (геометрическая оптика); в клуб она идёт
  * каплями сетки ({@link CloudModel#DROP_K}, капли 5 мкм) — пересчётом массы на то же ослабление. Падая, столб
- * оставляет водяную пыль — долю {@link #MIST} мелких капель (О), её сносит ветром и расплывает, как облако.</li>
+ * оставляет водяную пыль — долю {@link #MIST} мелких капель (О) кольцом базисной волны ({@link #surgeRadius}, закон
+ * ядерки), её сносит ветром и расплывает, как облако.</li>
  * </ul>
  */
 public final class WaterBlast {
@@ -36,10 +37,12 @@ public final class WaterBlast {
     /** Высота и радиус столба, м; время подъёма, с; вода, кг. */
     public final double height, radius, rise, water;
     private final CloudModel.Air air;
+    /** Заряд, кт. */
+    private final double kt;
 
     public WaterBlast(double tntKg, CloudModel.Air air) {
         this.air = air;
-        double kt = tntKg / 1e6;
+        kt = tntKg / 1e6;
         height = WaterModel.columnHeight(kt);
         radius = WaterModel.columnRadius(kt);
         rise = Math.sqrt(2 * height / G);
@@ -65,43 +68,60 @@ public final class WaterBlast {
         return kg * 3 / (2 * 1000 * DROP_R) / CloudModel.DROP_K;
     }
 
-    /** Сколько живёт водяная пыль после падения столба, с: пока её толща поперёк больше порога. */
+    /** Клубов кольца базисной волны. */
+    static final int RING = 8;
+
+    /**
+     * Базисная волна: падая, вода столба растекается кольцом брызг — тот же закон, что у ядерки ({@link WaterModel#surgeReach},
+     * {@link WaterModel#surgeTop}: доля «Бейкера» по кубическому корню), начало — когда вода начинает падать (вершина
+     * столба), растекается со скоростью падения √(2gH) (постоянная — предел радиуса на неё, ⚠ оценка: у «Бейкера»
+     * волна идёт ~25–30 м/с), брызги — доля {@link #MIST} воды столба, расплываются по Бриггсу и сносятся ветром.
+     */
+    public double surgeRadius(double since) {
+        if (since <= 0) return 0;
+        double reach = surgeReach(), tau = reach / Math.sqrt(2 * G * height);
+        return radius + reach * (1 - Math.exp(-since / Math.max(tau, 1e-3)));
+    }
+
+    double surgeReach() {
+        return WaterModel.surgeReach(kt);
+    }
+
+    double surgeTop() {
+        return Math.max(1, WaterModel.surgeTop(kt));
+    }
+
+    /** Сколько живёт водяная пыль после вершины столба, с: пока толща клуба кольца поперёк больше порога. */
     public double mistLife() {
-        double ext = CloudModel.DROP_K * asGridDrops(MIST * water);
+        double ext = CloudModel.DROP_K * asGridDrops(MIST * water) / RING;
         double lo = 0, hi = CloudModel.LIFE_MAX;
         for (int i = 0; i < 30; i++) {
             double mid = 0.5 * (lo + hi);
-            if (mistTau(mid, ext) >= CloudModel.SEEN) lo = mid;
+            if (ext / (2 * Math.PI * mistSigmaH(mid) * mistSigmaV(mid)) >= CloudModel.SEEN) lo = mid;
             else hi = mid;
         }
-        return 2 * rise + lo;
+        return rise + lo;
     }
 
-    private double mistTau(double since, double ext) {
-        double sh = mistSigmaH(since), sv = mistSigmaV(since);
-        return ext / (2 * Math.PI * sh * sv);
-    }
-
-    /** σ водяной пыли через since секунд после падения столба: радиус столба и расплывание по Бриггсу по пути ветра. */
+    /** σ клуба кольца через since секунд после вершины столба: шаг кольца, высота волны и расплывание по Бриггсу. */
     double mistSigmaH(double since) {
-        double s = CloudModel.spreadH(air.spread(), path(since));
-        return Math.sqrt(radius * radius + s * s);
+        double s = CloudModel.spreadH(air.spread(), path(since)), ring = Math.PI * surgeRadius(since) / RING;
+        return Math.sqrt(ring * ring + s * s);
     }
 
     double mistSigmaV(double since) {
-        double s = CloudModel.spreadV(air.spread(), path(since));
-        double s0 = height / 4;
+        double s = CloudModel.spreadV(air.spread(), path(since)), s0 = surgeTop() / 2;
         return Math.sqrt(s0 * s0 + s * s);
     }
 
     private double path(double since) {
-        return Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(height / 2)) * Math.max(0, since);
+        return Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(surgeTop())) * Math.max(0, since);
     }
 
     /**
      * Клубы брызг в возрасте t от места взрыва на глади (центр от точки взрыва, м): столб — вертикальный отрезок до
      * верха с σ поперёк в радиус столба, корона — клуб на верху шире столба (струи тормозят и раскрываются), водяная
-     * пыль — когда вода падает, у воды, сносится ветром. false — брызг уже нет.
+     * пыль — кольцом базисной волны, когда вода падает, у воды, сносится ветром. false — брызг уже нет.
      */
     public boolean blobs(double t, SmokeGrid.Sink out, double x, double y, double z) {
         if (t < 0) return true;
@@ -117,11 +137,15 @@ public final class WaterBlast {
         }
         double since = t - rise;
         if (since > 0) {
-            double mist = asGridDrops(MIST * water) * Math.min(1, since / rise);
             if (t > mistLife()) return false;
-            double lean = air.wind(height / 2) * since;
-            out.blob(x + air.windX() * lean, y + Math.min(height / 2, mistSigmaV(since)), z + air.windZ() * lean, mistSigmaH(since),
-                    mistSigmaV(since), 0, 0, mist, 1, 1, 1, CloudModel.T_AIR_K, 0);
+            // кольцо набирает воду, пока столб падает (до 2·подъёма)
+            double mist = asGridDrops(MIST * water) * Math.min(1, since / rise) / RING;
+            double r = surgeRadius(since), lean = air.wind(surgeTop()) * since, sh = mistSigmaH(since), sv = mistSigmaV(since);
+            for (int i = 0; i < RING; i++) {
+                double a = 2 * Math.PI * i / RING;
+                out.blob(x + r * Math.cos(a) + air.windX() * lean, y + sv, z + r * Math.sin(a) + air.windZ() * lean, sh, sv, 0, 0, mist, 1, 1, 1,
+                        CloudModel.T_AIR_K, 0);
+            }
         }
         return true;
     }

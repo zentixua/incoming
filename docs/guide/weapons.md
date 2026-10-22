@@ -162,8 +162,8 @@ smoke.
 - **Lancet**: a small flash and a cloud a few tens of blocks high.
 
 A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
-the missile. It rises in under two seconds, opens into a crown at the top, falls back and leaves a drifting mist; clumps
-of water fly as particles.
+the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the
+surface as a low ring of spray that drifts away; clumps of water fly as particles.
 
 The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
 an orange glow spreads over the blocks around the crater and fades as the ball cools. There are no shadows: the light

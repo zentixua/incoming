@@ -46,7 +46,9 @@ class WaterBlastTest {
         for (double[] b : got) assertTrue(b[1] == 0 && b[2] == 0 && b[3] > 0);
         got.clear();
         assertTrue(w.blobs(3 * w.rise, sink, 0, 63, 0));
-        assertEquals(1, got.size(), "водяная пыль");
+        assertEquals(WaterBlast.RING, got.size(), "водяная пыль — кольцо базисной волны");
+        // кольцо растёт от стенки столба к пределу закона ядерки
+        assertTrue(w.surgeRadius(0.1) < w.surgeRadius(3 * w.rise) && w.surgeRadius(1e3) <= w.radius + WaterModel.surgeReach(50e-6) + 1e-9);
         assertTrue(w.mistLife() > 2 * w.rise);
         got.clear();
         assertFalse(w.blobs(w.mistLife() + 1, sink, 0, 63, 0));
