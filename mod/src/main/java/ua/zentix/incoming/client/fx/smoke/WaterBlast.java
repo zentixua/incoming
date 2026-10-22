@@ -19,7 +19,7 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * <li><b>Вода</b> — масса столба по массе «Бейкера» (Glasstone и Dolan, §2.52: ~1 млн т), пропорционально заряду;
  * ослабление брызг — капли радиуса {@link #DROP_R} м: 3/(2ρr) м²/кг (геометрическая оптика); в клуб она идёт
  * каплями сетки ({@link CloudModel#DROP_K}, капли 5 мкм) — пересчётом массы на то же ослабление. Падая, столб
- * оставляет водяную пыль — долю {@link #MIST} мелких капель (О) кольцом базисной волны ({@link #surgeRadius}, закон
+ * оставляет водяную пыль — долю {@link #MIST} мелких капель ({@link #MIST_DROP_R}) кольцом базисной волны ({@link #surgeRadius}, закон
  * ядерки), её сносит ветром и расплывает, как облако.</li>
  * </ul>
  */
@@ -32,6 +32,28 @@ public final class WaterBlast {
     static final double DROP_R = 0.5e-3;
     /** Доля воды столба, что остаётся водяной пылью, когда он падает (О: 1–5 %). */
     static final double MIST = 0.02;
+    /**
+     * Радиус капель водяной пыли, м. В воздухе после падения столба висят только капли, что оседают медленнее, чем
+     * волна держится над водой: по Стоксу v = 2ρgr²/(9μ) у 50 мкм — 0,3 м/с (за 10 с — 3 м при высоте волны в метры), а
+     * миллиметровые капли столба падают со скоростью ~4 м/с и уходят в воду сразу (размер — О, по скорости оседания).
+     */
+    static final double MIST_DROP_R = 50e-6;
+    /** Вязкость воздуха у земли, Па·с (15 °C). */
+    static final double AIR_MU = 1.81e-5;
+
+    /** Скорость оседания капель водяной пыли по Стоксу, м/с: 2ρgr²/(9μ). */
+    static double mistSettling() {
+        return 2 * 1000 * G * MIST_DROP_R * MIST_DROP_R / (9 * AIR_MU);
+    }
+
+    /**
+     * Доля водяной пыли, что ещё в воздухе через since секунд после вершины столба: слой высотой с базисную волну,
+     * перемешанный, теряет капли через дно со скоростью оседания — e^(−v·t/h) (испарение не считается: оно только
+     * укорачивает жизнь).
+     */
+    double mistLeft(double since) {
+        return Math.exp(-mistSettling() * Math.max(0, since) / surgeTop());
+    }
     static final double G = 9.80665;
 
     /** Высота и радиус столба, м; время подъёма, с; вода, кг. */
@@ -65,7 +87,12 @@ public final class WaterBlast {
 
     /** Масса капель сетки (5 мкм) с тем же ослаблением, что у {@code kg} брызг столба. */
     static double asGridDrops(double kg) {
-        return kg * 3 / (2 * 1000 * DROP_R) / CloudModel.DROP_K;
+        return asGridDrops(kg, DROP_R);
+    }
+
+    /** То же у капель радиуса {@code r}, м: ослабление 3/(2ρr) м²/кг. */
+    static double asGridDrops(double kg, double r) {
+        return kg * 3 / (2 * 1000 * r) / CloudModel.DROP_K;
     }
 
     /** Клубов кольца базисной волны. */
@@ -91,13 +118,13 @@ public final class WaterBlast {
         return Math.max(1, WaterModel.surgeTop(kt));
     }
 
-    /** Сколько живёт водяная пыль после вершины столба, с: пока толща клуба кольца поперёк больше порога. */
+    /** Сколько живёт водяная пыль после вершины столба, с: пока толща клуба кольца поперёк больше порога (с оседанием). */
     public double mistLife() {
-        double ext = CloudModel.DROP_K * asGridDrops(MIST * water) / RING;
+        double ext = CloudModel.DROP_K * asGridDrops(MIST * water, MIST_DROP_R) / RING;
         double lo = 0, hi = CloudModel.LIFE_MAX;
         for (int i = 0; i < 30; i++) {
             double mid = 0.5 * (lo + hi);
-            if (ext / (2 * Math.PI * mistSigmaH(mid) * mistSigmaV(mid)) >= CloudModel.SEEN) lo = mid;
+            if (ext * mistLeft(mid) / (2 * Math.PI * mistSigmaH(mid) * mistSigmaV(mid)) >= CloudModel.SEEN) lo = mid;
             else hi = mid;
         }
         return rise + lo;
@@ -139,7 +166,7 @@ public final class WaterBlast {
         if (since > 0) {
             if (t > mistLife()) return false;
             // кольцо набирает воду, пока столб падает (до 2·подъёма)
-            double mist = asGridDrops(MIST * water) * Math.min(1, since / rise) / RING;
+            double mist = asGridDrops(MIST * water, MIST_DROP_R) * Math.min(1, since / rise) * mistLeft(since) / RING;
             double r = surgeRadius(since), lean = air.wind(surgeTop()) * since, sh = mistSigmaH(since), sv = mistSigmaV(since);
             for (int i = 0; i < RING; i++) {
                 double a = 2 * Math.PI * i / RING;

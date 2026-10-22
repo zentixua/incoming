@@ -163,7 +163,9 @@ smoke.
 
 A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
 the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the
-surface as a low ring of spray that drifts away; clumps of water fly as particles.
+surface as a low ring of fine mist that drifts away and settles back within about a minute; clumps of water fly as
+particles. The Shahed's burning fuel makes a fireball about as big as its column, so most of the column is hidden in fire
+and smoke.
 
 The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
 an orange glow spreads over the blocks around the crater and fades as the ball cools. There are no shadows: the light

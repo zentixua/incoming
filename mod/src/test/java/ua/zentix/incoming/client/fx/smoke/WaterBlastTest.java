@@ -53,4 +53,21 @@ class WaterBlastTest {
         got.clear();
         assertFalse(w.blobs(w.mistLife() + 1, sink, 0, 63, 0));
     }
+
+    /**
+     * Водяная пыль — мелкие капли, что висят (Стокс), поэтому видна: у шахеда кольцо толще порога видимости, пока вода
+     * падает, и тает за секунды–десятки секунд, а не держится минутами.
+     */
+    @Test
+    void mistIsSeenForSeconds() {
+        WaterBlast w = new WaterBlast(50, CloudModel.Air.STANDARD);
+        List<Double> taus = new ArrayList<>();
+        SmokeGrid.Sink sink = (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) ->
+                taus.add(CloudModel.DROP_K * water / (2 * Math.PI * sh * sv));
+        w.blobs(2 * w.rise, sink, 0, 63, 0);
+        assertEquals(WaterBlast.RING, taus.size());
+        assertTrue(taus.getFirst() > 3 * CloudModel.SEEN, "кольцо водяной пыли видно: толща " + taus.getFirst());
+        double life = w.mistLife() - 2 * w.rise;
+        assertTrue(life > 3 && life < 120, "водяная пыль после падения столба " + life + " с");
+    }
 }
