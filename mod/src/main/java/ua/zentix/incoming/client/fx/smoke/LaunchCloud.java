@@ -50,11 +50,14 @@ public final class LaunchCloud implements SmokeGrid.Source {
     private final double born;
     /** Подано: тепло, Дж; сажа и капли продуктов, пыль, кг; место удара струи (с весом тепла), м; ось ΔT и радиус там. */
     private double heat, soot, water, dust, sumX, sumZ, sumT, sumR;
-    /** Импульс струи в землю за подачу, Н·с: весь и по осям мира (x, вниз, z). */
-    private double impulse, pushX, pushDown, pushZ;
-    /** Стенная струя по сборке ({@link #build}): «вперёд» (единичный, по горизонтали), азимуты равной доли и импульс на радиан у каждого. */
+    /**
+     * Импульс струи в землю за подачу, Н·с: весь и по осям мира (x, вниз, z); и Σ dI·τ (τ — миг подачи от начала облака,
+     * с): ∫₀ᵗ I dt = I·t − Σ dI·τ — у затяжки ({@link WallJet#reach}).
+     */
+    private double impulse, pushX, pushDown, pushZ, pushMoment;
+    /** Стенная струя по сборке ({@link #build}): «вперёд» (единичный, по горизонтали), азимуты равной доли и доля потока на радиан у каждого. */
     private double aheadX = 1, aheadZ;
-    private double[] fanAzimuth = new double[0], fanImpulse = new double[0];
+    private double[] fanAzimuth = new double[0], fanShare = new double[0];
     private Thermal thermal;
     private double life;
     private final double[] matter = new double[2];
@@ -128,6 +131,7 @@ public final class LaunchCloud implements SmokeGrid.Source {
         heat += q;
         double push = motor.exhaust() * motor.velocity() * dt;
         impulse += push;
+        pushMoment += push * Math.max(0, SmokeGrid.seconds(0) - born);
         pushX += push * jx;
         pushDown -= push * jy;
         pushZ += push * jz;
@@ -179,7 +183,7 @@ public final class LaunchCloud implements SmokeGrid.Source {
         double flat = Math.hypot(pushX, pushZ), all = Math.hypot(flat, pushDown);
         if (impulse <= 0 || all <= 0) {
             fanAzimuth = new double[0];
-            fanImpulse = new double[0];
+            fanShare = new double[0];
             return;
         }
         if (flat > 1e-9 * all) {
@@ -188,8 +192,9 @@ public final class LaunchCloud implements SmokeGrid.Source {
         }
         double sinA = Math.max(0, pushDown) / all;
         fanAzimuth = WallJet.azimuths(sinA, WallJet.DIRECTIONS);
-        fanImpulse = new double[fanAzimuth.length];
-        for (int k = 0; k < fanAzimuth.length; k++) fanImpulse[k] = impulse * WallJet.share(sinA, fanAzimuth[k]);
+        // доля на радиан у каждого направления; импульс — по мигу (fanMoments)
+        fanShare = new double[fanAzimuth.length];
+        for (int k = 0; k < fanAzimuth.length; k++) fanShare[k] = WallJet.share(sinA, fanAzimuth[k]);
     }
 
     /**
@@ -205,9 +210,10 @@ public final class LaunchCloud implements SmokeGrid.Source {
             out[4] = 0.75 * r0;
             return out;
         }
-        double mx = 0, my = 0, xx = 0, yy = 0, mr = 0;
+        double mx = 0, my = 0, xx = 0, yy = 0, mr = 0, integral = Math.max(0, impulse * t - pushMoment);
         for (int k = 0; k < n; k++) {
-            double r = WallJet.reach(fanImpulse[k], r0, t, wind), c = Math.cos(fanAzimuth[k]), s = Math.sin(fanAzimuth[k]);
+            double w = fanShare[k];
+            double r = WallJet.reach(impulse * w, integral * w, r0, wind), c = Math.cos(fanAzimuth[k]), s = Math.sin(fanAzimuth[k]);
             mx += 0.75 * r * c;
             my += 0.75 * r * s;
             xx += 0.6 * r * r * c * c;

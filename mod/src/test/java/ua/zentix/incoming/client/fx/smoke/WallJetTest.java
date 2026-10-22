@@ -47,23 +47,51 @@ class WallJetTest {
     }
 
     /**
-     * Затяжка: r⁴ = r₀⁴ + 12·i·t/(ρS) — в 16 раз дольше вдвое дальше; фронт стоит там, где ветер его обгоняет
-     * (dr/dt = 3i/(ρSr³) = U), и не убегает назад.
+     * Затяжка: r⁴ = r₀⁴ + 12·∫i dt/(ρS) — у толчка в 16 раз дольше вдвое дальше; фронт стоит там, где ветер его
+     * обгоняет (dr/dt = 3i/(ρSr³) = U), и не убегает назад.
      */
     @Test
     void puffSlowsAsItSweepsUpAirAndStopsWhereTheWindIsFaster() {
         double i = 1e4, r0 = 0.5;
-        double a = WallJet.reach(i, r0, 1, 0), b = WallJet.reach(i, r0, 16, 0);
+        double a = WallJet.reach(i, i * 1, r0, 0), b = WallJet.reach(i, i * 16, r0, 0);
         assertEquals(2 * Math.pow(Math.pow(a, 4) - Math.pow(r0, 4), 0.25), Math.pow(Math.pow(b, 4) - Math.pow(r0, 4), 0.25), 1e-9);
         double wind = 2, stop = Math.cbrt(3 * i / (CloudModel.RHO * WallJet.SPREAD * wind));
-        assertEquals(stop, WallJet.reach(i, r0, 1e6, wind), 1e-9);
+        assertEquals(stop, WallJet.reach(i, i * 1e6, r0, wind), 1e-9);
         double prev = 0;
         for (double t = 0; t < 600; t += 0.5) {
-            double r = WallJet.reach(i, r0, t, wind);
+            double r = WallJet.reach(i, i * t, r0, wind);
             assertTrue(r >= prev - 1e-12);
             prev = r;
         }
-        assertEquals(r0, WallJet.reach(0, r0, 10, wind), 0);
+        assertEquals(r0, WallJet.reach(0, 0, r0, wind), 0);
+    }
+
+    /**
+     * Импульс — по истории подачи (ревью #400: всё поданное как толчок в начале завышало вынос у долгой подачи МБР):
+     * ровная подача длиной T к её концу — ∫I dt = I·T/2, вдвое меньше толчка того же импульса; облако, поданное ровно,
+     * уходит не дальше облака того же импульса толчком.
+     */
+    @Test
+    void longFeedPushesAsItGoes() {
+        Motor m = motor(WeaponType.NUKE);
+        double s0 = SmokeGrid.seconds(0);
+        LaunchCloud puff = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, s0);
+        puff.feed(m, 2, 0, 67, 0, 0, -1, 0);
+        double[] once = puff.fanMoments(2, 1, 0);
+        // та же подача ровно за 2 с — по тикам SmokeGrid
+        LaunchCloud even = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, s0);
+        double before = SmokeGrid.seconds(0);
+        for (int k = 0; k < 40; k++) {
+            even.feed(m, 0.05, 0, 67, 0, 0, -1, 0);
+            SmokeGrid.tick();
+        }
+        double t = SmokeGrid.seconds(0) - s0;
+        assertEquals(2, SmokeGrid.seconds(0) - before, 1e-9);
+        double[] spread = even.fanMoments(t, 1, 0);
+        assertTrue(spread[4] < once[4], "ровная подача — ближе толчка: " + spread[4] + " против " + once[4]);
+        // ∫I dt к концу ровной подачи — I·T/2 (с шагом тика — до половины тика): радиус ∝ ∫^¼
+        double expect = Math.pow((Math.pow(once[4] / 0.75, 4) - 1) * 0.5 * (1 + 0.05 / 2), 0.25) * 0.75;
+        assertEquals(expect, spread[4], 0.05 * expect);
     }
 
     private static Motor motor(WeaponType w) {
@@ -74,6 +102,7 @@ class WallJetTest {
     private record Dust(double x, double z, double ax, double az, double sh) {}
 
     private static Dust dust(LaunchCloud c, double t, double seconds0) {
+        seconds0 += SmokeGrid.seconds(0);
         List<Dust> out = new ArrayList<>();
         c.emit(seconds0 + t, (x, y, z, ax, ay, az, sh, sv, soot, d, water, r, g, b, kelvin, rise) -> {
             if (soot == 0 && water == 0 && d > 0 && kelvin == CloudModel.T_AIR) out.add(new Dust(x, z, ax, az, sh));
@@ -92,7 +121,7 @@ class WallJetTest {
         Motor grad = motor(WeaponType.ROCKET);
         double sin = Math.sin(Math.toRadians(30)), cos = Math.cos(Math.toRadians(30));
         for (double[] dir : new double[][]{{1, 0}, {0, -1}}) {
-            LaunchCloud c = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, 0);
+            LaunchCloud c = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, SmokeGrid.seconds(0));
             // струя от сопла в 2,5 м под 30° вниз, у земли — в ~4 м вперёд
             for (int k = 0; k < 6; k++) c.feed(grad, 0.05, 0, 66.5, 0, dir[0] * cos, -sin, dir[1] * cos);
             double hitX = dir[0] * cos * LaunchCloud.reach(2.5, -sin), hitZ = dir[1] * cos * LaunchCloud.reach(2.5, -sin);
@@ -104,7 +133,7 @@ class WallJetTest {
             assertTrue(len > 1, "вытянута вдоль струи: " + len);
             assertEquals(1, Math.abs(d.ax * dir[0] + d.az * dir[1]) / len, 1e-9, "отрезок — вдоль струи");
         }
-        LaunchCloud down = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, 0);
+        LaunchCloud down = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, SmokeGrid.seconds(0));
         for (int k = 0; k < 6; k++) down.feed(grad, 0.05, 0, 66.5, 0, 0, -1, 0);
         Dust d = dust(down, 3, 0.4);
         assertEquals(0, Math.hypot(d.x, d.z), 1e-6, "отвесно — на месте удара");
@@ -115,11 +144,12 @@ class WallJetTest {
     @Test
     void groundDustMassIsUnchanged() {
         Motor grad = motor(WeaponType.ROCKET);
-        LaunchCloud c = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, 0);
+        double s0 = SmokeGrid.seconds(0);
+        LaunchCloud c = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, s0);
         double sin = Math.sin(Math.toRadians(30)), cos = Math.cos(Math.toRadians(30));
         c.feed(grad, 0.1, 0, 66.5, 0, cos, -sin, 0);
         double[] mass = new double[1];
-        c.emit(0.5, (x, y, z, ax, ay, az, sh, sv, soot, d, water, r, g, b, kelvin, rise) -> {
+        c.emit(s0 + 0.5, (x, y, z, ax, ay, az, sh, sv, soot, d, water, r, g, b, kelvin, rise) -> {
             if (soot == 0 && water == 0 && kelvin == CloudModel.T_AIR) mass[0] += d;
         });
         assertTrue(mass[0] > 0 && mass[0] <= (1 - CloudModel.CLOUD_SHARE) * c.dust() + 1e-12, "пыль у земли: " + mass[0]);
