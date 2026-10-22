@@ -2669,6 +2669,11 @@ public final class StrikeGameTests {
             generateNow(level, new ChunkPos(BlockPos.containing(charge)), 4);
             charges.add(charge);
         }
+        // часы полосы попаданий — считающие: работа трёх подрывов (полости, трещины, трубы обрушения) делится по тикам
+        // одинаково на любой машине; по настенным часам на занятой машине воронки осыпались по очереди, а не разом
+        net.minecraft.server.MinecraftServer server = level.getServer();
+        ua.zentix.incoming.work.WorkScheduler.useImpactClock(server, ua.zentix.incoming.nuclear.world.WorkClock.counting(1_000_000L));
+        afterTest(h, () -> ua.zentix.incoming.work.WorkScheduler.useImpactClock(server, ua.zentix.incoming.work.WorkScheduler.newImpactClock()));
         for (Vec3 c : charges) Warheads.bunker(level, c, c.add(0, 14, 0), null, null);
         // только своя полоса: площадки соседних партий — в 5 блоках от неё, и их падающие блоки (после партии чанки
         // соседей не тикают — блок висит) не про эту проверку
@@ -2694,6 +2699,42 @@ public final class StrikeGameTests {
                         f.getStartPos().subtract(origin).toShortString(), f.time, level.isPositionEntityTicking(f.blockPosition())));
             }
             h.fail("блоки ещё падают: " + falling.size() + ";" + where);
+        });
+    }
+
+    /**
+     * Падение в районе воронки там, где чанк тикает блоками, но не сущностями (уровень 32 — рядом с тикающими чанками
+     * площадки), ложится сразу: тик блока его начал, а сущность там не тикает и висела бы в воздухе (CI 22.10: гравий
+     * свода под соседней площадкой, обрушенный зоной трещин бомбы на краю района, висел до конца
+     * {@link #craterFallsShareWorldCap} — там, где район взрыва ещё не дорос до края, а потом был отпущен).
+     */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "crater_falls_edge", skyAccess = true)
+    public static void craterFallWithoutEntityTicksLandsAtOnce(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        // столбец за краем площадки к +X (там площадок ещё нет): первый, чей чанк тикает блоками, но не сущностями
+        BlockPos column = null;
+        for (int x = 64; x < 96 && column == null; x++) {
+            BlockPos p = h.absolutePos(new BlockPos(x, 0, 32));
+            if (level.shouldTickBlocksAt(p) && !level.isPositionEntityTicking(p)) column = p;
+        }
+        h.assertTrue(column != null, "за площадкой нет чанка, что тикает блоками без сущностей");
+        int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, column.getX(), column.getZ());
+        BlockPos rest = new BlockPos(column.getX(), top, column.getZ()), from = rest.above(3);
+        // район взрыва над столбцом: малый заряд высоко в воздухе (район — в пару блоков, тика сущностям не даёт)
+        Warheads.testCharge(level, Vec3.atCenterOf(from).add(0, 20, 0), 0.05);
+        long settledBefore = CraterFalls.get(level).settled();
+        level.setBlock(from, Blocks.GRAVEL.defaultBlockState(), Block.UPDATE_ALL);
+        afterTest(h, () -> {
+            level.setBlock(from, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            level.setBlock(rest, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+        });
+        AABB around = new AABB(rest).inflate(1, 6, 1);
+        h.succeedWhen(() -> {
+            List<FallingBlockEntity> hanging = level.getEntitiesOfClass(FallingBlockEntity.class, around);
+            h.assertTrue(hanging.isEmpty(), "падающий гравий висит: " + hanging.stream().map(f -> f.position() + " " + f.time + " тиков").toList());
+            h.assertTrue(level.getBlockState(rest).is(Blocks.GRAVEL) && level.getBlockState(from).isAir(), "гравий не лёг на опору: "
+                    + level.getBlockState(from) + " над " + level.getBlockState(rest));
+            h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "гравий лёг не через осыпание воронки");
         });
     }
 
@@ -3027,7 +3068,9 @@ public final class StrikeGameTests {
 
     /**
      * Шахед издалека на настоящей шкале полёта (1): заход на эшелоне 2 км над целью, пике оттуда — и подрыв в точке, а не
-     * самоликвидация в воздухе: запас хода по плану считает и снижение к цели (маршрут — по горизонтали).
+     * самоликвидация в воздухе: запас хода по плану считает и снижение к цели (маршрут — по горизонтали). Точка — та, куда
+     * шахед целится: пуск сдвигает её от цели на промах паспорта (СКО 3 м по оси, {@code WeaponSpec.Route#miss}), и с
+     * целью тест расходился в e⁻² ≈ 13 % пусков (CI 22.10); сам промах — не дальше 5 СКО.
      */
     @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_drone", skyAccess = true)
     public static void droneFromRealEchelonDivesIntoTarget(GameTestHelper h) {
@@ -3042,20 +3085,25 @@ public final class StrikeGameTests {
                 Waypoints.NONE, null).ok(), "пуск не принят");
         String[] last = {""};
         boolean[] high = {false};
+        Vec3[] aim = {null};
         h.onEachTick(() -> {
             List<StrikeProjectile> all = new ArrayList<>(VirtualFlights.get(level).flights());
             all.addAll(level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)));
             for (StrikeProjectile p : all) {
                 if (!owner.equals(p.ownerId())) continue;
                 if (p.getY() - point.y > 1500) high[0] = true;
-                last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " запас " + Math.round(p.rangeLeft());
+                aim[0] = p.aimPoint();
+                last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " запас " + Math.round(p.rangeLeft()) + ", целится в " + h.relativeVec(aim[0]);
             }
         });
         h.succeedWhen(() -> {
             h.assertTrue(high[0], "шахед не шёл на настоящем эшелоне: " + last[0]);
             h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(p -> owner.equals(p.ownerId()))
                     && level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)).isEmpty(), "шахед ещё летит: " + last[0]);
-            assertCrater(h, RUNWAY_TARGET, last[0]);
+            double miss = Math.hypot(aim[0].x - point.x, aim[0].z - point.z);
+            h.assertTrue(miss <= 5 * WeaponType.DRONE.spec().route().error(), String.format(Locale.ROOT, "промах пуска %.1f м — больше 5 СКО", miss));
+            // от начала площадки — вычитанием: relativePos в 1.21.1 поворачивает на 180°
+            assertCrater(h, BlockPos.containing(aim[0]).subtract(h.absolutePos(BlockPos.ZERO)), last[0]);
         });
     }
 

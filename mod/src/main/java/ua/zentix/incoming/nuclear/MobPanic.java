@@ -15,6 +15,7 @@ import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.MemoryStatus;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
+import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.ai.util.GoalUtils;
@@ -215,11 +216,18 @@ public final class MobPanic {
      * {@link DefaultRandomPos#getPosAway}: тот берёт высоту наугад (на ровной земле годна одна из 15, и поиск часто ничего
      * не находит), разброс — до ±90° (бег вбок) и даёт места под самыми ногами (путь в шаг) — моб, приняв это за загон,
      * стоял секунды. Годных нет — ванильный {@link LandRandomPos#getPosAway}: он поднимает место из твёрдого блока наверх.
-     * Летунам без своей проверки места (попугай, тихоня: у их навигации «устойчиво» — сама клетка, на которой можно
-     * стоять, а она же для пути закрыта) годно только так.
      */
     @Nullable
     static BlockPos place(PathfinderMob mob, Vec3 from) {
+        BlockPos best = awayPlace(mob, from);
+        if (best != null) return best;
+        Vec3 land = LandRandomPos.getPosAway(mob, REACH, Y_REACH, from);
+        return land == null ? null : BlockPos.containing(land);
+    }
+
+    /** Своё место бегства {@link #place} без ванильного запасного (и для проверок); годных нет — {@code null}. */
+    @Nullable
+    public static BlockPos awayPlace(PathfinderMob mob, Vec3 from) {
         RandomSource r = mob.getRandom();
         double away = Math.atan2(mob.getZ() - from.z, mob.getX() - from.x);
         boolean restricted = GoalUtils.mobRestricted(mob, REACH);
@@ -235,23 +243,26 @@ public final class MobPanic {
                 farthest = gone;
             }
         }
-        if (best != null) return best;
-        Vec3 land = LandRandomPos.getPosAway(mob, REACH, Y_REACH, from);
-        return land == null ? null : BlockPos.containing(land);
+        return best;
     }
 
     /**
      * Ближайшая к высоте y клетка столбца (0, +1, −1, +2 …, до {@link #Y_REACH}), годная для цели, — те же проверки, что
      * у ванильного места бегства: в мире, в пределах привязки, устойчива для навигации моба (у ходящих — есть на чём
-     * стоять, у рыбы — не сплошной блок), без штрафа пути. Дойдёт ли моб, решает поиск пути.
+     * стоять, у рыбы — не сплошной блок), без штрафа пути. У летуна (попугай, тихоня) «устойчиво» в навигации — сама
+     * твёрдая клетка, на которую садиться, а у неё штраф пути: его место — свободная клетка над такой опорой. Без этого
+     * летуну не годилась ни одна клетка, и он бежал только по ванильному месту — то пустому, то в паре блоков: два
+     * пустых поиска подряд откладывали бегство на 8 с. Дойдёт ли моб, решает поиск пути.
      */
     @Nullable
     private static BlockPos stand(PathfinderMob mob, int x, int y, int z, boolean restricted) {
+        boolean flyer = mob.getNavigation() instanceof FlyingPathNavigation;
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         for (int k = 0; k <= 2 * Y_REACH; k++) {
             p.set(x, y + (k % 2 == 0 ? -k / 2 : (k + 1) / 2), z);
             if (!GoalUtils.isOutsideLimits(p, mob) && !GoalUtils.isRestricted(restricted, mob, p)
-                    && !GoalUtils.isNotStable(mob.getNavigation(), p) && !GoalUtils.hasMalus(mob, p)) return p.immutable();
+                    && !GoalUtils.isNotStable(mob.getNavigation(), flyer ? p.below() : p) && !(flyer && GoalUtils.isSolid(mob, p))
+                    && !GoalUtils.hasMalus(mob, p)) return p.immutable();
         }
         return null;
     }
