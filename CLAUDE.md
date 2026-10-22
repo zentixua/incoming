@@ -51,7 +51,9 @@ data/PrismLauncher/` (`tools/paths.py`: PRISM): `instances/Airstrike Pack/minecr
 ## Рабочий цикл
 ```sh
 export JAVA_HOME=~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta
-cd mod && ./gradlew build                 # компиляция (-Xlint:all без предупреждений) и юнит-тесты
+cd mod && ./gradlew --daemon build        # компиляция (-Xlint:all без предупреждений) и юнит-тесты; --daemon — тёплый
+                                          # демон: правка → компиляция 16 → 4 с; только build/test/compile — запуски игры
+                                          # (run*) и скрипты без него; `gradlew --stop` не звать: гасит демоны всех сессий
 cd mod && ./gradlew runGameTestServer     # GameTest: сервер без окна с Create 6.0.10, Sable 2.0.6, Aeronautics 1.3.2
 cd mod && ./gradlew runScenarioSweep      # одни сценарии полёта, все зёрна (-PscenarioSeeds=N, по умолчанию 16;
                                           # -PscenarioOnly=<регвыр> — выбор, -PscenarioRealChunks — настоящая загрузка)
