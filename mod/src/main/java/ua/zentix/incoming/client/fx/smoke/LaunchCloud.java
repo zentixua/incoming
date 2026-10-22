@@ -116,6 +116,14 @@ public final class LaunchCloud implements SmokeGrid.Source {
      * длины Мортона — продукты и пыль в облако, true; нет — false (это след).
      */
     public boolean feed(Motor motor, double dt, double x, double y, double z, double jx, double jy, double jz) {
+        return feed(motor, dt, SmokeGrid.seconds(0), x, y, z, jx, jy, jz);
+    }
+
+    /**
+     * То же; seconds — миг этой подачи по часам сетки в том же счёте, что начало облака (у пути по пакетам — с его
+     * отставанием, как {@code born}): по нему — история импульса затяжки.
+     */
+    public boolean feed(Motor motor, double dt, double seconds, double x, double y, double z, double jx, double jy, double jz) {
         double l = reach(y - groundY, jy);
         if (!(l <= mortonLength(motor)) || dt <= 0) return false;
         double q = motor.heatFlow() * dt;
@@ -131,7 +139,7 @@ public final class LaunchCloud implements SmokeGrid.Source {
         heat += q;
         double push = motor.exhaust() * motor.velocity() * dt;
         impulse += push;
-        pushMoment += push * Math.max(0, SmokeGrid.seconds(0) - born);
+        pushMoment += push * Math.max(0, seconds - born);
         pushX += push * jx;
         pushDown -= push * jy;
         pushZ += push * jz;

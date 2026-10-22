@@ -422,7 +422,9 @@ public final class FarFlightView {
             CLOUDS.add(f.cloud);
             SmokeGrid.add(f.cloud);
         }
-        f.impinging = f.cloud.feed(stage.motor(), 1 / 20.0, NOZZLE[0], NOZZLE[1], NOZZLE[2], -fwd.x, -fwd.y, -fwd.z);
+        // миг подачи — тик t пути по часам сетки (как начало облака): по нему — история импульса затяжки
+        double at = SmokeGrid.seconds(0) - Math.max(0, FlightTracks.now() - t) / 20.0;
+        f.impinging = f.cloud.feed(stage.motor(), 1 / 20.0, at, NOZZLE[0], NOZZLE[1], NOZZLE[2], -fwd.x, -fwd.y, -fwd.z);
         f.cloudMotor = stage.motor();
     }
 

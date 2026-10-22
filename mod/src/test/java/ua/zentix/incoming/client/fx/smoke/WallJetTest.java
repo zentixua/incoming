@@ -140,9 +140,27 @@ class WallJetTest {
         assertEquals(0, Math.hypot(d.ax, d.az), 1e-6, "и кругом");
     }
 
-    /** Вся пыль у земли — в одном клубе, сколько её было и прежде: стенная струя пыль переносит, а не создаёт. */
+    /**
+     * Миг подачи — по часам пути, как начало облака (ревью #400): облако пути по пакетам, начатое и поданное с отставанием
+     * на 4 тика, через то же время после подачи — то же, что у облака без отставания.
+     */
     @Test
-    void groundDustMassIsUnchanged() {
+    void feedTimeIsThePathClock() {
+        Motor grad = motor(WeaponType.ROCKET);
+        double s0 = SmokeGrid.seconds(0), lag = 0.2, sin = Math.sin(Math.toRadians(30)), cos = Math.cos(Math.toRadians(30));
+        LaunchCloud now = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, s0);
+        LaunchCloud late = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, s0 - lag);
+        for (int k = 0; k < 6; k++) {
+            now.feed(grad, 0.05, s0 + 0.05 * k, 0, 66.5, 0, cos, -sin, 0);
+            late.feed(grad, 0.05, s0 - lag + 0.05 * k, 0, 66.5, 0, cos, -sin, 0);
+        }
+        double[] a = now.fanMoments(0.8, 0.5, 0), b = late.fanMoments(0.8, 0.5, 0);
+        for (int i = 0; i < a.length; i++) assertEquals(a[i], b[i], 1e-9 * Math.max(1, Math.abs(a[i])));
+    }
+
+    /** Пыль у земли — в одном клубе и не больше своей доли пыли облака: стенная струя пыль переносит, а не создаёт. */
+    @Test
+    void groundDustIsNeverMoreThanItsShare() {
         Motor grad = motor(WeaponType.ROCKET);
         double s0 = SmokeGrid.seconds(0);
         LaunchCloud c = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, s0);
