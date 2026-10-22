@@ -323,6 +323,8 @@ final class LssTerrain implements TerrainSource {
      * дальние долой (в фоне).
      */
     static void tick(double playerX, double playerZ) {
+        // JVM уже выходит (крюк остановки закрыл поток записи), а тик ещё идёт: задачи не принимаются
+        if (io.isShutdown()) return;
         ticks++;
         if (ticks % SAVE_TICKS == 0) {
             synchronized (worlds) {
