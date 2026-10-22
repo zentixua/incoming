@@ -92,10 +92,10 @@ public final class Sources {
     public static final Source EJECTA = new Source(Double.NaN, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS);
     /**
      * Стёкла, которые выбила ядерная волна у слушателя: запись — окна вылетают по улице, мощность — от энергии
-     * осколков ({@link #impact}, {@link Clatter}). Потолок — ядерки ({@link Loudness#ENGINE_LUFS}).
+     * осколков ({@link Clatter#watts}). Потолок — ядерки ({@link Loudness#ENGINE_LUFS}).
      */
     public static final Source RUIN_GLASS = new Source(Double.NaN, Spectra.NUKE_GLASS, Spectra.NUKE_GLASS_LUFS, Loudness.ENGINE_LUFS);
-    /** Обломки, что снесла ядерная волна у слушателя: запись осыпи, мощность — от энергии обломков ({@link #impact}). */
+    /** Обломки, что снесла ядерная волна у слушателя: запись осыпи, мощность — от энергии обломков ({@link Clatter#watts}). */
     public static final Source RUIN_CLATTER = new Source(Double.NaN, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS, Loudness.ENGINE_LUFS);
     /**
      * Гул горящего города: запись большого пожара, мощность — от тепла горящего ({@link #flame}: шторм модели и огонь в
@@ -122,14 +122,6 @@ public final class Sources {
      */
     public static double fall(double kg, double height, double seconds, Spectrum spectrum) {
         return lw(IMPACT_EFFICIENCY * kg * 9.81 * height / Math.max(seconds, 0.1)) + spectrum.aWeighting();
-    }
-
-    /**
-     * Уровень мощности звука удара (не A), дБ: звуком уходит {@link #IMPACT_EFFICIENCY} энергии {@code joules}, Дж, за
-     * {@code seconds} с — пока падает и бьётся сорванное.
-     */
-    public static double impact(double joules, double seconds) {
-        return lw(IMPACT_EFFICIENCY * joules / Math.max(seconds, 0.05));
     }
 
     /** Уровень мощности, дБ отн. 1 пВт. */

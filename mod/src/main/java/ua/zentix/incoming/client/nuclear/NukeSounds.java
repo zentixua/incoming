@@ -10,7 +10,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
@@ -207,6 +206,7 @@ public final class NukeSounds {
         /** Звуки волны у слушателя: он снова впереди фронта — они прочь ({@link #again}). */
         private final List<SoundInstance> shots = new ArrayList<>();
         /** Стёкла и обломки, что снесла волна у слушателя, — к уху ({@link #clatter}); сыгранные — для строки сценария. */
+        private final List<Ruins> ruinPackets = new ArrayList<>();
         private final Clatter clatter = new Clatter(new ua.zentix.incoming.sound.Spectrum[]{Sources.RUIN_GLASS.spectrum(), Sources.RUIN_CLATTER.spectrum()});
         private final List<Clatter.Play> plays = new ArrayList<>();
         private final int[] heardClatter = new int[Clatter.KINDS];
@@ -228,6 +228,7 @@ public final class NukeSounds {
         /** Подрыв убран (смена измерения, возрождение, перемотка повтора, срок): удар, эхо, ветер и петли горящего города — прочь. */
         void stop() {
             clatter.clear();
+            ruinPackets.clear();
             if (echoes != null) echoes.stop();
             OwnSources.stop(this);
             if (wind != null) wind.end();
@@ -241,20 +242,30 @@ public final class NukeSounds {
          */
         void debris(S2C.NukeDebris p) {
             after.ruins(p.pieces());
-            if (live) clatter(p);
+            if (live && !p.pieces().isEmpty()) ruinPackets.add(new Ruins(p, a.ticks(0)));
         }
+
+        /** Пакет обломков, пришедший в тик {@code at} (часы подрыва): звук считается, когда руины чанка дошли до клиента. */
+        private record Ruins(S2C.NukeDebris packet, double at) {}
+
+        /**
+         * Сколько тиков после пакета обломков ждать руин чанка у клиента: сервер шлёт пакет в тике подмены, а сами руины
+         * (изменения секций) уходят игроку в следующем тике сервера — до них мир клиента у этих мест ещё прежний, и куда
+         * упадёт сорванное, по нему не узнать.
+         */
+        static final int RUINS_SETTLE = 2;
+        /** Ниже места сорванное ищет, куда упасть, не дальше стольких блоков (дальше — земля под эпицентром). */
+        static final int FALL_SCAN = 256;
 
         /**
          * Звук разрушения чанка ({@link Clatter}): каждый снесённый блок — масса его вещества (блок — метр,
          * {@link Shielding#density}: стекло — окно, 25 кг), брошенная напором со скоростью {@link Detonation#throwSpeed} и
-         * упавшая с высоты над землёй столбца (по карте высот после руин), — {@link Clatter#watts}. Места пакета — выборка из всех снесённых
-         * ({@link S2C.NukeDebris#weight}); стёкла и прочее — по отдельности, каждое — одним событием в середине по энергии,
-         * с прихода фронта туда. Руины позже фронта больше чем на секунду ({@link NukeDust#DEBRIS_LATE}) — без звука, как
-         * и без кусков.
+         * упавшая до первого блока под своим местом в мире после руин ({@link #landing}), — {@link Clatter#watts}. Места
+         * пакета — выборка из всех снесённых ({@link S2C.NukeDebris#weight}); окна ({@link Shielding#window}) и прочее — по
+         * отдельности, каждое — одним событием в середине по энергии, с прихода фронта туда. Руины позже фронта больше чем
+         * на секунду ({@link NukeDust#DEBRIS_LATE}) — без звука, как и без кусков.
          */
-        private void clatter(S2C.NukeDebris p) {
-            ClientLevel level = Minecraft.getInstance().level;
-            if (level == null || p.pieces().isEmpty()) return;
+        private void clatter(ClientLevel level, S2C.NukeDebris p) {
             double weight = p.weight(), now = a.ticks(0);
             double[] watts = new double[Clatter.KINDS], seconds = new double[Clatter.KINDS], x = new double[Clatter.KINDS],
                     y = new double[Clatter.KINDS], z = new double[Clatter.KINDS];
@@ -262,11 +273,9 @@ public final class NukeSounds {
                 BlockPos pos = piece.pos();
                 double kg = Shielding.density(level, pos, piece.state());
                 if (kg <= 0) continue;
-                int kind = piece.state().getSoundType(level, pos, null) == SoundType.GLASS ? Clatter.GLASS : Clatter.DEBRIS;
+                int kind = Shielding.window(level, pos, piece.state()) ? Clatter.GLASS : Clatter.DEBRIS;
                 Vec3 c = Vec3.atCenterOf(pos);
-                LevelChunk chunk = level.getChunkSource().getChunk(pos.getX() >> 4, pos.getZ() >> 4, false);
-                double ground = chunk == null ? d.groundY() : chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, pos.getX() & 15, pos.getZ() & 15) + 1;
-                double h = c.y - ground, fall = Clatter.seconds(h);
+                double h = c.y - landing(level, pos), fall = Clatter.seconds(h);
                 // мощность — энергия за время падения; место и время — по мощности
                 double w = weight * Clatter.watts(kg, 20 * Detonation.throwSpeed(d.dynamicPressureKpa(c)), h);
                 watts[kind] += w;
@@ -280,15 +289,37 @@ public final class NukeSounds {
                 Vec3 at = new Vec3(x[k] / watts[k], y[k] / watts[k], z[k] / watts[k]);
                 double start = d.arrivalTicks(at.distanceTo(d.burst()));
                 if (start < now - NukeDust.DEBRIS_LATE) continue;
-                clatter.add(new Clatter.Event(at.x, at.y, at.z, Math.max(start, now), Sources.lw(watts[k]), seconds[k] / watts[k], k));
+                clatter.add(new Clatter.Event(at.x, at.y, at.z, start, Sources.lw(watts[k]), seconds[k] / watts[k], k));
             }
+        }
+
+        /**
+         * Куда падает сорванное с места {@code pos}: верх первого блока под ним в мире клиента после руин (окно — на
+         * подоконник своего этажа, кладка рухнувшего дома — на завал или землю). Чанка нет или под местом пусто на
+         * {@link #FALL_SCAN} блоков — земля под эпицентром.
+         */
+        private double landing(ClientLevel level, BlockPos pos) {
+            LevelChunk chunk = level.getChunkSource().getChunk(pos.getX() >> 4, pos.getZ() >> 4, false);
+            if (chunk == null) return d.groundY();
+            BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+            for (int y = pos.getY() - 1, end = Math.max(level.getMinBuildHeight(), pos.getY() - FALL_SCAN); y >= end; y--) {
+                if (!chunk.getBlockState(m.set(pos.getX(), y, pos.getZ())).isAir()) return y + 1;
+            }
+            return d.groundY();
         }
 
         /** Стёкла и обломки, чей звук дошёл до уха, — в игру ({@link Clatter}): запись вида, громкость — по уровню у уха. */
         private void clatterTick(Vec3 ear) {
-            if (clatter.pending() == 0 && plays.isEmpty()) return;
+            if (clatter.pending() == 0 && plays.isEmpty() && ruinPackets.isEmpty()) return;
             ClientLevel level = Minecraft.getInstance().level;
             if (level == null) return;
+            double now = a.ticks(0);
+            for (java.util.Iterator<Ruins> it = ruinPackets.iterator(); it.hasNext(); ) {
+                Ruins r = it.next();
+                if (now < r.at + RUINS_SETTLE) continue;
+                it.remove();
+                clatter(level, r.packet);
+            }
             plays.clear();
             clatter.tick(a.ticks(0), ear.x, ear.y, ear.z, Propagation.Weather.of(level), plays);
             for (Clatter.Play play : plays) {

@@ -152,12 +152,17 @@ public final class Shielding {
         return material(level, p, s) * fill + liquid * (1 - fill);
     }
 
+    /** Окно ли блок {@code s}: стекло по звуку блока (вещество — {@link #density}: окно, а не метр стекла), не лёд. */
+    public static boolean window(LevelReader level, BlockPos p, BlockState s) {
+        return !s.is(BlockTags.LEAVES) && !s.is(BlockTags.ICE) && !s.is(BlockTags.SNOW) && s.getSoundType(level, p, null) == SoundType.GLASS;
+    }
+
     private static double material(LevelReader level, BlockPos p, BlockState s) {
         if (s.is(BlockTags.LEAVES)) return 50;
         if (s.is(BlockTags.ICE)) return 900;
         if (s.is(BlockTags.SNOW)) return 300;
+        if (window(level, p, s)) return 25;
         SoundType t = s.getSoundType(level, p, null);
-        if (t == SoundType.GLASS) return 25;
         if (t == SoundType.WOOL) return 150;
         if (t == SoundType.WOOD || t == SoundType.NETHER_WOOD || t == SoundType.CHERRY_WOOD || t == SoundType.BAMBOO_WOOD
                 || t == SoundType.STEM || t == SoundType.BAMBOO) return 600;
