@@ -247,8 +247,9 @@ public final class ClientSounds {
                 EngineSound s = v.sound;
                 if (s == null) continue;
                 live++;
-                // getVolume читает звук, который движок подставляет при запуске: без звука (нет устройства) его нет
-                if (s.getSound() != null && s.getVolume() > 0.01f) layers.append(String.format(Locale.ROOT, " %s %.2f×%.2f", s.describe(), s.getVolume(), s.getPitch()));
+                // без звука, который движок подставляет при запуске (нет устройства), слой не звучит
+                // громкость против мерки (Loudness.gain), а не громкость файла: числа строки не зависят от сведения файлов
+                if (s.getSound() != null && s.loudness() > 0.01) layers.append(String.format(Locale.ROOT, " %s %.2f×%.2f", s.describe(), s.loudness(), s.getPitch()));
             }
             if (layers.isEmpty()) continue;
             t.track.at(t.track.lastTick(), p);
@@ -383,15 +384,6 @@ public final class ClientSounds {
     private static Vec3 toward(Vec3 ear, Vec3 source) {
         Vec3 dir = source.subtract(ear);
         return dir.lengthSqr() < 9 ? source : ear.add(dir.normalize().scale(3));
-    }
-
-    /** Обычный позиционный звук с ванильным затуханием (громкость > 1 — дальше слышно: 16 блоков на единицу). */
-    public static void at(SoundEvent event, Vec3 pos, float volume, float pitch) {
-        Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        float open = SoundFilters.open(ear, pos.add(0, 1, 0));
-        float highs = SoundFilters.air(ear.distanceTo(pos)) * SoundFilters.blockedHighs(open);
-        play(new Shot(event.getLocation(), SoundSource.AMBIENT, volume, pitch, RANDOM, SoundInstance.Attenuation.LINEAR, pos, false,
-                SoundFilters.blockedGain(open), highs));
     }
 
     private static void play(SoundInstance sound) {

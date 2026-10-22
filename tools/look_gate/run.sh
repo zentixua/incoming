@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Шлагбаум картинки и звука: сцены ProbeScenario (сценарий клиента probe) одной версии мода под Iris со всей сборкой.
 #   tools/look_gate/run.sh <имя> <дерево incoming> [сцены через запятую] [каталог доп. модов]
+#   INCOMING_LOOK_HEARING=off — без оглушения слуха (сравнение звука)
 # Копия инстанса Артёма → $LOOK_ROOT/inst-<имя> (его инстанс не трогается), клиент — prod_client.py дерева (сценарный
 # jar этого дерева); ждёт, пока игра Артёма закрыта и нет чужой задачи ноутбука; игра запустилась — клиент гасится, код 75.
 # Итог — $LOOK_ROOT/out/<имя>/: кадры, лог, audio.wav, probe-frames.txt, gpu.csv. Запускать через tools/laptop_job.sh.
@@ -26,6 +27,12 @@ short_of_memory() { [ "$(awk '/MemAvailable/ {print int($2/1048576)}' /proc/memi
 while gpu_job || short_of_memory; do echo "$(date +%T) видеокарта или память заняты чужой задачей — жду"; sleep 30; done
 python3 "$TREE/tools/prod_client.py" --copy-only --dir "$INST" || exit 1
 sed -i -e 's/^fullscreen:.*/fullscreen:false/' -e 's/^soundCategory_music:.*/soundCategory_music:0.0/' "$INST/options.txt"
+# INCOMING_LOOK_HEARING=off — без оглушения и звона (nuke_tinnitus = false в копии): сцены идут подряд одним игроком,
+# и глухота от взрыва в 50 м переходит в следующие сцены — для сравнения источников звука её выключают
+if [ "${INCOMING_LOOK_HEARING:-}" = off ]; then
+  sed -i "s/^nuke_tinnitus = .*/nuke_tinnitus = false/" "$INST/config/incoming-client.toml"
+  grep -q '^nuke_tinnitus = false' "$INST/config/incoming-client.toml" || { echo "nuke_tinnitus не выключен"; exit 1; }
+fi
 if [ "$EXTRA" != - ]; then cp -v "$EXTRA"/*.jar "$INST/mods/"; fi
 rm -rf "$OUT"; mkdir -p "$OUT"
 PROPS=(--prop incoming.frametimes=false)

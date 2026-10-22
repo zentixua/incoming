@@ -104,6 +104,111 @@ class SoundAssetsTest {
         assertEquals(shaft, best * (double) rate / n, shaft * 0.03, "самый сильный тон петли — вал");
     }
 
+    /**
+     * Файлы моторов и стартов — той громкости, на которую клиент их рассчитывает ({@link Loudness#MOTOR_LUFS} у событий
+     * {@code MOTOR} сборки, {@link Loudness#ROCKET_LAUNCH_LUFS} у схода снаряда РСЗО, {@link Loudness#ENGINE_LUFS} у
+     * хлопка отделения и катапульты): файл тише расчёта — громкость упирается в него раньше потолка, и всё громче звучит
+     * одинаково (3.5.0: удар поджига ракеты и ЗРК ближе ~45 м к пусковой). Мера — наибольшая мгновенная
+     * громкость EBU R128, у петель — по кругу, как в сборке.
+     */
+    @Test
+    void motorFilesAtTheirLoudness() throws IOException {
+        JsonObject json = JsonParser.parseReader(new InputStreamReader(open(ASSETS + "sounds.json"), StandardCharsets.UTF_8)).getAsJsonObject();
+        Matcher m = Pattern.compile("(?ms)^MOTOR = \\{(.*?)}").matcher(Files.readString(Path.of("../tools/build_sounds.py")));
+        assertTrue(m.find(), "MOTOR в build_sounds.py");
+        Set<String> motor = new HashSet<>();
+        Matcher q = Pattern.compile("\"([a-z.]+)\"").matcher(m.group(1));
+        while (q.find()) motor.add(q.group(1));
+        assertTrue(motor.contains("launch.booster") && motor.contains("booster.engine") && motor.size() > 15, "MOTOR: " + motor);
+        Set<String> oneShots = Set.of("launch.booster", "rocket.launch", "booster.separate", "loiter.launch");
+        Set<String> checked = new HashSet<>(motor);
+        checked.addAll(oneShots);
+        for (String ev : checked) {
+            double want = motor.contains(ev) ? ev.equals("rocket.launch") ? Loudness.ROCKET_LAUNCH_LUFS : Loudness.MOTOR_LUFS : Loudness.ENGINE_LUFS;
+            for (JsonElement s : json.getAsJsonObject(ev).getAsJsonArray("sounds")) {
+                String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
+                String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
+                double got = momentaryMax(file, !oneShots.contains(ev));
+                assertEquals(want, got, 0.5, file + ": громкость, LUFS");
+            }
+        }
+    }
+
+    /**
+     * Звук мода в мире — только по закону источника и пути ({@code Loudness}, {@code BlastMix}, {@code Sources}): ни одного
+     * ванильного проигрывания с громкостью на глаз (громкость больше 1 у Minecraft — дальность 16 блоков на единицу). Так
+     * 3.4.1 играл гул огня в воронке громкостью 5 до 90 блоков: хвост взрыва в 50 м — 135 дБА-эквивалента, громче
+     * реактивного двигателя, хотя у пожара ~2 МВт там ~80 дБ. UI-звуки без места ({@code forUI}) — не в счёт.
+     * Событие в переменной или своя обёртка этим поиском не ловятся; обёртки с ручной громкостью у клиента нет
+     * ({@code ClientSounds.at} убран).
+     */
+    @Test
+    void worldSoundsHaveNoHandVolume() throws IOException {
+        Pattern hand = Pattern.compile("(playSound|playLocalSound|playSeededSound|new SimpleSoundInstance|SimpleSoundInstance\\.forAmbientAddition)\\(");
+        try (var files = Files.walk(Path.of("src/main/java"))) {
+            for (Path f : (Iterable<Path>) files.filter(x -> x.toString().endsWith(".java"))::iterator) {
+                // по операторам, а не по строкам: вызов, разбитый на строки, — тоже
+                for (String st : Files.readString(f).split(";")) {
+                    assertTrue(!(st.contains("ModSounds.") && hand.matcher(st).find()), f + ": звук мода громкостью на глаз — " + st.strip());
+                }
+            }
+        }
+    }
+
+    /** Наибольшая мгновенная громкость файла (BS.1770: K-фильтр, окно 400 мс через 100 мс), LUFS; петля — по кругу. */
+    static double momentaryMax(String file, boolean loop) throws IOException {
+        float[] x;
+        int rate;
+        try (InputStream in = open(file); JOrbisAudioStream ogg = new JOrbisAudioStream(in)) {
+            rate = (int) ogg.getFormat().getSampleRate();
+            FloatArrayList samples = new FloatArrayList();
+            while (ogg.readChunk(samples::add)) {
+                // весь файл
+            }
+            x = samples.toFloatArray();
+        }
+        int n = x.length, w = (int) (0.4 * rate), h = rate / 10;
+        // петля: фильтр разогнан хвостом петли, окна идут через шов
+        int pre = loop ? Math.min(n, rate) : 0;
+        double[] y = new double[pre + n + (loop ? w : 0)];
+        for (int i = 0; i < y.length; i++) {
+            int k = i - pre;
+            y[i] = k < 0 ? x[n + k] : k < n ? x[k] : x[(k - n) % n];
+        }
+        kWeight(y, rate);
+        double[] c = new double[y.length + 1];
+        for (int i = 0; i < y.length; i++) c[i + 1] = c[i] + y[i] * y[i];
+        double best = 0;
+        int end = loop ? n : Math.max(1, n - w);
+        for (int i = 0; i < end; i += h) best = Math.max(best, (c[pre + Math.min(i + w, y.length - pre)] - c[pre + i]) / w);
+        return -0.691 + 10 * Math.log10(best + 1e-15);
+    }
+
+    /** К-взвешивание ITU-R BS.1770 на частоте {@code rate} (те же формулы, что {@code k_weight} в build_sounds.py). */
+    private static void kWeight(double[] x, int rate) {
+        double g = 3.99984385397, q = 0.7071752369554193, fc = 1681.9744509555319;
+        double k = Math.tan(Math.PI * fc / rate), vh = Math.pow(10, g / 20), vb = Math.pow(vh, 0.499666774155);
+        double a0 = 1 + k / q + k * k;
+        biquad(x, (vh + vb * k / q + k * k) / a0, 2 * (k * k - vh) / a0, (vh - vb * k / q + k * k) / a0, 2 * (k * k - 1) / a0, (1 - k / q + k * k) / a0);
+        q = 0.5003270373253953;
+        fc = 38.13547087613982;
+        k = Math.tan(Math.PI * fc / rate);
+        a0 = 1 + k / q + k * k;
+        biquad(x, 1, -2, 1, 2 * (k * k - 1) / a0, (1 - k / q + k * k) / a0);
+    }
+
+    private static void biquad(double[] x, double b0, double b1, double b2, double a1, double a2) {
+        double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+        for (int i = 0; i < x.length; i++) {
+            double v = x[i], y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+            x2 = x1;
+            x1 = v;
+            y2 = y1;
+            y1 = y;
+            x[i] = y;
+        }
+    }
+
     private static int variants(JsonObject json, String event) {
         return json.getAsJsonObject(event).getAsJsonArray("sounds").size();
     }

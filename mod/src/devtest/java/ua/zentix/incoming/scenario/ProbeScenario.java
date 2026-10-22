@@ -353,6 +353,19 @@ final class ProbeScenario {
             }
             return;
         }
+        if (launchTick < 0 && firedAt >= 0 && tick - firedAt > 1200) {
+            Incoming.LOG.warn("SCENARIO probe {} no launch seen", current);
+            missile = null;
+            firedAt = -1;
+            nextCase();
+            return;
+        }
+        if (launchTick < 0 && missile.isRemoved()) {
+            // клиент снял ракету до схода (сервер встал на загрузке чанков, сущность пришла заново): та же ракета —
+            // новый объект, старый не двигается, и старт не засекался никогда (прогон F2c 22.10)
+            missile = null;
+            return;
+        }
         Vec3 pos = missile.position();
         Vec3 step = pos.subtract(lastPos);
         if (step.length() > 0.05) axis = step.normalize();

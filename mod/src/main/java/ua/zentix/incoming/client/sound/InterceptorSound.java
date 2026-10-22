@@ -112,7 +112,7 @@ public final class InterceptorSound extends AbstractTickableSoundInstance implem
         boolean over = rocket.isRemoved() && (track == null || track.isDead() && (past || now - track.deathTick() > Hearing.MAX_DELAY));
         double gain = over || heard == null ? 0 : heard.gain * ClientSounds.duck();
         smoothVolume += (float) ((gain - smoothVolume) * 0.35);
-        volume = smoothVolume;
+        volume = Loudness.motor(smoothVolume);
         if (over && smoothVolume <= VoiceBudget.AUDIBLE) {
             stop();
             return;
@@ -147,8 +147,8 @@ public final class InterceptorSound extends AbstractTickableSoundInstance implem
         Propagation.Path path = Propagation.Path.over(d, Hearing.height(at, ear), weather);
         double[] bands = new double[Propagation.BANDS];
         double level0 = Propagation.level(BOOST.power(FlightPhase.BOOST, 0), Spectra.LAUNCH_BOOSTER, path, bands);
-        float v = (float) Loudness.gain(level0, Propagation.margin(bands, weather));
-        if (v > 0.01f) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, v, (float) VOICE);
+        double v = Loudness.gain(level0, Propagation.margin(bands, weather));
+        if (v > 0.01) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, Loudness.motor(v), (float) VOICE);
     }
 
     /** Что слышно у уха из момента излучения {@code te}: место, громкость, тон и доля верхов. */
