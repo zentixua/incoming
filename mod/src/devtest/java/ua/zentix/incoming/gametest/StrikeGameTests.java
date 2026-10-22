@@ -1022,6 +1022,7 @@ public final class StrikeGameTests {
             level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64)).forEach(Entity::discard);
         });
 
+        placeReady(h, from);
         h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(from) + via) == 1, "приказ с места пуска не принят");
         List<LauncherEntity> launchers = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive);
         h.assertTrue(launchers.size() == 1 && placed.test(launchers.getFirst()), "пусковая не на месте пуска " + from + ": "
@@ -1045,6 +1046,7 @@ public final class StrikeGameTests {
         // отметка перенесена на 50 блоков (в районе прежней): новый приказ — с новой пусковой у новой отметки, а не со
         // старой, что смотрит на прежнюю цель (пусковая помнит свою отметку)
         Vec3 moved = from.add(0, 0, 50);
+        placeReady(h, moved);
         h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(moved)) == 1, "приказ с перенесённой отметки не принят");
         List<LauncherEntity> both = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive);
         h.assertTrue(both.size() == 2 && both.stream().anyMatch(l -> flat(l.position(), moved) < PLACE_SLACK),
@@ -1137,6 +1139,7 @@ public final class StrikeGameTests {
         Item shahed = ModItems.SHAHED.get();
         MunitionGameTests.give(op, shahed, 1);
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
+        placeReady(h, from);
         h.assertTrue(ServerActions.strike(op, WeaponType.DRONE, 1, 0, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, new LaunchOrigin.Place(from), true),
                 "приказ оператора с места пуска не принят");
         h.assertTrue(MunitionGameTests.held(op, shahed) == 0, "приказ с пульта не снял боеприпас: осталось " + MunitionGameTests.held(op, shahed));
@@ -1345,6 +1348,20 @@ public final class StrikeGameTests {
 
     private static String fromArg(Vec3 from) {
         return String.format(Locale.ROOT, " from %.2f %.2f", from.x, from.z);
+    }
+
+    /**
+     * Район места пуска {@code at} готов сразу ({@link LaunchPlaces#ready}: чанки на {@link LaunchSite#PLACE_REACH} вокруг):
+     * GameTest грузит только свою площадку, а место у её края иначе ждало бы своего района залпом, и пусковая
+     * не встала бы в этом тике. У игрока в игре район места рядом с ним и так в его дальности прорисовки.
+     */
+    static void placeReady(GameTestHelper h, Vec3 at) {
+        ServerLevel level = h.getLevel();
+        double r = LaunchSite.PLACE_REACH;
+        for (int cx = Mth.floor(at.x - r) >> 4; cx <= Mth.floor(at.x + r) >> 4; cx++) {
+            for (int cz = Mth.floor(at.z - r) >> 4; cz <= Mth.floor(at.z + r) >> 4; cz++) level.getChunk(cx, cz);
+        }
+        h.assertTrue(LaunchPlaces.ready(level, new LaunchOrigin.Place(at)), "район места пуска " + at + " не готов");
     }
 
     /**
