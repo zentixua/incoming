@@ -40,6 +40,9 @@ paths:
     free_port.py                         ← свободный порт на 127.0.0.1 для серверов проверок (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← процессы проверок в своих сессиях (source из stress.sh, mp_scenario.sh): выход скрипта гасит их с JVM
     test_rig_procs.sh                    ← проверка rig_procs.sh (CI): Ctrl+C, TERM, конец скрипта, чужая сессия, fd, срок RIG_GRACE — без сирот
+    pr_note.py < файлы PR                ← проверка «Записка» (CI, .github/workflows/note.yml): PR, который меняет то, что
+                                           игрок видит или слышит (пути — PLAYER_FACING там же), несёт в описании раздел
+                                           `## Записка`; описание — PR_BODY; тест — test_pr_note.py
     gametest_durations.py <лог>...       ← время партий GameTest по логам (latest.log или лог задачи CI) → таблица, по которой
                                            CI делит GameTest на части (src/devtest/resources/gametest-durations.json)
     mp_scenario.sh                       ← мультиплеер без окон: сервер и два клиента (Alpha бьёт, Bravo — цель), выходы и входы посреди удара
@@ -86,5 +89,7 @@ paths:
                                            docs/guide/ru/ — то же по-русски
   docs/store/                            ← тексты страниц Modrinth и CurseForge
   .github/workflows/build.yml            ← CI: что изменилось → сборка и юнит-тесты, GameTest частями, итог; jar в артефактах; релиз
+  .github/workflows/note.yml             ← CI: проверка «Записка» описания PR (tools/pr_note.py); шаблон описания —
+                                           .github/PULL_REQUEST_TEMPLATE.md
   docs/releases/<версия>.md              ← заметки к релизу
 ```
