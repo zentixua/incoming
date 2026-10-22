@@ -66,4 +66,25 @@ class SmokePuffsTest {
         org.junit.jupiter.api.Assertions.assertTrue(mid > 10 * sv, "под 20° — уже не черта: " + mid);
         org.junit.jupiter.api.Assertions.assertEquals(3, SmokePuffs.projected(3, 3, 10, -7, 2), 1e-9, "круглый");
     }
+
+    /**
+     * Толща по лучу из глаза через гаусс: у шара — прежняя формула вуали (τ₀·e^(−b²/2σ²)·½(1 + erf(a/√2σ))); у плоского
+     * слоя (σh 40, σv 1) глаз в 18 м над ним видит толщу сверху — тонкую, а не толщу вдоль слоя (финальные кадры F2a:
+     * вуаль слоя пыли закрывала весь кадр у подстанции и у бомбы в 150 м).
+     */
+    @Test
+    void sightDepthThroughAFlatLayer() {
+        double ext = 1000, s = 5;
+        double tau0 = ext / (2 * Math.PI * s * s);
+        // глаз в середине шара, смотрит вбок: половина толщи поперёк
+        org.junit.jupiter.api.Assertions.assertEquals(0.5 * tau0, SmokePuffs.sightDepth(0, 0, 0, s, s, ext, 1, 0, 0), 1e-9);
+        // шар впереди на 10 (a = 10), смещён вбок на 3
+        double a = 10, b = 3, old = tau0 * Math.exp(-0.5 * b * b / (s * s)) * 0.5 * (1 + ua.zentix.incoming.client.fx.smoke.SmokeGrid.erf(a / (Math.sqrt(2) * s)));
+        org.junit.jupiter.api.Assertions.assertEquals(old, SmokePuffs.sightDepth(a, b, 0, s, s, ext, 1, 0, 0), 1e-9);
+        // плоский слой под глазом: вниз — толща сверху ext/(2πσh²)·(вся, слой целиком под глазом), вдоль слоя — огромная
+        double down = SmokePuffs.sightDepth(0, -18, 0, 40, 1, ext, 0, -1, 0);
+        org.junit.jupiter.api.Assertions.assertEquals(ext / (2 * Math.PI * 40 * 40), down, 1e-6);
+        double level = SmokePuffs.sightDepth(0, -18, 0, 40, 1, ext, 1, 0, 0);
+        org.junit.jupiter.api.Assertions.assertTrue(level < 1e-6, "взгляд вдоль, на 18 σ выше слоя: " + level);
+    }
 }

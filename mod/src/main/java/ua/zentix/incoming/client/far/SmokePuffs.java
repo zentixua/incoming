@@ -117,9 +117,12 @@ final class SmokePuffs {
             double air = view.air(d, py);
             if (air < Sight.THRESHOLD) return;
             // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
-            // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс
-            double outside = smoothstep(0.5 * r, r, d);
-            if (outside < 1) veil(px, py, pz, sh, sv, tau, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air);
+            // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс. «Внутри» — по эллипсоиду
+            // края (у плоского слоя пыли в сотню метров шириной и метр толщиной глаз над ним снаружи; по наибольшему
+            // радиусу он был «внутри», и вуаль слоя закрывала весь кадр)
+            double q = Math.sqrt((px * px + pz * pz) / (rh * rh) + py * py / (rw * rw));
+            double outside = smoothstep(0.5, 1, q);
+            if (outside < 1) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air);
             if (outside <= 0) return;
             Sight.point(rh, 1, 1, d, view.pixel(), point);
             double grow = point[0] / rh;
@@ -182,12 +185,11 @@ final class SmokePuffs {
      * геометрическое), непрозрачность — 1 − e^(−τ), квадратом во весь экран на {@link #VEIL_AT} блока перед глазом. Тот
      * же цвет вещества, что у клубов. Доля share — сколько клубов растаяло.
      */
-    private static void veil(double px, double py, double pz, double sh, double sv, double tau, double ks, double kd, double kw, float dr,
+    private static void veil(double px, double py, double pz, double sh, double sv, double ext, double ks, double kd, double kw, float dr,
                              float dg, float db, double share) {
         FarView view = DRAW.view;
         double fx = view.forward().x(), fy = view.forward().y(), fz = view.forward().z();
-        double a = px * fx + py * fy + pz * fz, b2 = Math.max(0, px * px + py * py + pz * pz - a * a), sigma = Math.sqrt(sh * sv);
-        double along = tau * Math.exp(-0.5 * b2 / (sigma * sigma)) * 0.5 * (1 + SmokeGrid.erf(a / (Math.sqrt(2) * sigma)));
+        double along = sightDepth(px, py, pz, sh, sv, ext, fx, fy, fz);
         float k = (float) ((1 - Math.exp(-along)) * share);
         if (k < 0.004f) return;
         float lit = view.ambient();
@@ -195,6 +197,25 @@ final class SmokePuffs {
         // во весь экран: полуразмер — с запасом на угол поля зрения до ~120°
         double half = VEIL_AT * 4;
         DRAW.out.veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, half, cr, cg, cb, k);
+    }
+
+    /**
+     * Толща по лучу взгляда из глаза (направление f, единичное) через гаусс с осями (σh, σh, σv), центр — (px, py, pz) от
+     * глаза, ослабление всей массы ext (м²): в пространстве, где гаусс — шар единичного σ, луч идёт с шагом |f'| =
+     * √((fx² + fz²)/σh² + fy²/σv²), и толща — ext/((2π)^{3/2}σh²σv)·√(π/2)/|f'|·e^(−b'²/2)·(1 + erf(a'/√2)), a' — путь до
+     * ближайшей к середине точки луча, b' — её расстояние до середины (обе — в σ). У шара — прежняя формула вуали.
+     */
+    static double sightDepth(double px, double py, double pz, double sh, double sv, double ext, double fx, double fy, double fz) {
+        double ux = fx / sh, uy = fy / sv, uz = fz / sh, len = Math.sqrt(ux * ux + uy * uy + uz * uz);
+        if (!(len > 0)) return 0;
+        ux /= len;
+        uy /= len;
+        uz /= len;
+        // середина от глаза в σ: луч из глаза — t·u, ближайшая к середине точка — t = a'
+        double cx = px / sh, cy = py / sv, cz = pz / sh;
+        double a = cx * ux + cy * uy + cz * uz, b2 = Math.max(0, cx * cx + cy * cy + cz * cz - a * a);
+        return ext / (Math.pow(2 * Math.PI, 1.5) * sh * sh * sv) * Math.sqrt(Math.PI / 2) / len * Math.exp(-0.5 * b2)
+                * (1 + SmokeGrid.erf(a / Math.sqrt(2)));
     }
 
     /** Видимый край гаусса толщи τ₀ поперёк середины, в σ: где толща падает до {@link #EDGE_TAU}. */
