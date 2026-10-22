@@ -1,0 +1,28 @@
+debris-night-50
+  S8ref341 frame10s={'mean': 21.67, 'p99': 78.97, 'max': 135.4, 'n': 461} all={'mean': 12.27, 'p99': 44.79, 'max': 135.4, 'n': 7280} comb=6.37 tone=None
+  S8v2     frame10s={'mean': 18.62, 'p99': 77.89, 'max': 121.0, 'n': 537} all={'mean': 14.1, 'p99': 45.69, 'max': 121.0, 'n': 6341} comb=5.71 tone=None
+  S8v6     frame10s=None all=None comb=None tone=None
+drone-day-50
+  S8ref341 frame10s={'mean': 81.78, 'p99': 589.68, 'max': 737.6, 'n': 126} all={'mean': 26.83, 'p99': 146.76, 'max': 737.6, 'n': 2232} comb=6.82 tone=None
+  S8v2     frame10s={'mean': 15.21, 'p99': 52.96, 'max': 197.2, 'n': 651} all={'mean': 11.74, 'p99': 38.44, 'max': 197.2, 'n': 5060} comb=5.64 tone=None
+  S8v6     frame10s=None all=None comb=None tone=None
+drone-night-50
+  S8ref341 frame10s={'mean': 43.26, 'p99': 204.18, 'max': 250.8, 'n': 231} all={'mean': 23.52, 'p99': 104.13, 'max': 250.8, 'n': 2560} comb=5.55 tone=None
+  S8v2     frame10s={'mean': 12.16, 'p99': 35.39, 'max': 49.7, 'n': 822} all={'mean': 10.91, 'p99': 35.11, 'max': 55.7, 'n': 5473} comb=5.84 tone=None
+  S8v6     frame10s=None all=None comb=None tone=None
+flyby
+  S8ref341 frame10s={'mean': 16.37, 'p99': 52.53, 'max': 64.6, 'n': 184} all={'mean': 11.84, 'p99': 41.24, 'max': 77.1, 'n': 2563} comb=None tone={'peak_hz': 88.8, 'centroid_hz': 518.6}
+  S8v2     frame10s=None all=None comb=None tone=None
+  S8v6     frame10s=None all=None comb=None tone=None
+grad-night
+  S8ref341 frame10s={'mean': 53.09, 'p99': 168.59, 'max': 172.9, 'n': 189} all={'mean': 16.77, 'p99': 85.86, 'max': 204.3, 'n': 5670} comb=6.03 tone=None
+  S8v2     frame10s={'mean': 18.35, 'p99': 52.74, 'max': 128.0, 'n': 545} all={'mean': 10.93, 'p99': 34.01, 'max': 128.0, 'n': 8702} comb=5.22 tone=None
+  S8v6     frame10s=None all=None comb=None tone=None
+substation-night-50
+  S8ref341 frame10s={'mean': 16.59, 'p99': 73.19, 'max': 133.3, 'n': 603} all={'mean': 10.97, 'p99': 39.26, 'max': 151.5, 'n': 8033} comb=5.28 tone=None
+  S8v2     frame10s={'mean': 21.59, 'p99': 64.16, 'max': 185.9, 'n': 463} all={'mean': 12.6, 'p99': 42.06, 'max': 7780.7, 'n': 7937} comb=5.49 tone=None
+  S8v6     frame10s=None all=None comb=None tone=None
+water-day-50
+  S8ref341 frame10s={'mean': 22.47, 'p99': 94.24, 'max': 160.8, 'n': 445} all={'mean': 12.48, 'p99': 54.58, 'max': 160.8, 'n': 4768} comb=6.32 tone=None
+  S8v2     frame10s={'mean': 13.47, 'p99': 39.03, 'max': 61.9, 'n': 739} all={'mean': 11.58, 'p99': 38.06, 'max': 116.0, 'n': 5135} comb=5.71 tone=None
+  S8v6     frame10s={'mean': 11.65, 'p99': 38.94, 'max': 198.4, 'n': 858} all={'mean': 6.71, 'p99': 25.46, 'max': 273.3, 'n': 9354} comb=5.94 tone=None
