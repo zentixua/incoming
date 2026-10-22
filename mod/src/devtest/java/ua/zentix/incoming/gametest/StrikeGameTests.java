@@ -75,6 +75,7 @@ import ua.zentix.incoming.strike.SalvoData;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.FlightLog;
 import ua.zentix.incoming.strike.LaunchOrigin;
+import ua.zentix.incoming.strike.LaunchPlaces;
 import ua.zentix.incoming.strike.LaunchSite;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.TargetMode;
@@ -1002,7 +1003,8 @@ public final class StrikeGameTests {
     /**
      * Место пуска и маршрут из команды ({@code /incoming salvo … from x z via x z …}) от консоли: пусковая встаёт на
      * самом месте пуска (у консоли без владельца) и смотрит на первую точку, путь — ворота взведения и точки; второй
-     * приказ с того же места — с той же пусковой. Место пуска в неготовом чанке — шахед и РСЗО стартуют из него вне мира.
+     * приказ с того же места — с той же пусковой. Место пуска в неготовом чанке — приказ и одного снаряда ждёт его залпом
+     * ({@link LaunchPlaces}), а не стартует вне мира уже на маршевом участке.
      * Точек у B-2 команда не разбирает, путь длиннее дальности и точки вне мира (NaN, бесконечность, за границей) не принимает. Пусковые на местах пуска лишними у владельца
      * не считаются, а залп помнит место пуска в сохранении.
      */
@@ -1041,17 +1043,19 @@ public final class StrikeGameTests {
                 && level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(64), launcher::serves).size() == 2,
                 "второй приказ с того же места — не с той же пусковой");
 
-        // место пуска далеко, чанк не готов: старт из него вне мира (у РСЗО точка падения — с рассеиванием)
+        // место пуска далеко, чанк не готов: один снаряд ждёт его залпом (залп грузит место), вне мира без пуска не стартует
         Vec3 far = from.add(0, 0, 20_000);
         java.util.function.Predicate<StrikeProjectile> fromFar = f -> flat(f.position(), far) < 1e-6;
+        h.assertTrue(LaunchPlaces.waits(level, WeaponType.DRONE, new LaunchOrigin.Place(far)), "далёкое место пуска уже готово");
+        int pending = SalvoData.get(level).size();
         h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(far)) == 1, "приказ с далёкого места пуска не принят");
         h.assertTrue(command(h, "incoming salvo rocket 1 0" + at + fromArg(far)) == 1, "залп РСЗО с далёкого места пуска не принят");
-        List<StrikeProjectile> outside = VirtualFlights.get(level).flights().stream().filter(fromFar).toList();
-        VirtualFlights.get(level).clear(level, fromFar);
-        h.assertTrue(outside.stream().map(StrikeProjectile::weapon).sorted().toList().equals(List.of(WeaponType.DRONE, WeaponType.ROCKET)),
-                "вне мира с места пуска стартовали не шахед и РСЗО: " + outside.stream().map(StrikeProjectile::weapon).toList());
-        StrikeProjectile drone = outside.stream().filter(f -> f.weapon() == WeaponType.DRONE).findFirst().orElseThrow();
-        h.assertTrue(Math.abs(drone.getY() - point.y - WeaponType.DRONE.spec().airframe().cruiseHeight()) < 1e-6, "шахед стартовал не на высоте крейсера: " + drone.getY());
+        h.assertTrue(SalvoData.get(level).size() == pending + 2, "один снаряд с неготового места пуска не ждёт его залпом: залпов "
+                + (SalvoData.get(level).size() - pending));
+        h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(fromFar), "снаряд с неготового места пуска стартовал вне мира без пуска");
+        // у B-2 место пуска — только курс захода: ему ждать нечего
+        h.assertTrue(!LaunchPlaces.waits(level, WeaponType.BUNKER, new LaunchOrigin.Place(far)), "B-2 ждёт места пуска");
+        SalvoData.get(level).cancel(level, null, List.of());
 
         // точек у B-2 нет, путь дальше дальности оружия — отказ
         h.assertTrue(command(h, "incoming salvo bunker 1 0" + at + via) == -1, "команда разобрала точки маршрута у B-2");
@@ -1290,6 +1294,46 @@ public final class StrikeGameTests {
     private static final double PLACE_SLACK = 1;
 
     /** « from x z» для команды. */
+    /**
+     * Место пуска дальше загруженных чанков ({@link LaunchPlaces}): залп из одного «Града» берёт район места, пока ждёт,
+     * и стреляет, как только место готово (раньше {@link LaunchPlaces#WAIT}), — с пусковой на месте, и снаряд проходит
+     * пуск в мире (видно издалека). Ровного места рядом с ним в случайном рельефе мира GameTest может не быть — тогда
+     * старт без пусковой, как и у места в загруженных чанках; это строка в лог, а не провал.
+     */
+    @GameTest(template = "runway", timeoutTicks = 900, batch = "launch_place", skyAccess = true)
+    public static void farLaunchPlaceLoadsThenLaunches(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Vec3 far = h.absoluteVec(new Vec3(16.5, 0, 60.5)).add(-20_000, 0, 0);
+        Vec3 aim = far.add(0, 0, 400);
+        LaunchOrigin place = new LaunchOrigin.Place(far);
+        java.util.function.Predicate<Entity> near = e -> flat(e.position(), far) < LaunchSite.PLACE_REACH + 8;
+        StrikeGameTests.afterTest(h, () -> {
+            VirtualFlights.get(level).clear(level, near::test);
+            level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(600, 512, 600)).forEach(Entity::discard);
+            level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(64, 256, 64)).forEach(Entity::discard);
+        });
+        h.assertTrue(LaunchPlaces.waits(level, WeaponType.ROCKET, place), "далёкое место пуска уже готово");
+        int salvos = SalvoData.get(level).size();
+        h.assertTrue(command(h, String.format(Locale.ROOT, "incoming salvo rocket 1 0 at %.2f %.2f", aim.x, aim.z) + fromArg(far)) == 1,
+                "приказ с далёкого места пуска не принят");
+        h.assertTrue(SalvoData.get(level).size() == salvos + 1, "приказ с неготового места не ждёт его залпом");
+        long start = level.getGameTime();
+        h.succeedWhen(() -> {
+            h.assertTrue(LaunchPlaces.ready(level, place), "район места пуска ещё не готов");
+            h.assertTrue(SalvoData.get(level).size() == salvos, "залп ещё не выстрелил с готового места");
+            h.assertTrue(level.getGameTime() - start < LaunchPlaces.WAIT, "залп дождался места только к пределу ожидания");
+            List<LauncherEntity> pads = level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(64, 256, 64), l -> l.isAlive() && near.test(l));
+            List<StrikeProjectile> rockets = level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(64, 256, 64),
+                    p -> p.weapon() == WeaponType.ROCKET && near.test(p));
+            if (pads.isEmpty()) {
+                Incoming.LOG.info("farLaunchPlaceLoadsThenLaunches: no flat place near {} in this world's terrain, launched without a launcher", BlockPos.containing(far));
+                return;
+            }
+            h.assertTrue(!rockets.isEmpty() && rockets.stream().allMatch(r -> r.flightPhase().launching()),
+                    "у пусковой на далёком месте нет «Града» на пуске: " + rockets.stream().map(r -> r.flightPhase()).toList());
+        });
+    }
+
     private static String fromArg(Vec3 from) {
         return String.format(Locale.ROOT, " from %.2f %.2f", from.x, from.z);
     }

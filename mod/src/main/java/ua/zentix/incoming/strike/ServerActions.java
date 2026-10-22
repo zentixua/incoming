@@ -479,7 +479,9 @@ public final class ServerActions {
                                   Waypoints via, @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid) {
         StrikeService.log(level, who, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), via, from);
         float course = from != null ? FlightController.anglesTo(from.at(), aim.point())[0] : yaw;
-        if (l.count() > 1 || l.spread() > 0) {
+        // место пуска не готово — и один снаряд идёт залпом: залп грузит место и ждёт его (LaunchPlaces), а не стартует
+        // вне мира уже на маршевом участке, где пуска не видно
+        if (l.count() > 1 || l.spread() > 0 || LaunchPlaces.waits(level, l.weapon(), from)) {
             SalvoData.start(level, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), course, ownerId, l.nuke(), via, from, paid != null);
             return true;
         }

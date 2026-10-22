@@ -40,7 +40,8 @@ import java.util.stream.Stream;
 
 /**
  * Где поставить пусковую: позади и сбоку от стреляющего, а у приказа с местом пуска — на нём самом ({@link Post}),
- * на ровной твёрдой земле под открытым небом, только в готовых чанках (ничего не грузим ради пуска). Своя пусковая
+ * на ровной твёрдой земле под открытым небом, только в готовых чанках (место пуска из приказа загружает залп,
+ * {@link LaunchPlaces}). Своя пусковая
  * того же оружия рядом ({@link #REUSE_RADIUS} от стреляющего, {@link #PLACE_REUSE} от места пуска) — берём её: залп
  * идёт с одной установки. Больше {@link #MAX_PER_OWNER} установок, что идут за игроком, у него не бывает — старая
  * убирается; на местах пуска из приказа они стоят до «Отбоя».
@@ -66,6 +67,11 @@ public final class LaunchSite {
     /** Места относительно места пуска из приказа: оно само, а там не ровно или занято — те же, что у игрока. */
     private static final double[][] AT_PLACE = Stream.concat(Stream.<double[]>of(new double[]{0, 0}), Arrays.stream(CANDIDATES))
             .toArray(double[][]::new);
+    /**
+     * Дальше этого от места пуска из приказа пусковая не встаёт: самое далёкое место вокруг него и зазор до соседней
+     * пусковой, блоков. Столько вокруг места должно быть готово к пуску ({@link LaunchPlaces#ready}).
+     */
+    public static final double PLACE_REACH = Arrays.stream(AT_PLACE).mapToDouble(c -> Math.hypot(c[0], c[1])).max().orElse(0) + CLEARANCE;
 
     private LaunchSite() {}
 
@@ -86,8 +92,8 @@ public final class LaunchSite {
         }
 
         /**
-         * Место пуска {@code place} (по горизонтали) из приказа по цели {@code target}; null — чанк места не готов:
-         * пусковую там никто не увидит, а грузить его ради пуска нельзя.
+         * Место пуска {@code place} (по горизонтали) из приказа по цели {@code target}; null — чанк места не готов (его
+         * грузит залп, {@link LaunchPlaces}; здесь ничего не грузится).
          */
         @Nullable
         public static Post ordered(ServerLevel level, Vec3 place, Vec3 target, @Nullable UUID owner) {

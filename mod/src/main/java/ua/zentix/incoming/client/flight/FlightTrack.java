@@ -64,6 +64,8 @@ public final class FlightTrack implements Acoustics.Path {
     private boolean fromEntity;
     /** Бомба бурит. */
     private boolean drilling;
+    /** Земля под снарядом на старте по чанку сервера (последний пакет, где она была, {@link S2C.FarFlight#ground}); NaN — не было. */
+    private double launchGround = Double.NaN;
 
     public FlightTrack(UUID id, @Nullable WeaponType weapon, boolean bomber) {
         this.id = id;
@@ -110,6 +112,15 @@ public final class FlightTrack implements Acoustics.Path {
         fromEntity = false;
         slack = f.period() + 2;
         drilling = f.drilling();
+        if (Float.isFinite(f.ground())) launchGround = f.ground();
+    }
+
+    /**
+     * Земля под снарядом на старте по чанку сервера (первый воздух), из пакетов; NaN — сервер её не присылал (снаряд был
+     * у клиента сущностью или чанк места пуска у сервера не готов).
+     */
+    public double launchGround() {
+        return launchGround;
     }
 
     /**

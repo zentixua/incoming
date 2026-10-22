@@ -10,6 +10,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -36,9 +37,10 @@ import java.util.UUID;
  * B-2 60–80) — с одной пусковой по ячейкам. Цель может двигаться — каждый снаряд целится со своим смещением
  * относительно неё; маршруты разные (обход слева или справа, курс захода ±35°), поэтому залп приходит волной
  * с разных сторон. По точкам оператора ({@link Waypoints}) весь залп идёт одним маршрутом, с места пуска из приказа —
- * с одной пусковой на нём, со стационарной пусковой ({@link LaunchOrigin.Fixed}) — с неё: пока её чанк не готов, залп
- * ждёт (грузить его ради пуска нельзя), блока на месте нет — залп кончен; строк и полосы залпа хозяину у неё нет —
- * её залпы идут по сигналу, когда хозяин может быть где угодно.
+ * с одной пусковой на нём, со стационарной пусковой ({@link LaunchOrigin.Fixed}) — с неё. Место пуска залп грузит в фоне
+ * и держит, пока идёт ({@link LaunchPlaces}): пока оно не готово, залп ждёт — место из приказа не дольше
+ * {@link LaunchPlaces#WAIT}, стационарная пусковая — сколько нужно; блока пусковой на месте нет — залп кончен; строк и
+ * полосы залпа хозяину у стационарной нет — её залпы идут по сигналу, когда хозяин может быть где угодно.
  * Хранится в мире: незаконченный залп продолжится после перезахода.
  * <p>
  * Залп, оплаченный боеприпасами ({@link Munitions}), возвращает владельцу то, что не вылетело: невыпущенные снаряды
@@ -190,6 +192,10 @@ public final class SalvoData extends SavedData {
         final boolean paid;
         /** Сколько пусков залпа не удалось: возвращаются владельцу в конце залпа (одной строкой, а не на каждый). */
         int failed;
+        /** Ключ района места пуска ({@link LaunchPlaces}; не сохраняется, как и тикеты: после загрузки залп возьмёт его заново). */
+        final UUID placeKey = UUID.randomUUID();
+        /** Сколько тиков залп ждёт района места пуска (не сохраняется). */
+        int waited;
 
         Salvo(WeaponType weapon, int total, int remaining, int radius, Target center, Vec3 lastCenter, float yaw, @Nullable UUID owner, int cooldown,
               Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid, int failed) {
@@ -219,9 +225,23 @@ public final class SalvoData extends SavedData {
 
         boolean tick(ServerLevel level) {
             watchCenter(level);
+            if (from != null && LaunchPlaces.fromPad(weapon)) {
+                // место пуска грузится и тикает, пока идёт залп: там стоит пусковая, и с неё уходят снаряды
+                LaunchPlaces.hold(level, from, placeKey);
+                // не готово — ждать (пауза залпа не идёт); место из приказа — не дольше WAIT, потом старт без пусковой
+                if (!LaunchPlaces.ready(level, from)) {
+                    if (from instanceof LaunchOrigin.Fixed || waited < LaunchPlaces.WAIT) {
+                        waited++;
+                        return true;
+                    }
+                    if (waited++ == LaunchPlaces.WAIT) {
+                        Incoming.LOG.warn("Salvo: {} — launch place {} {} not loaded in {} ticks, launching from it without a launcher",
+                                weapon.getSerializedName(), Mth.floor(from.at().x), Mth.floor(from.at().z), LaunchPlaces.WAIT);
+                    }
+                }
+            }
             if (from instanceof LaunchOrigin.Fixed fixed) {
-                // стационарная пусковая: её чанк не готов — ждать (пауза залпа не идёт), блока нет — залп кончен
-                if (!Terrain.ready(level, fixed.pos())) return true;
+                // стационарная пусковая: блока нет — залп кончен
                 if (fixed.launcher(level) == null) {
                     Incoming.LOG.info("Salvo: {} — launcher {} is gone, remaining {} cancelled", weapon.getSerializedName(),
                             fixed.pos().toShortString(), remaining);

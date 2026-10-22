@@ -280,11 +280,19 @@ public final class S2C {
      * оружие), бурит ли бомба, слышно ли его (тогда пакеты чаще), где он, сдвиг за последний тик
      * ({@code StrikeProjectile.velocity}; float — точнее миллиметра), куда смотрит нос и крен (модель вдали кренится
      * в развороте, как вблизи), фаза полёта и сколько она идёт,
-     * куда он летит (точка цели).
+     * куда он летит (точка цели); на старте — ещё и высота земли под ним (первый воздух) по чанку сервера
+     * ({@code ground}; NaN — не на старте или чанк не готов): у клиента вдали чанка нет, а рельеф мода LOD бывает не у
+     * всех — облако старта без земли не встанет.
      */
     public record FarFlight(UUID id, int weapon, boolean bomber, boolean drilling, boolean audible, Vec3 pos, Vec3 velocity, float yaw,
-                            float pitch, float roll, int phase, int phaseAge, Vec3 aim) {
-        private static final int BOMBER = 1, DRILLING = 2, AUDIBLE = 4;
+                            float pitch, float roll, int phase, int phaseAge, Vec3 aim, float ground) {
+        private static final int BOMBER = 1, DRILLING = 2, AUDIBLE = 4, GROUND = 8;
+
+        /** Без земли под снарядом. */
+        public FarFlight(UUID id, int weapon, boolean bomber, boolean drilling, boolean audible, Vec3 pos, Vec3 velocity, float yaw,
+                         float pitch, float roll, int phase, int phaseAge, Vec3 aim) {
+            this(id, weapon, bomber, drilling, audible, pos, velocity, yaw, pitch, roll, phase, phaseAge, aim, Float.NaN);
+        }
 
         public static final StreamCodec<ByteBuf, FarFlight> CODEC = new StreamCodec<>() {
             @Override
@@ -294,16 +302,20 @@ public final class S2C {
                 int flags = b.readByte();
                 Vec3 pos = StreamCodecs.VEC3.decode(b);
                 Vec3 velocity = new Vec3(b.readFloat(), b.readFloat(), b.readFloat());
+                float yaw = b.readFloat(), pitch = b.readFloat(), roll = b.readFloat();
+                int phase = ByteBufCodecs.VAR_INT.decode(b), phaseAge = ByteBufCodecs.VAR_INT.decode(b);
+                Vec3 aim = StreamCodecs.VEC3.decode(b);
+                float ground = (flags & GROUND) != 0 ? b.readFloat() : Float.NaN;
                 return new FarFlight(id, weapon, (flags & BOMBER) != 0, (flags & DRILLING) != 0, (flags & AUDIBLE) != 0, pos, velocity,
-                        b.readFloat(), b.readFloat(), b.readFloat(), ByteBufCodecs.VAR_INT.decode(b), ByteBufCodecs.VAR_INT.decode(b),
-                        StreamCodecs.VEC3.decode(b));
+                        yaw, pitch, roll, phase, phaseAge, aim, ground);
             }
 
             @Override
             public void encode(ByteBuf b, FarFlight f) {
                 UUIDUtil.STREAM_CODEC.encode(b, f.id);
                 ByteBufCodecs.VAR_INT.encode(b, f.weapon);
-                b.writeByte((f.bomber ? BOMBER : 0) | (f.drilling ? DRILLING : 0) | (f.audible ? AUDIBLE : 0));
+                boolean ground = Float.isFinite(f.ground);
+                b.writeByte((f.bomber ? BOMBER : 0) | (f.drilling ? DRILLING : 0) | (f.audible ? AUDIBLE : 0) | (ground ? GROUND : 0));
                 StreamCodecs.VEC3.encode(b, f.pos);
                 b.writeFloat((float) f.velocity.x);
                 b.writeFloat((float) f.velocity.y);
@@ -314,6 +326,7 @@ public final class S2C {
                 ByteBufCodecs.VAR_INT.encode(b, f.phase);
                 ByteBufCodecs.VAR_INT.encode(b, f.phaseAge);
                 StreamCodecs.VEC3.encode(b, f.aim);
+                if (ground) b.writeFloat(f.ground);
             }
         };
 

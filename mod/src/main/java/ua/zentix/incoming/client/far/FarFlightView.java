@@ -386,15 +386,17 @@ public final class FarFlightView {
     /**
      * Облако старта в тике пути t (горит ускоритель): струя двигателя фазы бьёт в землю раньше своей длины Мортона —
      * продукты за тик идут в облако ({@link LaunchCloud#feed}), а точки ленты этого тика — его ({@code TrailPoints.cloud}).
-     * Земля — карта высот чанка клиента, вне чанков —
-     * рельеф дальней картинки; неизвестна — облака нет. Сопло — фазы (ускоритель или маршевое), струя — назад по оси.
+     * Земля — по чанку сервера из пакетов ({@link FlightTrack#launchGround}: вдали у клиента чанка нет, а рельеф мода
+     * LOD бывает не у всех), иначе карта высот чанка клиента, вне чанков — рельеф дальней картинки; неизвестна — облака нет. Сопло — фазы (ускоритель или маршевое), струя — назад по оси.
      */
     private static void launch(Far f, long t, ClientWeaponSpec.Stage stage) {
         ClientLevel lv = level;
         if (lv == null || !f.track.covers(t)) return;
         f.track.at(t, NOZZLE);
         f.track.offset(t, f.airframe.nozzle(stage), NOZZLE);
-        double ground = ground(lv, NOZZLE[0], NOZZLE[2]);
+        // земля по чанку сервера (пусковая стоит на ровном, под соплом та же), иначе своя
+        double ground = f.track.launchGround();
+        if (Double.isNaN(ground)) ground = ground(lv, NOZZLE[0], NOZZLE[2]);
         if (Double.isNaN(ground)) return;
         Vec3 fwd = f.track.forward(t);
         if (!LaunchCloud.impinges(stage.motor(), NOZZLE[1] - ground, -fwd.y)) return;

@@ -3,6 +3,8 @@ package ua.zentix.incoming.strike;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -13,6 +15,7 @@ import ua.zentix.incoming.entity.BunkerBusterEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.sound.Propagation;
+import ua.zentix.incoming.util.Terrain;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -97,6 +100,17 @@ public final class FarFlights {
 
     private static S2C.FarFlight sample(StrikeProjectile p, boolean audible) {
         return new S2C.FarFlight(p.getUUID(), p.weapon().id(), p instanceof BomberEntity, p instanceof BunkerBusterEntity b && b.isDrilling(),
-                audible, p.position(), p.velocity(), p.getYRot(), p.getXRot(), p.roll(), p.flightPhase().ordinal(), p.phaseAge(), p.aimPoint());
+                audible, p.position(), p.velocity(), p.getYRot(), p.getXRot(), p.roll(), p.flightPhase().ordinal(), p.phaseAge(), p.aimPoint(),
+                ground(p));
+    }
+
+    /**
+     * Земля под снарядом на старте (горит ускоритель — облако старта у клиента встаёт на неё): первый воздух по карте высот
+     * {@code MOTION_BLOCKING} готового чанка, как у клиента в его чанках; не на старте или чанк не готов — NaN.
+     */
+    private static float ground(StrikeProjectile p) {
+        if (!p.flightPhase().boosterLit()) return Float.NaN;
+        Terrain.Surface s = Terrain.estimate(p.level(), Heightmap.Types.MOTION_BLOCKING, Mth.floor(p.getX()), Mth.floor(p.getZ()), Terrain.Allowed.CHUNK);
+        return s.source() == Terrain.Source.CHUNK ? s.y() : Float.NaN;
     }
 }
