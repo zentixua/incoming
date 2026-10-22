@@ -3079,7 +3079,9 @@ public final class StrikeGameTests {
 
     /**
      * Шахед издалека на настоящей шкале полёта (1): заход на эшелоне 2 км над целью, пике оттуда — и подрыв в точке, а не
-     * самоликвидация в воздухе: запас хода по плану считает и снижение к цели (маршрут — по горизонтали).
+     * самоликвидация в воздухе: запас хода по плану считает и снижение к цели (маршрут — по горизонтали). Точка — та, куда
+     * шахед целится: пуск сдвигает её от цели на промах паспорта (СКО 3 м по оси, {@code WeaponSpec.Route#miss}), и с
+     * целью тест расходился в e⁻² ≈ 13 % пусков (CI 22.10); сам промах — не дальше 5 СКО.
      */
     @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_drone", skyAccess = true)
     public static void droneFromRealEchelonDivesIntoTarget(GameTestHelper h) {
@@ -3094,20 +3096,24 @@ public final class StrikeGameTests {
                 Waypoints.NONE, null).ok(), "пуск не принят");
         String[] last = {""};
         boolean[] high = {false};
+        Vec3[] aim = {null};
         h.onEachTick(() -> {
             List<StrikeProjectile> all = new ArrayList<>(VirtualFlights.get(level).flights());
             all.addAll(level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)));
             for (StrikeProjectile p : all) {
                 if (!owner.equals(p.ownerId())) continue;
                 if (p.getY() - point.y > 1500) high[0] = true;
-                last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " запас " + Math.round(p.rangeLeft());
+                aim[0] = p.aimPoint();
+                last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " запас " + Math.round(p.rangeLeft()) + ", целится в " + h.relativeVec(aim[0]);
             }
         });
         h.succeedWhen(() -> {
             h.assertTrue(high[0], "шахед не шёл на настоящем эшелоне: " + last[0]);
             h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(p -> owner.equals(p.ownerId()))
                     && level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)).isEmpty(), "шахед ещё летит: " + last[0]);
-            assertCrater(h, RUNWAY_TARGET, last[0]);
+            double miss = Math.hypot(aim[0].x - point.x, aim[0].z - point.z);
+            h.assertTrue(miss <= 5 * WeaponType.DRONE.spec().route().error(), String.format(Locale.ROOT, "промах пуска %.1f м — больше 5 СКО", miss));
+            assertCrater(h, BlockPos.containing(aim[0]).subtract(h.absolutePos(BlockPos.ZERO)), last[0]);
         });
     }
 
