@@ -28,7 +28,8 @@ import java.util.UUID;
  * Осыпание в воронках. Взрыв оставляет песок и гравий без опоры (и бомба сама кладёт щебень над полостью), и каждый
  * такой блок ваниль превращает в падающую сущность ({@code FallingBlock.tick} → {@code FallingBlockEntity.fall}):
  * в песке или под сводом полости их сотни за секунды, и сервер несёт их все. Здесь — не больше {@link #LIVE_CAP}
- * живых падающих блоков на район взрыва и {@link #TOTAL_CAP} на мир (залп — это много районов сразу): осыпание,
+ * живых падающих блоков в районе взрыва (в пересечении районов соседних взрывов — в каждом из них) и {@link #TOTAL_CAP}
+ * на мир (залп — это много районов сразу): осыпание,
  * которое видно вблизи. Остальные ложатся сразу туда, где упали бы: {@code fall} уже убрал блок с места, сущность в мир
  * не входит ({@link EntityJoinLevelEvent} отменён), блок ставится на опору под ним. Соседи поставленного блока
  * получают обновление, как от приземления, так что столбец выше осыпается следом тем же путём.
@@ -39,7 +40,7 @@ import java.util.UUID;
  * в несохраняемом attachment мира {@link ModAttachments#CRATER_FALLS}.
  */
 public final class CraterFalls {
-    /** Живых падающих блоков на район взрыва. */
+    /** Живых падающих блоков, начавших падать в районе взрыва. */
     public static final int LIVE_CAP = 48;
     /** Живых падающих блоков во всех районах мира вместе: районы залпа с большим разбросом не пересекаются. */
     public static final int TOTAL_CAP = 96;
@@ -100,30 +101,32 @@ public final class CraterFalls {
      */
     private boolean settle(ServerLevel level, FallingBlockEntity falling, BlockPos from) {
         prune(level);
-        Zone zone = null;
+        // районы соседних взрывов (залп, воронка рядом со старой) пересекаются: место считается каждому, в чей квадрат
+        // попало, — иначе в квадрате района живых было бы больше предела на те, что засчитаны соседу
+        List<Zone> in = new ArrayList<>(2);
+        boolean room = live.size() < TOTAL_CAP;
         for (Zone z : zones.values()) {
-            if (z.contains(from)) {
-                zone = z;
-                break;
-            }
+            if (!z.contains(from)) continue;
+            in.add(z);
+            room &= z.live < LIVE_CAP;
         }
-        if (zone == null) return false;
-        if (zone.live < LIVE_CAP && live.size() < TOTAL_CAP) {
-            admit(falling, zone);
+        if (in.isEmpty()) return false;
+        if (room) {
+            admit(falling, in);
             return false;
         }
         BlockPos rest = restingPlace(level, falling, from);
         if (rest == null || !level.setBlock(rest, Block.updateFromNeighbourShapes(falling.getBlockState(), level, rest), Block.UPDATE_ALL)) {
-            admit(falling, zone);
+            admit(falling, in);
             return false;
         }
         settled++;
         return true;
     }
 
-    private void admit(FallingBlockEntity falling, Zone zone) {
-        live.add(new Live(falling, zone));
-        zone.live++;
+    private void admit(FallingBlockEntity falling, List<Zone> in) {
+        live.add(new Live(falling, in));
+        for (Zone z : in) z.live++;
     }
 
     /**
@@ -141,7 +144,7 @@ public final class CraterFalls {
         }
         live.removeIf(l -> {
             boolean gone = l.entity.isRemoved() || level.getEntity(l.entity.getId()) != l.entity;
-            if (gone) l.zone.live--;
+            if (gone) for (Zone z : l.zones) z.live--;
             return gone;
         });
     }
@@ -179,12 +182,12 @@ public final class CraterFalls {
         return p.immutable();
     }
 
-    private record Live(FallingBlockEntity entity, Zone zone) {}
+    private record Live(FallingBlockEntity entity, List<Zone> zones) {}
 
     private static final class Zone {
         final int minX, minZ, maxX, maxZ;
         long until;
-        /** Живых падающих блоков, которые пустил этот район. */
+        /** Живых падающих блоков, начавших падать в квадрате этого района. */
         int live;
 
         Zone(int minX, int minZ, int maxX, int maxZ, long until) {

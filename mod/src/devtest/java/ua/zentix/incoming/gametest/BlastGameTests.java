@@ -4,12 +4,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.Pig;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -19,6 +21,7 @@ import ua.zentix.incoming.nuclear.model.BlastDamage;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
+import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.Warheads;
@@ -44,43 +47,104 @@ public final class BlastGameTests {
     private BlastGameTests() {}
 
     /**
-     * Столбики из одного материала на восьми направлениях через 45°, каждый на своём луче (сломанный блок гасит часть
-     * волны — за ним проверять открытое поле нельзя), на 0,6–1,4 радиуса Джаррета порога этого материала: дальний
-     * сломанный и ближний уцелевший — в ±20 % от него.
+     * Столбики из одного материала, каждый на своём луче (сломанный блок гасит часть волны — за ним проверять открытое
+     * поле нельзя), на 0,6–1,35 радиуса Джаррета своего порога: дальний сломанный и ближний уцелевший — в ±20 % от
+     * него. Порог у каждого блока свой — разброс ±15 % по хэшу места ({@link BlockResponse#jitterAt}), а площадка
+     * GameTest каждый раз в новом месте: радиус Джаррета считается по порогу самого столбика, а места выбираются так,
+     * чтобы столбики стояли на одних и тех же долях своего радиуса при любом месте площадки.
      */
     private static void radiusTest(GameTestHelper h, Block material, double psi, double tnt) {
         ServerLevel level = h.getLevel();
-        Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER)).add(0, 0.5, 0);
-        double expected = BlastDamage.breakRange(BlastModel.kpa(psi), tnt);
-        List<BlockPos> posts = new ArrayList<>();
-        for (int i = 0; i < 8; i++) {
-            double a = i * Math.PI / 4, d = expected * (0.6 + 0.8 * i / 7.0);
-            posts.add(BlockPos.containing(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d));
-        }
-        // трава вокруг (до 1,5 радиуса): уцелевшая трава волну не держит — столбики за ней ломаются так же
         BlockPos c = h.absolutePos(CENTER);
-        int n = (int) Math.ceil(expected * 1.5);
+        Vec3 at = Vec3.atCenterOf(c);
+        double nominal = BlastDamage.breakRange(BlastModel.kpa(psi), tnt);
+        List<Post> posts = layPosts(c, at, psi, tnt, nominal);
+        h.assertTrue(posts.size() == POST_AT.length, "места для столбиков на своих лучах не нашлось: " + posts.size());
+        // трава вокруг (до 1,7 радиуса): уцелевшая трава волну не держит — столбики за ней ломаются так же
+        int n = (int) Math.ceil(nominal * 1.7);
         for (BlockPos p : BlockPos.betweenClosed(c.offset(-n, 0, -n), c.offset(n, 0, n))) {
             if (level.getBlockState(p).isAir()) level.setBlock(p, Blocks.SHORT_GRASS.defaultBlockState(), 2);
         }
-        for (BlockPos p : posts) level.setBlock(p, material.defaultBlockState(), 2);
+        for (Post p : posts) level.setBlock(p.pos(), material.defaultBlockState(), 2);
         Warheads.Probe blast = Warheads.testCharge(level, at, tnt);
         h.succeedWhen(() -> {
             h.assertTrue(blast.done(), "взрыв не кончился");
+            // доли радиуса Джаррета своего порога; сломан — материала на месте нет (вал воронки может лечь на снесённое)
             double broken = 0, kept = Double.MAX_VALUE;
-            for (BlockPos p : posts) {
-                // луч ломает блок, войдя в него: расстояние — до ближней точки блока
-                double d = new net.minecraft.world.phys.AABB(p).distanceToSqr(at);
-                d = Math.sqrt(d);
-                if (level.getBlockState(p).isAir()) broken = Math.max(broken, d);
-                else kept = Math.min(kept, d);
+            StringBuilder rows = new StringBuilder();
+            for (Post p : posts) {
+                boolean gone = !level.getBlockState(p.pos()).is(material);
+                if (gone) broken = Math.max(broken, p.share());
+                else kept = Math.min(kept, p.share());
+                rows.append(String.format(Locale.ROOT, " %.2f%s", p.share(), gone ? "x" : "|"));
             }
-            String got = String.format(Locale.ROOT, "%s, %.1f кг: сломан до %.1f, цел с %.1f, Джаррет %.1f", material, tnt, broken, kept, expected);
+            String got = String.format(Locale.ROOT, "%s, %.1f кг: сломан до %.2f, цел с %.2f своего радиуса Джаррета (%.1f м без разброса); столбики:%s",
+                    material, tnt, broken, kept, nominal, rows);
             Incoming.LOG.info("BLASTBENCH {}", got);
-            // шаг столбиков — 0,11 радиуса, разброс порогов блоков — ±15 %: край зоны между сломанным и уцелевшим
-            h.assertTrue(broken >= 0.7 * expected && broken <= 1.2 * expected, got);
-            h.assertTrue(kept >= 0.7 * expected && kept <= 1.3 * expected, got);
+            h.assertTrue(broken >= 0.7 && broken <= 1.2, got);
+            h.assertTrue(kept >= 0.7 && kept <= 1.3, got);
         });
+    }
+
+    /**
+     * Доли радиуса Джаррета своего порога, на которых стоят столбики: по обе стороны от краёв допуска (0,7 и 1,2–1,3),
+     * глубоко в зоне и за ней. Край модели — 0,9–1,11 радиуса своего порога (закон давление–импульс делит на разброс и
+     * давление, и импульс). Места выбираются в этом порядке: на тесном круге кладки у шахеда (столбики в 2–4,5 м,
+     * каждый закрывает 20–40° азимута) лучшие места достаются столбикам у краёв допуска.
+     */
+    private static final double[] POST_AT = {0.75, 1.25, 0.8, 1.2, 0.7, 1.35, 0.6, 0.9, 1.0, 1.1};
+    /** Зазор между столбиками по азимуту сверх их угловых полуширин, рад: луч к дальнему не задевает ближний. */
+    private static final double POST_GAP = Math.toRadians(3);
+
+    /**
+     * Столбик: место, расстояние от заряда до ближней точки блока (луч ломает блок, войдя в него), радиус Джаррета его
+     * порога, азимут и угловая полуширина блока от заряда.
+     */
+    private record Post(BlockPos pos, double distance, double jarrett, double bearing, double halfWidth) {
+        double share() {
+            return distance / jarrett;
+        }
+    }
+
+    /**
+     * Места столбиков в слое заряда: для каждой доли {@link #POST_AT} — блок, у которого расстояние, делённое на радиус
+     * Джаррета его порога, ближе всего к ней, и который по азимуту не перекрывает уже выбранные. Зависит только от
+     * порогов мест, а их разброс — от места площадки: доли выходят одни и те же везде.
+     */
+    private static List<Post> layPosts(BlockPos c, Vec3 at, double psi, double tnt, double nominal) {
+        int n = (int) Math.ceil(nominal * 1.6);
+        List<Post> candidates = new ArrayList<>();
+        for (int dx = -n; dx <= n; dx++) {
+            for (int dz = -n; dz <= n; dz++) {
+                BlockPos p = c.offset(dx, 0, dz);
+                double distance = Math.sqrt(new AABB(p).distanceToSqr(at));
+                if (distance < 1) continue;
+                double jarrett = BlastDamage.breakRange(BlastModel.kpa(psi * BlockResponse.jitterAt(p)), tnt);
+                double bearing = Math.atan2(p.getZ() + 0.5 - at.z, p.getX() + 0.5 - at.x), half = 0;
+                for (int cx = 0; cx <= 1; cx++) {
+                    for (int cz = 0; cz <= 1; cz++) {
+                        half = Math.max(half, Math.abs(Mth.wrapDegrees(Math.toDegrees(
+                                Math.atan2(p.getZ() + cz - at.z, p.getX() + cx - at.x) - bearing))));
+                    }
+                }
+                candidates.add(new Post(p, distance, jarrett, bearing, Math.toRadians(half)));
+            }
+        }
+        List<Post> posts = new ArrayList<>();
+        for (double share : POST_AT) {
+            Post best = null;
+            for (Post q : candidates) {
+                boolean free = true;
+                for (Post o : posts) {
+                    double apart = Math.abs(Math.toRadians(Mth.wrapDegrees(Math.toDegrees(q.bearing() - o.bearing()))));
+                    if (apart < q.halfWidth() + o.halfWidth() + POST_GAP) free = false;
+                }
+                if (free && (best == null || Math.abs(q.share() - share) < Math.abs(best.share() - share))) best = q;
+            }
+            if (best == null) break;
+            posts.add(best);
+        }
+        return posts;
     }
 
     /** Шахед (50 кг): кладка ломается до ~3,4 м (Джаррет A). */
