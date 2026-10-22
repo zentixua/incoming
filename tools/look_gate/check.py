@@ -6,19 +6,20 @@
 Не годен, если:
   - слух оглушается (строки «SCENARIO probe hearing damage off» нет или там «on»): сцены идут подряд одним игроком, и
     глухота от взрыва в 50 м глушит хвосты следующих сцен (F2b7, F2b8 22.10);
-  - сцена началась не в своё время игры (ProbeScenario.START, допуск LATE = 200 тиков): ветер и класс устойчивости —
-    функция времени игры, и сцена выборки, начатая позже, идёт в чужом воздухе (F2b8, F2b9 22.10: дым пожара полосой
-    вместо столба); время догоняется только вперёд;
+  - сцена идёт в другом воздухе, чем в своё эталонное время игры (ProbeScenario.START): ветер и класс устойчивости —
+    функция времени игры, и сцена выборки, начатая не в своё время, шла в чужом воздухе (F2b8, F2b9 22.10: дым пожара
+    полосой вместо столба); проба сама сравнивает воздух (ProbeScenario.sameAir: «same», «differs», «none» — у версии
+    без воздуха мира); лог без этого сравнения — по допуску LATE тиков;
   - прогон сам остановился строкой «SCENARIO probe FAIL».
 """
 import re
 import sys
 
-LATE = 200  # ProbeScenario.LATE
+LATE = 200  # лог пробы без сравнения воздуха (до F4): сцена позже своего времени больше этого — другой воздух
 EARLY = 5   # ProbeScenario.begin: догоняет до START − 5
 
 HEARING = re.compile(r"SCENARIO probe hearing damage (on|off)")
-START = re.compile(r"SCENARIO probe (\S+) game (-?\d+) \(reference start (null|-?\d+)\)")
+START = re.compile(r"SCENARIO probe (\S+) game (-?\d+) \(reference start (null|-?\d+)(?:, air ([^)]*))?\)")
 FAIL = re.compile(r"SCENARIO probe FAIL (.*)")
 
 
@@ -39,10 +40,15 @@ def problems(lines):
         m = START.search(line)
         if m:
             scenes += 1
-            case, game, ref = m.group(1), int(m.group(2)), m.group(3)
+            case, game, ref, air = m.group(1), int(m.group(2)), m.group(3), m.group(4)
             if ref == "null":
                 out.append(f"{case}: у сцены нет времени эталона (ProbeScenario.START)")
-            elif not (int(ref) - EARLY - 1 <= game <= int(ref) + LATE):
+            elif game < int(ref) - EARLY - 1:
+                out.append(f"{case}: началась в игре {game}, раньше эталона {ref}")
+            elif air is not None:
+                if air.startswith("differs"):
+                    out.append(f"{case}: другой воздух, чем в эталонное время {ref} (игра {game}): {air}")
+            elif game > int(ref) + LATE:
                 out.append(f"{case}: началась в игре {game}, эталон {ref} — другой воздух (допуск {LATE} тиков)")
     if hearing is None:
         out.append("нет строки «SCENARIO probe hearing damage»: слух не проверен (старый класс ProbeScenario?)")

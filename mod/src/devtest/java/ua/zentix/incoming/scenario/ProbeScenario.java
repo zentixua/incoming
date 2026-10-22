@@ -83,9 +83,11 @@ final class ProbeScenario {
      * игры ({@code util.Wind}, {@code util.Air}): ночью у границы классов D и E ветер у земли — 1 или 5 м/с, и шлейф пожара
      * то встаёт столбом, то стелется. Выборка сцен без этого шла бы в другом воздухе, чем эталон; сцена, до которой игра
      * не дошла, догоняет своё время ускоренными тиками ({@code /tick sprint}). Назад время не идёт, поэтому сцены выборки
-     * идут в порядке эталона ({@link #ALL}), а сцена, начавшаяся позже своего времени больше чем на {@link #LATE} тиков,
-     * останавливает прогон строкой {@code SCENARIO probe FAIL} (её же ловит {@code tools/look_gate/check.py}). У пролёта
-     * время — по прогону main 22.10 (Cmain: между стартом ночью и взрывом на воде, как у 3.4.1).
+     * идут в порядке эталона ({@link #ALL}); сцена, начавшаяся позже (прошлая сцена шла дольше: сцены старта ждут схода
+     * ракеты), годна, пока её воздух тот же, что в эталонное время ({@link #air}: ветер меняется за игровые сутки, а не за
+     * сотни тиков, но у границы классов хватает и малого), иначе — строка {@code SCENARIO probe FAIL} и выход (её же ловит
+     * {@code tools/look_gate/check.py}). У пролёта время — по прогону main 22.10 (Cmain: между стартом ночью и взрывом на
+     * воде, как у 3.4.1).
      */
     private static final java.util.Map<String, Integer> START = java.util.Map.ofEntries(
             java.util.Map.entry("drone-day-50", 902), java.util.Map.entry("drone-day-300", 2093), java.util.Map.entry("drone-night-50", 3353),
@@ -96,8 +98,11 @@ final class ProbeScenario {
             java.util.Map.entry("bomb-day-150", 18204), java.util.Map.entry("bomb-night-150", 19390), java.util.Map.entry("bomb-day-300", 20577),
             java.util.Map.entry("sam-side", 21690), java.util.Map.entry("sam-behind", 22182), java.util.Map.entry("sam-night-side", 22634),
             java.util.Map.entry("sam-burst", 23922), java.util.Map.entry("sam-night-burst", 24810));
-    /** Сцена позже своего времени игры больше этого, тиков, — уже в другом воздухе: прогон не годится. */
-    static final int LATE = 200;
+    /**
+     * Тот же воздух: ветер у земли — не дальше этого, м/с, его направление — градусов, класс устойчивости (непрерывный,
+     * {@code util.Stability}) — долей класса (⚠ оценка: снос дыма на минуту — в пределах метров и градусов).
+     */
+    static final double SAME_WIND = 0.3, SAME_DIR = 3, SAME_CLASS = 0.1;
     /** Сцена уже догнала своё время игры; ускорение до него уже заказано. */
     private boolean onTime, sprinting;
 
@@ -183,6 +188,34 @@ final class ProbeScenario {
         at(60, this::nextCase);
     }
 
+    /**
+     * Тот же ли воздух мира в тик {@code now}, что в тик {@code reference}, при солнце сцены (день — в зените, ночь — под
+     * горизонтом), без дождя: «same», «differs: …» или «none» — у этой версии мода воздуха мира нет (3.4.1: дым и звук от
+     * времени игры не зависят). Отражением: класс один в деревьях всех версий.
+     */
+    static String sameAir(long now, long reference, boolean night) {
+        double[] a = air(now, night), b = air(reference, night);
+        if (a == null || b == null) return "none";
+        double dir = Math.abs(Math.toDegrees(Math.atan2(Math.sin(a[1] - b[1]), Math.cos(a[1] - b[1]))));
+        String numbers = String.format(Locale.ROOT, "wind %.2f/%.2f m/s, direction %.1f deg apart, class %.2f/%.2f", a[0], b[0], dir, a[2], b[2]);
+        boolean same = Math.abs(a[0] - b[0]) <= SAME_WIND && dir <= SAME_DIR && Math.abs(a[2] - b[2]) <= SAME_CLASS;
+        return (same ? "same: " : "differs: ") + numbers;
+    }
+
+    /** Ветер в 10 м над уровнем моря, м/с, его направление, рад, и класс устойчивости в тик {@code gameTime}; null — нет. */
+    private static double @org.jetbrains.annotations.Nullable [] air(long gameTime, boolean night) {
+        try {
+            Class<?> c = Class.forName("ua.zentix.incoming.util.Air");
+            Object air = c.getMethod("of", long.class, double.class, double.class, double.class).invoke(null, gameTime, night ? -1.0 : 1.0, 0.0, 0.0);
+            Object wind = c.getMethod("wind").invoke(air);
+            double speed = (double) c.getMethod("speed", double.class).invoke(air, 73.0);
+            double direction = (double) wind.getClass().getMethod("direction").invoke(wind);
+            return new double[]{speed, direction, (double) c.getMethod("stability").invoke(air)};
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
+        }
+    }
+
     /** Сцены выборки в порядке эталона; незнакомая сцена — ошибка (место и время у неё неизвестны). */
     static List<String> ordered(String[] names) {
         List<String> out = new ArrayList<>();
@@ -236,9 +269,10 @@ final class ProbeScenario {
             return;
         }
         if (!onTime) {
-            Incoming.LOG.info("SCENARIO probe {} game {} (reference start {})", current, now, start);
-            if (start == null || now > start + LATE) {
-                fail(current + " starts at game " + now + ", reference start " + start + ": another air than the reference");
+            String air = start == null ? "unknown" : sameAir(now, start, current.contains("night"));
+            Incoming.LOG.info("SCENARIO probe {} game {} (reference start {}, air {})", current, now, start, air);
+            if (start == null || air.startsWith("differs")) {
+                fail(current + " starts at game " + now + ", reference start " + start + ": another air than the reference (" + air + ")");
                 return;
             }
         }

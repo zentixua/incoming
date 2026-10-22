@@ -17,7 +17,8 @@ class CheckTest(unittest.TestCase):
     def test_good_run(self):
         self.assertEqual([], check.problems(log(
             "SCENARIO probe hearing damage off",
-            "SCENARIO probe drone-day-50 game 902 (reference start 902)",
+            "SCENARIO probe drone-day-50 game 902 (reference start 902, air same: wind 1.20/1.20 m/s)",
+            "SCENARIO probe launch-night-behind game 10344 (reference start 10084, air same: wind 3.10/3.12 m/s)",
             "SCENARIO probe grad-night game 7717 (reference start 7722)",
             "SCENARIO probe water-day-50 game 11044 (reference start 11047)")))
 
@@ -39,6 +40,15 @@ class CheckTest(unittest.TestCase):
         self.assertEqual([], check.problems(log("SCENARIO probe hearing damage off", "SCENARIO probe sam-side game 21890 (reference start 21690)")))
         self.assertTrue(check.problems(log("SCENARIO probe hearing damage off", "SCENARIO probe sam-side game 21891 (reference start 21690)")))
         self.assertTrue(check.problems(log("SCENARIO probe hearing damage off", "SCENARIO probe sam-side game 21000 (reference start 21690)")))
+
+    def test_scene_in_another_air_fails(self):
+        # F4c: старт ночью позже эталона на 260 тиков — годен, пока воздух тот же; другой воздух — нет
+        bad = check.problems(log("SCENARIO probe hearing damage off",
+                                 "SCENARIO probe launch-night-behind game 10344 (reference start 10084, air differs: class 3.40/3.05)"))
+        self.assertTrue(any("воздух" in p for p in bad), bad)
+        # у версии без воздуха мира (3.4.1) время на кадр не влияет
+        self.assertEqual([], check.problems(log("SCENARIO probe hearing damage off",
+                                                "SCENARIO probe flyby game 11000 (reference start 10440, air none)")))
 
     def test_scene_without_reference_fails(self):
         bad = check.problems(log("SCENARIO probe hearing damage off", "SCENARIO probe flyby game 9902 (reference start null)"))
@@ -66,13 +76,14 @@ class ProbeFormatTest(unittest.TestCase):
         root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         java = open(os.path.join(root, "mod/src/devtest/java/ua/zentix/incoming/scenario/ProbeScenario.java"), encoding="utf-8").read()
         for fmt, sample in [('"SCENARIO probe hearing damage {}"', "SCENARIO probe hearing damage off"),
-                            ('"SCENARIO probe {} game {} (reference start {})"', "SCENARIO probe flyby game 10440 (reference start 10440)"),
+                            ('"SCENARIO probe {} game {} (reference start {}, air {})"', "SCENARIO probe flyby game 10440 (reference start 10440, air same: x)"),
                             ('"SCENARIO probe FAIL {}"', "SCENARIO probe FAIL x")]:
             self.assertIn(fmt, java, "строки нет в ProbeScenario")
         self.assertTrue(check.HEARING.search("SCENARIO probe hearing damage off"))
-        self.assertTrue(check.START.search("SCENARIO probe flyby game 10440 (reference start 10440)"))
+        m = check.START.search("SCENARIO probe flyby game 10440 (reference start 10440, air same: wind 1.00/1.00 m/s)")
+        self.assertTrue(m and m.group(4).startswith("same"))
         self.assertTrue(check.FAIL.search("SCENARIO probe FAIL x"))
-        self.assertIn("static final int LATE = %d;" % check.LATE, java, "допуск LATE — один в Java и здесь")
+        self.assertIn('return (same ? "same: " : "differs: ")', java, "проба пишет same/differs — это и читает check.py")
 
 
 if __name__ == "__main__":
