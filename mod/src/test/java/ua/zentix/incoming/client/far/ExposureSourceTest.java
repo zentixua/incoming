@@ -51,6 +51,6 @@ class ExposureSourceTest {
     void puffsTakeTheWorldsSkyLight() throws IOException {
         String text = Files.readString(CLIENT.resolve("far/SmokePuffs.java"));
         assertEquals(false, text.contains("view.ambient()"), "SmokePuffs: свет неба клубов — FarView.sky, не ambient");
-        assertEquals(true, text.contains("view.sky()"), "SmokePuffs: свет неба клубов — FarView.sky");
+        assertEquals(true, text.contains("view.skyLight()"), "SmokePuffs: свет неба клубов — FarView.sky");
     }
 }

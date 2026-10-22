@@ -273,6 +273,10 @@ public final class FxLayer {
             s.safeGetUniform("FxBalls").set(LIGHTS.balls);
             sun(s, level, view.partial());
             s.safeGetUniform("FxAmbient").set(view.skyLight());
+            // оттенок света неба у клубов: канал против яркости, в линейном
+            float skyLuma = Math.max(view.skyLight(), 1e-3f);
+            s.safeGetUniform("FxSkyTint").set((float) Math.pow(view.sky().x() / skyLuma, 2.2), (float) Math.pow(view.sky().y() / skyLuma, 2.2),
+                    (float) Math.pow(view.sky().z() / skyLuma, 2.2));
             float[] six = FxAtlas.puff6Light();
             s.safeGetUniform("FxSix").set(FxAtlas.PUFF6_STEP, FxAtlas.PUFF6_TOP, FxAtlas.PUFF6_U, FxAtlas.PUFF6_V);
             s.safeGetUniform("FxSixLight").set(six[0], six[1], six[2]);

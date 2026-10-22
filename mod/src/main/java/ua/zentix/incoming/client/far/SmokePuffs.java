@@ -130,10 +130,10 @@ final class SmokePuffs {
             Sight.point(rh, 1, 1, d, view.pixel(), point);
             double grow = point[0] / rh;
             long h = mix(seed * 0x9E3779B97F4A7C15L + id);
-            // свет неба — как у блоков и частиц под открытым небом (FarView.sky), с разбросом клуба
-            float lit = (float) (0.88 + 0.24 * unit(h));
-            float cr = thick(ks, kd, kw, dr) * lit * view.sky().x(), cg = thick(ks, kd, kw, dg) * lit * view.sky().y(),
-                    cb = thick(ks, kd, kw, db) * lit * view.sky().z();
+            // свет неба — яркость того, каким карта освещения светит блоки и частицы под открытым небом (FarView.sky), с
+            // разбросом клуба; его оттенок (ночью — сиреневый) — в шейдере только у света неба, не у огня (FxSkyTint)
+            float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
+            float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
             double light = shade(ks, kd, kw, dg);
             float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
             float shown = (float) (a * vis * point[1] * air * outside);
@@ -225,9 +225,9 @@ final class SmokePuffs {
         double[] point = POINT;
         Sight.point(rh, 1, 1, d, view.pixel(), point);
         double grow = point[0] / rh;
-        // свет неба — как у блоков и частиц под открытым небом (FarView.sky), с разбросом клуба
-        float lit = (float) (0.88 + 0.24 * unit(h));
-        float sr = cr * lit * view.sky().x(), sg = cg * lit * view.sky().y(), sb = cb * lit * view.sky().z();
+        // свет неба — яркость FarView.sky с разбросом клуба; оттенок — в шейдере у света неба (FxSkyTint)
+        float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
+        float sr = cr * lit, sg = cg * lit, sb = cb * lit;
         float shown = (float) (a * vis * point[1] * air * outside);
         // кучка: чем крупнее гаусс на экране, тем больше клубов и тем они мельче (кадр 128 пикселей не растягивается на
         // пол-экрана); дробная часть числа — доля последнего, без скачка
