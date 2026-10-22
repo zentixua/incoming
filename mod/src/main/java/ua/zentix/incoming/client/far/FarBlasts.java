@@ -246,6 +246,7 @@ public final class FarBlasts {
             double t = seconds - bornSeconds;
             if (t >= Math.max(model.life, water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
+                double growth = puffGrowth(seconds);
                 model.blobs(t, new CloudModel.Blobs() {
                     @Override
                     public void blob(double bx, double by, double bz, double sh, double sv, double soot, double dustKg, double water, double kelvin,
@@ -253,12 +254,12 @@ public final class FarBlasts {
                         out.blob(x + bx, y + by, z + bz, sh, sv, soot, dustKg, water, dustR, dustG, dustB, kelvin, rise);
                     }
 
-                    // ножка — трубкой, как шлейф пожара (вблизи и вдали без бус)
+                    // ножка — трубкой, как шлейф пожара (вблизи и вдали без бус); кадр её клубов — по росту облака, как у шапки
                     @Override
                     public void tube(double ax, double ay, double az, double sa, double massA, double bx, double by, double bz, double sb,
                                      double massB, double kelvin, double rise) {
                         out.tube(x + ax, y + ay, z + az, sa, sa, 0, massA, x + bx, y + by, z + bz, sb, sb, 0, massB, dustR, dustG, dustB, kelvin, rise,
-                                sa);
+                                sa / Math.max(growth, 1));
                     }
                 });
             }

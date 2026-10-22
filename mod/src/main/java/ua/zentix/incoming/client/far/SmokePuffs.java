@@ -124,6 +124,13 @@ final class SmokePuffs {
             sootB *= smoke;
             dustA *= smoke;
             dustB *= smoke;
+            // над рельефом, что закрывает место источника вдали (как у клуба, {@link SmokeGrid.Source#visible}): у каждого конца
+            // по его высоте и размаху сечения, вдоль куска — между ними
+            double visA = source.visible(ay, 3 * Math.max(sha, sva)), visB = source.visible(by, 3 * Math.max(shb, svb));
+            sootA *= visA;
+            dustA *= visA;
+            sootB *= visB;
+            dustB *= visB;
             if (sootA + sootB + dustA + dustB <= 0 || !(sha > 0) || !(sva > 0) || !(shb > 0) || !(svb > 0)) {
                 joint[0] = Float.NaN;
                 return;
