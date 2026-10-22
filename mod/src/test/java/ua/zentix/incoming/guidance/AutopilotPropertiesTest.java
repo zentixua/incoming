@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.SplittableRandom;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code gametest.scenario}), но на модели без Minecraft: автопилот ({@link DroneAutopilot}, {@link MissileAutopilot}),
  * маршрут ({@link Route}) и запас хода ({@link Mission}) — настоящие, мир — модель рельефа, шаг полёта — как у снаряда
  * в мире ({@code StrikeProjectile.advance}: попадание на последнем участке ближе шага и запаса взрывателя, иначе
- * столкновение с рельефом). Десять тысяч случайных сценариев за секунды:
+ * столкновение с рельефом). Десять тысяч случайных сценариев на всех ядрах:
  * <ul>
  *   <li>полёт кончается попаданием — по неподвижной цели в пределах шага и запаса взрывателя, по идущей и по
  *   перенацеленной в круг разворота тоже; до конца запаса хода и без столкновения с рельефом;</li>
@@ -149,10 +150,16 @@ class AutopilotPropertiesTest {
         List<String> failures = new ArrayList<>();
         int[] ends = new int[3];
         int occluded = 0;
-        for (int i = 0; i < SCENARIOS; i++) {
+        // сценарии независимы (у каждого своё зерно, автопилот и рельеф): полёты — на всех ядрах, разбор — по порядку,
+        // итог тот же, что подряд; подряд тест шёл ~2 мин и был ~85 % времени всех юнит-тестов
+        List<Scenario> scenarios = IntStream.range(0, SCENARIOS).mapToObj(i -> {
             SplittableRandom r = new SplittableRandom(i);
-            Scenario s = new Scenario(i, Weapon.values()[r.nextInt(2)], Relief.values()[r.nextInt(3)], Aim.values()[r.nextInt(3)], r.nextBoolean());
-            Outcome o = fly(s);
+            return new Scenario(i, Weapon.values()[r.nextInt(2)], Relief.values()[r.nextInt(3)], Aim.values()[r.nextInt(3)], r.nextBoolean());
+        }).toList();
+        List<Outcome> outcomes = scenarios.parallelStream().map(AutopilotPropertiesTest::fly).toList();
+        for (int i = 0; i < SCENARIOS; i++) {
+            Scenario s = scenarios.get(i);
+            Outcome o = outcomes.get(i);
             String why = null;
             if (o.occluded) occluded++;
             if (o.end.equals("forever") || o.end.equals("exhausted")) why = o.end;
