@@ -60,8 +60,8 @@ final class SmokePuffs {
         FarView view;
         FarSprites out;
         private SmokeGrid.Source source;
-        /** Кадр клуба по росту вещества (с дробью). */
-        private double age;
+        /** Кадр клуба по росту вещества (с дробью): дыма и брызг. */
+        private double age, sprayAge;
         private long seed;
         private boolean glow;
         private int index;
@@ -70,7 +70,9 @@ final class SmokePuffs {
             this.view = view;
             this.out = out;
             this.source = source;
-            this.age = FxAtlas.puffFrame(source.puffGrowth(seconds));
+            double growth = source.puffGrowth(seconds);
+            this.age = FxAtlas.puffFrame(growth);
+            this.sprayAge = FxAtlas.sprayFrame(growth);
             this.seed = source.seed();
             this.glow = source.drawsGlow();
             this.index = 0;
@@ -133,14 +135,17 @@ final class SmokePuffs {
             double overlap = Math.max(1, many * size * size);
             float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
             double spread = count == 1 ? 0 : 1 - size;
+            // вещество — больше брызги, чем дым и пыль: клубы брызг (взрыв на воде, облако конденсации)
+            boolean spray = kw > ks + kd;
+            double clubAge = spray ? sprayAge : age;
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
                 double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rv * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
                 double k = size * (0.8 + 0.4 * unit(hj >>> 21));
-                double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, age) + (count > 1 ? 2 * unit(hj >>> 28) : 0));
+                double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, clubAge) + (count > 1 ? 2 * unit(hj >>> 28) : 0));
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
-                out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, (j & 1) == 1), (float) (frame - f0),
+                out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1), (float) (frame - f0),
                         cr, cg, cb, sub * last);
             }
         }

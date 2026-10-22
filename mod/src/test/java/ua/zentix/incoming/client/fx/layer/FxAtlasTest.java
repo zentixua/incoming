@@ -84,7 +84,7 @@ class FxAtlasTest {
         assertEquals("abv", o.get("maps").getAsString());
         assertEquals(FxAtlas.PUFF6_FLOW, o.get("flow").getAsFloat(), 1e-6);
         assertEquals((float) tile / 1024, FxAtlas.PUFF6_U, 1e-6, "место кадра на листе — размер кадра запекания");
-        assertEquals((float) tile / 1536, FxAtlas.PUFF6_V, 1e-6);
+        assertEquals((float) tile / 2304, FxAtlas.PUFF6_V, 1e-6);
         for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
             for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "puff6%c_%02d.png", m, i), tile);
         }
@@ -97,6 +97,24 @@ class FxAtlasTest {
         try (Reader r = open("puff6.json")) {
             float[] light = FxAtlas.parseLight(r);
             assertTrue(light[1] > 0 && light[2] > 0, "свет густого места спереди и средний — есть");
+        }
+    }
+
+    /** Клуб брызг: те же 16 кадров по три карты, что у дыма, в мере дыма (одна нормировка карт на все клубы слоя). */
+    @Test
+    void sprayFramesMatchTheBake() throws IOException {
+        JsonObject o = json("spray6.json"), smoke = json("puff6.json");
+        int tile = o.get("tile").getAsInt();
+        assertEquals(FxAtlas.PUFF6_FRAMES, o.get("frames").getAsInt());
+        assertEquals("abv", o.get("maps").getAsString());
+        assertEquals(smoke.get("diffuse").getAsFloat(), o.get("diffuse").getAsFloat(), 1e-6, "карты брызг — в мере дыма");
+        for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
+            for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "spray6%c_%02d.png", m, i), tile);
+        }
+        try (Reader r = open("spray6.json")) {
+            float[] growth = FxAtlas.parseGrowth(r);
+            assertEquals(1, growth[0], 1e-6);
+            for (int i = 1; i < growth.length; i++) assertTrue(growth[i] >= growth[i - 1], "клуб растёт: кадр " + i);
         }
     }
 

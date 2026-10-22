@@ -299,8 +299,11 @@ def sun(direction, strength):
 # Подъём, размер и время столба даёт модель мода — кадры только как вещество брызг расходится и опадает (⚠ подбор формы).
 SPRAY_ALBEDO, SPRAY_G = 0.99, 0.85
 CLUBS = {
-    "puff": dict(alpha=0.0, vorticity=0.6, z=0.0, normal=3.0, random=0.6, up=0.3, albedo=PUFF_ALBEDO, g=PUFF_G),
-    "spray": dict(alpha=-1.5, vorticity=0.25, z=-1.5, normal=1.5, random=1.0, up=4.0, albedo=SPRAY_ALBEDO, g=SPRAY_G),
+    "puff": dict(alpha=0.0, vorticity=0.6, z=0.0, normal=3.0, random=0.6, up=0.3, albedo=PUFF_ALBEDO, g=PUFF_G, density=8.0, bounces=6),
+    # брызги — оптически толстые (столб воды — десятки толщ, WaterBlast): свет в них рассеян многократно, и капли с
+    # асимметрией 0,85 светятся белым со всех сторон, а не только на просвет; отражений в объёме — сколько нужно толще
+    "spray": dict(alpha=-1.5, vorticity=0.25, z=-1.5, normal=1.5, random=1.0, up=4.0, albedo=SPRAY_ALBEDO, g=SPRAY_G, density=600.0,
+                  bounces=32),
 }
 
 
@@ -332,7 +335,9 @@ def puff(kind="puff"):
     out = nt.nodes.new("ShaderNodeOutputMaterial")
     vol = nt.nodes.new("ShaderNodeVolumePrincipled")
     nt.links.new(vol.outputs[0], out.inputs["Volume"])
-    nt.links.new(math_node(nt, "MULTIPLY", attr(nt, "density"), 8.0), vol.inputs["Density"])
+    nt.links.new(math_node(nt, "MULTIPLY", attr(nt, "density"), c["density"]), vol.inputs["Density"])
+    sc.cycles.volume_bounces = c["bounces"]
+    sc.cycles.max_bounces = max(sc.cycles.max_bounces, c["bounces"])
     vol.inputs["Color"].default_value = (c["albedo"], c["albedo"], c["albedo"], 1)
     vol.inputs["Anisotropy"].default_value = c["g"]
     dom.data.materials.clear()
