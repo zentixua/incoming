@@ -356,10 +356,19 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return route;
     }
 
-    /** Маршрут до точки входа (после неё — на цель) и запас хода по плану полёта. */
+    /**
+     * Маршрут до точки входа (после неё — на цель) и запас хода по плану полёта: путь по маршруту (он — по горизонтали)
+     * и снижение к цели. Без снижения шахед на настоящем эшелоне (шкала полёта 1: 2 км над целью) кончал запас хода в
+     * пике над целью и самоликвидировался в сотне блоков над ней.
+     */
     public void setRoute(@Nullable Route route) {
         this.route = route;
-        this.mission = Mission.plan(pathToAim(), cruiseSpeed()).extend(extraRange());
+        this.mission = Mission.plan(pathToAim() + descent(), cruiseSpeed()).extend(extraRange());
+    }
+
+    /** Снижение к цели, которого нет в пути по маршруту (он — по горизонтали), блоков; без маршрута — 0. */
+    private double descent() {
+        return route != null && !route.finished() && tracker != null ? Math.max(0, getY() - tracker.point().y) : 0;
     }
 
     /** Запас хода сверх пути до цели: участки, которых в пути нет (круг барража), блоков. */
@@ -369,10 +378,10 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
     /**
      * Сколько пути по плану осталось до удара, блоков: по нему урезается запас хода, когда цель потеряна
-     * ({@link Mission#lose}). По умолчанию — путь до цели ({@link #pathToAim}); у «Ланцета» — ещё круг и пике.
+     * ({@link Mission#lose}). По умолчанию — путь до цели ({@link #pathToAim}) и снижение к ней; у «Ланцета» — ещё круг и пике.
      */
     protected double plannedPathLeft() {
-        return pathToAim();
+        return pathToAim() + descent();
     }
 
     /** Путь до цели: по оставшемуся маршруту, а без него — напрямую, блоков. */
@@ -941,7 +950,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     protected Vec3 navPoint(Vec3 aim) {
         if (route != null && !route.finished()) {
-            route.update(position(), weapon().spec().route().capture());
+            route.update(position(), weapon().spec().capture());
             Vec3 wp = route.current();
             if (wp != null) return new Vec3(wp.x, aim.y, wp.z);
             if (route.byOperator()) onRouteDone(aim);
@@ -1471,10 +1480,16 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return s != null ? s.z() : getZ();
     }
 
+    /**
+     * Дальше стольких блоков сущность снаряда свою модель не рисует ({@link #shouldRenderAtSqrDistance}): корпус там —
+     * у дальней картинки ({@code client.far.FarView#entityReach}).
+     */
+    public static final double DRAW_RANGE = 1024;
+
     @Override
     public boolean shouldRenderAtSqrDistance(double distanceSq) {
         // видно издалека: ограничивает только дальность отслеживания сущности сервером
-        return distanceSq < 1024 * 1024;
+        return distanceSq < DRAW_RANGE * DRAW_RANGE;
     }
 
     // ---------------------------------------------------------------- сохранение

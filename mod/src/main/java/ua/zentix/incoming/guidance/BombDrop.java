@@ -3,8 +3,6 @@ package ua.zentix.incoming.guidance;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.strike.WeaponSpec;
-import ua.zentix.incoming.util.Air;
-import ua.zentix.incoming.util.StandardAtmosphere;
 
 /**
  * Падение бетонобойной бомбы после сброса: рули ведут нос по дуге на точку, скорость — от тяжести вдоль пути и
@@ -32,7 +30,11 @@ public final class BombDrop {
     public static final float MIN_DIVE = 10;
     /** Падение, когда цели под носом нет. */
     public static final float FALL_PITCH = 60;
-    /** Столько тиков бомба падает в {@link #miss} самое большее: с высоты до ~1000 блоков она на земле раньше. */
+    /**
+     * Столько тиков бомба падает в {@link #miss} самое меньшее: с высоты до ~1000 блоков она на земле раньше. Выше
+     * (эшелон на шкале полёта — до 12 км) — вдвое дольше, чем прямая до точки на скорости сброса: бомба по пути
+     * разгоняется или тормозит не больше чем вдвое.
+     */
     private static final int MAX_TICKS = 200;
 
     private BombDrop() {}
@@ -50,6 +52,11 @@ public final class BombDrop {
      * к пределу √(g/drag), медленная — разгоняется к нему.
      */
     public static double steer(FlightController flight, Vec3 pos, double speed, Vec3 aim) {
+        return steer(flight, pos, speed, aim, fall());
+    }
+
+    /** {@link #steer(FlightController, Vec3, double, Vec3)} с сопротивлением {@code fall} (шкала полёта — у вызывающего). */
+    public static double steer(FlightController flight, Vec3 pos, double speed, Vec3 aim, Ballistics.Drag fall) {
         float[] a = FlightController.anglesTo(pos, aim);
         double dx = aim.x - pos.x, dz = aim.z - pos.z;
         double horizontal = Math.sqrt(dx * dx + dz * dz);
@@ -60,7 +67,7 @@ public final class BombDrop {
         flight.arcPitch(below ? a[1] : FALL_PITCH, speed, pos.distanceTo(aim), FIN_RATE, FIN_ACCEL);
         if (flight.pitch() < floor) flight.set(flight.yaw(), floor);
         if (below && horizontal > 8) flight.steerYaw(a[0], 0.15, 3.0, 0.3);
-        double drag = fall().drag() * StandardAtmosphere.density(pos.y - Air.SEA) / StandardAtmosphere.density(0);
+        double drag = fall.at(pos.y, speed);
         return Math.max(0, speed - Ballistics.GRAVITY * flight.forward().y - drag * speed * speed);
     }
 
@@ -78,13 +85,16 @@ public final class BombDrop {
      * drag·|v| за тик — тяжёлую быструю бомбу ветер почти не сносит.
      */
     public static Vec3 drift(Vec3 drift, Vec3 wind, double speed) {
-        double k = Math.min(1, fall().drag() * speed);
+        double k = Math.min(1, fall().coefficient() * speed);
         return drift.add(wind.subtract(drift).scale(k));
     }
 
-    /** Полёт бомбы без мотора из паспорта (читается при вызове: паспорт сам ссылается на этот класс). */
-    private static WeaponSpec.Ballistic fall() {
-        return WeaponSpec.BUNKER.payload().ballistic();
+    /**
+     * Сопротивление бомбы из паспорта на шкале полёта мира ({@link WeaponSpec.Airframe#drag()}; читается при вызове:
+     * паспорт сам ссылается на этот класс).
+     */
+    private static Ballistics.Drag fall() {
+        return WeaponSpec.BUNKER.payload().drag();
     }
 
     /**
@@ -98,12 +108,17 @@ public final class BombDrop {
      * слишком близко впереди, сзади, выше B-2) — заход снова.
      */
     public static boolean releaseNow(Vec3 pos, Vec3 step, Vec3 aim, double lineRatio) {
+        return releaseNow(pos, step, aim, lineRatio, fall());
+    }
+
+    /** {@link #releaseNow(Vec3, Vec3, Vec3, double)} с сопротивлением бомбы {@code fall}. */
+    public static boolean releaseNow(Vec3 pos, Vec3 step, Vec3 aim, double lineRatio, Ballistics.Drag fall) {
         double dx = aim.x - pos.x, dz = aim.z - pos.z;
         double horizontal = Math.sqrt(dx * dx + dz * dz), height = pos.y - aim.y, line = height * lineRatio;
         // край — по курсу: точка сбоку отодвигает его на свой отступ (иначе ниже 100 блоков сбоку край не нашёлся бы)
         double course = Math.sqrt(step.x * step.x + step.z * step.z), along = (step.x * dx + step.z * dz) / course;
-        if (horizontal > line && along > height + pullOver(step.length()) + EDGE_REACH || miss(pos, step, aim) > 0) return false;
-        return horizontal <= line || miss(pos.add(step), step, aim) > 0;
+        if (horizontal > line && along > height + pullOver(step.length()) + EDGE_REACH || miss(pos, step, aim, fall) > 0) return false;
+        return horizontal <= line || miss(pos.add(step), step, aim, fall) > 0;
     }
 
     /**
@@ -116,13 +131,19 @@ public final class BombDrop {
      * курс и тангаж — его.
      */
     public static double miss(Vec3 release, Vec3 velocity, Vec3 aim) {
+        return miss(release, velocity, aim, fall());
+    }
+
+    /** {@link #miss(Vec3, Vec3, Vec3)} с сопротивлением бомбы {@code fall}. */
+    public static double miss(Vec3 release, Vec3 velocity, Vec3 aim, Ballistics.Drag fall) {
         double ground = aim.y + GROUND_ABOVE_AIM;
         float[] angles = FlightController.anglesTo(Vec3.ZERO, velocity);
         FlightController flight = new FlightController(angles[0], angles[1]);
         Vec3 pos = release.add(0, -DROP_BELOW, 0);
         double speed = velocity.length();
-        for (int t = 0; t < MAX_TICKS; t++) {
-            speed = steer(flight, pos, speed, aim);
+        int ticks = Math.max(MAX_TICKS, (int) Math.ceil(2 * release.distanceTo(aim) / Math.max(1, speed)));
+        for (int t = 0; t < ticks; t++) {
+            speed = steer(flight, pos, speed, aim, fall);
             if (pos.distanceTo(aim) <= speed + REACH_PAD) return 0;
             Vec3 dir = flight.forward();
             Vec3 noseFrom = pos.add(dir.scale(NOSE * 0.5)), noseTo = pos.add(dir.scale(speed + NOSE));

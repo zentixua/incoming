@@ -40,7 +40,8 @@ server its owner does. The most useful ones are below; the rest are in the same 
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
 | `world.block_damage`, `fire` | on | destruction and fires |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators launch them |
-| `scale.scale_preset` | GAME | GAME: the nuclear blast wave away from the fireball travels at 0.20 of the speed of sound (not physical: slower than in life so that you can watch it roll in, and the server has more time for ruins); REAL: true to life; CUSTOM: the two numbers below as they are. Flight is the same game model with any preset; everything at the target is real |
+| `scale.scale_preset` | GAME | GAME: flight is slower and lower than in life, and the nuclear blast wave away from the fireball travels at 0.20 of the speed of sound (both not physical: so that you can watch the approach and the wave roll in, and the server has more time for ruins); REAL: true to life; CUSTOM: the three numbers below as they are. Everything at the target is real with any preset |
+| `scale.flight_speed` | 0 | with CUSTOM: [flight speeds and heights](weapons.md#how-they-fly), 0 the game values, 1 true to life; in between every weapon goes the same share of the way. Turns stay game values. Flight times stay, so a faster weapon starts further away |
 | `nuclear.effects_scale` | 1.0 | with CUSTOM: scale of nuclear strike radii (1.0 is true to life) |
 | `nuclear.wave_speed` | 0.20 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
 | `grid.enabled` | on | [blackout](blackout.md) |

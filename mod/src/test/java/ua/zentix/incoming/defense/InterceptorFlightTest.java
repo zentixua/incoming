@@ -229,8 +229,8 @@ class InterceptorFlightTest {
         Vec3 target = RAIL.add(-800, 50, 600);
         Vec3 dir = Interceptor.railDirection(RAIL, target, SPEC);
         assertEquals(0, dir.subtract(0, 1, 0).length(), 1e-9, "ЗРК пускает отвесно");
-        InterceptorSpec inclined = new InterceptorSpec(SPEC.radarRange(), SPEC.engageRange(), SPEC.railTicks(), 65, SPEC.launchSpeed(), SPEC.boostTicks(), SPEC.boostAccel(),
-                SPEC.maxSpeed(), SPEC.lateralG(), SPEC.fuelTicks(), SPEC.fuse(), SPEC.noseLength(), SPEC.passport());
+        InterceptorSpec inclined = new InterceptorSpec(SPEC.radarRange(), SPEC.engageRange(), SPEC.railTicks(), 65, SPEC.launchSpeed(), SPEC.boostTicks(), SPEC.gameBoostAccel(),
+                SPEC.gameMaxSpeed(), SPEC.lateralG(), SPEC.fuelTicks(), SPEC.fuse(), SPEC.noseLength(), SPEC.passport());
         Vec3 slant = Interceptor.railDirection(RAIL, target, inclined);
         assertEquals(65, Math.toDegrees(Math.asin(slant.y)), 1e-9);
         assertEquals(Math.atan2(600, -800), Math.atan2(slant.z, slant.x), 1e-9);

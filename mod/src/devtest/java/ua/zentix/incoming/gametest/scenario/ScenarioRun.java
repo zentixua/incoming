@@ -353,7 +353,7 @@ final class ScenarioRun {
         StrikeProjectile e = guided();
         if (!via.isEmpty()) {
             WeaponSpec spec = s.launch().weapon.spec();
-            Vec3 start = via.afar(point, spec.route().finalLeg()).add(0, point.y + spec.airframe().cruiseHeight(), 0);
+            Vec3 start = via.afar(point, spec.finalLeg()).add(0, point.y + spec.airframe().cruiseHeight(), 0);
             e.launch(start, target, point, owner);
             e.setRoute(via.route(start));
             VirtualFlights.launch(level, e);
@@ -393,7 +393,7 @@ final class ScenarioRun {
     private StrikeProjectile loiterFromAfar(Vec3 point) {
         LoiterEntity e = create(ModEntities.LOITER.get());
         Vec3 from = via.isEmpty() ? point.subtract(p.approach().scale(p.standoff()))
-                : via.afar(point, WeaponSpec.LOITER.route().standoff()).add(0, point.y, 0);
+                : via.afar(point, WeaponSpec.LOITER.standoff()).add(0, point.y, 0);
         from = from.add(0, WeaponSpec.LOITER.airframe().cruiseHeight(), 0);
         e.launch(from, target, point, owner);
         e.setRoute(via.isEmpty() ? null : via.route(from));
@@ -445,7 +445,7 @@ final class ScenarioRun {
         BomberEntity e = create(ModEntities.BOMBER.get());
         Vec3 surface = new Vec3(point.x, point.y - 0.5, point.z);
         aim = surface;
-        double length = WeaponSpec.BUNKER.airframe().cruiseSpeed() * p.flightTime() * 20 + WeaponSpec.BUNKER.route().finalLeg();
+        double length = WeaponSpec.BUNKER.airframe().cruiseSpeed() * p.flightTime() * 20 + BomberEntity.releaseLine(WeaponSpec.BUNKER.airframe().cruiseHeight());
         e.launch(surface.subtract(p.approach().scale(length)), surface, null, owner);
         e.setRoute(null);
         VirtualFlights.launch(level, e);
@@ -606,7 +606,7 @@ final class ScenarioRun {
     private void passWaypoints(StrikeProjectile e, Track tr, Vec3 pos) {
         if (viaPassed >= via.size()) return;
         Vec3 wp = via.points().get(viaPassed);
-        double near = 2 * e.weapon().spec().route().capture() + tr.lastStep + 1;
+        double near = 2 * e.weapon().spec().capture() + tr.lastStep + 1;
         if (Math.hypot(pos.x - wp.x, pos.z - wp.z) <= near) viaPassed++;
     }
 

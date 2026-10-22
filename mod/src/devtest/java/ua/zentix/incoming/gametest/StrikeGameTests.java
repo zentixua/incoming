@@ -974,7 +974,7 @@ public final class StrikeGameTests {
         roofOver(h, BlockPos.containing(shooter.position()));
         StrikeProjectile far = StrikeService.launchGuided(level, WeaponType.DRONE, point, 0, shooter, via);
         h.assertTrue(far != null && far.isVirtual(), "без места пусковой шахед по маршруту не зашёл издалека: " + far);
-        Vec3 entry = via.afar(point, WeaponType.DRONE.spec().route().finalLeg());
+        Vec3 entry = via.afar(point, WeaponType.DRONE.spec().finalLeg());
         h.assertTrue(flat(far.position(), entry) < 1e-6 && far.route().points().equals(via.points()),
                 "заход издалека не перед первой точкой: " + far.position() + " против " + entry + ", маршрут " + far.route().points());
         h.assertTrue(far.position().y > point.y, "заход издалека ниже цели: " + far.position().y);
@@ -982,7 +982,7 @@ public final class StrikeGameTests {
         StrikeProjectile lancet = VirtualFlights.get(level).flights().stream().filter(f -> f.weapon() == WeaponType.LOITER && f.aimPoint().distanceTo(point) < 1)
                 .findFirst().orElse(null);
         h.assertTrue(loiter.ok() && lancet != null && lancet.route() != null && lancet.route().points().equals(via.points()), "«Ланцет» без маршрута: " + lancet);
-        Vec3 lancetEntry = via.afar(point, WeaponType.LOITER.spec().route().standoff());
+        Vec3 lancetEntry = via.afar(point, WeaponType.LOITER.spec().standoff());
         h.assertTrue(flat(lancet.position(), lancetEntry) < 1e-6, "«Ланцет» заходит не перед первой точкой: " + lancet.position() + " против " + lancetEntry);
         // перенацеливание из камеры: дальше прямо на новую цель
         Vec3 other = point.add(40, 0, 0);
@@ -1380,7 +1380,7 @@ public final class StrikeGameTests {
 
         Vec3 start = ua.zentix.incoming.util.Nbt.getVec(tag, "start"), v0 = ua.zentix.incoming.util.Nbt.getVec(tag, "v0");
         // путь — тем же законом, что у снаряда: тяжесть, сопротивление, ветер мира (данных стрельбы нет — ветер целиком)
-        var path = ua.zentix.incoming.guidance.Ballistics.fly(start, v0, WeaponSpec.ROCKET.airframe().ballistic().drag(),
+        var path = ua.zentix.incoming.guidance.Ballistics.fly(start, v0, WeaponSpec.ROCKET.airframe().drag(),
                 ua.zentix.incoming.guidance.Ballistics.Wind.of(ua.zentix.incoming.util.Air.of(level)), point.y - 64, flightTicks + 400);
         double arc = path.at(11).distanceTo(path.at(t));
         for (int k = 11; k < flightTicks; k++) arc += path.at(k + 1).distanceTo(path.at(k));
@@ -1478,10 +1478,26 @@ public final class StrikeGameTests {
      */
     @GameTest(template = "runway", timeoutTicks = 1200, batch = "missile_area_late_tick", skyAccess = true)
     public static void targetAreaTicksOnlyNearArrival(GameTestHelper h) {
+        areaTicksOnlyNearArrival(h, 1200);
+    }
+
+    /**
+     * То же на настоящей скорости (шкала полёта 1): район грузится с пуска и тикает последние {@link
+     * StrikeProjectile#AREA_TICK_LEAD} тиков — время подлёта считается по настоящей маршевой, а не по игровой (иначе
+     * район тикал бы втрое раньше или ракета прилетала бы в нетикающий).
+     */
+    @GameTest(template = "runway", timeoutTicks = 1200, batch = "flight_scale_area", skyAccess = true)
+    public static void targetAreaTicksOnlyNearArrivalAtRealSpeed(GameTestHelper h) {
+        flightScale(h, 1);
+        areaTicksOnlyNearArrival(h, 1200 * WeaponSpec.MISSILE.airframe().stretch(1));
+    }
+
+    /** Ракета в {@code distance} блоках от цели вне мира: район цели грузится с пуска, тикает только на подлёте. */
+    private static void areaTicksOnlyNearArrival(GameTestHelper h, double distance) {
         ServerLevel level = h.getLevel();
         Vec3 point = top(h, RUNWAY_TARGET);
         CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(level);
-        missile.launch(point.add(1200, 80, 0), new Target.Point(point), point, null);
+        missile.launch(point.add(distance, 80, 0), new Target.Point(point), point, null);
         missile.setRoute(Route.direct());
         VirtualFlights.launch(level, missile);
         UUID id = missile.getUUID();
@@ -1724,6 +1740,37 @@ public final class StrikeGameTests {
             if (level.getEntity(id) instanceof RocketEntity e) last[0] = "в мире " + e.flightPhase() + " " + h.relativeVec(e.position());
         });
         h.succeedWhen(() -> {
+            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "снаряд ещё летит: " + last[0]);
+            assertCrater(h, RUNWAY_TARGET, last[0]);
+        });
+    }
+
+    /**
+     * РСЗО без стреляющего на настоящей шкале полёта (1): пакет за выносом паспорта на этой шкале (~19 км), сход на
+     * настоящих 683 м/с (±3 %) с настоящим сопротивлением и кривой Маха, полёт вне мира больше минуты и попадание.
+     */
+    @GameTest(template = "runway", timeoutTicks = 2400, batch = "flight_scale_rocket", skyAccess = true)
+    public static void rocketFromAfarAtRealSpeed(GameTestHelper h) {
+        flightScale(h, 1);
+        ServerLevel level = h.getLevel();
+        Vec3 point = top(h, RUNWAY_TARGET);
+        RocketEntity r = ModEntities.ROCKET.get().create(level);
+        Vec3 from = point.add(0, 0, -WeaponSpec.ROCKET.standoff());
+        r.launchFrom(from, new Target.Point(point), point, null);
+        VirtualFlights.launch(level, r);
+        java.util.UUID id = r.getUUID();
+        String[] last = {""};
+        // сход — по первому шагу пути (за тик сопротивление и тяжесть отнимают у 683 м/с меньше процента)
+        double[] exit = {Double.NaN};
+        h.onEachTick(() -> {
+            if (level.getEntity(id) instanceof RocketEntity e) last[0] = "в мире " + e.flightPhase() + " " + h.relativeVec(e.position());
+            if (Double.isNaN(exit[0]) && findProjectile(level, id) instanceof StrikeProjectile p && p.position().distanceTo(from) > 1) {
+                exit[0] = p.position().distanceTo(from);
+            }
+        });
+        h.succeedWhen(() -> {
+            double want = WeaponSpec.ROCKET.airframe().cruiseSpeed();
+            h.assertTrue(Math.abs(exit[0] - want) < 0.03 * want, "сход " + Math.round(exit[0] * 20) + " м/с, а не " + Math.round(want * 20));
             h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "снаряд ещё летит: " + last[0]);
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
@@ -2199,11 +2246,26 @@ public final class StrikeGameTests {
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual", skyAccess = true)
     public static void missileFliesThroughUnloadedWorld(GameTestHelper h) {
+        missileThroughUnloadedWorld(h, 1500);
+    }
+
+    /**
+     * То же на настоящей скорости (шкала полёта 1: 250 м/с, вдвое с лишним быстрее игровой): из втрое дальнего места —
+     * столько же тиков полёта вне мира, возврат в мир у цели и подрыв в точке.
+     */
+    @GameTest(template = "runway", timeoutTicks = 900, batch = "flight_scale_virtual", skyAccess = true)
+    public static void missileFliesThroughUnloadedWorldAtRealSpeed(GameTestHelper h) {
+        flightScale(h, 1);
+        missileThroughUnloadedWorld(h, 1500 * WeaponSpec.MISSILE.airframe().stretch(1));
+    }
+
+    /** Ракета в {@code distance} блоках от цели, вне мира, по прямой: возвращается в мир у цели и бьёт в точку. */
+    private static void missileThroughUnloadedWorld(GameTestHelper h, double distance) {
         ServerLevel level = h.getLevel();
         Vec3 point = top(h, RUNWAY_TARGET);
         CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(level);
         // выше барьерной стены вокруг площадки теста: иначе ракета бьётся в неё на входе
-        missile.launch(point.add(0, 80, -1500), new Target.Point(point), point, null);
+        missile.launch(point.add(0, 80, -distance), new Target.Point(point), point, null);
         missile.setRoute(Route.direct());
         VirtualFlights.launch(level, missile);
         java.util.UUID id = missile.getUUID();
@@ -2428,7 +2490,7 @@ public final class StrikeGameTests {
             Vec3 step = new Vec3(0, 0, WeaponSpec.BUNKER.airframe().cruiseSpeed());
             // подход по прямой с курсом +z; сдвиг начала — чтобы попасть в разные места окна
             for (Vec3 pos = aims[i].add(0, heights[i], -600 - 2 * i); pos.z < aims[i].z; pos = pos.add(step)) {
-                if (BombDrop.releaseNow(pos, step, aims[i], WeaponSpec.BUNKER.route().finalLeg() / WeaponSpec.BUNKER.airframe().cruiseHeight())) {
+                if (BombDrop.releaseNow(pos, step, aims[i], WeaponSpec.BUNKER.route().gameFinalLeg() / WeaponSpec.BUNKER.airframe().gameHeight())) {
                     releases[i] = pos;
                     break;
                 }
@@ -2880,7 +2942,7 @@ public final class StrikeGameTests {
             if (now instanceof BomberEntity b) {
                 last[0] = b;
                 double d = b.position().subtract(expect).horizontalDistance();
-                if (onePass && !b.hasReleased() && d < WeaponSpec.BUNKER.route().finalLeg() - WeaponSpec.BUNKER.airframe().cruiseSpeed()) {
+                if (onePass && !b.hasReleased() && d < BomberEntity.releaseLine(WeaponSpec.BUNKER.airframe().cruiseHeight()) - WeaponSpec.BUNKER.airframe().cruiseSpeed()) {
                     h.fail("B-2 прошёл черту сброса без сброса (второй заход): в " + (int) d + " блоках от точки, на высоте "
                             + (int) (b.getY() - expect.y) + ", вне мира " + b.isVirtual());
                 }
@@ -2904,6 +2966,152 @@ public final class StrikeGameTests {
             double miss = entry[0].subtract(expect).horizontalDistance();
             h.assertTrue(miss < 4 && Math.abs(entry[0].y - expect.y) < 4, "бомба вошла в грунт в " + (int) miss
                     + " блоках от точки, на высоте " + (int) (entry[0].y - expect.y));
+        });
+    }
+
+    /**
+     * B-2 на настоящей шкале полёта (1): эшелон 12 км над точкой, 250 м/с, сброс у черты в ~10 км по горизонтали (тот же
+     * угол на точку, что на игровом эшелоне). Бомба падает ~50 с — вне загруженного мира и в нём — и входит в грунт у
+     * точки со скоростью удара GBU-57 из паспорта (511 м/с, здесь не меньше 450): пробитие у цели (S5) — по этой
+     * скорости, а не по игровой (~235 м/с). Игрок прямо под B-2 получает его путь для дальнего вида: 12 км высоты
+     * дальность видимости не съедают.
+     */
+    @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_bomber", skyAccess = true)
+    public static void bomberAtRealEchelonDropsAtPassportSpeed(GameTestHelper h) {
+        flightScale(h, 1);
+        ServerLevel level = h.getLevel();
+        Vec3 surface = top(h, RUNWAY_TARGET).subtract(0, 0.5, 0);
+        WeaponSpec.Airframe b2 = WeaponSpec.BUNKER.airframe();
+        double line = BomberEntity.releaseLine(b2.cruiseHeight());
+        BomberEntity bomber = ModEntities.BOMBER.get().create(level);
+        UUID owner = UUID.randomUUID();
+        // как боевой пуск (StrikeService.launchBomber): на эшелоне над точкой, издалека — здесь за 60 тиков до черты
+        bomber.launch(surface.add(0, 0, -(line + 60 * b2.cruiseSpeed())), surface, null, owner);
+        bomber.setRoute(null);
+        VirtualFlights.launch(level, bomber);
+        UUID id = bomber.getUUID();
+        double[] release = {Double.NaN, Double.NaN}, entry = {Double.NaN};
+        Vec3[] entered = {null};
+        boolean[] overhead = {false};
+        h.onEachTick(() -> {
+            // дальний вид: B-2 в 12 км над головой игрока под ним — в пути снарядов, которые тот видит (far_range — по
+            // горизонтали)
+            if (!overhead[0] && findProjectile(level, id) instanceof BomberEntity b) {
+                Vec3 under = new Vec3(b.getX(), surface.y, b.getZ());
+                overhead[0] = FarFlights.sample(level, FarFlights.flights(level), under, null, true).stream().anyMatch(f -> f.id().equals(id));
+            }
+            List<BunkerBusterEntity> seen = new ArrayList<>(level.getEntitiesOfClass(BunkerBusterEntity.class, new AABB(surface, surface).inflate(400, 400, 400)));
+            for (StrikeProjectile p : VirtualFlights.get(level).flights()) if (p instanceof BunkerBusterEntity b) seen.add(b);
+            for (BunkerBusterEntity b : seen) {
+                if (!owner.equals(b.ownerId()) || entered[0] != null) continue;
+                // сброс — где бомба появилась (B-2 вне мира после сброса сразу убирается)
+                if (Double.isNaN(release[0])) {
+                    release[0] = b.position().subtract(surface).horizontalDistance();
+                    release[1] = b.getY() + BombDrop.DROP_BELOW - surface.y;
+                }
+                if (b.isDrilling()) entered[0] = b.entry();
+                else entry[0] = b.speed();
+            }
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(overhead[0], "B-2 на эшелоне не видно игроку прямо под ним");
+            h.assertTrue(!Double.isNaN(release[0]), "B-2 не сбросил бомбу");
+            h.assertTrue(Math.abs(release[1] - b2.cruiseHeight()) < 200 && Math.abs(release[0] - line) < 600,
+                    "сброс в " + (int) release[0] + " блоках от точки на высоте " + (int) release[1] + " (черта " + (int) line + ")");
+            h.assertTrue(entered[0] != null, "бомба ещё не вошла в грунт (последняя скорость " + entry[0] + ")");
+            double miss = entered[0].subtract(surface).horizontalDistance();
+            h.assertTrue(miss < 6, "бомба вошла в грунт в " + (int) miss + " блоках от точки");
+            h.assertTrue(entry[0] * 20 > 450, "удар на " + Math.round(entry[0] * 20) + " м/с");
+        });
+    }
+
+    /**
+     * Шахед издалека на настоящей шкале полёта (1): заход на эшелоне 2 км над целью, пике оттуда — и подрыв в точке, а не
+     * самоликвидация в воздухе: запас хода по плану считает и снижение к цели (маршрут — по горизонтали).
+     */
+    @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_drone", skyAccess = true)
+    public static void droneFromRealEchelonDivesIntoTarget(GameTestHelper h) {
+        flightScale(h, 1);
+        int time = IncomingConfig.SERVER.droneFlightTime.get();
+        IncomingConfig.SERVER.droneFlightTime.set(12);
+        afterTest(h, () -> IncomingConfig.SERVER.droneFlightTime.set(time));
+        ServerLevel level = h.getLevel();
+        Vec3 point = top(h, RUNWAY_TARGET);
+        UUID owner = UUID.randomUUID();
+        h.assertTrue(StrikeService.launch(level, WeaponType.DRONE, new Target.Point(point), point, 0, owner, false, Loadout.Nuke.DEFAULT,
+                Waypoints.NONE, null).ok(), "пуск не принят");
+        String[] last = {""};
+        boolean[] high = {false};
+        h.onEachTick(() -> {
+            List<StrikeProjectile> all = new ArrayList<>(VirtualFlights.get(level).flights());
+            all.addAll(level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)));
+            for (StrikeProjectile p : all) {
+                if (!owner.equals(p.ownerId())) continue;
+                if (p.getY() - point.y > 1500) high[0] = true;
+                last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " запас " + Math.round(p.rangeLeft());
+            }
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(high[0], "шахед не шёл на настоящем эшелоне: " + last[0]);
+            h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(p -> owner.equals(p.ownerId()))
+                    && level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)).isEmpty(), "шахед ещё летит: " + last[0]);
+            assertCrater(h, RUNWAY_TARGET, last[0]);
+        });
+    }
+
+    /**
+     * «Ланцет» на настоящей шкале полёта (1): круг в 700 м над целью, цель (корова) погибает, пока он кружит, — он
+     * докруживает и пикирует оттуда на её последнюю точку, а не самоликвидируется в воздухе: запас хода после потери
+     * цели урезается до пути по плану ({@code Mission.lose}), и план закладывает пике с высоты круга
+     * ({@code LoiterEntity.diveTicks}), а не 25 тиков пике с игрового круга.
+     */
+    @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_loiter", skyAccess = true)
+    public static void loiterLosingTargetAtRealHeightStillDives(GameTestHelper h) {
+        flightScale(h, 1);
+        int time = IncomingConfig.SERVER.loiterTime.get();
+        IncomingConfig.SERVER.loiterTime.set(5);
+        afterTest(h, () -> IncomingConfig.SERVER.loiterTime.set(time));
+        ServerLevel level = h.getLevel();
+        Vec3 point = top(h, RUNWAY_TARGET);
+        Cow cow = EntityType.COW.create(level);
+        cow.setNoAi(true);
+        cow.moveTo(point.x, point.y, point.z);
+        level.addFreshEntity(cow);
+        LoiterEntity e = ModEntities.LOITER.get().create(level);
+        e.launch(point.add(0, WeaponSpec.LOITER.airframe().cruiseHeight(), -150), Target.OfEntity.center(cow),
+                cow.getBoundingBox().getCenter(), null);
+        e.setRoute(null);
+        VirtualFlights.launch(level, e);
+        java.util.UUID id = e.getUUID();
+        boolean[] high = {false}, killed = {false};
+        String[] last = {""};
+        h.onEachTick(() -> {
+            LoiterEntity l = findLoiter(level, id);
+            if (l == null) return;
+            if (l.getY() - point.y > 600) high[0] = true;
+            if (!killed[0] && l.flightPhase() == FlightPhase.LOITER && l.phaseAge() > 20) {
+                killed[0] = true;
+                cow.kill();
+            }
+            last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " запас " + Math.round(l.rangeLeft());
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(high[0], "круг не на настоящей высоте: " + last[0]);
+            h.assertTrue(killed[0], "цель не погибла на круге: " + last[0]);
+            h.assertTrue(findLoiter(level, id) == null, "барражирующий ещё летит: " + last[0]);
+            assertCrater(h, RUNWAY_TARGET, last[0]);
+        });
+    }
+
+    /** Шкала полёта мира {@code x} на время проверки (пресет {@code CUSTOM}); после неё — прежние пресет и число. */
+    static void flightScale(GameTestHelper h, double x) {
+        IncomingConfig.ScalePreset preset = IncomingConfig.SERVER.scalePreset.get();
+        double was = IncomingConfig.SERVER.flightSpeed.get();
+        IncomingConfig.SERVER.scalePreset.set(IncomingConfig.ScalePreset.CUSTOM);
+        IncomingConfig.SERVER.flightSpeed.set(x);
+        afterTest(h, () -> {
+            IncomingConfig.SERVER.scalePreset.set(preset);
+            IncomingConfig.SERVER.flightSpeed.set(was);
         });
     }
 

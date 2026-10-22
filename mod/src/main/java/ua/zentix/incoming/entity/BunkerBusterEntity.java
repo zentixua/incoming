@@ -24,6 +24,7 @@ import org.joml.Vector3f;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.guidance.BombDrop;
 import ua.zentix.incoming.guidance.FlightController;
+import ua.zentix.incoming.guidance.Mission;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.registry.ModDamageTypes;
@@ -126,6 +127,9 @@ public class BunkerBusterEntity extends StrikeProjectile {
         moveTo(pos.x, pos.y, pos.z, angles[0], angles[1]);
         this.goal = goal;
         this.speed = velocity.length();
+        // запас хода — на прямую до точки с запасом плана, не меньше паспортного: с настоящего эшелона (шкала полёта
+        // 1, 12 км) бомба идёт до точки ~16 км, паспортный запас — на падение с игрового
+        setMission(Mission.of(Math.max(airframe().range(), pos.distanceTo(surface) * Mission.PATH_MARGIN)));
         setPhase(FlightPhase.TERMINAL);
     }
 

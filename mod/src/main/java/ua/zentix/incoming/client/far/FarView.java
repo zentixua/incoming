@@ -1,11 +1,13 @@
 package ua.zentix.incoming.client.far;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
+import ua.zentix.incoming.entity.StrikeProjectile;
 
 /**
  * Что нужно на кадр всем дальним картинкам: где камера и куда смотрит, докуда рисует мир, угол пикселя, свет неба,
@@ -53,6 +55,21 @@ public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up,
      */
     public double farShare(double d) {
         return farShare(d, world);
+    }
+
+    /** Дальняя плоскость кадра Minecraft с запасом, блоков: дальше дальнее переносится ближе ({@link #far}). */
+    public static double depthFar() {
+        return Minecraft.getInstance().gameRenderer.getDepthFar() * 0.97;
+    }
+
+    /**
+     * Докуда модель сущности снаряда рисует она сама, блоков: до {@link StrikeProjectile#DRAW_RANGE} и до дальней
+     * плоскости кадра {@code far}; дальше корпус рисует дальняя картинка ({@code FarFlightView}). Сервер отдаёт сущность
+     * по горизонтали, поэтому высоко над игроком она у клиента есть, а модель её за дальней плоскостью (4 прорисовки)
+     * отсекается: B-2 на настоящем эшелоне 12 км (шкала полёта 1) над головой иначе не виден вовсе.
+     */
+    public static double entityReach(double far) {
+        return Math.min(StrikeProjectile.DRAW_RANGE, far);
     }
 
     /** {@link #farShare(double)} при дальности прорисовки world блоков. */
