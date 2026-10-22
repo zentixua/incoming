@@ -383,7 +383,7 @@
   "incoming.map.place": "X %s  Z %s · %s · bearing %s°",
   "incoming.map.km": "%s km",
   "incoming.map.m": "%s m",
-  "incoming.map.near_only": "Terrain from loaded chunks only; LOD Server Support (on the server) or Distant Horizons shows far terrain",
+  "incoming.map.near_only": "Terrain from loaded chunks only; LOD Server Support (on the server), Voxy or Distant Horizons shows far terrain",
   "incoming.map.far_pending": "Distant Horizons is still loading its own terrain; far terrain will appear when it answers",
   "incoming.map.far_pending_lss": "Waiting for far terrain from the server (LOD Server Support)",
   "incoming.map.far_pending_voxy": "Voxy has no far terrain here yet: it keeps only what you have seen (in single-player /voxy import current fills it from the save)",

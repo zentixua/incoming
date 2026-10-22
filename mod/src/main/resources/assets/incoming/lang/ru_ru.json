@@ -383,7 +383,7 @@
   "incoming.map.place": "X %s  Z %s · %s · азимут %s°",
   "incoming.map.km": "%s км",
   "incoming.map.m": "%s м",
-  "incoming.map.near_only": "Рельеф — только загруженные чанки; дальний покажет LOD Server Support (на сервере) или Distant Horizons",
+  "incoming.map.near_only": "Рельеф — только загруженные чанки; дальний покажет LOD Server Support (на сервере), Voxy или Distant Horizons",
   "incoming.map.far_pending": "Distant Horizons ещё загружает свой рельеф; дальний появится, когда он ответит",
   "incoming.map.far_pending_lss": "Ждём дальний рельеф от сервера (LOD Server Support)",
   "incoming.map.far_pending_voxy": "У Voxy здесь ещё нет дальнего рельефа: он хранит только то, что ты видел (в одиночной игре /voxy import current берёт всё из сохранения)",
