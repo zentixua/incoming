@@ -154,9 +154,10 @@ public final class FarBlasts {
             // топливо в воронке горит пожаром среди пожаров клиента: шлейф, его свет и жар — там, и он сливается с огнём,
             // что поджёг шар топлива рядом (FireSmoke.merge)
             if (model.poolWatts > 0) ua.zentix.incoming.client.fx.FireSmoke.pool(level, x, y, z, model);
-            dustR = SmokeGrid.dustAlbedo(ground.r);
-            dustG = SmokeGrid.dustAlbedo(ground.g);
-            dustB = SmokeGrid.dustAlbedo(ground.b);
+            float[] dust = dustColour(ground);
+            dustR = SmokeGrid.dustAlbedo(dust[0]);
+            dustG = SmokeGrid.dustAlbedo(dust[1]);
+            dustB = SmokeGrid.dustAlbedo(dust[2]);
             phase = (float) (new java.util.SplittableRandom(seed).nextDouble() * Math.PI * 2);
         }
 
@@ -276,6 +277,20 @@ public final class FarBlasts {
                 out.blob(x + cx, y + cy, z + cz, SHELL * r, SHELL * r, 0, 0, water, 0.9f, 0.9f, 0.9f, CloudModel.T_AIR_K, 0);
             }
         }
+    }
+
+    /**
+     * Цвет толстой пыли взрыва на экране: пыль грунта — сухие мелкие зёрна (мельче ~50 мкм), и толстый слой их светлее
+     * самого грунта: цвет блока — влажная почва с гумусом и крупным зерном, у которых поглощение больше (у мелкой
+     * минеральной пыли альбедо однократного рассеяния на 550 нм — 0,9–0,97, Dubovik и др., J. Atmos. Sci. 59, 2002).
+     * Земля под ударом считается тем же сухим суглинистым песком, что у ядерки ({@code DustModel.Surface.REFERENCE}), —
+     * и пыль того же цвета, что стена пыли ядерки ({@code NukePall.DUST}); песок и снег — своего (светлее). В 3.5.0 пыль
+     * красилась цветом блока земли — тёмный, почти чёрный диск у земли (F3).
+     */
+    static float[] dustColour(GroundMaterial ground) {
+        if (ground == GroundMaterial.SAND || ground == GroundMaterial.SNOW) return new float[]{ground.r, ground.g, ground.b};
+        double[] d = ua.zentix.incoming.client.nuclear.NukePall.DUST;
+        return new float[]{(float) d[0], (float) d[1], (float) d[2]};
     }
 
     /** Пакет взрыва ближе {@link #NEAR} к камере: его рисуют частицы и озвучивает ближняя модель. */

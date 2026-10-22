@@ -31,16 +31,14 @@ import ua.zentix.incoming.nuclear.model.MushroomModel;
  * <li><b>Снос.</b> Слой уходит с ветром на высоте своей середины (не ниже 2 м) и расплывается по Бриггсу; поток волны
  * наружу пыль не сносит — она стоит там, где её сорвало.</li>
  * </ul>
- * Картинке слой отдаёт кольца показа ({@link #ANNULI}): у каждого — своя доля массы, кольцо из {@link #SPOKES} клубов на
- * среднем по массе радиусе, ширина — разброс колец по радиусу (не шире фронта в этот миг). Середины нет: под шаром пыль
- * в облаке.
+ * Картинке слой отдаёт кольца показа ({@link #ANNULI}): у каждого — своя доля массы, диск того же второго момента по
+ * радиусу (сплошной ковёр пыли; кучки клубов по кругу читались отдельными тёмными комками), видимый край — не дальше
+ * фронта в этот миг.
  */
 public final class GroundDust {
     /** Колец счёта (по логарифму радиуса), колец показа и их края — доли всей поднятой массы. */
     static final int RINGS = 24, ANNULI = 4;
     static final double[] QUANTILE = {0.35, 0.65, 0.88};
-    /** Клубов на кольцо показа (кроме среднего). */
-    static final int SPOKES = 6;
     /** Сетка времени таблиц: t_k = T0·(GROW^k − 1), с. */
     static final int STEPS = 112;
     static final double T0 = 0.01, GROW = 1.12;
@@ -262,50 +260,38 @@ public final class GroundDust {
     }
 
     /**
-     * Кольца показа в возрасте t: кольцо из {@link #SPOKES} клубов на среднем по массе радиусе; σ по горизонтали — разброс колец по радиусу (и шаг между клубами), расплывание Бриггса;
-     * снос — ветер на высоте середины слоя. {@code fade} — доля, что рисуется.
+     * Кольца показа в возрасте t: диск σ² = ⟨r²⟩/2 (в квадратуре с расплыванием Бриггса), не шире фронта; снос — ветер на
+     * высоте середины слоя. {@code fade} — доля, что рисуется.
      */
     public void blobs(double t, double fade, Blobs out) {
         if (total <= 0 || t <= 0) return;
         // один проход по кольцам: у каждого кольца показа — масса, её радиус и второй момент, доля ещё в фазе волны
-        double[] m = new double[ANNULI], mr = new double[ANNULI], mr2 = new double[ANNULI], wt = new double[ANNULI], wtop = new double[ANNULI];
+        double[] m = new double[ANNULI], mr2 = new double[ANNULI], wt = new double[ANNULI], wtop = new double[ANNULI];
         for (int i = 0; i < RINGS; i++) {
             if (ball[i]) continue;
             double e = ringNow(i, t);
             if (e <= 0) continue;
             int a = annulus[i];
             m[a] += e;
-            mr[a] += e * r[i];
             mr2[a] += e * r[i] * r[i];
             if (t - arrival[i] < positive[i]) {
                 wt[a] += e;
                 wtop[a] += e * waveTop(i, t);
             }
         }
-        double spread = CloudModel.spreadH(air.spread(), path(t));
+        double spread = CloudModel.spreadH(air.spread(), path(t)), front = front(t);
         for (int a = 0; a < ANNULI; a++) {
             if (m[a] <= 1e-9) continue;
-            double mean = mr[a] / m[a], var = Math.max(0, mr2[a] / m[a] - mean * mean);
             // σ по вертикали: в фазе волны — верх Kuhl той части, что ещё в фазе; потом — таблица
             double v = at(sv[a], t);
             if (wt[a] > 0) v = wt[a] / m[a] * Math.max(0.05, wtop[a] / wt[a] / 2.5) + (1 - wt[a] / m[a]) * v;
             double zc = 0.8 * v;
             double[] d = drift(t, zc);
-            double dx = d[0], dz = d[1];
-            double gap = Math.PI * mean / SPOKES / 2.5, ring = Math.max(Math.sqrt(var), gap);
-            double sh = Math.max(Math.hypot(ring, spread), v);
-            // видимый край кольца не дальше фронта: пыль встаёт там, где фронт уже прошёл (в первые доли секунды — уже,
-            // но не у́же шага между клубами; не хватает — кольцо ближе к середине)
-            double front = front(t);
-            if (mean + EDGE_SIGMAS * sh > front) {
-                sh = Math.max((front - mean) / EDGE_SIGMAS, Math.min(sh, Math.max(gap, v)));
-                mean = Math.max(0, Math.min(mean, front - EDGE_SIGMAS * sh));
-            }
-            double phase = a * Math.PI / SPOKES;
-            for (int k = 0; k < SPOKES; k++) {
-                double ang = phase + 2 * Math.PI * k / SPOKES;
-                out.blob(dx + mean * Math.cos(ang), zc, dz + mean * Math.sin(ang), sh, v, m[a] * fade / SPOKES);
-            }
+            // кольцо показа — диск того же второго момента (σ² = ⟨r²⟩/2): сплошной ковёр пыли, а не кучки по кругу; видимый
+            // край (4σ) — не дальше фронта: пыль встаёт там, где фронт уже прошёл
+            double disc = Math.sqrt(0.5 * mr2[a] / m[a]);
+            double sh = Math.max(Math.min(Math.hypot(disc, spread), front / EDGE_SIGMAS), v);
+            out.blob(d[0], zc, d[1], sh, v, m[a] * fade);
         }
     }
 
