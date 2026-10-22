@@ -88,8 +88,20 @@ paths:
   docs/guide/                            ← руководство игрока по-английски (страницы по темам, картинки в img/),
                                            docs/guide/ru/ — то же по-русски
   docs/store/                            ← тексты страниц Modrinth и CurseForge
+  docs/media/                            ← иконка (она же логотип мода incoming.png), петля hero.webp для README и страниц,
+                                           кадры для галереи
   .github/workflows/build.yml            ← CI: что изменилось → сборка и юнит-тесты, GameTest частями, итог; jar в артефактах; релиз
   .github/workflows/note.yml             ← CI: проверка «Записка» описания PR (tools/pr_note.py); шаблон описания —
                                            .github/PULL_REQUEST_TEMPLATE.md
+  .github/workflows/publish.yml          ← страницы Modrinth и CurseForge, только ручным запуском: draft (скрытый черновик
+                                           Modrinth), submit, release; поля — docs/store/modrinth.json
   docs/releases/<версия>.md              ← заметки к релизу
 ```
+
+## Запуски и CI
+- Моды для запусков (`run/*/mods`) копируются из инстанса задачами `copyRuntimeMods_*`; путь — `MC_DIR` или по
+  умолчанию. Без инстанса (облако, CI) — `tools/fetch_runtime_mods.py` (Java 21 в облаке есть, сеть к
+  NeoForge/Mojang/Parchment/Modrinth открыта).
+- «Что изменилось» в `build.yml`: правка только `tools/` (кроме `fetch_runtime_mods.py`, `paths.py`), `docs/`, `*.md`
+  мод не собирает и GameTest не гоняет (`tools/replayscan` — своя сборка и юнит-тесты); `mod/`, CI и незнакомые пути —
+  проверка целиком, ручной запуск (релиз) — всегда целиком. jar — артефакт `incoming-jar`.

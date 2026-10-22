@@ -9,6 +9,10 @@ paths:
 # Чанки, тикеты и тик сервера
 
 ## Подводные камни
+- «Где земля» — только `util/Terrain.estimate`: высота и источник `CHUNK`/`CEILING`/`CLIENT_MAP`/`GENERATOR`/`SEA`/
+  `UNKNOWN`, вызывающий выбирает допустимые — `Allowed.CHUNK` в мире, `FLIGHT` вне мира, `ORDER` для приказа; прямых
+  `getBaseHeight`/`getSeaLevel` вне `Terrain` нет. `Terrain.height` — источник `CHUNK` без выбора для кода, который сам
+  знает, что чанк готов: `LaunchSite`, взрывы `Warheads`, `nuclear/world`, площадка МБР за игроком в `NuclearStrikes`.
 - Выход из мира может зависнуть на «Saving worlds» (ванильный цикл выгрузки чанков, `ChunkMap.processUnloads`): при
   остановке ваниль зовёт `ServerChunkCache.tick(() -> true, …)`, очередь выгрузки
   разбирается без предела, а задача выгрузки держателя, которого вернули в работу и держит генерация
