@@ -613,6 +613,8 @@ final class ProbeScenario {
             Incoming.LOG.info("SCENARIO probe shot {} tick {} fps {}", name, tick, mc.getFps());
             // взрыв у кадра, а не в миг события сервера: пакет взрыва приходит позже счётчика взрывов
             Incoming.LOG.info("SCENARIO probe shot {} blast {}", name, ua.zentix.incoming.client.far.FarBlasts.describeLast());
+            // пожары у кадра: блоков огня, подъём шлейфа и ветер (дом, подстанция, огонь от шара топлива)
+            Incoming.LOG.info("SCENARIO probe shot {} smoke {}", name, ua.zentix.incoming.client.fx.FireSmoke.describe());
         });
     }
 
