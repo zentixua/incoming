@@ -956,6 +956,14 @@ public final class FarBlasts {
      * пакета (и d / 17,15 — когда фронт должен был дойти), громкость, запас слышимости и потери на низах (преграда,
      * тень, дождь), насколько верха глуше низов и сколько из этого от земли. Ничего дальнего ещё не было — пустая строка.
      */
+    /** Для строки {@code SCENARIO}: последний взрыв — место, материал под ним и столб воды (высота, м; нет — 0). */
+    public static String describeLast() {
+        Event e = EVENTS.peekLast();
+        if (e == null) return "none";
+        return String.format(Locale.ROOT, "at %.1f %.1f %.1f, %s, charge %.1f kg, water column %.1f m", e.x, e.y, e.z, e.ground, e.source.chargeKg(),
+                e.water == null ? 0 : e.water.height);
+    }
+
     public static String describe() {
         String light = BRIGHTEST[4] <= 0 ? "" : String.format(Locale.ROOT, "; brightest: core %.1f px, overexposure %.0f, glare %.1f px, veil %.1f px, "
                 + "visible %.2f", BRIGHTEST[0], BRIGHTEST[3], BRIGHTEST[1], BRIGHTEST[2], BRIGHTEST[4]);
