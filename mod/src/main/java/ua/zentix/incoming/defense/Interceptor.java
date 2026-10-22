@@ -149,7 +149,8 @@ public final class Interceptor {
 
     /**
      * Тик погони без мира: возраст, после направляющей — доворот на нынешнее место цели не круче паспорта на этой
-     * скорости ({@link InterceptorSpec#turnLimit}), на разгоне — прирост скорости. Возвращает, где ракета будет в конце
+     * скорости ({@link InterceptorSpec#turnLimit}), скорость — по закону полёта на моторе ({@link InterceptorSpec#speed}:
+     * мотор, обмен высоты на скорость). Возвращает, где ракета будет в конце
      * тика; сдвигает её {@link #moveTo} после проверки преград.
      */
     Vec3 steer(Vec3 targetNow) {
@@ -158,7 +159,7 @@ public final class Interceptor {
             Vec3 to = targetNow.subtract(pos);
             if (to.lengthSqr() > 1.0e-6) dir = Homing.turn(dir, to.normalize(), spec.turnLimit(speed));
         }
-        if (age <= spec.boostTicks()) speed = Math.min(spec.maxSpeed(), speed + spec.boostAccel());
+        speed = spec.speed(speed, age, dir.y);
         return pos.add(dir.scale(speed));
     }
 

@@ -35,8 +35,9 @@ class SmokePuffsTest {
         assertTrue(white < 0.05, "капли " + white);
         assertTrue(soot > 1 && soot < ua.zentix.incoming.client.fx.layer.FxQuads.SHADE_MAX, "сажа " + soot);
         assertEquals(1, SmokePuffs.twoStream(0.46, 0.355) / SmokePuffs.BAKED_K, 0.01, "вещество запекания");
-        // брызги запечены каплями: у капель тень карт брызг — как есть
-        assertEquals(1, SmokePuffs.shade(0, 0, 1, 0.9f) / SmokePuffs.SPRAY_K, 0.5, "капли на картах брызг");
+        // брызги запечены веществом с альбедо 0,99, капли облака белее (0,9999): тень карт брызг у них слабее, у сажи — сильнее
+        assertTrue(SmokePuffs.shade(0, 0, 1, 0.9f) / SmokePuffs.SPRAY_K < 1, "капли на картах брызг");
+        assertTrue(SmokePuffs.shade(1, 0, 0, 0.9f) / SmokePuffs.SPRAY_K > 1, "сажа на картах брызг");
     }
 
     /** Альбедо и асимметрия запекания — те же, что в скрипте запекания. */

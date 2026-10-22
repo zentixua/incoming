@@ -173,14 +173,15 @@ class InterceptShareTest {
 
         /** «Ланцет»: к кругу и круг на высоте круга, после круга — пике, когда цель под крылом круче 40°. */
         private void loiter() {
+            // как LoiterEntity: мотор и высота — по паспорту (Handling), к кругу и на круге — поле курсов, пике — Dive
+            WeaponSpec.Handling h = air.handling();
             if (phase == FlightPhase.TERMINAL) {
-                speed += (air.diveSpeed() - speed) * 0.1;
-                float[] to = FlightController.anglesTo(pos, aim);
-                flight.steerYaw(to[0], 0.3, air.turnRate() * 2, 1);
-                flight.holdPitch(to[1], 0.3, air.turnRate() * 2, 1);
+                throttle(air, air.diveSpeed());
+                ua.zentix.incoming.guidance.Dive.steer(flight, pos, speed, aim, Vec3.ZERO, h.dive());
                 return;
             }
-            holdAltitude(aim.y + air.cruiseHeight(), 0.12, 1.2, 0.15);
+            throttle(air, air.cruiseSpeed());
+            holdAltitude(aim.y + air.cruiseHeight(), 0.12, h, h.cruise());
             orbit.steer(flight, pos, aim, Vec3.ZERO, speed);
             if (phase == FlightPhase.CRUISE && orbit.captured(pos, aim, Vec3.ZERO, speed, flight.yaw())) setPhase(FlightPhase.LOITER);
             double lap = 2 * Math.PI * LoiterEntity.LOITER_RADIUS / speed;

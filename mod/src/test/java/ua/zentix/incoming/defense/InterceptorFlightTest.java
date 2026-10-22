@@ -128,8 +128,8 @@ class InterceptorFlightTest {
 
     /**
      * Из отвесного схода к цели далеко и низко у горизонта ракета ложится дугой: каждый тик поворот не круче бокового
-     * ускорения паспорта на скорости этого тика, в первый тик после направляющей — не больше 20°, а 10° над горизонтом
-     * курс проходит за 6–10 тиков (0,3–0,5 с) после неё.
+     * ускорения паспорта на скорости этого тика (сразу после направляющей — ~20°/тик), а 10° над горизонтом
+     * курс проходит за 5–10 тиков (0,25–0,5 с) после неё.
      */
     @Test
     void pitchOverIsAnArc() {
@@ -145,10 +145,9 @@ class InterceptorFlightTest {
             double byG = Math.toDegrees(SPEC.lateralG() * Ballistics.GRAVITY / Math.max(speed, SPEC.launchSpeed()));
             assertTrue(turn <= SPEC.turnLimit(speed) + 1e-9, i + "-й тик после схода: поворот " + turn + "°");
             assertTrue(turn <= byG + 1e-9, i + "-й тик после схода: поворот " + turn + "° круче " + SPEC.lateralG() + " g");
-            if (i == 1) assertTrue(turn <= 20, "первый тик после схода: поворот " + turn + "°");
             if (Math.toDegrees(Math.asin(f.direction().y)) <= 10) level = i;
         }
-        assertTrue(level >= 6 && level <= 10, "10° над горизонтом — на " + level + "-м тике после направляющей");
+        assertTrue(level >= 5 && level <= 10, "10° над горизонтом — на " + level + "-м тике после направляющей");
     }
 
     /** Где шахед через {@code tick} тиков: с {@code z0} идёт на 46 блоках над ЗРК, в 6 блоках сбоку, с z −41 — пике 18° в цель у z 100. */
@@ -245,6 +244,7 @@ class InterceptorFlightTest {
             speed = f.speed();
         }
         for (int i = SPEC.railTicks() + 1; i <= SPEC.fuelTicks(); i++) f.moveTo(f.steer(target));
-        assertEquals(SPEC.maxSpeed(), f.speed(), 1e-9, "после разгона — наибольшая скорость");
+        // мотор держит наибольшую скорость; в наборе к цели выше ЗРК — без обмена высоты на скорость за тик
+        assertEquals(SPEC.maxSpeed(), f.speed(), ua.zentix.incoming.strike.WeaponSpec.Handling.TRADE * Ballistics.GRAVITY, "после разгона — наибольшая скорость");
     }
 }

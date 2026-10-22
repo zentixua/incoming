@@ -2,6 +2,7 @@ package ua.zentix.incoming.defense;
 
 import ua.zentix.incoming.guidance.Ballistics;
 import ua.zentix.incoming.strike.Article;
+import ua.zentix.incoming.strike.WeaponSpec;
 
 /**
  * Паспорт ЗРК: дальности его радара и огня, числа полёта его ракеты и изделие по ТТХ ({@link Passport}, 9М96).
@@ -68,7 +69,9 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
 
     /**
      * Ракета ЗРК 9М96 ({@link #M96}). Игровое, не по физике (медленнее настоящей — полёт видно): вертикальный пуск из
-     * контейнера, как у 9М96 на С-350 и С-400, 14 блоков/тик (280 м/с) за полторы секунды разгона, 15 с полёта — ~4 км.
+     * контейнера, как у 9М96 на С-350 и С-400, 14 блоков/тик (280 м/с) за полторы секунды разгона, 15 с полёта — ~4 км;
+     * скорость — тем же законом полёта на моторе, что у снарядов ({@link #speed}: в отвесном наборе разгон медленнее на
+     * обмен высоты на скорость).
      * Боковое ускорение 40 g — не по физике: у 9М96 открытые источники называют «свыше 20 g» на высотах до 30–35 км
      * (FAS, «S-400 SA-20 Triumf», https://nuke.fas.org/guide/russia/airdef/s-400.htm), у земли воздух плотнее и манёвр
      * круче. Число — предел игры: с 30 g ракета не догоняет шахед, который к пуску уже над ЗРК и пикирует за ним в цель
@@ -80,6 +83,18 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
      * к ЗРК больше 30 с, ракета навстречу — 5–6 с.
      */
     public static final InterceptorSpec SAM = new InterceptorSpec(3000, 1500, 5, 90, 0.8, 30, 0.45, 14, 40, 300, 6, 2.0, M96);
+
+    /**
+     * Скорость после тика {@code age} полёта по закону полёта на моторе ({@link WeaponSpec.Handling#speed}: мотор тянет
+     * к наибольшей скорости, набор высоты отнимает скорость, снижение прибавляет), {@code climbSine} — синус угла пути.
+     * Мотор — игровой, не по физике: на разгоне прирост {@link #boostAccel} за тик, в маршевом режиме — меньше во столько
+     * раз, во сколько тяга маршевого режима паспорта меньше тяги разгона; доводит до наибольшей скорости за тик
+     * (relax 1), если прирост позволяет. До первого тика — скорость схода.
+     */
+    public double speed(double speed, int age, double climbSine) {
+        double accel = age <= boostTicks ? boostAccel : boostAccel * passport.sustain().thrust() / passport.boost().thrust();
+        return WeaponSpec.Handling.speed(speed, maxSpeed, climbSine, accel, 1);
+    }
 
     /**
      * Предел поворота за тик на скорости {@code speed}, °: боковое ускорение у ракеты одно (a = v·ω, ω = a / v), поэтому
