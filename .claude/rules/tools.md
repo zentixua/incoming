@@ -40,6 +40,8 @@ paths:
     free_port.py                         ← свободный порт на 127.0.0.1 для серверов проверок (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← процессы проверок в своих сессиях (source из stress.sh, mp_scenario.sh): выход скрипта гасит их с JVM
     test_rig_procs.sh                    ← проверка rig_procs.sh (CI): Ctrl+C, TERM, конец скрипта, чужая сессия, fd, срок RIG_GRACE — без сирот
+    pr_ci.sh <PR>                        ← ждать «Итог» и «Записку» PR одной командой (в фоне): 0 — зелёные, 1 — упало (задачи
+                                           и хвост лога), 3 — конфликт с базой (GitHub тогда проверки не запускает вовсе)
     pr_note.py < файлы PR                ← проверка «Записка» (CI, .github/workflows/note.yml): PR, который меняет то, что
                                            игрок видит или слышит (пути — PLAYER_FACING там же), несёт в описании раздел
                                            `## Записка`; описание — PR_BODY; тест — test_pr_note.py
