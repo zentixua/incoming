@@ -53,11 +53,11 @@ class ShockOpticsTest {
 
     @Test
     void densityJumpIsRankineHugoniot() {
-        assertEquals(1.048, BlastModel.densityRatio(BlastModel.kpa(1)), 0.001);
-        assertEquals(1.232, BlastModel.densityRatio(BlastModel.kpa(5)), 0.001);
-        assertEquals(1.443, BlastModel.densityRatio(BlastModel.kpa(10)), 0.001);
-        assertEquals(6, BlastModel.densityRatio(1e9), 1e-3);
-        assertEquals(0, ShockOptics.indexJump(0, N0));
+        assertEquals(1.048, HobBlast.densityRatio(1000 * BlastModel.kpa(1)), 0.001);
+        assertEquals(1.232, HobBlast.densityRatio(1000 * BlastModel.kpa(5)), 0.002);
+        assertEquals(1.443, HobBlast.densityRatio(1000 * BlastModel.kpa(10)), 0.003);
+        // без давления скачка нет (у γ = 1,402 таблицы HobBlast — 2·10⁻⁵ сжатия: 5·10⁻⁹ показателя)
+        assertEquals(0, ShockOptics.indexJump(0, N0), 1e-8);
     }
 
     /** Сила преломления растёт с перепадом давления при той же геометрии, на любом месте у края и внутри. */

@@ -32,7 +32,8 @@ Everyone within 20 km of the target hears a siren in advance. Then come the flas
 The flash lights up the sky and the land like lightning, in clear weather up to about 100 km away, in rain up to
 about 30 km. The blast wave itself is clear air, but the air behind its front is compressed and bends light: once the
 front leaves the fireball, its edge shows against the sky and the ground as a thin ring where whatever lies behind is
-shifted by a few pixels on a 1080p screen (from 1.5 km about 4–8, from 3 km 2–5, from 10 km 1–4 for 15 kt). The ring weakens with the
+shifted by a few pixels on a 1080p screen (for a 15 kt ground burst about 4–8 from 1.5 km, 2–5 from 3 km, 1–2 from
+10 km; above the ground the front of an air burst is weaker, about half of that). The ring weakens with the
 pressure and is gone where the dust wall ends (not physics: a weak front still bends light a little, but the mod
 draws nothing of the wave beyond the wall); once the front has passed you, nothing of it is seen. Hot gas over the
 fireball, the mushroom cap and a burning town shimmers too, but by less than a pixel. The wind right behind the front tears up what lies on the ground (dust and earth, smoke over a

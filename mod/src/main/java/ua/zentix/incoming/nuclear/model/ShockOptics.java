@@ -6,7 +6,7 @@ package ua.zentix.incoming.nuclear.model;
  * тонким кольцом по его краю — так фронт и виден на кадрах испытаний на фоне неба и земли, и так же его ловит теневой
  * метод (Settles G. S., «Schlieren and Shadowgraph Techniques», 2001, гл. 1–2: ударная волна — скачок показателя).
  * <ul>
- * <li><b>Скачок.</b> Сжатие за фронтом — Ренкин–Гюгонио ({@link BlastModel#densityRatio}); n − 1 ∝ плотности
+ * <li><b>Скачок.</b> Сжатие за фронтом — Ренкин–Гюгонио ({@link HobBlast#densityRatio}); n − 1 ∝ плотности
  * (Гладстон–Дейл), поэтому δn = (n₀ − 1)·(ρ/ρ₀ − 1), n₀ − 1 — у воздуха до фронта.</li>
  * <li><b>Оболочка.</b> За фронтом сжатие спадает к концу положительной фазы; ⚠ приближение: экспонента с e-кратной
  * длиной {@link #DECAY_SHARE} длины фазы (Фридлендер с b = 1 падает до 1/e на 0,43 фазы; у сильной волны b больше —
@@ -30,7 +30,7 @@ public final class ShockOptics {
 
     /** Скачок показателя преломления на фронте с избыточным давлением {@code kpa}: n0 — n − 1 воздуха до фронта. */
     public static double indexJump(double kpa, double n0) {
-        return n0 * (BlastModel.densityRatio(kpa) - 1);
+        return n0 * (HobBlast.densityRatio(1000 * Math.max(0, kpa)) - 1);
     }
 
     /**

@@ -5,8 +5,10 @@ import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.HeatPass;
 import ua.zentix.incoming.client.fx.smoke.FirePlume;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.CloudModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
+import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.ShockOptics;
 
@@ -15,8 +17,11 @@ import ua.zentix.incoming.nuclear.model.ShockOptics;
  * Всё — из модели подрыва у клиента, без пакетов.
  * <ul>
  * <li><b>Фронт</b> — сфера радиуса фронта в игре ({@link Detonation#frontRadius}) у подрыва, как только она отошла от шара
- * (до того фронт — край светящегося шара, и за ним не видно ничего); скачок показателя — по давлению модели на этой сфере
- * ({@link Detonation#overpressureKpa}) на четырёх высотах от земли до верха ({@link ShockOptics#indexJump}); толща
+ * (до того фронт — край светящегося шара, и за ним не видно ничего); скачок показателя ({@link ShockOptics#indexJump}) —
+ * по давлению фронта на этой сфере на четырёх высотах от земли до верха: у наземного подрыва вся полусфера — волна,
+ * отражённая землёй ({@link Detonation#overpressureKpa}); у воздушного — падающая волна в свободном воздухе
+ * ({@link HobBlast#freeAirPsi}), а у земли в области Маха — стебель Маха (давление на земле). Высоты тройной точки в модели
+ * нет, и между землёй и следующей высотой скачок идёт по прямой (⚠ стебель — десятки–сотни метров у земли); толща
  * сжатия за фронтом — доля {@link ShockOptics#DECAY_SHARE} длины положительной фазы в игре (от фронта до
  * {@link Detonation#phaseEndRadius}). За краем стены пыли ({@link Detonation#HIT_KPA}) волна у модели — только звук, и
  * фронта не видно: от двух краёв до края скачок сходит на нет (<b>не по физике</b>: слабая волна там всё ещё скачок, но
@@ -61,9 +66,14 @@ public final class NukeHeat {
     static boolean jumps(Detonation d, double r, double low, double[] out) {
         boolean any = false;
         Vec3 b = d.burst();
+        double hob = Math.max(0, d.hobMetres());
+        boolean air = !d.surface() && hob > 0;
         for (int k = 0; k < 4; k++) {
             double sine = low + (1 - low) * k / 3.0, across = Math.sqrt(Math.max(0, 1 - sine * sine));
-            double kpa = d.overpressureKpa(new Vec3(b.x + r * across, b.y + r * sine, b.z));
+            Vec3 p = new Vec3(b.x + r * across, b.y + r * sine, b.z);
+            // у воздушного: на земле в области Маха — стебель (давление на земле), иначе — падающая волна
+            boolean stem = k == 0 && d.metres(r * across) >= HobBlast.machStem(hob, d.yieldKt());
+            double kpa = air && !stem ? BlastModel.kpa(HobBlast.freeAirPsi(d.metres(r), d.yieldKt())) : d.overpressureKpa(p);
             out[k] = ShockOptics.indexJump(kpa, HeatPass.N0) * seen(kpa);
             any |= out[k] > 0;
         }

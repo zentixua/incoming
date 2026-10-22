@@ -57,17 +57,29 @@ class ShockOpticsGlslTest {
         assertEquals(HeatPass.SHIFT_MIN, Double.parseDouble(m.group(1)));
     }
 
-    /** Скачок на сфере фронта: чем дальше фронт, тем меньше (давление падает), за краем стены пыли — нуль. */
+    /**
+     * Скачок на сфере фронта: чем дальше фронт, тем меньше (давление падает) — у наземного на всех высотах, у воздушного
+     * — выше земли (падающая волна; у земли с началом области Маха скачок растёт: там встаёт стебель); за краем стены
+     * пыли — нуль.
+     */
     @Test
     void jumpFallsWithTheFrontAndEndsAtTheEdge() {
         double[] dn = new double[4];
         for (Detonation d : new Detonation[]{GROUND, AIR}) {
-            double reach = d.blastReach(), was = Double.MAX_VALUE;
+            double reach = d.blastReach();
+            double[] was = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE};
             for (double r = 600; r < reach; r *= 1.1) {
                 double low = Math.max(-1, (d.groundY() - d.burst().y) / r);
                 NukeHeat.jumps(d, r, low, dn);
-                assertTrue(dn[0] <= was * (1 + 1e-9), "у земли на " + r + ": " + dn[0] + " > " + was);
-                was = dn[0];
+                for (int k = d.surface() ? 0 : 1; k < 4; k++) {
+                    assertTrue(dn[k] <= was[k] * (1 + 1e-9), "высота " + k + " на " + r + ": " + dn[k] + " > " + was[k]);
+                    was[k] = dn[k];
+                }
+            }
+            // у воздушного выше земли — падающая волна: слабее, чем у земли в области Маха
+            if (!d.surface()) {
+                NukeHeat.jumps(d, 3000, (d.groundY() - d.burst().y) / 3000, dn);
+                assertTrue(dn[3] < dn[0], "падающая " + dn[3] + " против стебля " + dn[0]);
             }
             double r = reach * 1.001, low = Math.max(-1, (d.groundY() - d.burst().y) / r);
             assertTrue(!NukeHeat.jumps(d, r, low, dn), "за краем " + reach + ": " + java.util.Arrays.toString(dn));
