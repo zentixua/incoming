@@ -29,8 +29,9 @@ class FirePlumeLayTest {
                                 double water, float dustR, float dustG, float dustB, double kelvin, double rise) {}
 
             @Override
-            public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double bx, double by, double bz, double shb,
-                             double svb, double sootB, double kelvin, double rise, double sigma0) {
+            public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double dustA, double bx, double by, double bz,
+                     double shb, double svb, double sootB, double dustB, float albedoR, float albedoG, float albedoB, double kelvin, double rise,
+                     double sigma0) {
                 out.add(new double[]{ax, ay, az, bx, by, bz, sootA, sootB});
             }
         });

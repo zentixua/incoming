@@ -405,16 +405,16 @@ public final class FireSmoke implements SmokeGrid.Source {
             // (у очага, где шлейф круто поднимается)
             double dx = xb - xa, len = Math.sqrt(dx * dx + (hb - ha) * (hb - ha)), along = len > 0 ? dx / len : 1;
             double kelvin = CloudModel.T_AIR_K + pb.excess(0.5 * (ha + hb));
-            out.tube(x + wx * xa, y + ha, z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), pa.sootPerMetre() * along, x + wx * xb, y + hb, z + wz * xb,
-                    pb.sigmaY(xb), pb.sigmaZ(xb), pb.sootPerMetre() * along, kelvin, pb.riseSpeed(mid), sigma0);
+            out.tube(x + wx * xa, y + ha, z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), pa.sootPerMetre() * along, 0, x + wx * xb, y + hb,
+                    z + wz * xb, pb.sigmaY(xb), pb.sigmaZ(xb), pb.sootPerMetre() * along, 0, 1, 1, 1, kelvin, pb.riseSpeed(mid), sigma0);
         }
     }
 
     /** Кусок шлейфа без сажи (там не горело или его не видно): только номер куска у приёмника. */
     private static void empty(SmokeGrid.Sink out, double x, double y, double z, double wx, double wz, double xa, double xb, FirePlume pa,
                               FirePlume pb, double sigma0) {
-        out.tube(x + wx * xa, y + pa.rise(xa), z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), 0, x + wx * xb, y + pb.rise(xb), z + wz * xb,
-                pb.sigmaY(xb), pb.sigmaZ(xb), 0, CloudModel.T_AIR_K, 0, sigma0);
+        out.tube(x + wx * xa, y + pa.rise(xa), z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), 0, 0, x + wx * xb, y + pb.rise(xb), z + wz * xb,
+                pb.sigmaY(xb), pb.sigmaZ(xb), 0, 0, 1, 1, 1, CloudModel.T_AIR_K, 0, sigma0);
     }
 
     @Override

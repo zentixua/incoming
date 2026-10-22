@@ -196,12 +196,28 @@ public final class CloudModel {
          * @param rise    скорость подъёма вещества, м/с (шум клубов идёт с ним)
          */
         void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, double kelvin, double rise);
+
+        /**
+         * Кусок трубки пыли (ножка облака) между концами a и b от точки взрыва: σ сечения, пыли на метр оси у концов, кг/м.
+         * Приёмник без трубок получает гауссы того же сечения через σ вдоль оси (вещество — то же).
+         */
+        default void tube(double ax, double ay, double az, double sa, double dustA, double bx, double by, double bz, double sb, double dustB,
+                          double kelvin, double rise) {
+            double tx = bx - ax, ty = by - ay, tz = bz - az, len = Math.sqrt(tx * tx + ty * ty + tz * tz);
+            int n = (int) Math.max(1, Math.ceil(len / Math.max(Math.min(sa, sb), 1e-3)));
+            for (int i = 0; i < n; i++) {
+                double f = (i + 0.5) / n, s = sa + (sb - sa) * f;
+                blob(ax + tx * f, ay + ty * f, az + tz * f, s, s, 0, (dustA + (dustB - dustA) * f) * len / n, 0, kelvin, rise);
+            }
+        }
     }
 
     public final BlastSource source;
     public final Air air;
     /** Высота подрыва над землёй под точкой взрыва, м (0 — удар в поверхность). */
     public final double hob;
+    /** Кусков трубки ножки (изгиб по сдвигу ветра с высотой). */
+    static final int STEM_PIECES = 6;
     /** Пыль волны у земли и ножка. */
     public final GroundDust ground;
     /** Плавучесть всего тепла, м⁴/с²; F = 3B/(4π). */
@@ -611,15 +627,20 @@ public final class CloudModel {
             out.blob(cx, cy, cz, sh, sv, soot * fade, cloudDust * fade, 0, k, up);
         }
         if (stemShown) {
-            // клубы ножки — σ ножки (⚠ оценка: треть σ облака), клонится с ветром: снос на её высоте — доля сноса облака
-            double ss = Math.max(0.35 * sh, 1);
-            int count = (int) Math.min(8, Math.max(1, Math.round(bottom / (2 * ss))));
-            double mass = stem * fade / count;
-            for (int i = 0; i < count; i++) {
-                double f = (i + 0.5) / count;
-                double h = f * bottom;
-                double lean = air.wind(h) / air.wind(cy + hob);
-                out.blob(cx * lean, h - hob, cz * lean, ss, ss, 0, mass, 0, T_AIR + (k - T_AIR) * f * 0.5, up * f);
+            // ножка — трубка пыли от земли до низа облака (σ — ⚠ оценка: треть σ облака), клонится с ветром: снос на её высоте —
+            // доля сноса облака; пыль — поровну по высоте (на метр оси куска — меньше во столько, во сколько ось длиннее
+            // подъёма). Кусками трубки, а не отдельными клубами через 2σ: те шли бусами (кадры F5)
+            double ss = Math.max(0.35 * sh, 1), perHeight = stem * fade / bottom;
+            double px = 0, py = -hob, pz = 0;
+            for (int i = 1; i <= STEM_PIECES; i++) {
+                double f = (double) i / STEM_PIECES, h = f * bottom, lean = air.wind(h) / air.wind(cy + hob);
+                double qx = cx * lean, qy = h - hob, qz = cz * lean;
+                double dx = qx - px, dy = qy - py, dz = qz - pz, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                double dust = len > 0 ? perHeight * dy / len : 0, fm = f - 0.5 / STEM_PIECES;
+                out.tube(px, py, pz, ss, dust, qx, qy, qz, ss, dust, T_AIR + (k - T_AIR) * fm * 0.5, up * fm);
+                px = qx;
+                py = qy;
+                pz = qz;
             }
         }
         // слой пыли волны у земли (на hob ниже точки взрыва)

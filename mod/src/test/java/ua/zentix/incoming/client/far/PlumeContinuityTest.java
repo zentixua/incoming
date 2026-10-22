@@ -3,10 +3,13 @@ package ua.zentix.incoming.client.far;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.fx.FireSmoke;
+import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.smoke.FirePlume;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
+import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.util.Stability;
 
 import javax.imageio.ImageIO;
@@ -25,25 +28,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Шлейф пожара — один сплошной столб с любой дальности (жалоба 22.10: из 1–3 км дым лужи топлива шёл цепочкой отдельных
  * клубов). Шлейф раскладывает тот же код, что в игре ({@link FireSmoke#lay}), рисует тот же приёмник слоя эффектов
  * ({@link SmokePuffs#sink}: ленты и клубы, как у следа снаряда); квадраты пишет свой приёмник, и непрозрачность вдоль оси на
- * экране складывается из них: клуб — радиальный профиль непрозрачности запечённого клуба (самый узкий из кадров, что идут в
- * трубку), лента — её непрозрачность у оси. Разрыв — впадина: непрозрачность у оси меньше половины наименьшей из
+ * экране складывается из них: клуб — радиальный профиль непрозрачности его кадра запечённого клуба, лента — её
+ * непрозрачность у оси. Разрыв — впадина: непрозрачность у оси меньше половины наименьшей из
  * наибольших по обе стороны в окне шириной в четыре σ сечения (не меньше 8 пикселей), и разница видна глазу (больше порога
  * контраста Кошмидера, {@link Sight#THRESHOLD}): так выглядит бусина за бусиной. Сплошной шлейф редеет вдоль оси плавно.
  */
 class PlumeContinuityTest {
     /** Угол пикселя: 70° на 1080 строк. */
     private static final double PIXEL = Math.toRadians(70) / 1080;
-    /** Профиль непрозрачности клуба по радиусу (доля полуразмера квадрата), шаг {@link #BIN}. */
+    /** Шаг профиля непрозрачности клуба по радиусу (доля полуразмера квадрата). */
     private static final double BIN = 0.02;
-    private static double[] profile;
 
-    /** Самый узкий радиальный профиль непрозрачности кадров клуба, что рисуют трубки (с {@link SmokePuffs#FIRST_FRAME}). */
-    private static double[] profile() throws IOException {
-        if (profile != null) return profile;
+    /** Радиальные профили непрозрачности кадров клуба (по доле полуразмера квадрата, шаг {@link #BIN}). */
+    private static double[][] profiles() throws IOException {
+        if (profiles != null) return profiles;
         int bins = (int) Math.round(1.5 / BIN);
-        double[] min = new double[bins];
-        java.util.Arrays.fill(min, 1);
-        for (int f = SmokePuffs.FIRST_FRAME; f < FxAtlas.PUFF6_FRAMES; f++) {
+        double[][] out = new double[FxAtlas.PUFF6_FRAMES][bins];
+        for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
             BufferedImage img = image(String.format(Locale.ROOT, "textures/fx/particle/puff6a_%02d.png", f));
             int n = img.getWidth();
             double[] sum = new double[bins], count = new double[bins];
@@ -56,9 +57,19 @@ class PlumeContinuityTest {
                     count[k]++;
                 }
             }
-            for (int k = 0; k < bins; k++) min[k] = Math.min(min[k], count[k] > 0 ? sum[k] / count[k] : 0);
+            for (int k = 0; k < bins; k++) out[f][k] = count[k] > 0 ? sum[k] / count[k] : 0;
         }
-        return profile = min;
+        return profiles = out;
+    }
+
+    private static double[][] profiles;
+
+    /** Кадр клуба по его картинке (прямой и отражённый — один кадр). */
+    private static int frameOf(FxAtlas.Sprite sprite) {
+        for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
+            if (FxAtlas.puff6(f, false).equals(sprite) || FxAtlas.puff6(f, true).equals(sprite)) return f;
+        }
+        return FxAtlas.PUFF6_FRAMES - 1;
     }
 
     private static BufferedImage image(String path) throws IOException {
@@ -111,18 +122,19 @@ class PlumeContinuityTest {
 
     /** Квадраты кадра: клубы (центр от глаза, полуразмеры, непрозрачность) и ленты (концы, полуширины, непрозрачности). */
     private static final class Record implements SmokePuffs.Out {
-        final List<double[]> puffs = new ArrayList<>(), ribbons = new ArrayList<>();
+        /** Клубы лицом к камере, лежащие на горизонтали (слой пыли у земли, {@code FxQuads.flat}) и ленты. */
+        final List<double[]> puffs = new ArrayList<>(), flats = new ArrayList<>(), ribbons = new ArrayList<>();
 
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
                           float g, float b, float a) {
-            puffs.add(new double[]{dx, dy, dz, halfA, halfB, Math.min(1, a)});
+            puffs.add(new double[]{dx, dy, dz, halfA, halfB, Math.min(1, a), frameOf(sprite)});
         }
 
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix,
                               float shade, float r, float g, float b, float a) {
-            puffs.add(new double[]{dx, dy, dz, halfA, halfB, Math.min(1, a)});
+            flats.add(new double[]{dx, dy, dz, halfA, halfB, Math.min(1, a), frameOf(sprite)});
         }
 
         @Override
@@ -169,8 +181,9 @@ class PlumeContinuityTest {
                                 double water, float dustR, float dustG, float dustB, double kelvin, double rise) {}
 
             @Override
-            public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double bx, double by, double bz, double shb,
-                             double svb, double sootB, double kelvin, double rise, double sigma0) {
+            public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double dustA, double bx, double by, double bz,
+                     double shb, double svb, double sootB, double dustB, float albedoR, float albedoG, float albedoB, double kelvin, double rise,
+                     double sigma0) {
                 double k = ua.zentix.incoming.client.fx.smoke.CloudModel.SOOT_K;
                 axis.add(new double[]{ax, ay, az, Math.sqrt(sha * sva), bx, by, bz, Math.sqrt(shb * svb), k * sootA, k * sootB});
             }
@@ -202,7 +215,7 @@ class PlumeContinuityTest {
         Vec3 eye = view.camera();
         Vector3f fwd = view.forward(), left = view.left(), up = view.up();
         double edge = view.edge();
-        double[] prof = profile();
+        double[][] prof = profiles();
         // непрозрачность вдоль оси на экране: шаг — четверть пикселя или σ/8
         List<double[]> samples = new ArrayList<>();
         double total = 0;
@@ -222,7 +235,16 @@ class PlumeContinuityTest {
                 double qu = (q[0] * left.x + q[1] * left.y + q[2] * left.z) / qd, qv = (q[0] * up.x + q[1] * up.y + q[2] * up.z) / qd;
                 double r = Math.hypot((su - qu) / (q[3] / qd), (sv - qv) / (q[4] / qd));
                 int k = (int) (r / BIN);
-                if (k < prof.length) clear *= 1 - q[5] * prof[k];
+                if (k < prof[0].length) clear *= 1 - q[5] * prof[(int) q[6]][k];
+            }
+            // лежащий клуб — квадрат на горизонтали: луч из глаза в точку оси пересекает его плоскость (если пересекает до неё)
+            for (double[] q : out.flats) {
+                if (Math.abs(py) < 1e-9) continue;
+                double t = q[1] / py;
+                if (t <= 0 || t >= 1) continue;
+                double r = Math.hypot((px * t - q[0]) / q[3], (pz * t - q[2]) / q[4]);
+                int k = (int) (r / BIN);
+                if (k < prof[0].length) clear *= 1 - q[5] * prof[(int) q[6]][k];
             }
             for (double[] rb : out.ribbons) clear *= 1 - ribbonAt(rb, su, sv, fwd, left, up);
             // закон у оси — 1 − e^(−τ), τ = e/(√(2π)σ), с дымкой; только где трубку рисуют одни клубы (шире порога лент)
@@ -286,7 +308,7 @@ class PlumeContinuityTest {
         for (double[] a : axis) {
             FarFlightView.Tube ta = end(view, a[0] - eye.x, a[1] - eye.y, a[2] - eye.z, a[3], e);
             FarFlightView.Tube tb = end(view, a[4] - eye.x, a[5] - eye.y, a[6] - eye.z, a[7], e);
-            int drawn = FarFlightView.line(view, out, ta, tb, 0.5f, 0.5f, 0.5f, 0.6f, 1, 0.5, seed++, joint);
+            int drawn = FarFlightView.line(view, out, ta, tb, 0.5f, 0.5f, 0.5f, 0.6f, 0.6f, 0.6f, 1, 0.5, seed++, joint);
             if (drawn != FarFlightView.RIBBON) joint[0] = Float.NaN;
         }
         return along(name, axis, view, out);
@@ -349,6 +371,77 @@ class PlumeContinuityTest {
             ok &= continuous("дом, 4,9 м/с, D, " + range + " м", HOUSE, 4.9, Stability.D, range);
         }
         assertTrue(ok, "шлейф с разрывами — подробности выше");
+    }
+
+    /**
+     * Тот же класс — ножка облака взрыва (пыль от земли до низа облака, {@code CloudModel.blobs}): ракета, нейтральный воздух
+     * с ветром 3 м/с, через 10, 20 и 40 с, из 300 м, 1 и 3 км.
+     */
+    @Test
+    void blastStemIsOneColumnFromAnyDistance() throws IOException {
+        CloudModel.Air air = new CloudModel.Air(Stability.brunt(Stability.D), 3, 0, Stability.alpha(Stability.D), (int) Stability.D, 0.5);
+        CloudModel model = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), air);
+        float albedo = 0.8f;
+        double k = SmokeGrid.dustK(albedo, albedo, albedo);
+        boolean ok = true;
+        for (double t : new double[]{10, 20, 40}) {
+            List<double[]> axis = new ArrayList<>();
+            model.blobs(t, new CloudModel.Blobs() {
+                @Override
+                public void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, double kelvin, double rise) {}
+
+                @Override
+                public void tube(double ax, double ay, double az, double sa, double dustA, double bx, double by, double bz, double sb, double dustB,
+                                 double kelvin, double rise) {
+                    axis.add(new double[]{ax, ay, az, sa, bx, by, bz, sb, k * dustA, k * dustB});
+                }
+            });
+            assertTrue(axis.size() > 1, "ножка через " + t + " с");
+            double[] top = axis.get(axis.size() - 1);
+            for (double range : new double[]{300, 1000, 3000}) {
+                FarView view = view(new Vec3(0, 2, -range), at(axis, 0.5 * pathLength(axis)));
+                Record out = new Record();
+                SmokeGrid.Sink sink = SmokePuffs.sink(view, out, GLOWING, 100);
+                model.blobs(t, new CloudModel.Blobs() {
+                    @Override
+                    // облако и слой пыли у земли — свои клубы, у них своё вещество: здесь — только сплошность самой ножки
+                    public void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, double kelvin,
+                                     double rise) {}
+
+                    @Override
+                    public void tube(double ax, double ay, double az, double sa, double dustA, double bx, double by, double bz, double sb,
+                                     double dustB, double kelvin, double rise) {
+                        sink.tube(ax, ay, az, sa, sa, 0, dustA, bx, by, bz, sb, sb, 0, dustB, albedo, albedo, albedo, kelvin, rise, sa);
+                    }
+                });
+                ok &= along("ножка через " + t + " с (верх " + Math.round(top[5]) + " м), " + range + " м", axis, view, out);
+            }
+        }
+        assertTrue(ok, "ножка с разрывами — подробности выше");
+    }
+
+    /** Облако взрыва рисует свой огонь телом: горячее проступает дымом долей остывания. */
+    private static final SmokeGrid.Source GLOWING = new SmokeGrid.Source() {
+        @Override
+        public boolean emit(double seconds, SmokeGrid.Sink out) {
+            return true;
+        }
+
+        @Override
+        public boolean drawsGlow() {
+            return true;
+        }
+
+        @Override
+        public long seed() {
+            return 4321;
+        }
+    };
+
+    private static double pathLength(List<double[]> axis) {
+        double total = 0;
+        for (double[] s : axis) total += Math.sqrt(sq(s[4] - s[0]) + sq(s[5] - s[1]) + sq(s[6] - s[2]));
+        return total;
     }
 
     /** Тот же класс — след снаряда: трубка от тонкой (τ у оси ~0,05) до густой (~10) с любой дальности. */

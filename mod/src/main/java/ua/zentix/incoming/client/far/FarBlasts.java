@@ -246,8 +246,21 @@ public final class FarBlasts {
             double t = seconds - bornSeconds;
             if (t >= Math.max(model.life, water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
-                model.blobs(t, (bx, by, bz, sh, sv, soot, dustKg, water, kelvin, rise) -> out.blob(x + bx, y + by, z + bz, sh, sv, soot, dustKg,
-                        water, dustR, dustG, dustB, kelvin, rise));
+                model.blobs(t, new CloudModel.Blobs() {
+                    @Override
+                    public void blob(double bx, double by, double bz, double sh, double sv, double soot, double dustKg, double water, double kelvin,
+                                     double rise) {
+                        out.blob(x + bx, y + by, z + bz, sh, sv, soot, dustKg, water, dustR, dustG, dustB, kelvin, rise);
+                    }
+
+                    // ножка — трубкой, как шлейф пожара (вблизи и вдали без бус)
+                    @Override
+                    public void tube(double ax, double ay, double az, double sa, double massA, double bx, double by, double bz, double sb,
+                                     double massB, double kelvin, double rise) {
+                        out.tube(x + ax, y + ay, z + az, sa, sa, 0, massA, x + bx, y + by, z + bz, sb, sb, 0, massB, dustR, dustG, dustB, kelvin, rise,
+                                sa);
+                    }
+                });
             }
             if (t < model.condensationSeconds()) condensation(t, out);
             if (water != null) water.blobs(t, out, x, y, z);

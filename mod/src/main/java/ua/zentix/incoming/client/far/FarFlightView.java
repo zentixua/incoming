@@ -874,8 +874,9 @@ public final class FarFlightView {
         JOINT[1] = NY[a];
         JOINT[2] = NZ[a];
         double albedo = 0.5 * (EO[a] + EO[b]);
-        int drawn = line(view, out, TA, TB, (ER[a] + ER[b]) * 0.5f, (EG[a] + EG[b]) * 0.5f, (EB[a] + EB[b]) * 0.5f,
-                SmokePuffs.tubeColour(albedo), SmokePuffs.tubeShade(albedo), style.sigma0(), ESEED[a], JOINT);
+        float c = SmokePuffs.tubeColour(albedo);
+        int drawn = line(view, out, TA, TB, (ER[a] + ER[b]) * 0.5f, (EG[a] + EG[b]) * 0.5f, (EB[a] + EB[b]) * 0.5f, c, c, c,
+                SmokePuffs.tubeShade(albedo), style.sigma0(), ESEED[a], JOINT);
         if (drawn == CLUBS) ACROSS[b] = 0;
         if (drawn != RIBBON) return;
         NX[b] = JOINT[0];
@@ -912,12 +913,12 @@ public final class FarFlightView {
 
     /**
      * Отрезок трубки дыма между концами a и b — одна для следов снарядов и шлейфов пожаров: крупная на экране — клубами
-     * ({@link SmokePuffs#tube}: цвет толстого слоя c, степень тени shade), узкая — лентой цвета (r, g, b), между — плавно
+     * ({@link SmokePuffs#tube}: цвет толстого слоя (cr, cg, cb), степень тени shade), узкая — лентой цвета (r, g, b), между — плавно
      * ({@link #puffShare}, ширина — у ближней к глазу точки отрезка); клубы — в общий бюджет кадра ({@link #CLUB_BUDGET}).
      * joint — поперёк ленты у a (NaN — нет, начало ленты), на выходе — у b.
      */
-    static int line(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float c, double shade, double sigma0, long seed,
-                    float[] joint) {
+    static int line(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float cr, float cg, float cb, double shade,
+                    double sigma0, long seed, float[] joint) {
         double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z;
         double gap = FarSprites.distance(a.x, a.y, a.z, tx, ty, tz), scale = puffScale;
         double puffs = puffShare(Math.max(a.width, b.width) / scale, gap, view.pixel());
@@ -929,8 +930,8 @@ public final class FarFlightView {
         double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 9 * Math.max(a.sigma, b.sigma);
         double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
         if (puffs > 0 && (md <= reach || inFrame(view, mx, my, mz, md, reach))) {
-            clubs += SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width / scale, b.x, b.y, b.z, b.sigma, b.e, b.width / scale, c, shade,
-                    sigma0, seed, puffs >= 1);
+            clubs += SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width / scale, b.x, b.y, b.z, b.sigma, b.e, b.width / scale, cr, cg,
+                    cb, shade, sigma0, seed, puffs >= 1);
         }
         if (puffs >= 1) return CLUBS;
         return out.ribbon(a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half, b.alpha * (float) keepB, b.light, r, g, bl,
