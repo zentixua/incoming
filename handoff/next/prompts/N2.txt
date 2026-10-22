@@ -1,0 +1,9 @@
+Context: first read mod/run/incoming-sessions/context.md (project instructions, project memory); this task overrides it where they differ.
+
+What this is: Incoming is an open-source (GPL-3.0) Minecraft 1.21.1 NeoForge mod; 1 block = 1 m. Its nuclear strike picture is a raymarched volume and stays so; this task adds one hybrid detail on top of it.
+
+Read the handoff: git fetch origin claude/project-thread-5vf43h && git worktree add /tmp/handoff-N2 origin/claude/project-thread-5vf43h, then read /tmp/handoff-N2/handoff/next/N-nuke-hybrid.md: the common part and section N2 are your task. Never merge the handoff branch. Work in a new worktree from a fresh origin/main under mod/run/wt-N2/.
+
+Task (N2, "The fireball surface"): as section N2 says. Only frames that this addition touches may move; the rest of the nuke must not change.
+
+Rules: CLAUDE.md and .claude/rules (nuclear.md, client.md, client-fx.md, client-sound.md, client-scenario.md, dh.md) first; first principles, numbers with sources, fix causes, no frame tuning, no mixins into vanilla or other mods; GPU only while the game of Artem is closed, one GPU job at a time via tools/laptop_job.sh. Picture/sound gate: frames and WAV beside current main from the scenarios the spec lists under Iris on this laptop go into the PR; merge only if no scene is worse; report measured GPU time against the 2 ms budget. One draft PR into main right away; docs/guide EN+RU if players notice. Done = CI gate «Итог» green + clean independent review of the diff (fresh subagent or /code-review high), then merge it yourself. No release, pack, server or public steps.
