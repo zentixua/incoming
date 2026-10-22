@@ -298,6 +298,24 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
     }
 
+    /**
+     * Свет и горячий газ очагов на мир кадра ({@code HeatPass}): горячий газ над каждым горящим очагом (столб по
+     * Хескестаду), свет — только у масла подстанций: огонь Minecraft светит на мир сам, светом блоков.
+     */
+    public static void heat(Vec3 eye, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
+        if (FIRES.isEmpty() && OIL_FIRES.isEmpty()) return;
+        BlackBody.light(FirePlume.FLAME_K, BB);
+        for (FireSmoke fire : all()) {
+            if (!Double.isNaN(fire.end) || fire.gone) continue;
+            double dx = fire.x - eye.x, dy = fire.y - eye.y, dz = fire.z - eye.z;
+            f.plume(dx, dy, dz, fire.plume, 1);
+            if (fire.fuel == OIL) {
+                double r = 0.5 * fire.plume.flameHeight();
+                f.light(dx, dy + r, dz, r, BB[0], BB[1], BB[2], air, r);
+            }
+        }
+    }
+
     /** Для строки {@code SCENARIO}: очагов, блоков огня в них, самый большой — подъём и докуда виден шлейф. */
     public static String describe() {
         double all = 0;

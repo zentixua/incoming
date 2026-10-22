@@ -1,0 +1,182 @@
+{
+    "vertex": "incoming:fx_depth",
+    "fragment": "incoming:fx_heat",
+    "samplers": [
+        {
+            "name": "Sampler0"
+        },
+        {
+            "name": "Sampler1"
+        }
+    ],
+    "uniforms": [
+        {
+            "name": "InvViewProj",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                1.0,
+                0,
+                0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                0,
+                0,
+                1.0
+            ]
+        },
+        {
+            "name": "PallForward",
+            "type": "float",
+            "count": 3,
+            "values": [
+                0.0,
+                0.0,
+                -1.0
+            ]
+        },
+        {
+            "name": "PallOpenSky",
+            "type": "float",
+            "count": 3,
+            "values": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "PallFaceShade",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                0.5,
+                0.8,
+                0.6
+            ]
+        },
+        {
+            "name": "Haze",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                1000000000.0,
+                2000000000.0,
+                0.0
+            ]
+        },
+        {
+            "name": "HeatLights",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "HeatLightColor",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "HeatHot",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "HeatShape",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "HeatFrame",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.001,
+                0.0,
+                0.0
+            ]
+        }
+    ]
+}

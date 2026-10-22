@@ -3,6 +3,7 @@
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:smoke.glsl>
+#moj_import <incoming:scene.glsl>
 
 // Пелена — на кадр (client/fx/layer/PallPass): смешивание ONE, SRC_ALPHA — свет пелены плюс мир за ней, ослабленный
 // и в тени пелены и грибов. Кадр пелены мельче полного: из четырёх ближних его пикселей — с весом по сходству расстояния
@@ -136,47 +137,6 @@ vec3 ballLight(vec3 p, vec3 n, vec4 over) {
         sum += PallBallLight[i].rgb * (mushBallFalloff(d2, b.w * b.w) * face);
     }
     return sum;
-}
-
-// Место мира за пикселем at (от глаза): Sampler1 — расстояние вдоль взгляда
-vec3 sceneAt(ivec2 at, ivec2 size) {
-    ivec2 c = clamp(at, ivec2(0), size - 1);
-    vec2 ndc = (vec2(c) + 0.5) / vec2(size) * 2.0 - 1.0;
-    vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
-    vec3 dir = normalize(farPoint.xyz / farPoint.w);
-    return dir * (pallScene(texelFetch(Sampler1, c, 0).r) / max(dot(dir, PallForward), 1e-3));
-}
-
-// Нормаль поверхности мира в p (пиксель at) по соседним пикселям, к глазу: на каждой оси экрана — сосед, что ближе по
-// месту (на краю предмета другой — фон за ним или другой предмет); у края экрана — внутренний (внешнего нет: sceneAt
-// взял бы сам пиксель, разность 0 — и нормаль 0)
-vec3 sceneNormal(ivec2 at, ivec2 size, vec3 p) {
-    vec3 r = sceneAt(at + ivec2(1, 0), size) - p, l = p - sceneAt(at - ivec2(1, 0), size);
-    vec3 u = sceneAt(at + ivec2(0, 1), size) - p, d = p - sceneAt(at - ivec2(0, 1), size);
-    if (at.x + 1 >= size.x) r = l;
-    if (at.x <= 0) l = r;
-    if (at.y + 1 >= size.y) u = d;
-    if (at.y <= 0) d = u;
-    vec3 n = cross(mix(r, l, step(dot(l, l), dot(r, r))), mix(u, d, step(dot(d, d), dot(u, u))));
-    n *= inversesqrt(max(dot(n, n), 1e-20));
-    return mix(n, -n, step(0.0, dot(n, p)));
-}
-
-// Затенение грани Minecraft по оси, ближайшей к нормали n (ClientLevel.getShade): оно уже в пикселе мира, а свет шара по
-// грани — по косинусу к ней; в цвете блока его быть не должно
-float faceShade(vec3 n) {
-    vec3 a = abs(n);
-    if (a.y >= a.x && a.y >= a.z) return n.y > 0.0 ? PallFaceShade.x : PallFaceShade.y;
-    return a.z >= a.x ? PallFaceShade.z : PallFaceShade.w;
-}
-
-// Один канал пикселя мира под светом шаров (MushroomField.relit): мир на экране world, доля его прежнего света на экране
-// kept (тень), свет открытого неба на белом блоке на экране open (с затенением грани), свет шаров на белой стене added
-// (линейный). Цвет блока — пиксель, делённый на свет открытого неба (в пещере и доме свет Minecraft слабее — и свет шара на нём меньше: туда он и
-// не доходит), не белее белого. Линейный итог
-float relit(float world, float kept, float open, float added) {
-    float lin = pallLinear(world);
-    return lin * pallLinear(kept) + min(lin / max(pallLinear(open), 1e-4), 1.0) * added;
 }
 
 // Пламя горящего города на поверхности в точке p (от глаза), dist — до неё, pixel — ширина пикселя там (блоки): где
@@ -362,13 +322,13 @@ void main() {
         float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpenHere(p - 0.5 * dir));
         vec3 added = vec3(0.0), n = vec3(0.0, 1.0, 0.0);
         if (balls) {
-            n = sceneNormal(full, fullSize, p);
+            n = sceneNormal(Sampler1, InvViewProj, PallForward, full, fullSize, p);
             added = ballLight(p, n, over) * seen;
         }
         if (dot(added, LUMA) > 1e-6) {
             // мир ярче: пиксель целиком — пелена и мир за ней в свете шаров (альфа 0 — смешивание кадр не берёт); ярче
             // белого — к белому (CROSS, как свет вещества в fx_pall), не ярче 1 с тем же оттенком
-            vec3 world = texelFetch(Sampler9, full, 0).rgb, open = PallOpenSky * faceShade(n);
+            vec3 world = texelFetch(Sampler9, full, 0).rgb, open = PallOpenSky * faceShade(PallFaceShade, n);
             vec3 lit = vec3(relit(world.r, kept, open.r, added.r), relit(world.g, kept, open.g, added.g),
                     relit(world.b, kept, open.b, added.b));
             lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));

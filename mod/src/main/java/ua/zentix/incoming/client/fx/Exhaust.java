@@ -309,6 +309,17 @@ public final class Exhaust {
         }
     }
 
+    /** Пламя горящих обломков светит на мир кадра ({@code HeatPass}): тот же шар пламени, что у {@link #lights}. */
+    public static void heat(Vec3 eye, double seconds, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
+        if (BURNING.isEmpty()) return;
+        double r = 0.5 * DEBRIS_FLAME.flameHeight();
+        BlackBody.light(FirePlume.FLAME_K, BB);
+        for (Burning b : BURNING.values()) {
+            if (seconds - b.fed > 2 * PUFF_S + 0.1) continue;
+            f.light(b.at.x - eye.x, b.at.y + r - eye.y, b.at.z - eye.z, r, BB[0], BB[1], BB[2], air, Math.max(r, 1));
+        }
+    }
+
     /** Выброс дыма горящего обломка — раз в столько секунд пути (клуб у обломка — ~0,5 м, на скорости обломка ~10 м/с — через ~σ). */
     static final double PUFF_S = 0.1;
     /** Пламя обломка: грань дерева, очаг ~1 м² ({@link FirePlume}). */

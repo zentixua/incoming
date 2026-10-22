@@ -649,6 +649,36 @@ public final class FarBlasts {
     }
 
     /**
+     * Свет и горячий газ облаков модели на мир кадра ({@code HeatPass}): огненный шар — ламбертов шар чёрного тела своей
+     * температуры (как у {@link #fireballs}), пламя лужи — шар чёрного тела пламени в полвысоты пламени по Хескестаду,
+     * долей лужи, что ещё горит; газ — термик облака (середина, радиус, температура и подъём модели) и столб над лужей.
+     */
+    public static void heat(Vec3 eye, float partial, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
+        ClientLevel level = Minecraft.getInstance().level;
+        double now = clock + partial;
+        for (Event e : EVENTS) {
+            if (e.model == null || e.level != level || !e.alive) continue;
+            double t = Math.max(0, now - e.born) / 20;
+            double bx = e.x - eye.x, by = e.y - eye.y, bz = e.z - eye.z;
+            double r = e.model.ballRadius(t);
+            if (r > 0) {
+                e.model.ballLight(t, BB);
+                double h = e.model.ballHeight(t);
+                f.light(bx, by + h, bz, r, BB[0], BB[1], BB[2], air, h);
+            }
+            double share = e.model.poolShare(t);
+            if (share > 0 && e.pool != null) {
+                double pr = 0.5 * e.model.poolFlame();
+                BlackBody.light(ua.zentix.incoming.client.fx.smoke.FirePlume.FLAME_K, BB);
+                f.light(bx, by + pr, bz, pr, BB[0] * share, BB[1] * share, BB[2] * share, air, pr);
+                f.plume(bx, by, bz, e.pool, share);
+            }
+            double cr = e.model.radius(t), ch = e.model.height(t);
+            if (t < e.model.life) f.hot(bx, by + Math.max(0, ch - cr), bz, 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
+        }
+    }
+
+    /**
      * Огненный шар: тело — кадр анимации шара (от вспышки до сажи) поверх того, что за ним, мельче нескольких пикселей —
      * круг своего света ({@link FarSprites#shaped}); свет вокруг — бликом и вуалью на любой дальности. Тело — доля
      * {@code w} (у облака модели остальное — объём шара в сетке дыма).
