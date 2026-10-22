@@ -130,8 +130,8 @@ public final class CraterFalls {
     }
 
     /**
-     * Раз в тик: закрыть отжившие районы и забыть ушедшие падающие блоки — приземлились, выгружены с чанком или в мир
-     * так и не вошли (вход отменил обработчик другого мода). Без районов счёт не нужен.
+     * Раз в тик: закрыть отжившие районы и забыть ушедшие падающие блоки — приземлились, выгружены с чанком, висят
+     * в чанке без тика сущностей или в мир так и не вошли (вход отменил обработчик другого мода). Без районов счёт не нужен.
      */
     private void prune(ServerLevel level) {
         long now = level.getGameTime();
@@ -143,7 +143,10 @@ public final class CraterFalls {
             return;
         }
         live.removeIf(l -> {
-            boolean gone = l.entity.isRemoved() || level.getEntity(l.entity.getId()) != l.entity;
+            // висящий в чанке, который больше не тикает сущностями (край загруженного мира), сервер не несёт: место в
+            // пределе — тем, что падают
+            boolean gone = l.entity.isRemoved() || level.getEntity(l.entity.getId()) != l.entity
+                    || !level.isPositionEntityTicking(l.entity.blockPosition());
             if (gone) for (Zone z : l.zones) z.live--;
             return gone;
         });
