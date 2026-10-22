@@ -118,13 +118,14 @@ The land around the burst is scorched. The light does its part within the flash 
 the blast wave comes: it burns grass, flowers and crops in patches, leaves black char where it was strongest, melts
 snow, turns the grass, leaves and water around yellow-brown and grey, and starts fires. The wave then strips the turf
 near the centre down to bare dirt and blows out about half of the fires where it is strong. The edge is ragged, not a
-ring. Away from players the scorch shows together with the ruins. The scorched colours stay for good, also in Distant
-Horizons terrain.
+ring. Away from players the scorch shows together with the ruins. The scorched colours stay for good, also in the
+distant terrain of Distant Horizons or Voxy.
 
-After an ICBM strike, Distant Horizons terrain shows the ruins of the hardest-hit area as the wave reaches them: the
-server prepares them while the missile flies. At 15 kt the far edge of that area may show later. After a cruise
-missile, a bomb or `/incoming nuke now` the distant ruins show some time after the wave. Broken windows and fallen trees
-farther out show in the distant terrain once you come close.
+After an ICBM strike, the distant terrain of Distant Horizons or Voxy shows the ruins of the hardest-hit area as the
+wave reaches them: the server prepares them while the missile flies. At 15 kt the far edge of that area may show later.
+After a cruise missile, a bomb or `/incoming nuke now` the distant ruins show some time after the wave. Broken windows
+and fallen trees farther out show in the distant terrain once you come close. With Voxy, a player who was not in the
+world during the strike sees the distant ruins once they come close.
 
 The flash also marks what it lights. Wood, wool and hay that face the fireball char black in patches, and brick,
 concrete, stone bricks and sandstone darken with soot. A player, a mob, an armor stand or a boat standing in the light

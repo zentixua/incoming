@@ -178,7 +178,7 @@ CI гоняет проверки один раз на коммит: push в `mai
 - `nuclear.md` (ядерка без руин: модель, подрыв, радиация, клиент), `nuclear-world.md` (руины, зона за волной, отдача
   чанков игроку), `grid.md` (блэкаут, лампы, свет чанка).
 - `server-chunks.md` (чанки, тикеты, выход из мира, сущности, «где земля»), `sable.md` (Sable), `dh.md` (Distant
-  Horizons и LOD Server Support: рельеф карты, лучей и звука через их API, LOD вне мира, утечка миров), `voxy.md` (Voxy через Roxy: глубина, отражение).
+  Horizons и LOD Server Support: рельеф карты, лучей и звука через их API, LOD вне мира, утечка миров), `voxy.md` (Voxy через Roxy: глубина, изменения мира вдали, LSS).
 - `client.md` (устройство клиента, карты высот, Iris и `AFTER_LEVEL`), `client-fx.md` (частицы, слой эффектов,
   шлейф, отсечение альфы), `client-models.md` (модели OBJ), `client-sound.md` (OpenAL, громкость, петли),
   `replay.md` (Flashback).

@@ -46,14 +46,18 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * Чанк мира 1.17 с догенерацией под нулём ({@link DiskStatus.State#FINAL}), не дождавшийся плана, — тоже в мир квадратом:
  * зона за волной его не грузит (без генерации он не загрузится), и его LOD иначе остался бы целым городом.
  * <p>
- * Только при DH ({@link DhUpdates#room}) и только чанки не дальше {@link #FAR_CHUNKS} от игрока: дальше DH по умолчанию
+ * Только при DH или игроках с Voxy ({@link DhUpdates#room}, {@code compat/VoxyLods}) и только чанки не дальше
+ * {@link #FAR_CHUNKS} от игрока: дальше DH по умолчанию
  * не рассылает обновления, а чтения с диска делят поток ввода-вывода с загрузкой мира игрокам — их не больше
  * {@link #READS} сразу и {@link #PER_TICK} новых за тик; запросов за тик просматривается не больше {@link #VISITS}
  * (у тяжёлой зоны их десятки тысяч, и почти все ждут планов).
  */
 public final class FarLods {
-    /** Докуда от игрока (чанки, по большей оси): дальность обновлений DH игрокам по умолчанию ({@code realTimeUpdates.playerDistance}). */
-    static final int FAR_CHUNKS = 256;
+    /**
+     * Докуда от игрока (чанки, по большей оси): дальность обновлений DH игрокам по умолчанию ({@code
+     * realTimeUpdates.playerDistance}); та же — у LOD Voxy игроков ({@code compat/VoxyLods}).
+     */
+    public static final int FAR_CHUNKS = 256;
     /** Чтений с диска в работе сразу и новых за тик. */
     static final int READS = 16, PER_TICK = 8;
     /** Сколько тиков чанк за волной ждёт готового плана (строится в фоне); дальше — без руин вдали (свет, если просили, и след подрыва уходят). */
@@ -224,6 +228,24 @@ public final class FarLods {
      */
     public static void request(ServerLevel level, long chunk, boolean ruins) {
         get(level).request(level, chunk, ruins ? RUINS : LIGHTS);
+    }
+
+    /**
+     * Чанк не в мире, чью копию у игрока с Voxy переписали целым чанком с диска (LOD Server Support, {@code
+     * compat/VoxyLods.stale}): копия заново, если она отличается от диска — руины по плану, след подрыва, лампы
+     * квартала по сети сейчас (копия без изменений против диска с ними же не уходит). Загруженный чанк — отметкой: его
+     * LOD — как он есть в мире.
+     */
+    public static void refresh(ServerLevel level, long chunk) {
+        if (inWorld(level, chunk)) {
+            DhUpdates.mark(level, new ChunkPos(chunk), level.getGameTime());
+            return;
+        }
+        FarLods f = get(level);
+        long now = level.getGameTime();
+        if (NuclearWorld.get(level).prep().arrivedPlan(level, NuclearEvents.get(level), chunk, now) != null) f.request(level, chunk, RUINS);
+        else if (f.ringOf(chunk, now) != null) f.request(level, chunk, SCORCH);
+        f.request(level, chunk, LIGHTS);
     }
 
     private void request(ServerLevel level, long chunk, byte kind) {
