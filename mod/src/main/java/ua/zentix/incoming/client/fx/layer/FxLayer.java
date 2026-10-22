@@ -184,12 +184,14 @@ public final class FxLayer {
         if (level == null || s == null || atlas < 0) return;
         long start = System.nanoTime(), cpu = cpuNanos(), pauses = pauses();
         FarView sky = FarRenderer.view(e, mc, level);
-        // свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (HeatPass): воздух — дымка кадра. Огонь
+        // свет вспышки и огня обычного оружия на мир, дрожание воздуха над огнём и шаром и фронт ударной волны ядерки
+        // (HeatPass, NukeHeat): воздух — дымка кадра. Огонь
         // у глаза — до сбора кадра: по нему привыкает глаз всего кадра (шары, лужи, пожары, обломки — этого кадра; факелы
         // снарядов — прошлого: их места считает сбор, а вспыхнуть разом, как шар, они не могут)
         HeatPass.Frame heat = HeatPass.begin(level, sky.exposure(), sky.pixel());
         double air = Sight.KOSCHMIEDER / Sight.range(level.getRainLevel(sky.partial()), level.getThunderLevel(sky.partial()));
         FarBlasts.heat(sky.camera(), sky.partial(), heat, air);
+        ua.zentix.incoming.client.nuclear.NukeHeat.heat(sky.camera(), sky.partial(), heat);
         ua.zentix.incoming.client.fx.FireSmoke.heat(sky.camera(), heat, air);
         ua.zentix.incoming.client.fx.Exhaust.heat(sky.camera(), SmokeGrid.seconds(sky.partial()), heat, air);
         heat.eye(FarRenderer.flamesAtEye());

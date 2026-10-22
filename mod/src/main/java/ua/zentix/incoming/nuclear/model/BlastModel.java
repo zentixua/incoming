@@ -89,6 +89,15 @@ public final class BlastModel {
         return 2.5 * overpressureKpa * overpressureKpa / (7 * P0 + overpressureKpa);
     }
 
+    /**
+     * Сжатие воздуха сразу за фронтом по Ренкину–Гюгонио (γ = 1,4), ρ/ρ₀ = (7·P0 + 6P)/(7·P0 + P): 1 psi — 1,05, 5 psi —
+     * 1,23, 10 psi — 1,44; у сильной волны — к 6.
+     */
+    public static double densityRatio(double overpressureKpa) {
+        double p = Math.max(0, overpressureKpa);
+        return (7 * P0 + 6 * p) / (7 * P0 + p);
+    }
+
     /** Скорость фронта по Ренкину–Гюгонио, м/с: U = 343·√(1 + 6P/(7·P0)). */
     public static double frontSpeed(double overpressureKpa) {
         return SOUND_SPEED * Math.sqrt(1 + 6 * Math.max(0, overpressureKpa) / (7 * P0));
