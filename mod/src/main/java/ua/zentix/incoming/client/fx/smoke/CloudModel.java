@@ -245,9 +245,17 @@ public final class CloudModel {
      * воронка — только если заряд её роет ({@link #CRATER_HOB}), пыль волны — по давлению у земли ({@link GroundDust}).
      */
     public CloudModel(BlastSource source, Air air, boolean onWater, double hobM) {
+        this(source, air, onWater, hobM, 1);
+    }
+
+    /**
+     * То же, где доля {@code loose} земли вокруг — голый рыхлый грунт, остальное — под травой или твёрдое
+     * ({@link GroundDust}).
+     */
+    public CloudModel(BlastSource source, Air air, boolean onWater, double hobM, double loose) {
         // тот же закон воронки, что роет сервер (грунт — сухой: пакет несёт только «вода или нет»)
         this(source, air, onWater || !digs(source.chargeKg(), hobM) ? 0
-                : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater, hobM);
+                : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater, hobM, loose);
     }
 
     /** Роет ли заряд {@code tntKg} кг на высоте {@code hobM} над землёй воронку ({@link #CRATER_HOB}). */
@@ -265,10 +273,10 @@ public final class CloudModel {
      * размер облака — не меньше {@code size} м (пыль, поднятая не жаром, — облако такого размера у земли).
      */
     public CloudModel(BlastSource source, Air air, double dustKg, double size) {
-        this(source, air, dustKg, size, false, 0);
+        this(source, air, dustKg, size, false, 0, 1);
     }
 
-    private CloudModel(BlastSource source, Air air, double dustKg, double size, boolean onWater, double hobM) {
+    private CloudModel(BlastSource source, Air air, double dustKg, double size, boolean onWater, double hobM, double loose) {
         this.source = source;
         this.air = air;
         this.hob = Math.max(0, hobM);
@@ -303,7 +311,7 @@ public final class CloudModel {
         poolSeconds = poolKg > 0 && burn > 0 ? poolKg / burn : 0;
         poolWatts = poolSeconds > 0 ? burn * source.fuel().heatJPerKg : 0;
         // пыль волны: над водой грунта нет (брызги — WaterBlast)
-        ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, air);
+        ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, loose, air);
         life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, ground.life));
     }
 
@@ -312,7 +320,12 @@ public final class CloudModel {
      * ({@link BuriedBlast#craterVolume}; грунта пакет не несёт — сухой, как у наземного), доля {@link #DUST_LOFTED} в воздухе.
      */
     public static CloudModel buried(BlastSource source, Air air, BuriedBlast law, boolean onWater) {
-        return new CloudModel(source, air, onWater ? 0 : law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater, 0);
+        return buried(source, air, law, onWater, 1);
+    }
+
+    /** То же над землёй, где доля {@code loose} — голый рыхлый грунт ({@link GroundDust}). */
+    public static CloudModel buried(BlastSource source, Air air, BuriedBlast law, boolean onWater, double loose) {
+        return new CloudModel(source, air, onWater ? 0 : law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater, 0, loose);
     }
 
     /**

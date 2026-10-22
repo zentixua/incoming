@@ -13,6 +13,9 @@ import ua.zentix.incoming.nuclear.model.MushroomModel;
  * {@link CloudModel#equivalentKt}): грунт уходит в воздух с прихода фронта ({@link HobBlast#arrivalSeconds}) долей
  * {@link DustModel#lifted} за положительную фазу на месте. До фронта пыли нет, у разрыва высоко над землёй (давление у
  * земли ниже порога срыва) — нет совсем.</li>
+ * <li><b>Поверхность.</b> Голый рыхлый грунт (земля, песок, гравий, снег) срывается с u* в 0,34 м/с, трава и твёрдое —
+ * от 3 м/с (Gaj &amp; Small, §2.2): на лугу пыль встаёт только у воронки, на пашне и в степи — ковром на десятки метров.
+ * Доля голого — по верхним блокам вокруг удара ({@code FarBlasts.looseShare}).</li>
  * <li><b>Под шаром.</b> Пыль, сорванная под огненным шаром продуктов (он касается земли), — в его горячем газе и
  * поднимается с облаком, а не стоит у земли (как у ядерки: в шаре на земле пыли волны нет, {@code BlastWall.underBall}):
  * её отдаёт {@link #underBall}.</li>
@@ -70,15 +73,25 @@ public final class GroundDust {
      * радиус огненного шара (касается ли он земли).
      */
     GroundDust(double tntKg, double hobM, double ballM, CloudModel.Air air) {
+        this(tntKg, hobM, ballM, 1, air);
+    }
+
+    /**
+     * То же, где доля {@code loose} земли вокруг — голый рыхлый грунт ({@code DustModel.Surface.FIELD}), остальное — под
+     * травой или твёрдое ({@code Surface.COVERED}): срыв по закону над каждой, масса — по долям.
+     */
+    GroundDust(double tntKg, double hobM, double ballM, double loose, CloudModel.Air air) {
         this.air = air;
         this.yieldKt = CloudModel.equivalentKt(tntKg);
         this.hob = Math.max(0, hobM);
-        Rings k0 = rings(tntKg, hob, ballM);
+        Rings k0 = rings(tntKg, hob, ballM, DustModel.Surface.FIELD), k1 = rings(tntKg, hob, ballM, DustModel.Surface.COVERED);
+        double f = Math.max(0, Math.min(1, loose));
         r = k0.r;
         area = k0.area;
         arrival = k0.arrival;
         positive = k0.positive;
-        mass = k0.mass;
+        mass = new double[RINGS];
+        for (int i = 0; i < RINGS; i++) mass[i] = f * k0.mass[i] + (1 - f) * k1.mass[i];
         first = k0.first;
         stem = k0.stem;
         stemFrom = k0.stemFrom;
@@ -134,13 +147,16 @@ public final class GroundDust {
     private static final java.util.Map<String, Rings> CACHE = new java.util.LinkedHashMap<>(16, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(java.util.Map.Entry<String, Rings> e) {
-            return size() > 16;
+            return size() > 32;
         }
     };
 
-    /** Кольца счёта заряда {@code tntKg} на высоте {@code hob} с шаром {@code ballM} (из кэша; нет — считаются сейчас). */
-    private static Rings rings(double tntKg, double hob, double ballM) {
-        String key = tntKg + "/" + hob + "/" + ballM;
+    /**
+     * Кольца счёта заряда {@code tntKg} на высоте {@code hob} с шаром {@code ballM} над поверхностью {@code surface} (из кэша;
+     * нет — считаются сейчас).
+     */
+    private static Rings rings(double tntKg, double hob, double ballM, DustModel.Surface surface) {
+        String key = tntKg + "/" + hob + "/" + ballM + "/" + surface.threshold();
         synchronized (CACHE) {
             Rings k = CACHE.get(key);
             if (k != null) return k;
@@ -155,7 +171,7 @@ public final class GroundDust {
                 double r0 = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
                 r[i] = i == 0 ? 0.5 * r1 : Math.sqrt(r0 * r1);
                 area[i] = Math.PI * (r1 * r1 - r0 * r0);
-                DustModel.Column c = DustModel.chemical(r[i], hob, y, ballM);
+                DustModel.Column c = DustModel.chemical(r[i], hob, y, ballM, surface);
                 arrival[i] = HobBlast.arrivalSeconds(r[i], hob, y);
                 positive[i] = c.positive();
                 mass[i] = c.mass() * area[i];

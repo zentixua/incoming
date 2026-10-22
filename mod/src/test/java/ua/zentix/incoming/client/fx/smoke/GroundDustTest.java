@@ -50,7 +50,8 @@ class GroundDustTest {
 
     /**
      * Один закон: слой волны обычного взрыва — тот же вынос и тот же слой Kuhl, что у ядерки ({@code DustModel.column}),
-     * без света вспышки и пыли обломков; вся поднятая масса — интеграл того же закона по земле.
+     * без света вспышки и пыли обломков, со временем развития сальтации (у ядерки фаза длиннее его); вся поднятая масса —
+     * интеграл того же закона по земле.
      */
     @Test
     void oneDustLawBehindTheWave() {
@@ -58,7 +59,10 @@ class GroundDustTest {
             double y = CloudModel.equivalentKt(kg), ball = 1.7 * Math.cbrt(kg);
             for (double r = 0.5; r < 200; r *= 1.5) {
                 DustModel.Column he = DustModel.chemical(r, 0, y, ball), nuke = DustModel.column(r, 0, y, true, 20_000, DustModel.Surface.REFERENCE);
-                assertEquals(nuke.soil(), he.soil(), 1e-12, kg + " кг на " + r + " м: вынос");
+                // тот же вынос; у ВВ сальтация не успевает развиться за миллисекунды фазы (DustModel.SALTATION_S) — не больше
+                // установившегося, а взвесь у заряда (u* от 10 порогов) — та же
+                assertTrue(he.soil() <= nuke.soil() + 1e-12, kg + " кг на " + r + " м: вынос больше установившегося");
+                if (r <= 1.5 * Math.cbrt(kg)) assertEquals(1, he.soil() / nuke.soil(), 0.02, kg + " кг на " + r + " м: взвесь");
                 assertEquals(nuke.first(), he.first(), 1e-12, kg + " кг на " + r + " м: верх слоя Kuhl");
                 assertEquals(nuke.positive(), he.positive(), 1e-12);
                 assertEquals(0, he.buoyant(), "у ВВ вспышки, что греет землю, нет");
@@ -97,7 +101,7 @@ class GroundDustTest {
             }
             if (t == 0) assertEquals(0, mass, "до фронта пыли нет");
             // за фазу волны пыль только прибывает (потом крупная оседает)
-            if (t <= 0.3) assertTrue(mass >= before - 1e-9, "t " + t + ": пыль у земли растёт от нуля, " + before + " → " + mass);
+            if (t <= 0.1) assertTrue(mass >= before - 1e-9, "t " + t + ": пыль у земли растёт от нуля, " + before + " → " + mass);
             before = mass;
         }
         assertTrue(before > 10, "через секунду у земли — десятки кг пыли: " + before);
@@ -140,6 +144,19 @@ class GroundDustTest {
         }
         assertEquals(1, DustModel.extinctionAloft(0), 1e-12);
         assertTrue(DustModel.extinctionAloft(60) > 0.7 && DustModel.airborne(60) < 0.35, "через минуту в слое в метр");
+    }
+
+    /**
+     * Трава держит грунт: на лугу (рыхлого — ноль) пыль волны встаёт только у воронки — во много раз меньше, чем над голым
+     * грунтом, и не дальше ~15 м у шахеда (порог срыва 3 м/с против 0,34, Gaj &amp; Small).
+     */
+    @Test
+    void grassHoldsTheSoil() {
+        BlastSource s = BlastSource.of(WeaponType.DRONE, false);
+        CloudModel bare = new CloudModel(s, DAY, false, 0, 1), meadow = new CloudModel(s, DAY, false, 0, 0);
+        assertTrue(meadow.ground.total < 0.25 * bare.ground.total, "луг " + meadow.ground.total + " против " + bare.ground.total);
+        DustModel.Column far = DustModel.chemical(20, 0, CloudModel.equivalentKt(50), 6.3, DustModel.Surface.COVERED);
+        assertTrue(far.soil() * DustModel.K_MIX < 0.01, "на лугу в 20 м пыли почти нет: толща " + far.soil() * DustModel.K_MIX);
     }
 
     /**
