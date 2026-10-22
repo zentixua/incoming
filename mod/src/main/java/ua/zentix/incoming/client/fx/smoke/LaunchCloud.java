@@ -6,8 +6,8 @@ import ua.zentix.incoming.nuclear.model.DustModel;
 /**
  * Облако старта у пусковой: продукты двигателя, пока его струя бьёт в землю, и пыль, которую она поднимает, — одно тёплое
  * облако ({@link Thermal}, тот же закон, что у облака взрыва): всплывает, сносится ветром и расплывается, как любое
- * облако клиента (его рисуют запечённые клубы слоя эффектов, {@code far/SmokePuffs}; точки ленты шлейфа этих тиков —
- * его, лента их вещества не несёт). Без Minecraft: место земли, грунт и воздух даёт вызывающий.
+ * облако клиента (его рисуют запечённые клубы слоя эффектов, {@code far/SmokePuffs}; точки ленты шлейфа этих тиков
+ * несут только столб самой струи между соплом и землёй, {@link #column}). Без Minecraft: место земли, грунт и воздух даёт вызывающий.
  * <p>
  * <b>Когда продукты — облако, а не след.</b> Струя — струя, пока её несёт импульс: на длине Мортона L_M = M^¾/F^½
  * (M = ṁ·u/ρ — поток импульса, F = g·Q̇/(ρ·c_p·T) — поток плавучести; Morton 1959, Fischer и др. «Mixing in Inland and
@@ -34,6 +34,8 @@ public final class LaunchCloud implements SmokeGrid.Source {
     static final double DECAY = 5;
     /** Пыли на кг выхлопа, ударившего в рыхлый грунт, кг (⚠ оценка порядка). */
     public static final double DUST_PER_KG = 1;
+    /** Спад скорости на оси круглой струи: u/u₀ = B·d′/x, B = 5,8 (Pope 2000, табл. 5.1; Hussein и др. 1994). */
+    static final double JET_DECAY = 5.8;
 
     private final CloudModel.Air air;
     private final double groundY;
@@ -110,7 +112,7 @@ public final class LaunchCloud implements SmokeGrid.Source {
             water += matter[1];
         }
         dust += DUST_PER_KG * loose * motor.exhaust() * dt;
-        double d = 2 * motor.exitRadius() * Math.sqrt(motor.nozzles() * motor.exitDensity() / CloudModel.RHO);
+        double d = diameter(motor);
         double hot = motor.exitTemperature() - CloudModel.T_AIR;
         double dT = Math.max(1, hot * Math.min(1, DECAY * d / Math.max(l, 1e-6)));
         heat += q;
@@ -121,6 +123,28 @@ public final class LaunchCloud implements SmokeGrid.Source {
         lastFeed = SmokeGrid.seconds(0);
         if (thermal == null || heat >= REBUILD * builtHeat) build();
         return true;
+    }
+
+    /** Диаметр переменной плотности d′ = d·√(ρ_среза/ρ) всех сопел вместе, м (Chen, Rodi 1980; Thring, Newby 1953). */
+    static double diameter(Motor motor) {
+        return 2 * motor.exitRadius() * Math.sqrt(motor.nozzles() * motor.exitDensity() / CloudModel.RHO);
+    }
+
+    /**
+     * Доля вещества следа, которую держит столб самой струи в x метрах за соплом, пока струя бьёт в землю. Продукты этих
+     * тиков уходят в облако у земли, но не прыжком: между соплом и землёй их несёт струя — это и есть столб от ракеты
+     * до облака, который виден на старте (без него на кадре старта сзади под ракетой было пусто, пока струя доставала
+     * до земли, — пусто до ~38 м высоты у ускорителя ракеты). Вещество в струе идёт со скоростью её оси
+     * u(x) = u₀·B·d′/x (не быстрее среза), на метр столба его ṁ/u(x); след, положенный снарядом, несёт ṁ·inverse
+     * (inverse — секунды на метр пути снаряда, {@code TrailModel.inverseSpeed}). Доля — 1/(u(x)·inverse), не больше 1.
+     * Скорость струи — против воздуха, без скорости снаряда (на старте она мала против сотен м/с струи).
+     *
+     * @param x           путь по оси струи от сопла, м (путь, который снаряд пролетел с тех пор, как был в этой точке)
+     * @param inverseSpeed секунды на метр следа, с которыми точка положена
+     */
+    public static double column(Motor motor, double x, double inverseSpeed) {
+        double u = motor.velocity() * Math.min(1, JET_DECAY * diameter(motor) / Math.max(x, 1e-6));
+        return Math.min(1, 1 / Math.max(u * inverseSpeed, 1e-12));
     }
 
     /** Термик по всему поданному теплу. */

@@ -40,6 +40,12 @@ final class TrailPoints {
     final float[] stability = new float[CAPACITY];
     /** Облако старта, которому принадлежит вещество точки (струя тогда била в землю); null — след. */
     final ua.zentix.incoming.client.fx.smoke.LaunchCloud[] cloud = new ua.zentix.incoming.client.fx.smoke.LaunchCloud[CAPACITY];
+    /**
+     * У точки облака старта — доля её вещества, которую держит столб струи между соплом и землёй
+     * ({@code LaunchCloud.column}): пока струя бьёт в землю — по нынешнему месту сопла, потом — какой она была, когда
+     * струя землю отпустила (этот столб и остаётся следом).
+     */
+    final float[] column = new float[CAPACITY];
     /** Номер предыдущей точки той же ленты или {@link #NONE}. */
     final long[] prev = new long[CAPACITY];
     /**
@@ -83,6 +89,7 @@ final class TrailPoints {
         this.owner[i] = owner;
         this.prev[i] = prev;
         cloud[i] = null;
+        column[i] = 0;
         last[i] = false;
         // лента продолжилась (путь снова есть) — прошлый конец уже не конец
         if (holds(prev)) last[index(prev)] = false;
