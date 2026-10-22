@@ -34,6 +34,8 @@ final class TrailPoints {
      * ({@code TrailModel.excess}, {@code riseScale}): кадр их не пересчитывает.
      */
     final float[] excess = new float[CAPACITY], rise = new float[CAPACITY], brunt = new float[CAPACITY];
+    /** Путь снаряда от начала его пути к рождению точки, м ({@code FarFlightView}: докуда точка позади сопла). */
+    final double[] path = new double[CAPACITY];
     /** Класс устойчивости при рождении: по нему посчитан срок жизни — по нему и расплывание. */
     final float[] stability = new float[CAPACITY];
     /** Облако старта, которому принадлежит вещество точки (струя тогда била в землю); null — след. */

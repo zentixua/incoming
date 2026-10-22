@@ -29,7 +29,36 @@ import ua.zentix.incoming.entity.StrikeProjectile;
  * @param air     воздух от глаза ({@link Sight.Air}: дымка редеет с высотой) — по дальности видимости и высоте глаза
  */
 public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up, float partial, double far, double pixel, double edge,
-                      float ambient, double range, double world, double clouds, float rain, Sight.Air air) {
+                      float ambient, double exposure, Vector3f sky, double range, double world, double clouds, float rain, Sight.Air air) {
+    /** Тот же вид с привыканием глаза кадра exposure ({@link Sight#exposure}: с огнём у глаза этого кадра). */
+    public FarView exposed(double exposure) {
+        return new FarView(camera, forward, left, up, partial, far, pixel, edge, ambient, exposure, sky, range, world, clouds, rain, air);
+    }
+
+    /**
+     * Свет неба на экране у вещества под открытым небом (rgb, {@link #sky}): тот же, каким карта освещения Minecraft светит
+     * блоки и частицы под открытым небом (блок 0, небо 15), — ночью сиреневатый свет луны. Клубы дыма слоя берут его, а не
+     * {@link #ambient}: с ним белый дым ночью выходил темнее освещённого луной камня рядом, хотя отражает больше.
+     */
+    public static Vector3f sky(net.minecraft.client.renderer.LightTexture light, Vector3f into) {
+        int c = light.lightPixels.getPixelRGBA(0, 15);
+        return into.set((c & 0xFF) / 255f, (c >> 8 & 0xFF) / 255f, (c >> 16 & 0xFF) / 255f);
+    }
+
+    /** Яркость {@link #sky} (на экране): ею нормирован свет огненных шаров на клубах ({@code fx.vsh}). */
+    public float skyLight() {
+        return 0.2126f * sky.x() + 0.7152f * sky.y() + 0.0722f * sky.z();
+    }
+
+    /**
+     * Привыкание глаза ({@link Sight#exposure}) по свету неба и свету огня у глаза в прошлом кадре слоя эффектов
+     * ({@code HeatPass.atEye}) — у того, что рисуется до слоя (струя факела у сущности), и как начало кадра слоя (он сам
+     * берёт огонь этого кадра, {@link #exposed}).
+     */
+    public static double exposure(ClientLevel level, float partial) {
+        return Sight.exposure(ambient(level, partial), ua.zentix.incoming.client.fx.layer.HeatPass.atEye());
+    }
+
     /** Свет неба мира 0,12..1: днём 1, ночью 0,17, ночью в грозу 0,12. */
     public static float ambient(ClientLevel level, float partial) {
         return Mth.clamp(level.getSkyDarken(partial) * 1.1f - 0.05f, 0.12f, 1f);

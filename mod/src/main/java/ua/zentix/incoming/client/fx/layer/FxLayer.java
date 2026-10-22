@@ -183,7 +183,18 @@ public final class FxLayer {
         int atlas = FxAtlas.INSTANCE.id();
         if (level == null || s == null || atlas < 0) return;
         long start = System.nanoTime(), cpu = cpuNanos(), pauses = pauses();
-        FarView view = FarRenderer.view(e, mc, level);
+        FarView sky = FarRenderer.view(e, mc, level);
+        // свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (HeatPass): воздух — дымка кадра. Огонь
+        // у глаза — до сбора кадра: по нему привыкает глаз всего кадра (шары, лужи, пожары, обломки — этого кадра; факелы
+        // снарядов — прошлого: их места считает сбор, а вспыхнуть разом, как шар, они не могут)
+        HeatPass.Frame heat = HeatPass.begin(level, sky.exposure(), sky.pixel());
+        double air = Sight.KOSCHMIEDER / Sight.range(level.getRainLevel(sky.partial()), level.getThunderLevel(sky.partial()));
+        FarBlasts.heat(sky.camera(), sky.partial(), heat, air);
+        ua.zentix.incoming.client.fx.FireSmoke.heat(sky.camera(), heat, air);
+        ua.zentix.incoming.client.fx.Exhaust.heat(sky.camera(), SmokeGrid.seconds(sky.partial()), heat, air);
+        heat.eye(FarRenderer.flamesAtEye());
+        FarView view = sky.exposed(Sight.exposure(sky.ambient(), heat.atEye()));
+        heat.exposure = view.exposure();
         boolean warmup = !warmed;
         // атлас дальних моделей со всеми сетками в видеопамяти — до сбора кадра (прогрев начинает атлас заново)
         if (warmup) FarRenderer.warmup();
@@ -201,12 +212,9 @@ public final class FxLayer {
         // пламя пожаров и горящих обломков светит на дым и частицы вокруг
         ua.zentix.incoming.client.fx.FireSmoke.lights(view, LIGHTS);
         ua.zentix.incoming.client.fx.Exhaust.lights(view, LIGHTS);
-        // свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (HeatPass): воздух — дымка кадра
-        HeatPass.Frame heat = HeatPass.begin(level, Sight.adapted(1, view.ambient()), view.pixel());
-        double air = Sight.KOSCHMIEDER / Sight.range(level.getRainLevel(view.partial()), level.getThunderLevel(view.partial()));
-        FarBlasts.heat(view.camera(), view.partial(), heat, air);
-        ua.zentix.incoming.client.fx.FireSmoke.heat(view.camera(), heat, air);
-        ua.zentix.incoming.client.fx.Exhaust.heat(view.camera(), SmokeGrid.seconds(view.partial()), heat, air);
+        // факелы снарядов кадра — свет на мир (в глаз — со следующего кадра)
+        FarRenderer.heat(heat, air);
+        heat.done();
         boolean hot = HeatPass.needed(heat);
         if (warmup) {
             // невидимый квадрат: ни света, ни заслона — кадр проходит весь путь до первого настоящего, с пробой источника
@@ -264,7 +272,11 @@ public final class FxLayer {
             s.safeGetUniform("FxGlow").set(glow.u0(), glow.v0(), glow.u1(), glow.v1());
             s.safeGetUniform("FxBalls").set(LIGHTS.balls);
             sun(s, level, view.partial());
-            s.safeGetUniform("FxAmbient").set(view.ambient());
+            s.safeGetUniform("FxAmbient").set(view.skyLight());
+            // оттенок света неба у клубов: канал против яркости, в линейном
+            float skyLuma = Math.max(view.skyLight(), 1e-3f);
+            s.safeGetUniform("FxSkyTint").set((float) Math.pow(view.sky().x() / skyLuma, 2.2), (float) Math.pow(view.sky().y() / skyLuma, 2.2),
+                    (float) Math.pow(view.sky().z() / skyLuma, 2.2));
             float[] six = FxAtlas.puff6Light();
             s.safeGetUniform("FxSix").set(FxAtlas.PUFF6_STEP, FxAtlas.PUFF6_TOP, FxAtlas.PUFF6_U, FxAtlas.PUFF6_V);
             s.safeGetUniform("FxSixLight").set(six[0], six[1], six[2]);

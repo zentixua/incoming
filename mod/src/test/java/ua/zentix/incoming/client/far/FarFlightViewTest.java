@@ -92,6 +92,110 @@ class FarFlightViewTest {
         assertTrue(night[2] > 1, "за 8 км ночью: " + night[2]);
     }
 
+    /**
+     * Ночной старт сзади (сцена шлагбаума launch-night-behind): камера в 8,4 м от середины факела ускорителя ракеты. Глаз
+     * привыкает и к огню у себя ({@code HeatPass} собирает его в кадре, {@link Sight#exposure} — одно привыкание на кадр):
+     * факел ярче белого в единицы раз, и блик — бледный ореол. С одним ночным ×1200 (жалоба 22.10: «кадр заливает
+     * оранжевым») блик был во весь экран в полную силу. Вдали факел глаз не переучивает: блик и вуаль за 2 км — как были.
+     */
+    @Test
+    void nearFlameAtNightAdaptsTheEye() {
+        Flame flame = far(WeaponType.MISSILE).stage(FlightPhase.BOOST).flame(Air.SEA);
+        assertNotNull(flame);
+        double night = 0.17, d = 8.4, r = flame.lightRadius();
+        double[] out = new double[5];
+        // по-старому: только свет неба
+        double old = flame.brightness() * Sight.adapted(1, night);
+        Sight.light(r, old, d, PIXEL, out);
+        assertEquals(Sight.HALO, Math.min(Sight.HALO, Sight.SCATTER * old), 1e-12, "ночной ×1200: блик в полную силу");
+        assertTrue(out[3] / d > Math.toRadians(70), "и шире экрана: " + Math.toDegrees(out[3] / d) + "°");
+        double exposure = exposureNear(flame, d, night);
+        double seen = flame.brightness() * exposure;
+        Sight.light(r, seen, d, PIXEL, out);
+        assertTrue(Math.min(Sight.HALO, Sight.SCATTER * seen) < 0.1, "блик факела у глаза — бледный: " + Sight.SCATTER * seen);
+        assertTrue(seen > 1, "сам факел ярче белого: " + seen);
+        // освещённость белой стены у глаза: по-старому — в сотни раз ярче белого (экран её не покажет)
+        double wall = HeatPassAtEye.at(flame, d);
+        assertTrue(wall * Sight.adapted(1, night) > 500, "по-старому — в сотни раз ярче белого: " + wall * Sight.adapted(1, night));
+        // за 2 км огонь у глаза глаз почти не трогает
+        assertTrue(exposureNear(flame, 2000, night) > 0.95 * Sight.adapted(1, night), "вдали — ночное привыкание");
+    }
+
+    /**
+     * Привыкание глаза кадра с одним факелом в d блоках — тем путём, что в игре: факел кадра ({@link FarFlightView#lit}) —
+     * в свет на мир этого кадра ({@link FarFlightView#heat}) и в свет у глаза следующего ({@link FarFlightView#flamesAtEye},
+     * {@code HeatPass.Frame.eye}), привыкание — {@link Sight#exposure}.
+     */
+    private static double exposureNear(Flame flame, double d, double ambient) {
+        try {
+            FarFlightView.lit(d, 0, 0, flame, Vec3.ZERO);
+            FarFlightView.heat(new ua.zentix.incoming.client.fx.layer.HeatPass.Frame(), 0);
+            ua.zentix.incoming.client.fx.layer.HeatPass.Frame next = new ua.zentix.incoming.client.fx.layer.HeatPass.Frame();
+            next.eye(FarFlightView.flamesAtEye());
+            return Sight.exposure(ambient, next.atEye());
+        } finally {
+            FarFlightView.reset();
+        }
+    }
+
+    /** Освещённость белой стены у глаза от факела в d блоках (линейная, полдень — 1): яркость × (r/d)². */
+    private static final class HeatPassAtEye {
+        static double at(Flame flame, double d) {
+            double r = flame.lightRadius();
+            return flame.brightness() * r * r / Math.max(d * d, r * r);
+        }
+    }
+
+    /**
+     * След ЗРК вблизи (жалоба 22.10: «плоская лента с прямыми краями, у камеры — плоскость через кадр»): трубка, крупная на
+     * экране, рисуется клубами, как облака, а лента остаётся там, где трубка — линия в несколько пикселей. Ширина — у
+     * ближней к глазу точки отрезка: отрезок, что проходит у самой камеры, — только клубы.
+     */
+    @Test
+    void wideTubeOnScreenIsPuffsNotARibbon() {
+        double width = 5;
+        assertEquals(1, FarFlightView.puffShare(width, 30, PIXEL), 1e-12, "5 м в 30 блоках — клубы");
+        assertEquals(1, FarFlightView.puffShare(width, 0.5, PIXEL), 1e-12, "глаз у трубки — клубы и вуаль, не плоскость");
+        assertEquals(0, FarFlightView.puffShare(width, 2000, PIXEL), 1e-12, "за 2 км — линия: лента");
+        double prev = 1;
+        for (double gap = 10; gap < 3000; gap *= 1.05) {
+            double s = FarFlightView.puffShare(width, gap, PIXEL);
+            assertTrue(s <= prev + 1e-12, "дальше — меньше клубов, без скачков");
+            assertTrue(prev - s < 0.2, "переход плавный: " + gap);
+            prev = s;
+        }
+    }
+
+    /**
+     * Дым следа — с конца яркого пламени ({@link ua.zentix.incoming.client.fx.plume.TrailModel#emerged}, {@link Flame#flame}):
+     * у сопла вещество — само пламя, за концом догорания проявляется дым, к полуторной длине — весь; без пламени — дым
+     * сразу. Остывающий хвост до точки Дрейпера ({@link Flame#length}) на экране не светит: дым там уже есть, иначе
+     * между огнём и дымом был бы разрыв в десятки метров (жалоба ревью кадров 22.10). Путь — тот, что снаряд пролетел
+     * с рождения точки: у ракеты ЗРК (сход на 16 м/с, ~180 м/с²) точка, рождённая на сходе, через 0,5 с уже в ~30 м.
+     */
+    @Test
+    void trailSmokeStartsWhereTheFlameEnds() {
+        Flame f = far(WeaponType.MISSILE).stage(FlightPhase.BOOST).flame(Air.SEA);
+        assertNotNull(f);
+        double flame = f.flame();
+        assertTrue(f.tailLuminance() < 0.01 * f.flameLuminance(), "хвост за пламенем не светит: " + f.tailLuminance());
+        assertEquals(0, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(0, flame), 1e-12, "у сопла — пламя");
+        assertEquals(0, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(flame, flame), 1e-12);
+        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(1.5 * flame, flame), 1e-12, "за пламенем — дым");
+        assertTrue(1.5 * flame < 0.5 * f.length(), "дым — задолго до точки Дрейпера: " + flame + " против " + f.length());
+        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(0, 0), 1e-12, "без пламени — дым сразу");
+        double prev = 0;
+        for (double x = 0; x <= 3 * flame; x += 0.05) {
+            double e = ua.zentix.incoming.client.fx.plume.TrailModel.emerged(x, flame);
+            assertTrue(e >= prev && e - prev < 0.05, "плавно: " + x);
+            prev = e;
+        }
+        // путь разгоняющейся ракеты ЗРК за 0,5 с: v₀·t + a·t²/2
+        Flame sam = ua.zentix.incoming.client.fx.plume.FlameModel.at(ClientWeaponSpec.SAM_BOOST, 0);
+        double path = 16 * 0.5 + 0.5 * 180 * 0.25;
+        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(path, sam.flame()), 1e-12, "через 0,5 с после схода — дым");
+    }
+
     @Test
     void cruiseMissileEngineDoesNotGlow() {
         // выхлоп ТРДД — ~700 K без частиц: ни днём, ни ночью
@@ -278,7 +382,7 @@ class FarFlightViewTest {
     void modelOutsideTheScreenIsNotDrawn() {
         // экран — конус в 30° от середины до угла, взгляд на север (−Z)
         FarView view = new FarView(Vec3.ZERO, new Vector3f(0, 0, -1), new Vector3f(-1, 0, 0), new Vector3f(0, 1, 0), 0, 1000, PIXEL,
-                Math.toRadians(30), 1, 20000, 192, 192, 0, Sight.Air.at(0, 20000));
+                Math.toRadians(30), 1, 1, new Vector3f(1, 1, 1), 20000, 192, 192, 0, Sight.Air.at(0, 20000));
         assertTrue(FarFlightView.inFrame(view, 0, 0, -500, 500, 2));
         assertTrue(FarFlightView.inFrame(view, at(29)[0], 0, at(29)[1], 500, 2));
         assertFalse(FarFlightView.inFrame(view, at(35)[0], 0, at(35)[1], 500, 2), "в 35° мелкая модель за краем");
@@ -292,7 +396,7 @@ class FarFlightViewTest {
         // путь по пакетам — всегда весь свет; блик и вуаль — у обоих (FarFlightView.collect)
         double world = 192;
         FarView view = new FarView(Vec3.ZERO, new Vector3f(0, 0, -1), new Vector3f(-1, 0, 0), new Vector3f(0, 1, 0), 0, 1000, PIXEL,
-                Math.toRadians(30), 1, 20000, world, 192, 0, Sight.Air.at(0, 20000));
+                Math.toRadians(30), 1, 1, new Vector3f(1, 1, 1), 20000, world, 192, 0, Sight.Air.at(0, 20000));
         for (double d = 0; d <= 2 * world; d += 4) {
             double jet = 1 - FarView.farShare(d, world), core = FarFlightView.flameCore(true, view, d);
             assertEquals(1, jet + core, 1e-12, "на " + d + ": струя и ядро вместе — один факел");

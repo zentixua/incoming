@@ -98,9 +98,9 @@ public final class Exhaust {
         Flame f = stage.flame(e.getY());
         if (f == null) return null;
         ClientWeaponSpec.At n = a.nozzle(stage);
-        // привыкание глаза — то же, что у света этого факела вдали (FarRenderer: свет неба), иначе на 0,8 прорисовки
-        // яркость скакнула бы
-        return new Plume((float) n.y(), (float) n.z(), f, Sight.adapted(1, FarView.ambient(level, partial)), 1);
+        // привыкание глаза — то же, что у света этого факела вдали (FarView.exposure), иначе на 0,8 прорисовки яркость
+        // скакнула бы
+        return new Plume((float) n.y(), (float) n.z(), f, FarView.exposure(level, partial), 1);
     }
 
     /** Сопла сущности из клиентского паспорта (у B-2 и его бомбы — свои). */
@@ -291,7 +291,7 @@ public final class Exhaust {
         Vec3 cam = view.camera();
         for (Burning b : BURNING.values()) {
             if (now - b.fed > 2 * PUFF_S + 0.1) continue;
-            lights.add(b.at.x - cam.x, b.at.y + r - cam.y, b.at.z - cam.z, r, Sight.adapted(BB[3], view.ambient()), FireSmoke.FLAME_ON_SCREEN,
+            lights.add(b.at.x - cam.x, b.at.y + r - cam.y, b.at.z - cam.z, r, BB[3] * view.exposure(), FireSmoke.FLAME_ON_SCREEN,
                     (float) (BB[0] / m), (float) (BB[1] / m), (float) (BB[2] / m));
         }
     }

@@ -419,7 +419,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         for (FireSmoke f : all()) {
             if (!Double.isNaN(f.end)) continue;
             double r = 0.5 * f.flame;
-            lights.add(f.x - cam.x, f.y + r - cam.y, f.z - cam.z, r, Sight.adapted(BB[3], view.ambient()), FLAME_ON_SCREEN,
+            lights.add(f.x - cam.x, f.y + r - cam.y, f.z - cam.z, r, BB[3] * view.exposure(), FLAME_ON_SCREEN,
                     (float) (BB[0] / m), (float) (BB[1] / m), (float) (BB[2] / m));
         }
     }

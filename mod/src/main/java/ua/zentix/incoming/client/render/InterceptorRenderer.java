@@ -53,7 +53,7 @@ public class InterceptorRenderer extends EntityRenderer<InterceptorEntity> {
         boolean boost = e.age() + partial <= InterceptorSpec.SAM.boostTicks();
         Flame f = FlameModel.at(boost ? ClientWeaponSpec.SAM_BOOST : ClientWeaponSpec.SAM_SUSTAIN, e.getY() - Air.SEA);
         if (f == null || !(e.level() instanceof ClientLevel level)) return null;
-        return new Exhaust.Plume(0, (float) -InterceptorSpec.SAM.noseLength(), f, Sight.adapted(1, FarView.ambient(level, partial)), 1);
+        return new Exhaust.Plume(0, (float) -InterceptorSpec.SAM.noseLength(), f, FarView.exposure(level, partial), 1);
     }
 
     @Override

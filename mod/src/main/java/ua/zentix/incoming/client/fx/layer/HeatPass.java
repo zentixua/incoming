@@ -58,19 +58,27 @@ public final class HeatPass {
                 shape = new Matrix4f().zero();
         private final double[] lightWeight = new double[4], hotWeight = new double[4];
         private final Vector4f column = new Vector4f();
-        /** Привыкание глаза кадра ({@code Sight.adapted}) и свет открытого неба (линейный, для порога света); угол пикселя, рад. */
+        /**
+         * Привыкание глаза кадра ({@code Sight.exposure}: к свету неба и к свету огня у глаза — одно на весь кадр) и свет
+         * открытого неба (линейный, для порога света); угол пикселя, рад.
+         */
         public double exposure = 1, open = 1, pixel = 1e-3;
-        /** Свет шаров у глаза (линейный, белая стена в полдень — 1, без привыкания): к нему глаз привыкает тоже. */
+        /**
+         * Свет огня у глаза в этом кадре (освещённость белой стены у глаза, линейная, белая стена в полдень — 1, без
+         * привыкания): по нему глаз привыкает в следующем ({@link #atEye()}).
+         */
         double atEye;
 
         /**
          * Привыкание глаза с огнём: огонь освещает и место глаза, и глаз (экспозиция) привыкает к свету вокруг себя — к
-         * свету неба кадра (1/{@code exposure}: днём 1, ночью 1/1200, {@code Sight.adapted}) и свету шаров у глаза вместе.
+         * свету неба (днём 1, ночью 1/1200, {@code Sight.adapted}) и свету огня у глаза вместе ({@code Sight.exposure}).
          * Без этого свет огня шёл бы в кадр с ночным ×1200 и заливал белым всё в сотнях блоков (залп «Града» ночью — секунды
-         * белого кадра). Привыкание — сразу; у глаза оно идёт за 0,1–1 с (зрачок, колбочки; ⚠ оценка порядка).
+         * белого кадра), а факел ускорителя в 8 м от камеры — бликом и вуалью весь кадр. Шары, лужи, пожары и обломки — этого
+         * кадра (собраны до сбора квадратов), факелы снарядов — прошлого; привыкание — сразу, у глаза оно идёт за 0,1–1 с
+         * (зрачок, колбочки; ⚠ оценка порядка).
          */
         double adapted() {
-            return 1 / (1 / exposure + atEye);
+            return exposure;
         }
 
         void begin() {
@@ -81,6 +89,21 @@ public final class HeatPass {
             shape.zero();
             Arrays.fill(lightWeight, 0);
             Arrays.fill(hotWeight, 0);
+        }
+
+        /** Огонь кадра собран: свет у глаза — привыканию того, что рисуется до слоя в следующем кадре. */
+        public void done() {
+            lastAtEye = atEye;
+        }
+
+        /** Ещё свет у глаза (линейный, белая стена в полдень — 1) — от источников, которых нет в {@link #light} этого кадра. */
+        public void eye(double light) {
+            atEye += Math.max(0, light);
+        }
+
+        /** Свет огня у глаза в этом кадре (линейный, белая стена в полдень — 1). */
+        public double atEye() {
+            return atEye;
         }
 
         boolean lit() {
@@ -97,10 +120,15 @@ public final class HeatPass {
          * землёй (порог: свет на земле под шаром против неба).
          */
         public void light(double x, double y, double z, double r, double cr, double cg, double cb, double air, double h) {
+            light(x, y, z, r, cr, cg, cb, air, h, true);
+        }
+
+        /** То же; eye — свет идёт и в глаз ({@link #atEye}; нет — его там уже учли). */
+        public void light(double x, double y, double z, double r, double cr, double cg, double cb, double air, double h, boolean eye) {
             double lum = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
             if (r <= 0 || lum <= 0) return;
             double w = lum * r * r / Math.max(x * x + y * y + z * z, r * r);
-            atEye += w;
+            if (eye) atEye += w;
             if (lum * exposure * r * r / Math.max(h * h, r * r) < SEEN * Math.max(open, 1e-4)) return;
             int slot = 0;
             for (int i = 1; i < 4; i++) if (lightWeight[i] < lightWeight[slot]) slot = i;
@@ -149,6 +177,22 @@ public final class HeatPass {
     }
 
     private static final Frame FRAME = new Frame();
+    /** Свет огня у глаза в последнем собранном кадре ({@link Frame#atEye}). */
+    private static double lastAtEye;
+
+    /**
+     * Свет огня у глаза в последнем собранном кадре (линейный, белая стена в полдень — 1): к нему привыкает глаз кадра
+     * ({@code Sight.exposure}, {@code FarView.exposure}).
+     */
+    public static double atEye() {
+        return lastAtEye;
+    }
+
+    /** Выход из мира или смена измерения: огня у глаза нет. */
+    public static void forget() {
+        lastAtEye = 0;
+        FRAME.atEye = 0;
+    }
     private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), SHAPE = new Matrix4f(), LIGHT = new Matrix4f();
     /** Путь вихрей по модулю этого числа размеров вихря (шум не периодичен: раз в сотни вихрей узор перескакивает). */
     static final double NOISE_PERIOD = 256;

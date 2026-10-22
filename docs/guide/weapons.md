@@ -280,13 +280,17 @@ same up close and far away.
   motor show no flame and leave no visible smoke.
 - **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a
   greyer trail. A slower rocket leaves a denser trail. The hot trail rises a little. By day it spreads and fades sooner;
-  on a calm night it stays narrow and hangs much longer.
+  on a calm night it stays narrow and hangs much longer. Up close a trail is a round, billowing tube of smoke, lit by the
+  sun and by the flame; far away, where it is only a few pixels wide, it is a thin line. The smoke starts where the
+  visible flame ends: closer to the nozzle the exhaust is still the flame itself.
 - **Launch cloud**: while a rocket's exhaust still hits the ground, its smoke stays at the launcher, together with the
   dust it blows up, and rises and drifts as one warm cloud. A Shahed leaves a short white puff at the rail, a cruise
   missile's booster a bigger one. Each Grad rocket adds its own cloud, so a full salvo buries the launcher in smoke and
   dust that hang and drift downwind. Stone and concrete raise no dust. The ICBM leaves a large cloud at the pad.
 - **From behind**: looking along a trail or straight at a nozzle you see the round end of the smoke and the flame, not a
   flat strip.
+- **Your eyes adjust to fire**: next to a launch at night or a fireball, your eyes adjust to the fire's light. The flame
+  is bright but does not wash the whole screen out; a flame far away does not change how your eyes see the night.
 - **Wind**: smoke drifts with the world's wind, the same wind that carries nuclear fallout. Each game day has its own
   wind, and it turns slowly from one day to the next. Near the ground it is weaker, most of all at night.
 - **Contrails**: the B-2 leaves a contrail only where the air is cold enough for one to form. At the height it flies

@@ -6,6 +6,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import ua.zentix.incoming.client.fx.layer.FxLayer;
+import ua.zentix.incoming.client.fx.layer.HeatPass;
 import ua.zentix.incoming.client.fx.layer.FxLights;
 import ua.zentix.incoming.client.fx.layer.FxQuads;
 import ua.zentix.incoming.client.fx.layer.SourceProbes;
@@ -24,7 +25,7 @@ import java.util.Arrays;
 public final class FarRenderer {
     private static final FarSprites SPRITES = new FarSprites();
     /** Сколько клубов, точек, света, лент и моделей было в последнем кадре (для строки сценария). */
-    private static final int[] LAST_FRAME = new int[5];
+    private static final int[] LAST_FRAME = new int[6];
 
     private FarRenderer() {}
 
@@ -74,10 +75,11 @@ public final class FarRenderer {
         double pixel = 2 / (e.getProjectionMatrix().m11() * Math.max(1, mc.getWindow().getHeight()));
         double edge = Math.atan(0.5 * pixel * Math.hypot(mc.getWindow().getWidth(), mc.getWindow().getHeight()));
         float ambient = FarView.ambient(level, partial);
+        double exposure = FarView.exposure(level, partial);
         Vec3 eye = FarDraw.eye(e);
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
         return new FarView(eye, camera.getLookVector(), camera.getLeftVector(), camera.getUpVector(), partial,
-                FarView.depthFar(), pixel, edge, ambient, range, mc.options.getEffectiveRenderDistance() * 16.0,
+                FarView.depthFar(), pixel, edge, ambient, exposure, FarView.sky(mc.gameRenderer.lightTexture(), new org.joml.Vector3f()), range, mc.options.getEffectiveRenderDistance() * 16.0,
                 level.effects().getCloudHeight(), level.getRainLevel(partial), Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, range));
     }
 
@@ -88,12 +90,23 @@ public final class FarRenderer {
     public static String describe() {
         if (FarBlasts.isEmpty() && FarFlightView.isEmpty()) return "";
         return "blasts: " + FarBlasts.describe() + "; projectiles: " + FarFlightView.describe() + "; frame: puffs " + LAST_FRAME[0] + ", points "
-                + LAST_FRAME[1] + ", lights " + LAST_FRAME[2] + ", ribbons " + LAST_FRAME[3] + ", models " + LAST_FRAME[4] + "; layer: "
+                + LAST_FRAME[1] + ", lights " + LAST_FRAME[2] + ", ribbons " + LAST_FRAME[3] + ", models " + LAST_FRAME[4] + ", veils " + LAST_FRAME[5] + "; layer: "
                 + FxLayer.describeTiming();
+    }
+
+    /** Факелы снарядов кадра светят на мир ({@link HeatPass}): воздух air, 1/блок. */
+    public static void heat(HeatPass.Frame heat, double air) {
+        FarFlightView.heat(heat, air);
+    }
+
+    /** Свет факелов снарядов у глаза в прошлом кадре ({@link HeatPass.Frame#eye}). */
+    public static double flamesAtEye() {
+        return FarFlightView.flamesAtEye();
     }
 
     /** Выход из мира или смена измерения. */
     public static void reset() {
+        HeatPass.forget();
         FarBlasts.reset();
         FarFlightView.reset();
         Arrays.fill(LAST_FRAME, 0);

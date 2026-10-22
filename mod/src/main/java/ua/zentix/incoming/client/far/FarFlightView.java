@@ -23,6 +23,7 @@ import ua.zentix.incoming.client.flight.FlightTrack;
 import ua.zentix.incoming.client.flight.FlightTracks;
 import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.FxLights;
+import ua.zentix.incoming.client.fx.layer.HeatPass;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
@@ -103,6 +104,8 @@ public final class FarFlightView {
 
     private static final List<Far> FARS = new ArrayList<>();
     private static final Map<FlightTrack, Far> BY_TRACK = new IdentityHashMap<>();
+    /** Путь по номеру хозяина точек ({@link TrailPoints#owner}). */
+    private static final Int2ObjectMap<Far> BY_OWNER = new Int2ObjectOpenHashMap<>();
     private static final TrailPoints POINTS = new TrailPoints();
     private static int owners;
     /** Тик обхода путей (чей путь не встретился — забыт). */
@@ -116,7 +119,7 @@ public final class FarFlightView {
 
     // ---------------------------------------------------------------- кадр: числа живут между кадрами
     private static final double[] POS = new double[3], NOZZLE = new double[3], BACK = new double[3], OUT = new double[2], LIGHT = new double[5],
-            AIM = new double[3], BIRTH = new double[2], LOOK = new double[4];
+            AIM = new double[3], BIRTH = new double[2], LOOK = new double[TrailModel.LOOK];
     private static final float[] ANGLES = new float[3];
     private static final ProjectilePose POSE = new ProjectilePose();
     private static final BlockPos.MutableBlockPos PROBE = new BlockPos.MutableBlockPos();
@@ -129,6 +132,28 @@ public final class FarFlightView {
     private static final float[] EA = new float[ENDS], ER = new float[ENDS], EG = new float[ENDS], EB = new float[ENDS];
     private static final float[] NX = new float[ENDS], NY = new float[ENDS], NZ = new float[ENDS];
     private static final int[] EL = new int[ENDS], DRAWN = new int[ENDS], ACROSS = new int[ENDS];
+    /** Трубка у конца: ширина на половине непрозрачности середины и σ сечения, м; ослабление на метр, м; альбедо; зерно клубов. */
+    private static final double[] EW = new double[ENDS], ES = new double[ENDS], EE = new double[ENDS], EO = new double[ENDS];
+    private static final long[] ESEED = new long[ENDS];
+    /** Вид кадра — у отрезков ({@link #segment}). */
+    @Nullable
+    private static FarView seen;
+    /**
+     * Трубка шире стольких пикселей на экране — клубами, как облака ({@link SmokePuffs#tube}), уже — лентой, между — плавно.
+     * Лента — плоскость лицом к камере с одним цветом поперёк: вдали, пока трубка — линия в несколько пикселей, это и
+     * есть её вид; крупнее она читалась бы плоской полосой с прямыми краями, а у глаза — плоскостью через кадр. Клубы — то
+     * же вещество гауссами с шестисторонним светом: круглая трубка с любой стороны, глаз в ней — вуаль по пути взгляда.
+     */
+    static final double PUFFS_FROM = 6, PUFFS_FULL = 12;
+    /**
+     * Клубов трубок и их вуалей у глаза в кадре — не больше этого в среднем (производительность, не физика): больше — порог
+     * ширины на следующих кадрах растёт ({@link #puffScale}, ×1,1 за кадр), и дальние трубки снова рисует лента; меньше
+     * половины — порог плавно возвращается. Залп «Града» вблизи или трубки в бинокль иначе давали бы десятки тысяч квадратов.
+     */
+    static final int CLUB_BUDGET = 6000;
+    /** Множитель порога ширины трубки для клубов (≥ 1) и клубов в этом кадре. */
+    private static double puffScale = 1;
+    private static int clubs;
     private static final float[] JOINT = new float[3];
     private static int frame;
 
@@ -189,6 +214,12 @@ public final class FarFlightView {
         @Nullable
         LaunchCloud cloud;
         boolean impinging;
+        /**
+         * Путь снаряда по его пути от начала до тика {@link #cursor}, м, и длина его яркого пламени там (ядро и догорание,
+         * {@link Flame#flame}; нет пламени — 0):
+         * докуда точки следа ещё в факеле ({@link TrailModel#emerged}); в кадре — путь до мига кадра.
+         */
+        double path, flame, framePath;
 
         Far(FlightTrack track, int owner) {
             this.track = track;
@@ -237,6 +268,7 @@ public final class FarFlightView {
                 // путь забыт: после взрыва шлейф тает сам, после отбоя (полёт кончился без взрыва) пропадает сразу
                 if (!f.track.isDead()) POINTS.kill(f.owner);
                 BY_TRACK.remove(f.track);
+                BY_OWNER.remove(f.owner);
                 FARS.set(i, FARS.getLast());
                 FARS.removeLast();
                 continue;
@@ -260,6 +292,7 @@ public final class FarFlightView {
         if (f == null) {
             f = new Far(track, ++owners);
             BY_TRACK.put(track, f);
+            BY_OWNER.put(f.owner, f);
             FARS.add(f);
         }
         f.seen = pass;
@@ -303,6 +336,16 @@ public final class FarFlightView {
         for (; t <= horizon; t++) {
             FlightPhase phase = FlightPhase.byId(track.phase(t));
             ClientWeaponSpec.Stage stage = f.look.stage(phase);
+            // путь снаряда и его факел в этом тике: докуда точки следа ещё в огне
+            if (track.covers(t)) {
+                track.at(t, POS);
+                if (t - 1 >= track.start() && track.covers(t - 1)) {
+                    track.at(t - 1, NOZZLE);
+                    f.path += Math.sqrt(sq(POS[0] - NOZZLE[0]) + sq(POS[1] - NOZZLE[1]) + sq(POS[2] - NOZZLE[2]));
+                }
+                Flame flame = stage.flame(POS[1]);
+                f.flame = flame == null ? 0 : flame.flame();
+            }
             f.impinging = false;
             // облако старта — только на старте (горит ускоритель): струя маршевого у склона — не старт
             if (launch != null && stage.motor() != null && phase.boosterLit()) launch.at(f, t, stage);
@@ -411,6 +454,7 @@ public final class FarFlightView {
                     (float) TrailModel.riseScale(style, inv, brunt), (float) brunt, (float) air.stability());
             // струя бьёт в землю: вещество точки — облака старта (лента рисует ту его долю, что не в объёме)
             points.cloud[TrailPoints.index(f.chain[k])] = f.impinging ? f.cloud : null;
+            points.path[TrailPoints.index(f.chain[k])] = f.path;
         }
         f.chainTick = t;
         f.started = true;
@@ -486,6 +530,12 @@ public final class FarFlightView {
     /** Шлейфы, корпуса и факелы в кадр; факелы — ещё и светом дыма и лент кадра (lights). */
     static void collect(FarView view, FarSprites out, FxLights lights) {
         frame++;
+        seen = view;
+        lit = 0;
+        litEye = 0;
+        // бюджет клубов прошлого кадра
+        puffScale = clubs > CLUB_BUDGET ? puffScale * 1.1 : clubs < CLUB_BUDGET / 2 ? Math.max(1, puffScale / 1.02) : puffScale;
+        clubs = 0;
         flights = 0;
         points = 0;
         nearest = null;
@@ -494,23 +544,40 @@ public final class FarFlightView {
         Arrays.fill(COUNT, 0);
         double t = frameTime(view.partial());
         Vec3 cam = view.camera();
+        // путь каждого снаряда до мига кадра: докуда его точки ещё в факеле
+        for (int k = 0, n = FARS.size(); k < n; k++) {
+            Far f = FARS.get(k);
+            f.framePath = f.path;
+            if (f.flame > 0 && f.track.covers((long) Math.floor(t)) && f.track.predict(t, POS) && f.track.covers(f.cursor)) {
+                f.track.at(f.cursor, NOZZLE);
+                f.framePath += Math.sqrt(sq(POS[0] - NOZZLE[0]) + sq(POS[1] - NOZZLE[1]) + sq(POS[2] - NOZZLE[2]));
+            }
+        }
         for (long s = POINTS.first(), end = POINTS.end(); s < end; s++) {
             int i = TrailPoints.index(s);
             Trail style = POINTS.style[i];
             if (style == null) continue;
             double age = Math.max(0, t - POINTS.birth[i]);
             if (age >= POINTS.life[i]) continue;
-            // точка в облаке старта — её вещество рисует облако (запечённые клубы), лента — нет
+            // точка в облаке старта — её вещество рисует облако (запечённые клубы), лента — нет; точка ещё в факеле — её
+            // вещество светится в нём
             double volume = POINTS.cloud[i] != null ? 1 : 0;
+            Far owner = BY_OWNER.get(POINTS.owner[i]);
+            double smoke = owner == null || owner.track.isDead() ? 1 : TrailModel.emerged(owner.framePath - POINTS.path[i], owner.flame);
             TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i],
-                    POINTS.brunt[i], POINTS.stability[i], 1 - volume, LOOK);
+                    POINTS.brunt[i], POINTS.stability[i], (1 - volume) * smoke, LOOK);
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
             end(LOOK, POINTS.x[i] + air.wind().x() * drift - cam.x, POINTS.y[i] + LOOK[2] - cam.y, POINTS.z[i] + air.wind().z() * drift - cam.z,
                     POINTS.light[i], view, i);
-            if (POINTS.last[i]) EA[i] = 0;
+            // зерно клубов — номер записи точки: тик рождения в заморозке мира сдвигается (TrailPoints.hold), и клубы мигали бы
+            ESEED[i] = s * 0x2545F4914F6CDD1DL + 0x632BE59BD9B4E019L;
+            if (POINTS.last[i]) {
+                EA[i] = 0;
+                EE[i] = 0;
+            }
             points++;
             long p = POINTS.prev[i];
-            if (POINTS.holds(p) && DRAWN[TrailPoints.index(p)] == frame) segment(out, TrailPoints.index(p), i);
+            if (POINTS.holds(p) && DRAWN[TrailPoints.index(p)] == frame) segment(out, TrailPoints.index(p), i, style);
         }
         for (int k = 0, n = FARS.size(); k < n; k++) {
             Far f = FARS.get(k);
@@ -526,10 +593,11 @@ public final class FarFlightView {
                     System.arraycopy(POS, 0, NOZZLE, 0, 3);
                     track.offset(t, f.nozzles.get(j), NOZZLE);
                     int ci = TrailPoints.index(c);
+                    // у сопла вещество следа — ещё факел (у снаряда без факела — уже дым)
                     TrailModel.look(trail, 0, POINTS.inverse[ci], POINTS.ice[ci] / 20, POINTS.wind[ci], POINTS.excess[ci], POINTS.rise[ci],
-                            POINTS.brunt[ci], POINTS.stability[ci], LOOK);
+                            POINTS.brunt[ci], POINTS.stability[ci], TrailModel.emerged(0, f.flame), LOOK);
                     end(LOOK, NOZZLE[0] - cam.x, NOZZLE[1] - cam.y, NOZZLE[2] - cam.z, POINTS.light[ci], view, HEAD + j);
-                    segment(out, TrailPoints.index(c), HEAD + j);
+                    segment(out, TrailPoints.index(c), HEAD + j, trail);
                 }
             }
             // есть сущность — корпус рисует её модель, струю факела — PlumeRenderer; свет факела — здесь
@@ -547,11 +615,13 @@ public final class FarFlightView {
                 double bd = OUT[0], ft = view.air(bd, BACK[1]), core = flameCore(entity, view, d);
                 int fc = flame.lightColor();
                 float open = Mth.lerp(view.partial(), f.openPrev, f.open);
-                double seen = Sight.adapted(flame.brightness(), view.ambient());
+                double seen = flame.brightness() * view.exposure();
                 out.light(BACK[0], BACK[1], BACK[2], flame.lightRadius(), seen * ft, ft, view.pixel(),
                         channel(fc, 0), channel(fc, 1), channel(fc, 2), vis * core, vis * open, LIGHT);
                 // факел светит на дым и ленты вокруг, как огненный шар, — виден он глазу или нет
                 lights.add(BACK[0], BACK[1], BACK[2], flame.lightRadius(), seen, Math.min(1, seen), channel(fc, 0), channel(fc, 1), channel(fc, 2));
+                // и на мир, и в глаз (HeatPass): без воздуха до глаза — его ослабление считает проход
+                lit(BACK[0], BACK[1], BACK[2], flame, view.camera());
                 flamePx = 2 * LIGHT[0] / (bd * view.pixel());
                 flameAlpha = Math.min(1, LIGHT[2]) * vis * core;
                 flames++;
@@ -625,6 +695,65 @@ public final class FarFlightView {
         p.coarse = coarse;
     }
 
+    /** Факелы кадра для света на мир ({@link #heat}): середина от глаза, радиус, свет (линейный, белая стена в полдень — 1), высота над землёй. */
+    private static final int LIT_MAX = 16;
+    private static final double[] LIT = new double[LIT_MAX * 8], LIT_W = new double[LIT_MAX];
+    private static int lit;
+    /** Свет всех факелов кадра у глаза. */
+    private static double litEye;
+
+    /** Факел flame с серединой (x, y, z) от глаза cam — в свет кадра на мир. */
+    static void lit(double x, double y, double z, Flame flame, Vec3 cam) {
+        double lr = flame.lightRadius(), w = flame.brightness() * lr * lr / Math.max(x * x + y * y + z * z, lr * lr);
+        // в глаз — все факелы, на мир — самые заметные у глаза (проход берёт из них четыре)
+        litEye += w;
+        int slot = lit;
+        if (lit >= LIT_MAX) {
+            slot = 0;
+            for (int i = 1; i < LIT_MAX; i++) if (LIT_W[i] < LIT_W[slot]) slot = i;
+            if (w <= LIT_W[slot]) return;
+        } else {
+            lit++;
+        }
+        LIT_W[slot] = w;
+        ClientLevel lv = level;
+        double ground = lv == null ? Double.NaN : ground(lv, x + cam.x, z + cam.z);
+        int c = flame.lightColor();
+        double r = FlameModel.linear(c >> 16 & 255), g = FlameModel.linear(c >> 8 & 255), b = FlameModel.linear(c & 255);
+        double luma = 0.2126 * r + 0.7152 * g + 0.0722 * b, k = luma > 0 ? flame.brightness() / luma : 0;
+        int o = 8 * slot;
+        LIT[o] = x;
+        LIT[o + 1] = y;
+        LIT[o + 2] = z;
+        LIT[o + 3] = flame.lightRadius();
+        LIT[o + 4] = r * k;
+        LIT[o + 5] = g * k;
+        LIT[o + 6] = b * k;
+        LIT[o + 7] = Double.isNaN(ground) ? flame.lightRadius() : Math.max(flame.lightRadius(), y + cam.y - ground);
+    }
+
+    /**
+     * Свет факелов кадра на мир ({@link HeatPass.Frame#light}) и в глаз следующего кадра ({@link #flamesAtEye}): струя — круг площади её сбоку ({@link Flame#lightRadius})
+     * с её средней яркостью, как свет на дым ({@link FxLights}); воздух air, 1/блок.
+     */
+    static void heat(HeatPass.Frame heat, double air) {
+        for (int i = 0; i < lit; i++) {
+            int o = 8 * i;
+            // в глаз этого кадра факелы уже вошли — прошлым кадром ({@link #flamesAtEye})
+            heat.light(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT[o + 6], air, LIT[o + 7], false);
+        }
+        flamesAtEye = litEye;
+        lit = 0;
+        litEye = 0;
+    }
+
+    /** Свет факелов у глаза в последнем собранном кадре (линейный, белая стена в полдень — 1). */
+    private static double flamesAtEye;
+
+    static double flamesAtEye() {
+        return flamesAtEye;
+    }
+
     /** Шар радиуса r с центром (dx, dy, dz) на дальности d хоть краем в кадре (конус до угла экрана). */
     static boolean inFrame(FarView view, double dx, double dy, double dz, double d, double r) {
         double angle = view.edge() + Math.asin(Math.min(1, r / d));
@@ -675,6 +804,10 @@ public final class FarFlightView {
         EG[slot] = grey;
         EB[slot] = grey;
         EL[slot] = light;
+        EW[slot] = look[0];
+        ES[slot] = look[4];
+        EE[slot] = look[5];
+        EO[slot] = look[6];
         DRAWN[slot] = frame;
     }
 
@@ -682,11 +815,34 @@ public final class FarFlightView {
      * Отрезок ленты между концами a и b из кэша кадра; цвет — середина между их цветами. Поперёк у конца a — тот же, что
      * у прошлого отрезка этой ленты (стык без щели на изгибе), у b — запоминается для следующего.
      */
-    private static void segment(FarSprites out, int a, int b) {
+    private static void segment(FarSprites out, int a, int b, Trail style) {
+        // трубка, крупная на экране, — клубами; ширина — у ближней к глазу точки отрезка
+        FarView view = seen;
+        double puffs = 0, keepA = 1, keepB = 1;
+        if (view != null) {
+            double tx = EX[b] - EX[a], ty = EY[b] - EY[a], tz = EZ[b] - EZ[a];
+            double gap = FarSprites.distance(EX[a], EY[a], EZ[a], tx, ty, tz), scale = puffScale;
+            puffs = puffShare(Math.max(EW[a], EW[b]) / scale, gap, view.pixel());
+            // лента у конца — своей долей у этого конца (у стыка с соседним отрезком та же), а отрезок у самого глаза — без неё
+            keepA = 1 - puffShare(EW[a] / scale, Math.sqrt(EX[a] * EX[a] + EY[a] * EY[a] + EZ[a] * EZ[a]), view.pixel());
+            keepB = 1 - puffShare(EW[b] / scale, Math.sqrt(EX[b] * EX[b] + EY[b] * EY[b] + EZ[b] * EZ[b]), view.pixel());
+            // клубы — только у отрезка в кадре (шар отрезка с квадратами его клубов: до ~9σ от оси) или у глаза (глаз в этом шаре:
+            // его вещество — вуаль, а середина отрезка бывает за спиной)
+            double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 9 * Math.max(ES[a], ES[b]);
+            double mx = EX[a] + 0.5 * tx, my = EY[a] + 0.5 * ty, mz = EZ[a] + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
+            if (puffs > 0 && (md <= reach || inFrame(view, mx, my, mz, md, reach))) {
+                clubs += SmokePuffs.tube(view, out, EX[a], EY[a], EZ[a], ES[a], EE[a], EW[a] / scale, EX[b], EY[b], EZ[b], ES[b], EE[b], EW[b] / scale,
+                        0.5 * (EO[a] + EO[b]), style.sigma0(), ESEED[a], puffs >= 1);
+            }
+        }
+        if (puffs >= 1) {
+            ACROSS[b] = 0;
+            return;
+        }
         JOINT[0] = ACROSS[a] == frame ? NX[a] : Float.NaN;
         JOINT[1] = NY[a];
         JOINT[2] = NZ[a];
-        if (!out.ribbon(EX[a], EY[a], EZ[a], EH[a], EA[a], EL[a], EX[b], EY[b], EZ[b], EH[b], EA[b], EL[b],
+        if (!out.ribbon(EX[a], EY[a], EZ[a], EH[a], EA[a] * (float) keepA, EL[a], EX[b], EY[b], EZ[b], EH[b], EA[b] * (float) keepB, EL[b],
                 (ER[a] + ER[b]) * 0.5f, (EG[a] + EG[b]) * 0.5f, (EB[a] + EB[b]) * 0.5f, JOINT)) return;
         NX[b] = JOINT[0];
         NY[b] = JOINT[1];
@@ -715,6 +871,16 @@ public final class FarFlightView {
     }
 
     /**
+     * Доля отрезка трубки шириной width (на половине непрозрачности середины, м), что рисуют клубы, когда ближняя его точка
+     * в gap блоках от глаза ({@link #PUFFS_FROM}, {@link #PUFFS_FULL}); pixel — угол пикселя, рад.
+     */
+    static double puffShare(double width, double gap, double pixel) {
+        double px = width / Math.max(gap * pixel, 1e-9);
+        double t = Math.clamp((px - PUFFS_FROM) / (PUFFS_FULL - PUFFS_FROM), 0, 1);
+        return t * t * (3 - 2 * t);
+    }
+
+    /**
      * Лента шириной width на дальности d: полуширина для {@link FarSprites#ribbon} и доля непрозрачности. Уже пикселя
      * она не пропадает, а рисуется в полтора пикселя, бледнее во столько же раз: сколько неба закрывает след, столько
      * и лента.
@@ -723,6 +889,10 @@ public final class FarFlightView {
         double half = width / 2, floor = 0.5 * Sight.MIN_PIXELS * pixel * d;
         out[0] = Math.max(half, floor) * FarSprites.RIBBON;
         out[1] = half >= floor ? 1 : half / floor;
+    }
+
+    private static double sq(double v) {
+        return v * v;
     }
 
     private static float channel(int rgb, int channel) {
@@ -773,8 +943,14 @@ public final class FarFlightView {
 
     /** Выход из мира или смена измерения. */
     static void reset() {
+        flamesAtEye = 0;
+        lit = 0;
+        litEye = 0;
+        puffScale = 1;
+        clubs = 0;
         FARS.clear();
         BY_TRACK.clear();
+        BY_OWNER.clear();
         POINTS.clear();
         active = 0;
         flights = 0;

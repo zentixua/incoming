@@ -44,6 +44,8 @@ uniform vec4 FxSix;
 // x — наибольшее смещение векторов движения, доля кадра; y и z — средний по клубу свет спереди и средний по шести
 // сторонам в линейном (puff6.json); к среднему по шести карты приводятся
 uniform vec3 FxSixLight;
+// оттенок света неба у клубов (FarView.sky против его яркости, линейно): цвет вершины клуба несёт только яркость
+uniform vec3 FxSkyTint;
 
 out vec4 fragColor;
 
@@ -137,7 +139,9 @@ void main() {
             vec3 bd;
             fire = ballsToward(worldPos, bd);
         }
-        sixLit = pow(max(vec3(sky) + fire, vec3(0.0)), vec3(1.0 / 2.2));
+        // оттенок неба (ночью — сиреневый свет луны) — только у света неба: цвет вершины несёт его яркость, а огонь у клуба
+        // свой (оттенок на огне красил пыль у шара ночью в розовый)
+        sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
         tex = vec4(vec3(a.a), a.a);
     } else if (nearest < -0.5) {
         tex = textureGrad(Sampler3, texCoord0, dx, dy);
