@@ -720,8 +720,9 @@ public final class ServerActions {
                 else if (e instanceof LauncherEntity) launchersRemoved++;
                 e.discard();
             }
-            // залпы ядерными не бывают (ServerActions.clamp): одна ракета, одна бомба; невыпущенное — владельцам
-            salvos += StrikeWorld.clearSalvos(level);
+            // ядерный залп — только из одного снаряда, который ждёт места пуска (ServerActions.clamp, LaunchPlaces): его,
+            // как ядерный снаряд, снимает только ядерный отбой; невыпущенное — владельцам
+            salvos += StrikeWorld.clearSalvos(level, nuclear);
             if (nuclear) {
                 NuclearEvents events = NuclearEvents.get(level);
                 for (NuclearEvents.ScheduledStrike s : events.scheduled()) {
@@ -805,7 +806,8 @@ public final class ServerActions {
                     turned++;
                 }
             }
-            salvos += SalvoData.get(level).cancel(level, owner, server.getPlayerList().getPlayers());
+            // ядерный залп (снаряд ждёт места пуска) отбой игрока не снимает, как и ядерный снаряд
+            salvos += SalvoData.get(level).cancel(level, owner, server.getPlayerList().getPlayers(), false);
         }
         PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(owner), false, gone));
         Incoming.LOG.info("Stand down — {}: self-destructed {}, turned away {}, taken off launchers {} (launchers {}), off-world {}, salvos {}",

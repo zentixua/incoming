@@ -68,10 +68,18 @@ public final class SalvoData extends SavedData {
      * @return сколько залпов отменено
      */
     public int cancel(ServerLevel level, @Nullable UUID owner, Collection<? extends ServerPlayer> online) {
+        return cancel(level, owner, online, true);
+    }
+
+    /**
+     * То же; {@code nuclear} — и ядерный залп ({@link Salvo#nuclear}): его, как ядерный снаряд, снимает только ядерный
+     * отбой, а не отбой игрока и не обычный.
+     */
+    public int cancel(ServerLevel level, @Nullable UUID owner, Collection<? extends ServerPlayer> online, boolean nuclear) {
         int n = 0;
         for (Iterator<Salvo> it = salvos.iterator(); it.hasNext(); ) {
             Salvo s = it.next();
-            if (owner != null && !owner.equals(s.owner)) continue;
+            if (owner != null && !owner.equals(s.owner) || !nuclear && s.nuclear()) continue;
             it.remove();
             refund(s, online, "salvo cancelled");
             n++;
@@ -119,7 +127,7 @@ public final class SalvoData extends SavedData {
         if (s.paid) {
             // ядерная БЧ на носителе оплачена предметом на снаряд, как в Munitions.Bill.of
             int shots = s.remaining + s.failed;
-            boolean carrier = s.nuke.onCarrier() && Loadout.carriesNuke(s.weapon) && !s.weapon.spec().warhead().always();
+            boolean carrier = s.nuclear() && !s.weapon.spec().warhead().always();
             Munitions.refund(online, s.owner, new Munitions.Bill(s.weapon, shots, carrier ? shots : 0), why);
         }
         s.failed = 0;
@@ -223,6 +231,11 @@ public final class SalvoData extends SavedData {
             this.failed = failed;
         }
 
+
+        /** Залп несёт ядерную БЧ (залп из одного снаряда — ядерный приказ, который ждёт места пуска). */
+        boolean nuclear() {
+            return nuke.onCarrier() && Loadout.carriesNuke(weapon);
+        }
 
         /** Кому строки и полоса залпа: владельцу в сети, если залп не со стационарной пусковой. */
         @Nullable

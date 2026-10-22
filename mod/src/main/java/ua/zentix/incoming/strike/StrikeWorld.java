@@ -217,10 +217,11 @@ public final class StrikeWorld {
      * Отбой: взрывы в процессе доигрываются (это уже случилось), залпы отменяются, а их невыпущенные оплаченные снаряды
      * возвращаются владельцам в сети ({@link Munitions}).
      *
+     * @param nuclear и ядерные (ядерный отбой)
      * @return сколько залпов отменено
      */
-    public static int clearSalvos(ServerLevel level) {
-        return SalvoData.get(level).cancel(level, null, level.getServer().getPlayerList().getPlayers());
+    public static int clearSalvos(ServerLevel level, boolean nuclear) {
+        return SalvoData.get(level).cancel(level, null, level.getServer().getPlayerList().getPlayers(), nuclear);
     }
 
     /**

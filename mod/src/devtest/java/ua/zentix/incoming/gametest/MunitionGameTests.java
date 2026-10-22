@@ -286,8 +286,8 @@ public final class MunitionGameTests {
 
     /**
      * Ядерная ракета оператора с далёкого места пуска ждёт его залпом из одного снаряда ({@link LaunchPlaces}): залп
-     * несёт её ядерную БЧ (у залпов из нескольких снарядов её нет), а отбой, пока место грузится, возвращает и ракету,
-     * и БЧ — обе оплачены предметами.
+     * несёт её ядерную БЧ (у залпов из нескольких снарядов её нет); не ядерный отбой его не снимает, а ядерный, пока место
+     * грузится, возвращает и ракету, и БЧ — обе оплачены предметами.
      */
     @GameTest(template = "range", batch = "munitions_place", skyAccess = true)
     public static void nuclearMissileWaitingForPlaceRefundsWarhead(GameTestHelper h) {
@@ -312,6 +312,8 @@ public final class MunitionGameTests {
         CompoundTag saved = SalvoData.get(level).save(new CompoundTag(), level.registryAccess());
         h.assertTrue(saved.getList("salvos", Tag.TAG_COMPOUND).stream().map(t -> ((CompoundTag) t).getCompound("nuke"))
                 .anyMatch(n -> n.getBoolean("on_carrier")), "залп из одной ракеты потерял ядерную БЧ: " + saved);
+        // отбой игрока и обычный отбой ядерный залп не снимают, как и ядерный снаряд
+        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p), false), 0, "не ядерный отбой снял ядерный залп");
         h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p)), 1, "отменено залпов");
         h.assertTrue(held(p, missile) == 1 && held(p, warhead) == 1, "возврат: ракет " + held(p, missile) + ", БЧ " + held(p, warhead));
         h.succeed();
