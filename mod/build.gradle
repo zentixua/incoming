@@ -100,6 +100,8 @@ neoForge {
             // открыть мир сценария прошлого запуска, а не создавать заново (INCOMING_WORLD=incoming_scenario: повторный вход,
             // например рельеф LSS из файла, когда LSS присылает только изменённое)
             if (System.getenv('INCOMING_WORLD')) systemProperty 'incoming.world', System.getenv('INCOMING_WORLD')
+            // сценарий probe (шлагбаум): только эти сцены (INCOMING_PROBE_CASES=flyby,grad-day — как --prop incoming.probe.cases)
+            if (System.getenv('INCOMING_PROBE_CASES')) systemProperty 'incoming.probe.cases', System.getenv('INCOMING_PROBE_CASES')
             // сценарий guide: только эти разделы (INCOMING_GUIDE=recipes,map — список в GuideShots)
             if (System.getenv('INCOMING_GUIDE')) systemProperty 'incoming.guide', System.getenv('INCOMING_GUIDE')
             // размер окна: INCOMING_SIZE=1920x1080 (трейлер), по умолчанию 1280x720

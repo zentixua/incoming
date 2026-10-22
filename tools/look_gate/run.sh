@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Шлагбаум картинки и звука: сцены ProbeScenario (сценарий клиента probe) одной версии мода под Iris со всей сборкой.
 #   tools/look_gate/run.sh <имя> <дерево incoming> [сцены через запятую] [каталог доп. модов]
-#   INCOMING_LOOK_HEARING=off — без оглушения слуха (сравнение звука)
+# Слух без оглушения всегда, сцены выборки — в порядке и во времени игры эталона: прогон, где это не так, не годится
+# (check.py по логу, код 1).
 # Копия инстанса Артёма → $LOOK_ROOT/inst-<имя> (его инстанс не трогается), клиент — prod_client.py дерева (сценарный
 # jar этого дерева); ждёт, пока игра Артёма закрыта и нет чужой задачи ноутбука; игра запустилась — клиент гасится, код 75.
 # Итог — $LOOK_ROOT/out/<имя>/: кадры, лог, audio.wav, probe-frames.txt, gpu.csv. Запускать через tools/laptop_job.sh.
@@ -25,12 +26,11 @@ until flock -n 9; do echo "$(date +%T) другой прогон шлагбау�
 while gpu_job || short_of_memory; do echo "$(date +%T) видеокарта или память заняты чужой задачей — жду"; sleep 30; done
 python3 "$TREE/tools/prod_client.py" --copy-only --dir "$INST" || exit 1
 sed -i -e 's/^fullscreen:.*/fullscreen:false/' -e 's/^soundCategory_music:.*/soundCategory_music:0.0/' "$INST/options.txt"
-# INCOMING_LOOK_HEARING=off — без оглушения и звона (nuke_tinnitus = false в копии): сцены идут подряд одним игроком,
-# и глухота от взрыва в 50 м переходит в следующие сцены — для сравнения источников звука её выключают
-if [ "${INCOMING_LOOK_HEARING:-}" = off ]; then
-  sed -i "s/^nuke_tinnitus = .*/nuke_tinnitus = false/" "$INST/config/incoming-client.toml"
-  grep -q '^nuke_tinnitus = false' "$INST/config/incoming-client.toml" || { echo "nuke_tinnitus не выключен"; exit 1; }
-fi
+# без оглушения и звона (nuke_tinnitus = false в копии) — всегда: сцены идут подряд одним игроком, и глухота от взрыва
+# в 50 м переходит в следующие сцены. Раньше это включала переменная INCOMING_LOOK_HEARING=off, и прогоны F2b7, F2b8
+# без неё шли со слухом; теперь выключает сам скрипт, а проба пишет, что видит игра (check.py)
+sed -i "s/^nuke_tinnitus = .*/nuke_tinnitus = false/" "$INST/config/incoming-client.toml"
+grep -q '^nuke_tinnitus = false' "$INST/config/incoming-client.toml" || { echo "nuke_tinnitus не выключен"; exit 1; }
 if [ "$EXTRA" != - ]; then cp -v "$EXTRA"/*.jar "$INST/mods/"; fi
 rm -rf "$OUT"; mkdir -p "$OUT"
 PROPS=(--prop incoming.frametimes=false)
@@ -51,5 +51,10 @@ cp "$INST/logs/latest.log" "$INST/logs/probe-frames.txt" "$INST/audio.wav" "$OUT
 cp -r "$INST/crash-reports" "$OUT/" 2>/dev/null
 grep -c 'SCENARIO probe shot' "$OUT/latest.log"
 grep -E 'SCENARIO probe (case|.* blast|.* launch|.*no )|SCENARIO (done|fx)|Exception' "$OUT/latest.log" | head -40
+# годен ли прогон: слух выключен, каждая сцена — в своё время игры эталона
+if [ "$code" != 75 ] && ! python3 "$(dirname "$0")/check.py" "$OUT/latest.log"; then
+  echo "look $V: прогон не годится для сравнения (выше — почему)"
+  [ "$code" = 0 ] && code=1
+fi
 echo "look $V exit $code"
 exit $code

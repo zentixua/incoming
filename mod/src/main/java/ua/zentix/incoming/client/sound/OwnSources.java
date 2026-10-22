@@ -20,6 +20,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.DoubleSupplier;
 
 /**
  * Свои источники OpenAL — для эха от рельефа ({@link EchoMix}) и удара фронта ядерки ({@link BlastPulse}): мимо
@@ -126,6 +127,11 @@ public final class OwnSources {
         float filterGain = Float.NaN, filterHighs = Float.NaN;
         /** Слух, каким его слышит этот голос (удар самой волны — как до неё, {@link Deafness#before}); null — слух сейчас. */
         float @Nullable [] heard;
+        /** Множитель смеси взрывов ({@link Mix}), каждый кадр; null — громкость своя. */
+        @Nullable
+        DoubleSupplier mix;
+        /** Громкость, что стоит у источника. */
+        float applied;
 
         Voice(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, boolean whole, float open) {
             this.owner = owner;
@@ -202,10 +208,21 @@ public final class OwnSources {
      */
     public static boolean play(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, boolean whole,
                                boolean before) {
+        return play(owner, anchor, after, azimuth, gain, pcm, rate, whole, before, null);
+    }
+
+    /**
+     * Как {@link #play(Object, Anchor, double, double, float, short[], int, boolean, boolean)}; {@code mix} — множитель
+     * смеси взрывов ({@link Mix}): громкость голоса — {@code gain} × он, каждый кадр.
+     */
+    public static boolean play(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, boolean whole,
+                               boolean before, @Nullable DoubleSupplier mix) {
         if (pcm.length == 0 || VOICES.size() >= MAX || !ready()) return false;
         // преграда — при старте голоса (frame): до него он ждёт до ~24 с
         Voice v = new Voice(owner, anchor, after, azimuth, gain, pcm, rate, whole, 1);
         if (before) v.heard = new float[]{Deafness.gain(), Deafness.highs()};
+        v.mix = mix;
+        v.applied = mix == null ? gain : (float) (gain * mix.getAsDouble());
         try {
             v.buffer = AL10.alGenBuffers();
             if (v.buffer == 0 || !AL10.alIsBuffer(v.buffer)) {
@@ -228,7 +245,7 @@ public final class OwnSources {
             // без затухания по расстоянию: громкость — наша (как у Channel.disableAttenuation)
             AL10.alSourcei(v.source, 0xD000, AL10.AL_NONE);
             AL10.alSourcef(v.source, AL10.AL_MAX_GAIN, 16);
-            AL10.alSourcef(v.source, AL10.AL_GAIN, gain);
+            AL10.alSourcef(v.source, AL10.AL_GAIN, v.applied);
             if (effects()) filter(v, v.heard == null ? Deafness.gain() : v.heard[0], v.heard == null ? Deafness.highs() : v.heard[1]);
         } catch (RuntimeException | LinkageError e) {
             Incoming.LOG.warn("Own OpenAL source failed: {}", e.toString());
@@ -295,6 +312,13 @@ public final class OwnSources {
             AL10.alSource3f(v.source, AL10.AL_POSITION, (float) (ear.x + Math.cos(v.azimuth) * 3), (float) ear.y,
                     (float) (ear.z + Math.sin(v.azimuth) * 3));
             if (efx) filter(v, v.heard == null ? deafGain : v.heard[0], v.heard == null ? deafHighs : v.heard[1]);
+            if (v.mix != null) {
+                float g = (float) (v.gain * v.mix.getAsDouble());
+                if (Math.abs(g - v.applied) > 0.002f * Math.max(v.gain, 1e-6f)) {
+                    AL10.alSourcef(v.source, AL10.AL_GAIN, g);
+                    v.applied = g;
+                }
+            }
             if (v.started) continue;
             double at = v.anchor.zero + v.after;
             if (Double.isNaN(at)) continue;

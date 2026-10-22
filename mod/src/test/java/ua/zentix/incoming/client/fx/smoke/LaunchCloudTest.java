@@ -60,6 +60,34 @@ class LaunchCloudTest {
     }
 
     /**
+     * Пока струя бьёт в землю, её продукты — облако у земли, но между соплом и землёй их несёт сама струя: под ракетой виден
+     * столб до облака (кадр старта сзади, F4: в 3.5.x на 1,5 с под ракетой было пусто — все точки следа до ~38 м высоты
+     * отдавались облаку целиком). Столб — вещество на метр ṁ/u(x), u(x) = u₀·B·d′/x: не зависит от того, как быстро
+     * ракета шла, когда была в этой точке, и за пламенем, до длины Мортона, его видно.
+     */
+    @Test
+    void jetColumnStandsBetweenNozzleAndGround() {
+        var stage = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST);
+        Motor m = stage.motor();
+        var trail = stage.trail();
+        double flame = stage.flame(ua.zentix.incoming.util.Air.SEA).flame(), morton = LaunchCloud.mortonLength(m);
+        double[] look = new double[ua.zentix.incoming.client.fx.plume.TrailModel.LOOK];
+        for (double v : new double[]{3, 10, 30}) {
+            double inv = ua.zentix.incoming.client.fx.plume.TrailModel.inverseSpeed(v, 0);
+            for (double x = 1.5 * flame; x <= morton; x += 1) {
+                double share = LaunchCloud.column(m, x, inv);
+                assertTrue(share > 0 && share <= 1, "доля " + share);
+                // вещество на метр столба — от струи, а не от скорости ракеты, пока столб реже положенного следа
+                if (share < 1) assertEquals(m.velocity() * LaunchCloud.JET_DECAY * LaunchCloud.diameter(m) / x, 1 / (share * inv), 1e-6 * x + 1e-6);
+                ua.zentix.incoming.client.fx.plume.TrailModel.look(trail, 0.5, inv, 0, 0, 0, 0, 0.01, Stability.D, share, look);
+                assertTrue(look[1] > 0.3, "столб в " + x + " м за соплом (ракета " + v + " м/с) виден: непрозрачность " + look[1]);
+            }
+        }
+        // у сопла струя быстрее любого снаряда: столб там реже следа
+        assertTrue(LaunchCloud.column(m, 1, ua.zentix.incoming.client.fx.plume.TrailModel.inverseSpeed(30, 0)) < 0.05);
+    }
+
+    /**
      * Подача: тепло — тепло двигателя в воздухе × время, сажа и капли — та же толща, что у продуктов, пыль — по рыхлости;
      * струя мимо земли не подаёт.
      */

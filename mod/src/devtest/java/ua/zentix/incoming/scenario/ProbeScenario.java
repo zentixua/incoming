@@ -82,17 +82,29 @@ final class ProbeScenario {
      * начало сцены в v3.4.1 и main — в пределах 200 тиков). Ветер мира и его класс устойчивости зависят только от времени
      * игры ({@code util.Wind}, {@code util.Air}): ночью у границы классов D и E ветер у земли — 1 или 5 м/с, и шлейф пожара
      * то встаёт столбом, то стелется. Выборка сцен без этого шла бы в другом воздухе, чем эталон; сцена, до которой игра
-     * не дошла, догоняет своё время ускоренными тиками ({@code /tick sprint}).
+     * не дошла, догоняет своё время ускоренными тиками ({@code /tick sprint}). Назад время не идёт, поэтому сцены выборки
+     * идут в порядке эталона ({@link #ALL}); сцена, начавшаяся позже (прошлая сцена шла дольше: сцены старта ждут схода
+     * ракеты), годна, пока её воздух тот же, что в эталонное время ({@link #air}: ветер меняется за игровые сутки, а не за
+     * сотни тиков, но у границы классов хватает и малого), иначе — строка {@code SCENARIO probe FAIL} и выход (её же ловит
+     * {@code tools/look_gate/check.py}). У пролёта время — по прогону main 22.10 (Cmain: между стартом ночью и взрывом на
+     * воде, как у 3.4.1).
      */
     private static final java.util.Map<String, Integer> START = java.util.Map.ofEntries(
             java.util.Map.entry("drone-day-50", 902), java.util.Map.entry("drone-day-300", 2093), java.util.Map.entry("drone-night-50", 3353),
             java.util.Map.entry("drone-night-300", 4541), java.util.Map.entry("grad-day", 5821), java.util.Map.entry("grad-night", 7722),
             java.util.Map.entry("launch-behind", 9519), java.util.Map.entry("launch-side", 9792), java.util.Map.entry("launch-night-behind", 10084),
-            java.util.Map.entry("water-day-50", 11047), java.util.Map.entry("debris-night-50", 12236),
+            java.util.Map.entry("flyby", 10440), java.util.Map.entry("water-day-50", 11047), java.util.Map.entry("debris-night-50", 12236),
             java.util.Map.entry("substation-night-50", 14027), java.util.Map.entry("bomb-day-50", 15830), java.util.Map.entry("bomb-night-50", 17018),
             java.util.Map.entry("bomb-day-150", 18204), java.util.Map.entry("bomb-night-150", 19390), java.util.Map.entry("bomb-day-300", 20577),
             java.util.Map.entry("sam-side", 21690), java.util.Map.entry("sam-behind", 22182), java.util.Map.entry("sam-night-side", 22634),
             java.util.Map.entry("sam-burst", 23922), java.util.Map.entry("sam-night-burst", 24810));
+    /**
+     * Тот же воздух: ветер у земли — не дальше этого, м/с, его направление — градусов, класс устойчивости (непрерывный,
+     * {@code util.Stability}) — долей класса (⚠ оценка: снос дыма на минуту — в пределах метров и градусов).
+     */
+    static final double SAME_WIND = 0.3, SAME_DIR = 3, SAME_CLASS = 0.1;
+    /** Время игры, в которое нынешняя сцена началась; −1 — ещё ни одна. */
+    private long startedAt = -1;
     /** Сцена уже догнала своё время игры; ускорение до него уже заказано. */
     private boolean onTime, sprinting;
 
@@ -128,7 +140,8 @@ final class ProbeScenario {
 
     ProbeScenario() {
         String prop = System.getProperty("incoming.probe.cases");
-        cases = prop == null || prop.isBlank() ? ALL : List.of(prop.split(","));
+        // выборка — в порядке эталона: время игры догоняется только вперёд
+        cases = prop == null || prop.isBlank() ? ALL : ordered(prop.split(","));
         Writer w = null;
         try {
             Path file = FMLPaths.GAMEDIR.get().resolve("logs").resolve("probe-frames.txt");
@@ -145,6 +158,14 @@ final class ProbeScenario {
             if (e.getExplosion().center().distanceTo(target) < 80) blasts.incrementAndGet();
         });
         at(40, () -> {
+            // сравнение звука — без оглушения: сцены идут подряд одним игроком, и глухота от взрыва в 50 м перешла бы в
+            // следующие сцены (прогоны F2b7, F2b8 22.10 шли со слухом, и хвосты взрывов в них заглушены)
+            boolean hearing = IncomingConfig.CLIENT.nukeTinnitus.get();
+            Incoming.LOG.info("SCENARIO probe hearing damage {}", hearing ? "on" : "off");
+            if (hearing) {
+                fail("hearing damage is on (nuke_tinnitus = true): sounds of later scenes would be muffled by earlier blasts");
+                return;
+            }
             cmd("weather clear");
             cmd("gamerule doDaylightCycle false");
             cmd("gamerule doFireTick true");
@@ -169,10 +190,83 @@ final class ProbeScenario {
         at(60, this::nextCase);
     }
 
+    /**
+     * Тот же ли воздух мира в тик {@code now}, что в тик {@code reference}, при солнце сцены (день — в зените, ночь — под
+     * горизонтом), без дождя: «same», «differs: …» или «none» — у этой версии мода воздуха мира нет (3.4.1: дым и звук от
+     * времени игры не зависят). Отражением: класс один в деревьях всех версий.
+     */
+    static String sameAir(long now, long reference, boolean night) {
+        double[] a, b;
+        try {
+            a = air(now, night);
+            b = air(reference, night);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            // воздух в этой версии есть, а прочитать его нельзя (класс переделан): прогон не годится, а не проходит молча
+            return "differs: air unreadable (" + e + ")";
+        }
+        if (a == null || b == null) return "none";
+        double dir = Math.abs(Math.toDegrees(Math.atan2(Math.sin(a[1] - b[1]), Math.cos(a[1] - b[1]))));
+        String numbers = String.format(Locale.ROOT, "wind %.2f/%.2f m/s, direction %.1f deg apart, class %.2f/%.2f", a[0], b[0], dir, a[2], b[2]);
+        boolean same = Math.abs(a[0] - b[0]) <= SAME_WIND && dir <= SAME_DIR && Math.abs(a[2] - b[2]) <= SAME_CLASS;
+        return (same ? "same: " : "differs: ") + numbers;
+    }
+
+    /**
+     * Ветер в 10 м над уровнем моря, м/с, его направление, рад, и класс устойчивости в тик {@code gameTime}; null —
+     * класса воздуха в этой версии нет. Имена — те же, что проверяет {@code AirTest.probeReadsTheAirByTheseNames}.
+     */
+    private static double @org.jetbrains.annotations.Nullable [] air(long gameTime, boolean night) throws ReflectiveOperationException {
+        Class<?> c;
+        try {
+            c = Class.forName("ua.zentix.incoming.util.Air");
+        } catch (ClassNotFoundException e) {
+            return null;
+        }
+        Object air = c.getMethod("of", long.class, double.class, double.class, double.class).invoke(null, gameTime, night ? -1.0 : 1.0, 0.0, 0.0);
+        Object wind = c.getMethod("wind").invoke(air);
+        double speed = (double) c.getMethod("speed", double.class).invoke(air, 73.0);
+        double direction = (double) wind.getClass().getMethod("direction").invoke(wind);
+        return new double[]{speed, direction, (double) c.getMethod("stability").invoke(air)};
+    }
+
+    /** Сцены выборки в порядке эталона; незнакомая сцена — ошибка (место и время у неё неизвестны). */
+    static List<String> ordered(String[] names) {
+        List<String> out = new ArrayList<>();
+        for (String n : names) {
+            String name = n.trim();
+            if (name.isEmpty()) continue;
+            if (!ALL.contains(name)) throw new IllegalArgumentException("unknown probe case " + name + ", known: " + ALL);
+            if (!out.contains(name)) out.add(name);
+        }
+        out.sort(java.util.Comparator.comparingInt(ALL::indexOf));
+        return out;
+    }
+
+    /**
+     * Прогон не годится для сравнения: строка {@code SCENARIO probe FAIL} и выход — сразу, а не после часа съёмки
+     * ({@code tools/look_gate/check.py} ловит её и сам).
+     */
+    private void fail(String why) {
+        Incoming.LOG.error("SCENARIO probe FAIL {}", why);
+        at(tick + 2, () -> Minecraft.getInstance().stop());
+    }
+
     private void nextCase() {
         if (sites == null) {
             at(tick + 20, this::nextCase);
             return;
+        }
+        // сцена кончилась: и в конце воздух тот же, что у эталона на том же месте его сцены (сцены идут до минуты, а
+        // начатая позже могла к концу перейти границу класса)
+        Integer ref = caseIndex >= 0 ? START.get(current) : null;
+        if (ref != null && startedAt >= 0) {
+            long now = Minecraft.getInstance().level.getGameTime();
+            String air = sameAir(now, ref + (now - startedAt), current.contains("night"));
+            Incoming.LOG.info("SCENARIO probe {} ends at game {} (reference end {}, air {})", current, now, ref + (now - startedAt), air);
+            if (air.startsWith("differs")) {
+                fail(current + " ends in another air than the reference (" + air + ")");
+                return;
+            }
         }
         caseIndex++;
         if (caseIndex >= cases.size()) {
@@ -199,7 +293,15 @@ final class ProbeScenario {
             at(tick + 10, this::begin);
             return;
         }
-        if (!onTime) Incoming.LOG.info("SCENARIO probe {} game {} (reference start {})", current, now, start);
+        if (!onTime) {
+            String air = start == null ? "unknown" : sameAir(now, start, current.contains("night"));
+            Incoming.LOG.info("SCENARIO probe {} game {} (reference start {}, air {})", current, now, start, air);
+            if (start == null || air.startsWith("differs")) {
+                fail(current + " starts at game " + now + ", reference start " + start + ": another air than the reference (" + air + ")");
+                return;
+            }
+        }
+        if (!onTime) startedAt = now;
         onTime = true;
         int[] site = sites.get(caseIndex);
         armed = false;
@@ -485,8 +587,9 @@ final class ProbeScenario {
                 closest = d;
                 if (tick % 2 == 0) Incoming.LOG.info("SCENARIO probe flyby d={} tick {} audio {}", Math.round(d), tick, audioBytes());
             }
-            if (tick % 10 == 0) Incoming.LOG.info("SCENARIO probe flyby at {} d={} v={}", xyz(drone.position()), Math.round(d),
-                    String.format(Locale.ROOT, "%.2f", drone.speed()));
+            // слои мотора у уха — громкость против мерки и тон ({@code ClientSounds.describe}): сверка записи с моделью
+            if (tick % 10 == 0) Incoming.LOG.info("SCENARIO probe flyby at {} d={} v={} engines:{}", xyz(drone.position()), Math.round(d),
+                    String.format(Locale.ROOT, "%.2f", drone.speed()), ua.zentix.incoming.client.sound.ClientSounds.describe());
         }
     }
 
