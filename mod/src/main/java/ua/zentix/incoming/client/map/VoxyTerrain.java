@@ -84,7 +84,7 @@ final class VoxyTerrain implements TerrainSource {
 
     /** Отражение до классов Voxy, только чтение. */
     static final class Access {
-        final MethodHandle ofEngineNullable, acquireIfExists, copyDataTo, release, acquireRef, releaseRef, mapper, blockId, stateOf;
+        final MethodHandle ofEngineNullable, acquireIfExists, copyDataTo, release, acquireRef, releaseRef, isLive, mapper, blockId, stateOf;
 
         Access(ClassLoader loader) throws ReflectiveOperationException {
             Class<?> identifier = Class.forName("me.cortex.voxy.commonImpl.WorldIdentifier", false, loader);
@@ -100,6 +100,7 @@ final class VoxyTerrain implements TerrainSource {
             release = l.unreflect(section.getMethod("release")).asType(MethodType.methodType(void.class, Object.class));
             acquireRef = l.unreflect(engine.getMethod("acquireRef")).asType(MethodType.methodType(void.class, Object.class));
             releaseRef = l.unreflect(engine.getMethod("releaseRef")).asType(MethodType.methodType(void.class, Object.class));
+            isLive = l.unreflect(engine.getMethod("isLive")).asType(MethodType.methodType(boolean.class, Object.class));
             mapper = l.unreflect(engine.getMethod("getMapper")).asType(toObject);
             blockId = l.unreflect(mapperClass.getMethod("getBlockId", long.class)).asType(MethodType.methodType(int.class, long.class));
             Class<?> state = mapperClass.getMethod("getBlockStateFromBlockId", int.class).getReturnType();
@@ -213,8 +214,8 @@ final class VoxyTerrain implements TerrainSource {
 
     /**
      * Отказ при вызове Voxy: изменилось устройство ({@link LinkageError}, не тот тип) — источник выключен; мир Voxy
-     * закрыт под чтением ({@link IllegalStateException} «World is not live») — забыть его, найти заново; другое — в
-     * счётчик отказов, первый — в лог.
+     * закрыт под чтением ({@link IllegalStateException}, и сам Voxy говорит {@code isLive() == false}) — забыть его,
+     * найти заново; другое (и другое {@code IllegalStateException} у живого мира) — в счётчик отказов, первый — в лог.
      */
     private void fail(Throwable t, @Nullable Engine in) {
         if (t instanceof LinkageError || t instanceof WrongMethodTypeException || t instanceof ClassCastException) {
@@ -222,13 +223,25 @@ final class VoxyTerrain implements TerrainSource {
             return;
         }
         if (t instanceof Error err) throw err;
-        if (t instanceof IllegalStateException && in != null) {
+        if (t instanceof IllegalStateException && in != null && !live(in)) {
             if (engine == in) engine = null;
             return;
         }
         if (failures.getAndIncrement() == 0) {
             firstFailure = t.toString();
             Incoming.LOG.warn("Voxy terrain: a section of its LOD database not read", t);
+        }
+    }
+
+    /** Жив ли мир Voxy (не закрыт): не вышло спросить — считаем закрытым. */
+    private static boolean live(Engine e) {
+        Access a = access;
+        if (a == null) return false;
+        try {
+            return (boolean) a.isLive.invokeExact(e.engine);
+        } catch (Throwable t) {
+            if (t instanceof Error err && !(t instanceof LinkageError)) throw err;
+            return false;
         }
     }
 
@@ -246,7 +259,7 @@ final class VoxyTerrain implements TerrainSource {
             return 0;
         } catch (Throwable ex) {
             if (ex instanceof Error err) throw err;
-            throw new IllegalStateException(ex);
+            throw new java.lang.reflect.UndeclaredThrowableException(ex);
         }
         synchronized (e) {
             t = e.infos;
@@ -298,7 +311,11 @@ final class VoxyTerrain implements TerrainSource {
         for (int c : columns) any |= c != 0;
         Section now = new Section(columns, System.nanoTime(), any);
         Section was = e.cache.put(key(lvl, sx, sz), now);
-        if (was != null && !Arrays.equals(was.columns, columns)) markChanged(lvl, sx, sz);
+        if (was != null && !Arrays.equals(was.columns, columns)) {
+            markChanged(lvl, sx, sz);
+            // подробные сводки под ней — до перемены (воронка, руины): лучи и звук ({@link #peek}) берут подробную первой
+            dropFiner(e.cache, lvl, sx, sz);
+        }
         if (any) e.any.set(true);
         long took = System.nanoTime() - start;
         columnsRead.incrementAndGet();
@@ -314,7 +331,7 @@ final class VoxyTerrain implements TerrainSource {
         } catch (RuntimeException | Error t) {
             throw t;
         } catch (Throwable t) {
-            throw new IllegalStateException(t);
+            throw new java.lang.reflect.UndeclaredThrowableException(t);
         }
     }
 
@@ -325,6 +342,16 @@ final class VoxyTerrain implements TerrainSource {
         if (s != null && System.nanoTime() - s.readAt < maxAge) return s;
         Section read = read(e, lvl, sx, sz);
         return read != null ? read : s;
+    }
+
+    /** Сводки уровней мельче {@code lvl} под её столбцом секций (sx, sz) — из памяти; прочитаются заново, когда понадобятся. */
+    static void dropFiner(Map<Long, Section> cache, int lvl, int sx, int sz) {
+        for (int l = 0; l < lvl; l++) {
+            int k = lvl - l, n = 1 << k;
+            for (int z = 0; z < n; z++) {
+                for (int x = 0; x < n; x++) cache.remove(key(l, (sx << k) + x, (sz << k) + z));
+            }
+        }
     }
 
     /** Чанки под столбцом секций — через каждые 64 блока (плитка уровня 0), их плитки на всех уровнях перестроятся. */

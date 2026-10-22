@@ -50,6 +50,7 @@ and your client (the same terrain Voxy draws), otherwise from Voxy's own LOD, ot
 none of them, the map shows only loaded chunks, but you can still strike a blank spot. LOD Server Support does not run
 in single-player (a world opened to LAN runs it for the host and the friends who have it), so there it is Voxy or
 Distant Horizons. Voxy keeps only what you have seen; in single-player `/voxy import current` fills it from the
-whole save once. Far from you Voxy keeps coarse terrain, so heights there are right to a few blocks. If you installed LOD Server Support before this version of Incoming, run
+whole save once. Zoomed out, and for sight lines far away, Incoming reads Voxy's coarse levels: heights there are
+right to within 8 blocks, and water shallower than a cell may show as its bed. If you installed LOD Server Support before this version of Incoming, run
 `/lss clearcache` once on that server: LOD Server Support only sends terrain it has not sent before. The map does not
 work in the Nether.

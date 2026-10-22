@@ -99,6 +99,40 @@ class VoxyTerrainTest {
     }
 
     @Test
+    void failingSectionOfALiveWorldIsCountedNotTakenForClosed() {
+        int grass = engine.mapper.id(Blocks.GRASS_BLOCK.defaultBlockState());
+        put(0, 0, 64, 0, grass);
+        VoxyTerrain t = new VoxyTerrain(null, -64, 320);
+        assertTrue(t.active());
+        engine.broken = true;
+        assertNull(t.open(null, 0).column(0, 0));
+        assertTrue(t.describe().startsWith("Voxy (world open)"), "мир живой — не забыт: " + t.describe());
+        assertFalse(t.describe().contains("failures 0;"), "сбой посчитан: " + t.describe());
+    }
+
+    /** Перечитанная грубая сводка стала другой (воронка вдали) — подробные под ней уходят: лучи не берут рельеф до удара. */
+    @Test
+    void finerSummariesUnderAChangedCoarseOneAreDropped() {
+        Map<Long, VoxyTerrain.Section> cache = new HashMap<>();
+        VoxyTerrain.Section s = new VoxyTerrain.Section(new int[1024], 0, true);
+        // столбец уровня 4 (-1, 2): блоки -512..-1 по x, 1024..1535 по z
+        cache.put(VoxyTerrain.key(4, -1, 2), s);
+        cache.put(VoxyTerrain.key(0, -16, 32), s);
+        cache.put(VoxyTerrain.key(0, -1, 47), s);
+        cache.put(VoxyTerrain.key(2, -4, 8), s);
+        cache.put(VoxyTerrain.key(3, -2, 5), s);
+        cache.put(VoxyTerrain.key(0, 0, 32), s);
+        cache.put(VoxyTerrain.key(0, -17, 32), s);
+        VoxyTerrain.dropFiner(cache, 4, -1, 2);
+        assertTrue(cache.containsKey(VoxyTerrain.key(4, -1, 2)), "сама остаётся");
+        assertFalse(cache.containsKey(VoxyTerrain.key(0, -16, 32)));
+        assertFalse(cache.containsKey(VoxyTerrain.key(0, -1, 47)));
+        assertFalse(cache.containsKey(VoxyTerrain.key(2, -4, 8)));
+        assertFalse(cache.containsKey(VoxyTerrain.key(3, -2, 5)));
+        assertTrue(cache.containsKey(VoxyTerrain.key(0, 0, 32)) && cache.containsKey(VoxyTerrain.key(0, -17, 32)), "соседние — нет");
+    }
+
+    @Test
     void otherVoxyClassesTurnTheSourceOff() {
         assertFalse(VoxyTerrain.init(new ClassLoader(null) {}), "классов нет — источника нет");
         assertFalse(new VoxyTerrain(null, -64, 320).active());
