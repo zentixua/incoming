@@ -1,0 +1,15 @@
+sam-behind
+  S6old5   frame10s={'mean': 14.91, 'p99': 89.54, 'max': 186.3, 'n': 670} all={'mean': 12.38, 'p99': 63.14, 'max': 186.3, 'n': 2281} comb=5.15 tone=None
+  S6v5     frame10s={'mean': 12.11, 'p99': 44.52, 'max': 76.4, 'n': 826} all={'mean': 12.02, 'p99': 41.45, 'max': 97.3, 'n': 2348} comb=6.12 tone=None
+sam-night-burst
+  S6old5   frame10s={'mean': 9.37, 'p99': 20.3, 'max': 43.3, 'n': 1067} all={'mean': 4.95, 'p99': 25.25, 'max': 602.3, 'n': 15547} comb=5.92 tone=None
+  S6v5     frame10s={'mean': 12.08, 'p99': 44.42, 'max': 107.6, 'n': 826} all={'mean': 9.39, 'p99': 31.24, 'max': 107.6, 'n': 7214} comb=5.86 tone=None
+sam-night-side
+  S6old5   frame10s={'mean': 13.6, 'p99': 47.11, 'max': 75.4, 'n': 735} all={'mean': 12.11, 'p99': 43.2, 'max': 100.8, 'n': 2342} comb=5.21 tone=None
+  S6v5     frame10s={'mean': 11.05, 'p99': 38.9, 'max': 73.9, 'n': 905} all={'mean': 11.79, 'p99': 41.72, 'max': 73.9, 'n': 2379} comb=6.87 tone=None
+sam-side
+  S6old5   frame10s={'mean': 23.43, 'p99': 110.47, 'max': 262.1, 'n': 425} all={'mean': 17.7, 'p99': 90.38, 'max': 299.4, 'n': 1610} comb=5.17 tone=None
+  S6v5     frame10s={'mean': 13.61, 'p99': 67.46, 'max': 485.1, 'n': 733} all={'mean': 10.07, 'p99': 46.33, 'max': 485.1, 'n': 2790} comb=6.56 tone=None
+water-day-50
+  S6old5   frame10s=None all=None comb=None tone=None
+  S6v5     frame10s={'mean': 23.45, 'p99': 89.72, 'max': 118.1, 'n': 423} all={'mean': 15.56, 'p99': 60.82, 'max': 6645.2, 'n': 4436} comb=7.05 tone=None
