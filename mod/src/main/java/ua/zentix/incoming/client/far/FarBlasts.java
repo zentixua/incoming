@@ -263,7 +263,8 @@ public final class FarBlasts {
 
         /** Сколько тиков событие живёт (облако видно). */
         double life() {
-            return model != null ? model.life * 20 : look.life();
+            // водяная пыль взрыва на воде живёт дольше облака без пыли воронки
+            return model != null ? Math.max(model.life, water == null ? 0 : water.mistLife()) * 20 : look.life();
         }
 
         /** Сколько тиков светит огненный шар (0 — шара нет). */

@@ -31,11 +31,11 @@ uniform vec4 Haze;
 // (rgb), ослабление воздуха, 1/блок (w)
 uniform mat4 HeatLights;
 uniform mat4 HeatLightColor;
-// горячий газ: столбец i — низ столба от глаза (xyz), радиус (w; 0 — нет); высота, размер вихря ℓ, скорость подъёма
-// (блоки/с), пульсация показателя преломления δn (по столбцам)
+// горячий газ: столбец i — низ столба от глаза (xyz), радиус (w; 0 — нет); высота, размер вихря ℓ, путь газа в размерах
+// вихря (по модулю периода шума), пульсация показателя преломления δn (по столбцам)
 uniform mat4 HeatHot;
 uniform mat4 HeatShape;
-// время, с; угол пикселя, рад; есть ли свет (z > 0) и газ (w > 0)
+// не занято; угол пикселя, рад; есть ли свет (z > 0) и газ (w > 0)
 uniform vec4 HeatFrame;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
@@ -87,9 +87,9 @@ vec2 heatShift(vec3 dir, float dist) {
         float mid = 0.5 * (t0 + t1);
         float angle = s.w * sqrt(len / s.y) * (1.0 - mid / max(dist, mid + 1e-3));
         vec3 q = (dir * mid - h.xyz) / s.y;
-        float time = HeatFrame.x;
-        q.y -= time * s.z / s.y;
-        float turn = time * 0.3 * s.z / s.y;
+        // s.z — путь газа в размерах вихря (HeatPass: по модулю периода); вихри перемешиваются за ℓ/u', u' — 0,3 подъёма
+        q.y -= s.z;
+        float turn = 0.3 * s.z;
         // СКО шума ~0,45 на ось: на вектор — СКО угла
         float k = angle / (0.45 * 1.4142136) / HeatFrame.y;
         shift += k * vec2(heatNoise(q + vec3(0.0, 0.0, turn)), heatNoise(q + vec3(17.3, 5.1, turn + 31.7)));

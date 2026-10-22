@@ -345,7 +345,8 @@ public final class Exhaust {
                 SmokeGrid.add(b.smoke);
             }
             b.at = p;
-            double dt = now - b.fed;
+            // обломок мог уходить из отслеживания клиента: выброс — не больше двух шагов огня, а не всё пропущенное разом
+            double dt = Math.min(now - b.fed, 2 * PUFF_S);
             if (dt >= PUFF_S) {
                 double watts = FirePlume.BLOCK_WATTS * dt, top = DEBRIS_FLAME.flameHeight();
                 b.smoke.add(p.x, p.y + top, p.z, now, FirePlume.CONVECTIVE * watts, CloudModel.T_AIR_K + DEBRIS_FLAME.excess(top), 0.5,

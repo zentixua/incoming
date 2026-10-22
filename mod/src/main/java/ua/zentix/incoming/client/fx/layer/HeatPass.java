@@ -44,6 +44,8 @@ public final class HeatPass {
     public static final double EDDY = 0.2;
     /** Газ холоднее воздуха + столько, K, — без дрожания (δn меньше 1 % пика). */
     static final double COOL = 20;
+    /** Дрожание меньше этой доли пикселя — не рисуется. */
+    static final double SHIFT_MIN = 0.05;
     /** Свет шара на земле под ним меньше этой доли света открытого неба — шар на мир не светит (как у ядерки). */
     static final double SEEN = 0.005;
 
@@ -56,10 +58,23 @@ public final class HeatPass {
                 shape = new Matrix4f().zero();
         private final double[] lightWeight = new double[4], hotWeight = new double[4];
         private final Vector4f column = new Vector4f();
-        /** Привыкание глаза кадра ({@code Sight.adapted}) и свет открытого неба (линейный, для порога света). */
-        public double exposure = 1, open = 1;
+        /** Привыкание глаза кадра ({@code Sight.adapted}) и свет открытого неба (линейный, для порога света); угол пикселя, рад. */
+        public double exposure = 1, open = 1, pixel = 1e-3;
+        /** Свет шаров у глаза (линейный, белая стена в полдень — 1, без привыкания): к нему глаз привыкает тоже. */
+        double atEye;
+
+        /**
+         * Привыкание глаза с огнём: огонь освещает и место глаза, и глаз (экспозиция) привыкает к свету вокруг себя — к
+         * свету неба кадра (1/{@code exposure}: днём 1, ночью 1/1200, {@code Sight.adapted}) и свету шаров у глаза вместе.
+         * Без этого свет огня шёл бы в кадр с ночным ×1200 и заливал белым всё в сотнях блоков (залп «Града» ночью — секунды
+         * белого кадра). Привыкание — сразу; у глаза оно идёт за 0,1–1 с (зрачок, колбочки; ⚠ оценка порядка).
+         */
+        double adapted() {
+            return 1 / (1 / exposure + atEye);
+        }
 
         void begin() {
+            atEye = 0;
             lights.zero();
             lightColor.zero();
             hot.zero();
@@ -83,14 +98,16 @@ public final class HeatPass {
          */
         public void light(double x, double y, double z, double r, double cr, double cg, double cb, double air, double h) {
             double lum = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
-            if (r <= 0 || lum <= 0 || lum * exposure * r * r / Math.max(h * h, r * r) < SEEN * Math.max(open, 1e-4)) return;
+            if (r <= 0 || lum <= 0) return;
             double w = lum * r * r / Math.max(x * x + y * y + z * z, r * r);
+            atEye += w;
+            if (lum * exposure * r * r / Math.max(h * h, r * r) < SEEN * Math.max(open, 1e-4)) return;
             int slot = 0;
             for (int i = 1; i < 4; i++) if (lightWeight[i] < lightWeight[slot]) slot = i;
             if (w <= lightWeight[slot]) return;
             lightWeight[slot] = w;
             lights.setColumn(slot, column.set((float) x, (float) y, (float) z, (float) r));
-            lightColor.setColumn(slot, column.set((float) (cr * exposure), (float) (cg * exposure), (float) (cb * exposure), (float) air));
+            lightColor.setColumn(slot, column.set((float) cr, (float) cg, (float) cb, (float) air));
         }
 
         /**
@@ -100,6 +117,9 @@ public final class HeatPass {
         public void hot(double x, double y, double z, double h, double r, double kelvin, double rise) {
             if (r <= 0 || h <= 0 || kelvin < CloudModel.T_AIR_K + COOL) return;
             double t0 = CloudModel.T_AIR_K / kelvin, dn = N0 * TURBULENCE * t0 * (1 - t0);
+            // дрожание мельче {@link #SHIFT_MIN} пикселя и на самом длинном пути сквозь столб не видно: столб не нужен
+            double eddy = Math.max(0.05, EDDY * r), chord = Math.max(2 * r, Math.min(h, 4 * r));
+            if (dn * Math.sqrt(chord / eddy) < SHIFT_MIN * pixel) return;
             double cx = x, cy = y + 0.5 * h, cz = z;
             double w = dn * r * Math.max(r, h) / Math.max(cx * cx + cy * cy + cz * cz, r * r);
             int slot = 0;
@@ -107,7 +127,7 @@ public final class HeatPass {
             if (w <= hotWeight[slot]) return;
             hotWeight[slot] = w;
             hot.setColumn(slot, column.set((float) x, (float) y, (float) z, (float) r));
-            shape.setColumn(slot, column.set((float) h, (float) Math.max(0.05, EDDY * r), (float) Math.max(0.1, rise), (float) dn));
+            shape.setColumn(slot, column.set((float) h, (float) eddy, (float) Math.max(0.1, rise), (float) dn));
         }
 
         /**
@@ -129,7 +149,9 @@ public final class HeatPass {
     }
 
     private static final Frame FRAME = new Frame();
-    private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f();
+    private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), SHAPE = new Matrix4f(), LIGHT = new Matrix4f();
+    /** Путь вихрей по модулю этого числа размеров вихря (шум не периодичен: раз в сотни вихрей узор перескакивает). */
+    static final double NOISE_PERIOD = 256;
     private static final Vector3f FORWARD = new Vector3f();
     private static final Vector3f OPEN_SKY = new Vector3f();
     private static final Vector4f FACE_SHADE = new Vector4f();
@@ -140,10 +162,11 @@ public final class HeatPass {
     private HeatPass() {}
 
     /** Кадр источников: свет неба и привыкание глаза — до сбора (по ним — порог света). */
-    public static Frame begin(ClientLevel level, double exposure) {
+    public static Frame begin(ClientLevel level, double exposure, double pixel) {
         Frame f = FRAME;
         f.begin();
         f.exposure = exposure;
+        f.pixel = pixel;
         int c = Minecraft.getInstance().gameRenderer.lightTexture().lightPixels.getPixelRGBA(0, 15);
         OPEN_SKY.set((c & 0xFF) / 255f, (c >> 8 & 0xFF) / 255f, (c >> 16 & 0xFF) / 255f);
         FACE_SHADE.set(level.getShade(Direction.UP, true), level.getShade(Direction.DOWN, true), level.getShade(Direction.NORTH, true),
@@ -182,11 +205,25 @@ public final class HeatPass {
         s.safeGetUniform("PallFaceShade").set(FACE_SHADE.x, FACE_SHADE.y, FACE_SHADE.z, FACE_SHADE.w);
         s.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
         s.safeGetUniform("HeatLights").set(f.lights);
-        s.safeGetUniform("HeatLightColor").set(f.lightColor);
+        double k = f.adapted();
+        LIGHT.set(f.lightColor);
+        Vector4f lc = new Vector4f();
+        for (int i = 0; i < 4; i++) {
+            LIGHT.getColumn(i, lc);
+            LIGHT.setColumn(i, lc.set((float) (lc.x * k), (float) (lc.y * k), (float) (lc.z * k), lc.w));
+        }
+        s.safeGetUniform("HeatLightColor").set(LIGHT);
         s.safeGetUniform("HeatHot").set(f.hot);
-        s.safeGetUniform("HeatShape").set(f.shape);
-        float time = (float) ((System.nanoTime() - BORN) / 1e9 % 3600);
-        s.safeGetUniform("HeatFrame").set(time, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
+        // вихри идут вверх с газом: путь в размерах вихря — в double и по модулю периода шума, а не время в float
+        double time = (System.nanoTime() - BORN) / 1e9;
+        SHAPE.set(f.shape);
+        Vector4f c = new Vector4f();
+        for (int i = 0; i < 4; i++) {
+            SHAPE.getColumn(i, c);
+            if (c.y > 0) SHAPE.setColumn(i, c.set(c.x, c.y, (float) ((time * c.z / c.y) % NOISE_PERIOD), c.w));
+        }
+        s.safeGetUniform("HeatShape").set(SHAPE);
+        s.safeGetUniform("HeatFrame").set(0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
         b.addVertex(1, -1, 0);

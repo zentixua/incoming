@@ -202,7 +202,7 @@ public final class FxLayer {
         ua.zentix.incoming.client.fx.FireSmoke.lights(view, LIGHTS);
         ua.zentix.incoming.client.fx.Exhaust.lights(view, LIGHTS);
         // свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (HeatPass): воздух — дымка кадра
-        HeatPass.Frame heat = HeatPass.begin(level, Sight.adapted(1, view.ambient()));
+        HeatPass.Frame heat = HeatPass.begin(level, Sight.adapted(1, view.ambient()), view.pixel());
         double air = Sight.KOSCHMIEDER / Sight.range(level.getRainLevel(view.partial()), level.getThunderLevel(view.partial()));
         FarBlasts.heat(view.camera(), view.partial(), heat, air);
         ua.zentix.incoming.client.fx.FireSmoke.heat(view.camera(), heat, air);

@@ -31,10 +31,6 @@ final class Loudness {
     private Loudness() {}
 
     /**
-     * Громкость в игре звука с A-уровнем {@code level} у уха, который громче фона на {@code margin} дБ в самой выгодной
-     * октаве ({@link Propagation#margin}).
-     */
-    /**
      * Множитель громкости файла громкостью {@code lufs}, приводящий его к {@link #ENGINE_LUFS}: громкость в игре задаёт
      * уровень у уха, а не то, как громко собран файл (звуки источника, {@link Sources}).
      */
@@ -42,6 +38,10 @@ final class Loudness {
         return Math.pow(10, (ENGINE_LUFS - lufs) / 20);
     }
 
+    /**
+     * Громкость в игре звука с A-уровнем {@code level} у уха, который громче фона на {@code margin} дБ в самой выгодной
+     * октаве ({@link Propagation#margin}).
+     */
     static double gain(double level, double margin) {
         if (!(margin > 0)) return 0;
         return Math.min(1, Math.pow(10, (level - REF) / 40)) * Propagation.smoothstep(0, Propagation.FADE, margin);

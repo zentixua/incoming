@@ -378,7 +378,8 @@ public final class MushroomModel {
         double last = 0, prev = 0;
         for (int i = 1; i <= CHURN_NODES; i++) {
             double t = end * i * i / ((double) CHURN_NODES * CHURN_NODES);
-            Shape s = shape(t, yieldKt, hob, surface, 0);
+            // часам кипения нужна только форма кольца — без пыли ножки (её таблица считается в фоне)
+            Shape s = shape(t, yieldKt, hob, surface, 0, null);
             double rate = s == null ? 0 : churnRate(s, CloudModel.riseSpeed(t, hob, yieldKt, surface));
             // у подрыва (t = 0) шапки ещё нет, обращение — как в первом узле
             if (i == 1) last = rate;

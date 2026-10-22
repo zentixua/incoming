@@ -87,7 +87,8 @@ public final class StemDust {
                 lambda[k] = held / Math.max(capBot, 1);
             } else {
                 top[k] = oldest;
-                lambda[k] = held / Math.max(oldest, 1);
+                // свежий выброс — уже на пути воздуха за шаг: первый шаг подсоса не делится на нулевую высоту
+                lambda[k] = held / Math.max(Math.max(oldest, k > 0 ? rise[k] - rise[k - 1] : 0), 1);
             }
         }
     }
@@ -106,8 +107,8 @@ public final class StemDust {
         return d;
     }
 
-    /** Ключи, что уже считаются в фоне. */
-    private static final java.util.Set<String> PENDING = new java.util.HashSet<>();
+    /** Ключи, что уже считаются в фоне, и те, чей расчёт упал. */
+    private static final java.util.Set<String> PENDING = new java.util.HashSet<>(), FAILED = new java.util.HashSet<>();
 
     /**
      * Пыль ножки, если таблица готова; нет — начинает считать её в фоне (десятки мс — не в кадре) и отдаёт null: ножка
@@ -118,11 +119,17 @@ public final class StemDust {
         String key = key(yieldKt, hobM, surface, visibilityM);
         synchronized (CACHE) {
             StemDust d = CACHE.get(key);
-            if (d != null || !PENDING.add(key)) return d;
+            if (d != null || FAILED.contains(key) || !PENDING.add(key)) return d;
         }
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
                 of(yieldKt, hobM, surface, visibilityM);
+            } catch (RuntimeException e) {
+                // ошибка — в лог один раз; ножка остаётся без пыли (ключ — среди упавших, заново не считается)
+                org.slf4j.LoggerFactory.getLogger(StemDust.class).error("Stem dust table failed for {}", key, e);
+                synchronized (CACHE) {
+                    FAILED.add(key);
+                }
             } finally {
                 synchronized (CACHE) {
                     PENDING.remove(key);

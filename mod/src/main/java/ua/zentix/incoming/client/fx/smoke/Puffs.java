@@ -1,7 +1,6 @@
 package ua.zentix.incoming.client.fx.smoke;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -21,9 +20,18 @@ import java.util.Map;
 public final class Puffs implements SmokeGrid.Source {
     /** Плавучесть и радиус термиков одного расчёта совпадают с точностью до множителя (ошибка высоты ∝ B^¼ — до 4 %). */
     static final double BIN = Math.sqrt(2);
-    /** Кэш термиков на воздух. */
-    private static final Map<Long, Thermal> CACHE = new HashMap<>();
-    private static CloudModel.Air cachedAir;
+    /**
+     * Кэш термиков: воздух — до шага, который подъёма не меняет (N — 0,001 с⁻¹, ветер — 0,5 м/с), плавучесть и радиус —
+     * до {@link #BIN}; последние {@value #CACHED} расчётов. Воздух у каждого источника свой объект ({@code FarBlasts.air}
+     * по времени суток), а расчёт — тысячи шагов: по одному объекту кэш сбрасывался бы на каждом выбросе.
+     */
+    static final int CACHED = 64;
+    private static final Map<String, Thermal> CACHE = new java.util.LinkedHashMap<>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Thermal> e) {
+            return size() > CACHED;
+        }
+    };
 
     private record Puff(double x, double y, double z, double born, double until, Thermal thermal, double soot, double dust,
                         double life) {}
@@ -53,13 +61,10 @@ public final class Puffs implements SmokeGrid.Source {
 
     /** Термик плавучести тепла {@code heat}, Дж, с начальной температурой {@code kelvin} и радиусом не меньше {@code r0}. */
     static Thermal thermal(CloudModel.Air air, double heat, double kelvin, double r0) {
-        if (air != cachedAir) {
-            CACHE.clear();
-            cachedAir = air;
-        }
         long kb = Math.round(Math.log(Math.max(heat, 1)) / Math.log(BIN)), kr = Math.round(Math.log(Math.max(r0, 0.05)) / Math.log(BIN));
         long kt = Math.round(kelvin / 50);
-        long key = kb * 1_000_003L + kr * 1009 + kt;
+        String key = kb + "/" + kr + "/" + kt + "/" + Math.round(air.n() * 1000) + "/" + Math.round(air.windX() * 2) + "/" + Math.round(air.windZ() * 2)
+                + "/" + Math.round(air.shear() * 100) + "/" + air.spread();
         return CACHE.computeIfAbsent(key, k -> new Thermal(Thermal.buoyancy(Math.pow(BIN, kb)), CloudModel.G * (1 - CloudModel.T_AIR / Math.max(kt * 50.0, CloudModel.T_AIR + 1)),
                 Math.pow(BIN, kr), air));
     }
