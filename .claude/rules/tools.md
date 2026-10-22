@@ -40,6 +40,9 @@ paths:
     free_port.py                         ← свободный порт на 127.0.0.1 для серверов проверок (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← процессы проверок в своих сессиях (source из stress.sh, mp_scenario.sh): выход скрипта гасит их с JVM
     test_rig_procs.sh                    ← проверка rig_procs.sh (CI): Ctrl+C, TERM, конец скрипта, чужая сессия, fd, срок RIG_GRACE — без сирот
+    pr_note.py < файлы PR                ← проверка «Записка» (CI, .github/workflows/note.yml): PR, который меняет то, что
+                                           игрок видит или слышит (пути — PLAYER_FACING там же), несёт в описании раздел
+                                           `## Записка`; описание — PR_BODY; тест — test_pr_note.py
     gametest_durations.py <лог>...       ← время партий GameTest по логам (latest.log или лог задачи CI) → таблица, по которой
                                            CI делит GameTest на части (src/devtest/resources/gametest-durations.json)
     mp_scenario.sh                       ← мультиплеер без окон: сервер и два клиента (Alpha бьёт, Bravo — цель), выходы и входы посреди удара
@@ -85,6 +88,20 @@ paths:
   docs/guide/                            ← руководство игрока по-английски (страницы по темам, картинки в img/),
                                            docs/guide/ru/ — то же по-русски
   docs/store/                            ← тексты страниц Modrinth и CurseForge
+  docs/media/                            ← иконка (она же логотип мода incoming.png), петля hero.webp для README и страниц,
+                                           кадры для галереи
   .github/workflows/build.yml            ← CI: что изменилось → сборка и юнит-тесты, GameTest частями, итог; jar в артефактах; релиз
+  .github/workflows/note.yml             ← CI: проверка «Записка» описания PR (tools/pr_note.py); шаблон описания —
+                                           .github/PULL_REQUEST_TEMPLATE.md
+  .github/workflows/publish.yml          ← страницы Modrinth и CurseForge, только ручным запуском: draft (скрытый черновик
+                                           Modrinth), submit, release; поля — docs/store/modrinth.json
   docs/releases/<версия>.md              ← заметки к релизу
 ```
+
+## Запуски и CI
+- Моды для запусков (`run/*/mods`) копируются из инстанса задачами `copyRuntimeMods_*`; путь — `MC_DIR` или по
+  умолчанию. Без инстанса (облако, CI) — `tools/fetch_runtime_mods.py` (Java 21 в облаке есть, сеть к
+  NeoForge/Mojang/Parchment/Modrinth открыта).
+- «Что изменилось» в `build.yml`: правка только `tools/` (кроме `fetch_runtime_mods.py`, `paths.py`), `docs/`, `*.md`
+  мод не собирает и GameTest не гоняет (`tools/replayscan` — своя сборка и юнит-тесты); `mod/`, CI и незнакомые пути —
+  проверка целиком, ручной запуск (релиз) — всегда целиком. jar — артефакт `incoming-jar`.

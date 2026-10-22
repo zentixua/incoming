@@ -9,6 +9,11 @@ paths:
 # GameTest и сценарии полёта
 
 ## Подводные камни
+- В CI GameTest идёт частями на шести машинах (`-PgametestShard=i/n`, `GameTestShards`): партия целиком в одной части,
+  части равняются по `gametest-durations.json`; таблицу освежает `tools/gametest_durations.py` по логам частей, когда
+  части заметно разошлись по времени. Прогона с Lithium в CI нет: мод не лезет туда, что Lithium подменяет (тик
+  блок-сущностей, цикл `Explosion.explode`); `-PwithLithium` — GameTest ещё и с Lithium, как у хоста (в jar и
+  `mods.toml` его нет), для проверки совместимости руками.
 - Подмножество партий локально: `./gradlew runGameTestServer -PgametestOnly='<регвыр по имени партии>'`
   (`GameTestShards.only`, вместе с `-PgametestShard`). Ядерные проверки следа на земле — партия `nuke_scorch`.
 - GameTest ставит шаблон на 1 блок выше его начала; без `skyAccess = true` площадку накрывает потолок из барьеров

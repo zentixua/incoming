@@ -26,12 +26,17 @@ import java.util.List;
  */
 public final class Sources {
     /**
-     * Источник: A-уровень мощности звука, дБА; спектр записи и её громкость, LUFS.
+     * Источник: A-уровень мощности звука, дБА; спектр записи и её громкость, LUFS; потолок громкости в игре, LUFS
+     * ({@link Loudness#CEILING_LUFS}; у звуков ядерного удара — прежний {@link Loudness#ENGINE_LUFS}: они не меняются).
      */
-    public record Source(double lwA, Spectrum spectrum, double fileLufs) {
+    public record Source(double lwA, Spectrum spectrum, double fileLufs, double ceilingLufs) {
+        Source(double lwA, Spectrum spectrum, double fileLufs) {
+            this(lwA, spectrum, fileLufs, Loudness.CEILING_LUFS);
+        }
+
         /** Тот же источник другой мощности (закон источника считает её из своих чисел). */
         public Source power(double lwA) {
-            return new Source(lwA, spectrum, fileLufs);
+            return new Source(lwA, spectrum, fileLufs, ceilingLufs);
         }
     }
 
@@ -43,7 +48,7 @@ public final class Sources {
      */
     public static final Source SIREN = new Source(153, Spectra.SIREN, Spectra.SIREN_LUFS);
     /** Сирена ядерной тревоги — та же уличная сирена ({@link #SIREN}), своя запись. */
-    public static final Source NUKE_ALARM = new Source(153, Spectra.NUKE_ALARM, Spectra.NUKE_ALARM_LUFS);
+    public static final Source NUKE_ALARM = new Source(153, Spectra.NUKE_ALARM, Spectra.NUKE_ALARM_LUFS, Loudness.ENGINE_LUFS);
     /**
      * Короткое замыкание с дугой в подстанции: О ~140 дБА (~120 дБА в 10 м; замеров звука дуговых пробоев
      * распределительных подстанций в открытом доступе не нашлось — порядок удара грома вблизи, на запись которого он
@@ -62,14 +67,14 @@ public final class Sources {
     public static final Source GRID_POWER_DOWN = new Source(100, Spectra.GRID_POWER_DOWN, Spectra.GRID_POWER_DOWN_LUFS);
     public static final Source GRID_POWER_UP = new Source(100, Spectra.GRID_POWER_UP, Spectra.GRID_POWER_UP_LUFS);
     /** Обрушение дома в руинах ядерного удара: О ~125 дБА (снос зданий — ~100–110 дБА в 100 м вокруг). */
-    public static final Source NUKE_COLLAPSE = new Source(125, Spectra.NUKE_COLLAPSE, Spectra.NUKE_COLLAPSE_LUFS);
+    public static final Source NUKE_COLLAPSE = new Source(125, Spectra.NUKE_COLLAPSE, Spectra.NUKE_COLLAPSE_LUFS, Loudness.ENGINE_LUFS);
     /** Осыпь обломков в руинах: О ~110 дБА. */
-    public static final Source RUIN_DEBRIS = new Source(110, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS);
+    public static final Source RUIN_DEBRIS = new Source(110, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS, Loudness.ENGINE_LUFS);
     /**
      * Пуск МБР — запись старта со стола; мощность — закон РДТТ первой ступени из паспорта
      * ({@link Noise.Rocket#power}, {@code WeaponSpec.ICBM_NOISE}), здесь — только запись.
      */
-    public static final Source NUKE_LAUNCH = new Source(Double.NaN, Spectra.NUKE_LAUNCH, Spectra.NUKE_LAUNCH_LUFS);
+    public static final Source NUKE_LAUNCH = new Source(Double.NaN, Spectra.NUKE_LAUNCH, Spectra.NUKE_LAUNCH_LUFS, Loudness.ENGINE_LUFS);
 
     /**
      * Шум пламени: доля тепловыделения открытого турбулентного пламени, что уходит звуком, — 10⁻⁶–10⁻⁵ (Strahle W. C.,
@@ -114,14 +119,15 @@ public final class Sources {
 
     /**
      * Громкость в игре источника {@code s} в {@code at} у уха {@code ear}: уровень у уха по пути ISO 9613 против фона
-     * ({@link Loudness#gain}), файл — к мерке {@link Loudness#ENGINE_LUFS}. Преграды — не здесь (их ставит звук сам).
+     * ({@link Loudness#gain}, не громче потолка источника), файл — к мерке {@link Loudness#ENGINE_LUFS}. Преграды — не
+     * здесь (их ставит звук сам).
      */
     public static float volume(Source s, Vec3 at, Vec3 ear, Propagation.Weather weather) {
         if (Double.isNaN(s.lwA) || s.lwA == Noise.SILENT) return 0;
         double[] bands = new double[Propagation.BANDS];
         Propagation.Path path = Propagation.Path.over(at.distanceTo(ear), Hearing.height(at, ear), weather);
         double level = Propagation.level(s.lwA - s.spectrum.aWeighting(), s.spectrum, path, bands);
-        return (float) Math.min(1, Loudness.gain(level, Propagation.margin(bands, weather)) * Loudness.fileGain(s.fileLufs));
+        return Loudness.volume(Loudness.gain(level, Propagation.margin(bands, weather), s.ceilingLufs), s.fileLufs);
     }
 
     /** Громкость у уха камеры сейчас (0 — мира нет). */

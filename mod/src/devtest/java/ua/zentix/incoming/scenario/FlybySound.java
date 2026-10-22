@@ -427,7 +427,8 @@ final class FlybySound {
             } catch (ReflectiveOperationException ex) {
                 throw new IllegalStateException("SCENARIO flyby: поля звука мода изменились", ex);
             }
-            double vol = s.getSound() != null ? s.getVolume() : 0, pitch = s.getPitch();
+            // громкость против мерки (Loudness.gain): с ней сравнивает порог HEARD, громкость файла здесь ни при чём
+            double vol = s.getSound() != null ? ((ua.zentix.incoming.client.sound.EngineSound) s).loudness() : 0, pitch = s.getPitch();
             double d = Math.sqrt((s.getX() - cam.x) * (s.getX() - cam.x) + (s.getY() - cam.y) * (s.getY() - cam.y) + (s.getZ() - cam.z) * (s.getZ() - cam.z));
             if (!loops.containsKey(s)) {
                 Incoming.LOG.info("SCENARIO loop start {} {}#{} {} src={} d={} vol={} t={} ms={}", current, loop.weapon, shortId(loop.id), loop.layer,
