@@ -103,6 +103,8 @@ final class ProbeScenario {
      * {@code util.Stability}) — долей класса (⚠ оценка: снос дыма на минуту — в пределах метров и градусов).
      */
     static final double SAME_WIND = 0.3, SAME_DIR = 3, SAME_CLASS = 0.1;
+    /** Время игры, в которое нынешняя сцена началась; −1 — ещё ни одна. */
+    private long startedAt = -1;
     /** Сцена уже догнала своё время игры; ускорение до него уже заказано. */
     private boolean onTime, sprinting;
 
@@ -194,7 +196,14 @@ final class ProbeScenario {
      * времени игры не зависят). Отражением: класс один в деревьях всех версий.
      */
     static String sameAir(long now, long reference, boolean night) {
-        double[] a = air(now, night), b = air(reference, night);
+        double[] a, b;
+        try {
+            a = air(now, night);
+            b = air(reference, night);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            // воздух в этой версии есть, а прочитать его нельзя (класс переделан): прогон не годится, а не проходит молча
+            return "differs: air unreadable (" + e + ")";
+        }
         if (a == null || b == null) return "none";
         double dir = Math.abs(Math.toDegrees(Math.atan2(Math.sin(a[1] - b[1]), Math.cos(a[1] - b[1]))));
         String numbers = String.format(Locale.ROOT, "wind %.2f/%.2f m/s, direction %.1f deg apart, class %.2f/%.2f", a[0], b[0], dir, a[2], b[2]);
@@ -202,18 +211,22 @@ final class ProbeScenario {
         return (same ? "same: " : "differs: ") + numbers;
     }
 
-    /** Ветер в 10 м над уровнем моря, м/с, его направление, рад, и класс устойчивости в тик {@code gameTime}; null — нет. */
-    private static double @org.jetbrains.annotations.Nullable [] air(long gameTime, boolean night) {
+    /**
+     * Ветер в 10 м над уровнем моря, м/с, его направление, рад, и класс устойчивости в тик {@code gameTime}; null —
+     * класса воздуха в этой версии нет. Имена — те же, что проверяет {@code AirTest.probeReadsTheAirByTheseNames}.
+     */
+    private static double @org.jetbrains.annotations.Nullable [] air(long gameTime, boolean night) throws ReflectiveOperationException {
+        Class<?> c;
         try {
-            Class<?> c = Class.forName("ua.zentix.incoming.util.Air");
-            Object air = c.getMethod("of", long.class, double.class, double.class, double.class).invoke(null, gameTime, night ? -1.0 : 1.0, 0.0, 0.0);
-            Object wind = c.getMethod("wind").invoke(air);
-            double speed = (double) c.getMethod("speed", double.class).invoke(air, 73.0);
-            double direction = (double) wind.getClass().getMethod("direction").invoke(wind);
-            return new double[]{speed, direction, (double) c.getMethod("stability").invoke(air)};
-        } catch (ReflectiveOperationException | RuntimeException e) {
+            c = Class.forName("ua.zentix.incoming.util.Air");
+        } catch (ClassNotFoundException e) {
             return null;
         }
+        Object air = c.getMethod("of", long.class, double.class, double.class, double.class).invoke(null, gameTime, night ? -1.0 : 1.0, 0.0, 0.0);
+        Object wind = c.getMethod("wind").invoke(air);
+        double speed = (double) c.getMethod("speed", double.class).invoke(air, 73.0);
+        double direction = (double) wind.getClass().getMethod("direction").invoke(wind);
+        return new double[]{speed, direction, (double) c.getMethod("stability").invoke(air)};
     }
 
     /** Сцены выборки в порядке эталона; незнакомая сцена — ошибка (место и время у неё неизвестны). */
@@ -242,6 +255,18 @@ final class ProbeScenario {
         if (sites == null) {
             at(tick + 20, this::nextCase);
             return;
+        }
+        // сцена кончилась: и в конце воздух тот же, что у эталона на том же месте его сцены (сцены идут до минуты, а
+        // начатая позже могла к концу перейти границу класса)
+        Integer ref = caseIndex >= 0 ? START.get(current) : null;
+        if (ref != null && startedAt >= 0) {
+            long now = Minecraft.getInstance().level.getGameTime();
+            String air = sameAir(now, ref + (now - startedAt), current.contains("night"));
+            Incoming.LOG.info("SCENARIO probe {} ends at game {} (reference end {}, air {})", current, now, ref + (now - startedAt), air);
+            if (air.startsWith("differs")) {
+                fail(current + " ends in another air than the reference (" + air + ")");
+                return;
+            }
         }
         caseIndex++;
         if (caseIndex >= cases.size()) {
@@ -276,6 +301,7 @@ final class ProbeScenario {
                 return;
             }
         }
+        if (!onTime) startedAt = now;
         onTime = true;
         int[] site = sites.get(caseIndex);
         armed = false;

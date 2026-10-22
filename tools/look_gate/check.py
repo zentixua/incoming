@@ -20,6 +20,7 @@ EARLY = 5   # ProbeScenario.begin: догоняет до START − 5
 
 HEARING = re.compile(r"SCENARIO probe hearing damage (on|off)")
 START = re.compile(r"SCENARIO probe (\S+) game (-?\d+) \(reference start (null|-?\d+)(?:, air ([^)]*))?\)")
+END = re.compile(r"SCENARIO probe (\S+) ends at game (-?\d+) \(reference end (-?\d+), air ([^)]*)\)")
 FAIL = re.compile(r"SCENARIO probe FAIL (.*)")
 
 
@@ -36,6 +37,11 @@ def problems(lines):
         m = FAIL.search(line)
         if m:
             out.append("прогон остановлен: " + m.group(1).strip())
+            continue
+        m = END.search(line)
+        if m:
+            if m.group(4).startswith("differs"):
+                out.append(f"{m.group(1)}: к концу сцены другой воздух, чем у эталона: {m.group(4)}")
             continue
         m = START.search(line)
         if m:

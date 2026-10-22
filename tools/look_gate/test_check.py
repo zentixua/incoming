@@ -50,6 +50,21 @@ class CheckTest(unittest.TestCase):
         self.assertEqual([], check.problems(log("SCENARIO probe hearing damage off",
                                                 "SCENARIO probe flyby game 11000 (reference start 10440, air none)")))
 
+    def test_scene_ending_in_another_air_fails(self):
+        bad = check.problems(log("SCENARIO probe hearing damage off",
+                                 "SCENARIO probe debris-night-50 game 12321 (reference start 12236, air same: x)",
+                                 "SCENARIO probe debris-night-50 ends at game 13500 (reference end 13415, air differs: class 3.12/3.00)"))
+        self.assertTrue(any("к концу" in p for p in bad), bad)
+        self.assertEqual([], check.problems(log("SCENARIO probe hearing damage off",
+                                                "SCENARIO probe flyby game 10536 (reference start 10440, air same: x)",
+                                                "SCENARIO probe flyby ends at game 11000 (reference end 10904, air same: x)")))
+
+    def test_unreadable_air_fails(self):
+        # класс воздуха переделан, отражение не прочло его: не «none» (версия без воздуха), а провал
+        bad = check.problems(log("SCENARIO probe hearing damage off",
+                                 "SCENARIO probe flyby game 10536 (reference start 10440, air differs: air unreadable (java.lang.NoSuchMethodException: speed))"))
+        self.assertTrue(bad)
+
     def test_scene_without_reference_fails(self):
         bad = check.problems(log("SCENARIO probe hearing damage off", "SCENARIO probe flyby game 9902 (reference start null)"))
         self.assertTrue(any("flyby" in p for p in bad), bad)
@@ -84,6 +99,8 @@ class ProbeFormatTest(unittest.TestCase):
         self.assertTrue(m and m.group(4).startswith("same"))
         self.assertTrue(check.FAIL.search("SCENARIO probe FAIL x"))
         self.assertIn('return (same ? "same: " : "differs: ")', java, "проба пишет same/differs — это и читает check.py")
+        self.assertIn('"SCENARIO probe {} ends at game {} (reference end {}, air {})"', java)
+        self.assertTrue(check.END.search("SCENARIO probe flyby ends at game 11000 (reference end 10904, air same: x)"))
 
 
 if __name__ == "__main__":
