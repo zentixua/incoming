@@ -22,7 +22,7 @@ on:
       # повтор нестабильного теста на GitHub, а не на ноутбуке: каждая из шести машин гоняет подходящие партии
       # gametest_repeat раз, каждый раз в новом мире (tools/ci_repeat.sh запускает и сводит итог)
       gametest_only:
-        description: Только партии GameTest по регулярному выражению (повтор флака), пусто — все
+        description: Только партии GameTest, чьё имя целиком подходит под регулярное выражение (повтор флака), пусто — все
         type: string
         default: ''
       gametest_repeat:
@@ -171,14 +171,15 @@ jobs:
             grep -E 'All [0-9]+ required tests passed' run/gametest/logs/latest.log
             exit
           fi
-          # повтор: все подходящие партии на этой машине, REPEAT раз, каждый в новом мире; падение не обрывает повторы
+          # повтор: все подходящие партии на этой машине, REPEAT раз, каждый в новом мире; падение не обрывает повторы;
+          # выражение, под которое не подошла ни одна партия, — тоже падение («All 0 required tests passed» не считается)
           passed=0
           for i in $(seq "$REPEAT"); do
             if ./gradlew runGameTestServer -PmcModsDir=run/ci-mods "-PgametestOnly=$ONLY" --console=plain --quiet \
-                && grep -qE 'All [0-9]+ required tests passed' run/gametest/logs/latest.log; then
+                && grep -qE 'All [1-9][0-9]* required tests passed' run/gametest/logs/latest.log; then
               passed=$((passed + 1))
             else
-              cp run/gametest/logs/latest.log "run/gametest/logs/failed-$i.log"
+              cp run/gametest/logs/latest.log "run/gametest/logs/failed-$i.log" 2>/dev/null || true
               grep -E 'failed|::' run/gametest/logs/latest.log | grep -iE 'fail|exception' | head -5
             fi
           done
@@ -244,7 +245,7 @@ jobs:
   release:
     name: Релиз
     needs: [build, gametest, rig]
-    if: github.event_name == 'workflow_dispatch' && inputs.release && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/release-'))
+    if: github.event_name == 'workflow_dispatch' && inputs.release && inputs.gametest_only == '' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/release-'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

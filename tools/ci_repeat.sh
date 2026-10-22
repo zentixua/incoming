@@ -3,8 +3,8 @@
 #
 #   tools/ci_repeat.sh <ветка> <регвыр партий> [повторов на машину, по умолчанию 5]
 #
-# Ручной запуск build на ветке (ветка должна быть в origin): каждая из шести машин гоняет партии, чьё имя подходит
-# под выражение (как -PgametestOnly), N раз в новом мире — всего 6·N прогонов за ~(1 + N·длина партий) мин. Итог —
+# Ручной запуск build на ветке (ветка должна быть в origin): каждая из шести машин гоняет партии, чьё имя целиком
+# подходит под выражение (как -PgametestOnly: имя партии, не теста; ни одной — падение), N раз в новом мире — всего 6·N прогонов за ~(1 + N·длина партий) мин. Итог —
 # «прошло X из Y» по машинам и ссылка; код 0 — все прошли, 1 — были падения (логи упавших — артефакты logs-gametest-*).
 # 22.10 одну нестабильную партию ловили 41 прогоном на ноутбуке (8,6 ч) и полными ручными прогонами CI.
 set -euo pipefail
@@ -23,10 +23,15 @@ echo "запуск $run: «$only» × $n на 6 машинах — https://githu
 until [ "$(gh run view "$run" --json status -q .status 2>/dev/null)" = completed ]; do sleep 30; done
 total=0; ok=0
 for job in $(gh run view "$run" --json jobs -q '.jobs[] | select(.name | startswith("GameTest")) | .databaseId'); do
-  line=$(gh run view "$run" --job "$job" --log 2>/dev/null | grep -o 'GameTest repeat: .*' | tail -1)
-  echo "  ${line:-задача $job: итога нет (упала до повторов?)}"
+  # строка итога, а не исходник шага (лог показывает и его): с числами
+  line=$(gh run view "$run" --job "$job" --log 2>/dev/null | grep -oE 'GameTest repeat: .* passed [0-9]+ of [0-9]+ .*' | tail -1 || true)
   p=$(sed -n 's/.*passed \([0-9]*\) of \([0-9]*\).*/\1 \2/p' <<< "$line")
-  [ -n "$p" ] && { ok=$((ok + ${p% *})); total=$((total + ${p#* })); }
+  if [ -n "$p" ]; then
+    echo "  $line"; ok=$((ok + ${p% *})); total=$((total + ${p#* }))
+  else
+    echo "  задача $job: итога нет (упала до повторов или по времени) — считаю падением $n из $n"; total=$((total + n))
+  fi
 done
-echo "итого: прошло $ok из $total"
-[ "$total" -gt 0 ] && [ "$ok" = "$total" ]
+conclusion=$(gh run view "$run" --json conclusion -q .conclusion)
+echo "итого: прошло $ok из $total (запуск: $conclusion)"
+[ "$total" -gt 0 ] && [ "$ok" = "$total" ] && [ "$conclusion" = success ]
