@@ -234,11 +234,11 @@ smoke.
   drift downwind, over a carpet of dust from all the hits.
 - **Lancet**: a small flash and a cloud a few tens of blocks high.
 
-The blast wind tears dust off the ground, the same way as the wave of a nuclear strike does. A low ring of dust the colour
-of the ground races out with the wave in the first tenth of a second, a few tens of blocks for a Shahed. Then it
-thickens to several blocks over the next seconds, hangs for minutes and drifts with the wind near the ground; while the
-cloud rises, a thin column of dust is drawn up under it. The ground is taken as bare dry soil everywhere, as for the
-nuke. An interceptor bursting in the air leaves no crater and no dust, unless it bursts low over the ground.
+The blast wind tears dust off the ground, the same way as the wave of a nuclear strike does. Bare dirt, sand, gravel and
+snow give it up easily: a low ring of light dust races out with the wave, a few tens of blocks for a Shahed, then
+thickens to several blocks, hangs for minutes and drifts with the wind near the ground. Grass, stone and buildings hold
+the soil, so on a meadow the dust rises only around the crater. While the cloud rises, a thin column of dust is drawn up
+under it. An interceptor bursting in the air leaves no crater and no dust, unless it bursts low over the ground.
 
 A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
 the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the
