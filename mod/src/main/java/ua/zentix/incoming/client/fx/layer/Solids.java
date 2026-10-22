@@ -37,7 +37,10 @@ import java.util.Arrays;
  * кадр перечитываются {@value #REFRESH} секций по кругу (всё окно — за ~1,8 с при 60 кадрах) и секции у источников
  * света кадра в пределах их радиуса ({@link #near}: взрыв ломает блоки у самого огня) — им не больше половины бюджета,
  * по очереди, остальное — окну, хоть одна секция за кадр (иначе секции у огней одни съедали бы весь бюджет). Секция
- * без полных блоков или из одних них (воздух, толща камня — палитра это знает, {@code maybeHas}) — без обхода блоков. Обновляется, только пока у прохода есть свет; сбрасывается при смене мира. Чанка у клиента
+ * без полных блоков или из одних них (воздух, толща камня — палитра это знает, {@code maybeHas}) — без обхода блоков.
+ * Секция, чьи блоки с прошлого чтения те же (отпечаток палитры и хранилища номеров — сотни {@code long}), не читается и
+ * не грузится: загрузка в текстуру, которую ещё читает прошлый кадр, ждёт видеокарту (шлагбаум LFX4: до ~40 загрузок за
+ * кадр, время слоя у ночного взрыва 1,6 → 11,7 мс при том же времени процессора). Обновляется, только пока у прохода есть свет; сбрасывается при смене мира. Чанка у клиента
  * нет — не заслон.
  */
 public final class Solids {
@@ -55,6 +58,10 @@ public final class Solids {
     private static ByteBuffer section, zeros, full;
     /** Секция мира с блоками в каждом месте окна и секция, под которую место обнулено ({@link SectionPos#asLong}). */
     private static final long[] STORED = new long[ALL], ZEROED = new long[ALL];
+    /** Отпечаток блоков секции при её чтении ({@link #print}). */
+    private static final long[] PRINT = new long[ALL];
+    /** «Место обнулено при создании текстуры» в {@link #ZEROED}: обнулять его снова не нужно. */
+    private static final long FRESH = Long.MIN_VALUE + 1;
     private static final int[] PENDING = new int[ALL];
     private static final long[] PENDING_KEY = new long[ALL];
     /** Порядок чтения: расстояние² от глаза (блоки², целое) в старших битах, номер в младших 11. */
@@ -126,8 +133,11 @@ public final class Solids {
         GL11.glPixelStorei(GL12.GL_UNPACK_SKIP_IMAGES, 0);
         ensure();
         if (level != world.get()) {
-            Arrays.fill(STORED, Long.MIN_VALUE);
-            Arrays.fill(ZEROED, Long.MIN_VALUE);
+            // секции прежнего мира в окне — не наши: их места заново нулями (места, ещё нулевые с создания, — как есть)
+            for (int k = 0; k < ALL; k++) {
+                if (STORED[k] != Long.MIN_VALUE || ZEROED[k] != FRESH) ZEROED[k] = Long.MIN_VALUE;
+                STORED[k] = Long.MIN_VALUE;
+            }
             world = new WeakReference<>(level);
         }
         Solids.eye = eye;
@@ -145,10 +155,10 @@ public final class Solids {
                     long key = SectionPos.asLong(sx, sy, sz);
                     boolean close = isNear(key);
                     boolean due = Math.floorMod(i++ - refreshAt, ALL) < REFRESH || close;
-                    if (STORED[slot] == key && !due) continue;
+                    if (STORED[slot] == key && (!due || PRINT[slot] == print(level, sx, sy, sz))) continue;
                     if (STORED[slot] != key && ZEROED[slot] != key) {
                         // чужая секция в этом месте — сразу нулями: блоки той секции здесь — не наши заслоны
-                        upload(sx, sy, sz, zeros);
+                        if (ZEROED[slot] != FRESH) upload(sx, sy, sz, zeros);
                         ZEROED[slot] = key;
                         // в месте теперь нули, не блоки прежней секции: та, вернувшись, читается заново
                         STORED[slot] = Long.MIN_VALUE;
@@ -202,8 +212,29 @@ public final class Solids {
     private static void read(ClientLevel level, int o) {
         long key = PENDING_KEY[o];
         int sx = SectionPos.x(key), sy = SectionPos.y(key), sz = SectionPos.z(key);
+        PRINT[PENDING[o]] = print(level, sx, sy, sz);
         upload(sx, sy, sz, blocks(level, sx, sy, sz));
         STORED[PENDING[o]] = key;
+    }
+
+    /**
+     * Отпечаток блоков секции: состояния палитры по номерам и хранилище номеров (как у снимков руин ядерки), без обхода
+     * мест; секции нет (чанка нет, вне мира) или в ней один воздух — 0.
+     */
+    private static long print(ClientLevel level, int sx, int sy, int sz) {
+        if (sy < level.getMinSection() || sy >= level.getMaxSection()) return 0;
+        LevelChunk chunk = level.getChunkSource().getChunkNow(sx, sz);
+        if (chunk == null) return 0;
+        LevelChunkSection s = chunk.getSection(level.getSectionIndexFromSectionY(sy));
+        if (s.hasOnlyAir()) return 0;
+        var data = s.getStates().data;
+        long h = 0x9E3779B97F4A7C15L ^ data.storage().getBits();
+        net.minecraft.world.level.chunk.Palette<BlockState> palette = data.palette();
+        if (!(palette instanceof net.minecraft.world.level.chunk.GlobalPalette)) {
+            for (int k = 0; k < palette.getSize(); k++) h = (h ^ System.identityHashCode(palette.valueFor(k))) * 0x100000001B3L;
+        }
+        for (long v : data.storage().getRaw()) h = (h ^ v) * 0x100000001B3L;
+        return h == 0 ? 1 : h;
     }
 
     /** Заслоны секции (x — быстрее всех, потом y, потом z — как у текстуры): {@link #zeros}, {@link #full} или {@link #section}. */
@@ -258,13 +289,15 @@ public final class Solids {
         full = MemoryUtil.memAlloc(4096);
         for (int k = 0; k < 4096; k++) full.put(k, (byte) 255);
         Arrays.fill(STORED, Long.MIN_VALUE);
-        Arrays.fill(ZEROED, Long.MIN_VALUE);
+        Arrays.fill(ZEROED, FRESH);
         texture = GL11.glGenTextures();
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, texture);
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
-        // содержимое не определено до первой загрузки: каждое место окна первым кадром обнуляется (ZEROED — никакой)
-        GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8, SIZE_XZ, SIZE_Y, SIZE_XZ, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, (ByteBuffer) null);
+        // всё окно — нулями одним вызовом (содержимое без данных не определено), места — «обнулены при создании»
+        ByteBuffer blank = MemoryUtil.memCalloc(SIZE_XZ * SIZE_Y * SIZE_XZ);
+        GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8, SIZE_XZ, SIZE_Y, SIZE_XZ, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, blank);
+        MemoryUtil.memFree(blank);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0);
     }
 }
