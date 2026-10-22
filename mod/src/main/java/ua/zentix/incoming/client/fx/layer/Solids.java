@@ -5,6 +5,7 @@ import com.mojang.blaze3d.shaders.ProgramManager;
 import com.mojang.blaze3d.shaders.Uniform;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -22,17 +23,19 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
- * Что заслоняет свет у камеры: блоки, которые закрывают свет ({@link BlockState#canOcclude}, как у теней ядерной
- * вспышки — {@code FlashChar}), в окне {@value #SIZE_XZ}×{@value #SIZE_Y}×{@value #SIZE_XZ} блоков вокруг глаза —
+ * Что заслоняет свет у камеры: полные непрозрачные блоки ({@link BlockState#isSolidRender}) в окне {@value #SIZE_XZ}×{@value #SIZE_Y}×{@value #SIZE_XZ} блоков вокруг глаза —
  * трёхмерной текстурой R8 (255 — заслон). По ней луч тени прохода света огня ({@code fx_heat}: {@code heatBlocked})
  * идёт по клеткам: мир Minecraft — блоки, и заслон на пути света известен точно, в кадре он или нет. По одной глубине
  * кадра это не решить: за видимой гранью может быть и толща дома, и пустота за столбом (ревью #399: луч сквозь цельный
- * дом под углом к взгляду проходил в 84 % случаев). Листва, стекло, вода, трава — не заслон (⚠ листва пропускает часть).
+ * дом под углом к взгляду проходил в 84 % случаев). Листва, стекло, вода, трава — не заслон (⚠ листва пропускает часть);
+ * неполные блоки (плиты, ступени, слой снега, тропинка, пашня, ковёр) — тоже: заслон в целую клетку дал бы земле под
+ * снегом тень от соседней клетки снега (ревью #399: у света под 10–30° — вся), а высоты в клетке окно не хранит (⚠ плита
+ * и ступень свет пропускают).
  * <p>
  * Окно — по секциям 16³, по модулю размера (как {@link OpenAir}): новые секции окна — сперва нулями (не знаем — не
  * заслон), потом блоками от глаза к краю, не дольше {@link #FILL_NANOS} за кадр (производительность, не физика); каждый
- * кадр перечитываются {@value #REFRESH} секций по кругу и секции у источников света кадра ({@link #near}: взрыв ломает
- * блоки у самого огня). Обновляется, только пока у прохода есть свет; сбрасывается при смене мира. Чанка у клиента
+ * кадр перечитываются {@value #REFRESH} секций по кругу (всё окно — за ~1,8 с при 60 кадрах) и секции у источников
+ * света кадра в пределах их радиуса ({@link #near}: взрыв ломает блоки у самого огня). Обновляется, только пока у прохода есть свет; сбрасывается при смене мира. Чанка у клиента
  * нет — не заслон.
  */
 public final class Solids {
@@ -60,15 +63,21 @@ public final class Solids {
     private static Vec3 eye = Vec3.ZERO;
     private static WeakReference<ClientLevel> world = new WeakReference<>(null);
     /** Секции у источников света этого кадра (перечитываются каждый кадр). */
-    private static final long[] NEAR = new long[16];
+    private static final long[] NEAR = new long[32];
     private static int nears;
 
     private Solids() {}
 
-    /** Источник света кадра в (x, y, z) мира: его секция перечитывается в этом кадре. */
-    static void near(double x, double y, double z) {
+    /** Источник света кадра в (x, y, z) мира радиусом r: секции, которые он задевает, перечитываются в этом кадре. */
+    static void near(double x, double y, double z, double r) {
+        int x0 = SectionPos.blockToSectionCoord(x - r), x1 = SectionPos.blockToSectionCoord(x + r);
+        int y0 = SectionPos.blockToSectionCoord(y - r), y1 = SectionPos.blockToSectionCoord(y + r);
+        int z0 = SectionPos.blockToSectionCoord(z - r), z1 = SectionPos.blockToSectionCoord(z + r);
+        for (int sx = x0; sx <= x1; sx++) for (int sy = y0; sy <= y1; sy++) for (int sz = z0; sz <= z1; sz++) add(SectionPos.asLong(sx, sy, sz));
+    }
+
+    private static void add(long key) {
         if (nears >= NEAR.length) return;
-        long key = SectionPos.asLong(SectionPos.blockToSectionCoord(x), SectionPos.blockToSectionCoord(y), SectionPos.blockToSectionCoord(z));
         for (int i = 0; i < nears; i++) if (NEAR[i] == key) return;
         NEAR[nears++] = key;
     }
@@ -83,6 +92,13 @@ public final class Solids {
     }
 
     private static boolean fill(ClientLevel level, Vec3 eye) {
+        // распаковка — плотная, до любой загрузки (как у OpenAir): ваниль оставляет длину строки и пропуски от своих
+        // картинок, и драйвер читал бы за 4 КБ секции
+        GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
+        GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
+        GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
+        GL11.glPixelStorei(GL12.GL_UNPACK_IMAGE_HEIGHT, 0);
+        GL11.glPixelStorei(GL12.GL_UNPACK_SKIP_IMAGES, 0);
         ensure();
         if (level != world.get()) {
             Arrays.fill(STORED, Long.MIN_VALUE);
@@ -95,11 +111,6 @@ public final class Solids {
         y0 = OpenAir.start(ey, SIZE_Y);
         z0 = OpenAir.start(ez, SIZE_XZ);
         int sx0 = x0 >> 4, sy0 = y0 >> 4, sz0 = z0 >> 4;
-        GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
-        GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
-        GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
-        GL11.glPixelStorei(GL12.GL_UNPACK_IMAGE_HEIGHT, 0);
-        GL11.glPixelStorei(GL12.GL_UNPACK_SKIP_IMAGES, 0);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, texture);
         int pending = 0, i = 0;
         for (int sx = sx0; sx < sx0 + SX; sx++) {
@@ -113,6 +124,8 @@ public final class Solids {
                         // чужая секция в этом месте — сразу нулями: блоки той секции здесь — не наши заслоны
                         upload(sx, sy, sz, zeros);
                         ZEROED[slot] = key;
+                        // в месте теперь нули, не блоки прежней секции: та, вернувшись, читается заново
+                        STORED[slot] = Long.MIN_VALUE;
                     }
                     double dx = sx * 16 + 8 - eye.x, dy = sy * 16 + 8 - eye.y, dz = sz * 16 + 8 - eye.z;
                     PENDING[pending] = slot;
@@ -162,10 +175,12 @@ public final class Solids {
         if (chunk == null) return;
         LevelChunkSection s = chunk.getSection(level.getSectionIndexFromSectionY(sy));
         if (s.hasOnlyAir()) return;
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int z = 0; z < 16; z++) {
             for (int y = 0; y < 16; y++) {
                 for (int x = 0; x < 16; x++) {
-                    if (s.getBlockState(x, y, z).canOcclude()) section.put((z * 16 + y) * 16 + x, (byte) 255);
+                    BlockState st = s.getBlockState(x, y, z);
+                    if (!st.isAir() && st.isSolidRender(level, pos.set(sx * 16 + x, sy * 16 + y, sz * 16 + z))) section.put((z * 16 + y) * 16 + x, (byte) 255);
                 }
             }
         }
@@ -208,9 +223,8 @@ public final class Solids {
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, texture);
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+        // содержимое не определено до первой загрузки: каждое место окна первым кадром обнуляется (ZEROED — никакой)
         GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8, SIZE_XZ, SIZE_Y, SIZE_XZ, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, (ByteBuffer) null);
-        // всё окно — нулями до первого чтения (у текстуры без данных содержимое не определено)
-        for (int sx = 0; sx < SX; sx++) for (int sy = 0; sy < SY; sy++) for (int sz = 0; sz < SX; sz++) upload(sx, sy, sz, zeros);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0);
     }
 }

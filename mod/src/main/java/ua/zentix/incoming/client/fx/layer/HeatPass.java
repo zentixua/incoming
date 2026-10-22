@@ -387,8 +387,13 @@ public final class HeatPass {
         if (!f.lit()) return;
         Vector4f c = new Vector4f();
         for (int i = 0; i < 4; i++) {
-            if (f.lights.getColumn(i, c).w > 0) Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z);
-            if (f.jets.getColumn(i, c).w > 0) Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z);
+            if (f.lights.getColumn(i, c).w > 0) Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z, c.w);
+            // у струи — от среза сопла на её длину (до земли), не дальше 8 блоков: там она бьёт в землю
+            if (f.jets.getColumn(i, c).w > 0) {
+                double reach = Math.min(8, f.jetSize.getColumn(i, new Vector4f()).x);
+                f.jets.getColumn(i, c);
+                Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z, reach);
+            }
         }
         Solids.update(level, eye);
     }
@@ -451,7 +456,10 @@ public final class HeatPass {
         b.addVertex(1, 1, 0);
         b.addVertex(-1, 1, 0);
         MeshData mesh = b.build();
-        if (mesh == null) return false;
+        if (mesh == null) {
+            Solids.unbind();
+            return false;
+        }
         s.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
                 Minecraft.getInstance().getWindow());
         s.apply();

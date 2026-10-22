@@ -8,6 +8,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
@@ -744,11 +746,30 @@ public final class FarFlightView {
         LIT[o + 4] = jy;
         LIT[o + 5] = jz;
         LIT[o + 6] = Double.isNaN(ground) ? lr : Math.max(lr, y + cam.y - ground);
-        // где ось струи уходит в землю: земля под срезом сопла (струя от среза идёт вниз — до этой высоты)
-        double mid = flame.middle(), nx = x - jx * mid, ny = y - jy * mid, nz = z - jz * mid;
-        double under = lv == null ? Double.NaN : ground(lv, nx + cam.x, nz + cam.z);
-        LIT[o + 7] = Double.isNaN(under) || jy > -1e-6 ? Double.POSITIVE_INFINITY : Math.max(0, ny + cam.y - under) / -jy;
+        // где ось струи уходит в землю: первый блок под срезом сопла, что держит струю (как карта высот MOTION_BLOCKING:
+        // твёрдое или жидкость), — по блокам вниз от сопла, а не по карте высот: под кроной или крышей она выше сопла
+        double mid = flame.middle(), nx = x - jx * mid + cam.x, ny = y - jy * mid + cam.y, nz = z - jz * mid + cam.z;
+        double under = lv == null || jy > -1e-6 ? Double.NaN : floorBelow(lv, nx, ny, nz);
+        LIT[o + 7] = Double.isNaN(under) ? Double.POSITIVE_INFINITY : Math.max(0, ny - under) / -jy;
         LIT_FLAME[slot] = flame;
+    }
+
+    /** Сколько блоков вниз от сопла искать землю под струёй. */
+    static final int FLOOR_DEPTH = 64;
+    private static final BlockPos.MutableBlockPos FLOOR = new BlockPos.MutableBlockPos();
+
+    /**
+     * Верх первого блока под (x, y, z) мира, что держит струю (твёрдое или жидкость); NaN — нет в {@link #FLOOR_DEPTH}
+     * блоках или чанка нет. Блок самого сопла не в счёт: на поджиге сопло бывает в блоке пусковой.
+     */
+    static double floorBelow(ClientLevel lv, double x, double y, double z) {
+        int bx = Mth.floor(x), by = Mth.floor(y), bz = Mth.floor(z);
+        if (lv.getChunkSource().getChunkNow(bx >> 4, bz >> 4) == null) return Double.NaN;
+        for (int k = 1; k <= FLOOR_DEPTH && by - k >= lv.getMinBuildHeight(); k++) {
+            BlockState st = lv.getBlockState(FLOOR.set(bx, by - k, bz));
+            if (Heightmap.Types.MOTION_BLOCKING.isOpaque().test(st)) return by - k + 1;
+        }
+        return Double.NaN;
     }
 
     /**
