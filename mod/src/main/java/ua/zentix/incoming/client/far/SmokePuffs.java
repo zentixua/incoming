@@ -280,7 +280,8 @@ final class SmokePuffs {
 
     /**
      * Клуб трубки с центром (px, py, pz) от глаза — место на оси, что стоит за along метров оси: σ по горизонтали и
-     * вертикали, толща трубки поперёк оси tau (не одного гаусса: видимый край и непрозрачность у оси — у трубки) — кучкой
+     * вертикали, толща трубки поперёк оси tau, что рисуют клубы (не одного гаусса: непрозрачность у оси — у трубки), видимый
+     * край — по толще всей трубки edgeTau (часть её вещества может рисовать лента) — кучкой
      * запечённых клубов: цвет толстого слоя (cr, cg, cb; до света неба у глаза), степень тени карт shade, кадр клуба age
      * (с дробью), зерно h, видимая доля vis, клубов в кучке — не больше most; vary — и одиночный клуб берёт свой кадр и
      * отражение по зерну (клубы трубки идут рядом друг с другом: одинаковые лежали бы стопкой монет). Клуб на экране —
@@ -288,11 +289,11 @@ final class SmokePuffs {
      * (2·диск / along), и каждый берёт свою долю непрозрачности трубки — вместе у оси выходит 1 − e^(−τ). Глаз в трубке —
      * вуаль ({@link #veil}).
      */
-    static int club(FarView view, Out out, double px, double py, double pz, double sh, double sv, double tau, double along, float cr, float cg,
-                    float cb, double shade, boolean spray, double age, long h, double vis, int most, boolean vary) {
+    static int club(FarView view, Out out, double px, double py, double pz, double sh, double sv, double tau, double edgeTau, double along,
+                    float cr, float cg, float cb, double shade, boolean spray, double age, long h, double vis, int most, boolean vary) {
         double a = 1 - Math.exp(-tau);
         if (a < 0.004) return 0;
-        double edge = edge(tau);
+        double edge = edge(edgeTau);
         double rh = edge * sh, rv = edge * sv, r = Math.max(rh, rv);
         double d = Math.sqrt(px * px + py * py + pz * pz);
         double air = view.air(d, py);
@@ -439,8 +440,9 @@ final class SmokePuffs {
         double tx = bx - ax, ty = by - ay, tz = bz - az, len = Math.sqrt(tx * tx + ty * ty + tz * tz);
         double shareA = whole ? 1 : FarFlightView.puffShare(wa, Math.sqrt(ax * ax + ay * ay + az * az), view.pixel());
         double shareB = whole ? 1 : FarFlightView.puffShare(wb, Math.sqrt(bx * bx + by * by + bz * bz), view.pixel());
-        // места — не реже, чем у обоих концов диски клубов перекрывают ось вдвое ({@link #tubeStep})
-        double step = Math.min(tubeStep(sa, shareA * ea / (Math.sqrt(2 * Math.PI) * sa)), tubeStep(sb, shareB * eb / (Math.sqrt(2 * Math.PI) * sb)));
+        // места — не реже, чем у обоих концов диски клубов перекрывают ось вдвое ({@link #tubeStep}); край клуба — у всей трубки
+        // (лента и клубы рисуют одно вещество, видимая ширина — его), доля клубов — только в непрозрачности
+        double step = Math.min(tubeStep(sa, ea / (Math.sqrt(2 * Math.PI) * sa)), tubeStep(sb, eb / (Math.sqrt(2 * Math.PI) * sb)));
         double level = tubeLevel(len, step / SEGMENT_STEP);
         int k = tubeDepth(level), n = 1 << k;
         double total = tubeTotal(level);
@@ -453,15 +455,15 @@ final class SmokePuffs {
             double share = whole ? 1 : FarFlightView.puffShare(wa + (wb - wa) * u, Math.sqrt(cx * cx + cy * cy + cz * cz), view.pixel());
             if (share <= 0) continue;
             // толща трубки поперёк оси — e/(√(2π)σ) (доля клубов — share); место стоит за свой кусок оси len/total (с долей места)
-            double tau = share * e / (Math.sqrt(2 * Math.PI) * sigma), along = len * weight / total;
+            double full = e / (Math.sqrt(2 * Math.PI) * sigma), tau = share * full, along = len * weight / total;
             if (!(tau > 0) || !(along > 0)) continue;
             double age = FxAtlas.puffFrame(sigma / Math.max(sigma0, 1e-6));
             // зерно — по месту на самом мелком уровне: клуб остаётся тем же, когда уровень меняется
             long h = mix(seed * 0x9E3779B97F4A7C15L + ((long) j << (TUBE_LEVELS - k)));
             // вихри следа — порядка σ: середина клуба гуляет ({@link #meander}, ⚠ оценка), иначе ровный ряд
             double m = meander(sigma, tau);
-            drawn += club(view, out, cx + m * gauss(h >>> 3), cy + m * gauss(h >>> 11), cz + m * gauss(h >>> 19), sigma, sigma, tau, along, cr, cg,
-                    cb, shade, false, age, h, 1, TUBE_CLUSTER, true);
+            drawn += club(view, out, cx + m * gauss(h >>> 3), cy + m * gauss(h >>> 11), cz + m * gauss(h >>> 19), sigma, sigma, tau, full, along, cr,
+                    cg, cb, shade, false, age, h, 1, TUBE_CLUSTER, true);
         }
         return drawn;
     }

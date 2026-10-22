@@ -627,13 +627,16 @@ public final class CloudModel {
             out.blob(cx, cy, cz, sh, sv, soot * fade, cloudDust * fade, 0, k, up);
         }
         if (stemShown) {
-            // ножка — трубка пыли от земли до низа облака (σ — ⚠ оценка: треть σ облака), клонится с ветром: снос на её высоте —
+            // ножка — трубка пыли до низа облака (σ — ⚠ оценка: треть σ облака), клонится с ветром: снос на её высоте —
             // доля сноса облака; пыль — поровну по высоте (на метр оси куска — меньше во столько, во сколько ось длиннее
             // подъёма). Кусками трубки, а не отдельными клубами через 2σ: те шли бусами (кадры F5)
-            double ss = Math.max(0.35 * sh, 1), perHeight = stem * fade / bottom;
-            double px = 0, py = -hob, pz = 0;
+            // низ ножки — на её σ над землёй: ниже — слой пыли волны (свои клубы), а снос по степенному профилю ветра падает к
+            // нулю только у самой земли, и кусок от точки удара до основания наклонённой ножки лёг бы полосой по земле
+            double ss = Math.max(0.35 * sh, 1), h0 = Math.min(ss, 0.5 * bottom), perHeight = stem * fade / (bottom - h0);
+            double lean0 = air.wind(h0) / air.wind(cy + hob);
+            double px = cx * lean0, py = h0 - hob, pz = cz * lean0;
             for (int i = 1; i <= STEM_PIECES; i++) {
-                double f = (double) i / STEM_PIECES, h = f * bottom, lean = air.wind(h) / air.wind(cy + hob);
+                double f = (double) i / STEM_PIECES, h = h0 + f * (bottom - h0), lean = air.wind(h) / air.wind(cy + hob);
                 double qx = cx * lean, qy = h - hob, qz = cz * lean;
                 double dx = qx - px, dy = qy - py, dz = qz - pz, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 double dust = len > 0 ? perHeight * dy / len : 0, fm = f - 0.5 / STEM_PIECES;

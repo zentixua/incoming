@@ -177,7 +177,7 @@ class CloudModelTest {
     }
 
     /**
-     * Ножка — сплошная трубка пыли от земли до низа облака (куски стыкуются конец в начало), и несёт ровно ту пыль, что
+     * Ножка — сплошная трубка пыли от слоя у земли до низа облака (куски стыкуются конец в начало), и несёт ровно ту пыль, что
      * подсос забрал из слоя волны и ещё не донёс до облака (прежде — клубы через 2σ, кадры F5: бусы).
      */
     @Test
@@ -196,7 +196,8 @@ class CloudModelTest {
                 }
             });
             assertEquals(CloudModel.STEM_PIECES, pieces.size(), "ножка через " + t + " с");
-            assertEquals(-m.hob, pieces.get(0)[1], 1e-9, "от земли");
+            double foot = pieces.get(0)[1] + m.hob;
+            assertTrue(foot > 0 && foot <= Math.max(0.35 * m.sigmaH(t), 1) + 1e-9, "низ ножки — на её σ над землёй: " + foot);
             double dust = 0;
             for (int i = 0; i < pieces.size(); i++) {
                 double[] p = pieces.get(i);
