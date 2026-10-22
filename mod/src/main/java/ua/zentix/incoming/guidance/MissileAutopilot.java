@@ -18,8 +18,6 @@ public final class MissileAutopilot {
     private static final double POP_UP_HEIGHT = 32;
     /** На наборе после ускорителя — не ниже стольких блоков над рельефом впереди. */
     private static final double CLIMB_ABOVE_RELIEF = 25;
-    /** Тангаж горки, ° (вверх — отрицательный): набор над рельефом и перед пике (игровое число, не по физике). */
-    private static final double POP_UP_PITCH = -20;
 
     private final WeaponSpec.Airframe air;
     private final Autopilot.Turn climbTurn;
@@ -113,9 +111,10 @@ public final class MissileAutopilot {
                 c.holdAltitude(Math.max(terrain + air.cruiseHeight(), aim.y + air.cruiseHeight()), 0.30, air.handling(), air.handling().cruise());
             }
             case POP_UP -> {
-                // горка: турбина на маршевой, набор отнимает скорость
+                // горка: наибольший угол набора из паспорта (тангаж вверх — отрицательный), турбина на маршевой, набор
+                // отнимает скорость
                 c.throttle(air, air.cruiseSpeed());
-                c.flight().holdPitch(POP_UP_PITCH, 0.30, air.handling().cruise().pitchRate(), air.handling().cruise().pitchAccel());
+                c.flight().holdPitch(-air.handling().climbAngle(), 0.30, air.handling().cruise().pitchRate(), air.handling().cruise().pitchAccel());
             }
             case TERMINAL -> {
                 WeaponSpec.Agility dive = air.handling().dive();
