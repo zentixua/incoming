@@ -19,6 +19,16 @@ on:
         description: Выпустить релиз v<mod_version> (только с main или claude/release-*)
         type: boolean
         default: false
+      # повтор нестабильного теста на GitHub, а не на ноутбуке: каждая из шести машин гоняет подходящие партии
+      # gametest_repeat раз, каждый раз в новом мире (tools/ci_repeat.sh запускает и сводит итог)
+      gametest_only:
+        description: Только партии GameTest по регулярному выражению (повтор флака), пусто — все
+        type: string
+        default: ''
+      gametest_repeat:
+        description: Сколько раз прогнать эти партии на каждой из шести машин
+        type: number
+        default: 1
 
 # пуш отменяет прежнюю сборку той же ветки; ручной запуск (релиз) — в своей группе, пуш в main его не отменит
 concurrency:
@@ -122,7 +132,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.mod == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: ${{ inputs.gametest_only != '' && 120 || 25 }}
     strategy:
       # упавшая часть не обрывает остальные: все падения — за один прогон
       fail-fast: false
@@ -151,9 +161,29 @@ jobs:
       - run: python3 ../tools/fetch_runtime_mods.py run/ci-mods
 
       - name: GameTest
+        env:
+          ONLY: ${{ inputs.gametest_only }}
+          REPEAT: ${{ inputs.gametest_repeat || 1 }}
+          SHARD: ${{ matrix.part }}/${{ strategy.job-total }}
         run: |
-          ./gradlew runGameTestServer -PmcModsDir=run/ci-mods -PgametestShard=${{ matrix.part }}/${{ strategy.job-total }} --console=plain
-          grep -E 'All [0-9]+ required tests passed' run/gametest/logs/latest.log
+          if [ -z "$ONLY" ]; then
+            ./gradlew runGameTestServer -PmcModsDir=run/ci-mods -PgametestShard=$SHARD --console=plain
+            grep -E 'All [0-9]+ required tests passed' run/gametest/logs/latest.log
+            exit
+          fi
+          # повтор: все подходящие партии на этой машине, REPEAT раз, каждый в новом мире; падение не обрывает повторы
+          passed=0
+          for i in $(seq "$REPEAT"); do
+            if ./gradlew runGameTestServer -PmcModsDir=run/ci-mods "-PgametestOnly=$ONLY" --console=plain --quiet \
+                && grep -qE 'All [0-9]+ required tests passed' run/gametest/logs/latest.log; then
+              passed=$((passed + 1))
+            else
+              cp run/gametest/logs/latest.log "run/gametest/logs/failed-$i.log"
+              grep -E 'failed|::' run/gametest/logs/latest.log | grep -iE 'fail|exception' | head -5
+            fi
+          done
+          echo "GameTest repeat: «$ONLY» passed $passed of $REPEAT (part $SHARD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$passed" = "$REPEAT" ]
 
       - name: Логи при падении
         if: failure()
