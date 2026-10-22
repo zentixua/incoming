@@ -285,9 +285,13 @@ same up close and far away.
   motor show no flame and leave no visible smoke.
 - **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a
   greyer trail. A slower rocket leaves a denser trail. The hot trail rises a little. By day it spreads and fades sooner;
-  on a calm night it stays narrow and hangs much longer. Up close a trail is a round, billowing tube of smoke, lit by the
-  sun and by the flame; far away, where it is only a few pixels wide, it is a thin line. The smoke starts where the
-  visible flame ends: closer to the nozzle the exhaust is still the flame itself.
+  on a calm night it stays narrow and hangs much longer. A trail is a round, billowing tube of smoke, lit by the sun and
+  by the flame, near and kilometres away alike; only where it is narrower than about two pixels is it a thin line. At
+  dusk and at night it takes the light of the open sky the way the clouds do: grey at sunset, pale lilac under the moon.
+  The smoke starts where the visible flame ends: closer to the nozzle the exhaust is still the flame itself.
+  A motor burns for its real time, so at game speeds (not physical) its trail is as much shorter as the rocket is
+  slower: a Grad rocket's trail is about 160 blocks long instead of about 650 m, and since the same smoke lies on a
+  shorter path, it is denser and hangs longer. With `scale.flight_speed` 1 the trail is as long as a real one.
 - **Launch cloud**: while a rocket's exhaust still hits the ground, its smoke stays at the launcher, together with the
   dust it blows up, and rises and drifts as one warm cloud. A Shahed leaves a short white puff at the rail, a cruise
   missile's booster a bigger one. Each Grad rocket adds its own cloud, so a full salvo buries the launcher in smoke and
