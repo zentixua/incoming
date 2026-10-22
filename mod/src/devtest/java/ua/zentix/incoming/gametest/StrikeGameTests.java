@@ -3013,6 +3013,40 @@ public final class StrikeGameTests {
         });
     }
 
+    /**
+     * Шахед издалека на настоящей шкале полёта (1): заход на эшелоне 2 км над целью, пике оттуда — и подрыв в точке, а не
+     * самоликвидация в воздухе: запас хода по плану считает и снижение к цели (маршрут — по горизонтали).
+     */
+    @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_drone", skyAccess = true)
+    public static void droneFromRealEchelonDivesIntoTarget(GameTestHelper h) {
+        flightScale(h, 1);
+        int time = IncomingConfig.SERVER.droneFlightTime.get();
+        IncomingConfig.SERVER.droneFlightTime.set(12);
+        afterTest(h, () -> IncomingConfig.SERVER.droneFlightTime.set(time));
+        ServerLevel level = h.getLevel();
+        Vec3 point = top(h, RUNWAY_TARGET);
+        UUID owner = UUID.randomUUID();
+        h.assertTrue(StrikeService.launch(level, WeaponType.DRONE, new Target.Point(point), point, 0, owner, false, Loadout.Nuke.DEFAULT,
+                Waypoints.NONE, null).ok(), "пуск не принят");
+        String[] last = {""};
+        boolean[] high = {false};
+        h.onEachTick(() -> {
+            List<StrikeProjectile> all = new ArrayList<>(VirtualFlights.get(level).flights());
+            all.addAll(level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)));
+            for (StrikeProjectile p : all) {
+                if (!owner.equals(p.ownerId())) continue;
+                if (p.getY() - point.y > 1500) high[0] = true;
+                last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " запас " + Math.round(p.rangeLeft());
+            }
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(high[0], "шахед не шёл на настоящем эшелоне: " + last[0]);
+            h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(p -> owner.equals(p.ownerId()))
+                    && level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)).isEmpty(), "шахед ещё летит: " + last[0]);
+            assertCrater(h, RUNWAY_TARGET, last[0]);
+        });
+    }
+
     /** Шкала полёта мира {@code x} на время проверки (пресет {@code CUSTOM}); после неё — прежние пресет и число. */
     static void flightScale(GameTestHelper h, double x) {
         IncomingConfig.ScalePreset preset = IncomingConfig.SERVER.scalePreset.get();

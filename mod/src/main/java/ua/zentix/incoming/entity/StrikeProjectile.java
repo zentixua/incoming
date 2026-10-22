@@ -356,10 +356,15 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return route;
     }
 
-    /** Маршрут до точки входа (после неё — на цель) и запас хода по плану полёта. */
+    /**
+     * Маршрут до точки входа (после неё — на цель) и запас хода по плану полёта: путь по маршруту (он — по горизонтали)
+     * и снижение к цели. Без снижения шахед на настоящем эшелоне (шкала полёта 1: 2 км над целью) кончал запас хода в
+     * пике над целью и самоликвидировался в сотне блоков над ней.
+     */
     public void setRoute(@Nullable Route route) {
         this.route = route;
-        this.mission = Mission.plan(pathToAim(), cruiseSpeed()).extend(extraRange());
+        double descent = route != null && !route.finished() && tracker != null ? Math.max(0, getY() - tracker.point().y) : 0;
+        this.mission = Mission.plan(pathToAim() + descent, cruiseSpeed()).extend(extraRange());
     }
 
     /** Запас хода сверх пути до цели: участки, которых в пути нет (круг барража), блоков. */
