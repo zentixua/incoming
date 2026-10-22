@@ -12,17 +12,11 @@ INST=$ROOT/inst-$V; OUT=$ROOT/out/$V
 export JAVA_HOME=${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}
 artem() { local p; for p in $(pgrep -x java); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q 'PrismLauncher/instances/' && return 0; done; return 1; }
 while artem; do echo "$(date +%T) игра Артёма запущена — жду"; sleep 60; done
-# видеокарта — одна задача: чужая задача ноутбука с клиентом или Blender — ждать её конца; лёгкие (сервер, тесты) —
-# рядом, если памяти хватает на клиент со всей сборкой (~13 ГБ)
-gpu_job() {
-  local u cg
-  for u in $(systemctl --user list-units 'incoming-job-*' --state=active --no-legend --plain | awk '{print $1}' | grep -v -- "-look-$V"); do
-    cg=$(systemctl --user show "$u" -p ControlGroup --value)
-    [ -n "$cg" ] && cat "/sys/fs/cgroup$cg/cgroup.procs" 2>/dev/null | while read -r p; do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null; echo; done \
-      | grep -qE 'kwin|blender|Xwayland|xvfb' && return 0
-  done
-  return 1
-}
+# видеокарта — одна задача (tools/gpu_busy.sh): чужая задача ноутбука с клиентом или Blender — ждать её конца; лёгкие
+# (сервер, тесты) — рядом, если памяти хватает на клиент со всей сборкой (~13 ГБ)
+source "$(dirname "$0")/../gpu_busy.sh"
+# песочница эффектов (tools/sandbox.sh) не в счёт: видя клиент шлагбаума, она гасится сама за ~5 с
+gpu_job() { gpu_busy "incoming-job-look-$V-" incoming-job-sandbox-; }
 short_of_memory() { [ "$(awk '/MemAvailable/ {print int($2/1048576)}' /proc/meminfo)" -lt 13 ]; }
 # очередь шлагбаумов — замком: проверка по процессам не видит чужую задачу, пока та ещё копирует инстанс и собирает jar
 # (22.10 два прогона так шли одновременно, и кадры одного сняты при 20–30 fps вместо ~80); замок держится до выхода

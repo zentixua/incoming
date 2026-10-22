@@ -30,6 +30,12 @@ paths:
     logscan.py                           ← выжимка из logs/latest.log
     client_scenario.sh <сценарий> [shaders] [dh] [voxy] [lss] ← клиент без окна (KWin virtual + Xwayland), кадры и звук в WAV;
                                            сценарии и что снимает каждый — в шапке скрипта
+    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← песочница эффектов: клиент только с модом (+ Iris с шейдерпаком, DH) в
+                                           плоском мире, эффект командой /fx за секунды, горячая замена кода и
+                                           перезагрузка ресурсов без нового клиента, кадры и WAV одной командой (`shot`);
+                                           как работать — client-scenario.md, «Песочница эффектов»
+    gpu_busy.sh                          ← видеокарта — одна задача: `gpu_busy` (source) — чужая задача ноутбука держит
+                                           клиент или Blender (sandbox.sh, look_gate/run.sh; тест — test_gpu_busy.sh)
     nested_kwin.sh                       ← вложенный KWin для клиента: без окна и без звука хоста, своя шина D-Bus без запуска служб
                                            (nested_kwin_bus.conf) и каталоги XDG
     laptop_job.sh [--gpu|--light] <имя> -- <команда> ← тяжёлая задача на ноутбуке хоста: своя временная служба systemd
