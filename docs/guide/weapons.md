@@ -290,7 +290,7 @@ same up close and far away.
   dusk and at night it takes the light of the open sky the way the clouds do: grey at sunset, pale lilac under the moon.
   The smoke starts where the visible flame ends: closer to the nozzle the exhaust is still the flame itself.
   A motor burns for its real time (the Grad's 2 s), and the trail is the path the rocket flies meanwhile. At game speeds
-  (not physical) that path is short: a Grad trail is about 160 blocks, and since the same smoke lies on a shorter
+  (not physical) that path is short: a Grad trail is about 160 blocks from a battery 600 blocks away (less from a closer one), and since the same smoke lies on a shorter
   path, it is denser and hangs longer. A real 9M22U speeds up to about 690 m/s over its burn and leaves about 650 m.
   In the game the rocket leaves the tubes at full speed (not physical), so with `scale.flight_speed` 1 its trail is
   about 1.4 km.
