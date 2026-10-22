@@ -3048,32 +3048,44 @@ public final class StrikeGameTests {
     }
 
     /**
-     * «Ланцет» на настоящей шкале полёта (1): круг в 700 м над целью, пике оттуда — подрыв у цели. Запас хода по плану
-     * закладывает пике с высоты круга ({@code LoiterEntity.diveTicks}), а не 25 тиков пике с игрового круга.
+     * «Ланцет» на настоящей шкале полёта (1): круг в 700 м над целью, цель (корова) погибает, пока он кружит, — он
+     * докруживает и пикирует оттуда на её последнюю точку, а не самоликвидируется в воздухе: запас хода после потери
+     * цели урезается до пути по плану ({@code Mission.lose}), и план закладывает пике с высоты круга
+     * ({@code LoiterEntity.diveTicks}), а не 25 тиков пике с игрового круга.
      */
     @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_loiter", skyAccess = true)
-    public static void loiterFromRealHeightDivesIntoTarget(GameTestHelper h) {
+    public static void loiterLosingTargetAtRealHeightStillDives(GameTestHelper h) {
         flightScale(h, 1);
         int time = IncomingConfig.SERVER.loiterTime.get();
         IncomingConfig.SERVER.loiterTime.set(5);
         afterTest(h, () -> IncomingConfig.SERVER.loiterTime.set(time));
         ServerLevel level = h.getLevel();
         Vec3 point = top(h, RUNWAY_TARGET);
+        Cow cow = EntityType.COW.create(level);
+        cow.setNoAi(true);
+        cow.moveTo(point.x, point.y, point.z);
+        level.addFreshEntity(cow);
         LoiterEntity e = ModEntities.LOITER.get().create(level);
-        e.launch(point.add(0, WeaponSpec.LOITER.airframe().cruiseHeight(), -150), new Target.Point(point), point, null);
+        e.launch(point.add(0, WeaponSpec.LOITER.airframe().cruiseHeight(), -150), Target.OfEntity.center(cow),
+                cow.getBoundingBox().getCenter(), null);
         e.setRoute(null);
         VirtualFlights.launch(level, e);
         java.util.UUID id = e.getUUID();
-        boolean[] high = {false};
+        boolean[] high = {false}, killed = {false};
         String[] last = {""};
         h.onEachTick(() -> {
             LoiterEntity l = findLoiter(level, id);
             if (l == null) return;
             if (l.getY() - point.y > 600) high[0] = true;
+            if (!killed[0] && l.flightPhase() == FlightPhase.LOITER && l.phaseAge() > 20) {
+                killed[0] = true;
+                cow.kill();
+            }
             last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " запас " + Math.round(l.rangeLeft());
         });
         h.succeedWhen(() -> {
             h.assertTrue(high[0], "круг не на настоящей высоте: " + last[0]);
+            h.assertTrue(killed[0], "цель не погибла на круге: " + last[0]);
             h.assertTrue(findLoiter(level, id) == null, "барражирующий ещё летит: " + last[0]);
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
