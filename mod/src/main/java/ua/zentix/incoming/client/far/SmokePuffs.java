@@ -159,7 +159,9 @@ final class SmokePuffs {
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1);
-                if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
+                // лежащий клуб виден сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет
+                // сбоку и сзади) нет, свет солнца, неба и огня — весь (степень тени 0)
+                if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k, sprite, (float) (frame - f0), 0,
                         cr, cg, cb, sub * last);
                 else out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
                         cr, cg, cb, sub * last);
