@@ -130,6 +130,22 @@ public final class FarSprites {
     }
 
     /**
+     * Запечённый клуб плоского гаусса (слой пыли у земли), лежащий на горизонтали ({@link FxQuads#flat}): полуразмеры
+     * {@code halfA} и {@code halfB} — по горизонтали в мире.
+     */
+    public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
+                          float g, float b, float a) {
+        if (a < 0.002f) return;
+        double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
+        out.sixWay(mix, shade);
+        out.flat((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold), (float) (halfB * unfold),
+                sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
+                (float) Math.min(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
+        out.sixWay(-1);
+        counts[0]++;
+    }
+
+    /**
      * Вуаль вещества вокруг глаза (облако, в которое вошла камера, {@link SmokePuffs}): ровный квадрат полуразмера half лицом
      * к камере в (dx, dy, dz) от неё — свой цвет (r, g, b) с непрозрачностью a, без мягкого края у мира (что ближе —
      * ближе квадрата и так).

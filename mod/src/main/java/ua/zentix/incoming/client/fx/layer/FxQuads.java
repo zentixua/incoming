@@ -193,6 +193,30 @@ public final class FxQuads {
         vertex(x + ax - bx, y + ay - by, z + az - bz, s.u0(), s.v1(), r, g, b, a, soft, unfold, light, fog);
     }
 
+    /**
+     * Квадрат, лежащий в горизонтальной плоскости, с центром (x, y, z) от камеры: оси — «влево» экрана, положенное на
+     * горизонталь, и горизонталь поперёк неё (от камеры), полуразмеры {@code halfA} и {@code halfB}. Плоский клуб (слой
+     * пыли у земли) — такой квадрат: у квадрата лицом к камере нижняя половина уходила в землю, а верхняя стояла стеной
+     * над ней; у лежащего каждая точка — на своей глубине, и мягкий край у рельефа считается по ней.
+     */
+    public void flat(float x, float y, float z, float key, float halfA, float halfB, FxAtlas.Sprite s, float r, float g, float b, float a,
+                     float soft, float unfold, int light, float fog) {
+        float lx = left.x, lz = left.z, len = Mth.sqrt(lx * lx + lz * lz);
+        if (len < 1e-6f) {
+            lx = 1;
+            lz = 0;
+        } else {
+            lx /= len;
+            lz /= len;
+        }
+        float ax = lx * halfA, az = lz * halfA, bx = -lz * halfB, bz = lx * halfB;
+        quad(key);
+        vertex(x - ax - bx, y, z - az - bz, s.u1(), s.v1(), r, g, b, a, soft, unfold, light, fog);
+        vertex(x - ax + bx, y, z - az + bz, s.u1(), s.v0(), r, g, b, a, soft, unfold, light, fog);
+        vertex(x + ax + bx, y, z + az + bz, s.u0(), s.v0(), r, g, b, a, soft, unfold, light, fog);
+        vertex(x + ax - bx, y, z + az - bz, s.u0(), s.v1(), r, g, b, a, soft, unfold, light, fog);
+    }
+
     /** Отсортировать и нарисовать текущим шейдером; память кадра остаётся для следующего. */
     void draw() {
         if (n == 0) return;

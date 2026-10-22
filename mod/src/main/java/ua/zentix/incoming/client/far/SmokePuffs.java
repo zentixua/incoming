@@ -148,6 +148,9 @@ final class SmokePuffs {
             // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг
             boolean spray = sprays && kw > ks + kd;
             double clubAge = spray ? sprayAge : age;
+            // плоский клуб, на который смотрят сверху (проекция диска шире его толщи), лежит на горизонтали: квадрат лицом к
+            // камере у слоя пыли у земли стоял бы стеной над ней (кадры F2a: «плита» под шаром в 0,1 с)
+            boolean lying = lies(sh, sv, py, d);
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
                 double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
@@ -155,11 +158,21 @@ final class SmokePuffs {
                 double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, clubAge) + (count > 1 ? 2 * unit(hj >>> 28) : 0));
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
-                out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1), (float) (frame - f0),
-                        spray ? sprayShade : shade,
+                FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1);
+                if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
+                        cr, cg, cb, sub * last);
+                else out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
                         cr, cg, cb, sub * last);
             }
         }
+    }
+
+    /**
+     * Лежит ли клуб с осями (σh, σh, σv) на горизонтали, когда глаз выше или ниже его середины на dy при расстоянии d:
+     * плоский (σh &gt; 3σv) и видный сверху — проекция диска (σh·sin e) шире его толщи (σv·cos e ≈ σv).
+     */
+    static boolean lies(double sh, double sv, double dy, double d) {
+        return sh > 3 * sv && sh * Math.abs(dy) > sv * d;
     }
 
     /**

@@ -87,4 +87,15 @@ class SmokePuffsTest {
         double level = SmokePuffs.sightDepth(0, -18, 0, 40, 1, ext, 1, 0, 0);
         org.junit.jupiter.api.Assertions.assertTrue(level < 1e-6, "взгляд вдоль, на 18 σ выше слоя: " + level);
     }
+
+    /**
+     * Слой пыли у земли (σh 15, σv 0,5) из глаза в 18 м над ним и в 50 м — лежит на горизонтали (квадрат лицом к камере
+     * стоял бы над землёй «плитой» в 0,1 с, кадры F2a); тот же слой с уровня глаза и круглый клуб — лицом к камере.
+     */
+    @Test
+    void flatClubLiesWhenSeenFromAbove() {
+        org.junit.jupiter.api.Assertions.assertTrue(SmokePuffs.lies(15, 0.5, -18, 53));
+        org.junit.jupiter.api.Assertions.assertFalse(SmokePuffs.lies(15, 0.5, -1, 53), "с уровня глаза — полоса");
+        org.junit.jupiter.api.Assertions.assertFalse(SmokePuffs.lies(5, 5, -18, 53), "круглый");
+    }
 }
