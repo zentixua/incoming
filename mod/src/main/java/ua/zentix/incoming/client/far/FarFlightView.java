@@ -146,9 +146,9 @@ public final class FarFlightView {
      */
     static final double PUFFS_FROM = 6, PUFFS_FULL = 12;
     /**
-     * Клубов трубок в кадре — не больше этого в среднем (производительность, не физика): больше — порог ширины на следующих
-     * кадрах растёт ({@link #puffScale}, ×1,25 за кадр), и дальние трубки снова рисует лента; меньше половины — порог плавно
-     * возвращается. Залп «Града» вблизи или трубки в бинокль иначе давали бы десятки тысяч квадратов.
+     * Клубов трубок и их вуалей у глаза в кадре — не больше этого в среднем (производительность, не физика): больше — порог
+     * ширины на следующих кадрах растёт ({@link #puffScale}, ×1,1 за кадр), и дальние трубки снова рисует лента; меньше
+     * половины — порог плавно возвращается. Залп «Града» вблизи или трубки в бинокль иначе давали бы десятки тысяч квадратов.
      */
     static final int CLUB_BUDGET = 6000;
     /** Множитель порога ширины трубки для клубов (≥ 1) и клубов в этом кадре. */
@@ -534,7 +534,7 @@ public final class FarFlightView {
         lit = 0;
         litEye = 0;
         // бюджет клубов прошлого кадра
-        puffScale = clubs > CLUB_BUDGET ? puffScale * 1.25 : clubs < CLUB_BUDGET / 2 ? Math.max(1, puffScale / 1.05) : puffScale;
+        puffScale = clubs > CLUB_BUDGET ? puffScale * 1.1 : clubs < CLUB_BUDGET / 2 ? Math.max(1, puffScale / 1.02) : puffScale;
         clubs = 0;
         flights = 0;
         points = 0;
@@ -569,7 +569,8 @@ public final class FarFlightView {
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
             end(LOOK, POINTS.x[i] + air.wind().x() * drift - cam.x, POINTS.y[i] + LOOK[2] - cam.y, POINTS.z[i] + air.wind().z() * drift - cam.z,
                     POINTS.light[i], view, i);
-            ESEED[i] = (POINTS.birth[i] * 0x2545F4914F6CDD1DL + POINTS.owner[i]) * 31 + i;
+            // зерно клубов — номер записи точки: тик рождения в заморозке мира сдвигается (TrailPoints.hold), и клубы мигали бы
+            ESEED[i] = s * 0x2545F4914F6CDD1DL + 0x632BE59BD9B4E019L;
             if (POINTS.last[i]) {
                 EA[i] = 0;
                 EE[i] = 0;
@@ -702,7 +703,7 @@ public final class FarFlightView {
     private static double litEye;
 
     /** Факел flame с серединой (x, y, z) от глаза cam — в свет кадра на мир. */
-    private static void lit(double x, double y, double z, Flame flame, Vec3 cam) {
+    static void lit(double x, double y, double z, Flame flame, Vec3 cam) {
         double lr = flame.lightRadius(), w = flame.brightness() * lr * lr / Math.max(x * x + y * y + z * z, lr * lr);
         // в глаз — все факелы, на мир — самые заметные у глаза (проход берёт из них четыре)
         litEye += w;
@@ -825,12 +826,13 @@ public final class FarFlightView {
             // лента у конца — своей долей у этого конца (у стыка с соседним отрезком та же), а отрезок у самого глаза — без неё
             keepA = 1 - puffShare(EW[a] / scale, Math.sqrt(EX[a] * EX[a] + EY[a] * EY[a] + EZ[a] * EZ[a]), view.pixel());
             keepB = 1 - puffShare(EW[b] / scale, Math.sqrt(EX[b] * EX[b] + EY[b] * EY[b] + EZ[b] * EZ[b]), view.pixel());
-            // клубы — только у отрезка в кадре (шар отрезка с краем трубки) или у глаза (его вещество — вуаль)
-            double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 4 * Math.max(ES[a], ES[b]);
+            // клубы — только у отрезка в кадре (шар отрезка с квадратами его клубов: до ~9σ от оси) или у глаза (глаз в этом шаре:
+            // его вещество — вуаль, а середина отрезка бывает за спиной)
+            double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 9 * Math.max(ES[a], ES[b]);
             double mx = EX[a] + 0.5 * tx, my = EY[a] + 0.5 * ty, mz = EZ[a] + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
-            if (puffs > 0 && (gap < 4 * Math.max(ES[a], ES[b]) || inFrame(view, mx, my, mz, Math.max(md, 1e-6), reach))) {
-                clubs += SmokePuffs.tube(view, out, EX[a], EY[a], EZ[a], ES[a], EE[a], EX[b], EY[b], EZ[b], ES[b], EE[b], 0.5 * (EO[a] + EO[b]),
-                        style.sigma0(), ESEED[a], puffs);
+            if (puffs > 0 && (md <= reach || inFrame(view, mx, my, mz, md, reach))) {
+                clubs += SmokePuffs.tube(view, out, EX[a], EY[a], EZ[a], ES[a], EE[a], EW[a] / scale, EX[b], EY[b], EZ[b], ES[b], EE[b], EW[b] / scale,
+                        0.5 * (EO[a] + EO[b]), style.sigma0(), ESEED[a], puffs >= 1);
             }
         }
         if (puffs >= 1) {

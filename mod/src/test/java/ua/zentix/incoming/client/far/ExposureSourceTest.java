@@ -22,6 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class ExposureSourceTest {
     private static final Path CLIENT = Path.of("src/main/java/ua/zentix/incoming/client");
+    /** Вызов adapted(…) без адресата (статический импорт): не после буквы, цифры или точки. */
+    private static final java.util.regex.Pattern ADAPTED = java.util.regex.Pattern.compile("(?<![\\w.])adapted\\(");
     private static final Set<String> ALLOWED = Set.of("far/Sight.java", "fx/FlashFalloff.java", "fx/layer/PallPass.java");
 
     @Test
@@ -35,7 +37,7 @@ class ExposureSourceTest {
                 for (int i = 0; i < lines.size(); i++) {
                     String line = lines.get(i).trim();
                     if (line.startsWith("*") || line.startsWith("//")) continue;
-                    if (line.contains("Sight.adapted(") || line.contains(" adapted(") && !line.contains("double adapted(")) bad.add(rel + ":" + (i + 1));
+                    if (line.contains("Sight.adapted") || ADAPTED.matcher(line).find() && !line.contains("double adapted(")) bad.add(rel + ":" + (i + 1));
                 }
             }
         }

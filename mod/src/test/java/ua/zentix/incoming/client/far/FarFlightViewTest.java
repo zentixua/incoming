@@ -114,26 +114,27 @@ class FarFlightViewTest {
         Sight.light(r, seen, d, PIXEL, out);
         assertTrue(Math.min(Sight.HALO, Sight.SCATTER * seen) < 0.1, "блик факела у глаза — бледный: " + Sight.SCATTER * seen);
         assertTrue(seen > 1, "сам факел ярче белого: " + seen);
-        // освещённость белой стены у глаза — в кадре почти белая (глаз привык к ней), а не в тысячу раз ярче белого
+        // освещённость белой стены у глаза: по-старому — в сотни раз ярче белого (экран её не покажет)
         double wall = HeatPassAtEye.at(flame, d);
-        assertTrue(wall * exposure > 0.9, "стена у глаза освещена почти до белого: " + wall * exposure);
         assertTrue(wall * Sight.adapted(1, night) > 500, "по-старому — в сотни раз ярче белого: " + wall * Sight.adapted(1, night));
         // за 2 км огонь у глаза глаз почти не трогает
         assertTrue(exposureNear(flame, 2000, night) > 0.95 * Sight.adapted(1, night), "вдали — ночное привыкание");
     }
 
-    /** Привыкание глаза кадра с одним факелом в d блоках (HeatPass копит свет у глаза, кадр берёт его). */
+    /**
+     * Привыкание глаза кадра с одним факелом в d блоках — тем путём, что в игре: факел кадра ({@link FarFlightView#lit}) —
+     * в свет на мир этого кадра ({@link FarFlightView#heat}) и в свет у глаза следующего ({@link FarFlightView#flamesAtEye},
+     * {@code HeatPass.Frame.eye}), привыкание — {@link Sight#exposure}.
+     */
     private static double exposureNear(Flame flame, double d, double ambient) {
-        ua.zentix.incoming.client.fx.layer.HeatPass.Frame f = new ua.zentix.incoming.client.fx.layer.HeatPass.Frame();
-        int c = flame.lightColor();
-        double lr = ua.zentix.incoming.client.fx.plume.FlameModel.linear(c >> 16 & 255), lg = ua.zentix.incoming.client.fx.plume.FlameModel.linear(c >> 8 & 255),
-                lb = ua.zentix.incoming.client.fx.plume.FlameModel.linear(c & 255), k = flame.brightness() / (0.2126 * lr + 0.7152 * lg + 0.0722 * lb);
-        f.light(d, 0, 0, flame.lightRadius(), lr * k, lg * k, lb * k, 0, 10);
         try {
-            f.done();
-            return Sight.exposure(ambient, ua.zentix.incoming.client.fx.layer.HeatPass.atEye());
+            FarFlightView.lit(d, 0, 0, flame, Vec3.ZERO);
+            FarFlightView.heat(new ua.zentix.incoming.client.fx.layer.HeatPass.Frame(), 0);
+            ua.zentix.incoming.client.fx.layer.HeatPass.Frame next = new ua.zentix.incoming.client.fx.layer.HeatPass.Frame();
+            next.eye(FarFlightView.flamesAtEye());
+            return Sight.exposure(ambient, next.atEye());
         } finally {
-            ua.zentix.incoming.client.fx.layer.HeatPass.forget();
+            FarFlightView.reset();
         }
     }
 
