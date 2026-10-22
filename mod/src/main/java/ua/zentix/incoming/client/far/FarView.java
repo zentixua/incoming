@@ -36,13 +36,51 @@ public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up,
     }
 
     /**
-     * Свет неба на экране у вещества под открытым небом (rgb, {@link #sky}): тот же, каким карта освещения Minecraft светит
-     * блоки и частицы под открытым небом (блок 0, небо 15), — ночью сиреневатый свет луны. Клубы дыма слоя берут его, а не
-     * {@link #ambient}: с ним белый дым ночью выходил темнее освещённого луной камня рядом, хотя отражает больше.
+     * Свет неба на экране у вещества в воздухе под открытым небом (rgb, {@link #sky}). Яркость — та же, какой карта
+     * освещения Minecraft светит блоки и частицы под открытым небом (блок 0, небо 15): клубы дыма слоя берут её, а не
+     * {@link #ambient}, — с ним белый дым ночью выходил темнее освещённого луной камня рядом, хотя отражает больше.
+     * Оттенок — как у облаков Minecraft ({@link ClientLevel#getCloudColor}: белое вещество в небе), а не как у карты:
+     * карта синеет линейно с потемнением неба ({@code (s, s, 1)} к белому на 35 %), и на закате (время 13000, солнце на
+     * 3,5° под горизонтом, небо ещё розовое) синий у неё в 1,47 раза больше красного — почти как ночью (1,58); облака
+     * синеют, только когда свет ушёл (на закате 1,07, ночью 1,5). Дым и облака — одно и то же вещество в одном свете:
+     * у шейдерпака на кадре заката облака серые (синий к красному 1,0–1,1), а след по карте был тёмно-синим.
      */
-    public static Vector3f sky(net.minecraft.client.renderer.LightTexture light, Vector3f into) {
+    public static Vector3f sky(net.minecraft.client.renderer.LightTexture light, ClientLevel level, float partial, Vector3f into) {
+        Vec3 cloud = level.getCloudColor(partial);
+        return open(lightmap(light, into), cloud.x, cloud.y, cloud.z, into);
+    }
+
+    /** Карта освещения у открытого неба (блок 0, небо 15), rgb на экране. */
+    public static Vector3f lightmap(net.minecraft.client.renderer.LightTexture light, Vector3f into) {
         int c = light.lightPixels.getPixelRGBA(0, 15);
         return into.set((c & 0xFF) / 255f, (c >> 8 & 0xFF) / 255f, (c >> 16 & 0xFF) / 255f);
+    }
+
+    /**
+     * Свет открытого неба на веществе в воздухе: яркость карты освещения {@code map} с оттенком облаков (r, g, b) — в into
+     * (можно тот же вектор, что map). Облаков без света (яркость ноль) — карта как есть.
+     */
+    static Vector3f open(Vector3f map, double r, double g, double b, Vector3f into) {
+        double luma = luma(map.x(), map.y(), map.z()), cloud = luma(r, g, b);
+        if (cloud <= 1e-6) return into.set(map);
+        double k = luma / cloud;
+        return into.set((float) Math.min(1, r * k), (float) Math.min(1, g * k), (float) Math.min(1, b * k));
+    }
+
+    /**
+     * Во сколько раз по каналам свет вещества в воздухе {@code sky} больше карты освещения у открытого неба {@code map}
+     * ({@code FxSkyFix}: частицы и ленты слоя берут свет мира из карты, у них — его доля неба).
+     */
+    public static Vector3f fix(Vector3f sky, Vector3f map, Vector3f into) {
+        return into.set(ratio(sky.x(), map.x()), ratio(sky.y(), map.y()), ratio(sky.z(), map.z()));
+    }
+
+    private static float ratio(float a, float b) {
+        return b <= 1e-4f ? 1 : a / b;
+    }
+
+    private static double luma(double r, double g, double b) {
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     }
 
     /** Яркость {@link #sky} (на экране): ею нормирован свет огненных шаров на клубах ({@code fx.vsh}). */

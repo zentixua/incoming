@@ -157,6 +157,10 @@ class FarFlightViewTest {
         assertEquals(1, FarFlightView.puffShare(width, 30, PIXEL), 1e-12, "5 м в 30 блоках — клубы");
         assertEquals(1, FarFlightView.puffShare(width, 0.5, PIXEL), 1e-12, "глаз у трубки — клубы и вуаль, не плоскость");
         assertEquals(0, FarFlightView.puffShare(width, 2000, PIXEL), 1e-12, "за 2 км — линия: лента");
+        // залп «Града» за 1,7 км (кадры VXC4, 22.10): след в 10 с — 11 м (5,7 px) — клубы, а не полоса из лент; в 1 с — 3 м
+        // (1,6 px, сечение уже пикселя) — лента
+        assertEquals(1, FarFlightView.puffShare(11, 1700, PIXEL), 1e-12, "след «Града» в 10 с за 1,7 км — клубы");
+        assertEquals(0, FarFlightView.puffShare(3, 1700, PIXEL), 1e-12, "след в 1 с за 1,7 км — лента");
         double prev = 1;
         for (double gap = 10; gap < 3000; gap *= 1.05) {
             double s = FarFlightView.puffShare(width, gap, PIXEL);
