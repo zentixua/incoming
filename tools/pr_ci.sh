@@ -11,7 +11,7 @@
 # Пуш в ветку во время ожидания: ждём проверки новой головы.
 set -uo pipefail
 pr=${1:?использование: tools/pr_ci.sh <номер PR> [--repo владелец/репо]}; shift
-repo=(); [ "${1:-}" = --repo ] && repo=(--repo "$2")
+repo=(); [ "${1:-}" = --repo ] && { repo=(--repo "$2"); export GH_REPO=$2; }
 need='^(Итог|Записка)$'
 started=$(date +%s); head=; quiet=0
 while true; do
@@ -22,7 +22,18 @@ while true; do
     echo "PR $pr: конфликт с базой — CI не запустится. Слить main в ветку, разрешить конфликт, запушить."
     exit 3
   fi
-  checks=$(gh pr checks "$pr" "${repo[@]}" --json name,bucket,link -q '.[] | "\(.bucket)\t\(.name)\t\(.link)"' 2>/dev/null)
+  checks=$(gh pr checks "$pr" "${repo[@]}" --json name,bucket,link,completedAt -q '.[] | "\(.bucket)\t\(.name)\t\(.link)\t\(.completedAt)"' 2>/dev/null)
+  # GitHub иногда оставляет у законченной задачи состояние in_progress (22.10: «Итог» #383 закончился в 15:28:55 с
+  # success, а статус так и не сменился) — у такой «ждущей» с временем конца итог берётся из самой задачи
+  checks=$(printf '%s\n' "$checks" | while IFS=$'\t' read -r b name link done; do
+    [ -z "$name" ] && continue
+    if [ "$b" = pending ] && [ -n "$done" ] && [ "${done#0001}" = "$done" ]; then
+      case $(gh api "repos/{owner}/{repo}/actions/jobs/${link##*/}" -q .conclusion 2>/dev/null) in
+        success) b=pass ;; failure) b=fail ;; cancelled) b=cancel ;; skipped) b=skipping ;;
+      esac
+    fi
+    printf '%s\t%s\t%s\n' "$b" "$name" "$link"
+  done)
   mine=$(printf '%s\n' "$checks" | awk -F'\t' -v re="$need" '$2 ~ re')
   if [ "$(printf '%s\n' "$mine" | grep -c .)" -ge 2 ] && ! printf '%s\n' "$mine" | grep -q '^pending'; then
     if ! printf '%s\n' "$mine" | grep -qv '^pass'; then
