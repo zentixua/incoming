@@ -33,6 +33,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -249,7 +250,7 @@ final class LssTerrain implements TerrainSource {
             }
             return worlds.computeIfAbsent(seed + "/" + dimension.location(), k -> {
                 World w = new World(now, seed, dimension);
-                io.execute(() -> load(w));
+                submit(() -> load(w));
                 return w;
             });
         }
@@ -302,10 +303,22 @@ final class LssTerrain implements TerrainSource {
         }
     }
 
+    /**
+     * Задача в поток файлов. JVM уже выходит (крюк остановки закрыл поток, а тик или поток LSS ещё идут) — задача не
+     * нужна: всё, что было, крюк уже записал.
+     */
+    private static void submit(Runnable task) {
+        try {
+            io.execute(task);
+        } catch (RejectedExecutionException e) {
+            // выход из игры
+        }
+    }
+
     /** Под замком {@link #worlds}: все миры — на диск (в фоне) и из памяти. После выхода JVM запись уже не принимается. */
     private static void flushLocked() {
         for (World w : worlds.values()) {
-            if (!io.isShutdown()) io.execute(() -> save(w));
+            submit(() -> save(w));
         }
         worlds.clear();
     }
@@ -323,12 +336,10 @@ final class LssTerrain implements TerrainSource {
      * дальние долой (в фоне).
      */
     static void tick(double playerX, double playerZ) {
-        // JVM уже выходит (крюк остановки закрыл поток записи), а тик ещё идёт: задачи не принимаются
-        if (io.isShutdown()) return;
         ticks++;
         if (ticks % SAVE_TICKS == 0) {
             synchronized (worlds) {
-                for (World w : worlds.values()) io.execute(() -> save(w));
+                for (World w : worlds.values()) submit(() -> save(w));
             }
         }
         if (ticks % COARSEN_TICKS != 0 || coarsening) return;
@@ -336,7 +347,7 @@ final class LssTerrain implements TerrainSource {
             for (World w : worlds.values()) {
                 if (w.store.fullChunks() <= FULL_LIMIT && w.store.chunks() <= TOTAL_LIMIT) continue;
                 coarsening = true;
-                io.execute(() -> {
+                submit(() -> {
                     try {
                         w.store.coarsen(playerX, playerZ, FULL_LIMIT, FULL_KEEP);
                         w.store.trim(playerX, playerZ, TOTAL_LIMIT, TOTAL_KEEP);
