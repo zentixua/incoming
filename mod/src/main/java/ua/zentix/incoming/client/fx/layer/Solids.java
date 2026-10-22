@@ -75,8 +75,8 @@ public final class Solids {
     private Solids() {}
 
     /**
-     * Источник света кадра в (x, y, z) мира радиусом r: секции, которые он задевает, перечитываются в этом кадре —
-     * ближние к нему первыми (место на {@link #NEAR} кончается).
+     * Источник света кадра в (x, y, z) мира радиусом r: секции, которые он задевает, — вне очереди окна (не больше
+     * половины бюджета, по очереди между собой), ближние к нему первыми (место на {@link #NEAR} кончается).
      */
     static void near(double x, double y, double z, double r) {
         int x0 = SectionPos.blockToSectionCoord(x - r), x1 = SectionPos.blockToSectionCoord(x + r);
@@ -170,9 +170,9 @@ public final class Solids {
         // секции у огней — не больше половины бюджета, по очереди с кадра на кадр
         for (int k = 0; k < nearPending; k++) {
             if (k > 0 && System.nanoTime() - start > FILL_NANOS / 2) break;
-            read(level, NEAR_PENDING[(k + nearTurn) % nearPending]);
+            read(level, NEAR_PENDING[Math.floorMod(k + nearTurn, nearPending)]);
         }
-        nearTurn += 1;
+        nearTurn = Math.floorMod(nearTurn + 1, ALL);
         // остальное окно — от глаза к краю, хоть одна секция
         int far = pending - nearPending;
         Arrays.sort(ORDER, 0, far);
