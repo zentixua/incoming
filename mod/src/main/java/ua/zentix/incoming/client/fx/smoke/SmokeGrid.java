@@ -158,6 +158,19 @@ public final class SmokeGrid {
         void segment(double x, double y, double z, double ax, double ay, double az, double sh, double sv, double soot, double dust,
                      double water, float dustR, float dustG, float dustB, double kelvin, double rise);
 
+        /**
+         * Кусок трубки дыма между концами a и b (центры сечения в мире; шлейф пожара): у каждого конца σ по горизонтали
+         * и вертикали, м, и сажи на метр оси, кг/м; температура газа, K; подъём, м/с. Сетка берёт его отрезком со средними
+         * концов; слой эффектов рисует трубкой, как след снаряда ({@code FarFlightView.line}): σ и вещество меняются вдоль
+         * оси без ступенек, вдали — лентой. sigma0 — σ сечения у самого источника (кадр клуба — по росту σ с него).
+         */
+        default void tube(double ax, double ay, double az, double sha, double sva, double sootA, double bx, double by, double bz, double shb,
+                          double svb, double sootB, double kelvin, double rise, double sigma0) {
+            double hx = 0.5 * (bx - ax), hy = 0.5 * (by - ay), hz = 0.5 * (bz - az), len = 2 * Math.sqrt(hx * hx + hy * hy + hz * hz);
+            segment(ax + hx, ay + hy, az + hz, hx, hy, hz, 0.5 * (sha + shb), 0.5 * (sva + svb), 0.5 * (sootA + sootB) * len, 0, 0, 1, 1, 1,
+                    kelvin, rise);
+        }
+
         /** Гауссов клуб в точке (отрезок нулевой длины). */
         default void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water,
                           float dustR, float dustG, float dustB, double kelvin, double rise) {

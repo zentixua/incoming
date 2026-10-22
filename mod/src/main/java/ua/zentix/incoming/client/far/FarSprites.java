@@ -32,7 +32,7 @@ import java.util.Arrays;
  * {@link #DISC}, {@link #GLOW}, {@link #FIREBALL}, {@link #FIRE} переводят радиус круга того же светового потока
  * в полуразмер квадрата ({@code FarSpritesTest}).
  */
-public final class FarSprites {
+public final class FarSprites implements SmokePuffs.Out {
     /**
      * Полуразмер квадрата на радиус круга того же потока: круг {@code far/disc} закрывает 0,632 квадрата (√(π/(4·0,632))),
      * ореол {@code far/glow} — 0,133 (пик в середине — 1).

@@ -25,10 +25,27 @@ import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
  * ({@link SmokeGrid.Source#puffGrowth}, {@link FxAtlas#puffFrame}), у каждого клуба кучки со своим сдвигом.</li>
  * </ul>
  * Светящийся газ (горячее точки Дрейпера) у источника, что рисует тело огня ({@link SmokeGrid.Source#drawsGlow}: облако
- * взрыва — огненным шаром), здесь не рисуется: дым проступает той же долей, что тело тает. Отрезок
- * ({@link SmokeGrid.Sink#segment}: след, шлейф пожара) — клубы вдоль него через ~σ.
+ * взрыва — огненным шаром), здесь не рисуется: дым проступает той же долей, что тело тает. Отрезок облака
+ * ({@link SmokeGrid.Sink#segment}) — клубы вдоль него через ~σ; кусок трубки ({@link SmokeGrid.Sink#tube}: шлейф пожара) —
+ * как след снаряда ({@link FarFlightView#line}, {@link #tube}).
  */
 final class SmokePuffs {
+    /** Куда клубы, вуали и ленты идут квадратами (кадр слоя — {@link FarSprites}; проверки — свой приёмник). */
+    interface Out {
+        void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
+                   float b, float a);
+
+        void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
+                       float r, float g, float b, float a);
+
+        void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light);
+
+        void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a);
+
+        boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
+                       float alphaB, int lightB, float r, float g, float b, float[] joint);
+    }
+
     /** Толща видимого края гаусса (порог контраста — 0,02; край квадрата чуть внутри). */
     static final double EDGE_TAU = 0.05;
     /**
@@ -51,17 +68,20 @@ final class SmokePuffs {
     /** Облака, которых объём не рисует, — в кадр. */
     static void collect(FarView view, FarSprites out) {
         double seconds = SmokeGrid.seconds(view.partial());
-        SmokeGrid.quads(s -> {
-            DRAW.begin(view, out, s, seconds);
-            return s.emit(seconds, DRAW);
-        });
+        SmokeGrid.quads(s -> s.emit(seconds, sink(view, out, s, seconds)));
+    }
+
+    /** Приёмник клубов источника source в кадре view в миг seconds: клубы — квадратами в out (один на поток кадра). */
+    static SmokeGrid.Sink sink(FarView view, Out out, SmokeGrid.Source source, double seconds) {
+        DRAW.begin(view, out, source, seconds);
+        return DRAW;
     }
 
     /** Приёмник клубов одного источника: клубы — квадратами. */
     private static final class Draw implements SmokeGrid.Sink {
         private final double[] point = new double[2];
         FarView view;
-        FarSprites out;
+        Out out;
         private SmokeGrid.Source source;
         /** Кадр клуба по росту вещества (с дробью): дыма и брызг. */
         private double age, sprayAge;
@@ -69,7 +89,7 @@ final class SmokePuffs {
         private boolean glow, sprays;
         private int index;
 
-        void begin(FarView view, FarSprites out, SmokeGrid.Source source, double seconds) {
+        void begin(FarView view, Out out, SmokeGrid.Source source, double seconds) {
             this.view = view;
             this.out = out;
             this.source = source;
@@ -80,6 +100,45 @@ final class SmokePuffs {
             this.glow = source.drawsGlow();
             this.sprays = source.sprayClubs();
             this.index = 0;
+            joint[0] = Float.NaN;
+        }
+
+        /** Концы куска трубки и поперёк ленты у конца прошлого куска этого источника (NaN — ленты не было). */
+        private final FarFlightView.Tube a = new FarFlightView.Tube(), b = new FarFlightView.Tube();
+        private final float[] joint = new float[3];
+
+        /**
+         * Шлейф — трубка, как след снаряда ({@link FarFlightView#line}): гауссово сечение σ = √(σh·σv) (среднее
+         * геометрическое, как у толщи шлейфа {@code FirePlume.tau}; ⚠ сечение шлейфа в σh/σv до 2 раз шире, чем выше),
+         * ослабление сажи на метр у каждого конца; узкая на экране — лентой, крупная — клубами через ≤ 1,2σ. Куски одного
+         * источника идут подряд — лента без щели на стыке.
+         */
+        @Override
+        public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double bx, double by, double bz, double shb,
+                         double svb, double sootB, double kelvin, double rise, double sigma0) {
+            int at = index++;
+            if (sootA + sootB <= 0 || !(sha > 0) || !(sva > 0) || !(shb > 0) || !(svb > 0)) {
+                joint[0] = Float.NaN;
+                return;
+            }
+            Vec3 cam = view.camera();
+            end(a, ax - cam.x, ay - cam.y, az - cam.z, Math.sqrt(sha * sva), CloudModel.SOOT_K * sootA);
+            end(b, bx - cam.x, by - cam.y, bz - cam.z, Math.sqrt(shb * svb), CloudModel.SOOT_K * sootB);
+            // цвет и тень — у сажи (как у клубов облаков, {@link #thick}); лента — тем же цветом в тоне клуба
+            float c = thick(1, 0, 0, 0);
+            float grey = c * FarFlightView.TONE;
+            double shade = shade(1, 0, 0, 0) / BAKED_K;
+            int drawn = FarFlightView.line(view, out, a, b, grey, grey, grey, c, shade, sigma0, mix(seed * 0x9E3779B97F4A7C15L + at), joint);
+            if (drawn != FarFlightView.RIBBON) joint[0] = Float.NaN;
+        }
+
+        /** Конец трубки (от камеры): ширина на половине непрозрачности середины и лента — как у следа ({@code TrailModel.width}). */
+        private void end(FarFlightView.Tube t, double dx, double dy, double dz, double sigma, double e) {
+            double tau = e / (Math.sqrt(2 * Math.PI) * sigma), d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            double width = ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma);
+            FarFlightView.ribbon(width, d, view.pixel(), point);
+            float alpha = width > 0 ? (float) ((1 - Math.exp(-tau)) * point[1] * view.air(d, dy)) : 0;
+            t.set(dx, dy, dz, sigma, e, width, point[0], alpha, OPEN_SKY);
         }
 
         @Override
@@ -160,7 +219,7 @@ final class SmokePuffs {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
                 // лежащий клуб — на высоте середины слоя: ниже он ушёл бы под рельеф
                 double ox = gauss(hj) * spread * rh * 0.5, oy = lying ? 0 : gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
-                double k = size * (0.8 + 0.4 * unit(hj >>> 21));
+                double k = size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
                 double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, clubAge) + (count > 1 ? 2 * unit(hj >>> 28) : 0));
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
@@ -200,14 +259,17 @@ final class SmokePuffs {
     }
 
     /**
-     * Гаусс вещества с центром (px, py, pz) от глаза, σ по горизонтали и вертикали, толща поперёк середины tau — кучкой
+     * Клуб трубки с центром (px, py, pz) от глаза — место на оси, что стоит за along метров оси: σ по горизонтали и
+     * вертикали, толща трубки поперёк оси tau (не одного гаусса: видимый край и непрозрачность у оси — у трубки) — кучкой
      * запечённых клубов: цвет толстого слоя (cr, cg, cb; до света неба у глаза), степень тени карт shade, кадр клуба age
      * (с дробью), зерно h, видимая доля vis, клубов в кучке — не больше most; vary — и одиночный клуб берёт свой кадр и
-     * отражение по зерну (клубы трубки идут рядом друг с другом: одинаковые лежали бы стопкой монет). Глаз в гауссе —
+     * отражение по зерну (клубы трубки идут рядом друг с другом: одинаковые лежали бы стопкой монет). Клуб на экране —
+     * почти ровный диск радиусом {@link #PUFF_DISC} полуразмера квадрата (не гаусс): у оси его перекрывают соседи
+     * (2·диск / along), и каждый берёт свою долю непрозрачности трубки — вместе у оси выходит 1 − e^(−τ). Глаз в трубке —
      * вуаль ({@link #veil}).
      */
-    static int club(FarView view, FarSprites out, double px, double py, double pz, double sh, double sv, double tau, float cr, float cg, float cb,
-                    double shade, boolean spray, double age, long h, double vis, int most, boolean vary) {
+    static int club(FarView view, Out out, double px, double py, double pz, double sh, double sv, double tau, double along, float cr, float cg,
+                    float cb, double shade, boolean spray, double age, long h, double vis, int most, boolean vary) {
         double a = 1 - Math.exp(-tau);
         if (a < 0.004) return 0;
         double edge = edge(tau);
@@ -218,7 +280,9 @@ final class SmokePuffs {
         // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
         // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс
         double outside = smoothstep(0.5 * r, r, d);
-        int veils = outside < 1 && veilAround(view, out, px, py, pz, sh, sv, tau * 2 * Math.PI * sh * sv, cr, cg, cb, (1 - outside) * vis * air) ? 1 : 0;
+        // вещество места — толща трубки поперёк оси × √(2π)σ × его кусок оси
+        double ext = tau * Math.sqrt(2 * Math.PI * sh * sv) * along;
+        int veils = outside < 1 && veilAround(view, out, px, py, pz, sh, sv, ext, cr, cg, cb, (1 - outside) * vis * air) ? 1 : 0;
         if (outside <= 0) return veils;
         // вне кадра — не нужен: шар всего квадрата кучки (клуб — до 1,2 радиуса, его место — до ~0,9 от середины)
         if (!FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return veils;
@@ -238,14 +302,15 @@ final class SmokePuffs {
         double many = Math.clamp(Math.min(pixels / CLUSTER_PIXELS, most * Math.min(1, screen * screen / (pixels * pixels))), 1, most);
         int count = (int) Math.ceil(many - 1e-9);
         double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many));
-        // в середине перекрывается столько клубов: каждый берёт свою долю, вместе — то же пропускание
-        double overlap = Math.max(1, many * size * size);
+        // в середине кучки перекрывается столько клубов, у оси — ещё соседние места трубки (диск клуба на экране — с полом в
+        // пиксель, как он нарисован): каждый берёт свою долю, вместе — то же пропускание
+        double overlap = Math.max(1, many * size * size) * Math.max(1, 2 * PUFF_DISC * point[0] / along);
         float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
         double spread = count == 1 ? 0 : 1 - size;
         for (int j = 0; j < count; j++) {
             long hj = mix(h + j * 0x632BE59BD9B4E019L);
             double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rv * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
-            double k = size * (0.8 + 0.4 * unit(hj >>> 21));
+            double k = size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
             double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, age) + (count > 1 || vary ? 2 * unit(hj >>> 28) : 0));
             int f0 = (int) frame;
             float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
@@ -280,8 +345,39 @@ final class SmokePuffs {
         return k == 0 ? 1 : (1 << (k - 1)) * (1 + level - (k - 1));
     }
 
-    /** Клубов трубки следа на отрезок — не больше 2 в этой степени. */
-    static final int TUBE_LEVELS = 6;
+    /** Клубов трубки на отрезок — не больше 2 в этой степени. */
+    static final int TUBE_LEVELS = 7;
+    /**
+     * Запечённый клуб на экране — почти ровный диск: непрозрачность падает до половины середины на этой доле полуразмера
+     * квадрата — в среднем по кадрам, что рисуют трубки ({@link #FIRST_FRAME}–15: 0,76 у молодого клуба, 0,48 у
+     * раскрытого), и у самого узкого кадра ({@code PlumeContinuityTest} мерит по картинкам). Не гаусс: гауссы через 1,2σ
+     * складываются в ровную трубку, а диски радиусом 0,5–0,9σ (край клуба тонкой трубки — 1,2σ) — в бусы.
+     */
+    static final double PUFF_DISC = 0.6, PUFF_DISC_MIN = 0.48;
+    /** Размах размера клубов кучки и трубки: полуразмер × 0,8–1,2. */
+    static final double SIZE_LOW = 0.8;
+
+    /**
+     * Шаг мест трубки σ с толщей поперёк оси tau: не шире {@link #SEGMENT_STEP}·σ (гауссы вещества сливаются) и не шире
+     * диска самого мелкого клуба — каждое место оси под двумя дисками ({@link #PUFF_DISC_MIN} × {@link #SIZE_LOW} × край).
+     */
+    static double tubeStep(double sigma, double tau) {
+        double disc = PUFF_DISC_MIN * SIZE_LOW * edge(tau) * sigma, off = MEANDER_MAX * meander(sigma, tau);
+        // ось пересекает диск клуба, сдвинутого блужданием на off, хордой 2√(диск² − off²); шаг — её половина
+        return Math.min(SEGMENT_STEP * sigma, Math.sqrt(disc * disc - off * off));
+    }
+
+    /**
+     * Блуждание середины клуба трубки, м: {@link #TUBE_MEANDER}·σ, но не дальше половины диска самого мелкого клуба от
+     * оси (поперёк экрана — до {@link #MEANDER_MAX} блужданий): клубы гуляют каждый сам по себе, и сдвинутый дальше
+     * открывал бы ось — тонкая трубка рвалась бы на бусы. ⚠ Блуждание — оценка (вихри следа порядка его ширины).
+     */
+    static double meander(double sigma, double tau) {
+        return Math.min(TUBE_MEANDER * sigma, 0.5 * PUFF_DISC_MIN * SIZE_LOW * edge(tau) * sigma / MEANDER_MAX);
+    }
+
+    /** Сдвиг клуба поперёк оси на экране — не больше стольких блужданий: колокол {@link #gauss} до 1,725 по двум осям. */
+    static final double MEANDER_MAX = 1.725 * Math.sqrt(2);
     /**
      * Середина клуба трубки гуляет на столько σ: крупные вихри следа — порядка его ширины, и сам след извивается на доли
      * ширины (⚠ оценка).
@@ -301,24 +397,23 @@ final class SmokePuffs {
      * @param wa     ширина трубки у конца a для порога клубов ({@code FarFlightView.puffShare}: на половине непрозрачности, с
      *               множителем бюджета), у b — wb: доля вещества, что рисуют клубы, — у каждого клуба по его расстоянию
      *               (остальное — лента, её доля у концов — та же)
-     * @param albedo альбедо однократного рассеяния вещества (до дельта-Эддингтона, асимметрия {@link Smoke#ASYMMETRY})
+     * @param c      цвет толстого слоя вещества на экране (серый, {@link #thick}; у следа — {@link #tubeColour})
+     * @param shade  степень тени карт клуба ({@link #shade}; у следа — {@link #tubeShade})
      * @param sigma0 σ при рождении следа: кадр клуба — по росту σ с него ({@link FxAtlas#puffFrame})
      * @param whole  отрезок без ленты (проходит у самого глаза): клубы рисуют всё его вещество
      * @return квадратов клубов и вуалей
      */
-    static int tube(FarView view, FarSprites out, double ax, double ay, double az, double sa, double ea, double wa, double bx, double by, double bz,
-                    double sb, double eb, double wb, double albedo, double sigma0, long seed, boolean whole) {
+    static int tube(FarView view, Out out, double ax, double ay, double az, double sa, double ea, double wa, double bx, double by, double bz,
+                    double sb, double eb, double wb, float c, double shade, double sigma0, long seed, boolean whole) {
         if (ea + eb <= 0 || !(sa > 0) || !(sb > 0)) return 0;
         double tx = bx - ax, ty = by - ay, tz = bz - az, len = Math.sqrt(tx * tx + ty * ty + tz * tz);
-        double level = tubeLevel(len, Math.min(sa, sb));
+        double shareA = whole ? 1 : FarFlightView.puffShare(wa, Math.sqrt(ax * ax + ay * ay + az * az), view.pixel());
+        double shareB = whole ? 1 : FarFlightView.puffShare(wb, Math.sqrt(bx * bx + by * by + bz * bz), view.pixel());
+        // места — не реже, чем у обоих концов диски клубов перекрывают ось вдвое ({@link #tubeStep})
+        double step = Math.min(tubeStep(sa, shareA * ea / (Math.sqrt(2 * Math.PI) * sa)), tubeStep(sb, shareB * eb / (Math.sqrt(2 * Math.PI) * sb)));
+        double level = tubeLevel(len, step / SEGMENT_STEP);
         int k = tubeDepth(level), n = 1 << k;
         double total = tubeTotal(level);
-        // цвет и тень — двумя потоками после дельта-Эддингтона (f = g²), как у облаков ({@link SmokeGrid}); толща — полное
-        // ослабление, как у ленты и порога видимости следа (Кошмидер): рассеянное вперёд мелкими (~мкм) частицами уходит
-        // на десятки градусов и картинку за дымом не несёт
-        double g = Smoke.ASYMMETRY, f = g * g, w = (1 - f) * albedo / (1 - f * albedo), gs = g / (1 + g);
-        float c = thick(w, gs);
-        double shade = twoStream(w, gs) / BAKED_K;
         int drawn = 0;
         for (int j = 0; j < n; j++) {
             double weight = tubeWeight(j, level);
@@ -327,25 +422,42 @@ final class SmokePuffs {
             double cx = ax + tx * u, cy = ay + ty * u, cz = az + tz * u;
             double share = whole ? 1 : FarFlightView.puffShare(wa + (wb - wa) * u, Math.sqrt(cx * cx + cy * cy + cz * cz), view.pixel());
             if (share <= 0) continue;
-            // вещество куска оси len/total (с долей места), гаусс 3D того же σ: толща поперёк середины — K/(2πσ²)
-            double tau = share * e * len * weight / total / (2 * Math.PI * sigma * sigma);
-            if (!(tau > 0)) continue;
+            // толща трубки поперёк оси — e/(√(2π)σ) (доля клубов — share); место стоит за свой кусок оси len/total (с долей места)
+            double tau = share * e / (Math.sqrt(2 * Math.PI) * sigma), along = len * weight / total;
+            if (!(tau > 0) || !(along > 0)) continue;
             double age = FxAtlas.puffFrame(sigma / Math.max(sigma0, 1e-6));
             // зерно — по месту на самом мелком уровне: клуб остаётся тем же, когда уровень меняется
             long h = mix(seed * 0x9E3779B97F4A7C15L + ((long) j << (TUBE_LEVELS - k)));
-            // вихри следа — порядка σ: середина клуба гуляет на {@link #TUBE_MEANDER}·σ (⚠ оценка), иначе ровный ряд
-            double m = TUBE_MEANDER * sigma;
-            drawn += club(view, out, cx + m * gauss(h >>> 3), cy + m * gauss(h >>> 11), cz + m * gauss(h >>> 19), sigma, sigma, tau, c, c, c, shade,
-                    false, age, h, 1, TUBE_CLUSTER, true);
+            // вихри следа — порядка σ: середина клуба гуляет ({@link #meander}, ⚠ оценка), иначе ровный ряд
+            double m = meander(sigma, tau);
+            drawn += club(view, out, cx + m * gauss(h >>> 3), cy + m * gauss(h >>> 11), cz + m * gauss(h >>> 19), sigma, sigma, tau, along, c, c, c,
+                    shade, false, age, h, 1, TUBE_CLUSTER, true);
         }
         return drawn;
+    }
+
+    /**
+     * Цвет вещества следа с альбедо однократного рассеяния albedo (до дельта-Эддингтона, асимметрия {@link Smoke#ASYMMETRY}):
+     * двумя потоками после дельта-Эддингтона (f = g²), как у облаков ({@link SmokeGrid}). Толща трубки — полное ослабление,
+     * как у ленты и порога видимости следа (Кошмидер): рассеянное вперёд мелкими (~мкм) частицами уходит на десятки градусов
+     * и картинку за дымом не несёт.
+     */
+    static float tubeColour(double albedo) {
+        double g = Smoke.ASYMMETRY, f = g * g;
+        return thick((1 - f) * albedo / (1 - f * albedo), g / (1 + g));
+    }
+
+    /** Степень тени карт клуба у вещества следа с альбедо albedo ({@link #tubeColour}). */
+    static double tubeShade(double albedo) {
+        double g = Smoke.ASYMMETRY, f = g * g;
+        return twoStream((1 - f) * albedo / (1 - f * albedo), g / (1 + g)) / BAKED_K;
     }
 
     /**
      * Вуаль вещества клуба трубки вокруг глаза (как {@link #veil}, но для {@link #club}): ослабление всей массы ext (м²),
      * цвет толстого слоя (cr, cg, cb; свет — карта освещения под открытым небом и огонь кадра), доля share.
      */
-    private static boolean veilAround(FarView view, FarSprites out, double px, double py, double pz, double sh, double sv, double ext, float cr,
+    private static boolean veilAround(FarView view, Out out, double px, double py, double pz, double sh, double sv, double ext, float cr,
                                       float cg, float cb, double share) {
         double fx = view.forward().x(), fy = view.forward().y(), fz = view.forward().z();
         float k = (float) ((1 - Math.exp(-sightDepth(px, py, pz, sh, sv, ext, fx, fy, fz))) * share);

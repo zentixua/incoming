@@ -192,10 +192,18 @@ public final class TrailModel {
             out[0] = out[1] = 0;
             return;
         }
-        // половина непрозрачности середины: e^(−τg) = (1 + e^(−τ))/2
+        out[0] = width(tau, sigma);
+        out[1] = 1 - Math.exp(-tau);
+    }
+
+    /**
+     * Ширина гауссовой трубки сечения σ с толщей поперёк середины tau на половине непрозрачности середины, м:
+     * e^(−τg) = (1 + e^(−τ))/2, ширина — 2σ·√(−2·ln g). Тоньше порога видимости — 0.
+     */
+    public static double width(double tau, double sigma) {
+        if (!(tau > THRESHOLD)) return 0;
         double clear = Math.exp(-tau), g = -Math.log((1 + clear) / 2) / tau;
-        out[0] = 2 * sigma * Math.sqrt(-2 * Math.log(g));
-        out[1] = 1 - clear;
+        return 2 * sigma * Math.sqrt(-2 * Math.log(g));
     }
 
     /** σ сечения в возрасте age секунд при подъёме lift метров, м. */

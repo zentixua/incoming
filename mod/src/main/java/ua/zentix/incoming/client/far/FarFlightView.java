@@ -551,9 +551,6 @@ public final class FarFlightView {
         seen = view;
         lit = 0;
         litEye = 0;
-        // бюджет клубов прошлого кадра
-        puffScale = clubs > CLUB_BUDGET ? puffScale * 1.1 : clubs < CLUB_BUDGET / 2 ? Math.max(1, puffScale / 1.02) : puffScale;
-        clubs = 0;
         flights = 0;
         points = 0;
         nearest = null;
@@ -861,43 +858,89 @@ public final class FarFlightView {
         DRAWN[slot] = frame;
     }
 
+    /** Концы отрезка трубки следа ({@link #segment}). */
+    private static final Tube TA = new Tube(), TB = new Tube();
+
     /**
      * Отрезок ленты между концами a и b из кэша кадра; цвет — середина между их цветами. Поперёк у конца a — тот же, что
      * у прошлого отрезка этой ленты (стык без щели на изгибе), у b — запоминается для следующего.
      */
     private static void segment(FarSprites out, int a, int b, Trail style) {
-        // трубка, крупная на экране, — клубами; ширина — у ближней к глазу точки отрезка
         FarView view = seen;
-        double puffs = 0, keepA = 1, keepB = 1;
-        if (view != null) {
-            double tx = EX[b] - EX[a], ty = EY[b] - EY[a], tz = EZ[b] - EZ[a];
-            double gap = FarSprites.distance(EX[a], EY[a], EZ[a], tx, ty, tz), scale = puffScale;
-            puffs = puffShare(Math.max(EW[a], EW[b]) / scale, gap, view.pixel());
-            // лента у конца — своей долей у этого конца (у стыка с соседним отрезком та же), а отрезок у самого глаза — без неё
-            keepA = 1 - puffShare(EW[a] / scale, Math.sqrt(EX[a] * EX[a] + EY[a] * EY[a] + EZ[a] * EZ[a]), view.pixel());
-            keepB = 1 - puffShare(EW[b] / scale, Math.sqrt(EX[b] * EX[b] + EY[b] * EY[b] + EZ[b] * EZ[b]), view.pixel());
-            // клубы — только у отрезка в кадре (шар отрезка с квадратами его клубов: до ~9σ от оси) или у глаза (глаз в этом шаре:
-            // его вещество — вуаль, а середина отрезка бывает за спиной)
-            double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 9 * Math.max(ES[a], ES[b]);
-            double mx = EX[a] + 0.5 * tx, my = EY[a] + 0.5 * ty, mz = EZ[a] + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
-            if (puffs > 0 && (md <= reach || inFrame(view, mx, my, mz, md, reach))) {
-                clubs += SmokePuffs.tube(view, out, EX[a], EY[a], EZ[a], ES[a], EE[a], EW[a] / scale, EX[b], EY[b], EZ[b], ES[b], EE[b], EW[b] / scale,
-                        0.5 * (EO[a] + EO[b]), style.sigma0(), ESEED[a], puffs >= 1);
-            }
-        }
-        if (puffs >= 1) {
-            ACROSS[b] = 0;
-            return;
-        }
+        if (view == null) return;
+        TA.set(EX[a], EY[a], EZ[a], ES[a], EE[a], EW[a], EH[a], EA[a], EL[a]);
+        TB.set(EX[b], EY[b], EZ[b], ES[b], EE[b], EW[b], EH[b], EA[b], EL[b]);
         JOINT[0] = ACROSS[a] == frame ? NX[a] : Float.NaN;
         JOINT[1] = NY[a];
         JOINT[2] = NZ[a];
-        if (!out.ribbon(EX[a], EY[a], EZ[a], EH[a], EA[a] * (float) keepA, EL[a], EX[b], EY[b], EZ[b], EH[b], EA[b] * (float) keepB, EL[b],
-                (ER[a] + ER[b]) * 0.5f, (EG[a] + EG[b]) * 0.5f, (EB[a] + EB[b]) * 0.5f, JOINT)) return;
+        double albedo = 0.5 * (EO[a] + EO[b]);
+        int drawn = line(view, out, TA, TB, (ER[a] + ER[b]) * 0.5f, (EG[a] + EG[b]) * 0.5f, (EB[a] + EB[b]) * 0.5f,
+                SmokePuffs.tubeColour(albedo), SmokePuffs.tubeShade(albedo), style.sigma0(), ESEED[a], JOINT);
+        if (drawn == CLUBS) ACROSS[b] = 0;
+        if (drawn != RIBBON) return;
         NX[b] = JOINT[0];
         NY[b] = JOINT[1];
         NZ[b] = JOINT[2];
         ACROSS[b] = frame;
+    }
+
+    /**
+     * Конец отрезка трубки дыма (след снаряда, шлейф пожара) от камеры: σ сечения, м; ослабление на метр, м; ширина на
+     * половине непрозрачности середины, м; ленты — полуширина и непрозрачность (уже с полом в пиксель и дымкой), свет мира.
+     */
+    static final class Tube {
+        double x, y, z, sigma, e, width, half;
+        float alpha;
+        int light;
+
+        Tube set(double x, double y, double z, double sigma, double e, double width, double half, float alpha, int light) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.sigma = sigma;
+            this.e = e;
+            this.width = width;
+            this.half = half;
+            this.alpha = alpha;
+            this.light = light;
+            return this;
+        }
+    }
+
+    /** Итог {@link #line}: трубку нарисовали одни клубы; лента не легла (бледна); лента легла (поперёк у b — в joint). */
+    static final int CLUBS = 0, NONE = 1, RIBBON = 2;
+
+    /**
+     * Отрезок трубки дыма между концами a и b — одна для следов снарядов и шлейфов пожаров: крупная на экране — клубами
+     * ({@link SmokePuffs#tube}: цвет толстого слоя c, степень тени shade), узкая — лентой цвета (r, g, b), между — плавно
+     * ({@link #puffShare}, ширина — у ближней к глазу точки отрезка); клубы — в общий бюджет кадра ({@link #CLUB_BUDGET}).
+     * joint — поперёк ленты у a (NaN — нет, начало ленты), на выходе — у b.
+     */
+    static int line(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float c, double shade, double sigma0, long seed,
+                    float[] joint) {
+        double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z;
+        double gap = FarSprites.distance(a.x, a.y, a.z, tx, ty, tz), scale = puffScale;
+        double puffs = puffShare(Math.max(a.width, b.width) / scale, gap, view.pixel());
+        // лента у конца — своей долей у этого конца (у стыка с соседним отрезком та же), а отрезок у самого глаза — без неё
+        double keepA = 1 - puffShare(a.width / scale, Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), view.pixel());
+        double keepB = 1 - puffShare(b.width / scale, Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z), view.pixel());
+        // клубы — только у отрезка в кадре (шар отрезка с квадратами его клубов: до ~9σ от оси) или у глаза (глаз в этом шаре:
+        // его вещество — вуаль, а середина отрезка бывает за спиной)
+        double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 9 * Math.max(a.sigma, b.sigma);
+        double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
+        if (puffs > 0 && (md <= reach || inFrame(view, mx, my, mz, md, reach))) {
+            clubs += SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width / scale, b.x, b.y, b.z, b.sigma, b.e, b.width / scale, c, shade,
+                    sigma0, seed, puffs >= 1);
+        }
+        if (puffs >= 1) return CLUBS;
+        return out.ribbon(a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half, b.alpha * (float) keepB, b.light, r, g, bl,
+                joint) ? RIBBON : NONE;
+    }
+
+    /** Бюджет клубов трубок по прошлому кадру — в начале кадра, до всех, кто рисует трубки ({@code FarRenderer}). */
+    static void budget() {
+        puffScale = clubs > CLUB_BUDGET ? puffScale * 1.1 : clubs < CLUB_BUDGET / 2 ? Math.max(1, puffScale / 1.02) : puffScale;
+        clubs = 0;
     }
 
     // ---------------------------------------------------------------- чистая геометрия видимости (юнит-тесты)

@@ -20,8 +20,8 @@ import java.util.Locale;
 /**
  * Дым над тем, что горит, — облако клиента (его рисуют запечённые клубы слоя эффектов, {@code far/SmokePuffs}): огонь, который видит клиент ({@link FireWatch}: блоки огня в своих чанках,
  * окно выборок), собран в очаги по чанкам (16 блоков; у ядерного шторма — клетки 32, {@code FireStorm}): у очага — шлейф
- * Бриггса ({@link FirePlume}) по ветру мира и устойчивости воздуха ({@link ClientAir}), отрезками сетки
- * ({@link SmokeGrid.Sink#segment}); свет пламени снизу — шаром в свободные места света сетки ({@link #lights}). Откуда
+ * Бриггса ({@link FirePlume}) по ветру мира и устойчивости воздуха ({@link ClientAir}), кусками трубки
+ * ({@link SmokeGrid.Sink#tube}, {@link #lay}: рисуются как след снаряда); свет пламени снизу — шаром в свободные места света сетки ({@link #lights}). Откуда
  * огонь — дело сервера (поджиг и горение не трогаются): дым идёт за тем, что горит. Дым, что уже в воздухе, несёт силу
  * очага в миг выхода: место на пути x по ветру — от очага каким он был x/u секунд назад (история очага раз в
  * {@link #PERIOD} тиков; ветер — нынешний на весь шлейф). Так шлейф растёт от очага со скоростью ветра, а когда очаг
@@ -32,12 +32,15 @@ import java.util.Locale;
  * очаг несёт свою сажу, а поднимается шлейфом всего пожара. Пакета нет: огонь клиент видит сам. Пожары горящего ядерного подрыва — не здесь: их дым — огненный шторм ({@code FireStorm}).
  */
 public final class FireSmoke implements SmokeGrid.Source {
-    /** Отрезков шлейфа: гуще у очага, где ось круче (места — квадратично по пути). */
+    /**
+     * Кусков трубки шлейфа: гуще у очага, где ось круче (места — квадратично по пути); одни на любой дальности от глаза
+     * (прежние 4 дальше 256 м с 12 клубами на кусок клали клубы реже их размера — шлейф вдали шёл бусами).
+     */
     static final int SEGMENTS = 10;
     /** Очаги пересматриваются раз в столько тиков (окно огня меняется не быстрее обхода чанков). */
     static final int PERIOD = 20;
     /** Шлейф — не дальше по ветру, м (0,75 полустороны последнего каскада сетки: ~0,8 км). */
-    static final double REACH = 0.75 * 0.5 * SmokeGrid.N * SmokeGrid.CELL[SmokeGrid.CASCADES - 1];
+    public static final double REACH = 0.75 * 0.5 * SmokeGrid.N * SmokeGrid.CELL[SmokeGrid.CASCADES - 1];
 
     private static final Long2ObjectOpenHashMap<FireSmoke> FIRES = new Long2ObjectOpenHashMap<>();
     /** Горящее масло выбитых подстанций по месту блока ({@link #substation}). */
@@ -79,9 +82,6 @@ public final class FireSmoke implements SmokeGrid.Source {
     public static final Fuel OIL = new Fuel(0.039 * OIL_AREA * 46e6, OIL_AREA, 0.06 / 46e6);
     /** Мир очагов: сменился (портал) — прежние шлейфы уходят сразу. */
     private static ClientLevel world;
-    /** Дальше этого от глаза у шлейфа меньше отрезков ({@link #FAR_SEGMENTS}): на экране он мельче, а места в сетке общие. */
-    static final double FAR = 256;
-    static final int FAR_SEGMENTS = 4;
     private static int clock;
     private static final double[] BB = new double[4];
     private static final Vector4f COLUMN = new Vector4f();
@@ -326,9 +326,7 @@ public final class FireSmoke implements SmokeGrid.Source {
 
     /**
      * Шлейф в момент seconds: от очага до пути, что дым прошёл с начала горения, и не дальше, чем виден шлейф самого
-     * сильного очага. Место оси на пути x — по очагу в миг выхода этого дыма (x/u секунд назад): подъём и σ его шлейфа,
-     * сажа на метр — его; где тогда не горело, дыма нет. Отрезки — между местами оси на пути xₖ (квадратично: у очага ось
-     * круче).
+     * сильного очага ({@link #lay}).
      */
     @Override
     public boolean emit(double seconds, SmokeGrid.Sink out) {
@@ -337,27 +335,50 @@ public final class FireSmoke implements SmokeGrid.Source {
         double far = Math.min(visible, u * (seconds - start));
         if (!Double.isNaN(end) && u * (seconds - end) >= far) return false;
         if (far <= 0) return true;
-        double ex = SmokeGrid.eyeX(), ez = SmokeGrid.eyeZ();
-        int segments = (x - ex) * (x - ex) + (z - ez) * (z - ez) > FAR * FAR ? FAR_SEGMENTS : SEGMENTS;
-        double prevX = 0, prevB = blocksAt(seconds), prevH = prevB > 0 ? fuel.plume(prevB, fireAt(seconds), u, stability).rise(0) : 0;
-        for (int k = 1; k <= segments; k++) {
-            double f = (double) k / segments, xk = far * f * f, mid = 0.5 * (xk + prevX);
-            double bk = blocksAt(seconds - xk / u), bm = blocksAt(seconds - mid / u);
-            double hk = bk > 0 ? fuel.plume(bk, fireAt(seconds - xk / u), u, stability).rise(xk) : prevH;
-            double x0 = prevX, h0 = prevH, b0 = prevB;
-            prevX = xk;
-            prevH = hk;
-            prevB = bk;
-            if (bm <= 0 || b0 <= 0 && bk <= 0) continue;
-            FirePlume p = fuel.plume(bm, fireAt(seconds - mid / u), u, stability);
-            double ax = 0.5 * (xk - x0);
-            double cx = x + wx * mid, cy = y + 0.5 * (h0 + hk), cz = z + wz * mid;
-            if (p.tau(mid) < CloudModel.SEEN) continue;
-            double kelvin = CloudModel.T_AIR_K + p.excess(0.5 * (h0 + hk));
-            out.segment(cx, cy, cz, wx * ax, 0.5 * (hk - h0), wz * ax, p.sigmaY(mid), p.sigmaZ(mid), p.sootPerMetre() * 2 * ax, 0, 0,
-                    1, 1, 1, kelvin, p.riseSpeed(mid));
-        }
+        lay(fuel, x, y, z, wx, wz, u, stability, far, plume.size, path -> blocksAt(seconds - path / u), path -> fireAt(seconds - path / u), out);
         return true;
+    }
+
+    /**
+     * Шлейф очага (x, y, z) топлива fuel по ветру (wx, wz) скорости u до пути far — кусками трубки ({@link SmokeGrid.Sink#tube})
+     * между местами оси на пути xₖ (квадратично: у очага ось круче), одними на любой дальности от глаза: сколько квадратов
+     * на кусок, решает тот, кто рисует, по размеру на экране (вдали — лента). Место оси на пути x — по очагу в миг выхода
+     * этого дыма (x/u секунд назад, blocks и fire — сила очага и его пожара по пути): подъём и σ его шлейфа, сажа на метр —
+     * его; где тогда не горело, сажи нет (геометрия — соседнего места, что горело). sigma0 — σ у самого очага.
+     */
+    public static void lay(Fuel fuel, double x, double y, double z, double wx, double wz, double u, double stability, double far, double sigma0,
+                    java.util.function.DoubleUnaryOperator blocks, java.util.function.DoubleUnaryOperator fire, SmokeGrid.Sink out) {
+        int n = SEGMENTS + 1;
+        double[] path = new double[n], b = new double[n];
+        for (int k = 0; k < n; k++) {
+            double f = (double) k / SEGMENTS;
+            path[k] = far * f * f;
+            b[k] = blocks.applyAsDouble(path[k]);
+        }
+        FirePlume[] plume = new FirePlume[n];
+        for (int k = 0; k < n; k++) if (b[k] > 0) plume[k] = fuel.plume(b[k], fire.applyAsDouble(path[k]), u, stability);
+        // где не горело — без сажи, с геометрией ближайшего места, что горело (вещество сходит к нулю вдоль куска)
+        for (int k = 0; k < n; k++) {
+            if (plume[k] != null) continue;
+            for (int j = 1; j < n && plume[k] == null; j++) {
+                if (k - j >= 0 && b[k - j] > 0) plume[k] = plume[k - j];
+                else if (k + j < n && b[k + j] > 0) plume[k] = plume[k + j];
+            }
+            if (plume[k] == null) return;
+        }
+        sigma0 = Math.max(sigma0, 0.25);
+        for (int k = 1; k < n; k++) {
+            FirePlume pa = plume[k - 1], pb = plume[k];
+            double xa = path[k - 1], xb = path[k];
+            double ma = b[k - 1] > 0 ? pa.sootPerMetre() : 0, mb = b[k] > 0 ? pb.sootPerMetre() : 0;
+            if (ma + mb <= 0) continue;
+            // толща через середину на обоих концах ниже порога видимости — куска не видно
+            if (Math.max(ma > 0 ? pa.tau(xa) : 0, mb > 0 ? pb.tau(xb) : 0) < CloudModel.SEEN) continue;
+            double ha = pa.rise(xa), hb = pb.rise(xb), mid = 0.5 * (xa + xb);
+            double kelvin = CloudModel.T_AIR_K + (b[k] > 0 ? pb : pa).excess(0.5 * (ha + hb));
+            out.tube(x + wx * xa, y + ha, z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), ma, x + wx * xb, y + hb, z + wz * xb, pb.sigmaY(xb),
+                    pb.sigmaZ(xb), mb, kelvin, (b[k] > 0 ? pb : pa).riseSpeed(mid), sigma0);
+        }
     }
 
     @Override

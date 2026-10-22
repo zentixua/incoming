@@ -265,7 +265,9 @@ the hole; the dust of the impact and of a caved-in pit stays low and drifts.
 Whatever the blast sets on fire keeps smoking. Over every fire a column of black smoke rises, leans downwind and
 stretches out with it; a bigger fire sends it higher. Burning blocks close together, the fuel burning in a crater and an
 oil fire next to them are one fire: a burning house sends up one tall column, not several weak ones. By day it climbs higher than on a calm night, when
-it stays low and drifts flat. At night the flames light the smoke from below. The column grows from the fire at the
+it stays low and drifts flat. Near or kilometres away, the column is drawn the same way as a smoke trail: one unbroken,
+billowing tube, never a row of separate puffs; where it is narrower than about two pixels it is a thin line. At night the
+flames light the smoke from below. The column grows from the fire at the
 speed of the wind, and when the fire goes out the last of the smoke drifts away. Where the fire comes from is up to the
 server: the smoke follows any fire your game shows, not only fires from strikes.
 
@@ -290,7 +292,8 @@ same up close and far away.
 - **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a
   greyer trail. A slower rocket leaves a denser trail. The hot trail rises a little. By day it spreads and fades sooner;
   on a calm night it stays narrow and hangs much longer. A trail is a round, billowing tube of smoke, lit by the sun and
-  by the flame, near and kilometres away alike; only where it is narrower than about two pixels is it a thin line. At
+  by the flame, near and kilometres away alike, unbroken along its length; only where it is narrower than about two
+  pixels is it a thin line. At
   dusk and at night it takes the light of the open sky the way the clouds do: grey at sunset, pale lilac under the moon.
   The smoke starts where the visible flame ends: closer to the nozzle the exhaust is still the flame itself.
   A motor burns for its real time (the Grad's 2 s), and the trail is the path the rocket flies meanwhile. At game speeds
