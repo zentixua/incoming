@@ -127,7 +127,8 @@ public final class LaunchSite {
      */
     @Nullable
     public static LauncherEntity existing(ServerLevel level, Post post, WeaponType weapon, Predicate<LauncherEntity> fits) {
-        double reach = post.ordered() ? PLACE_AREA : REUSE_RADIUS;
+        // пусковая по отметке стоит в её районе, а отметка могла сдвинуться на зазор: коробка — на весь охват района
+        double reach = post.ordered() ? PLACE_REACH : REUSE_RADIUS;
         AABB box = new AABB(post.center(), post.center()).inflate(reach, 64, reach);
         return level.getEntitiesOfClass(LauncherEntity.class, box, l -> l.isAlive() && l.weapon() == weapon && Objects.equals(post.owner(), l.ownerId())
                         && serves(l, post))
@@ -494,6 +495,9 @@ public final class LaunchSite {
         /** Блок под ногами в (x, y, z) — твёрдый сверху и не жидкость. */
         boolean firm(int x, int y, int z);
 
+        /** Блок в (x, y, z) — опора (есть форма столкновения: и тропинка, и пашня) и не жидкость. */
+        boolean dry(int x, int y, int z);
+
         int minY();
 
         static Ground of(ServerLevel level) {
@@ -521,6 +525,13 @@ public final class LaunchSite {
                 }
 
                 @Override
+                public boolean dry(int x, int y, int z) {
+                    BlockPos at = new BlockPos(x, y, z);
+                    BlockState state = level.getBlockState(at);
+                    return state.getFluidState().isEmpty() && !state.getCollisionShape(level, at).isEmpty();
+                }
+
+                @Override
                 public int minY() {
                     return level.getMinBuildHeight();
                 }
@@ -533,8 +544,9 @@ public final class LaunchSite {
     }
 
     /**
-     * Ровно (±1 блок в квадрате 5×5), твёрдо и не вода под всем квадратом (прицеп 7,6 м: у кромки воды поверхность воды
-     * и берег расходятся на блок, и ровным квадрат вышел бы наполовину над водой), над головой пусто (листва тоже мешает).
+     * Ровно (±1 блок в квадрате 5×5), твёрдо под серединой, опора и не вода под всем квадратом (прицеп 7,6 м: у кромки
+     * воды поверхность воды и берег расходятся на блок, и ровным квадрат вышел бы наполовину над водой; тропинка и пашня
+     * по краям — опора), над головой пусто (листва тоже мешает).
      * Сначала то, что отсеивает чаще и дешевле: крона над самим местом и вода под ним (лес и озеро в районе места пуска),
      * потом квадрат.
      */
@@ -555,7 +567,7 @@ public final class LaunchSite {
         }
         for (int dx = -2; dx <= 2; dx += 2) {
             for (int dz = -2; dz <= 2; dz += 2) {
-                if ((dx != 0 || dz != 0) && !g.firm(x + dx, g.ground(x + dx, z + dz) - 1, z + dz)) return null;
+                if ((dx != 0 || dz != 0) && !g.dry(x + dx, g.ground(x + dx, z + dz) - 1, z + dz)) return null;
             }
         }
         return new Vec3(x + 0.5, y, z + 0.5);
@@ -598,6 +610,12 @@ public final class LaunchSite {
         public boolean firm(int x, int y, int z) {
             reads += BLOCK_READS;
             return g.firm(x, y, z);
+        }
+
+        @Override
+        public boolean dry(int x, int y, int z) {
+            reads += BLOCK_READS;
+            return g.dry(x, y, z);
         }
 
         @Override

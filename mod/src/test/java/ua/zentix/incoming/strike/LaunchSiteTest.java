@@ -43,6 +43,11 @@ class LaunchSiteTest {
         }
 
         @Override
+        public boolean dry(int x, int y, int z) {
+            return water.applyAsInt(x, z) == 0;
+        }
+
+        @Override
         public int minY() {
             return -64;
         }
