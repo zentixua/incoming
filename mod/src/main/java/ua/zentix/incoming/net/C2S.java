@@ -182,6 +182,11 @@ public final class C2S {
      */
     public record VoxyStale(long[] chunks) implements CustomPacketPayload {
         public static final int MAX = 1024;
+        /**
+         * Сколько чанков клиент называет за тик: 12 × 20 = 240 в секунду — меньше, чем сервер принимает от игрока
+         * ({@code VoxyLods.STALE_PER_SECOND}, 256): сверх его предела чанки отбрасываются.
+         */
+        public static final int PER_TICK = 12;
         public static final Type<VoxyStale> TYPE = new Type<>(Incoming.id("voxy_stale"));
         public static final StreamCodec<ByteBuf, VoxyStale> CODEC = StreamCodec.of(
                 (buf, v) -> {

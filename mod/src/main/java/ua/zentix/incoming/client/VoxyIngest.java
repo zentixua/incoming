@@ -121,12 +121,12 @@ public final class VoxyIngest {
         if (OURS.remove(chunk)) STALE.add(chunk);
     }
 
-    /** Тик клиента: переписанные LSS чанки — серверу пачками. */
+    /** Тик клиента: переписанные LSS чанки — серверу, не больше {@link C2S.VoxyStale#PER_TICK} за тик (предел сервера). */
     static void tick() {
         if (STALE.isEmpty() || Minecraft.getInstance().getConnection() == null) return;
         LongArrayList batch = new LongArrayList();
         for (Long c : STALE) {
-            if (batch.size() >= C2S.VoxyStale.MAX) break;
+            if (batch.size() >= C2S.VoxyStale.PER_TICK) break;
             batch.add((long) c);
         }
         for (int i = 0; i < batch.size(); i++) STALE.remove(batch.getLong(i));
