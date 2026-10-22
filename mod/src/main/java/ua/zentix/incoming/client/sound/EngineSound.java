@@ -209,7 +209,8 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
     }
 
     String describe() {
-        return layer.name().toLowerCase(Locale.ROOT);
+        // фильтр у источника: громкость и доля верхов за преградой и воздухом (1 — открыто)
+        return String.format(Locale.ROOT, "%s[f %.2f/%.2f]", layer.name().toLowerCase(Locale.ROOT), filterGain, filterHighs);
     }
 
     /** Что слушатель слышит в этот тик: {@code heard} — {@code null}, если данных о снаряде на этот момент нет. */

@@ -39,7 +39,8 @@ import java.util.Locale;
  * ({@link HearingModel#audibleRangeM}).</li>
  * </ul>
  * Вариант записи выбирает зерно взрыва (пакет {@code S2C.Blast}): каждый взрыв звучит по-своему, а его ракурсы — одна
- * запись. Моторы снарядов под громкий взрыв уходят вниз ({@link Ducking}).
+ * запись. Моторы снарядов под громкий взрыв уходят вниз ({@link Ducking}). Все звуки взрывов (ракурсы, удар в грудь, удар у
+ * уха, эхо, звуки бомбы) — в одной смеси ({@link Mix}): потолок громкости — у суммы, а не у каждого.
  */
 public final class BlastSounds {
     /**
@@ -65,6 +66,8 @@ public final class BlastSounds {
      * бы никогда и держали свои источники.
      */
     private static long ticks;
+    /** Смесь взрывов у уха: громкость в игре — половина децибел суммарного уровня, потолок — у суммы ({@link Mix}). */
+    private static final Mix MIX = new Mix();
     /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
     private static String last = "";
     @Nullable
@@ -100,8 +103,10 @@ public final class BlastSounds {
         float v = heard.volume();
         if (v < AUDIBLE) return heard;
         float highs = highs(path);
-        if (s.underground()) ClientSounds.atEar(ModSounds.BOMB_DEEP.get(), pos, v, 1, seed, 1, highs);
-        else ClientSounds.atEar(ModSounds.BLAST_FAR.get(), pos, v, BlastMix.pitch(s.chargeKg()), seed, 1, highs);
+        SoundEvent event = s.underground() ? ModSounds.BOMB_DEEP.get() : ModSounds.BLAST_FAR.get();
+        float pitch = s.underground() ? 1 : BlastMix.pitch(s.chargeKg());
+        mixed(event, v, pitch);
+        ClientSounds.blastAtEar(event, pos, v, pitch, seed, 1, highs, BlastSounds::factor);
         return heard;
     }
 
@@ -154,6 +159,7 @@ public final class BlastSounds {
                 return BlastModel.overpressureKpa(blocks, kg, s.surface());
             }
         }, ModSounds.BLAST_FAR.get(), seed);
+        e.bus(BlastSounds::factor);
         ECHOES.add(e);
         return e;
     }
@@ -176,16 +182,22 @@ public final class BlastSounds {
         float most = 0;
         float[] volumes = {l.near(), l.mid(), l.far()};
         SoundEvent[] events = {ModSounds.BLAST_NEAR.get(), ModSounds.BLAST_MID.get(), ModSounds.BLAST_FAR.get()};
+        // слои — в смесь до того, как зазвучат: громкость первого же тика — уже с этим взрывом
+        Mix.Blast blast = MIX.blast(ticks);
         for (int i = 0; i < 3; i++) {
             if (volumes[i] < AUDIBLE) continue;
-            SoundInstance shot = ClientSounds.shot(events[i], pos, volumes[i], pitch, seed);
+            blast.add(new Mix.Layer(Envelopes.of(events[i].getLocation()), pitch, volumes[i]));
+            SoundInstance shot = ClientSounds.blastShot(events[i], pos, volumes[i], pitch, seed, BlastSounds::factor);
             shots.add(shot);
             if (volumes[i] > most) {
                 most = volumes[i];
                 loudest = shot;
             }
         }
-        if (l.sub() >= AUDIBLE) shots.add(ClientSounds.shot(ModSounds.BLAST_SUB.get(), pos, l.sub(), pitch, seed ^ SUB_SALT));
+        if (l.sub() >= AUDIBLE) {
+            blast.add(new Mix.Layer(Envelopes.of(ModSounds.BLAST_SUB.get().getLocation()), pitch, l.sub()));
+            shots.add(ClientSounds.blastShot(ModSounds.BLAST_SUB.get(), pos, l.sub(), pitch, seed ^ SUB_SALT, BlastSounds::factor));
+        }
         // эхо и удар у уха ждут настоящего начала прямого звука: ожидание — до play
         if (echoes != null) echoes.expect(tick, loudest);
         boolean pulse = false;
@@ -193,7 +205,7 @@ public final class BlastSounds {
             Object owner = new Object();
             OwnSources.Anchor start = OwnSources.anchor(owner, loudest, clock, tick);
             pulse = OwnSources.play(owner, start, 0, Math.atan2(pos.z - ear.z, pos.x - ear.x), l.pulse(),
-                    BlastPulse.render(pa, BlastMix.phase(s, d), 1), BlastPulse.RATE, true, true);
+                    BlastPulse.render(pa, BlastMix.phase(s, d), 1), BlastPulse.RATE, true, true, BlastSounds::factor);
         }
         last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
                 s.weapon() == null ? "air" : s.weapon().name(), s.chargeKg(), d, pa, 20 * Math.log10(Math.max(pa, 1e-9) / 2e-5), 1000 * BlastMix.phase(s, d),
@@ -224,10 +236,21 @@ public final class BlastSounds {
         ticks++;
     }
 
+    /** Множитель громкости всех звуков взрывов сейчас ({@link Mix}). */
+    static double factor() {
+        return MIX.factor(ticks);
+    }
+
+    /** Разовый звук взрыва целиком (одна запись — один взрыв) — в смесь, до того как зазвучит. */
+    private static void mixed(SoundEvent event, float volume, float pitch) {
+        MIX.blast(ticks).add(new Mix.Layer(Envelopes.of(event.getLocation()), pitch, volume));
+    }
+
     /** Отбой, перемотка повтора, выход из мира: эхо, что ещё готовилось, забыть (его голоса снимает {@link OwnSources#reset}). */
     static void reset() {
         ECHOES.forEach(BlastEchoes::stop);
         ECHOES.clear();
+        MIX.reset();
         lastEchoes = null;
         last = "";
     }
@@ -244,7 +267,9 @@ public final class BlastSounds {
         float v = byPressure(pa, underground ? CAVE_LUFS : DEEP_LUFS);
         if (v < AUDIBLE) return;
         ClientSounds.ducked(BlastMix.loudness(pa));
-        ClientSounds.atEar(underground ? ModSounds.BOMB_CAVE.get() : ModSounds.BOMB_DEEP.get(), pos, v, 1);
+        SoundEvent event = underground ? ModSounds.BOMB_CAVE.get() : ModSounds.BOMB_DEEP.get();
+        mixed(event, v, 1);
+        ClientSounds.blastAtEar(event, pos, v, 1, BlastSounds::factor);
     }
 
     /**
@@ -253,13 +278,13 @@ public final class BlastSounds {
      */
     public static void bunkerImpact(Vec3 pos, double tntKg) {
         float v = byPressure(BlastMix.pressure(BlastSource.air(BunkerImpact.airTnt(tntKg)), ear().distanceTo(pos)), IMPACT_LUFS);
-        if (v >= AUDIBLE) ClientSounds.atEar(ModSounds.BOMB_IMPACT.get(), pos, v, 1);
+        if (v >= AUDIBLE) bomb(ModSounds.BOMB_IMPACT.get(), pos, v, 1);
     }
 
     /** Газы взрыва вырвались по скважине: рёв выброса, громкость — по давлению доли заряда {@code airKg}, что вышла в воздух. */
     public static void vent(Vec3 pos, double airKg) {
         float v = byPressure(BlastMix.pressure(BlastSource.air(airKg), ear().distanceTo(pos)), VENT_LUFS);
-        if (v >= AUDIBLE) ClientSounds.atEar(ModSounds.BOMB_VENT.get(), pos, v, 1);
+        if (v >= AUDIBLE) bomb(ModSounds.BOMB_VENT.get(), pos, v, 1);
     }
 
     /**
@@ -268,7 +293,7 @@ public final class BlastSounds {
      */
     public static void collapse(Vec3 pos, double tntKg) {
         float v = byPressure(BlastMix.pressure(BlastSource.air(BunkerImpact.airTnt(tntKg)), ear().distanceTo(pos)), QUAKE_LUFS);
-        if (v >= AUDIBLE) ClientSounds.atEar(ModSounds.BOMB_QUAKE.get(), pos, v, 0.8f);
+        if (v >= AUDIBLE) bomb(ModSounds.BOMB_QUAKE.get(), pos, v, 0.8f);
     }
 
     /** Громкость записи громкостью {@code fileLufs} для давления {@code pa} у уха ({@link BlastMix#loudness}). */
@@ -288,7 +313,13 @@ public final class BlastSounds {
     /** Толчок земли у слушателя (сервер шлёт тем, кто стоит над взрывом). */
     public static void quake() {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        ClientSounds.atEar(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), 1, 1);
+        bomb(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), 1, 1);
+    }
+
+    /** Звук бомбы — в смеси взрывов. */
+    private static void bomb(SoundEvent event, Vec3 pos, float volume, float pitch) {
+        mixed(event, volume, pitch);
+        ClientSounds.blastAtEar(event, pos, volume, pitch, BlastSounds::factor);
     }
 
     /**

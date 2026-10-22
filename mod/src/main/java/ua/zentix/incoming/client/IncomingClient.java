@@ -178,9 +178,10 @@ public final class IncomingClient {
         e.register((state, level, pos, tint) -> UNLIT_TINT, ModBlocks.UNLIT.stream().map(p -> p.unlit().get()).toArray(Block[]::new));
     }
 
-    /** Лист текстур слоя эффектов — заново при каждой перезагрузке ресурсов. */
+    /** Лист текстур слоя эффектов и огибающие записей взрывов — заново при каждой перезагрузке ресурсов. */
     private static void reloadListeners(RegisterClientReloadListenersEvent e) {
         e.registerReloadListener(FxAtlas.INSTANCE);
+        e.registerReloadListener(ua.zentix.incoming.client.sound.Envelopes.INSTANCE);
     }
 
     private static void keys(RegisterKeyMappingsEvent e) {

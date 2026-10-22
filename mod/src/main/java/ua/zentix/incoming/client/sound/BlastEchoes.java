@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.DoubleSupplier;
 
 /**
  * Эхо взрыва от рельефа у этого слушателя — у любого взрыва, ядерного ({@code client.nuclear.NukeEchoes}) и обычного
@@ -69,6 +70,9 @@ public class BlastEchoes {
     @Nullable
     private Vec3 heard;
     private float volume, pitch;
+    /** Множитель смеси взрывов ({@link #bus}); null — без смеси. */
+    @Nullable
+    private DoubleSupplier bus;
     private int queued;
     private boolean stopped;
 
@@ -115,6 +119,11 @@ public class BlastEchoes {
      * @param volume громкость прямого удара (эхо — доля её)
      * @param pitch  высота тона прямого удара (эхо — того же звука)
      */
+    /** Эхо обычного взрыва — в смеси взрывов ({@link Mix}): громкость его дорожек × её множитель; у ядерки смеси нет. */
+    public void bus(@Nullable DoubleSupplier bus) {
+        this.bus = bus;
+    }
+
     public void arrive(Vec3 ear, float volume, float pitch) {
         if (stopped) return;
         this.heard = ear;
@@ -149,7 +158,7 @@ public class BlastEchoes {
         if (done.tracks().isEmpty()) return;
         OwnSources.reverb(done.t60(), SEND);
         for (EchoMix.Track t : done.tracks()) {
-            if (OwnSources.play(this, anchor, t.start(), t.azimuth(), Math.min(16, volume * t.gain()), t.pcm(), EchoMix.RATE)) queued++;
+            if (OwnSources.play(this, anchor, t.start(), t.azimuth(), Math.min(16, volume * t.gain()), t.pcm(), EchoMix.RATE, false, false, bus)) queued++;
         }
     }
 
