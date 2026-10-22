@@ -248,6 +248,39 @@ final class LssColumns {
             return done;
         }
 
+        /**
+         * Чанков больше {@code limit} — самые дальние от (x, z) блоков уходят, пока не останется {@code keep}. Возвращает,
+         * сколько ушло.
+         */
+        int trim(double x, double z, int limit, int keep) {
+            if (chunks.get() <= limit) return 0;
+            List<long[]> found = new ArrayList<>();
+            for (Map.Entry<Long, AtomicReferenceArray<int[]>> e : regions.entrySet()) {
+                int rx = ChunkPos.getX(e.getKey()), rz = ChunkPos.getZ(e.getKey());
+                AtomicReferenceArray<int[]> r = e.getValue();
+                for (int i = 0; i < 1024; i++) {
+                    if (r.get(i) == null) continue;
+                    int cx = rx << 5 | i & 31, cz = rz << 5 | i >> 5;
+                    double dx = cx * 16 + 8 - x, dz = cz * 16 + 8 - z;
+                    found.add(new long[] {ChunkPos.asLong(cx, cz), (long) (dx * dx + dz * dz)});
+                }
+            }
+            found.sort(Comparator.comparingLong((long[] a) -> a[1]).reversed());
+            int done = 0;
+            for (long[] f : found) {
+                if (chunks.get() <= keep) break;
+                int cx = ChunkPos.getX(f[0]), cz = ChunkPos.getZ(f[0]);
+                AtomicReferenceArray<int[]> r = regions.get(region(cx, cz));
+                int[] c = r.get(slot(cx, cz));
+                if (c != null && r.compareAndSet(slot(cx, cz), c, null)) {
+                    chunks.decrementAndGet();
+                    if (c.length == FULL) full.decrementAndGet();
+                    done++;
+                }
+            }
+            return done;
+        }
+
         /** Всё на диск: чанки по одному, конец — {@code false}. */
         void write(DataOutputStream out) throws IOException {
             out.writeInt(MAGIC);

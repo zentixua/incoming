@@ -33,6 +33,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
@@ -54,23 +55,33 @@ import java.util.zip.GZIPOutputStream;
  * пришло, и при выходе из мира. Файла нет (LSS стоял раньше мода или файл потерян) — вдали пусто, пока сервер не
  * пришлёт чанки снова: {@code /lss clearcache} просит всё заново.
  * <p>
- * LSS на встроенном сервере одиночной игры не включается (его клиент проверяет это сам): там рельеф вдали — Distant
- * Horizons, если стоит. Класс загружается, только если LSS стоит (см. {@link TerrainTiles}).
+ * LSS на встроенном сервере одиночной игры не включается (его клиент проверяет это сам), кроме мира, открытого по
+ * сети: там рельеф вдали — Distant Horizons, если стоит. Класс загружается, только если LSS стоит (см. {@link TerrainTiles}).
  */
 final class LssTerrain implements TerrainSource {
     /** Подробных чанков (1 КБ) в памяти не больше этого (~64 МБ, круг ~2,3 км), дальние от игрока — грубыми (64 байта). */
     static final int FULL_LIMIT = 65_536;
     /** Понижать — до этой доли предела, чтобы не делать это каждые несколько секунд. */
     private static final int FULL_KEEP = FULL_LIMIT * 9 / 10;
+    /**
+     * Чанков всего не больше этого (~80 МБ грубыми; круг радиусом LOD сервера по умолчанию, 512 чанков, — ~820 тыс.):
+     * сверх — самые дальние от игрока уходят. LSS о них не знает и сам их не пришлёт (дыра далеко от игры, до
+     * изменения чанка или {@code /lss clearcache}); его собственный кэш меток так же ограничен 2 млн.
+     */
+    static final int TOTAL_LIMIT = 1 << 20;
+    private static final int TOTAL_KEEP = TOTAL_LIMIT * 9 / 10;
     private static final int SAVE_TICKS = 2400;
     private static final int COARSEN_TICKS = 200;
     /** Полная плитка без событий перечитывается раз в 5 минут (изменения приходят событием, {@link #changes}). */
     private static final long REFRESH_NS = 300_000_000_000L;
     private static final Pattern UNSAFE = Pattern.compile("[^A-Za-z0-9._-]");
 
-    /** Колонки мира одного сервера и измерения; что пришло с прошлого тика; прочитан ли файл. */
+    /**
+     * Колонки мира одного сервера (адрес и хэш сида мира — как ключ кэша меток самого LSS: другой мир на том же адресе
+     * LSS шлёт заново, и чужой рельеф не должен остаться) и измерения; что пришло с прошлого тика; прочитан ли файл.
+     */
     static final class World {
-        final String server;
+        final String server, seed;
         final ResourceKey<Level> dimension;
         final LssColumns.Store store = new LssColumns.Store();
         final Set<Long> changed = ConcurrentHashMap.newKeySet();
@@ -78,14 +89,15 @@ final class LssTerrain implements TerrainSource {
         final AtomicBoolean dirty = new AtomicBoolean(), loaded = new AtomicBoolean(), fresh = new AtomicBoolean();
         volatile String file = "";
 
-        World(String server, ResourceKey<Level> dimension) {
+        World(String server, String seed, ResourceKey<Level> dimension) {
             this.server = server;
+            this.seed = seed;
             this.dimension = dimension;
         }
     }
 
     /** Миры текущего сервера; сервер сменился — прежние сохраняются и уходят. Пишут поток LSS и поток игры. */
-    private static final Map<ResourceKey<Level>, World> worlds = new HashMap<>();
+    private static final Map<String, World> worlds = new HashMap<>();
     @Nullable
     private static String server;
     /** Для лога: чанки, колонки с верхом, время в потоке LSS, отказы. */
@@ -96,6 +108,20 @@ final class LssTerrain implements TerrainSource {
     /** Чтение и запись файлов, понижение до грубого — одним фоновым потоком. */
     private static final ExecutorService io = Executors.newSingleThreadExecutor(
             new ThreadFactoryBuilder().setNameFormat("Incoming LSS terrain").setDaemon(true).setPriority(Thread.MIN_PRIORITY).build());
+
+    static {
+        // закрыли игру в мире: присланное после последней записи — на диск до выхода JVM (поток записи — демон, и без
+        // этого запись обрывалась бы, а метки LSS остались бы — дыры до /lss clearcache)
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            flush();
+            io.shutdown();
+            try {
+                if (!io.awaitTermination(30, TimeUnit.SECONDS)) Incoming.LOG.warn("LOD Server Support: map terrain not saved in 30 s at exit");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, "Incoming LSS terrain save"));
+    }
     private static int ticks;
     private static volatile boolean coarsening;
     /** Подписчик, пока API LSS то, под которое собран мод; null — выключен ({@link #disable}). */
@@ -117,7 +143,7 @@ final class LssTerrain implements TerrainSource {
             @Override
             public void onVoxelColumnReceived(ClientLevel level, ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData data) {
                 try {
-                    receive(dimension, chunkX, chunkZ, data);
+                    receive(level, dimension, chunkX, chunkZ, data);
                 } catch (LinkageError e) {
                     disable(e);
                 }
@@ -147,12 +173,12 @@ final class LssTerrain implements TerrainSource {
      * Чанк от сервера, в потоке LSS ({@code LSS-ColumnProcessor}). Исключение не выпускается: LSS счёл бы чанк
      * не принятым и прислал заново всем подписчикам (и Voxy) — отказ только в счётчик.
      */
-    private static void receive(ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData data) {
+    private static void receive(ClientLevel level, ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData data) {
         if (consumer == null) return;
         long start = System.nanoTime();
         try {
             int[] columns = LssColumns.summarize(minSection(data), sections(data));
-            World w = world(dimension);
+            World w = world(level, dimension);
             w.store.put(chunkX, chunkZ, columns);
             w.changed.add(ChunkPos.asLong(chunkX, chunkZ));
             w.dirty.set(true);
@@ -209,16 +235,20 @@ final class LssTerrain implements TerrainSource {
         return "local_" + (root == null ? "world" : UNSAFE.matcher(root.toString()).replaceAll("_"));
     }
 
-    /** Мир измерения у текущего сервера; новый — с чтением файла в фоне. */
-    private static World world(ResourceKey<Level> dimension) {
+    /**
+     * Мир измерения у текущего сервера; новый — с чтением файла в фоне. {@code level} — мир клиента, для которого
+     * чанк (у LSS — снимок на миг отправки): хэш сида — из пакета входа или возрождения ({@code BiomeManager}).
+     */
+    private static World world(ClientLevel level, ResourceKey<Level> dimension) {
         String now = currentServer();
+        String seed = "world-" + Long.toHexString(level.getBiomeManager().biomeZoomSeed);
         synchronized (worlds) {
             if (!now.equals(server)) {
                 flushLocked();
                 server = now;
             }
-            return worlds.computeIfAbsent(dimension, d -> {
-                World w = new World(now, d);
+            return worlds.computeIfAbsent(seed + "/" + dimension.location(), k -> {
+                World w = new World(now, seed, dimension);
                 io.execute(() -> load(w));
                 return w;
             });
@@ -226,7 +256,7 @@ final class LssTerrain implements TerrainSource {
     }
 
     private static Path file(World w) {
-        return Minecraft.getInstance().gameDirectory.toPath().resolve("incoming").resolve("lss-terrain").resolve(w.server)
+        return Minecraft.getInstance().gameDirectory.toPath().resolve("incoming").resolve("lss-terrain").resolve(w.server).resolve(w.seed)
                 .resolve(UNSAFE.matcher(w.dimension.location().toString()).replaceAll("_") + ".bin");
     }
 
@@ -272,9 +302,11 @@ final class LssTerrain implements TerrainSource {
         }
     }
 
-    /** Под замком {@link #worlds}: все миры — на диск (в фоне) и из памяти. */
+    /** Под замком {@link #worlds}: все миры — на диск (в фоне) и из памяти. После выхода JVM запись уже не принимается. */
     private static void flushLocked() {
-        for (World w : worlds.values()) io.execute(() -> save(w));
+        for (World w : worlds.values()) {
+            if (!io.isShutdown()) io.execute(() -> save(w));
+        }
         worlds.clear();
     }
 
@@ -286,7 +318,10 @@ final class LssTerrain implements TerrainSource {
         }
     }
 
-    /** Раз в тик, в потоке игры: сохранение по часам; подробных чанков сверх предела — грубыми (в фоне). */
+    /**
+     * Раз в тик, в потоке игры: сохранение по часам; подробных чанков сверх предела — грубыми, всех сверх предела —
+     * дальние долой (в фоне).
+     */
     static void tick(double playerX, double playerZ) {
         ticks++;
         if (ticks % SAVE_TICKS == 0) {
@@ -297,11 +332,12 @@ final class LssTerrain implements TerrainSource {
         if (ticks % COARSEN_TICKS != 0 || coarsening) return;
         synchronized (worlds) {
             for (World w : worlds.values()) {
-                if (w.store.fullChunks() <= FULL_LIMIT) continue;
+                if (w.store.fullChunks() <= FULL_LIMIT && w.store.chunks() <= TOTAL_LIMIT) continue;
                 coarsening = true;
                 io.execute(() -> {
                     try {
                         w.store.coarsen(playerX, playerZ, FULL_LIMIT, FULL_KEEP);
+                        w.store.trim(playerX, playerZ, TOTAL_LIMIT, TOTAL_KEEP);
                     } finally {
                         coarsening = false;
                     }
@@ -316,7 +352,7 @@ final class LssTerrain implements TerrainSource {
 
     private World mine() {
         World w = mine;
-        return w != null ? w : (mine = world(level.dimension()));
+        return w != null ? w : (mine = world(level, level.dimension()));
     }
 
     /** Сервер с LSS раздаёт LOD этому клиенту (рукопожатие прошло); иначе слой не нужен. */
@@ -403,9 +439,18 @@ final class LssTerrain implements TerrainSource {
         World w = mine();
         long n = received.get();
         if (consumer == null) return "LSS off (API differs)";
+        boolean on;
+        int distance;
+        try {
+            on = LSSApi.isServerEnabled();
+            distance = LSSApi.getServerLodDistance();
+        } catch (LinkageError e) {
+            disable(e);
+            return "LSS off (API differs)";
+        }
         return String.format(Locale.ROOT, "LSS (server %s, LOD distance %d chunks): chunks received %d, columns with top %d, in LSS thread avg %.0f µs max %.1f ms, "
                         + "failures %d%s; in memory %d chunks (%d detailed), file %s",
-                LSSApi.isServerEnabled() ? "on" : "off", LSSApi.getServerLodDistance(), n, withTop.get(), n == 0 ? 0.0 : nanos.get() / 1e3 / n,
+                on ? "on" : "off", distance, n, withTop.get(), n == 0 ? 0.0 : nanos.get() / 1e3 / n,
                 maxNanos.get() / 1e6, failures.get(), firstFailure == null ? "" : " (first: " + firstFailure + ")", w.store.chunks(), w.store.fullChunks(),
                 w.file.isEmpty() ? "—" : w.file);
     }

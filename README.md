@@ -51,7 +51,7 @@ All of these are optional:
 - **Create Aeronautics** with **Sable** 2.0.6 or newer: aircraft can be targeted, and explosions break and push them.
 - **Create**: munition recipes use Create parts when Create is installed and vanilla items otherwise.
 - **LOD Server Support** on the server and the client (with Voxy or without it): the targeting map, sight lines and
-  sound around hills use the distant terrain the server sends. Not in single-player.
+  sound around hills use the distant terrain the server sends. Not in single-player (a world opened to LAN serves it).
 - **Distant Horizons** 3.3 or newer: the targeting map shows distant terrain where LOD Server Support is not serving,
   and strike damage shows up in the distant terrain right away.
 - **Voxy** 0.2.16 (on NeoForge through **Roxy**): distant terrain hides projectiles, blasts and smoke beyond your

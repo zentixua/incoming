@@ -180,6 +180,23 @@ class LssColumnsTest {
         assertEquals(6, s.fullChunks(), "пришёл снова — подробный");
     }
 
+    /** Чанков всего сверх предела — уходят самые дальние от игрока, подробные и грубые одинаково. */
+    @Test
+    void trimsFarthestChunks() {
+        LssColumns.Store s = new LssColumns.Store();
+        for (int cx = -5; cx < 5; cx++) s.put(cx, 0, chunk(cx));
+        s.coarsen(0, 0, 4, 4);
+        assertEquals(0, s.trim(0, 0, 10, 6), "в пределе — ничего");
+        assertEquals(4, s.trim(0, 0, 8, 6));
+        assertEquals(6, s.chunks());
+        for (int cx = -3; cx < 3; cx++) assertTrue(s.chunk(cx, 0) != null, "ближний остался");
+        assertNull(s.chunk(-5, 0));
+        assertNull(s.chunk(4, 0));
+        assertEquals(4, s.fullChunks(), "подробные (ближние) не тронуты");
+        s.put(4, 0, chunk(4));
+        assertEquals(7, s.chunks(), "пришёл снова — на месте");
+    }
+
     /** Файл: всё, что было (и грубое), читается тем же; чужой файл — ошибка, а не мусор в карте. */
     @Test
     void fileRoundTrip() throws IOException {
