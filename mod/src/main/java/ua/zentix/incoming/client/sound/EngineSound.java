@@ -16,6 +16,7 @@ import ua.zentix.incoming.sound.Propagation;
 import ua.zentix.incoming.sound.Spectra;
 import ua.zentix.incoming.sound.Spectrum;
 import ua.zentix.incoming.strike.WeaponSpec;
+import ua.zentix.incoming.strike.WeaponType;
 
 import java.util.Locale;
 import java.util.function.Supplier;
@@ -134,7 +135,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
                     case SOLID, NONE -> 1;
                 };
             }
-            double gain = Loudness.gain(level, heard.margin() + level - heard.level()) * share;
+            double gain = Loudness.gain(level, heard.margin() + level - heard.level(), ceiling(track)) * share;
             // дальняя запись уже прошла FAR_AIR воздуха: фильтр — только сверх него
             double highs = this.air > 0 ? Math.min(1, heard.highs() / e.heardAt(noise, part, drilling, this.air)) : heard.highs();
             // камера снаряда: слушатель сидит на нём самом — мотор в упор, но не оглушающе (не физика: камера —
@@ -143,6 +144,14 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
             // предел тона у Minecraft — 0,5…2 (SoundEngine): дальше тон не уходит
             return new Tone(gain, Math.max(0.5, Math.min(2.0, pitch)), highs);
         }
+    }
+
+    /**
+     * Потолок громкости снаряда, LUFS: у всех — {@link Loudness#CEILING_LUFS}, у МБР — прежний {@link Loudness#ENGINE_LUFS}
+     * (ядерный удар не меняется; по тому же закону её старт у стола звучал бы до 5,5 дБ громче).
+     */
+    static double ceiling(FlightTrack track) {
+        return track.weapon == WeaponType.NUKE ? Loudness.ENGINE_LUFS : Loudness.CEILING_LUFS;
     }
 
     /** Шум снаряда этого пути: паспорт его аппарата (у B-2 — самолёт, у его бомбы — бомба). */
@@ -230,12 +239,12 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         if (heard == null) {
             // данных о снаряде на этот момент нет (взорвался или ушёл из слуха): стихнуть, не дёргая источник
             smoothVolume *= 0.5f;
-            this.volume = smoothVolume;
+            this.volume = Loudness.motor(smoothVolume);
         } else {
             // сглаживание: смена слоёв и ракурса, запуск и отпускание слоя, приглушение под взрыв — без щелчков
             double gain = released ? 0 : tone.gain() * ClientSounds.duck();
             smoothVolume += (float) ((gain - smoothVolume) * 0.35);
-            this.volume = smoothVolume;
+            this.volume = Loudness.motor(smoothVolume);
             this.pitch = (float) tone.pitch();
             this.x = heard.x();
             this.y = heard.y();
@@ -271,33 +280,33 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
             switch (spec.launch()) {
                 case ROCKET_TUBE -> {
                     // сход реактивного снаряда: резкое «фш-ш» с треском; очередь по полсекунды сливается в рёв залпа
-                    float v = shot(motor, Spectra.ROCKET_LAUNCH, e);
-                    if (v > 0.01f) ClientSounds.atEar(ModSounds.ROCKET_LAUNCH.get(), at, v, 0.94f + (float) Math.random() * 0.12f);
+                    double v = shot(motor, Spectra.ROCKET_LAUNCH, e);
+                    if (v > 0.01) ClientSounds.atEar(ModSounds.ROCKET_LAUNCH.get(), at, Loudness.volume(v, Loudness.ROCKET_LAUNCH_LUFS), 0.94f + (float) Math.random() * 0.12f);
                 }
                 case CATAPULT -> {
                     // катапульта барражирующего: удар поршня и свист направляющей
-                    float v = shot(noise.catapult() - Spectra.LOITER_LAUNCH.aWeighting(), Spectra.LOITER_LAUNCH, e);
-                    if (v > 0.01f) ClientSounds.atEar(ModSounds.LOITER_LAUNCH.get(), at, v, 0.95f + (float) Math.random() * 0.1f);
+                    double v = shot(noise.catapult() - Spectra.LOITER_LAUNCH.aWeighting(), Spectra.LOITER_LAUNCH, e);
+                    if (v > 0.01) ClientSounds.atEar(ModSounds.LOITER_LAUNCH.get(), at, Loudness.volume(v, Loudness.ENGINE_LUFS), 0.95f + (float) Math.random() * 0.1f);
                 }
                 case BOOSTER, BOOSTER_LOW -> {
-                    float v = shot(motor, Spectra.LAUNCH_BOOSTER, e);
-                    if (v > 0.01f) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, v, spec.launch() == ClientWeaponSpec.LaunchCue.BOOSTER_LOW ? 0.92f : 1.05f);
+                    double v = shot(motor, Spectra.LAUNCH_BOOSTER, e);
+                    if (v > 0.01) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, Loudness.motor(v), spec.launch() == ClientWeaponSpec.LaunchCue.BOOSTER_LOW ? 0.92f : 1.05f);
                 }
                 case NONE -> {}
             }
         } else if (ph == FlightPhase.CLIMB && prev >= 0 && FlightPhase.byId(prev).boosterLit() && spec.separates()) {
-            float v = shot(noise.separation() - Spectra.BOOSTER_SEPARATE.aWeighting(), Spectra.BOOSTER_SEPARATE, e);
-            if (v > 0.01f) ClientSounds.atEar(ModSounds.BOOSTER_SEPARATE.get(), at, v, 1);
+            double v = shot(noise.separation() - Spectra.BOOSTER_SEPARATE.aWeighting(), Spectra.BOOSTER_SEPARATE, e);
+            if (v > 0.01) ClientSounds.atEar(ModSounds.BOOSTER_SEPARATE.get(), at, Loudness.volume(v, Loudness.ENGINE_LUFS), 1);
         }
     }
 
-    /** Громкость разового звука мощностью {@code lw} (без взвешивания) со спектром его записи у этого уха. */
-    private static float shot(double lw, Spectrum spectrum, Emission e) {
+    /** Громкость ({@link Loudness#gain}) разового звука мощностью {@code lw} (без взвешивания) со спектром его записи у этого уха. */
+    private static double shot(double lw, Spectrum spectrum, Emission e) {
         if (Double.isNaN(lw) || lw == Noise.SILENT) return 0;
         double[] bands = new double[Propagation.BANDS];
         double level = Propagation.level(lw, spectrum, e.path(e.distance()), bands);
         double v = Loudness.gain(level, Propagation.margin(bands, e.weather()));
-        return (float) (e.onboard() ? v * 0.5 : v);
+        return e.onboard() ? v * 0.5 : v;
     }
 
     /** Вес ближней записи: 1 ближе половины {@link #FAR_AIR}, 0 с самого {@link #FAR_AIR}. */
