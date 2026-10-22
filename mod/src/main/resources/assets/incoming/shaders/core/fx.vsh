@@ -22,6 +22,9 @@ in ivec2 UV2;
 in vec3 Normal;
 
 uniform sampler2D Sampler2;
+// свет открытого неба на веществе в воздухе против карты освещения у открытого неба (FarView.sky): карта красит синим
+// уже на закате, облака Minecraft — только когда свет ушёл; по каналам, на экране
+uniform vec3 FxSkyFix;
 // видимая доля источников кадра (SourceProbes): проба i — пиксель (i % ширина, i / ширина)
 uniform sampler2D Sampler4;
 // 1 — пробы есть
@@ -99,6 +102,8 @@ void main() {
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
     vec4 light = Normal.y < -0.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
     if (Normal.y > -0.5 && any(lessThan(UV2, ivec2(240)))) {
+        // доля света неба в точке (небо 0..15): её оттенок — как у вещества под открытым небом, свет блоков — как есть
+        light.rgb *= mix(vec3(1.0), FxSkyFix, float(UV2.y) / 240.0);
         // свет шаров — к карте освещения: в долях света неба на экране (карта при открытом небе без блоков) и вместе не
         // ярче света дня — экран больше не покажет; светящееся своим светом (FULL_BRIGHT) его не берёт
         vec3 add = balls(Position / unfold);

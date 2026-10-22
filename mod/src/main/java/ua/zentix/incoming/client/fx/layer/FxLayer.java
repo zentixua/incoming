@@ -12,6 +12,7 @@ import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import org.jetbrains.annotations.Nullable;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.joml.Vector4f;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.far.FarBlasts;
@@ -49,6 +50,8 @@ import java.util.Locale;
  * до конца кадра (к нему ваниль туман гасит).
  */
 public final class FxLayer {
+    /** Карта освещения у открытого неба и поправка оттенка её доли неба ({@code FxSkyFix}) — на кадр. */
+    private static final Vector3f SKY_MAP = new Vector3f(), SKY_FIX = new Vector3f();
     private static final FxQuads QUADS = new FxQuads();
     private static final FxLights LIGHTS = new FxLights();
     private static final SourceProbes PROBES = new SourceProbes();
@@ -138,6 +141,8 @@ public final class FxLayer {
 
     /** Время всего слоя на видеокарте: наклейка на воду, пелена, пробы, квадраты. */
     private static final GpuTimer GPU = new GpuTimer();
+    /** Проход дрожания и света огня ({@link HeatPass}) на видеокарте — внутри {@link #GPU}. */
+    private static final GpuTimer HEAT = new GpuTimer();
 
     /** Раз в тик клиента (не на паузе): секундная сводка времени кадра. */
     public static void tick() {
@@ -149,6 +154,7 @@ public final class FxLayer {
             lastCollected = collected;
             PallPass.second();
             GPU.second();
+            HEAT.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;
             frames = ticks = collected = 0;
         }
@@ -184,12 +190,14 @@ public final class FxLayer {
         if (level == null || s == null || atlas < 0) return;
         long start = System.nanoTime(), cpu = cpuNanos(), pauses = pauses();
         FarView sky = FarRenderer.view(e, mc, level);
-        // свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (HeatPass): воздух — дымка кадра. Огонь
+        // свет вспышки и огня обычного оружия на мир, дрожание воздуха над огнём и шаром и фронт ударной волны ядерки
+        // (HeatPass, NukeHeat): воздух — дымка кадра. Огонь
         // у глаза — до сбора кадра: по нему привыкает глаз всего кадра (шары, лужи, пожары, обломки — этого кадра; факелы
         // снарядов — прошлого: их места считает сбор, а вспыхнуть разом, как шар, они не могут)
         HeatPass.Frame heat = HeatPass.begin(level, sky.exposure(), sky.pixel());
         double air = Sight.KOSCHMIEDER / Sight.range(level.getRainLevel(sky.partial()), level.getThunderLevel(sky.partial()));
         FarBlasts.heat(sky.camera(), sky.partial(), heat, air);
+        ua.zentix.incoming.client.nuclear.NukeHeat.heat(sky.camera(), sky.partial(), heat);
         ua.zentix.incoming.client.fx.FireSmoke.heat(sky.camera(), heat, air);
         ua.zentix.incoming.client.fx.Exhaust.heat(sky.camera(), SmokeGrid.seconds(sky.partial()), heat, air);
         heat.eye(FarRenderer.flamesAtEye());
@@ -250,9 +258,11 @@ public final class FxLayer {
             PallPass.Frame front = pallDrawn ? pall : PallPass.empty();
             // свет на мир и дрожание — по кадру с пеленой, до квадратов: дым и огонь слоя ложатся поверх
             if (hot && scene >= 0) {
+                int timedHeat = HEAT.begin();
                 // заслоны у глаза — к тени прямого света (блоки мира, а не глубина кадра)
                 HeatPass.solids(heat, level, view.camera());
                 HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
+                HEAT.end(timedHeat);
             }
             // пробы — после пелены: её проход кладёт карты и таблицу грибов кадра, а проба берёт пропускание пелены и грибов
             int seen = PROBES.update(scene, front, pallDrawn, VIEW, e.getProjectionMatrix(), view.pixel());
@@ -281,6 +291,9 @@ public final class FxLayer {
             float skyLuma = Math.max(view.skyLight(), 1e-3f);
             s.safeGetUniform("FxSkyTint").set((float) Math.pow(view.sky().x() / skyLuma, 2.2), (float) Math.pow(view.sky().y() / skyLuma, 2.2),
                     (float) Math.pow(view.sky().z() / skyLuma, 2.2));
+            // частицы и ленты берут свет мира из карты освещения: у её доли неба — оттенок вещества в воздухе (FarView.sky)
+            Vector3f fix = FarView.fix(view.sky(), FarView.lightmap(light, SKY_MAP), SKY_FIX);
+            s.safeGetUniform("FxSkyFix").set(fix.x(), fix.y(), fix.z());
             float[] six = FxAtlas.puff6Light();
             s.safeGetUniform("FxSix").set(FxAtlas.PUFF6_STEP, FxAtlas.PUFF6_TOP, FxAtlas.PUFF6_U, FxAtlas.PUFF6_V);
             s.safeGetUniform("FxSixLight").set(six[0], six[1], six[2]);
@@ -337,8 +350,9 @@ public final class FxLayer {
     /** Время кадра слоя за прошлую секунду — для строки сценария. */
     public static String describeTiming() {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
-                + "GPU %.3f ms (longest %.3f, %d frames), depth: %s", lastQuads, lastMean, lastMax, lastClean, Math.max(0, lastCleanCpu), lastCollected,
-                GPU.lastMean, GPU.lastMax, GPU.lastFrames, SceneDepth.describe());
+                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s), depth: %s", lastQuads, lastMean, lastMax,
+                lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
+                HEAT.lastFrames, HeatPass.describe(), SceneDepth.describe());
     }
 
     /** Выход из мира или смена измерения. */

@@ -12,6 +12,10 @@
 //   температуре). Изображение за горячим газом сдвигается на этот угол × (1 − s/D) (s — до газа, D — до мира), вихри
 //   плывут вверх с газом. Это доли пикселя у огня и шара на обычном экране — дрожание видно на контрастных краях и в
 //   бинокль, как в жизни.
+// - Ударная волна ядерки: воздух за фронтом сжат (Ренкин–Гюгонио), n − 1 ∝ плотности, и луч, что пересекает сферу фронта,
+//   гнётся к её середине на производную добавки пути (тонкая оболочка: путь — функция Доусона, nuclear/model/ShockOptics,
+//   сверяет ShockOpticsGlslTest), среднюю по ширине пикселя там, где луч пересёк фронт. У касательной — пиксели, вдали от
+//   неё — ничто: фронт виден тонким кольцом по краю на фоне неба и земли. Сдвиг фронта меньше FRONT_SHIFT_MIN — нет.
 // - Свет: огненный шар взрыва, пламя лужи, горящие обломки и масло подстанции — ламбертовы шары яркостью чёрного тела
 //   (L·R²/max(d², R²), mushBallFace — прямой пучок по косинусу к грани, рассеянный воздухом и отражённый землёй), как
 //   свет шара ядерки на мир (fx_pall_composite): цвет блока — пиксель, делённый на свет открытого неба (relit). Факел
@@ -51,7 +55,12 @@ uniform mat4 HeatJetSize;
 uniform mat4 HeatJetCore;
 uniform mat4 HeatJetFlame;
 uniform mat4 HeatJetTail;
-// не занято; угол пикселя, рад; есть ли свет (z > 0) и газ (w > 0)
+// фронты ударной волны: столбцы 0 и 1 — середина от глаза (xyz), радиус (w; 0 — нет); 2 и 3 — скачок показателя
+// преломления на четырёх высотах ровно от синуса угла у земли до верха
+uniform mat4 HeatFront;
+// e-кратная толща сжатия за фронтом и синус угла над серединой у земли: фронта 0 (x, y) и 1 (z, w)
+uniform vec4 HeatFrontShape;
+// есть ли фронт (x > 0); угол пикселя, рад; есть ли свет (z > 0) и газ (w > 0)
 uniform vec4 HeatFrame;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
@@ -61,6 +70,8 @@ const vec3 SOLIDS_SIZE = vec3(192.0, 96.0, 192.0);
 const int SHADOW_CELLS = 160;
 // свет меньше этого (линейный на экране, ниже шага sRGB у чёрного) — тень не ищется: её не видно
 const float SHADOW_SEEN = 3e-4;
+// сдвиг фронта меньше этой доли пикселя не виден: его нет (HeatPass.SHIFT_MIN)
+const float FRONT_SHIFT_MIN = 0.05;
 
 out vec4 fragColor;
 
@@ -116,6 +127,67 @@ vec2 heatShift(vec3 dir, float dist) {
         shift += k * vec2(heatNoise(q + vec3(0.0, 0.0, turn)), heatNoise(q + vec3(17.3, 5.1, turn + 31.7)));
     }
     return shift;
+}
+
+// Функция Доусона F(x) = e^(−x²)·∫₀ˣ e^(t²) dt (ShockOptics.dawson)
+float frontDawson(float x) {
+    if (x > 10.0) return 0.5 / x * (1.0 + 0.5 / (x * x) + 0.75 / (x * x * x * x));
+    float y = x * x;
+    float p = 1.0 + y * (0.1049934947 + y * (0.0424060604 + y * (0.0072644182 + y * (0.0005064034 + y * 0.0001789971))));
+    float q = 1.0 + y * (0.7715471019 + y * (0.2909738639 + y * (0.0694555761 + y * (0.0140005442 + y * (0.0008327945 + y * 0.0003579942)))));
+    return x * p / q;
+}
+
+// Добавка оптического пути одного пересечения оболочки (ShockOptics.path): прицельное расстояние b, радиус r, толща l, скачок dn
+float frontPath(float b, float r, float l, float dn) {
+    float rl = 2.0 * r * l;
+    float a2 = max((r - b) * (r + b), 0.0) / rl;
+    return dn * sqrt(rl) * frontDawson(sqrt(a2));
+}
+
+// Отклонение одного пересечения к середине, среднее по пикселю шириной w, рад (ShockOptics.bend)
+float frontBend(float b, float r, float l, float dn, float w) {
+    float lo = max(b - 0.5 * w, 0.0);
+    float hi = b + 0.5 * w;
+    float bend = (frontPath(lo, r, l, dn) - frontPath(hi, r, l, dn)) / max(hi - lo, 1e-6);
+    float most = sqrt(2.0 * dn);
+    return clamp(bend, -most, most);
+}
+
+// Скачок фронта на месте q (от середины, |q| = r): по высоте — между четырьмя узлами от синуса low у земли до верха
+float frontJump(vec4 dn, float low, float sine) {
+    float k = clamp((sine - low) / max(1.0 - low, 1e-3), 0.0, 1.0) * 3.0;
+    if (k < 1.0) return mix(dn.x, dn.y, k);
+    if (k < 2.0) return mix(dn.y, dn.z, k - 1.0);
+    return mix(dn.z, dn.w, k - 2.0);
+}
+
+// Отклонение луча dir до мира (dist) фронтами, рад, вектором поперёк луча: каждое пересечение сферы перед миром — к её
+// середине, × (1 − s/D) — сдвиг того, что за ним, как его видит глаз
+vec3 frontShift(vec3 dir, float dist) {
+    vec3 bend = vec3(0.0);
+    for (int i = 0; i < 2; i++) {
+        vec4 f = HeatFront[i];
+        if (f.w <= 0.0) continue;
+        float along = dot(f.xyz, dir);
+        vec3 across = f.xyz - dir * along;
+        float b = length(across);
+        // пиксель у касательной снаружи ещё задевает фронт половиной своей ширины
+        if (b < 1e-3 || b >= f.w + 0.5 * HeatFrame.y * max(along, 0.0)) continue;
+        float chord = sqrt(max((f.w - b) * (f.w + b), 0.0));
+        float l = i == 0 ? HeatFrontShape.x : HeatFrontShape.z;
+        float low = i == 0 ? HeatFrontShape.y : HeatFrontShape.w;
+        vec4 dn = HeatFront[2 + i];
+        float angle = 0.0;
+        for (int k = 0; k < 2; k++) {
+            float s = k == 0 ? along - chord : along + chord;
+            if (s <= 0.0 || s >= dist) continue;
+            float jump = frontJump(dn, low, (dir.y * s - f.y) / f.w);
+            angle += frontBend(b, f.w, l, jump, HeatFrame.y * s) * (1.0 - s / dist);
+        }
+        bend += across / b * angle;
+    }
+    return bend;
 }
 
 // Часть [t.x, t.y] отрезка от a (от точки грани) по единичному u, что над гранью с нормалью n (HeatPass.above); пусто —
@@ -278,8 +350,23 @@ void main() {
     float depth0 = pallScene(texelFetch(Sampler1, ivec2(here), 0).r);
     float dist0 = depth0 >= 1e8 ? 1e8 : depth0 / max(dot(dir0, PallForward), 1e-3);
     vec2 shift = HeatFrame.w > 0.0 ? heatShift(dir0, dist0) : vec2(0.0);
+    vec2 front = vec2(0.0);
+    if (HeatFrame.x > 0.0) {
+        vec3 bend = frontShift(dir0, dist0);
+        if (dot(bend, bend) > 0.0) {
+            // поворот луча в пиксели: шаг луча на пиксель экрана по x и y (у пикселя — линейно)
+            vec2 ndc1 = (here + vec2(1.0, 0.0)) / vec2(size) * 2.0 - 1.0, ndc2 = (here + vec2(0.0, 1.0)) / vec2(size) * 2.0 - 1.0;
+            vec4 f1 = InvViewProj * vec4(ndc1, 1.0, 1.0), f2 = InvViewProj * vec4(ndc2, 1.0, 1.0);
+            vec3 dx = normalize(f1.xyz / f1.w) - dir0, dy = normalize(f2.xyz / f2.w) - dir0;
+            float xx = dot(dx, dx), xy = dot(dx, dy), yy = dot(dy, dy), det = xx * yy - xy * xy;
+            float bx = dot(bend, dx), by = dot(bend, dy);
+            if (det > 0.0) front = vec2(yy * bx - xy * by, xx * by - xy * bx) / det;
+        }
+    }
+    // фронт идёт с каждым кадром ядерки по всему кадру: его сдвиг меньше порога — как не было
+    if (dot(front, front) >= FRONT_SHIFT_MIN * FRONT_SHIFT_MIN) shift += front;
     vec2 at = here + shift;
-    vec3 world = texture(Sampler0, at / vec2(size)).rgb;
+    vec3 world = dot(shift, shift) > 0.0 ? texture(Sampler0, at / vec2(size)).rgb : texelFetch(Sampler0, ivec2(here), 0).rgb;
     ivec2 px = clamp(ivec2(floor(at)), ivec2(0), size - 1);
     float depth = pallScene(texelFetch(Sampler1, px, 0).r);
     if (HeatFrame.z > 0.0 && depth < 1e8) {

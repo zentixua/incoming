@@ -5,6 +5,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -134,7 +135,14 @@ public final class Shielding {
      * Стекло — окно (1 см стекла, а не метр), листва — крона, шерсть — войлок, снег и лёд — свои.
      */
     static double density(Level level, BlockPos p) {
-        BlockState s = level.getBlockState(p);
+        return density(level, p, level.getBlockState(p));
+    }
+
+    /**
+     * Плотность блока {@code s} на месте {@code p} ({@link #density(Level, BlockPos)}), кг/м³; блок — метр, поэтому это и
+     * его масса, кг. Блока на месте может уже не быть (снесённый волной — у звука обломков): форма и звук — его.
+     */
+    public static double density(LevelReader level, BlockPos p, BlockState s) {
         if (s.isAir()) return 0;
         FluidState fluid = s.getFluidState();
         double liquid = fluid.isEmpty() ? 0 : fluid.is(FluidTags.LAVA) ? 2600 : 1000;
@@ -144,12 +152,17 @@ public final class Shielding {
         return material(level, p, s) * fill + liquid * (1 - fill);
     }
 
-    private static double material(Level level, BlockPos p, BlockState s) {
+    /** Окно ли блок {@code s}: стекло по звуку блока (вещество — {@link #density}: окно, а не метр стекла), не лёд. */
+    public static boolean window(LevelReader level, BlockPos p, BlockState s) {
+        return !s.is(BlockTags.LEAVES) && !s.is(BlockTags.ICE) && !s.is(BlockTags.SNOW) && s.getSoundType(level, p, null) == SoundType.GLASS;
+    }
+
+    private static double material(LevelReader level, BlockPos p, BlockState s) {
         if (s.is(BlockTags.LEAVES)) return 50;
         if (s.is(BlockTags.ICE)) return 900;
         if (s.is(BlockTags.SNOW)) return 300;
+        if (window(level, p, s)) return 25;
         SoundType t = s.getSoundType(level, p, null);
-        if (t == SoundType.GLASS) return 25;
         if (t == SoundType.WOOL) return 150;
         if (t == SoundType.WOOD || t == SoundType.NETHER_WOOD || t == SoundType.CHERRY_WOOD || t == SoundType.BAMBOO_WOOD
                 || t == SoundType.STEM || t == SoundType.BAMBOO) return 600;

@@ -120,7 +120,10 @@ class S2CGoldenTest {
                         new S2C.NukeDetonation(D.withFires(false), 242f)),
                 golden(S2C.NukeDebris.TYPE, S2C.NukeDebris.CODEC, new S2C.NukeDebris(4, List.of(
                         new S2C.NukeDebris.Piece(new BlockPos(-100, 70, 2000), Blocks.STONE.defaultBlockState()),
-                        new S2C.NukeDebris.Piece(new BlockPos(1, -60, -1), Blocks.OAK_PLANKS.defaultBlockState())))),
+                        new S2C.NukeDebris.Piece(new BlockPos(1, -60, -1), Blocks.OAK_PLANKS.defaultBlockState())), S2C.NukeDebris.OLD_REMOVED),
+                        new S2C.NukeDebris(4, List.of(
+                        new S2C.NukeDebris.Piece(new BlockPos(-100, 70, 2000), Blocks.STONE.defaultBlockState()),
+                        new S2C.NukeDebris.Piece(new BlockPos(1, -60, -1), Blocks.OAK_PLANKS.defaultBlockState())), 731)),
                 golden(S2C.NukeFlashMarks.TYPE, S2C.NukeFlashMarks.CODEC, new S2C.NukeFlashMarks(-123_456_789_012L, new FlashMarks(List.of(
                         new FlashMarks.Layer(3, 100, new int[]{0x12345678, -5}, new int[0], new long[0]),
                         new FlashMarks.Layer(4, 123_456, new int[0], new int[]{0x0abcdef0},

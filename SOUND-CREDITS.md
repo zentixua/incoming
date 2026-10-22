@@ -54,10 +54,12 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | Sanderboah | [Geiger counter (dry)](https://freesound.org/s/674113/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Sclolex | [highvoltagearc.wav](https://freesound.org/s/210878/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | sidohzen | [Explosion with debris - authentic. 4kg TNT](https://freesound.org/s/165808/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| skowix | [house on fire](https://freesound.org/s/871765/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | Spennnyyy | [Extremely Close THUNDER! (no rain)](https://freesound.org/s/350506/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | TheLittleCrow | [Rocket Launch Boost and Burning (Version B)](https://freesound.org/s/774270/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | tim.kahn | [EXPLReal_Centennial Mills Watertower Demolition](https://freesound.org/s/866989/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | TRP | [Fridge hum whirl stops loud clunk bang](https://freesound.org/s/573936/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| YleArkisto | [Tulipalo, talo palaa / Big fire, a house burning, flames humming and crackling](https://freesound.org/s/257371/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | Yoyodaman234 | [Thunder2](https://freesound.org/s/267551/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Zagge28 | [Incoming mortar 4](https://freesound.org/s/241837/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Zagge28 | [Incoming mortar 3](https://freesound.org/s/241838/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |

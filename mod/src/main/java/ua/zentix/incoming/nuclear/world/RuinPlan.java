@@ -500,7 +500,17 @@ public final class RuinPlan {
      * сравнения и перемешивание числа.
      */
     public List<S2C.NukeDebris.Piece> thrown(LevelChunk chunk, int max) {
-        if (cells.length == 0 || max <= 0) return List.of();
+        return debris(chunk, max).pieces();
+    }
+
+    /** Места снесённого ({@link #thrown}) и сколько их всего в чанке — из них места выбраны. */
+    public record Debris(List<S2C.NukeDebris.Piece> pieces, int removed) {
+        static final Debris NONE = new Debris(List.of(), 0);
+    }
+
+    /** {@link #thrown} со счётом всех мест, где волна снесла блок целиком: места — выборка из них. */
+    public Debris debris(LevelChunk chunk, int max) {
+        if (cells.length == 0 || max <= 0) return Debris.NONE;
         ChunkPos pos = chunk.getPos();
         int x0 = pos.getMinBlockX(), z0 = pos.getMinBlockZ(), minY = chunk.getMinBuildHeight();
         long salt = pos.toLong() * 0x9E3779B97F4A7C15L;
@@ -509,11 +519,12 @@ public final class RuinPlan {
         // лучшие по возрастанию хеша: номер места в плане и хеш
         int[] best = new int[max];
         long[] keys = new long[max];
-        int n = 0;
+        int n = 0, removed = 0;
         for (int k = 0; k < cells.length; k++) {
             int c = cells[k];
             if (!states[(c >>> STATE_SHIFT) & STATE_MASK].isAir() || olds[k].isAir() || olds[k].getRenderShape() != RenderShape.MODEL) continue;
             if (flash != null && flash.find(c & KEY_MASK) >= 0) continue;
+            removed++;
             long key = HashCommon.mix(salt + (c & local)) >>> 1;
             if (n == max && key >= keys[n - 1]) continue;
             int i = n < max ? n++ : n - 1;
@@ -528,7 +539,7 @@ public final class RuinPlan {
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         List<S2C.NukeDebris.Piece> out = new java.util.ArrayList<>(n);
         for (int i = 0; i < n; i++) out.add(new S2C.NukeDebris.Piece(at(m, cells[best[i]], x0, z0, minY).immutable(), olds[best[i]]));
-        return out;
+        return new Debris(out, removed);
     }
 
     /** Примерный размер плана в памяти, байты (для строки в лог). */

@@ -30,7 +30,13 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
 
 Everyone within 20 km of the target hears a siren in advance. Then come the flash, the fireball and the mushroom cloud.
 The flash lights up the sky and the land like lightning, in clear weather up to about 100 km away, in rain up to
-about 30 km. The blast wave itself is invisible. The wind right behind it tears up what lies on the ground (dust and earth, smoke over a
+about 30 km. The blast wave itself is clear air, but the air behind its front is compressed and bends light: once the
+front leaves the fireball, its edge shows against the sky and the ground as a thin ring where whatever lies behind is
+shifted by a few pixels on a 1080p screen (for a 15 kt ground burst about 4–8 from 1.5 km, 2–5 from 3 km, 1–2 from
+10 km; above the ground the front of an air burst is about a third weaker). The ring weakens with the
+pressure and is gone where the dust wall ends (not physics: a weak front still bends light a little, but the mod
+draws nothing of the wave beyond the wall); once the front has passed you, nothing of it is seen. Hot gas over the
+fireball, the mushroom cap and a burning town shimmers too, but by less than a pixel. The wind right behind the front tears up what lies on the ground (dust and earth, smoke over a
 burning town, spray over water) as a churning wall. The dust doesn't fly out with the wave: the wind carries it only a
 few tens of metres, and after the wave the air flows back towards the burst more weakly and for longer, so the dust
 drifts back almost to where it was torn up, while the wave runs on and tears up more ahead, so the wall rolls
@@ -147,8 +153,10 @@ thick part you see only some 50 m, and it thins out over a quarter of an hour.
 
 The blast is as loud as the pressure where you stand: with distance it fades the way ordinary explosions do, and a
 hill between you, rain, or a sunny day (the warm ground bends sound up, so far away it is quieter than at night) make
-it quieter still. Far away it comes as a single sharp crack, duller the farther you are, with a deep boom behind it,
-and the gust of wind after the wave dies down within a second or two. Closer in, where the wave hurts your ears
+it quieter still. At any distance the wave itself is one sharp crack, duller the farther you are, with a deep boom
+behind it; close in it is a deafening slam. The gust of wind after the wave dies down within a second or two. Then you
+hear what the wave actually broke around you: windows shattering and debris falling, each from where it fell and a moment
+after the wave got there. An open field with nothing to break stays quiet after the crack. Closer in, where the wave hurts your ears
 (from about 0.75 psi, a few kilometres from a 15 kt burst), everything goes muffled and your ears ring. Most of your
 hearing comes back within a few game hours and all of it within a game day; if you were close, it takes game days,
 and weeks if you survived right next to the burst. The ringing fades with it, and sleep counts. From 5 psi the wave can tear your eardrums: then you hear muffled
@@ -156,8 +164,9 @@ for game weeks. Dying or leaving the world brings your hearing back. Then the bl
 forests and towns around you: every slope that faces both the burst and you sends it back, later the farther it is. Animals around
 the burst go quiet for a few minutes. Indoors the echoes are as muffled as the blast itself. Mobs run away from the
 flash and the blast wave, then calm down; tamed, named and leashed mobs stay put, and mobs under cover don't run from
-the wave. The town keeps burning for minutes: you hear the fires roar from where they burn, wind pulled into the fire
-near them, ruins collapsing nearby, and now and then an explosion in the burning blocks.
+the wave. The town keeps burning until morning: the fires roar from where they burn, as loud as the heat of what is
+burning, so the roar grows over the first minutes as the firestorm builds and dies down with it; you also hear wind pulled
+into the fire near them, ruins collapsing nearby, and now and then an explosion in the burning blocks.
 
 ## How to survive
 

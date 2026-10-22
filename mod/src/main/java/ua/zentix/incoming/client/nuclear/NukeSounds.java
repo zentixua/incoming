@@ -21,6 +21,7 @@ import ua.zentix.incoming.client.fx.CameraShake;
 import ua.zentix.incoming.client.sound.AmbientLoop;
 import ua.zentix.incoming.client.sound.BlastPulse;
 import ua.zentix.incoming.client.sound.BlastSounds;
+import ua.zentix.incoming.client.sound.Clatter;
 import ua.zentix.incoming.client.sound.ClientSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
 import ua.zentix.incoming.client.sound.OwnSources;
@@ -35,7 +36,9 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.BodySway;
 import ua.zentix.incoming.nuclear.model.HearingModel;
+import ua.zentix.incoming.nuclear.radiation.Shielding;
 import ua.zentix.incoming.registry.ModSounds;
+import ua.zentix.incoming.sound.Propagation;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 import java.util.ArrayList;
@@ -171,8 +174,12 @@ public final class NukeSounds {
         static final double WIND_PHASES = 5;
         /** Тише — звук не запускать. */
         private static final float AUDIBLE = 0.005f;
-        /** Окна лопаются от 0,34 psi падающей волны (у стекла отражённое — вдвое): край руин, {@link Detonation#RUIN_EDGE_KPA}. */
-        static final double GLASS_PSI = BlastModel.psi(Detonation.RUIN_EDGE_KPA);
+        /**
+         * Тон записей удара фронта: записи — в своей скорости, сдвиг не больше ±25 % ({@code SHIFT_MAX} сборки звуков,
+         * {@code NukeTonesTest}); три удара вблизи — разным тоном, чтобы копии одной записи не складывались в гребёнку.
+         */
+        static final float BOOM_TONE = 1;
+        static final float[] CRACK_TONES = {1, 0.92f, 0.85f};
 
         private final ClientNuclear.Active a;
         private final Detonation d;
@@ -198,6 +205,12 @@ public final class NukeSounds {
         private double swayRate;
         /** Звуки волны у слушателя: он снова впереди фронта — они прочь ({@link #again}). */
         private final List<SoundInstance> shots = new ArrayList<>();
+        /** Стёкла и обломки, что снесла волна у слушателя, — к уху ({@link #clatter}); сыгранные — для строки сценария. */
+        private final List<Ruins> ruinPackets = new ArrayList<>();
+        private final Clatter clatter = new Clatter(new ua.zentix.incoming.sound.Spectrum[]{Sources.RUIN_GLASS.spectrum(), Sources.RUIN_CLATTER.spectrum()});
+        private final List<Clatter.Play> plays = new ArrayList<>();
+        private final int[] heardClatter = new int[Clatter.KINDS];
+        private final double[] loudestClatter = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
         /** Эхо от рельефа — только вживую. */
         @Nullable
         NukeEchoes echoes;
@@ -214,6 +227,8 @@ public final class NukeSounds {
 
         /** Подрыв убран (смена измерения, возрождение, перемотка повтора, срок): удар, эхо, ветер и петли горящего города — прочь. */
         void stop() {
+            clatter.clear();
+            ruinPackets.clear();
             if (echoes != null) echoes.stop();
             OwnSources.stop(this);
             if (wind != null) wind.end();
@@ -221,9 +236,102 @@ public final class NukeSounds {
             after.end();
         }
 
-        /** Сервер снёс блоки в чанке рядом: места руин — для поздних обрушений. */
-        void debris(java.util.List<S2C.NukeDebris.Piece> pieces) {
-            after.ruins(pieces);
+        /**
+         * Сервер снёс блоки в чанке рядом: места руин — для поздних обрушений; стёкла и обломки — звуком, когда до места
+         * дойдёт фронт ({@link #clatter}).
+         */
+        void debris(S2C.NukeDebris p) {
+            after.ruins(p.pieces());
+            if (live && !p.pieces().isEmpty()) ruinPackets.add(new Ruins(p, a.ticks(0)));
+        }
+
+        /** Пакет обломков, пришедший в тик {@code at} (часы подрыва): звук считается, когда руины чанка дошли до клиента. */
+        private record Ruins(S2C.NukeDebris packet, double at) {}
+
+        /**
+         * Сколько тиков после пакета обломков ждать руин чанка у клиента: сервер шлёт пакет в тике подмены, а сами руины
+         * (изменения секций) уходят игроку в следующем тике сервера — до них мир клиента у этих мест ещё прежний, и куда
+         * упадёт сорванное, по нему не узнать.
+         */
+        static final int RUINS_SETTLE = 2;
+        /** Ниже места сорванное ищет, куда упасть, не дальше стольких блоков (дальше — земля под эпицентром). */
+        static final int FALL_SCAN = 256;
+
+        /**
+         * Звук разрушения чанка ({@link Clatter}): каждый снесённый блок — масса его вещества (блок — метр,
+         * {@link Shielding#density}: стекло — окно, 25 кг), брошенная напором со скоростью {@link Detonation#throwSpeed} и
+         * упавшая до первого блока под своим местом в мире после руин ({@link #landing}), — {@link Clatter#watts}. Места
+         * пакета — выборка из всех снесённых ({@link S2C.NukeDebris#weight}); окна ({@link Shielding#window}) и прочее — по
+         * отдельности, каждое — одним событием в середине по энергии, с прихода фронта туда. Руины позже фронта больше чем
+         * на секунду ({@link NukeDust#DEBRIS_LATE}) — без звука, как и без кусков.
+         */
+        private void clatter(ClientLevel level, S2C.NukeDebris p) {
+            double weight = p.weight(), now = a.ticks(0);
+            double[] watts = new double[Clatter.KINDS], seconds = new double[Clatter.KINDS], x = new double[Clatter.KINDS],
+                    y = new double[Clatter.KINDS], z = new double[Clatter.KINDS];
+            for (S2C.NukeDebris.Piece piece : p.pieces()) {
+                BlockPos pos = piece.pos();
+                double kg = Shielding.density(level, pos, piece.state());
+                if (kg <= 0) continue;
+                int kind = Shielding.window(level, pos, piece.state()) ? Clatter.GLASS : Clatter.DEBRIS;
+                Vec3 c = Vec3.atCenterOf(pos);
+                double h = c.y - landing(level, pos), fall = Clatter.seconds(h);
+                // мощность — энергия за время падения; место и время — по мощности
+                double w = weight * Clatter.watts(kg, 20 * Detonation.throwSpeed(d.dynamicPressureKpa(c)), h);
+                watts[kind] += w;
+                seconds[kind] += w * fall;
+                x[kind] += w * c.x;
+                y[kind] += w * c.y;
+                z[kind] += w * c.z;
+            }
+            for (int k = 0; k < Clatter.KINDS; k++) {
+                if (watts[k] <= 0) continue;
+                Vec3 at = new Vec3(x[k] / watts[k], y[k] / watts[k], z[k] / watts[k]);
+                double start = d.arrivalTicks(at.distanceTo(d.burst()));
+                if (start < now - NukeDust.DEBRIS_LATE) continue;
+                clatter.add(new Clatter.Event(at.x, at.y, at.z, start, Sources.lw(watts[k]), seconds[k] / watts[k], k));
+            }
+        }
+
+        /**
+         * Куда падает сорванное с места {@code pos}: верх первого блока под ним в мире клиента после руин (окно — на
+         * подоконник своего этажа, кладка рухнувшего дома — на завал или землю). Чанка нет или под местом пусто на
+         * {@link #FALL_SCAN} блоков — земля под эпицентром.
+         */
+        private double landing(ClientLevel level, BlockPos pos) {
+            LevelChunk chunk = level.getChunkSource().getChunk(pos.getX() >> 4, pos.getZ() >> 4, false);
+            if (chunk == null) return d.groundY();
+            BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+            for (int y = pos.getY() - 1, end = Math.max(level.getMinBuildHeight(), pos.getY() - FALL_SCAN); y >= end; y--) {
+                if (!chunk.getBlockState(m.set(pos.getX(), y, pos.getZ())).isAir()) return y + 1;
+            }
+            return d.groundY();
+        }
+
+        /** Стёкла и обломки, чей звук дошёл до уха, — в игру ({@link Clatter}): запись вида, громкость — по уровню у уха. */
+        private void clatterTick(Vec3 ear) {
+            if (clatter.pending() == 0 && plays.isEmpty() && ruinPackets.isEmpty()) return;
+            ClientLevel level = Minecraft.getInstance().level;
+            if (level == null) return;
+            double now = a.ticks(0);
+            for (java.util.Iterator<Ruins> it = ruinPackets.iterator(); it.hasNext(); ) {
+                Ruins r = it.next();
+                if (now < r.at + RUINS_SETTLE) continue;
+                it.remove();
+                clatter(level, r.packet);
+            }
+            plays.clear();
+            clatter.tick(a.ticks(0), ear.x, ear.y, ear.z, Propagation.Weather.of(level), plays);
+            for (Clatter.Play play : plays) {
+                Sources.Source s = play.kind() == Clatter.GLASS ? Sources.RUIN_GLASS : Sources.RUIN_CLATTER;
+                float v = Clatter.volume(play, s.fileLufs(), s.ceilingLufs());
+                if (v <= 0) continue;
+                heardClatter[play.kind()]++;
+                loudestClatter[play.kind()] = Math.max(loudestClatter[play.kind()], play.level());
+                ClientSounds.atEar(play.kind() == Clatter.GLASS ? ModSounds.NUKE_GLASS.get() : ModSounds.DEBRIS_FALL.get(),
+                        new Vec3(play.x(), play.y(), play.z()), v, 1);
+            }
+            plays.clear();
         }
 
         /**
@@ -236,6 +344,7 @@ public final class NukeSounds {
             Minecraft mc = Minecraft.getInstance();
             LocalPlayer p = mc.player;
             Vec3 ear = mc.gameRenderer.getMainCamera().getPosition(), b = d.burst();
+            clatterTick(ear);
             // наблюдатель тела не имеет: глазами другой сущности игрок у клиента стоит, где начал смотреть, — тело у камеры
             Vec3 body = p == null ? null : p.isSpectator() ? ear : p.getEyePosition();
             long now = (long) a.ticks(0);
@@ -261,9 +370,11 @@ public final class NukeSounds {
 
         /** Строка {@code SCENARIO}: что дошло прямым ударом; пусто — фронт ещё не дошёл. */
         String describe() {
-            if (!meeting.heard()) return "";
+            String ruins = String.format(java.util.Locale.ROOT, "clatter glass %d (%.0f dBA) debris %d (%.0f dBA) pending %d; ",
+                    heardClatter[Clatter.GLASS], loudestClatter[Clatter.GLASS], heardClatter[Clatter.DEBRIS], loudestClatter[Clatter.DEBRIS], clatter.pending());
+            if (!meeting.heard()) return ruins;
             return String.format(java.util.Locale.ROOT, "direct %.2f psi vol %.3f t+ %.2fs rise %.3fms %s wind %.1fm/s body %.2f psi sway %.2fdeg jolt %.1fdeg/s open %.2f; ",
-                    psi, heard, phaseTicks / 20, riseMs, pulse ? "pulse" : "file", windPeak, bodyPsi, swayPeak, swayRate, swayOpen);
+                    psi, heard, phaseTicks / 20, riseMs, pulse ? "pulse" : "file", windPeak, bodyPsi, swayPeak, swayRate, swayOpen) + ruins;
         }
 
         /**
@@ -313,37 +424,38 @@ public final class NukeSounds {
             float highs = path == null ? 1 : BlastSounds.highs(path);
             heard = v;
             long boom = echoes == null ? d.seed() : echoes.seed;
-            float tone = psi >= 1 ? 0.75f : 1;
             // эхо и удар фронта ждут настоящего начала прямого удара: ожидание — до play (с готовым буфером звук стартует сразу)
-            SoundInstance direct = ClientSounds.loudShot(ModSounds.NUKE_BOOM_FAR.get(), b, v, tone, boom, 1, highs);
+            SoundInstance direct = ClientSounds.loudShot(ModSounds.NUKE_BOOM_FAR.get(), b, v, BOOM_TONE, boom, 1, highs);
             // звуки самой волны слышит ухо, каким оно было до неё (слух — после, hurtEars)
             wave(direct, hit);
             if (echoes != null) echoes.expect(arrivalTick, direct);
-            if (psi >= 1) {
-                Vec3 side = new Vec3(b.z - ear.z, 0, ear.x - b.x).normalize().scale(40);
-                wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b, v, 1), hit);
-                wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.add(side), v, 0.92f), hit);
-                wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.subtract(side), v, 0.85f), hit);
-                ClientSounds.start(direct);
-                wave(ClientSounds.atEarLoud(ModSounds.BLAST_NEAR.get(), b, v, 0.55f), hit);
-            } else if (v >= AUDIBLE) {
+            if (v >= AUDIBLE) {
                 OwnSources.Anchor start = OwnSources.anchor(this, direct, a::ticks, arrivalTick);
-                // холм и зона тени срезают верха и у скачка; воздух — нет: крутизну скачка держит сама волна
+                // сам скачок с положительной фазой модели — на любой дальности: величину удара даёт закон, а не замедленная
+                // запись. Холм и зона тени срезают верха и у скачка; воздух — нет: крутизну скачка держит сама волна
                 float front = path == null || !IncomingConfig.CLIENT.soundMuffling.get() ? 1 : Outdoor.highs(path);
                 riseMs = 1000 * BlastPulse.riseSeconds(pa);
                 pulse = OwnSources.play(this, start, 0, Math.atan2(b.z - ear.z, b.x - ear.x), v,
                         BlastPulse.render(pa, phaseTicks / 20, front), BlastPulse.RATE, true, hit);
-                // своих источников нет (заняты, OpenAL не готов) — запись удара
-                if (!pulse) wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, v, 1, boom), hit);
+                if (psi >= 1) {
+                    // вблизи — удар фронта записями: лязг и грохот в упор с трёх сторон (несколько источников вместе —
+                    // одному OpenAL не даёт громче единицы)
+                    Vec3 side = new Vec3(b.z - ear.z, 0, ear.x - b.x).normalize().scale(40);
+                    wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b, v, CRACK_TONES[0]), hit);
+                    wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.add(side), v, CRACK_TONES[1]), hit);
+                    wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.subtract(side), v, CRACK_TONES[2]), hit);
+                } else if (!pulse) {
+                    // своих источников нет (заняты, OpenAL не готов) — запись удара
+                    wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, v, 1, boom), hit);
+                }
                 ClientSounds.start(direct);
             }
-            if (echoes != null) echoes.arrive(ear, v, tone);
+            if (echoes != null) echoes.arrive(ear, v, BOOM_TONE);
             if (windPeak / WIND_FULL >= AUDIBLE && mc.options.getSoundSourceVolume(SoundSource.MASTER) > 0) {
                 wind = new AmbientLoop(ModSounds.NUKE_WIND.get(), SoundSource.MASTER, 1, d.seed(), 1);
                 wind(ear, 0);
                 mc.getSoundManager().play(wind);
             }
-            if (psi >= GLASS_PSI) wave(ClientSounds.atEar(ModSounds.NUKE_GLASS.get(), ear.add(0, 2, 0), (float) Mth.clamp(psi / 3, 0.3, 0.9), 1), hit);
         }
 
         /**

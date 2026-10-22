@@ -43,6 +43,12 @@ public class LauncherEntity extends Entity implements Launcher {
     private final LaunchQueue queue = new LaunchQueue();
     /** Стоит на месте пуска из приказа, а не у стреляющего (только сервер: клиенту не нужно). */
     private boolean ordered;
+    /**
+     * Отметка места пуска из приказа, по которой она встала (по горизонтали; встаёт она на ближайшем годном месте её
+     * района, {@code LaunchSite.PLACE_AREA}); null — у стреляющего или поставлена до того, как отметку стали помнить.
+     */
+    @Nullable
+    private Vec3 mark;
 
     public LauncherEntity(EntityType<? extends LauncherEntity> type, Level level) {
         super(type, level);
@@ -51,8 +57,15 @@ public class LauncherEntity extends Entity implements Launcher {
 
     /** @param ordered на месте пуска из приказа ({@link #ordered}) */
     public static LauncherEntity create(ServerLevel level, Vec3 pos, float yaw, WeaponType weapon, @Nullable UUID owner, boolean ordered) {
+        return create(level, pos, yaw, weapon, owner, ordered, null);
+    }
+
+    /** @param mark отметка места пуска из приказа ({@link #mark}) */
+    public static LauncherEntity create(ServerLevel level, Vec3 pos, float yaw, WeaponType weapon, @Nullable UUID owner, boolean ordered,
+                                        @Nullable Vec3 mark) {
         LauncherEntity l = new LauncherEntity(ModEntities.LAUNCHER.get(), level);
         l.ordered = ordered;
+        l.mark = mark == null ? null : new Vec3(mark.x, 0, mark.z);
         l.moveTo(pos.x, pos.y, pos.z, yaw, 0);
         l.yRotO = yaw;
         l.entityData.set(DATA_WEAPON, (byte) weapon.id());
@@ -74,6 +87,12 @@ public class LauncherEntity extends Entity implements Launcher {
     /** Стоит на месте пуска из приказа: до «Отбоя» или удара, а не одна из установок, что идут за стреляющим. */
     public boolean ordered() {
         return ordered;
+    }
+
+    /** Отметка места пуска из приказа ({@link #mark}); null — нет. */
+    @Nullable
+    public Vec3 mark() {
+        return mark;
     }
 
     /** Снаряд этой пусковой: того же оружия и того же владельца (пусковая одна на игрока и оружие рядом с ним). */
@@ -206,6 +225,7 @@ public class LauncherEntity extends Entity implements Launcher {
         entityData.set(DATA_DEPLOYED, tag.getLong("deployed"));
         entityData.set(DATA_OWNER, tag.hasUUID("owner") ? Optional.of(tag.getUUID("owner")) : Optional.empty());
         ordered = tag.getBoolean("ordered");
+        mark = tag.contains("mark_x") ? new Vec3(tag.getDouble("mark_x"), 0, tag.getDouble("mark_z")) : null;
     }
 
     @Override
@@ -215,5 +235,9 @@ public class LauncherEntity extends Entity implements Launcher {
         UUID owner = ownerId();
         if (owner != null) tag.putUUID("owner", owner);
         if (ordered) tag.putBoolean("ordered", true);
+        if (mark != null) {
+            tag.putDouble("mark_x", mark.x);
+            tag.putDouble("mark_z", mark.z);
+        }
     }
 }

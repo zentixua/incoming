@@ -129,6 +129,10 @@ SOURCES = {
     583065: ("Profispiesser", "FX SaSc Glass Tiles Shatter Crash.wav", CC0, "583/583065_6667441"),
     860133: ("KVV_Audio", "RAIN_Heavy Rain Outdoor 01_KVV_FREE", BY4, "860/860133_12846320"),
     674113: ("Sanderboah", "Geiger counter (dry)", CC0, "674/674113_13017680"),
+    # горящий город: настоящие пожары домов — дом горит (архив Yle, 1978, плёнка Nagra) и деревянный дом, подожжённый
+    # для съёмок (гул с низами, внутри трещит и ломается)
+    257371: ("YleArkisto", "Tulipalo, talo palaa / Big fire, a house burning, flames humming and crackling", BY4, "257/257371_4415905"),
+    871765: ("skowix", "house on fire", BY4, "871/871765_7081328"),
     # сеть: выход подстанции из строя, дуга, гул трансформатора, район гаснет и загорается
     438494: ("craigsmith", "G32-10-Massive Electrical Discharges.wav", CC0, "438/438494_2524442"),
     434359: ("csengeri", "Close lightning strike 2018 07 07", CC0, "434/434359_197070"),
@@ -206,13 +210,21 @@ def fade(x, fi=0.004, fo=0.08):
 # «мухи», проба P 21.10.2026: петля 232 Гц против 84 Гц у 3.4.1). Решение Артёма 21.10: записи источника — в своей
 # скорости, сдвиг не больше ±25 %; нужен другой тон — другая запись.
 SHIFT_MAX = 1.25
+# Разделы, где причины нет вовсе (решение Артёма 22.10, N4): у ядерки «больше» не получается замедлением чужой записи —
+# Сакс от заряда записи до килотонн дал бы десятки раз, а взятые 0,62 и 0,7 были на глаз. Величину ядерки дают законы
+# клиента: скачок давления у уха с положительной фазой модели (BlastPulse), эхо от рельефа, ветер за фронтом, стёкла и
+# обломки, что снесла волна (Clatter), гул шторма по его теплу.
+NATIVE = {"sirens", "nuke", "after"}
+SECTION = None  # раздел, который собирается сейчас
 
 
 def speed(x, r, why=None):
     """Варипитч, как у плёнки: r > 1 — выше и короче, r < 1 — ниже, длиннее и «больше». Больше SHIFT_MAX — только с
-    причиной why: закон (Сакс — время взрыва ∝ ∛W) или отступление «не по физике»; без неё сборка падает."""
-    if max(r, 1 / r) > SHIFT_MAX + 1e-9 and not why:
-        sys.exit(f"запись ускорена в {r:.2f} раза: больше ±{SHIFT_MAX - 1:.0%} — взять запись с нужным тоном (SHIFT_MAX)")
+    причиной why: закон (Сакс — время взрыва ∝ ∛W) или отступление «не по физике»; без неё сборка падает, а в разделах
+    NATIVE (ядерка) — и с ней."""
+    if max(r, 1 / r) > SHIFT_MAX + 1e-9 and (not why or SECTION in NATIVE):
+        sys.exit(f"запись ускорена в {r:.2f} раза: больше ±{SHIFT_MAX - 1:.0%} — взять запись с нужным тоном (SHIFT_MAX"
+                 + (f", раздел {SECTION} — без причин" if SECTION in NATIVE else "") + ")")
     fr = Fraction(r).limit_denominator(200)
     return resample_poly(x, fr.denominator, fr.numerator)
 
@@ -446,7 +458,7 @@ def engine(x, lufs, name, steady=True):
     y = master(x, lufs, meter=lambda s: np.max(momentary(s)))
     sd = np.std(momentary(y))
     if steady and sd > STEADY_DB:
-        sys.exit(f"{name}: мгновенная громкость ходит на {sd:.1f} дБ (СКО), ровная петля — не больше {STEADY_DB}")
+        fail(f"{name}: мгновенная громкость ходит на {sd:.1f} дБ (СКО), ровная петля — не больше {STEADY_DB}")
     return y
 
 
@@ -468,6 +480,14 @@ def noise_loop(sigs, seconds):
 EVENTS = {}  # имя события → (субтитр, [файлы])
 PRELOAD = set()  # события, которые игра декодирует при загрузке ресурсов, а не при первом звуке
 WRITING = True  # пишутся ли файлы текущего раздела (python3 build_sounds.py <разделы> — только этих)
+
+
+def fail(msg):
+    """Проверка записи не прошла — сборка падает. У раздела, чьи файлы не пишутся (собираются другие разделы), —
+    только строка: он идёт ради событий и авторов, файлы его остаются прежние, а записи могут быть превью (--previews)."""
+    if WRITING:
+        sys.exit(msg)
+    print("  не пишется, проверка не прошла:", msg)
 
 
 def write(name, x, event=None, subtitle=None, level=0.35):
@@ -504,7 +524,7 @@ SPECTRA_GOT = {}
 # (наибольшая мгновенная, LUFS), по которой клиент приводит файл к ENGINE_LUFS — одной мерке всех звуков источника.
 # Пересобирать файлы ради этого не нужно: --measure меряет уже собранные.
 SOURCES_AT = {"siren", "nuke.alarm", "nuke.launch", "grid.fail", "grid.spark", "grid.hum", "grid.power_down",
-              "grid.power_up", "nuke.collapse", "debris.fall", "blast.fire"}
+              "grid.power_up", "nuke.collapse", "debris.fall", "blast.fire", "nuke.glass", "nuke.fire"}
 LUFS_GOT = {}
 SPECTRA_JAVA = os.path.join(ROOT, "mod", "src", "main", "java", "ua", "zentix", "incoming", "sound", "Spectra.java")
 OCTAVES = [63, 125, 250, 500, 1000, 2000, 4000, 8000]
@@ -579,7 +599,7 @@ def tone_at(x, f0, name, lo=40, hi=1200, tol=0.03):
     """Проверка: самый сильный тон петли — f0 (±tol)."""
     got = peak(x, lo, hi)
     if abs(got / f0 - 1) > tol:
-        sys.exit(f"{name}: самый сильный тон {got:.0f} Гц, а у настоящего двигателя {f0:.0f} Гц")
+        fail(f"{name}: самый сильный тон {got:.0f} Гц, а у настоящего двигателя {f0:.0f} Гц")
     print(f"  {name}: самый сильный тон {got:.0f} Гц (у двигателя {f0:.0f} Гц)")
 
 
@@ -785,7 +805,7 @@ def level(sigs, lufs, meter=None):
     for i, x in enumerate(sigs, 1):
         got = (meter or loudness)(x)
         if abs(got - lufs) > 0.3:
-            sys.exit(f"вариант {i}: {got:.1f} LUFS, а у ракурса {lufs} LUFS")
+            fail(f"вариант {i}: {got:.1f} LUFS, а у ракурса {lufs} LUFS")
     return sigs
 
 
@@ -897,8 +917,9 @@ def nuke():
     ln = mix((ln, 1.0), (pad(sub_thump(2.5, 34, 5, 0.8), len(ln)), 0.25))
     write("nuke_launch", norm(fade(ln, 0.01, 6.0), -14.6, 0.8), "nuke.launch", "subtitles.incoming.nuke.launch")
 
-    # удар фронта: огромный взрыв на октаву ниже + удар грома в упор + синтез N-волны и лязга
-    big = speed(cut(src(741175), 0, 9), 0.62, "Сакс: килотонны против записанного взрыва (⚠ множитель на глаз)")
+    # удар фронта: огромный взрыв + удар грома в упор + синтез лязга — все записи в своей скорости (NATIVE); низ самого
+    # скачка с фазой модели играет клиент (BlastPulse)
+    big = cut(src(741175), 0, 9)
     th = cut(src(350506), 0.9, 12)
     n = int(9.0 * SR)
     crack = mix((pad(big, n), 1.0), (pad(F(th, lo=30), n), 0.6), (pad(syn.nuke_crack(9.0), n), 0.9))
@@ -908,11 +929,10 @@ def nuke():
     slam = np.clip(2.5 * crack, -1, 1) * np.exp(-tt / 0.25) + np.clip(crack, -1, 1) * (1 - np.exp(-tt / 0.25))
     write("nuke_crack", fade(F(slam, hi=9000) * 0.92, 0.001, 1.5), "nuke.crack", "subtitles.incoming.nuke.blast")
 
-    # далёкий подрыв: дальний взрыв на пол-октавы ниже, затем гром, катящийся по рельефу
+    # далёкий подрыв: дальний взрыв в своей скорости, затем гром, катящийся по рельефу
     far = []
     for fid, a, b in [(438538, 47.81, 59.3), (438693, 72.38, 81.4)]:
-        s = F(speed(align(gate_hiss(cut(src(fid), a, b))), 0.7, "Сакс: килотонны против записанного взрыва (⚠ множитель "
-                                                                   "на глаз)"), lo=20, hi=1500)
+        s = F(align(gate_hiss(cut(src(fid), a, b))), lo=20, hi=1500)
         roll = F(cut(src(243782), 4.0, 20.0), lo=20, hi=900)
         x = mix((pad(s, int(16 * SR)), 1.0), (pad(np.pad(roll, (int(1.2 * SR), 0)), int(16 * SR)), 0.7),
                 (pad(syn.nuke_boom_far(16.0), int(16 * SR)), 0.6))
@@ -956,15 +976,17 @@ def nuke():
 
 
 def after():
-    """После ядерного удара — синтез (записей нет): удар фронта вдали (запись на случай без своих источников OpenAL),
-    звон в ушах (петля), гул горящего города (петли), обрушения в руинах. Ветер в огонь — петля урагана nuke_wind (раздел
+    """После ядерного удара: удар фронта вдали (синтез по модели — запись на случай без своих источников OpenAL), звон в
+    ушах (синтез, петля), гул горящего города — записи настоящих пожаров домов в своей скорости (петли; громкость — по
+    теплу пожаров, Sources.NUKE_FIRE), обрушения в руинах (синтез). Ветер в огонь — петля урагана nuke_wind (раздел
     nuke) под своим субтитром."""
     # 2 кт за 5 км (0,3 psi, фаза 0,73 с) и 15 кт за 25 км (0,12 psi, 1,66 с) — BlastModel
     cracks = [syn.nuke_crack_far(4.0, t_plus=tp, pa=pa) for tp, pa in [(0.73, 2060.0), (1.66, 800.0)]]
     variants("nuke.crack_far", "subtitles.incoming.nuke.blast", "nuke_crack_far", cracks)
     PRELOAD.add("nuke.crack_far")
     write("nuke_tinnitus", syn.nuke_tinnitus(), "nuke.tinnitus")
-    fires = [norm(loop(syn.nuke_fire(14.0), 12.0, 1.0), -15.5) for _ in range(2)]
+    # самые ровные 13 с каждой записи (мгновенная громкость гуляет меньше чем на 1 дБ): гул ровный, громкость ведёт клиент
+    fires = [norm(loop(F(cut(src(fid), a, a + 13.0), lo=25), 12.0, 1.0), -15.5) for fid, a in [(257371, 33.0), (871765, 0.0)]]
     variants("nuke.fire", "subtitles.incoming.nuke.fire", "nuke_fire", fires)
     EVENTS["nuke.fire_wind"] = ("subtitles.incoming.nuke.fire_wind", ["nuke_wind"])
     variants("nuke.collapse", "subtitles.incoming.nuke.collapse", "nuke_collapse", [syn.nuke_collapse(4.5) for _ in range(3)])
@@ -1182,6 +1204,7 @@ if __name__ == "__main__":
             continue
         print(part.__name__ + ("" if not only or part.__name__ in only else " (файлы не пишутся)"))
         WRITING = not only or part.__name__ in only
+        SECTION = part.__name__
         # свой генератор у каждого раздела: правка одного раздела не сдвигает случайные числа другим
         rng = np.random.default_rng(zlib.crc32(part.__name__.encode()))
         syn.rng = np.random.default_rng(zlib.crc32(("syn." + part.__name__).encode()))

@@ -79,7 +79,7 @@ public final class FarRenderer {
         Vec3 eye = FarDraw.eye(e);
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
         return new FarView(eye, camera.getLookVector(), camera.getLeftVector(), camera.getUpVector(), partial,
-                FarView.depthFar(), pixel, edge, ambient, exposure, FarView.sky(mc.gameRenderer.lightTexture(), new org.joml.Vector3f()), range, mc.options.getEffectiveRenderDistance() * 16.0,
+                FarView.depthFar(), pixel, edge, ambient, exposure, FarView.sky(mc.gameRenderer.lightTexture(), level, partial, new org.joml.Vector3f()), range, mc.options.getEffectiveRenderDistance() * 16.0,
                 level.effects().getCloudHeight(), level.getRainLevel(partial), Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, range));
     }
 

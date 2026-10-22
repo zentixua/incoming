@@ -265,6 +265,12 @@ public final class FireStorm {
         return g == null ? 0 : g.index.length;
     }
 
+    /** Горит ли шторм в миг {@code ticks} после подрыва (карта — заново, если пора, {@link #refresh}). */
+    boolean burningAt(double ticks) {
+        refresh(ticks);
+        return burning > 0;
+    }
+
     /** Сколько горит сейчас (сумма пламени по клеткам последней карты) — для строки сценария. */
     double burning() {
         return burning;
