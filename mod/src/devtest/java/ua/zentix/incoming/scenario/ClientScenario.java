@@ -2584,12 +2584,13 @@ public final class ClientScenario {
      */
     private void planFlyby() {
         soundEvery = 5;
-        // INCOMING_FLIGHT_SPEED=<0..1> — шкала полёта мира (пресет CUSTOM): тот же облёт на настоящих скоростях; «Град»
-        // издалека тогда летит ~80 с — облёт длиннее
+        // INCOMING_FLIGHT_SPEED=<0..1> — шкала полёта мира (пресет CUSTOM) и кадры: зритель на площадке в 30 блоках над
+        // землёй (над кронами), утром (солнце не в зените), смотрит на цель: снаряды проходят над ним и уходят к ней; «Град» издалека на шкале выше 0 летит ~80 с — облёт длиннее
         String scale = System.getenv("INCOMING_FLIGHT_SPEED");
-        int end = scale != null && Double.parseDouble(scale) > 0 ? 2600 : 1750;
+        boolean frames = scale != null;
+        int end = frames && Double.parseDouble(scale) > 0 ? 2600 : 1750;
         at(40, () -> {
-            cmd("time set 6000");
+            cmd(frames ? "time set 1000" : "time set 6000");
             cmd("weather clear");
             cmd("tp @s 0 200 0 0 0");
         });
@@ -2605,6 +2606,10 @@ public final class ClientScenario {
             aimAhead(200);
             Minecraft mc = Minecraft.getInstance();
             int y = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, 0, 0);
+            if (frames) {
+                y += 30;
+                cmd(String.format(java.util.Locale.ROOT, "fill -1 %d -1 1 %d 1 minecraft:glass", y - 1, y - 1));
+            }
             cmd(String.format(java.util.Locale.ROOT, "tp @s 0.5 %d 0.5 facing %.1f %.1f %.1f", y, target.x, target.y, target.z));
         });
         at(240, () -> cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 6 12 at %.1f %.1f %.1f", target.x, target.y, target.z)));
@@ -2618,8 +2623,8 @@ public final class ClientScenario {
             at(2110, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s ~ ~ ~ facing %.1f %.1f %.1f", target.x, target.y, target.z)));
         }
         for (int t = 250; t <= end - 50; t += 50) at(t, ClientScenario::dumpFlights);
-        // кадры облёта: зритель смотрит на цель, снаряды идут из-за спины над ним
-        for (int t = 250; t <= end - 50; t += 5) shot(t, "flyby");
+        // кадры облёта
+        if (frames) for (int t = 250; t <= end - 50; t += 5) shot(t, "flyby");
         at(end, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
