@@ -527,8 +527,9 @@ final class ProbeScenario {
                 closest = d;
                 if (tick % 2 == 0) Incoming.LOG.info("SCENARIO probe flyby d={} tick {} audio {}", Math.round(d), tick, audioBytes());
             }
-            if (tick % 10 == 0) Incoming.LOG.info("SCENARIO probe flyby at {} d={} v={}", xyz(drone.position()), Math.round(d),
-                    String.format(Locale.ROOT, "%.2f", drone.speed()));
+            // слои мотора у уха — громкость против мерки и тон ({@code ClientSounds.describe}): сверка записи с моделью
+            if (tick % 10 == 0) Incoming.LOG.info("SCENARIO probe flyby at {} d={} v={} engines:{}", xyz(drone.position()), Math.round(d),
+                    String.format(Locale.ROOT, "%.2f", drone.speed()), ua.zentix.incoming.client.sound.ClientSounds.describe());
         }
     }
 
