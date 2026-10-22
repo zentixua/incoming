@@ -3614,7 +3614,6 @@ public final class ClientScenario {
         });
     }
 
-    /** Снаряды на сервере: в мире и вне его, где, с какой скоростью, тикает ли их чанк. */
     /** Повернуть взгляд на B-2 (по месту на сервере: в мире или вне его). */
     private static void lookAtBomber() {
         var server = Minecraft.getInstance().getSingleplayerServer();
@@ -3636,6 +3635,7 @@ public final class ClientScenario {
         });
     }
 
+    /** Снаряды на сервере: в мире и вне его, где, с какой скоростью, тикает ли их чанк. */
     private static void dumpFlights() {
         var server = Minecraft.getInstance().getSingleplayerServer();
         server.execute(() -> {

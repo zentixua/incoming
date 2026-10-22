@@ -46,7 +46,8 @@ public final class Ballistics {
         /** f(M)<sup>mach</sup>; без кривой — ровно 1 (игровая траектория не меняется ни в одном бите). */
         private double machTerm(double h, double speed) {
             if (mach == 0) return 1;
-            return Math.pow(Article.machFactor(speed * 20 / StandardAtmosphere.soundSpeed(h)), mach);
+            double f = Article.machFactor(speed * 20 / StandardAtmosphere.soundSpeed(h));
+            return f == 1 || mach == 1 ? f : Math.pow(f, mach);
         }
     }
 

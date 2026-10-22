@@ -3047,6 +3047,38 @@ public final class StrikeGameTests {
         });
     }
 
+    /**
+     * «Ланцет» на настоящей шкале полёта (1): круг в 700 м над целью, пике оттуда — подрыв у цели. Запас хода по плану
+     * закладывает пике с высоты круга ({@code LoiterEntity.diveTicks}), а не 25 тиков пике с игрового круга.
+     */
+    @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_loiter", skyAccess = true)
+    public static void loiterFromRealHeightDivesIntoTarget(GameTestHelper h) {
+        flightScale(h, 1);
+        int time = IncomingConfig.SERVER.loiterTime.get();
+        IncomingConfig.SERVER.loiterTime.set(5);
+        afterTest(h, () -> IncomingConfig.SERVER.loiterTime.set(time));
+        ServerLevel level = h.getLevel();
+        Vec3 point = top(h, RUNWAY_TARGET);
+        LoiterEntity e = ModEntities.LOITER.get().create(level);
+        e.launch(point.add(0, WeaponSpec.LOITER.airframe().cruiseHeight(), -150), new Target.Point(point), point, null);
+        e.setRoute(null);
+        VirtualFlights.launch(level, e);
+        java.util.UUID id = e.getUUID();
+        boolean[] high = {false};
+        String[] last = {""};
+        h.onEachTick(() -> {
+            LoiterEntity l = findLoiter(level, id);
+            if (l == null) return;
+            if (l.getY() - point.y > 600) high[0] = true;
+            last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " запас " + Math.round(l.rangeLeft());
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(high[0], "круг не на настоящей высоте: " + last[0]);
+            h.assertTrue(findLoiter(level, id) == null, "барражирующий ещё летит: " + last[0]);
+            assertCrater(h, RUNWAY_TARGET, last[0]);
+        });
+    }
+
     /** Шкала полёта мира {@code x} на время проверки (пресет {@code CUSTOM}); после неё — прежние пресет и число. */
     static void flightScale(GameTestHelper h, double x) {
         IncomingConfig.ScalePreset preset = IncomingConfig.SERVER.scalePreset.get();

@@ -12,6 +12,7 @@ import ua.zentix.incoming.guidance.Bearing;
 import ua.zentix.incoming.guidance.Dive;
 import ua.zentix.incoming.guidance.Orbit;
 import ua.zentix.incoming.strike.FlightTickets;
+import ua.zentix.incoming.strike.FlightScale;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
@@ -95,12 +96,23 @@ public class LoiterEntity extends StrikeProjectile {
     }
 
     /**
+     * Пике с круга по плану, тиков: {@link #DIVE_TICKS} с игрового круга; на шкале полёта круг выше (до 700 м) — во
+     * столько раз дольше, во сколько длиннее путь с высоты круга до цели и медленнее (или быстрее) пике.
+     */
+    static int diveTicks() {
+        double x = FlightScale.x();
+        if (x == 0) return DIVE_TICKS;
+        double path = Math.hypot(AIR.cruiseHeight(x), LOITER_RADIUS) / Math.hypot(AIR.gameHeight(), LOITER_RADIUS);
+        return (int) Math.ceil(DIVE_TICKS * path * AIR.gameDive() / AIR.diveSpeed(x));
+    }
+
+    /**
      * Запас хода — ещё и на круг над целью (на маршевой скорости) и на пике с него (на скорости пике: в тиках плана
      * {@link #DIVE_TICKS} оно быстрее круга, и на маршевой запаса на пике не хватало бы).
      */
     @Override
     protected double extraRange() {
-        return loiterTicks * AIR.cruiseSpeed() + DIVE_TICKS * AIR.diveSpeed();
+        return loiterTicks * AIR.cruiseSpeed() + diveTicks() * AIR.diveSpeed();
     }
 
     /** Катапульта: хлопок и облако пара; ускорителя нет — сбрасывать нечего. */
@@ -137,10 +149,10 @@ public class LoiterEntity extends StrikeProjectile {
         Vec3 aim = tracker.point();
         return switch (flightPhase()) {
             case TERMINAL -> (int) Math.ceil(position().distanceTo(aim) / Math.max(speed, AIR.cruiseSpeed()));
-            case LOITER -> strikeNow ? DIVE_TICKS : Math.max(0, loiterTicks - phaseAge()) + DIVE_TICKS;
+            case LOITER -> strikeNow ? diveTicks() : Math.max(0, loiterTicks - phaseAge()) + diveTicks();
             default -> {
                 double toOrbit = Math.max(0, horizontalPathTo(aim) - orbitRadius);
-                yield (int) Math.ceil(toOrbit / AIR.cruiseSpeed()) + launchTicksLeft() + (strikeNow ? DIVE_TICKS : loiterTicks + DIVE_TICKS);
+                yield (int) Math.ceil(toOrbit / AIR.cruiseSpeed()) + launchTicksLeft() + (strikeNow ? diveTicks() : loiterTicks + diveTicks());
             }
         };
     }
@@ -151,7 +163,7 @@ public class LoiterEntity extends StrikeProjectile {
      */
     @Override
     protected double plannedPathLeft() {
-        double dive = DIVE_TICKS * AIR.diveSpeed();
+        double dive = diveTicks() * AIR.diveSpeed();
         return switch (flightPhase()) {
             case TERMINAL -> super.plannedPathLeft();
             case LOITER -> (strikeNow ? 0 : Math.max(0, loiterTicks - phaseAge()) * AIR.cruiseSpeed()) + dive;

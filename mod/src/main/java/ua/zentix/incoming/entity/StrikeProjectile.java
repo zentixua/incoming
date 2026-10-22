@@ -363,8 +363,12 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     public void setRoute(@Nullable Route route) {
         this.route = route;
-        double descent = route != null && !route.finished() && tracker != null ? Math.max(0, getY() - tracker.point().y) : 0;
-        this.mission = Mission.plan(pathToAim() + descent, cruiseSpeed()).extend(extraRange());
+        this.mission = Mission.plan(pathToAim() + descent(), cruiseSpeed()).extend(extraRange());
+    }
+
+    /** Снижение к цели, которого нет в пути по маршруту (он — по горизонтали), блоков; без маршрута — 0. */
+    private double descent() {
+        return route != null && !route.finished() && tracker != null ? Math.max(0, getY() - tracker.point().y) : 0;
     }
 
     /** Запас хода сверх пути до цели: участки, которых в пути нет (круг барража), блоков. */
@@ -374,10 +378,10 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
     /**
      * Сколько пути по плану осталось до удара, блоков: по нему урезается запас хода, когда цель потеряна
-     * ({@link Mission#lose}). По умолчанию — путь до цели ({@link #pathToAim}); у «Ланцета» — ещё круг и пике.
+     * ({@link Mission#lose}). По умолчанию — путь до цели ({@link #pathToAim}) и снижение к ней; у «Ланцета» — ещё круг и пике.
      */
     protected double plannedPathLeft() {
-        return pathToAim();
+        return pathToAim() + descent();
     }
 
     /** Путь до цели: по оставшемуся маршруту, а без него — напрямую, блоков. */
