@@ -1,7 +1,7 @@
 package ua.zentix.incoming.client.fx.smoke;
 
 import org.junit.jupiter.api.Test;
-import ua.zentix.incoming.client.fx.plume.Stability;
+import ua.zentix.incoming.util.Stability;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

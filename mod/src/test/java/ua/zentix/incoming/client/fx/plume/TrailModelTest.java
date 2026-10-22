@@ -1,5 +1,9 @@
 package ua.zentix.incoming.client.fx.plume;
 
+import ua.zentix.incoming.util.Stability;
+
+import ua.zentix.incoming.util.Air;
+
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;

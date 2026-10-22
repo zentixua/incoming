@@ -19,7 +19,12 @@ public final class Autopilot {
      * @param accel  предельное угловое ускорение, °/тик²
      * @param settle угловое ускорение, с которым гасится поворот при уходе на повторный заход
      */
-    public record Turn(double gain, double rate, double accel, double settle) {}
+    public record Turn(double gain, double rate, double accel, double settle) {
+        /** Разворот с усилением {@code gain} и пределами участка полёта из паспорта: гасится так же быстро, как набирается. */
+        public static Turn of(double gain, WeaponSpec.Agility a) {
+            return new Turn(gain, a.turnRate(), a.turnAccel(), a.turnAccel());
+        }
+    }
 
     /** Ближе этого по горизонтали курс на точку не трогаем: над самой точкой он скачет. */
     private static final double HOLD_COURSE = 8;
@@ -169,13 +174,16 @@ public final class Autopilot {
     static final int TRACK_TICKS = 64;
     /** Точка пути — раз в столько тиков проигрыша: хорда дуги разворота (3°/тик) отходит от неё меньше чем на полблока. */
     private static final int TRACK_STEP = 4;
-    /** Доля наибольшего угла набора ({@link AltitudeHold#MAX_CLIMB}) в {@link #CLIMB_GRADIENT}. */
+    /** Доля наибольшего угла набора ({@link WeaponSpec.Handling#climbAngle}) в {@link #gradient}. */
     static final double CLIMB_SHARE = 0.5;
+
     /**
-     * Наклон набора перед препятствием впереди: тангенс доли {@link #CLIMB_SHARE} наибольшего угла набора; остальное —
-     * запас на то, что снаряд держит высоту фильтром и П-регулятором тангажа, а не по прямой.
+     * Наклон набора перед препятствием впереди: тангенс доли {@link #CLIMB_SHARE} наибольшего угла набора {@code climbAngle};
+     * остальное — запас на то, что снаряд держит высоту фильтром и П-регулятором тангажа, а не по прямой.
      */
-    static final double CLIMB_GRADIENT = Math.tan(Math.toRadians(AltitudeHold.MAX_CLIMB * CLIMB_SHARE));
+    static double gradient(double climbAngle) {
+        return Math.tan(Math.toRadians(climbAngle * CLIMB_SHARE));
+    }
     /**
      * Сколько тиков пути снаряд только выходит на набор: фильтр заданной высоты ({@link AltitudeHold}, 1/5 за тик)
      * и тангаж с ограничением угловой скорости и ускорения. На этом пути набора нет — рельеф на нём учитывается целиком
@@ -192,7 +200,7 @@ public final class Autopilot {
      * и узкий дом между ними, а фильтр высоты сглаживал бы короткий пик: ракета на бреющем и шахеды залпа бились бы в них.
      */
     public static double reliefAhead(Craft c, Vec3 nav, Turn turn, WeaponSpec.Airframe air) {
-        return climbOver(track(c, nav, turn, air.attack().reattackMin(), air.reliefLookahead()), c.speed(), c::relief);
+        return climbOver(track(c, nav, turn, air.attack().reattackMin(), air.reliefLookahead()), c.speed(), air.handling().climbAngle(), c::relief);
     }
 
     /**
@@ -200,13 +208,16 @@ public final class Autopilot {
      * ({@link #CORRIDOR_HALF_WIDTH}) над путём {@code track} — то же, что {@link #reliefAhead}, по заданному пути: место
      * пусковой ({@code LaunchSite}) проверяет им, что подъём после взведения автопилоту по силам.
      */
-    public static double climbOver(double[] track, double speed, Corridor.Relief relief) {
-        return Corridor.highest(track, CORRIDOR_HALF_WIDTH, climb(speed), relief);
+    public static double climbOver(double[] track, double speed, double climbAngle, Corridor.Relief relief) {
+        return Corridor.highest(track, CORRIDOR_HALF_WIDTH, climb(speed, climbAngle), relief);
     }
 
-    /** Набор высоты снаряда на скорости {@code speed}: {@link #REACTION_TICKS} тиков пути без набора, потом {@link #CLIMB_GRADIENT}. */
-    static Corridor.Climb climb(double speed) {
-        return new Corridor.Climb(REACTION_TICKS * speed, CLIMB_GRADIENT);
+    /**
+     * Набор высоты снаряда на скорости {@code speed} с наибольшим углом набора {@code climbAngle}: {@link #REACTION_TICKS}
+     * тиков пути без набора, потом {@link #gradient}.
+     */
+    static Corridor.Climb climb(double speed, double climbAngle) {
+        return new Corridor.Climb(REACTION_TICKS * speed, gradient(climbAngle));
     }
 
     /** Полоса рельефа впереди считается заново раз в столько тиков ({@link ReliefSensor}). */
@@ -214,7 +225,7 @@ public final class Autopilot {
 
     /**
      * Датчик рельефа впереди одного снаряда ({@link #reliefAhead}) с замером раз в {@link #REFRESH_TICKS} тиков: полоса —
-     * сотни колонок, а за паузу меняется мало. Между замерами ответ растёт на {@link #CLIMB_GRADIENT} × путь с замера:
+     * сотни колонок, а за паузу меняется мало. Между замерами ответ растёт на {@link #gradient} × путь с замера:
      * колонки впереди стали ближе, и набрать до них снаряд успеет меньше (оценка сверху — у ближних колонок, где набора
      * нет, это лишний запас не больше наклона × пути за паузу). Не сохраняется: после загрузки — замер сразу.
      */
@@ -231,7 +242,7 @@ public final class Autopilot {
                 age = 0;
             }
             age++;
-            return value + CLIMB_GRADIENT * Math.hypot(pos.x - at.x, pos.z - at.z);
+            return value + gradient(air.handling().climbAngle()) * Math.hypot(pos.x - at.x, pos.z - at.z);
         }
     }
 

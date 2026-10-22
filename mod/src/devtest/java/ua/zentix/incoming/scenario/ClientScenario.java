@@ -167,6 +167,7 @@ public final class ClientScenario {
     public ClientScenario(IEventBus modBus) {
         String scenario = System.getProperty("incoming.scenario");
         if (scenario == null) return;
+        ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
         if (scenario.startsWith("mp-")) {
             new MultiplayerScenario("mp-a".equals(scenario)); // свой сервер, без мира сценария (tools/mp_scenario.sh)
@@ -681,6 +682,7 @@ public final class ClientScenario {
                 String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
                 ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
                 // как на серверах хоста: волна вдали медленнее настоящей
+                ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
                 ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(System.getenv().getOrDefault("INCOMING_WAVE_SPEED", "0.2")));
                 // глаз — над рельефом первых 800 блоков к эпицентру (холм у глаза закрыл бы стену)
                 var level = Minecraft.getInstance().getSingleplayerServer().overworld();
@@ -1779,8 +1781,7 @@ public final class ClientScenario {
         int at = b + 600;
         double t = 30;
         var model = new ua.zentix.incoming.client.fx.smoke.CloudModel(ua.zentix.incoming.client.fx.BlastSource.of(ua.zentix.incoming.strike.WeaponType.DRONE, false),
-                ua.zentix.incoming.client.fx.smoke.CloudModel.Air.of(1, 0, ua.zentix.incoming.client.far.FarBlasts.wind10(true),
-                        ua.zentix.incoming.client.far.FarBlasts.wind10(false), 0.5));
+                ua.zentix.incoming.client.fx.smoke.CloudModel.Air.of(ua.zentix.incoming.client.fx.ClientAir.now(), 0.5));
         Vec3 c = target.add(model.driftX(t), model.height(t), model.driftZ(t));
         double r = model.radius(t);
         Incoming.LOG.info("SCENARIO smoke column at 30 s: centre {} radius {}", xyz(c), Math.round(r));
@@ -3198,14 +3199,14 @@ public final class ClientScenario {
     private static final double MAP_MAX_MISS = 2;
 
     /**
-     * Допуск промаха по карте: {@link #MAP_MAX_MISS} и три СКО промаха из паспорта — рассеивания неуправляемого (РСЗО) на
-     * {@code range} блоков от стреляющего и промаха пуска (у шахеда σ 3 блока по каждой оси: попадание в 3–4 блоках от
-     * точки — его обычный разброс).
+     * Допуск промаха по карте: {@link #MAP_MAX_MISS} и три СКО промаха — рассеивания неуправляемого (РСЗО) на
+     * {@code range} блоков от стреляющего и промаха пуска из паспорта (у шахеда σ 3 блока по каждой оси: попадание в 3–4
+     * блоках от точки — его обычный разброс). Рассеивание РСЗО — {@link WeaponSpec.Ballistic#sigma}.
      */
     private static double allowedMiss(@org.jetbrains.annotations.Nullable WeaponType weapon, double range) {
         if (weapon == null) return MAP_MAX_MISS;
-        WeaponSpec.Route route = weapon.spec().route();
-        return MAP_MAX_MISS + 3 * Math.hypot(route.sigma(range), route.error());
+        WeaponSpec.Ballistic b = weapon.spec().striker().ballistic();
+        return MAP_MAX_MISS + 3 * Math.hypot(b == null ? 0 : b.sigma(range), weapon.spec().route().error());
     }
     /** Точка, выбранная на карте (сценарий target-map); её читает и поток сервера. */
     @org.jetbrains.annotations.Nullable

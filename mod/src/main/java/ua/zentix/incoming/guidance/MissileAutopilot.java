@@ -18,10 +18,6 @@ public final class MissileAutopilot {
     private static final double POP_UP_HEIGHT = 32;
     /** На наборе после ускорителя — не ниже стольких блоков над рельефом впереди. */
     private static final double CLIMB_ABOVE_RELIEF = 25;
-    /** Тангаж горки, ° (вверх — отрицательный): набор над рельефом и перед пике (игровое число, не по физике). */
-    private static final double POP_UP_PITCH = -20;
-    /** Пике: предельная угловая скорость тангажа, °/тик, и её предельное ускорение, °/тик² (игровые числа). */
-    private static final double DIVE_RATE = 16, DIVE_ACCEL = 3.5;
 
     private final WeaponSpec.Airframe air;
     private final Autopilot.Turn climbTurn;
@@ -35,8 +31,8 @@ public final class MissileAutopilot {
 
     public MissileAutopilot(WeaponSpec.Airframe air) {
         this.air = air;
-        this.climbTurn = new Autopilot.Turn(0.10, air.climbTurnRate(), 0.15, 0.15);
-        this.cruiseTurn = new Autopilot.Turn(0.15, air.turnRate(), 0.3, 0.3);
+        this.climbTurn = Autopilot.Turn.of(0.10, air.handling().climb());
+        this.cruiseTurn = Autopilot.Turn.of(0.15, air.handling().cruise());
     }
 
     public boolean popUp() {
@@ -82,10 +78,11 @@ public final class MissileAutopilot {
         Autopilot.Turn turn = ph == FlightPhase.CLIMB ? climbTurn : cruiseTurn;
         if (ph == FlightPhase.CLIMB) {
             // турбина набирает тягу; ракета переходит с подъёма на снижение к бреющему полёту
-            c.setSpeed(Math.min(air.cruiseSpeed(), c.speed() + 0.09));
+            c.throttle(air, air.cruiseSpeed());
             double terrain = relief.reliefAhead(c, nav, turn, air);
-            c.holdAltitude(Math.max(terrain + CLIMB_ABOVE_RELIEF, aim.y + air.cruiseHeight()), 0.25, 4, 0.6);
-            if (c.speed() >= air.cruiseSpeed() - 0.01 && c.phaseAge() > 40) c.setPhase(FlightPhase.CRUISE);
+            c.holdAltitude(Math.max(terrain + CLIMB_ABOVE_RELIEF, aim.y + air.cruiseHeight()), 0.25, air.handling(), air.handling().climb());
+            // турбина вышла на маршевую: в наборе скорость чуть ниже (обмен высоты на скорость) — 5 % на это
+            if (c.speed() >= air.cruiseSpeed() * 0.95 && c.phaseAge() > 40) c.setPhase(FlightPhase.CRUISE);
         }
         // цель внутри круга разворота (сместилась вбок на атаке, перенацеливание, игрок телепортировался): атака
         // отменяется, ракета уходит прямо, пока цель не выйдет из круга, и заходит снова
@@ -96,7 +93,7 @@ public final class MissileAutopilot {
         }
         // на заходе прямая до цели закрыта: горка, пока не откроется (и из пике — тоже в горку)
         boolean attack = c.phase() == FlightPhase.POP_UP || c.phase() == FlightPhase.TERMINAL;
-        boolean masked = attack && sight.masked(c, aim, b, air.reachPad(), DIVE_RATE, DIVE_ACCEL);
+        boolean masked = attack && sight.masked(c, aim, b, air.reachPad(), air.handling().dive().pitchRate(), air.handling().dive().pitchAccel());
         if (!attack) sight.forget();
         if (masked) {
             c.setPhase(FlightPhase.POP_UP);
@@ -109,14 +106,20 @@ public final class MissileAutopilot {
 
         switch (c.phase()) {
             case CRUISE -> {
-                c.setSpeed(Math.min(air.cruiseSpeed(), c.speed() + 0.09));
+                c.throttle(air, air.cruiseSpeed());
                 double terrain = relief.reliefAhead(c, nav, turn, air);
-                c.holdAltitude(Math.max(terrain + air.cruiseHeight(), aim.y + air.cruiseHeight()), 0.30, 8, 1.8);
+                c.holdAltitude(Math.max(terrain + air.cruiseHeight(), aim.y + air.cruiseHeight()), 0.30, air.handling(), air.handling().cruise());
             }
-            case POP_UP -> c.flight().holdPitch(POP_UP_PITCH, 0.30, 8, 1.8);
+            case POP_UP -> {
+                // горка: наибольший угол набора из паспорта (тангаж вверх — отрицательный), турбина на маршевой, набор
+                // отнимает скорость
+                c.throttle(air, air.cruiseSpeed());
+                c.flight().holdPitch(-air.handling().climbAngle(), 0.30, air.handling().cruise().pitchRate(), air.handling().cruise().pitchAccel());
+            }
             case TERMINAL -> {
-                c.flight().arcPitch(b.pitch(), c.speed(), b.distance(), DIVE_RATE, DIVE_ACCEL);
-                c.setSpeed(Math.min(air.diveSpeed(), c.speed() + 0.1));
+                WeaponSpec.Agility dive = air.handling().dive();
+                c.flight().arcPitch(b.pitch(), c.speed(), b.distance(), dive.pitchRate(), dive.pitchAccel());
+                c.throttle(air, air.diveSpeed());
             }
             default -> {}
         }

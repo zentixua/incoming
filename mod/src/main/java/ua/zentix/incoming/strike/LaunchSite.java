@@ -293,6 +293,7 @@ public final class LaunchSite {
                 double reach = ProximityFuse.ARM_DISTANCE;
                 path.add(rail.add(Local.horizontal(yaw).scale(reach)).add(0, reach * Math.tan(climb), 0));
             } else {
+                // парабола без сопротивления и ветра: до взведения (десятки блоков) путь с ними расходится с ней меньше чем на блок
                 Vec3 v0 = Ballistics.launchVelocity(rail, target, Ballistics.ticksFor(rail, target, elevation, RocketEntity.MIN_FLIGHT));
                 double reach = Math.min(ProximityFuse.ARM_DISTANCE, horizontal(rail, target) - NEAR_AIM);
                 for (int k = ARC_STEP; k <= RocketEntity.BURN_TICKS; k += ARC_STEP) {
@@ -435,7 +436,7 @@ public final class LaunchSite {
      */
     private static boolean climbOut(ServerLevel level, Vec3 gate, float yaw, WeaponSpec.Airframe air) {
         Vec3 end = gate.add(Local.horizontal(yaw).scale(air.reliefLookahead()));
-        double over = Autopilot.climbOver(new double[]{gate.x, gate.z, end.x, end.z}, air.cruiseSpeed(),
+        double over = Autopilot.climbOver(new double[]{gate.x, gate.z, end.x, end.z}, air.cruiseSpeed(), air.handling().climbAngle(),
                 (x, z) -> StrikeProjectile.surfaceY(level, x, z));
         return over + HULL <= gate.y;
     }

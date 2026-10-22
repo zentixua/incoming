@@ -31,6 +31,8 @@ import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
+import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.util.Nbt;
 import ua.zentix.incoming.warhead.Warheads;
 
 import java.util.UUID;
@@ -49,6 +51,9 @@ public class BunkerBusterEntity extends StrikeProjectile {
     private int energy;
     private int traveled;
     private int fuse = -1;
+
+    /** Снос ветром за тик, блоков (сохраняется: уходя в полёт вне мира, бомба становится новой сущностью из NBT). */
+    private Vec3 windDrift = Vec3.ZERO;
 
     public BunkerBusterEntity(EntityType<? extends BunkerBusterEntity> type, Level level) {
         super(type, level);
@@ -91,13 +96,17 @@ public class BunkerBusterEntity extends StrikeProjectile {
         return flightPhase() == FlightPhase.DRILL;
     }
 
-    /** Сброс с бомбардировщика: нос на 10° вниз, 6 блоков/тик ({@link BombDrop}). */
-    public void drop(Vec3 pos, float yaw, Vec3 surface, @Nullable BlockPos goal, @Nullable UUID owner) {
+    /**
+     * Сброс с бомбардировщика: бомба сходит со скоростью носителя {@code velocity} (блоков/тик) — величина, курс и тангаж
+     * его ({@link BombDrop}).
+     */
+    public void drop(Vec3 pos, Vec3 velocity, Vec3 surface, @Nullable BlockPos goal, @Nullable UUID owner) {
         super.launch(pos, new Target.Point(surface), surface, owner);
-        flight.set(yaw, (float) BombDrop.DROP_PITCH);
-        moveTo(pos.x, pos.y, pos.z, yaw, (float) BombDrop.DROP_PITCH);
+        float[] angles = FlightController.anglesTo(Vec3.ZERO, velocity);
+        flight.set(angles[0], angles[1]);
+        moveTo(pos.x, pos.y, pos.z, angles[0], angles[1]);
         this.goal = goal;
-        this.speed = BombDrop.DROP_SPEED;
+        this.speed = velocity.length();
         setPhase(FlightPhase.TERMINAL);
     }
 
@@ -109,7 +118,16 @@ public class BunkerBusterEntity extends StrikeProjectile {
         }
         Vec3 aim = tracker.point();
         speed = BombDrop.steer(flight, position(), speed, aim);
+        Air air = air();
+        double y = getY();
+        windDrift = BombDrop.drift(windDrift, new Vec3(air.windX(y) / 20, 0, air.windZ(y) / 20), speed);
         advance(level, aim, airframe().reachPad());
+    }
+
+    /** Снос ветром ({@link BombDrop#drift}); в грунте — нет. */
+    @Override
+    protected Vec3 drift() {
+        return flightPhase() == FlightPhase.DRILL ? Vec3.ZERO : windDrift;
     }
 
     /**
@@ -296,6 +314,8 @@ public class BunkerBusterEntity extends StrikeProjectile {
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        Vec3 d = Nbt.getVec(tag, "wind_drift");
+        windDrift = d != null ? d : Vec3.ZERO;
         goal = NbtUtils.readBlockPos(tag, "goal").orElse(null);
         energy = tag.getInt("energy");
         traveled = tag.getInt("traveled");
@@ -306,6 +326,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+        Nbt.putVec(tag, "wind_drift", windDrift);
         if (goal != null) tag.put("goal", NbtUtils.writeBlockPos(goal));
         tag.putInt("energy", energy);
         tag.putInt("traveled", traveled);

@@ -1,8 +1,9 @@
-package ua.zentix.incoming.client.fx.plume;
+package ua.zentix.incoming.util;
 
 /**
- * Устойчивость приземного воздуха по Паскуиллу (классы A–F, здесь 0..5 и дробные между ними) и расплывание дыма по
- * формулам Бриггса для открытой местности.
+ * Устойчивость приземного воздуха по Паскуиллу (классы A–F, здесь 0..5 и дробные между ними), профиль ветра и
+ * расплывание дыма по формулам Бриггса для открытой местности — одна функция на сервер и клиент: класс считают отсюда
+ * воздух мира ({@link Air}), дым, облака взрывов и полёт.
  * <p>
  * Класс — по таблице Паскуилла (Pasquill 1961; Turner 1964, «A diurnal stability classification scheme»): днём — по
  * ветру у земли (10 м) и солнцу (сильное — выше 60°, умеренное — 35–60°, слабое — 15–35°), ночью — по ветру и облачности
@@ -16,6 +17,8 @@ package ua.zentix.incoming.client.fx.plume;
  */
 public final class Stability {
     public static final double A = 0, B = 1, C = 2, D = 3, E = 4, F = 5;
+    /** Частота Брента–Вяйсяля стандартной атмосферы у земли, 1/с: g = 9,80665, T = 288,15 K, c_p = 1005 Дж/(кг·K). */
+    public static final double STANDARD_N = Math.sqrt(9.80665 / StandardAtmosphere.T0 * (-0.0065 + 9.80665 / 1005));
     private static final double[] SIGMA_Y = {0.22, 0.16, 0.11, 0.08, 0.06, 0.04};
     /** Ветер у земли — середины столбцов таблицы (&lt;2, 2–3, 3–5, 5–6, &gt;6 м/с). */
     private static final double[] WIND = {1, 2.5, 4, 5.5, 7};
@@ -23,13 +26,20 @@ public final class Stability {
     private static final double[] STRONG = {A, 0.5, B, C, C}, MODERATE = {0.5, B, 1.5, 2.5, D}, SLIGHT = {B, C, C, D, D},
             NIGHT = {F, F, E, D, D};
     /**
-     * Частота Брента–Вяйсяля, 1/с: днём и нейтрально — стандартная атмосфера (6,5 K/км, N ≈ 0,012), ночная инверсия —
-     * 0,02–0,04 (⚠ оценки; класс E — 0,02, F — 0,03). Дневной слой перемешивания (N ≈ 0) не выделен: дым поднимается в нём
-     * не выше, чем в стандартной атмосфере.
+     * Частота Брента–Вяйсяля, 1/с: днём и нейтрально — стандартная атмосфера ISO 2533, N² = g/T·(dT/dz + g/c_p) при
+     * −6,5 K/км у земли — 0,0105; ночная инверсия — 0,02–0,04 (⚠ оценки; класс E — 0,02, F — 0,03). Дневной слой
+     * перемешивания (N ≈ 0) не выделен: дым поднимается в нём не выше, чем в стандартной атмосфере.
      */
-    private static final double[] BRUNT = {0.012, 0.012, 0.012, 0.012, 0.02, 0.03};
-    /** Показатель степенного профиля ветра по классу: A–C 0,1, D 0,14, E 0,25, F 0,35 (⚠ оценки, {@code util.Wind}). */
-    private static final double[] ALPHA = {0.1, 0.1, 0.1, 0.14, 0.25, 0.35};
+    private static final double[] BRUNT = {STANDARD_N, STANDARD_N, STANDARD_N, STANDARD_N, 0.02, 0.03};
+    /**
+     * Показатель степенного профиля ветра u(z) = u_ref·(z/z_ref)^p по классу для открытой (сельской) местности: A 0,07,
+     * B 0,07, C 0,10, D 0,15, E 0,35, F 0,55 — рекомендованные EPA значения (J. S. Irwin, «A theoretical variation of the
+     * wind profile power-law exponent as a function of surface roughness and stability», Atmos. Environ. 13, 1979;
+     * EPA, J. Tikvart, memo 29.10.1987, https://gaftp.epa.gov/air/aqmg/SCRAM/mchisrs/R443_TIKVART_29_OCT_87.pdf).
+     * Измерены в приземном слое (до сотен метров); {@link Wind} продолжает профиль до своей высоты отсчёта 1 км —
+     * приближение.
+     */
+    private static final double[] ALPHA = {0.07, 0.07, 0.10, 0.15, 0.35, 0.55};
 
     private Stability() {}
 

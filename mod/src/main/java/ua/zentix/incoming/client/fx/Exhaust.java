@@ -10,7 +10,7 @@ import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
-import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.plume.TrailModel;

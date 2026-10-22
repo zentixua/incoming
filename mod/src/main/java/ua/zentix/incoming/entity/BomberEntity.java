@@ -26,8 +26,8 @@ import java.util.UUID;
 /**
  * B-2 на эшелоне +170 над местом, куда упадёт бомба (цель перенацелили выше или ниже, у цели крыша или башня —
  * эшелон меняется полого, не круче 6°): заходит издалека (большая часть пути — вне загруженного мира), идёт по прямой
- * 12 блоков/тик (240 м/с), сбрасывает бетонобойную бомбу на эшелоне за ~85 блоков до цели по горизонтали (бомба сама
- * доворачивает и входит почти отвесно) и уходит с разворотом и набором высоты. Не на эшелоне (вернулся в мир над
+ * 12 блоков/тик (240 м/с), сбрасывает бетонобойную бомбу на эшелоне за ~145 блоков до цели по горизонтали (бомба сходит с его скоростью,
+ * рули опускают ей нос, и она входит почти отвесно) и уходит с разворотом и набором высоты. Не на эшелоне (вернулся в мир над
  * холмом, точку перенацелили выше или ниже) — сбрасывает с той высоты, где он есть, дальше или ближе: B-2 проигрывает
  * падение бомбы ({@link BombDrop#releaseNow}); промах отовсюду (точка слишком близко впереди, сзади, выше него) —
  * заходит снова.
@@ -106,6 +106,11 @@ public class BomberEntity extends StrikeProjectile {
         return (int) Math.ceil(Math.max(0, b.horizontal() - releaseLine(getY() - aim.y)) / AIR.cruiseSpeed()) + 20;
     }
 
+    /** Скорость B-2 в горизонтальном полёте курсом {@code yaw}, блоков/тик: с ней же сходит бомба. */
+    public static Vec3 levelVelocity(float yaw) {
+        return Vec3.directionFromRotation(0, yaw).scale(AIR.cruiseSpeed());
+    }
+
     /**
      * Дальность сброса с высоты {@code height} над точкой: угол на точку тот же, что на эшелоне ({@link #RELEASE_DISTANCE}
      * с {@link #ALTITUDE}). Сброс бывает и раньше — на краю окна, откуда бомба ещё попадает ({@link BombDrop#releaseNow}).
@@ -132,16 +137,15 @@ public class BomberEntity extends StrikeProjectile {
         Vec3 aim = tracker.point();
         Bearing b = bearingTo(aim);
         // эшелон — над тем, куда упадёт бомба: у пуска он от первой оценки поверхности, а перенацеливание на точку ниже
-        // или выше, крыша или башня, которой не было в оценке генератора, меняют её — с 214 блоков над точкой бомба
-        // перелетает её на 42 блока
+        // или выше, крыша или башня, которой не было в оценке генератора, меняют её
         double echelon = 0;
         if (!released) {
             Vec3 drop = surfaceUnder(level, aim);
             echelon = drop.y + ALTITUDE;
-            // сброс — когда бомба, сброшенная сейчас, придёт в точку, и лучше уже не будет (BombDrop.releaseNow): с одной
-            // и той же черты бомба с 214 блоков перелетает точку на 42 блока, с 170 внутри черты — на 130–155, на точку
-            // в 40 блоках впереди — на 111; сзади (бомба падает по курсу и назад не рулит) — не сбрасывать вовсе
-            if (ahead(drop) && BombDrop.releaseNow(position(), flight.forward().scale(speed), flight.yaw(), drop, RELEASE_DISTANCE / ALTITUDE)) {
+            // сброс — когда бомба, сброшенная сейчас, придёт в точку, и лучше уже не будет (BombDrop.releaseNow): со 170
+            // за 100 блоков бомба со скоростью B-2 перелетает точку на ~75, на точку в 40 блоках впереди — на ~150; сзади
+            // (бомба падает по курсу и назад не рулит) — не сбрасывать вовсе
+            if (ahead(drop) && BombDrop.releaseNow(position(), flight.forward().scale(speed), drop, RELEASE_DISTANCE / ALTITUDE)) {
                 release(level, drop);
             }
         }
@@ -154,20 +158,24 @@ public class BomberEntity extends StrikeProjectile {
             discard();
             return;
         }
+        WeaponSpec.Agility egress = AIR.handling().climb(), cruise = AIR.handling().cruise();
         if (released) {
             // уход: вираж на 70° от курса и набор высоты
-            flight.holdPitch(-6, 0.05, 0.4, 0.04);
-            if (phaseAge() < 60) flight.steerYaw(flight.yaw() + 20 * breakSide, 0.08, 1.2, 0.08);
-            else flight.settleYaw(0.08);
+            flight.holdPitch(-6, 0.05, egress.pitchRate(), egress.pitchAccel());
+            if (phaseAge() < 60) flight.steerYaw(flight.yaw() + 20 * breakSide, 0.08, egress.turnRate(), egress.turnAccel());
+            else flight.settleYaw(egress.turnAccel());
         } else {
-            flight.holdPitch(Mth.clamp((getY() - echelon) * PITCH_PER_BLOCK, -LEVEL_CHANGE_PITCH, LEVEL_CHANGE_PITCH), 0.1, 0.3, 0.05);
+            flight.holdPitch(Mth.clamp((getY() - echelon) * PITCH_PER_BLOCK, -LEVEL_CHANGE_PITCH, LEVEL_CHANGE_PITCH), 0.1,
+                    cruise.pitchRate(), cruise.pitchAccel());
         }
         if (!released && b.horizontal() > RELEASE_DISTANCE + 40) {
             // точка сброса внутри круга разворота (перенацелили сбоку, проскочил её): на пределе поворота он
             // кружил бы вокруг неё без конца — прямо, пока она не выйдет из круга, и новый заход
-            if (insideTurn(aim, AIR.turnRate())) flight.settleYaw(0.1);
-            else flight.steerYaw(b.yaw(), 0.1, AIR.turnRate(), 0.1);
+            if (insideTurn(aim, AIR.turnRate())) flight.settleYaw(cruise.turnAccel());
+            else flight.steerYaw(b.yaw(), 0.1, AIR.turnRate(), cruise.turnAccel());
         }
+        // в наборе на уходе теряет скорость, на эшелоне держит маршевую
+        throttle(AIR.cruiseSpeed());
         Vec3 dir = flight.forward();
         Vec3 next = position().add(dir.scale(speed));
         if (leavesTickingChunks(level, next)) return;
@@ -190,8 +198,9 @@ public class BomberEntity extends StrikeProjectile {
         setPhase(FlightPhase.EGRESS);
         BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
         if (bomb == null) return;
-        bomb.drop(position().add(0, -BombDrop.DROP_BELOW, 0), flight.yaw(), drop, goal, ownerId());
+        bomb.drop(position().add(0, -BombDrop.DROP_BELOW, 0), flight.forward().scale(speed), drop, goal, ownerId());
         bomb.setNuclear(nuclear);
+        shareAir(bomb);
         // по UUID бомбы из предупреждений снаряда находится её B-2
         Incoming.LOG.info("B-2 {} dropped bomb {} at {}, {} blocks from the aim point, {} above it (off-world {})", getUUID(), bomb.getUUID(),
                 blockPosition(), Math.round(position().subtract(drop).horizontalDistance()), Math.round(getY() - drop.y), isVirtual());

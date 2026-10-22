@@ -2,6 +2,7 @@ package ua.zentix.incoming.guidance;
 
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.entity.FlightPhase;
+import ua.zentix.incoming.strike.WeaponSpec;
 
 /**
  * Управляемый летательный аппарат, каким его видит автопилот ({@link Autopilot}): датчики (место, скорость, фаза,
@@ -40,8 +41,16 @@ public interface Craft {
      */
     double clearAlong(Vec3 to, double margin);
 
-    /** Держать высоту {@code desired} ({@link AltitudeHold}). */
-    default void holdAltitude(double desired, double gain, double maxRate, double maxAccel) {
-        altitude().hold(flight(), position().y, desired, gain, maxRate, maxAccel);
+    /** Держать высоту {@code desired} ({@link AltitudeHold}) с поворотами участка полёта {@code a}. */
+    default void holdAltitude(double desired, double gain, WeaponSpec.Handling h, WeaponSpec.Agility a) {
+        altitude().hold(flight(), position().y, desired, gain, h, a);
+    }
+
+    /**
+     * Скорость за тик по своей модели полёта ({@link WeaponSpec.Airframe#airspeed}): мотор тянет к {@code target},
+     * набор высоты отнимает скорость, снижение прибавляет.
+     */
+    default void throttle(WeaponSpec.Airframe air, double target) {
+        setSpeed(air.airspeed(speed(), target, flight().forward().y));
     }
 }

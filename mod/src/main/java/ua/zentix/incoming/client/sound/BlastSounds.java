@@ -6,10 +6,11 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.sound.Propagation;
+import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.fx.BlastHit;
 import ua.zentix.incoming.client.fx.BlastSource;
@@ -122,11 +123,10 @@ public final class BlastSounds {
         int x = Mth.floor(ear.x), zz = Mth.floor(ear.z);
         int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, zz);
         GroundMaterial under = GroundMaterial.of(level.getBlockState(new BlockPos(x, top - 1, zz)));
-        DimensionType type = level.dimensionType();
-        // день: земля греет воздух, звук загибает вверх; нет солнца (Незер, Энд) — как ночью
-        double day = type.hasSkyLight() && !type.hasFixedTime() ? Outdoor.day(Mth.cos(level.getTimeOfDay(1) * Mth.TWO_PI)) : 0;
+        // зона тени — по устойчивости воздуха мира: днём земля греет воздух, звук загибает вверх; инверсия ночью — нет
         return new Outdoor.Path(d, z, hs, Math.max(1.5, ear.y - top), gs, under == null ? 0.5 : under.porosity,
-                day, level.getRainLevel(1), level.getThunderLevel(1));
+                level.dimensionType().hasSkyLight() ? Propagation.refraction(ClientAir.now().stability()) : 0,
+                level.getRainLevel(1), level.getThunderLevel(1));
     }
 
     /** Доля верхов записи раската по пути {@link Outdoor} и воздуху; путь звука считает Sound Physics или он выключен — 1. */

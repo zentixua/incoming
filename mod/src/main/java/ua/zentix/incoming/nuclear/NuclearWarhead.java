@@ -58,7 +58,7 @@ public final class NuclearWarhead {
      * @param airBurst воздушный подрыв на оптимальной высоте; иначе — наземный
      */
     public static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner) {
-        return detonate(level, target, yieldKt, airBurst, owner, IncomingConfig.SERVER.nukeEffectsScale.get().floatValue());
+        return detonate(level, target, yieldKt, airBurst, owner, (float) IncomingConfig.SERVER.effectsScale());
     }
 
     /** @param scale масштаб радиусов (1 — как в жизни); обычно из настройки effects_scale, GameTest задаёт свой */
@@ -76,7 +76,7 @@ public final class NuclearWarhead {
         Detonation d = new Detonation(id, g.burst(), g.groundY(), yieldKt, g.surface(),
                 level.getGameTime(), (float) wind.direction(), (float) wind.speed(),
                 g.visibility(), random.nextLong(), scale, IncomingConfig.SERVER.nukeFallout.get(),
-                IncomingConfig.SERVER.nukeWaveSpeed.get().floatValue(), level.getDayTime(),
+                (float) IncomingConfig.SERVER.waveSpeed(), level.getDayTime(),
                 IncomingConfig.SERVER.nukeFires.get() && IncomingConfig.SERVER.nukeMaxFires.get() > 0);
         events.add(d);
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d)));
@@ -100,7 +100,7 @@ public final class NuclearWarhead {
         boolean surface = hob / scale < FireballModel.maxRadius(yieldKt, true);
         float visibility = (float) (level.isThundering() ? ThermalModel.VISIBILITY_THUNDER : level.isRaining() ? ThermalModel.VISIBILITY_RAIN : ThermalModel.VISIBILITY_CLEAR);
         return new Detonation(-1, new Vec3(target.x, ground + hob, target.z), ground, yieldKt, surface, 0, 0, 0, visibility, 0, scale, false,
-                IncomingConfig.SERVER.nukeWaveSpeed.get().floatValue());
+                (float) IncomingConfig.SERVER.waveSpeed());
     }
 
     /** Точка на поверхности над целью (удар «по поверхности»: цель — место на карте). */

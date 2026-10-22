@@ -23,7 +23,7 @@ import ua.zentix.incoming.client.flight.FlightTrack;
 import ua.zentix.incoming.client.flight.FlightTracks;
 import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.FxLights;
-import ua.zentix.incoming.client.fx.plume.Air;
+import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.plume.TrailModel;
@@ -97,7 +97,7 @@ public final class FarFlightView {
      */
     static final double LAG = 0.9 / (1 - 0.9);
     /** Воздух для новых точек и кадра (тик берёт его у {@link ClientAir}; юнит-тесты задают свой). */
-    static Air air = new Air(new Wind(0, 0), 3, 0.5);
+    static Air air = Air.CALM;
     /** Свет точки вне загруженного мира — открытое небо. */
     private static final Light SKY = (x, y, z) -> LightTexture.FULL_SKY;
 

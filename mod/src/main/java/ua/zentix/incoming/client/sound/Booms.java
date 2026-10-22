@@ -53,7 +53,7 @@ final class Booms {
         // расстояние от линии полёта до уха
         double cos = d < 1.0e-6 ? 1 : n.dot(v) / (d * v.length());
         SonicBoom.Wave w = SonicBoom.at(mach, d * Math.sqrt(Math.max(0, 1 - cos * cos)), body);
-        Outdoor.Path path = new Outdoor.Path(d, 0, Hearing.height(at, ear), Propagation.EAR, 1, 1, weather.day(), weather.rain(), weather.thunder());
+        Outdoor.Path path = new Outdoor.Path(d, 0, Hearing.height(at, ear), Propagation.EAR, 1, 1, weather.shadow(), weather.rain(), weather.thunder());
         boolean longWave = w.seconds() >= Math.sqrt(CRACK * BOOM);
         float pitch = (float) Math.max(0.5, Math.min(2, (longWave ? BOOM : CRACK) / w.seconds()));
         return new Crack(at, w, Outdoor.pressureVolume(w.pressure(), FULL_PA, path), longWave, pitch);
