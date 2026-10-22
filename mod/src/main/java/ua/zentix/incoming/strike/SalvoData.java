@@ -44,7 +44,8 @@ import java.util.UUID;
  * Хранится в мире: незаконченный залп продолжится после перезахода.
  * <p>
  * Залп, оплаченный боеприпасами ({@link Munitions}), возвращает владельцу то, что не вылетело: невыпущенные снаряды
- * отменённого залпа (отбой, ошибка) и снаряды, чей пуск не удался, — в конце залпа.
+ * отменённого залпа (отбой, ошибка) и снаряды, чей пуск не удался, — в конце залпа; у залпа из одного ядерного снаряда
+ * (ядерный приказ ждёт места пуска) — и его ядерную БЧ.
  */
 public final class SalvoData extends SavedData {
     private static final String NAME = Incoming.MOD_ID + "_salvos";
@@ -112,10 +113,15 @@ public final class SalvoData extends SavedData {
     /**
      * Залп уходит из списка: оплаченный возвращает владельцу (если он среди {@code online}) невыпущенные снаряды и те,
      * чей пуск не удался ({@link Munitions#refund}). Единственное место возврата: его зовёт каждый путь, которым залп
-     * убирается, — отмена, ошибка, конец залпа. Залп ядерным не бывает: ядерных БЧ в возврате нет.
+     * убирается, — отмена, ошибка, конец залпа. Ядерная БЧ бывает только у залпа из одного снаряда.
      */
     private static void refund(Salvo s, Collection<? extends ServerPlayer> online, String why) {
-        if (s.paid) Munitions.refund(online, s.owner, new Munitions.Bill(s.weapon, s.remaining + s.failed, 0), why);
+        if (s.paid) {
+            // ядерная БЧ на носителе оплачена предметом на снаряд, как в Munitions.Bill.of
+            int shots = s.remaining + s.failed;
+            boolean carrier = s.nuke.onCarrier() && Loadout.carriesNuke(s.weapon) && !s.weapon.spec().warhead().always();
+            Munitions.refund(online, s.owner, new Munitions.Bill(s.weapon, shots, carrier ? shots : 0), why);
+        }
         s.failed = 0;
     }
 
@@ -208,8 +214,9 @@ public final class SalvoData extends SavedData {
             this.yaw = yaw;
             this.owner = owner;
             this.cooldown = cooldown;
-            // ядерных залпов нет (ServerActions.clamp): снаряды залпа ядерной БЧ не несут
-            this.nuke = nuke.withOnCarrier(false);
+            // ядерных залпов нет (ServerActions.clamp): снаряды залпа ядерной БЧ не несут; залп из одного снаряда — ядерный
+            // приказ, который ждёт места пуска (LaunchPlaces), — несёт её
+            this.nuke = total == 1 ? nuke : nuke.withOnCarrier(false);
             this.via = via;
             this.from = from;
             this.paid = paid;
