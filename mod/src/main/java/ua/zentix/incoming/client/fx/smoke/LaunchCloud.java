@@ -26,6 +26,11 @@ import ua.zentix.incoming.nuclear.model.DustModel;
  * «Аполлонов» — тонны реголита на ~тонну топлива последних десятков секунд, Metzger и др., 2011), × рыхлость грунта
  * (пористость, как у звука по земле: камень и бетон — 0). Половина пыли встаёт с облаком, половина стелется у земли —
  * та же оценка, что у облака взрыва ({@link CloudModel#CLOUD_SHARE}); оседает корзинами {@link DustModel}.
+ * <p>
+ * <b>Пыль у земли</b> уносит стенная струя ({@link WallJet}): у косой струи («Град», шахед и ракета с наклонной
+ * направляющей) — больше вперёд, по горизонтальной доле струи (Hasson–Peck), у отвесной — поровну во все стороны.
+ * Клуб пыли у земли — гаусс, растянутый отрезком вдоль струи: его середина и разброс вдоль и поперёк — те же, что у пыли
+ * затяжки по направлениям; дальше её расплывает воздух (Бриггс) и несёт ветер.
  */
 public final class LaunchCloud implements SmokeGrid.Source {
     /** Полуширина круглой струи на длину (Pope 2000, табл. 5.1). */
@@ -45,6 +50,11 @@ public final class LaunchCloud implements SmokeGrid.Source {
     private final double born;
     /** Подано: тепло, Дж; сажа и капли продуктов, пыль, кг; место удара струи (с весом тепла), м; ось ΔT и радиус там. */
     private double heat, soot, water, dust, sumX, sumZ, sumT, sumR;
+    /** Импульс струи в землю за подачу, Н·с: весь и по осям мира (x, вниз, z). */
+    private double impulse, pushX, pushDown, pushZ;
+    /** Стенная струя по сборке ({@link #build}): «вперёд» (единичный, по горизонтали), азимуты равной доли и импульс на радиан у каждого. */
+    private double aheadX = 1, aheadZ;
+    private double[] fanAzimuth = new double[0], fanImpulse = new double[0];
     private Thermal thermal;
     private double life;
     private final double[] matter = new double[2];
@@ -116,6 +126,11 @@ public final class LaunchCloud implements SmokeGrid.Source {
         double hot = motor.exitTemperature() - CloudModel.T_AIR;
         double dT = Math.max(1, hot * Math.min(1, DECAY * d / Math.max(l, 1e-6)));
         heat += q;
+        double push = motor.exhaust() * motor.velocity() * dt;
+        impulse += push;
+        pushX += push * jx;
+        pushDown -= push * jy;
+        pushZ += push * jz;
         sumX += q * (x + jx * l);
         sumZ += q * (z + jz * l);
         sumT += q * dT;
@@ -153,6 +168,60 @@ public final class LaunchCloud implements SmokeGrid.Source {
         thermal = new Thermal(Thermal.buoyancy(heat), CloudModel.G * (1 - CloudModel.T_AIR / t0), Math.max(0.5, sumR / heat), air);
         builtHeat = heat;
         life = lifeSeconds();
+        fan();
+    }
+
+    /**
+     * Стенная струя по всему поданному импульсу: угол к земле — у суммы импульсов струи (вектор), «вперёд» — её
+     * горизонтальная доля; азимуты равной доли потока и импульс на радиан в каждом ({@link WallJet}).
+     */
+    private void fan() {
+        double flat = Math.hypot(pushX, pushZ), all = Math.hypot(flat, pushDown);
+        if (impulse <= 0 || all <= 0) {
+            fanAzimuth = new double[0];
+            fanImpulse = new double[0];
+            return;
+        }
+        if (flat > 1e-9 * all) {
+            aheadX = pushX / flat;
+            aheadZ = pushZ / flat;
+        }
+        double sinA = Math.max(0, pushDown) / all;
+        fanAzimuth = WallJet.azimuths(sinA, WallJet.DIRECTIONS);
+        fanImpulse = new double[fanAzimuth.length];
+        for (int k = 0; k < fanAzimuth.length; k++) fanImpulse[k] = impulse * WallJet.share(sinA, fanAzimuth[k]);
+    }
+
+    /**
+     * Пыль стенной струи через t секунд: середина от места удара вдоль «вперёд» и поперёк, разброс вдоль и поперёк (σ²),
+     * средний радиус, м — по {@link WallJet#DIRECTIONS} направлениям равной доли, у каждого — затяжка до её фронта
+     * (масса ∝ r′²: середина ¾ r, второй момент ⅗ r²); r0 — радиус струи у земли, wind — ветер у земли, м/с.
+     */
+    double[] fanMoments(double t, double r0, double wind) {
+        int n = fanAzimuth.length;
+        double[] out = new double[5];
+        if (n == 0) {
+            out[2] = out[3] = 0.6 * r0 * r0;
+            out[4] = 0.75 * r0;
+            return out;
+        }
+        double mx = 0, my = 0, xx = 0, yy = 0, mr = 0;
+        for (int k = 0; k < n; k++) {
+            double r = WallJet.reach(fanImpulse[k], r0, t, wind), c = Math.cos(fanAzimuth[k]), s = Math.sin(fanAzimuth[k]);
+            mx += 0.75 * r * c;
+            my += 0.75 * r * s;
+            xx += 0.6 * r * r * c * c;
+            yy += 0.6 * r * r * s * s;
+            mr += 0.75 * r;
+        }
+        mx /= n;
+        my /= n;
+        out[0] = mx;
+        out[1] = my;
+        out[2] = Math.max(0, xx / n - mx * mx);
+        out[3] = Math.max(0, yy / n - my * my);
+        out[4] = mr / n;
+        return out;
     }
 
     /** Зерно клубов — по месту и началу подачи (у двух облаков рядом — разные клубы). */
@@ -248,13 +317,20 @@ public final class LaunchCloud implements SmokeGrid.Source {
         double cloudDust = CloudModel.CLOUD_SHARE * dust * DustModel.aloft(t, thermal.height(t)) * fade;
         out.blob(cx, cy, cz, thermal.sigmaH(t), thermal.sigmaV(t), soot * fade, cloudDust, water * fade, dustR, dustG, dustB,
                 thermal.kelvin(t), thermal.rise(t));
-        double x = Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(2)) * t;
+        double ground2 = Math.hypot(air.windX(), air.windZ()) * air.wind(2);
+        double x = Math.max(1, ground2) * t;
         double s0 = thermal.r0 / Math.sqrt(5);
-        double bh = Math.max(s0, CloudModel.spreadH(air.spread(), x)), bv = Math.max(s0, CloudModel.spreadV(air.spread(), x));
+        double[] fan = fanMoments(t, sumR / heat, ground2);
+        // поперёк — разброс затяжки и Бриггса; вдоль — ещё растяжка отрезком: гаусс σ поверх отрезка ±A даёт σ² + A²/3
+        double bh2 = Math.pow(CloudModel.spreadH(air.spread(), x), 2), along = Math.sqrt(3 * Math.max(0, fan[2] - fan[3]));
+        double bh = Math.max(s0, Math.sqrt(fan[3] + bh2));
+        // толщина стенной струи у середины её пыли — S·r на половине скорости (гаусс: полувысота 1,18σ)
+        double bv = Math.max(s0, Math.hypot(CloudModel.spreadV(air.spread(), x), WallJet.SPREAD * fan[4] / 1.18));
         double ground = (1 - CloudModel.CLOUD_SHARE) * dust * DustModel.aloft(t, 2 * bv) * fade;
         double lean = air.wind(2) * t;
-        out.blob(sumX / heat + air.windX() * lean, groundY + bv, sumZ / heat + air.windZ() * lean, bh, bv, 0, ground, 0, dustR, dustG, dustB,
-                CloudModel.T_AIR, 0);
+        double gx = sumX / heat + aheadX * fan[0] - aheadZ * fan[1] + air.windX() * lean;
+        double gz = sumZ / heat + aheadZ * fan[0] + aheadX * fan[1] + air.windZ() * lean;
+        out.segment(gx, groundY + bv, gz, aheadX * along, 0, aheadZ * along, bh, bv, 0, ground, 0, dustR, dustG, dustB, CloudModel.T_AIR, 0);
         return true;
     }
 }
