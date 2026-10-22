@@ -10,7 +10,9 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.material.MapColor;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -45,9 +47,11 @@ import java.util.concurrent.TimeUnit;
  * чтобы на пиксель экрана приходилось не больше пикселя плитки. Цвета — ванильной карты ({@link MapColor}) с тенью
  * склонов с севера, как у карты в руке.
  * <p>
- * Два слоя: снизу — Distant Horizons, если он стоит (километры вокруг, строится в своих фоновых потоках), сверху —
- * чанки клиента (строятся в кадре, понемногу). Клетка без данных прозрачна, поэтому вблизи видны точные и свежие
- * чанки (воронки), дальше — рельеф DH. Чтение DH может ждать его очередей сколько угодно (данных ещё нет, генерация
+ * Два слоя: снизу — дальний (километры вокруг, строится в фоновых потоках), сверху — чанки клиента (строятся в кадре,
+ * понемногу). Дальний — первый работающий из тех, что стоят: LOD Server Support (сервер раздаёт рельеф,
+ * {@link LssTerrain}), иначе Distant Horizons ({@link DistantHorizonsTerrain}); нет ни одного — только чанки. Клетка
+ * без данных прозрачна, поэтому вблизи видны точные и свежие чанки (воронки), дальше — дальний рельеф. Чтение DH может
+ * ждать его очередей сколько угодно (данных ещё нет, генерация
  * стоит, DH грузит свои LOD): ждут только наши фоновые потоки, а слой чанков от них не зависит. Пока карты нет на
  * экране, их не больше {@link #PREFETCH_JOBS}; пока она на экране (пульт или камера снаряда без видео) — столько, сколько
  * потоков у источника ({@link TerrainSource#parallelism}): мир за картой не виден, и вид, от центра, получает всю скорость
@@ -213,13 +217,20 @@ public final class TerrainTiles {
         boolean stallLogged, firstLogged;
         /** Источник сломался (другая версия API DH): слой больше не строится до смены мира. Пишет фоновый поток. */
         volatile boolean broken;
+        /** Дальний слой (из дальних работает один — см. {@code pickFar}), а не чанки клиента. */
+        final boolean far;
         /** Для лога: построено из источника, из них с рельефом, время их постройки; собрано из плиток уровнем ниже. */
         int built, withData, composed;
         long buildNanos;
 
         Layer(String name, TerrainSource source) {
+            this(name, source, false);
+        }
+
+        Layer(String name, TerrainSource source, boolean far) {
             this.name = name;
             this.source = source;
+            this.far = far;
         }
     }
 
@@ -237,8 +248,11 @@ public final class TerrainTiles {
     private static ExecutorService executor;
     @Nullable
     private static ClientLevel level;
-    /** Снизу вверх: DH (если стоит), потом чанки клиента. */
+    /** Снизу вверх: дальние по возрастанию предпочтения (DH, LSS — какие стоят), потом чанки клиента. */
     private static List<Layer> layers = List.of();
+    /** Дальний слой, который работает сейчас ({@link #pickFar}); null — рельеф только из чанков. */
+    @Nullable
+    private static Layer far;
     /**
      * Меняется при смене мира: плитки, начатые для старого, выбрасываются, а фоновая постройка останавливается между
      * колонками (поток её читает — {@code volatile}).
@@ -246,6 +260,8 @@ public final class TerrainTiles {
     private static volatile int generation;
     /** DH стоит, и его API совместимо ({@link #init}). */
     private static boolean distantHorizons;
+    /** LOD Server Support стоит, и его API совместимо ({@link #init}). */
+    private static boolean lodServerSupport;
     /** Счётчик кадров карты (для вытеснения только невидимых плиток). */
     private static long frame;
     private static int ticks;
@@ -281,8 +297,10 @@ public final class TerrainTiles {
         int visible = 0, ready = 0;
         StringBuilder byLayer = new StringBuilder();
         g.enableScissor(left, top, right, bottom);
+        pickFar();
         for (Layer layer : layers) {
             collect(layer);
+            if (!live(layer)) continue;
             if (!build) {
                 // клеток кадра на такой карте — сотни тысяч, а нового ничего не заводится: рисуются готовые плитки
                 // самого крупного уровня, перебором плиток слоя (их не больше предела слоя)
@@ -319,8 +337,13 @@ public final class TerrainTiles {
         LocalPlayer player = mc.player;
         if (current == null || player == null) return;
         if (current != level) switchTo(current);
+        pickFar();
+        if (lodServerSupport) LssTerrain.tick(player.getX(), player.getZ());
         for (Layer layer : layers) {
             collect(layer);
+            if (layer.source.invalidated(current)) {
+                for (Tile t : layer.tiles.values()) t.stale = true;
+            }
             if (layer.source.arrivals()) layer.source.changes(current, (chunkX, chunkZ) -> arrived(layer, chunkX, chunkZ));
             else layer.source.changes(current, (chunkX, chunkZ) -> changed(layer, chunkX, chunkZ));
         }
@@ -330,7 +353,7 @@ public final class TerrainTiles {
                     () -> player.getInventory().contains(s -> s.is(ModItems.DESIGNATOR.get())));
             for (Layer layer : layers) {
                 if (layer.broken) continue;
-                if (!prefetching) {
+                if (!prefetching || !live(layer)) {
                     layer.prefetch = Set.of();
                     layer.prefetchOrder = List.of();
                     dropPartial(layer);
@@ -464,16 +487,41 @@ public final class TerrainTiles {
         return progress;
     }
 
-    /** Рельеф вдали есть (Distant Horizons), а не только в загруженных чанках. */
+    /** Рельеф вдали есть (LOD Server Support или Distant Horizons), а не только в загруженных чанках. */
     public static boolean farTerrain() {
-        return layers.size() > 1;
+        return far != null;
     }
 
-    /** Distant Horizons стоит, но ещё не отдал ни одной плитки с рельефом, а спрошен (занят своей загрузкой). */
-    public static boolean farPending() {
-        if (layers.size() < 2) return false;
-        Layer far = layers.get(0);
-        return far.withData == 0 && far.jobs > 0;
+    /**
+     * Надпись на карте, пока дальний источник ничего не отдал: ждёт своих данных или ещё не ответил на чтения (DH занят
+     * своей загрузкой); null — не ждёт.
+     */
+    @Nullable
+    public static String farPendingNote() {
+        Layer f = far;
+        return f != null && (f.source.waiting() || f.withData == 0 && f.jobs > 0) ? f.source.pendingNote() : null;
+    }
+
+    /**
+     * Дальний слой, который сейчас работает: первый по предпочтению (последний в списке слоёв), чей источник работает в
+     * этом мире ({@link TerrainSource#active}: LSS — когда сервер раздаёт рельеф).
+     */
+    private static void pickFar() {
+        far = pickFar(layers);
+    }
+
+    @Nullable
+    static Layer pickFar(List<Layer> layers) {
+        Layer picked = null;
+        for (Layer layer : layers) {
+            if (layer.far && layer.source.active()) picked = layer;
+        }
+        return picked;
+    }
+
+    /** Слой рисуется, строится и отвечает на вопросы о высоте: чанки клиента — всегда, из дальних — только работающий. */
+    private static boolean live(Layer layer) {
+        return !layer.far || layer == far;
     }
 
     /** Высота земли в колонке: по самой подробной готовой плитке, чанки клиента первыми. */
@@ -488,7 +536,11 @@ public final class TerrainTiles {
 
     private static OptionalInt column(int x, int z, boolean water) {
         for (int i = layers.size() - 1; i >= 0; i--) {
-            Map<Key, Tile> tiles = layers.get(i).tiles;
+            Layer layer = layers.get(i);
+            if (!live(layer)) continue;
+            TerrainSource.Column now = layer.source.peek(x, z);
+            if (now != null) return OptionalInt.of(water ? now.waterDepth() : now.height());
+            Map<Key, Tile> tiles = layer.tiles;
             for (int l = 0; l <= MAX_LEVEL; l++) {
                 int span = SIZE << l;
                 Tile t = tiles.get(new Key(l, Math.floorDiv(x, span), Math.floorDiv(z, span)));
@@ -507,7 +559,11 @@ public final class TerrainTiles {
      */
     public static int wet(int x, int z) {
         for (int i = layers.size() - 1; i >= 0; i--) {
-            Map<Key, Tile> tiles = layers.get(i).tiles;
+            Layer layer = layers.get(i);
+            if (!live(layer)) continue;
+            TerrainSource.Column now = layer.source.peek(x, z);
+            if (now != null) return wetness(now.color().id, now.waterDepth());
+            Map<Key, Tile> tiles = layer.tiles;
             for (int l = 0; l <= MAX_LEVEL; l++) {
                 int span = SIZE << l;
                 Tile t = tiles.get(new Key(l, Math.floorDiv(x, span), Math.floorDiv(z, span)));
@@ -515,11 +571,14 @@ public final class TerrainTiles {
                 int px = Math.floorMod(x, span) >> l, pz = Math.floorMod(z, span) >> l;
                 int j = pz * SIZE + px;
                 if (!t.columns.has(j)) continue;
-                int color = t.columns.color[j] & 0x3F;
-                return t.columns.depth[j] > 0 || color == MapColor.WATER.id || color == MapColor.ICE.id || color == MapColor.SNOW.id ? 1 : 0;
+                return wetness(t.columns.color[j] & 0x3F, t.columns.depth[j]);
             }
         }
         return -1;
+    }
+
+    private static int wetness(int color, int waterDepth) {
+        return waterDepth > 0 || color == MapColor.WATER.id || color == MapColor.ICE.id || color == MapColor.SNOW.id ? 1 : 0;
     }
 
     /** Для лога и сценария: по слоям — сколько плиток построено и с рельефом, сколько строится, что отдал источник. */
@@ -553,6 +612,7 @@ public final class TerrainTiles {
             for (Tile t : layer.tiles.values()) release(t);
         }
         layers = List.of();
+        far = null;
         level = null;
         generation++;
         progress = new Progress(0, 0, "");
@@ -561,6 +621,8 @@ public final class TerrainTiles {
         prefetching = false;
         // очередь событий DH держала бы обёртки мира, из которого вышли
         if (distantHorizons) DistantHorizonsTerrain.clearChanges();
+        // присланное LSS — на диск: при новом входе он пришлёт только изменённое
+        if (lodServerSupport) LssTerrain.flush();
         LoadedChunksTerrain.clearArrivals();
         if (executor != null) {
             executor.shutdown();
@@ -569,11 +631,14 @@ public final class TerrainTiles {
     }
 
     /**
-     * При запуске клиента: подписка на приход чанков клиенту (слой чанков), есть ли DH с нашей версией API, и подписка
-     * на его события. Класс DH-источника трогаем, только если DH стоит: без него ссылки на API не разрешатся.
+     * При запуске клиента: подписка на приход чанков клиенту (слой чанков), есть ли LSS и DH с нашей версией API, и
+     * подписка на их колонки и события. Классы их источников трогаем, только если мод стоит: без него ссылки на API не
+     * разрешатся.
      */
-    public static void init() {
+    public static void init(IEventBus modBus) {
         NeoForge.EVENT_BUS.addListener(LoadedChunksTerrain::onChunkLoad);
+        // подписка на LSS — после конструкторов всех модов: его API трогает его же сетевые классы
+        if (ModList.get().isLoaded("lss")) modBus.addListener((FMLClientSetupEvent e) -> subscribeLss());
         if (!ModList.get().isLoaded("distanthorizons")) return;
         try {
             distantHorizons = DistantHorizonsTerrain.supported();
@@ -585,11 +650,26 @@ public final class TerrainTiles {
         }
     }
 
+    private static void subscribeLss() {
+        try {
+            LssTerrain.subscribe();
+            lodServerSupport = true;
+        } catch (LinkageError e) {
+            // API LSS без нужных классов или методов (LSS новее, чем мод знает): игра грузится, рельеф — из другого
+            Incoming.LOG.warn("LOD Server Support: API differs from the one the mod was built for — far terrain from it is off ({})", e.toString());
+        }
+    }
+
     private static void switchTo(ClientLevel current) {
         reset();
         level = current;
-        Layer chunks = new Layer("chunks", new LoadedChunksTerrain());
-        layers = distantHorizons ? List.of(new Layer("dh", new DistantHorizonsTerrain()), chunks) : List.of(chunks);
+        List<Layer> list = new ArrayList<>(3);
+        // порядок — предпочтение: LSS (рельеф с сервера, сразу в памяти) выше DH
+        if (distantHorizons) list.add(new Layer("dh", new DistantHorizonsTerrain(), true));
+        if (lodServerSupport) list.add(new Layer("lss", new LssTerrain(current), true));
+        list.add(new Layer("chunks", new LoadedChunksTerrain()));
+        layers = List.copyOf(list);
+        pickFar();
     }
 
     /** Плитка задевает дальность прорисовки клиента: дальше чанков у него нет. */

@@ -55,6 +55,8 @@ No other mods are required. Optional:
 
 - **Create Aeronautics** with **Sable** 2.0.6 or newer: aircraft can be targeted, and explosions break and push them.
 - **Create**: munition recipes use Create parts when Create is installed.
+- **LOD Server Support** on the server and the client: distant terrain for the targeting map, sight lines and sound
+  around hills (not in single-player; a world opened to LAN serves it).
 - **Distant Horizons** 3.3 or newer: distant terrain on the targeting map and strike damage in distant terrain.
 - **Sound Physics Remastered**, **Iris** shaders, **Flashback** replays.
 

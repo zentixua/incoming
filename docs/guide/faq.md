@@ -21,7 +21,9 @@ English · [Русский](ru/faq.md)
 **A server will not let you in: different mod versions.** Download the same jar the server has from the
 [Releases](https://github.com/zentixua/incoming/releases/latest) page.
 
-**The map is empty far away.** Without Distant Horizons only loaded chunks are shown. You can still strike there.
+**The map is empty far away.** Far terrain needs LOD Server Support on the server and your client, or Distant Horizons;
+without them only loaded chunks are shown. You can still strike there. Installed LOD Server Support before this
+version? Run `/lss clearcache` once on that server.
 
 **No sound from the mod.** Check the Ambient/Environment slider.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Клиент мода без окна: виртуальный дисплей KWin + Xwayland (tools/nested_kwin.sh — своя шина D-Bus и настройки), звук пишется в WAV (OpenAL Soft «wave»).
 # Сценарий (mod/src/devtest/.../ClientScenario) пускает все виды оружия и снимает кадры.
-#   tools/client_scenario.sh [all|guide|launch|rocket|loiter|hud|map|target-map|salvo-map|route-map|launch-map|nuke|nuke-water|nuke-lake|pall|pall-front|pall-low|pall-mine|mushroom|firestorm|wall|fx|fx-night|fx-late|models|far-models|occlusion|onboard|flyby|flyby-all|flyby-<случай>] [shaders] [dh]   → mod/run/scenario/screenshots/*.png, audio.wav, logs/latest.log
+#   tools/client_scenario.sh [all|guide|launch|rocket|loiter|hud|map|target-map|salvo-map|route-map|launch-map|nuke|nuke-water|nuke-lake|pall|pall-front|pall-low|pall-mine|mushroom|firestorm|wall|fx|fx-night|fx-late|models|far-models|occlusion|onboard|flyby|flyby-all|flyby-<случай>] [shaders] [dh] [voxy] [lss]   → mod/run/scenario/screenshots/*.png, audio.wav, logs/latest.log
 #   all — шахед, ракета, бомба, залп, бинокль и пульт (короткие полёты издалека);
 #   guide — кадры руководства игрока (GuideShots): рецепты, бинокль, пульт, GIF карты, снаряды на экране, камера,
 #     «Ланцет», ЗРК, стационарная пусковая; INCOMING_GUIDE=recipes,map — только эти разделы; карта — по прорисовке 20 чанков, без dh;
@@ -52,7 +52,9 @@
 #     маршрута — без свиста подлёта), pass (пролёт мимо), grad (залп РСЗО из 32 над головой), far (ракета и шахед из-за
 #     дальности сущностей); каждый слой, петли, отметки времени и итоги «SCENARIO check … PASS|FAIL» — в лог;
 #     один случай — flyby-grad, несколько — flyby-approach,pass;
-#   shaders — ещё Sodium, Iris и шейдерпак хоста из инстанса (как у Артёма); dh — ещё Distant Horizons из инстанса
+#   shaders — ещё Sodium, Iris и шейдерпак хоста из инстанса (как у Артёма); dh — ещё Distant Horizons из инстанса;
+#   lss — ещё LOD Server Support (jar lod-server-support-neoforge-*.jar в mods каталога MC_DIR): встроенный сервер раздаёт
+#     LOD своему клиенту (lss.test.integratedServer), карта и лучи берут рельеф у него (target-map lss)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/mod/run/scenario"
@@ -86,7 +88,7 @@ if [ "${1:-all}" = guide ]; then
 fi
 export INCOMING_SCENARIO="${1:-all}"
 MC="$(python3 "$ROOT/tools/paths.py" MC)"
-unset INCOMING_SHADERS INCOMING_DH INCOMING_VOXY
+unset INCOMING_SHADERS INCOMING_DH INCOMING_VOXY INCOMING_LSS
 for opt in "${@:2}"; do
   case "$opt" in
     shaders)
@@ -99,7 +101,8 @@ for opt in "${@:2}"; do
       ;;
     dh) export INCOMING_DH=1 ;;
     voxy) export INCOMING_VOXY=1 ;;
-    *) echo "неизвестный параметр: $opt (есть shaders, dh, voxy)" >&2; exit 2 ;;
+    lss) export INCOMING_LSS=1 ;;
+    *) echo "неизвестный параметр: $opt (есть shaders, dh, voxy, lss)" >&2; exit 2 ;;
   esac
 done
 export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}"

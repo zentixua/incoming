@@ -3109,6 +3109,7 @@ public final class ClientScenario {
     private void mapBegin(int o) {
         mapOpened = o;
         Incoming.LOG.info("SCENARIO map-target open at tick {}", o);
+        logCoverage();
         if (net.neoforged.fml.ModList.get().isLoaded("distanthorizons")) logDhThreads();
         ua.zentix.incoming.IncomingConfig.SERVER.droneFlightTime.set(20);
         Minecraft.getInstance().setScreen(new ua.zentix.incoming.client.screen.MapScreen(new RemoteScreen()));
@@ -3157,6 +3158,7 @@ public final class ClientScenario {
         for (int t = o + 300; t <= o + MAP_FLIGHT_WAIT; t += 200) {
             at(t, () -> {
                 Incoming.LOG.info("SCENARIO map-target terrain {}", ua.zentix.incoming.client.map.TerrainTiles.stats());
+                logCoverage();
                 if (net.neoforged.fml.ModList.get().isLoaded("distanthorizons")) logDhThreads();
             });
         }
@@ -3170,10 +3172,32 @@ public final class ClientScenario {
                 }
                 mapDone = true;
                 Incoming.LOG.info("SCENARIO map-target terrain {}", ua.zentix.incoming.client.map.TerrainTiles.stats());
+                logCoverage();
                 Incoming.LOG.info("SCENARIO done");
                 Minecraft.getInstance().stop();
             });
         }
+    }
+
+    /**
+     * Сколько рельефа вокруг игрока знают лучи и звук ({@code TerrainTiles.height}, как {@code FarTerrain} дальше чанков):
+     * доля точек сетки 33×33 в квадрате ±r — для сравнения источников (LOD Server Support, Distant Horizons).
+     */
+    private void logCoverage() {
+        var p = Minecraft.getInstance().player;
+        if (p == null) return;
+        StringBuilder b = new StringBuilder();
+        for (int r : new int[] {256, 512, 1024, 2048, 4096, 8192}) {
+            int known = 0, all = 0;
+            for (int i = -16; i <= 16; i++) {
+                for (int j = -16; j <= 16; j++) {
+                    all++;
+                    if (ua.zentix.incoming.client.map.TerrainTiles.height(net.minecraft.util.Mth.floor(p.getX()) + i * r / 16, net.minecraft.util.Mth.floor(p.getZ()) + j * r / 16).isPresent()) known++;
+                }
+            }
+            b.append(String.format(java.util.Locale.ROOT, " ±%d %.0f%%", r, 100.0 * known / all));
+        }
+        Incoming.LOG.info("SCENARIO map-target coverage (rays, sound) at tick {}:{}", tick, b);
     }
 
     /** DH не стоит или уже загрузил свои LOD вокруг: очередь загрузки пуста. */

@@ -53,3 +53,13 @@ reason = "Map strike: far terrain from Distant Horizons"
 versionRange = "${dh_version_range}"
 ordering = "NONE"
 side = "CLIENT"
+
+# LOD Server Support (сервер раздаёт LOD): необязателен; рельеф вдали для карты, лучей и звука через его клиентское API.
+# Версия любая: другое API — слой LSS выключается одной строкой в лог (client/map/LssTerrain)
+[[dependencies.${mod_id}]]
+modId = "lss"
+type = "optional"
+reason = "Map strike, sight lines and sound: far terrain from LOD Server Support"
+versionRange = "[0,)"
+ordering = "NONE"
+side = "CLIENT"

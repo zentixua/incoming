@@ -8,9 +8,27 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/grid/**"
 ---
 
-# Distant Horizons
+# Distant Horizons и LOD Server Support
 
 ## Подводные камни
+- Дальний рельеф карты, лучей и звука (`client/map/TerrainTiles`) — один дальний слой: первый работающий из LOD Server
+  Support (`LssTerrain`, пока `LSSApi.isServerEnabled()`) и DH (`DistantHorizonsTerrain`), иначе только чанки клиента
+  (`TerrainTiles.pickFar`). LSS (MIT, мягкая зависимость `lss`, compileOnly `lss_version`) — через его публичное
+  клиентское API `LSSApi.registerColumnConsumer`: подписка — в `FMLClientSetupEvent` (его API трогает его сетевые
+  классы), подписчик есть — клиент LSS качает и без Voxy. Колонка приходит в его потоке `LSS-ColumnProcessor`: верх
+  колонок считается там же (`LssColumns.summarize`, как слой чанков клиента: `MOTION_BLOCKING`, цвет карты, вода) и
+  кладётся в память; исключение наружу не выпускать — LSS сочтёт чанк не принятым и пришлёт заново всем (и Voxy).
+  Клиент LSS хранит метки полученного (`.lss/cache`) и при новом входе просит у сервера только изменённое, поэтому
+  колонки — и на диске (`incoming/lss-terrain/<сервер>/world-<хэш сида>/<измерение>.bin`, раз в 2 минуты и при выходе из мира); файла
+  нет, а метки LSS есть — вдали пусто до `/lss clearcache`. Подробных чанков (1 КБ) — не больше `LssTerrain.FULL_LIMIT`,
+  дальние от игрока — грубыми, середины клеток 4×4 (колонки плитки уровня 2). Колонки LSS читаются сразу из памяти
+  (`TerrainSource.peek`): `TerrainTiles.height`, `waterDepth`, `wet` (лучи `FarTerrain`, звук, ядерка) знают всё, что
+  прислал сервер, а не только построенные плитки. LSS не раздаёт LOD встроенному серверу одиночной игры (кроме
+  мира, открытого по сети — его `IntegratedServerLanHook`, — и свойства `lss.test.integratedServer`, им пользуется
+  `tools/client_scenario.sh target-map lss`). Файл — по адресу и хэшу сида мира (`BiomeManager.biomeZoomSeed`, AT),
+  как ключ меток самого LSS: другой мир на том же адресе LSS шлёт заново, и старый рельеф не должен остаться. Чанков
+  всего — не больше `LssTerrain.TOTAL_LIMIT` (дальние уходят; LSS их сам не пришлёт); при выходе из игры запись
+  дожидается крюк остановки JVM.
 - Рельеф Distant Horizons для карты — только через его API (`DhApi.Delayed.terrainRepo`), а оно читает базу DH в его
   пуле ввода-вывода, который ниже по приоритету, чем загрузка LOD: пока DH грузит LOD вокруг (после входа в мир, после
   дальнего перемещения), чтение стоит в очереди (облако: 30+ с; у хоста первая плитка — 0,3–1 с), потом плитка — десятки

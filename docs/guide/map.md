@@ -45,5 +45,9 @@ button.
 
 ## If the map is empty
 
-Without Distant Horizons the map shows only loaded chunks, but you can still strike a blank spot. The map does not work
-in the Nether.
+Far terrain comes from [LOD Server Support](https://modrinth.com/mod/lod-server-support) when it is on both the server
+and your client (the same terrain Voxy draws), otherwise from Distant Horizons. With neither, the map shows only loaded
+chunks, but you can still strike a blank spot. LOD Server Support does not run in single-player, so there it is
+Distant Horizons or loaded chunks; a world opened to LAN runs it for the host and the friends who have it. If you installed LOD Server Support before this version of Incoming, run
+`/lss clearcache` once on that server: LOD Server Support only sends terrain it has not sent before. The map does not
+work in the Nether.
