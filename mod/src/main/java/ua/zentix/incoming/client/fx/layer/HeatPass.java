@@ -293,7 +293,8 @@ public final class HeatPass {
     }
 
     /**
-     * Свободен ли путь от a до b (координаты окна заслонов, блоки) — зеркало {@code heatBlocked} в {@code fx_heat}: клетки
+     * Закрыт ли путь от a до b заслоном (координаты окна заслонов, блоки) — зеркало {@code heatBlocked} в {@code fx_heat}
+     * (там наоборот: 1 — путь свободен): клетки
      * вдоль отрезка по порядку (Amanatides, Woo, «A fast voxel traversal algorithm», Eurographics 1987), часть за окном
      * size — свободна, клетка самой точки a — её грань, не заслон; не больше {@link #SHADOW_CELLS} клеток.
      */

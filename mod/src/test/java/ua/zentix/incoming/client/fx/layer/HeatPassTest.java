@@ -51,6 +51,16 @@ class HeatPassTest {
             double num = numeric(a, u, t0, t1, n, w2);
             assertEquals(num, exact, 1e-4 * Math.max(num, 1e-3), "случай " + i);
         }
+        // у самой оси: грань в сантиметрах и в долях миллиметра от прямой струи, вдоль неё и наискось
+        double[][] near = {{0.01, 3, 0}, {0.0005, -2, 0.0003}, {0.02, 10, 0.01}};
+        for (double[] q : near) {
+            double[] a = {-q[0], -q[1], -q[2]}, u = {0, 1, 0};
+            for (double[] n : new double[][]{{1, 0, 0}, {0.6, 0.8, 0}, {0, -1, 0}}) {
+                double exact = HeatPass.segment(a[0], a[1], a[2], u[0], u[1], u[2], 0, 6, n[0], n[1], n[2], 0.01);
+                double num = numeric(a, u, 0, 6, n, 0.01);
+                assertEquals(num, exact, 1e-4 * Math.max(num, 1e-3), "у оси " + java.util.Arrays.toString(q) + " " + java.util.Arrays.toString(n));
+            }
+        }
     }
 
     /**
