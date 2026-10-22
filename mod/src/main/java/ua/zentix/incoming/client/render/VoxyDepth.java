@@ -122,10 +122,11 @@ final class VoxyDepth implements LodDepth.Source {
             int how = (reverse ? 1 : 0) | (zero2one ? 2 : 0);
             if (how != logged) {
                 logged = how;
-                described = LodDepth.describe("Voxy", !reverse, out.negativeOneToOne, out.empty, nearest(out, reverse),
+                described = LodDepth.describe(!reverse, out.negativeOneToOne, out.empty, nearest(out, reverse),
                         String.format(java.util.Locale.ROOT, ", Minecraft pixels marked %.1f", out.world));
                 Incoming.LOG.info("Voxy depth for the effects layer: {}", described);
             }
+            out.source = "Voxy";
             out.how = described;
             return true;
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
@@ -136,9 +137,20 @@ final class VoxyDepth implements LodDepth.Source {
         }
     }
 
+    /**
+     * Конец кадра: кадр Voxy, который идёт сейчас, — уже прошлый, даже если слой в нём глубину не брал (кадр без
+     * эффектов): следующий кадр берёт её, только если Voxy нарисовал новый.
+     */
     @Override
     public void endFrame() {
-        taken = last;
+        if (broken) return;
+        try {
+            Object system = renderSystem.invoke(null);
+            Object view = system == null ? null : viewport.invoke(system);
+            taken = view == null ? last : frameId.getInt(view);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            taken = last;
+        }
     }
 
     /** Расстояние до ближней плоскости проекции Voxy, блоков: для строки лога. */

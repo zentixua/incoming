@@ -25,6 +25,7 @@ public final class DhDepth implements LodDepth.Source {
     private static final DhDepth SOURCE = new DhDepth();
     /** Как читалась глубина DH в прошлый раз, что попал в лог (направление, диапазон, кто рисует); −1 — ещё никак. */
     private static int logged = -1;
+    private static String described = "";
     /** Для лога: проекция DH кадра негодна. */
     private static final int UNUSABLE = 8;
     private static final Vector4f VIEW = new Vector4f();
@@ -71,22 +72,21 @@ public final class DhDepth implements LodDepth.Source {
         out.texture = f.texture;
         out.negativeOneToOne = f.negativeOneToOne;
         out.empty = f.empty;
-        out.how = LodDepth.describe("Distant Horizons", f.forward, f.negativeOneToOne, f.empty,
-                along(out.inverseProjection, f.forward ? 0 : 1, f.negativeOneToOne),
-                String.format(Locale.ROOT, " (DH planes %.1f to %.0f), LOD drawn by %s", f.near, f.far, f.foreign ? "the shader pack" : "DH"));
-        if (!out.inverseProjection.isFinite()) {
-            // проекция кадра негодна (плоскости DH совпали, матрица не задана): LOD этого кадра для слоя — как без DH
-            if (logged != UNUSABLE) {
-                logged = UNUSABLE;
-                Incoming.LOG.warn("Distant Horizons depth for the effects layer: DH projection is not invertible ({}), DH terrain ignored", out.how);
-            }
-            return false;
-        }
+        out.source = "Distant Horizons";
         int how = (f.forward ? 1 : 0) | (f.negativeOneToOne ? 2 : 0) | (f.foreign ? 4 : 0);
-        if (how != logged) {
-            logged = how;
-            Incoming.LOG.info("Distant Horizons depth for the effects layer: {}", out.how);
+        boolean usable = out.inverseProjection.isFinite();
+        int state = usable ? how : UNUSABLE;
+        // строка — только когда меняется, как читается глубина (в лог и строку сценария), а не каждый кадр
+        if (state != logged) {
+            logged = state;
+            described = LodDepth.describe(f.forward, f.negativeOneToOne, f.empty, along(out.inverseProjection, f.forward ? 0 : 1, f.negativeOneToOne),
+                    String.format(Locale.ROOT, " (DH planes %.1f to %.0f), LOD drawn by %s", f.near, f.far, f.foreign ? "the shader pack" : "DH"));
+            // проекция кадра негодна (плоскости DH совпали, матрица не задана): LOD этого кадра для слоя — как без DH
+            if (usable) Incoming.LOG.info("Distant Horizons depth for the effects layer: {}", described);
+            else Incoming.LOG.warn("Distant Horizons depth for the effects layer: DH projection is not invertible ({}), DH terrain ignored", described);
         }
+        out.how = described;
+        if (!usable) return false;
         return true;
     }
 

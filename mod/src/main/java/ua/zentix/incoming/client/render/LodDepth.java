@@ -41,11 +41,11 @@ public final class LodDepth {
          * мира на дальней плоскости — это LOD, а не стена в сотнях блоков; его расстояние — по глубине LOD.
          */
         public boolean pinsWorldDepth;
-        /** Как читается глубина — для лога и строки сценария. */
-        String how = "";
+        /** Чья глубина и как читается — для строки сценария. */
+        String source = "", how = "";
 
         public String describe() {
-            return how;
+            return source + ": " + how;
         }
     }
 
@@ -81,8 +81,8 @@ public final class LodDepth {
     }
 
     /** Строка «как читается» для источника. */
-    static String describe(String source, boolean forward, boolean negativeOneToOne, float empty, float nearest, String more) {
-        return String.format(Locale.ROOT, "%s: %s Z, NDC %s, empty %.1f, nearest LOD %.1f blocks%s", source,
+    static String describe(boolean forward, boolean negativeOneToOne, float empty, float nearest, String more) {
+        return String.format(Locale.ROOT, "%s Z, NDC %s, empty %.1f, nearest LOD %.1f blocks%s",
                 forward ? "forward" : "reverse", negativeOneToOne ? "-1..1" : "0..1", empty, nearest, more);
     }
 }

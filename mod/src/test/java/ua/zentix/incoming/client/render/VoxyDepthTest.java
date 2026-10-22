@@ -70,6 +70,11 @@ class VoxyDepthTest {
         assertFalse(voxy.current(out), "Voxy не рисовал с прошлого кадра — глубина не этого кадра");
         view.frameId++;
         assertTrue(voxy.current(out));
+        voxy.endFrame();
+        // кадр без эффектов: слой глубину не брал, Voxy рисовал; в следующем Voxy не рисовал — его глубина прошлая
+        view.frameId++;
+        voxy.endFrame();
+        assertFalse(voxy.current(out), "глубина кадра без эффектов — не этого кадра");
     }
 
     @Test
