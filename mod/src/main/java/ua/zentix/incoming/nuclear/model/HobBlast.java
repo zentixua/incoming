@@ -109,6 +109,14 @@ public final class HobBlast {
         return pa / PA_PER_PSI;
     }
 
+    /**
+     * Падающая волна в свободном воздухе (стандарт DNA, подобие по ∛W), psi, на наклонной дальности {@code rangeM} м от
+     * подрыва {@code yieldKt} кт: давление фронта там, куда отражение от земли ещё не дошло.
+     */
+    public static double freeAirPsi(double rangeM, double yieldKt) {
+        return freeAirPa(Math.max(rangeM, 1e-6) / Math.cbrt(Math.max(1e-9, yieldKt))) / PA_PER_PSI;
+    }
+
     /** Стандарт DNA для 1 кт в свободном воздухе, Па, на дальности {@code r} м. */
     static double freeAirPa(double r) {
         double q = r / 445.42;
@@ -134,8 +142,11 @@ public final class HobBlast {
         return 1.402 - 3.4e-4 * Math.pow(z, 4) / (1 + 2.22e-5 * Math.pow(z, 6));
     }
 
-    /** Сжатие воздуха за фронтом давлением {@code op} Па. */
-    private static double densityRatio(double op) {
+    /**
+     * Сжатие воздуха за фронтом давлением {@code op} Па: Ренкин–Гюгонио с показателем адиабаты по давлению
+     * ({@link #shockGamma}; у слабой волны γ = 1,4 и ρ/ρ₀ = (7·P0 + 6P)/(7·P0 + P): 1 psi — 1,05, 5 psi — 1,23, 10 psi — 1,44).
+     */
+    public static double densityRatio(double op) {
         double xi = op / 101325 + 1, g = shockGamma(op), mu = (g + 1) / (g - 1);
         return (1 + mu * xi) / (5.975 + xi);
     }

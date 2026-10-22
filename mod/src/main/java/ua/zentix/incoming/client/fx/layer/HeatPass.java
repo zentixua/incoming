@@ -19,6 +19,7 @@ import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.FirePlume;
+import ua.zentix.incoming.nuclear.model.ShockOptics;
 
 import java.util.Arrays;
 
@@ -33,7 +34,12 @@ import java.util.Arrays;
  * Heat Mass Transfer 20, 1977: 0,38–0,40), δn = (n₀ − 1)·I·(T₀/T)·(1 − T₀/T); вихри — {@value #EDDY} радиуса столба
  * (интегральный масштаб турбулентности факела, ⚠ оценка), идут вверх со скоростью газа.
  * <p>
- * Источников — не больше четырёх каждого вида, самые заметные у глаза. Прохода нет, пока нет ни света, ни горячего газа.
+ * <b>Ударная волна ядерки</b> ({@code client/nuclear/NukeHeat}) — тот же сдвиг изображения за сжатым воздухом фронта:
+ * сфера фронта, скачок показателя преломления по давлению модели, отклонение — {@link ShockOptics} (копия в шейдере). Видна
+ * тонким кольцом по краю фронта на фоне неба и земли, пока перепад заметен.
+ * <p>
+ * Источников — не больше четырёх каждого вида (фронтов — двух), самые заметные у глаза. Прохода нет, пока нет ни света, ни
+ * горячего газа, ни фронта; сдвиг фронта меньше {@link #SHIFT_MIN} не берётся, и пиксель без сдвига пишется как был.
  */
 public final class HeatPass {
     /** n − 1 воздуха у земли (288 K, 1 атм, 550 нм), Edlén. */
@@ -45,7 +51,7 @@ public final class HeatPass {
     /** Газ холоднее воздуха + столько, K, — без дрожания (δn меньше 1 % пика). */
     static final double COOL = 20;
     /** Дрожание меньше этой доли пикселя — не рисуется. */
-    static final double SHIFT_MIN = 0.05;
+    public static final double SHIFT_MIN = 0.05;
     /** Свет шара на земле под ним меньше этой доли света открытого неба — шар на мир не светит (как у ядерки). */
     static final double SEEN = 0.005;
 
@@ -55,8 +61,10 @@ public final class HeatPass {
     /** Источники кадра. */
     public static final class Frame {
         final Matrix4f lights = new Matrix4f().zero(), lightColor = new Matrix4f().zero(), hot = new Matrix4f().zero(),
-                shape = new Matrix4f().zero();
-        private final double[] lightWeight = new double[4], hotWeight = new double[4];
+                shape = new Matrix4f().zero(), front = new Matrix4f().zero();
+        /** e-кратная толща оболочки и синус угла над серединой у земли: фронта 0 (x, y) и 1 (z, w). */
+        final Vector4f frontShape = new Vector4f();
+        private final double[] lightWeight = new double[4], hotWeight = new double[4], frontWeight = new double[2];
         private final Vector4f column = new Vector4f();
         /**
          * Привыкание глаза кадра ({@code Sight.exposure}: к свету неба и к свету огня у глаза — одно на весь кадр) и свет
@@ -87,8 +95,11 @@ public final class HeatPass {
             lightColor.zero();
             hot.zero();
             shape.zero();
+            front.zero();
+            frontShape.zero();
             Arrays.fill(lightWeight, 0);
             Arrays.fill(hotWeight, 0);
+            Arrays.fill(frontWeight, 0);
         }
 
         /** Огонь кадра собран: свет у глаза — привыканию того, что рисуется до слоя в следующем кадре. */
@@ -112,6 +123,10 @@ public final class HeatPass {
 
         boolean hotAny() {
             return hot.m03() > 0 || hot.m13() > 0 || hot.m23() > 0 || hot.m33() > 0;
+        }
+
+        boolean frontAny() {
+            return front.m03() > 0 || front.m13() > 0;
         }
 
         /**
@@ -143,10 +158,16 @@ public final class HeatPass {
          * (м/с = блоки/с).
          */
         public void hot(double x, double y, double z, double h, double r, double kelvin, double rise) {
+            hot(x, y, z, h, r, kelvin, rise, EDDY * r);
+        }
+
+        /** То же с размером вихря {@code eddy}, блоки: столб — поле отдельных факелов, вихри — их ({@link #plumes}). */
+        public void hot(double x, double y, double z, double h, double r, double kelvin, double rise, double eddy) {
             if (r <= 0 || h <= 0 || kelvin < CloudModel.T_AIR_K + COOL) return;
             double t0 = CloudModel.T_AIR_K / kelvin, dn = N0 * TURBULENCE * t0 * (1 - t0);
             // дрожание мельче {@link #SHIFT_MIN} пикселя и на самом длинном пути сквозь столб не видно: столб не нужен
-            double eddy = Math.max(0.05, EDDY * r), chord = Math.max(2 * r, Math.min(h, 4 * r));
+            eddy = Math.max(0.05, eddy);
+            double chord = Math.max(2 * r, Math.min(h, 4 * r));
             if (dn * Math.sqrt(chord / eddy) < SHIFT_MIN * pixel) return;
             double cx = x, cy = y + 0.5 * h, cz = z;
             double w = dn * r * Math.max(r, h) / Math.max(cx * cx + cy * cy + cz * cz, r * r);
@@ -164,6 +185,15 @@ public final class HeatPass {
          * Heskestad), температура — избыток на середине, скорость — на оси там ({@link FirePlume#axisSpeed}); доля share.
          */
         public void plume(double x, double y, double z, FirePlume p, double share) {
+            plumes(x, y, z, p, share, 0);
+        }
+
+        /**
+         * Горячий газ над полем очагов, как {@code p}, в круге радиуса {@code across} блоков с серединой (x, y, z) у земли
+         * от глаза (огненный шторм ядерки): столб каждого очага — как у {@link #plume}, столб всего поля — его высоты и
+         * температуры шириной с поле, вихри — каждого очага (поле — не один факел, а много рядом).
+         */
+        public void plumes(double x, double y, double z, FirePlume p, double share, double across) {
             if (share <= 0) return;
             double lo = p.flameHeight(), hi = 400;
             for (int i = 0; i < 30; i++) {
@@ -172,7 +202,29 @@ public final class HeatPass {
                 else hi = mid;
             }
             double h = lo, r = Math.max(2 * p.size, 0.12 * h);
-            hot(x, y, z, h, r, CloudModel.T_AIR_K + p.excess(0.5 * h) * share, p.axisSpeed(0.5 * h));
+            hot(x, y, z, h, Math.max(r, across), CloudModel.T_AIR_K + p.excess(0.5 * h) * share, p.axisSpeed(0.5 * h), EDDY * r);
+        }
+
+        /**
+         * Фронт ударной волны: сфера с серединой (x, y, z) от глаза радиусом r, e-кратная толща сжатия за фронтом l (всё —
+         * блоки), {@code low} — синус угла над серединой у земли (ниже фронта нет), dn — скачок показателя преломления на
+         * четырёх высотах ровно от low до верха. Фронт, который ни одному пикселю не даст сдвига в {@link #SHIFT_MIN}, не
+         * нужен.
+         */
+        public void front(double x, double y, double z, double r, double l, double low, double[] dn) {
+            double most = 0;
+            for (double v : dn) most = Math.max(most, v);
+            if (r <= 0 || l <= 0 || most <= 0) return;
+            double near = Math.abs(Math.sqrt(x * x + y * y + z * z) - r);
+            double w = ShockOptics.most(r, most, near, pixel) / pixel;
+            if (w < SHIFT_MIN) return;
+            int slot = frontWeight[1] < frontWeight[0] ? 1 : 0;
+            if (w <= frontWeight[slot]) return;
+            frontWeight[slot] = w;
+            front.setColumn(slot, column.set((float) x, (float) y, (float) z, (float) r));
+            front.setColumn(2 + slot, column.set((float) dn[0], (float) dn[1], (float) dn[2], (float) dn[3]));
+            if (slot == 0) frontShape.set((float) l, (float) low, frontShape.z, frontShape.w);
+            else frontShape.set(frontShape.x, frontShape.y, (float) l, (float) low);
         }
     }
 
@@ -225,7 +277,7 @@ public final class HeatPass {
 
     /** Нужен ли проход в этом кадре. */
     static boolean needed(Frame f) {
-        return shader != null && (f.lit() || f.hotAny());
+        return shader != null && (f.lit() || f.hotAny() || f.frontAny());
     }
 
     /**
@@ -267,7 +319,9 @@ public final class HeatPass {
             if (c.y > 0) SHAPE.setColumn(i, c.set(c.x, c.y, (float) ((time * c.z / c.y) % NOISE_PERIOD), c.w));
         }
         s.safeGetUniform("HeatShape").set(SHAPE);
-        s.safeGetUniform("HeatFrame").set(0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
+        s.safeGetUniform("HeatFront").set(f.front);
+        s.safeGetUniform("HeatFrontShape").set(f.frontShape.x, f.frontShape.y, f.frontShape.z, f.frontShape.w);
+        s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
         b.addVertex(1, -1, 0);
@@ -310,13 +364,21 @@ public final class HeatPass {
     /** Для строки сценария: источники кадра. */
     public static String describe() {
         Frame f = FRAME;
-        int l = 0, h = 0;
+        int l = 0, h = 0, n = 0;
         Vector4f c = new Vector4f();
         for (int i = 0; i < 4; i++) {
             if (f.lights.getColumn(i, c).w > 0) l++;
             if (f.hot.getColumn(i, c).w > 0) h++;
+            if (i < 2 && f.front.getColumn(i, c).w > 0) n++;
         }
-        StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "heat lights %d hot %d", l, h));
+        StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "heat lights %d hot %d front %d", l, h, n));
+        for (int i = 0; i < 2; i++) {
+            f.front.getColumn(i, c);
+            if (c.w <= 0) continue;
+            Vector4f dn = f.front.getColumn(2 + i, new Vector4f());
+            sb.append(String.format(java.util.Locale.ROOT, " {R %.0f L %.1f dn %.2e..%.2e most %.1f px}", c.w,
+                    i == 0 ? f.frontShape.x : f.frontShape.z, dn.x, dn.w, f.frontWeight[i]));
+        }
         for (int i = 0; i < 4; i++) {
             f.hot.getColumn(i, c);
             if (c.w <= 0) continue;

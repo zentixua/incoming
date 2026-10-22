@@ -141,6 +141,8 @@ public final class FxLayer {
 
     /** Время всего слоя на видеокарте: наклейка на воду, пелена, пробы, квадраты. */
     private static final GpuTimer GPU = new GpuTimer();
+    /** Проход дрожания и света огня ({@link HeatPass}) на видеокарте — внутри {@link #GPU}. */
+    private static final GpuTimer HEAT = new GpuTimer();
 
     /** Раз в тик клиента (не на паузе): секундная сводка времени кадра. */
     public static void tick() {
@@ -152,6 +154,7 @@ public final class FxLayer {
             lastCollected = collected;
             PallPass.second();
             GPU.second();
+            HEAT.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;
             frames = ticks = collected = 0;
         }
@@ -187,12 +190,14 @@ public final class FxLayer {
         if (level == null || s == null || atlas < 0) return;
         long start = System.nanoTime(), cpu = cpuNanos(), pauses = pauses();
         FarView sky = FarRenderer.view(e, mc, level);
-        // свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (HeatPass): воздух — дымка кадра. Огонь
+        // свет вспышки и огня обычного оружия на мир, дрожание воздуха над огнём и шаром и фронт ударной волны ядерки
+        // (HeatPass, NukeHeat): воздух — дымка кадра. Огонь
         // у глаза — до сбора кадра: по нему привыкает глаз всего кадра (шары, лужи, пожары, обломки — этого кадра; факелы
         // снарядов — прошлого: их места считает сбор, а вспыхнуть разом, как шар, они не могут)
         HeatPass.Frame heat = HeatPass.begin(level, sky.exposure(), sky.pixel());
         double air = Sight.KOSCHMIEDER / Sight.range(level.getRainLevel(sky.partial()), level.getThunderLevel(sky.partial()));
         FarBlasts.heat(sky.camera(), sky.partial(), heat, air);
+        ua.zentix.incoming.client.nuclear.NukeHeat.heat(sky.camera(), sky.partial(), heat);
         ua.zentix.incoming.client.fx.FireSmoke.heat(sky.camera(), heat, air);
         ua.zentix.incoming.client.fx.Exhaust.heat(sky.camera(), SmokeGrid.seconds(sky.partial()), heat, air);
         heat.eye(FarRenderer.flamesAtEye());
@@ -252,7 +257,11 @@ public final class FxLayer {
             SmokeGrid.drawn(pall == null || pall.smoke == null || pallDrawn && SmokePass.filled());
             PallPass.Frame front = pallDrawn ? pall : PallPass.empty();
             // свет на мир и дрожание — по кадру с пеленой, до квадратов: дым и огонь слоя ложатся поверх
-            if (hot && scene >= 0) HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
+            if (hot && scene >= 0) {
+                int timedHeat = HEAT.begin();
+                HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
+                HEAT.end(timedHeat);
+            }
             // пробы — после пелены: её проход кладёт карты и таблицу грибов кадра, а проба берёт пропускание пелены и грибов
             int seen = PROBES.update(scene, front, pallDrawn, VIEW, e.getProjectionMatrix(), view.pixel());
             RenderSystem.setShader(() -> s);
@@ -339,8 +348,9 @@ public final class FxLayer {
     /** Время кадра слоя за прошлую секунду — для строки сценария. */
     public static String describeTiming() {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
-                + "GPU %.3f ms (longest %.3f, %d frames), depth: %s", lastQuads, lastMean, lastMax, lastClean, Math.max(0, lastCleanCpu), lastCollected,
-                GPU.lastMean, GPU.lastMax, GPU.lastFrames, SceneDepth.describe());
+                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s), depth: %s", lastQuads, lastMean, lastMax,
+                lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
+                HEAT.lastFrames, HeatPass.describe(), SceneDepth.describe());
     }
 
     /** Выход из мира или смена измерения. */
