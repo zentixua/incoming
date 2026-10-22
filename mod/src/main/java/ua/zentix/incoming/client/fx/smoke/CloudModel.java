@@ -35,10 +35,12 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
  * шар остужает ещё быстрее (CCPS: 25–40 % тепла уходит светом) — здесь не считается, свечение кончается чуть позже
  * настоящего.
  * <p>
- * <b>Лужа.</b> Топливо, что не сгорело шаром, растекается по воронке и горит лужей: доля {@link #POOL_SHARE} (⚠ оценка),
- * площадь — круг воронки ({@link CraterModel#chargeRadius}), выгорание с единицы площади — у топлива
- * ({@link BlastSource.Fuel#poolBurn}): горит {@link #poolSeconds}, тепловыделение {@link #poolWatts}. Над ней — шлейф
- * Бриггса ({@link FirePlume}), пламя — по Хескестаду.
+ * <b>Топливо в воронке.</b> Что не разлетелось брызгами в шар, остаётся в воронке, пропитав грунт, и догорает там:
+ * доля {@link #POOL_SHARE}, площадь — круг воронки ({@link CraterModel#chargeRadius}), выгорание с единицы площади — у
+ * большой лужи топлива ({@link BlastSource.Fuel#poolBurn}) × {@link #THIN_LAYER}: слой в миллиметры на грунте горит
+ * медленнее глубокой лужи. Горит {@link #poolSeconds}, тепловыделение {@link #poolWatts}: у шахеда ~2,5 мин по ~2 МВт, у
+ * ракеты ~16 мин по ~3 МВт. Над ним — шлейф Бриггса ({@link FirePlume}) с сажей топлива, пока горит; пламя — по
+ * Хескестаду.
  * <p>
  * <b>Вещество.</b> Сажа взрывчатки — свободный углерод продуктов детонации ({@link BlastSource.Explosive#freeCarbon}), из
  * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link BlastSource.Fuel}.
@@ -100,11 +102,23 @@ public final class CloudModel {
      */
     public static final double GLOW_FULL_K = 1200;
     /**
-     * Доля топлива к удару, что не сгорает шаром, а растекается и горит лужей в воронке — ⚠ оценка: замеров у малых
-     * изделий нет. Шар CCPS считается по всей массе (как у сервера, что поджигает по нему), поэтому эта доля посчитана
-     * дважды: тепло лужи против шара мало (десятки МВт·с против сотен), в подъём облака оно не идёт.
+     * Доля топлива к удару, что остаётся в воронке и догорает там, а не разлетается брызгами в огненный шар: опыты Sandia с
+     * крылом С-141 в масштабе ~1/42, бьющим в песок с глиной (Tieszen, Attaway, «Fuel dispersal in high-speed aircraft/soil
+     * impact scenarios», SAND95-2529, 1996), — в воронке от почти нуля при ударе по касательной до 25–50 % при крутом.
+     * Шахед бьёт под 60°, ракета под 45° — круто; взят нижний край: у опытов не было заряда, а взрыв БЧ рядом с баком
+     * выбрасывает топливо из воронки (⚠ оценка внутри диапазона). Шар CCPS считается по всей массе (как у сервера, что
+     * поджигает по нему), поэтому эта доля посчитана дважды: по массе без неё диаметр шара на 9 % меньше (M^⅓) — в пределах
+     * разброса CCPS; тепло воронки в подъём облака не идёт.
      */
-    public static final double POOL_SHARE = 0.1;
+    public static final double POOL_SHARE = 0.25;
+    /**
+     * Выгорание топлива тонким слоем на грунте против глубокой лужи: у разлива толщиной в миллиметры наибольшая скорость
+     * горения — порядка пятой доли глубокой (Mealy, Benfer, Gottuk, «Liquid fuel spill fire dynamics», Fire Safety Science
+     * 10, 2011: тепло уходит в подложку); у топлива в пористом слое песка она тоже ниже, чем у лужи того же размера. В
+     * воронке шахеда — ~2 мм бензина, ракеты — ~8 мм JP-10 в перемешанном грунте (⚠ одна доля на оба: зависимость от
+     * толщины и грунта по их корреляциям не взята).
+     */
+    public static final double THIN_LAYER = 0.2;
     /** Дольше этого облако не живёт, с (дальше оно — дымка над районом). */
     public static final double LIFE_MAX = 3600;
 
@@ -182,7 +196,7 @@ public final class CloudModel {
     public final Thermal cooling;
     /** Радиус шара в конец горения, м, и высота его центра тогда. */
     final double burnRadius, burnHeight;
-    /** Лужа топлива в воронке: масса, кг; радиус, м; сколько горит, с; тепловыделение, Вт (0 — топлива нет). */
+    /** Топливо в воронке: масса, кг; радиус, м; сколько горит, с; тепловыделение, Вт (0 — топлива нет). */
     public final double poolKg, poolRadius, poolSeconds, poolWatts;
     /** Подъём облака ({@link Thermal}). */
     public final Thermal thermal;
@@ -225,9 +239,11 @@ public final class CloudModel {
         burnHeight = fuelLast ? fuelBallHeight(fuelBallSeconds) : 0.45 * heBall;
         cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), burnRadius, air);
         fireSeconds = glowEnd();
-        poolKg = POOL_SHARE * source.fuelKg();
+        // на воде воронки в грунте нет: топливо растекается плёнкой, а плёнка тоньше ~1 мм не держит горение — вода
+        // уносит тепло (Buist и др., «In situ burning», обзор для разливов нефти: гаснет у 1–2 мм; ⚠ по памяти)
+        poolKg = onWater ? 0 : POOL_SHARE * source.fuelKg();
         poolRadius = CraterModel.chargeRadius(source.chargeKg(), CraterModel.Soil.DRY);
-        double burn = source.fuel().poolBurn * Math.PI * poolRadius * poolRadius;
+        double burn = THIN_LAYER * source.fuel().poolBurn * Math.PI * poolRadius * poolRadius;
         poolSeconds = poolKg > 0 && burn > 0 ? poolKg / burn : 0;
         poolWatts = poolSeconds > 0 ? burn * source.fuel().heatJPerKg : 0;
         life = lifeSeconds();

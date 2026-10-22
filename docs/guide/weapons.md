@@ -151,11 +151,12 @@ burnt, the fireball does not switch off: it cools as it mixes with air, from yel
 smoke.
 
 - **Shahed**: a short flash, then a ball of burning petrol about 18 blocks across that burns for about 1.5 seconds and
-  glows for about another second as it cools. The petrol left in the crater burns for about 12 seconds with flames
-  about 7 blocks high and sends up a column of black smoke that leans downwind. Black smoke from the ball rises a few
+  glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
+  burns for about 2.5 minutes with flames about 3 blocks high. Its black smoke rises from the crater the whole time and
+  leans downwind: in a stiff breeze it trails low, in calm air it stands taller. Black smoke from the ball rises a few
   hundred blocks, and dust the colour of the ground spreads below.
 - **Cruise missile**: a bigger flash and a fuel ball about 38 blocks across that burns for about 3 seconds; the fuel left
-  in the crater burns for over a minute. Its own charge gives little soot, so the smoke is mostly from the burning fuel,
+  in the crater burns for about a quarter of an hour. Its own charge gives little soot, so the smoke is mostly from the burning fuel,
   with a lot of dust.
 - **Grad**: a flash and a small grey-black puff with dust, no fuel ball. A salvo leaves a field of puffs that merge and
   drift downwind.
@@ -165,7 +166,7 @@ A blast on water throws up a white column of spray instead of dust: about 14 blo
 the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the
 surface as a low ring of fine mist that drifts away and settles back within about a minute; clumps of water fly as
 particles. The Shahed's burning fuel makes a fireball about as big as its column, so most of the column is hidden in fire
-and smoke.
+and smoke. Fuel that lands on water spreads too thin to keep burning, so no fire is left after the ball.
 
 The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
 an orange glow spreads over the blocks around the crater and fades as the ball cools. There are no shadows: the light

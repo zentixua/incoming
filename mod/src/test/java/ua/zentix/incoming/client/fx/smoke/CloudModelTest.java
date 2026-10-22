@@ -228,19 +228,30 @@ class CloudModelTest {
     }
 
     /**
-     * Лужа топлива в воронке: горит по выгоранию с площади воронки (Babrauskas), пламя по Хескестаду; у «Града» топлива
-     * нет — и лужи нет. Шахед: секунды–десятки секунд, пламя — метры.
+     * Топливо в воронке (Tieszen, Attaway 1996: при крутом ударе в воронке 25–50 %; горит тонким слоем — пятая доля
+     * выгорания глубокой лужи, Mealy и др. 2011): горит по выгоранию с площади воронки, пламя по Хескестаду; у «Града»
+     * топлива нет — и огня нет. Шахед горит минуты (жалоба F: в 3.5.0 лужа гасла за 12 с, и через 30 с над местом удара
+     * не было дыма), ракета — больше десяти минут.
      */
     @Test
-    void poolFireBurnsFromTheFuelLeft() {
-        CloudModel drone = model(WeaponType.DRONE, CloudModel.Air.STANDARD), rocket = model(WeaponType.ROCKET, CloudModel.Air.STANDARD);
+    void craterFuelBurnsForMinutes() {
+        CloudModel drone = model(WeaponType.DRONE, CloudModel.Air.STANDARD), rocket = model(WeaponType.ROCKET, CloudModel.Air.STANDARD),
+                missile = model(WeaponType.MISSILE, CloudModel.Air.STANDARD);
         assertEquals(0, rocket.poolSeconds);
         assertEquals(0, rocket.poolShare(1));
+        // на воде воронки нет — и огня в ней нет
+        assertEquals(0, new CloudModel(drone.source, CloudModel.Air.STANDARD, true).poolSeconds);
         double area = Math.PI * drone.poolRadius * drone.poolRadius;
-        assertEquals(CloudModel.POOL_SHARE * drone.source.fuelKg() / (BlastSource.Fuel.PETROL.poolBurn * area), drone.poolSeconds, 1e-9);
-        assertTrue(drone.poolSeconds > 5 && drone.poolSeconds < 120, "шахед: лужа горит " + drone.poolSeconds + " с");
+        assertEquals(CloudModel.POOL_SHARE * drone.source.fuelKg() / (CloudModel.THIN_LAYER * BlastSource.Fuel.PETROL.poolBurn * area),
+                drone.poolSeconds, 1e-9);
+        assertEquals(drone.poolKg * BlastSource.Fuel.PETROL.heatJPerKg, drone.poolWatts * drone.poolSeconds, 1e-6 * drone.poolKg * 43.4e6);
+        assertTrue(drone.poolSeconds > 90 && drone.poolSeconds < 300, "шахед: топливо горит " + drone.poolSeconds + " с");
+        assertTrue(missile.poolSeconds > 600 && missile.poolSeconds < 1800, "ракета: топливо горит " + missile.poolSeconds + " с");
         assertTrue(drone.poolFlame() > 1 && drone.poolFlame() < 15, "пламя " + drone.poolFlame() + " м");
-        assertEquals(1, drone.poolShare(0.5 * drone.poolSeconds), 1e-12);
+        assertEquals(1, drone.poolShare(60), 1e-12, "через минуту шахед ещё горит в полную силу");
         assertEquals(0, drone.poolShare(drone.poolSeconds), 1e-12);
+        // дым над ним виден: толща шлейфа в 20 м по ветру 5 м/с днём (класс C) — выше порога видимости
+        FirePlume plume = new FirePlume(drone.poolWatts, drone.poolRadius, BlastSource.Fuel.PETROL.sootYield / BlastSource.Fuel.PETROL.heatJPerKg, 5, 2);
+        assertTrue(plume.tau(20) > 10 * CloudModel.SEEN, "толща шлейфа в 20 м " + plume.tau(20));
     }
 }
