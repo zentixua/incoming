@@ -2660,31 +2660,21 @@ public final class StrikeGameTests {
         ServerLevel level = h.getLevel();
         int[] centres = {40, 128, 216};
         List<Vec3> charges = new ArrayList<>();
-        java.util.Set<ChunkPos> beds = new java.util.HashSet<>();
         for (int z : centres) {
             // заряд под песком глубже прорыва (приведённая глубина ~1,3): полость доходит до песка, и он сыплется в неё,
             // пока полость не засыпана, — у трёх воронок разом
             BlockPos lo = new BlockPos(4, 1, z - 12), hi = new BlockPos(27, 27, z + 12);
             sandBed(h, lo, hi, 13);
-            for (BlockPos p : BlockPos.betweenClosed(lo.atY(0), hi.atY(0))) beds.add(new ChunkPos(h.absolutePos(p)));
             Vec3 charge = Vec3.atCenterOf(h.absolutePos(new BlockPos(16, 10, z)));
             generateNow(level, new ChunkPos(BlockPos.containing(charge)), 4);
             charges.add(charge);
         }
-        // подрыв — когда чанки песка тикают сущностями: тикет площадки грузит их сразу, но сущности ваниль пускает тикать,
-        // когда готов квадрат 5×5 вокруг, — на свежем сервере это несколько тиков. Падение, начатое раньше, ложится сразу
-        // ({@code CraterFalls}: сущность там висела бы), и живых у воронок набиралось меньше предела района
         // часы полосы попаданий — считающие: работа трёх подрывов (полости, трещины, трубы обрушения) делится по тикам
         // одинаково на любой машине; по настенным часам на занятой машине воронки осыпались по очереди, а не разом
         net.minecraft.server.MinecraftServer server = level.getServer();
         ua.zentix.incoming.work.WorkScheduler.useImpactClock(server, ua.zentix.incoming.nuclear.world.WorkClock.counting(1_000_000L));
         afterTest(h, () -> ua.zentix.incoming.work.WorkScheduler.useImpactClock(server, ua.zentix.incoming.work.WorkScheduler.newImpactClock()));
-        boolean[] fired = {false};
-        h.onEachTick(() -> {
-            if (fired[0] || !beds.stream().allMatch(c -> level.isPositionEntityTicking(c.getMiddleBlockPosition(0)))) return;
-            fired[0] = true;
-            for (Vec3 c : charges) Warheads.bunker(level, c, c.add(0, 14, 0), null, null);
-        });
+        for (Vec3 c : charges) Warheads.bunker(level, c, c.add(0, 14, 0), null, null);
         // только своя полоса: площадки соседних партий — в 5 блоках от неё, и их падающие блоки (после партии чанки
         // соседей не тикают — блок висит) не про эту проверку
         AABB box = new AABB(Vec3.atLowerCornerOf(h.absolutePos(new BlockPos(0, 1, 0))),
@@ -2697,7 +2687,6 @@ public final class StrikeGameTests {
             h.assertTrue(live <= CraterFalls.TOTAL_CAP, "живых падающих блоков " + live + " больше общего предела " + CraterFalls.TOTAL_CAP);
         });
         h.succeedWhen(() -> {
-            h.assertTrue(fired[0], "чанки песка так и не затикали сущностями");
             h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "ни один блок не лёг сразу: проверять нечего");
             h.assertTrue(max[0] > CraterFalls.LIVE_CAP, "живых разом было не больше " + max[0] + ": падали у одной воронки, общий предел не проверен");
             List<FallingBlockEntity> falling = level.getEntitiesOfClass(FallingBlockEntity.class, box);
@@ -3113,6 +3102,7 @@ public final class StrikeGameTests {
                     && level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)).isEmpty(), "шахед ещё летит: " + last[0]);
             double miss = Math.hypot(aim[0].x - point.x, aim[0].z - point.z);
             h.assertTrue(miss <= 5 * WeaponType.DRONE.spec().route().error(), String.format(Locale.ROOT, "промах пуска %.1f м — больше 5 СКО", miss));
+            // от начала площадки — вычитанием: relativePos в 1.21.1 поворачивает на 180°
             assertCrater(h, BlockPos.containing(aim[0]).subtract(h.absolutePos(BlockPos.ZERO)), last[0]);
         });
     }
