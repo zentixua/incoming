@@ -23,4 +23,30 @@ class SmokePuffsTest {
         float soot = SmokePuffs.thick(1, 0, 0, 0.9f);
         assertTrue(soot > 0.15 && soot < 0.35, "сажа " + soot);
     }
+
+    /**
+     * Тень карт клуба — в степени затухания света смеси против вещества запекания: белый дым окиси алюминия и капли почти
+     * без тени (иначе белое облако старта ЗРК выходило тёмно-серым шаром), сажа — темнее запечённого, смесь как у
+     * запекания — как есть; степень помещается в байт вершины ({@code FxQuads.SHADE_MAX}).
+     */
+    @Test
+    void mapShadeFollowsAlbedo() {
+        double white = SmokePuffs.shade(0, 0, 1, 0.9f) / SmokePuffs.BAKED_K, soot = SmokePuffs.shade(1, 0, 0, 0.9f) / SmokePuffs.BAKED_K;
+        assertTrue(white < 0.05, "капли " + white);
+        assertTrue(soot > 1 && soot < ua.zentix.incoming.client.fx.layer.FxQuads.SHADE_MAX, "сажа " + soot);
+        assertEquals(1, SmokePuffs.twoStream(0.46, 0.355) / SmokePuffs.BAKED_K, 0.01, "вещество запекания");
+        // брызги запечены веществом с альбедо 0,99, капли облака белее (0,9999): тень карт брызг у них слабее, у сажи — сильнее
+        assertTrue(SmokePuffs.shade(0, 0, 1, 0.9f) / SmokePuffs.SPRAY_K < 1, "капли на картах брызг");
+        assertTrue(SmokePuffs.shade(1, 0, 0, 0.9f) / SmokePuffs.SPRAY_K > 1, "сажа на картах брызг");
+    }
+
+    /** Альбедо и асимметрия запекания — те же, что в скрипте запекания. */
+    @Test
+    void bakedAlbedoMatchesBakeScript() throws java.io.IOException {
+        String bake = java.nio.file.Files.readString(java.nio.file.Path.of("..", "tools", "bake_fx", "bake.py"));
+        assertTrue(bake.contains("PUFF_ALBEDO, PUFF_G = " + SmokePuffs.BAKED_W + ", " + SmokePuffs.BAKED_G),
+                "tools/bake_fx/bake.py: PUFF_ALBEDO, PUFF_G не " + SmokePuffs.BAKED_W + ", " + SmokePuffs.BAKED_G);
+        assertTrue(bake.contains("SPRAY_ALBEDO, SPRAY_G = " + SmokePuffs.SPRAY_W + ", " + SmokePuffs.SPRAY_G),
+                "tools/bake_fx/bake.py: SPRAY_ALBEDO, SPRAY_G не " + SmokePuffs.SPRAY_W + ", " + SmokePuffs.SPRAY_G);
+    }
 }

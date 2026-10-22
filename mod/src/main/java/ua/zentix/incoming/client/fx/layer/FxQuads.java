@@ -88,9 +88,21 @@ public final class FxQuads {
      * движения ({@code Normal.z}). Меньше нуля — снова как обычно.
      */
     public void sixWay(float mix) {
-        nearest = (byte) (mix < 0 ? 0 : -32);
+        sixWay(mix, 1);
+    }
+
+    /**
+     * То же с тенью карт в степени shade (0…{@link #SHADE_MAX}, {@code SmokePuffs.shade}): она — в {@code Normal.y} внутри
+     * полосы запечённых клубов (−0,4…−0,1), {@link #SHADE_STEPS} ступеней.
+     */
+    public void sixWay(float mix, float shade) {
+        nearest = (byte) (mix < 0 ? 0 : -13 - Math.round(Mth.clamp(shade / SHADE_MAX, 0, 1) * SHADE_STEPS));
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
     }
+
+    /** Наибольшая степень тени карт клуба (сажа — ~1,3) и ступеней в полосе байта −13…−50 ({@code fx.fsh}). */
+    public static final float SHADE_MAX = 1.5f;
+    public static final int SHADE_STEPS = 37;
 
     public void glowShape(boolean on) {
         nearest = (byte) (on ? 64 : 0);

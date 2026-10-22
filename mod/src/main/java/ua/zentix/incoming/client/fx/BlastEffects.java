@@ -20,6 +20,7 @@ import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.sound.BlastEchoes;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.OwnSources;
+import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.net.S2C;
 import net.minecraft.world.level.block.state.BlockState;
 import ua.zentix.incoming.nuclear.model.BlackBody;
@@ -65,12 +66,15 @@ public final class BlastEffects {
     }
 
     /**
-     * Зенитная ракета разорвалась в воздухе ({@link S2C.Intercept}): вспышка, клуб огня, чёрное облачко разрыва и осколки;
-     * сбила — ещё и горящее топливо цели. Хлопок и лёгкая тряска — с фронтом. Дальше {@link FarBlasts#NEAR} — ничего: разрыв мал.
+     * Зенитная ракета разорвалась в воздухе ({@link S2C.Intercept}): облако разрыва — модель облака заряда боевой части
+     * ({@link FarBlasts#airburst}: вспышка, шар продуктов, облачко сажи — запечёнными клубами слоя, вдали — раскат), вблизи
+     * ещё искры осколков; сбила — горящее топливо цели. Хлопок и лёгкая тряска — с фронтом.
      */
     public static void intercept(S2C.Intercept p) {
-        if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.STONE, p.seed(), BlastSource.air(Airburst.CHARGE_KG)));
-        else if (FarBlasts.near(p.pos())) Effects.add(new Airburst(p.pos(), p.seed(), p.kill()));
+        BlastSource source = BlastSource.air(Airburst.CHARGE_KG);
+        CloudModel cloud = FarBlasts.airburst(p.pos(), source, p.seed());
+        if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.STONE, p.seed(), source));
+        else if (FarBlasts.near(p.pos()) && cloud != null) Effects.add(new Airburst(p.pos(), p.seed(), p.kill(), cloud));
     }
 
     /**
@@ -418,34 +422,23 @@ public final class BlastEffects {
     // ================================================================ разрыв зенитной ракеты
 
     static final class Airburst extends Timeline {
-        /** Радиус клуба огня, блоки (осколочно-фугасная часть ~20 кг). */
-        static final float R = 2.5f;
-        /**
-         * Заряд разрыва, кг ТНТ — для звука, слуха и удара по телу. Оценка сверху: вся боевая часть ~20 кг, хотя ВВ в
-         * осколочной части — её доля (зенитной ракеты в паспорте нет).
-         */
-        static final double CHARGE_KG = 20;
-        static final double FLASH_NEAR = 3 * R, FLASH_RANGE = 160;
+        /** Заряд разрыва, кг ТНТ — для облака, звука, слуха и удара по телу: боевая часть ракеты ЗРК по её паспорту. */
+        static final double CHARGE_KG = InterceptorSpec.SAM.passport().warhead().tnt();
+        /** Облако разрыва по модели: вспышка, шар, облачко ({@link FarBlasts#airburst}). */
+        private final CloudModel model;
         private final boolean kill;
 
-        Airburst(Vec3 pos, long seed, boolean kill) {
-            super(pos, GroundMaterial.STONE, seed, BlastSource.air(CHARGE_KG));
+        Airburst(Vec3 pos, long seed, boolean kill, CloudModel model) {
+            super(pos, GroundMaterial.STONE, seed, model.source);
+            this.model = model;
             this.kill = kill;
         }
 
         @Override
         boolean run(ClientLevel level, int t) {
             if (t == 0) {
-                flash(level, pos.subtract(0, 1.5, 0), FLASH_NEAR, FLASH_RANGE, 0.6f);
-                Explosions.fireball(level, pos, R, 6, random);
-                // чёрное облачко разрыва висит в воздухе и тает
-                int n = Math.round(10 * Fx.density(pos)) + 3;
-                for (int i = 0; i < n; i++) {
-                    Vec3 d = Explosions.dir(random, -1);
-                    Fx.smoke().vel(d.scale(0.25)).size(R * 0.4f, R * (0.9f + 0.4f * random.nextFloat())).growFast().life(240 + random.nextInt(120))
-                            .color(0x1E1C1A, 0x5A5650).alpha(0.85f).glow(1, 4).drag(0.85f).rise(0.001f).fadeIn(1).fadeFrom(0.45f)
-                            .budget(FxBudget.GROUND).spawn(level, pos.add(d.scale(R * 0.4)));
-                }
+                flash(level, model);
+                // осколки корпуса боевой части — искрами
                 for (int i = 0; i < 30; i++) {
                     Fx.spark().vel(Explosions.dir(random, -1).scale(0.6 + random.nextDouble() * 1.2)).life(8 + random.nextInt(14)).gravity(0.03f)
                             .spawn(level, pos);

@@ -36,6 +36,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.defense.DefenseWorld;
 import ua.zentix.incoming.defense.Interceptor;
+import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.defense.Radar;
 import ua.zentix.incoming.defense.SamBlockEntity;
 import ua.zentix.incoming.entity.DebrisEntity;
@@ -65,9 +66,11 @@ import java.util.UUID;
 /**
  * ЗРК ({@link SamBlockEntity}): сбивает чужие снаряды мода в дальности огня — по ракете на цель, с перезарядкой
  * направляющей; своих, команду, дальних, МБР и «Град» не трогает; без ракет не стреляет; цель вне загрузки бьёт, не
- * загрузив ни чанка. Блок заряжается воронкой (вынуть ею нельзя), ломается и взрывается с содержимым, рецепт — по
- * тому, стоит ли Create. У каждой проверки своя партия: ЗРК видит все снаряды мира, и соседняя проверка сбивала бы его
- * счёт ракет. Дальности — малые, поражение — наверняка ({@link #air}); всё возвращается после проверки.
+ * загрузив ни чанка; цель за холмом радар не видит. Блок заряжается воронкой (вынуть ею нельзя), ломается и
+ * взрывается с содержимым, рецепт — по тому, стоит ли Create. У каждой проверки своя партия: ЗРК видит все снаряды
+ * мира, и соседняя проверка сбивала бы его счёт ракет. Дальности — паспорта ЗРК; направляющие и перезарядка — на время
+ * проверки ({@link #air}), всё возвращается после неё. Стены площадки (барьеры по её высоте) закрывают радару низкие
+ * цели за ними: дальние цели — выше.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -92,7 +95,7 @@ public final class SamGameTests {
     @GameTest(template = "runway", timeoutTicks = 600, batch = "sam_kill", skyAccess = true)
     public static void shootsDownHostileDrones(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        air(h, 160, 96, 1, 1);
+        air(h, 1, 1);
         Listener crew = listener(h, "sam_crew", SAM.east(3)), stranger = listener(h, "sam_stranger", SAM.west(3));
         long placed = level.getGameTime();
         SamBlockEntity sam = sam(h, SAM, crew.getUUID(), 3);
@@ -135,7 +138,7 @@ public final class SamGameTests {
     @GameTest(template = "runway", timeoutTicks = 600, batch = "sam_friend", skyAccess = true)
     public static void ignoresOwnAndTeam(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        air(h, 160, 96, 4, 0);
+        air(h, 4, 0);
         Scoreboard board = level.getScoreboard();
         PlayerTeam blue = board.addPlayerTeam("sam_blue");
         StrikeGameTests.afterTest(h, () -> board.removePlayerTeam(blue));
@@ -151,11 +154,11 @@ public final class SamGameTests {
         Set<UUID> seenFriendly = new HashSet<>(), seenHostileByStranger = new HashSet<>();
         h.onEachTick(() -> {
             launches.watch();
-            for (Radar.Track t : Radar.scan(level, antenna, 160, 96, owner.getUUID())) {
+            for (Radar.Track t : scan(level, antenna, owner.getUUID())) {
                 h.assertFalse(t.hostile() || t.engageable(), "свой шахед " + t.id() + " чужой радару хозяина");
                 seenFriendly.add(t.id());
             }
-            for (Radar.Track t : Radar.scan(level, antenna, 160, 96, stranger)) if (t.engageable()) seenHostileByStranger.add(t.id());
+            for (Radar.Track t : scan(level, antenna, stranger)) if (t.engageable()) seenHostileByStranger.add(t.id());
         });
         h.succeedWhen(() -> {
             h.assertTrue(own.isRemoved() && team.isRemoved(), "шахеды ещё летят");
@@ -172,34 +175,78 @@ public final class SamGameTests {
     // ---------------------------------------------------------------- дальние, МБР и «Град»
 
     /**
-     * Чужой шахед в 200 блоках сбоку (вне мира) идёт мимо: радар (400) его видит — он на карте стороны, — но дальше
-     * дальности огня (100) — пуска нет.
+     * Чужой шахед вне мира между дальностью огня и дальностью радара (паспорт ЗРК) идёт мимо: радар его видит — он на
+     * карте стороны, — но пуска нет. Он к +Z, за дальней стеной площадки (к −Z и −X стоят прежние партии со своими
+     * постройками), и выше, чем она закрывает.
      */
     @GameTest(template = "runway", timeoutTicks = 100, batch = "sam_range", skyAccess = true)
     public static void ignoresOutOfRange(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        air(h, 400, 100, 4, 0);
+        air(h, 4, 0);
         UUID owner = UUID.randomUUID();
         SamBlockEntity sam = sam(h, SAM, owner, 4);
         Vec3 antenna = Vec3.atCenterOf(h.absolutePos(SAM)).add(0, 1, 0);
-        DroneEntity far = virtualDrone(h, antenna.add(200, 60, -150), antenna.add(200, 60, 4000), null);
+        double between = (InterceptorSpec.SAM.engageRange() + InterceptorSpec.SAM.radarRange()) / 2;
+        DroneEntity far = virtualDrone(h, antenna.add(0, 150, between), antenna.add(4000, 150, between), null);
         Launches launches = new Launches(level, owner);
         boolean[] seen = {false};
         h.onEachTick(() -> {
             launches.watch();
-            for (Radar.Track t : Radar.scan(level, antenna, 400, 100, owner)) {
+            for (Radar.Track t : scan(level, antenna, owner)) {
                 if (!t.id().equals(far.getUUID())) continue;
                 h.assertTrue(t.hostile() && !t.engageable(), "дальний шахед: чужой " + t.hostile() + ", бить " + t.engageable());
                 seen[0] = true;
             }
         });
         h.runAtTickTime(80, () -> {
-            h.assertTrue(seen[0], "радар не видел шахед в 200 блоках");
+            h.assertTrue(seen[0], "радар не видел шахед в " + (int) between + " блоках");
             h.assertTrue(Sightings.contact(level, Sides.side(level.getServer(), owner), far.getUUID()) != null, "дальний шахед не на карте стороны");
             h.assertTrue(launches.count() == 0, "пуск по цели дальше дальности огня");
             h.assertTrue(sam.ready() + sam.stockCount() == 4, "ракеты потрачены");
             h.succeed();
         });
+    }
+
+    /**
+     * Холм закрывает цель: стена камня в 12 блоках от радара, 20 блоков высотой. Шахед на бреющем за ней радар не видит,
+     * шахед высоко над ней — видит; тот, что за стеной, виден радару на её вершине (закрывает стена, а не дальность).
+     * Стена убирается после проверки.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "sam_terrain", skyAccess = true)
+    public static void hillHidesLowTarget(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        UUID owner = UUID.randomUUID();
+        BlockPos from = new BlockPos(20, 11, 20), to = new BlockPos(22, 30, 44);
+        for (BlockPos p : BlockPos.betweenClosed(from, to)) h.setBlock(p, Blocks.STONE);
+        StrikeGameTests.afterTest(h, () -> {
+            for (BlockPos p : BlockPos.betweenClosed(from, to)) level.setBlock(h.absolutePos(p), Blocks.AIR.defaultBlockState(), 3);
+        });
+        Vec3 antenna = Vec3.atCenterOf(h.absolutePos(new BlockPos(8, 11, 32))).add(0, 1, 0);
+        Vec3 hilltop = Vec3.atCenterOf(h.absolutePos(new BlockPos(21, 34, 32))).add(0, 1, 0);
+        DroneEntity low = hovering(h, new BlockPos(40, 14, 32)), high = hovering(h, new BlockPos(40, 80, 32));
+        h.runAtTickTime(2, () -> {
+            Set<UUID> seen = new HashSet<>(), fromTop = new HashSet<>();
+            for (Radar.Track t : scan(level, antenna, owner)) seen.add(t.id());
+            for (Radar.Track t : scan(level, hilltop, owner)) fromTop.add(t.id());
+            h.assertFalse(seen.contains(low.getUUID()), "шахед за холмом виден: " + h.relativeVec(low.position()));
+            h.assertTrue(seen.contains(high.getUUID()), "шахед над холмом не виден: " + h.relativeVec(high.position()));
+            h.assertTrue(fromTop.contains(low.getUUID()), "с вершины холма шахед за ним не виден: " + h.relativeVec(low.position()));
+            h.succeed();
+        });
+    }
+
+    /** Шахед в {@code at}, летит на +X к краю площадки; убирается после проверки. */
+    private static DroneEntity hovering(GameTestHelper h, BlockPos at) {
+        ServerLevel level = h.getLevel();
+        DroneEntity d = ModEntities.DRONE.get().create(level);
+        Vec3 start = Vec3.atCenterOf(h.absolutePos(at));
+        Vec3 aim = Vec3.atCenterOf(h.absolutePos(new BlockPos(60, at.getY(), at.getZ())));
+        d.launch(start, new Target.Point(aim), aim, null);
+        level.addFreshEntity(d);
+        StrikeGameTests.afterTest(h, () -> {
+            if (!d.isRemoved()) d.discard();
+        });
+        return d;
     }
 
     /**
@@ -209,7 +256,7 @@ public final class SamGameTests {
     @GameTest(template = "range", timeoutTicks = 800, batch = "sam_skip", skyAccess = true)
     public static void skipsIcbmAndGrad(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        air(h, 400, 200, 4, 0);
+        air(h, 4, 0);
         UUID owner = UUID.randomUUID();
         BlockPos at = new BlockPos(10, 11, 10);
         SamBlockEntity sam = sam(h, at, owner, 4);
@@ -232,7 +279,7 @@ public final class SamGameTests {
         Set<UUID> seen = new HashSet<>();
         h.onEachTick(() -> {
             launches.watch();
-            for (Radar.Track t : Radar.scan(level, antenna, 400, 200, owner)) {
+            for (Radar.Track t : scan(level, antenna, owner)) {
                 if (!t.id().equals(icbm.getUUID()) && !t.id().equals(gradId)) continue;
                 h.assertTrue(t.hostile() && !t.engageable(), t.projectile().weapon() + ": чужой " + t.hostile() + ", бить " + t.engageable());
                 seen.add(t.id());
@@ -254,7 +301,7 @@ public final class SamGameTests {
     @GameTest(template = "runway", timeoutTicks = 600, batch = "sam_empty", skyAccess = true)
     public static void emptyDoesNotFire(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        air(h, 160, 96, 4, 0);
+        air(h, 4, 0);
         UUID owner = UUID.randomUUID();
         SamBlockEntity sam = sam(h, SAM, owner, 0);
         DroneEntity d = drone(h, 16, null);
@@ -263,7 +310,7 @@ public final class SamGameTests {
         Vec3 antenna = Vec3.atCenterOf(h.absolutePos(SAM)).add(0, 1, 0);
         h.onEachTick(() -> {
             launches.watch();
-            for (Radar.Track t : Radar.scan(level, antenna, 160, 96, owner)) if (t.id().equals(d.getUUID()) && t.engageable()) engageable[0] = true;
+            for (Radar.Track t : scan(level, antenna, owner)) if (t.id().equals(d.getUUID()) && t.engageable()) engageable[0] = true;
         });
         h.succeedWhen(() -> {
             h.assertTrue(d.isRemoved(), "шахед ещё летит");
@@ -285,11 +332,12 @@ public final class SamGameTests {
     @GameTest(template = "runway", timeoutTicks = 400, batch = "sam_far", skyAccess = true)
     public static void loadsNoChunks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        air(h, 1500, 1000, 4, 0);
+        air(h, 4, 0);
         UUID owner = UUID.randomUUID();
         SamBlockEntity sam = sam(h, SAM, owner, 1);
         Vec3 antenna = Vec3.atCenterOf(h.absolutePos(SAM)).add(0, 1, 0);
-        DroneEntity far = virtualDrone(h, antenna.add(600, 100, 0), antenna.add(8000, 100, 0), null);
+        // выше стены площадки в 16 блоках к +X (её верх — на 3,5 блока выше антенны): ниже радар её за стеной не видит
+        DroneEntity far = virtualDrone(h, antenna.add(600, 200, 0), antenna.add(8000, 200, 0), null);
         FlightLog log = StrikeWorld.get(level).flightLog();
         int intercepted = log.total(FlightLog.Event.INTERCEPTED);
         // полоса чанков от 96 блоков за ЗРК до шахеда в конце проверки и за ним, в три ряда
@@ -326,7 +374,7 @@ public final class SamGameTests {
     @GameTest(template = "range", timeoutTicks = 200, batch = "sam_block", skyAccess = true)
     public static void blockLoadsBreaksAndCrafts(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        air(h, 160, 96, 2, 0);
+        air(h, 2, 0);
         BlockPos at = new BlockPos(20, 11, 20);
         SamBlockEntity sam = sam(h, at, null, 0);
         h.assertTrue(level.getBlockState(h.absolutePos(at)).is(BlockTags.MINEABLE_WITH_PICKAXE)
@@ -393,24 +441,22 @@ public final class SamGameTests {
 
     // ---------------------------------------------------------------- помощники
 
-    /** Настройки ПВО на время проверки: поражение наверняка, перезарядка в секундах; возвращаются после неё. */
-    private static void air(GameTestHelper h, int radar, int engage, int rails, int reloadSeconds) {
+    /** Правила ПВО на время проверки: направляющие и перезарядка в секундах; возвращаются после неё. */
+    private static void air(GameTestHelper h, int rails, int reloadSeconds) {
         IncomingConfig.Server c = IncomingConfig.SERVER;
-        int radar0 = c.samRadarRange.get(), engage0 = c.samEngageRange.get(), rails0 = c.samRails.get(), reload0 = c.samReloadSeconds.get();
-        double kill0 = c.samKillProbability.get();
-        c.samRadarRange.set(radar);
-        c.samEngageRange.set(engage);
+        int rails0 = c.samRails.get(), reload0 = c.samReloadSeconds.get();
         c.samRails.set(rails);
         c.samReloadSeconds.set(reloadSeconds);
-        c.samKillProbability.set(1.0);
         StrikeGameTests.afterTest(h, () -> {
-            c.samRadarRange.set(radar0);
-            c.samEngageRange.set(engage0);
             c.samRails.set(rails0);
             c.samReloadSeconds.set(reload0);
-            c.samKillProbability.set(kill0);
             DefenseWorld.get(h.getLevel()).clear();
         });
+    }
+
+    /** Что видит радар ЗРК в {@code antenna}: дальности — паспорта ЗРК. */
+    private static List<Radar.Track> scan(ServerLevel level, Vec3 antenna, @Nullable UUID owner) {
+        return Radar.scan(level, antenna, InterceptorSpec.SAM.radarRange(), InterceptorSpec.SAM.engageRange(), owner);
     }
 
     /**

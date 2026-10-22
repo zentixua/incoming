@@ -122,10 +122,14 @@ void main() {
         // сторонам по клубу (цвет вершины — толстый слой вещества в рассеянном свете неба, R∞): к солнцу просвечивающий
         // край ярче, со стороны солнца плотный клуб темнее (рассеяние вперёд). Огненные шары — по сторонам, в долях света
         // у глаза, и не ярче огня на экране (FxLights). Сумма — в линейном, на экран — степень 1/2,2
-        float key = sixLight(a.rgb, b, sixKeyDir, mirror) / FxSixLight.z;
-        float diffuse = (a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z;
+        // тень карт — у вещества запекания; у этого — в степени его затухания света против запечённого (SmokePuffs.shade,
+        // байт −13…−50 в Normal.y: FxQuads.sixWay)
+        // степень не ниже 0,001 и основание не ноль: pow(0, 0) в GLSL не определён (NaN — чёрный пиксель в смешивании)
+        float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
+        float key = pow(max(sixLight(a.rgb, b, sixKeyDir, mirror) / FxSixLight.z, 1e-6), shade);
+        float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
         float sky = sixKey * key + (1.0 - sixKey) * diffuse;
-        vec3 fire = sixBall * (sixLight(a.rgb, b, sixBallDir, mirror) / FxSixLight.z);
+        vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir, mirror) / FxSixLight.z, 1e-6), shade);
         sixLit = pow(max(vec3(sky) + fire, vec3(0.0)), vec3(1.0 / 2.2));
         tex = vec4(vec3(a.a), a.a);
     } else if (nearest < -0.5) {

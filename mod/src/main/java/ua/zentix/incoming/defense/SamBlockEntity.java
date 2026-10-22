@@ -152,9 +152,9 @@ public class SamBlockEntity extends BlockEntity {
 
     /** Осмотр неба: тревога и разведка стороны, пуск по ближайшей свободной цели, экран радара своим рядом. */
     private void sweep(ServerLevel level, BlockPos pos) {
-        IncomingConfig.Server cfg = IncomingConfig.SERVER;
         Vec3 antenna = Vec3.atCenterOf(pos).add(0, 1, 0);
-        List<Radar.Track> tracks = Radar.scan(level, antenna, cfg.samRadarRange.get(), cfg.samEngageRange.get(), owner);
+        InterceptorSpec spec = InterceptorSpec.SAM;
+        List<Radar.Track> tracks = Radar.scan(level, antenna, spec.radarRange(), spec.engageRange(), owner);
         String side = owner == null ? null : Sides.side(level.getServer(), owner);
         lastTracks = tracks.size();
         lastHostile = 0;
@@ -170,7 +170,7 @@ public class SamBlockEntity extends BlockEntity {
         if (ready > 0 && !covered) {
             Radar.Track shot = FireControl.pick(tracks, DefenseWorld.get(level));
             if (shot != null) {
-                FireControl.launch(level, rail(pos, ready - 1), shot, owner, pos.toShortString(), InterceptorSpec.SAM);
+                FireControl.launch(level, rail(pos, ready - 1), shot, owner, pos.toShortString(), spec);
                 ready--;
                 setChanged();
             }
@@ -201,8 +201,8 @@ public class SamBlockEntity extends BlockEntity {
             int flags = (t.hostile() ? S2C.Blip.HOSTILE : 0) | (t.engageable() ? S2C.Blip.ENGAGEABLE : 0) | (world.engaged(t.id()) ? S2C.Blip.ENGAGED : 0);
             blips.add(new S2C.Blip((float) d.x, (float) d.z, t.projectile().getYRot(), t.projectile().weapon().id(), flags));
         }
-        IncomingConfig.Server cfg = IncomingConfig.SERVER;
-        S2C.RadarScope packet = new S2C.RadarScope(antenna, cfg.samRadarRange.get(), cfg.samEngageRange.get(), ready, stockCount(), blips);
+        S2C.RadarScope packet = new S2C.RadarScope(antenna, (int) InterceptorSpec.SAM.radarRange(), (int) InterceptorSpec.SAM.engageRange(), ready,
+                stockCount(), blips);
         for (ServerPlayer p : crew) PacketDistributor.sendToPlayer(p, packet);
     }
 

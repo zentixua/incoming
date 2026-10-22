@@ -263,6 +263,18 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
             InterceptorSpec.SAM.passport().sustain().exhaust(), 3_200, 1.14, 0.028, SAM_BOOST.exitRadius(), Smoke.ALUMINA,
             alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
 
+    /**
+     * Ракета ЗРК 9М96: длина и калибр — паспорт, силуэт — πDL/4. Огонь и след — на разгоне двигатель разгона, потом
+     * маршевый режим (точка ленты — каждый тик на разгоне: дуга схода крутая). Вдали её нет: вид — только в тикающих
+     * чанках сервера, в прорисовке.
+     */
+    private static final FarLook SAM_FAR = new FarLook(InterceptorSpec.SAM.passport().length(),
+            Math.PI * InterceptorSpec.SAM.passport().diameter() * InterceptorSpec.SAM.passport().length() / 4, 0xC8C8BE, null,
+            Stage.burning(SAM_BOOST, false, 1), Stage.burning(SAM_SUSTAIN, false, 2), null);
+    /** Ракета ЗРК: сопло — у хвоста модели; звук мотора — свой ({@code InterceptorSound}). */
+    public static final ClientAirframe INTERCEPTOR = new ClientAirframe(WeaponModels::interceptor, List.of(),
+            List.of(new At(0, 0, -InterceptorSpec.SAM.noseLength())), null, 0, SAM_FAR);
+
     /** Шахед: 3,6 м, размах 2,6; дельта-крыло ~4,7 м² и корпус Ø 0,45. */
     private static final FarLook DRONE_FAR = new FarLook(3.6, 3.6, 0x3C3E42, null, Stage.burning(DRONE_BOOSTER, true, 2),
             Stage.burning(DRONE_ENGINE, false, 4), null);

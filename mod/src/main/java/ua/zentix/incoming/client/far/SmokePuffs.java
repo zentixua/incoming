@@ -122,6 +122,8 @@ final class SmokePuffs {
             long h = mix(seed * 0x9E3779B97F4A7C15L + id);
             float lit = (float) ((0.88 + 0.24 * unit(h)) * view.ambient());
             float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
+            double light = shade(ks, kd, kw, dg);
+            float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
             float shown = (float) (a * vis * point[1] * air * outside);
             // кучка: чем крупнее гаусс на экране, тем больше клубов и тем они мельче (кадр 128 пикселей не растягивается на
             // пол-экрана); дробная часть числа — доля последнего, без скачка
@@ -147,6 +149,7 @@ final class SmokePuffs {
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1), (float) (frame - f0),
+                        spray ? sprayShade : shade,
                         cr, cg, cb, sub * last);
             }
         }
@@ -193,6 +196,40 @@ final class SmokePuffs {
         double g = (soot * SmokeGrid.SOOT_G + dust * SmokeGrid.DUST_G + water * SmokeGrid.DROP_G) / sum;
         double u = Math.sqrt(Math.max((1 - w) / (1 - w * g), 0));
         return (float) Math.pow(Math.max(0, (1 - u) / (1 + u)), 1 / 2.2);
+    }
+
+    /**
+     * Альбедо и асимметрия вещества, с которыми запечены карты клуба дыма и клуба брызг ({@code tools/bake_fx/bake.py}:
+     * {@code PUFF_ALBEDO}, {@code PUFF_G}, {@code SPRAY_ALBEDO}, {@code SPRAY_G}).
+     */
+    static final double BAKED_W = 0.55, BAKED_G = 0.55, SPRAY_W = 0.99, SPRAY_G = 0.85;
+    /** Затухание света в толще k двух потоков у вещества запекания дыма и брызг (после дельта-Эддингтона, как у {@link SmokeGrid}). */
+    static final double BAKED_K = deltaK(BAKED_W, BAKED_G), SPRAY_K = deltaK(SPRAY_W, SPRAY_G);
+
+    /** k двух потоков вещества с альбедо w и асимметрией g после дельта-Эддингтона (f = g²). */
+    static double deltaK(double w, double g) {
+        double f = g * g;
+        return twoStream((1 - f) * w / (1 - f * w), g / (1 + g));
+    }
+
+    /** Затухание рассеянного света в толще, на единицу толщи: k = √(3(1 − ω')(1 − ω'g')) (два потока Эддингтона). */
+    static double twoStream(double w, double g) {
+        return Math.sqrt(Math.max(3 * (1 - w) * (1 - w * g), 0));
+    }
+
+    /**
+     * Затухание света в толще смеси, k двух потоков; степень тени карт — k смеси / k вещества запекания этого клуба
+     * ({@link #BAKED_K} у дыма, {@link #SPRAY_K} у брызг). Карты клуба — свет, прошедший его толщу τ (≈ e^(−kτ) против
+     * среднего по клубу), поэтому у смеси с другим альбедо карта берётся в этой степени ({@code fx.fsh}): белый дым окиси алюминия и капли (ω' ≈ 0,999) почти не дают тени — светлые насквозь,
+     * как облако; сажа (ω' ≈ 0,2) — темнее запечённого клуба. ⚠ Приближение: путь света в клубе один и тот же, меняется
+     * только затухание на нём. Доли — по ослаблению, как у {@link #thick}.
+     */
+    static double shade(double soot, double dust, double water, float dustW) {
+        double sum = soot + dust + water;
+        if (!(sum > 0)) return BAKED_K;
+        double w = (soot * SmokeGrid.SOOT_W + dust * dustW + water * SmokeGrid.DROP_W) / sum;
+        double g = (soot * SmokeGrid.SOOT_G + dust * SmokeGrid.DUST_G + water * SmokeGrid.DROP_G) / sum;
+        return twoStream(w, g);
     }
 
     /** Перемешивание битов (splitmix64): своё случайное у каждого клуба без объектов на кадр. */

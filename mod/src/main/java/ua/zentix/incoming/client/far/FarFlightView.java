@@ -193,7 +193,8 @@ public final class FarFlightView {
         Far(FlightTrack track, int owner) {
             this.track = track;
             this.owner = owner;
-            this.airframe = ClientWeaponSpec.of(track.weapon).airframe(!track.bomber);
+            // путь без оружия — зенитная ракета ЗРК
+            this.airframe = track.weapon == null ? ClientWeaponSpec.INTERCEPTOR : ClientWeaponSpec.of(track.weapon).airframe(!track.bomber);
             this.look = airframe.far();
             this.model = airframe.model();
             Arrays.fill(chain, TrailPoints.NONE);
@@ -222,15 +223,9 @@ public final class FarFlightView {
         long now = FlightTracks.now();
         air = ClientAir.now();
         pass++;
-        for (FlightTrack track : FlightTracks.all()) {
-            Far f = BY_TRACK.get(track);
-            if (f == null) {
-                f = new Far(track, ++owners);
-                BY_TRACK.put(track, f);
-                FARS.add(f);
-            }
-            f.seen = pass;
-        }
+        for (FlightTrack track : FlightTracks.all()) see(track);
+        // зенитные ракеты ЗРК: шлейф и облако старта — тем же законом, что у снарядов
+        for (FlightTrack track : FlightTracks.interceptors()) see(track);
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         double world = mc.options.getEffectiveRenderDistance() * 16.0;
         // мир заморожен: снаряды стоят, шлейфы не растут и не стареют (точки того же места не нужны)
@@ -257,6 +252,22 @@ public final class FarFlightView {
         }
         if (frozen) POINTS.hold();
         else POINTS.expire(now - 1);
+    }
+
+    /** Путь есть в этом тике: его вид (новый — с этого тика). */
+    private static void see(FlightTrack track) {
+        Far f = BY_TRACK.get(track);
+        if (f == null) {
+            f = new Far(track, ++owners);
+            BY_TRACK.put(track, f);
+            FARS.add(f);
+        }
+        f.seen = pass;
+    }
+
+    /** Имя снаряда пути в строке сценария. */
+    private static String name(FlightTrack track) {
+        return track.weapon == null ? "sam" : track.bomber ? "b2" : track.weapon.getSerializedName();
     }
 
     /** Мир заморожен ({@code /tick freeze}): сущности и частицы стоят. */
@@ -570,6 +581,7 @@ public final class FarFlightView {
             out.disc(dx, dy, dz, OUT[0], channel(c, 0) * lit, channel(c, 1) * lit, channel(c, 2) * lit, a);
             double bodyPx = 2 * OUT[0] / (d * view.pixel());
             flights++;
+            // путь без оружия (ракета ЗРК) — всегда по сущности: сюда он не доходит
             COUNT[track.bomber ? B2 : track.weapon.ordinal()]++;
             if (nearest == null || d < nearD) {
                 nearest = f;
@@ -744,7 +756,7 @@ public final class FarFlightView {
         Far f = nearest;
         if (f != null) {
             sb.append(String.format(Locale.ROOT, "; nearest %s: %.0f blocks, t %.2f, body %.1f px α %.2f",
-                    f.track.bomber ? "b2" : f.track.weapon.getSerializedName(), nearD, nearT, nearBody, nearBodyAlpha));
+                    name(f.track), nearD, nearT, nearBody, nearBodyAlpha));
             if (nearModel > 0) sb.append(String.format(Locale.ROOT, ", model %.1f px (%s)", nearModel, nearCoarse ? "coarse" : "full"));
             if (nearFlame > 0) sb.append(String.format(Locale.ROOT, ", flame %.1f px α %.2f", nearFlame, nearFlameAlpha));
             if (f.visTarget < 1) sb.append(", behind terrain");
@@ -752,7 +764,7 @@ public final class FarFlightView {
         Far g = flameOf;
         if (g != null) {
             sb.append(String.format(Locale.ROOT, "; flames %d, nearest %s (%s): %.0f blocks, core %.1f px α %.2f share %.2f, glare %.1f px, veil %.1f px",
-                    flames, g.track.bomber ? "b2" : g.track.weapon.getSerializedName(), g.track.fromServer() ? "packets" : "entity", flameD, flameCorePx,
+                    flames, name(g.track), g.track.fromServer() ? "packets" : "entity", flameD, flameCorePx,
                     flameCoreAlpha, flameShare, flameGlarePx, flameVeilPx));
         }
         return sb.append("; trail ").append(points).append(" points").toString();

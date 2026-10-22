@@ -50,14 +50,28 @@ and a half blocks tall. An interceptor leaves its canister straight up, then tur
 
 ![A SAM shooting down incoming Shaheds; the radar screen in the corner](img/sam.webp)
 
-- Its radar reaches 3 km and it fires from 1.5 km, one interceptor per target. About one in five misses.
+- Its radar reaches 3 km and it fires from 1.5 km, one interceptor per target. These are game ranges, much shorter
+  than a real system's, so that the fight happens within sight (not physics). Harder-to-detect targets are seen closer:
+  a cruise missile from 2.1 km, a Lancet from 1.5 km, the B-2 only from 450 blocks.
+- The radar sees only what is in line of sight. A hill or a building between the SAM and the target hides it: a cruise
+  missile flying low behind a hill is not seen until it comes out. Ground in chunks the server has not loaded hides
+  nothing.
+- An interceptor explodes where it passes closest to its target. If that point is within its fuze radius (6 blocks
+  plus half the target's length), the target is shot down. There is no dice roll. If it passes farther away, the target
+  flies on and the interceptor turns back after it until its fuel runs out (15 s).
 - It does not shoot down ICBMs or Grad rockets. It does not see players, mobs or aircraft.
 - It needs open sky above it and a player nearby: it does not work in an unloaded chunk.
 - Its own side gets "Air raid alert!" with the direction to the target. Near the SAM, a radar screen appears in the
   corner of the screen.
 - RMB on it with an empty hand shows how many missiles are ready and how many are in stock.
 
-Against a SAM: a salvo (it has only four rails), a route around it, the hard-to-detect B-2, or the Grad.
+How often it shoots targets down follows from the game model; nothing is tuned. In a batch of 400 simulated raids per
+target over flat ground, with the target point up to 600 blocks from the SAM, every interceptor it fired hit:
+all Shaheds, cruise missiles and Lancets were shot down, and 78 % of B-2s. The other B-2s never came within the 450
+blocks at which the radar sees them. In a real game targets get through behind hills, in salvos larger than its four
+rails while it reloads, and when it runs out of missiles.
+
+Against a SAM: a salvo (it has only four rails), a route around it or behind hills, the hard-to-detect B-2, or the Grad.
 
 ### Crafting and loading
 

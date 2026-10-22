@@ -62,7 +62,7 @@ record Emission(double time, double x, double y, double z, double distance, doub
             Spectrum spectrum = noise.spectrum(part);
             double[] bands = new double[Propagation.BANDS];
             double level = Propagation.level(lw, spectrum, path(distance), bands);
-            h = new Heard(lw, level, Propagation.margin(bands, weather), highs(lw, spectrum, distance));
+            h = new Heard(lw, level, Propagation.margin(bands, weather), highs(lw, spectrum, path(distance)));
         }
         parts[part.ordinal()] = h;
         return h;
@@ -74,13 +74,16 @@ record Emission(double time, double x, double y, double z, double distance, doub
      */
     double heardAt(Noise noise, Noise.Part part, boolean drilling, double distance) {
         double lw = noise.power(part, FlightPhase.byId(phase), phaseAge, velocity.length(), drilling);
-        return lw == Noise.SILENT ? 1 : highs(lw, noise.spectrum(part), distance);
+        return lw == Noise.SILENT ? 1 : highs(lw, noise.spectrum(part), path(distance));
     }
 
-    /** Доля верхов: насколько октава 4 кГц ослабла по пути сильнее, чем звук в целом (EFX глушит их выше 5 кГц). */
-    private double highs(double lw, Spectrum spectrum, double distance) {
+    /**
+     * Доля верхов звука мощностью {@code lw} со спектром {@code spectrum} после пути {@code path}: насколько октава
+     * 4 кГц ослабла по пути сильнее, чем звук в целом (EFX глушит их выше 5 кГц).
+     */
+    static double highs(double lw, Spectrum spectrum, Propagation.Path path) {
         double[] bands = new double[Propagation.BANDS];
-        double level = Propagation.level(lw, spectrum, path(distance), bands);
+        double level = Propagation.level(lw, spectrum, path, bands);
         int hf = Propagation.BANDS - 2;
         double emitted = lw + spectrum.aWeighting(), lost4k = lw + spectrum.z(hf) + Propagation.aWeight(hf) - bands[hf];
         return Math.min(1, Math.pow(10, -(lost4k - (emitted - level)) / 20));

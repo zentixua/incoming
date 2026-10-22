@@ -330,6 +330,14 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
          * @param climbSine синус угла пути к горизонту (> 0 — вверх)
          */
         public double speed(double speed, double target, double climbSine) {
+            return speed(speed, target, climbSine, accel, relax);
+        }
+
+        /**
+         * Тот же закон с мотором {@code accel} (прирост за тик, не больше) и {@code relax} (доля разницы с нужной
+         * скоростью за тик): один на всё, что летит на моторе, — и на ракету ЗРК ({@code defense.InterceptorSpec}).
+         */
+        public static double speed(double speed, double target, double climbSine, double accel, double relax) {
             double engine = (target - speed) * relax;
             return Math.max(0, speed + Math.min(accel, engine) - TRADE * ua.zentix.incoming.guidance.Ballistics.GRAVITY * climbSine);
         }

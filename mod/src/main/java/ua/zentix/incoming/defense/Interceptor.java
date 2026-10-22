@@ -10,7 +10,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jetbrains.annotations.Nullable;
-import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.InterceptorEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.guidance.Homing;
@@ -19,10 +18,13 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.UUID;
 
 /**
- * Полёт зенитной ракеты: сход с направляющей вверх под углом паспорта (у ЗРК — отвесно, из контейнера), разгон и
- * погоня — каждый тик курс на нынешнее место цели с пределом поворота по боковому ускорению ({@link Homing}, {@link InterceptorSpec#turnLimit}). Неконтактный взрыватель рвёт её у цели (ближайшее сближение за
- * тик); с вероятностью {@code kill_probability} цель сбита, иначе летит дальше. Цель пропала, на ней кто-то сидит,
- * кончилось топливо — самоликвидация в воздухе. Цель — только снаряд мода ({@link StrikeProjectile}) по его UUID.
+ * Полёт зенитной ракеты — своя игровая модель (не по физике): сход с направляющей вверх под углом паспорта (у ЗРК —
+ * отвесно, из контейнера), разгон и погоня — каждый тик курс на нынешнее место цели с пределом поворота по боковому
+ * ускорению ({@link Homing}, {@link InterceptorSpec#turnLimit}). Неконтактный взрыватель рвёт её в момент
+ * ближайшего сближения с целью, если оно в радиусе взрывателя ({@link #fuze}): разрыв — цель сбита. Броска кубика
+ * нет: промах — это пролёт дальше радиуса; цель летит дальше, ракета разворачивается за ней, пока есть топливо.
+ * Цель пропала, на ней кто-то сидит, кончилось топливо — самоликвидация в воздухе. Цель — только снаряд мода
+ * ({@link StrikeProjectile}) по его UUID.
  * <p>
  * Полёт ведёт {@link DefenseWorld} — и в загруженном мире, и вне его, одним кодом: в тикающих чанках у полёта есть
  * вид ({@link InterceptorEntity}), вне них — нет. Блоки читаются только в готовых чанках ({@link Terrain#readyUntil}),
@@ -32,10 +34,8 @@ import java.util.UUID;
 public final class Interceptor {
     /** Чем кончился полёт. */
     public enum End {
-        /** Разорвалась у цели и сбила. */
+        /** Разорвалась у цели в радиусе взрывателя и сбила. */
         KILL,
-        /** Разорвалась у цели, цель цела. */
-        MISS,
         /** Цель пропала (взорвалась, отбой, ушла из мира) или на ней кто-то сидит: самоликвидация. */
         LOST,
         /** Кончилось топливо: самоликвидация. */
@@ -136,8 +136,7 @@ public final class Interceptor {
         double s = fuze(next, tPrev, tNow, t.airframe().noseLength());
         Vec3 hit = obstacle(level, pos, next);
         if (s >= 0 && (hit == null || s * pos.distanceTo(next) <= pos.distanceTo(hit))) {
-            boolean kill = level.random.nextDouble() < IncomingConfig.SERVER.samKillProbability.get();
-            world.burst(level, this, pos.lerp(next, s), t, kill ? End.KILL : End.MISS);
+            world.burst(level, this, pos.lerp(next, s), t, End.KILL);
             return;
         }
         if (hit != null) {
@@ -150,7 +149,8 @@ public final class Interceptor {
 
     /**
      * Тик погони без мира: возраст, после направляющей — доворот на нынешнее место цели не круче паспорта на этой
-     * скорости ({@link InterceptorSpec#turnLimit}), на разгоне — прирост скорости. Возвращает, где ракета будет в конце
+     * скорости ({@link InterceptorSpec#turnLimit}), скорость — по закону полёта на моторе ({@link InterceptorSpec#speed}:
+     * мотор, обмен высоты на скорость). Возвращает, где ракета будет в конце
      * тика; сдвигает её {@link #moveTo} после проверки преград.
      */
     Vec3 steer(Vec3 targetNow) {
@@ -159,18 +159,21 @@ public final class Interceptor {
             Vec3 to = targetNow.subtract(pos);
             if (to.lengthSqr() > 1.0e-6) dir = Homing.turn(dir, to.normalize(), spec.turnLimit(speed));
         }
-        if (age <= spec.boostTicks()) speed = Math.min(spec.maxSpeed(), speed + spec.boostAccel());
+        speed = spec.speed(speed, age, dir.y);
         return pos.add(dir.scale(speed));
     }
 
     /**
      * Неконтактный взрыватель на отрезке тика ракеты ({@code position() → next}) против отрезка цели
-     * ({@code tPrev → tNow}): доля отрезка ракеты в точке наибольшего сближения, если оно в радиусе взрывателя сверх
-     * полудлины цели, иначе −1. На направляющей взрыватель не взведён.
+     * ({@code tPrev → tNow}): доля отрезка ракеты в момент ближайшего сближения, если оно в этом тике и в радиусе
+     * взрывателя сверх полудлины цели, иначе −1. Сближение ещё идёт к концу тика (ближайшая точка отрезков — его
+     * конец) — взрыватель ждёт следующего тика: в радиус ракета входит раньше, чем ближе всего подходит к цели.
+     * На направляющей взрыватель не взведён.
      */
     double fuze(Vec3 next, Vec3 tPrev, Vec3 tNow, double targetHalfLength) {
         if (age <= spec.railTicks()) return -1;
         double s = Homing.closest(pos, next, tPrev, tNow);
+        if (s >= 1) return -1;
         return Homing.distanceAt(pos, next, tPrev, tNow, s) <= spec.fuse() + targetHalfLength ? s : -1;
     }
 
