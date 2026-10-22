@@ -349,34 +349,32 @@ public final class FarBlasts {
                 GroundMaterial.STONE, seed);
     }
 
-    /** Радиусы проб поверхности вокруг взрыва ({@link #ground}), м; по направлению — середина каждого сектора. */
-    private static final double[] PROBE_R = {3, 6, 12, 24, 48};
-
     /**
-     * Что лежит вокруг места {@code pos} по секторам ({@code GroundDust.SECTORS}): верхние блоки карты высот
-     * {@code MOTION_BLOCKING} на радиусах до 48 м (трава без столкновения карту не держит, верх — дёрн). Рыхлое — земля без
-     * дёрна, песок, гравий, снег, пашня; вода — без пыли; остальное (дёрн, мох, листва, камень, постройки) держит грунт.
-     * Где у клиента нет чанков — как у ядерки: голый грунт ({@code Surface.REFERENCE}).
+     * Что лежит вокруг места {@code pos} по секторам ({@code GroundDust.SECTORS}) и радиусам ({@code GroundDust.BANDS}, до
+     * 48 м): верхний блок карты высот {@code MOTION_BLOCKING} (трава без столкновения карту не держит, верх — дёрн) в
+     * середине сектора на этом радиусе. Рыхлое — земля без дёрна, песок, гравий, снег, пашня; вода — без пыли; остальное
+     * (дёрн, мох, листва, камень, постройки) держит грунт. Где у клиента нет чанка — как у ядерки: голый грунт
+     * ({@code Surface.REFERENCE}).
      */
     static ua.zentix.incoming.client.fx.smoke.GroundDust.Ground ground(ClientLevel level, Vec3 pos) {
         int n = ua.zentix.incoming.client.fx.smoke.GroundDust.SECTORS;
-        double[] loose = new double[n], covered = new double[n];
+        double[] bands = ua.zentix.incoming.client.fx.smoke.GroundDust.BANDS;
+        double[][] loose = new double[n][bands.length], covered = new double[n][bands.length];
         for (int k = 0; k < n; k++) {
             double a = 2 * Math.PI * (k + 0.5) / n;
-            int seen = 0, l = 0, c = 0;
-            for (double r : PROBE_R) {
-                int x = (int) Math.floor(pos.x + r * Math.cos(a)), z = (int) Math.floor(pos.z + r * Math.sin(a));
+            for (int b = 0; b < bands.length; b++) {
+                int x = (int) Math.floor(pos.x + bands[b] * Math.cos(a)), z = (int) Math.floor(pos.z + bands[b] * Math.sin(a));
                 net.minecraft.world.level.chunk.LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
-                if (chunk == null) continue;
+                if (chunk == null) {
+                    loose[k][b] = 1;
+                    continue;
+                }
                 int y = chunk.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
                 net.minecraft.world.level.block.state.BlockState top = chunk.getBlockState(new net.minecraft.core.BlockPos(x, y, z));
-                seen++;
                 if (!top.getFluidState().isEmpty()) continue;
-                if (loose(top)) l++;
-                else c++;
+                if (loose(top)) loose[k][b] = 1;
+                else covered[k][b] = 1;
             }
-            loose[k] = seen == 0 ? 1 : (double) l / seen;
-            covered[k] = seen == 0 ? 0 : (double) c / seen;
         }
         return new ua.zentix.incoming.client.fx.smoke.GroundDust.Ground(loose, covered);
     }

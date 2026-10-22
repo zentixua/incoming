@@ -165,8 +165,8 @@ class GroundDustTest {
      */
     @Test
     void waterGivesNoDust() {
-        double[] loose = new double[GroundDust.SECTORS], covered = new double[GroundDust.SECTORS];
-        for (int k = 0; k < GroundDust.SECTORS / 2; k++) loose[k] = 1;
+        double[][] loose = new double[GroundDust.SECTORS][GroundDust.BANDS.length], covered = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+        for (int k = 0; k < GroundDust.SECTORS / 2; k++) java.util.Arrays.fill(loose[k], 1);
         CloudModel m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), DAY, false, 0, new GroundDust.Ground(loose, covered));
         int land = 0;
         for (double t : new double[]{0.1, 1, 3}) {
@@ -181,6 +181,22 @@ class GroundDustTest {
             }
         }
         assertTrue(land > 0, "над сушей пыль есть");
+    }
+
+    /**
+     * Узкий пляж: голый грунт только у воронки (до 6 м), дальше — вода. Пыль у земли — лишь там, где пляж: ни один клуб не
+     * дальше 6 м·2 по середине (пыль с гальки у воронки не выносится на воду дальше; кадры F2a: ковёр на озере).
+     */
+    @Test
+    void narrowBeachKeepsTheDustOnIt() {
+        double[][] loose = new double[GroundDust.SECTORS][GroundDust.BANDS.length], covered = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+        for (int k = 0; k < GroundDust.SECTORS; k++) {
+            loose[k][0] = 1;
+            loose[k][1] = 1;
+        }
+        CloudModel m = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), DAY, false, 0, new GroundDust.Ground(loose, covered));
+        CloudModel open = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), DAY, false, 0, GroundDust.Ground.BARE);
+        assertTrue(m.ground.total < 0.3 * open.ground.total, "пляж " + m.ground.total + " против голого поля " + open.ground.total);
     }
 
     /**

@@ -42,20 +42,40 @@ public final class GroundDust {
     /** Секторов по направлению от точки удара: у каждого — своя поверхность ({@link Ground}). */
     public static final int SECTORS = 8;
 
+    /** Радиусы, на которых известна поверхность ({@link Ground}), м: кольцу — ближайший по логарифму. */
+    public static final double[] BANDS = {3, 6, 12, 24, 48};
+
     /**
-     * Что лежит вокруг удара по секторам (направление k — угол 2π(k + ½)/{@link #SECTORS} от оси x к оси z): доли голого
-     * рыхлого грунта и грунта под дёрном или твёрдым; остальное — вода (с неё пыли нет).
+     * Что лежит вокруг удара по секторам и радиусам ({@code [сектор][радиус BANDS]}; направление k — угол
+     * 2π(k + ½)/{@link #SECTORS} от оси x к оси z): доли голого рыхлого грунта и грунта под дёрном или твёрдым; остальное —
+     * вода (с неё пыли нет). У берега полоса гальки у воронки не пылит над водой дальше.
      */
-    public record Ground(double[] loose, double[] covered) {
+    public record Ground(double[][] loose, double[][] covered) {
         /** Всюду голый грунт — как у ядерки ({@code Surface.REFERENCE}); так и там, где клиент ничего не знает. */
         public static final Ground BARE = uniform(1, 0);
 
         public static Ground uniform(double loose, double covered) {
-            double[] l = new double[SECTORS], c = new double[SECTORS];
-            java.util.Arrays.fill(l, loose);
-            java.util.Arrays.fill(c, covered);
+            double[][] l = new double[SECTORS][BANDS.length], c = new double[SECTORS][BANDS.length];
+            for (int k = 0; k < SECTORS; k++) {
+                java.util.Arrays.fill(l[k], loose);
+                java.util.Arrays.fill(c[k], covered);
+            }
             return new Ground(l, c);
         }
+    }
+
+    /** Радиус поверхности для кольца радиуса r: ближайший по логарифму из {@link #BANDS}. */
+    static int band(double r) {
+        int best = 0;
+        double d = Double.MAX_VALUE, lr = Math.log(Math.max(r, 1e-3));
+        for (int b = 0; b < BANDS.length; b++) {
+            double e = Math.abs(Math.log(BANDS[b]) - lr);
+            if (e < d) {
+                d = e;
+                best = b;
+            }
+        }
+        return best;
     }
 
     /** Колец счёта (по логарифму радиуса), колец показа и их края — доли всей поднятой массы. */
@@ -109,18 +129,16 @@ public final class GroundDust {
         this.yieldKt = CloudModel.equivalentKt(tntKg);
         this.hob = Math.max(0, hobM);
         Rings k0 = rings(tntKg, hob, ballM, DustModel.Surface.FIELD), k1 = rings(tntKg, hob, ballM, DustModel.Surface.COVERED);
-        double lo = 0, co = 0;
-        for (int k = 0; k < SECTORS; k++) {
-            lo += ground.loose()[k] / SECTORS;
-            co += ground.covered()[k] / SECTORS;
-        }
         r = k0.r;
         area = k0.area;
         arrival = k0.arrival;
         positive = k0.positive;
         // масса кольца — средняя по секторам; доли секторов — для показа ({@link #sector})
         mass = new double[RINGS];
-        for (int i = 0; i < RINGS; i++) mass[i] = lo * k0.mass[i] + co * k1.mass[i];
+        for (int i = 0; i < RINGS; i++) {
+            int b = band(r[i]);
+            for (int k = 0; k < SECTORS; k++) mass[i] += (ground.loose()[k][b] * k0.mass[i] + ground.covered()[k][b] * k1.mass[i]) / SECTORS;
+        }
         looseMass = k0.mass;
         coveredMass = k1.mass;
         this.ground = ground;
@@ -170,14 +188,16 @@ public final class GroundDust {
         }
         // доли секторов в массе каждого кольца показа: по их поверхности (сумма — 1; вода — ноль)
         for (int q = 0; q < ANNULI; q++) {
-            double ml = 0, mc = 0;
-            for (int i = 0; i < RINGS; i++) {
-                if (ball[i] || annulus[i] != q) continue;
-                ml += looseMass[i];
-                mc += coveredMass[i];
-            }
             double all = 0;
-            for (int k = 0; k < SECTORS; k++) all += sector[q][k] = ground.loose()[k] * ml + ground.covered()[k] * mc;
+            for (int k = 0; k < SECTORS; k++) {
+                double w = 0;
+                for (int i = 0; i < RINGS; i++) {
+                    if (ball[i] || annulus[i] != q) continue;
+                    int b = band(r[i]);
+                    w += ground.loose()[k][b] * looseMass[i] + ground.covered()[k][b] * coveredMass[i];
+                }
+                all += sector[q][k] = w;
+            }
             for (int k = 0; k < SECTORS; k++) sector[q][k] = all > 0 ? sector[q][k] / all : 0;
         }
         life = lifeSeconds();
