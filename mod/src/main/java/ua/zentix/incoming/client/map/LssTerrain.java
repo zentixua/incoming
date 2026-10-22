@@ -98,6 +98,9 @@ final class LssTerrain implements TerrainSource {
             new ThreadFactoryBuilder().setNameFormat("Incoming LSS terrain").setDaemon(true).setPriority(Thread.MIN_PRIORITY).build());
     private static int ticks;
     private static volatile boolean coarsening;
+    /** Подписчик, пока API LSS то, под которое собран мод; null — выключен ({@link #disable}). */
+    @Nullable
+    private static volatile VoxelColumnConsumer consumer;
 
     private final ClientLevel level;
 
@@ -110,12 +113,34 @@ final class LssTerrain implements TerrainSource {
      * тут же: слой LSS выключается одной строкой в лог (см. {@link TerrainTiles#init}).
      */
     static void subscribe() {
-        LSSApi.registerColumnConsumer(new VoxelColumnConsumer() {
+        VoxelColumnConsumer c = new VoxelColumnConsumer() {
             @Override
             public void onVoxelColumnReceived(ClientLevel level, ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData data) {
-                receive(dimension, chunkX, chunkZ, data);
+                try {
+                    receive(dimension, chunkX, chunkZ, data);
+                } catch (LinkageError e) {
+                    disable(e);
+                }
             }
-        });
+        };
+        LSSApi.registerColumnConsumer(c);
+        consumer = c;
+    }
+
+    /**
+     * API LSS не то, под которое собран мод (класс или метод изменился, {@link LinkageError} при вызове): слой LSS
+     * выключается до перезапуска одной строкой в лог, подписчик снимается — LSS не шлёт ему больше ничего.
+     */
+    private static void disable(LinkageError e) {
+        VoxelColumnConsumer c = consumer;
+        consumer = null;
+        if (c == null) return;
+        Incoming.LOG.warn("LOD Server Support: API differs from the one the mod was built for — far terrain from it is off ({})", e.toString());
+        try {
+            LSSApi.removeColumnConsumer(c);
+        } catch (LinkageError ignored) {
+            // и снять нечем: колонки дальше не читаются (consumer == null)
+        }
     }
 
     /**
@@ -123,6 +148,7 @@ final class LssTerrain implements TerrainSource {
      * не принятым и прислал заново всем подписчикам (и Voxy) — отказ только в счётчик.
      */
     private static void receive(ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData data) {
+        if (consumer == null) return;
         long start = System.nanoTime();
         try {
             int[] columns = LssColumns.summarize(minSection(data), sections(data));
@@ -296,7 +322,13 @@ final class LssTerrain implements TerrainSource {
     /** Сервер с LSS раздаёт LOD этому клиенту (рукопожатие прошло); иначе слой не нужен. */
     @Override
     public boolean active() {
-        return LSSApi.isServerEnabled();
+        if (consumer == null) return false;
+        try {
+            return LSSApi.isServerEnabled();
+        } catch (LinkageError e) {
+            disable(e);
+            return false;
+        }
     }
 
     /** Колонок этого мира ещё нет ни с сервера, ни с диска. */
@@ -370,6 +402,7 @@ final class LssTerrain implements TerrainSource {
     public String describe() {
         World w = mine();
         long n = received.get();
+        if (consumer == null) return "LSS off (API differs)";
         return String.format(Locale.ROOT, "LSS (server %s, LOD distance %d chunks): chunks received %d, columns with top %d, in LSS thread avg %.0f µs max %.1f ms, "
                         + "failures %d%s; in memory %d chunks (%d detailed), file %s",
                 LSSApi.isServerEnabled() ? "on" : "off", LSSApi.getServerLodDistance(), n, withTop.get(), n == 0 ? 0.0 : nanos.get() / 1e3 / n,

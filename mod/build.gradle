@@ -90,6 +90,9 @@ neoForge {
             if (System.getenv('INCOMING_COMMANDS')) systemProperty 'incoming.commands', System.getenv('INCOMING_COMMANDS')
             // замер огня клиента в подробном городе: INCOMING_CITY=N@тик (FireCity — N секций с глобальной палитрой в чанке)
             if (System.getenv('INCOMING_CITY')) systemProperty 'incoming.scenario.city', System.getenv('INCOMING_CITY')
+            // открыть мир сценария прошлого запуска, а не создавать заново (INCOMING_WORLD=incoming_scenario: повторный вход,
+            // например рельеф LSS из файла, когда LSS присылает только изменённое)
+            if (System.getenv('INCOMING_WORLD')) systemProperty 'incoming.world', System.getenv('INCOMING_WORLD')
             // сценарий guide: только эти разделы (INCOMING_GUIDE=recipes,map — список в GuideShots)
             if (System.getenv('INCOMING_GUIDE')) systemProperty 'incoming.guide', System.getenv('INCOMING_GUIDE')
             // размер окна: INCOMING_SIZE=1920x1080 (трейлер), по умолчанию 1280x720

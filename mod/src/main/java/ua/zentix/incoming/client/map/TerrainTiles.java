@@ -217,7 +217,7 @@ public final class TerrainTiles {
         boolean stallLogged, firstLogged;
         /** Источник сломался (другая версия API DH): слой больше не строится до смены мира. Пишет фоновый поток. */
         volatile boolean broken;
-        /** Дальний слой (из них работает один, {@link #far}), а не чанки клиента. */
+        /** Дальний слой (из дальних работает один — см. {@code pickFar}), а не чанки клиента. */
         final boolean far;
         /** Для лога: построено из источника, из них с рельефом, время их постройки; собрано из плиток уровнем ниже. */
         int built, withData, composed;
