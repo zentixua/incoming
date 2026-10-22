@@ -929,7 +929,7 @@ public final class ScarQueue {
         if (plan != null) {
             List<LivingEntity> free = BlastBody.free(level, chunk);
             if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
-            List<S2C.NukeDebris.Piece> debris = debris(level, chunk, plan);
+            RuinPlan.Debris debris = debris(level, chunk, plan);
             long t0 = System.nanoTime();
             if (plan.apply(level, chunk, d, budget)) {
                 long took = System.nanoTime() - t0;
@@ -986,7 +986,7 @@ public final class ScarQueue {
         }
         List<LivingEntity> free = BlastBody.free(level, chunk);
         if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
-        List<S2C.NukeDebris.Piece> debris = debris(level, chunk, plan);
+        RuinPlan.Debris debris = debris(level, chunk, plan);
         boolean applied = plan.apply(level, chunk, d, budget);
         if (applied) buried(level, d, free);
         if (!applied && !server) {
@@ -1019,18 +1019,18 @@ public final class ScarQueue {
      * подмена, после которой весь квадрат 5×5 вокруг чанка стоит, забывает слой вспышки чанка ({@link RuinContext#applied}),
      * а места, которые слой уже сменил (сгоревшее со вспышкой), не разлетаются.
      */
-    private static List<S2C.NukeDebris.Piece> debris(ServerLevel level, LevelChunk chunk, RuinPlan plan) {
-        if (level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false).isEmpty()) return List.of();
-        return plan.thrown(chunk, THROWN_PER_CHUNK);
+    private static RuinPlan.Debris debris(ServerLevel level, LevelChunk chunk, RuinPlan plan) {
+        if (level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false).isEmpty()) return RuinPlan.Debris.NONE;
+        return plan.debris(chunk, THROWN_PER_CHUNK);
     }
 
     /**
      * Обломки снесённого ({@link #debris}) — игрокам, которые видят чанк: руины у них встали в этом же тике, куски их блоков
      * разлетаются, когда до места дойдёт фронт.
      */
-    private static void thrown(ServerLevel level, Detonation d, LevelChunk chunk, List<S2C.NukeDebris.Piece> pieces) {
-        if (pieces.isEmpty()) return;
-        S2C.NukeDebris packet = new S2C.NukeDebris(d.id(), pieces);
+    private static void thrown(ServerLevel level, Detonation d, LevelChunk chunk, RuinPlan.Debris debris) {
+        if (debris.pieces().isEmpty()) return;
+        S2C.NukeDebris packet = new S2C.NukeDebris(d.id(), debris.pieces(), debris.removed());
         for (ServerPlayer p : level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false)) PacketDistributor.sendToPlayer(p, packet);
     }
 

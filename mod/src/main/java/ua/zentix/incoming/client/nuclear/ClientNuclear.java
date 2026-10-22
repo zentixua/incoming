@@ -254,7 +254,7 @@ public final class ClientNuclear {
         Active a = DETONATIONS.get(p.detonation());
         if (a == null) return;
         NukeDust.debris(a, p.pieces());
-        a.sounds.debris(p.pieces());
+        a.sounds.debris(p);
     }
 
     /**

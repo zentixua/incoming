@@ -90,6 +90,18 @@ public final class Sources {
     public static final double IMPACT_EFFICIENCY = 1e-4;
     /** Осыпь выброса воронки: запись, мощность — от массы и высоты падения ({@link #fall}). */
     public static final Source EJECTA = new Source(Double.NaN, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS);
+    /**
+     * Стёкла, которые выбила ядерная волна у слушателя: запись — окна вылетают по улице, мощность — от энергии
+     * осколков ({@link #impact}, {@link Clatter}). Потолок — ядерки ({@link Loudness#ENGINE_LUFS}).
+     */
+    public static final Source RUIN_GLASS = new Source(Double.NaN, Spectra.NUKE_GLASS, Spectra.NUKE_GLASS_LUFS, Loudness.ENGINE_LUFS);
+    /** Обломки, что снесла ядерная волна у слушателя: запись осыпи, мощность — от энергии обломков ({@link #impact}). */
+    public static final Source RUIN_CLATTER = new Source(Double.NaN, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS, Loudness.ENGINE_LUFS);
+    /**
+     * Гул горящего города: запись большого пожара, мощность — от тепла горящего ({@link #flame}: шторм модели и огонь в
+     * своих чанках, {@code NukeAfter}).
+     */
+    public static final Source NUKE_FIRE = new Source(Double.NaN, Spectra.NUKE_FIRE, Spectra.NUKE_FIRE_LUFS, Loudness.ENGINE_LUFS);
 
     /** Звук, который ещё идёт к уху: событие, место, тон, источник, сколько тиков в пути. */
     private record Pending(SoundEvent event, Vec3 at, float pitch, Source source, ClientLevel level, long born) {}
@@ -112,8 +124,16 @@ public final class Sources {
         return lw(IMPACT_EFFICIENCY * kg * 9.81 * height / Math.max(seconds, 0.1)) + spectrum.aWeighting();
     }
 
+    /**
+     * Уровень мощности звука удара (не A), дБ: звуком уходит {@link #IMPACT_EFFICIENCY} энергии {@code joules}, Дж, за
+     * {@code seconds} с — пока падает и бьётся сорванное.
+     */
+    public static double impact(double joules, double seconds) {
+        return lw(IMPACT_EFFICIENCY * joules / Math.max(seconds, 0.05));
+    }
+
     /** Уровень мощности, дБ отн. 1 пВт. */
-    static double lw(double watts) {
+    public static double lw(double watts) {
         return watts > 0 ? 10 * Math.log10(watts / 1e-12) : Noise.SILENT;
     }
 
