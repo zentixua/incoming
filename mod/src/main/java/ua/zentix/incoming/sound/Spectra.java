@@ -43,6 +43,10 @@ public final class Spectra {
     public static final double NUKE_LAUNCH_LUFS = -11.7;
     public static final Spectrum SIREN = Spectrum.of(-16.5, -23.2, -7.2, -1.1, 0.0, -12.7, -19.9, -37.8);
     public static final double SIREN_LUFS = -5.8;
+    public static final Spectrum NUKE_FIRE = Spectrum.of(-1.7, 0.0, -5.4, -8.6, -11.2, -12.0, -9.4, -13.2);
+    public static final double NUKE_FIRE_LUFS = -14.5;
+    public static final Spectrum NUKE_GLASS = Spectrum.of(-31.8, -24.8, -15.2, -7.5, -3.4, -0.0, 0.0, -1.8);
+    public static final double NUKE_GLASS_LUFS = -8.4;
     // @spectra-end
 
     private Spectra() {}

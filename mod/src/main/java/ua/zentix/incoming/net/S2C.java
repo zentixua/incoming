@@ -467,10 +467,20 @@ public final class S2C {
 
     /**
      * Блоки, которые снесла ядерная волна в чанке (несколько мест из руин чанка, {@code RuinPlan#thrown}), — тем, кто видит
-     * чанк: клиент бросает их куски, когда до места доходит фронт.
+     * чанк: клиент бросает их куски, когда до места доходит фронт, и слышит стёкла и обломки.
+     *
+     * @param removed сколько мест чанка волна снесла целиком (места {@code pieces} — выборка из них по хешу места); в повторе
+     *                до этого поля — {@link #OLD_REMOVED}
      */
-    public record NukeDebris(int detonation, List<Piece> pieces) implements CustomPacketPayload {
+    public record NukeDebris(int detonation, List<Piece> pieces, int removed) implements CustomPacketPayload {
         public static final Type<NukeDebris> TYPE = new Type<>(Incoming.id("nuke_debris"));
+        /** Повтор, записанный до поля: снесённых мест не знаем — столько, сколько в выборке. */
+        public static final int OLD_REMOVED = 0;
+
+        /** Сколько снесённых мест чанка стоит за каждым местом выборки (1 — выборка и есть все). */
+        public double weight() {
+            return pieces.isEmpty() ? 0 : Math.max(1.0, (double) removed / pieces.size());
+        }
 
         /** Место и блок, который там был. */
         public record Piece(BlockPos pos, BlockState state) {
@@ -479,7 +489,8 @@ public final class S2C {
         }
 
         public static final StreamCodec<ByteBuf, NukeDebris> CODEC = StreamCodec.composite(ByteBufCodecs.VAR_INT, NukeDebris::detonation,
-                Piece.CODEC.apply(ByteBufCodecs.list(64)), NukeDebris::pieces, NukeDebris::new);
+                Piece.CODEC.apply(ByteBufCodecs.list(64)), NukeDebris::pieces,
+                StreamCodecs.trailing(ByteBufCodecs.VAR_INT, OLD_REMOVED), NukeDebris::removed, NukeDebris::new);
 
         @Override
         public Type<? extends CustomPacketPayload> type() {

@@ -430,32 +430,6 @@ def nuke_crack_far(dur=4.0, t_plus=1.2, pa=345.0):
     return 0.98 * x / np.max(np.abs(x))
 
 
-def nuke_fire(dur=14.0):
-    """Гул горящего города издали: низкий рокот конвекции (30–120 Гц) с медленными наплывами, тело пламени
-    (120–500 Гц), которое «хлопает» по нескольку раз в секунду, шипение (0,5–3 кГц), треск и щелчки горящего дерева
-    (пуассоновские), изредка — громко лопается балка."""
-    n = int(dur * SR)
-    low = F(rng.standard_normal(n), lo=28, hi=120, bells=[(55, 4, 0.8)])
-    low = low / np.std(low) * env_noise(n, 0.35, 0.45) * env_noise(n, 1.2, 0.2)
-    body = F(rng.standard_normal(n), lo=120, hi=500, bells=[(220, 3, 0.8)])
-    body = body / np.std(body) * env_noise(n, 3.5, 0.5) * env_noise(n, 0.5, 0.3)
-    hiss = F(rng.standard_normal(n), lo=500, hi=3000)
-    hiss = hiss / np.std(hiss) * env_noise(n, 6, 0.6)
-    # треск: короткие щелчки, громкость — логнормальная
-    imp = (rng.random(n) < 28 / SR) * rng.lognormal(0, 0.9, n) * np.sign(rng.standard_normal(n))
-    crackle = F(imp, lo=900, hi=6000)
-    snaps = np.zeros(n)
-    L = int(0.25 * SR)
-    tt = np.arange(L) / SR
-    for k in np.nonzero(rng.random(n) < 0.7 / SR)[0]:
-        if k + L >= n:
-            continue
-        burst = F(rng.standard_normal(L), lo=700, hi=5000) * np.exp(-tt / 0.012) + 0.5 * F(rng.standard_normal(L), lo=80, hi=400) * np.exp(-tt / 0.06)
-        snaps[k:k + L] += burst * rng.uniform(0.4, 1.0)
-    x = 1.0 * low + 0.55 * body + 0.18 * hiss + 0.35 * crackle / np.std(crackle) + 0.5 * snaps / max(np.std(snaps), 1e-9)
-    return reverb(x, t60=1.5, mix=0.25, hi=2500)
-
-
 def nuke_collapse(dur=4.5):
     """Обрушение в руинах: треск ломающейся опоры, каскад тяжёлых ударов кладки и балок, осыпь мелочи, которая
     затихает."""

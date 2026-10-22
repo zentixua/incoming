@@ -76,8 +76,11 @@ paths:
   - `MobPanic` — паника мобов: своя цель бегства каждому `PathfinderMob` при входе в мир, будят вспышка
     (`NuclearWarhead.expose`) и волна (`BlastBody.hit`).
 - `client/nuclear/` после удара: `NukeEchoes` — эхо от рельефа (общий `client/sound/BlastEchoes`, геометрия `TerrainEcho`, сведение
-  `EchoMix`, игра — `OwnSources`), `NukeAfter` — горящий город (модель огня `FireField`, огонь в своих чанках
-  `fx/FireWatch` — общий с дымом пожаров, гул и ветер в огонь, обрушения, вторичные взрывы), `AnimalSilence` — тишина животных.
+  `EchoMix`, игра — `OwnSources`), `NukeAfter` — горящий город (гул — по теплу шторма `FireStorm` вдали и огня в своих
+  чанках `fx/FireWatch`, общего с дымом пожаров, законом `client/sound/FireRoar`; ветер в огонь и вторичные взрывы — по
+  модели пожаров сервера `FireField`; обрушения), `NukeSounds.Schedule.clatter` — стёкла и обломки, что снесла волна у
+  слушателя (`S2C.NukeDebris`: выборка мест и сколько снесено всего, закон — `client/sound/Clatter`), `AnimalSilence` —
+  тишина животных.
 
 - Пелена после волны (`client/nuclear/PallField` — поле, `NukePall` — у камеры и в кадр, `NukeAsh` — пепел;
   рисует `client/fx/layer/PallPass`): пыль по давлению на земле и приходу фронта, мгла над зоной поджига до утра

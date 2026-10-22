@@ -48,7 +48,7 @@ public final class NukeDust {
      */
     private static final double DEBRIS_FULL = 48;
     /** Руины чанка встали позже фронта больше чем на столько тиков — его обломки не летят: волна уже прошла. */
-    private static final int DEBRIS_LATE = 20;
+    static final int DEBRIS_LATE = 20;
     /**
      * Тёмные клубы пыли (с землёй и сором) — доля цвета стены в начале и в конце жизни; дым при прохождении стены —
      * вполовину серее её и темнее.
