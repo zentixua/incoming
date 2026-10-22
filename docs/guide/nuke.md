@@ -30,7 +30,8 @@ Everyone within 20 km of the target hears a siren in advance. Then come the flas
 The flash lights up the sky and the land like lightning, in clear weather up to about 100 km away, in rain up to
 about 30 km. The blast wave itself is invisible. The wind right behind it tears up what lies on the ground (dust and earth, smoke over a
 burning town, spray over water) as a churning wall. The dust doesn't fly out with the wave: the wind carries it only a
-few tens of metres and it stays where it was torn up, while the wave runs on and tears up more ahead, so the wall rolls
+few tens of metres, and after the wave the air flows back towards the burst more weakly and for longer, so the dust
+drifts back almost to where it was torn up, while the wave runs on and tears up more ahead, so the wall rolls
 over the land like a dust storm. The wall is the youngest dust of the pall: right at the front it hugs the ground, and
 behind it the dust grows thicker and taller. At 15 kt it is
 30–40 m tall 1 km from the burst and about 60 m tall 4 km out. After an air burst it stays dense out to about 4.5 km,
@@ -65,7 +66,11 @@ At 1 kt it climbs to about 6 km, more slowly: after eight minutes it is still ri
 the top and down the outside, and billows swell out of it and sink back. The faster the
 cloud climbs, the faster it rolls; when the cloud stops rising, the cap stops too. The sun lights one side of it, and
 the folds between the billows stay darker. By day the cloud casts its shadow on the land: under the thick cap only the
-sky lights the ground. A column of dust rises from the ground into the cap, and a skirt of dust spreads around its foot.
+sky lights the ground. A column of dust rises from the ground under the cloud, and a skirt of dust spreads around its
+foot. Its dust is what the inflow sucks in from the dust layer near ground zero. After a ground burst the column joins
+the cap from the start: the fireball touched the ground. After an air burst the inflow starts some seconds later and the
+dust climbs more slowly than the cloud, so the dusty column stays below the cap: at 15 kt and 592 m it reaches about
+2.5 km while the cap is above 6 km.
 A burning town lights the foot of the column orange from below, and the cap high above only faintly. Far away, and more
 so in rain, the cloud fades into the haze. Most haze lies in the lowest kilometre or two of air, so the cap high above
 stays clearer than the foot of the column at the same distance.
@@ -123,7 +128,8 @@ The flash also marks what it lights. Wood, wool and hay that face the fireball c
 concrete, stone bricks and sandstone darken with soot. A player, a mob, an armor stand or a boat standing in the light
 leaves a pale shadow of its shape on the wood or masonry behind it. These marks stay until the block is broken or
 replaced. In the same instant lit lamps and substations of the [power grid](blackout.md) short out with sparks, and
-grass, leaves and wood in the light start to smoke before the wave comes.
+grass, leaves and wood in the light give off pale grey smoke (they char without burning) until the wave comes and
+sweeps it away.
 
 Over water the wave raises no dust. It runs across the water as a dark ring of ripples, with a wall of spray behind it
 where the wind is strong, and white foam near the centre. Behind the wave the air over the water fills with white spray

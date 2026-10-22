@@ -95,7 +95,8 @@ approach within a few hundred blocks. A Grad battery stands 600 blocks from the 
 ![Shahed-136 in flight](img/weapon-shahed.jpg)
 
 A kamikaze drone: it takes off from a trailer next to you, flies with a loud engine buzz and dives at the end. Use it
-on buildings and on moving targets. It can be heard long before it arrives and a SAM can shoot it down, so
+on buildings and on moving targets. Its two-stroke engine has no muffler: on a quiet night it can be heard about 10 km away, by day about 6 km, long
+before it arrives. A SAM can shoot it down, so
 against air defense send a salvo or route it around. It dives only once it can see the target: if a hill or a
 building hides it, the drone flies on at its height and dives more steeply later. It does not aim ahead of a moving
 target. A tall building right next to the target or a roof over it can still be in the way: it then hits the
@@ -160,10 +161,20 @@ smoke.
   drift downwind.
 - **Lancet**: a small flash and a cloud a few tens of blocks high.
 
+A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
+the missile. It rises in under two seconds, opens into a crown at the top, falls back and leaves a drifting mist; clumps
+of water fly as particles.
+
+The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
+an orange glow spreads over the blocks around the crater and fades as the ball cools. There are no shadows: the light
+reaches behind houses and hills too. Hot gas over the fire and the fireball bends light, so whatever is behind it
+shimmers slightly; on a normal screen it is a fraction of a pixel, best seen on sharp edges and through binoculars.
+
 In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
 night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
 see. Sparks, clods of earth, the dust and sparks of fragment hits, flames and, where fuel was left in the tank, burning
-pieces with smoke trails are particles. The bomb's underground blast looks as before.
+pieces are particles. A burning piece in flight leaves puffs of grey-black wood smoke that rise with their own heat and
+drift away, and its flame lights the smoke around it. The bomb's underground blast looks as before.
 
 Whatever the blast sets on fire keeps smoking. Over every chunk with burning blocks a column of black smoke rises, leans
 downwind and stretches out with it; a bigger fire sends it higher. By day it climbs higher than on a calm night, when

@@ -43,3 +43,5 @@ paths:
 - Свет чанка с диска: `ChunkSerializer.read` ставит в очередь сохранённые массивы света до `ChunkDataEvent.Load`, а
   `lightChunk(…, isLighted=false)` только добавляет свет от источников — старый свет убранной в палитре лампы остаётся.
   Убирать его — `LightEngine.checkBlock` по месту лампы (снижение уровня расходится и в соседние чанки).
+- Звуки подстанции и кварталов — по закону источника на клиенте (`ClientHooks.substation` из `SubstationBlock.animateTick`,
+  `GridEffects`, `client/sound/Sources`); дым выбитой — масло трансформатора `FireSmoke.substation`.
