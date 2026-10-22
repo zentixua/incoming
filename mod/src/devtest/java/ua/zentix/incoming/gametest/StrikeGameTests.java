@@ -1322,7 +1322,7 @@ public final class StrikeGameTests {
         StrikeGameTests.afterTest(h, () -> {
             VirtualFlights.get(level).clear(level, near::test);
             level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(600, 512, 600)).forEach(Entity::discard);
-            level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(64, 256, 64)).forEach(Entity::discard);
+            level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(LaunchSite.PLACE_REACH + 8, 256, LaunchSite.PLACE_REACH + 8)).forEach(Entity::discard);
         });
         h.assertTrue(LaunchPlaces.waits(level, WeaponType.ROCKET, place), "далёкое место пуска уже готово");
         int salvos = SalvoData.get(level).size();
@@ -1334,8 +1334,8 @@ public final class StrikeGameTests {
             h.assertTrue(LaunchPlaces.ready(level, place), "район места пуска ещё не готов");
             h.assertTrue(SalvoData.get(level).size() == salvos, "залп ещё не выстрелил с готового места");
             h.assertTrue(level.getGameTime() - start < LaunchPlaces.WAIT, "залп дождался места только к пределу ожидания");
-            List<LauncherEntity> pads = level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(64, 256, 64), l -> l.isAlive() && near.test(l));
-            List<StrikeProjectile> rockets = level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(64, 256, 64),
+            List<LauncherEntity> pads = level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(LaunchSite.PLACE_REACH + 8, 256, LaunchSite.PLACE_REACH + 8), l -> l.isAlive() && near.test(l));
+            List<StrikeProjectile> rockets = level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(LaunchSite.PLACE_REACH + 8, 256, LaunchSite.PLACE_REACH + 8),
                     p -> p.weapon() == WeaponType.ROCKET && near.test(p));
             if (pads.isEmpty()) {
                 Incoming.LOG.info("farLaunchPlaceLoadsThenLaunches: no flat place near {} in this world's terrain, launched without a launcher", BlockPos.containing(far));

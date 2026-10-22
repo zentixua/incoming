@@ -129,7 +129,9 @@ public final class LaunchSite {
     public static LauncherEntity existing(ServerLevel level, Post post, WeaponType weapon, Predicate<LauncherEntity> fits) {
         // пусковая по отметке стоит в её районе, а отметка могла сдвинуться на зазор: коробка — на весь охват района
         double reach = post.ordered() ? PLACE_REACH : REUSE_RADIUS;
-        AABB box = new AABB(post.center(), post.center()).inflate(reach, 64, reach);
+        // по высоте у места пуска — весь мир: место в долине, а пусковая — на круче над ней
+        double up = post.ordered() ? level.getHeight() : 64;
+        AABB box = new AABB(post.center(), post.center()).inflate(reach, up, reach);
         return level.getEntitiesOfClass(LauncherEntity.class, box, l -> l.isAlive() && l.weapon() == weapon && Objects.equals(post.owner(), l.ownerId())
                         && serves(l, post))
                 .stream().sorted(Comparator.comparingDouble(l -> l.distanceToSqr(post.center()))).filter(fits).findFirst().orElse(null);
