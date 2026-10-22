@@ -259,7 +259,6 @@ final class ProbeScenario {
         Minecraft mc = Minecraft.getInstance();
         Incoming.LOG.info("SCENARIO probe {} blast tick {} game {} audio {} wall {}", current, tick, mc.level.getGameTime(), audioBytes(),
                 System.currentTimeMillis());
-        Incoming.LOG.info("SCENARIO probe {} blast {}", current, ua.zentix.incoming.client.far.FarBlasts.describeLast());
         double[] times = current.startsWith("grad") ? GRAD_SHOTS
                 : current.startsWith("debris") || current.startsWith("substation") ? FIRE_SHOTS : DRONE_SHOTS;
         int last = 0;
@@ -464,6 +463,8 @@ final class ProbeScenario {
             Minecraft mc = Minecraft.getInstance();
             Screenshot.grab(mc.gameDirectory, "probe_" + name + ".png", mc.getMainRenderTarget(), c -> {});
             Incoming.LOG.info("SCENARIO probe shot {} tick {} fps {}", name, tick, mc.getFps());
+            // взрыв у кадра, а не в миг события сервера: пакет взрыва приходит позже счётчика взрывов
+            Incoming.LOG.info("SCENARIO probe shot {} blast {}", name, ua.zentix.incoming.client.far.FarBlasts.describeLast());
         });
     }
 

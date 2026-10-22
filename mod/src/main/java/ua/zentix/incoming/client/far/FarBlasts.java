@@ -332,6 +332,12 @@ public final class FarBlasts {
             return model.sigmaH(t) / Math.max(model.sigmaH(0), 1e-6);
         }
 
+        /** Брызги — у взрыва на воде. */
+        @Override
+        public boolean sprayClubs() {
+            return water != null;
+        }
+
         /** Над рельефом, что закрывает место взрыва вдали (последний луч, {@link #trace}). */
         @Override
         public double visible(double wy, double r) {
@@ -951,11 +957,6 @@ public final class FarBlasts {
         lastHeard = null;
     }
 
-    /**
-     * Для лога сценария (раз в секунду): сколько взрывов вдали живо и последний дальний звук — до уха, задержка от
-     * пакета (и d / 17,15 — когда фронт должен был дойти), громкость, запас слышимости и потери на низах (преграда,
-     * тень, дождь), насколько верха глуше низов и сколько из этого от земли. Ничего дальнего ещё не было — пустая строка.
-     */
     /** Для строки {@code SCENARIO}: последний взрыв — место, материал под ним и столб воды (высота, м; нет — 0). */
     public static String describeLast() {
         Event e = EVENTS.peekLast();
@@ -964,6 +965,11 @@ public final class FarBlasts {
                 e.water == null ? 0 : e.water.height);
     }
 
+    /**
+     * Для лога сценария (раз в секунду): сколько взрывов вдали живо и последний дальний звук — до уха, задержка от
+     * пакета (и d / 17,15 — когда фронт должен был дойти), громкость, запас слышимости и потери на низах (преграда,
+     * тень, дождь), насколько верха глуше низов и сколько из этого от земли. Ничего дальнего ещё не было — пустая строка.
+     */
     public static String describe() {
         String light = BRIGHTEST[4] <= 0 ? "" : String.format(Locale.ROOT, "; brightest: core %.1f px, overexposure %.0f, glare %.1f px, veil %.1f px, "
                 + "visible %.2f", BRIGHTEST[0], BRIGHTEST[3], BRIGHTEST[1], BRIGHTEST[2], BRIGHTEST[4]);

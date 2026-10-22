@@ -63,7 +63,7 @@ final class SmokePuffs {
         /** Кадр клуба по росту вещества (с дробью): дыма и брызг. */
         private double age, sprayAge;
         private long seed;
-        private boolean glow;
+        private boolean glow, sprays;
         private int index;
 
         void begin(FarView view, FarSprites out, SmokeGrid.Source source, double seconds) {
@@ -75,6 +75,7 @@ final class SmokePuffs {
             this.sprayAge = FxAtlas.sprayFrame(growth);
             this.seed = source.seed();
             this.glow = source.drawsGlow();
+            this.sprays = source.sprayClubs();
             this.index = 0;
         }
 
@@ -135,8 +136,8 @@ final class SmokePuffs {
             double overlap = Math.max(1, many * size * size);
             float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
             double spread = count == 1 ? 0 : 1 - size;
-            // вещество — больше брызги, чем дым и пыль: клубы брызг (взрыв на воде, облако конденсации)
-            boolean spray = kw > ks + kd;
+            // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг
+            boolean spray = sprays && kw > ks + kd;
             double clubAge = spray ? sprayAge : age;
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);

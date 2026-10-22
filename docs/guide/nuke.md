@@ -15,6 +15,8 @@ By default only operators can.
    (wider destruction) or a ground burst (crater and fallout trail). The bomb explodes underground.
 3. LMB in the binoculars or FIRE. A 3-second countdown follows, and LMB again cancels it.
 
+![Console with the nuclear warhead: yield slider and burst height](img/remote-nuke.png)
+
 The ICBM lifts off behind you and flies for 90 seconds.
 
 If the world owner has allowed nuclear weapons for everyone, a player without operator rights needs a second key
