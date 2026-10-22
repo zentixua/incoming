@@ -34,8 +34,10 @@ An operator or the world host can choose where the projectiles take off: Ctrl+LM
 a click. A violet mark appears there. On fire, a launcher sets up at that spot, turns toward the target (or the first
 route point) and stays until [Abort](designator.md#abort); the next strikes with the same weapon from that spot use it
 again. If that area is not loaded, the server loads it first, and the strike fires once it is ready (usually within
-seconds; after 30 s the projectiles take off from the spot without a launcher). If there is no room for a launcher, they
-take off from that spot without one. A launch far away is seen from where you stand. The route starts at the launch site, and the bottom of the map shows its distance to the target. The B-2
+seconds; after 30 s the projectiles take off from the spot without a launcher). If the spot itself is no place for a
+launcher (water, forest, a slope, a roof over it, or a blocked launch sector), the crew drives to the nearest place
+that is (level, firm, open sky, clear sector) within about 100 blocks of the mark: a clearing, a road, the shore. Only
+if there is none, the projectiles take off from the spot without one. A launch far away is seen from where you stand. The route starts at the launch site, and the bottom of the map shows its distance to the target. The B-2
 comes in from that side; the ICBM always takes off from its own site. **Launch from me** removes the launch site, and
 strikes launch as usual again.
 

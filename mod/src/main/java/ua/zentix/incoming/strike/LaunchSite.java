@@ -29,19 +29,17 @@ import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.util.Local;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 /**
- * Где поставить пусковую: позади и сбоку от стреляющего, а у приказа с местом пуска — на нём самом ({@link Post}),
- * на ровной твёрдой земле под открытым небом, только в готовых чанках (место пуска из приказа загружает залп,
- * {@link LaunchPlaces}). Своя пусковая
+ * Где поставить пусковую: позади и сбоку от стреляющего, а у приказа с местом пуска — на нём самом, а нет там места —
+ * на ближайшем годном в его районе ({@link Post}, {@link #PLACE_AREA}), на ровной твёрдой земле под открытым небом,
+ * только в готовых чанках (место пуска из приказа загружает залп, {@link LaunchPlaces}). Своя пусковая
  * того же оружия рядом ({@link #REUSE_RADIUS} от стреляющего, {@link #PLACE_REUSE} от места пуска) — берём её: залп
  * идёт с одной установки. Больше {@link #MAX_PER_OWNER} установок, что идут за игроком, у него не бывает — старая
  * убирается; на местах пуска из приказа они стоят до «Отбоя».
@@ -54,24 +52,39 @@ import java.util.stream.Stream;
  */
 public final class LaunchSite {
     public static final double REUSE_RADIUS = 96;
-    /** Своя пусковая не дальше этого от места пуска из приказа — его: дальше места вокруг него не ищутся. */
-    public static final double PLACE_REUSE = 40;
     public static final int MAX_PER_OWNER = 3;
     /** Ближе этого к другой пусковой новую не ставим. */
     private static final double CLEARANCE = 9;
+    /**
+     * Район места пуска из приказа, блоков: место с карты — точка, а расчёт получает район и ставит машину на ближайшую
+     * годную огневую позицию в нём — ровную твёрдую площадку под открытым небом со свободным сектором (поляна, дорога,
+     * опушка, берег), а не в воде, не под кронами и не между стволами. Сто метров ехать — минута по грунту; район огневых
+     * позиций батареи — сотни метров (⚠ оценка, не закон: дальше — новое место, его выбирает оператор). На Newisle ближайшее
+     * годное у мест, где пусковой не было (#394), — 7 блоков у берега, 19 и 72 в лесу, 50 у озера (по картам высот мира).
+     * Цена — район, который грузит залп ({@link LaunchPlaces}): 15×15 чанков.
+     */
+    public static final double PLACE_AREA = 96;
+    /** Шаг мест в районе места пуска, блоков: проверка места смотрит квадрат 5×5 вокруг, шаг 2 его не пропускает. */
+    static final int PLACE_STEP = 2;
+    /**
+     * Своя пусковая места пуска из приказа — та, что встала по той же отметке ({@link LauncherEntity#mark}: не дальше
+     * зазора {@link #CLEARANCE}), где бы в районе она ни стояла; у пусковой без отметки (поставленной до того, как её
+     * стали помнить) — не дальше этого от места. Отметку, перенесённую дальше, обслуживает новая пусковая: старая стоит
+     * в районе прежней и смотрит на прежнюю цель.
+     */
+    public static final double PLACE_REUSE = 40;
 
     /** Места относительно игрока: [назад, влево] в блоках, по порядку предпочтения. */
     private static final double[][] CANDIDATES = {
             {18, 11}, {18, -11}, {24, 0}, {13, 17}, {13, -17}, {30, 13}, {30, -13}, {4, 22}, {4, -22}, {38, 0}, {24, 24}, {24, -24}
     };
-    /** Места относительно места пуска из приказа: оно само, а там не ровно или занято — те же, что у игрока. */
-    private static final double[][] AT_PLACE = Stream.concat(Stream.<double[]>of(new double[]{0, 0}), Arrays.stream(CANDIDATES))
-            .toArray(double[][]::new);
+    /** Места в районе места пуска из приказа: [восток, юг] от него, блоков, от ближних к дальним; первое — оно само. */
+    private static final int[][] AREA = area(PLACE_AREA, PLACE_STEP);
     /**
-     * Дальше этого от места пуска из приказа пусковая не встаёт: самое далёкое место вокруг него и зазор до соседней
-     * пусковой, блоков. Столько вокруг места должно быть готово к пуску ({@link LaunchPlaces#ready}).
+     * Дальше этого от места пуска из приказа пусковая не встаёт и не смотрит: район и зазор до соседней пусковой, блоков.
+     * Столько вокруг места должно быть готово к пуску ({@link LaunchPlaces#ready}).
      */
-    public static final double PLACE_REACH = Arrays.stream(AT_PLACE).mapToDouble(c -> Math.hypot(c[0], c[1])).max().orElse(0) + CLEARANCE;
+    public static final double PLACE_REACH = PLACE_AREA + CLEARANCE;
 
     private LaunchSite() {}
 
@@ -103,16 +116,6 @@ public final class LaunchSite {
             return new Post(center, FlightController.anglesTo(center, target)[0], owner, true);
         }
 
-        /** Места пусковой: [назад, влево] от центра в блоках, по порядку предпочтения. */
-        private double[][] candidates() {
-            return ordered ? AT_PLACE : CANDIDATES;
-        }
-
-        /** Своя пусковая не дальше этого — её. */
-        private double reuse() {
-            return ordered ? PLACE_REUSE : REUSE_RADIUS;
-        }
-
         public ChunkPos chunk() {
             return new ChunkPos(BlockPos.containing(center));
         }
@@ -124,9 +127,21 @@ public final class LaunchSite {
      */
     @Nullable
     public static LauncherEntity existing(ServerLevel level, Post post, WeaponType weapon, Predicate<LauncherEntity> fits) {
-        AABB box = new AABB(post.center(), post.center()).inflate(post.reuse(), 64, post.reuse());
-        return level.getEntitiesOfClass(LauncherEntity.class, box, l -> l.isAlive() && l.weapon() == weapon && Objects.equals(post.owner(), l.ownerId()))
+        // пусковая по отметке стоит в её районе, а отметка могла сдвинуться на зазор: коробка — на весь охват района
+        double reach = post.ordered() ? PLACE_REACH : REUSE_RADIUS;
+        // по высоте у места пуска — весь мир: место в долине, а пусковая — на круче над ней
+        double up = post.ordered() ? level.getHeight() : 64;
+        AABB box = new AABB(post.center(), post.center()).inflate(reach, up, reach);
+        return level.getEntitiesOfClass(LauncherEntity.class, box, l -> l.isAlive() && l.weapon() == weapon && Objects.equals(post.owner(), l.ownerId())
+                        && serves(l, post))
                 .stream().sorted(Comparator.comparingDouble(l -> l.distanceToSqr(post.center()))).filter(fits).findFirst().orElse(null);
+    }
+
+    /** Пусковая {@code l} в коробке поиска — огневой позиции {@code post}: у стреляющего — любая, у места пуска — {@link #PLACE_REUSE}. */
+    private static boolean serves(LauncherEntity l, Post post) {
+        if (!post.ordered()) return true;
+        Vec3 mark = l.mark();
+        return mark != null ? horizontal(mark, post.center()) < CLEARANCE : horizontal(l.position(), post.center()) <= PLACE_REUSE;
     }
 
     /**
@@ -206,7 +221,16 @@ public final class LaunchSite {
     @Nullable
     public static Pick findClear(ServerLevel level, Post post, WeaponType weapon, Vec3 target, Function<Vec3, float[]> yaws,
                                  float maxOff, Budget budget) {
-        for (double[] c : post.candidates()) {
+        if (post.ordered()) {
+            Pick[] found = new Pick[1];
+            nearest(Ground.of(level), Mth.floor(post.center().x), Mth.floor(post.center().z), budget, site -> {
+                if (taken(level, site)) return false;
+                found[0] = pickOn(level, site, weapon, yaws.apply(site), target, maxOff, budget);
+                return found[0] != null;
+            });
+            return found[0];
+        }
+        for (double[] c : CANDIDATES) {
             Vec3 off = Local.offset(post.yaw(), 0, c[1], 0, -c[0]);
             Vec3 p = post.center().add(off);
             Vec3 site = check(level, Mth.floor(p.x), Mth.floor(p.z));
@@ -457,27 +481,189 @@ public final class LaunchSite {
         return !level.getEntitiesOfClass(LauncherEntity.class, new AABB(site, site).inflate(CLEARANCE, 8, CLEARANCE), LauncherEntity::isAlive).isEmpty();
     }
 
-    /** Ровно (±1 блок в квадрате 5×5), твёрдо, не вода, над головой пусто (листва тоже мешает). */
-    @Nullable
+    /**
+     * Земля, на которой ищется место пусковой: готовность чанка, карты высот и блок под ногами. У мира — {@link #of};
+     * проверки выбора места — на своей.
+     */
+    interface Ground {
+        boolean ready(int x, int z);
+
+        /** Первый воздух над верхним блоком без листвы ({@code MOTION_BLOCKING_NO_LEAVES}). */
+        int ground(int x, int z);
+
+        /** Первый воздух над верхним блоком с листвой ({@code MOTION_BLOCKING}). */
+        int top(int x, int z);
+
+        /** Блок под ногами в (x, y, z) — твёрдый сверху и не жидкость. */
+        boolean firm(int x, int y, int z);
+
+        /** Блок в (x, y, z) — опора (есть форма столкновения: и тропинка, и пашня) и не жидкость. */
+        boolean dry(int x, int y, int z);
+
+        int minY();
+
+        static Ground of(ServerLevel level) {
+            return new Ground() {
+                @Override
+                public boolean ready(int x, int z) {
+                    return Terrain.ready(level, x >> 4, z >> 4);
+                }
+
+                @Override
+                public int ground(int x, int z) {
+                    return Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                }
+
+                @Override
+                public int top(int x, int z) {
+                    return Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x, z);
+                }
+
+                @Override
+                public boolean firm(int x, int y, int z) {
+                    BlockPos at = new BlockPos(x, y, z);
+                    BlockState state = level.getBlockState(at);
+                    return state.getFluidState().isEmpty() && state.isFaceSturdy(level, at, Direction.UP);
+                }
+
+                @Override
+                public boolean dry(int x, int y, int z) {
+                    BlockPos at = new BlockPos(x, y, z);
+                    BlockState state = level.getBlockState(at);
+                    return state.getFluidState().isEmpty() && !state.getCollisionShape(level, at).isEmpty();
+                }
+
+                @Override
+                public int minY() {
+                    return level.getMinBuildHeight();
+                }
+            };
+        }
+    }
+
     private static Vec3 check(ServerLevel level, int x, int z) {
+        return check(Ground.of(level), x, z);
+    }
+
+    /**
+     * Ровно (±1 блок в квадрате 5×5), твёрдо под серединой, опора и не вода под всем квадратом (прицеп 7,6 м: у кромки
+     * воды поверхность воды и берег расходятся на блок, и ровным квадрат вышел бы наполовину над водой; тропинка и пашня
+     * по краям — опора), над головой пусто (листва тоже мешает).
+     * Сначала то, что отсеивает чаще и дешевле: крона над самим местом и вода под ним (лес и озеро в районе места пуска),
+     * потом квадрат.
+     */
+    @Nullable
+    static Vec3 check(Ground g, int x, int z) {
         for (int dx = -3; dx <= 3; dx += 3) {
             for (int dz = -3; dz <= 3; dz += 3) {
-                if (!Terrain.ready(level, new BlockPos(x + dx, 0, z + dz))) return null;
+                if (!g.ready(x + dx, z + dz)) return null;
             }
         }
-        int y = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-        if (y <= level.getMinBuildHeight() + 1) return null;
+        int y = g.ground(x, z);
+        if (y <= g.minY() + 1 || g.top(x, z) > y + 1 || !g.firm(x, y - 1, z)) return null;
         for (int dx = -2; dx <= 2; dx += 2) {
             for (int dz = -2; dz <= 2; dz += 2) {
-                int h = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + dx, z + dz);
-                if (Math.abs(h - y) > 1) return null;
-                if (Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x + dx, z + dz) > h + 1) return null;
+                int h = g.ground(x + dx, z + dz);
+                if (Math.abs(h - y) > 1 || g.top(x + dx, z + dz) > h + 1) return null;
             }
         }
-        BlockPos below = new BlockPos(x, y - 1, z);
-        BlockState ground = level.getBlockState(below);
-        if (!ground.getFluidState().isEmpty() || !ground.isFaceSturdy(level, below, Direction.UP)) return null;
+        for (int dx = -2; dx <= 2; dx += 2) {
+            for (int dz = -2; dz <= 2; dz += 2) {
+                if ((dx != 0 || dz != 0) && !g.dry(x + dx, g.ground(x + dx, z + dz) - 1, z + dz)) return null;
+            }
+        }
         return new Vec3(x + 0.5, y, z + 0.5);
+    }
+
+    /**
+     * Чтений на клетку предела {@link Budget}: чтение готовности чанка или карты высот — десятки наносекунд, клетка луча —
+     * ~0,4 мкс (⚠ оценка порядка); блок под ногами (состояние и форма его верха) — как {@link #BLOCK_READS} чтений.
+     */
+    static final int READS_PER_CELL = 8, BLOCK_READS = 4;
+
+    /** Земля, что считает свои чтения: цена проверки места — в предел выбора пусковой. */
+    private static final class Counted implements Ground {
+        private final Ground g;
+        int reads;
+
+        Counted(Ground g) {
+            this.g = g;
+        }
+
+        @Override
+        public boolean ready(int x, int z) {
+            reads++;
+            return g.ready(x, z);
+        }
+
+        @Override
+        public int ground(int x, int z) {
+            reads++;
+            return g.ground(x, z);
+        }
+
+        @Override
+        public int top(int x, int z) {
+            reads++;
+            return g.top(x, z);
+        }
+
+        @Override
+        public boolean firm(int x, int y, int z) {
+            reads += BLOCK_READS;
+            return g.firm(x, y, z);
+        }
+
+        @Override
+        public boolean dry(int x, int y, int z) {
+            reads += BLOCK_READS;
+            return g.dry(x, y, z);
+        }
+
+        @Override
+        public int minY() {
+            return g.minY();
+        }
+    }
+
+    /**
+     * Ближайшее к месту (x, z) годное место пусковой в его районе ({@link #PLACE_AREA}), которое принимает {@code fits}
+     * (свободно и сектор пуска открыт); null — нет или вышел предел {@code budget}. Место с закрытым сектором закрывает
+     * и соседние в {@link #CLEARANCE}: их сектор упирается в те же деревья и дома, а проверка сектора — самое дорогое.
+     * Проверка места списывается с предела по своим чтениям ({@link #READS_PER_CELL}).
+     */
+    @Nullable
+    static Vec3 nearest(Ground ground, int x, int z, Budget budget, Predicate<Vec3> fits) {
+        List<Vec3> closed = new ArrayList<>();
+        Counted g = new Counted(ground);
+        for (int[] o : AREA) {
+            g.reads = 0;
+            Vec3 site = check(g, x + o[0], z + o[1]);
+            if (!budget.take(Math.max(1, (g.reads + READS_PER_CELL - 1) / READS_PER_CELL))) return null;
+            if (site == null || near(closed, site)) continue;
+            if (fits.test(site)) return site;
+            if (budget.out()) return null;
+            closed.add(site);
+        }
+        return null;
+    }
+
+    private static boolean near(List<Vec3> closed, Vec3 site) {
+        for (Vec3 c : closed) if (horizontal(c, site) < CLEARANCE) return true;
+        return false;
+    }
+
+    /** Места круга радиуса reach с шагом step: [восток, юг], от ближних к дальним (при равной дальности — по порядку обхода). */
+    static int[][] area(double reach, int step) {
+        List<int[]> out = new ArrayList<>();
+        int n = (int) Math.floor(reach / step);
+        for (int i = -n; i <= n; i++) {
+            for (int j = -n; j <= n; j++) {
+                if (Math.hypot(i * step, j * step) <= reach) out.add(new int[]{i * step, j * step});
+            }
+        }
+        out.sort(Comparator.comparingInt(o -> o[0] * o[0] + o[1] * o[1]));
+        return out.toArray(int[][]::new);
     }
 
     /**
@@ -491,7 +677,7 @@ public final class LaunchSite {
             mine.sort(Comparator.comparingLong(LauncherEntity::deployedAt));
             for (int i = 0; i <= mine.size() - MAX_PER_OWNER; i++) mine.get(i).discard();
         }
-        LauncherEntity l = LauncherEntity.create(level, site, yaw, weapon, post.owner(), post.ordered());
+        LauncherEntity l = LauncherEntity.create(level, site, yaw, weapon, post.owner(), post.ordered(), post.ordered() ? post.center() : null);
         level.addFreshEntity(l);
         return l;
     }
