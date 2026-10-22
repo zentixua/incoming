@@ -248,7 +248,8 @@ public final class ClientSounds {
                 if (s == null) continue;
                 live++;
                 // getVolume читает звук, который движок подставляет при запуске: без звука (нет устройства) его нет
-                if (s.getSound() != null && s.getVolume() > 0.01f) layers.append(String.format(Locale.ROOT, " %s %.2f×%.2f", s.describe(), s.getVolume(), s.getPitch()));
+                // громкость против мерки (Loudness.gain), а не громкость файла: числа строки не зависят от сведения файлов
+                if (s.getSound() != null && s.loudness() > 0.01) layers.append(String.format(Locale.ROOT, " %s %.2f×%.2f", s.describe(), s.loudness(), s.getPitch()));
             }
             if (layers.isEmpty()) continue;
             t.track.at(t.track.lastTick(), p);

@@ -200,6 +200,14 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         this.pitch = 1;
     }
 
+    /**
+     * Громкость слоя против мерки {@link Loudness#ENGINE_LUFS} ({@link Loudness#gain}, сглаженная): ей сравнивают с порогом
+     * {@link VoiceBudget#AUDIBLE}; громкость для Minecraft ({@code getVolume}) — она же, приведённая к громкости файла.
+     */
+    public double loudness() {
+        return smoothVolume;
+    }
+
     String describe() {
         return layer.name().toLowerCase(Locale.ROOT);
     }

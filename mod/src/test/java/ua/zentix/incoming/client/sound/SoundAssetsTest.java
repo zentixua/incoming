@@ -139,16 +139,17 @@ class SoundAssetsTest {
      * ванильного проигрывания с громкостью на глаз (громкость больше 1 у Minecraft — дальность 16 блоков на единицу). Так
      * 3.4.1 играл гул огня в воронке громкостью 5 до 90 блоков: хвост взрыва в 50 м — 135 дБА-эквивалента, громче
      * реактивного двигателя, хотя у пожара ~2 МВт там ~80 дБ. UI-звуки без места ({@code forUI}) — не в счёт.
+     * Событие в переменной или своя обёртка этим поиском не ловятся; обёртки с ручной громкостью у клиента нет
+     * ({@code ClientSounds.at} убран).
      */
     @Test
     void worldSoundsHaveNoHandVolume() throws IOException {
         Pattern hand = Pattern.compile("(playSound|playLocalSound|playSeededSound|new SimpleSoundInstance|SimpleSoundInstance\\.forAmbientAddition)\\(");
         try (var files = Files.walk(Path.of("src/main/java"))) {
             for (Path f : (Iterable<Path>) files.filter(x -> x.toString().endsWith(".java"))::iterator) {
-                List<String> lines = Files.readAllLines(f);
-                for (int i = 0; i < lines.size(); i++) {
-                    String l = lines.get(i);
-                    assertTrue(!(l.contains("ModSounds.") && hand.matcher(l).find()), f + ":" + (i + 1) + ": звук мода громкостью на глаз — " + l.trim());
+                // по операторам, а не по строкам: вызов, разбитый на строки, — тоже
+                for (String st : Files.readString(f).split(";")) {
+                    assertTrue(!(st.contains("ModSounds.") && hand.matcher(st).find()), f + ": звук мода громкостью на глаз — " + st.strip());
                 }
             }
         }
