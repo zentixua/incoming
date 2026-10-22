@@ -81,6 +81,10 @@ public final class LodSections {
     }
 
     private static void write(FriendlyByteBuf out, @Nullable LevelChunkSection section, @Nullable DataLayer block, @Nullable DataLayer sky, boolean fullSky) {
+        // слой, весь из 15, — без байтов; живой слой движка света не трогать (getData у однородного заполняет его сам)
+        if (sky != null && sky.isDefinitelyFilledWith(15)) fullSky = true;
+        if (block != null) block = block.copy();
+        if (sky != null) sky = sky.copy();
         boolean blocks = section != null && !section.hasOnlyAir();
         boolean hasBlock = block != null && !block.isEmpty();
         boolean hasSky = !fullSky && sky != null && !sky.isEmpty();

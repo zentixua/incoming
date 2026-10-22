@@ -263,8 +263,8 @@ public final class DhUpdates {
             if (held.waiting() == 0) LISTENING.remove(level, this);
         }
         if (due.isEmpty() && offered.isEmpty()) return;
-        // без DH темп — место в очередях игроков с Voxy
-        int budget = paced() ? PER_TICK : Math.min(PER_TICK, VoxyLods.room(level));
+        // игроки с Voxy (и с DH): темп — и место в их очередях, иначе лишнее они бы не получили
+        int budget = Math.min(PER_TICK, VoxyLods.room(level));
         // собранные чанки — первыми: отметки чанков в мире подождут тик, а собранные держат память; чанк, отданный DH
         // меньше RESEND тиков назад (держанной копией или прошлой собранной), — в конец: DH пропустил бы его молча
         for (int i = 0, n = offered.size(); budget > 0 && i < n; i++) {

@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * <ul>
  * <li>Кому: игрокам того же мира с Voxy не дальше {@link FarLods#FAR_CHUNKS} чанков, у кого этого чанка нет (чанк,
  * который игрок видит, Voxy перестраивает сам по пакетам ванили).</li>
- * <li>Темп: каждому не больше {@link #BYTES_PER_TICK} в тик (~5 МиБ/с до сжатия, ~100 чанков); очередь игрока — не
+ * <li>Темп: каждому не больше {@link #BYTES_PER_TICK} в тик (~2,5 МиБ/с до сжатия, ~60 чанков); очередь игрока — не
  * больше {@link #QUEUE_BYTES}, свежая копия того же чанка заменяет ждущую. Место в очередях — {@link #room}: по нему
  * {@link DhUpdates} отдаёт чанки и без DH.</li>
  * <li>Копию собирают в фоне (свет по её блокам, {@link CopyLight}), загруженный чанк — снимком в потоке сервера.</li>
@@ -53,17 +53,27 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * сервера, их очереди и копии в сборке.
  */
 public final class VoxyLods {
-    /** Байтов чанков в тик одному игроку, не больше: ~5 МиБ/с до сжатия сети (у LSS по умолчанию 25, у DH 0,5 МБ/с). */
-    static final int BYTES_PER_TICK = 256 * 1024;
+    /**
+     * Байтов чанков в тик одному игроку, не больше: 2,5 МиБ/с до сжатия сети, после сжатия — около 1 МиБ/с (у LSS по
+     * умолчанию 25 МиБ/с до сжатия, у DH 0,5 МБ/с): игрок, открывший мир друзьям, отдаёт их со своего канала.
+     */
+    static final int BYTES_PER_TICK = 128 * 1024;
     /** Очередь игрока, байтов, не больше: дальше новые чанки ему не идут (и {@link #room} — 0). */
     static final long QUEUE_BYTES = 48L << 20;
     /** Чанк по оценке (для {@link #room}): 24 секции с палитрами и свет у поверхности — ~40 КБ до сжатия. */
     static final int CHUNK_BYTES = 40 * 1024;
+    /**
+     * Чанков, переписанных LSS, которые игрок может назвать за секунду, не больше: каждый — заголовок с диска или чтение
+     * и копия; больше просит только клиент, который шлёт лишнее.
+     */
+    static final int STALE_PER_SECOND = 256;
 
     /** Игрок с Voxy: его чанки по порядку (чанк → пакет; свежий заменяет ждущий на его месте). */
     private static final class Viewer {
         final LinkedHashMap<Long, S2C.VoxyChunk> queue = new LinkedHashMap<>();
         long bytes, sent, dropped;
+        /** Сколько ещё чанков, переписанных LSS, игрок может назвать ({@link #stale}): {@link #STALE_PER_SECOND} в секунду. */
+        int staleBudget = STALE_PER_SECOND;
         @Nullable
         ResourceKey<Level> dimension;
     }
@@ -120,6 +130,18 @@ public final class VoxyLods {
      * DH за его задержку до прихода фронта, а Voxy кладёт секции сразу — LOD не должен меняться раньше фронта.
      */
     public static void send(ServerLevel level, ChunkAccess chunk, long notBefore) {
+        send(level, chunk, notBefore, null);
+    }
+
+    /**
+     * Чанк — одному игроку с Voxy (у него LOD Server Support переписал копию мода чанком с диска, {@code
+     * FarLods.refresh}): у DH и у остальных LOD уже верный. Поток сервера.
+     */
+    public static void sendTo(ServerLevel level, ChunkAccess chunk, UUID player) {
+        send(level, chunk, Long.MIN_VALUE, player);
+    }
+
+    private static void send(ServerLevel level, ChunkAccess chunk, long notBefore, @Nullable UUID only) {
         VoxyLods v = get(level.getServer());
         if (!v.levels.contains(level.dimension())) return;
         ChunkPos pos = chunk.getPos();
@@ -128,7 +150,7 @@ public final class VoxyLods {
         Set<ServerPlayer> seeing = loaded ? new HashSet<>(level.getChunkSource().chunkMap.getPlayers(pos, false)) : Set.of();
         for (ServerPlayer p : level.players()) {
             Viewer viewer = v.viewers.get(p.getUUID());
-            if (viewer == null || seeing.contains(p) || !near(p, pos)) continue;
+            if (viewer == null || only != null && !only.equals(p.getUUID()) || seeing.contains(p) || !near(p, pos)) continue;
             to.add(p.getUUID());
         }
         if (to.isEmpty()) return;
@@ -204,6 +226,7 @@ public final class VoxyLods {
                 viewer.bytes = 0;
             }
             levels.add(dim);
+            if (server.getTickCount() % 20 == 0) viewer.staleBudget = STALE_PER_SECOND;
             int budget = BYTES_PER_TICK;
             for (Iterator<S2C.VoxyChunk> q = viewer.queue.values().iterator(); q.hasNext() && budget > 0; ) {
                 S2C.VoxyChunk packet = q.next();
@@ -247,12 +270,16 @@ public final class VoxyLods {
      * от диска ({@link FarLods#refresh}); загруженный чанк LSS шлёт живым — его поправит отметка. Поток сервера.
      */
     public static void stale(C2S.VoxyStale packet, IPayloadContext context) {
-        if (!(context.player() instanceof ServerPlayer p) || !get(p.getServer()).viewers.containsKey(p.getUUID())) return;
+        if (!(context.player() instanceof ServerPlayer p)) return;
+        Viewer viewer = get(p.getServer()).viewers.get(p.getUUID());
+        if (viewer == null) return;
         ServerLevel level = p.serverLevel();
         int n = 0;
         for (long chunk : packet.chunks()) {
+            if (viewer.staleBudget <= 0) break;
             if (!near(p, new ChunkPos(chunk))) continue;
-            FarLods.refresh(level, chunk);
+            viewer.staleBudget--;
+            FarLods.refresh(level, chunk, p.getUUID());
             n++;
         }
         if (n > 0) Incoming.LOG.debug("Voxy LODs: {} chunks overwritten by LOD Server Support at {}, sent again if still changed", n, p.getGameProfile().getName());
