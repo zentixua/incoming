@@ -527,9 +527,15 @@ public final class MushroomField {
      * ({@code ready}) — доля 0: шар как прежде.
      */
     static void ballSurface(double t, double hobM, double yieldKt, boolean surface, boolean ready, double[] out) {
+        ballSurface(t, hobM, yieldKt, surface, ready ? NukeBallSurface.rises() : null, out);
+    }
+
+    /** То же по пути кадров узора {@code rises} (null — узор не прочитан). */
+    static void ballSurface(double t, double hobM, double yieldKt, boolean surface, float[] rises, double[] out) {
         double unmasked = FireballModel.unmasked(t, yieldKt);
-        out[0] = unmasked < 1 ? unmasked - 1 : NukeBallSurface.frame(FireballModel.surfaceRise(t, hobM, yieldKt, surface));
-        out[1] = ready ? 1 - MushroomModel.rollUp(t, yieldKt, surface) : 0;
+        double frame = rises == null ? 0 : NukeBallSurface.frame(rises, FireballModel.surfaceRise(t, hobM, yieldKt, surface));
+        out[0] = unmasked < 1 ? unmasked - 1 : frame;
+        out[1] = rises != null ? 1 - MushroomModel.rollUp(t, yieldKt, surface) : 0;
     }
 
     /**

@@ -127,12 +127,18 @@ public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBa
         return d == null ? 0 : frame(d.rises, rise);
     }
 
-    static double frame(float[] rises, double rise) {
+    public static double frame(float[] rises, double rise) {
         if (rise <= rises[0]) return 0;
         for (int i = 0; i < rises.length - 1; i++) {
             if (rise <= rises[i + 1]) return i + (rise - rises[i]) / Math.max(rises[i + 1] - rises[i], 1e-9);
         }
         return rises.length - 1;
+    }
+
+    /** Путь всплытия кадров в радиусах шара; null — узор не прочитан. */
+    public static float[] rises() {
+        Data d = data;
+        return d == null ? null : d.rises;
     }
 
     /** Кадров в текстуре (0 — не прочитана). */

@@ -290,19 +290,29 @@ class MushroomFieldTest {
     void ballSurfaceFollowsTheBreakawayAndTheRollUp() {
         double[] out = new double[2];
         double y = 15;
-        MushroomField.ballSurface(0.5 * FireballModel.firstMinimumSeconds(y), 600, y, false, true, out);
+        float[] rises;
+        try (var in = MushroomFieldTest.class.getResourceAsStream("/assets/incoming/textures/fx/nukeball.bin")) {
+            rises = NukeBallSurface.parse(in).rises();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+        MushroomField.ballSurface(0.5 * FireballModel.firstMinimumSeconds(y), 600, y, false, rises, out);
         assertEquals(-1, out[0], 0);
         assertEquals(1, out[1], 1e-12);
-        MushroomField.ballSurface(FireballModel.breakawaySeconds(y), 600, y, false, true, out);
+        MushroomField.ballSurface(FireballModel.breakawaySeconds(y), 600, y, false, rises, out);
         assertEquals(0, out[0], 1e-9);
         double last = -1;
         for (double t = 0.001; t < 40; t *= 1.1) {
-            MushroomField.ballSurface(t, 600, y, false, true, out);
+            MushroomField.ballSurface(t, 600, y, false, rises, out);
             assertTrue(out[0] >= last, "кадр не назад: " + t);
             last = out[0];
             assertEquals(1 - MushroomModel.rollUp(t, y, false), out[1], 1e-12);
-            MushroomField.ballSurface(t, 600, y, false, false, out);
+            MushroomField.ballSurface(t, 600, y, false, (float[]) null, out);
             assertEquals(0, out[1], 0);
         }
+        // кадр — путь всплытия в радиусах: к концу сворачивания у 15 кт — 4,1 радиуса из 5 файла, дальше последнего не идёт
+        MushroomField.ballSurface(MushroomModel.rollUpSeconds(y, false), 600, y, false, rises, out);
+        assertEquals(NukeBallSurface.frame(rises, FireballModel.surfaceRise(MushroomModel.rollUpSeconds(y, false), 600, y, false)), out[0], 1e-9);
+        assertTrue(out[0] > 0.6 * (rises.length - 1) && out[0] < rises.length - 1, "кадр к концу сворачивания: " + out[0]);
     }
 }

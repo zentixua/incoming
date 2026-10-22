@@ -453,7 +453,7 @@ class MushroomGlslTest {
         GlslFunction f = GlslFunction.parse(GLSL, "mushBallContrast");
         double[] out = new double[2];
         for (double t = 0.0005; t < 0.5; t *= 1.1) {
-            MushroomField.ballSurface(t, 600, 15, false, true, out);
+            MushroomField.ballSurface(t, 600, 15, false, new float[]{0, 1, 2}, out);
             assertEquals(FireballModel.unmasked(t, 15), f.call(Map.of("f", out[0])), 1e-9, "t = " + t);
         }
     }
