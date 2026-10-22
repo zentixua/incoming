@@ -102,8 +102,9 @@ blocks from the target, not 5–20 km. Everything at the target (charge, blast, 
   wind at the ground; higher up it blows harder, so a salvo lands a little downwind. Each rocket leaves its tube with a
   small spread in angle and speed, so the impacts scatter by about 1 % of the range. The Grad also fires at targets
   closer than its real minimum of about 5 km (not physical: the rockets leave the tubes slower than real ones).
-- **The bomb** falls under gravity and drag; its fins steer it to the aim point. It leaves the B-2 at half the bomber's
-  speed (not physical). The wind barely moves it.
+- **The bomb** falls under gravity and drag; its fins steer it to the aim point. It leaves the B-2 with the bomber's own speed,
+  so the B-2 releases it about 145 blocks before the target, and it comes down almost vertically. The wind barely
+  moves it.
 
 ## Shahed
 

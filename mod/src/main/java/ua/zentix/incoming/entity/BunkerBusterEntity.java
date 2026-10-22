@@ -96,13 +96,17 @@ public class BunkerBusterEntity extends StrikeProjectile {
         return flightPhase() == FlightPhase.DRILL;
     }
 
-    /** Сброс с бомбардировщика: нос на 10° вниз, 6 блоков/тик ({@link BombDrop}). */
-    public void drop(Vec3 pos, float yaw, Vec3 surface, @Nullable BlockPos goal, @Nullable UUID owner) {
+    /**
+     * Сброс с бомбардировщика: бомба сходит со скоростью носителя {@code velocity} (блоков/тик) — величина, курс и тангаж
+     * его ({@link BombDrop}).
+     */
+    public void drop(Vec3 pos, Vec3 velocity, Vec3 surface, @Nullable BlockPos goal, @Nullable UUID owner) {
         super.launch(pos, new Target.Point(surface), surface, owner);
-        flight.set(yaw, (float) BombDrop.DROP_PITCH);
-        moveTo(pos.x, pos.y, pos.z, yaw, (float) BombDrop.DROP_PITCH);
+        float[] angles = FlightController.anglesTo(Vec3.ZERO, velocity);
+        flight.set(angles[0], angles[1]);
+        moveTo(pos.x, pos.y, pos.z, angles[0], angles[1]);
         this.goal = goal;
-        this.speed = BombDrop.DROP_SPEED;
+        this.speed = velocity.length();
         setPhase(FlightPhase.TERMINAL);
     }
 

@@ -177,23 +177,31 @@ class FlightModelTest {
         assertTrue(b.sigma(600) >= Math.max(sigmaX, sigmaZ) + land.x / 2, "оценка σ " + b.sigma(600));
     }
 
-    /** Бомба: тяжесть вдоль пути разгоняет, сопротивление ограничивает — к пределу √(g/drag), не выше. */
+    /**
+     * Бомба сходит со скоростью B-2 и к земле тормозит: сопротивление больше тяжести, скорость идёт к пределу
+     * √(g/drag) сверху; медленная бомба разгоняется к нему снизу. Быстрее скорости сброса она не бывает.
+     */
     @Test
     void bombFallsToTerminalSpeed() {
-        WeaponSpec.Airframe bomb = WeaponSpec.BUNKER.payload();
+        WeaponSpec.Airframe bomb = WeaponSpec.BUNKER.payload(), bomber = WeaponSpec.BUNKER.airframe();
         double terminal = Math.sqrt(Ballistics.GRAVITY / bomb.ballistic().drag());
-        assertEquals(terminal, bomb.diveSpeed(), 1e-9);
-        // отвесно вниз у самой земли (плотность — как на уровне моря): место стоит, считается только скорость
-        FlightController f = new FlightController(0, 89);
-        Vec3 pos = new Vec3(0, 64, 0), aim = new Vec3(0, -1000, 0);
-        double v = BombDrop.DROP_SPEED, prev = v;
-        for (int t = 0; t < 3000; t++) {
-            v = BombDrop.steer(f, pos, v, aim);
-            assertTrue(v <= terminal * 1.001, "не быстрее предела: " + v);
-            assertTrue(v >= prev - 1e-9, "разгоняется");
-            prev = v;
+        assertEquals(bomber.cruiseSpeed(), bomb.cruiseSpeed(), 1e-9, "сходит со скоростью B-2");
+        assertTrue(bomb.cruiseSpeed() > terminal, "B-2 быстрее предела падения");
+        assertEquals(bomb.cruiseSpeed(), bomb.diveSpeed(), 1e-9);
+        for (double start : new double[]{bomb.cruiseSpeed(), 2}) {
+            // отвесно вниз у самой земли (плотность — как на уровне моря): место стоит, считается только скорость
+            FlightController f = new FlightController(0, 89);
+            Vec3 pos = new Vec3(0, 64, 0), aim = new Vec3(0, -1000, 0);
+            double v = start, prev = v;
+            for (int t = 0; t < 3000; t++) {
+                v = BombDrop.steer(f, pos, v, aim);
+                // нос на 89°, не 90: предел вдоль пути чуть ниже √(g/drag)
+                assertTrue(Math.abs(v - terminal) <= Math.abs(prev - terminal) + 1e-4, "к пределу: " + prev + " → " + v);
+                assertTrue(v <= bomb.diveSpeed() + 1e-9, "не быстрее сброса: " + v);
+                prev = v;
+            }
+            assertEquals(terminal, prev, terminal * 0.05, "у земли — у предела (с " + start + ")");
         }
-        assertEquals(terminal, prev, terminal * 0.05, "у земли — у предела");
     }
 
     /** Ветер сносит бомбу медленно: тяжёлую и быструю — на доли блока за десятки тиков. */

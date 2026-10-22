@@ -660,14 +660,19 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     /**
      * Падение GBU-57 ({@link #BOMB_ARTICLE}): сопротивление игровое — предел скорости падения у земли √(g/drag) ≈ 11
-     * блоков/тик; с эшелона 170 блоков бомба разгоняется с 6 до ~7 блоков/тик. Разброса нет: бомба управляемая.
+     * блоков/тик; бомба сходит со скоростью B-2 ({@link #BOMBER_SPEED}) и к земле тормозит к этому пределу. Разброса
+     * нет: бомба управляемая.
      */
     static final Ballistic BOMB_FALL = new Ballistic(2e-4, 0, 0);
     /**
-     * Предел скорости падения бомбы у земли √(g/drag), блоков/тик ({@link #BOMB_FALL}): её предельная скорость и запас
-     * хода; маршевая для оценок времени — скорость сброса (с эшелона бомба быстрее 7 не разгоняется).
+     * Предел скорости падения бомбы у земли √(g/drag), блоков/тик ({@link #BOMB_FALL}): её запас хода.
      */
     static final double BOMB_TERMINAL = Math.sqrt(ua.zentix.incoming.guidance.Ballistics.GRAVITY / BOMB_FALL.drag());
+    /**
+     * Скорость B-2, блоков/тик (игровая, не по физике): и бомбы при сбросе — сброшенная бомба сохраняет скорость
+     * носителя. Быстрее она уже не идёт: сопротивление больше тяжести, падение тормозит её к {@link #BOMB_TERMINAL}.
+     */
+    static final double BOMBER_SPEED = 12;
 
     /**
      * Полёт 9М22У после выгорания ({@link #ROCKET_ARTICLE}): сопротивление игровое — при сходе под 50° на 600 блоках
@@ -713,16 +718,16 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     /**
      * B-2 ({@link #BOMBER_ARTICLE}) и GBU-57 ({@link #BOMB_ARTICLE}). Игровое (не по физике): эшелон +170 над местом
-     * падения бомбы (настоящий — ~12 км), 12 блоков/тик, разворот 1°/тик (радиус ~690 блоков), сброс за ~85 блоков до
+     * падения бомбы (настоящий — ~12 км), 12 блоков/тик, разворот 1°/тик (радиус ~690 блоков), сброс за ~145 блоков до
      * цели; бетонобойная бомба пробивает грунт и взрывается под землёй. Бомба со спутниковым наведением: промах — СКО
      * 1,5 блока по оси. Топлива у бомбы нет.
      */
     public static final WeaponSpec BUNKER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(60, 80), new Warhead(false, true, false),
             Launch.BOMBER,
-            new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 85, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, true, 0.5f,
-            new Airframe(() -> ModEntities.BOMBER.get(), 12, 12, BOMBER_HANDLING, 170, 30, 0, 8.5, 0, 120 * 12, 0, null, 0, Attack.NONE,
+            new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 145, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, true, 0.5f,
+            new Airframe(() -> ModEntities.BOMBER.get(), BOMBER_SPEED, BOMBER_SPEED, BOMBER_HANDLING, 170, 30, 0, 8.5, 0, 120 * BOMBER_SPEED, 0, null, 0, Attack.NONE,
                     BOMBER_NOISE, new Signature(0.15, true), BOMBER_ARTICLE, null),
-            new Airframe(() -> ModEntities.BUNKER_BUSTER.get(), BombDrop.DROP_SPEED, BOMB_TERMINAL, null, 0, 12, 0, BombDrop.NOSE, 0, 300 * BOMB_TERMINAL,
+            new Airframe(() -> ModEntities.BUNKER_BUSTER.get(), BOMBER_SPEED, Math.max(BOMBER_SPEED, BOMB_TERMINAL), null, 0, 12, 0, BombDrop.NOSE, 0, 300 * BOMB_TERMINAL,
                     BombDrop.REACH_PAD, null, 0, Attack.NONE,
                     BOMB_NOISE, new Signature(0.1, false), BOMB_ARTICLE, BOMB_FALL),
             Munition.single(() -> ModItems.BUNKER_BUSTER.get()), null);

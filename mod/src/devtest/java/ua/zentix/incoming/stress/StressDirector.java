@@ -784,7 +784,7 @@ public final class StressDirector {
             if (behind == null) behind = aim;
             BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
             if (bomb == null) continue;
-            bomb.drop(from, 0, aim, null, null);
+            bomb.drop(from, BomberEntity.levelVelocity(0), aim, null, null);
             VirtualFlights.launch(level, bomb);
         }
         if (behind != null) {
