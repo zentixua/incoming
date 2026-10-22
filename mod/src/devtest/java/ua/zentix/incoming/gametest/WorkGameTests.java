@@ -554,10 +554,10 @@ public final class WorkGameTests {
     }
 
     /**
-     * Три подрыва бетонобойной бомбы (один район, один тик) на считающих часах: все выбирают лучами по нетронутой породе —
-     * ни один блок, выбранный прошлым подрывом, не снят к {@code ExplosionEvent.Detonate} следующего. Иначе лучи
-     * следующего идут то по снятому, то нет (и песок, начавший падать, разлетается от следующего подрыва), и воронка
-     * зависит от скорости сервера: на CI — от 5,3 до 8,6 тыс. блоков.
+     * Два подрыва бомбы, прорвавшейся наружу (один район, один тик): волна в подземной комнате и волна той доли заряда,
+     * что вышла в воздух, над домиком наверху. На считающих часах оба выбирают лучами по нетронутому — ни один блок,
+     * выбранный прошлым подрывом, не снят к {@code ExplosionEvent.Detonate} следующего. Иначе лучи следующего идут то по
+     * снятому, то нет, и разрушения зависят от скорости сервера.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_area_order", skyAccess = true)
     public static void areaExplosionsPickTogether(GameTestHelper h) {
@@ -565,14 +565,25 @@ public final class WorkGameTests {
         for (BlockPos p : BlockPos.betweenClosed(CENTER.offset(-10, -10, -10), CENTER.offset(10, 0, 10))) {
             level.setBlock(h.absolutePos(p), Blocks.STONE.defaultBlockState(), 2);
         }
+        // комната под землёй вокруг заряда, стены кирпичные
+        BlockPos room = CENTER.offset(0, -5, 0);
+        for (BlockPos p : BlockPos.betweenClosed(room.offset(-3, -2, -3), room.offset(3, 2, 3))) {
+            boolean wall = Math.abs(p.getX() - room.getX()) == 3 || Math.abs(p.getY() - room.getY()) == 2 || Math.abs(p.getZ() - room.getZ()) == 3;
+            level.setBlock(h.absolutePos(p), wall ? Blocks.BRICKS.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
+        }
+        // кирпичный домик наверху
+        for (BlockPos p : BlockPos.betweenClosed(CENTER.offset(-3, 1, -3), CENTER.offset(3, 4, 3))) {
+            boolean wall = Math.abs(p.getX() - CENTER.getX()) == 3 || Math.abs(p.getZ() - CENTER.getZ()) == 3 || p.getY() == CENTER.getY() + 4;
+            if (wall) level.setBlock(h.absolutePos(p), Blocks.BRICKS.defaultBlockState(), 2);
+        }
         useCounting(h, WorkClock.counting(MS));
-        Vec3 charge = Vec3.atCenterOf(h.absolutePos(CENTER.offset(0, -5, 0)));
+        Vec3 charge = Vec3.atCenterOf(h.absolutePos(room));
         List<Blast> blasts = recordBlasts(h, 48);
         List<String> early = new ArrayList<>();
         long[] first = {-1}, last = {-1};
         Consumer<ExplosionEvent.Detonate> check = e -> {
             // после записи взрывов (LOWEST): последний в списке — этот подрыв
-            if (e.getLevel() != level || e.getExplosion().radius() < 12 || e.getExplosion().center().distanceTo(charge) > 8) return;
+            if (e.getLevel() != level || e.getExplosion().radius() < 12 || e.getExplosion().center().distanceTo(charge) > 16) return;
             if (first[0] < 0) first[0] = level.getGameTime();
             last[0] = level.getGameTime();
             for (int i = 0; i < blasts.size() - 1; i++) {
@@ -587,10 +598,11 @@ public final class WorkGameTests {
         };
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, check);
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(check));
-        Warheads.bunker(level, charge, charge.add(0, 14, 0), null, null);
+        Warheads.bunker(level, charge, charge.add(0, 9, 0), null, null);
         h.succeedWhen(() -> {
             long mains = blasts.stream().filter(b -> b.radius() >= 12).count();
-            h.assertTrue(mains == 3 && StrikeWorld.get(level).impacts().isEmpty(), "подрывов " + mains);
+            h.assertTrue(mains == 2 && StrikeWorld.get(level).impacts().isEmpty(), "подрывов " + mains);
+            h.assertTrue(blasts.stream().allMatch(b -> b.radius() < 12 || !b.blocks().isEmpty()), "подрыв ничего не выбрал — порядок не проверен");
             h.assertTrue(last[0] > first[0], "все подрывы в одном тике — порядок не проверен");
             h.assertTrue(early.isEmpty(), early.toString());
         });

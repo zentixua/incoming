@@ -61,8 +61,6 @@ public final class IncomingConfig {
 
     public static final class Server {
         public final ModConfigSpec.EnumValue<ScalePreset> scalePreset;
-        public final ModConfigSpec.IntValue bunkerPower;
-        public final ModConfigSpec.IntValue bunkerEnergy;
         public final ModConfigSpec.BooleanValue blockDamage;
         public final ModConfigSpec.BooleanValue shatterGlass;
         public final ModConfigSpec.BooleanValue fire;
@@ -141,13 +139,6 @@ public final class IncomingConfig {
                             "GAME: wave_speed 0.20, effects_scale 1.0; REAL: 1.0, 1.0. Flight is one game model with any preset;",
                             "everything at the target (charge, crater, penetration, damage) is true to life with any preset.")
                     .translation("incoming.config.scale_preset").defineEnum("scale_preset", ScalePreset.GAME);
-            b.pop();
-
-            b.translation("incoming.config.warheads").push("warheads");
-            bunkerPower = b.comment("Underground blast power of the bunker buster (TNT = 4).")
-                    .translation("incoming.config.bunker_power").defineInRange("bunker_power", 20, 1, 60);
-            bunkerEnergy = b.comment("Bunker buster penetration: 1000 ≈ 30 blocks of stone.")
-                    .translation("incoming.config.bunker_energy").defineInRange("bunker_energy", 1000, 50, 10000);
             b.pop();
 
             b.translation("incoming.config.world").push("world");

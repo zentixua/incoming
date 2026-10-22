@@ -50,41 +50,6 @@ final class Explosions {
         }
     }
 
-    /** Мгновенная часть прорыва бомбы (прежняя картинка): огненный шар, осколки и пыль (t = 0). */
-    static void burst(ClientLevel level, Vec3 c, float r, FarBlasts.Look look, GroundMaterial mat, RandomSource rnd) {
-        float k = Fx.density(c);
-        fireball(level, c, look.fireball(), look.ballTicks(), rnd);
-        // тот же шар, остывающий в дым: клубы проступают, пока шар тает (до того они закрыли бы его — бурый ком вместо
-        // шара), и тают в чёрные; их свет изнутри гаснет вместе с шаром, иначе остывший шар ещё секунду висел бы ровным
-        // оранжевым пятном
-        int ball = Math.max(1, look.ballTicks()), from = FarBlasts.smokeFrom(look);
-        int n = ballSmoke(r, k);
-        for (int i = 0; i < n; i++) {
-            Vec3 d = dir(rnd, 0.1);
-            Fx.smoke().vel(d.scale(r * (0.05 + 0.06 * rnd.nextDouble())).add(0, 0.08 + 0.06 * rnd.nextDouble(), 0))
-                    .size(r * 0.55f, r * (1.6f + 0.7f * rnd.nextFloat())).growFast().life(420 + rnd.nextInt(300))
-                    .color(0x24201D, 0x6E6862).colorCurve(0.7f).alpha(0.92f).glow(0.8f, ball * (0.25f + 0.15f * rnd.nextFloat())).drag(0.9f)
-                    .rise(0.011f).fadeIn(Math.max(1, ball - from), from).fadeFrom(0.45f).spin(0.012f).spawn(level, c.add(d.scale(r * 0.3)).add(0, r * 0.35, 0));
-        }
-        // раскалённые осколки с дымными хвостами — «щупальца» взрыва
-        Fx.Spec tail = Fx.smoke().size(r * 0.12f, r * 0.55f).life(140).color(0x3A3430, 0x8A8279).alpha(0.55f).glow(0.6f, 5).drag(0.93f)
-                .rise(0.003f).fadeIn(1).fadeFrom(0.35f).budget(FxBudget.DEBRIS);
-        n = Math.round(9 * r / 4 * k) + 3;
-        for (int i = 0; i < n; i++) {
-            Vec3 d = dir(rnd, 0.35);
-            Fx.spark().vel(d.scale(0.9 + rnd.nextDouble() * 1.1)).size(0.16f, 0.08f).life(28 + rnd.nextInt(24)).gravity(0.045f).drag(0.985f)
-                    .streak(1.5f).trail(tail, 0.45f, 0.85f).spawn(level, c.add(0, r * 0.3, 0));
-        }
-        // искры
-        n = Math.round(60 * r / 4 * k) + 10;
-        for (int i = 0; i < n; i++) {
-            Vec3 d = dir(rnd, 0.0);
-            Fx.spark().vel(d.scale(0.4 + rnd.nextDouble() * 1.3)).life(10 + rnd.nextInt(30)).gravity(0.04f).drag(0.96f)
-                    .spawn(level, c.add(0, r * 0.3, 0));
-        }
-        // вал пыли по земле
-        dustSurge(level, c, r, mat, rnd, k);
-    }
 
     /**
      * Огненный шар радиуса {@code radius}, светящий {@code ticks} тиков: главный шар над точкой взрыва (у наземного —

@@ -11,7 +11,7 @@ launchers and the effects of a nuclear explosion have their real sizes.
 | Lancet loitering munition | Circles over the target until you pick what to hit from its camera. |
 | Cruise missile | Flies low over the terrain and dives at the end. Can carry a nuclear warhead. |
 | Grad rocket launcher | A 40-tube trailer that covers an area with unguided rockets. |
-| B-2 with a bunker buster | The bomb goes through about 30 blocks of stone and explodes underground. Can carry a nuclear warhead. |
+| B-2 with a bunker buster | The bomb goes through stone, concrete and earth by real penetration equations and explodes underground: a cavity, crushed rock, caved-in tunnels. Can carry a nuclear warhead. |
 | ICBM | A nuclear warhead of 1 to 15 kt, 90 seconds after launch. |
 
 ## How you use it

@@ -829,10 +829,7 @@ def blasts():
 
 def bunker():
     """Бетонобойная бомба: удар о грунт, подземный взрыв, выброс газов, обвал полостей, толчок."""
-    # хлопок-щелчок: N-волна над головой + хлёсткий ближний взрыв
-    cr = cut(src(182431), 0, 1.6)
-    crack = mix((pad(syn.bomb_crack(), int(2.5 * SR)), 1.0), (pad(F(cr, lo=400), int(2.5 * SR)), 0.6))
-    write("bomb_crack", norm(fade(crack, 0.001, 0.3), -15.4), "bomb.crack", "subtitles.incoming.blast")
+    # хлопка у удара нет: N-волну сверхзвуковой бомбы играет её полёт (Booms), на дозвуке её нет
     # удар о землю: тяжёлый глухой удар (большой взрыв в два раза медленнее, без верхов) + обломки
     imp = F(speed(cut(src(486018), 16.2, 21.1), 0.6, "Сакс: заряд бомбы больше записанного (⚠ множитель на глаз, S5)"), lo=20, hi=1800)
     imp = mix((imp, 1.0), (pad(syn.bomb_impact(), len(imp)), 0.8), (pad(cut(src(550342), 25.0, 27.0), len(imp)), 0.25))
@@ -1056,7 +1053,7 @@ def sonic():
 ORDER = ["drone.engine", "drone.engine.far", "launch.booster", "booster.engine", "booster.separate", "missile.engine",
          "missile.engine.rear", "missile.dive", "missile.engine.far", "missile.whistle", "bomber.engine",
          "bomber.engine.far", "bomb.fall", "bomb.fall.far", "bomb.drill", "siren", "blast.near", "blast.sub",
-         "blast.far", "blast.mid", "debris.fall", "blast.fire", "bomb.crack", "bomb.impact", "bomb.quake", "bomb.deep", "bomb.vent", "bomb.cave",
+         "blast.far", "blast.mid", "debris.fall", "blast.fire", "bomb.impact", "bomb.quake", "bomb.deep", "bomb.vent", "bomb.cave",
          "designator.lock", "silent", "nuke.alarm", "nuke.launch", "nuke.crack", "nuke.boom_far",
          "nuke.wind", "nuke.glass", "nuke.tinnitus", "nuke.rain", "nuke.crack_far", "nuke.fire",
          "nuke.fire_wind", "nuke.collapse", "geiger.click", "rocket.launch",

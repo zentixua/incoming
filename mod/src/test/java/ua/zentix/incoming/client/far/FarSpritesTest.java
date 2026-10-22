@@ -76,15 +76,16 @@ class FarSpritesTest {
     }
 
     /**
-     * Прежний процедурный шар ({@code fx/particle/ball_*}: прорыв бомбы, частицы шара) растёт в своих кадрах — радиус в доле
-     * полного ({@link FarBlasts#growth}, от него свет вспышки и шара).
+     * Прежний процедурный шар ({@code fx/particle/ball_*}: частицы шара) растёт в своих кадрах — радиус в доле полного, как
+     * пишет {@code tools/gen_particles.py}: 0,3 + 0,7·(1 − e^(−u/0,05)), к концу +6 %.
      */
     @Test
     void proceduralBallFramesMatchItsGrowth() throws IOException {
         for (int i = 0; i < FxAtlas.FIREBALL_FRAMES / 2; i++) {
             BufferedImage img = image(String.format(Locale.ROOT, "textures/fx/particle/ball_%02d.png", i));
             double radius = Math.sqrt(4 * opaque(img) / Math.PI) * FarSprites.FIREBALL;
-            assertEquals(FarBlasts.growth((i + 0.5) / FxAtlas.FIREBALL_FRAMES), radius, 0.08, "кадр " + i);
+            double f = (i + 0.5) / FxAtlas.FIREBALL_FRAMES;
+            assertEquals((0.3 + 0.7 * (1 - Math.exp(-f / 0.05))) * (1 + 0.06 * f), radius, 0.08, "кадр " + i);
         }
     }
 

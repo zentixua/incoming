@@ -28,10 +28,11 @@ import org.jetbrains.annotations.Nullable;
  * @param impact     настоящие условия удара (у МБР — входа боеголовки в атмосферу); null — сам не бьёт (B-2)
  * @param warhead    обычная боевая часть; null — её нет (B-2 — носитель, у МБР — ядерная)
  * @param fuelAtImpact топливо в баке к удару, кг: сгорает огненным шаром взрыва (картинка и звук клиента)
+ * @param penetrator корпус, который пробивает грунт и бетон ({@code warhead.Penetration}); null — изделие не пробивает
  */
 public record Article(double dryMass, double launchMass, double length, double diameter, double span, double cda,
                       @Nullable Propulsion sustainer, @Nullable SolidMotor booster, Envelope real, @Nullable Impact impact,
-                      @Nullable Charge warhead, double fuelAtImpact) {
+                      @Nullable Charge warhead, double fuelAtImpact, @Nullable Penetrator penetrator) {
 
     /** Ускорение свободного падения, м/с². */
     public static final double G = 9.80665;
@@ -106,7 +107,9 @@ public record Article(double dryMass, double launchMass, double length, double d
     public record Envelope(double cruise, double dive, double altitude) {}
 
     /**
-     * Настоящие условия удара: с ними считаются пробитие, воронка и осколки.
+     * Настоящие условия удара — сброс или пуск с настоящей высоты и дальности (сверка законов, {@code WeaponSpecTest}).
+     * В игре полёт — своя модель с игровыми высотами и скоростями: пробитие берёт скорость и угол удара сущности в конце
+     * её полёта в мире, а не эти.
      *
      * @param speed скорость, м/с
      * @param angle угол траектории к горизонту, ° (90 — отвесно)
@@ -123,6 +126,14 @@ public record Article(double dryMass, double launchMass, double length, double d
      *                  из масс ВВ и корпуса ({@code FragmentModel})
      */
     public record Charge(double tnt, double explosive, double caseMass, double diameter) {}
+
+    /**
+     * Корпус-пробиватель: его масса, диаметр и длина — у изделия, здесь — нос.
+     *
+     * @param crh радиус дуги оживальной головной части в калибрах (CRH): коэффициент носа по Янгу —
+     *            {@code warhead.Penetration#ogive}
+     */
+    public record Penetrator(double crh) {}
 
     /**
      * Множитель сопротивления по числу Маха f(M) для оперённых тонких тел без опубликованных продувок (О, типовая

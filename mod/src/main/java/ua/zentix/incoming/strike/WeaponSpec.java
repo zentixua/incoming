@@ -419,8 +419,13 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * клиента; 0 — наземного взрыва нет ({@link Blast#NONE}: бомба рвётся под землёй, у МБР — ядерный подрыв).
      */
     public double charge() {
+        return blast == Blast.NONE ? 0 : warheadTnt();
+    }
+
+    /** Заряд обычной боевой части изделия, которое бьёт, в тротиловом эквиваленте, кг; 0 — её нет (у МБР — ядерная). */
+    public double warheadTnt() {
         Article.Charge w = striker().article().warhead();
-        return blast == Blast.NONE || w == null ? 0 : w.tnt();
+        return w == null ? 0 : w.tnt();
     }
 
     /**
@@ -507,7 +512,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * О: 30 кг бензина (10–50, по пройденному пути).
      */
     static final Article DRONE_ARTICLE = new Article(150, 200, 3.5, 0.5, 2.5, 0.3, DRONE_PISTON, DRONE_BOOSTER,
-            new Article.Envelope(51.4, 105, 2000), new Article.Impact(99, 60), new Article.Charge(50, 40, 10, 0.4), 30);
+            new Article.Envelope(51.4, 105, 2000), new Article.Impact(99, 60), new Article.Charge(50, 40, 10, 0.4), 30, null);
 
     /**
      * BGM-109 «Томагавк» Block IV: 1,3 т без ускорителя, 5,56 м, Ø 0,52 м, размах 2,67 м, М0,74 ≈ 250 м/с (880 км/ч),
@@ -520,7 +525,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * 275 кг (200–350, сотни кг и размер огненного шара).
      */
     static final Article MISSILE_ARTICLE = new Article(925, 1310, 5.56, 0.52, 2.67, 0.078, MISSILE_TURBOFAN, MISSILE_BOOSTER,
-            new Article.Envelope(250, 250, 40), new Article.Impact(250, 45), new Article.Charge(150, 120, 190, 0.5), 275);
+            new Article.Envelope(250, 250, 40), new Article.Impact(250, 45), new Article.Charge(150, 120, 190, 0.5), 275, null);
 
     /**
      * B-2 Spirit: пустой 71,7 т, взлётная до 170,6 т, длина 21 м, высота 5,2 м, размах 52,4 м, крейсер М0,85 — на
@@ -528,17 +533,23 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * бомбардировщика). CdA — О: ~4 м² (C<sub>d0</sub> ~0,008 летающего крыла на 478 м²). Сам не бьёт: удар — у бомбы.
      */
     static final Article BOMBER_ARTICLE = new Article(71_700, 170_600, 21, 5.2, 52.4, 4, BOMBER_TURBOFANS, null,
-            new Article.Envelope(250, 250, 12_000), null, null, 0);
+            new Article.Envelope(250, 250, 12_000), null, null, 0, null);
+
+    /** Оживальный нос GBU-57, калибров (О, {@link #BOMB_ARTICLE}). */
+    static final double BOMB_NOSE_CRH = 6;
 
     /**
      * GBU-57A/B MOP: класс 30 000 фунтов (13,6 т; корпус BLU-127 с ВВ — 12 304 кг), 6,2 × 0,8 м, ВВ 2423 кг: 2082 кг
      * AFX-757 и 341 кг PBXN-114 (Wikipedia «GBU-57A/B MOP» по DTRA). Тротиловый эквивалент — О: равен массе ВВ
      * (относительная сила AFX-757 открыто не названа), корпус ~9,9 т стали. Сброс и удар открыто не названы — О:
      * с 12 км на 250 м/с при C<sub>d</sub> 0,3 (0,2–0,35, CdA 0,15 м²) бомба падает ~50 с и бьёт на 511 м/с (506–522)
-     * под 64° (точка с массой в стандартной атмосфере, {@code WeaponSpecTest}). Топлива нет.
+     * под 64° (точка с массой в стандартной атмосфере, {@code WeaponSpecTest}). Топлива нет. Нос — О: оживало
+     * {@value #BOMB_NOSE_CRH} калибров (коэффициент носа по Янгу N ≈ 0,99; форма головной части открыто не описана, у
+     * пробивающих корпусов — 6–9 калибров): с ним MOP на 511 м/с проходит 8,4–9,3 м камня (S ≈ 0,84).
      */
     static final Article BOMB_ARTICLE = new Article(13_600, 13_600, 6.2, 0.8, 0.8, 0.15, null, null,
-            new Article.Envelope(250, 511, 12_000), new Article.Impact(511, 64), new Article.Charge(2423, 2423, 9_900, 0.8), 0);
+            new Article.Envelope(250, 511, 12_000), new Article.Impact(511, 64), new Article.Charge(2423, 2423, 9_900, 0.8), 0,
+            new Article.Penetrator(BOMB_NOSE_CRH));
 
     /**
      * LGM-30G «Минитмен III»: 36 030 кг, 18,2 × 1,67 м (USAF Fact Sheet); мод ведёт только первую ступень
@@ -548,7 +559,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * Wikipedia «LGM-30 Minuteman» называет 7,83 км/с на конечном участке. Боевая часть ядерная — обычной нет.
      */
     static final Article ICBM_ARTICLE = new Article(ICBM_ASCENT.launchMass() - ICBM_ASCENT.propellant(), ICBM_ASCENT.launchMass(), 18.2, 1.67, 1.67, 0.66, null, null,
-            new Article.Envelope(1680, 7200, 0), new Article.Impact(7200, 22.5), null, 0);
+            new Article.Envelope(1680, 7200, 0), new Article.Impact(7200, 22.5), null, 0, null);
 
     /**
      * 9М22У «Града»: 66,6 кг, 2,87 м, 122 мм, дальность 5–20,38 км, ~690 м/с (Wikipedia «BM-21 Grad»); двигатель —
@@ -558,7 +569,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * (как было), корпус 12 кг, Ø 122 мм — калибр.
      */
     static final Article ROCKET_ARTICLE = new Article(46.6, 66.6, 2.87, 0.122, 0.122, 0.0034, null, ROCKET_MOTOR,
-            new Article.Envelope(683, 683, 0), new Article.Impact(337, 62), new Article.Charge(6.4, 6.4, 12, 0.122), 0);
+            new Article.Envelope(683, 683, 0), new Article.Impact(337, 62), new Article.Charge(6.4, 6.4, 12, 0.122), 0, null);
 
     /**
      * «Ланцет-3»: 12 кг, БЧ 3 кг, 80–110 км/ч, в пике до ~300 км/ч с 600–800 м (Wikipedia «ZALA Lancet», Army
@@ -567,7 +578,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * не опубликована — О: ~2,3 кг ВВ × 1,3 = 3 кг ТНТ, корпус 0,7 кг, Ø ~0,12 м (О: внутри корпуса 0,2 м). Топлива нет (батарея).
      */
     static final Article LOITER_ARTICLE = new Article(12, 12, 1.65, 0.2, 1.2, 0.028, LOITER_MOTOR, null,
-            new Article.Envelope(30.6, 83, 700), new Article.Impact(82, 70), new Article.Charge(3, 2.3, 0.7, 0.12), 0);
+            new Article.Envelope(30.6, 83, 700), new Article.Impact(82, 70), new Article.Charge(3, 2.3, 0.7, 0.12), 0, null);
 
     // ---- паспорта звука ({@link Noise}): законы источников из чисел двигателей выше; «О» — оценка по классу
 

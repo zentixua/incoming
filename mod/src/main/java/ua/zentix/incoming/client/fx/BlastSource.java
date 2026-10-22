@@ -4,6 +4,8 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.warhead.BunkerCover;
+import ua.zentix.incoming.warhead.BuriedBlast;
 
 /**
  * Что взорвалось — то, что картинке и звуку нужно от взрыва, из пакета {@link S2C.Blast} и паспорта оружия
@@ -11,8 +13,8 @@ import ua.zentix.incoming.strike.WeaponType;
  * Без Minecraft.
  *
  * @param weapon      оружие; null — взрыв не оружия из паспорта (разрыв зенитной ракеты)
- * @param chargeKg    заряд в тротиловом эквиваленте, кг ({@link WeaponSpec#charge}); 0 — наземного взрыва нет (бомба
- *                    рвётся под землёй, у неё свои звуки)
+ * @param chargeKg    заряд в тротиловом эквиваленте, кг ({@link WeaponSpec#charge}); у бомбы под землёй — доля её
+ *                    заряда, что вышла в воздух ({@link BuriedBlast#airCharge})
  * @param fuelKg      топливо, что сгорает огненным шаром, кг ({@link WeaponSpec#fuelAtImpact})
  * @param surface     взрыв на земле (волна отражается от неё — давление как у заряда в 1,8 раза больше) или в воздухе
  * @param underground бомба взорвалась под землёй ({@link S2C.Blast#BUNKER})
@@ -113,13 +115,33 @@ public record BlastSource(@Nullable WeaponType weapon, double chargeKg, double f
 
     /** Взрыв из пакета: оружие из пакета (в старом повторе — по виду), числа — из его паспорта. */
     public static BlastSource of(S2C.Blast p) {
-        return of(p.weaponType(), p.kind() == S2C.Blast.BUNKER);
+        return p.kind() == S2C.Blast.BUNKER ? buried(p.pos().y, p.surfaceY()) : of(p.weaponType(), false);
     }
 
     /** Взрыв оружия {@code w} на земле ({@code underground} — бомба под землёй). */
     public static BlastSource of(WeaponType w, boolean underground) {
         WeaponSpec s = w.spec();
         return new BlastSource(w, s.charge(), s.fuelAtImpact(), true, underground);
+    }
+
+    /**
+     * Бомба взорвалась на высоте {@code chargeY} под верхом {@code surfaceY} ({@link BunkerCover}): над землёй — та доля её
+     * заряда, что ушла в воздух ({@link BuriedBlast}); не прорвалась наружу — взрыв под землёй.
+     */
+    public static BlastSource buried(double chargeY, float surfaceY) {
+        BuriedBlast law = law(chargeY, surfaceY);
+        return new BlastSource(WeaponType.BUNKER, law.airCharge(hole()), 0, true, !law.breaches());
+    }
+
+    /** Закон подрыва бомбы на высоте {@code chargeY} под верхом {@code surfaceY}. */
+    public static BuriedBlast law(double chargeY, float surfaceY) {
+        return new BuriedBlast(WeaponType.BUNKER.spec().warheadTnt(), BunkerCover.depth((int) surfaceY, chargeY));
+    }
+
+    /** Сечение хода бомбы, м² (корпус по паспорту). */
+    public static double hole() {
+        double d = WeaponType.BUNKER.spec().striker().article().diameter();
+        return Math.PI * d * d / 4;
     }
 
     /** Разрыв в воздухе заряда {@code chargeKg} кг ТНТ без топлива. */

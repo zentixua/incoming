@@ -14,7 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class OutdoorTest {
     /** Докуда слышно и громкость ближней модели на её краю: шахед, крылатая ракета, РСЗО, бомба. */
     private static final double[][] KINDS = {kind(WeaponType.DRONE), kind(WeaponType.MISSILE), kind(WeaponType.ROCKET), kind(WeaponType.LOITER),
-            {BlastSounds.BUNKER_RANGE, BlastSounds.BUNKER_FAR_FLOOR}};
+            buried()};
+
+    /** Бомба на глубине 20 м: слышна доля заряда, что вышла в воздух по ходу, глухим ударом. */
+    private static double[] buried() {
+        BlastSource s = BlastSource.buried(0, 20);
+        return new double[]{BlastSounds.range(s), BlastSounds.atNear(s, BlastSounds.DEEP_LUFS)};
+    }
 
     /** Докуда слышно взрыв оружия и громкость ближней модели на её краю. */
     private static double[] kind(WeaponType w) {

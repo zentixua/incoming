@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BunkerCoverTest {
+    /** Заряд GBU-57, кг ТНТ. */
+    private static final double MOP = 2423;
+
     /**
      * Бомба пробила крышу в 1 блок (верх 75, карта высот 76) и рвётся в комнате под ней: свой ход рядом с зарядом
      * (ниже крыши до дна комнаты) и край стены выше верх не сдвигают — заряд неглубоко, взрыв прорывается наружу.
@@ -17,7 +20,7 @@ class BunkerCoverTest {
         int top = BunkerCover.surface(ring);
         assertEquals(76, top);
         assertEquals(6, BunkerCover.depth(top, 70));
-        assertTrue(BunkerCover.breaches(top, 70));
+        assertTrue(new BuriedBlast(MOP, BunkerCover.depth(top, 70)).breaches());
     }
 
     /** Ход в открытом грунте на 24 блока: верх — грунт вокруг, не дно хода; взрыв под землёй, прорыва нет. */
@@ -27,14 +30,15 @@ class BunkerCoverTest {
         int top = BunkerCover.surface(ring);
         assertEquals(64, top);
         assertEquals(24, BunkerCover.depth(top, 40));
-        assertFalse(BunkerCover.breaches(top, 40));
+        assertFalse(new BuriedBlast(MOP, BunkerCover.depth(top, 40)).breaches());
     }
 
-    /** Граница прорыва: ровно BREACH_DEPTH — прорыв, на блок глубже — нет. */
+    /** Граница прорыва — приведённая глубина 1 м/кг^⅓: у 2,4 т — 13,4 м; на метр мельче — прорыв, на метр глубже — нет. */
     @Test
-    void breachBoundary() {
-        assertTrue(BunkerCover.breaches(64, 64 - BunkerCover.BREACH_DEPTH));
-        assertFalse(BunkerCover.breaches(64, 64 - BunkerCover.BREACH_DEPTH - 1));
+    void breachBoundaryIsScaledDepthOne() {
+        double edge = Math.cbrt(MOP);
+        assertTrue(new BuriedBlast(MOP, edge - 1).breaches());
+        assertFalse(new BuriedBlast(MOP, edge + 1).breaches());
     }
 
     /** Кольцо не меняется (сортируется копия). */

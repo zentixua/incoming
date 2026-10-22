@@ -204,17 +204,6 @@ def siren(dur=13.0):
     return norm(x, -14, 0.8)
 
 
-def bomb_crack():
-    n = int(2.5 * SR)
-    t = np.arange(n) / SR
-    x = np.zeros(n)
-    for t0 in (0.02, 0.13):  # N-волна: два хлёстких щелчка
-        k, L = int(t0 * SR), int(0.004 * SR)
-        x[k:k + L] += np.linspace(1, -1, L)
-    x = F(x, lo=20, hi=9000) + F(rng.standard_normal(n), lo=30, hi=300) * np.exp(-t / 0.6) * 0.25
-    return norm(reverb(x, t60=1.8, mix=0.35), -10)
-
-
 def bomb_impact():
     n = int(3.5 * SR)
     t = np.arange(n) / SR

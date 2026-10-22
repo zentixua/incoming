@@ -74,6 +74,11 @@ public final class ColumnScar {
      * добыча не выпадает: таблица снимается до замены.
      */
     public static void replace(ServerLevel level, BlockPos pos, BlockState old, BlockState with) {
+        replace(level, pos, old, with, FLAGS);
+    }
+
+    /** То же с флагами {@code flags} ({@code setBlock}): с обновлением соседей сыпучее над местом падает. */
+    public static void replace(ServerLevel level, BlockPos pos, BlockState old, BlockState with, int flags) {
         if (old.hasBlockEntity()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof RandomizableContainer loot) loot.setLootTable(null);
@@ -81,7 +86,7 @@ public final class ColumnScar {
             level.getChunkAt(pos).pendingBlockEntities.remove(pos);
         }
         if (!old.is(with.getBlock())) PoiRecords.recordIfMissing(level, pos, old);
-        level.setBlock(pos, with, FLAGS);
+        level.setBlock(pos, with, flags);
     }
 
     /** Световой импульс в точке с учётом тени от рельефа и построек, кал/см². */

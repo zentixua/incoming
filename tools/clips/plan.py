@@ -122,8 +122,9 @@ def cameras(shot: dict) -> list[dict]:
 
 
 SMOKE_LIFE = 4800
-# бомба: глубже этого под верхом (BunkerCover.BREACH_DEPTH) взрыв не прорывается наружу — без шара, столб из провала
-BREACH_DEPTH = 10
+# бомба: глубже этого под верхом взрыв не прорывается наружу (warhead.BuriedBlast: приведённая глубина 1 м/кг^⅓ у заряда
+# 2423 кг ТНТ — 13,4 м) — без шара; облако — газы из хода бомбы
+BREACH_DEPTH = 2423 ** (1 / 3)
 # вид взрыва в пакете взрыва (S2C.Blast: шахед 0, ракета 1, бомба 2, РСЗО 3; так и в 2.10) → вид дыма Plume
 PACKET_LOOK = {0: 2, 1: 3, 2: 4, 3: 1}
 _HIT_WEAPONS: dict[int, tuple] = {}
@@ -132,7 +133,7 @@ _HIT_WEAPONS: dict[int, tuple] = {}
 def smoke_row(t: int, x: float, y: float, z: float, surface: float | None, weapon: str | None, kind: int | None = None) -> list:
     """Строка дыма удара для Plume replayscan: место, поперечник шара, вид взрыва — по пакету взрыва, как у мода, без пакета
     — по оружию снаряда. Дым бомбы — над верхом (surfaceY пакета, как у FarBlasts.add), не у заряда в толще; заряд глубже
-    BREACH_DEPTH — вид 5 (столб без шара)."""
+    BREACH_DEPTH — вид 5 (облако без шара)."""
     look = PACKET_LOOK.get(kind, BLAST_LOOK.get(weapon, 2))
     if look == 4 and surface is not None:
         if math.floor(int(surface) - y) > BREACH_DEPTH:
@@ -159,7 +160,7 @@ def film_shot(con, cid: str, shot: dict) -> dict:
     if s.get("centre"):
         subject["area"] = {"pos": s["centre"], "size": 2 * s.get("spread", 60)}
     dim = dim_of(con, shot)
-    # столб дыма у Incoming стоит до 4 минут (FarBlasts.Look.life ракеты — 4800 тиков): удары с тех пор; в кадре из них —
+    # столб дыма у Incoming стоит до 4 минут (прежняя таблица столбов ракеты — 4800 тиков): удары с тех пор; в кадре из них —
     # только удары живого повтора (с a − warm, Plan.Shot.live в replayscan), прежние — для сверки модели с кадрами
     # ядерный подрыв — без строки: у него своя картинка, не столб взрыва (снаряда в пакете подрыва нет — по пакету)
     smoke = con.execute("""

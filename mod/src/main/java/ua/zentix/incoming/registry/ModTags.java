@@ -7,20 +7,10 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
 import ua.zentix.incoming.Incoming;
 
-/** Теги (data/incoming/tags), в том числе классы пород для бурения. */
+/** Теги (data/incoming/tags). Среда блока для бомбы — карта данных {@link ModDataMaps#PENETRATION}, не теги. */
 public final class ModTags {
-    /** Сквозь это летим и бурим без затрат: воздух, трава, цветы, снег-слой, огонь. */
+    /** Сквозь это летим: воздух, трава, цветы, снег-слой, огонь. */
     public static final TagKey<Block> PASSABLE = block("passable");
-    /** Бомба может выгрызать при бурении. */
-    public static final TagKey<Block> DRILLABLE = block("drillable");
-    public static final TagKey<Block> BB_SOFT = block("bb_soft");
-    public static final TagKey<Block> BB_SOIL = block("bb_soil");
-    public static final TagKey<Block> BB_ROCK = block("bb_rock");
-    public static final TagKey<Block> BB_DEEP = block("bb_deep");
-    public static final TagKey<Block> BB_HARD = block("bb_hard");
-    public static final TagKey<Block> BB_VHARD = block("bb_vhard");
-    public static final TagKey<Block> BB_STOP = block("bb_stop");
-    public static final TagKey<Block> BB_FLUID = block("bb_fluid");
     /** Бьются ударной волной. */
     public static final TagKey<Block> SHATTERS = block("shatters");
     /** Ядерный удар: природный грунт (волна не трогает, только свет — верхний слой — и воронка). */

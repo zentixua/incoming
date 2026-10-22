@@ -1,56 +1,75 @@
 package ua.zentix.incoming.entity;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.guidance.BombDrop;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
+import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.registry.ModDamageTypes;
-import ua.zentix.incoming.registry.ModTags;
+import ua.zentix.incoming.registry.ModDataMaps.Penetrability;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.util.Nbt;
+import ua.zentix.incoming.util.Terrain;
+import ua.zentix.incoming.warhead.Penetration;
 import ua.zentix.incoming.warhead.Warheads;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
- * Бетонобойная бомба (GBU-57-подобная). Падает по дуге с разгоном до 12.5 блока/тик и входит почти отвесно;
- * в грунте бурит: каждый блок тратит «энергию» по классу породы (грунт 12, камень 30, глубинный сланец 40,
- * бетон и кирпич 110, обсидиан 300, вода 5, прочее 25). Взрыватель: пустота после ≥4 блоков породы — подрыв
- * в полости через 3 тика; кончилась энергия, 70 блоков пути или непробиваемое — через 8 тиков.
+ * Бетонобойная бомба GBU-57. Падает ({@link BombDrop}) и входит в грунт с той скоростью и под тем углом, с какими
+ * кончилось падение; дальше идёт прямо, по закону Янга ({@link Penetration}): каждый блок пути — среда из карты данных
+ * {@code incoming:penetration} ({@link Penetrability}), соседние блоки одной среды — один слой. Взрыватель: пустота после
+ * {@value #SENSOR_SOLID} м породы — подрыв, когда бомба вошла в неё целиком ({@link #VOID_DEPTH}, датчик пустоты); иначе —
+ * там, где бомба встала. Неготовый чанк впереди или низ мира — подрыв на месте. Канал — блоки по оси пути (калибр 0,8 м —
+ * один блок).
  */
 public class BunkerBusterEntity extends StrikeProjectile {
     private static final EntityDataAccessor<Vector3f> DATA_ENTRY = SynchedEntityData.defineId(BunkerBusterEntity.class, EntityDataSerializers.VECTOR3);
+    /** Датчик пустоты взводится, когда за бомбой столько метров твёрдой среды (как было: 4 блока). */
+    public static final double SENSOR_SOLID = 4;
+    /** Среда мягче этого (S не меньше) датчик пустоты не взводит ({@link #arms}). */
+    static final double SENSOR_SOFT = 20;
+    /** Самый длинный путь в грунте, м: дальше — подрыв (в мягком грунте путь — десятки метров, в воде — сотни). */
+    static final double MAX_PATH = 400;
 
+    /** Цель под землёй (пещера, бункер): бомба целит в неё, а не в поверхность над ней. */
     @Nullable
     private BlockPos goal;
-    private int energy;
-    private int traveled;
-    private int fuse = -1;
+    /** Путь в грунте от входа ({@link #plan}); пуст — не начат или прочитан из сохранения (тогда — заново отсюда). */
+    private Path path = Path.EMPTY;
+    /** Откуда путь {@link #path}. */
+    private Vec3 origin = Vec3.ZERO;
+    /** Сколько времени бомба уже в грунте, с, и сколько блоков канала уже пройдено. */
+    private double drillSeconds;
+    private int carved;
+    /** Сколько твёрдого, что взводит датчик пустоты, бомба уже прошла, м (сохраняется: путь после загрузки — заново). */
+    private double armed;
 
     /** Снос ветром за тик, блоков (сохраняется: уходя в полёт вне мира, бомба становится новой сущностью из NBT). */
     private Vec3 windDrift = Vec3.ZERO;
@@ -117,7 +136,8 @@ public class BunkerBusterEntity extends StrikeProjectile {
             return;
         }
         Vec3 aim = tracker.point();
-        speed = BombDrop.steer(flight, position(), speed, aim);
+        // цель под землёй — бомба со спутниковым наведением целит в неё саму: в грунт она входит на прямой к ней
+        speed = BombDrop.steer(flight, position(), speed, goal != null ? Vec3.atCenterOf(goal) : aim);
         Air air = air();
         double y = getY();
         windDrift = BombDrop.drift(windDrift, new Vec3(air.windX(y) / 20, 0, air.windZ(y) / 20), speed);
@@ -151,123 +171,236 @@ public class BunkerBusterEntity extends StrikeProjectile {
             NuclearWarhead.detonate(level, point, nuclear.yieldKt(), false, ownerId());
             return;
         }
+        // удар — скоростью сущности в конце падения: вдоль носа и снос ветром
+        Vec3 velocity = flight.forward().scale(speed).add(windDrift);
+        double v = velocity.length() * 20;
+        float[] angles = FlightController.anglesTo(Vec3.ZERO, velocity);
+        flight.set(angles[0], angles[1]);
+        speed = velocity.length();
         setPhase(FlightPhase.DRILL);
-        energy = IncomingConfig.SERVER.bunkerEnergy.get();
-        traveled = 0;
-        fuse = -1;
-        speed = 0;
+        // устье хода — на блок выше точки удара: оттуда идут дым и газы
         entityData.set(DATA_ENTRY, new Vector3f((float) point.x, (float) point.y + 1, (float) point.z));
-        // цель в пещере — пробиваемся к ней (не положе 45°), иначе почти отвесно вниз (не положе 70°)
-        if (goal != null) {
-            float[] a = FlightController.anglesTo(point, Vec3.atCenterOf(goal));
-            flight.set(a[0], Math.max(45, a[1]));
-        } else {
-            flight.set(flight.yaw(), Math.max(70, flight.pitch()));
-        }
         moveAlong(level, point, flight.forward());
-        Warheads.bunkerEntry(level, point, this, ownerId());
+        path = plan(level, point, flight.forward(), v, 0);
+        ua.zentix.incoming.Incoming.LOG.info("Bunker buster entered the ground at {} {} {}: {} m/s, {}° below the horizon, path {} m ({})",
+                Mth.floor(point.x), Mth.floor(point.y), Mth.floor(point.z), Math.round(v), Math.round(flight.pitch()),
+                String.format(java.util.Locale.ROOT, "%.1f", path.length()), path.end().name().toLowerCase(java.util.Locale.ROOT));
+        origin = point;
+        drillSeconds = 0;
+        carved = 0;
+        Warheads.bunkerEntry(level, point, v, this, ownerId());
     }
 
-    // ---------------------------------------------------------------- бурение
+    // ---------------------------------------------------------------- путь в грунте
 
-    private void drillTick(ServerLevel level) {
-        if (fuse >= 0) {
-            if (--fuse <= 0) detonate(level);
-            return;
-        }
-        // сколько блоков за тик: чем меньше осталось энергии, тем медленнее
-        int steps = Math.min(4, energy / 300 + 1);
-        for (int i = 0; i < steps && fuse < 0; i++) step(level);
+    /** Тело бомбы для закона пробития — из паспорта. */
+    public static Penetration.Body body() {
+        return Penetration.body(WeaponSpec.BUNKER.payload().article());
+    }
+
+    /** Как бомба внутри: в пустоте датчик срабатывает, когда она вошла туда целиком, м. */
+    public static double voidDepth() {
+        return WeaponSpec.BUNKER.payload().article().length();
     }
 
     /**
-     * Блок пути в грунте. Бомба идёт через {@link #moveAlong}, как в полёте: тикеты её чанков ({@code ChunkHold}) идут
-     * за ней. Иначе, уйдя в соседний чанк (наклонный путь сквозь пустоту под тонким перекрытием — десятки блоков по
-     * курсу), она стояла бы там без тика: без подрыва и с тикетами, которые держат и её, и район цели до остановки
-     * сервера.
+     * Путь в грунте от {@code from} по {@code dir} со скоростью {@code v} м/с: блоки по оси пути, где бомба будет к
+     * какому времени, и где встанет; {@code solid0} — сколько твёрдого уже за ней (путь заново после загрузки). Читаются
+     * только готовые чанки: неготовый — конец пути (подрыв там). В блоке — столько среды, сколько оси пути внутри его
+     * формы столкновений (ковёр, плита, ступени — не целый метр); остальное в нём — пустота или жидкость, что в нём стоит.
+     * Блок с записью в карте данных и без формы (рыхлый снег) — среда весь.
      */
-    private void step(ServerLevel level) {
-        Vec3 dir = flight.forward();
-        Vec3 next = position().add(dir);
-        BlockPos pos = BlockPos.containing(next);
-        BlockState state = level.getBlockState(pos);
-        RockClass cls = RockClass.of(state);
-
-        if (cls == RockClass.PASSABLE) {
-            if (traveled >= 4) {
-                // датчик пустот: вошла в полость после ≥4 блоков породы — подрыв внутри неё
-                moveAlong(level, next, dir);
-                Vec3 further = next.add(dir);
-                if (RockClass.of(level.getBlockState(BlockPos.containing(further))) == RockClass.PASSABLE) moveAlong(level, further, dir);
-                fuse = 3;
-            } else {
-                moveAlong(level, next, dir);
+    public static Path plan(ServerLevel level, Vec3 from, Vec3 dir, double v, double solid0) {
+        Penetration.Run run = new Penetration.Run(body(), v);
+        List<Step> steps = new ArrayList<>();
+        double s = 0, t = 0, solid = solid0, hollow = 0, depth = voidDepth();
+        Path.End end = Path.End.LIMIT;
+        while (s < MAX_PATH) {
+            Vec3 at = from.add(dir.scale(s));
+            BlockPos b = BlockPos.containing(at.add(dir.scale(1e-4)));
+            if (!level.isInWorldBounds(b) || !Terrain.ready(level, b)) {
+                end = Path.End.EDGE;
+                break;
             }
-            return;
+            double len = Math.max(1e-4, exit(at, dir, b));
+            BlockState state = level.getBlockState(b);
+            FluidState fluid = state.getFluidState();
+            Penetrability entry = Penetrability.find(state);
+            VoxelShape shape = state.getCollisionShape(level, b);
+            // среда блока: запись карты (или прочее твёрдое) по длине оси в форме; жидкость — по остатку
+            double matter = entry != null && shape.isEmpty() ? len : inside(shape, b, at, dir, len);
+            Penetrability medium = matter > 0 ? (entry != null ? entry : Penetrability.OTHER) : null;
+            // жидкость без записи в карте (мода) — жидкость плотности воды, а не прочее твёрдое
+            Penetrability liquid = fluid.isEmpty() ? null : Penetrability.find(fluid.createLegacyBlock());
+            if (liquid == null && !fluid.isEmpty()) liquid = Penetrability.WATER;
+            double va = run.speed();
+            if (va <= 0) {
+                // скорость кончилась (путь заново после загрузки на последнем тике): встала здесь
+                end = Path.End.REST;
+                break;
+            }
+            if (medium != null) {
+                hollow = 0;
+                double went = run.through(medium.kind(), medium.s(), matter);
+                double vb = run.speed();
+                s += went;
+                t += went > 0 ? 2 * went / (va + vb) : 0;
+                if (arms(medium)) solid += went;
+                va = vb;
+                if (run.stopped()) {
+                    steps.add(new Step(b, s, t, carves(medium), solid));
+                    end = Path.End.REST;
+                    break;
+                }
+            }
+            double rest = len - matter;
+            if (rest > 0 && liquid != null) {
+                hollow = 0;
+                double went = run.through(liquid.kind(), liquid.s(), rest);
+                double vb = run.speed();
+                s += went;
+                t += went > 0 ? 2 * went / (va + vb) : 0;
+                if (run.stopped()) {
+                    steps.add(new Step(b, s, t, medium != null && carves(medium), solid));
+                    end = Path.End.REST;
+                    break;
+                }
+            } else if (rest > 0) {
+                run.gap();
+                if (solid >= SENSOR_SOLID && hollow + rest >= depth) {
+                    double went = depth - hollow;
+                    s += went;
+                    t += went / va;
+                    steps.add(new Step(b, s, t, medium != null && carves(medium), solid));
+                    end = Path.End.VOID;
+                    break;
+                }
+                hollow += rest;
+                s += rest;
+                t += rest / va;
+            }
+            steps.add(new Step(b, s, t, medium != null && carves(medium), solid));
         }
-        if (cls == RockClass.STOP) {
-            fuse = 8;
-            return;
-        }
-        energy -= cls.cost;
-        traveled++;
-        carve(level, pos);
-        moveAlong(level, next, dir);
-        if (goal != null) home();
-        wobble(level.random);
-        if (energy <= 0 || traveled >= 70) fuse = 8;
+        return new Path(List.copyOf(steps), s, t, end);
     }
 
-    /** Довод на цель под землёй: 30% поправки за блок. */
-    private void home() {
-        float[] a = FlightController.anglesTo(position(), Vec3.atCenterOf(goal));
-        float yaw = flight.yaw() + Mth.wrapDegrees(a[0] - flight.yaw()) * 0.3f;
-        float pitch = flight.pitch() + (a[1] - flight.pitch()) * 0.3f;
-        flight.set(yaw, pitch);
-    }
-
-    /** В породе боеприпас «гуляет»: случайные отклонения до 2.5° по курсу и 2° по тангажу. */
-    private void wobble(RandomSource r) {
-        float yaw = flight.yaw() + (r.nextInt(501) - 250) / 100f;
-        float pitch = Mth.clamp(flight.pitch() + (r.nextInt(401) - 200) / 100f, 45, 89);
-        flight.set(yaw, pitch);
+    /** Выбивается ли блок среды в канал: твёрдое — да; жидкость (вода, лава) и непробиваемое — нет. */
+    static boolean carves(Penetrability m) {
+        return m.kind() != Penetration.Kind.FLUID && m.kind() != Penetration.Kind.STOP;
     }
 
     /**
-     * Канал бомбы: столб 1×3 и соседние блоки (65%), изредка куб 3×3×3 (15%); стенки канала дробятся
-     * (20%: камень → булыжник, сланец → булыжный сланец, грунт → гравий), сверху может осыпаться гравий (10%).
-     * Кто оказался в канале — погибает.
+     * Взводит ли среда датчик пустоты: твёрдая и не мягче S {@value #SENSOR_SOFT} — в листве, шерсти, рыхлом снеге
+     * замедление в десятки раз слабее, чем в грунте, и датчик (по замедлению) их за преграду не считает (оценка).
      */
-    private void carve(ServerLevel level, BlockPos c) {
-        RandomSource r = level.random;
-        for (int dy = -1; dy <= 1; dy++) clear(level, c.offset(0, dy, 0));
-        for (BlockPos n : new BlockPos[]{c.east(), c.west(), c.south(), c.north()}) {
-            if (r.nextFloat() < 0.65f) clear(level, n);
-        }
-        if (r.nextFloat() < 0.15f) {
-            for (BlockPos p : BlockPos.betweenClosed(c.offset(-1, -1, -1), c.offset(1, 1, 1))) clear(level, p);
-        }
-        if (r.nextFloat() < 0.2f) wall(level, c.offset(2, -1, -1), c.offset(2, 1, 1), ModTags.BB_ROCK, Blocks.COBBLESTONE.defaultBlockState());
-        if (r.nextFloat() < 0.2f) wall(level, c.offset(-2, -1, -1), c.offset(-2, 1, 1), ModTags.BB_ROCK, Blocks.COBBLESTONE.defaultBlockState());
-        if (r.nextFloat() < 0.2f) wall(level, c.offset(-1, -1, 2), c.offset(1, 1, 2), ModTags.BB_DEEP, Blocks.COBBLED_DEEPSLATE.defaultBlockState());
-        if (r.nextFloat() < 0.2f) wall(level, c.offset(-1, -1, -2), c.offset(1, 1, -2), ModTags.BB_SOIL, Blocks.GRAVEL.defaultBlockState());
-        if (r.nextFloat() < 0.1f && level.getBlockState(c.above(2)).isAir()) {
-            level.setBlock(c.above(2), Blocks.GRAVEL.defaultBlockState(), 3);
-        }
-        Vec3 cv = Vec3.atCenterOf(c);
-        level.sendParticles(ParticleTypes.POOF, cv.x, cv.y, cv.z, 3, 0.4, 0.4, 0.4, 0.05);
-        for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, new AABB(c).inflate(1.8), e -> e.distanceToSqr(cv) <= 1.8 * 1.8)) {
-            e.hurt(ModDamageTypes.source(level, ModDamageTypes.KINETIC, this, ownerPlayer()), 100);
-        }
+    static boolean arms(Penetrability m) {
+        return m.kind() != Penetration.Kind.FLUID && m.kind() != Penetration.Kind.STOP && m.s() < SENSOR_SOFT;
     }
 
-    private static void clear(ServerLevel level, BlockPos p) {
-        if (level.getBlockState(p).is(ModTags.DRILLABLE)) level.setBlock(p, Blocks.AIR.defaultBlockState(), 3);
+    /** Сколько оси пути от {@code at} длиной {@code len} по {@code dir} внутри формы {@code shape} блока {@code b}, м. */
+    private static double inside(VoxelShape shape, BlockPos b, Vec3 at, Vec3 dir, double len) {
+        if (shape.isEmpty()) return 0;
+        double sum = 0;
+        for (AABB box : shape.toAabbs()) {
+            AABB w = box.move(b);
+            // отрезок оси внутри коробки: пересечение интервалов по трём осям
+            double lo = 0, hi = len;
+            double[] p = {at.x, at.y, at.z}, d = {dir.x, dir.y, dir.z}, mn = {w.minX, w.minY, w.minZ}, mx = {w.maxX, w.maxY, w.maxZ};
+            for (int k = 0; k < 3 && lo < hi; k++) {
+                if (Math.abs(d[k]) < 1e-12) {
+                    if (p[k] < mn[k] || p[k] > mx[k]) hi = lo;
+                    continue;
+                }
+                double a = (mn[k] - p[k]) / d[k], c = (mx[k] - p[k]) / d[k];
+                lo = Math.max(lo, Math.min(a, c));
+                hi = Math.min(hi, Math.max(a, c));
+            }
+            if (hi > lo) sum += hi - lo;
+        }
+        return Math.min(len, sum);
     }
 
-    private static void wall(ServerLevel level, BlockPos from, BlockPos to, TagKey<Block> tag, BlockState with) {
-        for (BlockPos p : BlockPos.betweenClosed(from, to)) {
-            if (level.getBlockState(p).is(tag)) level.setBlock(p, with, 3);
+    /** Сколько пути от {@code at} по {@code dir} до выхода из блока {@code b}, м. */
+    private static double exit(Vec3 at, Vec3 dir, BlockPos b) {
+        double best = Double.POSITIVE_INFINITY;
+        best = Math.min(best, axis(at.x, dir.x, b.getX()));
+        best = Math.min(best, axis(at.y, dir.y, b.getY()));
+        best = Math.min(best, axis(at.z, dir.z, b.getZ()));
+        return best;
+    }
+
+    private static double axis(double p, double d, int lo) {
+        if (Math.abs(d) < 1e-9) return Double.POSITIVE_INFINITY;
+        return ((d > 0 ? lo + 1 : lo) - p) / d;
+    }
+
+    /**
+     * Тик в грунте: бомба проходит путь, пройденный за 0,05 с, — канал по оси и удар корпуса по тем, кто на пути; путь
+     * кончился — подрыв. Путь из сохранения не хранится: после загрузки — заново отсюда с той же скоростью.
+     */
+    private void drillTick(ServerLevel level) {
+        if (path == Path.EMPTY) {
+            path = plan(level, position(), flight.forward(), speed * 20, armed);
+            origin = position();
+            drillSeconds = 0;
+            carved = 0;
+        }
+        Vec3 from = position();
+        drillSeconds += 0.05;
+        double s = Math.min(path.length(), along(drillSeconds));
+        while (carved < path.steps().size() && path.steps().get(carved).s() <= s + 1e-6) {
+            Step step = path.steps().get(carved++);
+            armed = step.armed();
+            if (step.solid()) carve(level, step.pos());
+        }
+        Vec3 to = origin.add(flight.forward().scale(s));
+        strike(level, from, to);
+        speed = Math.max(0, speedAt(drillSeconds) / 20);
+        moveAlong(level, to, flight.forward());
+        if (drillSeconds >= path.seconds()) detonate(level);
+    }
+
+    /** Сколько пути пройдено к {@code seconds} в грунте, м (между блоками — по прямой во времени). */
+    private double along(double seconds) {
+        double s0 = 0, t0 = 0;
+        for (Step step : path.steps()) {
+            if (step.t() >= seconds) return s0 + (step.s() - s0) * (seconds - t0) / Math.max(1e-9, step.t() - t0);
+            s0 = step.s();
+            t0 = step.t();
+        }
+        return path.length();
+    }
+
+    /** Скорость в грунте к {@code seconds}, м/с (по шагу пути). */
+    private double speedAt(double seconds) {
+        double s0 = 0, t0 = 0;
+        for (Step step : path.steps()) {
+            if (step.t() >= seconds) return (step.s() - s0) / Math.max(1e-9, step.t() - t0);
+            s0 = step.s();
+            t0 = step.t();
+        }
+        return 0;
+    }
+
+    /**
+     * Канал: блок на оси пути выбит (калибр 0,8 м — один блок), сыпучее над ним падает в ход. Только где готовы и соседние
+     * чанки: соседей читают обновления и Sable.
+     */
+    private static void carve(ServerLevel level, BlockPos p) {
+        if (!IncomingConfig.SERVER.blockDamage.get() || !Terrain.neighbourhoodReady(level, p.getX() >> 4, p.getZ() >> 4)) return;
+        BlockState s = level.getBlockState(p);
+        if (s.isAir()) return;
+        ColumnScar.replace(level, p, s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+    }
+
+    /** Корпус в 13,6 т на сотнях метров в секунду: кто на пути бомбы за этот тик — погибает (удар корпуса). */
+    private void strike(ServerLevel level, Vec3 from, Vec3 to) {
+        double r = body().diameter() / 2;
+        AABB box = new AABB(from, to).inflate(r + 0.5);
+        for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, box, LivingEntity::isAlive)) {
+            if (e.getBoundingBox().inflate(r).clip(from, to).isPresent() || e.getBoundingBox().inflate(r).contains(from)) {
+                e.hurt(ModDamageTypes.source(level, ModDamageTypes.KINETIC, this, ownerPlayer()), Float.MAX_VALUE);
+            }
         }
     }
 
@@ -278,28 +411,35 @@ public class BunkerBusterEntity extends StrikeProjectile {
         Warheads.bunker(level, at, entry, this, ownerId());
     }
 
-    /** Классы пород (теги incoming:bb_*). */
-    enum RockClass {
-        PASSABLE(0), SOFT(12), ROCK(30), DEEP(40), HARD(110), VERY_HARD(300), STOP(0), FLUID(5), OTHER(25);
+    /**
+     * Блок пути: где он, сколько пути и времени от входа к его концу, твёрдый ли (выбивается в канал).
+     *
+     * @param s     путь от входа к концу блока, м
+     * @param t     время от входа к концу блока, с
+     * @param solid твёрдая среда (жидкость и пустота каналом не выбиваются)
+     * @param armed сколько твёрдого, что взводит датчик пустоты, пройдено к концу блока, м
+     */
+    public record Step(BlockPos pos, double s, double t, boolean solid, double armed) {}
 
-        final int cost;
+    /**
+     * Путь в грунте.
+     *
+     * @param length  весь путь, м
+     * @param seconds время до подрыва, с
+     * @param end     чем кончился
+     */
+    public record Path(List<Step> steps, double length, double seconds, End end) {
+        static final Path EMPTY = new Path(List.of(), 0, 0, End.LIMIT);
 
-        RockClass(int cost) {
-            this.cost = cost;
-        }
-
-        static RockClass of(BlockState s) {
-            // порядок как в bunker/step: последний подходящий тег побеждает
-            RockClass c = OTHER;
-            if (s.is(ModTags.PASSABLE)) c = PASSABLE;
-            if (s.is(ModTags.BB_SOFT)) c = SOFT;
-            if (s.is(ModTags.BB_ROCK)) c = ROCK;
-            if (s.is(ModTags.BB_DEEP)) c = DEEP;
-            if (s.is(ModTags.BB_HARD)) c = HARD;
-            if (s.is(ModTags.BB_VHARD)) c = VERY_HARD;
-            if (s.is(ModTags.BB_STOP)) c = STOP;
-            if (s.is(ModTags.BB_FLUID)) c = FLUID;
-            return c;
+        public enum End {
+            /** Встала. */
+            REST,
+            /** Датчик пустоты. */
+            VOID,
+            /** Неготовый чанк или край мира. */
+            EDGE,
+            /** Самый длинный путь. */
+            LIMIT
         }
     }
 
@@ -317,9 +457,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         Vec3 d = Nbt.getVec(tag, "wind_drift");
         windDrift = d != null ? d : Vec3.ZERO;
         goal = NbtUtils.readBlockPos(tag, "goal").orElse(null);
-        energy = tag.getInt("energy");
-        traveled = tag.getInt("traveled");
-        fuse = tag.contains("fuse") ? tag.getInt("fuse") : -1;
+        armed = tag.getDouble("armed");
         entityData.set(DATA_ENTRY, new Vector3f(tag.getFloat("entry_x"), tag.getFloat("entry_y"), tag.getFloat("entry_z")));
     }
 
@@ -328,9 +466,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         super.addAdditionalSaveData(tag);
         Nbt.putVec(tag, "wind_drift", windDrift);
         if (goal != null) tag.put("goal", NbtUtils.writeBlockPos(goal));
-        tag.putInt("energy", energy);
-        tag.putInt("traveled", traveled);
-        tag.putInt("fuse", fuse);
+        tag.putDouble("armed", armed);
         Vec3 e = entry();
         tag.putFloat("entry_x", (float) e.x);
         tag.putFloat("entry_y", (float) e.y);

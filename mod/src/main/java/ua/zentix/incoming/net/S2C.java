@@ -111,10 +111,13 @@ public final class S2C {
     }
 
     /** Бомба вошла в грунт: звуковой удар, удар о землю, фонтан у входного отверстия. */
-    public record BunkerImpact(Vec3 pos, int material) implements CustomPacketPayload {
+    public record BunkerImpact(Vec3 pos, int material, float speed) implements CustomPacketPayload {
         public static final Type<BunkerImpact> TYPE = new Type<>(Incoming.id("bunker_impact"));
+        /** Скорость удара в повторе, записанном до этого поля, м/с: прежний предел падения, 12,5 блока/тик. */
+        public static final float OLD_SPEED = 250;
         public static final StreamCodec<ByteBuf, BunkerImpact> CODEC = StreamCodec.composite(
-                StreamCodecs.VEC3, BunkerImpact::pos, ByteBufCodecs.VAR_INT, BunkerImpact::material, BunkerImpact::new);
+                StreamCodecs.VEC3, BunkerImpact::pos, ByteBufCodecs.VAR_INT, BunkerImpact::material,
+                StreamCodecs.trailing(ByteBufCodecs.FLOAT, OLD_SPEED), BunkerImpact::speed, BunkerImpact::new);
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
@@ -122,11 +125,19 @@ public final class S2C {
         }
     }
 
-    /** Газы подземного взрыва вырвались из скважины. */
-    public record Vent(Vec3 pos, int material) implements CustomPacketPayload {
+    /**
+     * Газы подземного взрыва вырвались из скважины.
+     *
+     * @param airKg какая доля заряда вышла в воздух, кг ТНТ ({@code warhead.BuriedBlast#airCharge}; в повторе до этого поля —
+     *              {@link #OLD_AIR_KG})
+     */
+    public record Vent(Vec3 pos, int material, float airKg) implements CustomPacketPayload {
         public static final Type<Vent> TYPE = new Type<>(Incoming.id("vent"));
+        /** Доля заряда в повторе, записанном до этого поля: 2,4 т через ход 0,8 м из полости 3,4 м, кг ТНТ. */
+        public static final float OLD_AIR_KG = 8.5f;
         public static final StreamCodec<ByteBuf, Vent> CODEC = StreamCodec.composite(
-                StreamCodecs.VEC3, Vent::pos, ByteBufCodecs.VAR_INT, Vent::material, Vent::new);
+                StreamCodecs.VEC3, Vent::pos, ByteBufCodecs.VAR_INT, Vent::material,
+                StreamCodecs.trailing(ByteBufCodecs.FLOAT, OLD_AIR_KG), Vent::airKg, Vent::new);
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
@@ -134,11 +145,18 @@ public final class S2C {
         }
     }
 
-    /** Свод над полостью обрушился: провал на поверхности. */
-    public record Collapse(Vec3 pos, int material) implements CustomPacketPayload {
+    /**
+     * Свод над полостью обрушился: провал на поверхности.
+     *
+     * @param volume сколько грунта ушло в провал, м³ (объём полости; в повторе до этого поля — {@link #OLD_VOLUME})
+     */
+    public record Collapse(Vec3 pos, int material, float volume) implements CustomPacketPayload {
         public static final Type<Collapse> TYPE = new Type<>(Incoming.id("collapse"));
+        /** Объём в повторе, записанном до этого поля: полость 2,4 т (радиус 3,4 м), м³. */
+        public static final float OLD_VOLUME = 160;
         public static final StreamCodec<ByteBuf, Collapse> CODEC = StreamCodec.composite(
-                StreamCodecs.VEC3, Collapse::pos, ByteBufCodecs.VAR_INT, Collapse::material, Collapse::new);
+                StreamCodecs.VEC3, Collapse::pos, ByteBufCodecs.VAR_INT, Collapse::material,
+                StreamCodecs.trailing(ByteBufCodecs.FLOAT, OLD_VOLUME), Collapse::volume, Collapse::new);
 
         @Override
         public Type<? extends CustomPacketPayload> type() {

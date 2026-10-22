@@ -17,14 +17,12 @@ import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlackBody;
-import ua.zentix.incoming.warhead.BunkerCover;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Locale;
-import java.util.SplittableRandom;
 
 /**
  * Взрывы вдали: вспышка, огненный шар, облако дыма и пыли и раскат с задержкой по скорости звука.
@@ -37,8 +35,9 @@ import java.util.SplittableRandom;
  * продуктов детонации, потом остывание подсосом воздуха), яркость — чёрное тело его температуры ({@link BlackBody}): днём
  * шар топлива (~1500 K) — порядка белой стены, вспышка продуктов детонации (~3000 K) — сотни.
  * <p>
- * Бомба под землёй ({@code kind} BUNKER) — прежняя картинка (её глубина и выход газов — физика полёта и боевой части, не
- * эта): шар прорыва и столб пыли по {@link Look}.
+ * Бомба под землёй ({@code kind} BUNKER) — те же облака модели от той доли заряда, что вышла в воздух
+ * ({@code warhead.BuriedBlast}): прорыв наружу — облако над воронкой, глубже — газы и пыль из хода, провал, пыль входа
+ * ({@link #cloud}).
  * <p>
  * Рельеф между взрывом и глазом — один луч {@link Sightline} при приходе и не чаще раза в секунду потом: за холмом видна
  * только поднявшаяся над ним часть облака, а вспышка — слабым заревом над гребнем. Свет приходит сразу: блик и вуаль
@@ -64,29 +63,17 @@ public final class FarBlasts {
     private static final double[] DISC = new double[3];
     /** Источник для луча и звука — над точкой удара, блоков (как вспышка ближней картинки). */
     static final double LIFT = 1.5;
-    /** Плотность клуба; разброс клубов от оси столба, радиусов. */
-    static final double OPACITY = 0.85, SPREAD = 0.4;
     /**
-     * Столб бомбы проступает из шара, пока тот тает ({@link #smokeFrom}), но не быстрее стольких тиков: проступая с
-     * первого тика, он за 8 тиков закрыл бы яркий шар десятком клубов.
-     */
-    static final double FADE_IN = 8;
-    /**
-     * Шар бомбы (прежняя картинка): яркость против белого экрана; доля света шара, что светит заревом, когда шар закрыт:
+     * Доля света шара, что светит заревом, когда шар закрыт:
      * воздух рассеивает свет шара радиуса R на расстоянии r — яркость σ·ℓ·R²/(4r²) от яркости шара (σ ясного воздуха
      * ~2·10⁻⁴ на метр, путь ℓ ~100 м, r — 2–3 R), тысячная. Днём это едва видно, ночью зарево упирается в яркость вуали
      * ({@link #halo}).
      */
-    static final double BALL = 8, BEHIND = 0.001;
+    static final double BEHIND = 0.001;
     /** Радиус светящегося воздуха вокруг закрытого шара, радиусов шара: дальше рассеянный свет слабеет как 1/r. */
     static final double HALO_SIZE = 3;
-    /**
-     * Центр огненного шара бомбы над точкой взрыва (радиусов): наземный шар — полусфера, низ в земле; за жизнь он
-     * всплывает ещё на {@link #BALL_RISE}.
-     */
-    public static final double BALL_LIFT = 0.45, BALL_RISE = 0.2;
-    /** С какой доли жизни шар тает (дальше — облако). */
-    public static final double BALL_FADE = 0.55;
+    /** Центр огненного шара над точкой взрыва (радиусов): наземный шар — полусфера, низ в земле. */
+    public static final double BALL_LIFT = 0.45;
     /**
      * Зарево на облаках: низ облаков над местом освещён шаром (освещённость E = I/h², яркость ≈ альбедо·E/π) — пятно
      * радиуса {@link #SKY_SPREAD} высот облаков над местом (на одной высоте — треть пика, на двух — десятая); пик против
@@ -94,36 +81,7 @@ public final class FarBlasts {
      * {@link #SKY_LOW} блоков над местом — считаем на этой высоте.
      */
     static final double CLOUD_ALBEDO = 0.7, SKY_SPREAD = 1, SKY_PEAK = 0.45, SKY_CLEAR = 0.45, SKY_LOW = 40;
-    /** Столб бомбы: свежий дым и старый, цвет пыли тянет к серому (прежняя картинка). */
-    private static final float[] DARK = {0.18f, 0.165f, 0.15f}, AGED = {0.48f, 0.455f, 0.43f}, DUST_GREY = {0.6f, 0.57f, 0.54f};
-    /** Шар бомбы: раскалён → оранжевый → тёмно-красный; свет вспышки. */
-    private static final float[] FLASH = {1, 0.95f, 0.82f}, BALL_HOT = {1, 0.9f, 0.7f}, BALL_MID = {1, 0.5f, 0.15f},
-            BALL_COLD = {0.6f, 0.15f, 0.04f};
-    /**
-     * Бомба под землёй — прежняя картинка (прорыв — шар и столб пыли ниже наземного взрыва; глубже — только столб пыли): её
-     * числа подобраны по замерам для бетонобойной бомбы и не из модели облака — глубина и выход газов принадлежат физике
-     * боевой части (пакет локальных сессий).
-     *
-     * @param fireball   радиус огненного шара, блоков; 0 — ни шара, ни вспышки
-     * @param flash      яркость вспышки против белого экрана
-     * @param flashTicks сколько тиков вспышка
-     * @param ballTicks  сколько тиков шар светит (ночью виден весь, днём — первую половину)
-     * @param column     высота столба, блоков
-     * @param riseTicks  за сколько тиков столб поднимается на 95 %
-     * @param base       радиус клуба у основания, блоков
-     * @param top        радиус клуба в шапке, блоков
-     * @param puffs      клубов в столбе
-     * @param life       сколько тиков столб виден
-     * @param dust       доля пыли грунта: 1 — весь столб пыль, меньше — дым, пыль у основания
-     */
-    public record Look(float fireball, double flash, int flashTicks, int ballTicks, double column, int riseTicks, double base,
-                       double top, int puffs, int life, float dust) {}
 
-    public static final Look BUNKER_BREACH = new Look(9, 60, 3, 20, 210, 2400, 18, 55, 14, 4200, 0.5f);
-    public static final Look BUNKER_DEEP = new Look(0, 0, 0, 0, 110, 500, 14, 32, 12, 3000, 1);
-
-    /** Размер клуба столба бомбы — от и сколько сверху (доля номинального); разброс места клуба по высоте — доля шага. */
-    static final double SIZE_MIN = 0.85, SIZE_SPAN = 0.3, JITTER = 0.3;
     /** Шлейф над лужей: отрезков (гуще у очага, где ось круче) и докуда по ветру, м (как дым пожаров). */
     static final int POOL_SEGMENTS = 8;
     static final double PLUME_REACH = 768;
@@ -148,13 +106,9 @@ public final class FarBlasts {
         final ClientLevel level;
         /** Что взорвалось: звук по заряду. */
         final BlastSource source;
-        /** Бомба под землёй — прежняя картинка; у остальных null. */
-        @Nullable
-        final Look look;
-        /** Облако по модели; у бомбы null. */
-        @Nullable
+        /** Облако по модели. */
         final CloudModel model;
-        /** Основание: точка удара, у бомбы — поверхность над зарядом. */
+        /** Основание: точка удара; у бомбы под землёй — место, откуда вышло облако (поверхность, устье хода, провал). */
         final double x, y, z;
         final GroundMaterial ground;
         /** Взрыв на воде: столб брызг, корона и водяная пыль ({@link WaterBlast}); null — на суше. */
@@ -167,11 +121,8 @@ public final class FarBlasts {
         final double bornSeconds;
         /** Пакет пришёл ближе {@link #NEAR}: ближняя картинка и звук есть. */
         final boolean near;
-        /** Альбедо пыли грунта по каналам (модель) и её цвет в воздухе (бомба). */
+        /** Альбедо пыли грунта по каналам; поворот кадра шара (по зерну). */
         final float dustR, dustG, dustB, phase;
-        /** Клубы: доля высоты столба, разброс по x и z (в радиусах), размер, поворот, вращение, оттенок, доля пыли, кадр атласа. */
-        final float[] f, ox, oz, size, rot, spin, shade, dust;
-        final byte[] tex;
         boolean soundPending;
         /**
          * Дольше не ждём звука, до уха которого фронт так и не дошёл (слушатель уходит быстрее звука), тиков: путь звука
@@ -192,24 +143,23 @@ public final class FarBlasts {
         final ua.zentix.incoming.client.fx.smoke.FirePlume pool;
         final double poolWx, poolWz;
 
-        Event(ClientLevel level, BlastSource source, @Nullable Look look, @Nullable CloudModel model, double x, double y, double z,
-              GroundMaterial ground, long seed, boolean near) {
+        Event(ClientLevel level, BlastSource source, CloudModel model, double x, double y, double z, GroundMaterial ground, long seed,
+              boolean near) {
             this.level = level;
             this.source = source;
             this.soundWait = (long) Math.ceil(BlastSounds.range(source) / Acoustics.SPEED);
-            this.look = look;
             this.model = model;
             this.x = x;
             this.y = y;
             this.z = z;
             this.ground = ground;
-            this.water = model != null && ground.isWater() && source.chargeKg() > 0 ? new WaterBlast(source.chargeKg(), model.air) : null;
+            this.water = ground.isWater() && source.chargeKg() > 0 ? new WaterBlast(source.chargeKg(), model.air) : null;
             this.seed = seed;
             this.born = clock;
             this.bornSeconds = SmokeGrid.seconds(0);
             this.near = near;
             this.soundPending = !near;
-            if (model != null && model.poolWatts > 0) {
+            if (model.poolWatts > 0) {
                 // ветер у земли — на высоте пламени (шлейф лужи — у земли, ниже облака)
                 double ux = model.air.windX() * model.air.wind(2), uz = model.air.windZ() * model.air.wind(2), u = Math.hypot(ux, uz);
                 pool = new ua.zentix.incoming.client.fx.smoke.FirePlume(model.poolWatts, model.poolRadius,
@@ -221,39 +171,10 @@ public final class FarBlasts {
                 poolWx = 1;
                 poolWz = 0;
             }
-            if (model != null) {
-                dustR = SmokeGrid.dustAlbedo(ground.r);
-                dustG = SmokeGrid.dustAlbedo(ground.g);
-                dustB = SmokeGrid.dustAlbedo(ground.b);
-            } else {
-                // пыль в воздухе светлее и серее грунта (прежняя картинка бомбы)
-                dustR = ground.r + (DUST_GREY[0] - ground.r) * 0.25f;
-                dustG = ground.g + (DUST_GREY[1] - ground.g) * 0.25f;
-                dustB = ground.b + (DUST_GREY[2] - ground.b) * 0.25f;
-            }
-            SplittableRandom rnd = new SplittableRandom(seed);
-            phase = (float) (rnd.nextDouble() * Math.PI * 2);
-            int n = look != null ? look.puffs() : 0;
-            f = new float[n];
-            ox = new float[n];
-            oz = new float[n];
-            size = new float[n];
-            rot = new float[n];
-            spin = new float[n];
-            shade = new float[n];
-            dust = new float[n];
-            tex = new byte[n];
-            for (int i = 0; i < n; i++) {
-                f[i] = (float) fraction(i, n, rnd.nextDouble() - 0.5);
-                ox[i] = (float) gauss(rnd);
-                oz[i] = (float) gauss(rnd);
-                size[i] = (float) (SIZE_MIN + SIZE_SPAN * rnd.nextDouble());
-                rot[i] = (float) (rnd.nextDouble() * Math.PI * 2);
-                spin[i] = (float) ((rnd.nextDouble() - 0.5) * 0.004);
-                shade[i] = (float) (0.88 + 0.24 * rnd.nextDouble());
-                dust[i] = look == null ? 0 : (float) Math.pow(look.dust(), 0.5 + f[i]);
-                tex[i] = (byte) rnd.nextInt(8);
-            }
+            dustR = SmokeGrid.dustAlbedo(ground.r);
+            dustG = SmokeGrid.dustAlbedo(ground.g);
+            dustB = SmokeGrid.dustAlbedo(ground.b);
+            phase = (float) (new java.util.SplittableRandom(seed).nextDouble() * Math.PI * 2);
         }
 
         double distanceTo(Vec3 p) {
@@ -264,23 +185,22 @@ public final class FarBlasts {
         /** Сколько тиков событие живёт (облако видно). */
         double life() {
             // водяная пыль взрыва на воде живёт дольше облака без пыли воронки
-            return model != null ? Math.max(model.life, water == null ? 0 : water.mistLife()) * 20 : look.life();
+            return Math.max(model.life, water == null ? 0 : water.mistLife()) * 20;
         }
 
         /** Сколько тиков светит огненный шар (0 — шара нет). */
         double ballTicks() {
-            return model != null ? model.fireSeconds * 20 : look.ballTicks();
+            return model.fireSeconds * 20;
         }
 
         /** Наибольший радиус огненного шара, блоков (полуразмер его картинки). */
         double ballRadius() {
-            return model != null ? Math.max(0.5 * model.fuelBall, model.heBall) : look.fireball();
+            return Math.max(0.5 * model.fuelBall, model.heBall);
         }
 
         /** Высота центра шара над основанием на age-м тике, блоков. */
         double ballHeight(double age) {
-            if (model != null) return model.ballHeight(age / 20);
-            return look.fireball() * (BALL_LIFT + BALL_RISE * age / Math.max(1, look.ballTicks()));
+            return model.ballHeight(age / 20);
         }
 
         /**
@@ -288,24 +208,16 @@ public final class FarBlasts {
          * шара (продукты детонации — вспышка, потом шар топлива), бомба — прежние вспышка и остывание.
          */
         double brightness(double age) {
-            if (model != null) {
-                model.ballLight(age / 20, BB);
-                return BB[3];
-            }
-            double u = age / Math.max(1, look.ballTicks());
-            return flash(look, age) + ball(u);
+            model.ballLight(age / 20, BB);
+            return BB[3];
         }
 
         /** Цвет света шара на age-м тике (наибольший канал — 1). */
         float[] colour(double age) {
-            if (model != null) {
-                model.ballLight(age / 20, BB);
-                double m = Math.max(BB[0], Math.max(BB[1], BB[2]));
-                for (int i = 0; i < 3; i++) TINT[i] = (float) (BB[i] / Math.max(m, 1e-12));
-                return TINT;
-            }
-            double u = age / Math.max(1, look.ballTicks());
-            return glare(flash(look, age), u);
+            model.ballLight(age / 20, BB);
+            double m = Math.max(BB[0], Math.max(BB[1], BB[2]));
+            for (int i = 0; i < 3; i++) TINT[i] = (float) (BB[i] / Math.max(m, 1e-12));
+            return TINT;
         }
 
         @Override
@@ -327,7 +239,6 @@ public final class FarBlasts {
         /** Во сколько раз облако выросло с начала (σ по горизонтали) — кадр запечённого клуба. */
         @Override
         public double puffGrowth(double seconds) {
-            if (model == null) return 1;
             double t = Math.max(0, seconds - bornSeconds);
             return model.sigmaH(t) / Math.max(model.sigmaH(0), 1e-6);
         }
@@ -347,7 +258,7 @@ public final class FarBlasts {
         /** Источник облака: клубы модели в мире, облако конденсации и шлейф над лужей топлива. */
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
-            if (!alive || model == null || level != Minecraft.getInstance().level) return false;
+            if (!alive || level != Minecraft.getInstance().level) return false;
             double t = seconds - bornSeconds;
             if (t >= Math.max(Math.max(model.life, poolEnd()), water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
@@ -428,22 +339,30 @@ public final class FarBlasts {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return null;
         Vec3 pos = p.pos();
-        Look look = null;
-        CloudModel model = null;
-        double y = pos.y;
+        BlastSource source = BlastSource.of(p);
+        GroundMaterial ground = GroundMaterial.byId(p.material());
         if (p.kind() == S2C.Blast.BUNKER) {
-            look = BunkerCover.breaches((int) p.surfaceY(), pos.y) ? BUNKER_BREACH : BUNKER_DEEP;
-            y = p.surfaceY();
-        } else {
-            model = new CloudModel(BlastSource.of(p), air(level, pos), GroundMaterial.byId(p.material()).isWater());
+            // бомба под землёй: прорвалась наружу — облако той доли заряда, что вышла в воздух, над воронкой (пыль — грунт
+            // воронки выброса); глубже — облако из хода приходит своим пакетом (S2C.Vent)
+            ua.zentix.incoming.warhead.BuriedBlast law = BlastSource.law(pos.y, p.surfaceY());
+            if (!law.breaches()) return null;
+            CloudModel model = CloudModel.buried(source, air(level, pos), law, ground.isWater());
+            return cloud(level, source, model, new Vec3(pos.x, p.surfaceY(), pos.z), ground, p.seed());
         }
-        Event e = new Event(level, BlastSource.of(p), look, model, pos.x, y, pos.z, GroundMaterial.byId(p.material()), p.seed(), near(pos));
+        return cloud(level, source, new CloudModel(source, air(level, pos), ground.isWater()), pos, ground, p.seed());
+    }
+
+    /**
+     * Облако модели {@code model} взрыва {@code source} с основанием в {@code at}: событие — источник облаков клиента (его
+     * рисуют запечённые клубы слоя, {@link SmokePuffs}), его шар и свет, раскат вдали. Возвращает модель.
+     */
+    public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed) {
+        Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at));
         trace(e, FarTerrain.of(level), camera());
         clear(e, camera());
         if (EVENTS.size() >= CAP) EVENTS.pollFirst().alive = false;
         EVENTS.addLast(e);
-        // облако — источник облаков клиента: его рисуют запечённые клубы слоя ({@link SmokePuffs})
-        if (model != null) SmokeGrid.add(e);
+        SmokeGrid.add(e);
         return model;
     }
 
@@ -577,8 +496,6 @@ public final class FarBlasts {
         e.traced = clock;
     }
 
-
-
     // ---------------------------------------------------------------- кадр
 
     static void collect(FarView view, FarSprites out, FxLights lights) {
@@ -592,15 +509,12 @@ public final class FarBlasts {
             // основание относительно камеры
             double bx = e.x - cam.x, by = e.y - cam.y, bz = e.z - cam.z;
             double d = e.distanceTo(cam);
-            // доля тела шара здесь: у облака модели — вся (вблизи и вдали — одни кадры); у бомбы — вблизи его рисуют частицы
-            double w = e.model != null ? 1 : e.near ? view.farShare(d) : 1;
             e.glows = age < e.ballTicks();
             // линия, ниже которой место взрыва закрыто рельефом, — над основанием (тела в прорисовке закрывает и глубина)
             double line = e.hidden > 0 ? LIFT + e.hidden : 0;
             sky(e, view, out, age, bx, by, bz, d, line);
-            light(e, view, out, lights, age, bx, by, bz, d, w, line);
-            if (e.model != null) poolLight(e, view, lights, age, bx, by, bz);
-            else column(e, view, out, age, bx, by, bz, line);
+            light(e, view, out, lights, age, bx, by, bz, d, line);
+            poolLight(e, view, lights, age, bx, by, bz);
         }
     }
 
@@ -625,7 +539,6 @@ public final class FarBlasts {
             weight[i] = column.w > 0 ? Double.MAX_VALUE : 0;
         }
         for (Event e : EVENTS) {
-            if (e.model == null) continue;
             double age = Math.max(0, now - e.born), t = age / 20;
             double r = e.model.ballRadius(t);
             if (r <= 0) continue;
@@ -652,7 +565,7 @@ public final class FarBlasts {
         ClientLevel level = Minecraft.getInstance().level;
         double now = clock + partial;
         for (Event e : EVENTS) {
-            if (e.model == null || e.level != level || !e.alive) continue;
+            if (e.level != level || !e.alive) continue;
             double t = Math.max(0, now - e.born) / 20;
             double bx = e.x - eye.x, by = e.y - eye.y, bz = e.z - eye.z;
             double r = e.model.ballRadius(t);
@@ -675,34 +588,26 @@ public final class FarBlasts {
 
     /**
      * Огненный шар: тело — кадр анимации шара (от вспышки до сажи) поверх того, что за ним, мельче нескольких пикселей —
-     * круг своего света ({@link FarSprites#shaped}); свет вокруг — бликом и вуалью на любой дальности. Тело — доля
-     * {@code w} (у облака модели остальное — объём шара в сетке дыма).
+     * круг своего света ({@link FarSprites#shaped}); свет вокруг — бликом и вуалью на любой дальности; вблизи и вдали — одни
+     * кадры.
      */
-    private static void light(Event e, FarView view, FarSprites out, FxLights lights, double age, double bx, double by, double bz, double d, double w,
+    private static void light(Event e, FarView view, FarSprites out, FxLights lights, double age, double bx, double by, double bz, double d,
                               double line) {
         double t = view.air(d, by);
         double ticks = e.ballTicks();
         if (ticks <= 0 || age >= ticks || t < Sight.THRESHOLD) return;
-        double u = age / ticks, r, half, body;
+        double r, half, body;
         FxAtlas.Sprite sprite;
         double fire;
-        if (e.model != null) {
-            // кадр — по состоянию шара: в горении — доля времени горения, остывая — температура (кадры запечённой симуляции
-            // с её временем и температурой, FxAtlas.fireballFrame); тело тает в дым по той же температуре, что дым
-            // проступает (CloudModel.glowShare)
-            double s = age / 20, frame = FxAtlas.fireballFrame(s / Math.max(e.model.burnSeconds, 1e-6), e.model.ballKelvin(s));
-            r = e.model.ballRadius(s);
-            half = r * FarSprites.FIREBALL;
-            body = CloudModel.glowShare(e.model.ballKelvin(s));
-            sprite = FxAtlas.fireballAt(frame);
-            fire = FxAtlas.fireLightAt(frame) * body;
-        } else {
-            r = e.ballRadius() * growth(u);
-            half = e.ballRadius() * FarSprites.FIREBALL;
-            body = fade(u);
-            sprite = FxAtlas.ball((float) u);
-            fire = FxAtlas.ballLight((float) u) * body;
-        }
+        // кадр — по состоянию шара: в горении — доля времени горения, остывая — температура (кадры запечённой симуляции
+        // с её временем и температурой, FxAtlas.fireballFrame); тело тает в дым по той же температуре, что дым
+        // проступает (CloudModel.glowShare)
+        double s = age / 20, frame = FxAtlas.fireballFrame(s / Math.max(e.model.burnSeconds, 1e-6), e.model.ballKelvin(s));
+        r = e.model.ballRadius(s);
+        half = r * FarSprites.FIREBALL;
+        body = CloudModel.glowShare(e.model.ballKelvin(s));
+        sprite = FxAtlas.fireballAt(frame);
+        fire = FxAtlas.fireLightAt(frame) * body;
         if (r <= 0 || body <= 0) return;
         double h = e.ballHeight(age), b = e.brightness(age);
         double vis = visible(h, r, line), hidden = 1 - vis * e.open;
@@ -713,7 +618,7 @@ public final class FarBlasts {
         lights.add(bx, by + h, bz, r, Sight.adapted(b, view.ambient()) * body, fire, c[0], c[1], c[2]);
         if (vis > 0) {
             out.shaped(bx, by + h, bz, r, sprite, half, e.phase, Sight.adapted(b, view.ambient()) * t, t, view.pixel(), c[0], c[1], c[2],
-                    vis * w * body, vis * e.open, fire, LIGHT);
+                    vis * body, vis * e.open, fire, LIGHT);
             brightest(view, bx, by + h, bz, vis);
         }
         // шар закрыт гребнем или постройкой: его свет рассеивает воздух над краем — зарево там, откуда место было бы
@@ -739,35 +644,6 @@ public final class FarBlasts {
     /** Огонь языков пламени лужи на экране (доля белого): свет пламени вокруг не ярче (как у шара, {@link FxAtlas#fireLightAt}). */
     static final double POOL_FIRE = 0.8;
 
-    /**
-     * Радиус светящегося шара на доле u его жизни против полного — как в его кадре ({@code tools/gen_particles.py}:
-     * 0,3 + 0,7·(1 − e^(−u/0,05)), к концу +6 %): вспышка — шар в 0,6 радиуса, за первые проценты жизни он почти весь.
-     * Свет шара (блик, вуаль, точка вдали) — от этого радиуса.
-     */
-    static double growth(double u) {
-        double f = (Math.floor(Math.min(u, 0.999) * FxAtlas.FIREBALL_FRAMES) + 0.5) / FxAtlas.FIREBALL_FRAMES;
-        return (0.3 + 0.7 * (1 - Math.exp(-f / 0.05))) * (1 + 0.06 * f);
-    }
-
-    /** Доля шара на доле u его жизни: со второй половины тает (дальше — облако). */
-    static double fade(double u) {
-        return u <= BALL_FADE ? 1 : Math.max(0, 1 - (u - BALL_FADE) / (1 - BALL_FADE));
-    }
-
-    /**
-     * Яркость вспышки бомбы на age-м тике: держится почти всю свою длину и гаснет к концу — глаз складывает свет 50–100 мс
-     * (Блох, Брока–Зульцер), и вспышка в тик короче, чем кажется настоящая.
-     */
-    static double flash(Look k, double age) {
-        double f = age / Math.max(1, k.flashTicks());
-        return f >= 1 || k.flashTicks() == 0 ? 0 : k.flash() * (1 - f * f);
-    }
-
-    /** Яркость шара бомбы на доле u его жизни: остывает от ~2000 K; ярче дневного неба — первую половину жизни. */
-    static double ball(double u) {
-        double f = 1 - Math.min(1, u);
-        return BALL * f * f * f;
-    }
 
     /** Самое яркое тело кадра — для лога: числа {@link Sight#light} последнего нарисованного (в {@link #LIGHT}). */
     private static void brightest(FarView view, double x, double y, double z, double share) {
@@ -804,24 +680,6 @@ public final class FarBlasts {
         return Math.min(Sight.VEIL_PEAK, Sight.adapted(light * BEHIND, ambient) * t);
     }
 
-    /** Цвет света шара и вспышки бомбы: пока вспышка ярче остывающего шара — её почти белый, потом — шара ({@link #tint}). */
-    private static float[] glare(double flash, double u) {
-        float[] c = tint(u);
-        float f = (float) (flash / Math.max(1e-9, flash + ball(u)));
-        for (int i = 0; i < 3; i++) c[i] += (FLASH[i] - c[i]) * f;
-        return c;
-    }
-
-    /** Цвет остывающего шара бомбы на доле u его жизни: раскалён → оранжевый → тёмно-красный. */
-    private static float[] tint(double u) {
-        float[] from = u < 0.35 ? BALL_HOT : BALL_MID, to = u < 0.35 ? BALL_MID : BALL_COLD;
-        float s = (float) (u < 0.35 ? u / 0.35 : (u - 0.35) / 0.65);
-        TINT[0] = from[0] + (to[0] - from[0]) * s;
-        TINT[1] = from[1] + (to[1] - from[1]) * s;
-        TINT[2] = from[2] + (to[2] - from[2]) * s;
-        return TINT;
-    }
-
     /**
      * Зарево на облаках над местом, пока светит шар ({@link #cloudGlow}): днём его не видно, ночью низ облаков над взрывом
      * вспыхивает, в дождь (облака сплошные) — сильнее. Вблизи (ближе трёх радиусов пятна) его заменяет вспышка на экране;
@@ -848,79 +706,6 @@ public final class FarBlasts {
     static double cloudGlow(double b, double r, double h, double ambient) {
         double k = r / h;
         return Math.min(1, Sight.adapted(CLOUD_ALBEDO * b * k * k, ambient));
-    }
-
-    /**
-     * Столб бомбы (прежняя картинка): поднимается, расплывается, уходит по ветру; сначала тает низ.
-     */
-    private static void column(Event e, FarView view, FarSprites out, double age, double bx, double by, double bz, double line) {
-        Look k = e.look;
-        double rise = rise(age, k.riseTicks());
-        double grey = smoothstep(0, 0.5 * k.life(), age);
-        float sr = (float) (DARK[0] + (AGED[0] - DARK[0]) * grey), sg = (float) (DARK[1] + (AGED[1] - DARK[1]) * grey),
-                sb = (float) (DARK[2] + (AGED[2] - DARK[2]) * grey);
-        double opacity = OPACITY * emerge(k, age);
-        double spread = 1 + 0.5 * age / k.life(), grow = 0.35 + 0.65 * rise;
-        for (int i = 0; i < e.f.length; i++) {
-            double f = e.f[i];
-            double a = opacity * (1 - smoothstep(k.life() * (0.35 + 0.45 * f), k.life(), age));
-            if (a < 0.004) continue;
-            double r = radius(k, f) * e.size[i] * grow * spread;
-            double h = height(k, f, r, rise);
-            double vis = visible(h, r, line);
-            if (vis <= 0) continue;
-            // ветер мира на высоте клуба (выше — сильнее: столб клонится); низ столба — дым, что подходит позже, и он
-            // сносится меньше, как прежде (доля shear)
-            double shear = 0.3 + 0.7 * f * rise, wy = view.camera().y + by + h;
-            double px = bx + e.ox[i] * r * SPREAD + ClientAir.windX(wy) * age * shear, py = by + h,
-                    pz = bz + e.oz[i] * r * SPREAD + ClientAir.windZ(wy) * age * shear;
-            double d = Math.sqrt(px * px + py * py + pz * pz);
-            double t = view.air(d, py);
-            if (t < Sight.THRESHOLD) continue;
-            double outside = smoothstep(0.5 * r, r, d);
-            if (outside <= 0) continue;
-            Sight.point(r, 1, 1, d, view.pixel(), POINT);
-            float share = e.dust[i], lit = e.shade[i] * view.ambient();
-            float cr = (sr + (e.dustR - sr) * share) * lit, cg = (sg + (e.dustG - sg) * share) * lit, cb = (sb + (e.dustB - sb) * share) * lit;
-            out.puff(px, py, pz, POINT[0], e.rot[i] + (float) (age * e.spin[i]), e.tex[i], cr, cg, cb, (float) (a * vis * POINT[1] * t * outside));
-        }
-    }
-
-    /**
-     * С какого тика дым шара бомбы проступает: шар тает со второй половины жизни ({@link #BALL_FADE}), и дым — это он
-     * же, остывший; раньше он закрыл бы яркий шар. Так же и вблизи ({@code Explosions}).
-     */
-    public static int smokeFrom(Look k) {
-        return (int) Math.ceil(BALL_FADE * k.ballTicks());
-    }
-
-    /** Доля столба бомбы на age-м тике: проступает, пока тает шар ({@link #smokeFrom}), не быстрее {@link #FADE_IN} тиков. */
-    static double emerge(Look k, double age) {
-        double from = smokeFrom(k);
-        return smoothstep(from, Math.max(from + FADE_IN, k.ballTicks()), age);
-    }
-
-    /** Доля высоты, на которую столб бомбы поднялся за age тиков: быстро вначале, к riseTicks — 95 %. */
-    static double rise(double age, double riseTicks) {
-        return 1 - Math.exp(-3 * age / riseTicks);
-    }
-
-    /**
-     * Доля высоты столба i-го из n клубов; jitter −0,5..0,5 — разброс в долю {@link #JITTER} шага. Внизу гуще: там клубы
-     * мельче, и столб не рвётся на бусины.
-     */
-    static double fraction(int i, int n, double jitter) {
-        return Math.pow(Math.max(0, Math.min(1, (i + 0.5 + JITTER * jitter) / n)), 1.3);
-    }
-
-    /** Радиус клуба на доле высоты f поднявшегося столба (без разброса размера), блоков: от ножки к шапке шире. */
-    static double radius(Look k, double f) {
-        return k.base() + (k.top() - k.base()) * f;
-    }
-
-    /** Высота центра клуба радиуса r над основанием: нижний стоит на земле, остальные — на своей доле подъёма. */
-    static double height(Look k, double f, double r, double rise) {
-        return 0.6 * r + f * k.column() * rise;
     }
 
     /**
@@ -978,8 +763,4 @@ public final class FarBlasts {
         return t * t * (3 - 2 * t);
     }
 
-    private static double gauss(SplittableRandom rnd) {
-        // сумма трёх равномерных — колокол без хвостов (клуб не улетает от столба)
-        return (rnd.nextDouble() + rnd.nextDouble() + rnd.nextDouble() - 1.5) * 1.15;
-    }
 }
