@@ -23,7 +23,7 @@ own_jobs() {
   done
 }
 
-for _ in $(seq 11); do
+for turn in $(seq 0 10); do
   out=$D/$S.json; [ "$n" -gt 0 ] && out=$D/$S.r$n.json
   t0=$(date +%s)
   "$claude" "${args[@]}" --append-system-prompt-file "$brief" --effort high --dangerously-skip-permissions \
@@ -36,6 +36,8 @@ try:
     d = json.load(open(out))
 except Exception:
     d = {}
+if not isinstance(d, dict):
+    d = {}
 res = (d.get("result") or "").strip().replace("\n", " ")
 line = "%s %s ход %s: код %s, %d мин, ходов %s, $%.2f%s — %s" % (
     time.strftime("%d.%m %H:%M"), s, n, code, (time.time() - float(t0)) / 60, d.get("num_turns", "?"),
@@ -45,7 +47,8 @@ print(d.get("session_id", ""))
 PY
 )
   jobs=$(own_jobs)
-  [ -z "$jobs" ] || [ -z "$sid" ] && break
+  # продолжать нечего (ход закончен, задач нет) или нечем (нет id сессии), или продолжений уже 10
+  [ -z "$jobs" ] || [ -z "$sid" ] || [ "$turn" = 10 ] && break
   echo "$(date '+%d.%m %T') $S: ход кончился, идут задачи: $(echo $jobs)" | tee -a "$D/sessions.log"
   while [ -n "$(own_jobs)" ]; do sleep 30; done
   report=""

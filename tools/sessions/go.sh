@@ -14,19 +14,21 @@
 # посреди прогона затёрла итоги P и S3 — bash дочитывает изменённый файл со старого места).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$(git -C "$here" rev-parse --git-common-dir)/.." && pwd)
+root=$(cd "$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)/.." && pwd)
 D=${SESSIONS_DIR:-$root/mod/run/incoming-sessions}
 
 case "${1:-}" in
   --wait)
+    [ -n "${2:-}" ] || { echo "go.sh --wait <S>" >&2; exit 2; }
     while systemctl --user is-active --quiet "incoming-claude-$2"; do sleep 60; done
-    grep -P "^\S+ $2 " "$D/sessions.log" 2>/dev/null | tail -1; exit 0 ;;
+    grep -P "^\S+ \S+ \Q$2\E[ :]" "$D/sessions.log" 2>/dev/null | tail -1; exit 0 ;;
   --status)
     systemctl --user list-units 'incoming-claude-*' --state=active --no-legend --plain | awk '{print "идёт: " $1}'
     tail -n 15 "$D/sessions.log" 2>/dev/null; exit 0 ;;
   ''|-*) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
 S=$1; shift
+[ $# -eq 0 ] || [ $# -eq 2 ] || { echo "продолжение — двумя аргументами: <session_id> <сообщение>" >&2; exit 2; }
 [ $# -eq 0 ] && [ ! -s "$D/$S.txt" ] && { echo "нет задания $D/$S.txt" >&2; exit 2; }
 [ -f "$D/live.md" ] || printf '# Новые решения Артёма для идущих сессий (сверху — новые)\n' > "$D/live.md"
 install -m 755 "$here/supervise.sh" "$D/.supervise-$S.sh"
