@@ -6,7 +6,7 @@
 # Итог — $LOOK_ROOT/out/<имя>/: кадры, лог, audio.wav, probe-frames.txt, gpu.csv. Запускать через tools/laptop_job.sh.
 set -uo pipefail
 V=$1; TREE=$2; CASES=${3:-}; EXTRA=${4:--}
-ROOT=${LOOK_ROOT:-/mnt/data/projects/airstrike/mod/run/look-gate}
+ROOT=${LOOK_ROOT:-/mnt/data/projects/incoming/mod/run/look-gate}
 INST=$ROOT/inst-$V; OUT=$ROOT/out/$V
 export JAVA_HOME=${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}
 artem() { local p; for p in $(pgrep -x java); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q 'PrismLauncher/instances/' && return 0; done; return 1; }
