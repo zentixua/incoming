@@ -19,7 +19,8 @@ for _ in $(seq 30); do
 done
 [ -n "$run" ] || { echo "запуск не нашёлся"; exit 2; }
 echo "запуск $run: «$only» × $n на 6 машинах — https://github.com/${GITHUB_REPOSITORY:-zentixua/incoming}/actions/runs/$run"
-gh run watch "$run" --exit-status --interval 30 > /dev/null 2>&1 || true
+# свой опрос, а не gh run watch: тот на только что созданном запуске выходит сразу
+until [ "$(gh run view "$run" --json status -q .status 2>/dev/null)" = completed ]; do sleep 30; done
 total=0; ok=0
 for job in $(gh run view "$run" --json jobs -q '.jobs[] | select(.name | startswith("GameTest")) | .databaseId'); do
   line=$(gh run view "$run" --job "$job" --log 2>/dev/null | grep -o 'GameTest repeat: .*' | tail -1)
