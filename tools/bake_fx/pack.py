@@ -266,8 +266,14 @@ def nukeball(src, dest, preview=None):
     dirs, area = octa_dirs(BALL_N)
     flat = dirs.reshape(-1, 3)
     maps, rises = [], []
+    # доля газа — в долях её средней в середине шара первого кадра: сетка шума Mantaflow (noise) масштабирует плотность
+    # по-своему (у шара — до ×2), а ослабление и температура считаются от доли чистого газа шара
+    first = meta["picks"][0]
+    c0 = np.load(os.path.join(src, f"c_{first['frame']:04d}.npy")).astype(np.float64)
+    near = np.sqrt(((np.indices(c0.shape) - np.array(first["centre"])[:, None, None, None]) ** 2).sum(0)) * first["voxel_m"] < 0.6 * r
+    unit = float(c0[near].mean())
     for pick in meta["picks"]:
-        c = np.load(os.path.join(src, f"c_{pick['frame']:04d}.npy")).astype(np.float32)
+        c = np.load(os.path.join(src, f"c_{pick['frame']:04d}.npy")).astype(np.float32) / unit
         # лесенка шара по клеткам сетки дала бы на карте кольца по широте: подробностей мельче клетки у счёта нет
         c = ndimage.gaussian_filter(np.clip(c, 0, None), 1.0)
         vox = pick["voxel_m"]
