@@ -281,4 +281,28 @@ class MushroomFieldTest {
     private static double dot(double[] x, double[] y) {
         return x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
     }
+
+    /**
+     * Узор поверхности шара: до минимума яркости — его нет (место −1), к отрыву — первый кадр, потом кадры идут вперёд с
+     * всплытием; доля узора — пока шар шар (1 − доля кольца), без прочитанного файла — 0 (шар как прежде).
+     */
+    @Test
+    void ballSurfaceFollowsTheBreakawayAndTheRollUp() {
+        double[] out = new double[2];
+        double y = 15;
+        MushroomField.ballSurface(0.5 * FireballModel.firstMinimumSeconds(y), 600, y, false, true, out);
+        assertEquals(-1, out[0], 0);
+        assertEquals(1, out[1], 1e-12);
+        MushroomField.ballSurface(FireballModel.breakawaySeconds(y), 600, y, false, true, out);
+        assertEquals(0, out[0], 1e-9);
+        double last = -1;
+        for (double t = 0.001; t < 40; t *= 1.1) {
+            MushroomField.ballSurface(t, 600, y, false, true, out);
+            assertTrue(out[0] >= last, "кадр не назад: " + t);
+            last = out[0];
+            assertEquals(1 - MushroomModel.rollUp(t, y, false), out[1], 1e-12);
+            MushroomField.ballSurface(t, 600, y, false, false, out);
+            assertEquals(0, out[1], 0);
+        }
+    }
 }

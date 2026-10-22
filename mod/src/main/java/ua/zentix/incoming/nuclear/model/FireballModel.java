@@ -34,6 +34,28 @@ public final class FireballModel {
         return 0.0025 * Math.sqrt(yieldKt);
     }
 
+    /**
+     * «Отрыв» (breakaway), с: фронт ударной волны, который до сих пор и был поверхностью шара (раскалённый сжатый воздух
+     * непрозрачен, гладкий «стеклянный» шар, G&D 2.117–2.119), остыл до ~3000 °C и стал прозрачным — сквозь него видна
+     * горячая неровная середина (G&D 2.120, 2.124–2.125: у 20 кт минимум яркости через 11 мс, отрыв — через 15 мс, «вскоре
+     * после минимума»). Здесь — минимум × 15/11 при любой мощности (оба — по времени фронта, ⚠ отношение — у 20 кт).
+     */
+    public static double breakawaySeconds(double yieldKt) {
+        return firstMinimumSeconds(yieldKt) * BREAKAWAY;
+    }
+
+    /** Отрыв на минимум яркости ({@link #breakawaySeconds}): 15 мс на 11 мс у 20 кт, G&D 2.120 и 2.125. */
+    static final double BREAKAWAY = 15.0 / 11.0;
+
+    /**
+     * Насколько видна неровная середина шара сквозь фронт 0..1: до минимума яркости — нет (поверхность — гладкий фронт),
+     * с минимума до отрыва фронт проясняется (по прямой, ⚠ оценка), дальше — вся.
+     */
+    public static double unmasked(double t, double yieldKt) {
+        double from = firstMinimumSeconds(yieldKt), to = breakawaySeconds(yieldKt);
+        return Solve.clamp((t - from) / (to - from), 0, 1);
+    }
+
     /** Второй (главный тепловой) максимум, с. */
     public static double secondMaximumSeconds(double yieldKt) {
         return 0.032 * Math.sqrt(yieldKt);
@@ -165,5 +187,17 @@ public final class FireballModel {
     public static double centreHeight(double t, double hobM, double yieldKt, boolean surface) {
         if (t <= 0) return hobM;
         return hobM + CloudModel.top(t, hobM, yieldKt, surface) - CloudModel.top(0, hobM, yieldKt, surface);
+    }
+
+    /**
+     * На сколько своих радиусов ({@link #maxRadius}) шар всплыл после второго максимума: часы узора его поверхности
+     * (запекание {@code tools/bake_fx}: пузырь горячего газа, кадры — по пути всплытия в радиусах). Течение у всплывающего
+     * пузыря подобно себе — где оно и что сделало с поверхностью, зависит от пройденного пути в радиусах, а не от секунд,
+     * поэтому один узор годен любой мощности. До второго максимума шар растёт, а не всплывает, — 0.
+     */
+    public static double surfaceRise(double t, double hobM, double yieldKt, boolean surface) {
+        double tm = secondMaximumSeconds(yieldKt);
+        if (t <= tm) return 0;
+        return (centreHeight(t, hobM, yieldKt, surface) - centreHeight(tm, hobM, yieldKt, surface)) / maxRadius(yieldKt, surface);
     }
 }

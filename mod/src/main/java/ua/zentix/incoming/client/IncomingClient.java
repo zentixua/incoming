@@ -181,6 +181,7 @@ public final class IncomingClient {
     /** Лист текстур слоя эффектов и огибающие записей взрывов — заново при каждой перезагрузке ресурсов. */
     private static void reloadListeners(RegisterClientReloadListenersEvent e) {
         e.registerReloadListener(FxAtlas.INSTANCE);
+        e.registerReloadListener(ua.zentix.incoming.client.nuclear.NukeBallSurface.INSTANCE);
         e.registerReloadListener(ua.zentix.incoming.client.sound.Envelopes.INSTANCE);
     }
 
