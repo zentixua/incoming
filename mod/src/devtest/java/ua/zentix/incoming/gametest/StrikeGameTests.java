@@ -3063,7 +3063,9 @@ public final class StrikeGameTests {
      * «Ланцет» на настоящей шкале полёта (1): круг в 700 м над целью, цель (корова) погибает, пока он кружит, — он
      * докруживает и пикирует оттуда на её последнюю точку, а не самоликвидируется в воздухе: запас хода после потери
      * цели урезается до пути по плану ({@code Mission.lose}), и план закладывает пике с высоты круга
-     * ({@code LoiterEntity.diveTicks}), а не 25 тиков пике с игрового круга.
+     * ({@code LoiterEntity.diveTicks}), а не 25 тиков пике с игрового круга. Зерно снаряда закреплено (круг, время
+     * барража) — то, с которым пике кончается отвесно, а цель позади курса: тангаж упирается в 89°, и до доворота над
+     * целью ({@code Dive.steer}) остаточный снос уводил «Ланцет» на 10 м (CI 22.10, 2 зерна из 40).
      */
     @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_loiter", skyAccess = true)
     public static void loiterLosingTargetAtRealHeightStillDives(GameTestHelper h) {
@@ -3078,6 +3080,7 @@ public final class StrikeGameTests {
         cow.moveTo(point.x, point.y, point.z);
         level.addFreshEntity(cow);
         LoiterEntity e = ModEntities.LOITER.get().create(level);
+        e.seed(237583);
         e.launch(point.add(0, WeaponSpec.LOITER.airframe().cruiseHeight(), -150), Target.OfEntity.center(cow),
                 cow.getBoundingBox().getCenter(), null);
         e.setRoute(null);

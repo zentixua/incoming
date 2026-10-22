@@ -1,5 +1,6 @@
 package ua.zentix.incoming.guidance;
 
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.strike.WeaponSpec;
 
@@ -24,9 +25,13 @@ public final class Dive {
         Vec3 aim = intercept(pos, speed, target, targetVelocity);
         float[] a = FlightController.anglesTo(pos, aim);
         flight.arcPitch(a[1], speed, pos.distanceTo(aim), dive.pitchRate(), dive.pitchAccel());
-        // с круга цель сбоку: резкий доворот с креном и пике (радиус разворота ~15 блоков); над целью — не крутиться
-        double dx = aim.x - pos.x, dz = aim.z - pos.z;
-        if (dx * dx + dz * dz > 9) flight.steerYaw(a[0], YAW_GAIN, dive.turnRate(), dive.turnAccel());
+        // с круга цель сбоку: резкий доворот с креном и пике (радиус разворота ~15 блоков); над целью — не крутиться.
+        // Но цель позади курса — доворот и над ней: тангаж упирается в 89°, остаточный снос идёт по курсу и уводил бы
+        // от цели (с круга в 700 м отвесное пике кончалось в 10 м от неё); на отвесе разворот курса — поворот носа
+        // на доли градуса
+        double dx = aim.x - pos.x, dz = aim.z - pos.z, h2 = dx * dx + dz * dz;
+        boolean behind = h2 > 0.25 && Math.abs(Mth.wrapDegrees(a[0] - flight.yaw())) > 90;
+        if (h2 > 9 || behind) flight.steerYaw(a[0], YAW_GAIN, dive.turnRate(), dive.turnAccel());
         else flight.settleYaw(dive.turnAccel());
     }
 
