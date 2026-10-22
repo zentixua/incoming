@@ -97,7 +97,11 @@ public final class CraterFalls {
 
     /**
      * Блок {@code falling} начал падать с {@code from} (его место уже пусто). В районе взрыва сверх предела — положить
-     * его сразу на опору и вернуть {@code true} (сущность в мир не входит); иначе — пустить живым.
+     * его сразу на опору и вернуть {@code true} (сущность в мир не входит); иначе — пустить живым. Там, где чанк тикает
+     * блоками, но не сущностями (уровень 32: край тикающего, район взрыва ещё не дорос — {@code AreaLoader} пускает
+     * сущности тикать кольцами по готовности соседей — или уже отпущен), падение тоже ложится сразу: тик блока его начал,
+     * а сущность там не тикает и висела бы в воздухе, пока чанк снова не затикает (CI 22.10: гравий свода, обрушенного
+     * зоной трещин бомбы у края района, висел до конца проверки).
      */
     private boolean settle(ServerLevel level, FallingBlockEntity falling, BlockPos from) {
         prune(level);
@@ -111,7 +115,7 @@ public final class CraterFalls {
             room &= z.live < LIVE_CAP;
         }
         if (in.isEmpty()) return false;
-        if (room) {
+        if (room && level.isPositionEntityTicking(from)) {
             admit(falling, in);
             return false;
         }

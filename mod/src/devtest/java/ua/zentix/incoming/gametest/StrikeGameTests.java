@@ -2697,6 +2697,42 @@ public final class StrikeGameTests {
         });
     }
 
+    /**
+     * Падение в районе воронки там, где чанк тикает блоками, но не сущностями (уровень 32 — рядом с тикающими чанками
+     * площадки), ложится сразу: тик блока его начал, а сущность там не тикает и висела бы в воздухе (CI 22.10: гравий
+     * свода под соседней площадкой, обрушенный зоной трещин бомбы на краю района, висел до конца
+     * {@link #craterFallsShareWorldCap} — там, где район взрыва ещё не дорос до края, а потом был отпущен).
+     */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "crater_falls_edge", skyAccess = true)
+    public static void craterFallWithoutEntityTicksLandsAtOnce(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        // столбец за краем площадки к +X (там площадок ещё нет): первый, чей чанк тикает блоками, но не сущностями
+        BlockPos column = null;
+        for (int x = 64; x < 96 && column == null; x++) {
+            BlockPos p = h.absolutePos(new BlockPos(x, 0, 32));
+            if (level.shouldTickBlocksAt(p) && !level.isPositionEntityTicking(p)) column = p;
+        }
+        h.assertTrue(column != null, "за площадкой нет чанка, что тикает блоками без сущностей");
+        int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, column.getX(), column.getZ());
+        BlockPos rest = new BlockPos(column.getX(), top, column.getZ()), from = rest.above(3);
+        // район взрыва над столбцом: малый заряд высоко в воздухе (район — в пару блоков, тика сущностям не даёт)
+        Warheads.testCharge(level, Vec3.atCenterOf(from).add(0, 20, 0), 0.05);
+        long settledBefore = CraterFalls.get(level).settled();
+        level.setBlock(from, Blocks.GRAVEL.defaultBlockState(), Block.UPDATE_ALL);
+        afterTest(h, () -> {
+            level.setBlock(from, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            level.setBlock(rest, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+        });
+        AABB around = new AABB(rest).inflate(1, 6, 1);
+        h.succeedWhen(() -> {
+            List<FallingBlockEntity> hanging = level.getEntitiesOfClass(FallingBlockEntity.class, around);
+            h.assertTrue(hanging.isEmpty(), "падающий гравий висит: " + hanging.stream().map(f -> f.position() + " " + f.time + " тиков").toList());
+            h.assertTrue(level.getBlockState(rest).is(Blocks.GRAVEL) && level.getBlockState(from).isAir(), "гравий не лёг на опору: "
+                    + level.getBlockState(from) + " над " + level.getBlockState(rest));
+            h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "гравий лёг не через осыпание воронки");
+        });
+    }
+
     /** Грунт {@code lo}…{@code hi}: камень ниже {@code sandFrom}, выше — песок с прослойкой гравия через три слоя. */
     private static void sandBed(GameTestHelper h, BlockPos lo, BlockPos hi, int sandFrom) {
         for (BlockPos p : BlockPos.betweenClosed(lo, hi)) {
