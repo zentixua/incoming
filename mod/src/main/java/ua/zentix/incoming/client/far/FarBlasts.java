@@ -346,7 +346,7 @@ public final class FarBlasts {
             // воронки выброса); глубже — облако из хода приходит своим пакетом (S2C.Vent)
             ua.zentix.incoming.warhead.BuriedBlast law = BlastSource.law(pos.y, p.surfaceY());
             if (!law.breaches()) return null;
-            CloudModel model = CloudModel.buried(source, air(level, pos), law);
+            CloudModel model = CloudModel.buried(source, air(level, pos), law, ground.isWater());
             return cloud(level, source, model, new Vec3(pos.x, p.surfaceY(), pos.z), ground, p.seed());
         }
         return cloud(level, source, new CloudModel(source, air(level, pos), ground.isWater()), pos, ground, p.seed());

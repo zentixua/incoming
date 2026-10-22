@@ -75,8 +75,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     private static final Sprite[] PUFF6 = new Sprite[PUFF6_FRAMES], PUFF6_MIRRORED = new Sprite[PUFF6_FRAMES];
     /**
      * Прежний процедурный огненный шар ({@code fx/particle/ball_00…15}, {@code tools/gen_particles.py}: растёт и остывает в
-     * своих кадрах по доле жизни) — у картинок, что ещё не по модели: прорыв бомбы из-под земли ({@code FarBlasts.Look}) и
-     * частицы шара ({@code Fx.fireball}: разрыв зенитной ракеты, прорыв бомбы вблизи).
+     * своих кадрах по доле жизни) — у частиц шара ({@code Fx.fireball}: разрыв зенитной ракеты).
      */
     private static final Sprite[] BALL = new Sprite[FIREBALL_FRAMES];
     private static final ResourceLocation BALL_LIGHT = Incoming.id("textures/fx/particle/ball.json");

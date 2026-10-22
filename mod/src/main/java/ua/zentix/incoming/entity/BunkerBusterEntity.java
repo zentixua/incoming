@@ -176,6 +176,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         double v = velocity.length() * 20;
         float[] angles = FlightController.anglesTo(Vec3.ZERO, velocity);
         flight.set(angles[0], angles[1]);
+        speed = velocity.length();
         setPhase(FlightPhase.DRILL);
         // устье хода — на блок выше точки удара: оттуда идут дым и газы
         entityData.set(DATA_ENTRY, new Vector3f((float) point.x, (float) point.y + 1, (float) point.z));
@@ -247,7 +248,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
                 if (arms(medium)) solid += went;
                 va = vb;
                 if (run.stopped()) {
-                    steps.add(new Step(b, s, t, medium.kind() != Penetration.Kind.STOP, solid));
+                    steps.add(new Step(b, s, t, carves(medium), solid));
                     end = Path.End.REST;
                     break;
                 }
@@ -260,7 +261,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
                 s += went;
                 t += went > 0 ? 2 * went / (va + vb) : 0;
                 if (run.stopped()) {
-                    steps.add(new Step(b, s, t, medium != null, solid));
+                    steps.add(new Step(b, s, t, medium != null && carves(medium), solid));
                     end = Path.End.REST;
                     break;
                 }
@@ -270,7 +271,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
                     double went = depth - hollow;
                     s += went;
                     t += went / va;
-                    steps.add(new Step(b, s, t, medium != null && medium.kind() != Penetration.Kind.STOP, solid));
+                    steps.add(new Step(b, s, t, medium != null && carves(medium), solid));
                     end = Path.End.VOID;
                     break;
                 }
@@ -278,9 +279,14 @@ public class BunkerBusterEntity extends StrikeProjectile {
                 s += rest;
                 t += rest / va;
             }
-            steps.add(new Step(b, s, t, medium != null && medium.kind() != Penetration.Kind.STOP, solid));
+            steps.add(new Step(b, s, t, medium != null && carves(medium), solid));
         }
         return new Path(List.copyOf(steps), s, t, end);
+    }
+
+    /** Выбивается ли блок среды в канал: твёрдое — да; жидкость (вода, лава) и непробиваемое — нет. */
+    static boolean carves(Penetrability m) {
+        return m.kind() != Penetration.Kind.FLUID && m.kind() != Penetration.Kind.STOP;
     }
 
     /**

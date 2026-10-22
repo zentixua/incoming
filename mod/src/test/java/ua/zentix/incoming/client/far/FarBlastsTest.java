@@ -42,7 +42,7 @@ class FarBlastsTest {
     void bunkerCloudsComeFromTheModel() {
         ua.zentix.incoming.warhead.BuriedBlast shallow = new ua.zentix.incoming.warhead.BuriedBlast(2423, 3);
         BlastSource breach = new BlastSource(WeaponType.BUNKER, shallow.airCharge(BlastSource.hole()), 0, true, false);
-        CloudModel m = CloudModel.buried(breach, CloudModel.Air.STANDARD, shallow);
+        CloudModel m = CloudModel.buried(breach, CloudModel.Air.STANDARD, shallow, false);
         CloudModel whole = new CloudModel(new BlastSource(WeaponType.BUNKER, 2423, 0, true, false), CloudModel.Air.STANDARD);
         assertTrue(m.topZ < whole.topZ && m.topZ > model(WeaponType.ROCKET).topZ, "прорыв: верх " + m.topZ + ", всего заряда " + whole.topZ);
         assertTrue(m.dust > whole.dust, "прорыв: пыль воронки выброса больше воронки заряда на земле");

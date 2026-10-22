@@ -263,8 +263,8 @@ public final class CloudModel {
      * Облако бомбы, прорвавшейся наружу ({@code source} — доля её заряда, что вышла в воздух): пыль — грунт воронки выброса
      * ({@link BuriedBlast#craterVolume}; грунта пакет не несёт — сухой, как у наземного), доля {@link #DUST_LOFTED} в воздухе.
      */
-    public static CloudModel buried(BlastSource source, Air air, BuriedBlast law) {
-        return new CloudModel(source, air, law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5);
+    public static CloudModel buried(BlastSource source, Air air, BuriedBlast law, boolean onWater) {
+        return new CloudModel(source, air, onWater ? 0 : law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater);
     }
 
     /**

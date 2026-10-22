@@ -160,7 +160,7 @@ def film_shot(con, cid: str, shot: dict) -> dict:
     if s.get("centre"):
         subject["area"] = {"pos": s["centre"], "size": 2 * s.get("spread", 60)}
     dim = dim_of(con, shot)
-    # столб дыма у Incoming стоит до 4 минут (FarBlasts.Look.life ракеты — 4800 тиков): удары с тех пор; в кадре из них —
+    # столб дыма у Incoming стоит до 4 минут (прежняя таблица столбов ракеты — 4800 тиков): удары с тех пор; в кадре из них —
     # только удары живого повтора (с a − warm, Plan.Shot.live в replayscan), прежние — для сверки модели с кадрами
     # ядерный подрыв — без строки: у него своя картинка, не столб взрыва (снаряда в пакете подрыва нет — по пакету)
     smoke = con.execute("""

@@ -538,10 +538,12 @@ public final class BlastEffects {
                 Particles.burst(level, FxParticles.fallingDust(mat), charge.add(0, 7, 0), 7, 1, 7, 0, 14);
             }
             if (t <= 16 && depth <= law.fracture()) heave(level, t * 2);
-            // выброс воронки падает обратно: грунт чаши закона (её роет сервер); под землёй выброса нет
-            if (t == 30 && cloud != null) {
+            // выброс воронки падает обратно, как у воронки наземного взрыва ({@link #crater}): грунт чаши закона без пыли,
+            // что ушла в воздух, с высоты порядка диаметра воронки; под землёй и в воде выброса нет
+            if (t == 20 && cloud != null && !mat.isWater()) {
                 CraterModel.Soil soil = mat.soil();
-                BlastSounds.debris(surface, law.craterVolume(soil) * CloudModel.SOIL_DENSITY, law.craterDepth(soil), 0.75f);
+                BlastSounds.debris(surface, law.craterVolume(soil) * CloudModel.SOIL_DENSITY * (1 - CloudModel.DUST_LOFTED),
+                        2 * law.craterRadius(soil), 0.75f);
             }
             return t < 240;
         }
@@ -576,7 +578,8 @@ public final class BlastEffects {
         GroundMaterial mat = GroundMaterial.byId(p.material());
         Vec3 pos = p.pos();
         ClientLevel world = Minecraft.getInstance().level;
-        if (world != null) {
+        if (world != null && !mat.isWater()) {
+            // в воду — без пыли грунта (брызги — частицами ниже)
             double d = WeaponType.BUNKER.spec().striker().article().diameter();
             BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, false);
             FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), BunkerImpact.entryVolume(d), 2 * d), pos, mat,
@@ -585,7 +588,10 @@ public final class BlastEffects {
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
-                if (t == 0) spray(level, 1);
+                if (t == 0) {
+                    if (mat.isWater()) Particles.burst(level, ParticleTypes.SPLASH, pos.add(0, 1, 0), 2, 2, 2, 0.8, 400);
+                    else spray(level, 1);
+                }
                 return t < 30;
             }
 
@@ -606,7 +612,7 @@ public final class BlastEffects {
         ClientLevel world = Minecraft.getInstance().level;
         if (world != null) {
             BlastSource gas = new BlastSource(WeaponType.BUNKER, p.airKg(), 0, true, true);
-            FarBlasts.cloud(world, gas, new CloudModel(gas, FarBlasts.air(world, pos)), pos, mat, Double.doubleToLongBits(pos.x * 17 + pos.z));
+            FarBlasts.cloud(world, gas, new CloudModel(gas, FarBlasts.air(world, pos), mat.isWater()), pos, mat, Double.doubleToLongBits(pos.x * 17 + pos.z));
         }
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
