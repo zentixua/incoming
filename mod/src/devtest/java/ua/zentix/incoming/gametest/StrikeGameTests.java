@@ -2608,7 +2608,10 @@ public final class StrikeGameTests {
             charges.add(charge);
         }
         for (Vec3 c : charges) Warheads.bunker(level, c, c.add(0, 14, 0), null, null);
-        AABB box = craterBox(h, new BlockPos(0, 1, 0), new BlockPos(31, 27, 255));
+        // только своя полоса: площадки соседних партий — в 5 блоках от неё, и их падающие блоки (после партии чанки
+        // соседей не тикают — блок висит) не про эту проверку
+        AABB box = new AABB(Vec3.atLowerCornerOf(h.absolutePos(new BlockPos(0, 1, 0))),
+                Vec3.atLowerCornerOf(h.absolutePos(new BlockPos(32, 28, 256)))).inflate(0, 16, 0);
         long settledBefore = CraterFalls.get(level).settled();
         int[] max = {0};
         h.onEachTick(() -> {
@@ -2619,7 +2622,15 @@ public final class StrikeGameTests {
         h.succeedWhen(() -> {
             h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "ни один блок не лёг сразу: проверять нечего");
             h.assertTrue(max[0] > CraterFalls.LIVE_CAP, "живых разом было не больше " + max[0] + ": падали у одной воронки, общий предел не проверен");
-            h.assertTrue(level.getEntitiesOfClass(FallingBlockEntity.class, box).isEmpty(), "блоки ещё падают");
+            List<FallingBlockEntity> falling = level.getEntitiesOfClass(FallingBlockEntity.class, box);
+            if (falling.isEmpty()) return;
+            // где висят: место и откуда начал падать (от площадки), тиков в полёте, тикает ли чанк сущностями
+            StringBuilder where = new StringBuilder();
+            for (FallingBlockEntity f : falling.subList(0, Math.min(5, falling.size()))) {
+                where.append(String.format(java.util.Locale.ROOT, " %s от %s, %d тиков, тикает %b;", h.relativePos(f.blockPosition()).toShortString(),
+                        h.relativePos(f.getStartPos()).toShortString(), f.time, level.isPositionEntityTicking(f.blockPosition())));
+            }
+            h.fail("блоки ещё падают: " + falling.size() + ";" + where);
         });
     }
 
