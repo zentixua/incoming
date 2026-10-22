@@ -28,8 +28,8 @@ import java.util.Locale;
  * Взрывы вдали: вспышка, огненный шар, облако дыма и пыли и раскат с задержкой по скорости звука.
  * <p>
  * Пакет взрыва — одно событие: облако — модель взрыва ({@link CloudModel}: заряд, топливо, грунт и воздух) — одна и та же
- * вблизи и вдали. Событие — источник облаков клиента ({@link SmokeGrid.Source}): клубы модели, облако конденсации и шлейф
- * над лужей топлива; рисует их слой эффектов запечёнными клубами ({@link SmokePuffs}), объём сетки — нет (клетка
+ * вблизи и вдали. Событие — источник облаков клиента ({@link SmokeGrid.Source}): клубы модели и облако конденсации
+ * (топливо в воронке горит пожаром среди пожаров клиента, {@code FireSmoke.pool}); рисует их слой эффектов запечёнными клубами ({@link SmokePuffs}), объём сетки — нет (клетка
  * в 2–32 м облако в метры–десятки метров не разрешает). Огненный шар — кадры {@code fx/particle/fireball} (симуляция
  * горения в Blender, цвет — чёрное тело поля температуры) размера и времени шара модели (шар топлива по CCPS или шар
  * продуктов детонации, потом остывание подсосом воздуха), яркость — чёрное тело его температуры ({@link BlackBody}): днём
@@ -81,10 +81,6 @@ public final class FarBlasts {
      * {@link #SKY_LOW} блоков над местом — считаем на этой высоте.
      */
     static final double CLOUD_ALBEDO = 0.7, SKY_SPREAD = 1, SKY_PEAK = 0.45, SKY_CLEAR = 0.45, SKY_LOW = 40;
-
-    /** Шлейф над лужей: отрезков (гуще у очага, где ось круче) и докуда по ветру, м (как дым пожаров). */
-    static final int POOL_SEGMENTS = 8;
-    static final double PLUME_REACH = 768;
 
     private static final ArrayDeque<Event> EVENTS = new ArrayDeque<>();
     /** Числа на кадр без выделения: точка {@link Sight#point}, свет {@link Sight#light} и цвет шара. */
@@ -138,10 +134,6 @@ public final class FarBlasts {
         float open = 1;
         /** Источник облака ещё нужен (событие живо). */
         boolean alive = true;
-        /** Шлейф над лужей топлива (null — лужи нет); направление ветра у земли. */
-        @Nullable
-        final ua.zentix.incoming.client.fx.smoke.FirePlume pool;
-        final double poolWx, poolWz;
 
         Event(ClientLevel level, BlastSource source, CloudModel model, double x, double y, double z, GroundMaterial ground, long seed,
               boolean near) {
@@ -159,18 +151,9 @@ public final class FarBlasts {
             this.bornSeconds = SmokeGrid.seconds(0);
             this.near = near;
             this.soundPending = !near;
-            if (model.poolWatts > 0) {
-                // ветер у земли — на высоте пламени (шлейф лужи — у земли, ниже облака)
-                double ux = model.air.windX() * model.air.wind(2), uz = model.air.windZ() * model.air.wind(2), u = Math.hypot(ux, uz);
-                pool = new ua.zentix.incoming.client.fx.smoke.FirePlume(model.poolWatts, model.poolRadius,
-                        model.source.fuel().sootYield / model.source.fuel().heatJPerKg, u, ClientAir.now().stability());
-                poolWx = u > 1e-6 ? ux / u : 1;
-                poolWz = u > 1e-6 ? uz / u : 0;
-            } else {
-                pool = null;
-                poolWx = 1;
-                poolWz = 0;
-            }
+            // топливо в воронке горит пожаром среди пожаров клиента: шлейф, его свет и жар — там, и он сливается с огнём,
+            // что поджёг шар топлива рядом (FireSmoke.merge)
+            if (model.poolWatts > 0) ua.zentix.incoming.client.fx.FireSmoke.pool(level, x, y, z, model);
             dustR = SmokeGrid.dustAlbedo(ground.r);
             dustG = SmokeGrid.dustAlbedo(ground.g);
             dustB = SmokeGrid.dustAlbedo(ground.b);
@@ -255,48 +238,19 @@ public final class FarBlasts {
             return FarBlasts.visible(wy - y, r, hidden > 0 ? LIFT + hidden : 0);
         }
 
-        /** Источник облака: клубы модели в мире, облако конденсации и шлейф над лужей топлива. */
+        /** Источник облака: клубы модели в мире, облако конденсации и брызги взрыва на воде. */
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
             if (!alive || level != Minecraft.getInstance().level) return false;
             double t = seconds - bornSeconds;
-            if (t >= Math.max(Math.max(model.life, poolEnd()), water == null ? 0 : water.mistLife())) return false;
+            if (t >= Math.max(model.life, water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
                 model.blobs(t, (bx, by, bz, sh, sv, soot, dustKg, water, kelvin, rise) -> out.blob(x + bx, y + by, z + bz, sh, sv, soot, dustKg,
                         water, dustR, dustG, dustB, kelvin, rise));
             }
             if (t < model.condensationSeconds()) condensation(t, out);
             if (water != null) water.blobs(t, out, x, y, z);
-            if (pool != null) pool(t, out);
             return true;
-        }
-
-        /** Когда последний дым лужи уходит за край видимого шлейфа, с. */
-        double poolEnd() {
-            return pool == null ? 0 : model.poolSeconds + pool.visible(PLUME_REACH) / pool.wind;
-        }
-
-        /**
-         * Шлейф Бриггса над лужей ({@link ua.zentix.incoming.client.fx.smoke.FirePlume}, как дым пожаров): отрезки от
-         * очага по ветру до пути, что дым прошёл с начала горения, — место на пути xₖ несёт силу лужи в миг выхода этого
-         * дыма (xₖ/u секунд назад).
-         */
-        private void pool(double t, SmokeGrid.Sink out) {
-            double u = pool.wind, far = Math.min(pool.visible(PLUME_REACH), u * t);
-            if (far <= 0) return;
-            double prevX = 0, prevH = pool.rise(0);
-            for (int k = 1; k <= POOL_SEGMENTS; k++) {
-                double f = (double) k / POOL_SEGMENTS, xk = far * f * f, mid = 0.5 * (xk + prevX), hk = pool.rise(xk);
-                double x0 = prevX, h0 = prevH;
-                prevX = xk;
-                prevH = hk;
-                double share = model.poolShare(t - mid / u);
-                if (share <= 0 || pool.tau(mid) * share < CloudModel.SEEN) continue;
-                double ax = 0.5 * (xk - x0);
-                out.segment(x + poolWx * mid, y + 0.5 * (h0 + hk), z + poolWz * mid, poolWx * ax, 0.5 * (hk - h0), poolWz * ax, pool.sigmaY(mid),
-                        pool.sigmaZ(mid), pool.sootPerMetre() * 2 * ax * share, 0, 0, dustR, dustG, dustB,
-                        CloudModel.T_AIR_K + pool.excess(0.5 * (h0 + hk)), pool.riseSpeed(mid));
-            }
         }
 
         /**
@@ -368,14 +322,25 @@ public final class FarBlasts {
 
     /**
      * Разрыв в воздухе ({@code S2C.Intercept}: боевая часть зенитной ракеты, заряд {@code source}) — то же облако модели,
-     * что у взрыва на земле, без грунта и топлива: вспышка, шар продуктов, облачко сажи, раскат вдали. Облако модели —
-     * тому, кто рисует разрыв вблизи (null — мира нет).
+     * что у взрыва на земле, на своей высоте над рельефом ({@link #heightAbove}): воронки нет, пыль волны — по давлению у
+     * земли (на высоте полёта его не хватает сорвать грунт), топлива нет; вспышка, шар продуктов, облачко сажи, раскат
+     * вдали. Облако модели — тому, кто рисует разрыв вблизи (null — мира нет).
      */
     @Nullable
     public static CloudModel airburst(Vec3 pos, BlastSource source, long seed) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return null;
-        return cloud(level, source, new CloudModel(source, air(level, pos)), pos, GroundMaterial.STONE, seed);
+        return cloud(level, source, new CloudModel(source, air(level, pos), false, heightAbove(level, pos)), pos, GroundMaterial.STONE, seed);
+    }
+
+    /**
+     * Высота точки над рельефом под ней, м: чанк клиента (карта высот {@code MOTION_BLOCKING} — с кронами и постройками),
+     * дальше — плитки рельефа карты ({@link FarTerrain}); не знаем ничего — над уровнем моря.
+     */
+    static double heightAbove(ClientLevel level, Vec3 pos) {
+        double ground = FarTerrain.of(level).at((int) Math.floor(pos.x), (int) Math.floor(pos.z));
+        if (Double.isNaN(ground)) ground = ua.zentix.incoming.util.Air.SEA;
+        return Math.max(0, pos.y - ground);
     }
 
     /**
@@ -411,7 +376,7 @@ public final class FarBlasts {
         while (it.hasNext()) {
             Event e = it.next();
             long age = clock - e.born;
-            if (e.level != level || age > e.life() && age > 20 * e.poolEnd() && (!e.soundPending || age > e.soundWait)) {
+            if (e.level != level || age > e.life() && (!e.soundPending || age > e.soundWait)) {
                 e.alive = false;
                 it.remove();
                 continue;
@@ -526,7 +491,6 @@ public final class FarBlasts {
             double line = e.hidden > 0 ? LIFT + e.hidden : 0;
             sky(e, view, out, age, bx, by, bz, d, line);
             light(e, view, out, lights, age, bx, by, bz, d, line);
-            poolLight(e, view, lights, age, bx, by, bz);
         }
     }
 
@@ -570,8 +534,8 @@ public final class FarBlasts {
 
     /**
      * Свет и горячий газ облаков модели на мир кадра ({@code HeatPass}): огненный шар — ламбертов шар чёрного тела своей
-     * температуры (как у {@link #fireballs}), пламя лужи — шар чёрного тела пламени в полвысоты пламени по Хескестаду,
-     * долей лужи, что ещё горит; газ — термик облака (середина, радиус, температура и подъём модели) и столб над лужей.
+     * температуры (как у {@link #fireballs}); газ — термик облака (середина, радиус, температура и подъём модели). Пламя и
+     * столб над топливом в воронке — у пожаров ({@code FireSmoke.heat}).
      */
     public static void heat(Vec3 eye, float partial, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         ClientLevel level = Minecraft.getInstance().level;
@@ -585,13 +549,6 @@ public final class FarBlasts {
                 e.model.ballLight(t, BB);
                 double h = e.model.ballHeight(t);
                 f.light(bx, by + h, bz, r, BB[0], BB[1], BB[2], air, h);
-            }
-            double share = e.model.poolShare(t);
-            if (share > 0 && e.pool != null) {
-                double pr = 0.5 * e.model.poolFlame();
-                BlackBody.light(ua.zentix.incoming.client.fx.smoke.FirePlume.FLAME_K, BB);
-                f.light(bx, by + pr, bz, pr, BB[0] * share, BB[1] * share, BB[2] * share, air, pr);
-                f.plume(bx, by, bz, e.pool, share);
             }
             double cr = e.model.radius(t), ch = e.model.height(t);
             if (t < e.model.life) f.hot(bx, by + Math.max(0, ch - cr), bz, 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
@@ -637,25 +594,6 @@ public final class FarBlasts {
         // видно, пока шар светит; на любой дальности, как блик (вблизи за домом одной вспышки на экране не хватает)
         if (hidden > 0) halo(view, out, bx, by + Math.max(line, h), bz, HALO_SIZE * r, b * hidden, fire, t, c);
     }
-
-    /**
-     * Пламя лужи топлива светит на дым, пыль и шлейфы вокруг ({@link FxLights}): шар радиусом в полвысоты пламени по
-     * Хескестаду ({@link CloudModel#poolFlame}) над воронкой, чёрное тело пламени
-     * ({@link ua.zentix.incoming.client.fx.smoke.FirePlume#FLAME_K}), доля — сколько лужи ещё горит.
-     */
-    private static void poolLight(Event e, FarView view, FxLights lights, double age, double bx, double by, double bz) {
-        double share = e.model.poolShare(age / 20);
-        if (share <= 0) return;
-        double r = 0.5 * e.model.poolFlame();
-        BlackBody.light(ua.zentix.incoming.client.fx.smoke.FirePlume.FLAME_K, BB);
-        double m = Math.max(BB[0], Math.max(BB[1], BB[2]));
-        lights.add(bx, by + r, bz, r, Sight.adapted(BB[3], view.ambient()) * share, POOL_FIRE * share, (float) (BB[0] / m), (float) (BB[1] / m),
-                (float) (BB[2] / m));
-    }
-
-    /** Огонь языков пламени лужи на экране (доля белого): свет пламени вокруг не ярче (как у шара, {@link FxAtlas#fireLightAt}). */
-    static final double POOL_FIRE = 0.8;
-
 
     /** Самое яркое тело кадра — для лога: числа {@link Sight#light} последнего нарисованного (в {@link #LIGHT}). */
     private static void brightest(FarView view, double x, double y, double z, double share) {

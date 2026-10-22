@@ -77,6 +77,25 @@ final class ProbeScenario {
      * осью на ~2,5 её полуширины, ~14° от оси; что ракета и струя оттуда видны, показывают кадры шлагбаума.
      */
     private static final double BEHIND = 24, ABOVE_JET = 6;
+    /**
+     * Время игры, с которого сцена начинается, — как в эталонном прогоне всех сцен подряд (сравнение 22.10, compare-final:
+     * начало сцены в v3.4.1 и main — в пределах 200 тиков). Ветер мира и его класс устойчивости зависят только от времени
+     * игры ({@code util.Wind}, {@code util.Air}): ночью у границы классов D и E ветер у земли — 1 или 5 м/с, и шлейф пожара
+     * то встаёт столбом, то стелется. Выборка сцен без этого шла бы в другом воздухе, чем эталон; сцена, до которой игра
+     * не дошла, догоняет своё время ускоренными тиками ({@code /tick sprint}).
+     */
+    private static final java.util.Map<String, Integer> START = java.util.Map.ofEntries(
+            java.util.Map.entry("drone-day-50", 902), java.util.Map.entry("drone-day-300", 2093), java.util.Map.entry("drone-night-50", 3353),
+            java.util.Map.entry("drone-night-300", 4541), java.util.Map.entry("grad-day", 5821), java.util.Map.entry("grad-night", 7722),
+            java.util.Map.entry("launch-behind", 9519), java.util.Map.entry("launch-side", 9792), java.util.Map.entry("launch-night-behind", 10084),
+            java.util.Map.entry("water-day-50", 11047), java.util.Map.entry("debris-night-50", 12236),
+            java.util.Map.entry("substation-night-50", 14027), java.util.Map.entry("bomb-day-50", 15830), java.util.Map.entry("bomb-night-50", 17018),
+            java.util.Map.entry("bomb-day-150", 18204), java.util.Map.entry("bomb-night-150", 19390), java.util.Map.entry("bomb-day-300", 20577),
+            java.util.Map.entry("sam-side", 21690), java.util.Map.entry("sam-behind", 22182), java.util.Map.entry("sam-night-side", 22634),
+            java.util.Map.entry("sam-burst", 23922), java.util.Map.entry("sam-night-burst", 24810));
+    /** Сцена уже догнала своё время игры; ускорение до него уже заказано. */
+    private boolean onTime, sprinting;
+
     /** Сколько ждать взрыва после команды, тиков. */
     private static final int BLAST_LIMIT = 2400;
 
@@ -165,6 +184,23 @@ final class ProbeScenario {
             return;
         }
         current = cases.get(caseIndex);
+        onTime = false;
+        sprinting = false;
+        begin();
+    }
+
+    /** Начало сцены {@link #current}: сперва — её время игры ({@link #START}), потом — место и план. */
+    private void begin() {
+        long now = Minecraft.getInstance().level.getGameTime();
+        Integer start = START.get(current);
+        if (!onTime && start != null && now < start - 5) {
+            if (!sprinting) cmd("tick sprint " + (start - now));
+            sprinting = true;
+            at(tick + 10, this::begin);
+            return;
+        }
+        if (!onTime) Incoming.LOG.info("SCENARIO probe {} game {} (reference start {})", current, now, start);
+        onTime = true;
         int[] site = sites.get(caseIndex);
         armed = false;
         firedAt = -1;

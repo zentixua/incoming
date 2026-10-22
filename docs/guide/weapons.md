@@ -225,14 +225,20 @@ smoke.
 - **Shahed**: a short flash, then a ball of burning petrol about 18 blocks across that burns for about 1.5 seconds and
   glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
   burns for about 2.5 minutes with flames about 3 blocks high. Its black smoke rises from the crater the whole time and
-  leans downwind: in a stiff breeze it trails low, in calm air it stands taller. Black smoke from the ball rises a few
-  hundred blocks, and dust the colour of the ground spreads below.
+  leans downwind: in a stiff breeze it trails low, in calm air it stands taller. The smoke of the ball, with the dust
+  torn up under it, rises a few hundred blocks as a dark cloud.
 - **Cruise missile**: a bigger flash and a fuel ball about 38 blocks across that burns for about 3 seconds; the fuel left
   in the crater burns for about a quarter of an hour. Its own charge gives little soot, so the smoke is mostly from the burning fuel,
   with a lot of dust.
 - **Grad**: a flash and a small grey-black puff with dust, no fuel ball. A salvo leaves a field of puffs that merge and
-  drift downwind.
+  drift downwind, over a carpet of dust from all the hits.
 - **Lancet**: a small flash and a cloud a few tens of blocks high.
+
+The blast wind tears dust off the ground, the same way as the wave of a nuclear strike does. A low ring of dust the colour
+of the ground races out with the wave in the first tenth of a second, a few tens of blocks for a Shahed. Then it
+thickens to several blocks over the next seconds, hangs for minutes and drifts with the wind near the ground; while the
+cloud rises, a thin column of dust is drawn up under it. The ground is taken as bare dry soil everywhere, as for the
+nuke. An interceptor bursting in the air leaves no crater and no dust, unless it bursts low over the ground.
 
 A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
 the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the
@@ -253,8 +259,9 @@ drift away, and its flame lights the smoke around it. The bomb's blast is drawn 
 breach gives the cloud of the part of the charge that went into the air, a deeper blast a smaller cloud from the mouth of
 the hole; the dust of the impact and of a caved-in pit stays low and drifts.
 
-Whatever the blast sets on fire keeps smoking. Over every chunk with burning blocks a column of black smoke rises, leans
-downwind and stretches out with it; a bigger fire sends it higher. By day it climbs higher than on a calm night, when
+Whatever the blast sets on fire keeps smoking. Over every fire a column of black smoke rises, leans downwind and
+stretches out with it; a bigger fire sends it higher. Burning blocks close together, the fuel burning in a crater and an
+oil fire next to them are one fire: a burning house sends up one tall column, not several weak ones. By day it climbs higher than on a calm night, when
 it stays low and drifts flat. At night the flames light the smoke from below. The column grows from the fire at the
 speed of the wind, and when the fire goes out the last of the smoke drifts away. Where the fire comes from is up to the
 server: the smoke follows any fire your game shows, not only fires from strikes.

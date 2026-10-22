@@ -61,9 +61,28 @@ public final class DustModel {
      * ({@code client/fx/smoke/CloudModel}).
      */
     public static double aloft(double seconds, double height) {
-        double h = Math.max(height, 1), sum = 0;
-        for (int i = 0; i < SHARE.length; i++) sum += SHARE[i] * Math.exp(-SETTLE[i] * Math.max(seconds, 0) / h);
+        return airborne(Math.max(seconds, 0) / Math.max(height, 1));
+    }
+
+    /**
+     * Доля массы смеси корзин, что ещё в воздухе, когда ∫dt/h (с/м, h — высота перемешанного слоя) дошёл до
+     * {@code settled}: Σ доля·e^(−v·∫dt/h).
+     */
+    public static double airborne(double settled) {
+        double sum = 0;
+        for (int i = 0; i < SHARE.length; i++) sum += SHARE[i] * Math.exp(-SETTLE[i] * Math.max(settled, 0));
         return sum;
+    }
+
+    /**
+     * Доля ослабления смеси, что ещё в воздухе при том же ∫dt/h: Σ k·доля·e^(−v·∫dt/h) / {@link #K_MIX}. Крупные корзины
+     * выпадают первыми, а ослабляют они мало (k ∝ 1/D): через минуту массы в слое в метры — половина, а ослабления — почти
+     * всё. Массу пыли, что клуб отдаёт картинке с ослаблением {@link #K_MIX}, считают по этой доле, а не по доле массы.
+     */
+    public static double extinctionAloft(double settled) {
+        double sum = 0;
+        for (int i = 0; i < SHARE.length; i++) sum += K[i] * SHARE[i] * Math.exp(-SETTLE[i] * Math.max(settled, 0));
+        return sum / K_MIX;
     }
 
     /** Шероховатость K_s пластины Шлихтинга, м (Gaj &amp; Small, ур. 7). */
@@ -107,7 +126,7 @@ public final class DustModel {
      * {@link #STEM_S} с. Оценка: Такакура в 300 м — «небо стало светлеть» через минуты. Эту пыль получает ножка
      * ({@link StemDust}).
      */
-    static final double STEM_M = 1000, STEM_FROM_S = 10, STEM_S = 90;
+    public static final double STEM_M = 1000, STEM_FROM_S = 10, STEM_S = 90;
     /** cal/см² → Дж/м². */
     private static final double CAL_PER_CM2 = 4.184e4;
 
@@ -126,6 +145,8 @@ public final class DustModel {
          * у 15 кт на 592 м темно ~20 минут, в 3,2 км — сумерки, как в Хиросиме).
          */
         public static final Surface REFERENCE = new Surface(0.34, 15, 0.1);
+        /** Тот же грунт без пыли обломков — поле у обычного удара. */
+        public static final Surface FIELD = new Surface(REFERENCE.threshold, REFERENCE.supply, 0);
     }
 
     /** Гладкая ступень 0..1 от e0 до e1. */
@@ -219,16 +240,37 @@ public final class DustModel {
      */
     public static Column column(double groundM, double hobM, double yieldKt, boolean surfaceBurst, double visibilityM, Surface surface) {
         double hob = Math.max(0, hobM), ground = Math.max(0, groundM);
+        // свет вспышки на ровную землю: от шара (не ближе его радиуса), с косинусом к вертикали
+        double ball = FireballModel.maxRadius(yieldKt, surfaceBurst), high = Math.max(hob, ball);
+        double lit = Math.max(Math.hypot(ground, high), ball);
+        double heat = ThermalModel.fluenceCalPerCm2(lit, yieldKt, surfaceBurst, visibilityM) * CAL_PER_CM2 * high / lit;
+        return column(ground, hob, yieldKt, heat, ball, surface);
+    }
+
+    /**
+     * Слой пыли волны обычного заряда (химического ВВ): тот же вынос, тот же слой Kuhl в фазе волны, те же подсос и корзины,
+     * что у ядерного ({@link #column}), а мощность — ядерная того же давления у земли ({@code yieldKt}, см.
+     * {@code client.fx.smoke.CloudModel#equivalentKt}). Вспышки, что греет землю, у ВВ нет (огненный шар — миллисекунды):
+     * верх над нагретой землёй {@code buoyant} — ноль, после фазы слой растит турбулентность воздуха — это считает облако
+     * обычного взрыва. {@code ballM} — радиус огненного шара заряда, м (подсос в ножку, {@link Column#stemFrom}).
+     * <p>
+     * Закон за пределом своих данных: вынос Gaj &amp; Small выведен для установившегося пограничного слоя, а у зарядов в
+     * десятки килограммов фаза волны — миллисекунды (у ядерки и у опытов MISERS BLUFF — десятые секунды); при таких
+     * временах вынос, вероятно, больше настоящего. Поверхность — {@link Surface#REFERENCE}, как у ядерки: трава держит
+     * грунт (порог срыва — от 3 м/с) и пыли там меньше.
+     */
+    public static Column chemical(double groundM, double hobM, double yieldKt, double ballM) {
+        return column(Math.max(0, groundM), Math.max(0, hobM), yieldKt, 0, ballM, Surface.FIELD);
+    }
+
+    /** Слой пыли по месту и подрыву: {@code heat} — свет вспышки на землю, Дж/м²; {@code ball} — радиус шара, м. */
+    private static Column column(double ground, double hob, double yieldKt, double heat, double ball, Surface surface) {
         double kpa = BlastModel.kpa(HobBlast.psi(ground, hob, yieldKt)), ys = Math.cbrt(yieldKt / 15);
         // ветер выноса — положительная фаза давления, а не напора (оценка, soil)
         double positive = HobBlast.positivePhaseSeconds(ground, hob, yieldKt), along = HobBlast.alongGround(ground, hob, yieldKt);
         double soil = Math.min(surface.supply(), soil(kpa, along, positive, surface.threshold()));
         double debris = surface.debris() * destroyed(BlastModel.psi(kpa));
         double first = waveTop(ground, hob, yieldKt, positive);
-        // свет вспышки на ровную землю: от шара (не ближе его радиуса), с косинусом к вертикали
-        double ball = FireballModel.maxRadius(yieldKt, surfaceBurst), high = Math.max(hob, ball);
-        double lit = Math.max(Math.hypot(ground, high), ball);
-        double heat = ThermalModel.fluenceCalPerCm2(lit, yieldKt, surfaceBurst, visibilityM) * CAL_PER_CM2 * high / lit;
         double buoyant = Math.min(TOP_MAX * ys, Math.sqrt(2 * (1 + 2 * ENTRAIN) * HEAT_SHARE * heat / (RHO_CP * LAPSE)));
         double stem = 1 - smooth(0.5 * STEM_M * ys, STEM_M * ys, ground);
         // нисходящий поток шара у оси глушит подсос первые секунды — у подрыва, чей шар не касается земли; шар на земле

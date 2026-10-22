@@ -434,7 +434,7 @@ public final class MushroomModel {
      * Скорость воздуха в ножке — эта доля скорости подъёма облака ({@link #stemRise}). <b>Оценка</b>: замеров потока в
      * ножке нет; число — прежнее.
      */
-    static final double STEM_INFLOW = 0.3;
+    public static final double STEM_INFLOW = 0.3;
 
     /**
      * На сколько поднялся воздух ножки к моменту t, м: кольцо тянет его вверх долей {@link #STEM_INFLOW} скорости подъёма
