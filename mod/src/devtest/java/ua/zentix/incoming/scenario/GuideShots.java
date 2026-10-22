@@ -162,6 +162,7 @@ final class GuideShots {
         if (only("recipes")) recipes();
         if (only("scope")) scope();
         if (only("remote")) remote();
+        if (only("nuke-remote")) nukeRemote();
         if (only("map")) {
             // без Distant Horizons карта рисует загруженные чанки: прорисовка шире — рельеф до цели и маршрута
             run(() -> mc.options.renderDistance().set(MAP_RENDER_DISTANCE));
@@ -185,7 +186,7 @@ final class GuideShots {
         });
     }
 
-    /** Разделы съёмки из {@code incoming.guide} (через запятую: recipes, scope, remote, map, hud, camera, loiter, sam, launcher); без него — все. */
+    /** Разделы съёмки из {@code incoming.guide} (через запятую: recipes, scope, remote, nuke-remote, map, hud, camera, loiter, sam, launcher); без него — все. */
     private static boolean only(String section) {
         String list = System.getProperty("incoming.guide");
         return list == null || List.of(list.split(",")).contains(section);
@@ -299,6 +300,22 @@ final class GuideShots {
             if (mc.screen != null) mc.setScreen(null);
         });
         await(10);
+    }
+
+    /** Пульт с ядеркой: мощность — ползунок 1–15 кт, высота подрыва — кнопка (кадр {@code guide-nuke-remote.png}). */
+    private void nukeRemote() {
+        run(() -> {
+            cmd("item replace entity @s weapon.mainhand with incoming:strike_designator[incoming:loadout={weapon:\"nuke\",count:1,spread:0,mode:\"look\",nuke:{yield:8,air_burst:true}}]");
+            look(village);
+        });
+        await(10);
+        run(() -> mc.setScreen(new RemoteScreen()));
+        await(10);
+        shot("nuke-remote");
+        run(() -> {
+            if (mc.screen != null) mc.setScreen(null);
+        });
+        await(5);
     }
 
     /**
