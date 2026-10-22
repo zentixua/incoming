@@ -344,7 +344,8 @@ public final class FireSmoke implements SmokeGrid.Source {
      * между местами оси на пути xₖ (квадратично: у очага ось круче), одними на любой дальности от глаза: сколько квадратов
      * на кусок, решает тот, кто рисует, по размеру на экране (вдали — лента). Место оси на пути x — по очагу в миг выхода
      * этого дыма (x/u секунд назад, blocks и fire — сила очага и его пожара по пути): подъём и σ его шлейфа, сажа на метр —
-     * его; где тогда не горело, сажи нет (геометрия — соседнего места, что горело). sigma0 — σ у самого очага.
+     * его; где тогда не горело, сажи нет: кусок кончается там, где дым кончается (граница — по истории очага), пустые куски
+     * тоже отдаются (без сажи). sigma0 — σ у самого очага.
      */
     public static void lay(Fuel fuel, double x, double y, double z, double wx, double wz, double u, double stability, double far, double sigma0,
                     java.util.function.DoubleUnaryOperator blocks, java.util.function.DoubleUnaryOperator fire, SmokeGrid.Sink out) {
@@ -368,17 +369,52 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
         sigma0 = Math.max(sigma0, 0.25);
         for (int k = 1; k < n; k++) {
-            FirePlume pa = plume[k - 1], pb = plume[k];
+            boolean burnA = b[k - 1] > 0, burnB = b[k] > 0;
+            // кусок отдаётся всегда (пустой — без сажи): номер куска — зерно его клубов у приёмника, и выпавший кусок не
+            // сдвигал бы клубы всего шлейфа дальше по ветру
+            if (!burnA && !burnB) {
+                empty(out, x, y, z, wx, wz, path[k - 1], path[k], plume[k - 1], plume[k], sigma0);
+                continue;
+            }
             double xa = path[k - 1], xb = path[k];
-            double ma = b[k - 1] > 0 ? pa.sootPerMetre() : 0, mb = b[k] > 0 ? pb.sootPerMetre() : 0;
-            if (ma + mb <= 0) continue;
+            FirePlume pa = plume[k - 1], pb = plume[k];
+            // край дыма (очаг загорелся или погас посреди куска) — граница по истории очага: кусок от неё, вещество до
+            // самого края полное — край идёт по ветру ровно, а не рампой от узла к узлу со щелчком, когда проходит узел
+            if (burnA != burnB) {
+                double lo = xa, hi = xb;
+                for (int i = 0; i < 24; i++) {
+                    double m = 0.5 * (lo + hi);
+                    if (blocks.applyAsDouble(m) > 0 == burnA) lo = m;
+                    else hi = m;
+                }
+                if (burnA) {
+                    xb = lo;
+                    pb = pa;
+                } else {
+                    xa = hi;
+                    pa = pb;
+                }
+            }
             // толща через середину на обоих концах ниже порога видимости — куска не видно
-            if (Math.max(ma > 0 ? pa.tau(xa) : 0, mb > 0 ? pb.tau(xb) : 0) < CloudModel.SEEN) continue;
+            if (Math.max(pa.tau(xa), pb.tau(xb)) < CloudModel.SEEN) {
+                empty(out, x, y, z, wx, wz, xa, xb, pa, pb, sigma0);
+                continue;
+            }
             double ha = pa.rise(xa), hb = pb.rise(xb), mid = 0.5 * (xa + xb);
-            double kelvin = CloudModel.T_AIR_K + (b[k] > 0 ? pb : pa).excess(0.5 * (ha + hb));
-            out.tube(x + wx * xa, y + ha, z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), ma, x + wx * xb, y + hb, z + wz * xb, pb.sigmaY(xb),
-                    pb.sigmaZ(xb), mb, kelvin, (b[k] > 0 ? pb : pa).riseSpeed(mid), sigma0);
+            // сажа шлейфа — ṁ/u на метр пути по ветру; на метр оси куска — меньше во столько, во сколько ось длиннее пути
+            // (у очага, где шлейф круто поднимается)
+            double dx = xb - xa, len = Math.sqrt(dx * dx + (hb - ha) * (hb - ha)), along = len > 0 ? dx / len : 1;
+            double kelvin = CloudModel.T_AIR_K + pb.excess(0.5 * (ha + hb));
+            out.tube(x + wx * xa, y + ha, z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), pa.sootPerMetre() * along, x + wx * xb, y + hb, z + wz * xb,
+                    pb.sigmaY(xb), pb.sigmaZ(xb), pb.sootPerMetre() * along, kelvin, pb.riseSpeed(mid), sigma0);
         }
+    }
+
+    /** Кусок шлейфа без сажи (там не горело или его не видно): только номер куска у приёмника. */
+    private static void empty(SmokeGrid.Sink out, double x, double y, double z, double wx, double wz, double xa, double xb, FirePlume pa,
+                              FirePlume pb, double sigma0) {
+        out.tube(x + wx * xa, y + pa.rise(xa), z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), 0, x + wx * xb, y + pb.rise(xb), z + wz * xb,
+                pb.sigmaY(xb), pb.sigmaZ(xb), 0, CloudModel.T_AIR_K, 0, sigma0);
     }
 
     @Override
