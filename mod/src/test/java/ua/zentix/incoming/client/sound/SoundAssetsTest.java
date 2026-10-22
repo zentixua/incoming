@@ -108,7 +108,7 @@ class SoundAssetsTest {
      * Файлы моторов и стартов — той громкости, на которую клиент их рассчитывает ({@link Loudness#MOTOR_LUFS} у событий
      * {@code MOTOR} сборки, {@link Loudness#ROCKET_LAUNCH_LUFS} у схода снаряда РСЗО, {@link Loudness#ENGINE_LUFS} у
      * хлопка отделения и катапульты): файл тише расчёта — громкость упирается в него раньше потолка, и всё громче звучит
-     * одинаково (3.5.0: старты ракеты и ЗРК на 5–10 дБ тише 3.4.1, проба 22.10.2026). Мера — наибольшая мгновенная
+     * одинаково (3.5.0: удар поджига ракеты и ЗРК ближе ~45 м к пусковой). Мера — наибольшая мгновенная
      * громкость EBU R128, у петель — по кругу, как в сборке.
      */
     @Test
@@ -130,6 +130,26 @@ class SoundAssetsTest {
                 String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
                 double got = momentaryMax(file, !oneShots.contains(ev));
                 assertEquals(want, got, 0.5, file + ": громкость, LUFS");
+            }
+        }
+    }
+
+    /**
+     * Звук мода в мире — только по закону источника и пути ({@code Loudness}, {@code BlastMix}, {@code Sources}): ни одного
+     * ванильного проигрывания с громкостью на глаз (громкость больше 1 у Minecraft — дальность 16 блоков на единицу). Так
+     * 3.4.1 играл гул огня в воронке громкостью 5 до 90 блоков: хвост взрыва в 50 м — 135 дБА-эквивалента, громче
+     * реактивного двигателя, хотя у пожара ~2 МВт там ~80 дБ. UI-звуки без места ({@code forUI}) — не в счёт.
+     */
+    @Test
+    void worldSoundsHaveNoHandVolume() throws IOException {
+        Pattern hand = Pattern.compile("(playSound|playLocalSound|playSeededSound|new SimpleSoundInstance|SimpleSoundInstance\\.forAmbientAddition)\\(");
+        try (var files = Files.walk(Path.of("src/main/java"))) {
+            for (Path f : (Iterable<Path>) files.filter(x -> x.toString().endsWith(".java"))::iterator) {
+                List<String> lines = Files.readAllLines(f);
+                for (int i = 0; i < lines.size(); i++) {
+                    String l = lines.get(i);
+                    assertTrue(!(l.contains("ModSounds.") && hand.matcher(l).find()), f + ":" + (i + 1) + ": звук мода громкостью на глаз — " + l.trim());
+                }
             }
         }
     }

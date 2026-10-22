@@ -385,15 +385,6 @@ public final class ClientSounds {
         return dir.lengthSqr() < 9 ? source : ear.add(dir.normalize().scale(3));
     }
 
-    /** Обычный позиционный звук с ванильным затуханием (громкость > 1 — дальше слышно: 16 блоков на единицу). */
-    public static void at(SoundEvent event, Vec3 pos, float volume, float pitch) {
-        Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        float open = SoundFilters.open(ear, pos.add(0, 1, 0));
-        float highs = SoundFilters.air(ear.distanceTo(pos)) * SoundFilters.blockedHighs(open);
-        play(new Shot(event.getLocation(), SoundSource.AMBIENT, volume, pitch, RANDOM, SoundInstance.Attenuation.LINEAR, pos, false,
-                SoundFilters.blockedGain(open), highs));
-    }
-
     private static void play(SoundInstance sound) {
         Minecraft.getInstance().getSoundManager().play(sound);
     }

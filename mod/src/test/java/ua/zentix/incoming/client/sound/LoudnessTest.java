@@ -20,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Мерка громкости: та же, что в сборке звуков; громкость растёт с уровнем у уха до потолка — ближнего взрыва с 1 psi —
- * и ни один звук не упирается в громкость своего файла раньше (3.5.0: файлы моторов на мерке, и рёв старта ближе ~80 м
- * звучал одинаково — на 5–10 дБ тише 3.4.1).
+ * и ни один звук не упирается в громкость своего файла раньше (3.5.0: файлы моторов на мерке, и удар поджига ракеты
+ * ближе ~45 м к пусковой, рёв ускорителя ближе ~20 м звучали одинаково).
  */
 class LoudnessTest {
     private static final double[] BIG = {200};
@@ -61,16 +61,16 @@ class LoudnessTest {
     }
 
     /**
-     * Рёв ускорителя ракеты на старте громче {@link Loudness#REF} на десятки метров вокруг (РДТТ по NASA SP-8072) — тот
-     * самый случай, что упирался в файл: в 25–30 м (камера пробы) он должен звучать громче, чем в 80 м.
+     * Удар поджига ускорителя ракеты громче {@link Loudness#REF} на десятки метров вокруг (РДТТ по NASA SP-8072) — тот
+     * самый случай, что упирался в файл: в 5 м он звучит громче, чем в 15 м, а в 15 м — громче, чем в 25 м.
      */
     @Test
     void missileLaunchIsLouderUpClose() {
         Noise.Rocket motor = WeaponType.MISSILE.spec().airframe().noise().motor();
         double lw = motor.power(FlightPhase.BOOST, 0);
-        double near = launchVolume(lw, 25), far = launchVolume(lw, 80);
+        double v5 = launchVolume(lw, 5), v15 = launchVolume(lw, 15), v25 = launchVolume(lw, 25);
         assertTrue(Loudness.gain(level(lw, Spectra.LAUNCH_BOOSTER, 25), BIG[0]) > 1, "в 25 м — громче мерки");
-        assertTrue(near > far * 1.5, "в 25 м " + near + ", в 80 м " + far);
+        assertTrue(v5 > v15 && v15 > v25, "в 5 м " + v5 + ", в 15 м " + v15 + ", в 25 м " + v25);
     }
 
     private static double launchVolume(double lw, double d) {
