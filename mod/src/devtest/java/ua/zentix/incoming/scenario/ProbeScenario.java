@@ -63,6 +63,8 @@ final class ProbeScenario {
     /** Кадры ЗРК: секунды после схода ракеты и после разрыва. */
     private static final double[] SAM_SHOTS = {0.25, 0.5, 1, 1.5, 2, 3, 5, 8, 15};
     private static final double[] BURST_SHOTS = {0.1, 0.25, 0.5, 1, 2, 3, 6, 12};
+    /** Дольше полёта ракеты ЗРК с запасом разрыва не ждать, тиков. */
+    private static final int SPEC_FLIGHT = 400;
     /** Кадры шахеда, секунды после взрыва. */
     private static final double[] DRONE_SHOTS = {0.1, 0.5, 1, 3, 10, 30};
     private static final double[] GRAD_SHOTS = {0.1, 0.5, 1, 3, 6, 12, 20, 30, 45, 60};
@@ -509,6 +511,13 @@ final class ProbeScenario {
                 shot(tick + last, label(t));
             }
             at(tick + last + 40, this::nextCase);
+        }
+        if (current.endsWith("burst") && samLaunch >= 0 && samBurst < 0 && tick - samLaunch > SPEC_FLIGHT) {
+            Incoming.LOG.warn("SCENARIO probe {} no burst", current);
+            samLaunch = -1;
+            firedAt = -1;
+            nextCase();
+            return;
         }
         if (firedAt >= 0 && samLaunch < 0 && tick - firedAt > BLAST_LIMIT) {
             Incoming.LOG.warn("SCENARIO probe {} no interceptor", current);

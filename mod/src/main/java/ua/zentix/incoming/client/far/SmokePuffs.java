@@ -122,7 +122,8 @@ final class SmokePuffs {
             long h = mix(seed * 0x9E3779B97F4A7C15L + id);
             float lit = (float) ((0.88 + 0.24 * unit(h)) * view.ambient());
             float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
-            float shade = (float) (shade(ks, kd, kw, dg) / BAKED_K), sprayShade = (float) (shade(ks, kd, kw, dg) / SPRAY_K);
+            double light = shade(ks, kd, kw, dg);
+            float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
             float shown = (float) (a * vis * point[1] * air * outside);
             // кучка: чем крупнее гаусс на экране, тем больше клубов и тем они мельче (кадр 128 пикселей не растягивается на
             // пол-экрана); дробная часть числа — доля последнего, без скачка
