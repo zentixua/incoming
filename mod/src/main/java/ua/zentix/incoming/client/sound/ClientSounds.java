@@ -247,7 +247,7 @@ public final class ClientSounds {
                 EngineSound s = v.sound;
                 if (s == null) continue;
                 live++;
-                // getVolume читает звук, который движок подставляет при запуске: без звука (нет устройства) его нет
+                // без звука, который движок подставляет при запуске (нет устройства), слой не звучит
                 // громкость против мерки (Loudness.gain), а не громкость файла: числа строки не зависят от сведения файлов
                 if (s.getSound() != null && s.loudness() > 0.01) layers.append(String.format(Locale.ROOT, " %s %.2f×%.2f", s.describe(), s.loudness(), s.getPitch()));
             }
