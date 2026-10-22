@@ -239,6 +239,8 @@ class CloudModelTest {
                 missile = model(WeaponType.MISSILE, CloudModel.Air.STANDARD);
         assertEquals(0, rocket.poolSeconds);
         assertEquals(0, rocket.poolShare(1));
+        // на воде воронки нет — и огня в ней нет
+        assertEquals(0, new CloudModel(drone.source, CloudModel.Air.STANDARD, true).poolSeconds);
         double area = Math.PI * drone.poolRadius * drone.poolRadius;
         assertEquals(CloudModel.POOL_SHARE * drone.source.fuelKg() / (CloudModel.THIN_LAYER * BlastSource.Fuel.PETROL.poolBurn * area),
                 drone.poolSeconds, 1e-9);

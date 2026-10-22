@@ -239,7 +239,9 @@ public final class CloudModel {
         burnHeight = fuelLast ? fuelBallHeight(fuelBallSeconds) : 0.45 * heBall;
         cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), burnRadius, air);
         fireSeconds = glowEnd();
-        poolKg = POOL_SHARE * source.fuelKg();
+        // на воде воронки в грунте нет: топливо растекается плёнкой, а плёнка тоньше ~1 мм не держит горение — вода
+        // уносит тепло (Buist и др., «In situ burning», обзор для разливов нефти: гаснет у 1–2 мм; ⚠ по памяти)
+        poolKg = onWater ? 0 : POOL_SHARE * source.fuelKg();
         poolRadius = CraterModel.chargeRadius(source.chargeKg(), CraterModel.Soil.DRY);
         double burn = THIN_LAYER * source.fuel().poolBurn * Math.PI * poolRadius * poolRadius;
         poolSeconds = poolKg > 0 && burn > 0 ? poolKg / burn : 0;
