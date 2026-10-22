@@ -200,4 +200,15 @@ class FlightTrackTest {
         assertEquals(4.5, t.age(14.5), 1e-9);
         assertEquals(0, t.age(5), 1e-9);
     }
+
+    /** Земля места пуска из пакетов остаётся у пути и после старта: пакет маршевого её не стирает. */
+    @Test
+    void launchGroundKeptFromPackets() {
+        FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
+        assertTrue(Double.isNaN(t.launchGround()), "без пакетов земли нет");
+        t.record(10, new S2C.FarFlight(ID, WeaponType.MISSILE.id(), false, false, true, new Vec3(0, 75, 0), Vec3.ZERO, 0, -30, 0,
+                FlightPhase.IGNITION.ordinal(), 3, new Vec3(500, 80, 0), 72));
+        t.record(12, at(10, 2));
+        assertEquals(72, t.launchGround());
+    }
 }

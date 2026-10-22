@@ -10,6 +10,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -36,13 +37,15 @@ import java.util.UUID;
  * B-2 60–80) — с одной пусковой по ячейкам. Цель может двигаться — каждый снаряд целится со своим смещением
  * относительно неё; маршруты разные (обход слева или справа, курс захода ±35°), поэтому залп приходит волной
  * с разных сторон. По точкам оператора ({@link Waypoints}) весь залп идёт одним маршрутом, с места пуска из приказа —
- * с одной пусковой на нём, со стационарной пусковой ({@link LaunchOrigin.Fixed}) — с неё: пока её чанк не готов, залп
- * ждёт (грузить его ради пуска нельзя), блока на месте нет — залп кончен; строк и полосы залпа хозяину у неё нет —
- * её залпы идут по сигналу, когда хозяин может быть где угодно.
+ * с одной пусковой на нём, со стационарной пусковой ({@link LaunchOrigin.Fixed}) — с неё. Место пуска залп грузит в фоне
+ * и держит, пока идёт ({@link LaunchPlaces}): пока оно не готово, залп ждёт — место из приказа не дольше
+ * {@link LaunchPlaces#WAIT}, стационарная пусковая — сколько нужно; блока пусковой на месте нет — залп кончен; строк и
+ * полосы залпа хозяину у стационарной нет — её залпы идут по сигналу, когда хозяин может быть где угодно.
  * Хранится в мире: незаконченный залп продолжится после перезахода.
  * <p>
  * Залп, оплаченный боеприпасами ({@link Munitions}), возвращает владельцу то, что не вылетело: невыпущенные снаряды
- * отменённого залпа (отбой, ошибка) и снаряды, чей пуск не удался, — в конце залпа.
+ * отменённого залпа (отбой, ошибка) и снаряды, чей пуск не удался, — в конце залпа; у залпа из одного ядерного снаряда
+ * (ядерный приказ ждёт места пуска) — и его ядерную БЧ.
  */
 public final class SalvoData extends SavedData {
     private static final String NAME = Incoming.MOD_ID + "_salvos";
@@ -65,10 +68,18 @@ public final class SalvoData extends SavedData {
      * @return сколько залпов отменено
      */
     public int cancel(ServerLevel level, @Nullable UUID owner, Collection<? extends ServerPlayer> online) {
+        return cancel(level, owner, online, true);
+    }
+
+    /**
+     * То же; {@code nuclear} — и ядерный залп ({@link Salvo#nuclear}): его, как ядерный снаряд, снимает только ядерный
+     * отбой, а не отбой игрока и не обычный.
+     */
+    public int cancel(ServerLevel level, @Nullable UUID owner, Collection<? extends ServerPlayer> online, boolean nuclear) {
         int n = 0;
         for (Iterator<Salvo> it = salvos.iterator(); it.hasNext(); ) {
             Salvo s = it.next();
-            if (owner != null && !owner.equals(s.owner)) continue;
+            if (owner != null && !owner.equals(s.owner) || !nuclear && s.nuclear()) continue;
             it.remove();
             refund(s, online, "salvo cancelled");
             n++;
@@ -110,10 +121,15 @@ public final class SalvoData extends SavedData {
     /**
      * Залп уходит из списка: оплаченный возвращает владельцу (если он среди {@code online}) невыпущенные снаряды и те,
      * чей пуск не удался ({@link Munitions#refund}). Единственное место возврата: его зовёт каждый путь, которым залп
-     * убирается, — отмена, ошибка, конец залпа. Залп ядерным не бывает: ядерных БЧ в возврате нет.
+     * убирается, — отмена, ошибка, конец залпа. Ядерная БЧ бывает только у залпа из одного снаряда.
      */
     private static void refund(Salvo s, Collection<? extends ServerPlayer> online, String why) {
-        if (s.paid) Munitions.refund(online, s.owner, new Munitions.Bill(s.weapon, s.remaining + s.failed, 0), why);
+        if (s.paid) {
+            // ядерная БЧ на носителе оплачена предметом на снаряд, как в Munitions.Bill.of
+            int shots = s.remaining + s.failed;
+            boolean carrier = s.nuclear() && !s.weapon.spec().warhead().always();
+            Munitions.refund(online, s.owner, new Munitions.Bill(s.weapon, shots, carrier ? shots : 0), why);
+        }
         s.failed = 0;
     }
 
@@ -190,6 +206,10 @@ public final class SalvoData extends SavedData {
         final boolean paid;
         /** Сколько пусков залпа не удалось: возвращаются владельцу в конце залпа (одной строкой, а не на каждый). */
         int failed;
+        /** Ключ района места пуска ({@link LaunchPlaces}; не сохраняется, как и тикеты: после загрузки залп возьмёт его заново). */
+        final UUID placeKey = UUID.randomUUID();
+        /** Сколько тиков залп ждёт района места пуска (не сохраняется). */
+        int waited;
 
         Salvo(WeaponType weapon, int total, int remaining, int radius, Target center, Vec3 lastCenter, float yaw, @Nullable UUID owner, int cooldown,
               Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid, int failed) {
@@ -202,14 +222,20 @@ public final class SalvoData extends SavedData {
             this.yaw = yaw;
             this.owner = owner;
             this.cooldown = cooldown;
-            // ядерных залпов нет (ServerActions.clamp): снаряды залпа ядерной БЧ не несут
-            this.nuke = nuke.withOnCarrier(false);
+            // ядерных залпов нет (ServerActions.clamp): снаряды залпа ядерной БЧ не несут; залп из одного снаряда — ядерный
+            // приказ, который ждёт места пуска (LaunchPlaces), — несёт её
+            this.nuke = total == 1 ? nuke : nuke.withOnCarrier(false);
             this.via = via;
             this.from = from;
             this.paid = paid;
             this.failed = failed;
         }
 
+
+        /** Залп несёт ядерную БЧ (залп из одного снаряда — ядерный приказ, который ждёт места пуска). */
+        boolean nuclear() {
+            return nuke.onCarrier() && Loadout.carriesNuke(weapon);
+        }
 
         /** Кому строки и полоса залпа: владельцу в сети, если залп не со стационарной пусковой. */
         @Nullable
@@ -219,9 +245,23 @@ public final class SalvoData extends SavedData {
 
         boolean tick(ServerLevel level) {
             watchCenter(level);
+            if (from != null && LaunchPlaces.fromPad(weapon)) {
+                // место пуска грузится и тикает, пока идёт залп: там стоит пусковая, и с неё уходят снаряды
+                LaunchPlaces.hold(level, from, placeKey);
+                // не готово — ждать (пауза залпа не идёт); место из приказа — не дольше WAIT, потом старт без пусковой
+                if (!LaunchPlaces.ready(level, from)) {
+                    if (from instanceof LaunchOrigin.Fixed || waited < LaunchPlaces.WAIT) {
+                        waited++;
+                        return true;
+                    }
+                    if (waited++ == LaunchPlaces.WAIT) {
+                        Incoming.LOG.warn("Salvo: {} — launch place {} {} not loaded in {} ticks, launching from it without a launcher",
+                                weapon.getSerializedName(), Mth.floor(from.at().x), Mth.floor(from.at().z), LaunchPlaces.WAIT);
+                    }
+                }
+            }
             if (from instanceof LaunchOrigin.Fixed fixed) {
-                // стационарная пусковая: её чанк не готов — ждать (пауза залпа не идёт), блока нет — залп кончен
-                if (!Terrain.ready(level, fixed.pos())) return true;
+                // стационарная пусковая: блока нет — залп кончен
                 if (fixed.launcher(level) == null) {
                     Incoming.LOG.info("Salvo: {} — launcher {} is gone, remaining {} cancelled", weapon.getSerializedName(),
                             fixed.pos().toShortString(), remaining);

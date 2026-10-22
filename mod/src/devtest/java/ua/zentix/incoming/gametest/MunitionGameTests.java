@@ -5,6 +5,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -39,6 +41,8 @@ import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.registry.ModDataComponents;
 import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.strike.ChunkTickets;
+import ua.zentix.incoming.strike.LaunchOrigin;
+import ua.zentix.incoming.strike.LaunchPlaces;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.Munitions;
 import ua.zentix.incoming.strike.SalvoData;
@@ -281,6 +285,41 @@ public final class MunitionGameTests {
     }
 
     /**
+     * Ядерная ракета оператора с далёкого места пуска ждёт его залпом из одного снаряда ({@link LaunchPlaces}): залп
+     * несёт её ядерную БЧ (у залпов из нескольких снарядов её нет); не ядерный отбой его не снимает, а ядерный, пока место
+     * грузится, возвращает и ракету, и БЧ — обе оплачены предметами.
+     */
+    @GameTest(template = "range", batch = "munitions_place", skyAccess = true)
+    public static void nuclearMissileWaitingForPlaceRefundsWarhead(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        boolean carrier = IncomingConfig.SERVER.carrierNukes.get();
+        IncomingConfig.SERVER.carrierNukes.set(true);
+        Listener p = new Listener(level, "munitions_place", 2);
+        p.moveTo(Vec3.atBottomCenterOf(h.absolutePos(RANGE_CENTER.above())));
+        StrikeGameTests.afterTest(h, () -> {
+            IncomingConfig.SERVER.carrierNukes.set(carrier);
+            SalvoData.get(level).cancel(level, p.getUUID(), List.of());
+        });
+        Item missile = ModItems.CRUISE_MISSILE.get(), warhead = Munitions.warhead();
+        give(p, missile, 1);
+        give(p, warhead, 1);
+        LaunchOrigin far = new LaunchOrigin.Place(p.position().add(-20_000, 0, 0));
+        h.assertTrue(LaunchPlaces.waits(level, WeaponType.MISSILE, far), "далёкое место пуска уже готово");
+        h.assertTrue(ServerActions.strike(p, WeaponType.MISSILE, 1, 0, aim(h), new Loadout.Nuke(15, true, true), Waypoints.NONE, far, true),
+                "ядерная ракета с далёкого места пуска не принята");
+        h.assertTrue(held(p, missile) == 0 && held(p, warhead) == 0, "оплата: ракет " + held(p, missile) + ", БЧ " + held(p, warhead));
+        h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 1, "ракета не ждёт места залпом");
+        CompoundTag saved = SalvoData.get(level).save(new CompoundTag(), level.registryAccess());
+        h.assertTrue(saved.getList("salvos", Tag.TAG_COMPOUND).stream().map(t -> ((CompoundTag) t).getCompound("nuke"))
+                .anyMatch(n -> n.getBoolean("on_carrier")), "залп из одной ракеты потерял ядерную БЧ: " + saved);
+        // отбой игрока и обычный отбой ядерный залп не снимают, как и ядерный снаряд
+        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p), false), 0, "не ядерный отбой снял ядерный залп");
+        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p)), 1, "отменено залпов");
+        h.assertTrue(held(p, missile) == 1 && held(p, warhead) == 1, "возврат: ракет " + held(p, missile) + ", БЧ " + held(p, warhead));
+        h.succeed();
+    }
+
+    /**
      * Рецепты боеприпасов загружены — по одному на предмет: с Create — с его точным механизмом и винтом, без него —
      * ванильная замена (условия NeoForge {@code neoforge:mod_loaded}); каждый собирается из своих ингредиентов на верстаке.
      */
@@ -320,9 +359,21 @@ public final class MunitionGameTests {
     /** {@code FakePlayer}, который запоминает строки над хотбаром и в чате (NeoForge их глушит). */
     static final class Listener extends FakePlayer {
         final List<Component> said = new ArrayList<>();
+        /** Права (оператор — 2). */
+        private final int permission;
 
         Listener(ServerLevel level, String name) {
+            this(level, name, 0);
+        }
+
+        Listener(ServerLevel level, String name, int permission) {
             super(level, new GameProfile(UUID.randomUUID(), name));
+            this.permission = permission;
+        }
+
+        @Override
+        protected int getPermissionLevel() {
+            return permission;
         }
 
         @Override
