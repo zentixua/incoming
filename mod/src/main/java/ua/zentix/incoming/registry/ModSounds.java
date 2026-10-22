@@ -44,7 +44,6 @@ public final class ModSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> BLAST_FAR = register("blast.far");
     public static final DeferredHolder<SoundEvent, SoundEvent> DEBRIS_FALL = register("debris.fall");
     public static final DeferredHolder<SoundEvent, SoundEvent> BLAST_FIRE = register("blast.fire");
-    public static final DeferredHolder<SoundEvent, SoundEvent> BOMB_CRACK = register("bomb.crack");
     public static final DeferredHolder<SoundEvent, SoundEvent> BOMB_IMPACT = register("bomb.impact");
     public static final DeferredHolder<SoundEvent, SoundEvent> BOMB_QUAKE = register("bomb.quake");
     public static final DeferredHolder<SoundEvent, SoundEvent> BOMB_DEEP = register("bomb.deep");

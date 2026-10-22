@@ -37,7 +37,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * над струёй ускорителя ({@link #ABOVE_JET}) и сбоку; {@code flyby} — шахед проходит над зрителем (звук);
  * {@code water-day-50} — шахед в пруд 41×41×4 (взрыв на воде), {@code debris-night-50} — шахед в крышу деревянного
  * дома 9×5×9 (горящие обломки, свет огня на мир, дрожание воздуха), {@code substation-night-50} — шахед в подстанцию
- * (дуга, горящее масло, гул и треск). У каждой сцены своё место на равнине.
+ * (дуга, горящее масло, гул и треск); {@code bomb-day-50}, {@code bomb-night-50} — бомба B-2 в грунт равнины, зритель в 50
+ * блоках ({@code bomb-day-150}, {@code bomb-night-150}, {@code bomb-day-300} — в 150 и 300: у прорыва ~1 т в воздухе слой пыли
+ * у земли — десятки метров, и в 50 блоках зритель внутри него), кадры от первого взрыва бомбы (у 3.4.1 — взрыв входа в
+ * грунт, дальше — подрыв). У каждой сцены своё место на равнине.
  * <p>
  * В лог — строки {@code SCENARIO probe …}: взрыв или старт (тик клиента, игровое время, байт в audio.wav — по нему
  * режется звук), снимки. Время каждого кадра — logs/probe-frames.txt: «сцена игровое_время мс».
@@ -48,7 +51,9 @@ final class ProbeScenario {
     private static final List<String> ALL = List.of("drone-day-50", "drone-day-300", "drone-night-50", "drone-night-300",
             "grad-day", "grad-night", "launch-behind", "launch-side", "launch-night-behind", "flyby",
             // S8 — в конце: места прежних сцен — по их номеру в этом списке
-            "water-day-50", "debris-night-50", "substation-night-50");
+            "water-day-50", "debris-night-50", "substation-night-50",
+            // S5
+            "bomb-day-50", "bomb-night-50", "bomb-day-150", "bomb-night-150", "bomb-day-300");
     /** Кадры сцен с пожаром и подстанцией: дольше — дым горящего масла и пожара встаёт десятками секунд. */
     private static final double[] FIRE_SHOTS = {0.1, 0.5, 1, 3, 10, 30, 60};
     /** Кадры шахеда, секунды после взрыва. */
@@ -215,8 +220,8 @@ final class ProbeScenario {
 
     /** Шахед или залп «Града» в землю: зритель висит перед целью, кадры от первого взрыва у цели. */
     private void planBlast(int s, int[] site) {
-        boolean grad = current.startsWith("grad");
-        int dist = grad ? 30 : current.endsWith("-300") ? 300 : 50;
+        boolean grad = current.startsWith("grad"), bomb = current.startsWith("bomb");
+        int dist = grad ? 30 : current.endsWith("-300") ? 300 : current.endsWith("-150") ? 150 : 50;
         at(s + 120, () -> {
             Minecraft mc = Minecraft.getInstance();
             int y = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, site[0], site[1]);
@@ -225,12 +230,12 @@ final class ProbeScenario {
             if (Math.abs(y - gen) > 12) y = gen;
             target = new Vec3(site[0] + 0.5, y, site[1] + 0.5);
             // зритель — выше рельефа на всём пути к цели (по генератору), не ниже заданной высоты над целью
-            int above = grad ? 10 : dist == 50 ? 18 : 40;
+            int above = grad ? 10 : dist == 50 ? 18 : dist == 150 ? 30 : 40;
             double eyeY = target.y + above;
             // деревья генератор не знает: над рельефом пути — с запасом на крону
             for (int d = 0; d <= dist; d += 8) eyeY = Math.max(eyeY, groundAt(site[0], site[1] - d) + 14);
             Vec3 eye = new Vec3(target.x, eyeY, target.z - dist);
-            double lookUp = grad ? 6 : dist == 50 ? 8 : 15;
+            double lookUp = grad ? 6 : dist == 50 ? 8 : dist == 150 ? 20 : 15;
             cmd(String.format(Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", eye.x, eye.y, eye.z, target.x, target.y + lookUp, target.z));
             Incoming.LOG.info("SCENARIO probe {} target {} eye {}", current, xyz(target), xyz(eye));
         });
@@ -252,11 +257,12 @@ final class ProbeScenario {
             var c = IncomingConfig.SERVER;
             c.launchNearPlayer.set(false);
             c.droneFlightTime.set(5);
+            c.bomberFlightTime.set(5);
             seenBlasts = blasts.get();
             armed = true;
             firedAt = tick;
             if (grad) cmd(String.format(Locale.ROOT, "incoming salvo rocket 40 15 at %.1f %.1f %.1f", target.x, target.y, target.z));
-            else cmd(String.format(Locale.ROOT, "incoming drone at %.1f %.1f %.1f", target.x, target.y, target.z));
+            else cmd(String.format(Locale.ROOT, "incoming %s at %.1f %.1f %.1f", bomb ? "bunker" : "drone", target.x, target.y, target.z));
             Incoming.LOG.info("SCENARIO probe {} fire tick {} audio {}", current, tick, audioBytes());
         });
     }

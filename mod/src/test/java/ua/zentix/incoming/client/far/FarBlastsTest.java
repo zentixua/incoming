@@ -13,9 +13,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Взрывы вдали: облако по модели и прежняя картинка бомбы, столб без разрывов, клубы за гребнем. */
+/** Взрывы вдали: облако по модели (и у бомбы под землёй), клубы за гребнем. */
 class FarBlastsTest {
-    private static final List<FarBlasts.Look> LOOKS = List.of(FarBlasts.BUNKER_BREACH, FarBlasts.BUNKER_DEEP);
     /** Облака наземных взрывов — по модели, в стандартной атмосфере. */
     private static final List<CloudModel> MODELS = List.of(model(WeaponType.ROCKET), model(WeaponType.LOITER), model(WeaponType.DRONE),
             model(WeaponType.MISSILE));
@@ -29,24 +28,34 @@ class FarBlastsTest {
         return 92.6 * Math.pow(kg, 0.25);
     }
 
-    /** Бомба: прорвавшаяся — ниже ракеты, под землёй — столб пыли без шара; столб живёт минуты. */
-    @Test
-    void bunkerKeepsItsColumn() {
-        assertTrue(cloud(FarBlasts.BUNKER_BREACH) < model(WeaponType.MISSILE).topZ + model(WeaponType.MISSILE).topR,
-                "прорвавшаяся бомба — ниже наземного взрыва ракеты");
-        assertEquals(0, FarBlasts.BUNKER_DEEP.fireball(), "бомба под землёй — без вспышки и шара");
-        assertEquals(1, FarBlasts.BUNKER_DEEP.dust(), 1e-6, "бомба под землёй — столб пыли");
-        for (FarBlasts.Look k : LOOKS) {
-            assertTrue(k.puffs() >= 10 && k.puffs() <= 14, "клубов на столб: " + k);
-            assertTrue(k.life() >= 1200, "столб живёт минуты: " + k);
-            assertTrue(k.life() > k.riseTicks(), "столб поднимается раньше, чем тает: " + k);
-        }
-    }
 
     /**
      * Облако взрывчатки без топлива («Град», «Ланцет») поднимается, как по Чёрчу, — верх в 15 % от 92,6·W^¼; с топливом
      * (шахед, ракета) — выше: его тепло в десятки раз больше тепла заряда.
      */
+    /**
+     * Бомба по той же модели облака: прорыв наружу на 3 м — облако доли заряда (выше «Града», ниже всего заряда на земле),
+     * пыль — грунт воронки выброса; глубже — облако газов из хода (доля сечения хода) — маленькое; пыль входа и провала
+     * без жара не всплывает, живёт и тает.
+     */
+    @Test
+    void bunkerCloudsComeFromTheModel() {
+        ua.zentix.incoming.warhead.BuriedBlast shallow = new ua.zentix.incoming.warhead.BuriedBlast(2423, 3);
+        BlastSource breach = new BlastSource(WeaponType.BUNKER, shallow.airCharge(BlastSource.hole()), 0, true, false);
+        CloudModel m = CloudModel.buried(breach, CloudModel.Air.STANDARD, shallow);
+        CloudModel whole = new CloudModel(new BlastSource(WeaponType.BUNKER, 2423, 0, true, false), CloudModel.Air.STANDARD);
+        assertTrue(m.topZ < whole.topZ && m.topZ > model(WeaponType.ROCKET).topZ, "прорыв: верх " + m.topZ + ", всего заряда " + whole.topZ);
+        assertTrue(m.dust > whole.dust, "прорыв: пыль воронки выброса больше воронки заряда на земле");
+        ua.zentix.incoming.warhead.BuriedBlast deep = new ua.zentix.incoming.warhead.BuriedBlast(2423, 20);
+        CloudModel vent = new CloudModel(new BlastSource(WeaponType.BUNKER, deep.airCharge(BlastSource.hole()), 0, true, true), CloudModel.Air.STANDARD);
+        assertTrue(vent.topZ < m.topZ, "газы из хода ниже прорыва");
+        BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, true);
+        // ветер 3 м/с у земли: в штиль облако у земли не расплывается (Бриггс — по пути ветра)
+        CloudModel dust = CloudModel.dust(none, CloudModel.Air.of(1, 0, 3, 0, 0.5), 160, 3.4);
+        assertTrue(Double.isFinite(dust.topZ) && dust.topZ < 3.4, "пыль без жара не всплывает: " + dust.topZ);
+        assertTrue(dust.life > 10 && dust.life < CloudModel.LIFE_MAX, "пыль провала живёт и тает: " + dust.life);
+    }
+
     @Test
     void cloudsRiseByTheirHeat() {
         for (CloudModel m : MODELS) {
@@ -65,59 +74,6 @@ class FarBlastsTest {
         assertTrue(drops > 0.9f, "капли " + drops);
         // пыль грунта — цвета грунта: толстый слой пыли цвета x на экране и есть x (обращение отражения)
         assertEquals(0.6f, SmokePuffs.thick(0, 1, 0, SmokeGrid.dustAlbedo(0.6f)), 0.01f);
-    }
-
-    @Test
-    void ballOutshinesDaySkyForAboutHalfItsLife() {
-        // днём (яркость против неба > 1 после воздуха 1,5 км) — меньше половины жизни; ночью — вся
-        double t = Sight.transmittance(1500, Sight.CLEAR);
-        double day = 0;
-        for (double u = 0; u < 1; u += 0.001) if (FarBlasts.ball(u) * t > 1) day += 0.001;
-        assertTrue(day > 0.3 && day < 0.55, "днём виден " + day + " жизни");
-        assertTrue(Sight.adapted(FarBlasts.ball(0.85), 0.17) * Sight.transmittance(4000, Sight.CLEAR) > 1, "ночью — почти до конца");
-    }
-
-    @Test
-    void smokeWaitsForTheBallToFade() {
-        // пока шар светит целиком, дым столба его не закрывает (иначе десяток клубов за 8 тиков делает из шара бурый ком)
-        for (FarBlasts.Look k : LOOKS) {
-            int from = FarBlasts.smokeFrom(k);
-            for (double age = 0; age < k.ballTicks(); age += 0.25) {
-                if (FarBlasts.fade(age / k.ballTicks()) >= 1) assertEquals(0, FarBlasts.emerge(k, age), 1e-12, k + ": на " + age + " тике шар ещё целый");
-            }
-            assertTrue(from >= FarBlasts.BALL_FADE * k.ballTicks() && (k.ballTicks() == 0 || from < k.ballTicks()), k + ": с " + from);
-            assertEquals(1, FarBlasts.emerge(k, Math.max(k.ballTicks(), from + FarBlasts.FADE_IN)), 1e-12, k + ": к концу шара столб весь");
-        }
-        assertEquals(0, FarBlasts.smokeFrom(FarBlasts.BUNKER_DEEP), "без шара — столб сразу");
-    }
-
-    @Test
-    void flashHoldsThenFades() {
-        FarBlasts.Look k = FarBlasts.BUNKER_BREACH;
-        assertEquals(k.flash(), FarBlasts.flash(k, 0), 1e-12);
-        assertTrue(FarBlasts.flash(k, 1) > 0.85 * k.flash(), "держится — глаз складывает свет 50–100 мс");
-        assertEquals(0, FarBlasts.flash(k, k.flashTicks()), 1e-12);
-    }
-
-    @Test
-    void columnHasNoGapsEvenAtWorstJitter() {
-        for (FarBlasts.Look k : LOOKS) {
-            int n = k.puffs();
-            for (int i = 0; i + 1 < n; i++) {
-                // соседи разнесены разбросом до предела и оба мельче всех
-                double f1 = FarBlasts.fraction(i, n, -0.5), f2 = FarBlasts.fraction(i + 1, n, 0.5);
-                double r1 = FarBlasts.radius(k, f1) * FarBlasts.SIZE_MIN, r2 = FarBlasts.radius(k, f2) * FarBlasts.SIZE_MIN;
-                double gap = FarBlasts.height(k, f2, r2, 1) - FarBlasts.height(k, f1, r1, 1);
-                assertTrue(gap < r1 + r2, k + ": клубы " + i + " и " + (i + 1) + " в " + gap + " бл при радиусах " + r1 + ", " + r2);
-            }
-        }
-    }
-
-    @Test
-    void columnRisesFastThenSettles() {
-        assertEquals(0, FarBlasts.rise(0, 600), 1e-12);
-        assertEquals(0.95, FarBlasts.rise(600, 600), 0.01);
-        assertTrue(FarBlasts.rise(100, 600) > 100 / 600.0, "вначале быстрее, чем равномерно");
     }
 
     @Test
@@ -153,8 +109,6 @@ class FarBlastsTest {
             assertTrue(FarBlasts.cloudGlow(light[3], m.ballRadius(0), h, night) > 0.5, m.source + ": ночью низ облаков над взрывом вспыхивает");
             assertTrue(FarBlasts.cloudGlow(light[3], m.ballRadius(0), h, night) <= 1, "не ярче белого");
         }
-        double b = FarBlasts.ball(0);
-        assertTrue(FarBlasts.SKY_PEAK * FarBlasts.cloudGlow(b, FarBlasts.BUNKER_BREACH.fireball(), h, day) < Sight.THRESHOLD, "бомба: днём зарева не видно");
     }
 
     @Test
@@ -188,9 +142,4 @@ class FarBlastsTest {
         assertTrue(Double.isFinite(p[0] + p[1] + p[2]), "глаз прямо над шаром");
     }
 
-    /** Верх облака: верх верхнего клуба поднявшегося столба. */
-    private static double cloud(FarBlasts.Look k) {
-        double r = FarBlasts.radius(k, 1);
-        return FarBlasts.height(k, 1, r, 1) + r;
-    }
 }

@@ -264,14 +264,6 @@
       }
     ]
   },
-  "bomb.crack": {
-    "subtitle": "subtitles.incoming.blast",
-    "sounds": [
-      {
-        "name": "incoming:bomb_crack"
-      }
-    ]
-  },
   "bomb.impact": {
     "subtitle": "subtitles.incoming.bomb.impact",
     "sounds": [

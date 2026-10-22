@@ -25,7 +25,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.util.Particles;
+import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.BunkerCover;
+import ua.zentix.incoming.warhead.BunkerImpact;
+import ua.zentix.incoming.warhead.BuriedBlast;
 import ua.zentix.incoming.warhead.GroundMaterial;
 import ua.zentix.incoming.warhead.Warheads;
 
@@ -54,7 +57,7 @@ public final class BlastEffects {
             Vec3 axis = p.weapon() == S2C.Blast.NO_WEAPON ? null : p.axis();
             switch (p.kind()) {
                 case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), axis, cloud));
-                case S2C.Blast.BUNKER -> Effects.add(new Bunker(p.pos(), mat, p.surfaceY(), p.seed()));
+                case S2C.Blast.BUNKER -> Effects.add(new Bunker(p.pos(), mat, p.surfaceY(), p.seed(), cloud));
                 case S2C.Blast.ROCKET -> Effects.add(new Drone(p.pos(), mat, p.seed(), axis, true, cloud));
                 default -> Effects.add(new Drone(p.pos(), mat, p.seed(), axis, false, cloud));
             }
@@ -138,7 +141,8 @@ public final class BlastEffects {
             this.seed = seed;
             this.random = RandomSource.create(seed);
             this.source = source;
-            this.echoes = source == null || !heard ? null : BlastSounds.echoes(source, pos, seed, clock);
+            // взрыв под землёй волной в воздух не выходит (газы — из хода, своим пакетом): ни эха, ни удара по телу
+            this.echoes = source == null || !heard || source.underground() ? null : BlastSounds.echoes(source, pos, seed, clock);
         }
 
         @Override
@@ -157,7 +161,7 @@ public final class BlastEffects {
             if (arrived && echoes != null) echoes.tick();
             // тело — после звуков: их слышит ухо, каким оно было до волны
             LocalPlayer player = mc.player;
-            if (!hit && source != null && player != null) {
+            if (!hit && source != null && !source.underground() && player != null) {
                 Vec3 body = player.getEyePosition();
                 double d = body.distanceTo(pos);
                 if (d <= Warheads.FRONT_SPEED * t) {
@@ -252,7 +256,11 @@ public final class BlastEffects {
                 return;
             }
             CraterModel.Soil soil = mat.soil();
-            double rc = CraterModel.chargeRadius(tntKg, soil), volume = CraterModel.chargeVolume(tntKg, soil);
+            ejecta(level, CraterModel.chargeRadius(tntKg, soil), CraterModel.chargeVolume(tntKg, soil));
+        }
+
+        /** Выброс воронки радиусом {@code rc} и объёмом {@code volume} м³ с основанием в {@link #pos} — тем же законом. */
+        void ejecta(ClientLevel level, double rc, double volume) {
             if (rc <= 0) return;
             int n = (int) Math.min(MAX_CLODS, Math.round(volume / CLOD_M3 * Fx.density(pos)));
             double vRim = EJECTA_C2 * Math.sqrt(G * rc), uMin = Math.pow(0.2, 3);
@@ -488,66 +496,54 @@ public final class BlastEffects {
     // ================================================================ бетонобойная бомба (bfx)
 
     static final class Bunker extends Timeline {
-        /** Радиус огненного шара прорыва, блоки: 2,4 т ВВ (шар ∝ W^⅓ — ×1,75 к ракете), часть энергии уходит в грунт. */
-        static final float R = 11f;
-
+        /** Место заряда; основание эффекта ({@link #pos}) — верх над ним: оттуда вспышка, комья, звук. */
+        private final Vec3 charge;
         private final Vec3 surface;
         private final int depth;
-        /** Взрыв прорывается наружу ({@link BunkerCover#BREACH_DEPTH}). */
-        private final boolean breach;
+        /** Подземный взрыв по приведённой глубине. */
+        private final BuriedBlast law;
+        /** Облако прорыва наружу ({@link FarBlasts#add}); null — взрыв под землёй. */
+        @Nullable
+        private final CloudModel cloud;
 
-        Bunker(Vec3 pos, GroundMaterial mat, float surfaceY, long seed) {
-            super(pos, mat, seed, null);
+        Bunker(Vec3 pos, GroundMaterial mat, float surfaceY, long seed, @Nullable CloudModel cloud) {
+            super(new Vec3(pos.x, surfaceY, pos.z), mat, seed, BlastSource.buried(pos.y, surfaceY));
+            this.charge = pos;
             this.surface = new Vec3(pos.x, surfaceY, pos.z);
-            this.depth = BunkerCover.depth((int) surfaceY, pos.y);
-            this.breach = BunkerCover.breaches((int) surfaceY, pos.y);
+            this.depth = BunkerCover.depth((int) surfaceY, charge.y);
+            this.law = BlastSource.law(pos.y, surfaceY);
+            this.cloud = cloud;
         }
 
+        /**
+         * Прорыв наружу — вспышка и комья воронки по той доле заряда, что вышла в воздух (облако — у {@link FarBlasts}); глубже
+         * вспышку видно только в самой полости. Поверхность в зоне трещин вспучивается, с потолка ходов сыплется крошка.
+         */
         @Override
         boolean run(ClientLevel level, int t) {
             if (t == 0) {
-                if (breach) {
-                    // газы и огонь вырываются над зарядом: шар, дым, вал пыли и вспышка — на поверхности, а не в толще грунта
-                    flash(level, surface, 3 * R, 400, 0.8f);
-                    Explosions.burst(level, surface, R, FarBlasts.BUNKER_BREACH, mat, random);
+                if (cloud != null) {
+                    // вспышка — над воронкой, комья — по воронке выброса закона (её роет сервер)
+                    flash(level, cloud);
+                    CraterModel.Soil soil = mat.soil();
+                    ejecta(level, law.craterRadius(soil), law.craterVolume(soil));
                 } else {
                     // под землёй вспышку видно только в самой полости и рядом
-                    flash(level, 8, 70, 0.8f);
+                    flash(level, charge, 8, 70, 0.8f);
                 }
                 return true;
             }
-            if (t <= 6) {
-                // полость: огонь бьёт во все стороны и упирается в стены, дым заполняет объём
-                for (int i = 0; i < 10; i++) {
-                    Fx.fire().vel(Explosions.dir(random, -1).scale(0.3 + random.nextDouble() * 0.4)).size(1.2f, 3).growFast()
-                            .life(8 + random.nextInt(8)).drag(0.75f).collide().spawn(level, pos);
-                }
-                Fx.smoke().vel(Explosions.dir(random, -1).scale(0.3)).size(1.5f, 5).growFast().life(260 + random.nextInt(120))
-                        .color(0x2A2622, 0x5E5852).alpha(0.9f).glow(1, 8).drag(0.85f).collide().rise(0.002f).spawn(level, pos);
-                Particles.burst(level, ParticleTypes.LAVA, pos, 4, 2, 4, 0, 6);
-                if (t == 1) Fx.flash().size(8, 10).life(4).spawn(level, pos);
+            if (t % 2 == 0 && t >= 2 && t <= 220 && cloud == null) {
+                // каменная крошка с потолка полости и ходов рядом
+                Particles.burst(level, FxParticles.fallingDust(mat), charge.add(0, 7, 0), 7, 1, 7, 0, 14);
             }
-            if (t % 2 == 0 && t >= 2 && t <= 220) {
-                // пыль и каменная крошка с потолка полости
-                Fx.smoke().vel(random.nextGaussian() * 0.05, 0, random.nextGaussian() * 0.05).size(1, 4).life(160).color(Explosions.rgb(mat), 0x8A8480)
-                        .alpha(0.5f).collide().budget(FxBudget.GROUND).spawn(level, pos.add(random.nextGaussian() * 5, random.nextGaussian() * 3, random.nextGaussian() * 5));
-                Particles.burst(level, FxParticles.fallingDust(mat), pos.add(0, 7, 0), 7, 1, 7, 0, 14);
+            if (t <= 16 && depth <= law.fracture()) heave(level, t * 2);
+            // выброс воронки падает обратно: грунт чаши закона (её роет сервер); под землёй выброса нет
+            if (t == 30 && cloud != null) {
+                CraterModel.Soil soil = mat.soil();
+                BlastSounds.debris(surface, law.craterVolume(soil) * CloudModel.SOIL_DENSITY, law.craterDepth(soil), 0.75f);
             }
-            // поверхность: земля «подпрыгивает» расходящимся кольцом, потом курится провал
-            if (t <= 16 && depth <= 60) heave(level, t * 2);
-            if (t % 2 == 0 && t >= 24 && t <= 200 && depth <= 48) {
-                // провал курится
-                Fx.smoke().vel(random.nextGaussian() * 0.03, 0.06 + random.nextDouble() * 0.05, random.nextGaussian() * 0.03).size(0.8f, 4)
-                        .life(200).color(Explosions.rgb(mat), 0x9A948E).alpha(0.45f).rise(0.002f).budget(FxBudget.GROUND)
-                        .spawn(level, surface.add(random.nextGaussian() * 3, 0.5, random.nextGaussian() * 3));
-            }
-            // осыпь провала: грунт над полостью — не больше воронки наземного взрыва того же заряда (оценка сверху)
-            if (t == 30) {
-                double kg = ua.zentix.incoming.strike.WeaponSpec.BUNKER.striker().article().warhead().tnt();
-                BlastSounds.debris(surface, CraterModel.chargeVolume(kg, CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY,
-                        CraterModel.chargeDepth(kg, CraterModel.Soil.DRY), 0.75f);
-            }
-            return t < 300;
+            return t < 240;
         }
 
         private void heave(ClientLevel level, double r) {
@@ -555,112 +551,99 @@ public final class BlastEffects {
             for (double a = 0; a < 360; a += 15) {
                 Particles.burst(level, FxParticles.block(mat), FxParticles.ground(level, surface, a, r).add(0, 0.2, 0), 0.7, 0.1, 0.7, 0.3, 10);
             }
-            for (double a = 7; a < 360; a += 30) {
-                Fx.smoke().vel(0, 0.08 + random.nextDouble() * 0.1, 0).size(0.8f, 3.5f).growFast().life(120 + random.nextInt(60))
-                        .color(Explosions.rgb(mat), Explosions.lighten(Explosions.rgb(mat), 0.3f)).alpha(0.6f).fadeFrom(0.3f)
-                        .budget(FxBudget.GROUND).spawn(level, FxParticles.ground(level, surface, a, r).add(0, 0.6, 0));
-            }
         }
 
+        /** Прорыв наружу — звук взрыва той доли заряда, что вышла в воздух ({@link BlastSounds#arrive}); глубже — глухой удар. */
         @Override
         void arrive(ClientLevel level, int band) {
+            if (!source.underground()) {
+                super.arrive(level, band);
+                return;
+            }
             Player player = Minecraft.getInstance().player;
             boolean sky = player != null && level.canSeeSky(BlockPos.containing(player.getEyePosition()));
-            // землю трясёт сервер (S2C.Quake): заряда бомбы в паспорте нет — волну у тела считать не по чему
-            BlastSounds.bunker(pos, band, !sky);
+            BlastSounds.buried(source, pos, !sky);
         }
     }
 
     // ================================================================ вход бомбы, выброс газов, провал
 
-    /** Бомба вошла в грунт (bfx/impact): звуковой удар и тупой удар о землю приходят со скоростью звука. */
+    /**
+     * Бомба вошла в грунт: облако пыли выброса из воронки входа ({@link BunkerImpact#entryVolume}, без жара — у земли, по
+     * ветру; рисует слой) и комья; тупой удар приходит со скоростью звука.
+     */
     public static void bunkerImpact(S2C.BunkerImpact p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
         Vec3 pos = p.pos();
+        ClientLevel world = Minecraft.getInstance().level;
+        if (world != null) {
+            double d = WeaponType.BUNKER.spec().striker().article().diameter();
+            BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, false);
+            FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), BunkerImpact.entryVolume(d), 2 * d), pos, mat,
+                    Double.doubleToLongBits(pos.x * 31 + pos.z));
+        }
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
-                if (t == 0) {
-                    // удар корпуса без подрыва — огня нет: выброс пыли и комьев грунта из воронки входа
-                    int dust = Explosions.rgb(mat);
-                    for (int i = 0; i < 10; i++) {
-                        Fx.smoke().vel(Explosions.dir(random, 0.3).scale(0.2 + 0.25 * random.nextDouble())).size(1, 3.5f).growFast()
-                                .life(90 + random.nextInt(60)).color(dust, Explosions.lighten(dust, 0.3f)).alpha(0.7f).drag(0.88f)
-                                .rise(0.003f).fadeFrom(0.3f).budget(FxBudget.GROUND).spawn(level, pos.add(0, 1, 0));
-                    }
-                    spray(level, 1);
-                }
+                if (t == 0) spray(level, 1);
                 return t < 30;
             }
 
             @Override
             void arrive(ClientLevel level, int band) {
-                BlastSounds.bunkerImpact(pos, band);
+                BlastSounds.bunkerImpact(pos, BunkerImpact.equivalentTnt(WeaponType.BUNKER.spec().striker().article().dryMass(), p.speed()));
             }
         });
     }
 
-    /** Газы взрыва вырываются по скважине: рёв, огненные струи и выброс грунта вверх (bfx/vent_*). */
+    /**
+     * Газы взрыва вырываются по скважине: облако той доли заряда, что вышла в воздух ({@code airKg}), из устья хода — по
+     * той же модели облака (жар, сажа, пыль; рисует слой), раскат вдали — глухой, из-под земли; вблизи — рёв выброса.
+     */
     public static void vent(S2C.Vent p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
         Vec3 pos = p.pos();
+        ClientLevel world = Minecraft.getInstance().level;
+        if (world != null) {
+            BlastSource gas = new BlastSource(WeaponType.BUNKER, p.airKg(), 0, true, true);
+            FarBlasts.cloud(world, gas, new CloudModel(gas, FarBlasts.air(world, pos)), pos, mat, Double.doubleToLongBits(pos.x * 17 + pos.z));
+        }
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
-                RandomSource rnd = level.random;
-                if (t < 12) {
-                    // огненные струи из скважины
-                    for (int i = 0; i < 5; i++) {
-                        Fx.fire().vel(rnd.nextGaussian() * 0.06, 0.8 + rnd.nextDouble() * 0.7, rnd.nextGaussian() * 0.06).size(0.5f, 1.6f)
-                                .life(10 + rnd.nextInt(8)).drag(0.9f).spawn(level, pos.add(0, 0.5, 0));
-                    }
-                    Fx.spark().vel(rnd.nextGaussian() * 0.2, 1 + rnd.nextDouble(), rnd.nextGaussian() * 0.2).life(20 + rnd.nextInt(20)).gravity(0.04f)
-                            .spawn(level, pos.add(0, 0.5, 0));
-                    Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 0.5, 0), 0.3, 0.3, 0.3, 0, 4);
-                }
-                if (t < 148) {
-                    // чёрный столб дыма и пыль грунта
-                    float f = t / 148f;
-                    Fx.smoke().vel(rnd.nextGaussian() * 0.04, (0.7 - 0.5 * f) * (0.8 + 0.4 * rnd.nextDouble()), rnd.nextGaussian() * 0.04)
-                            .size(0.6f, 4.5f).life(260 + rnd.nextInt(120)).color(0x24201E, 0x686260).alpha(0.85f * (1 - 0.6f * f))
-                            .glow(t < 12 ? 0.8f : 0, 6).drag(0.94f).rise(0.006f).fadeIn(2).fadeFrom(0.45f).spawn(level, pos.add(0, 0.8, 0));
-                    if (t <= 88) {
-                        Fx.smoke().vel(rnd.nextGaussian() * 0.08, 0.35 + rnd.nextDouble() * 0.3, rnd.nextGaussian() * 0.08).size(0.5f, 2.5f).life(80)
-                                .color(Explosions.rgb(mat), 0xA09A94).alpha(0.6f).gravity(0.006f).fadeFrom(0.3f).budget(FxBudget.GROUND)
-                                .spawn(level, pos.add(0, 1, 0));
-                    }
-                }
-                return t < 168;
+                return t < 40;
             }
 
             @Override
             void arrive(ClientLevel level, int band) {
-                BlastSounds.vent(pos, band);
+                BlastSounds.vent(pos, p.airKg());
             }
         });
     }
 
-    /** Свод над полостью обрушился: гул и пыль над провалом. */
+    /**
+     * Свод над полостью обрушился до верха: пыль над провалом (грунт объёма полости, без жара — у земли, по ветру; рисует
+     * слой) и гул обвала.
+     */
     public static void collapse(S2C.Collapse p) {
         Vec3 pos = p.pos();
-        Effects.add(new Timeline(pos, GroundMaterial.byId(p.material()), 0, null) {
+        GroundMaterial mat = GroundMaterial.byId(p.material());
+        ClientLevel world = Minecraft.getInstance().level;
+        if (world != null) {
+            BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, true);
+            double r = Math.cbrt(3 * p.volume() / (4 * Math.PI));
+            FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), p.volume(), r), pos, mat,
+                    Double.doubleToLongBits(pos.x * 13 + pos.z));
+        }
+        Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
-                if (t < 6) {
-                    RandomSource rnd = level.random;
-                    for (int i = 0; i < 12; i++) {
-                        double a = rnd.nextDouble() * Math.PI * 2;
-                        Fx.smoke().vel(Math.cos(a) * 0.3, 0.1 + rnd.nextDouble() * 0.2, Math.sin(a) * 0.3).size(1, 4 + rnd.nextFloat() * 2).growFast()
-                                .life(160 + rnd.nextInt(80)).color(Explosions.rgb(mat), 0xA8A29C).alpha(0.7f).drag(0.9f).collide().fadeFrom(0.35f)
-                                .budget(FxBudget.GROUND).spawn(level, pos.add(rnd.nextGaussian() * 2, 0.5, rnd.nextGaussian() * 2));
-                    }
-                }
                 return t < 20;
             }
 
             @Override
             void arrive(ClientLevel level, int band) {
-                BlastSounds.collapse(pos, band);
+                BlastSounds.collapse(pos, BuriedBlast.collapseTnt(p.volume()));
             }
         });
     }

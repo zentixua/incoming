@@ -216,16 +216,17 @@ public final class Exhaust {
 
     // ---------------------------------------------------------------- бомба (инверсионные следы B-2 — лентой)
 
-    /** Бомба: срыв потока с хвоста (лентой); у звукового барьера — «воротник» пара; при бурении — пыль у входа. */
+    /**
+     * Бомба: срыв потока с хвоста (лентой); около скорости звука во влажном воздухе — «воротник» пара ({@link VapourCollar});
+     * пыль входа в грунт — облако модели ({@link BlastEffects#bunkerImpact}).
+     */
     private static void bomb(ClientLevel level, BunkerBusterEntity e, State s) {
         RandomSource r = level.random;
-        if (e.isDrilling()) {
-            Vec3 in = e.entry();
-            Fx.smoke().vel(r.nextGaussian() * 0.05, 0.08 + r.nextDouble() * 0.08, r.nextGaussian() * 0.05).size(0.6f, 3).life(120)
-                    .color(0x7A7066, 0xA49A90).alpha(0.6f).rise(0.002f).budget(FxBudget.GROUND).spawn(level, in.x + r.nextGaussian() * 0.4, in.y + 0.4, in.z + r.nextGaussian() * 0.4);
-            return;
-        }
-        if (e.speed() >= 8) {
+        // в грунте — ничего: пыль выброса из входа — облако модели (BlastEffects.bunkerImpact)
+        if (e.isDrilling()) return;
+        Vec3 at = e.position();
+        double mach = VapourCollar.mach(e.speed() * 20, at.y - ua.zentix.incoming.client.fx.plume.Air.SEA);
+        if (VapourCollar.forms(mach, ua.zentix.incoming.client.far.FarBlasts.air(level, at).humidity())) {
             for (int i = 0; i < 4; i++) {
                 double a = r.nextDouble() * Mth.TWO_PI;
                 Vec3 p = Local.at(e.position(), e.getYRot(), e.getXRot(), Math.cos(a) * 1.1, Math.sin(a) * 1.1, 2 - r.nextDouble());

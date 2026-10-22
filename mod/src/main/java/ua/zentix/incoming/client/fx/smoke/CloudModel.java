@@ -2,6 +2,7 @@ package ua.zentix.incoming.client.fx.smoke;
 
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.util.Stability;
+import ua.zentix.incoming.warhead.BuriedBlast;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
@@ -210,13 +211,21 @@ public final class CloudModel {
 
     /** {@code onWater} — взрыв на воде: воронки в грунте нет, пыли нет (вода — брызгами, {@link WaterBlast}). */
     public CloudModel(BlastSource source, Air air, boolean onWater) {
+        // тот же закон воронки, что роет сервер (грунт — сухой: пакет несёт только «вода или нет»)
+        this(source, air, onWater ? 0 : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5);
+    }
+
+    /**
+     * Облако взрыва {@code source}, у которого пыль — не воронка его заряда: {@code dustKg} кг грунта в воздухе, начальный
+     * размер облака — не меньше {@code size} м (пыль, поднятая не жаром, — облако такого размера у земли).
+     */
+    public CloudModel(BlastSource source, Air air, double dustKg, double size) {
         this.source = source;
         this.air = air;
         double fuelHeat = source.fuelKg() * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
-        // тот же закон воронки, что роет сервер (грунт — сухой: пакет несёт только «вода или нет»)
-        dust = onWater ? 0 : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED;
+        dust = dustKg;
         soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + source.fuelKg() * source.fuel().sootYield;
         fuelBall = FuelFireball.diameter(source.fuelKg());
         fuelBallSeconds = FuelFireball.seconds(source.fuelKg());
@@ -225,7 +234,7 @@ public final class CloudModel {
         burnSeconds = Math.max(fuelBallSeconds, heBallSeconds);
         // начальный объём: в нём тепло держит температуру шара (у ideal gas при том же давлении g' = g·(1 − T_a/T))
         double ballK = source.fuelKg() > 0 ? FUEL_BALL_K : HE_BALL_END;
-        thermal = new Thermal(buoyancy, G * (1 - T_AIR / ballK), 0.5, air);
+        thermal = new Thermal(buoyancy, G * (1 - T_AIR / ballK), size, air);
         maxRise = thermal.maxRise;
         topZ = thermal.topZ;
         topR = thermal.topR;
@@ -234,7 +243,7 @@ public final class CloudModel {
         boolean fuelLast = source.fuelKg() > 0 && fuelBallSeconds >= heBallSeconds;
         burnRadius = fuelLast ? 0.5 * fuelBall : heBall;
         burnHeight = fuelLast ? fuelBallHeight(fuelBallSeconds) : 0.45 * heBall;
-        cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), burnRadius, air);
+        cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), Math.max(burnRadius, size), air);
         fireSeconds = glowEnd();
         // на воде воронки в грунте нет: топливо растекается плёнкой, а плёнка тоньше ~1 мм не держит горение — вода
         // уносит тепло (Buist и др., «In situ burning», обзор для разливов нефти: гаснет у 1–2 мм; ⚠ по памяти)
@@ -244,6 +253,22 @@ public final class CloudModel {
         poolSeconds = poolKg > 0 && burn > 0 ? poolKg / burn : 0;
         poolWatts = poolSeconds > 0 ? burn * source.fuel().heatJPerKg : 0;
         life = lifeSeconds();
+    }
+
+    /**
+     * Облако бомбы, прорвавшейся наружу ({@code source} — доля её заряда, что вышла в воздух): пыль — грунт воронки выброса
+     * ({@link BuriedBlast#craterVolume}; грунта пакет не несёт — сухой, как у наземного), доля {@link #DUST_LOFTED} в воздухе.
+     */
+    public static CloudModel buried(BlastSource source, Air air, BuriedBlast law) {
+        return new CloudModel(source, air, law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5);
+    }
+
+    /**
+     * Пыль без жара ({@code source} — заряд 0: звук и место берёт событие): {@code volume} м³ грунта, сорванного ударом или
+     * обвалом, доля {@link #DUST_LOFTED} — в воздухе, облако размером {@code size} м у земли расплывается и уходит с ветром.
+     */
+    public static CloudModel dust(BlastSource source, Air air, double volume, double size) {
+        return new CloudModel(source, air, volume * SOIL_DENSITY * DUST_LOFTED, size);
     }
 
     /**

@@ -95,7 +95,7 @@ class PlumeTest {
 
     @Test
     void deepBombSmokeIsAColumnFromTheCrater() {
-        // бомба глубже 10 блоков: частиц шара и вала пыли нет, столб из провала — сразу (FarBlasts.BUNKER_DEEP)
+        // бомба глубже границы прорыва: частиц шара и вала пыли нет, облако — сразу
         Plume deep = Plume.of(new double[]{100, 0, 64, 0, 24, 5});
         assertSame(Plume.Look.BUNKER_DEEP, deep.look());
         assertEquals(12, deep.shapes(130).size(), "only the column puffs");

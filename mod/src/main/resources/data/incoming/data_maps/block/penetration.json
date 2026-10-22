@@ -1,0 +1,401 @@
+{
+  "values": {
+    "#minecraft:base_stone_nether": {
+      "kind": "rock",
+      "s": 1.5
+    },
+    "#minecraft:dirt": {
+      "kind": "soil",
+      "s": 12
+    },
+    "minecraft:farmland": {
+      "kind": "soil",
+      "s": 12
+    },
+    "minecraft:dirt_path": {
+      "kind": "soil",
+      "s": 12
+    },
+    "minecraft:soul_soil": {
+      "kind": "soil",
+      "s": 12
+    },
+    "minecraft:mud": {
+      "kind": "soil",
+      "s": 15
+    },
+    "minecraft:muddy_mangrove_roots": {
+      "kind": "soil",
+      "s": 15
+    },
+    "#minecraft:sand": {
+      "kind": "soil",
+      "s": 7.5
+    },
+    "minecraft:soul_sand": {
+      "kind": "soil",
+      "s": 7.5
+    },
+    "minecraft:gravel": {
+      "kind": "soil",
+      "s": 5
+    },
+    "minecraft:suspicious_gravel": {
+      "kind": "soil",
+      "s": 5
+    },
+    "minecraft:clay": {
+      "kind": "soil",
+      "s": 7.5
+    },
+    "minecraft:snow_block": {
+      "kind": "soil",
+      "s": 20
+    },
+    "minecraft:powder_snow": {
+      "kind": "soil",
+      "s": 30
+    },
+    "minecraft:ice": {
+      "kind": "soil",
+      "s": 4.5
+    },
+    "minecraft:packed_ice": {
+      "kind": "soil",
+      "s": 4.5
+    },
+    "minecraft:blue_ice": {
+      "kind": "soil",
+      "s": 4.5
+    },
+    "#minecraft:leaves": {
+      "kind": "soil",
+      "s": 30
+    },
+    "#minecraft:wool": {
+      "kind": "soil",
+      "s": 30
+    },
+    "minecraft:hay_block": {
+      "kind": "soil",
+      "s": 30
+    },
+    "minecraft:moss_block": {
+      "kind": "soil",
+      "s": 30
+    },
+    "#minecraft:base_stone_overworld": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:stone_ore_replaceables": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:coal_ores": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:iron_ores": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:copper_ores": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:gold_ores": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:redstone_ores": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:lapis_ores": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:diamond_ores": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:emerald_ores": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "minecraft:basalt": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "minecraft:smooth_basalt": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "minecraft:blackstone": {
+      "kind": "rock",
+      "s": 0.84
+    },
+    "#minecraft:deepslate_ore_replaceables": {
+      "kind": "rock",
+      "s": 0.67
+    },
+    "minecraft:deepslate": {
+      "kind": "rock",
+      "s": 0.67
+    },
+    "minecraft:cobbled_deepslate": {
+      "kind": "rock",
+      "s": 0.67
+    },
+    "minecraft:tuff": {
+      "kind": "rock",
+      "s": 1.2
+    },
+    "minecraft:calcite": {
+      "kind": "rock",
+      "s": 1.2
+    },
+    "minecraft:dripstone_block": {
+      "kind": "rock",
+      "s": 1.2
+    },
+    "minecraft:end_stone": {
+      "kind": "rock",
+      "s": 1.2
+    },
+    "minecraft:sandstone": {
+      "kind": "rock",
+      "s": 1.1
+    },
+    "minecraft:red_sandstone": {
+      "kind": "rock",
+      "s": 1.1
+    },
+    "minecraft:cobblestone": {
+      "kind": "rock",
+      "s": 1.1
+    },
+    "minecraft:mossy_cobblestone": {
+      "kind": "rock",
+      "s": 1.1
+    },
+    "#minecraft:terracotta": {
+      "kind": "rock",
+      "s": 1.1
+    },
+    "minecraft:amethyst_block": {
+      "kind": "rock",
+      "s": 1.1
+    },
+    "minecraft:magma_block": {
+      "kind": "rock",
+      "s": 1.1
+    },
+    "minecraft:obsidian": {
+      "kind": "rock",
+      "s": 0.6
+    },
+    "minecraft:crying_obsidian": {
+      "kind": "rock",
+      "s": 0.6
+    },
+    "minecraft:white_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:orange_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:magenta_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:light_blue_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:yellow_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:lime_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:pink_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:gray_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:light_gray_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:cyan_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:purple_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:blue_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:brown_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:green_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:red_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:black_concrete": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:smooth_stone": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:polished_deepslate": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:deepslate_bricks": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:deepslate_tiles": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "#minecraft:stone_bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:nether_bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:red_nether_bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:mud_bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:polished_blackstone_bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:end_stone_bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:prismarine": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:prismarine_bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:dark_prismarine": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:quartz_block": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:smooth_quartz": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:polished_andesite": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:polished_diorite": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:polished_granite": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:polished_blackstone": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "#minecraft:planks": {
+      "kind": "rock",
+      "s": 1.5
+    },
+    "#minecraft:logs": {
+      "kind": "rock",
+      "s": 1.5
+    },
+    "minecraft:water": {
+      "kind": "fluid",
+      "s": 1000
+    },
+    "minecraft:bubble_column": {
+      "kind": "fluid",
+      "s": 1000
+    },
+    "minecraft:lava": {
+      "kind": "fluid",
+      "s": 3100
+    },
+    "minecraft:bedrock": {
+      "kind": "stop"
+    },
+    "minecraft:reinforced_deepslate": {
+      "kind": "stop"
+    },
+    "minecraft:barrier": {
+      "kind": "stop"
+    },
+    "minecraft:end_portal_frame": {
+      "kind": "stop"
+    },
+    "minecraft:end_portal": {
+      "kind": "stop"
+    },
+    "minecraft:end_gateway": {
+      "kind": "stop"
+    },
+    "minecraft:command_block": {
+      "kind": "stop"
+    },
+    "minecraft:chain_command_block": {
+      "kind": "stop"
+    },
+    "minecraft:repeating_command_block": {
+      "kind": "stop"
+    },
+    "minecraft:structure_block": {
+      "kind": "stop"
+    },
+    "minecraft:jigsaw": {
+      "kind": "stop"
+    }
+  }
+}

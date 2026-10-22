@@ -19,6 +19,7 @@ import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.sound.Spectra;
+import ua.zentix.incoming.warhead.BunkerImpact;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 import java.util.ArrayList;
@@ -41,13 +42,12 @@ import java.util.Locale;
  * запись. Моторы снарядов под громкий взрыв уходят вниз ({@link Ducking}).
  */
 public final class BlastSounds {
-    /** Громкость глухого удара бомбы из-под земли — и на краю ближней модели, с неё продолжается {@link #far}. */
-    static final float BUNKER_FAR_FLOOR = 1;
     /**
-     * Докуда слышно взрыв бомбы под землёй, блоков: заряда бомбы в паспорте пока нет (0 — её взрыв считает сервер
-     * своими силами, {@code WeaponSpec.BUNKER}), поэтому — прежняя дальность (не из модели), пока паспорт его не получит.
+     * Громкость записей бомбы, LUFS (наибольшая мгновенная, окно 0,4 с; замер файлов, собранных
+     * {@code tools/build_sounds.py}, {@code bunker()}): играются по давлению у уха, как ракурсы взрывов ({@link BlastMix}).
+     * У подземного взрыва — громкий из двух вариантов: тише нужного он не играет.
      */
-    static final double BUNKER_RANGE = 30_000;
+    static final double IMPACT_LUFS = -6.4, DEEP_LUFS = -7.7, VENT_LUFS = -11.2, CAVE_LUFS = -9.3, QUAKE_LUFS = -7.7;
     /** Соль зерна «удара в грудь»: его вариантов меньше, они не привязаны к варианту ракурсов. */
     private static final long SUB_SALT = 0x5DEECE66DL;
     /**
@@ -77,7 +77,7 @@ public final class BlastSounds {
      * шлёт взрывы ({@link IncomingConfig#FAR_RANGE_MAX}).
      */
     public static double range(BlastSource s) {
-        return s.underground() ? BUNKER_RANGE : Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(s.chargeKg()));
+        return Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(s.chargeKg()));
     }
 
     /**
@@ -96,7 +96,7 @@ public final class BlastSounds {
     public static Outdoor.@Nullable Heard far(BlastSource s, Vec3 pos, double hs, GroundMaterial ground, double d, double z, long seed) {
         Outdoor.Path path = path(d, z, hs, ground.porosity);
         if (path == null) return null;
-        Outdoor.Heard heard = Outdoor.hear(range(s), s.underground() ? BUNKER_FAR_FLOOR : BlastMix.v640(s), path);
+        Outdoor.Heard heard = Outdoor.hear(range(s), s.underground() ? atNear(s, DEEP_LUFS) : BlastMix.v640(s), path);
         float v = heard.volume();
         if (v < AUDIBLE) return heard;
         float highs = highs(path);
@@ -232,37 +232,57 @@ public final class BlastSounds {
         last = "";
     }
 
-    /** Бетонобойная бомба взорвалась под землёй. underground — слушатель сам под землёй (в той же толще). */
-    public static void bunker(Vec3 pos, int band, boolean underground) {
-        if (underground && band <= 4) {
-            // взрыв в замкнутом пространстве: жёстко и с долгим эхом, сверху сыплется порода
-            ClientSounds.atEar(ModSounds.BOMB_CAVE.get(), pos, 1, 1);
-            ClientSounds.atEar(ModSounds.BLAST_SUB.get(), pos, 1, 0.8f);
-            ClientSounds.atEar(ModSounds.BLAST_NEAR.get(), pos, 0.7f, 0.75f);
-            ClientSounds.atEar(ModSounds.DEBRIS_FALL.get(), pos, 1, 0.8f);
-        } else {
-            // на поверхности — глухой удар из-под земли, земля дрожит
-            ClientSounds.atEar(ModSounds.BOMB_DEEP.get(), pos, BUNKER_FAR_FLOOR, 1);
-            if (band <= 6) ClientSounds.atEar(ModSounds.BLAST_SUB.get(), pos, 0.7f, 0.6f);
-        }
+    /**
+     * Бомба взорвалась под землёй и наружу не прорвалась: над землёй слышна та доля заряда, что вышла в воздух
+     * ({@code s.chargeKg()}, {@code warhead.BuriedBlast#airShare}), — глухим ударом (запись без верхов: их съел грунт),
+     * громкость — по её давлению у уха. Слушатель под землёй — гул в толще, той же громкости.
+     *
+     * @param underground слушатель сам под землёй
+     */
+    public static void buried(BlastSource s, Vec3 pos, boolean underground) {
+        double pa = BlastMix.pressure(s, ear().distanceTo(pos));
+        float v = byPressure(pa, underground ? CAVE_LUFS : DEEP_LUFS);
+        if (v < AUDIBLE) return;
+        ClientSounds.ducked(BlastMix.loudness(pa));
+        ClientSounds.atEar(underground ? ModSounds.BOMB_CAVE.get() : ModSounds.BOMB_DEEP.get(), pos, v, 1);
     }
 
-    /** Бомба вошла в грунт: хлопок и тупой удар. */
-    public static void bunkerImpact(Vec3 pos, int band) {
-        if (band > 18) return;
-        float v = Math.max(0.3f, 1 - band / 18f);
-        ClientSounds.atEar(ModSounds.BOMB_CRACK.get(), pos, v, 1);
-        ClientSounds.atEar(ModSounds.BOMB_IMPACT.get(), pos, v, 1);
+    /**
+     * Бомба вошла в грунт ({@code tntKg} — энергия удара, кг ТНТ, {@code warhead.BunkerImpact}): тупой удар — громкость по
+     * давлению той доли энергии, что ушла в воздух. Хлопка нет: N-волну сверхзвуковой бомбы играет её полёт ({@link Booms}).
+     */
+    public static void bunkerImpact(Vec3 pos, double tntKg) {
+        float v = byPressure(BlastMix.pressure(BlastSource.air(BunkerImpact.airTnt(tntKg)), ear().distanceTo(pos)), IMPACT_LUFS);
+        if (v >= AUDIBLE) ClientSounds.atEar(ModSounds.BOMB_IMPACT.get(), pos, v, 1);
     }
 
-    /** Газы взрыва вырвались по скважине. */
-    public static void vent(Vec3 pos, int band) {
-        if (band <= 10) ClientSounds.atEar(ModSounds.BOMB_VENT.get(), pos, Math.max(0.3f, 1 - band / 10f), 1);
+    /** Газы взрыва вырвались по скважине: рёв выброса, громкость — по давлению доли заряда {@code airKg}, что вышла в воздух. */
+    public static void vent(Vec3 pos, double airKg) {
+        float v = byPressure(BlastMix.pressure(BlastSource.air(airKg), ear().distanceTo(pos)), VENT_LUFS);
+        if (v >= AUDIBLE) ClientSounds.atEar(ModSounds.BOMB_VENT.get(), pos, v, 1);
     }
 
-    /** Свод над полостью обрушился. */
-    public static void collapse(Vec3 pos, int band) {
-        if (band <= 7) ClientSounds.atEar(ModSounds.BOMB_QUAKE.get(), pos, Math.max(0.4f, 1 - band / 8f), 0.8f);
+    /**
+     * Свод над полостью обрушился ({@code tntKg} — энергия падения породы, кг ТНТ): гул обвала — громкость по давлению
+     * доли, что ушла в воздух (как у удара бомбы о землю, {@link BunkerImpact#airTnt}).
+     */
+    public static void collapse(Vec3 pos, double tntKg) {
+        float v = byPressure(BlastMix.pressure(BlastSource.air(BunkerImpact.airTnt(tntKg)), ear().distanceTo(pos)), QUAKE_LUFS);
+        if (v >= AUDIBLE) ClientSounds.atEar(ModSounds.BOMB_QUAKE.get(), pos, v, 0.8f);
+    }
+
+    /** Громкость записи громкостью {@code fileLufs} для давления {@code pa} у уха ({@link BlastMix#loudness}). */
+    static float byPressure(double pa, double fileLufs) {
+        return BlastMix.gain(BlastMix.loudness(pa) - fileLufs);
+    }
+
+    /** Громкость записи громкостью {@code fileLufs} у взрыва {@code s} на краю ближней модели ({@link Outdoor#NEAR}). */
+    static float atNear(BlastSource s, double fileLufs) {
+        return byPressure(BlastMix.pressure(s, Outdoor.NEAR), fileLufs);
+    }
+
+    private static Vec3 ear() {
+        return Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
     }
 
     /** Толчок земли у слушателя (сервер шлёт тем, кто стоит над взрывом). */

@@ -34,7 +34,11 @@ final class Craters {
      */
     static int dig(ServerLevel level, Vec3 pos, double tntKg, GroundMaterial mat) {
         CraterModel.Soil soil = mat.soil();
-        double rc = CraterModel.chargeRadius(tntKg, soil), depth = CraterModel.chargeDepth(tntKg, soil);
+        return dig(level, pos, CraterModel.chargeRadius(tntKg, soil), CraterModel.chargeDepth(tntKg, soil), mat);
+    }
+
+    /** Воронка радиусом {@code rc} и глубиной {@code depth} блоков у {@code pos} (та же чаша и вал). Сколько столбцов смотрели. */
+    static int dig(ServerLevel level, Vec3 pos, double rc, double depth, GroundMaterial mat) {
         if (depth <= 0) return 0;
         int cx = Mth.floor(pos.x), cz = Mth.floor(pos.z);
         if (!Terrain.neighbourhoodReady(level, cx >> 4, cz >> 4)) return 0;

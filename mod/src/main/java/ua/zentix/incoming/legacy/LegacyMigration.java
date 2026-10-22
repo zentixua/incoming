@@ -60,8 +60,6 @@ public final class LegacyMigration {
         CompoundTag cfg = server.getCommandStorage().get(id);
         if (cfg.isEmpty()) return;
         IncomingConfig.Server s = IncomingConfig.SERVER;
-        setInt(cfg, "bunker_power", s.bunkerPower, 1, 60);
-        setInt(cfg, "bunker_energy", s.bunkerEnergy, 50, 10000);
         setBool(cfg, "shatter", s.shatterGlass);
         setBool(cfg, "siren", s.siren);
         setBool(cfg, "debris_stay", s.debrisStay);
@@ -71,10 +69,6 @@ public final class LegacyMigration {
         server.getCommandStorage().set(ResourceLocation.fromNamespaceAndPath("airstrike", "tmp"), new CompoundTag());
         server.getCommandStorage().set(ResourceLocation.fromNamespaceAndPath("shahed", "cfg"), new CompoundTag());
         Incoming.LOG.info("Datapack settings moved to the mod config: {}", cfg);
-    }
-
-    private static void setInt(CompoundTag cfg, String key, ModConfigSpec.IntValue value, int min, int max) {
-        if (cfg.contains(key)) value.set(Math.max(min, Math.min(max, cfg.getInt(key))));
     }
 
     private static void setBool(CompoundTag cfg, String key, ModConfigSpec.BooleanValue value) {

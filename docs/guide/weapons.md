@@ -7,12 +7,12 @@ Six weapons, in the order the designator lists them. Each launch uses [munitions
 | | Shahed | Lancet | Missile | Grad | Bomb (B-2) | Nuclear (ICBM) |
 |---|---|---|---|---|---|---|
 | Time to impact | ≈50 s | approach plus ≈25 s circling | ≈30 s | 7–10 s | ≈40 s | 90 s |
-| Warhead, TNT | 50 kg | 3 kg | ≈150 kg | 6.4 kg per rocket | power 20 underground (TNT = 4) | 1 to 15 kt |
+| Warhead, TNT | 50 kg | 3 kg | ≈150 kg | 6.4 kg per rocket | 2.4 t, underground | 1 to 15 kt |
 | Follows a moving target | yes, through the camera | yes, through the camera | no | no | no | no |
 | Route on the map | yes | yes | yes | no | no | no |
 | Shot down by a SAM | yes | yes | yes | no | yes | no |
 
-Times are for a nearby target. The world owner can change flight times and the bomb's underground blast power.
+Times are for a nearby target. The world owner can change flight times.
 
 ## The real weapons
 
@@ -31,6 +31,7 @@ sets everything the blast does: what it breaks and how far, the crater, wounds, 
 | Crater in soil, across | ≈2.4 m | ≈0.9 m | ≈3.5 m | ≈1.2 m | — | — |
 | Fuel left at impact | ≈30 kg | none | ≈275 kg | none | none | — |
 | Real speed | 185 km/h | 110 km/h, ≈300 in a dive | ≈900 km/h | ≈690 m/s at burnout | ≈510 m/s at impact (calculated) | — |
+| Goes through stone | — | — | — | — | ≈4 m in the game, ≈8–9 m in real life | — |
 | Real flight height | 1.5–2.8 km | 600–800 m when circling | 30–50 m over the ground | apogee ≈7 km | dropped from ≈12 km | — |
 | Speed in the game | ≈150 km/h | ≈115 km/h | ≈290 km/h | by its arc | B-2 ≈860 km/h, 170 blocks up | — |
 
@@ -147,8 +148,44 @@ siren at the target sounds only 8 seconds before impact.
 
 ![B-2 with its bomb bay open](img/weapon-b2.jpg)
 
-A B-2 arrives from far away and drops a bunker buster. The bomb goes through about 30 blocks of stone and explodes
-underground. Use it on bunkers and underground bases. SAM radar detects the B-2 very late. Can carry a nuclear warhead.
+A B-2 arrives from far away and drops a GBU-57 bunker buster. Use it on bunkers and underground bases. SAM radar
+detects the B-2 very late. Can carry a nuclear warhead.
+
+**How deep it goes.** The bomb hits the ground with the speed and angle its fall gives it and keeps going in a straight
+line. How far depends on that speed, on the bomb (13.6 t, 0.8 m across, a pointed nose) and on what it goes through:
+Young's penetration equations (Sandia, 1997), layer by layer. In the game the B-2 flies 170 blocks up instead of about
+12 km (not by physics, so you can see it), and the bomb hits at about 250 m/s instead of about 510 m/s. So it goes
+through:
+
+| | In the game (≈250 m/s) | Real drop (≈510 m/s) |
+|---|---|---|
+| Stone, concrete | ≈4 blocks | ≈8–9 m |
+| Deepslate | ≈3 blocks | ≈7 m |
+| Gravel | ≈25 blocks | ≈40–65 m |
+| Dirt and grass | ≈60 blocks | ≈100–200 m |
+
+Dirt right under a concrete slab is twice as hard for the first 5 blocks. Water slows the bomb only a little. Bedrock
+and reinforced deepslate stop it. For rock the equations are good only to within a factor of two. Which block is what
+material is in the data map `incoming:penetration` (`data/incoming/data_maps/block/penetration.json`): a data pack or
+mod can add its own blocks; a block without an entry counts as brick. A thin block (carpet, slab, stairs) counts only
+as thick as it is.
+
+**The fuze.** If the bomb breaks into a cave or a bunker room after at least 4 blocks of solid matter, it goes off once
+it is all the way inside. Leaves, wool and powder snow barely slow it down and do not count. Otherwise it goes off where
+it stops.
+
+**The underground blast.** 2.4 t of TNT. What it does depends on how deep it is for its size, the depth divided by the
+cube root of the charge (all radii here are estimates with a wide range, U.S. Army TM 5-855-1):
+
+- Deeper than about 13 blocks the blast stays underground. It leaves a cavity about 3 blocks in radius, crushes rock to
+  cobblestone or gravel out to about 10 blocks (chests and other blocks without a material entry stay), and brings down parts of the roofs of tunnels and caves out to about 27 blocks.
+  Gas and dust shoot out of the hole the bomb made, and the ground shakes. If the charge is less than about 17 blocks
+  deep, the cavity roof caves in all the way up a second later and leaves a pit on the surface.
+- Shallower than about 13 blocks it blows a crater open: near the surface as wide as a surface blast would make, widest
+  (about one and a half times that) at around half that depth, and shrinking to nothing towards 13 blocks. The closer to the surface, the more of the charge goes into
+  the air: blast wave, broken windows and the cloud above are those of a surface blast of that part of the charge.
+- Anything in a void next to the charge, a bunker room or a cave, takes the blast wave and the gas pressure like a
+  room hit by any warhead. Anyone in the crushed zone dies.
 
 ## Nuclear (ICBM)
 
@@ -193,7 +230,9 @@ In humid air a white condensation cloud flashes around the blast for a moment. B
 night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
 see. Sparks, clods of earth, the dust and sparks of fragment hits, flames and, where fuel was left in the tank, burning
 pieces are particles. A burning piece in flight leaves puffs of grey-black wood smoke that rise with their own heat and
-drift away, and its flame lights the smoke around it. The bomb's underground blast looks as before.
+drift away, and its flame lights the smoke around it. The bomb's blast is drawn the same way: a
+breach gives the cloud of the part of the charge that went into the air, a deeper blast a smaller cloud from the mouth of
+the hole; the dust of the impact and of a caved-in pit stays low and drifts.
 
 Whatever the blast sets on fire keeps smoking. Over every chunk with burning blocks a column of black smoke rises, leans
 downwind and stretches out with it; a bigger fire sends it higher. By day it climbs higher than on a calm night, when
@@ -224,7 +263,8 @@ same up close and far away.
 - **Wind**: smoke drifts with the world's wind, the same wind that carries nuclear fallout. Each game day has its own
   wind, and it turns slowly from one day to the next. Near the ground it is weaker, most of all at night.
 - **Contrails**: the B-2 leaves a contrail only where the air is cold enough for one to form. At the height it flies
-  now the air is too warm, so it leaves none. The falling bomb leaves no trail.
+  now the air is too warm, so it leaves none. The falling bomb leaves no trail. A white vapour collar forms around a body
+  only near the speed of sound in humid air; the bomb falls slower in the game, so it has none.
 
 ## No room for the launcher
 

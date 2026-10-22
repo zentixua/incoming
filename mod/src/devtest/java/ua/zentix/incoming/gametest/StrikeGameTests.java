@@ -2524,7 +2524,7 @@ public final class StrikeGameTests {
      * Подрыв бомбы в скале под песком (камень до y = 14, выше до y = 22 песок с прослойками гравия, заряд на глубине 14,
      * под ним — слой воды, который взрыв вскрывает на дне полости): песок над полостью, щебень бомбы и труба обрушения
      * осыпаются сотнями блоков. Когда подрыв кончился, из-под штабеля песка в районе взрыва убирается его каменная полка
-     * (осыпание уже без взрывов). Живых падающих блоков в районе не больше {@link CraterFalls#LIVE_CAP} (у воронок B-2
+     * (осыпание уже без взрывов; полка — кирпичная, свод из породы в зоне трещин рушится сам). Живых падающих блоков в районе не больше {@link CraterFalls#LIVE_CAP} (у воронок B-2
      * без предела их по 151 и больше), сверх них блоки легли сразу; ни один не пропал (песка и
      * гравия — блоками, падающими и предметами — в конце столько же, сколько до обрушения полки), и, когда падение
      * кончилось, ни один сыпучий блок не висит над пустотой или водой. Без {@link CraterFalls} живых разом — 1384.
@@ -2540,8 +2540,9 @@ public final class StrikeGameTests {
         }
         // штабель 6×6×8 на каменной полке над грунтом, в углу площадки — дальше, чем достаёт взрыв в скале
         BlockPos shelfLo = new BlockPos(17, 26, 42), shelfHi = new BlockPos(22, 26, 47);
+        // полка — кладка, а не порода: свод из породы над пустотой в зоне трещин подземного взрыва рушится сам
         for (BlockPos p : BlockPos.betweenClosed(shelfLo, shelfHi)) {
-            level.setBlock(h.absolutePos(p), Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+            level.setBlock(h.absolutePos(p), Blocks.STONE_BRICKS.defaultBlockState(), Block.UPDATE_CLIENTS);
         }
         for (BlockPos p : BlockPos.betweenClosed(shelfLo.above(), shelfHi.above(8))) {
             level.setBlock(h.absolutePos(p), Blocks.SAND.defaultBlockState(), Block.UPDATE_CLIENTS);
@@ -2564,11 +2565,14 @@ public final class StrikeGameTests {
         h.onEachTick(() -> {
             int live = level.getEntitiesOfClass(FallingBlockEntity.class, box).size();
             h.assertTrue(live <= CraterFalls.LIVE_CAP, "живых падающих блоков " + live + " больше предела " + CraterFalls.LIVE_CAP);
-            // подрыв (таймлайн бомбы — 24 тика) кончился, выброшенные им предметы упали (подброшенные вторичными
-            // подрывами летают дольше 40 тиков), и обломки выброса легли: они ложатся блоком грунта — песком, а самые
-            // высокие летят дольше 120 тиков. Тогда счёт, потом полка — дальше
+            // подрыв и вся его работа (полость, дробление, трещины, труба обрушения — единицами) кончились, и обломки
+            // выброса легли: они ложатся блоком грунта — песком, а самые высокие летят дольше 120 тиков. Тогда счёт,
+            // потом полка — дальше
             // песок и гравий только осыпаются; район ещё открыт (до конца подрыва + GRACE)
-            if (loose[0] >= 0 || h.getTick() < 120 || !level.getEntitiesOfClass(DebrisEntity.class, column).isEmpty()) return;
+            // и ничего не падает: падающий блок, чьё место осыпание уже заняло, считался бы дважды
+            if (loose[0] >= 0 || h.getTick() < 120 || !StrikeWorld.get(level).impacts().isEmpty()
+                    || !level.getEntitiesOfClass(DebrisEntity.class, column).isEmpty()
+                    || !level.getEntitiesOfClass(FallingBlockEntity.class, box).isEmpty()) return;
             loose[0] = looseCount(level, box);
             settledShelf[0] = CraterFalls.get(level).settled();
             for (BlockPos p : BlockPos.betweenClosed(shelfLo, shelfHi)) level.setBlock(h.absolutePos(p), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
@@ -2595,14 +2599,16 @@ public final class StrikeGameTests {
         int[] centres = {40, 128, 216};
         List<Vec3> charges = new ArrayList<>();
         for (int z : centres) {
-            BlockPos lo = new BlockPos(4, 1, z - 12), hi = new BlockPos(27, 20, z + 12);
+            // заряд под песком глубже прорыва (приведённая глубина ~1,3): полость доходит до песка, и он сыплется в неё,
+            // пока полость не засыпана, — у трёх воронок разом
+            BlockPos lo = new BlockPos(4, 1, z - 12), hi = new BlockPos(27, 27, z + 12);
             sandBed(h, lo, hi, 13);
-            Vec3 charge = Vec3.atCenterOf(h.absolutePos(new BlockPos(16, 7, z)));
+            Vec3 charge = Vec3.atCenterOf(h.absolutePos(new BlockPos(16, 10, z)));
             generateNow(level, new ChunkPos(BlockPos.containing(charge)), 4);
             charges.add(charge);
         }
         for (Vec3 c : charges) Warheads.bunker(level, c, c.add(0, 14, 0), null, null);
-        AABB box = craterBox(h, new BlockPos(0, 1, 0), new BlockPos(31, 20, 255));
+        AABB box = craterBox(h, new BlockPos(0, 1, 0), new BlockPos(31, 27, 255));
         long settledBefore = CraterFalls.get(level).settled();
         int[] max = {0};
         h.onEachTick(() -> {

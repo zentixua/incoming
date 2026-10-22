@@ -38,7 +38,6 @@ server its owner does. The most useful ones are below; the rest are in the same 
 | `launch.max_salvo`, `max_spread` | 30, 150 | largest salvo and spread |
 | `launch.max_active_per_player` | 0 | how many of one player's rounds may be in progress; 0: no limit |
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
-| `warheads.bunker_power` | 20 | underground blast power of the bomb (TNT is 4); the other weapons' blasts come from their warheads |
 | `world.block_damage`, `fire` | on | destruction and fires |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators launch them |
 | `scale.scale_preset` | GAME | GAME: the nuclear blast wave away from the fireball travels at 0.20 of the speed of sound (not physical: slower than in life so that you can watch it roll in, and the server has more time for ruins); REAL: true to life; CUSTOM: the two numbers below as they are. Flight is the same game model with any preset; everything at the target is real |

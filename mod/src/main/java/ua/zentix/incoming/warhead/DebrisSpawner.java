@@ -73,13 +73,6 @@ public final class DebrisSpawner {
                 + spawnBurning(level, at, 2.1, 0.6, 2.2);
     }
 
-    /** Выброс газов из скважины бомбы: грунт и угли вверх почти отвесно. Возвращает, сколько обломков. */
-    public static int vent(ServerLevel level, Vec3 at, GroundMaterial mat) {
-        return spawn(level, at, mat.debris(), false, 0.45, 1.2, 2.7)
-                + spawn(level, at, mat.debris(), false, 0.45, 1.2, 2.7)
-                + spawnCharred(level, at, 0.45, 1.2, 2.7);
-    }
-
     /**
      * Обломки снаряда, сбитого в воздухе зенитной ракетой: детали корпуса, горящие и обгоревшие куски летят дальше по
      * ходу цели, теряя скорость, и падают. Сколько — по размеру корпуса ({@code noseLength}): «Ланцет» и шахед —

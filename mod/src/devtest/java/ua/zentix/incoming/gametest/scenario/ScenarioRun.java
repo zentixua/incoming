@@ -676,9 +676,8 @@ final class ScenarioRun {
         if (e.getLevel() != level || launchTick < 0) return;
         UUID by = StressDirector.blastBy(e.getExplosion());
         Track tr = by == null ? null : tracks.get(by);
-        if (tr != null && !(tr.bomb && e.getExplosion().radius() <= Warheads.BUNKER_ENTRY_POWER)) {
-            detonated = true;
-        }
+        // у бомбы взрыва при входе в грунт нет: любой её взрыв — подрыв
+        if (tr != null) detonated = true;
         if (outcome != null && !outcome.end.equals("gone")) return;
         // тик итога — тик попадания (снаряд пропал), а не очереди работы: он зависит от чужих взрывов в том же тике
         if (tr != null) outcome = new Outcome("blast", outcome != null ? outcome.tick : tick - launchTick, e.getExplosion().center(), tr.weapon);

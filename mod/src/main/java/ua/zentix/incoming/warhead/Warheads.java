@@ -43,7 +43,9 @@ import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
 import ua.zentix.incoming.nuclear.model.HearingModel;
+import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.registry.ModDamageTypes;
+import ua.zentix.incoming.registry.ModDataMaps;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.strike.ImpactCost;
@@ -87,23 +89,36 @@ public final class Warheads {
         world.impactCost().step(System.nanoTime() - t0);
     }
 
-    /** Сила взрыва входа бетонобойной бомбы в грунт (заряд бомбы сильнее). */
-    public static final float BUNKER_ENTRY_POWER = 4;
-
-    /** Бетонобойная бомба вошла в грунт: небольшой кратер, кинетический удар, звуковой удар и тупой удар о землю. */
-    public static void bunkerEntry(ServerLevel level, Vec3 point, @Nullable Entity bomb, @Nullable UUID owner) {
+    /**
+     * Бетонобойная бомба вошла в грунт со скоростью {@code speed} м/с: взрыва нет (взрыватель замедленный) — удар корпуса
+     * по земле: клиентам — пыль выброса из входа и звук удара, тем, кто рядом, — толчок земли по энергии удара.
+     */
+    public static void bunkerEntry(ServerLevel level, Vec3 point, double speed, @Nullable Entity bomb, @Nullable UUID owner) {
         long t0 = System.nanoTime();
-        Entity ownerEntity = owner == null ? null : level.getPlayerByUUID(owner);
-        GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(point.add(0, 1, 0)));
-        explode(level, null, List.of(), point.add(0, 1, 0), BUNKER_ENTRY_POWER, false, bomb, ownerEntity, null);
-        // кинетический удар: рядом с точкой попадания — смертельно
-        hurtAround(level, point, 14, bomb, ownerEntity, ModDamageTypes.KINETIC, d -> d <= 4.5 ? 60 : d <= 9 ? 22 : 7);
-        PacketDistributor.sendToPlayersNear(level, null, point.x, point.y, point.z, 320, new S2C.BunkerImpact(point, mat.ordinal()));
-        for (ServerPlayer p : level.players()) {
-            if (p.distanceToSqr(point) <= 60 * 60) PacketDistributor.sendToPlayer(p, new S2C.Quake(20, false));
-        }
+        GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(point));
+        double hit = BunkerImpact.equivalentTnt(WeaponSpec.BUNKER.payload().article().dryMass(), speed);
+        double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX,
+                HearingModel.audibleRangeM(BunkerImpact.airTnt(hit))));
+        PacketDistributor.sendToPlayersNear(level, null, point.x, point.y, point.z, reach, new S2C.BunkerImpact(point, mat.ordinal(), (float) speed));
+        quake(level, point, hit);
         StrikeWorld.get(level).impactCost().step(System.nanoTime() - t0);
     }
+
+    /**
+     * Толчок земли от удара или взрыва в грунте ({@code tntKg} кг ТНТ, что ушло в грунт): сейсмическая волна быстрее звука
+     * — трясёт сразу. Сила и длительность — по приведённому расстоянию Z = R/W^⅓ (оценка, удобство игрока, не урон): до
+     * Z 3 — 4 с, до 7,5 — 3 с, до 24 — 2 с (как было у 2,4 т в 40, 100 и 320 блоках).
+     */
+    static void quake(ServerLevel level, Vec3 at, double tntKg) {
+        double cube = Math.cbrt(Math.max(tntKg, 1e-3));
+        for (ServerPlayer p : level.players()) {
+            double z = p.position().distanceTo(at) / cube;
+            if (z <= QUAKE_FELT) PacketDistributor.sendToPlayer(p, new S2C.Quake(z <= 3 ? 80 : z <= 7.5 ? 60 : 40, true));
+        }
+    }
+
+    /** Докуда толчок земли ощутим, Z = R/W^⅓ (оценка). */
+    static final double QUAKE_FELT = 24;
 
     /** Подрыв бетонобойной бомбы под землёй. */
     public static void bunker(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity bomb, @Nullable UUID owner) {
@@ -322,25 +337,6 @@ public final class Warheads {
         }
     }
 
-    /** Сила подземного взрыва бетонобойной бомбы (настройка мира до закона её заряда — S5). */
-    static float bunkerPower() {
-        return IncomingConfig.SERVER.bunkerPower.get();
-    }
-
-    interface DamageByDistance {
-        float at(double distance);
-    }
-
-    static void hurtAround(ServerLevel level, Vec3 c, double radius, @Nullable Entity direct, @Nullable Entity owner,
-                           ResourceKey<DamageType> type, DamageByDistance damage) {
-        for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, new AABB(c, c).inflate(radius))) {
-            double d = e.position().distanceTo(c);
-            if (d > radius || !e.isAlive()) continue;
-            float amount = damage.at(d);
-            if (amount > 0) e.hurt(ModDamageTypes.source(level, type, direct, owner), amount);
-        }
-    }
-
     /** Частицы, которые видно издалека (как «force» в команде particle). */
     static void forced(ServerLevel level, ParticleOptions options, Vec3 p, int count, double dx, double dy, double dz, double speed, double range) {
         for (ServerPlayer pl : level.players()) {
@@ -376,34 +372,6 @@ public final class Warheads {
     }
 
     /**
-     * Ударная волна дошла: отбрасывает от эпицентра, контузия у тех, кто рядом.
-     * Сидящих в транспорте и на сиденьях не трогаем.
-     *
-     * @param band номер пояса фронта: 1 — первый тик пути фронта ({@link #FRONT_SPEED} блоков), 2 — второй …
-     */
-    static void push(ServerLevel level, Vec3 c, int band, double[] strength, Predicate<LivingEntity> filter,
-                     BiConsumer<Player, Integer> effects) {
-        if (band < 1 || band > strength.length) return;
-        double r0 = (band - 1) * FRONT_SPEED, r1 = band * FRONT_SPEED;
-        double k = strength[band - 1];
-        for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, new AABB(c, c).inflate(r1))) {
-            double d = e.position().distanceTo(c);
-            if (d < r0 || d >= r1 || e.isPassenger() || e.isSpectator() || !filter.test(e)) continue;
-            if (e instanceof Player p && p.getAbilities().flying) continue;
-            Vec3 dir = new Vec3(e.getX() - c.x, 0, e.getZ() - c.z);
-            dir = dir.lengthSqr() < 1.0e-4 ? new Vec3(0, 0, 0) : dir.normalize();
-            double resist = 1.0 - e.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE);
-            e.push(dir.x * k * resist, 0.3 * k * resist, dir.z * k * resist);
-            e.hurtMarked = true;
-            if (e instanceof Player p) effects.accept(p, band);
-        }
-    }
-
-    static void effect(Player p, Holder<MobEffect> effect, int seconds) {
-        p.addEffect(new MobEffectInstance(effect, seconds * 20, 0, true, false, true));
-    }
-
-    /**
      * Сколько блоков от изменённого блока должно быть в готовых чанках, когда он меняется без обновлений соседей
      * ({@link #EDGE_FLAGS}): сам блок и его соседи, которые читает Sable, — с запасом в блок.
      */
@@ -433,35 +401,6 @@ public final class Warheads {
         if (level.getBlockState(pos).isAir()) {
             BlockState fire = BaseFireBlock.getState(level, pos);
             if (fire.canSurvive(level, pos)) level.setBlock(pos, fire, 11);
-        }
-    }
-
-    /**
-     * Неровный «ком»: три пересекающихся бруска — полуоси a по одной оси и b = 0.6·a по двум другим;
-     * центр со случайным сдвигом ±(rx, ry, rz) и смещением oy по высоте.
-     */
-    static void blob(BlockPos c, int rx, int ry, int rz, int oy, int rmin, int rmax, RandomSource r, Consumer<BlockPos> out) {
-        int bx = c.getX() + r.nextIntBetweenInclusive(-rx, rx);
-        int by = c.getY() + r.nextIntBetweenInclusive(-ry, ry) + oy;
-        int bz = c.getZ() + r.nextIntBetweenInclusive(-rz, rz);
-        int a = r.nextIntBetweenInclusive(rmin, rmax);
-        int b = Math.max(1, a * 6 / 10);
-        Set<BlockPos> seen = new HashSet<>();
-        box(bx - a, by - b, bz - b, bx + a, by + b, bz + b, seen, out);
-        box(bx - b, by - b, bz - a, bx + b, by + b, bz + a, seen, out);
-        box(bx - b, by - a, bz - b, bx + b, by + a, bz + b, seen, out);
-    }
-
-    private static void box(int x0, int y0, int z0, int x1, int y1, int z1, Set<BlockPos> seen, Consumer<BlockPos> out) {
-        for (int x = x0; x <= x1; x++) for (int y = y0; y <= y1; y++) for (int z = z0; z <= z1; z++) {
-            BlockPos p = new BlockPos(x, y, z);
-            if (seen.add(p)) out.accept(p);
-        }
-    }
-
-    static void fill(ServerLevel level, Iterable<BlockPos> positions, BlockState with, TagKey<Block> replace) {
-        for (BlockPos p : positions) {
-            if (level.getBlockState(p).is(replace)) level.setBlock(p, with, 3);
         }
     }
 
@@ -633,114 +572,134 @@ public final class Warheads {
 
     // ================================================================ бетонобойная бомба
 
-    /** Подземный взрыв: каверна, щебень, сейсмика, выброс газов, обрушение свода. */
+    /**
+     * Подземный взрыв заряда бомбы ({@link WeaponSpec#warheadTnt}) по приведённой глубине ({@link BuriedBlast}). Сразу —
+     * волна заряда по физике ({@link #charge}) из точки подрыва: в грунте ей идти некуда (природный грунт — тень), а в
+     * пустоте — бункере, пещере, полости — она бьёт тела и стены, газы держат давление в помещении. За ней единицами:
+     * полость и зона дробления, своды ходов и пещер в зоне трещин, на малой глубине — воронка выброса (и волна над
+     * землёй той доли заряда, что ушла в воздух), иначе — газы и пыль из хода; через ~1 с — труба обрушения свода.
+     */
     static final class BunkerBlast implements Timeline {
+        /** Когда рушится свод полости, тиков (как было: обрушение идёт за взрывом, ~1 с; оценка). */
+        static final int CHIMNEY_TICK = 22;
+        /** Слоёв зоны трещин на единицу работы. */
+        static final int FRACTURE_SLICES = 1;
         private final Vec3 pos;
         private final Vec3 entry;
         @Nullable
         private final Entity direct;
         @Nullable
         private final Entity owner;
-        private final GroundMaterial mat;
         private final GroundMaterial ventMat;
-        /** Верх колонки заряда (по нему — обрушение свода). */
-        private final int surfaceY;
-        /** Глубина взрыва под поверхностью, блоков. */
-        private final int depth;
-        /** Ослабленная зона: взрыв выгрызает её как пустоту, уцелевшее потом становится щебнем. */
-        private final Set<BlockPos> weakened = new HashSet<>();
+        private final BuriedBlast law;
+        /** Верх над зарядом (без своей скважины). */
+        private final int cover;
+        /** Сечение хода бомбы, м². */
+        private final double hole;
         private final BlastArea area;
-        /** Подрывы заряда: полость, огонь и щебень — после них. */
+        /** Волна заряда (в пустотах под землёй и, при прорыве, над землёй): остальная работа ждёт её. */
         private final List<StagedExplosion> main;
         private int t;
 
         BunkerBlast(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity direct, @Nullable UUID ownerId) {
             this.pos = pos;
-            // подрывы — до 6 блоков от заряда силой до 12, обрушение свода — до 10 блоков вокруг устья
-            this.area = BlastArea.hold(level, pos, Math.max(6 + reach(12), reach(bunkerPower())));
             this.entry = entry;
             this.direct = direct;
             this.owner = ownerId == null ? null : level.getPlayerByUUID(ownerId);
             BlockPos c = BlockPos.containing(pos);
-            this.mat = GroundMaterial.sample(level, c);
+            GroundMaterial mat = GroundMaterial.sample(level, c);
             this.ventMat = GroundMaterial.sample(level, BlockPos.containing(entry));
-            this.surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, c.getX(), c.getZ());
-            this.depth = Mth.floor(surfaceY - pos.y);
-            // клиенту — верх над зарядом без скважины: по нему прорыв наружу, вспучивание грунта и курящийся провал
-            int cover = surfaceAbove(level, c);
+            this.cover = surfaceAbove(level, c);
+            WeaponSpec.Airframe bomb = WeaponSpec.BUNKER.payload();
+            this.law = new BuriedBlast(WeaponSpec.BUNKER.warheadTnt(), BunkerCover.depth(cover, pos.y));
+            this.hole = Math.PI * bomb.article().diameter() * bomb.article().diameter() / 4;
+            double air = law.airCharge(hole);
+            Vec3 top = new Vec3(pos.x, cover, pos.z);
+            // район — то, что взрыв делает с грунтом (трещины, труба, воронка); волна над землёй при прорыве ломает дальше
+            // там, где мир загружен (луч кончается в неготовом чанке): охват волны 2,4 т — ~650 блоков, тысячи чанков, и
+            // весь удар ждал бы их загрузки
+            double held = Math.max(law.fracture(), Math.max(law.chimney(), 2 * law.craterRadius(CraterModel.Soil.WET) + 1)) + EDGE;
+            this.area = BlastArea.hold(level, pos, held);
 
-            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, IncomingConfig.SERVER.farRange.get(),
+            // видно — до far_range, слышно — докуда звук той доли заряда, что вышла в воздух (HearingModel)
+            double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(air)));
+            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
                     new S2C.Blast(S2C.Blast.BUNKER, pos, mat.ordinal(), cover, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID),
                             WeaponType.BUNKER.id()));
 
-            // каверна: порода вокруг заряда в неровных комьях «ослаблена» — взрыв выгрызает полость рваной формы
-            for (int i = 0; i < 12; i++) {
-                blob(c, 6, 5, 6, 0, 3, 5, level.random, p -> {
-                    if (level.getBlockState(p).is(ModTags.DRILLABLE)) weakened.add(p.immutable());
-                });
-            }
-            ExplosionDamageCalculator weak = new ExplosionDamageCalculator() {
-                @Override
-                public Optional<Float> getBlockExplosionResistance(Explosion explosion, BlockGetter reader, BlockPos p,
-                                                                             BlockState state, FluidState fluid) {
-                    return weakened.contains(p) ? Optional.of(0f) : super.getBlockExplosionResistance(explosion, reader, p, state, fluid);
-                }
-            };
-            List<StagedExplosion> blasts = new ArrayList<>(3);
-            for (int i = 0; i < 2; i++) {
-                Vec3 o = pos.add(level.random.nextIntBetweenInclusive(-3, 3), level.random.nextIntBetweenInclusive(-2, 2), level.random.nextIntBetweenInclusive(-3, 3));
-                blasts.add(explode(level, area, List.of(), o, 12, false, direct, owner, weak));
-            }
-            blasts.add(explode(level, area, List.of(), pos, bunkerPower(), false, direct, owner, weak));
+            // заряд один: в пустотах у заряда — то, что не ушло в воздух, над землёй — доля, что ушла (у самой поверхности —
+            // весь заряд волной над землёй)
+            List<StagedExplosion> blasts = new ArrayList<>(2);
+            double below = law.breaches() ? law.tnt() - air : law.tnt();
+            if (below > 0) blasts.add(charge(level, area, pos, below, direct, owner));
+            if (law.breaches() && air > 0) blasts.add(charge(level, area, top.add(0, 0.5, 0), air, direct, owner));
             main = List.copyOf(blasts);
-
-            // ударная волна в породе достаёт и за камнем, без прямой видимости
-            hurtAround(level, pos, 24, direct, owner, ModDamageTypes.SHOCKWAVE, d -> d <= 10 ? 200 : d <= 16 ? 40 : 12);
-            for (ServerPlayer p : level.players()) {
-                double d = p.position().distanceTo(pos);
-                if (d > 24 && d <= 34) p.hurt(ModDamageTypes.source(level, ModDamageTypes.SHOCKWAVE, direct, owner), 4);
-                // сейсмическая волна быстрее звука: трясёт сразу, звук придёт позже
-                if (d <= 320) PacketDistributor.sendToPlayer(p, new S2C.Quake(d <= 40 ? 80 : d <= 100 ? 60 : 40, true));
-            }
         }
 
         @Override
         public boolean tick(ServerLevel level) {
             t++;
-            switch (t) {
-                // после подрывов, которые поставлены раньше: огонь на дне и щебень — в уже выгрызенной полости
-                case 1 -> unit(level, area, main, ImpactCost.Kind.GROUND, "Cavity fire", l -> {
-                    igniteCavity(l);
-                    return 6;
+            if (t == 1) {
+                boolean blocks = IncomingConfig.SERVER.blockDamage.get();
+                // в зоне дробления давление в породе — сотни МПа: кто там (в ходе, в пустоте за стеной), не выживет
+                unit(level, area, main, ImpactCost.Kind.HITS, "Crush zone", l -> {
+                    if (!happened()) return 0;
+                    quake(l, pos, law.tnt() - law.airCharge(hole));
+                    return crushBodies(l);
                 });
-                case 2 -> unit(level, area, main, ImpactCost.Kind.GROUND, "Rubble", this::rubble);
-                case 3 -> {
-                    explode(level, area, main, pos.add(4, -2, -3), 4, false, direct, owner, null);
-                    explode(level, area, main, pos.add(-4, 1, 3), 4, false, direct, owner, null);
-                    PacketDistributor.sendToPlayersNear(level, null, entry.x, entry.y, entry.z, 200, new S2C.Vent(entry, ventMat.ordinal()));
-                    unit(level, area, main, ImpactCost.Kind.DEBRIS, "Ejecta", l -> DebrisSpawner.vent(l, entry, ventMat));
-                }
-                case 22 -> {
-                    if (IncomingConfig.SERVER.collapse.get() && depth >= 4 && depth <= 48) {
-                        unit(level, area, main, ImpactCost.Kind.GROUND, "Roof collapse", l -> {
-                            collapse(l);
-                            return 1;
-                        });
+                if (blocks) {
+                    // воронка — по верху, пока полость не выгрызла столбец заряда
+                    if (law.breaches()) unit(level, area, main, ImpactCost.Kind.GROUND, "Ejection crater", l -> happened() ? crater(l) : 0);
+                    int r = Mth.ceil(law.crush());
+                    for (int dy = -r; dy <= r; dy++) {
+                        int y = dy;
+                        unit(level, area, main, ImpactCost.Kind.GROUND, "Cavity", l -> happened() ? cavitySlice(l, y) : 0);
                     }
                 }
-                default -> {}
+                if (law.breaches()) {
+                    if (IncomingConfig.SERVER.shatterGlass.get()) {
+                        Vec3 top = new Vec3(pos.x, cover, pos.z);
+                        Shatter.queue(level, area, main, top, Shatter.Wave.of(top, law.airCharge(hole)), (l, n) -> {});
+                    }
+                } else {
+                    // газы полости выходят по ходу бомбы
+                    unit(level, area, main, ImpactCost.Kind.DEBRIS, "Vent", l -> {
+                        if (!happened()) return 0;
+                        double air = law.airCharge(hole);
+                        PacketDistributor.sendToPlayersNear(l, null, entry.x, entry.y, entry.z,
+                                Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(air))),
+                                new S2C.Vent(entry, ventMat.ordinal(), (float) air));
+                        return 1;
+                    });
+                }
             }
-            // под землёй рядом — взрыв в замкнутом пространстве отбрасывает и оглушает
-            push(level, pos, t, new double[]{1.2, 0.8}, e -> !level.canSeeSky(e.blockPosition().above()), (p, band) -> {
-                if (band == 1) effect(p, MobEffects.DARKNESS, 4);
-                effect(p, MobEffects.CONFUSION, 8);
-            });
-            return t < 24;
+            if (t == 2 && IncomingConfig.SERVER.blockDamage.get()) {
+                // своды в зоне трещин — следующим тиком: полости всех подрывов этого тика встают в очередь раньше (осыпание
+                // у воронок залпа идёт вместе, а не по очереди); по FRACTURE_SLICES слоёв на единицу (~3 тыс. клеток слой; падающий щебень и вода, что затекает в полость, — обновления соседей)
+                int f = Mth.ceil(law.fracture());
+                for (int dy = -f; dy <= f; dy += FRACTURE_SLICES) {
+                    int lo = dy, hi = Math.min(f, dy + FRACTURE_SLICES - 1);
+                    unit(level, area, main, ImpactCost.Kind.GROUND, "Fractures", l -> {
+                        int n = 0;
+                        for (int y = lo; y <= hi && happened(); y++) n += fractureSlice(l, y);
+                        return n;
+                    });
+                }
+            }
+            if (t == CHIMNEY_TICK && IncomingConfig.SERVER.collapse.get() && IncomingConfig.SERVER.blockDamage.get() && !law.breaches()) {
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Roof collapse", l -> happened() ? chimney(l) : 0);
+            }
+            return t < CHIMNEY_TICK;
         }
 
         @Override
         public void end(ServerLevel level) {
             area.release(level);
+        }
+
+        /** Волна заряда была (приват её не отменил): взрыв, отменённый приватом, не роет и не рушит. */
+        private boolean happened() {
+            return !main.isEmpty() && main.getFirst().happened();
         }
 
         /**
@@ -755,54 +714,133 @@ public final class Warheads {
             return BunkerCover.surface(h);
         }
 
-        /** Огонь на дне полости. */
-        private void igniteCavity(ServerLevel level) {
+        /** Тела в зоне дробления. Сколько задето. */
+        private int crushBodies(ServerLevel level) {
+            double r = law.crush();
+            int n = 0;
+            for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, new AABB(pos, pos).inflate(r), LivingEntity::isAlive)) {
+                if (e.position().distanceTo(pos) > r) continue;
+                e.hurt(ModDamageTypes.source(level, ModDamageTypes.SHOCKWAVE, direct, owner), Float.MAX_VALUE);
+                n++;
+            }
+            return n;
+        }
+
+        /**
+         * Слой {@code dy} над зарядом: полость (всё, что не держит {@link Penetration.Kind#STOP}, — воздух) и зона
+         * дробления (скала — в булыжник, бетон и кладка — в гравий; грунт уплотняется — без смены). Сколько блоков смотрели.
+         */
+        private int cavitySlice(ServerLevel level, int dy) {
             BlockPos c = BlockPos.containing(pos);
-            for (int i = 0; i < 6; i++) {
-                BlockPos p = c.offset(level.random.nextIntBetweenInclusive(-5, 5), 3, level.random.nextIntBetweenInclusive(-5, 5));
-                for (int k = 0; k < 10 && level.getBlockState(p.below()).isAir(); k++) p = p.below();
-                igniteAt(level, p);
+            double rc = law.cavity(), rk = law.crush();
+            int r = Mth.ceil(rk), n = 0;
+            BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    if (d > rk) continue;
+                    p.set(c.getX() + dx, c.getY() + dy, c.getZ() + dz);
+                    if (!level.isInWorldBounds(p) || !Terrain.ready(level, p)) continue;
+                    n++;
+                    BlockState s = level.getBlockState(p);
+                    if (s.isAir()) continue;
+                    ModDataMaps.Penetrability m = ModDataMaps.Penetrability.of(s);
+                    if (m.kind() == Penetration.Kind.STOP || m.kind() == Penetration.Kind.FLUID) continue;
+                    if (d <= rc) {
+                        ColumnScar.replace(level, p.immutable(), s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                        continue;
+                    }
+                    // дробится порода и кладка, что в карте данных; прочее (сундук, механизм мода) — нет
+                    BlockState rubble = rubble(s, ModDataMaps.Penetrability.find(s));
+                    if (rubble != null && !s.is(rubble.getBlock())) ColumnScar.replace(level, p.immutable(), s, rubble, Block.UPDATE_ALL);
+                }
             }
+            return n;
         }
 
-        /** Что уцелело от ослабленной зоны — дроблёная порода; щебень под сводом осыпается в полость. Сколько блоков смотрели. */
-        private int rubble(ServerLevel level) {
-            int cy = BlockPos.containing(pos).getY();
-            for (BlockPos p : weakened) {
-                BlockState s = level.getBlockState(p);
-                if (s.isAir() || !s.is(ModTags.DRILLABLE)) continue;
-                level.setBlock(p, p.getY() > cy ? Blocks.GRAVEL.defaultBlockState() : Blocks.COBBLESTONE.defaultBlockState(), 3);
-            }
-            Set<BlockPos> magma = new HashSet<>();
-            for (int i = 0; i < 3; i++) blob(BlockPos.containing(pos), 5, 1, 5, -7, 1, 2, level.random, magma::add);
-            fill(level, magma, Blocks.MAGMA_BLOCK.defaultBlockState(), ModTags.BB_ROCK);
-            return weakened.size() + magma.size();
+        /**
+         * Во что дробится блок в зоне дробления: камень — в булыжник, глубинный сланец — в свой булыжник, прочая скала, бетон
+         * и кладка — в гравий (щебень); грунт уплотняется — без смены; блок без записи в карте — без смены.
+         */
+        @Nullable
+        private static BlockState rubble(BlockState s, @Nullable ModDataMaps.Penetrability m) {
+            if (m == null) return null;
+            if (s.is(BlockTags.DEEPSLATE_ORE_REPLACEABLES)) return Blocks.COBBLED_DEEPSLATE.defaultBlockState();
+            if (s.is(BlockTags.BASE_STONE_OVERWORLD) || s.is(BlockTags.STONE_ORE_REPLACEABLES)) return Blocks.COBBLESTONE.defaultBlockState();
+            return m.kind() == Penetration.Kind.ROCK || m.kind() == Penetration.Kind.CONCRETE ? Blocks.GRAVEL.defaultBlockState() : null;
         }
 
-        /** «Труба» обрушения из щебня от свода полости к поверхности и рваная воронка провала наверху. */
-        private void collapse(ServerLevel level) {
-            BlockPos s = BlockPos.containing(pos.x, surfaceY, pos.z);
-            Set<BlockPos> chimney = new HashSet<>();
-            int n = (depth - 8) / 3;
-            for (int i = 1; i <= n; i++) blob(s, 1, 1, 1, -3 * i, 1, 2, level.random, chimney::add);
-            fill(level, chimney, Blocks.GRAVEL.defaultBlockState(), ModTags.DRILLABLE);
-            Set<BlockPos> crater = new HashSet<>();
-            for (int i = 0; i < 10; i++) blob(s, 7, 1, 7, -2, 1, 3, level.random, crater::add);
-            fill(level, crater, Blocks.GRAVEL.defaultBlockState(), ModTags.BB_SOIL);
-            Set<BlockPos> coarse = new HashSet<>();
-            for (int i = 0; i < 5; i++) blob(s, 8, 1, 8, -1, 1, 2, level.random, coarse::add);
-            fill(level, coarse, Blocks.COARSE_DIRT.defaultBlockState(), ModTags.BB_SOIL);
-            Set<BlockPos> rooted = new HashSet<>();
-            for (int i = 0; i < 3; i++) blob(s, 6, 1, 6, -1, 1, 2, level.random, rooted::add);
-            fill(level, rooted, Blocks.ROOTED_DIRT.defaultBlockState(), ModTags.BB_SOIL);
-
-            level.playSound(null, s, SoundEvents.GRAVEL_BREAK, SoundSource.BLOCKS, 8, 0.5f);
-            level.playSound(null, s, SoundEvents.GRAVEL_BREAK, SoundSource.BLOCKS, 8, 0.7f);
-            Vec3 sv = Vec3.atBottomCenterOf(s);
-            PacketDistributor.sendToPlayersNear(level, null, sv.x, sv.y, sv.z, 160, new S2C.Collapse(sv, mat.ordinal()));
-            for (ServerPlayer p : level.players()) {
-                if (p.distanceToSqr(sv) <= 50 * 50) PacketDistributor.sendToPlayer(p, new S2C.Quake(30, false));
+        /**
+         * Слой {@code dy} зоны трещин: свод хода или пещеры (воздух под природным грунтом или скалой) рушится щебнем —
+         * гравием, который падает сам, — с вероятностью 1 − r/R трещин (оценка: ближе — почти всегда, у края — редко).
+         * Полость и зона дробления — не здесь. Сколько блоков смотрели.
+         */
+        private int fractureSlice(ServerLevel level, int dy) {
+            BlockPos c = BlockPos.containing(pos);
+            double rf = law.fracture(), rk = law.crush();
+            int r = Mth.ceil(rf), n = 0;
+            RandomSource random = level.random;
+            BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(), up = new BlockPos.MutableBlockPos();
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    if (d > rf || d <= rk) continue;
+                    p.set(c.getX() + dx, c.getY() + dy, c.getZ() + dz);
+                    up.set(p.getX(), p.getY() + 1, p.getZ());
+                    if (!level.isInWorldBounds(up) || !Terrain.ready(level, p)) continue;
+                    n++;
+                    if (!level.getBlockState(p).isAir()) continue;
+                    BlockState roof = level.getBlockState(up);
+                    if (!roof.is(ModTags.NUKE_GROUND) || random.nextDouble() > 1 - d / rf) continue;
+                    ModDataMaps.Penetrability m = ModDataMaps.Penetrability.of(roof);
+                    if (m.kind() != Penetration.Kind.ROCK && m.kind() != Penetration.Kind.SOIL) continue;
+                    ColumnScar.replace(level, up.immutable(), roof, Blocks.GRAVEL.defaultBlockState(), Block.UPDATE_ALL);
+                }
             }
+            return n;
+        }
+
+        /**
+         * Свод полости рушится трубой высотой {@link BuriedBlast#chimney} (радиус — полости): порода над полостью — щебень
+         * (гравий), он осыпается в неё; труба дошла до верха — провал на поверхности и пыль над ним. Сколько блоков смотрели.
+         */
+        private int chimney(ServerLevel level) {
+            BlockPos c = BlockPos.containing(pos);
+            double rc = law.cavity();
+            int r = Mth.ceil(rc), top = Math.min(cover, c.getY() + Mth.ceil(law.chimney())), n = 0;
+            BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+            for (int y = c.getY() + 1; y <= top; y++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    for (int dz = -r; dz <= r; dz++) {
+                        if (dx * dx + dz * dz > rc * rc) continue;
+                        p.set(c.getX() + dx, y, c.getZ() + dz);
+                        if (!level.isInWorldBounds(p) || !Terrain.ready(level, p)) continue;
+                        n++;
+                        BlockState s = level.getBlockState(p);
+                        if (s.isAir()) continue;
+                        ModDataMaps.Penetrability m = ModDataMaps.Penetrability.of(s);
+                        if (m.kind() == Penetration.Kind.STOP || m.kind() == Penetration.Kind.FLUID || s.is(Blocks.GRAVEL)) continue;
+                        ColumnScar.replace(level, p.immutable(), s, Blocks.GRAVEL.defaultBlockState(), Block.UPDATE_ALL);
+                    }
+                }
+            }
+            if (law.subsides()) {
+                Vec3 sv = new Vec3(pos.x, cover, pos.z);
+                // пыль провала — доля грунта, что ушёл в провал (объём полости), поднятая падением (как у воронки)
+                double cavity = 4.0 / 3 * Math.PI * Math.pow(rc, 3);
+                PacketDistributor.sendToPlayersNear(level, null, sv.x, sv.y, sv.z, IncomingConfig.SERVER.farRange.get(),
+                        new S2C.Collapse(sv, ventMat.ordinal(), (float) cavity));
+            }
+            return n;
+        }
+
+        /**
+         * Воронка выброса ({@link BuriedBlast#craterRadius} по грунту у устья) — та же чаша и вал, что у
+         * воронок ({@link Craters#dig}), до центра полости. Сколько столбцов смотрели.
+         */
+        private int crater(ServerLevel level) {
+            CraterModel.Soil soil = ventMat.soil();
+            return Craters.dig(level, new Vec3(pos.x, cover, pos.z), law.craterRadius(soil), law.craterDepth(soil), ventMat);
         }
     }
 }

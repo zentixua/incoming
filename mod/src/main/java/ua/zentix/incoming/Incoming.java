@@ -80,6 +80,7 @@ public final class Incoming {
         Util.backgroundExecutor().execute(HobBlast::warm);
 
         modBus.addListener(IncomingNetwork::register);
+        modBus.addListener(ua.zentix.incoming.registry.ModDataMaps::register);
         modBus.addListener(SamBlockEntity::registerCapabilities);
         modBus.addListener(FixedLauncherBlockEntity::registerCapabilities);
 

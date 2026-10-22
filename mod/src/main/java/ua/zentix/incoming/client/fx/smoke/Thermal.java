@@ -37,7 +37,9 @@ public final class Thermal {
     public Thermal(double buoyancy, double g0, double rMin, CloudModel.Air air) {
         this.air = air;
         this.buoyancy = buoyancy;
-        double volume = buoyancy / g0;
+        // без тепла (пыль, поднятая не жаром) — шар не всплывает: g' = 0
+        double volume = buoyancy > 0 && g0 > 0 ? buoyancy / g0 : 0;
+        if (buoyancy <= 0) g0 = 0;
         r0 = Math.max(rMin, Math.cbrt(3 * volume / (4 * Math.PI)));
         int n = (int) Math.ceil(Math.PI / air.n() / DT) + 1;
         z = new double[n];

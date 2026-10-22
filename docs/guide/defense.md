@@ -35,8 +35,9 @@ blocks, a Lancet within about 35, a cruise missile within about 150. A wall, a h
 softens both. Hearing damage can be turned off in the [settings](settings.md).
 
 - **Get underground.** Earth and thick walls stop a blast; underground and under water even glass stays intact.
-- **The bunker buster** goes through about 30 blocks of stone and explodes inside. Only depth protects against it, or
-  a SAM that shoots down the B-2.
+- **The bunker buster** goes through about 4 blocks of stone or concrete, or tens of blocks of dirt, and explodes there;
+  it crushes rock about 10 blocks around and brings down tunnel roofs about 27 blocks away
+  ([details](weapons.md#bomb-b-2)). Depth in rock protects against it, or a SAM that shoots down the B-2.
 - **Nuclear strike**: see [how to survive](nuke.md#how-to-survive).
 
 ## Surface-to-Air Missile System (SAM)
