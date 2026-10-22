@@ -56,7 +56,9 @@ All of these are optional:
   and strike damage shows up in the distant terrain right away.
 - **Voxy** 0.2.16 (on NeoForge through **Roxy**): distant terrain hides projectiles, blasts and smoke beyond your
   render distance, with and without shaders, and strike damage far away (craters, nuclear ruins and scorch, dark
-  districts in a blackout) shows up in it: the server sends those chunks to players with Voxy.
+  districts in a blackout) shows up in it: the server sends those chunks to players with Voxy. Where LOD Server
+  Support is not serving (single-player, a server without it), the targeting map, sight lines and sound around hills
+  read distant terrain from Voxy's own LOD: everything Voxy has seen, or the whole save after `/voxy import current`.
 - **Sound Physics Remastered**: it handles muffling behind walls; Incoming only adds deafening from explosions.
 - **Iris**: the nuclear effects render with shaders.
 - **Flashback**: replays show strikes, and seeking through a replay does not set off explosions again.

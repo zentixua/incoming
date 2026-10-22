@@ -12,8 +12,10 @@ paths:
 
 ## Подводные камни
 - Дальний рельеф карты, лучей и звука (`client/map/TerrainTiles`) — один дальний слой: первый работающий из LOD Server
-  Support (`LssTerrain`, пока `LSSApi.isServerEnabled()`) и DH (`DistantHorizonsTerrain`), иначе только чанки клиента
-  (`TerrainTiles.pickFar`). LSS (MIT, мягкая зависимость `lss`, compileOnly `lss_version`) — через его публичное
+  Support (`LssTerrain`, пока `LSSApi.isServerEnabled()`), базы Voxy (`VoxyTerrain`, пока Voxy держит мир; `voxy.md`)
+  и DH (`DistantHorizonsTerrain`), иначе только чанки клиента (`TerrainTiles.pickFar`, порядок — `TerrainTiles.stack`,
+  тест `farSourceOrderForEachPack`). Своей настройки «раздавать одиночной игре» у LSS нет (только «Открыть для сети» и
+  тестовое свойство) — в одиночной игре дальний рельеф даёт база Voxy. LSS (MIT, мягкая зависимость `lss`, compileOnly `lss_version`) — через его публичное
   клиентское API `LSSApi.registerColumnConsumer`: подписка — в `FMLClientSetupEvent` (его API трогает его сетевые
   классы), подписчик есть — клиент LSS качает и без Voxy. Колонка приходит в его потоке `LSS-ColumnProcessor`: верх
   колонок считается там же (`LssColumns.summarize`, как слой чанков клиента: `MOTION_BLOCKING`, цвет карты, вода) и

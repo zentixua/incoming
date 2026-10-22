@@ -7,6 +7,7 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/client/render/LodDepth.java"
   - "mod/src/main/java/ua/zentix/incoming/client/render/VoxyDepth.java"
   - "mod/src/main/java/ua/zentix/incoming/compat/Voxy*.java"
+  - "mod/src/main/java/ua/zentix/incoming/client/map/Voxy*.java"
   - "mod/src/test/java/me/cortex/voxy/**"
 ---
 
@@ -32,6 +33,23 @@ paths:
   даёт расстояние, которого в кадре нет. Тот же кадр без глубины Voxy — `-Dincoming.lodDepth.voxy=false`. Как читается —
   строка «Voxy depth for the effects layer» в логе и `SCENARIO … depth:`; сценарий клиента с Voxy —
   `tools/client_scenario.sh <сценарий> voxy` (Sodium, Roxy, Voxy и Forgified Fabric API из каталога модов).
+- Дальний рельеф карты, лучей и звука из базы LOD Voxy (`client/map/VoxyTerrain`, за `TerrainSource` между DH и LSS,
+  `dh.md`): тем же путём, что читает LSS (`compat/VoxyTerrainProbe`, MIT) — `WorldIdentifier.ofEngineNullable(Level)`
+  (в потоке игры, не чаще раза в секунду; null — Voxy мира не держит, слой молчит), `WorldEngine.acquireRef` →
+  `acquireIfExists(уровень, x, y, z)` (null — секции нет: воздух или не видел) → `WorldSection.copyDataTo` →
+  `release()` сразу → `releaseRef`. Секции нет в памяти — Voxy читает свою базу в вызывающем потоке: только фоновые
+  потоки (плитки карты и обход `Incoming Voxy terrain`). Уровни Voxy (воксель 1–16 блоков) = уровни плиток: плитка
+  уровня L читает секции уровня L. Воксель уровня > 0 — непрозрачнейший из восьми, при равных верхний (`Mipper`), воздух
+  — только если все воздух: верх столбца — самый высокий блок клетки, высота — середина вокселя (`VoxyColumns.height`,
+  ±2^L/2); вода мельче вокселя над твёрдым дном выходит дном (у дна непрозрачность выше) — реки на грубых уровнях
+  «сухие». Перечитанная грубая сводка стала другой — подробные под ней из памяти долой (`dropFiner`): `peek` берёт
+  подробную первой и отдавал бы лучам рельеф до воронки. Мир закрылся под чтением — `IllegalStateException` и
+  `isLive() == false`: забыть мир, найти заново (не выкл.); другое `IllegalStateException` у живого — сбой в счётчик и лог.
+  Список блоков `Mapper` растёт без замка: номер, которого ещё нет, — как воздух, без кэша. Событий изменения для нас
+  нет (`setDirtyCallback` один и занят рендером): обход вокруг игрока перечитывает уровень 4 до 8 км раз в минуту,
+  сводка стала другой — плитки над ней устаревают. База Voxy — только то, что Voxy видел (и что прислали LSS и наши
+  `S2C.VoxyChunk`); в одиночной игре всё сохранение — `/voxy import current`. Как читается — `TerrainTiles.stats()`
+  (`Voxy (world …): section columns read …`).
 - Изменения мира вдали (воронки, руины и след ядерки, лампы блэкаута) — тем же путём, что в DH (`compat/DhUpdates`:
   отметки, копии `FarLods`, копии тяжёлой зоны `FrontLods`), рядом с DH: `compat/VoxyLods` шлёт чанк игрокам с Voxy
   (`C2S.LodMods` при входе) пакетом `S2C.VoxyChunk`, кроме тех, кто этот чанк видит (его Voxy перестроит сам), не

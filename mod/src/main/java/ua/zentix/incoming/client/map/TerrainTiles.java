@@ -262,6 +262,8 @@ public final class TerrainTiles {
     private static boolean distantHorizons;
     /** LOD Server Support стоит, и его API совместимо ({@link #init}). */
     private static boolean lodServerSupport;
+    /** Voxy стоит, и его классы — те, что мод читает ({@link #init}). */
+    private static boolean voxy;
     /** Счётчик кадров карты (для вытеснения только невидимых плиток). */
     private static long frame;
     private static int ticks;
@@ -341,6 +343,7 @@ public final class TerrainTiles {
         if (lodServerSupport) LssTerrain.tick(player.getX(), player.getZ());
         for (Layer layer : layers) {
             collect(layer);
+            if (live(layer)) layer.source.tickNear(player.getX(), player.getZ());
             if (layer.source.invalidated(current)) {
                 for (Tile t : layer.tiles.values()) t.stale = true;
             }
@@ -610,6 +613,7 @@ public final class TerrainTiles {
     public static void reset() {
         for (Layer layer : layers) {
             for (Tile t : layer.tiles.values()) release(t);
+            layer.source.close();
         }
         layers = List.of();
         far = null;
@@ -639,6 +643,8 @@ public final class TerrainTiles {
         NeoForge.EVENT_BUS.addListener(LoadedChunksTerrain::onChunkLoad);
         // подписка на LSS — после конструкторов всех модов: его API трогает его же сетевые классы
         if (ModList.get().isLoaded("lss")) modBus.addListener((FMLClientSetupEvent e) -> subscribeLss());
+        // классы Voxy (через Roxy) — тоже после загрузки всех модов
+        if (ModList.get().isLoaded("voxy")) modBus.addListener((FMLClientSetupEvent e) -> voxy = VoxyTerrain.init());
         if (!ModList.get().isLoaded("distanthorizons")) return;
         try {
             distantHorizons = DistantHorizonsTerrain.supported();
@@ -663,13 +669,24 @@ public final class TerrainTiles {
     private static void switchTo(ClientLevel current) {
         reset();
         level = current;
-        List<Layer> list = new ArrayList<>(3);
-        // порядок — предпочтение: LSS (рельеф с сервера, сразу в памяти) выше DH
-        if (distantHorizons) list.add(new Layer("dh", new DistantHorizonsTerrain(), true));
-        if (lodServerSupport) list.add(new Layer("lss", new LssTerrain(current), true));
-        list.add(new Layer("chunks", new LoadedChunksTerrain()));
-        layers = List.copyOf(list);
+        layers = stack(distantHorizons ? new DistantHorizonsTerrain() : null, voxy ? new VoxyTerrain(current) : null,
+                lodServerSupport ? new LssTerrain(current) : null, new LoadedChunksTerrain());
         pickFar();
+    }
+
+    /**
+     * Слои снизу вверх; дальние — по возрастанию предпочтения ({@link #pickFar} берёт последний работающий): DH, база
+     * Voxy, LSS. LSS — рельеф всей карты с сервера, когда тот его раздаёт; база Voxy — всё, что Voxy видел или
+     * импортировал, читается по уровням плиток и работает и в одиночной игре; DH — только через его API блочными
+     * участками. Классы источников трогаются, только если их мод стоит: null — нет.
+     */
+    static List<Layer> stack(@Nullable TerrainSource dh, @Nullable TerrainSource voxy, @Nullable TerrainSource lss, TerrainSource chunks) {
+        List<Layer> list = new ArrayList<>(4);
+        if (dh != null) list.add(new Layer("dh", dh, true));
+        if (voxy != null) list.add(new Layer("voxy", voxy, true));
+        if (lss != null) list.add(new Layer("lss", lss, true));
+        list.add(new Layer("chunks", chunks));
+        return List.copyOf(list);
     }
 
     /** Плитка задевает дальность прорисовки клиента: дальше чанков у него нет. */
@@ -825,7 +842,7 @@ public final class TerrainTiles {
                 }
                 if (src.offThread()) {
                     if (layer.jobs >= limit) continue;
-                    TerrainSource.Reader reader = src.open(current);
+                    TerrainSource.Reader reader = src.open(current, t.key.level);
                     if (reader == null) return;
                     t.buildingSince = now;
                     t.stale = false;

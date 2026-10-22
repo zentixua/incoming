@@ -540,6 +540,55 @@ class TerrainTilesTest {
         assertNull(TerrainTiles.pickFar(List.of(chunks)));
     }
 
+    /**
+     * Порядок дальних источников — LSS, когда сервер раздаёт рельеф, потом база Voxy, потом DH, потом только чанки — в
+     * трёх случаях сборки (только Voxy, только DH, ни того ни другого), каждый с LSS и без; LSS стоит, но сервер его не
+     * раздаёт (одиночная игра) — как без него.
+     */
+    @Test
+    void farSourceOrderForEachPack() {
+        boolean[] serving = {false};
+        TerrainSource chunks = source(() -> true), lss = source(() -> serving[0]);
+        TerrainSource voxy = source(() -> true), dh = source(() -> true);
+        // только Voxy (Open Skies)
+        assertEquals("voxy", far(TerrainTiles.stack(null, voxy, null, chunks)));
+        assertEquals("voxy", far(TerrainTiles.stack(null, voxy, lss, chunks)), "одиночная игра: LSS не раздаёт — база Voxy");
+        serving[0] = true;
+        assertEquals("lss", far(TerrainTiles.stack(null, voxy, lss, chunks)), "сервер раздаёт LOD — LSS");
+        serving[0] = false;
+        // только DH
+        assertEquals("dh", far(TerrainTiles.stack(dh, null, null, chunks)));
+        assertEquals("dh", far(TerrainTiles.stack(dh, null, lss, chunks)));
+        serving[0] = true;
+        assertEquals("lss", far(TerrainTiles.stack(dh, null, lss, chunks)));
+        serving[0] = false;
+        // ни того ни другого
+        assertNull(far(TerrainTiles.stack(null, null, null, chunks)), "только чанки");
+        assertNull(far(TerrainTiles.stack(null, null, lss, chunks)));
+        serving[0] = true;
+        assertEquals("lss", far(TerrainTiles.stack(null, null, lss, chunks)));
+        serving[0] = false;
+        // оба: база Voxy раньше DH, но только пока Voxy держит мир
+        boolean[] voxyWorld = {true};
+        TerrainSource voxyMaybe = source(() -> voxyWorld[0]);
+        assertEquals("voxy", far(TerrainTiles.stack(dh, voxyMaybe, lss, chunks)));
+        voxyWorld[0] = false;
+        assertEquals("dh", far(TerrainTiles.stack(dh, voxyMaybe, lss, chunks)), "у Voxy нет мира — DH");
+        List<TerrainTiles.Layer> all = TerrainTiles.stack(dh, voxy, lss, chunks);
+        assertEquals("chunks", all.get(all.size() - 1).name, "чанки клиента — сверху, всегда");
+        assertFalse(all.get(all.size() - 1).far);
+    }
+
+    @Nullable
+    private static String far(List<TerrainTiles.Layer> layers) {
+        TerrainTiles.Layer l = TerrainTiles.pickFar(layers);
+        return l == null ? null : l.name;
+    }
+
+    private static TerrainSource source(java.util.function.BooleanSupplier active) {
+        return farLayer("", active).source;
+    }
+
     private static TerrainTiles.Layer farLayer(String name, java.util.function.BooleanSupplier active) {
         return new TerrainTiles.Layer(name, new TerrainSource() {
             @Override
