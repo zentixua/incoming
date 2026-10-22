@@ -134,6 +134,7 @@ public final class AreaLoader {
         // взят снова, пока ждал снятия тикета отпуска: те же чанки уже держат тикеты района
         Long release = releasing.remove(area);
         if (release != null) distances(level).removeTicket(RELEASE, area.centre(), area.level(), release);
+        apply(level);
     }
 
     /** Продлить район, взятый на время, до тика {@code until}; отпущенный — не брать снова. */
@@ -158,6 +159,22 @@ public final class AreaLoader {
             releasing.put(area, release);
         }
         removeTickets(level, area, taken);
+        apply(level);
+    }
+
+    /**
+     * Тикеты района — в уровни чанков и тик сразу, а не когда их пересчитает кто-то другой. Ваниль пересчитывает уровни, когда
+     * её позовут: в начале тика, синхронной загрузкой чанка, отпуском чужого района ({@link #drainReleases}). Без этого
+     * снаряд, взявший район, видел его тикающим в этом тике или в следующем по тому, звал ли кто-то пересчёт между его
+     * тикетом и его проверкой, — по чужим ударам, соседним сценариям партии и составу части CI (22.10: «Ланцет»
+     * сценария loiter_rail.player возвращался в мир на тик раньше или позже, с тем же местом подрыва и другим хешем).
+     */
+    private static void apply(ServerLevel level) {
+        // только уровни, тик и статусы держателей — без ServerChunkCache.runDistanceManagerUpdates: тот ещё копирует всю
+        // карту чанков в видимую (promoteChunkMap), когда появились новые держатели, а районы берут снаряды залпа и
+        // руины ядерки десятками за тик; новые держатели станут видимы пересчётом ванили в начале тика
+        // кэш последних чанков getChunkNow помнил бы чанк, который пересчёт опустил ниже полной загрузки (открыт AT)
+        if (distances(level).runAllUpdates(level.getChunkSource().chunkMap)) level.getChunkSource().clearCache();
     }
 
     /**
@@ -227,6 +244,8 @@ public final class AreaLoader {
         }
         for (Area area : requests.keySet()) grow(level, area);
         drainReleases(level);
+        // выросшие районы — сразу ({@link #apply})
+        apply(level);
     }
 
     /**
