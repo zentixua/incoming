@@ -23,7 +23,7 @@ import ua.zentix.incoming.client.fx.smoke.SmokeFrame;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.client.nuclear.NukePall;
 import ua.zentix.incoming.client.nuclear.NukeWater;
-import ua.zentix.incoming.client.render.DhDepth;
+import ua.zentix.incoming.client.render.LodDepth;
 import ua.zentix.incoming.client.render.FarDraw;
 
 import java.io.IOException;
@@ -164,7 +164,7 @@ public final class FxLayer {
         try {
             draw(e);
         } finally {
-            DhDepth.endFrame();
+            LodDepth.endFrame();
         }
     }
 

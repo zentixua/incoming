@@ -8,7 +8,7 @@ import ua.zentix.incoming.Incoming;
 import java.util.Locale;
 
 /**
- * Глубина рельефа Distant Horizons в этом кадре — для того, что рисуется после мира: аппаратная проверка глубины его
+ * Источник {@link LodDepth} — глубина рельефа Distant Horizons в этом кадре, для того, что рисуется после мира: аппаратная проверка глубины его
  * не видит (DH рисует LOD в свою текстуру глубины и переносит в кадр только цвет; под шейдерами Iris — та же
  * текстура, {@code dhDepthTex} пака). Текстура и проекция DH — из его публичного API ({@link DhDepthApi}); без DH
  * или с API другой версии глубины DH нет, и после мира виден только рельеф Minecraft.
@@ -21,26 +21,24 @@ import java.util.Locale;
  * ближе настоящей: LOD города в 3–5 км «стоят» в 1–1,5 км, и столбы разрывов на 1,5 км пропадают за ними целиком
  * (Complementary).
  */
-public final class DhDepth {
-    private static boolean enabled;
+public final class DhDepth implements LodDepth.Source {
+    private static final DhDepth SOURCE = new DhDepth();
     /** Как читалась глубина DH в прошлый раз, что попал в лог (направление, диапазон, кто рисует); −1 — ещё никак. */
     private static int logged = -1;
+    private static String described = "";
     /** Для лога: проекция DH кадра негодна. */
     private static final int UNUSABLE = 8;
     private static final Vector4f VIEW = new Vector4f();
+    private static final Frame FRAME = new Frame();
+    private static final Matrix4f PROJECTION = new Matrix4f();
 
     private DhDepth() {}
 
-    /** Глубина DH в кадре: текстура, обратная проекция, как читать значение. */
-    public static final class View {
-        /** Текстура глубины OpenGL. */
-        public int texture;
-        /** Глубина → координаты вида (обратная проекция, которой записана глубина). */
-        public final Matrix4f inverseProjection = new Matrix4f();
-        /** Глубина в [0, 1] — это NDC от −1 до 1 (обычный OpenGL), иначе NDC от 0 до 1. */
-        public boolean negativeOneToOne;
-        /** Глубина пикселя без LOD (очищенная). */
-        public float empty;
+    /** Глубина DH в кадре, как её отдаёт API: текстура, проекция, диапазон и направление, кто рисует. */
+    static final class Frame {
+        int texture;
+        boolean negativeOneToOne;
+        float empty;
         /** Дальше — больше (прямая глубина), иначе обратная. */
         boolean forward;
         /** LOD рисует чужая программа (шейдерпак Iris) в свой кадр. */
@@ -48,46 +46,47 @@ public final class DhDepth {
         /** Проекция DH ({@code dhProjectionMatrix}) и плоскости отсечения его параметров кадра, блоков. */
         final Matrix4f projection = new Matrix4f();
         float near, far;
-
-        /** Как читается глубина DH — для лога и строки сценария. */
-        public String describe() {
-            float nearest = along(inverseProjection, forward ? 0 : 1, negativeOneToOne);
-            return String.format(Locale.ROOT, "%s Z, NDC %s, empty %.1f, nearest LOD %.1f blocks (DH planes %.1f to %.0f), LOD drawn by %s",
-                    forward ? "forward" : "reverse", negativeOneToOne ? "-1..1" : "0..1", empty, nearest, near, far, foreign ? "the shader pack" : "DH");
-        }
     }
 
-    /** При запуске клиента: есть ли DH с API, которое умеет отдать глубину, и подписка на его кадры. */
-    public static void init() {
-        if (!ModList.get().isLoaded("distanthorizons")) return;
+    /** При запуске клиента: есть ли DH с API, которое умеет отдать глубину, и подписка на его кадры; null — нет. */
+    static LodDepth.Source init() {
+        if (!ModList.get().isLoaded("distanthorizons")) return null;
         try {
-            enabled = DhDepthApi.supported();
-            if (enabled) DhDepthApi.subscribe();
+            if (!DhDepthApi.supported()) return null;
+            DhDepthApi.subscribe();
+            return SOURCE;
         } catch (LinkageError e) {
             // API DH без нужных классов или методов: игра грузится, дым вдали не прячется за LOD
             Incoming.LOG.warn("Distant Horizons: API differs from the one the mod was built for — DH terrain does not hide distant smoke and blasts", e);
-            enabled = false;
+            return null;
         }
     }
 
-    /** Глубина DH этого кадра в out; false — DH в этом кадре не рисовал (или его нет). */
-    public static boolean current(View out) {
-        if (!enabled || !DhDepthApi.current(out)) return false;
-        if (irisDrawn(out.foreign, out.forward, out.negativeOneToOne)) irisPlanes(out.projection, out.near, out.far);
-        out.projection.invert(out.inverseProjection);
-        if (!out.inverseProjection.isFinite()) {
+    @Override
+    public boolean current(LodDepth.View out) {
+        Frame f = FRAME;
+        if (!DhDepthApi.current(f)) return false;
+        Matrix4f projection = PROJECTION.set(f.projection);
+        if (irisDrawn(f.foreign, f.forward, f.negativeOneToOne)) irisPlanes(projection, f.near, f.far);
+        projection.invert(out.inverseProjection);
+        out.texture = f.texture;
+        out.negativeOneToOne = f.negativeOneToOne;
+        out.empty = f.empty;
+        out.source = "Distant Horizons";
+        int how = (f.forward ? 1 : 0) | (f.negativeOneToOne ? 2 : 0) | (f.foreign ? 4 : 0);
+        boolean usable = out.inverseProjection.isFinite();
+        int state = usable ? how : UNUSABLE;
+        // строка — только когда меняется, как читается глубина (в лог и строку сценария), а не каждый кадр
+        if (state != logged) {
+            logged = state;
+            described = LodDepth.describe(f.forward, f.negativeOneToOne, f.empty, along(out.inverseProjection, f.forward ? 0 : 1, f.negativeOneToOne),
+                    String.format(Locale.ROOT, " (DH planes %.1f to %.0f), LOD drawn by %s", f.near, f.far, f.foreign ? "the shader pack" : "DH"));
             // проекция кадра негодна (плоскости DH совпали, матрица не задана): LOD этого кадра для слоя — как без DH
-            if (logged != UNUSABLE) {
-                logged = UNUSABLE;
-                Incoming.LOG.warn("Distant Horizons depth for the effects layer: DH projection is not invertible ({}), DH terrain ignored", out.describe());
-            }
-            return false;
+            if (usable) Incoming.LOG.info("Distant Horizons depth for the effects layer: {}", described);
+            else Incoming.LOG.warn("Distant Horizons depth for the effects layer: DH projection is not invertible ({}), DH terrain ignored", described);
         }
-        int how = (out.forward ? 1 : 0) | (out.negativeOneToOne ? 2 : 0) | (out.foreign ? 4 : 0);
-        if (how != logged) {
-            logged = how;
-            Incoming.LOG.info("Distant Horizons depth for the effects layer: {}", out.describe());
-        }
+        out.how = described;
+        if (!usable) return false;
         return true;
     }
 
@@ -115,8 +114,8 @@ public final class DhDepth {
         return projection.m22((far + near) / (near - far)).m32(2 * far * near / (near - far));
     }
 
-    /** Конец кадра: следующий кадр DH должен нарисовать заново, иначе его глубина — не этого кадра. */
-    public static void endFrame() {
-        if (enabled) DhDepthApi.endFrame();
+    @Override
+    public void endFrame() {
+        DhDepthApi.endFrame();
     }
 }

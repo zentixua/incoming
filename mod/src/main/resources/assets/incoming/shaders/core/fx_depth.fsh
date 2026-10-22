@@ -1,14 +1,20 @@
 #version 150
 
 // Расстояние до мира за пикселем по оси взгляда (client/fx/layer/SceneDepth): ближнее из глубины Minecraft
-// (Sampler0) и глубины Distant Horizons (Sampler1), неба — 1e9.
+// (Sampler0) и глубины мода LOD — Distant Horizons или Voxy (Sampler1, client/render/LodDepth), неба — 1e9.
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 
 uniform mat4 InvProj;
-uniform mat4 DhInvProj;
-// x: 1 — DH рисовал в этом кадре; y: 1 — глубина DH в NDC от −1 до 1 (иначе от 0 до 1); z: глубина DH без LOD
-uniform vec3 DhDepth;
+uniform mat4 LodInvProj;
+// x: 1 — мод LOD рисовал в этом кадре; y: 1 — его глубина в NDC от −1 до 1 (иначе от 0 до 1); z: его глубина без LOD;
+// w: 1 — мод кладёт LOD и в глубину Minecraft, прижатыми к её дальней плоскости (Voxy без шейдерпака)
+uniform vec4 LodDepth;
+// глубина, которой мод LOD метит пиксель, где рисовал Minecraft (Voxy: ближняя плоскость); −1 — метки нет
+uniform float LodWorld;
+// 2 шага 24-битной глубины от 1: так близко к дальней плоскости Minecraft пишет только прижатый LOD (Voxy
+// blit_texture_depth_cutout: FAR − 2/(2²⁴−1) в NDC), блоки в прорисовке на порядок ближе
+const float PINNED = 1.0 - 2.0 / 16777215.0;
 
 out vec4 fragColor;
 
@@ -21,16 +27,20 @@ void main() {
     vec2 uv = gl_FragCoord.xy / vec2(textureSize(Sampler0, 0));
     vec2 ndc = uv * 2.0 - 1.0;
     float depth = texelFetch(Sampler0, ivec2(gl_FragCoord.xy), 0).r;
-    float dist = depth >= 1.0 ? 1e9 : along(InvProj, ndc, depth * 2.0 - 1.0);
+    // прижатый LOD — не стена у дальней плоскости: его расстояние даст глубина LOD
+    bool pinned = LodDepth.w > 0.5 && depth >= PINNED;
+    float dist = depth >= 1.0 || pinned ? 1e9 : along(InvProj, ndc, depth * 2.0 - 1.0);
     // мир — только перед глазом и конечным расстоянием; иначе (NaN, бесконечность, за глазом) — неба: пелена и слой
     // эффектов берут расстояние до мира как есть, и NaN из него — чёрный пиксель кадра
     if (!(dist > 0.0 && dist < 1e8)) dist = 1e9;
-    if (DhDepth.x > 0.5) {
-        float lod = texture(Sampler1, uv).r;
-        if (abs(lod - DhDepth.z) > 1e-7) {
-            float far = along(DhInvProj, ndc, DhDepth.y > 0.5 ? lod * 2.0 - 1.0 : lod);
-            // у дальней плоскости DH и с чужой проекцией (не та матрица, не тот диапазон глубины) LOD выходит за глазом
-            // или бесконечно далеко: такой пиксель — без LOD
+    if (LodDepth.x > 0.5) {
+        // ближайший тексель, а не смесь соседних: на краю холма смесь LOD с небом или с меткой мира — расстояние,
+        // которого нет ни у чего в кадре
+        float lod = texelFetch(Sampler1, ivec2(uv * vec2(textureSize(Sampler1, 0))), 0).r;
+        if (abs(lod - LodDepth.z) > 1e-7 && abs(lod - LodWorld) > 1e-7) {
+            float far = along(LodInvProj, ndc, LodDepth.y > 0.5 ? lod * 2.0 - 1.0 : lod);
+            // у дальней плоскости LOD и с чужой проекцией (не та матрица, не тот диапазон глубины) LOD выходит за
+            // глазом или бесконечно далеко: такой пиксель — без LOD
             if (far > 0.0 && far < 1e8) dist = min(dist, far);
         }
     }

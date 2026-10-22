@@ -57,7 +57,7 @@ import ua.zentix.incoming.client.nuclear.NukeHud;
 import ua.zentix.incoming.client.nuclear.NukeRenderer;
 import ua.zentix.incoming.client.nuclear.NukeSky;
 import ua.zentix.incoming.client.render.DebrisRenderer;
-import ua.zentix.incoming.client.render.DhDepth;
+import ua.zentix.incoming.client.render.LodDepth;
 import ua.zentix.incoming.client.render.FarModels;
 import ua.zentix.incoming.client.render.FixedLauncherRenderer;
 import ua.zentix.incoming.client.render.InterceptorRenderer;
@@ -106,7 +106,7 @@ public final class IncomingClient {
         modBus.addListener(IncomingClient::reloadListeners);
         modBus.addListener(IncomingClient::blockColors);
         TerrainTiles.init();
-        DhDepth.init();
+        LodDepth.init();
 
         NeoForge.EVENT_BUS.addListener(IncomingClient::tick);
         NeoForge.EVENT_BUS.addListener(IncomingClient::entityTick);

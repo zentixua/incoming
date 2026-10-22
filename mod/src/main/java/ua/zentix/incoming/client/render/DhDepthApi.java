@@ -57,7 +57,7 @@ final class DhDepthApi {
         });
     }
 
-    static boolean current(DhDepth.View out) {
+    static boolean current(DhDepth.Frame out) {
         if (!captured) return false;
         IDhApiRenderProxy proxy = DhApi.Delayed.renderProxy;
         if (proxy == null) return false;

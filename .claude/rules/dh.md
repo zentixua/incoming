@@ -80,7 +80,7 @@ paths:
   `leak`: в меню 1,3 → 2,1 → 2,4 ГБ, без e4all так же). После остановки сервера карту чистит
   `compat/DhChunks.onServerStopped` (метод из jar API DH, без миксина); один прошлый мир DH держит ещё
   в `ThreadWorldGenParams` до генерации в следующем мире.
-- Глубина LOD для слоя эффектов (`client/render/DhDepth`, `SceneDepth`): DH 3.3 без шейдерпака — и когда Iris стоит
+- Глубина LOD для слоя эффектов (`client/render/DhDepth` — источник `LodDepth`, рядом Voxy — `voxy.md`; `SceneDepth`): DH 3.3 без шейдерпака — и когда Iris стоит
   без него — рисует LOD сам, обратной глубиной (`getDepthDirection` — `REVERSE_Z`, пока шейдерпак не включён; матрица
   `setClipPlanes(far, near, true)` — NDC 0..1, при диапазоне OpenGL по умолчанию в текстуре 0,5..1, очистка 0), и подмены
   `IDhApiFramebuffer` нет (Iris без шейдерпака её каждый кадр снимает): матрица DH читается как есть, `irisPlanes` —
