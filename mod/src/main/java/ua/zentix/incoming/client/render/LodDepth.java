@@ -7,11 +7,13 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Глубина рельефа мода дальней прорисовки (LOD) в этом кадре — для того, что рисуется после мира: аппаратная проверка
- * глубины Minecraft LOD не видит (Distant Horizons рисует их в свою текстуру глубины, Voxy — в свою и в глубину
- * Minecraft кладёт их прижатыми к дальней плоскости). Источник — тот мод, что рисовал в этом кадре: {@link DhDepth}
- * (публичное API DH) или {@link VoxyDepth} (Voxy через Roxy: API нет, только чтение его публичных полей отражением).
- * Без мода LOD или с незнакомой версией источника нет, и после мира виден только рельеф Minecraft.
+ * Глубина рельефа мода дальней прорисовки (LOD) в этом кадре — для того, что рисуется после мира (слой эффектов:
+ * снаряды, вспышки и дым вдали, {@code fx/layer/SceneDepth}): аппаратная проверка глубины Minecraft LOD не видит
+ * (Distant Horizons рисует их в свою текстуру глубины, Voxy — в свою, а в глубину Minecraft кладёт их прижатыми к её
+ * дальней плоскости). Источник — тот мод, что рисовал в этом кадре: {@link DhDepth} (публичное API DH) или
+ * {@link VoxyDepth} (Voxy через Roxy: API нет, только чтение его полей отражением). Оба могут стоять сразу — берётся
+ * первый, кто рисовал. Без мода LOD или с незнакомой его версией источника нет, и после мира виден только рельеф
+ * Minecraft.
  */
 public final class LodDepth {
     private static final List<Source> SOURCES = new ArrayList<>();
@@ -28,6 +30,12 @@ public final class LodDepth {
         public boolean negativeOneToOne;
         /** Глубина пикселя без LOD (очищенная). */
         public float empty;
+        /**
+         * Глубина, которой мод метит пиксель, где рисовал Minecraft, а LOD нет (Voxy: ближняя плоскость — так он
+         * не рисует LOD поверх мира); −1 — такой метки нет. Расстояние такого пикселя — глубина Minecraft, а не LOD
+         * у ближней плоскости в 8–16 блоках, которая закрыла бы всё дальше.
+         */
+        public float world = -1;
         /**
          * Мод кладёт LOD и в глубину Minecraft, прижимая дальние к её дальней плоскости (Voxy без шейдерпака): пиксель
          * мира на дальней плоскости — это LOD, а не стена в сотнях блоков; его расстояние — по глубине LOD.
@@ -62,6 +70,7 @@ public final class LodDepth {
     public static boolean current(View out) {
         for (Source s : SOURCES) {
             out.pinsWorldDepth = false;
+            out.world = -1;
             if (s.current(out)) return true;
         }
         return false;

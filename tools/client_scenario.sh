@@ -86,7 +86,7 @@ if [ "${1:-all}" = guide ]; then
 fi
 export INCOMING_SCENARIO="${1:-all}"
 MC="$(python3 "$ROOT/tools/paths.py" MC)"
-unset INCOMING_SHADERS INCOMING_DH
+unset INCOMING_SHADERS INCOMING_DH INCOMING_VOXY
 for opt in "${@:2}"; do
   case "$opt" in
     shaders)
@@ -98,7 +98,8 @@ for opt in "${@:2}"; do
       printf 'enableShaders=true\nshaderPack=%s\ndisableUpdateMessage=true\n' "$PACK" > "$RUN/config/iris.properties"
       ;;
     dh) export INCOMING_DH=1 ;;
-    *) echo "неизвестный параметр: $opt (есть shaders, dh)" >&2; exit 2 ;;
+    voxy) export INCOMING_VOXY=1 ;;
+    *) echo "неизвестный параметр: $opt (есть shaders, dh, voxy)" >&2; exit 2 ;;
   esac
 done
 export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}"

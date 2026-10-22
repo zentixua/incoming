@@ -5,4 +5,8 @@ public record RenderProperties(boolean isZero2One, boolean isReverseZ, boolean u
     public float clearDepth() {
         return isReverseZ ? 0 : 1;
     }
+
+    public float inverseClearDepth() {
+        return isReverseZ ? 1 : 0;
+    }
 }

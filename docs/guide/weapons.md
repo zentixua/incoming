@@ -267,6 +267,11 @@ it stays low and drifts flat. At night the flames light the smoke from below. Th
 speed of the wind, and when the fire goes out the last of the smoke drifts away. Where the fire comes from is up to the
 server: the smoke follows any fire your game shows, not only fires from strikes.
 
+Past your render distance the mod draws projectiles, blasts and smoke itself, as far as the server's visibility range
+(8 km by default). With **Distant Horizons** or **Voxy** the distant terrain hides them the way a real hill would: a
+blast behind a far ridge is hidden by the ridge, one in front of it is seen whole. This works with and without a shader
+pack. Without either mod there is no distant terrain to hide behind.
+
 ## Flames and smoke trails
 
 Every engine flame and smoke trail is worked out from the motor's data, the same way for every weapon, and looks the

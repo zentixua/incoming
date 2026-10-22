@@ -39,7 +39,7 @@ public final class SceneDepth {
     @Nullable
     static ShaderInstance shader;
     private static int fbo = -1, texture = -1, width, height;
-    private static final LodDepth.View DH = new LodDepth.View();
+    private static final LodDepth.View LOD = new LodDepth.View();
     private static final Matrix4f INVERSE = new Matrix4f();
     private static final int[] VIEWPORT = new int[4];
     /** Чем закрыт слой в последнем кадре: 0 — ничем, 1 — миром, 2 — миром и LOD. */
@@ -64,7 +64,7 @@ public final class SceneDepth {
         if (!ensure(main.width, main.height)) return -1;
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
-        boolean dh = LodDepth.current(DH);
+        boolean lod = LodDepth.current(LOD);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fbo);
         RenderSystem.viewport(0, 0, width, height);
         RenderSystem.disableDepthTest();
@@ -72,10 +72,11 @@ public final class SceneDepth {
         RenderSystem.disableBlend();
         RenderSystem.setShader(() -> s);
         RenderSystem.setShaderTexture(0, depth);
-        RenderSystem.setShaderTexture(1, dh ? DH.texture : depth);
+        RenderSystem.setShaderTexture(1, lod ? LOD.texture : depth);
         s.safeGetUniform("InvProj").set(projection.invert(INVERSE));
-        s.safeGetUniform("DhInvProj").set(dh ? DH.inverseProjection : INVERSE);
-        s.safeGetUniform("DhDepth").set(dh ? 1f : 0f, DH.negativeOneToOne ? 1f : 0f, DH.empty, dh && DH.pinsWorldDepth ? 1f : 0f);
+        s.safeGetUniform("LodInvProj").set(lod ? LOD.inverseProjection : INVERSE);
+        s.safeGetUniform("LodDepth").set(lod ? 1f : 0f, LOD.negativeOneToOne ? 1f : 0f, LOD.empty, lod && LOD.pinsWorldDepth ? 1f : 0f);
+        s.safeGetUniform("LodWorld").set(lod ? LOD.world : -1f);
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
         b.addVertex(1, -1, 0);
@@ -86,13 +87,13 @@ public final class SceneDepth {
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
         RenderSystem.viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
         RenderSystem.enableDepthTest();
-        last = dh ? 2 : 1;
+        last = lod ? 2 : 1;
         if (DIAG) diag(depth, main.width, main.height, previous, main.frameBufferId);
         return texture;
     }
 
     /**
-     * Строка лога по средней колонке кадра сверху вниз: глубина Minecraft и её расстояние, глубина DH и её расстояние,
+     * Строка лога по средней колонке кадра сверху вниз: глубина Minecraft и её расстояние, глубина LOD и её расстояние,
      * итог текстуры расстояний. Читает три текстуры обратно (ждёт видеокарту) — только при диагностике прогонов.
      */
     private static void diag(int worldDepth, int w, int h, int drawn, int mainFbo) {
@@ -118,11 +119,11 @@ public final class SceneDepth {
         }
         float[] scene = read(texture, GL11.GL_RED);
         float[] world = read(worldDepth, GL11.GL_DEPTH_COMPONENT);
-        float[] lod = last == 2 ? read(DH.texture, GL11.GL_DEPTH_COMPONENT) : null;
+        float[] lod = last == 2 ? read(LOD.texture, GL11.GL_DEPTH_COMPONENT) : null;
         int lodW = last == 2 ? GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH) : 0;
         int lodH = last == 2 ? GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT) : 0;
         StringBuilder b = new StringBuilder(String.format(Locale.ROOT,
-                "Effects layer depth column: frame %dx%d, layer %dx%d, DH %dx%d, inverse projection z row %.6f %.6f, w row %.6f %.6f",
+                "Effects layer depth column: frame %dx%d, layer %dx%d, LOD %dx%d, inverse projection z row %.6f %.6f, w row %.6f %.6f",
                 w, h, width, height, lodW, lodH, INVERSE.m22(), INVERSE.m32(), INVERSE.m23(), INVERSE.m33()));
         for (float row : DIAG_ROWS) {
             float ny = 1 - 2 * row;
@@ -133,7 +134,7 @@ public final class SceneDepth {
                 int lx = lodW / 2, ly = Math.round((1 - row) * (lodH - 1));
                 float l = lod[ly * lodW + lx];
                 b.append(String.format(Locale.ROOT, " lod %.6f→%.1f", l,
-                        along(DH.inverseProjection, ny, DH.negativeOneToOne ? l * 2 - 1 : l)));
+                        along(LOD.inverseProjection, ny, LOD.negativeOneToOne ? l * 2 - 1 : l)));
             }
             b.append(String.format(Locale.ROOT, " scene %.1f", scene != null ? scene[y * width + x] : Float.NaN));
         }
@@ -212,7 +213,7 @@ public final class SceneDepth {
     /** Чем закрыт слой в последнем кадре — для строки сценария. */
     static String describe() {
         return switch (last) {
-            case 2 -> "world and LOD (" + DH.describe() + lodShare() + ")";
+            case 2 -> "world and LOD (" + LOD.describe() + lodShare() + ")";
             case 1 -> "world";
             default -> "none";
         };
