@@ -1,6 +1,8 @@
 package ua.zentix.incoming.nuclear.world;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
@@ -82,6 +84,14 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
         if (thresholdPsi == NEVER) return 0;
         float j = jitter(jitterSeed);
         return BlastDamage.passes(BlastModel.kpa(psi) / j, impulsePas / j, BlastModel.kpa(thresholdPsi));
+    }
+
+    /**
+     * Множитель порога блока на месте {@code pos} ({@code JITTER_MIN}…{@code JITTER_MAX}): разброс у взрывов мода
+     * берётся по хэшу места, и тот же блок на том же месте ломается одинаково.
+     */
+    public static float jitterAt(BlockPos pos) {
+        return jitter(Mth.murmurHash3Mixer(Long.hashCode(pos.asLong())));
     }
 
     private static float jitter(int seed) {
