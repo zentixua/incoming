@@ -1042,6 +1042,13 @@ public final class StrikeGameTests {
         h.assertTrue(level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive).size() == 1
                 && level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(64), launcher::serves).size() == 2,
                 "второй приказ с того же места — не с той же пусковой");
+        // отметка перенесена на 50 блоков (в районе прежней): новый приказ — с новой пусковой у новой отметки, а не со
+        // старой, что смотрит на прежнюю цель (пусковая помнит свою отметку)
+        Vec3 moved = from.add(0, 0, 50);
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(moved)) == 1, "приказ с перенесённой отметки не принят");
+        List<LauncherEntity> both = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive);
+        h.assertTrue(both.size() == 2 && both.stream().anyMatch(l -> flat(l.position(), moved) < PLACE_SLACK),
+                "перенесённая отметка взяла старую пусковую: " + both.stream().map(Entity::position).toList());
 
         // место пуска далеко, чанк не готов: один снаряд ждёт его залпом (залп грузит место), вне мира без пуска не стартует
         Vec3 far = from.add(0, 0, 20_000);

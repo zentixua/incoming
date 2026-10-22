@@ -75,7 +75,8 @@ class LaunchSiteTest {
         Field lake = new Field((x, z) -> Y, (x, z) -> Y, (x, z) -> Math.hypot(x, z) < 50 ? 1 : 0);
         Vec3 site = LaunchSite.nearest(lake, 0, 0, new LaunchSite.Budget(), s -> true);
         assertNotNull(site, "берег в районе");
-        assertTrue(dist(site, 0, 0) >= 50 && dist(site, 0, 0) < 53, "ближайший берег: " + dist(site, 0, 0));
+        // весь квадрат 5×5 — на суше: середина не ближе 2 блоков от воды
+        assertTrue(dist(site, 0, 0) >= 52 && dist(site, 0, 0) < 55, "ближайший берег: " + dist(site, 0, 0));
     }
 
     /** Лес: кроны и стволы всюду, поляна 8×8 в 72 блоках — пусковая на поляне. */
@@ -124,7 +125,7 @@ class LaunchSiteTest {
         Field sea = new Field((x, z) -> Y, (x, z) -> Y, (x, z) -> 1);
         LaunchSite.Budget budget = new LaunchSite.Budget();
         assertNull(LaunchSite.nearest(sea, 0, 0, budget, s -> true));
-        assertTrue(budget.spent() <= LaunchSite.area(LaunchSite.PLACE_AREA, LaunchSite.PLACE_STEP).length && !budget.out(),
+        assertTrue(budget.spent() <= 3 * LaunchSite.area(LaunchSite.PLACE_AREA, LaunchSite.PLACE_STEP).length && !budget.out(),
                 "цена поиска: " + budget.spent());
         LaunchSite.Budget small = new LaunchSite.Budget(100);
         assertNull(LaunchSite.nearest(sea, 0, 0, small, s -> true));

@@ -66,8 +66,13 @@ public final class LaunchSite {
     public static final double PLACE_AREA = 96;
     /** Шаг мест в районе места пуска, блоков: проверка места смотрит квадрат 5×5 вокруг, шаг 2 его не пропускает. */
     static final int PLACE_STEP = 2;
-    /** Своя пусковая не дальше этого от места пуска из приказа — его (стоит в его районе). */
-    public static final double PLACE_REUSE = PLACE_AREA;
+    /**
+     * Своя пусковая места пуска из приказа — та, что встала по той же отметке ({@link LauncherEntity#mark}: не дальше
+     * зазора {@link #CLEARANCE}), где бы в районе она ни стояла; у пусковой без отметки (поставленной до того, как её
+     * стали помнить) — не дальше этого от места. Отметку, перенесённую дальше, обслуживает новая пусковая: старая стоит
+     * в районе прежней и смотрит на прежнюю цель.
+     */
+    public static final double PLACE_REUSE = 40;
 
     /** Места относительно игрока: [назад, влево] в блоках, по порядку предпочтения. */
     private static final double[][] CANDIDATES = {
@@ -111,11 +116,6 @@ public final class LaunchSite {
             return new Post(center, FlightController.anglesTo(center, target)[0], owner, true);
         }
 
-        /** Своя пусковая не дальше этого — её. */
-        private double reuse() {
-            return ordered ? PLACE_REUSE : REUSE_RADIUS;
-        }
-
         public ChunkPos chunk() {
             return new ChunkPos(BlockPos.containing(center));
         }
@@ -127,9 +127,18 @@ public final class LaunchSite {
      */
     @Nullable
     public static LauncherEntity existing(ServerLevel level, Post post, WeaponType weapon, Predicate<LauncherEntity> fits) {
-        AABB box = new AABB(post.center(), post.center()).inflate(post.reuse(), 64, post.reuse());
-        return level.getEntitiesOfClass(LauncherEntity.class, box, l -> l.isAlive() && l.weapon() == weapon && Objects.equals(post.owner(), l.ownerId()))
+        double reach = post.ordered() ? PLACE_AREA : REUSE_RADIUS;
+        AABB box = new AABB(post.center(), post.center()).inflate(reach, 64, reach);
+        return level.getEntitiesOfClass(LauncherEntity.class, box, l -> l.isAlive() && l.weapon() == weapon && Objects.equals(post.owner(), l.ownerId())
+                        && serves(l, post))
                 .stream().sorted(Comparator.comparingDouble(l -> l.distanceToSqr(post.center()))).filter(fits).findFirst().orElse(null);
+    }
+
+    /** Пусковая {@code l} в коробке поиска — огневой позиции {@code post}: у стреляющего — любая, у места пуска — {@link #PLACE_REUSE}. */
+    private static boolean serves(LauncherEntity l, Post post) {
+        if (!post.ordered()) return true;
+        Vec3 mark = l.mark();
+        return mark != null ? horizontal(mark, post.center()) < CLEARANCE : horizontal(l.position(), post.center()) <= PLACE_REUSE;
     }
 
     /**
@@ -524,8 +533,10 @@ public final class LaunchSite {
     }
 
     /**
-     * Ровно (±1 блок в квадрате 5×5), твёрдо, не вода, над головой пусто (листва тоже мешает). Сначала то, что отсеивает
-     * чаще и дешевле: крона над самим местом и вода под ним (лес и озеро в районе места пуска), потом квадрат.
+     * Ровно (±1 блок в квадрате 5×5), твёрдо и не вода под всем квадратом (прицеп 7,6 м: у кромки воды поверхность воды
+     * и берег расходятся на блок, и ровным квадрат вышел бы наполовину над водой), над головой пусто (листва тоже мешает).
+     * Сначала то, что отсеивает чаще и дешевле: крона над самим местом и вода под ним (лес и озеро в районе места пуска),
+     * потом квадрат.
      */
     @Nullable
     static Vec3 check(Ground g, int x, int z) {
@@ -542,21 +553,73 @@ public final class LaunchSite {
                 if (Math.abs(h - y) > 1 || g.top(x + dx, z + dz) > h + 1) return null;
             }
         }
+        for (int dx = -2; dx <= 2; dx += 2) {
+            for (int dz = -2; dz <= 2; dz += 2) {
+                if ((dx != 0 || dz != 0) && !g.firm(x + dx, g.ground(x + dx, z + dz) - 1, z + dz)) return null;
+            }
+        }
         return new Vec3(x + 0.5, y, z + 0.5);
+    }
+
+    /**
+     * Чтений на клетку предела {@link Budget}: чтение готовности чанка или карты высот — десятки наносекунд, клетка луча —
+     * ~0,4 мкс (⚠ оценка порядка); блок под ногами (состояние и форма его верха) — как {@link #BLOCK_READS} чтений.
+     */
+    static final int READS_PER_CELL = 8, BLOCK_READS = 4;
+
+    /** Земля, что считает свои чтения: цена проверки места — в предел выбора пусковой. */
+    private static final class Counted implements Ground {
+        private final Ground g;
+        int reads;
+
+        Counted(Ground g) {
+            this.g = g;
+        }
+
+        @Override
+        public boolean ready(int x, int z) {
+            reads++;
+            return g.ready(x, z);
+        }
+
+        @Override
+        public int ground(int x, int z) {
+            reads++;
+            return g.ground(x, z);
+        }
+
+        @Override
+        public int top(int x, int z) {
+            reads++;
+            return g.top(x, z);
+        }
+
+        @Override
+        public boolean firm(int x, int y, int z) {
+            reads += BLOCK_READS;
+            return g.firm(x, y, z);
+        }
+
+        @Override
+        public int minY() {
+            return g.minY();
+        }
     }
 
     /**
      * Ближайшее к месту (x, z) годное место пусковой в его районе ({@link #PLACE_AREA}), которое принимает {@code fits}
      * (свободно и сектор пуска открыт); null — нет или вышел предел {@code budget}. Место с закрытым сектором закрывает
      * и соседние в {@link #CLEARANCE}: их сектор упирается в те же деревья и дома, а проверка сектора — самое дорогое.
-     * Проверка места — до двух десятков чтений карты высот, по клетке предела ({@link Budget}).
+     * Проверка места списывается с предела по своим чтениям ({@link #READS_PER_CELL}).
      */
     @Nullable
-    static Vec3 nearest(Ground g, int x, int z, Budget budget, Predicate<Vec3> fits) {
+    static Vec3 nearest(Ground ground, int x, int z, Budget budget, Predicate<Vec3> fits) {
         List<Vec3> closed = new ArrayList<>();
+        Counted g = new Counted(ground);
         for (int[] o : AREA) {
-            if (!budget.take(1)) return null;
+            g.reads = 0;
             Vec3 site = check(g, x + o[0], z + o[1]);
+            if (!budget.take(Math.max(1, (g.reads + READS_PER_CELL - 1) / READS_PER_CELL))) return null;
             if (site == null || near(closed, site)) continue;
             if (fits.test(site)) return site;
             if (budget.out()) return null;
@@ -594,7 +657,7 @@ public final class LaunchSite {
             mine.sort(Comparator.comparingLong(LauncherEntity::deployedAt));
             for (int i = 0; i <= mine.size() - MAX_PER_OWNER; i++) mine.get(i).discard();
         }
-        LauncherEntity l = LauncherEntity.create(level, site, yaw, weapon, post.owner(), post.ordered());
+        LauncherEntity l = LauncherEntity.create(level, site, yaw, weapon, post.owner(), post.ordered(), post.ordered() ? post.center() : null);
         level.addFreshEntity(l);
         return l;
     }
