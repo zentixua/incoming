@@ -173,6 +173,11 @@ final class ProbeScenario {
         launchTick = -1;
         blastTick = -1;
         closest = Double.MAX_VALUE;
+        // ЗРК прошлой сцены — прочь: заряженный, в загруженных чанках, он бил бы шахед следующей сцены в 1,5 км
+        if (sam != null) {
+            cmd(String.format(Locale.ROOT, "setblock %d %d %d minecraft:air", sam.getX(), sam.getY(), sam.getZ()));
+            cmd(String.format(Locale.ROOT, "forceload remove %d %d %d %d", sam.getX() - 32, sam.getZ() - 48, sam.getX() + 32, sam.getZ() + 48));
+        }
         sam = null;
         interceptor = null;
         samLaunch = -1;
