@@ -3,6 +3,7 @@ package ua.zentix.incoming.strike;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.util.Terrain;
@@ -45,8 +46,8 @@ public final class LaunchPlaces {
     }
 
     /**
-     * Место готово к пуску: у места из приказа — все чанки на {@link LaunchSite#PLACE_REACH} вокруг (там ищется место
-     * пусковой), у стационарной пусковой — её чанк.
+     * Место готово к пуску: у места из приказа — все чанки на {@link LaunchSite#PLACE_REACH} вокруг (в его районе ищется
+     * место пусковой), у стационарной пусковой — её чанк.
      */
     public static boolean ready(ServerLevel level, LaunchOrigin from) {
         return from instanceof LaunchOrigin.Fixed f ? Terrain.ready(level, f.pos()) : Terrain.readyAround(level, from.at(), LaunchSite.PLACE_REACH);
@@ -66,8 +67,13 @@ public final class LaunchPlaces {
         return StrikeWorld.get(level).areas().holds(area(from, key));
     }
 
-    /** Район вокруг места: тот же радиус, что у района цели ({@link FlightTickets#DISTANCE}, 4 чанка — больше {@link LaunchSite#PLACE_REACH}). */
+    /**
+     * Район вокруг места, чанков: все чанки на {@link LaunchSite#PLACE_REACH} от места в любой точке его чанка (7 — квадрат
+     * 15×15). Тикает весь — по мере готовности, как район цели: пусковая встаёт в любом его месте.
+     */
+    static final int DISTANCE = Mth.ceil(LaunchSite.PLACE_REACH / 16);
+
     private static AreaLoader.Area area(LaunchOrigin from, UUID key) {
-        return new AreaLoader.Area(TYPE, new ChunkPos(BlockPos.containing(from.at())), FlightTickets.DISTANCE, key);
+        return new AreaLoader.Area(TYPE, new ChunkPos(BlockPos.containing(from.at())), DISTANCE, key);
     }
 }

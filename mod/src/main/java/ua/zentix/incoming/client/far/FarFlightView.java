@@ -27,6 +27,7 @@ import ua.zentix.incoming.client.fx.layer.HeatPass;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
+import ua.zentix.incoming.client.fx.plume.Motor;
 import ua.zentix.incoming.client.fx.plume.TrailModel;
 import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
@@ -69,7 +70,8 @@ import java.util.Map;
  * взорвался. Мест частиц она не занимает: залп в сотни ракет не рвёт следы. Свет — карта освещения мира в точке
  * (вне загруженного мира — открытое небо). Объёма у следа нет: клетка сетки дыма (2–32 м) тонкий след не разрешает.
  * Пока струя ускорителя бьёт в землю ({@link LaunchCloud#impinges}), продукты двигателя — облако старта
- * ({@link LaunchCloud}, запечённые клубы слоя): точки ленты тех тиков его вещества не несут.</li>
+ * ({@link LaunchCloud}, запечённые клубы слоя): точки ленты тех тиков несут только столб самой струи между соплом и
+ * землёй ({@link LaunchCloud#column}), а когда струя землю отпустила, этот столб остаётся следом.</li>
  * <li>За рельефом дальше прорисовки (ближе закрывает глубина) — луч {@link Sightline} раз в {@link #SIGHT_PERIOD}
  * тика: корпус и факел плавно гаснут.</li>
  * </ul>
@@ -139,12 +141,16 @@ public final class FarFlightView {
     @Nullable
     private static FarView seen;
     /**
-     * Трубка шире стольких пикселей на экране — клубами, как облака ({@link SmokePuffs#tube}), уже — лентой, между — плавно.
-     * Лента — плоскость лицом к камере с одним цветом поперёк: вдали, пока трубка — линия в несколько пикселей, это и
-     * есть её вид; крупнее она читалась бы плоской полосой с прямыми краями, а у глаза — плоскостью через кадр. Клубы — то
-     * же вещество гауссами с шестисторонним светом: круглая трубка с любой стороны, глаз в ней — вуаль по пути взгляда.
+     * Трубка шире стольких пикселей на экране (на половине непрозрачности середины) — клубами, как облака
+     * ({@link SmokePuffs#tube}), уже — лентой, между — плавно. Лента — плоскость лицом к камере с одним цветом поперёк:
+     * это вид трубки, пока её сечение уже пикселя; шире — полоса с прямыми краями и без тени (у глаза — плоскость через
+     * кадр). Клубы — то же вещество гауссами с шестисторонним светом: круглая трубка с освещённой и теневой стороной,
+     * глаз в ней — вуаль по пути взгляда. Свет поперёк различим, когда σ сечения — пиксель и больше: ширина на
+     * половине — 2,355σ, с 2,4 px; с 4,8 px (σ — два пикселя) — только клубы. С порогом в 6–12 px (F2b) залп «Града» за
+     * 1,7 км (трубки 3–11 м — 2–7 px) весь шёл лентами: двенадцать лент, легших друг на друга, — плоская полоса с прямыми
+     * краями (кадры VXC4, 22.10).
      */
-    static final double PUFFS_FROM = 6, PUFFS_FULL = 12;
+    static final double PUFFS_FROM = 2.4, PUFFS_FULL = 4.8;
     /**
      * Клубов трубок и их вуалей у глаза в кадре — не больше этого в среднем (производительность, не физика): больше — порог
      * ширины на следующих кадрах растёт ({@link #puffScale}, ×1,1 за кадр), и дальние трубки снова рисует лента; меньше
@@ -214,6 +220,9 @@ public final class FarFlightView {
         @Nullable
         LaunchCloud cloud;
         boolean impinging;
+        /** Двигатель, чья струя бьёт в землю ({@link LaunchCloud#column}). */
+        @Nullable
+        Motor cloudMotor;
         /**
          * Путь снаряда по его пути от начала до тика {@link #cursor}, м, и длина его яркого пламени там (ядро и догорание,
          * {@link Flame#flame}; нет пламени — 0):
@@ -414,6 +423,7 @@ public final class FarFlightView {
             SmokeGrid.add(f.cloud);
         }
         f.impinging = f.cloud.feed(stage.motor(), 1 / 20.0, NOZZLE[0], NOZZLE[1], NOZZLE[2], -fwd.x, -fwd.y, -fwd.z);
+        f.cloudMotor = stage.motor();
     }
 
     /** Облака старта (снять при сбросе). */
@@ -454,8 +464,10 @@ public final class FarFlightView {
             f.chain[k] = points.add(POS[0], POS[1], POS[2], t, style, light.at(POS[0], POS[1], POS[2]), f.owner, f.chain[k], (float) inv,
                     (float) (BIRTH[0] * 20), (float) (BIRTH[1] * 20), (float) u, (float) TrailModel.excess(POS[1], air),
                     (float) TrailModel.riseScale(style, inv, brunt), (float) brunt, (float) air.stability());
-            // струя бьёт в землю: вещество точки — облака старта (лента рисует ту его долю, что не в объёме)
-            points.cloud[TrailPoints.index(f.chain[k])] = f.impinging ? f.cloud : null;
+            // струя бьёт в землю: вещество точки — облака старта, лента — только столб струи у сопла
+            int at = TrailPoints.index(f.chain[k]);
+            points.cloud[at] = f.impinging ? f.cloud : null;
+            points.column[at] = f.impinging && f.cloudMotor != null ? (float) LaunchCloud.column(f.cloudMotor, 0, inv) : 0;
             points.path[TrailPoints.index(f.chain[k])] = f.path;
         }
         f.chainTick = t;
@@ -561,13 +573,17 @@ public final class FarFlightView {
             if (style == null) continue;
             double age = Math.max(0, t - POINTS.birth[i]);
             if (age >= POINTS.life[i]) continue;
-            // точка в облаке старта — её вещество рисует облако (запечённые клубы), лента — нет; точка ещё в факеле — её
-            // вещество светится в нём
-            double volume = POINTS.cloud[i] != null ? 1 : 0;
+            // точка ещё в факеле — её вещество светится в нём
             Far owner = BY_OWNER.get(POINTS.owner[i]);
             double smoke = owner == null || owner.track.isDead() ? 1 : TrailModel.emerged(owner.framePath - POINTS.path[i], owner.flame);
+            // точка в облаке старта — её вещество рисует облако (запечённые клубы), а пока струя бьёт в землю, между соплом и
+            // землёй — столб самой струи (по нынешнему месту сопла); струя землю отпустила — столб остаётся каким был
+            LaunchCloud cloud = POINTS.cloud[i];
+            if (cloud != null && owner != null && owner.cloud == cloud && owner.impinging && owner.cloudMotor != null)
+                POINTS.column[i] = (float) LaunchCloud.column(owner.cloudMotor, owner.framePath - POINTS.path[i], POINTS.inverse[i]);
+            double mass = cloud == null ? 1 : POINTS.column[i];
             TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i],
-                    POINTS.brunt[i], POINTS.stability[i], (1 - volume) * smoke, LOOK);
+                    POINTS.brunt[i], POINTS.stability[i], mass * smoke, LOOK);
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
             end(LOOK, POINTS.x[i] + air.wind().x() * drift - cam.x, POINTS.y[i] + LOOK[2] - cam.y, POINTS.z[i] + air.wind().z() * drift - cam.z,
                     POINTS.light[i], view, i);

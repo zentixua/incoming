@@ -175,38 +175,13 @@ class SoundAssetsTest {
             int k = i - pre;
             y[i] = k < 0 ? x[n + k] : k < n ? x[k] : x[(k - n) % n];
         }
-        kWeight(y, rate);
+        Envelope.kWeight(y, rate);
         double[] c = new double[y.length + 1];
         for (int i = 0; i < y.length; i++) c[i + 1] = c[i] + y[i] * y[i];
         double best = 0;
         int end = loop ? n : Math.max(1, n - w);
         for (int i = 0; i < end; i += h) best = Math.max(best, (c[pre + Math.min(i + w, y.length - pre)] - c[pre + i]) / w);
         return -0.691 + 10 * Math.log10(best + 1e-15);
-    }
-
-    /** К-взвешивание ITU-R BS.1770 на частоте {@code rate} (те же формулы, что {@code k_weight} в build_sounds.py). */
-    private static void kWeight(double[] x, int rate) {
-        double g = 3.99984385397, q = 0.7071752369554193, fc = 1681.9744509555319;
-        double k = Math.tan(Math.PI * fc / rate), vh = Math.pow(10, g / 20), vb = Math.pow(vh, 0.499666774155);
-        double a0 = 1 + k / q + k * k;
-        biquad(x, (vh + vb * k / q + k * k) / a0, 2 * (k * k - vh) / a0, (vh - vb * k / q + k * k) / a0, 2 * (k * k - 1) / a0, (1 - k / q + k * k) / a0);
-        q = 0.5003270373253953;
-        fc = 38.13547087613982;
-        k = Math.tan(Math.PI * fc / rate);
-        a0 = 1 + k / q + k * k;
-        biquad(x, 1, -2, 1, 2 * (k * k - 1) / a0, (1 - k / q + k * k) / a0);
-    }
-
-    private static void biquad(double[] x, double b0, double b1, double b2, double a1, double a2) {
-        double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-        for (int i = 0; i < x.length; i++) {
-            double v = x[i], y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-            x2 = x1;
-            x1 = v;
-            y2 = y1;
-            y1 = y;
-            x[i] = y;
-        }
     }
 
     private static int variants(JsonObject json, String event) {

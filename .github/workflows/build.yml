@@ -49,6 +49,7 @@ jobs:
       mod: ${{ steps.diff.outputs.mod }}
       rig: ${{ steps.diff.outputs.rig }}
       replayscan: ${{ steps.diff.outputs.replayscan }}
+      lookgate: ${{ steps.diff.outputs.lookgate }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -64,29 +65,33 @@ jobs:
             *) base= ;;
           esac
           if [ -z "$base" ]; then
-            mod=true; rig=true; replayscan=true
+            mod=true; rig=true; replayscan=true; lookgate=true
             echo "Проверка целиком ($GITHUB_EVENT_NAME)" >> "$GITHUB_STEP_SUMMARY"
           else
-            mod=false; rig=false; replayscan=false
+            mod=false; rig=false; replayscan=false; lookgate=false
             # --no-renames: перенос из mod/ — это и удаление в mod/
             files=$(git diff --name-only --no-renames "$base" HEAD)
             while IFS= read -r f; do
               case "$f" in
                 '') ;;
                 mod/gradlew|mod/gradle/*) mod=true; replayscan=true ;;
+                # строки лога пробы читает tools/look_gate/check.py
+                mod/src/devtest/java/ua/zentix/incoming/scenario/ProbeScenario.java) mod=true; lookgate=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py) mod=true ;;
                 tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_busy.sh|tools/test_gpu_busy.sh) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
-                .github/*) mod=true; rig=true; replayscan=true ;;
+                tools/look_gate/*) lookgate=true ;;
+                .github/*) mod=true; rig=true; replayscan=true; lookgate=true ;;
                 tools/*|docs/*|*.md|.claude/*|.gitignore) ;;
                 *) mod=true ;;
               esac
             done <<< "$files"
-            { echo "Мод (сборка, юнит-тесты, GameTest): $mod; остановка проверок: $rig; разбор повторов: $replayscan"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "Мод (сборка, юнит-тесты, GameTest): $mod; остановка проверок: $rig; разбор повторов: $replayscan; шлагбаум: $lookgate"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "mod=$mod" >> "$GITHUB_OUTPUT"
           echo "rig=$rig" >> "$GITHUB_OUTPUT"
           echo "replayscan=$replayscan" >> "$GITHUB_OUTPUT"
+          echo "lookgate=$lookgate" >> "$GITHUB_OUTPUT"
 
   build:
     name: Сборка и юнит-тесты
@@ -231,10 +236,23 @@ jobs:
       - name: Сборка и юнит-тесты
         run: mod/gradlew -p tools/replayscan build --console=plain
 
+  # прогон шлагбаума картинки и звука годен, только если слух без оглушения и сцены — во времени игры эталона
+  # (tools/look_gate/check.py, по логу клиента); без Java и игры, секунды
+  lookgate:
+    name: Шлагбаум
+    needs: changes
+    if: needs.changes.outputs.lookgate == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Годность прогона шлагбаума
+        run: python3 -m unittest discover -s tools/look_gate -p 'test_*.py' -v
+
   # одна отметка на коммит: всё, что изменение требовало, прошло; ненужное пропущено
   ci:
     name: Итог
-    needs: [changes, build, gametest, rig, replayscan]
+    needs: [changes, build, gametest, rig, replayscan, lookgate]
     # и после упавших, пропущенных и отменённых: пропущенная задача засчитывается успехом, и «Итог», пропущенный
     # в отменённом прогоне, был бы зелёным без сборки и GameTest — поэтому в отменённом прогоне он идёт и падает
     if: always()
@@ -243,7 +261,7 @@ jobs:
     steps:
       - name: Нужные проверки прошли
         run: |
-          echo 'что изменилось: ${{ needs.changes.result }}; сборка: ${{ needs.build.result }}; GameTest: ${{ needs.gametest.result }}; остановка проверок: ${{ needs.rig.result }}; разбор повторов: ${{ needs.replayscan.result }}'
+          echo 'что изменилось: ${{ needs.changes.result }}; сборка: ${{ needs.build.result }}; GameTest: ${{ needs.gametest.result }}; остановка проверок: ${{ needs.rig.result }}; разбор повторов: ${{ needs.replayscan.result }}; шлагбаум: ${{ needs.lookgate.result }}'
           [ '${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}' = false ]
 
   release:

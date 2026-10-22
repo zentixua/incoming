@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.sound;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.SoundManager;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.DoubleSupplier;
 
 /**
  * Звук снарядов на клиенте. У каждого снаряда свой независимый набор зацикленных звуков (без общих ячеек
@@ -334,6 +336,35 @@ public final class ClientSounds {
         return shot(event, source, volume, pitch, SoundSource.AMBIENT, RandomSource.create(seed));
     }
 
+    /**
+     * Разовый звук взрыва в смеси взрывов ({@link Mix}), ещё не отданный движку ({@link #start}): как
+     * {@link #shot(SoundEvent, Vec3, float, float, long)}, но громкость — {@code volume} × множитель смеси {@code mix},
+     * заново каждый тик (звук тикает).
+     */
+    public static SoundInstance blastShot(SoundEvent event, Vec3 source, float volume, float pitch, long seed, DoubleSupplier mix, int life) {
+        Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        float open = SoundFilters.open(ear, source.add(0, 1.5, 0));
+        float highs = farAir(ear.distanceTo(source)) * SoundFilters.blockedHighs(open);
+        return new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), toward(ear, source), SoundFilters.blockedGain(open), highs, mix,
+                life);
+    }
+
+    /** Как {@link #atEar(SoundEvent, Vec3, float, float, long, float, float)} (фильтр пути — вызывающего), в смеси взрывов. */
+    public static void blastAtEar(SoundEvent event, Vec3 source, float volume, float pitch, long seed, float gain, float highs, DoubleSupplier mix,
+                                  int life) {
+        Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        play(new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), toward(ear, source), gain, highs, mix, life));
+    }
+
+    /** Как {@link #atEar(SoundEvent, Vec3, float, float)} (преграды и воздух — по лучу до источника), в смеси взрывов. */
+    public static void blastAtEar(SoundEvent event, Vec3 source, float volume, float pitch, DoubleSupplier mix, int life) {
+        Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        float open = SoundFilters.open(ear, source.add(0, 1.5, 0));
+        float highs = farAir(ear.distanceTo(source)) * SoundFilters.blockedHighs(open);
+        play(new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(), toward(ear, source), SoundFilters.blockedGain(open), highs, mix,
+                life));
+    }
+
     /** Отдать звук движку. */
     public static void start(SoundInstance sound) {
         play(sound);
@@ -388,6 +419,56 @@ public final class ClientSounds {
 
     private static void play(SoundInstance sound) {
         Minecraft.getInstance().getSoundManager().play(sound);
+    }
+
+    /**
+     * Разовый звук взрыва в смеси ({@link Mix}): тикает, и движок каждый тик берёт громкость заново — своя × множитель
+     * смеси (хвост этого взрыва уступает место следующему, а не держит громкость, с которой начался).
+     */
+    private static final class MixedShot extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
+        private final float gain, highs;
+        private final DoubleSupplier mix;
+        /** Тиков до конца записи с запасом: дальше звук снимается сам. */
+        private int life;
+
+        MixedShot(SoundEvent event, SoundSource category, float volume, float pitch, RandomSource random, Vec3 at, float gain, float highs,
+                  DoubleSupplier mix, int life) {
+            super(event, category, random);
+            this.volume = volume;
+            this.pitch = pitch;
+            this.attenuation = Attenuation.NONE;
+            this.relative = false;
+            this.looping = false;
+            this.delay = 0;
+            this.x = at.x;
+            this.y = at.y;
+            this.z = at.z;
+            this.gain = gain;
+            this.highs = highs;
+            this.mix = mix;
+            this.life = life;
+        }
+
+        @Override
+        public float getVolume() {
+            return (float) (super.getVolume() * mix.getAsDouble());
+        }
+
+        @Override
+        public void tick() {
+            // громкость — getVolume, место — неизменно; запись кончилась — снять
+            if (--life <= 0) stop();
+        }
+
+        @Override
+        public float lowpassGain() {
+            return gain;
+        }
+
+        @Override
+        public float lowpassHighs() {
+            return highs;
+        }
     }
 
     /** Разовый звук с фильтром пути (воздух, преграды). */

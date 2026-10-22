@@ -160,6 +160,16 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
         }
     }
 
+    /**
+     * A-уровень мощности звука источника со спектром {@code shape}, дБА, у которого на пути {@code path} закон
+     * распространения мода ({@link Propagation#level}) даёт замеренный A-уровень {@code measured}. Обратный ход того же
+     * закона, а не формула разлёта со своей поправкой на землю: иначе источник, выведенный из замера, на месте самого
+     * замера звучал бы не так, как замерено (шахед — на 4,9 дБ тише своего опорного сверхлёгкого над лугом, F4).
+     */
+    public static double fromMeasured(double measured, Spectrum shape, Propagation.Path path) {
+        return measured - Propagation.level(0, shape, path, null) + shape.aWeighting();
+    }
+
     /** Мощность звука части сейчас, дБ (без взвешивания); не шумит — {@link #SILENT}. */
     public double power(Part part, FlightPhase ph, double age, double speed, boolean drilling) {
         return switch (part) {

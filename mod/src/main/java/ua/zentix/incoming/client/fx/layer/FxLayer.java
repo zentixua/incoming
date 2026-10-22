@@ -12,6 +12,7 @@ import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import org.jetbrains.annotations.Nullable;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.joml.Vector4f;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.far.FarBlasts;
@@ -49,6 +50,8 @@ import java.util.Locale;
  * до конца кадра (к нему ваниль туман гасит).
  */
 public final class FxLayer {
+    /** Карта освещения у открытого неба и поправка оттенка её доли неба ({@code FxSkyFix}) — на кадр. */
+    private static final Vector3f SKY_MAP = new Vector3f(), SKY_FIX = new Vector3f();
     private static final FxQuads QUADS = new FxQuads();
     private static final FxLights LIGHTS = new FxLights();
     private static final SourceProbes PROBES = new SourceProbes();
@@ -286,6 +289,9 @@ public final class FxLayer {
             float skyLuma = Math.max(view.skyLight(), 1e-3f);
             s.safeGetUniform("FxSkyTint").set((float) Math.pow(view.sky().x() / skyLuma, 2.2), (float) Math.pow(view.sky().y() / skyLuma, 2.2),
                     (float) Math.pow(view.sky().z() / skyLuma, 2.2));
+            // частицы и ленты берут свет мира из карты освещения: у её доли неба — оттенок вещества в воздухе (FarView.sky)
+            Vector3f fix = FarView.fix(view.sky(), FarView.lightmap(light, SKY_MAP), SKY_FIX);
+            s.safeGetUniform("FxSkyFix").set(fix.x(), fix.y(), fix.z());
             float[] six = FxAtlas.puff6Light();
             s.safeGetUniform("FxSix").set(FxAtlas.PUFF6_STEP, FxAtlas.PUFF6_TOP, FxAtlas.PUFF6_U, FxAtlas.PUFF6_V);
             s.safeGetUniform("FxSixLight").set(six[0], six[1], six[2]);

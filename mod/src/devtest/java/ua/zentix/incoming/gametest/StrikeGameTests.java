@@ -1022,6 +1022,7 @@ public final class StrikeGameTests {
             level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64)).forEach(Entity::discard);
         });
 
+        placeReady(h, from);
         h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(from) + via) == 1, "приказ с места пуска не принят");
         List<LauncherEntity> launchers = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive);
         h.assertTrue(launchers.size() == 1 && placed.test(launchers.getFirst()), "пусковая не на месте пуска " + from + ": "
@@ -1042,6 +1043,14 @@ public final class StrikeGameTests {
         h.assertTrue(level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive).size() == 1
                 && level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(64), launcher::serves).size() == 2,
                 "второй приказ с того же места — не с той же пусковой");
+        // отметка перенесена на 50 блоков (в районе прежней): новый приказ — с новой пусковой у новой отметки, а не со
+        // старой, что смотрит на прежнюю цель (пусковая помнит свою отметку)
+        Vec3 moved = from.add(0, 0, 50);
+        placeReady(h, moved);
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(moved)) == 1, "приказ с перенесённой отметки не принят");
+        List<LauncherEntity> both = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive);
+        h.assertTrue(both.size() == 2 && both.stream().anyMatch(l -> flat(l.position(), moved) < PLACE_SLACK),
+                "перенесённая отметка взяла старую пусковую: " + both.stream().map(Entity::position).toList());
 
         // место пуска далеко, чанк не готов: один снаряд ждёт его залпом (залп грузит место), вне мира без пуска не стартует
         Vec3 far = from.add(0, 0, 20_000);
@@ -1130,6 +1139,7 @@ public final class StrikeGameTests {
         Item shahed = ModItems.SHAHED.get();
         MunitionGameTests.give(op, shahed, 1);
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
+        placeReady(h, from);
         h.assertTrue(ServerActions.strike(op, WeaponType.DRONE, 1, 0, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, new LaunchOrigin.Place(from), true),
                 "приказ оператора с места пуска не принят");
         h.assertTrue(MunitionGameTests.held(op, shahed) == 0, "приказ с пульта не снял боеприпас: осталось " + MunitionGameTests.held(op, shahed));
@@ -1312,7 +1322,7 @@ public final class StrikeGameTests {
         StrikeGameTests.afterTest(h, () -> {
             VirtualFlights.get(level).clear(level, near::test);
             level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(600, 512, 600)).forEach(Entity::discard);
-            level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(64, 256, 64)).forEach(Entity::discard);
+            level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(LaunchSite.PLACE_REACH + 8, 256, LaunchSite.PLACE_REACH + 8)).forEach(Entity::discard);
         });
         h.assertTrue(LaunchPlaces.waits(level, WeaponType.ROCKET, place), "далёкое место пуска уже готово");
         int salvos = SalvoData.get(level).size();
@@ -1324,8 +1334,8 @@ public final class StrikeGameTests {
             h.assertTrue(LaunchPlaces.ready(level, place), "район места пуска ещё не готов");
             h.assertTrue(SalvoData.get(level).size() == salvos, "залп ещё не выстрелил с готового места");
             h.assertTrue(level.getGameTime() - start < LaunchPlaces.WAIT, "залп дождался места только к пределу ожидания");
-            List<LauncherEntity> pads = level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(64, 256, 64), l -> l.isAlive() && near.test(l));
-            List<StrikeProjectile> rockets = level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(64, 256, 64),
+            List<LauncherEntity> pads = level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(LaunchSite.PLACE_REACH + 8, 256, LaunchSite.PLACE_REACH + 8), l -> l.isAlive() && near.test(l));
+            List<StrikeProjectile> rockets = level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(LaunchSite.PLACE_REACH + 8, 256, LaunchSite.PLACE_REACH + 8),
                     p -> p.weapon() == WeaponType.ROCKET && near.test(p));
             if (pads.isEmpty()) {
                 Incoming.LOG.info("farLaunchPlaceLoadsThenLaunches: no flat place near {} in this world's terrain, launched without a launcher", BlockPos.containing(far));
@@ -1338,6 +1348,20 @@ public final class StrikeGameTests {
 
     private static String fromArg(Vec3 from) {
         return String.format(Locale.ROOT, " from %.2f %.2f", from.x, from.z);
+    }
+
+    /**
+     * Район места пуска {@code at} готов сразу ({@link LaunchPlaces#ready}: чанки на {@link LaunchSite#PLACE_REACH} вокруг):
+     * GameTest грузит только свою площадку, а место у её края иначе ждало бы своего района залпом, и пусковая
+     * не встала бы в этом тике. У игрока в игре район места рядом с ним и так в его дальности прорисовки.
+     */
+    static void placeReady(GameTestHelper h, Vec3 at) {
+        ServerLevel level = h.getLevel();
+        double r = LaunchSite.PLACE_REACH;
+        for (int cx = Mth.floor(at.x - r) >> 4; cx <= Mth.floor(at.x + r) >> 4; cx++) {
+            for (int cz = Mth.floor(at.z - r) >> 4; cz <= Mth.floor(at.z + r) >> 4; cz++) level.getChunk(cx, cz);
+        }
+        h.assertTrue(LaunchPlaces.ready(level, new LaunchOrigin.Place(at)), "район места пуска " + at + " не готов");
     }
 
     /**

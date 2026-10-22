@@ -5,6 +5,7 @@ import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.sound.Noise;
 import ua.zentix.incoming.sound.Propagation;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -26,12 +27,33 @@ class HearingTest {
     void shahedIsHeardForKilometresAtNightAndCloserByDay() {
         WeaponSpec.Airframe drone = WeaponSpec.DRONE.airframe();
         double night = cruise(drone, NIGHT), day = cruise(drone, NOON);
+        System.out.printf("shahed heard: night %.0f m, day %.0f m%n", night, day);
         // в тихую погоду мотор шахеда слышно дальше 10 км (computingonline.net 2024, очевидцы): ночью — порядок этого
         assertTrue(night > 8000 && night < 14_000, "ночью " + night);
         assertTrue(day < night * 0.8, "днём " + day + ", ночью " + night);
         // звук обгоняет шахед: с края слышимости ночью его слышно задолго до прихода
         double lead = night * (1 / drone.cruiseSpeed() - 1 / (Noise.SOUND / 20)) / 20;
         assertTrue(lead > 30, "за " + lead + " с до прихода");
+    }
+
+    /**
+     * Источник, выведенный из замера, на месте самого замера звучит, как замерено: опорный сверхлёгкий (своя мощность,
+     * с глушителем, номинал оборотов) в 150 м над лугом — 70 дБА. Прежний вывод (поправка «+3 дБ у микрофона» при земле
+     * ISO 9613-2 в распространении) давал там 65 дБА, и шахед в игре был на 4,9 дБ тише своих данных (F4).
+     */
+    @Test
+    void shahedSourceReproducesItsReferenceMeasurement() {
+        Noise.Propeller d = (Noise.Propeller) WeaponSpec.DRONE.airframe().noise().engine();
+        double lw = d.refA() - WeaponSpec.OPEN_EXHAUST - d.spectrum().aWeighting();
+        double at = Propagation.level(lw, d.spectrum(), new Propagation.Path(WeaponSpec.UL_REF_M, WeaponSpec.UL_REF_M, WeaponSpec.UL_REF_MIC,
+                Propagation.MEADOW, NOON), null);
+        assertEquals(WeaponSpec.UL_REF_DBA, at, 0.05, "опорный сверхлёгкий на месте замера");
+        // шахед в игре над зрителем в 54 м (сцена пролёта шлагбаума): по классу ~92 дБА на настоящем крейсере
+        Noise noise = WeaponSpec.DRONE.airframe().noise();
+        double cruise = noise.power(Noise.Part.ENGINE, FlightPhase.CRUISE, 200, d.speed() / 20, false);
+        double l54 = Propagation.level(cruise, d.spectrum(), new Propagation.Path(54, 52, Propagation.EAR, Propagation.MEADOW, NOON), null);
+        assertEquals(70 + WeaponSpec.OPEN_EXHAUST + 10 * Math.log10(WeaponSpec.DRONE_PISTON.power() / WeaponSpec.UL_REF_W) + 20 * Math.log10(150.0 / 54), l54, 1.5,
+                "в 54 м — по классу с разлётом от 150 м");
     }
 
     @Test
