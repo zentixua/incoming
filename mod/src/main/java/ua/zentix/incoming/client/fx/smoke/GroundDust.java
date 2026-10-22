@@ -75,34 +75,19 @@ public final class GroundDust {
         this.air = air;
         this.yieldKt = CloudModel.equivalentKt(tntKg);
         this.hob = Math.max(0, hobM);
-        r = new double[RINGS];
-        area = new double[RINGS];
-        arrival = new double[RINGS];
-        positive = new double[RINGS];
-        mass = new double[RINGS];
-        first = new double[RINGS];
-        stem = new double[RINGS];
-        stemFrom = new double[RINGS];
+        Rings k0 = rings(tntKg, hob, ballM);
+        r = k0.r;
+        area = k0.area;
+        arrival = k0.arrival;
+        positive = k0.positive;
+        mass = k0.mass;
+        first = k0.first;
+        stem = k0.stem;
+        stemFrom = k0.stemFrom;
+        ball = k0.ball;
         annulus = new int[RINGS];
-        ball = new boolean[RINGS];
-        double outer = tntKg <= 0 ? 0 : HobBlast.rangeFor(OUTER_PSI, hob, yieldKt);
-        double sum = 0;
-        if (outer > INNER) {
-            for (int i = 0; i < RINGS; i++) {
-                double r0 = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
-                r[i] = i == 0 ? 0.5 * r1 : Math.sqrt(r0 * r1);
-                area[i] = Math.PI * (r1 * r1 - r0 * r0);
-                DustModel.Column c = DustModel.chemical(r[i], hob, yieldKt, ballM);
-                arrival[i] = HobBlast.arrivalSeconds(r[i], hob, yieldKt);
-                positive[i] = c.positive();
-                mass[i] = c.mass() * area[i];
-                first[i] = c.first();
-                stem[i] = c.stem();
-                stemFrom[i] = c.stemFrom();
-                ball[i] = r[i] * r[i] + hob * hob <= ballM * ballM;
-                if (!ball[i]) sum += mass[i];
-            }
-        }
+        double outer = k0.outer, sum = 0;
+        for (int i = 0; i < RINGS; i++) if (!ball[i]) sum += mass[i];
         total = sum;
         stemReach = DustModel.STEM_M * Math.cbrt(yieldKt / 15);
         // кольца показа — по долям массы
@@ -141,6 +126,52 @@ public final class GroundDust {
             drawn[s] = drawn[s - 1] + flux * (time(s) - time(s - 1));
         }
         life = lifeSeconds();
+    }
+
+    /** Кольца счёта одного заряда и высоты: от воздуха не зависят (залп «Града» считает их один раз). */
+    private record Rings(double outer, double[] r, double[] area, double[] arrival, double[] positive, double[] mass, double[] first,
+                         double[] stem, double[] stemFrom, boolean[] ball) {
+    }
+
+    private static final java.util.Map<String, Rings> CACHE = new java.util.LinkedHashMap<>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(java.util.Map.Entry<String, Rings> e) {
+            return size() > 16;
+        }
+    };
+
+    /** Кольца счёта заряда {@code tntKg} на высоте {@code hob} с шаром {@code ballM} (из кэша; нет — считаются сейчас). */
+    private static Rings rings(double tntKg, double hob, double ballM) {
+        String key = tntKg + "/" + hob + "/" + ballM;
+        synchronized (CACHE) {
+            Rings k = CACHE.get(key);
+            if (k != null) return k;
+        }
+        double y = CloudModel.equivalentKt(tntKg);
+        double[] r = new double[RINGS], area = new double[RINGS], arrival = new double[RINGS], positive = new double[RINGS],
+                mass = new double[RINGS], first = new double[RINGS], stem = new double[RINGS], stemFrom = new double[RINGS];
+        boolean[] ball = new boolean[RINGS];
+        double outer = tntKg <= 0 ? 0 : HobBlast.rangeFor(OUTER_PSI, hob, y);
+        if (outer > INNER) {
+            for (int i = 0; i < RINGS; i++) {
+                double r0 = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
+                r[i] = i == 0 ? 0.5 * r1 : Math.sqrt(r0 * r1);
+                area[i] = Math.PI * (r1 * r1 - r0 * r0);
+                DustModel.Column c = DustModel.chemical(r[i], hob, y, ballM);
+                arrival[i] = HobBlast.arrivalSeconds(r[i], hob, y);
+                positive[i] = c.positive();
+                mass[i] = c.mass() * area[i];
+                first[i] = c.first();
+                stem[i] = c.stem();
+                stemFrom[i] = c.stemFrom();
+                ball[i] = r[i] * r[i] + hob * hob <= ballM * ballM;
+            }
+        }
+        Rings k = new Rings(outer, r, area, arrival, positive, mass, first, stem, stemFrom, ball);
+        synchronized (CACHE) {
+            CACHE.put(key, k);
+        }
+        return k;
     }
 
     /** Время узла сетки s, с. */
