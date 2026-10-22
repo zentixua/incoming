@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""Годен ли прогон шлагбаума для сравнения с эталоном — по логу клиента (latest.log сценария probe).
+
+  python3 tools/look_gate/check.py <latest.log>   → 0 — годен; 1 — нет (причины в stderr)
+
+Не годен, если:
+  - слух оглушается (строки «SCENARIO probe hearing damage off» нет или там «on»): сцены идут подряд одним игроком, и
+    глухота от взрыва в 50 м глушит хвосты следующих сцен (F2b7, F2b8 22.10);
+  - сцена началась не в своё время игры (ProbeScenario.START, допуск LATE = 200 тиков): ветер и класс устойчивости —
+    функция времени игры, и сцена выборки, начатая позже, идёт в чужом воздухе (F2b8, F2b9 22.10: дым пожара полосой
+    вместо столба); время догоняется только вперёд;
+  - прогон сам остановился строкой «SCENARIO probe FAIL».
+"""
+import re
+import sys
+
+LATE = 200  # ProbeScenario.LATE
+EARLY = 5   # ProbeScenario.begin: догоняет до START − 5
+
+HEARING = re.compile(r"SCENARIO probe hearing damage (on|off)")
+START = re.compile(r"SCENARIO probe (\S+) game (-?\d+) \(reference start (null|-?\d+)\)")
+FAIL = re.compile(r"SCENARIO probe FAIL (.*)")
+
+
+def problems(lines):
+    """Причины, по которым прогон не годится (пусто — годен)."""
+    out = []
+    hearing = None
+    scenes = 0
+    for line in lines:
+        m = HEARING.search(line)
+        if m:
+            hearing = m.group(1)
+            continue
+        m = FAIL.search(line)
+        if m:
+            out.append("прогон остановлен: " + m.group(1).strip())
+            continue
+        m = START.search(line)
+        if m:
+            scenes += 1
+            case, game, ref = m.group(1), int(m.group(2)), m.group(3)
+            if ref == "null":
+                out.append(f"{case}: у сцены нет времени эталона (ProbeScenario.START)")
+            elif not (int(ref) - EARLY - 1 <= game <= int(ref) + LATE):
+                out.append(f"{case}: началась в игре {game}, эталон {ref} — другой воздух (допуск {LATE} тиков)")
+    if hearing is None:
+        out.append("нет строки «SCENARIO probe hearing damage»: слух не проверен (старый класс ProbeScenario?)")
+    elif hearing == "on":
+        out.append("слух оглушается (nuke_tinnitus = true): хвосты сцен заглушены прошлыми взрывами")
+    if scenes == 0:
+        out.append("ни одна сцена не началась")
+    return out
+
+
+def main():
+    with open(sys.argv[1], encoding="utf-8", errors="replace") as f:
+        bad = problems(f)
+    for p in bad:
+        print("look_gate: " + p, file=sys.stderr)
+    sys.exit(1 if bad else 0)
+
+
+if __name__ == "__main__":
+    main()

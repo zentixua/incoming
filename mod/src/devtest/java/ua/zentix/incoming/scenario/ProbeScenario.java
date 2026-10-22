@@ -82,17 +82,22 @@ final class ProbeScenario {
      * начало сцены в v3.4.1 и main — в пределах 200 тиков). Ветер мира и его класс устойчивости зависят только от времени
      * игры ({@code util.Wind}, {@code util.Air}): ночью у границы классов D и E ветер у земли — 1 или 5 м/с, и шлейф пожара
      * то встаёт столбом, то стелется. Выборка сцен без этого шла бы в другом воздухе, чем эталон; сцена, до которой игра
-     * не дошла, догоняет своё время ускоренными тиками ({@code /tick sprint}).
+     * не дошла, догоняет своё время ускоренными тиками ({@code /tick sprint}). Назад время не идёт, поэтому сцены выборки
+     * идут в порядке эталона ({@link #ALL}), а сцена, начавшаяся позже своего времени больше чем на {@link #LATE} тиков,
+     * останавливает прогон строкой {@code SCENARIO probe FAIL} (её же ловит {@code tools/look_gate/check.py}). У пролёта
+     * время — по прогону main 22.10 (Cmain: между стартом ночью и взрывом на воде, как у 3.4.1).
      */
     private static final java.util.Map<String, Integer> START = java.util.Map.ofEntries(
             java.util.Map.entry("drone-day-50", 902), java.util.Map.entry("drone-day-300", 2093), java.util.Map.entry("drone-night-50", 3353),
             java.util.Map.entry("drone-night-300", 4541), java.util.Map.entry("grad-day", 5821), java.util.Map.entry("grad-night", 7722),
             java.util.Map.entry("launch-behind", 9519), java.util.Map.entry("launch-side", 9792), java.util.Map.entry("launch-night-behind", 10084),
-            java.util.Map.entry("water-day-50", 11047), java.util.Map.entry("debris-night-50", 12236),
+            java.util.Map.entry("flyby", 10440), java.util.Map.entry("water-day-50", 11047), java.util.Map.entry("debris-night-50", 12236),
             java.util.Map.entry("substation-night-50", 14027), java.util.Map.entry("bomb-day-50", 15830), java.util.Map.entry("bomb-night-50", 17018),
             java.util.Map.entry("bomb-day-150", 18204), java.util.Map.entry("bomb-night-150", 19390), java.util.Map.entry("bomb-day-300", 20577),
             java.util.Map.entry("sam-side", 21690), java.util.Map.entry("sam-behind", 22182), java.util.Map.entry("sam-night-side", 22634),
             java.util.Map.entry("sam-burst", 23922), java.util.Map.entry("sam-night-burst", 24810));
+    /** Сцена позже своего времени игры больше этого, тиков, — уже в другом воздухе: прогон не годится. */
+    static final int LATE = 200;
     /** Сцена уже догнала своё время игры; ускорение до него уже заказано. */
     private boolean onTime, sprinting;
 
@@ -128,7 +133,8 @@ final class ProbeScenario {
 
     ProbeScenario() {
         String prop = System.getProperty("incoming.probe.cases");
-        cases = prop == null || prop.isBlank() ? ALL : List.of(prop.split(","));
+        // выборка — в порядке эталона: время игры догоняется только вперёд
+        cases = prop == null || prop.isBlank() ? ALL : ordered(prop.split(","));
         Writer w = null;
         try {
             Path file = FMLPaths.GAMEDIR.get().resolve("logs").resolve("probe-frames.txt");
@@ -145,6 +151,14 @@ final class ProbeScenario {
             if (e.getExplosion().center().distanceTo(target) < 80) blasts.incrementAndGet();
         });
         at(40, () -> {
+            // сравнение звука — без оглушения: сцены идут подряд одним игроком, и глухота от взрыва в 50 м перешла бы в
+            // следующие сцены (прогоны F2b7, F2b8 22.10 шли со слухом, и хвосты взрывов в них заглушены)
+            boolean hearing = IncomingConfig.CLIENT.nukeTinnitus.get();
+            Incoming.LOG.info("SCENARIO probe hearing damage {}", hearing ? "on" : "off");
+            if (hearing) {
+                fail("hearing damage is on (nuke_tinnitus = true): sounds of later scenes would be muffled by earlier blasts");
+                return;
+            }
             cmd("weather clear");
             cmd("gamerule doDaylightCycle false");
             cmd("gamerule doFireTick true");
@@ -167,6 +181,28 @@ final class ProbeScenario {
             });
         });
         at(60, this::nextCase);
+    }
+
+    /** Сцены выборки в порядке эталона; незнакомая сцена — ошибка (место и время у неё неизвестны). */
+    static List<String> ordered(String[] names) {
+        List<String> out = new ArrayList<>();
+        for (String n : names) {
+            String name = n.trim();
+            if (name.isEmpty()) continue;
+            if (!ALL.contains(name)) throw new IllegalArgumentException("unknown probe case " + name + ", known: " + ALL);
+            if (!out.contains(name)) out.add(name);
+        }
+        out.sort(java.util.Comparator.comparingInt(ALL::indexOf));
+        return out;
+    }
+
+    /**
+     * Прогон не годится для сравнения: строка {@code SCENARIO probe FAIL} и выход — сразу, а не после часа съёмки
+     * ({@code tools/look_gate/check.py} ловит её и сам).
+     */
+    private void fail(String why) {
+        Incoming.LOG.error("SCENARIO probe FAIL {}", why);
+        at(tick + 2, () -> Minecraft.getInstance().stop());
     }
 
     private void nextCase() {
@@ -199,7 +235,13 @@ final class ProbeScenario {
             at(tick + 10, this::begin);
             return;
         }
-        if (!onTime) Incoming.LOG.info("SCENARIO probe {} game {} (reference start {})", current, now, start);
+        if (!onTime) {
+            Incoming.LOG.info("SCENARIO probe {} game {} (reference start {})", current, now, start);
+            if (start == null || now > start + LATE) {
+                fail(current + " starts at game " + now + ", reference start " + start + ": another air than the reference");
+                return;
+            }
+        }
         onTime = true;
         int[] site = sites.get(caseIndex);
         armed = false;

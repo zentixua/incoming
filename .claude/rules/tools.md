@@ -53,6 +53,9 @@ paths:
     free_port.py                         ← свободный порт на 127.0.0.1 для серверов проверок (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← процессы проверок в своих сессиях (source из stress.sh, mp_scenario.sh): выход скрипта гасит их с JVM
     test_rig_procs.sh                    ← проверка rig_procs.sh (CI): Ctrl+C, TERM, конец скрипта, чужая сессия, fd, срок RIG_GRACE — без сирот
+    look_gate/run.sh <имя> <дерево> [сцены] ← шлагбаум картинки и звука: сцены ProbeScenario под Iris со всей сборкой (README.md
+                                           там); слух всегда без оглушения, выборка — в порядке и времени игры эталона;
+                                           годность прогона — check.py по логу (код 1), тест — test_check.py (CI «Шлагбаум»)
     pr_ci.sh <PR>                        ← ждать «Итог» и «Записку» PR одной командой (в фоне): 0 — зелёные, 1 — упало (задачи
                                            и хвост лога), 3 — конфликт с базой (GitHub тогда проверки не запускает вовсе)
     pr_note.py < файлы PR                ← проверка «Записка» (CI, .github/workflows/note.yml): PR, который меняет то, что
@@ -118,7 +121,8 @@ paths:
   умолчанию. Без инстанса (облако, CI) — `tools/fetch_runtime_mods.py` (Java 21 в облаке есть, сеть к
   NeoForge/Mojang/Parchment/Modrinth открыта).
 - «Что изменилось» в `build.yml`: правка только `tools/` (кроме `fetch_runtime_mods.py`, `paths.py`), `docs/`, `*.md`
-  мод не собирает и GameTest не гоняет (`tools/replayscan` — своя сборка и юнит-тесты); `mod/`, CI и незнакомые пути —
+  мод не собирает и GameTest не гоняет (`tools/replayscan` — своя сборка и юнит-тесты, `tools/look_gate` — тест
+  годности прогона); `mod/`, CI и незнакомые пути —
   проверка целиком, ручной запуск (релиз) — всегда целиком. jar — артефакт `incoming-jar`.
 - Релиз: поднять `mod_version`, написать `docs/releases/<версия>.md` (по-английски), влить в `main` и запустить `build`
   вручную на `main` с `release=true` — после всех проверок workflow выпускает `v<версия>` с jar (оттуда его берут
