@@ -45,7 +45,7 @@ Id и пространство имён — `incoming`, команда `/incomin
 
 ## Где что лежит
 ```
-/mnt/data/projects/airstrike/            ← этот проект (git)
+/mnt/data/projects/incoming/             ← этот проект (git); /mnt/data/projects/airstrike — ссылка на него
   mod/                                   ← исходники мода (ModDevGradle 2, NeoForge 21.1.259, Parchment, Java 21)
     src/main/java/ua/zentix/incoming/   ← код (пакеты — ниже)
     src/main/resources/                  ← assets (звуки, текстуры, lang ru/en), data (теги, типы урона), AT
@@ -75,7 +75,7 @@ Id и пространство имён — `incoming`, команда `/incomin
   .claude/rules/                         ← устройство пакетов и подводные камни по областям
 
 ~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/   ← Prism (tools/paths.py: PRISM)
-  instances/Airstrike Pack/minecraft/                             ← .minecraft инстанса (MC): сборка open-skies, в ней играет Артём
+  instances/Open Skies/minecraft/                                 ← .minecraft инстанса (MC): сборка open-skies, в ней играет Артём
                                                                      (папку инстанса не переименовывать, иначе — MC_DIR)
     mods/                              ← моды; отсюда же build.gradle берёт Create/Sable/Aeronautics для запусков
     logs/latest.log                    ← лог клиента и встроенного сервера

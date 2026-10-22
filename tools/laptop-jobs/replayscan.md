@@ -5,11 +5,11 @@
 воздухе и перехваты, видимость глазами всех игроков. Базы нужны треду «Превью TikTok» для выбора моментов.
 
 Не трогать: инстанс Артёма, его миры и настройки; оригиналы повторов только читать, разбирать — копии. Не во время
-игры Артёма (`pgrep -af java` — нет клиента инстанса «Airstrike Pack»). Клиент разбора — со всей сборкой (около
+игры Артёма (`pgrep -f 'java.*PrismLauncher/[i]nstances/'` пусто: ни одного клиента инстанса Prism). Клиент разбора — со всей сборкой (около
 10 ГБ): одновременно с другим клиентом со всей сборкой (шаги трейлера `record`, `render`) не идёт; рядом с `cut`
 (монтаж) — можно. Видеокарта разбору не нужна: он не рисует (шейдеры в его копии выключены).
 
-Пути — от `/mnt/data/projects/airstrike`, `W=mod/run/claude-work`, `JAVA_HOME` — `java-runtime-delta` из Prism.
+Пути — от `/mnt/data/projects/incoming`, `W=mod/run/claude-work`, `JAVA_HOME` — `java-runtime-delta` из Prism.
 
 ## Подготовка (один раз)
 1. Рабочее дерево и сборка:
@@ -28,7 +28,7 @@
    (уже без пакетов Point Blank, путь DH — на копию); остальные — как `render_windows.replay_copy`:
    `patch_replay.py` (путь DH → `$W/release-media/dh-airstrike-overworld`; нет `distantHorizonPaths` — шаг не нужен),
    затем `strip_payloads.py <src> <dst> pointblank:mainheldsimplifiedstatebroadcastpacket` (`$W/epic-index`).
-   Источник — `flashback/replays/` инстанса «Airstrike Pack».
+   Источник — `flashback/replays/` инстанса «Open Skies».
 
 ## Разбор одного повтора
 ```sh

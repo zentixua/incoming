@@ -12,7 +12,7 @@ paths:
 Краткая раскладка — в корневом CLAUDE.md; здесь — что умеет каждый скрипт.
 
 ```
-/mnt/data/projects/airstrike/            ← этот проект (git)
+/mnt/data/projects/incoming/             ← этот проект (git); /mnt/data/projects/airstrike — ссылка на него
   mod/                                   ← исходники мода (ModDevGradle 2, NeoForge 21.1.259, Parchment, Java 21)
     src/main/java/ua/zentix/incoming/   ← код (пакеты — в корневом CLAUDE.md)
     src/main/resources/                  ← assets (звуки, текстуры, lang ru/en), data (теги, типы урона), AT
