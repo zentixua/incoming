@@ -105,7 +105,7 @@ public final class IncomingClient {
         modBus.addListener(NukeRenderer::registerShaders);
         modBus.addListener(IncomingClient::reloadListeners);
         modBus.addListener(IncomingClient::blockColors);
-        TerrainTiles.init();
+        TerrainTiles.init(modBus);
         LodDepth.init();
 
         NeoForge.EVENT_BUS.addListener(IncomingClient::tick);

@@ -57,6 +57,38 @@ interface TerrainSource {
         return false;
     }
 
+    /**
+     * Колонка сразу, из памяти источника, из любого потока, без ожидания; null — не знает или так не умеет (тогда
+     * берутся готовые плитки). Лучи, звук и ядерка ({@code TerrainTiles.height}) спрашивают сначала его.
+     */
+    @Nullable
+    default Column peek(int x, int z) {
+        return null;
+    }
+
+    /**
+     * Источник работает в этом мире (у дальних источников: сервер раздаёт рельеф). Из дальних берётся первый работающий
+     * по порядку предпочтения ({@code TerrainTiles}), остальные молчат.
+     */
+    default boolean active() {
+        return true;
+    }
+
+    /** Источник работает, но рельефа ещё не отдал ничего: карта пишет об этом {@link #pendingNote}. */
+    default boolean waiting() {
+        return false;
+    }
+
+    /** Ключ надписи на карте, пока источник ждёт ({@link #waiting} или его чтения стоят в очереди). */
+    default String pendingNote() {
+        return "incoming.map.far_pending";
+    }
+
+    /** Раз в тик, в потоке игры: всё, что источник знал раньше, могло измениться (прочитан его кэш) — перечитать все плитки. */
+    default boolean invalidated(ClientLevel level) {
+        return false;
+    }
+
     /** Для лога: что источник отдал с начала мира (колонки, отказы и почему). */
     default String describe() {
         return "";

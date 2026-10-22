@@ -54,6 +54,9 @@ def dhModPatterns = System.getenv('INCOMING_DH') ? ['DistantHorizons-*.jar'] : [
 // ... или с Voxy через Roxy (официальный jar Voxy для 1.21.11, Roxy переводит его под 1.21.1; нужны Sodium и Forgified
 // Fabric API): глубина рельефа Voxy для слоя эффектов (tools/client_scenario.sh far voxy)
 def voxyModPatterns = System.getenv('INCOMING_VOXY') ? ['sodium-neoforge-*.jar', 'roxy-*.jar', 'voxy-*.jar', 'forgified-fabric-api-*.jar'] : []
+// ... и с LOD Server Support: рельеф карты вдали с сервера (tools/client_scenario.sh target-map lss; jar кладёт скрипт —
+// в сборке хоста его пока нет)
+def lssModPatterns = System.getenv('INCOMING_LSS') ? ['lod-server-support-neoforge-*.jar'] : []
 // GameTest с Lithium, как у хоста (-PwithLithium): проверка совместимости руками, в CI её нет
 def lithiumModPatterns = project.hasProperty('withLithium') ? ['lithium-neoforge-*.jar'] : []
 
@@ -95,6 +98,8 @@ neoForge {
             // трейлер проверяет, что кадр ровно такой (окно в KWin иначе уменьшается на заголовок)
             systemProperty 'incoming.frame', size.join('x')
             environment 'ALSOFT_CONF', project.file('run/scenario/alsoft.conf').absolutePath
+            // LSS раздаёт LOD и встроенным сервером одиночной игры — своим тестовым свойством (иначе только по сети)
+            if (System.getenv('INCOMING_LSS')) systemProperty 'lss.test.integratedServer', 'true'
             // паузы сборщика мусора — чтобы отличать их от медленного кода (run/scenario/logs/gc.log)
             jvmArgument "-Xlog:gc:file=${project.file("${scenarioDir}/logs/gc.log").absolutePath}:time,uptime"
             // профиль JFR по желанию: INCOMING_JFR=1 tools/client_scenario.sh nuke → run/scenario/logs/scenario.jfr
@@ -200,6 +205,8 @@ dependencies {
     compileOnly "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
     // Distant Horizons: только API для компиляции — рельеф вдали для карты наведения, если DH стоит (compat/DistantHorizons)
     compileOnly "maven.modrinth:distanthorizonsapi:${dh_api_version}"
+    // LOD Server Support (MIT): только для компиляции — рельеф вдали с сервера через его клиентское API (client/map/LssTerrain)
+    compileOnly "maven.modrinth:lod-server-support:${lss_version}"
     // диапазон, а не ровно версия: Sable несёт тот же companion со своим диапазоном, и FML выбирает одну версию,
     // подходящую всем, — ровно [1.6.0] не пустил бы игру с Sable, который принесёт 1.6.1
     jarJar("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}") {
@@ -286,7 +293,7 @@ tasks.register('rigLaunch') {
 // Копирует моды сборки в каталог запуска: FML сам распакует вложенные jar (Flywheel, Ponder, Veil…)
 def copyRuntimeMods = { String runDir ->
     tasks.register("copyRuntimeMods_${runDir}", Sync) {
-        def patterns = runDir == 'scenario' ? runtimeModPatterns + shaderModPatterns + dhModPatterns + voxyModPatterns
+        def patterns = runDir == 'scenario' ? runtimeModPatterns + shaderModPatterns + dhModPatterns + voxyModPatterns + lssModPatterns
                 : runDir in ['gametest', 'scenario-sweep', 'scenario-record'] ? runtimeModPatterns + lithiumModPatterns : runtimeModPatterns
         from(mcModsDir) { patterns.each { include it } }
         into({ "${project.findProperty(runDir + 'Dir') ?: 'run/' + runDir}/mods" })

@@ -522,4 +522,46 @@ class TerrainTilesTest {
         TerrainTiles.arrived(layer, -1, -5);
         assertTrue(layer.tiles.get(fresh).stale, "строящаяся — перечитать");
     }
+
+    /**
+     * Дальний рельеф — первый работающий по предпочтению: LSS (выше в списке) раньше DH, но только пока сервер раздаёт
+     * рельеф; иначе DH; нет дальних — только чанки.
+     */
+    @Test
+    void farLayerPrefersWorkingLss() {
+        boolean[] lssOn = {false};
+        TerrainTiles.Layer dh = farLayer("dh", () -> true), lss = farLayer("lss", () -> lssOn[0]), chunks = layer();
+        assertEquals(dh, TerrainTiles.pickFar(List.of(dh, lss, chunks)), "сервер без LSS — DH");
+        lssOn[0] = true;
+        assertEquals(lss, TerrainTiles.pickFar(List.of(dh, lss, chunks)), "сервер раздаёт LOD — LSS");
+        assertEquals(lss, TerrainTiles.pickFar(List.of(lss, chunks)));
+        lssOn[0] = false;
+        assertNull(TerrainTiles.pickFar(List.of(lss, chunks)), "LSS без сервера и без DH — только чанки");
+        assertNull(TerrainTiles.pickFar(List.of(chunks)));
+    }
+
+    private static TerrainTiles.Layer farLayer(String name, java.util.function.BooleanSupplier active) {
+        return new TerrainTiles.Layer(name, new TerrainSource() {
+            @Override
+            public boolean offThread() {
+                return true;
+            }
+
+            @Override
+            public long refreshNanos() {
+                return Long.MAX_VALUE;
+            }
+
+            @Override
+            public boolean active() {
+                return active.getAsBoolean();
+            }
+
+            @Nullable
+            @Override
+            public Reader open(ClientLevel level) {
+                return null;
+            }
+        }, true);
+    }
 }

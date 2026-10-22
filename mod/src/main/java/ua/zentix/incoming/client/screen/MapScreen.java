@@ -730,8 +730,7 @@ public class MapScreen extends Screen {
         g.drawCenteredString(font, targetLine(p.position()), width / 2, height - panel() + 5, canFire() ? 0xFFFF6050 : DIM);
         routeLine(g);
         if (launchAllowed && !ceiling()) launchLine(g);
-        String note = ceiling() ? "incoming.map.no_ceiling"
-                : !TerrainTiles.farTerrain() ? "incoming.map.near_only" : TerrainTiles.farPending() ? "incoming.map.far_pending" : null;
+        String note = ceiling() ? "incoming.map.no_ceiling" : !TerrainTiles.farTerrain() ? "incoming.map.near_only" : TerrainTiles.farPendingNote();
         if (note != null) g.drawString(font, Component.translatable(note).withStyle(ChatFormatting.ITALIC), 8, TOP + 6, DIM);
     }
 
