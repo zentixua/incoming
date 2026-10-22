@@ -15,6 +15,8 @@
                                             sounds.json и авторы — по всем разделам)
   uv run tools/build_sounds.py --alone after → только эти разделы, без записей остальных (синтез, когда Freesound
                                             недоступен): прочие события sounds.json и авторы остаются как были
+  uv run tools/build_sounds.py --measure  → только спектры и громкость звуков источника (SOURCES_AT) по собранным
+                                            файлам — в Spectra.java
   uv run tools/build_sounds.py --previews drone → без входа в Freesound (облако): вместо оригиналов — превью
                                             (ogg с потерями); оригиналы дома дают те же числа, но чище
 
@@ -462,8 +464,10 @@ def write(name, x, event=None, subtitle=None, level=0.35):
         files.append(name)
     if not WRITING:
         return
-    if event in SPECTRA:
+    if event in SPECTRA or event in SOURCES_AT:
         SPECTRA_GOT.setdefault(event, []).append(octaves(x))
+    if event in SOURCES_AT:
+        LUFS_GOT.setdefault(event, []).append(loudness(x))
     os.makedirs(OUT, exist_ok=True)
     channels = 1 if x.ndim == 1 else x.shape[1]
     # кусками: libsndfile падает, если отдать Vorbis длинный файл одним блоком
@@ -480,6 +484,13 @@ SPECTRA = {"drone.engine", "loiter.engine", "loiter.dive", "missile.engine", "mi
            "bomb.fall", "booster.engine", "rocket.incoming", "bomb.drill", "launch.booster", "rocket.launch",
            "loiter.launch", "booster.separate"}
 SPECTRA_GOT = {}
+# Разовые звуки и петли мира с громкостью по закону источника (client/sound/Sources: мощность звука из паспорта,
+# путь ISO 9613, client/sound/Loudness), а не ручной дальностью: им в Spectra.java — спектр и громкость самого файла
+# (наибольшая мгновенная, LUFS), по которой клиент приводит файл к ENGINE_LUFS — одной мерке всех звуков источника.
+# Пересобирать файлы ради этого не нужно: --measure меряет уже собранные.
+SOURCES_AT = {"siren", "nuke.alarm", "nuke.launch", "grid.fail", "grid.spark", "grid.hum", "grid.power_down",
+              "grid.power_up", "nuke.collapse", "debris.fall", "blast.fire"}
+LUFS_GOT = {}
 SPECTRA_JAVA = os.path.join(ROOT, "mod", "src", "main", "java", "ua", "zentix", "incoming", "sound", "Spectra.java")
 OCTAVES = [63, 125, 250, 500, 1000, 2000, 4000, 8000]
 
@@ -511,6 +522,19 @@ def write_spectra():
             lines.insert(next(i for i, l in enumerate(lines) if "// @spectra-end" in l), line)
         java = "\n".join(lines)
         print(f"  спектр {ev}: {' '.join(f'{v:.0f}' for v in db)}")
+        if ev in LUFS_GOT:
+            # варианты — среднее по мощности: клиент берёт вариант по зерну, разница вариантов — их собственная
+            lufs = 10 * np.log10(np.mean([10 ** (v / 10) for v in LUFS_GOT[ev]]))
+            line = f"    public static final double {const}_LUFS = {lufs:.1f};"
+            head = f"    public static final double {const}_LUFS = "
+            lines = java.split("\n")
+            hit = [i for i, l in enumerate(lines) if l.startswith(head)]
+            if hit:
+                lines[hit[0]] = line
+            else:
+                lines.insert(next(i for i, l in enumerate(lines) if "// @spectra-end" in l), line)
+            java = "\n".join(lines)
+            print(f"  громкость {ev}: {lufs:.1f} LUFS")
     with open(SPECTRA_JAVA, "w", encoding="utf-8") as fh:
         fh.write(java)
 
@@ -1084,9 +1108,27 @@ def write_credits():
         fh.write("\n".join(txt) + "\n")
 
 
+def measure():
+    """Спектры и громкость звуков источника (SOURCES_AT) по уже собранным файлам sounds.json — без записей Freesound."""
+    with open(os.path.join(ASSETS, "sounds.json"), encoding="utf-8") as fh:
+        data = json.load(fh)
+    for ev in sorted(SOURCES_AT):
+        for f in data[ev]["sounds"]:
+            x, sr = sf.read(os.path.join(OUT, f["name"].split(":")[1] + ".ogg"), dtype="float64")
+            if sr != SR:
+                sys.exit(f"{f['name']}: {sr} Гц, а сборка — {SR}")
+            x = x if x.ndim == 1 else x.mean(axis=1)
+            SPECTRA_GOT.setdefault(ev, []).append(octaves(x))
+            LUFS_GOT.setdefault(ev, []).append(loudness(x))
+    write_spectra()
+
+
 if __name__ == "__main__":
     PARTS = (drone, missile, launch, bomber, blasts, bunker, sirens, nuke, after, misc, rocket, loiter, grid, sonic)
     args = sys.argv[1:]
+    if args == ["--measure"]:
+        measure()
+        sys.exit(0)
     PREVIEWS = "--previews" in args
     args = [a for a in args if a != "--previews"]
     # --alone: только названные разделы (без записей Freesound — например, синтез в облаке): прочие события

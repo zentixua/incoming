@@ -119,12 +119,31 @@ public final class WaterModel {
 
     /** Масштаб «Бейкера» для мощности: кубический корень. */
     static double bakerScale(double yieldKt) {
-        return Math.cbrt(Math.max(yieldKt, 0.01) / BAKER_KT);
+        // и для обычного заряда (килограммы — миллионные доли килотонны, WaterBlast): ноль не даёт деления на ноль
+        return Math.cbrt(Math.max(yieldKt, 1e-12) / BAKER_KT);
     }
 
     /** Наружный радиус полого столба воды до сужения, м. */
     public static double columnRadius(double yieldKt) {
         return COLUMN_RADIUS * bakerScale(yieldKt);
+    }
+
+    /**
+     * Наибольшая высота столба подрыва на поверхности, м: {@link #SURFACE_COLUMN} высоты «Бейкера» по кубическому корню
+     * мощности (тот же закон у обычного взрыва на воде, {@code client.fx.smoke.WaterBlast}).
+     */
+    public static double columnHeight(double yieldKt) {
+        return COLUMN_TOP * SURFACE_COLUMN * bakerScale(yieldKt);
+    }
+
+    /** Наибольший радиус базисной волны подрыва на поверхности сверх стенки столба, м (обычный взрыв на воде — тот же закон). */
+    public static double surgeReach(double yieldKt) {
+        return SURFACE_SURGE * SURGE_RADIUS * bakerScale(yieldKt);
+    }
+
+    /** Высота базисной волны подрыва на поверхности, м. */
+    public static double surgeTop(double yieldKt) {
+        return SURFACE_SURGE * SURGE_HEIGHT * bakerScale(yieldKt);
     }
 
     /** Толщина стенки столба, м. */

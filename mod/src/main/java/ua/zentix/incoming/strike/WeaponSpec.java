@@ -481,16 +481,26 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     // ---- паспорта звука ({@link Noise}): законы источников из чисел двигателей выше; «О» — оценка по классу
 
+    /** Двухтакт без глушителя громче того же с глушителем, дБ (О: вносимое ослабление глушителя малого двухтакта 10–20). */
+    static final double OPEN_EXHAUST = 10;
+
     /**
      * Шахед ({@link #DRONE_PISTON}): лопасти 250 Гц, вал 125 Гц; номинал звука — крейсер 185 км/ч = 51 м/с (Wikipedia
      * «HESA Shahed 136»). Громкость — по классу: сверхлёгкие самолёты 15–30 л. с. на полном
      * газу дают ~70 дБА в 150 м под собой (F. W. J. van Deventer, «Noise aspects of ultralights and model airplanes»,
      * Proc. IOA): L<sub>WA</sub> = 70 + 20·lg 150 + 11 − 3 (отражение от земли у микрофона) ≈ 121,5 дБА на ~16,4 кВт
-     * (22 л. с.). На месте полный газ — 0,8 номинала оборотов, в пике раскрутка не выше 1,1 (О). Корпус — из {@link #DRONE_ARTICLE}; в записи
-     * обтекания — его крейсер. Отстрел ускорителя ~125 дБА (О).
+     * (22 л. с.). У сверхлёгких — глушители, а у MD-550 выхлоп открытый (короткие патрубки без глушителя на обломках):
+     * {@value #OPEN_EXHAUST} дБ сверху — вносимое ослабление глушителя малого двухтакта (О, 10–20 дБ; у глушителей больших
+     * дизелей 20–30 дБ — TRB Special Report 152, 1975). Сверка с жизнью: в тихую погоду мотор шахеда слышно дальше 10 км
+     * (computingonline.net, «Intelligent analysis of sound patterns of UAVs», 2024; очевидцы в Украине — так же), и с
+     * этим числом модель распространения даёт ночью ~10,6 км, днём ~6 км ({@code HearingTest}); с одним уровнем
+     * сверхлёгкого с глушителем было 4,3 км — на 20 дБ тише 3.4.1. На месте полный газ — 0,8 номинала оборотов, в пике
+     * раскрутка не выше 1,1 (О). Корпус — из {@link #DRONE_ARTICLE}; в записи обтекания — его крейсер. Отстрел ускорителя
+     * ~125 дБА (О).
      */
     static final Noise DRONE_NOISE = new Noise(
-            new Noise.Propeller(DRONE_PISTON.power(), DRONE_PISTON.rpm(), DRONE_PISTON.blades(), DRONE_ARTICLE.real().cruise(), 0.8, 1.1, 121.5, 16_400, Spectra.DRONE_ENGINE),
+            new Noise.Propeller(DRONE_PISTON.power(), DRONE_PISTON.rpm(), DRONE_PISTON.blades(), DRONE_ARTICLE.real().cruise(), 0.8, 1.1,
+                    121.5 + WeaponSpec.OPEN_EXHAUST, 16_400, Spectra.DRONE_ENGINE),
             new Noise.Rocket(DRONE_BOOSTER.thrust(), DRONE_BOOSTER.exhaust(), Spectra.BOOSTER_ENGINE),
             new Noise.Body(DRONE_ARTICLE.diameter(), DRONE_ARTICLE.length(), DRONE_ARTICLE.real().cruise(), Spectra.BOMB_FALL), Double.NaN, Double.NaN, 125);
 

@@ -34,7 +34,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * {@code drone-night-50}, {@code drone-night-300} — шахед в землю, зритель в 50 и 300 блоках, кадры через 0,1–30 с;
  * {@code grad-day}, {@code grad-night} — залп «Града» 40 снарядов с разбросом 15 в 30 блоках, кадры до минуты;
  * {@code launch-behind}, {@code launch-side}, {@code launch-night-behind} — старт ракеты с пусковой, камера за ракетой
- * по её оси и сбоку; {@code flyby} — шахед проходит над зрителем (звук). У каждой сцены своё место на равнине.
+ * по её оси и сбоку; {@code flyby} — шахед проходит над зрителем (звук); {@code water-day-50} — шахед в пруд 41×41×4
+ * (взрыв на воде), {@code debris-night-50} — шахед в крышу деревянного дома 9×5×9 (горящие обломки, свет огня на мир,
+ * дрожание воздуха), {@code substation-night-50} — шахед в подстанцию (дуга, горящее масло, гул и треск). У каждой
+ * сцены своё место на равнине.
  * <p>
  * В лог — строки {@code SCENARIO probe …}: взрыв или старт (тик клиента, игровое время, байт в audio.wav — по нему
  * режется звук), снимки. Время каждого кадра — logs/probe-frames.txt: «сцена игровое_время мс».
@@ -43,7 +46,11 @@ final class ProbeScenario {
     private record Step(int at, Runnable action) {}
 
     private static final List<String> ALL = List.of("drone-day-50", "drone-day-300", "drone-night-50", "drone-night-300",
-            "grad-day", "grad-night", "launch-behind", "launch-side", "launch-night-behind", "flyby");
+            "grad-day", "grad-night", "launch-behind", "launch-side", "launch-night-behind", "flyby",
+            // S8 — в конце: места прежних сцен — по их номеру в этом списке
+            "water-day-50", "debris-night-50", "substation-night-50");
+    /** Кадры сцен с пожаром и подстанцией: дольше — дым горящего масла и пожара встаёт десятками секунд. */
+    private static final double[] FIRE_SHOTS = {0.1, 0.5, 1, 3, 10, 30, 60};
     /** Кадры шахеда, секунды после взрыва. */
     private static final double[] DRONE_SHOTS = {0.1, 0.5, 1, 3, 10, 30};
     private static final double[] GRAD_SHOTS = {0.1, 0.5, 1, 3, 6, 12, 20, 30, 45, 60};
@@ -219,6 +226,20 @@ final class ProbeScenario {
             cmd(String.format(Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", eye.x, eye.y, eye.z, target.x, target.y + lookUp, target.z));
             Incoming.LOG.info("SCENARIO probe {} target {} eye {}", current, xyz(target), xyz(eye));
         });
+        // постройки сцен S8 — до пуска, на земле цели (ванильные команды: те же в любой версии мода)
+        at(s + 200, () -> {
+            int x = (int) Math.floor(target.x), y = (int) Math.floor(target.y), z = (int) Math.floor(target.z);
+            if (current.startsWith("water")) {
+                cmd(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:water", x - 20, y - 4, z - 20, x + 20, y - 1, z + 20));
+                target = new Vec3(target.x, y - 0.1, target.z);
+            } else if (current.startsWith("debris")) {
+                cmd(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_planks hollow", x - 4, y, z - 4, x + 4, y + 4, z + 4));
+                target = new Vec3(target.x, y + 4.5, target.z);
+            } else if (current.startsWith("substation")) {
+                cmd(String.format(Locale.ROOT, "setblock %d %d %d incoming:substation", x, y, z));
+                target = new Vec3(target.x, y + 0.5, target.z);
+            }
+        });
         at(s + 420, () -> {
             var c = IncomingConfig.SERVER;
             c.launchNearPlayer.set(false);
@@ -238,7 +259,8 @@ final class ProbeScenario {
         Minecraft mc = Minecraft.getInstance();
         Incoming.LOG.info("SCENARIO probe {} blast tick {} game {} audio {} wall {}", current, tick, mc.level.getGameTime(), audioBytes(),
                 System.currentTimeMillis());
-        double[] times = current.startsWith("grad") ? GRAD_SHOTS : DRONE_SHOTS;
+        double[] times = current.startsWith("grad") ? GRAD_SHOTS
+                : current.startsWith("debris") || current.startsWith("substation") ? FIRE_SHOTS : DRONE_SHOTS;
         int last = 0;
         for (double t : times) {
             int dt = Math.max(1, (int) Math.round(t * 20));
@@ -441,6 +463,8 @@ final class ProbeScenario {
             Minecraft mc = Minecraft.getInstance();
             Screenshot.grab(mc.gameDirectory, "probe_" + name + ".png", mc.getMainRenderTarget(), c -> {});
             Incoming.LOG.info("SCENARIO probe shot {} tick {} fps {}", name, tick, mc.getFps());
+            // взрыв у кадра, а не в миг события сервера: пакет взрыва приходит позже счётчика взрывов
+            Incoming.LOG.info("SCENARIO probe shot {} blast {}", name, ua.zentix.incoming.client.far.FarBlasts.describeLast());
         });
     }
 

@@ -26,6 +26,10 @@ import ua.zentix.incoming.client.sound.Outdoor;
 import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.client.sound.SirenSound;
 import ua.zentix.incoming.client.sound.SoundFilters;
+import ua.zentix.incoming.client.sound.Sources;
+import ua.zentix.incoming.entity.FlightPhase;
+import ua.zentix.incoming.sound.Noise;
+import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
@@ -70,7 +74,14 @@ public final class NukeSounds {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
         long now = mc.level.getGameTime();
-        if (w.mine() && now - w.launchTime() < 40) ClientSounds.at(ModSounds.NUKE_LAUNCH.get(), w.launchPos(), 24, 1);
+        if (w.mine() && now - w.launchTime() < 40) {
+            // мощность — закон РДТТ первой ступени из паспорта звука МБР, запись — старт со стола
+            Noise.Rocket motor = WeaponSpec.NUKE.airframe().noise().motor();
+            Sources.Source s = Sources.NUKE_LAUNCH;
+            if (motor != null) {
+                Sources.play(ModSounds.NUKE_LAUNCH.get(), w.launchPos(), s.power(motor.power(FlightPhase.BOOST, 0) + s.spectrum().aWeighting()), 1);
+            }
+        }
     }
 
     /**

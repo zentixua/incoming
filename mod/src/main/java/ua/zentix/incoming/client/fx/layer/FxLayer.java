@@ -14,7 +14,9 @@ import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarRenderer;
+import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.fx.particle.FxPool;
 import ua.zentix.incoming.client.fx.smoke.SmokeFrame;
@@ -121,6 +123,12 @@ public final class FxLayer {
             Incoming.LOG.error("Mushroom shadow shader failed to load: no mushroom shadow on the ground", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_heat"), DefaultVertexFormat.POSITION), s -> HeatPass.shader = s);
+        } catch (IOException ex) {
+            HeatPass.shader = null;
+            Incoming.LOG.error("Heat pass shader failed to load: no light of blasts and fire on the world, no heat shimmer", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_smoke_fill"), DefaultVertexFormat.POSITION), s -> SmokePass.fill = s);
         } catch (IOException ex) {
             SmokePass.fill = null;
@@ -190,6 +198,16 @@ public final class FxLayer {
         QUADS.nearestTexels(false);
         SmokeFrame.build(view.camera(), view.partial());
         FarRenderer.collect(view, QUADS, LIGHTS, PROBES);
+        // пламя пожаров и горящих обломков светит на дым и частицы вокруг
+        ua.zentix.incoming.client.fx.FireSmoke.lights(view, LIGHTS);
+        ua.zentix.incoming.client.fx.Exhaust.lights(view, LIGHTS);
+        // свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (HeatPass): воздух — дымка кадра
+        HeatPass.Frame heat = HeatPass.begin(level, Sight.adapted(1, view.ambient()), view.pixel());
+        double air = Sight.KOSCHMIEDER / Sight.range(level.getRainLevel(view.partial()), level.getThunderLevel(view.partial()));
+        FarBlasts.heat(view.camera(), view.partial(), heat, air);
+        ua.zentix.incoming.client.fx.FireSmoke.heat(view.camera(), heat, air);
+        ua.zentix.incoming.client.fx.Exhaust.heat(view.camera(), SmokeGrid.seconds(view.partial()), heat, air);
+        boolean hot = HeatPass.needed(heat);
         if (warmup) {
             // невидимый квадрат: ни света, ни заслона — кадр проходит весь путь до первого настоящего, с пробой источника
             // перед глазом (проба считается, квадрат её берёт)
@@ -202,7 +220,7 @@ public final class FxLayer {
         // дым обычных взрывов — в том же проходе: с ядеркой или без неё
         pall = SmokeFrame.frame(level, view.camera(), view.partial(), pall);
         lastQuads = QUADS.size();
-        if (QUADS.size() == 0 && pall == null && !WaterDecal.active()) {
+        if (QUADS.size() == 0 && pall == null && !WaterDecal.active() && !hot) {
             PallPass.reset();
             return;
         }
@@ -222,6 +240,8 @@ public final class FxLayer {
             // облака, чей объём не вышел (кадр пелены не нарисован), со следующего кадра — квадратами
             SmokeGrid.drawn(pall == null || pall.smoke == null || pallDrawn && SmokePass.filled());
             PallPass.Frame front = pallDrawn ? pall : PallPass.empty();
+            // свет на мир и дрожание — по кадру с пеленой, до квадратов: дым и огонь слоя ложатся поверх
+            if (hot && scene >= 0) HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
             // пробы — после пелены: её проход кладёт карты и таблицу грибов кадра, а проба берёт пропускание пелены и грибов
             int seen = PROBES.update(scene, front, pallDrawn, VIEW, e.getProjectionMatrix(), view.pixel());
             RenderSystem.setShader(() -> s);

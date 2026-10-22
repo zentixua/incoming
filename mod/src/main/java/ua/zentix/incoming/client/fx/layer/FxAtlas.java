@@ -39,7 +39,7 @@ import java.util.Optional;
 public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]> {
     public static final FxAtlas INSTANCE = new FxAtlas();
 
-    private static final int CELL = 64, COLS = 16, ROWS = 24, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
+    private static final int CELL = 64, COLS = 16, ROWS = 36, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
     /** Кадров огненного шара ({@code fx/particle/fireball_00…15}, 128×128): от вспышки до чёрного дыма. */
     public static final int FIREBALL_FRAMES = 16;
     private static final int FIREBALL_SIZE = 2 * CELL;
@@ -143,6 +143,37 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
      */
     public static Sprite puff6(int i, boolean mirror) {
         return (mirror ? PUFF6_MIRRORED : PUFF6)[Math.clamp(i, 0, PUFF6_FRAMES - 1)];
+    }
+
+    /**
+     * Запечённый клуб брызг ({@code tools/bake_fx}: тяжёлый газ капель, брошенный вверх, падает обратно; альбедо 0,99,
+     * асимметрия капель 0,85) — те же 16 кадров по три карты и те же шаги листа, что у дыма, с ряда {@link #SPRAY6_ROW}:
+     * шейдер шестистороннего света ({@code fx.fsh}: {@code sixFrames}) берёт их без своих чисел, карты — в мере дыма
+     * ({@code pack.py}: «diffuse» дыма).
+     */
+    public static final int SPRAY6_ROW = 24;
+    private static final Sprite[] SPRAY6 = new Sprite[PUFF6_FRAMES], SPRAY6_MIRRORED = new Sprite[PUFF6_FRAMES];
+    private static final ResourceLocation SPRAY6_DATA = Incoming.id("textures/fx/particle/spray6.json");
+    private static volatile float[] sprayGrowth = linear(1, 3);
+
+    static {
+        for (int i = 0; i < PUFF6_FRAMES; i++) {
+            int x = i % PUFF6_COLUMNS * FIREBALL_SIZE, y = SPRAY6_ROW * CELL + i / PUFF6_COLUMNS * FIREBALL_SIZE;
+            SPRAY6[i] = slot(String.format(Locale.ROOT, "fx/particle/spray6a_%02d", i), x, y, FIREBALL_SIZE, FIREBALL_SIZE);
+            SPRAY6_MIRRORED[i] = new Sprite(SPRAY6[i].u1, SPRAY6[i].v0, SPRAY6[i].u0, SPRAY6[i].v1);
+            slot(String.format(Locale.ROOT, "fx/particle/spray6b_%02d", i), x, y + 4 * CELL, FIREBALL_SIZE, FIREBALL_SIZE);
+            slot(String.format(Locale.ROOT, "fx/particle/spray6v_%02d", i), x, y + 8 * CELL, FIREBALL_SIZE, FIREBALL_SIZE);
+        }
+    }
+
+    /** Кадр i запечённого клуба брызг ({@link #puff6}). */
+    public static Sprite spray6(int i, boolean mirror) {
+        return (mirror ? SPRAY6_MIRRORED : SPRAY6)[Math.clamp(i, 0, PUFF6_FRAMES - 1)];
+    }
+
+    /** Кадр клуба брызг (с дробью), где край вещества вырос во столько раз с первого кадра. */
+    public static double sprayFrame(double growth) {
+        return at(sprayGrowth, growth, 0, PUFF6_FRAMES - 1);
     }
 
     static {
@@ -343,6 +374,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         for (Slot s : SLOTS) place(resources, s, sheets);
         fireball = read(resources, FIREBALL_LIGHT, FxAtlas::parseFire, Fireball.FALLBACK);
         puffGrowth = read(resources, PUFF6_DATA, FxAtlas::parseGrowth, linear(1, 3));
+        sprayGrowth = read(resources, SPRAY6_DATA, FxAtlas::parseGrowth, linear(1, 3));
         ballShown = read(resources, BALL_LIGHT, r -> numbers(JsonParser.parseReader(r).getAsJsonObject().getAsJsonArray("fire"), FIREBALL_FRAMES),
                 full());
         puffLight = read(resources, PUFF6_DATA, FxAtlas::parseLight, new float[]{PUFF6_FLOW / 128f, 0.79f, 0.5f});

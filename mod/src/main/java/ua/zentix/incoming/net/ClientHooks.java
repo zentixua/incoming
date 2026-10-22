@@ -19,6 +19,12 @@ public interface ClientHooks {
 
     default void gridDistrict(S2C.GridDistrict p) {}
 
+    /**
+     * Случайный тик подстанции у игрока ({@code SubstationBlock.animateTick}): работает — гул, выбита — горит масло
+     * трансформатора и иногда ({@code spark}) трещит дуга.
+     */
+    default void substation(net.minecraft.core.BlockPos pos, boolean powered, boolean spark, float pitch) {}
+
     default void siren(S2C.Siren p) {}
 
     default void salvoStatus(S2C.SalvoStatus p) {}

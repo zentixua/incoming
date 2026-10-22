@@ -12,7 +12,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.fx.BlastEffects;
 import ua.zentix.incoming.client.sound.AmbientLoop;
-import ua.zentix.incoming.client.sound.ClientSounds;
+import ua.zentix.incoming.client.sound.Sources;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.registry.ModSounds;
@@ -48,7 +48,7 @@ final class NukeAfter {
     /** Пересчёт мощности — раз в столько тиков (громкость петель между ними плавная). */
     private static final int EVERY = 5;
     /** Обрушения: места руин рядом (не дальше), сколько помнить, частота у начала и спад. */
-    private static final double COLLAPSE_RANGE = 128, COLLAPSE_TAU = 2 * 60 * 20;
+    private static final double COLLAPSE_TAU = 2 * 60 * 20;
     private static final int RUINS_KEPT = 512;
     private static final double COLLAPSE_RATE = 1 / 50.0;
     /** Пока своих чанков с моделью мало (ожидается меньше стольких пожаров), модели верим как есть. */
@@ -120,7 +120,7 @@ final class NukeAfter {
         if ((long) t % EVERY == 0) measure(level, f, t, ear);
         sound(ear);
         secondaries(level, t);
-        collapses(t, ear);
+        collapses(t);
     }
 
     /**
@@ -267,15 +267,16 @@ final class NukeAfter {
     }
 
     /** Треск и поздние обрушения в руинах рядом, всё реже. */
-    private void collapses(double t, Vec3 ear) {
+    private void collapses(double t) {
         if (ruins.isEmpty() || Double.isNaN(firstRuin) || t < firstRuin + 40) return;
         double rate = COLLAPSE_RATE * Math.exp(-(t - firstRuin) / COLLAPSE_TAU);
         if (random.nextDouble() >= rate) return;
         BlockPos p = ruins.get(random.nextInt(ruins.size()));
         Vec3 at = Vec3.atCenterOf(p);
-        if (at.distanceTo(ear) > COLLAPSE_RANGE) return;
         boolean small = random.nextFloat() < 0.35f;
-        ClientSounds.at(small ? ModSounds.DEBRIS_FALL.get() : ModSounds.NUKE_COLLAPSE.get(), at, small ? 3 : 6, 0.8f + random.nextFloat() * 0.3f);
+        // докуда слышно — мощность обрушения и путь до уха (Sources), а не дальность
+        Sources.play(small ? ModSounds.DEBRIS_FALL.get() : ModSounds.NUKE_COLLAPSE.get(), at, small ? Sources.RUIN_DEBRIS : Sources.NUKE_COLLAPSE,
+                0.8f + random.nextFloat() * 0.3f);
     }
 
     /** Петли стихают (подрыв убран, огонь кончился). */

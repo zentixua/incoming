@@ -11,6 +11,7 @@ import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLights;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
+import ua.zentix.incoming.client.fx.smoke.WaterBlast;
 import ua.zentix.incoming.client.sound.Acoustics;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
@@ -156,6 +157,9 @@ public final class FarBlasts {
         /** Основание: точка удара, у бомбы — поверхность над зарядом. */
         final double x, y, z;
         final GroundMaterial ground;
+        /** Взрыв на воде: столб брызг, корона и водяная пыль ({@link WaterBlast}); null — на суше. */
+        @Nullable
+        final WaterBlast water;
         /** Зерно взрыва: клубы и вариант записи звука. */
         final long seed;
         final long born;
@@ -199,6 +203,7 @@ public final class FarBlasts {
             this.y = y;
             this.z = z;
             this.ground = ground;
+            this.water = model != null && ground.isWater() && source.chargeKg() > 0 ? new WaterBlast(source.chargeKg(), model.air) : null;
             this.seed = seed;
             this.born = clock;
             this.bornSeconds = SmokeGrid.seconds(0);
@@ -258,7 +263,8 @@ public final class FarBlasts {
 
         /** Сколько тиков событие живёт (облако видно). */
         double life() {
-            return model != null ? model.life * 20 : look.life();
+            // водяная пыль взрыва на воде живёт дольше облака без пыли воронки
+            return model != null ? Math.max(model.life, water == null ? 0 : water.mistLife()) * 20 : look.life();
         }
 
         /** Сколько тиков светит огненный шар (0 — шара нет). */
@@ -326,6 +332,12 @@ public final class FarBlasts {
             return model.sigmaH(t) / Math.max(model.sigmaH(0), 1e-6);
         }
 
+        /** Брызги — у взрыва на воде. */
+        @Override
+        public boolean sprayClubs() {
+            return water != null;
+        }
+
         /** Над рельефом, что закрывает место взрыва вдали (последний луч, {@link #trace}). */
         @Override
         public double visible(double wy, double r) {
@@ -337,12 +349,13 @@ public final class FarBlasts {
         public boolean emit(double seconds, SmokeGrid.Sink out) {
             if (!alive || model == null || level != Minecraft.getInstance().level) return false;
             double t = seconds - bornSeconds;
-            if (t >= Math.max(model.life, poolEnd())) return false;
+            if (t >= Math.max(Math.max(model.life, poolEnd()), water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
                 model.blobs(t, (bx, by, bz, sh, sv, soot, dustKg, water, kelvin, rise) -> out.blob(x + bx, y + by, z + bz, sh, sv, soot, dustKg,
                         water, dustR, dustG, dustB, kelvin, rise));
             }
             if (t < model.condensationSeconds()) condensation(t, out);
+            if (water != null) water.blobs(t, out, x, y, z);
             if (pool != null) pool(t, out);
             return true;
         }
@@ -422,7 +435,7 @@ public final class FarBlasts {
             look = BunkerCover.breaches((int) p.surfaceY(), pos.y) ? BUNKER_BREACH : BUNKER_DEEP;
             y = p.surfaceY();
         } else {
-            model = new CloudModel(BlastSource.of(p), air(level, pos));
+            model = new CloudModel(BlastSource.of(p), air(level, pos), GroundMaterial.byId(p.material()).isWater());
         }
         Event e = new Event(level, BlastSource.of(p), look, model, pos.x, y, pos.z, GroundMaterial.byId(p.material()), p.seed(), near(pos));
         trace(e, FarTerrain.of(level), camera());
@@ -440,7 +453,7 @@ public final class FarBlasts {
      */
     public static CloudModel model(S2C.Blast p) {
         ClientLevel level = Minecraft.getInstance().level;
-        return new CloudModel(BlastSource.of(p), level == null ? CloudModel.Air.STANDARD : air(level, p.pos()));
+        return new CloudModel(BlastSource.of(p), level == null ? CloudModel.Air.STANDARD : air(level, p.pos()), GroundMaterial.byId(p.material()).isWater());
     }
 
     /**
@@ -640,6 +653,36 @@ public final class FarBlasts {
             any = true;
         }
         return any;
+    }
+
+    /**
+     * Свет и горячий газ облаков модели на мир кадра ({@code HeatPass}): огненный шар — ламбертов шар чёрного тела своей
+     * температуры (как у {@link #fireballs}), пламя лужи — шар чёрного тела пламени в полвысоты пламени по Хескестаду,
+     * долей лужи, что ещё горит; газ — термик облака (середина, радиус, температура и подъём модели) и столб над лужей.
+     */
+    public static void heat(Vec3 eye, float partial, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
+        ClientLevel level = Minecraft.getInstance().level;
+        double now = clock + partial;
+        for (Event e : EVENTS) {
+            if (e.model == null || e.level != level || !e.alive) continue;
+            double t = Math.max(0, now - e.born) / 20;
+            double bx = e.x - eye.x, by = e.y - eye.y, bz = e.z - eye.z;
+            double r = e.model.ballRadius(t);
+            if (r > 0) {
+                e.model.ballLight(t, BB);
+                double h = e.model.ballHeight(t);
+                f.light(bx, by + h, bz, r, BB[0], BB[1], BB[2], air, h);
+            }
+            double share = e.model.poolShare(t);
+            if (share > 0 && e.pool != null) {
+                double pr = 0.5 * e.model.poolFlame();
+                BlackBody.light(ua.zentix.incoming.client.fx.smoke.FirePlume.FLAME_K, BB);
+                f.light(bx, by + pr, bz, pr, BB[0] * share, BB[1] * share, BB[2] * share, air, pr);
+                f.plume(bx, by, bz, e.pool, share);
+            }
+            double cr = e.model.radius(t), ch = e.model.height(t);
+            if (t < e.model.life) f.hot(bx, by + Math.max(0, ch - cr), bz, 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
+        }
     }
 
     /**
@@ -912,6 +955,14 @@ public final class FarBlasts {
         for (Event e : EVENTS) e.alive = false;
         EVENTS.clear();
         lastHeard = null;
+    }
+
+    /** Для строки {@code SCENARIO}: последний взрыв — место, материал под ним и столб воды (высота, м; нет — 0). */
+    public static String describeLast() {
+        Event e = EVENTS.peekLast();
+        if (e == null) return "none";
+        return String.format(Locale.ROOT, "at %.1f %.1f %.1f, %s, charge %.1f kg, water column %.1f m", e.x, e.y, e.z, e.ground, e.source.chargeKg(),
+                e.water == null ? 0 : e.water.height);
     }
 
     /**

@@ -5,7 +5,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
@@ -21,7 +20,7 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
-import ua.zentix.incoming.registry.ModSounds;
+import ua.zentix.incoming.net.ClientHooks;
 
 /**
  * Трансформаторная подстанция: поставленная — узел сети радиусом {@code grid.node_radius}; удар рядом выводит её
@@ -80,22 +79,26 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
-    /** Работает — гудит; выбита — трещит дугой, сыплет искрами и дымит. */
+    /** Блок — выбитая подстанция (не под током). */
+    public static boolean out(BlockState state) {
+        return state.getBlock() instanceof SubstationBlock && !state.getValue(POWERED);
+    }
+
+    /**
+     * Работает — гудит; выбита — трещит дугой и сыплет искрами, а над ней горит масло трансформатора (дым и звук —
+     * клиент, {@code ClientHooks.substation}: громкость по закону источника, дым — модель облака).
+     */
     @Override
     public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
         double x = pos.getX() + 0.5, y = pos.getY() + 0.9, z = pos.getZ() + 0.5;
-        if (state.getValue(POWERED)) {
-            // случайный тик блока рядом с игроком — в среднем раз в 2 с; запись гула 4 с с плавными краями, наложения не слышно
-            level.playLocalSound(x, y, z, ModSounds.GRID_HUM.get(), SoundSource.BLOCKS, 0.4f, 0.95f + random.nextFloat() * 0.1f, false);
-            return;
-        }
-        level.addParticle(ParticleTypes.LARGE_SMOKE, x + random.nextGaussian() * 0.2, y + 0.2, z + random.nextGaussian() * 0.2, 0, 0.05, 0);
-        if (random.nextInt(4) == 0) {
+        // случайный тик блока рядом с игроком — в среднем раз в 2 с; запись гула 4 с с плавными краями, наложения не слышно
+        boolean spark = !state.getValue(POWERED) && random.nextInt(4) == 0;
+        ClientHooks.get().substation(pos, state.getValue(POWERED), spark, 0.9f + random.nextFloat() * 0.2f);
+        if (spark) {
             for (int i = 0; i < 6; i++) {
                 level.addParticle(ParticleTypes.ELECTRIC_SPARK, x + random.nextGaussian() * 0.25, y + 0.15, z + random.nextGaussian() * 0.25,
                         random.nextGaussian() * 0.2, 0.1 + random.nextDouble() * 0.2, random.nextGaussian() * 0.2);
             }
-            level.playLocalSound(x, y, z, ModSounds.GRID_SPARK.get(), SoundSource.BLOCKS, 0.8f, 0.9f + random.nextFloat() * 0.2f, false);
         }
     }
 }

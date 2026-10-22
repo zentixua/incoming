@@ -18,8 +18,9 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.client.fx.Effects;
 import ua.zentix.incoming.client.fx.particle.Fx;
-import ua.zentix.incoming.client.fx.particle.FxBudget;
-import ua.zentix.incoming.client.fx.particle.FxPool;
+import ua.zentix.incoming.client.far.FarBlasts;
+import ua.zentix.incoming.client.fx.smoke.Puffs;
+import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.grid.Districts;
 import ua.zentix.incoming.grid.GridLights;
@@ -44,10 +45,10 @@ import java.util.List;
  *     ближние первыми; дуг — не больше {@link #MAX_ARCS}. Подстанции здесь нет: удар выбивает их на сервере
  *     ({@code Blackouts.nuke}), и у каждой — своя дуга выхода из строя ({@code GridEffects.failure}), вторая была бы
  *     лишней;</li>
- *     <li>дымки с того, что свет поджёг: крыши, земля с травой, листва и деревянные стены лицом к шару курятся тонкими
- *     струйками, пока до них не дойдёт волна. Места — случайные точки перед камерой (в кадре, до {@link #SMOKE_RANGE}
- *     блоков), свет — как у гари ({@link FlashChar}): импульс × угол × тень по картам высот клиента; частицы — своей
- *     группой {@link FxBudget#SCORCH}.</li>
+ *     <li>дымки с того, что свет прогрел: крыши, земля с травой, листва и деревянные стены лицом к шару курятся дымом
+ *     пиролиза, пока до них не дойдёт волна ({@link Smoke}). Места — точки перед камерой (до {@link #SMOKE_RANGE}
+ *     блоков), свет — как у гари ({@link FlashChar}): импульс × угол × тень по картам высот клиента; дым — выбросы модели
+ *     облака ({@link Puffs}).</li>
  * </ul>
  */
 public final class FlashAftermath {
@@ -61,23 +62,20 @@ public final class FlashAftermath {
     private static final int ARC = 0xDCE8FF, ARC_EDGE = 0x5A7CFF;
     /** Звеньев ломаной разряда и точек на звено. */
     private static final int BOLT_SEGMENTS = 5, BOLT_DOTS = 3;
-    /** Докуда от камеры ищутся дымки, блоки, и проб за тик. */
+    /** Докуда от камеры ищутся дымки, блоки. */
     static final double SMOKE_RANGE = 128;
-    static final int SMOKE_TRIES = 96;
     /** Медиана и разброс света, от которого поверхность курится, кал/см². */
     static final double SMOKE_Q = 5, SMOKE_BETA = 0.6;
-    /** Сколько тиков вспышка поджигает новые дымки (основной импульс — первые секунды). */
-    static final int SMOKE_TICKS = 80;
 
-    /** Дуг у последнего подрыва (строка сценария клиента). */
+    /** Дуг у последнего подрыва и выбросов дыма пиролиза (строка сценария клиента). */
     private static volatile int lastArcs = -1;
+    private static volatile int puffs;
 
     private FlashAftermath() {}
 
     /** Строка {@code SCENARIO}: сколько дуг ЭМИ нашлось у последнего подрыва и сколько мест у дымков. */
     public static String describe() {
-        FxPool pool = FxPool.INSTANCE;
-        return "emp arcs " + lastArcs + ", scorch smoke " + pool.live(FxBudget.SCORCH) + " live, " + pool.refused(FxBudget.SCORCH) + " refused";
+        return "emp arcs " + lastArcs + ", scorch smoke " + puffs + " puffs";
     }
 
     /**
@@ -88,6 +86,7 @@ public final class FlashAftermath {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         lastArcs = 0;
+        puffs = 0;
         if (blackout > 0) Effects.add(new Emp(d, blackout, level));
         Effects.add(new Smoke(d));
     }
@@ -250,11 +249,36 @@ public final class FlashAftermath {
 
     // ---------------------------------------------------------------- дымки
 
-    /** Пробы мест перед камерой: где свет поджёг поверхность и волны ещё нет — струйка дыма. */
+    /**
+     * Дымки вспышки — не горение, а пиролиз: свет выше порога обугливания ({@link #SMOKE_Q}, разброс {@link #SMOKE_BETA}
+     * по {@link Fragility}) прогревает поверхность дерева, листвы и травы, и она выделяет летучие — белёсый дым смол,
+     * которым курились дома в опытах в Неваде до прихода волны (Glasstone и Dolan 1977, §7.40–7.45). Без пламени: огонь
+     * ставит сервер (слой вспышки). Пробы — {@link #SMOKE_PROBES} мест, равных по площади, в секторе перед камерой до
+     * {@link #SMOKE_RANGE} блоков; у мест, что дымят, — выброс модели облака ({@link Puffs}):
+     * <ul>
+     * <li>летучих — α·(q − q₀)·S / L<sub>г</sub>: поглощение α = {@value #ABSORB} (О: дерево и листва 0,6–0,9), свет сверх
+     * порога q₀ = {@link #SMOKE_Q} кал/см², S — площадь, которую представляет проба, теплота газификации древесины
+     * L<sub>г</sub> = {@value #GASIFY} Дж/кг (Tewarson, SFPE Handbook, табл. 3-4.x: 1,8 МДж/кг у дугласовой пихты; ⚠ по памяти);</li>
+     * <li>дыма из них — {@value #SMOKE_YIELD} кг на кг (О: выход аэрозоля тления древесины 0,01–0,1), ослабление
+     * {@value #SMOKE_K} м²/кг (у дыма тления ~4,4 м²/г, Mulholland, SFPE Handbook; ⚠ по памяти), цвет — серо-бурый;</li>
+     * <li>тепло в воздух — {@value #TO_AIR} поглощённого (О), газ ~{@value #SMOKE_K_GAS} K (пиролиз дерева 500–700 K).</li>
+     * </ul>
+     * Дымок виден, пока до места не дошла волна (её стена пыли сметает его).
+     */
+    static final int SMOKE_PROBES = 384;
+    /** Проб за тик: вся раскладка — за первые {@link #SMOKE_PROBES} / столько тиков вспышки. */
+    static final int SMOKE_PER_TICK = 24;
+    static final double ABSORB = 0.7, GASIFY = 1.8e6, SMOKE_YIELD = 0.05, SMOKE_K = 4.4e3, TO_AIR = 0.1, SMOKE_K_GAS = 600;
+    /** Джоулей на квадратный метр в одной калории на квадратный сантиметр. */
+    static final double CAL_CM2 = 41_868;
+
+    /** Пробы мест перед камерой: где свет прогрел поверхность сверх порога и волны ещё нет — выброс дыма пиролиза. */
     private static final class Smoke implements Effects.Effect {
         private final Detonation d;
         private final RandomSource rnd;
         private final double reach;
+        private Puffs smoke;
+        private int probed;
 
         Smoke(Detonation d) {
             this.d = d;
@@ -270,19 +294,27 @@ public final class FlashAftermath {
 
         @Override
         public boolean tick(ClientLevel level, int t) {
-            if (t >= SMOKE_TICKS || reach <= 0) return false;
+            if (reach <= 0 || probed >= SMOKE_PROBES) {
+                if (smoke != null) smoke.close();
+                return false;
+            }
             var camera = Minecraft.getInstance().gameRenderer.getMainCamera();
             Vec3 cam = camera.getPosition();
-            double yaw = Math.toRadians(camera.getYRot());
+            if (smoke == null) {
+                smoke = new Puffs(FarBlasts.air(level, cam), 0.71f, 0.68f, 0.65f, d.seed());
+                SmokeGrid.add(smoke);
+            }
+            double yaw = Math.toRadians(camera.getYRot()), sector = Math.toRadians(120), r0 = 4, r1 = r0 + SMOKE_RANGE;
+            // проба — равная доля площади сектора
+            double area = 0.5 * sector * (r1 * r1 - r0 * r0) / SMOKE_PROBES;
+            double now = SmokeGrid.seconds(0);
             BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
-            // в первые тики струек больше: импульс сильнее всего в начале
-            int tries = (int) (SMOKE_TRIES * (t < 20 ? 1 : 0.5));
-            for (int k = 0; k < tries; k++) {
-                // плотность проб ∝ 1/r: у камеры струйки гуще, вдали их и так не разглядеть
-                double a = yaw + (rnd.nextDouble() - 0.5) * Math.toRadians(120), r = 4 + SMOKE_RANGE * rnd.nextDouble();
+            for (int k = 0; k < SMOKE_PER_TICK && probed < SMOKE_PROBES; k++, probed++) {
+                double a = yaw + (rnd.nextDouble() - 0.5) * sector, r = Math.sqrt(r0 * r0 + rnd.nextDouble() * (r1 * r1 - r0 * r0));
                 int x = Mth.floor(cam.x - Math.sin(a) * r), z = Mth.floor(cam.z + Math.cos(a) * r);
                 double dist = Math.hypot(x + 0.5 - d.burst().x, z + 0.5 - d.burst().z);
-                if (dist > reach || t >= d.arrivalTicks(dist)) continue;
+                double wave = d.arrivalTicks(dist);
+                if (dist > reach || t >= wave) continue;
                 int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) - 1;
                 if (top <= level.getMinBuildHeight()) continue;
                 Direction face = Direction.UP;
@@ -302,7 +334,10 @@ public final class FlashAftermath {
                 double q = d.fluence(at) * cos;
                 if (!Fragility.possible(q, SMOKE_Q, SMOKE_BETA) || !ThermalShadow.visible(level, d.burst(), at)) continue;
                 if (!Fragility.hit(q, SMOKE_Q, SMOKE_BETA, rnd.nextGaussian())) continue;
-                puff(level, at, Math.min(1, Math.log(q / SMOKE_Q) / 2 + 0.5));
+                double absorbed = ABSORB * q * CAL_CM2 * area, volatiles = ABSORB * Math.max(0, q - SMOKE_Q) * CAL_CM2 * area / GASIFY;
+                smoke.add(at.x, at.y, at.z, now, TO_AIR * absorbed, SMOKE_K_GAS, 0.5 * Math.sqrt(area), 0, SMOKE_YIELD * volatiles, SMOKE_K,
+                        now + (wave - t) / 20);
+                puffs++;
             }
             return true;
         }
@@ -311,13 +346,6 @@ public final class FlashAftermath {
             if (st.isAir()) return false;
             if (FlashChar.material(st) == FlashChar.CHARS || st.is(BlockTags.LEAVES)) return true;
             return face == Direction.UP && (st.is(Blocks.GRASS_BLOCK) || st.is(BlockTags.REPLACEABLE_BY_TREES) || st.is(Blocks.HAY_BLOCK));
-        }
-
-        private void puff(ClientLevel level, Vec3 at, double strength) {
-            float s = (float) Math.max(0.3, strength);
-            Fx.smoke().vel(rnd.nextGaussian() * 0.01, 0.03 + 0.05 * rnd.nextDouble(), rnd.nextGaussian() * 0.01).size(0.3f * s, 1.4f + 1.8f * s)
-                    .life(80 + rnd.nextInt(70)).color(0x6A625A, 0xB4AEA6).alpha(0.45f + 0.3f * s).drag(0.97f).rise(0.003f).fadeIn(3).fadeFrom(0.4f)
-                    .budget(FxBudget.SCORCH).spawn(level, at.add(rnd.nextGaussian() * 0.2, 0.1, rnd.nextGaussian() * 0.2));
         }
     }
 }

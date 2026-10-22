@@ -17,6 +17,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.work.WorkScheduler;
 import ua.zentix.incoming.grid.BlackoutWorld;
 import ua.zentix.incoming.grid.Blackouts;
 import ua.zentix.incoming.grid.ChunkSaves;
@@ -95,7 +96,7 @@ final class GridCommand {
         // почему очередь идёт с такой скоростью: единиц за тик при бюджете, оценка следующей и самая долгая
         WorkClock clock = Blackouts.clock(ctx.getSource().getServer());
         String estimate = String.format(Locale.ROOT, "%.2f", clock.estimateNanos() / 1e6), largest = String.format(Locale.ROOT, "%.2f", clock.largestRecentNanos() / 1e6);
-        int units = clock.unitsLastTick(), budget = IncomingConfig.SERVER.gridTimeBudgetMs.get();
+        int units = clock.unitsLastTick(), budget = (int) Math.round(WorkScheduler.gridCapNanos() / 1e6);
         ctx.getSource().sendSuccess(() -> Component.translatable("incoming.grid.status_clock", units, budget, estimate, largest), false);
         // куда ушёл бюджет за прошлое окно: виды работы — сколько раз и сколько времени
         for (ServerLevel level : ctx.getSource().getServer().getAllLevels()) {

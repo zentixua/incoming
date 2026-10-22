@@ -8,7 +8,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
-import ua.zentix.incoming.client.sound.ClientSounds;
+import ua.zentix.incoming.client.sound.Sources;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.strike.WeaponType;
@@ -41,8 +41,9 @@ public final class Alerts {
         Vec3 c = p.pos();
         Vec3 a = missile ? c.add(125, 15, -65) : c.add(115, 15, 80);
         Vec3 b = missile ? c.add(-95, 15, 115) : c.add(-130, 15, -70);
-        ClientSounds.at(ModSounds.SIREN.get(), a, 16, 1.0f);
-        ClientSounds.at(ModSounds.SIREN.get(), b, 16, 0.97f);
+        // громкость — мощность уличной сирены и путь до уха (Sources), приходит со скоростью звука
+        Sources.play(ModSounds.SIREN.get(), a, Sources.SIREN, 1.0f);
+        Sources.play(ModSounds.SIREN.get(), b, Sources.SIREN, 0.97f);
     }
 
     public static void salvo(S2C.SalvoStatus p) {

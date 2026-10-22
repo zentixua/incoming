@@ -74,6 +74,7 @@ import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModBlocks;
 import ua.zentix.incoming.util.Palettes;
+import ua.zentix.incoming.work.WorkScheduler;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -391,7 +392,7 @@ public final class GridGameTests {
         // лампы — в чанках, чьи соседи тоже на площадке: к ним каскад приходит без ожидания соседей
         List<BlockPos> lamps = List.of(new BlockPos(18, 12, 18), new BlockPos(45, 12, 45), new BlockPos(32, 12, 20), new BlockPos(20, 12, 44));
         for (BlockPos p : lamps) h.setBlock(p, Blocks.LANTERN);
-        int budgetMs = IncomingConfig.SERVER.gridTimeBudgetMs.get();
+        int budgetMs = (int) Math.round(WorkScheduler.gridCapNanos() / 1e6);
         h.startSequence()
                 .thenIdle(1)
                 .thenExecute(() -> {
@@ -567,7 +568,7 @@ public final class GridGameTests {
                     Blackouts.useClock(level.getServer(), Blackouts.newClock());
                     held.forEach(p -> chunks.removeRegionTicket(HOLD, p, 1, p));
                     assertAllLit(h, level, lamps, mid);
-                    int budget = IncomingConfig.SERVER.gridTimeBudgetMs.get();
+                    int budget = (int) Math.round(WorkScheduler.gridCapNanos() / 1e6);
                     // на единицу, а не на тик: каскад идёт по кварталам со сдвигом, и в части тиков очередь пустеет раньше срока
                     double off = (double) held.size() / units[0], on = (double) held.size() / units[1];
                     Incoming.LOG.info("GRIDBENCH считающие часы (до {} единиц за тик): гашение {} чанков на единицу ({} единиц, {} тиков), возврат {} ({} единиц, {} тиков)",
@@ -831,7 +832,7 @@ public final class GridGameTests {
         BlockPos lamp = centre.offset(-14, 0, -14).atY(level.getHeight(Heightmap.Types.MOTION_BLOCKING, centre.getX() - 14, centre.getZ() - 14));
         level.setBlock(lamp, Blocks.LANTERN.defaultBlockState(), Block.UPDATE_ALL);
         WorkClock clock = WorkClock.counting(1_000_000L);
-        int budget = IncomingConfig.SERVER.gridTimeBudgetMs.get();
+        int budget = (int) Math.round(WorkScheduler.gridCapNanos() / 1e6);
         long[] start = {0};
         long[] took = {0};
         h.startSequence()

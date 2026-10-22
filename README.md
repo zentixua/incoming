@@ -29,7 +29,7 @@ calculated from reference data ([design notes](docs/DESIGN-nuke.md), in Russian)
 - **Air defense.** Air raid sirens and on-screen warnings near the target. The surface-to-air missile system block
   shoots down drones, cruise missiles and the B-2.
 - **Fixed launcher.** A block that launches a preset strike on a redstone signal.
-- **Nuclear strike.** A 1 or 15 kt warhead on the ICBM, the cruise missile or the B-2: flash, fireball, mushroom
+- **Nuclear strike.** A warhead of 1 to 15 kt on the ICBM, the cruise missile or the B-2: flash, fireball, mushroom
   cloud, a blast wave that ruins buildings as it passes, fires, and for a surface burst a crater and radioactive
   fallout. Operators only by default.
 - **Blackout.** Destroying a transformer substation turns off the electric lights in its district.

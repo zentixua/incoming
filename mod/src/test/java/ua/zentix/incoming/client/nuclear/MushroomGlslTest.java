@@ -273,7 +273,7 @@ class MushroomGlslTest {
             double r = s.capR();
             assertEquals(MushroomModel.light(s, 15, true, d) / lum, falloff.call(Map.of("d2", d * d, "r2", r * r)), 1e-9, "d = " + d);
         }
-        GlslFunction relit = GlslFunction.parse(read("include/pall.glsl") + read("core/fx_pall_composite.fsh"), "relit");
+        GlslFunction relit = GlslFunction.parse(read("include/pall.glsl") + read("include/scene.glsl"), "relit");
         for (double world : new double[]{0, 0.05, 0.3, 0.8, 1}) {
             for (double kept : new double[]{0.4, 1}) {
                 for (double open : new double[]{0.3, 1}) {

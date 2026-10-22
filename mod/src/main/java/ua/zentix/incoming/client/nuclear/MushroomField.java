@@ -295,7 +295,8 @@ public final class MushroomField {
         // докуда по земле дошёл фронт (юбка — пыль у основания ножки, не дальше него)
         double front = d.metres(d.frontRadius(a.ticks(partial)));
         double hob = Math.max(0, d.hobMetres());
-        return MushroomModel.shape(t, d.yieldKt(), hob, d.surface(), Math.sqrt(Math.max(0, front * front - hob * hob)));
+        return MushroomModel.shape(t, d.yieldKt(), hob, d.surface(), Math.sqrt(Math.max(0, front * front - hob * hob)),
+                ua.zentix.incoming.nuclear.model.StemDust.ready(d.yieldKt(), hob, d.surface(), d.visibility()));
     }
 
     /**

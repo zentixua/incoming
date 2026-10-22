@@ -1224,7 +1224,7 @@ public final class NuclearGameTests {
                     if (level.getGameTime() <= now + 850) return;
                 } else {
                     unwatch.run();
-                    h.assertTrue(clock.maxUnitsPerTick() <= IncomingConfig.SERVER.nukeTimeBudgetMs.get(), "за тик " + clock.maxUnitsPerTick() + " единиц");
+                    h.assertTrue(clock.maxUnitsPerTick() <= IncomingConfig.SERVER.workBudgetMs.get(), "за тик " + clock.maxUnitsPerTick() + " единиц");
                     h.assertTrue(diag.isEmpty(), "строки диагностики без свойства: " + diag);
                     h.assertTrue(Thread.getAllStackTraces().keySet().stream().noneMatch(t -> t.getName().equals("incoming-nuke-diag")), "поток диагностики без свойства");
                     IncomingConfig.SERVER.nukeEffectsScale.set(scale);
@@ -1425,7 +1425,7 @@ public final class NuclearGameTests {
         WorkClock clock = WorkClock.counting(1_000_000L);
         NuclearWorld.useClock(level.getServer(), clock);
         Detonation d = NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(CENTER)), 1, false, null, 0.1f);
-        int budgetMs = IncomingConfig.SERVER.nukeTimeBudgetMs.get();
+        int budgetMs = IncomingConfig.SERVER.workBudgetMs.get();
         h.succeedWhen(() -> {
             // чанки на краю загруженного мира ждут соседей (иначе Sable догружал бы их на каждом блоке) — они в очереди
             h.assertTrue(w.craterJobs() == 0, "воронка ещё роется");
@@ -1475,7 +1475,7 @@ public final class NuclearGameTests {
             if (level.getGameTime() >= start + 2) maxInspected[0] = Math.max(maxInspected[0], w.scarInspectedLastTick());
         });
         NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(CENTER)), 1, false, null, 0.1f);
-        int budgetMs = IncomingConfig.SERVER.nukeTimeBudgetMs.get();
+        int budgetMs = IncomingConfig.SERVER.workBudgetMs.get();
         h.runAfterDelay(200, () -> {
             h.assertTrue(w.queuedChunks() > 2 * budgetMs, "в очереди " + w.queuedChunks() + " чанков — не больше двух бюджетов, проверка ни о чём");
             h.assertTrue(maxInspected[0] > 0, "очередь руин ничего не осматривала — проверка ни о чём");
@@ -1504,7 +1504,7 @@ public final class NuclearGameTests {
         NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(CENTER)), 1, false, null, 0.1f);
         for (Cow cow : cows) h.assertTrue(cow.isAlive() && !cow.isOnFire() && cow.getHealth() == cow.getMaxHealth(), "подрыв тронул сущность в своём тике");
         h.assertTrue(w.pulseJobs() == 1, "импульс не поставлен в работу");
-        int budgetMs = IncomingConfig.SERVER.nukeTimeBudgetMs.get();
+        int budgetMs = IncomingConfig.SERVER.workBudgetMs.get();
         h.succeedWhen(() -> {
             h.assertTrue(w.pulseJobs() == 0, "импульс ещё идёт");
             long whole = cows.stream().filter(c -> c.isAlive() && !shocked(c)).count();
@@ -1830,7 +1830,7 @@ public final class NuclearGameTests {
         WorkClock clock = WorkClock.counting(1_000_000L);
         long start = level.getGameTime();
         h.onEachTick(() -> {
-            clock.start(IncomingConfig.SERVER.nukeTimeBudgetMs.get() * 1_000_000L);
+            clock.start(IncomingConfig.SERVER.workBudgetMs.get() * 1_000_000L);
             fallout.work(level, List.of(d), clock);
             if (level.getGameTime() - start < 380) h.assertTrue(sick.isAlive(), "моб с 1000 Гр умер раньше срока болезни");
         });

@@ -48,6 +48,14 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
         public Nuke withOnCarrier(boolean on) {
             return new Nuke(yieldKt, airBurst, on);
         }
+
+        public Nuke withYield(int kt) {
+            return new Nuke(kt, airBurst, onCarrier);
+        }
+
+        public Nuke withAirBurst(boolean air) {
+            return new Nuke(yieldKt, air, onCarrier);
+        }
     }
 
     /** Эта настройка пульта несёт ядерную БЧ: МБР или ракета/B-2 с ядерной БЧ. */

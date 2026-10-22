@@ -17,6 +17,7 @@ import ua.zentix.incoming.client.nuclear.Deafness;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.registry.ModSounds;
+import ua.zentix.incoming.sound.Spectra;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 import java.util.ArrayList;
@@ -270,22 +271,22 @@ public final class BlastSounds {
         ClientSounds.atEar(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), 1, 1);
     }
 
-    /** Обломки и земля падают обратно — слышно тем, кто ближе radius блоков. */
-    public static void debris(Vec3 pos, double radius, float pitch) {
-        if (near(pos, radius)) ClientSounds.at(ModSounds.DEBRIS_FALL.get(), pos, 3, pitch);
+    /**
+     * Выброс воронки падает обратно: {@code kg} грунта с высоты {@code height} м — мощность звука осыпи по энергии
+     * падения ({@link Sources#fall}), докуда слышно — путь до уха ({@link Sources}).
+     */
+    public static void debris(Vec3 pos, double kg, double height, float pitch) {
+        Sources.play(ModSounds.DEBRIS_FALL.get(), pos, Sources.EJECTA.power(Sources.fall(kg, height, EJECTA_FALL_S, Spectra.DEBRIS_FALL)), pitch);
     }
 
-    /** Пожар в воронке гудит и трещит (слышно в пределах ~80 блоков). */
-    public static void fire(Vec3 pos, float pitch) {
-        if (near(pos, 90)) ClientSounds.at(ModSounds.BLAST_FIRE.get(), pos, 5, pitch);
-    }
+    /** Осыпь выброса длится столько, с — длина записи осыпи без хвоста (О: выброс падает за 1–3 с). */
+    static final double EJECTA_FALL_S = 2;
 
-    /** Вторичный подрыв в воронке: небольшой взрыв, выше тоном. */
-    public static void cookoff(Vec3 pos) {
-        ClientSounds.at(ModSounds.BLAST_NEAR.get(), pos, 6, 1.35f);
-    }
-
-    private static boolean near(Vec3 pos, double radius) {
-        return Minecraft.getInstance().gameRenderer.getMainCamera().getPosition().distanceTo(pos) <= radius;
+    /**
+     * Пожар в воронке гудит и трещит: мощность шума пламени — доля тепловыделения лужи {@code watts}, Вт
+     * ({@link Sources#flame}), докуда слышно — путь до уха.
+     */
+    public static void fire(Vec3 pos, double watts, float pitch) {
+        Sources.play(ModSounds.BLAST_FIRE.get(), pos, Sources.BLAST_FIRE.power(Sources.flame(watts, Spectra.BLAST_FIRE)), pitch);
     }
 }

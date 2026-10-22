@@ -130,6 +130,15 @@ public final class FirePlume {
         return Math.min(dt, FLAME_K - CloudModel.T_AIR);
     }
 
+    /**
+     * Скорость газа на оси на высоте z над очагом по Хескестаду, м/с: u = 3,4·(g/(c_p·ρ·T))^⅓·Q_c^⅓·z^(−⅓) (SFPE Handbook,
+     * гл. 13; ⚠ по памяти, как {@link #excess}).
+     */
+    public double axisSpeed(double z) {
+        double c = 3.4 * Math.cbrt(CloudModel.G / (CloudModel.CP * CloudModel.RHO * CloudModel.T_AIR));
+        return c * Math.cbrt(CONVECTIVE * watts) * Math.pow(Math.max(z, 0.1), -1.0 / 3);
+    }
+
     /** Высота пламени по Хескестаду, м: L = 0,235·Q^⅖ − 1,02·D (Q — кВт, D — диаметр очага); не меньше полуметра. */
     public double flameHeight() {
         return Math.max(0.5, 0.235 * Math.pow(watts / 1e3, 0.4) - 1.02 * 4 * size);

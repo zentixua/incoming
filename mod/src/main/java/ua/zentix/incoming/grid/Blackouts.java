@@ -189,7 +189,7 @@ public final class Blackouts {
 
     /**
      * Блэкаут всех измерений — полоса {@link WorkScheduler.Lane#GRID} общего бюджета тика: не больше
-     * {@code grid.ms_per_tick} и не больше, чем оставили полосы выше. {@code levels} — первым идёт следующее
+     * доли {@code WorkScheduler.GRID_SHARE} общего бюджета и не больше, чем оставили полосы выше. {@code levels} — первым идёт следующее
      * измерение, как у ядерных очередей.
      *
      * @param clock часы полосы, уже запущены

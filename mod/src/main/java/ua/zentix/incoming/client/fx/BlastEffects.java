@@ -247,6 +247,10 @@ public final class BlastEffects {
          * Число комьев — объём чаши ({@link CraterModel#chargeVolume}) на ком {@link #CLOD_M3}; пыль — облако модели.
          */
         void ejecta(ClientLevel level, double tntKg) {
+            if (mat.isWater()) {
+                splash(level, tntKg);
+                return;
+            }
             CraterModel.Soil soil = mat.soil();
             double rc = CraterModel.chargeRadius(tntKg, soil), volume = CraterModel.chargeVolume(tntKg, soil);
             if (rc <= 0) return;
@@ -264,11 +268,31 @@ public final class BlastEffects {
                 p.setParticleSpeed(Math.cos(az) * Math.cos(el) * v, Math.sin(el) * v, Math.sin(az) * Math.cos(el) * v);
                 Minecraft.getInstance().particleEngine.add(p);
             }
-            if (mat.isWater()) {
-                Particles.burst(level, ParticleTypes.SPLASH, pos.add(0, 1, 0), 3, 3, 3, 0.8, 2 * n);
-                Particles.burst(level, ParticleTypes.BUBBLE_POP, pos.add(0, 1, 0), 4, 2, 4, 0.3, n / 2);
+        }
+
+        /**
+         * Взрыв на воде: столб брызг и водяная пыль — облако модели ({@link ua.zentix.incoming.client.fx.smoke.WaterBlast}
+         * у события {@code FarBlasts}); здесь — струи и комья воды частицами: бросок со скоростью до √(2gH) (H — верх столба
+         * того же закона) из круга радиуса столба, почти отвесно (±15°, О), с настоящей тяжестью. Комьев — по одному на
+         * {@link #SPLASH_PER_KG} кг воды столба (О: видимые на экране струи, не капли), не больше {@link #MAX_CLODS}.
+         */
+        void splash(ClientLevel level, double tntKg) {
+            ua.zentix.incoming.client.fx.smoke.WaterBlast w = new ua.zentix.incoming.client.fx.smoke.WaterBlast(tntKg, CloudModel.Air.STANDARD);
+            if (w.height <= 0) return;
+            int n = (int) Math.min(MAX_CLODS, Math.round(w.water / SPLASH_PER_KG * Fx.density(pos)));
+            double v0 = Math.sqrt(2 * G * w.height) / 20;
+            for (int i = 0; i < n; i++) {
+                double u = random.nextDouble(), v = v0 * Math.sqrt(u), az = random.nextDouble() * Math.PI * 2;
+                double tilt = Math.toRadians(15 * random.nextGaussian()), r = w.radius * Math.sqrt(random.nextDouble());
+                Vec3 at = pos.add(Math.cos(az) * r, 0.3, Math.sin(az) * r);
+                Fx.smoke().vel(Math.cos(az) * Math.sin(tilt) * v, Math.cos(tilt) * v, Math.sin(az) * Math.sin(tilt) * v).size(0.15f, 0.35f)
+                        .life((int) Math.ceil(2 * v / GRAVITY) + 10).color(0xDCE6EC, 0xF2F5F7).alpha(0.9f).drag(0.995f).gravity((float) GRAVITY)
+                        .collide().wind(0).fadeIn(0).fadeFrom(0.8f).budget(FxBudget.SPRAY).spawn(level, at);
             }
         }
+
+        /** Воды столба на один ком-частицу, кг (О). */
+        static final double SPLASH_PER_KG = 5;
 
         /** Фонтан грунта у входа бомбы в грунт (бетонобойная — своим законом в S5). */
         void spray(ClientLevel level, int scale) {
@@ -359,12 +383,29 @@ public final class BlastEffects {
             if (t == 1) ejecta(level, model.source.chargeKg());
             // лужа топлива, что не сгорела шаром, горит в воронке
             Explosions.pool(level, pos, model.poolRadius, model.poolFlame(), model.poolShare(t / 20.0), random);
-            if (t == 8 && !rocket) BlastSounds.fire(pos, 1.1f);
-            if (t == 20) BlastSounds.debris(pos, rocket ? 40 : 60, rocket ? 1.25f : 1.1f);
+            crater(model, pos, t, rocket ? 1.25f : 1.1f);
             return t < Math.max(240, 20 * model.poolSeconds);
         }
 
     }
+
+    /**
+     * Звук воронки по модели облака: выброс падает обратно — через секунду (О: полёт выброса на высоту порядка диаметра
+     * воронки), масса — воронка без пыли, что ушла в воздух; гул огня, пока горит лужа топлива, — по её теплу сейчас,
+     * запись заново, когда прошлая кончилась ({@link #FIRE_REPEAT}).
+     */
+    static void crater(CloudModel model, Vec3 pos, int t, float pitch) {
+        double charge = model.source.chargeKg();
+        if (t == 20 && charge > 0) {
+            double kg = CraterModel.chargeVolume(charge, CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY * (1 - CloudModel.DUST_LOFTED);
+            BlastSounds.debris(pos, kg, 2 * CraterModel.chargeRadius(charge, CraterModel.Soil.DRY), pitch);
+        }
+        double share = model.poolShare(t / 20.0);
+        if (t >= 8 && (t - 8) % FIRE_REPEAT == 0 && share > 0) BlastSounds.fire(pos, model.poolWatts * share, pitch);
+    }
+
+    /** Запись гула огня — 14 с с краями: следующая — через столько тиков. */
+    static final int FIRE_REPEAT = 260;
 
     // ================================================================ разрыв зенитной ракеты
 
@@ -438,13 +479,7 @@ public final class BlastEffects {
             if (t == 1) ejecta(level, model.source.chargeKg());
             // вторичных подрывов нет: вторичное — топливо (лужа в воронке) и горящие обломки сервера
             Explosions.pool(level, pos, model.poolRadius, model.poolFlame(), model.poolShare(t / 20.0), random);
-            switch (t) {
-                case 10 -> BlastSounds.fire(pos, 0.9f);
-                case 150 -> BlastSounds.fire(pos, 0.85f);
-                case 20 -> BlastSounds.debris(pos, 90, 0.9f);
-                case 34 -> BlastSounds.debris(pos, 90, 0.8f);
-                default -> {}
-            }
+            crater(model, pos, t, 0.9f);
             return t < Math.max(340, 20 * model.poolSeconds);
         }
 
@@ -506,7 +541,12 @@ public final class BlastEffects {
                         .life(200).color(Explosions.rgb(mat), 0x9A948E).alpha(0.45f).rise(0.002f).budget(FxBudget.GROUND)
                         .spawn(level, surface.add(random.nextGaussian() * 3, 0.5, random.nextGaussian() * 3));
             }
-            if (t == 30) BlastSounds.debris(surface, 60, 0.75f);
+            // осыпь провала: грунт над полостью — не больше воронки наземного взрыва того же заряда (оценка сверху)
+            if (t == 30) {
+                double kg = ua.zentix.incoming.strike.WeaponSpec.BUNKER.striker().article().warhead().tnt();
+                BlastSounds.debris(surface, CraterModel.chargeVolume(kg, CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY,
+                        CraterModel.chargeDepth(kg, CraterModel.Soil.DRY), 0.75f);
+            }
             return t < 300;
         }
 

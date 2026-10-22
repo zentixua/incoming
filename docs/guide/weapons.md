@@ -7,7 +7,7 @@ Six weapons, in the order the designator lists them. Each launch uses [munitions
 | | Shahed | Lancet | Missile | Grad | Bomb (B-2) | Nuclear (ICBM) |
 |---|---|---|---|---|---|---|
 | Time to impact | ≈50 s | approach plus ≈25 s circling | ≈30 s | 7–10 s | ≈40 s | 90 s |
-| Warhead, TNT | 50 kg | 3 kg | ≈150 kg | 6.4 kg per rocket | power 20 underground (TNT = 4) | 1 or 15 kt |
+| Warhead, TNT | 50 kg | 3 kg | ≈150 kg | 6.4 kg per rocket | power 20 underground (TNT = 4) | 1 to 15 kt |
 | Follows a moving target | yes, through the camera | yes, through the camera | no | no | no | no |
 | Route on the map | yes | yes | yes | no | no | no |
 | Shot down by a SAM | yes | yes | yes | no | yes | no |
@@ -95,7 +95,8 @@ approach within a few hundred blocks. A Grad battery stands 600 blocks from the 
 ![Shahed-136 in flight](img/weapon-shahed.jpg)
 
 A kamikaze drone: it takes off from a trailer next to you, flies with a loud engine buzz and dives at the end. Use it
-on buildings and on moving targets. It can be heard long before it arrives and a SAM can shoot it down, so
+on buildings and on moving targets. Its two-stroke engine has no muffler: on a quiet night it can be heard about 10 km away, by day about 6 km, long
+before it arrives. A SAM can shoot it down, so
 against air defense send a salvo or route it around. It dives only once it can see the target: if a hill or a
 building hides it, the drone flies on at its height and dives more steeply later. It does not aim ahead of a moving
 target. A tall building right next to the target or a roof over it can still be in the way: it then hits the
@@ -160,10 +161,22 @@ smoke.
   drift downwind.
 - **Lancet**: a small flash and a cloud a few tens of blocks high.
 
+A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
+the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the
+surface as a low ring of fine mist that drifts away and settles back within about a minute; clumps of water fly as
+particles. The Shahed's burning fuel makes a fireball about as big as its column, so most of the column is hidden in fire
+and smoke.
+
+The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
+an orange glow spreads over the blocks around the crater and fades as the ball cools. There are no shadows: the light
+reaches behind houses and hills too. Hot gas over the fire and the fireball bends light, so whatever is behind it
+shimmers slightly; on a normal screen it is a fraction of a pixel, best seen on sharp edges and through binoculars.
+
 In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
 night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
 see. Sparks, clods of earth, the dust and sparks of fragment hits, flames and, where fuel was left in the tank, burning
-pieces with smoke trails are particles. The bomb's underground blast looks as before.
+pieces are particles. A burning piece in flight leaves puffs of grey-black wood smoke that rise with their own heat and
+drift away, and its flame lights the smoke around it. The bomb's underground blast looks as before.
 
 Whatever the blast sets on fire keeps smoking. Over every chunk with burning blocks a column of black smoke rises, leans
 downwind and stretches out with it; a bigger fire sends it higher. By day it climbs higher than on a calm night, when

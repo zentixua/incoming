@@ -228,14 +228,17 @@ class BlastWallTest {
     /**
      * Доля пути пыли с ветром за фронтом ({@link BlastWall#carriedShare}) — интеграл скорости частиц Фридлендера: с нуля у
      * фронта, у края растёт со скоростью e (полный ветер за фронтом), к концу фазы ветер стихает (наклон — ноль), за фазой
-     * пыль стоит.
+     * ветер обратный — фаза разрежения возвращает пыль к эпицентру.
      */
     @Test
-    void dustIsCarriedOnlyByTheWindOfThePhase() {
+    void dustIsCarriedOutByThePhaseAndBackByTheSuction() {
         assertEquals(0, BlastWall.carriedShare(0));
         assertEquals(0, BlastWall.carriedShare(-1));
         assertEquals(1, BlastWall.carriedShare(1), 1e-12);
-        assertEquals(1, BlastWall.carriedShare(5));
+        // фаза разрежения: обратный ветер возвращает пыль — к 2t₊ на 0,74 пути, к 5t₊ почти на место (импульс волны — ноль)
+        assertEquals(2 / Math.E, BlastWall.carriedShare(2), 1e-12);
+        assertEquals(5 * Math.exp(-4), BlastWall.carriedShare(5), 1e-12);
+        for (double u = 1.05; u < 6; u += 0.05) assertTrue(BlastWall.carriedShare(u) < BlastWall.carriedShare(u - 0.05), "u = " + u);
         assertEquals(Math.E, BlastWall.carriedShare(1e-6) / 1e-6, 1e-4);
         assertEquals(0, (BlastWall.carriedShare(1) - BlastWall.carriedShare(1 - 1e-4)) / 1e-4, 1e-3);
         double prev = 0;

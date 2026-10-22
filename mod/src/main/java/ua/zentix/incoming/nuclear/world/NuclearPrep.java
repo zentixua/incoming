@@ -16,6 +16,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.work.WorkScheduler;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
@@ -290,23 +291,23 @@ public final class NuclearPrep {
     // ---------------------------------------------------------------- тик
 
     /**
-     * Подготовка под бюджетом: свой срок ({@code ms} на тик) и общий бюджет ядерной работы.
+     * Подготовка под бюджетом: свой срок (доля общего бюджета {@link WorkScheduler#PREP_SHARE}) и срок полосы ядерки.
      *
      * @param shared общие часы тика (уже запущены)
      */
     public void tick(ServerLevel level, NuclearEvents events, ScarQueue scars, WorkClock shared) {
         long now = level.getGameTime();
-        int ms = IncomingConfig.SERVER.nukePrepMsPerTick.get();
+        long cap = WorkScheduler.prepCapNanos();
         // новые удары: подготовка с пуска
         for (NuclearEvents.ScheduledStrike s : events.scheduled()) {
-            if (ms <= 0 || !IncomingConfig.SERVER.nukeBlockDamage.get()) break;
+            if (!IncomingConfig.SERVER.nukeBlockDamage.get()) break;
             if (s.detonateTime() - now < MIN_LEAD || failed.contains(s.id()) || preps.stream().anyMatch(p -> p.strike == s.id())) continue;
             // один район — одна подготовка: второй удар по тем же местам руины заранее не строит (память под зону — одна)
             if (preps.stream().anyMatch(p -> p.geometry != null && p.detonation < 0
                     && Math.hypot(p.geometry.burst().x - s.target().x, p.geometry.burst().z - s.target().z) < 2 * heavyRadius(p.geometry) + 64)) continue;
             preps.add(new Prep(s.id(), s.detonateTime()));
         }
-        clock.start(Math.max(1, ms) * 1_000_000L);
+        clock.start(Math.max(1_000_000L, cap));
         for (Iterator<Prep> it = preps.iterator(); it.hasNext(); ) {
             Prep p = it.next();
             try {

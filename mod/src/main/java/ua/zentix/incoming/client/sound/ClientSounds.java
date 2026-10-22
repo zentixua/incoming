@@ -138,6 +138,7 @@ public final class ClientSounds {
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
         BlastSounds.tick();
+        Sources.tick();
         if (mc.level == null) {
             reset();
             return;
@@ -263,6 +264,7 @@ public final class ClientSounds {
         TRACKS.clear();
         DUCK.reset();
         BlastSounds.reset();
+        Sources.reset();
         OwnSources.reset();
     }
 

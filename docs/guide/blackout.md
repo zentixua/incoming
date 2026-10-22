@@ -3,7 +3,9 @@
 English · [Русский](ru/blackout.md)
 
 A Transformer Substation powers an area with a radius of 512 blocks. Knock it out with a blast and the electric lights
-of the area go out district by district. Power comes back by itself after 15 minutes.
+of the area go out district by district. Power comes back by itself after 15 minutes. While a substation is knocked out,
+its transformer oil burns: a column of thick black smoke, flames about 4.5 blocks high that light the area at night, and
+the crackle of the broken arc. A working substation hums.
 
 ![Transformer Substation recipe](img/recipe-substation.png)
 
