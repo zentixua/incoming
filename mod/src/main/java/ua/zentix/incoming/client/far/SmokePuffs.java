@@ -99,6 +99,8 @@ final class SmokePuffs {
 
         private void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
                           int id) {
+            Vec3 eye = view.camera();
+            sv = projected(sh, sv, x - eye.x, y - eye.y, z - eye.z);
             double ks = SmokeGrid.SOOT_K * soot, kd = SmokeGrid.dustK(dr, dg, db) * dust, kw = SmokeGrid.DROP_K * water;
             double tau = (ks + kd + kw) / (2 * Math.PI * sh * sv);
             double a = 1 - Math.exp(-tau);
@@ -153,6 +155,20 @@ final class SmokePuffs {
                         cr, cg, cb, sub * last);
             }
         }
+    }
+
+    /**
+     * σ по вертикали экрана у гаусса с осями (σh, σh, σv), на который смотрят из (dx, dy, dz) от глаза: проекция гаусса —
+     * гаусс с осями σh (поперёк, по горизонтали) и √(σv²·cos²e + σh²·sin²e) (e — угол взгляда к горизонту), толща по лучу
+     * через середину — масса / (2π·σ₁·σ₂). Плоский клуб (слой пыли у земли: σh в десятки раз больше σv) сверху — круг на
+     * земле толщей слоя по лучу, сбоку — полоса; квадрат к камере высотой σv лёг бы тонкой чертой поперёк кадра (кадры
+     * шлагбаума F2a: тёмные полосы над землёй вокруг взрыва).
+     */
+    static double projected(double sh, double sv, double dx, double dy, double dz) {
+        double d2 = dx * dx + dy * dy + dz * dz;
+        if (!(d2 > 0)) return sv;
+        double sin2 = dy * dy / d2;
+        return Math.sqrt(sv * sv * (1 - sin2) + sh * sh * sin2);
     }
 
     /** Вуаль облака вокруг глаза — на столько блоков перед ним (ближе квадраты слоя тают у ближней плоскости). */

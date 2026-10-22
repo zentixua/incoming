@@ -49,4 +49,21 @@ class SmokePuffsTest {
         assertTrue(bake.contains("SPRAY_ALBEDO, SPRAY_G = " + SmokePuffs.SPRAY_W + ", " + SmokePuffs.SPRAY_G),
                 "tools/bake_fx/bake.py: SPRAY_ALBEDO, SPRAY_G не " + SmokePuffs.SPRAY_W + ", " + SmokePuffs.SPRAY_G);
     }
+
+    /**
+     * Плоский клуб (слой пыли у земли) проецируется на экран по углу взгляда: сверху — круг шириной σh, сбоку — полоса
+     * высотой σv, между — √(σv²cos²e + σh²sin²e); у круглого — всегда σ. Квадрат к камере высотой σv при взгляде сверху
+     * лёг бы чертой поперёк кадра (кадры F2a: тёмные полосы над землёй вокруг взрыва).
+     */
+    @Test
+    void flatClubProjectsByViewAngle() {
+        double sh = 20, sv = 0.5;
+        org.junit.jupiter.api.Assertions.assertEquals(sh, SmokePuffs.projected(sh, sv, 0, -50, 0), 1e-9, "сверху");
+        org.junit.jupiter.api.Assertions.assertEquals(sv, SmokePuffs.projected(sh, sv, 50, 0, 0), 1e-9, "сбоку");
+        double e = Math.toRadians(20), d = 50;
+        double mid = SmokePuffs.projected(sh, sv, d * Math.cos(e), -d * Math.sin(e), 0);
+        org.junit.jupiter.api.Assertions.assertEquals(Math.sqrt(sv * sv * Math.pow(Math.cos(e), 2) + sh * sh * Math.pow(Math.sin(e), 2)), mid, 1e-9);
+        org.junit.jupiter.api.Assertions.assertTrue(mid > 10 * sv, "под 20° — уже не черта: " + mid);
+        org.junit.jupiter.api.Assertions.assertEquals(3, SmokePuffs.projected(3, 3, 10, -7, 2), 1e-9, "круглый");
+    }
 }
