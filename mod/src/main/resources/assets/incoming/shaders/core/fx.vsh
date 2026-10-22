@@ -4,6 +4,7 @@
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:smoke.glsl>
 #moj_import <incoming:pall_front.glsl>
+#moj_import <incoming:fx_balls.glsl>
 
 // Слой эффектов (client/fx/layer): дым, пламя, искры, вспышки и всё дальнее одним проходом после мира.
 in vec3 Position;
@@ -28,10 +29,6 @@ uniform float FxProbes;
 
 uniform mat4 ModelViewMat;
 uniform mat4 ProjMat;
-// огненные шары (FxLights), по столбцу на шар: центр от камеры и радиус (0 — шара нет); освещённость у его поверхности
-// против света вокруг глаза, с цветом, и его огонь на экране (w)
-uniform mat4 FxBalls;
-uniform mat4 FxBallLight;
 // пелена, стена пыли и грибы кадра — pall_front.glsl; огненный шторм: карты огня слотов и слоты огня (pall.glsl) — свет
 // пожаров снизу на дыме и пыли слоя
 uniform sampler2D Sampler7;
@@ -54,15 +51,10 @@ out float sixKey;
 out vec3 sixBall;
 out vec3 sixKeyDir;
 out vec3 sixBallDir;
+// место вершины от камеры (настоящее, без переноса ближе): свет шаров на лежащем клубе — в каждом пикселе (fx.fsh)
+out vec3 worldPos;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
-// свет неба у глаза на экране (FarView.ambient): им цвет вершины клуба уже умножен
-uniform float FxAmbient;
-
-const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
-// дальше стольких радиусов шар не освещает (от половины — плавно к нулю): теней нет, и ночью свет шара за сотни блоков
-// ложился бы и на дым за холмом
-const float BALL_REACH = 16.0;
 
 // свет точки p (от камеры) огненными шарами на экране (gain — свет неба на экране): у поверхности шара — его освещённость,
 // дальше — как (r/d)²; с колена — не ярче огня самого шара на экране: освещённое не бывает ярче источника
@@ -96,27 +88,6 @@ float pall(vec3 p) {
     if (PallAmbient.w < 0.5 || len < 1e-3) return 1.0;
     vec3 dir = p / len;
     return pallThrough(dir, len) * mushTransmit(Sampler11, dir, len, 6, PallAir) * smokeThrough(dir, len);
-}
-
-// свет огненных шаров на точке p (в долях света неба у глаза: им цвет вершины клуба уже умножен) и его направление —
-// среднее по свету; не ярче огня на экране, как у balls: предел — в той же мере (освещённость × свет неба)
-vec3 ballsToward(vec3 p, out vec3 dir) {
-    float sky = max(FxAmbient, 1e-3);
-    vec3 sum = vec3(0.0);
-    vec3 d = vec3(0.0);
-    for (int i = 0; i < 4; i++) {
-        float r = FxBalls[i].w;
-        if (r <= 0.0) continue;
-        vec3 v = FxBalls[i].xyz - p;
-        float d2 = max(dot(v, v), r * r), reach = BALL_REACH * r * BALL_REACH * r;
-        vec3 add = FxBallLight[i].rgb * (r * r / d2) * (1.0 - smoothstep(0.25 * reach, reach, d2));
-        // на экране свет шара — цвет вершины (× свет неба) × степень 1/2,2 линейного: предел огня w (на экране) — в той же мере
-        add = add / (1.0 + dot(add, LUMA) / pow(max(FxBallLight[i].w, 1e-4) / sky, 2.2));
-        sum += add;
-        d += dot(add, LUMA) * v / sqrt(max(dot(v, v), 1e-6));
-    }
-    dir = d;
-    return sum;
 }
 
 void main() {
@@ -155,6 +126,7 @@ void main() {
     }
     // настоящее расстояние по оси взгляда: перенесённую ближе точку — обратно
     viewDistance = -view.z / unfold;
+    worldPos = Position / unfold;
     softness = float(max(UV1.x, 0)) / 16.0;
     fog = Normal.x;
     nearest = Normal.y;

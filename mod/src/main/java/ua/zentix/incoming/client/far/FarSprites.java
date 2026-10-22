@@ -131,16 +131,18 @@ public final class FarSprites {
 
     /**
      * Запечённый клуб плоского гаусса (слой пыли у земли), лежащий на горизонтали ({@link FxQuads#flat}): полуразмеры
-     * {@code halfA} и {@code halfB} — по горизонтали в мире.
+     * {@code halfA} и {@code halfB} — по горизонтали в мире; мягкость края у рельефа {@code soft} — путь луча в слое до
+     * земли (у лежащего квадрата зазор до мира за ним одинаков по всей площади, и мягкость по полуразмеру гасила бы
+     * слой целиком).
      */
-    public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
-                          float g, float b, float a) {
+    public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
+                          float r, float g, float b, float a) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
         out.sixWay(mix, shade);
         out.flat((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold), (float) (halfB * unfold),
                 sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
-                (float) Math.min(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
+                (float) soft, (float) unfold, LightTexture.FULL_BRIGHT, 0);
         out.sixWay(-1);
         counts[0]++;
     }

@@ -153,16 +153,19 @@ final class SmokePuffs {
             boolean lying = lies(sh, sv, py, d);
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
-                double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
+                // лежащий клуб — на высоте середины слоя: ниже он ушёл бы под рельеф
+                double ox = gauss(hj) * spread * rh * 0.5, oy = lying ? 0 : gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
                 double k = size * (0.8 + 0.4 * unit(hj >>> 21));
                 double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, clubAge) + (count > 1 ? 2 * unit(hj >>> 28) : 0));
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1);
-                // лежащий клуб виден сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет
-                // сбоку и сзади) нет, свет солнца, неба и огня — весь (степень тени 0)
-                if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k, sprite, (float) (frame - f0), 0,
-                        cr, cg, cb, sub * last);
+                // лежащий клуб сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет сбоку и
+                // сзади) нет, свет солнца, неба и огня — весь (степень тени 0; свет шаров — в каждом пикселе, fx.fsh); снизу —
+                // как обычно. Мягкость у рельефа — путь луча в слое до земли (rw / sin e), не полуразмер
+                if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
+                        Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, sprite,
+                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, sub * last);
                 else out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
                         cr, cg, cb, sub * last);
             }
