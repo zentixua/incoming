@@ -212,7 +212,7 @@ public final class CloudModel {
     /** {@code onWater} — взрыв на воде: воронки в грунте нет, пыли нет (вода — брызгами, {@link WaterBlast}). */
     public CloudModel(BlastSource source, Air air, boolean onWater) {
         // тот же закон воронки, что роет сервер (грунт — сухой: пакет несёт только «вода или нет»)
-        this(source, air, onWater ? 0 : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5);
+        this(source, air, onWater ? 0 : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater);
     }
 
     /**
@@ -220,6 +220,10 @@ public final class CloudModel {
      * размер облака — не меньше {@code size} м (пыль, поднятая не жаром, — облако такого размера у земли).
      */
     public CloudModel(BlastSource source, Air air, double dustKg, double size) {
+        this(source, air, dustKg, size, false);
+    }
+
+    private CloudModel(BlastSource source, Air air, double dustKg, double size, boolean onWater) {
         this.source = source;
         this.air = air;
         double fuelHeat = source.fuelKg() * source.fuel().heatJPerKg * (1 - RADIANT);

@@ -154,15 +154,16 @@ detects the B-2 very late. Can carry a nuclear warhead.
 **How deep it goes.** The bomb hits the ground with the speed and angle its fall gives it and keeps going in a straight
 line. How far depends on that speed, on the bomb (13.6 t, 0.8 m across, a pointed nose) and on what it goes through:
 Young's penetration equations (Sandia, 1997), layer by layer. In the game the B-2 flies 170 blocks up instead of about
-12 km (not by physics, so you can see it), and the bomb hits at about 250 m/s instead of about 510 m/s. So it goes
+12 km (not by physics, so you can see it). The bomb leaves it at the bomber's 240 m/s and falls with gravity and
+drag, so it hits at about 235 m/s instead of about 510 m/s. So it goes
 through:
 
-| | In the game (≈250 m/s) | Real drop (≈510 m/s) |
+| | In the game (≈235 m/s) | Real drop (≈510 m/s) |
 |---|---|---|
 | Stone, concrete | ≈4 blocks | ≈8–9 m |
 | Deepslate | ≈3 blocks | ≈7 m |
-| Gravel | ≈25 blocks | ≈40–65 m |
-| Dirt and grass | ≈60 blocks | ≈100–200 m |
+| Gravel | ≈23 blocks | ≈40–65 m |
+| Dirt and grass | ≈55 blocks | ≈100–200 m |
 
 Dirt right under a concrete slab is twice as hard for the first 5 blocks. Water slows the bomb only a little. Bedrock
 and reinforced deepslate stop it. For rock the equations are good only to within a factor of two. Which block is what

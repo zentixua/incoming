@@ -181,6 +181,9 @@ public class BunkerBusterEntity extends StrikeProjectile {
         entityData.set(DATA_ENTRY, new Vector3f((float) point.x, (float) point.y + 1, (float) point.z));
         moveAlong(level, point, flight.forward());
         path = plan(level, point, flight.forward(), v, 0);
+        ua.zentix.incoming.Incoming.LOG.info("Bunker buster entered the ground at {} {} {}: {} m/s, {}° below the horizon, path {} m ({})",
+                Mth.floor(point.x), Mth.floor(point.y), Mth.floor(point.z), Math.round(v), Math.round(flight.pitch()),
+                String.format(java.util.Locale.ROOT, "%.1f", path.length()), path.end().name().toLowerCase(java.util.Locale.ROOT));
         origin = point;
         drillSeconds = 0;
         carved = 0;

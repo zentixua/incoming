@@ -225,8 +225,9 @@ public final class Exhaust {
         // в грунте — ничего: пыль выброса из входа — облако модели (BlastEffects.bunkerImpact)
         if (e.isDrilling()) return;
         Vec3 at = e.position();
-        double mach = VapourCollar.mach(e.speed() * 20, at.y - ua.zentix.incoming.client.fx.plume.Air.SEA);
-        if (VapourCollar.forms(mach, ua.zentix.incoming.client.far.FarBlasts.air(level, at).humidity())) {
+        // влажность — атмосфера мира (погода), как у следов и облаков
+        double mach = VapourCollar.mach(e.speed() * 20, at.y - ua.zentix.incoming.util.Air.SEA);
+        if (VapourCollar.forms(mach, ua.zentix.incoming.util.Air.of(level).humidity())) {
             for (int i = 0; i < 4; i++) {
                 double a = r.nextDouble() * Mth.TWO_PI;
                 Vec3 p = Local.at(e.position(), e.getYRot(), e.getXRot(), Math.cos(a) * 1.1, Math.sin(a) * 1.1, 2 - r.nextDouble());

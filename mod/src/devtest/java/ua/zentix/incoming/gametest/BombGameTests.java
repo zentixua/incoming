@@ -69,9 +69,10 @@ public final class BombGameTests {
             h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, c.name + ": бомба не встала — " + path.end());
             h.assertTrue(Math.abs(path.length() - expect) < 1e-6, c.name + ": путь " + m(path.length()) + ", по Янгу " + m(expect));
         }
-        // в камне на 250 м/с — ~4 м: удар из игрового падения (12,5 блока/тик), вдвое медленнее настоящего
-        double stone = down(h, cases[0].top, 250).length();
-        h.assertTrue(stone > 3.5 && stone < 5, "камень на 250 м/с: " + m(stone));
+        // в камне на 235 м/с — ~3,9 м: удар после игрового падения (сброс с B-2 на 12 блоках/тик с 170 блоков), вдвое
+        // медленнее настоящего
+        double stone = down(h, cases[0].top, 235).length();
+        h.assertTrue(stone > 3.4 && stone < 4.5, "камень на 235 м/с: " + m(stone));
         // бетонная плита в блок над землёй
         BlockPos slab = new BlockPos(48, 30, 16);
         column(h, slab.below(), 28, Blocks.DIRT.defaultBlockState());

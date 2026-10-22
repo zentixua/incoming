@@ -51,9 +51,9 @@ class FarBlastsTest {
         assertTrue(vent.topZ < m.topZ, "газы из хода ниже прорыва");
         BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, true);
         // ветер 3 м/с у земли: в штиль облако у земли не расплывается (Бриггс — по пути ветра)
-        CloudModel dust = CloudModel.dust(none, CloudModel.Air.of(1, 0, 3, 0, 0.5), 160, 3.4);
+        CloudModel dust = CloudModel.dust(none, new CloudModel.Air(CloudModel.N_STANDARD, 3, 0, 0.14, 3, 0.5), 160, 3.4);
         assertTrue(Double.isFinite(dust.topZ) && dust.topZ < 3.4, "пыль без жара не всплывает: " + dust.topZ);
-        assertTrue(dust.life > 10 && dust.life < CloudModel.LIFE_MAX, "пыль провала живёт и тает: " + dust.life);
+        assertTrue(dust.life > 10 && dust.tau(600) < 0.5 * dust.tau(10), "пыль провала живёт и редеет: " + dust.tau(10) + " → " + dust.tau(600));
     }
 
     @Test
