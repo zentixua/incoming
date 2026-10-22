@@ -56,16 +56,18 @@ out vec3 worldPos;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
 
-// свет точки p (от камеры) огненными шарами на экране (gain — свет неба на экране): у поверхности шара — его освещённость,
-// дальше — как (r/d)²; с колена — не ярче огня самого шара на экране: освещённое не бывает ярче источника
-vec3 balls(vec3 p, float gain) {
+// свет точки p (от камеры) огненными шарами на экране (доля белого, привыкание глаза — уже в FxBallLight): у поверхности
+// шара — его освещённость, дальше — как (r/d)²; с колена — не ярче огня самого шара на экране: освещённое не бывает ярче
+// источника. Свет неба на экране сюда не множится: ночь уже в привыкании глаза (Sight.exposure), второй раз она гасила
+// огонь на дыме и частицах ночью в 3 раза
+vec3 balls(vec3 p) {
     vec3 sum = vec3(0.0);
     for (int i = 0; i < 4; i++) {
         float r = FxBalls[i].w;
         if (r <= 0.0) continue;
         vec3 v = FxBalls[i].xyz - p;
         float d2 = max(dot(v, v), r * r), reach = BALL_REACH * r * BALL_REACH * r;
-        vec3 add = gain * FxBallLight[i].rgb * (r * r / d2) * (1.0 - smoothstep(0.25 * reach, reach, d2));
+        vec3 add = FxBallLight[i].rgb * (r * r / d2) * (1.0 - smoothstep(0.25 * reach, reach, d2));
         sum += add / (1.0 + dot(add, LUMA) / max(FxBallLight[i].w, 1e-4));
     }
     return sum;
@@ -99,7 +101,7 @@ void main() {
     if (Normal.y > -0.5 && any(lessThan(UV2, ivec2(240)))) {
         // свет шаров — к карте освещения: в долях света неба на экране (карта при открытом небе без блоков) и вместе не
         // ярче света дня — экран больше не покажет; светящееся своим светом (FULL_BRIGHT) его не берёт
-        vec3 add = balls(Position / unfold, dot(texelFetch(Sampler2, ivec2(0, 15), 0).rgb, LUMA));
+        vec3 add = balls(Position / unfold);
         if (PallAmbient.w > 0.5) add += firelight(Sampler7, PallSlot0, PallFire0, Position / unfold) + firelight(Sampler8, PallSlot1, PallFire1, Position / unfold);
         light.rgb += add / max(1.0, dot(add, LUMA));
     }
@@ -115,7 +117,7 @@ void main() {
     sixKeyDir = vec3(0.0, 1.0, 0.0);
     sixBallDir = vec3(0.0, 1.0, 0.0);
     if (Normal.y < -0.1 && Normal.y > -0.4) {
-        // цвет вершины клуба — вещество в свете неба у глаза (SmokePuffs); по сторонам его делят карты кадра (fx.fsh)
+        // цвет вершины клуба — вещество в свете неба под открытым небом (SmokePuffs, FarView.sky); по сторонам его делят карты кадра (fx.fsh)
         mat3 rot = mat3(ModelViewMat);
         sixKey = FxSun.w;
         sixKeyDir = normalize(rot * FxSun.xyz);

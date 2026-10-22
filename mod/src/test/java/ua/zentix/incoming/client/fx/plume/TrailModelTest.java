@@ -68,7 +68,7 @@ class TrailModelTest {
 
     @Test
     void boosterSmokeIsWhiteAndHangsForMinutes() {
-        double[] out = new double[4];
+        double[] out = new double[TrailModel.LOOK];
         for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET, WeaponType.NUKE}) {
             Trail t = trail(w, FlightPhase.BOOST);
             for (Air air : new Air[]{DAY, NIGHT}) {
@@ -89,7 +89,7 @@ class TrailModelTest {
     @Test
     void ribbonIsDrawnAtHalfTheCentreOpacity() {
         Trail t = trail(WeaponType.ROCKET, FlightPhase.BOOST);
-        double[] out = new double[4];
+        double[] out = new double[TrailModel.LOOK];
         double age = 20, u = 4, inv = TrailModel.inverseSpeed(300, u);
         double sigma = TrailModel.sigma(t, age, Stability.D, u, 0);
         double tau = TrailModel.smoke(t, inv) / (Math.sqrt(2 * Math.PI) * sigma);

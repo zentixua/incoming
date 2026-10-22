@@ -37,6 +37,8 @@ import ua.zentix.incoming.util.StandardAtmosphere;
  * Время — секунды, длины — метры.
  */
 public final class TrailModel {
+    /** Чисел вида точки ({@link #look}). */
+    public static final int LOOK = 7;
     /** Порог видимости толщи. */
     public static final double THRESHOLD = Sight.THRESHOLD;
     /** Слабее этого ветра (м/с) формулы гауссова шлейфа не держат (штиль): берётся он. */
@@ -68,6 +70,20 @@ public final class TrailModel {
             Flame f = FlameModel.of(motor, 0);
             return new Trail(motor, step, f != null ? f.spread() / 2 : 2 * motor.exitRadius() * Math.sqrt(motor.nozzles()));
         }
+    }
+
+    /**
+     * Доля вещества точки следа, что уже вышла из пламени дымом, когда точка — в behind метрах позади сопла по пути снаряда
+     * (снаряд кладёт точку у сопла и уходит), а яркое пламя сейчас длиной flame метров — ядро и догорание до стехиометрии
+     * ({@link Flame#flame}; нет пламени — 0): в нём её продукты — само пламя (раскалённые частицы светятся в десятки раз
+     * ярче белого, {@code FlameModel}), и дымом поверх него они легли бы дважды: ночью — тёмным комом на месте огня.
+     * Остывающий хвост за ним до точки Дрейпера на экране почти не светит — там уже дым. Плавно от конца пламени до
+     * полуторной его длины. ⚠ Пламя считается прямым вдоль пути.
+     */
+    public static double emerged(double behind, double flame) {
+        if (flame <= 0) return 1;
+        double u = Math.clamp((behind / flame - 1) / 0.5, 0, 1);
+        return u * u * (3 - 2 * u);
     }
 
     /** Снаряд со скоростью speed кладёт след (обгоняет ветер wind), а не стоит в облаке своего старта, м/с. */
@@ -132,7 +148,8 @@ public final class TrailModel {
     /**
      * Вид точки, рождённой на высоте y мира, в возрасте age секунд: out[0] — ширина на половине непрозрачности середины, м;
      * out[1] — непрозрачность середины; out[2] — подъём, м; out[3] — отражение густого дыма (линейно,
-     * {@link Smoke#reflectance}).
+     * {@link Smoke#reflectance}); сама трубка — out[4] σ сечения, м, out[5] ослабление на метр (дым и лёд), м, out[6] альбедо
+     * однократного рассеяния смеси ({@link #LOOK} чисел).
      */
     public static void look(Trail t, double age, double inverseSpeed, double iceLife, double wind, double y, Air air, double[] out) {
         double n = air.brunt();
@@ -163,6 +180,9 @@ public final class TrailModel {
         Smoke s = t.motor().smoke();
         double albedo = e <= 0 ? 1 : ((s == null ? 0 : smoke * s.albedo) + ice * Smoke.ICE.albedo) / e;
         out[3] = Smoke.reflectance(albedo);
+        out[4] = sigma;
+        out[5] = e;
+        out[6] = albedo;
         if (tau <= THRESHOLD) {
             out[0] = out[1] = 0;
             return;

@@ -6,7 +6,7 @@
 // против света вокруг глаза, с цветом, и его огонь на экране (w)
 uniform mat4 FxBalls;
 uniform mat4 FxBallLight;
-// свет неба у глаза на экране (FarView.ambient): им цвет вершины клуба уже умножен
+// свет неба на экране у вещества под открытым небом (FarView.sky, его яркость): им цвет вершины клуба уже умножен
 uniform float FxAmbient;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
@@ -14,10 +14,12 @@ const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 // ложился бы и на дым за холмом
 const float BALL_REACH = 16.0;
 
-// свет огненных шаров на точке p (в долях света неба у глаза: им цвет вершины клуба уже умножен) и его направление —
-// среднее по свету; не ярче огня на экране, как у balls: предел — в той же мере (освещённость × свет неба)
+// свет огненных шаров на точке p в долях света неба (им цвет вершины клуба уже умножен: FarView.sky на экране, в линейном —
+// его степень 2,2) и его направление — среднее по свету; не ярче огня на экране, как у balls: предел — в той же мере.
+// Ночь — уже в привыкании глаза (FxBallLight, Sight.exposure): не делённый на свет неба, огонь на дыме ночью выходил в
+// 3–14 раз слабее
 vec3 ballsToward(vec3 p, out vec3 dir) {
-    float sky = max(FxAmbient, 1e-3);
+    float sky = max(FxAmbient, 1e-3), skyLinear = pow(sky, 2.2);
     vec3 sum = vec3(0.0);
     vec3 d = vec3(0.0);
     for (int i = 0; i < 4; i++) {
@@ -25,7 +27,8 @@ vec3 ballsToward(vec3 p, out vec3 dir) {
         if (r <= 0.0) continue;
         vec3 v = FxBalls[i].xyz - p;
         float d2 = max(dot(v, v), r * r), reach = BALL_REACH * r * BALL_REACH * r;
-        vec3 add = FxBallLight[i].rgb * (r * r / d2) * (1.0 - smoothstep(0.25 * reach, reach, d2));
+        // освещённость шаром (доля белого, линейная) — в долях линейного света неба: клуб в свете шара против клуба в свете неба
+        vec3 add = FxBallLight[i].rgb * (r * r / d2) * (1.0 - smoothstep(0.25 * reach, reach, d2)) / skyLinear;
         // на экране свет шара — цвет вершины (× свет неба) × степень 1/2,2 линейного: предел огня w (на экране) — в той же мере
         add = add / (1.0 + dot(add, LUMA) / pow(max(FxBallLight[i].w, 1e-4) / sky, 2.2));
         sum += add;

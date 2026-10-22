@@ -98,4 +98,41 @@ class SmokePuffsTest {
         org.junit.jupiter.api.Assertions.assertFalse(SmokePuffs.lies(15, 0.5, -1, 53), "с уровня глаза — полоса");
         org.junit.jupiter.api.Assertions.assertFalse(SmokePuffs.lies(5, 5, -18, 53), "круглый");
     }
+
+    /**
+     * Трубка следа клубами ({@link SmokePuffs#tube}): вещество отрезка — целиком (сумма долей мест — 1 на любом уровне),
+     * клубы не дальше {@link SmokePuffs#SEGMENT_STEP}·σ, пока уровень не на пределе, и вещество каждого места меняется
+     * без скачков, когда σ растёт и уровень меняется (клубы не перескакивают). Толща поперёк середины трубки из гауссов —
+     * толща трубки по закону следа, e/(√(2π)·σ).
+     */
+    @Test
+    void tubeKeepsItsMatterAndSpacing() {
+        double len = 28;
+        double[] last = null;
+        for (double sigma = 0.3; sigma < 40; sigma *= 1.01) {
+            double level = SmokePuffs.tubeLevel(len, sigma), total = SmokePuffs.tubeTotal(level);
+            int n = 1 << SmokePuffs.tubeDepth(level);
+            double sum = 0;
+            for (int j = 0; j < n; j++) sum += SmokePuffs.tubeWeight(j, level);
+            assertEquals(total, sum, 1e-9, "вещество целиком при σ " + sigma);
+            if (level < SmokePuffs.TUBE_LEVELS) assertTrue(len / n <= SmokePuffs.SEGMENT_STEP * sigma * 1.0001, "шаг при σ " + sigma);
+            // вещество мест на самом мелком уровне
+            int fine = 1 << SmokePuffs.TUBE_LEVELS;
+            double[] mass = new double[fine];
+            for (int j = 0; j < n; j++) mass[j * (fine / n)] = SmokePuffs.tubeWeight(j, level) / total;
+            if (last != null) {
+                for (int j = 0; j < fine; j++) assertTrue(Math.abs(mass[j] - last[j]) < 0.05, "место " + j + " при σ " + sigma);
+            }
+            last = mass;
+        }
+        // толща поперёк середины: гауссы через шаг по оси
+        double sigma = 0.5, e = 0.4, level = SmokePuffs.tubeLevel(len, sigma), total = SmokePuffs.tubeTotal(level);
+        int n = 1 << SmokePuffs.tubeDepth(level);
+        double tau = 0, at = len / 2;
+        for (int j = 0; j < n; j++) {
+            double x = len * j / n - at, k = e * len * SmokePuffs.tubeWeight(j, level) / total;
+            tau += k / (2 * Math.PI * sigma * sigma) * Math.exp(-x * x / (2 * sigma * sigma));
+        }
+        assertEquals(e / (Math.sqrt(2 * Math.PI) * sigma), tau, 0.05 * tau, "толща трубки поперёк");
+    }
 }

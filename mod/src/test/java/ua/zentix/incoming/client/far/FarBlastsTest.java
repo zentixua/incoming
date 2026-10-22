@@ -94,9 +94,10 @@ class FarBlastsTest {
 
     @Test
     void cloudsGlowAtNightNotByDay() {
-        // свет неба FarView.ambient: полдень, сумерки и полночь (getSkyDarken 0,2); облака в 130 блоках над местом; шар —
+        // привыкание глаза кадра без огня у глаза (Sight.exposure) при свете неба полудня и полуночи (getSkyDarken 0,2);
+        // облака в 130 блоках над местом; шар —
         // вспышка продуктов детонации модели
-        double day = 1, night = 0.17, h = 130;
+        double day = Sight.adapted(1, 1), night = Sight.adapted(1, 0.17), h = 130;
         double[] light = new double[4];
         for (CloudModel m : MODELS) {
             // днём зарево на облаках — только пока светят продукты детонации (~3000 K); шар топлива (~1500 K) их не светит
@@ -113,7 +114,8 @@ class FarBlastsTest {
 
     @Test
     void hiddenBallGlowsNoBrighterThanItsVeil() {
-        double day = 1, night = 0.17;
+        // привыкание глаза кадра без огня у глаза (Sight.exposure): полдень и полночь
+        double day = Sight.adapted(1, 1), night = Sight.adapted(1, 0.17);
         double[] light = new double[4];
         for (CloudModel m : MODELS) {
             m.ballLight(0, light);

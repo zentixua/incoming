@@ -641,9 +641,9 @@ public final class FarBlasts {
         // огонь шара на экране — в его кадре; свет вокруг (на дыме, блик, вуаль, зарево) не ярче: ночью свет ×1200
         // держал бы пыль под уже чёрным от сажи шаром оранжевым кольцом и небо над ним — заревом
         // шар светит и на дым, пыль и шлейфы вокруг — закрыт он от глаза или нет; тающий — своей светящейся долей
-        lights.add(bx, by + h, bz, r, Sight.adapted(b, view.ambient()) * body, fire, c[0], c[1], c[2]);
+        lights.add(bx, by + h, bz, r, b * view.exposure() * body, fire, c[0], c[1], c[2]);
         if (vis > 0) {
-            out.shaped(bx, by + h, bz, r, sprite, half, e.phase, Sight.adapted(b, view.ambient()) * t, t, view.pixel(), c[0], c[1], c[2],
+            out.shaped(bx, by + h, bz, r, sprite, half, e.phase, b * view.exposure() * t, t, view.pixel(), c[0], c[1], c[2],
                     vis * body, vis * e.open, fire, LIGHT);
             brightest(view, bx, by + h, bz, vis);
         }
@@ -674,17 +674,18 @@ public final class FarBlasts {
     private static void halo(FarView view, FarSprites out, double gx, double gy, double gz, double rad, double light, double fire, double t, float[] c) {
         double d = Math.sqrt(gx * gx + gy * gy + gz * gz);
         double floor = Math.max(rad, 0.5 * Sight.MIN_PIXELS * view.pixel() * d), k = rad / floor;
-        out.glow(gx, gy, gz, floor, rad, c[0], c[1], c[2], (float) (Math.min(behind(light, view.ambient(), t), fire) * k * k));
+        out.glow(gx, gy, gz, floor, rad, c[0], c[1], c[2], (float) (Math.min(behind(light, view.exposure(), t), fire) * k * k));
     }
 
     /**
-     * Яркость зарева закрытого шара яркостью light против белого (с воздухом t и привыканием глаза к свету неба ambient):
+     * Яркость зарева закрытого шара яркостью light против белого (с воздухом t и привыканием глаза кадра exposure,
+     * {@link Sight#exposure}):
      * доля {@link #BEHIND} его света, но не ярче вуали видимого шара ({@link Sight#VEIL_PEAK}) — это тот же рассеянный
      * свет. Ночью свет ×1200 ({@link Sight#adapted}), и зарево в полную силу заливало бы кремовым пол-кадра шире вуали
      * самого шара: закрытый шар светил бы ярче открытого.
      */
-    static double behind(double light, double ambient, double t) {
-        return Math.min(Sight.VEIL_PEAK, Sight.adapted(light * BEHIND, ambient) * t);
+    static double behind(double light, double exposure, double t) {
+        return Math.min(Sight.VEIL_PEAK, light * BEHIND * exposure * t);
     }
 
     /**
@@ -702,17 +703,17 @@ public final class FarBlasts {
         if (vis <= 0) return;
         double peak = SKY_PEAK * (SKY_CLEAR + (1 - SKY_CLEAR) * view.rain()) * t * vis * share;
         float[] c = e.colour(age);
-        out.glow(bx, gy, bz, rs, rs, c[0], c[1], c[2], (float) (peak * cloudGlow(e.brightness(age), r, h, view.ambient())));
+        out.glow(bx, gy, bz, rs, rs, c[0], c[1], c[2], (float) (peak * cloudGlow(e.brightness(age), r, h, view.exposure())));
     }
 
     /**
      * Яркость низа облаков на высоте h над источником яркости b радиуса r против белого экрана, с привыканием глаза
-     * ({@link Sight#adapted}), не ярче белого: шар светит силой b·r² (на единицу π), освещённость облаков — сила / h²,
+     * кадра exposure ({@link Sight#exposure}), не ярче белого: шар светит силой b·r² (на единицу π), освещённость облаков — сила / h²,
      * их яркость — {@link #CLOUD_ALBEDO}·E/π. Днём это тысячные доли неба, ночью — в сотни раз ярче него.
      */
-    static double cloudGlow(double b, double r, double h, double ambient) {
+    static double cloudGlow(double b, double r, double h, double exposure) {
         double k = r / h;
-        return Math.min(1, Sight.adapted(CLOUD_ALBEDO * b * k * k, ambient));
+        return Math.min(1, CLOUD_ALBEDO * b * k * k * exposure);
     }
 
     /**

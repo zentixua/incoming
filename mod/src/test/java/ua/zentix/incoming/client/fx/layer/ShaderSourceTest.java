@@ -38,6 +38,21 @@ class ShaderSourceTest {
     /** Инструкция-увеличение: {@code n++;}, {@code --k;} ({@code i++} в заголовке {@code for} — без «;» следом). */
     private static final Pattern INCREMENT = Pattern.compile("(\\w\\+\\+|\\w--|\\+\\+\\w|--\\w)\\s*;");
 
+    /**
+     * Свет огня на дыме и частицах ({@code fx.vsh}): ночь уже в привыкании глаза ({@code Sight.exposure} в FxBallLight),
+     * второй раз её не множить — свет шара на частице не умножается на свет неба, а на клубе (цвет вершины которого уже
+     * умножен на свет неба) делится на его линейную величину. Иначе при честном привыкании огонь ночью на дыме в 3–14 раз
+     * слабее, чем днём при том же свете у глаза (пыль у бомбы ночью — розово-сиреневая, ревью кадров 22.10).
+     */
+    @Test
+    void fireLightOnSmokeCountsTheNightOnce() throws IOException {
+        String vsh = Files.readString(Path.of("src/main/resources/assets/incoming/shaders/core/fx.vsh"));
+        String balls = Files.readString(Path.of("src/main/resources/assets/incoming/shaders/include/fx_balls.glsl"));
+        assertTrue(vsh.contains("vec3 balls(vec3 p)"), "balls — без множителя света неба");
+        assertTrue(!vsh.contains("gain * FxBallLight"), "свет шара не умножается на свет неба");
+        assertTrue(balls.contains("/ skyLinear"), "свет шара на клубе — в долях линейного света неба");
+    }
+
     @Test
     void noConditionalInsideAnExpression() throws IOException, URISyntaxException {
         List<String> bad = everyShader(ShaderSourceTest::nested);

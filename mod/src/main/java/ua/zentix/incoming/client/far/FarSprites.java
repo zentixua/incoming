@@ -79,8 +79,8 @@ public final class FarSprites {
     private double far;
     /** Куда смотрит камера (для глубины ореола у глаза). */
     private float fx, fy, fz;
-    /** Сколько клубов, кругов, света, лент и моделей записано в этом кадре. */
-    private final int[] counts = new int[5];
+    /** Сколько клубов, кругов, света, лент, моделей и вуалей вещества у глаза записано в этом кадре. */
+    private final int[] counts = new int[6];
 
     /** Новый кадр: писать в out, яркие источники — в пробы видимости probes. */
     void begin(FarView view, FxQuads out, SourceProbes probes) {
@@ -95,7 +95,7 @@ public final class FarSprites {
     }
 
     public boolean isEmpty() {
-        return counts[0] + counts[1] + counts[2] + counts[3] + counts[4] == 0;
+        return counts[0] + counts[1] + counts[2] + counts[3] + counts[4] + counts[5] == 0;
     }
 
     /** Сколько чего в кадре (клубы, круги, свет, ленты, модели) — в out, без выделения памяти. */
@@ -162,7 +162,7 @@ public final class FarSprites {
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         out.billboard((float) dx, (float) dy, (float) dz, (float) d, (float) half, 0, FxAtlas.white(), Math.min(1, r * a), Math.min(1, g * a),
                 Math.min(1, b * a), Math.min(1, a), 0, 1, light, 0);
-        counts[0]++;
+        counts[5]++;
     }
 
     /**

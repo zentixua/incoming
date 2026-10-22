@@ -165,4 +165,14 @@ public final class Sight {
     public static double adapted(double brightness, double ambient) {
         return brightness / Math.pow(ambient, ADAPT);
     }
+
+    /**
+     * Привыкание глаза кадра — одно на всё, что кадр рисует светом обычного оружия (тело огня, блик и вуаль, свет на дыме,
+     * частицах и мире): глаз и экспозиция привыкают к свету вокруг себя — к свету неба ({@link #adapted}: ambient^{@value #ADAPT}
+     * против дня) и к свету огня у глаза fire (освещённость белой стены у глаза от огненных шаров, факелов и пожаров, белая
+     * стена в полдень — 1) вместе. Без огня — {@link #adapted}. Во сколько раз ярче кажется свет яркости 1.
+     */
+    public static double exposure(double ambient, double fire) {
+        return 1 / (Math.pow(ambient, ADAPT) + Math.max(0, fire));
+    }
 }
