@@ -1,6 +1,6 @@
 """Запекание огненного шара и клуба дыма для слоя эффектов: Blender (Mantaflow, Cycles), бесплатно.
 
-  blender --background --factory-startup --python tools/bake_fx/bake.py -- <папка> [fireball|puff|all] [--res N] [--draft]
+  blender --background --factory-startup --python tools/bake_fx/bake.py -- <папка> [fireball|puff|spray|all] [--res N] [--draft]
 
 Дальше — tools/bake_fx/pack.py: кадры на лист слоя (fx/particle/*.png и fx/particle/flipbooks.json).
 
@@ -293,26 +293,38 @@ def sun(direction, strength):
     return lamp
 
 
-def puff():
+# Клуб брызг (взрыв на воде, WaterBlast мода): газ капель тяжелее воздуха — брошен вверх и во все стороны и падает
+# обратно (плавучесть по плотности отрицательная, без тепла), закручивается слабее дыма; капли почти не поглощают
+# (альбедо — {SPRAY_ALBEDO}) и рассеивают вперёд (асимметрия — {SPRAY_G}, как у капель конденсации CloudModel.DROP_G).
+# Подъём, размер и время столба даёт модель мода — кадры только как вещество брызг расходится и опадает (⚠ подбор формы).
+SPRAY_ALBEDO, SPRAY_G = 0.99, 0.85
+CLUBS = {
+    "puff": dict(alpha=0.0, vorticity=0.6, z=0.0, normal=3.0, random=0.6, up=0.3, albedo=PUFF_ALBEDO, g=PUFF_G),
+    "spray": dict(alpha=-1.5, vorticity=0.25, z=-1.5, normal=1.5, random=1.0, up=4.0, albedo=SPRAY_ALBEDO, g=SPRAY_G),
+}
+
+
+def puff(kind="puff"):
+    c = CLUBS[kind]
     frames = 40 if DRAFT else 120
     sc = reset(TILE)
     sc.frame_start, sc.frame_end = 1, frames
     size = 8.0
-    dom, ds = domain(size, -size / 2, "puff", frames)
-    ds.alpha = 0.0
+    dom, ds = domain(size, -size / 2, kind, frames)
+    ds.alpha = c["alpha"]
     ds.beta = 0.0
-    ds.vorticity = 0.6
-    flow, fs = flow_sphere(0.6, 0.0, "puff")
+    ds.vorticity = c["vorticity"]
+    flow, fs = flow_sphere(0.6, c["z"], kind)
     fs.flow_type = "SMOKE"
     fs.temperature = 0.0
     fs.density = 1.0
     fs.smoke_color = (0.5, 0.5, 0.5)
-    fs.velocity_normal = 3.0
-    fs.velocity_random = 0.6
-    fs.velocity_coord = (0, 0, 0.3)
+    fs.velocity_normal = c["normal"]
+    fs.velocity_random = c["random"]
+    fs.velocity_coord = (0, 0, c["up"])
     pulse(fs, 4)
     bake(dom)
-    mat = bpy.data.materials.new("puff")
+    mat = bpy.data.materials.new(kind)
     mat.use_nodes = True
     nt = mat.node_tree
     for n in list(nt.nodes):
@@ -321,13 +333,13 @@ def puff():
     vol = nt.nodes.new("ShaderNodeVolumePrincipled")
     nt.links.new(vol.outputs[0], out.inputs["Volume"])
     nt.links.new(math_node(nt, "MULTIPLY", attr(nt, "density"), 8.0), vol.inputs["Density"])
-    vol.inputs["Color"].default_value = (PUFF_ALBEDO, PUFF_ALBEDO, PUFF_ALBEDO, 1)
-    vol.inputs["Anisotropy"].default_value = PUFF_G
+    vol.inputs["Color"].default_value = (c["albedo"], c["albedo"], c["albedo"], 1)
+    vol.inputs["Anisotropy"].default_value = c["g"]
     dom.data.materials.clear()
     dom.data.materials.append(mat)
     camera(size, 0)
     lamps = {k: sun(v, math.pi) for k, v in LIGHTS.items()}
-    os.makedirs(os.path.join(OUT, "puff"), exist_ok=True)
+    os.makedirs(os.path.join(OUT, kind), exist_ok=True)
     # кадры, что пойдут на лист (pack.py берёт 16 с восьмого по последний): шаг по возрасту растёт — клуб тем медленнее
     picks = sorted({8 + round((frames - 8) * (i / 15) ** 1.4) for i in range(16)})
     for frame in picks:
@@ -335,16 +347,18 @@ def puff():
         for name, lamp in lamps.items():
             for other in lamps.values():
                 other.hide_render = other is not lamp
-            exr = os.path.join(OUT, "puff", f"{name}_{frame:03d}.exr")
+            exr = os.path.join(OUT, kind, f"{name}_{frame:03d}.exr")
             sc.render.filepath = exr
             bpy.ops.render.render(write_still=True)
             save_npy(exr, exr[:-4] + ".npy")
-    with open(os.path.join(OUT, "puff", "meta.json"), "w") as f:
-        json.dump({"frames": frames, "picks": picks, "view_m": size, "albedo": PUFF_ALBEDO, "g": PUFF_G}, f)
+    with open(os.path.join(OUT, kind, "meta.json"), "w") as f:
+        json.dump({"frames": frames, "picks": picks, "view_m": size, "albedo": c["albedo"], "g": c["g"]}, f)
 
 
 if WHAT in ("fireball", "all"):
     fireball()
 if WHAT in ("puff", "all"):
     puff()
+if WHAT in ("spray", "all"):
+    puff("spray")
 print("BAKE DONE", OUT)

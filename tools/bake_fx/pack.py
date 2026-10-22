@@ -143,7 +143,9 @@ SIDES_A = ("right", "top", "back")
 SIDES_B = ("left", "bottom", "front")
 
 
-def puff(src, out):
+def puff(src, out, prefix="puff6", like=None):
+    """Клуб (prefix — имя кадров на листе). like — puff6.json дыма: карты брызг приводятся к его «diffuse» (у слоя одна
+    мера карт на все клубы, FxSixLight), их собственная мера — в «own»."""
     meta = json.load(open(os.path.join(src, "meta.json")))
     picks = meta["picks"][-FRAMES:]
     maps = []
@@ -161,6 +163,10 @@ def puff(src, out):
     num_d = sum(float(np.sum(np.mean([l[x] for x in SIDES_A + SIDES_B], 0) * a)) for a, l in maps)
     den = sum(float(np.sum(a * a)) for a, l in maps)
     front, diffuse = num_f / den * norm, num_d / den * norm
+    own = diffuse
+    if like is not None:
+        norm *= like["diffuse"] / diffuse
+        front, diffuse = front * like["diffuse"] / diffuse, like["diffuse"]
     tiles, growth, r0 = [], [], None
     for alpha, light in maps:
         cx, cy, _, extent = centre(alpha, 0.05)
@@ -177,7 +183,7 @@ def puff(src, out):
         tiles.append((a, rgb))
     for k, (a, rgb) in enumerate(tiles):
         for name in ("a", "b"):
-            save_rgba(np.clip(rgb[name], 0, 1) ** (1 / 2.2), a, os.path.join(out, f"puff6{name}_{k:02d}.png"))
+            save_rgba(np.clip(rgb[name], 0, 1) ** (1 / 2.2), a, os.path.join(out, f"{prefix}{name}_{k:02d}.png"))
         # векторы движения к следующему кадру: по непрозрачности (форма), Farneback
         if k + 1 < len(tiles):
             prev = np.clip(a * 255, 0, 255).astype(np.uint8)
@@ -187,10 +193,10 @@ def puff(src, out):
             flow = np.zeros((TILE, TILE, 2), np.float32)
         flow = np.clip(flow, -FLOW, FLOW)
         enc = np.stack([0.5 + flow[..., 0] / (2 * FLOW), 0.5 + flow[..., 1] / (2 * FLOW), np.full((TILE, TILE), 0.5)], -1)
-        save_rgba(enc, np.ones((TILE, TILE)), os.path.join(out, f"puff6v_{k:02d}.png"))
-    with open(os.path.join(out, "puff6.json"), "w", encoding="utf-8") as f:
+        save_rgba(enc, np.ones((TILE, TILE)), os.path.join(out, f"{prefix}v_{k:02d}.png"))
+    with open(os.path.join(out, f"{prefix}.json"), "w", encoding="utf-8") as f:
         json.dump({"tile": TILE, "frames": FRAMES, "maps": "abv", "flow": FLOW, "front": round(front, 4), "diffuse": round(diffuse, 4),
-                   "growth": [float(g) for g in growth]}, f)
+                   "own": round(own, 4), "growth": [float(g) for g in growth]}, f)
     print("puff frames", picks, "norm", round(norm, 3), "front", round(front, 3), "diffuse", round(diffuse, 3), "growth", growth)
 
 
@@ -201,3 +207,5 @@ if __name__ == "__main__":
         fireball(os.path.join(bake, "fireball"), dest)
     if os.path.isdir(os.path.join(bake, "puff")):
         puff(os.path.join(bake, "puff"), dest)
+    if os.path.isdir(os.path.join(bake, "spray")):
+        puff(os.path.join(bake, "spray"), dest, "spray6", json.load(open(os.path.join(dest, "puff6.json"))))
