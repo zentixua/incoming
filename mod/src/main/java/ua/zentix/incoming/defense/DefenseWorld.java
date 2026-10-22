@@ -2,7 +2,6 @@ package ua.zentix.incoming.defense;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -13,7 +12,6 @@ import ua.zentix.incoming.entity.InterceptorEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.registry.ModAttachments;
-import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.VirtualFlights;
 import ua.zentix.incoming.util.Terrain;
@@ -118,7 +116,6 @@ public final class DefenseWorld {
         Interceptor f = new Interceptor(spec, track.id(), owner, launcher, rail, Interceptor.railDirection(rail, track.position(), spec));
         flights.add(f);
         engaged.put(track.id(), f);
-        level.playSound(null, rail.x, rail.y, rail.z, ModSounds.ROCKET_LAUNCH.get(), SoundSource.AMBIENT, 6f, 1.15f);
         Incoming.LOG.debug("SAM {} fired at {} {}, range {} blocks", launcher, track.projectile().getType().getDescriptionId(), track.id(),
                 (int) track.distance());
         show(level, f);

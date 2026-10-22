@@ -581,6 +581,7 @@ public final class FarFlightView {
             out.disc(dx, dy, dz, OUT[0], channel(c, 0) * lit, channel(c, 1) * lit, channel(c, 2) * lit, a);
             double bodyPx = 2 * OUT[0] / (d * view.pixel());
             flights++;
+            // путь без оружия (ракета ЗРК) — всегда по сущности: сюда он не доходит
             COUNT[track.bomber ? B2 : track.weapon.ordinal()]++;
             if (nearest == null || d < nearD) {
                 nearest = f;

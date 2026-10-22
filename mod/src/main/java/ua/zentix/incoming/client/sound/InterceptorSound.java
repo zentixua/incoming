@@ -6,6 +6,7 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.flight.FlightTrack;
 import ua.zentix.incoming.client.flight.FlightTracks;
 import ua.zentix.incoming.defense.InterceptorSpec;
@@ -46,8 +47,14 @@ public final class InterceptorSound extends AbstractTickableSoundInstance implem
     private static final Set<InterceptorEntity> PLAYING = Collections.newSetFromMap(new WeakHashMap<>());
 
     private final InterceptorEntity rocket;
+    @Nullable
+    private FlightTrack track;
     private final Occlusion occlusion = new Occlusion();
     private float smoothVolume;
+    /** Удар поджига уже был (или звук начался не со схода). */
+    private boolean ignited;
+    /** Звук схода слышен, только если мотор зазвучал у уха с первых тиков разгона. */
+    private static final int IGNITION_HEARD = 10;
     private float filterGain = 1, filterHighs = 1;
 
     private InterceptorSound(InterceptorEntity rocket) {
@@ -92,7 +99,8 @@ public final class InterceptorSound extends AbstractTickableSoundInstance implem
     @Override
     public void tick() {
         if (isStopped()) return;
-        FlightTrack track = FlightTracks.interceptor(rocket.getUUID());
+        // путь — тот, с которым мотор зазвучал: вид ракеты, вернувшийся к клиенту, — новый путь и свой звук
+        if (track == null) track = FlightTracks.interceptor(rocket.getUUID());
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         double now = FlightTracks.now();
         double te = track == null ? Double.NaN : Acoustics.emissionTime(track, now, ear.x, ear.y, ear.z);
@@ -110,6 +118,11 @@ public final class InterceptorSound extends AbstractTickableSoundInstance implem
             return;
         }
         if (heard == null) return;
+        if (!ignited) {
+            ignited = true;
+            // до уха дошёл звук самого схода (а не середины полёта: ракета появилась у клиента уже в пути) — удар поджига
+            if (FlightPhase.byId(track.phase(te)).boosterLit() && track.phaseAge(te) < IGNITION_HEARD) ignition(heard.at, ear);
+        }
         pitch = (float) heard.pitch;
         x = heard.at.x;
         y = heard.at.y;
@@ -120,6 +133,22 @@ public final class InterceptorSound extends AbstractTickableSoundInstance implem
             filterHighs = (SoundFilters.pathEffects() ? (float) heard.highs : 1) * SoundFilters.blockedHighs(open);
             SoundFilters.update(this, filterGain, filterHighs);
         }
+    }
+
+    /**
+     * Удар поджига у пакета ЗРК — как у ускорителей снарядов ({@code EngineSound.launchEvents}): запись старта
+     * ускорителя ({@code launch.booster}) громкостью по мощности звука двигателя разгона на полной тяге и пути до уха,
+     * голосом этого двигателя.
+     */
+    private static void ignition(Vec3 at, Vec3 ear) {
+        var level = Minecraft.getInstance().level;
+        Propagation.Weather weather = level == null ? Propagation.Weather.NIGHT : Propagation.Weather.of(level);
+        double d = Math.max(0.5, at.distanceTo(ear));
+        Propagation.Path path = Propagation.Path.over(d, Hearing.height(at, ear), weather);
+        double[] bands = new double[Propagation.BANDS];
+        double level0 = Propagation.level(BOOST.power(FlightPhase.BOOST, 0), Spectra.LAUNCH_BOOSTER, path, bands);
+        float v = (float) Loudness.gain(level0, Propagation.margin(bands, weather));
+        if (v > 0.01f) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, v, (float) VOICE);
     }
 
     /** Что слышно у уха из момента излучения {@code te}: место, громкость, тон и доля верхов. */
