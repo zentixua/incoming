@@ -1168,14 +1168,14 @@ public final class StrikeGameTests {
 
     /**
      * Цель команды «at x z» — место на земле ({@link Target.Ground}), как с карты пульта: высоту находит сервер, и у
-     * залпа с места пуска, и у одного снаряда. «at x y z» — точка как есть, и над землёй тоже. Ведущий высоты далёкого
+     * команды залпа, и у одного снаряда (снаряды заходят издалека, вне мира: место пуска из приказа ждёт своего района,
+     * {@link LaunchPlaces}, — это {@link #farLaunchPlaceLoadsThenLaunches}). «at x y z» — точка как есть, и над землёй тоже. Ведущий высоты далёкого
      * места не знает, а точка выше земли — взрыв в воздухе.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "command_place", skyAccess = true)
     public static void commandAtPlaceTargetsGround(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 point = top(h, RUNWAY_TARGET);
-        Vec3 far = point.add(0, 0, -20_000);
         String place = String.format(Locale.ROOT, " at %.2f %.2f", point.x, point.z);
         java.util.function.Predicate<StrikeProjectile> near = f -> f.target() != null && flat(f.aimPoint(), point) < 2 + 5 * WeaponType.DRONE.spec().route().error();
         StrikeGameTests.afterTest(h, () -> {
@@ -1184,13 +1184,13 @@ public final class StrikeGameTests {
             level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64)).forEach(Entity::discard);
         });
 
-        h.assertTrue(command(h, "incoming salvo drone 1 0" + place + fromArg(far)) == 1, "«at x z» с места пуска не принято");
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + place) == 1, "залп «at x z» не принят");
         assertOnGround(h, aimingAt(level, near), point, "залп «at x z»");
         h.assertTrue(command(h, "incoming drone" + place) == 1, "«drone at x z» не принято");
         assertOnGround(h, aimingAt(level, near), point, "«drone at x z»");
 
         double air = point.y + 30;
-        h.assertTrue(command(h, "incoming salvo drone 1 0" + String.format(Locale.ROOT, " at %.2f %.2f %.2f", point.x, air, point.z) + fromArg(far)) == 1,
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + String.format(Locale.ROOT, " at %.2f %.2f %.2f", point.x, air, point.z)) == 1,
                 "«at x y z» не принято");
         StrikeProjectile exact = aimingAt(level, near);
         h.assertTrue(exact.target() instanceof Target.Point p && p.pos().y == air, "«at x y z» — не точка на своей высоте: " + exact.target());
@@ -1303,6 +1303,8 @@ public final class StrikeGameTests {
     @GameTest(template = "runway", timeoutTicks = 900, batch = "launch_place", skyAccess = true)
     public static void farLaunchPlaceLoadsThenLaunches(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // ожидание места мод меряет тиками, а свежий район генерируется в своём темпе: тест — в темпе игры
+        gameSpeed(h);
         Vec3 far = h.absoluteVec(new Vec3(16.5, 0, 60.5)).add(-20_000, 0, 0);
         Vec3 aim = far.add(0, 0, 400);
         LaunchOrigin place = new LaunchOrigin.Place(far);
