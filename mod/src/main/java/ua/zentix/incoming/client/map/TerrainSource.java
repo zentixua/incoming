@@ -37,6 +37,15 @@ interface TerrainSource {
     @Nullable
     Reader open(ClientLevel level);
 
+    /**
+     * Читатель для плитки уровня {@code detail} (колонка — середина клетки {@code 2^detail} блоков): источник с грубыми
+     * данными (Voxy) читает их на этом уровне, а не по блоку; остальным уровень не нужен.
+     */
+    @Nullable
+    default Reader open(ClientLevel level, int detail) {
+        return open(level);
+    }
+
     /** Через сколько перестраивать плитку, у которой рельеф есть везде (новое источник может и сообщить: {@link #changes}). */
     long refreshNanos();
 
@@ -88,6 +97,12 @@ interface TerrainSource {
     default boolean invalidated(ClientLevel level) {
         return false;
     }
+
+    /** Раз в тик, в потоке игры, пока слой работает: игрок здесь (источник может читать заранее вокруг него). */
+    default void tickNear(double playerX, double playerZ) {}
+
+    /** Мир клиента сменился: источник больше не нужен, его фоновая работа кончается. */
+    default void close() {}
 
     /** Для лога: что источник отдал с начала мира (колонки, отказы и почему). */
     default String describe() {
