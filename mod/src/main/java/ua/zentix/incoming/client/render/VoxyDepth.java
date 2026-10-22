@@ -69,6 +69,11 @@ final class VoxyDepth implements LodDepth.Source {
     @Nullable
     static LodDepth.Source init() {
         if (!ModList.get().isLoaded("voxy")) return null;
+        // проба (VXT): тот же кадр с глубиной Voxy и без неё
+        if (!Boolean.parseBoolean(System.getProperty("incoming.lodDepth.voxy", "true"))) {
+            Incoming.LOG.info("Voxy depth for the effects layer: off (-Dincoming.lodDepth.voxy=false)");
+            return null;
+        }
         for (ClassLoader loader : new ClassLoader[]{VoxyDepth.class.getClassLoader(), Thread.currentThread().getContextClassLoader()}) {
             try {
                 VoxyDepth d = new VoxyDepth(loader);
