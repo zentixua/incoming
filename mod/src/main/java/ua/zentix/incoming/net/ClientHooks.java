@@ -59,6 +59,9 @@ public interface ClientHooks {
 
     default void radarScope(S2C.RadarScope p) {}
 
+    /** Чанк в LOD Voxy; поток сети. */
+    default void voxyChunk(S2C.VoxyChunk p) {}
+
     ClientHooks NONE = new ClientHooks() {};
 
     final class Holder {

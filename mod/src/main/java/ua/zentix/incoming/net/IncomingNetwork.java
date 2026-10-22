@@ -11,7 +11,7 @@ import ua.zentix.incoming.strike.ServerActions;
  * несовместимом изменении — тогда NeoForge честно скажет «разные версии мода», а не упадёт.
  */
 public final class IncomingNetwork {
-    public static final String PROTOCOL = "34";
+    public static final String PROTOCOL = "35";
 
     private IncomingNetwork() {}
 
@@ -51,5 +51,10 @@ public final class IncomingNetwork {
         r.playToServer(C2S.MapPlayers.TYPE, C2S.MapPlayers.CODEC, ServerActions::mapPlayers);
         r.playToServer(C2S.Pick.TYPE, C2S.Pick.CODEC, PickHints::pick);
         r.playToServer(C2S.NuclearKey.TYPE, C2S.NuclearKey.CODEC, NuclearKeys::onKey);
+        r.playToServer(C2S.LodMods.TYPE, C2S.LodMods.CODEC, ua.zentix.incoming.compat.VoxyLods::lodMods);
+        r.playToServer(C2S.VoxyStale.TYPE, C2S.VoxyStale.CODEC, ua.zentix.incoming.compat.VoxyLods::stale);
+        // секции разбираются и кладутся в Voxy в потоке сети: поток игры их не ждёт (Voxy принимает их из любого потока)
+        event.registrar(PROTOCOL).executesOn(net.neoforged.neoforge.network.registration.HandlerThread.NETWORK)
+                .playToClient(S2C.VoxyChunk.TYPE, S2C.VoxyChunk.CODEC, (p, ctx) -> ClientHooks.get().voxyChunk(p));
     }
 }

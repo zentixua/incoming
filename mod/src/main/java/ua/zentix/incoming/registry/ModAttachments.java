@@ -87,6 +87,10 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<DhUpdates>> DH_UPDATES = REGISTER.register("dh_updates",
             () -> AttachmentType.builder(DhUpdates::new).build());
 
+    /** Главный мир: что мод изменил в мире — в LOD Voxy игроков, их очереди (несохраняемое). */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.compat.VoxyLods>> VOXY_LODS = REGISTER.register("voxy_lods",
+            () -> AttachmentType.builder(ua.zentix.incoming.compat.VoxyLods::new).build());
+
     /** Мир: осыпание в воронках обычных взрывов ({@link CraterFalls}); не сохраняется. */
     public static final Supplier<AttachmentType<CraterFalls>> CRATER_FALLS = REGISTER.register("crater_falls",
             () -> AttachmentType.builder(CraterFalls::new).build());

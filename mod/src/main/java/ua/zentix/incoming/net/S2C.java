@@ -634,4 +634,38 @@ public final class S2C {
             return (flags & flag) != 0;
         }
     }
+
+    /**
+     * Чанк, которого у клиента нет, — в LOD Voxy ({@code compat/VoxyLods}, только игрокам, у кого Voxy): руины, воронки,
+     * след подрыва и лампы квартала вдали. {@code sections} — секции со светом ({@code compat/LodSections}); измерение —
+     * чьё это: после смены измерения пакет старого не принимается.
+     */
+    public record VoxyChunk(net.minecraft.resources.ResourceLocation dimension, int x, int z, byte[] sections) implements CustomPacketPayload {
+        /** Больше чанк не бывает: 24 секции глобальной палитрой и два слоя света — ~250 КБ. */
+        static final int MAX_BYTES = 1 << 20;
+        public static final Type<VoxyChunk> TYPE = new Type<>(Incoming.id("voxy_chunk"));
+        public static final StreamCodec<ByteBuf, VoxyChunk> CODEC = StreamCodec.composite(
+                net.minecraft.resources.ResourceLocation.STREAM_CODEC, VoxyChunk::dimension, ByteBufCodecs.VAR_INT, VoxyChunk::x,
+                ByteBufCodecs.VAR_INT, VoxyChunk::z, ByteBufCodecs.byteArray(MAX_BYTES), VoxyChunk::sections, VoxyChunk::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof VoxyChunk v && v.x == x && v.z == z && v.dimension.equals(dimension) && java.util.Arrays.equals(v.sections, sections);
+        }
+
+        @Override
+        public int hashCode() {
+            return (dimension.hashCode() * 31 + x) * 31 + z;
+        }
+
+        @Override
+        public String toString() {
+            return "VoxyChunk[" + dimension + " " + x + " " + z + ", " + sections.length + " bytes]";
+        }
+    }
 }

@@ -46,14 +46,18 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * Чанк мира 1.17 с догенерацией под нулём ({@link DiskStatus.State#FINAL}), не дождавшийся плана, — тоже в мир квадратом:
  * зона за волной его не грузит (без генерации он не загрузится), и его LOD иначе остался бы целым городом.
  * <p>
- * Только при DH ({@link DhUpdates#room}) и только чанки не дальше {@link #FAR_CHUNKS} от игрока: дальше DH по умолчанию
+ * Только при DH или игроках с Voxy ({@link DhUpdates#room}, {@code compat/VoxyLods}) и только чанки не дальше
+ * {@link #FAR_CHUNKS} от игрока: дальше DH по умолчанию
  * не рассылает обновления, а чтения с диска делят поток ввода-вывода с загрузкой мира игрокам — их не больше
  * {@link #READS} сразу и {@link #PER_TICK} новых за тик; запросов за тик просматривается не больше {@link #VISITS}
  * (у тяжёлой зоны их десятки тысяч, и почти все ждут планов).
  */
 public final class FarLods {
-    /** Докуда от игрока (чанки, по большей оси): дальность обновлений DH игрокам по умолчанию ({@code realTimeUpdates.playerDistance}). */
-    static final int FAR_CHUNKS = 256;
+    /**
+     * Докуда от игрока (чанки, по большей оси): дальность обновлений DH игрокам по умолчанию ({@code
+     * realTimeUpdates.playerDistance}); та же — у LOD Voxy игроков ({@code compat/VoxyLods}).
+     */
+    public static final int FAR_CHUNKS = 256;
     /** Чтений с диска в работе сразу и новых за тик. */
     static final int READS = 16, PER_TICK = 8;
     /** Сколько тиков чанк за волной ждёт готового плана (строится в фоне); дальше — без руин вдали (свет, если просили, и след подрыва уходят). */
@@ -187,6 +191,11 @@ public final class FarLods {
     private final LongOpenHashSet scorchReading = new LongOpenHashSet();
     /** Чанки, которые за время чтения попросили снова, и что просили: после чтения — в очередь ещё раз. */
     private final Long2ByteOpenHashMap again = new Long2ByteOpenHashMap();
+    /**
+     * Чанки в очереди только ради игроков с Voxy, у кого их копию переписал LOD Server Support ({@link #refresh}): копия
+     * уходит только им, а не в DH и не всем — у DH и у остальных LOD уже верный.
+     */
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<java.util.Set<java.util.UUID>> refreshFor = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private final ConcurrentLinkedQueue<Built> built = new ConcurrentLinkedQueue<>();
     /** Чанки за волной без плана: что на диске ({@link #SCANNING}, {@link #WHOLE}, {@link #FINAL}, {@link #PARTIAL}); ответы — из потока ввода-вывода. */
     private final Long2ByteOpenHashMap disk = new Long2ByteOpenHashMap();
@@ -226,8 +235,47 @@ public final class FarLods {
         get(level).request(level, chunk, ruins ? RUINS : LIGHTS);
     }
 
+    /**
+     * Чанк, чью копию у игрока с Voxy переписал целым чанком с диска LOD Server Support ({@code compat/VoxyLods.stale}):
+     * копия заново — только этому игроку (у DH и у остальных LOD уже верный) и только если она отличается от диска:
+     * руины по плану, след подрыва вне тяжёлой зоны (там без плана копия — целый город со следом), тьма квартала.
+     * Иначе копия была бы тем же чанком с диска. Загруженный чанк — как он есть в мире, тоже только ему.
+     */
+    public static void refresh(ServerLevel level, long chunk, java.util.UUID player) {
+        if (!DhUpdates.enabled(level)) return;
+        if (inWorld(level, chunk)) {
+            LevelChunk loaded = level.getChunkSource().getChunkNow(ChunkPos.getX(chunk), ChunkPos.getZ(chunk));
+            if (loaded != null) ua.zentix.incoming.compat.VoxyLods.sendTo(level, loaded, player);
+            return;
+        }
+        FarLods f = get(level);
+        long now = level.getGameTime();
+        java.util.Set<java.util.UUID> waiting = f.refreshFor.get(chunk);
+        if (waiting != null) {
+            waiting.add(player);
+            return;
+        }
+        // уже в очереди по своей причине: её копия уйдёт всем, и этому игроку
+        if (f.queued.containsKey(chunk) || f.reading.contains(chunk)) return;
+        byte kind;
+        if (NuclearWorld.get(level).prep().arrivedPlan(level, NuclearEvents.get(level), chunk, now) != null) kind = RUINS;
+        else if (f.ringOf(chunk, now) != null && !f.inHeavyZone(chunk, now)) kind = SCORCH;
+        else if (PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), now)) kind = LIGHTS;
+        // ни плана, ни следа вне тяжёлой зоны, ни тьмы: копия была бы чанком с диска — тем же, что прислал LSS
+        else return;
+        f.refreshFor.computeIfAbsent(chunk, c -> new java.util.HashSet<>()).add(player);
+        f.queue(level, chunk, kind);
+    }
+
+    /** Чанк в тяжёлой зоне подрыва, чей след на нём лежит: без плана его копия — целый город со следом, не руины. */
+    private boolean inHeavyZone(long chunk, long now) {
+        Ring ring = ringOf(chunk, now);
+        return ring != null && NuclearPrep.horizontal(new ChunkPos(chunk), ring.d) <= Math.max(ring.skip, NuclearPrep.heavyRadius(ring.d) + 16);
+    }
+
     private void request(ServerLevel level, long chunk, byte kind) {
         if (!DhUpdates.enabled(level) || !nearPlayer(level, chunk)) return;
+        refreshFor.remove(chunk);
         // копия тяжёлой зоны, собранная заранее, уходит к фронту сама: руины её чанка и свет квартала — с ней
         if (kind != SCORCH && front(level, chunk, kind == LIGHTS)) return;
         queue(level, chunk, kind);
@@ -321,6 +369,8 @@ public final class FarLods {
             lightQueue.clear();
             scorchQueue.clear();
         }
+        // запросы ради игроков с Voxy, которые сняли без чтения (загрузили, не дождались плана), — прочь
+        if (!refreshFor.isEmpty() && level.getGameTime() % 20 == 0) refreshFor.keySet().removeIf(c -> !queued.containsKey(c) && !reading.contains(c));
         if (queued.isEmpty() && reading.isEmpty() && scanning == 0 && !zone.busy() && !ringsFeeding()) return;
         long now = level.getGameTime();
         for (Built b; (b = built.poll()) != null; ) harvest(level, b);
@@ -509,7 +559,8 @@ public final class FarLods {
         if (format == null) format = DiskShots.Format.of(level);
         reading.add(r.chunk);
         DiskShots.Format f = format;
-        boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0;
+        // запрос только ради игроков с Voxy: копия уходит, только если отличается от диска
+        boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
         // без плана руин на чанке может лежать след подрыва (свет квартала — с ним): снимок, план следа, копия
         Ring ring = plan == null ? ringOf(r.chunk, now) : null;
         if (ring != null) {
@@ -570,8 +621,14 @@ public final class FarLods {
         // на диске двойников нет: погасить, если квартал тёмный
         boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), level.getGameTime());
         int lamps = dark ? ChunkLights.applyToCopy(b.copy.getSections(), true) : 0;
+        java.util.Set<java.util.UUID> only = refreshFor.remove(b.chunk);
         if (!b.ruined && lamps == 0 && !b.lights) {
             unchanged++;
+            return;
+        }
+        if (only != null) {
+            // переписанный LSS у этих игроков: у DH и остальных LOD уже верный
+            for (java.util.UUID p : only) ua.zentix.incoming.compat.VoxyLods.sendTo(level, b.copy, p);
             return;
         }
         DhUpdates.offer(level, b.copy);
@@ -616,6 +673,7 @@ public final class FarLods {
         rings.clear();
         queued.clear();
         again.clear();
+        refreshFor.clear();
         disk.long2ByteEntrySet().removeIf(e -> e.getByteValue() != SCANNING);
         zone.clear(level);
     }

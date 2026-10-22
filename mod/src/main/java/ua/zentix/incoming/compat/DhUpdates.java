@@ -22,7 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Что мод изменил в мире — в LOD Distant Horizons ({@link DhChunks}), в темпе, который его очередь выдерживает.
+ * Что мод изменил в мире — в LOD Distant Horizons ({@link DhChunks}), в темпе, который его очередь выдерживает, и в LOD
+ * Voxy игроков ({@link VoxyLods}: тем же путём, в темпе их очередей).
  * <ul>
  * <li>Загруженные чанки, где мод менял блоки (воронки и осыпание у взрывов, руины ядерки, лампы блэкаута), —
  * {@link #mark}: чанк уходит в DH не раньше срока (порции одного взрыва идут несколько тиков — один вызов на всё)
@@ -39,7 +40,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * позиций на поток его разбора, переполненная выкидывает дальние (на выделенном сервере — дальние от 0 0) с одной
  * строкой «overloaded» в лог DH раз в 30 с. Чанк, отданный DH любым путём, снова уходит не раньше {@link #RESEND}
  * тиков: позицию, которая ещё в его очереди, DH молча пропускает.
- * Без DH ничего не копится. Несохраняемый attachment мира ({@link ModAttachments#DH_UPDATES}): перезапуск теряет
+ * Без DH и без игроков с Voxy ничего не копится. Несохраняемый attachment мира ({@link ModAttachments#DH_UPDATES}): перезапуск теряет
  * очередь, а чанки, ушедшие в DH, он помнит в своей базе.
  */
 public final class DhUpdates {
@@ -86,8 +87,8 @@ public final class DhUpdates {
     private long sentTotal, offeredTotal;
     /** Для проверок: больше всего отметок, просмотренных за один тик. */
     private int scannedMax;
-    /** Куда уходят чанки: в игре — {@link DhChunks}; проверки подставляют свой приёмник ({@link #testSink}). */
-    private Sink sink = DhChunks::overwrite;
+    /** Куда уходят чанки: в игре — {@link DhChunks} и {@link VoxyLods}; проверки подставляют свой приёмник ({@link #testSink}). */
+    private Sink sink = DhUpdates::deliver;
     private boolean test;
 
     /** Приёмник чанков. */
@@ -98,16 +99,27 @@ public final class DhUpdates {
     /** Для {@link ModAttachments#DH_UPDATES}: своё у каждого мира, не сохраняется. */
     public DhUpdates() {}
 
-    /** Очередь мира, если есть куда отдавать (DH стоит или проверка подставила приёмник), иначе null. */
+    /** Очередь мира, если есть куда отдавать (DH стоит, в мире игрок с Voxy или проверка подставила приёмник), иначе null. */
     private static DhUpdates active(ServerLevel level) {
         DhUpdates u = level.getData(ModAttachments.DH_UPDATES);
-        return u.test || DhChunks.available() ? u : null;
+        return u.test || DhChunks.available() || VoxyLods.wanted(level) ? u : null;
+    }
+
+    /** Чанк — в DH (если стоит) и игрокам с Voxy (если есть). Поток сервера. */
+    private static void deliver(ServerLevel level, ChunkAccess chunk) {
+        DhChunks.overwrite(level, chunk);
+        VoxyLods.send(level, chunk);
+    }
+
+    /** Темп держит очередь DH (подтверждения записи): DH стоит или проверка подставила приёмник. */
+    private boolean paced() {
+        return test || DhChunks.available();
     }
 
     /** Проверки: чанки мира {@code level} уходят в {@code sink} (и без DH); null — снова в DH, очередь пуста. */
     public static void testSink(ServerLevel level, @Nullable Sink sink) {
         DhUpdates u = level.getData(ModAttachments.DH_UPDATES);
-        u.sink = sink != null ? sink : DhChunks::overwrite;
+        u.sink = sink != null ? sink : DhUpdates::deliver;
         u.test = sink != null;
         if (sink == null) {
             u.due.clear();
@@ -155,10 +167,13 @@ public final class DhUpdates {
         return active(level) != null;
     }
 
-    /** Есть ли DH, и сколько ещё собранных чанков не в мире можно отдать ({@link #offer}) прямо сейчас. */
+    /**
+     * Есть ли куда отдавать, и сколько ещё собранных чанков не в мире можно отдать ({@link #offer}) прямо сейчас: и не
+     * больше, чем осталось места в очередях игроков с Voxy ({@link VoxyLods#room}).
+     */
     public static int room(ServerLevel level) {
         DhUpdates u = active(level);
-        return u == null ? 0 : OFFER_LIMIT - u.offered.size();
+        return u == null ? 0 : Math.max(0, Math.min(OFFER_LIMIT - u.offered.size(), VoxyLods.room(level) - u.offered.size()));
     }
 
     /**
@@ -179,7 +194,9 @@ public final class DhUpdates {
      */
     public static int heldRoom(ServerLevel level) {
         DhUpdates u = active(level);
-        return u == null ? 0 : DhQueue.window(DhChunks.threads()) - u.held.waiting();
+        if (u == null) return 0;
+        int dh = u.paced() ? DhQueue.window(DhChunks.threads()) - u.held.waiting() : Integer.MAX_VALUE;
+        return Math.min(dh, VoxyLods.room(level));
     }
 
     /**
@@ -194,12 +211,20 @@ public final class DhUpdates {
         if (u == null) return true;
         long key = copy.getPos().toLong(), now = level.getGameTime();
         if (u.offeredCount.containsKey(key) || u.sent.containsKey(key) && now - u.sent.get(key) < RESEND) return false;
-        if (u.held.waiting() == 0) {
+        // подтверждения записи — только от DH: без него темп держит место в очередях Voxy (heldRoom)
+        boolean paced = u.paced();
+        if (paced && u.held.waiting() == 0) {
             LISTENING.put(level, u);
             DhChunks.listen();
         }
-        u.sink.overwrite(level, copy);
-        u.held.sent(key, System.nanoTime());
+        if (u.test) {
+            u.sink.overwrite(level, copy);
+        } else {
+            DhChunks.overwrite(level, copy);
+            // DH ставит LOD через LEAD тиков после вызова, Voxy — сразу: копия игрокам с Voxy — к самому фронту
+            VoxyLods.send(level, copy, now + LEAD);
+        }
+        if (paced) u.held.sent(key, System.nanoTime());
         u.sent.put(key, now);
         return true;
     }
@@ -238,7 +263,8 @@ public final class DhUpdates {
             if (held.waiting() == 0) LISTENING.remove(level, this);
         }
         if (due.isEmpty() && offered.isEmpty()) return;
-        int budget = PER_TICK;
+        // игроки с Voxy (и с DH): темп — и место в их очередях, иначе лишнее они бы не получили
+        int budget = Math.min(PER_TICK, VoxyLods.room(level));
         // собранные чанки — первыми: отметки чанков в мире подождут тик, а собранные держат память; чанк, отданный DH
         // меньше RESEND тиков назад (держанной копией или прошлой собранной), — в конец: DH пропустил бы его молча
         for (int i = 0, n = offered.size(); budget > 0 && i < n; i++) {

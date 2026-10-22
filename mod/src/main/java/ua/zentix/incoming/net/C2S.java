@@ -160,4 +160,60 @@ public final class C2S {
             return TYPE;
         }
     }
+
+    /**
+     * Чем клиент рисует дальний рельеф: при входе в мир. {@code voxy} — у клиента Voxy, и мод кладёт в него чанки
+     * ({@code client/VoxyIngest}): сервер шлёт ему чанки, которых у клиента нет ({@code compat/VoxyLods}).
+     */
+    public record LodMods(boolean voxy) implements CustomPacketPayload {
+        public static final Type<LodMods> TYPE = new Type<>(Incoming.id("lod_mods"));
+        public static final StreamCodec<ByteBuf, LodMods> CODEC = ByteBufCodecs.BOOL.map(LodMods::new, LodMods::voxy);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * LOD Server Support переписал в Voxy клиента чанки, которые прислал мод (его первая сверка шлёт чанк с диска
+     * сервера, а руин вдали на диске нет): сервер присылает их заново, если они всё ещё отличаются от диска
+     * ({@code compat/VoxyLods.stale}). Чанки — {@code ChunkPos.toLong}, не больше {@link #MAX} за пакет.
+     */
+    public record VoxyStale(long[] chunks) implements CustomPacketPayload {
+        public static final int MAX = 1024;
+        /**
+         * Сколько чанков клиент называет за тик: 12 × 20 = 240 в секунду — меньше, чем сервер принимает от игрока
+         * ({@code VoxyLods.STALE_PER_SECOND}, 256): сверх его предела чанки отбрасываются.
+         */
+        public static final int PER_TICK = 12;
+        public static final Type<VoxyStale> TYPE = new Type<>(Incoming.id("voxy_stale"));
+        public static final StreamCodec<ByteBuf, VoxyStale> CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    ByteBufCodecs.VAR_INT.encode(buf, v.chunks.length);
+                    for (long c : v.chunks) buf.writeLong(c);
+                },
+                buf -> {
+                    int n = ByteBufCodecs.VAR_INT.decode(buf);
+                    if (n < 0 || n > MAX) throw new io.netty.handler.codec.DecoderException("voxy_stale: " + n + " chunks");
+                    long[] c = new long[n];
+                    for (int i = 0; i < n; i++) c[i] = buf.readLong();
+                    return new VoxyStale(c);
+                });
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof VoxyStale v && java.util.Arrays.equals(v.chunks, chunks);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Arrays.hashCode(chunks);
+        }
+    }
 }

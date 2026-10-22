@@ -107,6 +107,12 @@ public final class IncomingClient {
         modBus.addListener(IncomingClient::blockColors);
         TerrainTiles.init(modBus);
         LodDepth.init();
+        // Voxy (через Roxy) и его классы — к настройке клиента; LOD Server Support переписывает в Voxy чанки, которые
+        // прислал мод: заметить и попросить заново
+        modBus.addListener((net.neoforged.fml.event.lifecycle.FMLClientSetupEvent e) -> {
+            VoxyIngest.init();
+            if (VoxyIngest.available() && net.neoforged.fml.ModList.get().isLoaded("lss")) LssVoxyWatch.subscribe();
+        });
 
         NeoForge.EVENT_BUS.addListener(IncomingClient::tick);
         NeoForge.EVENT_BUS.addListener(IncomingClient::entityTick);
@@ -220,6 +226,7 @@ public final class IncomingClient {
         Replay.tick();
         // следы вспышки — и на паузе: повтор перематывают и на паузе
         ua.zentix.incoming.client.nuclear.FlashMarksClient.tick();
+        VoxyIngest.tick();
         if (mc.isPaused()) return;
         Designator.tick();
         ClientFlights.tick();
@@ -288,6 +295,7 @@ public final class IncomingClient {
      */
     private static void login(ClientPlayerNetworkEvent.LoggingIn e) {
         PallPass.prepare();
+        VoxyIngest.login();
         if (!nukeWarmed) {
             nukeWarmed = true;
             net.minecraft.Util.backgroundExecutor().execute(ClientNuclear::warm);
@@ -488,6 +496,11 @@ public final class IncomingClient {
                 p.target().ifPresent(FlightTracks::impact);
                 BlastEffects.intercept(p);
             });
+        }
+
+        @Override
+        public void voxyChunk(S2C.VoxyChunk p) {
+            VoxyIngest.accept(p);
         }
 
         @Override
