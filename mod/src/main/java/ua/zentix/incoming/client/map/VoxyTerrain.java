@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Рельеф из базы LOD самого Voxy на клиенте (на NeoForge 1.21.1 — Voxy 0.2.16 через Roxy): всё, что Voxy видел (чанки
  * клиента за всю игру в этом мире), что прислал ему сервер с LOD Server Support и что игрок импортировал
- * ({@code /voxy import world <мир>} — сохранение одиночной игры целиком). Так дальний рельеф есть и в одиночной игре,
+ * ({@code /voxy import current} — сохранение одиночной игры целиком). Так дальний рельеф есть и в одиночной игре,
  * где LSS не работает, и без Distant Horizons.
  * <p>
  * API у Voxy нет (лицензия ARR: его код не копируем, только зовём): только чтение его классов отражением, без миксинов,
@@ -164,14 +164,16 @@ final class VoxyTerrain implements TerrainSource {
     private final int minY, maxY;
     @Nullable
     private volatile Engine engine;
-    private long resolvedAt = Long.MIN_VALUE;
+    /** Когда мир Voxy искали; искали ли вообще (до первого раза часы не сравниваются: nanoTime бывает любым). */
+    private long resolvedAt;
+    private boolean resolvedOnce;
     /** Чанки ({@code ChunkPos.asLong}), над которыми сводка перечитана другой: плитки там — перестроить. */
     private final Set<Long> changed = ConcurrentHashMap.newKeySet();
     private volatile boolean scanning, closed;
     /** Обход был (и сколько колонок секций прошёл, за сколько); где и когда начат последний. */
     private volatile boolean scanned;
     private volatile int lastScanColumns;
-    private volatile long lastScanNanos, scanStarted = Long.MIN_VALUE / 2;
+    private volatile long lastScanNanos, scanStarted;
     private double scanX = Double.NaN, scanZ = Double.NaN;
 
     VoxyTerrain(ClientLevel level) {
@@ -195,7 +197,8 @@ final class VoxyTerrain implements TerrainSource {
         Access a = access;
         if (a == null) return null;
         long now = System.nanoTime();
-        if (now - resolvedAt < RESOLVE_NS) return engine;
+        if (resolvedOnce && now - resolvedAt < RESOLVE_NS) return engine;
+        resolvedOnce = true;
         resolvedAt = now;
         try {
             Object e = (Object) a.ofEngineNullable.invokeExact(level);

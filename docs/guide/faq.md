@@ -21,8 +21,9 @@ English · [Русский](ru/faq.md)
 **A server will not let you in: different mod versions.** Download the same jar the server has from the
 [Releases](https://github.com/zentixua/incoming/releases/latest) page.
 
-**The map is empty far away.** Far terrain needs LOD Server Support on the server and your client, or Distant Horizons;
-without them only loaded chunks are shown. You can still strike there. Installed LOD Server Support before this
+**The map is empty far away.** Far terrain needs LOD Server Support on the server and your client, Voxy, or Distant
+Horizons; without them only loaded chunks are shown. Voxy shows only what you have seen: in single-player run
+`/voxy import current` once. You can still strike there. Installed LOD Server Support before this
 version? Run `/lss clearcache` once on that server.
 
 **No sound from the mod.** Check the Ambient/Environment slider.

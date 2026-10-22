@@ -17,7 +17,7 @@ Fields to paste when the project pages are created. The long description is [des
 | Issues | https://github.com/zentixua/incoming/issues |
 | Wiki / guide | https://github.com/zentixua/incoming/blob/main/docs/guide/README.md |
 | Mod id | `incoming` |
-| Dependencies | none required; optional: Create, Create Aeronautics + Sable, Distant Horizons, LOD Server Support |
+| Dependencies | none required; optional: Create, Create Aeronautics + Sable, Distant Horizons, Voxy (through Roxy), LOD Server Support |
 
 ## Media
 

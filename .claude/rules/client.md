@@ -88,7 +88,7 @@ paths:
   `map/` (общая проекция карт `MapProjection`; `MapPlayers` — другие игроки по запросу `C2S.MapPlayers`, пока карта открыта (сервер:
   `ServerActions.mapPlayers` — измерение, `map_range`, без невидимых и наблюдателей, `map_players`; GameTest `mapPlayersShowsOnlyWhomItShould`);
   `TerrainTiles` — рельеф плитками 64×64 цветами ванильной карты: дальний слой — из LOD Server Support (колонки,
-  присланные сервером, `LssTerrain`, см. `dh.md`) или из Distant Horizons через его API
+  присланные сервером, `LssTerrain`, см. `dh.md`), из базы LOD Voxy (`VoxyTerrain`, отражением, `voxy.md`) или из Distant Horizons через его API
   `DhApi.Delayed.terrainRepo` в фоновых потоках, если DH стоит (compileOnly, классы `LssTerrain` и `DistantHorizonsTerrain`
   грузятся только со своим модом), поверх — из чанков клиента в кадре; крупная плитка — из четырёх свежих мелких (`TerrainTiles.kids`: строится или устарела
   мелкая — ждать её, а не читать DH второй раз), перестроенная мелкая копируется в свою четверть крупных; подробные

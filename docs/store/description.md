@@ -58,6 +58,8 @@ No other mods are required. Optional:
 - **LOD Server Support** on the server and the client: distant terrain for the targeting map, sight lines and sound
   around hills (not in single-player; a world opened to LAN serves it).
 - **Distant Horizons** 3.3 or newer: distant terrain on the targeting map and strike damage in distant terrain.
+- **Voxy** (on NeoForge through Roxy): distant terrain hides far blasts and smoke, shows strike damage, and gives the
+  targeting map, sight lines and sound its terrain, in single-player too.
 - **Sound Physics Remastered**, **Iris** shaders, **Flashback** replays.
 
 The mod is needed on the server and on every client, in the same version.
