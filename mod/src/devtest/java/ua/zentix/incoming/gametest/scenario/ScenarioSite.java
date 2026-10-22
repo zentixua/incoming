@@ -72,6 +72,8 @@ final class ScenarioSite {
         Zone z = new Zone(new ChunkPos(BlockPos.containing(at)), distance);
         zones.add(z);
         level.getChunkSource().addRegionTicket(ZONE, z.centre, z.distance, z.centre);
+        // в уровни чанков сразу, как тикеты мода (AreaLoader.apply): иначе посреди полёта их применял бы кто придётся
+        level.getChunkSource().runDistanceManagerUpdates();
     }
 
     /** Коридор района с шагом в два чанка от {@code from} до {@code to}. */

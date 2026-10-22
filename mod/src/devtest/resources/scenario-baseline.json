@@ -530,11 +530,11 @@
     },
     "loiter_rail.player.none.0": {
       "end": "blast",
-      "tick": 877,
-      "x": 32.39,
+      "tick": 881,
+      "x": 35.9,
       "y": 40.03,
-      "z": -44.2,
-      "hash": "f71df82811ce68d9"
+      "z": -41.4,
+      "hash": "0387697385e33a31"
     },
     "loiter_rail.player.retarget.0": {
       "end": "blast",

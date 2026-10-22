@@ -2,6 +2,7 @@ package ua.zentix.incoming.gametest.scenario;
 
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkLevel;
+import net.minecraft.server.level.DistanceManager;
 import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
@@ -14,6 +15,7 @@ import ua.zentix.incoming.util.Terrain;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * Мгновенная генерация на время сценариев: в конце каждого тика сервера всё, что тикеты требуют загрузить полностью
@@ -80,7 +82,14 @@ final class InstantChunks {
         if (ms >= 1000) Incoming.LOG.info("SCENARIO запись чанков ({}) дождалась за {} мс", level.dimension().location(), ms);
     }
 
-    /** Догрузить всё, что тикеты требуют полностью. */
+    /**
+     * Догрузить всё, что тикеты требуют полностью, и довести до тика сущностей всё, чему они его дают. Тик — тоже
+     * функция тикетов: ваниль переводит готовый чанк в «тикает сущностями» задачей потока сервера, когда готов квадрат 5×5
+     * вокруг ({@code ChunkMap.prepareEntityTickingChunk}), а дойдёт ли до этой задачи очередь к следующему тику, решают
+     * потоки и чужие пересчёты уровней. Снаряд уходит из мира, когда шаг ведёт в чанк без тика сущностей, и возвращается,
+     * когда путь впереди тикает, — без этого «Ланцет» сценария {@code loiter_rail.player} уходил из мира или нет
+     * по тому, кто в тике пересчитал уровни ({@link ChunkChurn}).
+     */
     static void settle(ServerLevel level) {
         ServerChunkCache cache = level.getChunkSource();
         // тикеты, взятые в этом тике, — в уровни чанков сейчас (открыт AT)
@@ -90,5 +99,31 @@ final class InstantChunks {
             if (holder.getTicketLevel() <= FULL && !Terrain.ready(level, holder.getPos().x, holder.getPos().z)) pending.add(holder.getPos());
         }
         for (ChunkPos c : pending) level.getChunk(c.x, c.z);
+        awaitEntityTicking(level, cache);
+    }
+
+    /** Предел ожидания тика сущностей, мс: дольше — не ожидание, а ошибка (чанк, которому не дождаться соседей). */
+    private static final long TICKING_WAIT_MS = 10_000;
+
+    /**
+     * Выполнять задачи потока сервера, пока каждый чанк, которому тикеты дают тик сущностей, не тикает ими. Тик блоков
+     * не ждём: ему нужны и загруженные сущности чанка, а их загрузку ваниль доводит только в тике мира, — и полёт от
+     * тика блоков не зависит.
+     */
+    private static void awaitEntityTicking(ServerLevel level, ServerChunkCache cache) {
+        DistanceManager tickets = cache.chunkMap.getDistanceManager();
+        List<ChunkPos> late = new ArrayList<>();
+        for (ChunkHolder holder : cache.chunkMap.getChunks()) {
+            ChunkPos c = holder.getPos();
+            if (tickets.inEntityTickingRange(c.toLong()) && !level.isPositionEntityTicking(c.getWorldPosition())) late.add(c);
+        }
+        long deadline = System.nanoTime() + TICKING_WAIT_MS * 1_000_000;
+        while (!late.isEmpty()) {
+            if (System.nanoTime() > deadline) {
+                throw new IllegalStateException("SCENARIO: чанки не затикали сущностями за " + TICKING_WAIT_MS + " мс: " + late.subList(0, Math.min(8, late.size())));
+            }
+            if (!cache.pollTask()) LockSupport.parkNanos(100_000);
+            late.removeIf(c -> level.isPositionEntityTicking(c.getWorldPosition()));
+        }
     }
 }

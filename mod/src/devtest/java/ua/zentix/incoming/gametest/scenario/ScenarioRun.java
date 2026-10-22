@@ -207,6 +207,7 @@ final class ScenarioRun {
         NeoForge.EVENT_BUS.addListener(onDetonate);
         NeoForge.EVENT_BUS.addListener(onBlockUpdate);
         WorkBudgetWatch.acquire(level.getServer());
+        if (!Baseline.recording() && !ScenarioMode.REAL_CHUNKS) ChunkChurn.acquire();
         StrikeGameTests.afterTest(h, this::cleanup);
         h.onEachTick(this::tick);
         h.succeedWhen(() -> h.assertTrue(checked, "полёт ещё идёт: " + status() + " — " + ScenarioMode.reproduce(s)));
@@ -826,6 +827,7 @@ final class ScenarioRun {
         NeoForge.EVENT_BUS.unregister(onBlockUpdate);
         WorkBudgetWatch.release(level.getServer());
         if (!ScenarioMode.REAL_CHUNKS) InstantChunks.release();
+        if (!Baseline.recording() && !ScenarioMode.REAL_CHUNKS) ChunkChurn.release(level);
         VirtualFlights.get(level).clear(level, e -> owner.equals(e.ownerId()));
         for (StrikeProjectile e : live()) e.discard();
         if (targetEntity != null) targetEntity.discard();
