@@ -120,7 +120,7 @@ public final class FarFlightView {
     private static Sightline.Heights heights;
 
     // ---------------------------------------------------------------- кадр: числа живут между кадрами
-    private static final double[] POS = new double[3], NOZZLE = new double[3], BACK = new double[3], OUT = new double[2], LIGHT = new double[5],
+    private static final double[] POS = new double[3], NOZZLE = new double[3], BACK = new double[3], NOSE = new double[3], OUT = new double[2], LIGHT = new double[5],
             AIM = new double[3], BIRTH = new double[2], LOOK = new double[TrailModel.LOOK];
     private static final float[] ANGLES = new float[3];
     private static final ProjectilePose POSE = new ProjectilePose();
@@ -635,7 +635,7 @@ public final class FarFlightView {
                 // факел светит на дым и ленты вокруг, как огненный шар, — виден он глазу или нет
                 lights.add(BACK[0], BACK[1], BACK[2], flame.lightRadius(), seen, Math.min(1, seen), channel(fc, 0), channel(fc, 1), channel(fc, 2));
                 // и на мир, и в глаз (HeatPass): без воздуха до глаза — его ослабление считает проход
-                lit(BACK[0], BACK[1], BACK[2], flame, view.camera());
+                lit(BACK[0], BACK[1], BACK[2], -NOSE[0], -NOSE[1], -NOSE[2], flame, view.camera());
                 flamePx = 2 * LIGHT[0] / (bd * view.pixel());
                 flameAlpha = Math.min(1, LIGHT[2]) * vis * core;
                 flames++;
@@ -709,15 +709,16 @@ public final class FarFlightView {
         p.coarse = coarse;
     }
 
-    /** Факелы кадра для света на мир ({@link #heat}): середина от глаза, радиус, свет (линейный, белая стена в полдень — 1), высота над землёй. */
-    private static final int LIT_MAX = 16;
-    private static final double[] LIT = new double[LIT_MAX * 8], LIT_W = new double[LIT_MAX];
+    /** Факелы кадра для света на мир ({@link #heat}): середина от глаза, ось струи, высота середины над землёй; сам факел. */
+    private static final int LIT_MAX = 16, LIT_STRIDE = 7;
+    private static final double[] LIT = new double[LIT_MAX * LIT_STRIDE], LIT_W = new double[LIT_MAX];
+    private static final Flame[] LIT_FLAME = new Flame[LIT_MAX];
     private static int lit;
     /** Свет всех факелов кадра у глаза. */
     private static double litEye;
 
-    /** Факел flame с серединой (x, y, z) от глаза cam — в свет кадра на мир. */
-    static void lit(double x, double y, double z, Flame flame, Vec3 cam) {
+    /** Факел flame с серединой (x, y, z) от глаза cam и осью струи от сопла (jx, jy, jz) — в свет кадра на мир. */
+    static void lit(double x, double y, double z, double jx, double jy, double jz, Flame flame, Vec3 cam) {
         double lr = flame.lightRadius(), w = flame.brightness() * lr * lr / Math.max(x * x + y * y + z * z, lr * lr);
         // в глаз — все факелы, на мир — самые заметные у глаза (проход берёт из них четыре)
         litEye += w;
@@ -732,29 +733,27 @@ public final class FarFlightView {
         LIT_W[slot] = w;
         ClientLevel lv = level;
         double ground = lv == null ? Double.NaN : ground(lv, x + cam.x, z + cam.z);
-        int c = flame.lightColor();
-        double r = FlameModel.linear(c >> 16 & 255), g = FlameModel.linear(c >> 8 & 255), b = FlameModel.linear(c & 255);
-        double luma = 0.2126 * r + 0.7152 * g + 0.0722 * b, k = luma > 0 ? flame.brightness() / luma : 0;
-        int o = 8 * slot;
+        int o = LIT_STRIDE * slot;
         LIT[o] = x;
         LIT[o + 1] = y;
         LIT[o + 2] = z;
-        LIT[o + 3] = flame.lightRadius();
-        LIT[o + 4] = r * k;
-        LIT[o + 5] = g * k;
-        LIT[o + 6] = b * k;
-        LIT[o + 7] = Double.isNaN(ground) ? flame.lightRadius() : Math.max(flame.lightRadius(), y + cam.y - ground);
+        LIT[o + 3] = jx;
+        LIT[o + 4] = jy;
+        LIT[o + 5] = jz;
+        LIT[o + 6] = Double.isNaN(ground) ? lr : Math.max(lr, y + cam.y - ground);
+        LIT_FLAME[slot] = flame;
     }
 
     /**
-     * Свет факелов кадра на мир ({@link HeatPass.Frame#light}) и в глаз следующего кадра ({@link #flamesAtEye}): струя — круг площади её сбоку ({@link Flame#lightRadius})
-     * с её средней яркостью, как свет на дым ({@link FxLights}); воздух air, 1/блок.
+     * Свет факелов кадра на мир ({@link HeatPass.Frame#jet}: струя от сопла до точки Дрейпера по частям) и в глаз следующего
+     * кадра ({@link #flamesAtEye}); воздух air, 1/блок.
      */
     static void heat(HeatPass.Frame heat, double air) {
         for (int i = 0; i < lit; i++) {
-            int o = 8 * i;
+            int o = LIT_STRIDE * i;
             // в глаз этого кадра факелы уже вошли — прошлым кадром ({@link #flamesAtEye})
-            heat.light(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT[o + 6], air, LIT[o + 7], false);
+            heat.jet(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT_FLAME[i], air, LIT[o + 6]);
+            LIT_FLAME[i] = null;
         }
         flamesAtEye = litEye;
         lit = 0;
@@ -794,6 +793,9 @@ public final class FarFlightView {
         track.angles(t, ANGLES);
         double yaw = Math.toRadians(ANGLES[0]), pitch = Math.toRadians(ANGLES[1]);
         double nx = -Math.sin(yaw) * Math.cos(pitch), ny = -Math.sin(pitch), nz = Math.cos(yaw) * Math.cos(pitch);
+        NOSE[0] = nx;
+        NOSE[1] = ny;
+        NOSE[2] = nz;
         BACK[0] = dx - nx * back;
         BACK[1] = dy - ny * back;
         BACK[2] = dz - nz * back;

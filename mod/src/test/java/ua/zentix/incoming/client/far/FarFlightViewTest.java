@@ -128,7 +128,7 @@ class FarFlightViewTest {
      */
     private static double exposureNear(Flame flame, double d, double ambient) {
         try {
-            FarFlightView.lit(d, 0, 0, flame, Vec3.ZERO);
+            FarFlightView.lit(d, 0, 0, 0, -1, 0, flame, Vec3.ZERO);
             FarFlightView.heat(new ua.zentix.incoming.client.fx.layer.HeatPass.Frame(), 0);
             ua.zentix.incoming.client.fx.layer.HeatPass.Frame next = new ua.zentix.incoming.client.fx.layer.HeatPass.Frame();
             next.eye(FarFlightView.flamesAtEye());
