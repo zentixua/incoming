@@ -11,9 +11,12 @@
 #
 # Очередь: тяжёлая задача (по умолчанию) идёт одна — служба ждёт замка ($XDG_RUNTIME_DIR/incoming-laptop.lock) и
 # держит его до конца. Две съёмки сразу или съёмка поверх прогона GameTest делили видеокарту и процессор, сервер пробы
-# подвисал, и камера теряла ракету (21–22.10: 45 пересечений, 5,7 ч). Время ожидания входит в `timeout` вызывающего.
-#   --gpu    клиент или Blender: ещё и ждать, пока игра Артёма закрыта (Java из папки инстанса Prism)
-#   --light  лёгкая задача без очереди (сервер без клиента, короткий скрипт) — рядом, если хватает памяти
+# подвисал, и камера теряла ракету (21–22.10: 45 пересечений, 5,7 ч). Задача, чей запустивший ушёл (timeout, обрыв
+# сессии), пока она ждала очереди, не начинается (код 75); начавшаяся идёт до конца своей службой.
+#   --gpu    клиент или Blender: ещё и ждать, пока игра Артёма закрыта (Java из папки инстанса Prism); пока ждёт игру,
+#            очередь не держит — тяжёлые задачи без видеокарты идут
+#   --light  лёгкая задача без очереди (короткий скрипт; сервер, к которому следом подключится клиент-задача, — иначе
+#            клиент ждал бы конца сервера) — рядом, если хватает памяти
 set -euo pipefail
 lock=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-laptop.lock
 
@@ -21,7 +24,7 @@ lock=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-laptop.lock
 artem_playing() {
   local p
   for p in $(pgrep -x java); do
-    tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q 'PrismLauncher/instances/' && return 0
+    grep -qa 'PrismLauncher/instances/' "/proc/$p/cmdline" 2>/dev/null && return 0
   done
   return 1
 }
@@ -33,19 +36,35 @@ if [ "${1:-}" = --status ]; then
   exit 0
 fi
 
-# внутри службы: дождаться очереди (и закрытой игры), записать, чья очередь, выполнить
+# внутри службы: дождаться очереди (и закрытой игры), записать, чья очередь, выполнить. Вывод — без set -e: запустивший
+# мог уйти, и запись в его закрытый канал не должна ронять задачу
 if [ "${1:-}" = --in-unit ]; then
-  mode=$2; name=$3; shift 4
+  set +e
+  mode=$2; name=$3; caller=$4; shift 5
   [ "$mode" = light ] && exec "$@"
+  gone() { ! kill -0 "$caller" 2>/dev/null; }
   exec 9>"$lock"
-  if ! flock -n 9; then
-    echo "$(date +%T) $name ждёт очереди: идёт $(cat "$lock.owner" 2>/dev/null || echo '?')"
-    flock 9
-  fi
-  while [ "$mode" = gpu ] && artem_playing; do echo "$(date +%T) $name: игра Артёма запущена — жду"; sleep 60; done
+  said=
+  while true; do
+    while [ "$mode" = gpu ] && artem_playing; do
+      [ -z "$said" ] && { echo "$(date +%T) $name: игра Артёма запущена — жду"; said=1; }
+      gone && { echo "$name: запустивший ушёл до начала — не запускаю"; exit 75; }
+      sleep 60
+    done
+    if flock -n 9; then
+      # игра могла запуститься, пока ждали очереди: отпустить очередь и ждать игру снова
+      [ "$mode" = gpu ] && artem_playing && { flock -u 9; continue; }
+      gone && { echo "$name: запустивший ушёл до начала — не запускаю"; exit 75; }
+      break
+    fi
+    [ -z "$said" ] && { echo "$(date +%T) $name ждёт очереди: идёт $(cat "$lock.owner" 2>/dev/null || echo '?')"; said=1; }
+    gone && { echo "$name: запустивший ушёл до начала — не запускаю"; exit 75; }
+    sleep 10
+  done
   echo "$name ($mode) с $(date '+%d.%m %T'), служба $(sed 's|.*/||' /proc/self/cgroup)" > "$lock.owner"
   echo "$(date +%T) $name: очередь моя"
-  code=0; "$@" 9>&- || code=$?
+  "$@" 9>&-
+  code=$?
   : > "$lock.owner"
   exit $code
 fi
@@ -62,7 +81,7 @@ while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_H
 code=0
 systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="проверка мода (tools/laptop_job.sh)" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
-    -p OOMScoreAdjust=500 "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" -- "$@" || code=$?
+    -p OOMScoreAdjust=500 "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" || code=$?
 # строка конца — для того, кто ждёт задачу в фоне: код виден сразу, и падение на старте не теряется
 echo "laptop_job $name: exit $code"
 exit $code
