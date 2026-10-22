@@ -59,5 +59,21 @@ class CheckTest(unittest.TestCase):
         self.assertEqual([], check.problems(log(*rows)))
 
 
+class ProbeFormatTest(unittest.TestCase):
+    """check.py читает строки, которые пишет ProbeScenario: формат в Java и разбор здесь — одни."""
+
+    def test_probe_writes_what_check_reads(self):
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        java = open(os.path.join(root, "mod/src/devtest/java/ua/zentix/incoming/scenario/ProbeScenario.java"), encoding="utf-8").read()
+        for fmt, sample in [('"SCENARIO probe hearing damage {}"', "SCENARIO probe hearing damage off"),
+                            ('"SCENARIO probe {} game {} (reference start {})"', "SCENARIO probe flyby game 10440 (reference start 10440)"),
+                            ('"SCENARIO probe FAIL {}"', "SCENARIO probe FAIL x")]:
+            self.assertIn(fmt, java, "строки нет в ProbeScenario")
+        self.assertTrue(check.HEARING.search("SCENARIO probe hearing damage off"))
+        self.assertTrue(check.START.search("SCENARIO probe flyby game 10440 (reference start 10440)"))
+        self.assertTrue(check.FAIL.search("SCENARIO probe FAIL x"))
+        self.assertIn("static final int LATE = %d;" % check.LATE, java, "допуск LATE — один в Java и здесь")
+
+
 if __name__ == "__main__":
     unittest.main()

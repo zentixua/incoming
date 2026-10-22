@@ -105,8 +105,7 @@ public final class BlastSounds {
         float highs = highs(path);
         SoundEvent event = s.underground() ? ModSounds.BOMB_DEEP.get() : ModSounds.BLAST_FAR.get();
         float pitch = s.underground() ? 1 : BlastMix.pitch(s.chargeKg());
-        mixed(event, v, pitch);
-        ClientSounds.blastAtEar(event, pos, v, pitch, seed, 1, highs, BlastSounds::factor);
+        ClientSounds.blastAtEar(event, pos, v, pitch, seed, 1, highs, BlastSounds::factor, mixed(event, v, pitch));
         return heard;
     }
 
@@ -186,8 +185,9 @@ public final class BlastSounds {
         Mix.Blast blast = MIX.blast(ticks);
         for (int i = 0; i < 3; i++) {
             if (volumes[i] < AUDIBLE) continue;
-            blast.add(new Mix.Layer(Envelopes.of(events[i].getLocation()), pitch, volumes[i]));
-            SoundInstance shot = ClientSounds.blastShot(events[i], pos, volumes[i], pitch, seed, BlastSounds::factor);
+            Mix.Layer layer = new Mix.Layer(Envelopes.of(events[i].getLocation()), pitch, volumes[i]);
+            blast.add(layer);
+            SoundInstance shot = ClientSounds.blastShot(events[i], pos, volumes[i], pitch, seed, BlastSounds::factor, life(layer));
             shots.add(shot);
             if (volumes[i] > most) {
                 most = volumes[i];
@@ -195,8 +195,10 @@ public final class BlastSounds {
             }
         }
         if (l.sub() >= AUDIBLE) {
-            blast.add(new Mix.Layer(Envelopes.of(ModSounds.BLAST_SUB.get().getLocation()), pitch, l.sub()));
-            shots.add(ClientSounds.blastShot(ModSounds.BLAST_SUB.get(), pos, l.sub(), pitch, seed ^ SUB_SALT, BlastSounds::factor));
+            // удар в грудь — своя запись (низ других подрывов и синтез): с ракурсами — по мощности
+            Mix.Layer layer = new Mix.Layer(Envelopes.of(ModSounds.BLAST_SUB.get().getLocation()), pitch, l.sub(), true);
+            blast.add(layer);
+            shots.add(ClientSounds.blastShot(ModSounds.BLAST_SUB.get(), pos, l.sub(), pitch, seed ^ SUB_SALT, BlastSounds::factor, life(layer)));
         }
         // эхо и удар у уха ждут настоящего начала прямого звука: ожидание — до play
         if (echoes != null) echoes.expect(tick, loudest);
@@ -204,8 +206,13 @@ public final class BlastSounds {
         if (l.pulse() >= AUDIBLE) {
             Object owner = new Object();
             OwnSources.Anchor start = OwnSources.anchor(owner, loudest, clock, tick);
-            pulse = OwnSources.play(owner, start, 0, Math.atan2(pos.z - ear.z, pos.x - ear.x), l.pulse(),
-                    BlastPulse.render(pa, BlastMix.phase(s, d), 1), BlastPulse.RATE, true, true, BlastSounds::factor);
+            short[] track = BlastPulse.render(pa, BlastMix.phase(s, d), 1);
+            // удар у уха — дорожка из модели: в смеси своей огибающей, по мощности
+            float[] x = new float[track.length];
+            for (int i = 0; i < x.length; i++) x[i] = track[i] / 32768f;
+            blast.add(new Mix.Layer(Envelope.of(x, BlastPulse.RATE), 1, l.pulse(), true));
+            pulse = OwnSources.play(owner, start, 0, Math.atan2(pos.z - ear.z, pos.x - ear.x), l.pulse(), track, BlastPulse.RATE, true, true,
+                    BlastSounds::factor);
         }
         last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
                 s.weapon() == null ? "air" : s.weapon().name(), s.chargeKg(), d, pa, 20 * Math.log10(Math.max(pa, 1e-9) / 2e-5), 1000 * BlastMix.phase(s, d),
@@ -241,9 +248,19 @@ public final class BlastSounds {
         return MIX.factor(ticks);
     }
 
-    /** Разовый звук взрыва целиком (одна запись — один взрыв) — в смесь, до того как зазвучит. */
-    private static void mixed(SoundEvent event, float volume, float pitch) {
-        MIX.blast(ticks).add(new Mix.Layer(Envelopes.of(event.getLocation()), pitch, volume));
+    /** Разовый звук взрыва целиком (одна запись — один взрыв) — в смесь, до того как зазвучит; срок звука, тиков. */
+    private static int mixed(SoundEvent event, float volume, float pitch) {
+        Mix.Layer layer = new Mix.Layer(Envelopes.of(event.getLocation()), pitch, volume);
+        MIX.blast(ticks).add(layer);
+        return life(layer);
+    }
+
+    /**
+     * Срок звука слоя, тиков: запись с её тоном и запас. Звук смеси тикает, а тикающий звук, чей канал движок снял без
+     * {@code stop} (ползунок «Окружение» в нуле), так и остался бы в его списке.
+     */
+    private static int life(Mix.Layer layer) {
+        return (int) Math.ceil(layer.ticks()) + 20;
     }
 
     /** Отбой, перемотка повтора, выход из мира: эхо, что ещё готовилось, забыть (его голоса снимает {@link OwnSources#reset}). */
@@ -268,8 +285,7 @@ public final class BlastSounds {
         if (v < AUDIBLE) return;
         ClientSounds.ducked(BlastMix.loudness(pa));
         SoundEvent event = underground ? ModSounds.BOMB_CAVE.get() : ModSounds.BOMB_DEEP.get();
-        mixed(event, v, 1);
-        ClientSounds.blastAtEar(event, pos, v, 1, BlastSounds::factor);
+        ClientSounds.blastAtEar(event, pos, v, 1, BlastSounds::factor, mixed(event, v, 1));
     }
 
     /**
@@ -318,8 +334,7 @@ public final class BlastSounds {
 
     /** Звук бомбы — в смеси взрывов. */
     private static void bomb(SoundEvent event, Vec3 pos, float volume, float pitch) {
-        mixed(event, volume, pitch);
-        ClientSounds.blastAtEar(event, pos, volume, pitch, BlastSounds::factor);
+        ClientSounds.blastAtEar(event, pos, volume, pitch, BlastSounds::factor, mixed(event, volume, pitch));
     }
 
     /**

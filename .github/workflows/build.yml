@@ -75,6 +75,8 @@ jobs:
               case "$f" in
                 '') ;;
                 mod/gradlew|mod/gradle/*) mod=true; replayscan=true ;;
+                # строки лога пробы читает tools/look_gate/check.py
+                mod/src/devtest/java/ua/zentix/incoming/scenario/ProbeScenario.java) mod=true; lookgate=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py) mod=true ;;
                 tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_busy.sh|tools/test_gpu_busy.sh) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;

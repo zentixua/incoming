@@ -7,10 +7,10 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Мгновенная громкость записи во времени (ITU-R BS.1770: K-фильтр, окно 400 мс) — средний квадрат K-взвешенного сигнала
- * в окне, которое начинается в каждом тике записи (шаг 50 мс): сколько звук даст в ближайшие 400 мс с этого мига. По ней
- * {@link Mix} знает, что звучит у уха сейчас, а не только громкость в начале. Окно — вперёд: у взрыва громче всего
- * первые доли секунды, и смесь узнаёт об ударе до него, а не через 400 мс. Без Minecraft (кроме чтения Vorbis).
+ * Мгновенная громкость записи во времени (ITU-R BS.1770: K-фильтр, окно 400 мс) в каждом тике записи (шаг 50 мс) — самое
+ * громкое окно 400 мс, в котором этот тик есть: и то, что с него начинается (удар — до того, как прозвучал), и начатые
+ * до него (удар тиком раньше: его окно ещё звучит, и взрыв, пришедший следом, ложится в то же окно). По ней {@link Mix}
+ * знает, что звучит у уха сейчас, а не только громкость в начале. Без Minecraft (кроме чтения Vorbis).
  */
 public final class Envelope {
     /** Окно мгновенной громкости, с (BS.1770). */
@@ -28,10 +28,18 @@ public final class Envelope {
         double[] c = new double[y.length + 1];
         for (int i = 0; i < y.length; i++) c[i + 1] = c[i] + y[i] * y[i];
         int w = (int) Math.round(WINDOW * rate), h = (int) Math.round(STEP * rate), n = Math.max(1, (y.length + h - 1) / h);
-        float[] out = new float[n];
+        float[] ahead = new float[n];
         for (int k = 0; k < n; k++) {
             int a = k * h, b = Math.min(y.length, a + w);
-            out[k] = (float) ((c[b] - c[a]) / w);
+            ahead[k] = (float) ((c[b] - c[a]) / w);
+        }
+        // в тик k звучит всякое окно 400 мс, где он есть: и начатые до него (удар был тиком раньше — его окно ещё идёт)
+        int back = (int) Math.ceil(WINDOW / STEP) - 1;
+        float[] out = new float[n];
+        for (int k = 0; k < n; k++) {
+            float m = 0;
+            for (int j = Math.max(0, k - back); j <= k; j++) m = Math.max(m, ahead[j]);
+            out[k] = m;
         }
         return out;
     }

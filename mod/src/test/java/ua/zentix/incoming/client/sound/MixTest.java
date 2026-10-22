@@ -35,12 +35,20 @@ class MixTest {
 
     @Test
     void layersOfOneBlastAddUpToTheCeiling() {
-        // ближний ракурс на потолке и удар в грудь — одна волна: вместе не громче потолка
+        // ракурсы одной записи — по амплитуде: два по половине громкости — одна запись целиком
         Mix mix = new Mix();
         Mix.Blast b = mix.blast(0);
-        b.add(new Mix.Layer(flat(1, 40), 1, 1));
-        b.add(new Mix.Layer(flat(0.5, 40), 1, 1));
-        assertEquals(1, mix.heard(3), 1e-6);
+        b.add(new Mix.Layer(flat(0.5, 40), 1, Math.sqrt(0.5)));
+        b.add(new Mix.Layer(flat(0.5, 40), 1, Math.sqrt(0.5)));
+        assertEquals(0.5 * (0.5 + 0.5 + 2 * 0.5), mix.heard(3), 1e-6);
+        // удар в грудь — своя запись: с ракурсом — по мощности; взрыв с 1 psi (ракурс на потолке) — на потолке, а не на
+        // 3 дБ ниже, как вышло бы по амплитуде (ревью F4)
+        Mix one = new Mix();
+        Mix.Blast c = one.blast(0);
+        c.add(new Mix.Layer(flat(1, 40), 1, 1));
+        c.add(new Mix.Layer(flat(0.8, 40), 1, 1, true));
+        assertEquals(1, one.heard(3), 1e-6);
+        assertEquals(1 / 1.8, one.factor(3) * one.factor(3), 1e-6, "по мощности: 1 + 0,8, а не (1 + √0,8)²");
     }
 
     @Test
@@ -106,7 +114,7 @@ class MixTest {
                 if (l.near() > 0) mb[next].add(new Mix.Layer(eNear, pitch, l.near()));
                 if (l.mid() > 0) mb[next].add(new Mix.Layer(eMid, pitch, l.mid()));
                 if (l.far() > 0) mb[next].add(new Mix.Layer(eFar, pitch, l.far()));
-                if (l.sub() > 0) mb[next].add(new Mix.Layer(eSub, pitch, l.sub()));
+                if (l.sub() > 0) mb[next].add(new Mix.Layer(eSub, pitch, l.sub(), true));
                 next++;
             }
             double k = mix.factor(tick);
@@ -123,11 +131,22 @@ class MixTest {
             }
         }
         double top = momentaryMax(mixed, rate), unmixed = momentaryMax(raw, rate);
-        System.out.printf("salvo: mixed %.1f LUFS, unmixed %.1f LUFS, peak %.2f, over full scale %d samples%n", top, unmixed, peak(mixed), over(mixed));
+        System.out.printf("salvo: mixed %.1f LUFS, unmixed %.1f LUFS, peak %.2f, over full scale %d samples (unmixed %d)%n", top, unmixed, peak(mixed),
+                over(mixed), over(raw));
         assertTrue(unmixed > Loudness.CEILING_LUFS + 2, "без смеси залп выше потолка: " + unmixed);
         assertTrue(top <= Loudness.CEILING_LUFS + 1, "залп в смеси — у потолка " + Loudness.CEILING_LUFS + " LUFS: " + top);
-        // и не упирается в полную шкалу (в прогоне RV1 — ~20 срезов за сцену)
-        assertEquals(0, over(mixed), "отсчётов на полной шкале, пик " + peak(mixed));
+        // и не упирается в полную шкалу суммой (в прогоне RV1 — ~20 срезов за сцену, без смеси здесь — тысячи): пик выше
+        // полной шкалы — только в тик удара (первые 50 мс), где пики ближнего ракурса и удара в грудь одного взрыва совпадают (оба
+        // с удара с первого отсчёта; так срезал и одиночный взрыв в 50 м у 3.4.1) — это ловит ограничитель OpenAL Soft
+        int impact = tickLen, tails = 0;
+        for (int i = 0; i < n; i++) {
+            if (Math.abs(mixed[i]) < 1) continue;
+            boolean onImpact = false;
+            for (Mix.Blast b : mb) if (b != null && i >= b.start * tickLen && i < b.start * tickLen + impact) onImpact = true;
+            if (!onImpact) tails++;
+        }
+        assertEquals(0, tails, "отсчётов на полной шкале вне удара, пик " + peak(mixed));
+        assertTrue(over(mixed) * 100 < over(raw), "срезов " + over(mixed) + " против " + over(raw) + " без смеси");
     }
 
     private static double peak(double[] x) {

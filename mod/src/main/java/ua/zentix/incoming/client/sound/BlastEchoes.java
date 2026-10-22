@@ -113,17 +113,17 @@ public class BlastEchoes {
         this.anchor = OwnSources.anchor(this, direct, clock, tick);
     }
 
+    /** Эхо обычного взрыва — в смеси взрывов ({@link Mix}): громкость его дорожек × её множитель; у ядерки смеси нет. */
+    public void bus(@Nullable DoubleSupplier bus) {
+        this.bus = bus;
+    }
+
     /**
      * Фронт у слушателя: недосчитанные лучи — по {@link #ARRIVAL_RAYS} за тик, дальше сведение в фоне.
      *
      * @param volume громкость прямого удара (эхо — доля её)
      * @param pitch  высота тона прямого удара (эхо — того же звука)
      */
-    /** Эхо обычного взрыва — в смеси взрывов ({@link Mix}): громкость его дорожек × её множитель; у ядерки смеси нет. */
-    public void bus(@Nullable DoubleSupplier bus) {
-        this.bus = bus;
-    }
-
     public void arrive(Vec3 ear, float volume, float pitch) {
         if (stopped) return;
         this.heard = ear;

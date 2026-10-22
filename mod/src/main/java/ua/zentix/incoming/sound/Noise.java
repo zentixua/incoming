@@ -160,7 +160,6 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
         }
     }
 
-    /** Мощность звука части сейчас, дБ (без взвешивания); не шумит — {@link #SILENT}. */
     /**
      * A-уровень мощности звука источника со спектром {@code shape}, дБА, у которого на пути {@code path} закон
      * распространения мода ({@link Propagation#level}) даёт замеренный A-уровень {@code measured}. Обратный ход того же
@@ -171,6 +170,7 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
         return measured - Propagation.level(0, shape, path, null) + shape.aWeighting();
     }
 
+    /** Мощность звука части сейчас, дБ (без взвешивания); не шумит — {@link #SILENT}. */
     public double power(Part part, FlightPhase ph, double age, double speed, boolean drilling) {
         return switch (part) {
             case ENGINE -> engine == null || drilling ? SILENT : engine.power(ph, age, speed);

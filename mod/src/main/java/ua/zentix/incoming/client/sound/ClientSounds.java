@@ -341,25 +341,28 @@ public final class ClientSounds {
      * {@link #shot(SoundEvent, Vec3, float, float, long)}, но громкость — {@code volume} × множитель смеси {@code mix},
      * заново каждый тик (звук тикает).
      */
-    public static SoundInstance blastShot(SoundEvent event, Vec3 source, float volume, float pitch, long seed, DoubleSupplier mix) {
+    public static SoundInstance blastShot(SoundEvent event, Vec3 source, float volume, float pitch, long seed, DoubleSupplier mix, int life) {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         float open = SoundFilters.open(ear, source.add(0, 1.5, 0));
         float highs = farAir(ear.distanceTo(source)) * SoundFilters.blockedHighs(open);
-        return new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), toward(ear, source), SoundFilters.blockedGain(open), highs, mix);
+        return new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), toward(ear, source), SoundFilters.blockedGain(open), highs, mix,
+                life);
     }
 
     /** Как {@link #atEar(SoundEvent, Vec3, float, float, long, float, float)} (фильтр пути — вызывающего), в смеси взрывов. */
-    public static void blastAtEar(SoundEvent event, Vec3 source, float volume, float pitch, long seed, float gain, float highs, DoubleSupplier mix) {
+    public static void blastAtEar(SoundEvent event, Vec3 source, float volume, float pitch, long seed, float gain, float highs, DoubleSupplier mix,
+                                  int life) {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        play(new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), toward(ear, source), gain, highs, mix));
+        play(new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), toward(ear, source), gain, highs, mix, life));
     }
 
     /** Как {@link #atEar(SoundEvent, Vec3, float, float)} (преграды и воздух — по лучу до источника), в смеси взрывов. */
-    public static void blastAtEar(SoundEvent event, Vec3 source, float volume, float pitch, DoubleSupplier mix) {
+    public static void blastAtEar(SoundEvent event, Vec3 source, float volume, float pitch, DoubleSupplier mix, int life) {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         float open = SoundFilters.open(ear, source.add(0, 1.5, 0));
         float highs = farAir(ear.distanceTo(source)) * SoundFilters.blockedHighs(open);
-        play(new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(), toward(ear, source), SoundFilters.blockedGain(open), highs, mix));
+        play(new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(), toward(ear, source), SoundFilters.blockedGain(open), highs, mix,
+                life));
     }
 
     /** Отдать звук движку. */
@@ -425,9 +428,11 @@ public final class ClientSounds {
     private static final class MixedShot extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
         private final float gain, highs;
         private final DoubleSupplier mix;
+        /** Тиков до конца записи с запасом: дальше звук снимается сам. */
+        private int life;
 
         MixedShot(SoundEvent event, SoundSource category, float volume, float pitch, RandomSource random, Vec3 at, float gain, float highs,
-                  DoubleSupplier mix) {
+                  DoubleSupplier mix, int life) {
             super(event, category, random);
             this.volume = volume;
             this.pitch = pitch;
@@ -441,6 +446,7 @@ public final class ClientSounds {
             this.gain = gain;
             this.highs = highs;
             this.mix = mix;
+            this.life = life;
         }
 
         @Override
@@ -450,7 +456,8 @@ public final class ClientSounds {
 
         @Override
         public void tick() {
-            // громкость — getVolume, место — неизменно
+            // громкость — getVolume, место — неизменно; запись кончилась — снять
+            if (--life <= 0) stop();
         }
 
         @Override
