@@ -85,13 +85,14 @@ class GroundDustTest {
     void dustComesWithTheFront() {
         CloudModel m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), DAY);
         double before = -1;
-        for (double t : new double[]{0, 0.002, 0.01, 0.03, 0.1, 0.3, 1}) {
+        for (double t : new double[]{0, 0.002, 0.005, 0.01, 0.03, 0.06, 0.1, 0.2, 0.3, 1}) {
             double front = m.ground.front(t), mass = 0;
             for (double[] b : blobs(m, t)) {
                 if (b[6] <= 0 || b[5] > 0 || b[1] > 2 * b[4] + 0.5) continue; // пыль у земли (облако и ножка — выше)
                 mass += b[6];
                 double r = Math.hypot(b[0] - m.ground.drift(t, b[1])[0], b[2] - m.ground.drift(t, b[1])[1]);
-                assertTrue(r + b[3] <= 1.1 * front + 1, "t " + t + ": клуб на " + r + " м, σ " + b[3] + " — за фронтом " + front);
+                // видимый край клуба (толща у края — 0,05: у густого ~3,7σ, не дальше 4σ) — не за фронтом
+                assertTrue(r + GroundDust.EDGE_SIGMAS * b[3] <= front + 0.5, "t " + t + ": клуб на " + r + " м, σ " + b[3] + " — за фронтом " + front);
                 if (t <= 0.1) assertTrue(b[4] < 1, "t " + t + ": σ слоя по вертикали " + b[4] + " — Kuhl, дециметры");
             }
             if (t == 0) assertEquals(0, mass, "до фронта пыли нет");

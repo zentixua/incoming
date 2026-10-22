@@ -122,7 +122,7 @@ public final class GroundDust {
         // ножка: ушедшее в подсос — нарастающим итогом (ослабление в кг смеси)
         for (int s = 1; s < STEPS; s++) {
             double t = 0.5 * (time(s - 1) + time(s)), flux = 0;
-            for (int i = 0; i < RINGS; i++) if (!ball[i]) flux += stem[i] / DustModel.STEM_S * under(t) * ringNow(i, t);
+            for (int i = 0; i < RINGS; i++) if (!ball[i] && t > stemFrom[i]) flux += stem[i] / DustModel.STEM_S * under(t) * ringNow(i, t);
             drawn[s] = drawn[s - 1] + flux * (time(s) - time(s - 1));
         }
         life = lifeSeconds();
@@ -241,11 +241,20 @@ public final class GroundDust {
         return at(drawn, t);
     }
 
-    /** Фронт по земле в возрасте t, м: дальше него пыли нет. */
+    /**
+     * Фронт по земле в возрасте t, м: дальше него пыли нет. Между кольцами — по приходу ({@link HobBlast#arrivalSeconds}),
+     * за последним — со скоростью звука.
+     */
     public double front(double t) {
-        for (int i = RINGS - 1; i >= 0; i--) if (arrival[i] <= t) return i + 1 < RINGS ? r[i + 1] : edge[ANNULI];
-        return 0;
+        if (total <= 0 && underBall(1e9) <= 0 || t <= arrival[0]) return 0;
+        for (int i = 1; i < RINGS; i++) {
+            if (arrival[i] > t) return r[i - 1] + (r[i] - r[i - 1]) * (t - arrival[i - 1]) / Math.max(arrival[i] - arrival[i - 1], 1e-9);
+        }
+        return r[RINGS - 1] + ua.zentix.incoming.nuclear.model.BlastModel.SOUND_SPEED * (t - arrival[RINGS - 1]);
     }
+
+    /** Видимый край клуба — не дальше стольких σ (толща в сотни: край по порогу 0,05 — до ~4σ, {@code SmokePuffs.edge}). */
+    static final double EDGE_SIGMAS = 4;
 
     /** Приёмник клубов слоя (центр от точки под взрывом на земле, м). */
     public interface Blobs {
@@ -283,8 +292,15 @@ public final class GroundDust {
             double zc = 0.8 * v;
             double[] d = drift(t, zc);
             double dx = d[0], dz = d[1];
-            double ring = Math.max(Math.sqrt(var), Math.PI * mean / SPOKES / 2.5);
+            double gap = Math.PI * mean / SPOKES / 2.5, ring = Math.max(Math.sqrt(var), gap);
             double sh = Math.max(Math.hypot(ring, spread), v);
+            // видимый край кольца не дальше фронта: пыль встаёт там, где фронт уже прошёл (в первые доли секунды — уже,
+            // но не у́же шага между клубами; не хватает — кольцо ближе к середине)
+            double front = front(t);
+            if (mean + EDGE_SIGMAS * sh > front) {
+                sh = Math.max((front - mean) / EDGE_SIGMAS, Math.min(sh, Math.max(gap, v)));
+                mean = Math.max(0, Math.min(mean, front - EDGE_SIGMAS * sh));
+            }
             double phase = a * Math.PI / SPOKES;
             for (int k = 0; k < SPOKES; k++) {
                 double ang = phase + 2 * Math.PI * k / SPOKES;

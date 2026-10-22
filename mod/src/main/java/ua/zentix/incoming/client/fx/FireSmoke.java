@@ -105,8 +105,11 @@ public final class FireSmoke implements SmokeGrid.Source {
     int seen;
     /** Мир сменился: источник уходит из сетки. */
     boolean gone;
-    /** Шлейф нынешнего очага в нынешнем ветре и воздухе; направление ветра. */
-    FirePlume plume;
+    /**
+     * Шлейф нынешнего очага в нынешнем ветре и воздухе (подъём — по теплу всего пожара, {@link #merge}) и шлейф одного
+     * его тепла (горячий газ и пламя над очагом); направление ветра.
+     */
+    FirePlume plume, own;
     double wx, wz;
     /** Докуда по ветру виден шлейф самого сильного очага за историю, м; высота пламени самого очага, м. */
     double visible, flame;
@@ -154,8 +157,10 @@ public final class FireSmoke implements SmokeGrid.Source {
         wx = u > 1e-6 ? ux / u : 1;
         wz = u > 1e-6 ? uz / u : 0;
         plume = fuel.plume(blocks, fire, u, ClientAir.now().stability());
-        // пламя — у каждого очага своё (свет от пожара — сумма очагов, а не очаги × пламя всего пожара)
-        flame = fuel.plume(blocks, u, ClientAir.now().stability()).flameHeight();
+        // пламя и горячий газ над очагом — у каждого очага свои (свет и дрожание от пожара — сумма очагов, а не очаги ×
+        // пламя всего пожара)
+        own = fuel.plume(blocks, u, ClientAir.now().stability());
+        flame = own.flameHeight();
         visible = fuel.plume(strongest, u, ClientAir.now().stability()).visible(REACH);
     }
 
@@ -429,7 +434,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         for (FireSmoke fire : all()) {
             if (!Double.isNaN(fire.end) || fire.gone) continue;
             double dx = fire.x - eye.x, dy = fire.y - eye.y, dz = fire.z - eye.z;
-            f.plume(dx, dy, dz, fire.plume, 1);
+            f.plume(dx, dy, dz, fire.own, 1);
             if (fire.fuel != WOOD) {
                 double r = 0.5 * fire.flame;
                 f.light(dx, dy + r, dz, r, BB[0], BB[1], BB[2], air, r);

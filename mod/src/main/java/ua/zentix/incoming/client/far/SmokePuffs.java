@@ -100,13 +100,15 @@ final class SmokePuffs {
         private void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
                           int id) {
             Vec3 eye = view.camera();
-            sv = projected(sh, sv, x - eye.x, y - eye.y, z - eye.z);
+            // на экране — проекция гаусса по углу взгляда (толща по лучу и высота квадрата); в мире — его σ (разброс клубов
+            // кучки, край для рельефа и для глаза внутри)
+            double across = projected(sh, sv, x - eye.x, y - eye.y, z - eye.z);
             double ks = SmokeGrid.SOOT_K * soot, kd = SmokeGrid.dustK(dr, dg, db) * dust, kw = SmokeGrid.DROP_K * water;
-            double tau = (ks + kd + kw) / (2 * Math.PI * sh * sv);
+            double tau = (ks + kd + kw) / (2 * Math.PI * sh * across);
             double a = 1 - Math.exp(-tau);
             if (a < 0.004) return;
             double edge = edge(tau);
-            double rh = edge * sh, rv = edge * sv, r = Math.max(rh, rv);
+            double rh = edge * sh, rv = edge * across, rw = edge * sv, r = Math.max(rh, rw);
             double vis = source.visible(y, r);
             if (vis <= 0) return;
             Vec3 cam = view.camera();
@@ -145,7 +147,7 @@ final class SmokePuffs {
             double clubAge = spray ? sprayAge : age;
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
-                double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rv * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
+                double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
                 double k = size * (0.8 + 0.4 * unit(hj >>> 21));
                 double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, clubAge) + (count > 1 ? 2 * unit(hj >>> 28) : 0));
                 int f0 = (int) frame;
