@@ -2,7 +2,7 @@
 
 Коммит zentixua/incoming — в сообщении координатора. Повтор — копия войны `2026-10-09T15_24_55` (Incoming 2.10.3).
 На видеокарте — одна тяжёлая задача (между частями трейлера, не рядом с ними), не во время игры Артёма
-(`pgrep -f 'java.*PrismLauncher/instances/'` пусто). Инстанс, его миры и настройки не трогать.
+(`pgrep -f 'java.*PrismLauncher/[i]nstances/'` пусто). Инстанс, его миры и настройки не трогать.
 Пути — от `/mnt/data/projects/incoming`, `JAVA_HOME` — `java-runtime-delta` из Prism,
 `W=/mnt/data/projects/incoming/mod/run/claude-work`, `T=$W/tiktok/war`, `R=2026-10-09T15_24_55`.
 

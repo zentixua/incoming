@@ -1,7 +1,7 @@
 # Задание ноутбуку: записи Артёма на Zearth Rec — превью TikTok его глазами
 
 Коммит zentixua/incoming — в сообщении координатора; там же — какие записи брать и время моментов, если Артём назвал
-время, а не ставил маркеры. Не во время игры Артёма: начинать, когда `pgrep -f 'java.*PrismLauncher/instances/'` пусто; на
+время, а не ставил маркеры. Не во время игры Артёма: начинать, когда `pgrep -f 'java.*PrismLauncher/[i]nstances/'` пусто; на
 видеокарте — одна тяжёлая задача, клиент со всей сборкой — один. Инстанс, его миры и настройки только читать; повторы
 и данные Distant Horizons — копиями. Пути — от `/mnt/data/projects/incoming`, `JAVA_HOME` — `java-runtime-delta` из
 Prism, `W=/mnt/data/projects/incoming/mod/run/claude-work`, `T=$W/tiktok/rec`, `MC=$(python3 tools/paths.py MC)`.
