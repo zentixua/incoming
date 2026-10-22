@@ -2584,6 +2584,10 @@ public final class ClientScenario {
      */
     private void planFlyby() {
         soundEvery = 5;
+        // INCOMING_FLIGHT_SPEED=<0..1> — шкала полёта мира (пресет CUSTOM): тот же облёт на настоящих скоростях; «Град»
+        // издалека тогда летит ~80 с — облёт длиннее
+        String scale = System.getenv("INCOMING_FLIGHT_SPEED");
+        int end = scale != null && Double.parseDouble(scale) > 0 ? 2600 : 1750;
         at(40, () -> {
             cmd("time set 6000");
             cmd("weather clear");
@@ -2594,6 +2598,10 @@ public final class ClientScenario {
             c.launchNearPlayer.set(false);
             c.droneFlightTime.set(12);
             c.missileFlightTime.set(12);
+            if (scale != null) {
+                c.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
+                c.flightSpeed.set(Double.parseDouble(scale));
+            }
             aimAhead(200);
             Minecraft mc = Minecraft.getInstance();
             int y = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, 0, 0);
@@ -2602,8 +2610,17 @@ public final class ClientScenario {
         at(240, () -> cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 6 12 at %.1f %.1f %.1f", target.x, target.y, target.z)));
         at(700, () -> cmd(String.format(java.util.Locale.ROOT, "incoming missile at %.1f %.1f %.1f", target.x, target.y, target.z)));
         at(1100, () -> cmd(String.format(java.util.Locale.ROOT, "incoming drone at %.1f %.1f %.1f", target.x, target.y, target.z)));
-        for (int t = 250; t <= 1700; t += 50) at(t, ClientScenario::dumpFlights);
-        at(1750, () -> {
+        if (end > 1750) {
+            // на настоящей шкале — ещё B-2 на эшелоне 12 км: его цель в 12 км впереди зрителя, черта сброса — в ~10 км
+            // до неё, и над зрителем он проходит до сброса; камера смотрит на него (дальний вид: корпус и след на высоте)
+            at(1300, () -> cmd("incoming bunker at 0.5 12000.5"));
+            for (int t = 1850; t <= 2100; t += 5) at(t, ClientScenario::lookAtBomber);
+            at(2110, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s ~ ~ ~ facing %.1f %.1f %.1f", target.x, target.y, target.z)));
+        }
+        for (int t = 250; t <= end - 50; t += 50) at(t, ClientScenario::dumpFlights);
+        // кадры облёта: зритель смотрит на цель, снаряды идут из-за спины над ним
+        for (int t = 250; t <= end - 50; t += 5) shot(t, "flyby");
+        at(end, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });
@@ -2886,7 +2903,7 @@ public final class ClientScenario {
             ua.zentix.incoming.strike.Waypoints via = routeFired;
             if (via == null || routePassed >= via.size()) return;
             Vec3 wp = via.points().get(routePassed);
-            double near = 2 * weapon.spec().route().capture() + weapon.spec().airframe().cruiseSpeed() + 1;
+            double near = 2 * weapon.spec().capture() + weapon.spec().airframe().cruiseSpeed() + 1;
             var level = e.getServer().overworld();
             java.util.List<StrikeProjectile> flying = new ArrayList<>(ua.zentix.incoming.strike.VirtualFlights.get(level).flights());
             level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(StrikeProjectile.class), q -> !q.isRemoved()).forEach(flying::add);
@@ -3593,12 +3610,33 @@ public final class ClientScenario {
     }
 
     /** Снаряды на сервере: в мире и вне его, где, с какой скоростью, тикает ли их чанк. */
+    /** Повернуть взгляд на B-2 (по месту на сервере: в мире или вне его). */
+    private static void lookAtBomber() {
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        server.execute(() -> {
+            var level = server.overworld();
+            java.util.List<StrikeProjectile> all = new ArrayList<>(level.getEntitiesOfClass(ua.zentix.incoming.entity.BomberEntity.class,
+                    new net.minecraft.world.phys.AABB(-30_000_000, -1000, -30_000_000, 30_000_000, 40_000, 30_000_000)));
+            for (StrikeProjectile p : ua.zentix.incoming.strike.VirtualFlights.get(level).flights()) {
+                if (p instanceof ua.zentix.incoming.entity.BomberEntity) all.add(p);
+            }
+            if (all.isEmpty()) return;
+            Vec3 at = all.getFirst().position();
+            Minecraft.getInstance().execute(() -> {
+                Minecraft mc = Minecraft.getInstance();
+                mc.player.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, at);
+                Incoming.LOG.info("SCENARIO look B-2 at {} ({} blocks)", BlockPos.containing(at).toShortString(),
+                        Math.round(at.distanceTo(mc.player.getEyePosition())));
+            });
+        });
+    }
+
     private static void dumpFlights() {
         var server = Minecraft.getInstance().getSingleplayerServer();
         server.execute(() -> {
             var level = server.overworld();
             java.util.List<StrikeProjectile> all = new ArrayList<>(level.getEntitiesOfClass(StrikeProjectile.class,
-                    new net.minecraft.world.phys.AABB(-30_000_000, -1000, -30_000_000, 30_000_000, 1000, 30_000_000)));
+                    new net.minecraft.world.phys.AABB(-30_000_000, -1000, -30_000_000, 30_000_000, 40_000, 30_000_000)));
             all.addAll(ua.zentix.incoming.strike.VirtualFlights.get(level).flights());
             for (StrikeProjectile p : all) {
                 var bp = p.blockPosition();

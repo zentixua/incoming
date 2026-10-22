@@ -2,14 +2,18 @@ package ua.zentix.incoming.defense;
 
 import ua.zentix.incoming.guidance.Ballistics;
 import ua.zentix.incoming.strike.Article;
+import ua.zentix.incoming.strike.FlightScale;
 import ua.zentix.incoming.strike.WeaponSpec;
+import ua.zentix.incoming.util.Air;
 
 /**
  * Паспорт ЗРК: дальности его радара и огня, числа полёта его ракеты и изделие по ТТХ ({@link Passport}, 9М96).
  * ПВО — своя игровая модель (решение Артёма 21.10): дальности, полёт и взрыватель — игровые числа, не по физике,
  * подобраны под масштаб игры (сотни блоков видно, ракета медленнее настоящей, чтобы полёт было видно), а не данные
  * настоящего комплекса. Вероятности поражения нет: сбита цель, если ракета разорвалась у неё в радиусе взрывателя
- * ({@link Interceptor}). Число направляющих и перезарядка — правила мира ({@code air_defense}).
+ * ({@link Interceptor}). Число направляющих и перезарядка — правила мира ({@code air_defense}). Шкала полёта мира
+ * ({@link FlightScale}) ведёт наибольшую скорость ракеты от игровой к настоящей ({@link #maxSpeed()}), разгон — за те же
+ * тики ({@link #boostAccel()}); предел поворота и дальности — игровые.
  *
  * @param radarRange  дальность радара, блоков (игровая): дальше снарядов не видно, малозаметные — ближе, по их
  *                    паспорту ({@code WeaponSpec.Signature.visibility}); холм или дом между радаром и целью её
@@ -19,8 +23,8 @@ import ua.zentix.incoming.strike.WeaponSpec;
  * @param elevation   угол направляющей над горизонтом, градусов: ракета уходит вверх в сторону цели (90 — отвесно)
  * @param launchSpeed скорость схода, блоков/тик
  * @param boostTicks  тики разгона
- * @param boostAccel  прирост скорости за тик разгона, блоков/тик²
- * @param maxSpeed    наибольшая скорость, блоков/тик
+ * @param gameBoostAccel прирост скорости за тик разгона на игровой скорости, блоков/тик²
+ * @param gameMaxSpeed наибольшая скорость, блоков/тик (игровая, не по физике)
  * @param lateralG    наибольшее боковое ускорение, g: предел поворота на любой скорости ({@link #turnLimit}), поэтому
  *                    медленная ракета поворачивает круче
  * @param fuelTicks   столько тиков летит, потом самоликвидация
@@ -28,8 +32,33 @@ import ua.zentix.incoming.strike.WeaponSpec;
  * @param noseLength  полудлина корпуса, блоков (модель и срез сопла — {@code client.render.InterceptorRenderer})
  * @param passport    изделие по ТТХ
  */
-public record InterceptorSpec(double radarRange, double engageRange, int railTicks, double elevation, double launchSpeed, int boostTicks, double boostAccel, double maxSpeed,
+public record InterceptorSpec(double radarRange, double engageRange, int railTicks, double elevation, double launchSpeed, int boostTicks, double gameBoostAccel, double gameMaxSpeed,
                               double lateralG, int fuelTicks, double fuse, double noseLength, Passport passport) {
+    /** Наибольшая скорость на шкале полёта мира, блоков/тик ({@link #maxSpeed(double)}). */
+    public double maxSpeed() {
+        return maxSpeed(FlightScale.x());
+    }
+
+    /** Наибольшая скорость на шкале {@code x}, блоков/тик: от игровой к настоящей ({@link Passport#maxSpeed}). */
+    public double maxSpeed(double x) {
+        return FlightScale.blend(gameMaxSpeed, passport.maxSpeed() / 20, x);
+    }
+
+    /** Прирост скорости за тик разгона на шкале полёта мира, блоков/тик² ({@link #boostAccel(double)}). */
+    public double boostAccel() {
+        return boostAccel(FlightScale.x());
+    }
+
+    /** Прирост скорости за тик разгона на шкале {@code x}, блоков/тик²: до наибольшей за те же тики разгона. */
+    public double boostAccel(double x) {
+        return x == 0 ? gameBoostAccel : gameBoostAccel * (maxSpeed(x) - launchSpeed) / (gameMaxSpeed - launchSpeed);
+    }
+
+    /** Выше стольких блоков над уровнем моря ракета не летит: верхняя граница зоны по высоте ({@link Passport#altitudeMax}). */
+    public double ceiling() {
+        return Air.SEA + passport.altitudeMax();
+    }
+
     /**
      * Зенитная ракета по ТТХ. Единицы — СИ; «О» — оценка, выведенная законом из других чисел, с диапазоном.
      *
@@ -88,13 +117,14 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
     /**
      * Скорость после тика {@code age} полёта по закону полёта на моторе ({@link WeaponSpec.Handling#speed}: мотор тянет
      * к наибольшей скорости, набор высоты отнимает скорость, снижение прибавляет), {@code climbSine} — синус угла пути.
-     * Мотор — игровой, не по физике: на разгоне прирост {@link #boostAccel} за тик, в маршевом режиме — меньше во столько
+     * Мотор — игровой, не по физике: на разгоне прирост {@link #boostAccel()} за тик, в маршевом режиме — меньше во столько
      * раз, во сколько тяга маршевого режима паспорта меньше тяги разгона; доводит до наибольшей скорости за тик
      * (relax 1), если прирост позволяет. До первого тика — скорость схода.
      */
     public double speed(double speed, int age, double climbSine) {
-        double accel = age <= boostTicks ? boostAccel : boostAccel * passport.sustain().thrust() / passport.boost().thrust();
-        return WeaponSpec.Handling.speed(speed, maxSpeed, climbSine, accel, 1);
+        double boost = boostAccel();
+        double accel = age <= boostTicks ? boost : boost * passport.sustain().thrust() / passport.boost().thrust();
+        return WeaponSpec.Handling.speed(speed, maxSpeed(), climbSine, accel, 1);
     }
 
     /**

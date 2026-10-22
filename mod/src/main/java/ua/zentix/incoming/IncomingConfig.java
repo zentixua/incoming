@@ -33,16 +33,29 @@ public final class IncomingConfig {
     public static final double GAME_WAVE_SPEED = 0.20;
 
     /**
-     * Пресет масштаба (настройка вида «масштаб под игру»): скорость ядерной волны вдали и радиусы ядерки разом. Полёт
-     * пресет не трогает: он один, своя игровая модель (решение Артёма 21.10). Всё у цели настоящее при любом.
+     * Пресет масштаба (настройка вида «масштаб под игру»): скорость полёта, скорость ядерной волны вдали и радиусы
+     * ядерки разом. Полёт — своя игровая модель при любом (решение Артёма 21.10): шкала меняет только его скорости и
+     * высоты ({@code strike.FlightScale}, решение Артёма 22.10), не манёвр. Всё у цели настоящее при любом.
      */
     public enum ScalePreset {
-        /** Игровой: волна {@link #GAME_WAVE_SPEED} (не по физике, чтобы её было видно), радиусы 1 — как в жизни. */
+        /**
+         * Игровой: скорости и высоты полёта игровые (шкала 0), волна {@link #GAME_WAVE_SPEED} — обе не по физике, чтобы
+         * подлёт и волну было видно; радиусы 1 — как в жизни.
+         */
         GAME,
-        /** Как в жизни: волна 1, радиусы 1. */
+        /** Как в жизни: шкала полёта 1, волна 1, радиусы 1. */
         REAL,
-        /** Числа {@code nuclear.wave_speed} и {@code nuclear.effects_scale} как есть. */
+        /** Числа {@code scale.flight_speed}, {@code nuclear.wave_speed} и {@code nuclear.effects_scale} как есть. */
         CUSTOM;
+
+        /** Шкала полёта: 0 — игровые скорости и высоты, 1 — настоящие; {@code custom} — число настройки. */
+        public double flight(double custom) {
+            return switch (this) {
+                case GAME -> 0;
+                case REAL -> 1;
+                case CUSTOM -> custom;
+            };
+        }
 
         /** Скорость волны вдали, доля скорости звука; {@code custom} — число настройки. */
         public double wave(double custom) {
@@ -61,6 +74,7 @@ public final class IncomingConfig {
 
     public static final class Server {
         public final ModConfigSpec.EnumValue<ScalePreset> scalePreset;
+        public final ModConfigSpec.DoubleValue flightSpeed;
         public final ModConfigSpec.BooleanValue blockDamage;
         public final ModConfigSpec.BooleanValue shatterGlass;
         public final ModConfigSpec.BooleanValue fire;
@@ -119,6 +133,11 @@ public final class IncomingConfig {
         public final ModConfigSpec.IntValue samRails;
         public final ModConfigSpec.IntValue samReloadSeconds;
 
+        /** Шкала полёта по пресету: 0 — игровые скорости и высоты, 1 — настоящие ({@code strike.FlightScale}). */
+        public double flightSpeed() {
+            return scalePreset.get().flight(flightSpeed.get());
+        }
+
         /** Скорость ядерной волны вдали по пресету, доля скорости звука ({@code nuclear.Detonation#wave}). */
         public double waveSpeed() {
             return scalePreset.get().wave(nukeWaveSpeed.get());
@@ -131,11 +150,18 @@ public final class IncomingConfig {
 
         Server(ModConfigSpec.Builder b) {
             b.translation("incoming.config.scale").push("scale");
-            scalePreset = b.comment("Scale for play: GAME (default) slows the nuclear blast wave far from the fireball so that you can watch",
-                            "it roll in; REAL is true to life; CUSTOM takes nuclear.wave_speed and nuclear.effects_scale as they are.",
-                            "GAME: wave_speed 0.20, effects_scale 1.0; REAL: 1.0, 1.0. Flight is one game model with any preset;",
-                            "everything at the target (charge, crater, penetration, damage) is true to life with any preset.")
+            scalePreset = b.comment("Scale for play: GAME (default) flies slower and lower than in life and slows the nuclear blast wave far",
+                            "from the fireball, so that you can watch the approach and the wave; REAL is true to life; CUSTOM takes",
+                            "flight_speed, nuclear.wave_speed and nuclear.effects_scale as they are. GAME: flight_speed 0, wave_speed 0.20,",
+                            "effects_scale 1.0; REAL: 1, 1.0, 1.0. Everything at the target (charge, crater, penetration, damage) is true",
+                            "to life with any preset.")
                     .translation("incoming.config.scale_preset").defineEnum("scale_preset", ScalePreset.GAME);
+            flightSpeed = b.comment("Works with scale_preset = CUSTOM. Flight speeds and altitudes: 0 is the game values (not true to life: slower",
+                            "and lower, so that the approach is seen within a few hundred blocks), 1 is true to life, in between each weapon",
+                            "goes the same share of the way on a log scale. Changes cruise and dive speed, route altitude, B-2 release",
+                            "altitude, SAM missile speed and the Grad launch speed (a Grad launched from afar starts further away); turns and climb rates stay game values, the flight time",
+                            "settings stay, so a faster weapon starts further away.")
+                    .translation("incoming.config.flight_speed").defineInRange("flight_speed", 0.0, 0.0, 1.0);
             b.pop();
 
             b.translation("incoming.config.world").push("world");
@@ -276,7 +302,7 @@ public final class IncomingConfig {
             b.pop();
 
             b.translation("incoming.config.visibility").push("visibility");
-            farRange = b.comment("How far players see and hear projectiles in flight and conventional blasts, blocks. Beyond render distance they show",
+            farRange = b.comment("How far players see and hear projectiles in flight (horizontally, at any altitude) and conventional blasts, blocks. Beyond render distance they show",
                             "as a model (a dot when smaller than a couple of pixels), flame, trail, fireball and smoke column; sound arrives with",
                             "the speed-of-sound delay. Haze hides them anyway further out; a lower value sends fewer packets to players.",
                             "A blast is also sent as far as its sound carries on a quiet night, which depends on its charge, up to " + FAR_RANGE_MAX + " blocks.")

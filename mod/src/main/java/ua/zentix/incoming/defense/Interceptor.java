@@ -144,7 +144,7 @@ public final class Interceptor {
             return;
         }
         moveTo(next);
-        if (pos.y > level.getMaxBuildHeight() + 1024 || pos.y < level.getMinBuildHeight()) world.burst(level, this, pos, null, End.FUEL);
+        if (pos.y > spec.ceiling() || pos.y < level.getMinBuildHeight()) world.burst(level, this, pos, null, End.FUEL);
     }
 
     /**

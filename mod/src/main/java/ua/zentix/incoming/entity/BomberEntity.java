@@ -15,6 +15,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.guidance.Bearing;
 import ua.zentix.incoming.guidance.BombDrop;
 import ua.zentix.incoming.registry.ModEntities;
+import ua.zentix.incoming.strike.FlightScale;
 import ua.zentix.incoming.strike.VirtualFlights;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
@@ -24,9 +25,11 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.UUID;
 
 /**
- * B-2 на эшелоне +170 над местом, куда упадёт бомба (цель перенацелили выше или ниже, у цели крыша или башня —
+ * B-2 на эшелоне +170 над местом, куда упадёт бомба (на шкале полёта — до 12 км, {@link WeaponSpec.Airframe#cruiseHeight()};
+ * цель перенацелили выше или ниже, у цели крыша или башня —
  * эшелон меняется полого, не круче 6°): заходит издалека (большая часть пути — вне загруженного мира), идёт по прямой
- * 12 блоков/тик (240 м/с), сбрасывает бетонобойную бомбу на эшелоне за ~145 блоков до цели по горизонтали (бомба сходит с его скоростью,
+ * 12 блоков/тик (240 м/с), сбрасывает бетонобойную бомбу на эшелоне за ~145 блоков до цели по горизонтали (на любом
+ * эшелоне — под тем же углом на точку, {@link #releaseLine}; бомба сходит с его скоростью,
  * рули опускают ей нос, и она входит почти отвесно) и уходит с разворотом и набором высоты. Не на эшелоне (вернулся в мир над
  * холмом, точку перенацелили выше или ниже) — сбрасывает с той высоты, где он есть, дальше или ближе: B-2 проигрывает
  * падение бомбы ({@link BombDrop#releaseNow}); промах отовсюду (точка слишком близко впереди, сзади, выше него) —
@@ -35,10 +38,17 @@ import java.util.UUID;
 public class BomberEntity extends StrikeProjectile {
     /** Паспорт B-2: скорость, разворот (радиус ~690 блоков), эшелон над точкой сброса. */
     private static final WeaponSpec.Airframe AIR = WeaponSpec.BUNKER.airframe();
-    /** Эшелон над точкой, куда упадёт бомба. */
-    private static final double ALTITUDE = AIR.cruiseHeight();
-    /** Дальность сброса на эшелоне, по горизонтали до точки. */
-    private static final double RELEASE_DISTANCE = WeaponSpec.BUNKER.route().finalLeg();
+    /**
+     * Дальность сброса на игровом эшелоне ({@link #GAME_ALTITUDE}): угол на точку при сбросе один на любой высоте —
+     * бомба опускает нос и идёт на точку по той же прямой ({@link #releaseLine}).
+     */
+    private static final double GAME_RELEASE = WeaponSpec.BUNKER.route().gameFinalLeg();
+    /** Игровой эшелон над точкой сброса. */
+    private static final double GAME_ALTITUDE = AIR.gameHeight();
+    /** Дальность сброса к высоте над точкой. */
+    private static final double RELEASE_RATIO = GAME_RELEASE / GAME_ALTITUDE;
+    /** Падение бомбы с игрового эшелона до удара, тиков (оценка: ~20). */
+    private static final int FALL_TICKS = 20;
     /** Смена эшелона: тангаж не круче этого, ° (набор и снижение B-2 — пологие). */
     private static final double LEVEL_CHANGE_PITCH = 6;
     /** Тангаж на блок ошибки эшелона, °: у эшелона — плавный выход в горизонт. */
@@ -97,13 +107,13 @@ public class BomberEntity extends StrikeProjectile {
         return released;
     }
 
-    /** До удара бомбы: дойти до точки сброса и ~20 тиков падения (без второго захода — его заранее не знает никто). */
+    /** До удара бомбы: дойти до точки сброса и падение ({@link #fallTicks}; без второго захода — его заранее не знает никто). */
     @Override
     public int etaTicks() {
         if (tracker == null) return 0;
         Vec3 aim = tracker.point();
         Bearing b = bearingTo(aim);
-        return (int) Math.ceil(Math.max(0, b.horizontal() - releaseLine(getY() - aim.y)) / AIR.cruiseSpeed()) + 20;
+        return (int) Math.ceil(Math.max(0, b.horizontal() - releaseLine(getY() - aim.y)) / AIR.cruiseSpeed()) + fallTicks();
     }
 
     /** Скорость B-2 в горизонтальном полёте курсом {@code yaw}, блоков/тик: с ней же сходит бомба. */
@@ -112,11 +122,30 @@ public class BomberEntity extends StrikeProjectile {
     }
 
     /**
-     * Дальность сброса с высоты {@code height} над точкой: угол на точку тот же, что на эшелоне ({@link #RELEASE_DISTANCE}
-     * с {@link #ALTITUDE}). Сброс бывает и раньше — на краю окна, откуда бомба ещё попадает ({@link BombDrop#releaseNow}).
+     * Дальность сброса с высоты {@code height} над точкой: угол на точку тот же, что на игровом эшелоне.
+     * Сброс бывает и раньше — на краю окна, откуда бомба ещё попадает ({@link BombDrop#releaseNow}).
      */
     public static double releaseLine(double height) {
-        return height * RELEASE_DISTANCE / ALTITUDE;
+        return height * GAME_RELEASE / GAME_ALTITUDE;
+    }
+
+    /** Эшелон над точкой, куда упадёт бомба, на шкале полёта мира: игровой +170, настоящий — 12 км. */
+    private static double altitude() {
+        return AIR.cruiseHeight();
+    }
+
+    /** Дальность сброса на эшелоне, по горизонтали до точки. */
+    private static double releaseDistance() {
+        return releaseLine(altitude());
+    }
+
+    /**
+     * Падение бомбы с эшелона до удара, тиков (оценка): путь — в столько раз длиннее игрового, во сколько выше эшелон,
+     * скорость — во сколько быстрее B-2, с которой она сходит; при игровой шкале — {@link #FALL_TICKS}.
+     */
+    private static int fallTicks() {
+        double x = FlightScale.x();
+        return (int) Math.round(FALL_TICKS * AIR.cruiseHeight(x) / GAME_ALTITUDE / AIR.stretch(x));
     }
 
     /**
@@ -124,7 +153,7 @@ public class BomberEntity extends StrikeProjectile {
      * @param goal    цель под землёй или null
      */
     public void launch(Vec3 pos, Vec3 surface, @Nullable BlockPos goal, @Nullable UUID owner) {
-        Vec3 start = new Vec3(pos.x, surface.y + ALTITUDE, pos.z);
+        Vec3 start = new Vec3(pos.x, surface.y + altitude(), pos.z);
         super.launch(start, new Target.Point(surface), surface, owner);
         this.goal = goal;
         this.speed = AIR.cruiseSpeed();
@@ -141,11 +170,11 @@ public class BomberEntity extends StrikeProjectile {
         double echelon = 0;
         if (!released) {
             Vec3 drop = surfaceUnder(level, aim);
-            echelon = drop.y + ALTITUDE;
+            echelon = drop.y + altitude();
             // сброс — когда бомба, сброшенная сейчас, придёт в точку, и лучше уже не будет (BombDrop.releaseNow): со 170
             // за 100 блоков бомба со скоростью B-2 перелетает точку на ~75, на точку в 40 блоках впереди — на ~150; сзади
             // (бомба падает по курсу и назад не рулит) — не сбрасывать вовсе
-            if (ahead(drop) && BombDrop.releaseNow(position(), flight.forward().scale(speed), drop, RELEASE_DISTANCE / ALTITUDE)) {
+            if (ahead(drop) && BombDrop.releaseNow(position(), flight.forward().scale(speed), drop, RELEASE_RATIO)) {
                 release(level, drop);
             }
         }
@@ -168,7 +197,7 @@ public class BomberEntity extends StrikeProjectile {
             flight.holdPitch(Mth.clamp((getY() - echelon) * PITCH_PER_BLOCK, -LEVEL_CHANGE_PITCH, LEVEL_CHANGE_PITCH), 0.1,
                     cruise.pitchRate(), cruise.pitchAccel());
         }
-        if (!released && b.horizontal() > RELEASE_DISTANCE + 40) {
+        if (!released && b.horizontal() > releaseDistance() + 40) {
             // точка сброса внутри круга разворота (перенацелили сбоку, проскочил её): на пределе поворота он
             // кружил бы вокруг неё без конца — прямо, пока она не выйдет из круга, и новый заход
             if (insideTurn(aim, AIR.turnRate())) flight.settleYaw(cruise.turnAccel());

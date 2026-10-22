@@ -91,9 +91,26 @@ fragment leaves a pit of a few centimetres (not physical).
 ## How they fly
 
 Flight is the mod's own game model, not a copy of the real weapons: the same rules for every weapon, with each one's
-own game numbers (not physical, chosen for blocks and for how a flight reads on screen). Speeds and flight heights are
-lower than the real ones so that you can see the approach within a few hundred blocks; a Grad battery stands 600
-blocks from the target, not 5–20 km. Everything at the target (charge, blast, damage) is real.
+own game numbers (not physical, chosen for blocks and for how a flight reads on screen). Everything at the target
+(charge, blast, damage) is real.
+
+By default speeds and flight heights are game values, lower than the real ones (not physical): a block is a metre,
+but you see only a few hundred blocks, and at real speed a fast weapon crosses that in a second or two. The world
+setting [`scale.flight_speed`](settings.md#world-settings) (or the REAL preset) brings them up to the real ones: 0 is
+the game values, 1 is true to life, and in between every weapon goes the same share of the way, so their order stays.
+
+| | Game (0) | Real (1) |
+|---|---|---|
+| Shahed | 42 m/s, dive 60 m/s, 45 blocks up | 51 m/s, dive 105 m/s, 2 km up |
+| Lancet | 32 m/s, dive 80 m/s, circles 45 blocks up | 31 m/s, dive 83 m/s, circles 700 m up |
+| Cruise missile | 80 m/s, dive 100 m/s, 12 blocks over the terrain | 250 m/s, 40 m over the terrain |
+| Grad, leaving the tubes | 80 m/s from a battery 600 blocks away | 683 m/s from about 19 km |
+| B-2 | 240 m/s, 170 blocks over the drop point | 250 m/s, 12 km up |
+| SAM missile | 280 m/s | 1000 m/s |
+
+Turns and climb rates stay game values, so a faster weapon turns wider. Flight times stay, so a faster weapon starts
+further away. A Grad battery near you still fires from where it stands; only a battery placed without you stands
+further away. At 1 the B-2 bomb falls for about 50 seconds after the drop, so it arrives that much later.
 
 - **Turns** build up and ease off smoothly; nothing turns on the spot. A Shahed or a missile banks into a turn, the
   harder the turn the steeper the bank.
@@ -104,8 +121,9 @@ blocks from the target, not 5–20 km. Everything at the target (charge, blast, 
   small spread in angle and speed, so the impacts scatter by about 1 % of the range. The Grad also fires at targets
   closer than its real minimum of about 5 km (not physical: the rockets leave the tubes slower than real ones).
 - **The bomb** falls under gravity and drag; its fins steer it to the aim point. It leaves the B-2 with the bomber's own speed,
-  so the B-2 releases it about 145 blocks before the target, and it comes down almost vertically. The wind barely
-  moves it.
+  so the B-2 releases it about 145 blocks before the target (at 12 km up, about 10 km), and it comes down almost
+  vertically. The wind barely moves it. Towards real speeds the drag of the Grad rocket and the bomb also goes from
+  the game value to the real one, with the rise near the speed of sound.
 
 ## Shahed
 
@@ -153,12 +171,12 @@ detects the B-2 very late. Can carry a nuclear warhead.
 
 **How deep it goes.** The bomb hits the ground with the speed and angle its fall gives it and keeps going in a straight
 line. How far depends on that speed, on the bomb (13.6 t, 0.8 m across, a pointed nose) and on what it goes through:
-Young's penetration equations (Sandia, 1997), layer by layer. In the game the B-2 flies 170 blocks up instead of about
-12 km (not by physics, so you can see it). The bomb leaves it at the bomber's 240 m/s and falls with gravity and
-drag, so it hits at about 235 m/s instead of about 510 m/s. So it goes
-through:
+Young's penetration equations (Sandia, 1997), layer by layer. With game flight speeds the B-2 flies 170 blocks up
+instead of about 12 km (not by physics, so you can see it). The bomb leaves it at the bomber's 240 m/s and falls with
+gravity and drag, so it hits at about 235 m/s instead of about 510 m/s. With `scale.flight_speed` 1 the B-2 flies at
+12 km and the bomb hits at about 510 m/s. So it goes through:
 
-| | In the game (≈235 m/s) | Real drop (≈510 m/s) |
+| | Game flight speeds (≈235 m/s) | Real drop, `flight_speed` 1 (≈510 m/s) |
 |---|---|---|
 | Stone, concrete | ≈4 blocks | ≈8–9 m |
 | Deepslate | ≈3 blocks | ≈7 m |

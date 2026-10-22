@@ -941,7 +941,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     protected Vec3 navPoint(Vec3 aim) {
         if (route != null && !route.finished()) {
-            route.update(position(), weapon().spec().route().capture());
+            route.update(position(), weapon().spec().capture());
             Vec3 wp = route.current();
             if (wp != null) return new Vec3(wp.x, aim.y, wp.z);
             if (route.byOperator()) onRouteDone(aim);
@@ -1471,10 +1471,16 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return s != null ? s.z() : getZ();
     }
 
+    /**
+     * Дальше стольких блоков сущность снаряда свою модель не рисует ({@link #shouldRenderAtSqrDistance}): корпус там —
+     * у дальней картинки ({@code client.far.FarView#entityReach}).
+     */
+    public static final double DRAW_RANGE = 1024;
+
     @Override
     public boolean shouldRenderAtSqrDistance(double distanceSq) {
         // видно издалека: ограничивает только дальность отслеживания сущности сервером
-        return distanceSq < 1024 * 1024;
+        return distanceSq < DRAW_RANGE * DRAW_RANGE;
     }
 
     // ---------------------------------------------------------------- сохранение

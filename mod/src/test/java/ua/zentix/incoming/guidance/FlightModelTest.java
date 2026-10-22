@@ -89,7 +89,7 @@ class FlightModelTest {
     @Test
     void noDragIsTheParabola() {
         Vec3 from = new Vec3(0, 80, 0), v0 = new Vec3(2, 3, 1);
-        Ballistics.Path p = Ballistics.fly(from, v0, 0, Ballistics.Wind.CALM, -1000, 300);
+        Ballistics.Path p = Ballistics.fly(from, v0, Ballistics.Drag.of(0), Ballistics.Wind.CALM, -1000, 300);
         for (int k = 0; k <= 250; k += 25) {
             Vec3 exact = from.add(v0.scale(k)).add(0, -Ballistics.GRAVITY * k * k / 2, 0);
             assertEquals(0, p.at(k).distanceTo(exact), 1e-6, "тик " + k);
@@ -99,7 +99,7 @@ class FlightModelTest {
     /** Расчёт огня при известном ветре приводит «Град» в точку; с сопротивлением спуск круче подъёма. */
     @Test
     void gradFireSolutionLandsOnTarget() {
-        double drag = WeaponSpec.ROCKET.airframe().ballistic().drag();
+        Ballistics.Drag drag = WeaponSpec.ROCKET.airframe().drag(0);
         Vec3 from = new Vec3(0, 70, 0);
         // и цель выше пусковой: на 250 блоках на 180 выше — снаряд проходит её ещё на подъёме
         for (Vec3 to : List.of(new Vec3(0, 64, 150), new Vec3(400, 90, 400), new Vec3(-1500, 64, 900), new Vec3(3000, 64, -200),
@@ -123,9 +123,9 @@ class FlightModelTest {
     @Test
     void dragNeedsFasterLaunch() {
         Vec3 from = Vec3.ZERO, to = new Vec3(0, 0, 2000);
-        double drag = WeaponSpec.ROCKET.airframe().ballistic().drag();
+        Ballistics.Drag drag = WeaponSpec.ROCKET.airframe().drag(0);
         double withDrag = Ballistics.aim(from, to, 50, drag, Ballistics.Wind.CALM).length();
-        double vacuum = Ballistics.aim(from, to, 50, 0, Ballistics.Wind.CALM).length();
+        double vacuum = Ballistics.aim(from, to, 50, Ballistics.Drag.of(0), Ballistics.Wind.CALM).length();
         assertEquals(Math.sqrt(Ballistics.GRAVITY * 2000 / Math.sin(Math.toRadians(100))), vacuum, 0.05);
         assertTrue(withDrag > vacuum * 1.05, withDrag + " против " + vacuum);
     }
@@ -136,7 +136,7 @@ class FlightModelTest {
      */
     @Test
     void gradDriftsDownwindAndScatters() {
-        double drag = WeaponSpec.ROCKET.airframe().ballistic().drag();
+        Ballistics.Drag drag = WeaponSpec.ROCKET.airframe().drag(0);
         Vec3 from = new Vec3(0, 64, 0), to = new Vec3(0, 64, 600);
         // по x дует ветер: у земли 0,25 блока/тик, на 200 блоках — 0,5
         Ballistics.Wind real = new Ballistics.Wind() {

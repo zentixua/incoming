@@ -1,6 +1,7 @@
 package ua.zentix.incoming.guidance;
 
 import net.minecraft.world.phys.Vec3;
+import ua.zentix.incoming.strike.Article;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.util.StandardAtmosphere;
 
@@ -20,6 +21,34 @@ public final class Ballistics {
     private static final double RHO0 = StandardAtmosphere.density(0);
 
     private Ballistics() {}
+
+    /**
+     * Сопротивление полёта без мотора: ускорение = coefficient · ρ/ρ₀ · f(M)<sup>mach</sup> · |v|·v (v — относительно
+     * воздуха, блоков/тик), ρ — стандартной атмосферы на высоте, f(M) — кривая {@link Article#machFactor} по скорости
+     * звука на высоте. Игровое ({@code WeaponSpec.Ballistic#drag}) — без кривой ({@code mach} 0); настоящее изделия —
+     * ρ₀·CdA/2m с кривой целиком; шкала полёта ведёт оба числа ({@code WeaponSpec.Airframe#drag}).
+     *
+     * @param coefficient коэффициент на уровне моря, 1/блок
+     * @param mach        показатель кривой f(M): 0 — без неё, 1 — вся
+     */
+    public record Drag(double coefficient, double mach) {
+        /** Игровое: без кривой f(M). */
+        public static Drag of(double coefficient) {
+            return new Drag(coefficient, 0);
+        }
+
+        /** Коэффициент на высоте мира {@code y} при скорости {@code speed} блоков/тик относительно воздуха, 1/блок. */
+        public double at(double y, double speed) {
+            double h = y - Air.SEA;
+            return coefficient * StandardAtmosphere.density(h) / RHO0 * machTerm(h, speed);
+        }
+
+        /** f(M)<sup>mach</sup>; без кривой — ровно 1 (игровая траектория не меняется ни в одном бите). */
+        private double machTerm(double h, double speed) {
+            if (mach == 0) return 1;
+            return Math.pow(Article.machFactor(speed * 20 / StandardAtmosphere.soundSpeed(h)), mach);
+        }
+    }
 
     /** Ветер на высоте мира: блоков/тик по x и z. */
     public interface Wind {
@@ -137,11 +166,10 @@ public final class Ballistics {
     }
 
     /**
-     * Полёт из {@code start} со скоростью {@code v0} (блоков/тик) с сопротивлением {@code drag} (1/блок на уровне моря,
-     * {@code WeaponSpec.Ballistic#drag}) и ветром {@code wind}: до {@code maxTicks} тиков или пока путь не уйдёт ниже
-     * {@code floor}.
+     * Полёт из {@code start} со скоростью {@code v0} (блоков/тик) с сопротивлением {@code drag} ({@link Drag}) и ветром
+     * {@code wind}: до {@code maxTicks} тиков или пока путь не уйдёт ниже {@code floor}.
      */
-    public static Path fly(Vec3 start, Vec3 v0, double drag, Wind wind, double floor, int maxTicks) {
+    public static Path fly(Vec3 start, Vec3 v0, Drag drag, Wind wind, double floor, int maxTicks) {
         int cap = Math.max(2, maxTicks + 1);
         double[] xs = new double[cap], ys = new double[cap], zs = new double[cap];
         double[] s = {start.x, start.y, start.z, v0.x, v0.y, v0.z};
@@ -164,11 +192,12 @@ public final class Ballistics {
      * Один тик: {@code s} = {x, y, z, vx, vy, vz}. На каждом шаге ускорение — в начале шага, место — с его половиной
      * (p += v·dt + a·dt²/2): без сопротивления это точная парабола p = start + v0·t − g·t²/2.
      */
-    static void step(double[] s, double drag, Wind wind) {
+    static void step(double[] s, Drag drag, Wind wind) {
         double dt = 1.0 / SUBSTEPS;
         for (int i = 0; i < SUBSTEPS; i++) {
             double rx = s[3] - wind.x(s[1]), ry = s[4], rz = s[5] - wind.z(s[1]);
-            double k = drag * StandardAtmosphere.density(s[1] - Air.SEA) / RHO0 * Math.sqrt(rx * rx + ry * ry + rz * rz);
+            double v = Math.sqrt(rx * rx + ry * ry + rz * rz);
+            double k = drag.at(s[1], v) * v;
             double ax = -k * rx, ay = -k * ry - GRAVITY, az = -k * rz;
             s[0] += (s[3] + ax * dt / 2) * dt;
             s[1] += (s[4] + ay * dt / 2) * dt;
@@ -185,7 +214,7 @@ public final class Ballistics {
      * Ньютоном по этим двум промахам (производные — разностями; высота на дальности растёт со скоростью); начальное
      * приближение — парабола без сопротивления. Не сошлось (точка выше досягаемого) — лучшее, что нашлось.
      */
-    public static Vec3 aim(Vec3 from, Vec3 to, float elevation, double drag, Wind wind) {
+    public static Vec3 aim(Vec3 from, Vec3 to, float elevation, Drag drag, Wind wind) {
         double dx = to.x - from.x, dz = to.z - from.z;
         double d = Math.max(1, Math.sqrt(dx * dx + dz * dz));
         double el = Math.toRadians(elevation), az = Math.atan2(dz, dx);
@@ -219,7 +248,7 @@ public final class Ballistics {
     }
 
     /** Снаряд из {@code from} со скоростью {@code v0} приходит к {@code to} ({@link Path#arrival}) ближе {@code tolerance}. */
-    public static boolean hits(Vec3 from, Vec3 v0, Vec3 to, double drag, Wind wind, double tolerance) {
+    public static boolean hits(Vec3 from, Vec3 v0, Vec3 to, Drag drag, Wind wind, double tolerance) {
         double d = Math.sqrt(to.subtract(from).horizontalDistanceSqr());
         int maxTicks = (int) Math.min(6000, 3 * d / Math.max(0.05, v0.horizontalDistance()) + 400);
         Path p = fly(from, v0, drag, wind, Math.min(to.y, from.y) - 64, maxTicks);
@@ -236,7 +265,7 @@ public final class Ballistics {
      * Промах на дальности точки: {высота пути там − высота точки, отклонение вбок (влево — плюс)}. Не долетает до её
      * дальности — высота самой низкой точки пути за вычетом недолёта (растёт со скоростью, как и высота на дальности).
      */
-    private static double[] miss(Vec3 from, Vec3 to, double speed, double el, double az, double drag, Wind wind, int maxTicks) {
+    private static double[] miss(Vec3 from, Vec3 to, double speed, double el, double az, Drag drag, Wind wind, int maxTicks) {
         double dx = to.x - from.x, dz = to.z - from.z, d = Math.max(1e-9, Math.sqrt(dx * dx + dz * dz));
         double ux = dx / d, uz = dz / d;
         Path p = fly(from, velocity(speed, el, az), drag, wind, Math.min(to.y, from.y) - d, maxTicks);
