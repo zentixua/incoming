@@ -30,8 +30,8 @@ public final class Envelopes extends SimplePreparableReloadListener<Map<String, 
     /** События, которые сводит {@link Mix}: ракурсы обычного взрыва и звуки бомбы. */
     static final List<String> EVENTS = List.of("blast.near", "blast.mid", "blast.far", "blast.sub", "bomb.impact", "bomb.deep", "bomb.vent",
             "bomb.cave", "bomb.quake");
-    /** Огибающей нет (запись не прочиталась): громкость файла весь срок {@link #FALLBACK_TICKS} — с запасом. */
-    static final int FALLBACK_TICKS = 100;
+    /** Огибающей нет (запись не прочиталась): громкость потолка весь срок {@link #FALLBACK_TICKS} — длиннее любой записи взрыва. */
+    static final int FALLBACK_TICKS = 600;
 
     private volatile Map<String, float[]> envelopes = Map.of();
 
