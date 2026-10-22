@@ -306,6 +306,11 @@ public final class IncomingClient {
     private static boolean nukeWarmed;
 
     private static void logout(ClientPlayerNetworkEvent.LoggingOut e) {
+        resetSession();
+    }
+
+    /** Всё, что клиент держит о мире: звуки, пути, эффекты, ядерка, карта; выход из мира (и песочница эффектов devtest). */
+    public static void resetSession() {
         ClientSounds.reset();
         FlightTracks.logout();
         FarRenderer.reset();

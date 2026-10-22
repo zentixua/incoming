@@ -59,6 +59,8 @@ cd mod && ./gradlew runScenarioSweep      # одни сценарии полёт
                                           # -PscenarioOnly=<регвыр> — выбор, -PscenarioRealChunks — настоящая загрузка)
 cd mod && ./gradlew runScenarioRecord     # записать эталон траекторий заново (сдвиг — объяснить в PR по сценариям)
 tools/client_scenario.sh nuke             # клиент без окна: mod/run/scenario/screenshots/*.png, audio.wav, logs
+tools/sandbox.sh shot <имя> '<эффект>'    # картинка и звук: кадры и WAV одного эффекта за ~10 с после правки, без нового
+                                          # клиента (start — один раз); полная сборка под Iris — один раз в конце (client-scenario.md)
 tools/deploy.sh                           # jar → dist/ (для друзей) и mods/ инстанса без автообновления сборки
 python3 tools/logscan.py [--since 18:30]  # после игры: ошибки мода, удары, подрывы, Sable
 ```

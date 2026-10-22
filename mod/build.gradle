@@ -16,15 +16,19 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }
-    // юнит-тесты чистых частей проверок (разбор сценария commands — CommandPlanTest)
+    // агент горячей замены песочницы эффектов (tools/sandbox.sh): свой jar для -javaagent, без Minecraft, в мод не входит
+    sandboxAgent {}
+    // юнит-тесты чистых частей проверок (разбор сценария commands — CommandPlanTest, команды песочницы, агент)
     test {
-        compileClasspath += sourceSets.devtest.output
-        runtimeClasspath += sourceSets.devtest.output
+        compileClasspath += sourceSets.devtest.output + sourceSets.sandboxAgent.output
+        runtimeClasspath += sourceSets.devtest.output + sourceSets.sandboxAgent.output
     }
 }
 configurations {
     devtestCompileOnly.extendsFrom compileOnly
     devtestImplementation.extendsFrom implementation
+    // моды песочницы эффектов (copyRuntimeMods_scenario при INCOMING_SANDBOX)
+    sandboxMods { transitive = false }
 }
 
 repositories {
@@ -61,7 +65,10 @@ def lssModPatterns = System.getenv('INCOMING_LSS') ? ['lod-server-support-neofor
 def lithiumModPatterns = project.hasProperty('withLithium') ? ['lithium-neoforge-*.jar'] : []
 
 // каталог клиента сценария; в мультиплеере у каждого клиента свой (tools/mp_scenario.sh)
-def scenarioDir = project.findProperty('scenarioDir') ?: 'run/scenario'
+// песочница эффектов (tools/sandbox.sh): сценарий sandbox в своём каталоге, только мод (+ Iris и DH по желанию) и
+// агент горячей замены, который следит за каталогами классов мода
+def sandbox = System.getenv('INCOMING_SANDBOX') != null
+def scenarioDir = project.findProperty('scenarioDir') ?: (sandbox ? 'run/sandbox' : 'run/scenario')
 
 neoForge {
     version = project.neo_version
@@ -100,7 +107,15 @@ neoForge {
             programArguments.addAll '--width', size[0], '--height', size[1]
             // трейлер проверяет, что кадр ровно такой (окно в KWin иначе уменьшается на заголовок)
             systemProperty 'incoming.frame', size.join('x')
-            environment 'ALSOFT_CONF', project.file('run/scenario/alsoft.conf').absolutePath
+            environment 'ALSOFT_CONF', project.file(sandbox ? "${scenarioDir}/alsoft.conf" : 'run/scenario/alsoft.conf').absolutePath
+            if (sandbox) {
+                def classes = [sourceSets.main, sourceSets.devtest].collect { it.java.destinationDirectory.get().asFile.absolutePath }
+                jvmArgument "-javaagent:${project.file('build/sandbox/sandbox-agent.jar').absolutePath}=" +
+                        ([project.file("${scenarioDir}/fx/hotswap").absolutePath] + classes).join(';')
+                // JetBrains Runtime (INCOMING_SANDBOX_JAVA, флаг он знает — проверяет tools/sandbox.sh): замена принимает
+                // и новые поля, методы, лямбды; обычная JVM с этим флагом не стартует
+                if (System.getenv('INCOMING_SANDBOX_ENHANCED')) jvmArgument '-XX:+AllowEnhancedClassRedefinition'
+            }
             // LSS раздаёт LOD и встроенным сервером одиночной игры — своим тестовым свойством (иначе только по сети)
             if (System.getenv('INCOMING_LSS')) systemProperty 'lss.test.integratedServer', 'true'
             // паузы сборщика мусора — чтобы отличать их от медленного кода (run/scenario/logs/gc.log)
@@ -216,6 +231,8 @@ dependencies {
         version { strictly "[${sable_companion_version},2.0)"; prefer sable_companion_version }
     }
 
+    sandboxMods "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
+
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -241,9 +258,15 @@ offroad = ["+simulated"]
 aeronautics = ["+simulated", "+offroad"]
 """
 def writeFmlOverrides = { File gameDir ->
+    File config = new File(gameDir, 'config/fml.toml')
+    // песочница — только мод: переопределение отсутствующих модов FML показывает экраном предупреждений до главного
+    // меню, и клиент без окна на нём стоит
+    if (sandbox && gameDir == project.file(scenarioDir)) {
+        if (config.isFile() && config.text.startsWith(fmlDependencyOverrides.readLines().first())) config.delete()
+        return
+    }
     // без Create Aeronautics в сборке запуска переопределять нечего
     if (!(mcModsDir.isDirectory() && mcModsDir.list().any { it.contains('aeronautics') })) return
-    File config = new File(gameDir, 'config/fml.toml')
     config.parentFile.mkdirs()
     config.text = fmlDependencyOverrides
 }
@@ -277,7 +300,10 @@ tasks.register('rigLaunch') {
             copy.bytes = src.bytes
             return '@' + copy.absolutePath
         }
-        List<String> cmd = [run.javaLauncher.get().executablePath.asFile.absolutePath]
+        // песочница с JetBrains Runtime (INCOMING_SANDBOX_JAVA — его bin/java): горячая замена и новых полей и методов
+        String java = sandbox && System.getenv('INCOMING_SANDBOX_JAVA') ? System.getenv('INCOMING_SANDBOX_JAVA')
+                : run.javaLauncher.get().executablePath.asFile.absolutePath
+        List<String> cmd = [java]
         // allJvmArgs у JavaExec не несёт явных jvmArgs задачи, а в них @файл MDG (модули, --add-opens, -D запуска)
         cmd += ((run.jvmArgs ?: []) + run.allJvmArgs.findAll { !(it in (run.jvmArgs ?: [])) }).collect(own)
         cmd += ['-cp', run.classpathProvider.asPath, run.mainClass.get()]
@@ -296,11 +322,15 @@ tasks.register('rigLaunch') {
 // Копирует моды сборки в каталог запуска: FML сам распакует вложенные jar (Flywheel, Ponder, Veil…)
 def copyRuntimeMods = { String runDir ->
     tasks.register("copyRuntimeMods_${runDir}", Sync) {
-        def patterns = runDir == 'scenario' ? runtimeModPatterns + shaderModPatterns + dhModPatterns + voxyModPatterns + lssModPatterns
+        // песочница — без Create и Sable (старт за секунды); sable-companion в dev не вшит — его jar рядом
+        if (sandbox && runDir == 'scenario') from(configurations.sandboxMods)
+        def patterns = runDir == 'scenario' ? (sandbox ? [] : runtimeModPatterns) + shaderModPatterns + dhModPatterns + voxyModPatterns + lssModPatterns
                 : runDir in ['gametest', 'scenario-sweep', 'scenario-record'] ? runtimeModPatterns + lithiumModPatterns : runtimeModPatterns
-        from(mcModsDir) { patterns.each { include it } }
-        into({ "${project.findProperty(runDir + 'Dir') ?: 'run/' + runDir}/mods" })
-        onlyIf { mcModsDir.isDirectory() }
+        // без шаблонов from() взял бы весь каталог модов; шаблоны — у этого from(): в замыкании each include ушёл бы
+        // в корень задачи и отсеял бы и jar песочницы
+        if (patterns) from(mcModsDir, { CopySpec spec -> spec.include(patterns) } as Action<CopySpec>)
+        into({ "${runDir == 'scenario' ? scenarioDir : project.findProperty(runDir + 'Dir') ?: 'run/' + runDir}/mods" })
+        onlyIf { sandbox && runDir == 'scenario' || mcModsDir.isDirectory() }
     }
 }
 ['client', 'server', 'gametest', 'scenario', 'scenario-sweep', 'scenario-record'].each { copyRuntimeMods(it) }
@@ -312,7 +342,10 @@ tasks.register('copyRuntimeMods_stress', Sync) {
 tasks.matching { it.name in ['runStressServer', 'runStressClient'] }.configureEach { dependsOn 'copyRuntimeMods_stress' }
 tasks.matching { it.name == 'runClient' }.configureEach { dependsOn 'copyRuntimeMods_client' }
 tasks.matching { it.name == 'runServer' }.configureEach { dependsOn 'copyRuntimeMods_server' }
-tasks.matching { it.name == 'runClientScenario' }.configureEach { dependsOn 'copyRuntimeMods_scenario' }
+tasks.matching { it.name == 'runClientScenario' }.configureEach {
+    dependsOn 'copyRuntimeMods_scenario'
+    if (sandbox) dependsOn 'sandboxAgentJar'
+}
 tasks.matching { it.name == 'runGameTestServer' }.configureEach { dependsOn 'copyRuntimeMods_gametest' }
 tasks.matching { it.name == 'runScenarioSweep' }.configureEach { dependsOn 'copyRuntimeMods_scenario-sweep' }
 tasks.matching { it.name == 'runScenarioRecord' }.configureEach { dependsOn 'copyRuntimeMods_scenario-record' }
@@ -346,6 +379,15 @@ tasks.named('jar', Jar) {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.compilerArgs += ['-Xlint:all,-processing,-serial,-classfile,-this-escape', '-Xmaxerrs', '1000']
+}
+
+// Агент горячей замены песочницы эффектов (src/sandboxAgent, tools/sandbox.sh): -javaagent у клиента песочницы
+tasks.register('sandboxAgentJar', Jar) {
+    archiveBaseName = 'sandbox-agent'
+    archiveVersion = ''
+    destinationDirectory = layout.buildDirectory.dir('sandbox')
+    from(sourceSets.sandboxAgent.output)
+    manifest.attributes('Premain-Class': 'ua.zentix.hotswap.HotswapAgent', 'Can-Redefine-Classes': 'true')
 }
 
 // Тестовая сборка для боевого клиента (tools/prod_client.py): мод вместе со сценариями из devtest.
