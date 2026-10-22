@@ -55,7 +55,7 @@ public final class FarFlights {
         return flights;
     }
 
-    /** Докуда игрокам видно снаряды и взрывы, блоков (настройка мира). */
+    /** Докуда игрокам видно снаряды (по горизонтали) и взрывы, блоков (настройка мира). */
     public static double range() {
         return IncomingConfig.SERVER.farRange.get();
     }
@@ -71,7 +71,9 @@ public final class FarFlights {
         Propagation.Weather weather = Propagation.Weather.of(level);
         List<Candidate> found = new ArrayList<>();
         for (StrikeProjectile p : flights) {
-            double d2 = p.position().distanceToSqr(eye);
+            // видно и ближние — по горизонтали, как прорисовку и отслеживание сущностей: высота полёта (B-2 на настоящем
+            // эшелоне 12 км при шкале полёта 1) снаряд над головой не прячет
+            double d2 = p.position().subtract(eye).horizontalDistanceSqr();
             boolean audible = Hearing.audible(p, eye, weather);
             if (!audible && d2 > sight * sight) continue;
             if (player == null || p.isVirtual() || !seenBy(level, p, player)) found.add(new Candidate(p, d2, audible));

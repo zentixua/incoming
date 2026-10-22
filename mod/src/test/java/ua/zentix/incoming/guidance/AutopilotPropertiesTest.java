@@ -273,7 +273,7 @@ class AutopilotPropertiesTest {
             Vec3 direct = aim.subtract(start);
             double turn = r.nextDouble(-Math.PI / 3, Math.PI / 3);
             Vec3 approach = new Vec3(direct.x * Math.cos(turn) - direct.z * Math.sin(turn), 0, direct.x * Math.sin(turn) + direct.z * Math.cos(turn));
-            route = Route.plan(start, aim, approach, distance * r.nextDouble(1, 1.5), s.weapon.spec.route().finalLeg(), r.nextBoolean() ? 1 : -1);
+            route = Route.plan(start, aim, approach, distance * r.nextDouble(1, 1.5), s.weapon.spec.finalLeg(), r.nextBoolean() ? 1 : -1);
         }
         Vec3 first = route != null && route.current() != null ? route.current() : aim;
         c.flight.set(FlightController.anglesTo(start, new Vec3(first.x, start.y, first.z))[0], 0);

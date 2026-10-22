@@ -105,7 +105,7 @@ class WeaponSpecTest {
     void sirenBeforeFinalLeg() {
         for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.BUNKER)) {
             double warned = w.sirenLead() * w.airframe().cruiseSpeed();
-            assertTrue(warned >= w.route().finalLeg(), "тревога за " + warned + " блоков, последний участок " + w.route().finalLeg());
+            assertTrue(warned >= w.finalLeg(), "тревога за " + warned + " блоков, последний участок " + w.finalLeg());
         }
     }
 
@@ -133,7 +133,7 @@ class WeaponSpecTest {
         WeaponSpec.Airframe a = WeaponSpec.MISSILE.airframe();
         WeaponSpec.Attack attack = a.attack();
         assertTrue(attack.terminalRange() > a.turnRadius(a.diveSpeed()) * WeaponSpec.TURN_MARGIN);
-        assertTrue(attack.terminalRange() <= WeaponSpec.MISSILE.route().finalLeg());
+        assertTrue(attack.terminalRange() <= WeaponSpec.MISSILE.finalLeg());
         assertTrue(attack.terminalRange() <= a.visibleLeg());
         assertTrue(attack.popUpMinRange() > attack.terminalRange());
     }
@@ -143,7 +143,7 @@ class WeaponSpecTest {
     void finalLegFitsTurn() {
         for (WeaponSpec w : GUIDED) {
             WeaponSpec.Airframe a = w.airframe();
-            assertTrue(w.route().finalLeg() >= 2 * a.turnRadius(a.cruiseSpeed()), "последний участок " + w.route().finalLeg());
+            assertTrue(w.finalLeg() >= 2 * a.turnRadius(a.cruiseSpeed()), "последний участок " + w.finalLeg());
         }
     }
 
@@ -157,7 +157,7 @@ class WeaponSpecTest {
         for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.LOITER)) {
             WeaponSpec.Airframe a = w.airframe();
             double r = a.turnRadius(a.cruiseSpeed());
-            assertTrue(w.route().capture() >= 0.95 * r && w.route().capture() <= 2 * r, "захват точки " + w.route().capture() + ", радиус разворота " + r);
+            assertTrue(w.capture() >= 0.95 * r && w.capture() <= 2 * r, "захват точки " + w.capture() + ", радиус разворота " + r);
             assertTrue(w.route().reach() >= 1.5 * 10_000, "дальность по маршруту " + w.route().reach());
         }
         for (WeaponSpec w : List.of(WeaponSpec.BUNKER, WeaponSpec.NUKE, WeaponSpec.ROCKET)) assertTrue(!w.route().waypoints());

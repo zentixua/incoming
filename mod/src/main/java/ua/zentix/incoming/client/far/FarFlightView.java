@@ -565,7 +565,8 @@ public final class FarFlightView {
                     flameVeilPx = 2 * LIGHT[4] / (bd * view.pixel());
                 }
             }
-            if (entity) continue;
+            // корпус сущности рисует её модель, пока она не дальше, чем модель сущности рисуется сама
+            if (entity && d < FarView.entityReach(view.far())) continue;
             double length = f.look.size() / (d * view.pixel());
             double model = modelShare(length);
             if (model > 0 && vis > 0 && inFrame(view, dx, dy, dz, d, FarModels.TILE_RADIUS * f.look.size())) {

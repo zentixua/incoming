@@ -10,12 +10,15 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.entity.LauncherRack;
 import ua.zentix.incoming.entity.StrikeProjectile;
+import ua.zentix.incoming.guidance.Ballistics;
 import ua.zentix.incoming.guidance.BombDrop;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.sound.Noise;
 import ua.zentix.incoming.sound.Spectra;
+import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.util.StandardAtmosphere;
 
 import java.util.function.Supplier;
 
@@ -130,19 +133,23 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     /**
      * Путь до цели.
      *
+     * Длины, которые выходят из скорости (участок, вынос, захват точки), — игровые, при шкале полёта 0; на шкале — у
+     * паспорта ({@link WeaponSpec#finalLeg}, {@link WeaponSpec#standoff}, {@link WeaponSpec#capture}).
+     *
      * @param flightSeconds время полёта от пуска до цели, секунд (настройка мира): путь маршрута = скорость × время;
      *                      null — время полёта следует из дальности, а не задаётся
-     * @param finalLeg      последний прямой участок перед целью, блоков (у B-2 — дальность сброса на эшелоне)
-     * @param standoff      без стреляющего рядом пусковая стоит за столько блоков от цели (по направлению захода)
+     * @param gameFinalLeg  последний прямой участок перед целью, блоков (у B-2 — дальность сброса на игровом эшелоне:
+     *                      угол на точку при сбросе, {@code entity.BomberEntity#releaseLine})
+     * @param gameStandoff  без стреляющего рядом пусковая стоит за столько блоков от цели (по направлению захода)
      * @param error         ошибка наведения: СКО промаха по каждой оси, блоков, — снаряд целится в цель со сдвигом,
      *                      случайным для каждого пуска (спутниковая навигация, сброс с эшелона); 0 — точно в цель
-     * @param capture       точка маршрута взята, когда до неё ближе стольких блоков по горизонтали (или она уже позади,
+     * @param gameCapture   точка маршрута взята, когда до неё ближе стольких блоков по горизонтали (или она уже позади,
      *                      {@code guidance.Route#update}): около радиуса разворота — ближе снаряд кружил бы вокруг точки
      * @param reach         дальность по маршруту оператора ({@link Waypoints}): путь от него через его точки до цели не
      *                      длиннее стольких блоков; 0 — по точкам оператора не летает
      */
-    public record Route(@Nullable Supplier<ModConfigSpec.IntValue> flightSeconds, double finalLeg, double standoff,
-                        double error, double capture, double reach) {
+    public record Route(@Nullable Supplier<ModConfigSpec.IntValue> flightSeconds, double gameFinalLeg, double gameStandoff,
+                        double error, double gameCapture, double reach) {
         /** Время полёта из настроек, секунд. */
         public int seconds() {
             return flightSeconds == null ? 0 : flightSeconds.get().get();
@@ -233,35 +240,127 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      *
      * Скорости, высоты, повороты и разгон здесь — игровые, не по физике: полёт — своя игровая модель (решение Артёма
      * 21.10), медленнее и ниже настоящих, чтобы подлёт было видно на сотнях блоков игры; настоящие — в {@link Article#real}
-     * изделия, полёт их не повторяет.
+     * изделия. Шкала полёта мира ({@link FlightScale}, решение Артёма 22.10) ведёт скорости и высоты от игровых к
+     * настоящим ({@link #cruiseSpeed()}, {@link #diveSpeed()}, {@link #cruiseHeight()}, сопротивление {@link #drag()}), а
+     * длины, которые выходят из скорости (запас хода, полоса подлёта, геометрия атаки), — вместе с маршевой
+     * ({@link #stretch}); повороты и набор остаются игровыми. Взгляд на рельеф вперёд ({@link #reliefLookahead}) не
+     * растёт: набор идёт под тем же углом при любой скорости, и путь, на котором снаряд поднимается над холмом, — тот же.
      *
      * @param entity        тип сущности (поставщик: паспорт не трогает реестр, пока его не спросят)
-     * @param cruiseSpeed   маршевая скорость, блоков/тик (игровая, не по физике): по ней считается время подлёта
-     * @param diveSpeed     предельная скорость (у кого пике нет — маршевая), блоков/тик (игровая, не по физике): быстрее не
+     * @param gameCruise    маршевая скорость, блоков/тик (игровая, не по физике): по ней считается время подлёта
+     * @param gameDive      предельная скорость (у кого пике нет — маршевая), блоков/тик (игровая, не по физике): быстрее не
      *                      разгоняет ни пике, ни обмен высоты на скорость ({@link #airspeed})
      * @param handling      повороты, набор высоты и разгон снаряда с мотором ({@link Handling}); null — мотора и рулей нет
-     * @param cruiseHeight  высота крейсера, блоков (игровая, не по физике): над стартом и целью у шахеда, над целью у
+     * @param gameHeight    высота крейсера, блоков (игровая, не по физике): над стартом и целью у шахеда, над целью у
      *                      «Ланцета» — круг, над рельефом у ракеты — бреющий полёт, над точкой сброса у B-2
      * @param clearance     наименьший запас высоты над рельефом, с которым снаряд возвращается в мир из полёта вне мира
      * @param reliefLookahead на сколько блоков пути вперёд автопилот смотрит рельеф полосой ({@code guidance.Autopilot.reliefAhead}
      *                      у шахеда и ракеты — с наклоном набора, у «Ланцета» — прямо по курсу без наклона); 0 — не смотрит
      * @param noseLength    полудлина корпуса: от центра до носа, блоков
      * @param health        сколько урона выдержит, прежде чем его собьют; 0 — сбить нельзя
-     * @param range         запас хода, блоков, если его не задаёт план полёта ({@code guidance.Mission})
+     * @param gameRange     запас хода, блоков, если его не задаёт план полёта ({@code guidance.Mission})
      * @param reachPad      запас дальности неконтактного взрывателя сверх шага за тик, блоков
      * @param launchProfile старт с пусковой; null — с пусковой не стартует (или у него свой старт, как у РСЗО)
-     * @param visibleLeg    последние столько блоков до цели снаряд летит в мире, когда у цели есть игрок
+     * @param gameVisibleLeg последние столько блоков до цели снаряд летит в мире, когда у цели есть игрок
      *                      ({@link FlightTickets#approach}); 0 — только район цели
-     * @param attack        геометрия атаки управляемого снаряда
+     * @param gameAttack    геометрия атаки управляемого снаряда
      * @param noise         чем шумит: двигатели, корпус, старт ({@link Noise}); докуда его слышно — {@link Hearing}
      * @param radar         как его видит и бьёт ЗРК ({@code defense.Radar})
      * @param article       изделие по ТТХ: масса, размеры, двигатели, настоящие скорости, условия удара, боевая часть
      * @param ballistic     полёт без мотора: тяжесть, сопротивление и ветер ({@link Ballistic}); null — летит на моторе
      */
-    public record Airframe(Supplier<EntityType<? extends StrikeProjectile>> entity, double cruiseSpeed, double diveSpeed,
-                           @Nullable Handling handling, double cruiseHeight, double clearance, double reliefLookahead, double noseLength,
-                           float health, double range, double reachPad, @Nullable LaunchProfile launchProfile, double visibleLeg,
-                           Attack attack, Noise noise, Signature radar, Article article, @Nullable Ballistic ballistic) {
+    public record Airframe(Supplier<EntityType<? extends StrikeProjectile>> entity, double gameCruise, double gameDive,
+                           @Nullable Handling handling, double gameHeight, double clearance, double reliefLookahead, double noseLength,
+                           float health, double gameRange, double reachPad, @Nullable LaunchProfile launchProfile, double gameVisibleLeg,
+                           Attack gameAttack, Noise noise, Signature radar, Article article, @Nullable Ballistic ballistic) {
+        /** Маршевая скорость на шкале полёта мира, блоков/тик ({@link #cruiseSpeed(double)}). */
+        public double cruiseSpeed() {
+            return cruiseSpeed(FlightScale.x());
+        }
+
+        /** Маршевая скорость на шкале {@code x}, блоков/тик: от игровой к настоящей ({@link Article.Envelope#cruise}). */
+        public double cruiseSpeed(double x) {
+            return FlightScale.blend(gameCruise, article.real().cruise() / 20, x);
+        }
+
+        /** Предельная скорость на шкале полёта мира, блоков/тик ({@link #diveSpeed(double)}). */
+        public double diveSpeed() {
+            return diveSpeed(FlightScale.x());
+        }
+
+        /** Предельная скорость на шкале {@code x}, блоков/тик: от игровой к настоящей в пике ({@link Article.Envelope#dive}). */
+        public double diveSpeed(double x) {
+            return FlightScale.blend(gameDive, article.real().dive() / 20, x);
+        }
+
+        /** Высота крейсера на шкале полёта мира, блоков ({@link #cruiseHeight(double)}). */
+        public double cruiseHeight() {
+            return cruiseHeight(FlightScale.x());
+        }
+
+        /**
+         * Высота крейсера на шкале {@code x}, блоков: от игровой к настоящей ({@link Article.Envelope#altitude}: у шахеда
+         * 2 км, у ракеты 40 м, у «Ланцета» 700 м, у B-2 — высота сброса 12 км); у кого её нет — игровая.
+         */
+        public double cruiseHeight(double x) {
+            return FlightScale.blend(gameHeight, article.real().altitude(), x);
+        }
+
+        /**
+         * Во сколько раз маршевая на шкале {@code x} быстрее игровой: длины, которые выходят из скорости при игровых
+         * поворотах и времени (радиус разворота v/ω, путь за срок), растут в столько же раз. При 0 — ровно 1.
+         */
+        public double stretch(double x) {
+            return x == 0 ? 1 : cruiseSpeed(x) / gameCruise;
+        }
+
+        /** Запас хода на шкале полёта мира, блоков: столько же тиков на маршевой. */
+        public double range() {
+            return gameRange * stretch(FlightScale.x());
+        }
+
+        /** Полоса подлёта в мире на шкале полёта мира, блоков ({@link #visibleLeg(double)}). */
+        public double visibleLeg() {
+            return visibleLeg(FlightScale.x());
+        }
+
+        /** Полоса подлёта в мире на шкале {@code x}, блоков: столько же тиков подлёта, и горка ракеты в ней. */
+        public double visibleLeg(double x) {
+            return gameVisibleLeg * stretch(x);
+        }
+
+        /** Геометрия атаки на шкале полёта мира ({@link #attack(double)}). */
+        public Attack attack() {
+            return attack(FlightScale.x());
+        }
+
+        /** Геометрия атаки на шкале {@code x}: её длины — от радиуса разворота и пути за переход, растут с маршевой. */
+        public Attack attack(double x) {
+            double k = stretch(x);
+            return k == 1 ? gameAttack : new Attack(gameAttack.reattackMin() * k, gameAttack.terminalRange() * k, gameAttack.popUpMinRange() * k);
+        }
+
+        /**
+         * Сопротивление полёта без мотора на шкале полёта мира ({@link #drag(double)}); null — летит на моторе.
+         */
+        @Nullable
+        public Ballistics.Drag drag() {
+            return drag(FlightScale.x());
+        }
+
+        /**
+         * Сопротивление на шкале {@code x}: коэффициент — от игрового ({@link Ballistic#drag}) к настоящему изделия
+         * ρ₀·C<sub>d</sub>A / 2m (масса без топлива: «Град» после выгорания, бомба), кривая f(M) — в той же доле. Без
+         * сопротивления по Маху игровая траектория на 1 не стала бы настоящей: «Град» улетал бы дальше, бомба била бы
+         * быстрее паспорта. null — летит на моторе.
+         */
+        @Nullable
+        public Ballistics.Drag drag(double x) {
+            if (ballistic == null) return null;
+            double real = StandardAtmosphere.density(0) * article.cda() / (2 * article.dryMass());
+            return new Ballistics.Drag(FlightScale.blend(ballistic.drag(), real, x), x);
+        }
+
         /** Предельная скорость разворота по курсу на маршруте и в атаке, °/тик (0 — не управляется). */
         public double turnRate() {
             return handling == null ? 0 : handling.cruise().turnRate();
@@ -284,7 +383,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
          * @param climbSine синус угла пути к горизонту на этом тике (> 0 — вверх)
          */
         public double airspeed(double speed, double target, double climbSine) {
-            return Math.min(diveSpeed, handling.speed(speed, target, climbSine));
+            return Math.min(diveSpeed(), handling.speed(speed, target, climbSine));
         }
     }
 
@@ -410,6 +509,62 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     public static double turnRadius(double speed, double rateDeg) {
         return speed / Math.toRadians(rateDeg);
     }
+
+    /** Последний прямой участок перед целью на шкале полёта мира, блоков ({@link #finalLeg(double)}). */
+    public double finalLeg() {
+        return finalLeg(FlightScale.x());
+    }
+
+    /**
+     * Последний прямой участок перед целью на шкале {@code x}, блоков: вмещает радиусы разворота, поэтому растёт с
+     * маршевой ({@link Airframe#stretch}). У B-2 дальность сброса — по высоте эшелона ({@code entity.BomberEntity#releaseLine}).
+     */
+    public double finalLeg(double x) {
+        return route.gameFinalLeg() * airframe.stretch(x);
+    }
+
+    /** Точка маршрута взята ближе стольких блоков на шкале полёта мира ({@link #capture(double)}). */
+    public double capture() {
+        return capture(FlightScale.x());
+    }
+
+    /** Точка маршрута взята ближе стольких блоков на шкале {@code x}: около радиуса разворота, растёт с маршевой. */
+    public double capture(double x) {
+        return route.gameCapture() * airframe.stretch(x);
+    }
+
+    /** Вынос пусковой без стреляющего рядом на шкале полёта мира, блоков ({@link #standoff(double)}). */
+    public double standoff() {
+        return standoff(FlightScale.x());
+    }
+
+    /**
+     * Вынос пусковой без стреляющего рядом на шкале {@code x}, блоков. У управляемых — путь за то же время: растёт с
+     * маршевой. У неуправляемого из пакета («Град») скорость схода с пакета ведёт шкала (маршевая паспорта — скорость
+     * схода): пакет встаёт на дальность его траектории при угле пакета на этой скорости ({@link #reach}), в той же доле
+     * от игрового выноса, — при 1 сход на настоящих 683 м/с, как у 9М22У на ~20 км.
+     */
+    public double standoff(double x) {
+        if (x == 0) return route.gameStandoff();
+        double k = airframe.ballistic() != null && rack != null ? reach(x) / reach(0) : airframe.stretch(x);
+        return route.gameStandoff() * k;
+    }
+
+    /**
+     * Дальность траектории без мотора на ровном месте у моря при угле пакета, скорости схода и сопротивлении шкалы
+     * {@code x}, блоков, — без ветра.
+     */
+    private double reach(double x) {
+        double v = airframe.cruiseSpeed(x), el = Math.toRadians(rack.elevation());
+        Vec3 from = new Vec3(0, Air.SEA, 0);
+        Ballistics.Path path = Ballistics.fly(from, new Vec3(v * Math.cos(el), v * Math.sin(el), 0), airframe.drag(x), Ballistics.Wind.CALM,
+                Air.SEA - 1, REACH_TICKS);
+        double k = path.landing(Air.SEA);
+        return Double.isNaN(k) ? path.at(path.ticks()).x : path.at(k).x;
+    }
+
+    /** Предел счёта {@link #reach}, тиков: 5 минут полёта — дольше любой траектории «Града» (настоящая — 77 с). */
+    private static final int REACH_TICKS = 6000;
 
     /** За сколько тиков до удара включается тревога у цели. */
     public int sirenLead() {

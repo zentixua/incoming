@@ -54,8 +54,10 @@ public class StrikeProjectileRenderer<T extends StrikeProjectile> extends Entity
 
     @Override
     public boolean shouldRender(T entity, Frustum frustum, double x, double y, double z) {
-        // модель длиннее габаритов сущности: проверяем по раздутому объёму
-        return entity.isActive() && frustum.isVisible(entity.getBoundingBox().inflate(24));
+        // модель длиннее габаритов сущности: проверяем по раздутому объёму; дальше своей дальности корпус — у дальней
+        // картинки (FarView.entityReach: за дальней плоскостью кадра модель отсекалась бы)
+        return entity.isActive() && frustum.isVisible(entity.getBoundingBox().inflate(24))
+                && entity.position().distanceToSqr(x, y, z) < Math.pow(FarView.entityReach(FarView.depthFar()), 2);
     }
 
     @Override

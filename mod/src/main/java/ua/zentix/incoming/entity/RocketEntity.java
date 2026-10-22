@@ -58,8 +58,14 @@ public class RocketEntity extends StrikeProjectile {
     /** Запас хода сверх дуги траектории, тиков на маршевой скорости: снаряд, не попавший в точку, летит дальше вниз. */
     private static final int OVERSHOOT_TICKS = 200;
 
-    /** Полёт без мотора из паспорта: сопротивление и разброс схода. */
+    /** Полёт без мотора из паспорта: разброс схода. */
     private static final WeaponSpec.Ballistic FLIGHT = WeaponSpec.ROCKET.airframe().ballistic();
+
+    /** Сопротивление 9М22У на шкале полёта мира ({@link WeaponSpec.Airframe#drag()}): игровое при 0, настоящее с f(M) при 1. */
+    private static Ballistics.Drag drag() {
+        return WeaponSpec.ROCKET.airframe().drag();
+    }
+
     /** Ниже точки падения путь считается ещё на столько блоков: промах в овраг, полёт дальше вниз. */
     private static final double BELOW_IMPACT = 64;
 
@@ -341,7 +347,7 @@ public class RocketEntity extends StrikeProjectile {
      */
     private void solve(Vec3 from, Vec3 to) {
         float el = Ballistics.elevationFor(from, to, elevation, MIN_FLIGHT);
-        restart(from, to, scatter(Ballistics.aim(from, to, el, FLIGHT.drag(), known())));
+        restart(from, to, scatter(Ballistics.aim(from, to, el, drag(), known())));
     }
 
     /**
@@ -351,10 +357,10 @@ public class RocketEntity extends StrikeProjectile {
     private void resolve(Vec3 from, Vec3 to) {
         Vec3 v = at(t + 1).subtract(at(t));
         float el = (float) Math.toDegrees(Math.atan2(v.y, Math.max(1e-6, v.horizontalDistance())));
-        Vec3 aim = Ballistics.aim(from, to, Math.max(-80, Math.min(80, el)), FLIGHT.drag(), known());
+        Vec3 aim = Ballistics.aim(from, to, Math.max(-80, Math.min(80, el)), drag(), known());
         // с этим наклоном точку не достать (на спуске она выше линии пути): не разгонять снаряд — прямо в неё за
         // оставшееся время, как по параболе без сопротивления (не по физике, редкий случай: уточнилась высота точки)
-        if (!Ballistics.hits(from, aim, to, FLIGHT.drag(), known(), 1) || aim.length() > 2 * v.length() + 1) {
+        if (!Ballistics.hits(from, aim, to, drag(), known(), 1) || aim.length() > 2 * v.length() + 1) {
             // скорость, с которой парабола без сопротивления p = from + v·n − g·n²/2 (как у интегратора) за n тиков в точке
             int n = Math.max(8, (int) Math.ceil(flightTicks - t));
             aim = to.subtract(from).scale(1.0 / n).add(0, Ballistics.GRAVITY * n / 2, 0);
@@ -417,7 +423,7 @@ public class RocketEntity extends StrikeProjectile {
     private void fly(Vec3 to) {
         double h = Math.max(0.05, v0.horizontalDistance()), d = Math.sqrt(to.subtract(start).horizontalDistanceSqr());
         int ticks = (int) Math.min(6000, 3 * d / h + 400) + OVERSHOOT_TICKS;
-        path = Ballistics.fly(start, v0, FLIGHT.drag(), Ballistics.Wind.of(air()), to.y - BELOW_IMPACT, ticks);
+        path = Ballistics.fly(start, v0, drag(), Ballistics.Wind.of(air()), to.y - BELOW_IMPACT, ticks);
         double k = path.arrival(start, to);
         flightTicks = Double.isNaN(k) ? Math.max(1, path.ticks()) : Math.max(1, (int) Math.ceil(k));
         landing = Double.isNaN(k) ? to : path.at(k);
