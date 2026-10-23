@@ -11,8 +11,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.BomberEntity;
+import ua.zentix.incoming.defense.DefenseWorld;
+import ua.zentix.incoming.defense.Interceptor;
+import ua.zentix.incoming.defense.InterceptorSpec;
+import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
+import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.sound.Propagation;
 import ua.zentix.incoming.util.Terrain;
@@ -43,9 +48,16 @@ public final class FarFlights {
         for (ServerLevel level : e.getServer().getAllLevels()) {
             if (level.players().isEmpty()) continue;
             List<StrikeProjectile> flights = flights(level);
-            if (flights.isEmpty()) continue;
+            List<Interceptor> interceptors = DefenseWorld.get(level).flights();
+            if (flights.isEmpty() && interceptors.isEmpty()) continue;
             for (ServerPlayer player : level.players()) {
                 List<S2C.FarFlight> sent = sample(level, flights, player.position(), player, silent);
+                sent.addAll(sampleInterceptors(level, interceptors, player.position(), player, silent));
+                if (sent.size() > LIMIT) {
+                    Vec3 eye = player.position();
+                    sent.sort(Comparator.comparingDouble(f -> f.pos().subtract(eye).horizontalDistanceSqr()));
+                    sent = sent.subList(0, LIMIT);
+                }
                 if (!sent.isEmpty()) PacketDistributor.sendToPlayer(player, new S2C.FarFlights(sent));
             }
         }
@@ -88,6 +100,48 @@ public final class FarFlights {
         List<S2C.FarFlight> out = new ArrayList<>(found.size());
         for (Candidate c : found) out.add(sample(c.p, c.audible));
         return out;
+    }
+
+    /** Дальний путь ЗРК нужен дыму и после ухода сущности из прорисовки; никакой новой загрузки чанков. */
+    public static List<S2C.FarFlight> sampleInterceptors(ServerLevel level, List<Interceptor> flights, Vec3 eye,
+                                                       @Nullable ServerPlayer player, boolean silent) {
+        List<S2C.FarFlight> out = new ArrayList<>();
+        if (!silent) return out;
+        double reach2 = range() * range();
+        for (Interceptor f : flights) {
+            if (f.done() || f.position().subtract(eye).horizontalDistanceSqr() > reach2) continue;
+            if (player != null && f.view() != null) {
+                ChunkMap.TrackedEntity entity = level.getChunkSource().chunkMap.entityMap.get(f.view().getId());
+                if (entity != null && entity.seenBy.contains(player.connection)) continue;
+            }
+            out.add(interceptor(level, f, f.position(), false));
+        }
+        if (out.size() > LIMIT) {
+            out.sort(Comparator.comparingDouble(f -> f.pos().subtract(eye).horizontalDistanceSqr()));
+            return new ArrayList<>(out.subList(0, LIMIT));
+        }
+        return out;
+    }
+
+    /** Последнее место пути — до сообщения разрыва: конец следа не экстраполируется за точку встречи. */
+    public static void endInterceptor(ServerLevel level, Interceptor f, Vec3 at) {
+        S2C.FarFlights packet = new S2C.FarFlights(List.of(interceptor(level, f, at, true)));
+        double reach2 = range() * range();
+        for (ServerPlayer p : level.players()) {
+            if (p.position().subtract(at).horizontalDistanceSqr() <= reach2) PacketDistributor.sendToPlayer(p, packet);
+        }
+    }
+
+    private static S2C.FarFlight interceptor(ServerLevel level, Interceptor f, Vec3 at, boolean ended) {
+        int age = f.age(), boost = InterceptorSpec.SAM.boostTicks();
+        boolean burning = age <= boost;
+        Vec3 velocity = f.direction().scale(f.speed());
+        float[] angles = FlightController.anglesTo(Vec3.ZERO, f.direction());
+        Terrain.Surface surface = burning ? Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(at.x), Mth.floor(at.z), Terrain.Allowed.CHUNK) : null;
+        float ground = surface != null && surface.source() == Terrain.Source.CHUNK ? surface.y() : Float.NaN;
+        return new S2C.FarFlight(f.id(), S2C.FarFlight.INTERCEPTOR, false, false, false, at, velocity, angles[0], angles[1], 0,
+                (burning ? FlightPhase.BOOST : FlightPhase.CRUISE).ordinal(), burning ? age : age - boost,
+                at.add(velocity.scale(Hearing.MAX_DELAY)), ground, ended);
     }
 
     private record Candidate(StrikeProjectile p, double d2, boolean audible) {}

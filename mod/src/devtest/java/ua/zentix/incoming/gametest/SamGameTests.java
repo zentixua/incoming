@@ -349,8 +349,17 @@ public final class SamGameTests {
         List<String> loaded = loaded(level, strip);
         h.assertTrue(loaded.isEmpty(), "чанки полосы загружены до проверки: " + loaded);
         Launches launches = new Launches(level, owner);
+        boolean[] distantSustain = {false};
         h.onEachTick(() -> {
             launches.watch();
+            var missileFlights = DefenseWorld.get(level).flights();
+            var packets = ua.zentix.incoming.strike.FarFlights.sampleInterceptors(level, missileFlights, antenna, null, true);
+            for (var packet : packets) {
+                h.assertTrue(packet.interceptor(), "маршевый путь помечен как ЗРК");
+                var f = missileFlights.stream().filter(x -> x.id().equals(packet.id())).findFirst().orElseThrow();
+                if (f.view() != null) h.assertTrue(f.view().getUUID().equals(packet.id()), "один UUID у сущности и дальнего пути");
+                if (f.view() == null && f.age() > InterceptorSpec.SAM.boostTicks()) distantSustain[0] = true;
+            }
             List<String> now = loaded(level, strip);
             h.assertTrue(now.isEmpty(), "ЗРК загрузил чанки: " + now);
         });
@@ -360,6 +369,7 @@ public final class SamGameTests {
             h.assertTrue(log.total(FlightLog.Event.INTERCEPTED) - intercepted == 1, "шахед вне мира не сбит");
             h.assertTrue(launches.count() == 1 && sam.ready() + sam.stockCount() == 0, "ракет " + launches.count());
             h.assertFalse(launches.viewedUnloaded, "вид ракеты вне загрузки");
+            h.assertTrue(distantSustain[0], "маршевый путь за тикающими чанками не дошёл до пакетов дыма");
         });
     }
 

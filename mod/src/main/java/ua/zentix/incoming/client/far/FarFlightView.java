@@ -170,8 +170,8 @@ public final class FarFlightView {
 
     // ---------------------------------------------------------------- сводка последнего кадра (describe)
     /** Место B-2 в счёте по оружию (у его бомбы — своё оружие). */
-    private static final int B2 = WeaponType.values().length;
-    private static final int[] COUNT = new int[B2 + 1];
+    private static final int B2 = WeaponType.values().length, SAM = B2 + 1;
+    private static final int[] COUNT = new int[SAM + 1];
     private static int flights, points;
     @Nullable
     private static Far nearest;
@@ -580,8 +580,6 @@ public final class FarFlightView {
 
     /** Шлейфы, корпуса и факелы в кадр; факелы — ещё и светом дыма и лент кадра (lights). */
     static void collect(FarView view, FarSprites out, FxLights lights) {
-        frame++;
-        seen = view;
         lit = 0;
         litEye = 0;
         flights = 0;
@@ -601,40 +599,7 @@ public final class FarFlightView {
                 f.framePath += Math.sqrt(sq(POS[0] - NOZZLE[0]) + sq(POS[1] - NOZZLE[1]) + sq(POS[2] - NOZZLE[2]));
             }
         }
-        for (long s = POINTS.first(), end = POINTS.end(); s < end; s++) {
-            int i = TrailPoints.index(s);
-            Trail style = POINTS.style[i];
-            if (style == null) continue;
-            double age = Math.max(0, t - POINTS.birth[i]);
-            if (age >= POINTS.life[i]) continue;
-            // точка ещё в факеле — её вещество светится в нём
-            Far owner = BY_OWNER.get(POINTS.owner[i]);
-            double smoke = owner == null || owner.track.isDead() ? 1 : TrailModel.emerged(owner.framePath - POINTS.path[i], owner.flame);
-            // точка в облаке старта — её вещество рисует облако (запечённые клубы), а пока струя бьёт в землю, между соплом и
-            // землёй — столб самой струи (по нынешнему месту сопла); струя землю отпустила — столб остаётся каким был
-            LaunchCloud cloud = POINTS.cloud[i];
-            if (cloud != null && owner != null && owner.cloud == cloud && owner.impinging && owner.cloudMotor != null)
-                POINTS.column[i] = (float) LaunchCloud.column(owner.cloudMotor, owner.framePath - POINTS.path[i], POINTS.inverse[i]);
-            double mass = cloud == null ? 1 : POINTS.column[i];
-            TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i],
-                    POINTS.brunt[i], POINTS.stability[i], mass * smoke, LOOK);
-            double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
-            // ось следа гнут вихри крупнее его: усреднённый шлейф Бриггса — это расплывание следа плюс мотание оси; точка
-            // облака старта стоит в своём облаке (его сносит ветер, вихри следа его не гнут)
-            if (cloud != null) BEND[0] = BEND[1] = BEND[2] = 0;
-            else bend(i, style, age);
-            end(LOOK, POINTS.x[i] + air.wind().x() * drift + BEND[0] - cam.x, POINTS.y[i] + LOOK[2] + BEND[1] - cam.y,
-                    POINTS.z[i] + air.wind().z() * drift + BEND[2] - cam.z, POINTS.light[i], view, i);
-            // зерно клубов — номер записи точки: тик рождения в заморозке мира сдвигается (TrailPoints.hold), и клубы мигали бы
-            ESEED[i] = s * 0x2545F4914F6CDD1DL + 0x632BE59BD9B4E019L;
-            if (POINTS.last[i]) {
-                EA[i] = 0;
-                EE[i] = 0;
-            }
-            points++;
-            long p = POINTS.prev[i];
-            if (POINTS.holds(p) && DRAWN[TrailPoints.index(p)] == frame) segment(out, TrailPoints.index(p), i, style);
-        }
+        collectTrails(view, out, t, POINTS, air);
         for (int k = 0, n = FARS.size(); k < n; k++) {
             Far f = FARS.get(k);
             FlightTrack track = f.track;
@@ -710,8 +675,8 @@ public final class FarFlightView {
             out.disc(dx, dy, dz, OUT[0], channel(c, 0) * lit, channel(c, 1) * lit, channel(c, 2) * lit, a);
             double bodyPx = 2 * OUT[0] / (d * view.pixel());
             flights++;
-            // путь без оружия (ракета ЗРК) — всегда по сущности: сюда он не доходит
-            COUNT[track.bomber ? B2 : track.weapon.ordinal()]++;
+            // У ЗРК тоже есть дальний путь: её маршевый след продолжается за краем сущностей.
+            COUNT[track.weapon == null ? SAM : track.bomber ? B2 : track.weapon.ordinal()]++;
             if (nearest == null || d < nearD) {
                 nearest = f;
                 nearD = d;
@@ -723,6 +688,48 @@ public final class FarFlightView {
                 nearModel = model > 0 ? length : 0;
                 nearCoarse = f.coarse;
             }
+        }
+    }
+
+    /** Полный проход точек следов в квадраты кадра; без OpenGL, тот же вход у проверки экрана. */
+    static void collectTrails(FarView view, SmokePuffs.Out out, double t, TrailPoints trail, Air air) {
+        frame++;
+        seen = view;
+        points = 0;
+        Vec3 cam = view.camera();
+        for (long s = trail.first(), end = trail.end(); s < end; s++) {
+            int i = TrailPoints.index(s);
+            Trail style = trail.style[i];
+            if (style == null) continue;
+            double age = Math.max(0, t - trail.birth[i]);
+            if (age >= trail.life[i]) continue;
+            // точка ещё в факеле — её вещество светится в нём
+            Far owner = BY_OWNER.get(trail.owner[i]);
+            double smoke = owner == null || owner.track.isDead() ? 1 : TrailModel.emerged(owner.framePath - trail.path[i], owner.flame);
+            // точка в облаке старта — её вещество рисует облако (запечённые клубы), а пока струя бьёт в землю, между соплом и
+            // землёй — столб самой струи (по нынешнему месту сопла); струя землю отпустила — столб остаётся каким был
+            LaunchCloud cloud = trail.cloud[i];
+            if (cloud != null && owner != null && owner.cloud == cloud && owner.impinging && owner.cloudMotor != null)
+                trail.column[i] = (float) LaunchCloud.column(owner.cloudMotor, owner.framePath - trail.path[i], trail.inverse[i]);
+            double mass = cloud == null ? 1 : trail.column[i];
+            TrailModel.look(style, age / 20, trail.inverse[i], trail.ice[i] / 20, trail.wind[i], trail.excess[i], trail.rise[i],
+                    trail.brunt[i], trail.stability[i], mass * smoke, LOOK);
+            double drift = trail.wind[i] * Math.max(0, age - LAG) / 20;
+            // ось следа гнут вихри крупнее его: усреднённый шлейф Бриггса — это расплывание следа плюс мотание оси; точка
+            // облака старта стоит в своём облаке (его сносит ветер, вихри следа его не гнут)
+            if (cloud != null) BEND[0] = BEND[1] = BEND[2] = 0;
+            else bend(trail, i, style, age);
+            end(LOOK, trail.x[i] + air.wind().x() * drift + BEND[0] - cam.x, trail.y[i] + LOOK[2] + BEND[1] - cam.y,
+                    trail.z[i] + air.wind().z() * drift + BEND[2] - cam.z, trail.light[i], view, i);
+            // зерно клубов — номер записи точки: тик рождения в заморозке мира сдвигается (TrailPoints.hold), и клубы мигали бы
+            ESEED[i] = s * 0x2545F4914F6CDD1DL + 0x632BE59BD9B4E019L;
+            if (trail.last[i]) {
+                EA[i] = 0;
+                EE[i] = 0;
+            }
+            points++;
+            long p = trail.prev[i];
+            if (trail.holds(p) && DRAWN[TrailPoints.index(p)] == frame) segment(out, TrailPoints.index(p), i, style);
         }
     }
 
@@ -925,23 +932,23 @@ public final class FarFlightView {
      * считает раз в тик ({@link TrailPoints#bend}): {@link TrailModel#wander} — самое дорогое у точки в кадре, а за тик ось
      * сдвигается на доли метра (TrailModelTest.bendsMoveSmoothly).
      */
-    private static void bend(int i, Trail style, double age) {
+    private static void bend(TrailPoints trail, int i, Trail style, double age) {
         int k = (int) Math.floor(age), o = 6 * i;
-        float[] b = POINTS.bend;
-        if (POINTS.bendAge[i] != k) {
-            if (POINTS.bendAge[i] == k - 1) {
+        float[] b = trail.bend;
+        if (trail.bendAge[i] != k) {
+            if (trail.bendAge[i] == k - 1) {
                 System.arraycopy(b, o + 3, b, o, 3);
             } else {
-                wanderAt(i, style, k);
+                wanderAt(trail, i, style, k);
                 b[o] = (float) BEND[0];
                 b[o + 1] = (float) BEND[1];
                 b[o + 2] = (float) BEND[2];
             }
-            wanderAt(i, style, k + 1);
+            wanderAt(trail, i, style, k + 1);
             b[o + 3] = (float) BEND[0];
             b[o + 4] = (float) BEND[1];
             b[o + 5] = (float) BEND[2];
-            POINTS.bendAge[i] = k;
+            trail.bendAge[i] = k;
         }
         double f = age - k;
         BEND[0] = b[o] + (b[o + 3] - b[o]) * f;
@@ -950,17 +957,17 @@ public final class FarFlightView {
     }
 
     /** {@link TrailModel#wander} точки i в возрасте age тиков — в {@link #BEND}. */
-    private static void wanderAt(int i, Trail style, int age) {
-        TrailModel.wander(BENDS ^ POINTS.owner[i] * 0x9E3779B97F4A7C15L, POINTS.path[i], age / 20.0, POINTS.stability[i], POINTS.wind[i],
-                spacing(i, style), POINTS.clearance[i], BEND);
+    private static void wanderAt(TrailPoints trail, int i, Trail style, int age) {
+        TrailModel.wander(BENDS ^ trail.owner[i] * 0x9E3779B97F4A7C15L, trail.path[i], age / 20.0, trail.stability[i], trail.wind[i],
+                spacing(trail, i, style), trail.clearance[i], BEND);
     }
 
     /** Шаг точек ленты у точки i, м: до предыдущей точки той же ленты, без неё — по скорости, с которой её клали. */
-    private static double spacing(int i, Trail style) {
-        long p = POINTS.prev[i];
-        if (!POINTS.holds(p)) return style.step() / (20.0 * POINTS.inverse[i]);
+    private static double spacing(TrailPoints trail, int i, Trail style) {
+        long p = trail.prev[i];
+        if (!trail.holds(p)) return style.step() / (20.0 * trail.inverse[i]);
         int j = TrailPoints.index(p);
-        return Math.sqrt(sq(POINTS.x[i] - POINTS.x[j]) + sq(POINTS.y[i] - POINTS.y[j]) + sq(POINTS.z[i] - POINTS.z[j]));
+        return Math.sqrt(sq(trail.x[i] - trail.x[j]) + sq(trail.y[i] - trail.y[j]) + sq(trail.z[i] - trail.z[j]));
     }
 
     /** Концы отрезка трубки следа ({@link #segment}). */
@@ -970,7 +977,7 @@ public final class FarFlightView {
      * Отрезок ленты между концами a и b из кэша кадра; цвет — середина между их цветами. Поперёк у конца a — тот же, что
      * у прошлого отрезка этой ленты (стык без щели на изгибе), у b — запоминается для следующего.
      */
-    private static void segment(FarSprites out, int a, int b, Trail style) {
+    private static void segment(SmokePuffs.Out out, int a, int b, Trail style) {
         FarView view = seen;
         if (view == null) return;
         TA.set(EX[a], EY[a], EZ[a], ES[a], EE[a], EW[a], EH[a], EA[a], EL[a]);
@@ -1118,7 +1125,7 @@ public final class FarFlightView {
             String sep = "";
             for (int i = 0; i < COUNT.length; i++) {
                 if (COUNT[i] == 0) continue;
-                sb.append(sep).append(i == B2 ? "b2" : WeaponType.byId(i).getSerializedName()).append(' ').append(COUNT[i]);
+                sb.append(sep).append(i == SAM ? "sam" : i == B2 ? "b2" : WeaponType.byId(i).getSerializedName()).append(' ').append(COUNT[i]);
                 sep = ", ";
             }
             sb.append(')');
@@ -1137,7 +1144,23 @@ public final class FarFlightView {
                     flames, name(g.track), g.track.fromServer() ? "packets" : "entity", flameD, flameCorePx,
                     flameCoreAlpha, flameShare, flameGlarePx, flameVeilPx));
         }
-        return sb.append("; trail ").append(points).append(" points").toString();
+        int sustain = 0, boost = 0, sustainInCone = 0;
+        double sustainAlpha = 0;
+        for (long serial = POINTS.first(); serial < POINTS.end(); serial++) {
+            int i = TrailPoints.index(serial);
+            if (DRAWN[i] != frame || POINTS.style[i] == null) continue;
+            if (POINTS.style[i].motor() == ClientWeaponSpec.SAM_SUSTAIN) {
+                sustain++;
+                double d = Math.sqrt(sq(EX[i]) + sq(EY[i]) + sq(EZ[i]));
+                if (seen != null && d > 0 && inFrame(seen, EX[i], EY[i], EZ[i], d, 0)) {
+                    sustainInCone++;
+                    sustainAlpha = Math.max(sustainAlpha, EA[i]);
+                }
+            }
+            if (POINTS.style[i].motor() == ClientWeaponSpec.SAM_BOOST) boost++;
+        }
+        return sb.append("; trail ").append(points).append(" points (SAM boost ").append(boost).append(", sustain ").append(sustain)
+                .append(", sustain axis in view cone ").append(sustainInCone).append(String.format(Locale.ROOT, ", alpha max %.3f)", sustainAlpha)).toString();
     }
 
     /** Выход из мира или смена измерения. */

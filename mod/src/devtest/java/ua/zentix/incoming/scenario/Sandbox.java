@@ -541,6 +541,13 @@ final class Sandbox {
                 pending = c.verb() == SandboxCommand.Verb.LAUNCH ? Pending.LAUNCH : Pending.FLIGHT;
             }
             case SAM -> {
+                // Один воздух для сравнения разных веток: Wind зависит от gameTime, а /time меняет только dayTime.
+                onServer(false, s -> {
+                    var world = s.overworld();
+                    ((net.minecraft.world.level.storage.ServerLevelData) world.getLevelData()).setGameTime(NEAR_GAME_TIME);
+                    s.getPlayerList().broadcastAll(new net.minecraft.network.protocol.game.ClientboundSetTimePacket(world.getGameTime(),
+                            world.getDayTime(), world.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
+                });
                 placeCamera();
                 int x = (int) Math.floor(site.x), z = (int) Math.floor(site.z);
                 // ЗРК заряжен (4 ракеты), шахед идёт с севера через точку к югу: радар берёт его, ракета сходит у точки
