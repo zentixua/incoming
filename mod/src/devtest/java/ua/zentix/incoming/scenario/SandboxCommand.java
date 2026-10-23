@@ -21,7 +21,9 @@ import java.util.Locale;
  *   <li>{@code raid [число] [радиус] [секунд между]} — налёт: взрывы шахедов только у клиента (как {@code blast}) в круге
  *       радиуса вокруг точки один за другим (по умолчанию 16 за 45 с в 120 м) — цена дыма многих ударов в кадре;</li>
  *   <li>{@code launch <оружие>} — пуск с пусковой в точке; время — от первого движения снаряда;</li>
- *   <li>{@code flight <оружие> [от, блоков]} — снаряд проходит над точкой; время — от ближайшего к ней места;</li>
+ *   <li>{@code flight <оружие> [от, блоков]} — снаряд проходит над точкой; время — от ближайшего к ней места; у
+ *       {@code launch} и {@code flight} последнее слово {@code own} — пуск от игрока (свои снаряды: список и метки на
+ *       экране);</li>
  *   <li>{@code fire [сторона]} — пожар: квадрат незерака с огнём в точке;</li>
  *   <li>{@code cam <дальность> [высота] [азимут°] [взгляд]} — где камера: дальность от точки, высота над землёй, азимут
  *       от точки (0 — юг, 90 — запад, как поворот игрока), высота точки взгляда над землёй;</li>
@@ -46,6 +48,11 @@ record SandboxCommand(Verb verb, List<String> args) {
             case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, RAID -> true;
             default -> false;
         };
+    }
+
+    /** Пуск от игрока ({@code own} последним словом): он владелец снаряда — список и метки снарядов на экране, как в игре. */
+    boolean own() {
+        return (verb == Verb.LAUNCH || verb == Verb.FLIGHT) && args.size() > 1 && args.getLast().equals("own");
     }
 
     static SandboxCommand parse(String line) {
@@ -76,9 +83,9 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (args.size() > 2 && (number(2) < 0 || number(2) > 200)) throw new IllegalArgumentException("высота 0–200 м");
             }
             case LAUNCH, FLIGHT -> {
-                need(1, 2);
+                need(1, own() ? 3 : 2);
                 weapon();
-                if (args.size() > 1) number(1);
+                if (args.size() > (own() ? 2 : 1)) number(1);
             }
             case NUKE -> {
                 need(1, 4);

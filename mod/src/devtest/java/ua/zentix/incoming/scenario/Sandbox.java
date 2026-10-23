@@ -513,11 +513,13 @@ final class Sandbox {
                 placeCamera();
                 WeaponType w = c.weapon();
                 int x = (int) Math.floor(site.x), z = (int) Math.floor(site.z);
+                // свой пуск — от имени игрока: сервер берёт владельца из источника команды
+                String as = c.own() ? "execute as " + mc.player.getGameProfile().getName() + " run " : "";
                 if (c.verb() == SandboxCommand.Verb.LAUNCH) {
-                    server(String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - LAUNCH_RANGE, x, z));
+                    server(String.format(Locale.ROOT, "%sincoming salvo %s 1 0 at %d %d from %d %d", as, w.getSerializedName(), x, z - LAUNCH_RANGE, x, z));
                 } else {
-                    int from = (int) c.number(1, 600);
-                    server(String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - from, x, z + from));
+                    int from = c.args().size() > 1 && !c.args().get(1).equals("own") ? (int) c.number(1) : 600;
+                    server(String.format(Locale.ROOT, "%sincoming salvo %s 1 0 at %d %d from %d %d", as, w.getSerializedName(), x, z - from, x, z + from));
                 }
                 pending = c.verb() == SandboxCommand.Verb.LAUNCH ? Pending.LAUNCH : Pending.FLIGHT;
             }

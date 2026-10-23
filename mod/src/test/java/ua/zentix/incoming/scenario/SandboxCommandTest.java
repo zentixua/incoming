@@ -22,6 +22,9 @@ class SandboxCommandTest {
         assertEquals(SandboxCommand.Verb.FLIGHT, SandboxCommand.parse("flight drone 400\n").verb());
         assertFalse(SandboxCommand.parse("cam 60 10 90 8").effect());
         assertEquals(16, SandboxCommand.parse("zoom 16").number(0));
+        assertTrue(SandboxCommand.parse("flight drone 600 own").own());
+        assertTrue(SandboxCommand.parse("launch missile own").own());
+        assertFalse(SandboxCommand.parse("flight drone 600").own());
     }
 
     @Test
@@ -57,7 +60,7 @@ class SandboxCommandTest {
     @Test
     void badCommandsFailBeforeRunning() {
         for (String bad : new String[]{"", "boom", "blast", "blast tank", "blast nuke", "nuke 40", "nuke 5 high", "cam far",
-                "fire 99", "hud maybe", "again now", "time noon", "zoom 0.5", "zoom", "zoom 1000"}) {
+                "fire 99", "hud maybe", "again now", "time noon", "zoom 0.5", "zoom", "zoom 1000", "flight drone own 600", "flight drone 600 mine"}) {
             assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse(bad), bad);
         }
     }
