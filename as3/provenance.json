@@ -1,0 +1,327 @@
+{
+  "pr": 437,
+  "renderer": "development sandbox, vanilla renderer, no Iris, quiet power profile",
+  "seed": 20261022,
+  "camera": [
+    18,
+    12,
+    0,
+    0
+  ],
+  "after_head": "1a131e23f5019c84939de912d467112824059938",
+  "before_physics": "e592f2ff",
+  "before_replaced_files": [
+    "warhead/StagedExplosion.java",
+    "warhead/Craters.java",
+    "warhead/GroundMaterial.java",
+    "nuclear/world/CraterJob.java"
+  ],
+  "captures": {
+    "road-before": {
+      "name": "road-before",
+      "effect": "real drone paved",
+      "site": [
+        320.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        12.0,
+        0.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3/mod/run/sandbox/audio.wav",
+        "start": 3162180,
+        "from": 0.0,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": 0.1,
+          "age": 0.134,
+          "file": "road-before_000.10s.png",
+          "fps": 62
+        },
+        {
+          "t": 1.0,
+          "age": 1.005,
+          "file": "road-before_001.00s.png",
+          "fps": 51
+        },
+        {
+          "t": 10.0,
+          "age": 10.012,
+          "file": "road-before_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.013,
+          "file": "road-before_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "road-after": {
+      "name": "road-after",
+      "effect": "real drone paved",
+      "site": [
+        320.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        12.0,
+        0.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3/mod/run/sandbox/audio.wav",
+        "start": 4767812,
+        "from": 0.0,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": 0.1,
+          "age": 0.133,
+          "file": "road-after_000.10s.png",
+          "fps": 62
+        },
+        {
+          "t": 1.0,
+          "age": 1.003,
+          "file": "road-after_001.00s.png",
+          "fps": 54
+        },
+        {
+          "t": 10.0,
+          "age": 10.002,
+          "file": "road-after_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.001,
+          "file": "road-after_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "slab-before": {
+      "name": "slab-before",
+      "effect": "real loiter concrete 1",
+      "site": [
+        640.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        12.0,
+        0.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3/mod/run/sandbox/audio.wav",
+        "start": 18731076,
+        "from": 0.0,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": 0.1,
+          "age": 0.216,
+          "file": "slab-before_000.10s.png",
+          "fps": 60
+        },
+        {
+          "t": 1.0,
+          "age": 1.006,
+          "file": "slab-before_001.00s.png",
+          "fps": 38
+        },
+        {
+          "t": 10.0,
+          "age": 10.0,
+          "file": "slab-before_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.002,
+          "file": "slab-before_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "slab-after": {
+      "name": "slab-after",
+      "effect": "real loiter concrete 1",
+      "site": [
+        640.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        12.0,
+        0.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3/mod/run/sandbox/audio.wav",
+        "start": 18575428,
+        "from": 0.0,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": 0.1,
+          "age": 0.133,
+          "file": "slab-after_000.10s.png",
+          "fps": 61
+        },
+        {
+          "t": 1.0,
+          "age": 1.014,
+          "file": "slab-after_001.00s.png",
+          "fps": 54
+        },
+        {
+          "t": 10.0,
+          "age": 10.01,
+          "file": "slab-after_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.005,
+          "file": "slab-after_060.00s.png",
+          "fps": 62
+        }
+      ]
+    }
+  },
+  "files": {
+    "as3/road-before/road-before_000.10s.png": {
+      "sha256": "946545762881709ab8553d8f3402e5a91b974cb303fb77649b3b32cc7ef47b45",
+      "bytes": 1006397
+    },
+    "as3/road-before/road-before_001.00s.png": {
+      "sha256": "708f636b38b758afa704aeb5c7ae4c93874f674f4e6d0598ce920d2ec4aaf4ca",
+      "bytes": 1091564
+    },
+    "as3/road-before/road-before_010.00s.png": {
+      "sha256": "7f7b0374ec29b09ae913cf5e2245495883d1d9ffcc0c50e01d2194e641be0f97",
+      "bytes": 641493
+    },
+    "as3/road-before/road-before_060.00s.png": {
+      "sha256": "74342dce5bd09a3d78712cdcce597ca545c3d9de900b630a011856c1774e72e2",
+      "bytes": 672297
+    },
+    "as3/road-before/capture.json": {
+      "sha256": "738dad98adbe8ce6c20ad6561456bb92bb8ac67365c31be65a204344adce798e",
+      "bytes": 564
+    },
+    "as3/road-before/road-before.wav": {
+      "sha256": "9a0a8e7b8068a9eaa12f8f696e0ebe890f2f53a45c6ae3fdeb101e36a65cce0e",
+      "bytes": 1152044,
+      "seconds": 6.0,
+      "rate": 48000,
+      "channels": 2,
+      "rms": 1856.1264516736005,
+      "peak": 23485
+    },
+    "as3/road-after/road-after_000.10s.png": {
+      "sha256": "481bc7a6aacbecb854a82b8fb3545ce5f2dee396981995ef714aca13412271c7",
+      "bytes": 984075
+    },
+    "as3/road-after/road-after_001.00s.png": {
+      "sha256": "ac7547dcfaa4ca7388b0e45dfa6722e170d66c15139b18ebfc30a2084a15c3e0",
+      "bytes": 1072442
+    },
+    "as3/road-after/road-after_010.00s.png": {
+      "sha256": "e4188836c4d3149f1289dc7fd0c1f424c2499fb9adc8ec40fe81fd2772122a56",
+      "bytes": 692583
+    },
+    "as3/road-after/road-after_060.00s.png": {
+      "sha256": "a94dcd6b107de64f5480dd921eb01f2eee9729f7b6b75ca12d821ec811492abe",
+      "bytes": 720165
+    },
+    "as3/road-after/capture.json": {
+      "sha256": "fd3510edc4c00e710d18799c4dc9472cac95a6b0594e9f38b6ce478488403328",
+      "bytes": 559
+    },
+    "as3/road-after/road-after.wav": {
+      "sha256": "8e980d63eb502e1746f9d30fe2056bc5823caca45ad24f851d00440b1680ee5f",
+      "bytes": 1152044,
+      "seconds": 6.0,
+      "rate": 48000,
+      "channels": 2,
+      "rms": 1770.2168882987348,
+      "peak": 19646
+    },
+    "as3/slab-before/slab-before_000.10s.png": {
+      "sha256": "ede8b232fc3ad2b8408d9b19642982bd805f001b52624eb27049e330d3dac3c1",
+      "bytes": 304061
+    },
+    "as3/slab-before/slab-before_001.00s.png": {
+      "sha256": "77a4e6f5a7ab709e7e200a62926b09ea4c12e25877cf40ec447dacdc6d90d21e",
+      "bytes": 532851
+    },
+    "as3/slab-before/slab-before_010.00s.png": {
+      "sha256": "f852ce628abf217e784282397786aaa9061e9df17e171d1b8eddb6ac0b423ecb",
+      "bytes": 652801
+    },
+    "as3/slab-before/slab-before_060.00s.png": {
+      "sha256": "1fb5fa254f28dcf8981004c19875e6e85b01b50dbaafe3699adc6ebc5951beae",
+      "bytes": 579299
+    },
+    "as3/slab-before/capture.json": {
+      "sha256": "cdddc123dcfc171749125e91969cf918eb164d4dc7322794d55fb1ff575e129d",
+      "bytes": 571
+    },
+    "as3/slab-before/slab-before.wav": {
+      "sha256": "ac8db6394f3a7b3847bfeddfe2bf4513e8af0d6052e5047c46359920b3062e38",
+      "bytes": 1152044,
+      "seconds": 6.0,
+      "rate": 48000,
+      "channels": 2,
+      "rms": 1414.3099392613356,
+      "peak": 21182
+    },
+    "as3/slab-after/slab-after_000.10s.png": {
+      "sha256": "77cfe1a4b1d8af4c3a5f29c6199c257c7d7f796b2b457938f166cd7e6fa3ae7e",
+      "bytes": 600199
+    },
+    "as3/slab-after/slab-after_001.00s.png": {
+      "sha256": "3d6df5ec810d0583e797c8b7c5a4e8f94d941987cc07647efea4b1193e22fcfd",
+      "bytes": 886407
+    },
+    "as3/slab-after/slab-after_010.00s.png": {
+      "sha256": "da2df2ed2720a6b510519cbef80820e60b373d02c593b55d5aacb222368e4563",
+      "bytes": 663937
+    },
+    "as3/slab-after/slab-after_060.00s.png": {
+      "sha256": "72e240e18ca3d0bf86d344e0be4788bf4a0ecc6b47873099e70eceba84887632",
+      "bytes": 588158
+    },
+    "as3/slab-after/capture.json": {
+      "sha256": "8edfb6f87b828d08f8120155e0bca62911b5ce27c18eed139357eae8d0cb77ee",
+      "bytes": 566
+    },
+    "as3/slab-after/slab-after.wav": {
+      "sha256": "52b0a18a9db3b32535e0b56af4326f3f319815ef8f7073388e10aa42259c7333",
+      "bytes": 1152044,
+      "seconds": 6.0,
+      "rate": 48000,
+      "channels": 2,
+      "rms": 2507.1468715499236,
+      "peak": 21968
+    }
+  }
+}
