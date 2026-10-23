@@ -1,13 +1,17 @@
 package ua.zentix.incoming.util;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ChunkHolder;
+import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumSet;
 import java.util.Optional;
@@ -32,6 +36,24 @@ public final class Terrain {
 
     public static boolean ready(Level level, BlockPos pos) {
         return ready(level, pos.getX() >> 4, pos.getZ() >> 4);
+    }
+
+    /**
+     * Чанк в памяти: полностью загруженный, опущенный ниже (у края видимости) или ждущий выгрузки, — пока не пришёл
+     * его {@code ChunkEvent.Unload}; null — его нет в памяти или он ещё не бывал полностью загружен ({@code ChunkEvent.Load}
+     * поставит его сам). Держатель, у которого не осталось тикетов, ваниль убирает из видимой карты чанков сразу, а сам
+     * чанк выгружает позже, когда его можно сохранить ({@code ChunkMap.processUnloads} → {@code pendingUnloads} →
+     * {@code scheduleUnload}); вернувшийся за это время тикет возвращает держатель из {@code pendingUnloads} с тем же
+     * чанком и без нового {@code ChunkEvent.Load}. Поэтому «нет в видимой карте» ещё не значит «выгружен».
+     * Читать из такого чанка его же данные (карта высот) можно — загрузки это не вызывает. AT: {@code ChunkMap.pendingUnloads},
+     * только чтение.
+     */
+    @Nullable
+    public static LevelChunk inMemory(ServerLevel level, long pos) {
+        ChunkMap chunkMap = level.getChunkSource().chunkMap;
+        ChunkHolder holder = chunkMap.getVisibleChunkIfPresent(pos);
+        if (holder == null) holder = chunkMap.pendingUnloads.get(pos);
+        return holder != null && holder.getChunkIfPresentUnchecked(ChunkStatus.FULL) instanceof LevelChunk chunk ? chunk : null;
     }
 
     /** Готовы чанк и все восемь соседей: цепочка обновлений от блока в нём (до 16 блоков) не выходит за готовые. */
@@ -88,6 +110,26 @@ public final class Terrain {
     private static final double EDGE = 0.01;
 
     /**
+     * Доля отрезка {@code from → to} (0..1), на которой он впервые уходит под поверхность по картам высот
+     * {@code MOTION_BLOCKING} из набора {@code allowed}; 1 — весь над ней. Колонка блоков, которую пересекает отрезок
+     * ({@link GridWalk}), закрыта, если поверхность в ней выше нижней точки отрезка в этой колонке. Это проверка по
+     * верху рельефа, а не по блокам: навес и пещеру она не видит. Где рельеф неизвестен (низ мира), — открыто.
+     */
+    public static double underRelief(Level level, Vec3 from, Vec3 to, Allowed allowed) {
+        double dy = to.y - from.y;
+        double[] hit = {1};
+        GridWalk.walk(from.x, from.z, to.x, to.z, 1, (GridWalk.SpanVisitor) (x, z, t0, t1) -> {
+            double low = from.y + dy * (dy < 0 ? t1 : t0);
+            if (estimate(level, Heightmap.Types.MOTION_BLOCKING, x, z, allowed).y() > low) {
+                hit[0] = t0;
+                return false;
+            }
+            return true;
+        });
+        return hit[0];
+    }
+
+    /**
      * Первый воздух над картой высот (как {@link Level#getHeight}) — источник {@link Source#CHUNK} без выбора: для кода,
      * который сам знает, что чанк готов (район взрыва, очередь ядерки), или которому низ мира — верный ответ. «Где земля»
      * там, где чанк может быть не готов, — {@link #estimate}.
@@ -109,6 +151,13 @@ public final class Terrain {
          * она годится для обхода препятствий, для полёта вне мира и точки на земле — нет.
          */
         CEILING,
+        /**
+         * Сохранённая карта высот чанка, который не готов: копия в памяти (чанк ждёт выгрузки или опущен у края
+         * видимости) или файл чанка на диске, прочитанный в потоке ввода-вывода чанков без загрузки чанка
+         * ({@link TerrainSurvey}). Точна, как карта высот чанка на момент записи; ответ — не сразу, а когда съёмка
+         * дочитает его (тик не ждёт). Только в мире без потолка.
+         */
+        DISK,
         /** Верх по карте клиента, на которой игрок выбрал место (Distant Horizons или чанки клиента), — подсказка приказа. */
         CLIENT_MAP,
         /**
@@ -116,7 +165,9 @@ public final class Terrain {
          * ≈3 мс на точку — только для приказа, не для тика), не ниже его уровня моря (над водой поверхность — сама вода).
          * У мира, построенного не этим генератором, он далёк от поверхности: город с карты мира (63 под крышей на 107),
          * мир 1.17, поднятый до 1.21 (генератор даёт дно мира);
-         * уровень моря держит оценку хотя бы у суши.
+         * уровень моря держит оценку хотя бы у суши. В съёмке рельефа ({@link TerrainSurvey}, набор с фоновыми
+         * источниками) — для чанка, которого нет на диске или он там недогенерирован: считается в фоне, по узлам через
+         * {@link TerrainSurvey#GENERATOR_STEP} блоков.
          */
         GENERATOR,
         /**
@@ -138,24 +189,36 @@ public final class Terrain {
 
     /**
      * Какие источники вызывающему разрешены и подсказка карты клиента, если она есть. Цена — в самом наборе:
-     * {@link #CHUNK} и {@link #FLIGHT} годятся для тика, {@link #ORDER} читает генератор — только для приказа.
+     * {@link #CHUNK}, {@link #FLIGHT} и {@link #RELIEF} годятся для тика, {@link #ORDER} читает генератор — только для приказа.
+     * Набор с фоновыми источниками ({@link #RELIEF}) берёт {@link Source#DISK} и {@link Source#GENERATOR} только из
+     * готовой съёмки ({@link TerrainSurvey}) и заказывает её, если ответа ещё нет: сам он ни диска, ни генератора не ждёт.
      */
     public static final class Allowed {
         /** В мире, в тике: только готовый чанк (и потолок, где он есть), иначе низ мира. */
-        public static final Allowed CHUNK = new Allowed(Set.of(Source.CHUNK, Source.CEILING), Optional.empty());
+        public static final Allowed CHUNK = new Allowed(Set.of(Source.CHUNK, Source.CEILING), Optional.empty(), false);
         /** Полёт вне мира, в тике: готовый чанк, иначе уровень моря; потолок — не земля. */
-        public static final Allowed FLIGHT = new Allowed(Set.of(Source.CHUNK, Source.SEA), Optional.empty());
+        public static final Allowed FLIGHT = new Allowed(Set.of(Source.CHUNK, Source.SEA), Optional.empty(), false);
         /** Приказ (раз на пуск): готовый чанк, иначе рельеф генератора. */
-        public static final Allowed ORDER = new Allowed(Set.of(Source.CHUNK, Source.CEILING, Source.GENERATOR), Optional.empty());
+        public static final Allowed ORDER = new Allowed(Set.of(Source.CHUNK, Source.CEILING, Source.GENERATOR), Optional.empty(), false);
+        /**
+         * Рельеф для полёта, в тике, в мире и вне его: готовый чанк (и потолок, где он есть), иначе съёмка — карта
+         * высот с диска или из памяти, у чанка, которого на диске нет, — рельеф генератора, посчитанный в фоне; пока
+         * съёмка не ответила — низ мира, как у ванили для незагруженного чанка.
+         */
+        public static final Allowed RELIEF = new Allowed(Set.of(Source.CHUNK, Source.CEILING, Source.DISK, Source.GENERATOR), Optional.empty(), true);
 
         private final Set<Source> sources;
         private final Optional<Integer> map;
+        /** {@link Source#DISK} и {@link Source#GENERATOR} — только из готовой съёмки ({@link TerrainSurvey}). */
+        private final boolean survey;
 
         /** Снаружи — только наборы выше и {@link #withMap}. */
-        Allowed(Set<Source> sources, Optional<Integer> map) {
+        Allowed(Set<Source> sources, Optional<Integer> map, boolean survey) {
             if (sources.contains(Source.CLIENT_MAP) != map.isPresent()) throw new IllegalArgumentException("CLIENT_MAP only with a map hint");
+            if (sources.contains(Source.DISK) && !survey) throw new IllegalArgumentException("DISK only from the background survey");
             this.sources = Set.copyOf(sources);
             this.map = map;
+            this.survey = survey;
         }
 
         /**
@@ -166,11 +229,16 @@ public final class Terrain {
             if (top.isEmpty()) return this;
             Set<Source> s = EnumSet.of(Source.CLIENT_MAP);
             s.addAll(sources);
-            return new Allowed(s, top);
+            return new Allowed(s, top, survey);
         }
 
         boolean permits(Source source) {
             return sources.contains(source);
+        }
+
+        /** Фоновые источники: {@link Source#DISK} и {@link Source#GENERATOR} — из съёмки, не в вызове. */
+        boolean survey() {
+            return survey;
         }
 
         /** Подсказка карты клиента (есть, только если разрешён {@link Source#CLIENT_MAP}). */
@@ -212,6 +280,15 @@ public final class Terrain {
         boolean outside(int y);
 
         int bottom();
+
+        /**
+         * Ответ съёмки рельефа ({@link TerrainSurvey}: {@link Source#DISK} или {@link Source#GENERATOR}) или null —
+         * его ещё нет (съёмка заказана) или съёмки нет (клиент, мир с потолком).
+         */
+        @Nullable
+        default Surface surveyed() {
+            return null;
+        }
     }
 
     /** Выбор источника (без Minecraft — для {@code TerrainTest}). */
@@ -220,12 +297,16 @@ public final class Terrain {
             Source chunk = c.ceiling() ? Source.CEILING : Source.CHUNK;
             if (allowed.permits(chunk)) return new Surface(c.chunkHeight(), chunk);
         }
+        if (allowed.survey()) {
+            Surface s = c.surveyed();
+            if (s != null && allowed.permits(s.source())) return s;
+        }
         if (allowed.permits(Source.CLIENT_MAP)) {
             int top = allowed.map().orElseThrow();
             if (!c.outside(top - 1)) return new Surface(top, Source.CLIENT_MAP);
         }
         if (c.hasGenerator()) {
-            if (allowed.permits(Source.GENERATOR)) return new Surface(Math.max(c.sea(), c.generatorBase()), Source.GENERATOR);
+            if (allowed.permits(Source.GENERATOR) && !allowed.survey()) return new Surface(Math.max(c.sea(), c.generatorBase()), Source.GENERATOR);
             if (allowed.permits(Source.SEA)) return new Surface(c.sea(), Source.SEA);
         }
         return new Surface(c.bottom(), Source.UNKNOWN);
@@ -261,6 +342,13 @@ public final class Terrain {
         public int generatorBase() {
             ServerLevel server = (ServerLevel) level;
             return generator().getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, server, server.getChunkSource().randomState());
+        }
+
+        @Override
+        @Nullable
+        public Surface surveyed() {
+            if (!(level instanceof ServerLevel server) || ceiling()) return null;
+            return TerrainSurvey.get(server).at(server, type, x, z);
         }
 
         @Override

@@ -70,6 +70,8 @@ final class InstantChunks {
         boolean write = e.getServer().getTickCount() % WRITE_PERIOD == 0;
         for (ServerLevel level : e.getServer().getAllLevels()) {
             settle(level);
+            // съёмка рельефа без загрузки (диск, генератор в фоне) — тоже к концу тика заказа, а не когда успеет диск
+            ua.zentix.incoming.util.TerrainSurvey.settle(level);
             if (write) awaitWrites(level);
         }
     }

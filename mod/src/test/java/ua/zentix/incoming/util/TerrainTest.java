@@ -16,6 +16,9 @@ class TerrainTest {
         final boolean ready, ceiling, generator;
         final int chunk, sea, base, bottom, top;
         int generatorCalls;
+        /** Ответ съёмки ({@link Terrain.Column#surveyed}); null — ещё нет. */
+        Terrain.Surface surveyed;
+        int surveyCalls;
 
         FakeColumn(boolean ready, int chunk, boolean ceiling, boolean generator, int sea, int base) {
             this(ready, chunk, ceiling, generator, sea, base, -64, 320);
@@ -40,6 +43,7 @@ class TerrainTest {
         @Override public int generatorBase() { generatorCalls++; return base; }
         @Override public boolean outside(int y) { return y < bottom || y >= top; }
         @Override public int bottom() { return bottom; }
+        @Override public Terrain.Surface surveyed() { surveyCalls++; return surveyed; }
     }
 
     private static Terrain.Surface surface(int y, Terrain.Source source) {
@@ -103,8 +107,38 @@ class TerrainTest {
 
     @Test
     void clientMapNeedsHint() {
-        assertThrows(IllegalArgumentException.class, () -> new Terrain.Allowed(Set.of(Terrain.Source.CLIENT_MAP), Optional.empty()));
+        assertThrows(IllegalArgumentException.class, () -> new Terrain.Allowed(Set.of(Terrain.Source.CLIENT_MAP), Optional.empty(), false));
         assertEquals(Terrain.Allowed.ORDER, Terrain.Allowed.ORDER.withMap(Optional.empty()));
+    }
+
+    /** Рельеф для полёта: готовый чанк, иначе съёмка (диск, генератор в фоне); генератор в вызове не спрашивают. */
+    @Test
+    void reliefTakesSurveyNeverAsksGenerator() {
+        FakeColumn c = new FakeColumn(false, 0, false, true, 63, 120);
+        // съёмка ещё не ответила — низ мира, как у неготового чанка
+        assertEquals(surface(-64, Terrain.Source.UNKNOWN), Terrain.choose(c, Terrain.Allowed.RELIEF));
+        c.surveyed = surface(97, Terrain.Source.DISK);
+        assertEquals(surface(97, Terrain.Source.DISK), Terrain.choose(c, Terrain.Allowed.RELIEF));
+        c.surveyed = surface(88, Terrain.Source.GENERATOR);
+        assertEquals(surface(88, Terrain.Source.GENERATOR), Terrain.choose(c, Terrain.Allowed.RELIEF));
+        assertEquals(0, c.generatorCalls, "в тике генератор (≈3 мс) не спрашивают");
+        // готовый чанк точнее съёмки, её и не спрашивают
+        FakeColumn ready = new FakeColumn(true, 70, false, true, 63, 120);
+        ready.surveyed = surface(97, Terrain.Source.DISK);
+        assertEquals(surface(70, Terrain.Source.CHUNK), Terrain.choose(ready, Terrain.Allowed.RELIEF));
+        assertEquals(0, ready.surveyCalls);
+    }
+
+    /** Наборы без фоновых источников съёмку не спрашивают: их ответ прежний. */
+    @Test
+    void otherSetsIgnoreSurvey() {
+        FakeColumn c = new FakeColumn(false, 0, false, true, 63, 120);
+        c.surveyed = surface(97, Terrain.Source.DISK);
+        assertEquals(surface(-64, Terrain.Source.UNKNOWN), Terrain.choose(c, Terrain.Allowed.CHUNK));
+        assertEquals(surface(63, Terrain.Source.SEA), Terrain.choose(c, Terrain.Allowed.FLIGHT));
+        assertEquals(surface(120, Terrain.Source.GENERATOR), Terrain.choose(c, Terrain.Allowed.ORDER));
+        assertEquals(0, c.surveyCalls);
+        assertThrows(IllegalArgumentException.class, () -> new Terrain.Allowed(Set.of(Terrain.Source.DISK), Optional.empty(), false));
     }
 
     @Test
