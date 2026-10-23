@@ -19,6 +19,26 @@ class CraterModelTest {
         assertEquals(1.3 * CraterModel.depth(15, Soil.DRY), CraterModel.depth(15, Soil.WET), 1e-9);
     }
 
+    /**
+     * Воронка заряда на сухом грунте — в пределах открытых данных о наземных взрывах (жалоба 23.10: ракета по полю
+     * оставила яму 2×2). Ambrosini, Luccioni, Danesi, «Craters produced by explosions on the soil surface», Mecánica
+     * Computacional XXII (2003): опыт EMRTC — 250 кг ТНТ на земле, Ø 3,8 м; расчёт с центром заряда на уровне земли
+     * (табл. 5, б) — 50–500 кг; статистика ~200 наземных взрывов Кинни и Грэхема — 0,8·∛W с разбросом 30 %.
+     */
+    @Test
+    void chargeCraterWithinData() {
+        assertEquals(3.8, 2 * CraterModel.chargeRadius(250, Soil.DRY), 0.15 * 3.8, "EMRTC 250 кг");
+        double[][] table = {{50, 2.76}, {100, 2.92}, {150, 3.40}, {200, 3.58}, {250, 3.78}, {300, 3.94}, {400, 4.50}, {500, 4.60}};
+        for (double[] row : table) {
+            assertEquals(row[1], 2 * CraterModel.chargeRadius(row[0], Soil.DRY), 0.15 * row[1], row[0] + " кг");
+        }
+        for (double kg : new double[] {3, 6.4, 50, 150, 2423}) {
+            double d = 2 * CraterModel.chargeRadius(kg, Soil.DRY) / Math.cbrt(kg);
+            assertTrue(d >= 0.8 * 0.7 && d <= 0.8 * 1.3, kg + " кг: D/∛W " + d);
+            assertEquals(0.25, CraterModel.chargeDepth(kg, Soil.DRY) / (2 * CraterModel.chargeRadius(kg, Soil.DRY)), 1e-9);
+        }
+    }
+
     @Test
     void profile() {
         double r = CraterModel.radius(15, Soil.DRY), d = CraterModel.depth(15, Soil.DRY);
