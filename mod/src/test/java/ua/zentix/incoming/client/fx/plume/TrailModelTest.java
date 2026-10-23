@@ -27,13 +27,21 @@ class TrailModelTest {
     }
 
     @Test
-    void widthFollowsBriggsInTwoClasses() {
+    void widthFollowsRichardsonUpToBriggsInTwoClasses() {
         Trail t = trail(WeaponType.ROCKET, FlightPhase.BOOST);
         for (Air air : new Air[]{DAY, NIGHT}) {
-            double u = 4, age = 30, x = u * age;
-            double expect = Math.sqrt(t.sigma0() * t.sigma0() + Stability.sigmaY(air.stability(), x) * Stability.sigmaZ(air.stability(), x));
-            assertEquals(expect, TrailModel.sigma(t, age, air.stability(), u, 0), 1e-9);
+            double u = 4;
+            for (double age : new double[]{1, 30, 300, 1200}) {
+                double x = u * age, briggs = Stability.sigmaY(air.stability(), x) * Stability.sigmaZ(air.stability(), x);
+                double rel = Math.min(TrailModel.RICHARDSON * TrailModel.dissipation(air.stability()) * age * age * age / 6, briggs);
+                assertEquals(Math.sqrt(t.sigma0() * t.sigma0() + rel), TrailModel.sigma(t, age, air.stability(), u, 0), 1e-9);
+            }
+            // след — клуб: в первые минуты он уже усреднённого шлейфа (тот мотают вихри крупнее его)
+            double x = u * 30;
+            assertTrue(TrailModel.spread(30, air.stability(), u) < 0.25 * Stability.sigmaY(air.stability(), x) * Stability.sigmaZ(air.stability(), x));
         }
+        assertEquals(5e-3, TrailModel.dissipation(Stability.B), 1e-12);
+        assertEquals(Math.sqrt(1e-3 * 1e-4), TrailModel.dissipation(3.5), 1e-12, "между классами — по логарифму");
         // Бриггс: класс B у 1 км — σ_y 152, σ_z 120; F — 38, 12,3
         assertEquals(0.16 * 1000 / Math.sqrt(1.1), Stability.sigmaY(Stability.B, 1000), 1e-9);
         assertEquals(120, Stability.sigmaZ(Stability.B, 1000), 1e-9);
@@ -159,6 +167,104 @@ class TrailModelTest {
         Air dry = new Air(new Wind(0, 10), Stability.D, 0.3);
         TrailModel.birth(t, inv, Air.SEA + 11_000, 10, dry, out);
         assertTrue(out[1] < 60, "в сухом воздухе лёд испаряется: " + out[1]);
+    }
+
+    /**
+     * Жалоба FX-report 23.10: след ЗРК днём пропадал к ~15 с (σ шлейфа Бриггса, усреднённого за минуты), в 3.4.1 тонкий
+     * след держался. Маршевый двигатель на 280 м/с (игровая скорость ракеты ЗРК): днём виден десятки секунд, ночью — минуты.
+     */
+    @Test
+    void samTrailHangsForTensOfSeconds() {
+        Trail t = Trail.of(ClientWeaponSpec.SAM_SUSTAIN, 1);
+        double[] out = new double[TrailModel.LOOK];
+        Air day = new Air(new Wind(0, 5), Stability.B, 0.5), night = new Air(new Wind(0, 5), Stability.F, 0.5);
+        double inv = TrailModel.inverseSpeed(280, 5);
+        TrailModel.birth(t, inv, 150, 5, day, out);
+        double dayLife = out[0];
+        TrailModel.look(t, 15, inv, 0, 5, 150, day, out);
+        double at15 = out[1];
+        TrailModel.look(t, 30, inv, 0, 5, 150, day, out);
+        double at30 = out[1];
+        TrailModel.birth(t, inv, 150, 5, night, out);
+        double nightLife = out[0];
+        System.out.printf(Locale.ROOT, "SAM sustain: day life %.0f s, opacity 15 s %.2f, 30 s %.2f; night life %.0f s%n", dayLife, at15, at30, nightLife);
+        assertTrue(dayLife > 60, "днём виден дольше минуты: " + dayLife);
+        // прежде (σ Бриггса) — 0,06 и 0,02
+        assertTrue(at15 > 0.2 && at30 > 0.1, "днём к 15–30 с ещё заметен: " + at15 + ", " + at30);
+        assertTrue(nightLife > 300, "ночью — минуты: " + nightLife);
+    }
+
+    @Test
+    void wanderNoiseHasUnitSpread() {
+        java.util.Random r = new java.util.Random(7);
+        double sum = 0, sum2 = 0;
+        int n = 400_000;
+        for (int i = 0; i < n; i++) {
+            double v = TrailModel.noise(r.nextLong(), r.nextDouble() * 1000 - 500, r.nextDouble() * 1000);
+            sum += v;
+            sum2 += v * v;
+        }
+        double mean = sum / n, std = Math.sqrt(sum2 / n - mean * mean);
+        assertEquals(0, mean, 0.01);
+        assertEquals(1, std, 0.01);
+    }
+
+    /** Мотание оси и расплывание следа вместе — усреднённый шлейф Бриггса: Var(сдвига) = σ_y² − σ_r² (σ_z² − σ_r² по высоте). */
+    @Test
+    void bendsMakeUpTheAveragedPlume() {
+        double[] out = new double[3];
+        for (double c : new double[]{Stability.B, Stability.D, Stability.F}) {
+            for (double age : new double[]{10, 60, 300}) {
+                double u = 5, x = u * age, rel = TrailModel.spread(age, c, u);
+                double side = Stability.sigmaY(c, x), up = Stability.sigmaZ(c, x);
+                double vx = 0, vy = 0, vz = 0;
+                int n = 20_000;
+                java.util.Random r = new java.util.Random(11);
+                for (int i = 0; i < n; i++) {
+                    TrailModel.wander(r.nextLong(), r.nextDouble() * 5000, age, c, u, 1, Double.POSITIVE_INFINITY, out);
+                    vx += out[0] * out[0];
+                    vy += out[1] * out[1];
+                    vz += out[2] * out[2];
+                }
+                assertEquals(side * side - rel, vx / n, 0.1 * (side * side - rel), "вбок, класс " + c + ", " + age + " с");
+                assertEquals(side * side - rel, vz / n, 0.1 * (side * side - rel), "вбок, класс " + c + ", " + age + " с");
+                assertEquals(up * up - rel, vy / n, 0.1 * (up * up - rel), "по высоте, класс " + c + ", " + age + " с");
+            }
+        }
+        TrailModel.wander(1, 100, 0, Stability.B, 5, 1, Double.POSITIVE_INFINITY, out);
+        assertEquals(0, Math.abs(out[0]) + Math.abs(out[1]) + Math.abs(out[2]), 0, "у сопла оси никто не гнул");
+        // у земли ось не уходит в неё: по высоте — не больше трети высоты над землёй
+        double worst = 0;
+        java.util.Random r = new java.util.Random(3);
+        for (int i = 0; i < 20_000; i++) {
+            TrailModel.wander(r.nextLong(), r.nextDouble() * 5000, 120, Stability.B, 5, 1, 12, out);
+            worst = Math.max(worst, -out[1]);
+        }
+        assertTrue(worst < 12, "в землю: " + worst);
+    }
+
+    /**
+     * Изгибы движутся плавно: в самом бурном воздухе (класс A, ветер 8 м/с) ось за тик сдвигается не дальше 0,5 м — 10 м/с,
+     * восходящий поток конвекции, — а не рывками, с которых лента дрожит.
+     */
+    @Test
+    void bendsMoveSmoothly() {
+        double[] a = new double[3], b = new double[3];
+        java.util.Random r = new java.util.Random(5);
+        double worst = 0;
+        for (int i = 0; i < 5000; i++) {
+            long seed = r.nextLong();
+            double s = r.nextDouble() * 3000, age = 0.05 + r.nextDouble() * 600;
+            TrailModel.wander(seed, s, age, Stability.A, 8, 14, Double.POSITIVE_INFINITY, a);
+            TrailModel.wander(seed, s, age + 0.05, Stability.A, 8, 14, Double.POSITIVE_INFINITY, b);
+            double d = Math.sqrt(sq(a[0] - b[0]) + sq(a[1] - b[1]) + sq(a[2] - b[2]));
+            worst = Math.max(worst, d);
+        }
+        assertTrue(worst < 0.5, "за тик: " + worst);
+    }
+
+    private static double sq(double v) {
+        return v * v;
     }
 
     @Test

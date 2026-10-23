@@ -36,6 +36,8 @@ final class TrailPoints {
     final float[] excess = new float[CAPACITY], rise = new float[CAPACITY], brunt = new float[CAPACITY];
     /** Путь снаряда от начала его пути к рождению точки, м ({@code FarFlightView}: докуда точка позади сопла). */
     final double[] path = new double[CAPACITY];
+    /** Высота точки над землёй при рождении, м ({@code TrailModel.wander}: ось следа вихри не уводят в землю); земля неизвестна — бесконечность. */
+    final float[] clearance = new float[CAPACITY];
     /** Класс устойчивости при рождении: по нему посчитан срок жизни — по нему и расплывание. */
     final float[] stability = new float[CAPACITY];
     /** Облако старта, которому принадлежит вещество точки (струя тогда била в землю); null — след. */
@@ -90,6 +92,7 @@ final class TrailPoints {
         this.prev[i] = prev;
         cloud[i] = null;
         column[i] = 0;
+        clearance[i] = Float.POSITIVE_INFINITY;
         last[i] = false;
         // лента продолжилась (путь снова есть) — прошлый конец уже не конец
         if (holds(prev)) last[index(prev)] = false;
