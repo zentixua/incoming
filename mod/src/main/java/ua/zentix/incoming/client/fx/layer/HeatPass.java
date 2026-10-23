@@ -17,6 +17,8 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
+import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
@@ -441,7 +443,7 @@ public final class HeatPass {
         lastAtEye = 0;
         FRAME.atEye = 0;
     }
-    private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), SHAPE = new Matrix4f(), LIGHT = new Matrix4f();
+    private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), SHAPE = new Matrix4f();
     /** Путь вихрей по модулю этого числа размеров вихря (шум не периодичен: раз в сотни вихрей узор перескакивает). */
     static final double NOISE_PERIOD = 256;
     private static final Vector3f FORWARD = new Vector3f();
@@ -508,29 +510,14 @@ public final class HeatPass {
         RenderSystem.disableDepthTest();
         RenderSystem.depthMask(false);
         RenderSystem.disableBlend();
+        // видимость прямого света источников — своим проходом в половинном разрешении (лучи тени — основная цена)
+        boolean shadows = f.lit() && seen(f, scene, pixel);
         RenderSystem.setShaderTexture(0, copy);
         RenderSystem.setShaderTexture(1, scene);
-        s.safeGetUniform("InvViewProj").set(INVERSE);
-        s.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
-        s.safeGetUniform("PallOpenSky").set(OPEN_SKY.x, OPEN_SKY.y, OPEN_SKY.z);
-        s.safeGetUniform("PallFaceShade").set(FACE_SHADE.x, FACE_SHADE.y, FACE_SHADE.z, FACE_SHADE.w);
+        RenderSystem.setShaderTexture(2, shadows ? shadowTex : copy);
+        common(s, f, pixel);
+        s.safeGetUniform("HeatShadow").set(shadows ? 1f : 0f, 0f, 0f, 0f);
         s.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
-        s.safeGetUniform("HeatLights").set(f.lights);
-        double k = f.adapted();
-        LIGHT.set(f.lightColor);
-        Vector4f lc = new Vector4f();
-        for (int i = 0; i < 4; i++) {
-            LIGHT.getColumn(i, lc);
-            LIGHT.setColumn(i, lc.set((float) (lc.x * k), (float) (lc.y * k), (float) (lc.z * k), lc.w));
-        }
-        s.safeGetUniform("HeatLightColor").set(LIGHT);
-        Solids.bind(s);
-        s.safeGetUniform("HeatJet").set(f.jets);
-        s.safeGetUniform("HeatJetAxis").set(f.jetAxis);
-        s.safeGetUniform("HeatJetSize").set(f.jetSize);
-        s.safeGetUniform("HeatJetCore").set(exposed(f.jetCore, k));
-        s.safeGetUniform("HeatJetFlame").set(exposed(f.jetFlame, k));
-        s.safeGetUniform("HeatJetTail").set(exposed(f.jetTail, k));
         s.safeGetUniform("HeatHot").set(f.hot);
         // вихри идут вверх с газом: путь в размерах вихря — в double и по модулю периода шума, а не время в float
         double time = (System.nanoTime() - BORN) / 1e9;
@@ -544,6 +531,32 @@ public final class HeatPass {
         s.safeGetUniform("HeatFront").set(f.front);
         s.safeGetUniform("HeatFrontShape").set(f.frontShape.x, f.frontShape.y, f.frontShape.z, f.frontShape.w);
         s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
+        boolean drawn = quad(s);
+        RenderSystem.enableDepthTest();
+        return drawn;
+    }
+
+    /** Общее у прохода видимости и прохода света: мир кадра, источники, окно заслонов. */
+    private static void common(ShaderInstance s, Frame f, double pixel) {
+        s.safeGetUniform("InvViewProj").set(INVERSE);
+        s.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
+        s.safeGetUniform("PallOpenSky").set(OPEN_SKY.x, OPEN_SKY.y, OPEN_SKY.z);
+        s.safeGetUniform("PallFaceShade").set(FACE_SHADE.x, FACE_SHADE.y, FACE_SHADE.z, FACE_SHADE.w);
+        s.safeGetUniform("HeatLights").set(f.lights);
+        double k = f.adapted();
+        s.safeGetUniform("HeatLightColor").set(exposed(f.lightColor, k));
+        Solids.bind(s);
+        s.safeGetUniform("HeatJet").set(f.jets);
+        s.safeGetUniform("HeatJetAxis").set(f.jetAxis);
+        s.safeGetUniform("HeatJetSize").set(f.jetSize);
+        s.safeGetUniform("HeatJetCore").set(exposed(f.jetCore, k));
+        s.safeGetUniform("HeatJetFlame").set(exposed(f.jetFlame, k));
+        s.safeGetUniform("HeatJetTail").set(exposed(f.jetTail, k));
+        s.safeGetUniform("HeatFrame").set(0f, (float) pixel, f.lit() ? 1f : 0f, 0f);
+    }
+
+    /** Четырёхугольник во весь привязанный кадр шейдером s; false — не нарисован. */
+    private static boolean quad(ShaderInstance s) {
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
         b.addVertex(1, -1, 0);
@@ -560,8 +573,53 @@ public final class HeatPass {
         com.mojang.blaze3d.vertex.BufferUploader.draw(mesh);
         s.clear();
         Solids.unbind();
-        RenderSystem.enableDepthTest();
         return true;
+    }
+
+    @Nullable
+    static ShaderInstance shadowShader;
+    private static int shadowTex = -1, shadowFbo = -1, shadowW, shadowH;
+    private static boolean shadowFailed;
+
+    /**
+     * Проход видимости ({@code fx_heat_shadow}): в свою текстуру (RGBA16F, половина кадра по каждой оси) коды видимости
+     * шаров и факелов и расстояние до мира у образца; кадр и окно вывода — прежние после него. false — прохода нет
+     * (шейдер не собрался, текстуру не завести): свет без теней.
+     */
+    private static boolean seen(Frame f, int scene, double pixel) {
+        ShaderInstance s = shadowShader;
+        if (s == null || shadowFailed) return false;
+        int w = Math.max(1, (copyW + 1) / 2), h = Math.max(1, (copyH + 1) / 2);
+        int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        if (w != shadowW || h != shadowH || shadowTex < 0) {
+            if (shadowTex < 0) shadowTex = GlStateManager._genTexture();
+            if (shadowFbo < 0) shadowFbo = GlStateManager.glGenFramebuffers();
+            GlStateManager._bindTexture(shadowTex);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_NEAREST);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
+            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, w, h, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, shadowFbo);
+            GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, shadowTex, 0);
+            boolean ok = GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+            if (!ok) {
+                Incoming.LOG.error("Heat pass: shadow target {}×{} not created, fire light without shadows", w, h);
+                shadowFailed = true;
+                return false;
+            }
+            shadowW = w;
+            shadowH = h;
+        }
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, shadowFbo);
+        GlStateManager._viewport(0, 0, w, h);
+        RenderSystem.setShaderTexture(1, scene);
+        common(s, f, pixel);
+        boolean drawn = quad(s);
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+        GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+        return drawn;
     }
 
     private static final Matrix4f EXPOSED = new Matrix4f();

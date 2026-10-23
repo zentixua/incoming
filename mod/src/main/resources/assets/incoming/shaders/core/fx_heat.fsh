@@ -3,6 +3,7 @@
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:scene.glsl>
+#moj_import <incoming:heat.glsl>
 
 // Свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (client/fx/layer/HeatPass): проход во весь кадр
 // после пелены и до квадратов слоя по копии кадра (Sampler0) — пиксель пишется целиком.
@@ -27,6 +28,9 @@
 // копия кадра (линейная выборка) и расстояние до мира за пикселем
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
+// видимость прямого света источников из прохода в половинном разрешении (fx_heat_shadow): коды шаров (r) и факелов (g),
+// расстояние до мира у образца вдоль взгляда (b)
+uniform sampler2D Sampler2;
 
 uniform mat4 InvViewProj;
 uniform vec3 PallForward;
@@ -34,27 +38,10 @@ uniform vec3 PallOpenSky;
 uniform vec4 PallFaceShade;
 // дымка воздуха и туман кадра (как у fx_pall_composite): ослабление, начало и конец тумана, форма
 uniform vec4 Haze;
-// шары света: столбец i — середина от глаза (xyz), радиус (w; 0 — нет); свет на белой стене лицом к шару, линейный
-// (rgb), ослабление воздуха, 1/блок (w)
-uniform mat4 HeatLights;
-uniform mat4 HeatLightColor;
 // горячий газ: столбец i — низ столба от глаза (xyz), радиус (w; 0 — нет); высота, размер вихря ℓ, путь газа в размерах
 // вихря (по модулю периода шума), пульсация показателя преломления δn (по столбцам)
 uniform mat4 HeatHot;
 uniform mat4 HeatShape;
-// заслоны у глаза (Solids, свой блок текстуры: в JSON не объявлен): нижний угол окна от глаза (xyz), есть ли окно (w);
-// где этот угол в текстуре
-uniform sampler3D HeatSolids;
-uniform vec4 HeatSolidsAt;
-uniform vec3 HeatSolidsWrap;
-// факелы: столбец i — срез сопла от глаза (xyz), конец ядра (w; 0 — нет); ось струи от сопла (xyz), конец пламени (w);
-// конец струи, полуширина у среза, её рост на метр, ослабление воздуха; свет ядра, пламени, хвоста на метр (rgb)
-uniform mat4 HeatJet;
-uniform mat4 HeatJetAxis;
-uniform mat4 HeatJetSize;
-uniform mat4 HeatJetCore;
-uniform mat4 HeatJetFlame;
-uniform mat4 HeatJetTail;
 // фронты ударной волны: столбцы 0 и 1 — середина от глаза (xyz), радиус (w; 0 — нет); 2 и 3 — скачок показателя
 // преломления на четырёх высотах ровно от синуса угла у земли до верха
 uniform mat4 HeatFront;
@@ -62,17 +49,10 @@ uniform mat4 HeatFront;
 uniform vec4 HeatFrontShape;
 // есть ли фронт (x > 0); угол пикселя, рад; есть ли свет (z > 0) и газ (w > 0)
 uniform vec4 HeatFrame;
+// есть ли видимость из прохода тени (x > 0; нет — без теней)
+uniform vec4 HeatShadow;
 
-const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 const float CROSS = 0.15;
-// окно Solids, блоки; клеток луча тени не больше (HeatPass.SHADOW_CELLS)
-const vec3 SOLIDS_SIZE = vec3(192.0, 96.0, 192.0);
-const int SHADOW_CELLS = 160;
-// свет меньше этого (линейный на экране, ниже шага sRGB у чёрного) — тень не ищется: её не видно
-const float SHADOW_SEEN = 3e-4;
-// и меньше этой доли всей освещённости грани — тоже: порог контраста глаза ~1–2 % (Blackwell, JOSA 36, 1946; ночью он
-// выше — порог с запасом) (HeatPass.WEBER)
-const float WEBER = 0.02;
 // сдвиг фронта меньше этой доли пикселя не виден: его нет (HeatPass.SHIFT_MIN)
 const float FRONT_SHIFT_MIN = 0.05;
 
@@ -193,173 +173,29 @@ vec3 frontShift(vec3 dir, float dist) {
     return bend;
 }
 
-// Часть [t.x, t.y] отрезка от a (от точки грани) по единичному u, что над гранью с нормалью n (HeatPass.above); пусто —
-// y <= x
-vec2 heatAbove(vec3 a, vec3 u, vec2 t, vec3 n) {
-    float na = dot(n, a), nu = dot(n, u);
-    if (abs(nu) > 1e-6) {
-        float ts = -na / nu;
-        if (nu > 0.0) {
-            t.x = max(t.x, ts);
-        } else {
-            t.y = min(t.y, ts);
-        }
-    } else if (na <= 0.0) {
-        t.y = t.x;
-    }
-    return t;
-}
+// Видимость источников в пикселе px с расстоянием до мира depth (вдоль взгляда): из четырёх ближних образцов прохода
+// видимости (половинное разрешение: образец t — пиксель 2t) — тот, чьё расстояние до мира ближе к этому (на краю
+// предмета видимость фона не ложится на предмет); коды: шар — 2 бита (0, ¼, ¾, 1), факел — 1 бит
+const vec4 HEAT_SEEN_CODES = vec4(0.0, 0.25, 0.75, 1.0);
 
-// Прямой свет равномерного отрезка на грань, ∫ cos θ / d² по нему (HeatPass.segment): отрезок от a (от точки грани) по
-// единичному u на [t.x, t.y] — уже над гранью (heatAbove), нормаль n; w2 — квадрат полуширины струи
-float heatSegment(vec3 a, vec3 u, vec2 t, vec3 n, float w2) {
-    if (t.y <= t.x) return 0.0;
-    float na = dot(n, a), nu = dot(n, u);
-    float b = dot(a, u);
-    float h2 = max(dot(a, a) - b * b, 0.0) + w2;
-    float c0 = na - b * nu, s0 = t.x + b, s1 = t.y + b;
-    float q0 = 1.0 / (s0 * s0 + h2), q1 = 1.0 / (s1 * s1 + h2), r0 = sqrt(q0), r1 = sqrt(q1);
-    // (s1·r1 − s0·r0)/h² и r1 − r0 без вычитания близких чисел
-    float k = (s1 * r1 - s0 * r0) / h2;
-    if (s0 * s1 > 0.0) k = (s1 - s0) * (s1 + s0) * q0 * q1 / (s1 * r1 + s0 * r0);
-    float dr = (s0 - s1) * (s0 + s1) * q0 * q1 / (r0 + r1);
-    return max(c0 * k - nu * dr, 0.0);
-}
-
-// Свободен ли путь от p до q (от глаза) от блоков-заслонов (HeatPass.blocked): 1 — да, 0 — нет. Клетки окна вдоль
-// отрезка по порядку (Amanatides, Woo 1987), часть отрезка за окном — свободна; клетка самой точки мира — её грань, не
-// заслон. Без целых делений и ветвлений на шаг: окно по модулю — повтором текстуры (выборка в середине клетки, без
-// уменьшенных копий), ось шага — step по ближней грани (у видеокарты остаток от деления на 192 и ветвящийся выбор оси на
-// каждом шаге стоили больше самой выборки)
-float heatBlocked(vec3 p, vec3 q) {
-    if (HeatSolidsAt.w < 0.5) return 1.0;
-    vec3 a = p - HeatSolidsAt.xyz, d = q - p;
-    float t0 = 0.0, t1 = 1.0;
-    for (int k = 0; k < 3; k++) {
-        if (abs(d[k]) < 1e-6) {
-            if (a[k] < 0.0 || a[k] >= SOLIDS_SIZE[k]) return 1.0;
-        } else {
-            float ta = -a[k] / d[k], tb = (SOLIDS_SIZE[k] - a[k]) / d[k];
-            t0 = max(t0, min(ta, tb));
-            t1 = min(t1, max(ta, tb));
+void heatSeen(ivec2 px, float depth, out vec4 ballSeen, out vec4 jetSeen) {
+    ivec2 lsize = textureSize(Sampler2, 0), f = px / 2;
+    vec4 best = vec4(255.0, 15.0, 1e9, 0.0);
+    float err = 1e30;
+    for (int k = 0; k < 4; k++) {
+        ivec2 t = clamp(f + ivec2(k % 2, k / 2), ivec2(0), lsize - 1);
+        vec4 s = texelFetch(Sampler2, t, 0);
+        float e = abs(s.b - depth);
+        if (e < err) {
+            err = e;
+            best = s;
         }
     }
-    if (t1 <= t0) return 1.0;
-    vec3 cell = clamp(floor(a + d * t0), vec3(0.0), SOLIDS_SIZE - 1.0);
-    vec3 dir = sign(d), inv = 1.0 / max(abs(d), vec3(1e-9));
-    // путь до следующей грани клетки по осям; ось без хода — никогда
-    vec3 next = mix(vec3(1e9), (cell + max(dir, 0.0) - a) * dir * inv, abs(dir));
-    vec3 base = HeatSolidsWrap + 0.5, scale = 1.0 / SOLIDS_SIZE;
-    bool own = t0 <= 0.0;
-    for (int i = 0; i < SHADOW_CELLS; i++) {
-        if (!own && textureLod(HeatSolids, (cell + base) * scale, 0.0).r > 0.5) return 0.0;
-        own = false;
-        float t = min(min(next.x, next.y), next.z);
-        if (t >= t1) break;
-        vec3 m = step(next, vec3(t));
-        cell += m * dir;
-        next += m * inv;
-        if (any(lessThan(cell, vec3(0.0))) || any(greaterThanEqual(cell, SOLIDS_SIZE))) break;
-    }
-    return 1.0;
-}
-
-// Видимая доля диска шара с серединой b радиуса r из точки from (HeatPass.ballSeen): кромка заслона у земли — почти
-// горизонтальная, доля диска над кромкой на высоте y — интеграл ширины хорды 2√(1 − y²); квадратура Гаусса–Чебышёва
-// второго рода по вертикальному диаметру — узлы 0 и ±r·cos(π/4), веса ½ и ¼. Кромка снизу: середина видна — верхний
-// узел тоже, смотрим нижний; середина закрыта — нижний тоже, смотрим верхний (два луча, доли 0, ¼, ¾, 1). Конец луча —
-// у края шара со стороны точки (в шаре заслонов нет)
-float heatBallSeen(vec3 from, vec3 b, float r) {
-    vec3 v = b - from;
-    float d = length(v);
-    v /= max(d, 1e-3);
-    float end = 1.0 - r / max(d, r);
-    float mid = heatBlocked(from, from + (b - from) * end);
-    // вертикаль диска: мировой верх без доли вдоль луча (луч почти отвесный — любая поперечная)
-    vec3 up = vec3(0.0, 1.0, 0.0) - v * v.y;
-    if (dot(up, up) < 1e-4) up = vec3(1.0, 0.0, 0.0) - v * v.x;
-    up = normalize(up) * (0.70710678 * r);
-    if (mid > 0.5) return 0.75 + 0.25 * heatBlocked(from, from + (b - up - from) * end);
-    return 0.25 * heatBlocked(from, from + (b + up - from) * end);
-}
-
-// Начало луча тени: точка мира на две ширины пикселя от грани (не меньше 2 см), чтобы её клетка была воздухом перед гранью
-vec3 heatLift(vec3 p, vec3 n) {
-    return p + n * max(0.02, 2.0 * HeatFrame.y * length(p));
-}
-
-// Свет шаров и факелов на мире в точке p (от глаза) с нормалью n, линейный, на белой стене; prior — свет, что уже
-// падает на грань (неба, линейный, в тех же единицах). Сначала весь свет без теней, потом прямой — с тенью, но только у
-// источника, чей прямой свет не меньше WEBER всей освещённости грани (меньше глаз не различит)
-vec3 heatLight(vec3 p, vec3 n, float prior) {
-    vec3 sum = vec3(0.0);
-    vec3 ballDirect[4], jetDirect[4], jetTarget[4];
-    float total = prior;
+    int balls = int(best.r + 0.5), jets = int(best.g + 0.5);
     for (int i = 0; i < 4; i++) {
-        ballDirect[i] = vec3(0.0);
-        vec4 b = HeatLights[i];
-        if (b.w <= 0.0) continue;
-        vec3 l = b.xyz - p;
-        float d2 = dot(l, l), d = sqrt(d2);
-        vec3 v = l / max(d, 1e-3);
-        float sd = HeatLightColor[i].w * d, nv = dot(n, v);
-        vec3 c = HeatLightColor[i].rgb * mushBallFalloff(d2, b.w * b.w);
-        vec3 lit = c * mushBallFace(nv, v.y, n.y, sd, PALL_LAND, 1.0, 0.0);
-        sum += lit;
-        total += dot(lit, LUMA);
-        // прямой пучок (в шаре и у самого шара тени нет)
-        if (d > b.w) ballDirect[i] = c * (exp(-sd) * max(nv, 0.0));
+        ballSeen[i] = HEAT_SEEN_CODES[(balls >> (2 * i)) & 3];
+        jetSeen[i] = float((jets >> i) & 1);
     }
-    for (int i = 0; i < 4; i++) {
-        jetDirect[i] = vec3(0.0);
-        jetTarget[i] = p;
-        vec4 j = HeatJet[i];
-        if (j.w <= 0.0) continue;
-        vec4 ax = HeatJetAxis[i], sz = HeatJetSize[i];
-        vec3 a = j.xyz - p, u = ax.xyz;
-        vec3 direct = vec3(0.0), around = vec3(0.0), lit = vec3(0.0);
-        float weight = 0.0;
-        for (int k = 0; k < 3; k++) {
-            // ядро и пламя — от среза (пламя обнимает ядро), хвост — за пламенем
-            vec3 q = HeatJetCore[i].rgb;
-            float t0 = 0.0, t1 = j.w;
-            if (k == 1) {
-                q = HeatJetFlame[i].rgb;
-                t1 = ax.w;
-            } else if (k == 2) {
-                q = HeatJetTail[i].rgb;
-                t0 = ax.w;
-                t1 = sz.x;
-            }
-            if (dot(q, LUMA) <= 0.0 || t1 <= t0) continue;
-            float mid = 0.5 * (t0 + t1), w = sz.y + sz.z * mid;
-            vec3 l = a + u * mid;
-            float d2 = max(dot(l, l), 0.25 * (t1 - t0) * (t1 - t0) + w * w), d = sqrt(d2);
-            vec3 v = l / max(length(l), 1e-3);
-            float sd = sz.w * d, nv = dot(n, v);
-            // рассеянный воздухом и отражённый землёй — как у шара в середине части; прямой — интегралом по отрезку
-            float rest = mushBallFace(nv, v.y, n.y, sd, PALL_LAND, 1.0, 0.0) - exp(-sd) * max(nv, 0.0);
-            around += q * ((t1 - t0) / d2 * rest);
-            vec2 above = heatAbove(a, u, vec2(t0, t1), n);
-            vec3 e = q * (exp(-sd) * heatSegment(a, u, above, n, w * w));
-            direct += e;
-            // середина части над гранью — к ней луч тени
-            float y = dot(e, LUMA);
-            lit += y * (a + u * (0.5 * (above.x + above.y)));
-            weight += y;
-        }
-        sum += direct + around;
-        total += dot(direct + around, LUMA);
-        jetDirect[i] = direct;
-        if (weight > 0.0) jetTarget[i] = p + lit / weight;
-    }
-    float seen = max(SHADOW_SEEN, WEBER * total);
-    vec3 from = heatLift(p, n);
-    for (int i = 0; i < 4; i++) {
-        if (dot(ballDirect[i], LUMA) > seen) sum -= ballDirect[i] * (1.0 - heatBallSeen(from, HeatLights[i].xyz, HeatLights[i].w));
-        if (dot(jetDirect[i], LUMA) > seen) sum -= jetDirect[i] * (1.0 - heatBlocked(from, jetTarget[i]));
-    }
-    return sum;
 }
 
 void main() {
@@ -397,8 +233,9 @@ void main() {
         float fd = Haze.w > 0.5 ? max(length(p.xz), abs(p.y)) : length(p);
         float seen = exp(-Haze.x * length(p)) * (1.0 - smoothstep(Haze.y, Haze.z, fd));
         vec3 open = PallOpenSky * faceShade(PallFaceShade, n);
-        float prior = dot(vec3(pallLinear(open.r), pallLinear(open.g), pallLinear(open.b)), LUMA);
-        vec3 added = heatLight(p, n, prior) * seen;
+        vec4 ballSeen = vec4(1.0), jetSeen = vec4(1.0);
+        if (HeatShadow.x > 0.0) heatSeen(px, depth, ballSeen, jetSeen);
+        vec3 added = heatLight(p, n, ballSeen, jetSeen) * seen;
         if (dot(added, LUMA) > 1e-6) {
             vec3 lit = vec3(relit(world.r, 1.0, open.r, added.r), relit(world.g, 1.0, open.g, added.g), relit(world.b, 1.0, open.b, added.b));
             lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
