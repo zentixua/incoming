@@ -4,8 +4,8 @@
 # Слух без оглушения всегда, сцены выборки — в порядке и во времени игры эталона: прогон, где это не так, не годится
 # (check.py по логу, код 1).
 # Копия инстанса Артёма → $LOOK_ROOT/inst-<имя> (его инстанс не трогается), клиент — prod_client.py дерева (сценарный
-# jar этого дерева); ждёт, пока игра Артёма закрыта и нет чужой задачи ноутбука; игра запустилась — клиент гасится, код 75.
-# Итог — $LOOK_ROOT/out/<имя>/: кадры, лог, audio.wav, probe-frames.txt, gpu.csv. Запускать через tools/laptop_job.sh.
+# jar этого дерева); ждёт, пока игра Артёма закрыта и хватает памяти; игра запустилась — клиент гасится, код 75.
+# Итог — $LOOK_ROOT/out/<имя>/: кадры, лог, audio.wav, probe-frames.txt, gpu.csv. Запускать через tools/laptop_job.sh --gpu.
 set -uo pipefail
 V=$1; TREE=$2; CASES=${3:-}; EXTRA=${4:--}
 ROOT=${LOOK_ROOT:-/mnt/data/projects/airstrike/mod/run/look-gate}
@@ -13,17 +13,14 @@ INST=$ROOT/inst-$V; OUT=$ROOT/out/$V
 export JAVA_HOME=${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}
 artem() { local p; for p in $(pgrep -x java); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q 'PrismLauncher/instances/' && return 0; done; return 1; }
 while artem; do echo "$(date +%T) игра Артёма запущена — жду"; sleep 60; done
-# видеокарта — одна задача (tools/gpu_busy.sh): чужая задача ноутбука с клиентом или Blender — ждать её конца; лёгкие
-# (сервер, тесты) — рядом, если памяти хватает на клиент со всей сборкой (~13 ГБ)
-source "$(dirname "$0")/../gpu_busy.sh"
-# песочница эффектов (tools/sandbox.sh) не в счёт: видя клиент шлагбаума, она гасится сама за ~5 с
-gpu_job() { gpu_busy "incoming-job-look-$V-" incoming-job-sandbox-; }
+# с картинкой — одна сессия за раз (CLAUDE.md): своих клиентов, свою песочницу она гасит сама; лёгкие задачи (сервер,
+# тесты) — рядом, если памяти хватает на клиент со всей сборкой (~13 ГБ)
 short_of_memory() { [ "$(awk '/MemAvailable/ {print int($2/1048576)}' /proc/meminfo)" -lt 13 ]; }
 # очередь шлагбаумов — замком: проверка по процессам не видит чужую задачу, пока та ещё копирует инстанс и собирает jar
 # (22.10 два прогона так шли одновременно, и кадры одного сняты при 20–30 fps вместо ~80); замок держится до выхода
 mkdir -p "$ROOT"; exec 9>"$ROOT/.gpu.lock"
 until flock -n 9; do echo "$(date +%T) другой прогон шлагбаума — жду"; sleep 30; done
-while gpu_job || short_of_memory; do echo "$(date +%T) видеокарта или память заняты чужой задачей — жду"; sleep 30; done
+while short_of_memory; do echo "$(date +%T) памяти меньше 13 ГБ — жду"; sleep 30; done
 python3 "$TREE/tools/prod_client.py" --copy-only --dir "$INST" || exit 1
 sed -i -e 's/^fullscreen:.*/fullscreen:false/' -e 's/^soundCategory_music:.*/soundCategory_music:0.0/' "$INST/options.txt"
 # без оглушения и звона (nuke_tinnitus = false в копии) — всегда: сцены идут подряд одним игроком, и глухота от взрыва

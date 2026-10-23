@@ -18,11 +18,19 @@
 #     Сценарий, которому нужен звук (client_scenario.sh), пишет его драйвером OpenAL Soft «wave» в файл
 #     (ALSOFT_CONF), трейлер собирает звук из журнала — ни тому ни другому сервер не нужен.
 # Команда (строка) выполняется внутри сессии вложенного KWin (--exit-with-session): с его выходом KWin закрывается.
+# Видеокарта — одна (tools/gpu_lease.sh): клиент берёт аренду своей сессии и замок «клиент на видеокарте» и держит их,
+# пока жив; аренда у другой сессии или клиент уже идёт — отказ 75 со строкой, у кого (INCOMING_GPU_WAIT=1 — ждать аренду).
 set -euo pipefail
 [ $# -eq 4 ] || { echo "использование: $0 <сокет> <ширина> <высота> <команда>" >&2; exit 2; }
 SOCKET="$1" WIDTH="$2" HEIGHT="$3" COMMAND="$4"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOME_DIR="$ROOT/mod/run/kwin/$SOCKET"
+source "$ROOT/tools/gpu_lease.sh"
+owner="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
+# сначала замок клиента (иначе отказ по нему оставил бы только что взятую аренду на 10 мин), потом аренда
+who=$(gpu_client_busy) && { echo "$who" >&2; exit 75; }
+lease_take "$owner" "$ROOT" ${INCOMING_GPU_WAIT:+--wait} || exit 75
+gpu_client_hold "$owner" "$ROOT" "$COMMAND" || exit 75
 mkdir -p "$HOME_DIR/config" "$HOME_DIR/data" "$HOME_DIR/cache" "$HOME_DIR/state"
 exec env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
     XDG_CONFIG_HOME="$HOME_DIR/config" XDG_DATA_HOME="$HOME_DIR/data" \

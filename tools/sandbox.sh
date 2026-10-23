@@ -4,9 +4,13 @@
 # горячей заменой, ресурсы — перезагрузкой, без нового клиента. Сценарий — Sandbox (mod/src/devtest), команды —
 # SandboxCommand; каталог клиента — mod/run/sandbox, кадры и звук — mod/run/sandbox/fx/out/<имя>/.
 #
-#   tools/sandbox.sh start [shaders] [dh] [soft] [--size 1280x720]   клиент в фоне (задача ноутбука sandbox-<дерево>):
-#                                          при игре Артёма — выход 75; ждёт свободных видеокарты и очереди; выходит, когда мир готов;
-#                                          soft — без видеокарты (xvfb-run, llvmpipe: 3–10 кадров/с, без шейдеров; облако)
+#   tools/sandbox.sh start [shaders] [dh] [soft] [--wait] [--size 1280x720]   клиент в фоне (задача ноутбука
+#                                          sandbox-<дерево>): берёт аренду видеокарты своей сессии (tools/gpu_lease.sh) —
+#                                          она у другой сессии: выход 75 со строкой «видеокарта у …» (--wait — ждать её);
+#                                          при игре Артёма — выход 75; выходит, когда мир готов; живёт, пока не stop или
+#                                          игра Артёма, и продлевает аренду; чужие задачи без видеокарты её не гасят;
+#                                          soft — без видеокарты и без аренды (xvfb-run, llvmpipe: 3–10 кадров/с, без
+#                                          шейдеров; облако)
 #   tools/sandbox.sh fx '<команда>' …      команды /fx по очереди (blast drone, cam 60 10 90 8, time night, clear, …),
 #                                          каждая ждёт своего итога
 #   tools/sandbox.sh swap                  собрать изменённое (Gradle), горячая замена классов, перезагрузка ресурсов,
@@ -14,11 +18,13 @@
 #   tools/sandbox.sh shot <имя> '<эффект>' [--at 0.1,0.5,1,3] [--wav 4] [--cam 'дальн выс азимут взгляд'] [--time day|night]
 #                        [--overlay] [--no-swap]
 #                                          swap, потом эффект с кадрами на эти секунды и звуком: <имя>_*.png, <имя>.wav,
-#                                          capture.json; в конце — сколько секунд от команды до последнего кадра
+#                                          capture.json; в конце — сколько секунд от команды до последнего кадра.
+#                                          Ядерка у камеры: shot wall 'nuke 15 near' --cam '60 15 0 5' --at -0.5,0.1,1 —
+#                                          дома сцены debris, время — от прихода фронта к ним (client-scenario.md)
 #   tools/sandbox.sh restart [опции start] остановить и запустить заново (после правки, которую замена не берёт)
 #   tools/sandbox.sh jbr                   поставить JetBrains Runtime (общий для всех деревьев, mod/run/jbr главного):
 #                                          с ним замена берёт и новые поля, методы, лямбды; start берёт его сам
-#   tools/sandbox.sh stop | status
+#   tools/sandbox.sh stop | status          закончил с картинкой — stop, потом tools/gpu_lease.sh release
 #
 # INCOMING_SANDBOX_JAVA=<java> — своя JVM песочницы (JetBrains Runtime — с -XX:+AllowEnhancedClassRedefinition).
 set -uo pipefail
@@ -33,15 +39,10 @@ jbr_java() { local j="$JBR_DIR/$JBR_BUILD/bin/java"; [ -x "$j" ] && echo "$j"; }
 export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}"
 
 artem() { pgrep -f 'java.*PrismLauncher/[i]nstances/' >/dev/null; }
+# аренда видеокарты (tools/gpu_lease.sh): владелец — сессия по дереву
+source "$(dirname "$0")/gpu_lease.sh"
+export INCOMING_GPU_OWNER="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 running() { [ -n "$(systemctl --user list-units "$UNIT-*" --state=active --no-legend --plain)" ]; }
-# видеокарта — одна задача (tools/gpu_busy.sh)
-source "$(dirname "$0")/gpu_busy.sh"
-gpu_job() { gpu_busy "$UNIT-"; }
-# очередь тяжёлых задач ноутбука (tools/laptop_job.sh, замок): песочница живёт, пока её не остановят, поэтому замок не
-# берёт (задача --light), а ждёт, пока он свободен, и уступает, как только его взял кто-то ещё
-LOCK=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-laptop.lock
-# занята — замок держит задача, записавшая себя владельцем (как laptop_job.sh --status: его миг на замке — не задача)
-queue_busy() { [ -s "$LOCK.owner" ] && ! flock -n "$LOCK" true; }
 
 # одна команда /fx: файл в inbox, ждать итога (*.done); вывод — итог, код 1 — ошибка
 fx() {
@@ -123,9 +124,10 @@ PY
 }
 
 start() {
-  local size=1280x720 opts=() pack
+  local size=1280x720 opts=() pack wait= fresh=
   while [ $# -gt 0 ]; do
     case "$1" in
+      --wait) wait=--wait ;;
       shaders) export INCOMING_SHADERS=1 ;;
       dh) export INCOMING_DH=1 ;;
       soft) export INCOMING_SANDBOX_SOFT=1 ;;
@@ -135,9 +137,6 @@ start() {
     shift
   done
   running && { echo "песочница уже идёт ($UNIT)"; exit 0; }
-  # песочница другого дерева держит видеокарту, пока её не остановят: не ждать её без конца
-  local other; other=$(systemctl --user list-units 'incoming-job-sandbox-*' --state=active --no-legend --plain | awk '{print $1}' | grep -v -- "^$UNIT-" || true)
-  [ -n "$other" ] && { echo "видеокарту держит песочница другого дерева ($other) — её tools/sandbox.sh stop" >&2; exit 75; }
   # JetBrains Runtime, если поставлен (tools/sandbox.sh jbr): замена берёт и новые поля и методы
   if [ -z "${INCOMING_SANDBOX_JAVA:-}" ] && jbr_java >/dev/null; then export INCOMING_SANDBOX_JAVA="$(jbr_java)"; fi
   unset INCOMING_SANDBOX_ENHANCED
@@ -148,7 +147,18 @@ start() {
   echo "JVM: ${INCOMING_SANDBOX_JAVA:-тулчейн Gradle}; замена — $swaps"
   if [ -z "${INCOMING_SANDBOX_SOFT:-}" ]; then
     artem && { echo "игра Артёма запущена — видеокарту не берём" >&2; exit 75; }
-    while gpu_job || queue_busy; do echo "$(date +%T) видеокарта или очередь ноутбука заняты ($(cat "$LOCK.owner" 2>/dev/null)) — жду"; sleep 30; done
+    # с картинкой — одна сессия за раз: аренда у другой — отказ (её песочницу и задачи не гасим); клиент на видеокарте
+    # уже идёт (своя песочница другого дерева, свой шлагбаум) — тоже отказ, до сборки
+    local who
+    while who=$(gpu_client_busy); do
+      [ -n "$wait" ] || { echo "$who" >&2; exit 75; }
+      echo "$(date +%T) $who — жду" >&2; sleep 10
+    done
+    _lease_read
+    fresh=1; [ "$L_OWNER" = "$INCOMING_GPU_OWNER" ] && ! _lease_free && fresh=
+    lease_take "$INCOMING_GPU_OWNER" "$ROOT" $wait || exit 75
+    # не поднялись (сборка, клиент) — только что взятую аренду отпустить: другие сессии не ждут 10 мин впустую
+    [ -n "$fresh" ] && trap 'lease_release "$INCOMING_GPU_OWNER"' EXIT
   elif [ -n "${INCOMING_SHADERS:-}" ]; then
     echo "soft — без шейдеров (llvmpipe)" >&2; exit 2
   elif ! command -v xvfb-run >/dev/null; then
@@ -194,6 +204,9 @@ OPT
   local w=${size%x*} h=${size#*x}
   INCOMING_SANDBOX=1 nohup "$ROOT/tools/laptop_job.sh" --light "sandbox-$(basename "$ROOT")" -- "$ROOT/tools/sandbox.sh" _run "$w" "$h" > "$RUN/logs/job.log" 2>&1 &
   local job=$! waited=0
+  # задача пошла: аренду держит её клиент; обрыв этого ожидания (Ctrl+C, срок) аренду у живого клиента не отнимает —
+  # отпустить, только если задача сама не поднялась
+  trap - EXIT
   until [ -f "$FX/ready" ]; do
     sleep 0.2; waited=$((waited + 1))
     # клиент жив, но встал до мира (чужой экран, шейдерпак) — не ждать без конца: последний экран — строка SANDBOX screen
@@ -202,13 +215,15 @@ OPT
       grep 'SANDBOX screen' "$RUN/logs/latest.log" 2>/dev/null | tail -n 1 >&2
       tail -n 20 "$RUN/logs/latest.log" "$RUN/logs/job.log" >&2
       [ $waited -gt 1500 ] && stop >&2
+      # задача не поднялась или остановлена — только что взятую аренду отпустить
+      if [ -n "$fresh" ] && { [ $waited -gt 1500 ] || ! kill -0 $job 2>/dev/null; }; then lease_release "$INCOMING_GPU_OWNER"; fi
       exit 1
     fi
   done
   echo "песочница готова: сборка $build с, клиент $(cat "$FX/ready") с (JVM → мир), всего $(since "$t0") с"
 }
 
-# внутри задачи ноутбука: клиент во вложенном KWin; игра Артёма запустилась — клиент гасится
+# внутри задачи ноутбука: клиент во вложенном KWin; гасится только игрой Артёма (машина общая) и stop
 run_client() {
   if [ -n "${INCOMING_SANDBOX_SOFT:-}" ]; then
     # без видеокарты и без звука хоста, как путь xvfb-run в rigs.md (облако)
@@ -218,10 +233,9 @@ run_client() {
     "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   fi
   local pc=$!
+  # аренду, пока клиент жив, продлевает nested_kwin.sh (gpu_client_hold)
   while kill -0 $pc 2>/dev/null; do
     if [ -z "${INCOMING_SANDBOX_SOFT:-}" ] && artem; then echo "$(date +%T) игра Артёма запустилась — гашу песочницу" | tee "$FX/stopped"; kill -TERM $pc; wait $pc; exit 75; fi
-    # съёмка (шлагбаум, трейлер) важнее песочницы: чужой клиент на видеокарте — уступить
-    if [ -z "${INCOMING_SANDBOX_SOFT:-}" ] && { gpu_job || queue_busy; }; then echo "$(date +%T) видеокарту или очередь ноутбука взяла другая задача — гашу песочницу" | tee "$FX/stopped"; kill -TERM $pc; wait $pc; exit 75; fi
     sleep 5
   done
   wait $pc
@@ -282,10 +296,10 @@ case "$cmd" in
   restart) stop; sleep 2; start "$@" ;;
   stop) stop ;;
   jbr) jbr ;;
-  status) if running; then echo "идёт; готов за $(cat "$FX/ready" 2>/dev/null) с; замена: $(cat "$FX/hotswap" 2>/dev/null)"; else echo "не запущена"; fi ;;
+  status) if running; then echo "идёт; готов за $(cat "$FX/ready" 2>/dev/null) с; замена: $(cat "$FX/hotswap" 2>/dev/null)"; else echo "не запущена"; fi; lease_status || true ;;
   fx) for c in "$@"; do fx "$c" || exit 1; done ;;
   swap) swap ;;
   shot) [ $# -ge 2 ] || { echo "shot <имя> '<эффект>' [--at …] [--wav …] [--cam …]" >&2; exit 2; }; shot "$@" ;;
   _run) run_client "$@" ;;
-  *) sed -n '2,23p' "$0"; exit 2 ;;
+  *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 2 ;;
 esac

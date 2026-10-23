@@ -14,7 +14,9 @@ import java.util.Locale;
  *       сервера (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять); высота —
  *       над землёй, м: удар в крышу или стену (земля в пакете — трава под точкой);</li>
  *   <li>{@code real <оружие>} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки) на новом месте;</li>
- *   <li>{@code nuke <кт> [air|ground]} — ядерный подрыв без полёта ({@code /incoming nuke now}) на новом месте;</li>
+ *   <li>{@code nuke <кт> [air|ground] [near [метров]]} — ядерный подрыв без полёта ({@code /incoming nuke now}) на новом
+ *       месте; с {@code near} — вид у камеры: дома и дубы сцены {@code debris} в точке, подрыв в стольких метрах к северу
+ *       (по умолчанию {@link #NEAR_RANGE}), время эффекта — от прихода фронта к домам (кадры и до него, с −10 с);</li>
  *   <li>{@code airburst [seed]} — разрыв зенитной ракеты в воздухе над точкой;</li>
  *   <li>{@code raid [число] [радиус] [секунд между]} — налёт: взрывы шахедов только у клиента (как {@code blast}) в круге
  *       радиуса вокруг точки один за другим (по умолчанию 16 за 45 с в 120 м) — цена дыма многих ударов в кадре;</li>
@@ -31,6 +33,9 @@ import java.util.Locale;
  * </ul>
  */
 record SandboxCommand(Verb verb, List<String> args) {
+    /** {@code nuke … near}: дальность подрыва от домов по умолчанию — как в сценарии {@code debris} (2 км). */
+    static final double NEAR_RANGE = 2000;
+
     enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
@@ -74,10 +79,17 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (args.size() > 1) number(1);
             }
             case NUKE -> {
-                need(1, 2);
+                need(1, 4);
                 int kt = (int) number(0);
                 if (kt < 1 || kt > 15) throw new IllegalArgumentException("мощность 1–15 кт");
-                if (args.size() > 1 && !List.of("air", "ground").contains(args.get(1))) throw new IllegalArgumentException("air или ground");
+                int i = 1;
+                if (args.size() > i && List.of("air", "ground").contains(args.get(i))) i++;
+                if (args.size() > i && args.get(i).equals("near")) {
+                    i++;
+                    if (args.size() > i && (number(i) < 100 || number(i) > 10000)) throw new IllegalArgumentException("дальность near 100–10000 м");
+                    if (args.size() > i) i++;
+                }
+                if (args.size() > i) throw new IllegalArgumentException("nuke <кт> [air|ground] [near [метров]]");
             }
             case RAID -> {
                 need(0, 3);
@@ -117,6 +129,22 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case AGAIN, CLEAR, RELOAD -> need(0, 0);
         }
+    }
+
+    /** {@code nuke}: воздушный подрыв. */
+    boolean air() {
+        return args.contains("air");
+    }
+
+    /** {@code nuke … near}: вид у камеры. */
+    boolean near() {
+        return verb == Verb.NUKE && args.contains("near");
+    }
+
+    /** {@code nuke … near [метров]}: дальность подрыва от домов. */
+    double nearRange() {
+        int i = args.indexOf("near");
+        return i >= 0 && args.size() > i + 1 ? number(i + 1) : NEAR_RANGE;
     }
 
     WeaponType weapon() {
@@ -162,7 +190,8 @@ record SandboxCommand(Verb verb, List<String> args) {
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException("время кадра — секунды через запятую: " + args.get(1));
             }
-            if (t[i] < 0 || t[i] > 600) throw new IllegalArgumentException("время кадра 0–600 с");
+            // до начала эффекта (−10…0 с) — только у эффекта, чьё начало известно заранее (nuke … near: приход фронта)
+            if (t[i] < -10 || t[i] > 600) throw new IllegalArgumentException("время кадра −10…600 с");
             if (i > 0 && t[i] < t[i - 1]) throw new IllegalArgumentException("время кадров — по возрастанию");
         }
         return t;
