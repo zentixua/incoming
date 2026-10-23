@@ -520,7 +520,8 @@ class GroundDustTest {
      * опускал минутами — бурый пласт на высоте крыш над городом): шахед на перекрёстке с рыхлым грунтом, ветер 5 м/с — в
      * квартале (дома 10×10×12 м, улицы по 6 м) и перед башней 40 м шириной 20 м в 30–50 м по ветру до 120 с низ клуба,
      * поднятого с улицы, пока слой тоньше дома, не выше блока над улицей (на стены слой не взбирается, в застройке ветер
-     * идёт поверху, skimming flow), а толще — накрывает дома: низ не выше половины их высоты или четверти своей толщи.
+     * идёт поверху, skimming flow), а толще — накрывает дома: низ не выше половины их высоты или четверти своей толщи
+     * (на миг, пока след весь над крышами, — не дольше 3 с подряд).
      */
     @Test
     void windyStreetDustStaysInTheStreet() {
@@ -538,6 +539,8 @@ class GroundDustTest {
             String scene = relief == town ? "квартал" : "башня";
             List<Double> ts = nodes(1, 120);
             List<double[]> first = layer(dust, ts.getFirst());
+            double[] high = new double[first.size()];
+            double last = ts.getFirst();
             for (double t : ts) {
                 List<double[]> now = layer(dust, t);
                 for (int i = 0; i < now.size(); i++) {
@@ -547,8 +550,14 @@ class GroundDustTest {
                     // слой тоньше домов — на улице; толще — переливается, но лежит не выше среднего верха под своим следом
                     if (2 * b[4] < wall) assertTrue(base <= 1 + 1e-6, scene + ", " + t + " с, клуб " + i + ": тонкая пыль улицы на высоте " + base);
                     // толще — накрывает: низ не выше половины дома или четверти своей толщи (пласта над пустой улицей нет)
-                    else assertTrue(base <= Math.max(0.5 * wall, 0.5 * b[4]) + 1e-6, scene + ", " + t + " с, клуб " + i + ": толстая пыль улицы на высоте " + base);
+                    else {
+                        // след на миг весь на крышах — низ поднимается на узел-другой; дольше 3 с подряд — уже пласт
+                        if (base > Math.max(0.5 * wall, 0.5 * b[4])) high[i] += t - last;
+                        else high[i] = 0;
+                        assertTrue(high[i] <= 3, scene + ", " + t + " с, клуб " + i + ": толстая пыль улицы на высоте " + base + " уже " + high[i] + " с");
+                    }
                 }
+                last = t;
             }
         }
     }
@@ -621,6 +630,49 @@ class GroundDustTest {
                 if (b[0] < 60) continue;
                 double base = b[1] - 0.8 * b[4], below = under(dust, b);
                 assertTrue(base <= below + 2 * GroundDust.DROP + 1e-6, t + " с: клуб в " + b[0] + " м висит на " + (base - below) + " над склоном");
+            }
+        }
+    }
+
+    /**
+     * Овраг рядом и крутой склон вверх у ракеты (десятое ревью: минимум по следу утягивал широкий клуб на дно оврага в 6 м,
+     * и пыль этой стороны минуту лежала под землёй; старт внешнего кольца с точки полосы в 48 м сажал клуб в склон): кадры
+     * с первого, ветер 5 м/с. Овраг 6×25 м в 12 м от удара — с 3 с клуб, чей след ни разу не лёг на овраг хоть на ~20 %,
+     * не ниже ровной земли больше чем на блок (стёкший в овраг в нём и скапливается); склон 39° вверх по ветру — с 3 с низ каждого клуба не ниже поверхности
+     * под ним больше чем на два блока.
+     */
+    @Test
+    void gullyAndSteepUpslopeKeepDustOnTheSurface() {
+        CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 5, 0, 0.1, (int) Stability.D, 0.5);
+        GroundDust.Relief gully = (x, z) -> x >= 12 && x < 18 ? -25 : 0;
+        GroundDust.Relief slope = (x, z) -> Math.floor(0.8 * x);
+        for (GroundDust.Relief relief : List.of(gully, slope)) {
+            double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+            for (int k = 0; k < GroundDust.SECTORS; k++) {
+                double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
+                for (int b = 0; b < GroundDust.BANDS.length; b++) h[k][b] = relief.at(GroundDust.BANDS[b] * Math.cos(ang), GroundDust.BANDS[b] * Math.sin(ang));
+            }
+            GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
+            GroundDust dust = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), air, false, 0, g).ground;
+            String scene = relief == gully ? "овраг" : "склон";
+            for (double t = 1 / 60.0; t < 3; t += 1 / 60.0) layer(dust, t);
+            boolean[] inside = new boolean[layer(dust, 3).size()];
+            for (double t : nodes(3, 120)) {
+                List<double[]> now = layer(dust, t);
+                for (int i = 0; i < now.size() && i < inside.length; i++) {
+                    double[] b = now.get(i);
+                    double base = b[1] - 0.8 * b[4], centre = relief.at(b[0], b[2]);
+                    if (relief == gully) {
+                        // клуб, чей след хоть раз заметно (от ~20 %: три выборки из 13) лёг на овраг, в него стёк и там
+                        // скапливается (тяжёлый воздух стоит в низине) — не в счёт; остальные на дно не уходят
+                        int over = 0;
+                        for (double[] d : GroundDust.FOOTPRINT) if (gully.at(b[0] + 0.5 * b[3] * d[0], b[2] + 0.5 * b[3] * d[1]) < 0) over++;
+                        if (over >= 3) inside[i] = true;
+                        if (!inside[i]) assertTrue(base >= -GroundDust.DROP - 1e-6, scene + ", " + t + " с, клуб " + i + ": на дне оврага, хотя над ним " + over + " из 13 выборок следа, низ " + base);
+                    } else {
+                        assertTrue(base >= under(dust, b) - 2 * GroundDust.DROP - 1e-6, scene + ", " + t + " с, клуб " + i + ": в склоне, низ " + base + " под " + under(dust, b));
+                    }
+                }
             }
         }
     }

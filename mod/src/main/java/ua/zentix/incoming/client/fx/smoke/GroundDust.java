@@ -517,7 +517,7 @@ public final class GroundDust {
                 double ang = 2 * Math.PI * (k + 0.5) / SECTORS, ux = Math.cos(ang), uz = Math.sin(ang);
                 double[] d = drift(t, zc);
                 double[] at = levels ? level(k, a, t, source, ux, uz, own) : new double[]{surface[k][a], 0, 0};
-                out.blob(d[0] + mean * ux - at[1], at[0] + zc, d[1] + mean * uz - at[2], sh, v, mass * fade, airborne(k, a, t));
+                out.blob(d[0] + mean * ux - at[1], at[0] + zc, d[1] + mean * uz - at[2], sh, v, mass * fade, levels ? airborne(k, a, t) : 0);
             }
         }
     }
@@ -591,7 +591,7 @@ public final class GroundDust {
      * Уровень поверхности, на которой лежит клуб кольца показа {@code show} сектора {@code sector} в возрасте t, м от
      * точки взрыва. Путь клуба (сток пласта вдоль {@code ux, uz} от радиуса {@code source} и снос ветром на высоте середины
      * слоя в тот миг) идёт по сетке {@link #PATH} от поверхности, с которой пыль подняло. Тяжёлый воздух уходит в самое
-     * низкое место, до которого достаёт: поверхность под клубом — самая низкая под его следом ({@link #under}: улица между
+     * низкое место, до которого достаёт: поверхность под клубом — нижняя под его следом ({@link #under}: улица между
      * домами, низ склона, улица за краем крыши), выборка — через полширины клуба (не реже метра). Вниз слой идёт по ней,
      * пока она уходит не круче {@link #DROP} на метр пути (склон до 45°: рельеф Minecraft — ступени в блок); за краем
      * круче — опускается быстрее из двух: тяжёлым термиком с мига, когда вышел за край (масса пыли в воздухе и размер
@@ -609,18 +609,18 @@ public final class GroundDust {
             paths[show][sector] = null;
             double[] at = place(show, t, source, ux, uz);
             double start = under(at[0], at[1], 0.5 * width(show, t, own));
-            return new double[]{Double.isNaN(start) ? surface[sector][show] : Math.min(surface[sector][show], start), 0, 0};
+            return new double[]{Double.isNaN(start) ? surface[sector][show] : start, 0, 0};
         }
         Path p = paths[show][sector];
         if (p == null || PATH[p.node] > t) {
-            // начало — самое низкое из поверхности, с которой пыль подняло, и того, что под следом клуба в его месте (на
-            // склоне клуб стоит ниже точки полосы; крыши по бокам улицы уличную пыль не поднимают — под следом улица)
+            // начало — поверхность под следом клуба в его месте (точка полосы — не там, где клуб: у внешнего кольца он на
+            // десятки метров дальше; крыши по бокам улицы уличную пыль не поднимают — под следом улица); не знаем — точка полосы
             p = new Path();
             p.node = PATH_FROM;
             p.now = new Track();
             double[] at = place(show, PATH[PATH_FROM], source, ux, uz);
             double start = under(at[0], at[1], 0.5 * width(show, PATH[PATH_FROM], own));
-            p.now.level = Double.isNaN(start) ? surface[sector][show] : Math.min(surface[sector][show], start);
+            p.now.level = Double.isNaN(start) ? surface[sector][show] : start;
             p.now.seen = start;
             p.next = p.now.copy();
             step(p.next, sector, show, PATH[PATH_FROM], PATH[PATH_FROM + 1], source, ux, uz, own);
@@ -651,22 +651,27 @@ public final class GroundDust {
     }
 
     /**
-     * Поверхность под клубом с серединой в (x, z) и полушириной w, м от точки взрыва: самая низкая из рельефа в середине и
+     * Поверхность под клубом с серединой в (x, z) и полушириной w, м от точки взрыва: третья снизу из 13 выборок рельефа
+     * (нижние ~20 % следа) в середине и
      * на ±w и ±0,62w по осям и на диагоналях ({@link #FOOTPRINT}: несоизмеримые шаги — след, кратный шагу кварталов, не
      * попадает только в крыши) — тяжёлый воздух уходит в низ, до которого достаёт (столб, ствол, крыши по бокам улицы его не
-     * поднимают, дом шире клуба держит); неизвестно всё — {@link Double#NaN}.
+     * поднимают, дом шире клуба держит), но щель, куда попадают одна-две выборки (овраг, канава), весь клуб в себя не забирает;
+     * неизвестно всё — {@link Double#NaN}.
      */
     /** Выборки следа клуба в долях полуширины. */
     static final double[][] FOOTPRINT = {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {0.62, 0}, {-0.62, 0}, {0, 0.62}, {0, -0.62},
             {0.71, 0.71}, {-0.71, 0.71}, {0.71, -0.71}, {-0.71, -0.71}};
 
     double under(double x, double z, double w) {
-        double low = Double.NaN;
+        double[] h = new double[FOOTPRINT.length];
+        int n = 0;
         for (double[] d : FOOTPRINT) {
             double v = relief.at(x + w * d[0], z + w * d[1]);
-            if (!Double.isNaN(v) && !(v >= low)) low = v;
+            if (!Double.isNaN(v)) h[n++] = v;
         }
-        return low;
+        if (n == 0) return Double.NaN;
+        java.util.Arrays.sort(h, 0, n);
+        return h[Math.min(n - 1, n / 6)];
     }
 
     /**
