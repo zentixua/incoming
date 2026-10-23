@@ -27,8 +27,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * закрывает не больше бюджета экранов, а пропускание по экрану то же, что без бюджета.
  */
 class SmokeFillTest {
-    /** Кадр 16:9, 70° по вертикали на 1080 строк. */
-    static final double PIXEL = Math.toRadians(70) / 1080, H = Math.tan(Math.toRadians(35)), W = H * 16 / 9;
+    /**
+     * Кадр 16:9, 70° по вертикали на 1080 строк: пиксель и полудиагональ — как у кадра игры ({@code FarRenderer.view}:
+     * тангенс на пиксель, край — полудиагональ).
+     */
+    static final double H = Math.tan(Math.toRadians(35)), W = H * 16 / 9, PIXEL = 2 * H / 1080,
+            EDGE = Math.atan(0.5 * PIXEL * Math.hypot(1920, 1080));
 
     /** Облако модели — источник, как событие {@code FarBlasts.Event}. */
     record Blast(CloudModel model, double x, double y, double z, double born, long seed) implements SmokeGrid.Source {
@@ -141,7 +145,7 @@ class SmokeFillTest {
     static FarView view(Vec3 eye, Vector3f fwd) {
         fwd.normalize();
         Vector3f left = new Vector3f(0, 1, 0).cross(fwd, new Vector3f()).normalize(), up = fwd.cross(left, new Vector3f()).normalize();
-        return new FarView(eye, fwd, left, up, 0, 1000, PIXEL, Math.toRadians(35), 1, 1, new Vector3f(1, 1, 1), 32000, 192, 192, 0,
+        return new FarView(eye, fwd, left, up, 0, 1000, PIXEL, EDGE, 1, 1, new Vector3f(1, 1, 1), 32000, 192, 192, 0,
                 Sight.Air.at(0, 20000));
     }
 

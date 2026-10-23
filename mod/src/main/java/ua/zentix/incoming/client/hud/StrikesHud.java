@@ -131,7 +131,12 @@ public final class StrikesHud {
         marks.sort(Comparator.comparingInt((TargetMark m) -> m.numbers.getFirst()));
         for (TargetMark m : marks) {
             float[] r = ScreenProjection.rect(m.box);
-            if (r == null) continue;
+            if (r == null) {
+                // угол коробки за глазом (цель вплотную, глаз в ней) — наименьшая рамка у середины, как была метка
+                float[] c = ScreenProjection.project(m.pos);
+                if (c == null) continue;
+                r = new float[]{c[0], c[1], c[0], c[1]};
+            }
             float[] fr = frame(r, w, h);
             int x0 = Math.round(fr[0]), y0 = Math.round(fr[1]), x1 = Math.round(fr[2]), y1 = Math.round(fr[3]);
             if (x1 <= 0 || x0 >= w || y1 <= 0 || y0 >= h) continue;

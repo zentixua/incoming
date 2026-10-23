@@ -240,10 +240,11 @@ public final class WorkGameTests {
         List<Blast> blasts = recordBlasts(h, 48);
         Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         Vec3 first = c.add(-14, 0, 0), second = c.add(14, 0, 0);
-        // поленница за западной стеной первого дома: волна шахеда её не ломает (дальше 5 м — Джаррет B), шар топлива (9 м)
-        // доходит до неё, когда газы выбили стену
+        // книжные шкафы за западной стеной первого дома: волна шахеда их не ломает (дальше 5 м — Джаррет B, порог 5 psi, как у
+        // брёвен), шар топлива (8 м) доходит до них, когда газы выбили стену; бумага загорается от его вспышки (порог газеты
+        // 7,9 кал/см² против ~8,4 — больше половины шкафов, PulseIgnition), брёвна от вспышки в секунду — нет
         BlockPos pile = BlockPos.containing(first).offset(-7, 0, -1);
-        for (int y = 0; y < 4; y++) for (int z = 0; z < 3; z++) level.setBlock(pile.offset(0, y, z), Blocks.OAK_LOG.defaultBlockState(), 2);
+        for (int y = 0; y < 4; y++) for (int z = 0; z < 3; z++) level.setBlock(pile.offset(0, y, z), Blocks.BOOKSHELF.defaultBlockState(), 2);
         List<String> early = new ArrayList<>();
         int[] fires = {0};
         // огонь шара топлива первого шахеда (в его доме) — только после того, как подрыв снёс выбранное

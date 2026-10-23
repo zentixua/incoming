@@ -53,6 +53,7 @@ import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Timeline;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.nuclear.world.CraterJob;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.work.UnitQueue;
@@ -417,17 +418,22 @@ public final class Warheads {
     // ================================================================ шахед, ракета, «Град», «Ланцет»
 
     /**
-     * Природная земля под точкой удара, м (первый воздух над грунтом, ниже построек и деревьев, {@link CraterJob#naturalSurface}):
+     * Природная земля под точкой удара, м (первый воздух над грунтом, ниже построек и деревьев, как {@link CraterJob#naturalSurface}):
      * клиент ставит пыль волны на неё, а не на крышу или стену, куда пришёлся удар (взрыв на крыше — разрыв на её
-     * высоте над улицей). В неготовом чанке — сама точка удара: чтение высоты грузило бы его или ждало загрузки. Земля
-     * выше точки (подвал, удар в склон) — тоже точка: взрыв не под землёй. ⚠ Дом из природного камня (песчаник, камень)
-     * считается грунтом — его крыша будет землёй.
+     * высоте над улицей). В неготовом чанке — сама точка удара: чтение высоты грузило бы его или ждало загрузки. Вниз —
+     * до дна мира (столбец одного готового чанка: башня выше сотни блоков; аппарата над рельефом в столбце мира нет).
+     * Земля выше точки (подвал, удар в склон) — тоже точка: взрыв не под землёй; грунта в столбце нет (пустота) — точка.
+     * ⚠ Дом из природного камня (песчаник, камень) считается грунтом — его крыша будет землёй.
      */
     public static double groundUnder(ServerLevel level, Vec3 pos) {
         BlockPos at = BlockPos.containing(pos);
         if (!Terrain.ready(level, at)) return pos.y;
-        int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX(), at.getZ());
-        return Math.min(pos.y, CraterJob.naturalSurface(level, at.getX(), at.getZ(), Math.max(top, at.getY() + 1)));
+        int top = Math.max(Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX(), at.getZ()), at.getY() + 1);
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(at.getX(), 0, at.getZ());
+        for (int y = top - 1; y >= level.getMinBuildHeight(); y--) {
+            if (BlockResponse.of(level.getBlockState(m.setY(y))).kind() == BlockResponse.Kind.GROUND) return Math.min(pos.y, y + 1);
+        }
+        return pos.y;
     }
 
     /**
