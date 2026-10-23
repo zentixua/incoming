@@ -26,6 +26,8 @@ import java.util.Locale;
  *   <li>{@code cam <дальность> [высота] [азимут°] [взгляд]} — где камера: дальность от точки, высота над землёй, азимут
  *       от точки (0 — юг, 90 — запад, как поворот игрока), высота точки взгляда над землёй;</li>
  *   <li>{@code time day|night|<тик>}, {@code hud on|off}, {@code overlay on|off} — свет, интерфейс, числа модели;</li>
+ *   <li>{@code zoom <k>} — зум ×k (1–256; 1 — без зума): поле зрения в k раз уже (тангенс половины угла), как у Ok Zoomer
+ *       и бинокля — последним, после всех, кто его меняет;</li>
  *   <li>{@code shots <имя> <секунды через запятую> [wav]} — кадры и звук следующего эффекта: кадры на эти секунды от
  *       его начала, звук — столько секунд ({@code wav}, 0 — без звука) в {@code fx/out/<имя>/};</li>
  *   <li>{@code again} — последний эффект ещё раз (после горячей замены кода), {@code clear} — снять все эффекты,
@@ -36,7 +38,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code nuke … near}: дальность подрыва от домов по умолчанию — как в сценарии {@code debris} (2 км). */
     static final double NEAR_RANGE = 2000;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
@@ -116,6 +118,10 @@ record SandboxCommand(Verb verb, List<String> args) {
             case HUD, OVERLAY -> {
                 need(1, 1);
                 if (!List.of("on", "off").contains(args.getFirst())) throw new IllegalArgumentException("on или off");
+            }
+            case ZOOM -> {
+                need(1, 1);
+                if (number(0) < 1 || number(0) > 256) throw new IllegalArgumentException("зум 1–256");
             }
             case SHOTS -> {
                 need(2, 3);

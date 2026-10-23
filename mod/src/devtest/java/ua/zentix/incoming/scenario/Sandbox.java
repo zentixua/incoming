@@ -28,11 +28,13 @@ import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.client.event.ViewportEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -117,6 +119,8 @@ final class Sandbox {
     /** Камера: дальность, высота над землёй, азимут от точки, высота точки взгляда. */
     private double camDist = 60, camHeight = 10, camBearing = 90, camLook = 8;
     private boolean overlay;
+    /** Зум ×k ({@code zoom}): 1 — нет. */
+    private double zoom = 1;
     @Nullable
     private SandboxCommand lastEffect;
     /** Команда из файла, которая ещё идёт, и её файл итога. */
@@ -186,6 +190,7 @@ final class Sandbox {
         NeoForge.EVENT_BUS.addListener(this::onTick);
         NeoForge.EVENT_BUS.addListener(this::onFrame);
         NeoForge.EVENT_BUS.addListener(this::onCommands);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, this::onFov);
         try {
             Files.createDirectories(inbox);
             // команды прошлого запуска — не этому клиенту
@@ -333,6 +338,15 @@ final class Sandbox {
         })));
     }
 
+    /**
+     * Зум ×k: поле зрения мира в k раз уже по тангенсу половины угла, последним из всех, кто его меняет, — так, как
+     * Ok Zoomer меняет его на выходе {@code getFov} (кадр мира и его матрица — с зумом).
+     */
+    private void onFov(ViewportEvent.ComputeFov e) {
+        if (zoom <= 1 || !e.usedConfiguredFov()) return;
+        e.setFOV(2 * Math.toDegrees(Math.atan(Math.tan(Math.toRadians(e.getFOV() / 2)) / zoom)));
+    }
+
     private void run(SandboxCommand c) {
         Minecraft mc = Minecraft.getInstance();
         if (c.effect()) {
@@ -360,6 +374,10 @@ final class Sandbox {
             }
             case OVERLAY -> {
                 overlay = c.args().getFirst().equals("on");
+                finish("ok");
+            }
+            case ZOOM -> {
+                zoom = c.number(0);
                 finish("ok");
             }
             case SHOTS -> {
