@@ -604,8 +604,39 @@ public final class MushroomField {
             // между ней и верхом мира и верхом
             shadowRect(AXIS_A, AXIS_B, boundR, w[0], w[1], top, end, RECT);
             put(into, o, SHADOW_RECT, RECT[0], RECT[1], RECT[2], RECT[3]);
-            put(into, o, SHADOW_TOP, Math.max(worldTop - d.groundY(), 16), 0, 0, 0);
         }
+        // земля под грибом — верх слоя пыли у основания ножки (отражение снизу на ножку, юбку и низ шапки)
+        groundUnder(a, d.blocks(s.stemR()), partial, GROUND);
+        put(into, o, SHADOW_TOP, Math.max(worldTop - d.groundY(), 16), GROUND[0], GROUND[1], GROUND[2]);
+    }
+
+    /** Где вокруг ножки берётся слой пыли под грибом, в радиусах ножки ({@link #groundUnder}). ⚠ Оценка. */
+    static final double GROUND_AT = 2;
+    private static final double[] GROUND = new double[3];
+
+    /**
+     * Отражение земли под грибом по каналам (rgb в {@code out}, линейное, в рассеянном свете): то, что ножка, юбка и низ
+     * шапки видят внизу, — не голая земля ({@code PALL_LAND}, над водой {@code PALL_SEA}), а верх слоя пыли волны, что
+     * лежит на ней ({@link PallField}: толща τ по вертикали в {@link #GROUND_AT} радиусах ножки r от эпицентра; ⚠ место —
+     * оценка: низ ножки видит землю в основном у себя). Слой над землёй — двумя потоками: от земли при τ = 0 к R∞ пыли
+     * (цвет толстого слоя — сам цвет пыли, {@link NukePall#DUST}; над водой — брызг) как e^(−2kτ) ({@link #slabOver}).
+     */
+    static void groundUnder(ClientNuclear.Active a, double stemR, float partial, double[] out) {
+        double under = a.water.under(), land = PallLight.LAND + (PallLight.SEA - PallLight.LAND) * under, ticks = a.ticks(partial);
+        double tau = a.pall.visible(ticks) ? a.pall.tau(GROUND_AT * stemR, 0, 0, Double.POSITIVE_INFINITY, 0, ticks, NukePall.water(a)) : 0;
+        int top = mix(DUST, CloudPuffs.SPRAY, under);
+        double g = PallLight.truncated(G);
+        for (int i = 0; i < 3; i++) out[i] = slabOver(PallLight.linear(channel(top, i)), g, tau, land);
+    }
+
+    /**
+     * Отражение слоя толщи tau над землёй с альбедо ground в рассеянном свете: у тонкого — земля, у толстого — R∞ слоя
+     * (линейный цвет его толстого слоя r), между — как e^(−2kτ) (два потока: свет до земли и обратно гаснет как e^(−kτ)
+     * каждый путь; ⚠ без многократного отражения между слоем и землёй — верхняя оценка доли земли).
+     */
+    static double slabOver(double r, double g, double tau, double ground) {
+        double k = PallLight.k(PallLight.albedo(r, g), g);
+        return r + (ground - r) * Math.exp(-2 * k * Math.max(tau, 0));
     }
 
     /**

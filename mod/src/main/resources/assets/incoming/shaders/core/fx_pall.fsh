@@ -1110,7 +1110,9 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
     vec3 rinf = vec3(mushWallR(w.r, g), mushWallR(w.g, g), mushWallR(w.b, g));
     vec3 open = mix(vec3(1.0), slot / (1.0 - rinf * (1.0 - slot)), sig.x / st);
     vec3 sky = PallSkyLight * open;
-    vec3 land = PallSunLight * (PALL_LAND * max(PallSun.y, 0.0));
+    // земля под грибом — верх слоя пыли у основания ножки (MushroomField.groundUnder), не голая земля: ножка стоит на нём
+    vec3 floorR = texelFetch(Sampler7, ivec2(MUSH_SHADOW_TOP, k), 0).yzw;
+    vec3 land = PallSunLight * floorR * max(PallSun.y, 0.0);
     vec3 bottom = land * exp(-min((up + down) / gMuS, 30.0));
     // пожары снизу — как зарево шторма под пеленой (storm): свет у земли (m.fire, на экране), выше — доля диска пожаров,
     // видная с высоты (R²/(R² + h²), как свет со всей площади шириной ~2h у пелены) и дым шторма под точкой (выше его
@@ -1121,10 +1123,10 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
         bottom += pallFlame(PallBase, m.fire * (through * r2 / max(r2 + h * h, 1.0)), m.fire / m.fire.r);
     }
     float cv = g * gMv;
-    vec3 vertical = vec3(pallDiffuse(w.r, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.r, bottom.r, cv),
-            pallDiffuse(w.g, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.g, bottom.g, cv),
-            pallDiffuse(w.b, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.b, bottom.b, cv));
-    vec3 side = 0.5 * open * (PallSkyLight + PALL_LAND * PallSkyLight + land);
+    vec3 vertical = vec3(pallDiffuse(w.r, g, up, up + down, floorR.r, 1.0, 0.0, 1.0, 0.0, sky.r, bottom.r, cv),
+            pallDiffuse(w.g, g, up, up + down, floorR.g, 1.0, 0.0, 1.0, 0.0, sky.g, bottom.g, cv),
+            pallDiffuse(w.b, g, up, up + down, floorR.b, 1.0, 0.0, 1.0, 0.0, sky.b, bottom.b, cv));
+    vec3 side = 0.5 * open * (PallSkyLight + floorR * PallSkyLight + land);
     vec3 sideways = vec3(pallDiffuse(w.r, g, toEye, toEye + beyond, 0.0, 1.0, 0.0, 1.0, 0.0, side.r, side.r, g),
             pallDiffuse(w.g, g, toEye, toEye + beyond, 0.0, 1.0, 0.0, 1.0, 0.0, side.g, side.g, g),
             pallDiffuse(w.b, g, toEye, toEye + beyond, 0.0, 1.0, 0.0, 1.0, 0.0, side.b, side.b, g));

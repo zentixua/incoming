@@ -327,4 +327,25 @@ class MushroomFieldTest {
         }
         assertEquals(PallLight.DUST_G, MushroomField.G, 0, "асимметрия пыли гриба — как у пелены");
     }
+    /**
+     * Земля под грибом — верх слоя пыли, что на ней лежит: без пыли — сама земля, под толстым слоем — цвет толстого слоя
+     * пыли (то же R∞, что у ковра на экране), между — без скачков и монотонно. Ножка в тени шапки видит снизу этот ковёр, а
+     * не голую землю 0,2.
+     */
+    @Test
+    void groundUnderTheMushroomIsTheDustLayerOnIt() {
+        double g = PallLight.truncated(MushroomField.G);
+        for (int i = 0; i < 3; i++) {
+            double r = PallLight.linear(NukePall.DUST[i]);
+            assertEquals(PallLight.LAND, MushroomField.slabOver(r, g, 0, PallLight.LAND), 1e-12, "без пыли — земля");
+            assertEquals(r, MushroomField.slabOver(r, g, 200, PallLight.LAND), 1e-6, "толстый слой — цвет ковра");
+            double prev = PallLight.LAND;
+            for (double tau = 0.01; tau < 50; tau *= 1.2) {
+                double now = MushroomField.slabOver(r, g, tau, PallLight.LAND);
+                assertTrue(Math.abs(now - prev) < 0.02, "канал " + i + " на τ " + tau);
+                assertTrue((r - now) * (r - PallLight.LAND) >= -1e-12, "между землёй и ковром");
+                prev = now;
+            }
+        }
+    }
 }
