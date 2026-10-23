@@ -1,0 +1,30 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+index f6a6a343..19502229 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+@@ -377,6 +377,8 @@ final class Sandbox {
+                 onServer(false, s -> {
+                     run(s, "time set " + day);
+                     var level = s.overworld();
++                    // Capture-only harness: match the wind of both saved worlds, as for nuke near.
++                    ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(NEAR_GAME_TIME);
+                     s.getPlayerList().broadcastAll(new net.minecraft.network.protocol.game.ClientboundSetTimePacket(level.getGameTime(),
+                             level.getDayTime(), level.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
+                 });
+@@ -514,6 +516,7 @@ final class Sandbox {
+                 GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(ground));
+                 long seed = c.args().size() > 1 ? c.seedAt(1) : 1;
+                 // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
++                Incoming.LOG.info("SANDBOX capture input: gameTime {}, air {}", level.getGameTime(), ua.zentix.incoming.client.fx.ClientAir.now());
+                 ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
+                 begin();
+             }
+@@ -606,7 +609,7 @@ final class Sandbox {
+             finish("ok");
+         }
+         // время пришло (пакет без смены суток пишет 0 как 1 — допуск в тик)
+-        if (timeWait >= 0 && Math.floorMod(mc.level.getDayTime() - timeWait, 24000L) <= 1) {
++        if (timeWait >= 0 && Math.abs(mc.level.getGameTime() - NEAR_GAME_TIME) <= 40 && Math.floorMod(mc.level.getDayTime() - timeWait, 24000L) <= 1) {
+             timeWait = -1;
+             finish("ok");
+         } else if (timeWait >= 0 && tick - timeSince > 40) {

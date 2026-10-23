@@ -1,0 +1,106 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+index f108b2b8..a4f93b65 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+@@ -377,12 +377,33 @@ final class Sandbox {
+                 onServer(false, s -> {
+                     run(s, "time set " + day);
+                     var level = s.overworld();
++                    // Capture-only harness: match the wind of both saved worlds, as for nuke near.
++                    ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(NEAR_GAME_TIME);
+                     s.getPlayerList().broadcastAll(new net.minecraft.network.protocol.game.ClientboundSetTimePacket(level.getGameTime(),
+                             level.getDayTime(), level.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
+                 });
+                 timeWait = Math.floorMod(day, 24000L);
+                 timeSince = tick;
+             }
++            case HOUSE -> {
++                // прежний дом — прочь, новый — сплошной из каменного кирпича от травы до высоты (крыша — на ней)
++                BlockPos s = BlockPos.containing(HOME);
++                if (house[0] > 0) {
++                    server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", s.getX() - house[1], GROUND + 1, s.getZ() - house[1],
++                            s.getX() + house[1], GROUND + house[0], s.getZ() + house[1]));
++                }
++                house[0] = (int) c.number(0);
++                house[1] = (int) c.number(1, 10);
++                if (house[0] > 0) {
++                    server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", s.getX() - house[1], GROUND + 1, s.getZ() - house[1],
++                            s.getX() + house[1], GROUND + house[0], s.getZ() + house[1]));
++                    if (c.args().size() > 2) {
++                        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:%s", s.getX() - house[1], GROUND + house[0], s.getZ() - house[1],
++                                s.getX() + house[1], GROUND + house[0], s.getZ() + house[1], c.args().get(2)));
++                    }
++                }
++                finish("ok");
++            }
+             case HUD -> {
+                 mc.options.hideGui = c.args().getFirst().equals("off");
+                 finish("ok");
+@@ -450,6 +471,9 @@ final class Sandbox {
+         capture = null;
+     }
+ 
++    /** Дом под точкой ({@code house}): высота и полуширина, блоков; 0 — дома нет. */
++    private final int[] house = new int[2];
++
+     /** Взрывы налёта ({@code raid}), что ещё впереди: тик, x, z (биты double), зерно. */
+     private final List<long[]> raid = new ArrayList<>();
+ 
+@@ -491,8 +515,9 @@ final class Sandbox {
+                 Vec3 ground = new Vec3(site.x, GROUND + 1, site.z), pos = ground.add(0, c.number(2, 0), 0);
+                 GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(ground));
+                 long seed = c.args().size() > 1 ? c.seedAt(1) : 1;
+-                // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре; земля — трава под точкой
+-                ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
++                // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
++                Incoming.LOG.info("SANDBOX capture input: gameTime {}, air {}", level.getGameTime(), ua.zentix.incoming.client.fx.ClientAir.now());
++                ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) (house[0] > 0 ? pos.y : ground.y), seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
+                 begin();
+             }
+             case RAID -> {
+@@ -584,7 +609,7 @@ final class Sandbox {
+             finish("ok");
+         }
+         // время пришло (пакет без смены суток пишет 0 как 1 — допуск в тик)
+-        if (timeWait >= 0 && Math.floorMod(mc.level.getDayTime() - timeWait, 24000L) <= 1) {
++        if (timeWait >= 0 && Math.abs(mc.level.getGameTime() - NEAR_GAME_TIME) <= 40 && Math.floorMod(mc.level.getDayTime() - timeWait, 24000L) <= 1) {
+             timeWait = -1;
+             finish("ok");
+         } else if (timeWait >= 0 && tick - timeSince > 40) {
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/scenario/SandboxCommand.java b/mod/src/devtest/java/ua/zentix/incoming/scenario/SandboxCommand.java
+index 89f9d292..16cf19b9 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/scenario/SandboxCommand.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/scenario/SandboxCommand.java
+@@ -13,7 +13,9 @@ import java.util.Locale;
+  * <ul>
+  *   <li>{@code blast <оружие> [seed] [высота]} — взрыв только у клиента: пакет взрыва в той точке песочницы, как от
+  *       сервера (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять); высота —
+- *       над землёй, м: удар в крышу или стену (земля в пакете — трава под точкой);</li>
++ *       над землёй, м (удар в крышу — на высоте дома {@code house}, иначе — точка в воздухе над травой);</li>
++ *   <li>{@code house <высота> [полуширина] [верх]} — дом из каменного кирпича под точкой (высота 0 — убрать), по
++ *       умолчанию 21×21 блок; верх — блок крыши ({@code coarse_dirt} — крыша-сад с рыхлой землёй);</li>
+  *   <li>{@code real <оружие> [deck <м> | houses]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки)
+  *   на новом месте; {@code deck} — удар в середину моста: настил из камня в столько метров над руслом с водой (пробой
+  *   плиты); {@code houses} — у дощатого дома сцены {@code debris} (дома и дубы рядом): что загорится и как дымит;</li>
+@@ -50,7 +52,7 @@ record SandboxCommand(Verb verb, List<String> args) {
+     /** {@code flight}: пуск — на столько блоков к югу от точки (+Z), цель — на столько же к северу (−Z). */
+     static final int FLIGHT_FROM = 600;
+ 
+-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID }
++    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, HOUSE }
+ 
+     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
+     boolean effect() {
+@@ -159,6 +161,12 @@ record SandboxCommand(Verb verb, List<String> args) {
+                 need(1, 1);
+                 number(0);
+             }
++            case HOUSE -> {
++                need(1, 3);
++                if (args.size() > 2 && !args.get(2).matches("[a-z0-9_]+")) throw new IllegalArgumentException("верх — блок minecraft: " + args.get(2));
++                if (number(0) < 0 || number(0) > 50) throw new IllegalArgumentException("высота дома 0–50");
++                if (number(1, 10) < 1 || number(1, 10) > 12) throw new IllegalArgumentException("полуширина 1–12");
++            }
+             case AGAIN, CLEAR, RELOAD -> need(0, 0);
+         }
+     }
