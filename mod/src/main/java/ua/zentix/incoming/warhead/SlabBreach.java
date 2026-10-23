@@ -134,7 +134,9 @@ final class SlabBreach {
         Cell here = cell(level, cell, level.getBlockState(cell), e, damage);
         if (here == Cell.STOP) return null;
         double x = 0, y = 0, z = 0, gap = Double.MAX_VALUE;
-        // грань, через которую пришла боевая часть: из открытых — та, чья наружная сторона больше всего навстречу курсу
+        // грань, через которую пришла боевая часть: где обратный курс выходит из блока, если она открыта; иначе из
+        // открытых — та, чья наружная сторона больше всего навстречу курсу
+        Direction entry = axis != null && here == Cell.SOLID ? exitFace(cell, centre, axis.scale(-1)) : null;
         Direction hit = null;
         double facing = 0;
         for (Direction d : Direction.values()) {
@@ -148,7 +150,7 @@ final class SlabBreach {
             }
             if (here == Cell.VOID && k == Cell.SOLID) gap = Math.min(gap, faceDistance(cell, centre, d));
             if (here == Cell.SOLID && k == Cell.VOID && axis != null) {
-                double f = -(d.getStepX() * axis.x + d.getStepY() * axis.y + d.getStepZ() * axis.z);
+                double f = d == entry ? Double.MAX_VALUE : -(d.getStepX() * axis.x + d.getStepY() * axis.y + d.getStepZ() * axis.z);
                 if (hit == null || f > facing) {
                     hit = d;
                     facing = f;
@@ -205,6 +207,17 @@ final class SlabBreach {
         t = Math.min(t, axisExit(p.y, dir.y, cell.getY()));
         t = Math.min(t, axisExit(p.z, dir.z, cell.getZ()));
         return t == Double.MAX_VALUE ? p : p.add(dir.scale(t));
+    }
+
+    /** Грань блока {@code cell}, через которую выходит луч из {@code p} по {@code dir}; null — луча нет. */
+    @Nullable
+    static Direction exitFace(BlockPos cell, Vec3 p, Vec3 dir) {
+        double tx = axisExit(p.x, dir.x, cell.getX()), ty = axisExit(p.y, dir.y, cell.getY()), tz = axisExit(p.z, dir.z, cell.getZ());
+        double t = Math.min(tx, Math.min(ty, tz));
+        if (t == Double.MAX_VALUE) return null;
+        if (t == tx) return dir.x > 0 ? Direction.EAST : Direction.WEST;
+        if (t == ty) return dir.y > 0 ? Direction.UP : Direction.DOWN;
+        return dir.z > 0 ? Direction.SOUTH : Direction.NORTH;
     }
 
     private static double axisExit(double p, double d, int lo) {
