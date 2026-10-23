@@ -56,6 +56,10 @@ out vec3 sixKeyDir;
 out vec3 sixBallDir;
 // место вершины от камеры (настоящее, без переноса ближе): свет шаров на лежащем клубе — в каждом пикселе (fx.fsh)
 out vec3 worldPos;
+// запечённый клуб: его толща — толща кадра × столько (PuffOptics: клуб несёт вещество гаусса модели); ступеней на октаву —
+// FxQuads.TAU_STEPS
+out float sixTau;
+const float SIX_TAU_STEPS = 1024.0;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
 
@@ -100,8 +104,11 @@ void main() {
     gl_Position = ProjMat * view;
     texCoord0 = UV0;
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
-    vec4 light = Normal.y < -0.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
-    if (Normal.y > -0.5 && any(lessThan(UV2, ivec2(240)))) {
+    // запечённый клуб: свет мира — полный (под открытым небом), в UV2.x — множитель толщи его кадра (FxQuads.sixWay)
+    bool six = Normal.y < -0.1 && Normal.y > -0.4;
+    vec4 light = Normal.y < -0.5 ? vec4(1.0) : texelFetch(Sampler2, six ? ivec2(15) : UV2 / 16, 0);
+    sixTau = six ? exp2(float(UV2.x) / SIX_TAU_STEPS) : 1.0;
+    if (Normal.y > -0.5 && !six && any(lessThan(UV2, ivec2(240)))) {
         // доля света неба в точке (небо 0..15): её оттенок — как у вещества под открытым небом, свет блоков — как есть
         light.rgb *= mix(vec3(1.0), FxSkyFix, float(UV2.y) / 240.0);
         // свет шаров — к карте освещения: в долях света неба на экране (карта при открытом небе без блоков) и вместе не
@@ -121,7 +128,7 @@ void main() {
     sixBall = vec3(0.0);
     sixKeyDir = vec3(0.0, 1.0, 0.0);
     sixBallDir = vec3(0.0, 1.0, 0.0);
-    if (Normal.y < -0.1 && Normal.y > -0.4) {
+    if (six) {
         // цвет вершины клуба — вещество в свете неба под открытым небом (SmokePuffs, FarView.sky); по сторонам его делят карты кадра (fx.fsh)
         mat3 rot = mat3(ModelViewMat);
         sixKey = FxSun.w;

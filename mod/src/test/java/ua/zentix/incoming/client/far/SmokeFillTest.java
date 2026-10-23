@@ -27,6 +27,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * закрывает не больше бюджета экранов, а пропускание по экрану то же, что без бюджета.
  */
 class SmokeFillTest {
+    @org.junit.jupiter.api.BeforeAll
+    static void optics() throws IOException {
+        ClubFrames.install();
+    }
+
     /**
      * Кадр 16:9, 70° по вертикали на 1080 строк: пиксель и полудиагональ — как у кадра игры ({@code FarRenderer.view}:
      * тангенс на пиксель, край — полудиагональ).
@@ -86,22 +91,23 @@ class SmokeFillTest {
 
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
-                          float b, float a) {
-            if (a < 0.002f) return;
+                          float b, float a, double tau) {
+            if (a < 0.002f || !(tau > 0)) return;
             Vector3f f = view.forward(), l = view.left(), up = view.up();
             double depth = dx * f.x + dy * f.y + dz * f.z;
             if (depth <= -Math.max(halfA, halfB)) return;
             depth = Math.max(depth, 0.05);
-            quads.add(new double[]{(dx * l.x + dy * l.y + dz * l.z) / depth, (dx * up.x + dy * up.y + dz * up.z) / depth, halfA / depth, halfB / depth,
-                    Math.min(1, a), PlumeContinuityTest.frameOf(sprite)});
+            double[] q = PlumeContinuityTest.club((dx * l.x + dy * l.y + dz * l.z) / depth, (dx * up.x + dy * up.y + dz * up.z) / depth, 0,
+                    halfA / depth, halfB / depth, sprite, mix, a, tau);
+            quads.add(q);
         }
 
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
-                              float r, float g, float b, float a) {
+                              float r, float g, float b, float a, double tau) {
             // лежащий квадрат: по высоте экрана — проекция диска
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            puff6(dx, dy, dz, halfA, halfB * Math.abs(dy) / d, sprite, mix, shade, r, g, b, a);
+            puff6(dx, dy, dz, halfA, halfB * Math.abs(dy) / d, sprite, mix, shade, r, g, b, a, tau);
         }
 
         @Override
@@ -124,19 +130,18 @@ class SmokeFillTest {
         double fill() {
             double sum = 0;
             for (double[] q : quads) {
-                double x0 = Math.max(-W, q[0] - q[2]), x1 = Math.min(W, q[0] + q[2]), y0 = Math.max(-H, q[1] - q[3]), y1 = Math.min(H, q[1] + q[3]);
+                double x0 = Math.max(-W, q[0] - q[3]), x1 = Math.min(W, q[0] + q[3]), y0 = Math.max(-H, q[1] - q[4]), y1 = Math.min(H, q[1] + q[4]);
                 if (x1 > x0 && y1 > y0) sum += (x1 - x0) * (y1 - y0) / (4 * W * H);
             }
             return sum;
         }
 
-        /** Пропускание в точке экрана (u, v): квадраты — радиальный профиль непрозрачности кадра клуба, вуали. */
-        double transmittance(double u, double v, double[][] prof) {
+        /** Пропускание в точке экрана (u, v): квадраты — по пикселям кадра клуба, как в шейдере ({@link ClubFrames}), вуали. */
+        double transmittance(double u, double v) throws IOException {
             double clear = Math.exp(-veil);
             for (double[] q : quads) {
-                double r = Math.hypot((u - q[0]) / q[2], (v - q[1]) / q[3]);
-                int k = (int) (r / PlumeContinuityTest.BIN);
-                if (k < prof[0].length) clear *= 1 - q[4] * prof[(int) q[5]][k];
+                double x = (u - q[0]) / q[3], y = (v - q[1]) / q[4];
+                if (Math.abs(x) < 1 && Math.abs(y) < 1) clear *= 1 - PlumeContinuityTest.clubAt(q, x, y);
             }
             return clear;
         }
@@ -145,8 +150,8 @@ class SmokeFillTest {
     static FarView view(Vec3 eye, Vector3f fwd) {
         fwd.normalize();
         Vector3f left = new Vector3f(0, 1, 0).cross(fwd, new Vector3f()).normalize(), up = fwd.cross(left, new Vector3f()).normalize();
-        return new FarView(eye, fwd, left, up, 0, 1000, PIXEL, EDGE, 1, 1, new Vector3f(1, 1, 1), 32000, 192, 192, 0,
-                Sight.Air.at(0, 20000));
+        // воздух без дымки: сверяется рисовка вещества, а не дымка перед ним (её у «истины» нет)
+        return new FarView(eye, fwd, left, up, 0, 1000, PIXEL, EDGE, 1, 1, new Vector3f(1, 1, 1), 32000, 192, 192, 0, new Sight.Air(0, 0, 0));
     }
 
     /** Налёт: 14 шахедов и 2 ракеты в квадрате 240 м, 40 % — в крыши на 10–40 м, возраст 5–150 с, ветер 4 м/с (класс D). */
@@ -212,16 +217,17 @@ class SmokeFillTest {
 
     /**
      * Глаз на крыше в дыму налёта и рядом с облаками, взгляд вдоль дыма: без бюджета кадр закрывает больше двух бюджетов, с ним —
-     * не больше бюджета или его пола (по одному клубу на гаусс; с запасом на оценку площади кучки, 15 %) и меньше вдвое;
-     * пропускание по экрану с бюджетом в среднем то же (±0,04), и в каждой из 18 частей кадра от пропускания самого вещества
-     * модели ({@link #truth}) — не дальше, чем у полного кадра, больше чем на 0,05 (мельче части — подробность клубов: её
-     * бюджет и отдаёт).
+     * не больше бюджета или его пола (по одному клубу на гаусс; с запасом на оценку площади кучки, 15 %) и меньше вдвое.
+     * Видимая толща — модели: в каждой из 18 частей кадра пропускание и полного кадра, и кадра в бюджете — у пропускания
+     * самого вещества модели ({@link #truth}: гауссы облаков без квадратов) не дальше {@link #MODEL_PART}, в среднем по
+     * кадру — не дальше {@link #MODEL_MEAN}. До 3.6.1 части расходились до 0,4 (полный кадр) и 0,34 (в бюджете), всегда в
+     * светлую сторону: квадрат клуба был «видимым краем» гаусса с линейной непрозрачностью (тонкий дым терял до 80 %
+     * вещества), кучка — комьями со случайными просветами, квадрат в плоскости экрана у края кадра — меньше шара.
      */
     @Test
     void raidSmokeStaysInTheFillBudgetAtTheSameDensity() throws IOException {
         double now = 1000;
         List<Blast> raid = raid(now);
-        double[][] prof = PlumeContinuityTest.profiles();
         Vector3f along = new Vector3f(1, 0, 0);
         for (Vec3 eye : new Vec3[]{new Vec3(0, 40, 0), new Vec3(raid.get(3).x(), 25, raid.get(3).z() + 20), new Vec3(raid.get(5).x() + 5, 60, raid.get(5).z())}) {
             Screen free = frame(raid, now, eye, along, Double.POSITIVE_INFINITY), budget = frame(raid, now, eye, along, SmokePuffs.FILL_BUDGET);
@@ -230,8 +236,8 @@ class SmokeFillTest {
             for (int i = 0; i < 48; i++) {
                 for (int j = 0; j < 27; j++) {
                     double u = -W + (i + 0.5) * 2 * W / 48, v = -H + (j + 0.5) * 2 * H / 27;
-                    meanFree += free.transmittance(u, v, prof);
-                    meanBudget += budget.transmittance(u, v, prof);
+                    meanFree += free.transmittance(u, v);
+                    meanBudget += budget.transmittance(u, v);
                     n++;
                 }
             }
@@ -248,64 +254,68 @@ class SmokeFillTest {
                     real[i / 8 * 3 + j / 9] += truth(raid, now, v0, u, v) / 72;
                 }
             }
-            double worstFree = worstBlock(free, real, prof), worst = worstBlock(budget, real, prof);
+            double worstFree = worstBlock(free, real), worst = worstBlock(budget, real);
             String got = String.format(Locale.ROOT, "глаз %s: без бюджета %d квадратов, %.1f экранов, пропускание %.3f; с бюджетом %d, %.1f (пол %.1f), %.3f; худшая часть против вещества: полный %.3f, в бюджете %.3f",
                     eye, free.quads.size(), free.fill(), meanFree, budget.quads.size(), budget.fill(), floor, meanBudget, worstFree, worst);
             System.out.println("FILL " + got);
             assertTrue(free.fill() > 2 * SmokePuffs.FILL_BUDGET, got);
             assertTrue(budget.fill() <= 1.15 * Math.max(SmokePuffs.FILL_BUDGET, floor), got);
             assertTrue(budget.fill() < free.fill() / 2, got);
-            assertTrue(Math.abs(meanFree - meanBudget) <= 0.04, got);
-            assertTrue(worst <= worstFree + 0.05, got);
+            double meanReal = 0;
+            for (double r : real) meanReal += r / real.length;
+            assertTrue(Math.abs(meanFree - meanReal) <= MODEL_MEAN && Math.abs(meanBudget - meanReal) <= MODEL_MEAN, got + "; модель в среднем " + meanReal);
+            assertTrue(worstFree <= MODEL_PART && worst <= MODEL_PART, got);
         }
     }
 
     /**
-     * Слияние близких гауссов держит массу и моменты: два равных клуба на расстоянии σ — один с суммой масс, серединой
-     * посередине и σ² = σ² + (σ/2)² по оси разноса (по горизонтали — половина: σh общий у двух осей); дальше 2σ — не
-     * сливаются никогда, дальше σ — только когда кадр не укладывается в бюджет.
+     * Части кадра против вещества модели — не дальше этого: подробность клубов (раскладка кучки, кадр и отражение по зерну)
+     * сама двигает пропускание частей до {@link #DETAIL} ({@link #clusterDetailNoise}), остальное — форма кадра клуба
+     * против гаусса.
      */
+    static final double MODEL_PART = 0.15, MODEL_MEAN = 0.03, DETAIL = 0.12;
+
     /**
-     * Подробность кучек — случайная (зерно облака): смена зерна меняет пропускание по частям кадра не больше чем на 0,05 —
-     * от этого шума и мерится, что бюджет плотность не трогает ({@link #raidSmokeStaysInTheFillBudgetAtTheSameDensity}: +0,05).
+     * Подробность кучек — по зерну облака (поворот раскладки, кадр, отражение и размер клубов): смена зерна меняет
+     * пропускание по частям кадра не больше чем на {@link #DETAIL} — это клубы, а не плотность (на весь кадр вещество то же).
      */
     @Test
     void clusterDetailNoise() throws IOException {
         double now = 1000;
         List<Blast> raid = raid(now), other = new ArrayList<>();
         for (Blast b : raid) other.add(new Blast(b.model(), b.x(), b.y(), b.z(), b.born(), b.seed() * 31 + 7));
-        double[][] prof = PlumeContinuityTest.profiles();
         Screen a = frame(raid, now, new Vec3(0, 40, 0), new Vector3f(1, 0, 0), Double.POSITIVE_INFINITY);
         Screen b = frame(other, now, new Vec3(0, 40, 0), new Vector3f(1, 0, 0), Double.POSITIVE_INFINITY);
-        double worst = worstBlock(a, b, prof);
-        assertTrue(worst <= 0.05, "зерно: худшая часть кадра " + worst);
+        double worst = worstBlock(a, b);
+        assertTrue(worst <= DETAIL, "зерно: худшая часть кадра " + worst);
     }
 
     /** Наибольшая разница среднего пропускания двух кадров по 18 частям (8 × 9 узлов сетки 48×27). */
-    static double worstBlock(Screen a, Screen b, double[][] prof) {
-        return worstBlock(a, blocks(b, prof), prof);
+    static double worstBlock(Screen a, Screen b) throws IOException {
+        return worstBlock(a, blocks(b));
     }
 
     /** То же против средних по частям {@code ref}. */
-    static double worstBlock(Screen a, double[] ref, double[][] prof) {
-        double[] ba = blocks(a, prof);
+    static double worstBlock(Screen a, double[] ref) throws IOException {
+        double[] ba = blocks(a);
         double worst = 0;
         for (int k = 0; k < 18; k++) worst = Math.max(worst, Math.abs(ba[k] - ref[k]));
         return worst;
     }
 
     /** Среднее пропускание кадра по 18 частям. */
-    static double[] blocks(Screen a, double[][] prof) {
+    static double[] blocks(Screen a) throws IOException {
         double[] ba = new double[18];
         for (int i = 0; i < 48; i++) {
             for (int j = 0; j < 27; j++) {
                 double u = -W + (i + 0.5) * 2 * W / 48, v = -H + (j + 0.5) * 2 * H / 27;
-                ba[i / 8 * 3 + j / 9] += a.transmittance(u, v, prof) / 72;
+                ba[i / 8 * 3 + j / 9] += a.transmittance(u, v) / 72;
             }
         }
         return ba;
     }
 
+    /** Слияние двух равных гауссов на расстоянии σ держит массу, середину и вторые моменты; дальний остаётся отдельно. */
     @Test
     void mergeKeepsMassAndMoments() {
         int f = SmokePuffs.FIELDS;

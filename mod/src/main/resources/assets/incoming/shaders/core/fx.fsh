@@ -42,6 +42,8 @@ in vec3 sixBall;
 in vec3 sixKeyDir;
 in vec3 sixBallDir;
 in vec3 worldPos;
+// запечённый клуб: множитель толщи кадра (fx.vsh, PuffOptics)
+in float sixTau;
 
 // запечённый клуб (FxAtlas.puff6): x — шаг карт по листу (v), y — начало кадров (v), z и w — размер кадра (u, v)
 uniform vec4 FxSix;
@@ -186,7 +188,9 @@ void main() {
         // оттенок неба (ночью — сиреневый свет луны) — только у света неба: цвет вершины несёт его яркость, а огонь у клуба
         // свой (оттенок на огне красил пыль у шара ночью в розовый)
         sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
-        tex = vec4(vec3(a.a), a.a);
+        // Calibrated optical depth for smoke; fire keeps its motion-vector frame interpolation.
+        float k = 1.0 - pow(max(1.0 - a.a, 1.0 / 255.0), sixTau);
+        tex = vec4(vec3(k), k);
     } else if (nearest > 0.55) {
         tex = fireFrames(texCoord0, dx, dy, opacity);
     } else if (nearest < -0.5) {
@@ -231,4 +235,11 @@ void main() {
     // тумана у края прорисовки закрывало бы ленты шлейфов и дальнюю картинку взрывов, которые сменяют частицы там
     color *= 1.0 - fog * FxFogColor.a;
     fragColor = color * ColorModulator;
+    if (six) {
+        // клуб — толща, и тонкий дым кладёт на пиксель доли шага кадра RGBA8: смешивание округлило бы такой вклад в ноль, и
+        // слои тонкого дыма пропадали бы. Шум в ±½ шага (interleaved gradient noise, Jimenez 2014; у каждого квадрата — свой
+        // сдвиг по расстоянию) делает округление несмещённым: в среднем по пикселям вклад слоя — его толща
+        float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + viewDistance * 0.61803399);
+        fragColor.rgb = max(fragColor.rgb + (dither - 0.5) / 255.0, vec3(0.0));
+    }
 }

@@ -447,6 +447,9 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         int[][] sheets = new int[MIPS + 1][];
         for (int l = 0; l <= MIPS; l++) sheets[l] = new int[(WIDTH >> l) * (HEIGHT >> l)];
         for (Slot s : SLOTS) place(resources, s, sheets);
+        // толща кадров клубов — из тех же пикселей, что уйдут на лист (PuffOptics: клуб несёт вещество гаусса модели); в
+        // ход — вместе с листом (apply)
+        pending = new PuffOptics[]{optics(sheets[0], 8 * CELL), optics(sheets[0], SPRAY6_ROW * CELL)};
         fireball = read(resources, FIREBALL_LIGHT, FxAtlas::parseFire, Fireball.FALLBACK);
         puffGrowth = read(resources, PUFF6_DATA, FxAtlas::parseGrowth, linear(1, 3));
         puffLast = turbulentLast(read(resources, PUFF6_DATA, FxAtlas::parseDetail, null));
@@ -460,9 +463,24 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return levels;
     }
 
+    /** Непрозрачность кадров клуба (байты альфы) с листа: ряды кадров — с {@code top}, как у {@link #puff6} и {@link #spray6}. */
+    private static PuffOptics optics(int[] sheet, int top) {
+        int n = FIREBALL_SIZE;
+        int[][] alpha = new int[PUFF6_FRAMES][n * n];
+        for (int f = 0; f < PUFF6_FRAMES; f++) {
+            int x0 = f % PUFF6_COLUMNS * n, y0 = top + f / PUFF6_COLUMNS * n;
+            for (int y = 0; y < n; y++) {
+                for (int x = 0; x < n; x++) alpha[f][y * n + x] = sheet[(y0 + y) * WIDTH + x0 + x] >>> 24;
+            }
+        }
+        return PuffOptics.of(alpha, n);
+    }
+
     /** Поток отрисовки: в видеопамять (та же текстура при перезагрузке ресурсов). */
     @Override
     protected void apply(NativeImage[] levels, ResourceManager resources, ProfilerFiller profiler) {
+        if (pending != null) PuffOptics.set(pending[0], pending[1]);
+        pending = null;
         if (id < 0) id = TextureUtil.generateTextureId();
         TextureUtil.prepareImage(id, MIPS, WIDTH, HEIGHT);
         for (int l = 0; l < levels.length; l++) {
@@ -503,7 +521,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         for (int l = 0; ; l++) {
             put(sheets[l], WIDTH >> l, s, l, px);
             if (l == MIPS) break;
-            px = half(px, w, h);
+            px = optical(s) ? halfDepth(px, w, h) : half(px, w, h);
             w >>= 1;
             h >>= 1;
         }
@@ -553,6 +571,49 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
 
     private static int at(int[] src, int w, int h, int x, int y) {
         return src[Math.clamp(y, 0, h - 1) * w + Math.clamp(x, 0, w - 1)];
+    }
+
+    /** Оптика кадров клубов, прочитанная в фоне ({@link #prepare}), — до {@link #apply}. */
+    @org.jetbrains.annotations.Nullable
+    private PuffOptics[] pending;
+
+    /** Карта непрозрачности клуба (A: свет с трёх сторон и альфа — {@link #puff6}, {@link #spray6}): её копии — по толще. */
+    private static boolean optical(Slot s) {
+        String p = s.texture.getPath();
+        return p.contains("/puff6a_") || p.contains("/spray6a_");
+    }
+
+    /**
+     * Копия вдвое меньше карты клуба: толща пикселя — средняя толща четырёх (α = 1 − e^(−τ), байт 255 — τ = ln 255,
+     * {@link PuffOptics#TAU_MAX}), а не средняя непрозрачность: клуб рисуется толщей кадра × s ({@code fx.fsh}), и средняя
+     * альфа теряла бы вещество далёкого клуба (у клуба в 8 пикселей — 3–15 %); свет (с умноженной альфой) — среднее, в
+     * той же доле, что новая альфа к средней.
+     */
+    private static int[] halfDepth(int[] src, int w, int h) {
+        int hw = w >> 1, hh = h >> 1;
+        int[] out = new int[hw * hh];
+        for (int y = 0; y < hh; y++) {
+            for (int x = 0; x < hw; x++) {
+                int i = 2 * y * w + 2 * x;
+                int[] p = {src[i], src[i + 1], src[i + w], src[i + w + 1]};
+                double tau = 0;
+                int alphaSum = 0;
+                for (int q : p) {
+                    int a = q >>> 24;
+                    alphaSum += a;
+                    tau += Math.min(PuffOptics.TAU_MAX, -Math.log(1 - a / 255.0));
+                }
+                int alpha = (int) Math.round(255 * -Math.expm1(-tau / 4));
+                double k = alphaSum > 0 ? alpha * 4.0 / alphaSum : 0;
+                int v = alpha << 24;
+                for (int shift = 0; shift < 24; shift += 8) {
+                    int sum = (p[0] >>> shift & 0xFF) + (p[1] >>> shift & 0xFF) + (p[2] >>> shift & 0xFF) + (p[3] >>> shift & 0xFF);
+                    v |= Math.min(alpha, (int) Math.round(sum / 4.0 * k)) << shift;
+                }
+                out[y * hw + x] = v;
+            }
+        }
+        return out;
     }
 
     /** Копия вдвое меньше: среднее четырёх пикселей по каждому каналу. */

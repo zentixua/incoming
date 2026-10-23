@@ -55,6 +55,7 @@ public final class FxQuads {
         n = 0;
         nearest = opacity = 0;
         probe = 0;
+        six = false;
     }
 
     /**
@@ -64,6 +65,7 @@ public final class FxQuads {
      */
     public void nearestTexels(boolean on) {
         nearest = (byte) (on ? 127 : 0);
+        six = false;
         opacity = 0;
     }
 
@@ -73,6 +75,7 @@ public final class FxQuads {
      */
     public void modelTiles(boolean on) {
         nearest = (byte) (on ? -127 : 0);
+        six = false;
         opacity = 0;
     }
 
@@ -88,17 +91,31 @@ public final class FxQuads {
      * движения ({@code Normal.z}). Меньше нуля — снова как обычно.
      */
     public void sixWay(float mix) {
-        sixWay(mix, 1);
+        sixWay(mix, 1, 1);
     }
 
     /**
      * То же с тенью карт в степени shade (0…{@link #SHADE_MAX}, {@code SmokePuffs.shade}): она — в {@code Normal.y} внутри
-     * полосы запечённых клубов (−0,4…−0,1), {@link #SHADE_STEPS} ступеней.
+     * полосы запечённых клубов (−0,4…−0,1), {@link #SHADE_STEPS} ступеней; толща клуба — толща его кадра × tau
+     * ({@code PuffOptics}: непрозрачность 1 − (1 − α)^tau) — в {@code UV2.x} как {@link #TAU_STEPS}·log₂ tau: свет мира у клуба
+     * всегда полный (под открытым небом; его свет — по картам кадра в шейдере), и карта освещения берётся без UV2.
      */
-    public void sixWay(float mix, float shade) {
+    public void sixWay(float mix, float shade, double tau) {
         nearest = (byte) (mix < 0 ? 0 : -13 - Math.round(Mth.clamp(shade / SHADE_MAX, 0, 1) * SHADE_STEPS));
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
+        sixTau = mix < 0 ? 0 : tauCode(tau);
+        six = mix >= 0;
     }
+
+    /** Множитель толщи клуба в {@code UV2.x}: {@link #TAU_STEPS}·log₂ tau ({@code fx.vsh}: exp2(UV2.x / SIX_TAU_STEPS)). */
+    public static short tauCode(double tau) {
+        return (short) Mth.clamp(Math.round(Math.log(Math.max(tau, 1e-30)) / Math.log(2) * TAU_STEPS), Short.MIN_VALUE + 1, Short.MAX_VALUE);
+    }
+
+    /** Ступеней множителя толщи клуба на октаву ({@code fx.vsh}: {@code SIX_TAU_STEPS}): ±32 октавы, шаг 0,07 %. */
+    public static final int TAU_STEPS = 1024;
+    private short sixTau;
+    private boolean six;
 
     /** Наибольшая степень тени карт клуба (сажа — ~1,3) и ступеней в полосе байта −13…−50 ({@code fx.fsh}). */
     public static final float SHADE_MAX = 1.5f;
@@ -112,6 +129,7 @@ public final class FxQuads {
 
     public void glowShape(boolean on) {
         nearest = (byte) (on ? 64 : 0);
+        six = false;
         opacity = 0;
     }
 
@@ -164,8 +182,8 @@ public final class FxQuads {
         // мягкость — не меньше нуля, проба источника — минус её номер
         MemoryUtil.memPutShort(p + 24, probe > 0 ? (short) -probe : (short) Mth.clamp(Math.round(soft * 16), 0, Short.MAX_VALUE));
         MemoryUtil.memPutShort(p + 26, (short) Mth.clamp(Math.round(unfold * Short.MAX_VALUE), 1, Short.MAX_VALUE));
-        MemoryUtil.memPutShort(p + 28, (short) (light & 0xFFFF));
-        MemoryUtil.memPutShort(p + 30, (short) (light >>> 16 & 0xFFFF));
+        MemoryUtil.memPutShort(p + 28, six ? sixTau : (short) (light & 0xFFFF));
+        MemoryUtil.memPutShort(p + 30, six ? 0 : (short) (light >>> 16 & 0xFFFF));
         MemoryUtil.memPutByte(p + 32, (byte) Math.round(Mth.clamp(fog, 0, 1) * 127));
         MemoryUtil.memPutByte(p + 33, nearest);
         MemoryUtil.memPutByte(p + 34, opacity);
