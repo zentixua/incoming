@@ -493,12 +493,14 @@ final class Sandbox {
         // пожар ({@code fire}) — на незераке: земля снова трава
         server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:grass_block replace minecraft:netherrack", s.getX() - 20, GROUND,
                 s.getZ() - 20, s.getX() + 20, GROUND, s.getZ() + 20));
-        // пруд ({@code blast … water}) — снова земля и трава
+        // пруд ({@code blast … water}, всегда в исходной точке) — снова земля и трава; русло моста {@code real … deck} — на
+        // своём месте, его вода остаётся
+        BlockPos p = BlockPos.containing(HOME);
         int half = SandboxCommand.POND / 2;
-        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:dirt replace minecraft:water", s.getX() - half, GROUND - SandboxCommand.POND_DEPTH + 1,
-                s.getZ() - half, s.getX() + half, GROUND - 1, s.getZ() + half));
-        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:grass_block replace minecraft:water", s.getX() - half, GROUND, s.getZ() - half,
-                s.getX() + half, GROUND, s.getZ() + half));
+        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:dirt replace minecraft:water", p.getX() - half, GROUND - SandboxCommand.POND_DEPTH + 1,
+                p.getZ() - half, p.getX() + half, GROUND - 1, p.getZ() + half));
+        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:grass_block replace minecraft:water", p.getX() - half, GROUND, p.getZ() - half,
+                p.getX() + half, GROUND, p.getZ() + half));
         effectTick = -1;
         capture = null;
     }
