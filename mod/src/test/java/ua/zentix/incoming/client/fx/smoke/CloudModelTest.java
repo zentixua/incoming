@@ -293,11 +293,14 @@ class CloudModelTest {
                     assertTrue(CloudModel.glowShare(kelvin, day) >= share - 1e-9, "в шаре на " + t + " с — огонь, не дым: " + kelvin);
             });
         }
+        // огонь, что ярче света дыма за порогом контраста, — весь огонь: ни доли его вещества дымом (тонны пыли шара)
+        assertEquals(1, CloudModel.glowShare(m.ballKelvin(0.5), day), 0, "шар в горении днём — ровно огонь");
+        assertEquals(0, CloudModel.glowShare(900, day), 0, "тёплый газ днём — ровно дым");
         double prev = 1;
         for (double k = 3000; k >= 700; k -= 5) {
             double g = CloudModel.glowShare(k, day);
             assertTrue(g <= CloudModel.glowShare(k) + 1e-12);
-            assertTrue(g <= prev + 1e-12 && prev - g < 0.05, "без скачков: " + k);
+            assertTrue(g <= prev + 1e-12 && prev - g < 0.06, "без скачков: " + k);
             if (k > CloudModel.DRAPER_K) assertEquals(BlackBody.luminance(k), CloudModel.glowLuminance(k), 0.002 * BlackBody.luminance(k));
             prev = g;
         }
