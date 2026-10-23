@@ -59,7 +59,7 @@ public final class NukeDust {
     private static final int CELL = 4;
     /**
      * Минеральное вещество ({@link Shielding#material}: грунт 1600, камень и кирпич 2300) — от этой плотности, кг/м³, металл
-     * (7800) — с {@link #METAL}: в пыль крошится только минеральное.
+     * (7800) — с {@link #METAL}: в пыль крошится только минеральное, и из него — кладка, не природная земля ({@link #ground}).
      */
     private static final double MINERAL = 1500, METAL = 7000;
     /** Руины чанка встали позже фронта больше чем на столько тиков — его обломки не летят: волна уже прошла. */
@@ -218,9 +218,10 @@ public final class NukeDust {
                         c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay)) TORN[kind.ordinal()]++;
             }
             if (dist > NEAR || kind != Fragments.Kind.CHUNK) continue;
-            // в пыль крошится минеральное — камень, кирпич, глина, грунт; дерево, лёд и металл — нет
+            // в пыль крошится кладка — камень, кирпич, бетон; дерево, лёд и металл — нет; природный грунт и скала — пыль
+            // самой пелены (вынос с земли, DustModel), а не обломков
             double material = Shielding.material(level, p.pos(), p.state());
-            if (material < MINERAL || material >= METAL) continue;
+            if (material < MINERAL || material >= METAL || ground(p.state())) continue;
             double mass = weight * BlastDust.FINES * Shielding.density(level, p.pos(), p.state());
             long key = dist <= DEBRIS_FULL ? BlockPos.asLong(Math.floorDiv(p.pos().getX(), CELL), Math.floorDiv(p.pos().getY(), CELL),
                     Math.floorDiv(p.pos().getZ(), CELL)) : Long.MIN_VALUE;
@@ -244,6 +245,18 @@ public final class NukeDust {
             dust.add(mid, h[0], Math.sqrt(Math.max(0, h[4] / h[0] - mid.lengthSqr()) / 3), eye);
             streaks++;
         }
+    }
+
+    /**
+     * Природная земля и скала: грунт, песок, гравий, глина, камень и сланец рельефа, терракота плато, снег. Волна срывает
+     * гребни и уступы рельефа, но пыль с земли — вынос пелены ({@code DustModel}: грунт, поднятый ветром за фронтом); пыль
+     * обломков модели — глина стен и штукатурка построек, её и даёт кладка. Без этого сорванные уступы холмов давали тонны
+     * пыли полосами с камерой внутри (сцена {@code film}).
+     */
+    private static boolean ground(BlockState s) {
+        return s.is(BlockTags.DIRT) || s.is(BlockTags.SAND) || s.is(BlockTags.BASE_STONE_OVERWORLD) || s.is(BlockTags.BASE_STONE_NETHER)
+                || s.is(BlockTags.TERRACOTTA) || s.is(BlockTags.SNOW) || s.is(net.minecraft.world.level.block.Blocks.GRAVEL)
+                || s.is(net.minecraft.world.level.block.Blocks.CLAY);
     }
 
     /**

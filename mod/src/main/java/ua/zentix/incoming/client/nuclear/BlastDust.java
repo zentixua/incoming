@@ -14,8 +14,8 @@ import java.util.List;
  * где волна снесла блоки ({@code S2C.NukeDebris}), выбитое в пыль вещество уносит ветер за фронтом ({@link BlastGust}).
  * Пыль выходит из пролома, пока дует положительная фаза, — тем больше, чем сильнее ветер (доля вынесенного к мигу —
  * доля пути воздуха, {@link BlastWall#carriedShare}), и ложится полосой по ветру: первая — дальше всех, на путь воздуха с
- * прихода фронта, последняя — у пролома ({@link #parcel}). Полоса расплывается вихрями пыльного слоя и растворяется в
- * нём, когда слой (голова стены, {@link DustModel#waveTop}) её перерастает, — тогда её рисует сама пелена.
+ * прихода фронта, последняя — у пролома ({@link #parcel}). Полоса расплывается вихрями пыльного слоя и уходит в него,
+ * когда слой (голова стены, {@link DustModel#waveTop}) её перерастает, — тогда её рисует сама пелена ({@link #apart}).
  * <p>
  * Сколько пыли: в модели пелены пыль обломков города — {@code DustModel.Surface.REFERENCE.debris} = 0,1 кг/м² там, где
  * рушится всё (подобрано по Хиросиме). На килограмм снесённого минерального это {@link #FINES}: доля, что встаёт мелкой
@@ -138,6 +138,18 @@ final class BlastDust implements SmokeGrid.Source {
     }
 
     /**
+     * Доля полосы с σ {@code sigma}, что ещё не смешалась со слоем пыли верхом {@code top} (блоки): слой высотой h перемешан
+     * ровно, σ его — h/√12; полоса, которую слой перерос, — уже его пыль, и её рисует пелена (как голова стены отдаёт место
+     * пелене, {@link BlastWall#handoff}): доля — σ²/(σ² + σ_слоя²) (⚠ оценка формы перехода). Раздувать полосу до слоя
+     * нельзя: в кадре вышла бы вторая пыль поверх пелены — светом неба, без тени головы стены над ней (сцена {@code film}:
+     * ровная бежевая вуаль на весь кадр).
+     */
+    static double apart(double sigma, double top) {
+        double layer = top / Math.sqrt(12);
+        return sigma * sigma / (sigma * sigma + layer * layer);
+    }
+
+    /**
      * Верх слоя пыли, в котором растворяется полоса, блоки: пыльный пограничный слой Kuhl в возрасте пыли на месте
      * ({@link DustModel#waveTop}); слой высотой h перемешан ровно, σ его — h/√12.
      */
@@ -163,8 +175,8 @@ final class BlastDust implements SmokeGrid.Source {
             parcel(g, last, t, parcel);
             double tx = parcel[0], ty = parcel[1], tz = parcel[2], spreadTail = parcel[3];
             s.layer(d, t);
-            double sigma = Math.hypot(s.r0 + 0.5 * (spreadHead + spreadTail), s.top / Math.sqrt(12));
-            double mass = s.mass * released * s.aloft;
+            double sigma = s.r0 + 0.5 * (spreadHead + spreadTail);
+            double mass = s.mass * released * s.aloft * apart(sigma, s.top);
             double half = 0.5 * Math.sqrt((hx - tx) * (hx - tx) + (hz - tz) * (hz - tz) + (hy - ty) * (hy - ty));
             // толща поперёк середины полосы: гаусс, размазанный по длине 2·half
             double tau = DustModel.K_MIX * mass / (2 * Math.PI * sigma * (sigma + 2 * half / Math.sqrt(2 * Math.PI)));
@@ -201,8 +213,6 @@ final class BlastDust implements SmokeGrid.Source {
         Streak s = streaks.getLast();
         double t = a.ticks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
         parcel(s.gust, s.gust.arrival, t, parcel);
-        s.layer(a.d, t);
-        double sigma = Math.hypot(s.r0 + parcel[3], s.top / Math.sqrt(12));
-        return Math.max(1, sigma / s.r0);
+        return Math.max(1, (s.r0 + parcel[3]) / s.r0);
     }
 }

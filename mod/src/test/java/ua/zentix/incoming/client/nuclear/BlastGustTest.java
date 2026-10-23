@@ -113,6 +113,12 @@ class BlastGustTest {
             assertEquals(0, tail[0], 1e-9, "последняя — у пролома");
             assertTrue(head[1] > 0 && head[3] > 0, "поднимается и расплывается");
         }
+        // полоса уходит в слой, когда слой её перерастает: вся — пока слоя нет, половина — при σ слоя, равном её, потом
+        // на нет; доля не растёт с верхом слоя
+        assertEquals(1, BlastDust.apart(2, 0), 0);
+        assertEquals(0.5, BlastDust.apart(2, 2 * Math.sqrt(12)), 1e-12);
+        assertTrue(BlastDust.apart(2, 100) < 0.02);
+        for (double top = 0; top < 200; top += 5) assertTrue(BlastDust.apart(2, top + 5) <= BlastDust.apart(2, top));
         double groundM = d.metres(1000);
         assertEquals(0, BlastDust.layerTop(d, groundM, 0), 1e-9);
         assertTrue(BlastDust.layerTop(d, groundM, 20) > 0 && BlastDust.layerTop(d, groundM, 100) > BlastDust.layerTop(d, groundM, 20));
