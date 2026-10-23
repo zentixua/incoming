@@ -370,6 +370,24 @@ final class Sandbox {
                 placeCamera();
                 finish("ok");
             }
+            case STANCE -> {
+                boolean stand = c.args().getFirst().equals("stand");
+                // Только игрок своей dev-песочницы: в spectator он летает, и качания тела на ногах не видно.
+                var id = mc.player.getUUID();
+                onServer(false, s -> {
+                    var p = s.getPlayerList().getPlayer(id);
+                    if (p == null) return;
+                    p.setGameMode(stand ? GameType.CREATIVE : GameType.SPECTATOR);
+                    p.getAbilities().flying = !stand;
+                    p.onUpdateAbilities();
+                });
+                finish("ok");
+            }
+            case WEATHER -> {
+                boolean rain = c.args().getFirst().equals("rain");
+                onServer(false, s -> s.overworld().setWeatherParameters(rain ? 0 : 6000, rain ? 6000 : 0, rain, false));
+                finish("ok");
+            }
             case TIME -> {
                 String t = c.args().getFirst();
                 long day = t.equals("day") ? 6000 : t.equals("night") ? 18000 : (long) c.number(0);
