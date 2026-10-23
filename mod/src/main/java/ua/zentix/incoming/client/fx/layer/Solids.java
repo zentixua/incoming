@@ -228,15 +228,23 @@ public final class Solids {
         LevelChunkSection s = chunk.getSection(level.getSectionIndexFromSectionY(sy));
         if (s.hasOnlyAir()) return 0;
         var data = s.getStates().data;
-        // перемешивание — в обе стороны по битам (HashCommon.mix): у умножения разница идёт только вверх, и две правки в
-        // верхних битах слов хранилища гасили бы друг друга (ревью #399)
-        long h = it.unimi.dsi.fastutil.HashCommon.mix(0x9E3779B97F4A7C15L ^ data.storage().getBits());
         net.minecraft.world.level.chunk.Palette<BlockState> palette = data.palette();
-        if (!(palette instanceof net.minecraft.world.level.chunk.GlobalPalette)) {
-            for (int k = 0; k < palette.getSize(); k++) h = it.unimi.dsi.fastutil.HashCommon.mix(h ^ System.identityHashCode(palette.valueFor(k)));
-        }
-        for (long v : data.storage().getRaw()) h = it.unimi.dsi.fastutil.HashCommon.mix(h ^ v);
+        int[] states = new int[palette instanceof net.minecraft.world.level.chunk.GlobalPalette ? 0 : palette.getSize()];
+        for (int k = 0; k < states.length; k++) states[k] = System.identityHashCode(palette.valueFor(k));
+        long h = fingerprint(data.storage().getBits(), states, data.storage().getRaw());
         return h == 0 ? 1 : h;
+    }
+
+    /**
+     * Отпечаток: ширина номера, состояния палитры, слова хранилища — перемешиванием fmix64 (murmurHash3) после каждого:
+     * у умножения разница идёт только вверх, у {@code HashCommon.mix} старший бит выходит постоянным узором, и правки в
+     * соседних словах гасили бы друг друга (ревью #399); у fmix64 — лавина во все биты.
+     */
+    static long fingerprint(int bits, int[] states, long[] raw) {
+        long h = it.unimi.dsi.fastutil.HashCommon.murmurHash3(0x9E3779B97F4A7C15L ^ bits);
+        for (int st : states) h = it.unimi.dsi.fastutil.HashCommon.murmurHash3(h ^ st);
+        for (long v : raw) h = it.unimi.dsi.fastutil.HashCommon.murmurHash3(h ^ v);
+        return h;
     }
 
     /** Заслоны секции (x — быстрее всех, потом y, потом z — как у текстуры): {@link #zeros}, {@link #full} или {@link #section}. */
