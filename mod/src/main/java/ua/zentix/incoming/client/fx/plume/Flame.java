@@ -56,6 +56,17 @@ public record Flame(double core, double flame, double length, double width, bool
                 tailMiddle, speed);
     }
 
+    /**
+     * Докуда за seconds секунд с поджига дошёл газ струи от среза, м: в ядре — со скоростью среза, за ним скорость на оси
+     * speed·core/x (Pope), и x² растёт линейно со временем. ⚠ Голова начинающейся струи идёт медленнее установившейся
+     * оси (порядка вдвое) — это оценка сверху.
+     */
+    public double gasReach(double seconds) {
+        if (speed <= 0 || core <= 0) return 0;
+        double t = Math.max(0, seconds), inCore = core / speed;
+        return t <= inCore ? speed * t : Math.sqrt(core * core + 2 * speed * core * (t - inCore));
+    }
+
     /** Полуширина струи в x метрах от среза. */
     public double widthAt(double x) {
         return width * (1 + x / core);

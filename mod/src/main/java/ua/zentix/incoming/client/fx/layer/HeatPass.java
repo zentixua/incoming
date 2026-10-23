@@ -41,7 +41,7 @@ import java.util.Arrays;
  * Andrews, Phillips, «Laser Beam Propagation through Random Media», 2005), D — что глаз различает у газа (зрачок или
  * пятно остроты зрения там), C_n² ≈ 2δn²·ℓ^(−2/3) (структурная функция доходит до 2δn² на внешнем масштабе ℓ, ⚠
  * порядок): σ = δn·√(5,82·L/ℓ)·(ℓ/D)^(1/6), крупнее ℓ пятно усредняет вихри — ×ℓ/D ({@link #hazeAngle}). Вихри,
- * которые проходят мимо быстрее, чем глаз копит свет ({@value #EYE_S} с), сливаются: σ·√(τ/{@value #EYE_S})
+ * которые газ проносит мимо быстрее, чем глаз копит свет ({@value #EYE_S} с), сливаются: σ·√(τ/{@value #EYE_S})
  * ({@link #hazeSeen}). Прежнее δn·√(L/ℓ) брало только вихри размера ℓ — в 2–5 раз меньше.
  * <p>
  * <b>Подача.</b> Пиксель экрана при обычном поле зрения — 3–6 угловых минут, глаз различает одну ({@value #ACUITY} рад):
@@ -248,13 +248,15 @@ public final class HeatPass {
          * назад (jx, jy, jz), cut — путь по оси от среза до земли (как у {@link #jet}). Закон струи — тот же, что у света
          * ({@code FlameModel}): температура пламени до его конца, за ним избыток ∝ 1/x; скорость газа на срезе — до конца
          * ядра, за ним ∝ 1/x (Pope, «Turbulent Flows», 2000, гл. 5: U₀/Uⱼ = B·d/x); полуширина — {@link Flame#widthAt}.
-         * Струя — до места, где избыток падает до {@link #COOL}, не дальше земли. Скорость — от сопла: снаряд, что летит
-         * быстро, оставляет горячий газ позади почти неподвижным, а узор вихрей идёт с соплом (⚠ упрощение).
+         * Струя — до места, где избыток падает до {@link #COOL}, не дальше земли и не дальше, чем газ дошёл с поджига: burn
+         * секунд горения ({@link Flame#gasReach}) плюс путь снаряда flown по прямой с места поджига (газ, оставленный там,
+         * позади сопла). Узор вихрей идёт с соплом, а снаряд, что летит быстро, оставляет горячий газ позади почти
+         * неподвижным; у снаряда в развороте газ лежит по пути, а столб — по нынешней оси (⚠ упрощения).
          */
-        public void exhaust(double x, double y, double z, double jx, double jy, double jz, Flame flame, double cut) {
+        public void exhaust(double x, double y, double z, double jx, double jy, double jz, Flame flame, double cut, double burn, double flown) {
             double core = flame.core(), fl = Math.max(flame.flame(), core), excess = flame.flameTemperature() - CloudModel.T_AIR_K;
             if (core <= 0 || flame.width() <= 0 || flame.speed() <= 0 || excess < COOL) return;
-            double len = Math.min(cut, fl * excess / COOL), mid = flame.middle();
+            double len = Math.min(Math.min(cut, fl * excess / COOL), flown + flame.gasReach(burn)), mid = flame.middle();
             if (!(len > 0)) return;
             tube(x - jx * mid, y - jy * mid, z - jz * mid, jx, jy, jz, len, flame.width(), flame.width() / core, EDDY * flame.width(),
                     flame.speed(), excess, fl, core, JET_TURBULENCE);
@@ -408,11 +410,12 @@ public final class HeatPass {
     }
 
     /**
-     * Доля дрожания, которую видит глаз, у вихрей eddy в газе скорости speed: вихрь живёт ℓ/(0,3u), а глаз копит свет
-     * {@value #EYE_S} с — вихри быстрее сливаются (СКО среднего из τ_глаза/τ независимых) — {@code hazeSeen}.
+     * Доля дрожания, которую видит глаз, у вихрей eddy в газе скорости speed: газ проносит вихрь мимо луча за ℓ/u (быстрее,
+     * чем он сам сменится, ℓ/(0,3u)), а глаз копит свет {@value #EYE_S} с — вихри быстрее сливаются (СКО среднего из
+     * τ_глаза/τ независимых) — {@code hazeSeen}.
      */
     public static double hazeSeen(double eddy, double speed) {
-        double tau = eddy / Math.max(SWIRL * speed, 1e-6);
+        double tau = eddy / Math.max(speed, 1e-6);
         return tau < EYE_S ? Math.sqrt(tau / EYE_S) : 1;
     }
 
@@ -424,6 +427,31 @@ public final class HeatPass {
         double res = resolve(pixel);
         return hazeAngle(dn, len, eddy, aperture(distance, res)) * hazeSeen(eddy, speed) / res;
     }
+
+    /**
+     * Где луч внутри столба: f(t) = a·t² − 2b·t + c < 0 на [t0, t1] — {@code hazeIn}/{@code hazeOut} в {@code fx_heat.fsh}.
+     * Конус |t·d⊥ − b⊥|² < (R₀ + G·t)²: a = d⊥² − G², b = d⊥·b⊥ + R₀G, c = b⊥² − R₀². Усечённый конус выпуклый, и на
+     * [t0, t1] (между плоскостями низа и конца, где радиус положителен) это один отрезок; пусто — конец не дальше начала.
+     */
+    public static double[] coneSpan(double a, double b, double c, double t0, double t1) {
+        double disc = b * b - a * c;
+        if (a > CONE_FLAT) {
+            if (disc <= 0) return new double[]{1, 0};
+            double q = Math.sqrt(disc);
+            return new double[]{Math.max(t0, (b - q) / a), Math.min(t1, (b + q) / a)};
+        }
+        if (a < -CONE_FLAT) {
+            if (disc <= 0) return new double[]{t0, t1};
+            double q = Math.sqrt(disc), r1 = (b + q) / a, r2 = (b - q) / a;
+            return t0 < r1 ? new double[]{t0, Math.min(t1, r1)} : new double[]{Math.max(t0, r2), t1};
+        }
+        if (b > 1e-12) return new double[]{Math.max(t0, c / (2 * b)), t1};
+        if (b < -1e-12) return new double[]{t0, Math.min(t1, c / (2 * b))};
+        return c < 0 ? new double[]{t0, t1} : new double[]{1, 0};
+    }
+
+    /** |a| меньше — уравнение конуса линейное (луч почти вдоль образующей). */
+    public static final double CONE_FLAT = 1e-6;
 
     /** Линейный rgb цвета color (sRGB, наибольший канал 255) с яркостью (luma) luminance. */
     static double[] rgb(int color, double luminance) {
@@ -565,7 +593,10 @@ public final class HeatPass {
         FRAME.atEye = 0;
     }
     private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f();
-    /** Номер цикла переноса — по модулю этого числа (сдвиг узора у каждого цикла свой; повтор — раз в 97 циклов). */
+    /**
+     * Номер цикла переноса — по модулю этого числа (сдвиг узора у каждого цикла свой; повтор — раз в 97 циклов); у второго
+     * слоя — со сдвигом на полномера: полцикла оба слоя в одном номере, и с одним сдвигом их узоры совпадали бы.
+     */
     static final double CYCLE_SEEDS = 97;
     private static final Vector3f FORWARD = new Vector3f();
     private static final Vector3f OPEN_SKY = new Vector3f();
@@ -646,7 +677,7 @@ public final class HeatPass {
         // узор вихрей переносит газ: два слоя со сдвигом в полцикла, доля цикла и номер цикла — в double, а не время в float
         double cycles = (System.nanoTime() - BORN) / 1e9 / HAZE_CYCLE, half = cycles + 0.5;
         s.safeGetUniform("HeatClock").set((float) (cycles - Math.floor(cycles)), (float) (Math.floor(cycles) % CYCLE_SEEDS),
-                (float) (half - Math.floor(half)), (float) (Math.floor(half) % CYCLE_SEEDS));
+                (float) (half - Math.floor(half)), (float) (Math.floor(half) % CYCLE_SEEDS + 0.5));
         s.safeGetUniform("HeatFront").set(f.front);
         s.safeGetUniform("HeatFrontShape").set(f.frontShape.x, f.frontShape.y, f.frontShape.z, f.frontShape.w);
         s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);

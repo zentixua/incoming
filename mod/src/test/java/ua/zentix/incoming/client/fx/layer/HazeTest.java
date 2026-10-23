@@ -44,8 +44,9 @@ class HazeTest {
     }
 
     /**
-     * При обычном поле зрения огонь Minecraft, шар шахеда и струя ускорителя на старте в 20–100 блоках сбоку дрожат на
-     * заметную долю пикселя и больше (СКО ≥ 0,3; размах — вдвое-втрое), но не на «космические» пиксели.
+     * При обычном поле зрения огонь Minecraft и шар шахеда в 20–100 блоках сбоку дрожат на пиксель (СКО ≥ 0,5; размах —
+     * вдвое-втрое), струя ускорителя ракеты, ушедшей на 100 блоков вверх за 2 с, — на доли пикселя (газ быстрый, глаз
+     * сливает его вихри), и ничто — не на «космические» пиксели.
      */
     @Test
     void fireBallAndJetShimmerOnScreen() {
@@ -58,9 +59,13 @@ class HazeTest {
             double t = 1, cr = DRONE.radius(t);
             b.hot(d, Math.max(0, DRONE.height(t) - cr) - 1.6, 0, 2 * cr, cr, DRONE.kelvin(t), DRONE.rise(t));
             HeatPass.Frame j = frame(PIXEL);
-            j.exhaust(d, 1.5, 0, 0, -0.5, -0.866, boost, Double.POSITIVE_INFINITY);
-            for (HeatPass.Frame x : new HeatPass.Frame[]{f, b, j}) {
-                assertTrue(shift(x) >= 0.3 && shift(x) <= 4, "в " + d + " блоках: " + shift(x) + " px");
+            j.exhaust(d, 100, 0, 0, -1, 0, boost, 100, 2, 100);
+            // огонь и шар — заметный пиксель; газ струи быстрый, глаз сливает его вихри — доли пикселя
+            double[] least = {0.5, 0.5, 0.15};
+            HeatPass.Frame[] all = {f, b, j};
+            for (int k = 0; k < 3; k++) {
+                double s = shift(all[k]);
+                assertTrue(s >= least[k] && s <= 4, "в " + d + " блоках, " + k + ": " + s + " px");
             }
         }
     }
@@ -113,10 +118,96 @@ class HazeTest {
         Flame b = booster();
         f.exhaust(20, 1.5, 0, 0, -1, 0, new Flame(b.core(), b.flame(), b.length(), b.width(), b.diamonds(), b.coreLuminance(),
                 b.flameLuminance(), b.tailLuminance(), b.coreColor(), b.flameColor(), b.tailColor(), b.temperature(), b.flameTemperature(),
-                b.emissivity(), b.sheath(), b.middle(), b.tailMiddle(), 0), Double.POSITIVE_INFINITY);
+                b.emissivity(), b.sheath(), b.middle(), b.tailMiddle(), 0), Double.POSITIVE_INFINITY, 10, 100);
         assertEquals(0, shift(f));
-        // струя, что ушла в землю у среза, — не дрожит
-        f.exhaust(20, 1.5, 0, 0, -1, 0, b, 0);
+        // струя, что ушла в землю у среза, — не дрожит; на поджиге газа ещё нет
+        f.exhaust(20, 1.5, 0, 0, -1, 0, b, 0, 10, 100);
+        f.exhaust(20, 1.5, 0, 0, -1, 0, b, Double.POSITIVE_INFINITY, 0, 0);
         assertEquals(0, shift(f));
+    }
+
+    /**
+     * Горячий газ струи — не дальше, чем дошёл с поджига: за t секунд в ядре — со скоростью среза, дальше x² растёт
+     * линейно (скорость на оси ∝ 1/x); столб кадра — не длиннее этого и пути снаряда с места поджига.
+     */
+    @Test
+    void jetGasGoesNoFurtherThanItGot() {
+        Flame b = booster();
+        double inCore = b.core() / b.speed();
+        assertEquals(b.speed() * inCore / 2, b.gasReach(inCore / 2), 1e-9);
+        double prev = b.core();
+        for (double t = inCore * 1.01; t < 30; t *= 1.5) {
+            double x = b.gasReach(t), dt = 1e-6, u = (b.gasReach(t + dt) - x) / dt;
+            assertEquals(b.speed() * b.core() / x, u, 1e-3 * u, t + " с");
+            assertTrue(x > prev);
+            prev = x;
+        }
+        for (double t : new double[]{0.1, 1, 3}) {
+            HeatPass.Frame f = frame(PIXEL);
+            f.exhaust(50, 100, 0, 0, -1, 0, b, Double.POSITIVE_INFINITY, t, 20);
+            assertTrue(f.shape.m00() <= 20 + b.gasReach(t) + 1e-3, t + " с: " + f.shape.m00());
+        }
+    }
+
+    /** Луч в усечённом конусе ({@link HeatPass#coneSpan}) — то же, что выборка точек луча по самому конусу. */
+    @Test
+    void coneSpanIsWhereTheRayIsInside() {
+        java.util.Random rnd = new java.util.Random(11);
+        for (int i = 0; i < 2000; i++) {
+            double[] a = unit(rnd), d = unit(rnd);
+            if (i % 3 == 0) d = unit(a, rnd, 0.02);
+            double[] base = {rnd.nextGaussian() * 20, rnd.nextGaussian() * 20, rnd.nextGaussian() * 20};
+            double len = 1 + rnd.nextDouble() * 80, r0 = 0.1 + rnd.nextDouble() * 3, g = rnd.nextDouble() * 0.3;
+            double c = dot(d, a), ba = dot(base, a);
+            double t0 = 0, t1 = 300;
+            if (Math.abs(c) > 1e-5) {
+                t0 = Math.max(t0, Math.min(ba / c, (ba + len) / c));
+                t1 = Math.min(t1, Math.max(ba / c, (ba + len) / c));
+            } else if (ba > 0 || ba + len < 0) {
+                continue;
+            }
+            if (t1 <= t0) continue;
+            double[] dp = new double[3], bp = new double[3];
+            for (int k = 0; k < 3; k++) {
+                dp[k] = d[k] - a[k] * c;
+                bp[k] = base[k] - a[k] * ba;
+            }
+            double R0 = r0 - g * ba, G = g * c;
+            double[] span = HeatPass.coneSpan(dot(dp, dp) - G * G, dot(dp, bp) + R0 * G, dot(bp, bp) - R0 * R0, t0, t1);
+            // выборка: точки луча в конусе
+            double lo = Double.NaN, hi = Double.NaN;
+            int n = 20000;
+            for (int k = 0; k <= n; k++) {
+                double t = t0 + (t1 - t0) * k / n, u = t * c - ba, r = r0 + g * u;
+                double px = t * d[0] - base[0] - a[0] * u, py = t * d[1] - base[1] - a[1] * u, pz = t * d[2] - base[2] - a[2] * u;
+                if (u >= 0 && u <= len && px * px + py * py + pz * pz < r * r) {
+                    if (Double.isNaN(lo)) lo = t;
+                    hi = t;
+                }
+            }
+            double step = 2 * (t1 - t0) / n;
+            if (Double.isNaN(lo)) {
+                assertTrue(span[1] - span[0] <= step, "случай " + i + ": " + span[0] + ".." + span[1]);
+            } else {
+                assertEquals(lo, span[0], step, "случай " + i);
+                assertEquals(hi, span[1], step, "случай " + i);
+            }
+        }
+    }
+
+    private static double dot(double[] p, double[] q) {
+        return p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+    }
+
+    private static double[] unit(java.util.Random r) {
+        double x = r.nextGaussian(), y = r.nextGaussian(), z = r.nextGaussian(), l = Math.sqrt(x * x + y * y + z * z);
+        return new double[]{x / l, y / l, z / l};
+    }
+
+    /** Почти вдоль a (взгляд вдоль струи), разброс spread. */
+    private static double[] unit(double[] a, java.util.Random r, double spread) {
+        double x = a[0] + r.nextGaussian() * spread, y = a[1] + r.nextGaussian() * spread, z = a[2] + r.nextGaussian() * spread;
+        double l = Math.sqrt(x * x + y * y + z * z), s = r.nextBoolean() ? 1 : -1;
+        return new double[]{s * x / l, s * y / l, s * z / l};
     }
 }

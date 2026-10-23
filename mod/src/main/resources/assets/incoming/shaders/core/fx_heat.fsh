@@ -69,6 +69,7 @@ const float HAZE_PUPIL = 4e-3;
 const float HAZE_EYE_S = 0.05;
 const float HAZE_SWIRL = 0.3;
 const float HAZE_CYCLE = 2.0;
+const float HAZE_CONE_FLAT = 1e-6;
 // сдвиг фронта меньше этой доли пикселя не виден: его нет (HeatPass.SHIFT_MIN)
 const float FRONT_SHIFT_MIN = 0.05;
 
@@ -101,11 +102,62 @@ float hazeAngle(float dn, float len, float eddy, float aperture) {
     return dn * sqrt(HAZE_KOLMOGOROV * len / eddy) * eddy / aperture;
 }
 
-// Доля дрожания, которую видит глаз: вихри, что живут меньше времени, за которое глаз копит свет, сливаются (HeatPass.hazeSeen)
+// Доля дрожания, которую видит глаз: вихри, которые газ проносит мимо луча быстрее, чем глаз копит свет, сливаются
+// (HeatPass.hazeSeen)
 float hazeSeen(float eddy, float speed) {
-    float tau = eddy / max(HAZE_SWIRL * speed, 1e-6);
+    float tau = eddy / max(speed, 1e-6);
     if (tau < HAZE_EYE_S) return sqrt(tau / HAZE_EYE_S);
     return 1.0;
+}
+
+// Где луч внутри столба: f(t) = a·t² − 2b·t + c < 0 на [t0, t1], один отрезок (усечённый конус выпуклый) — начало
+// (hazeIn) и конец (hazeOut); пусто — конец не дальше начала (HeatPass.coneSpan)
+float hazeInUp(float a, float b, float disc, float t0) {
+    if (disc <= 0.0) return 1e30;
+    return max(t0, (b - sqrt(disc)) / a);
+}
+
+float hazeOutUp(float a, float b, float disc, float t1) {
+    if (disc <= 0.0) return -1e30;
+    return min(t1, (b + sqrt(disc)) / a);
+}
+
+float hazeInDown(float a, float b, float disc, float t0) {
+    if (disc <= 0.0) return t0;
+    if (t0 < (b + sqrt(disc)) / a) return t0;
+    return max(t0, (b - sqrt(disc)) / a);
+}
+
+float hazeOutDown(float a, float b, float disc, float t0, float t1) {
+    if (disc <= 0.0) return t1;
+    if (t0 < (b + sqrt(disc)) / a) return min(t1, (b + sqrt(disc)) / a);
+    return t1;
+}
+
+float hazeInFlat(float b, float c, float t0) {
+    if (b > 1e-12) return max(t0, c / (2.0 * b));
+    if (b < -1e-12) return t0;
+    if (c < 0.0) return t0;
+    return 1e30;
+}
+
+float hazeOutFlat(float b, float c, float t1) {
+    if (b > 1e-12) return t1;
+    if (b < -1e-12) return min(t1, c / (2.0 * b));
+    if (c < 0.0) return t1;
+    return -1e30;
+}
+
+float hazeIn(float a, float b, float c, float t0) {
+    if (a > HAZE_CONE_FLAT) return hazeInUp(a, b, b * b - a * c, t0);
+    if (a < -HAZE_CONE_FLAT) return hazeInDown(a, b, b * b - a * c, t0);
+    return hazeInFlat(b, c, t0);
+}
+
+float hazeOut(float a, float b, float c, float t0, float t1) {
+    if (a > HAZE_CONE_FLAT) return hazeOutUp(a, b, b * b - a * c, t1);
+    if (a < -HAZE_CONE_FLAT) return hazeOutDown(a, b, b * b - a * c, t0, t1);
+    return hazeOutFlat(b, c, t1);
 }
 
 // Узор вихрей одного слоя в месте p (от низа столба, блоки): октавы от eddy втрое мельче, пока крупнее пятна aperture, вес
@@ -127,8 +179,8 @@ vec2 hazeNoise(vec3 p, vec3 axis, float eddy, float travel, float cycle, float a
     return sum / sqrt(norm);
 }
 
-// Сдвиг изображения за горячим газом, пиксели: отрезок луча dir до мира (dist) внутри столба i (вдоль оси от низа на длину,
-// радиус у места, где луч ближе всего к оси), сила — hazeAngle в середине отрезка, направление — узор вихрей там
+// Сдвиг изображения за горячим газом, пиксели: отрезок луча dir до мира (dist) внутри столба i (усечённый конус вдоль оси
+// от низа на длину), сила — hazeAngle в середине отрезка, направление — узор вихрей там
 vec2 heatShift(vec3 dir, float dist) {
     vec2 shift = vec2(0.0);
     float res = min(HAZE_ACUITY, HeatFrame.y);
@@ -152,22 +204,13 @@ vec2 heatShift(vec3 dir, float dist) {
             continue;
         }
         if (t1 <= t0) continue;
-        // поперёк оси: |t·d⊥ − b⊥|² = r², радиус — там, где луч ближе всего к оси
+        // поперёк оси: |t·d⊥ − b⊥|² < r(t)², r(t) = r₀ + рост·(t·c − ba) — одно квадратное уравнение
         vec3 dp = dir - a * c, bp = h.xyz - a * ba;
-        float qa = dot(dp, dp), qb = dot(dp, bp);
-        float tc = 0.5 * (t0 + t1);
-        if (qa > 1e-8) tc = clamp(qb / qa, t0, t1);
-        float r = h.w + ax.w * clamp(tc * c - ba, 0.0, s.x);
-        float qc = dot(bp, bp) - r * r;
-        if (qa > 1e-8) {
-            float disc = qb * qb - qa * qc;
-            if (disc <= 0.0) continue;
-            float root = sqrt(disc);
-            t0 = max(t0, (qb - root) / qa);
-            t1 = min(t1, (qb + root) / qa);
-        } else if (qc > 0.0) {
-            continue;
-        }
+        float r0 = h.w - ax.w * ba, grow = ax.w * c;
+        float qa = dot(dp, dp) - grow * grow, qb = dot(dp, bp) + r0 * grow, qc = dot(bp, bp) - r0 * r0;
+        float lo = hazeIn(qa, qb, qc, t0);
+        t1 = hazeOut(qa, qb, qc, t0, t1);
+        t0 = lo;
         float len = t1 - t0;
         if (len <= 0.0) continue;
         float mid = 0.5 * (t0 + t1);
