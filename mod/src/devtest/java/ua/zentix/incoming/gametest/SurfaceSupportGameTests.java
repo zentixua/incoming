@@ -189,6 +189,50 @@ public final class SurfaceSupportGameTests {
         });
     }
 
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_surface_wall", skyAccess = true)
+    public static void surfaceExcavationDoesNotJumpToTheTopOfAnAdjacentThickWall(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos ground = h.absolutePos(new BlockPos(32, 11, 32));
+        for (BlockPos p : BlockPos.betweenClosed(ground.offset(0, 1, -4), ground.offset(1, 7, 4)))
+            level.setBlock(p, Blocks.GRAY_CONCRETE.defaultBlockState(), Block.UPDATE_CLIENTS);
+        // Exercise the entire impact, including the air wave and the crater.
+        Warheads.testDetonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(ground.offset(-2, 1, 0)), null, 0x415333);
+        h.succeedWhen(() -> {
+            h.assertTrue(StrikeWorld.get(level).idle(), "impact unfinished");
+            for (int x = 0; x <= 1; x++) for (int z = -2; z <= 2; z++) {
+                BlockPos cap = ground.offset(x, 7, z);
+                h.assertTrue(level.getBlockState(cap).is(Blocks.GRAY_CONCRETE), "crater shaved wall cap " + cap);
+                h.assertTrue(SurfaceDamage.depth(level, cap) == 0, "cracks moved to wall cap " + cap);
+                h.assertTrue(level.getBlockState(cap.above()).isAir(), "rim deposited on wall cap");
+            }
+        });
+    }
+
+    @GameTest(template = "range", timeoutTicks = 80, batch = "blast_surface_rubble", skyAccess = true)
+    public static void surfaceRubbleIsSavedVisibleBeyondCrackRangeAndClearedWithTheBlock(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos top = h.absolutePos(C.above(3));
+        level.setBlock(top, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
+        SurfaceDamage.mark(level, top, level.getBlockState(top), 0.4);
+        var mark = level.getChunkAt(top).getData(ModAttachments.SURFACE_DAMAGE).stream()
+                .filter(m -> m.pos().equals(top)).findFirst().orElseThrow();
+        h.assertTrue(!mark.rubble().isEmpty(), "surface damage is only an invisible number");
+        for (UUID id : mark.rubble()) {
+            var entity = level.getEntity(id);
+            h.assertTrue(entity instanceof net.minecraft.world.entity.Display.BlockDisplay, "missing saved rubble display");
+            h.assertTrue(entity.shouldRenderAtSqrDistance(64 * 64), "rubble inherits the 32 m crack limit");
+            var saved = entity.saveWithoutId(new net.minecraft.nbt.CompoundTag());
+            var loaded = EntityType.BLOCK_DISPLAY.create(level);
+            loaded.load(saved);
+            h.assertTrue(loaded.getPersistentData().getLong("incoming_surface_pos") == top.asLong(), "rubble lost its anchor on save");
+        }
+        level.setBlock(top, Blocks.AIR.defaultBlockState(), 2);
+        h.runAtTickTime(30, () -> {
+            for (UUID id : mark.rubble()) h.assertTrue(level.getEntity(id) == null, "rubble survived removal of its substrate");
+            h.succeed();
+        });
+    }
+
     /** Pure layout check over translated threshold hashes, including a reproduced failing origin. */
     @GameTest(template = "range", timeoutTicks = 100, batch = "surface_layout", skyAccess = true)
     public static void nearbyPostsAreSampledForEveryThresholdHash(GameTestHelper h) {

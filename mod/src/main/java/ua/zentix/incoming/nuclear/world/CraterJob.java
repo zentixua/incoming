@@ -183,6 +183,8 @@ public final class CraterJob {
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, 0, z);
         // итоговая поверхность = природный грунт + вал − чаша (у кромки они перекрываются)
         double relief = lift - depth;
+        BlockPos damagedPos = null;
+        double damagedDepth = 0;
         if (mode == Mode.DIG) {
             BlockState surface = level.getBlockState(m.setY(ground - 1));
             if (surface.getBlock().defaultDestroyTime() < 0 || surface.getBlock().getExplosionResistance() >= BLAST_PROOF) return;
@@ -191,8 +193,11 @@ public final class CraterJob {
                 // metres; retain and mark the fractional last block. Loose soil keeps the unbiased grain sampling.
                 double dug = -relief, full = Math.floor(dug);
                 BlockPos bottom = new BlockPos(x, ground - (int) full - 1, z);
-                if (dug > full) SurfaceDamage.mark(level, bottom, level.getBlockState(bottom), dug - full);
+                if (dug > full) { damagedPos = bottom; damagedDepth = dug - full; }
                 relief = -full;
+            } else if (relief > 0 && SurfaceBlocks.cohesive(surface)) {
+                // A fractional ejecta rim is rubble, not a randomly added whole metre on intact paving.
+                relief = Math.floor(relief);
             } else {
                 double whole = Math.floor(relief);
                 relief = whole + (random.nextDouble() < relief - whole ? 1 : 0);
@@ -222,6 +227,8 @@ public final class CraterJob {
                 if (was.canBeReplaced()) ColumnScar.replace(level, m, was, rimStates.get(random.nextInt(rimStates.size())));
             }
         }
+        // Full metres above the residual surface have now gone; its chips must not be hidden by those old blocks.
+        if (damagedPos != null) SurfaceDamage.mark(level, damagedPos, level.getBlockState(damagedPos), damagedDepth);
     }
 
     /** Первый воздух над природным грунтом (ниже построек, деревьев и прочего надземного). */

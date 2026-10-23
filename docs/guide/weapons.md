@@ -54,7 +54,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   and about a block deep: craters are much smaller than in earlier versions, and that is the real size.
 - **Paving on a solid backing** cannot bend like a free wall. It is excavated with its backing, using the crater
   law for its material. In cohesive stone and concrete, a fraction of a block is saved as surface damage and shown
-  with cracks; the remaining block keeps its collision shape. A shallow crater cannot open a metre-thick slab.
+  with exposed aggregate and material chips, plus nearby cracks. This approximates a
+  fractured surface; the remaining block keeps its collision shape. A shallow crater cannot open a metre-thick slab.
 - **A slab over a void** (a bridge deck, a roof over a room, the ceiling of a cave) is breached when the charge
   touches it and the slab is thinner than the breaching radius of the US Army demolition manual (FM 5-250): everything
   between the charge and the void within that radius is blown out, and the blast carries on into the void. This works

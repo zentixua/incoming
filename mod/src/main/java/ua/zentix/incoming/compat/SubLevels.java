@@ -100,6 +100,30 @@ public final class SubLevels {
         }
     }
 
+    /** Plot cells enclosing a craft's world bounds. Reading them still requires Terrain.ready. */
+    public static Iterable<net.minecraft.core.BlockPos> plotCells(SubLevelAccess sub) {
+        var b = sub.boundingBox().toMojang();
+        double x0 = Double.POSITIVE_INFINITY, y0 = x0, z0 = x0;
+        double x1 = Double.NEGATIVE_INFINITY, y1 = x1, z1 = x1;
+        for (double x : new double[]{b.minX, b.maxX}) for (double y : new double[]{b.minY, b.maxY})
+            for (double z : new double[]{b.minZ, b.maxZ}) {
+                Vec3 p = toPlot(sub, new Vec3(x, y, z));
+                x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); z0 = Math.min(z0, p.z);
+                x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); z1 = Math.max(z1, p.z);
+            }
+        return net.minecraft.core.BlockPos.betweenClosed(net.minecraft.core.BlockPos.containing(x0, y0, z0),
+                net.minecraft.core.BlockPos.containing(x1, y1, z1));
+    }
+
+    /** Exact distance to a posed voxel (rotation and scale included), rather than to a hollow craft's bounds. */
+    public static double blockRangeSqr(SubLevelAccess sub, net.minecraft.core.BlockPos cell, Vec3 source) {
+        Vec3 local = toPlot(sub, source);
+        Vec3 nearest = new Vec3(net.minecraft.util.Mth.clamp(local.x, cell.getX(), cell.getX() + 1.0),
+                net.minecraft.util.Mth.clamp(local.y, cell.getY(), cell.getY() + 1.0),
+                net.minecraft.util.Mth.clamp(local.z, cell.getZ(), cell.getZ() + 1.0));
+        return sub.logicalPose().transformPosition(nearest).distanceToSqr(source);
+    }
+
     /** Аппараты в радиусе (по габаритам). */
     public static List<SubLevelAccess> near(Level level, Vec3 at, double radius) {
         List<SubLevelAccess> out = new ArrayList<>();

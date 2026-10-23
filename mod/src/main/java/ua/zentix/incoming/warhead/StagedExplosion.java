@@ -92,6 +92,8 @@ import java.util.function.LongSupplier;
  *     с момента лучей (натекла вода, поставил игрок), не трогается; сменившиеся свойства того же блока (забор потерял
  *     соседа) — не смена.</li>
  * </ol>
+ * У заряда блоки, тела и корпуса аппаратов объединены во фронте по расстоянию. Корпус — одно событие на ближайшем
+ * твёрдом блоке, до тела за ним; ванильный путь выше относится к обычному TNT/аварийному взрыву.
  * Между единицами мир может меняться (1–3 тика) — порции сверяют блок. Взрыв с центром в сетке плотов (на аппарате) —
  * одним ванильным {@code level.explode}: Sable переносит такой взрыв в мир своей обёрткой {@code ServerLevel.explode}.
  * <p>
@@ -825,18 +827,59 @@ final class StagedExplosion implements UnitQueue.Job {
      * it is hit; a breached plate in front of a further body is already an opening. Within a block the failure is
      * instantaneous (voxel approximation); scheduling may take several ticks but cannot reverse that causal order.
      */
+    private record CraftFront(java.util.UUID id, double rangeSqr, float power) {}
+    private final List<CraftFront> craftFront = new ArrayList<>();
+    private int nextCraft;
+    private List<dev.ryanhcode.sable.companion.SubLevelAccess> craftScan;
+    private int scanCraft;
+    private java.util.Iterator<BlockPos> craftCells;
+    private double nearestCraft = Double.POSITIVE_INFINITY;
+    private float frontCraftPower;
+
+    /** Scan loaded plot cells under the work budget; empty space inside bounds is not the nearest hull block. */
+    private boolean scanCrafts(ServerLevel level) {
+        if (craftScan == null) {
+            frontCraftPower = craftPower(level, centre, charge);
+            craftScan = frontCraftPower > 0 ? SubLevels.near(level, centre, breakReach(charge)) : List.of();
+        }
+        int cells = 0;
+        while (scanCraft < craftScan.size()) {
+            var sub = craftScan.get(scanCraft);
+            if (craftCells == null) craftCells = SubLevels.plotCells(sub).iterator();
+            while (craftCells.hasNext()) {
+                BlockPos p = craftCells.next();
+                if (Terrain.ready(level, p) && Objects.equals(sub.getUniqueId(), SubLevels.containingId(level, new ChunkPos(p)))
+                        && !level.getBlockState(p).getCollisionShape(level, p).isEmpty())
+                    nearestCraft = Math.min(nearestCraft, SubLevels.blockRangeSqr(sub, p, centre));
+                if (++cells >= 256) return false;
+            }
+            if (Double.isFinite(nearestCraft)) craftFront.add(new CraftFront(sub.getUniqueId(), nearestCraft, frontCraftPower));
+            scanCraft++;
+            craftCells = null;
+            nearestCraft = Double.POSITIVE_INFINITY;
+        }
+        craftFront.sort(Comparator.comparingDouble(CraftFront::rangeSqr));
+        return true;
+    }
+
     private boolean front(ServerLevel level) {
         long t = System.nanoTime();
         LongSupplier watch = clock != null ? clock : WorkScheduler.impactClock(level.getServer()).sampler();
         long start = watch.getAsLong();
         int bodies = 0;
         blown = 0;
-        while (next < toBlow.size() || nextEntity < entities.size()) {
+        while (next < toBlow.size() || nextEntity < entities.size() || nextCraft < craftFront.size()) {
             double body = nextEntity < bodyRanges.size() ? bodyRanges.get(nextEntity) : Double.POSITIVE_INFINITY;
             double block = next < toBlow.size() ? new AABB(toBlow.get(next)).distanceToSqr(centre) : Double.POSITIVE_INFINITY;
-            frontDueTick = beganAt + (long) Math.ceil(20 * BlastModel.chemicalArrivalSeconds(Math.sqrt(Math.min(body, block)), charge, true));
+            double craft = nextCraft < craftFront.size() ? craftFront.get(nextCraft).rangeSqr() : Double.POSITIVE_INFINITY;
+            frontDueTick = beganAt + (long) Math.ceil(20 * BlastModel.chemicalArrivalSeconds(Math.sqrt(Math.min(craft, Math.min(body, block))), charge, true));
             if (level.getGameTime() < frontDueTick) break;
-            if (block <= body && next < toBlow.size()) {
+            if (craft <= Math.min(block, body)) {
+                CraftFront hit = craftFront.get(nextCraft);
+                if (!Terrain.readyAround(level, centre, craftReach(hit.power()))) return true;
+                crafts(level, hit);
+                nextCraft++;
+            } else if (block <= body && next < toBlow.size()) {
                 int i = next++;
                 BlockPos p = toBlow.get(i);
                 if (Terrain.ready(level, p)) {
@@ -862,10 +905,9 @@ final class StagedExplosion implements UnitQueue.Job {
             largestPortion = Math.max(largestPortion, blown);
         }
         time(ExplosionStage.DAMAGE, t);
-        if (next < toBlow.size() || nextEntity < entities.size()) return true;
+        if (next < toBlow.size() || nextEntity < entities.size() || nextCraft < craftFront.size()) return true;
         entities = List.of();
         bodyBefore.clear();
-        crafts(level);
         return false;
     }
 
@@ -895,7 +937,7 @@ final class StagedExplosion implements UnitQueue.Job {
                     bodyBefore.put(entity, BlastBody.before(level, wave(), living));
             }
         }
-        if (nextEntity == entities.size()) {
+        if (nextEntity == entities.size() && scanCrafts(level)) {
             nextEntity = 0;
             phase = Phase.FRONT;
         }
@@ -917,8 +959,8 @@ final class StagedExplosion implements UnitQueue.Job {
      * при наименьшем множителе (0,7): дальше закон ничего не ломает. Толчок аппарата — Sable по ванильным лучам, не по
      * физике.
      */
-    private void crafts(ServerLevel level) {
-        float craftPower = craftPower(level, centre, charge);
+    private void crafts(ServerLevel level, CraftFront hit) {
+        float craftPower = hit.power();
         if (craftPower <= 0) return;
         Vec3 c = centre;
         double tnt = charge;
@@ -929,7 +971,7 @@ final class StagedExplosion implements UnitQueue.Job {
             double outer = craftCharge;
             craftCharge = tnt;
             try {
-                l.explode(null, ModDamageTypes.source(l, ModDamageTypes.STRIKE, null, null), new CraftCharge(l, c, tnt),
+                l.explode(null, ModDamageTypes.source(l, ModDamageTypes.STRIKE, null, null), new CraftCharge(l, c, tnt, hit.id()),
                         c.x, c.y, c.z, craftPower, false, destroy ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE,
                         ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
             } finally {
@@ -969,16 +1011,27 @@ final class StagedExplosion implements UnitQueue.Job {
         private final Level level;
         private final Vec3 centre;
         private final double tnt;
+        private final java.util.UUID craftId;
 
-        CraftCharge(Level level, Vec3 centre, double tnt) {
+        CraftCharge(Level level, Vec3 centre, double tnt, java.util.UUID craftId) {
             this.level = level;
             this.centre = centre;
             this.tnt = tnt;
+            this.craftId = craftId;
+        }
+
+        @Override
+        public Optional<Float> getBlockExplosionResistance(Explosion explosion, BlockGetter reader, BlockPos pos,
+                                                            BlockState state, FluidState fluid) {
+            // A hull block that the pressure/impulse law breaks cannot also stop the ray by vanilla TNT hardness.
+            // Surviving hull and world terrain retain their resistance. Failure within this craft event is instantaneous.
+            if (shouldBlockExplode(explosion, reader, pos, state, 1)) return Optional.of(0f);
+            return super.getBlockExplosionResistance(explosion, reader, pos, state, fluid);
         }
 
         @Override
         public boolean shouldBlockExplode(Explosion explosion, BlockGetter reader, BlockPos pos, BlockState state, float power) {
-            if (state.isAir() || !SubLevels.isInPlot(level, pos.getCenter())) return false;
+            if (state.isAir() || !craftId.equals(SubLevels.containingId(level, new ChunkPos(pos)))) return false;
             double r = Math.max(0.25, SubLevels.toWorld(level, pos.getCenter()).distanceTo(centre));
             return BlockResponse.of(state).breaksAt(BlastModel.psi(BlastModel.surfaceOverpressureKpa(r, tnt)),
                     BlastModel.chemicalImpulse(r, tnt, true), Mth.murmurHash3Mixer(Long.hashCode(pos.asLong())));

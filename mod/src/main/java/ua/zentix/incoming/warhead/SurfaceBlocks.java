@@ -25,14 +25,16 @@ public final class SurfaceBlocks {
     /** First air above a continuous solid backing rooted in natural ground; a gap stops the search. */
     public static int supportedTop(ServerLevel level, int x, int z, int ground, int top) {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, ground, z);
-        int y = ground;
+        int y = Math.min(ground, top);
         while (y < top && solid(level, p.setY(y), level.getBlockState(p))) y++;
         return y;
     }
 
     /** An impacted slab has its own surface even if the natural ground is a room or a river below it. */
     public static int excavationTop(ServerLevel level, int x, int z, int ground, int top, double sourceY) {
-        int backed = supportedTop(level, x, z, ground, top);
+        // The contact plane caps the supported layer. A wall/tree above it is not a raised road surface.
+        int plane = (int) Math.floor(sourceY + 1e-5);
+        int backed = supportedTop(level, x, z, ground, Math.min(top, plane));
         BlockPos p = BlockPos.containing(x, sourceY - 1e-5, z);
         if (p.getY() >= backed && p.getY() < top && solid(level, p, level.getBlockState(p))) return p.getY() + 1;
         return backed;
