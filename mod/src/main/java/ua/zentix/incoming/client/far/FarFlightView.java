@@ -669,7 +669,8 @@ public final class FarFlightView {
                 // факел светит на дым и ленты вокруг, как огненный шар, — виден он глазу или нет
                 lights.add(BACK[0], BACK[1], BACK[2], flame.lightRadius(), seen, Math.min(1, seen), channel(fc, 0), channel(fc, 1), channel(fc, 2));
                 // и на мир, и в глаз (HeatPass): без воздуха до глаза — его ослабление считает проход
-                lit(BACK[0], BACK[1], BACK[2], -NOSE[0], -NOSE[1], -NOSE[2], flame, view.camera());
+                lit(BACK[0], BACK[1], BACK[2], -NOSE[0], -NOSE[1], -NOSE[2], flame, view.camera(), track.phaseAge(t) / 20,
+                        flown(track, t, track.phaseAge(t)));
                 flamePx = 2 * LIGHT[0] / (bd * view.pixel());
                 flameAlpha = Math.min(1, LIGHT[2]) * vis * core;
                 flames++;
@@ -745,17 +746,34 @@ public final class FarFlightView {
 
     /**
      * Факелы кадра для света на мир ({@link #heat}): середина от глаза, ось струи, высота середины над землёй, путь по оси
-     * от среза до земли; сам факел.
+     * от среза до земли, сколько секунд горит, путь снаряда по прямой от места поджига; сам факел.
      */
-    private static final int LIT_MAX = 16, LIT_STRIDE = 8;
+    private static final int LIT_MAX = 16, LIT_STRIDE = 10;
     private static final double[] LIT = new double[LIT_MAX * LIT_STRIDE], LIT_W = new double[LIT_MAX];
     private static final Flame[] LIT_FLAME = new Flame[LIT_MAX];
     private static int lit;
     /** Свет всех факелов кадра у глаза. */
     private static double litEye;
 
-    /** Факел flame с серединой (x, y, z) от глаза cam и осью струи от сопла (jx, jy, jz) — в свет кадра на мир. */
-    static void lit(double x, double y, double z, double jx, double jy, double jz, Flame flame, Vec3 cam) {
+    /**
+     * Путь снаряда по прямой от места, где горела нынешняя фаза полёта age тиков назад, до места в t, блоки; места нет в
+     * памяти пути — бесконечность (горячий газ струи тогда не короче её закона).
+     */
+    private static double flown(FlightTrack track, double t, double age) {
+        double from = t - age;
+        if (from < track.start() || !track.covers(from) || !track.predict(t, FLOWN_AT)) return Double.POSITIVE_INFINITY;
+        double x = FLOWN_AT[0], y = FLOWN_AT[1], z = FLOWN_AT[2];
+        track.at(from, FLOWN_AT);
+        return Math.sqrt((x - FLOWN_AT[0]) * (x - FLOWN_AT[0]) + (y - FLOWN_AT[1]) * (y - FLOWN_AT[1]) + (z - FLOWN_AT[2]) * (z - FLOWN_AT[2]));
+    }
+
+    private static final double[] FLOWN_AT = new double[3];
+
+    /**
+     * Факел flame с серединой (x, y, z) от глаза cam и осью струи от сопла (jx, jy, jz) — в свет кадра на мир; горит burn
+     * секунд, снаряд с поджига пролетел flown блоков.
+     */
+    static void lit(double x, double y, double z, double jx, double jy, double jz, Flame flame, Vec3 cam, double burn, double flown) {
         double lr = flame.lightRadius(), w = flame.brightness() * lr * lr / Math.max(x * x + y * y + z * z, lr * lr);
         // в глаз — все факелы, на мир — самые заметные у глаза (проход берёт из них четыре)
         litEye += w;
@@ -782,7 +800,12 @@ public final class FarFlightView {
         // твёрдое или жидкость), — по блокам вниз от сопла, а не по карте высот: под кроной или крышей она выше сопла
         double mid = flame.middle(), nx = x - jx * mid + cam.x, ny = y - jy * mid + cam.y, nz = z - jz * mid + cam.z;
         double under = lv == null || jy > -1e-6 ? Double.NaN : floorBelow(lv, nx, ny, nz);
+        // глубже — карта высот у сопла (струю горячего газа в сотни метров ведёт вниз и с высоты; ⚠ земля под соплом, а не
+        // там, где наклонная ось её встретит)
+        if (Double.isNaN(under) && lv != null && jy <= -1e-6) under = ground(lv, nx, nz);
         LIT[o + 7] = Double.isNaN(under) ? Double.POSITIVE_INFINITY : Math.max(0, ny - under) / -jy;
+        LIT[o + 8] = burn;
+        LIT[o + 9] = flown;
         LIT_FLAME[slot] = flame;
     }
 
@@ -806,13 +829,14 @@ public final class FarFlightView {
 
     /**
      * Свет факелов кадра на мир ({@link HeatPass.Frame#jet}: струя от сопла до точки Дрейпера по частям) и в глаз следующего
-     * кадра ({@link #flamesAtEye}); воздух air, 1/блок.
+     * кадра ({@link #flamesAtEye}), горячий газ их струй — дрожанием ({@link HeatPass.Frame#exhaust}); воздух air, 1/блок.
      */
     static void heat(HeatPass.Frame heat, double air) {
         for (int i = 0; i < lit; i++) {
             int o = LIT_STRIDE * i;
             // в глаз этого кадра факелы уже вошли — прошлым кадром ({@link #flamesAtEye})
             heat.jet(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT_FLAME[i], air, LIT[o + 6], LIT[o + 7]);
+            heat.exhaust(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT_FLAME[i], LIT[o + 7], LIT[o + 8], LIT[o + 9]);
             LIT_FLAME[i] = null;
         }
         flamesAtEye = litEye;

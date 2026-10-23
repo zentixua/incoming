@@ -35,8 +35,19 @@ import java.util.Arrays;
  * <p>
  * <b>Дрожание.</b> Показатель преломления воздуха n − 1 = {@value #N0} при 288 K (Edlén 1966, 550 нм) и ∝ плотности,
  * т. е. 1/T; пульсации температуры в факеле — {@value #TURBULENCE} от избытка на оси (George, Alpert, Tamanini, Int. J.
- * Heat Mass Transfer 20, 1977: 0,38–0,40), δn = (n₀ − 1)·I·(T₀/T)·(1 − T₀/T); вихри — {@value #EDDY} радиуса столба
- * (интегральный масштаб турбулентности факела, ⚠ оценка), идут вверх со скоростью газа.
+ * Heat Mass Transfer 20, 1977: 0,38–0,40), в струе сопла — {@value #JET_TURBULENCE} (⚠ оценка по нагретым струям),
+ * δn = (n₀ − 1)·I·(T₀/T)·(1 − T₀/T); вихри — {@value #EDDY} радиуса столба (внешний масштаб, ⚠ оценка), идут с газом.
+ * Угол прихода луча (одна ось) за путём L в турбулентности Колмогорова — σ² = 2,91·C_n²·L·D^(−1/3) (Татарский 1961;
+ * Andrews, Phillips, «Laser Beam Propagation through Random Media», 2005), D — что глаз различает у газа (зрачок или
+ * пятно остроты зрения там), C_n² ≈ 2δn²·ℓ^(−2/3) (структурная функция доходит до 2δn² на внешнем масштабе ℓ, ⚠
+ * порядок): σ = δn·√(5,82·L/ℓ)·(ℓ/D)^(1/6), крупнее ℓ пятно усредняет вихри — ×ℓ/D ({@link #hazeAngle}). Вихри,
+ * которые газ проносит мимо быстрее, чем глаз копит свет ({@value #EYE_S} с), сливаются: σ·√(τ/{@value #EYE_S})
+ * ({@link #hazeSeen}). Прежнее δn·√(L/ℓ) брало только вихри размера ℓ — в 2–5 раз меньше.
+ * <p>
+ * <b>Подача.</b> Пиксель экрана при обычном поле зрения — 3–6 угловых минут, глаз различает одну ({@value #ACUITY} рад):
+ * дрожание, которое глаз видит у огня, на экране было бы долями пикселя. Сдвиг кадра — в долях того, что различает
+ * глаз, а не пиксель ({@link #resolve}): подача, усиление в пиксель/острота раз (3–6 при поле 70°), а в бинокль,
+ * где пиксель мельче остроты, — как есть. Размер, место и сила марева — по физике.
  * <p>
  * <b>Свет факела</b> двигателя — не шар, а струя от среза сопла до конца света хвоста ({@link Frame#jet}, {@link Flame#tailEnd}): каждая часть
  * {@link Flame} (ядро, пламя догорания, остывающий хвост) — равномерный светящийся отрезок своей яркости и цвета, свет на
@@ -60,10 +71,27 @@ public final class HeatPass {
     public static final double N0 = 2.77e-4;
     /** Пульсации температуры в факеле — доля избытка на оси. */
     public static final double TURBULENCE = 0.4;
+    /**
+     * Пульсации температуры на оси нагретой струи — доля избытка там (⚠ оценка: у круглых нагретых струй на оси 0,15–0,25
+     * — Chevray, Tutu, J. Fluid Mech. 88, 1978).
+     */
+    public static final double JET_TURBULENCE = 0.2;
     /** Вихри — эта доля радиуса столба (⚠ оценка). */
     public static final double EDDY = 0.2;
+    /** Острота зрения — одна угловая минута, рад (норма 1,0 по Снеллену). */
+    public static final double ACUITY = 2.9e-4;
+    /** Зрачок, м (днём 2–4 мм, ночью до 7: ⚠ среднее; в формуле — в степени 1/6). */
+    public static final double PUPIL = 4e-3;
+    /** Время, за которое глаз копит свет, с (Блох: 0,05–0,1; ⚠ нижняя граница). */
+    public static final double EYE_S = 0.05;
+    /** Сумма угла прихода по Колмогорову: 2·2,91 (C_n² = 2δn²ℓ^(−2/3), σ² = 2,91·C_n²·L·D^(−1/3)). */
+    public static final double KOLMOGOROV = 5.82;
+    /** Пульсации скорости в факеле и струе — доля средней скорости (вихрь живёт ℓ/u'; ⚠ оценка). */
+    public static final double SWIRL = 0.3;
+    /** Цикл переноса узора вихрей, с: два слоя со сдвигом в полцикла, смена — при нулевом весе (поток по карте). */
+    public static final double HAZE_CYCLE = 2;
     /** Газ холоднее воздуха + столько, K, — без дрожания (δn меньше 1 % пика). */
-    static final double COOL = 20;
+    public static final double COOL = 20;
     /** Дрожание меньше этой доли пикселя — не рисуется. */
     public static final double SHIFT_MIN = 0.05;
     /** Свет шара на земле под ним меньше этой доли света открытого неба — шар на мир не светит (как у ядерки). */
@@ -84,6 +112,12 @@ public final class HeatPass {
     public static final class Frame {
         final Matrix4f lights = new Matrix4f().zero(), lightColor = new Matrix4f().zero(), hot = new Matrix4f().zero(),
                 shape = new Matrix4f().zero(), front = new Matrix4f().zero();
+        /**
+         * Горячий газ, кроме {@link #hot} (низ от глаза и радиус там) и {@link #shape} (длина по оси, вихрь у низа, скорость
+         * газа у низа, (n₀ − 1)·доля пульсаций): ось от низа (xyz) и рост радиуса на метр оси (w); избыток температуры у
+         * низа, K, место по оси, за которым он падает как 1/x, и место, за которым так же падает скорость (у столба — нигде).
+         */
+        final Matrix4f axis = new Matrix4f().zero(), gas = new Matrix4f().zero();
         /** e-кратная толща оболочки и синус угла над серединой у земли: фронта 0 (x, y) и 1 (z, w). */
         final Vector4f frontShape = new Vector4f();
         /**
@@ -94,6 +128,8 @@ public final class HeatPass {
         final Matrix4f jets = new Matrix4f().zero(), jetAxis = new Matrix4f().zero(), jetSize = new Matrix4f().zero(),
                 jetCore = new Matrix4f().zero(), jetFlame = new Matrix4f().zero(), jetTail = new Matrix4f().zero();
         private final double[] lightWeight = new double[4], hotWeight = new double[4], frontWeight = new double[2], jetWeight = new double[4];
+        /** Сдвиг столбов горячего газа кадра, пиксели (самое заметное место, как при выборе). */
+        final double[] hotShift = new double[4];
         private final Vector4f column = new Vector4f();
         /**
          * Привыкание глаза кадра ({@code Sight.exposure}: к свету неба и к свету огня у глаза — одно на весь кадр) и свет
@@ -124,6 +160,8 @@ public final class HeatPass {
             lightColor.zero();
             hot.zero();
             shape.zero();
+            axis.zero();
+            gas.zero();
             front.zero();
             frontShape.zero();
             jets.zero();
@@ -134,6 +172,7 @@ public final class HeatPass {
             jetTail.zero();
             Arrays.fill(lightWeight, 0);
             Arrays.fill(hotWeight, 0);
+            Arrays.fill(hotShift, 0);
             Arrays.fill(frontWeight, 0);
             Arrays.fill(jetWeight, 0);
         }
@@ -201,19 +240,54 @@ public final class HeatPass {
         /** То же с размером вихря {@code eddy}, блоки: столб — поле отдельных факелов, вихри — их ({@link #plumes}). */
         public void hot(double x, double y, double z, double h, double r, double kelvin, double rise, double eddy) {
             if (r <= 0 || h <= 0 || kelvin < CloudModel.T_AIR_K + COOL) return;
-            double t0 = CloudModel.T_AIR_K / kelvin, dn = N0 * TURBULENCE * t0 * (1 - t0);
-            // дрожание мельче {@link #SHIFT_MIN} пикселя и на самом длинном пути сквозь столб не видно: столб не нужен
-            eddy = Math.max(0.05, eddy);
-            double chord = Math.max(2 * r, Math.min(h, 4 * r));
-            if (dn * Math.sqrt(chord / eddy) < SHIFT_MIN * pixel) return;
-            double cx = x, cy = y + 0.5 * h, cz = z;
-            double w = dn * r * Math.max(r, h) / Math.max(cx * cx + cy * cy + cz * cz, r * r);
+            tube(x, y, z, 0, 1, 0, h, r, 0, Math.max(0.05, eddy), rise, kelvin - CloudModel.T_AIR_K, NOWHERE, NOWHERE, TURBULENCE);
+        }
+
+        /**
+         * Горячий газ струи сопла факела {@code flame}: середина света струи (x, y, z) от глаза, единичная ось от сопла
+         * назад (jx, jy, jz), cut — путь по оси от среза до земли (как у {@link #jet}). Закон струи — тот же, что у света
+         * ({@code FlameModel}): температура пламени до его конца, за ним избыток ∝ 1/x; скорость газа на срезе — до конца
+         * ядра, за ним ∝ 1/x (Pope, «Turbulent Flows», 2000, гл. 5: U₀/Uⱼ = B·d/x); полуширина — {@link Flame#widthAt}.
+         * Струя — до места, где избыток падает до {@link #COOL}, не дальше земли и не дальше, чем газ дошёл с поджига: burn
+         * секунд горения ({@link Flame#gasReach}) плюс путь снаряда flown по прямой с места поджига (газ, оставленный там,
+         * позади сопла). Узор вихрей идёт с соплом, а снаряд, что летит быстро, оставляет горячий газ позади почти
+         * неподвижным; у снаряда в развороте газ лежит по пути, а столб — по нынешней оси (⚠ упрощения).
+         */
+        public void exhaust(double x, double y, double z, double jx, double jy, double jz, Flame flame, double cut, double burn, double flown) {
+            double core = flame.core(), fl = Math.max(flame.flame(), core), excess = flame.flameTemperature() - CloudModel.T_AIR_K;
+            if (core <= 0 || flame.width() <= 0 || flame.speed() <= 0 || excess < COOL) return;
+            double len = Math.min(Math.min(cut, fl * excess / COOL), flown + flame.gasReach(burn)), mid = flame.middle();
+            if (!(len > 0)) return;
+            tube(x - jx * mid, y - jy * mid, z - jz * mid, jx, jy, jz, len, flame.width(), flame.width() / core, EDDY * flame.width(),
+                    flame.speed(), excess, fl, core, JET_TURBULENCE);
+        }
+
+        /**
+         * Столб горячего газа вдоль оси (ax, ay, az) от низа (x, y, z) от глаза длиной len: радиус r0 у низа и рост grow на
+         * метр оси, вихрь eddy у низа (растёт с радиусом), скорость газа speed, избыток температуры excess у низа; избыток
+         * за местом hotTo по оси и скорость за местом fastTo падают как 1/x; пульсации — доля turbulence от избытка.
+         * Столб, который ни одному пикселю не даст сдвига в {@link #SHIFT_MIN}, не нужен.
+         */
+        private void tube(double x, double y, double z, double ax, double ay, double az, double len, double r0, double grow, double eddy,
+                          double speed, double excess, double hotTo, double fastTo, double turbulence) {
+            // самое заметное место столба: δn наибольшее при T = 2T₀ (если газ там вообще такой горячий), иначе — у низа
+            double at = excess > CloudModel.T_AIR_K && hotTo < len ? Math.min(len, hotTo * excess / CloudModel.T_AIR_K) : 0;
+            double hotAt = excess * Math.min(1, hotTo / Math.max(at, 1e-3)), r = r0 + grow * at;
+            double dn = dn(CloudModel.T_AIR_K + hotAt, turbulence), e = eddy * r / r0, u = speed * Math.min(1, fastTo / Math.max(at, 1e-3));
+            double cx = x + ax * 0.5 * len, cy = y + ay * 0.5 * len, cz = z + az * 0.5 * len, d = Math.sqrt(cx * cx + cy * cy + cz * cz);
+            double chord = Math.max(2 * r, Math.min(len, 4 * r)), near = Math.max(1, d - 0.5 * len - r);
+            double px = hazeShift(dn, chord, e, near, pixel, u);
+            if (px < SHIFT_MIN) return;
+            double w = px * r * Math.max(r, len) / Math.max(d * d, r * r);
             int slot = 0;
             for (int i = 1; i < 4; i++) if (hotWeight[i] < hotWeight[slot]) slot = i;
             if (w <= hotWeight[slot]) return;
             hotWeight[slot] = w;
-            hot.setColumn(slot, column.set((float) x, (float) y, (float) z, (float) r));
-            shape.setColumn(slot, column.set((float) h, (float) eddy, (float) Math.max(0.1, rise), (float) dn));
+            hotShift[slot] = px;
+            hot.setColumn(slot, column.set((float) x, (float) y, (float) z, (float) r0));
+            axis.setColumn(slot, column.set((float) ax, (float) ay, (float) az, (float) grow));
+            shape.setColumn(slot, column.set((float) len, (float) eddy, (float) Math.max(0.1, speed), (float) (N0 * turbulence)));
+            gas.setColumn(slot, column.set((float) excess, (float) hotTo, (float) fastTo, 0));
         }
 
         /**
@@ -303,6 +377,81 @@ public final class HeatPass {
             m.setColumn(slot, column.set((float) rgb[0], (float) rgb[1], (float) rgb[2], 0));
         }
     }
+
+    /** Место по оси, до которого избыток или скорость столба не падают: у столба — всюду (float в шейдере). */
+    static final double NOWHERE = 1e9;
+
+    /** Пульсация показателя преломления в газе температуры kelvin (СКО), пульсации температуры — доля turbulence от избытка. */
+    public static double dn(double kelvin, double turbulence) {
+        double t0 = CloudModel.T_AIR_K / kelvin;
+        return N0 * turbulence * t0 * (1 - t0);
+    }
+
+    /**
+     * Что различает глаз на экране, рад (подача: {@link HeatPass}): острота зрения, а где пиксель мельче её (бинокль) —
+     * пиксель. Сдвиг в этих долях и есть сдвиг кадра в пикселях.
+     */
+    public static double resolve(double pixel) {
+        return Math.min(ACUITY, pixel);
+    }
+
+    /** Пятно, которое глаз различает у газа в distance блоках, м: зрачок или угол {@code resolve} × расстояние. */
+    public static double aperture(double distance, double resolve) {
+        return Math.max(PUPIL, resolve * distance);
+    }
+
+    /**
+     * Угол прихода луча за путём len в газе с пульсацией показателя dn и вихрями eddy (внешний масштаб), СКО по одной оси,
+     * рад, у пятна aperture ({@link #aperture}) — {@code hazeAngle} в {@code fx_heat.fsh}.
+     */
+    public static double hazeAngle(double dn, double len, double eddy, double aperture) {
+        double k = aperture < eddy ? Math.pow(eddy / aperture, 1 / 6.0) : eddy / aperture;
+        return dn * Math.sqrt(KOLMOGOROV * len / eddy) * k;
+    }
+
+    /**
+     * Доля дрожания, которую видит глаз, у вихрей eddy в газе скорости speed: газ проносит вихрь мимо луча за ℓ/u (быстрее,
+     * чем он сам сменится, ℓ/(0,3u)), а глаз копит свет {@value #EYE_S} с — вихри быстрее сливаются (СКО среднего из
+     * τ_глаза/τ независимых) — {@code hazeSeen}.
+     */
+    public static double hazeSeen(double eddy, double speed) {
+        double tau = eddy / Math.max(speed, 1e-6);
+        return tau < EYE_S ? Math.sqrt(tau / EYE_S) : 1;
+    }
+
+    /**
+     * Сдвиг кадра за горячим газом, пиксели (СКО по оси): угол прихода у пятна, что глаз различает в distance блоках, в долях
+     * того, что глаз различает на экране ({@link #resolve}; подача), × доля, что видит глаз ({@link #hazeSeen}).
+     */
+    public static double hazeShift(double dn, double len, double eddy, double distance, double pixel, double speed) {
+        double res = resolve(pixel);
+        return hazeAngle(dn, len, eddy, aperture(distance, res)) * hazeSeen(eddy, speed) / res;
+    }
+
+    /**
+     * Где луч внутри столба: f(t) = a·t² − 2b·t + c < 0 на [t0, t1] — {@code hazeIn}/{@code hazeOut} в {@code fx_heat.fsh}.
+     * Конус |t·d⊥ − b⊥|² < (R₀ + G·t)²: a = d⊥² − G², b = d⊥·b⊥ + R₀G, c = b⊥² − R₀². Усечённый конус выпуклый, и на
+     * [t0, t1] (между плоскостями низа и конца, где радиус положителен) это один отрезок; пусто — конец не дальше начала.
+     */
+    public static double[] coneSpan(double a, double b, double c, double t0, double t1) {
+        double disc = b * b - a * c;
+        if (a > CONE_FLAT) {
+            if (disc <= 0) return new double[]{1, 0};
+            double q = Math.sqrt(disc);
+            return new double[]{Math.max(t0, (b - q) / a), Math.min(t1, (b + q) / a)};
+        }
+        if (a < -CONE_FLAT) {
+            if (disc <= 0) return new double[]{t0, t1};
+            double q = Math.sqrt(disc), r1 = (b + q) / a, r2 = (b - q) / a;
+            return t0 < r1 ? new double[]{t0, Math.min(t1, r1)} : new double[]{Math.max(t0, r2), t1};
+        }
+        if (b > 1e-12) return new double[]{Math.max(t0, c / (2 * b)), t1};
+        if (b < -1e-12) return new double[]{t0, Math.min(t1, c / (2 * b))};
+        return c < 0 ? new double[]{t0, t1} : new double[]{1, 0};
+    }
+
+    /** |a| меньше — уравнение конуса линейное (луч почти вдоль образующей). */
+    public static final double CONE_FLAT = 1e-6;
 
     /** Линейный rgb цвета color (sRGB, наибольший канал 255) с яркостью (luma) luminance. */
     static double[] rgb(int color, double luminance) {
@@ -443,9 +592,12 @@ public final class HeatPass {
         lastAtEye = 0;
         FRAME.atEye = 0;
     }
-    private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), SHAPE = new Matrix4f();
-    /** Путь вихрей по модулю этого числа размеров вихря (шум не периодичен: раз в сотни вихрей узор перескакивает). */
-    static final double NOISE_PERIOD = 256;
+    private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f();
+    /**
+     * Номер цикла переноса — по модулю этого числа (сдвиг узора у каждого цикла свой; повтор — раз в 97 циклов); у второго
+     * слоя — со сдвигом на полномера: полцикла оба слоя в одном номере, и с одним сдвигом их узоры совпадали бы.
+     */
+    static final double CYCLE_SEEDS = 97;
     private static final Vector3f FORWARD = new Vector3f();
     private static final Vector3f OPEN_SKY = new Vector3f();
     private static final Vector4f FACE_SHADE = new Vector4f();
@@ -519,15 +671,13 @@ public final class HeatPass {
         s.safeGetUniform("HeatShadow").set(shadows ? 1f : 0f, 0f, 0f, 0f);
         s.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
         s.safeGetUniform("HeatHot").set(f.hot);
-        // вихри идут вверх с газом: путь в размерах вихря — в double и по модулю периода шума, а не время в float
-        double time = (System.nanoTime() - BORN) / 1e9;
-        SHAPE.set(f.shape);
-        Vector4f c = new Vector4f();
-        for (int i = 0; i < 4; i++) {
-            SHAPE.getColumn(i, c);
-            if (c.y > 0) SHAPE.setColumn(i, c.set(c.x, c.y, (float) ((time * c.z / c.y) % NOISE_PERIOD), c.w));
-        }
-        s.safeGetUniform("HeatShape").set(SHAPE);
+        s.safeGetUniform("HeatShape").set(f.shape);
+        s.safeGetUniform("HeatAxis").set(f.axis);
+        s.safeGetUniform("HeatGas").set(f.gas);
+        // узор вихрей переносит газ: два слоя со сдвигом в полцикла, доля цикла и номер цикла — в double, а не время в float
+        double cycles = (System.nanoTime() - BORN) / 1e9 / HAZE_CYCLE, half = cycles + 0.5;
+        s.safeGetUniform("HeatClock").set((float) (cycles - Math.floor(cycles)), (float) (Math.floor(cycles) % CYCLE_SEEDS),
+                (float) (half - Math.floor(half)), (float) (Math.floor(half) % CYCLE_SEEDS + 0.5));
         s.safeGetUniform("HeatFront").set(f.front);
         s.safeGetUniform("HeatFrontShape").set(f.frontShape.x, f.frontShape.y, f.frontShape.z, f.frontShape.w);
         s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
@@ -682,8 +832,8 @@ public final class HeatPass {
         for (int i = 0; i < 4; i++) {
             f.hot.getColumn(i, c);
             if (c.w <= 0) continue;
-            Vector4f s = f.shape.getColumn(i, new Vector4f());
-            sb.append(String.format(java.util.Locale.ROOT, " [r %.1f h %.0f dn %.2e]", c.w, s.x, s.w));
+            Vector4f s = f.shape.getColumn(i, new Vector4f()), g = f.gas.getColumn(i, new Vector4f());
+            sb.append(String.format(java.util.Locale.ROOT, " [r %.1f h %.0f dT %.0f px %.2f]", c.w, s.x, g.x, f.hotShift[i]));
         }
         return sb.toString();
     }

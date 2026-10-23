@@ -28,10 +28,11 @@ package ua.zentix.incoming.client.fx.plume;
  *                        по закону вдоль оси) — отсюда светит факел вдали, на дым и на мир
  * @param tailMiddle      центр светового потока хвоста позади среза, м: свет хвоста на мир — ровным отрезком той же
  *                        середины ({@link #tailEnd})
+ * @param speed           скорость газа на срезе (полностью расширенная струя), м/с; за ядром на оси — как ядро/x (Pope)
  */
 public record Flame(double core, double flame, double length, double width, boolean diamonds, double coreLuminance, double flameLuminance,
                     double tailLuminance, int coreColor, int flameColor, int tailColor, double temperature, double flameTemperature,
-                    double emissivity, Sheath sheath, double middle, double tailMiddle) {
+                    double emissivity, Sheath sheath, double middle, double tailMiddle, double speed) {
     /**
      * Оболочка струи вдоль оси — пламя догорания вокруг ядра и остывающий хвост за ним: в местах {@code x} (метры от среза
      * сопла, по возрастанию, от 0 до {@link #length}) яркость сбоку (в единицах кадра, как у частей) и цвет (sRGB,
@@ -52,7 +53,18 @@ public record Flame(double core, double flame, double length, double width, bool
         for (int i = 0; i < lum.length; i++) lum[i] *= k;
         return new Flame(core, flame, length, width, diamonds, coreLuminance * k, flameLuminance * k, tailLuminance * k, coreColor, flameColor,
                 tailColor, temperature, flameTemperature, 1 - Math.pow(1 - emissivity, k), new Sheath(sheath.x(), lum, sheath.color()), middle,
-                tailMiddle);
+                tailMiddle, speed);
+    }
+
+    /**
+     * Докуда за seconds секунд с поджига дошёл газ струи от среза, м: в ядре — со скоростью среза, за ним скорость на оси
+     * speed·core/x (Pope), и x² растёт линейно со временем. ⚠ Голова начинающейся струи идёт медленнее установившейся
+     * оси (порядка вдвое) — это оценка сверху.
+     */
+    public double gasReach(double seconds) {
+        if (speed <= 0 || core <= 0) return 0;
+        double t = Math.max(0, seconds), inCore = core / speed;
+        return t <= inCore ? speed * t : Math.sqrt(core * core + 2 * speed * core * (t - inCore));
     }
 
     /** Полуширина струи в x метрах от среза. */
