@@ -433,11 +433,11 @@ public final class FarSprites implements SmokePuffs.Out {
      * камеры), свет этих концов (на экране, с пересветом к белому, умноженный на долю). Поперёк — профиль ореола
      * {@code far/glow} (мягкий край, как у смешения на кромке струи), квадрат шире в {@link #STRIP_CROSS} раза: свет поперёк
      * тот же, что у ровной полосы этой ширины (с кругом {@code far/disc} край был жёстким, кадры F6). Только светит (альфа 0):
-     * что за ней, остаётся видно. Сортируется на ahead блоков ближе своего ближнего угла: дым своего выхлопа (след и столб на длине
-     * струи) ложится под огонь, а не между его кусками.
+     * что за ней, остаётся видно. Сортируется по ключу key (у всех кусков одной струи — один: её ближняя точка минус клубы у оси):
+     * дым своего выхлопа ложится под огонь, а не между его кусками, дым ближе — поверх.
      */
     public void glowStrip(Vector3f a, Vector3f b, Vector3f c, Vector3f d, float r0, float g0, float b0, float r1, float g1, float b1, float soft,
-                          float ahead) {
+                          float key) {
         if (r0 + g0 + b0 < 0.006f && r1 + g1 + b1 < 0.006f) return;
         widen(a, b);
         widen(d, c);
@@ -452,7 +452,7 @@ public final class FarSprites implements SmokePuffs.Out {
         g1 = Math.min(1, g1);
         b1 = Math.min(1, b1);
         out.glowShape(true);
-        out.quad((float) Math.max(1e-3, Math.min(Math.min(da, db), Math.min(dc, dd)) - ahead));
+        out.quad(key);
         out.vertex(a.x * ka, a.y * ka, a.z * ka, s.u0(), v, r0, g0, b0, 0, soft, ka, LightTexture.FULL_BRIGHT, 0);
         out.vertex(b.x * kb, b.y * kb, b.z * kb, s.u1(), v, r0, g0, b0, 0, soft, kb, LightTexture.FULL_BRIGHT, 0);
         out.vertex(c.x * kc, c.y * kc, c.z * kc, s.u1(), v, r1, g1, b1, 0, soft, kc, LightTexture.FULL_BRIGHT, 0);

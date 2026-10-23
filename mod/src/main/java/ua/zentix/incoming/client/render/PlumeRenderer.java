@@ -110,10 +110,11 @@ public final class PlumeRenderer {
         // свет струи — поверх дыма её же выхлопа: след и столб у струи — то же вещество, свечение и рассеянный им свет
         // складываются (⚠ самопоглощение не учитывается); по квадратам сортировка резала струю ступенями между клубами
         // (кадры F6 сзади). Запас — глубина струи вдоль взгляда и клубы следа у оси (до ~3,7σ₀, σ₀ — половина ширины струи
-        // в её конце, TrailModel.Trail.of): дым дальше этого перед струёй, чужой и свой, её закрывает
-        Vector3f axis = new Vector3f(0, 0, -1).rotate(rot);
-        double along = Math.abs((axis.x * ox + axis.y * oy + axis.z * oz) / Math.max(1e-6, Math.sqrt(ox * ox + oy * oy + oz * oz)));
-        float ahead = (float) (f.length() * along + 2 * f.spread());
+        // в её конце, TrailModel.Trail.of): у всех кусков один ключ — ближняя точка струи минус клубы у оси; дым ближе этого,
+        // чужой и свой, её закрывает
+        Vector3f nozzle = new Vector3f(0, p.y(), p.z()).rotate(rot).add(ox, oy, oz);
+        Vector3f tail = new Vector3f(0, p.y(), p.z() - (float) f.length()).rotate(rot).add(ox, oy, oz);
+        float key = (float) Math.max(1e-3, Math.min(nozzle.length(), tail.length()) - 2 * f.spread());
         double lit = exposure * view.air(dist, oy);
         layout(f, p.z(), cam, left, up, (layer, piece, a, b, c, d) -> {
             for (Vector3f v : new Vector3f[]{a, b, c, d}) v.add(0, p.y(), 0).rotate(rot).add(ox, oy, oz);
@@ -121,11 +122,11 @@ public final class PlumeRenderer {
                 case SHEATH -> {
                     float[] c0 = Sight.onScreen(sheath.color()[piece], sheath.luminance()[piece] * lit, near);
                     float[] c1 = Sight.onScreen(sheath.color()[piece + 1], sheath.luminance()[piece + 1] * lit, near);
-                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c1[0], c1[1], c1[2], (float) f.widthAt(sheath.x()[piece]), ahead);
+                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c1[0], c1[1], c1[2], (float) f.widthAt(sheath.x()[piece]), key);
                 }
                 case CORE -> {
                     float[] c0 = Sight.onScreen(f.coreColor(), f.coreLuminance() * lit, near);
-                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c0[0], c0[1], c0[2], (float) f.width(), ahead);
+                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c0[0], c0[1], c0[2], (float) f.width(), key);
                 }
                 default -> {
                     boolean core = layer == CORE_DISC;
