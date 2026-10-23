@@ -53,11 +53,16 @@ public enum GroundMaterial {
     private final String[] debris;
     private List<BlockState> debrisStates;
 
-    /** Грунт для закона воронки ({@link ua.zentix.incoming.nuclear.model.CraterModel}): скала, влажный и рыхлый, сухой. */
+    /**
+     * Грунт для закона воронки ({@link ua.zentix.incoming.nuclear.model.CraterModel.Soil}): скала — камень и кладка;
+     * насыщенный водой — дно под водой; сухой — почва, песок, гравий (насыпь путей — щебень, рыхлое, не скала: жалоба
+     * 23.10, воронка в балласте была на 30 % уже, чем в поле). ⚠ Снег — как насыщенный: данных о воронках в снегу нет,
+     * он рыхлее сухого грунта (оценка).
+     */
     public ua.zentix.incoming.nuclear.model.CraterModel.Soil soil() {
         return switch (this) {
             case STONE, DEEPSLATE, BRICK -> ua.zentix.incoming.nuclear.model.CraterModel.Soil.ROCK;
-            case SAND, WATER, SNOW -> ua.zentix.incoming.nuclear.model.CraterModel.Soil.WET;
+            case WATER, SNOW -> ua.zentix.incoming.nuclear.model.CraterModel.Soil.WET;
             default -> ua.zentix.incoming.nuclear.model.CraterModel.Soil.DRY;
         };
     }
@@ -103,7 +108,9 @@ public enum GroundMaterial {
         if (s.is(BlockTags.SNOW) || s.is(BlockTags.ICE)) return SNOW;
         if (s.is(BlockTags.SAND) || s.is(Blocks.SANDSTONE)) return SAND;
         if (s.is(Blocks.DEEPSLATE) || s.is(Blocks.COBBLED_DEEPSLATE) || s.is(Blocks.TUFF)) return DEEPSLATE;
-        if (s.is(BlockTags.BASE_STONE_OVERWORLD) || s.is(Blocks.GRAVEL)) return STONE;
+        // гравий — сыпучий щебень (насыпь путей), не скала: своя воронка, пыль и звук ({@link #GRAVEL})
+        if (s.is(Blocks.GRAVEL)) return GRAVEL;
+        if (s.is(BlockTags.BASE_STONE_OVERWORLD)) return STONE;
         if (s.is(BlockTags.DIRT) || s.is(Blocks.GRASS_BLOCK)) return DIRT;
         return null;
     }

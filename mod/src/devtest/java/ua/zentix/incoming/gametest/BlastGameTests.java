@@ -206,35 +206,62 @@ public final class BlastGameTests {
     }
 
     /**
-     * Воронка ракеты в сухом грунте — по закону заряда (D = 0,65·∛W, глубина — четверть): снятого грунта в среднем
-     * π/4·r³ ≈ 4 м³ (блоками со случайной добавкой — 1–12), и не дальше вала (2 r + 1). У шахеда (≈1,4 м³) ямы в блок
-     * может и не быть — проверка по нему была бы монеткой.
+     * Воронка ракеты — по закону заряда (D = 0,65·∛W, глубина — четверть) в своём грунте: сухой (почва, песок, гравий
+     * насыпи) — множитель 1 (жалоба 23.10: гравий под путями считался скалой, ×0,7, песок — насыщенным водой, ×1,3).
+     * Одна воронка ракеты — ~4 м³ блоками со случайной добавкой (1–8 блоков), поэтому девять воронок сеткой через 12 м и
+     * сумма: в среднем 9 × 4,0 = 36 м³; скала дала бы 12, насыщенный грунт — 79. Обломки на время проверки не ложатся
+     * блоками — считается только снятый грунт; каждая яма — не дальше вала (2 r + 1).
      */
-    @GameTest(template = "range", timeoutTicks = 200, batch = "blast_crater", skyAccess = true)
-    public static void craterMatchesChargeLaw(GameTestHelper h) {
+    private static void craterTest(GameTestHelper h, Block ground, CraterModel.Soil soil) {
         ServerLevel level = h.getLevel();
-        double tnt = WeaponType.MISSILE.spec().charge();
-        BlockPos ground = h.absolutePos(GRASS);
-        Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
-        List<BlockPos> soil = new ArrayList<>();
-        for (BlockPos p : BlockPos.betweenClosed(ground.offset(-8, -4, -8), ground.offset(8, 0, 8))) soil.add(p.immutable());
-        Warheads.detonate(level, WeaponType.MISSILE, at, null, null);
-        double rc = CraterModel.chargeRadius(tnt, CraterModel.Soil.DRY);
+        boolean debris = IncomingConfig.SERVER.debrisStay.get();
+        IncomingConfig.SERVER.debrisStay.set(false);
+        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
+        BlockPos grass = h.absolutePos(GRASS);
+        h.assertTrue(ua.zentix.incoming.warhead.GroundMaterial.of(ground.defaultBlockState()).soil() == soil, ground + " — не " + soil);
+        // три верхних слоя — проверяемый грунт: воронка ракеты глубиной меньше метра целиком в нём
+        for (BlockPos p : BlockPos.betweenClosed(grass.offset(-18, -2, -18), grass.offset(18, 0, 18))) level.setBlock(p, ground.defaultBlockState(), 2);
+        List<BlockPos> soilBlocks = new ArrayList<>();
+        for (BlockPos p : BlockPos.betweenClosed(grass.offset(-18, -4, -18), grass.offset(18, 0, 18))) soilBlocks.add(p.immutable());
+        double tnt = WeaponType.MISSILE.spec().charge(), rc = CraterModel.chargeRadius(tnt, soil);
+        List<Vec3> hits = new ArrayList<>();
+        for (int i = -1; i <= 1; i++) {
+            for (int k = -1; k <= 1; k++) hits.add(Vec3.atBottomCenterOf(grass.offset(12 * i, 1, 12 * k)));
+        }
+        for (Vec3 at : hits) Warheads.detonate(level, WeaponType.MISSILE, at, null, null);
+        double law = hits.size() * CraterModel.chargeVolume(tnt, soil);
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
             int dug = 0;
             double far = 0;
-            for (BlockPos p : soil) {
+            for (BlockPos p : soilBlocks) {
                 if (!level.getBlockState(p).isAir()) continue;
                 dug++;
-                far = Math.max(far, Math.hypot(p.getX() + 0.5 - at.x, p.getZ() + 0.5 - at.z));
+                double near = Double.MAX_VALUE;
+                for (Vec3 at : hits) near = Math.min(near, Math.hypot(p.getX() + 0.5 - at.x, p.getZ() + 0.5 - at.z));
+                far = Math.max(far, near);
             }
-            String got = "снято " + dug + " блоков грунта до " + String.format(Locale.ROOT, "%.1f", far) + " м (закон: "
-                    + String.format(Locale.ROOT, "%.1f м³, r %.1f", CraterModel.chargeVolume(tnt, CraterModel.Soil.DRY), rc) + ")";
+            String got = String.format(Locale.ROOT, "%s: снято %d блоков в %d воронках до %.1f м (закон: %.1f м³, r %.1f)",
+                    ground, dug, hits.size(), far, law, rc);
             Incoming.LOG.info("BLASTBENCH воронка {}", got);
-            h.assertTrue(dug >= 1 && dug <= 12, got);
+            h.assertTrue(dug >= 0.6 * law && dug <= 1.45 * law, got);
             h.assertTrue(far <= 2 * rc + 1, got);
         });
+    }
+
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_crater", skyAccess = true)
+    public static void craterMatchesChargeLaw(GameTestHelper h) {
+        craterTest(h, Blocks.DIRT, CraterModel.Soil.DRY);
+    }
+
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_crater_gravel", skyAccess = true)
+    public static void craterInRailBallastIsLooseGround(GameTestHelper h) {
+        craterTest(h, Blocks.GRAVEL, CraterModel.Soil.DRY);
+    }
+
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_crater_sand", skyAccess = true)
+    public static void craterInDrySandIsDryGround(GameTestHelper h) {
+        craterTest(h, Blocks.SAND, CraterModel.Soil.DRY);
     }
 
     /**
