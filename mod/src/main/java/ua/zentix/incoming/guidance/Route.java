@@ -158,9 +158,11 @@ public final class Route {
      * {@code offset} блоков (знак — сторона, как {@code side} у {@link #plan}), плавно — сдвиг на пути равен offset · min(1, s / exit) · min(1, r / converge),
      * где s — путь от начала маршрута, r — путь до цели. В начале и у цели сдвига нет: снаряд выходит в полосу с
      * курса пуска и сходится к своей точке прицеливания (сама цель не сдвигается). Сдвиг ставится в точках маршрута
-     * (на поворотах — по биссектрисе, чтобы оба участка шли в полосе; на крутом повороте — не больше 2·offset от точки), а
+     * (на поворотах — по биссектрисе, чтобы оба участка шли в полосе; поворот круче 120° — двумя точками, каждая сбоку от
+     * своего участка: биссектриса ушла бы дальше 2·offset вдоль пути, а на развороте полоса перешла бы на другую сторону), а
      * там, где на участке кончается выход в полосу (s = exit) или начинается схождение (r = converge), добавляется точка:
      * между ними снаряд идёт ровно параллельно пути. Нужен начальный пункт маршрута ({@link #origin}): без него — как есть.
+     * Только на пуске: первый участок — от {@link #origin} к ближайшей непройденной точке, а это верно, пока ни одна не взята.
      *
      * @param target точка прицеливания: после последней точки маршрута снаряд идёт на неё
      */
@@ -199,25 +201,26 @@ public final class Route {
             Vec3 after = i == pts.size() - 1 ? path.getLast() : pts.get(i + 1);
             double sAt = along.get(i);
             double k = (exit > 0 ? Math.min(1, sAt / exit) : 1) * (converge > 0 ? Math.min(1, (total - sAt) / converge) : 1);
-            out.add(p.add(side(prev, p, after).scale(offset * k)));
+            for (Vec3 side : sides(prev, p, after)) out.add(p.add(side.scale(offset * k)));
         }
         return new Route(out, origin, operator);
     }
 
     /**
-     * Сдвиг вбок на единицу в точке {@code p} между участками prev → p → next ({@link #across}), на повороте — по
-     * биссектрисе и длиннее (1 / cos половины угла), чтобы оба участка шли на единице от пути; не больше 2.
+     * Сдвиги вбок на единицу в точке {@code p} между участками prev → p → next ({@link #across}): на повороте до 120° —
+     * один, по биссектрисе и длиннее (1 / cos половины угла, не больше 2), чтобы оба участка шли на единице от пути;
+     * круче — два, по одному сбоку от каждого участка (на развороте биссектрисы нет, а полоса не должна менять сторону).
      */
-    private static Vec3 side(Vec3 prev, Vec3 p, Vec3 next) {
+    private static List<Vec3> sides(Vec3 prev, Vec3 p, Vec3 next) {
         Vec3 in = across(prev, p), out = across(p, next);
         if (in == null) in = out;
         if (out == null) out = in;
-        if (in == null) return Vec3.ZERO;
+        if (in == null) return List.of(Vec3.ZERO);
         Vec3 sum = in.add(out);
         double len = sum.length();
-        // разворот почти назад: биссектрисы нет — вбок от входящего участка
-        if (len < 0.2) return in;
-        return sum.scale(Math.min(2, 2 / len) / len);
+        // |in + out| = 2·cos(θ/2): меньше 1 — поворот круче 120°
+        if (len < 1) return List.of(in, out);
+        return List.of(sum.scale(2 / (len * len)));
     }
 
     /** Единица вбок от хода a → b по горизонтали, в сторону {@code side} = +1 у {@link #plan}; null — точки совпадают. */

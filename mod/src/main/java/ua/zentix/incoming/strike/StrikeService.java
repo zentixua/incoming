@@ -582,7 +582,7 @@ public final class StrikeService {
         if (launcher != null) {
             Slot slot = Slot.reserve(level, launcher);
             e.placeOnLauncher(slot.rail(), launcher.yaw(), launcher.elevation(), slot.ready(), slot.hidden(), target, point, owner);
-            e.setRoute(loiterRoute(via, slot.rail(), point, lane));
+            e.setRoute(loiterRoute(via, slot.rail(), point, lane, gate(slot.rail(), launcher.yaw())));
             return e;
         }
         if (stand.fixed() != null) return null;
@@ -593,19 +593,28 @@ public final class StrikeService {
                 : via.afar(point, spec.standoff()).add(0, point.y, 0);
         start = start.add(0, spec.airframe().cruiseHeight(), 0);
         e.launch(start, target, point, owner);
-        e.setRoute(loiterRoute(via, start, point, lane));
+        e.setRoute(loiterRoute(via, start, point, lane, null));
         startVirtual(level, e);
         return e;
     }
 
     /**
      * Путь «Ланцета» от {@code start}: по точкам оператора или прямо к кругу над целью, у снаряда залпа — в своей полосе
-     * ({@link #inLane}; прямой путь короче выхода в полосу и схождения — без неё). Null — прямо, без маршрута.
+     * ({@link #inLane}). С катапульты полоса начинается после ворот взведения {@code gate} (как у шахеда и ракеты): до них
+     * он идёт по проверенному сектору пуска; первая точка пути ближе ворот или прямой путь от них короче выхода в полосу и
+     * схождения — без полосы. Null — прямо, без маршрута.
      */
     @Nullable
-    private static Route loiterRoute(Waypoints via, Vec3 start, Vec3 point, double lane) {
-        Route route = inLane(via.isEmpty() ? new Route(List.of(), start) : via.route(start), WeaponType.LOITER, lane, point);
-        return route.size() == 0 ? null : route;
+    private static Route loiterRoute(Waypoints via, Vec3 start, Vec3 point, double lane, @Nullable Vec3 gate) {
+        Route plain = via.isEmpty() ? null : via.route(start);
+        if (lane == 0) return plain;
+        Vec3 from = gate != null ? gate : start;
+        Vec3 first = via.isEmpty() ? point : via.points().getFirst();
+        if (gate != null && Math.hypot(first.x - start.x, first.z - start.z) <= ProximityFuse.ARM_DISTANCE) return plain;
+        WeaponSpec.Lanes lanes = WeaponType.LOITER.spec().lanes();
+        if (via.isEmpty() && Math.hypot(point.x - from.x, point.z - from.z) < lanes.exit() + lanes.converge()) return plain;
+        Route laned = inLane(via.isEmpty() ? new Route(List.of(), from) : via.route(from), WeaponType.LOITER, lane, point);
+        return gate != null ? laned.after(gate, start) : laned;
     }
 
     /**

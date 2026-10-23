@@ -47,6 +47,25 @@ class RouteLaneTest {
         assertEquals(10, Math.abs(c.z - 1000), 1e-6, "от второго участка (z = 1000): " + c);
     }
 
+    /**
+     * Разворот почти назад (как петля пуска у стреляющего рядом с целью): две точки, каждая сбоку от своего участка, и на
+     * обратном участке полоса — с той же стороны по ходу, а не переходит через путь.
+     */
+    @Test
+    void hairpinKeepsLaneSideOnBothLegs() {
+        Vec3 corner = new Vec3(0, 0, 1000), target = new Vec3(20, 64, 0);
+        Route r = Route.operator(List.of(corner), ORIGIN).inLane(10, EXIT, CONVERGE, target);
+        List<Vec3> near = r.points().stream().filter(p -> Math.abs(p.z - 1000) < 1).toList();
+        assertEquals(2, near.size(), "у разворота — две точки: " + r.points());
+        assertEquals(-10, near.get(0).x, 1e-6, "сбоку от первого участка (ход +z)");
+        // обратный участок: ход от угла к цели, сдвиг по той же стороне (side = +1) — вправо от него на карте, +x
+        double dx = target.x - corner.x, dz = target.z - corner.z, len = Math.hypot(dx, dz);
+        for (Vec3 p : r.points().subList(r.points().indexOf(near.get(1)), r.points().size())) {
+            double lateral = (p.x - corner.x) * (-dz / len) + (p.z - corner.z) * (dx / len);
+            assertTrue(lateral > 0 && lateral <= 10 + 1e-6, "полоса обратного участка перешла на другую сторону: " + lateral + " в " + p);
+        }
+    }
+
     /** Точка ближе схождения к цели сдвинута не полностью: у цели сдвига нет. */
     @Test
     void lastPointNearTargetIsTapered() {
