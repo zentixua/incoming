@@ -19,6 +19,7 @@
 #                        [--overlay] [--no-swap]
 #                                          swap, потом эффект с кадрами на эти секунды и звуком: <имя>_*.png, <имя>.wav,
 #                                          capture.json; в конце — сколько секунд от команды до последнего кадра.
+#                                          Время — у каждого снимка своё: --time, по умолчанию day (полдень).
 #                                          Ядерка у камеры: shot wall 'nuke 15 near' --cam '60 15 0 5' --at -0.5,0.1,1 —
 #                                          дома сцены debris, время — от прихода фронта к ним (client-scenario.md)
 #   tools/sandbox.sh restart [опции start] остановить и запустить заново (после правки, которую замена не берёт)
@@ -38,8 +39,8 @@ JBR_BUILD=jbr-21.0.11-linux-x64-b1163.116
 jbr_java() { local j="$JBR_DIR/$JBR_BUILD/bin/java"; [ -x "$j" ] && echo "$j"; }
 export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}"
 
-artem() { pgrep -f 'java.*PrismLauncher/[i]nstances/' >/dev/null; }
-# аренда видеокарты (tools/gpu_lease.sh): владелец — сессия по дереву
+# аренда видеокарты (tools/gpu_lease.sh): владелец — сессия по дереву; там же artem_playing — игра Артёма по его
+# инстансу (не по пути в командной строке: с MC_DIR на инстанс песочница несёт его в путях модов и гасила бы себя)
 source "$(dirname "$0")/gpu_lease.sh"
 export INCOMING_GPU_OWNER="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 running() { [ -n "$(systemctl --user list-units "$UNIT-*" --state=active --no-legend --plain)" ]; }
@@ -146,7 +147,7 @@ start() {
   local swaps="только тела методов"; [ -n "${INCOMING_SANDBOX_ENHANCED:-}" ] && swaps="и новые поля, методы, лямбды"
   echo "JVM: ${INCOMING_SANDBOX_JAVA:-тулчейн Gradle}; замена — $swaps"
   if [ -z "${INCOMING_SANDBOX_SOFT:-}" ]; then
-    artem && { echo "игра Артёма запущена — видеокарту не берём" >&2; exit 75; }
+    artem_playing && { echo "игра Артёма запущена — видеокарту не берём" >&2; exit 75; }
     # с картинкой — одна сессия за раз: аренда у другой — отказ (её песочницу и задачи не гасим); клиент на видеокарте
     # уже идёт (своя песочница другого дерева, свой шлагбаум) — тоже отказ, до сборки
     local who
@@ -192,7 +193,10 @@ OPT
   mkdir -p "$RUN/config"
   if [ -n "${INCOMING_SHADERS:-}" ]; then
     local MC; MC="$(python3 "$ROOT/tools/paths.py" MC)"
-    pack="$(sed -n 's/^shaderPack=//p' "$MC/config/iris.properties")"
+    pack="$(sed -n 's/^shaderPack=//p' "$MC/config/iris.properties" 2>/dev/null)"
+    # без шейдерпака песочница шла бы молча без него — кадры «под Iris» были бы без пака
+    [ -n "$pack" ] && [ -e "$MC/shaderpacks/$pack" ] \
+      || { echo "shaders: нет шейдерпака инстанса ($MC: iris.properties «$pack») — tools/paths.py или MC_DIR" >&2; exit 2; }
     mkdir -p "$RUN/shaderpacks"
     rm -rf "${RUN:?}/shaderpacks/$pack"
     cp -r "$MC/shaderpacks/$pack" "$RUN/shaderpacks/"
@@ -235,7 +239,7 @@ run_client() {
   local pc=$!
   # аренду, пока клиент жив, продлевает nested_kwin.sh (gpu_client_hold)
   while kill -0 $pc 2>/dev/null; do
-    if [ -z "${INCOMING_SANDBOX_SOFT:-}" ] && artem; then echo "$(date +%T) игра Артёма запустилась — гашу песочницу" | tee "$FX/stopped"; kill -TERM $pc; wait $pc; exit 75; fi
+    if [ -z "${INCOMING_SANDBOX_SOFT:-}" ] && artem_playing; then echo "$(date +%T) игра Артёма запустилась — гашу песочницу" | tee "$FX/stopped"; kill -TERM $pc; wait $pc; exit 75; fi
     sleep 5
   done
   wait $pc
@@ -261,7 +265,7 @@ stop() {
 }
 
 shot() {
-  local name=$1 effect=$2 at="0.1,0.5,1,2,4" wav=4 cam="" time="" overlay=off doswap=1 t0
+  local name=$1 effect=$2 at="0.1,0.5,1,2,4" wav=4 cam="" time=day overlay=off doswap=1 t0
   shift 2
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -279,7 +283,9 @@ shot() {
   if [ $doswap = 1 ]; then swap || exit $?; fi
   fx clear || exit 1
   [ -n "$cam" ] && { fx "cam $cam" || exit 1; }
-  [ -n "$time" ] && { fx "time $time" || exit 1; }
+  # время — у каждого снимка своё (по умолчанию день): смена суток в мире песочницы выключена, и ночь прошлого снимка
+  # держалась бы в следующем; `time` кончается, когда время пришло к клиенту
+  fx "time $time" || exit 1
   fx "overlay $overlay" || exit 1
   fx "shots $name $at $wav" || exit 1
   fx "$effect" || exit 1

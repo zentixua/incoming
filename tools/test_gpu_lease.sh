@@ -2,11 +2,15 @@
 # Проверка аренды видеокарты (CI, «Остановка проверок»): видеокарта у одной сессии; другая — отказ со строкой, кто и с
 # какого времени, а с --wait — ждёт; своя сессия берёт снова без ожидания; брошенная аренда истекает; чужую не
 # продлить и не отпустить; владелец — по дереву; laptop_job.sh --gpu и sandbox.sh start другой сессии отказывают до
-# запуска чего-либо; задача без видеокарты аренды не берёт.
+# запуска чего-либо; задача без видеокарты аренды не берёт; клиент без замка (скрипт до аренды) — тоже занятая
+# видеокарта, а не «свободна»; игра Артёма — по папке его инстанса, не по пути в командной строке.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 export INCOMING_GPU_LEASE=$tmp/lease INCOMING_GPU_LEASE_IDLE=600
+# «вложенный KWin» проверки — своя программа: настоящие клиенты на ноутбуке ей не мешают
+export INCOMING_GPU_KWIN=$tmp/kwin_wayland
+printf '#!/bin/bash\ntrap "kill \\$c; exit" TERM\nsleep 60 & c=$!\nwait\n' > "$INCOMING_GPU_KWIN"; chmod +x "$INCOMING_GPU_KWIN"
 unset INCOMING_GPU_OWNER
 source "$ROOT/tools/gpu_lease.sh"
 fail=0
@@ -89,7 +93,6 @@ for _ in $(seq 50); do grep -q стенд "$INCOMING_GPU_LEASE.client.who" 2>/de
 gpu_client_hold FZC /x/wt-FZC "чужой" 2>/dev/null && { bad "чужой процесс взял замок работы"; exec 199>&-; } || ok "процесс не из работы — отказ"
 wait $h; rc=$?
 [ $rc = 0 ] && ok "клиенты работы (с fd и без) не отказывают" || bad "клиенты работы (код $rc)"
-artem_playing() { local p; for p in $(pgrep -x java); do grep -qa 'PrismLauncher/instances/' "/proc/$p/cmdline" 2>/dev/null && return 0; done; return 1; }
 if artem_playing; then
   echo "пропуск: игра Артёма идёт — задача --gpu её ждёт (так и задумано)"
 else
@@ -103,4 +106,47 @@ else
 fi
 # отпустили, а работа идёт — продление берёт аренду снова
 lease_release SH && lease_renew SH /x/wt-SH && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] && ok "продление берёт свободную аренду снова" || bad "продление свободной"
+
+# клиент без замка и аренды (песочница, поднятая скриптом до аренды; 23.10 так шла песочница ZM, аренда отвечала
+# «свободна», и клиент FX её выбил): вторая сессия — отказ, а не «свободно»
+lease_release SH
+"$INCOMING_GPU_KWIN" --virtual --xwayland --socket wayland-incoming-sandbox --exit-with-session "bash /x/wt-ZM/sandbox.sh" & k=$!
+sleep 0.3
+out=$(lease_status); rc=$?
+[ $rc = 0 ] && [[ $out == *"клиент без аренды"*"wt-ZM"* ]] && ok "аренды нет, клиент идёт — status: $out" || bad "status при клиенте без замка: $rc $out"
+out=$(lease_take FZC /x/wt-FZC 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"клиент без аренды"* ]] && [ ! -s "$INCOMING_GPU_LEASE" ] && ok "lease_take другой сессии — отказ 75, аренда не взята" || bad "lease_take при клиенте без замка: $rc $out"
+out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/nested_kwin.sh" wayland-test 64 64 true 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"клиент без аренды"* ]] && ok "клиент другой сессии — отказ до KWin" || bad "nested_kwin при клиенте без замка: $rc $out"
+out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/laptop_job.sh" --gpu film -- false 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"клиент без аренды"* ]] && ok "laptop_job --gpu — отказ" || bad "laptop_job --gpu при клиенте без замка: $rc $out"
+if [ -z "$(systemctl --user list-units "incoming-job-sandbox-$(basename "$ROOT")-*" --state=active --no-legend --plain 2>/dev/null)" ]; then
+  out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start 2>&1); rc=$?
+  [ $rc = 75 ] && [[ $out == *"клиент без аренды"* || $out == *"игра Артёма запущена"* ]] && [ ! -s "$INCOMING_GPU_LEASE" ] \
+    && ok "sandbox start — отказ 75" || bad "sandbox start при клиенте без замка: $rc $out"
+fi
+out=$(lease_take FZC /x/wt-FZC --wait 2>&1 & w=$!; sleep 1; kill -0 $w && echo waiting; kill $k; wait $w; echo "rc=$?")
+[[ $out == *waiting*"rc=0"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = FZC ] && ok "с --wait ждёт клиента без замка, он кончился — взял" || bad "--wait при клиенте без замка: $out"
+lease_release FZC
+# клиенты своей работы (стенд: замок у работы, её KWin — потомки) — свои, и без замка у каждого
+( source "$ROOT/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "стенд" || exit 9
+  "$INCOMING_GPU_KWIN" --virtual & c=$!
+  sleep 0.3
+  bash -c 'source "$1/tools/gpu_lease.sh"; ! gpu_client_busy' _ "$ROOT"; rc=$?
+  kill $c; exit $rc ) ; rc=$?
+[ $rc = 0 ] && ok "KWin своей работы — не чужой клиент" || bad "KWin своей работы (код $rc)"
+
+# игра Артёма — java в папке его инстанса; java песочницы с путями инстанса в командной строке — не она
+mkdir -p "$tmp/prism/instances/Open Skies/minecraft" "$tmp/bin" "$tmp/sandbox"
+printf '#!/bin/bash\nsleep 5\n' > "$tmp/bin/java"; chmod +x "$tmp/bin/java"
+real=0; artem_playing && real=1
+( cd "$tmp/sandbox" && exec "$tmp/bin/java" -Dfml.modFolders="$tmp/prism/instances/Open Skies/minecraft/mods" ) & j=$!
+sleep 0.3
+if [ $real = 1 ]; then echo "пропуск: игра Артёма идёт"
+else (PRISM=$tmp/prism; artem_playing) && bad "песочница с путями инстанса — «игра Артёма»" || ok "песочница с путями инстанса — не игра Артёма"; fi
+kill $j 2>/dev/null; wait $j 2>/dev/null
+( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+sleep 0.3
+(PRISM=$tmp/prism; artem_playing) && ok "java в папке инстанса — игра Артёма" || bad "java в папке инстанса не видна"
+kill $j 2>/dev/null; wait $j 2>/dev/null
 exit $fail
