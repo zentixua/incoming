@@ -142,4 +142,51 @@ class FireballModelTest {
         }
         return s;
     }
+
+    /**
+     * Отрыв фронта (G&D 2.120, 2.125): у 20 кт минимум яркости — 11 мс, отрыв — 15 мс. До минимума узора середины не
+     * видно, к отрыву — весь; между ними растёт без скачков.
+     */
+    @Test
+    void breakawayUnmasksTheInterior() {
+        assertEquals(0.011, FireballModel.firstMinimumSeconds(20), 0.0005);
+        assertEquals(0.015, FireballModel.breakawaySeconds(20), 0.0007);
+        for (double y : new double[]{0.1, 1, 15, 1000}) {
+            double from = FireballModel.firstMinimumSeconds(y), to = FireballModel.breakawaySeconds(y);
+            assertEquals(0, FireballModel.unmasked(0.5 * from, y), 0);
+            assertEquals(0, FireballModel.unmasked(from, y), 1e-12);
+            assertEquals(1, FireballModel.unmasked(to, y), 1e-12);
+            assertEquals(1, FireballModel.unmasked(10, y), 0);
+            double last = 0;
+            for (double t = from; t <= to; t += (to - from) / 50) {
+                double u = FireballModel.unmasked(t, y);
+                assertTrue(u >= last && u - last < 0.05, "без скачков: " + t);
+                last = u;
+            }
+        }
+    }
+
+    /**
+     * Часы узора поверхности — путь всплытия центра в радиусах шара: до второго максимума — 0, потом растёт; к концу
+     * сворачивания в кольцо у игровых мощностей — 2–5 радиусов (запекание считает 5: узор не застывает, пока виден).
+     */
+    @Test
+    void surfaceRiseIsTheRiseInRadii() {
+        for (double y : new double[]{1, 15}) {
+            for (boolean surface : new boolean[]{false, true}) {
+                double hob = surface ? 0 : 40 * Math.cbrt(y) * 10;
+                double tm = FireballModel.secondMaximumSeconds(y);
+                assertEquals(0, FireballModel.surfaceRise(0.5 * tm, hob, y, surface), 0);
+                assertEquals(0, FireballModel.surfaceRise(tm, hob, y, surface), 1e-12);
+                double last = 0;
+                for (double t = tm * 1.01; t < 30; t *= 1.05) {
+                    double r = FireballModel.surfaceRise(t, hob, y, surface);
+                    assertTrue(r > last, "растёт: " + t);
+                    last = r;
+                }
+                double end = FireballModel.surfaceRise(MushroomModel.rollUpSeconds(y, surface), hob, y, surface);
+                assertTrue(end > 2 && end < 5, y + " кт: " + end);
+            }
+        }
+    }
 }

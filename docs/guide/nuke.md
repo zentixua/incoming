@@ -56,7 +56,10 @@ leans you toward the burst by several degrees. In a jump the wind doesn't lean y
 Where only the sound reaches, the wave moves your view by about a degree or less. A wall or a house between you and the burst shelters
 you from the wind.
 
-The fireball shines white with brighter and darker patches boiling over it, and turns yellow and orange as it cools. It
+For its first hundredth of a second the fireball is a smooth, sharp-edged ball of glowing air: the shock front. Then the
+front clears, and the hotter, uneven inside shows through it, blotched with brighter and darker patches. The fireball
+shines white and turns yellow and orange as it cools. As it rises, it draws cold air in from below: its underside
+darkens and the patches churn. It
 rises and rolls into a ring of hot gas: the cap of the mushroom cloud, the same body from the first moment. As it rolls
 up, its outside mixes with cold air, turns dark red and then into brown smoke. Dust in front of the fireball hides it,
 and its light falls on the dust and smoke around it. By day it outshines the sky only for its first few seconds; at

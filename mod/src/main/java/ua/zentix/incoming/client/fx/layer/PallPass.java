@@ -21,6 +21,7 @@ import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
+import ua.zentix.incoming.client.nuclear.NukeBallSurface;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL33;
@@ -757,6 +758,8 @@ public final class PallPass {
             GL11.glBindTexture(GL12.GL_TEXTURE_3D, noise);
             GlStateManager._activeTexture(unit);
             Uniform.uploadInteger(Uniform.glGetUniformLocation(s.getId(), "PallNoise"), NOISE_UNIT);
+            // узор поверхности огненного шара — тоже трёхмерный, свой блок
+            NukeBallSurface.bind(s);
         }
         BufferUploader.draw(mesh);
         s.clear();
@@ -764,6 +767,7 @@ public final class PallPass {
             GlStateManager._activeTexture(GL13.GL_TEXTURE0 + NOISE_UNIT);
             GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0);
             GlStateManager._activeTexture(unit);
+            NukeBallSurface.unbind();
         }
     }
 

@@ -1,6 +1,6 @@
 """Запекание огненного шара и клуба дыма для слоя эффектов: Blender (Mantaflow, Cycles), бесплатно.
 
-  blender --background --factory-startup --python tools/bake_fx/bake.py -- <папка> [fireball|puff|spray|all] [--res N] [--draft]
+  blender --background --factory-startup --python tools/bake_fx/bake.py -- <папка> [fireball|puff|spray|all|nukeball] [--res N] [--draft]
 
 Дальше — tools/bake_fx/pack.py: кадры на лист слоя (fx/particle/*.png и fx/particle/flipbooks.json).
 
@@ -20,6 +20,8 @@
   даёт мод, карты — только как свет проходит клуб (⚠ приближение).
 Камера ортографическая сбоку (вдоль +Y): право — +X, верх — +Z, к камере — −Y. Рендер — Cycles на видеокарте (OptiX):
 запускать только когда игра Артёма закрыта (tools/laptop_job.sh).
+- nukeball — поверхность огненного шара ядерки (ниже, у nukeball()): только Mantaflow, без рендера — на процессоре
+  (~1 ч на ноутбуке); поля доли газа у шара по кадрам, узор считает pack.py.
 """
 import json
 import math
@@ -360,10 +362,148 @@ def puff(kind="puff"):
         json.dump({"frames": frames, "picks": picks, "view_m": size, "albedo": c["albedo"], "g": c["g"]}, f)
 
 
+# Огненный шар ядерки (поверхность для прохода пелены: MushroomField, mushroom.glsl): не горение, а пузырь горячего воздуха
+# после второго максимума — у мода шар 15 кт (R = 70·15^0,4 м, Glasstone и Dolan 2.12) уже не растёт ударной волной и
+# всплывает. Mantaflow — несжимаемый газ (Буссинеск), поэтому считается только то, что он может: всплытие и
+# перемешивание с воздухом. Одно поле — доля газа шара c (плотность Mantaflow): им же и плавучесть (alpha, тепла нет),
+# и температура (смешение двух газов: T = T_возд + c·ΔT, ⚠ теплоёмкость постоянная). Неоднородность в начале — сгустки
+# паров заряда, бьющие в изнанку фронта (Brode 1963, RAND RM-3622, рис. 2: «blistered appearance caused by blobs of
+# debris»; G&D 2.119): сгустки с длиной корреляции NUKE_CLUMP·R, перепадом доли газа NUKE_CONTRAST и долей объёма
+# NUKE_FILL — ⚠ оценка по снимку Trinity 25 мс (корреляция яркости ½ на 0,15 R, разброс отпечатка ~10 %; отклик плёнки
+# неизвестен: при отпечатке ∝ L^(1/2,2) или ∝ L разброс температуры поверхности 3–6,5 %, взято ~4,5 %). Время — не секунды:
+# кадр берёт путь всплытия центра в радиусах шара, у мода — тот же путь по его закону подъёма (FireballModel.centreHeight),
+# поэтому ни время Mantaflow, ни размер не важны: течение Буссинеска подобно себе, и шар считается радиусом NUKE_SIM м
+# (плавучесть Mantaflow — в клетках, на шаре в 200 м она в тысячи раз слабее, и он не всплывает), ⚠ число Рейнольдса —
+# сетки, а не шара. Пишутся поля c у шара по кадрам — float16 .npy.
+NUKE_SIM = 1.0
+NUKE_CLUMP, NUKE_CONTRAST, NUKE_FILL = 0.15, 0.2, 0.3
+# неровное движение сгустков: случайная скорость выброса, доля скорости всплытия (⚠ оценка; без неё течение на кубической
+# сетке остаётся осесимметричным с её четырьмя осями — крест на верху шара)
+NUKE_STIR = 0.3
+NUKE_RISE = 5.0
+NUKE_ALPHA = 2.0
+
+
+def nukeball():
+    import openvdb
+    r = NUKE_SIM
+    width, height = 6 * r, 10 * r
+    sc = reset(16)
+    frames = 120 if DRAFT else 320
+    sc.frame_start, sc.frame_end = 1, frames
+    dom, ds = domain(height, 0, "nukeball", frames)
+    dom.scale = (width / height, width / height, 1.0)
+    bpy.ops.object.transform_apply(scale=True)
+    ds.resolution_max = RES if "--res" in argv else (80 if DRAFT else 200)
+    ds.alpha = NUKE_ALPHA
+    ds.beta = 0.0
+    ds.use_collision_border_bottom = True
+    ds.vorticity = 0.1
+    ds.use_noise = not DRAFT
+    ds.noise_scale = 2
+    flow, fs = flow_sphere(r, 2.0 * r, "nukeball")
+    fs.flow_type = "SMOKE"
+    fs.density = 1.0
+    fs.temperature = 0.0
+    fs.use_initial_velocity = True
+    fs.velocity_normal = 0.0
+    fs.velocity_random = NUKE_STIR
+    fs.density = 1.0 - NUKE_CONTRAST
+    # сгустки: шары доли газа 1 внутри шара 1 − NUKE_CONTRAST (выброс Mantaflow — наибольшее из источников, не сумма);
+    # радиусы — равно от 0,6 до 1,4 NUKE_CLUMP·R (у шаров радиуса b корреляция ½ — на ~0,8 b), доля объёма — NUKE_FILL
+    rng = np.random.default_rng(15)
+    left = NUKE_FILL * r ** 3
+    while left > 0:
+        b = NUKE_CLUMP / 0.8 * r * rng.uniform(0.6, 1.4)
+        while True:
+            q = rng.uniform(-1, 1, 3)
+            if q @ q <= 1:
+                break
+        q *= r - b
+        _, cs = flow_sphere(b, 0, "clump")
+        bpy.context.active_object.location = (q[0], q[1], 2.0 * r + q[2])
+        cs.flow_type = "SMOKE"
+        cs.density = 1.0
+        cs.temperature = 0.0
+        cs.use_initial_velocity = False
+        pulse(cs, 1)
+        left -= b ** 3
+    pulse(fs, 1)
+    bake(dom)
+    nukeball_frames(ds.cache_directory, ds.use_noise, frames)
+
+
+def nukeball_frames(cache, use_noise, frames):
+    """Кадры из посчитанного кэша. Отдельно от сцены: новая сцена с областью на ту же папку кэша его стирает."""
+    import openvdb
+    r = NUKE_SIM
+    out = os.path.join(OUT, "nukeball")
+    os.makedirs(out, exist_ok=True)
+
+    def grid(kind, f):
+        p = os.path.join(cache, kind, f"fluid_{kind}_{f:04d}.vdb")
+        return openvdb.read(p, "density_noise" if kind == "noise" else "density") if os.path.exists(p) else None
+
+    # путь центра газа шара по кадрам — по сетке без шума (центр масс доли газа)
+    path = []
+    for f in range(1, frames + 1):
+        g = grid("data", f)
+        if g is None:
+            continue
+        lo, hi = g.evalActiveVoxelBoundingBox()
+        if hi[0] < lo[0]:
+            continue
+        a = np.zeros((hi[0] - lo[0] + 1, hi[1] - lo[1] + 1, hi[2] - lo[2] + 1), np.float32)
+        g.copyToArray(a, ijk=lo)
+        m = float(a.sum())
+        if m <= 0:
+            continue
+        z = float((np.arange(a.shape[2]) * a.sum(axis=(0, 1))).sum() / m) + lo[2]
+        path.append((f, g.transform.indexToWorld((0, 0, z))[2]))
+    z0 = path[0][1]
+    # кадры: 64 — поровну по пути всплытия в радиусах шара от 0 до NUKE_RISE (или до конца счёта)
+    rise = [(f, (z - z0) / r) for f, z in path]
+    top = min(NUKE_RISE, rise[-1][1])
+    picks, k = [], 0
+    for i in range(64):
+        want = top * i / 63
+        while k + 1 < len(rise) and rise[k + 1][1] <= want:
+            k += 1
+        picks.append(rise[k] if k + 1 >= len(rise) or want - rise[k][1] <= rise[k + 1][1] - want else rise[k + 1])
+    kind = "noise" if use_noise else "data"
+    rows = []
+    for f, s in picks:
+        g = grid(kind, f)
+        xf = g.transform
+        voxel = xf.voxelSize()[0]
+        lo, hi = g.evalActiveVoxelBoundingBox()
+        a = np.zeros((hi[0] - lo[0] + 1, hi[1] - lo[1] + 1, hi[2] - lo[2] + 1), np.float32)
+        g.copyToArray(a, ijk=lo)
+        m = float(a.sum())
+        idx = [np.arange(n, dtype=np.float64) for n in a.shape]
+        c = [float((idx[i] * a.sum(axis=tuple(j for j in range(3) if j != i))).sum() / m) for i in range(3)]
+        # вырезка вокруг центра: ±3 радиуса (шар растёт, вбирая воздух)
+        half = int(math.ceil(3 * r / voxel))
+        box = [(max(0, int(c[i]) - half), min(a.shape[i], int(c[i]) + half + 1)) for i in range(3)]
+        crop = a[box[0][0]:box[0][1], box[1][0]:box[1][1], box[2][0]:box[2][1]]
+        np.save(os.path.join(out, f"c_{f:04d}.npy"), crop.astype(np.float16))
+        rows.append({"frame": f, "rise_radii": s, "voxel_m": voxel, "centre": [c[i] - box[i][0] for i in range(3)]})
+        print("nukeball pick", f, "rise", round(s, 3), "R, crop", crop.shape, flush=True)
+    with open(os.path.join(out, "meta.json"), "w") as fo:
+        json.dump({"radius": r, "clump": NUKE_CLUMP, "contrast": NUKE_CONTRAST, "frames": frames, "path": path,
+                   "picks": rows}, fo)
+
+
 if WHAT in ("fireball", "all"):
     fireball()
 if WHAT in ("puff", "all"):
     puff()
 if WHAT in ("spray", "all"):
     puff("spray")
+if WHAT == "nukeball":
+    # --reuse: кэш в OUT уже посчитан — только снять кадры (сцену не строить)
+    if "--reuse" in argv:
+        nukeball_frames(os.path.join(OUT, "cache-nukeball"), not DRAFT, 120 if DRAFT else 320)
+    else:
+        nukeball()
 print("BAKE DONE", OUT)

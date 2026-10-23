@@ -11,6 +11,7 @@ import ua.zentix.incoming.client.fx.layer.PallPass;
 import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
@@ -108,6 +109,7 @@ public final class MushroomField {
     private static final float[] BB = blackBody();
     private static final double[] BALL = new double[4], CENTRE = new double[3], BALL_WEIGHT = new double[BALLS];
     private static final Vector4f COLUMN = new Vector4f();
+    private static final double[] BALL_SURFACE = new double[2];
     private static final double[] RGB = new double[3], CAP = new double[4], DRIFT = new double[2], RAYS = new double[3], AXIS_A = new double[3],
             AXIS_B = new double[3], RECT = new double[4];
     private static final Vector3f LO = new Vector3f(), HI = new Vector3f();
@@ -517,6 +519,26 @@ public final class MushroomField {
     }
 
     /**
+     * Узор поверхности шара в момент t (секунды подрыва) в {@code out}: место кадра узора и его доля на шапке
+     * ({@code mushroom.glsl}: тексель 16 z, w). Место: до минимума яркости −1 (поверхность — гладкий фронт ударной волны,
+     * узора нет), до отрыва — от −1 к 0 (неровная середина проступает сквозь проясняющийся фронт,
+     * {@code FireballModel.unmasked}), дальше — кадр по пути всплытия ({@code FireballModel.surfaceRise}). Доля — пока шар
+     * шар: 1 − доля кольца ({@code MushroomModel.rollUp}); у кольца края красят языки клубов (MUSH_SKIN). Узор не прочитан
+     * ({@code ready}) — доля 0: шар как прежде.
+     */
+    static void ballSurface(double t, double hobM, double yieldKt, boolean surface, boolean ready, double[] out) {
+        ballSurface(t, hobM, yieldKt, surface, ready ? NukeBallSurface.rises() : null, out);
+    }
+
+    /** То же по пути кадров узора {@code rises} (null — узор не прочитан). */
+    static void ballSurface(double t, double hobM, double yieldKt, boolean surface, float[] rises, double[] out) {
+        double unmasked = FireballModel.unmasked(t, yieldKt);
+        double frame = rises == null ? 0 : NukeBallSurface.frame(rises, FireballModel.surfaceRise(t, hobM, yieldKt, surface));
+        out[0] = unmasked < 1 ? unmasked - 1 : frame;
+        out[1] = rises != null ? 1 - MushroomModel.rollUp(t, yieldKt, surface) : 0;
+    }
+
+    /**
      * Гриб в строку таблицы с {@code o} ({@code mushroom.glsl}: таблица грибов); днём ({@code day}) — и плитка его карты
      * тени, верхний слой которой — верх мира {@code worldTop} (y).
      */
@@ -565,8 +587,11 @@ public final class MushroomField {
             matter(into, o, 14, CloudPuffs.SPRAY, G_WATER);
             put(into, o, 15, d.blocks(c.crownR()), d.blocks(c.crownH()), d.blocks(c.top()), d.blocks(COLUMN_TILE * WaterModel.columnRadius(y)));
         }
-        // шар и шапка снаружи: доля перепада ядра у края (у шара — вся) и размах клубов края (у шара — гладкая сфера)
-        put(into, o, 16, MushroomModel.edgeShare(t, y, d.surface()), MushroomModel.billows(t, y, d.surface()), 0, 0);
+        // шар и шапка снаружи: доля перепада ядра у края (у шара — вся) и размах клубов края (у шара — гладкая сфера);
+        // узор поверхности шара (NukeBallSurface): место кадра и доля узора против языков клубов (ballSurface)
+        double[] ball = BALL_SURFACE;
+        ballSurface(t, d.hobMetres(), y, d.surface(), NukeBallSurface.ready(), ball);
+        put(into, o, 16, MushroomModel.edgeShare(t, y, d.surface()), MushroomModel.billows(t, y, d.surface()), ball[0], ball[1]);
         if (day) {
             // тень от солнца: плитка карты — проекция рамки поперёк солнца; слои — над землёй под эпицентром, серединой
             // между ней и верхом мира и верхом

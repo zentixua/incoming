@@ -104,6 +104,11 @@ uniform vec4 PallWilson0;
 uniform vec4 PallWilson1;
 // грибы кадра (MushroomField): таблица грибов и света чёрного тела (mushroom.glsl)
 uniform sampler2D Sampler7;
+// узор поверхности огненного шара (NukeBallSurface): u, v — октаэдрическая карта направления от центра шара, по третьей
+// оси — кадры по пути всплытия; трёхмерная — в JSON не объявлена, привязка — руками (как PallNoise)
+uniform sampler3D PallBall;
+// узор в текстуре — p / BALL_P_MAX (NukeBallSurface.P_MAX)
+const float BALL_P_MAX = 2.0;
 // во сколько раз ярче кажется свет при свете неба кадра (Sight.adapted): свечение гриба — в значениях кадра
 uniform float PallExposure;
 // дым обычных взрывов (smoke.glsl): место глаза в плитке шума клубов — по модулю SMOKE_TILE (xyz), часы, с (w); ветер у
@@ -1013,6 +1018,18 @@ float mushSunTau(Mush m, vec3 p, float k) {
     return tau + mushTau(m, p + gSun * reach, gSun, 2.0 * m.boundR);
 }
 
+// Узор поверхности шара гриба m в месте q тела (NukeBallSurface): во сколько раз перепад температуры здесь больше
+// среднего — по направлению от середины шапки (её снос по высоте — в mushLocal), кадр — место m.ballFrame; до отрыва
+// фронта узор проступает долей mushBallContrast, кадр — первый
+float mushBallPattern(Mush m, vec3 q) {
+    vec3 n = vec3(q.x, q.y - m.capY, q.z);
+    if (dot(n, n) < 1e-6) return 1.0;
+    float frames = float(textureSize(PallBall, 0).z);
+    float f = max(m.ballFrame, 0.0);
+    float p = texture(PallBall, vec3(mushOctU(n.x, n.y, n.z), mushOctV(n.x, n.y, n.z), (f + 0.5) / frames)).r * BALL_P_MAX;
+    return mix(1.0, p, mushBallContrast(m.ballFrame));
+}
+
 // Гриб k в точке p (от глаза) с местом q: ослабление (w, 1/блок) и свет к глазу на единицу пути (rgb, Σ ослабление ×
 // функция источника). cone — меньшее, что луч здесь различает
 vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
@@ -1104,7 +1121,11 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
     // к ядру (край смешан с подхваченным воздухом — m.edge перепада, языки клубов ± MUSH_SKIN его), ножка горяча только
     // у шапки (снизу кольцо тянет в неё воздух с пылью), юбка и вода столба холодные
     float hw = clamp(q.y / max(m.capBot, 1.0), 0.0, 1.0);
-    float skin = m.edge * (1.0 + MUSH_SKIN * lobes) + (1.0 - m.edge) * smoothstep(0.0, 1.0, depth);
+    float skin = m.edge * (1.0 + MUSH_SKIN * lobes);
+    // у шара перепад края — узор его поверхности (запечённый пузырь, NukeBallSurface): где поверхность горячее и
+    // холоднее среднего; языки клубов — его доля у кольца
+    if (m.ballShare > 0.0 && sig.x > 0.0) skin = m.edge * mix(1.0 + MUSH_SKIN * lobes, mushBallPattern(m, q), m.ballShare);
+    skin += (1.0 - m.edge) * smoothstep(0.0, 1.0, depth);
     float heat = (sig.x * skin + sig.y * 0.6 * hw * hw) / st;
     vec3 bb = mushBlackBody(Sampler7, m.tAmb + m.dT * heat) * PallExposure;
     // функция источника свечения: в глубине — свет чёрного тела (рассеянное изнутри его и досвечивает), у края — доля ω'

@@ -430,4 +430,31 @@ class MushroomGlslTest {
         assertEquals(1, swirl.call(Map.of("u", 0.6, "v", 0.8)), 1e-12);
         assertEquals(0.25, swirl.call(Map.of("u", 0.0, "v", 2.0)), 1e-12);
     }
+
+    /** Карта узора поверхности шара в шейдере ({@code mushOctU}, {@code mushOctV}) — та же, что в Java ({@link NukeBallSurface}). */
+    @Test
+    void ballSurfaceMapMatchesJava() {
+        GlslFunction u = GlslFunction.parse(GLSL, "mushOctU"), v = GlslFunction.parse(GLSL, "mushOctV");
+        java.util.Random rnd = new java.util.Random(7);
+        for (int i = 0; i < 2000; i++) {
+            double x = rnd.nextGaussian(), y = rnd.nextGaussian(), z = rnd.nextGaussian();
+            Map<String, Double> a = Map.of("x", x, "y", y, "z", z);
+            assertEquals(NukeBallSurface.octU(x, y, z), u.call(a), 1e-9);
+            assertEquals(NukeBallSurface.octV(x, y, z), v.call(a), 1e-9);
+        }
+    }
+
+    /**
+     * Узор поверхности проступает в шейдере ({@code mushBallContrast}) так, как его открывает фронт ({@link
+     * FireballModel#unmasked}): место кадра до отрыва — доля открытого − 1 ({@link MushroomField#ballSurface}).
+     */
+    @Test
+    void ballSurfaceContrastMatchesTheBreakaway() {
+        GlslFunction f = GlslFunction.parse(GLSL, "mushBallContrast");
+        double[] out = new double[2];
+        for (double t = 0.0005; t < 0.5; t *= 1.1) {
+            MushroomField.ballSurface(t, 600, 15, false, new float[]{0, 1, 2}, out);
+            assertEquals(FireballModel.unmasked(t, 15), f.call(Map.of("f", out[0])), 1e-9, "t = " + t);
+        }
+    }
 }
