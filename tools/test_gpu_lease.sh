@@ -3,7 +3,8 @@
 # какого времени, а с --wait — ждёт; своя сессия берёт снова без ожидания; брошенная аренда истекает; чужую не
 # продлить и не отпустить; владелец — по дереву; laptop_job.sh --gpu и sandbox.sh start другой сессии отказывают до
 # запуска чего-либо; задача без видеокарты аренды не берёт; клиент без замка (скрипт до аренды) — тоже занятая
-# видеокарта, а не «свободна»; игра Артёма — по папке его инстанса, не по пути в командной строке.
+# видеокарта, а не «свободна»; ждущие — честная очередь (FIFO); игра Артёма — по папке его инстанса, не по пути в
+# командной строке.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -135,6 +136,47 @@ lease_release FZC
   bash -c 'source "$1/tools/gpu_lease.sh"; ! gpu_client_busy' _ "$ROOT"; rc=$?
   kill $c; exit $rc ) ; rc=$?
 [ $rc = 0 ] && ok "KWin своей работы — не чужой клиент" || bad "KWin своей работы (код $rc)"
+
+# очередь ждущих (FIFO): освободилась — берёт первый пришедший, а не тот, кто первым проверил; держащего не выбивает;
+# без --wait свободную при очереди не взять; прерванный ждущий уходит из очереди сам. 23.10 start --wait ждал ~35 мин,
+# пока видеокарту по очереди брали три сессии, проверявшие раньше него
+export INCOMING_GPU_POLL=0.2
+rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue"
+lease_take V3 /x/wt-V3
+( lease_take L1 /x/wt-L1 --wait 2>"$tmp/q-l1"; echo L1 >> "$tmp/order" ) & q1=$!
+sleep 0.5
+( lease_take WV /x/wt-WV --wait 2>"$tmp/q-wv"; echo WV >> "$tmp/order" ) & q2=$!
+sleep 0.5
+out=$(lease_status)
+[[ $out == "видеокарта у V3 "*"её ждут: L1 (/x/wt-L1) с "*", WV (/x/wt-WV) с "* ]] && ok "status — кто держит и кто ждёт по порядку: $out" || bad "status очереди: $out"
+grep -q 'в очереди 2-й' "$tmp/q-wv" && ok "ждущий знает своё место: $(head -n 1 "$tmp/q-wv")" || bad "место в очереди: $(cat "$tmp/q-wv")"
+lease_take V3 /x/wt-V3 && lease_renew V3 && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = V3 ] && ok "держащий при очереди продлевает и берёт снова — не выбит" || bad "держащего выбила очередь"
+out=$(lease_take N1 /x/wt-N1 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"видеокарта у V3"*"её ждут: L1"* ]] && ok "без --wait при очереди — отказ с очередью" || bad "без --wait: $rc $out"
+lease_release V3
+for _ in $(seq 50); do [ -s "$tmp/order" ] && break; sleep 0.1; done
+[ "$(cut -f1 "$INCOMING_GPU_LEASE")" = L1 ] && [ "$(cat "$tmp/order")" = L1 ] && ok "отпустили — взял первый в очереди (L1), второй ждёт" || bad "первым взял не L1: $(cat "$tmp/order") / $(cut -f1 "$INCOMING_GPU_LEASE")"
+# пока L1 держит, а WV ждёт, отпущенную в промежутке аренду не перехватить без очереди
+lease_release L1
+out=$(lease_take N1 /x/wt-N1 2>&1); rc=$?
+for _ in $(seq 50); do grep -q WV "$tmp/order" && break; sleep 0.1; done
+[ $rc = 75 ] && [[ $out == *"свободна, но её ждут: WV"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = WV ] \
+  && ok "свободную при очереди без --wait не взять, взял ждущий WV" || bad "перехват мимо очереди: $rc $out / $(cut -f1 "$INCOMING_GPU_LEASE")"
+wait $q1 $q2
+[ ! -s "$INCOMING_GPU_LEASE.queue" ] && ok "взявшие ушли из очереди" || bad "очередь после взятия: $(cat "$INCOMING_GPU_LEASE.queue")"
+# прерванный ждущий (Ctrl+C, срок) уходит из очереди сам: следующий не ждёт его
+( lease_take SM /x/wt-SM --wait 2>/dev/null ) & q3=$!
+sleep 0.5
+( lease_take TR /x/wt-TR --wait 2>/dev/null; echo TR > "$tmp/tr" ) & q4=$!
+sleep 0.5
+kill $q3; wait $q3 2>/dev/null
+pkill -P $q3 2>/dev/null
+lease_release WV
+for _ in $(seq 50); do [ -f "$tmp/tr" ] && break; sleep 0.1; done
+[ "$(cut -f1 "$INCOMING_GPU_LEASE")" = TR ] && ok "прерванный ждущий не держит очередь — взял следующий" || bad "прерванный держит очередь: $(cut -f1 "$INCOMING_GPU_LEASE") $(cat "$INCOMING_GPU_LEASE.queue")"
+wait $q4
+lease_release TR
+unset INCOMING_GPU_POLL
 
 # игра Артёма — java в папке его инстанса; java песочницы с путями инстанса в командной строке — не она
 mkdir -p "$tmp/prism/instances/Open Skies/minecraft" "$tmp/bin" "$tmp/sandbox"

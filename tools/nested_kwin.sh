@@ -19,7 +19,7 @@
 #     (ALSOFT_CONF), трейлер собирает звук из журнала — ни тому ни другому сервер не нужен.
 # Команда (строка) выполняется внутри сессии вложенного KWin (--exit-with-session): с его выходом KWin закрывается.
 # Видеокарта — одна (tools/gpu_lease.sh): клиент берёт аренду своей сессии и замок «клиент на видеокарте» и держит их,
-# пока жив; аренда у другой сессии или клиент уже идёт — отказ 75 со строкой, у кого (INCOMING_GPU_WAIT=1 — ждать аренду).
+# пока жив; аренда у другой сессии или клиент уже идёт — отказ 75 со строкой, у кого (INCOMING_GPU_WAIT=1 — ждать в очереди аренды).
 set -euo pipefail
 [ $# -eq 4 ] || { echo "использование: $0 <сокет> <ширина> <высота> <команда>" >&2; exit 2; }
 SOCKET="$1" WIDTH="$2" HEIGHT="$3" COMMAND="$4"
@@ -28,7 +28,8 @@ HOME_DIR="$ROOT/mod/run/kwin/$SOCKET"
 source "$ROOT/tools/gpu_lease.sh"
 owner="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 # сначала замок клиента (иначе отказ по нему оставил бы только что взятую аренду на 10 мин), потом аренда
-who=$(gpu_client_busy) && { echo "$who" >&2; exit 75; }
+# (с INCOMING_GPU_WAIT клиента, что идёт, ждёт очередь аренды — lease_take)
+if [ -z "${INCOMING_GPU_WAIT:-}" ] && who=$(gpu_client_busy); then echo "$who" >&2; exit 75; fi
 # сокет занят живым композитором (libwayland держит flock на <сокет>.lock): второй KWin на том же имени роняет первый
 RT=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 if [ -e "$RT/$SOCKET.lock" ] && ! flock -n -s "$RT/$SOCKET.lock" true 2>/dev/null; then

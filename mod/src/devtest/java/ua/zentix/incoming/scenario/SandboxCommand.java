@@ -1,5 +1,6 @@
 package ua.zentix.incoming.scenario;
 
+import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 
 import java.util.ArrayList;
@@ -21,9 +22,10 @@ import java.util.Locale;
  *   <li>{@code raid [число] [радиус] [секунд между]} — налёт: взрывы шахедов только у клиента (как {@code blast}) в круге
  *       радиуса вокруг точки один за другим (по умолчанию 16 за 45 с в 120 м) — цена дыма многих ударов в кадре;</li>
  *   <li>{@code launch <оружие>} — пуск с пусковой в точке; время — от первого движения снаряда;</li>
- *   <li>{@code flight <оружие> [от, блоков]} — снаряд проходит над точкой; время — от ближайшего к ней места; у
- *       {@code launch} и {@code flight} последнее слово {@code own} — пуск от игрока (свои снаряды: список и метки на
- *       экране);</li>
+ *   <li>{@code flight <оружие> [от, блоков]} — снаряд проходит над точкой по прямой: пуск в стольких блоках к югу
+ *       (по умолчанию {@link #FLIGHT_FROM}), цель — столько же к северу, у оружия с маршрутом оператора (шахед, ракета,
+ *       «Ланцет») точка маршрута — сама точка ({@link #order}); время — от ближайшего к ней места; у {@code launch} и
+ *       {@code flight} последнее слово {@code own} — пуск от игрока (свои снаряды: список и метки на экране);</li>
  *   <li>{@code fire [сторона]} — пожар: квадрат незерака с огнём в точке;</li>
  *   <li>{@code cam <дальность> [высота] [азимут°] [взгляд]} — где камера: дальность от точки, высота над землёй, азимут
  *       от точки (0 — юг, 90 — запад, как поворот игрока), высота точки взгляда над землёй;</li>
@@ -41,6 +43,10 @@ import java.util.Locale;
 record SandboxCommand(Verb verb, List<String> args) {
     /** {@code nuke … near}: дальность подрыва от домов по умолчанию — как в сценарии {@code debris} (2 км). */
     static final double NEAR_RANGE = 2000;
+    /** {@code launch}: цель — на столько блоков к северу от точки (−Z). */
+    static final int LAUNCH_RANGE = 3000;
+    /** {@code flight}: пуск — на столько блоков к югу от точки (+Z), цель — на столько же к северу (−Z). */
+    static final int FLIGHT_FROM = 600;
 
     enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID }
 
@@ -87,7 +93,7 @@ record SandboxCommand(Verb verb, List<String> args) {
             case LAUNCH, FLIGHT -> {
                 need(1, own() ? 3 : 2);
                 weapon();
-                if (args.size() > (own() ? 2 : 1)) number(1);
+                if (args.size() > (own() ? 2 : 1) && (number(1) < 50 || number(1) > 5000)) throw new IllegalArgumentException("от точки 50–5000 блоков");
             }
             case NUKE -> {
                 need(1, 4);
@@ -162,6 +168,28 @@ record SandboxCommand(Verb verb, List<String> args) {
     double nearRange() {
         int i = args.indexOf("near");
         return i >= 0 && args.size() > i + 1 ? number(i + 1) : NEAR_RANGE;
+    }
+
+    /**
+     * Приказ серверу для {@code launch}/{@code flight} в точке (x, z), без «execute as» ({@code own} добавляет его сам).
+     * Пролёт — по прямой мимо камеры: без точек оператора шахед и ракета летят петлёй в обход и заходят из-за спины
+     * стреляющего ({@code StrikeService.Loop}), и у точки проходили в 200–350 блоках, дальше, чем ждёт песочница. Поэтому
+     * у оружия, которое летает по точкам ({@link WeaponSpec.Route#waypoints}), точка маршрута — сама точка, на одной
+     * прямой между местом пуска и целью: снаряд проходит над ней на своей высоте. «Град» и B-2 точек не берут (приказ с
+     * {@code via} сервер отклоняет) и идут по прямой сами: баллистика и курс сброса от места пуска на цель.
+     */
+    String order(int x, int z) {
+        WeaponType w = weapon();
+        if (verb == Verb.LAUNCH) return String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - LAUNCH_RANGE, x, z);
+        if (verb != Verb.FLIGHT) throw new IllegalStateException("не пуск: " + this);
+        int from = flightFrom();
+        String s = String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - from, x, z + from);
+        return w.spec().route().waypoints() ? s + String.format(Locale.ROOT, " via %d %d", x, z) : s;
+    }
+
+    /** {@code flight}: пуск и цель — на столько блоков от точки. */
+    int flightFrom() {
+        return args.size() > 1 && !args.get(1).equals("own") ? (int) number(1) : FLIGHT_FROM;
     }
 
     WeaponType weapon() {

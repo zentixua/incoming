@@ -94,8 +94,6 @@ final class Sandbox {
     static final double AIRBURST_HEIGHT = 30;
     /** Пуск и пролёт: ждать снаряд не дольше, тиков. */
     static final int FLIGHT_LIMIT = 1800;
-    /** Цель пуска — на столько блоков к северу от точки (−Z). */
-    static final int LAUNCH_RANGE = 3000;
     /**
      * Ядерка у камеры: место k-го запуска — (X0 + k·DX, Z0 + k·DZ). Хеш места {@code Long.hashCode(BlockPos.asLong())} —
      * старшие 32 бита (x << 6 и выше) XOR младшие (z << 12 | y): сдвиг x на k·2¹⁶ и z на k·2¹⁰ кладёт k в оба слова на
@@ -532,16 +530,9 @@ final class Sandbox {
             }
             case LAUNCH, FLIGHT -> {
                 placeCamera();
-                WeaponType w = c.weapon();
-                int x = (int) Math.floor(site.x), z = (int) Math.floor(site.z);
                 // свой пуск — от имени игрока: сервер берёт владельца из источника команды
                 String as = c.own() ? "execute as " + mc.player.getGameProfile().getName() + " run " : "";
-                if (c.verb() == SandboxCommand.Verb.LAUNCH) {
-                    server(String.format(Locale.ROOT, "%sincoming salvo %s 1 0 at %d %d from %d %d", as, w.getSerializedName(), x, z - LAUNCH_RANGE, x, z));
-                } else {
-                    int from = c.args().size() > 1 && !c.args().get(1).equals("own") ? (int) c.number(1) : 600;
-                    server(String.format(Locale.ROOT, "%sincoming salvo %s 1 0 at %d %d from %d %d", as, w.getSerializedName(), x, z - from, x, z + from));
-                }
+                server(as + c.order((int) Math.floor(site.x), (int) Math.floor(site.z)));
                 pending = c.verb() == SandboxCommand.Verb.LAUNCH ? Pending.LAUNCH : Pending.FLIGHT;
             }
             case FIRE -> {

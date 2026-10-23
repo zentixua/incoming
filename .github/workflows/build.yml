@@ -78,7 +78,7 @@ jobs:
                 # строки лога пробы читает tools/look_gate/check.py
                 mod/src/devtest/java/ua/zentix/incoming/scenario/ProbeScenario.java) mod=true; lookgate=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py) mod=true ;;
-                tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/nested_kwin.sh|tools/stress.sh|tools/mp_scenario.sh) rig=true ;;
+                tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/stress.sh|tools/mp_scenario.sh) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
                 tools/look_gate/*) lookgate=true ;;
                 .github/*) mod=true; rig=true; replayscan=true; lookgate=true ;;
@@ -199,8 +199,9 @@ jobs:
           path: mod/run/gametest/logs/
           if-no-files-found: ignore
 
-  # процессы стенда и мультиплеера гасятся целиком, без сирот (tools/rig_procs.sh), ~4 с; видеокарта — у одной сессии
-  # (tools/gpu_lease.sh); без Java и модов
+  # процессы стенда и мультиплеера гасятся целиком, без сирот (tools/rig_procs.sh), ~4 с; видеокарта — у одной сессии,
+  # ждущие — по очереди (tools/gpu_lease.sh); песочница — время до эффекта, моды режима (tools/test_sandbox.sh); без Java
+  # и модов
   rig:
     name: Остановка проверок
     needs: changes
@@ -215,6 +216,9 @@ jobs:
       - name: Аренда видеокарты
         timeout-minutes: 2
         run: tools/test_gpu_lease.sh
+      - name: Песочница без клиента
+        timeout-minutes: 1
+        run: tools/test_sandbox.sh
 
   # разбор повторов Flashback (tools/replayscan): сборка мода разбора и юнит-тесты, без игры
   replayscan:

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Аренда видеокарты ноутбука: с картинкой работает один владелец за раз, и это держит файл, а не память.
 #
-#   tools/gpu_lease.sh status               кто держит, с какого времени, из какого дерева, когда работал последний раз
+#   tools/gpu_lease.sh status               кто держит, с какого времени, из какого дерева, когда работал последний раз,
+#                                           и кто ждёт (очередь по порядку)
 #   tools/gpu_lease.sh take [--wait]        взять (своя — продлить); чужая — отказ 75 со строкой «видеокарта у …»,
-#                                           с --wait — ждать, пока её отпустят или она истечёт
+#                                           с --wait — встать в очередь и ждать, пока её отпустят или она истечёт
 #   tools/gpu_lease.sh release              отпустить свою (закончил с картинкой; пока свой клиент идёт — отказ: сначала
 #                                           tools/sandbox.sh stop)
 #   source tools/gpu_lease.sh               функции lease_owner, lease_take, lease_renew, lease_release, lease_status
@@ -28,12 +29,23 @@
 # Почему файл и flock(1), а не правило на память или очередь задач: правило держалось текстом, и 23.10 видеокарту
 # брали три работы разом — одна песочница перезапускалась пять раз. Семафоры вроде `sem` (GNU parallel) и очереди
 # (`ts`, `nq`) держат процесс, а не сессию: между кадрами, пока сессия правит код, процесса нет, и соседняя задача
-# заняла бы видеокарту. Файл живёт в XDG_RUNTIME_DIR
+# заняла бы видеокарту.
+#
+# Ждущие (--wait) — честная очередь (FIFO, `$LEASE.queue`): освободилась — берёт первый в ней, а не тот, кто первым
+# проверил; без --wait свободную при очереди не взять (отказ «её ждут: …»). Держащую аренду очередь не трогает: своя
+# сессия продлевает и перезапускает своё как прежде, аренда уходит, только когда её отпустят или она истечёт. В
+# очереди — процесс, который ждёт (номер и время старта): кончился или прерван (Ctrl+C) — его место снимается само.
+# 23.10 без очереди `start --wait` ждал ~35 мин, пока видеокарту по очереди брали три сессии, проверявшие раньше него.
+# Файлы живут в XDG_RUNTIME_DIR
 # (tmpfs): перезагрузка его снимает. Проверка — tools/test_gpu_lease.sh (CI).
 LEASE=${INCOMING_GPU_LEASE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-gpu.lease}
 LEASE_IDLE=${INCOMING_GPU_LEASE_IDLE:-600}
 # клиент на видеокарте: замок и кто его держит (владелец, дерево, с какого времени, что за клиент)
 GPU_CLIENT=$LEASE.client
+# очередь ждущих: строка «владелец, дерево, с (эпоха), процесс (номер время-старта)», по порядку прихода; под $LEASE.lock
+QUEUE=$LEASE.queue
+# как часто ждущий проверяет, секунд
+LEASE_POLL=${INCOMING_GPU_POLL:-3}
 
 # владелец по дереву $1 (по умолчанию — дерево этого скрипта)
 lease_owner() {
@@ -49,42 +61,91 @@ _lease_write() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" > "$LEASE.tmp" &&
 _lease_free() { [ -z "$L_OWNER" ] || [ $(( $(date +%s) - L_SEEN )) -gt "$LEASE_IDLE" ]; }
 _lease_hm() { date -d "@$1" +%H:%M; }
 
-# занятая чужим — строка «видеокарта у …»
+# занятая чужим — строка «видеокарта у …»; свободная, но с очередью — тоже занята (её ждут); строка очереди — следом
 lease_status() {
-  local who
+  local who q
   _lease_read
+  q=$(_queue_line)
   if _lease_free; then
-    who=$(gpu_client_busy) && { echo "аренды нет, но $who"; return 0; }
+    who=$(gpu_client_busy) && { echo "аренды нет, но $who${q:+; $q}"; return 0; }
+    [ -n "$q" ] && { echo "видеокарта свободна, но $q"; return 0; }
     echo "видеокарта свободна"; return 1
   fi
   echo "видеокарта у $L_OWNER ($L_TREE), с $(_lease_hm "$L_SINCE"), последняя работа $(( ($(date +%s) - L_SEEN) / 60 )) мин назад" \
-    "(свободна — tools/gpu_lease.sh release в её дереве или через $(( (LEASE_IDLE - $(date +%s) + L_SEEN) / 60 + 1 )) мин без работы)"
+    "(свободна — tools/gpu_lease.sh release в её дереве или через $(( (LEASE_IDLE - $(date +%s) + L_SEEN) / 60 + 1 )) мин без работы)${q:+; $q}"
 }
 
-# lease_take <владелец> <дерево> [--wait] — 0: аренда своя; 75: чужая (строка — в stderr)
+# очередь без кончившихся ждущих (под замком $LEASE.lock): строки живых процессов, по порядку
+_queue_live() {
+  local o t since pid
+  [ -s "$QUEUE" ] || return 0
+  while IFS=$'\t' read -r o t since pid; do
+    [ -n "$pid" ] && [ "$(_proc_start "${pid%% *}")" = "${pid#* }" ] && printf '%s\t%s\t%s\t%s\n' "$o" "$t" "$since" "$pid"
+  done < "$QUEUE"
+}
+
+# переписать очередь живыми, без строк владельца $1 (если задан)
+_queue_keep() {
+  _queue_live | awk -F'\t' -v o="${1:-}" 'o == "" || $1 != o' > "$QUEUE.tmp"; mv "$QUEUE.tmp" "$QUEUE"
+}
+
+# первый живой ждущий (владелец) или ничего
+_queue_head() { _queue_live | head -n 1 | cut -f1; }
+
+# «её ждут: A (дерево) с 21:10, B (…) с 21:12» — по порядку, владелец один раз; пусто — никто
+_queue_line() {
+  local o t since seen=" " parts=()
+  while IFS=$'\t' read -r o t since _; do
+    [[ $seen == *" $o "* ]] && continue
+    seen+="$o "; parts+=("$o ($t) с $(_lease_hm "$since")")
+  done < <(_queue_live)
+  [ ${#parts[@]} -gt 0 ] || return 0
+  local IFS=,; echo "её ждут: ${parts[*]}" | sed 's/,/, /g'
+}
+
+# lease_take <владелец> <дерево> [--wait] — 0: аренда своя; 75: чужая, или свободна, а очередь впереди (строка — в
+# stderr). С --wait — в очередь: свободную берёт первый ждущий; своя, пока не истекла, — без очереди
 lease_take() {
-  local owner=$1 tree wait=${3:-} fd said= now who
+  local owner=$1 tree wait=${3:-} fd said= now who why queued= me
   tree=$(readlink -m "$2")
+  me="$BASHPID $(_proc_start "$BASHPID")"
   while true; do
     exec {fd}>"$LEASE.lock"; flock "$fd"
     _lease_read; now=$(date +%s)
-    # свободна, а клиент без замка идёт (скрипт до аренды, чужой запуск мимо неё) — занята им
-    if _lease_free && who=$(gpu_client_busy); then
-      exec {fd}>&-
-      [ "$wait" = --wait ] || { echo "$who" >&2; return 75; }
-      [ -z "$said" ] && { echo "$(date +%T) $who — жду" >&2; said=1; }
-      sleep 10; continue
+    why=
+    if [ "$L_OWNER" = "$owner" ] && ! _lease_free; then
+      # своя, ещё не истекла: продлить — держащего очередь не выбивает
+      :
+    elif ! _lease_free; then
+      why=$(lease_status)
+    elif [ -n "$(_queue_head)" ] && [ "$(_queue_head)" != "$owner" ]; then
+      why="видеокарта свободна, но $(_queue_line)"
+    elif who=$(gpu_client_busy); then
+      # свободна, а клиент без замка идёт (скрипт до аренды, чужой запуск мимо неё) — занята им
+      why=$who
     fi
-    if _lease_free || [ "$L_OWNER" = "$owner" ]; then
+    if [ -z "$why" ]; then
       [ "$L_OWNER" = "$owner" ] && ! _lease_free || L_SINCE=$now
       _lease_write "$owner" "$tree" "$L_SINCE" "$now"
+      # взял — место в очереди (и других процессов своей сессии) больше не нужно
+      _queue_keep "$owner"
       exec {fd}>&-
       return 0
     fi
+    if [ "$wait" != --wait ]; then exec {fd}>&-; echo "$why" >&2; return 75; fi
+    # в очередь — при первом отказе (и снова, если место сняли: его снимает взявший процесс той же сессии)
+    local pos key; pos=$(_queue_live | awk -F'\t' -v m="$me" '$4 == m { print NR; exit }')
+    if [ -z "$pos" ]; then
+      _queue_keep
+      printf '%s\t%s\t%s\t%s\n' "$owner" "$tree" "${queued:-$now}" "$me" >> "$QUEUE"
+      queued=${queued:-$now}
+      pos=$(_queue_live | wc -l)
+    fi
+    # строка — при входе и когда сменились место в очереди или тот, кто держит
+    key="$pos|$L_OWNER|$(_lease_free && echo free)"
     exec {fd}>&-
-    [ "$wait" = --wait ] || { lease_status >&2; return 75; }
-    [ -z "$said" ] && { echo "$(date +%T) $(lease_status) — жду" >&2; said=1; }
-    sleep 10
+    [ "$said" != "$key" ] && { echo "$(date +%T) $why — жду (в очереди ${pos:-?}-й)" >&2; said=$key; }
+    sleep "$LEASE_POLL"
   done
 }
 
