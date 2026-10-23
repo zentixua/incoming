@@ -74,16 +74,16 @@ class CloudModelTest {
     void fuelFireballFollowsCcps() {
         for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
             CloudModel m = model(w, CloudModel.Air.STANDARD);
-            double mass = BlastSource.of(w, false).fuelKg();
+            double mass = ua.zentix.incoming.nuclear.model.FuelFireball.ballKg(BlastSource.of(w, false).fuelKg());
             assertEquals(5.8 * Math.cbrt(mass), m.fuelBall, 1e-9);
             assertEquals(0.45 * Math.cbrt(mass), m.fuelBallSeconds, 1e-9);
             assertEquals(1, m.radius(0) / (0.5 * m.fuelBall), 0.15, w + ": начальный радиус " + m.radius(0) + " при шаре CCPS " + 0.5 * m.fuelBall);
             assertEquals(CloudModel.FUEL_BALL_K, m.ballKelvin(0.5 * (m.heBallSeconds + m.fuelBallSeconds)), 1e-9, "после вспышки — шар топлива");
         }
-        // шахед: 30 кг бензина — шар 18 м на 1,4 с (ref/passport.md: 12–21 м, 1,0–1,7 с)
+        // шахед: 30 кг бензина, шаром — 22,5 кг (четверть — в воронке): шар 16,4 м на 1,27 с (ref/passport.md: 12–21 м, 1,0–1,7 с)
         CloudModel drone = model(WeaponType.DRONE, CloudModel.Air.STANDARD);
-        assertEquals(18, drone.fuelBall, 0.5);
-        assertEquals(1.4, drone.fuelBallSeconds, 0.05);
+        assertEquals(16.4, drone.fuelBall, 0.2);
+        assertEquals(1.27, drone.fuelBallSeconds, 0.02);
         // у «Града» и «Ланцета» топлива нет — нет и шара топлива
         assertEquals(0, model(WeaponType.ROCKET, CloudModel.Air.STANDARD).fuelBall);
         assertEquals(0, model(WeaponType.LOITER, CloudModel.Air.STANDARD).fuelBall);
@@ -125,7 +125,9 @@ class CloudModelTest {
         assertEquals(-0.216, BlastSource.Explosive.RDX.oxygenBalance(), 0.002);
         CloudModel rocket = model(WeaponType.ROCKET, CloudModel.Air.STANDARD), missile = model(WeaponType.MISSILE, CloudModel.Air.STANDARD);
         assertEquals(6.4 * 0.185 * CloudModel.SOOT_SURVIVES, rocket.soot, 1e-3);
-        assertEquals(WeaponSpec.MISSILE.fuelAtImpact() * BlastSource.Fuel.JP10.sootYield, missile.soot, 1e-9, "гексоген сажи не даёт");
+        // сажа облака — топливо шара; сажа воронки уходит шлейфом её пожара
+        assertEquals(ua.zentix.incoming.nuclear.model.FuelFireball.ballKg(WeaponSpec.MISSILE.fuelAtImpact()) * BlastSource.Fuel.JP10.sootYield,
+                missile.soot, 1e-9, "гексоген сажи не даёт");
         assertTrue(missile.dust > 10 * rocket.dust, "пыль — объём воронки ∝ W");
     }
 

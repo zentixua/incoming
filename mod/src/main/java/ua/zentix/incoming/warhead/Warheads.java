@@ -396,12 +396,21 @@ public final class Warheads {
      * обновляет соседей (и цепочкой — их соседей: дверь рядом проверяет сигнал редстоуна), а Sable читает соседние
      * блоки ({@code SableCommonEvents.handleBlockChange}) — у края загрузки это грузило бы чанк синхронно.
      */
-    static void igniteAt(ServerLevel level, BlockPos pos) {
-        if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return;
-        if (level.getBlockState(pos).isAir()) {
-            BlockState fire = BaseFireBlock.getState(level, pos);
-            if (fire.canSurvive(level, pos)) level.setBlock(pos, fire, 11);
-        }
+    static boolean igniteAt(ServerLevel level, BlockPos pos) {
+        if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
+        return level.getBlockState(pos).isAir() && igniteIn(level, pos);
+    }
+
+    /**
+     * Огонь на месте {@code pos} вместо того, что там (воздух или растение без формы, которое горит на своём месте, как
+     * его сжигает огонь ванили), если огонь держится; те же условия готовности, что у {@link #igniteAt}. Поставлен ли.
+     */
+    static boolean igniteIn(ServerLevel level, BlockPos pos) {
+        if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
+        BlockState fire = BaseFireBlock.getState(level, pos);
+        if (!fire.canSurvive(level, pos)) return false;
+        level.setBlock(pos, fire, 11);
+        return true;
     }
 
     // ================================================================ шахед, ракета, «Град», «Ланцет»
@@ -442,7 +451,7 @@ public final class Warheads {
      */
     static double chargeReach(double tntKg, double fuelKg) {
         double crater = 2 * CraterModel.chargeRadius(tntKg, CraterModel.Soil.WET) + 1;
-        return Math.max(StagedExplosion.breakReach(tntKg), Math.max(crater, FuelFireball.diameter(fuelKg) / 2)) + EDGE;
+        return Math.max(StagedExplosion.breakReach(tntKg), Math.max(crater, FuelFireball.diameter(FuelFireball.ballKg(fuelKg)) / 2)) + EDGE;
     }
 
     /**
@@ -537,7 +546,7 @@ public final class Warheads {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat) : 0);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact()) : 0);
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact(), weapon.spec().charge()) : 0);
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
                     l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));

@@ -27,7 +27,8 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
  * тепло Q держит температуру шара ({@link #FUEL_BALL_K} или конец шара взрывчатки).
  * <p>
  * <b>Огненные шары.</b> Шар топлива — CCPS (1994), «Guidelines for Evaluating the Characteristics of Vapor Cloud
- * Explosions, Flash Fires and BLEVEs»: D = 5,8·M^⅓ м, горит 0,45·M^⅓ с (M &lt; 30 т), центр поднимается к 0,75·D; излучает
+ * Explosions, Flash Fires and BLEVEs»: D = 5,8·M^⅓ м, горит 0,45·M^⅓ с (M &lt; 30 т; M — топливо шара без доли воронки,
+ * {@link #POOL_SHARE}), центр поднимается к 0,75·D; излучает
  * 200–350 кВт/м² — чёрное тело {@value #FUEL_BALL_K} K (середина). Шар продуктов детонации — радиус 1,7·W^⅓ м, светит
  * 0,2·W^0,35 с (так было в {@code FarBlasts}; первоисточник не найден — оценка), 3000 K → 1500 K (продукты детонации —
  * 3000–5000 K, обзор Ciccarelli и др. в Shock Waves 2021; к концу — оценка). Горение кончилось — шар не гаснет, а
@@ -124,15 +125,11 @@ public final class CloudModel {
      */
     public static final double GLOW_FULL_K = 1200;
     /**
-     * Доля топлива к удару, что остаётся в воронке и догорает там, а не разлетается брызгами в огненный шар: опыты Sandia с
-     * крылом С-141 в масштабе ~1/42, бьющим в песок с глиной (Tieszen, Attaway, «Fuel dispersal in high-speed aircraft/soil
-     * impact scenarios», SAND95-2529, 1996), — в воронке от почти нуля при ударе по касательной до 25–50 % при крутом.
-     * Шахед бьёт под 60°, ракета под 45° — круто; взят нижний край: у опытов не было заряда, а взрыв БЧ рядом с баком
-     * выбрасывает топливо из воронки (⚠ оценка внутри диапазона). Шар CCPS считается по всей массе (как у сервера, что
-     * поджигает по нему), поэтому эта доля посчитана дважды: по массе без неё диаметр шара на 9 % меньше (M^⅓) — в пределах
-     * разброса CCPS; тепло воронки в подъём облака не идёт.
+     * Доля топлива к удару, что остаётся в воронке и догорает там (общая с сервером, {@link FuelFireball#POOL_SHARE}): шар
+     * горит остальным ({@link FuelFireball#ballKg}) — его размер, тепло подъёма облака и сажа облака; тепло и сажа воронки
+     * уходят шлейфом пожара ({@code FireSmoke.pool}).
      */
-    public static final double POOL_SHARE = 0.25;
+    public static final double POOL_SHARE = FuelFireball.POOL_SHARE;
     /**
      * Выгорание топлива тонким слоем на грунте против глубокой лужи: у разлива толщиной в миллиметры наибольшая скорость
      * горения — порядка пятой доли глубокой (Mealy, Benfer, Gottuk, «Liquid fuel spill fire dynamics», Fire Safety Science
@@ -295,13 +292,15 @@ public final class CloudModel {
         this.source = source;
         this.air = air;
         this.hob = Math.max(0, hobM);
-        double fuelHeat = source.fuelKg() * source.fuel().heatJPerKg * (1 - RADIANT);
+        // шаром горит топливо без доли воронки: её тепло и сажа — у шлейфа пожара над воронкой
+        double ballKg = FuelFireball.ballKg(source.fuelKg());
+        double fuelHeat = ballKg * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
         dust = dustKg;
-        soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + source.fuelKg() * source.fuel().sootYield;
-        fuelBall = FuelFireball.diameter(source.fuelKg());
-        fuelBallSeconds = FuelFireball.seconds(source.fuelKg());
+        soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + ballKg * source.fuel().sootYield;
+        fuelBall = FuelFireball.diameter(ballKg);
+        fuelBallSeconds = FuelFireball.seconds(ballKg);
         heBall = 1.7 * Math.cbrt(source.chargeKg());
         heBallSeconds = 0.2 * Math.pow(source.chargeKg(), 0.35);
         burnSeconds = Math.max(fuelBallSeconds, heBallSeconds);
