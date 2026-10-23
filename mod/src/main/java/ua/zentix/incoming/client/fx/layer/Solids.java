@@ -14,6 +14,8 @@ import net.minecraft.world.phys.Vec3;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
@@ -190,6 +192,7 @@ public final class Solids {
             if (k > 0 && System.nanoTime() - start > FILL_NANOS) break;
             read(level, (int) (ORDER[k] & 0x7FF));
         }
+        flush();
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0);
         return true;
     }
@@ -203,9 +206,44 @@ public final class Solids {
         return (Math.floorMod(sx, SX) * SY + Math.floorMod(sy, SY)) * SX + Math.floorMod(sz, SX);
     }
 
+    /** Секций в одной пачке загрузки (дальше — ещё пачка в том же кадре). */
+    static final int BATCH = 128;
+    private static int pbo = -1, batched;
+    private static ByteBuffer batch;
+    private static final int[] BATCH_AT = new int[BATCH * 3];
+
+    /**
+     * Секция в пачку загрузки кадра ({@link #flush}): загрузка прямо из памяти в текстуру, которую ещё читает прошлый
+     * кадр, ждала видеокарту (шлагбаум LFX9: время слоя в первую секунду после ночного взрыва +6,7 мс при том же
+     * процессорном), а из буфера распаковки копия встаёт в очередь видеокарты.
+     */
     private static void upload(int sx, int sy, int sz, ByteBuffer data) {
-        GL12.glTexSubImage3D(GL12.GL_TEXTURE_3D, 0, Math.floorMod(sx, SX) * 16, Math.floorMod(sy, SY) * 16, Math.floorMod(sz, SX) * 16,
-                16, 16, 16, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, data);
+        if (batched == BATCH) flush();
+        batch.put(batched * 4096, data, 0, 4096);
+        BATCH_AT[3 * batched] = Math.floorMod(sx, SX) * 16;
+        BATCH_AT[3 * batched + 1] = Math.floorMod(sy, SY) * 16;
+        BATCH_AT[3 * batched + 2] = Math.floorMod(sz, SX) * 16;
+        batched++;
+    }
+
+    /**
+     * Пачка — в текстуру (привязанную): буфер распаковки заводится заново на каждую пачку (старый, который ещё читает
+     * видеокарта, драйвер отпускает сам — ожидания нет), секции — из него по смещению; буфер отвязывается (иначе чужие
+     * загрузки текстур читали бы из него).
+     */
+    private static void flush() {
+        if (batched == 0) return;
+        if (pbo < 0) pbo = GL15.glGenBuffers();
+        GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, pbo);
+        batch.limit(batched * 4096).position(0);
+        GL15.glBufferData(GL21.GL_PIXEL_UNPACK_BUFFER, batch, GL15.GL_STREAM_DRAW);
+        batch.clear();
+        for (int k = 0; k < batched; k++) {
+            GL12.glTexSubImage3D(GL12.GL_TEXTURE_3D, 0, BATCH_AT[3 * k], BATCH_AT[3 * k + 1], BATCH_AT[3 * k + 2], 16, 16, 16, GL11.GL_RED,
+                    GL11.GL_UNSIGNED_BYTE, (long) k * 4096);
+        }
+        GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, 0);
+        batched = 0;
     }
 
     /** Секция pending-номера o: заслоны — в текстуру, место помнит её. */
@@ -296,6 +334,7 @@ public final class Solids {
         if (texture >= 0) return;
         section = MemoryUtil.memAlloc(4096);
         zeros = MemoryUtil.memCalloc(4096);
+        batch = MemoryUtil.memAlloc(BATCH * 4096);
         full = MemoryUtil.memAlloc(4096);
         for (int k = 0; k < 4096; k++) full.put(k, (byte) 255);
         Arrays.fill(STORED, Long.MIN_VALUE);
