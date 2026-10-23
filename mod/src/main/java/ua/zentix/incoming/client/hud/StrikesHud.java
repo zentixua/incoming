@@ -7,6 +7,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
@@ -89,27 +90,32 @@ public final class StrikesHud {
     }
 
     /**
-     * Метки в мире: ромб на снаряде (номер и время) и пунктир от него к его цели; на цели — крестик с номерами
-     * снарядов, которые на неё идут, и подписью, кто это. Цели ближе 4 блоков друг к другу — один крестик (залп по
-     * игроку не рисует десять одинаковых). Потерянная цель — серый крестик. За спиной — не рисуются.
+     * Метки в мире: ромб на снаряде (номер и время) и пунктир от него к его цели; на цели — рамка-уголки по угловому
+     * размеру цели в этом кадре (с зумом рамка растёт с целью, жалоба 23.10: метки «плывут» и велики при зуме), с
+     * номерами снарядов, которые на неё идут, и подписью, кто это. Сущность цели, которую клиент видит, — по её
+     * сглаженному месту (точка из пакета сервера — раз в 5 тиков и отстаёт); точка и блок — коробкой блока вокруг точки.
+     * Цели ближе 4 блоков друг к другу — одна рамка (залп по игроку не рисует десять одинаковых). Потерянная цель — серая.
+     * За спиной — не рисуются.
      */
     private static void markers(GuiGraphics g, Font font, List<ClientFlights.Tracked> flights, float pt) {
         int w = g.guiWidth(), h = g.guiHeight();
         List<TargetMark> marks = new ArrayList<>();
         for (ClientFlights.Tracked f : flights) {
             if (f.phase() == FlightPhase.READY) continue;
+            AABB box = targetBox(f, pt);
+            Vec3 at = box.getCenter();
             TargetMark mark = null;
             for (TargetMark m : marks) {
-                if (m.lost == f.targetLost() && m.pos.distanceToSqr(f.target()) < 16) {
+                if (m.lost == f.targetLost() && m.pos.distanceToSqr(at) < 16) {
                     mark = m;
                     break;
                 }
             }
-            if (mark == null) marks.add(mark = new TargetMark(f.target(), f.targetLost(), targetText(f)));
+            if (mark == null) marks.add(mark = new TargetMark(at, box, f.targetLost(), targetText(f)));
             mark.numbers.add(f.number);
 
             float[] s = ScreenProjection.project(f.position(pt));
-            float[] t = ScreenProjection.project(f.target());
+            float[] t = ScreenProjection.project(at);
             if (s == null) continue;
             int sx = (int) (s[0] * w), sy = (int) (s[1] * h);
             if (sx <= -20 || sx >= w + 20 || sy <= -20 || sy >= h + 20) continue;
@@ -120,28 +126,51 @@ public final class StrikesHud {
             g.drawString(font, label, sx - font.width(label) / 2, sy - 14, c);
         }
         List<int[]> placed = new ArrayList<>();
+        // подписи раскладываются по номерам снарядов, а не по месту на экране: порядок не меняется, когда метки движутся
+        // (при зуме и повороте подписи не перескакивают со строки на строку)
+        marks.sort(Comparator.comparingInt((TargetMark m) -> m.numbers.getFirst()));
         for (TargetMark m : marks) {
-            float[] t = ScreenProjection.project(m.pos);
-            if (t == null) continue;
-            m.tx = (int) (t[0] * w);
-            m.ty = (int) (t[1] * h);
-        }
-        // сверху вниз: подпись, которая наехала бы на уже поставленную, опускается на строку
-        marks.sort(Comparator.comparingInt((TargetMark m) -> m.ty).thenComparingInt(m -> m.tx));
-        for (TargetMark m : marks) {
-            int tx = m.tx, ty = m.ty;
-            if (tx <= 0 || tx >= w || ty <= 0 || ty >= h) continue;
-            int c = m.lost ? 0xC0A0A0A0 : 0xC0FF3030;
-            for (int i = -4; i <= 4; i++) {
-                g.fill(tx + i, ty + i, tx + i + 1, ty + i + 1, c);
-                g.fill(tx + i, ty - i, tx + i + 1, ty - i + 1, c);
+            float[] r = ScreenProjection.rect(m.box);
+            if (r == null) {
+                // угол коробки за глазом (цель вплотную, глаз в ней) — наименьшая рамка у середины, как была метка
+                float[] c = ScreenProjection.project(m.pos);
+                if (c == null) continue;
+                r = new float[]{c[0], c[1], c[0], c[1]};
             }
+            float[] fr = frame(r, w, h);
+            int x0 = Math.round(fr[0]), y0 = Math.round(fr[1]), x1 = Math.round(fr[2]), y1 = Math.round(fr[3]);
+            if (x1 <= 0 || x0 >= w || y1 <= 0 || y0 >= h) continue;
+            int c = m.lost ? 0xC0A0A0A0 : 0xC0FF3030;
+            HudDraw.corners(g, x0, y0, x1, y1, c);
             MutableComponent text = Component.translatable("incoming.hud.number", numbers(m.numbers));
             if (m.label != null) text.append(" · ").append(m.label);
-            int tw = font.width(text), x = tx - tw / 2, y = labelY(placed, x, tw, ty + 7);
+            int tw = font.width(text), x = (x0 + x1) / 2 - tw / 2, y = labelY(placed, x, tw, y1 + 3);
             placed.add(new int[] {x, y, tw});
             g.drawString(font, text, x, y, c | 0xFF000000);
         }
+    }
+
+    /** Наименьшая рамка на экране, пикселей интерфейса: цель вдали меньше пикселя, а рамку должно быть видно. */
+    static final int MIN_FRAME = 7;
+
+    /**
+     * Рамка цели в пикселях интерфейса шириной {@code w} и высотой {@code h} по прямоугольнику {@code r} в долях экрана
+     * ({@link ScreenProjection#rect}): сам угловой размер цели, не меньше {@link #MIN_FRAME} вокруг её середины.
+     */
+    static float[] frame(float[] r, int w, int h) {
+        float x0 = r[0] * w, y0 = r[1] * h, x1 = r[2] * w, y1 = r[3] * h;
+        float cx = 0.5f * (x0 + x1), cy = 0.5f * (y0 + y1), half = 0.5f * MIN_FRAME;
+        return new float[]{Math.min(x0, cx - half), Math.min(y0, cy - half), Math.max(x1, cx + half), Math.max(y1, cy + half)};
+    }
+
+    /**
+     * Коробка цели в мире в долю тика {@code pt}: видимая клиенту сущность — её коробка на её сглаженном месте; иначе —
+     * блок вокруг точки цели.
+     */
+    static AABB targetBox(ClientFlights.Tracked f, float pt) {
+        net.minecraft.world.entity.Entity e = f.targetEntity();
+        if (e != null) return e.getBoundingBox().move(e.getPosition(pt).subtract(e.position()));
+        return AABB.ofSize(f.target(), 1, 1, 1);
     }
 
     /** Строка подписи шириной {@code width} от {@code x}: первая с {@code y} вниз, где она ни на что не наезжает. */
@@ -160,18 +189,18 @@ public final class StrikesHud {
         return y;
     }
 
-    /** Крестик цели: точка, потеряна ли она, подпись и номера снарядов. */
+    /** Рамка цели: середина и коробка цели в мире, потеряна ли она, подпись и номера снарядов. */
     private static final class TargetMark {
         final Vec3 pos;
+        final AABB box;
         final boolean lost;
         @Nullable
         final Component label;
         final List<Integer> numbers = new ArrayList<>();
-        /** Место на экране (−1 — за спиной). */
-        int tx = -1, ty = -1;
 
-        TargetMark(Vec3 pos, boolean lost, @Nullable Component label) {
+        TargetMark(Vec3 pos, AABB box, boolean lost, @Nullable Component label) {
             this.pos = pos;
+            this.box = box;
             this.lost = lost;
             this.label = label;
         }

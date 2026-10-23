@@ -28,6 +28,7 @@ import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.material.FluidState;
@@ -53,6 +54,8 @@ import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Timeline;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.nuclear.world.BlockResponse;
+import ua.zentix.incoming.nuclear.world.CraterJob;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.work.UnitQueue;
 
@@ -396,15 +399,47 @@ public final class Warheads {
      * обновляет соседей (и цепочкой — их соседей: дверь рядом проверяет сигнал редстоуна), а Sable читает соседние
      * блоки ({@code SableCommonEvents.handleBlockChange}) — у края загрузки это грузило бы чанк синхронно.
      */
-    static void igniteAt(ServerLevel level, BlockPos pos) {
-        if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return;
-        if (level.getBlockState(pos).isAir()) {
-            BlockState fire = BaseFireBlock.getState(level, pos);
-            if (fire.canSurvive(level, pos)) level.setBlock(pos, fire, 11);
-        }
+    static boolean igniteAt(ServerLevel level, BlockPos pos) {
+        if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
+        return level.getBlockState(pos).isAir() && igniteIn(level, pos);
+    }
+
+    /**
+     * Огонь на месте {@code pos} вместо того, что там (воздух или растение без формы, которое горит на своём месте, как
+     * его сжигает огонь ванили), если огонь держится; те же условия готовности, что у {@link #igniteAt}. Поставлен ли.
+     */
+    static boolean igniteIn(ServerLevel level, BlockPos pos) {
+        if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
+        BlockState fire = BaseFireBlock.getState(level, pos);
+        if (!fire.canSurvive(level, pos)) return false;
+        level.setBlock(pos, fire, 11);
+        return true;
     }
 
     // ================================================================ шахед, ракета, «Град», «Ланцет»
+
+    /**
+     * Природная земля под точкой удара, м (первый воздух над грунтом, ниже построек и деревьев, как {@link CraterJob#naturalSurface}):
+     * клиент ставит пыль волны на неё, а не на крышу или стену, куда пришёлся удар (взрыв на крыше — разрыв на её
+     * высоте над улицей). В неготовом чанке — сама точка удара: чтение высоты грузило бы его или ждало загрузки. Вниз —
+     * до дна мира (столбец одного готового чанка: башня выше сотни блоков; аппарата над рельефом в столбце мира нет).
+     * Вода — тоже земля (гладь). Земля выше точки (подвал, удар в склон) — тоже точка: взрыв не под землёй; грунта в
+     * столбце нет (пустота) — точка.
+     * ⚠ Дом из природного камня (песчаник, камень) считается грунтом — его крыша будет землёй.
+     */
+    public static double groundUnder(ServerLevel level, Vec3 pos) {
+        BlockPos at = BlockPos.containing(pos);
+        if (!Terrain.ready(level, at)) return pos.y;
+        int top = Math.max(Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX(), at.getZ()), at.getY() + 1);
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(at.getX(), 0, at.getZ());
+        for (int y = top - 1; y >= level.getMinBuildHeight(); y--) {
+            BlockState s = level.getBlockState(m.setY(y));
+            // вода — земля взрыва: над ней разрыв на воде, а не над дном (пыли над водой нет, брызги — у WaterBlast)
+            // (сама жидкость, а не блок с водой внутри: ступень или плита в доме — не гладь)
+            if (s.getBlock() instanceof LiquidBlock || BlockResponse.of(s).kind() == BlockResponse.Kind.GROUND) return Math.min(pos.y, y + 1);
+        }
+        return pos.y;
+    }
 
     /**
      * Взрыв заряда {@code tntKg} кг ТНТ по физике ({@link StagedExplosion}: волна Кинни–Грэхема, кривая давление–импульс
@@ -442,7 +477,7 @@ public final class Warheads {
      */
     static double chargeReach(double tntKg, double fuelKg) {
         double crater = 2 * CraterModel.chargeRadius(tntKg, CraterModel.Soil.WET) + 1;
-        return Math.max(StagedExplosion.breakReach(tntKg), Math.max(crater, FuelFireball.diameter(fuelKg) / 2)) + EDGE;
+        return Math.max(StagedExplosion.breakReach(tntKg), Math.max(crater, FuelFireball.diameter(FuelFireball.ballKg(fuelKg)) / 2)) + EDGE;
     }
 
     /**
@@ -496,9 +531,7 @@ public final class Warheads {
                 case ROCKET -> S2C.Blast.ROCKET;
                 case DRONE, NONE -> S2C.Blast.DRONE;
             };
-            // высоту поверхности клиент берёт только у бомбы (BunkerBlast, BlastEffects): здесь — точка удара, без чтения
-            // высоты, которое у неготового чанка грузило бы его или ждало загрузки
-            float surface = (float) pos.y;
+            float surface = (float) groundUnder(level, pos);
             // видно — до far_range, слышно — докуда звук взрыва его заряда тихой ночью выше фона (HearingModel), но не
             // дальше, чем сервер шлёт что-либо далёкое
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
@@ -537,7 +570,7 @@ public final class Warheads {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat) : 0);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact()) : 0);
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact(), weapon.spec().charge()) : 0);
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
                     l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));

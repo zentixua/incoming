@@ -50,10 +50,14 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **The crater** follows the law for a charge on the ground: about 0.65·∛W metres across and a quarter of that deep,
   a little smaller in rock, a little larger in sand and wet soil. A crater is only dug where the blast is at the ground.
   Craters are much smaller than in earlier versions: that is the real size.
-- **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; it burns as a
-  fireball (18 m across for the Shahed, ≈38 m for the missile) and sets fire to flammable blocks that the fireball
-  touches. The Grad and the Lancet carry no fuel. Burning debris starts a fire only where it lands on something that
-  burns. There are no scripted secondary explosions.
+- **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; three quarters of it
+  burns as a fireball (≈16 m across for the Shahed, ≈34 m for the missile) for one to three seconds. That flash ignites
+  thin, dry fuel it touches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. Planks, logs
+  and other thick wood only char in a flash that short; they catch fire only right at the crater, where the burning fuel
+  lands. Fire stays on what burns: sand, stone, earth, metal and rails never burn, and no flames are left standing on
+  them. So a Shahed in a town leaves a few fires at the impact and on dry plants nearby, not a burning circle. The
+  Grad and the Lancet carry no fuel. Burning debris starts a fire only where it lands on something that burns. Fire then
+  spreads by the game's own rules. There are no scripted secondary explosions.
 - **People and mobs** are hurt by the same wave as in a nuclear strike: pressure on the lungs, being thrown into a
   wall, glass from a window. Close to a Shahed the wave kills; at 30 m in the open it does nothing, but fragments still
   do (below). Someone behind a wall that holds is safe from the wave; inside the room where the charge went off, the
@@ -222,16 +226,18 @@ the smoke from its side and shines through its thin edges, and a fireball lights
 burnt, the fireball does not switch off: it cools as it mixes with air, from yellow through orange and dark red into
 smoke. You see it as fire while its glow outshines the light on its smoke, so by day it turns into smoke sooner than at
 night: the bomb's ball is smoke by day 3 s after the blast and still glows at night. A growing cloud keeps its billowing
-clumps the whole time, near and far.
+clumps the whole time, near and far. The air mixes the cloud from the first second, so it widens and thins as it rises.
+The wind is stronger higher up: the top of the cloud runs ahead of its base, and the cloud leans and stretches downwind
+instead of drifting as one ball.
 
-- **Shahed**: a short flash, then a ball of burning petrol about 18 blocks across that burns for about 1.5 seconds and
+- **Shahed**: a short flash, then a ball of burning petrol about 16 blocks across that burns for about 1.3 seconds and
   glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
   burns for about 2.5 minutes with flames about 3 blocks high. The flames are orange by day; at night they glow
   yellow-white and light the ground around. Far away, where flame particles are no longer drawn, the fire is a glowing
   spot of the same colour and brightness, with a glare at night. Its black smoke rises from the crater the whole time and
   leans downwind: in a stiff breeze it trails low, in calm air it stands taller. The smoke of the ball, with the dust
   torn up under it, rises a few hundred blocks as a dark cloud.
-- **Cruise missile**: a bigger flash and a fuel ball about 38 blocks across that burns for about 3 seconds; the fuel left
+- **Cruise missile**: a bigger flash and a fuel ball about 34 blocks across that burns for about 2.7 seconds; the fuel left
   in the crater burns for about a quarter of an hour. Its own charge gives little soot, so the smoke is mostly from the burning fuel,
   with a lot of dust.
 - **Grad**: a flash and a small grey-black puff with dust, no fuel ball. A salvo leaves a field of puffs that merge and
@@ -243,7 +249,9 @@ snow give it up easily: a low ring of light dust races out with the wave, a few 
 thickens to several blocks, hangs for minutes and drifts with the wind near the ground. Grass, stone and buildings hold
 the soil, so on a meadow the dust rises only around the crater, and water gives none: by a shore the dust lies mostly
 over the land. While the cloud rises, a thin column of dust is drawn up
-under it. An interceptor bursting in the air leaves no crater and no dust, unless it bursts low over the ground.
+under it. An interceptor bursting in the air leaves no crater and no dust, unless it bursts low over the ground. A hit on a
+roof or a wall is a burst at that height above the street: the dust rises from the ground below, and after a high hit
+the wave is too weak at the ground to raise any. Roofs themselves give no dust.
 
 A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
 the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the

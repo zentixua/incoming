@@ -48,6 +48,8 @@ public final class ClientFlights {
         public final UUID id;
         public final int number;
         S2C.Flight data;
+        /** Сетевой номер сущности цели ({@link S2C.Flights#NO_ENTITY} — нет). */
+        int targetEntity = S2C.Flights.NO_ENTITY;
         /** Позиция из предыдущего пакета и тики клиента, когда пришли предыдущий и последний. */
         private Vec3 prevPos;
         private long prevAt, at;
@@ -93,6 +95,17 @@ public final class ClientFlights {
 
         public Vec3 target() {
             return data.target();
+        }
+
+        /**
+         * Сущность цели, если клиент её видит (сетевой номер — из пакета сервера): метку ставить туда, где она нарисована,
+         * а не в точку из пакета раз в 5 тиков (при зуме ×4–×64 отставание точки — во столько же раз больше на экране).
+         */
+        @Nullable
+        public net.minecraft.world.entity.Entity targetEntity() {
+            if (targetEntity == S2C.Flights.NO_ENTITY || targetLost()) return null;
+            ClientLevel level = Minecraft.getInstance().level;
+            return level == null ? null : level.getEntity(targetEntity);
         }
 
         /** Цель пропала: снаряд идёт в последнюю известную точку. */
@@ -150,10 +163,12 @@ public final class ClientFlights {
 
     public static void update(S2C.Flights packet) {
         List<Tracked> next = new ArrayList<>();
-        for (S2C.Flight f : packet.flights()) {
+        for (int i = 0; i < packet.flights().size(); i++) {
+            S2C.Flight f = packet.flights().get(i);
             Tracked t = find(f.id());
             if (t == null) t = new Tracked(f, nextNumber++);
             else t.accept(f);
+            t.targetEntity = packet.target(i);
             next.add(t);
         }
         FLIGHTS.clear();

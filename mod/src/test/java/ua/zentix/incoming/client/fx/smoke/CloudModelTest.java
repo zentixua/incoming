@@ -74,16 +74,16 @@ class CloudModelTest {
     void fuelFireballFollowsCcps() {
         for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
             CloudModel m = model(w, CloudModel.Air.STANDARD);
-            double mass = BlastSource.of(w, false).fuelKg();
+            double mass = ua.zentix.incoming.nuclear.model.FuelFireball.ballKg(BlastSource.of(w, false).fuelKg());
             assertEquals(5.8 * Math.cbrt(mass), m.fuelBall, 1e-9);
             assertEquals(0.45 * Math.cbrt(mass), m.fuelBallSeconds, 1e-9);
             assertEquals(1, m.radius(0) / (0.5 * m.fuelBall), 0.15, w + ": начальный радиус " + m.radius(0) + " при шаре CCPS " + 0.5 * m.fuelBall);
             assertEquals(CloudModel.FUEL_BALL_K, m.ballKelvin(0.5 * (m.heBallSeconds + m.fuelBallSeconds)), 1e-9, "после вспышки — шар топлива");
         }
-        // шахед: 30 кг бензина — шар 18 м на 1,4 с (ref/passport.md: 12–21 м, 1,0–1,7 с)
+        // шахед: 30 кг бензина, шаром — 22,5 кг (четверть — в воронке): шар 16,4 м на 1,27 с (ref/passport.md: 12–21 м, 1,0–1,7 с)
         CloudModel drone = model(WeaponType.DRONE, CloudModel.Air.STANDARD);
-        assertEquals(18, drone.fuelBall, 0.5);
-        assertEquals(1.4, drone.fuelBallSeconds, 0.05);
+        assertEquals(16.4, drone.fuelBall, 0.2);
+        assertEquals(1.27, drone.fuelBallSeconds, 0.02);
         // у «Града» и «Ланцета» топлива нет — нет и шара топлива
         assertEquals(0, model(WeaponType.ROCKET, CloudModel.Air.STANDARD).fuelBall);
         assertEquals(0, model(WeaponType.LOITER, CloudModel.Air.STANDARD).fuelBall);
@@ -125,7 +125,9 @@ class CloudModelTest {
         assertEquals(-0.216, BlastSource.Explosive.RDX.oxygenBalance(), 0.002);
         CloudModel rocket = model(WeaponType.ROCKET, CloudModel.Air.STANDARD), missile = model(WeaponType.MISSILE, CloudModel.Air.STANDARD);
         assertEquals(6.4 * 0.185 * CloudModel.SOOT_SURVIVES, rocket.soot, 1e-3);
-        assertEquals(WeaponSpec.MISSILE.fuelAtImpact() * BlastSource.Fuel.JP10.sootYield, missile.soot, 1e-9, "гексоген сажи не даёт");
+        // сажа облака — топливо шара; сажа воронки уходит шлейфом её пожара
+        assertEquals(ua.zentix.incoming.nuclear.model.FuelFireball.ballKg(WeaponSpec.MISSILE.fuelAtImpact()) * BlastSource.Fuel.JP10.sootYield,
+                missile.soot, 1e-9, "гексоген сажи не даёт");
         assertTrue(missile.dust > 10 * rocket.dust, "пыль — объём воронки ∝ W");
     }
 
@@ -332,5 +334,109 @@ class CloudModelTest {
         // дым над ним виден: толща шлейфа в 20 м по ветру 5 м/с днём (класс C) — выше порога видимости
         FirePlume plume = new FirePlume(drone.poolWatts, drone.poolRadius, BlastSource.Fuel.PETROL.sootYield / BlastSource.Fuel.PETROL.heatJPerKg, 5, 2);
         assertTrue(plume.tau(20) > 10 * CloudModel.SEEN, "толща шлейфа в 20 м " + plume.tau(20));
+    }
+
+    /**
+     * Пыль волны лежит на земле под взрывом (жалоба 23.10: плоские «блины» пыли над городом на высоте ударов в крыши):
+     * у взрыва на высоте h над землёй клубы слоя пыли — у земли (середина клуба не выше 2σ над ней), а не на высоте
+     * взрыва (в облаке модели слой стоит на {@code hob} ниже точки взрыва); у удара в землю слой есть.
+     */
+    @Test
+    void groundDustLiesOnTheGround() {
+        for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET}) {
+            for (double hob : new double[]{0, 6, 20, 45}) {
+                CloudModel m = new CloudModel(BlastSource.of(w, false), CloudModel.Air.STANDARD, false, hob, GroundDust.Ground.BARE);
+                double[] dust = new double[1];
+                for (double t : new double[]{0.3, 2, 10, 60}) {
+                    final double age = t;
+                    m.ground.blobs(t, 1, (x, y, z, sh, sv, d) -> {
+                        dust[0] += d;
+                        assertTrue(y <= 2 * sv + 0.5, w + " на " + hob + " м, " + age + " с: клуб пыли в " + y + " м над землёй, σv " + sv);
+                    });
+                }
+                if (hob == 0) assertTrue(dust[0] > 0, w + ": у удара в землю пыль волны есть");
+            }
+        }
+    }
+
+    /**
+     * Ветер растёт с высотой — верх облака уходит вперёд низа (жалоба 23.10: облако сносилось одним твёрдым телом): у
+     * ракеты в ветре 5 м/с на 10 м (класс D) слой над серединой облака по ветру дальше слоя под ней, и разница растёт;
+     * в штиль слои стоят друг над другом.
+     */
+    @Test
+    void topDriftsFasterThanBottom() {
+        CloudModel.Air wind = new CloudModel.Air(ua.zentix.incoming.util.Stability.STANDARD_N, 5, 0, 0.15, 3, 0.5);
+        CloudModel m = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), wind);
+        double last = 0;
+        for (double t : new double[]{20, 60, 120, 240}) {
+            assertTrue(t > m.fireSeconds, "после огненной стадии");
+            java.util.List<double[]> layers = new java.util.ArrayList<>();
+            m.blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
+                if (soot > 0) layers.add(new double[]{x, y});
+            });
+            assertEquals(CloudModel.LAYERS, layers.size(), "слои облака в " + t + " с");
+            layers.sort(java.util.Comparator.comparingDouble(a -> a[1]));
+            double lead = layers.get(layers.size() - 1)[0] - layers.get(0)[0];
+            assertTrue(lead > last, t + " с: верх впереди низа на " + lead + " м (было " + last + ")");
+            last = lead;
+        }
+        assertTrue(last > 20, "за 4 минуты верх ушёл вперёд на " + last + " м");
+        CloudModel calm = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), CloudModel.Air.STANDARD);
+        calm.blobs(120, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
+            if (soot > 0) assertEquals(calm.driftX(120), x, 1e-9, "в штиль слои друг над другом");
+        });
+    }
+
+    /**
+     * Слои облака — тот же гаусс: масса целиком, середина массы и второй момент по высоте — как у одного гаусса σv, профиль
+     * без провалов.
+     */
+    @Test
+    void layersKeepTheCloudsMoments() {
+        double w = 0, q = 0, q2 = 0;
+        for (int j = 0; j < CloudModel.LAYERS; j++) {
+            w += CloudModel.LAYER_W[j];
+            q += CloudModel.LAYER_W[j] * CloudModel.LAYER_Q[j];
+            q2 += CloudModel.LAYER_W[j] * CloudModel.LAYER_Q[j] * CloudModel.LAYER_Q[j];
+        }
+        assertEquals(1, w, 1e-12);
+        assertEquals(0, q, 1e-12);
+        assertEquals(1, q2 + CloudModel.SLICE * CloudModel.SLICE, 1e-6);
+        // профиль по высоте без провалов: плотность падает от середины к краю (облако сплошное, а не бусы)
+        double prev = Double.MAX_VALUE;
+        for (double z = 0; z < 3; z += 0.05) {
+            double p = 0;
+            for (int j = 0; j < CloudModel.LAYERS; j++) {
+                double u = (z - CloudModel.LAYER_Q[j]) / CloudModel.SLICE;
+                p += CloudModel.LAYER_W[j] * Math.exp(-0.5 * u * u);
+            }
+            assertTrue(p < prev, "провал на " + z + " σv");
+            prev = p;
+        }
+    }
+
+    /**
+     * Воздух перемешивает облако с первой секунды (жалоба 23.10: облако минутами держало форму): пока термик ещё
+     * поднимается, σ уже больше радиуса термика (R/√5), и толща поперёк середины падает всё время, а не только после
+     * вершины.
+     */
+    @Test
+    void airMixesTheCloudFromTheStart() {
+        CloudModel.Air wind = new CloudModel.Air(ua.zentix.incoming.util.Stability.STANDARD_N, 5, 0, 0.15, 3, 0.5);
+        for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
+            CloudModel m = new CloudModel(BlastSource.of(w, false), wind);
+            assertTrue(m.topSeconds > 100, w + ": вершина через " + m.topSeconds + " с");
+            for (double t : new double[]{10, 30, 60}) {
+                double thermal = m.radius(t) / Math.sqrt(5);
+                assertTrue(m.sigmaH(t) > 1.03 * thermal, w + " " + t + " с: σ " + m.sigmaH(t) + " при термике " + thermal);
+            }
+            double prev = Double.MAX_VALUE;
+            for (double t = Math.ceil(m.fireSeconds); t < m.topSeconds; t += 5) {
+                double tau = m.tau(t);
+                assertTrue(tau < prev, w + " " + t + " с: толща " + tau + " после " + prev);
+                prev = tau;
+            }
+        }
     }
 }

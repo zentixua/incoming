@@ -49,6 +49,8 @@ public final class FarRenderer {
             FarBlasts.collect(view, SPRITES, lights);
             FarFlightView.collect(view, SPRITES, lights);
         }
+        // клубы облаков, кучки трубок и вуали кадра — одним бюджетом, после следов снарядов
+        SmokePuffs.flush();
         // пламя очагов топлива вдали, где его языков-частиц уже нет
         ua.zentix.incoming.client.fx.FireSmoke.far(view, SPRITES);
         // струи факелов сущностей кадра: после мира, а не путём сущностей — иначе их перекрашивает шейдерпак
@@ -116,6 +118,13 @@ public final class FarRenderer {
         FarBlasts.reset();
         FarFlightView.reset();
         ua.zentix.incoming.client.render.PlumeRenderer.reset();
+        SmokePuffs.reset();
         Arrays.fill(LAST_FRAME, 0);
+    }
+
+    /** Заливка кадра кучками облаков (экранов, с перекрытием) и доля кучки, что ей дал бюджет ({@link SmokePuffs#FILL_BUDGET}). */
+    public static String describeSmoke() {
+        return String.format(java.util.Locale.ROOT, "fill %.2f screens (budget %.0f, one club per gaussian %.2f), cluster share %.2f",
+                SmokePuffs.lastFill(), SmokePuffs.FILL_BUDGET, SmokePuffs.lastFloor(), SmokePuffs.lastShare());
     }
 }

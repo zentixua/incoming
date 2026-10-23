@@ -126,4 +126,17 @@ public final class HudDraw {
         g.fill(-3, 4, 3, 6, color);
         g.pose().popPose();
     }
+
+    /** Уголки рамки (x0, y0)–(x1, y1): по четверти короткой стороны, не меньше 2 пикселей. */
+    public static void corners(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
+        int len = Math.max(2, Math.min(x1 - x0, y1 - y0) / 4);
+        g.fill(x0, y0, x0 + len, y0 + 1, color);
+        g.fill(x0, y0, x0 + 1, y0 + len, color);
+        g.fill(x1 - len, y0, x1, y0 + 1, color);
+        g.fill(x1 - 1, y0, x1, y0 + len, color);
+        g.fill(x0, y1 - 1, x0 + len, y1, color);
+        g.fill(x0, y1 - len, x0 + 1, y1, color);
+        g.fill(x1 - len, y1 - 1, x1, y1, color);
+        g.fill(x1 - 1, y1 - len, x1, y1, color);
+    }
 }

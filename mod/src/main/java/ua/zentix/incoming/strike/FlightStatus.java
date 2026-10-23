@@ -36,13 +36,14 @@ public final class FlightStatus {
         MinecraftServer server = e.getServer();
         if (server.getTickCount() % PERIOD != 0) return;
         Map<UUID, List<S2C.Flight>> byOwner = new HashMap<>();
+        Map<UUID, List<Integer>> targets = new HashMap<>();
         for (ServerLevel level : server.getAllLevels()) {
-            for (StrikeProjectile p : StrikeWorld.projectiles(level)) collect(byOwner, p);
+            for (StrikeProjectile p : StrikeWorld.projectiles(level)) collect(byOwner, targets, p);
         }
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             List<S2C.Flight> flights = byOwner.get(p.getUUID());
             if (flights != null) {
-                PacketDistributor.sendToPlayer(p, new S2C.Flights(flights));
+                PacketDistributor.sendToPlayer(p, new S2C.Flights(flights, targets.get(p.getUUID())));
                 p.setData(ModAttachments.FLIGHTS_SHOWN, true);
             } else if (p.getData(ModAttachments.FLIGHTS_SHOWN)) {
                 PacketDistributor.sendToPlayer(p, new S2C.Flights(List.of()));
@@ -51,14 +52,15 @@ public final class FlightStatus {
         }
     }
 
-    private static void collect(Map<UUID, List<S2C.Flight>> byOwner, StrikeProjectile p) {
+    private static void collect(Map<UUID, List<S2C.Flight>> byOwner, Map<UUID, List<Integer>> targets, StrikeProjectile p) {
         UUID owner = p.ownerId();
         if (owner == null || p.isRemoved() || p instanceof IcbmEntity || p instanceof BomberEntity b && b.hasReleased()) return;
-        int kind = S2C.Flight.TARGET_POINT;
+        int kind = S2C.Flight.TARGET_POINT, entity = S2C.Flights.NO_ENTITY;
         String name = "";
         Target t = p.target() == null ? null : p.target().subject();
         if (t instanceof Target.OfEntity e) {
             Entity ent = p.level() instanceof ServerLevel sl ? sl.getEntity(e.uuid()) : null;
+            if (ent != null) entity = ent.getId();
             if (ent instanceof Player || ent != null && ent.hasCustomName()) {
                 kind = S2C.Flight.TARGET_NAMED;
                 name = ent.getName().getString();
@@ -75,5 +77,6 @@ public final class FlightStatus {
         if (name.length() > S2C.Flight.MAX_NAME) name = name.substring(0, S2C.Flight.MAX_NAME);
         byOwner.computeIfAbsent(owner, k -> new ArrayList<>()).add(new S2C.Flight(p.getUUID(), p.weapon().id(), p.flightPhase().ordinal(),
                 p.etaTicks(), p.position(), p.aimPoint(), p.isNuclear(), kind, name, p.targetLost()));
+        targets.computeIfAbsent(owner, k -> new ArrayList<>()).add(entity);
     }
 }

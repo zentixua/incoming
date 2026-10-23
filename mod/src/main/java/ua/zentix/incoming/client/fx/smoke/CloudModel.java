@@ -21,13 +21,15 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
  * JFM 2023, ур. 2.1–2.3): сфера радиуса R поднимается со скоростью W, подсасывая воздух через поверхность со скоростью αW
  * (α = {@value #ALPHA} — опыты MTT), ускоряется плавучестью g', а в устойчивом воздухе (частота Брента–Вяйсяля N) теряет её:
  * d(R³)/dt = 3α·R²W, d(R³W)/dt = R³g', d(R³g')/dt = −N²·R³W. У точечного источника наибольшая высота —
- * (8F/(α³N²))^¼ при F = R³g' (B = 4π/3·F), за π/N секунд; радиус — α·высоты. Дальше облако стоит на этой высоте и
- * расплывается турбулентностью воздуха (Паскуилл–Гиффорд, формулы Бриггса для открытой местности, по пути ветра x = u·t),
- * уходя с ветром на своей высоте. Высоту и радиус в первые секунды задаёт огненный шар: начальный объём — тот, в котором
+ * (8F/(α³N²))^¼ при F = R³g' (B = 4π/3·F), за π/N секунд; радиус — α·высоты. Дальше облако стоит на этой высоте. С первой
+ * секунды его расплывает турбулентность воздуха (Паскуилл–Гиффорд, формулы Бриггса для открытой местности, по пути ветра
+ * x = u·t, в квадратуре с радиусом термика), а ветер растёт с высотой: облако — стопка слоёв ({@link #LAYERS}), каждый со
+ * своим ветром, — наклоняется и вытягивается по ветру. Высоту и радиус в первые секунды задаёт огненный шар: начальный объём — тот, в котором
  * тепло Q держит температуру шара ({@link #FUEL_BALL_K} или конец шара взрывчатки).
  * <p>
  * <b>Огненные шары.</b> Шар топлива — CCPS (1994), «Guidelines for Evaluating the Characteristics of Vapor Cloud
- * Explosions, Flash Fires and BLEVEs»: D = 5,8·M^⅓ м, горит 0,45·M^⅓ с (M &lt; 30 т), центр поднимается к 0,75·D; излучает
+ * Explosions, Flash Fires and BLEVEs»: D = 5,8·M^⅓ м, горит 0,45·M^⅓ с (M &lt; 30 т; M — топливо шара без доли воронки,
+ * {@link #POOL_SHARE}), центр поднимается к 0,75·D; излучает
  * 200–350 кВт/м² — чёрное тело {@value #FUEL_BALL_K} K (середина). Шар продуктов детонации — радиус 1,7·W^⅓ м, светит
  * 0,2·W^0,35 с (так было в {@code FarBlasts}; первоисточник не найден — оценка), 3000 K → 1500 K (продукты детонации —
  * 3000–5000 K, обзор Ciccarelli и др. в Shock Waves 2021; к концу — оценка). Горение кончилось — шар не гаснет, а
@@ -124,15 +126,11 @@ public final class CloudModel {
      */
     public static final double GLOW_FULL_K = 1200;
     /**
-     * Доля топлива к удару, что остаётся в воронке и догорает там, а не разлетается брызгами в огненный шар: опыты Sandia с
-     * крылом С-141 в масштабе ~1/42, бьющим в песок с глиной (Tieszen, Attaway, «Fuel dispersal in high-speed aircraft/soil
-     * impact scenarios», SAND95-2529, 1996), — в воронке от почти нуля при ударе по касательной до 25–50 % при крутом.
-     * Шахед бьёт под 60°, ракета под 45° — круто; взят нижний край: у опытов не было заряда, а взрыв БЧ рядом с баком
-     * выбрасывает топливо из воронки (⚠ оценка внутри диапазона). Шар CCPS считается по всей массе (как у сервера, что
-     * поджигает по нему), поэтому эта доля посчитана дважды: по массе без неё диаметр шара на 9 % меньше (M^⅓) — в пределах
-     * разброса CCPS; тепло воронки в подъём облака не идёт.
+     * Доля топлива к удару, что остаётся в воронке и догорает там (общая с сервером, {@link FuelFireball#POOL_SHARE}): шар
+     * горит остальным ({@link FuelFireball#ballKg}) — его размер, тепло подъёма облака и сажа облака; тепло и сажа воронки
+     * уходят шлейфом пожара ({@code FireSmoke.pool}).
      */
-    public static final double POOL_SHARE = 0.25;
+    public static final double POOL_SHARE = FuelFireball.POOL_SHARE;
     /**
      * Выгорание топлива тонким слоем на грунте против глубокой лужи: у разлива толщиной в миллиметры наибольшая скорость
      * горения — порядка пятой доли глубокой (Mealy, Benfer, Gottuk, «Liquid fuel spill fire dynamics», Fire Safety Science
@@ -218,6 +216,23 @@ public final class CloudModel {
     public final double hob;
     /** Кусков трубки ножки (изгиб по сдвигу ветра с высотой). */
     static final int STEM_PIECES = 6;
+    /**
+     * Облако после огненной стадии — стопка слоёв по высоте: гаусс σv делится на {@value #LAYERS} гаусса σ = {@link #SLICE}·σv
+     * на высотах {@link #LAYER_Q}·σv (тот же второй момент — σv), и каждый слой несёт ветер своей
+     * высоты ({@link #shear}): верх уходит вперёд низа, облако наклоняется и вытягивается по ветру (Saffman, QJRMS 88,
+     * 1962: дисперсия облака в сдвиге ветра; так же — пуфы SCIPUFF и CALPUFF). Прежде облако было одним гауссом и
+     * сносилось целиком (жалоба 23.10: «как одно твёрдое тело»). ⚠ Вихрь термика, пока он всплывает, сдвиг частью
+     * держит — здесь нет: облако наклоняется чуть раньше настоящего.
+     */
+    static final int LAYERS = 3;
+    static final double SLICE = 0.85;
+    /**
+     * Высоты слоёв (в σv облака) и их доли массы: квадратура Гаусса–Эрмита на три точки для середин с дисперсией
+     * 1 − {@link #SLICE}² — 0 и ±√(3·(1 − SLICE²)), доли 2/3 и 1/6: вместе с шириной слоёв — тот же второй и четвёртый
+     * момент, что у одного гаусса σv; профиль по высоте без провалов (слой у края виден краем середины).
+     */
+    static final double[] LAYER_Q = {-Math.sqrt(3 * (1 - SLICE * SLICE)), 0, Math.sqrt(3 * (1 - SLICE * SLICE))},
+            LAYER_W = {1 / 6.0, 2 / 3.0, 1 / 6.0};
     /** Пыль волны у земли и ножка. */
     public final GroundDust ground;
     /** Плавучесть всего тепла, м⁴/с²; F = 3B/(4π). */
@@ -295,13 +310,15 @@ public final class CloudModel {
         this.source = source;
         this.air = air;
         this.hob = Math.max(0, hobM);
-        double fuelHeat = source.fuelKg() * source.fuel().heatJPerKg * (1 - RADIANT);
+        // шаром горит топливо без доли воронки: её тепло и сажа — у шлейфа пожара над воронкой
+        double ballKg = FuelFireball.ballKg(source.fuelKg());
+        double fuelHeat = ballKg * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
         dust = dustKg;
-        soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + source.fuelKg() * source.fuel().sootYield;
-        fuelBall = FuelFireball.diameter(source.fuelKg());
-        fuelBallSeconds = FuelFireball.seconds(source.fuelKg());
+        soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + ballKg * source.fuel().sootYield;
+        fuelBall = FuelFireball.diameter(ballKg);
+        fuelBallSeconds = FuelFireball.seconds(ballKg);
         heBall = 1.7 * Math.cbrt(source.chargeKg());
         heBallSeconds = 0.2 * Math.pow(source.chargeKg(), 0.35);
         burnSeconds = Math.max(fuelBallSeconds, heBallSeconds);
@@ -438,6 +455,34 @@ public final class CloudModel {
 
     public double driftZ(double t) {
         return thermal.driftZ(t);
+    }
+
+    /** Шаг таблицы сдвига, с. */
+    private static final double SHEAR_DT = 0.5;
+    /** Сдвиг слоя на σv выше середины против середины по ветру, м, по шагам {@link #SHEAR_DT} (считается при первом вызове). */
+    private double[] shearTable;
+
+    /**
+     * На сколько слой на σv выше середины облака ушёл по ветру вперёд середины к возрасту t, м: ∫ ½·(u(z + σv) − u(z − σv)) dt,
+     * u — ветер на высоте над землёй (степенной профиль класса устойчивости, {@link Air#wind}), z — середина облака
+     * (над землёй — с высотой подрыва). Слой на q·σv — на q·сдвиг.
+     */
+    public double shear(double t) {
+        if (t <= 0) return 0;
+        double[] a = shearTable;
+        if (a == null) {
+            int n = (int) Math.ceil(Math.min(life, LIFE_MAX) / SHEAR_DT) + 2;
+            a = new double[n];
+            double w = Math.hypot(air.windX(), air.windZ());
+            for (int i = 1; i < n; i++) {
+                double tm = (i - 0.5) * SHEAR_DT, z = height(tm) + hob, v = sigmaV(tm);
+                a[i] = a[i - 1] + 0.5 * w * (air.wind(z + v) - air.wind(Math.max(z - v, 1))) * SHEAR_DT;
+            }
+            shearTable = a;
+        }
+        double f = t / SHEAR_DT;
+        int i = (int) Math.min(a.length - 2, Math.floor(f));
+        return a[i] + (a[i + 1] - a[i]) * Math.min(1, f - i);
     }
 
     /**
@@ -668,7 +713,13 @@ public final class CloudModel {
                         Math.max(k, FUEL_BALL_K), up);
             }
         } else {
-            out.blob(cx, cy, cz, sh, sv, soot * fade, cloudDust * fade, 0, k, up);
+            // слои по высоте: каждый — с ветром своей высоты (сдвиг относительно середины — вдоль ветра)
+            double lean = shear(t), wx = air.windX(), wz = air.windZ(), w = Math.hypot(wx, wz);
+            double ux = w > 0 ? wx / w : 0, uz = w > 0 ? wz / w : 0;
+            for (int j = 0; j < LAYERS; j++) {
+                double q = LAYER_Q[j], m = LAYER_W[j] * fade;
+                out.blob(cx + ux * q * lean, cy + q * sv, cz + uz * q * lean, sh, SLICE * sv, soot * m, cloudDust * m, 0, k, up);
+            }
         }
         if (stemShown) {
             // ножка — трубка пыли до низа облака (σ — ⚠ оценка: треть σ облака), клонится с ветром: снос на её высоте —

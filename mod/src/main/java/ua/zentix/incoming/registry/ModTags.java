@@ -28,6 +28,15 @@ public final class ModTags {
     /** Ядерный удар: вспышка только закапчивает грани — кладка, бетон, терракота. */
     public static final TagKey<Block> NUKE_SOOTS = block("nuke_soots");
 
+    /**
+     * Шар топлива поджигает импульсом ({@code nuclear/model/PulseIgnition}): листва, бумага, сухая трава и кусты, ткань —
+     * у каждого свой порог; остальное горючее (дерево) — только горящее топливо на нём ({@code warhead/Craters}).
+     */
+    public static final TagKey<Block> PULSE_LEAVES = block("pulse_leaves");
+    public static final TagKey<Block> PULSE_PAPER = block("pulse_paper");
+    public static final TagKey<Block> PULSE_GRASS = block("pulse_grass");
+    public static final TagKey<Block> PULSE_FABRIC = block("pulse_fabric");
+
     /** Ядерный удар: биомы, которые свет не перекрашивает (моря, реки, пещеры), — {@code nuclear/world/ScorchedBiomes}. */
     public static final TagKey<Biome> NUKE_KEEPS_BIOME = TagKey.create(Registries.BIOME, Incoming.id("nuke_keeps_biome"));
 

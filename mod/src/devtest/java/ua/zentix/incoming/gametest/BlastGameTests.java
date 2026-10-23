@@ -1,15 +1,18 @@
 package ua.zentix.incoming.gametest;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.Pig;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -21,8 +24,10 @@ import ua.zentix.incoming.nuclear.model.BlastDamage;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
+import ua.zentix.incoming.nuclear.model.PulseIgnition;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.strike.StrikeWorld;
+import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.Warheads;
 
@@ -233,39 +238,97 @@ public final class BlastGameTests {
     }
 
     /**
-     * Шар топлива шахеда (30 кг — 18 м): поленницы на 5–20 м — огонь только у тех, что в шаре (радиус 9 м), и не дальше;
-     * у «Града» топлива нет — у тех же поленниц огня нет (обломки не ложатся блоками).
+     * Огонь после шара топлива (жалоба 23.10: после ракеты горел почти каждый блок в круге — крыши, песок, рельсы).
+     * Вокруг удара на траве: столбы брёвен (толстое дерево) на лучах 3–20 м, столбы листвы и сена (тонкое) на своих лучах
+     * внутри шара, бревно у самой воронки, трава и маки на траве (горят на своём месте). Огонь ставится только у горючего: у листвы и сена — с долей их порога
+     * ({@link PulseIgnition}), у брёвен — только в круге горящего топлива воронки; ни один огонь не стоит на полу, что сам
+     * не горит (пол — трава-дёрн; так «горели» песок и рельсы), и все — в шаре. У «Града» топлива нет — огня нет. Огонь ванили на время проверки не растёт
+     * ({@code doFireTick}), волна блоков не ломает: считается только поджиг.
      */
     private static void fireTest(GameTestHelper h, WeaponType weapon) {
         ServerLevel level = h.getLevel();
-        boolean debris = IncomingConfig.SERVER.debrisStay.get();
+        boolean debris = IncomingConfig.SERVER.debrisStay.get(), damage = IncomingConfig.SERVER.blockDamage.get();
         IncomingConfig.SERVER.debrisStay.set(false);
-        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
+        // волна не ломает: листву и сено взрыв снёс бы раньше шара, а проверяется поджиг
+        IncomingConfig.SERVER.blockDamage.set(false);
+        GameRules.BooleanValue tick = level.getGameRules().getRule(GameRules.RULE_DOFIRETICK);
+        boolean ticked = tick.get();
+        tick.set(false, level.getServer());
+        StrikeGameTests.afterTest(h, () -> {
+            IncomingConfig.SERVER.debrisStay.set(debris);
+            IncomingConfig.SERVER.blockDamage.set(damage);
+            tick.set(ticked, level.getServer());
+        });
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+        WeaponSpec spec = weapon.spec();
+        double ballKg = FuelFireball.ballKg(spec.fuelAtImpact());
+        double r = FuelFireball.diameter(ballKg) / 2, wet = CraterModel.chargeRadius(spec.charge(), CraterModel.Soil.DRY);
+        BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true);
+        // брёвна: 16 лучей, 3–20 м; тонкое — между ними, 2,5 м до края шара
         for (int i = 0; i < 16; i++) {
-            double a = i * Math.PI / 8, d = 5 + i;
+            double a = i * Math.PI / 8, d = 3 + i * 17 / 15.0;
+            column(level, at, a, d, Blocks.OAK_LOG.defaultBlockState());
+            double thin = 2.5 + (Math.max(r, 3) - 3) * i / 15.0;
+            column(level, at, a + Math.PI / 16, thin, i % 2 == 0 ? leaves : Blocks.HAY_BLOCK.defaultBlockState());
+        }
+        // бревно у самой воронки — в круге горящего топлива
+        level.setBlock(BlockPos.containing(at.x + 1, at.y, at.z), Blocks.OAK_LOG.defaultBlockState(), 2);
+        // растения на траве (трава, цветы) по кругу в 2,5 м до края шара: горят на своём месте
+        java.util.Set<BlockPos> plants = new java.util.HashSet<>();
+        for (int i = 0; i < 24; i++) {
+            double a = (i + 0.25) * Math.PI / 12, d = 2.5 + (Math.max(r, 3) - 3) * (i % 6) / 5.0;
             BlockPos p = BlockPos.containing(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d);
-            for (int y = 0; y < 3; y++) level.setBlock(p.above(y), Blocks.OAK_LOG.defaultBlockState(), 2);
+            if (!level.getBlockState(p).isAir()) continue;
+            level.setBlock(p, (i % 2 == 0 ? Blocks.SHORT_GRASS : Blocks.POPPY).defaultBlockState(), 2);
+            plants.add(p.immutable());
         }
         Warheads.detonate(level, weapon, at, null, null);
-        double r = FuelFireball.diameter(weapon.spec().fuelAtImpact()) / 2;
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
-            int fires = 0;
+            int fires = 0, thin = 0, solid = 0, floor = 0, plant = 0;
             double far = 0;
             for (BlockPos p : BlockPos.betweenClosed(h.absolutePos(CENTER.offset(-24, -1, -24)), h.absolutePos(CENTER.offset(24, 6, 24)))) {
-                BlockState s = level.getBlockState(p);
-                if (!(s.getBlock() instanceof BaseFireBlock)) continue;
+                if (!(level.getBlockState(p).getBlock() instanceof BaseFireBlock)) continue;
                 fires++;
                 far = Math.max(far, Vec3.atCenterOf(p).distanceTo(at));
+                boolean byThin = false, bySolid = false;
+                for (Direction d : Direction.values()) {
+                    BlockState n = level.getBlockState(p.relative(d));
+                    if (n.is(Blocks.OAK_LEAVES) || n.is(Blocks.HAY_BLOCK)) byThin = true;
+                    else if (n.is(Blocks.OAK_LOG)) bySolid = true;
+                }
+                // огонь на месте растения — растение горит само; иначе огонь на твёрдом полу, что сам не горит (песок,
+                // камень, дёрн), — огонь «на земле» рядом с горючим
+                BlockPos below = p.below();
+                BlockState under = level.getBlockState(below);
+                if (plants.contains(p)) plant++;
+                else if (under.isFaceSturdy(level, below, Direction.UP) && !under.isFlammable(level, below, Direction.UP)) floor++;
+                else if (byThin) thin++;
+                else if (bySolid) {
+                    solid++;
+                    // бревно горит только там, где на нём лежит горящее топливо воронки
+                    h.assertTrue(Vec3.atCenterOf(p).distanceTo(at) <= wet + 1.5,
+                            String.format(Locale.ROOT, "%s: огонь у бревна в %.1f м — дальше круга топлива %.1f м", weapon, Vec3.atCenterOf(p).distanceTo(at), wet));
+                } else floor++;
+
             }
-            String got = weapon + ": огня " + fires + " до " + String.format(Locale.ROOT, "%.1f м (шар %.1f м)", far, r);
+            String got = String.format(Locale.ROOT, "%s: огня %d (у тонкого %d, растений %d, у брёвен %d, на пустом полу %d) до %.1f м (шар %.1f м, топливо %.1f м)",
+                    weapon, fires, thin, plant, solid, floor, far, r, wet);
             Incoming.LOG.info("BLASTBENCH {}", got);
+            h.assertTrue(floor == 0, got);
             if (r > 0) {
-                h.assertTrue(fires > 0, got);
+                h.assertTrue(thin >= 4, got);
+                // растений в шаре — 24 (половина — трава, у шахеда загорается треть-половина, у ракеты — почти все)
+                h.assertTrue(plant >= 3, got);
                 h.assertTrue(far <= r + 1.5, got);
             } else h.assertTrue(fires == 0, got);
         });
+    }
+
+    /** Столб в три блока на луче под углом {@code a} в {@code d} м от {@code at}. */
+    private static void column(ServerLevel level, Vec3 at, double a, double d, BlockState state) {
+        BlockPos p = BlockPos.containing(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d);
+        for (int y = 0; y < 3; y++) level.setBlock(p.above(y), state, 2);
     }
 
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_fire_drone", skyAccess = true)
@@ -273,9 +336,45 @@ public final class BlastGameTests {
         fireTest(h, WeaponType.DRONE);
     }
 
+    @GameTest(template = "range", timeoutTicks = 400, batch = "blast_fire_missile", skyAccess = true)
+    public static void missileFireballSparesSolidWood(GameTestHelper h) {
+        fireTest(h, WeaponType.MISSILE);
+    }
+
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_fire_rocket", skyAccess = true)
     public static void rocketWithoutFuelLightsNothing(GameTestHelper h) {
         fireTest(h, WeaponType.ROCKET);
+    }
+
+    /**
+     * Земля под ударом в крышу — улица (жалоба 23.10: «блины» пыли волны на высоте ударов): башня из каменного кирпича в
+     * 12 блоков на траве — у точки на её крыше земля — верх травы; у точки на траве — она сама; в подвале (точка ниже
+     * земли) — точка; в 150 м над травой (выше прежнего поиска в 96 блоков) — трава; над водой — гладь, не дно.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "blast_ground_under", skyAccess = true)
+    public static void groundUnderARoofIsTheStreet(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos base = h.absolutePos(CENTER);
+        for (int y = 0; y < 12; y++) {
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) level.setBlock(base.offset(dx, y, dz), Blocks.STONE_BRICKS.defaultBlockState(), 2);
+        }
+        for (int y = 1; y <= 3; y++) level.setBlock(base.offset(-8, -y, 8), Blocks.WATER.defaultBlockState(), 2);
+        h.runAfterDelay(1, () -> {
+            double street = base.getY();
+            h.assertTrue(Warheads.groundUnder(level, Vec3.atBottomCenterOf(base.above(12))) == street, "крыша: земля " + Warheads.groundUnder(level, Vec3.atBottomCenterOf(base.above(12))));
+            h.assertTrue(Warheads.groundUnder(level, Vec3.atCenterOf(base.offset(1, 6, 0))) == street, "стена");
+            BlockPos open = base.offset(8, 0, 0);
+            h.assertTrue(Warheads.groundUnder(level, Vec3.atBottomCenterOf(open)) == street, "трава");
+            Vec3 cellar = Vec3.atCenterOf(base.offset(8, -3, 0));
+            h.assertTrue(Warheads.groundUnder(level, cellar) == cellar.y, "подвал");
+            // удар в воду глубиной 3 блока: земля взрыва — гладь, а не дно
+            Vec3 pond = Vec3.atBottomCenterOf(base.offset(-8, 0, 8));
+            h.assertTrue(Warheads.groundUnder(level, pond) == street, "вода: земля " + Warheads.groundUnder(level, pond));
+            // точка в 150 м над травой (аппарат или верх высокой башни) — земля та же: поиск идёт до дна мира
+            Vec3 high = Vec3.atCenterOf(base.offset(-8, 150, 0));
+            h.assertTrue(Warheads.groundUnder(level, high) == street, "в 150 м: земля " + Warheads.groundUnder(level, high));
+            h.succeed();
+        });
     }
 
     /** Тела — по давлению волны ({@code BlastBody}): свинья в 2 м от шахеда погибает, в 30 м цела. */

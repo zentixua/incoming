@@ -103,7 +103,7 @@ class BlastDamageTest {
         assertEquals(18.0, FuelFireball.diameter(30), 0.1);
         assertEquals(1.40, FuelFireball.seconds(30), 0.01);
         assertEquals(9.2, FuelFireball.exposure(30), 0.2);
-        assertEquals(0.46, ThermalModel.ignitionShare(FuelFireball.exposure(30)), 0.02);
-        assertEquals(0, ThermalModel.ignitionShare(4.9));
+        // шаром горят три четверти топлива к удару: у шахеда 22,5 кг из 30
+        assertEquals(22.5, FuelFireball.ballKg(30), 1e-9);
     }
 }
