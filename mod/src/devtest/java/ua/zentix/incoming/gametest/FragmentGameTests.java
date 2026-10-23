@@ -2,6 +2,7 @@ package ua.zentix.incoming.gametest;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.TagKey;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -16,6 +17,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.registry.ModDataMaps;
+import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.FragmentStrike;
 import ua.zentix.incoming.warhead.GroundMaterial;
@@ -97,6 +99,8 @@ public final class FragmentGameTests {
      */
     @GameTest(template = "pad", batch = "fragments")
     public static void crackedKeepsMaterial(GameTestHelper h) {
+        List<TagKey<Block>> modTags = BuiltInRegistries.BLOCK.getTagNames().filter(t -> t.location().getNamespace().equals(Incoming.MOD_ID)).toList();
+        h.assertTrue(modTags.contains(ModTags.NUKE_MASONRY), "теги мода не найдены: " + modTags);
         List<String> wrong = new ArrayList<>();
         for (Map.Entry<Block, Block> e : FragmentStrike.CRACKED.entrySet()) {
             BlockState whole = e.getKey().defaultBlockState(), cracked = e.getValue().defaultBlockState();
@@ -107,8 +111,7 @@ public final class FragmentGameTests {
                 wrong.add(name + ": волна " + BlockResponse.of(cracked) + " у целого " + BlockResponse.of(whole));
             if (GroundMaterial.of(whole) != GroundMaterial.of(cracked))
                 wrong.add(name + ": грунт " + GroundMaterial.of(cracked) + " у целого " + GroundMaterial.of(whole));
-            BuiltInRegistries.BLOCK.getTagNames().filter(t -> t.location().getNamespace().equals(Incoming.MOD_ID))
-                    .filter(t -> whole.is(t) != cracked.is(t))
+            modTags.stream().filter(t -> whole.is(t) != cracked.is(t))
                     .forEach(t -> wrong.add(name + ": тег " + t.location() + (cracked.is(t) ? " есть" : " нет") + ", у целого — наоборот"));
         }
         h.assertTrue(wrong.isEmpty(), String.join("; ", wrong));
