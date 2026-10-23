@@ -46,7 +46,7 @@ behind it the dust grows thicker and taller. At 15 kt it is
 thins out beyond and fades at about 8 km, where the wind is too weak to lift dust; after a ground burst it is dense out
 to about 3.5 km and fades at about 7 km. Inside the wall it is dark. Far away, and more so in rain, the wall fades into the haze, like the mushroom cloud.
 In its first seconds the fireball lights the top of the wall orange, even by day.
-The wave breaks buildings as it reaches them: their pieces fly with the dust. The ground doesn't shake before the
+The wave breaks buildings as it reaches them, and the wind behind the front carries what it tore off, each piece by its weight: leaves stream away at once, boards and glass shards are whipped along for metres, stone chunks drop near their wall, and dust from broken walls trails downwind before it merges into the dust wall. The ground doesn't shake before the
 wave. When it reaches you, the front hits you at once: your view jerks away from the burst in the same instant. Then
 the wind behind it keeps pushing you while you stand, and your view leans further and comes back over a few seconds. At 1 psi that is a few degrees, more from a bigger
 burst, whose wind blows longer. From about 0.8–1.4 psi the blow and the wind are stronger than anyone can stand against, sooner
@@ -141,7 +141,7 @@ concrete, stone bricks and sandstone darken with soot. A player, a mob, an armor
 leaves a pale shadow of its shape on the wood or masonry behind it. These marks stay until the block is broken or
 replaced. In the same instant lit lamps and substations of the [power grid](blackout.md) short out with sparks, and
 grass, leaves and wood in the light give off pale grey smoke (they char without burning) until the wave comes and
-sweeps it away.
+sweeps it away downwind.
 
 Over water the wave raises no dust. It runs across the water as a dark ring of ripples, with a wall of spray behind it
 where the wind is strong, and white foam near the centre. Behind the wave the air over the water fills with white spray
