@@ -9,9 +9,17 @@ paths:
 # Чанки, тикеты и тик сервера
 
 ## Подводные камни
-- «Где земля» — только `util/Terrain.estimate`: высота и источник `CHUNK`/`CEILING`/`CLIENT_MAP`/`GENERATOR`/`SEA`/
-  `UNKNOWN`, вызывающий выбирает допустимые — `Allowed.CHUNK` в мире, `FLIGHT` вне мира, `ORDER` для приказа; прямых
-  `getBaseHeight`/`getSeaLevel` вне `Terrain` нет. `Terrain.height` — источник `CHUNK` без выбора для кода, который сам
+- «Где земля» — только `util/Terrain.estimate`: высота и источник `CHUNK`/`CEILING`/`DISK`/`CLIENT_MAP`/`GENERATOR`/`SEA`/
+  `UNKNOWN`, вызывающий выбирает допустимые — `Allowed.CHUNK` в мире, `FLIGHT` вне мира, `ORDER` для приказа,
+  `RELIEF` — рельеф полёта на всём пути; прямых `getBaseHeight`/`getSeaLevel` вне `Terrain` и `TerrainSurvey` нет.
+  `RELIEF` берёт `DISK` и `GENERATOR` только из съёмки `util/TerrainSurvey` (несохраняемый attachment мира): чанк в
+  памяти, но не готов (`Terrain.inMemory`), — его карта высот сразу; иначе первый вопрос заказывает чтение поля
+  `Heightmaps` файла чанка в потоке ввода-вывода чанков (`chunkScanner`, как `DiskStatus.scan`; он же отдаёт ещё не
+  записанное, а запись выгруженного чанка встаёт в его очередь раньше любого чтения после неё) и отвечает null; нет
+  на диске или недогенерирован — генератор в фоновом потоке, узлы через 8 блоков. Чанк, пришедший в память или
+  ушедший из неё (`ChunkEvent.Load`/`Unload`), забывается, а его заказ в пути отбрасывается (метка заказа). Сценарии
+  полёта дожидаются заказов в конце тика (`TerrainSurvey.settle` из `InstantChunks`): иначе полёт зависел бы от
+  скорости диска. `Terrain.height` — источник `CHUNK` без выбора для кода, который сам
   знает, что чанк готов: `LaunchSite`, взрывы `Warheads`, `nuclear/world`, площадка МБР за игроком в `NuclearStrikes`.
 - Выход из мира может зависнуть на «Saving worlds» (ванильный цикл выгрузки чанков, `ChunkMap.processUnloads`): при
   остановке ваниль зовёт `ServerChunkCache.tick(() -> true, …)`, очередь выгрузки
