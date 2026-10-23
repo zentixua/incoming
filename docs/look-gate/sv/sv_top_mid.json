@@ -1,0 +1,60 @@
+{
+  "scene": {
+    "name": "sv_top_mid",
+    "camera": "tp @p 0 175 -32 90 90",
+    "times": [
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52
+    ],
+    "location": "route midpoint, overhead"
+  },
+  "requested_frame_pairs": "36,40,44",
+  "sheet": "sv_top_mid.png",
+  "frames": [
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_top_mid/sv_top_mid_036.00s.png",
+      "sha256": "82adeaaf3ca6a883de623572dcd7b41666321943efbf11c9e26f6bb13185b963"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_top_mid/sv_top_mid_036.00s.png",
+      "sha256": "fc0e5f95f9588cafdd2ca95a3f41a7cceca694a3434b6c6c2494558cc01400b6"
+    },
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_top_mid/sv_top_mid_040.00s.png",
+      "sha256": "bbc917feb8486c611f6de00aa3fc379da85e959e7c9e4f998dd9ce3703c46477"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_top_mid/sv_top_mid_040.00s.png",
+      "sha256": "490b7b4e76581832353ce9b1106bd7071cb6b7b4b524f50bc1719e7b441f7242"
+    },
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_top_mid/sv_top_mid_044.00s.png",
+      "sha256": "fed297f2018144f3820a5274b32f48d0f02cd3bfae40b40b52c98a20a9d00c1c"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_top_mid/sv_top_mid_044.00s.png",
+      "sha256": "5051d89743f069d2d31ff8eb39c5ae1221f93ba267854ad496a02ebe43a58afc"
+    }
+  ]
+}

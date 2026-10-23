@@ -1,0 +1,58 @@
+{
+  "scene": {
+    "name": "sv_side_300",
+    "camera": "tp @p 400 140 -1083 facing 305 110 -1115",
+    "times": [
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84
+    ],
+    "location": "300 blocks before target, side"
+  },
+  "requested_frame_pairs": "64,68,72",
+  "sheet": "sv_side_300.png",
+  "frames": [
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_side_300/sv_side_300_064.00s.png",
+      "sha256": "b859fd59f254b30965fd16eea2a8a64897026a56189aaca13689c55d15ceb8cf"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_side_300/sv_side_300_064.00s.png",
+      "sha256": "e654fa48ece2630e2bd257e75829caee57c1bdeb75fc620e117c55e9f0e9d5fd"
+    },
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_side_300/sv_side_300_068.00s.png",
+      "sha256": "67a8a1a98c8cd6198a7ab210fae5828fc1b72f645e495fec1c040dac2fc02256"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_side_300/sv_side_300_068.00s.png",
+      "sha256": "5b12d87d3bd2c5c583c13ff7bba43a9569e836e5d063807622e1dfeba2bc1017"
+    },
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_side_300/sv_side_300_072.00s.png",
+      "sha256": "53f488d22b1fc0411286c065cbad09977f7ef8886c8c932e6f6d2fc3de5048a9"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_side_300/sv_side_300_072.00s.png",
+      "sha256": "3fe43a03f985cfa8127fb489b95d11a9c21d98d355e9c7a54acca36be4f6d6b5"
+    }
+  ]
+}

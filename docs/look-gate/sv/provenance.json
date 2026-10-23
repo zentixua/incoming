@@ -1,0 +1,22 @@
+{
+  "captured_local_date": "2026-10-24",
+  "timezone": "Europe/Warsaw",
+  "main_commit": "3a8b6eb171a38bd9f03a3374e76e041c969f1974",
+  "pr_head": "e904e2af82de715ecd2beb73e7844d5a91d1fc1b",
+  "pr_capture_merge": "f31cd4b1580e7e4a4553ccd237f11f4c762ff8f1",
+  "raw_size": [
+    3840,
+    872
+  ],
+  "screenshot_layout": "unchanged screenshot pixels, two columns, labels outside images",
+  "gpu_profile": "quiet, no benchmark",
+  "capture_bridge": {
+    "Sandbox.java": "93db6e11659943e08580f4b4a4af97a24d70d161fa7207c77f5e336aa1a2825e",
+    "SandboxCommand.java": "225b0bbe068f034737845cb22482f85c0bebd061062336a21b48f7fbb6b6f295"
+  },
+  "pr_status_at_capture_end": {
+    "headRefOid": "e904e2af82de715ecd2beb73e7844d5a91d1fc1b",
+    "mergedAt": null,
+    "state": "OPEN"
+  }
+}

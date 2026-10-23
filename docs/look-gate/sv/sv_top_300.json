@@ -1,0 +1,66 @@
+{
+  "scene": {
+    "name": "sv_top_300",
+    "camera": "tp @p 305 175 -1115 108.435 90",
+    "times": [
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84
+    ],
+    "location": "300 blocks before target, overhead"
+  },
+  "requested_frame_pairs": "78/64,80/66,82/68,84/70",
+  "sheet": "sv_top_300.png",
+  "frames": [
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_top_300/sv_top_300_078.00s.png",
+      "sha256": "6e9fafb25f07529696c3d74492d80a59cc1052bb227e52ec8246e3e03a08016b"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_top_300/sv_top_300_064.00s.png",
+      "sha256": "7ff4cee4b587ac472a8f7d0206674e85c5d552dadccea3265b8de9594e568fb5"
+    },
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_top_300/sv_top_300_080.00s.png",
+      "sha256": "c79874a141cb817c1c4238dba427183992de1e8d288637d1621e5b79d63b3959"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_top_300/sv_top_300_066.00s.png",
+      "sha256": "edc8916b63de3c0e4a3da626326436ecacb3184fd7d32c5fd6c80c8fb14ba9ec"
+    },
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_top_300/sv_top_300_082.00s.png",
+      "sha256": "61dc7ee945c034c69d2a7375069bf59b1c098b69e6481e37591b83db359ee887"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_top_300/sv_top_300_068.00s.png",
+      "sha256": "8b52148bedb93049e5f5cca934812a3deb3c936b0ba10ec19a0c81a14d67e4d6"
+    },
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_top_300/sv_top_300_084.00s.png",
+      "sha256": "ee2cb6b85745c23ae05560be9e0a418467223fc8f83e3b6a0e30c7180acbb77d"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_top_300/sv_top_300_070.00s.png",
+      "sha256": "2fe1b316355aef08135ef80bdc30aa3039ba2625fdb4055fe7c5775b12088e77"
+    }
+  ]
+}

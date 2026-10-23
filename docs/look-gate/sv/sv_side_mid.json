@@ -1,0 +1,60 @@
+{
+  "scene": {
+    "name": "sv_side_mid",
+    "camera": "tp @p 100 140 -32 facing 0 110 -32",
+    "times": [
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52
+    ],
+    "location": "route midpoint, side"
+  },
+  "requested_frame_pairs": "36,40,44",
+  "sheet": "sv_side_mid.png",
+  "frames": [
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_side_mid/sv_side_mid_036.00s.png",
+      "sha256": "cded7fd2983ffcd576eecaffed74859b0217b57ebf0094e472000e751d3c3479"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_side_mid/sv_side_mid_036.00s.png",
+      "sha256": "65ee884a102b437315d65cd4083d76cd1227b6942d830f0558a07c4a47a816eb"
+    },
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_side_mid/sv_side_mid_040.00s.png",
+      "sha256": "9def9a8e1f40c3666500bd21289b0ff0815e0460435f096016c46a02bb0ed22d"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_side_mid/sv_side_mid_040.00s.png",
+      "sha256": "67dc2dd8e7657cb823e6566aebc9a7d859f04ae0ab15008016941d51dcde7bd3"
+    },
+    {
+      "source": "mod/run/wt-SV-main/mod/run/sandbox/fx/out/sv_side_mid/sv_side_mid_044.00s.png",
+      "sha256": "7ebe09f6a6424e077f982682833ec1cf75f7963caf7e94035a87b7e2d6bfbc53"
+    },
+    {
+      "source": "mod/run/wt-SV-pr/mod/run/sandbox/fx/out/sv_side_mid/sv_side_mid_044.00s.png",
+      "sha256": "96c5d21c815f7bdbc560f5e08303f2064c2397d91101f12b6a069cb8bf3b0c5d"
+    }
+  ]
+}
