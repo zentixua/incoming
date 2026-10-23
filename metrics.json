@@ -1,0 +1,90 @@
+{
+  "main/drone/3": {
+    "gpu_ms": 1.465,
+    "fill_screens": 0.4
+  },
+  "main/drone/10": {
+    "gpu_ms": 1.205,
+    "fill_screens": 0.81
+  },
+  "main/drone/30": {
+    "gpu_ms": 1.532,
+    "fill_screens": 1.05
+  },
+  "main/missile/3": {
+    "gpu_ms": 2.165,
+    "fill_screens": 0.55
+  },
+  "main/missile/10": {
+    "gpu_ms": 1.853,
+    "fill_screens": 1.07
+  },
+  "main/missile/30": {
+    "gpu_ms": 2.003,
+    "fill_screens": 1.12
+  },
+  "main/raid/20": {
+    "gpu_ms": 2.656,
+    "fill_screens": 8.37
+  },
+  "main/raid/40": {
+    "gpu_ms": 3.008,
+    "fill_screens": 12.93
+  },
+  "main/raid/55": {
+    "gpu_ms": 3.284,
+    "fill_screens": 18.26
+  },
+  "main/fire/10": {
+    "gpu_ms": 1.846,
+    "fill_screens": 4.13
+  },
+  "main/fire/20": {
+    "gpu_ms": 2.009,
+    "fill_screens": 3.94
+  },
+  "pr/drone/3": {
+    "gpu_ms": 1.228,
+    "fill_screens": 0.44
+  },
+  "pr/drone/10": {
+    "gpu_ms": 1.935,
+    "fill_screens": 1.18
+  },
+  "pr/drone/30": {
+    "gpu_ms": 2.233,
+    "fill_screens": 2.28
+  },
+  "pr/missile/3": {
+    "gpu_ms": 2.203,
+    "fill_screens": 0.52
+  },
+  "pr/missile/10": {
+    "gpu_ms": 1.882,
+    "fill_screens": 1.35
+  },
+  "pr/missile/30": {
+    "gpu_ms": 2.205,
+    "fill_screens": 2.14
+  },
+  "pr/raid/20": {
+    "gpu_ms": 6.288,
+    "fill_screens": 18.99
+  },
+  "pr/raid/40": {
+    "gpu_ms": 6.023,
+    "fill_screens": 32.65
+  },
+  "pr/raid/55": {
+    "gpu_ms": 8.441,
+    "fill_screens": 71.6
+  },
+  "pr/fire/10": {
+    "gpu_ms": 2.226,
+    "fill_screens": 4.09
+  },
+  "pr/fire/20": {
+    "gpu_ms": 2.803,
+    "fill_screens": 8.23
+  }
+}
