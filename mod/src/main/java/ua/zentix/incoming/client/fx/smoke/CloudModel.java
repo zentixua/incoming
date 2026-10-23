@@ -367,17 +367,19 @@ public final class CloudModel {
     public static final double SMOKE_SEEN = 0.1;
 
     /**
-     * Доля газа температуры kelvin, что видна телом огня при привыкании глаза exposure ({@code Sight.exposure}: днём 1,
-     * ночью ~1200): в пикселе свечение газа ε·B(T) и свет неба, рассеянный его дымом, складываются, и огнём он виден
-     * своей долей B·exposure / (B·exposure + {@link #SMOKE_SEEN}), не больше {@link #glowShare(double)} (светится ли газ
-     * вообще). Днём шар бомбы в 1260 K (3 с после взрыва 1,3 т, яркость ~0,009 белой стены) — уже дым, ночью — ещё огонь;
-     * по одной температуре он днём оставался сплошь оранжевым до 3,7 с (шлагбаум RV2, бомба в 150 м).
+     * Доля газа температуры kelvin, что видна телом огня, когда дым освещает небо силы sky (белая стена в полдень — 1;
+     * днём 1, ночью ~8·10⁻⁴ — {@code FarView.skyLuminance}): в пикселе свечение газа B(T) и свет неба, рассеянный его дымом
+     * ({@link #SMOKE_SEEN}·sky), складываются, и огнём он виден своей долей B / (B + {@link #SMOKE_SEEN}·sky), не больше
+     * {@link #glowShare(double)} (светится ли газ вообще). Привыкание глаза не входит: на экране оба умножаются на одно и
+     * то же (с привыканием к огню шара у глаза холодный газ рядом выходил бы ночью чёрным комом). Днём шар бомбы в 1260 K
+     * (3 с после взрыва 1,3 т, яркость ~0,009 белой стены) — уже дым, ночью — ещё огонь; по одной температуре он днём
+     * оставался сплошь оранжевым до 3,7 с (шлагбаум RV2, бомба в 150 м). ⚠ Свет огня на самом дыме не входит.
      */
-    public static double glowShare(double kelvin, double exposure) {
+    public static double glowShare(double kelvin, double sky) {
         double g = glowShare(kelvin);
         if (g <= 0) return 0;
-        double x = glowLuminance(kelvin) * exposure;
-        return g * x / (x + SMOKE_SEEN);
+        double b = glowLuminance(kelvin);
+        return g * b / (b + SMOKE_SEEN * Math.max(sky, 0));
     }
 
     /**

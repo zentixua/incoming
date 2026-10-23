@@ -30,6 +30,14 @@ import ua.zentix.incoming.entity.StrikeProjectile;
  */
 public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up, float partial, double far, double pixel, double edge,
                       float ambient, double exposure, Vector3f sky, double range, double world, double clouds, float rain, Sight.Air air) {
+    /**
+     * Свет неба в единицах белой стены в полдень (днём 1, ночью ~8·10⁻⁴): к нему глаз привыкает без огня
+     * ({@link Sight#adapted}: ambient^{@value Sight#ADAPT}).
+     */
+    public double skyLuminance() {
+        return Math.pow(ambient, Sight.ADAPT);
+    }
+
     /** Тот же вид с привыканием глаза кадра exposure ({@link Sight#exposure}: с огнём у глаза этого кадра). */
     public FarView exposed(double exposure) {
         return new FarView(camera, forward, left, up, partial, far, pixel, edge, ambient, exposure, sky, range, world, clouds, rain, air);

@@ -491,20 +491,19 @@ public final class FireSmoke implements SmokeGrid.Source {
     public static void far(FarView view, FarSprites out) {
         if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
         Vec3 cam = view.camera();
-        double seconds = SmokeGrid.seconds(view.partial());
         int c = FirePlume.FLAME_COLOR;
         float r = (c >> 16 & 255) / 255f, g = (c >> 8 & 255) / 255f, b = (c & 255) / 255f;
         for (FireSmoke f : (Iterable<FireSmoke>) () -> java.util.stream.Stream.concat(OIL_FIRES.values().stream(), POOLS.stream()).iterator()) {
             if (!Double.isNaN(f.end) || f.gone) continue;
-            double share = f.burning == null ? 1 : f.burning.applyAsDouble(seconds - f.start);
-            if (share <= 0) continue;
-            // пламя сбоку: высота × диаметр очага, круг той же площади — на половине высоты
-            double across = 2 * Math.sqrt(f.fuel.area / Math.PI), radius = Math.sqrt(f.flame * across * share / Math.PI);
+            if (f.blocks <= 0 || f.flame <= 0) continue;
+            // пламя сбоку: высота по Хескестаду (по нынешней силе очага: у лужи — доля, что ещё горит) × диаметр очага (у
+            // масла — всех его очагов), круг той же площади — на половине высоты
+            double area = f.burning == null ? f.blocks * f.fuel.area : f.fuel.area;
+            double across = 2 * Math.sqrt(area / Math.PI), radius = Math.sqrt(f.flame * across / Math.PI);
             double dx = f.x - cam.x, dy = f.y + 0.5 * f.flame - cam.y, dz = f.z - cam.z;
-            double d = Math.sqrt(dx * dx + dy * dy + dz * dz), w = view.farShare(d);
-            if (w <= 0) continue;
-            double t = view.air(d, dy);
-            out.light(dx, dy, dz, radius, FirePlume.FLAME_LUMINANCE * view.exposure() * t, t, view.pixel(), r, g, b, w, w, FAR_LIGHT);
+            double d = Math.sqrt(dx * dx + dy * dy + dz * dz), w = view.farShare(d), t = view.air(d, dy);
+            // ядро сменяет языки-частицы с 0,8 прорисовки; блик и вуаль — на любой дальности, как у факела и шара
+            out.light(dx, dy, dz, radius, FirePlume.FLAME_LUMINANCE * view.exposure() * t, t, view.pixel(), r, g, b, w, 1, FAR_LIGHT);
         }
     }
 

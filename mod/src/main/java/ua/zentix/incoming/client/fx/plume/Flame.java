@@ -26,10 +26,12 @@ package ua.zentix.incoming.client.fx.plume;
  *                        закон, по которому {@link FlameModel} считает средние яркости частей
  * @param middle          середина света струи позади среза сопла, м: центр её светового потока (ядро, пламя и хвост
  *                        по закону вдоль оси) — отсюда светит факел вдали, на дым и на мир
+ * @param tailMiddle      центр светового потока хвоста позади среза, м: свет хвоста на мир — ровным отрезком той же
+ *                        середины ({@link #tailEnd})
  */
 public record Flame(double core, double flame, double length, double width, boolean diamonds, double coreLuminance, double flameLuminance,
                     double tailLuminance, int coreColor, int flameColor, int tailColor, double temperature, double flameTemperature,
-                    double emissivity, Sheath sheath, double middle) {
+                    double emissivity, Sheath sheath, double middle, double tailMiddle) {
     /**
      * Оболочка струи вдоль оси — пламя догорания вокруг ядра и остывающий хвост за ним: в местах {@code x} (метры от среза
      * сопла, по возрастанию, от 0 до {@link #length}) яркость сбоку (в единицах кадра, как у частей) и цвет (sRGB,
@@ -47,6 +49,16 @@ public record Flame(double core, double flame, double length, double width, bool
     /** Полуширина струи в x метрах от среза. */
     public double widthAt(double x) {
         return width * (1 + x / core);
+    }
+
+    /**
+     * Конец отрезка света хвоста позади среза, м: ровный отрезок от конца пламени с той же серединой потока, что у хвоста
+     * ({@link #tailMiddle}), не дальше видимой струи. До точки Дрейпера свет хвоста ложился бы вчетверо дальше пламени, а
+     * светит в основном его начало.
+     */
+    public double tailEnd() {
+        double fl = Math.max(flame, core);
+        return Math.min(length, Math.max(fl, 2 * tailMiddle - fl));
     }
 
     /** Полуширина в конце видимой струи. */

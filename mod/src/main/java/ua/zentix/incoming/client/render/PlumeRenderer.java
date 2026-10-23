@@ -54,7 +54,7 @@ public final class PlumeRenderer {
      * Струи этого кадра — по сущности: Iris рисует сущности ещё и в карту теней, и струя одной сущности легла бы дважды.
      * Только поток отрисовки.
      */
-    private static final Map<Object, Jet> FRAME = new IdentityHashMap<>();
+    private static final Map<net.minecraft.world.entity.Entity, Jet> FRAME = new IdentityHashMap<>();
 
     private PlumeRenderer() {}
 
@@ -64,16 +64,27 @@ public final class PlumeRenderer {
      * @param rotation поворот системы снаряда (нос по +Z)
      * @param origin   положение снаряда в мире в этот кадр
      */
-    public static void render(Exhaust.Plume p, Object key, Quaternionf rotation, Vec3 origin) {
+    public static void render(Exhaust.Plume p, net.minecraft.world.entity.Entity key, Quaternionf rotation, Vec3 origin) {
+        // с борта своего двигателя струи не видно (как и света факела вдали, FarFlightView.onboard): Iris рисует сущность
+        // камеры в карту теней, и без этого слой нарисовал бы струю у самого глаза
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.getCameraEntity() == key && mc.options.getCameraType().isFirstPerson()) return;
         FRAME.put(key, new Jet(p, new Quaternionf(rotation), origin));
     }
 
-    /** Струи кадра — в квадраты слоя эффектов (от глаза кадра {@code view.camera()}); дальше кадр их забывает. */
+    /** Струи кадра — в квадраты слоя эффектов (от глаза кадра {@code view.camera()}). */
     public static void collect(FarView view, FarSprites out) {
         if (FRAME.isEmpty()) return;
         Vec3 eye = view.camera();
         double exposure = view.exposure();
         for (Jet jet : FRAME.values()) draw(jet, eye, exposure, view, out);
+    }
+
+    /**
+     * Конец кадра ({@code FxLayer}, этап после мира, и тогда, когда слой ничего не рисовал): струи кадра забыты — иначе
+     * без сбора (слой не готов, перезагрузка ресурсов) они держали бы сущности и легли бы потом струёй прошлого места.
+     */
+    public static void endFrame() {
         FRAME.clear();
     }
 
@@ -92,7 +103,9 @@ public final class PlumeRenderer {
         Vector3f left = new Vector3f(view.left()).rotate(inv), up = new Vector3f(view.up()).rotate(inv);
         float ox = (float) (o.x - eye.x), oy = (float) (o.y - eye.y), oz = (float) (o.z - eye.z);
         Flame.Sheath sheath = f.sheath();
-        float near = p.near();
+        // дымка воздуха до струи — та же, что у света этого факела вдали (FarFlightView): на 0,8 прорисовки без скачка
+        double dist = Math.sqrt(ox * ox + oy * oy + oz * oz);
+        float near = (float) (p.near() * view.air(dist, oy));
         layout(f, p.z(), cam, left, up, (layer, piece, a, b, c, d) -> {
             for (Vector3f v : new Vector3f[]{a, b, c, d}) v.add(0, p.y(), 0).rotate(rot).add(ox, oy, oz);
             switch (layer) {

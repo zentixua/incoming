@@ -136,11 +136,6 @@ public record Article(double dryMass, double launchMass, double length, double d
     public record Penetrator(double crh) {}
 
     /**
-     * Множитель сопротивления по числу Маха f(M) для оперённых тонких тел без опубликованных продувок (О, типовая
-     * форма кривой, {@code formulas.md} §2): 1 до М0,8; рост до 1,8 к М1,05; 1,8 до М1,2; дальше спадает на 0,45 на
-     * единицу Маха, но не ниже 1,1. Закон приближённый: настоящая кривая у каждого корпуса своя.
-     */
-    /**
      * Путь, который изделие проходит, пока горит двигатель в его корпусе (РСЗО: {@link SolidMotor#jettison} 0, скорость
      * {@link Envelope#cruise} — к выгоранию), м: разгон от схода до неё за {@link SolidMotor#burn} — v·t/2 (⚠ тяга
      * постоянна, масса убывает — настоящий разгон к концу круче, путь короче на ~10 %; скорость схода из трубы, ~50 м/с у
@@ -150,6 +145,11 @@ public record Article(double dryMass, double launchMass, double length, double d
         return booster == null || booster.jettison() > 0 ? 0 : real.cruise() * booster.burn() / 2;
     }
 
+    /**
+     * Множитель сопротивления по числу Маха f(M) для оперённых тонких тел без опубликованных продувок (О, типовая
+     * форма кривой, {@code formulas.md} §2): 1 до М0,8; рост до 1,8 к М1,05; 1,8 до М1,2; дальше спадает на 0,45 на
+     * единицу Маха, но не ниже 1,1. Закон приближённый: настоящая кривая у каждого корпуса своя.
+     */
     public static double machFactor(double mach) {
         if (mach < 0.8) return 1;
         if (mach < 1.05) return 1 + 0.8 * (mach - 0.8) / 0.25;

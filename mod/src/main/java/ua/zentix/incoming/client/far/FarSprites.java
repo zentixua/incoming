@@ -285,12 +285,15 @@ public final class FarSprites implements SmokePuffs.Out {
         glare(dx, dy, dz, radius, out, seen, r, g, b, 1, shown);
     }
 
-    /** Ядро {@link #light} кругом: свой свет поверх того, что за ним; пересвет — к белому, тусклее белого — тает. */
+    /**
+     * Ядро {@link #light} кругом: свой свет поверх того, что за ним; пересвет — к белому, тусклее белого — темнее в линейном
+     * свете и на экран в sRGB ({@link Sight#onScreen}, как струя и языки пламени вблизи: на 0,8 прорисовки без скачка) и тает.
+     */
     private void core(double dx, double dy, double dz, double[] o, double t, float r, float g, float b, double w) {
-        double s = o[2], k = Math.min(1, s) * w, white = s > 1 ? Math.min(1, Math.log(s) / Math.log(Sight.WHITE)) : 0;
+        double s = o[2];
+        float[] c = Sight.onScreen(r, g, b, s, (float) w);
         float a = (float) (o[1] * t * Math.min(1, 4 * s) * w);
-        if (billboard(dx, dy, dz, o[0] * DISC, 0, FxAtlas.disc(), (float) ((r + (1 - r) * white) * k), (float) ((g + (1 - g) * white) * k),
-                (float) ((b + (1 - b) * white) * k), a, (float) (o[0] * BODY_SOFT))) counts[1]++;
+        if (billboard(dx, dy, dz, o[0] * DISC, 0, FxAtlas.disc(), c[0], c[1], c[2], a, (float) (o[0] * BODY_SOFT))) counts[1]++;
     }
 
     /**

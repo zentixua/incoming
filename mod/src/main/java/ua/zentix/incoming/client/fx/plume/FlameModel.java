@@ -64,7 +64,7 @@ public final class FlameModel {
     private static final Map<Long, Flame> CACHE = new ConcurrentHashMap<>();
     private static final Map<Motor, Integer> IDS = new ConcurrentHashMap<>();
     private static final AtomicInteger NEXT = new AtomicInteger();
-    private static final Flame NONE = new Flame(0, 0, 0, 0, false, 0, 0, 0, 0, 0, 0, 0, 0, 0, Flame.Sheath.NONE, 0);
+    private static final Flame NONE = new Flame(0, 0, 0, 0, false, 0, 0, 0, 0, 0, 0, 0, 0, 0, Flame.Sheath.NONE, 0, 0);
 
     private FlameModel() {}
 
@@ -119,7 +119,7 @@ public final class FlameModel {
         double coreFlux = coreL * core * width;
         double middle = (coreFlux * core / 3 + jet.moment(0, length, width)) / (coreFlux + jet.flux(0, length, width));
         return new Flame(core, flame, length, width, diamonds, coreL, flameL, tailL, color(tj), color(tf), tailL > 0 ? pack(tailRgb) : color(DRAPER),
-                tj, tf, eps, jet.sheath(length), middle);
+                tj, tf, eps, jet.sheath(length), middle, tailL > 0 ? jet.moment(flame, length, width) / jet.flux(flame, length, width) : flame);
     }
 
     /**

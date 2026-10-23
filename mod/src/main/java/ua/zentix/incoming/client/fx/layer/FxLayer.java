@@ -177,6 +177,7 @@ public final class FxLayer {
             draw(e);
         } finally {
             LodDepth.endFrame();
+            ua.zentix.incoming.client.render.PlumeRenderer.endFrame();
         }
     }
 

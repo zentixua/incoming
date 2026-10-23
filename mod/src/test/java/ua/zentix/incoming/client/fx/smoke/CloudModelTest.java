@@ -269,17 +269,20 @@ class CloudModelTest {
     }
 
     /**
-     * Огонь виден, пока его свечение не меньше света дыма вокруг ({@link CloudModel#glowShare(double, double)}): шар бомбы
+     * Огонь виден, пока его свечение не меньше света неба на его дыме ({@link CloudModel#glowShare(double, double)}): шар бомбы
      * (прорыв ~1,3 т) днём к 3 с — уже дым (шлагбаум RV2, бомба в 150 м: шар был сплошь оранжевым), ночью — ещё огонь;
      * в горении — огонь и днём; доля плавная и не больше доли по одной температуре.
      */
     @Test
     void fireballFadesIntoSmokeByWhatTheEyeSees() {
         CloudModel m = new CloudModel(new BlastSource(WeaponType.BUNKER, 1340, 0, true, false), CloudModel.Air.STANDARD);
-        double day = ua.zentix.incoming.client.far.Sight.exposure(1, 0), night = ua.zentix.incoming.client.far.Sight.exposure(0.17, 0);
+        // свет неба: днём 1, ночью — ambient^ADAPT (FarView.skyLuminance)
+        double day = 1, night = Math.pow(0.17, ua.zentix.incoming.client.far.Sight.ADAPT);
         assertTrue(CloudModel.glowShare(m.ballKelvin(1), day) > 0.95, "в горении — огонь и днём");
         assertTrue(CloudModel.glowShare(m.ballKelvin(3), day) < 0.15, "днём к 3 с — дым: " + CloudModel.glowShare(m.ballKelvin(3), day));
         assertTrue(CloudModel.glowShare(m.ballKelvin(3), night) > 0.9, "ночью к 3 с — огонь");
+        // ночью газ у точки Дрейпера — не чернее, чем по одной температуре наполовину (ком сажи поверх шара ночью, F6)
+        assertTrue(CloudModel.glowShare(1000, night) > 0.4 * CloudModel.glowShare(1000), "ночью тёплый газ ещё светится");
         double prev = 1;
         for (double k = 3000; k >= 700; k -= 5) {
             double g = CloudModel.glowShare(k, day);

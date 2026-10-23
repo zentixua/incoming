@@ -72,7 +72,7 @@ class HeatPassTest {
         Flame f = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).flame(Air.SEA);
         assertNotNull(f);
         double[] parts = f.partAreas();
-        double core = f.core(), fl = Math.max(f.flame(), core), end = f.length();
+        double core = f.core(), fl = Math.max(f.flame(), core), end = f.tailEnd();
         double[] lum = {f.coreLuminance(), f.flameLuminance(), f.tailLuminance()};
         double[][] span = {{0, core}, {0, fl}, {fl, end}};
         // струя вдоль x, грань лицом к ней в d по y

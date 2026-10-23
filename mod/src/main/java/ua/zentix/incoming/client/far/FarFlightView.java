@@ -613,7 +613,8 @@ public final class FarFlightView {
             FlightTrack track = f.track;
             if (track.isDead() && t >= track.deathTick() || track.drilling() || !track.predict(t, POS)) continue;
             ClientWeaponSpec.Stage stage = f.look.stage(FlightPhase.byId(track.phase(t)));
-            Trail trail = stage.trail();
+            // след по настоящему пути выгорания идёт и после фазы с факелом — лента и тогда доходит до сопла
+            Trail trail = laying(stage.trail(), f.style, f.path);
             if (trail != null && trail == f.style && f.started) {
                 // ленты доходят до сопел: там они ещё не проявились
                 for (int j = 0, m = Math.min(MAX_NOZZLES, f.nozzles.size()); j < m; j++) {

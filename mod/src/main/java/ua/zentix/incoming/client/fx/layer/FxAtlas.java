@@ -325,13 +325,13 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
                 numbers(o.getAsJsonArray("kelvin"), FIREBALL_FRAMES));
     }
 
-    /** Рост клуба из {@code puff6.json}: {@code {"growth": [16 чисел]}}. */
     /** Мелкая структура кадров из {@code puff6.json}: {@code "detail"}; нет — null. */
     static float[] parseDetail(Reader in) {
         var o = JsonParser.parseReader(in).getAsJsonObject();
         return o.has("detail") ? numbers(o.getAsJsonArray("detail"), PUFF6_FRAMES) : null;
     }
 
+    /** Рост клуба из {@code puff6.json}: {@code {"growth": [16 чисел]}}. */
     static float[] parseGrowth(Reader in) {
         return numbers(JsonParser.parseReader(in).getAsJsonObject().getAsJsonArray("growth"), PUFF6_FRAMES);
     }
