@@ -360,7 +360,7 @@ public final class FarFlightView {
             f.impinging = false;
             // облако старта — только на старте (горит ускоритель): струя маршевого у склона — не старт
             if (launch != null && stage.motor() != null && phase.boosterLit()) launch.at(f, t, stage);
-            Trail style = stage.trail();
+            Trail style = laying(stage.trail(), f.style, f.path);
             boolean booster = phase.boosterLit() && f.airframe.boosterNozzle() != null;
             if (style != f.style || style != null && booster != f.booster) {
                 if (f.style != null && f.started) {
@@ -375,6 +375,16 @@ public final class FarFlightView {
             if (style != null && (!f.started || t - f.chainTick >= style.step())) put(f, points, t, style, light);
         }
         f.cursor = Math.max(f.cursor, horizon);
+    }
+
+    /**
+     * След, который кладёт снаряд с путём path от начала: фазы (phase) или, если у прежнего (laid) он идёт по настоящему
+     * пути выгорания ({@link Trail#reach}), — прежний, пока путь меньше этого участка (на игровой скорости фаза с факелом
+     * кончается раньше — дальше дым без огня, не по физике); на настоящей скорости — до конца участка, не дальше.
+     */
+    static Trail laying(@Nullable Trail phase, @Nullable Trail laid, double path) {
+        if (phase == null && laid != null && laid.reach() > 0) phase = laid;
+        return phase != null && phase.reach() > 0 && path >= phase.reach() ? null : phase;
     }
 
     /**
@@ -456,7 +466,7 @@ public final class FarFlightView {
         for (int k = 0, n = Math.min(MAX_NOZZLES, f.nozzles.size()); k < n; k++) {
             f.track.at(t, POS);
             f.track.offset(t, f.nozzles.get(k), POS);
-            double u = air.speed(POS[1]), inv = TrailModel.inverseSpeed(speed, u);
+            double u = air.speed(POS[1]), inv = style.inverseSpeed(speed, u);
             if (TrailModel.laid(speed, u)) TrailModel.birth(style, inv, POS[1], u, air, BIRTH);
             else BIRTH[0] = 0;
             if (BIRTH[0] <= 0) {

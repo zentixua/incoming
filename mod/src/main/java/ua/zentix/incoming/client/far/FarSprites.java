@@ -425,6 +425,40 @@ public final class FarSprites implements SmokePuffs.Out {
         return true;
     }
 
+    /**
+     * Светящаяся полоса — струя факела вблизи ({@code PlumeRenderer}): углы a, b — у одного конца, c, d — у другого (от
+     * камеры), свет этих концов (на экране, с пересветом к белому, умноженный на долю). Поперёк — профиль круга
+     * {@code far/disc}: сечение струи сбоку. Только светит (альфа 0): что за ней, остаётся видно. Сортируется по ближнему
+     * углу — дым следа у того же места ложится под огонь, а не поверх него.
+     */
+    public void glowStrip(Vector3f a, Vector3f b, Vector3f c, Vector3f d, float r0, float g0, float b0, float r1, float g1, float b1, float soft) {
+        if (r0 + g0 + b0 < 0.006f && r1 + g1 + b1 < 0.006f) return;
+        double da = a.length(), db = b.length(), dc = c.length(), dd = d.length();
+        float ka = (float) FarDraw.fold(da, far), kb = (float) FarDraw.fold(db, far), kc = (float) FarDraw.fold(dc, far), kd = (float) FarDraw.fold(dd, far);
+        FxAtlas.Sprite s = FxAtlas.disc();
+        float v = s.vMid();
+        r0 = Math.min(1, r0);
+        g0 = Math.min(1, g0);
+        b0 = Math.min(1, b0);
+        r1 = Math.min(1, r1);
+        g1 = Math.min(1, g1);
+        b1 = Math.min(1, b1);
+        out.quad((float) Math.min(Math.min(da, db), Math.min(dc, dd)));
+        out.vertex(a.x * ka, a.y * ka, a.z * ka, s.u0(), v, r0, g0, b0, 0, soft, ka, LightTexture.FULL_BRIGHT, 0);
+        out.vertex(b.x * kb, b.y * kb, b.z * kb, s.u1(), v, r0, g0, b0, 0, soft, kb, LightTexture.FULL_BRIGHT, 0);
+        out.vertex(c.x * kc, c.y * kc, c.z * kc, s.u1(), v, r1, g1, b1, 0, soft, kc, LightTexture.FULL_BRIGHT, 0);
+        out.vertex(d.x * kd, d.y * kd, d.z * kd, s.u0(), v, r1, g1, b1, 0, soft, kd, LightTexture.FULL_BRIGHT, 0);
+        counts[2]++;
+    }
+
+    /**
+     * Светящийся круг радиуса radius лицом к камере (сечение струи факела с торца, {@code PlumeRenderer}): свет (r, g, b)
+     * на экране, только светит.
+     */
+    public void glowDisc(double dx, double dy, double dz, double radius, float r, float g, float b, float soft) {
+        if (billboard(dx, dy, dz, radius * DISC, 0, FxAtlas.disc(), r, g, b, 0, soft)) counts[2]++;
+    }
+
     /** Вуаль трубки следа вокруг глаза — на столько блоков перед ним (как у облаков, {@link SmokePuffs#VEIL_AT}). */
     static final double VEIL_AT = SmokePuffs.VEIL_AT;
 

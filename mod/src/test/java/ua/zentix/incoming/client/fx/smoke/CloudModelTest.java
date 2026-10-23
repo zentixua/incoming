@@ -269,6 +269,28 @@ class CloudModelTest {
     }
 
     /**
+     * Огонь виден, пока его свечение не меньше света дыма вокруг ({@link CloudModel#glowShare(double, double)}): шар бомбы
+     * (прорыв ~1,3 т) днём к 3 с — уже дым (шлагбаум RV2, бомба в 150 м: шар был сплошь оранжевым), ночью — ещё огонь;
+     * в горении — огонь и днём; доля плавная и не больше доли по одной температуре.
+     */
+    @Test
+    void fireballFadesIntoSmokeByWhatTheEyeSees() {
+        CloudModel m = new CloudModel(new BlastSource(WeaponType.BUNKER, 1340, 0, true, false), CloudModel.Air.STANDARD);
+        double day = ua.zentix.incoming.client.far.Sight.exposure(1, 0), night = ua.zentix.incoming.client.far.Sight.exposure(0.17, 0);
+        assertTrue(CloudModel.glowShare(m.ballKelvin(1), day) > 0.95, "в горении — огонь и днём");
+        assertTrue(CloudModel.glowShare(m.ballKelvin(3), day) < 0.15, "днём к 3 с — дым: " + CloudModel.glowShare(m.ballKelvin(3), day));
+        assertTrue(CloudModel.glowShare(m.ballKelvin(3), night) > 0.9, "ночью к 3 с — огонь");
+        double prev = 1;
+        for (double k = 3000; k >= 700; k -= 5) {
+            double g = CloudModel.glowShare(k, day);
+            assertTrue(g <= CloudModel.glowShare(k) + 1e-12);
+            assertTrue(g <= prev + 1e-12 && prev - g < 0.05, "без скачков: " + k);
+            if (k > CloudModel.DRAPER_K) assertEquals(BlackBody.luminance(k), CloudModel.glowLuminance(k), 0.002 * BlackBody.luminance(k));
+            prev = g;
+        }
+    }
+
+    /**
      * Топливо в воронке (Tieszen, Attaway 1996: при крутом ударе в воронке 25–50 %; горит тонким слоем — пятая доля
      * выгорания глубокой лужи, Mealy и др. 2011): горит по выгоранию с площади воронки, пламя по Хескестаду; у «Града»
      * топлива нет — и огня нет. Шахед горит минуты (жалоба F: в 3.5.0 лужа гасла за 12 с, и через 30 с над местом удара

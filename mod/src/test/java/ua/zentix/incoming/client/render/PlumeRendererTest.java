@@ -9,6 +9,13 @@ import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.strike.WeaponType;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -22,10 +29,13 @@ class PlumeRendererTest {
         // взгляд — поперёк экрана (left × up), как у камеры
         Vector3f view = new Vector3f(left).cross(up).normalize();
         double[] sum = {0};
-        PlumeRenderer.layout(f, 0, cam, left, up, (layer, a, b, c, d) -> {
-            Vector3f ab = new Vector3f(b).sub(a), ad = new Vector3f(d).sub(a);
-            double projected = Math.abs(new Vector3f(ab).cross(ad).dot(view));
-            sum[0] += layer < 3 ? projected : projected * 0.632;
+        PlumeRenderer.layout(f, 0, cam, left, up, (layer, piece, a, b, c, d) -> {
+            // четырёхугольник (у кусков оболочки — трапеция): две половины по диагонали
+            Vector3f ab = new Vector3f(b).sub(a), ac = new Vector3f(c).sub(a), ad = new Vector3f(d).sub(a);
+            double projected = 0.5 * (Math.abs(new Vector3f(ab).cross(ac).dot(view)) + Math.abs(new Vector3f(ac).cross(ad).dot(view)));
+            // оболочка и ядро светят вместе: сбоку площадь струи — у оболочки, ядро внутри неё
+            if (layer == PlumeRenderer.CORE) return;
+            sum[0] += layer == PlumeRenderer.SHEATH ? projected : projected * 0.632;
         });
         return sum[0];
     }
@@ -54,5 +64,52 @@ class PlumeRendererTest {
             }
         }
         assertTrue(seen > 0, "факелы есть");
+    }
+
+    /**
+     * Огонь светит после мира, слоем эффектов: под Iris всё, что нарисовано путём сущностей или частиц Minecraft, проходит
+     * через шейдерпак, и днём струя факела в десятки раз ярче белой стены выходила бледным обрывком (шлагбаум RV2,
+     * старт сбоку). Самосветящегося — ни {@code RenderType.eyes}, ни сложения в буферы сущностей — в клиенте нет.
+     */
+    @Test
+    void fireIsNotDrawnThroughTheShaderPack() throws IOException {
+        try (Stream<Path> files = Files.walk(Path.of("src/main/java/ua/zentix/incoming/client"))) {
+            List<Path> eyes = files.filter(p -> p.toString().endsWith(".java")).filter(p -> {
+                try {
+                    String src = Files.readString(p);
+                    return src.contains("RenderType.eyes(") || src.contains("RenderType.energySwirl(");
+                } catch (IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
+            }).toList();
+            assertEquals(List.of(), eyes, "светящееся — в слое эффектов");
+        }
+        String plume = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/render/PlumeRenderer.java"));
+        assertTrue(!plume.contains("MultiBufferSource") && !plume.contains("VertexConsumer"), "струя — квадратами слоя, а не буфером сущности");
+    }
+
+    /**
+     * Вдоль струи свет — из закона модели, а не картинкой: от сопла до конца пламени пламя (у ускорителя ракеты днём —
+     * пересвет, белое), за ним хвост гаснет без скачков к точке Дрейпера и краснеет.
+     */
+    @Test
+    void sheathFadesAlongTheJet() {
+        Flame f = FlameModel.of(ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).motor(), 0);
+        Flame.Sheath s = f.sheath();
+        assertTrue(s.size() >= 8, "кусков вдоль струи хватает на плавный хвост");
+        assertEquals(0, s.x()[0], 1e-12);
+        assertEquals(f.length(), s.x()[s.size() - 1], 1e-9);
+        for (int i = 1; i < s.size(); i++) {
+            assertTrue(s.x()[i] > s.x()[i - 1]);
+            assertTrue(s.luminance()[i] <= s.luminance()[i - 1] * (1 + 1e-9), "к хвосту не ярче");
+            assertTrue((s.color()[i] >> 8 & 255) <= (s.color()[i - 1] >> 8 & 255), "к хвосту краснее");
+        }
+        // днём (привыкание 1) пламя до своего конца — ярче белого экрана, через полторы длины пламени — уже тусклее
+        int atFlame = 0;
+        while (s.x()[atFlame] < f.flame() - 1e-9) atFlame++;
+        assertTrue(s.luminance()[atFlame] > 1, "конец пламени днём — пересвет: " + s.luminance()[atFlame]);
+        int far = s.size() - 1;
+        while (s.x()[far - 1] > 1.5 * f.flame()) far--;
+        assertTrue(s.luminance()[far] < 1, "за полутора длинами пламени — тусклее белого: " + s.luminance()[far]);
     }
 }

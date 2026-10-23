@@ -360,6 +360,43 @@ public final class CloudModel {
         return u * u * (3 - 2 * u);
     }
 
+    /**
+     * Свет густого дыма облака на экране в полдень, белая стена — 1: сажа отражает R∞ ~0,03, пыль ~0,3 (два потока,
+     * {@code SmokePuffs.thick}); ⚠ оценка — их среднее геометрическое 0,1. Против него видно свечение остывающего шара.
+     */
+    public static final double SMOKE_SEEN = 0.1;
+
+    /**
+     * Доля газа температуры kelvin, что видна телом огня при привыкании глаза exposure ({@code Sight.exposure}: днём 1,
+     * ночью ~1200): в пикселе свечение газа ε·B(T) и свет неба, рассеянный его дымом, складываются, и огнём он виден
+     * своей долей B·exposure / (B·exposure + {@link #SMOKE_SEEN}), не больше {@link #glowShare(double)} (светится ли газ
+     * вообще). Днём шар бомбы в 1260 K (3 с после взрыва 1,3 т, яркость ~0,009 белой стены) — уже дым, ночью — ещё огонь;
+     * по одной температуре он днём оставался сплошь оранжевым до 3,7 с (шлагбаум RV2, бомба в 150 м).
+     */
+    public static double glowShare(double kelvin, double exposure) {
+        double g = glowShare(kelvin);
+        if (g <= 0) return 0;
+        double x = glowLuminance(kelvin) * exposure;
+        return g * x / (x + SMOKE_SEEN);
+    }
+
+    /**
+     * Яркость чёрного тела ({@link BlackBody#luminance}) по таблице логарифмов с шагом 10 K от точки Дрейпера (холоднее —
+     * 0): доля огня считается на каждый клуб кадра, а по Вину яркость между узлами — экспонента.
+     */
+    static double glowLuminance(double kelvin) {
+        if (kelvin <= DRAPER_K) return 0;
+        double i = Math.min(GLOW_LOG.length - 1.001, (kelvin - DRAPER_K) / 10);
+        int k = (int) i;
+        return Math.exp(GLOW_LOG[k] + (GLOW_LOG[k + 1] - GLOW_LOG[k]) * (i - k));
+    }
+
+    private static final double[] GLOW_LOG = new double[421];
+
+    static {
+        for (int i = 0; i < GLOW_LOG.length; i++) GLOW_LOG[i] = Math.log(BlackBody.luminance(DRAPER_K + 10.0 * i));
+    }
+
     /** Температура остывающего шара в возрасте t ≥ {@link #burnSeconds}, K. */
     double coolKelvin(double t) {
         return cooling.kelvin(t - burnSeconds);

@@ -23,7 +23,12 @@
 всех кадров и сторон — 1, без среза); «front» и «diffuse» в puff6.json — средний по клубу свет спереди и средний по
 шести сторонам (на непрозрачность, весом непрозрачности): к ним шейдер приводит карты (белая стена — 1); на листе — степень
 1/2,2 (шейдер складывает свет в линейном). Кадр — по краю вещества
-(непрозрачность 0,05) с запасом 4 %: квадрат клуба в моде — этот край (SmokePuffs.edge).
+(непрозрачность 0,05) с запасом 4 %: квадрат клуба в моде — этот край (SmokePuffs.edge). «detail» — мелкая структура
+кадра (разброс карт света за вычетом их сглаживания по 7×7 пикселям, в непрозрачной части; у самого клубящегося — 1):
+симуляция — конечный клуб, к концу он рассеивается и теряет клубы, а настоящее облако, пока растёт, остаётся
+турбулентным (термик подобен себе: клубы растут вместе с ним, Scorer 1957), и мод берёт кадры только клубящейся части
+(FxAtlas.puffFrame). Пересчитать «detail» по готовым кадрам листа, без запекания:
+  uv run tools/bake_fx/pack.py --detail [<папка текстур>]
 
 Поверхность огненного шара ядерки — nukeball.bin рядом с листом (textures/fx; читает client/nuclear/NukeBallSurface):
 у каждого кадра запекания — карта по направлениям от центра шара (октаэдрическая, {BALL_N}², ось y — вверх), в
@@ -155,6 +160,43 @@ SIDES_A = ("right", "top", "back")
 SIDES_B = ("left", "bottom", "front")
 
 
+def detail(tiles):
+    """Мелкая структура кадров клуба: tiles — (непрозрачность, карты света rgb a и b) кадров; у самого клубящегося — 1."""
+    out = []
+    for a, rgb in tiles:
+        inside = a > 0.5
+        spread = []
+        for name in ("a", "b"):
+            for c in range(3):
+                ch = rgb[name][..., c]
+                smooth = cv2.blur(ch.astype(np.float32), (7, 7))
+                spread.append(float(np.std((ch - smooth)[inside])) if inside.any() else 0.0)
+        out.append(float(np.mean(spread)))
+    top = max(out) or 1
+    return [round(v / top, 4) for v in out]
+
+
+def detail_only(dest):
+    """«detail» в puff6.json и spray6.json — по кадрам листа (карты — степень 1/2,2, обратно в линейные)."""
+    for prefix in ("puff6", "spray6"):
+        path = os.path.join(dest, f"{prefix}.json")
+        if not os.path.exists(path):
+            continue
+        tiles = []
+        for k in range(FRAMES):
+            rgb = {}
+            for name in ("a", "b"):
+                img = np.asarray(Image.open(os.path.join(dest, f"{prefix}{name}_{k:02d}.png")).convert("RGBA"), dtype=np.float64) / 255
+                rgb[name] = img[..., :3] ** 2.2
+                a = img[..., 3]
+            tiles.append((a, rgb))
+        meta = json.load(open(path, encoding="utf-8"))
+        meta["detail"] = detail(tiles)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(meta, f)
+        print(prefix, "detail", meta["detail"])
+
+
 def puff(src, out, prefix="puff6", like=None):
     """Клуб (prefix — имя кадров на листе). like — puff6.json дыма: карты брызг приводятся к его «diffuse» (у слоя одна
     мера карт на все клубы, FxSixLight), их собственная мера — в «own»."""
@@ -208,7 +250,7 @@ def puff(src, out, prefix="puff6", like=None):
         save_rgba(enc, np.ones((TILE, TILE)), os.path.join(out, f"{prefix}v_{k:02d}.png"))
     with open(os.path.join(out, f"{prefix}.json"), "w", encoding="utf-8") as f:
         json.dump({"tile": TILE, "frames": FRAMES, "maps": "abv", "flow": FLOW, "front": round(front, 4), "diffuse": round(diffuse, 4),
-                   "own": round(own, 4), "growth": [float(g) for g in growth]}, f)
+                   "own": round(own, 4), "growth": [float(g) for g in growth], "detail": detail(tiles)}, f)
     print("puff frames", picks, "norm", round(norm, 3), "front", round(front, 3), "diffuse", round(diffuse, 3), "growth", growth)
 
 
@@ -325,6 +367,9 @@ def nukeball(src, dest, preview=None):
 
 
 if __name__ == "__main__":
+    if sys.argv[1] == "--detail":
+        detail_only(sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "../../mod/src/main/resources/assets/incoming/textures/fx/particle"))
+        sys.exit(0)
     bake = sys.argv[1]
     dest = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "../../mod/src/main/resources/assets/incoming/textures/fx/particle")
     if os.path.isdir(os.path.join(bake, "fireball")):

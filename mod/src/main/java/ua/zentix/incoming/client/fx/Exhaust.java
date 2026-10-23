@@ -22,7 +22,6 @@ import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.FirePlume;
 import ua.zentix.incoming.client.fx.smoke.Puffs;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
-import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.entity.BomberEntity;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
@@ -48,14 +47,14 @@ import java.util.WeakHashMap;
  */
 public final class Exhaust {
     /**
-     * Факел в системе снаряда: срез сопла в (0, {@code y}, {@code z}) (нос по +Z), факел на высоте снаряда, привыкание
-     * глаза {@code adapt} (яркость × adapt — во сколько раз он ярче белого экрана, {@code Sight.adapted}) и доля струи
-     * {@code near} (с 0,8 прорисовки струю сменяет свет того же факела вдали).
+     * Факел в системе снаряда: срез сопла в (0, {@code y}, {@code z}) (нос по +Z), факел на высоте снаряда и доля струи
+     * {@code near} (с 0,8 прорисовки струю сменяет свет того же факела вдали). Привыкание глаза — у слоя эффектов,
+     * который её рисует ({@code PlumeRenderer}): то же, что у света факела вдали.
      */
-    public record Plume(float y, float z, Flame flame, double adapt, float near) {
+    public record Plume(float y, float z, Flame flame, float near) {
         /** Та же струя, тусклее в k раз (на краю прорисовки её сменяет свет факела вдали). */
         public Plume dimmed(float k) {
-            return new Plume(y, z, flame, adapt, near * k);
+            return new Plume(y, z, flame, near * k);
         }
     }
 
@@ -98,9 +97,7 @@ public final class Exhaust {
         Flame f = stage.flame(e.getY());
         if (f == null) return null;
         ClientWeaponSpec.At n = a.nozzle(stage);
-        // привыкание глаза — то же, что у света этого факела вдали (FarView.exposure), иначе на 0,8 прорисовки яркость
-        // скакнула бы
-        return new Plume((float) n.y(), (float) n.z(), f, FarView.exposure(level, partial), 1);
+        return new Plume((float) n.y(), (float) n.z(), f, 1);
     }
 
     /** Сопла сущности из клиентского паспорта (у B-2 и его бомбы — свои). */
@@ -280,13 +277,13 @@ public final class Exhaust {
     private static final double[] BB = new double[4];
 
     /**
-     * Пламя горящих обломков светит на дым, частицы и ленты вокруг ({@link FxLights}): шар чёрного тела пламени
-     * ({@link FirePlume#FLAME_K}) радиусом в полвысоты пламени по Хескестаду, с привыканием глаза кадра.
+     * Пламя горящих обломков светит на дым, частицы и ленты вокруг ({@link FxLights}): шар видимого пламени
+     * ({@link FirePlume#flameLight}) радиусом в полвысоты пламени по Хескестаду, с привыканием глаза кадра.
      */
     public static void lights(FarView view, FxLights lights) {
         if (BURNING.isEmpty()) return;
         double now = SmokeGrid.seconds(view.partial()), r = 0.5 * DEBRIS_FLAME.flameHeight();
-        BlackBody.light(FirePlume.FLAME_K, BB);
+        FirePlume.flameLight(BB);
         double m = Math.max(BB[0], Math.max(BB[1], BB[2]));
         Vec3 cam = view.camera();
         for (Burning b : BURNING.values()) {
@@ -300,7 +297,7 @@ public final class Exhaust {
     public static void heat(Vec3 eye, double seconds, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         if (BURNING.isEmpty()) return;
         double r = 0.5 * DEBRIS_FLAME.flameHeight();
-        BlackBody.light(FirePlume.FLAME_K, BB);
+        FirePlume.flameLight(BB);
         for (Burning b : BURNING.values()) {
             if (seconds - b.fed > 2 * PUFF_S + 0.1) continue;
             f.light(b.at.x - eye.x, b.at.y + r - eye.y, b.at.z - eye.z, r, BB[0], BB[1], BB[2], air, Math.max(r, 1));

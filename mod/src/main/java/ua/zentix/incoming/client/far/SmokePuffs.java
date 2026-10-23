@@ -119,7 +119,7 @@ final class SmokePuffs {
                      double sigma0) {
             int at = index++;
             // светящийся газ — тело огня у источника; остывая, он проступает дымом той же долей, что тело тает
-            double smoke = glow ? 1 - CloudModel.glowShare(kelvin) : 1;
+            double smoke = glow ? 1 - CloudModel.glowShare(kelvin, view.exposure()) : 1;
             sootA *= smoke;
             sootB *= smoke;
             dustA *= smoke;
@@ -166,7 +166,7 @@ final class SmokePuffs {
                             double water, float dustR, float dustG, float dustB, double kelvin, double rise) {
             int at = index++;
             // светящийся газ — тело огня у источника; остывая, он проступает дымом той же долей, что тело тает
-            double smoke = glow ? 1 - CloudModel.glowShare(kelvin) : 1;
+            double smoke = glow ? 1 - CloudModel.glowShare(kelvin, view.exposure()) : 1;
             if (smoke <= 0 || soot + dust + water <= 0 || !(sh > 0) || !(sv > 0)) return;
             soot *= smoke;
             dust *= smoke;

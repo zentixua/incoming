@@ -231,23 +231,32 @@ class FarFlightViewTest {
         return out;
     }
 
+    /**
+     * След «Града» — одна лента по пути от схода до настоящего пути выгорания ({@link Trail#reach}): игровой двигатель
+     * гаснет в тике 50 (фаза следующего пакета — с тика 51), а лента идёт дальше, пока путь не дойдёт до участка, и сходит
+     * на нет в той точке.
+     */
     @Test
-    void rocketTrailRunsWhileMotorBurnsAndEndsAtBurnout() {
+    void rocketTrailRunsAlongTheRealBurnPath() {
         FarLook look = far(WeaponType.ROCKET);
         Trail trail = look.stage(FlightPhase.BOOST).trail();
-        FlightTrack t = track(WeaponType.ROCKET, 10, 90, tick -> tick <= 50 ? FlightPhase.BOOST : FlightPhase.CRUISE);
+        FlightTrack t = track(WeaponType.ROCKET, 10, 400, tick -> tick <= 50 ? FlightPhase.BOOST : FlightPhase.CRUISE);
         TrailPoints p = new TrailPoints();
-        FarFlightView.sample(new FarFlightView.Far(t, 1), 90, p);
+        FarFlightView.sample(new FarFlightView.Far(t, 1), 400, p);
         List<Point> pts = points(p);
-        // каждые 2 тика с 10 по 50, и точка выгорания в тике 51 (он уже в фазе следующего пакета)
-        assertEquals(22, pts.size());
+        // путь — √10 блока за тик: участок выгорания пройден в тике 10 + ⌈reach / √10⌉
+        double step = Math.sqrt(10);
+        long end = 10 + (long) Math.ceil(trail.reach() / step);
+        Point last = pts.getLast();
+        assertEquals(end, last.tick, "лента кончается там, где пройден участок выгорания");
+        assertTrue(last.last, "и сходит там на нет");
+        assertTrue(pts.stream().anyMatch(pt -> pt.tick > 60), "после факела дым ещё ложится");
         for (int i = 0; i < pts.size(); i++) {
             Point pt = pts.get(i);
             assertSame(trail, pt.style);
-            assertEquals(i == 21 ? 51 : 10 + 2 * i, pt.tick);
             assertEquals(pt.tick * 3.0, pt.x, 1e-9, "место — по пути");
             assertEquals(i == 0 ? TrailPoints.NONE : pts.get(i - 1).serial, pt.prev, "одна лента");
-            assertEquals(i == 21, pt.last, "лента сходит на нет в точке выгорания, и только там");
+            assertEquals(i == pts.size() - 1, pt.last, "лента сходит на нет только в конце участка");
         }
     }
 
@@ -413,5 +422,33 @@ class FarFlightViewTest {
     /** Точка в 500 блоках под углом deg от взгляда на север: x и z. */
     private static double[] at(double deg) {
         return new double[]{500 * Math.sin(Math.toRadians(deg)), -500 * Math.cos(Math.toRadians(deg))};
+    }
+
+    /**
+     * След «Града» — настоящий участок выгорания при любой скорости полёта (решение F6): на игровой скорости (~80 м/с)
+     * двигатель горит 2 с, ~160 м, а след 9М22У — ~650 м (683 м/с к выгоранию за 1,9 с, паспорт); он ложится и после
+     * факела (не по физике) и кончается на том же пути. Вещество на метр — настоящий расход на настоящий путь: всего
+     * дыма столько, сколько его даёт топливо.
+     */
+    @Test
+    void gradTrailCoversTheRealBurnPath() {
+        Trail trail = far(WeaponType.ROCKET).stage(FlightPhase.BOOST).trail();
+        assertNotNull(trail);
+        assertEquals(683 * 1.9 / 2, trail.reach(), 1, "участок выгорания по паспорту");
+        assertEquals(1.9, trail.burn(), 1e-9);
+        // пока горит фаза и после неё — тот же след, до конца участка
+        assertEquals(trail, FarFlightView.laying(trail, null, 10));
+        assertEquals(trail, FarFlightView.laying(null, trail, 160), "игровой двигатель догорел на 160 м — дым ещё ложится");
+        assertEquals(trail, FarFlightView.laying(null, trail, 600));
+        assertNull(FarFlightView.laying(null, trail, trail.reach() + 1), "за участком выгорания следа нет");
+        assertNull(FarFlightView.laying(trail, null, 1300), "на настоящей скорости фаза идёт дальше участка — след кончается там же");
+        // у снаряда без пути выгорания след — по фазе
+        Trail booster = far(WeaponType.MISSILE).stage(FlightPhase.BOOST).trail();
+        assertEquals(0, booster.reach());
+        assertNull(FarFlightView.laying(null, booster, 10), "ускоритель ракеты: след кончается с фазой");
+        // вещество: на метр — по настоящему пути, не по скорости снаряда; за весь участок — весь дым топлива
+        double perMetre = trail.motor().smokeFlow() * trail.inverseSpeed(80, 3);
+        assertEquals(trail.motor().smokeFlow() * 1.9, perMetre * trail.reach(), 1e-9, "дым всего топлива — на весь участок");
+        assertEquals(trail.inverseSpeed(80, 3), trail.inverseSpeed(683, 3), 1e-12, "и при любой скорости полёта");
     }
 }

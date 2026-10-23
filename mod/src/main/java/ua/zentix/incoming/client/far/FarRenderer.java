@@ -49,6 +49,10 @@ public final class FarRenderer {
             FarBlasts.collect(view, SPRITES, lights);
             FarFlightView.collect(view, SPRITES, lights);
         }
+        // пламя очагов топлива вдали, где его языков-частиц уже нет
+        ua.zentix.incoming.client.fx.FireSmoke.far(view, SPRITES);
+        // струи факелов сущностей кадра: после мира, а не путём сущностей — иначе их перекрашивает шейдерпак
+        ua.zentix.incoming.client.render.PlumeRenderer.collect(view, SPRITES);
         NukeRenderer.fireballs(view, SPRITES, lights);
         SPRITES.counts(LAST_FRAME);
     }
@@ -111,6 +115,7 @@ public final class FarRenderer {
         HeatPass.forget();
         FarBlasts.reset();
         FarFlightView.reset();
+        ua.zentix.incoming.client.render.PlumeRenderer.reset();
         Arrays.fill(LAST_FRAME, 0);
     }
 }

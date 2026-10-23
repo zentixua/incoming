@@ -39,7 +39,7 @@ public class InterceptorRenderer extends EntityRenderer<InterceptorEntity> {
         pose.mulPose(rotation);
         WeaponModels.Mesh.INTERCEPTOR_BODY.draw(pose, buffers, packedLight);
         Exhaust.Plume plume = plume(e, partialTick);
-        if (plume != null) PlumeRenderer.render(plume, pose, buffers, rotation, e.getPosition(partialTick), entityRenderDispatcher.camera);
+        if (plume != null) PlumeRenderer.render(plume, e, rotation, e.getPosition(partialTick));
         pose.popPose();
         super.render(e, entityYaw, partialTick, pose, buffers, packedLight);
     }
@@ -53,7 +53,7 @@ public class InterceptorRenderer extends EntityRenderer<InterceptorEntity> {
         boolean boost = e.age() + partial <= InterceptorSpec.SAM.boostTicks();
         Flame f = FlameModel.at(boost ? ClientWeaponSpec.SAM_BOOST : ClientWeaponSpec.SAM_SUSTAIN, e.getY() - Air.SEA);
         if (f == null || !(e.level() instanceof ClientLevel level)) return null;
-        return new Exhaust.Plume(0, (float) -InterceptorSpec.SAM.noseLength(), f, FarView.exposure(level, partial), 1);
+        return new Exhaust.Plume(0, (float) -InterceptorSpec.SAM.noseLength(), f, 1);
     }
 
     @Override

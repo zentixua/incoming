@@ -22,9 +22,8 @@
                 с примесью белого (CROSS: глаз насыщается по всем каналам, вспышка белёсая, а не лимонная), гамма sRGB. Радиус шара — 0,7 полуразмера кадра (client/far/FarSprites.FIREBALL); свой сид.
   ball.json — огонь каждого кадра на экране (среднее по кругу шара, без сажи): свет шара вокруг не ярче него
                 (client/fx/layer/FxAtlas.ballLight).
-  ../plume, ../plume_diamonds — факел двигателя 64×256 (сопло сверху, хвост внизу; второй — с «алмазами»
-  скачков уплотнения, как у МБР и стартового ускорителя), ../halo — ореол у сопла 64×64; у этих трёх цвет
-  домножен на прозрачность — они рисуются сложением.
+  ../halo — ореол 64×64; цвет домножен на прозрачность — рисуется сложением. (Струю факела рисует слой эффектов
+  светом модели, render/PlumeRenderer: картинки у неё нет.)
   flake, paper — хлопья пепла и клочок обгоревшей бумаги 16×16 (пепел после ядерной волны, client/nuclear/NukeAsh):
                 неровное пятно и прямоугольник с тёмным рваным краем; свой генератор (прежние файлы не меняются).
                 Только их — `uv run tools/gen_particles.py ash`.
@@ -156,23 +155,6 @@ def ring(n=128):
     alpha = band * (0.55 + 0.6 * noise)
     lum = 0.82 + 0.18 * noise
     return np.dstack([lum] * 3), np.clip(alpha, 0, 1)
-
-
-def plume(w=64, h=256, diamonds=False):
-    """Факел: яркое узкое ядро у сопла, расширяется и остывает к хвосту, рваный край; по желанию — «алмазы»."""
-    v, u = np.meshgrid(np.linspace(0, 1, h), np.linspace(-1, 1, w), indexing="ij")
-    turb = fbm(max(w, h), 5, 4)[:h, :w]
-    width = 0.35 + 0.65 * np.sqrt(v)  # ширина струи вдоль длины
-    x = np.abs(u) / width
-    core = np.clip(1 - x ** 2, 0, 1) ** 1.5
-    along = np.exp(-v * 2.2) * smooth(0.0, 0.03, v)
-    inten = core * along * (0.75 + 0.5 * turb) * smooth(0.0, 0.35, 1 - v - 0.25 * (turb - 0.5))
-    if diamonds:
-        nodes = np.clip(np.cos(v * np.pi * 2 * 6.5) * 0.5 + 0.5, 0, 1) ** 6 * np.exp(-v * 4) * np.clip(1 - (np.abs(u) / 0.3) ** 2, 0, 1)
-        inten = inten + 0.9 * nodes
-    a = np.clip(inten * 1.6, 0, 1)
-    # цвет домножен на прозрачность: факел рисуется сложением (ONE, ONE), где альфа не участвует
-    return np.dstack([a] * 3), a
 
 
 def halo(n=64):
@@ -363,8 +345,6 @@ if __name__ == "__main__":
     save(*spark(), "spark")
     save(*flash(), "flash")
     save(*ring(), "ring")
-    save(*plume(), "../plume")
-    save(*plume(diamonds=True), "../plume_diamonds")
     save(*halo(), "../halo")
     save(*far_disc(), "../../far/disc")
     save(*far_glow(), "../../far/glow")

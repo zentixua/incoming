@@ -116,4 +116,22 @@ class SightTest {
         double night = Sight.adapted(1, NIGHT);
         assertTrue(night > 500 && night < 3000, "ночью в " + night + " раз");
     }
+
+    /**
+     * Свет самосветящегося на экране ({@link Sight#onScreen}): ярче белого — во всю силу и к белому, тусклее — темнее в
+     * линейном свете и в sRGB на экран (тело в 0,1 белого — ~0,35 экрана); без скачков.
+     */
+    @Test
+    void selfLuminousOnScreen() {
+        float[] white = Sight.onScreen(0xFF7401, Sight.WHITE, 1);
+        assertEquals(1, white[2], 1e-3, "пересвет — белый");
+        float[] tenth = Sight.onScreen(0xFFFFFF, 0.1, 1);
+        assertEquals(0.35, tenth[0], 0.01, "0,1 белого на экране — sRGB");
+        float prev = 0;
+        for (double l = 0.001; l < 100; l *= 1.05) {
+            float g = Sight.onScreen(0xFF7401, l, 1)[1];
+            assertTrue(g >= prev - 1e-6 && g - prev < 0.06, "плавно: " + l);
+            prev = g;
+        }
+    }
 }

@@ -150,6 +150,12 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
             return new Stage(motor, booster, Trail.of(motor, step));
         }
 
+        /** Та же фаза, след которой ложится по настоящему пути выгорания изделия ({@link Trail#alongBurn}). */
+        Stage alongBurn(Article article) {
+            return trail == null || article.booster() == null ? this
+                    : new Stage(motor, booster, trail.alongBurn(article.burnPath(), article.booster().burn()));
+        }
+
         /** Факел на высоте мира y; null — не горит или не видно. */
         @Nullable
         public Flame flame(double y) {
@@ -288,9 +294,13 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     /** «Минитмен III»: 18,3 м, Ø 1,7; ступень горит весь полёт. */
     private static final Stage ICBM_BURN = Stage.burning(ICBM_STAGE, false, 4);
     private static final FarLook ICBM_FAR = new FarLook(18.3, 24, 0xD8D6D0, null, ICBM_BURN, ICBM_BURN, null);
-    /** Снаряд «Града»: 2,9 м, Ø 0,12; поджиг — в трубе, след — с переднего среза; после выгорания — без огня и следа. */
+    /**
+     * Снаряд «Града»: 2,9 м, Ø 0,12; поджиг — в трубе, след — с переднего среза; после выгорания — без огня. След — по
+     * настоящему пути выгорания (~650 м, {@code Article.burnPath}) при любой скорости полёта: на игровой он ложится и после
+     * факела — не по физике.
+     */
     private static final FarLook ROCKET_FAR = new FarLook(2.9, 0.28, 0x4E5446, new Stage(ROCKET_MOTOR, false, null),
-            Stage.burning(ROCKET_MOTOR, false, 2), Stage.NONE, null);
+            Stage.burning(ROCKET_MOTOR, false, 2).alongBurn(WeaponType.ROCKET.spec().striker().article()), Stage.NONE, null);
     /** «Ланцет»: 1,65 м, Ø 0,2, два креста крыльев; катапульта и электромотор — без огня и дыма. */
     private static final FarLook LOITER_FAR = new FarLook(1.65, 0.62, 0x6A7066, null, Stage.NONE, Stage.NONE, null);
 

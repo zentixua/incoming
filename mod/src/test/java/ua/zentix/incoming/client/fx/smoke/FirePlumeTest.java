@@ -72,4 +72,20 @@ class FirePlumeTest {
         assertEquals(200, fire.at(12 - 30 / u), 1e-9);
         assertEquals(10, fire.at(12 - 4 / u), 1e-9);
     }
+
+    /**
+     * Видимое пламя ({@link FirePlume#flameLight}) — светящаяся сажа, а не средний поток излучения: ~0,1 белой стены в
+     * полдень (10³–10⁴ кд/м² — порядок яркости открытого пламени; по одному {@link FirePlume#FLAME_K} выходило 3·10⁻⁴ —
+     * днём чёрные языки), цвет — оранжевый (красный — наибольший, синего почти нет).
+     */
+    @org.junit.jupiter.api.Test
+    void visibleFlameIsTheLuminousSoot() {
+        double[] l = new double[4];
+        FirePlume.flameLight(l);
+        org.junit.jupiter.api.Assertions.assertTrue(l[3] > 0.03 && l[3] < 0.3, "яркость пламени днём: " + l[3]);
+        org.junit.jupiter.api.Assertions.assertEquals(l[3], FirePlume.FLAME_LUMINANCE, 1e-12);
+        int c = FirePlume.FLAME_COLOR;
+        org.junit.jupiter.api.Assertions.assertEquals(255, c >> 16 & 255);
+        org.junit.jupiter.api.Assertions.assertTrue((c & 255) < 64 && (c >> 8 & 255) > 64, "оранжевый: " + Integer.toHexString(c));
+    }
 }

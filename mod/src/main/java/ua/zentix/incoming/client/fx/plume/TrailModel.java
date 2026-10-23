@@ -68,12 +68,30 @@ public final class TrailModel {
      * @param motor  откуда дым
      * @param step   точка ленты — раз в столько тиков (разрешение ленты, не физика)
      * @param sigma0 σ дыма, когда он выходит из струи (полуширина струи в конце видимого факела — 2σ), м
+     * @param reach  след ложится по настоящему пути выгорания двигателя, м ({@code Article.burnPath}): пока снаряд от
+     *               начала пути не прошёл столько, и не дальше — при любой скорости полёта; 0 — пока горит фаза
+     * @param burn   время работы двигателя по паспорту, с: с {@code reach} — вещество на метр следа (настоящий расход
+     *               на настоящий путь), а не по скорости снаряда
      */
-    public record Trail(Motor motor, int step, double sigma0) {
+    public record Trail(Motor motor, int step, double sigma0, double reach, double burn) {
         /** След двигателя: начальная ширина — из его факела у земли (без факела — струя к концу её ядра, вдвое шире среза). */
         public static Trail of(Motor motor, int step) {
             Flame f = FlameModel.of(motor, 0);
-            return new Trail(motor, step, f != null ? f.spread() / 2 : 2 * motor.exitRadius() * Math.sqrt(motor.nozzles()));
+            return new Trail(motor, step, f != null ? f.spread() / 2 : 2 * motor.exitRadius() * Math.sqrt(motor.nozzles()), 0, 0);
+        }
+
+        /**
+         * Тот же след по настоящему пути выгорания reach за время burn: на игровой скорости снаряд проходит его дольше, чем
+         * горит игровой двигатель, и след ложится и после факела — не по физике (у «Града» при игровой скорости ~80 м/с
+         * двигатель горит 2 с, ~160 м, а след — ~650 м, как у настоящего); на настоящей скорости — кончается на том же пути.
+         */
+        public Trail alongBurn(double reach, double burn) {
+            return new Trail(motor, step, sigma0, reach, burn);
+        }
+
+        /** Секунды на метр следа: по настоящему пути выгорания или, без него, по скорости снаряда speed в ветре wind, м/с. */
+        public double inverseSpeed(double speed, double wind) {
+            return reach > 0 ? burn / reach : TrailModel.inverseSpeed(speed, wind);
         }
     }
 
