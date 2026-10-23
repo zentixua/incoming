@@ -319,15 +319,6 @@ float mushStemAt(Mush m, float h) {
     return mushStemR(h / max(m.capBot, 1.0), m.stemR, m.stemFlare);
 }
 
-// радиус подсоса на высоте h места тела: ножка и полоса воздуха слоя за её стенкой
-float mushFootAt(Mush m, float h) {
-    return mushStemAt(m, h) + m.footShare * mushFootWidth(max(h, 0.0), m.footTop);
-}
-
-float mushFootSigma(Mush m, float h) {
-    return mushFootDensity(h, m.footTop, m.footSigma, m.footShare, min(m.footRise, m.stemTop), mushStemSigma(m, h));
-}
-
 // Место в узоре клубов шапки (от её оси и середины по высоте, блоки) для места q тела, если ядро кольца с тех пор обошло
 // своё сечение на turn радиан: обращение по эллипсу сечения вокруг оси кольца (mushWasU, mushWasV), снаружи сечения
 // слабее (mushSwirl), у оси гриба сходит на нет (mushTaper). Узор идёт с веществом: точку, где вещество сейчас, узор
@@ -380,6 +371,15 @@ float mushStemSigma(Mush m, float h) {
     // у шара у земли низ шапки ниже земли (capBot < 0): ширина таяния — не меньше блока
     float topFade = clamp((m.stemTop - h) / max(0.05 * m.capBot + 1.0, 1.0), 0.0, 1.0);
     return m.stemTau / (2.0 * mushStemAt(m, h)) * topFade;
+}
+
+// радиус подсоса на высоте h места тела: ножка и полоса воздуха слоя за её стенкой
+float mushFootAt(Mush m, float h) {
+    return mushStemAt(m, h) + m.footShare * mushFootWidth(max(h, 0.0), m.footTop);
+}
+
+float mushFootSigma(Mush m, float h) {
+    return mushFootDensity(h, m.footTop, m.footSigma, m.footShare, min(m.footRise, m.stemTop), mushStemSigma(m, h));
 }
 
 // Ослабление шапки, ножки, юбки и столба воды в месте q без шума — среднее по клубам (край размыт на размах клубов): для

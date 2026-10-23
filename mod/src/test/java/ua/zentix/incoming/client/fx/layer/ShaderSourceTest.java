@@ -213,6 +213,63 @@ class ShaderSourceTest {
         assertTrue(bad.isEmpty(), "вызовы не по объявлению: " + bad);
     }
 
+    /**
+     * Каждая функция шейдера вызвана после своего объявления — в тексте программы, как его собирает ваниль (файлы
+     * {@code #moj_import} на их местах): GLSL не знает функции, объявленной ниже вызова, и шейдер не собирается — а
+     * разбор законов по одной функции ({@code GlslFunction}) этого не видит (подсос у основания ножки звал
+     * {@code mushStemSigma} выше её определения: не собирались все восемь программ с грибом).
+     */
+    @Test
+    void everyFunctionIsDeclaredBeforeItsCall() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        List<String> bad = new ArrayList<>();
+        int files = 0;
+        try (Stream<Path> list = Files.list(core)) {
+            for (Path p : list.filter(f -> f.toString().matches(".*\\.(fsh|vsh)")).sorted().toList()) {
+                files++;
+                for (String call : beforeDeclaration(withImports(core.resolveSibling("include"), Files.readString(p), new HashSet<>()))) {
+                    bad.add(p.getFileName() + ": " + call);
+                }
+            }
+        }
+        assertTrue(files > 5, "шейдеров " + files);
+        assertTrue(bad.isEmpty(), "функция вызвана выше своего объявления: " + bad);
+    }
+
+    @Test
+    void findsACallBeforeTheDeclaration() {
+        assertEquals(List.of("b"), beforeDeclaration("""
+                float c(float x);
+                float a(float x) {
+                    return b(x) + c(x) + exp(x);
+                }
+                float b(float x) {
+                    return x;
+                }
+                float c(float x) {
+                    return a(x); // b(x) в комментарии
+                }
+                """));
+    }
+
+    /**
+     * Имена функций своего текста, вызванных выше первого объявления (определения или прототипа): объявление верхнего
+     * уровня пишется с начала строки (как проверяет {@link #everyBodyIsClosed}).
+     */
+    private static List<String> beforeDeclaration(String source) {
+        String text = blankComments(source);
+        Matcher d = Pattern.compile("(?m)^[A-Za-z_]\\w*[ \\t]+([A-Za-z_]\\w*)[ \\t]*\\(").matcher(text);
+        java.util.Map<String, Integer> declared = new java.util.HashMap<>();
+        while (d.find()) declared.putIfAbsent(d.group(1), d.start(1));
+        List<String> bad = new ArrayList<>();
+        Matcher c = Pattern.compile("\\b([A-Za-z_]\\w*)\\s*\\(").matcher(text);
+        while (c.find()) {
+            Integer at = declared.get(c.group(1));
+            if (at != null && c.start(1) < at && !bad.contains(c.group(1))) bad.add(c.group(1));
+        }
+        return bad;
+    }
+
     /** Тело функции, что объявлена с {@code head}. */
     private static String body(String source, String head) {
         int at = source.indexOf(head);
