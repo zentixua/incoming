@@ -4,6 +4,7 @@ import com.mojang.datafixers.util.Pair;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -177,6 +178,19 @@ final class StagedExplosion implements UnitQueue.Job {
     private Room room;
     @Nullable
     private BlastBody.Wave wave;
+    /** Как заряд приложен к преграде: пробой плиты ({@link SlabBreach}) — только у приложенного. */
+    private SlabBreach.Placement placement = SlabBreach.Placement.NONE;
+    /** Курс боевой части у удара: через какую грань она пришла к преграде ({@link SlabBreach#locate}); null — неизвестен. */
+    @Nullable
+    private Vec3 axis;
+    /** Откуда идут лучи пробоя; null — заряд ни к чему не приложен (или ещё не искали: {@link #breachLocated}). */
+    @Nullable
+    private SlabBreach.Origin breach;
+    private boolean breachLocated;
+    /** Блоков, снесённых пробоем (для проверок и итога). */
+    int breached;
+    /** Блоки на луче пробоя (снимаются, если луч пробил). */
+    private final LongArrayList breachPath = new LongArrayList();
     /** Взрывы, которые должны кончиться раньше (вторичные подрывы удара ждут главный). */
     private final List<StagedExplosion> after;
     private final Vec3 at;
@@ -262,9 +276,12 @@ final class StagedExplosion implements UnitQueue.Job {
         this(area, after, at, power, 0, fire, blocks, direct, owner, calculator);
     }
 
-    /** Взрыв заряда {@code tntKg} кг ТНТ по физике. */
-    StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, double tntKg, boolean blocks, @Nullable Entity direct, @Nullable Entity owner) {
+    /** Взрыв заряда {@code tntKg} кг ТНТ по физике, приложенного к преграде так, как {@code placement}. */
+    StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, double tntKg, SlabBreach.Placement placement, @Nullable Vec3 axis,
+                    boolean blocks, @Nullable Entity direct, @Nullable Entity owner) {
         this(area, after, at, (float) breakReach(tntKg), tntKg, false, blocks, direct, owner, null);
+        this.placement = placement;
+        this.axis = axis;
     }
 
     private StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, float power, double charge, boolean fire, boolean blocks,
@@ -569,48 +586,72 @@ final class StagedExplosion implements UnitQueue.Job {
                     && !(s.getBlock() instanceof LiquidBlock) && s.getExplosionResistance(level, c, e) < BLAST_PROOF
                     && damage.shouldBlockExplode(e, level, c, s, 1f)) chosen.add(c);
         }
+        if (!breachLocated) {
+            breachLocated = true;
+            breach = SlabBreach.locate(level, centre, charge, placement, axis, e, damage);
+        }
+        boolean[] liquid = new boolean[1];
         for (int r = nextRay; r < end; r++) {
             double dx = RAY_X[r], dy = RAY_Y[r], dz = RAY_Z[r];
-            double share = 1;
-            long last = contact;
-            for (double d = 0; d <= breakReach; d += STEP) {
-                double x = centre.x + dx * d, y = centre.y + dy * d, z = centre.z + dz * d;
-                BlockPos pos = BlockPos.containing(x, y, z);
-                long key = pos.asLong();
-                counts.steps++;
-                if (key == last) {
-                    counts.cached++;
-                    continue;
-                }
-                last = key;
-                if (!level.isInWorldBounds(pos) || !Terrain.ready(level, pos)) break;
-                BlockState state = level.getBlockState(pos);
-                if (state.isAir()) {
-                    counts.airSteps++;
-                    continue;
-                }
-                if (state.getBlock() instanceof LiquidBlock || state.getExplosionResistance(level, pos, e) >= BLAST_PROOF) break;
-                BlockResponse response = BlockResponse.of(state);
-                if (response.kind() == BlockResponse.Kind.NONE || response.kind() == BlockResponse.Kind.GROUND) break;
-                double range = Math.max(0.25, d);
-                double psi = BlastModel.psi(BlastModel.surfaceOverpressureKpa(range, charge)) * share;
-                double impulse = BlastModel.chemicalImpulse(range, charge, true) * share;
-                int seed = Mth.murmurHash3Mixer(Long.hashCode(key));
-                boolean breaks = damage.shouldBlockExplode(e, level, pos, state, 1f) && response.breaksAt(psi, impulse, seed);
-                // трава, цветы, посевы, факелы без формы столкновений — без массы на пути волны: сломаны они или нет,
-                // волна идёт сквозь, ничего не теряя
-                boolean massless = state.getCollisionShape(level, pos).isEmpty();
-                if (breaks) chosen.add(pos);
-                if (massless) continue;
-                if (!breaks) break;
-                share *= response.passes(psi, impulse, seed);
-                if (share < 1e-3) break;
+            wave(level, e, centre, dx, dy, dz, 0, 1, contact);
+            // пробой: луч внутрь преграды, к которой приложен заряд; дошёл до пустоты — пройденное снесено, волна идёт
+            // дальше в пустоту
+            if (breach == null || !breach.inward(dx, dy, dz)) continue;
+            liquid[0] = false;
+            double out = SlabBreach.march(level, breach, dx, dy, dz, e, damage, breachPath, liquid);
+            if (out < 0) continue;
+            for (int i = 0; i < breachPath.size(); i++) {
+                if (chosen.add(BlockPos.of(breachPath.getLong(i)))) breached++;
             }
+            // приближение: волна за пробоем — как в открытом поле на том же расстоянии от центра (энергия, ушедшая на
+            // пробой, не вычитается) — верхняя оценка для того, что за плитой
+            if (!liquid[0]) wave(level, e, breach.at(), dx, dy, dz, out, 1, breachPath.getLong(breachPath.size() - 1));
         }
         nextRay = end;
         time(ExplosionStage.RAYS, t);
         if (nextRay >= rays()) phase = Phase.GAS;
         return true;
+    }
+
+    /**
+     * Волна по лучу из {@code from} по {@code (dx, dy, dz)} от расстояния {@code d0}: давление и импульс — Кинни–Грэхем на
+     * расстоянии от центра заряда, с долей {@code share}; {@code last} — блок, который луч уже прошёл (не трогать).
+     */
+    private void wave(ServerLevel level, Explosion e, Vec3 from, double dx, double dy, double dz, double d0, double share, long last) {
+        for (double d = d0; d <= breakReach; d += STEP) {
+            double x = from.x + dx * d, y = from.y + dy * d, z = from.z + dz * d;
+            BlockPos pos = BlockPos.containing(x, y, z);
+            long key = pos.asLong();
+            counts.steps++;
+            if (key == last) {
+                counts.cached++;
+                continue;
+            }
+            last = key;
+            if (!level.isInWorldBounds(pos) || !Terrain.ready(level, pos)) break;
+            BlockState state = level.getBlockState(pos);
+            if (state.isAir()) {
+                counts.airSteps++;
+                continue;
+            }
+            if (state.getBlock() instanceof LiquidBlock || state.getExplosionResistance(level, pos, e) >= BLAST_PROOF) break;
+            BlockResponse response = BlockResponse.of(state);
+            if (response.kind() == BlockResponse.Kind.NONE || response.kind() == BlockResponse.Kind.GROUND) break;
+            double range = Math.max(0.25, from == centre ? d : Math.sqrt((x - centre.x) * (x - centre.x) + (y - centre.y) * (y - centre.y)
+                    + (z - centre.z) * (z - centre.z)));
+            double psi = BlastModel.psi(BlastModel.surfaceOverpressureKpa(range, charge)) * share;
+            double impulse = BlastModel.chemicalImpulse(range, charge, true) * share;
+            int seed = Mth.murmurHash3Mixer(Long.hashCode(key));
+            boolean breaks = damage.shouldBlockExplode(e, level, pos, state, 1f) && response.breaksAt(psi, impulse, seed);
+            // трава, цветы, посевы, факелы без формы столкновений — без массы на пути волны: сломаны они или нет,
+            // волна идёт сквозь, ничего не теряя
+            boolean massless = state.getCollisionShape(level, pos).isEmpty();
+            if (breaks) chosen.add(pos);
+            if (massless) continue;
+            if (!breaks) break;
+            share *= response.passes(psi, impulse, seed);
+            if (share < 1e-3) break;
+        }
     }
 
     /**

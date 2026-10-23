@@ -182,7 +182,8 @@
     },
     "#minecraft:terracotta": {
       "kind": "rock",
-      "s": 1.1
+      "s": 1.1,
+      "breach": "poor"
     },
     "minecraft:amethyst_block": {
       "kind": "rock",
@@ -274,11 +275,13 @@
     },
     "minecraft:deepslate_bricks": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "breach": "dense"
     },
     "minecraft:deepslate_tiles": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "breach": "dense"
     },
     "minecraft:bricks": {
       "kind": "concrete",
@@ -302,7 +305,8 @@
     },
     "minecraft:polished_blackstone_bricks": {
       "kind": "concrete",
-      "s": 1.0
+      "s": 1.0,
+      "breach": "dense"
     },
     "minecraft:end_stone_bricks": {
       "kind": "concrete",
@@ -346,11 +350,13 @@
     },
     "#minecraft:planks": {
       "kind": "rock",
-      "s": 1.5
+      "s": 1.5,
+      "breach": "poor"
     },
     "#minecraft:logs": {
       "kind": "rock",
-      "s": 1.5
+      "s": 1.5,
+      "breach": "poor"
     },
     "minecraft:water": {
       "kind": "fluid",

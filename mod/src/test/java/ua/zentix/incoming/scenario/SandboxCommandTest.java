@@ -92,6 +92,18 @@ class SandboxCommandTest {
         }
     }
 
+    /** Настоящий взрыв в середину моста: настил из камня 1–6 м над руслом (пробой плиты). */
+    @Test
+    void realTakesBridgeDeck() {
+        assertEquals(0, SandboxCommand.parse("real missile").deck());
+        SandboxCommand c = SandboxCommand.parse("real missile deck 1");
+        assertEquals(WeaponType.MISSILE, c.weapon());
+        assertEquals(1, c.deck());
+        for (String bad : new String[]{"real missile 7", "real missile deck", "real missile deck 9", "real drone deck 2 x", "real drone span 2"}) {
+            assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse(bad), bad);
+        }
+    }
+
     @Test
     void timeTakesDayNightOrTick() {
         for (String ok : new String[]{"time day", "time night", "time 0", "time 13000"}) {
