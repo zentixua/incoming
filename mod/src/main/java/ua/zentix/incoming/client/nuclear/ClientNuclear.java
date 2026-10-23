@@ -363,6 +363,12 @@ public final class ClientNuclear {
 
     // ---------------------------------------------------------------- для рисования и звука
 
+    /** Часы подрыва {@code id} у клиента — тики после подрыва ({@link Active#ticks}); подрыва нет — NaN. */
+    static double ticksOf(int id) {
+        Active a = DETONATIONS.get(id);
+        return a == null ? Double.NaN : a.ticks(0);
+    }
+
     public static List<Active> detonations() {
         return DETONATIONS.isEmpty() ? List.of() : Collections.unmodifiableList(new ArrayList<>(DETONATIONS.values()));
     }

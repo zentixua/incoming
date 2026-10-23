@@ -17,14 +17,16 @@ import java.util.function.DoubleSupplier;
  * <p>
  * Перед фронтом ветра нет: воздух за скачком всегда медленнее самого скачка, но фронт в игре вдали идёт со скоростью
  * {@code nuclear.wave_speed} (по умолчанию 0,2 звука, {@link Detonation#wave}), а ветер и фаза — настоящие, и у сильной
- * волны воздух обогнал бы фронт. Поэтому путь не уходит дальше фронта, и тому, что уже впереди него, ветер не дует
- * (⚠ не по физике — следствие игровой скорости волны; при волне как в жизни ничего не меняет).
+ * волны воздух обогнал бы фронт. Поэтому ветер не быстрее фронта в игре, путь не уходит дальше фронта, и тому, что уже
+ * впереди него, ветер не дует (⚠ не по физике — следствие игровой скорости волны; при волне как в жизни ничего не меняет).
  * <p>
  * Блоки и тики игры: путь — блоки, скорость — блоки за тик (метр модели — {@code scale} блоков, секунда модели —
  * {@code 20·scale} тиков, поэтому скорость в блоках за тик — U/20 при любом масштабе); часы — тики после подрыва.
  */
 public final class BlastGust implements Fragments.Wind {
     private final Detonation d;
+    /** Приход фронта в игре — свой у подрыва ({@link Detonation#front}): таблица, а не поиск в кэше на каждый вызов. */
+    private final ua.zentix.incoming.nuclear.model.FrontProfile front;
     /** Наклонная дальность места от подрыва, блоки. */
     private final double slant;
     /** Приход фронта и положительная фаза, тики после подрыва; ветер сразу за фронтом, блоков за тик; направление от эпицентра. */
@@ -35,6 +37,7 @@ public final class BlastGust implements Fragments.Wind {
 
     private BlastGust(Detonation d, Vec3 at, DoubleSupplier clock) {
         this.d = d;
+        this.front = d.front();
         this.slant = at.distanceTo(d.burst());
         double dx = at.x - d.burst().x, dz = at.z - d.burst().z, len = Math.sqrt(dx * dx + dz * dz);
         this.ax = len < 1e-3 ? 1 : dx / len;
@@ -45,13 +48,18 @@ public final class BlastGust implements Fragments.Wind {
         this.clock = clock;
     }
 
-    /** Ветер волны подрыва {@code a} в месте {@code at} (по часам подрыва у клиента). */
+    /**
+     * Ветер волны подрыва {@code a} в месте {@code at} — по часам подрыва у клиента, найденного по номеру: вход в мир,
+     * возрождение и перемотка повтора заменяют его запись ({@code ClientNuclear.sync}), а куски в полёте остаются, и со
+     * старыми часами ветер у них застыл бы на десяток секунд. Подрыва нет — ветра нет.
+     */
     static BlastGust at(ClientNuclear.Active a, Vec3 at) {
-        return of(a.d, at, () -> a.ticks(0));
+        int id = a.d.id();
+        return of(a.d, at, () -> ClientNuclear.ticksOf(id));
     }
 
     /** Ветер волны подрыва {@code d} в месте {@code at}; {@code clock} — тики после подрыва. */
-    static BlastGust of(Detonation d, Vec3 at, DoubleSupplier clock) {
+    public static BlastGust of(Detonation d, Vec3 at, DoubleSupplier clock) {
         return new BlastGust(d, at, clock);
     }
 
@@ -60,10 +68,15 @@ public final class BlastGust implements Fragments.Wind {
         return Math.max(0, ticks - arrival) / phase;
     }
 
-    /** Скорость воздуха от эпицентра вдоль земли, блоков за тик (в фазе разрежения — меньше нуля; до фронта — 0). */
+    /**
+     * Скорость воздуха от эпицентра вдоль земли, блоков за тик (в фазе разрежения — меньше нуля; до фронта — 0), не быстрее
+     * фронта в игре.
+     */
     double speed(double ticks) {
         double x = x(ticks);
-        return x <= 0 ? 0 : u0 * (1 - x) * Math.exp(-x);
+        if (x <= 0) return 0;
+        double u = u0 * (1 - x) * Math.exp(-x);
+        return Math.min(u, front.radiusAt(ticks + 0.5) - front.radiusAt(ticks - 0.5));
     }
 
     /**
@@ -73,7 +86,7 @@ public final class BlastGust implements Fragments.Wind {
     double path(double ticks) {
         double x = x(ticks);
         if (x <= 0) return 0;
-        return Math.min(u0 * phase * x * Math.exp(-x), Math.max(0, d.frontRadius(ticks) - slant));
+        return Math.min(u0 * phase * x * Math.exp(-x), Math.max(0, front.radiusAt(ticks) - slant));
     }
 
     /**
@@ -100,10 +113,10 @@ public final class BlastGust implements Fragments.Wind {
 
     @Override
     public void at(double x, double y, double z, double[] into) {
-        double now = clock.getAsDouble(), u = speed(now);
+        double now = clock.getAsDouble(), u = Double.isNaN(now) ? 0 : speed(now);
         // впереди фронта воздух стоит
-        double bx = x - d.burst().x, by = y - d.burst().y, bz = z - d.burst().z;
-        if (bx * bx + by * by + bz * bz > d.frontRadius(now) * d.frontRadius(now)) u = 0;
+        double bx = x - d.burst().x, by = y - d.burst().y, bz = z - d.burst().z, r = u == 0 ? 0 : front.radiusAt(now);
+        if (bx * bx + by * by + bz * bz > r * r) u = 0;
         into[0] = ax * u;
         into[1] = u;
         into[2] = az * u;

@@ -29,7 +29,7 @@ import java.util.List;
  * Куски блоков, которые сорвала и несёт ударная волна: кувыркающиеся тела с текстурой своего блока (как частица
  * разрушения блока, только объёмные) летят, падают, бьются о землю и ложатся. Частицы ванильного движка на листе блоков:
  * свет мира, туман и шейдерпак — как у всего в мире, своё — только тело. Сколько их живёт сразу — не больше {@link #CAP}
- * (меньше по настройке «Частицы»): лишние не рождаются.
+ * (меньше по настройке «Частицы»): когда мест нет, новый кусок ближе к камере вытесняет самый дальний, иначе не рождается.
  * <p>
  * Кусок — тело своего вещества ({@link Kind}): обломок камня или дерева — куб, доска, осколок стекла, лист. Волна его не
  * бросает, а несёт ветер за фронтом ({@link Wind}): кусок срывается с места в покое, воздух разгоняет его квадратичным
@@ -47,11 +47,10 @@ public final class Fragments {
     public static final int DELAY_MAX = 40;
     /** Последние столько тиков жизни кусок уменьшается до нуля (ложится и крошится). */
     private static final int SHRINK = 15;
-    /** Кусок, что пролежал на земле столько тиков (скорость меньше {@link #REST_SPEED} блока за тик), уходит. */
+    /** Кусок, что пролежал на земле столько тиков, уходит. */
     private static final int REST = 20;
-    private static final double REST_SPEED = 0.02;
     /** Ускорение свободного падения, блоков за тик² (9,81 м/с²; блок — метр, тик — 1/20 с). */
-    static final double G = 9.81 / 400;
+    public static final double G = 9.81 / 400;
     /** Плотность воздуха у земли, кг/м³. */
     static final double AIR = 1.2;
     /**
@@ -76,7 +75,7 @@ public final class Fragments {
      * Ветер вверх — доля ветра вдоль земли у куска (Kuhl и др. 1992, §3.4: вертикальная скорость в пыльном слое за фронтом —
      * 0,02 ветра у дна и 0,04–0,12 у верха); у каждого куска своя.
      */
-    static final double LIFT_MIN = 0.02, LIFT_MAX = 0.12;
+    public static final double LIFT_MIN = 0.02, LIFT_MAX = 0.12;
     /**
      * Живые куски — свой список, а не по смерти куска: движок выбрасывает частицы и без неё (переполнение очереди, смена
      * мира), поэтому кусок, который не тикал дольше {@link #LOST} тиков, считается ушедшим.
@@ -135,7 +134,7 @@ public final class Fragments {
      * @param density плотность вещества, кг/м³ ({@link Shielding#material}; у стекла — масса окна на квадратный метр)
      * @param size    ребро куба или длина пластины, м
      */
-    static double terminal(Kind kind, double density, double size) {
+    public static double terminal(Kind kind, double density, double size) {
         double g = 9.81;
         return switch (kind) {
             case CHUNK -> Math.sqrt(2 * density * size * g / (AIR * CD_CUBE));
@@ -150,7 +149,7 @@ public final class Fragments {
      * {@code drag} = g/v_t² (1/блок): квадратичное сопротивление за тик — точно (|v − u| спадает как 1/(1 + k·|v − u|·t):
      * у листа k·|v − u| в сотни раз больше единицы, и шаг Эйлера разошёлся бы), тяжесть — вокруг него. Возвращает |v − u|.
      */
-    static double step(double[] v, double ux, double uy, double uz, double drag) {
+    public static double step(double[] v, double ux, double uy, double uz, double drag) {
         // тяжесть — половиной до сопротивления и половиной после (у листа время установления — 3 тика, и тяжесть одним
         // шагом после сопротивления сдвинула бы скорость падения на 15 %)
         double rx = v[0] - ux, ry = v[1] - 0.5 * G - uy, rz = v[2] - uz, rel = Math.sqrt(rx * rx + ry * ry + rz * rz);
@@ -243,6 +242,8 @@ public final class Fragments {
         private final Wind wind;
         private float angle, angleO, spin;
         private int delay, rest;
+        /** Первый тик полёта прошёл (рамка вынута из блоков). */
+        private boolean out;
         /** Тик {@link Fragments#tick}, в который кусок тикал в последний раз (движок выбросил его — перестаёт). */
         private long ticked = Fragments.tick;
 
@@ -330,6 +331,27 @@ public final class Fragments {
                 delay--;
                 return;
             }
+            if (!out) {
+                // рамка — по наибольшему размеру тела: у длинной доски из пролома у пола она заходит в пол, а ваниль не
+                // выталкивает частицу из блока, в котором та уже стоит, — доска ушла бы в пол; выше — на свободное место (руины
+                // встают к вылету, поэтому проверка — в первый тик полёта, а не при рождении)
+                out = true;
+                for (int i = 0; i < 4 && !level.noCollision(getBoundingBox()); i++) {
+                    setPos(x, y + 0.25, z);
+                    yo = y;
+                }
+            }
+            if (onGround) {
+                // лёг: ваниль после касания земли частицу больше не двигает (stoppedByCollision) — кувырок гаснет, полежит и
+                // раскрошится
+                xd = yd = zd = 0;
+                super.tick();
+                spin *= 0.5f;
+                angleO = angle;
+                angle += spin;
+                if (++rest >= REST) lifetime = Math.min(lifetime, age + SHRINK);
+                return;
+            }
             // ветер: вдоль земли — у места, откуда сорвало, вверх — своя доля его (вихри пыльного слоя)
             wind.at(x, y + bbHeight * 0.5, z, AIR_NOW);
             VEL[0] = xd;
@@ -343,13 +365,7 @@ public final class Fragments {
             angleO = angle;
             // кувыркается тем быстрее, чем быстрее его обтекает воздух
             spin = Math.copySign((float) Math.min(0.8, 0.1 + 0.25 * rel), spin);
-            angle += onGround ? 0.3f * spin : spin;
-            if (onGround && xd * xd + yd * yd + zd * zd < REST_SPEED * REST_SPEED) {
-                // лёг: полежит и раскрошится
-                if (++rest >= REST) lifetime = Math.min(lifetime, age + SHRINK);
-            } else {
-                rest = 0;
-            }
+            angle += spin;
         }
 
         @Override

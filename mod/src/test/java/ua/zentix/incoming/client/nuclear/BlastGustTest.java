@@ -38,11 +38,36 @@ class BlastGustTest {
     }
 
     /**
-     * Ничто не опережает фронт волны: путь воздуха от места не уходит дальше фронта в игре (и при игровой волне 0,2 звука,
-     * где ветер вблизи быстрее фронта), впереди фронта ветра нет; пройденный воздухом путь не убывает.
+     * Ничто не опережает фронт волны: клок листвы и доска, сорванные в покое у места, летят с ветром (сопротивление по своей
+     * скорости падения, ветер — в точке куска, вверх — наибольшая доля) и не уходят дальше фронта в игре — и при игровой
+     * волне 0,2 звука, где настоящий ветер вблизи быстрее фронта.
      */
     @Test
-    void nothingOutrunsTheFront() {
+    void piecesStayBehindTheFront() {
+        for (float wave : new float[]{1f, 0.2f}) {
+            Detonation d = ground(wave);
+            for (double r : RANGES) {
+                for (ua.zentix.incoming.client.fx.Fragments.Kind kind : new ua.zentix.incoming.client.fx.Fragments.Kind[]{
+                        ua.zentix.incoming.client.fx.Fragments.Kind.LEAF, ua.zentix.incoming.client.fx.Fragments.Kind.BOARD}) {
+                    double[] now = {0}, air = new double[3], v = new double[3], p = {r, 70, 0};
+                    BlastGust g = BlastGust.of(d, new Vec3(r, 70, 0), () -> now[0]);
+                    double vt = ua.zentix.incoming.client.fx.Fragments.terminal(kind, 600, 0.3) / 20, drag = ua.zentix.incoming.client.fx.Fragments.G / (vt * vt);
+                    for (double t = Math.floor(g.arrival); t < g.arrival + 3 * g.phase; t++) {
+                        now[0] = t;
+                        g.at(p[0], p[1], p[2], air);
+                        ua.zentix.incoming.client.fx.Fragments.step(v, air[0], ua.zentix.incoming.client.fx.Fragments.LIFT_MAX * Math.max(0, air[1]), air[2], drag);
+                        for (int i = 0; i < 3; i++) p[i] += v[i];
+                        double slant = Math.sqrt(p[0] * p[0] + (p[1] - 64) * (p[1] - 64) + p[2] * p[2]);
+                        assertTrue(slant <= d.frontRadius(t + 1) + 1e-6, wave + " " + r + " " + kind + " at " + t + ": " + slant + " > " + d.frontRadius(t + 1));
+                    }
+                }
+            }
+        }
+    }
+
+    /** Путь воздуха не уходит дальше фронта в игре; пройденный путь не убывает; без часов подрыва ветра нет. */
+    @Test
+    void airPathBehindTheFront() {
         for (float wave : new float[]{1f, 0.2f}) {
             Detonation d = ground(wave);
             double[] into = new double[3];
@@ -63,6 +88,9 @@ class BlastGustTest {
                 }
             }
         }
+        double[] into = new double[3];
+        BlastGust.of(ground(1), new Vec3(1000, 65, 0), () -> Double.NaN).at(1000, 65, 0, into);
+        assertEquals(0, into[1], 0, "подрыва у клиента нет — ветра нет");
     }
 
     /**

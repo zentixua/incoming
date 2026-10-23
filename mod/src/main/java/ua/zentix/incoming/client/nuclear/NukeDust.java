@@ -4,8 +4,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
@@ -178,7 +180,8 @@ public final class NukeDust {
             if (surface && psi >= TEARS_PSI && RANDOM.nextFloat() < 0.5f) {
                 // сорванное с верха земли — в покое, его подхватывает ветер за фронтом
                 m.set(bx, top - 1, bz);
-                Fragments.torn(level, chunk.getBlockState(m), m, Fragments.Kind.LEAF, x, top + 0.3, z, 0, 0, 0, 0, BlastGust.at(a, at), 0);
+                BlockState cover = chunk.getBlockState(m);
+                if (litter(cover)) Fragments.torn(level, cover, m, Fragments.Kind.LEAF, x, top + 0.3, z, 0, 0, 0, 0, BlastGust.at(a, at), 0);
             }
         }
     }
@@ -238,9 +241,17 @@ public final class NukeDust {
             if (h[0] <= 0) continue;
             Vec3 mid = new Vec3(h[1] / h[0], h[2] / h[0], h[3] / h[0]);
             // разброс мест кучки — её начальный размер (σ по каждой оси)
-            dust.add(mid, h[0], Math.sqrt(Math.max(0, h[4] / h[0] - mid.lengthSqr()) / 3));
+            dust.add(mid, h[0], Math.sqrt(Math.max(0, h[4] / h[0] - mid.lengthSqr()) / 3), eye);
             streaks++;
         }
+    }
+
+    /**
+     * Есть ли на верхнем блоке {@code s} что сорвать ветру: дёрн, подстилка, листва кроны — лёгкие пластины. С камня, песка,
+     * гравия, снега кусков нет: песок и снег уходят пылью и брызгами слоя (пелена), а камень ветру не по силам.
+     */
+    private static boolean litter(BlockState s) {
+        return s.is(BlockTags.LEAVES) || s.is(BlockTags.DIRT);
     }
 
     /**
@@ -296,7 +307,8 @@ public final class NukeDust {
                 LevelChunk chunk = level.getChunkSource().getChunk(bx >> 4, bz >> 4, false);
                 if (chunk == null) continue;
                 m.set(bx, chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15), bz);
-                Fragments.torn(level, chunk.getBlockState(m), m, Fragments.Kind.LEAF, p.x, Math.max(p.y, m.getY() + 1.2), p.z, air[0], 0, air[2], 0,
+                BlockState cover = chunk.getBlockState(m);
+                if (litter(cover)) Fragments.torn(level, cover, m, Fragments.Kind.LEAF, p.x, Math.max(p.y, m.getY() + 1.2), p.z, air[0], 0, air[2], 0,
                         wind, 0);
             } else if (puffs && RANDOM.nextDouble() < inHead(a, GUST_WALL, p)) {
                 // бурая пыль и серый дым клубами — стена, которая проходит сквозь игрока (цветом стены, со светом); над

@@ -39,6 +39,11 @@ final class BlastDust implements SmokeGrid.Source {
     static final double RISE = 0.05, SPREAD = 0.07;
     /** Пыль пролома в блок — клуб такого полуразмера, блоки. */
     static final double R0 = 0.5;
+    /**
+     * Полос у подрыва — не больше (каждая в кадре — до 12 клубов слоя): когда мест нет, новая полоса ближе к камере
+     * вытесняет самую дальнюю, иначе не встаёт — волна идёт к камере, и ближние проломы приходят последними.
+     */
+    static final int MAX_STREAKS = 256;
 
     /** Полоса одного пролома или кучки проломов: место, ветер там, масса пыли, кг, начальный σ, дальность от эпицентра, м. */
     private static final class Streak {
@@ -92,9 +97,23 @@ final class BlastDust implements SmokeGrid.Source {
         dustK = SmokeGrid.dustK(dustR, dustG, dustB);
     }
 
-    /** Пыль {@code mass} кг из пролома в {@code at} (кучка — с полуразмером {@code r0} блоков). */
-    void add(Vec3 at, double mass, double r0) {
+    /** Пыль {@code mass} кг из пролома в {@code at} (кучка — с полуразмером {@code r0} блоков); {@code eye} — камера. */
+    void add(Vec3 at, double mass, double r0, Vec3 eye) {
         if (gone || mass <= 0) return;
+        if (streaks.size() >= MAX_STREAKS) {
+            int far = -1;
+            double farD = at.distanceToSqr(eye);
+            for (int i = 0; i < streaks.size(); i++) {
+                Streak s = streaks.get(i);
+                double dd = eye.distanceToSqr(s.x, s.y, s.z);
+                if (dd > farD) {
+                    farD = dd;
+                    far = i;
+                }
+            }
+            if (far < 0) return;
+            streaks.remove(far);
+        }
         Detonation d = a.d;
         streaks.add(new Streak(at.x, at.y, at.z, BlastGust.at(a, at), mass, Math.max(R0, r0),
                 d.metres(Math.hypot(at.x - d.burst().x, at.z - d.burst().z))));
