@@ -383,22 +383,31 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
         };
     }
 
-    /** Горячие сопла ускорителей по оружию: таблица остывания считается один раз, при первом ускорителе. */
-    private static final java.util.Map<WeaponType, java.util.Optional<NozzleGlow>> NOZZLES = new java.util.concurrent.ConcurrentHashMap<>();
+    /**
+     * Горячие сопла ускорителей по оружию: таблица остывания (десятки миллисекунд) считается один раз, в фоне, при первом
+     * ускорителе — до готовности сопла нет (первые доли секунды поджига, стенки ещё холодные).
+     */
+    private static final java.util.Map<WeaponType, java.util.concurrent.CompletableFuture<java.util.Optional<NozzleGlow>>> NOZZLES =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Горячее сопло ускорителя оружия weapon ({@link #buildNozzleGlow}), если уже посчитано; иначе null. */
+    @Nullable
+    public static NozzleGlow nozzleGlow(WeaponType weapon) {
+        var f = NOZZLES.computeIfAbsent(weapon, w -> java.util.concurrent.CompletableFuture.supplyAsync(() -> buildNozzleGlow(w),
+                net.minecraft.Util.backgroundExecutor()));
+        return f.isDone() && !f.isCompletedExceptionally() ? f.join().orElse(null) : null;
+    }
 
     /**
      * Горячее сопло сбрасываемого стартового ускорителя оружия weapon ({@link NozzleGlow}: двигатель ускорителя, кривая
-     * тяги в игре и настоящее время работы); null — такого ускорителя нет.
+     * тяги в игре и настоящее время работы); пусто — такого ускорителя нет.
      */
-    @Nullable
-    public static NozzleGlow nozzleGlow(WeaponType weapon) {
-        return NOZZLES.computeIfAbsent(weapon, w -> {
-            Stage boost = of(w).airframe(false).far().boost();
-            ThrustCurve curve = w.spec().airframe().thrust();
-            Article.SolidMotor real = w.spec().airframe().article().booster();
-            if (of(w).spent() == null || boost.motor() == null || !boost.booster() || curve == null || real == null) return java.util.Optional.empty();
-            return java.util.Optional.of(new NozzleGlow(boost.motor(), curve, real.burn()));
-        }).orElse(null);
+    public static java.util.Optional<NozzleGlow> buildNozzleGlow(WeaponType weapon) {
+        Stage boost = of(weapon).airframe(false).far().boost();
+        ThrustCurve curve = weapon.spec().airframe().thrust();
+        Article.SolidMotor real = weapon.spec().airframe().article().booster();
+        if (of(weapon).spent() == null || boost.motor() == null || !boost.booster() || curve == null || real == null) return java.util.Optional.empty();
+        return java.util.Optional.of(new NozzleGlow(boost.motor(), curve, real.burn()));
     }
 
     /** Сущность полёта: носитель или вторая (бомба). */

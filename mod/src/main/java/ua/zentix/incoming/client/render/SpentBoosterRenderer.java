@@ -8,6 +8,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.inventory.InventoryMenu;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
+import net.minecraft.world.phys.Vec3;
+import ua.zentix.incoming.client.fx.plume.NozzleGlow;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.entity.SpentBoosterEntity;
 
@@ -31,8 +34,23 @@ public class SpentBoosterRenderer extends EntityRenderer<SpentBoosterEntity> {
             pose.translate(0, spent.dy(), spent.dz());
             spent.mesh().get().draw(pose, buffers, packedLight);
             pose.popPose();
+            glow(e, spent, tumble, t);
         }
         super.render(e, entityYaw, partialTick, pose, buffers, packedLight);
+    }
+
+    /**
+     * Горячее сопло: стенки остывают с конца работы ({@link NozzleGlow#spent}); срез — там же, где у сетки (та же поза).
+     */
+    private static void glow(SpentBoosterEntity e, ClientWeaponSpec.SpentBooster spent, float tumble, float age) {
+        NozzleGlow g = ClientWeaponSpec.nozzleGlow(e.weapon());
+        ClientWeaponSpec.At at = ClientWeaponSpec.of(e.weapon()).airframe(false).boosterNozzle();
+        if (g == null || at == null) return;
+        Quaternionf rot = new Quaternionf().rotationYXZ(-e.getYRot() * Mth.DEG_TO_RAD, tumble * Mth.DEG_TO_RAD, 0);
+        Vector3f n = new Vector3f((float) at.x(), (float) at.y() + spent.dy(), (float) at.z() + spent.dz()).rotate(rot).add(0, spent.lift(), 0);
+        float partial = age - e.age();
+        Vec3 nozzle = e.getPosition(partial).add(n.x, n.y, n.z);
+        PlumeRenderer.glow(g.spent(age), e, rot, nozzle, 1);
     }
 
     @Override

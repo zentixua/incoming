@@ -8,6 +8,7 @@ import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.Exhaust;
 import ua.zentix.incoming.client.fx.plume.Flame;
+import ua.zentix.incoming.client.fx.plume.NozzleGlow;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -56,7 +57,23 @@ public final class PlumeRenderer {
      */
     private static final Map<net.minecraft.world.entity.Entity, Jet> FRAME = new IdentityHashMap<>();
 
+    /** Горячее сопло кадра: вид сопла, поворот системы ускорителя (ось сопла — −Z), срез сопла в мире, доля вблизи. */
+    private record Hot(NozzleGlow.Shine shine, Quaternionf rotation, Vec3 nozzle, float near) {}
+
+    /** Горячие сопла этого кадра — по сущности, как струи ({@link #FRAME}). */
+    private static final Map<net.minecraft.world.entity.Entity, Hot> HOT = new IdentityHashMap<>();
+
     private PlumeRenderer() {}
+
+    /**
+     * Сущность key рисуется в этом кадре с горячим соплом s ({@link NozzleGlow}): срез — в nozzle (мир), ось сопла — −Z
+     * системы rotation; near — доля вблизи, как у струи.
+     */
+    public static void glow(NozzleGlow.Shine s, net.minecraft.world.entity.Entity key, Quaternionf rotation, Vec3 nozzle, float near) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.getCameraEntity() == key && mc.options.getCameraType().isFirstPerson()) return;
+        HOT.put(key, new Hot(s, new Quaternionf(rotation), nozzle, near));
+    }
 
     /**
      * Сущность key рисуется в этом кадре со струёй p: её нарисует слой эффектов ({@link #collect}).
@@ -74,10 +91,11 @@ public final class PlumeRenderer {
 
     /** Струи кадра — в квадраты слоя эффектов (от глаза кадра {@code view.camera()}). */
     public static void collect(FarView view, FarSprites out) {
-        if (FRAME.isEmpty()) return;
+        if (FRAME.isEmpty() && HOT.isEmpty()) return;
         Vec3 eye = view.camera();
         double exposure = view.exposure();
         for (Jet jet : FRAME.values()) draw(jet, eye, exposure, view, out);
+        for (Hot hot : HOT.values()) draw(hot, eye, exposure, view, out);
     }
 
     /**
@@ -86,11 +104,13 @@ public final class PlumeRenderer {
      */
     public static void endFrame() {
         FRAME.clear();
+        HOT.clear();
     }
 
     /** Выход из мира. */
     public static void reset() {
         FRAME.clear();
+        HOT.clear();
     }
 
     private static void draw(Jet jet, Vec3 eye, double exposure, FarView view, FarSprites out) {
@@ -136,6 +156,42 @@ public final class PlumeRenderer {
                 }
             }
         });
+    }
+
+    /**
+     * Горячее сопло: круг среза в его плоскости — свет раструба (что видно через срез — его стенки), и круг горла на его
+     * глубине — сверх раструба, долей, видной через срез ({@link NozzleGlow.Shine#throatSeen}). Спереди среза сопла не
+     * видно. Мельче пятна {@link Sight#MIN_PIXELS} — пятно, бледнее во столько же раз (свет тот же, как у
+     * {@link Sight#point}). Дымка и привыкание глаза — как у струи.
+     */
+    private static void draw(Hot hot, Vec3 eye, double exposure, FarView view, FarSprites out) {
+        NozzleGlow.Shine s = hot.shine();
+        Quaternionf rot = hot.rotation();
+        Vector3f axis = new Vector3f(0, 0, -1).rotate(rot), ax = new Vector3f(1, 0, 0).rotate(rot), ay = new Vector3f(0, 1, 0).rotate(rot);
+        float nx = (float) (hot.nozzle().x - eye.x), ny = (float) (hot.nozzle().y - eye.y), nz = (float) (hot.nozzle().z - eye.z);
+        double dist = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (dist < 1e-3) return;
+        // косинус между осью сопла (наружу) и направлением на глаз
+        double cos = -(axis.x * nx + axis.y * ny + axis.z * nz) / dist;
+        if (cos <= 0) return;
+        double lit = exposure * view.air(dist, ny);
+        double cone = s.coneLuminance(), throat = s.throatLuminance() * s.throatSeen(cos);
+        // срез — чуть позади своей плоскости: не в одной глубине с краем сетки сопла
+        plate(out, view, new Vector3f(axis).mul(0.01f).add(nx, ny, nz), ax, ay, s.exitRadius(), cos, dist, NozzleGlow.color(s.coneKelvin()),
+                cone * lit, hot.near());
+        plate(out, view, new Vector3f(axis).mul((float) -s.depth()).add(nx, ny, nz), ax, ay, s.throatRadius(), cos, dist,
+                NozzleGlow.color(s.throatKelvin()), Math.max(0, throat - cone * s.throatSeen(cos)) * lit, hot.near());
+    }
+
+    /** Круг радиуса r с центром c (от глаза) в плоскости осей ax, ay, видный под косинусом cos с дальности dist. */
+    private static void plate(FarSprites out, FarView view, Vector3f c, Vector3f ax, Vector3f ay, double r, double cos, double dist, int color,
+                              double lum, float near) {
+        if (lum <= 0) return;
+        // видимый круг той же площади — r·√cos; мельче пятна в полтора пикселя — крупнее, бледнее во столько же раз
+        double seen = r * Math.sqrt(cos), least = 0.5 * Sight.MIN_PIXELS * view.pixel() * dist, grow = Math.max(1, least / Math.max(seen, 1e-9));
+        float[] rgb = Sight.onScreen(color, lum / (grow * grow), near);
+        float k = (float) (r * grow);
+        out.glowPlate(c, new Vector3f(ax).mul(k), new Vector3f(ay).mul(k), rgb[0], rgb[1], rgb[2], c.length());
     }
 
     /**

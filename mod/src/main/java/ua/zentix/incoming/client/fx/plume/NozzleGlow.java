@@ -115,6 +115,28 @@ public final class NozzleGlow {
         public double throatLuminance() {
             return Material.GRAPHITE.emissivity * NozzleGlow.luminance(throatKelvin);
         }
+
+        /**
+         * Доля горла, видная через срез у взгляда под углом с косинусом cos к оси сопла (1 — строго сзади): круг горла на
+         * глубине {@link #depth} за срезом сдвинут по срезу на depth·tg θ, видна его часть внутри круга среза (линза двух
+         * кругов); спереди среза — 0.
+         */
+        public double throatSeen(double cos) {
+            if (cos <= 0) return 0;
+            double tan = Math.sqrt(Math.max(0, 1 - cos * cos)) / cos;
+            return lens(throatRadius, exitRadius, depth * tan) / (Math.PI * throatRadius * throatRadius);
+        }
+    }
+
+    /** Площадь пересечения кругов радиусов r1, r2 с центрами на расстоянии d. */
+    static double lens(double r1, double r2, double d) {
+        if (d >= r1 + r2) return 0;
+        double small = Math.min(r1, r2);
+        if (d <= Math.abs(r2 - r1)) return Math.PI * small * small;
+        double a1 = Math.acos(Math.max(-1, Math.min(1, (d * d + r1 * r1 - r2 * r2) / (2 * d * r1))));
+        double a2 = Math.acos(Math.max(-1, Math.min(1, (d * d + r2 * r2 - r1 * r1) / (2 * d * r2))));
+        double k = (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2);
+        return r1 * r1 * a1 + r2 * r2 * a2 - 0.5 * Math.sqrt(Math.max(0, k));
     }
 
     private final Motor motor;

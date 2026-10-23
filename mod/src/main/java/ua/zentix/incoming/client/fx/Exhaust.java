@@ -13,6 +13,7 @@ import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
+import ua.zentix.incoming.client.fx.plume.NozzleGlow;
 import ua.zentix.incoming.client.fx.plume.TrailModel;
 import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.client.fx.particle.Fx;
@@ -99,6 +100,22 @@ public final class Exhaust {
         if (f == null) return null;
         ClientWeaponSpec.At n = a.nozzle(stage);
         return new Plume((float) n.y(), (float) n.z(), f, 1);
+    }
+
+    /** Горячее сопло ускорителя на снаряде: вид в этот миг и срез в системе снаряда (нос по +Z). */
+    public record Hot(NozzleGlow.Shine shine, ClientWeaponSpec.At at) {}
+
+    /**
+     * Горячее сопло стартового ускорителя, пока он на снаряде ({@link NozzleGlow}: время — настоящее, полка игрового
+     * разгона сжата в настоящую); null — ускорителя нет, он отделился или сопло ещё не посчитано.
+     */
+    @Nullable
+    public static Hot hot(StrikeProjectile e, float partial) {
+        if (!e.isActive() || !e.flightPhase().boosterLit()) return null;
+        ClientWeaponSpec.At at = nozzles(e).boosterNozzle();
+        NozzleGlow g = at == null ? null : ClientWeaponSpec.nozzleGlow(e.weapon());
+        if (g == null) return null;
+        return new Hot(g.at(g.seconds(e.flightPhase(), e.phaseAge() + partial)), at);
     }
 
     /** Сопла сущности из клиентского паспорта (у B-2 и его бомбы — свои). */

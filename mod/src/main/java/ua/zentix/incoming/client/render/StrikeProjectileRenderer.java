@@ -10,6 +10,7 @@ import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.fx.Exhaust;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
@@ -47,6 +48,15 @@ public class StrikeProjectileRenderer<T extends StrikeProjectile> extends Entity
             double world = Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0;
             float near = (float) (1 - FarView.farShare(at.distanceTo(entityRenderDispatcher.camera.getPosition()), world));
             if (near > 0) PlumeRenderer.render(plume.dimmed(near), entity, rotation, at);
+        }
+        // горячее сопло ускорителя: под факелом, а на спаде тяги — когда огонь гаснет
+        Exhaust.Hot hot = Exhaust.hot(entity, partialTick);
+        if (hot != null) {
+            Vec3 at = entity.getPosition(partialTick);
+            Vector3f n = new Vector3f((float) hot.at().x(), (float) hot.at().y(), (float) hot.at().z()).rotate(rotation);
+            double world = Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0;
+            float near = (float) (1 - FarView.farShare(at.distanceTo(entityRenderDispatcher.camera.getPosition()), world));
+            if (near > 0) PlumeRenderer.glow(hot.shine(), entity, rotation, at.add(n.x, n.y, n.z), near);
         }
         pose.popPose();
         super.render(entity, entityYaw, partialTick, pose, buffers, packedLight);
