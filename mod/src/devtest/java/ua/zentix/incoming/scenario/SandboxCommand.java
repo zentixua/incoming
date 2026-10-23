@@ -14,8 +14,9 @@ import java.util.Locale;
  *   <li>{@code blast <оружие> [seed] [высота]} — взрыв только у клиента: пакет взрыва в той точке песочницы, как от
  *       сервера (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять); высота —
  *       над землёй, м: удар в крышу или стену (земля в пакете — трава под точкой);</li>
- *   <li>{@code real <оружие> [deck <м>]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки) на новом
- *   месте; {@code deck} — удар в середину моста: настил из камня в столько метров над руслом с водой (пробой плиты);</li>
+ *   <li>{@code real <оружие> [deck <м> | houses]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки)
+ *   на новом месте; {@code deck} — удар в середину моста: настил из камня в столько метров над руслом с водой (пробой
+ *   плиты); {@code houses} — у дощатого дома сцены {@code debris} (дома и дубы рядом): что загорится и как дымит;</li>
  *   <li>{@code nuke <кт> [air|ground] [near [метров]]} — ядерный подрыв без полёта ({@code /incoming nuke now}) на новом
  *       месте; с {@code near} — вид у камеры: дома и дубы сцены {@code debris} в точке, подрыв в стольких метрах к северу
  *       (по умолчанию {@link #NEAR_RANGE}), время эффекта — от прихода фронта к домам (кадры и до него, с −10 с);</li>
@@ -89,8 +90,9 @@ record SandboxCommand(Verb verb, List<String> args) {
                 WeaponType w = weapon();
                 if (w == WeaponType.NUKE) throw new IllegalArgumentException("ядерка — nuke <кт>");
                 if (verb == Verb.REAL) {
-                    if (args.size() > 1 && (args.size() != 3 || !args.get(1).equals("deck") || number(2) < 1 || number(2) > 6)) {
-                        throw new IllegalArgumentException("real <оружие> [deck <1–6 м>]");
+                    if (houses() ? args.size() != 2
+                            : args.size() > 1 && (args.size() != 3 || !args.get(1).equals("deck") || number(2) < 1 || number(2) > 6)) {
+                        throw new IllegalArgumentException("real <оружие> [deck <1–6 м> | houses]");
                     }
                     break;
                 }
@@ -177,31 +179,14 @@ record SandboxCommand(Verb verb, List<String> args) {
         return i >= 0 && args.size() > i + 1 ? number(i + 1) : NEAR_RANGE;
     }
 
-    /**
-     * Приказ серверу для {@code launch}/{@code flight} в точке (x, z), без «execute as» ({@code own} добавляет его сам).
-     * Пролёт — по прямой мимо камеры: без точек оператора шахед и ракета летят петлёй в обход и заходят из-за спины
-     * стреляющего ({@code StrikeService.Loop}), и у точки проходили в 200–350 блоках, дальше, чем ждёт песочница. Поэтому
-     * у оружия, которое летает по точкам ({@link WeaponSpec.Route#waypoints}), точка маршрута — сама точка, на одной
-     * прямой между местом пуска и целью: снаряд проходит над ней на своей высоте. «Град» и B-2 точек не берут (приказ с
-     * {@code via} сервер отклоняет) и идут по прямой сами: баллистика и курс сброса от места пуска на цель.
-     */
-    String order(int x, int z) {
-        WeaponType w = weapon();
-        if (verb == Verb.LAUNCH) return String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - LAUNCH_RANGE, x, z);
-        if (verb != Verb.FLIGHT) throw new IllegalStateException("не пуск: " + this);
-        int from = flightFrom();
-        String s = String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - from, x, z + from);
-        return w.spec().route().waypoints() ? s + String.format(Locale.ROOT, " via %d %d", x, z) : s;
+ *   <li>{@code real <оружие> [deck <м> | houses]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки)
+ *   на новом месте; {@code deck} — удар в середину моста: настил из камня в столько метров над руслом с водой (пробой
+ *   плиты); {@code houses} — у дощатого дома сцены {@code debris} (дома и дубы рядом): что загорится и как дымит;</li>
     }
 
-    /** {@code flight}: пуск и цель — на столько блоков от точки. */
-    int flightFrom() {
-        return args.size() > 1 && !args.get(1).equals("own") ? (int) number(1) : FLIGHT_FROM;
-    }
-
-    /** {@code real … deck <м>}: толщина настила моста, м; 0 — удар в землю. */
-    int deck() {
-        return verb == Verb.REAL && args.size() == 3 ? (int) number(2) : 0;
+    /** {@code real <оружие> houses}: удар у дощатого дома сцены {@code debris}. */
+    boolean houses() {
+        return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("houses");
     }
 
     WeaponType weapon() {

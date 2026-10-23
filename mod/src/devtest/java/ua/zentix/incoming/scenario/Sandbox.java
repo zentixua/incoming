@@ -643,7 +643,9 @@ final class Sandbox {
         onServer(true, server -> {
             if (c.verb() == SandboxCommand.Verb.REAL) {
                 if (c.deck() > 0) buildBridge(server, BlockPos.containing(site), c.deck());
-                Warheads.detonate(server.overworld(), c.weapon(), at, null, null);
+                // у дощатого дома: удар в землю у его стены к камере (дом — от x + 4 до x + 12, z ± 3)
+                if (c.houses()) buildHouses(server, BlockPos.containing(site));
+                Warheads.detonate(server.overworld(), c.weapon(), c.houses() ? at.add(8, 0, 5) : at, null, null);
                 return;
             }
             if (c.near()) {
