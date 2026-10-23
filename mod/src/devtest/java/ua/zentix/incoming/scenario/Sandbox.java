@@ -385,6 +385,25 @@ final class Sandbox {
                 timeWait = Math.floorMod(day, 24000L);
                 timeSince = tick;
             }
+            case HOUSE -> {
+                // прежний дом — прочь, новый — сплошной из каменного кирпича от травы до высоты (крыша — на ней)
+                BlockPos s = BlockPos.containing(HOME);
+                if (house[0] > 0) {
+                    server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", s.getX() - house[1], GROUND + 1, s.getZ() - house[1],
+                            s.getX() + house[1], GROUND + house[0], s.getZ() + house[1]));
+                }
+                house[0] = (int) c.number(0);
+                house[1] = (int) c.number(1, 10);
+                if (house[0] > 0) {
+                    server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", s.getX() - house[1], GROUND + 1, s.getZ() - house[1],
+                            s.getX() + house[1], GROUND + house[0], s.getZ() + house[1]));
+                    if (c.args().size() > 2) {
+                        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:%s", s.getX() - house[1], GROUND + house[0], s.getZ() - house[1],
+                                s.getX() + house[1], GROUND + house[0], s.getZ() + house[1], c.args().get(2)));
+                    }
+                }
+                finish("ok");
+            }
             case HUD -> {
                 mc.options.hideGui = c.args().getFirst().equals("off");
                 finish("ok");
@@ -455,6 +474,9 @@ final class Sandbox {
         capture = null;
     }
 
+    /** Дом под точкой ({@code house}): высота и полуширина, блоков; 0 — дома нет. */
+    private final int[] house = new int[2];
+
     /** Взрывы налёта ({@code raid}), что ещё впереди: тик, x, z (биты double), зерно. */
     private final List<long[]> raid = new ArrayList<>();
 
@@ -496,7 +518,7 @@ final class Sandbox {
                 Vec3 ground = new Vec3(site.x, GROUND + 1, site.z), pos = ground.add(0, c.number(2, 0), 0);
                 GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(ground));
                 long seed = c.args().size() > 1 ? c.seedAt(1) : 1;
-                // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре; земля — трава под точкой
+                // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
                 ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
                 begin();
             }

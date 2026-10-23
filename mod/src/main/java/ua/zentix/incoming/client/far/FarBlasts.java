@@ -336,9 +336,10 @@ public final class FarBlasts {
             CloudModel model = CloudModel.buried(source, air(level, pos), law, ground.isWater(), ground(level, top));
             return cloud(level, source, model, top, ground, p.seed());
         }
-        // удар — в поверхность, куда пришёлся (земля, крыша, стена — всё равно): что вокруг и на какой высоте, видно по
-        // верхним блокам (ground)
-        return cloud(level, source, new CloudModel(source, air(level, pos), ground.isWater(), 0, ground(level, pos)), pos, ground, p.seed());
+        // удар — в то, что под точкой (земля, крыша, стена — всё равно; над аппаратом в воздухе — рельеф далеко внизу): что
+        // вокруг и на какой высоте, видно по верхним блокам (ground)
+        return cloud(level, source, new CloudModel(source, air(level, pos), ground.isWater(), overSurface(level, pos), ground(level, pos)), pos, ground,
+                p.seed());
     }
 
     /**
@@ -424,6 +425,22 @@ public final class FarBlasts {
     }
 
     /**
+     * Высота наземного взрыва над тем, что прямо под точкой, м: верх колонки ({@link FarTerrain}: чанк клиента — с кронами
+     * и постройками, дальше плитки карты); удар в крышу, стену, склон — 0 (контакт: заряд дробит то, во что попал), над
+     * аппаратом в небе — высота над рельефом. Точка удара о стену лежит на её грани — колонки по обе стороны грани (в
+     * полублоке), берётся высшая. Не знаем ничего — 0: пакет называет взрыв наземным.
+     */
+    static double overSurface(ClientLevel level, Vec3 pos) {
+        Sightline.Heights heights = FarTerrain.of(level);
+        double ground = Double.NaN;
+        for (int[] d : new int[][]{{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            double h = heights.at((int) Math.floor(pos.x + 0.5 * d[0]), (int) Math.floor(pos.z + 0.5 * d[1]));
+            if (!Double.isNaN(h) && !(h <= ground)) ground = h;
+        }
+        return Double.isNaN(ground) ? 0 : Math.max(0, pos.y - ground);
+    }
+
+    /**
      * Высота точки над рельефом под ней, м: чанк клиента (карта высот {@code MOTION_BLOCKING} — с кронами и постройками),
      * дальше — плитки рельефа карты ({@link FarTerrain}); не знаем ничего — над уровнем моря.
      */
@@ -440,7 +457,7 @@ public final class FarBlasts {
     public static CloudModel model(S2C.Blast p) {
         ClientLevel level = Minecraft.getInstance().level;
         return new CloudModel(BlastSource.of(p), level == null ? CloudModel.Air.STANDARD : air(level, p.pos()), GroundMaterial.byId(p.material()).isWater(),
-                0, level == null ? ua.zentix.incoming.client.fx.smoke.GroundDust.Ground.BARE : ground(level, p.pos()));
+                level == null ? 0 : overSurface(level, p.pos()), level == null ? ua.zentix.incoming.client.fx.smoke.GroundDust.Ground.BARE : ground(level, p.pos()));
     }
 
     /** Воздух в месте взрыва: воздух мира ({@link ClientAir}); влажность — его, у воды 1 (облако конденсации). */

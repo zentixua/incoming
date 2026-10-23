@@ -13,7 +13,9 @@ import java.util.Locale;
  * <ul>
  *   <li>{@code blast <оружие> [seed] [высота]} — взрыв только у клиента: пакет взрыва в той точке песочницы, как от
  *       сервера (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять); высота —
- *       над землёй, м: удар в крышу или стену (земля в пакете — трава под точкой);</li>
+ *       над землёй, м (удар в крышу — на высоте дома {@code house}, иначе — точка в воздухе над травой);</li>
+ *   <li>{@code house <высота> [полуширина] [верх]} — дом из каменного кирпича под точкой (высота 0 — убрать), по
+ *       умолчанию 21×21 блок; верх — блок крыши ({@code coarse_dirt} — крыша-сад с рыхлой землёй);</li>
  *   <li>{@code real <оружие> [deck <м> | houses]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки)
  *   на новом месте; {@code deck} — удар в середину моста: настил из камня в столько метров над руслом с водой (пробой
  *   плиты); {@code houses} — у дощатого дома сцены {@code debris} (дома и дубы рядом): что загорится и как дымит;</li>
@@ -52,7 +54,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code flight}: пуск — на столько блоков к югу от точки (+Z), цель — на столько же к северу (−Z). */
     static final int FLIGHT_FROM = 600;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
@@ -161,6 +163,12 @@ record SandboxCommand(Verb verb, List<String> args) {
             case WAIT -> {
                 need(1, 1);
                 number(0);
+            }
+            case HOUSE -> {
+                need(1, 3);
+                if (args.size() > 2 && !args.get(2).matches("[a-z0-9_]+")) throw new IllegalArgumentException("верх — блок minecraft: " + args.get(2));
+                if (number(0) < 0 || number(0) > 50) throw new IllegalArgumentException("высота дома 0–50");
+                if (number(1, 10) < 1 || number(1, 10) > 12) throw new IllegalArgumentException("полуширина 1–12");
             }
             case AGAIN, CLEAR, RELOAD -> need(0, 0);
         }
