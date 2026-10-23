@@ -158,9 +158,18 @@ final class Loudness {
             return top;
         }
 
-        /** До уха дошёл взрыв, который на неподвижной шкале звучит громкостью {@code lufs}. */
+        /** До уха дошёл взрыв, который на неподвижной шкале (окно у {@link #CEILING_LEVEL}) звучит громкостью {@code lufs}. */
         void blast(double lufs) {
             hear(level(lufs));
+        }
+
+        /**
+         * Насколько громче неподвижной шкалы звучит взрыв громкостью {@code lufs} (на ней), дБ: окно — с ним самим
+         * ({@link #blast} — когда он зазвучит), поэтому громче потолка он не выходит. Подъём держится до конца записи
+         * взрыва: хвост не разрастается, пока окно опускается.
+         */
+        double lift(double lufs) {
+            return (CEILING_LEVEL - Math.max(top, Math.min(CEILING_LEVEL, level(lufs)))) / 2;
         }
 
         double top() {

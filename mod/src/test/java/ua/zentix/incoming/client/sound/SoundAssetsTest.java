@@ -157,6 +157,30 @@ class SoundAssetsTest {
         }
     }
 
+    /**
+     * Ракурсы взрыва — той громкости, с которой их сводит клиент ({@link BlastMix}): ближний, средний, дальний — каждый
+     * вариант, удар в грудь — среднее вариантов по мощности ({@link BlastMix#SUB_LUFS}, по нему {@link BlastMix#WITH_SUB}).
+     */
+    @Test
+    void blastFilesAtTheirLoudness() throws IOException {
+        JsonObject json = JsonParser.parseReader(new InputStreamReader(open(ASSETS + "sounds.json"), StandardCharsets.UTF_8)).getAsJsonObject();
+        java.util.Map<String, Double> want = java.util.Map.of("blast.near", BlastMix.NEAR_LUFS, "blast.mid", BlastMix.MID_LUFS,
+                "blast.far", BlastMix.FAR_LUFS, "blast.sub", BlastMix.SUB_LUFS);
+        for (var e : want.entrySet()) {
+            double power = 0;
+            int n = 0;
+            for (JsonElement s : json.getAsJsonObject(e.getKey()).getAsJsonArray("sounds")) {
+                String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
+                String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
+                double got = momentaryMax(file, false);
+                if (!e.getKey().equals("blast.sub")) assertEquals(e.getValue(), got, 0.5, file + ": громкость, LUFS");
+                power += Math.pow(10, got / 10);
+                n++;
+            }
+            assertEquals(e.getValue(), 10 * Math.log10(power / n), 0.3, e.getKey() + ": средняя громкость вариантов, LUFS");
+        }
+    }
+
     /** Наибольшая мгновенная громкость файла (BS.1770: K-фильтр, окно 400 мс через 100 мс), LUFS; петля — по кругу. */
     static double momentaryMax(String file, boolean loop) throws IOException {
         float[] x;

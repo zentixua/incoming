@@ -30,7 +30,17 @@ import ua.zentix.incoming.nuclear.model.BlastModel;
  */
 public final class BlastMix {
     /** Громкость файлов ракурсов, LUFS (наибольшая мгновенная) — те же числа, что в {@code tools/build_sounds.py}. */
-    static final double NEAR_LUFS = -13.5, MID_LUFS = -13.5, FAR_LUFS = -15;
+    static final double NEAR_LUFS = -12.2, MID_LUFS = -12.2, FAR_LUFS = -13.7;
+    /**
+     * Громкость «удара в грудь» по той же мере, LUFS: среднее по мощности его вариантов ({@code blast_sub_1}, {@code _2}:
+     * −12,9 и −14,4; сборка сводит их без взвешивания, {@code SUB_DB}).
+     */
+    static final double SUB_LUFS = -13.6;
+    /**
+     * Удар в грудь звучит с ближним ракурсом той же громкостью и складывается с ним по мощности ({@link Mix}): на столько
+     * дБ ближний ракурс тише громкости взрыва, чтобы вместе они дали её.
+     */
+    static final double WITH_SUB = 10 * Math.log10(1 + Math.pow(10, (SUB_LUFS - NEAR_LUFS) / 10));
     /**
      * Заряд, у которого записи ракурсов звучат как есть, кг ТНТ. Оценка: ракурсы собраны и сведены как взрыв шахеда
      * (у ближнего — фаза 8 мс, «заряд ~50 кг в двух десятках метров», {@code build_sounds.py}); сами записи — подрывы от
@@ -71,9 +81,8 @@ public final class BlastMix {
     }
 
     /**
-     * Громкость прямого звука у уха, LUFS: потолок с {@link #FULL_PA}, тише — половина децибел давления. Файл ближнего
-     * ракурса тише потолка ({@link #NEAR_LUFS}): с ~0,45 psi он звучит целиком, и до потолка взрыв дотягивает «удар в
-     * грудь» — своя запись, по мощности ({@link Mix}: −13,5 и −14,2 LUFS — −10,8).
+     * Громкость прямого звука у уха, LUFS: потолок с {@link #FULL_PA}, тише — половина децибел давления. Ближний ракурс с
+     * ударом в грудь дают её вместе ({@link #WITH_SUB}): у потолка они звучат почти целиком.
      */
     public static double loudness(double pa) {
         return Loudness.CEILING_LUFS + 10 * Math.log10(Math.max(1e-12, Math.min(1, pa / FULL_PA)));
@@ -99,13 +108,18 @@ public final class BlastMix {
         return gain(loudness(pressure(s, Outdoor.NEAR)) - FAR_LUFS);
     }
 
-    /** Слои взрыва {@code s} на расстоянии {@code d} блоков. */
+    /** Слои взрыва {@code s} на расстоянии {@code d} блоков на неподвижной шкале. */
     public static Layers at(BlastSource s, double d) {
-        double pa = pressure(s, d), l = loudness(pa), far = far(d), crack = crack(pa);
+        return at(s, d, 0);
+    }
+
+    /** Слои взрыва {@code s} на расстоянии {@code d} блоков, громче неподвижной шкалы на {@code lift} дБ (окно громкости). */
+    public static Layers at(BlastSource s, double d, double lift) {
+        double pa = pressure(s, d), l = loudness(pa) + lift, far = far(d), crack = crack(pa);
         double near = (1 - far) * crack, mid = (1 - far) * (1 - crack);
-        float nearV = (float) near * gain(l - NEAR_LUFS);
+        float nearV = (float) near * gain(l - NEAR_LUFS - WITH_SUB);
         return new Layers(nearV, (float) mid * gain(l - MID_LUFS), (float) far * gain(l - FAR_LUFS), nearV,
-                (float) ((1 - near) * Math.sqrt(Math.min(1, pa / FULL_PA)) * uncapped(Loudness.CEILING_LUFS - NEAR_LUFS)));
+                (float) ((1 - near) * Math.sqrt(Math.min(1, pa / FULL_PA)) * uncapped(Loudness.CEILING_LUFS - NEAR_LUFS + lift)));
     }
 
     /** Множитель громкости для разницы db, не больше 1 (громче файла Minecraft не играет). */

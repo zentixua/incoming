@@ -18,10 +18,14 @@ class BlastMixTest {
         return BlastSource.of(w, false);
     }
 
-    /** Громкость прямого звука, LUFS: ракурсы одной записи (один вариант) складываются по амплитуде. */
+    /**
+     * Громкость прямого звука, LUFS: ракурсы одной записи (один вариант) складываются по амплитуде, удар в грудь — своя
+     * запись — по мощности.
+     */
     private static double direct(BlastMix.Layers l) {
-        return 20 * Math.log10(l.near() * Math.pow(10, BlastMix.NEAR_LUFS / 20) + l.mid() * Math.pow(10, BlastMix.MID_LUFS / 20)
-                + l.far() * Math.pow(10, BlastMix.FAR_LUFS / 20));
+        double a = l.near() * Math.pow(10, BlastMix.NEAR_LUFS / 20) + l.mid() * Math.pow(10, BlastMix.MID_LUFS / 20)
+                + l.far() * Math.pow(10, BlastMix.FAR_LUFS / 20), sub = l.sub() * Math.pow(10, BlastMix.SUB_LUFS / 20);
+        return 10 * Math.log10(a * a + sub * sub);
     }
 
     @Test
@@ -61,9 +65,9 @@ class BlastMixTest {
                 assertEquals(1, (1 - near) * crack + (1 - near) * (1 - crack) + near, 1e-9);
                 double v = direct(l);
                 assertTrue(v <= prev + 0.05, w + ": громче на " + d + " бл");
-                // громкость — по давлению: ракурсы вместе дают её (ближний и средний сведены одинаково, дальний тише), но не
-                // громче своего файла: до потолка с ~0,45 psi взрыв дотягивает удар в грудь
-                assertEquals(Math.min(BlastMix.NEAR_LUFS, BlastMix.loudness(BlastMix.pressure(s, d))), v, 1.6, w + " на " + d);
+                // громкость — по давлению: ракурсы с ударом в грудь вместе дают её (ближний и средний сведены одинаково,
+                // дальний тише) до самого потолка — файлы её не обрезают
+                assertEquals(BlastMix.loudness(BlastMix.pressure(s, d)), v, 1.6, w + " на " + d);
                 assertTrue(l.near() <= 1 && l.mid() <= 1 && l.far() <= 1 && l.sub() <= 1 && l.pulse() <= 1);
                 prev = v;
             }
@@ -85,7 +89,7 @@ class BlastMixTest {
     void crackIsTheNearPerspectiveUpCloseAndTheModelFurther() {
         BlastSource shahed = of(WeaponType.DRONE);
         BlastMix.Layers close = BlastMix.at(shahed, 10);
-        assertTrue(close.near() > 0.95 && close.mid() < 0.05 && close.pulse() < 0.05, "в 10 м: " + close);
+        assertTrue(close.near() > 0.9 && close.mid() < 0.05 && close.pulse() < 0.05, "в 10 м: " + close);
         assertEquals(close.near(), close.sub(), 1e-6, "удар в грудь — низ ближнего ракурса");
         assertTrue(BlastMix.crack(10_000) > 0.99 && BlastMix.crack(300) < 0.1);
         BlastMix.Layers mid = BlastMix.at(shahed, 400);

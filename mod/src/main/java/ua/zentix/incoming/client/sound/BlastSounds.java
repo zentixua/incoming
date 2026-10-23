@@ -102,10 +102,13 @@ public final class BlastSounds {
         Outdoor.Heard heard = Outdoor.hear(range(s), s.underground() ? atNear(s, DEEP_LUFS) : BlastMix.v640(s), path);
         float v = heard.volume();
         if (v < AUDIBLE) return heard;
+        // окно громкости: в тишине дальний раскат — громче неподвижной шкалы, под громким — нет
+        double file = s.underground() ? DEEP_LUFS : BlastMix.FAR_LUFS, lufs = file + 20 * Math.log10(v);
+        v = BlastMix.gain(lufs + Loudness.WINDOW.lift(lufs) - file);
+        Loudness.WINDOW.blast(lufs);
         float highs = highs(path);
         SoundEvent event = s.underground() ? ModSounds.BOMB_DEEP.get() : ModSounds.BLAST_FAR.get();
         float pitch = s.underground() ? 1 : BlastMix.pitch(s.chargeKg());
-        Loudness.WINDOW.blast((s.underground() ? DEEP_LUFS : BlastMix.FAR_LUFS) + 20 * Math.log10(v));
         ClientSounds.blastAtEar(event, pos, v, pitch, seed, 1, highs, BlastSounds::factor, mixed(event, v, pitch));
         return heard;
     }
@@ -174,7 +177,9 @@ public final class BlastSounds {
         double tick = clock.ticks(0);
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         double d = ear.distanceTo(pos), pa = BlastMix.pressure(s, d), loudness = BlastMix.loudness(pa);
-        BlastMix.Layers l = BlastMix.at(s, d);
+        // окно громкости ({@link Loudness.Window}): взрыв громче всего, что звучит, — у потолка, подъём на всю запись
+        double lift = Loudness.WINDOW.lift(loudness);
+        BlastMix.Layers l = BlastMix.at(s, d, lift);
         float pitch = BlastMix.pitch(s.chargeKg());
         Loudness.WINDOW.blast(loudness);
         List<SoundInstance> shots = new ArrayList<>(4);
@@ -216,15 +221,15 @@ public final class BlastSounds {
             // своих источников не нашлось — удара нет и в смеси
             if (pulse) blast.add(new Mix.Layer(Envelope.of(x, BlastPulse.RATE), 1, l.pulse(), true));
         }
-        last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
+        last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS lift %.1f pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
                 s.weapon() == null ? "air" : s.weapon().name(), s.chargeKg(), d, pa, 20 * Math.log10(Math.max(pa, 1e-9) / 2e-5), 1000 * BlastMix.phase(s, d),
-                loudness, pitch, l.near(), l.mid(), l.far(), l.sub(), l.pulse(), pulse ? "played" : "-", echoes == null ? "-" : "on");
+                loudness, lift, pitch, l.near(), l.mid(), l.far(), l.sub(), l.pulse(), pulse ? "played" : "-", echoes == null ? "-" : "on");
         if (echoes != null) lastEchoes = echoes;
         for (SoundInstance shot : shots) {
             Deafness.before(shot);
             ClientSounds.start(shot);
         }
-        if (echoes != null) echoes.arrive(ear, BlastMix.uncapped(loudness - BlastMix.FAR_LUFS), pitch);
+        if (echoes != null) echoes.arrive(ear, BlastMix.uncapped(loudness + lift - BlastMix.FAR_LUFS), pitch);
     }
 
     /** Строка {@code SCENARIO blast-sound}: последний обычный взрыв у уха и его эхо; пусто — взрывов не было. */
@@ -285,7 +290,6 @@ public final class BlastSounds {
         double pa = BlastMix.pressure(s, ear().distanceTo(pos));
         float v = byPressure(pa, underground ? CAVE_LUFS : DEEP_LUFS);
         if (v < AUDIBLE) return;
-        Loudness.WINDOW.blast(BlastMix.loudness(pa));
         SoundEvent event = underground ? ModSounds.BOMB_CAVE.get() : ModSounds.BOMB_DEEP.get();
         ClientSounds.blastAtEar(event, pos, v, 1, BlastSounds::factor, mixed(event, v, 1));
     }
@@ -314,14 +318,20 @@ public final class BlastSounds {
         if (v >= AUDIBLE) bomb(ModSounds.BOMB_QUAKE.get(), pos, v, 0.8f);
     }
 
-    /** Громкость записи громкостью {@code fileLufs} для давления {@code pa} у уха ({@link BlastMix#loudness}). */
+    /**
+     * Громкость записи громкостью {@code fileLufs} для давления {@code pa} у уха ({@link BlastMix#loudness}) в окне
+     * громкости; слышно — звук в окне.
+     */
     static float byPressure(double pa, double fileLufs) {
-        return BlastMix.gain(BlastMix.loudness(pa) - fileLufs);
+        double lufs = BlastMix.loudness(pa);
+        float v = BlastMix.gain(lufs + Loudness.WINDOW.lift(lufs) - fileLufs);
+        if (v >= AUDIBLE) Loudness.WINDOW.blast(lufs);
+        return v;
     }
 
     /** Громкость записи громкостью {@code fileLufs} у взрыва {@code s} на краю ближней модели ({@link Outdoor#NEAR}). */
     static float atNear(BlastSource s, double fileLufs) {
-        return byPressure(BlastMix.pressure(s, Outdoor.NEAR), fileLufs);
+        return BlastMix.gain(BlastMix.loudness(BlastMix.pressure(s, Outdoor.NEAR)) - fileLufs);
     }
 
     private static Vec3 ear() {

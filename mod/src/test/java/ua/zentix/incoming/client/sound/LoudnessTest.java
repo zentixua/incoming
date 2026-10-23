@@ -43,6 +43,13 @@ class LoudnessTest {
         // потолок — громкость ванильного TNT (random/explode1–4: −9,6…−11,0 LUFS); файлы взрывов его не громче
         assertEquals(-10, Loudness.CEILING_LUFS, 0.5);
         assertTrue(BlastMix.NEAR_LUFS <= Loudness.CEILING_LUFS && BlastMix.MID_LUFS <= Loudness.CEILING_LUFS);
+        m = Pattern.compile("(?m)^NEAR_LUFS, MID_LUFS, FAR_LUFS, SUB_DB = (-?[\\d.]+), (-?[\\d.]+), (-?[\\d.]+), ").matcher(script);
+        assertTrue(m.find(), "громкость ракурсов взрыва в build_sounds.py");
+        assertEquals(Double.parseDouble(m.group(1)), BlastMix.NEAR_LUFS, 1e-9);
+        assertEquals(Double.parseDouble(m.group(2)), BlastMix.MID_LUFS, 1e-9);
+        assertEquals(Double.parseDouble(m.group(3)), BlastMix.FAR_LUFS, 1e-9);
+        // ближний ракурс с ударом в грудь достают до потолка: файлы громкость взрыва с 1 psi не обрезают
+        assertTrue(BlastMix.NEAR_LUFS + BlastMix.WITH_SUB >= Loudness.CEILING_LUFS - 0.5);
     }
 
     private static double constant(String script, String name) {

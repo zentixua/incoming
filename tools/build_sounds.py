@@ -794,8 +794,10 @@ def bomber():
 # ================================================================ взрывы
 
 # Громкость ракурсов взрыва, LUFS (наибольшая мгновенная, EBU R128; у удара низа — без взвешивания, дБ): каждый вариант
-# сведён ровно на неё (level), клиент сводит ракурсы по расстоянию с этими же числами (client/sound/BlastMix).
-NEAR_LUFS, MID_LUFS, FAR_LUFS, SUB_DB = -13.5, -13.5, -15.0, -10.0
+# сведён ровно на неё (level), клиент сводит ракурсы по расстоянию с этими же числами (client/sound/BlastMix). Так
+# громко, как прозрачный ограничитель (не глубже 6 дБ) доводит самый тихий вариант (blast_near_6): ближний с ударом в
+# грудь — на потолке игры (Loudness.CEILING_LUFS, громкость ванильного TNT); до 23.10 — −13,5/−13,5/−15/−10.
+NEAR_LUFS, MID_LUFS, FAR_LUFS, SUB_DB = -12.2, -12.2, -13.7, -8.7
 
 # Записи взрывов: (id, начало, конец, канал) — из каждой три ракурса одного и того же взрыва: вблизи, на средней
 # дистанции и вдали. Ракурсы одного варианта клиент выбирает одним зерном (одинаковое число вариантов), поэтому
@@ -1164,7 +1166,7 @@ def measure():
 
 
 def relevel():
-    """Файлы событий MOTOR — на MOTOR_LUFS по уже собранным файлам (без записей Freesound): тот же master(), что при
+    """Файлы событий MOTOR и ракурсов взрыва — на свою громкость по уже собранным файлам (без записей Freesound): тот же master(), что при
     сборке, — усиление и прозрачный ограничитель пиков; петли — мерой по кругу (engine), разовые — линейной
     (loudness). Сборка из записей с теми же числами даёт ту же громкость, без ещё одного сжатия Vorbis."""
     with open(os.path.join(ASSETS, "sounds.json"), encoding="utf-8") as fh:
@@ -1190,6 +1192,21 @@ def relevel():
                 aim += lufs - got
             if abs(got - lufs) > 0.5:
                 fail(f"{name}: файл {got:.1f} LUFS, а нужно {lufs}")
+    # ракурсы взрыва — на свои числа (их громкость сменилась 23.10), тем же master(), что в blasts()
+    for ev, (lufs, meter) in {"blast.near": (NEAR_LUFS, loudness), "blast.mid": (MID_LUFS, loudness),
+                              "blast.far": (FAR_LUFS, loudness), "blast.sub": (SUB_DB, low_level)}.items():
+        for f in data[ev]["sounds"]:
+            name = f["name"].split(":")[1]
+            x, sr = sf.read(os.path.join(OUT, name + ".ogg"), dtype="float64")
+            aim = lufs
+            for _ in range(2):
+                write(name, master(x, aim, meter=meter), level=0.2)
+                got = meter(sf.read(os.path.join(OUT, name + ".ogg"), dtype="float64")[0])
+                if abs(got - lufs) <= 0.2:
+                    break
+                aim += lufs - got
+            if abs(got - lufs) > 0.5:
+                fail(f"{name}: файл {got:.1f}, а нужно {lufs}")
 
 
 if __name__ == "__main__":
