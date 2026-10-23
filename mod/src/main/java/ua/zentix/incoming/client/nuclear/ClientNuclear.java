@@ -253,7 +253,7 @@ public final class ClientNuclear {
     public static void debris(S2C.NukeDebris p) {
         Active a = DETONATIONS.get(p.detonation());
         if (a == null) return;
-        NukeDust.debris(a, p.pieces());
+        NukeDust.debris(a, p);
         a.sounds.debris(p);
     }
 
@@ -362,6 +362,12 @@ public final class ClientNuclear {
     }
 
     // ---------------------------------------------------------------- для рисования и звука
+
+    /** Часы подрыва {@code id} у клиента — тики после подрыва ({@link Active#ticks}); подрыва нет — NaN. */
+    static double ticksOf(int id) {
+        Active a = DETONATIONS.get(id);
+        return a == null ? Double.NaN : a.ticks(0);
+    }
 
     public static List<Active> detonations() {
         return DETONATIONS.isEmpty() ? List.of() : Collections.unmodifiableList(new ArrayList<>(DETONATIONS.values()));
