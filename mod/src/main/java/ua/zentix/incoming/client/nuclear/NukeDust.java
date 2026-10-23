@@ -181,7 +181,7 @@ public final class NukeDust {
                 // сорванное с верха земли — в покое, его подхватывает ветер за фронтом
                 m.set(bx, top - 1, bz);
                 BlockState cover = chunk.getBlockState(m);
-                if (litter(cover)) Fragments.torn(level, cover, m, Fragments.Kind.LEAF, x, top + 0.3, z, 0, 0, 0, 0, BlastGust.at(a, at), 0);
+                if (litter(cover)) Fragments.torn(level, cover, m, Fragments.Kind.LEAF, x, top + 0.3, z, 0, 0, 0, 0, BlastGust.at(a, at), 0, false);
             }
         }
     }
@@ -215,7 +215,7 @@ public final class NukeDust {
             places++;
             for (int i = 0; i < n; i++) {
                 if (Fragments.torn(level, p.state(), p.pos(), kind, c.x + (RANDOM.nextDouble() - 0.5) * 0.6, c.y + (RANDOM.nextDouble() - 0.5) * 0.6,
-                        c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay)) TORN[kind.ordinal()]++;
+                        c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay, true)) TORN[kind.ordinal()]++;
             }
             if (dist > NEAR || kind != Fragments.Kind.CHUNK) continue;
             // в пыль крошится кладка — камень, кирпич, бетон; дерево, лёд и металл — нет; природный грунт и скала — пыль
@@ -322,7 +322,7 @@ public final class NukeDust {
                 m.set(bx, chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15), bz);
                 BlockState cover = chunk.getBlockState(m);
                 if (litter(cover)) Fragments.torn(level, cover, m, Fragments.Kind.LEAF, p.x, Math.max(p.y, m.getY() + 1.2), p.z, air[0], 0, air[2], 0,
-                        wind, 0);
+                        wind, 0, false);
             } else if (puffs && RANDOM.nextDouble() < inHead(a, GUST_WALL, p)) {
                 // бурая пыль и серый дым клубами — стена, которая проходит сквозь игрока (цветом стены, со светом); над
                 // водой — брызги и водяная пыль

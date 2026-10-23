@@ -77,6 +77,13 @@ public final class Fragments {
      */
     public static final double LIFT_MIN = 0.02, LIFT_MAX = 0.12;
     /**
+     * Ветер вверх у куска с постройки или кроны — до этой доли ветра: у кромки тупого тела поток срывается, и оторвавшийся
+     * слой уходит вверх под 15–30° (обтекание куба на земле: Castro и Robins, J. Fluid Mech. 79, 1977; ⚠ угол по памяти,
+     * взят 25°, tg 0,47); так кромка дома и крона подбрасывают сорванное. Доля держится весь полёт, хотя область срыва —
+     * одна-две высоты постройки за ней, а путь воздуха за фазу — того же порядка (⚠ приближение).
+     */
+    public static final double LIFT_EDGE = Math.tan(Math.toRadians(25));
+    /**
      * Живые куски — свой список, а не по смерти куска: движок выбрасывает частицы и без неё (переполнение очереди, смена
      * мира), поэтому кусок, который не тикал дольше {@link #LOST} тиков, считается ушедшим.
      */
@@ -164,17 +171,17 @@ public final class Fragments {
      * Кусок блока {@code state} (с места {@code from}: его цвет травы и листвы) вещества {@code kind} с центром (x, y, z) и
      * скоростью (vx, vy, vz), блоков за тик (сорванный на месте — покой): вылетает через {@code delay} тиков (до тех пор не
      * виден и стоит) и летит с ветром {@code wind}. {@code size} — ребро обломка или длина доски и осколка, блоки (клок листвы —
-     * своего размера).
+     * своего размера). {@code edge} — кусок с постройки или кроны: поток на её кромке подбрасывает его ({@link #LIFT_EDGE}).
      *
      * @return false — не родился (воздух, блок без модели, мест нет)
      */
     public static boolean torn(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
-                               float size, Wind wind, int delay) {
+                               float size, Wind wind, int delay, boolean edge) {
         if (state.isAir() || state.getRenderShape() != RenderShape.MODEL || !state.shouldSpawnTerrainParticles()) return false;
         if (LIVE.size() >= cap() && !evictFartherThan(x, y, z)) return false;
         int wait = Mth.clamp(delay, 0, DELAY_MAX);
         int life = kind == Kind.LEAF ? LIFE_MAX : LIFE_SHORT - 40 + RANDOM.nextInt(41);
-        Fragment f = new Fragment(level, state, from, kind, x, y, z, vx, vy, vz, size, wind, wait, life);
+        Fragment f = new Fragment(level, state, from, kind, x, y, z, vx, vy, vz, size, wind, wait, life, edge);
         LIVE.add(f);
         Minecraft.getInstance().particleEngine.add(f);
         return true;
@@ -248,7 +255,7 @@ public final class Fragments {
         private long ticked = Fragments.tick;
 
         Fragment(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
-                 float size, Wind wind, int delay, int life) {
+                 float size, Wind wind, int delay, int life, boolean edge) {
             super(level, x, y, z);
             this.delay = delay;
             this.wind = wind;
@@ -286,7 +293,7 @@ public final class Fragments {
             lifetime = life;
             double vt = terminal(kind, Shielding.material(level, from, state), len) / 20;
             drag = G / (vt * vt);
-            lift = (float) (LIFT_MIN + (LIFT_MAX - LIFT_MIN) * random.nextDouble());
+            lift = (float) (LIFT_MIN + ((edge ? LIFT_EDGE : LIFT_MAX) - LIFT_MIN) * random.nextDouble());
             TextureAtlasSprite sprite = Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getTexture(state, level, from);
             // на грани — кусок текстуры размером с тело (16 пикселей на блок); у стекла — от края: окно прозрачно, кроме рамки
             // и бликов по краю, а прозрачные пиксели частица не рисует

@@ -55,7 +55,7 @@ class BlastGustTest {
                     for (double t = Math.floor(g.arrival); t < g.arrival + 3 * g.phase; t++) {
                         now[0] = t;
                         g.at(p[0], p[1], p[2], air);
-                        ua.zentix.incoming.client.fx.Fragments.step(v, air[0], ua.zentix.incoming.client.fx.Fragments.LIFT_MAX * Math.max(0, air[1]), air[2], drag);
+                        ua.zentix.incoming.client.fx.Fragments.step(v, air[0], ua.zentix.incoming.client.fx.Fragments.LIFT_EDGE * Math.max(0, air[1]), air[2], drag);
                         for (int i = 0; i < 3; i++) p[i] += v[i];
                         double slant = Math.sqrt(p[0] * p[0] + (p[1] - 64) * (p[1] - 64) + p[2] * p[2]);
                         assertTrue(slant <= d.frontRadius(t + 1) + 1e-6, wave + " " + r + " " + kind + " at " + t + ": " + slant + " > " + d.frontRadius(t + 1));
