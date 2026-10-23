@@ -104,6 +104,8 @@ uniform vec4 PallWilson0;
 uniform vec4 PallWilson1;
 // грибы кадра (MushroomField): таблица грибов и света чёрного тела (mushroom.glsl)
 uniform sampler2D Sampler7;
+// карта тени грибов от солнца (fx_mush_shadow, mushShadow): ночью и без грибов — таблица, плиток в ней нет
+uniform sampler2D Sampler8;
 // узор поверхности огненного шара (NukeBallSurface): u, v — октаэдрическая карта направления от центра шара, по третьей
 // оси — кадры по пути всплытия; трёхмерная — в JSON не объявлена, привязка — руками (как PallNoise)
 uniform sampler3D PallBall;
@@ -479,18 +481,18 @@ float slabGround(Sample s) {
     return mix(PALL_LAND, PALL_SEA, water);
 }
 
-// Рассеянный свет слоя пелены в точке от света сверху (солнце, шар, небо), I0 + c·I1 по каналам (pallDiffuse;
+// Рассеянный свет слоя пелены в точке от света сверху (солнце силой sun, шар, небо), I0 + c·I1 по каналам (pallDiffuse;
 // без альбедо точки) — на глубине, сдвинутой тенью клубов к нему. Решение линейно по источникам: свет шара — своим
 // решением на своей глубине (capDeep, голова стены) и только пока он не исчезающе мал
-vec3 scattered(Sample s, float c) {
+vec3 scattered(Sample s, float c, vec3 sun) {
     float slab = max(s.slab, s.tau);
     vec4 w = slabMatter(s);
     float g = w.a, ground = slabGround(s);
     float muS = max(PallSun.y, 0.12);
     float top = clamp(s.tau + s.shadeUp, 0.0, slab);
-    vec3 d = vec3(pallDiffuse(w.r, g, top, slab, ground, muS, PallSunLight.r, 1.0, 0.0, PallSkyLight.r, 0.0, c),
-            pallDiffuse(w.g, g, top, slab, ground, muS, PallSunLight.g, 1.0, 0.0, PallSkyLight.g, 0.0, c),
-            pallDiffuse(w.b, g, top, slab, ground, muS, PallSunLight.b, 1.0, 0.0, PallSkyLight.b, 0.0, c));
+    vec3 d = vec3(pallDiffuse(w.r, g, top, slab, ground, muS, sun.r, 1.0, 0.0, PallSkyLight.r, 0.0, c),
+            pallDiffuse(w.g, g, top, slab, ground, muS, sun.g, 1.0, 0.0, PallSkyLight.g, 0.0, c),
+            pallDiffuse(w.b, g, top, slab, ground, muS, sun.b, 1.0, 0.0, PallSkyLight.b, 0.0, c));
     float capI = s.cap.r + s.cap.g + s.cap.b;
     if (capI > 1e-5) {
         float muC = clamp(s.capUp / capI, 0.12, 1.0);
@@ -808,6 +810,13 @@ float pallOpenHere(vec3 p) {
     if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot0, PallGround0, p);
     return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler6, PallSlot1, PallGround1, p);
 }
+// Солнце над точкой p пелены (от глаза): сквозь грибы на его прямой — карта тени, как у мира (fx_pall_composite: shade);
+// ночью карты нет
+vec3 pallSunAt(vec3 p) {
+    if (PallSun.w <= 0.0) return PallSunLight;
+    return PallSunLight * mushShadow(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p);
+}
+
 // Шаг пелены на [ta, ta + ds]: её свет в луч. grid — шаг сетки луча здесь (обычной или головы стены, меньший): шаг,
 // урезанный входом в отрезок головы или его концом, случаен от кадра к кадру (сдвиг сетки), и то, что луч различает,
 // по нему мигало бы
@@ -843,9 +852,12 @@ void pallStep(float ta, float ds, float grid, inout vec3 light, inout float tran
         g = s.phase / s.sigma;
     }
     // рассеянный свет слоя и пучки: солнце и шар — по Бугеру–Ламберту сквозь столб над точкой и тень клубов,
-    // с фазой Хеньи–Гринстейна (её среднее по сфере — 1, пучок на белой стене — его сила: отсюда ¼)
-    vec3 field = scattered(s, g * mv);
-    vec3 beams = PallSunLight * (0.25 * hg(g, c) * exp(-max(s.tau / muS + s.shadeSun, 0.0)));
+    // с фазой Хеньи–Гринстейна (её среднее по сфере — 1, пучок на белой стене — его сила: отсюда ¼). Солнце над
+    // пеленой — сперва сквозь грибы на его прямой (карта тени, как у мира в fx_pall_composite): пыль под шапкой —
+    // в её тени, как и ножка, которую шапка закрывает (mushSunTau)
+    vec3 sun = pallSunAt(p);
+    vec3 field = scattered(s, g * mv, sun);
+    vec3 beams = sun * (0.25 * hg(g, c) * exp(-max(s.tau / muS + s.shadeSun, 0.0)));
     float capI = s.cap.r + s.cap.g + s.cap.b;
     if (capI > 1e-5) {
         float muC = clamp(s.capUp / capI, 0.12, 1.0);
@@ -875,7 +887,7 @@ void pallStep(float ta, float ds, float grid, inout vec3 light, inout float tran
     // столб объёмный, а не плоская серая полоса); снизу — зарево пожаров
     if (soot > 0.0) {
         float self = (f0.z + f1.z) / soot;
-        vec3 sootLit = field * exp(-gSootK * self) + PallSunLight * (gSootSun * exp(-max(s.tau / muS + s.shadeSun, 0.0) - self))
+        vec3 sootLit = field * exp(-gSootK * self) + sun * (gSootSun * exp(-max(s.tau / muS + s.shadeSun, 0.0) - self))
                 + min(below * exp(-gSootK * self) + (0.5 + 0.75 * PALL_SOOT_G * mv) * glow + around, gFlame);
         emit += soot * PALL_SOOT_W * sootLit;
     }
@@ -1324,7 +1336,8 @@ void main() {
         Sample m = emptySample();
         slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, m);
         slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, m);
-        vec3 lit = scattered(m, PALL_SOOT_G * gMv) + PallSunLight * (gSootSun * exp(-m.tau / gMuS));
+        vec3 sun = pallSunAt(mid);
+        vec3 lit = scattered(m, PALL_SOOT_G * gMv, sun) + sun * (gSootSun * exp(-m.tau / gMuS));
         float g0 = storm(Sampler3, PallSlot0, PallFire0, mid, 0.0, 1.0).y, g1 = storm(Sampler4, PallSlot1, PallFire1, mid, 0.0, 1.0).y;
         vec3 strongest = g0 >= g1 ? PallFire0[3].rgb : PallFire1[3].rgb;
         vec3 glow = pallFlame(PallBase, g0 * PallFire0[3].rgb + g1 * PallFire1[3].rgb, strongest);

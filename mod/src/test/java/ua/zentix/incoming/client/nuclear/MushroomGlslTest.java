@@ -161,7 +161,7 @@ class MushroomGlslTest {
         }
         assertEquals(40, MushroomField.across(40, 900, 1), 1e-9, "солнце над головой — круг сверху");
         assertEquals(Math.sqrt(2 / Math.PI * 40 * 900), MushroomField.across(40, 900, 0), 1e-9, "солнце у горизонта — столб сбоку");
-        double stem = PallLight.albedo(PallLight.linear(((MushroomField.STEM >> 8) & 0xFF) / 255.0), PallLight.truncated(MushroomField.G));
+        double stem = PallLight.albedo(PallLight.linear(((MushroomField.DUST >> 8) & 0xFF) / 255.0), PallLight.truncated(MushroomField.G));
         // ножка: толща 2 поперёк, полуширина 60 блоков, в 400 блоках по прямой к солнцу на высоте 30°
         double g = PallLight.truncated(MushroomField.G);
         double t = MushroomField.shadowThrough(2, 400, 60, stem, g, 0.5);
@@ -181,7 +181,7 @@ class MushroomGlslTest {
     void shadowCutLosesUnderAPercent() {
         double dark = constants().get("MUSH_SHADOW_DARK"), dust = PallLight.truncated(MushroomField.G);
         // вещество гриба — с асимметрией пыли пелены, столб воды — капель
-        double[][] matter = {{MushroomField.CAP_DUSTY, dust}, {MushroomField.STEM, dust}, {MushroomField.SKIRT, dust},
+        double[][] matter = {{MushroomField.CAP_DUSTY, dust}, {MushroomField.DUST, dust},
                 {MushroomField.STEAM, dust}, {CloudPuffs.SPRAY, dust}, {CloudPuffs.SPRAY, PallLight.truncated(MushroomField.G_WATER)}};
         for (double[] at : matter) {
             int rgb = (int) at[0];

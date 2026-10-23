@@ -315,4 +315,16 @@ class MushroomFieldTest {
         assertEquals(NukeBallSurface.frame(rises, FireballModel.surfaceRise(MushroomModel.rollUpSeconds(y, false), 600, y, false)), out[0], 1e-9);
         assertTrue(out[0] > 0.6 * (rises.length - 1) && out[0] < rises.length - 1, "кадр к концу сворачивания: " + out[0]);
     }
+    /**
+     * Ножка и юбка — пыль места подрыва, то же вещество, что слой пыли волны под ними (ковёр пелены): тот же цвет толстого
+     * слоя и та же асимметрия. Ножку питает только пыль из этого слоя ({@code StemDust}); свой цвет «пыль с дымом» делал её
+     * серее ковра, на котором она стоит.
+     */
+    @Test
+    void stemAndSkirtAreTheLayersDust() {
+        for (int i = 0; i < 3; i++) {
+            assertEquals(NukePall.DUST[i], ((MushroomField.DUST >> (16 - 8 * i)) & 0xFF) / 255.0, 0.5 / 255, "канал " + i);
+        }
+        assertEquals(PallLight.DUST_G, MushroomField.G, 0, "асимметрия пыли гриба — как у пелены");
+    }
 }

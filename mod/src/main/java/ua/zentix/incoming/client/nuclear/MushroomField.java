@@ -74,10 +74,17 @@ public final class MushroomField {
     static final double COLUMN_TILE = 1.2;
     /**
      * Цвет толстого слоя (на экране; альбедо — по нему, как у пелены): шапка с грунтом ({@link MushroomModel#soil}) без
-     * NO₂ — серая от пыли (её поглощение — сверх NO₂, {@link #capMatter}); ножка — пыль с дымом; юбка — пыль земли (как
-     * стена пыли); пар — у подрыва над водой. Шапка без грунта — капли и NO₂ ({@link #capMatter}), цвета у неё нет.
+     * NO₂ — серая от пыли (её поглощение — сверх NO₂, {@link #capMatter}); пар — у подрыва над водой. Шапка без грунта —
+     * капли и NO₂ ({@link #capMatter}), цвета у неё нет.
      */
-    static final int CAP_DUSTY = 0xC9C4BE, STEM = 0x8E7F70, SKIRT = 0x9C8A74, STEAM = 0xD9D9D6;
+    static final int CAP_DUSTY = 0xC9C4BE, STEAM = 0xD9D9D6;
+    /**
+     * Пыль места подрыва у ножки и юбки — то же вещество, что слой пыли волны и пелена ({@link NukePall#DUST}): ножку
+     * питает только пыль, которую подсос забрал из этого слоя ({@code StemDust}: «sweep-up and thermal dust», NRC 1985),
+     * юбка — она же у земли. Прежде у ножки был свой подобранный цвет «пыль с дымом» (0x8E7F70, темнее и серее слоя
+     * под ней), хотя дыма в её модели нет.
+     */
+    static final int DUST = display(NukePall.DUST);
     /**
      * Доля пара в ослаблении шапки при полной воде под подрывом и свернувшемся кольце ({@link #capMatter}). <b>Оценка</b>:
      * сколько воды поднимает шар над водой, в источниках нет; число — прежняя доля пара в цвете слоя.
@@ -568,9 +575,9 @@ public final class MushroomField {
         put(into, o, 4, d.blocks(s.domeH()), capSigma, Math.max(across, 1), t);
         put(into, o, 5, CAP[0], CAP[1], CAP[2], CAP[3]);
         put(into, o, 6, d.blocks(s.stemTop()), d.blocks(s.stemR()), d.blocks(MushroomModel.dustFlare(s)), s.stemTau());
-        matter(into, o, 7, mix(STEM, STEAM, 0.8 * wet));
+        matter(into, o, 7, mix(DUST, STEAM, 0.8 * wet));
         put(into, o, 8, d.blocks(s.skirtR()), d.blocks(s.skirtW()), d.blocks(s.skirtH()), skirtSigma);
-        matter(into, o, 9, mix(SKIRT, CloudPuffs.SPRAY, a.water.under()));
+        matter(into, o, 9, mix(DUST, CloudPuffs.SPRAY, a.water.under()));
         put(into, o, 10, MushroomModel.AMBIENT_K, tCore - MushroomModel.AMBIENT_K, d.blocks(s.capBottom()), Math.max(1, 3 * d.blocks(s.stemR())));
         // струи ножки — вверх с воздухом, который тянет кольцо (MushroomModel.stemRise); пожары под грибом: верх дыма шторма
         // (тот же, до которого встают его столбы в пелене, FireStorms.slot) и радиус зоны пожаров (свет — fire, после света
@@ -677,6 +684,13 @@ public final class MushroomField {
     static double wallReflectance(double w, double g) {
         double s = Math.sqrt(Math.max(1 - w, 0) / Math.max(1 - w * g, 1e-4));
         return (1 - s) / (1 + s);
+    }
+
+    /** Цвет на экране по каналам 0..1 → RGB. */
+    private static int display(double[] rgb) {
+        int out = 0;
+        for (int i = 0; i < 3; i++) out = out << 8 | (int) Math.round(255 * Math.clamp(rgb[i], 0, 1));
+        return out;
     }
 
     /** Канал i (0 — R, 1 — G, 2 — B) цвета RGB, 0..1. */
