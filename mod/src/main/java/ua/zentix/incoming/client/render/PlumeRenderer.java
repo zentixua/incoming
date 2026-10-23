@@ -107,6 +107,8 @@ public final class PlumeRenderer {
         // на экран): на 0,8 прорисовки без скачка
         double dist = Math.sqrt(ox * ox + oy * oy + oz * oz);
         float near = p.near();
+        // клубы следа у струи — до ~3,7σ₀ от оси, σ₀ — половина ширины струи в её конце (TrailModel.Trail.of): огонь — над ними
+        float ahead = (float) (2 * f.spread());
         double lit = exposure * view.air(dist, oy);
         layout(f, p.z(), cam, left, up, (layer, piece, a, b, c, d) -> {
             for (Vector3f v : new Vector3f[]{a, b, c, d}) v.add(0, p.y(), 0).rotate(rot).add(ox, oy, oz);
@@ -114,11 +116,11 @@ public final class PlumeRenderer {
                 case SHEATH -> {
                     float[] c0 = Sight.onScreen(sheath.color()[piece], sheath.luminance()[piece] * lit, near);
                     float[] c1 = Sight.onScreen(sheath.color()[piece + 1], sheath.luminance()[piece + 1] * lit, near);
-                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c1[0], c1[1], c1[2], (float) f.widthAt(sheath.x()[piece]));
+                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c1[0], c1[1], c1[2], (float) f.widthAt(sheath.x()[piece]), ahead);
                 }
                 case CORE -> {
                     float[] c0 = Sight.onScreen(f.coreColor(), f.coreLuminance() * lit, near);
-                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c0[0], c0[1], c0[2], (float) f.width());
+                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c0[0], c0[1], c0[2], (float) f.width(), ahead);
                 }
                 default -> {
                     boolean core = layer == CORE_DISC;

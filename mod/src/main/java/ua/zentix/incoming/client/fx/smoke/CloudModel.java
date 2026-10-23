@@ -679,14 +679,27 @@ public final class CloudModel {
                 double qx = cx * lean, qy = h - hob, qz = cz * lean;
                 double dx = qx - px, dy = qy - py, dz = qz - pz, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 double dust = len > 0 ? perHeight * dy / len : 0, fm = f - 0.5 / STEM_PIECES;
-                out.tube(px, py, pz, ss, dust, qx, qy, qz, ss, dust, T_AIR + (k - T_AIR) * fm * 0.5, up * fm);
+                out.tube(px, py, pz, ss, dust, qx, qy, qz, ss, dust, inBall(t, 0.5 * (px + qx), 0.5 * (py + qy), 0.5 * (pz + qz),
+                        T_AIR + (k - T_AIR) * fm * 0.5), up * fm);
                 px = qx;
                 py = qy;
                 pz = qz;
             }
         }
         // слой пыли волны у земли (на hob ниже точки взрыва)
-        ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y - hob, z, gh, gv, 0, d, 0, T_AIR, 0));
+        ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y - hob, z, gh, gv, 0, d, 0, inBall(t, x, y - hob, z, T_AIR), 0));
+    }
+
+    /**
+     * Температура вещества в (x, y, z) от точки взрыва, у которого своя — kelvin: внутри светящегося шара оно — часть шара
+     * (его пыль проступает той же долей, что шар тает), иначе — своя. Днём по своей температуре ножка и пыль у земли внутри
+     * шара ложились тёмным комом поверх него в первую секунду (кадры F6, бомба в 150 м).
+     */
+    private double inBall(double t, double x, double y, double z, double kelvin) {
+        double ball = ballRadius(t);
+        if (ball <= 0) return kelvin;
+        double dx = x - driftX(t), dy = y - ballHeight(t), dz = z - driftZ(t);
+        return dx * dx + dy * dy + dz * dz < ball * ball ? Math.max(kelvin, ballKelvin(t)) : kelvin;
     }
 
     /**

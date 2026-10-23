@@ -283,6 +283,16 @@ class CloudModelTest {
         assertTrue(CloudModel.glowShare(m.ballKelvin(3), night) > 0.9, "ночью к 3 с — огонь");
         // ночью газ у точки Дрейпера — не чернее, чем по одной температуре наполовину (ком сажи поверх шара ночью, F6)
         assertTrue(CloudModel.glowShare(1000, night) > 0.4 * CloudModel.glowShare(1000), "ночью тёплый газ ещё светится");
+        // вещество внутри светящегося шара тает в дым той же долей, что шар: днём в первую секунду ножка пыли внутри шара
+        // ложилась тёмным комом поверх него (кадры F6, бомба в 150 м)
+        for (double t : new double[]{0.1, 0.5, 1, 2}) {
+            double ball = m.ballRadius(t), bh = m.ballHeight(t), cx = m.driftX(t), cz = m.driftZ(t), share = CloudModel.glowShare(m.ballKelvin(t), day);
+            m.blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
+                double dx = x - cx, dy = y - bh, dz = z - cz;
+                if (dx * dx + dy * dy + dz * dz < 0.8 * ball * ball && soot + dust > 0)
+                    assertTrue(CloudModel.glowShare(kelvin, day) >= share - 1e-9, "в шаре на " + t + " с — огонь, не дым: " + kelvin);
+            });
+        }
         double prev = 1;
         for (double k = 3000; k >= 700; k -= 5) {
             double g = CloudModel.glowShare(k, day);

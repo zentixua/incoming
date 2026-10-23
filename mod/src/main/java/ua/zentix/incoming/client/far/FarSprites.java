@@ -430,15 +430,20 @@ public final class FarSprites implements SmokePuffs.Out {
 
     /**
      * Светящаяся полоса — струя факела вблизи ({@code PlumeRenderer}): углы a, b — у одного конца, c, d — у другого (от
-     * камеры), свет этих концов (на экране, с пересветом к белому, умноженный на долю). Поперёк — профиль круга
-     * {@code far/disc}: сечение струи сбоку. Только светит (альфа 0): что за ней, остаётся видно. Сортируется по ближнему
-     * углу — дым следа у того же места ложится под огонь, а не поверх него.
+     * камеры), свет этих концов (на экране, с пересветом к белому, умноженный на долю). Поперёк — профиль ореола
+     * {@code far/glow} (мягкий край, как у смешения на кромке струи), квадрат шире в {@link #STRIP_CROSS} раза: свет поперёк
+     * тот же, что у ровной полосы этой ширины (с кругом {@code far/disc} край был жёстким, кадры F6). Только светит (альфа 0):
+     * что за ней, остаётся видно. Сортируется на ahead блоков ближе своего ближнего угла: клубы своего следа у оси струи
+     * (до ~3,7σ₀ от неё) ложатся под огонь, а не между его кусками.
      */
-    public void glowStrip(Vector3f a, Vector3f b, Vector3f c, Vector3f d, float r0, float g0, float b0, float r1, float g1, float b1, float soft) {
+    public void glowStrip(Vector3f a, Vector3f b, Vector3f c, Vector3f d, float r0, float g0, float b0, float r1, float g1, float b1, float soft,
+                          float ahead) {
         if (r0 + g0 + b0 < 0.006f && r1 + g1 + b1 < 0.006f) return;
+        widen(a, b);
+        widen(d, c);
         double da = a.length(), db = b.length(), dc = c.length(), dd = d.length();
         float ka = (float) FarDraw.fold(da, far), kb = (float) FarDraw.fold(db, far), kc = (float) FarDraw.fold(dc, far), kd = (float) FarDraw.fold(dd, far);
-        FxAtlas.Sprite s = FxAtlas.disc();
+        FxAtlas.Sprite s = FxAtlas.glow();
         float v = s.vMid();
         r0 = Math.min(1, r0);
         g0 = Math.min(1, g0);
@@ -446,12 +451,27 @@ public final class FarSprites implements SmokePuffs.Out {
         r1 = Math.min(1, r1);
         g1 = Math.min(1, g1);
         b1 = Math.min(1, b1);
-        out.quad((float) Math.min(Math.min(da, db), Math.min(dc, dd)));
+        out.glowShape(true);
+        out.quad((float) Math.max(1e-3, Math.min(Math.min(da, db), Math.min(dc, dd)) - ahead));
         out.vertex(a.x * ka, a.y * ka, a.z * ka, s.u0(), v, r0, g0, b0, 0, soft, ka, LightTexture.FULL_BRIGHT, 0);
         out.vertex(b.x * kb, b.y * kb, b.z * kb, s.u1(), v, r0, g0, b0, 0, soft, kb, LightTexture.FULL_BRIGHT, 0);
         out.vertex(c.x * kc, c.y * kc, c.z * kc, s.u1(), v, r1, g1, b1, 0, soft, kc, LightTexture.FULL_BRIGHT, 0);
         out.vertex(d.x * kd, d.y * kd, d.z * kd, s.u0(), v, r1, g1, b1, 0, soft, kd, LightTexture.FULL_BRIGHT, 0);
+        out.glowShape(false);
         counts[2]++;
+    }
+
+    /**
+     * Во сколько раз полоса {@code far/glow} шире ровной того же света поперёк: середина круга {@code far/disc} поперёк
+     * закрывает ~0,93 ширины, ореола exp(−(u/0,42)²) — 0,42·√π/2 ≈ 0,744.
+     */
+    static final float STRIP_CROSS = 0.93f / 0.744f;
+
+    /** Отрезок p–q поперёк струи — шире в {@link #STRIP_CROSS} раза от своей середины. */
+    private static void widen(Vector3f p, Vector3f q) {
+        float mx = 0.5f * (p.x + q.x), my = 0.5f * (p.y + q.y), mz = 0.5f * (p.z + q.z);
+        p.set(mx + (p.x - mx) * STRIP_CROSS, my + (p.y - my) * STRIP_CROSS, mz + (p.z - mz) * STRIP_CROSS);
+        q.set(mx + (q.x - mx) * STRIP_CROSS, my + (q.y - my) * STRIP_CROSS, mz + (q.z - mz) * STRIP_CROSS);
     }
 
     /**
