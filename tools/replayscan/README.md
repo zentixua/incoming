@@ -27,7 +27,7 @@ mod/gradlew -p tools/replayscan build        # jar — tools/replayscan/build/li
 
 **Облако, Gradle** (клиент без окна, `xvfb-run`): моды запуска — каталог `-PmodsDir` (все jar оттуда кладутся в
 `run/mods`). Connector в запуске из Gradle ищет «чистый» jar клиента, как в раскладке лаунчера: его даёт установщик
-NeoForge (`java -jar neoforge-21.1.259-installer.jar --installClient <каталог>`, в каталоге нужен
+NeoForge (`java -jar neoforge-21.1.264-installer.jar --installClient <каталог>`, в каталоге нужен
 `launcher_profiles.json` с `{"profiles": {}}`).
 ```sh
 cd tools/replayscan
