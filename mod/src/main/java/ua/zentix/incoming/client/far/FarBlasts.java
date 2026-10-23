@@ -154,8 +154,9 @@ public final class FarBlasts {
             // топливо в воронке горит пожаром среди пожаров клиента: шлейф, его свет и жар — там, и он сливается с огнём,
             // что поджёг шар топлива рядом (FireSmoke.merge)
             if (model.poolWatts > 0) ua.zentix.incoming.client.fx.FireSmoke.pool(level, x, y, z, model);
-            // огонь, что удар поджёг (шар топлива, обломки), — в дым с первых секунд и в полную силу, а не на проход обхода позже
-            ua.zentix.incoming.client.fx.FireWatch.hot(level, x, z);
+            // огонь, что поджёг шар топлива, — в дым с первых секунд нынешним счётом, а не на проход обхода позже; без топлива
+            // удар сам ничего не поджигает (`Craters.ignite`)
+            if (source.fuelKg() > 0) ua.zentix.incoming.client.fx.FireWatch.hot(level, x, z);
             float[] dust = dustColour(ground);
             dustR = SmokeGrid.dustAlbedo(dust[0]);
             dustG = SmokeGrid.dustAlbedo(dust[1]);

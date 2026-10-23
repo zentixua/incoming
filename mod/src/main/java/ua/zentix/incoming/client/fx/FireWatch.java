@@ -42,10 +42,11 @@ public final class FireWatch {
     /** Выборка в секции: каждый столько-й блок (по x — 2 места из 16, все y и z). */
     static final int SAMPLE = 8;
     /**
-     * Чанки у удара смотрятся целиком: столько чанков от чанка удара (шар топлива ракеты — 17 м в радиусе, огонь
-     * от горящего топлива и обломков — рядом с ним; 2 чанка — 32–48 м).
+     * Чанки у удара смотрятся целиком: столько чанков от чанка удара — огонь, что ставит удар, лежит в шаре топлива
+     * (`Craters.ignite`: у ракеты радиус 17 м, у шахеда 8 м) и в воронке; 1 чанк — 16–31 м во все стороны. Горящие
+     * обломки, что легли дальше, видит обход.
      */
-    static final int HOT_CHUNKS = 2;
+    static final int HOT_CHUNKS = 1;
     /** Столько секунд после удара (пожар у воронки разгорается и гаснет минутами: лужа шахеда — 2,5 мин). */
     static final int HOT_SECONDS = 180;
     /** Чанки у ударов по порядку осмотра (от середины наружу) и тик, до которого каждый смотрится. */
@@ -90,8 +91,8 @@ public final class FireWatch {
             }
             int x = cx - radius + i % side, z = cz - radius + i / side;
             long key = ChunkPos.asLong(x, z);
-            // чанк у удара смотрится целиком своей очередью ({@link #hotScan}): выборка одного сдвига вернула бы в окно прошлые
-            if (HOT_UNTIL.containsKey(key)) continue;
+            // чанк у удара обход смотрит как все: его выборка — свежая, она лишь заменяет свой сдвиг в окне полного осмотра;
+            // длинный список ударов (налёт) поэтому не хуже обхода
             LevelChunk chunk = lvl.getChunkSource().getChunk(x, z, false);
             long was = SEEN.remove(key);
             total -= (int) (was >>> 16);
@@ -152,13 +153,15 @@ public final class FireWatch {
      * Чанки у удара — целиком, секция за секцией ({@link #phases}), пока у тика есть половина {@link #BUDGET_NANOS}
      * (хотя бы одна секция): в подробном городе палитра секции глобальная, все 4096 мест каждой секции — десятки
      * микросекунд, и чанк целиком за один тик съел бы бюджет всего обхода. Чанк досмотрен — его окно и счёт — нынешний
-     * огонь; срок вышел — чанк снова в общей очереди.
+     * огонь; срок вышел — чанк уходит из списка.
      */
     private static void hotScan(ClientLevel lvl, long t0) {
         boolean first = true;
+        // не больше круга по списку за тик: чанки без огня в палитре смотрятся мгновенно, и цикл крутил бы их до бюджета
+        int left = HOT.size();
         while (first || System.nanoTime() - t0 < BUDGET_NANOS / 2) {
             first = false;
-            if (hotChunk == null && !nextHot(lvl)) return;
+            if (hotChunk == null && (left-- <= 0 || !nextHot(lvl))) return;
             LevelChunk chunk = hotChunk;
             LevelChunkSection[] sections = chunk.getSections();
             while (hotSection < sections.length) {
