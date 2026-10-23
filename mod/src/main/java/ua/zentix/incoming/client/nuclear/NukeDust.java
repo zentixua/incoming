@@ -112,7 +112,7 @@ public final class NukeDust {
     /**
      * Тик: голова стены у камеры. Клубы встают по дуге фронта ближе {@link #NEAR} к камере — гуще у земли, выше — крупнее,
      * летят от эпицентра медленнее фронта и отстают от него шлейфом, а у земли поднимаются (вал); где волна сильнее,
-     * с ними летят тёмные клочья мусора и куски верха земли (трава, песок, листва, снег). Рельеф — карта высот
+     * с ними летят тёмные клочья мусора и сорванное с верха земли (дёрн, подстилка, листва). Рельеф — карта высот
      * загруженных чанков клиента (под потолком — высота эпицентра). Клубы — цветом стены в своём месте
      * ({@link #wallColor}: свет стены в кадре), а не по карте освещения.
      */
@@ -189,7 +189,7 @@ public final class NukeDust {
     /**
      * Блоки, которые снесла волна (сервер — тем, кто видит чанк, {@code S2C.NukeDebris}: выборка мест и сколько снесено
      * всего): каждое место выборки срывается кусками своего вещества в покое, когда до него дошёл фронт, и их несёт ветер
-     * за фронтом в этом месте ({@link BlastGust}); вдали — реже. Пыль, выбитая из камня, кирпича и грунта, — полосой по
+     * за фронтом в этом месте ({@link BlastGust}); вдали — реже. Пыль, выбитая из кладки, — полосой по
      * ветру ({@link BlastDust}): масса — за все снесённые места, которые место выборки представляет.
      */
     static void debris(ClientNuclear.Active a, S2C.NukeDebris packet) {
@@ -215,7 +215,7 @@ public final class NukeDust {
             places++;
             for (int i = 0; i < n; i++) {
                 if (Fragments.torn(level, p.state(), p.pos(), kind, c.x + (RANDOM.nextDouble() - 0.5) * 0.6, c.y + (RANDOM.nextDouble() - 0.5) * 0.6,
-                        c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay, true)) TORN[kind.ordinal()]++;
+                        c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay, !ground(p.state()))) TORN[kind.ordinal()]++;
             }
             if (dist > NEAR || kind != Fragments.Kind.CHUNK) continue;
             // в пыль крошится кладка — камень, кирпич, бетон; дерево, лёд и металл — нет; природный грунт и скала — пыль
@@ -248,15 +248,19 @@ public final class NukeDust {
     }
 
     /**
-     * Природная земля и скала: грунт, песок, гравий, глина, камень и сланец рельефа, терракота плато, снег. Волна срывает
+     * Природная земля и скала: грунт, песок и песчаник, гравий, глина, камень, сланец, руды, кальцит и капельник рельефа,
+     * терракота плато, снег (и тюк сена — не кладка, хоть звук у него земляной). Волна срывает
      * гребни и уступы рельефа, но пыль с земли — вынос пелены ({@code DustModel}: грунт, поднятый ветром за фронтом); пыль
      * обломков модели — глина стен и штукатурка построек, её и даёт кладка. Без этого сорванные уступы холмов давали тонны
      * пыли полосами с камерой внутри (сцена {@code film}).
      */
     private static boolean ground(BlockState s) {
         return s.is(BlockTags.DIRT) || s.is(BlockTags.SAND) || s.is(BlockTags.BASE_STONE_OVERWORLD) || s.is(BlockTags.BASE_STONE_NETHER)
-                || s.is(BlockTags.TERRACOTTA) || s.is(BlockTags.SNOW) || s.is(net.minecraft.world.level.block.Blocks.GRAVEL)
-                || s.is(net.minecraft.world.level.block.Blocks.CLAY);
+                || s.is(BlockTags.TERRACOTTA) || s.is(BlockTags.SNOW) || s.is(net.neoforged.neoforge.common.Tags.Blocks.SANDSTONE_UNCOLORED_BLOCKS)
+                || s.is(net.neoforged.neoforge.common.Tags.Blocks.SANDSTONE_RED_BLOCKS) || s.is(net.neoforged.neoforge.common.Tags.Blocks.ORES)
+                || s.is(net.neoforged.neoforge.common.Tags.Blocks.GRAVELS) || s.is(net.minecraft.world.level.block.Blocks.CLAY)
+                || s.is(net.minecraft.world.level.block.Blocks.CALCITE) || s.is(net.minecraft.world.level.block.Blocks.DRIPSTONE_BLOCK)
+                || s.is(net.minecraft.world.level.block.Blocks.HAY_BLOCK);
     }
 
     /**

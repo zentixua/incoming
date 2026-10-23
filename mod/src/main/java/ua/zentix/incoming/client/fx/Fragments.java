@@ -251,6 +251,8 @@ public final class Fragments {
         private int delay, rest;
         /** Первый тик полёта прошёл (рамка вынута из блоков). */
         private boolean out;
+        /** Упёрся в блок не снизу (потолок, крона над ним): ваниль его больше не двигает, а onGround не ставит. */
+        private boolean stuck;
         /** Тик {@link Fragments#tick}, в который кусок тикал в последний раз (движок выбросил его — перестаёт). */
         private long ticked = Fragments.tick;
 
@@ -342,15 +344,18 @@ public final class Fragments {
                 // рамка — по наибольшему размеру тела: у длинной доски из пролома у пола она заходит в пол, а ваниль не
                 // выталкивает частицу из блока, в котором та уже стоит, — доска ушла бы в пол; выше — на свободное место (руины
                 // встают к вылету, поэтому проверка — в первый тик полёта, а не при рождении)
+                // только пол под серединой: рамка у пролома в стене задевает и соседние блоки по бокам, и их проверка
+                // подняла бы кусок на блок, в стену над проломом
                 out = true;
-                for (int i = 0; i < 4 && !level.noCollision(getBoundingBox()); i++) {
+                for (int i = 0; i < 4 && !level.noCollision(new net.minecraft.world.phys.AABB(x - 0.05, getBoundingBox().minY, z - 0.05, x + 0.05,
+                        getBoundingBox().minY + 0.5 * bbHeight, z + 0.05)); i++) {
                     setPos(x, y + 0.25, z);
                     yo = y;
                 }
             }
-            if (onGround) {
-                // лёг: ваниль после касания земли частицу больше не двигает (stoppedByCollision) — кувырок гаснет, полежит и
-                // раскрошится
+            if (onGround || stuck) {
+                // лёг или упёрся: ваниль после касания земли (или потолка, кроны снизу — тогда onGround не ставится) частицу
+                // больше не двигает (stoppedByCollision) — кувырок гаснет, полежит и раскрошится
                 xd = yd = zd = 0;
                 super.tick();
                 spin *= 0.5f;
@@ -368,7 +373,10 @@ public final class Fragments {
             xd = VEL[0];
             yd = VEL[1];
             zd = VEL[2];
+            double x0 = x, y0 = y, z0 = z;
             super.tick();
+            // скорость есть, а место то же: упёрся в блок (ваниль больше не двигает)
+            stuck = x == x0 && y == y0 && z == z0 && xd * xd + yd * yd + zd * zd > 1e-8;
             angleO = angle;
             // кувыркается тем быстрее, чем быстрее его обтекает воздух
             spin = Math.copySign((float) Math.min(0.8, 0.1 + 0.25 * rel), spin);
