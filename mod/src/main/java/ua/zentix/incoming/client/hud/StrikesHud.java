@@ -133,6 +133,7 @@ public final class StrikesHud {
             if (r == null) r = point(ScreenProjection.project(at));
             if (r == null) continue;
             float[] fr = frame(r, w, h);
+            if (!onScreen(fr, w, h)) continue;
             int c = f.phase() == FlightPhase.TERMINAL ? 0xFFFF4030 : 0xFFFFC040;
             float[] t = aims.get(i).frame;
             if (t != null) {
@@ -141,7 +142,6 @@ public final class StrikesHud {
                     HudDraw.dotted(g, Math.round(from[0]), Math.round(from[1]), Math.round(to[0]), Math.round(to[1]), (c & 0x00FFFFFF) | 0x70000000);
                 }
             }
-            if (!onScreen(fr, w, h)) continue;
             HudDraw.corners(g, Math.round(fr[0]), Math.round(fr[1]), Math.round(fr[2]), Math.round(fr[3]), c);
             String label = Component.translatable("incoming.hud.number", f.number).getString() + " " + clock(f.etaSeconds(pt));
             g.drawString(font, label, Math.round(0.5f * (fr[0] + fr[2])) - font.width(label) / 2, labelAbove(fr), c);
