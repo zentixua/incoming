@@ -142,11 +142,26 @@ class ShaderSourceTest {
     @Test
     void pallUnderTheCapIsInItsShadow() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
-        String pall = Files.readString(core.resolve("fx_pall.fsh")), step = blankComments(body(pall, "void pallStep("));
+        String pall = Files.readString(core.resolve("fx_pall.fsh")), step = blankComments(body(pall, "vec4 pallSource("));
         assertTrue(blankComments(body(pall, "vec3 pallSunAt(")).contains("mushShadowFrom("), "fx_pall: солнце над пеленой без тени грибов");
-        assertTrue(step.contains("pallSunAt("), "fx_pall: pallStep без тени грибов");
+        assertTrue(step.contains("pallSunAt("), "fx_pall: общий источник пыли без тени грибов");
         assertFalse(step.contains("PallSunLight"), "fx_pall: солнце в pallStep — только сквозь тень грибов");
         assertTrue(Files.readString(core.resolve("fx_pall_composite.fsh")).contains("mushShadow("), "мир — в той же тени");
+    }
+
+    /** Одинаковая пыль на стыке требует общего источника света, а не двух независимых решателей освещения. */
+    @Test
+    void inflowAndCarpetUseOneLightingSource() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        String pall = Files.readString(core.resolve("fx_pall.fsh"));
+        String layer = blankComments(body(pall, "void pallStep(")), stem = blankComments(body(pall, "vec4 mushAt("));
+        assertTrue(layer.contains("pallSource(p, cone, vec4(0.0), dustLight)"));
+        assertTrue(stem.contains("pallSource(p, cone, vec4(m.base, carried), carpetLight)"));
+        assertTrue(stem.contains("mushFootLightShare("));
+        assertTrue(stem.contains("mix(source, carpetLight, fromCarpet)"));
+        String dense = blankComments(body(pall, "vec4 mushDense("));
+        assertTrue(dense.contains("mushInflowLobes("), "подсос — клубами ковра, не растянутыми струями всей ножки");
+        assertFalse(dense.contains("mushStemLobes("), "исходный узор ножки не переотображается");
     }
 
     /**

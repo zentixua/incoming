@@ -240,6 +240,29 @@ float mushFootWall(float rho, float r) {
     return smoothstep(0.6 * r, r, rho);
 }
 
+// Доля света ковра в точке: в чистом притоке у входа — ровно 1, внутри прежней ножки без притока — 0;
+// к высоте слияния — прежний свет ножки. Смешивается функция источника, а не готовый цвет пикселя поверх дыма.
+float mushFootLightShare(float h, float top, float merge, float carried, float total) {
+    return clamp(carried / max(total, 1e-7), 0.0, 1.0) * mushFootNarrow(h, top, merge);
+}
+
+// Доля движущегося воздуха ковра у основания: только внешний край ножки и ближайший ковёр, до высоты слияния.
+// К шапке, внутрь ножки и на дальнюю мглу эта карта течения не доходит.
+float mushFootInfluence(float h, float rho, float r, float top, float share, float merge) {
+    if (h < 0.0) return 0.0;
+    if (share <= 0.0) return 0.0;
+    if (merge <= 0.0) return 0.0;
+    if (h >= merge) return 0.0;
+    float t = max(top, 1.0);
+    return share * mushFootWall(rho, r) * (1.0 - smoothstep(r + t, r + 2.0 * t, rho)) * mushFootNarrow(h, t, merge);
+}
+
+// Поворот потока от горизонтального притока к подъёму. Геометрия поворота — оценка; путь — stemRise модели.
+float mushFootUp(float h, float top) {
+    float t = max(top, 1.0);
+    return smoothstep(0.25 * t, 1.25 * t, h);
+}
+
 // мера места в сечении кольца: 1 — на его краю (rho — от оси по горизонтали, y — от середины кольца)
 float mushRing(float rho, float y, float ringR, float a, float b) {
     float u = (rho - ringR) / max(a, 1e-3), v = y / max(b, 1e-3);
@@ -427,10 +450,13 @@ float mushFootSigma(Mush m, float h) {
 // толщи к свету и квадратов слоя; без столба его край не считается (стенка нулевой толщины — край нулевой ширины)
 vec4 mushMean(Mush m, vec3 q) {
     vec4 d = mushDist(m, q);
-    float soft = 0.5 * MUSH_STEM_LOBES * mushStemAt(m, q.y);
-    // ножка и подсос у её основания — одна пыль: где подсос гуще ножки, он
-    float stem = max(mushStemSigma(m, q.y) * mushEdge(d.y, soft),
-            mushFootSigma(m, q.y) * mushFootWall(length(q.xz), mushStemAt(m, q.y)) * mushEdge(length(q.xz) - mushFootAt(m, q.y), soft));
+    float r = mushStemAt(m, q.y), rho = length(q.xz), soft = 0.5 * MUSH_STEM_LOBES * r;
+    float stem = mushStemSigma(m, q.y) * mushEdge(d.y, soft);
+    // Выше слияния нет добавки: не считать профиль ковра на каждом отсчёте толщи всей шапки и ножки.
+    if (m.footShare > 0.0 && q.y >= 0.0 && q.y < m.footMerge) {
+        float band = mushFootBandAt(m, q.y);
+        if (rho < r + band + soft) stem = max(stem, mushFootSigma(m, q.y) * mushFootWall(rho, r) * mushEdge(rho - r - band, soft));
+    }
     vec4 s = vec4(m.capSigma * mushEdge(d.x, 0.5 * MUSH_CAP_LOBES * m.billows * mushCapUnit(m)), stem,
             m.skirtSigma * mushEdge(d.z, 0.5 * MUSH_SKIRT_LOBES * mushSkirtUnit(m)), 0.0);
     if (m.colSigma > 0.0) s.w = m.colSigma * mushEdge(d.w, 0.5 * MUSH_COLUMN_LOBES * mushColumnUnit(m));

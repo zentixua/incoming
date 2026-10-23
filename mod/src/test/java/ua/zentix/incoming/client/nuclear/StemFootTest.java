@@ -224,6 +224,47 @@ class StemFootTest {
         }
     }
 
+    /** Разные цвет и свет двух сред не образуют ступень: при входе чистый приток имеет свет самого ковра. */
+    @Test
+    void inflowRadianceJoinsTheCarpetBeforeItBecomesTheStem() {
+        GlslFunction light = GlslFunction.parse(GLSL, "mushFootLightShare");
+        for (Case c : CASES) {
+            double top = c.top(), merge = c.foot[4], before = 1;
+            for (double h = 0; h <= 5 * top; h += 0.002 * top) {
+                double share = light.call(Map.of("h", h, "top", top, "merge", merge, "carried", 0.4, "total", 0.4));
+                assertTrue(share >= 0 && share <= before + 1e-9, c.name + ": скачок доли света ковра");
+                if (h <= Math.min(top, 0.5 * merge)) {
+                    // бурый ковёр и сизая ножка в разном свете: все каналы у входа — именно ковра.
+                    for (double[] colors : new double[][]{{0.42, 0.12}, {0.26, 0.20}, {0.10, 0.35}}) {
+                        double radiance = colors[1] + (colors[0] - colors[1]) * share;
+                        assertTrue(Math.abs(radiance - colors[0]) < 1e-12, c.name + ": у входа другой цвет/свет");
+                    }
+                }
+                if (h >= merge) assertTrue(share == 0, c.name + ": свет ковра выше слияния");
+                before = share;
+            }
+        }
+    }
+
+    /** Карта движения не заходит внутрь исходной ножки, выше основания и на дальнюю мглу. */
+    @Test
+    void movingCarpetIsConfinedToTheInflow() {
+        GlslFunction flow = GlslFunction.parse(GLSL, "mushFootInfluence");
+        for (Case c : CASES) {
+            double top = c.top(), merge = c.foot[4];
+            for (double h = 0; h < 5 * top; h += 0.05 * top) {
+                double r = c.wall(h);
+                for (double rho = 0; rho < r + 3 * top; rho += 0.05 * r) {
+                    double share = flow.call(Map.of("h", h, "rho", rho, "r", r, "top", top, "share", c.foot[2], "merge", merge));
+                    assertTrue(Double.isFinite(share) && share >= 0 && share <= c.foot[2] + 1e-9);
+                    if (rho <= 0.6 * r || h >= merge || rho >= r + 2 * top) assertTrue(share == 0, c.name + ": движение вне притока");
+                }
+            }
+            double h = 0.2 * Math.min(top, merge), r = c.wall(h);
+            assertTrue(flow.call(Map.of("h", h, "rho", r + 0.5 * top, "r", r, "top", top, "share", c.foot[2], "merge", merge)) > 0);
+        }
+    }
+
     /** Дальше всего от оси, где пыль у основания на высоте h не тоньше seen, блоки. */
     private static double surface(Case c, double h, double seen, boolean withFoot) {
         double far = c.wall(h) + 4 * c.top();
