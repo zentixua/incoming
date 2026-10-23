@@ -421,14 +421,20 @@ def friedlander(dur, positive, b=1.2):
 # (client/sound/Loudness: мощность источника из паспорта звука и путь, половина децибел уровня).
 ENGINE_LUFS = -19.0
 # Громкость всех петель моторов и разовых звуков старта, LUFS (наибольшая мгновенная, как у взрывов): одна на все —
-# потолок громкости в игре, ближний ракурс взрыва (NEAR_LUFS, 1 psi; Loudness.CEILING_LUFS). Громкость в игре задаёт
+# потолок громкости в игре, громкость ванильного TNT (random/explode1–4: −9,6…−11,0; Loudness.CEILING_LUFS; до 23.10 —
+# −13,5, файл ближнего ракурса взрыва). Громкость в игре задаёт
 # уровень у уха, файл — только как звук звучит; клиент ведёт громкость от мерки ENGINE_LUFS вверх до потолка, и файл
 # на потолке не обрезает её раньше: в 3.5.0 файлы были на ENGINE_LUFS, и всё громче Loudness.REF (≈126 дБА — удар
 # поджига ракеты ближе ~45 м к пусковой, рёв ускорителя ближе ~20 м) звучало одинаково.
-MOTOR_LUFS = -13.5
+MOTOR_LUFS = -10.0
 # Сход снаряда РСЗО — короткий удар с шипением: на потолок его не свести без пережатия (ограничитель не глубже 6 дБ),
-# на 2 дБ ниже — можно; он упирается в файл с ~133 дБА у уха (ближе ~25 м к пусковой «Града»).
+# на 2 дБ ниже — можно.
 ROCKET_LAUNCH_LUFS = MOTOR_LUFS - 2
+# Поджиг и рёв ускорителя (launch.booster, booster.engine) — удар и плотный рёв РДТТ: ограничитель не глубже 6 дБ
+# доводит их только до −11 LUFS (launch_booster_4, booster_engine — −10,7) — на 1 дБ ниже потолка.
+LAUNCH_LUFS = MOTOR_LUFS - 1
+# Бурение бомбы — скрежет с ударами: тот же предел ограничителя — на 1 дБ ниже потолка.
+DRILL_LUFS = MOTOR_LUFS - 1
 # События, собранные на MOTOR_LUFS (SoundAssetsTest меряет их файлы; --relevel пересводит собранные файлы). Хлопок
 # отделения ускорителя и катапульта — на ENGINE_LUFS: удар не свести на потолок без пережатия (ограничитель не глубже
 # 6 дБ), а громче Loudness.REF они не бывают и в метре (~125 и ~120 дБА мощности — 117 и 112 дБА; LoudnessTest).
@@ -670,12 +676,12 @@ def launch():
     for x, a, b in [(at, 0.0, 9.9), (at, 9.95, 19.9), (rl, 0.5, 7.0), (rl, 19.1, 26.0)]:
         s = cut(x, a, b)
         s = mix((s, 1.0), (pad(sub_thump(1.2, 42, 8, 0.3), len(s)), 0.35))
-        sigs.append(master(punch(trim_tail(s, -50, 0.6), 3), MOTOR_LUFS))
-    variants("launch.booster", "subtitles.incoming.launch", "launch_booster", level(sigs, MOTOR_LUFS))
+        sigs.append(master(punch(trim_tail(s, -50, 0.6), 3), LAUNCH_LUFS))
+    variants("launch.booster", "subtitles.incoming.launch", "launch_booster", level(sigs, LAUNCH_LUFS))
     burn = cut(src(774270), 1, 23)
     crackle = F(cut(src(613855), 20, 42), lo=60, hi=12000)
     boost = mix((F(burn, lo=40, hi=14000), 1.0), (pad(crackle, len(burn)), 0.45))
-    write("booster_engine", engine(loop(boost, 9.0), MOTOR_LUFS, "booster_engine"), "booster.engine", "subtitles.incoming.launch")
+    write("booster_engine", engine(loop(boost, 9.0), LAUNCH_LUFS, "booster_engine"), "booster.engine", "subtitles.incoming.launch")
 
     # отделение ускорителя: хлопок пиропатрона и металлический лязг замков
     sep = []
@@ -781,7 +787,7 @@ def bomber():
     # бурение бетона: синтез скрежета + настоящий треск ломающихся перекрытий, глухо (бомба в грунте)
     crash = F(cut(src(675967), 10, 30), lo=40, hi=1600)
     dr = syn.drill(20.0)
-    write("bomb_drill", engine(loop(mix((dr, 1.0), (pad(crash, len(dr)), 0.55)), 7.0), MOTOR_LUFS, "bomb_drill", False),
+    write("bomb_drill", engine(loop(mix((dr, 1.0), (pad(crash, len(dr)), 0.55)), 7.0), DRILL_LUFS, "bomb_drill", False),
           "bomb.drill", "subtitles.incoming.bomb.drill")
 
 
@@ -1170,9 +1176,20 @@ def relevel():
             if sr != SR or x.ndim != 1:
                 sys.exit(f"{name}: {sr} Гц, {x.ndim} кан., а сборка — {SR} Гц моно")
             loop = ev not in {"launch.booster", "rocket.launch"}
-            lufs = ROCKET_LAUNCH_LUFS if ev == "rocket.launch" else MOTOR_LUFS
-            y = engine(x, lufs, name, steady=False) if loop else level([master(x, lufs)], lufs)[0]
-            write(name, y)
+            lufs = {"rocket.launch": ROCKET_LAUNCH_LUFS, "launch.booster": LAUNCH_LUFS, "booster.engine": LAUNCH_LUFS,
+                    "bomb.drill": DRILL_LUFS}.get(ev, MOTOR_LUFS)
+            meter = (lambda s: np.max(momentary(s))) if loop else loudness
+            aim = lufs
+            # сжатие Vorbis сильно ограниченного звука убавляет громкость до ~0,7 дБ: мерить сам файл и добрать раз
+            for _ in range(2):
+                y = engine(x, aim, name, steady=False) if loop else master(x, aim)
+                write(name, y)
+                got = meter(sf.read(os.path.join(OUT, name + ".ogg"), dtype="float64")[0])
+                if abs(got - lufs) <= 0.2:
+                    break
+                aim += lufs - got
+            if abs(got - lufs) > 0.5:
+                fail(f"{name}: файл {got:.1f} LUFS, а нужно {lufs}")
 
 
 if __name__ == "__main__":

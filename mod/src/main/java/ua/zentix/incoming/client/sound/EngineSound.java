@@ -83,6 +83,15 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
             this.air = air;
         }
 
+        /** Громкость файла записи, LUFS ({@code MOTOR}; у ускорителя — {@code LAUNCH_LUFS}, у бурения — {@code DRILL_LUFS} в сборке). */
+        double fileLufs() {
+            return switch (this) {
+                case BOOSTER -> Loudness.LAUNCH_LUFS;
+                case BOMB_DRILL -> Loudness.DRILL_LUFS;
+                default -> Loudness.MOTOR_LUFS;
+            };
+        }
+
         /** Громкость и тон слоя для того, что слушатель слышит сейчас (до сглаживания). */
         Tone tone(FlightTrack track, Emission e) {
             Noise noise = noise(track);
@@ -248,12 +257,12 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         if (heard == null) {
             // данных о снаряде на этот момент нет (взорвался или ушёл из слуха): стихнуть, не дёргая источник
             smoothVolume *= 0.5f;
-            this.volume = Loudness.motor(smoothVolume);
+            this.volume = Loudness.volume(smoothVolume, layer.fileLufs());
         } else {
             // сглаживание: смена слоёв и ракурса, запуск и отпускание слоя, приглушение под взрыв — без щелчков
-            double gain = released ? 0 : tone.gain() * ClientSounds.duck();
+            double gain = released ? 0 : tone.gain();
             smoothVolume += (float) ((gain - smoothVolume) * 0.35);
-            this.volume = Loudness.motor(smoothVolume);
+            this.volume = Loudness.volume(smoothVolume, layer.fileLufs());
             this.pitch = (float) tone.pitch();
             this.x = heard.x();
             this.y = heard.y();
@@ -299,7 +308,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
                 }
                 case BOOSTER, BOOSTER_LOW -> {
                     double v = shot(motor, Spectra.LAUNCH_BOOSTER, e);
-                    if (v > 0.01) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, Loudness.motor(v), spec.launch() == ClientWeaponSpec.LaunchCue.BOOSTER_LOW ? 0.92f : 1.05f);
+                    if (v > 0.01) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, Loudness.volume(v, Loudness.LAUNCH_LUFS), spec.launch() == ClientWeaponSpec.LaunchCue.BOOSTER_LOW ? 0.92f : 1.05f);
                 }
                 case NONE -> {}
             }

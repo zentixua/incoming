@@ -61,8 +61,9 @@ class BlastMixTest {
                 assertEquals(1, (1 - near) * crack + (1 - near) * (1 - crack) + near, 1e-9);
                 double v = direct(l);
                 assertTrue(v <= prev + 0.05, w + ": громче на " + d + " бл");
-                // громкость — по давлению: ракурсы вместе дают её (ближний и средний сведены одинаково, дальний тише)
-                assertEquals(BlastMix.loudness(BlastMix.pressure(s, d)), v, 1.6, w + " на " + d);
+                // громкость — по давлению: ракурсы вместе дают её (ближний и средний сведены одинаково, дальний тише), но не
+                // громче своего файла: до потолка с ~0,45 psi взрыв дотягивает удар в грудь
+                assertEquals(Math.min(BlastMix.NEAR_LUFS, BlastMix.loudness(BlastMix.pressure(s, d))), v, 1.6, w + " на " + d);
                 assertTrue(l.near() <= 1 && l.mid() <= 1 && l.far() <= 1 && l.sub() <= 1 && l.pulse() <= 1);
                 prev = v;
             }

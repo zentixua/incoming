@@ -13,7 +13,8 @@ import ua.zentix.incoming.nuclear.model.BlastModel;
  * дольше у ракеты ({@link #pitch}). Minecraft играет тон только от 0,5 до 2 ({@code SoundEngine.calculatePitch}):
  * записи не сжать сильнее, чем у заряда 6,25 кг, и не растянуть сильнее, чем у 400 кг, — «Ланцет» (3 кг) звучит записью
  * заряда 6,25 кг (отступление: предел движка). Удар у уха из модели ({@link BlastPulse}) этого предела не знает.</li>
- * <li>Громкость — по пиковому давлению у уха (Кинни–Грэхем, {@link BlastModel}): полная с {@link #FULL_PA}, тише —
+ * <li>Громкость — по пиковому давлению у уха (Кинни–Грэхем, {@link BlastModel}): потолок игры ({@link Loudness#CEILING_LUFS},
+ * громкость ванильного TNT) с {@link #FULL_PA}, тише —
  * на половину децибел давления, как у ядерного удара ({@link Outdoor#pressureVolume}) и у дальней модели
  * {@link Outdoor}: вдали давление падает как 1/R — −3 дБ на удвоение, вблизи быстрее.</li>
  * <li>Ракурсы одной записи (вблизи — удар и тело взрыва, средний — запись с эхом склонов и домов, вдали — она же
@@ -69,9 +70,13 @@ public final class BlastMix {
         return (float) Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.cbrt(REFERENCE_KG / chargeKg)));
     }
 
-    /** Громкость прямого звука у уха, LUFS: ближний ракурс с {@link #FULL_PA}, тише — половина децибел давления. */
+    /**
+     * Громкость прямого звука у уха, LUFS: потолок с {@link #FULL_PA}, тише — половина децибел давления. Файл ближнего
+     * ракурса тише потолка ({@link #NEAR_LUFS}): с ~0,45 psi он звучит целиком, и до потолка взрыв дотягивает «удар в
+     * грудь» — своя запись, по мощности ({@link Mix}: −13,5 и −14,2 LUFS — −10,8).
+     */
     public static double loudness(double pa) {
-        return NEAR_LUFS + 10 * Math.log10(Math.max(1e-12, Math.min(1, pa / FULL_PA)));
+        return Loudness.CEILING_LUFS + 10 * Math.log10(Math.max(1e-12, Math.min(1, pa / FULL_PA)));
     }
 
     /**
@@ -100,7 +105,7 @@ public final class BlastMix {
         double near = (1 - far) * crack, mid = (1 - far) * (1 - crack);
         float nearV = (float) near * gain(l - NEAR_LUFS);
         return new Layers(nearV, (float) mid * gain(l - MID_LUFS), (float) far * gain(l - FAR_LUFS), nearV,
-                (float) ((1 - near) * Math.sqrt(Math.min(1, pa / FULL_PA))));
+                (float) ((1 - near) * Math.sqrt(Math.min(1, pa / FULL_PA)) * uncapped(Loudness.CEILING_LUFS - NEAR_LUFS)));
     }
 
     /** Множитель громкости для разницы db, не больше 1 (громче файла Minecraft не играет). */

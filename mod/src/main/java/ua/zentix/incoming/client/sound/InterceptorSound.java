@@ -110,9 +110,9 @@ public final class InterceptorSound extends AbstractTickableSoundInstance implem
                 : Propagation.Weather.of(Minecraft.getInstance().level));
         // путь забыт или кончился, и его конец уже слышен (не дошёл за самый долгий путь звука — уже не дойдёт)
         boolean over = rocket.isRemoved() && (track == null || track.isDead() && (past || now - track.deathTick() > Hearing.MAX_DELAY));
-        double gain = over || heard == null ? 0 : heard.gain * ClientSounds.duck();
+        double gain = over || heard == null ? 0 : heard.gain;
         smoothVolume += (float) ((gain - smoothVolume) * 0.35);
-        volume = Loudness.motor(smoothVolume);
+        volume = Loudness.volume(smoothVolume, Loudness.LAUNCH_LUFS);
         if (over && smoothVolume <= VoiceBudget.AUDIBLE) {
             stop();
             return;
@@ -148,7 +148,7 @@ public final class InterceptorSound extends AbstractTickableSoundInstance implem
         double[] bands = new double[Propagation.BANDS];
         double level0 = Propagation.level(BOOST.power(FlightPhase.BOOST, 0), Spectra.LAUNCH_BOOSTER, path, bands);
         double v = Loudness.gain(level0, Propagation.margin(bands, weather));
-        if (v > 0.01) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, Loudness.motor(v), (float) VOICE);
+        if (v > 0.01) ClientSounds.atEar(ModSounds.LAUNCH_BOOSTER.get(), at, Loudness.volume(v, Loudness.LAUNCH_LUFS), (float) VOICE);
     }
 
     /** Что слышно у уха из момента излучения {@code te}: место, громкость, тон и доля верхов. */

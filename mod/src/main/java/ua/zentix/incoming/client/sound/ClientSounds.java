@@ -41,7 +41,6 @@ public final class ClientSounds {
     private static final Map<UUID, Tracked> TRACKS = new HashMap<>();
     private static final RandomSource RANDOM = RandomSource.create();
     /** Моторы уходят вниз под громкий взрыв. */
-    private static final Ducking DUCK = new Ducking();
     /** Движок не дал слою канал (все заняты): через столько тиков попробовать снова. */
     private static final int RETRY = 10;
     /**
@@ -157,18 +156,9 @@ public final class ClientSounds {
         for (FlightTrack track : FlightTracks.all()) {
             if (!TRACKS.containsKey(track.id)) TRACKS.put(track.id, new Tracked(track, layers(track)));
         }
-        DUCK.tick();
         budget(hear(mc));
-    }
-
-    /** Громкость моторов под взрывами ({@link Ducking}). */
-    static float duck() {
-        return DUCK.factor();
-    }
-
-    /** До уха дошёл взрыв с громкостью прямого звука lufs: моторы уходят вниз ({@link Ducking}). */
-    static void ducked(double lufs) {
-        DUCK.blast(lufs);
+        // окно — по всему, что прозвучало в этот тик: моторы выше, звуки мира и взрывы — при запуске
+        Loudness.WINDOW.tick();
     }
 
     /** Что слышно от каждого снаряда в этот тик: громкость каждого слоя и разовые звуки старта. */
@@ -265,7 +255,7 @@ public final class ClientSounds {
     public static void reset() {
         TRACKS.values().forEach(Tracked::kill);
         TRACKS.clear();
-        DUCK.reset();
+        Loudness.WINDOW.reset();
         BlastSounds.reset();
         Sources.reset();
         OwnSources.reset();

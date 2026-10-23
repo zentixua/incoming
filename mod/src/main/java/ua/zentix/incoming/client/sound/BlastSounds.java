@@ -39,7 +39,7 @@ import java.util.Locale;
  * ({@link HearingModel#audibleRangeM}).</li>
  * </ul>
  * Вариант записи выбирает зерно взрыва (пакет {@code S2C.Blast}): каждый взрыв звучит по-своему, а его ракурсы — одна
- * запись. Моторы снарядов под громкий взрыв уходят вниз ({@link Ducking}). Все звуки взрывов (ракурсы, удар в грудь, удар у
+ * запись. Взрыв поднимает окно громкости ({@link Loudness.Window}): моторы под ним уходят вниз. Все звуки взрывов (ракурсы, удар в грудь, удар у
  * уха, эхо, звуки бомбы) — в одной смеси ({@link Mix}): потолок громкости — у суммы, а не у каждого.
  */
 public final class BlastSounds {
@@ -105,6 +105,7 @@ public final class BlastSounds {
         float highs = highs(path);
         SoundEvent event = s.underground() ? ModSounds.BOMB_DEEP.get() : ModSounds.BLAST_FAR.get();
         float pitch = s.underground() ? 1 : BlastMix.pitch(s.chargeKg());
+        Loudness.WINDOW.blast((s.underground() ? DEEP_LUFS : BlastMix.FAR_LUFS) + 20 * Math.log10(v));
         ClientSounds.blastAtEar(event, pos, v, pitch, seed, 1, highs, BlastSounds::factor, mixed(event, v, pitch));
         return heard;
     }
@@ -175,7 +176,7 @@ public final class BlastSounds {
         double d = ear.distanceTo(pos), pa = BlastMix.pressure(s, d), loudness = BlastMix.loudness(pa);
         BlastMix.Layers l = BlastMix.at(s, d);
         float pitch = BlastMix.pitch(s.chargeKg());
-        ClientSounds.ducked(loudness);
+        Loudness.WINDOW.blast(loudness);
         List<SoundInstance> shots = new ArrayList<>(4);
         SoundInstance loudest = null;
         float most = 0;
@@ -284,7 +285,7 @@ public final class BlastSounds {
         double pa = BlastMix.pressure(s, ear().distanceTo(pos));
         float v = byPressure(pa, underground ? CAVE_LUFS : DEEP_LUFS);
         if (v < AUDIBLE) return;
-        ClientSounds.ducked(BlastMix.loudness(pa));
+        Loudness.WINDOW.blast(BlastMix.loudness(pa));
         SoundEvent event = underground ? ModSounds.BOMB_CAVE.get() : ModSounds.BOMB_DEEP.get();
         ClientSounds.blastAtEar(event, pos, v, 1, BlastSounds::factor, mixed(event, v, 1));
     }

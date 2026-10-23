@@ -25,10 +25,20 @@ import java.util.List;
  * с тоном — быстрее или медленнее), так хвост раннего взрыва убавляет поздний ровно настолько, насколько он ещё звучит.
  * Так сводят звук в играх с «окном громкости» (HDR-звук: Frostbite, Wwise) — громкость всего слышимого держится в окне;
  * у нас окно — тот же перенос, что у каждого звука.
+ * <p>
+ * Потолок ({@link Loudness#CEILING_LUFS}, громкость ванильного TNT) — у мгновенной громкости (окно 0,4 с): так громок удар.
+ * Долгий гул — залп, налёт — держится ниже, у {@link #SUSTAIN}, по средней громкости за 3 с (кратковременная громкость
+ * EBU R128): у суммы десятков разрывов пик выше громкости на ~13 дБ, и на потолке её хвосты упирались бы в полную шкалу
+ * (MixTest: −12 LUFS — уже сотни отсчётов выше неё, −13,5 — ни одного). Одиночный взрыв за 3 с в среднем тише своего
+ * удара и звучит на потолке; залп после первых разрывов — как до 23.10.
  */
 final class Mix {
     /** Средний квадрат мгновенной громкости потолка ({@link Loudness#CEILING_LUFS}). */
     static final double CEILING = Envelope.meanSquare(Loudness.CEILING_LUFS);
+    /** Предел средней громкости за {@link #SHORT} тиков, против потолка (мощность): −13,5 LUFS. */
+    static final double SUSTAIN = Envelope.meanSquare(-13.5) / CEILING;
+    /** Окно средней громкости, тиков (3 с, кратковременная громкость EBU R128). */
+    static final int SHORT = 60;
 
     /**
      * Один слой: огибающая записи (средний квадрат по тикам при громкости 1), тон, громкость; {@code apart} — своя запись,
@@ -67,6 +77,7 @@ final class Mix {
 
         void add(Layer l) {
             layers.add(l);
+            changes++;
             end = Math.max(end, start + l.ticks());
         }
 
@@ -87,25 +98,41 @@ final class Mix {
     }
 
     private final List<Blast> blasts = new ArrayList<>();
+    /** Слоёв добавлено за всё время (смесь сменилась — множитель заново). */
+    private static long changes;
+    /** Множитель уже посчитан на этот тик и эту смесь (его берёт каждый звук смеси). */
+    private double factorTick = Double.NaN, factorK = 1;
+    private long factorChanges = -1;
 
     /** Взрыв, который зазвучит в тик {@code tick}: слои — {@link Blast#add}. */
     Blast blast(double tick) {
-        blasts.removeIf(b -> b.end < tick);
+        // взрыв держится в смеси и после своего конца, пока он в окне средней громкости
+        blasts.removeIf(b -> b.end + SHORT < tick);
         Blast b = new Blast(tick);
         blasts.add(b);
+        factorTick = Double.NaN;
         return b;
     }
 
     /** Множитель громкости всех слоёв всех взрывов в тик {@code tick} (0..1). */
     double factor(double tick) {
-        double sum = 0, sq = 0;
+        if (tick == factorTick && changes == factorChanges) return factorK;
+        double sum = 0, sq = 0, last = 0;
         for (Blast b : blasts) {
             double p = b.power(tick);
             sum += p;
             sq += p * p;
+            for (int j = 0; j < SHORT; j++) last += b.power(tick - j);
         }
-        if (!(sum > 0)) return 1;
-        return Math.sqrt(Math.min(1, Math.min(1, Math.sqrt(sq)) / sum));
+        double k2 = 1;
+        if (sum > 0) k2 = Math.min(1, Math.min(1, Math.sqrt(sq)) / sum);
+        // средняя громкость за 3 с — та, что звучала бы без множителя: залп садится к SUSTAIN за первые секунды
+        last /= SHORT;
+        if (last > SUSTAIN) k2 = Math.min(k2, SUSTAIN / last);
+        factorTick = tick;
+        factorChanges = changes;
+        factorK = Math.sqrt(k2);
+        return factorK;
     }
 
     /** Мощность смеси в игре в тик {@code tick} с множителем {@link #factor}, против потолка (сверка в тестах). */
@@ -117,6 +144,7 @@ final class Mix {
 
     void reset() {
         blasts.clear();
+        factorTick = Double.NaN;
     }
 
     int size() {
