@@ -178,6 +178,11 @@ public final class Fragments {
         return s == ParticleStatus.ALL ? CAP : s == ParticleStatus.DECREASED ? CAP / 2 : CAP / 4;
     }
 
+    /** Сколько кусков живёт (верхняя оценка: срок ещё не вышел). */
+    public static int alive() {
+        return alive;
+    }
+
     /** Тик клиента (не на паузе): куски, чей срок вышел, — из счёта. */
     public static void tick() {
         tick = (tick + 1) % ENDS.length;

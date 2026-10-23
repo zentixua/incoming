@@ -77,6 +77,9 @@ final class BlastDust implements SmokeGrid.Source {
     private final float dustR, dustG, dustB;
     private final double dustK;
     private final double[] parcel = new double[4];
+    /** Для строки сценария: полос, отданных в последнем кадре, наибольшая толща поперёк, масса пыли в них, кг. */
+    private int drawn;
+    private double tauMax, massDrawn;
     private boolean gone;
 
     BlastDust(ClientNuclear.Active a) {
@@ -143,6 +146,8 @@ final class BlastDust implements SmokeGrid.Source {
         if (gone) return false;
         Detonation d = a.d;
         double t = a.ticks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
+        drawn = 0;
+        tauMax = massDrawn = 0;
         streaks.removeIf(s -> {
             BlastGust g = s.gust;
             double x = g.x(t);
@@ -160,11 +165,19 @@ final class BlastDust implements SmokeGrid.Source {
             // толща поперёк середины полосы: гаусс, размазанный по длине 2·half
             double tau = DustModel.K_MIX * mass / (2 * Math.PI * sigma * (sigma + 2 * half / Math.sqrt(2 * Math.PI)));
             if (x >= 1 && tau < CloudModel.SEEN) return true;
+            drawn++;
+            tauMax = Math.max(tauMax, tau);
+            massDrawn += mass;
             out.segment(s.x + 0.5 * (hx + tx), s.y + 0.5 * (hy + ty), s.z + 0.5 * (hz + tz), 0.5 * (hx - tx), 0.5 * (hy - ty), 0.5 * (hz - tz),
                     sigma, sigma, 0, mass * DustModel.K_MIX / dustK, 0, dustR, dustG, dustB, CloudModel.T_AIR_K, 0);
             return false;
         });
         return !streaks.isEmpty();
+    }
+
+    /** Строка сценария: полос живых и в кадре, наибольшая толща поперёк, масса пыли в кадре. */
+    String describe() {
+        return String.format(java.util.Locale.ROOT, "[%d live, %d drawn, tau max %.2f, %.1f kg]", streaks.size(), drawn, tauMax, massDrawn);
     }
 
     @Override

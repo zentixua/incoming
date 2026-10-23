@@ -1251,8 +1251,9 @@ public final class ClientScenario {
 
     /** Кадр сценария {@code pall} со строкой о пелене у камеры и в кадре. */
     private void pallShot(int t, String name) {
-        at(t, () -> Incoming.LOG.info("SCENARIO pall {} at {}: {}; layer {}", name, xyz(Minecraft.getInstance().gameRenderer.getMainCamera().getPosition()),
-                ua.zentix.incoming.client.nuclear.NukePall.describe(), ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming()));
+        at(t, () -> Incoming.LOG.info("SCENARIO pall {} at {}: {}; layer {}; near {}", name, xyz(Minecraft.getInstance().gameRenderer.getMainCamera().getPosition()),
+                ua.zentix.incoming.client.nuclear.NukePall.describe(), ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(),
+                ua.zentix.incoming.client.nuclear.NukeDust.describe()));
         shot(t, "pall_" + name);
     }
 
@@ -1296,7 +1297,8 @@ public final class ClientScenario {
         if (gap > gaps[wallStage]) return;
         if (wallStage == 0) cmd("tick rate 4");
         else {
-            Incoming.LOG.info("SCENARIO wall {} gap {} at {}", day, String.format(java.util.Locale.ROOT, "%.0f", gap), xyz(cam));
+            Incoming.LOG.info("SCENARIO wall {} gap {} at {}; near {}", day, String.format(java.util.Locale.ROOT, "%.0f", gap), xyz(cam),
+                    ua.zentix.incoming.client.nuclear.NukeDust.describe());
             shot(tick + 1, "wall_" + day + "_" + wallStage);
         }
         if (wallStage == 5) {
@@ -1601,7 +1603,8 @@ public final class ClientScenario {
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x - 1, y - 1, z - 1, x + 1, y - 1, z + 1));
         cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 %d %d.5 180 20", x, y, z));
         at(tick + 21, () -> Minecraft.getInstance().options.hideGui = true);
-        at(tick + 41, () -> Incoming.LOG.info("SCENARIO water {}", ua.zentix.incoming.client.nuclear.NukeWater.describe()));
+        at(tick + 41, () -> Incoming.LOG.info("SCENARIO water {}; near {}", ua.zentix.incoming.client.nuclear.NukeWater.describe(),
+                ua.zentix.incoming.client.nuclear.NukeDust.describe()));
         shot(tick + 41, "nuke_wall");
         shot(tick + 71, "nuke_wall");
         // снова на смотровую площадку (её могли снести руины; целая — без строки ошибки «No blocks were filled» в кадре

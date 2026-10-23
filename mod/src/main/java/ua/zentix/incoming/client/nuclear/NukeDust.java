@@ -79,6 +79,9 @@ public final class NukeDust {
     private static final float[] GUST_WALL = new float[BlastWall.SLOT];
     /** Пыль проломов у камеры по подрывам ({@link BlastDust}): источник облака, пока в нём есть пыль. */
     private static final Map<ClientNuclear.Active, BlastDust> DUST = new IdentityHashMap<>();
+    /** Для строки сценария: пакетов обломков, мест в них, кусков по веществу и полос пыли с последнего сброса. */
+    private static int packets, places, streaks;
+    private static final int[] TORN = new int[Fragments.Kind.values().length];
 
     private NukeDust() {}
 
@@ -191,6 +194,7 @@ public final class NukeDust {
         Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         // пыль проломов: кучками по клеткам у камеры, дальше — одной на чанк (масса, середина и разброс мест)
         Map<Long, double[]> heaps = new HashMap<>();
+        packets++;
         for (S2C.NukeDebris.Piece p : packet.pieces()) {
             Vec3 c = Vec3.atCenterOf(p.pos());
             double wait = d.arrivalTicks(c.distanceTo(d.burst())) - now;
@@ -202,9 +206,10 @@ public final class NukeDust {
             // вдали мелочь не видна: реже
             double expect = kind.perBlock * Fx.density(c) * Math.min(1, DEBRIS_FULL * DEBRIS_FULL / (dist * dist));
             int n = (int) expect + (RANDOM.nextDouble() < expect - (int) expect ? 1 : 0);
+            places++;
             for (int i = 0; i < n; i++) {
-                Fragments.torn(level, p.state(), p.pos(), kind, c.x + (RANDOM.nextDouble() - 0.5) * 0.6, c.y + (RANDOM.nextDouble() - 0.5) * 0.6,
-                        c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay);
+                if (Fragments.torn(level, p.state(), p.pos(), kind, c.x + (RANDOM.nextDouble() - 0.5) * 0.6, c.y + (RANDOM.nextDouble() - 0.5) * 0.6,
+                        c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay)) TORN[kind.ordinal()]++;
             }
             if (dist > NEAR || kind == Fragments.Kind.LEAF || kind == Fragments.Kind.PANE) continue;
             // металл в пыль не крошится
@@ -230,6 +235,7 @@ public final class NukeDust {
             Vec3 mid = new Vec3(h[1] / h[0], h[2] / h[0], h[3] / h[0]);
             // разброс мест кучки — её начальный размер (σ по каждой оси)
             dust.add(mid, h[0], Math.sqrt(Math.max(0, h[4] / h[0] - mid.lengthSqr()) / 3));
+            streaks++;
         }
     }
 
@@ -328,10 +334,23 @@ public final class NukeDust {
         if (veil < 0.01f) veil = veilTarget = 0;
     }
 
+    /**
+     * Строка сценария: пакетов обломков и мест в них, кусков по веществу (обломок, доска, стекло, лист), живых кусков,
+     * полос пыли проломов всего и сейчас (с наибольшей толщей поперёк).
+     */
+    public static String describe() {
+        StringBuilder live = new StringBuilder();
+        for (BlastDust d : DUST.values()) live.append(' ').append(d.describe());
+        return String.format(java.util.Locale.ROOT, "debris packets %d, places %d, torn chunk %d board %d pane %d leaf %d (alive %d), dust streaks %d;%s",
+                packets, places, TORN[0], TORN[1], TORN[2], TORN[3], Fragments.alive(), streaks, live);
+    }
+
     static void reset() {
         veil = veilTarget = veilWanted = 0;
         for (BlastDust dust : DUST.values()) dust.end();
         DUST.clear();
+        packets = places = streaks = 0;
+        java.util.Arrays.fill(TORN, 0);
     }
 
     /** Пелена поверх мира (под вспышкой): цветом стены у глаза, над водой — серо-белая. */
