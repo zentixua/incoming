@@ -34,8 +34,9 @@ about 30 km. The blast wave itself is clear air, but the air behind its front is
 front leaves the fireball, its edge shows against the sky and the ground as a thin ring where whatever lies behind is
 shifted by a few pixels on a 1080p screen (for a 15 kt ground burst about 4–8 from 1.5 km, 2–5 from 3 km, 1–2 from
 10 km; above the ground the front of an air burst is about a third weaker). The ring weakens with the
-pressure and is gone where the dust wall ends (not physics: a weak front still bends light a little, but the mod
-draws nothing of the wave beyond the wall); once the front has passed you, nothing of it is seen. Hot gas over the
+pressure and is gone where the dust wall ends: a weak front still bends light a little, but the mod does not draw it
+beyond the wall, which only changes what you see, not what the wave does. Once the front has passed you, nothing of it
+is seen. Hot gas over the
 fireball, the mushroom cap and a burning town shimmers too, but by less than a pixel. The wind right behind the front tears up what lies on the ground (dust and earth, smoke over a
 burning town, spray over water) as a churning wall. The dust doesn't fly out with the wave: the wind carries it only a
 few tens of metres, and after the wave the air flows back towards the burst more weakly and for longer, so the dust

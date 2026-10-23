@@ -12,7 +12,10 @@ missiles and bombers.
 ![Fireball and blast wave of a 15 kt airburst over a city](docs/guide/img/nuke-wave.jpg)
 
 One block is one meter. Projectiles and launchers are built to real size, and the effects of a nuclear explosion are
-calculated from reference data ([design notes](docs/DESIGN-nuke.md), in Russian).
+calculated from reference data ([design notes](docs/DESIGN-nuke.md), in Russian). What happens at the target, its
+order, size, timing and damage, follows the real charge and the laws of physics. Flight and air defense are the mod's
+own game model, slower and lower than in life by default so that you can watch them. How a strike is shown (light,
+colour, contrast, billowing smoke, camera) is made to read well in the game and never changes what happens.
 
 ## What it adds
 

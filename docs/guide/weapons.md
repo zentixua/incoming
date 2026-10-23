@@ -18,7 +18,8 @@ Times are for a nearby target. The world owner can change flight times.
 
 Each weapon is a real one. Its size, mass, warhead and engines come from open data; where a number is not published
 (some engines, the share of explosive in a warhead), it is worked out from the published ones by physics. The warhead
-sets everything the blast does: what it breaks and how far, the crater, wounds, and how the explosion looks and sounds.
+sets everything the blast does: what it breaks and how far, the crater, wounds, and the size, timing and course of
+what you see and hear.
 
 | | Shahed-136 | Lancet-3 | Tomahawk | Grad 9M22U | GBU-57 (from B-2) | Minuteman III |
 |---|---|---|---|---|---|---|
@@ -179,7 +180,7 @@ detects the B-2 very late. Can carry a nuclear warhead.
 **How deep it goes.** The bomb hits the ground with the speed and angle its fall gives it and keeps going in a straight
 line. How far depends on that speed, on the bomb (13.6 t, 0.8 m across, a pointed nose) and on what it goes through:
 Young's penetration equations (Sandia, 1997), layer by layer. With game flight speeds the B-2 flies 170 blocks up
-instead of about 12 km (not by physics, so you can see it). The bomb leaves it at the bomber's 240 m/s and falls with
+instead of about 12 km (not physical, so you can see it). The bomb leaves it at the bomber's 240 m/s and falls with
 gravity and drag, so it hits at about 235 m/s instead of about 510 m/s. With `scale.flight_speed` 1 the B-2 flies at
 12 km and the bomb hits at about 510 m/s. So it goes through:
 
