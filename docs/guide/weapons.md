@@ -328,7 +328,8 @@ same up close and far away.
   greyer trail. A slower rocket leaves a denser trail. The hot trail rises a little. By day it spreads and fades sooner;
   on a calm night it stays narrow and hangs much longer. Turbulence bends its axis while the smoke itself spreads more
   slowly: a SAM trail remains visible for tens of seconds by day and minutes on a calm night, drifting with the wind
-  at its height. A trail is a round, billowing tube of smoke, lit by the sun and
+  at its height. The SAM's trail continues beyond entity tracking distance, including its sustainer section.
+  A trail is a round, billowing tube of smoke, lit by the sun and
   by the flame, near and kilometres away alike, unbroken along its length; only where it is narrower than about two
   pixels is it a thin line. At
   dusk and at night it takes the light of the open sky the way the clouds do: grey at sunset, pale lilac under the moon.

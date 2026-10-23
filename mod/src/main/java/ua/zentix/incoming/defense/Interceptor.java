@@ -44,6 +44,8 @@ public final class Interceptor {
         GROUND
     }
 
+    /** Постоянный UUID вида: сущность может исчезать и появляться у тикающих чанков, дымный путь — один. */
+    private final UUID id = UUID.randomUUID();
     private final InterceptorSpec spec;
     private final UUID target;
     @Nullable
@@ -66,6 +68,10 @@ public final class Interceptor {
         this.pos = rail;
         this.dir = dir.normalize();
         this.speed = spec.launchSpeed();
+    }
+
+    public UUID id() {
+        return id;
     }
 
     public Vec3 position() {

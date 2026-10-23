@@ -56,9 +56,13 @@ paths:
   `BlastEffects.Airburst`; путь сбитого кончается), своим ближе 48 блоков — `S2C.RadarScope` (экран `client/hud/RadarScope`), чужие цели
   радара — на карту стороны (`Sightings.spot`, `Source.RADAR`; своих не отмечает — карта рисует отмеченное чужим).
 - Вид и звук: `entity/InterceptorEntity` — только над готовым тикающим чанком, ставится на место полёта каждый тик,
-  не сохраняется; модель `interceptor_body` (`tools/gen_models.py`, вдали не рисуется), факел — `PlumeRenderer`
+  не сохраняется; модель `interceptor_body` (`tools/gen_models.py`, вдали — `FarFlightView`), факел — `PlumeRenderer`
   (`InterceptorRenderer`), вспышка поджига и огонь у сопла — `Exhaust.interceptor`. Путь у клиента — `FlightTrack`
-  без оружия (`FlightTracks.interceptors`, отдельно от путей снарядов: оружия у неё нет), по нему — облако старта
+  без оружия (`FlightTracks.interceptors`, отдельно от путей снарядов: оружия у неё нет), по сущности или дальним
+  `S2C.FarFlights` (`weapon = FarFlight.INTERCEPTOR`, UUID полёта постоянный и у всех его сущностей). Дальний путь
+  раз в 4 тика продолжает маршевый след после края отслеживания сущности; без него ЗРК уходил за край ещё на разгоне,
+  и рассчитанный моделью маршевый дым на экране отсутствовал. Терминальный отсчёт `FarFlight.ended` закрывает путь в
+  месте разрыва; опоздавший отсчёт его не оживляет. Передача не грузит чанки. По пути — облако старта
   (`LaunchCloud`, пока струя бьёт в землю) и след лентой (`FarFlightView`, вид — `ClientWeaponSpec.INTERCEPTOR`) тем же
   законом, что у снарядов, и мотор — `client/sound/InterceptorSound` (закон источника РДТТ `Noise.Rocket` по тяге и
   истечению паспорта, путь `Propagation`, громкость `Loudness`, запаздывание `Acoustics.emissionTime`; петля
