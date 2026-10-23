@@ -66,6 +66,8 @@ class MushroomGlslTest {
         String both = read("include/pall.glsl") + GLSL;
         GlslFunction width = GlslFunction.parse(GLSL, "mushFootWidth"), share = GlslFunction.parse(GLSL, "mushFootShare");
         GlslFunction density = GlslFunction.parse(both, "mushFootDensity"), band = GlslFunction.parse(GLSL, "mushFootBand");
+        GlslFunction narrow = GlslFunction.parse(GLSL, "mushFootNarrow"), wall = GlslFunction.parse(GLSL, "mushFootWall");
+        for (double rho = 0; rho <= 600; rho += 3) assertEquals(MushroomField.footWall(rho, 400), wall.call(Map.of("rho", rho, "r", 400.0)), 1e-9);
         for (double top : new double[]{0.5, 40, 380}) {
             for (double h = -0.2 * top; h <= 5 * top; h += 0.01 * top) {
                 Map<String, Double> at = Map.of("h", h, "top", top);
@@ -77,6 +79,7 @@ class MushroomGlslTest {
                 }
                 for (double merge : new double[]{0, 0.4 * top, 2.3 * top}) {
                     assertEquals(MushroomField.footBand(h, top, 0.7, merge), band.call(Map.of("h", h, "top", top, "share", 0.7, "merge", merge)), 1e-9, "h " + h);
+                    assertEquals(MushroomField.footNarrow(h, top, merge), narrow.call(Map.of("h", h, "top", top, "merge", merge)), 1e-9, "h " + h);
                 }
             }
         }

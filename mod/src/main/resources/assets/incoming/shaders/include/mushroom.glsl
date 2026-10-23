@@ -205,11 +205,39 @@ float mushFootDensity(float h, float top, float sigma, float share, float rise) 
     return max(mushFootBoth(h, top, sigma, rise) - sigma * pallProfile(h / max(top, 1.0)), 0.0);
 }
 
-// полоса подсоса за стенкой ножки на высоте h: от верха слоя (или половины высоты слияния, если она ниже) сужается к
-// стенке до высоты слияния merge (+ 1e-6: у слияния на земле края нет — smoothstep с равными краями не определён)
+// доля полосы подсоса на высоте h: от верха слоя (или половины высоты слияния, если она ниже) сходит на нет к высоте
+// слияния merge (густота — нет: у слияния она и так — ножки) (+ 1e-6: у слияния на земле края нет — smoothstep с равными краями не определён)
+float mushFootNarrow(float h, float top, float merge) {
+    return 1.0 - smoothstep(min(top, 0.5 * merge), merge + 1e-6, h);
+}
+
+// полоса подсоса за стенкой ножки на высоте h: сужается к стенке до высоты слияния
 float mushFootBand(float h, float top, float share, float merge) {
     if (share <= 0.0) return 0.0;
-    return share * mushFootWidth(max(h, 0.0), top) * (1.0 - smoothstep(min(top, 0.5 * merge), merge + 1e-6, h));
+    return share * mushFootWidth(max(h, 0.0), top) * mushFootNarrow(h, top, merge);
+}
+
+// Узор полосы подсоса (пятна ножки, fx_pall: mushStemLobes): путь вдоль потока на высоте h, rho от оси у ножки радиуса r
+// с полосой band за стенкой — высота минус расстояние от стенки × доля полосы (верха слоя top): пятна идут по верху ковра
+// к ножке и вверх по её стенке; без полосы — высота, как у ножки
+float mushFootPath(float h, float rho, float r, float band, float top) {
+    return h - clamp(band / max(top, 1.0), 0.0, 1.0) * max(rho - r, 0.0);
+}
+
+// Поворот узора полосы подсоса вокруг оси, рад — подача (не по данным, фактов не меняет): MUSH_FOOT_TURN × доля полосы
+// за стенкой — пятно, поднимаясь, поворачивается против часовой стрелки сверху (как вихрь притока в северном полушарии;
+// замеров вращения притока у ножки нет). Сама ножка (rho ≤ r) не поворачивается: поворот, меняющийся с высотой, клонит
+// её струи «ёлочкой»
+const float MUSH_FOOT_TURN = 0.6;
+
+float mushFootTurn(float rho, float r, float band, float top) {
+    return MUSH_FOOT_TURN * clamp(band / max(top, 1.0), 0.0, 1.0) * smoothstep(r, r + 0.5 * band + 1.0, rho);
+}
+
+// доля подсоса на rho от оси у ножки радиуса r: он — у стенки и наружу; внутри ножки пыль — её своя (StemDust), с
+// подсосом во всю ножку внутри она стояла бы густотой ковра до фронта пыли подсоса — кольцом поперёк ножки
+float mushFootWall(float rho, float r) {
+    return smoothstep(0.6 * r, r, rho);
 }
 
 // мера места в сечении кольца: 1 — на его краю (rho — от оси по горизонтали, y — от середины кольца)
@@ -402,7 +430,7 @@ vec4 mushMean(Mush m, vec3 q) {
     float soft = 0.5 * MUSH_STEM_LOBES * mushStemAt(m, q.y);
     // ножка и подсос у её основания — одна пыль: где подсос гуще ножки, он
     float stem = max(mushStemSigma(m, q.y) * mushEdge(d.y, soft),
-            mushFootSigma(m, q.y) * mushEdge(length(q.xz) - mushFootAt(m, q.y), soft));
+            mushFootSigma(m, q.y) * mushFootWall(length(q.xz), mushStemAt(m, q.y)) * mushEdge(length(q.xz) - mushFootAt(m, q.y), soft));
     vec4 s = vec4(m.capSigma * mushEdge(d.x, 0.5 * MUSH_CAP_LOBES * m.billows * mushCapUnit(m)), stem,
             m.skirtSigma * mushEdge(d.z, 0.5 * MUSH_SKIRT_LOBES * mushSkirtUnit(m)), 0.0);
     if (m.colSigma > 0.0) s.w = m.colSigma * mushEdge(d.w, 0.5 * MUSH_COLUMN_LOBES * mushColumnUnit(m));

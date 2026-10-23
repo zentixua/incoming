@@ -928,17 +928,12 @@ float mushLobes(vec3 c, float tile, float cone, float k, vec3 ch) {
 }
 
 // Пятна ножки гриба m в месте q тела (rho — от оси, r — радиус ножки на этой высоте): струи поднимаются с воздухом,
-// который тянет кольцо (вдвое вытянуты по высоте, мелких нет — их вытягивает подъём). У основания — те же пятна в
-// полосе подсоса (mushFootBandAt, c — её доля верха слоя): путь вдоль потока — высота минус расстояние от стенки, и пятна
-// идут по верху ковра к ножке и вверх по её стенке; подача (не по данным, фактов не меняет): узор там повёрнут вокруг оси
-// на MUSH_FOOT_TURN × долю полосы — пятно, поднимаясь, поворачивается против часовой стрелки сверху (как вихрь притока в
-// северном полушарии; замеров вращения притока у ножки нет); где полоса сошла на нет, узор — ножки, без шва
-const float MUSH_FOOT_TURN = 1.0;
-
+// который тянет кольцо (вдвое вытянуты по высоте, мелких нет — их вытягивает подъём). В полосе подсоса за стенкой — те
+// же пятна по линиям тока и с поворотом (mushFootPath, mushFootTurn); где полосы нет, узор — ножки, без шва
 float mushStemLobes(Mush m, vec3 q, float rho, float r, float cone, float k) {
-    float c = clamp(mushFootBandAt(m, q.y) / max(m.footTop, 1.0), 0.0, 1.0);
-    float path = q.y - c * max(rho - r, 0.0) - m.stemRise;
-    float turn = MUSH_FOOT_TURN * c, cs = cos(turn), sn = sin(turn);
+    float band = mushFootBandAt(m, q.y);
+    float path = mushFootPath(q.y, rho, r, band, m.footTop) - m.stemRise;
+    float turn = mushFootTurn(rho, r, band, m.footTop), cs = cos(turn), sn = sin(turn);
     // место в узоре — откуда воздух пришёл: поворот на север от востока (−z) — против часовой сверху
     vec2 was = vec2(cs * q.x + sn * q.z, cs * q.z - sn * q.x);
     return mushLobes(vec3(was.x, 0.5 * path, was.y), m.stemTile, max(cone, m.stemTile), k + 4.0, MUSH_STREAKS);
@@ -1008,7 +1003,7 @@ vec4 mushDense(Mush m, vec3 q, float cone, float k, out float lobes, out float d
             }
             if (inFoot) {
                 float shifted = df - MUSH_STEM_LOBES * r * l;
-                sigma.y = max(sigma.y, foot * mushEdge(shifted, MUSH_STEM_EDGE * r));
+                sigma.y = max(sigma.y, foot * mushFootWall(rho, r) * mushEdge(shifted, MUSH_STEM_EDGE * r));
                 near = min(near, shifted - MUSH_STEM_EDGE * r);
             }
         }

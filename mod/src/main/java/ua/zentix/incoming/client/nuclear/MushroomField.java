@@ -717,7 +717,25 @@ public final class MushroomField {
      */
     static double footBand(double h, double top, double share, double merge) {
         if (share <= 0) return 0;
-        return share * footWidth(Math.max(h, 0), top) * (1 - smooth(Math.min(top, 0.5 * merge), merge + 1e-6, h));
+        return share * footWidth(Math.max(h, 0), top) * footNarrow(h, top, merge);
+    }
+
+    /**
+     * Доля подсоса на высоте {@code h} ({@code mushFootNarrow}): от верха слоя (или половины высоты слияния, если она ниже)
+     * сходит на нет к высоте слияния {@code merge} (полоса за стенкой, {@link #footBand}; густота — нет: у слияния она и
+     * так — ножки).
+     */
+    static double footNarrow(double h, double top, double merge) {
+        return 1 - smooth(Math.min(top, 0.5 * merge), merge + 1e-6, h);
+    }
+
+    /**
+     * Доля подсоса на {@code rho} от оси у ножки радиуса {@code r} ({@code mushFootWall}): он — у стенки и наружу; внутри
+     * ножки пыль — её своя ({@code StemDust}). С подсосом во всю ножку внутри она стояла бы густотой ковра до фронта пыли
+     * подсоса — кольцом поперёк ножки (кадры песочницы, ревью).
+     */
+    static double footWall(double rho, double r) {
+        return smooth(0.6 * r, r, rho);
     }
 
     private static double smooth(double e0, double e1, double x) {
