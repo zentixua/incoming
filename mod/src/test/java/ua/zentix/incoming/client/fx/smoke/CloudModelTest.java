@@ -289,7 +289,7 @@ class CloudModelTest {
             double ball = m.ballRadius(t), bh = m.ballHeight(t), cx = m.driftX(t), cz = m.driftZ(t), share = CloudModel.glowShare(m.ballKelvin(t), day);
             m.blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
                 double dx = x - cx, dy = y - bh, dz = z - cz;
-                if (dx * dx + dy * dy + dz * dz < 0.8 * ball * ball && soot + dust > 0)
+                if (dx * dx + dy * dy + dz * dz < 0.6 * ball * ball && soot + dust > 0)
                     assertTrue(CloudModel.glowShare(kelvin, day) >= share - 1e-9, "в шаре на " + t + " с — огонь, не дым: " + kelvin);
             });
         }

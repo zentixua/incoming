@@ -109,8 +109,11 @@ public final class PlumeRenderer {
         float near = p.near();
         // свет струи — поверх дыма её же выхлопа: след и столб у струи — то же вещество, свечение и рассеянный им свет
         // складываются (⚠ самопоглощение не учитывается); по квадратам сортировка резала струю ступенями между клубами
-        // (кадры F6 сзади). Клубы следа — до ~3,7σ₀ от оси, σ₀ — половина ширины струи в её конце (TrailModel.Trail.of)
-        float ahead = (float) (f.length() + 2 * f.spread());
+        // (кадры F6 сзади). Запас — глубина струи вдоль взгляда и клубы следа у оси (до ~3,7σ₀, σ₀ — половина ширины струи
+        // в её конце, TrailModel.Trail.of): дым дальше этого перед струёй, чужой и свой, её закрывает
+        Vector3f axis = new Vector3f(0, 0, -1).rotate(rot);
+        double along = Math.abs((axis.x * ox + axis.y * oy + axis.z * oz) / Math.max(1e-6, Math.sqrt(ox * ox + oy * oy + oz * oz)));
+        float ahead = (float) (f.length() * along + 2 * f.spread());
         double lit = exposure * view.air(dist, oy);
         layout(f, p.z(), cam, left, up, (layer, piece, a, b, c, d) -> {
             for (Vector3f v : new Vector3f[]{a, b, c, d}) v.add(0, p.y(), 0).rotate(rot).add(ox, oy, oz);

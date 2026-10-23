@@ -463,9 +463,9 @@ public final class FarSprites implements SmokePuffs.Out {
 
     /**
      * Во сколько раз полоса {@code far/glow} шире ровной того же света поперёк: середина круга {@code far/disc} поперёк
-     * закрывает ~0,93 ширины, ореола exp(−(u/0,42)²) — 0,42·√π/2 ≈ 0,744.
+     * закрывает ~0,93 ширины, ореола exp(−(u/0,42)²) — 0,42·√π/2 ≈ 0,372 (доля ширины, не интеграл по ней), ≈ 2,5.
      */
-    static final float STRIP_CROSS = 0.93f / 0.744f;
+    static final float STRIP_CROSS = (float) (0.93 / (0.42 * Math.sqrt(Math.PI) / 2));
 
     /** Отрезок p–q поперёк струи — шире в {@link #STRIP_CROSS} раза от своей середины. */
     private static void widen(Vector3f p, Vector3f q) {

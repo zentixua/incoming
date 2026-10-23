@@ -697,14 +697,16 @@ public final class CloudModel {
 
     /**
      * Температура вещества в (x, y, z) от точки взрыва, у которого своя — kelvin: внутри светящегося шара оно — часть шара
-     * (его пыль проступает той же долей, что шар тает), иначе — своя. Днём по своей температуре ножка и пыль у земли внутри
+     * (его пыль проступает той же долей, что шар тает), снаружи — своя, у поверхности (0,8–1,2 радиуса) — плавно. Днём по своей температуре ножка и пыль у земли внутри
      * шара ложились тёмным комом поверх него в первую секунду (кадры F6, бомба в 150 м).
      */
     private double inBall(double t, double x, double y, double z, double kelvin) {
-        double ball = ballRadius(t);
-        if (ball <= 0) return kelvin;
-        double dx = x - driftX(t), dy = y - ballHeight(t), dz = z - driftZ(t);
-        return dx * dx + dy * dy + dz * dz < ball * ball ? Math.max(kelvin, ballKelvin(t)) : kelvin;
+        double ball = ballRadius(t), hot = ballKelvin(t);
+        if (ball <= 0 || hot <= kelvin) return kelvin;
+        double dx = x - driftX(t), dy = y - ballHeight(t), dz = z - driftZ(t), d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // у поверхности шара — плавно (0,8–1,2 радиуса): кусок, что выходит из растущего шара, не выскакивает непрозрачным
+        double u = Math.max(0, Math.min(1, (1.2 * ball - d) / (0.4 * ball)));
+        return kelvin + (hot - kelvin) * u * u * (3 - 2 * u);
     }
 
     /**
