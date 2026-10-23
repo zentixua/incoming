@@ -96,6 +96,35 @@ public final class BombGameTests {
     }
 
     /**
+     * Путь в однородной земле под углом — тот же путь Янга, что отвесно: ось, пересекая грани блоков, не начинает слой
+     * заново. Жалоба ET 23.10: бомба B-2 входит под 89°, и путь в земле был на 25–40 % длиннее закона (отвесно — точно):
+     * хвост оси вне формы блока длиной в погрешность float считался пустотой. Скорость — 160 м/с, путь ~35 м: в высоту
+     * площадки.
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "bomb_oblique", skyAccess = true)
+    public static void obliquePathIsYoung(GameTestHelper h) {
+        Penetration.Body mop = BunkerBusterEntity.body();
+        BlockPos top = new BlockPos(32, 38, 32);
+        for (BlockPos p : BlockPos.betweenClosed(new BlockPos(8, 2, 8), new BlockPos(55, 38, 55))) {
+            h.getLevel().setBlock(h.absolutePos(p), (p.getY() == 38 ? Blocks.PODZOL : Blocks.DIRT).defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
+        double v = 160, expect = Penetration.depth(mop, 12, v);
+        h.assertTrue(expect > 25 && expect < 36, "путь по Янгу " + m(expect) + " не помещается в куб земли");
+        Vec3 face = Vec3.atBottomCenterOf(h.absolutePos(top)).add(0.13, 1, 0.29);
+        for (double pitch : new double[]{90, 89, 80, 70}) {
+            for (double yaw : new double[]{0, 30, 45}) {
+                double p = Math.toRadians(pitch), y = Math.toRadians(yaw);
+                Vec3 dir = new Vec3(Math.cos(p) * Math.sin(y), -Math.sin(p), Math.cos(p) * Math.cos(y));
+                BunkerBusterEntity.Path path = BunkerBusterEntity.plan(h.getLevel(), face, dir, v, 0);
+                h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, pitch + "°/" + yaw + "°: бомба не встала — " + path.end());
+                h.assertTrue(Math.abs(path.length() - expect) < 1e-3 * expect,
+                        pitch + "°/" + yaw + "°: путь " + m(path.length()) + ", по Янгу " + m(expect));
+            }
+        }
+        h.succeed();
+    }
+
+    /**
      * Датчик пустоты: после 5 м камня пещера в 10 блоков — подрыв, когда бомба вошла в неё целиком (своя длина); за
      * перекрытием тоньше {@value BunkerBusterEntity#SENSOR_SOLID} м — не срабатывает, бомба идёт дальше.
      */

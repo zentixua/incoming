@@ -58,6 +58,12 @@ public class BunkerBusterEntity extends StrikeProjectile {
     static final double SENSOR_SOFT = 20;
     /** Самый длинный путь в грунте, м: дальше — подрыв (в мягком грунте путь — десятки метров, в воде — сотни). */
     static final double MAX_PATH = 400;
+    /**
+     * Короче этого остаток оси в блоке вне его формы — погрешность пересечения граней (float), а не пустота, м: форма
+     * блока не мельче 1/16 м. Без этого ось, пересекая под углом грань соседнего блока той же среды, «выходила в
+     * пустоту» на 10⁻¹⁶ м и начинала слой Янга заново — бомба B-2 под 89° уходила в землю на 25–40 % глубже закона.
+     */
+    static final double GRAZE = 1e-6;
 
     /** Цель под землёй (пещера, бункер): бомба целит в неё, а не в поверхность над ней. */
     @Nullable
@@ -258,6 +264,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
                 }
             }
             double rest = len - matter;
+            if (rest < GRAZE) rest = 0;
             if (rest > 0 && liquid != null) {
                 hollow = 0;
                 double went = run.through(liquid.kind(), liquid.s(), rest);

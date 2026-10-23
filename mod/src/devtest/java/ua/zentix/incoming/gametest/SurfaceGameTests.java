@@ -247,9 +247,9 @@ public final class SurfaceGameTests {
     }
 
     /**
-     * Девять ударов оружия сеткой по поверхности {@code s} (одна воронка «Ланцета» — доля блока, поэтому сумма), замер в
-     * квадрате каждого удара: снятые блоки поверхности, отверстие (столбцы со снятым верхом), глубина; у плит — сквозные
-     * пробои.
+     * Удары оружия сеткой по всей поверхности {@code s} (шаг — {@link #spacing}: у ракеты 3×3, у шахеда 4×4, у «Ланцета»
+     * и «Града» 6×6 — их воронка доля блока, поэтому сумма), замер в квадрате каждого удара: снятые блоки поверхности,
+     * отверстие (столбцы со снятым верхом), глубина; у плит — сквозные пробои.
      */
     private static void craterCell(GameTestHelper h, WeaponType weapon, Surface s) {
         ServerLevel level = h.getLevel();
@@ -258,76 +258,89 @@ public final class SurfaceGameTests {
         IncomingConfig.SERVER.debrisStay.set(false);
         StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
         build(h, s, LO, HI, LO, HI, TOP);
-        int step = spacing(weapon);
-        h.assertTrue(MID - step - step / 2 >= LO && MID + step + step / 2 <= HI, weapon + ": сетка ударов шире площадки, шаг " + step);
+        int step = spacing(weapon), n = (HI - LO + 1) / step, first = MID - (n - 1) * step / 2;
+        h.assertTrue(n >= 3, weapon + ": меньше трёх ударов в ряд, шаг " + step);
         List<BlockPos> hits = new ArrayList<>();
-        for (int i = -1; i <= 1; i++) for (int k = -1; k <= 1; k++) hits.add(new BlockPos(MID + step * i, TOP, MID + step * k));
+        for (int i = 0; i < n; i++) for (int k = 0; k < n; k++) hits.add(new BlockPos(first + step * i, TOP, first + step * k));
         for (BlockPos hit : hits) {
             Warheads.detonate(level, weapon, Vec3.atBottomCenterOf(h.absolutePos(hit.above())), striker(level, weapon), null);
         }
+        Row[] row = {null};
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "работа ударов идёт");
-            int removed = 0, maxDepth = 0, holes = 0, through = 0;
-            double area = 0;
-            int half = (step - 1) / 2;
-            for (BlockPos hit : hits) {
-                int opening = 0, holeCols = 0;
-                for (int dx = -half; dx <= half; dx++) {
-                    for (int dz = -half; dz <= half; dz++) {
-                        int depth = 0;
-                        for (int y = TOP; y >= BASE; y--) {
-                            BlockPos rel = new BlockPos(hit.getX() + dx, y, hit.getZ() + dz);
-                            if (s.layer(TOP - y).isAir()) continue;
-                            BlockState now = level.getBlockState(h.absolutePos(rel));
-                            if (now.isAir() || now.is(Blocks.FIRE) || !now.getFluidState().isEmpty()) {
-                                removed++;
-                                depth = Math.max(depth, TOP - y + 1);
-                            }
-                        }
-                        BlockState cap = level.getBlockState(h.absolutePos(new BlockPos(hit.getX() + dx, TOP, hit.getZ() + dz)));
-                        boolean open = cap.isAir() || cap.is(Blocks.FIRE);
-                        if (open) opening++;
-                        // у плиты верх снят — дыра насквозь: под ней пустота
-                        if (s.slab() && open) holeCols++;
-                        maxDepth = Math.max(maxDepth, depth);
-                    }
-                }
-                area += opening;
-                if (holeCols > 0) through++;
-                holes += holeCols;
-            }
-            double tnt = weapon.spec().charge();
-            double dEq = 2 * Math.sqrt(area / hits.size() / Math.PI);
-            String got = s.slab()
-                    ? String.format(Locale.ROOT, "%d бл. плиты (%s/удар), пробой %d/9, дыра %s м", removed, f(removed / 9.0), through, f(2 * Math.sqrt(holes / 9.0 / Math.PI)))
-                    : String.format(Locale.ROOT, "%d бл. (%s/удар), Ø %s м, глуб. %d", removed, f(removed / 9.0), f(dEq), maxDepth);
-            String should;
-            boolean ok;
-            if (s.slab()) {
-                // FM 5-250: снесено всё в радиусе пробоя; пробой — радиус больше толщины (1 м)
-                double rLo = breachRadius(tnt, FM_K_HI), rHi = breachRadius(tnt, FM_K_LO);
-                double vLo = 9 * slabVolume(rLo, 1), vHi = 9 * slabVolume(rHi, 1), noise = 3 * Math.sqrt(vHi);
-                int lo = (int) Math.max(0, Math.floor(0.6 * vLo - noise)), hi = (int) Math.ceil(1.45 * vHi + noise);
-                boolean breach = rLo > 1.15, none = rHi < 0.85;
-                should = String.format(Locale.ROOT, "%d–%d бл., пробой %s (R %s–%s м)", lo, hi, breach ? "9/9" : none ? "0/9" : "любой", f(rLo), f(rHi));
-                ok = removed >= lo && removed <= hi && (!breach || through == 9) && (!none || through == 0);
-            } else {
-                // воронка в своей среде; бетон дороги — среда не мягче скалы и не больше воронки в грунте
-                CraterModel.Soil soil = s == Surface.PAVED ? CraterModel.Soil.ROCK : s.soil();
-                double rc = CraterModel.chargeRadius(tnt, soil), depth = CraterModel.chargeDepth(tnt, soil);
-                double[] one = lawBlocks(rc, depth);
-                double mean = 9 * one[0], sigma = Math.sqrt(9 * one[1]);
-                double upper = s == Surface.PAVED ? 9 * lawBlocks(CraterModel.chargeRadius(tnt, CraterModel.Soil.DRY),
-                        CraterModel.chargeDepth(tnt, CraterModel.Soil.DRY))[0] : mean;
-                int lo = (int) Math.max(0, Math.floor(0.6 * mean - 3 * sigma)), hi = (int) Math.ceil(1.45 * upper + 3 * sigma);
-                int deepest = Mth.ceil(1.3 * depth);
-                should = String.format(Locale.ROOT, "%d–%d бл. (закон %s), Ø %s м, глуб. ≤ %d", lo, hi, f(mean), f(2 * rc), deepest);
-                ok = removed >= lo && removed <= hi && maxDepth <= Math.max(1, deepest);
-            }
-            Row row = new Row(weapon.name(), s.title, should, got, !s.pending(), ok, SLAB_PENDING);
-            report("surface_" + weapon.name().toLowerCase(Locale.ROOT), List.of(row));
-            if (row.checked) h.assertTrue(ok, row.line());
+            if (row[0] == null) row[0] = craterRow(h, weapon, s, hits, step);
+            if (row[0].checked) h.assertTrue(row[0].ok, row[0].line());
         });
+    }
+
+    /** Замер ударов {@code hits} по поверхности {@code s} против закона — строка отчёта (печатается один раз). */
+    private static Row craterRow(GameTestHelper h, WeaponType weapon, Surface s, List<BlockPos> hits, int step) {
+        ServerLevel level = h.getLevel();
+        int removed = 0, maxDepth = 0, holes = 0, through = 0;
+        double area = 0;
+        int half = (step - 1) / 2;
+        for (BlockPos hit : hits) {
+            int opening = 0, holeCols = 0;
+            for (int dx = -half; dx <= half; dx++) {
+                for (int dz = -half; dz <= half; dz++) {
+                    int depth = 0;
+                    for (int y = TOP; y >= BASE; y--) {
+                        BlockPos rel = new BlockPos(hit.getX() + dx, y, hit.getZ() + dz);
+                        if (s.layer(TOP - y).isAir()) continue;
+                        BlockState now = level.getBlockState(h.absolutePos(rel));
+                        if (now.isAir() || now.is(Blocks.FIRE) || !now.getFluidState().isEmpty()) {
+                            removed++;
+                            depth = Math.max(depth, TOP - y + 1);
+                        }
+                    }
+                    BlockState cap = level.getBlockState(h.absolutePos(new BlockPos(hit.getX() + dx, TOP, hit.getZ() + dz)));
+                    boolean open = cap.isAir() || cap.is(Blocks.FIRE);
+                    if (open) opening++;
+                    // у плиты верх снят — дыра насквозь: под ней пустота
+                    if (s.slab() && open) holeCols++;
+                    maxDepth = Math.max(maxDepth, depth);
+                }
+            }
+            area += opening;
+            if (holeCols > 0) through++;
+            holes += holeCols;
+        }
+        double tnt = weapon.spec().charge(), count = hits.size();
+        double dEq = 2 * Math.sqrt(area / hits.size() / Math.PI);
+        String got = s.slab()
+                ? String.format(Locale.ROOT, "%d бл. плиты за %d (%s/удар), пробой %d, дыра %s м", removed, hits.size(), f(removed / count), through,
+                f(2 * Math.sqrt(holes / count / Math.PI)))
+                : String.format(Locale.ROOT, "%d бл. за %d (%s/удар), Ø %s м, глуб. %d", removed, hits.size(), f(removed / count), f(dEq), maxDepth);
+        String should;
+        boolean ok;
+        if (s.slab()) {
+            // FM 5-250: снесено всё в радиусе пробоя, пробой — радиус больше толщины (1 м); плита над пустотой ещё и
+            // панель — дальше пробоя её ломает волна не дальше, чем кладку (12 psi, Джаррет): верхняя граница
+            double rLo = breachRadius(tnt, FM_K_HI), rHi = breachRadius(tnt, FM_K_LO), rPanel = BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt);
+            double vLo = count * slabVolume(rLo, 1), vHi = count * Math.max(slabVolume(rHi, 1), Math.PI * rPanel * rPanel);
+            // край дыры — целыми блоками: ±2√V блоков на шум края
+            int lo = (int) Math.max(0, Math.floor(0.6 * vLo - 2 * Math.sqrt(vLo))), hi = (int) Math.ceil(1.45 * vHi + 2 * Math.sqrt(vHi));
+            boolean breach = rLo > 1.15, none = rHi < 0.85 && rPanel < 0.85;
+            should = String.format(Locale.ROOT, "%d–%d бл., пробой %s (FM R %s–%s м, кладка %s м)", lo, hi,
+                    breach ? "у всех" : none ? "нет" : "любой", f(rLo), f(rHi), f(rPanel));
+            ok = removed >= lo && removed <= hi && (!breach || through == hits.size()) && (!none || through == 0);
+        } else {
+            // воронка в своей среде; бетон дороги — среда не мягче скалы и не больше воронки в грунте
+            CraterModel.Soil soil = s == Surface.PAVED ? CraterModel.Soil.ROCK : s.soil();
+            double rc = CraterModel.chargeRadius(tnt, soil), depth = CraterModel.chargeDepth(tnt, soil);
+            double[] one = lawBlocks(rc, depth);
+            // данные — 0,6–1,45 объёма закона; целые блоки — ещё 2σ случайной добавки
+            double mean = count * one[0], sigma = Math.sqrt(count * one[1]);
+            double upper = s == Surface.PAVED ? count * lawBlocks(CraterModel.chargeRadius(tnt, CraterModel.Soil.DRY),
+                    CraterModel.chargeDepth(tnt, CraterModel.Soil.DRY))[0] : mean;
+            int lo = (int) Math.max(0, Math.floor(0.6 * mean - 2 * sigma)), hi = (int) Math.ceil(1.45 * upper + 2 * sigma);
+            int deepest = Mth.ceil(1.3 * depth);
+            should = String.format(Locale.ROOT, "%d–%d бл. (закон %s), Ø %s м, глуб. ≤ %d", lo, hi, f(mean), f(2 * rc), deepest);
+            ok = removed >= lo && removed <= hi && maxDepth <= Math.max(1, deepest);
+        }
+        Row row = new Row(weapon.name(), s.title, should, got, !s.pending(), ok, SLAB_PENDING);
+        report("surface_" + weapon.name().toLowerCase(Locale.ROOT), List.of(row));
+        return row;
     }
 
     // ---------------------------------------------------------------- рядом: стены и стёкла
@@ -347,8 +360,11 @@ public final class SurfaceGameTests {
         double tnt = weapon.spec().charge();
         BlockPos c = h.absolutePos(new BlockPos(MID, TOP + 1, MID));
         Vec3 at = Vec3.atBottomCenterOf(c);
-        List<BlastGameTests.Post> bricks = BlastGameTests.layPosts(c, at, BRICK_PSI, tnt, BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt), List.of());
-        List<BlastGameTests.Post> planks = BlastGameTests.layPosts(c, at, WOOD_PSI, tnt, BlastDamage.breakRange(BlastModel.kpa(WOOD_PSI), tnt), bricks);
+        // кладка — к −z, доски — к +z: каждому материалу своя половина азимутов, и доски у шахеда стоят и на малых долях
+        List<BlastGameTests.Post> bricks = BlastGameTests.layPosts(c, at, BRICK_PSI, tnt, BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt),
+                List.of(), b -> b < 0);
+        List<BlastGameTests.Post> planks = BlastGameTests.layPosts(c, at, WOOD_PSI, tnt, BlastDamage.breakRange(BlastModel.kpa(WOOD_PSI), tnt),
+                List.of(), b -> b > 0);
         for (BlastGameTests.Post p : bricks) level.setBlock(p.pos(), Blocks.STONE_BRICKS.defaultBlockState(), Block.UPDATE_CLIENTS);
         for (BlastGameTests.Post p : planks) level.setBlock(p.pos(), Blocks.OAK_PLANKS.defaultBlockState(), Block.UPDATE_CLIENTS);
         // стёкла: по одному в воздухе над площадкой, место — ближайшее к доле своего радиуса
@@ -373,24 +389,30 @@ public final class SurfaceGameTests {
             glass.add(new double[]{bestShare});
         }
         Warheads.detonate(level, weapon, at, striker(level, weapon), null);
+        List<Row> rows = new ArrayList<>();
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "работа удара идёт");
-            List<Row> rows = new ArrayList<>();
-            rows.add(posts(level, weapon, "стены: каменный кирпич 12 psi", bricks, Blocks.STONE_BRICKS, Blocks.CRACKED_STONE_BRICKS, tnt, BRICK_PSI));
-            rows.add(posts(level, weapon, "стены: доски 4 psi", planks, Blocks.OAK_PLANKS, Blocks.OAK_PLANKS, tnt, WOOD_PSI));
-            StringBuilder got = new StringBuilder();
-            boolean ok = true;
-            for (int k = 0; k < panes.size(); k++) {
-                double sh = glass.get(k)[0];
-                boolean gone = !level.getBlockState(panes.get(k)).is(Blocks.GLASS);
-                got.append(String.format(Locale.ROOT, " %.2f%s", sh, gone ? "x" : "|"));
-                if (sh <= 0.8 && !gone || sh >= 1.25 && gone) ok = false;
-            }
-            double r = BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI), tnt);
-            rows.add(new Row(weapon.name(), "стёкла 0,8 psi (R " + f(r) + " м)", "≤0,8 R выбиты, ≥1,25 R целы", "доли R:" + got, true, ok, ""));
-            report("surface_" + weapon.name().toLowerCase(Locale.ROOT) + "_nearby", rows);
+            if (rows.isEmpty()) nearbyRows(level, weapon, tnt, bricks, planks, panes, glass, rows);
             for (Row row : rows) h.assertTrue(row.ok, row.line());
         });
+    }
+
+    /** Строки «рядом»: столбики кладки и досок, стёкла (печатаются один раз). */
+    private static void nearbyRows(ServerLevel level, WeaponType weapon, double tnt, List<BlastGameTests.Post> bricks,
+                                   List<BlastGameTests.Post> planks, List<BlockPos> panes, List<double[]> glass, List<Row> rows) {
+        rows.add(posts(level, weapon, "стены: каменный кирпич 12 psi", bricks, Blocks.STONE_BRICKS, Blocks.CRACKED_STONE_BRICKS, tnt, BRICK_PSI));
+        rows.add(posts(level, weapon, "стены: доски 4 psi", planks, Blocks.OAK_PLANKS, Blocks.OAK_PLANKS, tnt, WOOD_PSI));
+        StringBuilder got = new StringBuilder();
+        boolean ok = true;
+        for (int k = 0; k < panes.size(); k++) {
+            double sh = glass.get(k)[0];
+            boolean gone = !level.getBlockState(panes.get(k)).is(Blocks.GLASS);
+            got.append(String.format(Locale.ROOT, " %.2f%s", sh, gone ? "x" : "|"));
+            if (sh <= 0.8 && !gone || sh >= 1.25 && gone) ok = false;
+        }
+        double r = BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI), tnt);
+        rows.add(new Row(weapon.name(), "стёкла 0,8 psi (R " + f(r) + " м)", "≤0,8 R выбиты, ≥1,25 R целы", "доли R:" + got, true, ok, ""));
+        report("surface_" + weapon.name().toLowerCase(Locale.ROOT) + "_nearby", rows);
     }
 
     /** Строка столбиков одного материала: доли радиуса Джаррета своего порога, сломан (x) или цел (|). */
@@ -485,62 +507,71 @@ public final class SurfaceGameTests {
         };
         NeoForge.EVENT_BUS.addListener(first);
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(first));
+        Row[] row = {null};
         h.succeedWhen(() -> {
             h.assertTrue(entry[0] != null, "бомба не вошла в грунт");
             h.assertTrue(bomb.isRemoved() && charge[0] != null, "бомба не взорвалась");
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "работа подрыва идёт");
-            Vec3 dir = last[1].normalize();
-            double sin = Math.max(0.05, -dir.y), v = speed[0];
-            // путь по Янгу через слои поверхности по оси бомбы
-            Penetration.Run run = new Penetration.Run(BunkerBusterEntity.body(), v);
-            double young = 0;
-            for (int d = 0; d <= top - BASE && !run.stopped(); d++) {
-                BlockState layer = s.layer(d);
-                if (layer.isAir()) {
-                    young += 1 / sin;
-                    continue;
-                }
-                young += run.through(kind(layer), youngS(layer), 1 / sin);
-            }
-            double path = charge[0].distanceTo(entry[0]);
-            boolean rocky = s == Surface.ROCK;
-            double lo2 = rocky ? 0.5 : 0.8, hi2 = rocky ? 2 : 1.2;
-            // воронка выброса по глубине подрыва под верхом
-            double depth = entry[0].y - charge[0].y;
-            BuriedBlast law = new BuriedBlast(WeaponType.BUNKER.spec().warheadTnt(), depth);
-            CraterModel.Soil soil = s == Surface.ROCK ? CraterModel.Soil.ROCK : CraterModel.Soil.DRY;
-            int removedTop = 0, columns = 0;
-            BlockPos ent = BlockPos.containing(entry[0]);
-            for (int dx = -BOMB_HALF + 1; dx < BOMB_HALF; dx++) {
-                for (int dz = -BOMB_HALF + 1; dz < BOMB_HALF; dz++) {
-                    boolean col = false;
-                    for (int dy = 0; dy < 3; dy++) {
-                        BlockPos a = new BlockPos(ent.getX() + dx, ent.getY() - dy, ent.getZ() + dz);
-                        if (s.layer(dy).isAir()) continue;
-                        BlockState now = level.getBlockState(a);
-                        if (now.isAir() || now.is(Blocks.FIRE)) {
-                            removedTop++;
-                            col = true;
-                        }
-                    }
-                    if (col) columns++;
-                }
-            }
-            // ход бомбы (Ø 0,8 м) — блок по оси: в верхних трёх слоях — до трёх столбцов по косой
-            double crater = law.breaches() ? law.craterVolume(soil) : 0;
-            int craterLo = (int) Math.floor(0.6 * crater - 3 * Math.sqrt(crater)), craterHi = (int) Math.ceil(1.45 * crater + 3 * Math.sqrt(crater)) + 6;
-            boolean pathOk = path >= lo2 * young && path <= hi2 * young;
-            boolean craterOk = removedTop >= Math.max(1, craterLo) && removedTop <= craterHi;
-            boolean throughSlab = !s.slab() || depth > 1 + (s == Surface.DECK ? VOID : ROOM);
-            String should = String.format(Locale.ROOT, "путь %s м (Янг, %s–%s), λ %s: %s", f(young), f(lo2 * young), f(hi2 * young),
-                    f(law.scaledDepth()), law.breaches() ? "воронка " + Math.max(1, craterLo) + "–" + craterHi + " бл." : "камуфлет, верх — ход (≤ " + craterHi + " бл.)")
-                    + (s.slab() ? ", подрыв под плитой" : "");
-            String got = String.format(Locale.ROOT, "удар %s м/с под %s°, путь %s м, глубина %s м, снято сверху %d бл. в %d столбцах",
-                    f(v), f(Math.toDegrees(Math.asin(sin))), f(path), f(depth), removedTop, columns);
-            Row row = new Row("BOMB", s.title, should, got, true, pathOk && craterOk && throughSlab, "");
-            report("surface_bomb", List.of(row));
-            h.assertTrue(row.ok, row.line());
+            if (row[0] == null) row[0] = bombRow(level, s, top, last[1], speed[0], entry[0], charge[0]);
+            h.assertTrue(row[0].ok, row[0].line());
         });
+    }
+
+    /** Строка бомбы: путь против Янга, воронка против приведённой глубины (печатается один раз). */
+    private static Row bombRow(ServerLevel level, Surface s, int top, Vec3 step, double v, Vec3 entry, Vec3 charge) {
+        Vec3 dir = step.normalize();
+        double sin = Math.max(0.05, -dir.y);
+        // путь по Янгу через слои поверхности по оси бомбы
+        Penetration.Run run = new Penetration.Run(BunkerBusterEntity.body(), v);
+        double young = 0;
+        for (int d = 0; d <= top - BASE && !run.stopped(); d++) {
+            BlockState layer = s.layer(d);
+            if (layer.isAir()) {
+                run.gap();
+                young += 1 / sin;
+                continue;
+            }
+            young += run.through(kind(layer), youngS(layer), 1 / sin);
+        }
+        double path = charge.distanceTo(entry);
+        boolean rocky = s == Surface.ROCK;
+        double lo2 = rocky ? 0.5 : 0.8, hi2 = rocky ? 2 : 1.2;
+        // воронка выброса по глубине подрыва под верхом
+        double depth = entry.y - charge.y;
+        BuriedBlast law = new BuriedBlast(WeaponType.BUNKER.spec().warheadTnt(), depth);
+        CraterModel.Soil soil = s == Surface.ROCK ? CraterModel.Soil.ROCK : CraterModel.Soil.DRY;
+        int removedTop = 0, columns = 0;
+        BlockPos ent = BlockPos.containing(entry);
+        for (int dx = -BOMB_HALF + 1; dx < BOMB_HALF; dx++) {
+            for (int dz = -BOMB_HALF + 1; dz < BOMB_HALF; dz++) {
+                boolean col = false;
+                for (int dy = 0; dy < 3; dy++) {
+                    // вход — верх блока поверхности: сам блок — под ним
+                    BlockPos a = new BlockPos(ent.getX() + dx, ent.getY() - 1 - dy, ent.getZ() + dz);
+                    if (s.layer(dy).isAir()) continue;
+                    BlockState now = level.getBlockState(a);
+                    if (now.isAir() || now.is(Blocks.FIRE)) {
+                        removedTop++;
+                        col = true;
+                    }
+                }
+                if (col) columns++;
+            }
+        }
+        // ход бомбы (Ø 0,8 м) — блок по оси: в верхних трёх слоях — до трёх столбцов по косой
+        double crater = law.breaches() ? law.craterVolume(soil) : 0;
+        int craterLo = (int) Math.floor(0.6 * crater - 3 * Math.sqrt(crater)), craterHi = (int) Math.ceil(1.45 * crater + 3 * Math.sqrt(crater)) + 6;
+        boolean pathOk = path >= lo2 * young && path <= hi2 * young;
+        boolean craterOk = removedTop >= Math.max(1, craterLo) && removedTop <= craterHi;
+        boolean throughSlab = !s.slab() || depth > 1 + (s == Surface.DECK ? VOID : ROOM);
+        String should = String.format(Locale.ROOT, "путь %s м (Янг, %s–%s), λ %s: %s", f(young), f(lo2 * young), f(hi2 * young),
+                f(law.scaledDepth()), law.breaches() ? "воронка " + Math.max(1, craterLo) + "–" + craterHi + " бл." : "камуфлет, верх — ход (≤ " + craterHi + " бл.)")
+                + (s.slab() ? ", подрыв под плитой" : "");
+        String got = String.format(Locale.ROOT, "удар %s м/с под %s°, путь %s м, глубина %s м, снято сверху %d бл. в %d столбцах",
+                f(v), f(Math.toDegrees(Math.asin(sin))), f(path), f(depth), removedTop, columns);
+        Row row = new Row("BOMB", s.title, should, got, true, pathOk && craterOk && throughSlab, "");
+        report("surface_bomb", List.of(row));
+        return row;
     }
 
     // ---------------------------------------------------------------- проверки

@@ -63,7 +63,7 @@ public final class BlastGameTests {
         BlockPos c = h.absolutePos(CENTER);
         Vec3 at = Vec3.atCenterOf(c);
         double nominal = BlastDamage.breakRange(BlastModel.kpa(psi), tnt);
-        List<Post> posts = layPosts(c, at, psi, tnt, nominal, List.of());
+        List<Post> posts = layPosts(c, at, psi, tnt, nominal, List.of(), b -> true);
         h.assertTrue(posts.size() == POST_AT.length, "места для столбиков на своих лучах не нашлось: " + posts.size());
         // трава вокруг (до 1,7 радиуса): уцелевшая трава волну не держит — столбики за ней ломаются так же
         int n = (int) Math.ceil(nominal * 1.7);
@@ -115,16 +115,17 @@ public final class BlastGameTests {
      * Места столбиков в слое заряда: для каждой доли {@link #POST_AT} — блок, у которого расстояние, делённое на радиус
      * Джаррета его порога, ближе всего к ней, и который по азимуту не перекрывает уже выбранные. Зависит только от
      * порогов мест, а их разброс — от места площадки: доли выходят одни и те же везде. {@code taken} — уже стоящие
-     * столбики другого материала: новые не перекрывают и их.
+     * столбики другого материала: новые не перекрывают и их; {@code side} — какие азимуты (рад, от +x к +z) годятся.
      */
-    static List<Post> layPosts(BlockPos c, Vec3 at, double psi, double tnt, double nominal, List<Post> taken) {
+    static List<Post> layPosts(BlockPos c, Vec3 at, double psi, double tnt, double nominal, List<Post> taken,
+                               java.util.function.DoublePredicate side) {
         int n = (int) Math.ceil(nominal * 1.6);
         List<Post> candidates = new ArrayList<>();
         for (int dx = -n; dx <= n; dx++) {
             for (int dz = -n; dz <= n; dz++) {
                 BlockPos p = c.offset(dx, 0, dz);
                 double distance = Math.sqrt(new AABB(p).distanceToSqr(at));
-                if (distance < 1) continue;
+                if (distance < 1 || !side.test(Math.atan2(p.getZ() + 0.5 - at.z, p.getX() + 0.5 - at.x))) continue;
                 double jarrett = BlastDamage.breakRange(BlastModel.kpa(psi * BlockResponse.jitterAt(p)), tnt);
                 double bearing = Math.atan2(p.getZ() + 0.5 - at.z, p.getX() + 0.5 - at.x), half = 0;
                 for (int cx = 0; cx <= 1; cx++) {
