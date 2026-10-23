@@ -3445,17 +3445,27 @@ public final class StrikeGameTests {
         // Короткий гребень даёт высоту для настоящего снижения. Длинный навес появится только при подъёме цели.
         if (ridge > 0) roofOverStart(h, start, Mth.floor(low.y) + 60, ridge);
         CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(level);
-        missile.launch(start, Target.OfEntity.center(stand), low, null);
-        missile.setRoute(Route.direct());
-        VirtualFlights.launch(level, missile);
         UUID id = missile.getUUID();
         Vec3 high = low.add(0, 40, 0);
         // пол полёта вне мира после подъёма: центр цели на 16 блоков ниже (рельеф над путём выше)
         double floorAfter = high.y + stand.getBbHeight() / 2 - 16;
         Vec3[] last = {start};
-        boolean[] raised = {false}, climbed = {false};
+        boolean[] launched = {false}, raised = {false}, climbed = {false};
         double[] raisedAt = {0};
         h.onEachTick(() -> {
+            if (!launched[0]) {
+                // getChunk() при постройке вернул FULL, но его держатель может ещё не быть в видимой карте.
+                // launch() читает высоту только getChunkNow: иначе старт с +12, и короткий гребень не всегда
+                // успевает поднять ракету выше нового пола. Ждём именно готовности, не заданное число тиков.
+                if (ridge > 0 && !Terrain.ready(level, BlockPos.containing(start))) return;
+                missile.launch(start, Target.OfEntity.center(stand), low, null);
+                missile.setRoute(Route.direct());
+                h.assertTrue(ridge == 0 || missile.getY() > floorAfter,
+                        "подготовка снижения: старт y=" + missile.getY() + " не выше будущего пола " + floorAfter);
+                last[0] = missile.position();
+                VirtualFlights.launch(level, missile);
+                launched[0] = true;
+            }
             StrikeProjectile f = flight(level, id);
             if (f == null) return;
             double descent = last[0].y - f.getY();
@@ -3470,7 +3480,8 @@ public final class StrikeGameTests {
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(raised[0], "цель не поднялась");
+            h.assertTrue(launched[0], "гребень не готов, ракета не запущена");
+            h.assertTrue(raised[0], "цель не поднялась; последнее место " + last[0].subtract(low));
             h.assertTrue(climbed[0], "ракета не набрала высоту после подъёма цели");
             h.assertFalse(flight(level, id) != null, "ракета ещё летит, до цели " + (int) last[0].distanceTo(high));
             h.assertTrue(last[0].distanceTo(high) < 24, "ракета взорвалась не у цели: " + last[0].subtract(high));
