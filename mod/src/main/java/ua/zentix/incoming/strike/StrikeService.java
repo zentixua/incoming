@@ -605,7 +605,7 @@ public final class StrikeService {
      * схождения — без полосы. Null — прямо, без маршрута.
      */
     @Nullable
-    private static Route loiterRoute(Waypoints via, Vec3 start, Vec3 point, double lane, @Nullable Vec3 gate) {
+    static Route loiterRoute(Waypoints via, Vec3 start, Vec3 point, double lane, @Nullable Vec3 gate) {
         Route plain = via.isEmpty() ? null : via.route(start);
         if (lane == 0) return plain;
         Vec3 from = gate != null ? gate : start;
