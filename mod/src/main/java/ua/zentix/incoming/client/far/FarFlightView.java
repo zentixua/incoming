@@ -619,9 +619,10 @@ public final class FarFlightView {
             TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i],
                     POINTS.brunt[i], POINTS.stability[i], mass * smoke, LOOK);
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
-            // ось следа гнут вихри крупнее его: усреднённый шлейф Бриггса — это расплывание следа плюс мотание оси
-            TrailModel.wander(BENDS ^ POINTS.owner[i] * 0x9E3779B97F4A7C15L, POINTS.path[i], age / 20, POINTS.stability[i], POINTS.wind[i],
-                    spacing(i, style), POINTS.clearance[i], BEND);
+            // ось следа гнут вихри крупнее его: усреднённый шлейф Бриггса — это расплывание следа плюс мотание оси; точка
+            // облака старта стоит в своём облаке (его сносит ветер, вихри следа его не гнут)
+            if (cloud != null) BEND[0] = BEND[1] = BEND[2] = 0;
+            else bend(i, style, age);
             end(LOOK, POINTS.x[i] + air.wind().x() * drift + BEND[0] - cam.x, POINTS.y[i] + LOOK[2] + BEND[1] - cam.y,
                     POINTS.z[i] + air.wind().z() * drift + BEND[2] - cam.z, POINTS.light[i], view, i);
             // зерно клубов — номер записи точки: тик рождения в заморозке мира сдвигается (TrailPoints.hold), и клубы мигали бы
@@ -917,6 +918,41 @@ public final class FarFlightView {
         EE[slot] = look[5];
         EO[slot] = look[6];
         DRAWN[slot] = frame;
+    }
+
+    /**
+     * Изгиб оси следа у точки i в возрасте age тиков — в {@link #BEND}: между изгибами целых возрастов, которые точка
+     * считает раз в тик ({@link TrailPoints#bend}): {@link TrailModel#wander} — самое дорогое у точки в кадре, а за тик ось
+     * сдвигается на доли метра (TrailModelTest.bendsMoveSmoothly).
+     */
+    private static void bend(int i, Trail style, double age) {
+        int k = (int) Math.floor(age), o = 6 * i;
+        float[] b = POINTS.bend;
+        if (POINTS.bendAge[i] != k) {
+            if (POINTS.bendAge[i] == k - 1) {
+                System.arraycopy(b, o + 3, b, o, 3);
+            } else {
+                wanderAt(i, style, k);
+                b[o] = (float) BEND[0];
+                b[o + 1] = (float) BEND[1];
+                b[o + 2] = (float) BEND[2];
+            }
+            wanderAt(i, style, k + 1);
+            b[o + 3] = (float) BEND[0];
+            b[o + 4] = (float) BEND[1];
+            b[o + 5] = (float) BEND[2];
+            POINTS.bendAge[i] = k;
+        }
+        double f = age - k;
+        BEND[0] = b[o] + (b[o + 3] - b[o]) * f;
+        BEND[1] = b[o + 1] + (b[o + 4] - b[o + 1]) * f;
+        BEND[2] = b[o + 2] + (b[o + 5] - b[o + 2]) * f;
+    }
+
+    /** {@link TrailModel#wander} точки i в возрасте age тиков — в {@link #BEND}. */
+    private static void wanderAt(int i, Trail style, int age) {
+        TrailModel.wander(BENDS ^ POINTS.owner[i] * 0x9E3779B97F4A7C15L, POINTS.path[i], age / 20.0, POINTS.stability[i], POINTS.wind[i],
+                spacing(i, style), POINTS.clearance[i], BEND);
     }
 
     /** Шаг точек ленты у точки i, м: до предыдущей точки той же ленты, без неё — по скорости, с которой её клали. */

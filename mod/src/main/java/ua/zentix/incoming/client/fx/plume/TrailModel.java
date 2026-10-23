@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.fx.plume;
 
+import net.minecraft.util.Mth;
 import ua.zentix.incoming.util.Stability;
 
 import ua.zentix.incoming.util.Air;
@@ -32,7 +33,8 @@ import ua.zentix.incoming.util.StandardAtmosphere;
  * источника: σ_y, σ_z Бриггса ({@link Stability}) — ширина шлейфа, усреднённая за минуты замера (Hanna, Briggs, Hosker
  * 1982: 3–10 мин), и в неё входит мотание всего шлейфа вихрями крупнее его самого. Мгновенный след расплывается медленнее —
  * относительной дисперсией Ричардсона — Обухова: пары частиц расходятся как ⟨r²⟩ = g·ε·t³ (тот же закон, что рассеивает
- * гриб ядерки, {@code MushroomModel}), по каждой оси σ_r² = g·ε·t³/6 — и не шире усреднённого: σ_r² ≤ σ_y·σ_z. С σ_y·σ_z
+ * гриб ядерки, {@code MushroomModel}), по каждой оси σ_r² = g·ε·t³/6 — и не шире усреднённого в среднем по осям:
+ * σ_r² ≤ σ_y·σ_z (в устойчивом воздухе по высоте след бывает шире σ_z — тогда по высоте ось не гнётся). С σ_y·σ_z
  * в этом месте (прежде) след ЗРК днём разбавлялся до невидимого к ~15 с, хотя настоящий висит десятки секунд — минуты
  * (FX-report 23.10). Остальное от усреднённой ширины — изгибы оси следа вихрями крупнее его ({@link #wander}):
  * σ_y² − σ_r² вбок, σ_z² − σ_r² по высоте (модель мотающегося шлейфа Гиффорда).</li>
@@ -78,6 +80,16 @@ public final class TrailModel {
     /** Длины волн изгибов следа ({@link #wander}): вихри 4·2^k м, k = 0…8 — до 1 км, толщины слоя перемешивания. */
     static final int OCTAVES = 9;
     static final double SMALLEST_EDDY = 4;
+    /** Длины вихрей октав, м, и их кубические корни. */
+    private static final double[] EDDY = new double[OCTAVES], CBRT_EDDY = new double[OCTAVES];
+    private static final double TAU = 2 * Math.PI;
+
+    static {
+        for (int k = 0; k < OCTAVES; k++) {
+            EDDY[k] = SMALLEST_EDDY * (1 << k);
+            CBRT_EDDY[k] = Math.cbrt(EDDY[k]);
+        }
+    }
     /** Изгиб, который рисуется, не мельче стольких шагов точек ленты: мельче отрезки между точками ломаются в зигзаг. */
     static final double POINTS_PER_EDDY = 4;
     /** Безразмерное всплытие s(τ) до вершины, шаг τ. */
@@ -284,22 +296,23 @@ public final class TrailModel {
     public static void wander(long seed, double s, double age, double stability, double wind, double spacing, double clearance, double[] out) {
         out[0] = out[1] = out[2] = 0;
         if (age <= 0) return;
-        double x = Math.max(0, wind) * age, rel = spread(age, stability, wind);
-        double sy = Stability.sigmaY(stability, x), sz = Stability.sigmaZ(stability, x);
+        // кадр зовёт это у каждой живой точки: всё, что не зависит от точки, — в таблицах, корни и логарифмы — по разу
+        double x = Math.max(0, wind) * age, sy = Stability.sigmaY(stability, x), sz = Stability.sigmaZ(stability, x);
+        double eps = dissipation(stability), rel = Math.min(RICHARDSON * eps * age * age * age / 6, sy * sz);
         double side = Math.sqrt(Math.max(0, sy * sy - rel)), up = Math.min(Math.sqrt(Math.max(0, sz * sz - rel)), Math.max(0, clearance) / 3);
         if (side <= 0 && up <= 0) return;
-        double eps = dissipation(stability), cut = Math.max(Math.sqrt(rel), POINTS_PER_EDDY * spacing);
+        double cut = Math.max(Math.sqrt(rel), POINTS_PER_EDDY * spacing);
+        // порог в октавах: λ_k = 4·2^k, доля октавы — плавно на двух октавах над порогом (ось уходит в ширину следа постепенно)
+        double below = Math.log(cut / SMALLEST_EDDY) / Math.log(2), ce = Math.cbrt(eps);
         double total = 0, ax = 0, ay = 0, az = 0;
-        for (int k = 0; k < OCTAVES; k++) {
-            double lambda = SMALLEST_EDDY * (1 << k);
-            // плавно на двух октавах над порогом: ось уходит в ширину следа постепенно
-            double fade = Math.clamp(Math.log(lambda / cut) / Math.log(4), 0, 1);
+        for (int k = Math.max(0, (int) Math.floor(below)); k < OCTAVES; k++) {
+            double fade = Math.clamp((k - below) / 2, 0, 1);
             if (fade <= 0) continue;
-            double v = Math.cbrt(eps * lambda), turnover = lambda / v;
+            double v = ce * CBRT_EDDY[k], turnover = EDDY[k] / v;
             fade = fade * fade * (3 - 2 * fade);
             // доля — амплитуде, не дисперсии: у корня доли дисперсии у нуля производная бесконечна — ось дёрнулась бы
             double w2 = fade * fade * v * v * Math.min(age, turnover);
-            double w = Math.sqrt(w2), u = s / lambda, tt = age / turnover;
+            double w = Math.sqrt(w2), u = s / EDDY[k], tt = age / turnover;
             long o = seed + k * 0x9E3779B97F4A7C15L;
             ax += w * noise(o, u, tt);
             az += w * noise(o ^ 0x5DEECE66DL, u, tt);
@@ -325,9 +338,11 @@ public final class TrailModel {
      */
     static double noise(long seed, double u, double t) {
         long h1 = mix(seed), h2 = mix(h1), h3 = mix(h2);
-        double tau = 2 * Math.PI;
-        return Math.cos(tau * (u * jitter(h1) + unit(h1 >>> 42)) + t * jitter(h1 >>> 21))
-                + Math.cos(tau * (u * jitter(h2) + unit(h3)) - t * jitter(h2 >>> 21));
+        // волны вдоль пути — в долях периода до косинуса: путь в тысячи длин вихря во float потерял бы фазу
+        double a = u * jitter(h1) + unit(h1 >>> 42), b = u * jitter(h2) + unit(h3);
+        a -= Math.floor(a);
+        b -= Math.floor(b);
+        return Mth.cos((float) (TAU * a + t * jitter(h1 >>> 21))) + Mth.cos((float) (TAU * b - t * jitter(h2 >>> 21)));
     }
 
     /** 0,75–1,25 по 21 биту. */
