@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.util.SimpleBitStorage;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -46,22 +47,22 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   леса (крон генератор не знает): приближение, не карта.</li>
  * </ul>
  * Тик не ждёт ни диска, ни генератора: первый вопрос о чанке заказывает съёмку и получает null («ещё не знаю»), ответ
- * приходит в следующих тиках. Чанк, который пришёл в память или ушёл из неё ({@code ChunkEvent.Load}/{@code Unload}),
- * забывается: его карта высот могла измениться, а заказ, который читал старый файл, отбрасывается. Своё у каждого мира,
- * не сохраняется ({@link ModAttachments#TERRAIN_SURVEY}).
+ * приходит в конце тика ({@link #publish}). Чанк в памяти отвечает сам; уходя из неё ({@code ChunkEvent.Unload}),
+ * он оставляет съёмке свою карту высот — ту же, что уходит на диск: ответ о нём не прерывается ни на тик, когда бы
+ * ваниль его ни выгрузила (выгрузка идёт по свободному времени тика), и старый ответ с диска её не заменит. Своё у
+ * каждого мира, не сохраняется ({@link ModAttachments#TERRAIN_SURVEY}).
  */
 public final class TerrainSurvey {
     /** Шаг узлов рельефа генератора, блоков: ~3 мс на узел, в среднем ~4 новых узла на чанк. */
     public static final int GENERATOR_STEP = 8;
     /**
-     * Сколько чтений с диска мир держит в очереди потока ввода-вывода чанков разом: та же очередь грузит чанки игрокам,
-     * и сотни чтений задержали бы их. Сверх — заказ повторится при следующем вопросе.
+     * Сколько чтений мир отдаёт потоку ввода-вывода чанков разом: та же очередь грузит чанки игрокам, и сотни чтений
+     * задержали бы их. Остальные заказы ждут в своей очереди — не отбрасываются: иначе чей заказ принят, решали бы
+     * соседние полёты и скорость диска.
      */
     public static final int MAX_READS = 64;
-    /** Заказ вперёд ({@link #ahead}) берёт не больше половины очереди: место остаётся вопросам датчика о колонках у носа. */
-    static final int AHEAD_READS = MAX_READS / 2;
-    /** Сколько заказов (чтения и генератор) мир держит разом: дальше заказ повторится при следующем вопросе. */
-    static final int MAX_PENDING = 512;
+    /** Заказов в очереди больше этого не берётся (память; столько не набирает и залп над неисследованной землёй). */
+    static final int MAX_QUEUED = 8192;
     /** Сколько чанков генератора считается разом (фоновые потоки Minecraft общие с генерацией мира); следующий — сразу по концу. */
     static final int GENERATOR_WORKERS = 2;
     /** Чанк, о котором не спрашивали столько тиков, забывается. */
@@ -76,11 +77,16 @@ public final class TerrainSurvey {
     /** Чтения с диска в пути (для {@link #settle}). */
     private final Queue<CompletableFuture<?>> reads = new ConcurrentLinkedQueue<>();
     /** Чанки без карты на диске — ждут генератора (кладёт поток ввода-вывода, считает фоновый поток, {@link #pump}). */
-    private final Queue<Job> toGenerate = new ConcurrentLinkedQueue<>();
+    private final Queue<Order> toGenerate = new ConcurrentLinkedQueue<>();
     /** Счёт генератора в пути (для {@link #settle}). */
     private final Queue<CompletableFuture<?>> generating = new ConcurrentLinkedQueue<>();
     private final AtomicInteger workers = new AtomicInteger();
-    private final AtomicInteger readsInFlight = new AtomicInteger();
+    private final AtomicInteger reading = new AtomicInteger();
+    /** Заказы, ждущие чтения (поток сервера): вопросы датчика — первыми, заказ вперёд — следом. */
+    private final java.util.ArrayDeque<Order> urgent = new java.util.ArrayDeque<>(), later = new java.util.ArrayDeque<>();
+
+    /** Заказ чанка с меткой (ждёт чтения или генератора). */
+    private record Order(Heightmap.Types type, long chunk, Object token) {}
     /** Время мира последнего тика (для ответов из фоновых потоков). */
     private volatile long now;
     /**
@@ -92,6 +98,9 @@ public final class TerrainSurvey {
     private Heightmap.Types lastType;
     @Nullable
     private Heights last;
+    /** Какие карты спрашивали и когда последний раз (поток сервера): уходящий чанк оставляет только их, и только пока спрашивают. */
+    private final java.util.Set<Heightmap.Types> asked = java.util.EnumSet.noneOf(Heightmap.Types.class);
+    private long lastAsked = Long.MIN_VALUE;
     /** Узлы рельефа генератора: (x / шаг, z / шаг) → первый воздух. */
     private final Map<Long, Integer> points = new ConcurrentHashMap<>();
 
@@ -125,8 +134,12 @@ public final class TerrainSurvey {
         }
     }
 
-    /** Чанк, который считает генератор, с меткой своего заказа. */
-    private record Job(Heightmap.Types type, long chunk, Object token) {}
+
+    /** Ответ заказа из фонового потока: в известные — в конце тика мира ({@link #publish}). */
+    private record Answer(Heightmap.Types type, long chunk, Object token, @Nullable int[] y, @Nullable Terrain.Source source) {}
+
+    /** Ответы, пришедшие с прошлого конца тика. */
+    private final Queue<Answer> answers = new ConcurrentLinkedQueue<>();
 
     /**
      * Поверхность колонки (первый воздух над картой высот {@code type}) по съёмке; null — ещё не известна (съёмка
@@ -135,6 +148,8 @@ public final class TerrainSurvey {
     @Nullable
     public Terrain.Surface at(ServerLevel level, Heightmap.Types type, int x, int z) {
         long chunk = ChunkPos.asLong(x >> 4, z >> 4);
+        lastAsked = level.getGameTime();
+        asked.add(type);
         LevelChunk memory = Terrain.inMemory(level, chunk);
         if (memory != null) return new Terrain.Surface(memory.getHeight(type, x & 15, z & 15) + 1, Terrain.Source.DISK);
         Heights h = chunk == lastChunk && type == lastType ? last : known.get(type).get(chunk);
@@ -145,7 +160,7 @@ public final class TerrainSurvey {
             h.used = level.getGameTime();
             return h.y == null ? null : new Terrain.Surface(h.y[(x & 15) + (z & 15) * 16], h.source);
         }
-        request(level, type, chunk);
+        request(level, type, chunk, urgent);
         return null;
     }
 
@@ -159,26 +174,42 @@ public final class TerrainSurvey {
             for (int dx = -1; dx <= 1; dx++)
                 for (int dz = -1; dz <= 1; dz++) {
                     long c = ChunkPos.asLong(cx + dx, cz + dz);
-                    if (readsInFlight.get() >= AHEAD_READS) return false;
                     if (!Terrain.ready(level, cx + dx, cz + dz) && Terrain.inMemory(level, c) == null && !known.get(type).containsKey(c))
-                        request(level, type, c);
+                        request(level, type, c, later);
                 }
             return true;
         });
     }
 
-    private void request(ServerLevel level, Heightmap.Types type, long chunk) {
+    private void request(ServerLevel level, Heightmap.Types type, long chunk, java.util.ArrayDeque<Order> queue) {
         Map<Long, Object> waiting = pending.get(type);
-        if (waiting.containsKey(chunk) || waiting.size() >= MAX_PENDING || readsInFlight.get() >= MAX_READS) return;
+        if (waiting.containsKey(chunk) || urgent.size() + later.size() >= MAX_QUEUED) return;
         Object token = new Object();
         waiting.put(chunk, token);
-        readsInFlight.incrementAndGet();
         now = level.getGameTime();
+        queue.add(new Order(type, chunk, token));
+        submit(level, MAX_READS);
+    }
+
+    /** Отдать потоку ввода-вывода заказы из очереди, пока в пути меньше {@code limit} чтений (поток сервера). */
+    private void submit(ServerLevel level, int limit) {
+        while (reading.get() < limit) {
+            Order o = urgent.isEmpty() ? later.poll() : urgent.poll();
+            if (o == null) return;
+            // чанк за это время пришёл в память и ушёл, оставив карту (onChunkUnload), — заказ уже не нужен
+            if (pending.get(o.type).get(o.chunk) != o.token) continue;
+            read(level, o.type, o.chunk, o.token);
+        }
+    }
+
+    private void read(ServerLevel level, Heightmap.Types type, long chunk, Object token) {
+        Map<Long, Object> waiting = pending.get(type);
+        reading.incrementAndGet();
         ChunkPos pos = new ChunkPos(chunk);
         CollectFields fields = DiskStatus.fields(new FieldSelector(HEIGHTMAPS, LongArrayTag.TYPE, type.getSerializationKey()));
         int minY = level.getMinBuildHeight(), height = level.getHeight();
         reads.add(level.getChunkSource().chunkMap.chunkScanner().scanChunk(pos, fields).handle((v, e) -> {
-            readsInFlight.decrementAndGet();
+            reading.decrementAndGet();
             CompoundTag tag = e == null && fields.getResult() instanceof CompoundTag t ? t : null;
             int[] y = tag == null ? null : decode(tag, type, minY, height);
             if (y != null) {
@@ -187,7 +218,7 @@ public final class TerrainSurvey {
                 // блоки окончательные, а карты не прочесть: генератор дал бы чужой рельеф — неизвестно
                 finish(type, chunk, token, null, Terrain.Source.UNKNOWN, now);
             } else if (waiting.get(chunk) == token) {
-                toGenerate.add(new Job(type, chunk, token));
+                toGenerate.add(new Order(type, chunk, token));
                 pump(level);
             }
             return null;
@@ -197,9 +228,23 @@ public final class TerrainSurvey {
     /** Поле карт высот в файле чанка ({@code ChunkSerializer.HEIGHTMAPS_TAG}). */
     private static final String HEIGHTMAPS = "Heightmaps";
 
-    /** Ответ заказа: в известные, если метка заказа ещё стоит (чанк за это время не приходил в память). */
+    /**
+     * Ответ заказа (любой поток) — в очередь: в известные его кладёт конец тика мира ({@link #publish}). Иначе ответ,
+     * пришедший посреди тика, видела бы одна колонка полосы датчика и не видела соседняя того же чанка, а полёт зависел
+     * бы от скорости диска.
+     */
     private void finish(Heightmap.Types type, long chunk, Object token, @Nullable int[] y, Terrain.Source source, long now) {
-        if (pending.get(type).remove(chunk, token)) known.get(type).put(chunk, new Heights(y, source, now));
+        answers.add(new Answer(type, chunk, token, y, source));
+    }
+
+    /**
+     * Конец тика мира: пришедшие ответы — в известные. Карту, которую оставил ушедший из памяти чанк, ответ не заменяет:
+     * заказ мог читать файл, записанный до того, как чанк побывал в памяти.
+     */
+    private void publish(long now) {
+        for (Answer a; (a = answers.poll()) != null; ) {
+            if (pending.get(a.type).remove(a.chunk, a.token) && a.source != null) known.get(a.type).putIfAbsent(a.chunk, new Heights(a.y, a.source, now));
+        }
     }
 
     /**
@@ -233,7 +278,7 @@ public final class TerrainSurvey {
             int w = workers.get();
             if (w >= GENERATOR_WORKERS) return;
             if (!workers.compareAndSet(w, w + 1)) continue;
-            Job job = toGenerate.poll();
+            Order job = toGenerate.poll();
             if (job == null) {
                 workers.decrementAndGet();
                 return;
@@ -243,7 +288,8 @@ public final class TerrainSurvey {
                 if (y != null) {
                     finish(job.type, job.chunk, job.token, y, Terrain.Source.GENERATOR, now);
                 } else {
-                    pending.get(job.type).remove(job.chunk, job.token);
+                    // заказ снимается в конце тика без ответа: следующий вопрос закажет заново
+                    answers.add(new Answer(job.type, job.chunk, job.token, null, null));
                     Incoming.LOG.warn("Terrain survey: generator relief for chunk {} failed", new ChunkPos(job.chunk), e);
                 }
                 pump(level);
@@ -252,7 +298,7 @@ public final class TerrainSurvey {
         }
     }
 
-    /** Тик мира: время для ответов, забывание старого. */
+    /** Конец тика мира: пришедшие ответы — в известные ({@link #publish}), забывание старого. */
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.TERRAIN_SURVEY)) return;
         TerrainSurvey s = get(level);
@@ -260,6 +306,8 @@ public final class TerrainSurvey {
         s.generating.removeIf(CompletableFuture::isDone);
         long now = level.getGameTime();
         s.now = now;
+        s.publish(now);
+        s.submit(level, MAX_READS);
         if (now % 1200 == 0) {
             for (Map<Long, Heights> m : s.known.values()) m.values().removeIf(h -> now - h.used > FORGET_TICKS);
             s.forgetLast();
@@ -307,22 +355,29 @@ public final class TerrainSurvey {
         return v;
     }
 
-    /** Чанк пришёл в память или ушёл из неё: его карта высот и заказы — заново. */
-    public static void onChunkLoad(ChunkEvent.Load event) {
-        forget(event);
-    }
-
+    /**
+     * Чанк уходит из памяти (перед записью): его карта высот — в известные, как с диска, для видов, которые спрашивали за
+     * последние {@link #FORGET_TICKS} тиков, а заказы о нём в пути отбрасываются (их файл может быть старше). Без этого
+     * между выгрузкой и ответом диска чанк был бы неизвестен тик-другой — смотря когда ваниль его выгрузила. Только
+     * полный чанк ({@code LevelChunk}) и только готовая карта ({@code hasPrimedHeightmap}): у недогенерированного карт нет
+     * или они без построек, а несчитанную карту {@code getHeight} посчитал бы и дописал в уходящий на диск чанк. Прежний
+     * ответ о чанке забывается в любом случае: чанк, побывав в памяти, мог измениться.
+     */
     public static void onChunkUnload(ChunkEvent.Unload event) {
-        forget(event);
-    }
-
-    private static void forget(ChunkEvent event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.TERRAIN_SURVEY)) return;
         TerrainSurvey s = get(level);
-        long chunk = event.getChunk().getPos().toLong();
-        if (chunk == s.lastChunk) s.forgetLast();
-        for (Map<Long, Heights> m : s.known.values()) m.remove(chunk);
-        for (Map<Long, Object> m : s.pending.values()) m.remove(chunk);
+        ChunkAccess chunk = event.getChunk();
+        long now = level.getGameTime(), pos = chunk.getPos().toLong();
+        s.forget(pos);
+        boolean recent = now - s.lastAsked <= FORGET_TICKS && !level.dimensionType().hasCeiling() && chunk instanceof LevelChunk;
+        for (Heightmap.Types type : s.asked) {
+            if (!recent || !chunk.hasPrimedHeightmap(type)) continue;
+            s.pending.get(type).remove(pos);
+            int[] y = new int[256];
+            for (int x = 0; x < 16; x++)
+                for (int z = 0; z < 16; z++) y[x + z * 16] = chunk.getHeight(type, x, z) + 1;
+            s.known.get(type).put(pos, new Heights(y, Terrain.Source.DISK, now));
+        }
     }
 
     /**
@@ -333,15 +388,28 @@ public final class TerrainSurvey {
         if (!level.hasData(ModAttachments.TERRAIN_SURVEY)) return;
         TerrainSurvey s = get(level);
         while (true) {
+            s.submit(level, Integer.MAX_VALUE);
             List<CompletableFuture<?>> wait = new ArrayList<>(s.reads);
             wait.addAll(s.generating);
             for (CompletableFuture<?> f : wait) f.join();
             s.reads.removeAll(wait);
             s.generating.removeAll(wait);
-            Job job = s.toGenerate.poll();
-            if (job == null && s.reads.isEmpty() && s.generating.isEmpty()) return;
+            Order job = s.toGenerate.poll();
+            if (job == null && s.reads.isEmpty() && s.generating.isEmpty() && s.urgent.isEmpty() && s.later.isEmpty()) {
+                s.publish(level.getGameTime());
+                return;
+            }
             if (job != null) s.finish(job.type, job.chunk, job.token, s.generate(level, job.chunk), Terrain.Source.GENERATOR, s.now);
         }
+    }
+
+    /**
+     * Забыть чанк (GameTest: выгруженный чанк оставил съёмке свою карту, а проверка спрашивает файл на диске). В игре не
+     * зовётся.
+     */
+    public void forget(long chunk) {
+        if (chunk == lastChunk) forgetLast();
+        for (Map<Long, Heights> m : known.values()) m.remove(chunk);
     }
 
     /** Заказов в пути (GameTest). */

@@ -3406,9 +3406,11 @@ public final class StrikeGameTests {
     private static final TicketType<ChunkPos> READY_ONLY = TicketType.create("incoming_test_ready", Comparator.comparingLong(ChunkPos::toLong));
 
     /**
-     * Цель, за которой снаряд держит высоту, поднялась на 40 блоков (игрок вышел из оврага, телепорт): пол полёта вне
-     * мира ({@code BELOW_AIM} под целью) встал выше снаряда. Снаряд на бреющем не падает там, где его это застало
-     * (в 1500 блоках от цели), а набирает высоту за целью и бьёт по ней.
+     * Цель, за которой снаряд держит высоту, поднялась на 40 блоков (игрок вышел из оврага, телепорт), и в тот же тик
+     * над снарядом встал «рельеф» (готовый, но не тикающий чанк догрузился): пол полёта вне мира ({@code BELOW_AIM} под
+     * целью) встал выше снаряда. Снаряд на бреющем не падает там, где его это застало (в 1500 блоках от цели), а
+     * набирает высоту над рельефом и за целью и бьёт по ней. Рельеф встаёт только тогда: заранее ракета видела бы его
+     * датчиком ({@code StrikeProjectile.relief}) и шла бы над ним, ниже пола не оказавшись.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual_rising_aim", skyAccess = true)
     public static void virtualMissileClimbsAfterRisingAim(GameTestHelper h) {
@@ -3440,7 +3442,6 @@ public final class StrikeGameTests {
         level.addFreshEntity(stand);
         Vec3 start = low.add(0, 12, -1500);
         int roofLength = 1000;
-        roofOverStart(h, start, Mth.floor(low.y) + 60, roofLength);
         CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(level);
         missile.launch(start, Target.OfEntity.center(stand), low, null);
         missile.setRoute(Route.direct());
@@ -3459,6 +3460,8 @@ public final class StrikeGameTests {
             if (!raised[0] && f.isVirtual() && f.getZ() < start.z + roofLength - 100 && when.test(f.getY(), floorAfter, descent)) {
                 raised[0] = true;
                 stand.teleportTo(high.x, high.y, high.z);
+                // «рельеф» над ракетой и впереди до конца прежнего навеса: пол встал выше неё и с этой стороны
+                roofOverStart(h, new Vec3(start.x, start.y, Math.floor(f.getZ())), Mth.floor(low.y) + 60, (int) (start.z + roofLength - Math.floor(f.getZ())));
             }
         });
         h.succeedWhen(() -> {

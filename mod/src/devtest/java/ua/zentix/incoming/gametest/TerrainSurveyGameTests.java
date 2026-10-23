@@ -82,9 +82,9 @@ public final class TerrainSurveyGameTests {
     }
 
     /**
-     * Чанк сгенерирован, на нём столб на 40 блоков, и он выгружен (записан): высота колонки столба — с диска, точно, как
-     * карта высот чанка; соседняя колонка — своя поверхность. Пока чанк не выгружен, ответ — из памяти (те же данные).
-     * Вопрос чанк не грузит.
+     * Чанк сгенерирован, на нём столб на 40 блоков, и он выгружен (записан). Уходя из памяти, он оставил съёмке свою
+     * карту: ответ сразу, без пробела. Забыв её, съёмка читает файл: высота колонки столба — с диска, точно, как карта
+     * высот чанка; соседняя колонка — своя поверхность; первый вопрос ответа в тике не даёт. Вопрос чанк не грузит.
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "survey_disk", skyAccess = true)
     public static void diskHeightOfUnloadedChunk(GameTestHelper h) {
@@ -97,11 +97,18 @@ public final class TerrainSurveyGameTests {
         for (int y = surface; y < surface + 40; y++) level.setBlockAndUpdate(new BlockPos(x, y, z), Blocks.STONE.defaultBlockState());
         int top = surface + 40;
         TerrainSurvey survey = TerrainSurvey.get(level);
+        // спросили, пока он в памяти: ответ — его карта
+        Terrain.Surface held = survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z);
+        h.assertTrue(held != null && held.y() == top, "чанк в памяти: " + held + " вместо " + top);
         int[] stage = {0};
         h.onEachTick(() -> {
             if (stage[0] == 0) {
                 if (!unloaded(level, List.of(c))) return;
-                // выгружен: первый вопрос заказывает чтение и ответа сразу не даёт
+                // выгружен; карту, которую он оставил съёмке при выгрузке, забыть — проверяется чтение файла.
+                // Первый вопрос заказывает чтение и ответа сразу не даёт
+                Terrain.Surface left = survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z);
+                h.assertTrue(left != null && left.source() == Terrain.Source.DISK && left.y() == top, "выгруженный чанк не оставил карту: " + left);
+                survey.forget(c.toLong());
                 h.assertTrue(survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z) == null, "съёмка ответила в тике вопроса: она ждала диск");
                 stage[0] = 1;
             }
@@ -171,6 +178,7 @@ public final class TerrainSurveyGameTests {
         h.onEachTick(() -> {
             if (stage[0] == 0) {
                 if (!unloaded(level, all)) return;
+                for (ChunkPos c : all) survey.forget(c.toLong());
                 long t0 = System.nanoTime();
                 int answered = 0;
                 for (ChunkPos c : all) if (survey.at(level, Heightmap.Types.MOTION_BLOCKING, c.getMiddleBlockX(), c.getMiddleBlockZ()) != null) answered++;
@@ -264,6 +272,9 @@ public final class TerrainSurveyGameTests {
                 // ниже полной загрузки, поэтому он берётся только теперь; холм оттуда — недогруженные копии с диска,
                 // не готовые и не полные) и пуск
                 if (!unloaded(level, hillChunks)) return;
+                // карту, которую холм оставил съёмке при выгрузке, забыть: ракета читает его файл
+                TerrainSurvey survey = TerrainSurvey.get(level);
+                for (ChunkPos c : hillChunks) survey.forget(c.toLong());
                 for (int dx = -FlightTickets.DISTANCE; dx <= FlightTickets.DISTANCE; dx++)
                     for (int dz = -FlightTickets.DISTANCE; dz <= FlightTickets.DISTANCE; dz++) level.getChunk(aimChunk.x + dx, aimChunk.z + dz);
                 level.getChunkSource().addRegionTicket(AIM_AREA, aimChunk, FlightTickets.DISTANCE, aimChunk);
