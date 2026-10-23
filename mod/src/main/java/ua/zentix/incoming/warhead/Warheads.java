@@ -53,6 +53,7 @@ import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Timeline;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.nuclear.world.CraterJob;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.work.UnitQueue;
 
@@ -416,6 +417,20 @@ public final class Warheads {
     // ================================================================ шахед, ракета, «Град», «Ланцет»
 
     /**
+     * Природная земля под точкой удара, м (первый воздух над грунтом, ниже построек и деревьев, {@link CraterJob#naturalSurface}):
+     * клиент ставит пыль волны на неё, а не на крышу или стену, куда пришёлся удар (взрыв на крыше — разрыв на её
+     * высоте над улицей). В неготовом чанке — сама точка удара: чтение высоты грузило бы его или ждало загрузки. Земля
+     * выше точки (подвал, удар в склон) — тоже точка: взрыв не под землёй. ⚠ Дом из природного камня (песчаник, камень)
+     * считается грунтом — его крыша будет землёй.
+     */
+    public static double groundUnder(ServerLevel level, Vec3 pos) {
+        BlockPos at = BlockPos.containing(pos);
+        if (!Terrain.ready(level, at)) return pos.y;
+        int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX(), at.getZ());
+        return Math.min(pos.y, CraterJob.naturalSurface(level, at.getX(), at.getZ(), Math.max(top, at.getY() + 1)));
+    }
+
+    /**
      * Взрыв заряда {@code tntKg} кг ТНТ по физике ({@link StagedExplosion}: волна Кинни–Грэхема, кривая давление–импульс
      * блоков, газы в помещении, тела — {@code BlastBody}) единицами в очереди попаданий.
      */
@@ -505,9 +520,7 @@ public final class Warheads {
                 case ROCKET -> S2C.Blast.ROCKET;
                 case DRONE, NONE -> S2C.Blast.DRONE;
             };
-            // высоту поверхности клиент берёт только у бомбы (BunkerBlast, BlastEffects): здесь — точка удара, без чтения
-            // высоты, которое у неготового чанка грузило бы его или ждало загрузки
-            float surface = (float) pos.y;
+            float surface = (float) groundUnder(level, pos);
             // видно — до far_range, слышно — докуда звук взрыва его заряда тихой ночью выше фона (HearingModel), но не
             // дальше, чем сервер шлёт что-либо далёкое
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(),

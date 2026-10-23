@@ -328,6 +328,30 @@ public final class BlastGameTests {
         fireTest(h, WeaponType.ROCKET);
     }
 
+    /**
+     * Земля под ударом в крышу — улица (жалоба 23.10: «блины» пыли волны на высоте ударов): башня из каменного кирпича в
+     * 12 блоков на траве — у точки на её крыше земля — верх травы; у точки на траве — она сама; в подвале (точка ниже
+     * земли) — точка.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "blast_ground_under", skyAccess = true)
+    public static void groundUnderARoofIsTheStreet(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos base = h.absolutePos(CENTER);
+        for (int y = 0; y < 12; y++) {
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) level.setBlock(base.offset(dx, y, dz), Blocks.STONE_BRICKS.defaultBlockState(), 2);
+        }
+        h.runAfterDelay(1, () -> {
+            double street = base.getY();
+            h.assertTrue(Warheads.groundUnder(level, Vec3.atBottomCenterOf(base.above(12))) == street, "крыша: земля " + Warheads.groundUnder(level, Vec3.atBottomCenterOf(base.above(12))));
+            h.assertTrue(Warheads.groundUnder(level, Vec3.atCenterOf(base.offset(1, 6, 0))) == street, "стена");
+            BlockPos open = base.offset(8, 0, 0);
+            h.assertTrue(Warheads.groundUnder(level, Vec3.atBottomCenterOf(open)) == street, "трава");
+            Vec3 cellar = Vec3.atCenterOf(base.offset(8, -3, 0));
+            h.assertTrue(Warheads.groundUnder(level, cellar) == cellar.y, "подвал");
+            h.succeed();
+        });
+    }
+
     /** Тела — по давлению волны ({@code BlastBody}): свинья в 2 м от шахеда погибает, в 30 м цела. */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_bodies", skyAccess = true)
     public static void bodiesHurtByPressure(GameTestHelper h) {

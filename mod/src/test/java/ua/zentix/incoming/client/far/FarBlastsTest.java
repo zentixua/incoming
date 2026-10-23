@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
+import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.strike.WeaponType;
 
@@ -160,5 +161,19 @@ class FarBlastsTest {
             float[] c = FarBlasts.dustColour(g);
             org.junit.jupiter.api.Assertions.assertTrue(c[0] + c[1] + c[2] >= g.r + g.g + g.b - 1e-6, g + ": пыль темнее блока");
         }
+    }
+
+    /**
+     * Высота взрыва над землёй — из земли под точкой удара, что шлёт сервер: удар в крышу на 16 м — разрыв на 16 м над
+     * улицей; пакет прежней сборки (земля — сама точка) — удар в землю.
+     */
+    @Test
+    void burstHeightAboveTheGroundFromThePacket() {
+        S2C.Blast roof = new S2C.Blast(S2C.Blast.DRONE, new Vec3(10, 80.3, 10), 0, 64, 1, java.util.Optional.empty(), 0);
+        assertEquals(16.5, FarBlasts.hob(roof), 1e-9);
+        S2C.Blast ground = new S2C.Blast(S2C.Blast.DRONE, new Vec3(10, 64.2, 10), 0, 64.2f, 1, java.util.Optional.empty(), 0);
+        assertEquals(0, FarBlasts.hob(ground), 1e-9);
+        // земля выше точки (подвал) — не под землёй
+        assertEquals(0, FarBlasts.hob(new S2C.Blast(S2C.Blast.DRONE, new Vec3(10, 60, 10), 0, 64, 1, java.util.Optional.empty(), 0)), 1e-9);
     }
 }

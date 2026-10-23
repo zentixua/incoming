@@ -332,7 +332,18 @@ public final class FarBlasts {
             CloudModel model = CloudModel.buried(source, air(level, pos), law, ground.isWater(), ground(level, pos));
             return cloud(level, source, model, new Vec3(pos.x, p.surfaceY(), pos.z), ground, p.seed());
         }
-        return cloud(level, source, new CloudModel(source, air(level, pos), ground.isWater(), 0, ground(level, pos)), pos, ground, p.seed());
+        return cloud(level, source, new CloudModel(source, air(level, pos), ground.isWater(), hob(p), ground(level, pos, p.surfaceY())), pos, ground,
+                p.seed());
+    }
+
+    /**
+     * Высота взрыва над землёй под ним, м: сервер шлёт природную землю под точкой удара ({@code Warheads.groundUnder}) —
+     * удар в крышу или стену — разрыв на этой высоте над улицей, и пыль волны встаёт с улицы, а не плоским слоем на
+     * высоте удара (жалоба 23.10: «блины» пыли над городом). Пакет прежней сборки шлёт саму точку — 0, как раньше.
+     */
+    static double hob(S2C.Blast p) {
+        // до полуметра: кольца пыли волны считаются раз на заряд и высоту (кэш GroundDust), а высоты ударов — дробные
+        return Math.max(0, Math.round(2 * (p.pos().y - p.surfaceY())) / 2.0);
     }
 
     /**
@@ -371,6 +382,15 @@ public final class FarBlasts {
      * ({@code Surface.REFERENCE}).
      */
     static ua.zentix.incoming.client.fx.smoke.GroundDust.Ground ground(ClientLevel level, Vec3 pos) {
+        return ground(level, pos, pos.y);
+    }
+
+    /**
+     * То же для взрыва над землёй на высоте {@code groundY}: верх, что не грунт (крыша, стена, мостовая), выше
+     * {@link #ROOF} над этой землёй — не источник пыли: волна срывает пыль с земли, а не с крыш (рыхлого там нет, а
+     * держащий грунт под постройкой закрыт ею).
+     */
+    static ua.zentix.incoming.client.fx.smoke.GroundDust.Ground ground(ClientLevel level, Vec3 pos, double groundY) {
         int n = ua.zentix.incoming.client.fx.smoke.GroundDust.SECTORS;
         double[] bands = ua.zentix.incoming.client.fx.smoke.GroundDust.BANDS;
         double[][] loose = new double[n][bands.length], covered = new double[n][bands.length];
@@ -387,10 +407,24 @@ public final class FarBlasts {
                 net.minecraft.world.level.block.state.BlockState top = chunk.getBlockState(new net.minecraft.core.BlockPos(x, y, z));
                 if (!top.getFluidState().isEmpty()) continue;
                 if (loose(top)) loose[k][b] = 1;
-                else covered[k][b] = 1;
+                else if (!above(top, y, groundY)) covered[k][b] = 1;
             }
         }
         return new ua.zentix.incoming.client.fx.smoke.GroundDust.Ground(loose, covered);
+    }
+
+    /** Выше этого над землёй взрыва верх, что не грунт, — крыша или стена постройки, м (этаж — 3 м; ⚠ оценка). */
+    static final double ROOF = 2;
+
+    /**
+     * Верх {@code top} на высоте {@code y} — постройка над землёй взрыва {@code groundY}: не природный грунт, не листва и
+     * не дерево, и выше {@link #ROOF}. Склон холма (грунт) — источник на любой высоте.
+     */
+    static boolean above(net.minecraft.world.level.block.state.BlockState top, int y, double groundY) {
+        if (y + 1 - groundY <= ROOF) return false;
+        ua.zentix.incoming.nuclear.world.BlockResponse.Kind kind = ua.zentix.incoming.nuclear.world.BlockResponse.of(top).kind();
+        return kind != ua.zentix.incoming.nuclear.world.BlockResponse.Kind.GROUND && kind != ua.zentix.incoming.nuclear.world.BlockResponse.Kind.LEAVES
+                && kind != ua.zentix.incoming.nuclear.world.BlockResponse.Kind.LOG;
     }
 
     /** Рыхлый ли грунт сверху: пыль с него срывает слабый ветер. */
@@ -420,7 +454,7 @@ public final class FarBlasts {
     public static CloudModel model(S2C.Blast p) {
         ClientLevel level = Minecraft.getInstance().level;
         return new CloudModel(BlastSource.of(p), level == null ? CloudModel.Air.STANDARD : air(level, p.pos()), GroundMaterial.byId(p.material()).isWater(),
-                0, level == null ? ua.zentix.incoming.client.fx.smoke.GroundDust.Ground.BARE : ground(level, p.pos()));
+                hob(p), level == null ? ua.zentix.incoming.client.fx.smoke.GroundDust.Ground.BARE : ground(level, p.pos(), p.surfaceY()));
     }
 
     /** Воздух в месте взрыва: воздух мира ({@link ClientAir}); влажность — его, у воды 1 (облако конденсации). */
