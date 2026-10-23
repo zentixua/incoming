@@ -44,12 +44,12 @@ repositories {
     mavenCentral()
 }
 
-// Моды из инстанса хоста (сборка «Open Skies», папка инстанса «Airstrike Pack») для запусков из Gradle
-// (Create, Sable, Aeronautics).
+// Моды из инстанса хоста (сборка «Open Skies») для запусков из Gradle (Create, Sable, Aeronautics).
 // NeoForge 1.21.1 работает на mojmap-именах, поэтому jar из mods/ подходят без ремаппинга.
-// Путь переопределяется: -PmcModsDir=... или переменная MC_DIR (как в tools/paths.py).
-def mcDir = System.getenv('MC_DIR') ?: "${System.getProperty('user.home')}/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances/Airstrike Pack/minecraft"
-def mcModsDir = file(project.findProperty('mcModsDir') ?: "${mcDir}/mods")
+// Каталог — -PmcModsDir=..., иначе из tools/paths.py (единственное место путей к игре; MC_DIR его переопределяет):
+// своя копия пути здесь пережила переименование инстанса и молча вела в пустоту.
+def mcModsDir = file(project.findProperty('mcModsDir')
+        ?: providers.exec { commandLine 'python3', file('../tools/paths.py').path, 'MODS' }.standardOutput.asText.get().trim())
 def runtimeModPatterns = ['create-1.21.1-*.jar', 'sable-neoforge-1.21.1-*.jar', 'create-aeronautics-bundled-1.21.1-*.jar']
 // сценарий клиента с Sodium и Iris, как у хоста (tools/client_scenario.sh nuke shaders)
 def shaderModPatterns = System.getenv('INCOMING_SHADERS') ? ['sodium-neoforge-*.jar', 'iris-neoforge-*.jar'] : []

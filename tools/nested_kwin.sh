@@ -29,6 +29,11 @@ source "$ROOT/tools/gpu_lease.sh"
 owner="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 # сначала замок клиента (иначе отказ по нему оставил бы только что взятую аренду на 10 мин), потом аренда
 who=$(gpu_client_busy) && { echo "$who" >&2; exit 75; }
+# сокет занят живым композитором (libwayland держит flock на <сокет>.lock): второй KWin на том же имени роняет первый
+RT=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+if [ -e "$RT/$SOCKET.lock" ] && ! flock -n -s "$RT/$SOCKET.lock" true 2>/dev/null; then
+  echo "сокет $SOCKET занят другим KWin" >&2; exit 75
+fi
 lease_take "$owner" "$ROOT" ${INCOMING_GPU_WAIT:+--wait} || exit 75
 gpu_client_hold "$owner" "$ROOT" "$COMMAND" || exit 75
 mkdir -p "$HOME_DIR/config" "$HOME_DIR/data" "$HOME_DIR/cache" "$HOME_DIR/state"

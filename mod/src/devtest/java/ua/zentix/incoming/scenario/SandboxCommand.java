@@ -122,7 +122,9 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case TIME -> {
                 need(1, 1);
-                if (!List.of("day", "night").contains(args.getFirst())) number(0);
+                // тик, как у ванильного time set: целое от 0
+                if (!List.of("day", "night").contains(args.getFirst()) && (number(0) < 0 || number(0) > Integer.MAX_VALUE
+                        || number(0) != Math.rint(number(0)))) throw new IllegalArgumentException("время — day, night или тик (целое от 0)");
             }
             case HUD, OVERLAY, TRACK -> {
                 need(1, 1);

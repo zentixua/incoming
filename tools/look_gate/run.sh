@@ -11,8 +11,9 @@ V=$1; TREE=$2; CASES=${3:-}; EXTRA=${4:--}
 ROOT=${LOOK_ROOT:-/mnt/data/projects/airstrike/mod/run/look-gate}
 INST=$ROOT/inst-$V; OUT=$ROOT/out/$V
 export JAVA_HOME=${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}
-artem() { local p; for p in $(pgrep -x java); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q 'PrismLauncher/instances/' && return 0; done; return 1; }
-while artem; do echo "$(date +%T) игра Артёма запущена — жду"; sleep 60; done
+# игра Артёма — по его инстансу (artem_playing в gpu_lease.sh): копия инстанса у клиента шлагбаума — не она
+source "$(dirname "$(readlink -f "$0")")/../gpu_lease.sh"
+while artem_playing; do echo "$(date +%T) игра Артёма запущена — жду"; sleep 60; done
 # с картинкой — одна сессия за раз (CLAUDE.md): своих клиентов, свою песочницу она гасит сама; лёгкие задачи (сервер,
 # тесты) — рядом, если памяти хватает на клиент со всей сборкой (~13 ГБ)
 short_of_memory() { [ "$(awk '/MemAvailable/ {print int($2/1048576)}' /proc/meminfo)" -lt 13 ]; }
@@ -38,7 +39,7 @@ python3 "$TREE/tools/prod_client.py" probe --no-copy --dir "$INST" --size 1920x1
 PC=$!
 code=
 while kill -0 $PC 2>/dev/null; do
-  if artem; then echo "$(date +%T) игра Артёма запустилась — гашу клиент"; kill -TERM $PC; wait $PC; code=75; break; fi
+  if artem_playing; then echo "$(date +%T) игра Артёма запустилась — гашу клиент"; kill -TERM $PC; wait $PC; code=75; break; fi
   sleep 5
 done
 [ -z "$code" ] && { wait $PC; code=$?; }
