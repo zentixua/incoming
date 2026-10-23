@@ -423,11 +423,11 @@ final class Sandbox {
                     case ROCKET -> S2C.Blast.ROCKET;
                     case DRONE, NONE -> S2C.Blast.DRONE;
                 };
-                Vec3 pos = new Vec3(site.x, GROUND + 1, site.z);
-                GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(pos));
-                long seed = c.args().size() > 1 ? c.seed() : 1;
-                // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
-                ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
+                Vec3 ground = new Vec3(site.x, GROUND + 1, site.z), pos = ground.add(0, c.number(2, 0), 0);
+                GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(ground));
+                long seed = c.args().size() > 1 ? c.seedAt(1) : 1;
+                // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре; земля — трава под точкой
+                ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
                 begin();
             }
             case RAID -> {

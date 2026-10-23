@@ -10,8 +10,9 @@ import java.util.Locale;
  * Команда песочницы эффектов ({@link Sandbox}, {@code /fx …} в чате или строка файла {@code fx/inbox/*.cmd}), без
  * Minecraft: разбор строки в действие. Слова:
  * <ul>
- *   <li>{@code blast <оружие> [seed]} — взрыв только у клиента: пакет взрыва в той точке песочницы, как от сервера
- *       (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять);</li>
+ *   <li>{@code blast <оружие> [seed] [высота]} — взрыв только у клиента: пакет взрыва в той точке песочницы, как от
+ *       сервера (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять); высота —
+ *       над землёй, м: удар в крышу или стену (земля в пакете — трава под точкой);</li>
  *   <li>{@code real <оружие>} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки) на новом месте;</li>
  *   <li>{@code nuke <кт> [air|ground]} — ядерный подрыв без полёта ({@code /incoming nuke now}) на новом месте;</li>
  *   <li>{@code airburst [seed]} — разрыв зенитной ракеты в воздухе над точкой;</li>
@@ -61,10 +62,11 @@ record SandboxCommand(Verb verb, List<String> args) {
     private void check() {
         switch (verb) {
             case BLAST, REAL -> {
-                need(1, 2);
+                need(1, verb == Verb.BLAST ? 3 : 1);
                 WeaponType w = weapon();
                 if (w == WeaponType.NUKE) throw new IllegalArgumentException("ядерка — nuke <кт>");
-                if (verb == Verb.BLAST && args.size() > 1) seed();
+                if (verb == Verb.BLAST && args.size() > 1) seedAt(1);
+                if (args.size() > 2 && (number(2) < 0 || number(2) > 200)) throw new IllegalArgumentException("высота 0–200 м");
             }
             case LAUNCH, FLIGHT -> {
                 need(1, 2);
@@ -126,10 +128,15 @@ record SandboxCommand(Verb verb, List<String> args) {
     }
 
     long seed() {
+        return seedAt(args.size() - 1);
+    }
+
+    /** Зерно — слово i. */
+    long seedAt(int i) {
         try {
-            return Long.parseLong(args.getLast());
+            return Long.parseLong(args.get(i));
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("зерно — целое: " + args.getLast());
+            throw new IllegalArgumentException("зерно — целое: " + args.get(i));
         }
     }
 
