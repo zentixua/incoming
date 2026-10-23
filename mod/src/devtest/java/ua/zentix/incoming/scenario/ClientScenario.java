@@ -77,7 +77,8 @@ public final class ClientScenario {
     private double fsWhirlAge = 300;
     /** Сценарий {@code debris}: дома и деревья у камеры, которые ломает волна; тик прихода фронта к ним (−1 — подрыва нет). */
     private boolean debris;
-    private int debrisArrival = -1;
+    private volatile BlockPos debrisSite;
+    private int debrisStage, debrisAt;
     /** Сценарий {@code wall}: стена пыли проходит мимо камеры; сколько кадров её прохода уже снято. */
     private boolean wall;
     private int wallStage;
@@ -1317,12 +1318,13 @@ public final class ClientScenario {
     }
 
     /**
-     * Обломки и пыль у камеры (N3): днём площадка 41×41 у точки появления (камень на 10 блоков вглубь — снизу опора, сверху
-     * расчищено), на ней дом из каменного кирпича со стёклами и дощатой крышей, дощатый дом с окнами и три дуба — в 45–60
-     * блоках перед зрителем; наземные 15 кт в 1,4 км к северу. Зритель — наблюдатель (волна не сносит) в 12 блоках над
-     * площадкой смотрит на дома. Кадры {@code debris_<десятые>ds} — от прихода фронта к домам: за 0,5 с до него и через 0,1,
-     * 0,3, 0,5, 1, 2, 4 и 10 с (по часам подрыва у клиента), в лог — строка {@code SCENARIO debris} с тем, что сорвано у
-     * камеры ({@code NukeDust.describe}).
+     * Обломки и пыль у камеры (N3): днём на ближайшей равнине площадка 41×41 (камень на 10 блоков вглубь — иначе часть
+     * площадки висела бы над низиной, и обрушение руин уронило бы её целиком; над ней расчищено), на ней дом из каменного
+     * кирпича со стеклянными панелями и дощатой крышей, дощатый дом со стёклами и три дуба; наземные 15 кт к северу в
+     * {@code INCOMING_DEBRIS} метрах (по умолчанию 2000). Зритель — наблюдатель (волна не сносит) в 60 блоках к югу от
+     * домов и в 15 над ними смотрит на них: фронт приходит к нему позже, чем к домам. Кадры {@code debris_<тики>t} — от
+     * прихода фронта к домам (по часам подрыва у клиента): за 10 тиков до него и через 1–200 тиков; в лог — строка
+     * {@code SCENARIO debris}: где голова стены против домов и камеры и что сорвано ({@code NukeDust.describe}).
      */
     private void planDebris() {
         debris = true;
@@ -1330,56 +1332,86 @@ public final class ClientScenario {
             cmd("time set 6000");
             cmd("weather clear");
             cmd("gamemode spectator");
-            cmd("tp @s 0.5 200 20.5 180 15");
             hover = true;
-        });
-        String corner = "execute positioned -20 0 -45 positioned over motion_blocking_no_leaves run ";
-        at(200, () -> cmd(corner + "fill ~ ~ ~ ~40 ~17 ~40 minecraft:air"));
-        at(220, () -> cmd(corner + "fill ~ ~-10 ~ ~40 ~-1 ~40 minecraft:stone"));
-        String top = "execute positioned -20 0 -45 positioned over motion_blocking run ";
-        at(240, () -> {
-            // каменный дом: окна к зрителю и к взрыву, крыша из досок
-            cmd(top + "fill ~4 ~ ~8 ~12 ~6 ~16 minecraft:stone_bricks hollow");
-            cmd(top + "fill ~6 ~2 ~16 ~10 ~3 ~16 minecraft:glass_pane");
-            cmd(top + "fill ~6 ~2 ~8 ~10 ~3 ~8 minecraft:glass_pane");
-            cmd(top + "fill ~4 ~7 ~8 ~12 ~7 ~16 minecraft:oak_planks");
-            // дощатый дом со стеклом
-            cmd(top + "fill ~22 ~ ~10 ~30 ~5 ~16 minecraft:oak_planks hollow");
-            cmd(top + "fill ~24 ~2 ~16 ~28 ~3 ~16 minecraft:glass");
-            cmd(top + "fill ~24 ~2 ~10 ~28 ~3 ~10 minecraft:glass");
-        });
-        at(260, () -> {
-            cmd(top + "place feature minecraft:oak ~16 ~ ~26");
-            cmd(top + "place feature minecraft:oak ~34 ~ ~30");
-            cmd(top + "place feature minecraft:oak ~6 ~ ~30");
-            cmd("execute positioned 0 0 20 positioned over motion_blocking run tp @s 0.5 ~12 20.5 180 15");
-        });
-        at(500, () -> {
-            Minecraft.getInstance().options.hideGui = true;
-            cmd("incoming nuke now at 0.5 320 -1400.5 15 ground");
+            var server = Minecraft.getInstance().getSingleplayerServer();
+            server.execute(() -> {
+                var level = server.overworld();
+                var found = level.findClosestBiome3d(b -> b.is(net.minecraft.world.level.biome.Biomes.PLAINS), BlockPos.ZERO.atY(64), 6400, 32, 64);
+                BlockPos c = found == null ? BlockPos.ZERO : found.getFirst();
+                level.getChunk(c.getX() >> 4, c.getZ() >> 4);
+                int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, c.getX(), c.getZ());
+                debrisSite = new BlockPos(c.getX(), y, c.getZ());
+                Incoming.LOG.info("SCENARIO debris site {}", debrisSite.toShortString());
+            });
         });
     }
 
-    /** Сценарий {@code debris}: кадры — по приходу фронта к домам по часам подрыва у клиента. */
+    /** Сценарий {@code debris}: место (сервер ищет равнину), стройка, подрыв, кадры — по приходу фронта к домам. */
     private void debrisEvents() {
+        BlockPos o = debrisSite;
+        if (o == null) return;
+        int x = o.getX(), y = o.getY(), z = o.getZ();
+        if (debrisStage == 0) {
+            debrisStage = 1;
+            debrisAt = tick;
+            cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 %d %d.5 180 10", x, y + 15, z + 60));
+            return;
+        }
+        if (debrisStage == 1 && tick >= debrisAt + 100) {
+            debrisStage = 2;
+            debrisAt = tick;
+            String[] build = {
+                    "fill %1$d %3$d %5$d %2$d %4$d %6$d minecraft:air".formatted(x - 20, x + 20, y, y + 17, z - 20, z + 20),
+                    "fill %1$d %3$d %5$d %2$d %4$d %6$d minecraft:stone".formatted(x - 20, x + 20, y - 10, y - 1, z - 20, z + 20),
+                    // каменный дом: окна к зрителю и к взрыву, крыша из досок
+                    "fill %d %d %d %d %d %d minecraft:stone_bricks hollow".formatted(x - 12, y, z - 4, x - 4, y + 6, z + 4),
+                    "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z + 4, x - 6, y + 3, z + 4),
+                    "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z - 4, x - 6, y + 3, z - 4),
+                    "fill %d %d %d %d %d %d minecraft:oak_planks".formatted(x - 12, y + 7, z - 4, x - 4, y + 7, z + 4),
+                    // дощатый дом со стеклом
+                    "fill %d %d %d %d %d %d minecraft:oak_planks hollow".formatted(x + 4, y, z - 3, x + 12, y + 5, z + 3),
+                    "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z + 3, x + 10, y + 3, z + 3),
+                    "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z - 3, x + 10, y + 3, z - 3),
+                    "place feature minecraft:oak %d %d %d".formatted(x - 8, y, z + 12),
+                    "place feature minecraft:oak %d %d %d".formatted(x + 8, y, z + 12),
+                    "place feature minecraft:oak %d %d %d".formatted(x, y, z - 14)};
+            for (int i = 0; i < build.length; i++) {
+                String c = build[i];
+                at(tick + 1 + 4 * i, () -> cmd(c));
+            }
+            return;
+        }
+        if (debrisStage == 2 && tick >= debrisAt + 100) {
+            debrisStage = 3;
+            Minecraft.getInstance().options.hideGui = true;
+            String metres = System.getenv("INCOMING_DEBRIS");
+            int range = metres == null ? 2000 : Integer.parseInt(metres.strip());
+            cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %d.5 320 %d.5 15 ground", x, z - range));
+            return;
+        }
         var list = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
-        if (list.isEmpty() || debrisArrival >= 0) return;
+        if (debrisStage != 3 || list.isEmpty()) return;
+        debrisStage = 4;
         var a = list.getLast();
         detTick = tick;
-        Vec3 town = new Vec3(0.5, a.d.burst().y, -33);
-        town = new Vec3(town.x, Minecraft.getInstance().level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,
-                (int) town.x, (int) town.z) + 3, town.z);
-        double wait = a.d.arrivalTicks(town.distanceTo(a.d.burst())) - a.ticks(0);
-        debrisArrival = tick + (int) Math.round(wait);
+        Vec3 houses = new Vec3(x + 0.5, y + 3, z + 0.5);
+        double wait = a.d.arrivalTicks(houses.distanceTo(a.d.burst())) - a.ticks(0);
+        int arrival = tick + (int) Math.round(wait);
         Incoming.LOG.info("SCENARIO detonation at tick {}, burst {}, front at the houses in {} ticks", tick, xyz(a.d.burst()), Math.round(wait));
-        for (int ds : new int[]{-5, 1, 3, 5, 10, 20, 40, 100}) {
-            int t = debrisArrival + ds * 2;
-            String name = String.format(java.util.Locale.ROOT, "debris_%s%02dds", ds < 0 ? "m" : "", Math.abs(ds));
-            at(t, () -> Incoming.LOG.info("SCENARIO debris {} near {}; layer {}", name, ua.zentix.incoming.client.nuclear.NukeDust.describe(),
-                    ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming()));
-            shot(t, name);
+        for (int dt : new int[]{-10, 1, 2, 4, 7, 10, 15, 20, 40, 200}) {
+            String name = String.format(java.util.Locale.ROOT, "debris_%s%03dt", dt < 0 ? "m" : "", Math.abs(dt));
+            at(arrival + dt, () -> {
+                Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+                double head = a.wall.wall(a.seconds(0)).head(), front = a.d.frontRadius(a.ticks(0));
+                Incoming.LOG.info("SCENARIO debris {} front {} past the houses, {} past the camera; head {}; near {}; layer {}", name,
+                        String.format(java.util.Locale.ROOT, "%.1f", front - houses.distanceTo(a.d.burst())),
+                        String.format(java.util.Locale.ROOT, "%.1f", front - cam.distanceTo(a.d.burst())),
+                        String.format(java.util.Locale.ROOT, "%.1f", head - Math.hypot(houses.x - a.d.burst().x, houses.z - a.d.burst().z)),
+                        ua.zentix.incoming.client.nuclear.NukeDust.describe(), ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming());
+            });
+            shot(arrival + dt, name);
         }
-        at(debrisArrival + 230, () -> {
+        at(arrival + 230, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });
