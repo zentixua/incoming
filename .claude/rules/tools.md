@@ -43,7 +43,7 @@ paths:
                                            по одной (замок, ждут очереди), --gpu ещё ждёт, пока игра Артёма закрыта, --light —
                                            без очереди; в конце — «laptop_job <имя>: exit N»; --status — что идёт и ждёт
     sessions/go.sh <S> [id сообщение]    ← фоновая сессия claude2 своей службой systemd (incoming-claude-<S>): задание
-                                           <S>.txt и бриф context.md из mod/run/incoming-sessions; итог хода — строкой в
+                                           <S>.txt и бриф context.md (свой — <S>-context.md) из incoming-sessions; итог — в
                                            sessions.log; закончила ход, пока её задачи ноутбука (из дерева wt-<S>, wt-<S>-*)
                                            идут, — продолжается сама по их концу; live.md — новые решения для идущих
                                            сессий; --wait <S>, --status

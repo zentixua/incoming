@@ -6,7 +6,8 @@
 #   tools/sessions/go.sh --wait <S>                   — ждать конца (запускать в фоне: конец разбудит)
 #   tools/sessions/go.sh --status                     — что идёт и последние строки sessions.log
 #
-# Файлы — в $SESSIONS_DIR (по умолчанию mod/run/incoming-sessions основной копии): <S>.txt задание, context.md бриф,
+# Файлы — в $SESSIONS_DIR (по умолчанию mod/run/incoming-sessions основной копии): <S>.txt задание, context.md бриф
+# (<S>-context.md, если есть, — вместо него),
 # live.md новые решения Артёма; итог каждого хода — <S>.json (первый), <S>.r1.json, <S>.r2.json …, строка в
 # sessions.log. Сессия идёт своей службой systemd incoming-claude-<S>: обрыв того, кто её запустил, её не трогает
 # (22.10 01:16 S5 и S8 погибли с сессией-родителем — дочерние процессы Claude гаснут с его группой, setsid не спасает).

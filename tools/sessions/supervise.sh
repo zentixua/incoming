@@ -10,7 +10,9 @@ trees=${SESSION_TREES:-$root/mod/run/wt-$S}
 claude=$(command -v claude2 || echo "$HOME/.local/bin/claude2")
 live="Новые решения Артёма, пришедшие после твоего старта, — в $D/live.md: перечитай его перед каждым запуском дольше пяти минут и перед влитием; что там сказано, главнее этого брифа. Фоновую задачу жди в этом же ходе: tools/laptop_job.sh с run_in_background — его конец тебя разбудит; timeout фоновой команды ставь по длине задачи (по умолчанию 10 мин, предел 2 ч), иначе её остановят посреди работы; закончишь ход, пока твои задачи ноутбука идут, — тебя продолжат, когда они кончатся."
 brief=$D/.context-$S.md
-{ cat "$D/context.md" 2>/dev/null; printf '\n\n## Идущая сессия\n%s\n' "$live"; } > "$brief"
+# свой бриф задачи <S>-context.md вместо общего context.md — когда задаче нужен другой контекст (шейдерпаки 23.10)
+ctx=$D/context.md; [ -s "$D/$S-context.md" ] && ctx=$D/$S-context.md
+{ cat "$ctx" 2>/dev/null; printf '\n\n## Идущая сессия\n%s\n' "$live"; } > "$brief"
 
 if [ $# -ge 2 ]; then args=(--resume "$1" -p "$2"); n=$(ls "$D/$S".r*.json 2>/dev/null | wc -l); n=$((n + 1)); else args=(-p "$(cat "$D/$S.txt")"); n=0; fi
 
