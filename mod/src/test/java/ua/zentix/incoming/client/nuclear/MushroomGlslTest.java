@@ -60,6 +60,27 @@ class MushroomGlslTest {
         }
     }
 
+    /** Подсос у основания ножки ({@code mushFoot*}, профиль слоя — {@code pallProfile}) — тот же, что в Java ({@link MushroomField#footDensity}). */
+    @Test
+    void footMatchesJava() {
+        String both = read("include/pall.glsl") + GLSL;
+        GlslFunction width = GlslFunction.parse(GLSL, "mushFootWidth"), share = GlslFunction.parse(GLSL, "mushFootShare");
+        GlslFunction density = GlslFunction.parse(both, "mushFootDensity");
+        for (double top : new double[]{0.5, 40, 380}) {
+            for (double h = -0.2 * top; h <= 5 * top; h += 0.01 * top) {
+                Map<String, Double> at = Map.of("h", h, "top", top);
+                assertEquals(MushroomField.footWidth(h, top), width.call(at), 1e-9, "h " + h);
+                assertEquals(MushroomField.footShare(h, top), share.call(at), 1e-9, "h " + h);
+                for (double rise : new double[]{0.3 * top, 1e9}) {
+                    for (double stem : new double[]{0, 0.03, 0.3}) {
+                        assertEquals(MushroomField.footDensity(h, top, 0.4, 0.7, rise, stem),
+                                density.call(Map.of("h", h, "top", top, "sigma", 0.4, "share", 0.7, "rise", rise, "stem", stem)), 1e-9, "h " + h);
+                    }
+                }
+            }
+        }
+    }
+
     /** Отражение стенок ложбин шапки ({@code mushWallR}) — то же, что в Java ({@link MushroomField#wallReflectance}). */
     @Test
     void wallReflectanceMatchesJava() {

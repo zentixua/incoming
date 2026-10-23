@@ -927,6 +927,19 @@ float mushLobes(vec3 c, float tile, float cone, float k, vec3 ch) {
     return (n - 0.5) + 0.35 * fine * (f - 0.5);
 }
 
+// Клубы подсоса у основания ножки гриба m в месте q тела (r — радиус ножки на этой высоте): пятна ножки, которые идут с
+// воздухом слоя по линиям тока угла (mushFootWidth) — по верху ковра к ножке и вверх по её стенке: путь вдоль потока —
+// высота минус расстояние от стенки, сдвинутый на подъём воздуха ножки. Подача (не по данным, фактов не меняет): узор ещё
+// и закручивается вокруг оси — против часовой стрелки сверху, как вихрь притока в северном полушарии, радиан на два верха
+// слоя пути; замеров вращения притока у ножки нет
+float mushFootLobes(Mush m, vec3 q, float r, float cone, float k) {
+    float path = q.y - max(length(q.xz) - r, 0.0) - m.stemRise;
+    float turn = 0.5 * path / max(m.footTop, 1.0), c = cos(turn), s = sin(turn);
+    // место в узоре — откуда воздух пришёл: поворот на север от востока (−z) — против часовой сверху
+    vec2 was = vec2(c * q.x + s * q.z, c * q.z - s * q.x);
+    return mushLobes(vec3(was.x, 0.5 * path, was.y), m.stemTile, max(cone, m.stemTile), k + 4.0, MUSH_STREAKS);
+}
+
 // Клубы слоя j узора шапки гриба m в месте q тела на часах кипения churn, опущенные в шапку на MUSH_SINK × (1 − доля
 // слоя): узор слоя повёрнут обращением сечения от рождения слоя (roll — доля обращения, пока шар сворачивается в
 // кольцо), у каждой жизни слоя — свой
@@ -987,6 +1000,18 @@ vec4 mushDense(Mush m, vec3 q, float cone, float k, out float lobes, out float d
                 float shifted = d.y - MUSH_STEM_LOBES * r * l;
                 sigma.y = stem * mushEdge(shifted, MUSH_STEM_EDGE * r);
                 near = min(near, shifted - MUSH_STEM_EDGE * r);
+            }
+        }
+        // подсос у основания (mushFootAt): та же пыль, где он гуще ножки — он; свои клубы — идут с воздухом слоя
+        float foot = mushFootSigma(m, q.y);
+        if (foot > 0.0) {
+            float df = length(q.xz) - mushFootAt(m, q.y);
+            if (df < MUSH_STEM_REACH * r) {
+                float shifted = df - MUSH_STEM_LOBES * r * mushFootLobes(m, q, r, cone, k);
+                sigma.y = max(sigma.y, foot * mushEdge(shifted, MUSH_STEM_EDGE * r));
+                near = min(near, shifted - MUSH_STEM_EDGE * r);
+            } else {
+                near = min(near, df - MUSH_STEM_REACH * r);
             }
         }
     }
