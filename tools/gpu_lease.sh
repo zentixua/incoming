@@ -32,7 +32,8 @@ GPU_CLIENT=$LEASE.client
 # владелец по дереву $1 (по умолчанию — дерево этого скрипта)
 lease_owner() {
   [ -n "${INCOMING_GPU_OWNER:-}" ] && { echo "$INCOMING_GPU_OWNER"; return; }
-  local name; name=$(basename "${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}")
+  # настоящий путь: главное дерево видно и через симлинк (airstrike → incoming), а владелец у него один
+  local name; name=$(basename "$(readlink -m "${1:-$(dirname "${BASH_SOURCE[0]}")/..}")")
   if [[ $name =~ ^wt-([^-]+) ]]; then echo "${BASH_REMATCH[1]}"; else echo "$name"; fi
 }
 
@@ -52,7 +53,8 @@ lease_status() {
 
 # lease_take <владелец> <дерево> [--wait] — 0: аренда своя; 75: чужая (строка — в stderr)
 lease_take() {
-  local owner=$1 tree=$2 wait=${3:-} fd said= now
+  local owner=$1 tree wait=${3:-} fd said= now
+  tree=$(readlink -m "$2")
   while true; do
     exec {fd}>"$LEASE.lock"; flock "$fd"
     _lease_read; now=$(date +%s)
@@ -81,22 +83,45 @@ lease_renew() {
   return $rc
 }
 
-# клиент на видеокарте сейчас: строка «кто» (код 0) или ничего (код 1)
+# этот процесс — часть работы, что держит замок клиента: унаследовал его (fd 199) или держатель — его предок (Python
+# с close_fds=True потомкам fd не отдаёт: prod_client.py → nested_kwin.sh внутри задачи --gpu)
+gpu_client_inherited() {
+  [ "$(readlink "/proc/$BASHPID/fd/199" 2>/dev/null)" = "$(readlink -f "$GPU_CLIENT")" ] && return 0
+  local holder p; holder=$(cat "$GPU_CLIENT.pid" 2>/dev/null) || return 1
+  [ -n "$holder" ] && ! flock -n "$GPU_CLIENT" true 2>/dev/null || return 1
+  p=$BASHPID
+  while [ "${p:-1}" -gt 1 ]; do
+    [ "$p" = "$holder" ] && return 0
+    p=$(sed 's/.*) //' "/proc/$p/stat" 2>/dev/null | cut -d' ' -f2)
+  done
+  return 1
+}
+
+# клиент на видеокарте сейчас (не своей работы): строка «кто» (код 0) или ничего (код 1)
 gpu_client_busy() {
   flock -n "$GPU_CLIENT" true 2>/dev/null && return 1
+  gpu_client_inherited && return 1
   echo "на видеокарте идёт клиент $(cat "$GPU_CLIENT.who" 2>/dev/null)"
 }
 
 # gpu_client_hold <владелец> <дерево> <что> — взять замок клиента на fd 199 (его наследуют exec и потомки: держится,
-# пока жив клиент) и продлевать аренду, пока он жив; занят — отказ 75
+# пока жив клиент или работа) и продлевать аренду, пока он держится; занят — отказ 75. Часть работы, что уже держит
+# замок (стенд, мультиплеер, клиент задачи --gpu), его не берёт
 gpu_client_hold() {
-  # замок уже держит работа, что запустила этот клиент (стенд, мультиплеер: несколько клиентов — одна работа)
-  [ "$(readlink "/proc/$$/fd/199" 2>/dev/null)" = "$(readlink -f "$GPU_CLIENT")" ] && return 0
+  gpu_client_inherited && return 0
   exec 199>"$GPU_CLIENT"
-  if ! flock -n 199; then echo "на видеокарте идёт клиент $(cat "$GPU_CLIENT.who" 2>/dev/null)" >&2; exec 199>&-; return 75; fi
-  printf '%s (%s), с %s: %s\n' "$1" "$2" "$(date +%H:%M)" "$3" > "$GPU_CLIENT.who"
-  # продление — пока замок держит клиент; свой замок продлевателю не нужен (иначе держал бы его сам)
-  ( exec 199>&-; while sleep "${INCOMING_GPU_RENEW:-30}"; do flock -n "$GPU_CLIENT" true && exit 0; lease_renew "$1" "$2" || true; done ) >/dev/null 2>&1 &
+  # ждать до 2 с: проба `flock -n` соседа (status, продлеватель) держит замок на миг
+  if ! flock -w 2 199; then echo "на видеокарте идёт клиент $(cat "$GPU_CLIENT.who" 2>/dev/null)" >&2; exec 199>&-; return 75; fi
+  printf '%s (%s), с %s: %s\n' "$1" "$(readlink -m "$2")" "$(date +%H:%M)" "$3" > "$GPU_CLIENT.who"
+  echo $BASHPID > "$GPU_CLIENT.pid"
+  # продление — пока замок держат; продлевателю не нужны ни замок (держал бы его сам), ни чужие fd (канал вызывающего,
+  # tee, ssh ждали бы его конца)
+  (
+    for f in /proc/$BASHPID/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-" 2>/dev/null; done
+    exec </dev/null >/dev/null 2>&1
+    # продлевать, только пока замок занят (код 1); свободен или файла нет (код 0, ошибка открытия) — конец
+    while sleep "${INCOMING_GPU_RENEW:-30}"; do flock -n "$GPU_CLIENT" true 2>/dev/null; [ $? = 1 ] || exit 0; lease_renew "$1" "$2" || true; done
+  ) &
 }
 
 # отпустить свою

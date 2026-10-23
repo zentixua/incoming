@@ -49,10 +49,14 @@ wait $w 2>/dev/null
 out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/laptop_job.sh" --gpu film -- false 2>&1); rc=$?
 [ $rc = 75 ] && [[ $out == *"видеокарта у SH"* ]] && ok "laptop_job --gpu другой сессии — отказ 75" || bad "laptop_job --gpu: $rc $out"
 [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] || { bad "аренда не у SH — дальше нельзя: start поднял бы клиент"; exit 1; }
-out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start 2>&1); rc=$?
-# на ноутбуке при игре Артёма раньше аренды отказывает она (тоже 75, аренду не берёт)
-[ $rc = 75 ] && [[ $out == *"видеокарта у SH"* || $out == *"игра Артёма запущена"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] \
-  && ok "sandbox start другой сессии — отказ 75, аренда у SH" || bad "sandbox start: $rc $out"
+if [ -n "$(systemctl --user list-units "incoming-job-sandbox-$(basename "$ROOT")-*" --state=active --no-legend --plain 2>/dev/null)" ]; then
+  echo "пропуск: песочница этого дерева идёт (start ответил бы «уже идёт»)"
+else
+  out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start 2>&1); rc=$?
+  # на ноутбуке при игре Артёма раньше аренды отказывает она (тоже 75, аренду не берёт)
+  [ $rc = 75 ] && [[ $out == *"видеокарта у SH"* || $out == *"игра Артёма запущена"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] \
+    && ok "sandbox start другой сессии — отказ 75, аренда у SH" || bad "sandbox start: $rc $out"
+fi
 # задача без видеокарты аренды не берёт и не отказывает (служба systemd в CI не встаёт — смотрим только на аренду)
 before=$(cat "$INCOMING_GPU_LEASE")
 out=$(INCOMING_GPU_OWNER=FZC timeout 20 "$ROOT/tools/laptop_job.sh" gametest -- true 2>&1); rc=$?
@@ -75,13 +79,27 @@ wait $c; sleep 1.5
 gpu_client_busy >/dev/null && bad "замок клиента остался после его конца" || ok "клиент кончился — замок свободен"
 seen1=$(cut -f4 "$INCOMING_GPU_LEASE"); sleep 2
 [ "$(cut -f4 "$INCOMING_GPU_LEASE")" = "$seen1" ] && ok "после клиента продление остановилось" || bad "продление живёт после клиента"
-# клиенты одной работы (стенд, мультиплеер): работа держит замок, её клиенты его наследуют и не отказывают; чужой
-# клиент рядом — отказ
+# клиенты одной работы (стенд, мультиплеер, клиент задачи --gpu): работа держит замок, её клиенты — потомки — не
+# отказывают, и с унаследованным fd 199, и без него (Python close_fds); процесс не из неё — отказ
 ( source "$ROOT/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "стенд" || exit 9
   bash -c 'source "$1/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "клиент стенда"' _ "$ROOT" || exit 8
-  bash -c 'exec 199>&-; source "$1/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "чужой клиент" 2>/dev/null' _ "$ROOT" && exit 7
-  exit 0 ); rc=$?
-[ $rc = 0 ] && ok "клиенты работы, что держит замок, не отказывают; чужой рядом — отказ" || bad "унаследованный замок (код $rc)"
+  bash -c 'exec 199>&-; source "$1/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "клиент без fd"' _ "$ROOT" || exit 7
+  sleep 5 ) & h=$!
+sleep 1
+gpu_client_hold FZC /x/wt-FZC "чужой" 2>/dev/null && { bad "чужой процесс взял замок работы"; exec 199>&-; } || ok "процесс не из работы — отказ"
+wait $h; rc=$?
+[ $rc = 0 ] && ok "клиенты работы (с fd и без) не отказывают" || bad "клиенты работы (код $rc)"
+if pgrep -f 'java.*PrismLauncher/[i]nstances/' >/dev/null; then
+  echo "пропуск: игра Артёма идёт — задача --gpu её ждёт (так и задумано)"
+else
+  # задача --gpu держит замок всю жизнь: её клиент (потомок, fd закрыт) — свой, снаружи — «идёт клиент задачи …»
+  INCOMING_GPU_OWNER=SH "$ROOT/tools/laptop_job.sh" --in-unit gpu bake $$ -- \
+    bash -c 'exec 199>&-; sleep 1; source "$1/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "клиент задачи" && echo child-ok' _ "$ROOT" > "$tmp/job" 2>&1 & j=$!
+  sleep 0.5
+  who=$(gpu_client_busy); [[ $who == *"задача bake"* ]] && ok "задача --gpu держит замок: $who" || bad "задача --gpu без замка: $who"
+  wait $j; grep -q child-ok "$tmp/job" && ok "клиент внутри задачи --gpu — её частью" || bad "клиент задачи: $(cat "$tmp/job")"
+  sleep 1.5; gpu_client_busy >/dev/null && bad "замок остался после задачи" || ok "задача кончилась — замок свободен"
+fi
 # отпустили, а работа идёт — продление берёт аренду снова
 lease_release SH && lease_renew SH /x/wt-SH && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] && ok "продление берёт свободную аренду снова" || bad "продление свободной"
 exit $fail

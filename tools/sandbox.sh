@@ -124,7 +124,7 @@ PY
 }
 
 start() {
-  local size=1280x720 opts=() pack wait=
+  local size=1280x720 opts=() pack wait= fresh=
   while [ $# -gt 0 ]; do
     case "$1" in
       --wait) wait=--wait ;;
@@ -155,7 +155,7 @@ start() {
       echo "$(date +%T) $who — жду" >&2; sleep 10
     done
     _lease_read
-    local fresh=1; [ "$L_OWNER" = "$INCOMING_GPU_OWNER" ] && ! _lease_free && fresh=
+    fresh=1; [ "$L_OWNER" = "$INCOMING_GPU_OWNER" ] && ! _lease_free && fresh=
     lease_take "$INCOMING_GPU_OWNER" "$ROOT" $wait || exit 75
     # не поднялись (сборка, клиент) — только что взятую аренду отпустить: другие сессии не ждут 10 мин впустую
     [ -n "$fresh" ] && trap 'lease_release "$INCOMING_GPU_OWNER"' EXIT
@@ -204,6 +204,9 @@ OPT
   local w=${size%x*} h=${size#*x}
   INCOMING_SANDBOX=1 nohup "$ROOT/tools/laptop_job.sh" --light "sandbox-$(basename "$ROOT")" -- "$ROOT/tools/sandbox.sh" _run "$w" "$h" > "$RUN/logs/job.log" 2>&1 &
   local job=$! waited=0
+  # задача пошла: аренду держит её клиент; обрыв этого ожидания (Ctrl+C, срок) аренду у живого клиента не отнимает —
+  # отпустить, только если задача сама не поднялась
+  trap - EXIT
   until [ -f "$FX/ready" ]; do
     sleep 0.2; waited=$((waited + 1))
     # клиент жив, но встал до мира (чужой экран, шейдерпак) — не ждать без конца: последний экран — строка SANDBOX screen
@@ -212,10 +215,11 @@ OPT
       grep 'SANDBOX screen' "$RUN/logs/latest.log" 2>/dev/null | tail -n 1 >&2
       tail -n 20 "$RUN/logs/latest.log" "$RUN/logs/job.log" >&2
       [ $waited -gt 1500 ] && stop >&2
+      # задача не поднялась или остановлена — только что взятую аренду отпустить
+      if [ -n "$fresh" ] && { [ $waited -gt 1500 ] || ! kill -0 $job 2>/dev/null; }; then lease_release "$INCOMING_GPU_OWNER"; fi
       exit 1
     fi
   done
-  trap - EXIT
   echo "песочница готова: сборка $build с, клиент $(cat "$FX/ready") с (JVM → мир), всего $(since "$t0") с"
 }
 

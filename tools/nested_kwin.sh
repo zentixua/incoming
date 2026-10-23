@@ -27,6 +27,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOME_DIR="$ROOT/mod/run/kwin/$SOCKET"
 source "$ROOT/tools/gpu_lease.sh"
 owner="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
+# сначала замок клиента (иначе отказ по нему оставил бы только что взятую аренду на 10 мин), потом аренда
+who=$(gpu_client_busy) && { echo "$who" >&2; exit 75; }
 lease_take "$owner" "$ROOT" ${INCOMING_GPU_WAIT:+--wait} || exit 75
 gpu_client_hold "$owner" "$ROOT" "$COMMAND" || exit 75
 mkdir -p "$HOME_DIR/config" "$HOME_DIR/data" "$HOME_DIR/cache" "$HOME_DIR/state"

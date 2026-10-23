@@ -45,17 +45,17 @@ if [ "${1:-}" = --in-unit ]; then
   while [ "$mode" = gpu ] && artem_playing; do
     [ -z "$said" ] && { echo "$(date +%T) $name: игра Артёма запущена — жду"; said=1; }
     kill -0 "$caller" 2>/dev/null || { echo "$name: запустивший ушёл до начала — не запускаю"; exit 75; }
-    lease_renew "$INCOMING_GPU_OWNER" || true
+    lease_renew "$INCOMING_GPU_OWNER" "$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)" || true
     sleep 30
   done
   [ "$mode" = gpu ] || exec "$@"
-  # аренда — своей сессии, пока задача идёт (истекает за INCOMING_GPU_LEASE_IDLE без работы)
-  ( while sleep 30; do lease_renew "$INCOMING_GPU_OWNER" || true; done ) &
-  renew=$!
+  # задача --gpu — один клиент на видеокарте всё время, пока идёт (Blender — сам, клиенты внутри — её частью), и
+  # аренда своей сессии продлевается, пока она держит замок
+  tree=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+  gpu_client_hold "$INCOMING_GPU_OWNER" "$tree" "задача $name" || exit 75
   "$@"
   code=$?
-  kill $renew 2>/dev/null
-  lease_renew "$INCOMING_GPU_OWNER" || true
+  lease_renew "$INCOMING_GPU_OWNER" "$tree" || true
   exit $code
 fi
 
