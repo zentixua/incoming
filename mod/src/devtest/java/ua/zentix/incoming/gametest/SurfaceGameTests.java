@@ -195,6 +195,27 @@ public final class SurfaceGameTests {
         return String.format(Locale.ROOT, "%.1f", x);
     }
 
+    /** Проверок партии, которые держат обломки выключенными, и что было до первой из них. */
+    private static int debrisHolders;
+    private static boolean debrisBefore;
+
+    /**
+     * Обломки не ложатся блоками, пока идёт проверка. Настройка — на весь сервер, а проверок в партии семь: выключает
+     * первая, возвращает последняя (каждая своё «до» вернула бы чужое «выключено», и {@code debrisLandsAsBlocks} в той же
+     * части CI падал бы).
+     */
+    private static synchronized void noDebris(GameTestHelper h) {
+        if (debrisHolders++ == 0) {
+            debrisBefore = IncomingConfig.SERVER.debrisStay.get();
+            IncomingConfig.SERVER.debrisStay.set(false);
+        }
+        StrikeGameTests.afterTest(h, () -> {
+            synchronized (SurfaceGameTests.class) {
+                if (--debrisHolders == 0) IncomingConfig.SERVER.debrisStay.set(debrisBefore);
+            }
+        });
+    }
+
     // ---------------------------------------------------------------- удар снаряда
 
     /** Сущность оружия с осью удара из паспорта: угол к горизонту {@link Article.Impact#angle}, курс на +z. */
@@ -256,16 +277,14 @@ public final class SurfaceGameTests {
     }
 
     /**
-     * Удары оружия сеткой по всей поверхности {@code s} (шаг — {@link #spacing}: у ракеты 3×3, у шахеда 4×4, у «Ланцета»
+     * Удары оружия сеткой по всей поверхности {@code s} (шаг — {@link #spacing}: у ракеты 3×3, у шахеда 5×5, у «Ланцета»
      * и «Града» 6×6 — их воронка доля блока, поэтому сумма), замер в квадрате каждого удара: снятые блоки поверхности,
      * отверстие (столбцы со снятым верхом), глубина; у плит — сквозные пробои.
      */
     private static void craterCell(GameTestHelper h, WeaponType weapon, Surface s) {
         ServerLevel level = h.getLevel();
-        boolean debris = IncomingConfig.SERVER.debrisStay.get();
         // обломки на время проверки не ложатся блоками: считается только снятое
-        IncomingConfig.SERVER.debrisStay.set(false);
-        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
+        noDebris(h);
         build(h, s, LO, HI, LO, HI, TOP);
         int step = spacing(weapon), n = (HI - LO + 1) / step, first = MID - (n - 1) * step / 2;
         h.assertTrue(n >= 3, weapon + ": меньше трёх ударов в ряд, шаг " + step);
@@ -373,7 +392,7 @@ public final class SurfaceGameTests {
         List<BlastGameTests.Post> bricks = BlastGameTests.layPosts(c, at, BRICK_PSI, tnt, BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt),
                 List.of(), b -> b < 0);
         List<BlastGameTests.Post> planks = BlastGameTests.layPosts(c, at, WOOD_PSI, tnt, BlastDamage.breakRange(BlastModel.kpa(WOOD_PSI), tnt),
-                List.of(), b -> b > 0);
+                bricks, b -> b > 0);
         for (BlastGameTests.Post p : bricks) level.setBlock(p.pos(), Blocks.STONE_BRICKS.defaultBlockState(), Block.UPDATE_CLIENTS);
         for (BlastGameTests.Post p : planks) level.setBlock(p.pos(), Blocks.OAK_PLANKS.defaultBlockState(), Block.UPDATE_CLIENTS);
         // стёкла: по одному в воздухе над площадкой, место — ближайшее к доле своего радиуса
@@ -395,6 +414,9 @@ public final class SurfaceGameTests {
             }
             level.setBlock(best, Blocks.GLASS.defaultBlockState(), Block.UPDATE_CLIENTS);
             panes.add(best);
+            BlockPos pane = best;
+            // стёкла выше стены площадки — прочь после проверки, как башня бомбы
+            StrikeGameTests.afterTest(h, () -> level.setBlock(pane, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS));
             glass.add(new double[]{bestShare});
         }
         Warheads.detonate(level, weapon, at, striker(level, weapon), null);
@@ -479,11 +501,9 @@ public final class SurfaceGameTests {
     private static void bomb(GameTestHelper h, Surface s) {
         ServerLevel level = h.getLevel();
         int top = bombTop(s);
-        boolean debris = IncomingConfig.SERVER.debrisStay.get();
-        IncomingConfig.SERVER.debrisStay.set(false);
+        noDebris(h);
         int lo = BOMB_X - BOMB_HALF, hi = BOMB_X + BOMB_HALF, loZ = BOMB_Z - BOMB_HALF, hiZ = BOMB_Z + BOMB_HALF;
         StrikeGameTests.afterTest(h, () -> {
-            IncomingConfig.SERVER.debrisStay.set(debris);
             // башня выше стены площадки — прочь: соседние партии летают над миром теста
             for (BlockPos p : BlockPos.betweenClosed(new BlockPos(lo - 4, 9, loZ - 4), new BlockPos(hi + 4, top + 12, hiZ + 4))) {
                 BlockPos a = h.absolutePos(p);
