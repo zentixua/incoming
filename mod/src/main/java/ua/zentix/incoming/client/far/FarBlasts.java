@@ -282,29 +282,12 @@ public final class FarBlasts {
             return true;
         }
 
-        /**
-         * σ клуба оболочки конденсации, радиусов: клубы на полусфере стоят через 0,5–0,9 радиуса (кольцо на 30° — реже всего),
-         * клуб шире половины шага — оболочка сплошная, а не бусы (оценка формы).
-         */
-        static final double SHELL = 0.45;
-
-        /**
-         * Облако конденсации ({@link CloudModel#condensation}): оболочка капель на полусфере радиуса r за фронтом волны —
-         * кольцо клубов по полусфере ({@link #SHELL}), слой капель — пятая радиуса (оценка формы); капли — водность 0,5 г/м³
-         * (оценка), тают к концу жизни.
-         */
+        /** Water follows the pressure history, rather than appearing at the final radius in the first frame. */
         private void condensation(double t, SmokeGrid.Sink out) {
-            double r = model.condensation(), life = model.condensationSeconds();
-            double shell = 2 * Math.PI * r * r * 0.2 * r;
-            double water = 0.5e-3 * shell * (1 - t / life) / 13;
-            for (int i = 0; i < 13; i++) {
-                // 1 на вершине и 12 по кругам на 30° и 60° над землёй
-                double el = i == 0 ? Math.PI / 2 : (i <= 6 ? Math.PI / 6 : Math.PI / 3), az = i * Math.PI / 3 + (i > 6 ? Math.PI / 6 : 0);
-                double cx = r * Math.cos(el) * Math.cos(az), cy = r * Math.sin(el), cz = r * Math.cos(el) * Math.sin(az);
-                // клуб оболочки — шире половины шага между клубами ({@link #SHELL}): у́же — оболочка распадалась на бусы
-                out.blob(x + cx, y + cy, z + cz, SHELL * r, SHELL * r, 0, 0, water, 0.9f, 0.9f, 0.9f, CloudModel.T_AIR_K, 0);
-            }
+            model.condensation(t, (bx, by, bz, sh, sv, soot, dust, water, kelvin, rise) ->
+                    out.blob(x + bx, y + by, z + bz, sh, sv, 0, 0, water, 0.95f, 0.95f, 0.95f, kelvin, rise));
         }
+
     }
 
     /**

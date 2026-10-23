@@ -319,9 +319,13 @@ shimmer runs out from the fireball over the sky and the ground: a few pixels for
 pressure drops. On grass and under trees the front tears off grass, turf and leaves as it arrives and flicks them up,
 so a ring of flying bits races out at the speed of the front and settles right behind it: the air behind the front
 moves only a few tenths of a block, so nothing is carried far. A Shahed tears them within about 50 blocks, a cruise
-missile within about 85, a Lancet within about 20. Bare soil, sand and snow give dust instead.
+missile within about 85, a Lancet within about 20. Short pale puffs from the torn turf mark the travelling ring.
+Refraction, clump size, lift and contrast are emphasised for presentation; the ring keeps the pressure front’s radius
+and timing. Bare soil, sand and snow give dust instead.
 
-In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
+In sufficiently humid air a white condensation shell appears briefly behind the pressure front, after the air expands
+and cools below its dew point. It evaporates as pressure recovers. Rain makes it much easier to see; dry air may give
+no shell. Its negative-phase history and outer extent are estimates. By day the cloud rises higher than at
 night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
 see. Sparks, clods of earth, the dust and sparks of fragment hits, flames and, where fuel was left in the tank, burning
 pieces are particles. A burning piece in flight leaves puffs of grey-black wood smoke that rise with their own heat and

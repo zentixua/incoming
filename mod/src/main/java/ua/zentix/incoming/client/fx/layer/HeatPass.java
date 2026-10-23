@@ -331,7 +331,11 @@ public final class HeatPass {
 
         /** Фронт обычного взрыва ({@code FarBlasts.front}): как {@link #front}, но слот ядерки не занимает. */
         public void chemicalFront(double x, double y, double z, double r, double l, double low, double[] dn) {
-            front(x, y, z, r, l, low, dn, false);
+            // Подача: усиление ряби обычного фронта. Радиус, время, толща и зависимость от давления — прежние.
+            // Ядерный front() использует физический скачок без усиления.
+            double[] shown = new double[4];
+            for (int i = 0; i < shown.length; i++) shown[i] = 24 * dn[i];
+            front(x, y, z, r, l, low, shown, false);
         }
 
         private double rank(int slot) {

@@ -804,25 +804,22 @@ public final class CloudModel {
         return kelvin + (hot - kelvin) * u * u * (3 - 2 * u);
     }
 
-    /**
-     * Облако конденсации — во влажном воздухе (влажность не меньше {@code CloudModel.WILSON_HUMIDITY} ядерки) за фронтом
-     * волны, где давление ещё 20 кПа (Кинни–Грэхем; оценка), живёт {@link #condensationSeconds}: радиус, м; 0 — нет.
-     */
+    /** Wilson cloud: shock heating, expansion, saturation and latent heat, see {@link Condensation}. */
     public double condensation() {
-        if (condensationR < 0) {
-            condensationR = ua.zentix.incoming.nuclear.model.CloudModel.wilsonCloud(air.humidity())
-                    ? ua.zentix.incoming.nuclear.model.BlastModel.rangeForSurfaceOverpressure(20, source.chargeKg()) : 0;
-        }
-        return condensationR;
+        return condensationModel().reach;
     }
 
-    /** Сколько живёт облако конденсации, с: 10 положительных фаз волны на его радиусе (оценка). */
     public double condensationSeconds() {
-        if (condensationLife < 0) {
-            double r = condensation();
-            condensationLife = r <= 0 ? 0 : 10 * ua.zentix.incoming.nuclear.model.BlastModel.positivePhaseSeconds(r, source.chargeKg() * 1e-6);
-        }
-        return condensationLife;
+        return condensationModel().life;
+    }
+
+    public void condensation(double t, Blobs out) {
+        condensationModel().blobs(t, out);
+    }
+
+    private Condensation condensationModel() {
+        if (condensation == null) condensation = new Condensation(source.chargeKg(), source.surface(), air.humidity());
+        return condensation;
     }
 
     /** Толща самого густого клуба слоя пыли волны в возрасте t (через середину по горизонтали). */
@@ -830,6 +827,5 @@ public final class CloudModel {
         return ground.tau(t);
     }
 
-    /** Радиус и жизнь облака конденсации — один раз (зовут каждый кадр); −1 — ещё не считались. */
-    private double condensationR = -1, condensationLife = -1;
+    private Condensation condensation;
 }

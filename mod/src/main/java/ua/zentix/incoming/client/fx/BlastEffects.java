@@ -176,7 +176,7 @@ public final class BlastEffects {
                 double d = ear.distanceTo(pos);
                 if (arrivalTicks(d) <= t || t > 60) {
                     arrived = true;
-                    if (t <= 60) arrive(level, (int) (d / Warheads.FRONT_SPEED) + 1);
+                    if (t <= 60) arrive(level, (int) Math.ceil(arrivalTicks(d)));
                 } else if (echoes != null) {
                     echoes.approach(ear);
                 }
