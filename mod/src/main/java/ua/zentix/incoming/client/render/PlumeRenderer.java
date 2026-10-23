@@ -103,24 +103,26 @@ public final class PlumeRenderer {
         Vector3f left = new Vector3f(view.left()).rotate(inv), up = new Vector3f(view.up()).rotate(inv);
         float ox = (float) (o.x - eye.x), oy = (float) (o.y - eye.y), oz = (float) (o.z - eye.z);
         Flame.Sheath sheath = f.sheath();
-        // дымка воздуха до струи — та же, что у света этого факела вдали (FarFlightView): на 0,8 прорисовки без скачка
+        // дымка воздуха до струи гасит её свет, как у света этого факела вдали (FarFlightView: яркость × пропускание, потом
+        // на экран): на 0,8 прорисовки без скачка
         double dist = Math.sqrt(ox * ox + oy * oy + oz * oz);
-        float near = (float) (p.near() * view.air(dist, oy));
+        float near = p.near();
+        double lit = exposure * view.air(dist, oy);
         layout(f, p.z(), cam, left, up, (layer, piece, a, b, c, d) -> {
             for (Vector3f v : new Vector3f[]{a, b, c, d}) v.add(0, p.y(), 0).rotate(rot).add(ox, oy, oz);
             switch (layer) {
                 case SHEATH -> {
-                    float[] c0 = Sight.onScreen(sheath.color()[piece], sheath.luminance()[piece] * exposure, near);
-                    float[] c1 = Sight.onScreen(sheath.color()[piece + 1], sheath.luminance()[piece + 1] * exposure, near);
+                    float[] c0 = Sight.onScreen(sheath.color()[piece], sheath.luminance()[piece] * lit, near);
+                    float[] c1 = Sight.onScreen(sheath.color()[piece + 1], sheath.luminance()[piece + 1] * lit, near);
                     out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c1[0], c1[1], c1[2], (float) f.widthAt(sheath.x()[piece]));
                 }
                 case CORE -> {
-                    float[] c0 = Sight.onScreen(f.coreColor(), f.coreLuminance() * exposure, near);
+                    float[] c0 = Sight.onScreen(f.coreColor(), f.coreLuminance() * lit, near);
                     out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c0[0], c0[1], c0[2], (float) f.width());
                 }
                 default -> {
                     boolean core = layer == CORE_DISC;
-                    float[] c0 = core ? Sight.onScreen(f.coreColor(), f.coreLuminance() * exposure, near) : Sight.onScreen(f.flameColor(), f.flameLuminance() * exposure, near);
+                    float[] c0 = core ? Sight.onScreen(f.coreColor(), f.coreLuminance() * lit, near) : Sight.onScreen(f.flameColor(), f.flameLuminance() * lit, near);
                     double r = new Vector3f(c).sub(a).length() / 2 / Math.sqrt(2) / HALO;
                     out.glowDisc((a.x + c.x) / 2, (a.y + c.y) / 2, (a.z + c.z) / 2, r, c0[0], c0[1], c0[2], (float) r);
                 }
