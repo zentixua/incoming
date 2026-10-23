@@ -112,6 +112,8 @@ public enum GroundMaterial {
         if (s.is(Blocks.GRAVEL)) return GRAVEL;
         if (s.is(BlockTags.BASE_STONE_OVERWORLD)) return STONE;
         if (s.is(BlockTags.DIRT) || s.is(Blocks.GRASS_BLOCK)) return DIRT;
+        // Concrete and tagged masonry are cohesive rock, rather than the earth below the paving.
+        if (s.is(ua.zentix.incoming.registry.ModTags.NUKE_MASONRY)) return STONE;
         return null;
     }
 

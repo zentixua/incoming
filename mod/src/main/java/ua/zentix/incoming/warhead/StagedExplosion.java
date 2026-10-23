@@ -143,7 +143,7 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /** Что делает следующая единица. */
-    private enum Phase { START, RAYS, GAS, DETONATE, SPLIT, DAMAGE, BLOCKS }
+    private enum Phase { START, RAYS, GAS, DETONATE, SPLIT, REMEMBER, DAMAGE, FRONT, BLOCKS }
 
     /** Проверки: лучи ванильным {@code explode()} (как при аппарате рядом) — сравнить выборку своего цикла с ванильной. */
     boolean forceVanilla;
@@ -217,6 +217,12 @@ final class StagedExplosion implements UnitQueue.Job {
     private final Set<BlockPos> chosen = new HashSet<>();
     private List<Entity> entities = List.of();
     private int nextEntity;
+    /** Entity distance at the start of the outward sweep, and glass/backing before any blocks are removed. */
+    private List<Double> bodyRanges = List.of();
+    private long beganAt, frontDueTick;
+    /** UnitQueue polls blocked between units; ready is only checked at the start of its slice. */
+    private LongSupplier frontTime = () -> Long.MAX_VALUE;
+    private final java.util.Map<Entity, BlastBody.Before> bodyBefore = new java.util.IdentityHashMap<>();
     private final Set<ServerPlayer> told = new HashSet<>();
     /** Блоки мира, от центра наружу, и сами блоки на момент лучей. */
     private List<BlockPos> toBlow = List.of();
@@ -309,7 +315,7 @@ final class StagedExplosion implements UnitQueue.Job {
     @Override
     public boolean ready(ServerLevel level) {
         // район удара целиком (он накрывает и этот взрыв): у работ одного удара одно условие — порядок не ломается
-        return area.ready(level);
+        return (phase != Phase.FRONT || level.getGameTime() >= frontDueTick) && area.ready(level);
     }
 
     /** Шёл ванильным {@code explode()}. */
@@ -324,7 +330,7 @@ final class StagedExplosion implements UnitQueue.Job {
 
     /** Ещё выбирает лучами или бьёт сущности (блоки не снимает). */
     boolean picking() {
-        return !done && phase.ordinal() < Phase.BLOCKS.ordinal();
+        return !done && (charge > 0 ? phase.ordinal() <= Phase.REMEMBER.ordinal() : phase.ordinal() < Phase.BLOCKS.ordinal());
     }
 
     /** Ждёт взрывы {@code after} целиком. */
@@ -334,7 +340,8 @@ final class StagedExplosion implements UnitQueue.Job {
 
     @Override
     public boolean blocked() {
-        return waiting() || phase == Phase.BLOCKS && area.peersPicking(this);
+        return waiting() || phase == Phase.FRONT && frontTime.getAsLong() < frontDueTick
+                || (phase == Phase.BLOCKS || phase == Phase.FRONT) && area.peersPicking(this);
     }
 
     @Override
@@ -345,8 +352,8 @@ final class StagedExplosion implements UnitQueue.Job {
     private ImpactCost.Kind kind() {
         return switch (phase) {
             case START, RAYS, GAS -> ImpactCost.Kind.RAYS;
-            case DETONATE, DAMAGE -> ImpactCost.Kind.HITS;
-            case SPLIT, BLOCKS -> ImpactCost.Kind.BLOCKS;
+            case DETONATE, REMEMBER, DAMAGE -> ImpactCost.Kind.HITS;
+            case SPLIT, FRONT, BLOCKS -> ImpactCost.Kind.BLOCKS;
         };
     }
 
@@ -366,7 +373,12 @@ final class StagedExplosion implements UnitQueue.Job {
             case GAS -> more = gas(level);
             case DETONATE -> more = detonate(level);
             case SPLIT -> more = split(level);
-            case DAMAGE -> more = charge > 0 ? chargeDamage(level) : damage(level);
+            case REMEMBER -> more = remember(level);
+            case DAMAGE -> more = damage(level);
+            case FRONT -> {
+                more = front(level);
+                count = blown;
+            }
             default -> {
                 more = portion(level);
                 count = blown;
@@ -558,6 +570,8 @@ final class StagedExplosion implements UnitQueue.Job {
         time(ExplosionStage.START, t);
         if (cancelled) return false;
         waveId = level.random.nextLong();
+        beganAt = level.getGameTime();
+        frontTime = level::getGameTime;
         t = System.nanoTime();
         level.gameEvent(null, GameEvent.EXPLODE, centre);
         time(ExplosionStage.GAME_EVENT, t);
@@ -575,25 +589,20 @@ final class StagedExplosion implements UnitQueue.Job {
         long t = System.nanoTime();
         Explosion e = explosion;
         int end = Math.min(rays(), nextRay + raysPerUnit);
-        // блок, в который снаряд ударил и в котором рвётся заряд, — его сносит контактный взрыв (грунт — воронка):
-        // волна идёт от его граней
-        long contact = BlockPos.containing(centre).asLong();
-        if (nextRay == 0 && Terrain.ready(level, BlockPos.of(contact))) {
-            BlockPos c = BlockPos.of(contact);
-            BlockState s = level.getBlockState(c);
-            BlockResponse response = BlockResponse.of(s);
-            if (!s.isAir() && response.kind() != BlockResponse.Kind.NONE && response.kind() != BlockResponse.Kind.GROUND
-                    && !(s.getBlock() instanceof LiquidBlock) && s.getExplosionResistance(level, c, e) < BLAST_PROOF
-                    && damage.shouldBlockExplode(e, level, c, s, 1f)) chosen.add(c);
-        }
         if (!breachLocated) {
             breachLocated = true;
             breach = SlabBreach.locate(level, centre, charge, placement, axis, e, damage);
+            // The targeting point may be half a block inside the surface. The charge is on the entry face, not inside
+            // half a slab. Air and contact rays must start at the same physical surface.
+            if (breach != null && placement == SlabBreach.Placement.SURFACE) centre = breach.at();
         }
         boolean[] liquid = new boolean[1];
         for (int r = nextRay; r < end; r++) {
             double dx = RAY_X[r], dy = RAY_Y[r], dz = RAY_Z[r];
-            wave(level, e, centre, dx, dy, dz, 0, 1, contact);
+            // Into a contacted solid the contact-breach law applies. Starting an air wave there would bypass the
+            // entire slab thickness (and remove a metre of concrete for a sub-metre Lancet charge).
+            if (placement != SlabBreach.Placement.SURFACE || breach == null || !breach.inward(dx, dy, dz))
+                wave(level, e, centre, dx, dy, dz, 0, 1, Long.MIN_VALUE);
             // пробой: луч внутрь преграды, к которой приложен заряд; дошёл до пустоты — пройденное снесено, волна идёт
             // дальше в пустоту
             if (breach == null || !breach.inward(dx, dy, dz)) continue;
@@ -646,6 +655,7 @@ final class StagedExplosion implements UnitQueue.Job {
             // трава, цветы, посевы, факелы без формы столкновений — без массы на пути волны: сломаны они или нет,
             // волна идёт сквозь, ничего не теряя
             boolean massless = state.getCollisionShape(level, pos).isEmpty();
+            if (!massless && SurfaceBlocks.backed(level, pos, from)) break;
             if (breaks) chosen.add(pos);
             if (massless) continue;
             if (!breaks) break;
@@ -673,6 +683,7 @@ final class StagedExplosion implements UnitQueue.Job {
                 BlockState s = level.getBlockState(p);
                 BlockResponse response = BlockResponse.of(s);
                 if (response.kind() == BlockResponse.Kind.NONE || response.kind() == BlockResponse.Kind.GROUND) continue;
+                if (SurfaceBlocks.backed(level, p, centre)) continue;
                 if (s.getExplosionResistance(level, p, e) >= BLAST_PROOF || !damage.shouldBlockExplode(e, level, p, s, 1f)) continue;
                 if (response.breaksAt(psi, impulse, Mth.murmurHash3Mixer(Long.hashCode(p.asLong())))) chosen.add(p);
             }
@@ -773,7 +784,7 @@ final class StagedExplosion implements UnitQueue.Job {
 
             @Override
             public boolean wind(ServerLevel level, LivingEntity e) {
-                return Explosion.getSeenPercent(centre, e) > 0;
+                return Explosion.getSeenPercent(airOrigin(), e) > 0;
             }
 
             @Override
@@ -794,35 +805,91 @@ final class StagedExplosion implements UnitQueue.Job {
         return wave;
     }
 
+    /** A point just outside the contacted face; vanilla clipping treats a start exactly on a solid face as inside. */
+    private Vec3 airOrigin() {
+        return breach != null && breach.open() != null ? centre.add(breach.open().scale(1e-5)) : centre;
+    }
+
     /**
-     * Урон по {@link #ENTITIES_PER_UNIT} сущностей волной заряда: живые — {@link BlastBody} (лёгкие, бросок напором за
-     * положительную фазу, удар о стену, осколки окна; в помещении — давление газов), остальное (предметы, рамки,
-     * вагонетки) разбивает там, где волна ломает лёгкие деревянные постройки ({@code nuke_light}, 4 psi), если оно открыто
-     * взрыву. Тела, к которым путь из центра идёт через неготовый чанк, не трогаются (луч видимости грузил бы его).
+     * Outward front: remove only blocks reached before the next body. A wall behind a nearer body still exists when
+     * it is hit; a breached plate in front of a further body is already an opening. Within a block the failure is
+     * instantaneous (voxel approximation); scheduling may take several ticks but cannot reverse that causal order.
      */
-    private boolean chargeDamage(ServerLevel level) {
+    private boolean front(ServerLevel level) {
         long t = System.nanoTime();
+        LongSupplier watch = clock != null ? clock : WorkScheduler.impactClock(level.getServer()).sampler();
+        long start = watch.getAsLong();
+        int bodies = 0;
+        blown = 0;
+        while (next < toBlow.size() || nextEntity < entities.size()) {
+            double body = nextEntity < bodyRanges.size() ? bodyRanges.get(nextEntity) : Double.POSITIVE_INFINITY;
+            double block = next < toBlow.size() ? new AABB(toBlow.get(next)).distanceToSqr(centre) : Double.POSITIVE_INFINITY;
+            frontDueTick = beganAt + (long) Math.ceil(20 * BlastModel.chemicalArrivalSeconds(Math.sqrt(Math.min(body, block)), charge, true));
+            if (level.getGameTime() < frontDueTick) break;
+            if (block <= body && next < toBlow.size()) {
+                int i = next++;
+                BlockPos p = toBlow.get(i);
+                if (Terrain.ready(level, p)) {
+                    BlockState state = level.getBlockState(p);
+                    if (state.is(blocksAtRays.get(i)) && explosion.interactsWithBlocks()) {
+                        PoiRecords.recordWithNeighbours(level, p, state);
+                        long since = System.nanoTime();
+                        state.onExplosionHit(level, p, explosion, this::addOrAppend);
+                        long took = System.nanoTime() - since;
+                        if (took > SLOW_BLOCK_NANOS) area.slowBlock(level, state, p, took);
+                        blown++;
+                    }
+                }
+            } else {
+                // Reuse the charge damage implementation for exactly this body, without its final phase transition.
+                hitBody(level, entities.get(nextEntity++));
+                if (++bodies >= ENTITIES_PER_UNIT) break;
+            }
+            if (watch.getAsLong() - start >= portionNanos) break;
+        }
+        if (blown > 0) {
+            portions++;
+            largestPortion = Math.max(largestPortion, blown);
+        }
+        time(ExplosionStage.DAMAGE, t);
+        if (next < toBlow.size() || nextEntity < entities.size()) return true;
+        entities = List.of();
+        bodyBefore.clear();
+        crafts(level);
+        return false;
+    }
+
+    private void hitBody(ServerLevel level, Entity entity) {
         Explosion e = explosion;
-        int end = Math.min(entities.size(), nextEntity + ENTITIES_PER_UNIT);
-        if (lightReach < 0) lightReach = reachFor(LIGHT_PSI, charge);
-        for (int i = nextEntity; i < end; i++) {
-            Entity entity = entities.get(i);
-            if (!entity.isAlive() || entity.level() != level || entity == direct || entity.ignoreExplosion(e)) continue;
-            if (!Terrain.readyAlong(level, centre, entity.position())) continue;
-            if (entity instanceof LivingEntity living) {
-                if (living.isSpectator() || living.isPassenger()) continue;
-                BlastBody.hit(level, wave(), living, direct, owner, null);
-            } else if (entity.distanceToSqr(centre) <= lightReach * lightReach && Explosion.getSeenPercent(centre, entity) > 0) {
+        if (!entity.isAlive() || entity.level() != level || entity == direct || entity.ignoreExplosion(e)
+                || !Terrain.readyAlong(level, centre, entity.position())) return;
+        if (entity instanceof LivingEntity living) {
+            BlastBody.Before before = bodyBefore.remove(entity);
+            if (before != null) before = before.drifted(entity.position());
+            if (!living.isSpectator() && !living.isPassenger()) BlastBody.hit(level, wave(), living, direct, owner, before);
+        } else {
+            if (lightReach < 0) lightReach = reachFor(LIGHT_PSI, charge);
+            if (entity.distanceToSqr(centre) <= lightReach * lightReach && Explosion.getSeenPercent(airOrigin(), entity) > 0)
                 entity.hurt(source, BREAKS_ANYTHING);
+        }
+    }
+
+    /** Snapshot bodies under the same per-unit budget as damage, before any front blocks disappear. */
+    private boolean remember(ServerLevel level) {
+        int remembered = 0;
+        while (nextEntity < entities.size() && remembered < ENTITIES_PER_UNIT) {
+            Entity entity = entities.get(nextEntity++);
+            if (entity instanceof LivingEntity living) {
+                remembered++;
+                if (entity.level() == level && Terrain.readyAlong(level, centre, entity.position()))
+                    bodyBefore.put(entity, BlastBody.before(level, wave(), living));
             }
         }
-        nextEntity = end;
-        time(ExplosionStage.DAMAGE, t);
-        if (nextEntity < entities.size()) return true;
-        entities = List.of();
-        crafts(level);
-        phase = Phase.BLOCKS;
-        return !toBlow.isEmpty();
+        if (nextEntity == entities.size()) {
+            nextEntity = 0;
+            phase = Phase.FRONT;
+        }
+        return true;
     }
 
     /** Докуда волна ломает лёгкие постройки, блоков (−1 — ещё не считали). */
@@ -1027,7 +1094,7 @@ final class StagedExplosion implements UnitQueue.Job {
         List<Target> world = new ArrayList<>(picked.size());
         for (BlockPos p : picked) {
             BlockState s = level.getBlockState(p);
-            if (fire || !s.isAir()) world.add(new Target(p.distToCenterSqr(at), p, s.getBlock()));
+            if (fire || !s.isAir()) world.add(new Target(charge > 0 ? new AABB(p).distanceToSqr(centre) : p.distToCenterSqr(at), p, s.getBlock()));
         }
         picked = List.of();
         time(ExplosionStage.SPLIT, t);
@@ -1043,6 +1110,13 @@ final class StagedExplosion implements UnitQueue.Job {
         blocksAtRays = seen;
         time(ExplosionStage.SNAPSHOT, t);
         phase = vanillaDamage ? Phase.BLOCKS : Phase.DAMAGE;
+        if (charge > 0) {
+            entities.sort(Comparator.comparingDouble(a -> a.getBoundingBox().distanceToSqr(centre)));
+            bodyRanges = entities.stream().map(a -> a.getBoundingBox().distanceToSqr(centre)).toList();
+            phase = Phase.REMEMBER;
+            // Even with an empty world/body list, FRONT must run the separate Sable craft blast.
+            return true;
+        }
         return phase == Phase.DAMAGE || !toBlow.isEmpty();
     }
 

@@ -14,6 +14,8 @@ import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.registry.ModBlocks;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.warhead.GroundMaterial;
+import ua.zentix.incoming.warhead.SurfaceBlocks;
+import ua.zentix.incoming.warhead.SurfaceDamage;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -33,6 +35,8 @@ public final class CraterJob {
     private static final int LOOKAHEAD = 4;
     /** Сколько блоков вниз искать природный грунт под постройками. */
     private static final int MAX_DEPTH = 96;
+    /** Same vanilla blast-proof boundary as the charge/breach rays (obsidian). */
+    private static final float BLAST_PROOF = 1200;
 
     private final Detonation d;
     private final BlockPos gz;
@@ -175,12 +179,24 @@ public final class CraterJob {
         // высоты — как у карты высот: первый воздух над блоком
         int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         int ground = naturalSurface(level, x, z, top);
+        if (mode == Mode.DIG) ground = SurfaceBlocks.excavationTop(level, x, z, ground, top, centre.y);
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, 0, z);
         // итоговая поверхность = природный грунт + вал − чаша (у кромки они перекрываются)
         double relief = lift - depth;
         if (mode == Mode.DIG) {
-            double whole = Math.floor(relief);
-            relief = whole + (random.nextDouble() < relief - whole ? 1 : 0);
+            BlockState surface = level.getBlockState(m.setY(ground - 1));
+            if (surface.getBlock().defaultDestroyTime() < 0 || surface.getBlock().getExplosionResistance() >= BLAST_PROOF) return;
+            if (relief < 0 && SurfaceBlocks.cohesive(surface)) {
+                // Cohesive material cannot lose a metre of collision shape for a 0.2 m excavation. Remove only full
+                // metres; retain and mark the fractional last block. Loose soil keeps the unbiased grain sampling.
+                double dug = -relief, full = Math.floor(dug);
+                BlockPos bottom = new BlockPos(x, ground - (int) full - 1, z);
+                if (dug > full) SurfaceDamage.mark(level, bottom, level.getBlockState(bottom), dug - full);
+                relief = -full;
+            } else {
+                double whole = Math.floor(relief);
+                relief = whole + (random.nextDouble() < relief - whole ? 1 : 0);
+            }
         }
         if (relief < 0) {
             // в чаше снято всё: и постройки над грунтом, и грунт до профиля; под водой яма заполняется водой
@@ -190,6 +206,7 @@ public final class CraterJob {
             for (int y = mode == Mode.VAPORIZE ? top - 1 : ground - 1; y >= floor; y--) {
                 BlockState s = level.getBlockState(m.setY(y));
                 if (y >= ground && !s.getFluidState().isEmpty()) continue; // сама вода над дном остаётся
+                if (mode == Mode.DIG && (s.getBlock().defaultDestroyTime() < 0 || s.getBlock().getExplosionResistance() >= BLAST_PROOF)) break;
                 if (!s.isAir() && s.getBlock().defaultDestroyTime() >= 0) ColumnScar.replace(level, m, s, y < ground ? fill : Blocks.AIR.defaultBlockState());
             }
             BlockState bottom = level.getBlockState(m.setY(floor - 1));
@@ -215,6 +232,7 @@ public final class CraterJob {
         }
         return top;
     }
+
 
     public void release(ServerLevel level) {
         if (soil == null) NuclearTickets.hold(level, new ChunkPos(gz), false);

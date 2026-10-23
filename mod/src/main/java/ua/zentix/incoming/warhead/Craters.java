@@ -47,6 +47,7 @@ final class Craters {
         if (!Terrain.neighbourhoodReady(level, cx >> 4, cz >> 4)) return 0;
         int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cx, cz);
         int ground = CraterJob.naturalSurface(level, cx, cz, top);
+        ground = SurfaceBlocks.excavationTop(level, cx, cz, ground, top, pos.y);
         if (Math.abs(pos.y - ground) > depth + 1) return 0;
         double outer = 2 * rc + 1;
         CraterJob.Profile profile = new CraterJob.Profile() {

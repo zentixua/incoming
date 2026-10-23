@@ -9,6 +9,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlastModelTest {
     @Test
+    void chemicalFrontArrivalIsCausalAndConverged() {
+        for (double charge : new double[]{3, 6.4, 50, 150, 2423}) {
+            double previous = 0;
+            for (double r : new double[]{0.1, 1, 3, 10, 30, 100, 300}) {
+                double actual = BlastModel.chemicalArrivalSeconds(r, charge, true);
+                assertTrue(actual > previous && actual < r / BlastModel.SOUND_SPEED);
+                double reference = 0, dr = r / 16384;
+                for (int i = 0; i < 16384; i++) reference += dr / BlastModel.frontSpeed(BlastModel.surfaceOverpressureKpa((i + 0.5) * dr, charge));
+                // Much tighter than the server's 50 ms tick; no zero-time body hits in front of the wave.
+                assertEquals(reference, actual, Math.max(1e-6, reference * 0.002));
+                previous = actual;
+            }
+        }
+    }
+
+    @Test
     void frontSlowsToSoundSpeed() {
         assertEquals(343, BlastModel.frontSpeed(0), 1e-9);
         assertEquals(343, BlastModel.frontSpeed(BlastModel.kpa(1e-4)), 0.01);

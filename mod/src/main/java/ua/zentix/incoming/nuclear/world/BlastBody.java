@@ -192,6 +192,11 @@ public final class BlastBody {
         return new Before(e.position(), wallBehind(level, d.burst(), e), windowAhead(level, d.burst(), e), 0);
     }
 
+    /** Conventional charge: remember glass and reflection before its outward sweep removes nearer blocks. */
+    public static Before before(ServerLevel level, Wave wave, LivingEntity e) {
+        return new Before(e.position(), wallBehind(level, wave.centre(), e), windowAhead(level, wave.centre(), e), 0);
+    }
+
     private static boolean wallBehind(ServerLevel level, Vec3 centre, LivingEntity e) {
         return march(level, mid(e), away(centre, e), e.getBbWidth() * 0.5 + 0.5, BlastBody::solid) >= 0;
     }
