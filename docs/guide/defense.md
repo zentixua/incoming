@@ -51,7 +51,7 @@ and a half blocks tall. An interceptor leaves its canister straight up, then tur
 ![A SAM shooting down incoming Shaheds; the radar screen in the corner](img/sam.webp)
 
 - Its radar reaches 3 km and it fires from 1.5 km, one interceptor per target. These are game ranges, much shorter
-  than a real system's, so that the fight happens within sight (not physics). Harder-to-detect targets are seen closer:
+  than a real system's, so that the fight happens within sight (not physical). Harder-to-detect targets are seen closer:
   a cruise missile from 2.1 km, a Lancet from 1.5 km, the B-2 only from 450 blocks.
 - The radar sees only what is in line of sight. A hill or a building between the SAM and the target hides it: a cruise
   missile flying low behind a hill is not seen until it comes out. Ground in chunks the server has not loaded hides

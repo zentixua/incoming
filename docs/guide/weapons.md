@@ -93,8 +93,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 
 Known limits: the injury thresholds are those for long nuclear pulses, so near a small charge they slightly overstate
 harm. Fragments fly in straight lines (gravity bends a dangerous fragment's path by less than a metre), do not
-ricochet and pass through Create Aeronautics aircraft. A real fragment leaves a pit of a few centimetres; a block
-has no marks that small, so a chipped block shows the hit by turning cracked as a whole.
+ricochet and pass through Create Aeronautics aircraft. A chipped block turns cracked as a whole, while a real
+fragment leaves a pit of a few centimetres (not physical).
 
 ## How they fly
 
@@ -180,7 +180,7 @@ detects the B-2 very late. Can carry a nuclear warhead.
 **How deep it goes.** The bomb hits the ground with the speed and angle its fall gives it and keeps going in a straight
 line. How far depends on that speed, on the bomb (13.6 t, 0.8 m across, a pointed nose) and on what it goes through:
 Young's penetration equations (Sandia, 1997), layer by layer. With game flight speeds the B-2 flies 170 blocks up
-instead of about 12 km (not by physics, so you can see it). The bomb leaves it at the bomber's 240 m/s and falls with
+instead of about 12 km (not physical, so you can see it). The bomb leaves it at the bomber's 240 m/s and falls with
 gravity and drag, so it hits at about 235 m/s instead of about 510 m/s. With `scale.flight_speed` 1 the B-2 flies at
 12 km and the bomb hits at about 510 m/s. So it goes through:
 
