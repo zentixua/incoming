@@ -27,7 +27,8 @@
 //  15 = (наружный край короны по радиусу; её полувысота; подъём струй стенки — верх столба, блоки; плитка клубов
 //        столба, блоки)
 //  16 = (доля перепада температуры ядра у края шапки: у шара 1, у кольца MushroomModel.EDGE_HEAT; размах клубов края
-//        против кольца: у шара — гладкая сфера; 0; 0)
+//        против кольца: у шара — гладкая сфера; место кадра узора поверхности шара — от −1 (узора нет) к 0 и номер
+//        кадра с долей; доля узора против языков клубов — 1 − доля кольца, 0 — узор не прочитан; MushroomField.ballSurface)
 //  17 = (плитка карты тени в плоскости поперёк солнца — начало u, v и стороны от эпицентра, блоки; сторона 0 — тени нет;
 //        MUSH_SHADOW_RECT)
 //  18 = (верх мира над землёй под эпицентром — верхний слой карты тени; 0; 0; 0; MUSH_SHADOW_TOP)
@@ -53,7 +54,8 @@ const float MUSH_COLUMN_EDGE = 0.15;
 // четверть его)
 const float MUSH_BLEND = 0.25;
 // языки клубов на краю шапки (MushroomModel.SKIN): нагрев края ± эта доля его же на размах клубов — выступ клуба —
-// свежий горячий газ изнутри, ложбина — уже смешанный; у шара — его «кипение»
+// свежий горячий газ изнутри, ложбина — уже смешанный; у шара — запечённый узор (mushBallPattern в fx_pall), языки —
+// его доля, пока шар сворачивается
 const float MUSH_SKIN = 0.09 / 0.35;
 // большой радиус кольца шапки — эта доля её радиуса, когда шар свернулся (MushroomModel.RING): доля кольца — по нему
 const float MUSH_RING = 0.55;
@@ -126,6 +128,8 @@ struct Mush {
     float colTile;
     float edge;
     float billows;
+    float ballFrame;
+    float ballShare;
 };
 
 Mush mushLoad(sampler2D data, int k) {
@@ -138,7 +142,7 @@ Mush mushLoad(sampler2D data, int k) {
     return Mush(t0.xzy, t1.xy, t1.z, t1.w, t2.x, t2.y, t2.z, t2.w, t3.x, t3.y, t3.z, t3.w, t4.x, t4.y, t4.z, t4.w,
             texelFetch(data, ivec2(5, k), 0), t6.x, t6.y, t6.z, t6.w, texelFetch(data, ivec2(7, k), 0), t8.x, t8.y, t8.z, t8.w,
             texelFetch(data, ivec2(9, k), 0), t10.x, t10.y, t10.z, t10.w, t11.x, t11.y, t11.z, t12.rgb, t12.w,
-            t13.x, t13.y, t13.z, t13.w, texelFetch(data, ivec2(14, k), 0), t15.x, t15.y, t15.z, t15.w, t16.x, t16.y);
+            t13.x, t13.y, t13.z, t13.w, texelFetch(data, ivec2(14, k), 0), t15.x, t15.y, t15.z, t15.w, t16.x, t16.y, t16.z, t16.w);
 }
 
 // есть ли гриб k в кадре
@@ -404,6 +408,26 @@ vec2 mushLine(Mush m, vec3 o, vec3 dir) {
 vec2 mushSpan(Mush m, vec3 dir) {
     vec2 t = mushLine(m, vec3(0.0), dir);
     return vec2(max(t.x, 0.0), t.y);
+}
+
+// Октаэдрическая карта направления (x, y, z; y — вверх) — u и v 0..1 (NukeBallSurface.octU/octV, pack.py: octa_decode):
+// верхняя полусфера — ромб в середине карты, нижняя — его углы
+float mushOctU(float x, float y, float z) {
+    float s = abs(x) + abs(y) + abs(z);
+    if (y < 0.0) return 0.5 * ((1.0 - abs(z / s)) * sign(x) + 1.0);
+    return 0.5 * (x / s + 1.0);
+}
+
+float mushOctV(float x, float y, float z) {
+    float s = abs(x) + abs(y) + abs(z);
+    if (y < 0.0) return 0.5 * ((1.0 - abs(x / s)) * sign(z) + 1.0);
+    return 0.5 * (z / s + 1.0);
+}
+
+// Насколько виден узор поверхности шара при месте кадра f (MushroomField.ballSurface): до минимума яркости (f = −1) —
+// нет, поверхность — гладкий фронт; до отрыва (f = 0) проступает сквозь проясняющийся фронт (FireballModel.unmasked)
+float mushBallContrast(float f) {
+    return clamp(f + 1.0, 0.0, 1.0);
 }
 
 // место температуры в строке света чёрного тела (0..1)

@@ -1,5 +1,5 @@
 # /// script
-# dependencies = ["numpy", "Pillow", "opencv-python-headless"]
+# dependencies = ["numpy", "Pillow", "opencv-python-headless", "scipy"]
 # ///
 """Кадры запекания (tools/bake_fx/bake.py) → текстуры слоя эффектов (mod/src/main/resources/assets/incoming/textures/fx/particle).
 
@@ -24,6 +24,18 @@
 шести сторонам (на непрозрачность, весом непрозрачности): к ним шейдер приводит карты (белая стена — 1); на листе — степень
 1/2,2 (шейдер складывает свет в линейном). Кадр — по краю вещества
 (непрозрачность 0,05) с запасом 4 %: квадрат клуба в моде — этот край (SmokePuffs.edge).
+
+Поверхность огненного шара ядерки — nukeball.bin рядом с листом (textures/fx; читает client/nuclear/NukeBallSurface):
+у каждого кадра запекания — карта по направлениям от центра шара (октаэдрическая, {BALL_N}², ось y — вверх), в
+текселе — узор p: во сколько раз перепад температуры поверхности здесь больше среднего. Поверхность — то, что
+видно, глядя на шар по радиусу снаружи: свечение газа шара по Кирхгофу вдоль луча к центру (ослабление ∝ доле газа,
+{BALL_TAU} толщ на радиус чистого газа — ⚠ оценка: горячий воздух непрозрачен, G&D 2.117), яркость по Вину на 555 нм,
+обратно в температуру. Температура газа — смешение: T = T_возд + c·ΔT, ΔT — у мода у 15 кт в этот миг
+(FireballModel.temperature; миг — по пути всплытия кадра, CloudModel у 15 кт). Узор кадра нормирован по
+Стефану–Больцману: среднее p⁴ по сфере — 1, шар светит мощностью модели (яркость и цвет — по-прежнему её чёрное тело;
+воздух против шара не в счёте: T_возд⁴ против T⁴ — до ~1 % к концу сворачивания).
+Формат (little-endian): int32 N, int32 кадров, float32 путь всплытия кадра в радиусах шара × кадров, uint16 p/{BALL_P}·65535
+× кадров × N × N (строка — v, в строке — u).
 """
 import json
 import math
@@ -200,6 +212,118 @@ def puff(src, out, prefix="puff6", like=None):
     print("puff frames", picks, "norm", round(norm, 3), "front", round(front, 3), "diffuse", round(diffuse, 3), "growth", growth)
 
 
+BALL_N = 128
+BALL_TAU = 10.0
+BALL_P = 2.0
+# 15 кт в воздухе (мод): радиус шара, второй максимум, подъём центра (CloudModel: (9840 − 1,3·R)·(1 − e^(−t/121)) м)
+BALL_R_M = 70.0 * 15 ** 0.4
+BALL_TMAX = 0.032 * 15 ** 0.5
+BALL_RISE_M, BALL_RISE_TAU = 9840 - 1.3 * BALL_R_M, 121.0
+T_AIR, T_PEAK, COOLING = 288.0, 7700.0, 0.35
+
+
+def octa_dirs(n):
+    """Направления текселей октаэдрической карты n×n (середины), ось y — вверх; и телесный угол текселя."""
+    u = (np.arange(n) + 0.5) / n * 2 - 1
+    px, pz = np.meshgrid(u, u)
+    return octa_decode(px, pz), octa_area(n)
+
+
+def octa_decode(px, pz):
+    y = 1 - np.abs(px) - np.abs(pz)
+    x, z = px.copy(), pz.copy()
+    low = y < 0
+    x[low] = (1 - np.abs(pz[low])) * np.sign(px[low])
+    z[low] = (1 - np.abs(px[low])) * np.sign(pz[low])
+    v = np.stack([x, y, z], -1)
+    return v / np.linalg.norm(v, axis=-1, keepdims=True)
+
+
+def octa_area(n):
+    """Телесный угол текселя: площадь сферического четырёхугольника по углам (два треугольника, Ван Остерома)."""
+    e = np.linspace(-1, 1, n + 1)
+    ex, ez = np.meshgrid(e, e)
+    c = octa_decode(ex, ez)
+
+    def tri(a, b, d):
+        num = np.abs(np.einsum("...i,...i", a, np.cross(b, d)))
+        den = 1 + np.einsum("...i,...i", a, b) + np.einsum("...i,...i", b, d) + np.einsum("...i,...i", d, a)
+        return 2 * np.arctan2(num, den)
+    a, b, cc, d = c[:-1, :-1], c[:-1, 1:], c[1:, 1:], c[1:, :-1]
+    return tri(a, b, cc) + tri(a, cc, d)
+
+
+def ball_temperature(rise):
+    """Видимая температура шара 15 кт, K, когда его центр поднялся на rise радиусов после второго максимума
+    (FireballModel.surfaceRise, CloudModel)."""
+    done = BALL_RISE_M * (1 - math.exp(-BALL_TMAX / BALL_RISE_TAU)) + rise * BALL_R_M
+    t = max(-BALL_RISE_TAU * math.log(max(1 - done / BALL_RISE_M, 1e-9)), BALL_TMAX)
+    return T_AIR + (T_PEAK - T_AIR) * (t / BALL_TMAX) ** -COOLING
+
+
+def nukeball(src, dest, preview=None):
+    from scipy import ndimage
+    meta = json.load(open(os.path.join(src, "meta.json")))
+    r = meta["radius"]
+    dirs, area = octa_dirs(BALL_N)
+    flat = dirs.reshape(-1, 3)
+    maps, rises = [], []
+    # доля газа — в долях её средней в середине шара первого кадра: сетка шума Mantaflow (noise) масштабирует плотность
+    # по-своему (у шара — до ×2), а ослабление и температура считаются от доли чистого газа шара
+    first = meta["picks"][0]
+    c0 = np.load(os.path.join(src, f"c_{first['frame']:04d}.npy")).astype(np.float64)
+    near = np.sqrt(((np.indices(c0.shape) - np.array(first["centre"])[:, None, None, None]) ** 2).sum(0)) * first["voxel_m"] < 0.6 * r
+    unit = float(c0[near].mean())
+    for pick in meta["picks"]:
+        c = np.load(os.path.join(src, f"c_{pick['frame']:04d}.npy")).astype(np.float32) / unit
+        # лесенка шара по клеткам сетки дала бы на карте кольца по широте: подробностей мельче клетки у счёта нет
+        c = ndimage.gaussian_filter(np.clip(c, 0, None), 1.0)
+        vox = pick["voxel_m"]
+        # оси Blender x, y, z (z — вверх) → у мода x, z, y
+        centre = np.array(pick["centre"], np.float64)
+        dt = ball_temperature(pick["rise_radii"]) - T_AIR
+        reach = 3 * r / vox
+        step = 0.5
+        n_steps = int(reach / step)
+        lum = np.zeros(len(flat))
+        tau = np.zeros(len(flat))
+        kappa = BALL_TAU / (r / vox)
+        for i in range(n_steps):
+            d = reach - (i + 0.5) * step
+            pos = centre[None, :] + np.stack([flat[:, 0], flat[:, 2], flat[:, 1]], -1) * d
+            cs = ndimage.map_coordinates(c, pos.T, order=1, mode="constant", cval=0.0)
+            k = kappa * cs * step
+            temp = T_AIR + cs * dt
+            wien = np.exp(-C2 / (LAMBDA * temp))
+            lum += np.exp(-tau) * (1 - np.exp(-k)) * wien
+            tau += k
+        tb = C2 / (LAMBDA * -np.log(np.clip(lum, 1e-300, None)))
+        p = np.clip((tb - T_AIR) / dt, 0, None).reshape(BALL_N, BALL_N)
+        p /= (np.sum(area * p ** 4) / np.sum(area)) ** 0.25
+        maps.append(p)
+        rises.append(pick["rise_radii"])
+    maps = np.array(maps)
+    assert maps.max() < BALL_P, f"узор выше {BALL_P}: {maps.max()}"
+    import struct
+    path = os.path.join(dest, "nukeball.bin")
+    with open(path, "wb") as f:
+        f.write(struct.pack("<ii", BALL_N, len(maps)))
+        f.write(np.array(rises, "<f4").tobytes())
+        f.write(np.clip(np.round(maps / BALL_P * 65535), 0, 65535).astype("<u2").tobytes())
+    w = area / area.sum()
+    for k in (0, len(maps) // 4, len(maps) // 2, len(maps) - 1):
+        m = maps[k]
+        mean = float(np.sum(w * m))
+        print(f"nukeball frame {k}: rise {rises[k]:.2f} R, p mean {mean:.3f}, std {float(np.sqrt(np.sum(w * (m - mean) ** 2))):.3f}, "
+              f"min {m.min():.2f}, max {m.max():.2f}")
+    print("nukeball", path, os.path.getsize(path), "bytes")
+    if preview:
+        os.makedirs(preview, exist_ok=True)
+        for k in range(0, len(maps), max(1, len(maps) // 16)):
+            save_rgba(np.repeat(np.clip(maps[k] / 1.6, 0, 1)[..., None], 3, -1), np.ones((BALL_N, BALL_N)),
+                      os.path.join(preview, f"map_{k:02d}.png"))
+
+
 if __name__ == "__main__":
     bake = sys.argv[1]
     dest = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "../../mod/src/main/resources/assets/incoming/textures/fx/particle")
@@ -207,5 +331,7 @@ if __name__ == "__main__":
         fireball(os.path.join(bake, "fireball"), dest)
     if os.path.isdir(os.path.join(bake, "puff")):
         puff(os.path.join(bake, "puff"), dest)
+    if os.path.isdir(os.path.join(bake, "nukeball")):
+        nukeball(os.path.join(bake, "nukeball"), os.path.join(dest, ".."), os.environ.get("NUKEBALL_PREVIEW"))
     if os.path.isdir(os.path.join(bake, "spray")):
         puff(os.path.join(bake, "spray"), dest, "spray6", json.load(open(os.path.join(dest, "puff6.json"))))
