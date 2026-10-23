@@ -41,6 +41,8 @@ public final class FarRenderer {
      */
     public static void collect(FarView view, FxQuads out, FxLights lights, SourceProbes probes) {
         SPRITES.begin(view, out, probes);
+        // бюджет клубов трубок дыма — общий у следов снарядов и шлейфов пожаров
+        FarFlightView.budget();
         // облака (взрывов, старта, пожаров) — запечёнными клубами, вблизи и вдали
         SmokePuffs.collect(view, SPRITES);
         if (!FarBlasts.isEmpty() || !FarFlightView.isEmpty()) {

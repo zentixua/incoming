@@ -176,6 +176,40 @@ class CloudModelTest {
         assertEquals(BlackBody.luminance(CloudModel.FUEL_BALL_K), late[3], 1e-9, "после вспышки — шар топлива");
     }
 
+    /**
+     * Ножка — сплошная трубка пыли от слоя у земли до низа облака (куски стыкуются конец в начало), и несёт ровно ту пыль, что
+     * подсос забрал из слоя волны и ещё не донёс до облака (прежде — клубы через 2σ, кадры F5: бусы).
+     */
+    @Test
+    void stemIsOneTubeWithItsDust() {
+        CloudModel m = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), air(Stability.D, 3, 0, 0.5));
+        for (double t : new double[]{10, 20, 40}) {
+            List<double[]> pieces = new ArrayList<>();
+            m.blobs(t, new CloudModel.Blobs() {
+                @Override
+                public void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, double kelvin, double rise) {}
+
+                @Override
+                public void tube(double ax, double ay, double az, double sa, double dustA, double bx, double by, double bz, double sb, double dustB,
+                                 double kelvin, double rise) {
+                    pieces.add(new double[]{ax, ay, az, bx, by, bz, dustA, dustB});
+                }
+            });
+            assertEquals(CloudModel.STEM_PIECES, pieces.size(), "ножка через " + t + " с");
+            double foot = pieces.get(0)[1] + m.hob;
+            assertTrue(foot > 0 && foot <= Math.max(0.35 * m.sigmaH(t), 1) + 1e-9, "низ ножки — на её σ над землёй: " + foot);
+            double dust = 0;
+            for (int i = 0; i < pieces.size(); i++) {
+                double[] p = pieces.get(i);
+                if (i > 0) for (int a = 0; a < 3; a++) assertEquals(pieces.get(i - 1)[3 + a], p[a], 1e-9, "кусок " + i + " — с конца прошлого");
+                double len = Math.sqrt(Math.pow(p[3] - p[0], 2) + Math.pow(p[4] - p[1], 2) + Math.pow(p[5] - p[2], 2));
+                dust += 0.5 * (p[6] + p[7]) * len;
+            }
+            double stem = (m.ground.drawn(t) - m.ground.drawn(m.stemEntered(t))) * m.fade(t);
+            assertEquals(stem, dust, 1e-9 * Math.max(1, stem), "пыль ножки через " + t + " с");
+        }
+    }
+
     /** Ветер сносит облако по ходу и сильнее на высоте; облако конденсации — только во влажном воздухе. */
     @Test
     void windAndHumidity() {
