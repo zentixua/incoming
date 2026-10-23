@@ -15,12 +15,15 @@ class FrontLitterTest {
      */
     @Test
     void tearRingGrowsWithTheCharge() {
-        double drone = FrontLitter.tearRange(ChemicalFront.of(30, true, 2500), 3, 0);
-        double missile = FrontLitter.tearRange(ChemicalFront.of(450, true, 2500), 6, 0);
-        assertTrue(drone > 15 && drone < 80, "шахед: " + drone);
-        assertTrue(missile > drone && missile < 200, "ракета: " + missile);
+        double drone = FrontLitter.tearRange(ChemicalFront.of(BlastSource.of(ua.zentix.incoming.strike.WeaponType.DRONE, false).chargeKg(), true, 2500), 3, 0);
+        double missile = FrontLitter.tearRange(ChemicalFront.of(BlastSource.of(ua.zentix.incoming.strike.WeaponType.MISSILE, false).chargeKg(), true, 2500), 6, 0);
+        double lancet = FrontLitter.tearRange(ChemicalFront.of(BlastSource.of(ua.zentix.incoming.strike.WeaponType.LOITER, false).chargeKg(), true, 2500), 1, 0);
+        assertTrue(lancet > 15 && lancet < 28, "Ланцет: " + lancet);
+        // руководство: шахед — около 50 блоков, ракета — 85, «Ланцет» — 20
+        assertTrue(drone > 40 && drone < 65, "шахед: " + drone);
+        assertTrue(missile > 75 && missile < 95, "ракета: " + missile);
         assertEquals(0, FrontLitter.tearRange(ChemicalFront.of(20, false, 2500), 2, 150), 1e-9, "разрыв в 150 м");
-        ChemicalFront f = ChemicalFront.of(30, true, 2500);
+        ChemicalFront f = ChemicalFront.of(BlastSource.of(ua.zentix.incoming.strike.WeaponType.DRONE, false).chargeKg(), true, 2500);
         assertTrue(BlastLitter.tearsCover(f.kpa(drone), 1) && !BlastLitter.tearsCover(f.kpa(drone + 1), 1));
     }
 

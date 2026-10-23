@@ -314,6 +314,12 @@ shimmers. The shimmer is shown as large as your eye would see it: about a pixel 
 screen, so it shows on edges behind them, and less in a rocket's exhaust, whose fast gas blurs; through binoculars it
 is the true angle.
 
+The shock front itself is seen the way it is on film. The compressed air behind it bends light, so a thin ring of
+shimmer runs out from the fireball over the sky and the ground: a few pixels for a fraction of a second, fading as the
+pressure drops. On grass and under trees the front tears off grass, turf and leaves as it arrives and throws them
+outward, so a ring of flying bits races out at the speed of the front: a Shahed tears them within about 50 blocks, a
+cruise missile within about 85, a Lancet within about 20. Bare soil, sand and snow give dust instead.
+
 In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
 night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
 see. Sparks, clods of earth, the dust and sparks of fragment hits, flames and, where fuel was left in the tank, burning
