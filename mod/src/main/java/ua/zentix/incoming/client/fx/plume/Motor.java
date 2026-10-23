@@ -77,6 +77,16 @@ public record Motor(String name, int nozzles, double exhaust, double fuel, doubl
         return fuel * water;
     }
 
+    /**
+     * Тот же двигатель на доле share расхода полки — РДТТ на спаде тяги ({@code strike.ThrustCurve}): сопло в критике,
+     * расход ∝ давлению в камере; температура в камере и скорость истечения те же (⚠ при падении давления сопло
+     * перерасширено, и истечение немного падает), срез тот же — давление на нём и в камере падает с расходом.
+     */
+    public Motor throttled(double share) {
+        return new Motor(name, nozzles, exhaust * share, fuel * share, velocity, temperature, gamma, molarMass, exitRadius, smoke, smokeIndex,
+                monoxide, hydrogen, water, heat, efficiency);
+    }
+
     /** Тепло, которое двигатель оставляет в воздухе за секунду, Вт. */
     public double heatFlow() {
         return fuel * heat * (1 - efficiency);

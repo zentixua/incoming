@@ -44,6 +44,7 @@ import ua.zentix.incoming.client.render.FarModels;
 import ua.zentix.incoming.client.render.ProjectilePose;
 import ua.zentix.incoming.client.render.WeaponModels;
 import ua.zentix.incoming.entity.FlightPhase;
+import ua.zentix.incoming.strike.ThrustCurve;
 import ua.zentix.incoming.strike.WeaponType;
 
 import java.util.ArrayList;
@@ -193,6 +194,9 @@ public final class FarFlightView {
         final FlightTrack track;
         final ClientAirframe airframe;
         final FarLook look;
+        /** Тяга ускорителя во времени ({@code Airframe.thrust}); null — двигатели горят ровно. */
+        @Nullable
+        final ThrustCurve thrust;
         final WeaponModels.Look model;
         /** Чьи точки в {@link TrailPoints}. */
         final int owner;
@@ -238,6 +242,7 @@ public final class FarFlightView {
             // путь без оружия — зенитная ракета ЗРК
             this.airframe = track.weapon == null ? ClientWeaponSpec.INTERCEPTOR : ClientWeaponSpec.of(track.weapon).airframe(!track.bomber);
             this.look = airframe.far();
+            this.thrust = track.weapon == null ? null : track.weapon.spec().airframe().thrust();
             this.model = airframe.model();
             Arrays.fill(chain, TrailPoints.NONE);
         }
@@ -346,7 +351,7 @@ public final class FarFlightView {
         }
         for (; t <= horizon; t++) {
             FlightPhase phase = FlightPhase.byId(track.phase(t));
-            ClientWeaponSpec.Stage stage = f.look.stage(phase);
+            ClientWeaponSpec.Stage stage = f.look.stage(phase, track.phaseAge(t), f.thrust);
             // путь снаряда и его факел в этом тике: докуда точки следа ещё в огне
             if (track.covers(t)) {
                 track.at(t, POS);
@@ -420,7 +425,9 @@ public final class FarFlightView {
         if (Double.isNaN(ground)) ground = ground(lv, NOZZLE[0], NOZZLE[2]);
         if (Double.isNaN(ground)) return;
         Vec3 fwd = f.track.forward(t);
-        if (!LaunchCloud.impinges(stage.motor(), NOZZLE[1] - ground, -fwd.y)) return;
+        // расход — на доле тяги сейчас (выход на режим, спад к отделению)
+        Motor motor = stage.flow();
+        if (motor == null || !LaunchCloud.impinges(motor, NOZZLE[1] - ground, -fwd.y)) return;
         if (f.cloud == null || f.cloud.ended()) {
             // верхний блок под соплом: грунт — его рыхлость и цвет; не грунт (бетон, гладкий камень, блоки модов) — пыли нет
             BlockPos at = BlockPos.containing(NOZZLE[0], ground - 0.5, NOZZLE[2]);
@@ -436,8 +443,8 @@ public final class FarFlightView {
         }
         // миг подачи — тик t пути по часам сетки (как начало облака): по нему — история импульса затяжки
         double at = SmokeGrid.seconds(0) - Math.max(0, FlightTracks.now() - t) / 20.0;
-        f.impinging = f.cloud.feed(stage.motor(), 1 / 20.0, at, NOZZLE[0], NOZZLE[1], NOZZLE[2], -fwd.x, -fwd.y, -fwd.z);
-        f.cloudMotor = stage.motor();
+        f.impinging = f.cloud.feed(motor, 1 / 20.0, at, NOZZLE[0], NOZZLE[1], NOZZLE[2], -fwd.x, -fwd.y, -fwd.z);
+        f.cloudMotor = motor;
     }
 
     /** Облака старта (снять при сбросе). */
@@ -540,7 +547,7 @@ public final class FarFlightView {
     /** Горит ли у снаряда видимый факел в тике t (на его высоте). */
     private static boolean hasFlame(Far f, long t) {
         f.track.at(t, POS);
-        return f.look.stage(FlightPhase.byId(f.track.phase(t))).flame(POS[1]) != null;
+        return f.look.stage(FlightPhase.byId(f.track.phase(t)), f.track.phaseAge(t), f.thrust).flame(POS[1]) != null;
     }
 
     /** Блоки мира клиента закрывают точку от глаза (луч до первого блока с формой для взгляда). */
@@ -612,7 +619,7 @@ public final class FarFlightView {
             Far f = FARS.get(k);
             FlightTrack track = f.track;
             if (track.isDead() && t >= track.deathTick() || track.drilling() || !track.predict(t, POS)) continue;
-            ClientWeaponSpec.Stage stage = f.look.stage(FlightPhase.byId(track.phase(t)));
+            ClientWeaponSpec.Stage stage = f.look.stage(FlightPhase.byId(track.phase(t)), track.phaseAge(t), f.thrust);
             // след по настоящему пути выгорания идёт и после фазы с факелом — лента и тогда доходит до сопла
             Trail trail = laying(stage.trail(), f.style, f.path);
             if (trail != null && trail == f.style && f.started) {

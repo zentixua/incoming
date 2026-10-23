@@ -274,6 +274,15 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
                            @Nullable Handling handling, double gameHeight, double clearance, double reliefLookahead, double noseLength,
                            float health, double gameRange, double reachPad, @Nullable LaunchProfile launchProfile, double gameVisibleLeg,
                            Attack gameAttack, Noise noise, Signature radar, Article article, @Nullable Ballistic ballistic) {
+        /**
+         * Тяга стартового ускорителя во времени ({@link ThrustCurve}: пламя, свет, облако старта и звук); null — с пусковой
+         * на сбрасываемом ускорителе не стартует.
+         */
+        @Nullable
+        public ThrustCurve thrust() {
+            return launchProfile == null || article.booster() == null ? null : ThrustCurve.of(launchProfile, article.booster());
+        }
+
         /** Маршевая скорость на шкале полёта мира, блоков/тик ({@link #cruiseSpeed(double)}). */
         public double cruiseSpeed() {
             return cruiseSpeed(FlightScale.x());
@@ -759,6 +768,11 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     static final double UL_REF_DBA = 70, UL_REF_M = 150, UL_REF_MIC = 1.2, UL_REF_W = 16_400;
 
+    /** Старт шахеда с пусковой (игровой, не по физике): поджиг, разгон на ускорителе {@link #DRONE_BOOSTER}. */
+    static final LaunchProfile DRONE_LAUNCH = new LaunchProfile(8, 38, 0.075, 8, -9);
+    /** Старт «Томагавка» с пусковой (игровой, не по физике): поджиг, разгон на ускорителе {@link #MISSILE_BOOSTER}. */
+    static final LaunchProfile MISSILE_LAUNCH = new LaunchProfile(6, 40, 0.09, 8, -14);
+
     /**
      * Шахед ({@link #DRONE_PISTON}): лопасти 250 Гц, вал 125 Гц; номинал звука — крейсер 185 км/ч = 51 м/с (Wikipedia
      * «HESA Shahed 136»). Громкость — по классу ({@link #UL_REF_DBA}: ~126,4 дБА на 16,4 кВт). У сверхлёгких — глушители,
@@ -776,7 +790,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             new Noise.Propeller(DRONE_PISTON.power(), DRONE_PISTON.rpm(), DRONE_PISTON.blades(), DRONE_ARTICLE.real().cruise(), 0.8, 1.1,
                     Noise.fromMeasured(UL_REF_DBA, Spectra.DRONE_ENGINE, new Propagation.Path(UL_REF_M, UL_REF_M, UL_REF_MIC, Propagation.MEADOW,
                             Propagation.Weather.NOON)) + WeaponSpec.OPEN_EXHAUST, UL_REF_W, Spectra.DRONE_ENGINE),
-            new Noise.Rocket(DRONE_BOOSTER.thrust(), DRONE_BOOSTER.exhaust(), Spectra.BOOSTER_ENGINE),
+            new Noise.Rocket(DRONE_BOOSTER.thrust(), DRONE_BOOSTER.exhaust(), Spectra.BOOSTER_ENGINE, ThrustCurve.of(DRONE_LAUNCH, DRONE_BOOSTER)),
             new Noise.Body(DRONE_ARTICLE.diameter(), DRONE_ARTICLE.length(), DRONE_ARTICLE.real().cruise(), Spectra.BOMB_FALL), Double.NaN, Double.NaN, 125);
 
     /**
@@ -785,7 +799,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     static final Noise MISSILE_NOISE = new Noise(
             new Noise.Jet(MISSILE_TURBOFAN.thrust(), MISSILE_TURBOFAN.jet(), MISSILE_TURBOFAN.count(), 0.55, 50, Spectra.MISSILE_ENGINE_REAR),
-            new Noise.Rocket(MISSILE_BOOSTER.thrust(), MISSILE_BOOSTER.exhaust(), Spectra.BOOSTER_ENGINE),
+            new Noise.Rocket(MISSILE_BOOSTER.thrust(), MISSILE_BOOSTER.exhaust(), Spectra.BOOSTER_ENGINE, ThrustCurve.of(MISSILE_LAUNCH, MISSILE_BOOSTER)),
             new Noise.Body(MISSILE_ARTICLE.diameter(), MISSILE_ARTICLE.length(), MISSILE_ARTICLE.real().cruise(), Spectra.BOMB_FALL), Double.NaN, Double.NaN, 125);
 
     /** B-2 ({@link #BOMBER_TURBOFANS}): тяга — на месте, верхняя оценка (на эшелоне двигатели прикрыты). */
@@ -880,7 +894,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             Launch.GUIDED,
             new Route(() -> IncomingConfig.SERVER.droneFlightTime, 300, 0, 3, 40, 30_000), Tracking.CAMERA, LauncherRack.DRONE, Blast.DRONE, false, 0.6f,
             new Airframe(() -> ModEntities.DRONE.get(), 2.1, 3.0, DRONE_HANDLING, 45, 20, 256, 1.83, 12, 900 * 2.1, 4.3,
-                    new LaunchProfile(8, 38, 0.075, 8, -9), 0, new Attack(16, 0, 0),
+                    DRONE_LAUNCH, 0, new Attack(16, 0, 0),
                     DRONE_NOISE, new Signature(1.0, true), DRONE_ARTICLE, null),
             null, Munition.single(() -> ModItems.SHAHED.get()), null);
 
@@ -897,7 +911,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             Launch.GUIDED,
             new Route(() -> IncomingConfig.SERVER.missileFlightTime, 500, 0, 1.5, 120, 30_000), Tracking.POINT, LauncherRack.MISSILE, Blast.MISSILE, false, 0.5f,
             new Airframe(() -> ModEntities.CRUISE_MISSILE.get(), 4.0, 5.0, MISSILE_HANDLING, 12, 12, 256, 2.96, 8, 700 * 4.0, 6.5,
-                    new LaunchProfile(6, 40, 0.09, 8, -14), 256, new Attack(64, 160, 185),
+                    MISSILE_LAUNCH, 256, new Attack(64, 160, 185),
                     MISSILE_NOISE, new Signature(0.7, true), MISSILE_ARTICLE, null),
             null, Munition.single(() -> ModItems.CRUISE_MISSILE.get()), null);
 
