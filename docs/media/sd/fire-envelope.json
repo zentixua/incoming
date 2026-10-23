@@ -1,0 +1,10 @@
+{
+  "main: fading one-shot, pitch 1.1, every 13 s": {
+    "max_LUFS": -19.041777140940358,
+    "min_LUFS_after_2s": -62.10172285634803
+  },
+  "SD: native loop, steady model heat": {
+    "max_LUFS": -19.090959016061838,
+    "min_LUFS_after_2s": -23.14489430493008
+  }
+}
