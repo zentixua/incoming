@@ -19,7 +19,12 @@ Each player has their own, stored in `config/incoming-client.toml`.
 | Hearing damage | on | muffled hearing and ringing ears after a blast wave that hurts the ears; torn eardrums from 5 psi |
 | Muffle distant and hidden strikes | on | distant strikes lose high tones, hidden ones sound muffled, and inside the dust pall all distant sounds are muffled |
 
-The mod's sounds follow the Ambient/Environment volume slider.
+The mod's sounds follow the Ambient/Environment volume slider. A nearby blast is as loud as vanilla TNT, and nothing
+in the mod is louder. Real loudness spans far more than speakers can play, so the mod mixes the way films and games
+do: the loudest sound you hear right now plays near the top, and quieter ones play below it by their real difference,
+halved. With nothing else around, an engine passing overhead is loud; a blast pushes engines down for a few seconds.
+Whatever is louder in life is louder in the game, and what you can hear at all still depends only on distance, terrain
+and background noise.
 
 ## Keys
 
