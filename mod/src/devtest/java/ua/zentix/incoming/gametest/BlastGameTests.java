@@ -240,7 +240,7 @@ public final class BlastGameTests {
     /**
      * Огонь после шара топлива (жалоба 23.10: после ракеты горел почти каждый блок в круге — крыши, песок, рельсы).
      * Вокруг удара на траве: столбы брёвен (толстое дерево) на лучах 3–20 м, столбы листвы и сена (тонкое) на своих лучах
-     * внутри шара, бревно у самой воронки. Огонь ставится только у горючего: у листвы и сена — с долей их порога
+     * внутри шара, бревно у самой воронки, трава и маки на траве (горят на своём месте). Огонь ставится только у горючего: у листвы и сена — с долей их порога
      * ({@link PulseIgnition}), у брёвен — только в круге горящего топлива воронки; ни один огонь не стоит на полу, что сам
      * не горит (пол — трава-дёрн; так «горели» песок и рельсы), и все — в шаре. У «Града» топлива нет — огня нет. Огонь ванили на время проверки не растёт
      * ({@code doFireTick}), волна блоков не ломает: считается только поджиг.
@@ -273,10 +273,19 @@ public final class BlastGameTests {
         }
         // бревно у самой воронки — в круге горящего топлива
         level.setBlock(BlockPos.containing(at.x + 1, at.y, at.z), Blocks.OAK_LOG.defaultBlockState(), 2);
+        // растения на траве (трава, цветы) по кругу в 2,5 м до края шара: горят на своём месте
+        java.util.Set<BlockPos> plants = new java.util.HashSet<>();
+        for (int i = 0; i < 24; i++) {
+            double a = (i + 0.25) * Math.PI / 12, d = 2.5 + (Math.max(r, 3) - 3) * (i % 6) / 5.0;
+            BlockPos p = BlockPos.containing(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d);
+            if (!level.getBlockState(p).isAir()) continue;
+            level.setBlock(p, (i % 2 == 0 ? Blocks.SHORT_GRASS : Blocks.POPPY).defaultBlockState(), 2);
+            plants.add(p.immutable());
+        }
         Warheads.detonate(level, weapon, at, null, null);
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
-            int fires = 0, thin = 0, solid = 0, floor = 0;
+            int fires = 0, thin = 0, solid = 0, floor = 0, plant = 0;
             double far = 0;
             for (BlockPos p : BlockPos.betweenClosed(h.absolutePos(CENTER.offset(-24, -1, -24)), h.absolutePos(CENTER.offset(24, 6, 24)))) {
                 if (!(level.getBlockState(p).getBlock() instanceof BaseFireBlock)) continue;
@@ -288,10 +297,12 @@ public final class BlastGameTests {
                     if (n.is(Blocks.OAK_LEAVES) || n.is(Blocks.HAY_BLOCK)) byThin = true;
                     else if (n.is(Blocks.OAK_LOG)) bySolid = true;
                 }
-                // огонь на твёрдом полу, что сам не горит (песок, камень, трава-дёрн), — огонь «на земле» рядом с горючим
+                // огонь на месте растения — растение горит само; иначе огонь на твёрдом полу, что сам не горит (песок,
+                // камень, дёрн), — огонь «на земле» рядом с горючим
                 BlockPos below = p.below();
                 BlockState under = level.getBlockState(below);
-                if (under.isFaceSturdy(level, below, Direction.UP) && !under.isFlammable(level, below, Direction.UP)) floor++;
+                if (plants.contains(p)) plant++;
+                else if (under.isFaceSturdy(level, below, Direction.UP) && !under.isFlammable(level, below, Direction.UP)) floor++;
                 else if (byThin) thin++;
                 else if (bySolid) {
                     solid++;
@@ -301,12 +312,14 @@ public final class BlastGameTests {
                 } else floor++;
 
             }
-            String got = String.format(Locale.ROOT, "%s: огня %d (у тонкого %d, у брёвен %d, на пустом полу %d) до %.1f м (шар %.1f м, топливо %.1f м)",
-                    weapon, fires, thin, solid, floor, far, r, wet);
+            String got = String.format(Locale.ROOT, "%s: огня %d (у тонкого %d, растений %d, у брёвен %d, на пустом полу %d) до %.1f м (шар %.1f м, топливо %.1f м)",
+                    weapon, fires, thin, plant, solid, floor, far, r, wet);
             Incoming.LOG.info("BLASTBENCH {}", got);
             h.assertTrue(floor == 0, got);
             if (r > 0) {
                 h.assertTrue(thin >= 4, got);
+                // растений в шаре — 24 (половина — трава, у шахеда загорается треть-половина, у ракеты — почти все)
+                h.assertTrue(plant >= 3, got);
                 h.assertTrue(far <= r + 1.5, got);
             } else h.assertTrue(fires == 0, got);
         });
@@ -336,7 +349,7 @@ public final class BlastGameTests {
     /**
      * Земля под ударом в крышу — улица (жалоба 23.10: «блины» пыли волны на высоте ударов): башня из каменного кирпича в
      * 12 блоков на траве — у точки на её крыше земля — верх травы; у точки на траве — она сама; в подвале (точка ниже
-     * земли) — точка; в 150 м над травой (выше прежнего поиска в 96 блоков) — трава.
+     * земли) — точка; в 150 м над травой (выше прежнего поиска в 96 блоков) — трава; над водой — гладь, не дно.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "blast_ground_under", skyAccess = true)
     public static void groundUnderARoofIsTheStreet(GameTestHelper h) {
@@ -345,6 +358,7 @@ public final class BlastGameTests {
         for (int y = 0; y < 12; y++) {
             for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) level.setBlock(base.offset(dx, y, dz), Blocks.STONE_BRICKS.defaultBlockState(), 2);
         }
+        for (int y = 1; y <= 3; y++) level.setBlock(base.offset(-8, -y, 8), Blocks.WATER.defaultBlockState(), 2);
         h.runAfterDelay(1, () -> {
             double street = base.getY();
             h.assertTrue(Warheads.groundUnder(level, Vec3.atBottomCenterOf(base.above(12))) == street, "крыша: земля " + Warheads.groundUnder(level, Vec3.atBottomCenterOf(base.above(12))));
@@ -353,6 +367,9 @@ public final class BlastGameTests {
             h.assertTrue(Warheads.groundUnder(level, Vec3.atBottomCenterOf(open)) == street, "трава");
             Vec3 cellar = Vec3.atCenterOf(base.offset(8, -3, 0));
             h.assertTrue(Warheads.groundUnder(level, cellar) == cellar.y, "подвал");
+            // удар в воду глубиной 3 блока: земля взрыва — гладь, а не дно
+            Vec3 pond = Vec3.atBottomCenterOf(base.offset(-8, 0, 8));
+            h.assertTrue(Warheads.groundUnder(level, pond) == street, "вода: земля " + Warheads.groundUnder(level, pond));
             // точка в 150 м над травой (аппарат или верх высокой башни) — земля та же: поиск идёт до дна мира
             Vec3 high = Vec3.atCenterOf(base.offset(-8, 150, 0));
             h.assertTrue(Warheads.groundUnder(level, high) == street, "в 150 м: земля " + Warheads.groundUnder(level, high));

@@ -422,7 +422,8 @@ public final class Warheads {
      * клиент ставит пыль волны на неё, а не на крышу или стену, куда пришёлся удар (взрыв на крыше — разрыв на её
      * высоте над улицей). В неготовом чанке — сама точка удара: чтение высоты грузило бы его или ждало загрузки. Вниз —
      * до дна мира (столбец одного готового чанка: башня выше сотни блоков; аппарата над рельефом в столбце мира нет).
-     * Земля выше точки (подвал, удар в склон) — тоже точка: взрыв не под землёй; грунта в столбце нет (пустота) — точка.
+     * Вода — тоже земля (гладь). Земля выше точки (подвал, удар в склон) — тоже точка: взрыв не под землёй; грунта в
+     * столбце нет (пустота) — точка.
      * ⚠ Дом из природного камня (песчаник, камень) считается грунтом — его крыша будет землёй.
      */
     public static double groundUnder(ServerLevel level, Vec3 pos) {
@@ -431,7 +432,9 @@ public final class Warheads {
         int top = Math.max(Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX(), at.getZ()), at.getY() + 1);
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(at.getX(), 0, at.getZ());
         for (int y = top - 1; y >= level.getMinBuildHeight(); y--) {
-            if (BlockResponse.of(level.getBlockState(m.setY(y))).kind() == BlockResponse.Kind.GROUND) return Math.min(pos.y, y + 1);
+            BlockState s = level.getBlockState(m.setY(y));
+            // вода — земля взрыва: над ней разрыв на воде, а не над дном (пыли над водой нет, брызги — у WaterBlast)
+            if (!s.getFluidState().isEmpty() || BlockResponse.of(s).kind() == BlockResponse.Kind.GROUND) return Math.min(pos.y, y + 1);
         }
         return pos.y;
     }

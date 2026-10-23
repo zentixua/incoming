@@ -159,7 +159,8 @@ final class Craters {
      * песок. Поставлен ли огонь.
      */
     private static boolean light(ServerLevel level, BlockPos air, BlockState here, BlockPos fuel, BlockState s, Direction dir) {
-        if (s.getCollisionShape(level, fuel).isEmpty() && s.canBeReplaced()) return Warheads.igniteIn(level, fuel);
+        // растение без формы (трава, цветы, посевы, тростник) — как его жжёт огонь ванили: огонь на его месте
+        if (s.getCollisionShape(level, fuel).isEmpty() && s.getFluidState().isEmpty()) return Warheads.igniteIn(level, fuel);
         if (!here.isAir()) return false;
         BlockPos below = air.below();
         if (dir != Direction.DOWN && level.getBlockState(below).isFaceSturdy(level, below, Direction.UP)) return false;
