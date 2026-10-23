@@ -6,7 +6,8 @@
 #
 #   tools/sandbox.sh start [shaders] [dh] [soft] [--wait] [--size 1280x720]   клиент в фоне (задача ноутбука
 #                                          sandbox-<дерево>): берёт аренду видеокарты своей сессии (tools/gpu_lease.sh) —
-#                                          она у другой сессии: выход 75 со строкой «видеокарта у …» (--wait — ждать её);
+#                                          она у другой сессии: выход 75 со строкой «видеокарта у …» (--wait — в очередь
+#                                          аренды, по порядку прихода); нет Iris и Sodium (shaders), DH (dh) — выход 2;
 #                                          при игре Артёма — выход 75; выходит, когда мир готов; живёт, пока не stop или
 #                                          игра Артёма, и продлевает аренду; чужие задачи без видеокарты её не гасят;
 #                                          soft — без видеокарты и без аренды (xvfb-run, llvmpipe: 3–10 кадров/с, без
@@ -60,6 +61,18 @@ fx() {
   res=$(cat "$done"); rm -f "$done"
   echo "fx $1 → $res"
   [[ $res == ok* ]]
+}
+
+# моды, без которых выбранный режим не тот, что заказан: shaders — Sodium и Iris, dh — Distant Horizons (шаблоны — как
+# в build.gradle); нет — строка, чего нет и откуда их берёт Gradle, код 1
+mods_check() {
+  local dir=$1 need=() miss=() p
+  [ -n "${INCOMING_SHADERS:-}" ] && need+=('sodium-neoforge-*.jar' 'iris-neoforge-*.jar')
+  [ -n "${INCOMING_DH:-}" ] && need+=('DistantHorizons-*.jar')
+  for p in "${need[@]}"; do compgen -G "$dir/$p" >/dev/null || miss+=("$p"); done
+  [ ${#miss[@]} -eq 0 ] && return 0
+  echo "нет модов для режима ($(IFS=' '; echo "${miss[*]}")) в $dir: Gradle берёт их из $(python3 "$ROOT/tools/paths.py" MODS 2>/dev/null || echo 'каталога модов инстанса') (MC_DIR или -PmcModsDir) — положить туда или запустить без shaders/dh" >&2
+  return 1
 }
 
 # секунды с отметки времени $1 (date +%s.%N)
@@ -149,18 +162,20 @@ start() {
   if [ -z "${INCOMING_SANDBOX_SOFT:-}" ]; then
     artem_playing && { echo "игра Артёма запущена — видеокарту не берём" >&2; exit 75; }
     # с картинкой — одна сессия за раз: аренда у другой — отказ (её песочницу и задачи не гасим); клиент на видеокарте
-    # уже идёт (своя песочница другого дерева, свой шлагбаум) — тоже отказ, до сборки
+    # уже идёт (своя песочница другого дерева, свой шлагбаум) — тоже отказ, до сборки. С --wait — в очередь аренды
+    # (tools/gpu_lease.sh: свободную берёт первый ждущий), потом — своего клиента, если он ещё идёт
     local who said=
+    _lease_read
+    fresh=1; [ "$L_OWNER" = "$INCOMING_GPU_OWNER" ] && ! _lease_free && fresh=
+    if [ -z "$wait" ] && who=$(gpu_client_busy); then echo "$who" >&2; exit 75; fi
+    lease_take "$INCOMING_GPU_OWNER" "$ROOT" $wait || exit 75
+    # не поднялись (сборка, клиент) — только что взятую аренду отпустить: другие сессии не ждут 10 мин впустую
+    [ -n "$fresh" ] && trap 'lease_release "$INCOMING_GPU_OWNER"' EXIT
     while who=$(gpu_client_busy); do
       [ -n "$wait" ] || { echo "$who" >&2; exit 75; }
       [ -z "$said" ] && { echo "$(date +%T) $who — жду" >&2; said=1; }
       sleep 10
     done
-    _lease_read
-    fresh=1; [ "$L_OWNER" = "$INCOMING_GPU_OWNER" ] && ! _lease_free && fresh=
-    lease_take "$INCOMING_GPU_OWNER" "$ROOT" $wait || exit 75
-    # не поднялись (сборка, клиент) — только что взятую аренду отпустить: другие сессии не ждут 10 мин впустую
-    [ -n "$fresh" ] && trap 'lease_release "$INCOMING_GPU_OWNER"' EXIT
   elif [ -n "${INCOMING_SHADERS:-}" ]; then
     echo "soft — без шейдеров (llvmpipe)" >&2; exit 2
   elif ! command -v xvfb-run >/dev/null; then
@@ -205,6 +220,9 @@ OPT
   fi
   (cd "$ROOT/mod" && INCOMING_SANDBOX=1 INCOMING_SCENARIO=sandbox INCOMING_SIZE=$size ./gradlew rigLaunch -PrigRun=runClientScenario \
       -PrigOut=sandbox -q --console=plain) || exit 1
+  # моды берёт Gradle из каталога модов инстанса по шаблонам (build.gradle) и молча пропускает те, которых там нет:
+  # без этой проверки `shaders` снимал бы без Iris, `dh` — без Distant Horizons
+  mods_check "$RUN/mods" || exit 2
   local build; build=$(since "$t0")
   local w=${size%x*} h=${size#*x}
   INCOMING_SANDBOX=1 nohup "$ROOT/tools/laptop_job.sh" --light "sandbox-$(basename "$ROOT")" -- "$ROOT/tools/sandbox.sh" _run "$w" "$h" > "$RUN/logs/job.log" 2>&1 &
@@ -296,6 +314,8 @@ shot() {
   echo "от команды до последнего кадра и звука: $(since "$t0") с"
 }
 
+# source tools/sandbox.sh — только функции (проверка tools/test_sandbox.sh)
+[ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 cmd=${1:-}
 shift || true
 case "$cmd" in
