@@ -310,7 +310,7 @@ public final class NozzleGlow {
         double dx = w.thickness() / (n - 1), air = StandardAtmosphere.T0;
         double[] t = new double[n], next = new double[n];
         java.util.Arrays.fill(t, air);
-        // полуячейка у поверхности: ρc·dx/2 против 2k/dx к соседу и потока газа — шаг вдвое меньше внутреннего
+        // предел теплопроводности — dx²/(2α) у всех узлов (у полуячеек тоже); 0,2 — запас на газ, излучение и воздух у поверхности
         double dt = Math.min(0.2 * dx * dx / mat.maxDiffusivity(), Math.min(SAMPLE / 4, tail / 10)) / fine;
         ThrustCurve real = new ThrustCurve(ThrustCurve.RISE, burn * 20 - ThrustCurve.RISE, tail * 20);
         int samples = (int) Math.ceil((burn + after) / SAMPLE) + 1;
