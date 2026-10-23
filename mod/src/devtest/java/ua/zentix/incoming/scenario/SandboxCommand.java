@@ -14,8 +14,9 @@ import java.util.Locale;
  *   <li>{@code blast <оружие> [seed] [высота]} — взрыв только у клиента: пакет взрыва в той точке песочницы, как от
  *       сервера (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять); высота —
  *       над землёй, м: удар в крышу или стену (земля в пакете — трава под точкой);</li>
- *   <li>{@code real <оружие> [deck <м>]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки) на новом
- *   месте; {@code deck} — удар в середину моста: настил из камня в столько метров над руслом с водой (пробой плиты);</li>
+ *   <li>{@code real <оружие> [deck <м> | houses]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки)
+ *   на новом месте; {@code deck} — удар в середину моста: настил из камня в столько метров над руслом с водой (пробой
+ *   плиты); {@code houses} — у дощатого дома сцены {@code debris} (дома и дубы рядом): что загорится и как дымит;</li>
  *   <li>{@code nuke <кт> [air|ground] [near [метров]]} — ядерный подрыв без полёта ({@code /incoming nuke now}) на новом
  *       месте; с {@code near} — вид у камеры: дома и дубы сцены {@code debris} в точке, подрыв в стольких метрах к северу
  *       (по умолчанию {@link #NEAR_RANGE}), время эффекта — от прихода фронта к домам (кадры и до него, с −10 с);</li>
@@ -89,8 +90,9 @@ record SandboxCommand(Verb verb, List<String> args) {
                 WeaponType w = weapon();
                 if (w == WeaponType.NUKE) throw new IllegalArgumentException("ядерка — nuke <кт>");
                 if (verb == Verb.REAL) {
-                    if (args.size() > 1 && (args.size() != 3 || !args.get(1).equals("deck") || number(2) < 1 || number(2) > 6)) {
-                        throw new IllegalArgumentException("real <оружие> [deck <1–6 м>]");
+                    if (houses() ? args.size() != 2
+                            : args.size() > 1 && (args.size() != 3 || !args.get(1).equals("deck") || number(2) < 1 || number(2) > 6)) {
+                        throw new IllegalArgumentException("real <оружие> [deck <1–6 м> | houses]");
                     }
                     break;
                 }
@@ -202,6 +204,11 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code real … deck <м>}: толщина настила моста, м; 0 — удар в землю. */
     int deck() {
         return verb == Verb.REAL && args.size() == 3 ? (int) number(2) : 0;
+    }
+
+    /** {@code real <оружие> houses}: удар у дощатого дома сцены {@code debris}. */
+    boolean houses() {
+        return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("houses");
     }
 
     WeaponType weapon() {
