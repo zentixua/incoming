@@ -69,6 +69,17 @@ import java.util.stream.Stream;
  * Мир — плоский (коренная порода, 124 камня, 3 земли, трава; верх травы — {@link #GROUND}), равнины без построек, вечный
  * полдень без погоды и мобов: одинаковый каждый запуск, и место нового настоящего взрыва ({@code real}, {@code nuke}) —
  * та же земля, что у прежнего.
+ * <p>
+ * Ядерка у камеры ({@code nuke <кт> [air|ground] near [м]}) — то, что снимает сценарий {@code debris} (ClientScenario),
+ * за секунды: на новом месте дома и дубы той же раскладки, подрыв в {@code м} к северу, время эффекта — от прихода фронта
+ * к домам. Волна — та же, что у сценариев клиента (1,0 скорости звука, {@code TestScale}): у 15 кт фронт доходит до
+ * домов в 2 км за ~4 с игры. Отличия от сценария: дубы — ровные кроны из блоков, а не случайной формы {@code place
+ * feature}; земля — плоская трава, а не равнина генератора. Место у
+ * каждого запуска новое, но разброс порогов блоков ({@code BlockResponse.jitterAt}, хеш места) на нём тот же
+ * ({@link #nearSite}), номер подрыва тот же ({@link #NEAR_ID}: сид подрыва сценария — по нему), и время игры в миг подрыва
+ * то же ({@link #NEAR_GAME_TIME}: ветер мира — по нему, {@code Wind.at}), — те же блоки ломаются при том же ветре; прочая
+ * случайность руин и следа по месту мира (шум следа, выборка обломков) — своя у места, как у двух прогонов сценария на
+ * разных картах.
  */
 final class Sandbox {
     static final String WORLD = "incoming_sandbox";
@@ -82,6 +93,17 @@ final class Sandbox {
     static final int FLIGHT_LIMIT = 1800;
     /** Цель пуска — на столько блоков к северу от точки (−Z). */
     static final int LAUNCH_RANGE = 3000;
+    /**
+     * Ядерка у камеры: место k-го запуска — (X0 + k·DX, Z0 + k·DZ). Хеш места {@code Long.hashCode(BlockPos.asLong())} —
+     * старшие 32 бита (x << 6 и выше) XOR младшие (z << 12 | y): сдвиг x на k·2¹⁶ и z на k·2¹⁰ кладёт k в оба слова на
+     * одно и то же место (бит 22), и XOR его снимает — у дома с x в [X0 − 2¹⁵, X0 + 2¹⁵) и z в [Z0 − 2⁹, Z0 + 2⁹) хеш, а
+     * с ним и разброс порогов, тот же на любом месте. k до 450: x не дальше края мира (3·10⁷).
+     */
+    static final int NEAR_X0 = 1 << 15, NEAR_Z0 = 1 << 9, NEAR_DX = 1 << 16, NEAR_DZ = 1 << 10, NEAR_RUNS = 450;
+    /** Номер подрыва у камеры: сид подрыва сценария — по номеру ({@code NuclearWarhead}), у каждого запуска тот же. */
+    static final int NEAR_ID = 9000;
+    /** Время игры в миг подрыва у камеры: ветер мира — функция времени игры ({@code Wind.at}), у каждого запуска тот же. */
+    static final long NEAR_GAME_TIME = 6000;
 
     private final Path dir = FMLPaths.GAMEDIR.get().resolve("fx");
     private final Path inbox = dir.resolve("inbox");
@@ -136,6 +158,8 @@ final class Sandbox {
     private final java.util.Set<Integer> knownNukes = new java.util.HashSet<>();
     private Vec3 firstSeen = Vec3.ZERO;
     private double closest = Double.MAX_VALUE;
+    /** Ядерка у камеры: сколько запусков было (место — {@link #nearSite}). */
+    private int nearRuns;
 
     /** Снимок эффекта: кадры на секунды {@code times}, звук {@code wavSeconds}. */
     private static final class Capture {
@@ -145,6 +169,8 @@ final class Sandbox {
         final Path out;
         int next;
         long audioStart = -1;
+        /** Тик начала звука: первый кадр, если он до начала эффекта, иначе начало эффекта. */
+        int audioTick;
         final List<String> frames = new ArrayList<>();
 
         Capture(String name, double[] times, double wavSeconds, Path out) {
@@ -412,6 +438,8 @@ final class Sandbox {
         closest = Double.MAX_VALUE;
         // воронка и пожары настоящего взрыва остаются на его месте, остальное — снова на нетронутой точке
         if (c.verb() != SandboxCommand.Verb.REAL && c.verb() != SandboxCommand.Verb.NUKE) site = HOME;
+        // кадры до начала эффекта — только там, где начало известно заранее (приход фронта к домам)
+        if (armed != null && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("кадры до начала эффекта — только у nuke … near");
         switch (c.verb()) {
             case BLAST -> {
                 placeCamera();
@@ -451,8 +479,15 @@ final class Sandbox {
                 begin();
             }
             case REAL, NUKE -> {
-                freshX += c.verb() == SandboxCommand.Verb.NUKE ? NUKE_STEP : REAL_STEP;
-                site = HOME.add(freshX, 0, 0);
+                if (c.near()) {
+                    // прежний подрыв у камеры забыт: номер и время игры у этого — те же ({@link #NEAR_ID})
+                    clear();
+                    nearRuns = nearRuns % NEAR_RUNS + 1;
+                    site = nearSite(nearRuns);
+                } else {
+                    freshX += c.verb() == SandboxCommand.Verb.NUKE ? NUKE_STEP : REAL_STEP;
+                    site = HOME.add(freshX, 0, 0);
+                }
                 placeCamera();
                 pending = Pending.SITE;
             }
@@ -486,13 +521,23 @@ final class Sandbox {
 
     /** Эффект начался в этом тике: часы кадров и звука. */
     private void begin() {
+        begin(tick);
+    }
+
+    /** Эффект начнётся в тике {@code at} (не раньше этого): часы кадров и звука от него. */
+    private void begin(int at) {
         pending = null;
-        effectTick = tick;
-        Incoming.LOG.info("SANDBOX effect {} at {} tick {} audio {}", pendingCmd, xyz(site), tick, audioBytes());
+        effectTick = at;
+        Incoming.LOG.info("SANDBOX effect {} at {} tick {} (now {}) audio {}", pendingCmd, xyz(site), at, tick, audioBytes());
         capture = armed;
         armed = null;
-        if (capture != null) capture.audioStart = audioBytes();
-        else finish("ok " + pendingCmd);
+        if (capture != null) {
+            // первый кадр уже в прошлом (подрыв ближе, чем кадры до фронта) — звук с этого тика
+            capture.audioTick = Math.max(tick, at + (int) Math.round(Math.min(0, capture.times[0]) * 20));
+            if (tick >= capture.audioTick) capture.audioStart = audioBytes();
+        } else {
+            finish("ok " + pendingCmd);
+        }
     }
 
     private void advance(Minecraft mc) {
@@ -515,7 +560,11 @@ final class Sandbox {
                     }
                 }
                 case NUKE -> {
-                    if (ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().stream().anyMatch(a -> !knownNukes.contains(a.d.id()))) begin();
+                    var fresh = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().stream().filter(a -> !knownNukes.contains(a.d.id())).findFirst();
+                    if (fresh.isPresent()) {
+                        if (pendingCmd.near()) frontAtHouses(fresh.get());
+                        else begin();
+                    }
                 }
                 case LAUNCH, FLIGHT -> watchFlight(mc);
             }
@@ -525,7 +574,8 @@ final class Sandbox {
             }
         }
         Capture cap = capture;
-        if (cap != null && effectTick >= 0 && cap.next >= cap.times.length && tick >= effectTick + Math.round(cap.wavSeconds * 20) + 10) {
+        if (cap != null && cap.audioStart < 0 && effectTick >= 0 && tick >= cap.audioTick) cap.audioStart = audioBytes();
+        if (cap != null && effectTick >= 0 && cap.next >= cap.times.length && tick >= cap.audioTick + Math.round(cap.wavSeconds * 20) + 10) {
             capture = null;
             write(cap.out.resolve("capture.json"), json(cap));
             finish("ok " + cap.out);
@@ -542,12 +592,92 @@ final class Sandbox {
         pending = Pending.SERVER;
         knownNukes.clear();
         ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().forEach(a -> knownNukes.add(a.d.id()));
-        Vec3 at = new Vec3(site.x, GROUND + 1, site.z);
+        Vec3 at = c.near() ? new Vec3(site.x, GROUND + 1, site.z - c.nearRange()) : new Vec3(site.x, GROUND + 1, site.z);
         onServer(true, server -> {
-            if (c.verb() == SandboxCommand.Verb.REAL) Warheads.detonate(server.overworld(), c.weapon(), at, null, null);
-            else run(server, String.format(Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f %d %s", at.x, at.y, at.z, (int) c.number(0),
-                    c.args().size() > 1 ? c.args().get(1) : "ground"));
+            if (c.verb() == SandboxCommand.Verb.REAL) {
+                Warheads.detonate(server.overworld(), c.weapon(), at, null, null);
+                return;
+            }
+            if (c.near()) {
+                buildHouses(server, BlockPos.containing(site));
+                sameDetonationNumber(server);
+                sameGameTime(server, at);
+            }
+            run(server, String.format(Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f %d %s", at.x, at.y, at.z, (int) c.number(0),
+                    c.air() ? "air" : "ground"));
         });
+    }
+
+    /** Место k-го запуска ядерки у камеры (точка — середина между домами, на земле): разброс порогов на нём тот же. */
+    static Vec3 nearSite(int k) {
+        return new Vec3(NEAR_X0 + (long) k * NEAR_DX + 0.5, GROUND + 1, NEAR_Z0 + (long) k * NEAR_DZ + 0.5);
+    }
+
+    /**
+     * Дома и дубы сцены {@code debris} (ClientScenario.debrisEvents): дом из каменного кирпича со стеклянными панелями к
+     * зрителю и к взрыву и дощатой крышей, дощатый дом со стёклами; дубы — ровные кроны (у сценария — {@code place
+     * feature}: форма случайная).
+     */
+    private static void buildHouses(MinecraftServer server, BlockPos o) {
+        int x = o.getX(), y = o.getY(), z = o.getZ();
+        List<String> build = new ArrayList<>(List.of(
+                "fill %d %d %d %d %d %d minecraft:stone_bricks hollow".formatted(x - 12, y, z - 4, x - 4, y + 6, z + 4),
+                "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z + 4, x - 6, y + 3, z + 4),
+                "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z - 4, x - 6, y + 3, z - 4),
+                "fill %d %d %d %d %d %d minecraft:oak_planks".formatted(x - 12, y + 7, z - 4, x - 4, y + 7, z + 4),
+                "fill %d %d %d %d %d %d minecraft:oak_planks hollow".formatted(x + 4, y, z - 3, x + 12, y + 5, z + 3),
+                "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z + 3, x + 10, y + 3, z + 3),
+                "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z - 3, x + 10, y + 3, z - 3)));
+        for (int[] t : new int[][]{{x - 8, z + 12}, {x + 8, z + 12}, {x, z - 14}}) build.addAll(oak(t[0], y, t[1]));
+        for (String c : build) run(server, c);
+    }
+
+    /** Дуб в 5 брёвен: два слоя кроны 5×5 без углов на 3-м и 4-м бревне, сверху 3×3 и крест — как у ванильного дуба. */
+    private static List<String> oak(int x, int y, int z) {
+        String leaves = "minecraft:oak_leaves[persistent=true]";
+        return List.of(
+                "fill %d %d %d %d %d %d %s".formatted(x - 2, y + 3, z - 1, x + 2, y + 4, z + 1, leaves),
+                "fill %d %d %d %d %d %d %s".formatted(x - 1, y + 3, z - 2, x + 1, y + 4, z + 2, leaves),
+                "fill %d %d %d %d %d %d %s".formatted(x - 1, y + 5, z - 1, x + 1, y + 5, z + 1, leaves),
+                "fill %d %d %d %d %d %d %s".formatted(x - 1, y + 6, z, x + 1, y + 6, z, leaves),
+                "fill %d %d %d %d %d %d %s".formatted(x, y + 6, z - 1, x, y + 6, z + 1, leaves),
+                "fill %d %d %d %d %d %d minecraft:oak_log".formatted(x, y, z, x, y + 4, z));
+    }
+
+    /**
+     * Номер следующего подрыва — {@link #NEAR_ID}: ветер и сид подрыва сценария — по номеру, у каждого запуска тот же.
+     * Счётчик закрыт ({@code NuclearEvents.nextId}, игре чужой номер не нужен) — только здесь, отражением; прошлые подрывы
+     * {@code clear} уже забыл ({@code incoming clear}), так что номер ни с кем не совпадёт.
+     */
+    private static void sameDetonationNumber(MinecraftServer server) {
+        try {
+            var f = ua.zentix.incoming.nuclear.NuclearEvents.class.getDeclaredField("nextId");
+            f.setAccessible(true);
+            f.setInt(ua.zentix.incoming.nuclear.NuclearEvents.get(server.overworld()), NEAR_ID);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("номер подрыва не задан", e);
+        }
+    }
+
+    /**
+     * Время игры — {@link #NEAR_GAME_TIME} (всем игрокам — пакет времени, как у пропуска сценария {@code firestorm}), а земля
+     * эпицентра — готова сейчас (плоский мир, миллисекунды; песочница, не игра): подрыв идёт в этом же тике
+     * ({@code NuclearStrikes.detonateNow}), а не отложенным, когда земля догрузится, — и ветер в миг подрыва тот же.
+     */
+    private static void sameGameTime(MinecraftServer server, Vec3 burst) {
+        var level = server.overworld();
+        level.getChunk(BlockPos.containing(burst));
+        ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(NEAR_GAME_TIME);
+        server.getPlayerList().broadcastAll(new net.minecraft.network.protocol.game.ClientboundSetTimePacket(level.getGameTime(), level.getDayTime(),
+                level.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
+    }
+
+    /** Подрыв у камеры пришёл: начало эффекта — приход фронта к домам по часам подрыва клиента, как у сценария {@code debris}. */
+    private void frontAtHouses(ua.zentix.incoming.client.nuclear.ClientNuclear.Active a) {
+        Vec3 houses = site.add(0, 2, 0);
+        double wait = a.d.arrivalTicks(houses.distanceTo(a.d.burst())) - a.ticks(0);
+        Incoming.LOG.info("SANDBOX near: burst {}, wave {} of sound, front at the houses in {} ticks", xyz(a.d.burst()), a.d.wave(), Math.round(wait));
+        begin(tick + (int) Math.round(wait));
     }
 
     private static boolean loaded(Minecraft mc, BlockPos at) {
@@ -626,6 +756,14 @@ final class Sandbox {
         String fire = ua.zentix.incoming.client.fx.FireSmoke.describe();
         if (!fire.isEmpty()) lines.add("fire: " + fire);
         lines.add("smoke: " + ua.zentix.incoming.client.far.FarRenderer.describeSmoke());
+        var nukes = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
+        if (!nukes.isEmpty()) {
+            var a = nukes.getLast();
+            double front = a.d.frontRadius(a.ticks(partial));
+            lines.add(String.format(Locale.ROOT, "nuke: front %.0f m past the point, %.0f m past the eye; %.2f psi at the point", front - site.distanceTo(a.d.burst()),
+                    front - eye.distanceTo(a.d.burst()), a.d.overpressureKpa(site) / 6.895));
+            lines.add("near: " + ua.zentix.incoming.client.nuclear.NukeDust.describe());
+        }
         // проекция интерфейса ещё стоит, а сдвиг вида по z (−11000) ваниль уже сняла: без него текст вне глубины проекции
         var view = com.mojang.blaze3d.systems.RenderSystem.getModelViewStack();
         view.pushMatrix();
@@ -693,9 +831,10 @@ final class Sandbox {
 
     private String json(Capture c) {
         return String.format(Locale.ROOT, "{\"name\": \"%s\", \"effect\": \"%s\", \"site\": [%.1f, %.1f, %.1f], \"camera\": [%.1f, %.1f, %.1f, %.1f], "
-                        + "\"audio\": {\"file\": \"%s\", \"start\": %d, \"seconds\": %.2f}, \"frames\": [%s]}\n",
+                        + "\"audio\": {\"file\": \"%s\", \"start\": %d, \"from\": %.2f, \"seconds\": %.2f}, \"frames\": [%s]}\n",
                 c.name, lastEffect, site.x, site.y, site.z, camDist, camHeight, camBearing, camLook,
-                FMLPaths.GAMEDIR.get().resolve("audio.wav").toAbsolutePath(), c.audioStart, c.wavSeconds, String.join(", ", c.frames));
+                FMLPaths.GAMEDIR.get().resolve("audio.wav").toAbsolutePath(), c.audioStart, (c.audioTick - effectTick) / 20.0, c.wavSeconds,
+                String.join(", ", c.frames));
     }
 
     private static void write(Path file, String text) {
