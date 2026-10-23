@@ -22,5 +22,5 @@ without ground, nothing ahead of the front, no jumps in brightness …). A promi
 a test. -->
 
 ## Check
-<!-- CI and an independent review of the code against the note. Seen or heard by the player: frames and sound of the
-client scenario at the note's moments next to the last accepted release, looked at once, not by the author. -->
+<!-- CI and an independent review of the code against the note. Seen or heard by the player: frames and WAV of the dev
+client (tools/sandbox.sh shot) at the note's moments, in this PR; the reviewer looks at them once, not the author. -->
