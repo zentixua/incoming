@@ -451,9 +451,9 @@ public final class Warheads {
      * блоков, газы в помещении, тела — {@code BlastBody}) единицами в очереди попаданий.
      */
     static StagedExplosion charge(ServerLevel level, BlastArea area, Vec3 at, double tntKg, SlabBreach.Placement placement,
-                                  @Nullable Entity direct, @Nullable Entity owner) {
+                                  @Nullable Vec3 axis, @Nullable Entity direct, @Nullable Entity owner) {
         boolean blocks = IncomingConfig.SERVER.blockDamage.get();
-        StagedExplosion job = new StagedExplosion(area.retain(), List.of(), at, tntKg, placement, blocks, direct, owner);
+        StagedExplosion job = new StagedExplosion(area.retain(), List.of(), at, tntKg, placement, axis, blocks, direct, owner);
         area.queued(job, level.getGameTime());
         StrikeWorld.get(level).impacts().add(level, job);
         return job;
@@ -462,7 +462,7 @@ public final class Warheads {
     /** Проверки: взрыв заряда {@code tntKg} кг ТНТ по физике, со своим районом. */
     public static Probe testCharge(ServerLevel level, Vec3 at, double tntKg) {
         BlastArea area = BlastArea.hold(level, at, chargeReach(tntKg, 0));
-        Probe probe = new Probe(charge(level, area, at, tntKg, SlabBreach.Placement.NONE, null, null));
+        Probe probe = new Probe(charge(level, area, at, tntKg, SlabBreach.Placement.NONE, null, null, null));
         area.release(level);
         return probe;
     }
@@ -482,7 +482,7 @@ public final class Warheads {
 
     private static Probe testPlaced(ServerLevel level, Vec3 at, double tntKg, SlabBreach.Placement placement, double reach) {
         BlastArea area = BlastArea.hold(level, at, reach);
-        Probe probe = new Probe(charge(level, area, at, tntKg, placement, null, null));
+        Probe probe = new Probe(charge(level, area, at, tntKg, placement, S2C.Blast.DOWN, null, null));
         area.release(level);
         return probe;
     }
@@ -573,7 +573,7 @@ public final class Warheads {
             // боевая часть рвётся на грани, в которую ударила: плиту над пустотой она пробивает (SlabBreach); корпус
             // аппарата — не преграда мира
             main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(),
-                    onCraft ? SlabBreach.Placement.NONE : SlabBreach.Placement.SURFACE, direct, owner)) : List.of();
+                    onCraft ? SlabBreach.Placement.NONE : SlabBreach.Placement.SURFACE, axis, direct, owner)) : List.of();
         }
 
         /** Взрыв на аппарате Sable. */
@@ -694,8 +694,8 @@ public final class Warheads {
             List<StagedExplosion> blasts = new ArrayList<>(2);
             double below = law.breaches() ? law.tnt() - air : law.tnt();
             // в толще заряд забит: пустоты рядом (бункер, пещера) он пробивает (SlabBreach); доля, вышедшая наружу, — волна
-            if (below > 0) blasts.add(charge(level, area, pos, below, SlabBreach.Placement.BURIED, direct, owner));
-            if (law.breaches() && air > 0) blasts.add(charge(level, area, top.add(0, 0.5, 0), air, SlabBreach.Placement.NONE, direct, owner));
+            if (below > 0) blasts.add(charge(level, area, pos, below, SlabBreach.Placement.BURIED, null, direct, owner));
+            if (law.breaches() && air > 0) blasts.add(charge(level, area, top.add(0, 0.5, 0), air, SlabBreach.Placement.NONE, null, direct, owner));
             main = List.copyOf(blasts);
         }
 

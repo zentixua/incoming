@@ -180,6 +180,9 @@ final class StagedExplosion implements UnitQueue.Job {
     private BlastBody.Wave wave;
     /** Как заряд приложен к преграде: пробой плиты ({@link SlabBreach}) — только у приложенного. */
     private SlabBreach.Placement placement = SlabBreach.Placement.NONE;
+    /** Курс боевой части у удара: через какую грань она пришла к преграде ({@link SlabBreach#locate}); null — неизвестен. */
+    @Nullable
+    private Vec3 axis;
     /** Откуда идут лучи пробоя; null — заряд ни к чему не приложен (или ещё не искали: {@link #breachLocated}). */
     @Nullable
     private SlabBreach.Origin breach;
@@ -274,10 +277,11 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /** Взрыв заряда {@code tntKg} кг ТНТ по физике, приложенного к преграде так, как {@code placement}. */
-    StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, double tntKg, SlabBreach.Placement placement, boolean blocks,
-                    @Nullable Entity direct, @Nullable Entity owner) {
+    StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, double tntKg, SlabBreach.Placement placement, @Nullable Vec3 axis,
+                    boolean blocks, @Nullable Entity direct, @Nullable Entity owner) {
         this(area, after, at, (float) breakReach(tntKg), tntKg, false, blocks, direct, owner, null);
         this.placement = placement;
+        this.axis = axis;
     }
 
     private StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, float power, double charge, boolean fire, boolean blocks,
@@ -584,7 +588,7 @@ final class StagedExplosion implements UnitQueue.Job {
         }
         if (!breachLocated) {
             breachLocated = true;
-            breach = SlabBreach.locate(level, centre, charge, placement, e, damage);
+            breach = SlabBreach.locate(level, centre, charge, placement, axis, e, damage);
         }
         boolean[] liquid = new boolean[1];
         for (int r = nextRay; r < end; r++) {

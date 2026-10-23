@@ -28,6 +28,7 @@ import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.strike.Article;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.warhead.BreachModel;
 import ua.zentix.incoming.warhead.BuriedBlast;
 import ua.zentix.incoming.warhead.Penetration;
 import ua.zentix.incoming.warhead.Warheads;
@@ -54,10 +55,11 @@ import java.util.function.Consumer;
  * <li>воронка заряда на грунте — {@link CraterModel#chargeRadius} (EMRTC, Ambrosini и др. 2003, Кинни–Грэхем; грунт —
  * TM 23-200): снятый объём 0,6–1,45 закона (как в {@code BlastGameTests.craterTest}, #417) плюс разброс целых блоков
  * (воронка роет столбцы целыми блоками со случайной добавкой по дробной части — 2σ этой добавки);</li>
- * <li>плита над пустотой — не меньше пробоя FM 5-250 (1992), табл. B-3: P = R³·K·C, K = 4,3–5,1 (скала, хорошая
- * кладка, обычный бетон), C = 1,8 (внешний заряд без забивки), всё в радиусе R снесено, пробой — R больше толщины; и не
- * больше круга, где волна ломает кладку (плита над пустотой — панель, как стена): закон пробоя — сессия SL, до него
- * строки печатаются, но не проверяются ({@link #SLAB_LAW});</li>
+ * <li>плита над пустотой — не меньше пробоя FM 5-250 (1992), табл. B-3: K = R³·M·C, M по ступеням R (скала, хорошая
+ * кладка, бетонный блок), C = 1,8 (внешний заряд без забивки), ± округление FM 0,25 м; пробита — R больше толщины, всё в
+ * радиусе R снесено; не пробита — по FM сносить нечего; и не больше круга, где волна ломает кладку (плита над пустотой —
+ * панель, как стена). Заряд, который метра не пробьёт («Ланцет»), — известный изъян целых блоков
+ * ({@link #SUB_BLOCK_ISSUE}): строка печатается, но не проверяется;</li>
  * <li>бетон на грунте (асфальт дороги) — плиту держит грунт за ней, свободной грани нет: не пробой и не панель, а
  * воронка в среде не мягче скалы (TM 23-200: скала ×0,7) и не больше воронки того же заряда в грунте. Известный изъян
  * ({@link #ROAD_ISSUE}, warhead.md) — строка печатается, но не проверяется;</li>
@@ -73,12 +75,11 @@ import java.util.function.Consumer;
 @PrefixGameTestTemplate(false)
 public final class SurfaceGameTests {
     /**
-     * Закон пробоя плиты влит (SL): строки плит над пустотой проверяются. До него — только печатаются: мод считает
-     * природный камень над пустотой полупространством грунта.
+     * Известный изъян: заряд, которому по FM метра не пробить («Ланцет»), всё же открывает плиту в блок — воронка меньше
+     * блока снимает его целым по дробной части (камень настила), волна ломает бетон крыши, как стену (тот же класс, что
+     * {@link #ROAD_ISSUE}). Строка печатается, проверка вернётся с исправлением целых блоков воронки и волны по бетону.
      */
-    static final boolean SLAB_LAW = false;
-    /** Почему строки плит не проверяются. */
-    private static final String SLAB_PENDING = "ждёт закона пробоя плиты (SL)";
+    private static final String SUB_BLOCK_ISSUE = "изъян: воронка меньше блока и волна по бетону открывают плиту в блок";
     /**
      * Известный изъян (warhead.md): бетон на грунте ломается волной как стена здания — у шахеда в ~17 раз больше
      * воронки того же заряда в грунте. Строка печатается, проверка вернётся с исправлением волны и воронки.
@@ -134,8 +135,7 @@ public final class SurfaceGameTests {
         /** Почему строка не проверяется; null — проверяется. */
         @Nullable
         String pending() {
-            if (this == PAVED) return ROAD_ISSUE;
-            return slab() && !SLAB_LAW ? SLAB_PENDING : null;
+            return this == PAVED ? ROAD_ISSUE : null;
         }
     }
 
@@ -255,13 +255,16 @@ public final class SurfaceGameTests {
         return new double[]{mean, var};
     }
 
-    /** Радиус пробоя по FM 5-250, м: P = R³·K·C, внешний заряд без забивки. */
-    static double breachRadius(double tntKg, double k) {
-        return Math.cbrt(tntKg / (k * FM_C));
+    /**
+     * Радиус пробоя по FM 5-250, м: K = R³·M·C, внешний заряд без забивки; M — табл. B-3 по ступеням радиуса, группа
+     * «скала, хорошая кладка, бетонный блок» — камень настила и бетон крыши ({@link BreachModel}).
+     */
+    static double breachRadius(double tntKg) {
+        return BreachModel.Material.ROCK.radius(tntKg, BreachModel.UNTAMPED);
     }
 
-    /** FM 5-250, табл. B-3 (метрическая): K скалы, хорошей кладки и обычного бетона; C внешнего заряда без забивки. */
-    static final double FM_K_LO = 4.3, FM_K_HI = 5.1, FM_C = 1.8;
+    /** FM округляет радиус пробоя наружного заряда вверх до ½ фута (~0,25 м, 3-12b): допуск закона в обе стороны, м. */
+    static final double FM_ROUND = 0.25;
 
     /** Объём плиты толщиной {@code t} в радиусе {@code r} от заряда на её грани, м³. */
     static double slabVolume(double r, double t) {
@@ -272,7 +275,7 @@ public final class SurfaceGameTests {
     private static int spacing(WeaponType weapon) {
         double tnt = weapon.spec().charge();
         double reach = Math.max(2 * CraterModel.chargeRadius(tnt, CraterModel.Soil.DRY) + 1,
-                Math.max(breachRadius(tnt, FM_K_LO), BlastDamage.breakRange(BlastModel.kpa(12), tnt)));
+                Math.max(breachRadius(tnt) + FM_ROUND, BlastDamage.breakRange(BlastModel.kpa(12), tnt)));
         return Math.max(8, Mth.ceil(2 * reach + 2));
     }
 
@@ -344,11 +347,13 @@ public final class SurfaceGameTests {
         if (s.slab()) {
             // FM 5-250: снесено всё в радиусе пробоя, пробой — радиус больше толщины (1 м); плита над пустотой ещё и
             // панель — дальше пробоя её ломает волна не дальше, чем кладку (12 psi, Джаррет): верхняя граница
-            double rLo = breachRadius(tnt, FM_K_HI), rHi = breachRadius(tnt, FM_K_LO), rPanel = BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt);
-            double vLo = count * slabVolume(rLo, 1), vHi = count * Math.max(slabVolume(rHi, 1), Math.PI * rPanel * rPanel);
+            // радиус по ступеням табл. B-3 ± округление FM; не пробита — сносить по FM нечего (только воронка сверху)
+            double r = breachRadius(tnt), rLo = Math.max(0, r - FM_ROUND), rHi = r + FM_ROUND;
+            double rPanel = BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt);
+            boolean breach = rLo > 1, none = rHi < 1 && rPanel < 0.85;
+            double vLo = breach ? count * slabVolume(rLo, 1) : 0, vHi = count * Math.max(slabVolume(rHi, 1), Math.PI * rPanel * rPanel);
             // край дыры — целыми блоками: ±2√V блоков на шум края
             int lo = (int) Math.max(0, Math.floor(0.6 * vLo - 2 * Math.sqrt(vLo))), hi = (int) Math.ceil(1.45 * vHi + 2 * Math.sqrt(vHi));
-            boolean breach = rLo > 1.15, none = rHi < 0.85 && rPanel < 0.85;
             should = String.format(Locale.ROOT, "%d–%d бл., пробой %s (FM R %s–%s м, кладка %s м)", lo, hi,
                     breach ? "у всех" : none ? "нет" : "любой", f(rLo), f(rHi), f(rPanel));
             ok = removed >= lo && removed <= hi && (!breach || through == hits.size()) && (!none || through == 0);
@@ -366,7 +371,9 @@ public final class SurfaceGameTests {
             should = String.format(Locale.ROOT, "%d–%d бл. (закон %s), Ø %s м, глуб. ≤ %d", lo, hi, f(mean), f(2 * rc), deepest);
             ok = removed >= lo && removed <= hi && maxDepth <= Math.max(1, deepest);
         }
-        Row row = new Row(weapon.name(), s.title, should, got, s.pending() == null, ok, s.pending());
+        String pending = s.pending();
+        if (pending == null && s.slab() && breachRadius(tnt) + FM_ROUND < 1) pending = SUB_BLOCK_ISSUE;
+        Row row = new Row(weapon.name(), s.title, should, got, pending == null, ok, pending);
         report("surface_" + weapon.name().toLowerCase(Locale.ROOT), List.of(row));
         return row;
     }

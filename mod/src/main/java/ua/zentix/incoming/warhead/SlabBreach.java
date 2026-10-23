@@ -112,13 +112,16 @@ final class SlabBreach {
     /**
      * Где заряд {@code tnt} кг ТНТ с центром {@code centre} приложен к преграде; null — не приложен (центр в воздухе дальше
      * радиуса заряда от любой грани, в неготовом чанке, в непробиваемом). У заряда на грани ({@link Placement#SURFACE}):
-     * центр в твёрдом блоке (точка прицела — полблока в землю) — заряд лежит на его открытой грани (сторона, где у блока
-     * пустота), лучи — от неё внутрь: толщина считается от поверхности, как у FM (R наружного заряда — вся толщина);
-     * открыты две противоположные грани (настил в один блок) — лучи во все стороны из центра; центр в пустоте у грани
-     * (удар носом о поверхность) — оттуда же, внутрь.
+     * центр в твёрдом блоке (точка прицела — полблока в землю) — заряд лежит на той его открытой грани (сторона, где у
+     * блока пустота), через которую пришла боевая часть ({@code axis} — её курс у удара): у настила в один блок открыты
+     * обе грани, и толщина — весь блок от грани удара, а не полблока от центра; лучи — от грани внутрь: толщина
+     * считается от поверхности, как у FM (R наружного заряда — вся толщина). Курса нет — грань по сумме открытых сторон
+     * (у настила в блок — из центра во все стороны). Центр в пустоте у грани (удар носом о поверхность) — оттуда же,
+     * внутрь.
      */
     @Nullable
-    static Origin locate(ServerLevel level, Vec3 centre, double tnt, Placement placement, Explosion e, ExplosionDamageCalculator damage) {
+    static Origin locate(ServerLevel level, Vec3 centre, double tnt, Placement placement, @Nullable Vec3 axis, Explosion e,
+                         ExplosionDamageCalculator damage) {
         if (placement == Placement.NONE || !(tnt > 0)) return null;
         double c = placement == Placement.BURIED ? BreachModel.TAMPED : BreachModel.UNTAMPED;
         double[] radius = new double[BreachModel.Material.values().length];
@@ -131,6 +134,9 @@ final class SlabBreach {
         Cell here = cell(level, cell, level.getBlockState(cell), e, damage);
         if (here == Cell.STOP) return null;
         double x = 0, y = 0, z = 0, gap = Double.MAX_VALUE;
+        // грань, через которую пришла боевая часть: из открытых — та, чья наружная сторона больше всего навстречу курсу
+        Direction hit = null;
+        double facing = 0;
         for (Direction d : Direction.values()) {
             BlockPos n = cell.relative(d);
             if (!Terrain.ready(level, n)) return null;
@@ -141,6 +147,17 @@ final class SlabBreach {
                 z += d.getStepZ();
             }
             if (here == Cell.VOID && k == Cell.SOLID) gap = Math.min(gap, faceDistance(cell, centre, d));
+            if (here == Cell.SOLID && k == Cell.VOID && axis != null) {
+                double f = -(d.getStepX() * axis.x + d.getStepY() * axis.y + d.getStepZ() * axis.z);
+                if (hit == null || f > facing) {
+                    hit = d;
+                    facing = f;
+                }
+            }
+        }
+        if (hit != null) {
+            Vec3 open = new Vec3(hit.getStepX(), hit.getStepY(), hit.getStepZ());
+            return new Origin(exit(cell, centre, open), open, rc + STEP, radius);
         }
         Vec3 sum = new Vec3(x, y, z);
         if (here == Cell.VOID) {
