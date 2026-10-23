@@ -4,10 +4,13 @@
 # горячей заменой, ресурсы — перезагрузкой, без нового клиента. Сценарий — Sandbox (mod/src/devtest), команды —
 # SandboxCommand; каталог клиента — mod/run/sandbox, кадры и звук — mod/run/sandbox/fx/out/<имя>/.
 #
-#   tools/sandbox.sh start [shaders] [dh] [soft] [--size 1280x720]   клиент в фоне (задача ноутбука sandbox-<дерево>):
+#   tools/sandbox.sh start [shaders] [dh] [soft] [--wait] [--size 1280x720]   клиент в фоне (задача ноутбука
+#                                          sandbox-<дерево>): берёт аренду видеокарты своей сессии (tools/gpu_lease.sh) —
+#                                          она у другой сессии: выход 75 со строкой «видеокарта у …» (--wait — ждать её);
 #                                          при игре Артёма — выход 75; выходит, когда мир готов; живёт, пока не stop или
-#                                          игра Артёма (с картинкой — одна сессия за раз, ей видеокарту не уступать);
-#                                          soft — без видеокарты (xvfb-run, llvmpipe: 3–10 кадров/с, без шейдеров; облако)
+#                                          игра Артёма, и продлевает аренду; чужие задачи без видеокарты её не гасят;
+#                                          soft — без видеокарты и без аренды (xvfb-run, llvmpipe: 3–10 кадров/с, без
+#                                          шейдеров; облако)
 #   tools/sandbox.sh fx '<команда>' …      команды /fx по очереди (blast drone, cam 60 10 90 8, time night, clear, …),
 #                                          каждая ждёт своего итога
 #   tools/sandbox.sh swap                  собрать изменённое (Gradle), горячая замена классов, перезагрузка ресурсов,
@@ -21,7 +24,7 @@
 #   tools/sandbox.sh restart [опции start] остановить и запустить заново (после правки, которую замена не берёт)
 #   tools/sandbox.sh jbr                   поставить JetBrains Runtime (общий для всех деревьев, mod/run/jbr главного):
 #                                          с ним замена берёт и новые поля, методы, лямбды; start берёт его сам
-#   tools/sandbox.sh stop | status
+#   tools/sandbox.sh stop | status          закончил с картинкой — ещё tools/gpu_lease.sh release
 #
 # INCOMING_SANDBOX_JAVA=<java> — своя JVM песочницы (JetBrains Runtime — с -XX:+AllowEnhancedClassRedefinition).
 set -uo pipefail
@@ -36,6 +39,9 @@ jbr_java() { local j="$JBR_DIR/$JBR_BUILD/bin/java"; [ -x "$j" ] && echo "$j"; }
 export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}"
 
 artem() { pgrep -f 'java.*PrismLauncher/[i]nstances/' >/dev/null; }
+# аренда видеокарты (tools/gpu_lease.sh): владелец — сессия по дереву
+source "$(dirname "$0")/gpu_lease.sh"
+export INCOMING_GPU_OWNER="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 running() { [ -n "$(systemctl --user list-units "$UNIT-*" --state=active --no-legend --plain)" ]; }
 
 # одна команда /fx: файл в inbox, ждать итога (*.done); вывод — итог, код 1 — ошибка
@@ -118,9 +124,10 @@ PY
 }
 
 start() {
-  local size=1280x720 opts=() pack
+  local size=1280x720 opts=() pack wait=
   while [ $# -gt 0 ]; do
     case "$1" in
+      --wait) wait=--wait ;;
       shaders) export INCOMING_SHADERS=1 ;;
       dh) export INCOMING_DH=1 ;;
       soft) export INCOMING_SANDBOX_SOFT=1 ;;
@@ -130,9 +137,6 @@ start() {
     shift
   done
   running && { echo "песочница уже идёт ($UNIT)"; exit 0; }
-  # с картинкой — одна сессия за раз: песочница другого дерева — оставленная прошлой сессией, её гасят
-  local other; other=$(systemctl --user list-units 'incoming-job-sandbox-*' --state=active --no-legend --plain | awk '{print $1}' | grep -v -- "^$UNIT-" || true)
-  [ -n "$other" ] && { echo "идёт песочница другого дерева ($other) — её tools/sandbox.sh stop" >&2; exit 75; }
   # JetBrains Runtime, если поставлен (tools/sandbox.sh jbr): замена берёт и новые поля и методы
   if [ -z "${INCOMING_SANDBOX_JAVA:-}" ] && jbr_java >/dev/null; then export INCOMING_SANDBOX_JAVA="$(jbr_java)"; fi
   unset INCOMING_SANDBOX_ENHANCED
@@ -143,6 +147,8 @@ start() {
   echo "JVM: ${INCOMING_SANDBOX_JAVA:-тулчейн Gradle}; замена — $swaps"
   if [ -z "${INCOMING_SANDBOX_SOFT:-}" ]; then
     artem && { echo "игра Артёма запущена — видеокарту не берём" >&2; exit 75; }
+    # с картинкой — одна сессия за раз: аренда у другой — отказ (её песочницу и задачи не гасим)
+    lease_take "$INCOMING_GPU_OWNER" "$ROOT" $wait || exit 75
   elif [ -n "${INCOMING_SHADERS:-}" ]; then
     echo "soft — без шейдеров (llvmpipe)" >&2; exit 2
   elif ! command -v xvfb-run >/dev/null; then
@@ -211,8 +217,10 @@ run_client() {
   else
     "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   fi
-  local pc=$!
+  local pc=$! n=0
   while kill -0 $pc 2>/dev/null; do
+    # аренда своей сессии, пока песочница идёт (раз в 30 с)
+    [ -z "${INCOMING_SANDBOX_SOFT:-}" ] && [ $((n++ % 6)) = 0 ] && { lease_renew "$INCOMING_GPU_OWNER" || true; }
     if [ -z "${INCOMING_SANDBOX_SOFT:-}" ] && artem; then echo "$(date +%T) игра Артёма запустилась — гашу песочницу" | tee "$FX/stopped"; kill -TERM $pc; wait $pc; exit 75; fi
     sleep 5
   done
@@ -274,7 +282,7 @@ case "$cmd" in
   restart) stop; sleep 2; start "$@" ;;
   stop) stop ;;
   jbr) jbr ;;
-  status) if running; then echo "идёт; готов за $(cat "$FX/ready" 2>/dev/null) с; замена: $(cat "$FX/hotswap" 2>/dev/null)"; else echo "не запущена"; fi ;;
+  status) if running; then echo "идёт; готов за $(cat "$FX/ready" 2>/dev/null) с; замена: $(cat "$FX/hotswap" 2>/dev/null)"; else echo "не запущена"; fi; lease_status || true ;;
   fx) for c in "$@"; do fx "$c" || exit 1; done ;;
   swap) swap ;;
   shot) [ $# -ge 2 ] || { echo "shot <имя> '<эффект>' [--at …] [--wav …] [--cam …]" >&2; exit 2; }; shot "$@" ;;
