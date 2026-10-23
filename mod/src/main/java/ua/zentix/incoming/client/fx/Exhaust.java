@@ -376,7 +376,7 @@ public final class Exhaust {
         Vec3 p = e.position();
         Vec3 from = SPENT.put(e, p);
         if (e.age() >= SPENT_SMOKE_TICKS || e.landed()) return;
-        segment(level, from, p, Fx.smoke().size(0.15f, 0.7f).life(40).color(0x9A948C, 0xB4AEA6).alpha(0.3f).fadeFrom(0.3f).budget(FxBudget.DEBRIS), 1.0,
+        segment(level, from, p, Fx.smoke().size(0.3f, 1.2f).life(50).color(0x9A948C, 0xB4AEA6).alpha(0.55f).fadeFrom(0.3f).budget(FxBudget.DEBRIS), 1.0,
                 level.random);
     }
 
