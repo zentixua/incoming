@@ -49,8 +49,12 @@ public final class NozzleGlow {
     static final double SAMPLE = 0.05;
     /** Сколько секунд остывания после конца работы в таблице: ускоритель живёт в мире меньше ({@code SpentBoosterEntity}). */
     static final double AFTER = 60;
-    /** Узлов сетки по толщине стенки. */
-    static final int CELLS = 20;
+    /**
+     * Узлов сетки по толщине: у углепластика — {@value #CELLS_LINER} (глубина прогрева за спад тяги √(α·t) — 0,25–0,55 мм,
+     * узел не толще её половины; с 20 узлами раструб на отделении выходил на 90–125 K холоднее закона), у графита —
+     * {@value #CELLS_INSERT} (он проводит в 40 раз лучше; ошибка не больше ~15 K, счёт десятки мс).
+     */
+    static final int CELLS_LINER = 80, CELLS_INSERT = 40;
 
     /**
      * Материал стенки: теплопроводность и теплоёмкость по температуре (таблицы, между точками — по прямой), плотность,
@@ -105,7 +109,12 @@ public final class NozzleGlow {
      * Стенка: материал, толщина, м, коэффициент теплоотдачи газа на полке, Вт/(м²·K), температура восстановления, K,
      * степень черноты газа в сопле на полке (сквозь него стенка излучает наружу).
      */
-    record Wall(Material material, double thickness, double gas, double recovery, double gasEmissivity) {}
+    record Wall(Material material, double thickness, double gas, double recovery, double gasEmissivity) {
+        /** Узлов сетки по толщине. */
+        int cells() {
+            return material == Material.GRAPHITE ? CELLS_INSERT : CELLS_LINER;
+        }
+    }
 
     /** Вид сопла в миг: радиусы среза и горла, глубина горла за срезом, м; температуры раструба и горла, K. */
     public record Shine(double exitRadius, double throatRadius, double depth, double coneKelvin, double throatKelvin) {
@@ -168,13 +177,13 @@ public final class NozzleGlow {
         // раструб — одной стенкой в середине по площади (⚠): теплоотдача и восстановление там
         double mid = (1 + ratio) / 2;
         // чернота газа в сопле — ядра струи поперёк у среза (⚠ в сопле газ плотнее: оценка снизу)
-        Flame plateau = FlameModel.at(motor, ua.zentix.incoming.util.Air.SEA);
+        Flame plateau = FlameModel.at(motor, 0);
         double gas = plateau == null ? 0 : plateau.emissivity();
         throatWall = new Wall(Material.GRAPHITE, INSERT * throatRadius, bartz(motor, 1), recovery(motor, 1), gas);
         coneWall = new Wall(Material.CARBON_PHENOLIC, LINER * throatRadius, bartz(motor, mid), recovery(motor, mach(motor.gamma(), mid)), gas);
         tail = curve.tail() / 20;
-        throat = surface(throatWall, burn, tail, AFTER, 1);
-        cone = surface(coneWall, burn, tail, AFTER, 1);
+        throat = surface(throatWall, burn, tail, AFTER, 1, 1);
+        cone = surface(coneWall, burn, tail, AFTER, 1, 1);
     }
 
     public Motor motor() {
@@ -287,45 +296,46 @@ public final class NozzleGlow {
     }
 
     /**
-     * Температура поверхности стенки через {@link #SAMPLE} с от поджига до burn + after: теплопроводность по толщине
-     * (явная сетка {@link #CELLS} узлов, тыльная сторона закрыта), поверхность — из баланса потоков в ней
-     * ({@link #surfaceTemperature}) при доле тяги настоящей кривой ({@link #share}: выход на режим, полка, спад tail с).
-     * Шаг — по устойчивости сетки, но не крупнее четверти шага таблицы и десятой доли спада (у углепластика устойчивость
-     * позволяет 0,1–0,3 с — спад прошёл бы за один-два шага); fine — во сколько раз мельче (эталон в тестах).
+     * Температура поверхности стенки через {@link #SAMPLE} с от поджига до burn + after: теплопроводность по толщине —
+     * явная сетка {@link Wall#cells} × cellScale узлов от поверхности до тыла (крайние — полуячейки; тыл закрыт), узел на
+     * самой поверхности получает поток {@link #flux} при доле тяги настоящей кривой ({@link #share}: выход на режим, полка,
+     * спад tail с) — схема второго порядка: с узлом в полуячейке под поверхностью и балансом через него прогрев графита
+     * под факелом сходился медленно (~25 K на 40 узлах). Шаг — по устойчивости, но не крупнее четверти шага таблицы и десятой
+     * доли спада (у углепластика устойчивость позволяет 0,1–0,3 с — спад прошёл бы за один-два шага); fine — во сколько
+     * раз мельче шаг по времени, cellScale — во сколько раз больше узлов (эталон в тестах).
      */
-    static double[] surface(Wall w, double burn, double tail, double after, double fine) {
+    static double[] surface(Wall w, double burn, double tail, double after, double fine, int cellScale) {
         Material mat = w.material();
-        double dx = w.thickness() / CELLS, air = StandardAtmosphere.T0;
-        double[] t = new double[CELLS], next = new double[CELLS];
+        int n = w.cells() * cellScale + 1;
+        double dx = w.thickness() / (n - 1), air = StandardAtmosphere.T0;
+        double[] t = new double[n], next = new double[n];
         java.util.Arrays.fill(t, air);
-        // явная сетка: шаг по устойчивости узла (полуузел у поверхности — вдвое уже)
-        double dt = Math.min(0.25 * dx * dx / mat.maxDiffusivity(), Math.min(SAMPLE / 4, tail / 10)) / fine;
+        // полуячейка у поверхности: ρc·dx/2 против 2k/dx к соседу и потока газа — шаг вдвое меньше внутреннего
+        double dt = Math.min(0.2 * dx * dx / mat.maxDiffusivity(), Math.min(SAMPLE / 4, tail / 10)) / fine;
         ThrustCurve real = new ThrustCurve(ThrustCurve.RISE, burn * 20 - ThrustCurve.RISE, tail * 20);
         int samples = (int) Math.ceil((burn + after) / SAMPLE) + 1;
         double[] out = new double[samples];
-        double time = 0, prev = surfaceTemperature(w, air, dx, share(real, burn, 0), air);
-        int n = 0;
-        out[n++] = prev;
-        while (n < samples) {
-            double ts = surfaceTemperature(w, t[0], dx, share(real, burn, time), air);
-            // поток в первый узел — с поверхности через полуузел
-            for (int i = 0; i < CELLS; i++) {
-                double in = i == 0 ? 2 * mat.conductivity((ts + t[0]) / 2) * (ts - t[0]) / dx
-                        : mat.conductivity((t[i - 1] + t[i]) / 2) * (t[i - 1] - t[i]) / dx;
-                double outFlow = i == CELLS - 1 ? 0 : mat.conductivity((t[i] + t[i + 1]) / 2) * (t[i] - t[i + 1]) / dx;
-                next[i] = t[i] + dt * (in - outFlow) / (mat.density * mat.heat(t[i]) * dx);
+        double time = 0;
+        int k = 0;
+        out[k++] = air;
+        while (k < samples) {
+            double q = flux(w, t[0], share(real, burn, time), air);
+            for (int i = 0; i < n; i++) {
+                double in = i == 0 ? q : mat.conductivity((t[i - 1] + t[i]) / 2) * (t[i - 1] - t[i]) / dx;
+                double outFlow = i == n - 1 ? 0 : mat.conductivity((t[i] + t[i + 1]) / 2) * (t[i] - t[i + 1]) / dx;
+                double cell = i == 0 || i == n - 1 ? dx / 2 : dx;
+                next[i] = t[i] + dt * (in - outFlow) / (mat.density * mat.heat(t[i]) * cell);
+            }
+            double nowTime = time + dt;
+            // записи между шагами — по прямой
+            while (k < samples && k * SAMPLE <= nowTime) {
+                double f = (k * SAMPLE - time) / dt;
+                out[k++] = t[0] + (next[0] - t[0]) * f;
             }
             double[] swap = t;
             t = next;
             next = swap;
-            double nowTime = time + dt, now = surfaceTemperature(w, t[0], dx, share(real, burn, nowTime), air);
-            // записи между шагами — по прямой
-            while (n < samples && n * SAMPLE <= nowTime) {
-                double f = (n * SAMPLE - time) / dt;
-                out[n++] = prev + (now - prev) * f;
-            }
             time = nowTime;
-            prev = now;
         }
         return out;
     }
@@ -337,27 +347,17 @@ public final class NozzleGlow {
     }
 
     /**
-     * Температура поверхности стенки, у которой первый узел t0 в полуузле dx/2, при доле тяги share — один баланс на всё
-     * время, по Ньютону: подвод газа h·s^0,8·(T_восст − T); излучение наружу ε·σ·{@link #VIEW_OUT}·(T⁴ − T_в⁴) — сквозь
-     * газ в сопле, доля (1 − ε_г(s)), ε_г(s) = 1 − (1 − ε_г)^s (толща газа ∝ расходу, как у {@code Flame.dimmed});
-     * воздух {@link #AIR_H} — долей (1 − s): пока газ идёт, воздуха у стенки нет; против подвода теплопроводностью из
-     * толщи. Все члены непрерывны по s — конец работы без ступеньки (при выключателе «газ — излучение» поверхность раструба
-     * прыгала на ~280 K в один миг).
+     * Поток тепла в поверхность стенки температуры ts при доле тяги share, Вт/м² (в стенку — больше нуля) — один баланс на
+     * всё время: подвод газа h·s^0,8·(T_восст − T); излучение наружу ε·σ·{@link #VIEW_OUT}·(T⁴ − T_в⁴) — сквозь газ в сопле,
+     * доля (1 − ε_г(s)), ε_г(s) = 1 − (1 − ε_г)^s (толща газа ∝ расходу, как у {@code Flame.dimmed}); воздух {@link #AIR_H}
+     * — долей (1 − s): пока газ идёт, воздуха у стенки нет. Все члены непрерывны по s — конец работы без ступеньки (при
+     * выключателе «газ — излучение» поверхность раструба прыгала на ~280 K в один миг).
      */
-    static double surfaceTemperature(Wall w, double t0, double dx, double share, double air) {
+    static double flux(Wall w, double ts, double share, double air) {
         Material mat = w.material();
-        double g = 2 * mat.conductivity(t0) / dx;
         double h = share > 0 ? w.gas() * Math.pow(share, 0.8) : 0;
         double rad = mat.emissivity * SIGMA * VIEW_OUT * Math.pow(1 - w.gasEmissivity(), share), conv = AIR_H * (1 - share);
-        double ts = (h * w.recovery() + g * t0) / (h + g);
-        for (int i = 0; i < 30; i++) {
-            double f = h * (w.recovery() - ts) + g * (t0 - ts) - rad * (Math.pow(ts, 4) - Math.pow(air, 4)) - conv * (ts - air);
-            double df = -h - g - 4 * rad * ts * ts * ts - conv;
-            double step = f / df;
-            ts -= step;
-            if (Math.abs(step) < 1e-6) break;
-        }
-        return Math.max(air, ts);
+        return h * (w.recovery() - ts) - rad * (Math.pow(ts, 4) - Math.pow(air, 4)) - conv * (ts - air);
     }
 
     // ------------------------------------------------------------------ свет

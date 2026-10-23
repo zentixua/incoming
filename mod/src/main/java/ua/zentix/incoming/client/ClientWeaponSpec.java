@@ -394,7 +394,9 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     @Nullable
     public static NozzleGlow nozzleGlow(WeaponType weapon) {
         var f = NOZZLES.computeIfAbsent(weapon, w -> java.util.concurrent.CompletableFuture.supplyAsync(() -> buildNozzleGlow(w),
-                net.minecraft.Util.backgroundExecutor()));
+                net.minecraft.Util.backgroundExecutor()).whenComplete((g, ex) -> {
+                    if (ex != null) ua.zentix.incoming.Incoming.LOG.error("Booster nozzle glow of {} failed: no hot nozzle", w, ex);
+                }));
         return f.isDone() && !f.isCompletedExceptionally() ? f.join().orElse(null) : null;
     }
 

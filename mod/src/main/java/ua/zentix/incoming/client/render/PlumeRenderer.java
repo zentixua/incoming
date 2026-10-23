@@ -175,24 +175,28 @@ public final class PlumeRenderer {
         double cos = -(axis.x * nx + axis.y * ny + axis.z * nz) / dist;
         if (cos <= 0) return;
         double lit = exposure * view.air(dist, ny);
-        double cone = s.coneLuminance(), throat = s.throatLuminance() * s.throatSeen(cos);
+        // свет через срез: горло — своим кругом на его доле, видной через срез, раструб — остальной площадью среза; кругом
+        // поверх круга слой только складывает, поэтому раструб — ровным светом среза за вычетом доли горла (поток точный,
+        // ⚠ горло холоднее раструба в середине не темнеет)
+        double throatShare = s.throatSeen(cos) * (s.throatRadius() * s.throatRadius()) / (s.exitRadius() * s.exitRadius());
         // срез — чуть позади своей плоскости: не в одной глубине с краем сетки сопла
         plate(out, view, new Vector3f(axis).mul(0.01f).add(nx, ny, nz), ax, ay, s.exitRadius(), cos, dist, NozzleGlow.color(s.coneKelvin()),
-                cone * lit, hot.near());
+                s.coneLuminance() * (1 - throatShare) * lit, hot.near());
         plate(out, view, new Vector3f(axis).mul((float) -s.depth()).add(nx, ny, nz), ax, ay, s.throatRadius(), cos, dist,
-                NozzleGlow.color(s.throatKelvin()), Math.max(0, throat - cone * s.throatSeen(cos)) * lit, hot.near());
+                NozzleGlow.color(s.throatKelvin()), s.throatLuminance() * s.throatSeen(cos) * lit, hot.near());
     }
 
     /** Круг радиуса r с центром c (от глаза) в плоскости осей ax, ay, видный под косинусом cos с дальности dist. */
     private static void plate(FarSprites out, FarView view, Vector3f c, Vector3f ax, Vector3f ay, double r, double cos, double dist, int color,
                               double lum, float near) {
         if (lum <= 0) return;
-        // видимый круг той же площади — r·√cos; мельче пятна в полтора пикселя — круглым пятном лицом к камере, бледнее
-        // во столько же раз (с ребра растянутый по обеим осям круг шёл бы иглой тоньше пикселя — мерцающими точками)
-        double seen = r * Math.sqrt(cos), least = 0.5 * Sight.MIN_PIXELS * view.pixel() * dist;
-        if (seen < least) {
-            float[] rgb = Sight.onScreen(color, lum * (seen / least) * (seen / least), near);
-            out.glowDisc(c.x, c.y, c.z, least, rgb[0], rgb[1], rgb[2], 0);
+        // эллипс тоньше пятна в полтора пикселя (малая ось — r·cos) — круглым пятном лицом к камере с тем же светом
+        // (площадь эллипса — π·r²·cos): иначе с ребра — игла тоньше пикселя, мерцающие точки
+        double least = 0.5 * Sight.MIN_PIXELS * view.pixel() * dist;
+        if (r * cos < least) {
+            double spot = Math.max(least, r * Math.sqrt(cos));
+            float[] rgb = Sight.onScreen(color, lum * r * r * cos / (spot * spot), near);
+            out.glowDisc(c.x, c.y, c.z, spot, rgb[0], rgb[1], rgb[2], 0);
             return;
         }
         float[] rgb = Sight.onScreen(color, lum, near);

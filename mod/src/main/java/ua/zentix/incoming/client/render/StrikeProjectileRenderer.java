@@ -49,14 +49,13 @@ public class StrikeProjectileRenderer<T extends StrikeProjectile> extends Entity
             float near = (float) (1 - FarView.farShare(at.distanceTo(entityRenderDispatcher.camera.getPosition()), world));
             if (near > 0) PlumeRenderer.render(plume.dimmed(near), entity, rotation, at);
         }
-        // горячее сопло ускорителя: под факелом, а на спаде тяги — когда огонь гаснет
+        // горячее сопло ускорителя: под факелом, а на спаде тяги — когда огонь гаснет; вдали его ничто не сменяет (сопло —
+        // доли пикселя), поэтому во всю силу, как у отделившегося: иначе на отделении у края прорисовки оно вспыхивало бы
         Exhaust.Hot hot = Exhaust.hot(entity, partialTick);
         if (hot != null) {
             Vec3 at = entity.getPosition(partialTick);
             Vector3f n = new Vector3f((float) hot.at().x(), (float) hot.at().y(), (float) hot.at().z()).rotate(rotation);
-            double world = Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0;
-            float near = (float) (1 - FarView.farShare(at.distanceTo(entityRenderDispatcher.camera.getPosition()), world));
-            if (near > 0) PlumeRenderer.glow(hot.shine(), entity, rotation, at.add(n.x, n.y, n.z), near);
+            PlumeRenderer.glow(hot.shine(), entity, rotation, at.add(n.x, n.y, n.z), 1);
         }
         pose.popPose();
         super.render(entity, entityYaw, partialTick, pose, buffers, packedLight);
