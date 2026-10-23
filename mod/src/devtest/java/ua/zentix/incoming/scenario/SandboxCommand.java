@@ -35,6 +35,8 @@ import java.util.Locale;
  *       (по умолчанию {@link #FLIGHT_FROM}), цель — столько же к северу, у оружия с маршрутом оператора (шахед, ракета,
  *       «Ланцет») точка маршрута — сама точка ({@link #order}); время — от ближайшего к ней места; у {@code launch} и
  *       {@code flight} последнее слово {@code own} — пуск от игрока (свои снаряды: список и метки на экране);</li>
+ *   <li>{@code spent <оружие> [высота]} — отработавший ускоритель ({@code SpentBoosterEntity}) в высоте над точкой (по
+ *       умолчанию 20 м): падает, кувыркаясь, и лежит; время — от конца работы его двигателя (горячее сопло, {@code NozzleGlow});</li>
  *   <li>{@code fire [сторона]} — пожар: квадрат незерака с огнём в точке;</li>
  *   <li>{@code cam <дальность> [высота] [азимут°] [взгляд]} — где камера: дальность от точки, высота над землёй, азимут
  *       от точки (0 — юг, 90 — запад, как поворот игрока), высота точки взгляда над землёй;</li>
@@ -59,12 +61,12 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: сторона и глубина пруда, блоков (пруд шире столба и кольца брызг шахеда). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
         return switch (verb) {
-            case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, RAID, SAM -> true;
+            case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, RAID, SAM -> true;
             default -> false;
         };
     }
@@ -137,6 +139,12 @@ record SandboxCommand(Verb verb, List<String> args) {
             case AIRBURST -> {
                 need(0, 1);
                 if (!args.isEmpty()) seed();
+            }
+            case SPENT -> {
+                need(1, 2);
+                var booster = weapon().spec().airframe().article().booster();
+                if (booster == null || booster.jettison() <= 0) throw new IllegalArgumentException("у оружия нет сбрасываемого ускорителя");
+                if (args.size() > 1 && (number(1) < 0 || number(1) > 200)) throw new IllegalArgumentException("высота 0–200 м");
             }
             case FIRE -> {
                 need(0, 1);

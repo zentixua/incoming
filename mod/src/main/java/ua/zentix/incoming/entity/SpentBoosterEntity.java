@@ -1,7 +1,6 @@
 package ua.zentix.incoming.entity;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -17,11 +16,10 @@ import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.util.Local;
-import ua.zentix.incoming.util.Particles;
 
 /**
  * Отработавший стартовый ускоритель: отделяется от шахеда или ракеты, кувыркаясь, падает по баллистике,
- * первые секунды дымит догорающим топливом, падает с глухим стуком и через несколько секунд исчезает.
+ * первые секунды дымит, сопло светится, пока не остынет, падает с глухим стуком и через несколько секунд исчезает.
  * Никого не калечит (корпус пустой и лёгкий) и блоков не ломает.
  */
 public class SpentBoosterEntity extends Entity {
@@ -75,13 +73,8 @@ public class SpentBoosterEntity extends Entity {
         }
         setDeltaMovement(v);
         move(MoverType.SELF, v);
-        if (level().isClientSide) {
-            if (age < 70 && !onGround()) {
-                Particles.burst(level(), ParticleTypes.CAMPFIRE_COSY_SMOKE, getX(), getY(), getZ(), 0.1, 0.1, 0.1, 0.005, 1);
-                if (age < 12) Particles.burst(level(), ParticleTypes.SMALL_FLAME, getX(), getY(), getZ(), 0.05, 0.05, 0.05, 0.01, 2);
-            }
-            return;
-        }
+        // дым и горячее сопло у клиента — слой эффектов (Exhaust.spent, NozzleGlow)
+        if (level().isClientSide) return;
         if (onGround() && landedAt < 0) {
             landedAt = age;
             level().playSound(null, BlockPos.containing(position()), SoundEvents.ANVIL_LAND, SoundSource.NEUTRAL, 1.2f, 0.5f);

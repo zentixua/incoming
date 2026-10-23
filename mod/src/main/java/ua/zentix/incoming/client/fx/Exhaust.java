@@ -34,6 +34,7 @@ import ua.zentix.incoming.entity.IcbmEntity;
 import ua.zentix.incoming.entity.InterceptorEntity;
 import ua.zentix.incoming.entity.LauncherEntity;
 import ua.zentix.incoming.entity.RocketEntity;
+import ua.zentix.incoming.entity.SpentBoosterEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.util.Local;
 
@@ -358,6 +359,25 @@ public final class Exhaust {
         } else if (moving) {
             segment(level, from, p, Fx.smoke().size(0.2f, 0.8f).life(40).color(0x8A8278, 0xA8A098).alpha(0.35f).fadeFrom(0.3f).budget(FxBudget.DEBRIS), 1.2, r);
         }
+    }
+
+    /** Прошлое место отработавшего ускорителя: дым — по отрезку пути. */
+    private static final Map<SpentBoosterEntity, Vec3> SPENT = new WeakHashMap<>();
+    /** Ускоритель дымит столько тиков падения (как прежде). */
+    static final int SPENT_SMOKE_TICKS = 70;
+
+    /**
+     * Отработавший ускоритель в падении: жидкий дымок — тлеет горячая теплозащита у сопла (⚠ сколько — не считается: прежний
+     * вид, первые 3,5 с падения), слоем эффектов, а не ванильными частицами: ванильные пишут глубину, и горячее сопло
+     * ({@code NozzleGlow}) за дымком пропадало целиком. Огня нет: тяга кончилась спадом до отделения ({@code ThrustCurve}).
+     */
+    public static void spent(SpentBoosterEntity e) {
+        if (!(e.level() instanceof ClientLevel level)) return;
+        Vec3 p = e.position();
+        Vec3 from = SPENT.put(e, p);
+        if (e.age() >= SPENT_SMOKE_TICKS || e.landed()) return;
+        segment(level, from, p, Fx.smoke().size(0.15f, 0.7f).life(40).color(0x9A948C, 0xB4AEA6).alpha(0.3f).fadeFrom(0.3f).budget(FxBudget.DEBRIS), 1.0,
+                level.random);
     }
 
     // ---------------------------------------------------------------- общее
