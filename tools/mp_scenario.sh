@@ -57,6 +57,14 @@ done
 RIG="$MOD/build/rig"
 # сервер и клиенты — каждый в своей сессии; выход скрипта (и Ctrl+C) гасит их целиком, с JVM под обёртками
 source "$ROOT/tools/rig_procs.sh"
+
+# на рабочем столе клиенты идут на видеокарте (nested_kwin.sh): аренда и замок клиента — один раз на всю работу, её
+# клиенты наследуют замок (tools/gpu_lease.sh)
+if command -v kwin_wayland >/dev/null; then
+  source "$ROOT/tools/gpu_lease.sh"
+  lease_take "${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}" "$ROOT" || exit 75
+  gpu_client_hold "${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}" "$ROOT" "$(basename "$0")" || exit 75
+fi
 rig_trap
 rig_spawn "$RIG/mp-server.sh" > "$RUN/mp-server.out" 2>&1
 SERVER_PID=$RIG_LAST

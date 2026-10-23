@@ -48,6 +48,7 @@ wait $w 2>/dev/null
 # laptop_job.sh --gpu и sandbox.sh start другой сессии — отказ до службы и до сборки
 out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/laptop_job.sh" --gpu film -- false 2>&1); rc=$?
 [ $rc = 75 ] && [[ $out == *"видеокарта у SH"* ]] && ok "laptop_job --gpu другой сессии — отказ 75" || bad "laptop_job --gpu: $rc $out"
+[ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] || { bad "аренда не у SH — дальше нельзя: start поднял бы клиент"; exit 1; }
 out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start 2>&1); rc=$?
 # на ноутбуке при игре Артёма раньше аренды отказывает она (тоже 75, аренду не берёт)
 [ $rc = 75 ] && [[ $out == *"видеокарта у SH"* || $out == *"игра Артёма запущена"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] \
@@ -57,4 +58,30 @@ before=$(cat "$INCOMING_GPU_LEASE")
 out=$(INCOMING_GPU_OWNER=FZC timeout 20 "$ROOT/tools/laptop_job.sh" gametest -- true 2>&1); rc=$?
 [ $rc != 75 ] && [[ $out != *"видеокарта у"* ]] && [ "$(cat "$INCOMING_GPU_LEASE")" = "$before" ] \
   && ok "задача без видеокарты идёт рядом, аренда та же (код $rc)" || bad "задача без видеокарты: $rc $out"
+# клиент на видеокарте (nested_kwin.sh): другая сессия — отказ до KWin; клиент уже идёт — отказ и своей сессии
+out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/nested_kwin.sh" wayland-test 64 64 true 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"видеокарта у SH"* ]] && ok "клиент другой сессии — отказ 75 до KWin" || bad "nested_kwin другой сессии: $rc $out"
+( source "$ROOT/tools/gpu_lease.sh"; INCOMING_GPU_RENEW=1 gpu_client_hold SH /x/wt-SH "клиент проверки"; exec sleep 4 ) & c=$!
+sleep 0.5
+out=$(INCOMING_GPU_OWNER=SH "$ROOT/tools/nested_kwin.sh" wayland-test 64 64 true 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"на видеокарте идёт клиент SH (/x/wt-SH)"* ]] && ok "второй клиент своей сессии — отказ: $out" || bad "второй клиент: $rc $out"
+out=$(INCOMING_GPU_OWNER=SH "$ROOT/tools/laptop_job.sh" --gpu bake -- false 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"идёт клиент"* ]] && ok "задача --gpu при живом клиенте — отказ" || bad "задача --gpu при клиенте: $rc $out"
+out=$(INCOMING_GPU_OWNER=SH "$ROOT/tools/gpu_lease.sh" release 2>&1); rc=$?
+[ $rc = 75 ] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] && ok "release при своём клиенте — отказ" || bad "release при клиенте: $rc $out"
+seen0=$(cut -f4 "$INCOMING_GPU_LEASE"); sleep 2.5
+[ "$(cut -f4 "$INCOMING_GPU_LEASE")" -gt "$seen0" ] && ok "живой клиент продлевает аренду" || bad "клиент не продлевает"
+wait $c; sleep 1.5
+gpu_client_busy >/dev/null && bad "замок клиента остался после его конца" || ok "клиент кончился — замок свободен"
+seen1=$(cut -f4 "$INCOMING_GPU_LEASE"); sleep 2
+[ "$(cut -f4 "$INCOMING_GPU_LEASE")" = "$seen1" ] && ok "после клиента продление остановилось" || bad "продление живёт после клиента"
+# клиенты одной работы (стенд, мультиплеер): работа держит замок, её клиенты его наследуют и не отказывают; чужой
+# клиент рядом — отказ
+( source "$ROOT/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "стенд" || exit 9
+  bash -c 'source "$1/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "клиент стенда"' _ "$ROOT" || exit 8
+  bash -c 'exec 199>&-; source "$1/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "чужой клиент" 2>/dev/null' _ "$ROOT" && exit 7
+  exit 0 ); rc=$?
+[ $rc = 0 ] && ok "клиенты работы, что держит замок, не отказывают; чужой рядом — отказ" || bad "унаследованный замок (код $rc)"
+# отпустили, а работа идёт — продление берёт аренду снова
+lease_release SH && lease_renew SH /x/wt-SH && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] && ok "продление берёт свободную аренду снова" || bad "продление свободной"
 exit $fail

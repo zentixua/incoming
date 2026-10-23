@@ -5,7 +5,7 @@
 # (check.py по логу, код 1).
 # Копия инстанса Артёма → $LOOK_ROOT/inst-<имя> (его инстанс не трогается), клиент — prod_client.py дерева (сценарный
 # jar этого дерева); ждёт, пока игра Артёма закрыта и хватает памяти; игра запустилась — клиент гасится, код 75.
-# Итог — $LOOK_ROOT/out/<имя>/: кадры, лог, audio.wav, probe-frames.txt, gpu.csv. Запускать через tools/laptop_job.sh.
+# Итог — $LOOK_ROOT/out/<имя>/: кадры, лог, audio.wav, probe-frames.txt, gpu.csv. Запускать через tools/laptop_job.sh --gpu.
 set -uo pipefail
 V=$1; TREE=$2; CASES=${3:-}; EXTRA=${4:--}
 ROOT=${LOOK_ROOT:-/mnt/data/projects/airstrike/mod/run/look-gate}

@@ -4,15 +4,20 @@
 #   tools/gpu_lease.sh status               кто держит, с какого времени, из какого дерева, когда работал последний раз
 #   tools/gpu_lease.sh take [--wait]        взять (своя — продлить); чужая — отказ 75 со строкой «видеокарта у …»,
 #                                           с --wait — ждать, пока её отпустят или она истечёт
-#   tools/gpu_lease.sh release              отпустить свою (закончил с картинкой)
+#   tools/gpu_lease.sh release              отпустить свою (закончил с картинкой; пока свой клиент идёт — отказ: сначала
+#                                           tools/sandbox.sh stop)
 #   source tools/gpu_lease.sh               функции lease_owner, lease_take, lease_renew, lease_release, lease_status
 #
 # Владелец — сессия: INCOMING_GPU_OWNER или имя дерева (mod/run/wt-<S>[-что угодно] → <S>, иначе имя папки), так что
-# деревья одной сессии (wt-N3 и wt-N3-main) — один владелец. Берут её песочница (`tools/sandbox.sh start`) и задачи
-# `tools/laptop_job.sh --gpu`; пока они идут, они продлевают её раз в 30 с. Без работы на видеокарте аренда истекает через
+# деревья одной сессии (wt-N3 и wt-N3-main) — один владелец. Берёт её каждый клиент на видеокарте сам —
+# `tools/nested_kwin.sh` (через него идут все: песочница, сценарии, prod_client, шлагбаум, трейлер), — и задачи
+# `tools/laptop_job.sh --gpu` (Blender); песочница и задачи --gpu спрашивают её ещё до сборки, чтобы отказ пришёл сразу.
+# Пока клиент или задача идёт, аренда продлевается раз в 30 с; без работы на видеокарте истекает через
 # INCOMING_GPU_LEASE_IDLE секунд (600): правка кода между кадрами её не теряет, а брошенная сессия не держит видеокарту
-# вечно. Своя сессия перезапускает свою песочницу и ставит свои задачи без ожидания; тяжёлые задачи без видеокарты
-# (GameTest, сборка) аренды не берут и песочницу не гасят. Игра Артёма гасит всё, что идёт, при любой аренде.
+# вечно. Клиент на видеокарте — один и внутри сессии (замок `$LEASE.client`, держит nested_kwin.sh и все его потомки):
+# свой шлагбаум рядом со своей песочницей получает отказ «на видеокарте идёт клиент …», а не делит кадры. Своя сессия
+# перезапускает свою песочницу без ожидания; тяжёлые задачи без видеокарты (GameTest, сборка) аренды не берут и
+# песочницу не гасят. Игра Артёма гасит всё, что идёт, при любой аренде.
 #
 # Почему файл и flock(1), а не правило на память или очередь задач: правило держалось текстом, и 23.10 видеокарту
 # брали три работы разом — одна песочница перезапускалась пять раз. Семафоры вроде `sem` (GNU parallel) и очереди
@@ -21,6 +26,8 @@
 # (tmpfs): перезагрузка его снимает. Проверка — tools/test_gpu_lease.sh (CI).
 LEASE=${INCOMING_GPU_LEASE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-gpu.lease}
 LEASE_IDLE=${INCOMING_GPU_LEASE_IDLE:-600}
+# клиент на видеокарте: замок и кто его держит (владелец, дерево, с какого времени, что за клиент)
+GPU_CLIENT=$LEASE.client
 
 # владелец по дереву $1 (по умолчанию — дерево этого скрипта)
 lease_owner() {
@@ -62,14 +69,34 @@ lease_take() {
   done
 }
 
-# продлить свою (идёт работа на видеокарте); чужая — не трогать, код 1
+# продлить свою (идёт работа на видеокарте); свободную (отпустили или истекла, а работа идёт) — взять снова; чужая —
+# не трогать, код 1
 lease_renew() {
-  local owner=$1 fd rc=1
+  local owner=$1 tree=${2:-} fd rc=1 now
   exec {fd}>"$LEASE.lock"; flock "$fd"
-  _lease_read
-  if [ "$L_OWNER" = "$owner" ]; then _lease_write "$L_OWNER" "$L_TREE" "$L_SINCE" "$(date +%s)"; rc=0; fi
+  _lease_read; now=$(date +%s)
+  if [ "$L_OWNER" = "$owner" ] && ! _lease_free; then _lease_write "$L_OWNER" "$L_TREE" "$L_SINCE" "$now"; rc=0
+  elif _lease_free; then _lease_write "$owner" "${tree:-$L_TREE}" "$now" "$now"; rc=0; fi
   exec {fd}>&-
   return $rc
+}
+
+# клиент на видеокарте сейчас: строка «кто» (код 0) или ничего (код 1)
+gpu_client_busy() {
+  flock -n "$GPU_CLIENT" true 2>/dev/null && return 1
+  echo "на видеокарте идёт клиент $(cat "$GPU_CLIENT.who" 2>/dev/null)"
+}
+
+# gpu_client_hold <владелец> <дерево> <что> — взять замок клиента на fd 199 (его наследуют exec и потомки: держится,
+# пока жив клиент) и продлевать аренду, пока он жив; занят — отказ 75
+gpu_client_hold() {
+  # замок уже держит работа, что запустила этот клиент (стенд, мультиплеер: несколько клиентов — одна работа)
+  [ "$(readlink "/proc/$$/fd/199" 2>/dev/null)" = "$(readlink -f "$GPU_CLIENT")" ] && return 0
+  exec 199>"$GPU_CLIENT"
+  if ! flock -n 199; then echo "на видеокарте идёт клиент $(cat "$GPU_CLIENT.who" 2>/dev/null)" >&2; exec 199>&-; return 75; fi
+  printf '%s (%s), с %s: %s\n' "$1" "$2" "$(date +%H:%M)" "$3" > "$GPU_CLIENT.who"
+  # продление — пока замок держит клиент; свой замок продлевателю не нужен (иначе держал бы его сам)
+  ( exec 199>&-; while sleep "${INCOMING_GPU_RENEW:-30}"; do flock -n "$GPU_CLIENT" true && exit 0; lease_renew "$1" "$2" || true; done ) >/dev/null 2>&1 &
 }
 
 # отпустить свою
@@ -86,8 +113,10 @@ lease_release() {
 set -uo pipefail
 me=$(lease_owner)
 case "${1:-}" in
-  status) lease_status; exit 0 ;;
+  status) lease_status; gpu_client_busy; exit 0 ;;
   take) lease_take "$me" "$(cd "$(dirname "$0")/.." && pwd)" "${2:-}" && echo "видеокарта у $me" ;;
-  release) if lease_release "$me"; then echo "видеокарта отпущена"; else echo "аренда не у $me: $(lease_status)"; fi ;;
+  release)
+    who=$(gpu_client_busy) && [[ $(cat "$GPU_CLIENT.who" 2>/dev/null) == "$me "* ]] && { echo "$who — сначала остановить его (tools/sandbox.sh stop)" >&2; exit 75; }
+    if lease_release "$me"; then echo "видеокарта отпущена"; else echo "аренда не у $me: $(lease_status)"; fi ;;
   *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 2 ;;
 esac

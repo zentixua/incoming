@@ -68,6 +68,7 @@ name=$1; shift 2
 # видеокарта — аренда своей сессии: у другой — отказ (или ждать с --wait); до службы, чтобы отказ пришёл сразу
 if [ "$mode" = gpu ]; then
   export INCOMING_GPU_OWNER="${INCOMING_GPU_OWNER:-$(lease_owner)}"
+  who=$(gpu_client_busy) && { echo "$who" >&2; echo "laptop_job $name: exit 75"; exit 75; }
   lease_take "$INCOMING_GPU_OWNER" "$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)" $wait || { echo "laptop_job $name: exit 75"; exit 75; }
 fi
 

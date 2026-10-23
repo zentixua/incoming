@@ -532,8 +532,14 @@ final class Sandbox {
         capture = armed;
         armed = null;
         if (capture != null) {
-            // первый кадр уже в прошлом (подрыв ближе, чем кадры до фронта) — звук с этого тика
-            capture.audioTick = Math.max(tick, at + (int) Math.round(Math.min(0, capture.times[0]) * 20));
+            // первый кадр уже в прошлом (подрыв ближе, чем кадры до фронта) — звук с этого тика, кадры — сейчас (их
+            // настоящее время — age в capture.json)
+            int first = at + (int) Math.round(Math.min(0, capture.times[0]) * 20);
+            if (first < tick) {
+                Incoming.LOG.warn("SANDBOX frames before {} s are already past (the front comes in {} s): taken now, see age",
+                        String.format(Locale.ROOT, "%.2f", (tick - at) / 20.0), String.format(Locale.ROOT, "%.2f", (at - tick) / 20.0));
+            }
+            capture.audioTick = Math.max(tick, first);
             if (tick >= capture.audioTick) capture.audioStart = audioBytes();
         } else {
             finish("ok " + pendingCmd);

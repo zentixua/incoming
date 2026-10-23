@@ -24,7 +24,7 @@
 #   tools/sandbox.sh restart [опции start] остановить и запустить заново (после правки, которую замена не берёт)
 #   tools/sandbox.sh jbr                   поставить JetBrains Runtime (общий для всех деревьев, mod/run/jbr главного):
 #                                          с ним замена берёт и новые поля, методы, лямбды; start берёт его сам
-#   tools/sandbox.sh stop | status          закончил с картинкой — ещё tools/gpu_lease.sh release
+#   tools/sandbox.sh stop | status          закончил с картинкой — stop, потом tools/gpu_lease.sh release
 #
 # INCOMING_SANDBOX_JAVA=<java> — своя JVM песочницы (JetBrains Runtime — с -XX:+AllowEnhancedClassRedefinition).
 set -uo pipefail
@@ -147,8 +147,18 @@ start() {
   echo "JVM: ${INCOMING_SANDBOX_JAVA:-тулчейн Gradle}; замена — $swaps"
   if [ -z "${INCOMING_SANDBOX_SOFT:-}" ]; then
     artem && { echo "игра Артёма запущена — видеокарту не берём" >&2; exit 75; }
-    # с картинкой — одна сессия за раз: аренда у другой — отказ (её песочницу и задачи не гасим)
+    # с картинкой — одна сессия за раз: аренда у другой — отказ (её песочницу и задачи не гасим); клиент на видеокарте
+    # уже идёт (своя песочница другого дерева, свой шлагбаум) — тоже отказ, до сборки
+    local who
+    while who=$(gpu_client_busy); do
+      [ -n "$wait" ] || { echo "$who" >&2; exit 75; }
+      echo "$(date +%T) $who — жду" >&2; sleep 10
+    done
+    _lease_read
+    local fresh=1; [ "$L_OWNER" = "$INCOMING_GPU_OWNER" ] && ! _lease_free && fresh=
     lease_take "$INCOMING_GPU_OWNER" "$ROOT" $wait || exit 75
+    # не поднялись (сборка, клиент) — только что взятую аренду отпустить: другие сессии не ждут 10 мин впустую
+    [ -n "$fresh" ] && trap 'lease_release "$INCOMING_GPU_OWNER"' EXIT
   elif [ -n "${INCOMING_SHADERS:-}" ]; then
     echo "soft — без шейдеров (llvmpipe)" >&2; exit 2
   elif ! command -v xvfb-run >/dev/null; then
@@ -205,6 +215,7 @@ OPT
       exit 1
     fi
   done
+  trap - EXIT
   echo "песочница готова: сборка $build с, клиент $(cat "$FX/ready") с (JVM → мир), всего $(since "$t0") с"
 }
 
@@ -217,10 +228,9 @@ run_client() {
   else
     "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   fi
-  local pc=$! n=0
+  local pc=$!
+  # аренду, пока клиент жив, продлевает nested_kwin.sh (gpu_client_hold)
   while kill -0 $pc 2>/dev/null; do
-    # аренда своей сессии, пока песочница идёт (раз в 30 с)
-    [ -z "${INCOMING_SANDBOX_SOFT:-}" ] && [ $((n++ % 6)) = 0 ] && { lease_renew "$INCOMING_GPU_OWNER" || true; }
     if [ -z "${INCOMING_SANDBOX_SOFT:-}" ] && artem; then echo "$(date +%T) игра Артёма запустилась — гашу песочницу" | tee "$FX/stopped"; kill -TERM $pc; wait $pc; exit 75; fi
     sleep 5
   done
