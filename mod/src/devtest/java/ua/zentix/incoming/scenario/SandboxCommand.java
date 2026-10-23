@@ -21,11 +21,17 @@ import java.util.Locale;
  *   <li>{@code raid [число] [радиус] [секунд между]} — налёт: взрывы шахедов только у клиента (как {@code blast}) в круге
  *       радиуса вокруг точки один за другим (по умолчанию 16 за 45 с в 120 м) — цена дыма многих ударов в кадре;</li>
  *   <li>{@code launch <оружие>} — пуск с пусковой в точке; время — от первого движения снаряда;</li>
- *   <li>{@code flight <оружие> [от, блоков]} — снаряд проходит над точкой; время — от ближайшего к ней места;</li>
+ *   <li>{@code flight <оружие> [от, блоков]} — снаряд проходит над точкой; время — от ближайшего к ней места; у
+ *       {@code launch} и {@code flight} последнее слово {@code own} — пуск от игрока (свои снаряды: список и метки на
+ *       экране);</li>
  *   <li>{@code fire [сторона]} — пожар: квадрат незерака с огнём в точке;</li>
  *   <li>{@code cam <дальность> [высота] [азимут°] [взгляд]} — где камера: дальность от точки, высота над землёй, азимут
  *       от точки (0 — юг, 90 — запад, как поворот игрока), высота точки взгляда над землёй;</li>
  *   <li>{@code time day|night|<тик>}, {@code hud on|off}, {@code overlay on|off} — свет, интерфейс, числа модели;</li>
+ *   <li>{@code track on|off} — взгляд держит снаряд эффекта {@code launch}/{@code flight} в середине кадра (как игрок,
+ *       который ведёт его с зумом);</li>
+ *   <li>{@code zoom <k>} — зум ×k (1–256; 1 — без зума): поле зрения в k раз уже (тангенс половины угла), как у Ok Zoomer, —
+ *       последним, после всех, кто его меняет;</li>
  *   <li>{@code shots <имя> <секунды через запятую> [wav]} — кадры и звук следующего эффекта: кадры на эти секунды от
  *       его начала, звук — столько секунд ({@code wav}, 0 — без звука) в {@code fx/out/<имя>/};</li>
  *   <li>{@code again} — последний эффект ещё раз (после горячей замены кода), {@code clear} — снять все эффекты,
@@ -36,7 +42,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code nuke … near}: дальность подрыва от домов по умолчанию — как в сценарии {@code debris} (2 км). */
     static final double NEAR_RANGE = 2000;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
@@ -44,6 +50,11 @@ record SandboxCommand(Verb verb, List<String> args) {
             case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, RAID -> true;
             default -> false;
         };
+    }
+
+    /** Пуск от игрока ({@code own} последним словом): он владелец снаряда — список и метки снарядов на экране, как в игре. */
+    boolean own() {
+        return (verb == Verb.LAUNCH || verb == Verb.FLIGHT) && args.size() > 1 && args.getLast().equals("own");
     }
 
     static SandboxCommand parse(String line) {
@@ -74,9 +85,9 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (args.size() > 2 && (number(2) < 0 || number(2) > 200)) throw new IllegalArgumentException("высота 0–200 м");
             }
             case LAUNCH, FLIGHT -> {
-                need(1, 2);
+                need(1, own() ? 3 : 2);
                 weapon();
-                if (args.size() > 1) number(1);
+                if (args.size() > (own() ? 2 : 1)) number(1);
             }
             case NUKE -> {
                 need(1, 4);
@@ -113,9 +124,13 @@ record SandboxCommand(Verb verb, List<String> args) {
                 need(1, 1);
                 if (!List.of("day", "night").contains(args.getFirst())) number(0);
             }
-            case HUD, OVERLAY -> {
+            case HUD, OVERLAY, TRACK -> {
                 need(1, 1);
                 if (!List.of("on", "off").contains(args.getFirst())) throw new IllegalArgumentException("on или off");
+            }
+            case ZOOM -> {
+                need(1, 1);
+                if (number(0) < 1 || number(0) > 256) throw new IllegalArgumentException("зум 1–256");
             }
             case SHOTS -> {
                 need(2, 3);

@@ -28,16 +28,19 @@ import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.client.event.ViewportEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.IncomingClient;
-import ua.zentix.incoming.entity.StrikeProjectile;
+import ua.zentix.incoming.client.flight.FlightTrack;
+import ua.zentix.incoming.client.flight.FlightTracks;
 import ua.zentix.incoming.net.ClientHooks;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.WeaponSpec;
@@ -117,6 +120,10 @@ final class Sandbox {
     /** Камера: дальность, высота над землёй, азимут от точки, высота точки взгляда. */
     private double camDist = 60, camHeight = 10, camBearing = 90, camLook = 8;
     private boolean overlay;
+    /** Зум ×k ({@code zoom}): 1 — нет. */
+    private double zoom = 1;
+    /** Взгляд ведёт снаряд эффекта ({@code track}). */
+    private boolean track;
     @Nullable
     private SandboxCommand lastEffect;
     /** Команда из файла, которая ещё идёт, и её файл итога. */
@@ -150,7 +157,8 @@ final class Sandbox {
     private volatile String serverError;
     /** Пуск и пролёт: снаряд у клиента, где его увидели, ближе всего к точке. */
     @Nullable
-    private StrikeProjectile projectile;
+    /** Путь снаряда эффекта: по сущности вблизи и по пакетам сервера вдали, где сущности у клиента нет. */
+    private FlightTrack projectile;
     /**
      * Ядерка: подрывы, что клиент знал до команды. Начало — пакет нового подрыва у клиента, а не задача сервера: место
      * подрыва, чья земля ещё грузится, сервер откладывает ({@code NuclearStrikes.detonateNow}).
@@ -186,6 +194,8 @@ final class Sandbox {
         NeoForge.EVENT_BUS.addListener(this::onTick);
         NeoForge.EVENT_BUS.addListener(this::onFrame);
         NeoForge.EVENT_BUS.addListener(this::onCommands);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, this::onFov);
+        NeoForge.EVENT_BUS.addListener(this::onFrameStart);
         try {
             Files.createDirectories(inbox);
             // команды прошлого запуска — не этому клиенту
@@ -333,6 +343,15 @@ final class Sandbox {
         })));
     }
 
+    /**
+     * Зум ×k: поле зрения мира в k раз уже по тангенсу половины угла, последним из всех, кто его меняет, — так, как
+     * Ok Zoomer меняет его на выходе {@code getFov} (кадр мира и его матрица — с зумом).
+     */
+    private void onFov(ViewportEvent.ComputeFov e) {
+        if (zoom <= 1 || !e.usedConfiguredFov()) return;
+        e.setFOV(2 * Math.toDegrees(Math.atan(Math.tan(Math.toRadians(e.getFOV() / 2)) / zoom)));
+    }
+
     private void run(SandboxCommand c) {
         Minecraft mc = Minecraft.getInstance();
         if (c.effect()) {
@@ -360,6 +379,14 @@ final class Sandbox {
             }
             case OVERLAY -> {
                 overlay = c.args().getFirst().equals("on");
+                finish("ok");
+            }
+            case TRACK -> {
+                track = c.args().getFirst().equals("on");
+                finish("ok");
+            }
+            case ZOOM -> {
+                zoom = c.number(0);
                 finish("ok");
             }
             case SHOTS -> {
@@ -495,11 +522,13 @@ final class Sandbox {
                 placeCamera();
                 WeaponType w = c.weapon();
                 int x = (int) Math.floor(site.x), z = (int) Math.floor(site.z);
+                // свой пуск — от имени игрока: сервер берёт владельца из источника команды
+                String as = c.own() ? "execute as " + mc.player.getGameProfile().getName() + " run " : "";
                 if (c.verb() == SandboxCommand.Verb.LAUNCH) {
-                    server(String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - LAUNCH_RANGE, x, z));
+                    server(String.format(Locale.ROOT, "%sincoming salvo %s 1 0 at %d %d from %d %d", as, w.getSerializedName(), x, z - LAUNCH_RANGE, x, z));
                 } else {
-                    int from = (int) c.number(1, 600);
-                    server(String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - from, x, z + from));
+                    int from = c.args().size() > 1 && !c.args().get(1).equals("own") ? (int) c.number(1) : 600;
+                    server(String.format(Locale.ROOT, "%sincoming salvo %s 1 0 at %d %d from %d %d", as, w.getSerializedName(), x, z - from, x, z + from));
                 }
                 pending = c.verb() == SandboxCommand.Verb.LAUNCH ? Pending.LAUNCH : Pending.FLIGHT;
             }
@@ -692,22 +721,24 @@ final class Sandbox {
 
     /** Пуск — с первого движения снаряда у точки; пролёт — в миг, когда он ближе всего к ней. */
     private void watchFlight(Minecraft mc) {
-        if (projectile == null || projectile.isRemoved()) {
+        double[] at = new double[3];
+        if (projectile == null || projectile.isDead()) {
             projectile = null;
             double best = Double.MAX_VALUE;
-            for (var e : mc.level.entitiesForRendering()) {
-                if (!(e instanceof StrikeProjectile p) || p.weapon() != pendingCmd.weapon()) continue;
-                double d = p.position().distanceToSqr(site);
+            for (FlightTrack t : FlightTracks.all()) {
+                if (t.weapon != pendingCmd.weapon() || t.isDead() || !t.predict(FlightTracks.now() - 1, at)) continue;
+                double d = site.distanceToSqr(at[0], at[1], at[2]);
                 if (d < best) {
                     best = d;
-                    projectile = p;
+                    projectile = t;
                 }
             }
-            if (projectile == null) return;
-            firstSeen = projectile.position();
+            if (projectile == null || !projectile.predict(FlightTracks.now() - 1, at)) return;
+            firstSeen = new Vec3(at[0], at[1], at[2]);
             Incoming.LOG.info("SANDBOX projectile seen at {}", xyz(firstSeen));
         }
-        Vec3 pos = projectile.position();
+        if (!projectile.predict(FlightTracks.now() - 1, at)) return;
+        Vec3 pos = new Vec3(at[0], at[1], at[2]);
         if (pending == Pending.LAUNCH) {
             if (pos.distanceTo(firstSeen) > 0.3) begin();
             return;
@@ -721,6 +752,21 @@ final class Sandbox {
     }
 
     // ---------------------------------------------------------------- кадры
+
+    /** {@code track on}: перед кадром глаз смотрит на снаряд эффекта там, где он в этом кадре по пути. */
+    private void onFrameStart(RenderFrameEvent.Pre e) {
+        Minecraft mc = Minecraft.getInstance();
+        FlightTrack p = projectile;
+        if (!track || p == null || mc.player == null) return;
+        double[] at = new double[3];
+        if (!p.predict(FlightTracks.now() - 1 + e.getPartialTick().getGameTimeDeltaPartialTick(true), at)) return;
+        Vec3 d = new Vec3(at[0], at[1], at[2]).subtract(mc.gameRenderer.getMainCamera().getPosition());
+        float yaw = (float) Math.toDegrees(Math.atan2(-d.x, d.z)), pitch = (float) -Math.toDegrees(Math.atan2(d.y, Math.hypot(d.x, d.z)));
+        mc.player.setYRot(yaw);
+        mc.player.setXRot(pitch);
+        mc.player.yRotO = yaw;
+        mc.player.xRotO = pitch;
+    }
 
     private void onFrame(RenderFrameEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();

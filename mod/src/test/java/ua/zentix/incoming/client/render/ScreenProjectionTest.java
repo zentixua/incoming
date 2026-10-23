@@ -38,6 +38,29 @@ class ScreenProjectionTest {
         }
     }
 
+    /**
+     * Шахед (наибольший размер 3,6 м) в 700 м — шар радиуса 1,8: поперечник рамки — его угловой поперечник 3,6/700 в долях
+     * высоты кадра; при поле зрения в k раз уже — ровно в k раз больше; середина — его середина.
+     */
+    @Test
+    void bodyFrameHasTheBodysAngularSizeAtAnyZoom() {
+        double tan70 = Math.tan(Math.toRadians(35));
+        Vec3 shahed = new Vec3(30, 40, -700);
+        for (int k : new int[]{1, 4, 16, 64}) {
+            double fov = 2 * Math.toDegrees(Math.atan(tan70 / k));
+            Matrix4f proj = frame(fov);
+            float[] r = ScreenProjection.rect(proj, new Matrix4f(), Vec3.ZERO, shahed, 1.8);
+            assertNotNull(r);
+            double tall = r[3] - r[1], expected = 3.6 / 700 / (2 * tan70 / k);
+            assertEquals(expected, tall, expected * 1e-3, "зум ×" + k);
+            float[] c = ScreenProjection.rect(proj, Vec3.ZERO, new net.minecraft.world.phys.AABB(shahed, shahed));
+            assertNotNull(c);
+            assertEquals(c[0], 0.5 * (r[0] + r[2]), 1e-5, "зум ×" + k);
+            assertEquals(c[1], 0.5 * (r[1] + r[3]), 1e-5, "зум ×" + k);
+        }
+        assertNull(ScreenProjection.rect(frame(70), new Matrix4f(), Vec3.ZERO, new Vec3(0, 0, 50), 1.8), "за спиной");
+    }
+
     /** Угол коробки за спиной — рамки нет. */
     @Test
     void behindTheEyeNoFrame() {

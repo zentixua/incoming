@@ -557,6 +557,17 @@ public final class FarFlightView {
                 CollisionContext.empty())).getType() != HitResult.Type.MISS;
     }
 
+    /**
+     * Где корпус снаряда {@code id} в кадре с долей тика {@code partial} — там, где его рисует дальняя картинка
+     * ({@link #collect}: по пути, а не по последнему пакету); false — пути нет или на этот миг данных нет.
+     */
+    public static boolean drawnAt(java.util.UUID id, float partial, double[] out) {
+        FlightTrack track = FlightTracks.get(id);
+        if (track == null) return false;
+        double t = frameTime(partial);
+        return !(track.isDead() && t >= track.deathTick()) && track.predict(t, out);
+    }
+
     /** Время кадра у путей: тик пути и доля (как у {@link #collect}). */
     private static double frameTime(float partial) {
         return FlightTracks.now() - 1 + (frozen() ? 0 : partial);

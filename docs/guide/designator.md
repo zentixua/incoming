@@ -41,8 +41,10 @@ The binoculars then fire with the same settings.
 ## Projectiles on screen
 
 While your projectiles are in flight, a list in the top right corner shows each one's flight phase and time to impact,
-and in the world every projectile carries a numbered mark with a dotted line to its target. The target has a corner
-frame the size of the target on screen: it stays on a moving player or mob and grows with them when you zoom in.
+and in the world both every projectile and its target sit in corner frames the size of the body on screen, joined by a
+dotted line. A frame stays on a moving player or mob and grows with it when you zoom in; a far one never gets smaller
+than a few pixels. The projectile's number and time to impact are above its frame, the target's label below its frame,
+so text never covers what it marks, and it stays the same size at any zoom.
 
 ![A salvo of Shaheds and missiles: the list in the top right and marks in the world](img/hud.webp)
 

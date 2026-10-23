@@ -24,7 +24,7 @@ import java.util.Locale;
 
 /**
  * Свои снаряды в полёте — у того, кто пустил: справа сверху список (что, фаза полёта, время до удара), а в мире —
- * метки: ромб на снаряде с номером и временем и крестик на его цели. Время знает сервер (маршрут в обход и полёт
+ * метки: рамка вокруг снаряда с номером и временем и рамка вокруг его цели. Время знает сервер (маршрут в обход и полёт
  * вне загруженного мира), клиент лишь досчитывает его между пакетами.
  */
 public final class StrikesHud {
@@ -90,16 +90,20 @@ public final class StrikesHud {
     }
 
     /**
-     * Метки в мире: ромб на снаряде (номер и время) и пунктир от него к его цели; на цели — рамка-уголки по угловому
-     * размеру цели в этом кадре (с зумом рамка растёт с целью, жалоба 23.10: метки «плывут» и велики при зуме), с
-     * номерами снарядов, которые на неё идут, и подписью, кто это. Сущность цели, которую клиент видит, — по её
-     * сглаженному месту (точка из пакета сервера — раз в 5 тиков и отстаёт); точка и блок — коробкой блока вокруг точки.
-     * Цели ближе 4 блоков друг к другу — одна рамка (залп по игроку не рисует десять одинаковых). Потерянная цель — серая.
-     * За спиной — не рисуются.
+     * Метки в мире — рамки-уголки по угловому размеру тела в этом кадре (матрица кадра, с зумом): у снаряда — шар его
+     * корпуса там, где клиент его рисует, с номером и временем над рамкой; у цели — её коробка, с номерами снарядов,
+     * которые на неё идут, и подписью, кто это, под рамкой; от рамки снаряда к рамке цели — пунктир. С зумом рамка растёт
+     * ровно с телом, а подпись и наименьшая рамка ({@link #MIN_FRAME}) — пиксели интерфейса при любом поле зрения, и
+     * подпись всегда вне рамки: тело она не закрывает (жалобы 23.10: метки велики при зуме, подпись «#1 0:16» сидела
+     * поверх шахеда). Сущность цели, которую клиент видит, — по её сглаженному месту (точка из пакета сервера — раз в
+     * 5 тиков и отстаёт); точка и блок — коробкой блока вокруг точки. Цели ближе 4 блоков друг к другу — одна рамка
+     * (залп по игроку не рисует десять одинаковых). Потерянная цель — серая. За спиной — не рисуются.
      */
     private static void markers(GuiGraphics g, Font font, List<ClientFlights.Tracked> flights, float pt) {
         int w = g.guiWidth(), h = g.guiHeight();
         List<TargetMark> marks = new ArrayList<>();
+        List<ClientFlights.Tracked> shown = new ArrayList<>();
+        List<TargetMark> aims = new ArrayList<>();
         for (ClientFlights.Tracked f : flights) {
             if (f.phase() == FlightPhase.READY) continue;
             AABB box = targetBox(f, pt);
@@ -113,38 +117,48 @@ public final class StrikesHud {
             }
             if (mark == null) marks.add(mark = new TargetMark(at, box, f.targetLost(), targetText(f)));
             mark.numbers.add(f.number);
-
-            float[] s = ScreenProjection.project(f.position(pt));
-            float[] t = ScreenProjection.project(at);
-            if (s == null) continue;
-            int sx = (int) (s[0] * w), sy = (int) (s[1] * h);
-            if (sx <= -20 || sx >= w + 20 || sy <= -20 || sy >= h + 20) continue;
+            shown.add(f);
+            aims.add(mark);
+        }
+        for (TargetMark m : marks) {
+            float[] r = ScreenProjection.rect(m.box);
+            // угол коробки за глазом (цель вплотную, глаз в ней) — наименьшая рамка у середины
+            if (r == null) r = point(ScreenProjection.project(m.pos));
+            m.frame = r == null ? null : frame(r, w, h);
+        }
+        for (int i = 0; i < shown.size(); i++) {
+            ClientFlights.Tracked f = shown.get(i);
+            Vec3 at = f.position(pt);
+            float[] r = ScreenProjection.rect(at, 0.5 * f.bodySize());
+            if (r == null) r = point(ScreenProjection.project(at));
+            if (r == null) continue;
+            float[] fr = frame(r, w, h);
+            if (!onScreen(fr, w, h)) continue;
             int c = f.phase() == FlightPhase.TERMINAL ? 0xFFFF4030 : 0xFFFFC040;
-            if (t != null) HudDraw.dotted(g, sx, sy, (int) (t[0] * w), (int) (t[1] * h), (c & 0x00FFFFFF) | 0x70000000);
-            HudDraw.diamond(g, sx, sy, 4, c);
+            float[] t = aims.get(i).frame;
+            if (t != null) {
+                float[] from = edge(fr, 0.5f * (t[0] + t[2]), 0.5f * (t[1] + t[3])), to = edge(t, 0.5f * (fr[0] + fr[2]), 0.5f * (fr[1] + fr[3]));
+                if (from != null && to != null) {
+                    HudDraw.dotted(g, Math.round(from[0]), Math.round(from[1]), Math.round(to[0]), Math.round(to[1]), (c & 0x00FFFFFF) | 0x70000000);
+                }
+            }
+            HudDraw.corners(g, Math.round(fr[0]), Math.round(fr[1]), Math.round(fr[2]), Math.round(fr[3]), c);
             String label = Component.translatable("incoming.hud.number", f.number).getString() + " " + clock(f.etaSeconds(pt));
-            g.drawString(font, label, sx - font.width(label) / 2, sy - 14, c);
+            g.drawString(font, label, Math.round(0.5f * (fr[0] + fr[2])) - font.width(label) / 2, labelAbove(fr), c);
         }
         List<int[]> placed = new ArrayList<>();
         // подписи раскладываются по номерам снарядов, а не по месту на экране: порядок не меняется, когда метки движутся
         // (при зуме и повороте подписи не перескакивают со строки на строку)
         marks.sort(Comparator.comparingInt((TargetMark m) -> m.numbers.getFirst()));
         for (TargetMark m : marks) {
-            float[] r = ScreenProjection.rect(m.box);
-            if (r == null) {
-                // угол коробки за глазом (цель вплотную, глаз в ней) — наименьшая рамка у середины, как была метка
-                float[] c = ScreenProjection.project(m.pos);
-                if (c == null) continue;
-                r = new float[]{c[0], c[1], c[0], c[1]};
-            }
-            float[] fr = frame(r, w, h);
-            int x0 = Math.round(fr[0]), y0 = Math.round(fr[1]), x1 = Math.round(fr[2]), y1 = Math.round(fr[3]);
-            if (x1 <= 0 || x0 >= w || y1 <= 0 || y0 >= h) continue;
+            float[] fr = m.frame;
+            if (fr == null || !onScreen(fr, w, h)) continue;
+            int x0 = Math.round(fr[0]), y0 = Math.round(fr[1]), x1 = Math.round(fr[2]);
             int c = m.lost ? 0xC0A0A0A0 : 0xC0FF3030;
-            HudDraw.corners(g, x0, y0, x1, y1, c);
+            HudDraw.corners(g, x0, y0, x1, Math.round(fr[3]), c);
             MutableComponent text = Component.translatable("incoming.hud.number", numbers(m.numbers));
             if (m.label != null) text.append(" · ").append(m.label);
-            int tw = font.width(text), x = (x0 + x1) / 2 - tw / 2, y = labelY(placed, x, tw, y1 + 3);
+            int tw = font.width(text), x = (x0 + x1) / 2 - tw / 2, y = labelY(placed, x, tw, labelBelow(fr));
             placed.add(new int[] {x, y, tw});
             g.drawString(font, text, x, y, c | 0xFF000000);
         }
@@ -152,15 +166,49 @@ public final class StrikesHud {
 
     /** Наименьшая рамка на экране, пикселей интерфейса: цель вдали меньше пикселя, а рамку должно быть видно. */
     static final int MIN_FRAME = 7;
+    /** Зазор между рамкой и подписью и высота строки подписи, пикселей интерфейса (шрифт Minecraft — 9 на строку). */
+    static final int LABEL_GAP = 3, LABEL_LINE = 9;
 
     /**
-     * Рамка цели в пикселях интерфейса шириной {@code w} и высотой {@code h} по прямоугольнику {@code r} в долях экрана
-     * ({@link ScreenProjection#rect}): сам угловой размер цели, не меньше {@link #MIN_FRAME} вокруг её середины.
+     * Рамка тела в пикселях интерфейса шириной {@code w} и высотой {@code h} по прямоугольнику {@code r} в долях экрана
+     * ({@link ScreenProjection#rect}): сам угловой размер тела, не меньше {@link #MIN_FRAME} вокруг его середины.
      */
     static float[] frame(float[] r, int w, int h) {
         float x0 = r[0] * w, y0 = r[1] * h, x1 = r[2] * w, y1 = r[3] * h;
         float cx = 0.5f * (x0 + x1), cy = 0.5f * (y0 + y1), half = 0.5f * MIN_FRAME;
         return new float[]{Math.min(x0, cx - half), Math.min(y0, cy - half), Math.max(x1, cx + half), Math.max(y1, cy + half)};
+    }
+
+    /** Строка подписи над рамкой {@code fr} (снаряд): низ строки — над верхом рамки, тело подпись не закрывает. */
+    static int labelAbove(float[] fr) {
+        return (int) Math.floor(fr[1]) - LABEL_GAP - LABEL_LINE;
+    }
+
+    /** Строка подписи под рамкой {@code fr} (цель). */
+    static int labelBelow(float[] fr) {
+        return (int) Math.ceil(fr[3]) + LABEL_GAP;
+    }
+
+    /** Точка на экране (доли) — прямоугольник нулевого размера, из него {@link #frame} делает наименьшую рамку. */
+    @Nullable
+    private static float[] point(@Nullable float[] c) {
+        return c == null ? null : new float[]{c[0], c[1], c[0], c[1]};
+    }
+
+    private static boolean onScreen(float[] fr, int w, int h) {
+        return fr[2] > 0 && fr[0] < w && fr[3] > 0 && fr[1] < h;
+    }
+
+    /**
+     * Где прямая от середины рамки {@code fr} к точке ({@code tx}, {@code ty}) выходит из рамки: пунктир от снаряда к цели
+     * идёт между рамками и тел не перечёркивает. Null — точка внутри рамки (рамки слились, пунктира нет).
+     */
+    @Nullable
+    static float[] edge(float[] fr, float tx, float ty) {
+        float cx = 0.5f * (fr[0] + fr[2]), cy = 0.5f * (fr[1] + fr[3]), dx = tx - cx, dy = ty - cy;
+        float s = Math.min(dx == 0 ? Float.MAX_VALUE : 0.5f * (fr[2] - fr[0]) / Math.abs(dx),
+                dy == 0 ? Float.MAX_VALUE : 0.5f * (fr[3] - fr[1]) / Math.abs(dy));
+        return s >= 1 ? null : new float[]{cx + dx * s, cy + dy * s};
     }
 
     /**
@@ -197,6 +245,9 @@ public final class StrikesHud {
         @Nullable
         final Component label;
         final List<Integer> numbers = new ArrayList<>();
+        /** Рамка в этом кадре, пикселей интерфейса; null — цель за спиной. */
+        @Nullable
+        float[] frame;
 
         TargetMark(Vec3 pos, AABB box, boolean lost, @Nullable Component label) {
             this.pos = pos;
