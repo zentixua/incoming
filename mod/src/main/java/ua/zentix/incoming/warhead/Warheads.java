@@ -28,6 +28,7 @@ import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.material.FluidState;
@@ -434,7 +435,8 @@ public final class Warheads {
         for (int y = top - 1; y >= level.getMinBuildHeight(); y--) {
             BlockState s = level.getBlockState(m.setY(y));
             // вода — земля взрыва: над ней разрыв на воде, а не над дном (пыли над водой нет, брызги — у WaterBlast)
-            if (!s.getFluidState().isEmpty() || BlockResponse.of(s).kind() == BlockResponse.Kind.GROUND) return Math.min(pos.y, y + 1);
+            // (сама жидкость, а не блок с водой внутри: ступень или плита в доме — не гладь)
+            if (s.getBlock() instanceof LiquidBlock || BlockResponse.of(s).kind() == BlockResponse.Kind.GROUND) return Math.min(pos.y, y + 1);
         }
         return pos.y;
     }
