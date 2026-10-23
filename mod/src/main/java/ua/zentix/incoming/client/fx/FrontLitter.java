@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -26,14 +27,20 @@ import ua.zentix.incoming.nuclear.model.ChemicalFront;
  * <p>
  * Куски — {@link Fragments} (лист с текстурой и цветом блока: трава зелёная, листва — своего дерева), вылетают уже с
  * брошенной скоростью в тихий воздух (фаза — миллисекунды, короче тика) и планируют вниз. Сколько их — выборка для
- * картинки (<b>подача</b>: {@link #PER_M2} на квадратный метр, не больше {@link #MAX} на взрыв), где и как они летят —
+ * картинки (<b>подача</b>: {@link #PER_M2} на квадратный метр, не больше {@link #MAX} на взрыв, клок крупнее настоящего —
+ * {@link #CLUMP_MIN}–{@link #CLUMP_MAX} м), где и как они летят —
  * по закону. Ветра мира у кусков нет (⚠: сносит их только бросок).
  */
 public final class FrontLitter {
     /** Кусков на квадратный метр сорванного (подача: травинок на деле — тысячи; столько видно кольцом). */
     static final double PER_M2 = 0.35;
     /** Кусков на взрыв не больше (подача; общий предел — {@link Fragments}). */
-    static final int MAX = 500;
+    static final int MAX = 900;
+    /**
+     * Клок, м: крупнее клока листвы кроны ({@code Fragments.SPRIG_MAX}) — подача: мельче он с 50 блоков меньше пикселя.
+     * Траектория от размера не зависит: у пластины скорость падения — масса на площадь, не размер.
+     */
+    static final float CLUMP_MIN = 0.35f, CLUMP_MAX = 0.6f;
     /** Дальше стольких блоков от камеры кусков не рождаем: их не видно, а место в пределе кусков нужно ближним. */
     static final double REACH = 128;
     /** Дальше стольких метров срыв не ищется (у 450 кг он кончается в ~110 м). */
@@ -105,7 +112,8 @@ public final class FrontLitter {
             boolean grows = !plant.isAir() && plant.canBeReplaced() && plant.getFluidState().isEmpty();
             boolean leaves = cover.is(BlockTags.LEAVES);
             if (!grows && !leaves && !cover.is(BlockTags.DIRT)) continue;
-            BlockState torn = grows ? plant : cover;
+            // дёрн — травой (частица блока травы — земля: рыжие кубики вместо травинок); цвет — травы этого места
+            BlockState torn = grows ? plant : cover.is(Blocks.GRASS_BLOCK) ? Blocks.SHORT_GRASS.defaultBlockState() : cover;
             m.set(bx, grows ? top + 1 : top, bz);
             // крона и то, что выше места взрыва, видит волну в воздухе, а не вдоль земли
             double y = top + (grows ? 1.2 : 1.05), dy = y - pos.y, slant = Math.sqrt(r * r + dy * dy);
@@ -117,7 +125,8 @@ public final class FrontLitter {
             double lift = Fragments.LIFT_MIN + (Fragments.LIFT_MAX - Fragments.LIFT_MIN) * rnd.nextDouble();
             int delay = (int) Math.round(20 * front.arrivalSeconds(slant));
             if (delay > Fragments.DELAY_MAX) continue;
-            Fragments.torn(level, torn, m.immutable(), Fragments.Kind.LEAF, x, y, z, cos * v, lift * v, sin * v, 0, CALM, delay, false);
+            float size = CLUMP_MIN + (CLUMP_MAX - CLUMP_MIN) * rnd.nextFloat();
+            Fragments.torn(level, torn, m.immutable(), Fragments.Kind.LEAF, x, y, z, cos * v, lift * v, sin * v, size, CALM, delay, false);
         }
     }
 }

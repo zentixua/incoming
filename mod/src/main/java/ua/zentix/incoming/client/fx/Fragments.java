@@ -265,7 +265,8 @@ public final class Fragments {
                 case CHUNK -> size;
                 case BOARD -> Math.min(1, 1.6f * size);
                 case PANE -> 0.6f * size;
-                case LEAF -> SPRIG_MIN + (SPRIG_MAX - SPRIG_MIN) * random.nextFloat();
+                // клок своего размера (0 — клок кроны); скорость падения у пластины от размера не зависит
+                case LEAF -> size > 0 ? size : SPRIG_MIN + (SPRIG_MAX - SPRIG_MIN) * random.nextFloat();
             };
             half[0] = 0.5f * len;
             half[1] = 0.5f * switch (kind) {
