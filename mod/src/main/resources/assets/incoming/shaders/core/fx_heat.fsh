@@ -65,9 +65,10 @@ uniform vec4 HeatFrame;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 const float CROSS = 0.15;
-// окно Solids, блоки; клеток луча тени не больше (HeatPass.SHADOW_CELLS)
+// окно Solids, блоки (грубая сетка кубов 4³ — слоем за ним по z, с SOLIDS_SIZE.z); кубов луча тени не больше
+// (HeatPass.SHADOW_CUBES)
 const vec3 SOLIDS_SIZE = vec3(192.0, 96.0, 192.0);
-const int SHADOW_CELLS = 160;
+const int SHADOW_CUBES = 64;
 // свет меньше этого (линейный на экране, ниже шага sRGB у чёрного) — тень не ищется: её не видно
 const float SHADOW_SEEN = 3e-4;
 // сдвиг фронта меньше этой доли пикселя не виден: его нет (HeatPass.SHIFT_MIN)
@@ -223,9 +224,40 @@ float heatSegment(vec3 a, vec3 u, vec2 t, vec3 n, float w2) {
     return max(c0 * k - nu * dr, 0.0);
 }
 
-// Свободен ли путь от p до q (от глаза) от блоков-заслонов (HeatPass.blocked): 1 — да, 0 — нет. Клетки окна вдоль
-// отрезка по порядку (Amanatides, Woo 1987), часть отрезка за окном — свободна; клетка самой точки мира — её грань, не
-// заслон
+// Блоки куба cube вдоль отрезка a + d·t на [t, end] (HeatPass.cubeBlocked): есть ли заслон, кроме своей клетки own
+bool heatCubeBlocked(vec3 a, vec3 d, float t, float end, ivec3 cube, vec3 inv, ivec3 dir, bool skipOwn, ivec3 own) {
+    ivec3 size = ivec3(SOLIDS_SIZE), wrap = ivec3(HeatSolidsWrap);
+    ivec3 cell = clamp(ivec3(floor(a + d * min(t + 1e-6, end))), cube * 4, cube * 4 + 3);
+    vec3 next = vec3(1e9);
+    for (int k = 0; k < 3; k++) {
+        if (d[k] > 0.0) {
+            next[k] = (float(cell[k] + 1) - a[k]) * inv[k];
+        } else if (d[k] < 0.0) {
+            next[k] = (a[k] - float(cell[k])) * inv[k];
+        }
+    }
+    for (int j = 0; j < 12; j++) {
+        bool mine = skipOwn && all(equal(cell, own));
+        if (!mine && texelFetch(HeatSolids, (cell + wrap) % size, 0).r > 0.5) return true;
+        float tn = next.z;
+        int k = 2;
+        if (next.x <= next.y && next.x <= next.z) {
+            tn = next.x;
+            k = 0;
+        } else if (next.y <= next.z) {
+            tn = next.y;
+            k = 1;
+        }
+        if (tn >= end) break;
+        cell[k] += dir[k];
+        next[k] += inv[k];
+    }
+    return false;
+}
+
+// Свободен ли путь от p до q (от глаза) от блоков-заслонов (HeatPass.blocked): 1 — да, 0 — нет. Кубы 4³ вдоль отрезка по
+// порядку, в кубе с заслоном — его блоки по порядку (Amanatides, Woo 1987, на двух уровнях: ответ — как у прохода по
+// блокам, открытый воздух — шагом в куб); часть отрезка за окном — свободна; клетка самой точки мира — её грань, не заслон
 float heatBlocked(vec3 p, vec3 q) {
     if (HeatSolidsAt.w < 0.5) return 1.0;
     vec3 a = p - HeatSolidsAt.xyz, d = q - p;
@@ -240,35 +272,35 @@ float heatBlocked(vec3 p, vec3 q) {
         }
     }
     if (t1 <= t0) return 1.0;
-    ivec3 size = ivec3(SOLIDS_SIZE), wrap = ivec3(HeatSolidsWrap);
-    ivec3 cell = clamp(ivec3(floor(a + d * t0)), ivec3(0), size - 1);
-    ivec3 dir = ivec3(sign(d));
-    vec3 inv = 1.0 / max(abs(d), vec3(1e-9)), next = vec3(1e9);
+    ivec3 cubes = ivec3(SOLIDS_SIZE) / 4, wrapc = ivec3(HeatSolidsWrap) / 4;
+    ivec3 cube = clamp(ivec3(floor((a + d * t0) * 0.25)), ivec3(0), cubes - 1);
+    ivec3 dir = ivec3(sign(d)), own = ivec3(floor(a));
+    vec3 inv = 1.0 / max(abs(d), vec3(1e-9)), invc = 4.0 * inv, nextc = vec3(1e9);
     for (int k = 0; k < 3; k++) {
         if (d[k] > 0.0) {
-            next[k] = (float(cell[k] + 1) - a[k]) * inv[k];
+            nextc[k] = (float((cube[k] + 1) * 4) - a[k]) * inv[k];
         } else if (d[k] < 0.0) {
-            next[k] = (a[k] - float(cell[k])) * inv[k];
+            nextc[k] = (a[k] - float(cube[k] * 4)) * inv[k];
         }
     }
-    bool own = t0 <= 0.0;
-    for (int i = 0; i < SHADOW_CELLS; i++) {
-        if (!own && texelFetch(HeatSolids, (cell + wrap) % size, 0).r > 0.5) return 0.0;
-        own = false;
-        float t = next.z;
-        if (next.x <= next.y && next.x <= next.z) {
-            t = next.x;
-            cell.x += dir.x;
-            next.x += inv.x;
-        } else if (next.y <= next.z) {
-            t = next.y;
-            cell.y += dir.y;
-            next.y += inv.y;
-        } else {
-            cell.z += dir.z;
-            next.z += inv.z;
+    bool skipOwn = t0 <= 0.0;
+    float t = t0;
+    for (int i = 0; i < SHADOW_CUBES; i++) {
+        float leave = min(min(nextc.x, nextc.y), nextc.z);
+        ivec3 cw = (cube + wrapc) % cubes;
+        bool occupied = texelFetch(HeatSolids, ivec3(cw.x, cw.y, int(SOLIDS_SIZE.z) + cw.z), 0).r > 0.5;
+        if (occupied && heatCubeBlocked(a, d, t, min(leave, t1), cube, inv, dir, skipOwn, own)) return 0.0;
+        if (leave >= t1) break;
+        int k = 2;
+        if (nextc.x <= nextc.y && nextc.x <= nextc.z) {
+            k = 0;
+        } else if (nextc.y <= nextc.z) {
+            k = 1;
         }
-        if (t >= t1 || any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size))) break;
+        cube[k] += dir[k];
+        nextc[k] += invc[k];
+        t = leave;
+        if (cube[k] < 0 || cube[k] >= cubes[k]) break;
     }
     return 1.0;
 }

@@ -66,8 +66,13 @@ public final class HeatPass {
     public static final double SHIFT_MIN = 0.05;
     /** Свет шара на земле под ним меньше этой доли света открытого неба — шар на мир не светит (как у ядерки). */
     static final double SEEN = 0.005;
-    /** Клеток луча тени не больше (дальше — свободно): луч через всё окно по диагонали — до 480. */
-    static final int SHADOW_CELLS = 160;
+    /**
+     * Кубов 4³ луча тени не больше (дальше — свободно): 64 куба — не меньше ~110 блоков по пространственной диагонали.
+     * Кубы, где заслонов нет, луч проходит шагом в 4 блока, в занятых — по блокам (Amanatides–Woo на обоих уровнях).
+     */
+    static final int SHADOW_CUBES = 64;
+    /** Сторона куба грубой сетки окна заслонов, блоков. */
+    static final int CUBE = 4;
 
     @Nullable
     static ShaderInstance shader;
@@ -342,13 +347,22 @@ public final class HeatPass {
     /** Заслоны мира для {@link #blocked}: клетка (x, y, z) окна — заслон ли, или вне окна (тогда — свободно). */
     public interface Cells {
         boolean solid(int x, int y, int z);
+
+        /** Есть ли заслон в кубе {@link #CUBE}³ с номером (x, y, z) (у {@code Solids} — слой грубой сетки текстуры). */
+        default boolean cube(int x, int y, int z) {
+            for (int i = 0; i < CUBE; i++) for (int j = 0; j < CUBE; j++) for (int k = 0; k < CUBE; k++) {
+                if (solid(x * CUBE + i, y * CUBE + j, z * CUBE + k)) return true;
+            }
+            return false;
+        }
     }
 
     /**
      * Закрыт ли путь от a до b заслоном (координаты окна заслонов, блоки) — зеркало {@code heatBlocked} в {@code fx_heat}
-     * (там наоборот: 1 — путь свободен): клетки
-     * вдоль отрезка по порядку (Amanatides, Woo, «A fast voxel traversal algorithm», Eurographics 1987), часть за окном
-     * size — свободна, клетка самой точки a — её грань, не заслон; не больше {@link #SHADOW_CELLS} клеток.
+     * (там наоборот: 1 — путь свободен): кубы {@link #CUBE}³ вдоль отрезка по порядку, а в кубе с заслоном — его блоки
+     * по порядку (Amanatides, Woo, «A fast voxel traversal algorithm», Eurographics 1987, на двух уровнях: ответ тот же,
+     * что у прохода по одним блокам, а открытый воздух — шагом в куб); часть за окном size — свободна, клетка самой
+     * точки a — её грань, не заслон; не больше {@link #SHADOW_CUBES} кубов.
      */
     public static boolean blocked(double ax, double ay, double az, double bx, double by, double bz, int[] size, Cells cells) {
         double[] a = {ax, ay, az}, d = {bx - ax, by - ay, bz - az};
@@ -363,24 +377,51 @@ public final class HeatPass {
             }
         }
         if (t1 <= t0) return false;
-        int[] cell = new int[3], dir = new int[3];
-        double[] inv = new double[3], next = {1e9, 1e9, 1e9};
+        int[] cube = new int[3], dir = new int[3], cubes = new int[3], own = new int[3];
+        double[] inv = new double[3], invc = new double[3], nextc = {1e9, 1e9, 1e9};
         for (int k = 0; k < 3; k++) {
-            cell[k] = Math.max(0, Math.min(size[k] - 1, (int) Math.floor(a[k] + d[k] * t0)));
+            cubes[k] = size[k] / CUBE;
+            own[k] = (int) Math.floor(a[k]);
+            cube[k] = Math.max(0, Math.min(cubes[k] - 1, (int) Math.floor((a[k] + d[k] * t0) / CUBE)));
             dir[k] = (int) Math.signum(d[k]);
             inv[k] = 1 / Math.max(Math.abs(d[k]), 1e-9);
+            invc[k] = CUBE * inv[k];
+            if (d[k] > 0) nextc[k] = ((cube[k] + 1) * CUBE - a[k]) * inv[k];
+            else if (d[k] < 0) nextc[k] = (a[k] - cube[k] * CUBE) * inv[k];
+        }
+        boolean skipOwn = t0 <= 0;
+        double t = t0;
+        for (int i = 0; i < SHADOW_CUBES; i++) {
+            double out = Math.min(nextc[0], Math.min(nextc[1], nextc[2]));
+            if (cells.cube(cube[0], cube[1], cube[2]) && cubeBlocked(a, d, t, Math.min(out, t1), cube, inv, dir, skipOwn, own, cells)) return true;
+            if (out >= t1) break;
+            int k = nextc[0] <= nextc[1] && nextc[0] <= nextc[2] ? 0 : nextc[1] <= nextc[2] ? 1 : 2;
+            cube[k] += dir[k];
+            nextc[k] += invc[k];
+            t = out;
+            if (cube[k] < 0 || cube[k] >= cubes[k]) break;
+        }
+        return false;
+    }
+
+    /** Блоки куба cube вдоль отрезка a + d·t на [t, end]: есть ли заслон (кроме своей клетки own, если skipOwn). */
+    private static boolean cubeBlocked(double[] a, double[] d, double t, double end, int[] cube, double[] inv, int[] dir, boolean skipOwn,
+                                       int[] own, Cells cells) {
+        int[] cell = new int[3];
+        double[] next = {1e9, 1e9, 1e9};
+        double mid = Math.min(t + 1e-6, end);
+        for (int k = 0; k < 3; k++) {
+            cell[k] = Math.max(cube[k] * CUBE, Math.min(cube[k] * CUBE + CUBE - 1, (int) Math.floor(a[k] + d[k] * mid)));
             if (d[k] > 0) next[k] = (cell[k] + 1 - a[k]) * inv[k];
             else if (d[k] < 0) next[k] = (a[k] - cell[k]) * inv[k];
         }
-        boolean own = t0 <= 0;
-        for (int i = 0; i < SHADOW_CELLS; i++) {
-            if (!own && cells.solid(cell[0], cell[1], cell[2])) return true;
-            own = false;
+        for (int j = 0; j < 3 * CUBE; j++) {
+            boolean mine = skipOwn && cell[0] == own[0] && cell[1] == own[1] && cell[2] == own[2];
+            if (!mine && cells.solid(cell[0], cell[1], cell[2])) return true;
             int k = next[0] <= next[1] && next[0] <= next[2] ? 0 : next[1] <= next[2] ? 1 : 2;
-            double t = next[k];
+            if (next[k] >= end) break;
             cell[k] += dir[k];
             next[k] += inv[k];
-            if (t >= t1 || cell[k] < 0 || cell[k] >= size[k]) break;
         }
         return false;
     }
