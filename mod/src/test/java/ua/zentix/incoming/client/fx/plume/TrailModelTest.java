@@ -234,13 +234,15 @@ class TrailModelTest {
         TrailModel.wander(1, 100, 0, Stability.B, 5, 1, Double.POSITIVE_INFINITY, out);
         assertEquals(0, Math.abs(out[0]) + Math.abs(out[1]) + Math.abs(out[2]), 0, "у сопла оси никто не гнул");
         // у земли ось не уходит в неё: по высоте — не больше трети высоты над землёй
-        double worst = 0;
+        double worst = 0, low = 0;
         java.util.Random r = new java.util.Random(3);
         for (int i = 0; i < 20_000; i++) {
             TrailModel.wander(r.nextLong(), r.nextDouble() * 5000, 120, Stability.B, 5, 1, 12, out);
             worst = Math.max(worst, -out[1]);
+            if (-out[1] > 6) low++;
         }
-        assertTrue(worst < 12, "в землю: " + worst);
+        assertTrue(worst < 0.8 * 12, "в землю: " + worst);
+        assertTrue(low > 0, "у земли ось всё же гнётся вниз");
     }
 
     /**
