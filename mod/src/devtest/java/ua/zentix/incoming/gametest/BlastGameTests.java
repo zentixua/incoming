@@ -63,7 +63,7 @@ public final class BlastGameTests {
         BlockPos c = h.absolutePos(CENTER);
         Vec3 at = Vec3.atCenterOf(c);
         double nominal = BlastDamage.breakRange(BlastModel.kpa(psi), tnt);
-        List<Post> posts = layPosts(c, at, psi, tnt, nominal);
+        List<Post> posts = layPosts(c, at, psi, tnt, nominal, List.of());
         h.assertTrue(posts.size() == POST_AT.length, "места для столбиков на своих лучах не нашлось: " + posts.size());
         // трава вокруг (до 1,7 радиуса): уцелевшая трава волну не держит — столбики за ней ломаются так же
         int n = (int) Math.ceil(nominal * 1.7);
@@ -97,7 +97,7 @@ public final class BlastGameTests {
      * давление, и импульс). Места выбираются в этом порядке: на тесном круге кладки у шахеда (столбики в 2–4,5 м,
      * каждый закрывает 12–28° азимута) лучшие места достаются столбикам у краёв допуска.
      */
-    private static final double[] POST_AT = {0.75, 1.25, 0.8, 1.2, 0.7, 1.35, 0.6, 0.9, 1.0, 1.1};
+    static final double[] POST_AT = {0.75, 1.25, 0.8, 1.2, 0.7, 1.35, 0.6, 0.9, 1.0, 1.1};
     /** Зазор между столбиками по азимуту сверх их угловых полуширин, рад: луч к дальнему не задевает ближний. */
     private static final double POST_GAP = Math.toRadians(3);
 
@@ -105,7 +105,7 @@ public final class BlastGameTests {
      * Столбик: место, расстояние от заряда до ближней точки блока (луч ломает блок, войдя в него), радиус Джаррета его
      * порога, азимут и угловая полуширина блока от заряда.
      */
-    private record Post(BlockPos pos, double distance, double jarrett, double bearing, double halfWidth) {
+    record Post(BlockPos pos, double distance, double jarrett, double bearing, double halfWidth) {
         double share() {
             return distance / jarrett;
         }
@@ -114,9 +114,10 @@ public final class BlastGameTests {
     /**
      * Места столбиков в слое заряда: для каждой доли {@link #POST_AT} — блок, у которого расстояние, делённое на радиус
      * Джаррета его порога, ближе всего к ней, и который по азимуту не перекрывает уже выбранные. Зависит только от
-     * порогов мест, а их разброс — от места площадки: доли выходят одни и те же везде.
+     * порогов мест, а их разброс — от места площадки: доли выходят одни и те же везде. {@code taken} — уже стоящие
+     * столбики другого материала: новые не перекрывают и их.
      */
-    private static List<Post> layPosts(BlockPos c, Vec3 at, double psi, double tnt, double nominal) {
+    static List<Post> layPosts(BlockPos c, Vec3 at, double psi, double tnt, double nominal, List<Post> taken) {
         int n = (int) Math.ceil(nominal * 1.6);
         List<Post> candidates = new ArrayList<>();
         for (int dx = -n; dx <= n; dx++) {
@@ -135,12 +136,12 @@ public final class BlastGameTests {
                 candidates.add(new Post(p, distance, jarrett, bearing, Math.toRadians(half)));
             }
         }
-        List<Post> posts = new ArrayList<>();
+        List<Post> posts = new ArrayList<>(), all = new ArrayList<>(taken);
         for (double share : POST_AT) {
             Post best = null;
             for (Post q : candidates) {
                 boolean free = true;
-                for (Post o : posts) {
+                for (Post o : all) {
                     double apart = Math.abs(Math.toRadians(Mth.wrapDegrees(Math.toDegrees(q.bearing() - o.bearing()))));
                     if (apart < q.halfWidth() + o.halfWidth() + POST_GAP) free = false;
                 }
@@ -148,6 +149,7 @@ public final class BlastGameTests {
             }
             if (best == null) break;
             posts.add(best);
+            all.add(best);
         }
         return posts;
     }
