@@ -5,6 +5,7 @@ import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.plume.Motor;
+import ua.zentix.incoming.client.fx.plume.NozzleGlow;
 import ua.zentix.incoming.client.fx.plume.Smoke;
 import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.client.render.WeaponModels;
@@ -380,6 +381,24 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
             case ROCKET -> ROCKET;
             case LOITER -> LOITER;
         };
+    }
+
+    /** Горячие сопла ускорителей по оружию: таблица остывания считается один раз, при первом ускорителе. */
+    private static final java.util.Map<WeaponType, java.util.Optional<NozzleGlow>> NOZZLES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Горячее сопло сбрасываемого стартового ускорителя оружия weapon ({@link NozzleGlow}: двигатель ускорителя, кривая
+     * тяги в игре и настоящее время работы); null — такого ускорителя нет.
+     */
+    @Nullable
+    public static NozzleGlow nozzleGlow(WeaponType weapon) {
+        return NOZZLES.computeIfAbsent(weapon, w -> {
+            Stage boost = of(w).airframe(false).far().boost();
+            ThrustCurve curve = w.spec().airframe().thrust();
+            Article.SolidMotor real = w.spec().airframe().article().booster();
+            if (of(w).spent() == null || boost.motor() == null || !boost.booster() || curve == null || real == null) return java.util.Optional.empty();
+            return java.util.Optional.of(new NozzleGlow(boost.motor(), curve, real.burn()));
+        }).orElse(null);
     }
 
     /** Сущность полёта: носитель или вторая (бомба). */
