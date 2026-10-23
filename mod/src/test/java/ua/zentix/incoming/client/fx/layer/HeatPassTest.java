@@ -176,6 +176,9 @@ class HeatPassTest {
         Box wall = new Box(80, 40, 70, 120, 60, 72);
         assertEquals(0, HeatPass.ballSeen(ground[0], ground[1], ground[2], ball[0], ball[1], ball[2], 6, SIZE, world(g, wall)), 1e-12, "за стеной — ничего");
         assertEquals(1, HeatPass.ballSeen(ground[0], ground[1], ground[2], ball[0], ball[1], ball[2], 6, SIZE, world(g)), 1e-12, "открыт — весь");
+        // кромка ниже середины: низ диска закрыт, середина видна — три четверти
+        Box low = new Box(80, 40, 70, 120, 42, 72);
+        assertEquals(0.75, HeatPass.ballSeen(ground[0], ground[1], ground[2], ball[0], ball[1], ball[2], 6, SIZE, world(g, low)), 1e-12, "видна середина, низ закрыт");
     }
 
     /**

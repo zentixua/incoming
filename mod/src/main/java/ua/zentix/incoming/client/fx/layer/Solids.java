@@ -228,12 +228,14 @@ public final class Solids {
         LevelChunkSection s = chunk.getSection(level.getSectionIndexFromSectionY(sy));
         if (s.hasOnlyAir()) return 0;
         var data = s.getStates().data;
-        long h = 0x9E3779B97F4A7C15L ^ data.storage().getBits();
+        // перемешивание — в обе стороны по битам (HashCommon.mix): у умножения разница идёт только вверх, и две правки в
+        // верхних битах слов хранилища гасили бы друг друга (ревью #399)
+        long h = it.unimi.dsi.fastutil.HashCommon.mix(0x9E3779B97F4A7C15L ^ data.storage().getBits());
         net.minecraft.world.level.chunk.Palette<BlockState> palette = data.palette();
         if (!(palette instanceof net.minecraft.world.level.chunk.GlobalPalette)) {
-            for (int k = 0; k < palette.getSize(); k++) h = (h ^ System.identityHashCode(palette.valueFor(k))) * 0x100000001B3L;
+            for (int k = 0; k < palette.getSize(); k++) h = it.unimi.dsi.fastutil.HashCommon.mix(h ^ System.identityHashCode(palette.valueFor(k)));
         }
-        for (long v : data.storage().getRaw()) h = (h ^ v) * 0x100000001B3L;
+        for (long v : data.storage().getRaw()) h = it.unimi.dsi.fastutil.HashCommon.mix(h ^ v);
         return h == 0 ? 1 : h;
     }
 

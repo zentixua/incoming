@@ -390,12 +390,13 @@ public final class HeatPass {
      * {@code heatBallSeen}: шар радиусом в метры у земли — протяжённый источник, и луч к одной середине у кромки холма
      * гасил бы весь его свет, хотя верх шара виден. Кромка заслона у земли почти горизонтальная; доля диска над кромкой
      * на высоте y — ∫ 2√(1 − y²): квадратура Гаусса–Чебышёва второго рода по вертикальному диаметру, узлы 0 и
-     * ±r·cos(π/4), веса ½ и ¼. Луч к середине свободен — весь диск. Лучи кончаются у края шара со стороны точки.
+     * ±r·cos(π/4), веса ½ и ¼. Кромка снизу: середина видна — виден и верхний узел, смотрим нижний; закрыта — закрыт и
+     * нижний, смотрим верхний (два луча: доли 0, ¼, ¾, 1). Лучи кончаются у края шара со стороны точки.
      */
     public static double ballSeen(double ax, double ay, double az, double bx, double by, double bz, double r, int[] size, Cells cells) {
         double vx = bx - ax, vy = by - ay, vz = bz - az, d = Math.sqrt(vx * vx + vy * vy + vz * vz);
         double end = 1 - r / Math.max(d, r);
-        if (!blocked(ax, ay, az, ax + vx * end, ay + vy * end, az + vz * end, size, cells)) return 1;
+        boolean mid = !blocked(ax, ay, az, ax + vx * end, ay + vy * end, az + vz * end, size, cells);
         vx /= Math.max(d, 1e-3);
         vy /= Math.max(d, 1e-3);
         vz /= Math.max(d, 1e-3);
@@ -405,16 +406,10 @@ public final class HeatPass {
             uy = -vy * vx;
             uz = -vz * vx;
         }
-        double k = Math.sqrt(0.5) * r / Math.sqrt(ux * ux + uy * uy + uz * uz);
-        ux *= k;
-        uy *= k;
-        uz *= k;
-        double seen = 0;
-        for (int s = -1; s <= 1; s += 2) {
-            double tx = bx + s * ux - ax, ty = by + s * uy - ay, tz = bz + s * uz - az;
-            if (!blocked(ax, ay, az, ax + tx * end, ay + ty * end, az + tz * end, size, cells)) seen += 0.25;
-        }
-        return seen;
+        double k = Math.sqrt(0.5) * r / Math.sqrt(ux * ux + uy * uy + uz * uz), s = mid ? -1 : 1;
+        double tx = bx + s * ux * k - ax, ty = by + s * uy * k - ay, tz = bz + s * uz * k - az;
+        boolean node = !blocked(ax, ay, az, ax + tx * end, ay + ty * end, az + tz * end, size, cells);
+        return mid ? 0.75 + (node ? 0.25 : 0) : node ? 0.25 : 0;
     }
 
     private static final Frame FRAME = new Frame();
