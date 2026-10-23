@@ -141,15 +141,6 @@ public final class TerrainSurvey {
             return size() == 0;
         }
     }
-    /**
-     * Последний известный чанк, о котором спросили (поток сервера): полоса датчика идёт по колонкам подряд, и почти все
-     * вопросы — о том же чанке; без этого каждый вопрос — поиск в общей карте с упаковкой ключа.
-     */
-    private long lastChunk = Long.MIN_VALUE;
-    @Nullable
-    private Heightmap.Types lastType;
-    @Nullable
-    private Heights last;
     private final java.util.Set<Heightmap.Types> asked = java.util.EnumSet.of(Heightmap.Types.MOTION_BLOCKING);
     /** Узлы рельефа генератора: (x / шаг, z / шаг) → первый воздух. */
     private final Map<Long, Integer> points = new ConcurrentHashMap<>();
@@ -157,7 +148,7 @@ public final class TerrainSurvey {
     /** Для {@link ModAttachments#TERRAIN_SURVEY}. */
     public TerrainSurvey() {
         for (Heightmap.Types t : Heightmap.Types.values()) {
-            known.put(t, new LinkedHashMap<>());
+            known.put(t, new LinkedHashMap<>(16, 0.75f, true));
             pending.put(t, new ConcurrentHashMap<>());
         }
     }
@@ -210,9 +201,6 @@ public final class TerrainSurvey {
         if (memory != null) return new Terrain.Surface(memory.getHeight(type, x & 15, z & 15) + 1, Terrain.Source.DISK);
         Heights h = cached(type, chunk, level.getGameTime());
         if (h != null) {
-            lastChunk = chunk;
-            lastType = type;
-            last = h;
             h.used = level.getGameTime();
             return h.y == null ? null : new Terrain.Surface(h.y[(x & 15) + (z & 15) * 16], h.source);
         }
@@ -264,7 +252,7 @@ public final class TerrainSurvey {
 
     @Nullable
     Heights cached(Heightmap.Types type, long chunk, long now) {
-        Heights h = chunk == lastChunk && type == lastType ? last : known.get(type).get(chunk);
+        Heights h = known.get(type).get(chunk);
         if (h != null && now >= h.retryAt) {
             forget(chunk);
             return null;
@@ -336,9 +324,8 @@ public final class TerrainSurvey {
         map.put(chunk, h);
         if (map.size() > MAX_KNOWN) {
             var i = map.keySet().iterator();
-            long oldest = i.next();
+            i.next();
             i.remove();
-            if (oldest == lastChunk && type == lastType) forgetLast();
         }
     }
 
@@ -409,15 +396,8 @@ public final class TerrainSurvey {
         s.submit(level, MAX_READS);
         if (now % 1200 == 0) {
             for (Map<Long, Heights> m : s.known.values()) m.values().removeIf(h -> now - h.used > FORGET_TICKS);
-            s.forgetLast();
             if (s.points.size() > MAX_POINTS) s.points.clear();
         }
-    }
-
-    private void forgetLast() {
-        lastChunk = Long.MIN_VALUE;
-        lastType = null;
-        last = null;
     }
 
     /**
@@ -526,7 +506,6 @@ public final class TerrainSurvey {
      * зовётся.
      */
     public void forget(long chunk) {
-        if (chunk == lastChunk) forgetLast();
         for (Map<Long, Heights> m : known.values()) m.remove(chunk);
     }
 

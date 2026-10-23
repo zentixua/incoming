@@ -3440,10 +3440,12 @@ public final class StrikeGameTests {
         stand.setNoGravity(true);
         stand.moveTo(low.x, low.y, low.z);
         level.addFreshEntity(stand);
-        Vec3 start = low.add(0, 12, -1500);
+        // +Z от площадки ещё пуст: на -Z стоят прежние партии, и датчик видит их стены/крыши на всём пути.
+        Vec3 start = low.add(0, 12, 1500);
+        int direction = -1;
         int roofLength = 1000;
         // Короткий гребень даёт высоту для настоящего снижения. Длинный навес появится только при подъёме цели.
-        if (ridge > 0) roofOverStart(h, start, Mth.floor(low.y) + 60, ridge);
+        if (ridge > 0) roofOverStart(h, start, Mth.floor(low.y) + 60, ridge, direction);
         CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(level);
         UUID id = missile.getUUID();
         Vec3 high = low.add(0, 40, 0);
@@ -3451,7 +3453,8 @@ public final class StrikeGameTests {
         double floorAfter = high.y + stand.getBbHeight() / 2 - 16;
         Vec3[] last = {start};
         boolean[] launched = {false}, raised = {false}, climbed = {false};
-        double[] raisedAt = {0};
+        double[] raisedAt = {0}, range = {Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY};
+        List<String> crossing = new ArrayList<>();
         h.onEachTick(() -> {
             if (!launched[0]) {
                 // getChunk() при постройке вернул FULL, но его держатель может ещё не быть в видимой карте.
@@ -3469,19 +3472,26 @@ public final class StrikeGameTests {
             StrikeProjectile f = flight(level, id);
             if (f == null) return;
             double descent = last[0].y - f.getY();
+            if (!raised[0] && f.isVirtual() && (f.getZ() - start.z) * direction < roofLength - 100) {
+                range[0] = Math.min(range[0], f.getY());
+                range[1] = Math.max(range[1], f.getY());
+                if (descent > 0 && Math.abs(f.getY() - floorAfter) < 5 && crossing.size() < 20)
+                    crossing.add(String.format(Locale.ROOT, "z=%.1f y=%.4f dy=%.4f predict=%.4f phase=%s",
+                            (f.getZ() - start.z) * direction, f.getY(), descent, f.getY() - descent, f.flightPhase()));
+            }
             last[0] = f.position();
             if (raised[0] && descent < 0 && f.getY() > raisedAt[0] + 4) climbed[0] = true;
-            if (!raised[0] && f.isVirtual() && f.getZ() < start.z + roofLength - 100 && when.test(f.getY(), floorAfter, descent)) {
+            if (!raised[0] && f.isVirtual() && (f.getZ() - start.z) * direction < roofLength - 100 && when.test(f.getY(), floorAfter, descent)) {
                 raised[0] = true;
                 raisedAt[0] = f.getY();
                 stand.teleportTo(high.x, high.y, high.z);
                 // «рельеф» над ракетой и впереди до конца прежнего навеса: пол встал выше неё и с этой стороны
-                roofOverStart(h, new Vec3(start.x, start.y, Math.floor(f.getZ())), Mth.floor(low.y) + 60, (int) (start.z + roofLength - Math.floor(f.getZ())));
+                roofOverStart(h, new Vec3(start.x, start.y, Math.floor(f.getZ())), Mth.floor(low.y) + 60, (int) Math.abs(start.z + direction * roofLength - Math.floor(f.getZ())), direction);
             }
         });
         h.succeedWhen(() -> {
             h.assertTrue(launched[0], "гребень не готов, ракета не запущена");
-            h.assertTrue(raised[0], "цель не поднялась; последнее место " + last[0].subtract(low));
+            h.assertTrue(raised[0], "цель не поднялась; пол " + floorAfter + "; высоты до 900 м " + java.util.Arrays.toString(range) + "; снижение " + crossing + "; последнее место " + last[0].subtract(low));
             h.assertTrue(climbed[0], "ракета не набрала высоту после подъёма цели");
             h.assertFalse(flight(level, id) != null, "ракета ещё летит, до цели " + (int) last[0].distanceTo(high));
             h.assertTrue(last[0].distanceTo(high) < 24, "ракета взорвалась не у цели: " + last[0].subtract(high));
@@ -3538,10 +3548,15 @@ public final class StrikeGameTests {
      * сущности не тикают, — снаряд над ними летит вне мира. Тикеты снимаются после теста при любом исходе.
      */
     private static void roofOverStart(GameTestHelper h, Vec3 start, int roof, int length) {
+        roofOverStart(h, start, roof, length, 1);
+    }
+
+    /** direction — знак направления пути по Z. */
+    private static void roofOverStart(GameTestHelper h, Vec3 start, int roof, int length, int direction) {
         ServerLevel level = h.getLevel();
         List<ChunkPos> held = new ArrayList<>();
         for (int dz = 0; dz <= length; dz++) {
-            BlockPos b = BlockPos.containing(start.x, roof, start.z + dz);
+            BlockPos b = BlockPos.containing(start.x, roof, start.z + direction * dz);
             ChunkPos c = new ChunkPos(b);
             if (!held.contains(c)) {
                 // уровень 33: чанк готов (FULL), но не тикает

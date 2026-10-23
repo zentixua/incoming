@@ -164,4 +164,16 @@ class TerrainSurveyTest {
         assertNotNull(survey.cached(TYPE, TerrainSurvey.MAX_KNOWN, 100));
     }
 
+
+    @Test
+    void frequentlyReadHeightsSurviveUnrelatedChunkUnloads() {
+        TerrainSurvey survey = new TerrainSurvey();
+        for (int i = 0; i < TerrainSurvey.MAX_KNOWN; i++)
+            survey.remember(TYPE, i, new TerrainSurvey.Heights(hill(), Terrain.Source.DISK, 100));
+        assertNotNull(survey.cached(TYPE, 0, 101));
+        survey.remember(TYPE, TerrainSurvey.MAX_KNOWN, new TerrainSurvey.Heights(hill(), Terrain.Source.DISK, 101));
+        assertNotNull(survey.cached(TYPE, 0, 101), "активный полёт не теряет уже известный рельеф из-за чужой выгрузки");
+        assertNull(survey.cached(TYPE, 1, 101), "вытесняется давно не читанная карта");
+    }
+
 }
