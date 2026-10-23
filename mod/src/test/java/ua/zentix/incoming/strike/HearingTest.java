@@ -16,7 +16,12 @@ class HearingTest {
     private static final Propagation.Weather NIGHT = Propagation.Weather.NIGHT, NOON = Propagation.Weather.NOON;
 
     private static double range(WeaponSpec.Airframe a, FlightPhase ph, double speed, double height, Propagation.Weather w) {
-        return Hearing.range(a.noise(), ph, 200, speed, false, height, w);
+        return Hearing.range(a.noise(), ph, age(ph), speed, false, height, w);
+    }
+
+    /** Возраст фазы для замера: на разгоне — тик полки тяги (ускоритель шахеда догорает к 38-му), иначе — давно идёт. */
+    private static int age(FlightPhase ph) {
+        return ph == FlightPhase.BOOST ? 10 : 200;
     }
 
     private static double cruise(WeaponSpec.Airframe a, Propagation.Weather w) {
@@ -94,7 +99,7 @@ class HearingTest {
 
     /** Насколько шум громче фона ночью в 15 км, дБ. */
     private static double margin(WeaponSpec.Airframe a, FlightPhase ph, double speed) {
-        return a.noise().margin(ph, 200, speed, false, Propagation.Path.over(15_000, 50, NIGHT));
+        return a.noise().margin(ph, age(ph), speed, false, Propagation.Path.over(15_000, 50, NIGHT));
     }
 
     @Test
