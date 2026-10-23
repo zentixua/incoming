@@ -1,4 +1,4 @@
-"""Проверка годности прогона шлагбаума (check.py): слух и время игры сцен."""
+"""Проверка годности прогона шлагбаума (check.py): слух, время игры сцен и точка камеры."""
 import os
 import sys
 import unittest
@@ -73,6 +73,22 @@ class CheckTest(unittest.TestCase):
         bad = check.problems(log("SCENARIO probe hearing damage off", "SCENARIO probe FAIL grad-night starts at game 21772"))
         self.assertTrue(any("остановлен" in p for p in bad), bad)
 
+    def test_camera_put_back_fails(self):
+        # LNB 23.10 (прогон LFX11): глаз сцены в 7190 202 −38, кадр — с места игрока до старта, в 22 блоках
+        rows = ("SCENARIO probe hearing damage off",
+                "SCENARIO probe launch-night-behind game 10169 (reference start 10084, air same: x)",
+                "SCENARIO probe shot launch-night-behind_0.5s camera 7169 202 -32 off 22.40",
+                "SCENARIO probe shot launch-night-behind_1s camera 7181 213 -48 off 0.00")
+        bad = check.problems(log(*rows))
+        self.assertEqual(1, len(bad), bad)
+        self.assertIn("launch-night-behind_0.5s", bad[0])
+
+    def test_camera_on_its_place_passes(self):
+        self.assertEqual([], check.problems(log(
+            "SCENARIO probe hearing damage off",
+            "SCENARIO probe launch-behind game 9519 (reference start 9519, air same: x)",
+            "SCENARIO probe shot launch-behind_0.5s camera 5791 226 233 off 0.00")))
+
     def test_empty_run_fails(self):
         self.assertTrue(check.problems(log("SCENARIO probe hearing damage off")))
 
@@ -101,6 +117,9 @@ class ProbeFormatTest(unittest.TestCase):
         self.assertIn('return (same ? "same: " : "differs: ")', java, "проба пишет same/differs — это и читает check.py")
         self.assertIn('"SCENARIO probe {} ends at game {} (reference end {}, air {})"', java)
         self.assertTrue(check.END.search("SCENARIO probe flyby ends at game 11000 (reference end 10904, air same: x)"))
+        self.assertIn('"SCENARIO probe shot {} camera {} off {}"', java)
+        self.assertTrue(check.CAMERA.search("SCENARIO probe shot launch-side_1s camera 1 2 3 off 0.00"))
+        self.assertIn("CAMERA_SLIP = " + ("%g" % check.SLIP), java, "порог в check.py — тот же, что в пробе")
 
 
 if __name__ == "__main__":
