@@ -163,7 +163,8 @@ for _ in $(seq 50); do [ -s "$tmp/order" ] && break; sleep 0.1; done
 lease_release L1
 out=$(lease_take N1 /x/wt-N1 2>&1); rc=$?
 for _ in $(seq 50); do grep -q WV "$tmp/order" && break; sleep 0.1; done
-[ $rc = 75 ] && [[ $out == *"свободна, но её ждут: WV"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = WV ] \
+# (WV проверяет каждые 0,2 с и может успеть взять раньше N1 — тогда N1 видит её у WV; главное — N1 не взял)
+[ $rc = 75 ] && [[ $out == *"свободна, но её ждут: WV"* || $out == *"видеокарта у WV"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = WV ] \
   && ok "свободную при очереди без --wait не взять, взял ждущий WV" || bad "перехват мимо очереди: $rc $out / $(cut -f1 "$INCOMING_GPU_LEASE")"
 # ждущих, что так и не взяли (ошибка очереди), — снять, а не ждать вечно
 kill $q1 $q2 2>/dev/null; wait $q1 $q2 2>/dev/null

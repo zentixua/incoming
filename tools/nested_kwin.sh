@@ -36,6 +36,8 @@ if [ -e "$RT/$SOCKET.lock" ] && ! flock -n -s "$RT/$SOCKET.lock" true 2>/dev/nul
   echo "сокет $SOCKET занят другим KWin" >&2; exit 75
 fi
 lease_take "$owner" "$ROOT" ${INCOMING_GPU_WAIT:+--wait} || exit 75
+# аренда своя, а клиент своей же сессии ещё идёт: с INCOMING_GPU_WAIT — дождаться его
+while [ -n "${INCOMING_GPU_WAIT:-}" ] && gpu_client_busy >/dev/null; do sleep 10; done
 gpu_client_hold "$owner" "$ROOT" "$COMMAND" || exit 75
 mkdir -p "$HOME_DIR/config" "$HOME_DIR/data" "$HOME_DIR/cache" "$HOME_DIR/state"
 exec env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS \

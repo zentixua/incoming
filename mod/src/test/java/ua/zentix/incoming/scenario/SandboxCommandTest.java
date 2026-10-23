@@ -103,7 +103,7 @@ class SandboxCommandTest {
     void badCommandsFailBeforeRunning() {
         for (String bad : new String[]{"", "boom", "blast", "blast tank", "blast nuke", "nuke 40", "nuke 5 high", "cam far",
                 "fire 99", "hud maybe", "again now", "time noon", "time -100", "time 3e9", "time 13000.5", "zoom 0.5", "zoom",
-                "zoom 1000", "flight drone own 600", "flight drone 600 mine", "flight drone 0", "flight drone 9000", "track maybe"}) {
+                "zoom 1000", "flight drone own 600", "flight drone 600 mine", "flight drone 0", "flight drone 9000", "flight drone NaN", "track maybe"}) {
             assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse(bad), bad);
         }
     }

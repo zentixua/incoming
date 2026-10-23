@@ -63,6 +63,12 @@ if [ "$mode" = gpu ]; then
   # без --wait — отказ сразу; с --wait клиента, что идёт, ждёт очередь аренды (lease_take)
   if [ -z "$wait" ] && who=$(gpu_client_busy); then echo "$who" >&2; echo "laptop_job $name: exit 75"; exit 75; fi
   lease_take "$INCOMING_GPU_OWNER" "$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)" $wait || { echo "laptop_job $name: exit 75"; exit 75; }
+  # аренда своя, а клиент своей же сессии ещё идёт (песочница другого дерева): с --wait — дождаться его до службы
+  said=
+  while [ -n "$wait" ] && who=$(gpu_client_busy); do
+    [ -z "$said" ] && { echo "$(date +%T) $who — жду" >&2; said=1; }
+    sleep 10
+  done
 fi
 
 # окружение службы — только нужное задаче (служба не наследует окружение оболочки)

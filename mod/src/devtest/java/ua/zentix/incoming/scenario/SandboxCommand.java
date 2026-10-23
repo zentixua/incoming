@@ -93,7 +93,7 @@ record SandboxCommand(Verb verb, List<String> args) {
             case LAUNCH, FLIGHT -> {
                 need(1, own() ? 3 : 2);
                 weapon();
-                if (args.size() > (own() ? 2 : 1) && (number(1) < 50 || number(1) > 5000)) throw new IllegalArgumentException("от точки 50–5000 блоков");
+                if (args.size() > (own() ? 2 : 1) && !(number(1) >= 50 && number(1) <= 5000)) throw new IllegalArgumentException("от точки 50–5000 блоков");
             }
             case NUKE -> {
                 need(1, 4);
