@@ -26,7 +26,8 @@ projectiles in flight, your teammates, and other players where they were last [s
 
 The Shahed, the cruise missile and the Lancet fly through route points: around a SAM, or to come in from the side you
 choose. The bottom of the map shows the route length and flight time. A route that is too long turns red and cannot be
-fired. Without points the projectile picks its own path. Other weapons do not take a route.
+fired. Without points the projectile picks its own path. A salvo flies the route as a wave, each round in its own
+lane beside it ([how they fly](weapons.md#how-they-fly)). Other weapons do not take a route.
 
 ## Launch site
 

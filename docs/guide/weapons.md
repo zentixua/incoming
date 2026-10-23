@@ -131,6 +131,12 @@ further away. At 1 the B-2 bomb falls for about 50 seconds after the drop, so it
   harder the turn the steeper the bank.
 - **Climbs and dives** trade height for speed: a drone climbing at 15° loses about 15 % of its speed, a dive speeds it up
   faster than the engine alone, and afterwards it settles back to its cruising speed.
+- **A salvo flies as a wave**, not a string. Shaheds, missiles and Lancets leave the launcher one after another, and
+  each takes its own lane beside the path: up to 32 blocks to either side for the Shahed and the Lancet, 48 for the
+  missile (not physical: about the gap between rounds, so the salvo reads as a wave). A round moves into its lane over
+  the first 100 blocks of the route (missile 300, Lancet 80) and comes back to its own aim point over the last 300
+  (missile 500, Lancet 150), so accuracy does not change. A route on the map is shared by the whole salvo, each round
+  in its lane. The rounds still arrive a second or two apart.
 - **Grad rockets** fly by gravity and air drag: the way down is steeper than the way up. The fire control knows only the
   wind at the ground; higher up it blows harder, so a salvo lands a little downwind. Each rocket leaves its tube with a
   small spread in angle and speed, so the impacts scatter by about 1 % of the range. The Grad also fires at targets

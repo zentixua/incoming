@@ -21,6 +21,7 @@ import ua.zentix.incoming.sound.Spectra;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.util.StandardAtmosphere;
 
+import java.util.SplittableRandom;
 import java.util.function.Supplier;
 
 /**
@@ -88,10 +89,62 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * @param gapMax до
      * @param count  сколько в залпе ставит пульт, когда выбирают это оружие вместо одиночного (1 — оставить как было)
      * @param spread и разброс не меньше, блоков
+     * @param lanes  полосы снарядов залпа на маршруте ({@link Lanes}); {@link Lanes#NONE} — маршрута у оружия нет
      */
-    public record Salvo(int gapMin, int gapMax, int count, int spread) {
+    public record Salvo(int gapMin, int gapMax, int count, int spread, Lanes lanes) {
         static Salvo gaps(int gapMin, int gapMax) {
-            return new Salvo(gapMin, gapMax, 1, 0);
+            return new Salvo(gapMin, gapMax, 1, 0, Lanes.NONE);
+        }
+
+        /** Этот залп с полосами на маршруте. */
+        Salvo inLanes(double halfWidth, double exit, double converge) {
+            return new Salvo(gapMin, gapMax, count, spread, new Lanes(halfWidth, exit, converge));
+        }
+    }
+
+    /**
+     * Полосы залпа на маршруте (игровое, не по физике): снаряды одного залпа летят не ниткой по одному пути, а волной —
+     * у каждого своя полоса сбоку от пути, который строит пуск или задал оператор ({@code guidance.Route#inLane}): в неё
+     * снаряд выходит за {@code exit} блоков пути от начала маршрута, к своей точке прицеливания сходится за
+     * {@code converge} блоков до неё. Ширина — порядка расстояния между соседними снарядами на маршруте (пауза залпа ×
+     * маршевая): тогда залп в небе — волна, а не цепочка, и в район ЗРК снаряды входят с разных сторон и над разными
+     * складками рельефа. Выход в полосу — за несколько радиусов разворота, схождение — за последний прямой участок
+     * паспорта: заход на цель и точность (промах {@link Route#miss}) — прежние. Длины растут с маршевой
+     * ({@link Airframe#stretch}), как расстояние между снарядами.
+     *
+     * @param halfWidth полосы — не дальше стольких блоков от пути в обе стороны
+     * @param exit      в полосу снаряд выходит за столько блоков пути от начала маршрута
+     * @param converge  полосы сходятся за столько блоков пути до цели
+     */
+    public record Lanes(double halfWidth, double exit, double converge) {
+        public static final Lanes NONE = new Lanes(0, 0, 0);
+
+        /** Те же полосы с длинами × {@code k}. */
+        public Lanes scaled(double k) {
+            return k == 1 ? this : new Lanes(halfWidth * k, exit * k, converge * k);
+        }
+
+        /**
+         * Сдвиг вбок снаряда {@code round} (с 0, по порядку пуска) из {@code total} в залпе, блоков (знак — сторона, как
+         * {@code side} у {@code guidance.Route#plan}):
+         * поперёк пути — {@code total} равных полос шириной 2·{@code halfWidth}/{@code total}, у каждого снаряда своя, в
+         * порядке, перемешанном зерном залпа (иначе первые снаряды шли бы с одного края, и волна была бы косой цепочкой);
+         * внутри полосы — в её средней половине по тому же зерну: соседние снаряды не ближе половины полосы друг к другу.
+         * Одно зерно — одни полосы. Залп из одного снаряда идёт по самому пути.
+         */
+        public double offset(long seed, int round, int total) {
+            if (total <= 1 || halfWidth <= 0 || round < 0 || round >= total) return 0;
+            int[] order = new int[total];
+            for (int i = 0; i < total; i++) order[i] = i;
+            SplittableRandom shuffle = new SplittableRandom(seed);
+            for (int i = total - 1; i > 0; i--) {
+                int j = shuffle.nextInt(i + 1);
+                int t = order[i];
+                order[i] = order[j];
+                order[j] = t;
+            }
+            double u = new SplittableRandom(seed ^ (round + 1) * 0x9E3779B97F4A7C15L).nextDouble();
+            return halfWidth * (2 * (order[round] + 0.25 + 0.5 * u) / total - 1);
         }
     }
 
@@ -609,6 +662,11 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
         return striker().article().fuelAtImpact();
     }
 
+    /** Полосы залпа на шкале полёта мира ({@link Lanes}): длины растут с маршевой, как расстояние между снарядами. */
+    public Lanes lanes() {
+        return salvo.lanes().scaled(airframe.stretch(FlightScale.x()));
+    }
+
     /** Пауза между пусками в залпе, тиков. */
     public int salvoGap(RandomSource random) {
         return salvo.gapMin() + random.nextInt(salvo.gapMax() - salvo.gapMin() + 1);
@@ -888,9 +946,10 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * рельефом, пикирование с разгоном до 3 блоков/тик. Стартовый ускоритель горит ~2 с (настоящий — ~2,5 с) и сбрасывается. Боевая часть —
      * 50 кг ТНТ: стёкла выбивает до ~70 блоков. По точкам оператора — до 30 км пути (~12 минут полёта): втрое дальше
      * карты пульта по умолчанию. Навигация спутниковая и инерциальная: промах — СКО 3 блока по каждой оси (в среднем
-     * ~3,5 блока от цели).
+     * ~3,5 блока от цели). Залп — волной ({@link Lanes}, игровое, не по физике): у каждого шахеда своя полоса до ±32 блоков
+     * от пути (шаг между шахедами на маршруте — 42–84 блока), выход в неё за 100 блоков, схождение — за последние 300.
      */
-    public static final WeaponSpec DRONE = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 25, Salvo.gaps(20, 40), Warhead.CONVENTIONAL,
+    public static final WeaponSpec DRONE = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 25, Salvo.gaps(20, 40).inLanes(32, 100, 300), Warhead.CONVENTIONAL,
             Launch.GUIDED,
             new Route(() -> IncomingConfig.SERVER.droneFlightTime, 300, 0, 3, 40, 30_000), Tracking.CAMERA, LauncherRack.DRONE, Blast.DRONE, false, 0.6f,
             new Airframe(() -> ModEntities.DRONE.get(), 2.1, 3.0, DRONE_HANDLING, 45, 20, 256, 1.83, 12, 900 * 2.1, 4.3,
@@ -905,9 +964,10 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * Последние 256 блоков — в мире: больше дальности прорисовки 12 чанков, чтобы подлёт с её края был виден и при
      * меньшей дистанции симуляции. Боевая часть — ~150 кг ТНТ (WDU-36/B): стёкла выбивает до ~105 блоков. По точкам
      * оператора — до 30 км пути (~6 минут полёта). Точнее шахеда (сверка с рельефом и камерой на подлёте): промах — СКО
-     * 1,5 блока по оси.
+     * 1,5 блока по оси. Залп — волной ({@link Lanes}, игровое, не по физике): полосы до ±48 блоков (шаг между ракетами —
+     * 60–120 блоков), выход в полосу за 300 блоков (радиус захвата точки — 120), схождение — за последний участок, 500.
      */
-    public static final WeaponSpec MISSILE = new WeaponSpec(WeaponType.SirenKind.MISSILE, 15, Salvo.gaps(15, 30), new Warhead(false, true, true),
+    public static final WeaponSpec MISSILE = new WeaponSpec(WeaponType.SirenKind.MISSILE, 15, Salvo.gaps(15, 30).inLanes(48, 300, 500), new Warhead(false, true, true),
             Launch.GUIDED,
             new Route(() -> IncomingConfig.SERVER.missileFlightTime, 500, 0, 1.5, 120, 30_000), Tracking.POINT, LauncherRack.MISSILE, Blast.MISSILE, false, 0.5f,
             new Airframe(() -> ModEntities.CRUISE_MISSILE.get(), 4.0, 5.0, MISSILE_HANDLING, 12, 12, 256, 2.96, 8, 700 * 4.0, 6.5,
@@ -961,7 +1021,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * 6,4 кг ВВ: стёкла выбивает до ~37 блоков. Боеприпас — пакет на все трубы пусковой (40 снарядов, как перезарядка
      * БМ-21): залп тратит из него по снаряду. Топлива к удару нет: двигатель выгорает за секунду-другую после схода.
      */
-    public static final WeaponSpec ROCKET = new WeaponSpec(WeaponType.SirenKind.MISSILE, 8, new Salvo(8, 12, 12, 15), Warhead.CONVENTIONAL,
+    public static final WeaponSpec ROCKET = new WeaponSpec(WeaponType.SirenKind.MISSILE, 8, new Salvo(8, 12, 12, 15, Lanes.NONE), Warhead.CONVENTIONAL,
             Launch.ROCKET,
             new Route(null, 0, 600, 0, 0, 0), Tracking.POINT, LauncherRack.ROCKET, Blast.ROCKET, false, 0.5f,
             new Airframe(() -> ModEntities.ROCKET.get(), 4, 4, null, 0, 4, 0, 1.45, 2, 2400 * 4, 1.5, null, 0, Attack.NONE,
@@ -973,9 +1033,11 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * (толчок за полсекунды, без огня) к цели, круг на 45 блоков выше неё (настоящий — 600–800 м), пикирование с
      * разгоном до 4 блоков/тик; без стреляющего рядом — издалека, с 500 блоков. Боевая часть — 3 кг: стёкла выбивает
      * до ~29 блоков. По точкам оператора — до 15 км пути (~8 минут полёта): ближнее оружие, вдвое короче шахеда.
-     * Наводится камерой (оператора или своей): промаха нет. Топлива нет: мотор электрический (батарея).
+     * Наводится камерой (оператора или своей): промаха нет. Топлива нет: мотор электрический (батарея). Залп — волной
+     * ({@link Lanes}, игровое, не по физике): полосы до ±32 блоков (шаг — 64–96 блоков), выход за 80, схождение к кругу —
+     * за 150; на прямом пути короче 230 блоков (с катапульты — от ворот взведения) полосы нет.
      */
-    public static final WeaponSpec LOITER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(40, 60), Warhead.CONVENTIONAL,
+    public static final WeaponSpec LOITER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(40, 60).inLanes(32, 80, 150), Warhead.CONVENTIONAL,
             Launch.LOITER,
             new Route(null, 0, 500, 0, 32, 15_000), Tracking.CAMERA, LauncherRack.LOITER, Blast.DRONE, false, 0.5f,
             new Airframe(() -> ModEntities.LOITER.get(), 1.6, 4.0, LOITER_HANDLING, 45, 25, 35, 0.87, 4, 2400 * 1.6, 3.0,
