@@ -220,11 +220,15 @@ The size, rise, colour and light of every blast come from the charge and the fue
 fireball are drawn from simulations of real gas, baked in Blender, the same way up close and far away. The sun lights
 the smoke from its side and shines through its thin edges, and a fireball lights the smoke around it. When the fuel has
 burnt, the fireball does not switch off: it cools as it mixes with air, from yellow through orange and dark red into
-smoke.
+smoke. You see it as fire while its glow outshines the light on its smoke, so by day it turns into smoke sooner than at
+night: the bomb's ball is smoke by day 3 s after the blast and still glows at night. A growing cloud keeps its billowing
+clumps the whole time, near and far.
 
 - **Shahed**: a short flash, then a ball of burning petrol about 18 blocks across that burns for about 1.5 seconds and
   glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
-  burns for about 2.5 minutes with flames about 3 blocks high. Its black smoke rises from the crater the whole time and
+  burns for about 2.5 minutes with flames about 3 blocks high. The flames are orange by day; at night they glow
+  yellow-white and light the ground around. Far away, where flame particles are no longer drawn, the fire is a glowing
+  spot of the same colour and brightness, with a glare at night. Its black smoke rises from the crater the whole time and
   leans downwind: in a stiff breeze it trails low, in calm air it stands taller. The smoke of the ball, with the dust
   torn up under it, rises a few hundred blocks as a dark cloud.
 - **Cruise missile**: a bigger flash and a fuel ball about 38 blocks across that burns for about 3 seconds; the fuel left
@@ -283,8 +287,10 @@ same up close and far away.
 
 - **Rocket motors** (the Shahed's and the cruise missile's boosters, the Grad rocket, the ICBM stage) have a short hot
   core at the nozzle and a brighter orange flame behind it, where the exhaust burns in the air. Its length and colour
-  come from the motor. The Grad and the ICBM show shock diamonds near the ground. At night the cooling tail glows
-  further back, and the flame lights the smoke around it. The flame also lights the ground, the launcher and walls
+  come from the motor, and so does its brightness: a booster's flame is many times brighter than the daylight sky, so by
+  day as well as at night it is white at the nozzle and turns yellow, then orange where it cools. Shock diamonds form in
+  the core, but the burning flame around it is 10 to 1000 times brighter, so they are not seen. At night the cooling tail
+  glows further back, and the flame lights the smoke around it. The flame also lights the ground, the launcher and walls
   nearby along its whole length above the ground, from the nozzle to the end of the glowing tail, and blocks cast shadows
   from it.
 - **Engines without a flame**: the Shahed's piston engine, the cruise missile's jet engine and the Lancet's electric
@@ -296,11 +302,12 @@ same up close and far away.
   pixels is it a thin line. At
   dusk and at night it takes the light of the open sky the way the clouds do: grey at sunset, pale lilac under the moon.
   The smoke starts where the visible flame ends: closer to the nozzle the exhaust is still the flame itself.
-  A motor burns for its real time (the Grad's 2 s), and the trail is the path the rocket flies meanwhile. At game speeds
-  (not physical) that path is short: a Grad trail is about 160 blocks from a battery 600 blocks away (less from a closer one), and since the same smoke lies on a shorter
-  path, it is denser and hangs longer. A real 9M22U speeds up to about 690 m/s over its burn and leaves about 650 m.
-  In the game the rocket leaves the tubes at full speed (not physical), so with `scale.flight_speed` 1 its trail is
-  about 1.4 km.
+  A Grad trail covers the real burn path at any `scale.flight_speed`: a real 9M22U speeds up to about 690 m/s over its
+  1.9 s burn and leaves about 650 m of smoke, with the smoke of all its fuel spread over that length. At game speed the
+  rocket's flame goes out after 2 s, about 160 blocks from the tubes, and the smoke keeps coming without a flame until
+  the rocket has flown the whole 650 blocks (not physical: at game speed the motor would burn out sooner). With
+  `scale.flight_speed` 1 the rocket leaves the tubes at full speed (not physical), and the trail ends at 650 blocks while
+  the flame still burns.
 - **Launch cloud**: while a rocket's exhaust still hits the ground, its smoke stays at the launcher, together with the
   dust it blows up, and rises and drifts as one warm cloud. A Shahed leaves a short white puff at the rail, a cruise
   missile's booster a bigger one. Each Grad rocket adds its own cloud, so a full salvo buries the launcher in smoke and

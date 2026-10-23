@@ -285,12 +285,15 @@ public final class FarSprites implements SmokePuffs.Out {
         glare(dx, dy, dz, radius, out, seen, r, g, b, 1, shown);
     }
 
-    /** Ядро {@link #light} кругом: свой свет поверх того, что за ним; пересвет — к белому, тусклее белого — тает. */
+    /**
+     * Ядро {@link #light} кругом: свой свет поверх того, что за ним; пересвет — к белому, тусклее белого — темнее в линейном
+     * свете и на экран в sRGB ({@link Sight#onScreen}, как струя и языки пламени вблизи: на 0,8 прорисовки без скачка) и тает.
+     */
     private void core(double dx, double dy, double dz, double[] o, double t, float r, float g, float b, double w) {
-        double s = o[2], k = Math.min(1, s) * w, white = s > 1 ? Math.min(1, Math.log(s) / Math.log(Sight.WHITE)) : 0;
+        double s = o[2];
+        float[] c = Sight.onScreen(r, g, b, s, (float) w);
         float a = (float) (o[1] * t * Math.min(1, 4 * s) * w);
-        if (billboard(dx, dy, dz, o[0] * DISC, 0, FxAtlas.disc(), (float) ((r + (1 - r) * white) * k), (float) ((g + (1 - g) * white) * k),
-                (float) ((b + (1 - b) * white) * k), a, (float) (o[0] * BODY_SOFT))) counts[1]++;
+        if (billboard(dx, dy, dz, o[0] * DISC, 0, FxAtlas.disc(), c[0], c[1], c[2], a, (float) (o[0] * BODY_SOFT))) counts[1]++;
     }
 
     /**
@@ -423,6 +426,60 @@ public final class FarSprites implements SmokePuffs.Out {
         joint[1] = ny;
         joint[2] = nz;
         return true;
+    }
+
+    /**
+     * Светящаяся полоса — струя факела вблизи ({@code PlumeRenderer}): углы a, b — у одного конца, c, d — у другого (от
+     * камеры), свет этих концов (на экране, с пересветом к белому, умноженный на долю). Поперёк — профиль ореола
+     * {@code far/glow} (мягкий край, как у смешения на кромке струи), квадрат шире в {@link #STRIP_CROSS} раза: свет поперёк
+     * тот же, что у ровной полосы этой ширины (с кругом {@code far/disc} край был жёстким, кадры F6). Только светит (альфа 0):
+     * что за ней, остаётся видно. Сортируется по ключу key (у всех кусков одной струи — один: её ближняя точка минус клубы у оси):
+     * дым своего выхлопа ложится под огонь, а не между его кусками, дым ближе — поверх.
+     */
+    public void glowStrip(Vector3f a, Vector3f b, Vector3f c, Vector3f d, float r0, float g0, float b0, float r1, float g1, float b1, float soft,
+                          float key) {
+        if (r0 + g0 + b0 < 0.006f && r1 + g1 + b1 < 0.006f) return;
+        widen(a, b);
+        widen(d, c);
+        double da = a.length(), db = b.length(), dc = c.length(), dd = d.length();
+        float ka = (float) FarDraw.fold(da, far), kb = (float) FarDraw.fold(db, far), kc = (float) FarDraw.fold(dc, far), kd = (float) FarDraw.fold(dd, far);
+        FxAtlas.Sprite s = FxAtlas.glow();
+        float v = s.vMid();
+        r0 = Math.min(1, r0);
+        g0 = Math.min(1, g0);
+        b0 = Math.min(1, b0);
+        r1 = Math.min(1, r1);
+        g1 = Math.min(1, g1);
+        b1 = Math.min(1, b1);
+        out.glowShape(true);
+        out.quad(key);
+        out.vertex(a.x * ka, a.y * ka, a.z * ka, s.u0(), v, r0, g0, b0, 0, soft, ka, LightTexture.FULL_BRIGHT, 0);
+        out.vertex(b.x * kb, b.y * kb, b.z * kb, s.u1(), v, r0, g0, b0, 0, soft, kb, LightTexture.FULL_BRIGHT, 0);
+        out.vertex(c.x * kc, c.y * kc, c.z * kc, s.u1(), v, r1, g1, b1, 0, soft, kc, LightTexture.FULL_BRIGHT, 0);
+        out.vertex(d.x * kd, d.y * kd, d.z * kd, s.u0(), v, r1, g1, b1, 0, soft, kd, LightTexture.FULL_BRIGHT, 0);
+        out.glowShape(false);
+        counts[2]++;
+    }
+
+    /**
+     * Во сколько раз полоса {@code far/glow} шире ровной того же света поперёк: середина круга {@code far/disc} поперёк
+     * закрывает ~0,93 ширины, ореола exp(−(u/0,42)²) — 0,42·√π/2 ≈ 0,372 (доля ширины, не интеграл по ней), ≈ 2,5.
+     */
+    static final float STRIP_CROSS = (float) (0.93 / (0.42 * Math.sqrt(Math.PI) / 2));
+
+    /** Отрезок p–q поперёк струи — шире в {@link #STRIP_CROSS} раза от своей середины. */
+    private static void widen(Vector3f p, Vector3f q) {
+        float mx = 0.5f * (p.x + q.x), my = 0.5f * (p.y + q.y), mz = 0.5f * (p.z + q.z);
+        p.set(mx + (p.x - mx) * STRIP_CROSS, my + (p.y - my) * STRIP_CROSS, mz + (p.z - mz) * STRIP_CROSS);
+        q.set(mx + (q.x - mx) * STRIP_CROSS, my + (q.y - my) * STRIP_CROSS, mz + (q.z - mz) * STRIP_CROSS);
+    }
+
+    /**
+     * Светящийся круг радиуса radius лицом к камере (сечение струи факела с торца, {@code PlumeRenderer}): свет (r, g, b)
+     * на экране, только светит.
+     */
+    public void glowDisc(double dx, double dy, double dz, double radius, float r, float g, float b, float soft) {
+        if (billboard(dx, dy, dz, radius * DISC, 0, FxAtlas.disc(), r, g, b, 0, soft)) counts[2]++;
     }
 
     /** Вуаль трубки следа вокруг глаза — на столько блоков перед ним (как у облаков, {@link SmokePuffs#VEIL_AT}). */

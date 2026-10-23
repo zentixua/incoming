@@ -8,12 +8,12 @@ import org.joml.Matrix4f;
 import org.joml.Vector4f;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.FirePlume;
+import ua.zentix.incoming.client.far.FarSprites;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.FxLights;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.grid.SubstationBlock;
-import ua.zentix.incoming.nuclear.model.BlackBody;
 
 import java.util.Locale;
 
@@ -429,12 +429,12 @@ public final class FireSmoke implements SmokeGrid.Source {
 
     /**
      * Пламя очагов светит на дым снизу: в свободные места света сетки (занятые — шарами взрывов и ядерки), самые заметные
-     * (яркость × R²/d²) — шар чёрного тела {@link FirePlume#FLAME_K} радиусом в полвысоты пламени над очагом; свет — линейный
+     * (яркость × R²/d²) — шар видимого пламени ({@link FirePlume#flameLight}) радиусом в полвысоты пламени над очагом; свет — линейный
      * × exposure, в w — air.
      */
     public static void lights(Vec3 eye, double exposure, double air, Matrix4f centres, Matrix4f light) {
         if (FIRES.isEmpty() && OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
-        BlackBody.light(FirePlume.FLAME_K, BB);
+        FirePlume.flameLight(BB);
         Vector4f column = COLUMN;
         double[] weight = WEIGHT;
         for (int i = 0; i < 4; i++) {
@@ -464,13 +464,13 @@ public final class FireSmoke implements SmokeGrid.Source {
     static final double FLAME_ON_SCREEN = 0.8;
 
     /**
-     * Пламя очагов светит на частицы, клубы и ленты вокруг ({@link FxLights}): шар чёрного тела
-     * {@link FirePlume#FLAME_K} радиусом в полвысоты пламени над очагом, с привыканием глаза кадра. Ночью без него дым над
+     * Пламя очагов светит на частицы, клубы и ленты вокруг ({@link FxLights}): шар видимого пламени
+     * ({@link FirePlume#flameLight}) радиусом в полвысоты пламени над очагом, с привыканием глаза кадра. Ночью без него дым над
      * пожаром освещала бы одна луна.
      */
     public static void lights(FarView view, FxLights lights) {
         if (FIRES.isEmpty() && OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
-        BlackBody.light(FirePlume.FLAME_K, BB);
+        FirePlume.flameLight(BB);
         double m = Math.max(BB[0], Math.max(BB[1], BB[2]));
         Vec3 cam = view.camera();
         for (FireSmoke f : all()) {
@@ -482,12 +482,40 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
+     * Пламя очагов топлива (лужа в воронке, масло подстанции) там, где его языков-частиц уже нет: с 0,8 прорисовки они
+     * тают ({@code FxFrame.near}), и в 300 м ночью от пожара оставался только свет на земле — серая точка. Тело — круг
+     * площади пламени сбоку (высота по Хескестаду × диаметр очага), свет и цвет — те же, что у языков и у света пламени
+     * на дыме ({@link FirePlume#FLAME_LUMINANCE}, {@link FirePlume#FLAME_COLOR}, с привыканием глаза кадра), блик и вуаль —
+     * как у огненного шара и факела ({@link FarSprites#light}). Огонь Minecraft вдали рисует сам мир.
+     */
+    public static void far(FarView view, FarSprites out) {
+        if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
+        Vec3 cam = view.camera();
+        int c = FirePlume.FLAME_COLOR;
+        float r = (c >> 16 & 255) / 255f, g = (c >> 8 & 255) / 255f, b = (c & 255) / 255f;
+        for (FireSmoke f : (Iterable<FireSmoke>) () -> java.util.stream.Stream.concat(OIL_FIRES.values().stream(), POOLS.stream()).iterator()) {
+            if (!Double.isNaN(f.end) || f.gone) continue;
+            if (f.blocks <= 0 || f.flame <= 0) continue;
+            // пламя сбоку: высота по Хескестаду (по нынешней силе очага: у лужи — доля, что ещё горит) × диаметр очага (у
+            // масла — всех его очагов), круг той же площади — на половине высоты
+            double area = f.burning == null ? f.blocks * f.fuel.area : f.fuel.area;
+            double across = 2 * Math.sqrt(area / Math.PI), radius = Math.sqrt(f.flame * across / Math.PI);
+            double dx = f.x - cam.x, dy = f.y + 0.5 * f.flame - cam.y, dz = f.z - cam.z;
+            double d = Math.sqrt(dx * dx + dy * dy + dz * dz), w = view.farShare(d), t = view.air(d, dy);
+            // ядро сменяет языки-частицы с 0,8 прорисовки; блик и вуаль — на любой дальности, как у факела и шара
+            out.light(dx, dy, dz, radius, FirePlume.FLAME_LUMINANCE * view.exposure() * t, t, view.pixel(), r, g, b, w, 1, FAR_LIGHT);
+        }
+    }
+
+    private static final double[] FAR_LIGHT = new double[5];
+
+    /**
      * Свет и горячий газ очагов на мир кадра ({@code HeatPass}): горячий газ над каждым горящим очагом (столб по
      * Хескестаду), свет — у масла подстанций и топлива в воронках: огонь Minecraft светит на мир сам, светом блоков.
      */
     public static void heat(Vec3 eye, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         if (FIRES.isEmpty() && OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
-        BlackBody.light(FirePlume.FLAME_K, BB);
+        FirePlume.flameLight(BB);
         for (FireSmoke fire : all()) {
             if (!Double.isNaN(fire.end) || fire.gone) continue;
             double dx = fire.x - eye.x, dy = fire.y - eye.y, dz = fire.z - eye.z;

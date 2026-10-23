@@ -8,6 +8,7 @@ import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarSprites;
 import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxBudget;
+import ua.zentix.incoming.client.fx.smoke.FirePlume;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
@@ -94,10 +95,15 @@ final class Explosions {
      * со скоростью порядка √(g·L) (число Фруда пламени ~1), язык живёт, пока проходит высоту пламени; языков столько,
      * чтобы пламя над очагом было сплошным (не больше {@link #POOL_TONGUES}), × доля, что ещё горит ({@code share}).
      * Изредка стреляют угли. Дым над лужей — шлейф облака взрыва ({@code FarBlasts}), свет пламени — {@code FxLights}.
+     * Цвет и яркость языка — видимого пламени ({@link FirePlume#flameLight}: светящаяся сажа, с привыканием глаза), те же, что у
+     * его света и у пламени вдали ({@code FireSmoke.far}): нарисованный рукой бледно-жёлтый язык ночью в 300 м выходил
+     * серой точкой.
      */
     static void pool(ClientLevel level, Vec3 c, double radius, double flame, double share, RandomSource rnd) {
         if (share <= 0 || flame <= 0) return;
         float k = Fx.density(c);
+        float[] fire = ua.zentix.incoming.client.far.Sight.onScreen(FirePlume.FLAME_COLOR,
+                FirePlume.FLAME_LUMINANCE * ua.zentix.incoming.client.far.FarView.exposure(level, 0), 1);
         double up = Math.sqrt(9.80665 * flame) / 20, size = Math.max(0.35 * radius, 0.2 * flame);
         int life = (int) Math.max(6, Math.round(flame / up));
         // языков в пламени: объём пламени на объём языка, не больше предела
@@ -106,7 +112,7 @@ final class Explosions {
         for (int n = (int) born + (rnd.nextDouble() < born - (int) born ? 1 : 0); n > 0; n--) {
             double a = rnd.nextDouble() * Mth.TWO_PI, r = radius * Math.sqrt(rnd.nextDouble());
             float s = (float) (size * (0.8 + 0.4 * rnd.nextDouble()));
-            Fx.fire().vel(0, up * (0.7 + 0.3 * rnd.nextDouble()), 0).size(0.6f * s, s).life(life + rnd.nextInt(Math.max(1, life / 3))).rise(0.004f)
+            Fx.fire().color(fire, fire).vel(0, up * (0.7 + 0.3 * rnd.nextDouble()), 0).size(0.6f * s, s).life(life + rnd.nextInt(Math.max(1, life / 3))).rise(0.004f)
                     .budget(FxBudget.GROUND).spawn(level, c.add(Math.cos(a) * r, 0.3 + 0.5 * s, Math.sin(a) * r));
         }
         if (rnd.nextFloat() < 0.3f * share) {

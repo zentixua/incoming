@@ -46,7 +46,7 @@ public class StrikeProjectileRenderer<T extends StrikeProjectile> extends Entity
             Vec3 at = entity.getPosition(partialTick);
             double world = Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0;
             float near = (float) (1 - FarView.farShare(at.distanceTo(entityRenderDispatcher.camera.getPosition()), world));
-            if (near > 0) PlumeRenderer.render(plume.dimmed(near), pose, buffers, rotation, at, entityRenderDispatcher.camera);
+            if (near > 0) PlumeRenderer.render(plume.dimmed(near), entity, rotation, at);
         }
         pose.popPose();
         super.render(entity, entityYaw, partialTick, pose, buffers, packedLight);

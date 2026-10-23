@@ -360,6 +360,50 @@ public final class CloudModel {
         return u * u * (3 - 2 * u);
     }
 
+    /**
+     * Свет густого дыма облака на экране в полдень, белая стена — 1: сажа отражает R∞ ~0,03, пыль ~0,3 (два потока,
+     * {@code SmokePuffs.thick}); ⚠ оценка — их среднее геометрическое 0,1. Против него видно свечение остывающего шара.
+     */
+    public static final double SMOKE_SEEN = 0.1;
+
+    /**
+     * Доля газа температуры kelvin, что видна телом огня, когда дым освещает небо силы sky (белая стена в полдень — 1;
+     * днём 1, ночью ~8·10⁻⁴ — {@code FarView.skyLuminance}): в пикселе свечение газа B(T) и свет неба, рассеянный его
+     * дымом ({@link #SMOKE_SEEN}·sky), складываются. Огонь не виден, пока его свет ниже порога контраста ({@link #SEEN},
+     * 0,02 — Blackwell 1946) к свету дыма, и дым не виден, когда его свет ниже того же порога к свету огня; между — плавно
+     * по логарифму их отношения (при равных — половина), и не больше {@link #glowShare(double)} (светится ли газ вообще).
+     * Ровно 0 и 1 на краях — не 1 − ε: клуб шара бомбы несёт тонны пыли, и даже 0,04 % её непрозрачны (тёмный ком поверх
+     * шара днём в первую секунду, кадры F6). Привыкание глаза не входит: на экране оба умножаются на одно и то же (с
+     * привыканием к шару у глаза холодный газ рядом выходил бы ночью чёрным комом). Днём шар бомбы в 1260 K (3 с после
+     * взрыва 1,3 т, яркость ~0,009 белой стены) — уже дым, ночью — ещё огонь; по одной температуре он днём оставался сплошь
+     * оранжевым до 3,7 с (шлагбаум RV2, бомба в 150 м). ⚠ Свет огня на самом дыме не входит.
+     */
+    public static double glowShare(double kelvin, double sky) {
+        double g = glowShare(kelvin);
+        if (g <= 0) return 0;
+        double b = glowLuminance(kelvin), smoke = SMOKE_SEEN * Math.max(sky, 0);
+        if (smoke <= 0) return g;
+        double edge = -Math.log(SEEN), u = Math.max(0, Math.min(1, (Math.log(b / smoke) + edge) / (2 * edge)));
+        return g * u * u * (3 - 2 * u);
+    }
+
+    /**
+     * Яркость чёрного тела ({@link BlackBody#luminance}) по таблице логарифмов с шагом 10 K от точки Дрейпера (холоднее —
+     * 0): доля огня считается на каждый клуб кадра, а по Вину яркость между узлами — экспонента.
+     */
+    static double glowLuminance(double kelvin) {
+        if (kelvin <= DRAPER_K) return 0;
+        double i = Math.min(GLOW_LOG.length - 1.001, (kelvin - DRAPER_K) / 10);
+        int k = (int) i;
+        return Math.exp(GLOW_LOG[k] + (GLOW_LOG[k + 1] - GLOW_LOG[k]) * (i - k));
+    }
+
+    private static final double[] GLOW_LOG = new double[421];
+
+    static {
+        for (int i = 0; i < GLOW_LOG.length; i++) GLOW_LOG[i] = Math.log(BlackBody.luminance(DRAPER_K + 10.0 * i));
+    }
+
     /** Температура остывающего шара в возрасте t ≥ {@link #burnSeconds}, K. */
     double coolKelvin(double t) {
         return cooling.kelvin(t - burnSeconds);
@@ -640,14 +684,29 @@ public final class CloudModel {
                 double qx = cx * lean, qy = h - hob, qz = cz * lean;
                 double dx = qx - px, dy = qy - py, dz = qz - pz, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 double dust = len > 0 ? perHeight * dy / len : 0, fm = f - 0.5 / STEM_PIECES;
-                out.tube(px, py, pz, ss, dust, qx, qy, qz, ss, dust, T_AIR + (k - T_AIR) * fm * 0.5, up * fm);
+                out.tube(px, py, pz, ss, dust, qx, qy, qz, ss, dust, inBall(t, 0.5 * (px + qx), 0.5 * (py + qy), 0.5 * (pz + qz),
+                        T_AIR + (k - T_AIR) * fm * 0.5), up * fm);
                 px = qx;
                 py = qy;
                 pz = qz;
             }
         }
         // слой пыли волны у земли (на hob ниже точки взрыва)
-        ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y - hob, z, gh, gv, 0, d, 0, T_AIR, 0));
+        ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y - hob, z, gh, gv, 0, d, 0, inBall(t, x, y - hob, z, T_AIR), 0));
+    }
+
+    /**
+     * Температура вещества в (x, y, z) от точки взрыва, у которого своя — kelvin: внутри светящегося шара оно — часть шара
+     * (его пыль проступает той же долей, что шар тает), снаружи — своя, у поверхности (0,8–1,2 радиуса) — плавно. Днём по своей температуре ножка и пыль у земли внутри
+     * шара ложились тёмным комом поверх него в первую секунду (кадры F6, бомба в 150 м).
+     */
+    private double inBall(double t, double x, double y, double z, double kelvin) {
+        double ball = ballRadius(t), hot = ballKelvin(t);
+        if (ball <= 0 || hot <= kelvin) return kelvin;
+        double dx = x - driftX(t), dy = y - ballHeight(t), dz = z - driftZ(t), d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // у поверхности шара — плавно (0,8–1,2 радиуса): кусок, что выходит из растущего шара, не выскакивает непрозрачным
+        double u = Math.max(0, Math.min(1, (1.2 * ball - d) / (0.4 * ball)));
+        return kelvin + (hot - kelvin) * u * u * (3 - 2 * u);
     }
 
     /**

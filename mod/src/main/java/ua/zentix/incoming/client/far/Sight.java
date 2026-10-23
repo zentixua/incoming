@@ -175,4 +175,24 @@ public final class Sight {
     public static double exposure(double ambient, double fire) {
         return 1 / (Math.pow(ambient, ADAPT) + Math.max(0, fire));
     }
+
+    /**
+     * Свет на экране самосветящегося тела цвета rgb (sRGB, наибольший канал — 255) яркостью lum против белого экрана (с
+     * привыканием глаза): во всю силу, если ярче белого, и пересвет белит цвет к {@link #WHITE} (как ядро {@link #light});
+     * тусклее — темнее в линейном свете, а на экран — в sRGB (тело в 0,1 белого — 0,35 экрана, не 0,1); × share. sRGB 0..1.
+     */
+    public static float[] onScreen(int rgb, double lum, float share) {
+        return onScreen((rgb >> 16 & 255) / 255f, (rgb >> 8 & 255) / 255f, (rgb & 255) / 255f, lum, share);
+    }
+
+    /** То же для цвета (r, g, b) sRGB 0..1. */
+    public static float[] onScreen(float r, float g, float b, double lum, float share) {
+        double k = Math.min(1, Math.max(0, lum)), white = lum > 1 ? Math.min(1, Math.log(lum) / Math.log(WHITE)) : 0;
+        float[] in = {r, g, b}, out = new float[3];
+        for (int i = 0; i < 3; i++) {
+            double c = Math.max(0, Math.min(1, in[i])), l = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+            out[i] = (float) ua.zentix.incoming.client.fx.plume.FlameModel.srgb((l + (1 - l) * white) * k) * share;
+        }
+        return out;
+    }
 }

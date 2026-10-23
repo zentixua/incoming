@@ -170,10 +170,13 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return (mirror ? SPRAY6_MIRRORED : SPRAY6)[Math.clamp(i, 0, PUFF6_FRAMES - 1)];
     }
 
-    /** Кадр клуба брызг (с дробью), где край вещества вырос во столько раз с первого кадра. */
+    /** Кадр клуба брызг (с дробью), где край вещества вырос во столько раз с первого кадра, — до последнего клубящегося. */
     public static double sprayFrame(double growth) {
-        return at(sprayGrowth, growth, 0, PUFF6_FRAMES - 1);
+        return Math.min(at(sprayGrowth, growth, 0, PUFF6_FRAMES - 1), sprayLast);
     }
+
+    /** Последний клубящийся кадр брызг ({@link #turbulentLast}). */
+    private static volatile int sprayLast = PUFF6_FRAMES - 1;
 
     static {
         for (int i = 0; i < FIREBALL_FRAMES; i++) {
@@ -267,10 +270,37 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return (float) at(fireball.fire, frame);
     }
 
-    /** Кадр запечённого клуба (с дробью), где край вещества вырос во столько раз с первого кадра. */
+    /**
+     * Кадр запечённого клуба (с дробью), где край вещества вырос во столько раз с первого кадра, — не дальше последнего
+     * клубящегося ({@link #turbulentLast}): дальше облако растёт, а кадр стоит.
+     */
     public static double puffFrame(double growth) {
-        return at(puffGrowth, growth, 0, PUFF6_FRAMES - 1);
+        return Math.min(at(puffGrowth, growth, 0, PUFF6_FRAMES - 1), puffLast);
     }
+
+    /**
+     * Мелкой структуры кадра (puff6.json «detail», {@code tools/bake_fx/pack.py}) у клубящегося — не меньше этой доли
+     * её наибольшей (⚠ оценка: дальше кадры глазом — ровный размытый шар).
+     */
+    static final double TURBULENT = 2.0 / 3;
+
+    /**
+     * Последний клубящийся кадр: симуляция — конечный клуб, к концу он рассеивается и теряет мелкую структуру (у puff6 к
+     * 15-му кадру — 0,42 наибольшей), а настоящее облако, пока растёт, остаётся турбулентным — термик подобен себе, клубы
+     * растут вместе с ним (Scorer 1957; Morton, Taylor, Turner 1956). Облака на 150–300 м в 10–30 с брали поздние кадры по
+     * росту — ровные размытые шары без клубов (шлагбаум RV2). Последний кадр после наибольшей структуры, где её ещё не
+     * меньше {@link #TURBULENT}; нет данных — все кадры.
+     */
+    static int turbulentLast(float[] detail) {
+        if (detail == null || detail.length == 0) return PUFF6_FRAMES - 1;
+        int peak = 0;
+        for (int i = 1; i < detail.length; i++) if (detail[i] > detail[peak]) peak = i;
+        for (int i = peak + 1; i < detail.length; i++) if (detail[i] < TURBULENT * detail[peak]) return i - 1;
+        return detail.length - 1;
+    }
+
+    /** Последний кадр клуба, что берёт {@link #puffFrame}. */
+    private static volatile int puffLast = PUFF6_FRAMES - 1;
 
     /** Значение таблицы a в номере x (с дробью, за краями — край). */
     private static double at(float[] a, double x) {
@@ -293,6 +323,12 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         var o = JsonParser.parseReader(in).getAsJsonObject();
         return new Fireball(numbers(o.getAsJsonArray("fire"), FIREBALL_FRAMES), numbers(o.getAsJsonArray("burn"), FIREBALL_FRAMES),
                 numbers(o.getAsJsonArray("kelvin"), FIREBALL_FRAMES));
+    }
+
+    /** Мелкая структура кадров из {@code puff6.json}: {@code "detail"}; нет — null. */
+    static float[] parseDetail(Reader in) {
+        var o = JsonParser.parseReader(in).getAsJsonObject();
+        return o.has("detail") ? numbers(o.getAsJsonArray("detail"), PUFF6_FRAMES) : null;
     }
 
     /** Рост клуба из {@code puff6.json}: {@code {"growth": [16 чисел]}}. */
@@ -373,7 +409,9 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         for (Slot s : SLOTS) place(resources, s, sheets);
         fireball = read(resources, FIREBALL_LIGHT, FxAtlas::parseFire, Fireball.FALLBACK);
         puffGrowth = read(resources, PUFF6_DATA, FxAtlas::parseGrowth, linear(1, 3));
+        puffLast = turbulentLast(read(resources, PUFF6_DATA, FxAtlas::parseDetail, null));
         sprayGrowth = read(resources, SPRAY6_DATA, FxAtlas::parseGrowth, linear(1, 3));
+        sprayLast = turbulentLast(read(resources, SPRAY6_DATA, FxAtlas::parseDetail, null));
         ballShown = read(resources, BALL_LIGHT, r -> numbers(JsonParser.parseReader(r).getAsJsonObject().getAsJsonArray("fire"), FIREBALL_FRAMES),
                 full());
         puffLight = read(resources, PUFF6_DATA, FxAtlas::parseLight, new float[]{PUFF6_FLOW / 128f, 0.79f, 0.5f});

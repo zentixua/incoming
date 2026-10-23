@@ -108,7 +108,7 @@ class FarLookTest {
                 double lo = Math.min(f.coreLuminance(), Math.min(f.flameLuminance(), f.tailLuminance()));
                 double hi = Math.max(f.coreLuminance(), Math.max(f.flameLuminance(), f.tailLuminance()));
                 assertTrue(f.brightness() >= lo && f.brightness() <= hi, "средняя — между частями");
-                assertEquals(f.length() / 2, f.middle(), 1e-12);
+                assertTrue(f.middle() > 0 && f.middle() < f.flame(), "свет струи — у пламени, а не в середине хвоста: " + f.middle());
             }
         }
     }

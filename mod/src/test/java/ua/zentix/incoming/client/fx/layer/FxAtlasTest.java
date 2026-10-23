@@ -100,6 +100,33 @@ class FxAtlasTest {
         }
     }
 
+    /**
+     * Облако берёт только клубящиеся кадры ({@link FxAtlas#turbulentLast}): у запечённого клуба к концу симуляции мелкая
+     * структура уходит (рассеивается конечный клуб), и облака на 150–300 м были ровными размытыми шарами (шлагбаум RV2).
+     * Последний кадр — с мелкой структурой не меньше 2/3 наибольшей; ровные кадры конца не берутся.
+     */
+    @Test
+    void cloudsKeepTheirClumps() throws IOException {
+        for (String name : new String[]{"puff6.json", "spray6.json"}) {
+            float[] detail;
+            try (Reader r = open(name)) {
+                detail = FxAtlas.parseDetail(r);
+            }
+            assertNotNull(detail, name + ": мелкая структура кадров есть (tools/bake_fx/pack.py --detail)");
+            int last = FxAtlas.turbulentLast(detail);
+            float top = 0;
+            for (float v : detail) top = Math.max(top, v);
+            for (int i = 0; i <= last; i++) assertTrue(detail[i] >= FxAtlas.TURBULENT * top || i < 2, name + ": кадр " + i + " клубится");
+            assertTrue(last < FxAtlas.PUFF6_FRAMES - 1 || detail[FxAtlas.PUFF6_FRAMES - 1] >= FxAtlas.TURBULENT * top, name);
+        }
+        float[] smoke;
+        try (Reader r = open("puff6.json")) {
+            smoke = FxAtlas.parseDetail(r);
+        }
+        assertTrue(FxAtlas.turbulentLast(smoke) <= 8, "у дыма рассеянные кадры конца не берутся");
+        assertEquals(FxAtlas.PUFF6_FRAMES - 1, FxAtlas.turbulentLast(null), "нет данных — все кадры");
+    }
+
     /** Клуб брызг: те же 16 кадров по три карты, что у дыма, в мере дыма (одна нормировка карт на все клубы слоя). */
     @Test
     void sprayFramesMatchTheBake() throws IOException {

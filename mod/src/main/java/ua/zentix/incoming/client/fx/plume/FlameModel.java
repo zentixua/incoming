@@ -29,8 +29,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * раскалённое тело видно в темноте).</li>
  * <li><b>Свет</b>: газ в видимом почти не светит — светят конденсированные частицы (Al₂O₃, сажа): степень черноты
  * ε = 1 − e^(−τ), τ = σ_m·(поглощение горячих)·c·2r_j, c — их плотность в струе. Яркость — ε × чёрное тело
- * ({@link BlackBody}) при температуре газа, цвет — цветность чёрного тела; у пламени и хвоста — в их середине. За ядром
- * частицы разбавляются: τ ∝ 1/x (масса в сечении та же, путь растёт как x, плотность падает как x²).</li>
+ * ({@link BlackBody}) при температуре газа, цвет — цветность чёрного тела. За ядром частицы разбавляются: τ ∝ 1/x (масса
+ * в сечении та же, путь растёт как x, плотность падает как x²). Яркость оболочки (пламя и хвост) — в каждом месте оси
+ * ({@link Flame#sheath}: её рисует струя вблизи), у частей — средняя по их площади сбоку (свет вдали и на мир).</li>
  * <li><b>Алмазы</b> — скачки уплотнения, когда давление на срезе не равно давлению воздуха (и при недорасширении, и при
  * перерасширении); заметны при расхождении больше {@link #DIAMONDS} (⚠ оценка: слабые скачки не разогревают газ до
  * свечения).</li>
@@ -63,7 +64,7 @@ public final class FlameModel {
     private static final Map<Long, Flame> CACHE = new ConcurrentHashMap<>();
     private static final Map<Motor, Integer> IDS = new ConcurrentHashMap<>();
     private static final AtomicInteger NEXT = new AtomicInteger();
-    private static final Flame NONE = new Flame(0, 0, 0, 0, false, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    private static final Flame NONE = new Flame(0, 0, 0, 0, false, 0, 0, 0, 0, 0, 0, 0, 0, 0, Flame.Sheath.NONE, 0, 0);
 
     private FlameModel() {}
 
@@ -105,13 +106,103 @@ public final class FlameModel {
         double eps = 1 - Math.exp(-tau);
         double coreL = eps * BlackBody.luminance(tj);
         if (coreL < DIMMEST) return null;
-        double xf = (core + flame) / 2, epsF = 1 - Math.exp(-tau * core / xf);
-        double xt = (flame + length) / 2, tt = ta + (tf - ta) * flame / xt, epsT = 1 - Math.exp(-tau * core / xt);
         double width = rj * Math.sqrt(m.nozzles());
         double pe = m.exitPressure();
         boolean diamonds = pe > pa * DIAMONDS || pe * DIAMONDS < pa;
-        return new Flame(core, flame, length, width, diamonds, coreL, epsF * BlackBody.luminance(tf), epsT * BlackBody.luminance(tt),
-                color(tj), color(tf), color(tt), tj, tf, eps);
+        Jet jet = new Jet(core, flame, tf, ta, tau);
+        // средние яркости частей — по площади сбоку того же закона, что вдоль оси (в середине части яркость чёрного тела
+        // хвоста в десятки раз ниже средней: B(T) круто растёт с T, и хвост у конца пламени светит почти как пламя)
+        double[] flameRgb = new double[3], tailRgb = new double[3];
+        double flameL = jet.mean(0, flame, width, flameRgb), tailL = jet.mean(flame, length, width, tailRgb);
+        // середина света — центр потока: ядро (конус, его центр площади сбоку — на трети длины) и оболочка; середина
+        // длины до точки Дрейпера лежала втрое дальше от сопла, чем светящееся пламя, и свет на дым вставал в хвосте
+        double coreFlux = coreL * core * width;
+        double middle = (coreFlux * core / 3 + jet.moment(0, length, width)) / (coreFlux + jet.flux(0, length, width));
+        return new Flame(core, flame, length, width, diamonds, coreL, flameL, tailL, color(tj), color(tf), tailL > 0 ? pack(tailRgb) : color(DRAPER),
+                tj, tf, eps, jet.sheath(length), middle, tailL > 0 ? jet.moment(flame, length, width) / jet.flux(flame, length, width) : flame);
+    }
+
+    /**
+     * Закон оболочки струи вдоль оси (пламя догорания вокруг ядра и хвост за ним): в x метрах от среза степень черноты
+     * ε(x) = 1 − e^(−τ(x)), τ(x) = τ₀ у ядра и τ₀·L_c/x за ним (частицы разбавляются); температура — пламени до его конца
+     * и T_a + (T_f − T_a)·x_f/x за ним; яркость — ε × чёрное тело.
+     */
+    private record Jet(double core, double flame, double tf, double ta, double tau) {
+        /** Температура газа в x метрах от среза, K. */
+        double temperature(double x) {
+            return x <= flame ? tf : ta + (tf - ta) * flame / x;
+        }
+
+        /** Степень черноты поперёк струи в x. */
+        double emissivity(double x) {
+            return 1 - Math.exp(-(x <= core ? tau : tau * core / x));
+        }
+
+        /** Яркость оболочки сбоку в x (белая стена в полдень — 1). */
+        double luminance(double x) {
+            return emissivity(x) * BlackBody.luminance(temperature(x));
+        }
+
+        /**
+         * Площадь оболочки сбоку на метр оси в x при полуширине у среза w: вся струя 2w(1 + x/L_c), у среза — без конуса
+         * ядра 2w(1 − x/L_c) (пламя обнимает ядро, {@link Flame#partAreas}).
+         */
+        double side(double x, double w) {
+            return x < core ? 4 * w * x / core : 2 * w * (1 + x / core);
+        }
+
+        /** Средняя яркость оболочки по площади от a до b; в rgb — поток света (линейный) для цвета. */
+        double mean(double a, double b, double w, double[] rgb) {
+            if (b <= a) return 0;
+            int n = 64;
+            double dx = (b - a) / n, flux = 0, area = 0;
+            double[] l = new double[4];
+            for (int i = 0; i < n; i++) {
+                double x = a + (i + 0.5) * dx, s = side(x, w) * dx, e = emissivity(x);
+                BlackBody.light(temperature(x), l);
+                flux += e * l[3] * s;
+                area += s;
+                for (int k = 0; k < 3; k++) rgb[k] += e * l[k] * s;
+            }
+            return area > 0 ? flux / area : 0;
+        }
+
+        /** Поток света оболочки от a до b (яркость × площадь сбоку). */
+        double flux(double a, double b, double w) {
+            return integral(a, b, w, false);
+        }
+
+        /** Момент потока оболочки от a до b относительно среза (x × яркость × площадь). */
+        double moment(double a, double b, double w) {
+            return integral(a, b, w, true);
+        }
+
+        private double integral(double a, double b, double w, boolean moment) {
+            if (b <= a) return 0;
+            int n = 128;
+            double dx = (b - a) / n, sum = 0;
+            for (int i = 0; i < n; i++) {
+                double x = a + (i + 0.5) * dx;
+                sum += luminance(x) * side(x, w) * dx * (moment ? x : 1);
+            }
+            return sum;
+        }
+
+        /** Места вдоль оси: срез, ядро, пламя, хвост к точке Дрейпера — чаще у конца пламени, где свет падает круче. */
+        Flame.Sheath sheath(double length) {
+            double[] xs = new double[13];
+            int n = 0;
+            for (double x : new double[]{0, core, (core + flame) / 2, flame}) if (n == 0 || x > xs[n - 1] + 1e-6) xs[n++] = x;
+            double from = Math.max(flame, 1e-3);
+            for (int k = 1; k <= 8 && length > from; k++) xs[n++] = from * Math.pow(length / from, k / 8.0);
+            double[] x = java.util.Arrays.copyOf(xs, n), lum = new double[n];
+            int[] colors = new int[n];
+            for (int i = 0; i < n; i++) {
+                lum[i] = luminance(x[i]);
+                colors[i] = color(temperature(x[i]));
+            }
+            return new Flame.Sheath(x, lum, colors);
+        }
     }
 
     /** Цветность чёрного тела температуры kelvin: sRGB, наибольший канал — 255. */

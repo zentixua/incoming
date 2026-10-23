@@ -269,6 +269,44 @@ class CloudModelTest {
     }
 
     /**
+     * Огонь виден, пока его свечение не меньше света неба на его дыме ({@link CloudModel#glowShare(double, double)}): шар бомбы
+     * (прорыв ~1,3 т) днём к 3 с — уже дым (шлагбаум RV2, бомба в 150 м: шар был сплошь оранжевым), ночью — ещё огонь;
+     * в горении — огонь и днём; доля плавная и не больше доли по одной температуре.
+     */
+    @Test
+    void fireballFadesIntoSmokeByWhatTheEyeSees() {
+        CloudModel m = new CloudModel(new BlastSource(WeaponType.BUNKER, 1340, 0, true, false), CloudModel.Air.STANDARD);
+        // свет неба: днём 1, ночью — ambient^ADAPT (FarView.skyLuminance)
+        double day = 1, night = Math.pow(0.17, ua.zentix.incoming.client.far.Sight.ADAPT);
+        assertTrue(CloudModel.glowShare(m.ballKelvin(1), day) > 0.95, "в горении — огонь и днём");
+        assertTrue(CloudModel.glowShare(m.ballKelvin(3), day) < 0.15, "днём к 3 с — дым: " + CloudModel.glowShare(m.ballKelvin(3), day));
+        assertTrue(CloudModel.glowShare(m.ballKelvin(3), night) > 0.9, "ночью к 3 с — огонь");
+        // ночью газ у точки Дрейпера — не чернее, чем по одной температуре наполовину (ком сажи поверх шара ночью, F6)
+        assertTrue(CloudModel.glowShare(1000, night) > 0.4 * CloudModel.glowShare(1000), "ночью тёплый газ ещё светится");
+        // вещество внутри светящегося шара тает в дым той же долей, что шар: днём в первую секунду ножка пыли внутри шара
+        // ложилась тёмным комом поверх него (кадры F6, бомба в 150 м)
+        for (double t : new double[]{0.1, 0.5, 1, 2}) {
+            double ball = m.ballRadius(t), bh = m.ballHeight(t), cx = m.driftX(t), cz = m.driftZ(t), share = CloudModel.glowShare(m.ballKelvin(t), day);
+            m.blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
+                double dx = x - cx, dy = y - bh, dz = z - cz;
+                if (dx * dx + dy * dy + dz * dz < 0.6 * ball * ball && soot + dust > 0)
+                    assertTrue(CloudModel.glowShare(kelvin, day) >= share - 1e-9, "в шаре на " + t + " с — огонь, не дым: " + kelvin);
+            });
+        }
+        // огонь, что ярче света дыма за порогом контраста, — весь огонь: ни доли его вещества дымом (тонны пыли шара)
+        assertEquals(1, CloudModel.glowShare(m.ballKelvin(0.5), day), 0, "шар в горении днём — ровно огонь");
+        assertEquals(0, CloudModel.glowShare(900, day), 0, "тёплый газ днём — ровно дым");
+        double prev = 1;
+        for (double k = 3000; k >= 700; k -= 5) {
+            double g = CloudModel.glowShare(k, day);
+            assertTrue(g <= CloudModel.glowShare(k) + 1e-12);
+            assertTrue(g <= prev + 1e-12 && prev - g < 0.06, "без скачков: " + k);
+            if (k > CloudModel.DRAPER_K) assertEquals(BlackBody.luminance(k), CloudModel.glowLuminance(k), 0.002 * BlackBody.luminance(k));
+            prev = g;
+        }
+    }
+
+    /**
      * Топливо в воронке (Tieszen, Attaway 1996: при крутом ударе в воронке 25–50 %; горит тонким слоем — пятая доля
      * выгорания глубокой лужи, Mealy и др. 2011): горит по выгоранию с площади воронки, пламя по Хескестаду; у «Града»
      * топлива нет — и огня нет. Шахед горит минуты (жалоба F: в 3.5.0 лужа гасла за 12 с, и через 30 с над местом удара

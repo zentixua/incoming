@@ -18,8 +18,8 @@ import ua.zentix.incoming.util.Stability;
  * <li><b>Масса</b> — сажа на метр пути по ветру ṁ/u. Шлейф виден, пока толща через середину больше порога Кошмидера
  * (0,02).</li>
  * <li><b>Температура</b> у очага — избыток на оси по Хескестаду, ΔT = 9,1·(T/(g·c_p²·ρ²))^⅓·Q_c^⅔·z^(−5/3) (SFPE
- * Handbook, гл. 13; ⚠ по памяти), не выше пламени; свет пламени снизу — чёрное тело {@link #FLAME_K} K (поверхностная
- * излучаемая мощность малых пожаров 50–100 кВт/м², середина; ⚠ оценка).</li>
+ * Handbook, гл. 13; ⚠ по памяти), не выше пламени ({@link #FLAME_K}: поверхностная излучаемая мощность малых пожаров 50–100 кВт/м², середина; ⚠ оценка);
+ * видимый свет пламени — светящейся сажи ({@link #flameLight}).</li>
  * </ul>
  * Ветер слабее {@value #CALM} м/с формулы шлейфа не держат — берётся он (как у следа).
  */
@@ -30,8 +30,54 @@ public final class FirePlume {
     public static final double CONVECTIVE = 0.7;
     /** Сажи на джоуль тепла: 0,015 кг/кг / 12,4 МДж/кг. */
     public static final double SOOT_PER_JOULE = 0.015 / 12.4e6;
-    /** Пламя — чёрное тело с σT⁴ = 75 кВт/м², K. */
+    /** Пламя — чёрное тело с σT⁴ = 75 кВт/м² (поток излучения, нагрев газа над очагом), K. */
     public static final double FLAME_K = Math.pow(75e3 / 5.670374e-8, 0.25);
+    /**
+     * Светящаяся часть пламени углеводородов: 140 кВт/м² (Mudan, Croce, SFPE Handbook, «Fire hazard calculations for large
+     * open hydrocarbon fires»: E = 140·e^(−0,12D) + 20·(1 − e^(−0,12D)) кВт/м²; 20 — дым поверх пламени, в среднем
+     * {@link #FLAME_K} он и даёт) — σT⁴ при ~1250 K, K.
+     */
+    public static final double LUMINOUS_K = Math.pow(140e3 / 5.670374e-8, 0.25);
+    /**
+     * Пульсации температуры в светящемся пламени, K (⚠ по памяти: в пламени лужи JP-8 — 200–300 K, Gritzo и др., 1998).
+     * В видимом яркость растёт с T круто (по Вину ∝ e^(−c₂/λT)), и средняя яркость пламени — яркость его горячих мест.
+     */
+    public static final double FLUCTUATION_K = 200;
+    /**
+     * Свет пламени в видимом (r, g, b линейные, яркость Y; белая стена в полдень — 1, как {@code BlackBody.light}): среднее
+     * чёрного тела по пульсациям {@link #FLUCTUATION_K} вокруг {@link #LUMINOUS_K} — как у чёрного тела ~1450 K, ~0,1 белой
+     * стены (~3·10³ кд/м²; ⚠ оценка: у свечи ~10⁴). По одному {@link #FLAME_K} пламя днём выходило чёрным (3·10⁻⁴ стены),
+     * а ночью в 300 м — тёмно-красной точкой.
+     */
+    private static final double[] FLAME_LIGHT = visibleFlame();
+    /** Яркость видимого пламени (белая стена в полдень — 1) и его цвет (sRGB, наибольший канал — 255). */
+    public static final double FLAME_LUMINANCE = FLAME_LIGHT[3];
+    public static final int FLAME_COLOR = pack(FLAME_LIGHT);
+
+    /** Свет видимого пламени ({@link #FLAME_LIGHT}) в out: r, g, b, Y. */
+    public static void flameLight(double[] out) {
+        System.arraycopy(FLAME_LIGHT, 0, out, 0, 4);
+    }
+
+    private static double[] visibleFlame() {
+        double[] sum = new double[4], l = new double[4];
+        double weights = 0;
+        for (int i = -40; i <= 40; i++) {
+            double z = i / 10.0, w = Math.exp(-z * z / 2), t = LUMINOUS_K + FLUCTUATION_K * z;
+            ua.zentix.incoming.nuclear.model.BlackBody.light(t, l);
+            for (int k = 0; k < 4; k++) sum[k] += w * l[k];
+            weights += w;
+        }
+        for (int k = 0; k < 4; k++) sum[k] /= weights;
+        return sum;
+    }
+
+    private static int pack(double[] rgb) {
+        double max = Math.max(rgb[0], Math.max(rgb[1], rgb[2]));
+        int out = 0;
+        for (int i = 0; i < 3; i++) out = out << 8 | (int) Math.round(255 * ua.zentix.incoming.client.fx.plume.FlameModel.srgb(rgb[i] / max));
+        return out;
+    }
     /** Слабее этого ветра формулы шлейфа не держат, м/с. */
     public static final double CALM = 1;
     /** Порог видимости толщи. */

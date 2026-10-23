@@ -117,4 +117,26 @@ class FarSpritesTest {
         assertEquals(1, FarSprites.front(1, 5), 1e-9, "у самого глаза — на месте");
         assertEquals(1, FarSprites.front(85, 0), 1e-9);
     }
+
+    /**
+     * Струя вблизи — полосой с профилем ореола {@code far/glow} поперёк, шире в {@link FarSprites#STRIP_CROSS} раза: свет
+     * поперёк тот же, что у ровной полосы круга {@code far/disc} той же ширины (профили — как у {@code tools/gen_particles.py}
+     * и {@code glowAlpha}). Ошибка в доле ширины (интеграл вместо доли) делала струю вдвое уже модели (ревью F6).
+     */
+    @Test
+    void jetStripCarriesTheLightOfItsWidth() {
+        int n = 20_000;
+        double disc = 0, glow = 0;
+        for (int i = 0; i < n; i++) {
+            double u = -1 + (i + 0.5) * 2.0 / n, r = Math.abs(u);
+            disc += smooth(0, 0.15, 1 - r);
+            glow += Math.exp(-(r / 0.42) * (r / 0.42)) * smooth(0, 0.25, 1 - r);
+        }
+        assertEquals(disc / glow, FarSprites.STRIP_CROSS, 0.03 * FarSprites.STRIP_CROSS);
+    }
+
+    private static double smooth(double e0, double e1, double x) {
+        double t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+        return t * t * (3 - 2 * t);
+    }
 }

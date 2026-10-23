@@ -22,13 +22,43 @@ package ua.zentix.incoming.client.fx.plume;
  * @param temperature     температура газа в ядре, K
  * @param flameTemperature температура пламени догорания, K
  * @param emissivity      степень черноты ядра поперёк струи
+ * @param sheath          оболочка струи вдоль оси (пламя догорания и хвост): яркость и цвет в местах от среза — тот же
+ *                        закон, по которому {@link FlameModel} считает средние яркости частей
+ * @param middle          середина света струи позади среза сопла, м: центр её светового потока (ядро, пламя и хвост
+ *                        по закону вдоль оси) — отсюда светит факел вдали, на дым и на мир
+ * @param tailMiddle      центр светового потока хвоста позади среза, м: свет хвоста на мир — ровным отрезком той же
+ *                        середины ({@link #tailEnd})
  */
 public record Flame(double core, double flame, double length, double width, boolean diamonds, double coreLuminance, double flameLuminance,
                     double tailLuminance, int coreColor, int flameColor, int tailColor, double temperature, double flameTemperature,
-                    double emissivity) {
+                    double emissivity, Sheath sheath, double middle, double tailMiddle) {
+    /**
+     * Оболочка струи вдоль оси — пламя догорания вокруг ядра и остывающий хвост за ним: в местах {@code x} (метры от среза
+     * сопла, по возрастанию, от 0 до {@link #length}) яркость сбоку (в единицах кадра, как у частей) и цвет (sRGB,
+     * наибольший канал — 255). Между местами — по прямой. Струя на экране сужается к концу не текстурой, а светом
+     * модели: белое пламя, за ним жёлтый и оранжевый хвост, который гаснет к точке Дрейпера.
+     */
+    public record Sheath(double[] x, double[] luminance, int[] color) {
+        static final Sheath NONE = new Sheath(new double[0], new double[0], new int[0]);
+
+        public int size() {
+            return x.length;
+        }
+    }
+
     /** Полуширина струи в x метрах от среза. */
     public double widthAt(double x) {
         return width * (1 + x / core);
+    }
+
+    /**
+     * Конец отрезка света хвоста позади среза, м: ровный отрезок от конца пламени с той же серединой потока, что у хвоста
+     * ({@link #tailMiddle}), не дальше видимой струи. До точки Дрейпера свет хвоста ложился бы вчетверо дальше пламени, а
+     * светит в основном его начало.
+     */
+    public double tailEnd() {
+        double fl = Math.max(flame, core);
+        return Math.min(length, Math.max(fl, 2 * tailMiddle - fl));
     }
 
     /** Полуширина в конце видимой струи. */
@@ -75,8 +105,4 @@ public record Flame(double core, double flame, double length, double width, bool
         return FlameModel.pack(rgb);
     }
 
-    /** Середина струи позади среза сопла, м. */
-    public double middle() {
-        return length / 2;
-    }
 }

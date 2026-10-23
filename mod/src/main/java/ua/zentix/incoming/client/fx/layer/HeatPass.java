@@ -38,7 +38,7 @@ import java.util.Arrays;
  * Heat Mass Transfer 20, 1977: 0,38–0,40), δn = (n₀ − 1)·I·(T₀/T)·(1 − T₀/T); вихри — {@value #EDDY} радиуса столба
  * (интегральный масштаб турбулентности факела, ⚠ оценка), идут вверх со скоростью газа.
  * <p>
- * <b>Свет факела</b> двигателя — не шар, а струя от среза сопла до точки Дрейпера ({@link Frame#jet}): каждая часть
+ * <b>Свет факела</b> двигателя — не шар, а струя от среза сопла до конца света хвоста ({@link Frame#jet}, {@link Flame#tailEnd}): каждая часть
  * {@link Flame} (ядро, пламя догорания, остывающий хвост) — равномерный светящийся отрезок своей яркости и цвета, свет на
  * грань — точный интеграл по отрезку ({@link #segment}), только по части, что над гранью. Вдали он сходится к прежнему
  * шару той же площади сбоку.
@@ -268,7 +268,7 @@ public final class HeatPass {
          * Факел двигателя: середина струи (x, y, z) от глаза, единичная ось струи от сопла назад (jx, jy, jz), факел flame;
          * ослабление воздуха air, 1/блок; h — высота середины над землёй (порог, как у шара). Часть струи — равномерный
          * отрезок: ядро — [0, ядро] с площадью сбоку конуса ядра, пламя — [0, пламя] с площадью пламени без ядра (оно
-         * обнимает ядро), хвост — [пламя, конец]; свет части на метр — яркость × площадь сбоку / длина / π (тело с яркостью
+         * обнимает ядро), хвост — [пламя, {@link Flame#tailEnd}] (та же середина потока, что у хвоста); свет части на метр — яркость × площадь сбоку / длина / π (тело с яркостью
          * L и площадью сбоку S даёт белой стене лицом к нему в d блоках L·S/(π·d²): у шара S = πr², отсюда L·r²/d²).
          * Свет в глаз — уже у кадра ({@link #eye}); выбор четырёх и порог — как у шара той же площади ({@link Flame#lightRadius}).
          * cut — путь по оси от среза до земли: дальше струи нет (она растекается по земле — ⚠ свечения стенной струи
@@ -276,7 +276,7 @@ public final class HeatPass {
          */
         public void jet(double x, double y, double z, double jx, double jy, double jz, Flame flame, double air, double h, double cut) {
             double lr = flame.lightRadius(), lum = flame.brightness();
-            double mid = flame.middle(), core = flame.core(), fl = Math.max(flame.flame(), core), end = Math.max(flame.length(), fl);
+            double mid = flame.middle(), core = flame.core(), fl = Math.max(flame.flame(), core), end = flame.tailEnd();
             double c = Math.min(cut, end);
             if (lr <= 0 || lum <= 0 || !(c > 0)) return;
             if (lum * exposure * lr * lr / Math.max(h * h, lr * lr) < SEEN * Math.max(open, 1e-4)) return;
