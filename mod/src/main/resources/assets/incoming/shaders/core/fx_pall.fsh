@@ -810,11 +810,11 @@ float pallOpenHere(vec3 p) {
     if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot0, PallGround0, p);
     return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler6, PallSlot1, PallGround1, p);
 }
-// Солнце над точкой p пелены (от глаза): сквозь грибы на его прямой — карта тени, как у мира (fx_pall_composite: shade);
-// ночью карты нет
+// Солнце над точкой p пелены (от глаза): сквозь грибы на его прямой — карта тени, как у мира (fx_pall_composite: shade),
+// от вещества выше середины карты (mushShadowFrom); ночью карты нет
 vec3 pallSunAt(vec3 p) {
     if (PallSun.w <= 0.0) return PallSunLight;
-    return PallSunLight * mushShadow(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p);
+    return PallSunLight * mushShadowFrom(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p, 0.5);
 }
 
 // Шаг пелены на [ta, ta + ds]: её свет в луч. grid — шаг сетки луча здесь (обычной или головы стены, меньший): шаг,

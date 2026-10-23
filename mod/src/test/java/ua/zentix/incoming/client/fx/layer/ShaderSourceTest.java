@@ -143,7 +143,7 @@ class ShaderSourceTest {
     void pallUnderTheCapIsInItsShadow() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
         String pall = Files.readString(core.resolve("fx_pall.fsh")), step = blankComments(body(pall, "void pallStep("));
-        assertTrue(blankComments(body(pall, "vec3 pallSunAt(")).contains("mushShadow("), "fx_pall: солнце над пеленой без тени грибов");
+        assertTrue(blankComments(body(pall, "vec3 pallSunAt(")).contains("mushShadowFrom("), "fx_pall: солнце над пеленой без тени грибов");
         assertTrue(step.contains("pallSunAt("), "fx_pall: pallStep без тени грибов");
         assertFalse(step.contains("PallSunLight"), "fx_pall: солнце в pallStep — только сквозь тень грибов");
         assertTrue(Files.readString(core.resolve("fx_pall_composite.fsh")).contains("mushShadow("), "мир — в той же тени");

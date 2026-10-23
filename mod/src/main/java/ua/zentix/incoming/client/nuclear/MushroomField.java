@@ -617,13 +617,13 @@ public final class MushroomField {
     /**
      * Отражение земли под грибом по каналам (rgb в {@code out}, линейное, в рассеянном свете): то, что ножка, юбка и низ
      * шапки видят внизу, — не голая земля ({@code PALL_LAND}, над водой {@code PALL_SEA}), а верх слоя пыли волны, что
-     * лежит на ней ({@link PallField}: толща τ по вертикали в {@link #GROUND_AT} радиусах ножки r от эпицентра; ⚠ место —
+     * лежит на ней ({@link PallField#dustTau}: толща пыли и брызг, без мглы, в {@link #GROUND_AT} радиусах ножки от эпицентра; ⚠ место —
      * оценка: низ ножки видит землю в основном у себя). Слой над землёй — двумя потоками: от земли при τ = 0 к R∞ пыли
      * (цвет толстого слоя — сам цвет пыли, {@link NukePall#DUST}; над водой — брызг) как e^(−2kτ) ({@link #slabOver}).
      */
     static void groundUnder(ClientNuclear.Active a, double stemR, float partial, double[] out) {
         double under = a.water.under(), land = PallLight.LAND + (PallLight.SEA - PallLight.LAND) * under, ticks = a.ticks(partial);
-        double tau = a.pall.visible(ticks) ? a.pall.tau(GROUND_AT * stemR, 0, 0, Double.POSITIVE_INFINITY, 0, ticks, NukePall.water(a)) : 0;
+        double tau = a.pall.visible(ticks) ? a.pall.dustTau(GROUND_AT * stemR, 0, ticks, NukePall.water(a)) : 0;
         int top = mix(DUST, CloudPuffs.SPRAY, under);
         double g = PallLight.truncated(G);
         for (int i = 0; i < 3; i++) out[i] = slabOver(PallLight.linear(channel(top, i)), g, tau, land);
