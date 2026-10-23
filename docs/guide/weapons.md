@@ -275,8 +275,9 @@ an orange glow spreads over the blocks around the crater and fades as the ball c
 light: a house or a hill between the fire and the ground leaves it dark, even when the house is outside your view.
 Shadows are worked out for about 90 blocks around you and 40 up and down; further away the light has
 none. Hot gas over the fire, over the fireball and in a rocket's exhaust bends light, so whatever is behind it
-shimmers. The shimmer is shown as large as your eye would see it, about a pixel on a normal screen, so it shows on
-edges behind the fire; through binoculars it is the true angle.
+shimmers. The shimmer is shown as large as your eye would see it: about a pixel over a fire or a fireball on a normal
+screen, so it shows on edges behind them, and less in a rocket's exhaust, whose fast gas blurs; through binoculars it
+is the true angle.
 
 In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
 night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
