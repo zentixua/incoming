@@ -161,7 +161,7 @@ public final class PlumeRenderer {
     /**
      * Горячее сопло: круг среза в его плоскости — свет раструба (что видно через срез — его стенки), и круг горла на его
      * глубине — сверх раструба, долей, видной через срез ({@link NozzleGlow.Shine#throatSeen}). Спереди среза сопла не
-     * видно. Мельче пятна {@link Sight#MIN_PIXELS} — пятно, бледнее во столько же раз (свет тот же, как у
+     * видно. Мельче пятна {@link Sight#MIN_PIXELS} — круглое пятно, бледнее во столько же раз (свет тот же, как у
      * {@link Sight#point}). Дымка и привыкание глаза — как у струи.
      */
     private static void draw(Hot hot, Vec3 eye, double exposure, FarView view, FarSprites out) {
@@ -187,11 +187,16 @@ public final class PlumeRenderer {
     private static void plate(FarSprites out, FarView view, Vector3f c, Vector3f ax, Vector3f ay, double r, double cos, double dist, int color,
                               double lum, float near) {
         if (lum <= 0) return;
-        // видимый круг той же площади — r·√cos; мельче пятна в полтора пикселя — крупнее, бледнее во столько же раз
-        double seen = r * Math.sqrt(cos), least = 0.5 * Sight.MIN_PIXELS * view.pixel() * dist, grow = Math.max(1, least / Math.max(seen, 1e-9));
-        float[] rgb = Sight.onScreen(color, lum / (grow * grow), near);
-        float k = (float) (r * grow);
-        out.glowPlate(c, new Vector3f(ax).mul(k), new Vector3f(ay).mul(k), rgb[0], rgb[1], rgb[2], c.length());
+        // видимый круг той же площади — r·√cos; мельче пятна в полтора пикселя — круглым пятном лицом к камере, бледнее
+        // во столько же раз (с ребра растянутый по обеим осям круг шёл бы иглой тоньше пикселя — мерцающими точками)
+        double seen = r * Math.sqrt(cos), least = 0.5 * Sight.MIN_PIXELS * view.pixel() * dist;
+        if (seen < least) {
+            float[] rgb = Sight.onScreen(color, lum * (seen / least) * (seen / least), near);
+            out.glowDisc(c.x, c.y, c.z, least, rgb[0], rgb[1], rgb[2], 0);
+            return;
+        }
+        float[] rgb = Sight.onScreen(color, lum, near);
+        out.glowPlate(c, new Vector3f(ax).mul((float) r), new Vector3f(ay).mul((float) r), rgb[0], rgb[1], rgb[2], c.length());
     }
 
     /**

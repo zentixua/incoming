@@ -101,8 +101,11 @@ public final class NozzleGlow {
         }
     }
 
-    /** Стенка: материал, толщина, м, коэффициент теплоотдачи газа на полке, Вт/(м²·K), температура восстановления, K. */
-    record Wall(Material material, double thickness, double gas, double recovery) {}
+    /**
+     * Стенка: материал, толщина, м, коэффициент теплоотдачи газа на полке, Вт/(м²·K), температура восстановления, K,
+     * степень черноты газа в сопле на полке (сквозь него стенка излучает наружу).
+     */
+    record Wall(Material material, double thickness, double gas, double recovery, double gasEmissivity) {}
 
     /** Вид сопла в миг: радиусы среза и горла, глубина горла за срезом, м; температуры раструба и горла, K. */
     public record Shine(double exitRadius, double throatRadius, double depth, double coneKelvin, double throatKelvin) {
@@ -146,6 +149,9 @@ public final class NozzleGlow {
     private final double exitRadius, throatRadius, depth;
     /** Температура поверхности раструба и горла через {@link #SAMPLE} с от поджига, K. */
     private final double[] cone, throat;
+    /** Стенки горла и раструба; спад тяги, настоящие секунды. */
+    final Wall throatWall, coneWall;
+    final double tail;
 
     /**
      * Сопло ускорителя motor (данные двигателя — {@code ClientWeaponSpec}) с кривой тяги curve в игре
@@ -161,11 +167,14 @@ public final class NozzleGlow {
         double ratio = Math.max(1, exitRadius * exitRadius / (throatRadius * throatRadius));
         // раструб — одной стенкой в середине по площади (⚠): теплоотдача и восстановление там
         double mid = (1 + ratio) / 2;
-        Wall throatWall = new Wall(Material.GRAPHITE, INSERT * throatRadius, bartz(motor, 1), recovery(motor, 1));
-        Wall coneWall = new Wall(Material.CARBON_PHENOLIC, LINER * throatRadius, bartz(motor, mid), recovery(motor, mach(motor.gamma(), mid)));
-        double tail = curve.tail() / 20;
-        throat = surface(throatWall, burn, tail, AFTER);
-        cone = surface(coneWall, burn, tail, AFTER);
+        // чернота газа в сопле — ядра струи поперёк у среза (⚠ в сопле газ плотнее: оценка снизу)
+        Flame plateau = FlameModel.at(motor, ua.zentix.incoming.util.Air.SEA);
+        double gas = plateau == null ? 0 : plateau.emissivity();
+        throatWall = new Wall(Material.GRAPHITE, INSERT * throatRadius, bartz(motor, 1), recovery(motor, 1), gas);
+        coneWall = new Wall(Material.CARBON_PHENOLIC, LINER * throatRadius, bartz(motor, mid), recovery(motor, mach(motor.gamma(), mid)), gas);
+        tail = curve.tail() / 20;
+        throat = surface(throatWall, burn, tail, AFTER, 1);
+        cone = surface(coneWall, burn, tail, AFTER, 1);
     }
 
     public Motor motor() {
@@ -279,28 +288,26 @@ public final class NozzleGlow {
 
     /**
      * Температура поверхности стенки через {@link #SAMPLE} с от поджига до burn + after: теплопроводность по толщине
-     * (явная сетка {@link #CELLS} узлов, тыльная сторона закрыта). Поверхность — из баланса потоков в ней: в работе газ
-     * h·s^0,8·(T_восст − T) (s — доля тяги настоящей кривой: выход на режим, полка, спад tail с), после — излучение
-     * ε·σ·{@link #VIEW_OUT}·(T⁴ − T_в⁴) и воздух {@link #AIR_H}, против подвода теплопроводностью из толщи.
+     * (явная сетка {@link #CELLS} узлов, тыльная сторона закрыта), поверхность — из баланса потоков в ней
+     * ({@link #surfaceTemperature}) при доле тяги настоящей кривой ({@link #share}: выход на режим, полка, спад tail с).
+     * Шаг — по устойчивости сетки, но не крупнее четверти шага таблицы и десятой доли спада (у углепластика устойчивость
+     * позволяет 0,1–0,3 с — спад прошёл бы за один-два шага); fine — во сколько раз мельче (эталон в тестах).
      */
-    static double[] surface(Wall w, double burn, double tail, double after) {
+    static double[] surface(Wall w, double burn, double tail, double after, double fine) {
         Material mat = w.material();
         double dx = w.thickness() / CELLS, air = StandardAtmosphere.T0;
         double[] t = new double[CELLS], next = new double[CELLS];
         java.util.Arrays.fill(t, air);
         // явная сетка: шаг по устойчивости узла (полуузел у поверхности — вдвое уже)
-        double dt = 0.25 * dx * dx / mat.maxDiffusivity();
+        double dt = Math.min(0.25 * dx * dx / mat.maxDiffusivity(), Math.min(SAMPLE / 4, tail / 10)) / fine;
         ThrustCurve real = new ThrustCurve(ThrustCurve.RISE, burn * 20 - ThrustCurve.RISE, tail * 20);
         int samples = (int) Math.ceil((burn + after) / SAMPLE) + 1;
         double[] out = new double[samples];
-        double time = 0, prev = air;
+        double time = 0, prev = surfaceTemperature(w, air, dx, share(real, burn, 0), air);
         int n = 0;
-        out[n++] = air;
+        out[n++] = prev;
         while (n < samples) {
-            double share = time < ThrustCurve.RISE / 20 ? ThrustCurve.ignition(time * 20)
-                    : real.share(FlightPhase.BOOST, time * 20 - ThrustCurve.RISE);
-            if (time >= burn) share = 0;
-            double ts = surfaceTemperature(w, t[0], dx, share, air);
+            double ts = surfaceTemperature(w, t[0], dx, share(real, burn, time), air);
             // поток в первый узел — с поверхности через полуузел
             for (int i = 0; i < CELLS; i++) {
                 double in = i == 0 ? 2 * mat.conductivity((ts + t[0]) / 2) * (ts - t[0]) / dx
@@ -311,7 +318,7 @@ public final class NozzleGlow {
             double[] swap = t;
             t = next;
             next = swap;
-            double nowTime = time + dt, now = surfaceTemperature(w, t[0], dx, nowTime >= burn ? 0 : share, air);
+            double nowTime = time + dt, now = surfaceTemperature(w, t[0], dx, share(real, burn, nowTime), air);
             // записи между шагами — по прямой
             while (n < samples && n * SAMPLE <= nowTime) {
                 double f = (n * SAMPLE - time) / dt;
@@ -323,22 +330,32 @@ public final class NozzleGlow {
         return out;
     }
 
+    /** Доля тяги на time настоящих секунд от поджига: кривая real ({@link ThrustCurve}), после burn — 0. */
+    static double share(ThrustCurve real, double burn, double time) {
+        if (time >= burn) return 0;
+        return time < ThrustCurve.RISE / 20 ? ThrustCurve.ignition(time * 20) : real.share(FlightPhase.BOOST, time * 20 - ThrustCurve.RISE);
+    }
+
     /**
-     * Температура поверхности стенки, у которой первый узел t0 в полуузле dx/2: баланс подвода газа (в работе) или
-     * потерь излучением и воздухом (после) с теплопроводностью к узлу — по Ньютону.
+     * Температура поверхности стенки, у которой первый узел t0 в полуузле dx/2, при доле тяги share — один баланс на всё
+     * время, по Ньютону: подвод газа h·s^0,8·(T_восст − T); излучение наружу ε·σ·{@link #VIEW_OUT}·(T⁴ − T_в⁴) — сквозь
+     * газ в сопле, доля (1 − ε_г(s)), ε_г(s) = 1 − (1 − ε_г)^s (толща газа ∝ расходу, как у {@code Flame.dimmed});
+     * воздух {@link #AIR_H} — долей (1 − s): пока газ идёт, воздуха у стенки нет; против подвода теплопроводностью из
+     * толщи. Все члены непрерывны по s — конец работы без ступеньки (при выключателе «газ — излучение» поверхность раструба
+     * прыгала на ~280 K в один миг).
      */
-    private static double surfaceTemperature(Wall w, double t0, double dx, double share, double air) {
+    static double surfaceTemperature(Wall w, double t0, double dx, double share, double air) {
         Material mat = w.material();
         double g = 2 * mat.conductivity(t0) / dx;
-        if (share > 0) {
-            double h = w.gas() * Math.pow(share, 0.8);
-            return (h * w.recovery() + g * t0) / (h + g);
-        }
-        double ts = t0, rad = mat.emissivity * SIGMA * VIEW_OUT;
-        for (int i = 0; i < 20; i++) {
-            double f = rad * (Math.pow(ts, 4) - Math.pow(air, 4)) + AIR_H * (ts - air) - g * (t0 - ts);
-            double df = 4 * rad * ts * ts * ts + AIR_H + g;
-            ts -= f / df;
+        double h = share > 0 ? w.gas() * Math.pow(share, 0.8) : 0;
+        double rad = mat.emissivity * SIGMA * VIEW_OUT * Math.pow(1 - w.gasEmissivity(), share), conv = AIR_H * (1 - share);
+        double ts = (h * w.recovery() + g * t0) / (h + g);
+        for (int i = 0; i < 30; i++) {
+            double f = h * (w.recovery() - ts) + g * (t0 - ts) - rad * (Math.pow(ts, 4) - Math.pow(air, 4)) - conv * (ts - air);
+            double df = -h - g - 4 * rad * ts * ts * ts - conv;
+            double step = f / df;
+            ts -= step;
+            if (Math.abs(step) < 1e-6) break;
         }
         return Math.max(air, ts);
     }

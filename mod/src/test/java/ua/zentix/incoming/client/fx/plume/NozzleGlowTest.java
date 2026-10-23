@@ -73,6 +73,38 @@ class NozzleGlowTest {
         }
     }
 
+    /**
+     * Таблица — решение закона, а не шага сетки: с шагом вдесятеро мельче те же температуры (у углепластика шаг устойчивости
+     * 0,1–0,3 с, и спад тяги проходил за один-два шага — у шахеда раструб на отделении выходил на 170 K горячее).
+     */
+    @Test
+    void tableIsTheSolutionNotTheGrid() {
+        for (WeaponType w : BOOSTED) {
+            NozzleGlow g = glow(w);
+            for (NozzleGlow.Wall wall : new NozzleGlow.Wall[]{g.throatWall, g.coneWall}) {
+                double[] coarse = NozzleGlow.surface(wall, g.burn(), g.tail, 10, 1), fine = NozzleGlow.surface(wall, g.burn(), g.tail, 10, 10);
+                for (int i = 0; i < coarse.length; i++) {
+                    assertEquals(fine[i], coarse[i], 10, w + " " + wall.material() + " на " + i * NozzleGlow.SAMPLE + " с");
+                }
+            }
+        }
+    }
+
+    /** Конец работы — без ступеньки в самом законе: баланс поверхности непрерывен по доле тяги. */
+    @Test
+    void burnoutIsNotASwitch() {
+        for (WeaponType w : BOOSTED) {
+            NozzleGlow g = glow(w);
+            for (NozzleGlow.Wall wall : new NozzleGlow.Wall[]{g.throatWall, g.coneWall}) {
+                double dx = wall.thickness() / NozzleGlow.CELLS;
+                for (double t0 = 400; t0 <= 3000; t0 += 100) {
+                    double on = NozzleGlow.surfaceTemperature(wall, t0, dx, 1e-6, 288.15), off = NozzleGlow.surfaceTemperature(wall, t0, dx, 0, 288.15);
+                    assertEquals(off, on, 0.5, w + " " + wall.material() + " при узле " + t0 + " K");
+                }
+            }
+        }
+    }
+
     @Test
     void separationKeepsTheSameNozzle() {
         for (WeaponType w : BOOSTED) {
