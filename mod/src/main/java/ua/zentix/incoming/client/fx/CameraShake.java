@@ -62,8 +62,6 @@ public final class CameraShake {
     static final double TREMOR_IMPULSE_LOW = 5, TREMOR_IMPULSE_HIGH = 300;
     /** Частота дрожи, Гц: у слабого удара — {@link #TREMOR_HZ_WEAK}, у полного — {@link #TREMOR_HZ_STRONG}. Подача. */
     static final double TREMOR_HZ_WEAK = 12.5, TREMOR_HZ_STRONG = 8.5;
-    /** Больше стольких дрожей сразу — самая слабая уходит. */
-    private static final int TREMORS_MAX = 4;
 
     /** Дрожь одного удара: с мига {@code from} (тики, с долей), сила 0..1, длина, с, частота, Гц, сдвиг узора. */
     private record Tremor(double from, double strength, double seconds, double hz, double phase) {}
@@ -104,19 +102,14 @@ public final class CameraShake {
         double strength = tremorStrength(pPa);
         if (!(strength > 1e-4)) return 0;
         double hz = TREMOR_HZ_WEAK + (TREMOR_HZ_STRONG - TREMOR_HZ_WEAK) * Math.sqrt(strength);
-        if (TREMORS.size() >= TREMORS_MAX) {
-            Tremor weakest = TREMORS.getFirst();
-            for (Tremor t : TREMORS) if (t.strength < weakest.strength) weakest = t;
-            if (weakest.strength >= strength) return strength;
-            TREMORS.remove(weakest);
-        }
         TREMORS.add(new Tremor(ticks - Mth.clamp(late, 0, 1), strength, tremorSeconds(impulse), hz, (seed & 0xFFFF) / 65536.0));
         return strength;
     }
 
     /**
      * Дрожь в миг {@code t} тиков, ° (курс, тангаж; крен — доля курса): узор — две синусоиды в отношении 1,73, с нуля,
-     * огибающая (1 − s)² гаснет к нулю за длину дрожи. Сумма дрожей — не больше полного размаха.
+     * огибающая (1 − s)² гаснет к нулю за длину дрожи. Сумма дрожей — не больше полного размаха (предела числа дрожей
+     * нет: вытеснить идущую — рывок; каждая кончается за {@link #TREMOR_LONG} с).
      */
     static double[] tremorAt(double t) {
         double yaw = 0, pitch = 0;

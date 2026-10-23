@@ -737,7 +737,7 @@ public final class FarBlasts {
             if (t < e.model.life) f.hot(bx, by + Math.max(0, ch - cr), bz, 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
             if (e.source.underground() || e.source.chargeKg() <= 0 || t > FRONT_SECONDS) continue;
             if (e.front == null) e.front = ChemicalFront.cached(e.source.chargeKg(), e.source.surface());
-            if (front(e.front, t, r, e.model.hob, FRONT)) f.front(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
+            if (front(e.front, t, r, e.model.hob, FRONT)) f.chemicalFront(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
         }
     }
 

@@ -33,7 +33,11 @@ class ChemicalFrontTest {
                     assertTrue(got <= r / BlastModel.SOUND_SPEED + 1e-9, "фронт медленнее звука: " + kg + " кг, " + r + " м");
                     assertEquals(r, f.radiusAt(got), 1e-6 * r + 1e-9);
                 }
-                for (double t = 1e-4; t < 6; t *= 1.3) assertTrue(f.radiusAt(t) <= BlastModel.SOUND_SPEED * t + 2e3 && f.arrivalSeconds(f.radiusAt(t)) <= t + 1e-9);
+                // радиус во времени — тот же закон: фронт на радиусе закона, не впереди и не позади
+                for (double r : new double[]{3, 10, 40, 150, 600}) {
+                    double law = law(r, kg, surface);
+                    assertEquals(r, f.radiusAt(law), 0.005 * r, kg + " кг, " + r + " м: радиус в миг закона");
+                }
                 double far = (f.radiusAt(8) - f.radiusAt(7)) / 1;
                 assertEquals(BlastModel.SOUND_SPEED, far, 0.01 * BlastModel.SOUND_SPEED, kg + " кг: вдали — звук");
             }

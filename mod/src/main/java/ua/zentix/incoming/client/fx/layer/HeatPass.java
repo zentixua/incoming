@@ -130,6 +130,8 @@ public final class HeatPass {
         private final double[] lightWeight = new double[4], hotWeight = new double[4], frontWeight = new double[2], jetWeight = new double[4];
         /** Сдвиг столбов горячего газа кадра, пиксели (самое заметное место, как при выборе). */
         final double[] hotShift = new double[4];
+        /** Фронт в слоте — ядерки (обычный взрыв его не вытесняет: картинка ядерки от обычных не меняется). */
+        private final boolean[] frontNuke = new boolean[2];
         private final Vector4f column = new Vector4f();
         /**
          * Привыкание глаза кадра ({@code Sight.exposure}: к свету неба и к свету огня у глаза — одно на весь кадр) и свет
@@ -174,6 +176,7 @@ public final class HeatPass {
             Arrays.fill(hotWeight, 0);
             Arrays.fill(hotShift, 0);
             Arrays.fill(frontWeight, 0);
+            Arrays.fill(frontNuke, false);
             Arrays.fill(jetWeight, 0);
         }
 
@@ -320,18 +323,32 @@ public final class HeatPass {
          * Фронт ударной волны: сфера с серединой (x, y, z) от глаза радиусом r, e-кратная толща сжатия за фронтом l (всё —
          * блоки), {@code low} — синус угла над серединой у земли (ниже фронта нет), dn — скачок показателя преломления на
          * четырёх высотах ровно от low до верха. Фронт, который ни одному пикселю не даст сдвига в {@link #SHIFT_MIN}, не
-         * нужен.
+         * нужен. Фронт ядерки ({@code NukeHeat}) — всегда раньше фронтов обычных взрывов ({@link #chemicalFront}).
          */
         public void front(double x, double y, double z, double r, double l, double low, double[] dn) {
+            front(x, y, z, r, l, low, dn, true);
+        }
+
+        /** Фронт обычного взрыва ({@code FarBlasts.front}): как {@link #front}, но слот ядерки не занимает. */
+        public void chemicalFront(double x, double y, double z, double r, double l, double low, double[] dn) {
+            front(x, y, z, r, l, low, dn, false);
+        }
+
+        private double rank(int slot) {
+            return frontWeight[slot] + (frontNuke[slot] ? 1e9 : 0);
+        }
+
+        private void front(double x, double y, double z, double r, double l, double low, double[] dn, boolean nuke) {
             double most = 0;
             for (double v : dn) most = Math.max(most, v);
             if (r <= 0 || l <= 0 || most <= 0) return;
             double near = Math.abs(Math.sqrt(x * x + y * y + z * z) - r);
             double w = ShockOptics.most(r, most, near, pixel) / pixel;
             if (w < SHIFT_MIN) return;
-            int slot = frontWeight[1] < frontWeight[0] ? 1 : 0;
-            if (w <= frontWeight[slot]) return;
+            int slot = rank(1) < rank(0) ? 1 : 0;
+            if (w + (nuke ? 1e9 : 0) <= rank(slot)) return;
             frontWeight[slot] = w;
+            frontNuke[slot] = nuke;
             front.setColumn(slot, column.set((float) x, (float) y, (float) z, (float) r));
             front.setColumn(2 + slot, column.set((float) dn[0], (float) dn[1], (float) dn[2], (float) dn[3]));
             if (slot == 0) frontShape.set((float) l, (float) low, frontShape.z, frontShape.w);

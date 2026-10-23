@@ -220,8 +220,6 @@ class BodySwayTest {
             for (int i = 0; i < head.length; i++) head[i] = body[i] + neck[i];
             double pa = 1000 * BlastModel.surfaceOverpressureKpa(c[1], c[0]), q = 1000 * BlastModel.dynamicPressureKpa(pa / 1000);
             double tp = BlastModel.chemicalPhaseSeconds(c[1], c[0], true);
-            double[] tilt = BodySway.tilt(pa, q, 1, tp, BodySway.FORWARD, BodySway.BACK);
-            for (int i = 0; i < Math.min(tilt.length, body.length); i++) assertEquals(tilt[i], body[i], 1e-15, what + ": тело");
             assertTrue(head[1] < 0, what + ": голова сперва отстаёт назад");
             // размахи камеры: экстремумы между переходами через ноль
             java.util.List<Double> swings = new java.util.ArrayList<>();
@@ -256,6 +254,34 @@ class BodySwayTest {
             double seconds = motion(c[0], c[1]).body().length / (double) BodySway.RATE;
             assertTrue(seconds > 1 && seconds < 6, c[1] + " м: " + seconds + " с");
         }
+    }
+
+    /**
+     * Наклон тела от шеи не меняется: отсчёты {@link BodySway#tilt} — те же, что до головы на шее (эталон снят с кода
+     * main 9840901d: заряд, м, длина ряда там, отсчёты 1, 10, 50, 100, 200); ряд может быть длиннее — пока голова не
+     * успокоилась, тело добавляет отсчёты меньше {@link BodySway#STILL}.
+     */
+    @Test
+    void neckLeavesTheBodyAsItWas() {
+        double[][] main = {
+                {50.0, 100.0, 416, 7.395679767067632E-4, 0.007188804133661276, 0.0221177882058665, 0.0012014023244044333, 0.0022245733355720915},
+                {150.0, 50.0, 493, 0.002806985316968799, 0.02769623655308624, 0.0849411121087353, 0.004481699548655748, 0.008554702111216362},
+                {3.0, 30.0, 417, 8.408738985636841E-4, 0.008135599252273383, 0.02504726656991267, 0.0013629278238277598, 0.002519189547521692}};
+        int[] at = {1, 10, 50, 100, 200};
+        for (double[] c : main) {
+            double pa = 1000 * BlastModel.surfaceOverpressureKpa(c[1], c[0]), q = 1000 * BlastModel.dynamicPressureKpa(pa / 1000);
+            double[] t = BodySway.tilt(pa, q, 1, BlastModel.chemicalPhaseSeconds(c[1], c[0], true), BodySway.FORWARD, BodySway.BACK);
+            assertTrue(t.length >= c[2], c[0] + " кг: короче, чем было");
+            for (int k = 0; k < at.length; k++) assertEquals(c[3 + k], t[at[k]], 1e-15, c[0] + " кг, " + c[1] + " м, отсчёт " + at[k]);
+            for (int i = (int) c[2]; i < t.length; i++) assertTrue(Math.abs(t[i]) < BodySway.STILL);
+        }
+    }
+
+    /** Голова у самого взрыва (50 кг в 10 м) — не дальше хода шеи. */
+    @Test
+    void neckStaysInItsRange() {
+        BodySway.Motion m = motion(50, 10);
+        for (double v : m.neck()) assertTrue(Math.abs(v) < BodySway.NECK_RANGE, Math.toDegrees(v) + "°");
     }
 
     private static double head(BodySway.Motion m) {

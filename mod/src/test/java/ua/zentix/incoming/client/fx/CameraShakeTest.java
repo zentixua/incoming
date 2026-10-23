@@ -258,7 +258,7 @@ class CameraShakeTest {
 
     /**
      * Обычный взрыв (жалоба 23.10: «камера не качается, её разве что немного ударяет и сбивает»): шахед в 100 м за
-     * спиной — камера качается головой на шее (несколько размахов вперёд-назад), возвращается к нулю с затуханием и между
+     * спиной — камера дрожит, качается головой на шее (несколько размахов вперёд-назад), возвращается к нулю с затуханием и между
      * кадрами (по 1/6 тика) не прыгает больше, чем позволяет скорость удара. Ядерная волна шеи не берёт (её картинку этот
      * шаг не менял).
      */
@@ -267,13 +267,16 @@ class CameraShakeTest {
         CameraShake.reset();
         double kg = 50, m = 100, pa = 1000 * BlastModel.surfaceOverpressureKpa(m, kg), tp = BlastModel.chemicalPhaseSeconds(m, kg, true);
         BodySway.Motion motion = CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), 1, tp, tp, 0, new Vec3(0, 0, 1), 0, true);
-        assertTrue(motion.neck().length == motion.body().length && motion.body().length > 20);
-        double kick = Math.toDegrees(Math.abs(motion.body()[1] + motion.neck()[1])), last = 0, most = 0;
+        double strength = CameraShake.tremor(pa, BlastModel.chemicalImpulse(m, kg, true), 0, 3);
+        assertTrue(motion.neck().length == motion.body().length && motion.body().length > 20 && strength > 0);
+        // за 1/120 с камера сдвигается не больше, чем дают удар по шее и самая быстрая дрожь
+        double kick = Math.toDegrees(Math.abs(motion.body()[1] + motion.neck()[1])) * BodySway.RATE / 120
+                + 2 * Math.PI * 1.73 * CameraShake.TREMOR_HZ_WEAK * 1.1 * CameraShake.TREMOR_PITCH * strength / 120, last = 0, most = 0;
         int turns = 0, sign = 0;
         for (int tick = 0; tick < 20 * 6; tick++) {
             for (int k = 0; k < 6; k++) {
                 double pitch = CameraShake.offsets(k / 6.0, 0, 0, 0, 0, 1)[1];
-                assertTrue(Math.abs(pitch - last) <= 1.05 * kick * BodySway.RATE / 120 + 1e-9, "скачок в тике " + tick + ": " + last + " → " + pitch);
+                assertTrue(Math.abs(pitch - last) <= 1.05 * kick + 1e-9, "скачок в тике " + tick + ": " + last + " → " + pitch);
                 int s2 = (int) Math.signum(pitch);
                 if (s2 != 0 && s2 != sign) {
                     if (sign != 0) turns++;

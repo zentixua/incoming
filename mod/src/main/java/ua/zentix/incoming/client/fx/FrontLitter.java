@@ -16,8 +16,10 @@ import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.ChemicalFront;
 
 /**
- * Фронт обычного взрыва на траве: в миг прихода он срывает травинки, дёрн и листья крон, и они веером летят от взрыва —
- * так фронт и виден на земле, кольцом, что бежит со скоростью фронта (жалоба 23.10: «кольца никакого»). Где срывает —
+ * Фронт обычного взрыва на траве: в миг прихода он срывает травинки, дёрн и листья крон и подбрасывает их — так фронт и
+ * виден на земле: кольцо взлетающих клочков бежит со скоростью фронта (жалоба 23.10: «кольца никакого»). Далеко они не
+ * летят: воздух за фазой в миллисекунды сдвигается на дециметры, и клок, брошенный и на 30 м/с, за тик тормозит до
+ * своей скорости падения и ложится в полуметре (законы — ниже; траектория не подача). Где срывает —
  * закон срыва пыли ({@link BlastLitter#tearsCover}: u* за фронтом выше порога дёрна); с какой скоростью бросает —
  * сопротивление клока листвы под ветром фазы ({@link BlastLitter#kick}); когда — приход фронта на место
  * ({@link ChemicalFront}). Пыль с голой земли, песка и снега — слой пыли волны ({@code GroundDust}), не здесь.
@@ -46,14 +48,23 @@ public final class FrontLitter {
     private FrontLitter() {}
 
     /**
-     * Дальность срыва травы и листьев по земле, м: дальше u* за фронтом ниже порога дёрна. {@code from} — откуда искать
-     * (край огненного шара: ближе всё сгорает и уходит с грунтом воронки), {@code hob} — высота разрыва над землёй.
+     * Кольцо срыва травы и листьев по земле {внутренний, внешний радиус}, м: где u* за фронтом выше порога дёрна. Ищется с
+     * {@code from} (край огненного шара: ближе всё сгорает и уходит с грунтом воронки) до {@link #TEAR_MAX}; {@code hob}
+     * — высота разрыва над землёй: под воздушным разрывом ветер идёт вниз, и кольцо начинается дальше. {0, 0} — нигде.
      */
+    static double[] tearRing(ChemicalFront front, double from, double hob) {
+        double r = Math.max(from, 0.5), inner = 0, outer = 0;
+        for (; r <= TEAR_MAX; r += 0.5) {
+            if (!tears(front, r, hob)) continue;
+            if (inner == 0) inner = r;
+            outer = r;
+        }
+        return new double[]{inner, outer};
+    }
+
+    /** Внешний радиус кольца срыва, м ({@link #tearRing}). */
     static double tearRange(ChemicalFront front, double from, double hob) {
-        double r = Math.max(from, 0.5);
-        if (!tears(front, r, hob)) return 0;
-        while (r < TEAR_MAX && tears(front, r + 1, hob)) r += 1;
-        return r;
+        return tearRing(front, from, hob)[1];
     }
 
     private static boolean tears(ChemicalFront front, double ground, double hob) {
@@ -73,8 +84,9 @@ public final class FrontLitter {
      */
     static void spawn(ClientLevel level, Vec3 pos, @Nullable ChemicalFront front, double ball, double hob, RandomSource rnd) {
         if (front == null) return;
-        double inner = Math.max(ball, 1), outer = tearRange(front, inner, hob);
-        if (outer <= inner) return;
+        double[] ring = tearRing(front, Math.max(ball, 1), hob);
+        double inner = ring[0], outer = ring[1];
+        if (!(outer > inner)) return;
         Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         if (Math.hypot(eye.x - pos.x, eye.z - pos.z) > outer + REACH) return;
         int n = Math.min(MAX, (int) Math.round(PER_M2 * Math.PI * (outer * outer - inner * inner)));

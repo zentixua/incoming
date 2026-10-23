@@ -103,6 +103,12 @@ public final class BodySway {
     static final double NECK_HZ = 2.0;
     /** Относительное затухание головы на шее (⚠ оценка). */
     static final double NECK_DAMPING = 0.3;
+    /**
+     * Ход шеи по тангажу, рад: наклон вперёд ~50°, назад ~60–70° у молодых (Youdas et al. 1992, Phys Ther 72) — берём
+     * меньший. Линейное звено туда не годится: наклон головы на шее к нему подходит мягко (R·th(φ/R), ⚠ форма — оценка);
+     * так бывает только там, где волна уже сбивает с ног.
+     */
+    static final double NECK_RANGE = Math.toRadians(50);
     /** Площадь головы спереди, м²; длина головы вдоль волны и половина её ширины, м (ANSUR II: ~0,2 и ~0,155 м). */
     static final double HEAD_AREA = 0.03, HEAD_DEPTH = 0.2, HEAD_HALF_WIDTH = 0.077;
     /** Лобовое сопротивление головы, м²: площадь × Cd 0,5 (шар, Hoerner 1965 — оценка для головы). */
@@ -209,13 +215,13 @@ public final class BodySway {
             boolean sample = (i + 1) % every == 0;
             if (sample) {
                 out[n] = th;
-                neck[n++] = phi;
+                neck[n++] = NECK_RANGE * Math.tanh(phi / NECK_RANGE);
             }
             // ветер стих (разрежение за три фазы — меньше 1 % напора), тело стоит и голова на шее успокоилась
             if (t > 3 * tPlus && Math.abs(th) < STILL && Math.abs(om) < STILL && Math.abs(phi) < STILL && Math.abs(phiRate) < nw * STILL) {
                 if (!sample) {
                     out[n] = th;
-                    neck[n++] = phi;
+                    neck[n++] = NECK_RANGE * Math.tanh(phi / NECK_RANGE);
                 }
                 break;
             }
