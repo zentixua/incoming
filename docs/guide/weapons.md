@@ -271,10 +271,11 @@ instead of drifting as one ball.
 The blast wind tears dust off every surface it reaches, ground, roof or hillside alike, the same way as the wave of a
 nuclear strike does. Bare dirt, sand, gravel and snow give it up easily: a low ring of light dust races out with the
 wave, a few tens of blocks for a Shahed, then thickens to several blocks, hangs for minutes and drifts with the wind near
-the ground. Grass holds the soil, so on a meadow the dust rises only around the crater; stone, brick and planks carry
-only a thin film of settled dust; water gives none: by a shore the dust lies mostly over the land. Dusty air is heavier
+the ground. Grass holds the soil, so on a meadow the dust rises only around the crater; stone, brick, planks and tree
+crowns carry only a thin film of settled dust; water gives none: by a shore the dust lies mostly over the land. Dusty air is heavier
 than clean air, so the dust spreads out along the surface it came from, and where it drifts past an edge (a roof, a
-cliff, a slope) it sinks to the surface below, in about 15 seconds for a drop of 15 blocks. While the cloud rises, a
+cliff, a slope) it sinks to the surface below: thick dust in seconds, thin dust slower. It does not climb a wall
+higher than itself. While the cloud rises, a
 thin column of dust is drawn up under it. An interceptor bursting in the air leaves no crater and no dust, unless it
 bursts low over the ground. A hit on a roof or a wall is the same blast as a hit on the ground: what it crushes goes up
 with the hot cloud, and the wave lifts dust from the street below where it is still strong enough there.

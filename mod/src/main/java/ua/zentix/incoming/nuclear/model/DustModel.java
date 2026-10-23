@@ -148,8 +148,8 @@ public final class DustModel {
         /** Тот же грунт без пыли обломков — поле у обычного удара. */
         public static final Surface FIELD = new Surface(REFERENCE.threshold, REFERENCE.supply, 0);
         /**
-         * Грунт под травой (дёрн) или под твёрдым (камень, доски, лёд): порог срыва — от 3 м/с (Gaj &amp; Small, §2.2: трава
-         * и посевы — от 3; у твёрдого не меньше), запас — тот же сантиметр.
+         * Грунт под травой (дёрн): порог срыва — от 3 м/с (Gaj &amp; Small, §2.2: трава и посевы — от 3), запас — тот же
+         * сантиметр. Твёрдое без грунта — {@link #HARD}.
          */
         public static final Surface COVERED = new Surface(3.0, REFERENCE.supply, 0);
         /**

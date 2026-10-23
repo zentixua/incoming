@@ -162,4 +162,18 @@ class FarBlastsTest {
             org.junit.jupiter.api.Assertions.assertTrue(c[0] + c[1] + c[2] >= g.r + g.g + g.b - 1e-6, g + ": пыль темнее блока");
         }
     }
+
+    /**
+     * Контакт — по тому, что под точкой, а не по виду: удар в крышу (верх колонки — на точке) и в стену (точка на грани,
+     * колонка по ту сторону — стена выше точки) — 0; над аппаратом в 100 м над травой — 100; рельефа не знаем — 0.
+     */
+    @Test
+    void contactByWhatIsUnderThePoint() {
+        // дом x 0..9 высотой до 80, улица — 64
+        Sightline.Heights town = (x, z) -> x >= 0 && x < 10 ? 80 : 64;
+        assertEquals(0, FarBlasts.overSurface(town, new Vec3(5.5, 79.8, 5.5)), 1e-9, "крыша: точка в верхнем блоке");
+        assertEquals(0, FarBlasts.overSurface(town, new Vec3(-0.001, 70, 5.5)), 1e-9, "стена: точка на грани снаружи");
+        assertEquals(100, FarBlasts.overSurface(town, new Vec3(-50.5, 164, 5.5)), 1e-9, "аппарат над улицей");
+        assertEquals(0, FarBlasts.overSurface((x, z) -> Double.NaN, new Vec3(0, 300, 0)), 1e-9, "не знаем — наземный");
+    }
 }

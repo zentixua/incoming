@@ -377,13 +377,17 @@ public final class FarBlasts {
      * Рыхлое — земля без дёрна, песок, гравий, снег, пашня; дёрн и листва держат грунт под собой; остальное (камень,
      * кирпич, доски, металл) — твёрдое: на нём только осевшая пыль; вода — без пыли. Рельеф, куда слой стекает, — тот же
      * верх в любом месте ({@link FarTerrain}: чанки клиента, дальше плитки карты). Где у клиента нет чанка — как у
-     * ядерки: голый грунт ({@code Surface.REFERENCE}) на высоте {@code pos}.
+     * ядерки: голый грунт ({@code Surface.REFERENCE}) на высоте плитки карты, а нет и её — высота неизвестна (ровная
+     * поверхность на высоте взрыва над тем, что под точкой, ниже; ⚠ удар в крышу дальше прорисовки без карты рельефа —
+     * пыль на высоте крыши: клиент её не видит). Листва (крона) — твёрдое: пыль лежит на листьях, а грунт под кроной
+     * клиент сверху не видит (⚠ лесной подстилки нет).
      */
     static ua.zentix.incoming.client.fx.smoke.GroundDust.Ground ground(ClientLevel level, Vec3 pos) {
         int n = ua.zentix.incoming.client.fx.smoke.GroundDust.SECTORS;
         double[] bands = ua.zentix.incoming.client.fx.smoke.GroundDust.BANDS;
         double[][] loose = new double[n][bands.length], covered = new double[n][bands.length], hard = new double[n][bands.length],
                 height = new double[n][bands.length];
+        Sightline.Heights relief = FarTerrain.of(level);
         for (int k = 0; k < n; k++) {
             double a = 2 * Math.PI * (k + 0.5) / n;
             for (int b = 0; b < bands.length; b++) {
@@ -391,7 +395,7 @@ public final class FarBlasts {
                 net.minecraft.world.level.chunk.LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
                 if (chunk == null) {
                     loose[k][b] = 1;
-                    height[k][b] = 0;
+                    height[k][b] = relief.at(x, z) - pos.y;
                     continue;
                 }
                 int y = chunk.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
@@ -403,14 +407,13 @@ public final class FarBlasts {
                 else hard[k][b] = 1;
             }
         }
-        Sightline.Heights relief = FarTerrain.of(level);
         return new ua.zentix.incoming.client.fx.smoke.GroundDust.Ground(loose, covered, hard, height,
                 (dx, dz) -> relief.at((int) Math.floor(pos.x + dx), (int) Math.floor(pos.z + dz)) - pos.y);
     }
 
-    /** Грунт под дёрном или листвой сверху: пыль под ним есть, но держит её дёрн (срыв — от 3 м/с). */
+    /** Грунт под дёрном сверху: пыль под ним есть, но держит её дёрн (срыв — от 3 м/с). */
     static boolean sod(net.minecraft.world.level.block.state.BlockState s) {
-        return s.is(net.minecraft.tags.BlockTags.DIRT) || s.is(net.minecraft.tags.BlockTags.LEAVES) || s.is(net.minecraft.world.level.block.Blocks.MOSS_CARPET)
+        return s.is(net.minecraft.tags.BlockTags.DIRT) || s.is(net.minecraft.world.level.block.Blocks.MOSS_CARPET)
                 || s.is(net.minecraft.world.level.block.Blocks.MUD) || s.is(net.minecraft.world.level.block.Blocks.CLAY);
     }
 
@@ -431,7 +434,11 @@ public final class FarBlasts {
      * полублоке), берётся высшая. Не знаем ничего — 0: пакет называет взрыв наземным.
      */
     static double overSurface(ClientLevel level, Vec3 pos) {
-        Sightline.Heights heights = FarTerrain.of(level);
+        return overSurface(FarTerrain.of(level), pos);
+    }
+
+    /** То же по высотам {@code heights} (первый воздух над верхом колонки). */
+    static double overSurface(Sightline.Heights heights, Vec3 pos) {
         double ground = Double.NaN;
         for (int[] d : new int[][]{{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
             double h = heights.at((int) Math.floor(pos.x + 0.5 * d[0]), (int) Math.floor(pos.z + 0.5 * d[1]));

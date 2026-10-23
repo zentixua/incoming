@@ -422,10 +422,23 @@ public final class GroundDust {
      * почти не тормозит: N·t ~ 0,2). R₀ — шар объёма слоя 2πσh²·1,25σv.
      */
     static double fall(double dust, double sh, double sv, double dt) {
-        if (dust <= 0 || dt <= 0) return 0;
-        double volume = 2 * Math.PI * sh * sh * 1.25 * sv, r0 = Math.cbrt(3 * volume / (4 * Math.PI));
-        double f = 3 * CloudModel.G * dust / CloudModel.RHO / (4 * Math.PI), a = CloudModel.ALPHA;
-        double r4 = r0 * r0 * r0 * r0;
+        return dust <= 0 ? 0 : fall(radius(sh, sv), buoyancy(dust), dt);
+    }
+
+    /** R₀ тяжёлого термика клуба σh, σv: шар объёма слоя 2πσh²·1,25σv, м. */
+    static double radius(double sh, double sv) {
+        return Math.cbrt(3 * (2 * Math.PI * sh * sh * 1.25 * sv) / (4 * Math.PI));
+    }
+
+    /** F = 3B/(4π), B = g·M/ρ — у {@code dust} кг пыли, м⁴/с². */
+    static double buoyancy(double dust) {
+        return 3 * CloudModel.G * Math.max(dust, 0) / CloudModel.RHO / (4 * Math.PI);
+    }
+
+    /** Опускание за dt термика R₀, F из покоя: ((R₀⁴ + 2αF·t²)^¼ − R₀)/α, м. */
+    static double fall(double r0, double f, double dt) {
+        if (f <= 0 || dt <= 0) return 0;
+        double a = CloudModel.ALPHA, r4 = r0 * r0 * r0 * r0;
         return (Math.sqrt(Math.sqrt(r4 + 2 * a * f * dt * dt)) - r0) / a;
     }
 
@@ -443,6 +456,21 @@ public final class GroundDust {
      * слоя, над перепадом опускается к поверхности под собой. {@code fade} — доля, что рисуется.
      */
     public void blobs(double t, double fade, Blobs out) {
+        emit(t, fade, true, (x, y, z, sh, sv, dust, mass) -> out.blob(x, y, z, sh, sv, dust));
+    }
+
+    /** Клуб слоя для проверок — и масса пыли в нём, кг (по ней — тяжесть слоя). */
+    interface Probe {
+        void blob(double x, double y, double z, double sh, double sv, double dust, double mass);
+    }
+
+    /** Клубы в возрасте t с массой ({@link Probe}). */
+    void probe(double t, Probe out) {
+        emit(t, 1, true, out);
+    }
+
+    /** Клубы в возрасте t; {@code levels} — где они лежат (без него — на поверхности, с которой подняло: толща слоя). */
+    private void emit(double t, double fade, boolean levels, Probe out) {
         if (total <= 0 || t <= 0) return;
         // один проход по кольцам: у каждого кольца показа в секторе — масса, её радиус и второй момент, доля ещё в фазе волны
         double[][] m = new double[ANNULI][SECTORS], mr = new double[ANNULI][SECTORS], mr2 = new double[ANNULI][SECTORS],
@@ -486,55 +514,107 @@ public final class GroundDust {
                 double ang = 2 * Math.PI * (k + 0.5) / SECTORS, ux = Math.cos(ang), uz = Math.sin(ang);
                 double[] d = drift(t, zc);
                 double x = d[0] + mean * ux, z = d[1] + mean * uz;
-                double floor = floor(surface[k][a], t, x, z, source, ux, uz, k, a, own);
-                out.blob(x, floor + zc, z, sh, v, mass * fade);
+                double floor = levels ? level(k, a, t, source, ux, uz, own) : surface[k][a];
+                out.blob(x, floor + zc, z, sh, v, mass * fade, airborne(k, a, t));
             }
         }
     }
 
-    /**
-     * Поверхность, на которой лежит клуб в (x, z) в возрасте t, м от точки взрыва: поднятый с поверхности на высоте
-     * {@code lifted} — на ней, пока под ним не ниже её больше чем на {@link #DROP}; над перепадом — опускается тяжёлым
-     * термиком ({@link #fall}: масса и размер клуба кольца показа {@code show} сектора {@code sector} шириной
-     * {@code own} в миг, когда он вышел за край; дальше плавучесть термика сохраняется — ⚠ крупная пыль, что оседает из
-     * него, её уносит, это не учтено) с того мига, как его путь (сток пласта вдоль {@code ux, uz} от радиуса
-     * {@code source} и снос ветром) вышел за край, но не ниже поверхности под ним. Выше своей поверхности не поднимается.
-     */
-    private double floor(double lifted, double t, double x, double z, double source, double ux, double uz, int sector,
-                         int show, double own) {
-        double below = relief.at(x, z);
-        if (Double.isNaN(below) || below >= lifted - DROP) return lifted;
-        // когда путь клуба вышел за край: первый узел пути над перепадом, уточнённый делением пополам
-        double lo = 0, hi = t;
-        int n = 12;
-        for (int j = 1; j <= n; j++) {
-            double tj = t * j / n;
-            if (dropped(lifted, tj, source, ux, uz, show)) {
-                hi = tj;
-                lo = t * (j - 1) / n;
-                break;
-            }
-        }
-        for (int j = 0; j < 6; j++) {
-            double mid = 0.5 * (lo + hi);
-            if (dropped(lifted, mid, source, ux, uz, show)) hi = mid;
-            else lo = mid;
-        }
-        // размер на краю: дальше термик растёт сам (R = R₀ + αz), а турбулентность воздуха плавучести не меняет
-        double v = at(sv[show], hi), h = Math.max(Math.hypot(own * stretch(hi), CloudModel.spreadH(air.spread(), path(hi))), v);
-        double dust = 0;
-        for (int i = 0; i < RINGS; i++) if (annulus[i] == show && !ball[sector][i]) dust += ringNow(sector, i, hi);
-        return Math.max(below, lifted - fall(dust, h, v, t - hi));
+    /** Масса пыли в воздухе у клуба кольца показа {@code show} сектора k в возрасте t, кг. */
+    private double airborne(int k, int show, double t) {
+        double m = 0;
+        for (int i = 0; i < RINGS; i++) if (annulus[i] == show && !ball[k][i]) m += massNow(k, i, t);
+        return m;
     }
 
     /**
-     * Место пути клуба кольца показа {@code show} в возрасте t — над перепадом вниз от поверхности {@code lifted}: где
-     * клуб был тогда (снос — на высоте середины слоя в тот миг).
+     * Сетка пути клубов, с: шаг 0,25 с вначале (край крыши, приземление), потом 2 % возраста, не больше 2 с — путь
+     * клуба вдали от удара, когда он уже шире десятков метров.
      */
-    private boolean dropped(double lifted, double t, double source, double ux, double uz, int show) {
-        double[] d = drift(t, 0.8 * at(sv[show], t));
-        double mean = source * stretch(t), below = relief.at(d[0] + mean * ux, d[1] + mean * uz);
-        return !Double.isNaN(below) && below < lifted - DROP;
+    static final double[] PATH;
+
+    static {
+        java.util.List<Double> g = new java.util.ArrayList<>();
+        for (double t = 0; t <= CloudModel.LIFE_MAX; t += Math.min(2, Math.max(0.25, 0.02 * t))) g.add(t);
+        PATH = g.stream().mapToDouble(Double::doubleValue).toArray();
+    }
+
+    /**
+     * Путь клуба по сетке {@link #PATH}: узел, уровень поверхности, на которой он лежит (м от точки взрыва), и падение —
+     * с какого уровня и с какого мига, R₀ и F тяжёлого термика ({@link #fall}).
+     */
+    private static final class Track {
+        int node;
+        double level, from, since, r0, f;
+        boolean falling;
+
+        Track copy() {
+            Track c = new Track();
+            c.node = node;
+            c.level = level;
+            c.from = from;
+            c.since = since;
+            c.r0 = r0;
+            c.f = f;
+            c.falling = falling;
+            return c;
+        }
+    }
+
+    /** Пути клубов [кольцо показа][сектор]: ведутся вперёд с кадрами, назад (перемотка) — заново. */
+    private final Track[][] tracks = new Track[ANNULI][SECTORS];
+
+    /**
+     * Поверхность, на которой лежит клуб кольца показа {@code show} сектора {@code sector} в возрасте t, м от точки
+     * взрыва. Путь клуба (сток пласта вдоль {@code ux, uz} от радиуса {@code source} и снос ветром на высоте середины слоя
+     * в тот миг) идёт по сетке {@link #PATH} от поверхности, с которой его подняло: на пологом (перепад до {@link #DROP}
+     * за шаг) слой лежит на поверхности; ниже — падает тяжёлым термиком с мига, когда вышел за край (масса пыли в воздухе
+     * и размер клуба в тот миг; дальше плавучесть сохраняется — ⚠ крупная пыль, что оседает из него, её уносит), пока не
+     * ляжет на поверхность под собой; выше уровня слоя больше чем на {@link #DROP} (стена, следующий дом) — стоит у неё
+     * (⚠ разреженный слой ветер перенёс бы через дом; обтекания нет). Где рельеф неизвестен — уровень держится.
+     */
+    private double level(int sector, int show, double t, double source, double ux, double uz, double own) {
+        Track tr = tracks[show][sector];
+        if (tr == null || PATH[tr.node] > t) {
+            tr = new Track();
+            tr.level = surface[sector][show];
+            tracks[show][sector] = tr;
+        }
+        while (tr.node + 1 < PATH.length && PATH[tr.node + 1] <= t) {
+            step(tr, sector, show, PATH[tr.node], PATH[tr.node + 1], source, ux, uz, own);
+            tr.node++;
+        }
+        if (t <= PATH[tr.node]) return tr.level;
+        Track now = tr.copy();
+        step(now, sector, show, PATH[tr.node], t, source, ux, uz, own);
+        return now.level;
+    }
+
+    /** Шаг пути клуба от t0 до t1 ({@link #level}). */
+    private void step(Track tr, int sector, int show, double t0, double t1, double source, double ux, double uz, double own) {
+        double[] d = drift(t1, 0.8 * at(sv[show], t1));
+        double mean = source * stretch(t1), below = relief.at(d[0] + mean * ux, d[1] + mean * uz);
+        if (Double.isNaN(below) || below > tr.level + DROP) return;
+        if (!tr.falling) {
+            if (below >= tr.level - DROP) {
+                tr.level = below;
+                return;
+            }
+            // вышел за край: падает с этого мига — масса и размер клуба на краю
+            tr.falling = true;
+            tr.from = tr.level;
+            tr.since = 0.5 * (t0 + t1);
+            double v = at(sv[show], tr.since), h = Math.max(Math.hypot(own * stretch(tr.since), CloudModel.spreadH(air.spread(), path(tr.since))), v);
+            tr.r0 = radius(h, v);
+            tr.f = buoyancy(airborne(sector, show, tr.since));
+        }
+        double z = fall(tr.r0, tr.f, t1 - tr.since);
+        if (tr.from - z <= below) {
+            tr.level = below;
+            tr.falling = false;
+        } else {
+            tr.level = tr.from - z;
+        }
     }
 
     /**
@@ -549,7 +629,7 @@ public final class GroundDust {
     /** Толща самого густого клуба слоя в возрасте t (через середину по горизонтали). */
     double tau(double t) {
         double[] max = {0};
-        blobs(t, 1, (x, y, z, sh, sv, dust) -> max[0] = Math.max(max[0], DustModel.K_MIX * dust / (2 * Math.PI * sh * sv)));
+        emit(t, 1, false, (x, y, z, sh, sv, dust, mass) -> max[0] = Math.max(max[0], DustModel.K_MIX * dust / (2 * Math.PI * sh * sv)));
         return max[0];
     }
 
