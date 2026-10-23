@@ -253,7 +253,7 @@ public final class ClientNuclear {
     public static void debris(S2C.NukeDebris p) {
         Active a = DETONATIONS.get(p.detonation());
         if (a == null) return;
-        NukeDust.debris(a, p.pieces());
+        NukeDust.debris(a, p);
         a.sounds.debris(p);
     }
 

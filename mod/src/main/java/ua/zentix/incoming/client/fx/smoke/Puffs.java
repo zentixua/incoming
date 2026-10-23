@@ -34,7 +34,20 @@ public final class Puffs implements SmokeGrid.Source {
     };
 
     private record Puff(double x, double y, double z, double born, double until, Thermal thermal, double soot, double dust,
-                        double life) {}
+                        double life, Carry carry) {}
+
+    /**
+     * Ветер, что уносит выброс сверх его термика (волна ядерки сметает дымки вспышки): сдвиг и рост σ в миг часов сетки.
+     */
+    public interface Carry {
+        /**
+         * Сдвиг выброса от места на миг {@code seconds} (часы сетки), блоки — {@code into[0..2]}, и σ, что он набрал
+         * вихрями ветра, — {@code into[3]}.
+         */
+        void at(double seconds, double[] into);
+    }
+
+    private final double[] carried = new double[4];
 
     private final CloudModel.Air air;
     private final float dustR, dustG, dustB;
@@ -76,13 +89,22 @@ public final class Puffs implements SmokeGrid.Source {
      */
     public void add(double x, double y, double z, double seconds, double heat, double kelvin, double r0, double soot, double aerosol, double k,
                     double until) {
+        add(x, y, z, seconds, heat, kelvin, r0, soot, aerosol, k, until, null);
+    }
+
+    /**
+     * То же, но выброс уносит ещё и {@code carry}: он сдвигается и расплывается с ним и уходит, когда толща поперёк его
+     * середины падает ниже {@link CloudModel#SEEN}.
+     */
+    public void add(double x, double y, double z, double seconds, double heat, double kelvin, double r0, double soot, double aerosol, double k,
+                    double until, Carry carry) {
         if (closed || gone) return;
         lastFed = seconds;
         Thermal th = thermal(air, heat, kelvin, r0);
         double dust = aerosol * k / SmokeGrid.dustK(dustR, dustG, dustB);
         double life = life(th, soot, dust);
         if (life <= 0) return;
-        puffs.add(new Puff(x, y, z, seconds, until, th, soot, dust, life));
+        puffs.add(new Puff(x, y, z, seconds, until, th, soot, dust, life, carry));
     }
 
     /** Сколько выброс видно, с: пока толща поперёк середины больше порога ({@link CloudModel#SEEN}). */
@@ -124,14 +146,27 @@ public final class Puffs implements SmokeGrid.Source {
         if (gone) return false;
         if (!Double.isNaN(lastFed) && seconds - lastFed > QUIET) closed = true;
         puffs.removeIf(p -> seconds - p.born >= p.life || !Double.isNaN(p.until) && seconds >= p.until);
-        for (Puff p : puffs) {
+        double ext = SmokeGrid.dustK(dustR, dustG, dustB);
+        puffs.removeIf(p -> {
             double t = Math.max(0, seconds - p.born);
             Thermal th = p.thermal;
             // выброс, что дожил до предела густым, тает за последнюю десятую жизни (как облако взрыва)
             double fade = p.life < CloudModel.LIFE_MAX ? 1 : Math.min(1, (p.life - t) / (0.1 * p.life));
-            out.blob(p.x + th.driftX(t), p.y + th.height(t), p.z + th.driftZ(t), th.sigmaH(t), th.sigmaV(t), p.soot * fade, p.dust * fade, 0,
+            double dx = 0, dy = 0, dz = 0, sh = th.sigmaH(t), sv = th.sigmaV(t);
+            if (p.carry != null) {
+                p.carry.at(seconds, carried);
+                dx = carried[0];
+                dy = carried[1];
+                dz = carried[2];
+                sh = Math.hypot(sh, carried[3]);
+                sv = Math.hypot(sv, carried[3]);
+                // унесённый ветром расплылся ниже порога видимости — его нет
+                if ((CloudModel.SOOT_K * p.soot + ext * p.dust) / (2 * Math.PI * sh * sv) < CloudModel.SEEN) return true;
+            }
+            out.blob(p.x + th.driftX(t) + dx, p.y + th.height(t) + dy, p.z + th.driftZ(t) + dz, sh, sv, p.soot * fade, p.dust * fade, 0,
                     dustR, dustG, dustB, th.kelvin(t), th.rise(t));
-        }
+            return false;
+        });
         return !puffs.isEmpty() || !closed;
     }
 

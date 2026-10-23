@@ -157,7 +157,11 @@ public final class Shielding {
         return !s.is(BlockTags.LEAVES) && !s.is(BlockTags.ICE) && !s.is(BlockTags.SNOW) && s.getSoundType(level, p, null) == SoundType.GLASS;
     }
 
-    private static double material(LevelReader level, BlockPos p, BlockState s) {
+    /**
+     * Плотность вещества блока {@code s}, кг/м³ (без доли объёма, {@link #density}): по звуку блока; у стекла — окно, у
+     * листвы — крона.
+     */
+    public static double material(LevelReader level, BlockPos p, BlockState s) {
         if (s.is(BlockTags.LEAVES)) return 50;
         if (s.is(BlockTags.ICE)) return 900;
         if (s.is(BlockTags.SNOW)) return 300;
