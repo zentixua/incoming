@@ -459,12 +459,12 @@ public final class GroundDust {
      * слоя, над перепадом опускается к поверхности под собой. {@code fade} — доля, что рисуется.
      */
     public void blobs(double t, double fade, Blobs out) {
-        emit(t, fade, true, (x, y, z, sh, sv, dust, mass) -> out.blob(x, y, z, sh, sv, dust));
+        emit(t, fade, true, (x, y, z, sh, sv, dust, mass, source) -> out.blob(x, y, z, sh, sv, dust));
     }
 
-    /** Клуб слоя для проверок — и масса пыли в нём, кг (по ней — тяжесть слоя). */
+    /** Клуб слоя для проверок — и масса пыли в нём, кг (по ней — тяжесть слоя), и поверхность, с которой её подняло, м. */
     interface Probe {
-        void blob(double x, double y, double z, double sh, double sv, double dust, double mass);
+        void blob(double x, double y, double z, double sh, double sv, double dust, double mass, double source);
     }
 
     /** Клубы в возрасте t с массой ({@link Probe}). */
@@ -517,7 +517,8 @@ public final class GroundDust {
                 double ang = 2 * Math.PI * (k + 0.5) / SECTORS, ux = Math.cos(ang), uz = Math.sin(ang);
                 double[] d = drift(t, zc);
                 double[] at = levels ? level(k, a, t, source, ux, uz, own) : new double[]{surface[k][a], 0, 0};
-                out.blob(d[0] + mean * ux - at[1], at[0] + zc, d[1] + mean * uz - at[2], sh, v, mass * fade, levels ? airborne(k, a, t) : 0);
+                out.blob(d[0] + mean * ux - at[1], at[0] + zc, d[1] + mean * uz - at[2], sh, v, mass * fade, levels ? airborne(k, a, t) : 0,
+                        surface[k][a]);
             }
         }
     }
@@ -609,18 +610,17 @@ public final class GroundDust {
             paths[show][sector] = null;
             double[] at = place(show, t, source, ux, uz);
             double start = under(at[0], at[1], 0.5 * width(show, t, own));
-            return new double[]{Double.isNaN(start) ? surface[sector][show] : start, 0, 0};
+            return new double[]{begin(sector, show, start, ux, uz, at), 0, 0};
         }
         Path p = paths[show][sector];
         if (p == null || PATH[p.node] > t) {
-            // начало — поверхность под следом клуба в его месте (точка полосы — не там, где клуб: у внешнего кольца он на
-            // десятки метров дальше; крыши по бокам улицы уличную пыль не поднимают — под следом улица); не знаем — точка полосы
+            // начало — {@link #begin}
             p = new Path();
             p.node = PATH_FROM;
             p.now = new Track();
             double[] at = place(show, PATH[PATH_FROM], source, ux, uz);
             double start = under(at[0], at[1], 0.5 * width(show, PATH[PATH_FROM], own));
-            p.now.level = Double.isNaN(start) ? surface[sector][show] : start;
+            p.now.level = begin(sector, show, start, ux, uz, at);
             p.now.seen = start;
             p.next = p.now.copy();
             step(p.next, sector, show, PATH[PATH_FROM], PATH[PATH_FROM + 1], source, ux, uz, own);
@@ -636,6 +636,29 @@ public final class GroundDust {
         double u = Math.max(0, Math.min(1, (t - PATH[p.node]) / (PATH[p.node + 1] - PATH[p.node])));
         return new double[]{p.now.level + u * (p.next.level - p.now.level), p.now.heldX + u * (p.next.heldX - p.now.heldX),
                 p.now.heldZ + u * (p.next.heldZ - p.now.heldZ)};
+    }
+
+    /**
+     * С какой поверхности начинается путь клуба: под его следом в его месте ({@code under}, место {@code at} от точки
+     * взрыва), если от точки полосы, где известна поверхность, с которой пыль подняло, до него по радиусу —
+     * одна поверхность (нигде не круче 45° на метр: склон, двор); если между ними стена (дом), — не выше поверхности, с
+     * которой подняло: тяжёлая пыль сама на крышу не попадает (в первые доли секунды след меньше дома, и середина кольца у
+     * улицы бывает на нём). Неизвестно — точка полосы.
+     */
+    private double begin(int sector, int show, double under, double ux, double uz, double[] at) {
+        double source = surface[sector][show];
+        if (Double.isNaN(under)) return source;
+        if (under <= source) return under;
+        double x0 = BANDS[show] * ux, z0 = BANDS[show] * uz, len = Math.hypot(at[0] - x0, at[1] - z0);
+        int n = (int) Math.max(1, Math.min(32, Math.ceil(len)));
+        double step = Math.max(1, len / n), last = relief.at(x0, z0);
+        for (int i = 1; i <= n; i++) {
+            double h = relief.at(x0 + (at[0] - x0) * i / n, z0 + (at[1] - z0) * i / n);
+            if (Double.isNaN(h)) continue;
+            if (!Double.isNaN(last) && Math.abs(h - last) > DROP * step + DROP) return source;
+            last = h;
+        }
+        return under;
     }
 
     /** Ширина клуба кольца показа {@code show} шириной {@code own} в возрасте t (σh), м. */
@@ -772,7 +795,7 @@ public final class GroundDust {
     /** Толща самого густого клуба слоя в возрасте t (через середину по горизонтали). */
     double tau(double t) {
         double[] max = {0};
-        emit(t, 1, false, (x, y, z, sh, sv, dust, mass) -> max[0] = Math.max(max[0], DustModel.K_MIX * dust / (2 * Math.PI * sh * sv)));
+        emit(t, 1, false, (x, y, z, sh, sv, dust, mass, source) -> max[0] = Math.max(max[0], DustModel.K_MIX * dust / (2 * Math.PI * sh * sv)));
         return max[0];
     }
 

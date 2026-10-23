@@ -221,10 +221,13 @@ class GroundDustTest {
                 (x, z) -> Math.hypot(x, z) < roof ? 0 : -15);
     }
 
-    /** Клубы слоя пыли в возрасте t: {x, y, z, σh, σv, пыль (ослабление в кг смеси), масса пыли в воздухе}. */
+    /**
+     * Клубы слоя пыли в возрасте t: {x, y, z, σh, σv, пыль (ослабление в кг смеси), масса пыли в воздухе, поверхность, с
+     * которой её подняло}.
+     */
     private static List<double[]> layer(GroundDust g, double t) {
         List<double[]> out = new ArrayList<>();
-        g.probe(t, (x, y, z, sh, sv, d, m) -> out.add(new double[]{x, y, z, sh, sv, d, m}));
+        g.probe(t, (x, y, z, sh, sv, d, m, src) -> out.add(new double[]{x, y, z, sh, sv, d, m, src}));
         return out;
     }
 
@@ -324,7 +327,9 @@ class GroundDustTest {
                         double dt = t - crossed[i], z = law[i].height(dt) - 0.5 * law[i].r0;
                         double[] d = dust.drift(t, 0.8 * b[4]);
                         double lee = GroundDust.LEE * Math.hypot(d[0] - edge[i][0], d[1] - edge[i][1]), down = Math.max(z, lee);
-                        double step = law[i].height(dt + 2) - law[i].height(Math.max(0, dt - 2)) + GroundDust.LEE * 2 * 8;
+                        // допуск — на шаг узлов пути (миг выхода за край известен до узла): ±0,5 с закона и сноса
+                        double[] da = dust.drift(t + 0.5, 0.8 * b[4]), db = dust.drift(Math.max(0, t - 0.5), 0.8 * b[4]);
+                        double step = law[i].height(dt + 0.5) - law[i].height(Math.max(0, dt - 0.5)) + GroundDust.LEE * Math.hypot(da[0] - db[0], da[1] - db[1]);
                         assertTrue(base <= Math.max(below, lifted[i] - 0.9 * down + step) + 0.3, at + ": висит над пустотой, " + base + " против закона " + (lifted[i] - down));
                         assertTrue(base >= Math.min(below, lifted[i] - 1.1 * down - step) - 0.3, at + ": падает быстрее закона, " + base + " против " + (lifted[i] - down));
                         if (base <= below + 0.01 && lifted[i] > below + 5) fell++;
@@ -504,8 +509,9 @@ class GroundDustTest {
         for (double t : ts) {
             List<double[]> now = layer(dust, t);
             for (int i = 0; i < now.size(); i++) {
-                if (first.get(i)[1] - 0.8 * first.get(i)[4] > 1) continue;
                 double[] b = now.get(i);
+                // пыль, поднятая с улицы (по поверхности, с которой её подняло, а не по тому, где клуб уже стоит)
+                if (b[7] > 0.5) continue;
                 double base = b[1] - 0.8 * b[4];
                 // слой тоньше домов (2σv < 12) — на улице; толще — переливается через крыши, но лежит не выше среднего верха
                 // под своим следом
@@ -544,8 +550,8 @@ class GroundDustTest {
             for (double t : ts) {
                 List<double[]> now = layer(dust, t);
                 for (int i = 0; i < now.size(); i++) {
-                    if (first.get(i)[1] - 0.8 * first.get(i)[4] > 1) continue;
                     double[] b = now.get(i);
+                    if (b[7] > 0.5) continue;
                     double base = b[1] - 0.8 * b[4], wall = relief == town ? 9 : 40;
                     // слой тоньше домов — на улице; толще — переливается, но лежит не выше среднего верха под своим следом
                     if (2 * b[4] < wall) assertTrue(base <= 1 + 1e-6, scene + ", " + t + " с, клуб " + i + ": тонкая пыль улицы на высоте " + base);
