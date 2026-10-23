@@ -544,6 +544,8 @@ final class Sandbox {
                 placeCamera();
                 int x = (int) Math.floor(site.x), z = (int) Math.floor(site.z);
                 // ЗРК заряжен (4 ракеты), шахед идёт с севера через точку к югу: радар берёт его, ракета сходит у точки
+                // заново (again без clear): на месте прежнего ЗРК setblock не сменил бы блок, и ракеты не пополнились бы
+                server(String.format(Locale.ROOT, "setblock %d %d %d minecraft:air", x, GROUND + 1, z));
                 server(String.format(Locale.ROOT, "setblock %d %d %d incoming:sam{ready:4}", x, GROUND + 1, z));
                 server(String.format(Locale.ROOT, "incoming salvo drone 1 0 at %d %d from %d %d", x, z + SAM_PAST, x, z - SAM_FROM));
                 pending = Pending.SAM;
