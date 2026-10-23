@@ -78,6 +78,17 @@ final class ProbeScenario {
      */
     private static final double BEHIND = 24, ABOVE_JET = 6;
     /**
+     * Площадка старта: верх её каменного пола — y этого числа (пол — блоки на y − 1). Камера, поставленная ногами ниже
+     * верха пола, — в блоке: сервер считает это новым столкновением (`ServerGamePacketListenerImpl.handleMovePlayer`,
+     * `isPlayerCollidingWithAnythingNew`) и возвращает игрока на прежнее место с новым поворотом. Так камера сзади
+     * стояла до 23.10: глаз на 201,6 при росте глаза 1,62 — ноги на 199,98, и до ~1 с (пока ракета не поднимет камеру выше)
+     * кадр снимался с места игрока до старта, а смотрел туда, где ракета, — без пусковой и облака в кадре (при уходе
+     * ракеты к −X сдвиг ~25 блоков, к +X — ~3, и было незаметно).
+     */
+    private static final int LAUNCH_FLOOR = 200;
+    /** Камера, сдвинутая от места, куда её поставила сцена, на столько блоков к кадру, — кадр не с той точки. */
+    static final double CAMERA_SLIP = 1;
+    /**
      * Время игры, с которого сцена начинается, — как в эталонном прогоне всех сцен подряд (сравнение 22.10, compare-final:
      * начало сцены в v3.4.1 и main — в пределах 200 тиков). Ветер мира и его класс устойчивости зависят только от времени
      * игры ({@code util.Wind}, {@code util.Air}): ночью у границы классов D и E ветер у земли — 1 или 5 м/с, и шлейф пожара
@@ -129,6 +140,8 @@ final class ProbeScenario {
     private int launchTick = -1;
     private Vec3 launchFrom = Vec3.ZERO, lastPos = Vec3.ZERO, axis = new Vec3(0, 0, 1);
     private boolean behind;
+    /** Где сцена поставила глаз в прошлом тике (кадр снимка нарисован с него); null — камера сцены не двигает. */
+    private Vec3 placed;
     /** ЗРК: где стоит, ракета у клиента, тик схода, заряжен ли (сцена разрыва), тик разрыва. */
     private BlockPos sam;
     private net.minecraft.world.entity.Entity interceptor;
@@ -307,6 +320,7 @@ final class ProbeScenario {
         armed = false;
         firedAt = -1;
         missile = null;
+        placed = null;
         drone = null;
         launchTick = -1;
         blastTick = -1;
@@ -453,7 +467,7 @@ final class ProbeScenario {
     /** Старт ракеты с пусковой у зрителя; камера — за ракетой по её оси или сбоку. */
     private void planLaunch(int s, int[] site, boolean fromBehind) {
         behind = fromBehind;
-        int y = 200;
+        int y = LAUNCH_FLOOR;
         at(s + 2, () -> cmd(String.format(Locale.ROOT, "forceload add %d %d %d %d", site[0] - 32, site[1] - 48, site[0] + 32, site[1] + 136)));
         at(s + 120, () -> {
             cmd(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:smooth_stone", site[0] - 30, y - 1, site[1] - 40, site[0] + 30, y - 1, site[1] + 130));
@@ -526,25 +540,28 @@ final class ProbeScenario {
             });
         }
         if (!missile.isAlive()) return;
-        // камера: сзади, над струёй (не ниже площадки), или сбоку поперёк оси на высоте ракеты
+        // камера: сзади, над струёй, или сбоку поперёк оси на высоте ракеты
         Vec3 cam;
         if (behind) {
             Vec3 up = new Vec3(0, 1, 0).subtract(axis.scale(axis.y));
             up = up.lengthSqr() < 1e-6 ? new Vec3(0, 0, 1) : up.normalize();
             cam = pos.subtract(axis.scale(BEHIND)).add(up.scale(ABOVE_JET));
-            if (cam.y < 201.6) cam = new Vec3(cam.x, 201.6, cam.z);
         } else {
             Vec3 side = new Vec3(axis.z, 0, -axis.x);
             if (side.lengthSqr() < 1e-4) side = new Vec3(1, 0, 0);
             cam = pos.add(side.normalize().scale(30));
         }
+        // ногами не ниже верха пола площадки (LAUNCH_FLOOR): иначе сервер вернёт игрока назад
+        double feet = Math.max(cam.y - p.getEyeHeight(), LAUNCH_FLOOR);
+        cam = new Vec3(cam.x, feet + p.getEyeHeight(), cam.z);
         hover = true;
         p.getAbilities().flying = true;
         Vec3 d = pos.subtract(cam);
         float yaw = (float) (Math.toDegrees(Math.atan2(-d.x, d.z)));
         float pitch = (float) (-Math.toDegrees(Math.atan2(d.y, Math.hypot(d.x, d.z))));
-        p.moveTo(cam.x, cam.y - p.getEyeHeight(), cam.z, yaw, pitch);
+        p.moveTo(cam.x, feet, cam.z, yaw, pitch);
         p.setDeltaMovement(Vec3.ZERO);
+        placed = cam;
         if (launchTick >= 0 && (tick - launchTick) % 10 == 0) {
             Incoming.LOG.info("SCENARIO probe {} t={}s missile {} axis {} cam {} angle-to-axis {}°", current,
                     String.format(Locale.ROOT, "%.1f", (tick - launchTick) / 20.0), xyz(pos),
@@ -754,6 +771,13 @@ final class ProbeScenario {
             Incoming.LOG.info("SCENARIO probe shot {} blast {}", name, ua.zentix.incoming.client.far.FarBlasts.describeLast());
             // пожары у кадра: блоков огня, подъём шлейфа и ветер (дом, подстанция, огонь от шара топлива)
             Incoming.LOG.info("SCENARIO probe shot {} smoke {}", name, ua.zentix.incoming.client.fx.FireSmoke.describe());
+            // кадр — с той точки, куда сцена поставила глаз (сервер мог вернуть игрока назад): иначе check.py бракует прогон
+            if (placed != null) {
+                Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
+                double off = eye.distanceTo(placed);
+                Incoming.LOG.info("SCENARIO probe shot {} camera {} off {}", name, xyz(eye),
+                        String.format(Locale.ROOT, "%.2f", off));
+            }
         });
     }
 
