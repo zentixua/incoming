@@ -423,7 +423,8 @@ class GroundDustTest {
             GroundDust.Relief relief = (x, z) -> Math.floor(slope * x);
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
             GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-            for (double t : nodes(1, 300)) {
+            // с 3 с: в первую секунду растущий след клуба опускает низ под ним быстрее, чем слой успевает лечь (по закону)
+            for (double t : nodes(3, 300)) {
                 for (double[] b : layer(dust, t)) {
                     double base = b[1] - 0.8 * b[4], below = under(dust, b);
                     String at = "склон " + slope + ", " + t + " с: низ " + base + " над рельефом " + below;
@@ -482,11 +483,11 @@ class GroundDustTest {
      * В штиль пыль улицы не забирается на крыши (четвёртое ревью: предел подъёма был блок на выборку, и неподвижный клуб,
      * чей растущий след задевал дома, вставал на высоту крыш над улицей): шахед на перекрёстке (дома 10×10 высотой 12 м,
      * улицы по 6 м), штиль — до 240 с низ клуба, поднятого с улицы, пока слой тоньше домов (2σv < 12), не выше 1 м над
-     * улицей, а толще — накрывает квартал, не поднимая низ и до половины высоты домов.
+     * улицей, а толще — накрывает квартал: низ не выше половины высоты домов или четверти своей толщи (2σv).
      */
     @Test
     void calmStreetDustStaysInTheStreet() {
-        GroundDust.Relief town = (x, z) -> Math.floorMod((int) Math.floor(x) + 11, 16) < 10 && Math.floorMod((int) Math.floor(z) + 11, 16) < 10 ? 12 : 0;
+        GroundDust.Relief town = GroundDustTest::town;
         double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
         for (int k = 0; k < GroundDust.SECTORS; k++) {
             double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
@@ -504,8 +505,8 @@ class GroundDustTest {
                 double base = b[1] - 0.8 * b[4];
                 // слой тоньше домов (2σv < 12) — на улице; толще — переливается через крыши, но лежит не выше среднего верха
                 // под своим следом
-                if (2 * b[4] < 12) assertTrue(base <= 1 + 1e-6, t + " с, клуб " + i + ": тонкая пыль улицы на высоте " + base);
-                else assertTrue(base <= 6 + 1e-6, t + " с, клуб " + i + ": толстая пыль улицы на высоте " + base);
+                if (2 * b[4] < 9) assertTrue(base <= 1 + 1e-6, t + " с, клуб " + i + ": тонкая пыль улицы на высоте " + base);
+                else assertTrue(base <= Math.max(4.5, 0.5 * b[4]) + 1e-6, t + " с, клуб " + i + ": толстая пыль улицы на высоте " + base);
             }
         }
     }
@@ -515,12 +516,12 @@ class GroundDustTest {
      * опускал минутами — бурый пласт на высоте крыш над городом): шахед на перекрёстке с рыхлым грунтом, ветер 5 м/с — в
      * квартале (дома 10×10×12 м, улицы по 6 м) и перед башней 40 м шириной 20 м в 30–50 м по ветру до 120 с низ клуба,
      * поднятого с улицы, пока слой тоньше дома, не выше блока над улицей (на стены слой не взбирается, в застройке ветер
-     * идёт поверху, skimming flow), а толще — накрывает дома, не поднимая низ и до половины их высоты.
+     * идёт поверху, skimming flow), а толще — накрывает дома: низ не выше половины их высоты или четверти своей толщи.
      */
     @Test
     void windyStreetDustStaysInTheStreet() {
         CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 5, 0, 0.1, (int) Stability.C, 0.5);
-        GroundDust.Relief town = (x, z) -> Math.floorMod((int) Math.floor(x) + 11, 16) < 10 && Math.floorMod((int) Math.floor(z) + 11, 16) < 10 ? 12 : 0;
+        GroundDust.Relief town = GroundDustTest::town;
         GroundDust.Relief tower = (x, z) -> x > 30 && x < 50 && Math.abs(z) < 10 ? 40 : 0;
         for (GroundDust.Relief relief : List.of(town, tower)) {
             double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
@@ -538,36 +539,58 @@ class GroundDustTest {
                 for (int i = 0; i < now.size(); i++) {
                     if (first.get(i)[1] - 0.8 * first.get(i)[4] > 1) continue;
                     double[] b = now.get(i);
-                    double base = b[1] - 0.8 * b[4], wall = relief == town ? 12 : 40;
+                    double base = b[1] - 0.8 * b[4], wall = relief == town ? 9 : 40;
                     // слой тоньше домов — на улице; толще — переливается, но лежит не выше среднего верха под своим следом
                     if (2 * b[4] < wall) assertTrue(base <= 1 + 1e-6, scene + ", " + t + " с, клуб " + i + ": тонкая пыль улицы на высоте " + base);
-                    else assertTrue(base <= 0.5 * wall + 1e-6, scene + ", " + t + " с, клуб " + i + ": толстая пыль улицы на высоте " + base);
+                    // толще — накрывает: низ не выше половины дома или четверти своей толщи (пласта над пустой улицей нет)
+                    else assertTrue(base <= Math.max(0.5 * wall, 0.5 * b[4]) + 1e-6, scene + ", " + t + " с, клуб " + i + ": толстая пыль улицы на высоте " + base);
                 }
             }
         }
     }
 
     /**
-     * Ступень в два блока и склон за ней (шестое ревью: после ступени выше блока клуб считал её стеной навсегда и шёл под
-     * террасой и под холмом): голый грунт, терраса в 2 блока с 20 м и склон 17° за ней, ветер 5 м/с — до 60 с низ каждого
-     * клуба не глубже толщи слоя под поверхностью под ним, а за ступенью клуб, толще её, на ней.
+     * Ступень и склон за ней (шестое и седьмое ревью: ступень, раз встреченная, оставалась стеной или «накрытой» навсегда,
+     * и клуб шёл под террасой и под холмом): голый грунт, ветер 5 м/с — ступень в 2 блока (ниже слоя) и в 4 блока (выше
+     * раннего слоя) в 10–20 м от удара и склон 17° за ней. Низ клуба нигде не глубже под поверхностью под ним, чем толща
+     * слоя или ступень, у которой он ждёт, а клуб, прошедший ступень дальше чем на свою ширину (σh) и ещё 20 м, — снова на
+     * поверхности (в пределах двух блоков).
      */
     @Test
-    void dustClimbsStepsLowerThanItself() {
+    void dustClimbsStepsAndHillsBehindThem() {
         CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 5, 0, 0.1, (int) Stability.C, 0.5);
-        GroundDust.Relief step = (x, z) -> x < 20 ? 0 : Math.floor(2 + 0.3 * Math.max(0, x - 30));
-        double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
-        for (int k = 0; k < GroundDust.SECTORS; k++) {
-            double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
-            for (int b = 0; b < GroundDust.BANDS.length; b++) h[k][b] = step.at(GroundDust.BANDS[b] * Math.cos(ang), GroundDust.BANDS[b] * Math.sin(ang));
-        }
-        GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, step);
-        GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-        for (double t : nodes(3, 60)) {
-            for (double[] b : layer(dust, t)) {
-                double base = b[1] - 0.8 * b[4], below = under(dust, b);
-                assertTrue(base >= below - 2 * b[4] - GroundDust.DROP - 1e-6, t + " с: клуб в " + b[0] + " м под поверхностью " + below + ", низ " + base + ", σv " + b[4]);
+        for (double[] c : new double[][]{{20, 2}, {10, 4}}) {
+            double at = c[0], rise = c[1];
+            GroundDust.Relief step = (x, z) -> x < at ? 0 : Math.floor(rise + 0.3 * Math.max(0, x - at - 10));
+            double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+            for (int k = 0; k < GroundDust.SECTORS; k++) {
+                double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
+                for (int b = 0; b < GroundDust.BANDS.length; b++) h[k][b] = step.at(GroundDust.BANDS[b] * Math.cos(ang), GroundDust.BANDS[b] * Math.sin(ang));
+            }
+            GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, step);
+            GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
+            for (double t : nodes(3, 90)) {
+                for (double[] b : layer(dust, t)) {
+                    double base = b[1] - 0.8 * b[4], below = under(dust, b);
+                    String where = "ступень " + rise + " в " + at + " м, " + t + " с: клуб в " + b[0] + " м, низ " + base + ", поверхность " + below + ", σv " + b[4];
+                    // тоньше ступени — ждёт у неё на своём уровне (не глубже самой ступени), толще — на поверхности
+                    assertTrue(base >= below - Math.max(2 * b[4], rise) - GroundDust.DROP - 1e-6, where + " — глубже толщи и ступени");
+                    if (b[0] > at + b[3] + 20) assertTrue(base >= below - 2 * GroundDust.DROP - 1e-6, where + " — не вышел на поверхность");
+                }
             }
         }
+    }
+
+    /**
+     * Квартал: участки 16×16 со сдвигом улиц, на участке дом 10×10 высотой 9–15 м (по хешу участка), между ними улицы по 6 м;
+     * перекрёсток — в точке взрыва. Не по линейке: у настоящего города шаг домов не один.
+     */
+    private static double town(double x, double z) {
+        int cx = Math.floorDiv((int) Math.floor(x) + 11, 16), cz = Math.floorDiv((int) Math.floor(z) + 11, 16);
+        int hash = java.util.Objects.hash(cx, cz) * 0x9E3779B1;
+        int ox = Math.floorMod(hash >> 4, 3), oz = Math.floorMod(hash >> 8, 3);
+        boolean house = Math.floorMod((int) Math.floor(x) + 11, 16) - ox >= 0 && Math.floorMod((int) Math.floor(x) + 11, 16) - ox < 10
+                && Math.floorMod((int) Math.floor(z) + 11, 16) - oz >= 0 && Math.floorMod((int) Math.floor(z) + 11, 16) - oz < 10;
+        return house && !(cx == 0 && cz == 0 && Math.hypot(x, z) < 3) ? 9 + Math.floorMod(hash >> 12, 7) : 0;
     }
 }
