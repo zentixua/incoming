@@ -1,6 +1,7 @@
 """Запекание огненного шара и клуба дыма для слоя эффектов: Blender (Mantaflow, Cycles), бесплатно.
 
-  blender --background --factory-startup --python tools/bake_fx/bake.py -- <папка> [fireball|puff|spray|all|nukeball] [--res N] [--draft]
+  blender --background --factory-startup --python tools/bake_fx/bake.py -- <папка> [fireball|puff|spray|all|nukeball] [--res N] [--draft] [--cpu]
+  blender … bake.py -- <папка> fireball-vdb --vdb <папка кадров .vdb> [--frames 1,2,…] [--tile N] [--samples N] [--draft] [--cpu]
 
 Дальше — tools/bake_fx/pack.py: кадры на лист слоя (fx/particle/*.png и fx/particle/flipbooks.json).
 
@@ -14,6 +15,10 @@
   поле Mantaflow (ΔT в его единицах) линейно в кельвины: от воздуха {T_AIR} K до {T_PEAK} K у самого горячего
   (ядро диффузионного пламени углеводорода, ⚠ оценка; pack.py проверяет, что излучение поверхности в горении — порядка
   275 кВт/м² CCPS). Кадры — от вспышки до остывания ниже точки Дрейпера.
+- fireball-vdb — тот же шар из готовой симуляции горения (fireball_vdb): кадры OpenVDB «Gasoline Explosion» JangaFX
+  (EmberGen, CC0: https://jangafx.com/software/embergen/download/free-vdb-animations/ — скачать и распаковать, в репозиторий
+  не кладутся). Своя Mantaflow даёт гладкий шар без клубов (несжимаемый газ, ~70 пикселей на шар); у EmberGen — клубы,
+  языки и сажа настоящего горения. Свет — тот же закон излучения, время — в долях горения.
 - puff — клуб дыма: выброс газа во все стороны, без всплытия (подъём и снос даёт модель мода), клубится и расползается.
   На кадр — шесть рендеров с одним солнцем справа, слева, сверху, снизу, спереди и сзади (шестисторонний свет), мир
   чёрный; альбедо {PUFF_ALBEDO}, асимметрия {PUFF_G} — середина между сажей (0,25; 0,5) и пылью (0,8; 0,6): цвет вещества
@@ -39,9 +44,11 @@ os.makedirs(OUT, exist_ok=True)
 os.chdir(OUT)
 WHAT = argv[1] if len(argv) > 1 and not argv[1].startswith("--") else "all"
 DRAFT = "--draft" in argv
+# --cpu: Cycles на процессоре (видеокарта занята другой сессией; медленнее)
+CPU = "--cpu" in argv
 RES = int(argv[argv.index("--res") + 1]) if "--res" in argv else (48 if DRAFT else 96)
-TILE = 128 if DRAFT else 384
-SAMPLES = 16 if DRAFT else 64
+TILE = int(argv[argv.index("--tile") + 1]) if "--tile" in argv else (128 if DRAFT else 384)
+SAMPLES = int(argv[argv.index("--samples") + 1]) if "--samples" in argv else (16 if DRAFT else 64)
 FPS = 24
 
 # шар топлива: масса, диаметр и время горения по CCPS
@@ -58,18 +65,25 @@ PUFF_ALBEDO, PUFF_G = 0.55, 0.55
 # Mantaflow: плавучесть тепла, скорость сгорания и доля горения, пока идёт приток паров (⚠ подбор формы под CCPS:
 # шар растёт к D за первую пятую горения, горит t, всплывает; pack.py пишет, что вышло)
 BETA, BURN_RATE, INFLOW = 5.0, 0.5, 0.4
+# готовая симуляция (fireball-vdb): толщ сажи на поперечник горящего шара — как у своей (SOOT_PER_M · D_BALL)
+VDB_TAU = 10.0
+VDB_SMOKE = float(argv[argv.index("--smoke") + 1]) if "--smoke" in argv else 0.3
+VDB_HOT = float(argv[argv.index("--hot") + 1]) if "--hot" in argv else 90.0
 
 
 def reset(tile):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
-    prefs = bpy.context.preferences.addons["cycles"].preferences
-    prefs.compute_device_type = "OPTIX"
-    prefs.get_devices()
-    for d in prefs.devices:
-        d.use = d.type == "OPTIX"
-    sc.cycles.device = "GPU"
+    if CPU:
+        sc.cycles.device = "CPU"
+    else:
+        prefs = bpy.context.preferences.addons["cycles"].preferences
+        prefs.compute_device_type = "OPTIX"
+        prefs.get_devices()
+        for d in prefs.devices:
+            d.use = d.type == "OPTIX"
+        sc.cycles.device = "GPU"
     sc.cycles.samples = SAMPLES
     sc.cycles.use_denoising = True
     sc.cycles.volume_bounces = 6
@@ -209,6 +223,37 @@ def attr(nt, name):
     return n.outputs["Fac"]
 
 
+def fire_material(tmax, soot, flame, smoke=1.0):
+    """Сажа поглощает (σ = soot·(дым + FLAME_SOOT·пламя), на единицу длины сцены) и излучает по Кирхгофу то же σ × яркость
+    чёрного тела своей температуры (поле temperature линейно в кельвины: 0 — воздух, tmax и выше — T_PEAK); flame — имя поля
+    пламени, smoke — вес поля дыма против пламени в сажe."""
+    mat = bpy.data.materials.new("fireball")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    absorb = nt.nodes.new("ShaderNodeVolumeAbsorption")
+    absorb.inputs["Color"].default_value = (0, 0, 0, 1)
+    emit = nt.nodes.new("ShaderNodeEmission")
+    add = nt.nodes.new("ShaderNodeAddShader")
+    sigma = math_node(nt, "MULTIPLY", math_node(nt, "ADD", math_node(nt, "MULTIPLY", attr(nt, "density"), smoke),
+                                                math_node(nt, "MULTIPLY", attr(nt, flame), FLAME_SOOT)), soot)
+    nt.links.new(sigma, absorb.inputs["Density"])
+    kelvin = math_node(nt, "ADD", math_node(nt, "MULTIPLY", math_node(nt, "MINIMUM", attr(nt, "temperature"), tmax), (T_PEAK - T_AIR) / tmax), T_AIR)
+    kelvin = math_node(nt, "MAXIMUM", kelvin, T_AIR)
+    bb = nt.nodes.new("ShaderNodeBlackbody")
+    nt.links.new(kelvin, bb.inputs["Temperature"])
+    nt.links.new(bb.outputs[0], emit.inputs["Color"])
+    # яркость по Вину на 555 нм против чёрного тела 1490 K (шар топлива CCPS): exp(c2/λ·(1/1490 − 1/T))
+    wien = math_node(nt, "EXPONENT", math_node(nt, "MULTIPLY", math_node(nt, "SUBTRACT", 1 / 1490.0, math_node(nt, "DIVIDE", 1.0, kelvin)), C2 / LAMBDA))
+    nt.links.new(math_node(nt, "MULTIPLY", sigma, wien), emit.inputs["Strength"])
+    nt.links.new(absorb.outputs[0], add.inputs[0])
+    nt.links.new(emit.outputs[0], add.inputs[1])
+    nt.links.new(add.outputs[0], out.inputs["Volume"])
+    return mat
+
+
 def fireball():
     frames = int(math.ceil(3.0 * T_BURN * FPS)) + 4
     sc = reset(TILE)
@@ -241,30 +286,7 @@ def fireball():
     bake(dom)
     cache = ds.cache_directory
     tmax = grid_max(cache, "temperature", frames) or 3.0
-    # материал: поглощение сажи и излучение той же сажи по Кирхгофу
-    mat = bpy.data.materials.new("fireball")
-    mat.use_nodes = True
-    nt = mat.node_tree
-    for n in list(nt.nodes):
-        nt.nodes.remove(n)
-    out = nt.nodes.new("ShaderNodeOutputMaterial")
-    absorb = nt.nodes.new("ShaderNodeVolumeAbsorption")
-    absorb.inputs["Color"].default_value = (0, 0, 0, 1)
-    emit = nt.nodes.new("ShaderNodeEmission")
-    add = nt.nodes.new("ShaderNodeAddShader")
-    sigma = math_node(nt, "MULTIPLY", math_node(nt, "ADD", attr(nt, "density"), math_node(nt, "MULTIPLY", attr(nt, "flame"), FLAME_SOOT)), SOOT_PER_M)
-    nt.links.new(sigma, absorb.inputs["Density"])
-    kelvin = math_node(nt, "ADD", math_node(nt, "MULTIPLY", attr(nt, "temperature"), (T_PEAK - T_AIR) / tmax), T_AIR)
-    kelvin = math_node(nt, "MAXIMUM", kelvin, T_AIR)
-    bb = nt.nodes.new("ShaderNodeBlackbody")
-    nt.links.new(kelvin, bb.inputs["Temperature"])
-    nt.links.new(bb.outputs[0], emit.inputs["Color"])
-    # яркость по Вину на 555 нм против чёрного тела 1490 K (шар топлива CCPS): exp(c2/λ·(1/1490 − 1/T))
-    wien = math_node(nt, "EXPONENT", math_node(nt, "MULTIPLY", math_node(nt, "SUBTRACT", 1 / 1490.0, math_node(nt, "DIVIDE", 1.0, kelvin)), C2 / LAMBDA))
-    nt.links.new(math_node(nt, "MULTIPLY", sigma, wien), emit.inputs["Strength"])
-    nt.links.new(absorb.outputs[0], add.inputs[0])
-    nt.links.new(emit.outputs[0], add.inputs[1])
-    nt.links.new(add.outputs[0], out.inputs["Volume"])
+    mat = fire_material(tmax, SOOT_PER_M, "flame")
     dom.data.materials.clear()
     dom.data.materials.append(mat)
     camera(size, size * 0.5)
@@ -279,6 +301,89 @@ def fireball():
             "t_peak": T_PEAK, "t_air": T_AIR, "temperature_max": tmax, "soot_per_m": SOOT_PER_M, "reference_k": 1490.0}
     with open(os.path.join(OUT, "fireball", "meta.json"), "w") as f:
         json.dump(meta, f)
+
+
+def fireball_vdb(src):
+    """Огненный шар из готовой симуляции горения (кадры OpenVDB с полями density, flames, temperature — бесплатные CC0
+    симуляции JangaFX EmberGen, «Gasoline Explosion»: топливо горит у земли и всплывает, как шар топлива удара): тот же
+    рендер излучения сажи, что у своей симуляции (fire_material), сажа — {VDB_TAU} толщ на поперечник горящего шара
+    (у CCPS шар непрозрачен, ε ≈ 1), горение кончается, когда пламени меньше половины его наибольшего после пика.
+    Время кадров — в долях горения (мод берёт кадр по состоянию шара своей модели), а не в секундах EmberGen."""
+    import glob
+    import re
+
+    import openvdb
+    files = sorted(glob.glob(os.path.join(src, "*.vdb")), key=lambda f: int(re.findall(r"(\d+)\.vdb$", f)[0]))
+    flames, hot, width, lo, hi = [], [], 0.0, [1 << 30] * 3, [-(1 << 30)] * 3
+    for f in files:
+        g = openvdb.read(f, "flames")
+        if g.activeVoxelCount() == 0:
+            flames.append(0.0)
+            continue
+        a, b = g.evalActiveVoxelBoundingBox()
+        arr = np.zeros((b[0] - a[0] + 1, b[1] - a[1] + 1, b[2] - a[2] + 1), np.float32)
+        g.copyToArray(arr, ijk=a)
+        flames.append(float(arr.sum()))
+        if len(flames) % 5 == 0:
+            t = np.zeros_like(arr)
+            openvdb.read(f, "temperature").copyToArray(t, ijk=a)
+            hot.append(t[arr > 0.05])
+        d = openvdb.read(f, "density")
+        if d.activeVoxelCount():
+            da, db = d.evalActiveVoxelBoundingBox()
+            lo = [min(lo[i], da[i]) for i in range(3)]
+            hi = [max(hi[i], db[i]) for i in range(3)]
+    peak = int(np.argmax(flames))
+    end = next((i for i in range(peak, len(flames)) if flames[i] < 0.5 * flames[peak]), len(flames) - 1)
+    # поле temperature EmberGen — без единиц, и его наибольшее — редкие выбросы (медиана там, где горит, — в 5–10 раз
+    # ниже): T_PEAK получает {VDB_HOT}-я доля поля там, где горит (пламя > 0,05), в кадрах горения; что горячее — T_PEAK.
+    # Мерило — излучение поверхности в горении (pack.py пишет его против CCPS 200–350 кВт/м²)
+    tmax = float(np.percentile(np.concatenate(hot[:max(1, end // 5)]), VDB_HOT))
+    # поперечник горящего шара — по пламени в его наибольшем кадре (вокселей)
+    g = openvdb.read(files[peak], "flames")
+    a, b = g.evalActiveVoxelBoundingBox()
+    width = float(max(b[0] - a[0], b[1] - a[1]) + 1)
+    soot = VDB_TAU / width
+    frames = len(files)
+    sc = reset(TILE)
+    sc.frame_start, sc.frame_end = 1, frames
+    vol = bpy.data.volumes.new("fire")
+    vol.filepath = files[0]
+    obj = bpy.data.objects.new("fire", vol)
+    sc.collection.objects.link(obj)
+    vol.materials.append(fire_material(tmax, soot, "flames", VDB_SMOKE))
+    # камера ортографическая сбоку (вдоль +Y), кадр — всё, что занимает дым за все кадры, квадратом
+    size = 1.04 * max(hi[0] - lo[0], hi[2] - lo[2])
+    cx, cz = (lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2
+    bpy.ops.object.camera_add(location=(cx, lo[1] - 3 * size, cz), rotation=(math.pi / 2, 0, 0))
+    cam = bpy.context.active_object
+    cam.data.type = "ORTHO"
+    cam.data.ortho_scale = size
+    cam.data.clip_end = 10 * size
+    sc.camera = cam
+    # сетка VDB — в индексах (воксель — 1); сдвиг файла кладём в объект, чтобы индексы совпали с рамкой камеры
+    vol.grids.load()
+    obj.matrix_world = vol.grids[0].matrix_object.inverted() if len(vol.grids) else obj.matrix_world
+    os.makedirs(os.path.join(OUT, "fireball"), exist_ok=True)
+    only = {int(x) for x in argv[argv.index("--frames") + 1].split(",")} if "--frames" in argv else None
+    for i, f in enumerate(files):
+        if only is not None and i + 1 not in only:
+            continue
+        # прерванное запекание продолжается: готовые кадры не рендерятся заново
+        if os.path.exists(os.path.join(OUT, "fireball", f"f_{i + 1:03d}.npy")):
+            continue
+        vol.filepath = f
+        vol.grids.load()
+        exr = os.path.join(OUT, "fireball", f"f_{i + 1:03d}.exr")
+        sc.render.filepath = exr
+        bpy.ops.render.render(write_still=True)
+        save_npy(exr, exr[:-4] + ".npy")
+        print("vdb frame", i + 1, "/", frames, flush=True)
+    meta = {"source": src, "fps": FPS, "frames": frames, "burn_s": end / FPS, "burn_end_frame": end, "flames_peak_frame": peak,
+            "width_voxels": width, "view_voxels": size, "t_peak": T_PEAK, "t_air": T_AIR, "temperature_max": tmax,
+            "soot_per_voxel": soot, "reference_k": 1490.0}
+    with open(os.path.join(OUT, "fireball", "meta.json"), "w") as fo:
+        json.dump(meta, fo)
 
 
 LIGHTS = {"right": (-1, 0, 0), "left": (1, 0, 0), "top": (0, 0, -1), "bottom": (0, 0, 1), "front": (0, 1, 0), "back": (0, -1, 0)}
@@ -496,6 +601,8 @@ def nukeball_frames(cache, use_noise, frames):
 
 if WHAT in ("fireball", "all"):
     fireball()
+if WHAT == "fireball-vdb":
+    fireball_vdb(os.path.abspath(argv[argv.index("--vdb") + 1]))
 if WHAT in ("puff", "all"):
     puff()
 if WHAT in ("spray", "all"):

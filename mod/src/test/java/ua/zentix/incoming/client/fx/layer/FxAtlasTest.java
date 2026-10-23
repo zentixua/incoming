@@ -62,10 +62,17 @@ class FxAtlasTest {
         try (Reader r = open("fireball.json")) {
             f = FxAtlas.parseFire(r);
         }
-        assertTrue(f.fire()[0] >= 0.5, "вспышка — ярко на экране: свет вокруг почти не ограничен");
+        // шар топлива светится весь с первого мига (CCPS): первый кадр — почти самый яркий; кадры — после экспозиции по огню
+        // (pack.py film_exposure, подача), в мере экрана: ярче середины тонов, но не плоский белый диск (с ним складок и
+        // сажи не видно — шар 3.6)
+        int peak = 0;
+        for (int i = 1; i < FxAtlas.FIREBALL_FRAMES; i++) if (f.fire()[i] > f.fire()[peak]) peak = i;
+        assertTrue(f.fire()[0] >= 0.85 * f.fire()[peak], "вспышка — почти самый яркий кадр");
+        assertTrue(f.fire()[peak] >= 0.35 && f.fire()[peak] <= 0.75, "огонь на экране — ярко, но со складками: " + f.fire()[peak]);
+        assertTrue(peak < FxAtlas.FIREBALL_FRAMES / 4, "ярче всего — в начале горения: кадр " + peak);
         for (int i = 1; i < FxAtlas.FIREBALL_FRAMES; i++) {
             assertTrue(f.burn()[i] > f.burn()[i - 1], "время кадров растёт: " + i);
-            assertTrue(f.fire()[i] <= f.fire()[i - 1] + 0.02, "огонь гаснет: кадр " + i);
+            if (i > peak) assertTrue(f.fire()[i] <= f.fire()[i - 1] + 0.02, "огонь гаснет: кадр " + i);
             if (f.burn()[i - 1] >= 1) assertTrue(f.kelvin()[i] <= f.kelvin()[i - 1], "остывая — холоднее: кадр " + i);
         }
         assertTrue(f.fire()[FxAtlas.FIREBALL_FRAMES - 1] < 0.01, "последний кадр — сажа");
