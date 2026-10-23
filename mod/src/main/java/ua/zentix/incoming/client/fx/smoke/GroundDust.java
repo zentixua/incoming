@@ -547,12 +547,16 @@ public final class GroundDust {
      */
     private static final class Track {
         double level, from, since, r0, f;
-        /** Падает; стоит у препятствия выше себя (стены) — не поднимается, пока не прошёл его. */
-        boolean falling, blocked;
+        /**
+         * Падает; стоит у препятствия выше себя (стены) — не поднимается, пока не прошёл его; накрывает крутую ступень ниже
+         * своей толщи — низ поднимается, только чтобы земля под ним была не глубже толщи, пока не прошёл её.
+         */
+        boolean falling, blocked, covering;
 
         Track copy() {
             Track c = new Track();
             c.blocked = blocked;
+            c.covering = covering;
             c.level = level;
             c.from = from;
             c.since = since;
@@ -577,6 +581,8 @@ public final class GroundDust {
 
     /** Выборок пути на шаг {@link #PATH} не больше стольких (шаг выборки — полширины клуба, не меньше метра). */
     static final int PROBES = 16;
+    /** Узлов пути одного клуба за вызов не больше стольких: догонка в большом возрасте идёт кадрами, а не одним. */
+    static final int CATCH_UP = 64;
 
     /**
      * Уровень поверхности, на которой лежит клуб кольца показа {@code show} сектора {@code sector} в возрасте t, м от
@@ -588,22 +594,23 @@ public final class GroundDust {
      * ⚠ крупная пыль, что оседает из него, её уносит) или ветром за кромкой ({@link #LEE}) — что быстрее, — пока не ляжет
      * на поверхность под собой. Вверх — только по рельефу, над которым идёт (осевая линия пути, через метр: в
      * улице-каньоне крыши по бокам следа его не поднимают), не круче 45° пройденного пути; встретив на линии стену (круче
-     * 45° на метр), идёт мимо неё на своём уровне, пока рельеф на линии снова не у него (⚠ обтекания нет). Где рельеф неизвестен, лежащий клуб держит уровень, падающий
+     * 45° на метр и выше толщи слоя 2σv: ступень ниже тяжёлое течение переливает, Rottman и Simpson 1983), идёт мимо неё на
+     * своём уровне, пока рельеф на линии снова не у него (⚠ обтекания нет). Где рельеф неизвестен, лежащий клуб держит уровень, падающий
      * падает до самой низкой поверхности своего сектора, которую видел взрыв.
      */
     private double level(int sector, int show, double t, double source, double ux, double uz, double own) {
         Path p = paths[show][sector];
         if (p == null || PATH[p.node] > t) {
+            // начало — поверхность, с которой пыль подняло (крыши по бокам следа уличную пыль не поднимают)
             p = new Path();
             p.now = new Track();
-            double[] at = place(show, 0, source, ux, uz);
-            double start = under(at[0], at[1], 0.5 * width(show, 0, own));
-            p.now.level = Double.isNaN(start) ? surface[sector][show] : start;
+            p.now.level = surface[sector][show];
             p.next = p.now.copy();
             step(p.next, sector, show, PATH[0], PATH[1], source, ux, uz, own);
             paths[show][sector] = p;
         }
-        while (p.node + 2 < PATH.length && PATH[p.node + 1] <= t) {
+        // догонка за один вызов — не больше CATCH_UP узлов (первый вызов в большом возрасте): дальше — в следующих кадрах
+        for (int k = 0; k < CATCH_UP && p.node + 2 < PATH.length && PATH[p.node + 1] <= t; k++) {
             p.node++;
             p.now = p.next;
             p.next = p.now.copy();
@@ -674,17 +681,35 @@ public final class GroundDust {
             // осевая линия пути (рельеф, над которым слой идёт): стена на ней (круче 45° на метр) — клуб у препятствия,
             // идёт на своём уровне, пока рельеф на линии снова не у него; в улице-каньоне крыши по бокам следа его не
             // поднимают
-            double x1 = p0[0] + u * dx, z1 = p0[1] + u * dz, ridge = ridge(p0[0] + (u - 1.0 / n) * dx, p0[1] + (u - 1.0 / n) * dz, x1, z1);
+            // ступень не выше толщи слоя (2σv) — не стена: тяжёлое течение глубже препятствия переливается через него
+            // (Rottman и Simpson 1983; ⚠ толща — оценка), выше — слой идёт мимо на своём уровне
+            double depth = 2 * at(sv[show], tau);
+            double x1 = p0[0] + u * dx, z1 = p0[1] + u * dz;
+            double[] line = ridge(p0[0] + (u - 1.0 / n) * dx, p0[1] + (u - 1.0 / n) * dz, x1, z1, depth);
+            double ridge = line == null ? Double.NaN : line[0];
+            if (line != null && line[1] > 0) tr.covering = true;
+            else if (tr.covering) {
+                double here = relief.at(x1, z1);
+                if (!Double.isNaN(here) && here <= tr.level + DROP) tr.covering = false;
+            }
+            boolean covers = tr.covering;
             if (Double.isNaN(ridge)) tr.blocked = true;
             else if (tr.blocked) {
+                // прошёл препятствие: дальше — от рельефа здесь (то, что он прошёл сбоку, его не поднимает)
                 double here = relief.at(x1, z1);
-                if (!Double.isNaN(here) && here <= tr.level + DROP) tr.blocked = false;
+                if (!Double.isNaN(here) && here <= tr.level + Math.max(DROP, depth)) {
+                    tr.blocked = false;
+                    ridge = here;
+                    covers = tr.covering = here > tr.level + DROP;
+                }
             }
             if (below > tr.level) {
                 if (tr.blocked) continue;
                 // вверх — по склону, не выше верха линии и не круче 45° пройденного пути (стоящий на месте клуб не
-                // поднимается); падающий, долетев, лёг
-                tr.level = Math.min(Math.min(below, Math.max(ridge, tr.level)), tr.level + DROP * len / n);
+                // поднимается); крутую ступень ниже толщи слой накрывает: низ поднимается, только чтобы земля под ним
+                // была не глубже толщи слоя (квартал под толстым слоем — внутри него, улицы не пустеют); падающий, долетев, лёг
+                double target = covers ? Math.max(tr.level, Math.min(below, ridge) - depth) : Math.min(below, Math.max(ridge, tr.level));
+                tr.level = Math.min(target, tr.level + DROP * len / n);
                 tr.falling = false;
                 continue;
             }
@@ -707,23 +732,28 @@ public final class GroundDust {
     }
 
     /**
-     * Верх рельефа по прямой от (x0, z0) до (x1, z1), если подъём на ней пологий — ни на одном метре не круче
-     * {@link #DROP} (склон до 45°), — иначе (стена) {@link Double#NaN}; неизвестный рельеф — не стена. Не больше 32
-     * выборок (дальше — через 1/32 отрезка).
+     * Рельеф по прямой от (x0, z0) до (x1, z1): {верх; 1, если на ней есть ступень круче {@link #DROP} на метр, но не
+     * выше {@code depth} (её слой накрывает), иначе 0}; ступень выше (стена) — null; неизвестный рельеф — не стена. Не
+     * больше 32 выборок (дальше — через 1/32 отрезка).
      */
-    private double ridge(double x0, double z0, double x1, double z1) {
+    private double[] ridge(double x0, double z0, double x1, double z1, double depth) {
         int n = (int) Math.max(1, Math.min(32, Math.ceil(Math.hypot(x1 - x0, z1 - z0))));
         double step = Math.max(1, Math.hypot(x1 - x0, z1 - z0) / n), last = relief.at(x0, z0), top = Double.NEGATIVE_INFINITY;
+        boolean steep = false;
         if (!Double.isNaN(last)) top = last;
         for (int i = 1; i <= n; i++) {
             double h = relief.at(x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * i / n);
             if (Double.isNaN(h)) continue;
-            if (!Double.isNaN(last) && h - last > DROP * step) return Double.NaN;
+            if (!Double.isNaN(last) && h - last > DROP * step) {
+                if (h - last > depth) return null;
+                steep = true;
+            }
             last = h;
             top = Math.max(top, h);
         }
-        return top;
+        return new double[]{top, steep ? 1 : 0};
     }
+
 
     /**
      * Падающий клуб в миг tau над поверхностью {@code floor}: опустился — быстрее из двух: тяжёлым термиком или ветром
