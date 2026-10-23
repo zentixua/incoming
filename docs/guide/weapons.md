@@ -275,7 +275,7 @@ the ground. Grass holds the soil, so on a meadow the dust rises only around the 
 crowns carry only a thin film of settled dust; water gives none: by a shore the dust lies mostly over the land. Dusty air is heavier
 than clean air, so the dust spreads out along the surface it came from and follows the ground up and down gentle
 slopes; where it drifts past an edge (a roof, a cliff) it sinks to the surface below: thick dust in seconds, thin dust
-slower. The wind carries it over houses, rising no steeper than 45° as it goes; in still air it stays down. While the cloud rises, a
+slower. It climbs gentle slopes but not walls: in a street between houses it stays in the street, in wind or calm. While the cloud rises, a
 thin column of dust is drawn up under it. An interceptor bursting in the air leaves no crater and no dust, unless it
 bursts low over the ground. A hit on a roof or a wall is the same blast as a hit on the ground: what it crushes goes up
 with the hot cloud, and the wave lifts dust from the street below where it is still strong enough there.

@@ -284,9 +284,10 @@ class GroundDustTest {
 
     /**
      * Пыль не висит над пустотой (жалоба 23.10: бурый пласт на высоте крыши): у удара в крышу дома (10 и 30 м) с улицей на
-     * 15 м ниже, в ветер и в штиль, каждый клуб, чей путь вышел за край, опускается по закону тяжёлого термика
-     * (численный {@link Thermal}: масса пыли в воздухе и размер клуба в миг выхода — независимо от модели): не медленнее и
-     * не быстрее его (±10 %), а когда закон довёл бы его до улицы, он на ней; под поверхность под собой не уходит.
+     * 15 м ниже, в ветер и в штиль, каждый клуб, чей путь вышел за край, опускается быстрее из двух — тяжёлым термиком
+     * (численный {@link Thermal}: масса пыли в воздухе и размер клуба в миг выхода — независимо от модели) или ветром за
+     * кромкой ({@code GroundDust.LEE} на метр сноса): не медленнее и не быстрее (±10 %), а когда закон довёл бы его до
+     * улицы, он на ней; под поверхность под собой не уходит.
      */
     @Test
     void dustNeverHangsOverTheVoid() {
@@ -298,6 +299,7 @@ class GroundDustTest {
                 List<Double> ts = nodes(1, 180);
                 int n = layer(dust, ts.getFirst()).size();
                 double[] lifted = new double[n], crossed = new double[n], last = new double[n];
+                double[][] edge = new double[n][];
                 Thermal[] law = new Thermal[n];
                 java.util.Arrays.fill(crossed, -1);
                 int fell = 0;
@@ -313,14 +315,18 @@ class GroundDustTest {
                         last[i] = base;
                         if (crossed[i] < 0 && below < lifted[i] - GroundDust.DROP) {
                             crossed[i] = t;
+                            edge[i] = dust.drift(t, 0.8 * b[4]);
                             double volume = 2 * Math.PI * b[3] * b[3] * 1.25 * b[4], buoyancy = CloudModel.G * b[6] / CloudModel.RHO;
                             law[i] = new Thermal(buoyancy, buoyancy / volume, 0, neutral);
                         }
                         if (crossed[i] < 0) continue;
+                        // опускание — быстрее из двух: тяжёлый термик или ветер за кромкой (LEE метра на метр сноса)
                         double dt = t - crossed[i], z = law[i].height(dt) - 0.5 * law[i].r0;
-                        double step = law[i].height(dt + 2) - law[i].height(Math.max(0, dt - 2));
-                        assertTrue(base <= Math.max(below, lifted[i] - 0.9 * z + step) + 0.3, at + ": висит над пустотой, " + base + " против закона " + (lifted[i] - z));
-                        assertTrue(base >= Math.min(below, lifted[i] - 1.1 * z - step) - 0.3, at + ": падает быстрее закона, " + base + " против " + (lifted[i] - z));
+                        double[] d = dust.drift(t, 0.8 * b[4]);
+                        double lee = GroundDust.LEE * Math.hypot(d[0] - edge[i][0], d[1] - edge[i][1]), down = Math.max(z, lee);
+                        double step = law[i].height(dt + 2) - law[i].height(Math.max(0, dt - 2)) + GroundDust.LEE * 2 * 8;
+                        assertTrue(base <= Math.max(below, lifted[i] - 0.9 * down + step) + 0.3, at + ": висит над пустотой, " + base + " против закона " + (lifted[i] - down));
+                        assertTrue(base >= Math.min(below, lifted[i] - 1.1 * down - step) - 0.3, at + ": падает быстрее закона, " + base + " против " + (lifted[i] - down));
                         if (base <= below + 0.01 && lifted[i] > below + 5) fell++;
                     }
                 }
@@ -495,6 +501,41 @@ class GroundDustTest {
                 if (first.get(i)[1] - 0.8 * first.get(i)[4] > 1) continue;
                 double base = now.get(i)[1] - 0.8 * now.get(i)[4];
                 assertTrue(base <= 1 + 1e-6, t + " с, клуб " + i + ": пыль улицы на высоте " + base);
+            }
+        }
+    }
+
+    /**
+     * В ветер пыль улицы тоже не встаёт на высоту крыш (пятое ревью: ветер поднимал слой на дом за метры, а за домом
+     * опускал минутами — бурый пласт на высоте крыш над городом): шахед на улице с рыхлым грунтом, ветер 5 м/с — в
+     * квартале (дома 10×10×12 м, улицы по 6 м) до 120 с низ ни одного клуба, поднятого с улицы, не выше половины высоты
+     * домов (клуб шире квартала лежит на среднем верхе своего следа), а перед башней 40 м шириной 20 м в 30–50 м по ветру —
+     * не выше блока над улицей: на стены слой не взбирается (в застройке ветер идёт поверху, skimming flow).
+     */
+    @Test
+    void windyStreetDustStaysInTheStreet() {
+        CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 5, 0, 0.1, (int) Stability.C, 0.5);
+        GroundDust.Relief town = (x, z) -> Math.floorMod((int) Math.floor(x) + 3, 16) < 10 && Math.floorMod((int) Math.floor(z) + 3, 16) < 10 ? 12 : 0;
+        GroundDust.Relief tower = (x, z) -> x > 30 && x < 50 && Math.abs(z) < 10 ? 40 : 0;
+        for (GroundDust.Relief relief : List.of(town, tower)) {
+            double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+            for (int k = 0; k < GroundDust.SECTORS; k++) {
+                double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
+                for (int b = 0; b < GroundDust.BANDS.length; b++) h[k][b] = relief.at(GroundDust.BANDS[b] * Math.cos(ang), GroundDust.BANDS[b] * Math.sin(ang));
+            }
+            GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
+            GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
+            String scene = relief == town ? "квартал" : "башня";
+            List<Double> ts = nodes(1, 120);
+            List<double[]> first = layer(dust, ts.getFirst());
+            for (double t : ts) {
+                List<double[]> now = layer(dust, t);
+                for (int i = 0; i < now.size(); i++) {
+                    if (first.get(i)[1] - 0.8 * first.get(i)[4] > 1) continue;
+                    double base = now.get(i)[1] - 0.8 * now.get(i)[4];
+                    // клуб шире квартала лежит на среднем верхе под своим следом (улица и крыши), но не на крышах
+                    assertTrue(base <= (relief == town ? 6 : 1) + 1e-6, scene + ", " + t + " с, клуб " + i + ": пыль улицы на высоте " + base);
+                }
             }
         }
     }

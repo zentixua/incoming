@@ -30,8 +30,8 @@ import ua.zentix.incoming.nuclear.model.MushroomModel;
  * гравитационное течение. Он растекается по поверхности (сток пласта постоянного объёма, Huppert &amp; Simpson 1980:
  * dR/dt = Fr·√(g′h), Fr = {@value #FR}, g′V = g·M/ρ — R² = R₀² + 2Fr·√(g·M/(πρ))·t; M — пыль, что ещё в воздухе), а
  * над перепадом вниз (край крыши, обрыв, склон) опускается к поверхности под собой — тяжёлый термик MTT той же массы
- * (Boussinesq: тот же закон, что у тёплого, с обратным знаком; {@link #fall}); по склону до 45° слой идёт по
- * поверхности вниз, а вверх — на склон и через дом — ветер несёт его не круче 45° ({@code level}).</li>
+ * (Boussinesq: тот же закон, что у тёплого, с обратным знаком; {@link #fall}) или ветром за кромкой, что быстрее; по
+ * склону до 45° слой идёт по поверхности вверх и вниз, на стену круче не взбирается ({@code level}).</li>
  * <li><b>Оседание.</b> Корзины {@link DustModel} выпадают из слоя со скоростью Стокса по размеру: у гаусса с отражением
  * концентрация у поверхности — масса / (1,25σ), поток вниз — v·масса / (1,25σ); по ∫dt/(1,25σ) — доля ослабления, что
  * ещё в воздухе ({@link DustModel#extinctionAloft}).</li>
@@ -122,8 +122,8 @@ public final class GroundDust {
      */
     static final double FR = 1.19;
     /**
-     * Перепад поверхности на метр пути, с которого это край (вниз — слой над пустотой, падает), м; вверх слой поднимается
-     * не круче того же: склон до 45° из ступеней в блок.
+     * Перепад поверхности на метр пути, с которого это край (вниз — слой над пустотой, падает) или стена (вверх — слой на
+     * неё не взбирается), м: склон до 45° из ступеней в блок слой проходит по поверхности.
      */
     static final double DROP = 1;
 
@@ -547,10 +547,12 @@ public final class GroundDust {
      */
     private static final class Track {
         double level, from, since, r0, f;
-        boolean falling;
+        /** Падает; стоит у препятствия выше себя (стены) — не поднимается, пока не прошёл его. */
+        boolean falling, blocked;
 
         Track copy() {
             Track c = new Track();
+            c.blocked = blocked;
             c.level = level;
             c.from = from;
             c.since = since;
@@ -583,9 +585,10 @@ public final class GroundDust {
      * выборка — через полширины клуба (не реже метра). Вниз слой идёт по поверхности, пока она уходит не круче
      * {@link #DROP} на метр пути (склон до 45°: рельеф Minecraft — ступени в блок); за краем круче — падает тяжёлым
      * термиком с мига, когда вышел за край (масса пыли в воздухе и размер клуба в тот миг; дальше плавучесть сохраняется —
-     * ⚠ крупная пыль, что оседает из него, её уносит), пока не ляжет на поверхность под собой. Вверх — на склон и через
-     * дом — его несёт только ветер, не круче 45° по пути сноса (⚠ так обтекают здание линии тока разреженного слоя; густой у
-     * самого удара в жизни остановился бы у стены, обтекания нет); растекание под своей тяжестью вверх не идёт. Где рельеф неизвестен, лежащий клуб держит уровень, падающий
+     * ⚠ крупная пыль, что оседает из него, её уносит) или ветром за кромкой ({@link #LEE}) — что быстрее, — пока не ляжет
+     * на поверхность под собой. Вверх — только по рельефу, над которым идёт (осевая линия пути, через метр: в
+     * улице-каньоне крыши по бокам следа его не поднимают), не круче 45° пройденного пути; встретив на линии стену (круче
+     * 45° на метр), идёт мимо неё на своём уровне, пока рельеф на линии снова не у него (⚠ обтекания нет). Где рельеф неизвестен, лежащий клуб держит уровень, падающий
      * падает до самой низкой поверхности своего сектора, которую видел взрыв.
      */
     private double level(int sector, int show, double t, double source, double ux, double uz, double own) {
@@ -623,9 +626,9 @@ public final class GroundDust {
     }
 
     /**
-     * Поверхность под клубом с серединой в (x, z) и полушириной w, м от точки взрыва: нижняя медиана рельефа в середине и
-     * на ±w по осям — столб, ствол или фонарь в одну выборку клуб не держит, дом шире половины клуба держит; неизвестно
-     * всё — {@link Double#NaN}.
+     * Поверхность под клубом с серединой в (x, z) и полушириной w, м от точки взрыва: среднее рельефа в середине и на ±w по
+     * осям без самой высокой выборки — столб, ствол или фонарь в одну выборку клуб не держит, дом шире половины клуба
+     * держит, а клуб над кварталом — над средним верхом между улицей и крышами; неизвестно всё — {@link Double#NaN}.
      */
     double under(double x, double z, double w) {
         double[] h = new double[5];
@@ -636,38 +639,62 @@ public final class GroundDust {
         }
         if (n == 0) return Double.NaN;
         java.util.Arrays.sort(h, 0, n);
-        return h[(n - 1) / 2];
+        int k = Math.max(1, n - 1);
+        double sum = 0;
+        for (int i = 0; i < k; i++) sum += h[i];
+        return sum / k;
     }
+
+    /**
+     * За краем крыши или обрыва ветер опускает слой не круче стольких метров на метр сноса: поток за острой кромкой
+     * отрывается и прилипает к земле через ~2 высоты препятствия (куб в пограничном слое — 1,5–2,5 H, Castro &amp; Robins
+     * 1977, JFM 79; ⚠ у длинного дома и гребня — дальше).
+     */
+    static final double LEE = 0.5;
 
     /** Шаг пути клуба от t0 до t1 ({@link #level}). */
     private void step(Track tr, int sector, int show, double t0, double t1, double source, double ux, double uz, double own) {
         double[] p0 = place(show, t0, source, ux, uz), p1 = place(show, t1, source, ux, uz);
         double dx = p1[0] - p0[0], dz = p1[1] - p0[1], len = Math.hypot(dx, dz), w = 0.5 * width(show, t1, own);
         int n = (int) Math.max(1, Math.min(PROBES, Math.ceil(len / Math.max(1, w))));
-        // вниз за край — круче блока на метр (ступень в блок слой идёт по поверхности); вверх — не больше блока на метр
-        // пути сноса ветром: поверху слой несёт ветер, а растекание — течение под своей тяжестью, вверх оно не идёт; в
-        // штиль клуб не поднимается, сколько бы домов ни задел растущий след
+        // склон — перепад не круче блока на метр пути (ступень в блок слой идёт по поверхности вверх и вниз); вверх круче —
+        // стена: слой на неё не взбирается (в застройке ветер идёт поверху, а воздух улиц-каньонов в нём не участвует —
+        // skimming flow, Oke 1988; ⚠ обтекания нет: клуб проходит у стены на своём уровне); вниз круче — край
         double[] w0 = drift(t0, 0.8 * at(sv[show], t0)), w1 = drift(t1, 0.8 * at(sv[show], t1));
-        double tol = DROP * Math.max(1, len / n), climb = DROP * Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) / n;
+        double wind = Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) / n;
+        double tol = DROP * Math.max(1, len / n), lee = LEE * wind;
         for (int i = 1; i <= n; i++) {
             double u = (double) i / n, tau = t0 + u * (t1 - t0);
             double below = under(p0[0] + u * dx, p0[1] + u * dz, w);
             if (Double.isNaN(below)) {
                 // рельеф неизвестен: лежащий держит уровень, падающий падает — до самой низкой поверхности, что видел взрыв
-                if (tr.falling) fallTo(tr, Math.min(lowest(sector), tr.level), tau);
+                if (tr.falling) fallTo(tr, Math.min(lowest(sector), tr.level), tau, lee);
                 continue;
             }
+            // осевая линия пути (рельеф, над которым слой идёт): стена на ней (круче 45° на метр) — клуб у препятствия,
+            // идёт на своём уровне, пока рельеф на линии снова не у него; в улице-каньоне крыши по бокам следа его не
+            // поднимают
+            double x1 = p0[0] + u * dx, z1 = p0[1] + u * dz, ridge = ridge(p0[0] + (u - 1.0 / n) * dx, p0[1] + (u - 1.0 / n) * dz, x1, z1);
+            if (Double.isNaN(ridge)) tr.blocked = true;
+            else if (tr.blocked) {
+                double here = relief.at(x1, z1);
+                if (!Double.isNaN(here) && here <= tr.level + DROP) tr.blocked = false;
+            }
             if (below > tr.level) {
-                // поверхность поднимается (или падающий долетел до неё): вверх не круче 45°
+                if (tr.blocked) continue;
+                // вверх — по склону, не выше верха линии и не круче 45° пройденного пути (стоящий на месте клуб не
+                // поднимается); падающий, долетев, лёг
+                tr.level = Math.min(Math.min(below, Math.max(ridge, tr.level)), tr.level + DROP * len / n);
                 tr.falling = false;
-                tr.level = Math.min(below, tr.level + climb);
+                continue;
+            }
+            if (below >= tr.level - tol) {
+                // склон вниз, или падающий долетел до поверхности — лежит на ней
+                tr.level = below;
+                tr.falling = false;
                 continue;
             }
             if (!tr.falling) {
-                if (below >= tr.level - tol) {
-                    tr.level = below;
-                    continue;
-                }
                 // вышел за край: падает с этого мига — масса и размер клуба на краю
                 tr.falling = true;
                 tr.from = tr.level;
@@ -675,18 +702,40 @@ public final class GroundDust {
                 tr.r0 = radius(width(show, tr.since, own), at(sv[show], tr.since));
                 tr.f = buoyancy(airborne(sector, show, tr.since));
             }
-            fallTo(tr, below, tau);
+            fallTo(tr, below, tau, lee);
         }
     }
 
-    /** Падающий клуб в миг tau над поверхностью {@code floor}: опустился по закону, а дошёл до неё — лёг. */
-    private static void fallTo(Track tr, double floor, double tau) {
-        double z = fall(tr.r0, tr.f, tau - tr.since);
-        if (tr.from - z <= floor) {
+    /**
+     * Верх рельефа по прямой от (x0, z0) до (x1, z1), если подъём на ней пологий — ни на одном метре не круче
+     * {@link #DROP} (склон до 45°), — иначе (стена) {@link Double#NaN}; неизвестный рельеф — не стена. Не больше 32
+     * выборок (дальше — через 1/32 отрезка).
+     */
+    private double ridge(double x0, double z0, double x1, double z1) {
+        int n = (int) Math.max(1, Math.min(32, Math.ceil(Math.hypot(x1 - x0, z1 - z0))));
+        double step = Math.max(1, Math.hypot(x1 - x0, z1 - z0) / n), last = relief.at(x0, z0), top = Double.NEGATIVE_INFINITY;
+        if (!Double.isNaN(last)) top = last;
+        for (int i = 1; i <= n; i++) {
+            double h = relief.at(x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * i / n);
+            if (Double.isNaN(h)) continue;
+            if (!Double.isNaN(last) && h - last > DROP * step) return Double.NaN;
+            last = h;
+            top = Math.max(top, h);
+        }
+        return top;
+    }
+
+    /**
+     * Падающий клуб в миг tau над поверхностью {@code floor}: опустился — быстрее из двух: тяжёлым термиком или ветром
+     * за кромкой ({@code lee} — на столько за эту выборку, {@link #LEE}); дошёл до неё — лёг.
+     */
+    private static void fallTo(Track tr, double floor, double tau, double lee) {
+        double level = Math.min(tr.from - fall(tr.r0, tr.f, tau - tr.since), tr.level - lee);
+        if (level <= floor) {
             tr.level = floor;
             tr.falling = false;
         } else {
-            tr.level = tr.from - z;
+            tr.level = level;
         }
     }
 
