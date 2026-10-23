@@ -39,7 +39,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.IncomingClient;
-import ua.zentix.incoming.entity.StrikeProjectile;
+import ua.zentix.incoming.client.flight.FlightTrack;
+import ua.zentix.incoming.client.flight.FlightTracks;
 import ua.zentix.incoming.net.ClientHooks;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.WeaponSpec;
@@ -154,7 +155,8 @@ final class Sandbox {
     private volatile String serverError;
     /** Пуск и пролёт: снаряд у клиента, где его увидели, ближе всего к точке. */
     @Nullable
-    private StrikeProjectile projectile;
+    /** Путь снаряда эффекта: по сущности вблизи и по пакетам сервера вдали, где сущности у клиента нет. */
+    private FlightTrack projectile;
     /**
      * Ядерка: подрывы, что клиент знал до команды. Начало — пакет нового подрыва у клиента, а не задача сервера: место
      * подрыва, чья земля ещё грузится, сервер откладывает ({@code NuclearStrikes.detonateNow}).
@@ -712,22 +714,24 @@ final class Sandbox {
 
     /** Пуск — с первого движения снаряда у точки; пролёт — в миг, когда он ближе всего к ней. */
     private void watchFlight(Minecraft mc) {
-        if (projectile == null || projectile.isRemoved()) {
+        double[] at = new double[3];
+        if (projectile == null || projectile.isDead()) {
             projectile = null;
             double best = Double.MAX_VALUE;
-            for (var e : mc.level.entitiesForRendering()) {
-                if (!(e instanceof StrikeProjectile p) || p.weapon() != pendingCmd.weapon()) continue;
-                double d = p.position().distanceToSqr(site);
+            for (FlightTrack t : FlightTracks.all()) {
+                if (t.weapon != pendingCmd.weapon() || t.isDead() || !t.predict(FlightTracks.now() - 1, at)) continue;
+                double d = site.distanceToSqr(at[0], at[1], at[2]);
                 if (d < best) {
                     best = d;
-                    projectile = p;
+                    projectile = t;
                 }
             }
-            if (projectile == null) return;
-            firstSeen = projectile.position();
+            if (projectile == null || !projectile.predict(FlightTracks.now() - 1, at)) return;
+            firstSeen = new Vec3(at[0], at[1], at[2]);
             Incoming.LOG.info("SANDBOX projectile seen at {}", xyz(firstSeen));
         }
-        Vec3 pos = projectile.position();
+        if (!projectile.predict(FlightTracks.now() - 1, at)) return;
+        Vec3 pos = new Vec3(at[0], at[1], at[2]);
         if (pending == Pending.LAUNCH) {
             if (pos.distanceTo(firstSeen) > 0.3) begin();
             return;
