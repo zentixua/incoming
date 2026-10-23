@@ -212,4 +212,137 @@ class GroundDustTest {
         for (double[] b : blobs(m, 30)) if (b[6] > 0 && b[5] == 0) low = Math.min(low, b[1]);
         assertTrue(low < 0.5 * m.height(30), "у земли — пыль, а не только облако: " + low + " против " + m.height(30));
     }
+
+    /** Дом: крыша радиуса {@code roof} м на высоте взрыва, вокруг — улица на 15 м ниже; везде голый грунт. */
+    private static GroundDust.Ground house(double roof) {
+        double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+        for (double[] row : h) for (int b = 0; b < row.length; b++) row[b] = GroundDust.BANDS[b] < roof ? 0 : -15;
+        return new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h,
+                (x, z) -> Math.hypot(x, z) < roof ? 0 : -15);
+    }
+
+    /** Клубы слоя пыли в возрасте t: {x, y, z, σh, σv, пыль}. */
+    private static List<double[]> layer(GroundDust g, double t) {
+        List<double[]> out = new ArrayList<>();
+        g.blobs(t, 1, (x, y, z, sh, sv, d) -> out.add(new double[]{x, y, z, sh, sv, d}));
+        return out;
+    }
+
+    /**
+     * Тяжёлый клуб над пустотой падает по закону термика MTT: замкнутая формула {@code GroundDust.fall} — та же, что
+     * численный термик {@link Thermal} (РК4 тех же уравнений) с той же плавучестью g·M/ρ и объёмом, в нейтральном воздухе.
+     */
+    @Test
+    void denseDustFallsLikeAThermal() {
+        CloudModel.Air neutral = new CloudModel.Air(1e-3, 0, 0, 0.1, (int) Stability.D, 0.5);
+        for (double[] c : new double[][]{{15, 5, 1.5}, {2, 1, 0.3}, {40, 12, 4}}) {
+            double dust = c[0], sh = c[1], sv = c[2], volume = 2 * Math.PI * sh * sh * 1.25 * sv;
+            double b = CloudModel.G * dust / CloudModel.RHO;
+            Thermal th = new Thermal(b, b / volume, 0, neutral);
+            for (double t = 1; t <= 60; t += 1) {
+                double numeric = th.height(t) - 0.5 * th.r0, closed = GroundDust.fall(dust, sh, sv, t);
+                assertEquals(numeric, closed, 0.03 * numeric + 0.02, dust + " кг, σ " + sh + "/" + sv + ", " + t + " с");
+            }
+        }
+    }
+
+    /**
+     * Удар в крышу и удар в землю — одна физика: у крыши во все стороны (поверхность на высоте взрыва) слой тот же, что у
+     * удара в голый грунт, а ровная поверхность на 20 м ниже даёт то же, что разрыв на 20 м над землёй — та же пыль на
+     * той же высоте над своей поверхностью.
+     */
+    @Test
+    void roofAndGroundAreOneLaw() {
+        BlastSource s = BlastSource.of(WeaponType.MISSILE, false);
+        for (double drop : new double[]{0, 20}) {
+            GroundDust.Ground flat = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
+                    GroundDust.Ground.filled(-drop), (x, z) -> -drop);
+            GroundDust a = new CloudModel(s, DAY, false, 0, flat).ground, b = new CloudModel(s, DAY, false, drop, GroundDust.Ground.BARE).ground;
+            assertEquals(b.total, a.total, 1e-9 * b.total);
+            for (double t : new double[]{0.1, 1, 10, 60}) {
+                List<double[]> la = layer(a, t), lb = layer(b, t);
+                assertEquals(lb.size(), la.size(), drop + " м, " + t + " с");
+                for (int i = 0; i < la.size(); i++) {
+                    for (int j = 0; j < 6; j++) assertEquals(lb.get(i)[j], la.get(i)[j], 1e-9, drop + " м, " + t + " с, клуб " + i);
+                    assertTrue(la.get(i)[1] + drop <= 2 * la.get(i)[4] + 0.5, "слой — на своей поверхности");
+                }
+            }
+        }
+    }
+
+    /**
+     * Пыль не висит над пустотой (жалоба 23.10: бурый пласт на высоте крыши): у удара в крышу дома (10 и 30 м) с улицей на
+     * 15 м ниже, в ветер и в штиль, каждый клуб слоя, чей путь вышел за край, опускается по закону тяжёлого термика
+     * (численный {@link Thermal}: масса и размер клуба в миг выхода — независимо от модели): не медленнее и не быстрее его
+     * (±10 %), а когда закон довёл бы его до улицы, он на ней; выше поверхности, с которой его подняло, клуб не бывает.
+     */
+    @Test
+    void dustNeverHangsOverTheVoid() {
+        CloudModel.Air neutral = new CloudModel.Air(1e-3, 0, 0, 0.1, (int) Stability.D, 0.5);
+        for (double roof : new double[]{10, 30}) {
+            for (double wind : new double[]{4, 0}) {
+                CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, wind, 0, 0.1, (int) Stability.C, 0.5);
+                GroundDust.Ground g = house(roof);
+                GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
+                int n = layer(dust, 0.3).size();
+                double[] lifted = new double[n], crossed = new double[n];
+                Thermal[] law = new Thermal[n];
+                java.util.Arrays.fill(crossed, -1);
+                int fell = 0;
+                for (double t = 0.3; t <= 180; t += 0.25) {
+                    List<double[]> now = layer(dust, t);
+                    assertEquals(n, now.size(), "клубы те же");
+                    for (int i = 0; i < n; i++) {
+                        double[] b = now.get(i);
+                        double base = b[1] - 0.8 * b[4], below = g.relief().at(b[0], b[2]);
+                        if (t == 0.3) lifted[i] = base;
+                        String at = "дом " + roof + " м, ветер " + wind + ", " + t + " с, клуб " + i;
+                        assertTrue(base <= lifted[i] + 1e-6, at + ": выше своей поверхности");
+                        // выше своей поверхности слой не поднимается (у дома ветер его обтекает, ⚠), ниже поверхности под ним не уходит
+                        assertTrue(base >= Math.min(below, lifted[i]) - 1e-6, at + ": под поверхностью");
+                        if (crossed[i] < 0 && below < lifted[i] - GroundDust.DROP) {
+                            crossed[i] = t;
+                            double volume = 2 * Math.PI * b[3] * b[3] * 1.25 * b[4], buoyancy = CloudModel.G * b[5] / CloudModel.RHO;
+                            law[i] = new Thermal(buoyancy, buoyancy / volume, 0, neutral);
+                        }
+                        if (crossed[i] < 0) continue;
+                        double dt = t - crossed[i], z = law[i].height(dt) - 0.5 * law[i].r0, step = law[i].height(dt + 0.5) - law[i].height(Math.max(0, dt - 0.5));
+                        double target = Math.max(below, lifted[i] - z);
+                        assertTrue(base <= Math.max(below, lifted[i] - 0.9 * z + step) + 0.3, at + ": висит над пустотой, " + base + " против закона " + target);
+                        assertTrue(base >= Math.max(below, lifted[i] - 1.1 * z - step) - 0.3, at + ": падает быстрее закона, " + base + " против " + target);
+                        if (base <= below + 0.01 && lifted[i] > below + 5) fell++;
+                    }
+                }
+                if (roof >= 30) assertTrue(fell > 0, "дом " + roof + ", ветер " + wind + ": пыль с крыши дошла до улицы");
+            }
+        }
+    }
+
+    /**
+     * Сколько пыли — по материалу, а не «земля или постройка»: на твёрдом (камень, кирпич) — только осевшая пыль
+     * ({@code Surface.HARD}, 0,6 г/м²), в десятки раз меньше, чем на голом грунте.
+     */
+    @Test
+    void hardSurfaceHoldsOnlySettledDust() {
+        BlastSource s = BlastSource.of(WeaponType.MISSILE, false);
+        GroundDust.Ground stone = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1),
+                GroundDust.Ground.filled(Double.NaN), GroundDust.Relief.UNKNOWN);
+        GroundDust hard = new CloudModel(s, DAY, false, 0, stone).ground, bare = new CloudModel(s, DAY, false, 0, GroundDust.Ground.BARE).ground;
+        double outer = HobBlast.rangeFor(GroundDust.OUTER_PSI, 0, CloudModel.equivalentKt(s.chargeKg()));
+        assertTrue(hard.total + hard.underBall(1e3) <= DustModel.Surface.HARD.supply() * Math.PI * outer * outer * 1.0001, "не больше осевшей пыли");
+        assertTrue(hard.total < 0.05 * bare.total, "камень " + hard.total + " против голого грунта " + bare.total);
+    }
+
+    /**
+     * Пласт тяжелее воздуха растекается гравитационным течением (Huppert &amp; Simpson 1980): в штиль d(R²)/dt =
+     * 2·Fr·√(g·M/(πρ)) по пыли, что ещё в воздухе (в первые секунды — почти вся).
+     */
+    @Test
+    void dustSheetSlumpsLikeAGravityCurrent() {
+        GroundDust g = new CloudModel(BlastSource.of(WeaponType.DRONE, false), CloudModel.Air.STANDARD).ground;
+        double r2 = (Math.pow(g.stretch(1.5), 2) - Math.pow(g.stretch(1), 2)) * g.slumpFrom / 0.5;
+        double law = 2 * GroundDust.FR * Math.sqrt(CloudModel.G * g.total / (Math.PI * CloudModel.RHO));
+        assertTrue(r2 <= law * 1.02 && r2 > 0.6 * law, "d(R²)/dt " + r2 + " против закона по всей поднятой пыли " + law);
+        assertTrue(g.stretch(60) > g.stretch(10) && g.stretch(10) > 1, "растекается");
+    }
 }

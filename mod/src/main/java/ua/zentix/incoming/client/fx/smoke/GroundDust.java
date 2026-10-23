@@ -6,26 +6,35 @@ import ua.zentix.incoming.nuclear.model.MushroomModel;
 
 /**
  * Пыль, которую поднимает ветер за фронтом волны обычного взрыва, — тот же закон, что у ядерки ({@link DustModel}), без
- * Minecraft. Метры, секунды, килограммы.
+ * Minecraft. Метры, секунды, килограммы; высоты — от точки взрыва.
  * <ul>
- * <li><b>Вынос и время.</b> Кольца по земле от точки под взрывом: в каждом — слой {@link DustModel#chemical} (давление,
- * фаза и доля напора вдоль земли — {@link HobBlast} по высоте подрыва, мощность — ядерная того же давления,
- * {@link CloudModel#equivalentKt}): грунт уходит в воздух с прихода фронта ({@link HobBlast#arrivalSeconds}) долей
- * {@link DustModel#lifted} за положительную фазу на месте. До фронта пыли нет, у разрыва высоко над землёй (давление у
- * земли ниже порога срыва) — нет совсем.</li>
- * <li><b>Поверхность.</b> Голый рыхлый грунт (земля, песок, гравий, снег) срывается с u* в 0,34 м/с, трава и твёрдое —
- * от 3 м/с (Gaj &amp; Small, §2.2): на лугу пыль встаёт только у воронки, на пашне и в степи — ковром на десятки метров.
- * Поверхность по секторам — по верхним блокам вокруг удара ({@code FarBlasts.ground}); вода не пылит.</li>
- * <li><b>Под шаром.</b> Пыль, сорванная под огненным шаром продуктов (он касается земли), — в его горячем газе и
+ * <li><b>Откуда.</b> С каждой поверхности вокруг — там, где она есть (по секторам {@link #SECTORS} и радиусам
+ * {@link #BANDS}: верхний блок, {@code FarBlasts.ground}), без «земля это или крыша»: в каждом кольце — слой
+ * {@link DustModel#chemical} (давление, фаза и доля напора вдоль поверхности — {@link HobBlast} по высоте взрыва над
+ * этой поверхностью, мощность — ядерная того же давления, {@link CloudModel#equivalentKt}): грунт уходит в воздух с
+ * прихода фронта ({@link HobBlast#arrivalSeconds}) долей {@link DustModel#lifted} за положительную фазу на месте. До
+ * фронта пыли нет, у разрыва высоко над поверхностью (давление ниже порога срыва) — нет совсем.</li>
+ * <li><b>Поверхность.</b> Сколько пыли на ней лежит и как легко её сорвать — по материалу: голый рыхлый грунт (земля,
+ * песок, гравий, снег) срывается с u* в 0,34 м/с, грунт под дёрном и листвой — от 3 м/с (Gaj &amp; Small, §2.2), у
+ * твёрдого (камень, кирпич, доски, металл, лёд) рыхлого — только осевшая на нём пыль ({@code DustModel.Surface.HARD}:
+ * 0,6 г/м², AP-42 §13.2.1). Крыша из камня и скала — одно и то же; дробит перекрытие сам заряд у места удара — это
+ * пыль воронки в облаке ({@link CloudModel}). Вода не пылит.</li>
+ * <li><b>Под шаром.</b> Пыль, сорванная под огненным шаром продуктов (он касается поверхности), — в его горячем газе и
  * поднимается с облаком, а не стоит у земли (как у ядерки: в шаре на земле пыли волны нет, {@code BlastWall.underBall}):
  * её отдаёт {@link #underBall}.</li>
  * <li><b>Высота.</b> В фазе волны — пыльный слой Kuhl (у фронта ноль, к концу фазы — {@link DustModel.Column#first},
  * десятки сантиметров у зарядов в десятки кг); дальше вспышки, что греет землю, у ВВ нет, и слой растит турбулентность
  * воздуха: σ по вертикали — Бриггс по классу Паскуилла на пути ветра, в квадратуре с верхом Kuhl (σ = верх / 2,5 —
- * ⚠ форма слоя). Слой у земли — гаусс с отражением от неё: середина массы — на 0,8σ.</li>
- * <li><b>Оседание.</b> Корзины {@link DustModel} выпадают из слоя: у гаусса с отражением концентрация у земли — масса /
- * (1,25σ), поток вниз — v·масса / (1,25σ); по ∫dt/(1,25σ) — доля ослабления, что ещё в воздухе
- * ({@link DustModel#extinctionAloft}).</li>
+ * ⚠ форма слоя). Слой лежит на своей поверхности — гаусс с отражением от неё: середина массы — на 0,8σ над ней.</li>
+ * <li><b>Тяжесть.</b> Холодный воздух с пылью тяжелее чистого (плотность смеси растёт с массой пыли в объёме): слой —
+ * гравитационное течение. Он растекается по поверхности (сток пласта постоянного объёма, Huppert &amp; Simpson 1980:
+ * dR/dt = Fr·√(g′h), Fr = {@value #FR}, g′V = g·M/ρ — R² = R₀² + 2Fr·√(g·M/(πρ))·t; M — пыль, что ещё в воздухе), а
+ * над перепадом вниз (край крыши, обрыв, склон) опускается к поверхности под собой — тяжёлый термик MTT той же массы
+ * (Boussinesq: тот же закон, что у тёплого, с обратным знаком; {@link #fall}). Вверх выше своей поверхности слой не
+ * идёт (⚠ разреженный слой ветер перенёс бы и через дом — не учтено).</li>
+ * <li><b>Оседание.</b> Корзины {@link DustModel} выпадают из слоя со скоростью Стокса по размеру: у гаусса с отражением
+ * концентрация у поверхности — масса / (1,25σ), поток вниз — v·масса / (1,25σ); по ∫dt/(1,25σ) — доля ослабления, что
+ * ещё в воздухе ({@link DustModel#extinctionAloft}).</li>
  * <li><b>Ножка.</b> Подсос у оси — тот же член, что у ядерки ({@link DustModel.Column#stem}, {@link DustModel#STEM_S}):
  * из колец ближе {@code STEM_M}·∛(Y/15) он забирает stem/STEM_S их пыли в секунду, пока слой над ними — ветер уносит
  * слой из-под облака за полрадиуса подсоса. Шар обычного взрыва касается земли, поэтому пыль идёт по всей ножке до низа
@@ -34,9 +43,9 @@ import ua.zentix.incoming.nuclear.model.MushroomModel;
  * <li><b>Снос.</b> Слой уходит с ветром на высоте своей середины (не ниже 2 м) и расплывается по Бриггсу; поток волны
  * наружу пыль не сносит — она стоит там, где её сорвало.</li>
  * </ul>
- * Картинке слой отдаёт кольца показа ({@link #ANNULI}): у каждого — своя доля массы, клубы по секторам
- * ({@link #SECTORS}) на среднем по массе радиусе — масса сектора по его поверхности (с воды пыли нет: у берега пыль — над
- * берегом), видимый край — не дальше фронта в этот миг.
+ * Горячие продукты взрыва и топлива всплывают и уносят то, что в них, — это облако ({@link CloudModel}), а не слой.
+ * Картинке слой отдаёт кольца показа ({@link #ANNULI}: по радиусу поверхности) по секторам: у каждого — своя масса,
+ * средний по массе радиус и поверхность, с которой пыль подняло; видимый край — не дальше фронта в этот миг.
  */
 public final class GroundDust {
     /** Секторов по направлению от точки удара: у каждого — своя поверхность ({@link Ground}). */
@@ -46,21 +55,40 @@ public final class GroundDust {
     public static final double[] BANDS = {3, 6, 12, 24, 48};
 
     /**
-     * Что лежит вокруг удара по секторам и радиусам ({@code [сектор][радиус BANDS]}; направление k — угол
-     * 2π(k + ½)/{@link #SECTORS} от оси x к оси z): доли голого рыхлого грунта и грунта под дёрном или твёрдым; остальное —
-     * вода (с неё пыли нет). У берега полоса гальки у воронки не пылит над водой дальше.
+     * Рельеф вокруг: высота поверхности (первый воздух над верхним блоком) над точкой взрыва в месте (x, z) от неё, м;
+     * {@link Double#NaN} — не знаем.
      */
-    public record Ground(double[][] loose, double[][] covered) {
+    @FunctionalInterface
+    public interface Relief {
+        Relief UNKNOWN = (x, z) -> Double.NaN;
+
+        double at(double x, double z);
+    }
+
+    /**
+     * Что лежит вокруг удара по секторам и радиусам ({@code [сектор][радиус BANDS]}; направление k — угол
+     * 2π(k + ½)/{@link #SECTORS} от оси x к оси z): доли голого рыхлого грунта, грунта под дёрном или листвой и твёрдого;
+     * остальное — вода (с неё пыли нет). {@code height} — высота этой поверхности над точкой взрыва, м ({@link Double#NaN}
+     * — не знаем: ровная поверхность на высоте подрыва ниже); {@code relief} — рельеф в любом месте (куда слой стекает).
+     */
+    public record Ground(double[][] loose, double[][] covered, double[][] hard, double[][] height, Relief relief) {
         /** Всюду голый грунт — как у ядерки ({@code Surface.REFERENCE}); так и там, где клиент ничего не знает. */
         public static final Ground BARE = uniform(1, 0);
 
+        /** Рыхлое и дёрн по секторам, ровная поверхность на высоте подрыва ниже, рельефа нет. */
+        public Ground(double[][] loose, double[][] covered) {
+            this(loose, covered, filled(0), filled(Double.NaN), Relief.UNKNOWN);
+        }
+
         public static Ground uniform(double loose, double covered) {
-            double[][] l = new double[SECTORS][BANDS.length], c = new double[SECTORS][BANDS.length];
-            for (int k = 0; k < SECTORS; k++) {
-                java.util.Arrays.fill(l[k], loose);
-                java.util.Arrays.fill(c[k], covered);
-            }
-            return new Ground(l, c);
+            return new Ground(filled(loose), filled(covered));
+        }
+
+        /** Таблица [сектор][радиус] с одним числом. */
+        public static double[][] filled(double v) {
+            double[][] a = new double[SECTORS][BANDS.length];
+            for (double[] row : a) java.util.Arrays.fill(row, v);
+            return a;
         }
     }
 
@@ -78,174 +106,209 @@ public final class GroundDust {
         return best;
     }
 
-    /** Колец счёта (по логарифму радиуса), колец показа и их края — доли всей поднятой массы. */
-    static final int RINGS = 24, ANNULI = 4;
-    static final double[] QUANTILE = {0.35, 0.65, 0.88};
+    /**
+     * Колец счёта (по логарифму радиуса) и колец показа: кольцо показа — кольца счёта у одного радиуса поверхности
+     * ({@link #band}), у его клуба в секторе одна поверхность — та, с которой его подняло.
+     */
+    static final int RINGS = 24, ANNULI = BANDS.length;
     /** Сетка времени таблиц: t_k = T0·(GROW^k − 1), с. */
     static final int STEPS = 112;
     static final double T0 = 0.01, GROW = 1.12;
-    /** Внутренний край счёта и дальний — давление у земли, ниже которого грунт уже не срывает (psi; вынос ~0). */
+    /** Внутренний край счёта и дальний — давление у поверхности, ниже которого грунт уже не срывает (psi; вынос ~0). */
     static final double INNER = 0.1, OUTER_PSI = 0.3;
+    /**
+     * Число Фруда головы гравитационного течения, мелкого против толщи воздуха (Huppert &amp; Simpson 1980, «The slumping
+     * of gravity currents», JFM 99: 785, по опытам — 1,19).
+     */
+    static final double FR = 1.19;
+    /** Перепад поверхности вниз, с которого слой над ним — над пустотой, м (ступень в блок слой не замечает). */
+    static final double DROP = 1;
 
     final CloudModel.Air air;
     final double yieldKt, hob;
+    /** Кольца счёта: середина и площадь (одни на все секторы). */
+    private final double[] r, area;
     /**
-     * Кольца счёта: середина, площадь, приход фронта, фаза, поднятое (кг), верх к концу фазы, подсос, его начало; под
+     * По секторам и кольцам: приход фронта, фаза, поднятое (кг, доля сектора), верх к концу фазы, подсос, его начало; под
      * шаром ли кольцо (его пыль — в облаке).
      */
-    private final double[] r, area, arrival, positive, mass, first, stem, stemFrom;
-    private final boolean[] ball;
-    /** Поднятое кольцами над голым грунтом и над дёрном (кг, на весь круг); поверхность по секторам. */
-    private final double[] looseMass, coveredMass;
-    private final Ground ground;
+    private final double[][] arrival, positive, mass, first, stem, stemFrom;
+    private final boolean[][] ball;
+    /** Высота поверхности над точкой взрыва по секторам и радиусам, м (неизвестна — ровная на {@link #hob} ниже). */
+    private final double[][] surface;
+    private final Relief relief;
     private final int[] annulus;
-    /** Кольца показа: края по радиусу. */
-    private final double[] edge = new double[ANNULI + 1];
-    /** Доли секторов в массе кольца показа. */
-    private final double[][] sector = new double[ANNULI][SECTORS];
     /** Таблицы по сетке времени: σ по вертикали и ∫dt/(1,25σ) у каждого кольца показа; подсос — доля его времени. */
     private final double[][] sv = new double[ANNULI][STEPS], settled = new double[ANNULI][STEPS];
     private final double[] stemTime = new double[STEPS];
     /** Пыль, ушедшая в ножку (ослабление в кг смеси {@link DustModel#K_MIX}), нарастающим итогом по сетке. */
     private final double[] drawn = new double[STEPS];
-    /** Поднятая масса у земли (без той, что под шаром), кг; радиус подсоса, м; сколько слой виден, с. */
+    /** Сток слоя: R² − R₀² по сетке, м²; R₀² — средний по массе квадрат радиуса, откуда пыль подняло. */
+    private final double[] slump = new double[STEPS];
+    final double slumpFrom;
+    /** Поднятая масса у поверхности (без той, что под шаром), кг; радиус подсоса, м; сколько слой виден, с. */
     public final double total, stemReach;
     public final double life;
 
     /**
-     * Слой пыли заряда {@code tntKg} кг ТНТ на высоте {@code hobM} над землёй в воздухе {@code air}; {@code ballM} —
-     * радиус огненного шара (касается ли он земли).
+     * Слой пыли заряда {@code tntKg} кг ТНТ на высоте {@code hobM} над голым грунтом в воздухе {@code air};
+     * {@code ballM} — радиус огненного шара (касается ли он земли).
      */
     GroundDust(double tntKg, double hobM, double ballM, CloudModel.Air air) {
         this(tntKg, hobM, ballM, Ground.BARE, air);
     }
 
     /**
-     * То же над поверхностью {@code ground} по секторам: голый рыхлый грунт ({@code DustModel.Surface.FIELD}), под травой
-     * или твёрдое ({@code Surface.COVERED}), вода — без пыли; срыв по закону над каждой, масса сектора — по его долям.
+     * То же над поверхностью {@code ground} по секторам: у каждой — свой материал (рыхлый грунт {@code Surface.FIELD},
+     * дёрн {@code COVERED}, твёрдое {@code HARD}, вода — без пыли) и своя высота; срыв по закону над каждой — по высоте
+     * взрыва над ней (там, где высота неизвестна, — {@code hobM}).
      */
     GroundDust(double tntKg, double hobM, double ballM, Ground ground, CloudModel.Air air) {
         this.air = air;
         this.yieldKt = CloudModel.equivalentKt(tntKg);
         this.hob = Math.max(0, hobM);
-        Rings k0 = rings(tntKg, hob, ballM, DustModel.Surface.FIELD), k1 = rings(tntKg, hob, ballM, DustModel.Surface.COVERED);
-        r = k0.r;
-        area = k0.area;
-        arrival = k0.arrival;
-        positive = k0.positive;
-        // масса кольца — средняя по секторам; доли секторов — для показа ({@link #sector})
-        mass = new double[RINGS];
-        for (int i = 0; i < RINGS; i++) {
-            int b = band(r[i]);
-            for (int k = 0; k < SECTORS; k++) mass[i] += (ground.loose()[k][b] * k0.mass[i] + ground.covered()[k][b] * k1.mass[i]) / SECTORS;
+        this.relief = ground.relief();
+        // высота взрыва над каждой поверхностью: снизу (крыша, улица) или сверху (стена, склон выше точки) — по наклонной
+        // дальности то же давление (⚠ отражение от поверхности над точкой — как от поверхности под ней)
+        surface = new double[SECTORS][BANDS.length];
+        double[][] over = new double[SECTORS][BANDS.length];
+        double outer = 0;
+        for (int k = 0; k < SECTORS; k++) {
+            for (int b = 0; b < BANDS.length; b++) {
+                double h = ground.height()[k][b];
+                surface[k][b] = Double.isNaN(h) ? -hob : h;
+                over[k][b] = rounded(Math.abs(surface[k][b]));
+                if (tntKg > 0) outer = Math.max(outer, HobBlast.rangeFor(OUTER_PSI, over[k][b], yieldKt));
+            }
         }
-        looseMass = k0.mass;
-        coveredMass = k1.mass;
-        this.ground = ground;
-        first = k0.first;
-        stem = k0.stem;
-        stemFrom = k0.stemFrom;
-        ball = k0.ball;
-        annulus = new int[RINGS];
-        double outer = k0.outer, sum = 0;
-        for (int i = 0; i < RINGS; i++) if (!ball[i]) sum += mass[i];
+        double[] rr = new double[RINGS], aa = new double[RINGS];
+        if (outer > INNER) {
+            for (int i = 0; i < RINGS; i++) {
+                double r0 = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
+                rr[i] = i == 0 ? 0.5 * r1 : Math.sqrt(r0 * r1);
+                aa[i] = Math.PI * (r1 * r1 - r0 * r0);
+            }
+        }
+        r = rr;
+        area = aa;
+        arrival = new double[SECTORS][RINGS];
+        positive = new double[SECTORS][RINGS];
+        mass = new double[SECTORS][RINGS];
+        first = new double[SECTORS][RINGS];
+        stem = new double[SECTORS][RINGS];
+        stemFrom = new double[SECTORS][RINGS];
+        ball = new boolean[SECTORS][RINGS];
+        double hardSupply = DustModel.Surface.HARD.supply();
+        for (int k = 0; k < SECTORS && outer > INNER; k++) {
+            for (int i = 0; i < RINGS; i++) {
+                int b = band(r[i]);
+                Rings f = rings(tntKg, over[k][b], ballM, DustModel.Surface.FIELD, outer), c = rings(tntKg, over[k][b], ballM, DustModel.Surface.COVERED, outer);
+                // на твёрдом рыхлого — только осевшая пыль: вынос того же закона, не больше её запаса (порог — как у грунта)
+                double hard = Math.min(hardSupply * area[i], f.mass[i]);
+                mass[k][i] = (ground.loose()[k][b] * f.mass[i] + ground.covered()[k][b] * c.mass[i] + ground.hard()[k][b] * hard) / SECTORS;
+                arrival[k][i] = f.arrival[i];
+                positive[k][i] = f.positive[i];
+                first[k][i] = f.first[i];
+                stem[k][i] = f.stem[i];
+                stemFrom[k][i] = f.stemFrom[i];
+                ball[k][i] = f.ball[i];
+            }
+        }
+        double sum = 0;
+        for (int k = 0; k < SECTORS; k++) for (int i = 0; i < RINGS; i++) if (!ball[k][i]) sum += mass[k][i];
         total = sum;
         stemReach = DustModel.STEM_M * Math.cbrt(yieldKt / 15);
-        // кольца показа — по долям массы
-        double acc = 0;
-        int a = 0;
-        for (int i = 0; i < RINGS; i++) {
-            if (ball[i]) continue;
-            acc += mass[i];
-            annulus[i] = a;
-            while (a < ANNULI - 1 && sum > 0 && acc >= QUANTILE[a] * sum) edge[++a] = r[i];
-        }
-        for (int k = a + 1; k <= ANNULI; k++) edge[k] = Math.max(edge[k - 1], outer);
-        edge[ANNULI] = outer;
+        // кольца показа — по радиусам поверхности
+        annulus = new int[RINGS];
+        for (int i = 0; i < RINGS; i++) annulus[i] = band(r[i]);
         // таблицы: σ по вертикали (верх Kuhl к концу фазы и турбулентность воздуха), оседание, подсос
         double[] top = new double[ANNULI], weight = new double[ANNULI];
-        for (int i = 0; i < RINGS; i++) {
-            if (ball[i]) continue;
-            top[annulus[i]] += mass[i] * first[i];
-            weight[annulus[i]] += mass[i];
+        double from = Double.MAX_VALUE, r2 = 0;
+        for (int k = 0; k < SECTORS; k++) {
+            if (RINGS > 0) from = Math.min(from, stemFrom[k][0]);
+            for (int i = 0; i < RINGS; i++) {
+                if (ball[k][i]) continue;
+                top[annulus[i]] += mass[k][i] * first[k][i];
+                weight[annulus[i]] += mass[k][i];
+                r2 += mass[k][i] * r[i] * r[i];
+            }
         }
-        for (int k = 0; k < ANNULI; k++) top[k] = weight[k] > 0 ? top[k] / weight[k] : 0.1;
-        double from = RINGS > 0 ? stemFrom[0] : 0;
+        for (int q = 0; q < ANNULI; q++) top[q] = weight[q] > 0 ? top[q] / weight[q] : 0.1;
+        slumpFrom = sum > 0 ? Math.max(r2 / sum, 1) : 1;
         for (int s = 1; s < STEPS; s++) {
             double t0 = time(s - 1), t1 = time(s), dt = t1 - t0, mid = 0.5 * (t0 + t1);
-            for (int k = 0; k < ANNULI; k++) {
-                sv[k][s] = sigmaV(top[k], t1);
-                settled[k][s] = settled[k][s - 1] + dt / (1.25 * sigmaV(top[k], mid));
+            for (int q = 0; q < ANNULI; q++) {
+                sv[q][s] = sigmaV(top[q], t1);
+                settled[q][s] = settled[q][s - 1] + dt / (1.25 * sigmaV(top[q], mid));
             }
             stemTime[s] = stemTime[s - 1] + (mid > from ? dt * under(mid) : 0);
         }
-        for (int k = 0; k < ANNULI; k++) sv[k][0] = sigmaV(top[k], 0);
-        // ножка: ушедшее в подсос — нарастающим итогом (ослабление в кг смеси)
+        for (int q = 0; q < ANNULI; q++) sv[q][0] = sigmaV(top[q], 0);
+        // ножка: ушедшее в подсос — нарастающим итогом (ослабление в кг смеси); сток слоя — по пыли, что ещё в воздухе
         for (int s = 1; s < STEPS; s++) {
-            double t = 0.5 * (time(s - 1) + time(s)), flux = 0;
-            for (int i = 0; i < RINGS; i++) if (!ball[i] && t > stemFrom[i]) flux += stem[i] / DustModel.STEM_S * under(t) * ringNow(i, t);
-            drawn[s] = drawn[s - 1] + flux * (time(s) - time(s - 1));
-        }
-        // доли секторов в массе каждого кольца показа: по их поверхности (сумма — 1; вода — ноль)
-        for (int q = 0; q < ANNULI; q++) {
-            double all = 0;
+            double t = 0.5 * (time(s - 1) + time(s)), flux = 0, aloft = 0;
             for (int k = 0; k < SECTORS; k++) {
-                double w = 0;
                 for (int i = 0; i < RINGS; i++) {
-                    if (ball[i] || annulus[i] != q) continue;
-                    int b = band(r[i]);
-                    w += ground.loose()[k][b] * looseMass[i] + ground.covered()[k][b] * coveredMass[i];
+                    if (ball[k][i] || t <= arrival[k][i]) continue;
+                    if (t > stemFrom[k][i]) flux += stem[k][i] / DustModel.STEM_S * under(t) * ringNow(k, i, t);
+                    aloft += massNow(k, i, t);
                 }
-                all += sector[q][k] = w;
             }
-            for (int k = 0; k < SECTORS; k++) sector[q][k] = all > 0 ? sector[q][k] / all : 0;
+            double dt = time(s) - time(s - 1);
+            drawn[s] = drawn[s - 1] + flux * dt;
+            slump[s] = slump[s - 1] + 2 * FR * Math.sqrt(CloudModel.G * aloft / (Math.PI * CloudModel.RHO)) * dt;
         }
         life = lifeSeconds();
     }
 
-    /** Кольца счёта одного заряда и высоты: от воздуха не зависят (залп «Града» считает их один раз). */
-    private record Rings(double outer, double[] r, double[] area, double[] arrival, double[] positive, double[] mass, double[] first,
-                         double[] stem, double[] stemFrom, boolean[] ball) {
+    /**
+     * Высота взрыва над поверхностью, округлённая для кэша колец: до 4 м — полметра, выше — шагом в 10 % (давление у
+     * поверхности от неё меняется плавно).
+     */
+    static double rounded(double h) {
+        if (h <= 4) return Math.round(2 * h) / 2.0;
+        double step = Math.log(1.1);
+        return Math.exp(Math.round(Math.log(h) / step) * step);
     }
 
-    private static final java.util.Map<String, Rings> CACHE = new java.util.LinkedHashMap<>(16, 0.75f, true) {
+    /** Кольца счёта одного заряда и высоты: от воздуха не зависят (залп «Града» считает их один раз). */
+    private record Rings(double[] mass, double[] arrival, double[] positive, double[] first, double[] stem, double[] stemFrom, boolean[] ball) {
+    }
+
+    private static final java.util.Map<String, Rings> CACHE = new java.util.LinkedHashMap<>(64, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(java.util.Map.Entry<String, Rings> e) {
-            return size() > 32;
+            return size() > 256;
         }
     };
 
     /**
-     * Кольца счёта заряда {@code tntKg} на высоте {@code hob} с шаром {@code ballM} над поверхностью {@code surface} (из кэша;
-     * нет — считаются сейчас).
+     * Кольца счёта заряда {@code tntKg} на высоте {@code hob} над поверхностью {@code surface} с шаром {@code ballM} до
+     * радиуса {@code outer} (из кэша; нет — считаются сейчас).
      */
-    private static Rings rings(double tntKg, double hob, double ballM, DustModel.Surface surface) {
-        String key = tntKg + "/" + hob + "/" + ballM + "/" + surface.threshold();
+    private static Rings rings(double tntKg, double hob, double ballM, DustModel.Surface surface, double outer) {
+        String key = tntKg + "/" + hob + "/" + ballM + "/" + surface.threshold() + "/" + outer;
         synchronized (CACHE) {
             Rings k = CACHE.get(key);
             if (k != null) return k;
         }
         double y = CloudModel.equivalentKt(tntKg);
-        double[] r = new double[RINGS], area = new double[RINGS], arrival = new double[RINGS], positive = new double[RINGS],
-                mass = new double[RINGS], first = new double[RINGS], stem = new double[RINGS], stemFrom = new double[RINGS];
+        double[] mass = new double[RINGS], arrival = new double[RINGS], positive = new double[RINGS], first = new double[RINGS],
+                stem = new double[RINGS], stemFrom = new double[RINGS];
         boolean[] ball = new boolean[RINGS];
-        double outer = tntKg <= 0 ? 0 : HobBlast.rangeFor(OUTER_PSI, hob, y);
-        if (outer > INNER) {
-            for (int i = 0; i < RINGS; i++) {
-                double r0 = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
-                r[i] = i == 0 ? 0.5 * r1 : Math.sqrt(r0 * r1);
-                area[i] = Math.PI * (r1 * r1 - r0 * r0);
-                DustModel.Column c = DustModel.chemical(r[i], hob, y, ballM, surface);
-                arrival[i] = HobBlast.arrivalSeconds(r[i], hob, y);
-                positive[i] = c.positive();
-                mass[i] = c.mass() * area[i];
-                first[i] = c.first();
-                stem[i] = c.stem();
-                stemFrom[i] = c.stemFrom();
-                ball[i] = r[i] * r[i] + hob * hob <= ballM * ballM;
-            }
+        for (int i = 0; i < RINGS; i++) {
+            double r0 = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
+            double r = i == 0 ? 0.5 * r1 : Math.sqrt(r0 * r1);
+            DustModel.Column c = DustModel.chemical(r, hob, y, ballM, surface);
+            arrival[i] = HobBlast.arrivalSeconds(r, hob, y);
+            positive[i] = c.positive();
+            mass[i] = c.mass() * Math.PI * (r1 * r1 - r0 * r0);
+            first[i] = c.first();
+            stem[i] = c.stem();
+            stemFrom[i] = c.stemFrom();
+            ball[i] = r * r + hob * hob <= ballM * ballM;
         }
-        Rings k = new Rings(outer, r, area, arrival, positive, mass, first, stem, stemFrom, ball);
+        Rings k = new Rings(mass, arrival, positive, first, stem, stemFrom, ball);
         synchronized (CACHE) {
             CACHE.put(key, k);
         }
@@ -286,31 +349,39 @@ public final class GroundDust {
         return 1 - u * u * (3 - 2 * u);
     }
 
-    /** Поднятая доля кольца i к возрасту t (с взрыва): с прихода фронта — по фазе на месте. */
-    private double liftedShare(int i, double t) {
-        double age = t - arrival[i];
-        return age <= 0 ? 0 : DustModel.lifted(age / Math.max(positive[i], 1e-6));
+    /** Поднятая доля кольца i сектора k к возрасту t (с взрыва): с прихода фронта — по фазе на месте. */
+    private double liftedShare(int k, int i, double t) {
+        double age = t - arrival[k][i];
+        return age <= 0 ? 0 : DustModel.lifted(age / Math.max(positive[k][i], 1e-6));
     }
 
-    /** Кольцо i в возрасте t: ослабление в кг смеси — поднятое, осевшее и ушедшее в подсос. */
-    private double ringNow(int i, double t) {
-        double m = mass[i] * liftedShare(i, t);
+    /** Кольцо i сектора k в возрасте t: ослабление в кг смеси — поднятое, осевшее и ушедшее в подсос. */
+    private double ringNow(int k, int i, double t) {
+        double m = mass[k][i] * liftedShare(k, i, t);
         if (m <= 0) return 0;
-        double left = Math.exp(-stem[i] * at(stemTime, t) / DustModel.STEM_S);
+        double left = Math.exp(-stem[k][i] * at(stemTime, t) / DustModel.STEM_S);
         return m * DustModel.extinctionAloft(at(settled[annulus[i]], t)) * left;
     }
 
-    /** Верх слоя кольца i в возрасте t в фазе волны — Kuhl по пути фронта (∝ возраст^⅚ к {@code first}), м. */
-    private double waveTop(int i, double t) {
-        double age = t - arrival[i];
+    /** То же по массе, кг: тяжесть слоя — масса пыли в воздухе (крупная, что осела, слой уже не тянет). */
+    private double massNow(int k, int i, double t) {
+        double m = mass[k][i] * liftedShare(k, i, t);
+        if (m <= 0) return 0;
+        double left = Math.exp(-stem[k][i] * at(stemTime, t) / DustModel.STEM_S);
+        return m * DustModel.airborne(at(settled[annulus[i]], t)) * left;
+    }
+
+    /** Верх слоя кольца i сектора k в возрасте t в фазе волны — Kuhl по пути фронта (∝ возраст^⅚ к {@code first}), м. */
+    private double waveTop(int k, int i, double t) {
+        double age = t - arrival[k][i];
         if (age <= 0) return 0;
-        return first[i] * Math.pow(Math.min(1, age / Math.max(positive[i], 1e-6)), 5 / 6.0);
+        return first[k][i] * Math.pow(Math.min(1, age / Math.max(positive[k][i], 1e-6)), 5 / 6.0);
     }
 
     /** Пыль, сорванная под огненным шаром к возрасту t, кг (без оседания: она в облаке). */
     public double underBall(double t) {
         double m = 0;
-        for (int i = 0; i < RINGS; i++) if (ball[i]) m += mass[i] * liftedShare(i, t);
+        for (int k = 0; k < SECTORS; k++) for (int i = 0; i < RINGS; i++) if (ball[k][i]) m += mass[k][i] * liftedShare(k, i, t);
         return m;
     }
 
@@ -319,77 +390,156 @@ public final class GroundDust {
         return at(drawn, t);
     }
 
-    /**
-     * Фронт по земле в возрасте t, м: дальше него пыли нет. Между кольцами — по приходу ({@link HobBlast#arrivalSeconds}),
-     * за последним — со скоростью звука.
-     */
+    /** Фронт по поверхностям вокруг в возрасте t, м (у сектора, где он дальше всего): дальше него пыли нет. */
     public double front(double t) {
-        if (total <= 0 && underBall(1e9) <= 0 || t <= arrival[0]) return 0;
+        double f = 0;
+        for (int k = 0; k < SECTORS; k++) f = Math.max(f, front(k, t));
+        return f;
+    }
+
+    /**
+     * Фронт по поверхности сектора k в возрасте t, м. Между кольцами — по приходу ({@link HobBlast#arrivalSeconds}), за
+     * последним — со скоростью звука.
+     */
+    double front(int k, double t) {
+        if (RINGS == 0 || r[RINGS - 1] <= 0 || t <= arrival[k][0]) return 0;
         for (int i = 1; i < RINGS; i++) {
-            if (arrival[i] > t) return r[i - 1] + (r[i] - r[i - 1]) * (t - arrival[i - 1]) / Math.max(arrival[i] - arrival[i - 1], 1e-9);
+            if (arrival[k][i] > t) return r[i - 1] + (r[i] - r[i - 1]) * (t - arrival[k][i - 1]) / Math.max(arrival[k][i] - arrival[k][i - 1], 1e-9);
         }
-        return r[RINGS - 1] + ua.zentix.incoming.nuclear.model.BlastModel.SOUND_SPEED * (t - arrival[RINGS - 1]);
+        return r[RINGS - 1] + ua.zentix.incoming.nuclear.model.BlastModel.SOUND_SPEED * (t - arrival[k][RINGS - 1]);
+    }
+
+    /** Сток слоя к возрасту t: во сколько раз вырос радиус пласта, R/R₀ (гравитационное течение, {@link #FR}). */
+    double stretch(double t) {
+        return Math.sqrt(1 + at(slump, t) / slumpFrom);
+    }
+
+    /**
+     * На сколько опустился за {@code dt} с над перепадом клуб пыли массы {@code dust} кг в объёме гаусса σh, σv: тяжёлый
+     * термик MTT (как у тёплого облака, {@link Thermal}, с обратным знаком; Boussinesq — ⚠ у самого места удара пыли в
+     * воздухе по массе больше самого воздуха, и он падает быстрее): R = R₀ + αz, d(R³W)/dt = F, F = 3B/(4π), B = g·M/ρ;
+     * из покоя (R₀ + αz)⁴ = R₀⁴ + 2αF·t². Воздух нейтральный (⚠ устойчивость за десятки секунд падения на десятки метров
+     * почти не тормозит: N·t ~ 0,2). R₀ — шар объёма слоя 2πσh²·1,25σv.
+     */
+    static double fall(double dust, double sh, double sv, double dt) {
+        if (dust <= 0 || dt <= 0) return 0;
+        double volume = 2 * Math.PI * sh * sh * 1.25 * sv, r0 = Math.cbrt(3 * volume / (4 * Math.PI));
+        double f = 3 * CloudModel.G * dust / CloudModel.RHO / (4 * Math.PI), a = CloudModel.ALPHA;
+        double r4 = r0 * r0 * r0 * r0;
+        return (Math.sqrt(Math.sqrt(r4 + 2 * a * f * dt * dt)) - r0) / a;
     }
 
     /** Видимый край клуба — не дальше стольких σ (толща в сотни: край по порогу 0,05 — до ~4σ, {@code SmokePuffs.edge}). */
     static final double EDGE_SIGMAS = 4;
 
-    /** Приёмник клубов слоя (центр от точки под взрывом на земле, м). */
+    /** Приёмник клубов слоя (центр от точки взрыва, м). */
     public interface Blobs {
         void blob(double x, double y, double z, double sh, double sv, double dust);
     }
 
     /**
      * Кольца показа в возрасте t: клубы по секторам (масса — по поверхности сектора), σ в квадратуре с расплыванием
-     * Бриггса, видимый край не дальше фронта; снос — ветер на высоте середины слоя. {@code fade} — доля, что рисуется.
+     * Бриггса, видимый край не дальше фронта; пласт стекает гравитационным течением и уходит с ветром на высоте середины
+     * слоя, над перепадом опускается к поверхности под собой. {@code fade} — доля, что рисуется.
      */
     public void blobs(double t, double fade, Blobs out) {
         if (total <= 0 || t <= 0) return;
-        // один проход по кольцам: у каждого кольца показа — масса, её радиус и второй момент, доля ещё в фазе волны
-        double[] m = new double[ANNULI], mr = new double[ANNULI], mr2 = new double[ANNULI], wt = new double[ANNULI], wtop = new double[ANNULI];
-        for (int i = 0; i < RINGS; i++) {
-            if (ball[i]) continue;
-            double e = ringNow(i, t);
-            if (e <= 0) continue;
-            int a = annulus[i];
-            m[a] += e;
-            mr[a] += e * r[i];
-            mr2[a] += e * r[i] * r[i];
-            if (t - arrival[i] < positive[i]) {
-                wt[a] += e;
-                wtop[a] += e * waveTop(i, t);
+        // один проход по кольцам: у каждого кольца показа в секторе — масса, её радиус и второй момент, доля ещё в фазе волны
+        double[][] m = new double[ANNULI][SECTORS], mr = new double[ANNULI][SECTORS], mr2 = new double[ANNULI][SECTORS],
+                wt = new double[ANNULI][SECTORS], wtop = new double[ANNULI][SECTORS];
+        for (int k = 0; k < SECTORS; k++) {
+            for (int i = 0; i < RINGS; i++) {
+                if (ball[k][i]) continue;
+                double e = ringNow(k, i, t);
+                if (e <= 0) continue;
+                int a = annulus[i];
+                m[a][k] += e;
+                mr[a][k] += e * r[i];
+                mr2[a][k] += e * r[i] * r[i];
+                if (t - arrival[k][i] < positive[k][i]) {
+                    wt[a][k] += e;
+                    wtop[a][k] += e * waveTop(k, i, t);
+                }
             }
         }
-        double spread = CloudModel.spreadH(air.spread(), path(t)), front = front(t);
+        double spread = CloudModel.spreadH(air.spread(), path(t)), stretch = stretch(t);
         for (int a = 0; a < ANNULI; a++) {
-            if (m[a] <= 1e-9) continue;
-            // σ по вертикали: в фазе волны — верх Kuhl той части, что ещё в фазе; потом — таблица
-            double v = at(sv[a], t);
-            if (wt[a] > 0) v = wt[a] / m[a] * Math.max(0.05, wtop[a] / wt[a] / 2.5) + (1 - wt[a] / m[a]) * v;
-            double zc = 0.8 * v;
-            double[] d = drift(t, zc);
-            // кольцо показа — клубы по секторам на среднем по массе радиусе, у каждого — масса по своей поверхности (с воды
-            // пыли нет); σ — разброс колец по радиусу, не уже дуги сектора; видимый край (4σ) — не дальше фронта
-            double mean = mr[a] / m[a], var = Math.max(0, mr2[a] / m[a] - mean * mean);
-            double arc = Math.PI * mean / SECTORS / 1.25, sh = Math.max(Math.hypot(Math.max(Math.sqrt(var), arc), spread), v);
-            if (mean + EDGE_SIGMAS * sh > front) {
-                sh = Math.max((front - mean) / EDGE_SIGMAS, Math.min(sh, Math.max(arc, v)));
-                mean = Math.max(0, Math.min(mean, front - EDGE_SIGMAS * sh));
-                // фронт ещё у самой воронки: клубы — у середины, не шире него
-                if (mean + EDGE_SIGMAS * sh > front) sh = Math.max(front / EDGE_SIGMAS, v);
-            }
-            double[] w = sector[a];
+            double table = at(sv[a], t);
             for (int k = 0; k < SECTORS; k++) {
-                if (w[k] <= 0) continue;
-                double ang = 2 * Math.PI * (k + 0.5) / SECTORS;
-                out.blob(d[0] + mean * Math.cos(ang), zc, d[1] + mean * Math.sin(ang), sh, v, m[a] * fade * w[k]);
+                double mass = m[a][k];
+                if (mass <= 1e-9) continue;
+                // σ по вертикали: в фазе волны — верх Kuhl той части, что ещё в фазе; потом — таблица
+                double v = table;
+                if (wt[a][k] > 0) v = wt[a][k] / mass * Math.max(0.05, wtop[a][k] / wt[a][k] / 2.5) + (1 - wt[a][k] / mass) * v;
+                double zc = 0.8 * v;
+                // кольцо показа в секторе — клуб на среднем по массе радиусе; σ — разброс колец по радиусу, не уже дуги сектора;
+                // пласт стекает (радиус и ширина × R/R₀); видимый край (4σ) — не дальше фронта
+                double source = mr[a][k] / mass, var = Math.max(0, mr2[a][k] / mass - source * source);
+                double own = Math.max(Math.sqrt(var), Math.PI * source / SECTORS / 1.25), mean = source * stretch;
+                double sh = Math.max(Math.hypot(own * stretch, spread), v), front = front(k, t);
+                if (mean + EDGE_SIGMAS * sh > front) {
+                    sh = Math.max((front - mean) / EDGE_SIGMAS, Math.min(sh, Math.max(own, v)));
+                    mean = Math.max(0, Math.min(mean, front - EDGE_SIGMAS * sh));
+                    // фронт ещё у самой воронки: клубы — у середины, не шире него
+                    if (mean + EDGE_SIGMAS * sh > front) sh = Math.max(front / EDGE_SIGMAS, v);
+                }
+                double ang = 2 * Math.PI * (k + 0.5) / SECTORS, ux = Math.cos(ang), uz = Math.sin(ang);
+                double[] d = drift(t, zc);
+                double x = d[0] + mean * ux, z = d[1] + mean * uz;
+                double floor = floor(surface[k][a], t, x, z, source, ux, uz, k, a, own);
+                out.blob(x, floor + zc, z, sh, v, mass * fade);
             }
         }
     }
 
     /**
-     * Снос слоя ветром за t, м (x и z): ветер на высоте середины слоя {@code zc} над землёй, не ниже 2 м (⚠ высота
-     * середины — нынешняя на весь путь: слой растёт, и вначале он шёл чуть медленнее).
+     * Поверхность, на которой лежит клуб в (x, z) в возрасте t, м от точки взрыва: поднятый с поверхности на высоте
+     * {@code lifted} — на ней, пока под ним не ниже её больше чем на {@link #DROP}; над перепадом — опускается тяжёлым
+     * термиком ({@link #fall}: масса и размер клуба кольца показа {@code show} сектора {@code sector} шириной
+     * {@code own} в миг, когда он вышел за край; дальше плавучесть термика сохраняется — ⚠ крупная пыль, что оседает из
+     * него, её уносит, это не учтено) с того мига, как его путь (сток пласта вдоль {@code ux, uz} от радиуса
+     * {@code source} и снос ветром) вышел за край, но не ниже поверхности под ним. Выше своей поверхности не поднимается.
+     */
+    private double floor(double lifted, double t, double x, double z, double source, double ux, double uz, int sector,
+                         int show, double own) {
+        double below = relief.at(x, z);
+        if (Double.isNaN(below) || below >= lifted - DROP) return lifted;
+        // когда путь клуба вышел за край: первый узел пути над перепадом, уточнённый делением пополам
+        double lo = 0, hi = t;
+        int n = 12;
+        for (int j = 1; j <= n; j++) {
+            double tj = t * j / n;
+            if (dropped(lifted, tj, source, ux, uz, show)) {
+                hi = tj;
+                lo = t * (j - 1) / n;
+                break;
+            }
+        }
+        for (int j = 0; j < 6; j++) {
+            double mid = 0.5 * (lo + hi);
+            if (dropped(lifted, mid, source, ux, uz, show)) hi = mid;
+            else lo = mid;
+        }
+        // размер на краю: дальше термик растёт сам (R = R₀ + αz), а турбулентность воздуха плавучести не меняет
+        double v = at(sv[show], hi), h = Math.max(Math.hypot(own * stretch(hi), CloudModel.spreadH(air.spread(), path(hi))), v);
+        double dust = 0;
+        for (int i = 0; i < RINGS; i++) if (annulus[i] == show && !ball[sector][i]) dust += ringNow(sector, i, hi);
+        return Math.max(below, lifted - fall(dust, h, v, t - hi));
+    }
+
+    /**
+     * Место пути клуба кольца показа {@code show} в возрасте t — над перепадом вниз от поверхности {@code lifted}: где
+     * клуб был тогда (снос — на высоте середины слоя в тот миг).
+     */
+    private boolean dropped(double lifted, double t, double source, double ux, double uz, int show) {
+        double[] d = drift(t, 0.8 * at(sv[show], t));
+        double mean = source * stretch(t), below = relief.at(d[0] + mean * ux, d[1] + mean * uz);
+        return !Double.isNaN(below) && below < lifted - DROP;
+    }
+
+    /**
+     * Снос слоя ветром за t, м (x и z): ветер на высоте середины слоя {@code zc} над его поверхностью, не ниже 2 м (⚠
+     * высота середины — нынешняя на весь путь: слой растёт, и вначале он шёл чуть медленнее).
      */
     public double[] drift(double t, double zc) {
         double lean = air.wind(Math.max(2, zc)) * Math.max(t, 0);
