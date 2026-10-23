@@ -301,7 +301,9 @@ same up close and far away.
 - **Launch cloud**: while a rocket's exhaust still hits the ground, its smoke stays at the launcher, together with the
   dust it blows up, and rises and drifts as one warm cloud. A Shahed leaves a short white puff at the rail, a cruise
   missile's booster a bigger one. Each Grad rocket adds its own cloud, so a full salvo buries the launcher in smoke and
-  dust that hang and drift downwind. Stone and concrete raise no dust. The ICBM leaves a large cloud at the pad.
+  dust that hang and drift downwind. Stone and concrete raise no dust. The ICBM leaves a large cloud at the pad. The
+  jet blows the dust along the ground the way it points: from a slanted rail or tube (the Shahed, the Grad, the cruise
+  missile) the dust streams out ahead of the jet in a long tongue, from a jet straight down it spreads all around.
 - **From behind**: looking along a trail or straight at a nozzle you see the round end of the smoke and the flame, not a
   flat strip.
 - **Your eyes adjust to fire**: next to a launch at night or a fireball, your eyes adjust to the fire's light. The flame
