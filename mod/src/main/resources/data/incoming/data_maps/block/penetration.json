@@ -276,7 +276,15 @@
       "kind": "concrete",
       "s": 0.84
     },
+    "minecraft:cracked_deepslate_bricks": {
+      "kind": "concrete",
+      "s": 0.84
+    },
     "minecraft:deepslate_tiles": {
+      "kind": "concrete",
+      "s": 0.84
+    },
+    "minecraft:cracked_deepslate_tiles": {
       "kind": "concrete",
       "s": 0.84
     },
@@ -292,6 +300,10 @@
       "kind": "concrete",
       "s": 1.0
     },
+    "minecraft:cracked_nether_bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
     "minecraft:red_nether_bricks": {
       "kind": "concrete",
       "s": 1.0
@@ -301,6 +313,10 @@
       "s": 1.0
     },
     "minecraft:polished_blackstone_bricks": {
+      "kind": "concrete",
+      "s": 1.0
+    },
+    "minecraft:cracked_polished_blackstone_bricks": {
       "kind": "concrete",
       "s": 1.0
     },

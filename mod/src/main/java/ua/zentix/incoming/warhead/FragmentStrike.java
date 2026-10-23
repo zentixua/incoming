@@ -56,8 +56,11 @@ public final class FragmentStrike implements UnitQueue.Job {
      * 0,6 × 1,8 м рамки игрока; у мобов — так же (оценка).
      */
     static final double BODY_FILL = 0.55;
-    /** Кладка с треснувшим видом в ванили: выбоина — она. */
-    static final Map<Block, Block> CRACKED = Map.of(
+    /**
+     * Кладка с треснувшим видом в ванили: выбоина — она. Треснувший блок — тот же материал: те же запись пробития,
+     * ответ волне и теги мода (GameTest {@code FragmentGameTests.crackedKeepsMaterial}).
+     */
+    public static final Map<Block, Block> CRACKED = Map.of(
             Blocks.STONE_BRICKS, Blocks.CRACKED_STONE_BRICKS,
             Blocks.DEEPSLATE_BRICKS, Blocks.CRACKED_DEEPSLATE_BRICKS,
             Blocks.DEEPSLATE_TILES, Blocks.CRACKED_DEEPSLATE_TILES,
