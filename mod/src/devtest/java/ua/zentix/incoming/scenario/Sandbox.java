@@ -142,7 +142,7 @@ final class Sandbox {
     @Nullable
     private Capture armed, capture;
 
-    private enum Pending { SERVER, LAUNCH, FLIGHT, SITE, NUKE, SAM }
+    private enum Pending { SERVER, LAUNCH, FLIGHT, SITE, NUKE, SAM, POND }
 
     private int pendingSince;
     private SandboxCommand pendingCmd;
@@ -493,6 +493,12 @@ final class Sandbox {
         // пожар ({@code fire}) — на незераке: земля снова трава
         server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:grass_block replace minecraft:netherrack", s.getX() - 20, GROUND,
                 s.getZ() - 20, s.getX() + 20, GROUND, s.getZ() + 20));
+        // пруд ({@code blast … water}) — снова земля и трава
+        int half = SandboxCommand.POND / 2;
+        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:dirt replace minecraft:water", s.getX() - half, GROUND - SandboxCommand.POND_DEPTH + 1,
+                s.getZ() - half, s.getX() + half, GROUND - 1, s.getZ() + half));
+        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:grass_block replace minecraft:water", s.getX() - half, GROUND, s.getZ() - half,
+                s.getX() + half, GROUND, s.getZ() + half));
         effectTick = -1;
         capture = null;
     }
@@ -531,19 +537,17 @@ final class Sandbox {
             case BLAST -> {
                 placeCamera();
                 WeaponType w = c.weapon();
-                WeaponSpec spec = w.spec();
                 if (w == WeaponType.BUNKER) throw new IllegalArgumentException("бомба без сервера не взрывается: flight bunker");
-                int kind = switch (spec.blast()) {
-                    case MISSILE -> S2C.Blast.MISSILE;
-                    case ROCKET -> S2C.Blast.ROCKET;
-                    case DRONE, NONE -> S2C.Blast.DRONE;
-                };
-                Vec3 ground = new Vec3(site.x, GROUND + 1, site.z), pos = ground.add(0, c.number(2, 0), 0);
-                GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(ground));
-                long seed = c.args().size() > 1 ? c.seedAt(1) : 1;
-                // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
-                ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
-                begin();
+                if (c.water()) {
+                    // пруд — у сервера (вода у клиента приходит с чанком), взрыв — когда клиент видит воду под точкой
+                    BlockPos s = BlockPos.containing(site);
+                    int half = SandboxCommand.POND / 2;
+                    onServer(false, server -> run(server, String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:water", s.getX() - half,
+                            GROUND - SandboxCommand.POND_DEPTH + 1, s.getZ() - half, s.getX() + half, GROUND, s.getZ() + half)));
+                    pending = Pending.POND;
+                } else {
+                    blast(level, c);
+                }
             }
             case RAID -> {
                 placeCamera();
@@ -618,6 +622,23 @@ final class Sandbox {
         }
     }
 
+    /** Пакет взрыва {@code blast} только у клиента, тем же входом, что от сервера; земля — то, что под точкой (трава или пруд). */
+    private void blast(ClientLevel level, SandboxCommand c) {
+        WeaponType w = c.weapon();
+        int kind = switch (w.spec().blast()) {
+            case MISSILE -> S2C.Blast.MISSILE;
+            case ROCKET -> S2C.Blast.ROCKET;
+            case DRONE, NONE -> S2C.Blast.DRONE;
+        };
+        int n = c.args().size() - (c.water() ? 1 : 0);
+        Vec3 ground = new Vec3(site.x, GROUND + 1, site.z), pos = ground.add(0, n > 2 ? c.number(2) : 0, 0);
+        GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(ground));
+        long seed = n > 1 ? c.seedAt(1) : 1;
+        // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
+        ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
+        begin();
+    }
+
     /** Эффект начался в этом тике: часы кадров и звука. */
     private void begin() {
         begin(tick);
@@ -682,6 +703,9 @@ final class Sandbox {
                 }
                 case LAUNCH, FLIGHT -> watchFlight(mc);
                 case SAM -> watchSam();
+                case POND -> {
+                    if (mc.level.getFluidState(BlockPos.containing(site).atY(GROUND)).isSource()) blast(mc.level, pendingCmd);
+                }
             }
             if (pending != null && tick - pendingSince > FLIGHT_LIMIT) {
                 pending = null;

@@ -49,7 +49,7 @@ public final class WaterDecal {
     /** Колец в кадре — не больше; выборок профиля. */
     public static final int RINGS = 4, SAMPLES = 64;
     /** Верх стоячей воды над низом блока (у {@code LiquidBlockRenderer} — 8/9). */
-    static final double SURFACE = 8.0 / 9.0;
+    public static final double SURFACE = 8.0 / 9.0;
     /**
      * Уровень моря на клиенте: генератора у клиента нет, а {@code Level.getSeaLevel} в 1.21.1 устарел и всегда 63 —
      * море обычного мира (вода до 62, первый воздух над ней — 63).

@@ -145,7 +145,7 @@ public final class FarBlasts {
             this.y = y;
             this.z = z;
             this.ground = ground;
-            this.water = ground.isWater() && source.chargeKg() > 0 ? new WaterBlast(source.chargeKg(), model.air) : null;
+            this.water = ground.isWater() && source.chargeKg() > 0 ? water(level, new Vec3(x, y, z), source.chargeKg(), model.air) : null;
             this.seed = seed;
             this.born = clock;
             this.bornSeconds = SmokeGrid.seconds(0);
@@ -171,8 +171,8 @@ public final class FarBlasts {
 
         /** Сколько тиков событие живёт (облако видно). */
         double life() {
-            // водяная пыль взрыва на воде живёт дольше облака без пыли воронки
-            return Math.max(model.life, water == null ? 0 : water.mistLife()) * 20;
+            // водяная пыль, пена и волна взрыва на воде живут дольше облака без пыли воронки
+            return Math.max(model.life, water == null ? 0 : Math.max(water.mistLife(), water.waterLife())) * 20;
         }
 
         /** Сколько тиков светит огненный шар (0 — шара нет). */
@@ -476,6 +476,51 @@ public final class FarBlasts {
         return CloudModel.Air.of(air, water ? 1 : air.humidity());
     }
 
+    /**
+     * Взрыв на воде заряда {@code kg} кг ТНТ в месте {@code pos} ({@link WaterBlast}): глубина заряда под гладью и воды под
+     * ним — по чанку клиента (вверх от точки, пока вода, — гладь; вниз от глади, пока вода, — дно; чанка нет — удар о гладь
+     * глубокой воды). Один для облака события и для струй частицами вблизи.
+     */
+    public static WaterBlast water(ClientLevel level, Vec3 pos, double kg, CloudModel.Air air) {
+        net.minecraft.core.BlockPos.MutableBlockPos m = net.minecraft.core.BlockPos.containing(pos).mutable();
+        if (level.getChunkSource().getChunk(m.getX() >> 4, m.getZ() >> 4, false) == null) return new WaterBlast(kg, 0, Double.POSITIVE_INFINITY, air);
+        // точка — в воде или над самой гладью (пакет ставит взрыв на гладь): верх воды — первый воздух над ней
+        if (level.getFluidState(m).isEmpty() && level.getFluidState(m.move(0, -1, 0)).isEmpty()) return new WaterBlast(kg, 0, Double.POSITIVE_INFINITY, air);
+        while (m.getY() < level.getMaxBuildHeight() && !level.getFluidState(m).isEmpty()) m.move(0, 1, 0);
+        double surface = m.getY() - 1 + ua.zentix.incoming.client.fx.layer.WaterDecal.SURFACE;
+        int bottom = m.getY() - 1, deepest = Math.max(level.getMinBuildHeight(), bottom - 64);
+        m.setY(bottom);
+        while (m.getY() > deepest && !level.getFluidState(m).isEmpty()) m.move(0, -1, 0);
+        double floor = level.getFluidState(m).isEmpty() ? m.getY() + 1 : Double.NEGATIVE_INFINITY;
+        return new WaterBlast(kg, surface - pos.y, surface - floor, air);
+    }
+
+    /** Профили пены и волны кольца взрыва на воде в кадр (каждый кадр — без новых объектов). */
+    private static final float[] DARK = new float[ua.zentix.incoming.client.fx.layer.WaterDecal.SAMPLES],
+            FOAM = new float[ua.zentix.incoming.client.fx.layer.WaterDecal.SAMPLES];
+
+    /**
+     * Наклейка взрыва на воде ({@link ua.zentix.incoming.client.fx.layer.WaterDecal}): фронт — гребень волны от полости
+     * ({@link WaterBlast#waveRadius}), за ним — гребни через длину волны (рябь темнит воду; ⚠ подача: темнота — по
+     * высоте волны, без своей оптики) и пена там, куда упала вода столба ({@link WaterBlast#foam}).
+     */
+    private static void decal(Event e, double t) {
+        WaterBlast w = e.water;
+        if (!ua.zentix.incoming.client.fx.layer.WaterDecal.wanted() || t >= w.waterLife()) return;
+        double front = Math.max(w.waveRadius(t), w.radius), lambda = w.waveLength();
+        float most = 0;
+        for (int i = 0; i < DARK.length; i++) {
+            double behind = ua.zentix.incoming.client.fx.layer.WaterDecal.sampleAt(i, front), r = Math.max(0, front - behind);
+            // гребни: передний — у фронта, следующие — через длину волны внутрь, ниже на свою долю (пакет волн, ⚠ форма)
+            double phase = behind / lambda, crest = 0.5 + 0.5 * Math.cos(2 * Math.PI * phase);
+            double wave = w.waveRadius(t) > w.radius / 2 ? w.waveAt(r, t) * crest * Math.exp(-phase / 1.5) : 0;
+            DARK[i] = (float) (0.6 * wave);
+            FOAM[i] = (float) w.foam(r, t);
+            most = Math.max(most, Math.max(DARK[i], FOAM[i]));
+        }
+        if (most > 0.004f) ua.zentix.incoming.client.fx.layer.WaterDecal.ring(e.x, e.z, front, front, DARK, FOAM);
+    }
+
     /** Раз в тик: забыть прошедшее и чужое измерение, звук — когда дошёл фронт, лучи по рельефу — по очереди. */
     static void tick() {
         ClientLevel level = Minecraft.getInstance().level;
@@ -599,6 +644,7 @@ public final class FarBlasts {
         for (Event e : EVENTS) {
             if (e.level != level) continue;
             double age = Math.max(0, now - e.born);
+            if (e.water != null) decal(e, age / 20);
             // основание относительно камеры
             double bx = e.x - cam.x, by = e.y - cam.y, bz = e.z - cam.z;
             double d = e.distanceTo(cam);

@@ -13,7 +13,9 @@ import java.util.Locale;
  * <ul>
  *   <li>{@code blast <оружие> [seed] [высота]} — взрыв только у клиента: пакет взрыва в той точке песочницы, как от
  *       сервера (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять); высота —
- *       над землёй, м (удар в крышу — на высоте дома {@code house}, иначе — точка в воздухе над травой);</li>
+ *       над землёй, м (удар в крышу — на высоте дома {@code house}, иначе — точка в воздухе над травой); последнее слово
+ *       {@code water} — удар в пруд {@link #POND}×{@link #POND} блоков глубиной {@link #POND_DEPTH} (вода у сервера и
+ *       клиента, земля в пакете — вода; {@code clear} возвращает траву);</li>
  *   <li>{@code scenery grass|paved|forest} — поверхность и одинаковый лес для сравнения пыли (сначала убрать дом);</li>
  *   <li>{@code house <высота> [полуширина] [верх]} — дом из каменного кирпича под точкой (высота 0 — убрать), по
  *       умолчанию 21×21 блок; верх — блок крыши ({@code coarse_dirt} — крыша-сад с рыхлой землёй);</li>
@@ -54,6 +56,8 @@ record SandboxCommand(Verb verb, List<String> args) {
     static final int LAUNCH_RANGE = 3000;
     /** {@code flight}: пуск — на столько блоков к югу от точки (+Z), цель — на столько же к северу (−Z). */
     static final int FLIGHT_FROM = 600;
+    /** {@code blast … water}: сторона и глубина пруда, блоков (пруд шире столба и кольца брызг шахеда). */
+    static final int POND = 64, POND_DEPTH = 4;
 
     enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY }
 
@@ -91,7 +95,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     private void check() {
         switch (verb) {
             case BLAST, REAL -> {
-                need(1, 3);
+                need(1, verb == Verb.BLAST && water() ? 4 : 3);
                 WeaponType w = weapon();
                 if (w == WeaponType.NUKE) throw new IllegalArgumentException("ядерка — nuke <кт>");
                 if (verb == Verb.REAL) {
@@ -101,8 +105,9 @@ record SandboxCommand(Verb verb, List<String> args) {
                     }
                     break;
                 }
-                if (args.size() > 1) seedAt(1);
-                if (args.size() > 2 && (number(2) < 0 || number(2) > 200)) throw new IllegalArgumentException("высота 0–200 м");
+                int n = args.size() - (water() ? 1 : 0);
+                if (n > 1) seedAt(1);
+                if (n > 2 && (number(2) < 0 || number(2) > 200)) throw new IllegalArgumentException("высота 0–200 м");
             }
             case LAUNCH, FLIGHT -> {
                 need(1, own() ? 3 : 2);
@@ -177,6 +182,11 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case AGAIN, CLEAR, RELOAD -> need(0, 0);
         }
+    }
+
+    /** {@code blast … water}: удар в пруд. */
+    boolean water() {
+        return verb == Verb.BLAST && args.size() > 1 && args.getLast().equals("water");
     }
 
     /** {@code nuke}: воздушный подрыв. */
