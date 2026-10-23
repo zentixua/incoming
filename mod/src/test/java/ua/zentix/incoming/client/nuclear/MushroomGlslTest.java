@@ -65,17 +65,18 @@ class MushroomGlslTest {
     void footMatchesJava() {
         String both = read("include/pall.glsl") + GLSL;
         GlslFunction width = GlslFunction.parse(GLSL, "mushFootWidth"), share = GlslFunction.parse(GLSL, "mushFootShare");
-        GlslFunction density = GlslFunction.parse(both, "mushFootDensity");
+        GlslFunction density = GlslFunction.parse(both, "mushFootDensity"), band = GlslFunction.parse(GLSL, "mushFootBand");
         for (double top : new double[]{0.5, 40, 380}) {
             for (double h = -0.2 * top; h <= 5 * top; h += 0.01 * top) {
                 Map<String, Double> at = Map.of("h", h, "top", top);
                 assertEquals(MushroomField.footWidth(h, top), width.call(at), 1e-9, "h " + h);
                 assertEquals(MushroomField.footShare(h, top), share.call(at), 1e-9, "h " + h);
                 for (double rise : new double[]{0.3 * top, 1e9}) {
-                    for (double stem : new double[]{0, 0.03, 0.3}) {
-                        assertEquals(MushroomField.footDensity(h, top, 0.4, 0.7, rise, stem),
-                                density.call(Map.of("h", h, "top", top, "sigma", 0.4, "share", 0.7, "rise", rise, "stem", stem)), 1e-9, "h " + h);
-                    }
+                    assertEquals(MushroomField.footDensity(h, top, 0.4, 0.7, rise),
+                            density.call(Map.of("h", h, "top", top, "sigma", 0.4, "share", 0.7, "rise", rise)), 1e-9, "h " + h);
+                }
+                for (double merge : new double[]{0, 0.4 * top, 2.3 * top}) {
+                    assertEquals(MushroomField.footBand(h, top, 0.7, merge), band.call(Map.of("h", h, "top", top, "share", 0.7, "merge", merge)), 1e-9, "h " + h);
                 }
             }
         }

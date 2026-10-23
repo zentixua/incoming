@@ -927,16 +927,20 @@ float mushLobes(vec3 c, float tile, float cone, float k, vec3 ch) {
     return (n - 0.5) + 0.35 * fine * (f - 0.5);
 }
 
-// Клубы подсоса у основания ножки гриба m в месте q тела (r — радиус ножки на этой высоте): пятна ножки, которые идут с
-// воздухом слоя по линиям тока угла (mushFootWidth) — по верху ковра к ножке и вверх по её стенке: путь вдоль потока —
-// высота минус расстояние от стенки, сдвинутый на подъём воздуха ножки. Подача (не по данным, фактов не меняет): узор ещё
-// и закручивается вокруг оси — против часовой стрелки сверху, как вихрь притока в северном полушарии, радиан на два верха
-// слоя пути; замеров вращения притока у ножки нет
-float mushFootLobes(Mush m, vec3 q, float r, float cone, float k) {
-    float path = q.y - max(length(q.xz) - r, 0.0) - m.stemRise;
-    float turn = 0.5 * path / max(m.footTop, 1.0), c = cos(turn), s = sin(turn);
+// Пятна ножки гриба m в месте q тела (rho — от оси, r — радиус ножки на этой высоте): струи поднимаются с воздухом,
+// который тянет кольцо (вдвое вытянуты по высоте, мелких нет — их вытягивает подъём). У основания — те же пятна в
+// полосе подсоса (mushFootBandAt, c — её доля верха слоя): путь вдоль потока — высота минус расстояние от стенки, и пятна
+// идут по верху ковра к ножке и вверх по её стенке; подача (не по данным, фактов не меняет): узор там повёрнут вокруг оси
+// на MUSH_FOOT_TURN × долю полосы — пятно, поднимаясь, поворачивается против часовой стрелки сверху (как вихрь притока в
+// северном полушарии; замеров вращения притока у ножки нет); где полоса сошла на нет, узор — ножки, без шва
+const float MUSH_FOOT_TURN = 1.0;
+
+float mushStemLobes(Mush m, vec3 q, float rho, float r, float cone, float k) {
+    float c = clamp(mushFootBandAt(m, q.y) / max(m.footTop, 1.0), 0.0, 1.0);
+    float path = q.y - c * max(rho - r, 0.0) - m.stemRise;
+    float turn = MUSH_FOOT_TURN * c, cs = cos(turn), sn = sin(turn);
     // место в узоре — откуда воздух пришёл: поворот на север от востока (−z) — против часовой сверху
-    vec2 was = vec2(c * q.x + s * q.z, c * q.z - s * q.x);
+    vec2 was = vec2(cs * q.x + sn * q.z, cs * q.z - sn * q.x);
     return mushLobes(vec3(was.x, 0.5 * path, was.y), m.stemTile, max(cone, m.stemTile), k + 4.0, MUSH_STREAKS);
 }
 
@@ -990,30 +994,25 @@ vec4 mushDense(Mush m, vec3 q, float cone, float k, out float lobes, out float d
         near = d.x - MUSH_CAP_REACH * uc;
     }
     if (m.stemTau > 0.0) {
-        float r = mushStemAt(m, q.y);
-        if (d.y < MUSH_STEM_REACH * r) {
-            float stem = mushStemSigma(m, q.y);
-            if (stem > 0.0) {
-                // струи поднимаются с воздухом, который тянет кольцо: пятна вдвое вытянуты по высоте, мелких нет —
-                // их вытягивает подъём (мелкие пятна, вытянутые в нитки, у тонкой ножки — кружево)
-                float l = mushLobes(vec3(q.x, 0.5 * (q.y - m.stemRise), q.z), m.stemTile, max(cone, m.stemTile), k + 4.0, MUSH_STREAKS);
+        // ножка и подсос у её основания (mushFootAt) — одна пыль: где подсос гуще ножки — он; пятна — одни
+        float r = mushStemAt(m, q.y), rho = length(q.xz);
+        float stem = mushStemSigma(m, q.y), foot = mushFootSigma(m, q.y);
+        float df = rho - mushFootAt(m, q.y), reach = MUSH_STEM_REACH * r;
+        bool inStem = stem > 0.0 && d.y < reach, inFoot = foot > 0.0 && df < reach;
+        if (inStem || inFoot) {
+            float l = mushStemLobes(m, q, rho, r, cone, k);
+            if (inStem) {
                 float shifted = d.y - MUSH_STEM_LOBES * r * l;
                 sigma.y = stem * mushEdge(shifted, MUSH_STEM_EDGE * r);
                 near = min(near, shifted - MUSH_STEM_EDGE * r);
             }
-        }
-        // подсос у основания (mushFootAt): та же пыль, где он гуще ножки — он; свои клубы — идут с воздухом слоя
-        float foot = mushFootSigma(m, q.y);
-        if (foot > 0.0) {
-            float df = length(q.xz) - mushFootAt(m, q.y);
-            if (df < MUSH_STEM_REACH * r) {
-                float shifted = df - MUSH_STEM_LOBES * r * mushFootLobes(m, q, r, cone, k);
+            if (inFoot) {
+                float shifted = df - MUSH_STEM_LOBES * r * l;
                 sigma.y = max(sigma.y, foot * mushEdge(shifted, MUSH_STEM_EDGE * r));
                 near = min(near, shifted - MUSH_STEM_EDGE * r);
-            } else {
-                near = min(near, df - MUSH_STEM_REACH * r);
             }
         }
+        if (foot > 0.0 && !inFoot) near = min(near, df - reach);
     }
     float uk = mushSkirtUnit(m);
     if (m.skirtSigma > 0.0 && d.z < MUSH_SKIRT_REACH * uk) {

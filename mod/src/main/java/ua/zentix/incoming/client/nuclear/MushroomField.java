@@ -587,7 +587,7 @@ public final class MushroomField {
         // струи ножки — вверх с воздухом, который тянет кольцо (MushroomModel.stemRise); пожары под грибом: верх дыма шторма
         // (тот же, до которого встают его столбы в пелене, FireStorms.slot) и радиус зоны пожаров (свет — fire, после света
         // кадра)
-        put(into, o, 11, d.blocks(MushroomModel.stemRise(t, d.hobMetres(), y, d.surface())), a.pall.hazeTop(), a.pall.fireReach(), 0);
+        put(into, o, 11, d.blocks(MushroomModel.stemRise(t, d.hobMetres(), y, d.surface())), a.pall.hazeTop(), a.pall.fireReach(), FOOT_LAYER[4]);
         // часы кипения шапки (свет пожаров под грибом — fire, после света кадра)
         put(into, o, 12, 0, 0, 0, churn(d).at(t));
         // столб воды: ослабление стенки — её толща поперёк на её толщину, × вода, что ещё не упала и уже не пар, × насколько
@@ -616,7 +616,7 @@ public final class MushroomField {
         put(into, o, FOOT, FOOT_LAYER[0], FOOT_LAYER[1], FOOT_LAYER[2], FOOT_LAYER[3]);
     }
 
-    private static final double[] FOOT_LAYER = new double[4], LAYER_AT = new double[2];
+    private static final double[] FOOT_LAYER = new double[5], LAYER_AT = new double[2];
 
     /**
      * Подсос у основания ножки в {@code out} ({@code mushroom.glsl}: тексель 19), блоки: верх слоя пыли волны у стенки
@@ -632,7 +632,7 @@ public final class MushroomField {
     /** То же у подрыва {@code d} с пеленой {@code pall} и водой под ней {@code water} в момент {@code ticks} (тики клиента). */
     static void foot(Detonation d, PallField pall, PallField.Water water, MushroomModel.Shape s, double ticks, double[] out) {
         out[0] = 1;
-        out[1] = out[2] = out[3] = 0;
+        out[1] = out[2] = out[3] = out[4] = 0;
         if (s.stemTau() <= 0 || !pall.visible(ticks)) return;
         double hob = Math.max(0, d.hobMetres()), y = d.yieldKt(), t = s.t();
         double wall = MushroomModel.stemRadius(0, s.stemR(), MushroomModel.dustFlare(s));
@@ -643,6 +643,20 @@ public final class MushroomField {
         out[1] = LAYER_AT[0] * s.life();
         out[2] = DustModel.stemShare(wall, y);
         out[3] = d.blocks(MushroomModel.stemRise(t, hob, y, d.surface()) - MushroomModel.stemRise(from, hob, y, d.surface()));
+        out[4] = footMerge(out[0], out[1], Math.min(out[3], d.blocks(s.stemTop())),
+                s.stemTau() / (2 * d.blocks(MushroomModel.stemRadius(d.metres(out[0]) / Math.max(s.capBottom(), 1), s.stemR(), MushroomModel.dustFlare(s)))));
+    }
+
+    /**
+     * Высота слияния подсоса с ножкой, блоки: где слой с подсосом у стенки ({@link #footBoth}: σ/(1 + (h/top)²), до фронта
+     * пыли подсоса {@code rise}) сравнивается с ножкой {@code stem} (её ослабление у верха слоя, 1/блок; по высоте у
+     * основания оно почти не меняется), — выше пыль слоя в ножке перемешана, и полоса за стенкой сошла на нет
+     * ({@link #footBand}). Не выше фронта пыли подсоса.
+     */
+    static double footMerge(double top, double sigma, double rise, double stem) {
+        double t = Math.max(top, 1), ratio = stem > 0 ? sigma / stem : Double.POSITIVE_INFINITY;
+        double h = ratio > 1 ? t * Math.sqrt(ratio - 1) : 0;
+        return Math.max(0, Math.min(h, rise));
     }
 
     /**
@@ -677,20 +691,33 @@ public final class MushroomField {
         return 1 / (1 + u * u);
     }
 
+    /** Слой и подсос вместе у стенки на высоте {@code h} ({@code mushFootBoth}): до фронта пыли подсоса {@code rise} — пыль слоя, выше — ещё нет. */
+    static double footBoth(double h, double top, double sigma, double rise) {
+        double t = Math.max(top, 1);
+        return sigma * footShare(h, t) * Math.max(0, Math.min(1, (rise - h) / t));
+    }
+
     /**
      * Ослабление подсоса на высоте {@code h} без доли края ({@code mushFootDensity}): пыль слоя у земли {@code sigma} ×
      * {@link #footShare} за вычетом той, что сам слой держит на этой высоте ({@link PallField#profile}), — у стенки слой и
      * подсос вместе дают sigma·footShare, без ступени на верху слоя (воздух несёт пыль, не разбавляя: доля подсоса
-     * {@code share} — ширина полосы, {@link #reach}, а не густота; без подсоса — 0); выше {@code rise}
-     * (докуда поднялся воздух ножки с начала подсоса) пыли слоя ещё нет. Где слой с подсосом (sigma·footShare) уже не гуще
-     * самой ножки ({@code stem} — её ослабление на этой высоте), его пыль в ней перемешана (её несёт ножка, {@code StemDust}): полоса за стенкой
-     * сходит на нет — от ослабления ножки до половины его.
+     * {@code share} — ширина полосы, {@link #footBand}, а не густота; без подсоса — 0); выше {@code rise} (докуда
+     * поднялся воздух ножки с начала подсоса) пыли слоя ещё нет.
      */
-    static double footDensity(double h, double top, double sigma, double share, double rise, double stem) {
+    static double footDensity(double h, double top, double sigma, double share, double rise) {
         if (h < 0 || share <= 0) return 0;
-        double t = Math.max(top, 1), up = Math.max(0, Math.min(1, (rise - h) / t));
-        double both = sigma * footShare(h, t) * up;
-        return Math.max(both - sigma * PallField.profile(h / t), 0) * smooth(0.5 * stem, stem + 1e-6, both);
+        return Math.max(footBoth(h, top, sigma, rise) - sigma * PallField.profile(h / Math.max(top, 1)), 0);
+    }
+
+    /**
+     * Полоса подсоса за стенкой ножки на высоте {@code h} ({@code mushFootBand}): {@link #footWidth} × доля подсоса; от верха
+     * слоя (или половины высоты слияния, если она ниже) сужается к стенке до высоты слияния {@code merge}
+     * ({@link #footMerge}): выше пыль слоя в ножке перемешана (её несёт ножка, {@code StemDust}). Так поверхность подсоса
+     * сходит в поверхность ножки, а не обрывается уступом (⚠ форма сужения — оценка).
+     */
+    static double footBand(double h, double top, double share, double merge) {
+        if (share <= 0) return 0;
+        return share * footWidth(Math.max(h, 0), top) * (1 - smooth(Math.min(top, 0.5 * merge), merge + 1e-6, h));
     }
 
     private static double smooth(double e0, double e1, double x) {

@@ -47,7 +47,7 @@ class StemFootTest {
             double ticks = 20 * seconds, front = d.metres(d.frontRadius(ticks));
             MushroomModel.Shape s = MushroomModel.shape(seconds, yieldKt, hob, d.surface(), Math.sqrt(Math.max(0, front * front - hob * hob)),
                     StemDust.of(yieldKt, hob, d.surface(), d.visibility()));
-            double[] foot = new double[4];
+            double[] foot = new double[5];
             MushroomField.foot(d, pall, PallField.Water.DRY, s, ticks, foot);
             return new Case(String.format(Locale.ROOT, "%.0f кт на %.0f м, %.0f с", yieldKt, hob, seconds), d, pall, s, ticks, foot);
         }
@@ -73,7 +73,7 @@ class StemFootTest {
 
         /** Подсос на высоте h без доли края. */
         double footSigma(double h) {
-            return MushroomField.footDensity(h, foot[0], foot[1], foot[2], Math.min(foot[3], s.stemTop()), stemSigma(h));
+            return MushroomField.footDensity(h, foot[0], foot[1], foot[2], Math.min(foot[3], s.stemTop()));
         }
 
         /** Подсос гуще самой ножки — от верха слоя до этой его доли (шагом в сотую); 1 — уже на верху слоя нет. */
@@ -83,14 +83,25 @@ class StemFootTest {
             return u;
         }
 
-        /** Середина полосы подсоса за стенкой ножки на высоте h — линия тока от верха ковра в ножку. */
+        /** Середина полосы подсоса за стенкой ножки на высоте h, пока она не сужается к ножке, — линия тока от верха ковра в ножку. */
         double sheet(double h) {
             return wall(h) + 0.5 * foot[2] * MushroomField.footWidth(Math.max(h, 0), foot[0]);
         }
 
+        /** Полоса ещё во всю ширину линии тока (не уже трёх четвертей её) — от густой части ковра до этой высоты, блоки. */
+        double full() {
+            double h = 0.3 * top();
+            while (h < 20 * top() && band(h + 0.01 * top()) >= 0.75 * foot[2] * MushroomField.footWidth(h + 0.01 * top(), foot[0])) h += 0.01 * top();
+            return h;
+        }
+
         /** Подсос — среднее по клубам ({@code mushMean}: край — у ножки). */
+        double band(double h) {
+            return MushroomField.footBand(h, foot[0], foot[2], foot[4]);
+        }
+
         double foot(double rho, double h) {
-            double r = wall(h), at = r + foot[2] * MushroomField.footWidth(Math.max(h, 0), foot[0]);
+            double r = wall(h), at = r + band(h);
             return footSigma(h) * EDGE.call(Map.of("d", rho - at, "e", 0.5 * MushroomField.LOBES_STEM * r));
         }
 
@@ -122,8 +133,8 @@ class StemFootTest {
      * По линии тока подсоса (середина его полосы за стенкой ножки) от густой части ковра (0,3 его верха) вверх, пока
      * подсос гуще ножки: густота ножки с подсосом без скачков (на сотую верха слоя — не больше 2 % ковра у стенки или в
      * начале пути; сам ковёр — поле пелены, у него скачков нет), а вся пыль — не реже половины ковра в начале пути
-     * или самой ножки на этой высоте — что меньше. Без подсоса над верхом ковра там пусто: ковёр и ножка — два тела с
-     * пустотой между ними. Путь — не выше верха слоя под фронтом пыли, что подсос несёт вверх с воздухом ножки (у
+     * или самой ножки на этой высоте — что меньше. Без подсоса над верхом ковра там пусто (у наземного 15 кт в 45–60 с): ковёр и ножка — два
+     * тела с пустотой между ними. Путь — не выше верха слоя под фронтом пыли, что подсос несёт вверх с воздухом ножки (у
      * наземного 15 кт в 45 с — 0,9 км): фронт — край, а не стык ковра и ножки. Ковёр — в одном месте, где полоса на
      * верху слоя: таблица пелены у клиента ({@link PallField#sigma}) — по узлам радиуса, и путь, смещаясь к оси на
      * десятки блоков, ловил бы ступени узлов, которых в шейдере нет (там таблица — текстура с интерполяцией).
@@ -133,7 +144,7 @@ class StemFootTest {
         int hollow = 0;
         for (Case c : CASES) {
             double top = c.top(), step = top / 100, from = 0.3 * top;
-            double end = Math.min(c.dense() * top, Math.min(c.foot[3], c.s.stemTop()) - top);
+            double end = Math.min(Math.min(c.dense() * top, c.full()), Math.min(c.foot[3], c.s.stemTop()) - top);
             double carpet = c.sheet(top);
             double start = c.dust(c.sheet(from), carpet, from, true), prev = start, thinnestOld = Double.POSITIVE_INFINITY;
             for (double h = from + step; h <= end; h += step) {
@@ -145,33 +156,42 @@ class StemFootTest {
                 thinnestOld = Math.min(thinnestOld, c.dust(c.sheet(h), carpet, h, false) / floor);
                 prev = now;
             }
-            System.out.printf(Locale.ROOT, "%s: верх %.0f, σ %.3f, доля %.2f, подъём %.0f; путь до %.2f верха, без подсоса — %.3f порога%n",
-                    c.name, top, c.foot[1], c.foot[2], c.foot[3], end / top, thinnestOld);
-            // у позднего и мелкого ковёр у стенки и без подсоса касается ножки — там пустоты не было
+            System.out.printf(Locale.ROOT, "%s: верх %.0f, σ %.3f, доля %.2f, подъём %.0f, слияние %.2f верха; путь до %.2f верха, без подсоса — %.3f порога%n",
+                    c.name, top, c.foot[1], c.foot[2], c.foot[3], c.foot[4] / top, end / top, thinnestOld);
+            // у позднего, мелкого и раннего воздушного ковёр у стенки и без подсоса касается ножки — там пустоты не было
             if (thinnestOld < 0.1) hollow++;
         }
-        assertTrue(hollow >= 5, "без подсоса пустота между ковром и ножкой была бы у " + hollow + " мигов");
+        // пустота была у наземного 15 кт в 45 и 60 с (ковёр у стенки в 4–7 раз гуще ножки — кадры хоста) и у воздушного в 120 с
+        assertTrue(hollow >= 3, "без подсоса пустота между ковром и ножкой была бы у " + hollow + " мигов");
     }
 
     /**
      * Поверхность пыли (где среднее ослабление — пятая часть ножки на этой высоте) от верха ковра до места, где подсос
      * уже не гуще ножки, — за поверхностью самой ножки и к ней всё ближе: ковёр поднимается к ножке плавным раструбом. На
-     * верху слоя раструб — не меньше четверти верха слоя × доля подсоса. Без подсоса поверхности совпадали. У наземного
+     * верху слоя раструб — не меньше четверти верха слоя × доля подсоса, к четырём верхам он сходит в поверхность ножки
+     * без уступа (на 0,05 верха слоя — не больше 0,1 его). Без подсоса поверхности совпадали. У наземного
      * подрыва подсос на верху слоя гуще ножки (ковёр у стенки гуще её), у воздушного — бывает и нет: там ножка сама
      * густа, как ковёр.
      */
     @Test
     void carpetClimbsIntoTheStem() {
         for (Case c : CASES) {
-            double top = c.top(), prev = Double.POSITIVE_INFINITY, dense = c.dense();
-            for (double u = 1; u <= dense; u += 0.05) {
+            double top = c.top(), prev = Double.POSITIVE_INFINITY;
+            for (double u = 1; u <= 4.001; u += 0.05) {
                 double h = u * top, seen = 0.2 * c.stem(0, h);
-                double dust = surface(c, h, seen, true), stem = surface(c, h, seen, false);
-                double need = u < 1.001 ? 0.25 * c.foot[2] : 0;
-                assertTrue(dust - stem > need * top, c.name + String.format(Locale.ROOT, ": на %.2f верха раструб %.0f м", u, dust - stem));
-                assertTrue(dust - stem <= prev + 1e-6 * top, c.name + String.format(Locale.ROOT, ": на %.2f верха раструб шире, чем ниже", u));
-                prev = dust - stem;
+                double excess = surface(c, h, seen, true) - surface(c, h, seen, false);
+                // раструб над ковром — где ножка сливается с подсосом выше полутора верхов слоя (у воздушного и у
+                // позднего слабого ковра слияние ниже: там ковёр и так касается ножки)
+                if (u < 1.001 && c.foot[4] >= 1.5 * top) {
+                    assertTrue(excess > 0.25 * c.foot[2] * top, c.name + String.format(Locale.ROOT, ": на верху слоя раструб %.0f м", excess));
+                }
+                assertTrue(excess <= prev + 1e-6 * top, c.name + String.format(Locale.ROOT, ": на %.2f верха раструб шире, чем ниже", u));
+                // сходит в ножку, а не обрывается уступом: на 0,05 верха слоя — не больше чем на 0,1 его (наклон до 2)
+                assertTrue(prev == Double.POSITIVE_INFINITY || prev - excess <= 0.1 * top,
+                        c.name + String.format(Locale.ROOT, ": на %.2f верха раструб обрывается: %.0f → %.0f м", u, prev, excess));
+                prev = excess;
             }
+            assertTrue(prev < 0.02 * top, c.name + ": на четырёх верхах слоя раструб ещё " + prev + " м");
         }
     }
 
