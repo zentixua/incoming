@@ -68,6 +68,12 @@ public final class HeatPass {
     static final double SEEN = 0.005;
     /** Клеток луча тени не больше (дальше — свободно): луч через всё окно по диагонали — до 480. */
     static final int SHADOW_CELLS = 160;
+    /**
+     * Тень не ищется у источника, чей прямой свет меньше этой доли всей освещённости грани (небо и огонь): порог контраста
+     * глаза ~1–2 % (Blackwell, «Contrast thresholds of the human eye», JOSA 36, 1946; ночью он выше — порог с запасом).
+     * Копия — {@code WEBER} в {@code fx_heat}.
+     */
+    static final double WEBER = 0.02;
 
     @Nullable
     static ShaderInstance shader;
@@ -376,11 +382,17 @@ public final class HeatPass {
         for (int i = 0; i < SHADOW_CELLS; i++) {
             if (!own && cells.solid(cell[0], cell[1], cell[2])) return true;
             own = false;
-            int k = next[0] <= next[1] && next[0] <= next[2] ? 0 : next[1] <= next[2] ? 1 : 2;
-            double t = next[k];
-            cell[k] += dir[k];
-            next[k] += inv[k];
-            if (t >= t1 || cell[k] < 0 || cell[k] >= size[k]) break;
+            double t = Math.min(next[0], Math.min(next[1], next[2]));
+            if (t >= t1) break;
+            // шаг по каждой оси, у которой грань ближе всех (у шейдера — step: при равенстве — по обеим)
+            boolean out = false;
+            for (int k = 0; k < 3; k++) {
+                if (next[k] > t) continue;
+                cell[k] += dir[k];
+                next[k] += inv[k];
+                out |= cell[k] < 0 || cell[k] >= size[k];
+            }
+            if (out) break;
         }
         return false;
     }
