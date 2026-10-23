@@ -133,7 +133,7 @@ gpu_clients_running() {
     while IFS= read -r -d '' a; do
       [ "$a" = --virtual ] && virt=1
       if [ "$a" = "$kwin" ] || [ "${a##*/}" = "$kwin" ]; then hit=1; fi
-    done < "/proc/$p/cmdline" 2>/dev/null
+    done 2>/dev/null < "/proc/$p/cmdline"
     [ -n "$virt" ] && [ -n "$hit" ] || continue
     [ -n "${1:-}" ] && _descends "$p" "$1" && continue
     echo "$p $(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | cut -c1-200)"
@@ -201,10 +201,11 @@ lease_release() {
 set -uo pipefail
 me=$(lease_owner)
 case "${1:-}" in
-  status) lease_status; gpu_client_busy; exit 0 ;;
+  status) out=$(lease_status); echo "$out"; [[ $out == "аренды нет"* ]] || gpu_client_busy; exit 0 ;;
   take) lease_take "$me" "$(cd "$(dirname "$0")/.." && pwd)" "${2:-}" && echo "видеокарта у $me" ;;
   release)
-    who=$(gpu_client_busy) && [[ $(cat "$GPU_CLIENT.who" 2>/dev/null) == "$me "* ]] && { echo "$who — сначала остановить его (tools/sandbox.sh stop)" >&2; exit 75; }
+    # свой клиент — только если замок держат (файл «кто» остаётся после конца клиента)
+    ! flock -n -s "$GPU_CLIENT" true 2>/dev/null && who=$(gpu_client_busy) && [[ $(cat "$GPU_CLIENT.who" 2>/dev/null) == "$me "* ]] && { echo "$who — сначала остановить его (tools/sandbox.sh stop)" >&2; exit 75; }
     if lease_release "$me"; then echo "видеокарта отпущена"; else echo "аренда не у $me: $(lease_status)"; fi ;;
   *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 2 ;;
 esac

@@ -150,10 +150,11 @@ start() {
     artem_playing && { echo "игра Артёма запущена — видеокарту не берём" >&2; exit 75; }
     # с картинкой — одна сессия за раз: аренда у другой — отказ (её песочницу и задачи не гасим); клиент на видеокарте
     # уже идёт (своя песочница другого дерева, свой шлагбаум) — тоже отказ, до сборки
-    local who
+    local who said=
     while who=$(gpu_client_busy); do
       [ -n "$wait" ] || { echo "$who" >&2; exit 75; }
-      echo "$(date +%T) $who — жду" >&2; sleep 10
+      [ -z "$said" ] && { echo "$(date +%T) $who — жду" >&2; said=1; }
+      sleep 10
     done
     _lease_read
     fresh=1; [ "$L_OWNER" = "$INCOMING_GPU_OWNER" ] && ! _lease_free && fresh=

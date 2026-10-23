@@ -131,8 +131,9 @@ final class Sandbox {
     private Path running;
     /** Тик, когда команда без эффекта кончится сама ({@code wait}); −1 — нет. */
     private int waitUntil = -1;
-    /** Время суток (0–23999), которого команда {@code time} ждёт у клиента; −1 — нет. */
+    /** Время суток (0–23999), которого команда {@code time} ждёт у клиента; −1 — нет; с какого тика ждёт. */
     private long timeWait = -1;
+    private int timeSince;
     /** Эффект ждёт начала: что ждать (пуск, пролёт, сервер) и с какого тика. */
     @Nullable
     private Pending pending;
@@ -382,6 +383,7 @@ final class Sandbox {
                             level.getDayTime(), level.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
                 });
                 timeWait = Math.floorMod(day, 24000L);
+                timeSince = tick;
             }
             case HUD -> {
                 mc.options.hideGui = c.args().getFirst().equals("off");
@@ -594,6 +596,10 @@ final class Sandbox {
         if (timeWait >= 0 && Math.floorMod(mc.level.getDayTime() - timeWait, 24000L) <= 1) {
             timeWait = -1;
             finish("ok");
+        } else if (timeWait >= 0 && tick - timeSince > 40) {
+            // пакет идёт тик-два; не пришло за 2 с — смену суток включили или сервер команду не принял
+            timeWait = -1;
+            finish("error время не пришло к клиенту за 2 с: " + mc.level.getDayTime() % 24000);
         }
         if (pending != null) {
             if (serverError != null) {
