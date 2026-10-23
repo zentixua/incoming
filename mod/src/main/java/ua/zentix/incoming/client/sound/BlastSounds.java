@@ -14,6 +14,7 @@ import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.fx.BlastHit;
 import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.nuclear.Deafness;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.HearingModel;
@@ -39,7 +40,7 @@ import java.util.Locale;
  * ({@link HearingModel#audibleRangeM}).</li>
  * </ul>
  * Вариант записи выбирает зерно взрыва (пакет {@code S2C.Blast}): каждый взрыв звучит по-своему, а его ракурсы — одна
- * запись. Взрыв поднимает окно громкости ({@link Loudness.Window}): моторы под ним уходят вниз. Все звуки взрывов (ракурсы, удар в грудь, удар у
+ * запись. Моторы снарядов под громкий взрыв уходят вниз ({@link Ducking}). Все звуки взрывов (ракурсы, удар в грудь, удар у
  * уха, эхо, звуки бомбы) — в одной смеси ({@link Mix}): потолок громкости — у суммы, а не у каждого.
  */
 public final class BlastSounds {
@@ -68,6 +69,7 @@ public final class BlastSounds {
     private static long ticks;
     /** Смесь взрывов у уха: громкость в игре — половина децибел суммарного уровня, потолок — у суммы ({@link Mix}). */
     private static final Mix MIX = new Mix();
+    private static final List<CraterFire> FIRES = new ArrayList<>();
     /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
     private static String last = "";
     @Nullable
@@ -102,10 +104,6 @@ public final class BlastSounds {
         Outdoor.Heard heard = Outdoor.hear(range(s), s.underground() ? atNear(s, DEEP_LUFS) : BlastMix.v640(s), path);
         float v = heard.volume();
         if (v < AUDIBLE) return heard;
-        // окно громкости: в тишине дальний раскат — громче неподвижной шкалы, под громким — нет
-        double file = s.underground() ? DEEP_LUFS : BlastMix.FAR_LUFS, lufs = file + 20 * Math.log10(v);
-        v = BlastMix.gain(lufs + Loudness.WINDOW.lift(lufs) - file);
-        Loudness.WINDOW.blast(lufs);
         float highs = highs(path);
         SoundEvent event = s.underground() ? ModSounds.BOMB_DEEP.get() : ModSounds.BLAST_FAR.get();
         float pitch = s.underground() ? 1 : BlastMix.pitch(s.chargeKg());
@@ -177,11 +175,9 @@ public final class BlastSounds {
         double tick = clock.ticks(0);
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         double d = ear.distanceTo(pos), pa = BlastMix.pressure(s, d), loudness = BlastMix.loudness(pa);
-        // окно громкости ({@link Loudness.Window}): взрыв громче всего, что звучит, — у потолка, подъём на всю запись
-        double lift = Loudness.WINDOW.lift(loudness);
-        BlastMix.Layers l = BlastMix.at(s, d, lift);
+        BlastMix.Layers l = BlastMix.at(s, d);
         float pitch = BlastMix.pitch(s.chargeKg());
-        Loudness.WINDOW.blast(loudness);
+        ClientSounds.ducked(loudness);
         List<SoundInstance> shots = new ArrayList<>(4);
         SoundInstance loudest = null;
         float most = 0;
@@ -221,15 +217,15 @@ public final class BlastSounds {
             // своих источников не нашлось — удара нет и в смеси
             if (pulse) blast.add(new Mix.Layer(Envelope.of(x, BlastPulse.RATE), 1, l.pulse(), true));
         }
-        last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS lift %.1f pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
+        last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
                 s.weapon() == null ? "air" : s.weapon().name(), s.chargeKg(), d, pa, 20 * Math.log10(Math.max(pa, 1e-9) / 2e-5), 1000 * BlastMix.phase(s, d),
-                loudness, lift, pitch, l.near(), l.mid(), l.far(), l.sub(), l.pulse(), pulse ? "played" : "-", echoes == null ? "-" : "on");
+                loudness, pitch, l.near(), l.mid(), l.far(), l.sub(), l.pulse(), pulse ? "played" : "-", echoes == null ? "-" : "on");
         if (echoes != null) lastEchoes = echoes;
         for (SoundInstance shot : shots) {
             Deafness.before(shot);
             ClientSounds.start(shot);
         }
-        if (echoes != null) echoes.arrive(ear, BlastMix.uncapped(loudness + lift - BlastMix.FAR_LUFS), pitch);
+        if (echoes != null) echoes.arrive(ear, BlastMix.uncapped(loudness - BlastMix.FAR_LUFS), pitch);
     }
 
     /** Строка {@code SCENARIO blast-sound}: последний обычный взрыв у уха и его эхо; пусто — взрывов не было. */
@@ -248,6 +244,7 @@ public final class BlastSounds {
     /** Тик клиента. */
     static void tick() {
         ticks++;
+        FIRES.removeIf(fire -> !fire.tick(Minecraft.getInstance()));
     }
 
     /** Множитель громкости всех звуков взрывов сейчас ({@link Mix}). */
@@ -275,6 +272,8 @@ public final class BlastSounds {
         ECHOES.forEach(BlastEchoes::stop);
         ECHOES.clear();
         MIX.reset();
+        FIRES.forEach(CraterFire::stop);
+        FIRES.clear();
         lastEchoes = null;
         last = "";
     }
@@ -290,6 +289,7 @@ public final class BlastSounds {
         double pa = BlastMix.pressure(s, ear().distanceTo(pos));
         float v = byPressure(pa, underground ? CAVE_LUFS : DEEP_LUFS);
         if (v < AUDIBLE) return;
+        ClientSounds.ducked(BlastMix.loudness(pa));
         SoundEvent event = underground ? ModSounds.BOMB_CAVE.get() : ModSounds.BOMB_DEEP.get();
         ClientSounds.blastAtEar(event, pos, v, 1, BlastSounds::factor, mixed(event, v, 1));
     }
@@ -318,20 +318,14 @@ public final class BlastSounds {
         if (v >= AUDIBLE) bomb(ModSounds.BOMB_QUAKE.get(), pos, v, 0.8f);
     }
 
-    /**
-     * Громкость записи громкостью {@code fileLufs} для давления {@code pa} у уха ({@link BlastMix#loudness}) в окне
-     * громкости; слышно — звук в окне.
-     */
+    /** Громкость записи громкостью {@code fileLufs} для давления {@code pa} у уха ({@link BlastMix#loudness}). */
     static float byPressure(double pa, double fileLufs) {
-        double lufs = BlastMix.loudness(pa);
-        float v = BlastMix.gain(lufs + Loudness.WINDOW.lift(lufs) - fileLufs);
-        if (v >= AUDIBLE) Loudness.WINDOW.blast(lufs);
-        return v;
+        return BlastMix.gain(BlastMix.loudness(pa) - fileLufs);
     }
 
     /** Громкость записи громкостью {@code fileLufs} у взрыва {@code s} на краю ближней модели ({@link Outdoor#NEAR}). */
     static float atNear(BlastSource s, double fileLufs) {
-        return BlastMix.gain(BlastMix.loudness(BlastMix.pressure(s, Outdoor.NEAR)) - fileLufs);
+        return byPressure(BlastMix.pressure(s, Outdoor.NEAR), fileLufs);
     }
 
     private static Vec3 ear() {
@@ -361,10 +355,10 @@ public final class BlastSounds {
     static final double EJECTA_FALL_S = 2;
 
     /**
-     * Пожар в воронке гудит и трещит: мощность шума пламени — доля тепловыделения лужи {@code watts}, Вт
-     * ({@link Sources#flame}), докуда слышно — путь до уха.
+     * Пожар в воронке: запись петлёй в своей скорости, тепловыделение и длительность — у топлива модели.
      */
-    public static void fire(Vec3 pos, double watts, float pitch) {
-        Sources.play(ModSounds.BLAST_FIRE.get(), pos, Sources.BLAST_FIRE.power(Sources.flame(watts, Spectra.BLAST_FIRE)), pitch);
+    public static void fire(Vec3 pos, CloudModel model) {
+        ClientLevel world = Minecraft.getInstance().level;
+        if (world != null && model.poolWatts > 0) FIRES.add(new CraterFire(model, pos, world));
     }
 }

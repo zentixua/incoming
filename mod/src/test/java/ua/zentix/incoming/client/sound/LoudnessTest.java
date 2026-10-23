@@ -19,9 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Мерка громкости: та же, что в сборке звуков; громкость растёт с уровнем у уха до потолка — громкости ванильного TNT, у
- * взрыва с 1 psi — и ни один звук не упирается в громкость своего файла раньше (3.5.0: файлы моторов на мерке, и удар
- * поджига ракеты ближе ~45 м к пусковой, рёв ускорителя ближе ~20 м звучали одинаково). Окно громкости — {@link WindowTest}.
+ * Мерка громкости: та же, что в сборке звуков; громкость растёт с уровнем у уха до потолка — ближнего взрыва с 1 psi —
+ * и ни один звук не упирается в громкость своего файла раньше (3.5.0: файлы моторов на мерке, и удар поджига ракеты
+ * ближе ~45 м к пусковой, рёв ускорителя ближе ~20 м звучали одинаково).
  */
 class LoudnessTest {
     private static final double[] BIG = {200};
@@ -34,22 +34,8 @@ class LoudnessTest {
         Matcher m = Pattern.compile("(?m)^ROCKET_LAUNCH_LUFS = MOTOR_LUFS - ([\\d.]+)").matcher(script);
         assertTrue(m.find(), "ROCKET_LAUNCH_LUFS в build_sounds.py");
         assertEquals(Loudness.MOTOR_LUFS - Double.parseDouble(m.group(1)), Loudness.ROCKET_LAUNCH_LUFS, 1e-9);
-        m = Pattern.compile("(?m)^LAUNCH_LUFS = MOTOR_LUFS - ([\\d.]+)").matcher(script);
-        assertTrue(m.find(), "LAUNCH_LUFS в build_sounds.py");
-        assertEquals(Loudness.MOTOR_LUFS - Double.parseDouble(m.group(1)), Loudness.LAUNCH_LUFS, 1e-9);
-        m = Pattern.compile("(?m)^DRILL_LUFS = MOTOR_LUFS - ([\\d.]+)").matcher(script);
-        assertTrue(m.find(), "DRILL_LUFS в build_sounds.py");
-        assertEquals(Loudness.MOTOR_LUFS - Double.parseDouble(m.group(1)), Loudness.DRILL_LUFS, 1e-9);
-        // потолок — громкость ванильного TNT (random/explode1–4: −9,6…−11,0 LUFS); файлы взрывов его не громче
-        assertEquals(-10, Loudness.CEILING_LUFS, 0.5);
-        assertTrue(BlastMix.NEAR_LUFS <= Loudness.CEILING_LUFS && BlastMix.MID_LUFS <= Loudness.CEILING_LUFS);
-        m = Pattern.compile("(?m)^NEAR_LUFS, MID_LUFS, FAR_LUFS, SUB_DB = (-?[\\d.]+), (-?[\\d.]+), (-?[\\d.]+), ").matcher(script);
-        assertTrue(m.find(), "громкость ракурсов взрыва в build_sounds.py");
-        assertEquals(Double.parseDouble(m.group(1)), BlastMix.NEAR_LUFS, 1e-9);
-        assertEquals(Double.parseDouble(m.group(2)), BlastMix.MID_LUFS, 1e-9);
-        assertEquals(Double.parseDouble(m.group(3)), BlastMix.FAR_LUFS, 1e-9);
-        // ближний ракурс с ударом в грудь достают до потолка: файлы громкость взрыва с 1 psi не обрезают
-        assertTrue(BlastMix.NEAR_LUFS + BlastMix.WITH_SUB >= Loudness.CEILING_LUFS - 0.5);
+        // потолок — ближний ракурс взрыва с 1 psi: громче в игре нет ничего
+        assertEquals(BlastMix.NEAR_LUFS, Loudness.CEILING_LUFS, 1e-9);
     }
 
     private static double constant(String script, String name) {
@@ -58,41 +44,37 @@ class LoudnessTest {
         return Double.parseDouble(m.group(1));
     }
 
-    /**
-     * Мотор громче на 2 дБ у уха — на 1 дБ громче в игре, и так до самого верха окна; на верхе — файл целиком, на потолке.
-     * Окно у {@link Loudness#CEILING_LEVEL} — самое высокое (взрыв с 1 psi рядом).
-     */
+    /** Мотор громче на 2 дБ у уха — на 1 дБ громче в игре, и так до самого потолка; на потолке — файл целиком. */
     @Test
     void motorsGrowUpToTheCeiling() {
-        double prev = 0, top = Loudness.CEILING_LEVEL;
-        for (double level = Propagation.NIGHT; level <= top; level += 2) {
-            double v = Loudness.motor(Loudness.windowed(level, top));
+        double prev = 0;
+        for (double level = Propagation.NIGHT; level <= Loudness.CEILING_LEVEL; level += 2) {
+            double v = Loudness.motor(Loudness.gain(level, BIG[0]));
             assertTrue(v > prev, level + " дБА: " + v + " не громче " + prev);
             if (prev > 0) assertEquals(1, 20 * Math.log10(v / prev), 1e-4, level + " дБА");
             prev = v;
         }
-        assertEquals(1, Loudness.motor(Loudness.windowed(top, top)), 1e-6);
-        assertEquals(1, Loudness.motor(Loudness.windowed(top + 30, top)), 1e-6);
-        assertEquals(Loudness.CEILING_LUFS, Loudness.MOTOR_LUFS + 20 * Math.log10(Loudness.motor(Loudness.windowed(top, top))), 1e-6);
+        assertEquals(1, Loudness.motor(Loudness.gain(Loudness.CEILING_LEVEL, BIG[0])), 1e-6);
+        assertEquals(1, Loudness.motor(Loudness.gain(Loudness.CEILING_LEVEL + 30, BIG[0])), 1e-6);
+        assertEquals(Loudness.ENGINE_LUFS, Loudness.MOTOR_LUFS + 20 * Math.log10(Loudness.motor(Loudness.gain(Loudness.REF, BIG[0]))),
+                1e-5, "на REF — мерка");
     }
 
     /**
      * Удар поджига ускорителя ракеты громче {@link Loudness#REF} на десятки метров вокруг (РДТТ по NASA SP-8072) — тот
-     * самый случай, что упирался в файл: в 15 м он звучит громче, чем в 25 м, а в 25 м — громче, чем в 45 м (файл поджига
-     * на 1 дБ ниже потолка: ближе ~15 м — он целиком).
+     * самый случай, что упирался в файл: в 5 м он звучит громче, чем в 15 м, а в 15 м — громче, чем в 25 м.
      */
     @Test
     void missileLaunchIsLouderUpClose() {
         Noise.Rocket motor = WeaponType.MISSILE.spec().airframe().noise().motor();
         double lw = motor.power(FlightPhase.BOOST, 0);
-        double v5 = launchVolume(lw, 15), v15 = launchVolume(lw, 25), v25 = launchVolume(lw, 45);
-        assertTrue(Loudness.windowed(level(lw, Spectra.LAUNCH_BOOSTER, 25), Loudness.CEILING_LEVEL) > 1, "в 25 м — громче мерки");
-        assertTrue(v5 > v15 && v15 > v25, "в 15 м " + v5 + ", в 25 м " + v15 + ", в 45 м " + v25);
+        double v5 = launchVolume(lw, 5), v15 = launchVolume(lw, 15), v25 = launchVolume(lw, 25);
+        assertTrue(Loudness.gain(level(lw, Spectra.LAUNCH_BOOSTER, 25), BIG[0]) > 1, "в 25 м — громче мерки");
+        assertTrue(v5 > v15 && v15 > v25, "в 5 м " + v5 + ", в 15 м " + v15 + ", в 25 м " + v25);
     }
 
     private static double launchVolume(double lw, double d) {
-        // окно у взрыва с 1 psi: громче поджиг звучит только ближе — файл громкость не обрезает
-        return Loudness.volume(Loudness.windowed(level(lw, Spectra.LAUNCH_BOOSTER, d), Loudness.CEILING_LEVEL), Loudness.LAUNCH_LUFS);
+        return Loudness.motor(Loudness.gain(level(lw, Spectra.LAUNCH_BOOSTER, d), BIG[0]));
     }
 
     private static double level(double lw, Spectrum spectrum, double d) {
@@ -113,16 +95,15 @@ class LoudnessTest {
     }
 
     /**
-     * Звуки мира по закону источника: файл не тише того, как громко источник звучит в метре при окне у взрыва с 1 psi
-     * (или потолка, если тот ниже), — иначе всё ближе звучало бы одинаково. В тишине (окно у {@link Loudness.Window#FLOOR})
-     * громкий источник в метре упирается в файл раньше: треск дуги подстанции — ближе ~2,5 м.
+     * Звуки мира по закону источника: файл не тише того, как громко источник звучит в метре (или потолка, если тот
+     * ниже), — иначе всё ближе звучало бы одинаково.
      */
     @Test
     void sourceFilesHoldTheirLoudestLevel() {
         for (Sources.Source s : List.of(Sources.SIREN, Sources.GRID_FAIL, Sources.GRID_SPARK, Sources.GRID_HUM,
                 Sources.GRID_POWER_DOWN, Sources.GRID_POWER_UP)) {
             double l = level(s.lwA() - s.spectrum().aWeighting(), s.spectrum(), 1);
-            double want = Math.min(s.ceilingLufs(), Loudness.CEILING_LUFS + (l - Loudness.CEILING_LEVEL) / 2);
+            double want = Math.min(s.ceilingLufs(), Loudness.ENGINE_LUFS + (l - Loudness.REF) / 2);
             assertTrue(s.fileLufs() >= want - 0.05, s + ": файл " + s.fileLufs() + " LUFS, а в метре нужно " + want);
         }
         assertEquals(1, Loudness.fileGain(Loudness.ENGINE_LUFS), 1e-12);
@@ -139,9 +120,8 @@ class LoudnessTest {
             assertEquals(old, Loudness.gain(level, BIG[0], Loudness.ENGINE_LUFS), 1e-12);
             assertEquals(Math.min(1, old * Loudness.fileGain(Spectra.NUKE_LAUNCH_LUFS)),
                     Loudness.volume(Loudness.gain(level, BIG[0], Loudness.ENGINE_LUFS), Spectra.NUKE_LAUNCH_LUFS), 1e-6);
-            assertEquals(Math.min(1, old) * Loudness.fileGain(EngineSound.Layer.BOOSTER.fileLufs()),
-                    Loudness.volume(Loudness.gain(level, BIG[0], Loudness.ENGINE_LUFS), EngineSound.Layer.BOOSTER.fileLufs()), 1e-6,
-                    "МБР: петля ускорителя");
+            assertEquals(Math.min(1, old) * Loudness.fileGain(Loudness.MOTOR_LUFS),
+                    Loudness.motor(Loudness.gain(level, BIG[0], Loudness.ENGINE_LUFS)), 1e-6, "МБР: петля ускорителя");
         }
     }
 }

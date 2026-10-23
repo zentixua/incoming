@@ -13,8 +13,7 @@ import ua.zentix.incoming.nuclear.model.BlastModel;
  * дольше у ракеты ({@link #pitch}). Minecraft играет тон только от 0,5 до 2 ({@code SoundEngine.calculatePitch}):
  * записи не сжать сильнее, чем у заряда 6,25 кг, и не растянуть сильнее, чем у 400 кг, — «Ланцет» (3 кг) звучит записью
  * заряда 6,25 кг (отступление: предел движка). Удар у уха из модели ({@link BlastPulse}) этого предела не знает.</li>
- * <li>Громкость — по пиковому давлению у уха (Кинни–Грэхем, {@link BlastModel}): потолок игры ({@link Loudness#CEILING_LUFS},
- * громкость ванильного TNT) с {@link #FULL_PA}, тише —
+ * <li>Громкость — по пиковому давлению у уха (Кинни–Грэхем, {@link BlastModel}): полная с {@link #FULL_PA}, тише —
  * на половину децибел давления, как у ядерного удара ({@link Outdoor#pressureVolume}) и у дальней модели
  * {@link Outdoor}: вдали давление падает как 1/R — −3 дБ на удвоение, вблизи быстрее.</li>
  * <li>Ракурсы одной записи (вблизи — удар и тело взрыва, средний — запись с эхом склонов и домов, вдали — она же
@@ -30,17 +29,7 @@ import ua.zentix.incoming.nuclear.model.BlastModel;
  */
 public final class BlastMix {
     /** Громкость файлов ракурсов, LUFS (наибольшая мгновенная) — те же числа, что в {@code tools/build_sounds.py}. */
-    static final double NEAR_LUFS = -12.2, MID_LUFS = -12.2, FAR_LUFS = -13.7;
-    /**
-     * Громкость «удара в грудь» по той же мере, LUFS: среднее по мощности его вариантов ({@code blast_sub_1}, {@code _2}:
-     * −12,9 и −14,4; сборка сводит их без взвешивания, {@code SUB_DB}).
-     */
-    static final double SUB_LUFS = -13.6;
-    /**
-     * Удар в грудь звучит с ближним ракурсом той же громкостью и складывается с ним по мощности ({@link Mix}): на столько
-     * дБ ближний ракурс тише громкости взрыва, чтобы вместе они дали её.
-     */
-    static final double WITH_SUB = 10 * Math.log10(1 + Math.pow(10, (SUB_LUFS - NEAR_LUFS) / 10));
+    static final double NEAR_LUFS = -13.5, MID_LUFS = -13.5, FAR_LUFS = -15;
     /**
      * Заряд, у которого записи ракурсов звучат как есть, кг ТНТ. Оценка: ракурсы собраны и сведены как взрыв шахеда
      * (у ближнего — фаза 8 мс, «заряд ~50 кг в двух десятках метров», {@code build_sounds.py}); сами записи — подрывы от
@@ -80,12 +69,9 @@ public final class BlastMix {
         return (float) Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.cbrt(REFERENCE_KG / chargeKg)));
     }
 
-    /**
-     * Громкость прямого звука у уха, LUFS: потолок с {@link #FULL_PA}, тише — половина децибел давления. Ближний ракурс с
-     * ударом в грудь дают её вместе ({@link #WITH_SUB}): у потолка они звучат почти целиком.
-     */
+    /** Громкость прямого звука у уха, LUFS: ближний ракурс с {@link #FULL_PA}, тише — половина децибел давления. */
     public static double loudness(double pa) {
-        return Loudness.CEILING_LUFS + 10 * Math.log10(Math.max(1e-12, Math.min(1, pa / FULL_PA)));
+        return NEAR_LUFS + 10 * Math.log10(Math.max(1e-12, Math.min(1, pa / FULL_PA)));
     }
 
     /**
@@ -108,18 +94,13 @@ public final class BlastMix {
         return gain(loudness(pressure(s, Outdoor.NEAR)) - FAR_LUFS);
     }
 
-    /** Слои взрыва {@code s} на расстоянии {@code d} блоков на неподвижной шкале. */
+    /** Слои взрыва {@code s} на расстоянии {@code d} блоков. */
     public static Layers at(BlastSource s, double d) {
-        return at(s, d, 0);
-    }
-
-    /** Слои взрыва {@code s} на расстоянии {@code d} блоков, громче неподвижной шкалы на {@code lift} дБ (окно громкости). */
-    public static Layers at(BlastSource s, double d, double lift) {
-        double pa = pressure(s, d), l = loudness(pa) + lift, far = far(d), crack = crack(pa);
+        double pa = pressure(s, d), l = loudness(pa), far = far(d), crack = crack(pa);
         double near = (1 - far) * crack, mid = (1 - far) * (1 - crack);
-        float nearV = (float) near * gain(l - NEAR_LUFS - WITH_SUB);
+        float nearV = (float) near * gain(l - NEAR_LUFS);
         return new Layers(nearV, (float) mid * gain(l - MID_LUFS), (float) far * gain(l - FAR_LUFS), nearV,
-                (float) ((1 - near) * Math.sqrt(Math.min(1, pa / FULL_PA)) * uncapped(Loudness.CEILING_LUFS - NEAR_LUFS + lift)));
+                (float) ((1 - near) * Math.sqrt(Math.min(1, pa / FULL_PA))));
     }
 
     /** Множитель громкости для разницы db, не больше 1 (громче файла Minecraft не играет). */

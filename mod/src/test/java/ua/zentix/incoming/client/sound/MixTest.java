@@ -67,29 +67,13 @@ class MixTest {
         Mix mix = new Mix();
         mix.blast(0).add(new Mix.Layer(flat(2, 20), 1, 1));
         assertTrue(mix.factor(10) < 1);
-        // запись кончилась и вышла из окна средней громкости: следующий взрыв звучит так, будто первого не было
-        mix.blast(20 + Mix.SHORT).add(new Mix.Layer(flat(0.5, 20), 1, 1));
-        assertEquals(1, mix.factor(21 + Mix.SHORT), 1e-12);
+        // запись кончилась: следующий взрыв звучит так, будто первого не было
+        mix.blast(30).add(new Mix.Layer(flat(0.5, 20), 1, 1));
+        assertEquals(1, mix.factor(31), 1e-12);
         // тон 2 — запись вдвое короче
         Mix fast = new Mix();
         fast.blast(0).add(new Mix.Layer(flat(2, 20), 2, 1));
         assertEquals(1, fast.factor(11), 1e-12);
-    }
-
-    /**
-     * Удар — у потолка (мгновенная громкость), долгий гул на потолке — нет: средняя за 3 с садится к {@link Mix#SUSTAIN}.
-     */
-    @Test
-    void hitReachesTheCeilingRoarSettlesBelow() {
-        Mix hit = new Mix();
-        hit.blast(0).add(new Mix.Layer(flat(0.95, 8), 1, 1));
-        assertEquals(1, hit.factor(4), 1e-12);
-        assertEquals(0.95, hit.heard(4), 1e-6);
-        Mix roar = new Mix();
-        roar.blast(0).add(new Mix.Layer(flat(0.95, 200), 1, 1));
-        assertEquals(1, roar.factor(10), 1e-12);
-        assertEquals(Mix.SUSTAIN, roar.heard(100), 1e-6);
-        assertTrue(Mix.SUSTAIN < 0.5 && Mix.SUSTAIN > 0.4, "−13,5 LUFS против −10: " + Mix.SUSTAIN);
     }
 
     /**
@@ -152,10 +136,9 @@ class MixTest {
         assertTrue(unmixed > Loudness.CEILING_LUFS + 2, "без смеси залп выше потолка: " + unmixed);
         assertTrue(top <= Loudness.CEILING_LUFS + 1, "залп в смеси — у потолка " + Loudness.CEILING_LUFS + " LUFS: " + top);
         // и не упирается в полную шкалу суммой (в прогоне RV1 — ~20 срезов за сцену, без смеси здесь — тысячи): пик выше
-        // полной шкалы — только в ударе (первые 0,35 с — тело взрыва ближнего ракурса до спада, build_sounds.py), где пики ближнего ракурса и удара в грудь одного взрыва совпадают (оба
-        // с удара с первого отсчёта; так срезал и одиночный взрыв в 50 м у 3.4.1, и сами записи ванильного TNT — до +1,2 дБ
-        // выше полной шкалы) — это ловит ограничитель OpenAL Soft; хвосты не упираются (их держит SUSTAIN)
-        int impact = 7 * tickLen, tails = 0;
+        // полной шкалы — только в тик удара (первые 50 мс), где пики ближнего ракурса и удара в грудь одного взрыва совпадают (оба
+        // с удара с первого отсчёта; так срезал и одиночный взрыв в 50 м у 3.4.1) — это ловит ограничитель OpenAL Soft
+        int impact = tickLen, tails = 0;
         for (int i = 0; i < n; i++) {
             if (Math.abs(mixed[i]) < 1) continue;
             boolean onImpact = false;
@@ -163,7 +146,7 @@ class MixTest {
             if (!onImpact) tails++;
         }
         assertEquals(0, tails, "отсчётов на полной шкале вне удара, пик " + peak(mixed));
-        assertTrue(over(mixed) * 15 < over(raw), "срезов " + over(mixed) + " против " + over(raw) + " без смеси");
+        assertTrue(over(mixed) * 100 < over(raw), "срезов " + over(mixed) + " против " + over(raw) + " без смеси");
     }
 
     private static double peak(double[] x) {

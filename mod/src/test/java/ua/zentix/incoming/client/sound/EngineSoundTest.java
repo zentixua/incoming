@@ -1,7 +1,6 @@
 package ua.zentix.incoming.client.sound;
 
 import net.minecraft.world.phys.Vec3;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.flight.FlightTrack;
 import ua.zentix.incoming.entity.FlightPhase;
@@ -22,12 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Слои звука на всём пути снаряда: громкость — от мощности звука и пути, тон — от оборотов и Доплера. */
 class EngineSoundTest {
-    /** Окно громкости — общее: каждая проверка — в тишине, как будто до неё ничего не звучало. */
-    @BeforeEach
-    void quiet() {
-        Loudness.WINDOW.reset();
-    }
-
     private static final UUID ID = UUID.randomUUID();
     private static final Vec3 EAR = Vec3.ZERO;
     private static final Propagation.Weather NIGHT = Propagation.Weather.NIGHT;

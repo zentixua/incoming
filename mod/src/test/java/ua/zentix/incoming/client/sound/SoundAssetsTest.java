@@ -37,6 +37,23 @@ class SoundAssetsTest {
     private static final List<String> PRELOAD = List.of("blast.near", "blast.mid", "blast.far", "blast.sub");
 
     @Test
+    void craterFireHasNoBakedFadeOrSilentLoopBoundary() throws IOException {
+        float[][] pcm = new float[1][];
+        int rate = Envelope.read(open(ASSETS + "sounds/blast_fire.ogg"), pcm);
+        float[] envelope = Envelope.of(pcm[0], rate);
+        double peak = java.util.stream.IntStream.range(0, envelope.length).mapToDouble(i -> envelope[i]).max().orElseThrow();
+        assertTrue(pcm[0].length >= 10 * rate, "a varied recording, not a short repeated grain");
+        int window = rate / 5;
+        for (int start : new int[]{0, pcm[0].length - window}) {
+            double ms = 0;
+            for (int i = start; i < start + window; i++) ms += pcm[0][i] * pcm[0][i];
+            assertTrue(10 * Math.log10(ms / window) > -35, "audible at both sides of the loop seam");
+        }
+        assertTrue(Envelope.lufs(envelope[envelope.length - 1]) > Envelope.lufs(peak) - 12,
+                "the model controls extinction; no five-second fade baked into the recording");
+    }
+
+    @Test
     void everyEventHasMonoFiles() throws IOException {
         JsonObject json = JsonParser.parseReader(new InputStreamReader(open(ASSETS + "sounds.json"), StandardCharsets.UTF_8)).getAsJsonObject();
         for (var e : json.entrySet()) {
@@ -106,7 +123,7 @@ class SoundAssetsTest {
 
     /**
      * Файлы моторов и стартов — той громкости, на которую клиент их рассчитывает ({@link Loudness#MOTOR_LUFS} у событий
-     * {@code MOTOR} сборки, {@link Loudness#ROCKET_LAUNCH_LUFS} у схода снаряда РСЗО, {@link Loudness#LAUNCH_LUFS} у поджига, {@link Loudness#ENGINE_LUFS} у
+     * {@code MOTOR} сборки, {@link Loudness#ROCKET_LAUNCH_LUFS} у схода снаряда РСЗО, {@link Loudness#ENGINE_LUFS} у
      * хлопка отделения и катапульты): файл тише расчёта — громкость упирается в него раньше потолка, и всё громче звучит
      * одинаково (3.5.0: удар поджига ракеты и ЗРК ближе ~45 м к пусковой). Мера — наибольшая мгновенная
      * громкость EBU R128, у петель — по кругу, как в сборке.
@@ -124,14 +141,12 @@ class SoundAssetsTest {
         Set<String> checked = new HashSet<>(motor);
         checked.addAll(oneShots);
         for (String ev : checked) {
-            double want = motor.contains(ev) ? ev.equals("rocket.launch") ? Loudness.ROCKET_LAUNCH_LUFS
-                    : ev.equals("launch.booster") || ev.equals("booster.engine") ? Loudness.LAUNCH_LUFS : ev.equals("bomb.drill") ? Loudness.DRILL_LUFS : Loudness.MOTOR_LUFS : Loudness.ENGINE_LUFS;
+            double want = motor.contains(ev) ? ev.equals("rocket.launch") ? Loudness.ROCKET_LAUNCH_LUFS : Loudness.MOTOR_LUFS : Loudness.ENGINE_LUFS;
             for (JsonElement s : json.getAsJsonObject(ev).getAsJsonArray("sounds")) {
                 String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
                 String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
                 double got = momentaryMax(file, !oneShots.contains(ev));
-                // сжатие Vorbis сдвигает громкость короткого удара поджига до 0,6 дБ (launch_booster_1)
-                assertEquals(want, got, 0.6, file + ": громкость, LUFS");
+                assertEquals(want, got, 0.5, file + ": громкость, LUFS");
             }
         }
     }
@@ -154,30 +169,6 @@ class SoundAssetsTest {
                     assertTrue(!(st.contains("ModSounds.") && hand.matcher(st).find()), f + ": звук мода громкостью на глаз — " + st.strip());
                 }
             }
-        }
-    }
-
-    /**
-     * Ракурсы взрыва — той громкости, с которой их сводит клиент ({@link BlastMix}): ближний, средний, дальний — каждый
-     * вариант, удар в грудь — среднее вариантов по мощности ({@link BlastMix#SUB_LUFS}, по нему {@link BlastMix#WITH_SUB}).
-     */
-    @Test
-    void blastFilesAtTheirLoudness() throws IOException {
-        JsonObject json = JsonParser.parseReader(new InputStreamReader(open(ASSETS + "sounds.json"), StandardCharsets.UTF_8)).getAsJsonObject();
-        java.util.Map<String, Double> want = java.util.Map.of("blast.near", BlastMix.NEAR_LUFS, "blast.mid", BlastMix.MID_LUFS,
-                "blast.far", BlastMix.FAR_LUFS, "blast.sub", BlastMix.SUB_LUFS);
-        for (var e : want.entrySet()) {
-            double power = 0;
-            int n = 0;
-            for (JsonElement s : json.getAsJsonObject(e.getKey()).getAsJsonArray("sounds")) {
-                String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
-                String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
-                double got = momentaryMax(file, false);
-                if (!e.getKey().equals("blast.sub")) assertEquals(e.getValue(), got, 0.5, file + ": громкость, LUFS");
-                power += Math.pow(10, got / 10);
-                n++;
-            }
-            assertEquals(e.getValue(), 10 * Math.log10(power / n), 0.3, e.getKey() + ": средняя громкость вариантов, LUFS");
         }
     }
 
