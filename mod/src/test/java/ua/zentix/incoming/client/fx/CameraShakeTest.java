@@ -255,4 +255,40 @@ class CameraShakeTest {
     private static double angle(Vector3d a, Vector3d b) {
         return Math.toDegrees(Math.atan2(new Vector3d(a).cross(b).length(), a.dot(b)));
     }
+
+    /**
+     * Обычный взрыв (жалоба 23.10: «камера не качается, её разве что немного ударяет и сбивает»): шахед в 100 м за
+     * спиной — камера качается головой на шее (несколько размахов вперёд-назад), возвращается к нулю с затуханием и между
+     * кадрами (по 1/6 тика) не прыгает больше, чем позволяет скорость удара. Ядерная волна шеи не берёт (её картинку этот
+     * шаг не менял).
+     */
+    @Test
+    void conventionalBlastRocksTheCameraAndItSettles() {
+        CameraShake.reset();
+        double kg = 50, m = 100, pa = 1000 * BlastModel.surfaceOverpressureKpa(m, kg), tp = BlastModel.chemicalPhaseSeconds(m, kg, true);
+        BodySway.Motion motion = CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), 1, tp, tp, 0, new Vec3(0, 0, 1), 0, true);
+        assertTrue(motion.neck().length == motion.body().length && motion.body().length > 20);
+        double kick = Math.toDegrees(Math.abs(motion.body()[1] + motion.neck()[1])), last = 0, most = 0;
+        int turns = 0, sign = 0;
+        for (int tick = 0; tick < 20 * 6; tick++) {
+            for (int k = 0; k < 6; k++) {
+                double pitch = CameraShake.offsets(k / 6.0, 0, 0, 0, 0, 1)[1];
+                assertTrue(Math.abs(pitch - last) <= 1.05 * kick * BodySway.RATE / 120 + 1e-9, "скачок в тике " + tick + ": " + last + " → " + pitch);
+                int s2 = (int) Math.signum(pitch);
+                if (s2 != 0 && s2 != sign) {
+                    if (sign != 0) turns++;
+                    sign = s2;
+                }
+                most = Math.max(most, Math.abs(pitch));
+                last = pitch;
+            }
+            CameraShake.tick(true);
+        }
+        assertTrue(turns >= 2, "качается: смен знака " + turns);
+        assertTrue(most > 1, "размах " + most);
+        assertEquals(0, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "вернулась");
+        CameraShake.reset();
+        double[] w = wave(1, 2);
+        assertEquals(null, CameraShake.sway(w[2], w[0], 1, w[1], w[1], 0, new Vec3(0, 0, 1), 0, false).neck(), "ядерка — без шеи");
+    }
 }

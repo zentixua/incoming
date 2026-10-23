@@ -17,6 +17,8 @@ import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.ChemicalFront;
+import ua.zentix.incoming.nuclear.model.ShockOptics;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 import java.util.ArrayDeque;
@@ -134,6 +136,9 @@ public final class FarBlasts {
         float open = 1;
         /** Источник облака ещё нужен (событие живо). */
         boolean alive = true;
+        /** Фронт ударной волны во времени ({@link #front}); null — ещё не считался. */
+        @Nullable
+        ChemicalFront front;
 
         Event(ClientLevel level, BlastSource source, CloudModel model, double x, double y, double z, GroundMaterial ground, long seed,
               boolean near) {
@@ -711,7 +716,8 @@ public final class FarBlasts {
 
     /**
      * Свет и горячий газ облаков модели на мир кадра ({@code HeatPass}): огненный шар — ламбертов шар чёрного тела своей
-     * температуры (как у {@link #fireballs}); газ — термик облака (середина, радиус, температура и подъём модели). Пламя и
+     * температуры (как у {@link #fireballs}); газ — термик облака (середина, радиус, температура и подъём модели); фронт
+     * ударной волны ({@link #front(ChemicalFront, double, double, double, double[], double[])}). Пламя и
      * столб над топливом в воронке — у пожаров ({@code FireSmoke.heat}).
      */
     public static void heat(Vec3 eye, float partial, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
@@ -729,7 +735,44 @@ public final class FarBlasts {
             }
             double cr = e.model.radius(t), ch = e.model.height(t);
             if (t < e.model.life) f.hot(bx, by + Math.max(0, ch - cr), bz, 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
+            if (e.source.underground() || e.source.chargeKg() <= 0 || t > FRONT_SECONDS) continue;
+            if (e.front == null) e.front = ChemicalFront.cached(e.source.chargeKg(), e.source.surface());
+            if (front(e.front, t, r, e.model.hob, FRONT)) f.front(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
         }
+    }
+
+    /** Фронт дальше этого возраста не ищется, с: в 2 км он уже звук (скачок у 450 кг там — сотые доли процента плотности). */
+    static final double FRONT_SECONDS = 6;
+    private static final double[] FRONT = new double[3], FRONT_DN = new double[4];
+
+    /**
+     * Видимый фронт ударной волны обычного взрыва — тот же закон и тот же проход, что у ядерки ({@code NukeHeat},
+     * {@code HeatPass.Frame#front}, {@link ShockOptics}): сфера фронта радиуса {@link ChemicalFront#radiusAt} у места
+     * взрыва (у воздушного разрыва — в воздухе, ниже земли её нет), скачок показателя преломления — по сжатию за фронтом
+     * (Ренкин–Гюгонио) при давлении Кинни–Грэхема на ней, толща сжатия — {@link ShockOptics#DECAY_SHARE} длины
+     * положительной фазы за фронтом. Пока фронт внутри огненного шара ({@code ball}), его не видно — видно шар. Порога
+     * давления, кроме видимости, нет: скачок слабеет с давлением сам, и проход отбрасывает фронт, что ни одному
+     * пикселю не даст сдвига в {@code HeatPass.SHIFT_MIN} (у шахеда в 1080p — примерно до 150–250 м от зрителя у
+     * фронта; в бинокль — дальше). У обычного взрыва давление на сфере одно на всех высотах: на земле — отражённая
+     * полусфера (W × 1,8), в воздухе — свободная сфера (⚠ отражённой от земли волны и стебля Маха у воздушного разрыва
+     * модель не считает). В {@code out} — радиус, толща (м) и синус угла над серединой у земли; в {@code dn} — скачок
+     * на четырёх высотах. false — фронта не видно.
+     */
+    static boolean front(ChemicalFront front, double t, double ball, double hob, double[] out, double[] dn) {
+        double r = front.radiusAt(t);
+        if (!(r > ball) || r <= 0) return false;
+        double l = ShockOptics.DECAY_SHARE * front.phaseLength(r);
+        double jump = ShockOptics.indexJump(front.kpa(r), ua.zentix.incoming.client.fx.layer.HeatPass.N0);
+        if (!(l > 0) || !(jump > 0)) return false;
+        out[0] = r;
+        out[1] = l;
+        out[2] = Math.max(-1, Math.min(1, -Math.max(0, hob) / r));
+        Arrays.fill(dn, jump);
+        return true;
+    }
+
+    private static boolean front(ChemicalFront front, double t, double ball, double hob, double[] out) {
+        return front(front, t, ball, hob, out, FRONT_DN);
     }
 
     /**

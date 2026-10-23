@@ -20,9 +20,22 @@ import java.util.Arrays;
  * 4S/U. Пока волна обтекает тело, разница давлений толкает его — ~2 мс, против секунды ветра: это удар, тело получает
  * скорость наклона сразу ({@link #jolt}). У 1 psi — 11 Н·с (8°/с), у 3,5 psi (15 кт в 2 км) — 38 Н·с (27°/с), против
  * 20–40 Н·с ветра за всю фазу. Размеры тела — ANSUR II (Gordon et al. 2014): толщина груди ~0,25 м, ширина плеч ~0,4 м;
- * та же нагрузка у зданий (идеализация G&amp;D для прямоугольника), у тела она — оценка. Голова идёт с телом: своя
- * нагрузка на голову (площадь ~0,03 м², масса ~4,5 кг) даёт ей скорость вдвое меньше той, что даёт ей на её высоте
- * наклон тела (~0,13 м/с против ~0,23 у 1 psi); шеи и её качания модель не считает.
+ * та же нагрузка у зданий (идеализация G&amp;D для прямоугольника), у тела она — оценка.
+ * <p>
+ * <b>Голова на шее</b> ({@link #motion}) — то, что видит камера. Шея — опора головы на плечах, и голова на ней —
+ * недодемпфированное звено второго порядка: у сидящего под колебаниями вперёд-назад голова сильнее всего качается по
+ * тангажу около 2 Гц (Paddan &amp; Griffin 1988, J Biomech 21(3):199–206; основной тон головы ~2 Гц — Gresty &amp;
+ * Halmagyi 1979, J Neurol Neurosurg Psychiatry 42), звено передачи — пассивное недодемпфированное (Tangorra, Jones &amp;
+ * Hunter 2003, Ann Biomed Eng 31: в горизонтальной плоскости); ⚠ относительное затухание {@link #NECK_DAMPING} — оценка
+ * (число в этих работах для тангажа не найдено). Звено — как его меряют: от ускорения плеч к повороту головы, со всеми
+ * рефлексами шеи внутри (тяжесть головы на наклоне тела — в нём же: вестибулярный и шейный рефлексы держат голову над
+ * плечами, поэтому отдельного опрокидывающего члена нет). Толкают голову (а) плечи: тело получает скорость наклона
+ * разом, плечи на высоте шеи уходят по ветру, и голова по инерции остаётся — откидывается назад на шее, потом
+ * догоняет и качается с затуханием (то же, что в хлыстовой травме, только в разы слабее); (б) своя нагрузка на голову
+ * — тот же удар обтекания и ветер на её площади ({@link #HEAD_AREA}): толкает голову вперёд, навстречу отставанию.
+ * У 1 psi плечи уходят со скоростью ~0,2 м/с, своя нагрузка даёт голове ~0,1 м/с: голова отстаёт и качается на
+ * несколько градусов. Шея держит голову в пределах своего хода (разгибание ~60°): у обычных взрывов наклон шеи — до
+ * десятков градусов только там, где тело уже сбито с ног.
  * <p>
  * Земля под ногами тело не наклоняет. Воздушный толчок (airslap) приходит вместе с волной и ведёт грунт резко вниз,
  * потом отчасти обратно (Glasstone &amp; Dolan 1977, §6.12–6.16); скорость грунта — p/ρc (плоская волна в грунте,
@@ -72,6 +85,44 @@ public final class BodySway {
     static final double STILL = Math.toRadians(0.01);
     /** Дольше стольких секунд не считаем. */
     static final double LONGEST = 20;
+    /** Масса головы, кг. */
+    static final double HEAD_MASS = 4.5;
+    /**
+     * Высота шеи (шейная точка C7) над щиколотками, м: ANSUR II — высота шейной точки ~1,5 м, щиколотки ~0,07 м. На ней
+     * плечи уходят со скоростью наклона тела × эту высоту.
+     */
+    static final double NECK_HEIGHT = 1.43;
+    /** Середина массы головы над шеей, м (⚠ оценка: от C7 до середины головы у слухового прохода). */
+    static final double HEAD_LEVER = 0.2;
+    /** Момент инерции головы вокруг её середины по тангажу, кг·м² (⚠ порядок: ~0,02, Yoganandan et al. 2009, J Biomech 42). */
+    static final double HEAD_INERTIA = 0.022;
+    /** Момент инерции головы вокруг шеи, кг·м². */
+    static final double NECK_INERTIA = HEAD_INERTIA + HEAD_MASS * HEAD_LEVER * HEAD_LEVER;
+    /** Собственная частота головы на шее, Гц. */
+    static final double NECK_HZ = 2.0;
+    /** Относительное затухание головы на шее (⚠ оценка). */
+    static final double NECK_DAMPING = 0.3;
+    /** Площадь головы спереди, м²; длина головы вдоль волны и половина её ширины, м (ANSUR II: ~0,2 и ~0,155 м). */
+    static final double HEAD_AREA = 0.03, HEAD_DEPTH = 0.2, HEAD_HALF_WIDTH = 0.077;
+    /** Лобовое сопротивление головы, м²: площадь × Cd 0,5 (шар, Hoerner 1965 — оценка для головы). */
+    static final double HEAD_DRAG_AREA = HEAD_AREA * 0.5;
+    /**
+     * Насколько голова отстаёт от плеч: скорость наклона тела ω даёт голове на шее скорость −(1 + m·l·h/I)·ω (плечи
+     * уходят на ω·h, голова на рычаге l остаётся; и сама она по инерции не поворачивается с телом).
+     */
+    static final double NECK_LAG = 1 + HEAD_MASS * HEAD_LEVER * NECK_HEIGHT / NECK_INERTIA;
+
+    /**
+     * Наклон тела и наклон головы на шее, рад, {@link #RATE} отсчётов в секунду с прихода фронта, одной длины. Камера —
+     * голова: тело + шея. Пустые — ни тело, ни голова не сдвинулись и на {@link #STILL}.
+     */
+    public record Motion(double[] body, double[] neck) {
+        static final Motion NONE = new Motion(new double[0], new double[0]);
+
+        public boolean still() {
+            return body.length < 2;
+        }
+    }
 
     private BodySway() {}
 
@@ -98,19 +149,33 @@ public final class BodySway {
      * {@code effects_scale}, а обтекание тела — настоящие миллисекунды.
      */
     public static double[] tilt(double pPa, double qPa, double open, double tPlus, double hitPhase, double edge, double back) {
-        if (!(qPa > 0) || !(open > 0) || !(tPlus > 0)) return new double[0];
+        double[] body = motion(pPa, qPa, open, tPlus, hitPhase, edge, back).body;
+        return peak(body, 0) < STILL ? new double[0] : body;
+    }
+
+    /**
+     * Тело и голова на шее под волной — как {@link #tilt(double, double, double, double, double, double, double)}, плюс
+     * голова ({@link Motion#neck}): её толкают плечи (ускорение наклона тела на высоте шеи, в том числе остановка шагом
+     * на границе) и своя нагрузка (удар обтекания и ветер на голове). Отсчёты идут, пока не стихли и тело, и голова.
+     */
+    public static Motion motion(double pPa, double qPa, double open, double tPlus, double hitPhase, double edge, double back) {
+        if (!(qPa > 0) || !(open > 0) || !(tPlus > 0)) return Motion.NONE;
         int steps = (int) Math.ceil(LONGEST / STEP), lag = (int) Math.round(DELAY / STEP), every = (int) Math.round(1.0 / (RATE * STEP));
         // наклон и его скорость за задержку назад (кольцом; до волны тело стоит — нули)
         double[] thBack = new double[lag], omBack = new double[lag];
-        double[] out = new double[steps / every + 2];
+        double[] out = new double[steps / every + 2], neck = new double[steps / every + 2];
         int n = 1;
         // удар фронта — короче шага счёта и задержки равновесия: скорость наклона сразу
         double mgh = MASS * G * HEIGHT, peak = 0, th = 0, om = open * jolt(pPa, qPa, hitPhase) * HEIGHT / INERTIA, torque = 0, torqueRate = 0;
         double w2 = ACTIVATION_W * ACTIVATION_W, damp = 2 * ACTIVATION_DAMPING * ACTIVATION_W;
+        // голова на шее: плечи ушли разом — голова отстала; свой удар на голове толкает её по ветру
+        double nw = 2 * Math.PI * NECK_HZ, nw2 = nw * nw, ndamp = 2 * NECK_DAMPING * nw, phi = 0, neckPeak = 0;
+        double phiRate = -NECK_LAG * om + open * jolt(pPa, qPa, hitPhase, HEAD_AREA, HEAD_DEPTH, HEAD_HALF_WIDTH) * HEAD_LEVER / NECK_INERTIA;
         for (int i = 0; i < steps; i++) {
             double t = i * STEP;
             // ветер — за давлением, напор — его квадрат со знаком; среднее за шаг: у обычного взрыва фаза — несколько шагов
-            double push = open * qPa * windShare(t / tPlus, (t + STEP) / tPlus) * DRAG_AREA * HEIGHT;
+            double share = windShare(t / tPlus, (t + STEP) / tPlus), push = open * qPa * share * DRAG_AREA * HEIGHT;
+            double omBefore = om;
             int k = i % lag;
             double command = GAIN_P * thBack[k] + GAIN_D * omBack[k];
             thBack[k] = th;
@@ -131,17 +196,28 @@ public final class BodySway {
                 torque = GAIN_P * th;
                 torqueRate = 0;
             }
+            // шея: ускорение плеч за шаг (и остановка шагом на границе) и ветер на голове
+            double headPush = open * qPa * share * HEAD_DRAG_AREA * HEAD_LEVER / NECK_INERTIA;
+            phiRate += (-nw2 * phi - ndamp * phiRate + headPush) * STEP - NECK_LAG * (om - omBefore);
+            phi += phiRate * STEP;
             peak = Math.max(peak, Math.abs(th));
+            neckPeak = Math.max(neckPeak, Math.abs(phi));
             boolean sample = (i + 1) % every == 0;
-            if (sample) out[n++] = th;
-            // ветер стих (разрежение за три фазы — меньше 1 % напора) и тело стоит
-            if (t > 3 * tPlus && Math.abs(th) < STILL && Math.abs(om) < STILL) {
-                if (!sample) out[n++] = th;
+            if (sample) {
+                out[n] = th;
+                neck[n++] = phi;
+            }
+            // ветер стих (разрежение за три фазы — меньше 1 % напора), тело стоит и голова на шее успокоилась
+            if (t > 3 * tPlus && Math.abs(th) < STILL && Math.abs(om) < STILL && Math.abs(phi) < STILL && Math.abs(phiRate) < nw * STILL) {
+                if (!sample) {
+                    out[n] = th;
+                    neck[n++] = phi;
+                }
                 break;
             }
         }
-        if (peak < STILL) return new double[0];
-        return Arrays.copyOf(out, n);
+        if (peak < STILL && neckPeak < STILL) return Motion.NONE;
+        return new Motion(Arrays.copyOf(out, n), Arrays.copyOf(neck, n));
     }
 
     /**
@@ -182,13 +258,21 @@ public final class BodySway {
      * @param tPlus положительная фаза, с
      */
     public static double jolt(double pPa, double qPa, double tPlus) {
+        return jolt(pPa, qPa, tPlus, AREA, DEPTH, HALF_WIDTH);
+    }
+
+    /**
+     * Удар фронта по телу (или его части) площадью спереди {@code area}, м², толщиной вдоль волны {@code depth} и
+     * полушириной {@code halfWidth}, м — закон {@link #jolt(double, double, double)}.
+     */
+    static double jolt(double pPa, double qPa, double tPlus, double area, double depth, double halfWidth) {
         if (!(pPa > 0) || !(qPa > 0) || !(tPlus > 0)) return 0;
         double kpa = pPa / 1000, full = 1000 * BlastModel.dynamicPressureKpa(kpa), u = BlastModel.frontSpeed(kpa);
         double along = Math.sqrt(Math.min(1, qPa / full)), reflected = 1000 * BlastInjury.reflectedKpa(kpa);
-        double clear = 3 * HALF_WIDTH / u, behind = DEPTH / u, rise = 4 * HALF_WIDTH / u;
+        double clear = 3 * halfWidth / u, behind = depth / u, rise = 4 * halfWidth / u;
         // грудь: избыток отражённого спадает к нулю за 3S/U; спина: давления нет L/U, потом оно нарастает к p за 4S/U
         double front = Math.max(0, reflected - pPa - full) * weighted(clear, 0, tPlus, 1), rear = pPa * (weighted(behind, 0, tPlus, 0) + weighted(rise, behind, tPlus, 1));
-        return AREA * along * (front + rear);
+        return area * along * (front + rear);
     }
 
     /**

@@ -48,7 +48,7 @@ public final class CameraShake {
      * Наклон тела ударом и ветром одной волны, рад ({@link BodySway#RATE} отсчётов в секунду), с мига {@code from} (тики
      * клиента, с долей); куда дул её ветер — от взрыва вдоль земли (x, z, единичный).
      */
-    private record Sway(double[] tilt, double from, double pushX, double pushZ) {}
+    private record Sway(double[] tilt, double[] neck, double from, double pushX, double pushZ) {}
 
     private CameraShake() {}
 
@@ -65,23 +65,28 @@ public final class CameraShake {
      * тела по ветру, рад.
      */
     public static double[] sway(double pPa, double qPa, double open, double tPlus, double late, Vec3 away, double yaw) {
-        return sway(pPa, qPa, open, tPlus, tPlus, late, away, yaw);
+        return sway(pPa, qPa, open, tPlus, tPlus, late, away, yaw, false).body();
     }
 
     /**
      * Как {@link #sway(double, double, double, double, double, Vec3, double)}, но удар обтекания спадает по своей фазе
      * {@code hitPhase}, с: у ядерной волны фаза ветра в игре — время модели × {@code effects_scale}, а обтекание тела —
-     * настоящие миллисекунды, и фаза удара — фаза модели.
+     * настоящие миллисекунды, и фаза удара — фаза модели. {@code neck} — камера качается и головой на шее
+     * ({@link BodySway#motion}); без неё — голова идёт с телом (<b>не по физике</b>: так пока у ядерной волны — её
+     * картинку этот шаг не менял).
      */
-    public static double[] sway(double pPa, double qPa, double open, double tPlus, double hitPhase, double late, Vec3 away, double yaw) {
+    public static BodySway.Motion sway(double pPa, double qPa, double open, double tPlus, double hitPhase, double late, Vec3 away, double yaw,
+                                       boolean neck) {
         double flat = Math.hypot(away.x, away.z);
-        if (!(flat > 1e-6)) return new double[0];
+        if (!(flat > 1e-6)) return new BodySway.Motion(new double[0], new double[0]);
         double x = away.x / flat, z = away.z / flat;
-        double[] tilt = BodySway.tilt(pPa, qPa, open, tPlus, hitPhase, edge(yaw, x, z), edge(yaw, -x, -z));
-        if (tilt.length < 2) return tilt;
+        double edge = edge(yaw, x, z), back = edge(yaw, -x, -z);
+        BodySway.Motion m = neck ? BodySway.motion(pPa, qPa, open, tPlus, hitPhase, edge, back)
+                : new BodySway.Motion(BodySway.tilt(pPa, qPa, open, tPlus, hitPhase, edge, back), null);
+        if (m.still()) return m;
         if (SWAYS.size() >= SWAYS_MAX) SWAYS.remove(0);
-        SWAYS.add(new Sway(tilt, ticks - Mth.clamp(late, 0, 1), x, z));
-        return tilt;
+        SWAYS.add(new Sway(m.body(), m.neck(), ticks - Mth.clamp(late, 0, 1), x, z));
+        return m;
     }
 
     /**
@@ -154,8 +159,8 @@ public final class CameraShake {
         yaw *= k;
         pitch *= k;
         roll *= k;
-        // наклон тела по ветру всех волн, ° по осям мира
-        double leanX = 0, leanZ = 0;
+        // наклон тела и головы на шее по ветру всех волн, ° по осям мира
+        double leanX = 0, leanZ = 0, neckX = 0, neckZ = 0;
         for (Sway s : SWAYS) {
             double f = (ticks - s.from + partial) / 20 * BodySway.RATE;
             int i = (int) f;
@@ -163,13 +168,26 @@ public final class CameraShake {
             double tilt = Math.toDegrees(s.tilt[i] + (s.tilt[i + 1] - s.tilt[i]) * (f - i));
             leanX += tilt * s.pushX;
             leanZ += tilt * s.pushZ;
+            if (s.neck == null) continue;
+            double neck = Math.toDegrees(s.neck[i] + (s.neck[i + 1] - s.neck[i]) * (f - i));
+            neckX += neck * s.pushX;
+            neckZ += neck * s.pushZ;
         }
-        double w = k * (standingBefore + (standing - standingBefore) * partial), lean = w * Math.hypot(leanX, leanZ);
-        if (!(lean > 0) || Double.isNaN(bodyYaw)) return new double[]{yaw, pitch, roll};
+        double w = k * (standingBefore + (standing - standingBefore) * partial), body = w * Math.hypot(leanX, leanZ);
+        if (Double.isNaN(bodyYaw) || !(body > 0) && !(neckX != 0 || neckZ != 0)) return new double[]{yaw, pitch, roll};
         // тело отклоняется по ветру от взрыва — в лицо запрокидывает голову, в спину клонит вниз, сбоку наклоняет от
-        // взрыва; дальше границы устойчивости человек шагает — наклон стоит на ней
-        double x = leanX / Math.hypot(leanX, leanZ), z = leanZ / Math.hypot(leanX, leanZ);
-        lean = Math.min(lean, Math.toDegrees(edge(bodyYaw, x, z)));
+        // взрыва; дальше границы устойчивости человек шагает — наклон тела стоит на ней; голова качается на шее поверх
+        if (body > 0) {
+            double bx = leanX / Math.hypot(leanX, leanZ), bz = leanZ / Math.hypot(leanX, leanZ);
+            body = Math.min(body, Math.toDegrees(edge(bodyYaw, bx, bz)));
+            leanX = body * bx;
+            leanZ = body * bz;
+        }
+        leanX += w * neckX;
+        leanZ += w * neckZ;
+        double lean = Math.hypot(leanX, leanZ);
+        if (!(lean > 0)) return new double[]{yaw, pitch, roll};
+        double x = leanX / lean, z = leanZ / lean;
         double[] to = leaned(cameraYaw + yaw, cameraPitch + pitch, cameraRoll + roll, lean, x, z);
         return new double[]{Mth.wrapDegrees(to[0] - cameraYaw), to[1] - cameraPitch, Mth.wrapDegrees(to[2] - cameraRoll)};
     }

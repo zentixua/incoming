@@ -196,4 +196,71 @@ class BodySwayTest {
         // удар у долгой волны — прежний
         assertEquals(BodySway.jolt(6895, q(1)), BodySway.jolt(6895, q(1), 1e9), 1e-6);
     }
+
+    /** Тело и голова у наземного взрыва {@code kg} на {@code m} метрах, спиной к взрыву (толкает вперёд). */
+    private static BodySway.Motion motion(double kg, double m) {
+        double pa = 1000 * BlastModel.surfaceOverpressureKpa(m, kg), q = 1000 * BlastModel.dynamicPressureKpa(pa / 1000);
+        double tp = BlastModel.chemicalPhaseSeconds(m, kg, true);
+        return BodySway.motion(pa, q, 1, tp, tp, BodySway.FORWARD, BodySway.BACK);
+    }
+
+    /**
+     * Голова на шее (жалоба 23.10: «камера не качается»): плечи уходят с ударом, голова отстаёт — сперва откидывается
+     * назад против толчка, потом качается около тела и затухает; камера (тело + шея) качается не один раз, и каждый
+     * следующий размах меньше прошлого. Без скачков: шаг между отсчётами не больше скорости удара на шаг. Тело от
+     * шеи не меняется ({@link BodySway#tilt} — то же тело).
+     */
+    @Test
+    void headRocksOnTheNeckAndSettles() {
+        for (double[] c : new double[][]{{3, 50}, {50, 50}, {50, 100}, {50, 300}, {450, 100}, {450, 300}}) {
+            BodySway.Motion m = motion(c[0], c[1]);
+            String what = c[0] + " кг, " + c[1] + " м";
+            double[] body = m.body(), neck = m.neck(), head = new double[body.length];
+            assertEquals(body.length, neck.length);
+            for (int i = 0; i < head.length; i++) head[i] = body[i] + neck[i];
+            double pa = 1000 * BlastModel.surfaceOverpressureKpa(c[1], c[0]), q = 1000 * BlastModel.dynamicPressureKpa(pa / 1000);
+            double tp = BlastModel.chemicalPhaseSeconds(c[1], c[0], true);
+            double[] tilt = BodySway.tilt(pa, q, 1, tp, BodySway.FORWARD, BodySway.BACK);
+            for (int i = 0; i < Math.min(tilt.length, body.length); i++) assertEquals(tilt[i], body[i], 1e-15, what + ": тело");
+            assertTrue(head[1] < 0, what + ": голова сперва отстаёт назад");
+            // размахи камеры: экстремумы между переходами через ноль
+            java.util.List<Double> swings = new java.util.ArrayList<>();
+            double extreme = 0;
+            for (int i = 1; i < head.length; i++) {
+                if (Math.signum(head[i]) != Math.signum(head[i - 1]) && extreme != 0) {
+                    swings.add(Math.abs(extreme));
+                    extreme = 0;
+                }
+                if (Math.abs(head[i]) > Math.abs(extreme)) extreme = head[i];
+            }
+            assertTrue(swings.size() >= 3, what + ": качается, размахов " + swings.size());
+            for (int k = 2; k < swings.size(); k++) assertTrue(swings.get(k) < swings.get(k - 1), what + ": затухает " + swings);
+            assertTrue(Math.abs(body[body.length - 1]) < BodySway.STILL && Math.abs(neck[neck.length - 1]) < BodySway.STILL, what + ": успокоилась");
+            double kick = Math.abs(head[1] - head[0]);
+            for (int i = 2; i < head.length; i++) assertTrue(Math.abs(head[i] - head[i - 1]) <= 1.05 * kick, what + ": скачок на " + i);
+            assertTrue(head.length <= BodySway.LONGEST * BodySway.RATE + 1);
+        }
+    }
+
+    /**
+     * Сколько качает: у шахеда (50 кг) в 100 м камера уходит на 1–4°, в 300 м — на десятые доли градуса; ближе и у
+     * большего заряда — больше; качание кончается за 1–6 с (до сотой градуса).
+     */
+    @Test
+    void headSwingGrowsWithTheBlast() {
+        double near = head(motion(50, 50)), mid = head(motion(50, 100)), far = head(motion(50, 300)), big = head(motion(450, 100));
+        assertTrue(mid > 1 && mid < 4, "шахед 100 м: " + mid);
+        assertTrue(far > 0.2 && far < 1.5, "шахед 300 м: " + far);
+        assertTrue(near > mid && mid > far && big > mid, near + " " + mid + " " + far + " " + big);
+        for (double[] c : new double[][]{{50, 50}, {50, 300}}) {
+            double seconds = motion(c[0], c[1]).body().length / (double) BodySway.RATE;
+            assertTrue(seconds > 1 && seconds < 6, c[1] + " м: " + seconds + " с");
+        }
+    }
+
+    private static double head(BodySway.Motion m) {
+        double most = 0;
+        for (int i = 0; i < m.body().length; i++) most = Math.max(most, Math.abs(m.body()[i] + m.neck()[i]));
+        return Math.toDegrees(most);
+    }
 }

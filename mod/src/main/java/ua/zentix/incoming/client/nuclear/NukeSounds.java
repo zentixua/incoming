@@ -497,7 +497,7 @@ public final class NukeSounds {
             // фронт прошёл тело между прошлым тиком и этим: удар — с его прихода
             double late = a.ticks(0) - d.arrivalTicks(body.distanceTo(b));
             double[] tilt = CameraShake.sway(1000 * d.overpressureKpa(body), 1000 * d.dynamicPressureKpa(body), swayOpen, phase / 20,
-                    d.positivePhaseSeconds(body), late, body.subtract(b), p.getYRot());
+                    d.positivePhaseSeconds(body), late, body.subtract(b), p.getYRot(), false).body();
             swayPeak = Math.toDegrees(BodySway.peak(tilt, 0));
             swayRate = tilt.length < 2 ? 0 : Math.toDegrees(tilt[1]) * BodySway.RATE;
         }

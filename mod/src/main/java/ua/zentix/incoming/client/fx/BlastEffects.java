@@ -24,6 +24,7 @@ import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.net.S2C;
 import net.minecraft.world.level.block.state.BlockState;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.ChemicalFront;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.util.Particles;
 import ua.zentix.incoming.strike.WeaponType;
@@ -130,6 +131,13 @@ public final class BlastEffects {
         final BlastSource source;
         @Nullable
         private final BlastEchoes echoes;
+        /**
+         * Фронт волны во времени ({@link ChemicalFront}: Кинни–Грэхем и Ренкин–Гюгонио) — по нему приходят звук и удар по
+         * телу и его же видно кольцом ({@code FarBlasts.front}); null — у взрыва своя волна (бомба под землёй): со
+         * скоростью звука.
+         */
+        @Nullable
+        private final ChemicalFront front;
         private boolean arrived, hit, over;
         /** Часы взрыва, по которым эхо и удар у уха ждут начала прямого звука ({@link BlastSounds#clock}). */
         private final OwnSources.Clock clock = BlastSounds.clock();
@@ -147,6 +155,12 @@ public final class BlastEffects {
             this.source = source;
             // взрыв под землёй волной в воздух не выходит (газы — из хода, своим пакетом): ни эха, ни удара по телу
             this.echoes = source == null || !heard || source.underground() ? null : BlastSounds.echoes(source, pos, seed, clock);
+            this.front = source == null || source.underground() || source.chargeKg() <= 0 ? null : ChemicalFront.cached(source.chargeKg(), source.surface());
+        }
+
+        /** Тики с взрыва до прихода фронта на {@code d} блоков: вблизи фронт быстрее звука (у шахеда в 100 м — на 0,7 тика). */
+        double arrivalTicks(double d) {
+            return front == null ? d / Warheads.FRONT_SPEED : 20 * front.arrivalSeconds(d);
         }
 
         @Override
@@ -155,7 +169,7 @@ public final class BlastEffects {
             if (!arrived) {
                 Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
                 double d = ear.distanceTo(pos);
-                if (d <= Warheads.FRONT_SPEED * t || t > 60) {
+                if (arrivalTicks(d) <= t || t > 60) {
                     arrived = true;
                     if (t <= 60) arrive(level, (int) (d / Warheads.FRONT_SPEED) + 1);
                 } else if (echoes != null) {
@@ -168,9 +182,9 @@ public final class BlastEffects {
             if (!hit && source != null && !source.underground() && player != null) {
                 Vec3 body = player.getEyePosition();
                 double d = body.distanceTo(pos);
-                if (d <= Warheads.FRONT_SPEED * t) {
+                if (arrivalTicks(d) <= t) {
                     hit = true;
-                    BlastHit.hit(source, pos, mat, seed, player, body, t - d / Warheads.FRONT_SPEED);
+                    BlastHit.hit(source, pos, mat, seed, player, body, t - arrivalTicks(d));
                 } else if (t > 60) {
                     hit = true;
                 }
