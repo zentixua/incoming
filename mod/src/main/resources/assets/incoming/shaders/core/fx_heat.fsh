@@ -220,7 +220,13 @@ vec2 heatShift(vec3 dir, float dist) {
         float eddy = s.y * (h.w + ax.w * u) / h.w;
         float speed = s.z * min(1.0, g.z / max(u, 1e-3));
         float aperture = max(HAZE_PUPIL, res * mid);
-        float k = hazeAngle(hazeDn(excess, s.w), len, eddy, aperture) * hazeSeen(eddy, speed) * (1.0 - mid / max(dist, mid + 1e-3)) / res;
+        // пульсации к краю столба и к его концу гаснут (⚠ форма: (1 − ρ²/r²)² поперёк вместо гаусса, к концу — с 0,6 длины):
+        // ровным цилиндром дрожание обрывалось бы на его стенке прямой чертой
+        float r = h.w + ax.w * u;
+        vec3 off = dir * mid - h.xyz - a * u;
+        float edge = clamp(1.0 - dot(off, off) / (r * r), 0.0, 1.0);
+        edge = edge * edge * (1.0 - smoothstep(0.6 * s.x, s.x, u));
+        float k = edge * hazeAngle(hazeDn(excess, s.w), len, eddy, aperture) * hazeSeen(eddy, speed) * (1.0 - mid / max(dist, mid + 1e-3)) / res;
         // меньше сотой пикселя — без шума (цена)
         if (k < 0.01) continue;
         vec3 p = dir * mid - h.xyz;
