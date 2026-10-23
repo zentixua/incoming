@@ -160,69 +160,6 @@ class HeatPassTest {
         assertFalse(shadowed((x, y, z) -> x >= SIZE[0] || x < 0, new double[]{100, 50, 100}, new double[]{300, 50, 100}), "за окном — свободно");
     }
 
-    /** Проход по одним блокам (прежний, без кубов) — образец для двухуровневого {@link HeatPass#blocked}. */
-    private static boolean blockedByBlocks(double[] a, double[] b, int[] size, HeatPass.Cells cells) {
-        double[] d = {b[0] - a[0], b[1] - a[1], b[2] - a[2]};
-        double t0 = 0, t1 = 1;
-        for (int k = 0; k < 3; k++) {
-            if (Math.abs(d[k]) < 1e-6) {
-                if (a[k] < 0 || a[k] >= size[k]) return false;
-            } else {
-                double ta = -a[k] / d[k], tb = (size[k] - a[k]) / d[k];
-                t0 = Math.max(t0, Math.min(ta, tb));
-                t1 = Math.min(t1, Math.max(ta, tb));
-            }
-        }
-        if (t1 <= t0) return false;
-        int[] cell = new int[3], dir = new int[3];
-        double[] inv = new double[3], next = {1e9, 1e9, 1e9};
-        for (int k = 0; k < 3; k++) {
-            cell[k] = Math.max(0, Math.min(size[k] - 1, (int) Math.floor(a[k] + d[k] * t0)));
-            dir[k] = (int) Math.signum(d[k]);
-            inv[k] = 1 / Math.max(Math.abs(d[k]), 1e-9);
-            if (d[k] > 0) next[k] = (cell[k] + 1 - a[k]) * inv[k];
-            else if (d[k] < 0) next[k] = (a[k] - cell[k]) * inv[k];
-        }
-        boolean own = t0 <= 0;
-        for (int i = 0; i < 2000; i++) {
-            if (!own && cells.solid(cell[0], cell[1], cell[2])) return true;
-            own = false;
-            int k = next[0] <= next[1] && next[0] <= next[2] ? 0 : next[1] <= next[2] ? 1 : 2;
-            double t = next[k];
-            cell[k] += dir[k];
-            next[k] += inv[k];
-            if (t >= t1 || cell[k] < 0 || cell[k] >= size[k]) break;
-        }
-        return false;
-    }
-
-    /**
-     * Проход кубами 4³ с блоками внутри занятых — тот же ответ, что по одним блокам (кубы — только скорость: в открытом
-     * воздухе шаг в 4 блока): случайные сцены разной густоты, отрезки любой длины и наклона, начало в своём блоке.
-     */
-    @Test
-    void cubesGiveTheSameAnswerAsBlocks() {
-        Random r = new Random(5);
-        for (int scene = 0; scene < 40; scene++) {
-            double density = 0.002 + 0.05 * r.nextDouble();
-            long seed = r.nextLong();
-            HeatPass.Cells cells = (x, y, z) -> {
-                if (x < 0 || y < 0 || z < 0 || x >= SIZE[0] || y >= SIZE[1] || z >= SIZE[2]) return false;
-                long h = seed ^ (x * 73856093L) ^ (y * 19349663L) ^ (z * 83492791L);
-                h = it.unimi.dsi.fastutil.HashCommon.murmurHash3(h);
-                return y < 30 || (h >>> 11) * 0x1.0p-53 < density;
-            };
-            for (int i = 0; i < 300; i++) {
-                double[] a = {r.nextDouble() * SIZE[0], 30 + r.nextDouble() * 40, r.nextDouble() * SIZE[2]};
-                double len = 2 + r.nextDouble() * 60;
-                double[] u = unit(r);
-                double[] b = {a[0] + u[0] * len, a[1] + u[1] * len, a[2] + u[2] * len};
-                assertEquals(blockedByBlocks(a, b, SIZE, cells), HeatPass.blocked(a[0], a[1], a[2], b[0], b[1], b[2], SIZE, cells),
-                        "сцена " + scene + " отрезок " + i);
-            }
-        }
-    }
-
     /**
      * Огненный шар у кромки холма — протяжённый источник: точка, откуда середина шара за кромкой, а верх виден, получает
      * долю его света, а не ноль; шар целиком за холмом — ничего; открытый — весь.

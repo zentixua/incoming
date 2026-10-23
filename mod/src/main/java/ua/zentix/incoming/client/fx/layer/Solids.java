@@ -55,7 +55,7 @@ public final class Solids {
     static final int UNIT = 15;
 
     private static int texture = -1;
-    private static ByteBuffer section, zeros, full, cubeSection, cubeZeros, cubeFull;
+    private static ByteBuffer section, zeros, full;
     /** Секция мира с блоками в каждом месте окна и секция, под которую место обнулено ({@link SectionPos#asLong}). */
     private static final long[] STORED = new long[ALL], ZEROED = new long[ALL];
     /** Отпечаток блоков секции при её чтении ({@link #print}). */
@@ -203,29 +203,9 @@ public final class Solids {
         return (Math.floorMod(sx, SX) * SY + Math.floorMod(sy, SY)) * SX + Math.floorMod(sz, SX);
     }
 
-    /**
-     * Заслоны секции в текстуру: блоки — на её место окна, а кубы 4³ («есть ли в кубе заслон») — в слой грубой сетки
-     * за окном по z (с {@link #SIZE_XZ}): по нему луч тени ({@code heatBlocked}) идёт открытым воздухом шагом в куб.
-     */
     private static void upload(int sx, int sy, int sz, ByteBuffer data) {
         GL12.glTexSubImage3D(GL12.GL_TEXTURE_3D, 0, Math.floorMod(sx, SX) * 16, Math.floorMod(sy, SY) * 16, Math.floorMod(sz, SX) * 16,
                 16, 16, 16, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, data);
-        ByteBuffer c = data == zeros ? cubeZeros : data == full ? cubeFull : cubes(data);
-        GL12.glTexSubImage3D(GL12.GL_TEXTURE_3D, 0, Math.floorMod(sx, SX) * 4, Math.floorMod(sy, SY) * 4, SIZE_XZ + Math.floorMod(sz, SX) * 4,
-                4, 4, 4, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, c);
-    }
-
-    /** Кубы 4³ секции data: 255 — в кубе есть заслон (x — быстрее всех, потом y, потом z). */
-    private static ByteBuffer cubes(ByteBuffer data) {
-        for (int k = 0; k < 64; k++) cubeSection.put(k, (byte) 0);
-        for (int z = 0; z < 16; z++) {
-            for (int y = 0; y < 16; y++) {
-                for (int x = 0; x < 16; x++) {
-                    if (data.get((z * 16 + y) * 16 + x) != 0) cubeSection.put(((z >> 2) * 4 + (y >> 2)) * 4 + (x >> 2), (byte) 255);
-                }
-            }
-        }
-        return cubeSection;
     }
 
     /** Секция pending-номера o: заслоны — в текстуру, место помнит её. */
@@ -318,10 +298,6 @@ public final class Solids {
         zeros = MemoryUtil.memCalloc(4096);
         full = MemoryUtil.memAlloc(4096);
         for (int k = 0; k < 4096; k++) full.put(k, (byte) 255);
-        cubeSection = MemoryUtil.memAlloc(64);
-        cubeZeros = MemoryUtil.memCalloc(64);
-        cubeFull = MemoryUtil.memAlloc(64);
-        for (int k = 0; k < 64; k++) cubeFull.put(k, (byte) 255);
         Arrays.fill(STORED, Long.MIN_VALUE);
         Arrays.fill(ZEROED, FRESH);
         texture = GL11.glGenTextures();
@@ -329,9 +305,8 @@ public final class Solids {
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
         // всё окно — нулями одним вызовом (содержимое без данных не определено), места — «обнулены при создании»
-        // по z за окном — слой грубой сетки кубов 4³ (SIZE_XZ / 4)
-        ByteBuffer blank = MemoryUtil.memCalloc(SIZE_XZ * SIZE_Y * (SIZE_XZ + SIZE_XZ / 4));
-        GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8, SIZE_XZ, SIZE_Y, SIZE_XZ + SIZE_XZ / 4, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, blank);
+        ByteBuffer blank = MemoryUtil.memCalloc(SIZE_XZ * SIZE_Y * SIZE_XZ);
+        GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8, SIZE_XZ, SIZE_Y, SIZE_XZ, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, blank);
         MemoryUtil.memFree(blank);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0);
     }
