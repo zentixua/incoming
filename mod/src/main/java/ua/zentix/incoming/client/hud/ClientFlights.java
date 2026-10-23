@@ -8,6 +8,11 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.client.ClientWeaponSpec;
+import ua.zentix.incoming.client.far.FarFlightView;
+import ua.zentix.incoming.client.flight.FlightTrack;
+import ua.zentix.incoming.client.flight.FlightTracks;
+import ua.zentix.incoming.entity.BomberEntity;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.net.S2C;
@@ -25,14 +30,16 @@ import java.util.UUID;
 
 /**
  * Свои снаряды в полёте, как их прислал сервер ({@link S2C.Flights}, раз в 5 тиков): время до удара между пакетами
- * убывает по тикам клиента, позиция — у сущности, если она видна клиенту, иначе по присланным: между двумя последними
- * пакетами, с отставанием на один пакет (интерполяция снимков, без угадывания вперёд). Номер снаряда («№3»)
- * постоянный, пока снаряд летит.
+ * убывает по тикам клиента, позиция — там, где клиент рисует корпус: у сущности, если она видна клиенту, иначе по пути
+ * дальней картинки, а без него по присланным — между двумя последними пакетами, с отставанием на один пакет
+ * (интерполяция снимков, без угадывания вперёд). Номер снаряда («№3») постоянный, пока снаряд летит.
  */
 public final class ClientFlights {
     /** Сколько точек пути помнить на снаряд (пакет раз в 5 тиков: ~2 минуты полёта). */
     private static final int TRAIL = 480;
     private static final List<Tracked> FLIGHTS = new ArrayList<>();
+    /** Место корпуса по пути дальней картинки (кадр рисуется в одном потоке). */
+    private static final double[] AT = new double[3];
     /**
      * Снаряды, которые клиент сейчас видит, по UUID. Метки HUD, карта и камера спрашивают сущность каждого полёта
      * каждый кадр — перебор всех сущностей мира (в сборке с Create их тысячи) на 30–90 полётов был бы заметен.
@@ -135,12 +142,27 @@ public final class ClientFlights {
             return p != null && !p.isRemoved() && p.level() == Minecraft.getInstance().level ? p : null;
         }
 
-        /** Где снаряд сейчас (для метки на экране). */
+        /**
+         * Где снаряд сейчас — там, где клиент рисует его корпус (метка на экране, карта, камера): у сущности — её
+         * сглаженное место, вдали — путь дальней картинки ({@link FarFlightView#drawnAt}); без них — между пакетами.
+         */
         public Vec3 position(float partialTick) {
             StrikeProjectile p = entity();
             if (p != null) return p.getPosition(partialTick);
+            if (FarFlightView.drawnAt(id, partialTick, AT)) return new Vec3(AT[0], AT[1], AT[2]);
             double k = (tick - at + partialTick) / Math.max(1, at - prevAt);
             return prevPos.lerp(data.pos(), Math.min(1, k));
+        }
+
+        /**
+         * Наибольший размер корпуса (размах или длина), блоков — его угловой размер даёт рамку снаряда на экране: у B-2 —
+         * самолёт, у его бомбы — бомба.
+         */
+        public double bodySize() {
+            StrikeProjectile p = entity();
+            FlightTrack track = p == null ? FlightTracks.get(id) : null;
+            boolean bomber = p != null ? p instanceof BomberEntity : track != null && track.bomber;
+            return ClientWeaponSpec.of(weapon()).airframe(!bomber).far().size();
         }
 
         /** Скорость, блоков за тик: у сущности — за последний тик, иначе между двумя последними пакетами. */

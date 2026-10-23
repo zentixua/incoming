@@ -82,15 +82,6 @@ public final class HudDraw {
         }
     }
 
-    /** Контур ромба радиусом {@code r}. */
-    public static void diamond(GuiGraphics g, int x, int y, int r, int color) {
-        for (int i = -r; i <= r; i++) {
-            int half = r - Math.abs(i);
-            g.fill(x - half, y + i, x - half + 1, y + i + 1, color);
-            g.fill(x + half, y + i, x + half + 1, y + i + 1, color);
-        }
-    }
-
     /** Пунктирная окружность: точка через ~6 пикселей дуги. */
     public static void dottedCircle(GuiGraphics g, double cx, double cy, double r, int color) {
         int steps = (int) Math.max(24, Math.min(720, 2 * Math.PI * r / 6));
