@@ -108,7 +108,8 @@ _queue_line() {
 lease_take() {
   local owner=$1 tree wait=${3:-} fd said= now who why queued= me
   tree=$(readlink -m "$2")
-  me="$BASHPID $(_proc_start "$BASHPID")"
+  # номер — этого процесса: $BASHPID внутри $(…) — уже номер подоболочки
+  local pid=$BASHPID; me="$pid $(_proc_start "$pid")"
   while true; do
     exec {fd}>"$LEASE.lock"; flock "$fd"
     _lease_read; now=$(date +%s)

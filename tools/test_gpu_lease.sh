@@ -143,7 +143,10 @@ lease_release FZC
 export INCOMING_GPU_POLL=0.2
 rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue"
 lease_take V3 /x/wt-V3
-( lease_take L1 /x/wt-L1 --wait 2>"$tmp/q-l1"; echo L1 >> "$tmp/order" ) & q1=$!
+# ждущий старше своей очереди (sleep до lease_take): место — по его номеру и времени старта, а не подоболочки, — иначе
+# живой ждущий считался кончившимся и очередь была пуста
+( sleep 0.3; lease_take L1 /x/wt-L1 --wait 2>"$tmp/q-l1"; echo L1 >> "$tmp/order" ) & q1=$!
+sleep 0.3
 sleep 0.5
 ( lease_take WV /x/wt-WV --wait 2>"$tmp/q-wv"; echo WV >> "$tmp/order" ) & q2=$!
 sleep 0.5
@@ -162,7 +165,8 @@ out=$(lease_take N1 /x/wt-N1 2>&1); rc=$?
 for _ in $(seq 50); do grep -q WV "$tmp/order" && break; sleep 0.1; done
 [ $rc = 75 ] && [[ $out == *"свободна, но её ждут: WV"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = WV ] \
   && ok "свободную при очереди без --wait не взять, взял ждущий WV" || bad "перехват мимо очереди: $rc $out / $(cut -f1 "$INCOMING_GPU_LEASE")"
-wait $q1 $q2
+# ждущих, что так и не взяли (ошибка очереди), — снять, а не ждать вечно
+kill $q1 $q2 2>/dev/null; wait $q1 $q2 2>/dev/null
 [ ! -s "$INCOMING_GPU_LEASE.queue" ] && ok "взявшие ушли из очереди" || bad "очередь после взятия: $(cat "$INCOMING_GPU_LEASE.queue")"
 # прерванный ждущий (Ctrl+C, срок) уходит из очереди сам: следующий не ждёт его
 ( lease_take SM /x/wt-SM --wait 2>/dev/null ) & q3=$!
@@ -174,7 +178,7 @@ pkill -P $q3 2>/dev/null
 lease_release WV
 for _ in $(seq 50); do [ -f "$tmp/tr" ] && break; sleep 0.1; done
 [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = TR ] && ok "прерванный ждущий не держит очередь — взял следующий" || bad "прерванный держит очередь: $(cut -f1 "$INCOMING_GPU_LEASE") $(cat "$INCOMING_GPU_LEASE.queue")"
-wait $q4
+kill $q4 2>/dev/null; wait $q4 2>/dev/null
 lease_release TR
 unset INCOMING_GPU_POLL
 
