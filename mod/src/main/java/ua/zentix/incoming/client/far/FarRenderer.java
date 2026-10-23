@@ -124,7 +124,7 @@ public final class FarRenderer {
 
     /** Заливка кадра кучками облаков (экранов, с перекрытием) и доля кучки, что ей дал бюджет ({@link SmokePuffs#FILL_BUDGET}). */
     public static String describeSmoke() {
-        return String.format(java.util.Locale.ROOT, "fill %.2f screens (budget %.0f, one club per gaussian %.2f), cluster share %.2f",
+        return String.format(java.util.Locale.ROOT, "native fill %.2f screens (raster budget %.0f, one club per gaussian %.2f), cluster share %.2f",
                 SmokePuffs.lastFill(), SmokePuffs.FILL_BUDGET, SmokePuffs.lastFloor(), SmokePuffs.lastShare());
     }
 }

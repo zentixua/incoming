@@ -1,0 +1,9 @@
+{
+    "vertex": "incoming:fx_depth",
+    "fragment": "incoming:fx_puff_resolve",
+    "samplers": [{"name":"Sampler0"}, {"name":"Sampler1"}],
+    "uniforms": [
+        {"name":"PuffSize", "type":"float", "count":2, "values":[1,1]},
+        {"name":"PuffViewport", "type":"float", "count":4, "values":[0,0,1,1]}
+    ]
+}

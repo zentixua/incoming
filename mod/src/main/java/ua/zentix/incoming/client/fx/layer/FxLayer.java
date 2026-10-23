@@ -100,6 +100,12 @@ public final class FxLayer {
             Incoming.LOG.error("Scene depth shader failed to load: smoke has no soft edges and is not hidden by Distant Horizons LODs", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_puff_resolve"), DefaultVertexFormat.POSITION), sh -> PuffTarget.resolve = sh);
+        } catch (IOException ex) {
+            PuffTarget.resolve = null;
+            Incoming.LOG.error("Smoke resolve shader failed to load: drawing smoke clubs at full resolution", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_probe"), SourceProbes.FORMAT), s -> SourceProbes.shader = s);
         } catch (IOException ex) {
             SourceProbes.shader = null;
@@ -322,7 +328,7 @@ public final class FxLayer {
             RenderSystem.depthMask(false);
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
-            QUADS.draw();
+            QUADS.draw(VIEW_PROJECTION.set(e.getProjectionMatrix()).mul(VIEW), s, scene);
             GPU.end(timed);
         } finally {
             light.turnOffLightLayer();
@@ -368,11 +374,12 @@ public final class FxLayer {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
                 + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s), depth: %s", lastQuads, lastMean, lastMax,
                 lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
-                HEAT.lastFrames, HeatPass.describe(), SceneDepth.describe());
+                HEAT.lastFrames, HeatPass.describe(), SceneDepth.describe()) + "; " + PuffTarget.describe();
     }
 
     /** Выход из мира или смена измерения. */
     public static void reset() {
+        PuffTarget.reset();
         frameNanos = frameMax = cleanMax = cleanCpu = 0;
         frames = ticks = collected = lastCollected = lastQuads = 0;
         lastMean = lastMax = lastClean = lastCleanCpu = 0;

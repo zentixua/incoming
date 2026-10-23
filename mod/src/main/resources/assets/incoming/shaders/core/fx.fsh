@@ -24,7 +24,8 @@ uniform vec4 FxFireball;
 uniform vec4 FxFireFlow;
 
 uniform vec4 ColorModulator;
-uniform vec2 ScreenSize;
+// xy: current raster target, z: floating point smoke target
+uniform vec3 FxTarget;
 uniform vec4 FxFogColor;
 // 1 — расстояние до мира есть
 uniform float FxScene;
@@ -156,6 +157,12 @@ float glowAlpha(float r) {
 void main() {
     // производные — до ветвления (вне его они определены у всех пикселей)
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
+    // The reduced target has no hardware depth attachment. Reject hidden clubs before fetching their light maps.
+    float sceneDistance = 1e9;
+    if (FxScene > 0.5 && (softness > 0.0 || FxTarget.z > 0.5)) {
+        sceneDistance = pallScene(texture(Sampler1, gl_FragCoord.xy / FxTarget.xy).r);
+        if (sceneDistance <= viewDistance) discard;
+    }
     float lod = 0.0;
     vec4 tex;
     bool six = nearest < -0.1 && nearest > -0.4;
@@ -216,18 +223,17 @@ void main() {
         // Квадрат ближе мира: перед ним пелены не больше, чем на кадре до мира, — и её свет до него — доля света пелены
         // на кадре по доле ослабления. Средний свет годится только там, где пелены на кадре почти нет: иначе клуб за
         // густой пеленой выходил бы пятном другого цвета (вдали — светлыми точками на тёмной пелене)
-        vec4 frame = texture(Sampler6, gl_FragCoord.xy / ScreenSize);
+        vec4 frame = texture(Sampler6, gl_FragCoord.xy / FxTarget.xy);
         // негодный пиксель пелены (NaN, бесконечность) — пелены перед квадратом нет: NaN дал бы чёрный квадрат
         if (!pallValid(frame)) frame = vec4(0.0, 0.0, 0.0, 1.0);
         float front = max(pallFront, frame.a);
         vec3 before = mix(PallAmbient.rgb, frame.rgb / max(1.0 - frame.a, 1e-3), smoothstep(0.02, 0.15, 1.0 - frame.a));
         color.rgb = color.rgb * front + color.a * before * (1.0 - front);
     }
-    if (FxScene > 0.5 && softness > 0.0) {
+    if (FxScene > 0.5 && (softness > 0.0 || FxTarget.z > 0.5)) {
         // клуб тает, входя в землю и стены, и пропадает за рельефом (и за LOD Distant Horizons)
         // негодное расстояние (NaN, за глазом) — мира за пикселем нет, как у неба
-        float scene = pallScene(texture(Sampler1, gl_FragCoord.xy / ScreenSize).r);
-        color *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
+        if (softness > 0.0) color *= clamp((sceneDistance - viewDistance) / softness, 0.0, 1.0);
     }
     // у самой камеры квадрат не режет экран краем ближней плоскости
     color *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);
@@ -235,11 +241,9 @@ void main() {
     // тумана у края прорисовки закрывало бы ленты шлейфов и дальнюю картинку взрывов, которые сменяют частицы там
     color *= 1.0 - fog * FxFogColor.a;
     fragColor = color * ColorModulator;
-    if (six) {
-        // клуб — толща, и тонкий дым кладёт на пиксель доли шага кадра RGBA8: смешивание округлило бы такой вклад в ноль, и
-        // слои тонкого дыма пропадали бы. Шум в ±½ шага (interleaved gradient noise, Jimenez 2014; у каждого квадрата — свой
-        // сдвиг по расстоянию) делает округление несмещённым: в среднем по пикселям вклад слоя — его толща
+    if (six && FxTarget.z < 0.5) {
+        // Nonnegative stochastic rounding leaves black soot exactly black. Float smoke groups need no 8-bit quantizer.
         float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + viewDistance * 0.61803399);
-        fragColor.rgb = max(fragColor.rgb + (dither - 0.5) / 255.0, vec3(0.0));
+        fragColor.rgb = floor(max(fragColor.rgb, vec3(0.0)) * 255.0 + dither) / 255.0;
     }
 }

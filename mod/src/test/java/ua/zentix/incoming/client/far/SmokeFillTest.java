@@ -5,6 +5,7 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
+import ua.zentix.incoming.client.fx.layer.PuffTarget;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.GroundDust;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
@@ -145,6 +146,21 @@ class SmokeFillTest {
             }
             return clear;
         }
+
+        /** The off-screen target accumulates optical layers before bilinear reconstruction (unoccluded background). */
+        double reconstructed(double u, double v, int width, int height) throws IOException {
+            double px = (u + W) / (2 * W) * width - 0.5, py = (v + H) / (2 * H) * height - 0.5;
+            int ix = (int) Math.floor(px), iy = (int) Math.floor(py);
+            double wx = px - ix, wy = py - iy, sum = 0;
+            for (int y = 0; y < 2; y++) {
+                for (int x = 0; x < 2; x++) {
+                    int sx = Math.clamp(ix + x, 0, width - 1), sy = Math.clamp(iy + y, 0, height - 1);
+                    double at = transmittance(-W + (sx + 0.5) * 2 * W / width, -H + (sy + 0.5) * 2 * H / height);
+                    sum += at * (x == 0 ? 1 - wx : wx) * (y == 0 ? 1 - wy : wy);
+                }
+            }
+            return sum;
+        }
     }
 
     static FarView view(Vec3 eye, Vector3f fwd) {
@@ -216,8 +232,8 @@ class SmokeFillTest {
     }
 
     /**
-     * Глаз на крыше в дыму налёта и рядом с облаками, взгляд вдоль дыма: без бюджета кадр закрывает больше двух бюджетов, с ним —
-     * не больше бюджета или его пола (по одному клубу на гаусс; с запасом на оценку площади кучки, 15 %) и меньше вдвое.
+     * Глаз на крыше в дыму налёта и рядом с облаками, взгляд вдоль дыма: без бюджета кадр закрывает больше двух экранных бюджетов, с ним —
+     * не больше четырёх настоящих экранов пикселей уменьшенной цели (включая мелкие клубы полного разрешения).
      * Видимая толща — модели: в каждой из 18 частей кадра пропускание и полного кадра, и кадра в бюджете — у пропускания
      * самого вещества модели ({@link #truth}: гауссы облаков без квадратов) не дальше {@link #MODEL_PART}, в среднем по
      * кадру — не дальше {@link #MODEL_MEAN}. До 3.6.1 части расходились до 0,4 (полный кадр) и 0,34 (в бюджете), всегда в
@@ -259,12 +275,37 @@ class SmokeFillTest {
                     eye, free.quads.size(), free.fill(), meanFree, budget.quads.size(), budget.fill(), floor, meanBudget, worstFree, worst);
             System.out.println("FILL " + got);
             assertTrue(free.fill() > 2 * SmokePuffs.FILL_BUDGET, got);
-            assertTrue(budget.fill() <= 1.15 * Math.max(SmokePuffs.FILL_BUDGET, floor), got);
-            assertTrue(budget.fill() < free.fill() / 2, got);
+            float[] bounds = new float[4 * budget.quads.size()];
+            for (int k = 0; k < budget.quads.size(); k++) {
+                double[] q = budget.quads.get(k);
+                bounds[4 * k] = (float) Math.clamp((q[0] - q[3] + W) / (2 * W), 0, 1);
+                bounds[4 * k + 1] = (float) Math.clamp((q[1] - q[4] + H) / (2 * H), 0, 1);
+                bounds[4 * k + 2] = (float) Math.clamp((q[0] + q[3] + W) / (2 * W), 0, 1);
+                bounds[4 * k + 3] = (float) Math.clamp((q[1] + q[4] + H) / (2 * H), 0, 1);
+            }
+            PuffTarget.Resolution resolution = PuffTarget.plan(bounds, budget.quads.size(), 1920, 1080, SmokePuffs.FILL_BUDGET);
+            int step = resolution.step();
+            double raster = PuffTarget.workPixels(bounds, budget.quads.size(), 1920, 1080, step, resolution.keepSmall()) / (1920.0 * 1080);
+            System.out.printf(Locale.ROOT, "RASTER step %d, %.3f native screens%n", step, raster);
+            assertTrue(raster <= SmokePuffs.FILL_BUDGET, got);
+            assertTrue(budget.quads.size() >= free.quads.size() / 2, "clumps survive instead of one club per Gaussian: " + got);
             double meanReal = 0;
             for (double r : real) meanReal += r / real.length;
             assertTrue(Math.abs(meanFree - meanReal) <= MODEL_MEAN && Math.abs(meanBudget - meanReal) <= MODEL_MEAN, got + "; модель в среднем " + meanReal);
             assertTrue(worstFree <= MODEL_PART && worst <= MODEL_PART, got);
+            double[] reconstructed = new double[18];
+            for (int i = 0; i < 48; i++) {
+                for (int j = 0; j < 27; j++) {
+                    double u = -W + (i + 0.5) * 2 * W / 48, v = -H + (j + 0.5) * 2 * H / 27;
+                    reconstructed[i / 8 * 3 + j / 9] += budget.reconstructed(u, v, 1920 / step, 1080 / step) / 72;
+                }
+            }
+            double lowMean = 0;
+            for (int k = 0; k < 18; k++) {
+                lowMean += reconstructed[k] / 18;
+                assertTrue(Math.abs(reconstructed[k] - real[k]) <= MODEL_PART, "reconstructed target vs model, region " + k + ": " + got);
+            }
+            assertTrue(Math.abs(lowMean - meanReal) <= MODEL_MEAN, "reconstructed target vs mean model: " + got);
         }
     }
 

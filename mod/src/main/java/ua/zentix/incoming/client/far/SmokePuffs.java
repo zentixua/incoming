@@ -124,14 +124,11 @@ final class SmokePuffs {
     }
 
     /**
-     * Сколько экранов могут закрыть кучки клубов облаков за кадр (сумма их площадей на экране с перекрытием): что видно
-     * сквозь дым — толща по лучу взгляда, Στ, а не число слоёв, поэтому сверх этого кучки берут меньше клубов (крупнее),
-     * с той же непрозрачностью середины — плотность и цвет те же, мельче подробность (жалоба 23.10: в дыму налёта 8 к/с,
-     * кадр 62 мс, пики 279 мс; замер {@code SmokeFillTest} — ~13–17 экранов, с бюджетом — ~5). Меньше одного клуба на
-     * гаусс кучка не берёт: это уже толща облаков, а не подробность. ⚠ Число — оценка: цена экрана на 4060 — из замера
-     * песочницы (PR).
+     * Бюджет дорогой заливки клубов — четыре экрана настоящих пикселей. Размеры и массы остаются моделями;
+     * `PuffTarget` выбирает уменьшенную цель по рамкам готовых квадратов (GPU Gems 3 ch.23). Здесь непрерывно
+     * ограничивается лишь лишняя подробность кучки, с запасом до двух площадей одиночных клубов (оценка подачи).
      */
-    static final double FILL_BUDGET = 4;
+    static final double FILL_BUDGET = ua.zentix.incoming.client.fx.layer.PuffTarget.BUDGET;
     /** Бюджет, по которому кадр строится ({@link #FILL_BUDGET}; проверки сравнивают с кадром без бюджета). */
     static double budget = FILL_BUDGET;
 
@@ -263,13 +260,23 @@ final class SmokePuffs {
         return Math.clamp((a - Sight.THRESHOLD) / ((CLUMPS_FULL - 1) * Sight.THRESHOLD), 0, 1);
     }
 
+    /** Видимая граница гаусса (τ края 0,05), а не рамка текстуры: минимум 1,2σ, как у принятого слоя. */
+    static double visibleEdge(double tau0) {
+        return Math.max(1.2, Math.sqrt(2 * Math.log(Math.max(1, tau0 / 0.05))));
+    }
+
+    /** Доля клубов вне вуали: глаз внутри видимого гаусса, а не внутри прозрачной рамки запекания. */
+    static double outside(double px, double py, double pz, double sh, double sv, double tau0) {
+        return smoothstep(0.5, 1, Math.sqrt((px * px + pz * pz) / (sh * sh) + py * py / (sv * sv)) / visibleEdge(tau0));
+    }
+
     static final double CLUMPS_FULL = 5;
 
     /** σ колокола {@link #gauss}: три доли (√(3/12)·1,15). */
     static final double GAUSS_SD = 0.5 * 1.15;
 
     /**
-     * Сколько экранов закроет кучка гаусса с σ на экране (sa поперёк, sb вверх; м на его расстоянии) и толщей середины tau0
+     * Сколько экранов в полном разрешении закроет кучка гаусса с σ на экране (sa поперёк, sb вверх; м на его расстоянии) и толщей середины tau0
      * в кадре frame, с полным числом клубов {@code most} при доле {@code s} (кучка — между одним клубом и полной): клубов
      * many = 1 + (most − 1)·s, у каждого — σ·q ({@link #clubShare}) и 1/many вещества, полуразмер — по {@link PuffOptics};
      * сумма их квадратов — доля экрана под краем кучки ({@link #cover}: середины разбросаны на ±2σ·√(1 − q²)) × перекрытие.
@@ -493,13 +500,15 @@ final class SmokePuffs {
             planning = false;
             // доля кучки s — у облаков и трубок одна: заливка при s по настоящей кривой каждой кучки ({@link #clusterFill}),
             // подбор делением; трубки рисуются с долей прошлого кадра, их план — к следующему
-            double s = 1, whole = planned(1), floor = whole > budget ? planned(0) : 0;
-            if (floor >= budget) s = 0;
-            else if (whole > budget) {
+            double s = 1, whole = planned(1), floor = planned(0);
+            // Запас подробности над одиночным клубом — до двух его площадей (подача, оценка). Непрерывный target:
+            // ступени разрешения не должны переставлять комья. Четыре экрана пикселей удерживает PuffTarget.
+            double target = Math.max(budget, 2 * floor);
+            if (whole > target) {
                 double lo = 0, hi = 1;
-                for (int it = 0; it < 20; it++) {
+                for (int it = 0; it < 10; it++) {
                     double mid = 0.5 * (lo + hi);
-                    if (planned(mid) > budget) hi = mid;
+                    if (planned(mid) > target) hi = mid;
                     else lo = mid;
                 }
                 s = lo;
@@ -651,8 +660,7 @@ final class SmokePuffs {
             // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс. «Внутри» — по эллипсоиду
             // края (у плоского слоя пыли в сотню метров шириной и метр толщиной глаз над ним снаружи; по наибольшему
             // радиусу он был «внутри», и вуаль слоя закрывала весь кадр)
-            double q0 = Math.sqrt((px * px + pz * pz) / (rh * rh) + py * py / (rw * rw));
-            double outside = smoothstep(0.5, 1, q0);
+            double outside = outside(px, py, pz, sh, sv, tau);
             if (outside < 1 && !planning) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air);
             if (outside <= 0) return 0;
             // вне кадра — не нужен: шар всего квадрата кучки (клубы с разбросом — до ~2 краёв одиночного)
@@ -780,7 +788,7 @@ final class SmokePuffs {
         if (air < Sight.THRESHOLD) return 0;
         // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
         // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс
-        double outside = smoothstep(0.5 * r, r, d);
+        double outside = outside(px, py, pz, sh, sv, tau0);
         int veils = outside < 1 && veilAround(view, out, px, py, pz, sh, sv, ext, cr, cg, cb, (1 - outside) * vis * air) ? 1 : 0;
         if (outside <= 0) return veils;
         // вне кадра — не нужен: шар всего квадрата кучки (клубы с разбросом — до ~2 краёв одиночного)
@@ -801,7 +809,7 @@ final class SmokePuffs {
         double full = 1 + (Math.clamp(Math.min(pixels / CLUSTER_PIXELS, most * Math.min(1, screen * screen / (pixels * pixels))), 1, most) - 1)
                 * clumpsSeen(tau0);
         // бюджет заливки кадра ({@link #FILL_BUDGET}): доля кучки — из прошлого кадра (кучки трубок рисуются, пока источник
-        // их кладёт, а бюджет считается в конце кадра); план — к этому кадру
+        // их кладёт, а подробность считается в конце кадра); окончательный бюджет пикселей — у PuffTarget
         double many = 1 + (full - 1) * DRAW.tubeShare;
         int count = (int) Math.ceil(many - 1e-9);
         double wide = offAxis(view, px, py, pz, d), sa = sh * grow * wide, sbv = sv * grow * wide;

@@ -5,15 +5,23 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
+import com.mojang.blaze3d.vertex.VertexBuffer;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.platform.GlStateManager;
+import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import org.joml.Vector3f;
+import org.joml.Matrix4f;
+import org.joml.Vector4f;
+import net.minecraft.client.renderer.ShaderInstance;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.opengl.GL11;
 
 import java.util.Arrays;
 
 /**
  * Квадраты кадра слоя эффектов: копятся в своей памяти (вне кучи Java, между кадрами не освобождается), потом
- * сортируются от дальних к ближним по настоящему расстоянию до камеры и уходят одним вызовом отрисовки. Прозрачное
+ * сортируются от дальних к ближним по настоящему расстоянию до камеры и рисуются в общем порядке. Прозрачное
  * смешивается верно только в таком порядке: ближний клуб поверх дальнего, а не «кто родился позже».
  * <p>
  * Вершина — 36 байт ({@link #FORMAT}): место от камеры, место на листе, свет с умноженной альфой, мягкость края
@@ -42,6 +50,11 @@ public final class FxQuads {
     private int capacity, n;
     private long write;
     private float[] keys = new float[0];
+    private boolean[] smoke = new boolean[0];
+    private boolean[] reduced = new boolean[0];
+    private float[] bounds = new float[0];
+    private final Vector4f clip = new Vector4f();
+    private VertexBuffer gpu;
     private final FarFirst sort = new FarFirst();
     private final ByteBufferBuilder out = new ByteBufferBuilder(QUAD * 256);
     private Vector3f left = new Vector3f(1, 0, 0), up = new Vector3f(0, 1, 0);
@@ -159,6 +172,7 @@ public final class FxQuads {
     public void quad(float key) {
         if (n == capacity) grow();
         keys[n] = key > 0 ? key : 0;
+        smoke[n] = six;
         write = stage + (long) n * QUAD;
         n++;
     }
@@ -242,15 +256,110 @@ public final class FxQuads {
     }
 
     /** Отсортировать и нарисовать текущим шейдером; память кадра остаётся для следующего. */
-    void draw() {
-        if (n == 0) return;
+    void draw(Matrix4f projectionView, ShaderInstance shader, int scene) {
+        if (n == 0) {
+            PuffTarget.reset();
+            return;
+        }
         int[] order = sort.sort(keys, n);
-        long dst = out.reserve(n * QUAD);
-        for (int i = 0; i < n; i++) MemoryUtil.memCopy(stage + (long) order[i] * QUAD, dst + (long) i * QUAD, QUAD);
+        // Консервативные рамки настоящих квадратов в кадре: бюджет — по числу пикселей цели, включая прозрачные углы.
+        for (int i = 0; i < n; i++) {
+            int o = 4 * i;
+            Arrays.fill(bounds, o, o + 4, 0);
+            if (!smoke[i]) continue;
+            float x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+            for (int j = 0; j < 4; j++) {
+                long p = stage + (long) i * QUAD + (long) j * VERTEX;
+                projectionView.transform(clip.set(MemoryUtil.memGetFloat(p), MemoryUtil.memGetFloat(p + 4), MemoryUtil.memGetFloat(p + 8), 1));
+                if (!(clip.w > 0)) {
+                    x0 = y0 = 0;
+                    x1 = y1 = 1;
+                    break;
+                }
+                float x = Math.clamp(clip.x / clip.w * 0.5f + 0.5f, 0, 1), y = Math.clamp(clip.y / clip.w * 0.5f + 0.5f, 0, 1);
+                x0 = Math.min(x0, x);
+                x1 = Math.max(x1, x);
+                y0 = Math.min(y0, y);
+                y1 = Math.max(y1, y);
+            }
+            bounds[o] = x0;
+            bounds[o + 1] = y0;
+            bounds[o + 2] = x1;
+            bounds[o + 3] = y1;
+        }
+        if (!PuffTarget.begin(shader, scene, bounds, n)) {
+            draw(order, 0, n);
+            return;
+        }
+        for (int i = 0; i < n; i++) reduced[i] = smoke[i] && PuffTarget.reduced(bounds, i);
+        // One upload for all ranges. Rebuilding an immediate MeshData and its uniforms per group costs CPU at a raid.
+        if (gpu == null) gpu = new VertexBuffer(VertexBuffer.Usage.DYNAMIC);
+        gpu.bind();
+        MeshData mesh = mesh(order, 0, n);
+        if (mesh == null) {
+            PuffTarget.end();
+            VertexBuffer.unbind();
+            return;
+        }
+        gpu.upload(mesh);
+        shader.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
+                Minecraft.getInstance().getWindow());
+        try {
+            // Только последовательные клубы общего порядка. Искры, огонь, модели между ними остаются в полном разрешении.
+            for (int from = 0; from < n;) {
+                boolean puff = reduced[order[from]];
+                int to = groupEnd(order, reduced, from, n);
+                if (puff) {
+                    float x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+                    for (int i = from; i < to; i++) {
+                        int o = 4 * order[i];
+                        x0 = Math.min(x0, bounds[o]);
+                        y0 = Math.min(y0, bounds[o + 1]);
+                        x1 = Math.max(x1, bounds[o + 2]);
+                        y1 = Math.max(y1, bounds[o + 3]);
+                    }
+                    if (PuffTarget.low(x0, y0, x1, y1)) {
+                        range(shader, from, to);
+                        PuffTarget.composite(x0, y0, x1, y1);
+                    }
+                } else range(shader, from, to);
+                from = to;
+            }
+        } finally {
+            PuffTarget.end();
+            shader.clear();
+            VertexBuffer.unbind();
+        }
+    }
+
+    /** Граница последовательной группы одного разрешения в общем порядке глубины. */
+    static int groupEnd(int[] order, boolean[] smoke, int from, int count) {
+        int to = from + 1;
+        while (to < count && smoke[order[to]] == smoke[order[from]]) to++;
+        return to;
+    }
+
+    private void draw(int[] order, int from, int to) {
+        MeshData mesh = mesh(order, from, to);
+        if (mesh != null) BufferUploader.drawWithShader(mesh);
+    }
+
+    private MeshData mesh(int[] order, int from, int to) {
+        int count = to - from;
+        long dst = out.reserve(count * QUAD);
+        for (int i = from; i < to; i++) MemoryUtil.memCopy(stage + (long) order[i] * QUAD, dst + (long) (i - from) * QUAD, QUAD);
         ByteBufferBuilder.Result result = out.build();
-        if (result == null) return;
-        BufferUploader.drawWithShader(new MeshData(result, new MeshData.DrawState(FORMAT, n * 4, n * 6, VertexFormat.Mode.QUADS,
-                VertexFormat.IndexType.least(n * 4))));
+        if (result == null) return null;
+        return new MeshData(result, new MeshData.DrawState(FORMAT, count * 4, count * 6, VertexFormat.Mode.QUADS,
+                VertexFormat.IndexType.least(count * 4)));
+    }
+
+    private void range(ShaderInstance shader, int from, int to) {
+        gpu.bind(); // The compositor uses the vanilla POSITION buffer between these ranges.
+        shader.apply();
+        VertexFormat.IndexType type = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+        GlStateManager._drawElements(GL11.GL_TRIANGLES, (to - from) * 6, type.asGLType, (long) from * 6 * type.bytes);
+        // Keep atlas/light samplers bound; only the two compositor samplers change before the next range.
     }
 
     private void grow() {
@@ -260,6 +369,9 @@ public final class FxQuads {
         stage = p;
         capacity = cap;
         keys = Arrays.copyOf(keys, cap);
+        smoke = Arrays.copyOf(smoke, cap);
+        reduced = Arrays.copyOf(reduced, cap);
+        bounds = Arrays.copyOf(bounds, 4 * cap);
     }
 
     private static byte unorm(float f) {
