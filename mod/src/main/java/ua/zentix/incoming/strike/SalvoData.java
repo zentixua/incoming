@@ -35,9 +35,11 @@ import java.util.UUID;
 /**
  * Залпы: N снарядов с разбросом вокруг цели, по одному через случайную паузу (шахеды 20–40 тиков, ракеты 15–30,
  * B-2 60–80) — с одной пусковой по ячейкам. Цель может двигаться — каждый снаряд целится со своим смещением
- * относительно неё; маршруты разные (обход слева или справа, курс захода ±35°), поэтому залп приходит волной
- * с разных сторон. По точкам оператора ({@link Waypoints}) весь залп идёт одним маршрутом, с места пуска из приказа —
- * с одной пусковой на нём, со стационарной пусковой ({@link LaunchOrigin.Fixed}) — с неё. Место пуска залп грузит в фоне
+ * относительно неё; маршруты разные (обход слева или справа, курс захода ±35°), и каждый снаряд идёт по своему
+ * маршруту в своей полосе ({@link WeaponSpec.Lanes}: сдвиг вбок по зерну залпа, к цели полосы сходятся), поэтому залп
+ * летит и приходит волной с разных сторон, а не ниткой. По точкам оператора ({@link Waypoints}) весь залп идёт одним
+ * маршрутом — каждый снаряд в своей полосе, с места пуска из приказа — с одной пусковой на нём, со стационарной пусковой
+ * ({@link LaunchOrigin.Fixed}) — с неё. Место пуска залп грузит в фоне
  * и держит, пока идёт ({@link LaunchPlaces}): пока оно не готово, залп ждёт — место из приказа не дольше
  * {@link LaunchPlaces#WAIT}, стационарная пусковая — сколько нужно; блока пусковой на месте нет — залп кончен; строк и
  * полосы залпа хозяину у стационарной нет — её залпы идут по сигналу, когда хозяин может быть где угодно.
@@ -160,7 +162,14 @@ public final class SalvoData extends SavedData {
      */
     public static void start(ServerLevel level, WeaponType weapon, int count, int radius, Target center, Vec3 centerPoint,
                              float yaw, @Nullable UUID owner, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid) {
-        Salvo salvo = new Salvo(weapon, count, count, radius, center, centerPoint, yaw, owner, 1, nuke, via, from, paid, 0);
+        start(level, weapon, count, radius, center, centerPoint, yaw, owner, nuke, via, from, paid, level.random.nextLong());
+    }
+
+    /** То же с зерном залпа {@code seed}: по нему полосы снарядов ({@link WeaponSpec.Lanes#offset}; проверки — со своим). */
+    public static void start(ServerLevel level, WeaponType weapon, int count, int radius, Target center, Vec3 centerPoint,
+                             float yaw, @Nullable UUID owner, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid,
+                             long seed) {
+        Salvo salvo = new Salvo(weapon, count, count, radius, center, centerPoint, yaw, owner, 1, nuke, via, from, paid, 0, seed);
         get(level).add(salvo);
         ServerPlayer player = salvo.reporter(level);
         if (player != null) {
@@ -210,9 +219,11 @@ public final class SalvoData extends SavedData {
         final UUID placeKey = UUID.randomUUID();
         /** Сколько тиков залп ждёт района места пуска (не сохраняется). */
         int waited;
+        /** Зерно залпа: по нему у каждого снаряда своя полоса на маршруте ({@link WeaponSpec.Lanes#offset}). */
+        final long seed;
 
         Salvo(WeaponType weapon, int total, int remaining, int radius, Target center, Vec3 lastCenter, float yaw, @Nullable UUID owner, int cooldown,
-              Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid, int failed) {
+              Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid, int failed, long seed) {
             this.weapon = weapon;
             this.total = total;
             this.remaining = remaining;
@@ -229,6 +240,7 @@ public final class SalvoData extends SavedData {
             this.from = from;
             this.paid = paid;
             this.failed = failed;
+            this.seed = seed;
         }
 
 
@@ -335,8 +347,9 @@ public final class SalvoData extends SavedData {
                 shot = center instanceof Target.Sighted sighted ? sighted.at(point) : place;
             }
             float shotYaw = yaw + (level.random.nextInt(7001) - 3500) / 100f;
+            double lane = weapon.spec().lanes().offset(seed, total - remaining, total);
             // сирена одна на залп: её включит первый снаряд, когда его «увидят» на подлёте
-            return StrikeService.launch(level, weapon, shot, point, shotYaw, owner, remaining == total, nuke, via, from);
+            return StrikeService.launch(level, weapon, shot, point, shotYaw, owner, remaining == total, nuke, via, from, lane);
         }
 
         /**
@@ -382,6 +395,7 @@ public final class SalvoData extends SavedData {
             if (paid) t.putBoolean("paid", true);
             if (failed > 0) t.putInt("failed", failed);
             if (aloft != null) t.putBoolean("aloft", aloft);
+            t.putLong("seed", seed);
             return t;
         }
 
@@ -395,10 +409,11 @@ public final class SalvoData extends SavedData {
             // залп, сохранённый до маршрутов оператора, — без точек
             Waypoints via = t.contains("route") ? Waypoints.CODEC.parse(NbtOps.INSTANCE, t.get("route")).resultOrPartial(Incoming.LOG::error)
                     .orElse(Waypoints.NONE) : Waypoints.NONE;
-            // залп, сохранённый до места пуска в приказе, — без него; до боеприпасов — не оплачен: возвращать нечего
+            // залп, сохранённый до места пуска в приказе, — без него; до боеприпасов — не оплачен: возвращать нечего; до
+            // полос — с зерном 0: остаток идёт в полосах этого зерна
             Salvo s = new Salvo(w, t.getInt("total"), t.getInt("remaining"), t.getInt("radius"), c, last, t.getFloat("yaw"),
                     t.hasUUID("owner") ? t.getUUID("owner") : null, t.getInt("cooldown"), nuke, via, LaunchOrigin.load(t), t.getBoolean("paid"),
-                    t.getInt("failed"));
+                    t.getInt("failed"), t.getLong("seed"));
             if (t.contains("aloft")) s.aloft = t.getBoolean("aloft");
             return Optional.of(s);
         }

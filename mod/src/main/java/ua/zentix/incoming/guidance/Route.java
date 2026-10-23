@@ -153,6 +153,80 @@ public final class Route {
         return new Route(pts, l);
     }
 
+    /**
+     * Этот маршрут (оставшиеся точки) в полосе снаряда залпа ({@code WeaponSpec.Lanes}): путь сдвинут вбок на
+     * {@code offset} блоков (знак — сторона, как {@code side} у {@link #plan}), плавно — сдвиг на пути равен offset · min(1, s / exit) · min(1, r / converge),
+     * где s — путь от начала маршрута, r — путь до цели. В начале и у цели сдвига нет: снаряд выходит в полосу с
+     * курса пуска и сходится к своей точке прицеливания (сама цель не сдвигается). Сдвиг ставится в точках маршрута
+     * (на поворотах — по биссектрисе, чтобы оба участка шли в полосе; на крутом повороте — не больше 2·offset от точки), а
+     * там, где на участке кончается выход в полосу (s = exit) или начинается схождение (r = converge), добавляется точка:
+     * между ними снаряд идёт ровно параллельно пути. Нужен начальный пункт маршрута ({@link #origin}): без него — как есть.
+     *
+     * @param target точка прицеливания: после последней точки маршрута снаряд идёт на неё
+     */
+    public Route inLane(double offset, double exit, double converge, Vec3 target) {
+        if (offset == 0 || origin == null) return this;
+        List<Vec3> path = new ArrayList<>();
+        path.add(origin);
+        path.addAll(points.subList(next, points.size()));
+        path.add(new Vec3(target.x, 0, target.z));
+        double total = 0;
+        for (int i = 1; i < path.size(); i++) total += horizontal(path.get(i - 1), path.get(i));
+        // точки, где сдвиг перестаёт расти и начинает убывать: на участке, не ближе блока к его концам
+        double[] breaks = {Math.min(exit, total - converge), Math.max(exit, total - converge)};
+        List<Vec3> pts = new ArrayList<>();
+        List<Double> along = new ArrayList<>();
+        double s = 0;
+        for (int i = 1; i < path.size(); i++) {
+            Vec3 a = path.get(i - 1), b = path.get(i);
+            double len = horizontal(a, b);
+            for (double at : breaks) {
+                if (at > s + 1 && at < s + len - 1 && (along.isEmpty() || at > along.getLast() + 1)) {
+                    pts.add(a.add(b.subtract(a).scale((at - s) / len)));
+                    along.add(at);
+                }
+            }
+            s += len;
+            if (i < path.size() - 1) {
+                pts.add(b);
+                along.add(s);
+            }
+        }
+        List<Vec3> out = new ArrayList<>(pts.size());
+        for (int i = 0; i < pts.size(); i++) {
+            Vec3 p = pts.get(i);
+            Vec3 prev = i == 0 ? origin : pts.get(i - 1);
+            Vec3 after = i == pts.size() - 1 ? path.getLast() : pts.get(i + 1);
+            double sAt = along.get(i);
+            double k = (exit > 0 ? Math.min(1, sAt / exit) : 1) * (converge > 0 ? Math.min(1, (total - sAt) / converge) : 1);
+            out.add(p.add(side(prev, p, after).scale(offset * k)));
+        }
+        return new Route(out, origin, operator);
+    }
+
+    /**
+     * Сдвиг вбок на единицу в точке {@code p} между участками prev → p → next ({@link #across}), на повороте — по
+     * биссектрисе и длиннее (1 / cos половины угла), чтобы оба участка шли на единице от пути; не больше 2.
+     */
+    private static Vec3 side(Vec3 prev, Vec3 p, Vec3 next) {
+        Vec3 in = across(prev, p), out = across(p, next);
+        if (in == null) in = out;
+        if (out == null) out = in;
+        if (in == null) return Vec3.ZERO;
+        Vec3 sum = in.add(out);
+        double len = sum.length();
+        // разворот почти назад: биссектрисы нет — вбок от входящего участка
+        if (len < 0.2) return in;
+        return sum.scale(Math.min(2, 2 / len) / len);
+    }
+
+    /** Единица вбок от хода a → b по горизонтали, в сторону {@code side} = +1 у {@link #plan}; null — точки совпадают. */
+    @Nullable
+    private static Vec3 across(Vec3 a, Vec3 b) {
+        double dx = b.x - a.x, dz = b.z - a.z, len = Math.sqrt(dx * dx + dz * dz);
+        return len < 1.0e-6 ? null : new Vec3(-dz / len, 0, dx / len);
+    }
+
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         ListTag list = new ListTag();
