@@ -93,7 +93,8 @@ public final class Exhaust {
     public static Plume plume(StrikeProjectile e, float partial) {
         if (!e.isActive() || !(e.level() instanceof ClientLevel level)) return null;
         ClientWeaponSpec.ClientAirframe a = nozzles(e);
-        ClientWeaponSpec.Stage stage = a.far().stage(e.flightPhase());
+        // доля тяги ускорителя — по кривой (выход на режим, спад к отделению), с долей тика: факел гаснет без ступенек
+        ClientWeaponSpec.Stage stage = a.far().stage(e.flightPhase(), e.phaseAge() + partial, e.airframe().thrust());
         Flame f = stage.flame(e.getY());
         if (f == null) return null;
         ClientWeaponSpec.At n = a.nozzle(stage);

@@ -46,6 +46,15 @@ public record Flame(double core, double flame, double length, double width, bool
         }
     }
 
+    /** Тот же факел, светящий в k раз слабее (струя той же формы, частиц в ней в k раз меньше; оптически тонкая). */
+    public Flame dimmed(double k) {
+        double[] lum = sheath.luminance().clone();
+        for (int i = 0; i < lum.length; i++) lum[i] *= k;
+        return new Flame(core, flame, length, width, diamonds, coreLuminance * k, flameLuminance * k, tailLuminance * k, coreColor, flameColor,
+                tailColor, temperature, flameTemperature, 1 - Math.pow(1 - emissivity, k), new Sheath(sheath.x(), lum, sheath.color()), middle,
+                tailMiddle);
+    }
+
     /** Полуширина струи в x метрах от среза. */
     public double widthAt(double x) {
         return width * (1 + x / core);

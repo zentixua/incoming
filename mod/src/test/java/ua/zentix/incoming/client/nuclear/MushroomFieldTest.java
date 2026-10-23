@@ -315,4 +315,37 @@ class MushroomFieldTest {
         assertEquals(NukeBallSurface.frame(rises, FireballModel.surfaceRise(MushroomModel.rollUpSeconds(y, false), 600, y, false)), out[0], 1e-9);
         assertTrue(out[0] > 0.6 * (rises.length - 1) && out[0] < rises.length - 1, "кадр к концу сворачивания: " + out[0]);
     }
+    /**
+     * Ножка и юбка — пыль места подрыва, то же вещество, что слой пыли волны под ними (ковёр пелены): тот же цвет толстого
+     * слоя и та же асимметрия. Ножку питает только пыль из этого слоя ({@code StemDust}); свой цвет «пыль с дымом» делал её
+     * серее ковра, на котором она стоит.
+     */
+    @Test
+    void stemAndSkirtAreTheLayersDust() {
+        for (int i = 0; i < 3; i++) {
+            assertEquals(NukePall.DUST[i], ((MushroomField.DUST >> (16 - 8 * i)) & 0xFF) / 255.0, 0.5 / 255, "канал " + i);
+        }
+        assertEquals(PallLight.DUST_G, MushroomField.G, 0, "асимметрия пыли гриба — как у пелены");
+    }
+    /**
+     * Земля под грибом — верх слоя пыли, что на ней лежит: без пыли — сама земля, под толстым слоем — цвет толстого слоя
+     * пыли (то же R∞, что у ковра на экране), между — без скачков и монотонно. Ножка в тени шапки видит снизу этот ковёр, а
+     * не голую землю 0,2.
+     */
+    @Test
+    void groundUnderTheMushroomIsTheDustLayerOnIt() {
+        double g = PallLight.truncated(MushroomField.G);
+        for (int i = 0; i < 3; i++) {
+            double r = PallLight.linear(NukePall.DUST[i]);
+            assertEquals(PallLight.LAND, MushroomField.slabOver(r, g, 0, PallLight.LAND), 1e-12, "без пыли — земля");
+            assertEquals(r, MushroomField.slabOver(r, g, 200, PallLight.LAND), 1e-6, "толстый слой — цвет ковра");
+            double prev = PallLight.LAND;
+            for (double tau = 0.01; tau < 50; tau *= 1.2) {
+                double now = MushroomField.slabOver(r, g, tau, PallLight.LAND);
+                assertTrue(Math.abs(now - prev) < 0.02, "канал " + i + " на τ " + tau);
+                assertTrue((r - now) * (r - PallLight.LAND) >= -1e-12, "между землёй и ковром");
+                prev = now;
+            }
+        }
+    }
 }

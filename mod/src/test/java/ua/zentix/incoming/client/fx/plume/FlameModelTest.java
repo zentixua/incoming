@@ -128,4 +128,31 @@ class FlameModelTest {
             assertNull(look.stage(FlightPhase.READY).motor());
         }
     }
+    /**
+     * Свет факела ускорителя (яркость × площадь сбоку — то, что падает на дым, мир и в глаз) на спаде тяги гаснет без
+     * скачков и к отделению — до нуля: и пока сопло в критике, и ниже, где струя оптически тонкая. Прежде фаза разгона
+     * гасила его выключателем в последний тик.
+     */
+    @Test
+    void boosterLightFadesWithoutSteps() {
+        for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
+            FarLook look = ClientWeaponSpec.of(w).airframe(false).far();
+            ua.zentix.incoming.strike.ThrustCurve c = w.spec().airframe().thrust();
+            assertNotNull(c);
+            double y = ua.zentix.incoming.util.Air.SEA + 40;
+            Flame full = look.stage(FlightPhase.BOOST).flame(y);
+            assertNotNull(full);
+            double plateau = full.brightness() * full.area(), prev = plateau, dt = 0.002;
+            for (double a = c.burn() - c.tail() - 1; a < c.burn() + 0.5; a += dt) {
+                Flame f = look.stage(FlightPhase.BOOST, a, c).flame(y);
+                double flux = f == null ? 0 : f.brightness() * f.area();
+                assertTrue(Math.abs(flux - prev) < 0.03 * plateau, w + " на " + a + " тика: " + prev + " → " + flux + " из " + plateau);
+                assertTrue(flux <= prev + 0.021 * plateau, w + " свет на спаде не растёт: " + a);
+                prev = flux;
+            }
+            assertEquals(0, prev, w + ": после отделения огня нет");
+            Flame last = look.stage(FlightPhase.BOOST, c.burn() - 0.05, c).flame(y);
+            assertTrue(last == null || last.brightness() * last.area() < 0.01 * plateau, w + ": к отделению свет почти погас");
+        }
+    }
 }

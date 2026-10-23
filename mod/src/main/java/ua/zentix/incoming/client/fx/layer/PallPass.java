@@ -625,6 +625,8 @@ public final class PallPass {
         RenderSystem.setShaderTexture(5, ground0);
         RenderSystem.setShaderTexture(6, ground1);
         RenderSystem.setShaderTexture(7, mushrooms);
+        // тень грибов на пелене от солнца — та же карта, что на мире (без неё — таблица: плиток в ней нет)
+        RenderSystem.setShaderTexture(8, shade ? shadowMap : table);
         m.safeGetUniform("InvViewProj").set(INVERSE);
         m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
         m.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);

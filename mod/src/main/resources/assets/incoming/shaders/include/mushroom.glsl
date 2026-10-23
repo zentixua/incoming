@@ -31,7 +31,8 @@
 //        кадра с долей; доля узора против языков клубов — 1 − доля кольца, 0 — узор не прочитан; MushroomField.ballSurface)
 //  17 = (плитка карты тени в плоскости поперёк солнца — начало u, v и стороны от эпицентра, блоки; сторона 0 — тени нет;
 //        MUSH_SHADOW_RECT)
-//  18 = (верх мира над землёй под эпицентром — верхний слой карты тени; 0; 0; 0; MUSH_SHADOW_TOP)
+//  18 = (верх мира над землёй под эпицентром — верхний слой карты тени; отражение земли под грибом rgb — верх слоя пыли
+//        у основания ножки, MushroomField.groundUnder; MUSH_SHADOW_TOP)
 
 const int MUSHROOMS = 4;
 const int MUSH_BB_ROW = 4;
@@ -496,8 +497,8 @@ float mushTransmit(sampler2D data, vec3 dir, float len, int steps, vec4 air) {
 // вещество низко над слоем при низком солнце светит вперёд ярче пучка, — кто берёт карту, зажимает её до 1
 // (mushShadow). Над точкой мира свет солнца проходит то, что на её прямой выше неё: всё вещество гриба к солнцу — выше
 // точки, от солнца — ниже (солнце над горизонтом). Плитка считается раз в кадр (MUSH_SHADOW² прямых), точке мира — одна
-// выборка на гриб. Тень пелены и частиц от гриба могла бы брать ту же карту (mushShadow), пока её берёт только мир
-// (fx_pall_composite).
+// выборка на гриб. Её берут мир (fx_pall_composite) и солнце на пелене (fx_pall: пыль под шапкой — в её тени, как
+// ножка); частицы слоя — пока нет.
 const int MUSH_SHADOW = 128;
 // тексели строки гриба: плитка карты (MushroomField.SHADOW_RECT) и верх мира над землёй под эпицентром (SHADOW_TOP)
 const int MUSH_SHADOW_RECT = 17;
@@ -559,9 +560,12 @@ float mushShadowLayer(float h, float top, float t0, float t1, float t2) {
     return t1 + (t2 - t1) * (2.0 * x - 1.0);
 }
 
-// Доля прямого света солнца, что грибы кадра пропускают к точке p (от глаза), по карте тени map, вместе с рассеянным
-// ими вперёд (mushShadowSun — sun); вне плиток — 1
-float mushShadow(sampler2D data, sampler2D map, vec3 sun, vec3 p) {
+// Доля света солнца к точке p, как у mushShadow (ниже), но высота точки в слоях карты — не ниже доли low верха мира над землёй под эпицентром. Пелена (fx_pall:
+// pallSunAt) висит в воздухе, а слои карты — земля, середина и верх: между землёй и серединой карта смешивала бы тень
+// земли — и вещество гриба ниже точки на её прямой к солнцу (у низкого солнца — ножку и юбку под ковром на освещённой
+// стороне). С low = ½ точке пелены ниже середины — тень от вещества выше середины (шапка и почти вся ножка: она —
+// километры); ⚠ ножка между точкой и серединой (сотня-другая блоков) тени ковру за ней не даёт
+float mushShadowFrom(sampler2D data, sampler2D map, vec3 sun, vec3 p, float low) {
     vec3 a, b;
     mushShadowAxes(sun, a, b);
     float light = 1.0;
@@ -575,7 +579,14 @@ float mushShadow(sampler2D data, sampler2D map, vec3 sun, vec3 p) {
         // в своей плитке: соседняя плитка (другой гриб) в выборку не попадает
         uv = clamp(uv, vec2(0.5 / float(MUSH_SHADOW)), vec2(1.0 - 0.5 / float(MUSH_SHADOW)));
         vec4 t = textureLod(map, vec2(uv.x, (float(k) + uv.y) / float(MUSHROOMS)), 0.0);
-        light *= clamp(mushShadowLayer(q.y, texelFetch(data, ivec2(MUSH_SHADOW_TOP, k), 0).x, t.r, t.g, t.b), 0.0, 1.0);
+        float top = texelFetch(data, ivec2(MUSH_SHADOW_TOP, k), 0).x;
+        light *= clamp(mushShadowLayer(max(q.y, low * top), top, t.r, t.g, t.b), 0.0, 1.0);
     }
     return light;
+}
+
+// Доля прямого света солнца, что грибы кадра пропускают к точке p (от глаза), по карте тени map, вместе с рассеянным
+// ими вперёд (mushShadowSun — sun); вне плиток — 1
+float mushShadow(sampler2D data, sampler2D map, vec3 sun, vec3 p) {
+    return mushShadowFrom(data, map, sun, p, 0.0);
 }

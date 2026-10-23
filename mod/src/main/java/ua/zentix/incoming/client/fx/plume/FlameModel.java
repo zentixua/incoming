@@ -80,6 +80,29 @@ public final class FlameModel {
         return f == NONE ? null : f;
     }
 
+    /** Ступень доли расхода в кэше ({@link #at(Motor, double, double)}), по логарифму: соседние — на 2 %. */
+    static final double SHARE_STEP = -Math.log(0.98);
+
+    /**
+     * Факел двигателя на доле share расхода полки — РДТТ на выходе на режим и на спаде тяги ({@code strike.ThrustCurve}),
+     * на высоте altitude. Пока сопло в критике (давление в камере выше воздуха в ((γ + 1)/2)^(γ/(γ − 1)) раз), — тот же
+     * закон для двигателя с этим расходом ({@link Motor#throttled}). Ниже сопло не в критике: полностью расширенная струя
+     * закона там дозвуковая, её скорость к перепаду 1 уходит в ноль, а радиус — в бесконечность (свет рос бы к концу спада).
+     * Поэтому там — факел при критическом перепаде, а его свет убывает с расходом: частиц в струе — по расходу, и струя на
+     * спаде оптически тонкая (ε ≈ τ ∝ расходу; у «Томагавка» в критике ε ≈ 0,14). Доля — ступенями {@link #SHARE_STEP}
+     * (кэш); null — не видно.
+     */
+    @Nullable
+    public static Flame at(Motor motor, double altitude, double share) {
+        if (share >= 1) return at(motor, altitude);
+        if (share <= 0) return null;
+        double g = motor.gamma(), pa = StandardAtmosphere.pressure(Math.round(altitude / STEP) * STEP);
+        double choke = Math.min(1, pa * Math.pow((g + 1) / 2, g / (g - 1)) / motor.chamberPressure());
+        double s = Math.max(share, choke), step = Math.min(1, Math.exp(-Math.round(-Math.log(s) / SHARE_STEP) * SHARE_STEP));
+        Flame f = at(step >= 1 ? motor : motor.throttled(step), altitude);
+        return f == null || share >= choke ? f : f.dimmed(share / choke);
+    }
+
     /** Факел без кэша (юнит-тесты). */
     @Nullable
     public static Flame of(Motor m, double altitude) {

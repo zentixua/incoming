@@ -300,7 +300,9 @@ same up close and far away.
   the core, but the burning flame around it is 10 to 1000 times brighter, so they are not seen. At night the cooling tail
   glows further back, and the flame lights the smoke around it. The flame also lights the ground, the launcher and walls
   nearby along its whole length above the ground, from the nozzle to the end of the glowing tail, and blocks cast shadows
-  from it.
+  from it. A booster does not switch off: in its last moments the remaining propellant burns out and the pressure in the
+  motor falls, so the flame shortens and dims and the roar fades over about half a second on the cruise missile (about a
+  tenth of a second on the Shahed's small booster) before the empty booster drops away.
 - **Engines without a flame**: the Shahed's piston engine, the cruise missile's jet engine and the Lancet's electric
   motor show no flame and leave no visible smoke.
 - **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a

@@ -95,7 +95,8 @@ torn into clumps, lighter on the side facing the light and darker in their folds
 air mixes it, and from above, from a hill or a plane, the old pall is one even blanket, like fog seen from a plane,
 with only gentle humps on its top. Inside it you see only a few metres, it is dark even at noon, and sounds are
 muffled. At 15 kt it stays dark about 20 minutes 1.4 km from the burst, as in Hiroshima; within half a kilometre of the
-burst it clears in minutes, drawn up into the column of the mushroom cloud. The dust also fills the valleys around the
+burst it clears in minutes, drawn up into the column of the mushroom cloud, so the column is the same brown dust as
+the layer it stands in; where the cap shades the column from a high sun, it shades the dust under it too. The dust also fills the valleys around the
 town. It does not get into the mine, cave or cellar you are in: the air there stays clear and sounds are
 not muffled by the dust; only near a shaft or an opening to the sky does some dust drift in, thinning over about 15
 blocks. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for about an hour and a half, a little longer after an air burst. Where the

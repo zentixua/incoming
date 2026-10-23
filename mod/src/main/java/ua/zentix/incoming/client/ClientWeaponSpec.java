@@ -12,6 +12,7 @@ import ua.zentix.incoming.client.sound.EngineSound;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.strike.Article;
+import ua.zentix.incoming.strike.ThrustCurve;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.util.StandardAtmosphere;
@@ -132,6 +133,15 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
             if (phase.boosterLit()) return boost;
             return phase == FlightPhase.TERMINAL && terminal != null ? terminal : cruise;
         }
+
+        /**
+         * То же на age тиков фазы (с долей тика) с тягой ускорителя по кривой thrust ({@code Airframe.thrust}: выход на
+         * режим, полка, спад к отделению): пламя, свет и облако старта — по доле тяги; null — двигатель фазы горит ровно.
+         */
+        public Stage stage(FlightPhase phase, double age, @Nullable ThrustCurve thrust) {
+            Stage s = stage(phase);
+            return thrust == null || !phase.boosterLit() || s.motor == null ? s : s.at(thrust.share(phase, age));
+        }
     }
 
     /**
@@ -142,8 +152,27 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
      * @param booster горит стартовый ускоритель (сопло — {@link ClientAirframe#boosterNozzle}), иначе маршевые сопла
      * @param trail   след; null — его нет (поджиг РСЗО в трубе: след — с переднего среза)
      */
-    public record Stage(@Nullable Motor motor, boolean booster, @Nullable Trail trail) {
+    public record Stage(@Nullable Motor motor, boolean booster, @Nullable Trail trail, double share) {
         public static final Stage NONE = new Stage(null, false, null);
+
+        /** Двигатель горит полной тягой. */
+        public Stage(@Nullable Motor motor, boolean booster, @Nullable Trail trail) {
+            this(motor, booster, trail, 1);
+        }
+
+        /**
+         * Та же фаза на доле share тяги полки ({@code ThrustCurve}): факел — {@link FlameModel#at(Motor, double, double)},
+         * расход — {@link #flow()}; след тот же (вещество на метр — полки: ⚠ на спаде след не тоньше).
+         */
+        public Stage at(double share) {
+            return share >= 1 && this.share >= 1 ? this : new Stage(motor, booster, trail, share);
+        }
+
+        /** Двигатель с расходом на доле тяги сейчас (облако старта); null — не горит. */
+        @Nullable
+        public Motor flow() {
+            return motor == null || share >= 1 ? motor : share <= 0 ? null : motor.throttled(share);
+        }
 
         /** Горит двигатель и оставляет след (точка ленты — раз в step тиков). */
         static Stage burning(Motor motor, boolean booster, int step) {
@@ -153,13 +182,13 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
         /** Та же фаза, след которой ложится по настоящему пути выгорания изделия ({@link Trail#alongBurn}). */
         Stage alongBurn(Article article) {
             return trail == null || article.booster() == null ? this
-                    : new Stage(motor, booster, trail.alongBurn(article.burnPath(), article.booster().burn()));
+                    : new Stage(motor, booster, trail.alongBurn(article.burnPath(), article.booster().burn()), share);
         }
 
         /** Факел на высоте мира y; null — не горит или не видно. */
         @Nullable
         public Flame flame(double y) {
-            return motor == null ? null : FlameModel.at(motor, y - Air.SEA);
+            return motor == null ? null : FlameModel.at(motor, y - Air.SEA, share);
         }
     }
 

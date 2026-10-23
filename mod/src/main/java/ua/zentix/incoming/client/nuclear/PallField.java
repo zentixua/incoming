@@ -660,6 +660,17 @@ public final class PallField {
     }
 
     /**
+     * Толща слоя пыли волны над точкой (dx, dz) от земли доверху — пыль и брызги, без мглы пожаров и базисной волны:
+     * то, что лежит на земле ковром ({@code MushroomField.groundUnder}).
+     */
+    public double dustTau(double dx, double dz, double ticks, Water water) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        double inf = Double.POSITIVE_INFINITY;
+        return l[0] * between(0, inf, l[2]) + l[1] * between(0, inf, l[7]);
+    }
+
+    /**
      * Интеграл {@link #profile} по высоте от a до b (блоки) у слоя высотой top (блоки): по Симпсону, порознь ниже и выше
      * земли (там излом), — точнее приближения {@link #column} (у тонкого слоя под глазом его ошибка — десятки процентов).
      */

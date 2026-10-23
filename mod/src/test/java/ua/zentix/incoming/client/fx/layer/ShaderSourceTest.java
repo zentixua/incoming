@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -130,6 +131,22 @@ class ShaderSourceTest {
         assertTrue(body(Files.readString(core.resolve("fx_pall.fsh")), "void pallStep(").contains("pallOpenHere("), "fx_pall: pallStep без pallOpen");
         assertTrue(body(Files.readString(include.resolve("pall_front.glsl")), "float pallThrough(").contains("pallOpenHere("), "pall_front: pallThrough без pallOpen");
         assertTrue(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main(").contains("pallOpenHere("), "fx_pall_composite: тень без pallOpen");
+    }
+
+    /**
+     * Солнце над пеленой проходит грибы на своей прямой, как над миром: шаг пелены ({@code fx_pall}: {@code pallStep}) берёт
+     * свет солнца через карту тени грибов ({@code mushShadow}), тот же, что вывод на кадр у мира. Без этого шапка
+     * закрывала от солнца ножку, а ковёр пыли под ней светился полным солнцем: серая ножка на светлом буром ковре с резкой
+     * границей (скрины хоста 3.6.0). Пучок и рассеянный свет солнца в шаге — только через неё.
+     */
+    @Test
+    void pallUnderTheCapIsInItsShadow() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        String pall = Files.readString(core.resolve("fx_pall.fsh")), step = blankComments(body(pall, "void pallStep("));
+        assertTrue(blankComments(body(pall, "vec3 pallSunAt(")).contains("mushShadowFrom("), "fx_pall: солнце над пеленой без тени грибов");
+        assertTrue(step.contains("pallSunAt("), "fx_pall: pallStep без тени грибов");
+        assertFalse(step.contains("PallSunLight"), "fx_pall: солнце в pallStep — только сквозь тень грибов");
+        assertTrue(Files.readString(core.resolve("fx_pall_composite.fsh")).contains("mushShadow("), "мир — в той же тени");
     }
 
     /**
