@@ -320,7 +320,9 @@ same up close and far away.
   motor show no flame and leave no visible smoke.
 - **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a
   greyer trail. A slower rocket leaves a denser trail. The hot trail rises a little. By day it spreads and fades sooner;
-  on a calm night it stays narrow and hangs much longer. A trail is a round, billowing tube of smoke, lit by the sun and
+  on a calm night it stays narrow and hangs much longer. Turbulence bends its axis while the smoke itself spreads more
+  slowly: a SAM trail remains visible for tens of seconds by day and minutes on a calm night, drifting with the wind
+  at its height. A trail is a round, billowing tube of smoke, lit by the sun and
   by the flame, near and kilometres away alike, unbroken along its length; only where it is narrower than about two
   pixels is it a thin line. At
   dusk and at night it takes the light of the open sky the way the clouds do: grey at sunset, pale lilac under the moon.
