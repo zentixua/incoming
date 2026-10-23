@@ -118,4 +118,10 @@ public final class FarRenderer {
         ua.zentix.incoming.client.render.PlumeRenderer.reset();
         Arrays.fill(LAST_FRAME, 0);
     }
+
+    /** Заливка кадра кучками облаков (экранов, с перекрытием) и доля кучки, что ей дал бюджет ({@link SmokePuffs#FILL_BUDGET}). */
+    public static String describeSmoke() {
+        return String.format(java.util.Locale.ROOT, "fill %.2f screens (budget %.0f, one club per gaussian %.2f), cluster share %.2f",
+                SmokePuffs.lastFill(), SmokePuffs.FILL_BUDGET, SmokePuffs.lastFloor(), SmokePuffs.lastShare());
+    }
 }

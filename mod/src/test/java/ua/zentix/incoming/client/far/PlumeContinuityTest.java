@@ -37,10 +37,10 @@ class PlumeContinuityTest {
     /** Угол пикселя: 70° на 1080 строк. */
     private static final double PIXEL = Math.toRadians(70) / 1080;
     /** Шаг профиля непрозрачности клуба по радиусу (доля полуразмера квадрата). */
-    private static final double BIN = 0.02;
+    static final double BIN = 0.02;
 
     /** Радиальные профили непрозрачности кадров клуба (по доле полуразмера квадрата, шаг {@link #BIN}). */
-    private static double[][] profiles() throws IOException {
+    static double[][] profiles() throws IOException {
         if (profiles != null) return profiles;
         int bins = (int) Math.round(1.5 / BIN);
         double[][] out = new double[FxAtlas.PUFF6_FRAMES][bins];
@@ -65,7 +65,7 @@ class PlumeContinuityTest {
     private static double[][] profiles;
 
     /** Кадр клуба по его картинке (прямой и отражённый — один кадр). */
-    private static int frameOf(FxAtlas.Sprite sprite) {
+    static int frameOf(FxAtlas.Sprite sprite) {
         for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
             if (FxAtlas.puff6(f, false).equals(sprite) || FxAtlas.puff6(f, true).equals(sprite)) return f;
         }

@@ -231,6 +231,7 @@ final class Sandbox {
             write(dir.resolve("ready"), String.format(Locale.ROOT, "%.1f", up));
         }
         try {
+            raidNext(mc);
             advance(mc);
             if (!busy()) nextFromInbox();
         } catch (RuntimeException ex) {
@@ -372,6 +373,7 @@ final class Sandbox {
 
     /** Снять все эффекты: у клиента — как при выходе из мира, у сервера — снаряды и огонь у точки. */
     private void clear() {
+        raid.clear();
         IncomingClient.resetSession();
         server("incoming clear");
         server("kill @e[type=!minecraft:player]");
@@ -383,6 +385,20 @@ final class Sandbox {
                 s.getZ() - 20, s.getX() + 20, GROUND, s.getZ() + 20));
         effectTick = -1;
         capture = null;
+    }
+
+    /** Взрывы налёта ({@code raid}), что ещё впереди: тик, x, z (биты double), зерно. */
+    private final List<long[]> raid = new ArrayList<>();
+
+    /** Взрывы налёта, чей тик пришёл: пакет взрыва шахеда только у клиента, как {@code blast}. */
+    private void raidNext(Minecraft mc) {
+        while (!raid.isEmpty() && raid.getFirst()[0] <= tick) {
+            long[] r = raid.removeFirst();
+            Vec3 pos = new Vec3(Double.longBitsToDouble(r[1]), GROUND + 1, Double.longBitsToDouble(r[2]));
+            GroundMaterial mat = GroundMaterial.sample(mc.level, BlockPos.containing(pos));
+            ClientHooks.get().blast(new S2C.Blast(S2C.Blast.DRONE, pos, mat.ordinal(), (float) pos.y, r[3], Optional.empty(), WeaponType.DRONE.id(),
+                    S2C.Blast.DOWN));
+        }
     }
 
     private void startEffect(SandboxCommand c) {
@@ -412,6 +428,20 @@ final class Sandbox {
                 long seed = c.args().size() > 1 ? c.seed() : 1;
                 // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
                 ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
+                begin();
+            }
+            case RAID -> {
+                placeCamera();
+                int n = (int) c.number(0, 16);
+                double radius = c.number(1, 120), every = c.number(2, 3);
+                java.util.Random rnd = new java.util.Random(7);
+                raid.clear();
+                for (int i = 0; i < n; i++) {
+                    double a = 2 * Math.PI * rnd.nextDouble(), r = radius * Math.sqrt(rnd.nextDouble());
+                    raid.add(new long[]{tick + Math.round(i * every * 20), Double.doubleToLongBits(site.x + r * Math.cos(a)),
+                            Double.doubleToLongBits(site.z + r * Math.sin(a)), i + 1});
+                }
+                raidNext(mc);
                 begin();
             }
             case AIRBURST -> {
@@ -577,7 +607,8 @@ final class Sandbox {
             }
         });
         cap.frames.add(String.format(Locale.ROOT, "{\"t\": %.2f, \"age\": %.3f, \"file\": \"%s\", \"fps\": %d}", t, age, file, mc.getFps()));
-        Incoming.LOG.info("SANDBOX shot {} age {} s", file, String.format(Locale.ROOT, "%.3f", age));
+        Incoming.LOG.info("SANDBOX shot {} age {} s fps {}; layer: {}; smoke: {}", file, String.format(Locale.ROOT, "%.3f", age), mc.getFps(),
+                ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke());
         cap.next++;
     }
 
@@ -594,6 +625,7 @@ final class Sandbox {
         if (!sound.isEmpty()) lines.add("sound: " + sound);
         String fire = ua.zentix.incoming.client.fx.FireSmoke.describe();
         if (!fire.isEmpty()) lines.add("fire: " + fire);
+        lines.add("smoke: " + ua.zentix.incoming.client.far.FarRenderer.describeSmoke());
         // проекция интерфейса ещё стоит, а сдвиг вида по z (−11000) ваниль уже сняла: без него текст вне глубины проекции
         var view = com.mojang.blaze3d.systems.RenderSystem.getModelViewStack();
         view.pushMatrix();

@@ -15,6 +15,8 @@ import java.util.Locale;
  *   <li>{@code real <оружие>} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки) на новом месте;</li>
  *   <li>{@code nuke <кт> [air|ground]} — ядерный подрыв без полёта ({@code /incoming nuke now}) на новом месте;</li>
  *   <li>{@code airburst [seed]} — разрыв зенитной ракеты в воздухе над точкой;</li>
+ *   <li>{@code raid [число] [радиус] [секунд между]} — налёт: взрывы шахедов только у клиента (как {@code blast}) в круге
+ *       радиуса вокруг точки один за другим (по умолчанию 16 за 45 с в 120 м) — цена дыма многих ударов в кадре;</li>
  *   <li>{@code launch <оружие>} — пуск с пусковой в точке; время — от первого движения снаряда;</li>
  *   <li>{@code flight <оружие> [от, блоков]} — снаряд проходит над точкой; время — от ближайшего к ней места;</li>
  *   <li>{@code fire [сторона]} — пожар: квадрат незерака с огнём в точке;</li>
@@ -28,12 +30,12 @@ import java.util.Locale;
  * </ul>
  */
 record SandboxCommand(Verb verb, List<String> args) {
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, SHOTS, AGAIN, CLEAR, RELOAD, WAIT }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
         return switch (verb) {
-            case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE -> true;
+            case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, RAID -> true;
             default -> false;
         };
     }
@@ -74,6 +76,12 @@ record SandboxCommand(Verb verb, List<String> args) {
                 int kt = (int) number(0);
                 if (kt < 1 || kt > 15) throw new IllegalArgumentException("мощность 1–15 кт");
                 if (args.size() > 1 && !List.of("air", "ground").contains(args.get(1))) throw new IllegalArgumentException("air или ground");
+            }
+            case RAID -> {
+                need(0, 3);
+                if (number(0, 16) < 1 || number(0, 16) > 40) throw new IllegalArgumentException("взрывов 1–40");
+                if (number(1, 120) < 10 || number(1, 120) > 400) throw new IllegalArgumentException("радиус 10–400 м");
+                if (number(2, 3) < 0 || number(2, 3) > 30) throw new IllegalArgumentException("между взрывами 0–30 с");
             }
             case AIRBURST -> {
                 need(0, 1);
