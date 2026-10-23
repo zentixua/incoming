@@ -73,7 +73,7 @@ public final class HeatPass {
     /**
      * Тень не ищется у источника, чей прямой свет меньше этой доли всей освещённости грани (небо и огонь): порог контраста
      * глаза ~1–2 % (Blackwell, «Contrast thresholds of the human eye», JOSA 36, 1946; ночью он выше — порог с запасом).
-     * Копия — {@code WEBER} в {@code fx_heat}.
+     * Копия — {@code WEBER} в {@code include/heat.glsl} (там и считается: тень ищет проход видимости {@code fx_heat_shadow}).
      */
     static final double WEBER = 0.02;
 
@@ -317,7 +317,7 @@ public final class HeatPass {
      * гранью (под ней грань источника не видит). w2 — квадрат полуширины струи: грань в самой струе не видит её сингулярно
      * ярко. Первообразная (c₀ + c₁τ)/(τ² + h²)^{3/2} по τ = t + a·u — c₀τ/(h²√(τ² + h²)) − c₁/√(τ² + h²), c₀ = n·a − (a·u)(n·u),
      * c₁ = n·u, h — расстояние до прямой; разности — в виде без вычитания близких чисел (в шейдере float). Тот же расчёт —
-     * {@code heatSegment} в {@code fx_heat}.
+     * {@code heatSegment} в {@code include/heat.glsl}.
      */
     public static double segment(double ax, double ay, double az, double ux, double uy, double uz, double t0, double t1, double nx, double ny,
                                  double nz, double w2) {
@@ -353,7 +353,7 @@ public final class HeatPass {
     }
 
     /**
-     * Закрыт ли путь от a до b заслоном (координаты окна заслонов, блоки) — зеркало {@code heatBlocked} в {@code fx_heat}
+     * Закрыт ли путь от a до b заслоном (координаты окна заслонов, блоки) — зеркало {@code heatBlocked} в {@code include/heat.glsl}
      * (там наоборот: 1 — путь свободен): клетки
      * вдоль отрезка по порядку (Amanatides, Woo, «A fast voxel traversal algorithm», Eurographics 1987), часть за окном
      * size — свободна, клетка самой точки a — её грань, не заслон; не больше {@link #SHADOW_CELLS} клеток.
@@ -401,7 +401,7 @@ public final class HeatPass {
 
     /**
      * Видимая доля диска шара с серединой (bx, by, bz) радиуса r из точки (ax, ay, az) окна заслонов — зеркало
-     * {@code heatBallSeen}: шар радиусом в метры у земли — протяжённый источник, и луч к одной середине у кромки холма
+     * {@code heatBallSeen} ({@code include/heat.glsl}): шар радиусом в метры у земли — протяжённый источник, и луч к одной середине у кромки холма
      * гасил бы весь его свет, хотя верх шара виден. Кромка заслона у земли почти горизонтальная; доля диска над кромкой
      * на высоте y — ∫ 2√(1 − y²): квадратура Гаусса–Чебышёва второго рода по вертикальному диаметру, узлы 0 и
      * ±r·cos(π/4), веса ½ и ¼. Кромка снизу: середина видна — виден и верхний узел, смотрим нижний; закрыта — закрыт и

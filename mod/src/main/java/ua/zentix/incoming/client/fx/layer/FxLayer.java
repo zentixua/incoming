@@ -127,11 +127,15 @@ public final class FxLayer {
         }
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_heat"), DefaultVertexFormat.POSITION), s -> HeatPass.shader = s);
-            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_heat_shadow"), DefaultVertexFormat.POSITION), s -> HeatPass.shadowShader = s);
         } catch (IOException ex) {
             HeatPass.shader = null;
-            HeatPass.shadowShader = null;
             Incoming.LOG.error("Heat pass shader failed to load: no light of blasts and fire on the world, no heat shimmer", ex);
+        }
+        try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_heat_shadow"), DefaultVertexFormat.POSITION), s -> HeatPass.shadowShader = s);
+        } catch (IOException ex) {
+            HeatPass.shadowShader = null;
+            Incoming.LOG.error("Heat pass shadow shader failed to load: fire light on the world without shadows", ex);
         }
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_smoke_fill"), DefaultVertexFormat.POSITION), s -> SmokePass.fill = s);
