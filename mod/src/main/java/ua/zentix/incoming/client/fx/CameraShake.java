@@ -30,6 +30,12 @@ import java.util.List;
  * (прыжок) тело на ноги не опирается — наклона нет, пока снова не встанет. Наклон тела — поворот камеры вокруг
  * горизонтали мира поперёк наклона, как есть: курс камеры вертится вокруг вертикали мира, поэтому сложить наклон с
  * курсом, тангажем и креном по отдельности нельзя — у взгляда вниз поворот вбок ушёл бы во вращение картинки.
+ * <p>
+ * <b>Дрожь удара</b> ({@link #tremor}) — <b>подача</b> (принцип вида: камера — подача, факты не меняются): в миг прихода
+ * фронта обычного взрыва картинка коротко дрожит вращением, как в хорошей съёмке удара и как было до 3.5.0. Её сила,
+ * частота и длина — из самой волны у тела: размах — по давлению фронта, длина — по его импульсу, частота ниже у сильного
+ * удара; без полос дальности. Вращение, без сдвига; начинается с нуля и гаснет к нулю — без рывка. Потом остаётся
+ * наклон тела и качание головы ({@link BodySway}).
  */
 public final class CameraShake {
     /** Толчки грунта (подземный взрыв, бурение): медленнее и мягче. */
@@ -39,6 +45,28 @@ public final class CameraShake {
     private static final List<Sway> SWAYS = new ArrayList<>();
     /** Больше стольких волн сразу — самая старая уходит. */
     private static final int SWAYS_MAX = 8;
+    /** Дрожь от ударов, что идёт сейчас ({@link #tremor}). */
+    private static final List<Tremor> TREMORS = new ArrayList<>();
+    /**
+     * Дрожь удара: с давления {@link #TREMOR_LOW_PA} (140 дБ — громкий хлопок) её нет, к {@link #TREMOR_HIGH_PA} (5 psi —
+     * сбивает с ног) — полная; сила — доля по логарифму давления в степени {@link #TREMOR_POWER} (у Эйзерлоха, GDC 2016,
+     * тряска — trauma² или trauma³: слабый удар почти не трясёт; у нас мягче, чтобы шахед в 100 м дрожал не слабее 3.4.1).
+     * Подача.
+     */
+    static final double TREMOR_LOW_PA = 200, TREMOR_HIGH_PA = 35_000, TREMOR_POWER = 1.5;
+    /** Полный размах дрожи курса и тангажа, ° (как у ближнего удара в 3.4.1); крен — доля курса. Подача. */
+    static final double TREMOR_YAW = 5, TREMOR_PITCH = 3.5, TREMOR_ROLL = 0.6;
+    /** Длина дрожи, с: от {@link #TREMOR_SHORT} у слабого импульса фазы до {@link #TREMOR_LONG} у сильного. Подача. */
+    static final double TREMOR_SHORT = 0.3, TREMOR_LONG = 1.7;
+    /** Импульс фазы сжатия, Па·с, от которого дрожь длиннее кратчайшей и с которого — длиннейшая. Подача. */
+    static final double TREMOR_IMPULSE_LOW = 5, TREMOR_IMPULSE_HIGH = 300;
+    /** Частота дрожи, Гц: у слабого удара — {@link #TREMOR_HZ_WEAK}, у полного — {@link #TREMOR_HZ_STRONG}. Подача. */
+    static final double TREMOR_HZ_WEAK = 12.5, TREMOR_HZ_STRONG = 8.5;
+    /** Больше стольких дрожей сразу — самая слабая уходит. */
+    private static final int TREMORS_MAX = 4;
+
+    /** Дрожь одного удара: с мига {@code from} (тики, с долей), сила 0..1, длина, с, частота, Гц, сдвиг узора. */
+    private record Tremor(double from, double strength, double seconds, double hz, double phase) {}
     /** Насколько игрок стоит на ногах (1 — стоит, 0 — в воздухе), в прошлом тике и сейчас. */
     private static double standing = 1, standingBefore = 1;
     /** Насколько за тик меняется опора: тело встаёт на ноги и отрывается от них за четверть секунды. */
@@ -54,6 +82,60 @@ public final class CameraShake {
 
     public static void quake(int ticks) {
         quake = Math.max(quake, ticks);
+    }
+
+    /** Сила дрожи 0..1 у давления фронта {@code pPa}, Па: (доля по логарифму давления)^{@link #TREMOR_POWER}. */
+    static double tremorStrength(double pPa) {
+        double x = Mth.clamp(Math.log(Math.max(pPa, 1e-9) / TREMOR_LOW_PA) / Math.log(TREMOR_HIGH_PA / TREMOR_LOW_PA), 0, 1);
+        return Math.pow(x, TREMOR_POWER);
+    }
+
+    /** Длина дрожи, с, у импульса фазы сжатия {@code impulse}, Па·с. */
+    static double tremorSeconds(double impulse) {
+        double x = Mth.clamp(Math.log(Math.max(impulse, 1e-9) / TREMOR_IMPULSE_LOW) / Math.log(TREMOR_IMPULSE_HIGH / TREMOR_IMPULSE_LOW), 0, 1);
+        return TREMOR_SHORT + (TREMOR_LONG - TREMOR_SHORT) * x;
+    }
+
+    /**
+     * Фронт обычного взрыва дошёл до тела: дрожь камеры по его давлению {@code pPa}, Па, и импульсу фазы сжатия
+     * {@code impulse}, Па·с; {@code late} — сколько тиков назад (0..1); {@code seed} — узор. Подача. Возвращает силу 0..1.
+     */
+    public static double tremor(double pPa, double impulse, double late, long seed) {
+        double strength = tremorStrength(pPa);
+        if (!(strength > 1e-4)) return 0;
+        double hz = TREMOR_HZ_WEAK + (TREMOR_HZ_STRONG - TREMOR_HZ_WEAK) * Math.sqrt(strength);
+        if (TREMORS.size() >= TREMORS_MAX) {
+            Tremor weakest = TREMORS.getFirst();
+            for (Tremor t : TREMORS) if (t.strength < weakest.strength) weakest = t;
+            if (weakest.strength >= strength) return strength;
+            TREMORS.remove(weakest);
+        }
+        TREMORS.add(new Tremor(ticks - Mth.clamp(late, 0, 1), strength, tremorSeconds(impulse), hz, (seed & 0xFFFF) / 65536.0));
+        return strength;
+    }
+
+    /**
+     * Дрожь в миг {@code t} тиков, ° (курс, тангаж; крен — доля курса): узор — две синусоиды в отношении 1,73, с нуля,
+     * огибающая (1 − s)² гаснет к нулю за длину дрожи. Сумма дрожей — не больше полного размаха.
+     */
+    static double[] tremorAt(double t) {
+        double yaw = 0, pitch = 0;
+        for (Tremor r : TREMORS) {
+            double s = (t - r.from) / 20;
+            if (s < 0 || s >= r.seconds) continue;
+            double fade = (1 - s / r.seconds) * (1 - s / r.seconds), a = r.strength * fade;
+            yaw += TREMOR_YAW * a * shiver(s, r.hz, r.phase);
+            pitch += TREMOR_PITCH * a * shiver(s, 1.27 * r.hz, r.phase + 0.37);
+        }
+        yaw = Mth.clamp(yaw, -TREMOR_YAW, TREMOR_YAW);
+        pitch = Mth.clamp(pitch, -TREMOR_PITCH, TREMOR_PITCH);
+        return new double[]{yaw, pitch, TREMOR_ROLL * yaw};
+    }
+
+    /** Узор дрожи, размах ~1, с нуля в s = 0: две синусоиды частот f и 1,73·f, у каждого удара свой сдвиг частоты. */
+    private static double shiver(double s, double hz, double phase) {
+        double f = hz * (0.9 + 0.2 * phase);
+        return 0.7 * Math.sin(Mth.TWO_PI * f * s) + 0.3 * Math.sin(Mth.TWO_PI * 1.73 * f * s);
     }
 
     /**
@@ -117,11 +199,13 @@ public final class CameraShake {
         standingBefore = standing;
         standing = Mth.clamp(standing + (onFeet ? STANDING_STEP : -STANDING_STEP), 0, 1);
         SWAYS.removeIf(s -> (ticks - s.from) / 20.0 * BodySway.RATE >= s.tilt.length - 1);
+        TREMORS.removeIf(r -> (ticks - r.from) / 20.0 >= r.seconds);
     }
 
     public static void reset() {
         quake = 0;
         SWAYS.clear();
+        TREMORS.clear();
         standing = standingBefore = 1;
         ticks = 0;
     }
@@ -129,7 +213,7 @@ public final class CameraShake {
     public static void apply(ViewportEvent.ComputeCameraAngles e) {
         double k = IncomingConfig.CLIENT.cameraShake.get();
         Minecraft mc = Minecraft.getInstance();
-        if (k <= 0 || quake <= 0 && SWAYS.isEmpty() || mc.isPaused()) return;
+        if (k <= 0 || quake <= 0 && SWAYS.isEmpty() && TREMORS.isEmpty() || mc.isPaused()) return;
         // наклон — тела игрока: камере снаряда и глазам другой сущности его не видно
         Player p = mc.player;
         double body = p != null && mc.getCameraEntity() == p ? p.getViewYRot((float) e.getPartialTick()) : Double.NaN;
@@ -156,6 +240,13 @@ public final class CameraShake {
             pitch += a[1] * fade * wobble(t, 6.7, 4.4);
         }
         double roll = yaw * 0.6;
+        if (!TREMORS.isEmpty() && !Double.isNaN(bodyYaw)) {
+            // дрожь удара — у головы игрока, как наклон: камере снаряда её не видно
+            double[] tr = tremorAt(t);
+            yaw += tr[0];
+            pitch += tr[1];
+            roll += tr[2];
+        }
         yaw *= k;
         pitch *= k;
         roll *= k;

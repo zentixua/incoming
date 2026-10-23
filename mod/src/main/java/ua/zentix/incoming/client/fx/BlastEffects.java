@@ -163,6 +163,11 @@ public final class BlastEffects {
             return front == null ? d / Warheads.FRONT_SPEED : 20 * front.arrivalSeconds(d);
         }
 
+        /** Фронт срывает траву и листья вокруг ({@link FrontLitter}): огненный шар модели, высота разрыва над землёй. */
+        void litter(ClientLevel level, CloudModel model) {
+            FrontLitter.spawn(level, pos, front, model.ballRadius(0.5 * model.burnSeconds), model.hob, random);
+        }
+
         @Override
         public final boolean tick(ClientLevel level, int t) {
             Minecraft mc = Minecraft.getInstance();
@@ -403,6 +408,7 @@ public final class BlastEffects {
             if (t == 0) {
                 flash(level, model);
                 Explosions.solids(level, pos, radius(), model.source.fuelKg() > 0, random);
+                litter(level, model);
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 2, 1, 2, 0, 30);
                 return true;
             }
@@ -454,6 +460,7 @@ public final class BlastEffects {
                             .spawn(level, pos);
                 }
                 if (kill) Explosions.cookoff(level, pos, 2.0f, random);
+                litter(level, model);
             }
             return t < 61;
         }
@@ -484,6 +491,7 @@ public final class BlastEffects {
             if (t == 0) {
                 flash(level, model);
                 Explosions.solids(level, pos, radius(), model.source.fuelKg() > 0, random);
+                litter(level, model);
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 4, 2, 4, 0, 80);
                 return true;
             }

@@ -291,4 +291,41 @@ class CameraShakeTest {
         double[] w = wave(1, 2);
         assertEquals(null, CameraShake.sway(w[2], w[0], 1, w[1], w[1], 0, new Vec3(0, 0, 1), 0, false).neck(), "ядерка — без шеи");
     }
+
+    /**
+     * Дрожь удара (подача, жалоба 23.10: «камера только толкается»): нет ниже 140 дБ, полная с 5 psi; шахед в 20/50/100 м
+     * дрожит сильнее ближе, длиннее у сильного импульса — и не слабее 3.4.1 (в 50 и 100 м там было 1,5° курса); начинается
+     * с нуля, гаснет к нулю, без рывка между кадрами.
+     */
+    @Test
+    void blastTremorFollowsThePressure() {
+        assertEquals(0, CameraShake.tremorStrength(CameraShake.TREMOR_LOW_PA * 0.9), 1e-12);
+        assertEquals(1, CameraShake.tremorStrength(CameraShake.TREMOR_HIGH_PA * 1.1), 1e-12);
+        double kg = 30, last = 2;
+        double[] peaks = new double[3];
+        int k = 0;
+        for (double m : new double[]{20, 50, 100}) {
+            CameraShake.reset();
+            double pa = 1000 * BlastModel.surfaceOverpressureKpa(m, kg), impulse = BlastModel.chemicalImpulse(m, kg, true);
+            double s = CameraShake.tremor(pa, impulse, 0, 7);
+            assertTrue(s < last, m + " м: " + s);
+            last = s;
+            double seconds = CameraShake.tremorSeconds(impulse), prev = 0, most = 0, step = 1.0 / 120;
+            assertTrue(seconds >= CameraShake.TREMOR_SHORT && seconds <= CameraShake.TREMOR_LONG);
+            for (double t = 0; t <= seconds + 0.1; t += step) {
+                double yaw = CameraShake.tremorAt(20 * t)[0];
+                assertTrue(Math.abs(yaw - prev) <= 2 * Math.PI * 1.73 * CameraShake.TREMOR_HZ_WEAK * 1.1 * CameraShake.TREMOR_YAW * s * step + 1e-9,
+                        m + " м, " + t + " с: рывок");
+                most = Math.max(most, Math.abs(yaw));
+                prev = yaw;
+            }
+            assertEquals(0, CameraShake.tremorAt(0)[0], 1e-12, "с нуля");
+            assertEquals(0, CameraShake.tremorAt(20 * (seconds + 0.01))[0], 1e-12, "погасла");
+            peaks[k++] = most;
+        }
+        assertTrue(peaks[0] > peaks[1] && peaks[1] > peaks[2], java.util.Arrays.toString(peaks));
+        assertTrue(peaks[1] >= 1.5 && peaks[2] >= 1.2, "50 м: " + peaks[1] + "°, 100 м: " + peaks[2] + "° (3.4.1 — 1,5°)");
+        assertTrue(CameraShake.tremorSeconds(BlastModel.chemicalImpulse(100, 450, true)) > CameraShake.tremorSeconds(BlastModel.chemicalImpulse(100, 30, true)));
+        CameraShake.reset();
+    }
 }

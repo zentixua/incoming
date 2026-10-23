@@ -44,6 +44,8 @@ public final class BlastHit {
         double d = Math.max(0.5, body.distanceTo(pos)), pa = BlastMix.pressure(s, d), tPlus = BlastMix.phase(s, d);
         double exposure = HearingModel.exposure(pa, tPlus);
         if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(pos, ground, body, d, pa, tPlus, seed);
+        // дрожь камеры в миг удара — подача, по давлению и импульсу волны у тела (и верхом, и вплавь: удар чувствуется)
+        double tremor = CameraShake.tremor(pa, BlastModel.chemicalImpulse(d, s.chargeKg(), s.surface()), late, seed);
         double lean = 0, neck = 0;
         float open = 0;
         if (!CameraShake.carried(player)) {
@@ -54,8 +56,8 @@ public final class BlastHit {
             lean = Math.toDegrees(BodySway.peak(m.body(), 0));
             neck = Math.toDegrees(BodySway.peak(m.neck(), 0));
         }
-        last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg neck %.2f deg",
-                d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean, neck);
+        last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg neck %.2f deg tremor %.2f",
+                d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean, neck, tremor);
     }
 
     /**
