@@ -140,8 +140,12 @@ final class ProbeScenario {
     private int launchTick = -1;
     private Vec3 launchFrom = Vec3.ZERO, lastPos = Vec3.ZERO, axis = new Vec3(0, 0, 1);
     private boolean behind;
-    /** Где сцена поставила глаз в прошлом тике (кадр снимка нарисован с него); null — камера сцены не двигает. */
-    private Vec3 placed;
+    /**
+     * Куда сцена поставила глаз последним; null — камера сцены не двигает. {@link #drawnAt} — то же на миг последнего
+     * нарисованного кадра (его берёт снимок): после долгого кадра клиент гонит несколько тиков без отрисовки, и
+     * {@code placed} к снимку уже ушёл вперёд с ракетой на блоки (ревью LNB: LFX11, кадр 323 мс — 7 тиков подряд).
+     */
+    private Vec3 placed, drawnAt;
     /** ЗРК: где стоит, ракета у клиента, тик схода, заряжен ли (сцена разрыва), тик разрыва. */
     private BlockPos sam;
     private net.minecraft.world.entity.Entity interceptor;
@@ -321,6 +325,7 @@ final class ProbeScenario {
         firedAt = -1;
         missile = null;
         placed = null;
+        drawnAt = null;
         drone = null;
         launchTick = -1;
         blastTick = -1;
@@ -746,6 +751,7 @@ final class ProbeScenario {
     private void onFrame(RenderFrameEvent.Post e) {
         long now = System.nanoTime();
         Minecraft mc = Minecraft.getInstance();
+        drawnAt = placed;
         if (frames != null && last != 0 && mc.level != null) {
             try {
                 frames.write(current + " " + tick + " " + (now - last) / 1000 / 1000.0 + "\n");
@@ -771,10 +777,11 @@ final class ProbeScenario {
             Incoming.LOG.info("SCENARIO probe shot {} blast {}", name, ua.zentix.incoming.client.far.FarBlasts.describeLast());
             // пожары у кадра: блоков огня, подъём шлейфа и ветер (дом, подстанция, огонь от шара топлива)
             Incoming.LOG.info("SCENARIO probe shot {} smoke {}", name, ua.zentix.incoming.client.fx.FireSmoke.describe());
-            // кадр — с той точки, куда сцена поставила глаз (сервер мог вернуть игрока назад): иначе check.py бракует прогон
-            if (placed != null) {
+            // кадр — с той точки, куда сцена поставила глаз к его отрисовке (сервер мог вернуть игрока назад): иначе
+            // check.py бракует прогон
+            if (drawnAt != null) {
                 Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
-                double off = eye.distanceTo(placed);
+                double off = eye.distanceTo(drawnAt);
                 Incoming.LOG.info("SCENARIO probe shot {} camera {} off {}", name, xyz(eye),
                         String.format(Locale.ROOT, "%.2f", off));
             }
