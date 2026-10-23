@@ -40,7 +40,37 @@ final class BlastDust implements SmokeGrid.Source {
     static final double R0 = 0.5;
 
     /** Полоса одного пролома или кучки проломов: место, ветер там, масса пыли, кг, начальный σ, дальность от эпицентра, м. */
-    private record Streak(double x, double y, double z, BlastGust gust, double mass, double r0, double groundM) {}
+    private static final class Streak {
+        final double x, y, z, mass, r0, groundM;
+        final BlastGust gust;
+        /**
+         * Верх слоя пыли, блоки, и доля ослабления в воздухе на целый тик {@link #tick}: верх слоя — корень по таблице прихода
+         * фронта, считать его в каждом кадре у сотен полос дорого, а за тик он меняется на доли процента.
+         */
+        double top, aloft;
+        long tick = Long.MIN_VALUE;
+
+        Streak(double x, double y, double z, BlastGust gust, double mass, double r0, double groundM) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.gust = gust;
+            this.mass = mass;
+            this.r0 = r0;
+            this.groundM = groundM;
+        }
+
+        /** Верх слоя и доля в воздухе на миг {@code t} (тики после подрыва) — по целому тику. */
+        void layer(Detonation d, double t) {
+            long k = (long) Math.floor(t);
+            if (k == tick) return;
+            tick = k;
+            double age = k - gust.arrival;
+            top = layerTop(d, groundM, age);
+            // крупное оседает из слоя высотой с верх головы (не ниже метра), ослабление — по тому, что ещё в воздухе
+            aloft = DustModel.extinctionAloft(Math.max(0, age) / (20.0 * d.scale()) / Math.max(1, d.metres(top)));
+        }
+    }
 
     private final ClientNuclear.Active a;
     private final List<Streak> streaks = new ArrayList<>();
@@ -99,11 +129,12 @@ final class BlastDust implements SmokeGrid.Source {
      */
     static Puffs.Carry carry(Detonation d, Vec3 at, double ticks, double seconds) {
         BlastGust g = BlastGust.of(d, at, () -> ticks);
-        double groundM = d.metres(Math.hypot(at.x - d.burst().x, at.z - d.burst().z));
+        Streak layer = new Streak(at.x, at.y, at.z, g, 0, 0, d.metres(Math.hypot(at.x - d.burst().x, at.z - d.burst().z)));
         return (now, into) -> {
             double t = ticks + (now - seconds) * 20;
             parcel(g, g.arrival, t, into);
-            into[3] = Math.hypot(into[3], layerTop(d, groundM, t - g.arrival) / Math.sqrt(12));
+            layer.layer(d, t);
+            into[3] = Math.hypot(into[3], layer.top / Math.sqrt(12));
         };
     }
 
@@ -122,11 +153,9 @@ final class BlastDust implements SmokeGrid.Source {
             double hx = parcel[0], hy = parcel[1], hz = parcel[2], spreadHead = parcel[3];
             parcel(g, last, t, parcel);
             double tx = parcel[0], ty = parcel[1], tz = parcel[2], spreadTail = parcel[3];
-            double age = t - g.arrival, top = layerTop(d, s.groundM, age);
-            double sigma = Math.hypot(s.r0 + 0.5 * (spreadHead + spreadTail), top / Math.sqrt(12));
-            // крупное оседает из слоя высотой с верх головы (не ниже метра), ослабление — по тому, что ещё в воздухе
-            double aloft = DustModel.extinctionAloft(age / (20.0 * d.scale()) / Math.max(1, d.metres(top)));
-            double mass = s.mass * released * aloft;
+            s.layer(d, t);
+            double sigma = Math.hypot(s.r0 + 0.5 * (spreadHead + spreadTail), s.top / Math.sqrt(12));
+            double mass = s.mass * released * s.aloft;
             double half = 0.5 * Math.sqrt((hx - tx) * (hx - tx) + (hz - tz) * (hz - tz) + (hy - ty) * (hy - ty));
             // толща поперёк середины полосы: гаусс, размазанный по длине 2·half
             double tau = DustModel.K_MIX * mass / (2 * Math.PI * sigma * (sigma + 2 * half / Math.sqrt(2 * Math.PI)));
@@ -155,7 +184,8 @@ final class BlastDust implements SmokeGrid.Source {
         Streak s = streaks.getLast();
         double t = a.ticks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
         parcel(s.gust, s.gust.arrival, t, parcel);
-        double sigma = Math.hypot(s.r0 + parcel[3], layerTop(a.d, s.groundM, t - s.gust.arrival) / Math.sqrt(12));
+        s.layer(a.d, t);
+        double sigma = Math.hypot(s.r0 + parcel[3], s.top / Math.sqrt(12));
         return Math.max(1, sigma / s.r0);
     }
 }
