@@ -1,0 +1,596 @@
+{
+  "main": {
+    "sam-day": {
+      "name": "sam-day",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        45.0,
+        4.0,
+        270.0,
+        22.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 9310276,
+        "from": 0.0,
+        "seconds": 12.0
+      },
+      "frames": [
+        {
+          "t": 0.25,
+          "age": 0.26,
+          "file": "sam-day_000.25s.png",
+          "fps": 60
+        },
+        {
+          "t": 1.0,
+          "age": 1.001,
+          "file": "sam-day_001.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 3.0,
+          "age": 3.015,
+          "file": "sam-day_003.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.015,
+          "file": "sam-day_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.013,
+          "file": "sam-day_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.001,
+          "file": "sam-day_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.008,
+          "file": "sam-day_060.00s.png",
+          "fps": 61
+        }
+      ]
+    },
+    "sam-upwind-day": {
+      "name": "sam-upwind-day",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        90.0,
+        20.0,
+        48.0,
+        40.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 24956996,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.003,
+          "file": "sam-upwind-day_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.006,
+          "file": "sam-upwind-day_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.007,
+          "file": "sam-upwind-day_015.00s.png",
+          "fps": 61
+        },
+        {
+          "t": 30.0,
+          "age": 30.01,
+          "file": "sam-upwind-day_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.012,
+          "file": "sam-upwind-day_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "sam-night": {
+      "name": "sam-night",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        45.0,
+        4.0,
+        270.0,
+        22.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 41758788,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 0.25,
+          "age": 0.265,
+          "file": "sam-night_000.25s.png",
+          "fps": 62
+        },
+        {
+          "t": 1.0,
+          "age": 1.011,
+          "file": "sam-night_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 3.0,
+          "age": 3.001,
+          "file": "sam-night_003.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.006,
+          "file": "sam-night_005.00s.png",
+          "fps": 61
+        },
+        {
+          "t": 15.0,
+          "age": 15.002,
+          "file": "sam-night_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.011,
+          "file": "sam-night_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.0,
+          "file": "sam-night_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "grad-day": {
+      "name": "grad-day",
+      "effect": "launch rocket",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        120.0,
+        10.0,
+        90.0,
+        30.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 69627972,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.014,
+          "file": "grad-day_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 3.0,
+          "age": 3.013,
+          "file": "grad-day_003.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 8.0,
+          "age": 8.004,
+          "file": "grad-day_008.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.012,
+          "file": "grad-day_015.00s.png",
+          "fps": 63
+        },
+        {
+          "t": 30.0,
+          "age": 30.014,
+          "file": "grad-day_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.013,
+          "file": "grad-day_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "sam-downwind": {
+      "name": "sam-downwind",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        150.0,
+        30.0,
+        228.0,
+        50.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 83701828,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.006,
+          "file": "sam-downwind_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.0,
+          "file": "sam-downwind_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 10.0,
+          "age": 10.008,
+          "file": "sam-downwind_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.001,
+          "file": "sam-downwind_015.00s.png",
+          "fps": 63
+        },
+        {
+          "t": 20.0,
+          "age": 20.01,
+          "file": "sam-downwind_020.00s.png",
+          "fps": 62
+        }
+      ]
+    }
+  },
+  "TL": {
+    "sam-day": {
+      "name": "sam-day",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        45.0,
+        4.0,
+        270.0,
+        22.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 10313796,
+        "from": 0.0,
+        "seconds": 12.0
+      },
+      "frames": [
+        {
+          "t": 0.25,
+          "age": 0.259,
+          "file": "sam-day_000.25s.png",
+          "fps": 56
+        },
+        {
+          "t": 1.0,
+          "age": 1.009,
+          "file": "sam-day_001.00s.png",
+          "fps": 61
+        },
+        {
+          "t": 3.0,
+          "age": 3.009,
+          "file": "sam-day_003.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 5.0,
+          "age": 5.01,
+          "file": "sam-day_005.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 15.0,
+          "age": 15.011,
+          "file": "sam-day_015.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 30.0,
+          "age": 30.01,
+          "file": "sam-day_030.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 60.0,
+          "age": 60.008,
+          "file": "sam-day_060.00s.png",
+          "fps": 60
+        }
+      ]
+    },
+    "sam-upwind-day": {
+      "name": "sam-upwind-day",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        90.0,
+        20.0,
+        48.0,
+        40.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 62632004,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.013,
+          "file": "sam-upwind-day_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.005,
+          "file": "sam-upwind-day_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.0,
+          "file": "sam-upwind-day_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.001,
+          "file": "sam-upwind-day_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.005,
+          "file": "sam-upwind-day_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "sam-night": {
+      "name": "sam-night",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        45.0,
+        4.0,
+        270.0,
+        22.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 81059908,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 0.25,
+          "age": 0.26,
+          "file": "sam-night_000.25s.png",
+          "fps": 58
+        },
+        {
+          "t": 1.0,
+          "age": 1.006,
+          "file": "sam-night_001.00s.png",
+          "fps": 58
+        },
+        {
+          "t": 3.0,
+          "age": 3.014,
+          "file": "sam-night_003.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.005,
+          "file": "sam-night_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.02,
+          "file": "sam-night_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.002,
+          "file": "sam-night_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.012,
+          "file": "sam-night_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "grad-day": {
+      "name": "grad-day",
+      "effect": "launch rocket",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        120.0,
+        10.0,
+        90.0,
+        30.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 96022596,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.015,
+          "file": "grad-day_001.00s.png",
+          "fps": 61
+        },
+        {
+          "t": 3.0,
+          "age": 3.002,
+          "file": "grad-day_003.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 8.0,
+          "age": 8.01,
+          "file": "grad-day_008.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.008,
+          "file": "grad-day_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.005,
+          "file": "grad-day_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.01,
+          "file": "grad-day_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "sam-downwind": {
+      "name": "sam-downwind",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        150.0,
+        30.0,
+        228.0,
+        50.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 13328452,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.01,
+          "file": "sam-downwind_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.007,
+          "file": "sam-downwind_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 10.0,
+          "age": 10.006,
+          "file": "sam-downwind_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.013,
+          "file": "sam-downwind_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 20.0,
+          "age": 20.005,
+          "file": "sam-downwind_020.00s.png",
+          "fps": 63
+        }
+      ]
+    }
+  }
+}
