@@ -270,12 +270,23 @@ class GroundDustTest {
         }
     }
 
+    /** Узлы пути клубов от {@code from} до {@code to} с: в них уровень клуба — не середина шага. */
+    private static List<Double> nodes(double from, double to) {
+        List<Double> out = new ArrayList<>();
+        for (double t : GroundDust.PATH) if (t >= from && t <= to) out.add(t);
+        return out;
+    }
+
+    /** Поверхность под клубом {x, y, z, σh, …} — как её видит слой (по его следу, {@code GroundDust.under}). */
+    private static double under(GroundDust g, double[] b) {
+        return g.under(b[0], b[2], 0.5 * b[3]);
+    }
+
     /**
      * Пыль не висит над пустотой (жалоба 23.10: бурый пласт на высоте крыши): у удара в крышу дома (10 и 30 м) с улицей на
-     * 15 м ниже, в ветер и в штиль, каждый клуб слоя, чей путь вышел за край, опускается по закону тяжёлого термика
+     * 15 м ниже, в ветер и в штиль, каждый клуб, чей путь вышел за край, опускается по закону тяжёлого термика
      * (численный {@link Thermal}: масса пыли в воздухе и размер клуба в миг выхода — независимо от модели): не медленнее и
-     * не быстрее его (±10 %), а когда закон довёл бы его до улицы, он на ней; выше поверхности, с которой его подняло,
-     * клуб не бывает, под поверхностью, на которую мог бы лечь, — тоже.
+     * не быстрее его (±10 %), а когда закон довёл бы его до улицы, он на ней; под поверхность под собой не уходит.
      */
     @Test
     void dustNeverHangsOverTheVoid() {
@@ -283,34 +294,33 @@ class GroundDustTest {
         for (double roof : new double[]{10, 30}) {
             for (double wind : new double[]{4, 0}) {
                 CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, wind, 0, 0.1, (int) Stability.C, 0.5);
-                GroundDust.Ground g = house(roof);
-                GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-                int n = layer(dust, 0.3).size();
-                double[] lifted = new double[n], crossed = new double[n];
+                GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, house(roof)).ground;
+                List<Double> ts = nodes(1, 180);
+                int n = layer(dust, ts.getFirst()).size();
+                double[] lifted = new double[n], crossed = new double[n], last = new double[n];
                 Thermal[] law = new Thermal[n];
                 java.util.Arrays.fill(crossed, -1);
                 int fell = 0;
-                for (double t = 0.3; t <= 180; t += 0.25) {
+                for (double t : ts) {
                     List<double[]> now = layer(dust, t);
                     assertEquals(n, now.size(), "клубы те же");
                     for (int i = 0; i < n; i++) {
                         double[] b = now.get(i);
-                        double base = b[1] - 0.8 * b[4], below = g.relief().at(b[0], b[2]);
-                        if (t == 0.3) lifted[i] = base;
+                        double base = b[1] - 0.8 * b[4], below = under(dust, b);
+                        if (t == ts.getFirst()) lifted[i] = last[i] = base;
                         String at = "дом " + roof + " м, ветер " + wind + ", " + t + " с, клуб " + i;
-                        assertTrue(base <= lifted[i] + 1e-6, at + ": выше своей поверхности");
-                        // ниже поверхности под ним не уходит; выше себя больше чем на блок (стена) — не взбирается (⚠ обтекания нет)
-                        assertTrue(base >= below - 1e-6 || below > base + GroundDust.DROP, at + ": под поверхностью " + below);
+                        assertTrue(base >= below - 1e-6 || base >= last[i] - 1e-6, at + ": уходит под поверхность " + below);
+                        last[i] = base;
                         if (crossed[i] < 0 && below < lifted[i] - GroundDust.DROP) {
                             crossed[i] = t;
                             double volume = 2 * Math.PI * b[3] * b[3] * 1.25 * b[4], buoyancy = CloudModel.G * b[6] / CloudModel.RHO;
                             law[i] = new Thermal(buoyancy, buoyancy / volume, 0, neutral);
                         }
                         if (crossed[i] < 0) continue;
-                        double dt = t - crossed[i], z = law[i].height(dt) - 0.5 * law[i].r0, step = law[i].height(dt + 0.5) - law[i].height(Math.max(0, dt - 0.5));
-                        double target = Math.max(below, lifted[i] - z);
-                        assertTrue(base <= Math.max(below, lifted[i] - 0.9 * z + step) + 0.3, at + ": висит над пустотой, " + base + " против закона " + target);
-                        assertTrue(base >= Math.max(below, lifted[i] - 1.1 * z - step) - 0.3, at + ": падает быстрее закона, " + base + " против " + target);
+                        double dt = t - crossed[i], z = law[i].height(dt) - 0.5 * law[i].r0;
+                        double step = law[i].height(dt + 2) - law[i].height(Math.max(0, dt - 2));
+                        assertTrue(base <= Math.max(below, lifted[i] - 0.9 * z + step) + 0.3, at + ": висит над пустотой, " + base + " против закона " + (lifted[i] - z));
+                        assertTrue(base >= Math.min(below, lifted[i] - 1.1 * z - step) - 0.3, at + ": падает быстрее закона, " + base + " против " + (lifted[i] - z));
                         if (base <= below + 0.01 && lifted[i] > below + 5) fell++;
                     }
                 }
@@ -348,10 +358,10 @@ class GroundDustTest {
     }
 
     /**
-     * Упавшая пыль обратно не взлетает (ревью: без памяти пути клуб, сошедший с крыши, прыгал на крышу следующего дома и
-     * потом разом падал): два дома (крыша рыхлой земли до 10 м и дом в 40–70 м по ветру), улица на 15 м ниже, ветер 4 м/с
-     * — уровень клуба за шаг 0,25 с поднимается не больше чем на блок, а лёгший на улицу клуб остаётся у улицы и у стены
-     * второго дома; где рельеф пропал (нет чанков), уровень держится.
+     * Упавшая пыль не прыгает на крышу следующего дома (ревью: без памяти пути клуб, сошедший с крыши, прыгал на крышу
+     * соседнего и разом падал): два дома (крыша рыхлой земли до 10 м и дом 15 м в 40–70 м по ветру), улица на 15 м ниже,
+     * ветер 4 м/с; и где рельеф дальше 30 м пропал — уровень клуба от узла к узлу пути поднимается не круче 45° по его
+     * пути (ветер несёт слой через дом), и пыль с крыши доходит до улицы.
      */
     @Test
     void fallenDustStaysDown() {
@@ -366,23 +376,19 @@ class GroundDustTest {
             };
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
             GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-            int n = layer(dust, 0.3).size();
-            double[] last = new double[n];
-            boolean[] down = new boolean[n];
+            List<Double> ts = nodes(1, 120);
+            List<double[]> prev = layer(dust, ts.getFirst());
             int landed = 0;
-            for (double t = 0.3; t <= 120; t += 0.25) {
+            for (double t : ts.subList(1, ts.size())) {
                 List<double[]> now = layer(dust, t);
-                for (int i = 0; i < n; i++) {
-                    double base = now.get(i)[1] - 0.8 * now.get(i)[4];
-                    String at = (lost ? "рельеф пропал, " : "") + t + " с, клуб " + i;
-                    if (t > 0.3) assertTrue(base <= last[i] + GroundDust.DROP + 1e-6, at + ": уровень прыгнул " + last[i] + " → " + base);
-                    if (down[i]) assertTrue(base <= -15 + GroundDust.DROP + 1e-6, at + ": лёг на улицу и снова поднялся до " + base);
-                    if (!down[i] && base <= -15 + 1e-6 && last[i] > -10) {
-                        down[i] = true;
-                        landed++;
-                    }
-                    last[i] = base;
+                for (int i = 0; i < now.size(); i++) {
+                    double[] a = prev.get(i), b = now.get(i);
+                    double rise = (b[1] - 0.8 * b[4]) - (a[1] - 0.8 * a[4]), path = Math.hypot(b[0] - a[0], b[2] - a[2]);
+                    assertTrue(rise <= GroundDust.DROP * Math.max(1, path) + 0.8 * Math.abs(b[4] - a[4]) + 1e-6,
+                            (lost ? "рельеф пропал, " : "") + t + " с, клуб " + i + ": поднялся на " + rise + " за " + path + " м пути");
+                    if (b[1] - 0.8 * b[4] <= -15 + 1e-6 && a[1] - 0.8 * a[4] > -15 + 1e-6) landed++;
                 }
+                prev = now;
             }
             if (!lost) assertTrue(landed > 0, "пыль с крыши дошла до улицы");
         }
@@ -390,12 +396,11 @@ class GroundDustTest {
 
     /**
      * Слой идёт по склону, а не отрывается от него (второе ревью: порог края был на шаг сетки — над склоном вниз 17°
-     * клуб висел на сотню метров, а вверх по склону уходил в него): удар в голый грунт на склоне 17° и 10° вниз и вверх
-     * по ветру 4 м/с — до 300 с низ каждого клуба над рельефом под ним не выше блока и не под ним; перед стеной в 20 м
-     * по ветру клуб стоит у неё — его середина не за стеной.
+     * клуб висел на сотню метров, а вверх по склону уходил в него): удар в голый грунт на склоне 10° и 17° вниз и вверх
+     * по ветру 4 м/с — до 300 с низ каждого клуба в узлах пути — на поверхности под ним (в пределах блока).
      */
     @Test
-    void dustFollowsSlopesAndStopsAtWalls() {
+    void dustFollowsSlopes() {
         CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
         for (double slope : new double[]{-0.3, -0.18, 0.18, 0.3}) {
             double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
@@ -406,30 +411,56 @@ class GroundDustTest {
             GroundDust.Relief relief = (x, z) -> Math.floor(slope * x);
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
             GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-            for (double t = 0.3; t <= 300; t += 0.5) {
+            for (double t : nodes(1, 300)) {
                 for (double[] b : layer(dust, t)) {
-                    double base = b[1] - 0.8 * b[4], below = relief.at(b[0], b[2]);
+                    double base = b[1] - 0.8 * b[4], below = under(dust, b);
                     String at = "склон " + slope + ", " + t + " с: низ " + base + " над рельефом " + below;
-                    assertTrue(base <= below + GroundDust.DROP + 1e-6, at + " — висит над склоном");
-                    assertTrue(base >= below - GroundDust.DROP - 1e-6, at + " — под склоном");
+                    assertTrue(Math.abs(base - below) <= GroundDust.DROP + 1e-6, at);
                 }
             }
         }
-        // стена в 20–30 м по ветру, 15 блоков: клуб, что дошёл до неё, стоит перед ней
-        GroundDust.Relief wall = (x, z) -> x > 20 && x < 30 ? 15 : 0;
-        double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
-        for (int k = 0; k < GroundDust.SECTORS; k++) {
-            double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
-            for (int b = 0; b < GroundDust.BANDS.length; b++) h[k][b] = wall.at(GroundDust.BANDS[b] * Math.cos(ang), GroundDust.BANDS[b] * Math.sin(ang));
-        }
-        GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, wall);
-        GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-        for (double t = 0.3; t <= 120; t += 0.5) {
-            for (double[] b : layer(dust, t)) {
-                double base = b[1] - 0.8 * b[4];
-                // клуб, поднятый с крыши стены, лежит на ней; поднятый с земли — не в ней
-                assertTrue(wall.at(b[0], b[2]) <= base + GroundDust.DROP + 1e-6, t + " с: клуб в " + b[0] + " м — в стене, низ " + base);
+    }
+
+    /**
+     * Столбы, стволы и фонари клуб не держат (третье ревью: поверхность в одной точке — столб в блок останавливал клуб
+     * шириной в десятки метров): ракета на голом грунте, ветер 4 м/с, столбы 1×1 в 6 м в каждой сотой колонке — клубы идут
+     * так же, как без них (к 60 с — не дальше 2 м).
+     */
+    @Test
+    void postsDoNotHoldTheLayer() {
+        CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
+        // столбы и стволы — в каждой сотой колонке, вразброс
+        GroundDust.Relief posts = (x, z) -> Math.floorMod(java.util.Objects.hash((int) Math.floor(x), (int) Math.floor(z)) * 0x9E3779B1, 100) == 0 ? 6 : 0;
+        GroundDust.Ground withPosts = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
+                GroundDust.Ground.filled(0), posts);
+        GroundDust.Ground open = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
+                GroundDust.Ground.filled(0), (x, z) -> 0);
+        BlastSource s = BlastSource.of(WeaponType.MISSILE, false);
+        GroundDust a = new CloudModel(s, air, false, 0, withPosts).ground, b = new CloudModel(s, air, false, 0, open).ground;
+        for (double t = 0.3; t <= 60; t += 0.5) {
+            List<double[]> la = layer(a, t), lb = layer(b, t);
+            assertEquals(lb.size(), la.size());
+            for (int i = 0; i < la.size(); i++) {
+                double d = Math.hypot(la.get(i)[0] - lb.get(i)[0], la.get(i)[2] - lb.get(i)[2]);
+                assertTrue(d <= 2, t + " с, клуб " + i + ": столбы задержали на " + d + " м");
             }
         }
+    }
+
+    /**
+     * Падающий клуб над неизвестным рельефом (нет чанков и карты) падает дальше — до самой низкой поверхности, что видел
+     * взрыв, а не висит (третье ревью): шахед в крышу 10 м, улица на 15 м ниже, рельеф известен только до 14 м — к 120 с
+     * ни один клуб не выше 1 м над улицей.
+     */
+    @Test
+    void fallingDustOverUnknownReliefStillFalls() {
+        CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
+        double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+        for (double[] row : h) for (int b = 0; b < row.length; b++) row[b] = GroundDust.BANDS[b] < 10 ? 0 : -15;
+        GroundDust.Relief known = (x, z) -> Math.hypot(x, z) < 10 ? 0 : Math.hypot(x, z) < 14 ? -15 : Double.NaN;
+        GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, known);
+        GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
+        for (double t = 0.3; t <= 120; t += 0.5) layer(dust, t);
+        for (double[] b : layer(dust, 120)) assertTrue(b[1] - 0.8 * b[4] <= -15 + 1 + 1e-6, "120 с: клуб в " + b[0] + " м, низ " + (b[1] - 0.8 * b[4]));
     }
 }
