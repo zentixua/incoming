@@ -91,6 +91,10 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<ua.zentix.incoming.compat.VoxyLods>> VOXY_LODS = REGISTER.register("voxy_lods",
             () -> AttachmentType.builder(ua.zentix.incoming.compat.VoxyLods::new).build());
 
+    /** Мир: съёмка рельефа без загрузки чанков — карты высот с диска и рельеф генератора в фоне ({@link ua.zentix.incoming.util.TerrainSurvey}); не сохраняется. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.util.TerrainSurvey>> TERRAIN_SURVEY = REGISTER.register("terrain_survey",
+            () -> AttachmentType.builder(ua.zentix.incoming.util.TerrainSurvey::new).build());
+
     /** Мир: осыпание в воронках обычных взрывов ({@link CraterFalls}); не сохраняется. */
     public static final Supplier<AttachmentType<CraterFalls>> CRATER_FALLS = REGISTER.register("crater_falls",
             () -> AttachmentType.builder(CraterFalls::new).build());

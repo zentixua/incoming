@@ -1,14 +1,12 @@
 package ua.zentix.incoming.nuclear.world;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.strike.AreaLoader;
 import ua.zentix.incoming.strike.StrikeWorld;
@@ -67,10 +65,7 @@ public final class NuclearTickets {
      */
     @Nullable
     public static LevelChunk inMemory(ServerLevel level, long pos) {
-        ChunkMap chunkMap = level.getChunkSource().chunkMap;
-        ChunkHolder holder = chunkMap.getVisibleChunkIfPresent(pos);
-        if (holder == null) holder = chunkMap.pendingUnloads.get(pos);
-        return holder != null && holder.getChunkIfPresentUnchecked(ChunkStatus.FULL) instanceof LevelChunk chunk ? chunk : null;
+        return Terrain.inMemory(level, pos);
     }
 
     /**

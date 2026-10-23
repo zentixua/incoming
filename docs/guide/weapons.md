@@ -171,8 +171,12 @@ circles over the target while you pick what to hit in its
 ![Cruise missile in flight](img/weapon-missile.jpg)
 
 Flies low over the terrain and dives just before the target. A heavy strike on a target that does not move. Can carry
-a nuclear warhead. If a hill, the rim of a pit or a building hides the target, the missile climbs until it can see
-it and then dives. It cannot get past a building that hides the target at a steep angle right next to it (for
+a nuclear warhead. It sees the terrain along its whole route, also where nobody is near and the world is not
+loaded: it reads the saved height of each place, and for land nobody has explored yet it uses the world generator, which
+knows the ground but not trees or buildings. On a map made before Minecraft 1.18, places nobody has visited since the
+update stay unknown to it until they load. It flies over a hill on its way and dives behind it. It does not look for a
+way around through valleys: the route is yours to set. If a hill, the rim of a pit or a building hides the target, the
+missile climbs until it can see it and then dives. It cannot get past a building that hides the target at a steep angle right next to it (for
 example, 40 blocks taller than the target and 20 blocks from it), and it cannot reach a target under a roof: use
 the bomb there.
 

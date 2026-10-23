@@ -1,4 +1,4 @@
-package ua.zentix.incoming.nuclear.world;
+package ua.zentix.incoming.util;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.StringTag;
@@ -15,16 +15,16 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Что за чанк на диске — одно правило на весь мод. Блоки окончательные ({@link State#blocksFinal}) — по нему строится
- * план руин с диска ({@link DiskShots}, фаза 2 подготовки {@link NuclearPrep}) и копия с руинами для LOD вдали
- * ({@link FarLods}: иначе чанк берёт в мир {@link FarZone}). Целый ({@link State#WHOLE}) — зона за волной берёт его
- * в мир ({@link NuclearPrep}: чанк, чьё окно руин целое), ничего не генерируя. Разница — чанки мира 1.17, обновлённого
+ * план руин с диска ({@code nuclear.world.DiskShots}, фаза 2 подготовки {@code nuclear.world.NuclearPrep}) и копия с руинами для LOD вдали
+ * ({@code nuclear.world.FarLods}: иначе чанк берёт в мир {@code nuclear.world.FarZone}). Целый ({@link State#WHOLE}) — зона за волной берёт его
+ * в мир ({@code nuclear.world.NuclearPrep}: чанк, чьё окно руин целое), ничего не генерируя. Разница — чанки мира 1.17, обновлённого
  * до 1.21: блоки на месте, но при загрузке ваниль догенерирует низ мира под нулём. Их план с диска верен (сверка —
  * по старым состояниям мест плана, низ мира и бедрок в них не входят), до волны их не грузит зона, а после — грузит
  * игрок или LOD; план держится до конца зоны. На старых картах таких чанков почти все (Zearth — 77974 из 86392
  * чанков на диске, Greenfield — 295718 из 295936): «не целые», они не получали бы плана с диска, а LOD вдали грузил
  * бы их в мир с генерацией.
  */
-final class DiskStatus {
+public final class DiskStatus {
     /** Имя полной генерации в поле {@code Status}. */
     private static final ResourceLocation FULL = ResourceLocation.withDefaultNamespace("full");
     /**
@@ -36,7 +36,7 @@ final class DiskStatus {
             ResourceLocation.withDefaultNamespace("spawn"), ResourceLocation.withDefaultNamespace("heightmaps"), FULL);
 
     /** Что за чанк на диске. */
-    enum State {
+    public enum State {
         /** Нет на диске, недогенерированный (кольца у края исследованного мира, начала структур), ошибка чтения. */
         PARTIAL,
         /**
@@ -48,7 +48,7 @@ final class DiskStatus {
         WHOLE;
 
         /** Годится ли для плана руин и копии LOD с диска. */
-        boolean blocksFinal() {
+        public boolean blocksFinal() {
             return this != PARTIAL;
         }
     }
@@ -62,7 +62,7 @@ final class DiskStatus {
      *
      * @param fields данные чанка или только поля {@link #fields}; {@code null} — чанка нет
      */
-    static State of(@Nullable CompoundTag fields) {
+    public static State of(@Nullable CompoundTag fields) {
         if (fields == null) return State.PARTIAL;
         if (fields.contains("below_zero_retrogen", Tag.TAG_COMPOUND))
             return finished(fields.getCompound("below_zero_retrogen").getString("target_status")) ? State.FINAL : State.PARTIAL;
@@ -81,15 +81,22 @@ final class DiskStatus {
 
     /** Поля, по которым {@link #of} решает, — без разбора всего чанка ({@code chunkScanner}). */
     private static CollectFields fields() {
-        return new CollectFields(new FieldSelector(StringTag.TYPE, "Status"), new FieldSelector(CompoundTag.TYPE, "below_zero_retrogen"),
-                new FieldSelector("Level", StringTag.TYPE, "Status"));
+        return fields(new FieldSelector[0]);
+    }
+
+    /** Поля {@link #of} и ещё {@code extra} — одним чтением заголовка ({@link TerrainSurvey}: и карта высот). */
+    static CollectFields fields(FieldSelector... extra) {
+        java.util.List<FieldSelector> all = new java.util.ArrayList<>(java.util.List.of(new FieldSelector(StringTag.TYPE, "Status"),
+                new FieldSelector(CompoundTag.TYPE, "below_zero_retrogen"), new FieldSelector("Level", StringTag.TYPE, "Status")));
+        all.addAll(java.util.List.of(extra));
+        return new CollectFields(all.toArray(FieldSelector[]::new));
     }
 
     /**
      * Что за чанк на диске — по его заголовку, в потоке ввода-вывода чанков ({@code chunkScanner}: не загружая и не
      * разбирая чанк). Ответ приходит в потоке ввода-вывода; ошибка чтения — {@link State#PARTIAL}.
      */
-    static CompletableFuture<State> scan(ServerLevel level, ChunkPos pos) {
+    public static CompletableFuture<State> scan(ServerLevel level, ChunkPos pos) {
         CollectFields fields = fields();
         return level.getChunkSource().chunkMap.chunkScanner().scanChunk(pos, fields)
                 .handle((v, e) -> e == null ? of(fields.getResult() instanceof CompoundTag tag ? tag : null) : State.PARTIAL);

@@ -34,6 +34,8 @@ import ua.zentix.incoming.warhead.Warheads;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Взрыв боевой части по заряду (S3): блоки ломаются до радиусов Джаррета своего порога, газы выбивают комнату,
@@ -120,10 +122,12 @@ public final class BlastGameTests {
     static List<Post> layPosts(BlockPos c, Vec3 at, double psi, double tnt, double nominal, List<Post> taken,
                                java.util.function.DoublePredicate side) {
         int n = (int) Math.ceil(nominal * 1.6);
+        Set<BlockPos> sampled = sampledPosts(c, at, n);
         List<Post> candidates = new ArrayList<>();
         for (int dx = -n; dx <= n; dx++) {
             for (int dz = -n; dz <= n; dz++) {
                 BlockPos p = c.offset(dx, 0, dz);
+                if (!sampled.contains(p)) continue;
                 double distance = Math.sqrt(new AABB(p).distanceToSqr(at));
                 if (distance < 1 || !side.test(Math.atan2(p.getZ() + 0.5 - at.z, p.getX() + 0.5 - at.x))) continue;
                 double jarrett = BlastDamage.breakRange(BlastModel.kpa(psi * BlockResponse.jitterAt(p)), tnt);
@@ -153,6 +157,30 @@ public final class BlastGameTests {
             all.add(best);
         }
         return posts;
+    }
+
+    /**
+     * A one-block post must intersect an actual 0.3 m sample of the 1352-ray charge wave. The even 16³ direction
+     * lattice has no zero component: (0, 9), for example, can lie between rays from the bottom centre of a block.
+     * The position hash changes which post is closest to 0.6 R; it used to select such a gap on some test origins.
+     * Keep every requested share and threshold, but choose measurable posts rather than changing the pressure law.
+     */
+    static Set<BlockPos> sampledPosts(BlockPos c, Vec3 at, int n) {
+        Set<BlockPos> sampled = new HashSet<>();
+        for (int j = 0; j < 16; j++) for (int k = 0; k < 16; k++) for (int l = 0; l < 16; l++) {
+            if (j != 0 && j != 15 && k != 0 && k != 15 && l != 0 && l != 15) continue;
+            double x = (float) j / 15.0F * 2.0F - 1.0F;
+            double y = (float) k / 15.0F * 2.0F - 1.0F;
+            double z = (float) l / 15.0F * 2.0F - 1.0F;
+            double len = Math.sqrt(x * x + y * y + z * z);
+            x /= len; y /= len; z /= len;
+            for (double d = 0; d <= 2 * n + 2; d += 0.3) {
+                BlockPos p = BlockPos.containing(at.x + x * d, at.y + y * d, at.z + z * d);
+                if (p.getY() != c.getY()) break;
+                sampled.add(p);
+            }
+        }
+        return sampled;
     }
 
     /** Шахед (50 кг): кладка ломается до ~3,4 м (Джаррет A). */

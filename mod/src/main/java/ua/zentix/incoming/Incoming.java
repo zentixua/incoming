@@ -89,6 +89,9 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(Sightings::onLevelTick);
         // после StrikeWorld: снаряды вне мира в этом тике уже сдвинулись — зенитная ракета идёт за их новым местом
         NeoForge.EVENT_BUS.addListener(DefenseWorld::onLevelTick);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onLevelTick);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onChunkUnload);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(StrikeWorld::onServerStopping);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppingEvent e) -> ua.zentix.incoming.nuclear.world.NuclearWorld.onServerStopping(e.getServer()));
         // после того как мод снял свои тикеты и работу: генерация, начатая до выхода, доходит до конца (иначе цикл выгрузки висит)

@@ -1,4 +1,4 @@
-package ua.zentix.incoming.nuclear.world;
+package ua.zentix.incoming.util;
 
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;

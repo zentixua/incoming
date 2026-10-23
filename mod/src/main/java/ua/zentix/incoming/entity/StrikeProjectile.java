@@ -38,6 +38,7 @@ import ua.zentix.incoming.guidance.Mission;
 import ua.zentix.incoming.guidance.Route;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.util.Terrain;
+import ua.zentix.incoming.util.TerrainSurvey;
 import ua.zentix.incoming.strike.CameraLink;
 import ua.zentix.incoming.strike.ChunkTickets;
 import ua.zentix.incoming.strike.FlightLog;
@@ -608,6 +609,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             mission().spend(getDeltaMovement().length());
             checkSiren(level);
             holdTargetArea(level);
+            surveyAhead(level);
             syncSpeed();
         } catch (RuntimeException e) {
             Incoming.LOG.error("Projectile {} {} at {} failed with an exception and was removed", getType().getDescriptionId(), getUUID(), blockPosition(), e);
@@ -637,6 +639,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             mission().spend(getDeltaMovement().length());
             checkSiren(level);
             holdTargetArea(level);
+            surveyAhead(level);
         } catch (RuntimeException e) {
             Incoming.LOG.error("Projectile {} {} off-world at {} failed with an exception and was removed", getType().getDescriptionId(), getUUID(), blockPosition(), e);
             discard();
@@ -1231,11 +1234,36 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Датчик {@link Craft#relief}: высота рельефа в колонке ({@link #surfaceY}, только готовый чанк); вне мира рельеф
-     * не читаем — низ мира.
+     * Датчик {@link Craft#relief}: высота рельефа в колонке на всём пути, в мире и вне его ({@link Terrain.Allowed#RELIEF}):
+     * готовый чанк, иначе съёмка без загрузки — карта высот с диска или из памяти, у чанка, которого на диске нет, —
+     * рельеф генератора ({@link TerrainSurvey}); пока съёмка не ответила — низ мира.
      */
     protected double relief(Level level, int x, int z) {
-        return virtual ? level.getMinBuildHeight() : surfaceY(level, x, z);
+        return Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, x, z, virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF).y();
+    }
+
+    /** Съёмку рельефа заказывать вперёд на столько блоков пути ({@link #surveyAhead}). */
+    static final double SURVEY_AHEAD = 1024;
+
+    /**
+     * Заказать съёмку рельефа ({@link TerrainSurvey#ahead}) на {@link #SURVEY_AHEAD} блоков пути вперёд: до точки
+     * маршрута, потом от неё к цели. Датчик рельефа сам заказывает то, о чём спросил, но ответ приходит через тики;
+     * к тому, как снаряд дойдёт, он уже будет. Только у снарядов, которые смотрят рельеф ({@code reliefLookahead}).
+     */
+    private void surveyAhead(ServerLevel level) {
+        if (airframe().reliefLookahead() <= 0 || age % 20 != 0) return;
+        Vec3 aim = tracker.point(), pos = position();
+        Vec3 wp = route != null && !route.finished() ? route.current() : null;
+        double left = SURVEY_AHEAD;
+        TerrainSurvey survey = TerrainSurvey.get(level);
+        for (Vec3 to : wp == null ? new Vec3[]{aim} : new Vec3[]{wp, aim}) {
+            double d = Math.hypot(to.x - pos.x, to.z - pos.z);
+            Vec3 end = d <= left ? to : pos.lerp(to, left / d);
+            survey.ahead(level, Heightmap.Types.MOTION_BLOCKING, pos, end);
+            left -= d;
+            if (left <= 0) break;
+            pos = to;
+        }
     }
 
     /**
@@ -1250,21 +1278,29 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Датчик {@link Craft#clearAlong}: клетки блоков на прямой до точки без последних {@code margin} блоков, только по
-     * готовым чанкам ({@link Terrain#readyUntil}); вне мира — свободна. Закрывает клетка с любой формой столкновения
+     * Датчик {@link Craft#clearAlong}: клетки блоков на прямой до точки без последних {@code margin} блоков по готовым
+     * чанкам ({@link Terrain#readyUntil}); дальше них и вне мира — верх рельефа съёмки ({@link Terrain#underRelief}). Закрывает клетка с любой формой столкновения
      * целиком: у тонкого (забор, мачта из заборов — столб 0,25 блока) луч по форме ({@code Level.clip}) обычно проходит
      * мимо, а шахед своим корпусом его задевает. Цена — обход клеток по прямой ({@code BlockGetter.traverseBlocks}),
      * до первой закрытой.
      */
     protected double clearAlong(Level level, Vec3 to, double margin) {
-        if (virtual) return Double.POSITIVE_INFINITY;
         Vec3 from = position();
         double length = from.distanceTo(to);
         if (length <= margin) return Double.POSITIVE_INFINITY;
-        Vec3 end = Terrain.readyUntil(level, from, from.lerp(to, (length - margin) / length));
-        BlockPos blocked = BlockGetter.traverseBlocks(from, end, level,
-                (l, pos) -> l.getBlockState(pos).getCollisionShape(l, pos).isEmpty() ? null : pos.immutable(), l -> null);
-        return blocked == null ? Double.POSITIVE_INFINITY : from.distanceTo(Vec3.atCenterOf(blocked));
+        Vec3 end = from.lerp(to, (length - margin) / length);
+        Vec3 start = from;
+        if (!virtual) {
+            Vec3 ready = Terrain.readyUntil(level, from, end);
+            BlockPos blocked = BlockGetter.traverseBlocks(from, ready, level,
+                    (l, pos) -> l.getBlockState(pos).getCollisionShape(l, pos).isEmpty() ? null : pos.immutable(), l -> null);
+            if (blocked != null) return from.distanceTo(Vec3.atCenterOf(blocked));
+            if (ready == end) return Double.POSITIVE_INFINITY;
+            start = ready;
+        }
+        // за готовыми чанками и вне мира — по верху рельефа съёмки: цель за холмом, которого ещё нет в мире
+        double t = Terrain.underRelief(level, start, end, virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF);
+        return t >= 1 ? Double.POSITIVE_INFINITY : from.distanceTo(start.lerp(end, t));
     }
 
     // ---------------------------------------------------------------- чанки

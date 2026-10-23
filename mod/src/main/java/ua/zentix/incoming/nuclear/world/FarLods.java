@@ -24,6 +24,7 @@ import ua.zentix.incoming.grid.PowerGrid;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.registry.ModAttachments;
+import ua.zentix.incoming.util.DiskStatus;
 
 import java.util.ArrayDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;

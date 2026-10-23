@@ -3406,14 +3406,16 @@ public final class StrikeGameTests {
     private static final TicketType<ChunkPos> READY_ONLY = TicketType.create("incoming_test_ready", Comparator.comparingLong(ChunkPos::toLong));
 
     /**
-     * Цель, за которой снаряд держит высоту, поднялась на 40 блоков (игрок вышел из оврага, телепорт): пол полёта вне
-     * мира ({@code BELOW_AIM} под целью) встал выше снаряда. Снаряд на бреющем не падает там, где его это застало
-     * (в 1500 блоках от цели), а набирает высоту за целью и бьёт по ней.
+     * Цель, за которой снаряд держит высоту, поднялась на 40 блоков (игрок вышел из оврага, телепорт), и в тот же тик
+     * над снарядом встал «рельеф» (готовый, но не тикающий чанк догрузился): пол полёта вне мира ({@code BELOW_AIM} под
+     * целью) встал выше снаряда. Снаряд на бреющем не падает там, где его это застало (в 1500 блоках от цели), а
+     * набирает высоту над рельефом и за целью и бьёт по ней. Рельеф встаёт только тогда: заранее ракета видела бы его
+     * датчиком ({@code StrikeProjectile.relief}) и шла бы над ним, ниже пола не оказавшись.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual_rising_aim", skyAccess = true)
     public static void virtualMissileClimbsAfterRisingAim(GameTestHelper h) {
         // ракета спустилась под «рельеф» на свою высоту над целью (+12)
-        climbsAfterRisingAim(h, (y, floor, dy) -> y < floor - 11);
+        climbsAfterRisingAim(h, 0, (y, floor, dy) -> y < floor - 11);
     }
 
     /**
@@ -3422,7 +3424,7 @@ public final class StrikeGameTests {
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual_rising_aim_descent", skyAccess = true)
     public static void virtualMissileClimbsAfterAimRisesMidDescent(GameTestHelper h) {
-        climbsAfterRisingAim(h, (y, floor, dy) -> dy > 0 && y >= floor && y - dy < floor);
+        climbsAfterRisingAim(h, 64, (y, floor, dy) -> dy > 0 && y >= floor && y - dy < floor);
     }
 
     @FunctionalInterface
@@ -3431,38 +3433,66 @@ public final class StrikeGameTests {
         boolean test(double y, double floorAfter, double descent);
     }
 
-    private static void climbsAfterRisingAim(GameTestHelper h, RiseWhen when) {
+    private static void climbsAfterRisingAim(GameTestHelper h, int ridge, RiseWhen when) {
         ServerLevel level = h.getLevel();
         Vec3 low = top(h, RUNWAY_TARGET);
         ArmorStand stand = EntityType.ARMOR_STAND.create(level);
         stand.setNoGravity(true);
         stand.moveTo(low.x, low.y, low.z);
         level.addFreshEntity(stand);
-        Vec3 start = low.add(0, 12, -1500);
+        // +Z от площадки ещё пуст: на -Z стоят прежние партии, и датчик видит их стены/крыши на всём пути.
+        Vec3 start = low.add(0, 12, 1500);
+        int direction = -1;
         int roofLength = 1000;
-        roofOverStart(h, start, Mth.floor(low.y) + 60, roofLength);
+        // Короткий гребень даёт высоту для настоящего снижения. Длинный навес появится только при подъёме цели.
+        if (ridge > 0) roofOverStart(h, start, Mth.floor(low.y) + 60, ridge, direction);
         CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(level);
-        missile.launch(start, Target.OfEntity.center(stand), low, null);
-        missile.setRoute(Route.direct());
-        VirtualFlights.launch(level, missile);
         UUID id = missile.getUUID();
         Vec3 high = low.add(0, 40, 0);
         // пол полёта вне мира после подъёма: центр цели на 16 блоков ниже (рельеф над путём выше)
         double floorAfter = high.y + stand.getBbHeight() / 2 - 16;
         Vec3[] last = {start};
-        boolean[] raised = {false};
+        boolean[] launched = {false}, raised = {false}, climbed = {false};
+        double[] raisedAt = {0}, range = {Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY};
+        List<String> crossing = new ArrayList<>();
         h.onEachTick(() -> {
+            if (!launched[0]) {
+                // getChunk() при постройке вернул FULL, но его держатель может ещё не быть в видимой карте.
+                // launch() читает высоту только getChunkNow: иначе старт с +12, и короткий гребень не всегда
+                // успевает поднять ракету выше нового пола. Ждём именно готовности, не заданное число тиков.
+                if (ridge > 0 && !Terrain.ready(level, BlockPos.containing(start))) return;
+                missile.launch(start, Target.OfEntity.center(stand), low, null);
+                missile.setRoute(Route.direct());
+                h.assertTrue(ridge == 0 || missile.getY() > floorAfter,
+                        "подготовка снижения: старт y=" + missile.getY() + " не выше будущего пола " + floorAfter);
+                last[0] = missile.position();
+                VirtualFlights.launch(level, missile);
+                launched[0] = true;
+            }
             StrikeProjectile f = flight(level, id);
             if (f == null) return;
             double descent = last[0].y - f.getY();
+            if (!raised[0] && f.isVirtual() && (f.getZ() - start.z) * direction < roofLength - 100) {
+                range[0] = Math.min(range[0], f.getY());
+                range[1] = Math.max(range[1], f.getY());
+                if (descent > 0 && Math.abs(f.getY() - floorAfter) < 5 && crossing.size() < 20)
+                    crossing.add(String.format(Locale.ROOT, "z=%.1f y=%.4f dy=%.4f predict=%.4f phase=%s",
+                            (f.getZ() - start.z) * direction, f.getY(), descent, f.getY() - descent, f.flightPhase()));
+            }
             last[0] = f.position();
-            if (!raised[0] && f.isVirtual() && f.getZ() < start.z + roofLength - 100 && when.test(f.getY(), floorAfter, descent)) {
+            if (raised[0] && descent < 0 && f.getY() > raisedAt[0] + 4) climbed[0] = true;
+            if (!raised[0] && f.isVirtual() && (f.getZ() - start.z) * direction < roofLength - 100 && when.test(f.getY(), floorAfter, descent)) {
                 raised[0] = true;
+                raisedAt[0] = f.getY();
                 stand.teleportTo(high.x, high.y, high.z);
+                // «рельеф» над ракетой и впереди до конца прежнего навеса: пол встал выше неё и с этой стороны
+                roofOverStart(h, new Vec3(start.x, start.y, Math.floor(f.getZ())), Mth.floor(low.y) + 60, (int) Math.abs(start.z + direction * roofLength - Math.floor(f.getZ())), direction);
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(raised[0], "цель не поднялась");
+            h.assertTrue(launched[0], "гребень не готов, ракета не запущена");
+            h.assertTrue(raised[0], "цель не поднялась; пол " + floorAfter + "; высоты до 900 м " + java.util.Arrays.toString(range) + "; снижение " + crossing + "; последнее место " + last[0].subtract(low));
+            h.assertTrue(climbed[0], "ракета не набрала высоту после подъёма цели");
             h.assertFalse(flight(level, id) != null, "ракета ещё летит, до цели " + (int) last[0].distanceTo(high));
             h.assertTrue(last[0].distanceTo(high) < 24, "ракета взорвалась не у цели: " + last[0].subtract(high));
             assertFlightReleased(h, id);
@@ -3518,10 +3548,15 @@ public final class StrikeGameTests {
      * сущности не тикают, — снаряд над ними летит вне мира. Тикеты снимаются после теста при любом исходе.
      */
     private static void roofOverStart(GameTestHelper h, Vec3 start, int roof, int length) {
+        roofOverStart(h, start, roof, length, 1);
+    }
+
+    /** direction — знак направления пути по Z. */
+    private static void roofOverStart(GameTestHelper h, Vec3 start, int roof, int length, int direction) {
         ServerLevel level = h.getLevel();
         List<ChunkPos> held = new ArrayList<>();
         for (int dz = 0; dz <= length; dz++) {
-            BlockPos b = BlockPos.containing(start.x, roof, start.z + dz);
+            BlockPos b = BlockPos.containing(start.x, roof, start.z + direction * dz);
             ChunkPos c = new ChunkPos(b);
             if (!held.contains(c)) {
                 // уровень 33: чанк готов (FULL), но не тикает
