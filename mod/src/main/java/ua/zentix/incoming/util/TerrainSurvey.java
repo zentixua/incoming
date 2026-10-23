@@ -73,6 +73,15 @@ public final class TerrainSurvey {
     /** Счёт генератора в пути (для {@link #settle}). */
     private final Queue<CompletableFuture<?>> generating = new ConcurrentLinkedQueue<>();
     private final AtomicInteger workers = new AtomicInteger();
+    /**
+     * Последний известный чанк, о котором спросили (поток сервера): полоса датчика идёт по колонкам подряд, и почти все
+     * вопросы — о том же чанке; без этого каждый вопрос — поиск в общей карте с упаковкой ключа.
+     */
+    private long lastChunk = Long.MIN_VALUE;
+    @Nullable
+    private Heightmap.Types lastType;
+    @Nullable
+    private Heights last;
     /** Узлы рельефа генератора: (x / шаг, z / шаг) → первый воздух. */
     private final Map<Long, Integer> points = new ConcurrentHashMap<>();
 
@@ -106,15 +115,18 @@ public final class TerrainSurvey {
 
     /**
      * Поверхность колонки (первый воздух над картой высот {@code type}) по съёмке; null — ещё не известна (съёмка
-     * заказана) или чанк готов (его читает {@link Terrain} сам). Только поток сервера; чанк не грузится.
+     * заказана). Готовый чанк {@link Terrain#estimate} читает сам, до съёмки. Только поток сервера; чанк не грузится.
      */
     @Nullable
     public Terrain.Surface at(ServerLevel level, Heightmap.Types type, int x, int z) {
         long chunk = ChunkPos.asLong(x >> 4, z >> 4);
         LevelChunk memory = Terrain.inMemory(level, chunk);
         if (memory != null) return new Terrain.Surface(memory.getHeight(type, x & 15, z & 15) + 1, Terrain.Source.DISK);
-        Heights h = known.get(type).get(chunk);
+        Heights h = chunk == lastChunk && type == lastType ? last : known.get(type).get(chunk);
         if (h != null) {
+            lastChunk = chunk;
+            lastType = type;
+            last = h;
             h.used = level.getGameTime();
             return new Terrain.Surface(h.y[(x & 15) + (z & 15) * 16], h.source);
         }
@@ -210,6 +222,7 @@ public final class TerrainSurvey {
         }
         if (now % 1200 == 0) {
             for (Map<Long, Heights> m : s.known.values()) m.values().removeIf(h -> now - h.used > FORGET_TICKS);
+            s.last = null;
             if (s.points.size() > MAX_POINTS) s.points.clear();
         }
     }
@@ -257,6 +270,7 @@ public final class TerrainSurvey {
         if (!(event.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.TERRAIN_SURVEY)) return;
         TerrainSurvey s = get(level);
         long chunk = event.getChunk().getPos().toLong();
+        if (chunk == s.lastChunk) s.last = null;
         for (Map<Long, Heights> m : s.known.values()) m.remove(chunk);
         for (Map<Long, Object> m : s.pending.values()) m.remove(chunk);
     }

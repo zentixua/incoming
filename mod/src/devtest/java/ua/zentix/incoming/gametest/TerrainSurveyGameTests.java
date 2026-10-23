@@ -226,10 +226,7 @@ public final class TerrainSurveyGameTests {
     public static void missileDivesOverHillFromDisk(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         ChunkPos aimChunk = new ChunkPos(Site.HILL.at(h));
-        for (int dx = -FlightTickets.DISTANCE; dx <= FlightTickets.DISTANCE; dx++)
-            for (int dz = -FlightTickets.DISTANCE; dz <= FlightTickets.DISTANCE; dz++) level.getChunk(aimChunk.x + dx, aimChunk.z + dz);
-        level.getChunkSource().addRegionTicket(AIM_AREA, aimChunk, FlightTickets.DISTANCE, aimChunk);
-        StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(AIM_AREA, aimChunk, FlightTickets.DISTANCE, aimChunk));
+        level.getChunk(aimChunk.x, aimChunk.z);
         int ax = aimChunk.getMiddleBlockX(), az = aimChunk.getMiddleBlockZ();
         int ground = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, ax, az);
         Vec3 aim = new Vec3(ax + 0.5, ground, az + 0.5);
@@ -261,8 +258,14 @@ public final class TerrainSurveyGameTests {
         long[] paced = {0};
         h.onEachTick(() -> {
             if (id[0] == null) {
-                // холм записан на диск и выгружен: пуск
+                // холм записан на диск и выгружен: район цели (его тикет держит в памяти и чанки на 15 чанков вокруг —
+                // ниже полной загрузки, поэтому он берётся только теперь; холм оттуда — недогруженные копии с диска,
+                // не готовые и не полные) и пуск
                 if (!unloaded(level, hillChunks)) return;
+                for (int dx = -FlightTickets.DISTANCE; dx <= FlightTickets.DISTANCE; dx++)
+                    for (int dz = -FlightTickets.DISTANCE; dz <= FlightTickets.DISTANCE; dz++) level.getChunk(aimChunk.x + dx, aimChunk.z + dz);
+                level.getChunkSource().addRegionTicket(AIM_AREA, aimChunk, FlightTickets.DISTANCE, aimChunk);
+                StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(AIM_AREA, aimChunk, FlightTickets.DISTANCE, aimChunk));
                 CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
                 // как пуск издалека (StrikeService.fromAfar): над целью на 12 блоков
                 m.launch(aim.add(-MISSILE_START, 12, 0), new Target.Point(aim), aim, null);
@@ -276,6 +279,7 @@ public final class TerrainSurveyGameTests {
             long deadline = paced[0] + 50_000_000L, left;
             while ((left = deadline - System.nanoTime()) > 0) LockSupport.parkNanos(left);
             paced[0] = System.nanoTime();
+            for (ChunkPos c : hillChunks) h.assertFalse(Terrain.ready(level, c.x, c.z), "чанк холма загружен: " + c);
             StrikeProjectile p = flight(level, id[0]);
             if (p == null) return;
             last[0] = p.position();
