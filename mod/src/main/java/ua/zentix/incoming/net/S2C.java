@@ -203,11 +203,28 @@ public final class S2C {
 
     /**
      * Свои снаряды в полёте — тому, кто их пустил, раз в 5 тиков (и пустой список, когда все долетели): для HUD
-     * с временем до удара, меток на экране и камеры снаряда. Сервер знает и тех, что летят вне загруженного мира.
+     * с временем до удара, меток на экране и камеры снаряда. Сервер знает и тех, что летят вне загруженного мира. В конце —
+     * сетевые номера сущностей цели, по снаряду ({@link #target}).
      */
-    public record Flights(List<Flight> flights) implements CustomPacketPayload {
+    public record Flights(List<Flight> flights, List<Integer> targets) implements CustomPacketPayload {
         public static final Type<Flights> TYPE = new Type<>(Incoming.id("flights"));
-        public static final StreamCodec<ByteBuf, Flights> CODEC = Flight.CODEC.apply(ByteBufCodecs.list()).map(Flights::new, Flights::flights);
+        /** Сущности цели нет (цель — точка, аппарат или сущность, которой сервер не нашёл). */
+        public static final int NO_ENTITY = -1;
+        public static final StreamCodec<ByteBuf, Flights> CODEC = StreamCodec.composite(Flight.CODEC.apply(ByteBufCodecs.list()), Flights::flights,
+                StreamCodecs.trailing(ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list()), List.of()), Flights::targets, Flights::new);
+
+        public Flights(List<Flight> flights) {
+            this(flights, List.of());
+        }
+
+        /**
+         * Сетевой номер сущности цели снаряда i ({@link #NO_ENTITY} — нет): по нему клиент ставит метку туда, где рисует
+         * цель, а не в точку, что сервер шлёт раз в 5 тиков. Список в конце пакета (формат 2): у записи повтора прежней
+         * сборки его нет.
+         */
+        public int target(int i) {
+            return i < targets.size() ? targets.get(i) : NO_ENTITY;
+        }
 
         @Override
         public Type<? extends CustomPacketPayload> type() {

@@ -135,9 +135,13 @@ class S2CGoldenTest {
                         new S2C.NukeSync(List.of(D, D2), List.of(W)),
                         new S2C.NukeSync(List.of(D.withFires(false), D2), List.of(W))),
                 golden(S2C.Radiation.TYPE, S2C.Radiation.CODEC, new S2C.Radiation(1.5f, 250f, 0.125f, 2)),
+                // 1 — без сущностей цели; 2 — их сетевые номера списком в конце
                 golden(S2C.Flights.TYPE, S2C.Flights.CODEC, new S2C.Flights(List.of(
                         new S2C.Flight(A, 2, 1, 340, P, Q, false, S2C.Flight.TARGET_NAMED, "ZentixUA", false),
-                        new S2C.Flight(B, 6, 3, 0, Q, P, true, S2C.Flight.TARGET_AIRCRAFT, "", true)))),
+                        new S2C.Flight(B, 6, 3, 0, Q, P, true, S2C.Flight.TARGET_AIRCRAFT, "", true))),
+                        new S2C.Flights(List.of(
+                        new S2C.Flight(A, 2, 1, 340, P, Q, false, S2C.Flight.TARGET_NAMED, "ZentixUA", false),
+                        new S2C.Flight(B, 6, 3, 0, Q, P, true, S2C.Flight.TARGET_AIRCRAFT, "", true)), List.of(1234, S2C.Flights.NO_ENTITY))),
                 golden(S2C.FarFlights.TYPE, S2C.FarFlights.CODEC, new S2C.FarFlights(List.of(
                         new S2C.FarFlight(A, 4, true, true, false, P, new Vec3(0.5, -1.25, 12), 90.5f, -30f, 15.25f, 2, 77, Q)))),
                 golden(S2C.MapPlayers.TYPE, S2C.MapPlayers.CODEC, new S2C.MapPlayers(List.of(

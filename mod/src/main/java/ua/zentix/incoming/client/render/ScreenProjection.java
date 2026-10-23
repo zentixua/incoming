@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.render;
 
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.jetbrains.annotations.Nullable;
@@ -39,6 +40,35 @@ public final class ScreenProjection {
         VIEW_PROJ.transform(v);
         if (v.w <= 0.05f) return null;
         return new float[]{(v.x / v.w + 1) * 0.5f, (1 - v.y / v.w) * 0.5f, v.w};
+    }
+
+    /**
+     * Прямоугольник на экране (доли 0..1, {x0, y0, x1, y1}) вокруг коробки мира {@code box} в матрицах кадра — её угловой
+     * размер в этом кадре (с зумом: матрица кадра строится из поля зрения после модов зума); null — угол коробки за
+     * спиной.
+     */
+    @Nullable
+    public static float[] rect(AABB box) {
+        return valid ? rect(VIEW_PROJ, camera, box) : null;
+    }
+
+    /** То же для матрицы вида и проекции {@code viewProj} и глаза {@code eye}. */
+    @Nullable
+    public static float[] rect(Matrix4f viewProj, Vec3 eye, AABB box) {
+        float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+        Vector4f v = new Vector4f();
+        for (int i = 0; i < 8; i++) {
+            v.set((float) (((i & 1) == 0 ? box.minX : box.maxX) - eye.x), (float) (((i & 2) == 0 ? box.minY : box.maxY) - eye.y),
+                    (float) (((i & 4) == 0 ? box.minZ : box.maxZ) - eye.z), 1);
+            viewProj.transform(v);
+            if (v.w <= 0.05f) return null;
+            float x = (v.x / v.w + 1) * 0.5f, y = (1 - v.y / v.w) * 0.5f;
+            x0 = Math.min(x0, x);
+            y0 = Math.min(y0, y);
+            x1 = Math.max(x1, x);
+            y1 = Math.max(y1, y);
+        }
+        return new float[]{x0, y0, x1, y1};
     }
 
     /** Вертикальный масштаб проекции: доля высоты экрана на единицу (радиус / глубина). */
