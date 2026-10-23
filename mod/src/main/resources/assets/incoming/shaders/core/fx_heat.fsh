@@ -3,6 +3,7 @@
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:scene.glsl>
+#moj_import <incoming:heat.glsl>
 
 // Свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (client/fx/layer/HeatPass): проход во весь кадр
 // после пелены и до квадратов слоя по копии кадра (Sampler0) — пиксель пишется целиком.
@@ -18,12 +19,18 @@
 //   неё — ничто: фронт виден тонким кольцом по краю на фоне неба и земли. Сдвиг фронта меньше FRONT_SHIFT_MIN — нет.
 // - Свет: огненный шар взрыва, пламя лужи, горящие обломки и масло подстанции — ламбертовы шары яркостью чёрного тела
 //   (L·R²/max(d², R²), mushBallFace — прямой пучок по косинусу к грани, рассеянный воздухом и отражённый землёй), как
-//   свет шара ядерки на мир (fx_pall_composite): цвет блока — пиксель, делённый на свет открытого неба (relit). Теней
-//   рельефа и домов нет.
+//   свет шара ядерки на мир (fx_pall_composite): цвет блока — пиксель, делённый на свет открытого неба (relit). Факел
+//   двигателя — три равномерных светящихся отрезка по оси струи (ядро, пламя, хвост до точки Дрейпера): прямой свет —
+//   точный интеграл по отрезку над гранью (heatSegment), рассеянный и отражённый — как у шара в середине части.
+// - Тени: прямой свет закрывают блоки — луч от точки мира к источнику по клеткам окна блоков вокруг глаза (heatBlocked,
+//   HeatPass.blocked; окно — Solids): заслон известен точно, в кадре он или нет. За окном теней нет.
 
 // копия кадра (линейная выборка) и расстояние до мира за пикселем
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
+// видимость прямого света источников из прохода в половинном разрешении (fx_heat_shadow): коды шаров (r) и факелов (g),
+// расстояние до мира у образца вдоль взгляда (b)
+uniform sampler2D Sampler2;
 
 uniform mat4 InvViewProj;
 uniform vec3 PallForward;
@@ -31,10 +38,6 @@ uniform vec3 PallOpenSky;
 uniform vec4 PallFaceShade;
 // дымка воздуха и туман кадра (как у fx_pall_composite): ослабление, начало и конец тумана, форма
 uniform vec4 Haze;
-// шары света: столбец i — середина от глаза (xyz), радиус (w; 0 — нет); свет на белой стене лицом к шару, линейный
-// (rgb), ослабление воздуха, 1/блок (w)
-uniform mat4 HeatLights;
-uniform mat4 HeatLightColor;
 // горячий газ: столбец i — низ столба от глаза (xyz), радиус (w; 0 — нет); высота, размер вихря ℓ, путь газа в размерах
 // вихря (по модулю периода шума), пульсация показателя преломления δn (по столбцам)
 uniform mat4 HeatHot;
@@ -46,8 +49,9 @@ uniform mat4 HeatFront;
 uniform vec4 HeatFrontShape;
 // есть ли фронт (x > 0); угол пикселя, рад; есть ли свет (z > 0) и газ (w > 0)
 uniform vec4 HeatFrame;
+// есть ли видимость из прохода тени (x > 0; нет — без теней)
+uniform vec4 HeatShadow;
 
-const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 const float CROSS = 0.15;
 // сдвиг фронта меньше этой доли пикселя не виден: его нет (HeatPass.SHIFT_MIN)
 const float FRONT_SHIFT_MIN = 0.05;
@@ -169,19 +173,29 @@ vec3 frontShift(vec3 dir, float dist) {
     return bend;
 }
 
-// Свет шаров на мире в точке p (от глаза) с нормалью n, линейный, на белой стене
-vec3 heatLight(vec3 p, vec3 n) {
-    vec3 sum = vec3(0.0);
-    for (int i = 0; i < 4; i++) {
-        vec4 b = HeatLights[i];
-        if (b.w <= 0.0) continue;
-        vec3 l = b.xyz - p;
-        float d2 = dot(l, l), d = sqrt(d2);
-        vec3 v = l / max(d, 1e-3);
-        float face = mushBallFace(dot(n, v), v.y, n.y, HeatLightColor[i].w * d, PALL_LAND, 1.0, 0.0);
-        sum += HeatLightColor[i].rgb * (mushBallFalloff(d2, b.w * b.w) * face);
+// Видимость источников в пикселе px с расстоянием до мира depth (вдоль взгляда): из четырёх ближних образцов прохода
+// видимости (половинное разрешение: образец t — пиксель 2t) — тот, чьё расстояние до мира ближе к этому (на краю
+// предмета видимость фона не ложится на предмет); коды: шар — 2 бита (0, ¼, ¾, 1), факел — 1 бит
+const vec4 HEAT_SEEN_CODES = vec4(0.0, 0.25, 0.75, 1.0);
+
+void heatSeen(ivec2 px, float depth, out vec4 ballSeen, out vec4 jetSeen) {
+    ivec2 lsize = textureSize(Sampler2, 0), f = px / 2;
+    vec4 best = vec4(255.0, 15.0, 1e9, 0.0);
+    float err = 1e30;
+    for (int k = 0; k < 4; k++) {
+        ivec2 t = clamp(f + ivec2(k % 2, k / 2), ivec2(0), lsize - 1);
+        vec4 s = texelFetch(Sampler2, t, 0);
+        float e = abs(s.b - depth);
+        if (e < err) {
+            err = e;
+            best = s;
+        }
     }
-    return sum;
+    int balls = int(best.r + 0.5), jets = int(best.g + 0.5);
+    for (int i = 0; i < 4; i++) {
+        ballSeen[i] = HEAT_SEEN_CODES[(balls >> (2 * i)) & 3];
+        jetSeen[i] = float((jets >> i) & 1);
+    }
 }
 
 void main() {
@@ -218,9 +232,11 @@ void main() {
         // свет — на свете самого мира: дымка воздуха и туман Minecraft перед ним — нет
         float fd = Haze.w > 0.5 ? max(length(p.xz), abs(p.y)) : length(p);
         float seen = exp(-Haze.x * length(p)) * (1.0 - smoothstep(Haze.y, Haze.z, fd));
-        vec3 added = heatLight(p, n) * seen;
+        vec3 open = PallOpenSky * faceShade(PallFaceShade, n);
+        vec4 ballSeen = vec4(1.0), jetSeen = vec4(1.0);
+        if (HeatShadow.x > 0.0) heatSeen(px, depth, ballSeen, jetSeen);
+        vec3 added = heatLight(p, n, ballSeen, jetSeen) * seen;
         if (dot(added, LUMA) > 1e-6) {
-            vec3 open = PallOpenSky * faceShade(PallFaceShade, n);
             vec3 lit = vec3(relit(world.r, 1.0, open.r, added.r), relit(world.g, 1.0, open.g, added.g), relit(world.b, 1.0, open.b, added.b));
             lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
             vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));

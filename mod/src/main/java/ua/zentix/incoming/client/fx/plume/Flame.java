@@ -51,21 +51,21 @@ public record Flame(double core, double flame, double length, double width, bool
         return Math.sqrt(area() / Math.PI);
     }
 
-    /** Площади частей сбоку: ядро, пламя без ядра, хвост. */
-    private double[] parts() {
+    /** Площади частей сбоку, м²: ядро (его конус), пламя без ядра (обнимает ядро), хвост. */
+    public double[] partAreas() {
         double c = core * width, f = Math.max(0, areaTo(flame) - c), t = Math.max(0, area() - areaTo(flame));
         return new double[]{c, f, t};
     }
 
     /** Средняя яркость струи сбоку: каждая часть на своей площади. */
     public double brightness() {
-        double[] a = parts();
+        double[] a = partAreas();
         return (coreLuminance * a[0] + flameLuminance * a[1] + tailLuminance * a[2]) / (a[0] + a[1] + a[2]);
     }
 
     /** Цвет света струи: части по их потокам света (линейно), снова к наибольшему каналу 255. */
     public int lightColor() {
-        double[] a = parts(), w = {coreLuminance * a[0], flameLuminance * a[1], tailLuminance * a[2]};
+        double[] a = partAreas(), w = {coreLuminance * a[0], flameLuminance * a[1], tailLuminance * a[2]};
         int[] colors = {coreColor, flameColor, tailColor};
         double[] rgb = new double[3];
         for (int i = 0; i < 3; i++) {

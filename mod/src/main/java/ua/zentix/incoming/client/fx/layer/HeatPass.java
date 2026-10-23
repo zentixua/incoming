@@ -17,6 +17,10 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
+import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.client.fx.plume.Flame;
+import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.FirePlume;
 import ua.zentix.incoming.nuclear.model.ShockOptics;
@@ -33,6 +37,16 @@ import java.util.Arrays;
  * т. е. 1/T; пульсации температуры в факеле — {@value #TURBULENCE} от избытка на оси (George, Alpert, Tamanini, Int. J.
  * Heat Mass Transfer 20, 1977: 0,38–0,40), δn = (n₀ − 1)·I·(T₀/T)·(1 − T₀/T); вихри — {@value #EDDY} радиуса столба
  * (интегральный масштаб турбулентности факела, ⚠ оценка), идут вверх со скоростью газа.
+ * <p>
+ * <b>Свет факела</b> двигателя — не шар, а струя от среза сопла до точки Дрейпера ({@link Frame#jet}): каждая часть
+ * {@link Flame} (ядро, пламя догорания, остывающий хвост) — равномерный светящийся отрезок своей яркости и цвета, свет на
+ * грань — точный интеграл по отрезку ({@link #segment}), только по части, что над гранью. Вдали он сходится к прежнему
+ * шару той же площади сбоку.
+ * <p>
+ * <b>Тени.</b> Прямой свет на мир перекрывают блоки: от точки мира к источнику — по клеткам окна заслонов вокруг глаза
+ * ({@link Solids}, {@link #blocked}): мир — блоки, заслон на пути известен точно, в кадре он или нет. По глубине кадра
+ * этого не решить (за видимой гранью — толща дома или пустота за столбом). За окном ({@value Solids#SIZE_XZ} блоков
+ * поперёк) теней нет (⚠ предел окна).
  * <p>
  * <b>Ударная волна ядерки</b> ({@code client/nuclear/NukeHeat}) — тот же сдвиг изображения за сжатым воздухом фронта:
  * сфера фронта, скачок показателя преломления по давлению модели, отклонение — {@link ShockOptics} (копия в шейдере). Видна
@@ -54,6 +68,14 @@ public final class HeatPass {
     public static final double SHIFT_MIN = 0.05;
     /** Свет шара на земле под ним меньше этой доли света открытого неба — шар на мир не светит (как у ядерки). */
     static final double SEEN = 0.005;
+    /** Клеток луча тени не больше (дальше — свободно): луч через всё окно по диагонали — до 480. */
+    static final int SHADOW_CELLS = 160;
+    /**
+     * Тень не ищется у источника, чей прямой свет меньше этой доли всей освещённости грани (небо и огонь): порог контраста
+     * глаза ~1–2 % (Blackwell, «Contrast thresholds of the human eye», JOSA 36, 1946; ночью он выше — порог с запасом).
+     * Копия — {@code WEBER} в {@code include/heat.glsl} (там и считается: тень ищет проход видимости {@code fx_heat_shadow}).
+     */
+    static final double WEBER = 0.02;
 
     @Nullable
     static ShaderInstance shader;
@@ -64,7 +86,14 @@ public final class HeatPass {
                 shape = new Matrix4f().zero(), front = new Matrix4f().zero();
         /** e-кратная толща оболочки и синус угла над серединой у земли: фронта 0 (x, y) и 1 (z, w). */
         final Vector4f frontShape = new Vector4f();
-        private final double[] lightWeight = new double[4], hotWeight = new double[4], frontWeight = new double[2];
+        /**
+         * Факелы: столбец i — срез сопла от глаза (xyz) и конец ядра (w; 0 — нет); ось струи от сопла (xyz) и конец пламени;
+         * конец струи, полуширина у среза, её рост на метр, ослабление воздуха; свет ядра, пламени и хвоста на метр струи
+         * (rgb, линейный, белая стена в полдень — 1 в метре сбоку от метра струи, без привыкания: его ставит кадр).
+         */
+        final Matrix4f jets = new Matrix4f().zero(), jetAxis = new Matrix4f().zero(), jetSize = new Matrix4f().zero(),
+                jetCore = new Matrix4f().zero(), jetFlame = new Matrix4f().zero(), jetTail = new Matrix4f().zero();
+        private final double[] lightWeight = new double[4], hotWeight = new double[4], frontWeight = new double[2], jetWeight = new double[4];
         private final Vector4f column = new Vector4f();
         /**
          * Привыкание глаза кадра ({@code Sight.exposure}: к свету неба и к свету огня у глаза — одно на весь кадр) и свет
@@ -97,9 +126,16 @@ public final class HeatPass {
             shape.zero();
             front.zero();
             frontShape.zero();
+            jets.zero();
+            jetAxis.zero();
+            jetSize.zero();
+            jetCore.zero();
+            jetFlame.zero();
+            jetTail.zero();
             Arrays.fill(lightWeight, 0);
             Arrays.fill(hotWeight, 0);
             Arrays.fill(frontWeight, 0);
+            Arrays.fill(jetWeight, 0);
         }
 
         /** Огонь кадра собран: свет у глаза — привыканию того, что рисуется до слоя в следующем кадре. */
@@ -118,7 +154,8 @@ public final class HeatPass {
         }
 
         boolean lit() {
-            return lights.m03() > 0 || lights.m13() > 0 || lights.m23() > 0 || lights.m33() > 0;
+            return lights.m03() > 0 || lights.m13() > 0 || lights.m23() > 0 || lights.m33() > 0 || jetWeight[0] > 0 || jetWeight[1] > 0
+                    || jetWeight[2] > 0 || jetWeight[3] > 0;
         }
 
         boolean hotAny() {
@@ -226,6 +263,167 @@ public final class HeatPass {
             if (slot == 0) frontShape.set((float) l, (float) low, frontShape.z, frontShape.w);
             else frontShape.set(frontShape.x, frontShape.y, (float) l, (float) low);
         }
+
+        /**
+         * Факел двигателя: середина струи (x, y, z) от глаза, единичная ось струи от сопла назад (jx, jy, jz), факел flame;
+         * ослабление воздуха air, 1/блок; h — высота середины над землёй (порог, как у шара). Часть струи — равномерный
+         * отрезок: ядро — [0, ядро] с площадью сбоку конуса ядра, пламя — [0, пламя] с площадью пламени без ядра (оно
+         * обнимает ядро), хвост — [пламя, конец]; свет части на метр — яркость × площадь сбоку / длина / π (тело с яркостью
+         * L и площадью сбоку S даёт белой стене лицом к нему в d блоках L·S/(π·d²): у шара S = πr², отсюда L·r²/d²).
+         * Свет в глаз — уже у кадра ({@link #eye}); выбор четырёх и порог — как у шара той же площади ({@link Flame#lightRadius}).
+         * cut — путь по оси от среза до земли: дальше струи нет (она растекается по земле — ⚠ свечения стенной струи
+         * нет), и сквозь землю она не светит; свет на метр у частей — прежний, короче — только их концы.
+         */
+        public void jet(double x, double y, double z, double jx, double jy, double jz, Flame flame, double air, double h, double cut) {
+            double lr = flame.lightRadius(), lum = flame.brightness();
+            double mid = flame.middle(), core = flame.core(), fl = Math.max(flame.flame(), core), end = Math.max(flame.length(), fl);
+            double c = Math.min(cut, end);
+            if (lr <= 0 || lum <= 0 || !(c > 0)) return;
+            if (lum * exposure * lr * lr / Math.max(h * h, lr * lr) < SEEN * Math.max(open, 1e-4)) return;
+            double w = lum * lr * lr / Math.max(x * x + y * y + z * z, lr * lr);
+            int slot = 0;
+            for (int i = 1; i < 4; i++) if (jetWeight[i] < jetWeight[slot]) slot = i;
+            if (w <= jetWeight[slot]) return;
+            jetWeight[slot] = w;
+            double[] parts = flame.partAreas();
+            jets.setColumn(slot, column.set((float) (x - jx * mid), (float) (y - jy * mid), (float) (z - jz * mid), (float) Math.max(1e-3, Math.min(core, c))));
+            jetAxis.setColumn(slot, column.set((float) jx, (float) jy, (float) jz, (float) Math.min(fl, c)));
+            jetSize.setColumn(slot, column.set((float) c, (float) flame.width(), (float) (flame.width() / Math.max(core, 1e-6)), (float) air));
+            part(jetCore, slot, flame.coreColor(), flame.coreLuminance(), parts[0], core);
+            part(jetFlame, slot, flame.flameColor(), flame.flameLuminance(), parts[1], fl);
+            part(jetTail, slot, flame.tailColor(), flame.tailLuminance(), parts[2], end - fl);
+        }
+
+        private void part(Matrix4f m, int slot, int color, double luminance, double area, double length) {
+            if (length <= 1e-6 || area <= 0 || luminance <= 0) {
+                m.setColumn(slot, column.set(0, 0, 0, 0));
+                return;
+            }
+            double[] rgb = rgb(color, luminance * area / (length * Math.PI));
+            m.setColumn(slot, column.set((float) rgb[0], (float) rgb[1], (float) rgb[2], 0));
+        }
+    }
+
+    /** Линейный rgb цвета color (sRGB, наибольший канал 255) с яркостью (luma) luminance. */
+    static double[] rgb(int color, double luminance) {
+        double r = FlameModel.linear(color >> 16 & 255), g = FlameModel.linear(color >> 8 & 255), b = FlameModel.linear(color & 255);
+        double luma = 0.2126 * r + 0.7152 * g + 0.0722 * b, k = luma > 0 ? luminance / luma : 0;
+        return new double[]{r * k, g * k, b * k};
+    }
+
+    /**
+     * Прямой свет равномерного светящегося отрезка на грань — ∫ cos θ / d² по отрезку, 1/м (свет на метр × это = свет на
+     * белой стене): отрезок от точки a (от точки грани) по единичному u на [t0, t1], нормаль грани n; только часть над
+     * гранью (под ней грань источника не видит). w2 — квадрат полуширины струи: грань в самой струе не видит её сингулярно
+     * ярко. Первообразная (c₀ + c₁τ)/(τ² + h²)^{3/2} по τ = t + a·u — c₀τ/(h²√(τ² + h²)) − c₁/√(τ² + h²), c₀ = n·a − (a·u)(n·u),
+     * c₁ = n·u, h — расстояние до прямой; разности — в виде без вычитания близких чисел (в шейдере float). Тот же расчёт —
+     * {@code heatSegment} в {@code include/heat.glsl}.
+     */
+    public static double segment(double ax, double ay, double az, double ux, double uy, double uz, double t0, double t1, double nx, double ny,
+                                 double nz, double w2) {
+        double[] t = above(ax, ay, az, ux, uy, uz, t0, t1, nx, ny, nz);
+        if (t[1] <= t[0]) return 0;
+        double na = nx * ax + ny * ay + nz * az, nu = nx * ux + ny * uy + nz * uz;
+        double b = ax * ux + ay * uy + az * uz, h2 = Math.max(ax * ax + ay * ay + az * az - b * b, 0) + w2;
+        double c0 = na - b * nu, s0 = t[0] + b, s1 = t[1] + b;
+        double q0 = 1 / (s0 * s0 + h2), q1 = 1 / (s1 * s1 + h2), r0 = Math.sqrt(q0), r1 = Math.sqrt(q1);
+        // (s1·r1 − s0·r0)/h² и r1 − r0 без вычитания близких: s²r² = 1 − h²r²
+        double k = s0 * s1 > 0 ? (s1 - s0) * (s1 + s0) * q0 * q1 / (s1 * r1 + s0 * r0) : (s1 * r1 - s0 * r0) / h2;
+        double dr = (s0 - s1) * (s0 + s1) * q0 * q1 / (r0 + r1);
+        return Math.max(c0 * k - nu * dr, 0);
+    }
+
+    /** Часть [t0, t1] отрезка от a по единичному u, что над гранью с нормалью n ({@code heatAbove}); пусто — t1 ≤ t0. */
+    public static double[] above(double ax, double ay, double az, double ux, double uy, double uz, double t0, double t1, double nx, double ny,
+                                 double nz) {
+        double na = nx * ax + ny * ay + nz * az, nu = nx * ux + ny * uy + nz * uz;
+        if (Math.abs(nu) > 1e-6) {
+            double ts = -na / nu;
+            if (nu > 0) t0 = Math.max(t0, ts);
+            else t1 = Math.min(t1, ts);
+        } else if (na <= 0) {
+            t1 = t0;
+        }
+        return new double[]{t0, t1};
+    }
+
+    /** Заслоны мира для {@link #blocked}: клетка (x, y, z) окна — заслон ли, или вне окна (тогда — свободно). */
+    public interface Cells {
+        boolean solid(int x, int y, int z);
+    }
+
+    /**
+     * Закрыт ли путь от a до b заслоном (координаты окна заслонов, блоки) — зеркало {@code heatBlocked} в {@code include/heat.glsl}
+     * (там наоборот: 1 — путь свободен): клетки
+     * вдоль отрезка по порядку (Amanatides, Woo, «A fast voxel traversal algorithm», Eurographics 1987), часть за окном
+     * size — свободна, клетка самой точки a — её грань, не заслон; не больше {@link #SHADOW_CELLS} клеток.
+     */
+    public static boolean blocked(double ax, double ay, double az, double bx, double by, double bz, int[] size, Cells cells) {
+        double[] a = {ax, ay, az}, d = {bx - ax, by - ay, bz - az};
+        double t0 = 0, t1 = 1;
+        for (int k = 0; k < 3; k++) {
+            if (Math.abs(d[k]) < 1e-6) {
+                if (a[k] < 0 || a[k] >= size[k]) return false;
+            } else {
+                double ta = -a[k] / d[k], tb = (size[k] - a[k]) / d[k];
+                t0 = Math.max(t0, Math.min(ta, tb));
+                t1 = Math.min(t1, Math.max(ta, tb));
+            }
+        }
+        if (t1 <= t0) return false;
+        int[] cell = new int[3], dir = new int[3];
+        double[] inv = new double[3], next = {1e9, 1e9, 1e9};
+        for (int k = 0; k < 3; k++) {
+            cell[k] = Math.max(0, Math.min(size[k] - 1, (int) Math.floor(a[k] + d[k] * t0)));
+            dir[k] = (int) Math.signum(d[k]);
+            inv[k] = 1 / Math.max(Math.abs(d[k]), 1e-9);
+            if (d[k] > 0) next[k] = (cell[k] + 1 - a[k]) * inv[k];
+            else if (d[k] < 0) next[k] = (a[k] - cell[k]) * inv[k];
+        }
+        boolean own = t0 <= 0;
+        for (int i = 0; i < SHADOW_CELLS; i++) {
+            if (!own && cells.solid(cell[0], cell[1], cell[2])) return true;
+            own = false;
+            double t = Math.min(next[0], Math.min(next[1], next[2]));
+            if (t >= t1) break;
+            // шаг по каждой оси, у которой грань ближе всех (у шейдера — step: при равенстве — по обеим)
+            boolean out = false;
+            for (int k = 0; k < 3; k++) {
+                if (next[k] > t) continue;
+                cell[k] += dir[k];
+                next[k] += inv[k];
+                out |= cell[k] < 0 || cell[k] >= size[k];
+            }
+            if (out) break;
+        }
+        return false;
+    }
+
+    /**
+     * Видимая доля диска шара с серединой (bx, by, bz) радиуса r из точки (ax, ay, az) окна заслонов — зеркало
+     * {@code heatBallSeen} ({@code include/heat.glsl}): шар радиусом в метры у земли — протяжённый источник, и луч к одной середине у кромки холма
+     * гасил бы весь его свет, хотя верх шара виден. Кромка заслона у земли почти горизонтальная; доля диска над кромкой
+     * на высоте y — ∫ 2√(1 − y²): квадратура Гаусса–Чебышёва второго рода по вертикальному диаметру, узлы 0 и
+     * ±r·cos(π/4), веса ½ и ¼. Кромка снизу: середина видна — виден и верхний узел, смотрим нижний; закрыта — закрыт и
+     * нижний, смотрим верхний (два луча: доли 0, ¼, ¾, 1). Лучи кончаются у края шара со стороны точки.
+     */
+    public static double ballSeen(double ax, double ay, double az, double bx, double by, double bz, double r, int[] size, Cells cells) {
+        double vx = bx - ax, vy = by - ay, vz = bz - az, d = Math.sqrt(vx * vx + vy * vy + vz * vz);
+        double end = 1 - r / Math.max(d, r);
+        boolean mid = !blocked(ax, ay, az, ax + vx * end, ay + vy * end, az + vz * end, size, cells);
+        vx /= Math.max(d, 1e-3);
+        vy /= Math.max(d, 1e-3);
+        vz /= Math.max(d, 1e-3);
+        double ux = -vx * vy, uy = 1 - vy * vy, uz = -vz * vy;
+        if (ux * ux + uy * uy + uz * uz < 1e-4) {
+            ux = 1 - vx * vx;
+            uy = -vy * vx;
+            uz = -vz * vx;
+        }
+        double k = Math.sqrt(0.5) * r / Math.sqrt(ux * ux + uy * uy + uz * uz), s = mid ? -1 : 1;
+        double tx = bx + s * ux * k - ax, ty = by + s * uy * k - ay, tz = bz + s * uz * k - az;
+        boolean node = !blocked(ax, ay, az, ax + tx * end, ay + ty * end, az + tz * end, size, cells);
+        return mid ? 0.75 + (node ? 0.25 : 0) : node ? 0.25 : 0;
     }
 
     private static final Frame FRAME = new Frame();
@@ -245,7 +443,7 @@ public final class HeatPass {
         lastAtEye = 0;
         FRAME.atEye = 0;
     }
-    private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), SHAPE = new Matrix4f(), LIGHT = new Matrix4f();
+    private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), SHAPE = new Matrix4f();
     /** Путь вихрей по модулю этого числа размеров вихря (шум не периодичен: раз в сотни вихрей узор перескакивает). */
     static final double NOISE_PERIOD = 256;
     private static final Vector3f FORWARD = new Vector3f();
@@ -275,6 +473,25 @@ public final class HeatPass {
         return Math.pow(v, 2.2);
     }
 
+    /**
+     * Окно заслонов ({@link Solids}) к этому кадру — вокруг глаза eye (места источников — от него), секции у источников
+     * света перечитываются сейчас. Зовёт слой перед проходом, если в кадре есть свет.
+     */
+    static void solids(Frame f, ClientLevel level, net.minecraft.world.phys.Vec3 eye) {
+        if (!f.lit()) return;
+        Vector4f c = new Vector4f();
+        for (int i = 0; i < 4; i++) {
+            if (f.lights.getColumn(i, c).w > 0) Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z, c.w);
+            // у струи — от среза сопла на её длину (до земли), не дальше 8 блоков: там она бьёт в землю
+            if (f.jets.getColumn(i, c).w > 0) {
+                double reach = Math.min(8, f.jetSize.getColumn(i, new Vector4f()).x);
+                f.jets.getColumn(i, c);
+                Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z, reach);
+            }
+        }
+        Solids.update(level, eye);
+    }
+
     /** Нужен ли проход в этом кадре. */
     static boolean needed(Frame f) {
         return shader != null && (f.lit() || f.hotAny() || f.frontAny());
@@ -293,22 +510,14 @@ public final class HeatPass {
         RenderSystem.disableDepthTest();
         RenderSystem.depthMask(false);
         RenderSystem.disableBlend();
+        // видимость прямого света источников — своим проходом в половинном разрешении (лучи тени — основная цена)
+        boolean shadows = f.lit() && seen(f, scene, pixel);
         RenderSystem.setShaderTexture(0, copy);
         RenderSystem.setShaderTexture(1, scene);
-        s.safeGetUniform("InvViewProj").set(INVERSE);
-        s.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
-        s.safeGetUniform("PallOpenSky").set(OPEN_SKY.x, OPEN_SKY.y, OPEN_SKY.z);
-        s.safeGetUniform("PallFaceShade").set(FACE_SHADE.x, FACE_SHADE.y, FACE_SHADE.z, FACE_SHADE.w);
+        RenderSystem.setShaderTexture(2, shadows ? shadowTex : copy);
+        common(s, f, pixel);
+        s.safeGetUniform("HeatShadow").set(shadows ? 1f : 0f, 0f, 0f, 0f);
         s.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
-        s.safeGetUniform("HeatLights").set(f.lights);
-        double k = f.adapted();
-        LIGHT.set(f.lightColor);
-        Vector4f lc = new Vector4f();
-        for (int i = 0; i < 4; i++) {
-            LIGHT.getColumn(i, lc);
-            LIGHT.setColumn(i, lc.set((float) (lc.x * k), (float) (lc.y * k), (float) (lc.z * k), lc.w));
-        }
-        s.safeGetUniform("HeatLightColor").set(LIGHT);
         s.safeGetUniform("HeatHot").set(f.hot);
         // вихри идут вверх с газом: путь в размерах вихря — в double и по модулю периода шума, а не время в float
         double time = (System.nanoTime() - BORN) / 1e9;
@@ -322,20 +531,110 @@ public final class HeatPass {
         s.safeGetUniform("HeatFront").set(f.front);
         s.safeGetUniform("HeatFrontShape").set(f.frontShape.x, f.frontShape.y, f.frontShape.z, f.frontShape.w);
         s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
+        boolean drawn = quad(s);
+        RenderSystem.enableDepthTest();
+        return drawn;
+    }
+
+    /** Общее у прохода видимости и прохода света: мир кадра, источники, окно заслонов. */
+    private static void common(ShaderInstance s, Frame f, double pixel) {
+        s.safeGetUniform("InvViewProj").set(INVERSE);
+        s.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
+        s.safeGetUniform("PallOpenSky").set(OPEN_SKY.x, OPEN_SKY.y, OPEN_SKY.z);
+        s.safeGetUniform("PallFaceShade").set(FACE_SHADE.x, FACE_SHADE.y, FACE_SHADE.z, FACE_SHADE.w);
+        s.safeGetUniform("HeatLights").set(f.lights);
+        double k = f.adapted();
+        s.safeGetUniform("HeatLightColor").set(exposed(f.lightColor, k));
+        Solids.bind(s);
+        s.safeGetUniform("HeatJet").set(f.jets);
+        s.safeGetUniform("HeatJetAxis").set(f.jetAxis);
+        s.safeGetUniform("HeatJetSize").set(f.jetSize);
+        s.safeGetUniform("HeatJetCore").set(exposed(f.jetCore, k));
+        s.safeGetUniform("HeatJetFlame").set(exposed(f.jetFlame, k));
+        s.safeGetUniform("HeatJetTail").set(exposed(f.jetTail, k));
+        s.safeGetUniform("HeatFrame").set(0f, (float) pixel, f.lit() ? 1f : 0f, 0f);
+    }
+
+    /** Четырёхугольник во весь привязанный кадр шейдером s; false — не нарисован. */
+    private static boolean quad(ShaderInstance s) {
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
         b.addVertex(1, -1, 0);
         b.addVertex(1, 1, 0);
         b.addVertex(-1, 1, 0);
         MeshData mesh = b.build();
-        if (mesh == null) return false;
+        if (mesh == null) {
+            Solids.unbind();
+            return false;
+        }
         s.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
                 Minecraft.getInstance().getWindow());
         s.apply();
         com.mojang.blaze3d.vertex.BufferUploader.draw(mesh);
         s.clear();
-        RenderSystem.enableDepthTest();
+        Solids.unbind();
         return true;
+    }
+
+    @Nullable
+    static ShaderInstance shadowShader;
+    private static int shadowTex = -1, shadowFbo = -1, shadowW, shadowH;
+    private static boolean shadowFailed;
+
+    /**
+     * Проход видимости ({@code fx_heat_shadow}): в свою текстуру (RGBA16F, половина кадра по каждой оси) коды видимости
+     * шаров и факелов и расстояние до мира у образца; кадр и окно вывода — прежние после него. false — прохода нет
+     * (шейдер не собрался, текстуру не завести): свет без теней.
+     */
+    private static boolean seen(Frame f, int scene, double pixel) {
+        ShaderInstance s = shadowShader;
+        if (s == null || shadowFailed) return false;
+        int w = Math.max(1, (copyW + 1) / 2), h = Math.max(1, (copyH + 1) / 2);
+        int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        if (w != shadowW || h != shadowH || shadowTex < 0) {
+            if (shadowTex < 0) shadowTex = GlStateManager._genTexture();
+            if (shadowFbo < 0) shadowFbo = GlStateManager.glGenFramebuffers();
+            GlStateManager._bindTexture(shadowTex);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_NEAREST);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
+            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, w, h, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, shadowFbo);
+            GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, shadowTex, 0);
+            boolean ok = GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+            if (!ok) {
+                Incoming.LOG.error("Heat pass: shadow target {}×{} not created, fire light without shadows", w, h);
+                shadowFailed = true;
+                return false;
+            }
+            shadowW = w;
+            shadowH = h;
+        }
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, shadowFbo);
+        GlStateManager._viewport(0, 0, w, h);
+        RenderSystem.setShaderTexture(1, scene);
+        common(s, f, pixel);
+        boolean drawn = quad(s);
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+        GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+        return drawn;
+    }
+
+    private static final Matrix4f EXPOSED = new Matrix4f();
+
+    /** Свет m (rgb по столбцам) с привыканием глаза k — в общей матрице на один вызов (uniform копирует её сразу). */
+    private static final Vector4f EXPOSED_COLUMN = new Vector4f();
+
+    private static Matrix4f exposed(Matrix4f m, double k) {
+        EXPOSED.set(m);
+        Vector4f c = EXPOSED_COLUMN;
+        for (int i = 0; i < 4; i++) {
+            EXPOSED.getColumn(i, c);
+            EXPOSED.setColumn(i, c.set((float) (c.x * k), (float) (c.y * k), (float) (c.z * k), c.w));
+        }
+        return EXPOSED;
     }
 
     /** Копия кадра, в который рисует проход (привязанного сейчас), своей текстурой с линейной выборкой. */
@@ -364,14 +663,15 @@ public final class HeatPass {
     /** Для строки сценария: источники кадра. */
     public static String describe() {
         Frame f = FRAME;
-        int l = 0, h = 0, n = 0;
+        int l = 0, h = 0, n = 0, j = 0;
         Vector4f c = new Vector4f();
         for (int i = 0; i < 4; i++) {
             if (f.lights.getColumn(i, c).w > 0) l++;
             if (f.hot.getColumn(i, c).w > 0) h++;
             if (i < 2 && f.front.getColumn(i, c).w > 0) n++;
+            if (f.jetWeight[i] > 0) j++;
         }
-        StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "heat lights %d hot %d front %d", l, h, n));
+        StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "heat lights %d hot %d front %d jets %d", l, h, n, j));
         for (int i = 0; i < 2; i++) {
             f.front.getColumn(i, c);
             if (c.w <= 0) continue;

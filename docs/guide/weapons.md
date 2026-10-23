@@ -248,8 +248,10 @@ particles. The Shahed's burning fuel makes a fireball about as big as its column
 and smoke. Fuel that lands on water spreads too thin to keep burning, so no fire is left after the ball.
 
 The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
-an orange glow spreads over the blocks around the crater and fades as the ball cools. There are no shadows: the light
-reaches behind houses and hills too. Hot gas over the fire and the fireball bends light, so whatever is behind it
+an orange glow spreads over the blocks around the crater and fades as the ball cools. Blocks cast shadows from this
+light: a house or a hill between the fire and the ground leaves it dark, even when the house is outside your view.
+Shadows are worked out for about 90 blocks around you and 40 up and down; further away the light has
+none. Hot gas over the fire and the fireball bends light, so whatever is behind it
 shimmers slightly; on a normal screen it is a fraction of a pixel, best seen on sharp edges and through binoculars.
 
 In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
@@ -280,7 +282,9 @@ same up close and far away.
 - **Rocket motors** (the Shahed's and the cruise missile's boosters, the Grad rocket, the ICBM stage) have a short hot
   core at the nozzle and a brighter orange flame behind it, where the exhaust burns in the air. Its length and colour
   come from the motor. The Grad and the ICBM show shock diamonds near the ground. At night the cooling tail glows
-  further back, and the flame lights the smoke around it.
+  further back, and the flame lights the smoke around it. The flame also lights the ground, the launcher and walls
+  nearby along its whole length above the ground, from the nozzle to the end of the glowing tail, and blocks cast shadows
+  from it.
 - **Engines without a flame**: the Shahed's piston engine, the cruise missile's jet engine and the Lancet's electric
   motor show no flame and leave no visible smoke.
 - **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a

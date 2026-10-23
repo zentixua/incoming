@@ -132,6 +132,12 @@ public final class FxLayer {
             Incoming.LOG.error("Heat pass shader failed to load: no light of blasts and fire on the world, no heat shimmer", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_heat_shadow"), DefaultVertexFormat.POSITION), s -> HeatPass.shadowShader = s);
+        } catch (IOException ex) {
+            HeatPass.shadowShader = null;
+            Incoming.LOG.error("Heat pass shadow shader failed to load: fire light on the world without shadows", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_smoke_fill"), DefaultVertexFormat.POSITION), s -> SmokePass.fill = s);
         } catch (IOException ex) {
             SmokePass.fill = null;
@@ -259,6 +265,8 @@ public final class FxLayer {
             // свет на мир и дрожание — по кадру с пеленой, до квадратов: дым и огонь слоя ложатся поверх
             if (hot && scene >= 0) {
                 int timedHeat = HEAT.begin();
+                // заслоны у глаза — к тени прямого света (блоки мира, а не глубина кадра)
+                HeatPass.solids(heat, level, view.camera());
                 HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
                 HEAT.end(timedHeat);
             }
