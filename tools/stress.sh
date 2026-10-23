@@ -91,6 +91,7 @@ python3 "$ROOT/tools/rig_config.py" "$RUN/server"
 # клиенты наследуют замок (tools/gpu_lease.sh); до rig_procs.sh — продлевателю не достаётся его fd сообщений
 if command -v kwin_wayland >/dev/null; then
   source "$ROOT/tools/gpu_lease.sh"
+  who=$(gpu_client_busy) && { echo "$who" >&2; exit 75; }
   lease_take "${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}" "$ROOT" || exit 75
   gpu_client_hold "${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}" "$ROOT" "$(basename "$0")" || exit 75
 fi

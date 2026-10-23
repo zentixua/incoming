@@ -85,17 +85,18 @@ seen1=$(cut -f4 "$INCOMING_GPU_LEASE"); sleep 2
   bash -c 'source "$1/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "клиент стенда"' _ "$ROOT" || exit 8
   bash -c 'exec 199>&-; source "$1/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "клиент без fd"' _ "$ROOT" || exit 7
   sleep 5 ) & h=$!
-sleep 1
+for _ in $(seq 50); do grep -q стенд "$INCOMING_GPU_LEASE.client.who" 2>/dev/null && break; sleep 0.1; done
 gpu_client_hold FZC /x/wt-FZC "чужой" 2>/dev/null && { bad "чужой процесс взял замок работы"; exec 199>&-; } || ok "процесс не из работы — отказ"
 wait $h; rc=$?
 [ $rc = 0 ] && ok "клиенты работы (с fd и без) не отказывают" || bad "клиенты работы (код $rc)"
-if pgrep -f 'java.*PrismLauncher/[i]nstances/' >/dev/null; then
+artem_playing() { local p; for p in $(pgrep -x java); do grep -qa 'PrismLauncher/instances/' "/proc/$p/cmdline" 2>/dev/null && return 0; done; return 1; }
+if artem_playing; then
   echo "пропуск: игра Артёма идёт — задача --gpu её ждёт (так и задумано)"
 else
   # задача --gpu держит замок всю жизнь: её клиент (потомок, fd закрыт) — свой, снаружи — «идёт клиент задачи …»
   INCOMING_GPU_OWNER=SH "$ROOT/tools/laptop_job.sh" --in-unit gpu bake $$ -- \
     bash -c 'exec 199>&-; sleep 1; source "$1/tools/gpu_lease.sh"; gpu_client_hold SH /x/wt-SH "клиент задачи" && echo child-ok' _ "$ROOT" > "$tmp/job" 2>&1 & j=$!
-  sleep 0.5
+  for _ in $(seq 50); do grep -q 'задача bake' "$INCOMING_GPU_LEASE.client.who" 2>/dev/null && break; sleep 0.1; done
   who=$(gpu_client_busy); [[ $who == *"задача bake"* ]] && ok "задача --gpu держит замок: $who" || bad "задача --gpu без замка: $who"
   wait $j; grep -q child-ok "$tmp/job" && ok "клиент внутри задачи --gpu — её частью" || bad "клиент задачи: $(cat "$tmp/job")"
   sleep 1.5; gpu_client_busy >/dev/null && bad "замок остался после задачи" || ok "задача кончилась — замок свободен"

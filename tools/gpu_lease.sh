@@ -78,20 +78,24 @@ lease_renew() {
   exec {fd}>"$LEASE.lock"; flock "$fd"
   _lease_read; now=$(date +%s)
   if [ "$L_OWNER" = "$owner" ] && ! _lease_free; then _lease_write "$L_OWNER" "$L_TREE" "$L_SINCE" "$now"; rc=0
-  elif _lease_free; then _lease_write "$owner" "${tree:-$L_TREE}" "$now" "$now"; rc=0; fi
+  elif _lease_free; then _lease_write "$owner" "$(readlink -m "${tree:-$L_TREE}")" "$now" "$now"; rc=0; fi
   exec {fd}>&-
   return $rc
 }
+
+# время старта процесса (поле 22 /proc/<pid>/stat; после имени, где бывают пробелы и скобки, — 20-е)
+_proc_start() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20; }
 
 # этот процесс — часть работы, что держит замок клиента: унаследовал его (fd 199) или держатель — его предок (Python
 # с close_fds=True потомкам fd не отдаёт: prod_client.py → nested_kwin.sh внутри задачи --gpu)
 gpu_client_inherited() {
   [ "$(readlink "/proc/$BASHPID/fd/199" 2>/dev/null)" = "$(readlink -f "$GPU_CLIENT")" ] && return 0
+  # держатель — номер и время старта процесса: номер, занятый заново другим процессом, не в счёт
   local holder p; holder=$(cat "$GPU_CLIENT.pid" 2>/dev/null) || return 1
-  [ -n "$holder" ] && ! flock -n "$GPU_CLIENT" true 2>/dev/null || return 1
+  [ -n "$holder" ] && ! flock -n -s "$GPU_CLIENT" true 2>/dev/null || return 1
   p=$BASHPID
   while [ "${p:-1}" -gt 1 ]; do
-    [ "$p" = "$holder" ] && return 0
+    [ "$p $(_proc_start "$p")" = "$holder" ] && return 0
     p=$(sed 's/.*) //' "/proc/$p/stat" 2>/dev/null | cut -d' ' -f2)
   done
   return 1
@@ -99,7 +103,8 @@ gpu_client_inherited() {
 
 # клиент на видеокарте сейчас (не своей работы): строка «кто» (код 0) или ничего (код 1)
 gpu_client_busy() {
-  flock -n "$GPU_CLIENT" true 2>/dev/null && return 1
+  # пробы — разделяемым замком: друг другу не мешают, с держателем (эксклюзивный) не сходятся
+  flock -n -s "$GPU_CLIENT" true 2>/dev/null && return 1
   gpu_client_inherited && return 1
   echo "на видеокарте идёт клиент $(cat "$GPU_CLIENT.who" 2>/dev/null)"
 }
@@ -113,14 +118,16 @@ gpu_client_hold() {
   # ждать до 2 с: проба `flock -n` соседа (status, продлеватель) держит замок на миг
   if ! flock -w 2 199; then echo "на видеокарте идёт клиент $(cat "$GPU_CLIENT.who" 2>/dev/null)" >&2; exec 199>&-; return 75; fi
   printf '%s (%s), с %s: %s\n' "$1" "$(readlink -m "$2")" "$(date +%H:%M)" "$3" > "$GPU_CLIENT.who"
-  echo $BASHPID > "$GPU_CLIENT.pid"
+  local me=$BASHPID
+  echo "$me $(_proc_start "$me")" > "$GPU_CLIENT.pid"
   # продление — пока замок держат; продлевателю не нужны ни замок (держал бы его сам), ни чужие fd (канал вызывающего,
   # tee, ssh ждали бы его конца)
   (
+    set +e
     for f in /proc/$BASHPID/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-" 2>/dev/null; done
     exec </dev/null >/dev/null 2>&1
     # продлевать, только пока замок занят (код 1); свободен или файла нет (код 0, ошибка открытия) — конец
-    while sleep "${INCOMING_GPU_RENEW:-30}"; do flock -n "$GPU_CLIENT" true 2>/dev/null; [ $? = 1 ] || exit 0; lease_renew "$1" "$2" || true; done
+    while sleep "${INCOMING_GPU_RENEW:-30}"; do flock -n -s "$GPU_CLIENT" true 2>/dev/null; [ $? = 1 ] || exit 0; lease_renew "$1" "$2" || true; done
   ) &
 }
 
