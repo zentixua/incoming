@@ -42,7 +42,7 @@ https://github.com/zentixua/incoming. Всё это — внутри игры: �
 
 ## Где что лежит
 Раскладка проекта и что умеет каждый скрипт `tools/` — `.claude/rules/tools.md`. `mod/` — исходники (ModDevGradle 2,
-NeoForge 21.1.259, Parchment, Java 21): `src/main` — мод, `src/devtest` — GameTest, сценарии и стенд (в jar не входят),
+NeoForge 21.1.264, Parchment, Java 21): `src/main` — мод, `src/devtest` — GameTest, сценарии и стенд (в jar не входят),
 `src/test` — юнит-тесты, `run/` — папки запусков (в .gitignore). Prism — `~/.var/app/org.prismlauncher.PrismLauncher/
 data/PrismLauncher/` (`tools/paths.py`: PRISM): `instances/Airstrike Pack/minecraft/` — инстанс, в котором играет Артём
 (MC; папку не переименовывать, иначе — `MC_DIR`): `mods/` (отсюда build.gradle берёт Create/Sable/Aeronautics для
