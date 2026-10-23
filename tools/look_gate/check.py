@@ -10,18 +10,23 @@
     функция времени игры, и сцена выборки, начатая не в своё время, шла в чужом воздухе (F2b8, F2b9 22.10: дым пожара
     полосой вместо столба); проба сама сравнивает воздух (ProbeScenario.sameAir: «same», «differs», «none» — у версии
     без воздуха мира); лог без этого сравнения — по допуску LATE тиков;
-  - прогон сам остановился строкой «SCENARIO probe FAIL».
+  - прогон сам остановился строкой «SCENARIO probe FAIL»;
+  - кадр снят не с той точки, куда сцена поставила глаз (строка «SCENARIO probe shot <кадр> camera … off <блоков>»
+    дальше ProbeScenario.CAMERA_SLIP): сервер вернул игрока назад — камера сзади старта до 23.10 стояла ногами на 2 см
+    в полу, и кадр 0,5 с снимался с места до старта, без пусковой и облака (LNB 23.10).
 """
 import re
 import sys
 
 LATE = 200  # лог пробы без сравнения воздуха (до F4): сцена позже своего времени больше этого — другой воздух
 EARLY = 5   # ProbeScenario.begin: догоняет до START − 5
+SLIP = 1.0  # ProbeScenario.CAMERA_SLIP, блоков
 
 HEARING = re.compile(r"SCENARIO probe hearing damage (on|off)")
 START = re.compile(r"SCENARIO probe (\S+) game (-?\d+) \(reference start (null|-?\d+)(?:, air ([^)]*))?\)")
 END = re.compile(r"SCENARIO probe (\S+) ends at game (-?\d+) \(reference end (-?\d+), air ([^)]*)\)")
 FAIL = re.compile(r"SCENARIO probe FAIL (.*)")
+CAMERA = re.compile(r"SCENARIO probe shot (\S+) camera (.*) off (\d+(?:\.\d+)?)")
 
 
 def problems(lines):
@@ -37,6 +42,11 @@ def problems(lines):
         m = FAIL.search(line)
         if m:
             out.append("прогон остановлен: " + m.group(1).strip())
+            continue
+        m = CAMERA.search(line)
+        if m:
+            if float(m.group(3)) > SLIP:
+                out.append(f"{m.group(1)}: кадр снят в {m.group(3)} блоках от места камеры сцены (сервер вернул игрока назад?)")
             continue
         m = END.search(line)
         if m:
