@@ -642,6 +642,7 @@ final class Sandbox {
         Vec3 at = c.near() ? new Vec3(site.x, GROUND + 1, site.z - c.nearRange()) : new Vec3(site.x, GROUND + 1, site.z);
         onServer(true, server -> {
             if (c.verb() == SandboxCommand.Verb.REAL) {
+                if (c.deck() > 0) buildBridge(server, BlockPos.containing(site), c.deck());
                 Warheads.detonate(server.overworld(), c.weapon(), at, null, null);
                 return;
             }
@@ -653,6 +654,20 @@ final class Sandbox {
             run(server, String.format(Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f %d %s", at.x, at.y, at.z, (int) c.number(0),
                     c.air() ? "air" : "ground"));
         });
+    }
+
+    /**
+     * Мост для {@code real … deck}: русло вдоль X (13 м шириной, вода на дне) и поперёк него настил из камня толщиной
+     * {@code deck} м и 9 м шириной вровень с землёй; удар — в середину настила (точка взрыва — на его верхней грани).
+     */
+    private static void buildBridge(MinecraftServer server, BlockPos o, int deck) {
+        int x = o.getX(), y = GROUND, z = o.getZ();
+        for (String c : List.of(
+                "fill %d %d %d %d %d %d minecraft:air".formatted(x - 30, y - deck - 6, z - 6, x + 30, y, z + 6),
+                "fill %d %d %d %d %d %d minecraft:water".formatted(x - 30, y - deck - 6, z - 6, x + 30, y - deck - 5, z + 6),
+                "fill %d %d %d %d %d %d minecraft:stone".formatted(x - 4, y - deck + 1, z - 7, x + 4, y, z + 7))) {
+            run(server, c);
+        }
     }
 
     /** Место k-го запуска ядерки у камеры (точка — середина между домами, на земле): разброс порогов на нём тот же. */

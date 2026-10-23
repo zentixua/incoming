@@ -243,6 +243,11 @@ public final class Warheads {
         public int slowBlocks() {
             return job.slowBlocks();
         }
+
+        /** Блоков, снесённых пробоем преграды ({@link SlabBreach}). */
+        public int breached() {
+            return job.breached;
+        }
     }
 
     /** {@code ExplosionEvent.Detonate}, приоритет {@code LOWEST}: урон ванильного взрыва у аппарата — в единицы мода. */
@@ -445,9 +450,10 @@ public final class Warheads {
      * Взрыв заряда {@code tntKg} кг ТНТ по физике ({@link StagedExplosion}: волна Кинни–Грэхема, кривая давление–импульс
      * блоков, газы в помещении, тела — {@code BlastBody}) единицами в очереди попаданий.
      */
-    static StagedExplosion charge(ServerLevel level, BlastArea area, Vec3 at, double tntKg, @Nullable Entity direct, @Nullable Entity owner) {
+    static StagedExplosion charge(ServerLevel level, BlastArea area, Vec3 at, double tntKg, SlabBreach.Placement placement,
+                                  @Nullable Entity direct, @Nullable Entity owner) {
         boolean blocks = IncomingConfig.SERVER.blockDamage.get();
-        StagedExplosion job = new StagedExplosion(area.retain(), List.of(), at, tntKg, blocks, direct, owner);
+        StagedExplosion job = new StagedExplosion(area.retain(), List.of(), at, tntKg, placement, blocks, direct, owner);
         area.queued(job, level.getGameTime());
         StrikeWorld.get(level).impacts().add(level, job);
         return job;
@@ -456,7 +462,18 @@ public final class Warheads {
     /** Проверки: взрыв заряда {@code tntKg} кг ТНТ по физике, со своим районом. */
     public static Probe testCharge(ServerLevel level, Vec3 at, double tntKg) {
         BlastArea area = BlastArea.hold(level, at, chargeReach(tntKg, 0));
-        Probe probe = new Probe(charge(level, area, at, tntKg, null, null));
+        Probe probe = new Probe(charge(level, area, at, tntKg, SlabBreach.Placement.NONE, null, null));
+        area.release(level);
+        return probe;
+    }
+
+    /**
+     * Проверки: заряд {@code tntKg} кг ТНТ в толще (как у бомбы, вошедшей в грунт) — волна в пустотах и пробой к ним
+     * ({@link SlabBreach}); район — до {@code reach} блоков (как у бомбы, не весь охват волны над землёй).
+     */
+    public static Probe testBuriedCharge(ServerLevel level, Vec3 at, double tntKg, double reach) {
+        BlastArea area = BlastArea.hold(level, at, reach);
+        Probe probe = new Probe(charge(level, area, at, tntKg, SlabBreach.Placement.BURIED, null, null));
         area.release(level);
         return probe;
     }
@@ -540,11 +557,14 @@ public final class Warheads {
             this.axis = axis(direct);
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
                     new S2C.Blast(kind, pos, mat.ordinal(), surface, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis));
-            main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(), direct, owner)) : List.of();
             // заряд на аппарате: воронку и шар топлива там не ставить — это корпус, а не земля. Снаряд отдаёт точку удара о
             // аппарат уже в мире (StrikeProjectile: SubLevels.toWorld), поэтому — и аппарат, чей габарит у точки
             inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
             onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
+            // боевая часть рвётся на грани, в которую ударила: плиту над пустотой она пробивает (SlabBreach); корпус
+            // аппарата — не преграда мира
+            main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(),
+                    onCraft ? SlabBreach.Placement.NONE : SlabBreach.Placement.SURFACE, direct, owner)) : List.of();
         }
 
         /** Взрыв на аппарате Sable. */
@@ -664,8 +684,9 @@ public final class Warheads {
             // весь заряд волной над землёй)
             List<StagedExplosion> blasts = new ArrayList<>(2);
             double below = law.breaches() ? law.tnt() - air : law.tnt();
-            if (below > 0) blasts.add(charge(level, area, pos, below, direct, owner));
-            if (law.breaches() && air > 0) blasts.add(charge(level, area, top.add(0, 0.5, 0), air, direct, owner));
+            // в толще заряд забит: пустоты рядом (бункер, пещера) он пробивает (SlabBreach); доля, вышедшая наружу, — волна
+            if (below > 0) blasts.add(charge(level, area, pos, below, SlabBreach.Placement.BURIED, direct, owner));
+            if (law.breaches() && air > 0) blasts.add(charge(level, area, top.add(0, 0.5, 0), air, SlabBreach.Placement.NONE, direct, owner));
             main = List.copyOf(blasts);
         }
 

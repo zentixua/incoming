@@ -51,9 +51,16 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **The crater** follows the law for a charge on the ground: about 0.65·∛W metres across and a quarter of that deep,
   a little smaller in rock, a little larger in waterlogged ground under water; dry sand and the gravel of a rail bed dig
   like soil. A crater is only dug where the blast is at the ground. A missile crater is a pit two to three blocks across
-  and about a block deep: craters are much smaller than in earlier versions, and that is the real size. Natural blocks
-  (stone, dirt, sand) count as ground even where they form a bridge deck or a roof over a room: the blast does not
-  break through them, only the crater digs into them.
+  and about a block deep: craters are much smaller than in earlier versions, and that is the real size.
+- **A slab over a void** (a bridge deck, a roof over a room, the ceiling of a cave) is breached when the charge
+  touches it and the slab is thinner than the breaching radius of the US Army demolition manual (FM 5-250): everything
+  between the charge and the void within that radius is blown out, and the blast carries on into the void. This works
+  the same for every block, natural or built; what matters is the material and how thick it is down to the void. A
+  missile breaches about 2.7 m of stone or masonry and 4.2 m of earth: a 1 m stone bridge deck gets a hole about five
+  blocks across, 3 m of stone holds. A Shahed breaches about 1.75 m of stone, a Grad rocket less than a metre. The
+  bomb, which explodes deep in the ground, breaches into a bunker or cave up to about 8 m of rock away. The manual's
+  rule is meant to be sure of a breach, so a real charge may break somewhat more. The span around the hole stays up:
+  there is no collapse of a weakened span.
 - **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; three quarters of it
   burns as a fireball (≈16 m across for the Shahed, ≈34 m for the missile) for one to three seconds. That flash ignites
   thin, dry fuel it touches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. Planks, logs
