@@ -267,7 +267,8 @@ public final class FarBlasts {
                 });
             }
             if (t < model.condensationSeconds()) condensation(t, out);
-            if (water != null) water.blobs(t, out, x, y, z);
+            // Струи выходят из глади, даже когда сам заряд под ней.
+            if (water != null) water.blobs(t, out, x, y + water.depth, z);
             return true;
         }
 

@@ -296,7 +296,7 @@ public final class BlastEffects {
             for (int i = 0; i < n; i++) {
                 double u = random.nextDouble(), v = v0 * Math.sqrt(0.1 + 0.9 * u), az = random.nextDouble() * Math.PI * 2;
                 double tilt = w.cone * Math.sqrt(random.nextDouble()), r = 0.5 * w.radius * Math.sqrt(random.nextDouble());
-                Vec3 at = pos.add(Math.cos(az) * r, 0.3, Math.sin(az) * r);
+                Vec3 at = pos.add(Math.cos(az) * r, w.depth + 0.3, Math.sin(az) * r);
                 Fx.smoke().vel(Math.cos(az) * Math.sin(tilt) * v, Math.cos(tilt) * v, Math.sin(az) * Math.sin(tilt) * v).size(0.3f, 0.7f)
                         .life((int) Math.ceil(2 * v / GRAVITY) + 10).color(0xDCE6EC, 0xF2F5F7).alpha(0.9f).drag(0.995f).gravity((float) GRAVITY)
                         .collide().wind(0).fadeIn(0).fadeFrom(0.8f).budget(FxBudget.SPRAY).spawn(level, at);

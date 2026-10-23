@@ -279,8 +279,10 @@ public final class WaterBlast {
 
     /**
      * Волна от полости взрыва: радиус переднего гребня в возрасте t, м. Полость — половина радиуса столба, её волны —
-     * длины λ = 2R (⚠ оценка размера); на глубокой воде фронт группы идёт с групповой скоростью ½√(gλ/2π), на мелкой —
-     * не быстрее √(gD) (у шахеда: λ ≈ 47 м, 4,3 м/с; пруд в 1 м — 3,1 м/с).
+     * длины λ = 2R (⚠ оценка размера); фронт группы идёт с dω/dk, ω² = gk·tanh(kD), k = 2π/λ (линейная теория
+     * гравитационных волн; WEC-Sim, Theory / Regular Wave Power,
+     * https://wec-sim.github.io/WEC-Sim/main/theory/theory.html). Предел глубокой воды — ½√(gλ/2π), мелкой — √(gD).
+     * Это модель малой волны за полостью, не нелинейного начального выброса.
      */
     public double waveRadius(double t) {
         return radius / 2 + waveSpeed() * Math.max(0, t);
@@ -288,8 +290,12 @@ public final class WaterBlast {
 
     /** Скорость фронта волны по воде, м/с. */
     public double waveSpeed() {
-        double lambda = 2 * radius, deep = 0.5 * Math.sqrt(G * lambda / (2 * Math.PI));
-        return Math.min(deep, Math.sqrt(G * waterDepth));
+        if (radius <= 0) return 0;
+        double k = Math.PI / radius, kh = k * waterDepth;
+        // Глубокая вода: kh/sinh(2kh) → 0; отдельная ветка избегает ∞/∞ при неизвестном дне.
+        if (kh > 20) return 0.5 * Math.sqrt(G / k);
+        if (kh < 1e-6) return Math.sqrt(G * waterDepth);
+        return 0.5 * Math.sqrt(G * Math.tanh(kh) / k) * (1 + 2 * kh / Math.sinh(2 * kh));
     }
 
     /** Длина волны кольца, м. */

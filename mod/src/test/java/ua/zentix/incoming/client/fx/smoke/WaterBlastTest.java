@@ -115,7 +115,7 @@ class WaterBlastTest {
         assertFalse(w.blobs(w.mistLife() + 1, (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> {}, 0, 0, 0));
     }
 
-    /** Пена: у полости — сразу, дальше — когда туда упала вода; тает. Волна на мелкой воде медленнее, чем на глубокой. */
+    /** Пена: у полости — сразу, дальше — когда туда упала вода; тает. Волна: предел мелкой воды и dω/dk при конечной глубине. */
     @Test
     void foamAndWaveOnTheWater() {
         WaterBlast w = new WaterBlast(50, 0, DEEP, CloudModel.Air.STANDARD);
@@ -124,8 +124,16 @@ class WaterBlastTest {
         assertTrue(w.foam(1.5 * w.radius, 2 * w.rise) > 0.5, "упала — пена");
         assertTrue(w.foam(1.5 * w.radius, 2 * w.rise + 60) < 0.05, "через минуту — почти нет");
         WaterBlast pond = new WaterBlast(50, 0, 1, CloudModel.Air.STANDARD);
-        assertEquals(Math.sqrt(9.80665), pond.waveSpeed(), 1e-9);
+        assertEquals(Math.sqrt(9.80665), pond.waveSpeed(), 0.01 * Math.sqrt(9.80665));
         assertTrue(pond.waveSpeed() < w.waveSpeed());
+        // Независимая сверка: численная производная дисперсии, не ещё одна запись формулы групповой скорости.
+        double k = 2 * Math.PI / w.waveLength(), dk = k * 1e-5;
+        for (double depth : new double[]{0.01, 1, 4, 20, 1000}) {
+            WaterBlast finite = new WaterBlast(50, 0, depth, CloudModel.Air.STANDARD);
+            double hi = Math.sqrt(9.80665 * (k + dk) * Math.tanh((k + dk) * depth));
+            double lo = Math.sqrt(9.80665 * (k - dk) * Math.tanh((k - dk) * depth));
+            assertEquals((hi - lo) / (2 * dk), finite.waveSpeed(), 1e-7, "глубина " + depth);
+        }
         assertTrue(w.waveRadius(10) > w.waveRadius(1));
     }
 }
