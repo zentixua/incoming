@@ -385,6 +385,38 @@ public final class HeatPass {
         return false;
     }
 
+    /**
+     * Видимая доля диска шара с серединой (bx, by, bz) радиуса r из точки (ax, ay, az) окна заслонов — зеркало
+     * {@code heatBallSeen}: шар радиусом в метры у земли — протяжённый источник, и луч к одной середине у кромки холма
+     * гасил бы весь его свет, хотя верх шара виден. Кромка заслона у земли почти горизонтальная; доля диска над кромкой
+     * на высоте y — ∫ 2√(1 − y²): квадратура Гаусса–Чебышёва второго рода по вертикальному диаметру, узлы 0 и
+     * ±r·cos(π/4), веса ½ и ¼. Луч к середине свободен — весь диск. Лучи кончаются у края шара со стороны точки.
+     */
+    public static double ballSeen(double ax, double ay, double az, double bx, double by, double bz, double r, int[] size, Cells cells) {
+        double vx = bx - ax, vy = by - ay, vz = bz - az, d = Math.sqrt(vx * vx + vy * vy + vz * vz);
+        double end = 1 - r / Math.max(d, r);
+        if (!blocked(ax, ay, az, ax + vx * end, ay + vy * end, az + vz * end, size, cells)) return 1;
+        vx /= Math.max(d, 1e-3);
+        vy /= Math.max(d, 1e-3);
+        vz /= Math.max(d, 1e-3);
+        double ux = -vx * vy, uy = 1 - vy * vy, uz = -vz * vy;
+        if (ux * ux + uy * uy + uz * uz < 1e-4) {
+            ux = 1 - vx * vx;
+            uy = -vy * vx;
+            uz = -vz * vx;
+        }
+        double k = Math.sqrt(0.5) * r / Math.sqrt(ux * ux + uy * uy + uz * uz);
+        ux *= k;
+        uy *= k;
+        uz *= k;
+        double seen = 0;
+        for (int s = -1; s <= 1; s += 2) {
+            double tx = bx + s * ux - ax, ty = by + s * uy - ay, tz = bz + s * uz - az;
+            if (!blocked(ax, ay, az, ax + tx * end, ay + ty * end, az + tz * end, size, cells)) seen += 0.25;
+        }
+        return seen;
+    }
+
     private static final Frame FRAME = new Frame();
     /** Свет огня у глаза в последнем собранном кадре ({@link Frame#atEye}). */
     private static double lastAtEye;

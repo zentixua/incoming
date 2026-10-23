@@ -273,6 +273,26 @@ float heatBlocked(vec3 p, vec3 q) {
     return 1.0;
 }
 
+// Видимая доля диска шара с серединой b радиуса r из точки from (HeatPass.ballSeen): кромка заслона у земли — почти
+// горизонтальная, доля диска над кромкой на высоте y — интеграл ширины хорды 2√(1 − y²); квадратура Гаусса–Чебышёва
+// второго рода по вертикальному диаметру — узлы 0 и ±r·cos(π/4), веса ½ и ¼. Луч к середине свободен — весь диск
+// (дальше лучей нет); конец луча — у края шара со стороны точки (в шаре заслонов нет)
+float heatBallSeen(vec3 from, vec3 b, float r) {
+    vec3 v = b - from;
+    float d = length(v);
+    v /= max(d, 1e-3);
+    float end = 1.0 - r / max(d, r);
+    float mid = heatBlocked(from, from + (b - from) * end);
+    if (mid > 0.5) return 1.0;
+    // вертикаль диска: мировой верх без доли вдоль луча (луч почти отвесный — любая поперечная)
+    vec3 up = vec3(0.0, 1.0, 0.0) - v * v.y;
+    if (dot(up, up) < 1e-4) up = vec3(1.0, 0.0, 0.0) - v * v.x;
+    up = normalize(up) * (0.70710678 * r);
+    float top = heatBlocked(from, from + (b + up - from) * end);
+    float low = heatBlocked(from, from + (b - up - from) * end);
+    return 0.25 * top + 0.25 * low;
+}
+
 // Начало луча тени: точка мира на две ширины пикселя от грани (не меньше 2 см), чтобы её клетка была воздухом перед гранью
 vec3 heatLift(vec3 p, vec3 n) {
     return p + n * max(0.02, 2.0 * HeatFrame.y * length(p));
@@ -293,8 +313,7 @@ vec3 heatLight(vec3 p, vec3 n) {
         // прямой пучок закрыт — без него (в шаре и у самого шара тени нет)
         float direct = exp(-sd) * max(nv, 0.0);
         if (d > b.w && direct > 0.0 && dot(c, LUMA) * direct > SHADOW_SEEN) {
-            vec3 from = heatLift(p, n);
-            face -= direct * (1.0 - heatBlocked(from, from + (b.xyz - from) * (1.0 - b.w / d)));
+            face -= direct * (1.0 - heatBallSeen(heatLift(p, n), b.xyz, b.w));
         }
         sum += c * face;
     }
