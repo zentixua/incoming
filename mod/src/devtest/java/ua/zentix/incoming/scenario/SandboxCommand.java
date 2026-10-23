@@ -21,6 +21,8 @@ import java.util.Locale;
  *       месте; с {@code near} — вид у камеры: дома и дубы сцены {@code debris} в точке, подрыв в стольких метрах к северу
  *       (по умолчанию {@link #NEAR_RANGE}), время эффекта — от прихода фронта к домам (кадры и до него, с −10 с);</li>
  *   <li>{@code airburst [seed]} — разрыв зенитной ракеты в воздухе над точкой;</li>
+ *   <li>{@code sam} — ЗРК в точке (заряжен) и шахед, который идёт через неё с юга; время — от схода зенитной ракеты
+ *       (след, облако схода, звук мотора — как сцена {@code sam-side} пробы);</li>
  *   <li>{@code raid [число] [радиус] [секунд между]} — налёт: взрывы шахедов только у клиента (как {@code blast}) в круге
  *       радиуса вокруг точки один за другим (по умолчанию 16 за 45 с в 120 м) — цена дыма многих ударов в кадре;</li>
  *   <li>{@code launch <оружие>} — пуск с пусковой в точке; время — от первого движения снаряда;</li>
@@ -50,12 +52,12 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code flight}: пуск — на столько блоков к югу от точки (+Z), цель — на столько же к северу (−Z). */
     static final int FLIGHT_FROM = 600;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
         return switch (verb) {
-            case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, RAID -> true;
+            case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, RAID, SAM -> true;
             default -> false;
         };
     }
@@ -123,6 +125,7 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (number(1, 120) < 10 || number(1, 120) > 400) throw new IllegalArgumentException("радиус 10–400 м");
                 if (number(2, 3) < 0 || number(2, 3) > 30) throw new IllegalArgumentException("между взрывами 0–30 с");
             }
+            case SAM -> need(0, 0);
             case AIRBURST -> {
                 need(0, 1);
                 if (!args.isEmpty()) seed();

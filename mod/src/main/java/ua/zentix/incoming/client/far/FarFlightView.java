@@ -124,7 +124,9 @@ public final class FarFlightView {
 
     // ---------------------------------------------------------------- кадр: числа живут между кадрами
     private static final double[] POS = new double[3], NOZZLE = new double[3], BACK = new double[3], NOSE = new double[3], OUT = new double[2], LIGHT = new double[5],
-            AIM = new double[3], BIRTH = new double[2], LOOK = new double[TrailModel.LOOK];
+            AIM = new double[3], BIRTH = new double[2], LOOK = new double[TrailModel.LOOK], BEND = new double[3];
+    /** Зерно изгибов следа (с номером хозяина точек — у каждого следа свои). */
+    private static final long BENDS = 0x3C6EF372FE94F82AL;
     private static final float[] ANGLES = new float[3];
     private static final ProjectilePose POSE = new ProjectilePose();
     private static final BlockPos.MutableBlockPos PROBE = new BlockPos.MutableBlockPos();
@@ -490,6 +492,9 @@ public final class FarFlightView {
             points.cloud[at] = f.impinging ? f.cloud : null;
             points.column[at] = f.impinging && f.cloudMotor != null ? (float) LaunchCloud.column(f.cloudMotor, 0, inv) : 0;
             points.path[TrailPoints.index(f.chain[k])] = f.path;
+            ClientLevel lv = level;
+            double under = lv == null ? Double.NaN : ground(lv, POS[0], POS[2]);
+            if (!Double.isNaN(under)) points.clearance[at] = (float) Math.max(0, POS[1] - under);
         }
         f.chainTick = t;
         f.started = true;
@@ -614,8 +619,11 @@ public final class FarFlightView {
             TrailModel.look(style, age / 20, POINTS.inverse[i], POINTS.ice[i] / 20, POINTS.wind[i], POINTS.excess[i], POINTS.rise[i],
                     POINTS.brunt[i], POINTS.stability[i], mass * smoke, LOOK);
             double drift = POINTS.wind[i] * Math.max(0, age - LAG) / 20;
-            end(LOOK, POINTS.x[i] + air.wind().x() * drift - cam.x, POINTS.y[i] + LOOK[2] - cam.y, POINTS.z[i] + air.wind().z() * drift - cam.z,
-                    POINTS.light[i], view, i);
+            // ось следа гнут вихри крупнее его: усреднённый шлейф Бриггса — это расплывание следа плюс мотание оси
+            TrailModel.wander(BENDS ^ POINTS.owner[i] * 0x9E3779B97F4A7C15L, POINTS.path[i], age / 20, POINTS.stability[i], POINTS.wind[i],
+                    spacing(i, style), POINTS.clearance[i], BEND);
+            end(LOOK, POINTS.x[i] + air.wind().x() * drift + BEND[0] - cam.x, POINTS.y[i] + LOOK[2] + BEND[1] - cam.y,
+                    POINTS.z[i] + air.wind().z() * drift + BEND[2] - cam.z, POINTS.light[i], view, i);
             // зерно клубов — номер записи точки: тик рождения в заморозке мира сдвигается (TrailPoints.hold), и клубы мигали бы
             ESEED[i] = s * 0x2545F4914F6CDD1DL + 0x632BE59BD9B4E019L;
             if (POINTS.last[i]) {
@@ -909,6 +917,14 @@ public final class FarFlightView {
         EE[slot] = look[5];
         EO[slot] = look[6];
         DRAWN[slot] = frame;
+    }
+
+    /** Шаг точек ленты у точки i, м: до предыдущей точки той же ленты, без неё — по скорости, с которой её клали. */
+    private static double spacing(int i, Trail style) {
+        long p = POINTS.prev[i];
+        if (!POINTS.holds(p)) return style.step() / (20.0 * POINTS.inverse[i]);
+        int j = TrailPoints.index(p);
+        return Math.sqrt(sq(POINTS.x[i] - POINTS.x[j]) + sq(POINTS.y[i] - POINTS.y[j]) + sq(POINTS.z[i] - POINTS.z[j]));
     }
 
     /** Концы отрезка трубки следа ({@link #segment}). */
