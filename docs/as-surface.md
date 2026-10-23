@@ -34,6 +34,10 @@ An empty `impacts()` queue can occur before the bomb timeline schedules its dela
 
 ## Validation
 
-Local `build` and 76 affected GameTests passed, using the downloaded CI runtime mods (`-PmcModsDir=run/ci-mods`). The set includes every surface row, conventional blasts, slab breach, body order/shielding, fractional damage/save codec, the layout regression, bomb tests, the nuclear crater and deferred blasts. Before/after sandbox frames and WAV are required in PR #437 before review.
+Local `build` and 77 affected GameTests passed, using the downloaded CI runtime mods (`-PmcModsDir=run/ci-mods`). The set includes every surface row, conventional blasts, slab breach, body order/shielding, fractional damage/save codec, the layout regression, bomb tests, the nuclear crater and deferred blasts. Before/after sandbox frames and WAV are required in PR #437 before review.
 
 The complete CI run caught a loaded-face error: the vector to an upper wall block is steep when the charge is near the floor, but room gas loads the vertical wall normally. Backing now follows the ray's actual entry face, and gas uses the faces adjacent to room air. The strengthened tall-room regression and the existing budget test pass without lowering its >300 selected-block requirement. The Sable timing test observes the craft explosion's own event, after the conventional front, and still requires its selected hull blocks to disappear in that event's tick.
+
+## Reproducible loose-soil fixtures
+
+A later full run exposed `loiterOnSand`: 21 removed blocks against the unchanged 0–18 bound (continuous expectation 8.4). Fractional loose-soil rounding consumed the world's shared random stream when deferred crater work ran, so unrelated work changed the sample. Surface craters now use the existing per-impact source seed. The benchmark sets source seeds from relative hit coordinates; it never reseeds the world's generator. `blast_crater_seed` checks that two identical seeds produce the same nonempty excavation after unrelated world RNG draws. No volume or depth bound is relaxed.

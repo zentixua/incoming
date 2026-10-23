@@ -164,3 +164,5 @@ paths:
   Fabric, на NeoForge не грузится; createpropulsion 1.1.5 — снаряд CBC, не наш; Lithium — калькулятор по сущности,
   у нас источника нет; copycats `CopycatBlockMixin`/`MultiStateCopycatBlockMixin` — сопротивление зависит от места,
   верно через калькулятор с настоящим уровнем; alltheleaks `BlockBehaviorMixinSquared` — jar не на Modrinth, не разобран.
+
+- Воронка поверхностного взрыва использует его собственное зерно (`SurfaceBlast.seed`), не общий `level.random` во время отложенной работы. `SurfaceGameTests` задаёт зерно по относительной точке попадания через `Warheads.testDetonate`: выборка рыхлого грунта не зависит от порядка партий и случайного места площадки. `blast_crater_seed` сравнивает одинаковые удары после посторонних выборок генератора мира; прежние пределы объёма не расширены.

@@ -8,6 +8,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
@@ -35,13 +36,17 @@ final class Craters {
      * среднем — по закону: у «Ланцета» и «Града» — ямка в блок или ничего). Воронки нет, если заряд рвётся выше грунта
      * больше чем на её глубину (крыша, этаж). Возвращает, сколько столбцов смотрели.
      */
-    static int dig(ServerLevel level, Vec3 pos, double tntKg, GroundMaterial mat) {
+    static int dig(ServerLevel level, Vec3 pos, double tntKg, GroundMaterial mat, long seed) {
         CraterModel.Soil soil = mat.soil();
-        return dig(level, pos, CraterModel.chargeRadius(tntKg, soil), CraterModel.chargeDepth(tntKg, soil), mat);
+        return dig(level, pos, CraterModel.chargeRadius(tntKg, soil), CraterModel.chargeDepth(tntKg, soil), mat, RandomSource.create(seed));
     }
 
     /** Воронка радиусом {@code rc} и глубиной {@code depth} блоков у {@code pos} (та же чаша и вал). Сколько столбцов смотрели. */
     static int dig(ServerLevel level, Vec3 pos, double rc, double depth, GroundMaterial mat) {
+        return dig(level, pos, rc, depth, mat, level.random);
+    }
+
+    private static int dig(ServerLevel level, Vec3 pos, double rc, double depth, GroundMaterial mat, RandomSource random) {
         if (depth <= 0) return 0;
         int cx = Mth.floor(pos.x), cz = Mth.floor(pos.z);
         if (!Terrain.neighbourhoodReady(level, cx >> 4, cz >> 4)) return 0;
@@ -61,12 +66,12 @@ final class Craters {
                 return CraterModel.rim(r, rc, depth);
             }
         };
-        double phase = level.random.nextDouble() * Math.PI * 2;
+        double phase = random.nextDouble() * Math.PI * 2;
         int n = Mth.ceil(outer), columns = 0;
         for (int x = cx - n; x <= cx + n; x++) {
             for (int z = cz - n; z <= cz + n; z++) {
                 if (!Terrain.neighbourhoodReady(level, x >> 4, z >> 4)) continue;
-                CraterJob.digColumn(level, x, z, pos, outer, phase, profile, mat.debris(), null, CraterJob.Mode.DIG, level.random);
+                CraterJob.digColumn(level, x, z, pos, outer, phase, profile, mat.debris(), null, CraterJob.Mode.DIG, random);
                 columns++;
             }
         }

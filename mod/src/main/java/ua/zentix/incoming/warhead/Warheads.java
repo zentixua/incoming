@@ -92,6 +92,11 @@ public final class Warheads {
         world.impactCost().step(System.nanoTime() - t0);
     }
 
+    /** Same complete surface impact with a fixed source seed, for reproducible fixtures; no world RNG reseeding. */
+    public static void testDetonate(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity projectile, long seed) {
+        StrikeWorld.get(level).add(new SurfaceBlast(level, weapon, pos, projectile, null, seed));
+    }
+
     /**
      * Бетонобойная бомба вошла в грунт со скоростью {@code speed} м/с: взрыва нет (взрыватель замедленный) — удар корпуса
      * по земле: клиентам — пыль выброса из входа и звук удара, тем, кто рядом, — толчок земли по энергии удара.
@@ -541,6 +546,10 @@ public final class Warheads {
         private final List<StagedExplosion> main;
 
         SurfaceBlast(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity direct, @Nullable UUID ownerId) {
+            this(level, weapon, pos, direct, ownerId, level.random.nextLong());
+        }
+
+        SurfaceBlast(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity direct, @Nullable UUID ownerId, long seed) {
             this.weapon = weapon;
             this.pos = pos;
             WeaponSpec spec = weapon.spec();
@@ -562,7 +571,7 @@ public final class Warheads {
             // дальше, чем сервер шлёт что-либо далёкое
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
                     Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(spec.charge())));
-            this.seed = level.random.nextLong();
+            this.seed = seed;
             this.axis = axis(direct);
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
                     new S2C.Blast(kind, pos, mat.ordinal(), surface, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis));
@@ -596,7 +605,7 @@ public final class Warheads {
             // всё после главного взрыва — только если он был: взрыв, отменённый приватом, не роет и не жжёт
             if (main.isEmpty()) return false;
             if (IncomingConfig.SERVER.blockDamage.get() && !onCraft) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat) : 0);
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact(), weapon.spec().charge()) : 0);

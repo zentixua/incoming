@@ -162,6 +162,33 @@ public final class SurfaceSupportGameTests {
         });
     }
 
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_crater_seed", skyAccess = true)
+    public static void craterSamplingDoesNotDependOnOtherWorldRandomDraws(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        boolean debris = IncomingConfig.SERVER.debrisStay.get();
+        IncomingConfig.SERVER.debrisStay.set(false);
+        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
+        BlockPos a = h.absolutePos(new BlockPos(18, 11, 32)), b = a.east(28);
+        for (BlockPos top : List.of(a, b)) {
+            for (BlockPos p : BlockPos.betweenClosed(top.offset(-6, -5, -6), top.offset(6, 0, 6))) {
+                level.setBlock(p, Blocks.DIRT.defaultBlockState(), Block.UPDATE_CLIENTS);
+            }
+        }
+        Warheads.testDetonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(a.above()), null, 0x415333L);
+        for (int i = 0; i < 1024; i++) level.random.nextLong();
+        Warheads.testDetonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(b.above()), null, 0x415333L);
+        h.succeedWhen(() -> {
+            h.assertTrue(StrikeWorld.get(level).idle(), "impacts unfinished");
+            int holes = 0;
+            for (BlockPos rel : BlockPos.betweenClosed(new BlockPos(-5, -4, -5), new BlockPos(5, 0, 5))) {
+                BlockState left = level.getBlockState(a.offset(rel)), right = level.getBlockState(b.offset(rel));
+                h.assertTrue(left.equals(right), "same impact seed produced different craters at " + rel);
+                if (left.isAir()) holes++;
+            }
+            h.assertTrue(holes > 0, "seed comparison did not excavate soil");
+        });
+    }
+
     /** Pure layout check over translated threshold hashes, including a reproduced failing origin. */
     @GameTest(template = "range", timeoutTicks = 100, batch = "surface_layout", skyAccess = true)
     public static void nearbyPostsAreSampledForEveryThresholdHash(GameTestHelper h) {

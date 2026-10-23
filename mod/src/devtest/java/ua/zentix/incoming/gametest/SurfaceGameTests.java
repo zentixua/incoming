@@ -279,7 +279,9 @@ public final class SurfaceGameTests {
         List<BlockPos> hits = new ArrayList<>();
         for (int i = 0; i < n; i++) for (int k = 0; k < n; k++) hits.add(new BlockPos(first + step * i, TOP, first + step * k));
         for (BlockPos hit : hits) {
-            Warheads.detonate(level, weapon, Vec3.atBottomCenterOf(h.absolutePos(hit.above())), striker(level, weapon), null);
+            // Stable source seeds, independent of the random GameTest origin, other tests and deferred-work order.
+            long seed = Mth.getSeed(hit.getX(), hit.getY(), hit.getZ());
+            Warheads.testDetonate(level, weapon, Vec3.atBottomCenterOf(h.absolutePos(hit.above())), striker(level, weapon), seed);
         }
         Row[] row = {null};
         h.succeedWhen(() -> {
