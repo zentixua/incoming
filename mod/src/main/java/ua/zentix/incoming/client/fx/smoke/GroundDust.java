@@ -547,6 +547,8 @@ public final class GroundDust {
      */
     private static final class Track {
         double level, from, since, r0, f;
+        /** Последняя известная поверхность под клубом, м ({@link Double#NaN} — ещё не было). */
+        double seen = Double.NaN;
         /** Сколько сноса и стока задержала запруда (препятствие шире следа и выше слоя), м по x и z. */
         double heldX, heldZ;
         boolean falling;
@@ -555,6 +557,7 @@ public final class GroundDust {
             Track c = new Track();
             c.heldX = heldX;
             c.heldZ = heldZ;
+            c.seen = seen;
             c.level = level;
             c.from = from;
             c.since = since;
@@ -595,15 +598,19 @@ public final class GroundDust {
      * толщи слоя (2σv: тяжёлое течение глубже препятствия переливается через него, Rottman и Simpson 1983); перед
      * подъёмом выше (препятствие шире следа: терраса, склон, большой дом) — запруда: стоит, пока слой не станет толще (⚠
      * обтекания нет). Где рельеф неизвестен, лежащий клуб держит уровень, падающий падает до самой
-     * низкой поверхности своего сектора, которую видел взрыв.
+     * низкой поверхности, известной под ним (последней, иначе — своего сектора, которую видел взрыв).
      */
     private double[] level(int sector, int show, double t, double source, double ux, double uz, double own) {
         Path p = paths[show][sector];
         if (p == null || PATH[p.node] > t) {
-            // начало — поверхность, с которой пыль подняло (крыши по бокам следа уличную пыль не поднимают)
+            // начало — самое низкое из поверхности, с которой пыль подняло, и того, что под следом клуба в его месте (на
+            // склоне клуб стоит ниже точки полосы; крыши по бокам улицы уличную пыль не поднимают — под следом улица)
             p = new Path();
             p.now = new Track();
-            p.now.level = surface[sector][show];
+            double[] at = place(show, 0, source, ux, uz);
+            double start = under(at[0], at[1], 0.5 * width(show, 0, own));
+            p.now.level = Double.isNaN(start) ? surface[sector][show] : Math.min(surface[sector][show], start);
+            p.now.seen = start;
             p.next = p.now.copy();
             step(p.next, sector, show, PATH[0], PATH[1], source, ux, uz, own);
             paths[show][sector] = p;
@@ -664,14 +671,16 @@ public final class GroundDust {
         double dx = p1[0] - p0[0], dz = p1[1] - p0[1], len = Math.hypot(dx, dz), w = 0.5 * width(show, t1, own);
         int n = (int) Math.max(1, Math.min(PROBES, Math.ceil(len / Math.max(1, w))));
         double[] w0 = drift(t0, 0.8 * at(sv[show], t0)), w1 = drift(t1, 0.8 * at(sv[show], t1));
-        // склон — не круче блока на метр пути; за краем ветер опускает слой на LEE метра на метр сноса
-        double tol = DROP * Math.max(1, len / n), lee = LEE * Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) / n;
+        // склон — не круче блока на метр пути и роста полуширины следа (растущий след сам достаёт ниже по склону — это не
+        // край); за краем ветер опускает слой на LEE метра на метр сноса
+        double grow = Math.max(0, w - 0.5 * width(show, t0, own)) / n;
+        double tol = DROP * Math.max(1, len / n + grow), lee = LEE * Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) / n;
         for (int i = 1; i <= n; i++) {
             double u = (double) i / n, tau = t0 + u * (t1 - t0);
             double below = under(p0[0] + u * dx - tr.heldX, p0[1] + u * dz - tr.heldZ, w);
             if (Double.isNaN(below)) {
                 // рельеф неизвестен: лежащий держит уровень, падающий падает — до самой низкой поверхности, что видел взрыв
-                if (tr.falling) fallTo(tr, Math.min(lowest(sector), tr.level), tau, lee);
+                if (tr.falling) fallTo(tr, Math.min(Double.isNaN(tr.seen) ? lowest(sector) : tr.seen, tr.level), tau, lee);
                 continue;
             }
             if (below > tr.level) {
@@ -682,15 +691,18 @@ public final class GroundDust {
                     // не идёт, пока слой не станет толще
                     tr.heldX += (1 - (i - 1.0) / n) * dx;
                     tr.heldZ += (1 - (i - 1.0) / n) * dz;
-                    if (tr.falling) fallTo(tr, Math.min(lowest(sector), tr.level), t1, lee);
+                    // падающий падает дальше — до поверхности там, где стоит (последней известной под ним)
+                    if (tr.falling) fallTo(tr, Math.min(Double.isNaN(tr.seen) ? lowest(sector) : tr.seen, tr.level), t1, lee);
                     return;
                 }
+                tr.seen = below;
                 tr.level = Math.min(below, tr.level + DROP * len / n);
                 tr.falling = false;
                 continue;
             }
-            if (below >= tr.level - tol) {
-                // склон вниз, или падающий долетел до поверхности — лежит на ней
+            tr.seen = below;
+            if (below >= tr.level - tol - DROP) {
+                // склон вниз (с блоком на ступенчатость рельефа), или падающий долетел до поверхности — лежит на ней
                 tr.level = below;
                 tr.falling = false;
                 continue;
