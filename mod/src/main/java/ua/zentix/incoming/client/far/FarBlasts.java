@@ -236,6 +236,12 @@ public final class FarBlasts {
             return water != null;
         }
 
+        @Override
+        public boolean sprayClubs(double seconds) {
+            // После возвращения последней струи — взвесь мелких капель, не падающие полосы брызг.
+            return water != null && water.aloft(seconds - bornSeconds) > 0;
+        }
+
         /** Над рельефом, что закрывает место взрыва вдали (последний луч, {@link #trace}). */
         @Override
         public double visible(double wy, double r) {
@@ -508,18 +514,27 @@ public final class FarBlasts {
     private static void decal(Event e, double t) {
         WaterBlast w = e.water;
         if (!ua.zentix.incoming.client.fx.layer.WaterDecal.wanted() || t >= w.waterLife()) return;
-        double front = Math.max(w.waveRadius(t), w.radius), lambda = w.waveLength();
+        double front = waterProfile(w, t, DARK, FOAM);
         float most = 0;
-        for (int i = 0; i < DARK.length; i++) {
+        for (int i = 0; i < DARK.length; i++) most = Math.max(most, Math.max(DARK[i], FOAM[i]));
+        if (most > 0.004f) ua.zentix.incoming.client.fx.layer.WaterDecal.ring(e.x, e.z, front, front, DARK, FOAM, true);
+    }
+
+    /** Подача волны: фронт ровно из закона; гребень темнеет плавно за ним, без жёсткого обода. Пена — доля модели. */
+    static double waterProfile(WaterBlast w, double t, float[] dark, float[] foam) {
+        double front = w.waveRadius(t), lambda = w.waveLength();
+        for (int i = 0; i < dark.length; i++) {
             double behind = ua.zentix.incoming.client.fx.layer.WaterDecal.sampleAt(i, front), r = Math.max(0, front - behind);
             // гребни: передний — у фронта, следующие — через длину волны внутрь, ниже на свою долю (пакет волн, ⚠ форма)
             double phase = behind / lambda, crest = 0.5 + 0.5 * Math.cos(2 * Math.PI * phase);
-            double wave = w.waveRadius(t) > w.radius / 2 ? w.waveAt(r, t) * crest * Math.exp(-phase / 1.5) : 0;
-            DARK[i] = (float) (0.6 * wave);
-            FOAM[i] = (float) w.foam(r, t);
-            most = Math.max(most, Math.max(DARK[i], FOAM[i]));
+            double edge = Math.clamp(behind / (lambda / 16), 0, 1);
+            edge = edge * edge * (3 - 2 * edge);
+            double wave = w.waveAt(r, t) * crest * Math.exp(-phase / 1.5) * edge;
+            // Подача, не изменение высоты волны: вода сохраняет отражения пака под мягким гребнем.
+            dark[i] = (float) (0.35 * wave);
+            foam[i] = (float) w.foam(r, t);
         }
-        if (most > 0.004f) ua.zentix.incoming.client.fx.layer.WaterDecal.ring(e.x, e.z, front, front, DARK, FOAM);
+        return front;
     }
 
     /** Раз в тик: забыть прошедшее и чужое измерение, звук — когда дошёл фронт, лучи по рельефу — по очереди. */

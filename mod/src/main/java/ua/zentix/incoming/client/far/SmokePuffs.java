@@ -252,7 +252,7 @@ final class SmokePuffs {
             this.sprayAge = FxAtlas.sprayFrame(growth);
             this.seed = source.seed();
             this.glow = source.drawsGlow();
-            this.sprays = source.sprayClubs();
+            this.sprays = source.sprayClubs(seconds);
             this.index = 0;
             // вид источника для второго прохода ({@link #flush})
             if (contexts == ctxSource.length) {

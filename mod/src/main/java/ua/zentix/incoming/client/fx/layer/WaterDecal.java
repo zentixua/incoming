@@ -107,6 +107,11 @@ public final class WaterDecal {
      * 0..1 на {@link #sampleAt} блоков за фронтом. False — места нет.
      */
     public static boolean ring(double x, double z, double radius, double length, float[] dark, float[] foam) {
+        return ring(x, z, radius, length, dark, foam, false);
+    }
+
+    /** Обычный водяной взрыв: patchy — кружево пены с ограниченной непрозрачностью; ядерные барашки без изменений. */
+    public static boolean ring(double x, double z, double radius, double length, float[] dark, float[] foam, boolean patchy) {
         if (!wanted()) return false;
         int row = count++;
         RING[row][0] = x;
@@ -117,7 +122,7 @@ public final class WaterDecal {
             int at = (row * SAMPLES + i) * 4;
             PIXELS.put(at, (byte) Math.round(Math.max(0, Math.min(1, dark[i])) * 255));
             PIXELS.put(at + 1, (byte) Math.round(Math.max(0, Math.min(1, foam[i])) * 255));
-            PIXELS.put(at + 2, (byte) 0);
+            PIXELS.put(at + 2, (byte) (patchy ? 255 : 0));
             PIXELS.put(at + 3, (byte) 255);
         }
         return true;

@@ -6,7 +6,7 @@
 // трава, мобы, склоны и края предметов перед небом на той же высоте в блоке — не вода) на высоте верха стоячей воды —
 // 8/9 блока (у шейдерпака — ниже, на его волны), а дальше прорисовки (LOD DH) — гладь на высоте моря или место ниже
 // моря, тогда — пересечение луча с гладью. Профили колец — Sampler1: строка — кольцо, по x — корень доли пути от фронта
-// к центру; r — темнота, g — пена. Шум ряби и пены — у каждого кольца свой, от его центра (у далёких координат мира
+// к центру; r — темнота, g — пена, b — кружево обычного взрыва (у ядерки 0). Шум — у каждого кольца свой, от его центра (у далёких координат мира
 // в float нет дробной части, а центр подрыва стоит на месте).
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
@@ -116,6 +116,17 @@ float caps(vec2 rel) {
     return 0.5 + (c - 0.5) * inversesqrt(1.0 - 2.0 * w * (1.0 - w));
 }
 
+// Подача обычной пены: пятна и мелкое кружево в координатах самого кольца. Доля модели не превращается в сплошной
+// белый слой: даже в густом пятне вода и отражения видны сквозь пену. Ядерные барашки остаются у caps.
+float foamLace(vec2 rel, float foot) {
+    vec2 warp = vec2(noise(rel / 6.0), noise(rel / 6.0 + vec2(19.0, 37.0))) - 0.5;
+    vec2 q = rel + 3.0 * warp;
+    float patches = smoothstep(0.28, 0.65, noise(q / 9.0));
+    float lace = 1.0 - smoothstep(0.05, 0.18, abs(noise(q / 1.7) - 0.5));
+    lace = mix(lace, 0.5, smoothstep(0.3, 1.5, foot));
+    return patches * (0.25 + 0.75 * lace);
+}
+
 // верх стоячей воды над низом блока
 const float SURFACE = 8.0 / 9.0;
 
@@ -176,7 +187,8 @@ void main() {
         if (behind < -foot) continue;
         float edge = smoothstep(-foot, foot, behind);
         float u = sqrt(clamp(behind / rg.w, 0.0, 1.0));
-        vec2 prof = textureLod(Sampler1, vec2((u * 63.0 + 0.5) / 64.0, (float(i) + 0.5) / 4.0), 0.0).rg * edge;
+        vec3 profile = textureLod(Sampler1, vec2((u * 63.0 + 0.5) / 64.0, (float(i) + 0.5) / 4.0), 0.0).rgb;
+        vec2 prof = profile.rg * edge;
         if (prof.r > 0.002) {
             // кошачьи лапы: пятна ряби разной густоты; мельче пикселя — к среднему
             float paws = noise(rel / 23.0) * 0.6 + noise(rel / 7.0) * 0.4;
@@ -187,7 +199,8 @@ void main() {
             // пена барашками: мелкие пятна, вытянутые по ветру полосами, доля которых — пена профиля; мельче пикселя —
             // сама доля
             float f = prof.g;
-            if (foot < 1.5) f = mix(smoothstep(1.0 - f, 1.12 - f, caps(rel)), f, foot / 1.5);
+            if (profile.b > 0.5) f = 0.6 * f * foamLace(rel, foot);
+            else if (foot < 1.5) f = mix(smoothstep(1.0 - f, 1.12 - f, caps(rel)), f, foot / 1.5);
             foam = max(foam, f);
         }
     }
