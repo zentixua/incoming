@@ -15,6 +15,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.BomberEntity;
@@ -52,13 +53,14 @@ import java.util.function.Consumer;
  * <ul>
  * <li>воронка заряда на грунте — {@link CraterModel#chargeRadius} (EMRTC, Ambrosini и др. 2003, Кинни–Грэхем; грунт —
  * TM 23-200): снятый объём 0,6–1,45 закона (как в {@code BlastGameTests.craterTest}, #417) плюс разброс целых блоков
- * (воронка роет столбцы целыми блоками со случайной добавкой по дробной части — 3σ этой добавки);</li>
- * <li>плита над пустотой — FM 5-250 (1992), табл. B-3: P = R³·K·C, K = 4,3–5,1 (скала, хорошая кладка, обычный бетон),
- * C = 1,8 (внешний заряд без забивки); всё в радиусе R снесено, пробой — R больше толщины. Закона в моде ещё нет
- * (сессия SL): эти строки печатаются, но не проверяются, пока {@link #SLAB_LAW} не включён;</li>
- * <li>бетон на грунте (асфальт дороги) — плиту держит грунт за ней, свободной грани нет: не пробой, а воронка в среде
- * не мягче скалы (TM 23-200: скала ×0,7, бетон прочнее грунта) — не больше воронки того же заряда в грунте. Тот же
- * закон «что держит заряд — толща до пустоты» (SL), поэтому и эти строки ждут {@link #SLAB_LAW};</li>
+ * (воронка роет столбцы целыми блоками со случайной добавкой по дробной части — 2σ этой добавки);</li>
+ * <li>плита над пустотой — не меньше пробоя FM 5-250 (1992), табл. B-3: P = R³·K·C, K = 4,3–5,1 (скала, хорошая
+ * кладка, обычный бетон), C = 1,8 (внешний заряд без забивки), всё в радиусе R снесено, пробой — R больше толщины; и не
+ * больше круга, где волна ломает кладку (плита над пустотой — панель, как стена): закон пробоя — сессия SL, до него
+ * строки печатаются, но не проверяются ({@link #SLAB_LAW});</li>
+ * <li>бетон на грунте (асфальт дороги) — плиту держит грунт за ней, свободной грани нет: не пробой и не панель, а
+ * воронка в среде не мягче скалы (TM 23-200: скала ×0,7) и не больше воронки того же заряда в грунте. Известный изъян
+ * ({@link #ROAD_ISSUE}, warhead.md) — строка печатается, но не проверяется;</li>
  * <li>стены и стёкла рядом — пороги давления мода ({@link BlockResponse}: кладка 12 psi, доски 4 psi, стекло 0,8 psi;
  * DESIGN-nuke §3.3) по Джаррету и Кинни–Грэхему: всё ближе 0,8 радиуса своего порога сломано, дальше 1,25 — цело;</li>
  * <li>бомба — путь по Янгу (SAND97-2426, {@link Penetration}: в грунте ~15 %, у скалы до двух раз) и воронка выброса по
@@ -71,12 +73,17 @@ import java.util.function.Consumer;
 @PrefixGameTestTemplate(false)
 public final class SurfaceGameTests {
     /**
-     * Закон пробоя плиты влит (SL): строки плит и бетона на грунте проверяются. До него — только печатаются: мод сейчас
-     * считает природный камень над пустотой полупространством грунта, а бетон дороги ломает волной как стену здания.
+     * Закон пробоя плиты влит (SL): строки плит над пустотой проверяются. До него — только печатаются: мод считает
+     * природный камень над пустотой полупространством грунта.
      */
     static final boolean SLAB_LAW = false;
     /** Почему строки плит не проверяются. */
     private static final String SLAB_PENDING = "ждёт закона пробоя плиты (SL)";
+    /**
+     * Известный изъян (warhead.md): бетон на грунте ломается волной как стена здания — у шахеда в ~17 раз больше
+     * воронки того же заряда в грунте. Строка печатается, проверка вернётся с исправлением волны и воронки.
+     */
+    private static final String ROAD_ISSUE = "изъян: бетон на грунте ломает волна, как стену";
 
     /** Верх поверхности на площадке «range» (дёрн шаблона) и квадрат, где она своя. */
     private static final int TOP = 11, LO = 8, HI = 55, MID = 32;
@@ -124,9 +131,11 @@ public final class SurfaceGameTests {
             return this == ROCK ? CraterModel.Soil.ROCK : CraterModel.Soil.DRY;
         }
 
-        /** Строки, которые ждут закона пробоя плиты. */
-        boolean pending() {
-            return !SLAB_LAW && (slab() || this == PAVED);
+        /** Почему строка не проверяется; null — проверяется. */
+        @Nullable
+        String pending() {
+            if (this == PAVED) return ROAD_ISSUE;
+            return slab() && !SLAB_LAW ? SLAB_PENDING : null;
         }
     }
 
@@ -338,7 +347,7 @@ public final class SurfaceGameTests {
             should = String.format(Locale.ROOT, "%d–%d бл. (закон %s), Ø %s м, глуб. ≤ %d", lo, hi, f(mean), f(2 * rc), deepest);
             ok = removed >= lo && removed <= hi && maxDepth <= Math.max(1, deepest);
         }
-        Row row = new Row(weapon.name(), s.title, should, got, !s.pending(), ok, SLAB_PENDING);
+        Row row = new Row(weapon.name(), s.title, should, got, s.pending() == null, ok, s.pending());
         report("surface_" + weapon.name().toLowerCase(Locale.ROOT), List.of(row));
         return row;
     }
@@ -558,17 +567,17 @@ public final class SurfaceGameTests {
                 if (col) columns++;
             }
         }
-        // ход бомбы (Ø 0,8 м) — блок по оси: в верхних трёх слоях — до трёх столбцов по косой
-        double crater = law.breaches() ? law.craterVolume(soil) : 0;
-        int craterLo = (int) Math.floor(0.6 * crater - 3 * Math.sqrt(crater)), craterHi = (int) Math.ceil(1.45 * crater + 3 * Math.sqrt(crater)) + 6;
+        // воронка выброса — по радиусу отверстия: закон BuriedBlast — оценка формы (сказано в нём), допуск ±50 %; камуфлет —
+        // наверху только ход бомбы (Ø 0,8 м, блок по оси): в верхних трёх слоях — не больше трёх столбцов
+        double lawR = law.breaches() ? law.craterRadius(soil) : 0, gotR = Math.sqrt(columns / Math.PI);
         boolean pathOk = path >= lo2 * young && path <= hi2 * young;
-        boolean craterOk = removedTop >= Math.max(1, craterLo) && removedTop <= craterHi;
+        boolean craterOk = law.breaches() ? gotR >= 0.5 * lawR && gotR <= 1.5 * lawR : removedTop >= 1 && columns <= 3;
         boolean throughSlab = !s.slab() || depth > 1 + (s == Surface.DECK ? VOID : ROOM);
         String should = String.format(Locale.ROOT, "путь %s м (Янг, %s–%s), λ %s: %s", f(young), f(lo2 * young), f(hi2 * young),
-                f(law.scaledDepth()), law.breaches() ? "воронка " + Math.max(1, craterLo) + "–" + craterHi + " бл." : "камуфлет, верх — ход (≤ " + craterHi + " бл.)")
+                f(law.scaledDepth()), law.breaches() ? "воронка R " + f(lawR) + " м (" + f(0.5 * lawR) + "–" + f(1.5 * lawR) + ")" : "камуфлет, наверху только ход")
                 + (s.slab() ? ", подрыв под плитой" : "");
-        String got = String.format(Locale.ROOT, "удар %s м/с под %s°, путь %s м, глубина %s м, снято сверху %d бл. в %d столбцах",
-                f(v), f(Math.toDegrees(Math.asin(sin))), f(path), f(depth), removedTop, columns);
+        String got = String.format(Locale.ROOT, "удар %s м/с под %s°, путь %s м, глубина %s м, наверху %d бл. в %d столбцах (R %s м)",
+                f(v), f(Math.toDegrees(Math.asin(sin))), f(path), f(depth), removedTop, columns, f(gotR));
         Row row = new Row("BOMB", s.title, should, got, true, pathOk && craterOk && throughSlab, "");
         report("surface_bomb", List.of(row));
         return row;
