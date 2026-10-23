@@ -122,6 +122,8 @@ final class Sandbox {
     private boolean overlay;
     /** Зум ×k ({@code zoom}): 1 — нет. */
     private double zoom = 1;
+    /** Взгляд ведёт снаряд эффекта ({@code track}). */
+    private boolean track;
     @Nullable
     private SandboxCommand lastEffect;
     /** Команда из файла, которая ещё идёт, и её файл итога. */
@@ -193,6 +195,7 @@ final class Sandbox {
         NeoForge.EVENT_BUS.addListener(this::onFrame);
         NeoForge.EVENT_BUS.addListener(this::onCommands);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, this::onFov);
+        NeoForge.EVENT_BUS.addListener(this::onFrameStart);
         try {
             Files.createDirectories(inbox);
             // команды прошлого запуска — не этому клиенту
@@ -376,6 +379,10 @@ final class Sandbox {
             }
             case OVERLAY -> {
                 overlay = c.args().getFirst().equals("on");
+                finish("ok");
+            }
+            case TRACK -> {
+                track = c.args().getFirst().equals("on");
                 finish("ok");
             }
             case ZOOM -> {
@@ -745,6 +752,21 @@ final class Sandbox {
     }
 
     // ---------------------------------------------------------------- кадры
+
+    /** {@code track on}: перед кадром глаз смотрит на снаряд эффекта там, где он в этом кадре по пути. */
+    private void onFrameStart(RenderFrameEvent.Pre e) {
+        Minecraft mc = Minecraft.getInstance();
+        FlightTrack p = projectile;
+        if (!track || p == null || mc.player == null) return;
+        double[] at = new double[3];
+        if (!p.predict(FlightTracks.now() - 1 + e.getPartialTick().getGameTimeDeltaPartialTick(true), at)) return;
+        Vec3 d = new Vec3(at[0], at[1], at[2]).subtract(mc.gameRenderer.getMainCamera().getPosition());
+        float yaw = (float) Math.toDegrees(Math.atan2(-d.x, d.z)), pitch = (float) -Math.toDegrees(Math.atan2(d.y, Math.hypot(d.x, d.z)));
+        mc.player.setYRot(yaw);
+        mc.player.setXRot(pitch);
+        mc.player.yRotO = yaw;
+        mc.player.xRotO = pitch;
+    }
 
     private void onFrame(RenderFrameEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();
