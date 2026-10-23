@@ -7,12 +7,14 @@
 
 // Свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (client/fx/layer/HeatPass): проход во весь кадр
 // после пелены и до квадратов слоя по копии кадра (Sampler0) — пиксель пишется целиком.
-// - Дрожание: показатель преломления воздуха n − 1 ∝ плотности ∝ 1/T, и горячий газ над огнём и шаром отклоняет луч
-//   на ∫∇n·dl. Пульсации температуры в факеле рвут его на вихри размера ℓ; луч, прошедший их путь L, отклоняется на
-//   угол ~δn·√(L/ℓ) (случайное блуждание через L/ℓ вихрей), δn — пульсации показателя (HeatPass считает их по
-//   температуре). Изображение за горячим газом сдвигается на этот угол × (1 − s/D) (s — до газа, D — до мира), вихри
-//   плывут вверх с газом. Это доли пикселя у огня и шара на обычном экране — дрожание видно на контрастных краях и в
-//   бинокль, как в жизни.
+// - Дрожание: показатель преломления воздуха n − 1 ∝ плотности ∝ 1/T, и горячий газ над огнём, шаром и в струе сопла
+//   отклоняет луч на ∫∇n·dl. Пульсации температуры рвут газ на вихри от внешнего масштаба ℓ вниз (Колмогоров); угол
+//   прихода за путём L — σ = δn·√(5,82·L/ℓ)·(ℓ/D)^(1/6) по одной оси (hazeAngle; D — пятно, что глаз различает у газа),
+//   вихри быстрее, чем глаз копит свет, сливаются (hazeSeen). Изображение за газом сдвигается на этот угол × (1 − s/D)
+//   (s — до газа, D — до мира). Сдвиг — в долях того, что различает глаз (острота зрения, в бинокль — пиксель): подача,
+//   HeatPass. Газ — столб вдоль своей оси (у огня и шара — вверх, у сопла — по струе), радиус растёт по оси, избыток
+//   температуры и скорость за своими местами падают как 1/x; узор вихрей — октавы шума от ℓ втрое мельче, пока крупнее
+//   пятна, и его несёт газ (два слоя со сдвигом в полцикла, смена слоя — при нулевом весе).
 // - Ударная волна ядерки: воздух за фронтом сжат (Ренкин–Гюгонио), n − 1 ∝ плотности, и луч, что пересекает сферу фронта,
 //   гнётся к её середине на производную добавки пути (тонкая оболочка: путь — функция Доусона, nuclear/model/ShockOptics,
 //   сверяет ShockOpticsGlslTest), среднюю по ширине пикселя там, где луч пересёк фронт. У касательной — пиксели, вдали от
@@ -38,10 +40,15 @@ uniform vec3 PallOpenSky;
 uniform vec4 PallFaceShade;
 // дымка воздуха и туман кадра (как у fx_pall_composite): ослабление, начало и конец тумана, форма
 uniform vec4 Haze;
-// горячий газ: столбец i — низ столба от глаза (xyz), радиус (w; 0 — нет); высота, размер вихря ℓ, путь газа в размерах
-// вихря (по модулю периода шума), пульсация показателя преломления δn (по столбцам)
+// горячий газ: столбец i — низ столба от глаза (xyz), радиус там (w; 0 — нет); длина по оси, вихрь ℓ у низа, скорость
+// газа у низа, (n₀ − 1)·доля пульсаций; ось от низа (xyz) и рост радиуса на метр оси; избыток температуры у низа, K, и
+// места по оси, за которыми избыток и скорость падают как 1/x
 uniform mat4 HeatHot;
 uniform mat4 HeatShape;
+uniform mat4 HeatAxis;
+uniform mat4 HeatGas;
+// перенос узора вихрей: доля цикла и номер цикла у двух слоёв (x, y и z, w)
+uniform vec4 HeatClock;
 // фронты ударной волны: столбцы 0 и 1 — середина от глаза (xyz), радиус (w; 0 — нет); 2 и 3 — скачок показателя
 // преломления на четырёх высотах ровно от синуса угла у земли до верха
 uniform mat4 HeatFront;
@@ -53,6 +60,15 @@ uniform vec4 HeatFrame;
 uniform vec4 HeatShadow;
 
 const float CROSS = 0.15;
+// закон дрожания — копии чисел HeatPass (сверяет HazeGlslTest)
+const float HAZE_T_AIR = 288.15;
+const float HAZE_COOL = 20.0;
+const float HAZE_KOLMOGOROV = 5.82;
+const float HAZE_ACUITY = 2.9e-4;
+const float HAZE_PUPIL = 4e-3;
+const float HAZE_EYE_S = 0.05;
+const float HAZE_SWIRL = 0.3;
+const float HAZE_CYCLE = 2.0;
 // сдвиг фронта меньше этой доли пикселя не виден: его нет (HeatPass.SHIFT_MIN)
 const float FRONT_SHIFT_MIN = 0.05;
 
@@ -73,41 +89,102 @@ float heatNoise(vec3 p) {
     return mix(a, b, u.z);
 }
 
-// Сдвиг изображения за горячим газом, пиксели: отрезок луча dir до мира (dist) внутри столба i (вертикальный цилиндр от
-// низа на высоту), угол — δn·√(L/ℓ), направление — шум вихрей в середине отрезка, вихри идут вверх с газом и
-// перемешиваются за ℓ/u' (u' — 0,3 скорости подъёма, оценка)
+// Пульсация показателя преломления (СКО) в газе с избытком температуры excess, K; amp — (n₀ − 1)·доля пульсаций (HeatPass.dn)
+float hazeDn(float excess, float amp) {
+    float t0 = HAZE_T_AIR / (HAZE_T_AIR + excess);
+    return amp * t0 * (1.0 - t0);
+}
+
+// Угол прихода луча (СКО по оси), рад: путь len в газе с пульсацией dn и вихрями до eddy, пятно aperture (HeatPass.hazeAngle)
+float hazeAngle(float dn, float len, float eddy, float aperture) {
+    if (aperture < eddy) return dn * sqrt(HAZE_KOLMOGOROV * len / eddy) * pow(eddy / aperture, 1.0 / 6.0);
+    return dn * sqrt(HAZE_KOLMOGOROV * len / eddy) * eddy / aperture;
+}
+
+// Доля дрожания, которую видит глаз: вихри, что живут меньше времени, за которое глаз копит свет, сливаются (HeatPass.hazeSeen)
+float hazeSeen(float eddy, float speed) {
+    float tau = eddy / max(HAZE_SWIRL * speed, 1e-6);
+    if (tau < HAZE_EYE_S) return sqrt(tau / HAZE_EYE_S);
+    return 1.0;
+}
+
+// Узор вихрей одного слоя в месте p (от низа столба, блоки): октавы от eddy втрое мельче, пока крупнее пятна aperture, вес
+// октавы — по Колмогорову (наклон фронта от вихрей размера s ∝ s^(−1/6)); газ прошёл по оси travel блоков, вихрь размера s
+// за это время сменился на долю 0,3·travel/ℓ·(ℓ/s)^(2/3); у каждого цикла — свой сдвиг узора. СКО на ось — как у heatNoise.
+vec2 hazeNoise(vec3 p, vec3 axis, float eddy, float travel, float cycle, float aperture) {
+    vec2 sum = vec2(0.0);
+    float norm = 0.0;
+    vec3 seed = vec3(cycle * 17.31, cycle * 5.17, cycle * 11.73);
+    for (int k = 0; k < 3; k++) {
+        float s = eddy * pow(3.0, -float(k));
+        if (k > 0 && s < aperture) break;
+        float w = pow(3.0, float(k) / 6.0);
+        vec3 q = p / s - axis * (travel / s) + seed;
+        float turn = HAZE_SWIRL * travel / eddy * pow(eddy / s, 2.0 / 3.0);
+        sum += w * vec2(heatNoise(q + vec3(0.0, 0.0, turn)), heatNoise(q + vec3(17.3, 5.1, turn + 31.7)));
+        norm += w * w;
+    }
+    return sum / sqrt(norm);
+}
+
+// Сдвиг изображения за горячим газом, пиксели: отрезок луча dir до мира (dist) внутри столба i (вдоль оси от низа на длину,
+// радиус у места, где луч ближе всего к оси), сила — hazeAngle в середине отрезка, направление — узор вихрей там
 vec2 heatShift(vec3 dir, float dist) {
     vec2 shift = vec2(0.0);
+    float res = min(HAZE_ACUITY, HeatFrame.y);
+    float wa = 1.0 - abs(2.0 * HeatClock.x - 1.0);
+    float wb = 1.0 - wa;
     for (int i = 0; i < 4; i++) {
         vec4 h = HeatHot[i];
         if (h.w <= 0.0) continue;
         vec4 s = HeatShape[i];
-        vec2 d2 = dir.xz;
-        // |d2·t − h.xz|² = r²: a·t² − 2b·t + c = 0
-        float a = dot(d2, d2), b = dot(h.xz, d2), c = dot(h.xz, h.xz) - h.w * h.w;
-        float disc = b * b - a * c;
-        if (a < 1e-8 || disc <= 0.0) continue;
-        float r = sqrt(disc);
-        float t0 = max((b - r) / a, 0.0), t1 = min((b + r) / a, dist);
-        // по высоте — между низом и верхом столба
-        if (abs(dir.y) > 1e-5) {
-            float ya = (h.y - 0.0) / dir.y, yb = (h.y + s.x) / dir.y;
-            t0 = max(t0, min(ya, yb));
-            t1 = min(t1, max(ya, yb));
-        } else if (h.y > 0.0 || h.y + s.x < 0.0) {
+        vec4 ax = HeatAxis[i];
+        vec4 g = HeatGas[i];
+        vec3 a = ax.xyz;
+        // по оси — между низом и концом: место по оси точки луча t — t·c − ba
+        float c = dot(dir, a), ba = dot(h.xyz, a);
+        float t0 = 0.0, t1 = dist;
+        if (abs(c) > 1e-5) {
+            float ta = ba / c, tb = (ba + s.x) / c;
+            t0 = max(t0, min(ta, tb));
+            t1 = min(t1, max(ta, tb));
+        } else if (ba > 0.0 || ba + s.x < 0.0) {
+            continue;
+        }
+        if (t1 <= t0) continue;
+        // поперёк оси: |t·d⊥ − b⊥|² = r², радиус — там, где луч ближе всего к оси
+        vec3 dp = dir - a * c, bp = h.xyz - a * ba;
+        float qa = dot(dp, dp), qb = dot(dp, bp);
+        float tc = 0.5 * (t0 + t1);
+        if (qa > 1e-8) tc = clamp(qb / qa, t0, t1);
+        float r = h.w + ax.w * clamp(tc * c - ba, 0.0, s.x);
+        float qc = dot(bp, bp) - r * r;
+        if (qa > 1e-8) {
+            float disc = qb * qb - qa * qc;
+            if (disc <= 0.0) continue;
+            float root = sqrt(disc);
+            t0 = max(t0, (qb - root) / qa);
+            t1 = min(t1, (qb + root) / qa);
+        } else if (qc > 0.0) {
             continue;
         }
         float len = t1 - t0;
         if (len <= 0.0) continue;
         float mid = 0.5 * (t0 + t1);
-        float angle = s.w * sqrt(len / s.y) * (1.0 - mid / max(dist, mid + 1e-3));
-        vec3 q = (dir * mid - h.xyz) / s.y;
-        // s.z — путь газа в размерах вихря (HeatPass: по модулю периода); вихри перемешиваются за ℓ/u', u' — 0,3 подъёма
-        q.y -= s.z;
-        float turn = 0.3 * s.z;
-        // СКО шума ~0,45 на ось: на вектор — СКО угла
-        float k = angle / (0.45 * 1.4142136) / HeatFrame.y;
-        shift += k * vec2(heatNoise(q + vec3(0.0, 0.0, turn)), heatNoise(q + vec3(17.3, 5.1, turn + 31.7)));
+        float u = clamp(mid * c - ba, 0.0, s.x);
+        float excess = g.x * min(1.0, g.y / max(u, 1e-3));
+        if (excess < HAZE_COOL) continue;
+        float eddy = s.y * (h.w + ax.w * u) / h.w;
+        float speed = s.z * min(1.0, g.z / max(u, 1e-3));
+        float aperture = max(HAZE_PUPIL, res * mid);
+        float k = hazeAngle(hazeDn(excess, s.w), len, eddy, aperture) * hazeSeen(eddy, speed) * (1.0 - mid / max(dist, mid + 1e-3)) / res;
+        // меньше сотой пикселя — без шума (цена)
+        if (k < 0.01) continue;
+        vec3 p = dir * mid - h.xyz;
+        vec2 n = wa * hazeNoise(p, a, eddy, speed * HeatClock.x * HAZE_CYCLE, HeatClock.y, aperture)
+                + wb * hazeNoise(p, a, eddy, speed * HeatClock.z * HAZE_CYCLE, HeatClock.w, aperture);
+        // СКО шума ~0,45 на ось, смесь двух слоёв — /√(wa² + wb²)
+        shift += k / (0.45 * sqrt(wa * wa + wb * wb)) * n;
     }
     return shift;
 }

@@ -806,13 +806,14 @@ public final class FarFlightView {
 
     /**
      * Свет факелов кадра на мир ({@link HeatPass.Frame#jet}: струя от сопла до точки Дрейпера по частям) и в глаз следующего
-     * кадра ({@link #flamesAtEye}); воздух air, 1/блок.
+     * кадра ({@link #flamesAtEye}), горячий газ их струй — дрожанием ({@link HeatPass.Frame#exhaust}); воздух air, 1/блок.
      */
     static void heat(HeatPass.Frame heat, double air) {
         for (int i = 0; i < lit; i++) {
             int o = LIT_STRIDE * i;
             // в глаз этого кадра факелы уже вошли — прошлым кадром ({@link #flamesAtEye})
             heat.jet(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT_FLAME[i], air, LIT[o + 6], LIT[o + 7]);
+            heat.exhaust(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT_FLAME[i], LIT[o + 7]);
             LIT_FLAME[i] = null;
         }
         flamesAtEye = litEye;

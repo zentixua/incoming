@@ -274,8 +274,9 @@ The fireball and burning fuel light the ground and walls around them, like the f
 an orange glow spreads over the blocks around the crater and fades as the ball cools. Blocks cast shadows from this
 light: a house or a hill between the fire and the ground leaves it dark, even when the house is outside your view.
 Shadows are worked out for about 90 blocks around you and 40 up and down; further away the light has
-none. Hot gas over the fire and the fireball bends light, so whatever is behind it
-shimmers slightly; on a normal screen it is a fraction of a pixel, best seen on sharp edges and through binoculars.
+none. Hot gas over the fire, over the fireball and in a rocket's exhaust bends light, so whatever is behind it
+shimmers. The shimmer is shown as large as your eye would see it, about a pixel on a normal screen, so it shows on
+edges behind the fire; through binoculars it is the true angle.
 
 In humid air a white condensation cloud flashes around the blast for a moment. By day the cloud rises higher than at
 night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
