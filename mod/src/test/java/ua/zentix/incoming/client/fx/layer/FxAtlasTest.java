@@ -13,6 +13,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.stream.Stream;
 
@@ -80,6 +81,32 @@ class FxAtlasTest {
         assertEquals(0, FxAtlas.fireballFrameOf(f, 0, 1484), 1e-9);
         assertTrue(FxAtlas.fireballFrameOf(f, 0.5, 1484) > 2, "середина горения — не вспышка");
         assertTrue(FxAtlas.fireballFrameOf(f, 2, 800) >= FxAtlas.FIREBALL_FRAMES - 3, "остывший — у сажи");
+    }
+
+    /** Средняя яркость не ловит ровный диск: складки должны различаться внутри, без прозрачной каймы. */
+    @Test
+    void burningFireballKeepsItsInteriorContrast() throws IOException {
+        for (int i = 0; i < 10; i++) {
+            try (InputStream in = FxAtlasTest.class.getResourceAsStream(DIR + String.format(Locale.ROOT, "fireball_%02d.png", i))) {
+                assertNotNull(in);
+                BufferedImage img = ImageIO.read(in);
+                double[] light = new double[img.getWidth() * img.getHeight()];
+                int count = 0;
+                double middle = (img.getWidth() - 1) / 2.0, radius = 0.35 * img.getWidth();
+                for (int y = 0; y < img.getHeight(); y++) {
+                    for (int x = 0; x < img.getWidth(); x++) {
+                        int rgba = img.getRGB(x, y);
+                        if ((rgba >>> 24) <= 230 || Math.hypot(x - middle, y - middle) >= radius) continue;
+                        light[count++] = (0.2126 * (rgba >> 16 & 255) + 0.7152 * (rgba >> 8 & 255) + 0.0722 * (rgba & 255)) / 255;
+                    }
+                }
+                assertTrue(count > 100, "внутри шара есть непрозрачный огонь: кадр " + i);
+                Arrays.sort(light, 0, count);
+                // Разница в 15 % белого экрана: заметные складки, а не шум у почти срезанного белого (3.6: 4–11 %).
+                double contrast = light[9 * count / 10] - light[count / 10];
+                assertTrue(contrast > 0.15, "складки внутри огня видны: кадр " + i + ", контраст " + contrast);
+            }
+        }
     }
 
     /** Клуб: 16 кадров по три карты 128, рост края — с 1 и растёт, предел векторов движения — тот, что ждёт шейдер. */

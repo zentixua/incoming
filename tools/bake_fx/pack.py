@@ -98,7 +98,7 @@ def save_rgba(rgb, alpha, path):
 
 
 def film(x):
-    """Плёночная кривая по каналам (ACES, приближение Narkowicz 2015): носок держит сажу тёмной, плечо — ядро без среза
+    """Плёночная кривая по каналам (ACES, приближение Narkowicz 2016, CC0): носок держит сажу тёмной, плечо — ядро без среза
     в плоский белый; горячее по каналам уходит в жёлтое и белое, как у плёнки и глаза."""
     x = np.maximum(x, 0)
     return np.clip(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14), 0, 1)
@@ -198,6 +198,8 @@ def fireball(src, out):
                 break
             half *= math.sqrt(seen / target)
         last_half = half
+        # Кубическая выборка при увеличении даёт малые отрицательные выбросы у резкого края: до гаммы, не после NaN.
+        tile[..., :3] = np.clip(tile[..., :3], 0, 1)
         save_rgba(tile[..., :3] ** (1 / 2.2), tile[..., 3], os.path.join(out, f"fireball_{k:02d}.png"))
         yy, xx = np.mgrid[0:TILE, 0:TILE]
         disc = (xx - TILE / 2 + 0.5) ** 2 + (yy - TILE / 2 + 0.5) ** 2 < (TILE / 2 / FIREBALL) ** 2
