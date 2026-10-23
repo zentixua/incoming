@@ -179,9 +179,31 @@ record SandboxCommand(Verb verb, List<String> args) {
         return i >= 0 && args.size() > i + 1 ? number(i + 1) : NEAR_RANGE;
     }
 
- *   <li>{@code real <оружие> [deck <м> | houses]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки)
- *   на новом месте; {@code deck} — удар в середину моста: настил из камня в столько метров над руслом с водой (пробой
- *   плиты); {@code houses} — у дощатого дома сцены {@code debris} (дома и дубы рядом): что загорится и как дымит;</li>
+    /**
+     * Приказ серверу для {@code launch}/{@code flight} в точке (x, z), без «execute as» ({@code own} добавляет его сам).
+     * Пролёт — по прямой мимо камеры: без точек оператора шахед и ракета летят петлёй в обход и заходят из-за спины
+     * стреляющего ({@code StrikeService.Loop}), и у точки проходили в 200–350 блоках, дальше, чем ждёт песочница. Поэтому
+     * у оружия, которое летает по точкам ({@link WeaponSpec.Route#waypoints}), точка маршрута — сама точка, на одной
+     * прямой между местом пуска и целью: снаряд проходит над ней на своей высоте. «Град» и B-2 точек не берут (приказ с
+     * {@code via} сервер отклоняет) и идут по прямой сами: баллистика и курс сброса от места пуска на цель.
+     */
+    String order(int x, int z) {
+        WeaponType w = weapon();
+        if (verb == Verb.LAUNCH) return String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - LAUNCH_RANGE, x, z);
+        if (verb != Verb.FLIGHT) throw new IllegalStateException("не пуск: " + this);
+        int from = flightFrom();
+        String s = String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - from, x, z + from);
+        return w.spec().route().waypoints() ? s + String.format(Locale.ROOT, " via %d %d", x, z) : s;
+    }
+
+    /** {@code flight}: пуск и цель — на столько блоков от точки. */
+    int flightFrom() {
+        return args.size() > 1 && !args.get(1).equals("own") ? (int) number(1) : FLIGHT_FROM;
+    }
+
+    /** {@code real … deck <м>}: толщина настила моста, м; 0 — удар в землю. */
+    int deck() {
+        return verb == Verb.REAL && args.size() == 3 ? (int) number(2) : 0;
     }
 
     /** {@code real <оружие> houses}: удар у дощатого дома сцены {@code debris}. */
