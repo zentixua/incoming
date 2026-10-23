@@ -46,8 +46,8 @@ a non-operator then needs a second player nearby to confirm it when anyone else 
 - **Blackout**: destroying a transformer substation turns off the electric lights in its district for 15 minutes.
 - **Sound**: engines and explosions carry for kilometers and travel at the speed of sound, so you see a distant
   explosion before you hear it.
-- **Settings**: the world owner sets explosion power, flight times, salvo limits, who may use the designator and
-  nuclear weapons, and more.
+- **Settings**: the world owner sets flight times, game or real flight speeds, salvo limits, whether strikes break
+  blocks and start fires, who may use the designator and nuclear weapons, and more.
 
 ## Compatibility
 

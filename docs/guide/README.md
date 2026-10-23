@@ -3,8 +3,14 @@
 English · [Русский](ru/README.md)
 
 Air strikes: Shahed drones, Lancets, cruise missiles, Grad rockets, a B-2 bomber and a nuclear ICBM. All of them are
-aimed with one item, the Strike Designator. The projectiles are full size and fly like real ones; they can be seen and
-heard from far away, and a siren sounds at the target before impact.
+aimed with one item, the Strike Designator. The projectiles are full size; they can be seen and heard from far away,
+and a siren sounds at the target before impact.
+
+What happens at the target follows the real weapon and the laws of physics: what breaks and how far, the crater,
+wounds, how big a blast is and how long it lasts. Flight and air defense are the mod's own game model, and by default
+speeds and heights in flight are game values ([how they fly](weapons.md#how-they-fly)). How it is shown (light,
+colour, contrast, smoke, camera) can be stronger than a camera would record, so that it reads well in the game; that
+never changes what happens. Where the mod departs from physics, this guide says "not physical".
 
 ## Getting started
 

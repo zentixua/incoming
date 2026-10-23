@@ -18,7 +18,8 @@ Times are for a nearby target. The world owner can change flight times.
 
 Each weapon is a real one. Its size, mass, warhead and engines come from open data; where a number is not published
 (some engines, the share of explosive in a warhead), it is worked out from the published ones by physics. The warhead
-sets everything the blast does: what it breaks and how far, the crater, wounds, and how the explosion looks and sounds.
+sets everything the blast does: what it breaks and how far, the crater, wounds, and the size, timing and course of
+what you see and hear.
 
 | | Shahed-136 | Lancet-3 | Tomahawk | Grad 9M22U | GBU-57 (from B-2) | Minuteman III |
 |---|---|---|---|---|---|---|
@@ -92,8 +93,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 
 Known limits: the injury thresholds are those for long nuclear pulses, so near a small charge they slightly overstate
 harm. Fragments fly in straight lines (gravity bends a dangerous fragment's path by less than a metre), do not
-ricochet and pass through Create Aeronautics aircraft. A chipped block turns cracked as a whole, while a real
-fragment leaves a pit of a few centimetres (not physical).
+ricochet and pass through Create Aeronautics aircraft. A real fragment leaves a pit of a few centimetres; a block
+has no marks that small, so a chipped block shows the hit by turning cracked as a whole.
 
 ## How they fly
 
