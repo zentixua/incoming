@@ -46,7 +46,6 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.GroundMaterial;
-import ua.zentix.incoming.warhead.Warheads;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -744,7 +743,7 @@ final class Sandbox {
                 }
                 // у дощатого дома: удар в землю у его стены к камере (дом — от x + 4 до x + 12, z ± 3)
                 if (c.houses()) buildHouses(server, BlockPos.containing(site));
-                Warheads.detonate(server.overworld(), c.weapon(), c.houses() ? at.add(8, 0, 5) : at, null, null);
+                SandboxStrikes.detonate(server.overworld(), c.weapon(), c.houses() ? at.add(8, 0, 5) : at);
                 return;
             }
             if (c.near()) {
