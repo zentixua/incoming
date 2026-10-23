@@ -22,7 +22,8 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Куски блоков, которые сорвала и несёт ударная волна: кувыркающиеся тела с текстурой своего блока (как частица
@@ -71,11 +72,12 @@ public final class Fragments {
      */
     static final double LIFT_MIN = 0.02, LIFT_MAX = 0.12;
     /**
-     * Куски, которые кончат жизнь в каждый из ближайших тиков (по кругу, тик — по сроку куска): живых не больше их суммы.
-     * Свой счёт, а не по смерти куска — движок выбрасывает частицы и без неё (переполнение очереди, смена мира).
+     * Живые куски — свой список, а не по смерти куска: движок выбрасывает частицы и без неё (переполнение очереди, смена
+     * мира), поэтому кусок, который не тикал дольше {@link #LOST} тиков, считается ушедшим.
      */
-    private static final int[] ENDS = new int[LIFE_MAX + DELAY_MAX + 1];
-    private static int alive, tick;
+    private static final List<Fragment> LIVE = new ArrayList<>();
+    private static final int LOST = 2;
+    private static long tick;
     private static final RandomSource RANDOM = RandomSource.create();
 
     private Fragments() {}
@@ -164,12 +166,36 @@ public final class Fragments {
     public static boolean torn(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
                                float size, Wind wind, int delay) {
         if (state.isAir() || state.getRenderShape() != RenderShape.MODEL || !state.shouldSpawnTerrainParticles()) return false;
-        if (alive >= cap()) return false;
+        if (LIVE.size() >= cap() && !evictFartherThan(x, y, z)) return false;
         int wait = Mth.clamp(delay, 0, DELAY_MAX);
         int life = kind == Kind.LEAF ? LIFE_MAX : LIFE_SHORT - 40 + RANDOM.nextInt(41);
-        ENDS[(tick + wait + life) % ENDS.length]++;
-        alive++;
-        Minecraft.getInstance().particleEngine.add(new Fragment(level, state, from, kind, x, y, z, vx, vy, vz, size, wind, wait, life));
+        Fragment f = new Fragment(level, state, from, kind, x, y, z, vx, vy, vz, size, wind, wait, life);
+        LIVE.add(f);
+        Minecraft.getInstance().particleEngine.add(f);
+        return true;
+    }
+
+    /**
+     * Мест нет: самый дальний от камеры живой кусок уходит, если он дальше места (x, y, z) нового. Волна идёт к камере, и
+     * ближние места снесённого приходят последними — иначе все места занимали бы куски дальних чанков, а у камеры, где
+     * их и видно, не было бы ни одного.
+     */
+    private static boolean evictFartherThan(double x, double y, double z) {
+        Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        int far = -1;
+        double farD = eye.distanceToSqr(x, y, z);
+        for (int i = 0; i < LIVE.size(); i++) {
+            Fragment f = LIVE.get(i);
+            double d = eye.distanceToSqr(f.x(), f.y(), f.z());
+            if (d > farD) {
+                farD = d;
+                far = i;
+            }
+        }
+        if (far < 0) return false;
+        LIVE.get(far).remove();
+        LIVE.set(far, LIVE.getLast());
+        LIVE.removeLast();
         return true;
     }
 
@@ -178,22 +204,20 @@ public final class Fragments {
         return s == ParticleStatus.ALL ? CAP : s == ParticleStatus.DECREASED ? CAP / 2 : CAP / 4;
     }
 
-    /** Сколько кусков живёт (верхняя оценка: срок ещё не вышел). */
+    /** Сколько кусков живёт. */
     public static int alive() {
-        return alive;
+        return LIVE.size();
     }
 
-    /** Тик клиента (не на паузе): куски, чей срок вышел, — из счёта. */
+    /** Тик клиента (не на паузе): ушедшие куски — из счёта. */
     public static void tick() {
-        tick = (tick + 1) % ENDS.length;
-        alive -= ENDS[tick];
-        ENDS[tick] = 0;
+        tick++;
+        LIVE.removeIf(f -> !f.isAlive() || tick - f.ticked > LOST);
     }
 
     /** Выход из мира: движок сам убирает частицы. */
     public static void reset() {
-        Arrays.fill(ENDS, 0);
-        alive = 0;
+        LIVE.clear();
     }
 
     /** Кусок: прямоугольное тело с полуразмерами по своим осям, повёрнутое вокруг своей оси, с текстурой блока на гранях. */
@@ -213,6 +237,8 @@ public final class Fragments {
         private final Wind wind;
         private float angle, angleO, spin;
         private int delay, rest;
+        /** Тик {@link Fragments#tick}, в который кусок тикал в последний раз (движок выбросил его — перестаёт). */
+        private long ticked = Fragments.tick;
 
         Fragment(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
                  float size, Wind wind, int delay, int life) {
@@ -279,8 +305,21 @@ public final class Fragments {
             spin = 0.1f * (random.nextBoolean() ? 1 : -1);
         }
 
+        double x() {
+            return x;
+        }
+
+        double y() {
+            return y;
+        }
+
+        double z() {
+            return z;
+        }
+
         @Override
         public void tick() {
+            ticked = Fragments.tick;
             if (delay > 0) {
                 delay--;
                 return;

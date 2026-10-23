@@ -55,8 +55,11 @@ public final class NukeDust {
     private static final double DEBRIS_FULL = 48;
     /** Пыль проломов ближе {@link #DEBRIS_FULL} — полосой у каждой кучки в клетке со стороной столько блоков, дальше — одной на чанк. */
     private static final int CELL = 4;
-    /** Вещество плотнее этого, кг/м³, — металл ({@link Shielding#material}): он гнётся и рвётся, а в пыль не крошится. */
-    private static final double METAL = 7000;
+    /**
+     * Минеральное вещество ({@link Shielding#material}: грунт 1600, камень и кирпич 2300) — от этой плотности, кг/м³, металл
+     * (7800) — с {@link #METAL}: в пыль крошится только минеральное.
+     */
+    private static final double MINERAL = 1500, METAL = 7000;
     /** Руины чанка встали позже фронта больше чем на столько тиков — его обломки не летят: волна уже прошла. */
     static final int DEBRIS_LATE = 20;
     /**
@@ -183,7 +186,7 @@ public final class NukeDust {
     /**
      * Блоки, которые снесла волна (сервер — тем, кто видит чанк, {@code S2C.NukeDebris}: выборка мест и сколько снесено
      * всего): каждое место выборки срывается кусками своего вещества в покое, когда до него дошёл фронт, и их несёт ветер
-     * за фронтом в этом месте ({@link BlastGust}); вдали — реже. Пыль, выбитая из каменного и деревянного, — полосой по
+     * за фронтом в этом месте ({@link BlastGust}); вдали — реже. Пыль, выбитая из камня, кирпича и грунта, — полосой по
      * ветру ({@link BlastDust}): масса — за все снесённые места, которые место выборки представляет.
      */
     static void debris(ClientNuclear.Active a, S2C.NukeDebris packet) {
@@ -211,9 +214,10 @@ public final class NukeDust {
                 if (Fragments.torn(level, p.state(), p.pos(), kind, c.x + (RANDOM.nextDouble() - 0.5) * 0.6, c.y + (RANDOM.nextDouble() - 0.5) * 0.6,
                         c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay)) TORN[kind.ordinal()]++;
             }
-            if (dist > NEAR || kind == Fragments.Kind.LEAF || kind == Fragments.Kind.PANE) continue;
-            // металл в пыль не крошится
-            if (Shielding.material(level, p.pos(), p.state()) >= METAL) continue;
+            if (dist > NEAR || kind != Fragments.Kind.CHUNK) continue;
+            // в пыль крошится минеральное — камень, кирпич, глина, грунт; дерево, лёд и металл — нет
+            double material = Shielding.material(level, p.pos(), p.state());
+            if (material < MINERAL || material >= METAL) continue;
             double mass = weight * BlastDust.FINES * Shielding.density(level, p.pos(), p.state());
             long key = dist <= DEBRIS_FULL ? BlockPos.asLong(Math.floorDiv(p.pos().getX(), CELL), Math.floorDiv(p.pos().getY(), CELL),
                     Math.floorDiv(p.pos().getZ(), CELL)) : Long.MIN_VALUE;

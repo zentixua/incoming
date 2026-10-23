@@ -263,7 +263,7 @@ public final class FlashAftermath {
      * {@value #SMOKE_K} м²/кг (у дыма тления ~4,4 м²/г, Mulholland, SFPE Handbook; ⚠ по памяти), цвет — серо-бурый;</li>
      * <li>тепло в воздух — {@value #TO_AIR} поглощённого (О), газ ~{@value #SMOKE_K_GAS} K (пиролиз дерева 500–700 K).</li>
      * </ul>
-     * Волна сносит дымок ветром за фронтом ({@link BlastDust#carry}): полосой по ветру, пока он не растворится в пыли.
+     * Дымок виден, пока до места не дошла волна (её стена пыли сметает его).
      */
     static final int SMOKE_PROBES = 384;
     /** Проб за тик: вся раскладка — за первые {@link #SMOKE_PROBES} / столько тиков вспышки. */
@@ -335,9 +335,8 @@ public final class FlashAftermath {
                 if (!Fragility.possible(q, SMOKE_Q, SMOKE_BETA) || !ThermalShadow.visible(level, d.burst(), at)) continue;
                 if (!Fragility.hit(q, SMOKE_Q, SMOKE_BETA, rnd.nextGaussian())) continue;
                 double absorbed = ABSORB * q * CAL_CM2 * area, volatiles = ABSORB * Math.max(0, q - SMOKE_Q) * CAL_CM2 * area / GASIFY;
-                // волна дымок не обрывает, а уносит полосой по ветру за фронтом, и он растворяется в пыли
                 smoke.add(at.x, at.y, at.z, now, TO_AIR * absorbed, SMOKE_K_GAS, 0.5 * Math.sqrt(area), 0, SMOKE_YIELD * volatiles, SMOKE_K,
-                        Double.NaN, BlastDust.carry(d, at, t, now));
+                        now + (wave - t) / 20);
                 puffs++;
             }
             return true;

@@ -2,7 +2,6 @@ package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
-import ua.zentix.incoming.client.fx.smoke.Puffs;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.DustModel;
@@ -19,15 +18,17 @@ import java.util.List;
  * нём, когда слой (голова стены, {@link DustModel#waveTop}) её перерастает, — тогда её рисует сама пелена.
  * <p>
  * Сколько пыли: в модели пелены пыль обломков города — {@code DustModel.Surface.REFERENCE.debris} = 0,1 кг/м² там, где
- * рушится всё (подобрано по Хиросиме). На килограмм снесённого это {@link #FINES}: доля, что встаёт мелкой пылью. Масса
- * блока — {@code Shielding.density}. Так пролом одного каменного блока даёт клуб в метры, видный долю секунды, а обрушенный
+ * рушится всё (подобрано по Хиросиме). На килограмм снесённого минерального это {@link #FINES}: доля, что встаёт мелкой
+ * пылью. Масса блока — {@code Shielding.density}. Так пролом одного каменного блока даёт клуб в метры, видный долю секунды, а обрушенный
  * дом — облако. Пелена свою пыль обломков кладёт ровно по давлению и не вычитает эту (⚠ у снесённых домов пыли до вдвое
  * больше, чем в модели над ровным местом; пыль обломков — меньшая часть слоя: грунт ветер поднимает килограммами).
  */
 final class BlastDust implements SmokeGrid.Source {
     /**
-     * Доля массы снесённого, что встаёт мелкой пылью: 0,1 кг/м² пыли обломков модели на город, где дома занимают половину
-     * земли и весят ~400 кг на квадратный метр застройки (двухэтажный дом из дерева, глины и черепицы) — ⚠ оценка.
+     * Доля массы снесённого минерального вещества (камень, кирпич, глина, грунт), что встаёт мелкой пылью: 0,1 кг/м² пыли
+     * обломков модели — глина стен и штукатурка города, где дома занимают половину земли, а глины, штукатурки и черепицы
+     * в них ~400 кг на квадратный метр застройки (двухэтажный дом) — ⚠ оценка. Дерево, листва, стекло и металл в пыль не
+     * крошатся: доски и стволы ломаются кусками.
      */
     static final double FINES = DustModel.Surface.REFERENCE.debris() / (0.5 * 400);
     /**
@@ -123,22 +124,6 @@ final class BlastDust implements SmokeGrid.Source {
      */
     static double layerTop(Detonation d, double groundM, double ageTicks) {
         return d.blocks(DustModel.waveTop(groundM, d.hobMetres(), d.yieldKt(), Math.max(0, ageTicks) / (20.0 * d.scale())));
-    }
-
-    /**
-     * Ветер волны подрыва {@code d}, что сносит выброс дыма из места {@code at} ({@link Puffs.Carry}: дымки вспышки): с
-     * прихода фронта — путь воздуха и рост полосы, как у пыли пролома, и растворение в слое пыли. {@code ticks} — тики
-     * после подрыва в миг часов сетки {@code seconds}.
-     */
-    static Puffs.Carry carry(Detonation d, Vec3 at, double ticks, double seconds) {
-        BlastGust g = BlastGust.of(d, at, () -> ticks);
-        Streak layer = new Streak(at.x, at.y, at.z, g, 0, 0, d.metres(Math.hypot(at.x - d.burst().x, at.z - d.burst().z)));
-        return (now, into) -> {
-            double t = ticks + (now - seconds) * 20;
-            parcel(g, g.arrival, t, into);
-            layer.layer(d, t);
-            into[3] = Math.hypot(into[3], layer.top / Math.sqrt(12));
-        };
     }
 
     @Override
