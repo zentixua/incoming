@@ -27,6 +27,41 @@ public final class FarTerrain {
         };
     }
 
+    /**
+     * Surface carrying dense dust: a leaf canopy is permeable, so follow the column to matter below it.
+     * Solid wood, stone, roofs and water all stop the scan alike. Chunk reads only; no world generation.
+     * The frame-local cache also bounds repeated column scans while rebuilding a puff's path after a rewind.
+     */
+    public static Sightline.Heights dust(ClientLevel level) {
+        java.util.Map<Long, Integer> cache = new java.util.HashMap<>();
+        long[] tick = {Long.MIN_VALUE};
+        Sightline.Heights fallback = of(level);
+        return (x, z) -> {
+            if (tick[0] != level.getGameTime()) { cache.clear(); tick[0] = level.getGameTime(); }
+            LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
+            if (chunk == null) return fallback.at(x, z);
+            long key = ((long) x << 32) ^ (z & 0xffffffffL);
+            return cache.computeIfAbsent(key, k -> dustY(chunk, x, z) + 1);
+        };
+    }
+
+    static int dustY(LevelChunk chunk, int x, int z) {
+        int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, top, z);
+        return belowCanopy(top, chunk.getMinBuildHeight(), chunk.getBlockState(p).is(net.minecraft.tags.BlockTags.LEAVES), y -> {
+            var s = chunk.getBlockState(p.setY(y));
+            return s.isAir() || s.is(net.minecraft.tags.BlockTags.LEAVES);
+        });
+    }
+
+    /** Pure column operation for tests: a full solid is a surface regardless of what it was built for. */
+    static int belowCanopy(int top, int bottom, boolean leaves, java.util.function.IntPredicate permeable) {
+        if (!leaves) return top;
+        int y = top;
+        while (y > bottom && permeable.test(y)) y--;
+        return y;
+    }
+
     /** Вода ли сверху колонки: 1 — вода, 0 — суша, {@link Double#NaN} — неизвестно. */
     @FunctionalInterface
     public interface Water {

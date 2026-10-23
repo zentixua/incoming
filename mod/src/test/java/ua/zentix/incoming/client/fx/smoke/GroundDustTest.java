@@ -170,8 +170,9 @@ class GroundDustTest {
         CloudModel m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), DAY, false, 0, new GroundDust.Ground(loose, covered));
         int land = 0;
         for (double t : new double[]{0.1, 1, 3}) {
-            for (double[] b : blobs(m, t)) {
-                if (b[6] <= 0 || b[5] > 0 || b[1] > 2 * b[4] + 0.5) continue;
+            // Test the wave's source, not land-origin crushed material that can be thrown/carried over water.
+            for (double[] b : layer(m.ground, t)) {
+                if (b[5] <= 0) continue;
                 double[] d = m.ground.drift(t, b[1]);
                 double ang = Math.atan2(b[2] - d[1], b[0] - d[0]);
                 if (ang < 0) ang += 2 * Math.PI;
@@ -219,6 +220,23 @@ class GroundDustTest {
         for (double[] row : h) for (int b = 0; b < row.length; b++) row[b] = GroundDust.BANDS[b] < roof ? 0 : -15;
         return new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h,
                 (x, z) -> Math.hypot(x, z) < roof ? 0 : -15);
+    }
+
+    @Test
+    void crushedMaterialAtAnEdgeStartsAtTheImpactBeforeFalling() {
+        CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
+        // The impact is on a narrow ledge. Every 3 m band sample already sees the street 15 m below it.
+        var dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, house(1)).crushed;
+        var first = layer(dust, 0.1);
+        assertTrue(!first.isEmpty());
+        for (double[] b : first) assertTrue(b[1] - 0.8 * b[4] > -1, "not born on the street below the impact");
+        for (double t = 0.25; t <= 60; t += 0.25) {
+            for (double[] b : layer(dust, t)) {
+                double base = b[1] - 0.8 * b[4];
+                assertTrue(base >= -15 - 1e-6 && base <= 1e-6, "falls between the impact and the street");
+                if (t == 60) assertTrue(base <= -14, "reaches the street by the dense-current/lee law");
+            }
+        }
     }
 
     /**
@@ -296,9 +314,10 @@ class GroundDustTest {
     void dustNeverHangsOverTheVoid() {
         CloudModel.Air neutral = new CloudModel.Air(1e-3, 0, 0, 0.1, (int) Stability.D, 0.5);
         for (double roof : new double[]{10, 30}) {
-            for (double wind : new double[]{4, 0}) {
+            for (double wind : new double[]{4, 0}) for (boolean crushed : new boolean[]{false, true}) {
                 CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, wind, 0, 0.1, (int) Stability.C, 0.5);
-                GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, house(roof)).ground;
+                CloudModel model = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, house(roof));
+                GroundDust dust = crushed ? model.crushed : model.ground;
                 List<Double> ts = nodes(1, 180);
                 int n = layer(dust, ts.getFirst()).size();
                 double[] lifted = new double[n], crossed = new double[n], last = new double[n];
@@ -335,7 +354,7 @@ class GroundDustTest {
                         if (base <= below + 0.01 && lifted[i] > below + 5) fell++;
                     }
                 }
-                if (roof >= 30) assertTrue(fell > 0, "дом " + roof + ", ветер " + wind + ": пыль с крыши дошла до улицы");
+                if (roof >= 30 && (!crushed || wind > 0)) assertTrue(fell > 0, "дом " + roof + ", ветер " + wind + ", crushed " + crushed + ": пыль с крыши дошла до улицы");
             }
         }
     }

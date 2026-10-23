@@ -385,6 +385,29 @@ final class Sandbox {
                 timeWait = Math.floorMod(day, 24000L);
                 timeSince = tick;
             }
+            case SCENERY -> {
+                // Deterministic surfaces for the same dust-source comparison on both versions. Only this test world.
+                BlockPos s = BlockPos.containing(HOME);
+                for (int y = GROUND + 1; y <= GROUND + 9; y += 3) {
+                    server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", s.getX() - 48, y, s.getZ() - 48,
+                            s.getX() + 48, y + 2, s.getZ() + 48));
+                }
+                String kind = c.args().getFirst();
+                server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:%s", s.getX() - 48, GROUND, s.getZ() - 48,
+                        s.getX() + 48, GROUND, s.getZ() + 48, kind.equals("paved") ? "stone" : "grass_block"));
+                if (kind.equals("forest")) {
+                    for (int x = -40; x <= 40; x += 8) for (int z = -40; z <= 40; z += 8) {
+                        if (x * x + z * z < 64) continue;
+                        int tx = s.getX() + x, tz = s.getZ() + z;
+                        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_log", tx, GROUND + 1, tz, tx, GROUND + 5, tz));
+                        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_leaves[persistent=true]", tx - 3, GROUND + 4, tz - 3,
+                                tx + 3, GROUND + 6, tz + 3));
+                        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_leaves[persistent=true]", tx - 2, GROUND + 7, tz - 2,
+                                tx + 2, GROUND + 7, tz + 2));
+                    }
+                }
+                finish("ok");
+            }
             case HOUSE -> {
                 // прежний дом — прочь, новый — сплошной из каменного кирпича от травы до высоты (крыша — на ней)
                 BlockPos s = BlockPos.containing(HOME);

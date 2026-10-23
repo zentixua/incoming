@@ -14,6 +14,7 @@ import java.util.Locale;
  *   <li>{@code blast <оружие> [seed] [высота]} — взрыв только у клиента: пакет взрыва в той точке песочницы, как от
  *       сервера (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять); высота —
  *       над землёй, м (удар в крышу — на высоте дома {@code house}, иначе — точка в воздухе над травой);</li>
+ *   <li>{@code scenery grass|paved|forest} — поверхность и одинаковый лес для сравнения пыли (сначала убрать дом);</li>
  *   <li>{@code house <высота> [полуширина] [верх]} — дом из каменного кирпича под точкой (высота 0 — убрать), по
  *       умолчанию 21×21 блок; верх — блок крыши ({@code coarse_dirt} — крыша-сад с рыхлой землёй);</li>
  *   <li>{@code real <оружие> [deck <м> | houses]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки)
@@ -54,7 +55,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code flight}: пуск — на столько блоков к югу от точки (+Z), цель — на столько же к северу (−Z). */
     static final int FLIGHT_FROM = 600;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
@@ -169,6 +170,10 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (args.size() > 2 && !args.get(2).matches("[a-z0-9_]+")) throw new IllegalArgumentException("верх — блок minecraft: " + args.get(2));
                 if (number(0) < 0 || number(0) > 50) throw new IllegalArgumentException("высота дома 0–50");
                 if (number(1, 10) < 1 || number(1, 10) > 12) throw new IllegalArgumentException("полуширина 1–12");
+            }
+            case SCENERY -> {
+                need(1, 1);
+                if (!List.of("grass", "paved", "forest").contains(args.getFirst())) throw new IllegalArgumentException("scenery grass|paved|forest");
             }
             case AGAIN, CLEAR, RELOAD -> need(0, 0);
         }

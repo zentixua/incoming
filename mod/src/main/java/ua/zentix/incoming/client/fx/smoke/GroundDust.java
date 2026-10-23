@@ -140,6 +140,8 @@ public final class GroundDust {
     /** Высота поверхности над точкой взрыва по секторам и радиусам, м (неизвестна — ровная на {@link #hob} ниже). */
     private final double[][] surface;
     private final Relief relief;
+    /** Crushed material starts at the impact, even when the footprint already extends past an edge. */
+    private final boolean fragmented;
     private final int[] annulus;
     /** Таблицы по сетке времени: σ по вертикали и ∫dt/(1,25σ) у каждого кольца показа; подсос — доля его времени. */
     private final double[][] sv = new double[ANNULI][STEPS], settled = new double[ANNULI][STEPS];
@@ -167,10 +169,26 @@ public final class GroundDust {
      * взрыва над ней (там, где высота неизвестна, — {@code hobM}).
      */
     GroundDust(double tntKg, double hobM, double ballM, Ground ground, CloudModel.Air air) {
+        this(tntKg, hobM, ballM, ground, air, 0, 0);
+    }
+
+    /**
+     * Cold crushed material, separate from dust already lying on the surface. The mass is supplied by the crater /
+     * crushed-volume law, not by HARD's surface loading. Ejecta occupy the crater and its berm (2 crater radii,
+     * the same extent used for crater throwout); distribution over that disc is an approximation. Its subsequent
+     * spreading, settling and descent use exactly the same dense-current law as wave dust.
+     */
+    static GroundDust crushed(double tntKg, double hobM, double kg, double radius, Ground ground, CloudModel.Air air) {
+        Ground source = new Ground(ground.loose(), ground.covered(), ground.hard(), Ground.filled(-Math.max(0, hobM)), ground.relief());
+        return new GroundDust(kg > 0 ? tntKg : 0, hobM, 0, source, air, kg, radius);
+    }
+
+    private GroundDust(double tntKg, double hobM, double ballM, Ground ground, CloudModel.Air air, double crushedKg, double crushedRadius) {
         this.air = air;
         this.yieldKt = CloudModel.equivalentKt(tntKg);
         this.hob = Math.max(0, hobM);
         this.relief = ground.relief();
+        this.fragmented = crushedKg > 0;
         // высота взрыва над каждой поверхностью: снизу (крыша, улица) или сверху (стена, склон выше точки) — по наклонной
         // дальности то же давление (⚠ отражение от поверхности над точкой — как от поверхности под ней)
         surface = new double[SECTORS][BANDS.length];
@@ -202,6 +220,19 @@ public final class GroundDust {
         stemFrom = new double[SECTORS][RINGS];
         ball = new boolean[SECTORS][RINGS];
         double hardSupply = DustModel.Surface.HARD.supply();
+        double crushedArea = Math.PI * crushedRadius * crushedRadius;
+        double usedArea = 0;
+        // The radial cells are logarithmic. Integrate the source disc over their boundaries, including its last cell.
+        double[] crushedWeights = new double[RINGS];
+        if (crushedKg > 0 && crushedArea > 0) {
+            double edge = 0;
+            for (int i = 0; i < RINGS; i++) {
+                double next = Math.sqrt(edge * edge + area[i] / Math.PI);
+                crushedWeights[i] = Math.PI * (Math.pow(Math.min(next, crushedRadius), 2) - Math.pow(Math.min(edge, crushedRadius), 2));
+                usedArea += crushedWeights[i];
+                edge = next;
+            }
+        }
         for (int k = 0; k < SECTORS && outer > INNER; k++) {
             for (int i = 0; i < RINGS; i++) {
                 int b = band(r[i]);
@@ -215,6 +246,12 @@ public final class GroundDust {
                 stem[k][i] = f.stem[i];
                 stemFrom[k][i] = f.stemFrom[i];
                 ball[k][i] = f.ball[i];
+                if (crushedKg > 0) {
+                    mass[k][i] = usedArea > 0 ? crushedKg * crushedWeights[i] / usedArea / SECTORS : 0;
+                    // This source has already been partitioned from the hot cloud. Do not entrain/count it twice.
+                    stem[k][i] = 0;
+                    ball[k][i] = false;
+                }
             }
         }
         double sum = 0;
@@ -648,7 +685,7 @@ public final class GroundDust {
     private double begin(int sector, int show, double under, double ux, double uz, double[] at) {
         double source = surface[sector][show];
         if (Double.isNaN(under)) return source;
-        if (under <= source) return under;
+        if (under <= source) return fragmented && under < source - DROP ? source : under;
         double x0 = BANDS[show] * ux, z0 = BANDS[show] * uz, len = Math.hypot(at[0] - x0, at[1] - z0);
         int n = (int) Math.max(1, Math.min(32, Math.ceil(len)));
         double step = Math.max(1, len / n), last = relief.at(x0, z0);

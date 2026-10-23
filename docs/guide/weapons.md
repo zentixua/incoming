@@ -271,14 +271,18 @@ instead of drifting as one ball.
 The blast wind tears dust off every surface it reaches, ground, roof or hillside alike, the same way as the wave of a
 nuclear strike does. Bare dirt, sand, gravel and snow give it up easily: a low ring of light dust races out with the
 wave, a few tens of blocks for a Shahed, then thickens to several blocks, hangs for minutes and drifts with the wind near
-the ground. Grass holds the soil, so on a meadow the dust rises only around the crater; stone, brick, planks and tree
-crowns carry only a thin film of settled dust; water gives none: by a shore the dust lies mostly over the land. Dusty air is heavier
+the ground. Grass holds the soil, so on a meadow the dust rises only around the crater; stone, brick and planks
+carry only a thin film of settled dust. A leafy canopy is permeable: the surface beneath it supplies the forest
+dust. Water gives none: by a shore the dust lies mostly over the land. Dusty air is heavier
 than clean air, so the dust spreads out along the surface it came from and follows the ground up and down gentle
 slopes; where it drifts past an edge (a roof, a cliff) it sinks to the surface below: thick dust in seconds, thin dust
 slower. It climbs gentle slopes but not walls: in a street between houses it stays in the street, in wind or calm. While the cloud rises, a
 thin column of dust is drawn up under it. An interceptor bursting in the air leaves no crater and no dust, unless it
-bursts low over the ground. A hit on a roof or a wall is the same blast as a hit on the ground: what it crushes goes up
-with the hot cloud, and the wave lifts dust from the street below where it is still strong enough there.
+bursts low over the ground. A hit on a roof or a wall is the same blast as a hit on the ground: some of what it crushes rises
+with the hot gas, while cold ejecta and falling material feed the low, heavy dust layer. This also leaves low dust on
+a paved street without pretending that the stone was covered in soil. The hot/cold split is an estimate: half of the
+existing crushed-material dust budget in each stream. The wave can also lift dust from the street below where it is
+still strong enough there.
 
 A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
 the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the
