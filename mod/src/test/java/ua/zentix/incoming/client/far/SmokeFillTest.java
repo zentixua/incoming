@@ -160,6 +160,30 @@ class SmokeFillTest {
         return out;
     }
 
+    /**
+     * Пропускание самого вещества налёта в точке экрана (u, v) из глаза кадра {@code view}: e^(−Στ), τ — толща по лучу
+     * через каждый гаусс облаков модели ({@link SmokePuffs#sightDepth}; ножка — гауссами трубки), без квадратов. С ним
+     * сверяются оба кадра — полный и в бюджете.
+     */
+    static double truth(List<Blast> raid, double now, FarView view, double u, double v) {
+        Vector3f f = view.forward(), l = view.left(), up = view.up();
+        double rx = f.x + u * l.x + v * up.x, ry = f.y + u * l.y + v * up.y, rz = f.z + u * l.z + v * up.z, n = Math.sqrt(rx * rx + ry * ry + rz * rz);
+        double fx = rx / n, fy = ry / n, fz = rz / n, kd = SmokeGrid.dustK(0.6f, 0.55f, 0.45f);
+        double[] tau = new double[1];
+        Vec3 eye = view.camera();
+        for (Blast b : raid) {
+            double t = now - b.born();
+            if (t < 0 || t >= b.model().life) continue;
+            b.model().blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
+                // светящийся газ — тело огня, не дым (как у приёмника слоя)
+                double smoke = 1 - CloudModel.glowShare(kelvin, view.skyLuminance());
+                double ext = smoke * (CloudModel.SOOT_K * soot + kd * dust);
+                if (ext > 0) tau[0] += SmokePuffs.sightDepth(b.x() + x - eye.x, b.y() + y - eye.y, b.z() + z - eye.z, sh, sv, ext, fx, fy, fz);
+            });
+        }
+        return Math.exp(-tau[0]);
+    }
+
     /** Кадр налёта из глаза eye в сторону fwd с бюджетом заливки budget. */
     static Screen frame(List<Blast> raid, double now, Vec3 eye, Vector3f fwd, double budget) {
         FarView v = view(eye, new Vector3f(fwd));
@@ -167,10 +191,17 @@ class SmokeFillTest {
         double was = SmokePuffs.budget;
         SmokePuffs.budget = budget;
         try {
-            for (Blast b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
-            SmokePuffs.flush();
+            // два кадра: доля кучек трубок — из прошлого кадра
+            SmokePuffs.resetBudget();
+            for (int frame = 0; frame < 2; frame++) {
+                s.quads.clear();
+                s.veil = 0;
+                for (Blast b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
+                SmokePuffs.flush();
+            }
         } finally {
             SmokePuffs.budget = was;
+            SmokePuffs.resetBudget();
         }
         return s;
     }
@@ -178,8 +209,9 @@ class SmokeFillTest {
     /**
      * Глаз на крыше в дыму налёта и рядом с облаками, взгляд вдоль дыма: без бюджета кадр закрывает больше двух бюджетов, с ним —
      * не больше бюджета или его пола (по одному клубу на гаусс; с запасом на оценку площади кучки, 15 %) и меньше вдвое;
-     * пропускание по экрану с бюджетом в среднем то же (±0,04),
-     * и в каждой из 18 частей кадра — не дальше 0,1 (мельче части — подробность клубов: её бюджет и отдаёт).
+     * пропускание по экрану с бюджетом в среднем то же (±0,04), и в каждой из 18 частей кадра от пропускания самого вещества
+     * модели ({@link #truth}) — не дальше, чем у полного кадра, больше чем на 0,05 (мельче части — подробность клубов: её
+     * бюджет и отдаёт).
      */
     @Test
     void raidSmokeStaysInTheFillBudgetAtTheSameDensity() throws IOException {
@@ -201,16 +233,26 @@ class SmokeFillTest {
             }
             meanFree /= n;
             meanBudget /= n;
-            // подробность клубов мельче части кадра — её бюджет и отдаёт, плотность — по частям
-            double worst = worstBlock(free, budget, prof), floor = SmokePuffs.lastFloor();
-            String got = String.format(Locale.ROOT, "глаз %s: без бюджета %d квадратов, %.1f экранов, пропускание %.3f; с бюджетом %d, %.1f (пол %.1f), %.3f; худшая часть %.3f",
-                    eye, free.quads.size(), free.fill(), meanFree, budget.quads.size(), budget.fill(), floor, meanBudget, worst);
+            // подробность клубов мельче части кадра — её бюджет и отдаёт, плотность — по частям; оба кадра — против вещества
+            // модели (без квадратов): бюджет не дальше от него, чем полный кадр, больше чем на шум подробности
+            double floor = SmokePuffs.lastFloor();
+            double[] real = new double[18];
+            FarView v0 = view(eye, new Vector3f(along));
+            for (int i = 0; i < 48; i++) {
+                for (int j = 0; j < 27; j++) {
+                    double u = -W + (i + 0.5) * 2 * W / 48, v = -H + (j + 0.5) * 2 * H / 27;
+                    real[i / 8 * 3 + j / 9] += truth(raid, now, v0, u, v) / 72;
+                }
+            }
+            double worstFree = worstBlock(free, real, prof), worst = worstBlock(budget, real, prof);
+            String got = String.format(Locale.ROOT, "глаз %s: без бюджета %d квадратов, %.1f экранов, пропускание %.3f; с бюджетом %d, %.1f (пол %.1f), %.3f; худшая часть против вещества: полный %.3f, в бюджете %.3f",
+                    eye, free.quads.size(), free.fill(), meanFree, budget.quads.size(), budget.fill(), floor, meanBudget, worstFree, worst);
             System.out.println("FILL " + got);
             assertTrue(free.fill() > 2 * SmokePuffs.FILL_BUDGET, got);
             assertTrue(budget.fill() <= 1.15 * Math.max(SmokePuffs.FILL_BUDGET, floor), got);
             assertTrue(budget.fill() < free.fill() / 2, got);
             assertTrue(Math.abs(meanFree - meanBudget) <= 0.04, got);
-            assertTrue(worst <= 0.1, got);
+            assertTrue(worst <= worstFree + 0.05, got);
         }
     }
 
@@ -221,7 +263,7 @@ class SmokeFillTest {
      */
     /**
      * Подробность кучек — случайная (зерно облака): смена зерна меняет пропускание по частям кадра не больше чем на 0,05 —
-     * от этого шума и мерится, что бюджет плотность не трогает ({@link #raidSmokeStaysInTheFillBudgetAtTheSameDensity}: 0,1).
+     * от этого шума и мерится, что бюджет плотность не трогает ({@link #raidSmokeStaysInTheFillBudgetAtTheSameDensity}: +0,05).
      */
     @Test
     void clusterDetailNoise() throws IOException {
@@ -237,17 +279,27 @@ class SmokeFillTest {
 
     /** Наибольшая разница среднего пропускания двух кадров по 18 частям (8 × 9 узлов сетки 48×27). */
     static double worstBlock(Screen a, Screen b, double[][] prof) {
-        double[] ba = new double[18], bb = new double[18];
+        return worstBlock(a, blocks(b, prof), prof);
+    }
+
+    /** То же против средних по частям {@code ref}. */
+    static double worstBlock(Screen a, double[] ref, double[][] prof) {
+        double[] ba = blocks(a, prof);
+        double worst = 0;
+        for (int k = 0; k < 18; k++) worst = Math.max(worst, Math.abs(ba[k] - ref[k]));
+        return worst;
+    }
+
+    /** Среднее пропускание кадра по 18 частям. */
+    static double[] blocks(Screen a, double[][] prof) {
+        double[] ba = new double[18];
         for (int i = 0; i < 48; i++) {
             for (int j = 0; j < 27; j++) {
                 double u = -W + (i + 0.5) * 2 * W / 48, v = -H + (j + 0.5) * 2 * H / 27;
                 ba[i / 8 * 3 + j / 9] += a.transmittance(u, v, prof) / 72;
-                bb[i / 8 * 3 + j / 9] += b.transmittance(u, v, prof) / 72;
             }
         }
-        double worst = 0;
-        for (int k = 0; k < 18; k++) worst = Math.max(worst, Math.abs(ba[k] - bb[k]));
-        return worst;
+        return ba;
     }
 
     @Test

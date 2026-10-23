@@ -194,6 +194,12 @@ final class SmokePuffs {
         return DRAW.lastFloor;
     }
 
+    /** Бюджет заново: доля кучек трубок — полная (проверки, что строят кадры с разным бюджетом подряд). */
+    static void resetBudget() {
+        DRAW.tubeShare = 1;
+        DRAW.tubeFull = DRAW.tubeLeast = DRAW.tubeDrawn = 0;
+    }
+
     /** Приёмник клубов источника source в кадре view в миг seconds: клубы — квадратами в out (один на поток кадра). */
     static SmokeGrid.Sink sink(FarView view, Out out, SmokeGrid.Source source, double seconds) {
         DRAW.begin(view, out, source, seconds);
@@ -352,6 +358,11 @@ final class SmokePuffs {
          * а не подробность) и доля кучек, что ему досталась (для замера).
          */
         double lastFill, lastFloor, lastShare = 1;
+        /**
+         * Кучки трубок ({@link #club}) этого кадра: заливка при полной кучке, при одном клубе и нарисованная; доля кучки
+         * трубок — посчитанная в конце прошлого кадра.
+         */
+        double tubeFull, tubeLeast, tubeDrawn, tubeShare = 1;
         /** Режим прохода {@link #blob}: план (только цена) или квадраты с долей кучки {@link #share}. */
         private boolean planning;
         private double share = 1;
@@ -412,11 +423,12 @@ final class SmokePuffs {
             }
             planning = false;
             // доля кучки: заливка при доле s — между одним клубом и полной кучкой (у каждой — по её плану), подбор делением
+            // кучки облаков и трубок — одним бюджетом
             double s = 1;
-            if (whole > budget) {
+            if (whole + tubeFull > budget) {
                 double lo = 0, hi = 1;
                 for (int it = 0; it < 20; it++) {
-                    double mid = 0.5 * (lo + hi), f = 0;
+                    double mid = 0.5 * (lo + hi), f = tubeLeast + (tubeFull - tubeLeast) * mid;
                     for (int i = 0; i < n; i++) if (!merged[i]) f += planned(i, mid);
                     if (f > budget) hi = mid;
                     else lo = mid;
@@ -426,9 +438,11 @@ final class SmokePuffs {
             share = s;
             double drawn = 0;
             for (int i = 0; i < n; i++) if (!merged[i]) drawn += held(i);
-            lastFill = drawn;
-            lastFloor = floor;
+            lastFill = drawn + tubeDrawn;
+            lastFloor = floor + tubeLeast;
             lastShare = s;
+            tubeShare = s;
+            tubeFull = tubeLeast = tubeDrawn = 0;
             share = 1;
             holding = from = contexts = 0;
             java.util.Arrays.fill(ctxSource, null);
@@ -556,7 +570,9 @@ final class SmokePuffs {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
                 // лежащий клуб — на высоте середины слоя: ниже он ушёл бы под рельеф
                 double ox = gauss(hj) * spread * rh * 0.5, oy = lying ? 0 : gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
-                double k = size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
+                // разброс размера — у клубов кучки (разнообразие); одиночный клуб — весь гаусс, без разброса: иначе его
+                // площадь, а с ней и вещество на экране, гуляла бы на ±44 %
+                double k = count == 1 ? 1 : size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
                 double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, clubAge) + (count > 1 ? 2 * unit(hj >>> 28) : 0));
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
@@ -638,9 +654,21 @@ final class SmokePuffs {
         // крупнее экрана — подробность за его краем не видна, а заливка дорога: клубов меньше во столько раз, во сколько
         // гаусс по площади больше экрана (полудиагональ кадра, пикселей)
         double screen = view.edge() / Math.max(view.pixel(), 1e-12);
-        double many = Math.clamp(Math.min(pixels / CLUSTER_PIXELS, most * Math.min(1, screen * screen / (pixels * pixels))), 1, most);
+        double full = Math.clamp(Math.min(pixels / CLUSTER_PIXELS, most * Math.min(1, screen * screen / (pixels * pixels))), 1, most);
+        // бюджет заливки кадра ({@link #FILL_BUDGET}): доля кучки — из прошлого кадра (кучки трубок рисуются, пока источник
+        // их кладёт, а бюджет считается в конце кадра); план — к этому кадру
+        double many = 1 + (full - 1) * DRAW.tubeShare;
         int count = (int) Math.ceil(many - 1e-9);
         double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many));
+        {
+            int cf = (int) Math.ceil(full - 1e-9);
+            double sf = cf == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(full));
+            double ra = rh * grow, rb = rv * grow;
+            DRAW.tubeFull += Math.max(1, full * sf * sf) * cover(view, px, py, pz, ra * (1 + (cf == 1 ? 0 : 1 - sf) * 0.5), rb * (1 + (cf == 1 ? 0 : 1 - sf) * 0.5));
+            DRAW.tubeLeast += cover(view, px, py, pz, ra, rb);
+            DRAW.tubeDrawn += Math.max(1, many * size * size) * cover(view, px, py, pz, ra * (1 + (count == 1 ? 0 : 1 - size) * 0.5),
+                    rb * (1 + (count == 1 ? 0 : 1 - size) * 0.5));
+        }
         // в середине кучки перекрывается столько клубов, у оси — ещё соседние места трубки (диск клуба на экране — с полом в
         // пиксель, как он нарисован): каждый берёт свою долю, вместе — то же пропускание
         double disc = puffDisc(Math.max(FIRST_FRAME, age) + (count > 1 || vary ? 1 : 0));
