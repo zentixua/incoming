@@ -121,6 +121,57 @@ public final class BreachGameTests {
     }
 
     /**
+     * Удар ракеты в землю в 3 м от уступа рельефа в блок (жалоба ревью: пологие лучи по верхнему слою выходили в
+     * пустоту у уступа и срезали клин земли до 4 м — вчетверо дальше воронки). Пустота у уступа — под открытым небом: это
+     * поверхность земли, грань закона воронки, а не тыльная грань плиты: пробоя нет. Без воронки и обломков — только
+     * главный взрыв заряда, приложенного к грани.
+     */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_terrace", skyAccess = true)
+    public static void terraceStepIsNoBreachFace(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos top = h.absolutePos(TOP);
+        for (BlockPos p : BlockPos.betweenClosed(top.offset(-HALF, -2, -HALF), top.offset(HALF, 0, HALF))) {
+            level.setBlock(p, Blocks.DIRT.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
+        for (BlockPos p : BlockPos.betweenClosed(top.offset(3, 0, -HALF), top.offset(HALF, 0, HALF))) {
+            level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
+        double tnt = WeaponType.MISSILE.spec().charge();
+        double r = BreachModel.Material.EARTH.radius(tnt, BreachModel.UNTAMPED);
+        h.assertTrue(r > 3.5, String.format(Locale.ROOT, "проверка пустая: R земли %.2f м", r));
+        Warheads.Probe blast = Warheads.testSurfaceCharge(level, Vec3.atBottomCenterOf(top.above()), tnt, 2 * r + 4);
+        h.succeedWhen(() -> {
+            h.assertTrue(blast.done(), "взрыв не кончился");
+            h.assertTrue(blast.breached() == 0, "у уступа под открытым небом снесено пробоем " + blast.breached() + " блоков");
+        });
+    }
+
+    /**
+     * Заряд в земле на глубине 6,5 м под открытым небом (как бомба на приведённой глубине ~0,5; 1210 кг — доля, что
+     * осталась в земле): радиус пробоя земли ~10 м больше глубины, но поверхность — грань закона воронки
+     * ({@code BuriedBlast}), пробой к ней не идёт (жалоба ревью: конус земли до поверхности сверх воронки выброса).
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "blast_breach_buried_open", skyAccess = true)
+    public static void buriedChargeLeavesTheSurfaceToTheCrater(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        for (BlockPos p : BlockPos.betweenClosed(h.absolutePos(new BlockPos(16, 1, 16)), h.absolutePos(new BlockPos(47, 20, 47)))) {
+            level.setBlock(p, Blocks.DIRT.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
+        Vec3 at = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 14, 32)));
+        double tnt = 1210;
+        double r = BreachModel.Material.EARTH.radius(tnt, BreachModel.TAMPED);
+        h.assertTrue(r > 6.5 + 1 && r < 12.5, String.format(Locale.ROOT, "проверка пустая: R %.2f м", r));
+        ChunkPos c = new ChunkPos(BlockPos.containing(at));
+        for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) level.getChunk(c.x + dx, c.z + dz);
+        Warheads.Probe blast = Warheads.testBuriedCharge(level, at, tnt, r + 4);
+        h.succeedWhen(() -> {
+            h.assertTrue(blast.done(), "взрыв не кончился");
+            h.assertTrue(blast.breached() == 0, "к открытой поверхности снесено пробоем " + blast.breached() + " блоков");
+            h.assertTrue(h.getBlockState(new BlockPos(32, 20, 32)).is(Blocks.DIRT), "верх над зарядом снесён пробоем");
+        });
+    }
+
+    /**
      * Заряд бомбы (2423 кг) в толще камня (забит, C = 1: R ≈ 8,2 м): пустота в 4,5 м — пробита (порода между зарядом и
      * ею снесена), пустота в 9,5 м — нет (стена к ней цела). Закон и путь — те же, что у подрыва бомбы
      * ({@code Warheads.BunkerBlast}: волна заряда в толще); полость, дробление и трещины — его же работа, здесь их нет.

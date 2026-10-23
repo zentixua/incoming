@@ -4,10 +4,12 @@ import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
@@ -18,9 +20,11 @@ import ua.zentix.incoming.util.Terrain;
  * Пробой преграды зарядом, приложенным к ней ({@link BreachModel}), на блоках мира. Из точки, где заряд лежит на грани
  * ({@link #locate}), луч взрыва идёт внутрь преграды; путь в каждом блоке делится на радиус пробоя его материала
  * (группа FM — карта данных {@code incoming:penetration}, {@link ModDataMaps.Penetrability#breaching}). Дошёл до
- * пустоты (воздух, жидкость, блок без формы) раньше, чем сумма превысила 1, — всё пройденное снесено: плита пробита
- * по этому лучу, и волна идёт дальше в пустоту. Не дошёл — преграда держит, а грунт роет закон воронки. Одно правило
- * для любых блоков: держит заряд толща и материал до пустоты, а не то, природный блок или постройка.
+ * пустоты под перекрытием ({@link #covered}: помещение, пещера, русло под настилом — свободная тыльная грань FM) раньше,
+ * чем сумма превысила 1, — всё пройденное снесено: плита пробита по этому лучу, и волна идёт дальше в пустоту. Не дошёл
+ * или вышел к открытой поверхности — пробоя нет: там грунт роет закон воронки. Одно правило для любых блоков: держит
+ * заряд толща и материал до пустоты, а не то, природный блок или постройка. Ширина дыры — из того же правила по
+ * каждому косому лучу (путь по косой — как толщина); у FM R — толщина под зарядом, ширину дыры он не даёт: это наше.
  */
 final class SlabBreach {
     /**
@@ -86,11 +90,24 @@ final class SlabBreach {
         return Cell.SOLID;
     }
 
-    /** Группа материала твёрдого блока ({@link Cell#SOLID}). */
+    /**
+     * Группа материала твёрдого блока ({@link Cell#SOLID}): из карты данных, а у блока без записи (ступени, плиты, стены,
+     * двери, блоки модов) — по инструменту, которым его добывают: топор — дерево («good timber»), лопата и мотыга —
+     * грунт, кирка — камень и кладка, если блок не прочнее булыжника (2); прочее неопознанное — железобетон: FM велит
+     * считать неопознанное самым прочным (3-12c).
+     */
     static BreachModel.Material material(BlockState s) {
-        BreachModel.Material m = ModDataMaps.Penetrability.of(s).breaching();
-        return m != null ? m : BreachModel.Material.REINFORCED;
+        ModDataMaps.Penetrability entry = ModDataMaps.Penetrability.find(s);
+        BreachModel.Material m = entry != null ? entry.breaching() : null;
+        if (m != null) return m;
+        if (s.is(BlockTags.MINEABLE_WITH_AXE)) return BreachModel.Material.POOR;
+        if (s.is(BlockTags.MINEABLE_WITH_SHOVEL) || s.is(BlockTags.MINEABLE_WITH_HOE)) return BreachModel.Material.EARTH;
+        if (s.is(BlockTags.MINEABLE_WITH_PICKAXE) && s.getBlock().defaultDestroyTime() <= ROCK_HARDNESS) return BreachModel.Material.ROCK;
+        return BreachModel.Material.REINFORCED;
     }
+
+    /** Прочность (время добычи ванили) булыжника и кирпича: прочнее — не обычная кладка. */
+    private static final float ROCK_HARDNESS = 2;
 
     /**
      * Где заряд {@code tnt} кг ТНТ с центром {@code centre} приложен к преграде; null — не приложен (центр в воздухе дальше
@@ -148,6 +165,22 @@ final class SlabBreach {
         };
     }
 
+    /**
+     * Пустота {@code p} — под перекрытием: выше неё в своём столбце, ниже верха земли (карта высот без листвы), есть
+     * твёрдый блок не из листвы. Пустота под открытым небом (у поверхности рядом с ударом, уступ рельефа, ход бомбы,
+     * открытая вода) — нет: это поверхность земли, к которой заряд выбрасывает грунт по закону воронки
+     * ({@code CraterModel}, у бомбы — {@link BuriedBlast}), а не тыльная грань плиты, которую он пробивает.
+     */
+    static boolean covered(ServerLevel level, BlockPos p) {
+        int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, p.getX(), p.getZ());
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(p.getX(), p.getY(), p.getZ());
+        for (int y = p.getY() + 1; y < top; y++) {
+            BlockState s = level.getBlockState(m.setY(y));
+            if (!s.is(BlockTags.LEAVES) && !s.getCollisionShape(level, m).isEmpty()) return true;
+        }
+        return false;
+    }
+
     /** Где луч из {@code p} по {@code dir} выходит из блока {@code cell}. */
     static Vec3 exit(BlockPos cell, Vec3 p, Vec3 dir) {
         double t = Double.MAX_VALUE;
@@ -192,6 +225,9 @@ final class SlabBreach {
                             if (d > o.tolerance()) return -1;
                             continue;
                         }
+                        // свободная грань пробоя — пустота под перекрытием (помещение, пещера, русло под настилом);
+                        // открытая поверхность — грань закона воронки, а не пробоя
+                        if (!covered(level, pos)) return -1;
                         liquid[0] = s.getBlock() instanceof LiquidBlock;
                         return d - STEP / 2;
                     }

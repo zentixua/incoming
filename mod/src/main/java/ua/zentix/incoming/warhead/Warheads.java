@@ -472,8 +472,17 @@ public final class Warheads {
      * ({@link SlabBreach}); район — до {@code reach} блоков (как у бомбы, не весь охват волны над землёй).
      */
     public static Probe testBuriedCharge(ServerLevel level, Vec3 at, double tntKg, double reach) {
+        return testPlaced(level, at, tntKg, SlabBreach.Placement.BURIED, reach);
+    }
+
+    /** Проверки: заряд {@code tntKg} кг ТНТ, приложенный к грани (как боевая часть, ударившая в неё), с районом {@code reach}. */
+    public static Probe testSurfaceCharge(ServerLevel level, Vec3 at, double tntKg, double reach) {
+        return testPlaced(level, at, tntKg, SlabBreach.Placement.SURFACE, reach);
+    }
+
+    private static Probe testPlaced(ServerLevel level, Vec3 at, double tntKg, SlabBreach.Placement placement, double reach) {
         BlastArea area = BlastArea.hold(level, at, reach);
-        Probe probe = new Probe(charge(level, area, at, tntKg, SlabBreach.Placement.BURIED, null, null));
+        Probe probe = new Probe(charge(level, area, at, tntKg, placement, null, null));
         area.release(level);
         return probe;
     }

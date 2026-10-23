@@ -51,10 +51,10 @@ public final class ModDataMaps {
                 BREACH.optionalFieldOf("breach").forGetter(Penetrability::breach)).apply(i, Penetrability::new));
         /**
          * Твёрдый блок без записи — как кирпич, S = 1 (оценка: прочее твёрдое — металл, стекло, блоки модов — Янгом не
-         * описано); вид — скала: за ним грунт не твёрже, как за бетонной плитой. Для пробоя зарядом — железобетон: что не
-         * опознано, FM 5-250 велит считать самым прочным (3-12c).
+         * описано); вид — скала: за ним грунт не твёрже, как за бетонной плитой. Группу для пробоя зарядом у блока без
+         * записи выбирает пробой сам ({@code SlabBreach.material}).
          */
-        public static final Penetrability OTHER = new Penetrability(Penetration.Kind.ROCK, 1.0, Optional.of(BreachModel.Material.REINFORCED));
+        public static final Penetrability OTHER = new Penetrability(Penetration.Kind.ROCK, 1.0, Optional.empty());
 
         /** Жидкость без записи (мода): плотность воды, кг/м³. */
         public static final Penetrability WATER = new Penetrability(Penetration.Kind.FLUID, 1000, Optional.empty());

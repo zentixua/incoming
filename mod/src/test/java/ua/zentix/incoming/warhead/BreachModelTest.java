@@ -86,6 +86,17 @@ class BreachModelTest {
         }
     }
 
+    /** Ступени табл. B-3: «0,3 м и меньше» у скалы включает 0,3; у слабой кладки «меньше 1,5 м» — 1,5 уже вторая. */
+    @Test
+    void bandEdges() {
+        assertEquals(14.09, BreachModel.Material.ROCK.factor(0.3), 0);
+        assertEquals(7.69, BreachModel.Material.ROCK.factor(0.31), 0);
+        assertEquals(6.41, BreachModel.Material.ROCK.factor(1.0), 0);
+        assertEquals(5.13, BreachModel.Material.POOR.factor(1.49), 0);
+        assertEquals(4.64, BreachModel.Material.POOR.factor(1.5), 0);
+        assertEquals(1.12, BreachModel.Material.EARTH.factor(9), 0);
+    }
+
     /** Шар заряда: 150 кг литого ТНТ — 0,28 м. */
     @Test
     void chargeRadius() {

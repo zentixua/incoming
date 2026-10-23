@@ -36,35 +36,41 @@ public final class BreachModel {
      */
     public enum Material {
         /** Earth — земля, песок, гравий, глина, снег и прочее рыхлое. */
-        EARTH(new double[]{}, 1.12),
+        EARTH(false, new double[]{}, 1.12),
         /** Poor masonry, shale, hardpan, good timber, earth construction — дерево, сланец, ссохшаяся глина (терракота). */
-        POOR(new double[]{1.5}, 5.13, 4.64),
+        POOR(false, new double[]{1.5}, 5.13, 4.64),
         /** Good masonry, concrete block, rock — камень, кирпич и обычная кладка, бетон без арматуры. */
-        ROCK(new double[]{0.3, 1, 1.5, 2}, 14.09, 7.69, 6.41, 5.13, 4.32),
+        ROCK(true, new double[]{0.3, 1, 1.5, 2}, 14.09, 7.69, 6.41, 5.13, 4.32),
         /** Dense concrete, first-class masonry — плотная кладка тёсаным камнем. */
-        DENSE(new double[]{0.3, 1, 1.5, 2}, 18.26, 9.93, 8.33, 6.57, 5.61),
+        DENSE(true, new double[]{0.3, 1, 1.5, 2}, 18.26, 9.93, 8.33, 6.57, 5.61),
         /**
          * Reinforced concrete (бетон, арматура не режется) — самая прочная группа таблицы: ею FM велит считать то, что
          * не опознано (3-12c), — твёрдые блоки без записи.
          */
-        REINFORCED(new double[]{0.3, 1, 1.5, 2}, 28.19, 15.38, 12.81, 10.09, 8.65);
+        REINFORCED(true, new double[]{0.3, 1, 1.5, 2}, 28.19, 15.38, 12.81, 10.09, 8.65);
 
         /** Границы ступеней по R, м (ступеней на одну больше). */
         private final double[] bounds;
+        /**
+         * Первая ступень включает свою границу: у бетона и скалы — «0,3 м и меньше»; у слабой кладки и дерева —
+         * «меньше 1,5 м», и 1,5 — уже вторая.
+         */
+        private final boolean firstInclusive;
         /** M на каждой ступени. */
         private final double[] factor;
 
-        Material(double[] bounds, double... factor) {
+        Material(boolean firstInclusive, double[] bounds, double... factor) {
             if (factor.length != bounds.length + 1) throw new IllegalArgumentException("ступеней не столько, сколько множителей");
             this.bounds = bounds;
             this.factor = factor;
+            this.firstInclusive = firstInclusive;
         }
 
         /** M при радиусе пробоя {@code r}, м (табл. B-3). */
         public double factor(double r) {
             int i = 0;
             // «0,3 м и меньше» — первая ступень включает границу, дальше — «от … до меньше …»
-            while (i < bounds.length && (i == 0 ? r > bounds[i] : r >= bounds[i])) i++;
+            while (i < bounds.length && (i == 0 && firstInclusive ? r > bounds[i] : r >= bounds[i])) i++;
             return factor[i];
         }
 
