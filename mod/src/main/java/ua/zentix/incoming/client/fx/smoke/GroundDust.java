@@ -584,6 +584,8 @@ public final class GroundDust {
     static final int PROBES = 16;
     /** Узлов пути одного клуба за вызов не больше стольких: догонка в большом возрасте идёт кадрами, а не одним. */
     static final int CATCH_UP = 64;
+    /** Узел {@link #PATH}, с которого строится путь (0,5 с): к нему фронт прошёл кольца показа, их радиус установился. */
+    static final int PATH_FROM = 2;
 
     /**
      * Уровень поверхности, на которой лежит клуб кольца показа {@code show} сектора {@code sector} в возрасте t, м от
@@ -601,18 +603,27 @@ public final class GroundDust {
      * низкой поверхности, известной под ним (последней, иначе — своего сектора, которую видел взрыв).
      */
     private double[] level(int sector, int show, double t, double source, double ux, double uz, double own) {
+        // до PATH_FROM фронт ещё поднимает кольцо, и средний радиус клуба бежит наружу: путь строится потом, а пока клуб
+        // лежит, где его подняло
+        if (t < PATH[PATH_FROM]) {
+            paths[show][sector] = null;
+            double[] at = place(show, t, source, ux, uz);
+            double start = under(at[0], at[1], 0.5 * width(show, t, own));
+            return new double[]{Double.isNaN(start) ? surface[sector][show] : Math.min(surface[sector][show], start), 0, 0};
+        }
         Path p = paths[show][sector];
         if (p == null || PATH[p.node] > t) {
             // начало — самое низкое из поверхности, с которой пыль подняло, и того, что под следом клуба в его месте (на
             // склоне клуб стоит ниже точки полосы; крыши по бокам улицы уличную пыль не поднимают — под следом улица)
             p = new Path();
+            p.node = PATH_FROM;
             p.now = new Track();
-            double[] at = place(show, 0, source, ux, uz);
-            double start = under(at[0], at[1], 0.5 * width(show, 0, own));
+            double[] at = place(show, PATH[PATH_FROM], source, ux, uz);
+            double start = under(at[0], at[1], 0.5 * width(show, PATH[PATH_FROM], own));
             p.now.level = Double.isNaN(start) ? surface[sector][show] : Math.min(surface[sector][show], start);
             p.now.seen = start;
             p.next = p.now.copy();
-            step(p.next, sector, show, PATH[0], PATH[1], source, ux, uz, own);
+            step(p.next, sector, show, PATH[PATH_FROM], PATH[PATH_FROM + 1], source, ux, uz, own);
             paths[show][sector] = p;
         }
         // догонка за один вызов — не больше CATCH_UP узлов (первый вызов в большом возрасте): дальше — в следующих кадрах
@@ -677,7 +688,7 @@ public final class GroundDust {
         double tol = DROP * Math.max(1, len / n + grow), lee = LEE * Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) / n;
         for (int i = 1; i <= n; i++) {
             double u = (double) i / n, tau = t0 + u * (t1 - t0);
-            double below = under(p0[0] + u * dx - tr.heldX, p0[1] + u * dz - tr.heldZ, w);
+            double below = under(p0[0] + u * dx - tr.heldX, p0[1] + u * dz - tr.heldZ, w), before = tr.seen;
             if (Double.isNaN(below)) {
                 // рельеф неизвестен: лежащий держит уровень, падающий падает — до самой низкой поверхности, что видел взрыв
                 if (tr.falling) fallTo(tr, Math.min(Double.isNaN(tr.seen) ? lowest(sector) : tr.seen, tr.level), tau, lee);
@@ -706,6 +717,10 @@ public final class GroundDust {
                 tr.level = below;
                 tr.falling = false;
                 continue;
+            }
+            if (tr.falling && !Double.isNaN(before) && before - below <= tol + DROP) {
+                // падает над склоном, по которому слой мог бы идти: опускается и вместе с ним (сошёл на склон)
+                tr.level -= Math.max(0, before - below);
             }
             if (!tr.falling) {
                 // вышел за край: падает с этого мига — масса и размер клуба на краю

@@ -415,7 +415,7 @@ class GroundDustTest {
     @Test
     void dustFollowsSlopes() {
         CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
-        for (double slope : new double[]{-0.9, -0.6, -0.3, -0.18, 0.18, 0.3, 0.6}) {
+        for (double slope : new double[]{-0.9, -0.6, -0.3, -0.18, 0.18, 0.3, 0.6, 0.9}) {
             double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
             for (int k = 0; k < GroundDust.SECTORS; k++) {
                 double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
@@ -424,12 +424,15 @@ class GroundDustTest {
             GroundDust.Relief relief = (x, z) -> Math.floor(slope * x);
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
             GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-            // с 3 с: в первую секунду растущий след клуба опускает низ под ним быстрее, чем слой успевает лечь (по закону)
+            // как в игре — с первого кадра (путь строится по тому, что видел первый вызов); проверка — с 3 с: в первую
+            // секунду растущий след опускает низ под клубом быстрее, чем слой успевает лечь (по закону)
+            for (double t = 1 / 60.0; t < 3; t += 1 / 60.0) layer(dust, t);
             for (double t : nodes(3, 300)) {
                 for (double[] b : layer(dust, t)) {
                     double base = b[1] - 0.8 * b[4], below = under(dust, b);
                     String at = "склон " + slope + ", " + t + " с: низ " + base + " над рельефом " + below;
-                    assertTrue(Math.abs(base - below) <= GroundDust.DROP + 1e-6, at);
+                    // у склона почти в 45° (предел подъёма) ступени рельефа дают отставание ещё на блок
+                    assertTrue(Math.abs(base - below) <= (Math.abs(slope) > 0.7 ? 2 : 1) * GroundDust.DROP + 1e-6, at);
                 }
             }
         }
@@ -593,5 +596,32 @@ class GroundDustTest {
         boolean house = Math.floorMod((int) Math.floor(x) + 11, 16) - ox >= 0 && Math.floorMod((int) Math.floor(x) + 11, 16) - ox < 10
                 && Math.floorMod((int) Math.floor(z) + 11, 16) - oz >= 0 && Math.floorMod((int) Math.floor(z) + 11, 16) - oz < 10;
         return house && !(cx == 0 && cz == 0 && Math.hypot(x, z) < 3) ? 9 + Math.floorMod(hash >> 12, 7) : 0;
+    }
+
+    /**
+     * Обрыв, а за ним крутой склон (девятое ревью: падающий клуб опускался только законом падения, а склон 31° под ним
+     * уходил быстрее — к минуте он висел на 50 м над склоном): ракета на голом грунте, ветер 5 м/с, обрыв 8 м в 15 м от
+     * удара и склон 31° за ним; кадры с первого — с 60 с клубы за 60 м от удара — на поверхности под ними (в пределах
+     * двух блоков).
+     */
+    @Test
+    void dustFallingOffACliffLandsOnTheSlopeBelow() {
+        CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 5, 0, 0.1, (int) Stability.D, 0.5);
+        GroundDust.Relief cliff = (x, z) -> x < 15 ? 0 : Math.floor(-8 - 0.6 * (x - 15));
+        double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+        for (int k = 0; k < GroundDust.SECTORS; k++) {
+            double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
+            for (int b = 0; b < GroundDust.BANDS.length; b++) h[k][b] = cliff.at(GroundDust.BANDS[b] * Math.cos(ang), GroundDust.BANDS[b] * Math.sin(ang));
+        }
+        GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, cliff);
+        GroundDust dust = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), air, false, 0, g).ground;
+        for (double t = 1 / 60.0; t < 60; t += 1 / 60.0) layer(dust, t);
+        for (double t : nodes(60, 240)) {
+            for (double[] b : layer(dust, t)) {
+                if (b[0] < 60) continue;
+                double base = b[1] - 0.8 * b[4], below = under(dust, b);
+                assertTrue(base <= below + 2 * GroundDust.DROP + 1e-6, t + " с: клуб в " + b[0] + " м висит на " + (base - below) + " над склоном");
+            }
+        }
     }
 }
