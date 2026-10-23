@@ -1,0 +1,71 @@
+{
+  "name": "codex-main-wet50",
+  "effect": "blast drone 7",
+  "site": [
+    0.5,
+    65.0,
+    0.5
+  ],
+  "camera": [
+    50.0,
+    1.6,
+    0.0,
+    3.0
+  ],
+  "audio": {
+    "file": "wet50.wav",
+    "start": 10993732,
+    "from": 0.0,
+    "seconds": 3.0
+  },
+  "frames": [
+    {
+      "t": 0.0,
+      "age": 0.006,
+      "file": "codex-main-wet50_000.00s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.03,
+      "age": 0.055,
+      "file": "codex-main-wet50_000.03s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.05,
+      "age": 0.079,
+      "file": "codex-main-wet50_000.05s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.1,
+      "age": 0.103,
+      "file": "codex-main-wet50_000.10s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.15,
+      "age": 0.152,
+      "file": "codex-main-wet50_000.15s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.25,
+      "age": 0.265,
+      "file": "codex-main-wet50_000.25s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.5,
+      "age": 0.506,
+      "file": "codex-main-wet50_000.50s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.0,
+      "age": 1.006,
+      "file": "codex-main-wet50_001.00s.png",
+      "fps": 62
+    }
+  ]
+}

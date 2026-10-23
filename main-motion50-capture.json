@@ -1,0 +1,1469 @@
+{
+  "name": "codex-main-motion50",
+  "effect": "blast drone 7",
+  "site": [
+    0.5,
+    65.0,
+    0.5
+  ],
+  "camera": [
+    50.0,
+    1.6,
+    0.0,
+    3.0
+  ],
+  "audio": {
+    "file": "main-motion50.wav",
+    "start": 7909444,
+    "from": 0.0,
+    "seconds": 5.0
+  },
+  "frames": [
+    {
+      "t": 0.0,
+      "age": 0.001,
+      "file": "codex-main-motion50_000.00s.png",
+      "fps": 61
+    },
+    {
+      "t": 0.02,
+      "age": 0.028,
+      "file": "codex-main-motion50_000.02s.png",
+      "fps": 61
+    },
+    {
+      "t": 0.03,
+      "age": 0.051,
+      "file": "codex-main-motion50_000.03s.png",
+      "fps": 61
+    },
+    {
+      "t": 0.05,
+      "age": 0.073,
+      "file": "codex-main-motion50_000.05s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.07,
+      "age": 0.09,
+      "file": "codex-main-motion50_000.07s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.08,
+      "age": 0.105,
+      "file": "codex-main-motion50_000.08s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.1,
+      "age": 0.122,
+      "file": "codex-main-motion50_000.10s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.12,
+      "age": 0.136,
+      "file": "codex-main-motion50_000.12s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.13,
+      "age": 0.153,
+      "file": "codex-main-motion50_000.13s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.15,
+      "age": 0.169,
+      "file": "codex-main-motion50_000.15s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.17,
+      "age": 0.188,
+      "file": "codex-main-motion50_000.17s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.18,
+      "age": 0.201,
+      "file": "codex-main-motion50_000.18s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.2,
+      "age": 0.218,
+      "file": "codex-main-motion50_000.20s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.22,
+      "age": 0.232,
+      "file": "codex-main-motion50_000.22s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.23,
+      "age": 0.252,
+      "file": "codex-main-motion50_000.23s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.25,
+      "age": 0.266,
+      "file": "codex-main-motion50_000.25s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.27,
+      "age": 0.286,
+      "file": "codex-main-motion50_000.27s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.28,
+      "age": 0.308,
+      "file": "codex-main-motion50_000.28s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.3,
+      "age": 0.33,
+      "file": "codex-main-motion50_000.30s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.32,
+      "age": 0.35,
+      "file": "codex-main-motion50_000.32s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.33,
+      "age": 0.362,
+      "file": "codex-main-motion50_000.33s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.35,
+      "age": 0.377,
+      "file": "codex-main-motion50_000.35s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.37,
+      "age": 0.394,
+      "file": "codex-main-motion50_000.37s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.38,
+      "age": 0.413,
+      "file": "codex-main-motion50_000.38s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.4,
+      "age": 0.427,
+      "file": "codex-main-motion50_000.40s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.42,
+      "age": 0.443,
+      "file": "codex-main-motion50_000.42s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.43,
+      "age": 0.459,
+      "file": "codex-main-motion50_000.43s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.45,
+      "age": 0.475,
+      "file": "codex-main-motion50_000.45s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.47,
+      "age": 0.491,
+      "file": "codex-main-motion50_000.47s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.48,
+      "age": 0.506,
+      "file": "codex-main-motion50_000.48s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.5,
+      "age": 0.524,
+      "file": "codex-main-motion50_000.50s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.52,
+      "age": 0.538,
+      "file": "codex-main-motion50_000.52s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.53,
+      "age": 0.555,
+      "file": "codex-main-motion50_000.53s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.55,
+      "age": 0.571,
+      "file": "codex-main-motion50_000.55s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.57,
+      "age": 0.587,
+      "file": "codex-main-motion50_000.57s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.58,
+      "age": 0.602,
+      "file": "codex-main-motion50_000.58s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.6,
+      "age": 0.62,
+      "file": "codex-main-motion50_000.60s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.62,
+      "age": 0.635,
+      "file": "codex-main-motion50_000.62s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.63,
+      "age": 0.654,
+      "file": "codex-main-motion50_000.63s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.65,
+      "age": 0.668,
+      "file": "codex-main-motion50_000.65s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.67,
+      "age": 0.686,
+      "file": "codex-main-motion50_000.67s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.68,
+      "age": 0.7,
+      "file": "codex-main-motion50_000.68s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.7,
+      "age": 0.717,
+      "file": "codex-main-motion50_000.70s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.72,
+      "age": 0.733,
+      "file": "codex-main-motion50_000.72s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.73,
+      "age": 0.751,
+      "file": "codex-main-motion50_000.73s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.75,
+      "age": 0.765,
+      "file": "codex-main-motion50_000.75s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.77,
+      "age": 0.785,
+      "file": "codex-main-motion50_000.77s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.78,
+      "age": 0.809,
+      "file": "codex-main-motion50_000.78s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.8,
+      "age": 0.83,
+      "file": "codex-main-motion50_000.80s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.82,
+      "age": 0.85,
+      "file": "codex-main-motion50_000.82s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.83,
+      "age": 0.862,
+      "file": "codex-main-motion50_000.83s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.85,
+      "age": 0.877,
+      "file": "codex-main-motion50_000.85s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.87,
+      "age": 0.894,
+      "file": "codex-main-motion50_000.87s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.88,
+      "age": 0.911,
+      "file": "codex-main-motion50_000.88s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.9,
+      "age": 0.926,
+      "file": "codex-main-motion50_000.90s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.92,
+      "age": 0.941,
+      "file": "codex-main-motion50_000.92s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.93,
+      "age": 0.958,
+      "file": "codex-main-motion50_000.93s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.95,
+      "age": 0.974,
+      "file": "codex-main-motion50_000.95s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.97,
+      "age": 0.99,
+      "file": "codex-main-motion50_000.97s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.98,
+      "age": 1.006,
+      "file": "codex-main-motion50_000.98s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.0,
+      "age": 1.023,
+      "file": "codex-main-motion50_001.00s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.02,
+      "age": 1.039,
+      "file": "codex-main-motion50_001.02s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.03,
+      "age": 1.055,
+      "file": "codex-main-motion50_001.03s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.05,
+      "age": 1.071,
+      "file": "codex-main-motion50_001.05s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.07,
+      "age": 1.087,
+      "file": "codex-main-motion50_001.07s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.08,
+      "age": 1.103,
+      "file": "codex-main-motion50_001.08s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.1,
+      "age": 1.12,
+      "file": "codex-main-motion50_001.10s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.12,
+      "age": 1.135,
+      "file": "codex-main-motion50_001.12s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.13,
+      "age": 1.153,
+      "file": "codex-main-motion50_001.13s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.15,
+      "age": 1.168,
+      "file": "codex-main-motion50_001.15s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.17,
+      "age": 1.186,
+      "file": "codex-main-motion50_001.17s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.18,
+      "age": 1.2,
+      "file": "codex-main-motion50_001.18s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.2,
+      "age": 1.219,
+      "file": "codex-main-motion50_001.20s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.22,
+      "age": 1.233,
+      "file": "codex-main-motion50_001.22s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.23,
+      "age": 1.253,
+      "file": "codex-main-motion50_001.23s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.25,
+      "age": 1.265,
+      "file": "codex-main-motion50_001.25s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.27,
+      "age": 1.287,
+      "file": "codex-main-motion50_001.27s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.28,
+      "age": 1.309,
+      "file": "codex-main-motion50_001.28s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.3,
+      "age": 1.33,
+      "file": "codex-main-motion50_001.30s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.32,
+      "age": 1.348,
+      "file": "codex-main-motion50_001.32s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.33,
+      "age": 1.362,
+      "file": "codex-main-motion50_001.33s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.35,
+      "age": 1.378,
+      "file": "codex-main-motion50_001.35s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.37,
+      "age": 1.394,
+      "file": "codex-main-motion50_001.37s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.38,
+      "age": 1.409,
+      "file": "codex-main-motion50_001.38s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.4,
+      "age": 1.427,
+      "file": "codex-main-motion50_001.40s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.42,
+      "age": 1.441,
+      "file": "codex-main-motion50_001.42s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.43,
+      "age": 1.458,
+      "file": "codex-main-motion50_001.43s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.45,
+      "age": 1.474,
+      "file": "codex-main-motion50_001.45s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.47,
+      "age": 1.49,
+      "file": "codex-main-motion50_001.47s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.48,
+      "age": 1.506,
+      "file": "codex-main-motion50_001.48s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.5,
+      "age": 1.526,
+      "file": "codex-main-motion50_001.50s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.52,
+      "age": 1.538,
+      "file": "codex-main-motion50_001.52s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.53,
+      "age": 1.556,
+      "file": "codex-main-motion50_001.53s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.55,
+      "age": 1.571,
+      "file": "codex-main-motion50_001.55s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.57,
+      "age": 1.587,
+      "file": "codex-main-motion50_001.57s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.58,
+      "age": 1.603,
+      "file": "codex-main-motion50_001.58s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.6,
+      "age": 1.62,
+      "file": "codex-main-motion50_001.60s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.62,
+      "age": 1.635,
+      "file": "codex-main-motion50_001.62s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.63,
+      "age": 1.653,
+      "file": "codex-main-motion50_001.63s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.65,
+      "age": 1.668,
+      "file": "codex-main-motion50_001.65s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.67,
+      "age": 1.687,
+      "file": "codex-main-motion50_001.67s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.68,
+      "age": 1.701,
+      "file": "codex-main-motion50_001.68s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.7,
+      "age": 1.721,
+      "file": "codex-main-motion50_001.70s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.72,
+      "age": 1.733,
+      "file": "codex-main-motion50_001.72s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.73,
+      "age": 1.754,
+      "file": "codex-main-motion50_001.73s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.75,
+      "age": 1.765,
+      "file": "codex-main-motion50_001.75s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.77,
+      "age": 1.784,
+      "file": "codex-main-motion50_001.77s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.78,
+      "age": 1.809,
+      "file": "codex-main-motion50_001.78s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.8,
+      "age": 1.83,
+      "file": "codex-main-motion50_001.80s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.82,
+      "age": 1.845,
+      "file": "codex-main-motion50_001.82s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.83,
+      "age": 1.861,
+      "file": "codex-main-motion50_001.83s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.85,
+      "age": 1.878,
+      "file": "codex-main-motion50_001.85s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.87,
+      "age": 1.894,
+      "file": "codex-main-motion50_001.87s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.88,
+      "age": 1.909,
+      "file": "codex-main-motion50_001.88s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.9,
+      "age": 1.927,
+      "file": "codex-main-motion50_001.90s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.92,
+      "age": 1.941,
+      "file": "codex-main-motion50_001.92s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.93,
+      "age": 1.958,
+      "file": "codex-main-motion50_001.93s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.95,
+      "age": 1.974,
+      "file": "codex-main-motion50_001.95s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.97,
+      "age": 1.99,
+      "file": "codex-main-motion50_001.97s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.98,
+      "age": 2.006,
+      "file": "codex-main-motion50_001.98s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.0,
+      "age": 2.024,
+      "file": "codex-main-motion50_002.00s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.02,
+      "age": 2.039,
+      "file": "codex-main-motion50_002.02s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.03,
+      "age": 2.055,
+      "file": "codex-main-motion50_002.03s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.05,
+      "age": 2.071,
+      "file": "codex-main-motion50_002.05s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.07,
+      "age": 2.087,
+      "file": "codex-main-motion50_002.07s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.08,
+      "age": 2.103,
+      "file": "codex-main-motion50_002.08s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.1,
+      "age": 2.121,
+      "file": "codex-main-motion50_002.10s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.12,
+      "age": 2.135,
+      "file": "codex-main-motion50_002.12s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.13,
+      "age": 2.155,
+      "file": "codex-main-motion50_002.13s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.15,
+      "age": 2.168,
+      "file": "codex-main-motion50_002.15s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.17,
+      "age": 2.188,
+      "file": "codex-main-motion50_002.17s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.18,
+      "age": 2.2,
+      "file": "codex-main-motion50_002.18s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.2,
+      "age": 2.222,
+      "file": "codex-main-motion50_002.20s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.22,
+      "age": 2.233,
+      "file": "codex-main-motion50_002.22s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.23,
+      "age": 2.253,
+      "file": "codex-main-motion50_002.23s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.25,
+      "age": 2.266,
+      "file": "codex-main-motion50_002.25s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.27,
+      "age": 2.284,
+      "file": "codex-main-motion50_002.27s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.28,
+      "age": 2.309,
+      "file": "codex-main-motion50_002.28s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.3,
+      "age": 2.33,
+      "file": "codex-main-motion50_002.30s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.32,
+      "age": 2.345,
+      "file": "codex-main-motion50_002.32s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.33,
+      "age": 2.361,
+      "file": "codex-main-motion50_002.33s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.35,
+      "age": 2.377,
+      "file": "codex-main-motion50_002.35s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.37,
+      "age": 2.394,
+      "file": "codex-main-motion50_002.37s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.38,
+      "age": 2.409,
+      "file": "codex-main-motion50_002.38s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.4,
+      "age": 2.427,
+      "file": "codex-main-motion50_002.40s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.42,
+      "age": 2.442,
+      "file": "codex-main-motion50_002.42s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.43,
+      "age": 2.459,
+      "file": "codex-main-motion50_002.43s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.45,
+      "age": 2.475,
+      "file": "codex-main-motion50_002.45s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.47,
+      "age": 2.491,
+      "file": "codex-main-motion50_002.47s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.48,
+      "age": 2.506,
+      "file": "codex-main-motion50_002.48s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.5,
+      "age": 2.525,
+      "file": "codex-main-motion50_002.50s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.52,
+      "age": 2.539,
+      "file": "codex-main-motion50_002.52s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.53,
+      "age": 2.555,
+      "file": "codex-main-motion50_002.53s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.55,
+      "age": 2.571,
+      "file": "codex-main-motion50_002.55s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.57,
+      "age": 2.588,
+      "file": "codex-main-motion50_002.57s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.58,
+      "age": 2.604,
+      "file": "codex-main-motion50_002.58s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.6,
+      "age": 2.623,
+      "file": "codex-main-motion50_002.60s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.62,
+      "age": 2.636,
+      "file": "codex-main-motion50_002.62s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.63,
+      "age": 2.655,
+      "file": "codex-main-motion50_002.63s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.65,
+      "age": 2.668,
+      "file": "codex-main-motion50_002.65s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.67,
+      "age": 2.689,
+      "file": "codex-main-motion50_002.67s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.68,
+      "age": 2.7,
+      "file": "codex-main-motion50_002.68s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.7,
+      "age": 2.722,
+      "file": "codex-main-motion50_002.70s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.72,
+      "age": 2.733,
+      "file": "codex-main-motion50_002.72s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.73,
+      "age": 2.752,
+      "file": "codex-main-motion50_002.73s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.75,
+      "age": 2.766,
+      "file": "codex-main-motion50_002.75s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.77,
+      "age": 2.782,
+      "file": "codex-main-motion50_002.77s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.78,
+      "age": 2.809,
+      "file": "codex-main-motion50_002.78s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.8,
+      "age": 2.83,
+      "file": "codex-main-motion50_002.80s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.82,
+      "age": 2.845,
+      "file": "codex-main-motion50_002.82s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.83,
+      "age": 2.862,
+      "file": "codex-main-motion50_002.83s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.85,
+      "age": 2.878,
+      "file": "codex-main-motion50_002.85s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.87,
+      "age": 2.894,
+      "file": "codex-main-motion50_002.87s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.88,
+      "age": 2.909,
+      "file": "codex-main-motion50_002.88s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.9,
+      "age": 2.927,
+      "file": "codex-main-motion50_002.90s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.92,
+      "age": 2.942,
+      "file": "codex-main-motion50_002.92s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.93,
+      "age": 2.959,
+      "file": "codex-main-motion50_002.93s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.95,
+      "age": 2.975,
+      "file": "codex-main-motion50_002.95s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.97,
+      "age": 2.991,
+      "file": "codex-main-motion50_002.97s.png",
+      "fps": 62
+    },
+    {
+      "t": 2.98,
+      "age": 3.007,
+      "file": "codex-main-motion50_002.98s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.0,
+      "age": 3.024,
+      "file": "codex-main-motion50_003.00s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.02,
+      "age": 3.039,
+      "file": "codex-main-motion50_003.02s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.03,
+      "age": 3.056,
+      "file": "codex-main-motion50_003.03s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.05,
+      "age": 3.071,
+      "file": "codex-main-motion50_003.05s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.07,
+      "age": 3.09,
+      "file": "codex-main-motion50_003.07s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.08,
+      "age": 3.104,
+      "file": "codex-main-motion50_003.08s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.1,
+      "age": 3.124,
+      "file": "codex-main-motion50_003.10s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.12,
+      "age": 3.136,
+      "file": "codex-main-motion50_003.12s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.13,
+      "age": 3.157,
+      "file": "codex-main-motion50_003.13s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.15,
+      "age": 3.169,
+      "file": "codex-main-motion50_003.15s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.17,
+      "age": 3.189,
+      "file": "codex-main-motion50_003.17s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.18,
+      "age": 3.201,
+      "file": "codex-main-motion50_003.18s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.2,
+      "age": 3.22,
+      "file": "codex-main-motion50_003.20s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.22,
+      "age": 3.233,
+      "file": "codex-main-motion50_003.22s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.23,
+      "age": 3.25,
+      "file": "codex-main-motion50_003.23s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.25,
+      "age": 3.265,
+      "file": "codex-main-motion50_003.25s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.27,
+      "age": 3.281,
+      "file": "codex-main-motion50_003.27s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.28,
+      "age": 3.309,
+      "file": "codex-main-motion50_003.28s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.3,
+      "age": 3.33,
+      "file": "codex-main-motion50_003.30s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.32,
+      "age": 3.345,
+      "file": "codex-main-motion50_003.32s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.33,
+      "age": 3.362,
+      "file": "codex-main-motion50_003.33s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.35,
+      "age": 3.378,
+      "file": "codex-main-motion50_003.35s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.37,
+      "age": 3.394,
+      "file": "codex-main-motion50_003.37s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.38,
+      "age": 3.41,
+      "file": "codex-main-motion50_003.38s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.4,
+      "age": 3.427,
+      "file": "codex-main-motion50_003.40s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.42,
+      "age": 3.442,
+      "file": "codex-main-motion50_003.42s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.43,
+      "age": 3.459,
+      "file": "codex-main-motion50_003.43s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.45,
+      "age": 3.475,
+      "file": "codex-main-motion50_003.45s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.47,
+      "age": 3.491,
+      "file": "codex-main-motion50_003.47s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.48,
+      "age": 3.506,
+      "file": "codex-main-motion50_003.48s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.5,
+      "age": 3.524,
+      "file": "codex-main-motion50_003.50s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.52,
+      "age": 3.539,
+      "file": "codex-main-motion50_003.52s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.53,
+      "age": 3.558,
+      "file": "codex-main-motion50_003.53s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.55,
+      "age": 3.571,
+      "file": "codex-main-motion50_003.55s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.57,
+      "age": 3.591,
+      "file": "codex-main-motion50_003.57s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.58,
+      "age": 3.606,
+      "file": "codex-main-motion50_003.58s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.6,
+      "age": 3.625,
+      "file": "codex-main-motion50_003.60s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.62,
+      "age": 3.636,
+      "file": "codex-main-motion50_003.62s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.63,
+      "age": 3.657,
+      "file": "codex-main-motion50_003.63s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.65,
+      "age": 3.669,
+      "file": "codex-main-motion50_003.65s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.67,
+      "age": 3.687,
+      "file": "codex-main-motion50_003.67s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.68,
+      "age": 3.701,
+      "file": "codex-main-motion50_003.68s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.7,
+      "age": 3.72,
+      "file": "codex-main-motion50_003.70s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.72,
+      "age": 3.733,
+      "file": "codex-main-motion50_003.72s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.73,
+      "age": 3.76,
+      "file": "codex-main-motion50_003.73s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.75,
+      "age": 3.781,
+      "file": "codex-main-motion50_003.75s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.77,
+      "age": 3.797,
+      "file": "codex-main-motion50_003.77s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.78,
+      "age": 3.813,
+      "file": "codex-main-motion50_003.78s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.8,
+      "age": 3.83,
+      "file": "codex-main-motion50_003.80s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.82,
+      "age": 3.845,
+      "file": "codex-main-motion50_003.82s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.83,
+      "age": 3.862,
+      "file": "codex-main-motion50_003.83s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.85,
+      "age": 3.878,
+      "file": "codex-main-motion50_003.85s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.87,
+      "age": 3.894,
+      "file": "codex-main-motion50_003.87s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.88,
+      "age": 3.909,
+      "file": "codex-main-motion50_003.88s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.9,
+      "age": 3.927,
+      "file": "codex-main-motion50_003.90s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.92,
+      "age": 3.942,
+      "file": "codex-main-motion50_003.92s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.93,
+      "age": 3.959,
+      "file": "codex-main-motion50_003.93s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.95,
+      "age": 3.974,
+      "file": "codex-main-motion50_003.95s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.97,
+      "age": 3.991,
+      "file": "codex-main-motion50_003.97s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.98,
+      "age": 4.006,
+      "file": "codex-main-motion50_003.98s.png",
+      "fps": 62
+    },
+    {
+      "t": 4.0,
+      "age": 4.026,
+      "file": "codex-main-motion50_004.00s.png",
+      "fps": 62
+    }
+  ]
+}

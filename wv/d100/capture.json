@@ -1,0 +1,71 @@
+{
+  "name": "codex-d100",
+  "effect": "blast drone 7",
+  "site": [
+    0.5,
+    65.0,
+    0.5
+  ],
+  "camera": [
+    100.0,
+    1.6,
+    0.0,
+    3.0
+  ],
+  "audio": {
+    "file": "d100.wav",
+    "start": 6029380,
+    "from": 0.0,
+    "seconds": 4.0
+  },
+  "frames": [
+    {
+      "t": 0.0,
+      "age": 0.001,
+      "file": "codex-d100_000.00s.png",
+      "fps": 61
+    },
+    {
+      "t": 0.05,
+      "age": 0.051,
+      "file": "codex-d100_000.05s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.1,
+      "age": 0.114,
+      "file": "codex-d100_000.10s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.15,
+      "age": 0.163,
+      "file": "codex-d100_000.15s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.25,
+      "age": 0.259,
+      "file": "codex-d100_000.25s.png",
+      "fps": 62
+    },
+    {
+      "t": 0.5,
+      "age": 0.502,
+      "file": "codex-d100_000.50s.png",
+      "fps": 62
+    },
+    {
+      "t": 1.0,
+      "age": 1.001,
+      "file": "codex-d100_001.00s.png",
+      "fps": 62
+    },
+    {
+      "t": 3.0,
+      "age": 3.013,
+      "file": "codex-d100_003.00s.png",
+      "fps": 62
+    }
+  ]
+}
