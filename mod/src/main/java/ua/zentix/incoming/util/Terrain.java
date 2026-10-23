@@ -207,6 +207,9 @@ public final class Terrain {
          */
         public static final Allowed RELIEF = new Allowed(Set.of(Source.CHUNK, Source.CEILING, Source.DISK, Source.GENERATOR), Optional.empty(), true);
 
+        /** Вне мира потолок Незера — неизвестный рельеф, как у FLIGHT; верх коренной породы не земля. */
+        public static final Allowed VIRTUAL_RELIEF = new Allowed(Set.of(Source.CHUNK, Source.DISK, Source.GENERATOR), Optional.empty(), true);
+
         private final Set<Source> sources;
         private final Optional<Integer> map;
         /** {@link Source#DISK} и {@link Source#GENERATOR} — только из готовой съёмки ({@link TerrainSurvey}). */

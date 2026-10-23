@@ -95,6 +95,9 @@ class TerrainTest {
         assertEquals(surface(128, Terrain.Source.CEILING), Terrain.choose(nether, Terrain.Allowed.CHUNK));
         assertEquals(surface(32, Terrain.Source.SEA), Terrain.choose(nether, Terrain.Allowed.FLIGHT));
         assertEquals(surface(128, Terrain.Source.CEILING), Terrain.choose(nether, Terrain.Allowed.ORDER));
+        assertEquals(surface(128, Terrain.Source.CEILING), Terrain.choose(nether, Terrain.Allowed.RELIEF));
+        assertEquals(surface(0, Terrain.Source.UNKNOWN), Terrain.choose(nether, Terrain.Allowed.VIRTUAL_RELIEF));
+        assertEquals(0, nether.generatorCalls);
     }
 
     @Test

@@ -97,9 +97,7 @@ public final class TerrainSurveyGameTests {
         for (int y = surface; y < surface + 40; y++) level.setBlockAndUpdate(new BlockPos(x, y, z), Blocks.STONE.defaultBlockState());
         int top = surface + 40;
         TerrainSurvey survey = TerrainSurvey.get(level);
-        // спросили, пока он в памяти: ответ — его карта
-        Terrain.Surface held = survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z);
-        h.assertTrue(held != null && held.y() == top, "чанк в памяти: " + held + " вместо " + top);
+        // До выгрузки не спрашиваем карту: MOTION_BLOCKING должна сохраняться и без прежнего полёта/вопроса.
         int[] stage = {0};
         h.onEachTick(() -> {
             if (stage[0] == 0) {

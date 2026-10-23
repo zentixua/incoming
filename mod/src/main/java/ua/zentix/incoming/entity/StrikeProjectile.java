@@ -1239,7 +1239,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      * рельеф генератора ({@link TerrainSurvey}); пока съёмка не ответила — низ мира.
      */
     protected double relief(Level level, int x, int z) {
-        return Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, x, z, Terrain.Allowed.RELIEF).y();
+        return Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, x, z, virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF).y();
     }
 
     /** Съёмку рельефа заказывать вперёд на столько блоков пути ({@link #surveyAhead}). */
@@ -1299,7 +1299,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             start = ready;
         }
         // за готовыми чанками и вне мира — по верху рельефа съёмки: цель за холмом, которого ещё нет в мире
-        double t = Terrain.underRelief(level, start, end, Terrain.Allowed.RELIEF);
+        double t = Terrain.underRelief(level, start, end, virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF);
         return t >= 1 ? Double.POSITIVE_INFINITY : from.distanceTo(start.lerp(end, t));
     }
 

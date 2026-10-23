@@ -24,6 +24,7 @@ import ua.zentix.incoming.registry.ModAttachments;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
@@ -65,6 +66,10 @@ public final class TerrainSurvey {
     static final int MAX_QUEUED = 8192;
     /** Сколько чанков генератора считается разом (фоновые потоки Minecraft общие с генерацией мира); следующий — сразу по концу. */
     static final int GENERATOR_WORKERS = 2;
+    /** Верхняя граница карт каждого вида (выгрузки идут и без полётов, память должна быть ограничена сразу). */
+    static final int MAX_KNOWN = 8192;
+    /** После ошибки генератора чанк неизвестен столько тиков; вопросы не продлевают запрет повторной попытки. */
+    static final int RETRY_TICKS = 200;
     /** Чанк, о котором не спрашивали столько тиков, забывается. */
     static final int FORGET_TICKS = 6000;
     /** Узлов генератора больше этого — память узлов сбрасывается (≈1,5 МБ). */
@@ -73,22 +78,69 @@ public final class TerrainSurvey {
     /** Известные карты высот: вид карты → чанк → колонки. */
     private final Map<Heightmap.Types, Map<Long, Heights>> known = new EnumMap<>(Heightmap.Types.class);
     /** Заказанные: вид карты → чанк → метка заказа (заказ, чья метка снята, отбрасывается). */
-    private final Map<Heightmap.Types, Map<Long, Object>> pending = new EnumMap<>(Heightmap.Types.class);
+    private final Map<Heightmap.Types, Map<Long, Order>> pending = new EnumMap<>(Heightmap.Types.class);
     /** Чтения с диска в пути (для {@link #settle}). */
     private final Queue<CompletableFuture<?>> reads = new ConcurrentLinkedQueue<>();
     /** Чанки без карты на диске — ждут генератора (кладёт поток ввода-вывода, считает фоновый поток, {@link #pump}). */
-    private final Queue<Order> toGenerate = new ConcurrentLinkedQueue<>();
+    private final Orders toGenerate = new Orders();
     /** Счёт генератора в пути (для {@link #settle}). */
     private final Queue<CompletableFuture<?>> generating = new ConcurrentLinkedQueue<>();
     private final AtomicInteger workers = new AtomicInteger();
     private final AtomicInteger reading = new AtomicInteger();
     /** Заказы, ждущие чтения (поток сервера): вопросы датчика — первыми, заказ вперёд — следом. */
-    private final java.util.ArrayDeque<Order> urgent = new java.util.ArrayDeque<>(), later = new java.util.ArrayDeque<>();
+    private final Orders toRead = new Orders();
 
     /** Заказ чанка с меткой (ждёт чтения или генератора). */
-    private record Order(Heightmap.Types type, long chunk, Object token) {}
-    /** Время мира последнего тика (для ответов из фоновых потоков). */
-    private volatile long now;
+    static final class Order {
+        final Heightmap.Types type;
+        final long chunk;
+        volatile boolean urgent;
+
+        Order(Heightmap.Types type, long chunk, boolean urgent) {
+            this.type = type;
+            this.chunk = chunk;
+            this.urgent = urgent;
+        }
+    }
+
+    /** Две FIFO с продвижением уже ожидающего заказа; потоки IO и генератора тоже обращаются к очереди. */
+    static final class Orders {
+        private final Map<Order, Order> urgent = new LinkedHashMap<>(), later = new LinkedHashMap<>();
+
+        synchronized boolean add(Order o) {
+            if (urgent.containsKey(o) || later.containsKey(o)) return true;
+            if (size() >= MAX_QUEUED) return false;
+            (o.urgent ? urgent : later).put(o, o);
+            return true;
+        }
+
+        synchronized void promote(Order o) {
+            o.urgent = true;
+            if (later.remove(o) != null) urgent.put(o, o);
+        }
+
+        synchronized void remove(Order o) {
+            urgent.remove(o);
+            later.remove(o);
+        }
+
+        synchronized Order poll() {
+            Map<Order, Order> q = urgent.isEmpty() ? later : urgent;
+            var i = q.keySet().iterator();
+            if (!i.hasNext()) return null;
+            Order o = i.next();
+            i.remove();
+            return o;
+        }
+
+        synchronized int size() {
+            return urgent.size() + later.size();
+        }
+
+        synchronized boolean isEmpty() {
+            return size() == 0;
+        }
+    }
     /**
      * Последний известный чанк, о котором спросили (поток сервера): полоса датчика идёт по колонкам подряд, и почти все
      * вопросы — о том же чанке; без этого каждый вопрос — поиск в общей карте с упаковкой ключа.
@@ -98,16 +150,14 @@ public final class TerrainSurvey {
     private Heightmap.Types lastType;
     @Nullable
     private Heights last;
-    /** Какие карты спрашивали и когда последний раз (поток сервера): уходящий чанк оставляет только их, и только пока спрашивают. */
-    private final java.util.Set<Heightmap.Types> asked = java.util.EnumSet.noneOf(Heightmap.Types.class);
-    private long lastAsked = Long.MIN_VALUE;
+    private final java.util.Set<Heightmap.Types> asked = java.util.EnumSet.of(Heightmap.Types.MOTION_BLOCKING);
     /** Узлы рельефа генератора: (x / шаг, z / шаг) → первый воздух. */
     private final Map<Long, Integer> points = new ConcurrentHashMap<>();
 
     /** Для {@link ModAttachments#TERRAIN_SURVEY}. */
     public TerrainSurvey() {
         for (Heightmap.Types t : Heightmap.Types.values()) {
-            known.put(t, new ConcurrentHashMap<>());
+            known.put(t, new LinkedHashMap<>());
             pending.put(t, new ConcurrentHashMap<>());
         }
     }
@@ -121,22 +171,28 @@ public final class TerrainSurvey {
      * с окончательными блоками, но без годной карты высот (формат до 1.18, догенерация под нулём): рельеф неизвестен,
      * генератор тут не годится — мир построен не им или с тех пор изменён.
      */
-    private static final class Heights {
+    static final class Heights {
         @Nullable
         final int[] y;
         final Terrain.Source source;
-        volatile long used;
+        long used;
+        final long retryAt;
 
         Heights(@Nullable int[] y, Terrain.Source source, long used) {
+            this(y, source, used, Long.MAX_VALUE);
+        }
+
+        Heights(@Nullable int[] y, Terrain.Source source, long used, long retryAt) {
             this.y = y;
             this.source = source;
             this.used = used;
+            this.retryAt = retryAt;
         }
     }
 
 
     /** Ответ заказа из фонового потока: в известные — в конце тика мира ({@link #publish}). */
-    private record Answer(Heightmap.Types type, long chunk, Object token, @Nullable int[] y, @Nullable Terrain.Source source) {}
+    private record Answer(Order order, @Nullable int[] y, Terrain.Source source, boolean retry) {}
 
     /** Ответы, пришедшие с прошлого конца тика. */
     private final Queue<Answer> answers = new ConcurrentLinkedQueue<>();
@@ -148,11 +204,11 @@ public final class TerrainSurvey {
     @Nullable
     public Terrain.Surface at(ServerLevel level, Heightmap.Types type, int x, int z) {
         long chunk = ChunkPos.asLong(x >> 4, z >> 4);
-        lastAsked = level.getGameTime();
+        if (level.dimensionType().hasCeiling()) return null;
         asked.add(type);
         LevelChunk memory = Terrain.inMemory(level, chunk);
         if (memory != null) return new Terrain.Surface(memory.getHeight(type, x & 15, z & 15) + 1, Terrain.Source.DISK);
-        Heights h = chunk == lastChunk && type == lastType ? last : known.get(type).get(chunk);
+        Heights h = cached(type, chunk, level.getGameTime());
         if (h != null) {
             lastChunk = chunk;
             lastType = type;
@@ -160,7 +216,7 @@ public final class TerrainSurvey {
             h.used = level.getGameTime();
             return h.y == null ? null : new Terrain.Surface(h.y[(x & 15) + (z & 15) * 16], h.source);
         }
-        request(level, type, chunk, urgent);
+        request(level, type, chunk, true);
         return null;
     }
 
@@ -175,51 +231,79 @@ public final class TerrainSurvey {
                 for (int dz = -1; dz <= 1; dz++) {
                     long c = ChunkPos.asLong(cx + dx, cz + dz);
                     if (!Terrain.ready(level, cx + dx, cz + dz) && Terrain.inMemory(level, c) == null && !known.get(type).containsKey(c))
-                        request(level, type, c, later);
+                        request(level, type, c, false);
                 }
             return true;
         });
     }
 
-    private void request(ServerLevel level, Heightmap.Types type, long chunk, java.util.ArrayDeque<Order> queue) {
-        Map<Long, Object> waiting = pending.get(type);
-        if (waiting.containsKey(chunk) || urgent.size() + later.size() >= MAX_QUEUED) return;
-        Object token = new Object();
-        waiting.put(chunk, token);
-        now = level.getGameTime();
-        queue.add(new Order(type, chunk, token));
+    private void request(ServerLevel level, Heightmap.Types type, long chunk, boolean urgent) {
+        order(type, chunk, urgent);
         submit(level, MAX_READS);
+    }
+
+    /** Один живой заказ на чанк и вид карты; общий предел действует до ответа генератора включительно. */
+    @Nullable
+    Order order(Heightmap.Types type, long chunk, boolean urgent) {
+        Map<Long, Order> waiting = pending.get(type);
+        Order existing = waiting.get(chunk);
+        if (existing != null) {
+            if (urgent) {
+                toRead.promote(existing);
+                toGenerate.promote(existing);
+            }
+            return existing;
+        }
+        // Половина мест оставлена вопросам датчика: предзаказ не вытесняет новую нужную сейчас колонку.
+        if (pendingCount() >= (urgent ? MAX_QUEUED : MAX_QUEUED / 2)) return null;
+        Order order = new Order(type, chunk, urgent);
+        waiting.put(chunk, order);
+        toRead.add(order);
+        return order;
+    }
+
+    @Nullable
+    Heights cached(Heightmap.Types type, long chunk, long now) {
+        Heights h = chunk == lastChunk && type == lastType ? last : known.get(type).get(chunk);
+        if (h != null && now >= h.retryAt) {
+            forget(chunk);
+            return null;
+        }
+        return h;
+    }
+
+    private boolean current(Order o) {
+        return pending.get(o.type).get(o.chunk) == o;
     }
 
     /** Отдать потоку ввода-вывода заказы из очереди, пока в пути меньше {@code limit} чтений (поток сервера). */
     private void submit(ServerLevel level, int limit) {
         while (reading.get() < limit) {
-            Order o = urgent.isEmpty() ? later.poll() : urgent.poll();
+            Order o = toRead.poll();
             if (o == null) return;
-            // чанк за это время пришёл в память и ушёл, оставив карту (onChunkUnload), — заказ уже не нужен
-            if (pending.get(o.type).get(o.chunk) != o.token) continue;
-            read(level, o.type, o.chunk, o.token);
+            if (current(o)) read(level, o);
         }
     }
 
-    private void read(ServerLevel level, Heightmap.Types type, long chunk, Object token) {
-        Map<Long, Object> waiting = pending.get(type);
+    private void read(ServerLevel level, Order o) {
         reading.incrementAndGet();
-        ChunkPos pos = new ChunkPos(chunk);
-        CollectFields fields = DiskStatus.fields(new FieldSelector(HEIGHTMAPS, LongArrayTag.TYPE, type.getSerializationKey()));
+        CollectFields fields = DiskStatus.fields(new FieldSelector(HEIGHTMAPS, LongArrayTag.TYPE, o.type.getSerializationKey()));
         int minY = level.getMinBuildHeight(), height = level.getHeight();
-        reads.add(level.getChunkSource().chunkMap.chunkScanner().scanChunk(pos, fields).handle((v, e) -> {
+        reads.add(level.getChunkSource().chunkMap.chunkScanner().scanChunk(new ChunkPos(o.chunk), fields).handle((v, e) -> {
             reading.decrementAndGet();
             CompoundTag tag = e == null && fields.getResult() instanceof CompoundTag t ? t : null;
-            int[] y = tag == null ? null : decode(tag, type, minY, height);
+            int[] y = tag == null ? null : decode(tag, o.type, minY, height);
             if (y != null) {
-                finish(type, chunk, token, y, Terrain.Source.DISK, now);
+                finish(o, y, Terrain.Source.DISK, false);
+            } else if (e != null) {
+                // Ошибка чтения — не доказательство отсутствия чанка: генератор мог бы выдумать чужой рельеф.
+                finish(o, null, Terrain.Source.UNKNOWN, true);
+                Incoming.LOG.warn("Terrain survey: reading chunk {} failed", new ChunkPos(o.chunk), e);
             } else if (tag != null && DiskStatus.of(tag).blocksFinal()) {
-                // блоки окончательные, а карты не прочесть: генератор дал бы чужой рельеф — неизвестно
-                finish(type, chunk, token, null, Terrain.Source.UNKNOWN, now);
-            } else if (waiting.get(chunk) == token) {
-                toGenerate.add(new Order(type, chunk, token));
-                pump(level);
+                finish(o, null, Terrain.Source.UNKNOWN, false);
+            } else if (current(o)) {
+                if (toGenerate.add(o)) pump(level);
+                else finish(o, null, Terrain.Source.UNKNOWN, true);
             }
             return null;
         }));
@@ -233,17 +317,28 @@ public final class TerrainSurvey {
      * пришедший посреди тика, видела бы одна колонка полосы датчика и не видела соседняя того же чанка, а полёт зависел
      * бы от скорости диска.
      */
-    private void finish(Heightmap.Types type, long chunk, Object token, @Nullable int[] y, Terrain.Source source, long now) {
-        answers.add(new Answer(type, chunk, token, y, source));
+    void finish(Order o, @Nullable int[] y, Terrain.Source source, boolean retry) {
+        answers.add(new Answer(o, y, source, retry));
     }
 
-    /**
-     * Конец тика мира: пришедшие ответы — в известные. Карту, которую оставил ушедший из памяти чанк, ответ не заменяет:
-     * заказ мог читать файл, записанный до того, как чанк побывал в памяти.
-     */
-    private void publish(long now) {
+    /** Ответы становятся видны одновременно, в конце тика; старый заказ не заменяет карту уходящего чанка. */
+    void publish(long now) {
         for (Answer a; (a = answers.poll()) != null; ) {
-            if (pending.get(a.type).remove(a.chunk, a.token) && a.source != null) known.get(a.type).putIfAbsent(a.chunk, new Heights(a.y, a.source, now));
+            Order o = a.order;
+            if (pending.get(o.type).remove(o.chunk, o))
+                remember(o.type, o.chunk, new Heights(a.y, a.source, now, a.retry ? now + RETRY_TICKS : Long.MAX_VALUE));
+        }
+    }
+
+    void remember(Heightmap.Types type, long chunk, Heights h) {
+        Map<Long, Heights> map = known.get(type);
+        map.remove(chunk);
+        map.put(chunk, h);
+        if (map.size() > MAX_KNOWN) {
+            var i = map.keySet().iterator();
+            long oldest = i.next();
+            i.remove();
+            if (oldest == lastChunk && type == lastType) forgetLast();
         }
     }
 
@@ -283,15 +378,20 @@ public final class TerrainSurvey {
                 workers.decrementAndGet();
                 return;
             }
-            generating.add(CompletableFuture.supplyAsync(() -> generate(level, job.chunk), Util.backgroundExecutor()).handle((y, e) -> {
+            if (!current(job)) {
                 workers.decrementAndGet();
-                if (y != null) {
-                    finish(job.type, job.chunk, job.token, y, Terrain.Source.GENERATOR, now);
-                } else {
-                    // заказ снимается в конце тика без ответа: следующий вопрос закажет заново
-                    answers.add(new Answer(job.type, job.chunk, job.token, null, null));
-                    Incoming.LOG.warn("Terrain survey: generator relief for chunk {} failed", new ChunkPos(job.chunk), e);
+                continue;
+            }
+            generating.add(CompletableFuture.supplyAsync(() -> generate(level, job.chunk), Util.backgroundExecutor()).handle((y, e) -> {
+                // Ответ кладётся до освобождения работника: settle не пропустит ещё не опубликованный результат.
+                if (current(job)) {
+                    if (y != null) finish(job, y, Terrain.Source.GENERATOR, false);
+                    else {
+                        finish(job, null, Terrain.Source.UNKNOWN, true);
+                        Incoming.LOG.warn("Terrain survey: generator relief for chunk {} failed; retry in {} ticks", new ChunkPos(job.chunk), RETRY_TICKS, e);
+                    }
                 }
+                workers.decrementAndGet();
                 pump(level);
                 return null;
             }));
@@ -305,7 +405,6 @@ public final class TerrainSurvey {
         s.reads.removeIf(CompletableFuture::isDone);
         s.generating.removeIf(CompletableFuture::isDone);
         long now = level.getGameTime();
-        s.now = now;
         s.publish(now);
         s.submit(level, MAX_READS);
         if (now % 1200 == 0) {
@@ -356,27 +455,40 @@ public final class TerrainSurvey {
     }
 
     /**
-     * Чанк уходит из памяти (перед записью): его карта высот — в известные, как с диска, для видов, которые спрашивали за
-     * последние {@link #FORGET_TICKS} тиков, а заказы о нём в пути отбрасываются (их файл может быть старше). Без этого
-     * между выгрузкой и ответом диска чанк был бы неизвестен тик-другой — смотря когда ваниль его выгрузила. Только
-     * полный чанк ({@code LevelChunk}) и только готовая карта ({@code hasPrimedHeightmap}): у недогенерированного карт нет
-     * или они без построек, а несчитанную карту {@code getHeight} посчитал бы и дописал в уходящий на диск чанк. Прежний
-     * ответ о чанке забывается в любом случае: чанк, побывав в памяти, мог измениться.
+     * Чанк уходит из памяти перед записью: всегда оставляет готовую MOTION_BLOCKING, даже если полётов ещё не было.
+     * Все старые заказы отменяются независимо от полноты чанка и наличия карты; поздний ответ их не воскресит.
+     * Читаются только уже посчитанные карты полного чанка, без изменения уходящего чанка. Память ограничена MAX_KNOWN.
      */
     public static void onChunkUnload(ChunkEvent.Unload event) {
-        if (!(event.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.TERRAIN_SURVEY)) return;
+        if (!(event.getLevel() instanceof ServerLevel level)) return;
         TerrainSurvey s = get(level);
         ChunkAccess chunk = event.getChunk();
         long now = level.getGameTime(), pos = chunk.getPos().toLong();
-        s.forget(pos);
-        boolean recent = now - s.lastAsked <= FORGET_TICKS && !level.dimensionType().hasCeiling() && chunk instanceof LevelChunk;
+        s.invalidate(pos);
+        if (level.dimensionType().hasCeiling() || !(chunk instanceof LevelChunk)) return;
         for (Heightmap.Types type : s.asked) {
-            if (!recent || !chunk.hasPrimedHeightmap(type)) continue;
-            s.pending.get(type).remove(pos);
+            if (!chunk.hasPrimedHeightmap(type)) continue;
             int[] y = new int[256];
             for (int x = 0; x < 16; x++)
                 for (int z = 0; z < 16; z++) y[x + z * 16] = chunk.getHeight(type, x, z) + 1;
-            s.known.get(type).put(pos, new Heights(y, Terrain.Source.DISK, now));
+            s.remember(type, pos, new Heights(y, Terrain.Source.DISK, now));
+        }
+    }
+
+    /** Свежий чанк в памяти точнее любых прежних ответов или запросов к файлу. */
+    public static void onChunkLoad(ChunkEvent.Load event) {
+        if (event.getLevel() instanceof ServerLevel level && level.hasData(ModAttachments.TERRAIN_SURVEY))
+            get(level).invalidate(event.getChunk().getPos().toLong());
+    }
+
+    void invalidate(long chunk) {
+        forget(chunk);
+        for (Map<Long, Order> m : pending.values()) {
+            Order o = m.remove(chunk);
+            if (o != null) {
+                toRead.remove(o);
+                toGenerate.remove(o);
+            }
         }
     }
 
@@ -395,11 +507,17 @@ public final class TerrainSurvey {
             s.reads.removeAll(wait);
             s.generating.removeAll(wait);
             Order job = s.toGenerate.poll();
-            if (job == null && s.reads.isEmpty() && s.generating.isEmpty() && s.urgent.isEmpty() && s.later.isEmpty()) {
+            if (job == null && s.reads.isEmpty() && s.generating.isEmpty() && s.toRead.isEmpty() && s.workers.get() == 0) {
                 s.publish(level.getGameTime());
                 return;
             }
-            if (job != null) s.finish(job.type, job.chunk, job.token, s.generate(level, job.chunk), Terrain.Source.GENERATOR, s.now);
+            if (job != null && s.current(job)) {
+                try {
+                    s.finish(job, s.generate(level, job.chunk), Terrain.Source.GENERATOR, false);
+                } catch (RuntimeException e) {
+                    s.finish(job, null, Terrain.Source.UNKNOWN, true);
+                }
+            }
         }
     }
 
@@ -415,7 +533,7 @@ public final class TerrainSurvey {
     /** Заказов в пути (GameTest). */
     public int pendingCount() {
         int n = 0;
-        for (Map<Long, Object> m : pending.values()) n += m.size();
+        for (Map<Long, Order> m : pending.values()) n += m.size();
         return n;
     }
 }
