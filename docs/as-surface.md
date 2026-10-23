@@ -34,4 +34,6 @@ An empty `impacts()` queue can occur before the bomb timeline schedules its dela
 
 ## Validation
 
-Local `build` and 74 affected GameTests passed, using the downloaded CI runtime mods (`-PmcModsDir=run/ci-mods`). The set includes every surface row, conventional blasts, slab breach, body order/shielding, fractional damage/save codec, the layout regression, bomb tests, the nuclear crater and deferred blasts. Before/after sandbox frames and WAV are linked in PR #437.
+Local `build` and 76 affected GameTests passed, using the downloaded CI runtime mods (`-PmcModsDir=run/ci-mods`). The set includes every surface row, conventional blasts, slab breach, body order/shielding, fractional damage/save codec, the layout regression, bomb tests, the nuclear crater and deferred blasts. Before/after sandbox frames and WAV are required in PR #437 before review.
+
+The complete CI run caught a loaded-face error: the vector to an upper wall block is steep when the charge is near the floor, but room gas loads the vertical wall normally. Backing now follows the ray's actual entry face, and gas uses the faces adjacent to room air. The strengthened tall-room regression and the existing budget test pass without lowering its >300 selected-block requirement. The Sable timing test observes the craft explosion's own event, after the conventional front, and still requires its selected hull blocks to disappear in that event's tick.

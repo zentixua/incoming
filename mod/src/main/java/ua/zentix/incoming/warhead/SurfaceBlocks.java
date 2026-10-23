@@ -4,7 +4,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.util.Terrain;
 
 /** Geometry shared by the air wave and excavation; no road/building classification. */
@@ -12,11 +11,8 @@ public final class SurfaceBlocks {
     private SurfaceBlocks() {}
 
     /** A solid backing cannot be replaced by the free rear face assumed by the panel damage curve. */
-    static boolean backed(ServerLevel level, BlockPos p, Vec3 from) {
-        // Normal of the face facing the source, not the grazing ray's direction along that face.
-        double x = from.x - (p.getX() + 0.5), y = from.y - (p.getY() + 0.5), z = from.z - (p.getZ() + 0.5);
-        Direction toward = Direction.getNearest(x, y, z);
-        BlockPos rear = p.relative(toward.getOpposite());
+    static boolean backed(ServerLevel level, BlockPos p, Direction loadedFace) {
+        BlockPos rear = p.relative(loadedFace.getOpposite());
         if (!Terrain.ready(level, rear)) return true;
         return solid(level, rear, level.getBlockState(rear));
     }

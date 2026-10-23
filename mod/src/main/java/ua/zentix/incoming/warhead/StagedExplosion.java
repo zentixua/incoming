@@ -655,7 +655,8 @@ final class StagedExplosion implements UnitQueue.Job {
             // трава, цветы, посевы, факелы без формы столкновений — без массы на пути волны: сломаны они или нет,
             // волна идёт сквозь, ничего не теряя
             boolean massless = state.getCollisionShape(level, pos).isEmpty();
-            if (!massless && SurfaceBlocks.backed(level, pos, from)) break;
+            Direction entry = SlabBreach.exitFace(pos, new Vec3(x, y, z), new Vec3(-dx, -dy, -dz));
+            if (!massless && (entry == null || SurfaceBlocks.backed(level, pos, entry))) break;
             if (breaks) chosen.add(pos);
             if (massless) continue;
             if (!breaks) break;
@@ -683,7 +684,16 @@ final class StagedExplosion implements UnitQueue.Job {
                 BlockState s = level.getBlockState(p);
                 BlockResponse response = BlockResponse.of(s);
                 if (response.kind() == BlockResponse.Kind.NONE || response.kind() == BlockResponse.Kind.GROUND) continue;
-                if (SurfaceBlocks.backed(level, p, centre)) continue;
+                // Gas loads a wall normally from every adjacent room cell. The vector from the charge is not that
+                // normal (a tall wall above a floor-level charge must not be mistaken for a backed horizontal slab).
+                boolean free = false;
+                for (Direction dir : Direction.values()) {
+                    if (room.cells().contains(p.relative(dir).asLong()) && !SurfaceBlocks.backed(level, p, dir)) {
+                        free = true;
+                        break;
+                    }
+                }
+                if (!free) continue;
                 if (s.getExplosionResistance(level, p, e) >= BLAST_PROOF || !damage.shouldBlockExplode(e, level, p, s, 1f)) continue;
                 if (response.breaksAt(psi, impulse, Mth.murmurHash3Mixer(Long.hashCode(p.asLong())))) chosen.add(p);
             }

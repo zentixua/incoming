@@ -40,7 +40,7 @@ public final class SurfaceSupportGameTests {
         ServerLevel level = h.getLevel();
         BlockPos c = h.absolutePos(C.above(2));
         Vec3 at = Vec3.atCenterOf(c);
-        BlockPos free = c.offset(2, 0, 1), backed = c.offset(-2, 0, -1);
+        BlockPos free = c.east(2), backed = c.west(2);
         for (BlockPos p : List.of(free, backed)) level.setBlock(p, Blocks.GRAY_CONCRETE.defaultBlockState(), 2);
         level.setBlock(backed.west(), Blocks.DIRT.defaultBlockState(), 2);
         Warheads.Probe blast = Warheads.testCharge(level, at, WeaponType.DRONE.spec().charge());

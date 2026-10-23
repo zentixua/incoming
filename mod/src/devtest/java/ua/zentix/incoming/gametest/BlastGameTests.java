@@ -202,7 +202,7 @@ public final class BlastGameTests {
     }
 
     /**
-     * Заряд в закрытой комнате (кладка, 5×3×5 воздуха): газы держат давление на всех стенах (UFC 3-340-02) — стены
+     * Заряд у пола высокой закрытой комнаты (кладка, 5×7×5 воздуха): газы держат давление на всех стенах (UFC 3-340-02) — стены
      * выбиты целиком, хотя волна в открытом поле сломала бы кладку лишь в метре от 10 кг.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_room", skyAccess = true)
@@ -210,8 +210,10 @@ public final class BlastGameTests {
         ServerLevel level = h.getLevel();
         BlockPos base = h.absolutePos(CENTER.offset(-3, 0, -3));
         List<BlockPos> walls = new ArrayList<>();
-        for (int x = 0; x < 7; x++) for (int y = 0; y < 5; y++) for (int z = 0; z < 7; z++) {
-            boolean wall = x == 0 || x == 6 || y == 0 || y == 4 || z == 0 || z == 6;
+        // Tall room, charge near the floor: gas loads the upper vertical walls horizontally, not along the steep
+        // charge-to-block vector. Otherwise an adjacent wall block above wrongly looks like structural backing.
+        for (int x = 0; x < 7; x++) for (int y = 0; y < 9; y++) for (int z = 0; z < 7; z++) {
+            boolean wall = x == 0 || x == 6 || y == 0 || y == 8 || z == 0 || z == 6;
             BlockPos p = base.offset(x, y, z);
             level.setBlock(p, wall ? Blocks.STONE_BRICKS.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
             if (wall && y > 0) walls.add(p);
@@ -220,7 +222,7 @@ public final class BlastGameTests {
         walls.removeIf(p -> {
             for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
                 BlockPos n = p.relative(d);
-                if (n.getX() > base.getX() && n.getX() < base.getX() + 6 && n.getY() > base.getY() && n.getY() < base.getY() + 4
+                    if (n.getX() > base.getX() && n.getX() < base.getX() + 6 && n.getY() > base.getY() && n.getY() < base.getY() + 8
                         && n.getZ() > base.getZ() && n.getZ() < base.getZ() + 6) return false;
             }
             return true;

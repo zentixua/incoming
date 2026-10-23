@@ -480,15 +480,17 @@ public final class WorkGameTests {
         level.getServer().getCommands().performPrefixedCommand(level.getServer().createCommandSourceStack().withLevel(level).withPermission(4)
                 .withSuppressedOutput(), String.format(Locale.ROOT, "sable assemble area %d %d %d %d %d %d",
                 a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ()));
-        Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+        Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER.above()));
         List<BlockPos> plot = new ArrayList<>();
         long[] at = {-1};
         Consumer<ExplosionEvent.Detonate> onBlast = e -> {
             if (e.getLevel() != level || e.getExplosion().center().distanceTo(c) > 0.01) return;
-            at[0] = level.getGameTime();
             for (BlockPos p : e.getAffectedBlocks()) {
                 if (SubLevels.inPlotGrid(level, new ChunkPos(p)) && !level.getBlockState(p).isAir()) plot.add(p.immutable());
             }
+            // The charge's initial world Detonate has no plot blocks. Its craft blast follows the outward front;
+            // test removal in that craft blast's tick, rather than prematurely inspecting the initial event's tick.
+            if (!plot.isEmpty()) at[0] = level.getGameTime();
         };
         List<String> left = new ArrayList<>();
         boolean[] checked = {false};
