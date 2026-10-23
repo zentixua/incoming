@@ -324,10 +324,10 @@ def fireball_vdb(src):
         arr = np.zeros((b[0] - a[0] + 1, b[1] - a[1] + 1, b[2] - a[2] + 1), np.float32)
         g.copyToArray(arr, ijk=a)
         flames.append(float(arr.sum()))
-        if len(flames) % 5 == 0:
+        if (len(flames) - 1) % 5 == 0:
             t = np.zeros_like(arr)
             openvdb.read(f, "temperature").copyToArray(t, ijk=a)
-            hot.append(t[arr > 0.05])
+            hot.append((len(flames) - 1, t[arr > 0.05]))
         d = openvdb.read(f, "density")
         if d.activeVoxelCount():
             da, db = d.evalActiveVoxelBoundingBox()
@@ -336,9 +336,11 @@ def fireball_vdb(src):
     peak = int(np.argmax(flames))
     end = next((i for i in range(peak, len(flames)) if flames[i] < 0.5 * flames[peak]), len(flames) - 1)
     # поле temperature EmberGen — без единиц, и его наибольшее — редкие выбросы (медиана там, где горит, — в 5–10 раз
-    # ниже): T_PEAK получает {VDB_HOT}-я доля поля там, где горит (пламя > 0,05), в кадрах горения; что горячее — T_PEAK.
+    # ниже): T_PEAK получает {VDB_HOT}-я доля поля там, где горит (пламя > 0,05), в кадрах полного горения (пламени не меньше
+    # половины наибольшего, каждый пятый); что горячее — T_PEAK.
     # Мерило — излучение поверхности в горении (pack.py пишет его против CCPS 200–350 кВт/м²)
-    tmax = float(np.percentile(np.concatenate(hot[:max(1, end // 5)]), VDB_HOT))
+    burning = [h for i, h in hot if flames[i] >= 0.5 * flames[peak] and i <= end] or [h for _, h in hot]
+    tmax = float(np.percentile(np.concatenate(burning), VDB_HOT))
     # поперечник горящего шара — по пламени в его наибольшем кадре (вокселей)
     g = openvdb.read(files[peak], "flames")
     a, b = g.evalActiveVoxelBoundingBox()

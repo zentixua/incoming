@@ -110,7 +110,8 @@ def film_exposure(burning):
     шар в ровный жёлтый диск — складок, языков и сажи не видно. Здесь {FILM_KEY}-я доля яркости горящего шара (по
     непрозрачному, во всех кадрах горения) встаёт в плечо кривой, на {FILM_TOP} белого: ярче — белеет, тусклее в
     10–100 раз (остывшие складки, сажа) — тёмно-красное и чёрное. Одна экспозиция на все кадры: остывание темнеет,
-    как в жизни; яркость в модели (свет на мир, блик) — по-прежнему чёрное тело."""
+    как в жизни. Свет шара в модели — по-прежнему чёрное тело, но свет вокруг (блик, вуаль, зарево, свет на дым) не
+    ярче огня кадра на экране («fire», FxAtlas.fireLightAt) — и он идёт за этой экспозицией: ~0,5 белого, а не ~0,87."""
     lit = np.concatenate([d[2][d[1] > 0.5] for d in burning]) if burning else np.ones(1)
     key = float(np.percentile(lit, FILM_KEY)) if lit.size else 1.0
     # film(x) = FILM_TOP — решение квадратного уравнения кривой
@@ -161,7 +162,8 @@ def fireball(src, out):
     burn_s -= (int(files[first][2:5]) - 1) / fps
     kel = [kelvin_of(d[3]) if d[3] > 0 else 0 for d in data]
     # горение: кадры равно по времени до t; остывание: от конца горения равно по температуре до Дрейпера
-    burn_idx = [min(len(data) - 1, int(round(i * burn_s / BURN_FRAMES * fps))) for i in range(BURN_FRAMES)]
+    # по времени кадров, а не по номеру: кадры запекания — с пропусками или без (bake.py --frames)
+    burn_idx = [int(np.argmin([abs(t - i * burn_s / BURN_FRAMES) for t in times])) for i in range(BURN_FRAMES)]
     end = next((i for i, t in enumerate(times) if t >= burn_s), len(data) - 1)
     k0 = kel[end]
     cool = []
@@ -172,16 +174,15 @@ def fireball(src, out):
     picks = [min(i, len(data) - 1) for i in burn_idx + cool]
     exposure = film_exposure([data[i] for i in burn_idx])
     fire, burn, kelv = [], [], []
-    last_r = 0.0
+    last_half = 0.0
     for k, i in enumerate(picks):
         rgb, alpha, lum, top, _ = data[i]
         cx, cy, r, _ = centre(alpha, 0.5)
-        # остывая, шар тает в дым, и непрозрачной его части всё меньше: кадр по ней приближал бы редеющий дым на весь
-        # квадрат — не меньше шара в конец горения
-        if k >= BURN_FRAMES:
-            r = max(r, last_r)
-        last_r = r
         half = max(r * FIREBALL, 8)
+        # остывая, шар тает в дым, и непрозрачной его части всё меньше: кадр по ней приближал бы редеющий дым на весь
+        # квадрат — не меньше кадра конца горения (после его подгонки ниже), без скачка размера на стыке
+        if k >= BURN_FRAMES:
+            half = max(half, last_half)
         disp = film(rgb * exposure)
         # край кадра: клубы, что выходят за квадрат, тают к краю, а не обрезаются прямой (у готовой симуляции шар не круглый)
         rr = np.hypot(*(np.mgrid[0:TILE, 0:TILE] - TILE / 2 + 0.5)) / (TILE / 2)
@@ -196,6 +197,7 @@ def fireball(src, out):
             if k >= BURN_FRAMES or seen <= 0 or abs(seen / target - 1) < 0.02:
                 break
             half *= math.sqrt(seen / target)
+        last_half = half
         save_rgba(tile[..., :3] ** (1 / 2.2), tile[..., 3], os.path.join(out, f"fireball_{k:02d}.png"))
         yy, xx = np.mgrid[0:TILE, 0:TILE]
         disc = (xx - TILE / 2 + 0.5) ** 2 + (yy - TILE / 2 + 0.5) ** 2 < (TILE / 2 / FIREBALL) ** 2
