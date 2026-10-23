@@ -178,6 +178,8 @@ public final class TerrainSurveyGameTests {
                 Incoming.LOG.info(String.format(Locale.ROOT, "Замер съёмки рельефа: %d вопросов о незнакомых чанках в тике — %.2f мс, ответов в тике %d",
                         all.size(), took[0] / 1e6, answered));
                 h.assertTrue(answered == 0, "съёмка ответила в тике вопроса " + answered + " раз: ждала диск или генератор");
+                // заказы в пути: при чтении в тике их бы не осталось (половина чанков ждёт ещё и генератора)
+                h.assertTrue(survey.pendingCount() > 0, "заказов в пути нет: съёмка дочитала в тике вопроса");
                 h.assertTrue(took[0] / 1_000_000 < NO_WAIT_LIMIT_MS, String.format(Locale.ROOT, "вопросы в тике заняли %.1f мс", took[0] / 1e6));
                 stage[0] = 1;
             }

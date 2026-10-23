@@ -53,9 +53,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class TerrainSurvey {
     /** Шаг узлов рельефа генератора, блоков: ~3 мс на узел, в среднем ~4 новых узла на чанк. */
     public static final int GENERATOR_STEP = 8;
-    /** Сколько чтений с диска может ждать мир разом: дальше заказ повторится при следующем вопросе. */
+    /**
+     * Сколько чтений с диска мир держит в очереди потока ввода-вывода чанков разом: та же очередь грузит чанки игрокам,
+     * и сотни чтений задержали бы их. Сверх — заказ повторится при следующем вопросе.
+     */
+    public static final int MAX_READS = 64;
+    /** Заказ вперёд ({@link #ahead}) берёт не больше половины очереди: место остаётся вопросам датчика о колонках у носа. */
+    static final int AHEAD_READS = MAX_READS / 2;
+    /** Сколько заказов (чтения и генератор) мир держит разом: дальше заказ повторится при следующем вопросе. */
     static final int MAX_PENDING = 512;
-    /** Сколько чанков генератора считается разом (фоновые потоки Minecraft общие с генерацией мира). */
+    /** Сколько чанков генератора считается разом (фоновые потоки Minecraft общие с генерацией мира); следующий — сразу по концу. */
     static final int GENERATOR_WORKERS = 2;
     /** Чанк, о котором не спрашивали столько тиков, забывается. */
     static final int FORGET_TICKS = 6000;
@@ -68,11 +75,14 @@ public final class TerrainSurvey {
     private final Map<Heightmap.Types, Map<Long, Object>> pending = new EnumMap<>(Heightmap.Types.class);
     /** Чтения с диска в пути (для {@link #settle}). */
     private final Queue<CompletableFuture<?>> reads = new ConcurrentLinkedQueue<>();
-    /** Чанки без карты на диске — ждут генератора (кладёт поток ввода-вывода, берёт тик мира). */
+    /** Чанки без карты на диске — ждут генератора (кладёт поток ввода-вывода, считает фоновый поток, {@link #pump}). */
     private final Queue<Job> toGenerate = new ConcurrentLinkedQueue<>();
     /** Счёт генератора в пути (для {@link #settle}). */
     private final Queue<CompletableFuture<?>> generating = new ConcurrentLinkedQueue<>();
     private final AtomicInteger workers = new AtomicInteger();
+    private final AtomicInteger readsInFlight = new AtomicInteger();
+    /** Время мира последнего тика (для ответов из фоновых потоков). */
+    private volatile long now;
     /**
      * Последний известный чанк, о котором спросили (поток сервера): полоса датчика идёт по колонкам подряд, и почти все
      * вопросы — о том же чанке; без этого каждый вопрос — поиск в общей карте с упаковкой ключа.
@@ -97,13 +107,18 @@ public final class TerrainSurvey {
         return level.getData(ModAttachments.TERRAIN_SURVEY);
     }
 
-    /** Первый воздух в колонках чанка и откуда он; {@code used} — тик последнего вопроса. */
+    /**
+     * Первый воздух в колонках чанка и откуда он; {@code used} — тик последнего вопроса. {@code y} null — чанк на диске
+     * с окончательными блоками, но без годной карты высот (формат до 1.18, догенерация под нулём): рельеф неизвестен,
+     * генератор тут не годится — мир построен не им или с тех пор изменён.
+     */
     private static final class Heights {
+        @Nullable
         final int[] y;
         final Terrain.Source source;
         volatile long used;
 
-        Heights(int[] y, Terrain.Source source, long used) {
+        Heights(@Nullable int[] y, Terrain.Source source, long used) {
             this.y = y;
             this.source = source;
             this.used = used;
@@ -128,7 +143,7 @@ public final class TerrainSurvey {
             lastType = type;
             last = h;
             h.used = level.getGameTime();
-            return new Terrain.Surface(h.y[(x & 15) + (z & 15) * 16], h.source);
+            return h.y == null ? null : new Terrain.Surface(h.y[(x & 15) + (z & 15) * 16], h.source);
         }
         request(level, type, chunk);
         return null;
@@ -144,6 +159,7 @@ public final class TerrainSurvey {
             for (int dx = -1; dx <= 1; dx++)
                 for (int dz = -1; dz <= 1; dz++) {
                     long c = ChunkPos.asLong(cx + dx, cz + dz);
+                    if (readsInFlight.get() >= AHEAD_READS) return false;
                     if (!Terrain.ready(level, cx + dx, cz + dz) && Terrain.inMemory(level, c) == null && !known.get(type).containsKey(c))
                         request(level, type, c);
                 }
@@ -153,17 +169,27 @@ public final class TerrainSurvey {
 
     private void request(ServerLevel level, Heightmap.Types type, long chunk) {
         Map<Long, Object> waiting = pending.get(type);
-        if (waiting.containsKey(chunk) || waiting.size() >= MAX_PENDING) return;
+        if (waiting.containsKey(chunk) || waiting.size() >= MAX_PENDING || readsInFlight.get() >= MAX_READS) return;
         Object token = new Object();
         waiting.put(chunk, token);
+        readsInFlight.incrementAndGet();
+        now = level.getGameTime();
         ChunkPos pos = new ChunkPos(chunk);
         CollectFields fields = DiskStatus.fields(new FieldSelector(HEIGHTMAPS, LongArrayTag.TYPE, type.getSerializationKey()));
         int minY = level.getMinBuildHeight(), height = level.getHeight();
-        long now = level.getGameTime();
         reads.add(level.getChunkSource().chunkMap.chunkScanner().scanChunk(pos, fields).handle((v, e) -> {
-            int[] y = e == null && fields.getResult() instanceof CompoundTag tag ? decode(tag, type, minY, height) : null;
-            if (y != null) finish(type, chunk, token, y, Terrain.Source.DISK, now);
-            else if (waiting.get(chunk) == token) toGenerate.add(new Job(type, chunk, token));
+            readsInFlight.decrementAndGet();
+            CompoundTag tag = e == null && fields.getResult() instanceof CompoundTag t ? t : null;
+            int[] y = tag == null ? null : decode(tag, type, minY, height);
+            if (y != null) {
+                finish(type, chunk, token, y, Terrain.Source.DISK, now);
+            } else if (tag != null && DiskStatus.of(tag).blocksFinal()) {
+                // блоки окончательные, а карты не прочесть: генератор дал бы чужой рельеф — неизвестно
+                finish(type, chunk, token, null, Terrain.Source.UNKNOWN, now);
+            } else if (waiting.get(chunk) == token) {
+                toGenerate.add(new Job(type, chunk, token));
+                pump(level);
+            }
             return null;
         }));
     }
@@ -172,7 +198,7 @@ public final class TerrainSurvey {
     private static final String HEIGHTMAPS = "Heightmaps";
 
     /** Ответ заказа: в известные, если метка заказа ещё стоит (чанк за это время не приходил в память). */
-    private void finish(Heightmap.Types type, long chunk, Object token, int[] y, Terrain.Source source, long now) {
+    private void finish(Heightmap.Types type, long chunk, Object token, @Nullable int[] y, Terrain.Source source, long now) {
         if (pending.get(type).remove(chunk, token)) known.get(type).put(chunk, new Heights(y, source, now));
     }
 
@@ -198,33 +224,53 @@ public final class TerrainSurvey {
         return y;
     }
 
-    /** Тик мира: генератор для чанков без карты на диске (не больше {@link #GENERATOR_WORKERS} разом), забывание старого. */
+    /**
+     * Генератор для чанков без карты на диске: не больше {@link #GENERATOR_WORKERS} разом, следующий — сразу по концу
+     * предыдущего (из любого потока).
+     */
+    private void pump(ServerLevel level) {
+        while (!toGenerate.isEmpty()) {
+            int w = workers.get();
+            if (w >= GENERATOR_WORKERS) return;
+            if (!workers.compareAndSet(w, w + 1)) continue;
+            Job job = toGenerate.poll();
+            if (job == null) {
+                workers.decrementAndGet();
+                return;
+            }
+            generating.add(CompletableFuture.supplyAsync(() -> generate(level, job.chunk), Util.backgroundExecutor()).handle((y, e) -> {
+                workers.decrementAndGet();
+                if (y != null) {
+                    finish(job.type, job.chunk, job.token, y, Terrain.Source.GENERATOR, now);
+                } else {
+                    pending.get(job.type).remove(job.chunk, job.token);
+                    Incoming.LOG.warn("Terrain survey: generator relief for chunk {} failed", new ChunkPos(job.chunk), e);
+                }
+                pump(level);
+                return null;
+            }));
+        }
+    }
+
+    /** Тик мира: время для ответов, забывание старого. */
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.TERRAIN_SURVEY)) return;
         TerrainSurvey s = get(level);
         s.reads.removeIf(CompletableFuture::isDone);
         s.generating.removeIf(CompletableFuture::isDone);
         long now = level.getGameTime();
-        while (s.workers.get() < GENERATOR_WORKERS) {
-            Job job = s.toGenerate.poll();
-            if (job == null) break;
-            s.workers.incrementAndGet();
-            s.generating.add(CompletableFuture.supplyAsync(() -> s.generate(level, job.chunk), Util.backgroundExecutor()).handle((y, e) -> {
-                s.workers.decrementAndGet();
-                if (y != null) {
-                    s.finish(job.type, job.chunk, job.token, y, Terrain.Source.GENERATOR, now);
-                } else {
-                    s.pending.get(job.type).remove(job.chunk, job.token);
-                    Incoming.LOG.warn("Terrain survey: generator relief for chunk {} failed", new ChunkPos(job.chunk), e);
-                }
-                return null;
-            }));
-        }
+        s.now = now;
         if (now % 1200 == 0) {
             for (Map<Long, Heights> m : s.known.values()) m.values().removeIf(h -> now - h.used > FORGET_TICKS);
-            s.last = null;
+            s.forgetLast();
             if (s.points.size() > MAX_POINTS) s.points.clear();
         }
+    }
+
+    private void forgetLast() {
+        lastChunk = Long.MIN_VALUE;
+        lastType = null;
+        last = null;
     }
 
     /**
@@ -232,11 +278,15 @@ public final class TerrainSurvey {
      * соседними чанками — по памяти узлов), колонка — наибольший узел своей клетки. Фоновый поток.
      */
     int[] generate(ServerLevel level, long chunk) {
-        int x0 = ChunkPos.getX(chunk) << 4, z0 = ChunkPos.getZ(chunk) << 4;
+        return cells(ChunkPos.getX(chunk) << 4, ChunkPos.getZ(chunk) << 4, (x, z) -> point(level, x, z));
+    }
+
+    /** Колонки чанка с началом {@code x0, z0} по узлам {@code node(x, z)}: наибольший из четырёх узлов клетки. */
+    static int[] cells(int x0, int z0, java.util.function.IntBinaryOperator nodeAt) {
         int n = 16 / GENERATOR_STEP + 1;
         int[] node = new int[n * n];
         for (int i = 0; i < n; i++)
-            for (int j = 0; j < n; j++) node[i + j * n] = point(level, x0 + i * GENERATOR_STEP, z0 + j * GENERATOR_STEP);
+            for (int j = 0; j < n; j++) node[i + j * n] = nodeAt.applyAsInt(x0 + i * GENERATOR_STEP, z0 + j * GENERATOR_STEP);
         int[] y = new int[256];
         for (int x = 0; x < 16; x++)
             for (int z = 0; z < 16; z++) {
@@ -270,7 +320,7 @@ public final class TerrainSurvey {
         if (!(event.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.TERRAIN_SURVEY)) return;
         TerrainSurvey s = get(level);
         long chunk = event.getChunk().getPos().toLong();
-        if (chunk == s.lastChunk) s.last = null;
+        if (chunk == s.lastChunk) s.forgetLast();
         for (Map<Long, Heights> m : s.known.values()) m.remove(chunk);
         for (Map<Long, Object> m : s.pending.values()) m.remove(chunk);
     }
@@ -290,7 +340,7 @@ public final class TerrainSurvey {
             s.generating.removeAll(wait);
             Job job = s.toGenerate.poll();
             if (job == null && s.reads.isEmpty() && s.generating.isEmpty()) return;
-            if (job != null) s.finish(job.type, job.chunk, job.token, s.generate(level, job.chunk), Terrain.Source.GENERATOR, level.getGameTime());
+            if (job != null) s.finish(job.type, job.chunk, job.token, s.generate(level, job.chunk), Terrain.Source.GENERATOR, s.now);
         }
     }
 

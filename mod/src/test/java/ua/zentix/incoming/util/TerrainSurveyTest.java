@@ -7,6 +7,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
@@ -60,5 +61,28 @@ class TerrainSurveyTest {
         old.remove("Status");
         old.put("Level", level);
         assertNull(TerrainSurvey.decode(old, Heightmap.Types.MOTION_BLOCKING, MIN_Y, HEIGHT));
+    }
+
+    /**
+     * Рельеф генератора по узлам через {@link TerrainSurvey#GENERATOR_STEP}: колонка — наибольший из четырёх узлов своей
+     * клетки (оценка сверху для склона между узлами); узлы на краю чанка — общие с соседом.
+     */
+    @Test
+    void generatorCellTakesHighestOfFourNodes() {
+        int step = TerrainSurvey.GENERATOR_STEP;
+        // склон вверх к +x на блок за блок и пик в узле (8, 16)
+        java.util.function.IntBinaryOperator node = (x, z) -> x == 8 && z == 16 ? 200 : 60 + x;
+        int[] y = TerrainSurvey.cells(0, 0, node);
+        for (int x = 0; x < 16; x++)
+            for (int z = 0; z < 16; z++) {
+                int i = x / step * step, j = z / step * step;
+                int expect = Math.max(Math.max(node.applyAsInt(i, j), node.applyAsInt(i + step, j)),
+                        Math.max(node.applyAsInt(i, j + step), node.applyAsInt(i + step, j + step)));
+                assertEquals(expect, y[x + z * 16], "колонка " + x + ", " + z);
+            }
+        // клетки, которые касаются пика, видят его целиком
+        assertEquals(200, y[3 + 12 * 16]);
+        assertEquals(200, y[12 + 12 * 16]);
+        assertEquals(76, y[12 + 3 * 16]);
     }
 }
