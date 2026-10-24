@@ -793,8 +793,10 @@ public final class FarBlasts {
         // шар светит и на дым, пыль и шлейфы вокруг — закрыт он от глаза или нет; тающий — своей светящейся долей
         lights.add(bx, by + h, bz, r, b * view.exposure() * body, fire, c[0], c[1], c[2]);
         if (vis > 0) {
+            // свечение огня (FxBloom): шар модели ярче своего кадра на экране во столько раз (кадр показан своей экспозицией)
+            double hdr = b * view.exposure() / Math.pow(Math.max(FxAtlas.fireLightAt(frame), 1e-3), 2.2);
             out.shaped(bx, by + h, bz, r, sprite, half, FxAtlas.fireballMix(frame), b * view.exposure() * t, t, view.pixel(), c[0], c[1], c[2],
-                    vis * body, vis * e.open, fire, LIGHT);
+                    vis * body, vis * e.open, fire, hdr, LIGHT);
             brightest(view, bx, by + h, bz, vis);
         }
         // шар закрыт гребнем или постройкой: его свет рассеивает воздух над краем — зарево там, откуда место было бы

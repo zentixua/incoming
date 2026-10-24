@@ -259,17 +259,19 @@ public final class FarSprites implements SmokePuffs.Out {
      * @param body   доля тела (видимое над рельефом, переход к частицам, таяние)
      * @param glare  доля блика и вуали
      * @param shown  тело на экране в картинке (доля белого): блик и вуаль не ярче — остывший в сажу шар не слепит
+     * @param hdr    во сколько раз тело ярче своей картинки на экране (кадр огня показан своей экспозицией): свечение
+     *               ({@code FxBloom}) берёт пересвет, не больше белой точки
      */
     public void shaped(double dx, double dy, double dz, double radius, FxAtlas.Sprite sprite, double half, float mix, double seen, double t, double pixel,
-                       float r, float g, float b, double body, double glare, double shown, double[] out) {
+                       float r, float g, float b, double body, double glare, double shown, double hdr, double[] out) {
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         Sight.light(radius, seen, d, pixel, out);
         double shape = smoothstep(SHAPE_FROM, SHAPE_FULL, radius / Math.max(d * pixel, 1e-12));
         if (shape < 1) core(dx, dy, dz, out, t, r, g, b, body * (1 - shape));
         float a = (float) (t * body * shape);
-        // огонь кадра светится (FxBloom: ореол — по форме огня, свет — обратной кривой кадра)
+        // огонь кадра светится (FxBloom: ореол — по форме огня, с пересветом модели против кадра)
         this.out.fireballMix(mix);
-        this.out.emission(1);
+        this.out.emission((float) Math.max(1, hdr));
         if (shape > 0 && billboard(dx, dy, dz, half, fireballRotation(), sprite, a, a, a, a, (float) (radius * BODY_SOFT), BALL_FRONT * radius)) counts[1]++;
         this.out.emission(0);
         this.out.fireballMix(-1);

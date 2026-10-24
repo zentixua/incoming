@@ -114,21 +114,20 @@ class FxBloomTest {
         assertTrue(fsh.contains("seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);"), "мягкий край у мира — в видимой доле");
     }
 
-    /** Законы шейдеров ({@code bloom.glsl}) — те же, что в Java. */
+    /** Законы шейдеров ({@code bloom.glsl}) — те же, что в Java: код пересвета, белая точка, кривая ореола. */
     @Test
     void shaderLawsAreJavaLaws() throws IOException {
         String glsl = read("include/bloom.glsl");
         assertEquals(FxBloom.WHITE, constant(glsl, "BLOOM_WHITE"), 1e-5);
         assertEquals(FxBloom.STEPS, constant(glsl, "BLOOM_STEPS"), 1e-9);
-        GlslFunction film = GlslFunction.parse(glsl, "bloomFilm"), gain = GlslFunction.parse(glsl, "bloomGain"), curve = GlslFunction.parse(glsl, "bloomCurve");
-        for (double y = 0; y <= 1.0001; y += 0.01) assertEquals(FxBloom.filmInverse(y), film.call(Map.of("y", y)), 1e-6 * (1 + FxBloom.filmInverse(y)), "y " + y);
+        GlslFunction gain = GlslFunction.parse(glsl, "bloomGain"), curve = GlslFunction.parse(glsl, "bloomCurve");
         for (int c = 1; c <= 255; c++) assertEquals(FxBloom.gain(c), gain.call(Map.of("code", (double) c)), 1e-5 * FxBloom.gain(c), "код " + c);
         for (double x = 0; x < 20; x += 0.1) assertEquals(FxBloom.curve(x), curve.call(Map.of("x", x)), 1e-12, "x " + x);
     }
 
     /**
-     * Обратная кривая — та, через которую запечён огонь ({@code tools/bake_fx/pack.py film}): кадр огня показывает y, свет до
-     * кривой — {@link FxBloom#filmInverse}(y); белая точка — 7,24.
+     * Белая точка — у той кривой, через которую запечён огонь ({@code tools/bake_fx/pack.py film}): свет, который она
+     * показывает белым, — 7,24 белой стены; ярче кадр различий не показывает.
      */
     @Test
     void filmInverseUndoesTheBake() throws IOException {

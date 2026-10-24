@@ -157,17 +157,18 @@ float glowAlpha(float r) {
     return exp(-(r / 0.42) * (r / 0.42)) * smoothstep(0.0, 0.25, 1.0 - r) / 0.997147;
 }
 
-// Излучение фрагмента c (цвет с умноженной альфой, значения экрана) в линейном свете: у кадров огня (film) — обратная
-// плёночная кривая запекания по каналам (кадр показывает огонь через неё; у неё — своя умноженная альфа), у остального —
-// показанный свет × пересвет gain, который экран срезал; не ярче белой точки кривой (BLOOM_WHITE)
-vec3 bloomLight(vec4 c, float film, float gain) {
-    if (film > 0.5) {
-        float a = max(c.a, 1e-4);
-        vec3 shown = pow(clamp(c.rgb / a, 0.0, 1.0), vec3(2.2));
-        return vec3(bloomFilm(shown.r), bloomFilm(shown.g), bloomFilm(shown.b)) * c.a;
+// Излучение фрагмента c (значения экрана) в линейном свете × пересвет gain, который экран срезал, не ярче белой точки
+// (BLOOM_WHITE): у частиц и кадров огня (cover) цвет умножен на непрозрачность — свет цвета на ту же долю; у ядер и
+// факела цвет — сам свет поверх
+vec3 bloomLight(vec4 c, float cover, float gain) {
+    vec3 shown = c.rgb;
+    float a = 1.0;
+    if (cover > 0.5 && c.a > 0.004) {
+        a = c.a;
+        shown = c.rgb / a;
     }
-    vec3 light = pow(clamp(c.rgb, 0.0, 1.0), vec3(2.2)) * gain;
-    return light * min(1.0, BLOOM_WHITE / max(max(light.r, max(light.g, light.b)), 1e-6));
+    vec3 light = pow(clamp(shown, 0.0, 1.0), vec3(2.2)) * gain;
+    return light * min(1.0, BLOOM_WHITE / max(max(light.r, max(light.g, light.b)), 1e-6)) * a;
 }
 
 void main() {
@@ -177,7 +178,6 @@ void main() {
     vec4 tex;
     bool six = nearest < -0.1 && nearest > -0.4;
     vec3 sixLit = vec3(1.0);
-    float film = 0.0;
     if (nearest > 0.75) {
         tex = particle(texCoord0, dx, dy, lod);
     } else if (six) {
@@ -209,7 +209,6 @@ void main() {
         tex = vec4(vec3(a.a), a.a);
     } else if (nearest > 0.55) {
         tex = fireFrames(texCoord0, dx, dy, opacity);
-        film = 1.0;
     } else if (nearest < -0.5) {
         tex = textureGrad(Sampler3, texCoord0, dx, dy);
     } else {
@@ -229,7 +228,10 @@ void main() {
     if (nearest > 0.75 && tex.a * opacity < 0.1 * clamp(2.0 - lod, 0.0, 1.0)) discard;
     vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a);
     vec3 glow = vec3(0.0);
-    if (emitGain > 0.0) glow = bloomLight(color, film, emitGain);
+    // частицы и кадры огня — с умноженной альфой
+    float cover = 0.0;
+    if (nearest > 0.55) cover = 1.0;
+    if (emitGain > 0.0) glow = bloomLight(color, cover, emitGain);
     if (PallAmbient.w > 0.5) {
         // пелена перед квадратом: его свет ослаблен, а закрытое им — уже её свет до него (пелена на кадре — до мира).
         // Квадрат ближе мира: перед ним пелены не больше, чем на кадре до мира, — и её свет до него — доля света пелены
