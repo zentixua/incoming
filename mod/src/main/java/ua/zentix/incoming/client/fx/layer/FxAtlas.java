@@ -63,7 +63,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
             FIREBALL_FLOW_V = (float) FIREBALL_FLOW_SIZE / HEIGHT, FIREBALL_FLOW_TOP = (float) (FIREBALL_FLOW_ROW * CELL) / HEIGHT;
     /**
      * Уменьшенных копий: клуб 64 → 4 пикселя (все места кратны 16 — копии соседних мест не смешивают). Выборка у края места
-     * отступает на полтекселя той копии, что читает (`sixInset` в {@code fx.fsh}, там же {@code SIX_LEVELS}).
+     * отступает на полтекселя той копии, что читает (`frameInset` в {@code fx.fsh}, там же {@code FRAME_LEVELS}).
      */
     public static final int MIPS = 4;
 
