@@ -33,6 +33,9 @@
 
 // расстояние до мира за пикселем по оси взгляда (полное разрешение)
 uniform sampler2D Sampler0;
+// Свет поднятой пыли: азимут × (радиус, высота, гриб), предпроход этого кадра.
+uniform sampler2D Sampler9;
+uniform int PallFootReady;
 // таблица поля (PallField.row): 6 строк — пыль, брызги над водой и мгла двух слотов
 uniform sampler2D Sampler1;
 // синий шум 64×64 (BlueNoise)
@@ -159,8 +162,9 @@ int gMushes;
 vec3 gDir;
 int gFoot0, gFoot1;
 vec2 gFootSpan0, gFootSpan1;
-int gFootLit, gFootOtherLit;
-vec3 gFootLight, gFootOtherLight;
+const int FOOT_LIGHT_AZ = 64;
+const int FOOT_LIGHT_R = 16;
+const int FOOT_LIGHT_H = 32;
 
 
 float hg(float g, float c) {
@@ -903,6 +907,23 @@ vec3 pallSunAt(vec3 p) {
     return PallSunLight * mushShadowFrom(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p, 0.5);
 }
 
+void pallLighting(vec3 dir) {
+    vec3 sunDir = PallSun.xyz;
+    gDir = dir;
+    gSun = sunDir;
+    gMuS = max(sunDir.y, 0.12);
+    gC = dot(dir, sunDir);
+    // путь света к глазу — против луча: его косинус к вертикали
+    gMv = -dir.y;
+    gSootK = vec3(pallK(PALL_SOOT_W.r, PALL_SOOT_G), pallK(PALL_SOOT_W.g, PALL_SOOT_G), pallK(PALL_SOOT_W.b, PALL_SOOT_G));
+    gSootSun = 0.25 * hg(PALL_SOOT_G, gC);
+    // Самое яркое пламя кадра, линейное: пожары под стеной, пламя шторма слотов, пожары под мглой (цвет их света). Огонь
+    // в точке — сумма всех огней: у каждого свой предел (pallFlame), а вместе они — ещё раз не ярче него: точка, со всех
+    // сторон окружённая пламенем, светит им, а не ярче
+    vec3 flame = max(pallLinear3(FIRE), max(pallLinear3(PallFire0[3].rgb), pallLinear3(PallFire1[3].rgb)));
+    gFlame = max(flame, pallLinear3(PallFireLight / max(PallFireLight.r, 1e-4)));
+}
+
 // Общий источник света пелены и пыли, поднятой из неё в основание ножки: свет нужен и выше прежнего
 // плоского верха. inflow.xyz — основание своего гриба, w — поднятая пыль; у обычной пелены — 0.
 vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
@@ -1173,6 +1194,20 @@ float mushBallPattern(Mush m, vec3 q) {
     return mix(1.0, p, mushBallContrast(m.ballFrame));
 }
 
+// В каждом блоке высоты — радиусы строками, азимут по X (последний столбец повторяет первый).
+// Две билинейные выборки дают трилинейный свет без шва азимута и без перемешивания соседних высот/грибов.
+vec3 mushFootLight(int k, Mush m, vec3 q) {
+    float r = mushStemAt(m, q.y), band = mushFootBandAt(m, q.y);
+    float radius = clamp((length(q.xz) - 0.6 * r) / max((0.4 + MUSH_STEM_REACH) * r + band, 1.0), 0.0, 1.0);
+    float az = fract(atan(q.z, q.x) / 6.28318530718 + 1.0);
+    float h = clamp(q.y / max(m.footMerge, 1.0), 0.0, 1.0) * float(FOOT_LIGHT_H - 1);
+    float hi = min(floor(h), float(FOOT_LIGHT_H - 2));
+    float rows = float(FOOT_LIGHT_H * FOOT_LIGHT_R * MUSHROOMS);
+    vec2 uv = vec2((az * float(FOOT_LIGHT_AZ) + 0.5) / float(FOOT_LIGHT_AZ + 1),
+            (float(k * FOOT_LIGHT_H * FOOT_LIGHT_R) + hi * float(FOOT_LIGHT_R) + radius * float(FOOT_LIGHT_R - 1) + 0.5) / rows);
+    return mix(texture(Sampler9, uv).rgb, texture(Sampler9, uv + vec2(0.0, float(FOOT_LIGHT_R) / rows)).rgb, h - hi);
+}
+
 // Гриб k в точке p (от глаза) с местом q: ослабление (w, 1/блок) и свет к глазу на единицу пути (rgb, Σ ослабление ×
 // функция источника). cone — меньшее, что луч здесь различает
 vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
@@ -1184,25 +1219,10 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
     if (st <= 1e-7) return vec4(0.0);
     float fromCarpet = 0.0;
     // Свет ковра — только от своего активного поля и в отрезке луча у основания. У остальных грибов — свет ножки.
-    if (k == gFoot0 || k == gFoot1) fromCarpet = mushFootLightShare(q.y, m.footTop, m.footMerge, min(carried, sig.y), st);
-    if (fromCarpet > 0.0 && gFootLit != k) {
-        // Свет поля медленно меняется вдоль видимой оболочки: одна выборка при входе луча в пыль основания.
-        // Клубы и их движение остаются в густоте, а не пересчитывают весь свет пелены на каждом шаге.
-        // Два поля пелены могут пересекаться. Сохранить и второе: один тег пересчитывал бы свет
-        // обоих грибов на каждом шаге при их чередовании, хотя луч уже вошёл в оба основания.
-        if (gFootOtherLit == k) {
-            vec3 previous = gFootLight;
-            gFootLight = gFootOtherLight;
-            gFootOtherLight = previous;
-            gFootOtherLit = gFootLit;
-        } else {
-            gFootOtherLit = gFootLit;
-            gFootOtherLight = gFootLight;
-            pallSource(p, cone, vec4(m.base, carried), gFootLight);
-        }
-        gFootLit = k;
-    }
-    if (fromCarpet >= 1.0) return vec4(st * gFootLight, st);
+    if (PallFootReady > 0 && (k == gFoot0 || k == gFoot1)) fromCarpet = mushFootLightShare(q.y, m.footTop, m.footMerge, min(carried, sig.y), st);
+    vec3 carpetLight = vec3(0.0);
+    if (fromCarpet > 0.0) carpetLight = mushFootLight(k, m, q);
+    if (fromCarpet >= 1.0) return vec4(st * carpetLight, st);
     vec3 w = (sig.x * m.capMat.rgb + sig.y * m.stemMat.rgb + sig.z * m.skirtMat.rgb + sig.w * m.colMat.rgb) / st;
     float g = (sig.x * m.capMat.a + sig.y * m.stemMat.a + sig.z * m.skirtMat.a + sig.w * m.colMat.a) / st;
     vec3 kd = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
@@ -1298,7 +1318,7 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
     // уходит наружу без замены (двумя потоками: недосвет гаснет вглубь как e^(−kτ))
     vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));
     vec3 source = w * light + thermal;
-    if (fromCarpet > 0.0) source = mix(source, gFootLight, fromCarpet);
+    if (fromCarpet > 0.0) source = mix(source, carpetLight, fromCarpet);
     return vec4(st * source, st);
 }
 
@@ -1428,6 +1448,7 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
     return vec4(st * (w * light + (1.0 - w) * bb), st);
 }
 
+#ifndef PALL_FOOT_CACHE
 void main() {
     vec2 low = gl_FragCoord.xy;
     ivec2 full = ivec2((floor(low) + 0.5) * PallFrame.z);
@@ -1461,19 +1482,7 @@ void main() {
     }
     float t0 = span.x, t1 = min(min(span.y, scene), t0 + clip);
     vec3 sunDir = PallSun.xyz;
-    gDir = dir;
-    gSun = sunDir;
-    gMuS = max(sunDir.y, 0.12);
-    gC = dot(dir, sunDir);
-    // путь света к глазу — против луча: его косинус к вертикали
-    gMv = -dir.y;
-    gSootK = vec3(pallK(PALL_SOOT_W.r, PALL_SOOT_G), pallK(PALL_SOOT_W.g, PALL_SOOT_G), pallK(PALL_SOOT_W.b, PALL_SOOT_G));
-    gSootSun = 0.25 * hg(PALL_SOOT_G, gC);
-    // Самое яркое пламя кадра, линейное: пожары под стеной, пламя шторма слотов, пожары под мглой (цвет их света). Огонь
-    // в точке — сумма всех огней: у каждого свой предел (pallFlame), а вместе они — ещё раз не ярче него: точка, со всех
-    // сторон окружённая пламенем, светит им, а не ярче
-    vec3 flame = max(pallLinear3(FIRE), max(pallLinear3(PallFire0[3].rgb), pallLinear3(PallFire1[3].rgb)));
-    gFlame = max(flame, pallLinear3(PallFireLight / max(PallFireLight.r, 1e-4)));
+    pallLighting(dir);
     vec3 whirlFlame = max(gFlame, WHIRL_FIRE_LINEAR);
     vec3 light = vec3(0.0);
     float transmit = 1.0;
@@ -1484,8 +1493,6 @@ void main() {
     gMushes = 0;
     gFoot0 = -1;
     gFoot1 = -1;
-    gFootLit = gFootOtherLit = -1;
-    gFootLight = gFootOtherLight = vec3(0.0);
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gWhirlLight = mat4(0.0);
     gWhirlIn = vec4(1e9);
@@ -1712,3 +1719,43 @@ void main() {
     vec4 res = vec4(shown, min(transmit + lost, 1.0));
     fragColor = pallValid(res) ? res : vec4(0.0, 0.0, 0.0, -1.0);
 }
+
+#else
+// One table per frame, not one lighting calculation per ray step. The integration reads it only in carried dust.
+void main() {
+    ivec2 at = ivec2(gl_FragCoord.xy);
+    int k = at.y / (FOOT_LIGHT_R * FOOT_LIGHT_H);
+    if (k >= MUSHROOMS || !mushOn(Sampler7, k)) { fragColor = vec4(0.0); return; }
+    Mush m = mushLoad(Sampler7, k);
+    if (m.footShare <= 0.0 || m.footMerge <= 0.0) { fragColor = vec4(0.0); return; }
+    gMushes = 0;
+    gFoot0 = -1;
+    gFoot1 = -1;
+    gFootSpan0 = gFootSpan1 = vec2(0.0, 1e9);
+    for (int j = 0; j < MUSHROOMS; j++) {
+        if (!mushOn(Sampler7, j)) break;
+        gMush[j] = mushLoad(Sampler7, j);
+        gMushes += 1;
+        if (length(gMush[j].base.xz - PallSlot0[0].xy) < 1.0) gFoot0 = j;
+        if (length(gMush[j].base.xz - PallSlot1[0].xy) < 1.0) gFoot1 = j;
+    }
+    if (k != gFoot0 && k != gFoot1) { fragColor = vec4(0.0); return; }
+    int layer = (at.y / FOOT_LIGHT_R) % FOOT_LIGHT_H;
+    float h = m.footMerge * float(layer) / float(FOOT_LIGHT_H - 1);
+    float r = mushStemAt(m, h), band = mushFootBandAt(m, h), width = (0.4 + MUSH_STEM_REACH) * r + band;
+    float rho = 0.6 * r + width * float(at.y % FOOT_LIGHT_R) / float(FOOT_LIGHT_R - 1);
+    float az = 6.28318530718 * float(at.x % FOOT_LIGHT_AZ) / float(FOOT_LIGHT_AZ);
+    vec3 q = vec3(rho * cos(az), h, rho * sin(az));
+    vec3 p = m.base + q;
+    p.xz += m.drift * mushShare(h, m.endTop);
+    gJitter = 0.5;
+    pallLighting(p / max(length(p), 1e-3));
+    // Filter fine lighting detail below the table cell; moving density/geometry retains its full detail in mushDense.
+    float cone = max(m.footMerge / float(FOOT_LIGHT_H - 1), max(width / float(FOOT_LIGHT_R - 1), rho * 6.28318530718 / float(FOOT_LIGHT_AZ)));
+    // Probe the radiative source also at empty nodes: the small test density supplies material, not rendered mass.
+    float sigma = max(mushFootSigma(m, h) * mushFootWall(rho, r), 1e-6);
+    vec3 light;
+    pallSource(p, cone, vec4(m.base, sigma), light);
+    fragColor = vec4(light, 1.0);
+}
+#endif

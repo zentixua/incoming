@@ -156,14 +156,14 @@ class ShaderSourceTest {
         String pall = Files.readString(core.resolve("fx_pall.fsh"));
         String layer = blankComments(body(pall, "void pallStep(")), stem = blankComments(body(pall, "vec4 mushAt("));
         assertTrue(layer.contains("pallSource(p, cone, vec4(0.0), dustLight)"));
-        assertTrue(stem.contains("pallSource(p, cone, vec4(m.base, carried), gFootLight)"));
+        assertFalse(stem.contains("pallSource("), "в шаге гриба нет встроенного расчёта пелены");
+        assertTrue(stem.contains("mushFootLight(k, m, q)"));
+        assertTrue(pall.contains("pallSource(p, cone, vec4(m.base, sigma), light)"), "предпроход считает тот же источник");
         assertTrue(stem.contains("mushFootLightShare("));
-        assertTrue(stem.contains("mix(source, gFootLight, fromCarpet)"));
+        assertTrue(stem.contains("mix(source, carpetLight, fromCarpet)"));
         String dense = blankComments(body(pall, "vec4 mushDense("));
         assertTrue(dense.contains("mushInflowLobes("), "подсос — клубами ковра, не растянутыми струями всей ножки");
         assertFalse(dense.contains("mushStemLobes("), "исходный узор ножки не переотображается");
-        assertEquals(1, stem.split("pallSource\\(", -1).length - 1, "дорогой свет — одно место вызова под кешем");
-        assertTrue(stem.contains("gFootLit != k"));
         String slot = blankComments(body(pall, "void slot("));
         assertEquals(1, slot.split("carpetFlowAt\\(", -1).length - 1, "карта потока общая у всех смещённых выборок слота");
         assertTrue(slot.contains("f.column.x += up") && slot.contains("f.slab.x += total"), "поднятая пыль затеняет сама себя");
@@ -309,13 +309,41 @@ class ShaderSourceTest {
     }
 
     /** Текст шейдера с файлами {@code #moj_import <incoming:…>} на их местах (каждый раз — один, как у ванили). */
+    @Test
+    void footLightTableDimensionsMatchItsShader() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        String source = Files.readString(core.resolve("fx_pall.fsh"));
+        for (Object[] pair : new Object[][]{{"FOOT_LIGHT_AZ", PallPass.FOOT_LIGHT_AZ}, {"FOOT_LIGHT_R", PallPass.FOOT_LIGHT_R}, {"FOOT_LIGHT_H", PallPass.FOOT_LIGHT_H}}) {
+            Matcher m = Pattern.compile("const int " + pair[0] + " = (\\d+);").matcher(source);
+            assertTrue(m.find(), pair[0].toString());
+            assertEquals(pair[1], Integer.valueOf(m.group(1)));
+        }
+    }
+
+    @Test
+    void relativeShaderImportKeepsItsExplicitNamespace() throws IOException, URISyntaxException {
+        Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
+        assertTrue(withImports(include, "#moj_import \"incoming:fx_pall.fsh\"", new HashSet<>()).contains("vec4 pallSource("));
+        assertFalse(withImports(include, "#moj_import \"fx_pall.fsh\"", new HashSet<>()).contains("vec4 pallSource("));
+    }
+
     private static String withImports(Path include, String source, Set<String> seen) throws IOException {
-        Matcher m = Pattern.compile("(?m)^\\s*#moj_import\\s*<incoming:([\\w./]+)>").matcher(source);
+        return withImportsFrom(include, include.resolveSibling("core"), source, seen);
+    }
+
+    /** Quoted imports are relative to the importing file, as in Mojang's GlslPreprocessor. */
+    private static String withImportsFrom(Path include, Path local, String source, Set<String> seen) throws IOException {
+        Matcher m = Pattern.compile("(?m)^\\s*#moj_import\\s*(?:<incoming:([\\w./]+)>|\"([\\w:./]+)\")").matcher(source);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
-            String name = m.group(1);
             m.appendReplacement(out, "");
-            if (seen.add(name)) out.append(withImports(include, Files.readString(include.resolve(name)), seen));
+            // A quoted import without a namespace means minecraft:, not the namespace of its parent shader.
+            if (m.group(2) != null && !m.group(2).startsWith("incoming:")) {
+                out.append(m.group());
+                continue;
+            }
+            Path file = (m.group(1) != null ? include.resolve(m.group(1)) : local.resolve(m.group(2).substring("incoming:".length()))).normalize();
+            if (seen.add(file.toString())) out.append(withImportsFrom(include, file.getParent(), Files.readString(file), seen));
         }
         m.appendTail(out);
         return out.toString();
