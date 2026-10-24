@@ -6,6 +6,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -143,6 +144,50 @@ public final class TerrainSurveyGameTests {
             h.assertTrue(s != null, "нет ответа генератора");
             h.assertTrue(s.source() == Terrain.Source.GENERATOR && s.y() == expected, "генератор: " + s + " вместо " + expected);
             h.assertTrue(unloaded(level, List.of(c)), "чанк появился в памяти");
+        });
+    }
+
+    /** После разрыва готовых чанков потолок Незера не должен становиться препятствием по карте высот. */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "survey_nether_gap", skyAccess = true)
+    public static void netherCeilingBeyondUnreadyGapDoesNotBlockSightline(GameTestHelper h) {
+        ServerLevel nether = h.getLevel().getServer().getLevel(Level.NETHER);
+        h.assertTrue(nether != null, "нет Незера");
+        ChunkPos near = new ChunkPos(Site.GENERATOR.at(h));
+        ChunkPos far = new ChunkPos(near.x + 32, near.z);
+        nether.getChunk(near.x, near.z);
+        nether.getChunk(far.x, far.z);
+        // Only the sensor is exercised: no launch, flight tickets or entity ticks.
+        class SensorMissile extends CruiseMissileEntity {
+            SensorMissile() { super(ModEntities.CRUISE_MISSILE.get(), nether); }
+            double sightline(Vec3 to) { return clearAlong(nether, to, 0); }
+        }
+        SensorMissile missile = new SensorMissile();
+        Vec3 from = new Vec3(near.getMiddleBlockX() + 0.5, 80.5, near.getMiddleBlockZ() + 0.5);
+        Vec3 to = from.add(32 * 16, 0, 0);
+        missile.setPos(from);
+        h.succeedWhen(() -> {
+            h.assertTrue(Terrain.ready(nether, near.x, near.z) && Terrain.ready(nether, far.x, far.z), "концы ещё не готовы");
+            h.assertFalse(Terrain.ready(nether, near.x + 16, near.z), "разрыв уже готов");
+            // Clear the near ready segment under the natural bedrock roof; touch no unready chunks.
+            for (int x = near.getMiddleBlockX(); x <= near.getMaxBlockX(); x++)
+                nether.getChunkSource().getChunkNow(near.x, near.z).setBlockState(new BlockPos(x, 80, near.getMiddleBlockZ()), Blocks.AIR.defaultBlockState(), false);
+            Vec3 edge = Terrain.readyUntil(nether, from, to);
+            h.assertTrue(edge != to && edge.x > from.x, "нет готового участка перед разрывом");
+            Terrain.Surface roof = Terrain.estimate(nether, Heightmap.Types.MOTION_BLOCKING,
+                    far.getMiddleBlockX(), far.getMiddleBlockZ(), Terrain.Allowed.RELIEF);
+            h.assertTrue(roof.source() == Terrain.Source.CEILING && roof.y() > to.y, "нет потолка за разрывом: " + roof);
+            h.assertTrue(Double.isInfinite(missile.sightline(to)), "потолок за разрывом закрыл прямую");
+            // A real block on the near ready segment must still block the in-world sensor.
+            BlockPos obstacle = BlockPos.containing(from.add(2, 0, 0));
+            var chunk = nether.getChunkSource().getChunkNow(near.x, near.z);
+            chunk.setBlockState(obstacle, Blocks.STONE.defaultBlockState(), false);
+            try {
+                double hit = missile.sightline(to);
+                h.assertTrue(hit > 0 && hit < edge.distanceTo(from), "не замечен блок до разрыва: " + hit);
+            } finally {
+                chunk.setBlockState(obstacle, Blocks.AIR.defaultBlockState(), false);
+            }
+            h.assertFalse(Terrain.ready(nether, near.x + 16, near.z), "датчик загрузил разрыв");
         });
     }
 
