@@ -41,9 +41,13 @@ import java.util.WeakHashMap;
  * Звук с фильтром — {@link Muffled}: разовый получает фильтр при старте ({@link PlaySoundSourceEvent}),
  * мотор снаряда — каждый тик ({@link #update}). Всё, что трогает OpenAL, идёт в звуковом потоке, где контекст
  * текущий; параметры фильтра копируются в источник при привязке, поэтому один объект фильтра на всех.
- * Если стоит Sound Physics Remastered, он сам глушит звуки по пути — тогда воздух и преграды не наши, только оглушение
- * и пелена. Его фильтр на источнике при этом не затирается, а умножается на наш ({@link Spr}): прямой фильтр у
- * источника OpenAL один, и наш на минуты пелены снимал бы с каждого звука его преграды.
+ * Путь наших звуков — наш и при Sound Physics Remastered: каждый наш звук играет в 3 блоках от уха в сторону источника
+ * (или на месте, где его слышно с запаздыванием), громкость и верха по пути считает наша модель, а он видел бы только
+ * эти 3 блока — дальний удар звучал бы как ближний. Поэтому прямой фильтр нашего звука — наш вместо его ({@link #direct}),
+ * а сборке и игроку — строка {@code incoming:*} = 0 в его {@code sound_rates.properties} (README): так он не трогает
+ * наши звуки вовсе (без своих отражений поверх нашего эха). Чужие звуки — его: на них наш фильтр оглушения и пелены
+ * умножается на его ({@link Spr}), прямой фильтр у источника OpenAL один, и наш на минуты пелены снимал бы с каждого
+ * звука его преграды.
  */
 public final class SoundFilters {
     /**
@@ -56,8 +60,9 @@ public final class SoundFilters {
     private static volatile int filter;
     private static Boolean soundPhysics;
     /**
-     * Фильтр Sound Physics Remastered, каким он был при старте наших петель (мотор, сирена): их фильтр мы ставим каждый
-     * тик, и его доля — отсюда. Только звуковой поток; ключи слабые — звук забыт, запись уходит.
+     * Фильтр Sound Physics Remastered, каким он был при старте чужих петель (вода, маяк, петли модов): в оглушении и
+     * пелене их фильтр мы ставим каждый тик ({@link #loops}), и его доля — отсюда. Только звуковой поток; ключи слабые —
+     * звук забыт, запись уходит.
      */
     private static final Map<SoundInstance, float[]> SPR_AT_START = new WeakHashMap<>();
     /**
@@ -86,9 +91,9 @@ public final class SoundFilters {
         float lowpassHighs();
     }
 
-    /** Воздух и преграды — наши (нет своего конфига «выкл» и нет Sound Physics). */
+    /** Воздух и преграды по пути наших звуков включены (настройка); Sound Physics их не отменяет — путь наш. */
     static boolean pathEffects() {
-        return !soundPhysics() && IncomingConfig.CLIENT.soundMuffling.get();
+        return IncomingConfig.CLIENT.soundMuffling.get();
     }
 
     /** Стоит ли Sound Physics Remastered. */
@@ -187,7 +192,9 @@ public final class SoundFilters {
 
     private static void start(SoundInstance sound, int source) {
         float gain = 1, highs = 1;
-        if (sound instanceof Muffled m) {
+        boolean own = sound instanceof Muffled;
+        if (own) {
+            Muffled m = (Muffled) sound;
             gain = m.lowpassGain();
             highs = m.lowpassHighs();
         }
@@ -195,19 +202,26 @@ public final class SoundFilters {
         gain *= Deafness.gain(sound) * (1 - 0.3f * m);
         highs *= Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
         boolean ours = gain < 0.999f || highs < 0.999f;
-        // петли ведём каждый тик (наши — хозяин, чужие — loops): их фильтр Sound Physics нужен и потом
-        boolean kept = sound instanceof Muffled || sound.isLooping();
         // Sound Physics Remastered поставил свой фильтр этому звуку только что (в начале Channel.play, событие — сразу
-        // после него, в той же задаче звукового потока): наш — поверх его, а не вместо
-        float[] spr = ours || kept ? Spr.now() : null;
-        if (spr != null && kept) SPR_AT_START.put(sound, spr);
-        if (ours) {
-            if (spr != null) {
-                gain *= spr[0];
-                highs *= spr[1];
-            }
-            set(source, gain, highs);
-        }
+        // после него, в той же задаче звукового потока)
+        float[] spr = ours || own || sound.isLooping() ? Spr.now() : null;
+        // чужие петли ведём каждый тик в оглушении (loops): их фильтр Sound Physics нужен и потом
+        if (spr != null && !own && sound.isLooping()) SPR_AT_START.put(sound, spr);
+        float[] f = direct(own, gain, highs, spr);
+        if (f != null) set(source, f[0], f[1]);
+    }
+
+    /**
+     * Прямой фильтр звука при старте: громкость и доля верхов, или null — фильтр не ставить. Наш звук ({@code own}) —
+     * наш фильтр вместо фильтра Sound Physics ({@code spr}, null — его нет): путь наш, его фильтр видел только 3 блока
+     * до уха, и преграда у уха считалась бы дважды; стоит его фильтр — наш ставится и без глушения, чтобы снять его.
+     * Чужой — наш поверх его: оглушение и пелена, а путь — его.
+     */
+    static float @Nullable [] direct(boolean own, float gain, float highs, float @Nullable [] spr) {
+        boolean ours = gain < 0.999f || highs < 0.999f;
+        if (own) return ours || spr != null ? new float[]{gain, highs} : null;
+        if (!ours) return null;
+        return spr != null ? new float[]{gain * spr[0], highs * spr[1]} : new float[]{gain, highs};
     }
 
     /** Каждый тик для звука, который играет: новые параметры фильтра (мотор улетает, скрывается за холмом). */
@@ -216,11 +230,8 @@ public final class SoundFilters {
         if (handle == null) return;
         float m = NukePall.muffle(sound);
         float g = gain * Deafness.gain(sound) * (1 - 0.3f * m), h = highs * Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
-        handle.execute(channel -> {
-            float[] spr = SPR_AT_START.get(sound);
-            if (spr != null) set(channel.source, g * spr[0], h * spr[1]);
-            else set(channel.source, g, h);
-        });
+        // звук наш ({@link Muffled}): его путь — наш, фильтр Sound Physics с его старта сюда не входит ({@link #direct})
+        handle.execute(channel -> set(channel.source, g, h));
     }
 
     /**

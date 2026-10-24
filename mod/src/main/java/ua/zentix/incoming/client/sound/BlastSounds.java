@@ -135,7 +135,7 @@ public final class BlastSounds {
                 level.getRainLevel(1), level.getThunderLevel(1));
     }
 
-    /** Доля верхов записи раската по пути {@link Outdoor} и воздуху; путь звука считает Sound Physics или он выключен — 1. */
+    /** Доля верхов записи раската по пути {@link Outdoor} и воздуху; путь звука выключен настройкой — 1. */
     public static float highs(Outdoor.Path path) {
         return SoundFilters.pathEffects() ? Outdoor.highs(path) * ClientSounds.farAir(path.d()) : 1;
     }

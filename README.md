@@ -62,7 +62,10 @@ All of these are optional:
   districts in a blackout) shows up in it: the server sends those chunks to players with Voxy. Where LOD Server
   Support is not serving (single-player, a server without it), the targeting map, sight lines and sound around hills
   read distant terrain from Voxy's own LOD: everything Voxy has seen, or the whole save after `/voxy import current`.
-- **Sound Physics Remastered**: it handles muffling behind walls; Incoming only adds deafening from explosions.
+- **Sound Physics Remastered**: it handles the world's sounds. Incoming's own sounds keep Incoming's distance, hill
+  and wall muffling, since Incoming knows where each blast and engine really is. To keep Sound Physics from adding its
+  echoes on top of Incoming's, set every `incoming:` line in `config/sound_physics_remastered/sound_rates.properties`
+  to `0`.
 - **Iris**: the nuclear effects render with shaders.
 - **Flashback**: replays show strikes, and seeking through a replay does not set off explosions again.
 

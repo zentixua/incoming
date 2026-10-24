@@ -335,7 +335,7 @@
   "incoming.config.nuke_tinnitus": "Hearing damage",
   "incoming.config.nuke_tinnitus.tooltip": "A blast wave strong enough to hurt your ears muffles your hearing and makes your ears ring; hearing comes back over game hours. From 5 psi it can tear your eardrums: muffled for game weeks, or until you die.",
   "incoming.config.sound_muffling": "Muffle distant and hidden strikes",
-  "incoming.config.sound_muffling.tooltip": "Strikes far away lose their high tones, and strikes behind a hill or wall sound muffled; with Sound Physics Remastered installed, that mod does this instead. Inside the nuclear dust pall, distant sounds are muffled too.",
+  "incoming.config.sound_muffling.tooltip": "Strikes far away lose their high tones, and strikes behind a hill or wall sound muffled, with or without Sound Physics Remastered. Inside the nuclear dust pall, distant sounds are muffled too.",
   "incoming.config.map_prefetch": "Prepare map terrain in advance",
   "incoming.config.map_prefetch.tooltip": "While a designator is in the inventory or the map was opened — the map opens instantly",
   "subtitles.incoming.nuke.alarm": "Civil defense siren",
