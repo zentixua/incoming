@@ -621,9 +621,10 @@ public final class BlastEffects {
     }
 
     /**
-     * Топливо удара горит на блоках (сервер, {@code warhead/FuelFires}): огонь рисует сам мир, светит — светом блоков; дым
-     * пожара ({@link FireSmoke#pool}) и его гул — у клиента, по закону топлива оружия ({@code WeaponSpec.pool}) на клетках
-     * пакета: легло на меньшую площадь — горит дольше и слабее ({@code FuelPool.spread}), как у сервера.
+     * Топливо удара горит на блоках (сервер, {@code warhead/FuelFires}): пламя рисует сам мир; очаг пожара
+     * ({@link FireSmoke#pool}: дым, свет пламени на мир и дым, пламя вдали) и его гул — у клиента, по закону топлива оружия
+     * ({@code WeaponSpec.pool}) на клетках пакета: легло на меньшую площадь — горит дольше и слабее
+     * ({@code FuelPool.spread}), как у сервера.
      */
     public static void fuelFire(S2C.FuelFire p) {
         ClientLevel level = Minecraft.getInstance().level;
