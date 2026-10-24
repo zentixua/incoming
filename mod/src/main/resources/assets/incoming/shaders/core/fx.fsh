@@ -45,6 +45,8 @@ in vec3 sixBallDir;
 in vec3 worldPos;
 // запечённый клуб: множитель толщи кадра (fx.vsh, PuffOptics)
 in float sixTau;
+flat in vec4 gaussian0;
+flat in vec4 gaussian1;
 
 // запечённый клуб (FxAtlas.puff6): x — шаг карт по листу (v), y — начало кадров (v), z и w — размер кадра (u, v)
 uniform vec4 FxSix;
@@ -90,13 +92,30 @@ float frameInset(float span) {
 
 // Кадр клуба и следующий, сдвинутые вдоль векторов движения на долю смеси m (кадр k — назад на m, k + 1 — вперёд на
 // 1 − m): клуб течёт, а не проступает двойным. Карты a и b — в линейном свете, альфа — в a.w
-void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
+void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, out vec3 b) {
     vec2 tile = FxSix.zw;
     vec2 cell = floor(vec2(uv.x / tile.x, (uv.y - FxSix.y) / tile.y));
     vec2 origin = vec2(cell.x * tile.x, FxSix.y + cell.y * tile.y);
     vec2 next = origin + vec2(tile.x, 0.0);
     if (cell.x > 6.5) next = vec2(0.0, origin.y + tile.y);
     vec2 local = uv - origin;
+    if (analytic) {
+        vec3 ray = normalize(worldPos);
+        vec3 invSigma = 1.0 / vec3(gaussian0.w, gaussian1.x, gaussian0.w);
+        vec3 p = gaussian0.xyz * invSigma, r = ray * invSigma;
+        float t = max(dot(p, r) / dot(r, r), 0.0);
+        vec3 delta = t * ray - gaussian0.xyz;
+        vec3 wx = dFdx(worldPos), wy = dFdy(worldPos);
+        float orientation = dx.x * dy.y - dx.y * dy.x < 0.0 ? -1.0 : 1.0;
+        vec3 right = unitOr((wx * dy.y - wy * dx.y) * orientation, vec3(1.0, 0.0, 0.0));
+        vec3 down = unitOr((wy * dx.x - wx * dy.x) * orientation, vec3(0.0, -1.0, 0.0));
+        local = (0.5 + 0.5 * vec2(dot(delta, right) / gaussian0.w, dot(delta, down) / gaussian1.z) / gaussian1.w) * tile;
+        uv = origin + local;
+        dx = dFdx(uv); dy = dFdy(uv);
+        if (any(lessThan(local, vec2(0.0))) || any(greaterThan(local, tile))) {
+            a = vec4(vec3(FxSixLight.z), 0.0); b = vec3(FxSixLight.z); return;
+        }
+    }
     vec4 v = textureGrad(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), dx, dy);
     vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
     vec2 size = vec2(textureSize(Sampler0, 0)), gx = dx * size, gy = dy * size;
@@ -105,7 +124,10 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
     vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
     // прозрачный край кадра (половина квадрата клуба) — без второй карты и света: цена слоя — заливка крупных клубов
-    if (mix(a0.a, a1.a, m) < 0.002) discard;
+    if (mix(a0.a, a1.a, m) < 0.002) {
+        if (!analytic) discard;
+        a = vec4(vec3(FxSixLight.z), 0.0); b = vec3(FxSixLight.z); return;
+    }
     vec4 b0 = textureGrad(Sampler0, uv0 + vec2(0.0, FxSix.x), dx, dy), b1 = textureGrad(Sampler0, uv1 + vec2(0.0, FxSix.x), dx, dy);
     // на листе — умноженная альфа и степень 1/2,2
     vec3 la0 = pow(a0.rgb / max(a0.a, 1e-3), vec3(2.2)), la1 = pow(a1.rgb / max(a1.a, 1e-3), vec3(2.2));
@@ -160,15 +182,35 @@ float glowAlpha(float r) {
     return exp(-(r / 0.42) * (r / 0.42)) * smoothstep(0.0, 0.25, 1.0 - r) / 0.997147;
 }
 
+// Integral of the physical 3D Gaussian over [eye, visible surface], with anisotropic sigma.
+// This closed form avoids the invalid small-angle projection of a billboard near the eye.
+float gaussianErf(float x) {
+    float a = abs(x), t = 1.0 / (1.0 + 0.3275911 * a);
+    float y = 1.0 - (((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*exp(-a*a);
+    return sign(x)*y;
+}
+float gaussianAlpha(float sceneDistance) {
+    vec3 ray = normalize(worldPos);
+    vec3 invSigma = 1.0 / vec3(gaussian0.w, gaussian1.x, gaussian0.w);
+    vec3 p = gaussian0.xyz * invSigma, r = ray * invSigma;
+    float speed = length(r), a = dot(p, r) / speed;
+    float b2 = max(dot(p,p)-a*a,0.0);
+    float tail = sceneDistance < 1e8 ? gaussianErf((speed * sceneDistance * length(worldPos) / viewDistance - a) * 0.7071067812) : 1.0;
+    float tau = gaussian1.y / (12.5663706144 * gaussian0.w * gaussian0.w * gaussian1.x * speed)
+            * exp(-0.5*b2) * max(tail + gaussianErf(a * 0.7071067812),0.0);
+    return 1.0-exp(-tau);
+}
+
 void main() {
     // производные — до ветвления (вне его они определены у всех пикселей)
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
     vec3 worldDx = dFdx(worldPos), worldDy = dFdy(worldPos);
+    bool analytic = gaussian0.w > 0.0;
     // The reduced target has no hardware depth attachment. Reject hidden clubs before fetching their light maps.
     float sceneDistance = 1e9;
     if (FxScene > 0.5 && (softness > 0.0 || FxTarget.z > 0.5)) {
         sceneDistance = pallScene(texture(Sampler1, gl_FragCoord.xy / FxTarget.xy).r);
-        if (sceneDistance <= viewDistance) discard;
+        if (!analytic && sceneDistance <= viewDistance) discard;
     }
     float lod = 0.0;
     vec4 tex;
@@ -179,7 +221,7 @@ void main() {
     } else if (six) {
         vec4 a;
         vec3 b;
-        sixFrames(texCoord0, dx, dy, opacity, a, b);
+        sixFrames(texCoord0, dx, dy, opacity, analytic, a, b);
         // Standard derivative tangent frame: texture right/up and the visible surface normal in world space.
         // A horizontal card must receive front light from above, not billboard-side light from the camera basis.
         float orientation = dx.x * dy.y - dx.y * dy.x < 0.0 ? -1.0 : 1.0;
@@ -210,7 +252,7 @@ void main() {
         sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
         // толща клуба — толща кадра (α = 1 − e^(−τ) запекания, байт 255 — пропускание 1/255) × sixTau: перекрытые клубы
         // складываются, как толщи (PuffOptics)
-        float k = 1.0 - pow(max(1.0 - a.a, 1.0 / 255.0), sixTau);
+        float k = analytic ? gaussianAlpha(sceneDistance) : 1.0 - pow(max(1.0 - a.a, 1.0 / 255.0), sixTau);
         tex = vec4(vec3(k), k);
     } else if (nearest > 0.55) {
         tex = fireFrames(texCoord0, dx, dy, opacity);

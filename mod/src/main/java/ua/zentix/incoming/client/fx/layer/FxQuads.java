@@ -121,9 +121,12 @@ public final class FxQuads {
     public void sixWay(float mix, float shade, double tau) {
         nearest = (byte) (mix < 0 ? 0 : -13 - Math.round(Mth.clamp(shade / SHADE_MAX, 0, 1) * SHADE_STEPS));
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
+        gaussianIndex = 0;
         sixTau = mix < 0 ? 0 : tauCode(tau);
         six = mix >= 0;
     }
+
+    public void gaussian(int index) { gaussianIndex = (short) index; }
 
     /** Множитель толщи клуба в {@code UV2.x}: {@link #TAU_STEPS}·log₂ tau ({@code fx.vsh}: exp2(UV2.x / SIX_TAU_STEPS)). */
     public static short tauCode(double tau) {
@@ -132,7 +135,7 @@ public final class FxQuads {
 
     /** Ступеней множителя толщи клуба на октаву ({@code fx.vsh}: {@code SIX_TAU_STEPS}): ±32 октавы, шаг 0,07 %. */
     public static final int TAU_STEPS = 1024;
-    private short sixTau;
+    private short sixTau, gaussianIndex;
     private boolean six;
 
     /** Наибольшая степень тени карт клуба (сажа — ~1,3) и ступеней в полосе байта −13…−50 ({@code fx.fsh}). */
@@ -202,7 +205,7 @@ public final class FxQuads {
         MemoryUtil.memPutShort(p + 24, probe > 0 ? (short) -probe : (short) Mth.clamp(Math.round(soft * 16), 0, Short.MAX_VALUE));
         MemoryUtil.memPutShort(p + 26, (short) Mth.clamp(Math.round(unfold * Short.MAX_VALUE), 1, Short.MAX_VALUE));
         MemoryUtil.memPutShort(p + 28, six ? sixTau : (short) (light & 0xFFFF));
-        MemoryUtil.memPutShort(p + 30, six ? 0 : (short) (light >>> 16 & 0xFFFF));
+        MemoryUtil.memPutShort(p + 30, six ? gaussianIndex : (short) (light >>> 16 & 0xFFFF));
         MemoryUtil.memPutByte(p + 32, (byte) Math.round(Mth.clamp(fog, 0, 1) * 127));
         MemoryUtil.memPutByte(p + 33, nearest);
         MemoryUtil.memPutByte(p + 34, opacity);

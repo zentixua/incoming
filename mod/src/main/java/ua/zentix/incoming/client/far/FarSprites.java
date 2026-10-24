@@ -148,6 +148,42 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     @Override
+    public boolean gaussian(FarView view, double x, double y, double z, double sh, double sv, double ext,
+                            double across, double card, FxAtlas.Sprite sprite, float mix, float shade,
+                            float r, float g, float b, float coverage) {
+        var f=view.forward(); var l=view.left(); var up=view.up();
+        double depth=x*f.x+y*f.y+z*f.z, u=x*l.x+y*l.y+z*l.z, v=x*up.x+y*up.y+z*up.z;
+        // Conservative sphere at a maximum omitted ray opacity of 1e-7; clipping changes no visible mass.
+        double peak=ext/(2*Math.PI*sh*Math.min(sh,sv));
+        double radius=Math.max(sh,sv)*Math.sqrt(Math.max(0,2*Math.log(Math.max(peak/1e-7,1))));
+        double aspect=veilAspect(), height=Math.tan(view.edge())/Math.sqrt(1+aspect*aspect), width=height*aspect;
+        double x0=-width,x1=width,y0=-height,y1=height;
+        if (depth > radius) {
+            double den=depth*depth-radius*radius;
+            double ex=radius*Math.sqrt(u*u+den), ey=radius*Math.sqrt(v*v+den);
+            x0=Math.max(x0,(u*depth-ex)/den); x1=Math.min(x1,(u*depth+ex)/den);
+            y0=Math.max(y0,(v*depth-ey)/den); y1=Math.min(y1,(v*depth+ey)/den);
+        } else if (depth < -radius) return true;
+        if (x1<=x0 || y1<=y0) return true;
+        int index=ua.zentix.incoming.client.fx.layer.GaussianData.add(x,y,z,sh,sv,ext,across,card);
+        if (index==0) return false;
+        out.sixWay(mix,shade,1);
+        out.gaussian(index);
+        out.quad((float)Math.sqrt(x*x+y*y+z*z));
+        for(int j=0;j<4;j++) {
+            double a=j<2?x0:x1, c=j==0||j==3?y0:y1;
+            out.vertex((float)(SmokePuffs.VEIL_AT*(f.x+a*l.x+c*up.x)),
+                    (float)(SmokePuffs.VEIL_AT*(f.y+a*l.y+c*up.y)),
+                    (float)(SmokePuffs.VEIL_AT*(f.z+a*l.z+c*up.z)),
+                    j<2?sprite.u0():sprite.u1(),j==0||j==3?sprite.v0():sprite.v1(),
+                    r*coverage,g*coverage,b*coverage,coverage,0,1,LightTexture.FULL_BRIGHT,0);
+        }
+        out.sixWay(-1);
+        counts[0]++;
+        return true;
+    }
+
+    @Override
     public double veilAspect() {
         var window = net.minecraft.client.Minecraft.getInstance().getWindow();
         return (double) window.getWidth() / window.getHeight();

@@ -43,6 +43,11 @@ final class SmokePuffs {
         void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                    float b, float a, double tau);
 
+        /** Near-field Gaussian: exact ray integral for density, baked frame for six-way lighting. */
+        default boolean gaussian(FarView view, double x, double y, double z, double sh, double sv, double ext,
+                                 double across, double card, FxAtlas.Sprite sprite, float mix, float shade,
+                                 float r, float g, float b, float coverage) { return false; }
+
         void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
                        float r, float g, float b, float a, double tau);
 
@@ -363,39 +368,10 @@ final class SmokePuffs {
         public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double dustA, double bx, double by, double bz,
                      double shb, double svb, double sootB, double dustB, float albedoR, float albedoG, float albedoB, double kelvin, double rise,
                      double sigma0) {
-            int at = index++;
-            // светящийся газ — тело огня у источника; остывая, он проступает дымом той же долей, что тело тает
-            double smoke = glow ? 1 - CloudModel.glowShare(kelvin, view.skyLuminance()) : 1;
-            sootA *= smoke;
-            sootB *= smoke;
-            dustA *= smoke;
-            dustB *= smoke;
-            // над рельефом, что закрывает место источника вдали (как у клуба, {@link SmokeGrid.Source#visible}): у каждого конца
-            // по его высоте и размаху сечения, вдоль куска — между ними
-            double visA = source.visible(ay, 3 * Math.max(sha, sva)), visB = source.visible(by, 3 * Math.max(shb, svb));
-            sootA *= visA;
-            dustA *= visA;
-            sootB *= visB;
-            dustB *= visB;
-            if (sootA + sootB + dustA + dustB <= 0 || !(sha > 0) || !(sva > 0) || !(shb > 0) || !(svb > 0)) {
-                joint[0] = Float.NaN;
-                return;
-            }
-            // World-source matter uses the same delta-scaled extinction as SmokeGrid and cloud Gaussians.
-            // The full coefficient of the independent flight-trail model must not increase a fire's rendered density.
-            double kd = SmokeGrid.dustK(albedoR, albedoG, albedoB);
-            double ea = SmokeGrid.SOOT_K * sootA + kd * dustA, eb = SmokeGrid.SOOT_K * sootB + kd * dustB;
-            double ks = SmokeGrid.SOOT_K * (sootA + sootB), kdust = kd * (dustA + dustB);
-            Vec3 cam = view.camera();
-            end(a, ax - cam.x, ay - cam.y, az - cam.z, Math.sqrt(sha * sva), ea);
-            end(b, bx - cam.x, by - cam.y, bz - cam.z, Math.sqrt(shb * svb), eb);
-            // цвет и тень — толстого слоя смеси, как у клубов облаков ({@link #thick}); лента — тем же цветом в тоне клуба
-            float cr = thick(ks, kdust, 0, albedoR), cg = thick(ks, kdust, 0, albedoG), cb = thick(ks, kdust, 0, albedoB);
-            float tone = FarFlightView.TONE;
-            double shade = shade(ks, kdust, 0, albedoG) / BAKED_K;
-            int drawn = FarFlightView.line(view, out, a, b, cr * tone, cg * tone, cb * tone, cr, cg, cb, shade, sigma0,
-                    mix(seed * 0x9E3779B97F4A7C15L + at), joint);
-            if (drawn != FarFlightView.RIBBON) joint[0] = Float.NaN;
+            // World sources and their analytical transport use the same segment representation.
+            // The separate projectile trail renderer retains its own longitudinal interpolation.
+            SmokeGrid.Sink.super.tube(ax, ay, az, sha, sva, sootA, dustA, bx, by, bz, shb, svb, sootB, dustB,
+                    albedoR, albedoG, albedoB, kelvin, rise, sigma0);
         }
 
         /** Конец трубки (от камеры): ширина на половине непрозрачности середины и лента — как у следа ({@code TrailModel.width}). */
@@ -422,7 +398,7 @@ final class SmokePuffs {
                 hold(x, y, z, sh, sv, soot, dust, water, dustR, dustG, dustB, at * 16);
                 return;
             }
-            int n = (int) Math.min(12, Math.max(1, Math.ceil(len / (SEGMENT_STEP * Math.min(sh, sv)))));
+            int n = (int) Math.min(64, Math.max(1, Math.ceil(len / (0.25 * Math.min(sh, sv)))));
             for (int k = 0; k < n; k++) {
                 double f = n == 1 ? 0 : (k + 0.5) / n * 2 - 1;
                 blob(x + ax * f, y + ay * f, z + az * f, sh, sv, soot / n, dust / n, water / n, dustR, dustG, dustB, at * 16 + k);
@@ -671,6 +647,17 @@ final class SmokePuffs {
             double d = Math.sqrt(px * px + py * py + pz * pz);
             double air = view.air(d, py);
             if (air < Sight.THRESHOLD) return 0;
+            double depth = px * view.forward().x + py * view.forward().y + pz * view.forward().z;
+            if (Math.max(sh, sv) > 0.08 * Math.max(depth, 0)) {
+                if (planning) return 0;
+                long hash = mix(seed * 0x9E3779B97F4A7C15L + id);
+                float light = (float) ((0.88 + 0.24 * unit(hash)) * view.skyLight());
+                int frame = (int) clubAge;
+                if (out.gaussian(view, px, py, pz, sh, sv, ks + kd + kw, across, c1,
+                        spray ? FxAtlas.spray6(frame, false) : FxAtlas.puff6(frame, false), (float)(clubAge-frame),
+                        (float)(shade(ks,kd,kw,dg)/(spray ? SPRAY_K : BAKED_K)),
+                        thick(ks,kd,kw,dr)*light, thick(ks,kd,kw,dg)*light, thick(ks,kd,kw,db)*light, (float)(vis*air))) return 0;
+            }
             // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
             // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс. «Внутри» — по эллипсоиду
             // края (у плоского слоя пыли в сотню метров шириной и метр толщиной глаз над ним снаружи; по наибольшему

@@ -231,6 +231,7 @@ public final class FxLayer {
         NukeWater.decals(view.partial());
         LIGHTS.begin();
         PROBES.begin();
+        GaussianData.begin();
         QUADS.nearestTexels(true);
         FxPool.INSTANCE.collect(new FxFrame(view, FRUSTUM, FOG), QUADS, view.partial());
         QUADS.nearestTexels(false);
@@ -328,6 +329,7 @@ public final class FxLayer {
             RenderSystem.depthMask(false);
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
+            RenderSystem.setShaderTexture(12, GaussianData.upload());
             if (QUADS.size() > 0) LinearStage.begin(scene);
             try {
                 QUADS.draw(VIEW_PROJECTION.set(RenderSystem.getProjectionMatrix()).mul(RenderSystem.getModelViewMatrix()), s, scene);

@@ -85,6 +85,7 @@ class SmokeFillTest {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
         final java.util.Map<double[],Double> matterScale = new java.util.IdentityHashMap<>();
+        final List<double[]> gaussians = new ArrayList<>();
         double veil;
         float[] veilField;
         double veilWidth, veilHeight;
@@ -106,6 +107,26 @@ class SmokeFillTest {
                     halfA / depth, halfB / depth, sprite, mix, a, tau);
             quads.add(q);
             matterScale.put(q, depth * depth * depth / Math.sqrt(dx*dx+dy*dy+dz*dz));
+        }
+
+        @Override
+        public boolean gaussian(FarView view, double x,double y,double z,double sh,double sv,double ext,
+                                double across,double card,FxAtlas.Sprite sprite,float mix,float shade,
+                                float r,float g,float b,float coverage) {
+            gaussians.add(new double[]{x,y,z,sh,sv,ext,coverage});
+            // Conservative raster rectangle, used only by the CPU fill planner.
+            double radius=Math.max(sh,sv)*Math.sqrt(Math.max(0,2*Math.log(Math.max(ext/(2*Math.PI*sh*Math.min(sh,sv))/1e-7,1))));
+            double depth=x*view.forward().x+y*view.forward().y+z*view.forward().z;
+            if(depth<=radius) {
+                quads.add(new double[]{0,0,0,W,H,0});
+            } else {
+                double u=x*view.left().x+y*view.left().y+z*view.left().z;
+                double v=x*view.up().x+y*view.up().y+z*view.up().z;
+                double den=depth*depth-radius*radius;
+                double ex=radius*Math.sqrt(u*u+den),ey=radius*Math.sqrt(v*v+den);
+                quads.add(new double[]{u*depth/den,v*depth/den,0,ex/den,ey/den,0});
+            }
+            return true;
         }
 
         @Override
@@ -152,7 +173,12 @@ class SmokeFillTest {
         /** Пропускание в точке экрана (u, v): квадраты — по пикселям кадра клуба, как в шейдере ({@link ClubFrames}), вуали. */
         double transmittance(double u, double v) throws IOException {
             double clear = veilField == null ? Math.exp(-veil) : 1-VeilField.alpha(veilField,u,v,veilWidth,veilHeight);
+            Vector3f f=view.forward(), l=view.left(), up=view.up();
+            double rx=f.x+u*l.x+v*up.x,ry=f.y+u*l.y+v*up.y,rz=f.z+u*l.z+v*up.z;
+            double n=Math.sqrt(rx*rx+ry*ry+rz*rz);
+            for(double[] q:gaussians) clear*=1-q[6]*(-Math.expm1(-SmokePuffs.sightDepth(q[0],q[1],q[2],q[3],q[4],q[5],rx/n,ry/n,rz/n)));
             for (double[] q : quads) {
+                if(q.length==6) continue;
                 double x = (u - q[0]) / q[3], y = (v - q[1]) / q[4];
                 if (Math.abs(x) < 1 && Math.abs(y) < 1) clear *= 1 - PlumeContinuityTest.clubAt(q, x, y);
             }
@@ -234,6 +260,7 @@ class SmokeFillTest {
             SmokePuffs.resetBudget();
             for (int frame = 0; frame < 2; frame++) {
                 s.quads.clear();
+                s.gaussians.clear();
                 s.matterScale.clear();
                 s.veil = 0;
                 s.veilField = null;
@@ -370,7 +397,7 @@ class SmokeFillTest {
         Screen screen=new Screen(view);
         SmokePuffs.resetBudget();
         for (int pass=0;pass<2;pass++) {
-            screen.quads.clear(); screen.matterScale.clear(); screen.veil=0; screen.veilField=null;
+            screen.quads.clear(); screen.gaussians.clear(); screen.matterScale.clear(); screen.veil=0; screen.veilField=null;
             for (SmokeGrid.Source source:sources) source.emit(1000,SmokePuffs.sink(view,screen,source,1000));
             SmokePuffs.flush();
         }
@@ -400,6 +427,31 @@ class SmokeFillTest {
     }
 
     @Test
+    void nearFieldObliqueAndFlatCloudsKeepTheirRayDensity() throws IOException {
+        for (double sv : new double[]{1, 10, 30}) for (double side : new double[]{0, 18}) {
+            double sh=20, ext=2*Math.PI*sh*sv;
+            SmokeGrid.Source source=(seconds,sink) -> {
+                sink.blob(side,0,0,sh,sv,ext/SmokeGrid.SOOT_K,0,0,0.6f,0.55f,0.45f,SmokeGrid.AIR_K,0);
+                return true;
+            };
+            Vec3 eye=new Vec3(0,8,30);
+            FarView view=view(eye,new Vector3f(0,0,-1));
+            Screen screen=new Screen(view);
+            SmokePuffs.resetBudget();
+            source.emit(0,SmokePuffs.sink(view,screen,source,0));
+            SmokePuffs.flush();
+            for(int y=0;y<15;y++) for(int x=0;x<25;x++) {
+                double u=-W+(x+0.5)*2*W/25,v=-H+(y+0.5)*2*H/15;
+                Vector3f ray=new Vector3f(view.forward()).fma((float)u,view.left()).fma((float)v,view.up()).normalize();
+                double truth=Math.exp(-SmokePuffs.sightDepth(side, -8, -30,sh,sv,ext,ray.x,ray.y,ray.z));
+                org.junit.jupiter.api.Assertions.assertEquals(truth,screen.transmittance(u,v),0.002,
+                        "near-field transport must not inherit a small-angle billboard approximation");
+            }
+        }
+        SmokePuffs.resetBudget();
+    }
+
+    @Test
     void horizontalDustRetainsItsMaterialLightingFromAboveAndBelow() {
         SmokeGrid.Source dust = (seconds, sink) -> {
             sink.blob(0, 0, 0, 20, 1, 0, 1000, 0, 0.6f, 0.55f, 0.45f, SmokeGrid.AIR_K, 0);
@@ -407,7 +459,7 @@ class SmokeFillTest {
         };
         float previous = -1;
         for (int side : new int[]{1, -1}) {
-            Vec3 eye = new Vec3(0, side * 40, 40);
+            Vec3 eye = new Vec3(0, side * 400, 400);
             FarView view = view(eye, new Vector3f(0, -side, -1));
             Screen screen = new Screen(view);
             SmokePuffs.resetBudget();
