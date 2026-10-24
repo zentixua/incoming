@@ -282,7 +282,7 @@ instead of drifting as one ball.
 - **Shahed**: a short flash, then a ball of burning petrol about 16 blocks across that burns for about 1.3 seconds and
   glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
   burns for about 2.5 minutes as ordinary fire on about five blocks of the crater floor; at night it lights the ground
-  around as any fire does. Its black smoke rises from the fire the whole time and leans downwind: in a stiff breeze it
+  around with an orange glow. Its black smoke rises from the fire the whole time and leans downwind: in a stiff breeze it
   trails low, in calm air it stands taller. The smoke of the ball, with the dust
   torn up under it, rises a few hundred blocks as a dark cloud.
 - **Cruise missile**: a bigger flash and a fuel ball about 34 blocks across that burns for about 2.7 seconds; the fuel left
@@ -320,8 +320,8 @@ speed that depends on water depth. Clumps of water fly as particles. Fuel that l
 thin to keep burning, so no fire is left after the ball.
 
 The fireball lights the ground and walls around it, like the fireball of a nuclear strike: at night an orange glow
-spreads over the blocks around the crater and fades as the ball cools. The fuel burning in the crater is ordinary fire
-and lights its surroundings as any fire in the game does. Blocks cast shadows from this
+spreads over the blocks around the crater and fades as the ball cools. The fuel burning in the crater lights its
+surroundings the same way, from where it burns, until it runs out. Blocks cast shadows from this
 light: a house or a hill between the fire and the ground leaves it dark, even when the house is outside your view.
 Shadows are worked out for about 90 blocks around you and 40 up and down; further away the light has
 none. Hot gas over the fire, over the fireball and in a rocket's exhaust bends light, so whatever is behind it

@@ -532,8 +532,9 @@ public final class FireSmoke implements SmokeGrid.Source {
 
     /**
      * Свет и горячий газ очагов на мир кадра ({@code HeatPass}): горячий газ над каждым горящим очагом (столб по
-     * Хескестаду), свет — у масла подстанций: огонь Minecraft (и топливо в воронках — огонь на блоках) светит на мир сам,
-     * светом блоков.
+     * Хескестаду), свет — у масла подстанций и топлива в воронках: огонь Minecraft светит на мир сам, светом блоков (свет
+     * блока 15 гаснет за ~14 блоков, а пламя топлива в 2–3 МВт ночью освещает округу на десятки метров: без своего света
+     * кадр ночью темнее прежнего, проверка FV), — свет пламени топлива из середины его клеток на блоках.
      */
     public static void heat(Vec3 eye, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         if (FIRES.isEmpty() && OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
@@ -542,7 +543,7 @@ public final class FireSmoke implements SmokeGrid.Source {
             if (!Double.isNaN(fire.end) || fire.gone) continue;
             double dx = fire.x - eye.x, dy = fire.y - eye.y, dz = fire.z - eye.z;
             f.plume(dx, dy, dz, fire.own, 1);
-            if (fire.fuel == OIL) {
+            if (fire.fuel != WOOD) {
                 double r = 0.5 * fire.flame;
                 f.light(dx, dy + r, dz, r, BB[0], BB[1], BB[2], air, r);
             }
