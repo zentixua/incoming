@@ -52,6 +52,8 @@ public final class FlightTrack implements Acoustics.Path {
     /** Точка пути перед последней (от неё строится прямая до последней). */
     private long previous = -1;
     private long death = Long.MAX_VALUE;
+    /** Сервер подтвердил конец: запоздалый вид сущности уже не может оживить этот UUID. */
+    private boolean confirmedEnd;
     /** Быстрее этого снаряд за всю историю не двигался, блоков/тик: по скорости и по сдвигу между тиками. */
     private double maxSpeed;
     /**
@@ -189,6 +191,7 @@ public final class FlightTrack implements Acoustics.Path {
      * тишины перед ним.
      */
     public void impact(long tick) {
+        confirmedEnd = true;
         if (last >= 0 && !isDead()) death = Math.max(last, tick);
     }
 
@@ -204,6 +207,10 @@ public final class FlightTrack implements Acoustics.Path {
 
     public void die(long tick) {
         if (death == Long.MAX_VALUE) death = Math.max(last, Math.min(tick, last + 1));
+    }
+
+    public boolean confirmedEnd() {
+        return confirmedEnd;
     }
 
     public boolean isDead() {

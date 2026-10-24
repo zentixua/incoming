@@ -145,6 +145,7 @@ public final class DefenseWorld {
         Incoming.LOG.debug("Interceptor from SAM {} against {}: {} at {}", f.launcher(), f.target(), end, BlockPos.containing(at));
         PacketDistributor.sendToPlayersNear(level, null, at.x, at.y, at.z, IncomingConfig.SERVER.farRange.get(),
                 new S2C.Intercept(at, kill, kill ? Optional.of(target.getUUID()) : Optional.empty(), level.random.nextLong()));
+        ua.zentix.incoming.strike.FarFlights.endInterceptor(level, f, at);
         end(f, end);
     }
 

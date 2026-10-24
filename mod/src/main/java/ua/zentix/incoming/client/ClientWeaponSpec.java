@@ -300,8 +300,8 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
 
     /**
      * Ракета ЗРК 9М96: длина и калибр — паспорт, силуэт — πDL/4. Огонь и след — на разгоне двигатель разгона, потом
-     * маршевый режим (точка ленты — каждый тик на разгоне: дуга схода крутая). Вдали её нет: вид — только в тикающих
-     * чанках сервера, в прорисовке.
+     * маршевый режим (точка ленты — каждый тик на разгоне: дуга схода крутая). За краем сущностей путь приходит
+     * пакетами FarFlights: без них маршевый участок дыма вообще не рождался.
      */
     private static final FarLook SAM_FAR = new FarLook(InterceptorSpec.SAM.passport().length(),
             Math.PI * InterceptorSpec.SAM.passport().diameter() * InterceptorSpec.SAM.passport().length() / 4, 0xC8C8BE, null,
