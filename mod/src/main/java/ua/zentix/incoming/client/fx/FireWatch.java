@@ -27,7 +27,7 @@ import java.util.Locale;
  * по одному на каждый сдвиг выборки, вместе — все места чанка: счёт и середина огня точные, а не ×{@link #SAMPLE} одной
  * выборки (маленький очаг иначе мигал бы между 0 и 8 блоками).
  * <p>
- * Огонь на клетках горящего топлива воронок — не огонь дерева ({@link FireSmoke#fuelCell}): его тепло и сажу несёт очаг
+ * Огонь на клетках горящего топлива воронок — не огонь дерева ({@link FuelCells}): его тепло и сажу несёт очаг
  * воронки, и в счёт он не идёт.
  * <p>
  * У свежего удара ({@link #hot}) огонь загорается в тот же тик (шар топлива, горящее топливо в воронке, обломки), а
@@ -167,7 +167,7 @@ public final class FireWatch {
             if (hotChunk == null && (left-- <= 0 || !nextHot(lvl))) return;
             LevelChunk chunk = hotChunk;
             LevelChunkSection[] sections = chunk.getSections();
-            boolean fuel = FireSmoke.fuelChunk(hotKey);
+            boolean fuel = FireSmoke.FUEL.inChunk(hotKey);
             int bx = chunk.getPos().getMinBlockX(), bz = chunk.getPos().getMinBlockZ(), minY = chunk.getMinBuildHeight();
             while (hotSection < sections.length) {
                 int i = hotSection++;
@@ -177,7 +177,7 @@ public final class FireWatch {
                 PalettedContainer<BlockState> states = s.getStates();
                 int base = minY + i * 16;
                 int n = phases(j -> fire(states.get(j & 15, j >> 8, (j >> 4) & 15))
-                        && !(fuel && FireSmoke.fuelCell(bx + (j & 15), base + (j >> 8), bz + ((j >> 4) & 15))), i * 16, hotWindow);
+                        && !(fuel && FireSmoke.FUEL.covers(bx + (j & 15), base + (j >> 8), bz + ((j >> 4) & 15))), i * 16, hotWindow);
                 hotCount += n;
                 hotY += (long) n * (i * 16 + 8);
                 break;
@@ -256,13 +256,13 @@ public final class FireWatch {
 
     /**
      * Огонь чанка выборкой: (число << 16) | средняя высота; {@code offset} — сдвиг выборки (свой в каждом обходе). Огонь на
-     * клетках горящего топлива воронок — не в счёте: его дым — очаг воронки ({@link FireSmoke#fuelCell}).
+     * клетках горящего топлива воронок — не в счёте: его дым — очаг воронки ({@link FuelCells}).
      */
     private static long scan(LevelChunk chunk, int offset) {
         LevelChunkSection[] sections = chunk.getSections();
         sampleN = sampleX = sampleY = sampleZ = 0;
         long count = 0, ySum = 0;
-        boolean fuel = FireSmoke.fuelChunk(chunk.getPos().toLong());
+        boolean fuel = FireSmoke.FUEL.inChunk(chunk.getPos().toLong());
         int bx = chunk.getPos().getMinBlockX(), bz = chunk.getPos().getMinBlockZ(), minY = chunk.getMinBuildHeight();
         for (int i = 0; i < sections.length; i++) {
             LevelChunkSection s = sections[i];
@@ -273,7 +273,7 @@ public final class FireWatch {
             // индекс секции — (y << 8) | (z << 4) | x
             for (int j = offset; j < 4096; j += SAMPLE) {
                 if (fire(states.get(j & 15, j >> 8, (j >> 4) & 15))
-                        && !(fuel && FireSmoke.fuelCell(bx + (j & 15), minY + i * 16 + (j >> 8), bz + ((j >> 4) & 15)))) {
+                        && !(fuel && FireSmoke.FUEL.covers(bx + (j & 15), minY + i * 16 + (j >> 8), bz + ((j >> 4) & 15)))) {
                     n++;
                     sampleX += j & 15;
                     sampleY += i * 16 + (j >> 8);

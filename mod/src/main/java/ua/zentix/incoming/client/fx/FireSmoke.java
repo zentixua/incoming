@@ -47,13 +47,8 @@ public final class FireSmoke implements SmokeGrid.Source {
     private static final Long2ObjectOpenHashMap<FireSmoke> OIL_FIRES = new Long2ObjectOpenHashMap<>();
     /** Топливо в воронках взрывов ({@link #pool}). */
     private static final java.util.List<FireSmoke> POOLS = new java.util.ArrayList<>();
-    /**
-     * Клетки топлива горящих воронок — колонка (x, z) → верх клетки в ней, и сколько таких колонок в чанке: огонь на них —
-     * топливо, а не дерево ({@link #fuelCell}). Топливо, потерявшее опору, капает вниз в своей колонке, поэтому огонь
-     * в колонке не выше клетки — тоже его.
-     */
-    private static final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap FUEL_COLUMNS = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
-    private static final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap FUEL_CHUNKS = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
+    /** Клетки огня топлива горящих воронок: их огонь — не дерево ({@link FireWatch} его не считает). */
+    static final FuelCells FUEL = new FuelCells();
 
     /**
      * Что горит: тепловыделение и площадь очага на единицу силы очага (у огня Minecraft единица — блок огня), сажи на
@@ -102,7 +97,7 @@ public final class FireSmoke implements SmokeGrid.Source {
     /** Доля топлива в воронке, что горит, по возрасту очага (null — не воронка). */
     @org.jetbrains.annotations.Nullable
     java.util.function.DoubleUnaryOperator burning;
-    /** Клетки огня топлива воронки (колонки и верх, {@link #FUEL_COLUMNS}); у прочих очагов — пусто. */
+    /** Клетки огня топлива воронки ({@link #FUEL}); у прочих очагов — пусто. */
     private java.util.List<BlockPos> cells = java.util.List.of();
     /**
      * Место очага, сила (блоков огня или очагов топлива), сила всего пожара, куда он входит (в единицах его топлива,
@@ -307,7 +302,7 @@ public final class FireSmoke implements SmokeGrid.Source {
      * {@code pool} с теплом {@code watts} и сажей топлива, долей {@code share} по возрасту ({@code age} с уже прошло с
      * удара), — очаг среди пожаров клиента над серединой клеток: его шлейф сливается с огнём, что поджёг шар топлива рядом
      * ({@link #merge}), пламя светит на дым. Огонь клеток — сами блоки (их свет — свет блоков); дерево он не считает
-     * ({@link #fuelCell}). Середина очага — место его звука.
+     * ({@link FuelCells}). Середина очага — место его звука.
      */
     public static Vec3 pool(ClientLevel level, java.util.List<BlockPos> cells, ua.zentix.incoming.nuclear.model.FuelPool pool, double age) {
         if (level != world) {
@@ -336,36 +331,9 @@ public final class FireSmoke implements SmokeGrid.Source {
         return new Vec3(x, y, z);
     }
 
-    /** Индекс клеток топлива ({@link #FUEL_COLUMNS}) — заново по горящим воронкам (их немного). */
+    /** Индекс клеток топлива ({@link #FUEL}) — заново по горящим воронкам. */
     private static void columns() {
-        FUEL_COLUMNS.clear();
-        FUEL_CHUNKS.clear();
-        for (FireSmoke f : POOLS) {
-            for (BlockPos p : f.cells) {
-                long column = BlockPos.asLong(p.getX(), 0, p.getZ());
-                if (FUEL_COLUMNS.containsKey(column)) {
-                    FUEL_COLUMNS.put(column, Math.max(FUEL_COLUMNS.get(column), p.getY()));
-                } else {
-                    FUEL_COLUMNS.put(column, p.getY());
-                    FUEL_CHUNKS.addTo(net.minecraft.world.level.ChunkPos.asLong(p.getX() >> 4, p.getZ() >> 4), 1);
-                }
-            }
-        }
-    }
-
-    /** В чанке есть клетки горящего топлива ({@link #fuelCell} стоит спрашивать). */
-    static boolean fuelChunk(long chunk) {
-        return !FUEL_CHUNKS.isEmpty() && FUEL_CHUNKS.containsKey(chunk);
-    }
-
-    /**
-     * Огонь в (x, y, z) — горящее топливо воронки, а не дерево: в колонке клетки и не выше её. Его тепло и сажу несёт очаг
-     * воронки ({@link #pool}); посчитанный ещё и огнём дерева ({@link FireWatch}), он дымил бы дважды — 175 кВт на блок
-     * сверх топлива.
-     */
-    static boolean fuelCell(int x, int y, int z) {
-        long column = BlockPos.asLong(x, 0, z);
-        return FUEL_COLUMNS.containsKey(column) && y <= FUEL_COLUMNS.get(column);
+        FUEL.index(POOLS.stream().map(f -> f.cells).toList());
     }
 
     /** Смена мира, перемотка повтора: очагов нет (источники сетки снимает её сброс). */
@@ -376,8 +344,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         FIRES.clear();
         OIL_FIRES.clear();
         POOLS.clear();
-        FUEL_COLUMNS.clear();
-        FUEL_CHUNKS.clear();
+        FUEL.clear();
         world = null;
     }
 
