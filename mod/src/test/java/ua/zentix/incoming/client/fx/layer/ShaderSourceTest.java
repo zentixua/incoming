@@ -142,11 +142,41 @@ class ShaderSourceTest {
     @Test
     void pallUnderTheCapIsInItsShadow() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
-        String pall = Files.readString(core.resolve("fx_pall.fsh")), step = blankComments(body(pall, "void pallStep("));
+        String pall = Files.readString(core.resolve("fx_pall.fsh")), step = blankComments(body(pall, "vec4 pallSource("));
         assertTrue(blankComments(body(pall, "vec3 pallSunAt(")).contains("mushShadowFrom("), "fx_pall: солнце над пеленой без тени грибов");
-        assertTrue(step.contains("pallSunAt("), "fx_pall: pallStep без тени грибов");
+        assertTrue(step.contains("pallSunAt("), "fx_pall: общий источник пыли без тени грибов");
         assertFalse(step.contains("PallSunLight"), "fx_pall: солнце в pallStep — только сквозь тень грибов");
         assertTrue(Files.readString(core.resolve("fx_pall_composite.fsh")).contains("mushShadow("), "мир — в той же тени");
+    }
+
+    /** Одинаковая пыль на стыке требует общего источника света, а не двух независимых решателей освещения. */
+    @Test
+    void inflowAndCarpetUseOneLightingSource() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        String pall = Files.readString(core.resolve("fx_pall.fsh"));
+        String layer = blankComments(body(pall, "void pallStep(")), stem = blankComments(body(pall, "vec4 mushAt("));
+        assertTrue(layer.contains("pallSource(p, cone, vec4(0.0), dustLight)"));
+        assertFalse(stem.contains("pallSource("), "в шаге гриба нет встроенного расчёта пелены");
+        assertTrue(stem.contains("mushFootLight(k, m, q)"));
+        assertTrue(pall.contains("pallSource(p, cone, vec4(m.base, sigma), light)"), "предпроход считает тот же источник");
+        assertTrue(stem.contains("mushFootLightShare("));
+        assertTrue(stem.contains("mix(source, carpetLight, fromCarpet)"));
+        String dense = blankComments(body(pall, "vec4 mushDense("));
+        assertTrue(dense.contains("mushInflowLobes("), "подсос — клубами ковра, не растянутыми струями всей ножки");
+        assertFalse(dense.contains("mushStemLobes("), "исходный узор ножки не переотображается");
+        String slot = blankComments(body(pall, "void slot("));
+        assertEquals(1, slot.split("carpetFlowAt\\(", -1).length - 1, "карта потока общая у всех смещённых выборок слота");
+        assertTrue(slot.contains("f.column.x += up") && slot.contains("f.slab.x += total"), "поднятая пыль затеняет сама себя");
+        assertTrue(slot.contains("mushFootRemoved(Sampler7, k, m, rho - r)"), "столб ограничен радиусом сужающейся полосы");
+        assertTrue(slot.contains("mushFootColumn(Sampler7, k, m, q.y) - removed"));
+        assertTrue(slot.contains("mushFootColumn(Sampler7, k, m, 0.0) - removed"), "общий слой не включает пыль вне данного радиуса");
+        String flow = blankComments(body(pall, "vec4 carpetFlow("));
+        assertFalse(flow.contains("for ("), "на шаге нет обхода массива грибов");
+        assertFalse(pall.contains("Mush gMush["), "неизменные параметры не копируются в частную память каждого пикселя");
+        String mush = Files.readString(core.resolve("../include/mushroom.glsl"));
+        String gap = blankComments(body(mush, "float mushGap("));
+        assertTrue(gap.contains("mushFootBandAt(m, q.y)") && gap.contains("q.y < m.footMerge"));
+
     }
 
     /**
@@ -213,6 +243,63 @@ class ShaderSourceTest {
         assertTrue(bad.isEmpty(), "вызовы не по объявлению: " + bad);
     }
 
+    /**
+     * Каждая функция шейдера вызвана после своего объявления — в тексте программы, как его собирает ваниль (файлы
+     * {@code #moj_import} на их местах): GLSL не знает функции, объявленной ниже вызова, и шейдер не собирается — а
+     * разбор законов по одной функции ({@code GlslFunction}) этого не видит (подсос у основания ножки звал
+     * {@code mushStemSigma} выше её определения: не собирались все восемь программ с грибом).
+     */
+    @Test
+    void everyFunctionIsDeclaredBeforeItsCall() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        List<String> bad = new ArrayList<>();
+        int files = 0;
+        try (Stream<Path> list = Files.list(core)) {
+            for (Path p : list.filter(f -> f.toString().matches(".*\\.(fsh|vsh)")).sorted().toList()) {
+                files++;
+                for (String call : beforeDeclaration(withImports(core.resolveSibling("include"), Files.readString(p), new HashSet<>()))) {
+                    bad.add(p.getFileName() + ": " + call);
+                }
+            }
+        }
+        assertTrue(files > 5, "шейдеров " + files);
+        assertTrue(bad.isEmpty(), "функция вызвана выше своего объявления: " + bad);
+    }
+
+    @Test
+    void findsACallBeforeTheDeclaration() {
+        assertEquals(List.of("b"), beforeDeclaration("""
+                float c(float x);
+                float a(float x) {
+                    return b(x) + c(x) + exp(x);
+                }
+                float b(float x) {
+                    return x;
+                }
+                float c(float x) {
+                    return a(x); // b(x) в комментарии
+                }
+                """));
+    }
+
+    /**
+     * Имена функций своего текста, вызванных выше первого объявления (определения или прототипа): объявление верхнего
+     * уровня пишется с начала строки (как проверяет {@link #everyBodyIsClosed}).
+     */
+    private static List<String> beforeDeclaration(String source) {
+        String text = blankComments(source);
+        Matcher d = Pattern.compile("(?m)^[A-Za-z_]\\w*[ \\t]+([A-Za-z_]\\w*)[ \\t]*\\(").matcher(text);
+        java.util.Map<String, Integer> declared = new java.util.HashMap<>();
+        while (d.find()) declared.putIfAbsent(d.group(1), d.start(1));
+        List<String> bad = new ArrayList<>();
+        Matcher c = Pattern.compile("\\b([A-Za-z_]\\w*)\\s*\\(").matcher(text);
+        while (c.find()) {
+            Integer at = declared.get(c.group(1));
+            if (at != null && c.start(1) < at && !bad.contains(c.group(1))) bad.add(c.group(1));
+        }
+        return bad;
+    }
+
     /** Тело функции, что объявлена с {@code head}. */
     private static String body(String source, String head) {
         int at = source.indexOf(head);
@@ -226,13 +313,41 @@ class ShaderSourceTest {
     }
 
     /** Текст шейдера с файлами {@code #moj_import <incoming:…>} на их местах (каждый раз — один, как у ванили). */
+    @Test
+    void footLightTableDimensionsMatchItsShader() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        String source = Files.readString(core.resolve("fx_pall.fsh"));
+        for (Object[] pair : new Object[][]{{"FOOT_LIGHT_AZ", PallPass.FOOT_LIGHT_AZ}, {"FOOT_LIGHT_R", PallPass.FOOT_LIGHT_R}, {"FOOT_LIGHT_H", PallPass.FOOT_LIGHT_H}}) {
+            Matcher m = Pattern.compile("const int " + pair[0] + " = (\\d+);").matcher(source);
+            assertTrue(m.find(), pair[0].toString());
+            assertEquals(pair[1], Integer.valueOf(m.group(1)));
+        }
+    }
+
+    @Test
+    void relativeShaderImportKeepsItsExplicitNamespace() throws IOException, URISyntaxException {
+        Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
+        assertTrue(withImports(include, "#moj_import \"incoming:fx_pall.fsh\"", new HashSet<>()).contains("vec4 pallSource("));
+        assertFalse(withImports(include, "#moj_import \"fx_pall.fsh\"", new HashSet<>()).contains("vec4 pallSource("));
+    }
+
     private static String withImports(Path include, String source, Set<String> seen) throws IOException {
-        Matcher m = Pattern.compile("(?m)^\\s*#moj_import\\s*<incoming:([\\w./]+)>").matcher(source);
+        return withImportsFrom(include, include.resolveSibling("core"), source, seen);
+    }
+
+    /** Quoted imports are relative to the importing file, as in Mojang's GlslPreprocessor. */
+    private static String withImportsFrom(Path include, Path local, String source, Set<String> seen) throws IOException {
+        Matcher m = Pattern.compile("(?m)^\\s*#moj_import\\s*(?:<incoming:([\\w./]+)>|\"([\\w:./]+)\")").matcher(source);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
-            String name = m.group(1);
             m.appendReplacement(out, "");
-            if (seen.add(name)) out.append(withImports(include, Files.readString(include.resolve(name)), seen));
+            // A quoted import without a namespace means minecraft:, not the namespace of its parent shader.
+            if (m.group(2) != null && !m.group(2).startsWith("incoming:")) {
+                out.append(m.group());
+                continue;
+            }
+            Path file = (m.group(1) != null ? include.resolve(m.group(1)) : local.resolve(m.group(2).substring("incoming:".length()))).normalize();
+            if (seen.add(file.toString())) out.append(withImportsFrom(include, file.getParent(), Files.readString(file), seen));
         }
         m.appendTail(out);
         return out.toString();
