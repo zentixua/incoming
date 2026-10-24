@@ -229,7 +229,10 @@ class SmokeFillTest {
             b.model().blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
                 // светящийся газ — тело огня, не дым (как у приёмника слоя)
                 double smoke = 1 - CloudModel.glowShare(kelvin, view.skyLuminance());
-                double ext = smoke * (CloudModel.SOOT_K * soot + kd * dust);
+                // Compare the same transport quantity as the volume and source renderer: delta-Eddington removes
+                // the unresolved forward-scattering lobe. The unscaled coefficient would count that lobe as loss.
+                double sootK = CloudModel.SOOT_K * (1 - CloudModel.SOOT_W * CloudModel.SOOT_G * CloudModel.SOOT_G);
+                double ext = smoke * (sootK * soot + kd * dust);
                 if (ext > 0) tau[0] += SmokePuffs.sightDepth(b.x() + x - eye.x, b.y() + y - eye.y, b.z() + z - eye.z, sh, sv, ext, fx, fy, fz);
             });
         }
