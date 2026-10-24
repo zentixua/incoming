@@ -18,11 +18,13 @@ shown.
 `overexposure.md` (`clip.py`): per frame, the share of pixels with any channel ≥ 250, the share brighter than half
 white (luma on screen), and the mean linear luma of the frame.
 
-- Saturated pixels: the same as main in every scene and moment (within ±0.07 % of the frame). The glow does not clip
+- Saturated pixels: the same as main in every scene and moment (−0.01 … +0.07 % of the frame). The glow does not clip
   anything.
-- Area brighter than half white grows by 0.1–1.2 % of the frame (largest: missile at 0.5 s, 2.4 → 3.5 %; bomb at 1 s,
-  1.2 → 1.7 %).
-- Mean luma grows by 2–35 % at the brightest moments (flash and fireball), by 1–10 % later.
+- Area brighter than half white grows by 0 … 1.15 % of the frame (largest: missile at 0.5 s, 2.38 → 3.53 %; bomb at
+  1 s, 1.22 → 1.74 %).
+- Mean linear luma of the frame (FAST against main): +21 … +52 % during the flash and the fireball (0.1–1 s; largest:
+  bomb at 1 s, +49 % with Iris, +52 % without), +1 … +17 % from 2 s on and over the crater fire. Most of it is the
+  glow over the lit ground and sky around the fire, which is dark at night.
 
 What it looks like: a warm glow about one fireball radius around the fire, the fire's folds and soot as in main. The
 strongest effect is at 0.5–1 s of the missile: the smoke arms right in front of and below the fireball get a soft veil
