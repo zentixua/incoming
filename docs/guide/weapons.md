@@ -289,11 +289,12 @@ a paved street without pretending that the stone was covered in soil. The hot/co
 existing crushed-material dust budget in each stream. The wave can also lift dust from the street below where it is
 still strong enough there.
 
-A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
-the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the
-surface as a low ring of fine mist that drifts away and settles back within about a minute; clumps of water fly as
-particles. The Shahed's burning fuel makes a fireball about as big as its column, so most of the column is hidden in fire
-and smoke. Fuel that lands on water spreads too thin to keep burning, so no fire is left after the ball.
+A blast on water throws up a white column of spray instead of dust. A surface hit gives about 78 blocks for the Shahed,
+113 for the missile and 39 for Grad, estimated from Swisdak's conventional-charge plume table with its safety margin
+reduced. Charge depth changes the height and width. The Shahed's column reaches its top in about four seconds and falls
+back by eight seconds; slower jets fall earlier, leaving foam and a low ring of drifting water mist. A wave ring spreads
+across the water at a speed that depends on water depth. Clumps of water fly as particles. Fuel that lands on water spreads too
+thin to keep burning, so no fire is left after the ball.
 
 The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
 an orange glow spreads over the blocks around the crater and fades as the ball cools. Blocks cast shadows from this
