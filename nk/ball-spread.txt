@@ -1,0 +1,8 @@
+main_1380_day_1s.png: t 1 s, display luminance p10 0.974 p50 0.974 p90 0.974, spread 0.000 (ball centre y 238, r 81 px)
+main_1380_day_3s.png: t 3 s, display luminance p10 0.977 p50 0.981 p90 0.982, spread 0.005 (ball centre y 191, r 83 px)
+nk_1380_day_1s.png: t 1 s, display luminance p10 0.951 p50 0.986 p90 0.994, spread 0.043 (ball centre y 238, r 81 px)
+nk_1380_day_3s.png: t 3 s, display luminance p10 0.690 p50 0.942 p90 0.987, spread 0.301 (ball centre y 191, r 83 px)
+main_1380_night_1s.png: t 1 s, display luminance p10 0.974 p50 0.974 p90 0.974, spread 0.000 (ball centre y 238, r 81 px)
+main_1380_night_3s.png: t 3 s, display luminance p10 0.972 p50 0.976 p90 0.977, spread 0.005 (ball centre y 191, r 83 px)
+nk_1380_night_1s.png: t 1 s, display luminance p10 0.907 p50 0.956 p90 0.987, spread 0.081 (ball centre y 238, r 81 px)
+nk_1380_night_3s.png: t 3 s, display luminance p10 0.711 p50 0.938 p90 0.984, spread 0.278 (ball centre y 191, r 83 px)
