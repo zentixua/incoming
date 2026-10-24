@@ -369,7 +369,7 @@ public final class IncomingConfig {
             nukeTinnitus = b.comment("Hearing damage from a blast wave strong enough to hurt the ears (from about 0.75 psi): muffled hearing and",
                             "ringing ears that recover over game hours; from 5 psi torn eardrums, muffled for game weeks or until you die.")
                     .translation("incoming.config.nuke_tinnitus").define("nuke_tinnitus", true);
-            soundMuffling = b.comment("Strike sounds lose high tones with distance and are muffled behind hills and walls (with Sound Physics Remastered, that mod does it);",
+            soundMuffling = b.comment("Strike sounds lose high tones with distance and are muffled behind hills and walls, with or without Sound Physics Remastered;",
                             "inside the nuclear dust pall, distant sounds are muffled too.")
                     .translation("incoming.config.sound_muffling").define("sound_muffling", true);
             mapPrefetch = b.comment("Terrain of the targeting map around the player is prepared in advance (from Distant Horizons) while a designator",

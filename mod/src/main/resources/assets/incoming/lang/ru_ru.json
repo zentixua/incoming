@@ -335,7 +335,7 @@
   "incoming.config.nuke_tinnitus": "Повреждение слуха",
   "incoming.config.nuke_tinnitus.tooltip": "Ударная волна, от которой страдают уши, глушит слух, и в ушах звенит; слух возвращается за игровые часы. С 5 psi она может порвать барабанные перепонки: глухо игровые недели или до смерти.",
   "incoming.config.sound_muffling": "Глушить звук вдали и за преградой",
-  "incoming.config.sound_muffling.tooltip": "Вдали у ударов пропадают верха, за холмом или стеной звук глуше; с Sound Physics Remastered это делает он. В пелене после ядерного удара глохнут и все звуки вдали.",
+  "incoming.config.sound_muffling.tooltip": "Вдали у ударов пропадают верха, за холмом или стеной звук глуше, со Sound Physics Remastered и без него. В пелене после ядерного удара глохнут и все звуки вдали.",
   "incoming.config.map_prefetch": "Рельеф карты заранее",
   "incoming.config.map_prefetch.tooltip": "Пока пульт в инвентаре или карту уже открывали — карта открывается сразу",
   "subtitles.incoming.nuke.alarm": "Сирена гражданской обороны",
