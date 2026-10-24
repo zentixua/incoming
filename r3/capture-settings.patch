@@ -1,0 +1,14 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+index bf36318e..8125cef2 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+@@ -498,6 +498,9 @@ final class Sandbox {
+ 
+     /** Снять все эффекты: у клиента — как при выходе из мира, у сервера — снаряды и огонь у точки. */
+     private void clear() {
++        Minecraft.getInstance().options.enableVsync().set(false);
++        Minecraft.getInstance().getWindow().updateVsync(false);
++        Minecraft.getInstance().options.framerateLimit().set(60);
+         raid.clear();
+         IncomingClient.resetSession();
+         server("incoming clear");

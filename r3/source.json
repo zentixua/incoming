@@ -1,0 +1,10 @@
+{
+  "head": "93048d545a8d5707716e878ac0c7b0de4c30cb9d",
+  "main_at_capture": "9364394a7825d777873888e93da7e4896943e397",
+  "dirty": [
+    "mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java"
+  ],
+  "profile": "quiet",
+  "renderer": "dev sandbox, native GPU, no Iris",
+  "fixture": "tracked WV stance/weather + temporary VSync off / 60 FPS patch (capture-settings.patch)"
+}
