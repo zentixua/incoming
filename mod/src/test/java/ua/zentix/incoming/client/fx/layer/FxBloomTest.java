@@ -108,8 +108,76 @@ class FxBloomTest {
             assertTrue(shown > 0.05 && shown < 0.9, q + ": ореол в 64 пикселях от шара в 30 пикселей виден и не белый: " + shown);
         }
         String out = read("core/fx_bloom.fsh").replaceAll("\\s+", " ");
-        assertTrue(out.contains("vec3 light = texture(Sampler0, uv).rgb * BloomStep.z * (1.0 - own);"), "вывод: доля — одним числом прохода");
+        assertTrue(out.contains("vec3 light = texture(Sampler0, uv).rgb * BloomStep.z * bloomThrough(covered);"), "вывод: доля — одним числом прохода");
         assertTrue(out.contains("pow(vec3(bloomCurve(light.r), bloomCurve(light.g), bloomCurve(light.b)), vec3(1.0 / 2.2))"), "вывод: кривая и экран");
+    }
+
+    /**
+     * Дым перед огнём гасит и его ореол. Шар радиусом 120 пикселей кадра, перед правой его частью и дальше вправо — полоса
+     * дыма с непрозрачностью 0,8; проход свечения смешивает их «поверх» (как {@code ONE, ONE_MINUS_SRC_ALPHA}), что
+     * закрывает ореол, и сколько его проходит, — функции шейдера ({@code bloomCovers}, {@code bloomThrough}); доля
+     * закрытого на кадр — линейной выборкой уровня прохода, как в {@code fx_bloom.fsh}. Ореол поверх дыма не светлее, чем
+     * пропускание дыма × ореол того же шара без дыма; вокруг открытой части шара ореол остаётся (не меньше половины); на
+     * самом шаре и на дыме перед ним ореола нет. С гашением над полосой выходит 0,09–0,14 ореола без дыма, без него (одна
+     * доля светящегося, как прежде) — около 0,5 при пропускании 0,2.
+     */
+    @Test
+    void smokeInFrontAbsorbsTheHalo() throws IOException {
+        String glsl = read("include/bloom.glsl");
+        GlslFunction covers = GlslFunction.parse(glsl, "bloomCovers"), through = GlslFunction.parse(glsl, "bloomThrough");
+        int w = 2560, h = 1600, cx = 1280, cy = 800, r = 120, band0 = cx + 40, band1 = cx + 200;
+        double smoke = 0.8, fire = FxBloom.WHITE;
+        for (Bloom q : new Bloom[]{Bloom.FULL, Bloom.FAST}) {
+            int g = FxBloom.glowLevel(h, q), k = 1 << g, gw = FxBloom.size(w, g), gh = FxBloom.size(h, g);
+            FxBloom.Image[] emission = {FxBloom.Image.of(gw, gh), FxBloom.Image.of(gw, gh)};
+            FxBloom.Image[] covered = {FxBloom.Image.of(gw, gh), FxBloom.Image.of(gw, gh)};
+            for (int j = 0; j < gh; j++) {
+                for (int i = 0; i < gw; i++) {
+                    double x = (i + 0.5) * k, y = (j + 0.5) * k;
+                    boolean ball = Math.hypot(x - cx, y - cy) <= r, band = x >= band0 && x < band1;
+                    for (int s = 0; s < 2; s++) {
+                        double e = 0, c = 0;
+                        if (ball) {
+                            e = fire;
+                            c = covers.call(Map.of("alpha", 1.0, "light", 1.0, "emits", 1.0));
+                        }
+                        if (s == 1 && band) {
+                            // дым поверх: излучения нет, альфа — его непрозрачность
+                            e *= 1 - smoke;
+                            c = covers.call(Map.of("alpha", smoke, "light", 0.0, "emits", 0.0)) + (1 - smoke) * c;
+                        }
+                        emission[s].v()[j * gw + i] = (float) e;
+                        covered[s].v()[j * gw + i] = (float) Math.min(1, c);
+                    }
+                }
+            }
+            FxBloom.Image clear = FxBloom.light(FxBloom.halo(emission[0], w, h, g), w, h, g);
+            FxBloom.Image smoky = FxBloom.light(FxBloom.halo(emission[1], w, h, g), w, h, g);
+            for (int x = cx + 150; x <= cx + 180; x += 6) {
+                for (int y : new int[]{cy - 60, cy, cy + 60, cy - 220, cy + 220}) {
+                    double open = shown(clear, covered[0], through, k, x, y), behind = shown(smoky, covered[1], through, k, x, y);
+                    assertTrue(open > 0, q + ": ореол без дыма есть");
+                    assertTrue(behind <= (1 - smoke) * open * 1.001, q + ": ореол поверх дыма не светлее пропускания × ореол: " + behind / open + " в (" + x + ", " + y + ")");
+                }
+            }
+            for (int x = cx - 250; x <= cx - 150; x += 10) {
+                double open = shown(clear, covered[0], through, k, x, cy), left = shown(smoky, covered[1], through, k, x, cy);
+                assertTrue(left >= 0.5 * open, q + ": ореол у открытой части шара остаётся: " + left / open + " в " + (x - cx));
+            }
+            assertEquals(0, shown(smoky, covered[1], through, k, cx + 80, cy), 1e-9, q + ": на дыме перед шаром ореола нет");
+            assertEquals(0, shown(clear, covered[0], through, k, cx - 60, cy), 1e-9, q + ": на шаре ореола нет");
+        }
+        String out = read("core/fx_bloom.fsh").replaceAll("\\s+", " "), fsh = read("core/fx.fsh").replaceAll("\\s+", " ");
+        assertTrue(out.contains("float covered = texture(Sampler1, at * BloomCover).r;"), "вывод: доля закрытого — выборкой уровня прохода");
+        assertTrue(out.contains("* BloomStep.z * bloomThrough(covered);"), "вывод: ореол — долей, не закрытой слоем перед ним");
+        assertTrue(fsh.contains("float covers = bloomCovers(fragColor.a, max(fragColor.r, max(fragColor.g, fragColor.b)), emits);"), "проход: закрывает каждый квадрат");
+        assertTrue(fsh.contains("fragCover = vec4(covers, 0.0, 0.0, fragColor.a);"), "проход: закрытое — смешиванием «поверх»");
+    }
+
+    /** Ореол на кадре в пикселе (x, y): свет до кривой × доля, что проходит ({@code fx_bloom.fsh}). */
+    private static double shown(FxBloom.Image light, FxBloom.Image covered, GlslFunction through, int k, int x, int y) {
+        double c = covered.sample((x + 0.5) / k, (y + 0.5) / k);
+        return light.at(x, y) * through.call(Map.of("covered", c));
     }
 
     /**
@@ -231,7 +299,7 @@ class FxBloomTest {
         assertEquals(1, wsum[0] + wsum[1] + wsum[2] + wsum[3], 1e-12, "B-сплайн сохраняет энергию");
         String out = read("core/fx_bloom.fsh").replaceAll("\\s+", " ");
         assertTrue(out.contains("vec2 uv = at * 0.5 * BloomStep.xy;"), "на кадр: пиксель — точка ((x + ½)/2, (y + ½)/2) половины кадра");
-        assertTrue(out.contains("texture(Sampler0, uv).rgb * BloomStep.z * (1.0 - own)"), "доля ореола, вокруг светящегося");
+        assertTrue(out.contains("texture(Sampler0, uv).rgb * BloomStep.z * bloomThrough(covered)"), "доля ореола, вокруг светящегося и за дымом");
     }
 
     /**
@@ -245,7 +313,7 @@ class FxBloomTest {
         String fsh = read("core/fx.fsh").replaceAll("\\s+", " "), vsh = read("core/fx.vsh").replaceAll("\\s+", " ");
         assertTrue(fsh.contains("fragColor = color * seen * ColorModulator;"), "цвет — с видимой долей");
         assertTrue(fsh.contains("fragColor = vec4(glow * seen * ColorModulator.rgb, fragColor.a);"), "излучение — с той же долей и альфой цвета");
-        assertTrue(fsh.contains("fragCover = vec4(own, 0.0, 0.0, fragColor.a);"), "доля светящегося — с альфой цвета: дым перед огнём её убавляет");
+        assertTrue(fsh.contains("fragCover = vec4(covers, 0.0, 0.0, fragColor.a);"), "закрытое перед ореолом — с альфой цвета");
         assertTrue(fsh.contains("glow *= front;"), "пелена перед огнём гасит и излучение");
         assertTrue(!fsh.contains("color *="), "цвет не гасится мимо видимой доли");
         assertTrue(fsh.contains("if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);"), "мягкий край у мира — в видимой доле");

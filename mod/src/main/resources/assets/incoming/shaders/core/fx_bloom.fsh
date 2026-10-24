@@ -6,7 +6,7 @@
 // кривую 1 − e^(−x);
 // смешивание «экраном» (ONE, ONE_MINUS_SRC_COLOR) — сложение света до этой кривой. Свет линейный, на экран — степень 1/2,2.
 uniform sampler2D Sampler0;
-// доля пикселя, которую занимает само светящееся (fx.fsh: fragCover), на уровне прохода излучения
+// доля пикселя, закрытая перед ореолом светящимся и дымом перед ним (fx.fsh: fragCover, bloomCovers), на уровне прохода излучения
 uniform sampler2D Sampler1;
 // xy — 1 / размер первого уровня (половина кадра); z — доля ореола (FxBloom.SHARE): сбор уже поделил на число уровней
 uniform vec4 BloomStep;
@@ -19,10 +19,11 @@ out vec4 fragColor;
 
 void main() {
     vec2 at = gl_FragCoord.xy - BloomFrom;
-    // ореол — вокруг светящегося: на нём самом (показан своей экспозицией) он высветлил бы складки и сажу огня
+    // ореол — вокруг светящегося и за дымом перед ним: на самом огне (показан своей экспозицией) он высветлил бы складки
+    // и сажу, а дым перед огнём его поглощает
     vec2 uv = at * 0.5 * BloomStep.xy;
-    float own = texture(Sampler1, at * BloomCover).r;
-    vec3 light = texture(Sampler0, uv).rgb * BloomStep.z * (1.0 - own);
+    float covered = texture(Sampler1, at * BloomCover).r;
+    vec3 light = texture(Sampler0, uv).rgb * BloomStep.z * bloomThrough(covered);
     vec3 shown = pow(vec3(bloomCurve(light.r), bloomCurve(light.g), bloomCurve(light.b)), vec3(1.0 / 2.2));
     // 8 бит кадра: бледный хвост ореола без подмешанного шума идёт кольцами — шум в полступени (Jimenez 2014), только
     // там, где ореол есть

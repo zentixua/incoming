@@ -297,11 +297,11 @@ void main() {
     fragColor = color * seen * ColorModulator;
     fragCover = vec4(0.0);
     if (FxGlowPass.x > 0.5) {
-        // светящееся занимает пиксель своей непрозрачностью (у ядер и факела, что только светят, — своим светом)
-        float own = 0.0;
-        if (emitGain > 0.0) own = clamp(max(fragColor.a, max(fragColor.r, max(fragColor.g, fragColor.b))), 0.0, 1.0);
-        if (emitSpot > 0.5) own = fragColor.a;
-        fragCover = vec4(own, 0.0, 0.0, fragColor.a);
+        // что закрывает ореол в пикселе (bloomCovers): светящееся и дым перед ним; пятно — своей непрозрачностью
+        float emits = 0.0;
+        if (emitGain > 0.0 && emitSpot < 0.5) emits = 1.0;
+        float covers = bloomCovers(fragColor.a, max(fragColor.r, max(fragColor.g, fragColor.b)), emits);
+        fragCover = vec4(covers, 0.0, 0.0, fragColor.a);
         fragColor = vec4(glow * seen * ColorModulator.rgb, fragColor.a);
     }
 }
