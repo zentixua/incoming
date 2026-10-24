@@ -1,5 +1,7 @@
 #version 150
 
+#moj_import <incoming:fx_gaussian_photo.glsl>
+
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:fx_balls.glsl>
 
@@ -153,7 +155,7 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
     vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
     // прозрачный край кадра (половина квадрата клуба) — без второй карты и света: цена слоя — заливка крупных клубов
     if (mix(a0.a, a1.a, m) < 0.002) {
-        if (!analytic || gaussianMix >= 1.0) discard;
+        if (!analytic) discard;
         a = vec4(vec3(FxSixLight.z), 0.0); b = vec3(FxSixLight.z); return;
     }
     vec4 b0 = textureGrad(Sampler0, uv0 + vec2(0.0, FxSix.x), dx, dy), b1 = textureGrad(Sampler0, uv1 + vec2(0.0, FxSix.x), dx, dy);
@@ -183,6 +185,10 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
             a.rgb *= mix(vec3(1.0),lightA/FxSixLight.z,weight);
             b *= mix(vec3(1.0),lightB/FxSixLight.z,weight);
         }
+    }
+    if (analytic) {
+        a.rgb = gaussianPhotoLight(a.rgb, FxSixLight.z, gaussianPhotoWindow, a.a);
+        b = gaussianPhotoLight(b, FxSixLight.z, gaussianPhotoWindow, a.a);
     }
 
 }

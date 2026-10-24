@@ -1,5 +1,7 @@
 #version 150
 
+#moj_import <incoming:fx_gaussian_photo.glsl>
+
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:smoke.glsl>
@@ -160,7 +162,8 @@ vec4 fieldColor(int first,int count,vec3 ray,float end) {
             alpha=mix(alpha,transferred,style.x*window);
             vec3 la=mix(pow(a0.rgb/max(a0.a,1e-3),vec3(2.2)),pow(a1.rgb/max(a1.a,1e-3),vec3(2.2)),photo.z);
             vec3 lb=mix(pow(b0.rgb/max(b0.a,1e-3),vec3(2.2)),pow(b1.rgb/max(b1.a,1e-3),vec3(2.2)),photo.z);
-            if(baked<0.002){la=vec3(FxSixLight.z);lb=la;}
+            la=gaussianPhotoLight(la,FxSixLight.z,window,baked);
+            lb=gaussianPhotoLight(lb,FxSixLight.z,window,baked);
             if(c.w>3.0*g.x && c.w*abs(c.y)>g.x*length(c.xyz)) {
                 wr=normalize(vec3(wr.x,0,wr.z));wn=vec3(0,c.y<0.0?1.0:-1.0,0);wu=cross(wn,wr);
             }

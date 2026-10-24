@@ -54,6 +54,21 @@ class ShaderSourceTest {
         assertTrue(balls.contains("/ skyLinear"), "свет шара на клубе — в долях линейного света неба");
     }
 
+    /** A zero-alpha photograph can still contain an optically thick analytic Gaussian (10,000-depth regression). */
+    @Test
+    void photoCullingNeverDiscardsTheAnalyticMedium() throws IOException {
+        String shader=Files.readString(Path.of("src/main/resources/assets/incoming/shaders/core/fx.fsh"));
+        String frames=shader.substring(shader.indexOf("void sixFrames("),shader.indexOf("vec4 fireFrames("));
+        Matcher discard=Pattern.compile("if\\s*\\(([^)]*)\\)\\s*discard\\s*;").matcher(blankComments(frames));
+        int branches=0;
+        while(discard.find()) {
+            assertEquals("!analytic",discard.group(1).strip(),
+                    "A bake-only alpha test may cull legacy sprites; world Gaussians must reach finite-ray transport");
+            branches++;
+        }
+        assertEquals(1,branches,"Check the actual photo-alpha cull, not an empty/extracted fragment");
+    }
+
     @Test
     void noConditionalInsideAnExpression() throws IOException, URISyntaxException {
         List<String> bad = everyShader(ShaderSourceTest::nested);
