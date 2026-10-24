@@ -547,6 +547,17 @@ final class Sandbox {
     private void startEffect(SandboxCommand c) {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
+        // Crater-fire seeds use SmokeGrid's presentation clock, independent of the world's wind clock.
+        // Pin it only for an armed capture with no live sources; ordinary /fx layering keeps its clock.
+        if (armed != null && ua.zentix.incoming.client.fx.smoke.SmokeGrid.sources() == 0) {
+            try {
+                var field = ua.zentix.incoming.client.fx.smoke.SmokeGrid.class.getDeclaredField("ticks");
+                field.setAccessible(true);
+                field.setLong(null, 0);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException("smoke capture clock was not reset", e);
+            }
+        }
         pendingCmd = c;
         pendingSince = tick;
         serverDone = false;

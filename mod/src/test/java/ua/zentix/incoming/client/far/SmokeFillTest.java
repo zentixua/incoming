@@ -84,7 +84,6 @@ class SmokeFillTest {
     static final class Screen implements SmokePuffs.Out {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
-        final java.util.Set<double[]> broad = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         final java.util.Map<double[],Double> matterScale = new java.util.IdentityHashMap<>();
         double veil;
 
@@ -112,21 +111,6 @@ class SmokeFillTest {
             // лежащий квадрат: по высоте экрана — проекция диска
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
             puff6(dx, dy, dz, halfA, halfB * Math.abs(dy) / d, sprite, mix, shade, r, g, b, a, tau);
-        }
-
-        @Override
-        public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade,
-                          float r, float g, float b, float a, double tau, boolean thin) {
-            int before = quads.size();
-            puff6(dx,dy,dz,halfA,halfB,sprite,mix,shade,r,g,b,a,tau);
-            if (thin && quads.size()>before) broad.add(quads.getLast());
-        }
-
-        @Override
-        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix,
-                              float shade, float r, float g, float b, float a, double tau, boolean thin) {
-            double d=Math.sqrt(dx*dx+dy*dy+dz*dz);
-            puff6(dx,dy,dz,halfA,halfB*Math.abs(dy)/d,sprite,mix,shade,r,g,b,a,tau,thin);
         }
 
         @Override
@@ -165,23 +149,13 @@ class SmokeFillTest {
             return clear;
         }
 
-        double tierTransmittance(double u, double v, boolean thin) throws IOException {
-            double clear = thin ? 1 : Math.exp(-veil);
-            for (double[] q : quads) {
-                if (broad.contains(q)!=thin) continue;
-                double x=(u-q[0])/q[3], y=(v-q[1])/q[4];
-                if (Math.abs(x)<1 && Math.abs(y)<1) clear*=1-PlumeContinuityTest.clubAt(q,x,y);
-            }
-            return clear;
-        }
-
-        double reconstructedTier(double u, double v, int width, int height, boolean thin) throws IOException {
+        double reconstructed(double u, double v, int width, int height) throws IOException {
             double px=(u+W)/(2*W)*width-0.5, py=(v+H)/(2*H)*height-0.5;
             int ix=(int)Math.floor(px),iy=(int)Math.floor(py);
             double wx=px-ix,wy=py-iy,sum=0;
             for(int y=0;y<2;y++) for(int x=0;x<2;x++) {
                 int sx=Math.clamp(ix+x,0,width-1),sy=Math.clamp(iy+y,0,height-1);
-                sum+=tierTransmittance(-W+(sx+0.5)*2*W/width,-H+(sy+0.5)*2*H/height,thin)
+                sum+=transmittance(-W+(sx+0.5)*2*W/width,-H+(sy+0.5)*2*H/height)
                         *(x==0?1-wx:wx)*(y==0?1-wy:wy);
             }
             return sum;
@@ -250,7 +224,6 @@ class SmokeFillTest {
             SmokePuffs.resetBudget();
             for (int frame = 0; frame < 2; frame++) {
                 s.quads.clear();
-                s.broad.clear();
                 s.matterScale.clear();
                 s.veil = 0;
                 for (Blast b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
@@ -315,15 +288,8 @@ class SmokeFillTest {
                 bounds[4 * k + 2] = (float) Math.clamp((q[0] + q[3] + W) / (2 * W), 0, 1);
                 bounds[4 * k + 3] = (float) Math.clamp((q[1] + q[4] + H) / (2 * H), 0, 1);
             }
-            float[] denseBounds=bounds.clone(), thinBounds=new float[bounds.length];
-            for(int k=0;k<budget.quads.size();k++) if(budget.broad.contains(budget.quads.get(k))) {
-                System.arraycopy(bounds,4*k,thinBounds,4*k,4);
-                java.util.Arrays.fill(denseBounds,4*k,4*k+4,0);
-            }
-            PuffTarget.FrameResolution resolution=PuffTarget.planFrame(denseBounds,thinBounds,budget.quads.size(),1920,1080,SmokePuffs.FILL_BUDGET);
-            int step=resolution.fine().step(), thinStep=resolution.thin().step();
-            double raster=(PuffTarget.workPixels(denseBounds,budget.quads.size(),1920,1080,step,resolution.fine().keepSmall())
-                    +PuffTarget.workPixels(thinBounds,budget.quads.size(),1920,1080,thinStep,resolution.thin().keepSmall()))/(1920.0*1080);
+            int step=PuffTarget.plan(bounds,budget.quads.size(),1920,1080,SmokePuffs.FILL_BUDGET);
+            double raster=PuffTarget.workPixels(bounds,budget.quads.size(),1920,1080,step)/(1920.0*1080);
             System.out.printf(Locale.ROOT, "RASTER step %d, %.3f native screens%n", step, raster);
             assertTrue(raster <= SmokePuffs.FILL_BUDGET, got);
             assertTrue(budget.quads.size() >= free.quads.size() / 2, "clumps survive instead of one club per Gaussian: " + got);
@@ -335,8 +301,7 @@ class SmokeFillTest {
             for (int i = 0; i < 48; i++) {
                 for (int j = 0; j < 27; j++) {
                     double u = -W + (i + 0.5) * 2 * W / 48, v = -H + (j + 0.5) * 2 * H / 27;
-                    reconstructed[i / 8 * 3 + j / 9] += budget.reconstructedTier(u, v, 1920 / step, 1080 / step, false)
-                            *budget.reconstructedTier(u, v, 1920 / thinStep, 1080 / thinStep, true) / 72;
+                    reconstructed[i / 8 * 3 + j / 9] += budget.reconstructed(u, v, 1920 / step, 1080 / step) / 72;
                 }
             }
             double lowMean = 0;
@@ -394,7 +359,7 @@ class SmokeFillTest {
         Screen screen=new Screen(view);
         SmokePuffs.resetBudget();
         for (int pass=0;pass<2;pass++) {
-            screen.quads.clear(); screen.broad.clear(); screen.matterScale.clear(); screen.veil=0;
+            screen.quads.clear(); screen.matterScale.clear(); screen.veil=0;
             for (SmokeGrid.Source source:sources) source.emit(1000,SmokePuffs.sink(view,screen,source,1000));
             SmokePuffs.flush();
         }

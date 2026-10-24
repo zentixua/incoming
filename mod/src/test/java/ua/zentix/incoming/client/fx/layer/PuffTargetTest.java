@@ -32,46 +32,26 @@ class PuffTargetTest {
         }
         assertBudget(rects, count, 1280, 720);
         assertBudget(rects, count, 2560, 1600);
-        assertEquals(1, PuffTarget.plan(new float[4], 1, 1280, 720, 4).step());
+        assertEquals(1, PuffTarget.plan(new float[4], 1, 1280, 720, 4));
     }
 
     private static void assertBudget(float[] rects, int n, int w, int h) {
-        PuffTarget.Resolution plan = PuffTarget.plan(rects, n, w, h, 4);
-        int step = plan.step();
-        assertTrue(PuffTarget.workPixels(rects, n, w, h, step, plan.keepSmall()) <= 4.0 * w * h,
+        int step = PuffTarget.plan(rects, n, w, h, 4);
+        assertTrue(PuffTarget.workPixels(rects, n, w, h, step) <= 4.0 * w * h,
                 "count=" + n + " frame=" + w + "x" + h + " step=" + step);
-        if (step > 1) assertTrue(PuffTarget.workPixels(rects, n, w, h, step-1, plan.keepSmall()) > 4.0 * w * h,
+        if (step > 1) assertTrue(PuffTarget.workPixels(rects, n, w, h, step-1) > 4.0 * w * h,
                 "uses the finest target that fits");
     }
 
     @Test
-    void tinySmokeStaysNativeAlongsideLargeClouds() {
-        float[] b = new float[21 * 4];
-        for (int i = 0; i < 20; i++) { b[4*i+2] = 1; b[4*i+3] = 1; }
-        b[82] = 2f / 1280;
-        b[83] = 2f / 720;
-        PuffTarget.Resolution plan = PuffTarget.plan(b, 21, 1280, 720, 4);
-        assertTrue(plan.keepSmall());
-        assertFalse(PuffTarget.reduced(b, 20, 1280, 720, plan.step()), "a far 2px club retains its native footprint");
-        assertBudget(b, 21, 1280, 720);
-    }
-
-    @Test
-    void denseClubsRetainDetailBesideLargeThinFieldsWithinTheSameFourScreens() {
-        for (int[] size : new int[][]{{1280,720},{2560,1600},{1279,719}}) {
-            float[] dense=new float[76*4], broad=new float[76*4];
-            for(int i=0;i<4;i++) { dense[4*i+2]=1; dense[4*i+3]=1; }
-            for(int i=4;i<76;i++) { broad[4*i+2]=1; broad[4*i+3]=1; }
-            PuffTarget.FrameResolution plan=PuffTarget.planFrame(dense,broad,76,size[0],size[1],4);
-            assertTrue(plan.fine().step()<plan.thin().step(),"a low-contrast field cannot blur the detailed club");
-            double work=PuffTarget.workPixels(dense,76,size[0],size[1],plan.fine().step(),plan.fine().keepSmall())
-                    +PuffTarget.workPixels(broad,76,size[0],size[1],plan.thin().step(),plan.thin().keepSmall());
-            assertTrue(work<=4.0*size[0]*size[1],"both resolutions and native small fragments count in one budget");
+    void interleavedSmokeUsesOneGridAndNeverSplitsForLightingOrSize() {
+        for (int[] frame : new int[][]{{1280,720},{2560,1600},{1279,719}}) {
+            float[] rects=new float[76*4];
+            for(int i=0;i<76;i++) { rects[4*i+2]=1; rects[4*i+3]=1; }
+            assertBudget(rects,76,frame[0],frame[1]);
         }
-        int[] order={0,1,2,3,4}, steps={2,2,7,1,7};
-        assertEquals(2,FxQuads.groupEnd(order,steps,0,5));
-        assertEquals(3,FxQuads.groupEnd(order,steps,2,5));
-        assertEquals(4,FxQuads.groupEnd(order,steps,3,5));
+        int[] order={0,1,2,3,4}, steps={7,7,7,7,7};
+        assertEquals(5,FxQuads.groupEnd(order,steps,0,5),"lighting and small-club LOD must not cause hundreds of full-screen resolves");
     }
 
     @Test

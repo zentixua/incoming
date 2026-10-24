@@ -46,16 +46,6 @@ final class SmokePuffs {
         void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
                        float r, float g, float b, float a, double tau);
 
-        default void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade,
-                           float r, float g, float b, float a, double tau, boolean thin) {
-            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, tau);
-        }
-
-        default void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix,
-                               float shade, float r, float g, float b, float a, double tau, boolean thin) {
-            puff6Flat(dx, dy, dz, halfA, halfB, soft, sprite, mix, shade, r, g, b, a, tau);
-        }
-
         void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light);
 
         void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a);
@@ -276,12 +266,6 @@ final class SmokePuffs {
     /** Veil only inside the Gaussian's concentration core; transparent bake padding never defines eye entry. */
     static double outside(double px, double py, double pz, double sh, double sv) {
         return smoothstep(0.5, 1, Math.sqrt((px * px + pz * pz) / (sh * sh) + py * py / (sv * sv)) / CORE_EDGE);
-    }
-
-    /** Thin self-shadow changes the image by O(alpha²), below the existing contrast threshold. Density is unchanged. */
-    static boolean thinLighting(double tau0) {
-        double alpha = -Math.expm1(-tau0);
-        return alpha * alpha < Sight.THRESHOLD;
     }
 
     static final double CLUMPS_FULL = 5;
@@ -718,9 +702,6 @@ final class SmokePuffs {
             // по осям экрана (σh поперёк, проекция вверх)
             org.joml.Vector3f l = view.left(), u = view.up();
             double turn = 2 * Math.PI * unit(h >>> 5);
-            // One resolution tier per physical Gaussian; size jitter cannot fragment its ordered club run.
-            boolean thinCluster = !spray && thinLighting((ks + kd + kw)
-                    / (2 * Math.PI * sh * Math.min(sh, sv) * many * q * q * (count == 1 ? 1 : SIZE_LOW * SIZE_LOW)));
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
                 double[] at = sunflower(j, many, turn, spread);
@@ -744,16 +725,15 @@ final class SmokePuffs {
                 double last = j == count - 1 ? many - (count - 1) : 1;
                 optics.club(frame, tau / (many * q * q * k * k), CLUB);
                 double half = CLUB[0] * q * k, mass = CLUB[1] * last;
-                boolean thin = thinCluster;
                 FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1);
                 // лежащий клуб сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет сбоку и
                 // сзади) нет, свет солнца, неба и огня — весь (степень тени 0; свет шаров — в каждом пикселе, fx.fsh); снизу —
                 // как обычно. Мягкость у рельефа — путь луча в слое до земли (rw / sin e), не полуразмер
                 if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, sa * half, sa * half,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, sprite,
-                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, shown, mass, thin);
+                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, shown, mass);
                 else out.puff6(px + ox, py + oy, pz + oz, sa * half, sb * half, sprite, (float) (frame - f0), spray ? sprayShade : shade,
-                        cr, cg, cb, shown, mass, thin);
+                        cr, cg, cb, shown, mass);
             }
             return fill;
         }
@@ -833,7 +813,6 @@ final class SmokePuffs {
         // кучка — «подсолнухом» в плоскости экрана, как у облаков ({@link #sunflower}: случайные места оставляли просветы)
         org.joml.Vector3f l = view.left(), u = view.up();
         double turn = 2 * Math.PI * unit(h >>> 5);
-        boolean thinCluster = !spray && thinLighting(tau0 * sv / Math.min(sh, sv) / (many * q * q * SIZE_LOW * SIZE_LOW));
         for (int j = 0; j < count; j++) {
             long hj = mix(h + j * 0x632BE59BD9B4E019L);
             double[] at = sunflower(j, many, turn, spread);
@@ -847,8 +826,7 @@ final class SmokePuffs {
             double half = c[0] * q * k;
             boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
             out.puff6(px + ox, py + oy, pz + oz, sa * half, sbv * half, spray ? FxAtlas.spray6(f0, mirror) : FxAtlas.puff6(f0, mirror),
-                    (float) (frame - f0), (float) shade, sr, sg, sb, shown, c[1] * last,
-                    thinCluster);
+                    (float) (frame - f0), (float) shade, sr, sg, sb, shown, c[1] * last);
         }
         return count + veils;
     }

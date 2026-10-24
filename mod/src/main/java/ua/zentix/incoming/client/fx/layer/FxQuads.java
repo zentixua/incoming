@@ -52,8 +52,6 @@ public final class FxQuads {
     private float[] keys = new float[0];
     private boolean[] reducible = new boolean[0];
     private int[] resolution = new int[0];
-    private boolean[] thin = new boolean[0];
-    private float[] thinBounds = new float[0];
     private float[] bounds = new float[0];
     private float[] frameBounds;
     private float[] clipCorners;
@@ -72,8 +70,6 @@ public final class FxQuads {
         this.up = up;
         // Enhanced class redefinition initializes added fields to null in an already running sandbox.
         if (resolution == null) resolution = new int[capacity];
-        if (thin == null) thin = new boolean[capacity];
-        if (thinBounds == null) thinBounds = new float[4 * capacity];
         n = 0;
         nearest = opacity = 0;
         probe = 0;
@@ -123,13 +119,7 @@ public final class FxQuads {
      * всегда полный (под открытым небом; его свет — по картам кадра в шейдере), и карта освещения берётся без UV2.
      */
     public void sixWay(float mix, float shade, double tau) {
-        sixWay(mix, shade, tau, false);
-    }
-
-    /** Broad optically thin smoke needs density sampling; its sub-threshold self-shadow needs no six-way maps. */
-    public void sixWay(float mix, float shade, double tau, boolean broad) {
         nearest = (byte) (mix < 0 ? 0 : -13 - Math.round(Mth.clamp(shade / SHADE_MAX, 0, 1) * SHADE_STEPS));
-        if (broad && mix >= 0) nearest = -60;
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
         sixTau = mix < 0 ? 0 : tauCode(tau);
         six = mix >= 0;
@@ -187,7 +177,6 @@ public final class FxQuads {
     public void quad(float key) {
         if (n == capacity) grow();
         keys[n] = key > 0 ? key : 0;
-        thin[n] = six && nearest == -60;
         reducible[n] = nearest > -100; // Sprite particles, ribbons and light; model tiles retain native resolution.
         write = stage + (long) n * QUAD;
         n++;
@@ -285,21 +274,20 @@ public final class FxQuads {
         for (int i = 0; i < n; i++) {
             int o = 4 * i;
             Arrays.fill(bounds, o, o + 4, 0);
-            Arrays.fill(thinBounds, o, o + 4, 0);
             for (int j = 0; j < 4; j++) {
                 long p = stage + (long) i * QUAD + (long) j * VERTEX;
                 projectionView.transform(clip.set(MemoryUtil.memGetFloat(p), MemoryUtil.memGetFloat(p + 4), MemoryUtil.memGetFloat(p + 8), 1));
                 clipCorners[4*j]=clip.x; clipCorners[4*j+1]=clip.y; clipCorners[4*j+2]=clip.z; clipCorners[4*j+3]=clip.w;
             }
             projectedBounds.quad(clipCorners, frameBounds, o);
-            if (reducible[i]) System.arraycopy(frameBounds, o, thin[i] ? thinBounds : bounds, o, 4);
+            if (reducible[i]) System.arraycopy(frameBounds, o, bounds, o, 4);
         }
         int visible = visibleOrder(order, frameBounds, n);
-        if (!PuffTarget.begin(shader, scene, bounds, thinBounds, n)) {
+        if (!PuffTarget.begin(shader, scene, bounds, n)) {
             if (visible > 0) draw(order, 0, visible);
             return;
         }
-        for (int i = 0; i < n; i++) resolution[i] = reducible[i] ? PuffTarget.resolution(thin[i] ? thinBounds : bounds, i, thin[i]) : 1;
+        for (int i = 0; i < n; i++) resolution[i] = reducible[i] ? PuffTarget.resolution() : 1;
         // One upload for all ranges. Rebuilding an immediate MeshData and its uniforms per group costs CPU at a raid.
         if (gpu == null) gpu = new VertexBuffer(VertexBuffer.Usage.DYNAMIC);
         gpu.bind();
@@ -313,7 +301,7 @@ public final class FxQuads {
         shader.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
                 Minecraft.getInstance().getWindow());
         try {
-            // Только последовательные частицы общего порядка. Модели и субпиксельные детали остаются в полном разрешении.
+            // Только последовательные частицы общего порядка. Модели остаются в полном разрешении.
             for (int from = 0; from < visible;) {
                 int sampleStep = resolution[order[from]];
                 int to = groupEnd(order, resolution, from, visible);
@@ -389,8 +377,6 @@ public final class FxQuads {
         keys = Arrays.copyOf(keys, cap);
         reducible = Arrays.copyOf(reducible, cap);
         resolution = Arrays.copyOf(resolution, cap);
-        thin = Arrays.copyOf(thin, cap);
-        thinBounds = Arrays.copyOf(thinBounds, 4 * cap);
         bounds = Arrays.copyOf(bounds, 4 * cap);
     }
 

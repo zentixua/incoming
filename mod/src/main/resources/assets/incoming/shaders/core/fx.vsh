@@ -105,7 +105,7 @@ void main() {
     texCoord0 = UV0;
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
     // запечённый клуб: свет мира — полный (под открытым небом), в UV2.x — множитель толщи его кадра (FxQuads.sixWay)
-    bool six = Normal.y < -0.1 && Normal.y > -0.49;
+    bool six = Normal.y < -0.1 && Normal.y > -0.44;
     vec4 light = Normal.y < -0.5 ? vec4(1.0) : texelFetch(Sampler2, six ? ivec2(15) : UV2 / 16, 0);
     sixTau = six ? exp2(float(UV2.x) / SIX_TAU_STEPS) : 1.0;
     if (Normal.y > -0.5 && !six && any(lessThan(UV2, ivec2(240)))) {
