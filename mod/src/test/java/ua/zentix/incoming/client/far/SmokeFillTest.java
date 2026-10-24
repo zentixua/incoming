@@ -111,9 +111,10 @@ class SmokeFillTest {
 
         @Override
         public boolean gaussian(FarView view, double x,double y,double z,double sh,double sv,double ext,
-                                double across,double card,FxAtlas.Sprite sprite,float mix,float shade,
+                                double across,double card,double power,double detail,FxAtlas.Sprite sprite,float mix,float shade,
                                 float r,float g,float b,float coverage) {
-            gaussians.add(new double[]{x,y,z,sh,sv,ext,coverage});
+            gaussians.add(new double[]{x,y,z,sh,sv,ext,coverage,card,power,ClubFrames.frame(sprite),mix,across,detail});
+            if(SmokePuffs.lies(sh,sv,y,Math.sqrt(x*x+y*y+z*z))) lastFlatShade=shade;
             // Conservative raster rectangle, used only by the CPU fill planner.
             double radius=Math.max(sh,sv)*Math.sqrt(Math.max(0,2*Math.log(Math.max(ext/(2*Math.PI*sh*Math.min(sh,sv))/1e-7,1))));
             double depth=x*view.forward().x+y*view.forward().y+z*view.forward().z;
@@ -176,7 +177,25 @@ class SmokeFillTest {
             Vector3f f=view.forward(), l=view.left(), up=view.up();
             double rx=f.x+u*l.x+v*up.x,ry=f.y+u*l.y+v*up.y,rz=f.z+u*l.z+v*up.z;
             double n=Math.sqrt(rx*rx+ry*ry+rz*rz);
-            for(double[] q:gaussians) clear*=1-q[6]*(-Math.expm1(-SmokePuffs.sightDepth(q[0],q[1],q[2],q[3],q[4],q[5],rx/n,ry/n,rz/n)));
+            for(double[] q:gaussians) {
+                double sx=rx/n/q[3],sy=ry/n/q[4],sz=rz/n/q[3], speed=Math.sqrt(sx*sx+sy*sy+sz*sz);
+                sx/=speed; sy/=speed; sz/=speed;
+                double tx=-l.x/q[3],ty=-l.y/q[4],tz=-l.z/q[3], dot=tx*sx+ty*sy+tz*sz;
+                tx-=dot*sx;ty-=dot*sy;tz-=dot*sz;
+                double norm=Math.sqrt(tx*tx+ty*ty+tz*tz);tx/=norm;ty/=norm;tz/=norm;
+                double ux=up.x/q[3],uy=up.y/q[4],uz=up.z/q[3];
+                double a=ux*sx+uy*sy+uz*sz,b=ux*tx+uy*ty+uz*tz;
+                ux-=a*sx+b*tx;uy-=a*sy+b*ty;uz-=a*sz+b*tz;
+                norm=Math.sqrt(ux*ux+uy*uy+uz*uz);ux/=norm;uy/=norm;uz/=norm;
+                double px=q[0]/q[3],py=q[1]/q[4],pz=q[2]/q[3];
+                double bx=-(px*tx+py*ty+pz*tz)/q[7],by=(px*ux+py*uy+pz*uz)/q[7];
+                double cdf=0.5*(1+SmokeGrid.erf((px*sx+py*sy+pz*sz)/Math.sqrt(2)));
+                double ratio=q[11]/(q[3]*q[4]*speed);
+                double alpha=ClubFrames.at((int)q[9],q[10],false,bx,by,1,1);
+                double bakeTau=-Math.log(Math.max(1-alpha,1.0/255))*q[8]*ratio*cdf;
+                double modelTau=SmokePuffs.sightDepth(q[0],q[1],q[2],q[3],q[4],q[5],rx/n,ry/n,rz/n);
+                clear*=1-q[6]*(-Math.expm1(-((1-q[12])*modelTau+q[12]*bakeTau)));
+            }
             for (double[] q : quads) {
                 if(q.length==6) continue;
                 double x = (u - q[0]) / q[3], y = (v - q[1]) / q[4];
@@ -231,7 +250,7 @@ class SmokeFillTest {
         Vector3f f = view.forward(), l = view.left(), up = view.up();
         double rx = f.x + u * l.x + v * up.x, ry = f.y + u * l.y + v * up.y, rz = f.z + u * l.z + v * up.z, n = Math.sqrt(rx * rx + ry * ry + rz * rz);
         double fx = rx / n, fy = ry / n, fz = rz / n, kd = SmokeGrid.dustK(0.6f, 0.55f, 0.45f);
-        double[] tau = new double[1];
+        double[] clear = {1};
         Vec3 eye = view.camera();
         for (Blast b : raid) {
             double t = now - b.born();
@@ -242,11 +261,12 @@ class SmokeFillTest {
                 // Compare the same transport quantity as the volume and source renderer: delta-Eddington removes
                 // the unresolved forward-scattering lobe. The unscaled coefficient would count that lobe as loss.
                 double sootK = CloudModel.SOOT_K * (1 - CloudModel.SOOT_W * CloudModel.SOOT_G * CloudModel.SOOT_G);
-                double ext = smoke * (sootK * soot + kd * dust);
-                if (ext > 0) tau[0] += SmokePuffs.sightDepth(b.x() + x - eye.x, b.y() + y - eye.y, b.z() + z - eye.z, sh, sv, ext, fx, fy, fz);
+                double ext = sootK * soot + kd * dust + SmokeGrid.DROP_K * water;
+                if (ext > 0) clear[0] *= 1-smoke*(-Math.expm1(-SmokePuffs.sightDepth(
+                        b.x()+x-eye.x,b.y()+y-eye.y,b.z()+z-eye.z,sh,sv,ext,fx,fy,fz)));
             });
         }
-        return Math.exp(-tau[0]);
+        return clear[0];
     }
 
     /** Кадр налёта из глаза eye в сторону fwd с бюджетом заливки budget. */
@@ -367,7 +387,11 @@ class SmokeFillTest {
                     0,0,distance+length/2,sigma,sigma,mass/length,0,1,1,1,300,0,sigma/2);
             SmokePuffs.flush();
             // Integrate emitted matter on the atlas grid, independently of screen filtering and its nonlinear log.
-            for(double[] q:screen.quads) for(int x=0;x<ClubFrames.N;x++) for(int y=0;y<ClubFrames.N;y++)
+            for(double[] g:screen.gaussians) for(int x=0;x<ClubFrames.N;x++) for(int y=0;y<ClubFrames.N;y++) {
+                double alpha=ClubFrames.at((int)g[9],g[10],false,2*(x+0.5)/ClubFrames.N-1,2*(y+0.5)/ClubFrames.N-1,1,g[8]);
+                measured[mode]+=-Math.log(Math.max(1-alpha,1e-30))*4*g[7]*g[7]*g[3]*g[11]/(ClubFrames.N*ClubFrames.N);
+            }
+            for(double[] q:screen.quads) if(q.length>6) for(int x=0;x<ClubFrames.N;x++) for(int y=0;y<ClubFrames.N;y++)
                 measured[mode]+=-Math.log(1-PlumeContinuityTest.clubAt(q,-1+(x+0.5)*2/ClubFrames.N,-1+(y+0.5)*2/ClubFrames.N))
                         *4*q[3]*q[4]*screen.matterScale.get(q)/(ClubFrames.N*ClubFrames.N);
         }
@@ -427,7 +451,7 @@ class SmokeFillTest {
     }
 
     @Test
-    void nearFieldObliqueAndFlatCloudsKeepTheirRayDensity() throws IOException {
+    void nearFieldObliqueAndFlatCloudsKeepTheirBulkRayDensity() throws IOException {
         for (double sv : new double[]{1, 10, 30}) for (double side : new double[]{0, 18})
                 for (double peak : new double[]{0.001, 0.01, 0.1, 1, 10}) {
             double sh=20, ext=peak*2*Math.PI*sh*sv;
@@ -441,13 +465,20 @@ class SmokeFillTest {
             SmokePuffs.resetBudget();
             source.emit(0,SmokePuffs.sink(view,screen,source,0));
             SmokePuffs.flush();
-            for(int y=0;y<15;y++) for(int x=0;x<25;x++) {
-                double u=-W+(x+0.5)*2*W/25,v=-H+(y+0.5)*2*H/15;
+            // The accepted bake has real small-scale structure; compare the same bulk regions as the raid test.
+            double mean=0;
+            double[] regions=new double[18];
+            for(int y=0;y<18;y++) for(int x=0;x<30;x++) {
+                double u=-W+(x+0.5)*2*W/30,v=-H+(y+0.5)*2*H/18;
                 Vector3f ray=new Vector3f(view.forward()).fma((float)u,view.left()).fma((float)v,view.up()).normalize();
-                double truth=Math.exp(-SmokePuffs.sightDepth(side, -8, -30,sh,sv,ext,ray.x,ray.y,ray.z));
-                org.junit.jupiter.api.Assertions.assertEquals(truth,screen.transmittance(u,v),0.002,
-                        "near-field transport must not inherit a small-angle billboard approximation");
+                double truth=Math.exp(-SmokePuffs.sightDepth(side,-8,-30,sh,sv,ext,ray.x,ray.y,ray.z));
+                double error=screen.transmittance(u,v)-truth;
+                mean+=error/(30*18); regions[x/5*3+y/6]+=error/30;
             }
+            String sample="sigma-v "+sv+", offset "+side+", peak "+peak;
+            assertTrue(Math.abs(mean)<=MODEL_MEAN,"near-field mean "+mean+": "+sample);
+            for(double error:regions) assertTrue(Math.abs(error)<=MODEL_PART,"near-field region "+error+": "+sample);
+
         }
         SmokePuffs.resetBudget();
     }
@@ -475,10 +506,79 @@ class SmokeFillTest {
                     double t=2*(j+0.5)/256-1;
                     tau+=SmokePuffs.sightDepth(ax*t,ay*t-eye.y,-eye.z,sh,sv,ext/256,ray.x,ray.y,ray.z);
                 }
-                org.junit.jupiter.api.Assertions.assertEquals(Math.exp(-tau),screen.transmittance(u,v),0.01,
-                        "segment quadrature must follow the anisotropic Gaussian metric");
+                double represented=0;
+                for(double[] g:screen.gaussians) represented+=SmokePuffs.sightDepth(g[0],g[1],g[2],g[3],g[4],g[5],ray.x,ray.y,ray.z);
+                org.junit.jupiter.api.Assertions.assertEquals(Math.exp(-tau),Math.exp(-represented),0.01,
+                        "segment quadrature is independent of the baked microstructure");
             }
         }
+        SmokePuffs.resetBudget();
+    }
+
+    @Test
+    void hotOpaqueSootFadesItsCoverageInsteadOfItsMass() throws IOException {
+        for(double sky:new double[]{1,0.0008}) for(double wanted:new double[]{0.01,0.1,0.5}) {
+            double lo=800,hi=5000;
+            for(int i=0;i<60;i++) {
+                double mid=(lo+hi)/2;
+                if(1-CloudModel.glowShare(mid,sky)>wanted) lo=mid; else hi=mid;
+            }
+            double temperature=(lo+hi)/2;
+            FarView day=view(Vec3.ZERO,new Vector3f(0,0,1));
+            FarView v=new FarView(day.camera(),day.forward(),day.left(),day.up(),day.partial(),day.far(),day.pixel(),day.edge(),
+                    (float)Math.pow(sky,1/Sight.ADAPT),day.exposure(),day.sky(),day.range(),day.world(),day.clouds(),day.rain(),day.air());
+            double[] alpha=new double[2];
+            for(int pass=0;pass<2;pass++) {
+                double kelvin=pass==0?SmokeGrid.AIR_K:temperature;
+                SmokeGrid.Source source=new SmokeGrid.Source() {
+                    public boolean drawsGlow() { return true; }
+                    public boolean emit(double seconds,SmokeGrid.Sink sink) {
+                        sink.blob(0,0,200,5,5,10000*2*Math.PI*25/SmokeGrid.SOOT_K,0,0,
+                                0.6f,0.55f,0.45f,kelvin,0);
+                        return true;
+                    }
+                };
+                Screen screen=new Screen(v);
+                SmokePuffs.resetBudget();
+                source.emit(0,SmokePuffs.sink(v,screen,source,0)); SmokePuffs.flush();
+                alpha[pass]=1-screen.transmittance(0,0);
+            }
+            double coverage=1-CloudModel.glowShare(temperature,v.skyLuminance());
+            org.junit.jupiter.api.Assertions.assertEquals(coverage*alpha[0],alpha[1],1e-6,
+                    "even ten thousand optical depths must remain 1% visible at 1% smoke coverage");
+        }
+        SmokePuffs.resetBudget();
+    }
+
+    @Test
+    void hotAndColdMatterKeepTheirDistinctDisplayCoverageWhenOverlapping() throws IOException {
+        double lo=800,hi=5000;
+        for(int i=0;i<60;i++) {
+            double mid=(lo+hi)/2;
+            if(1-CloudModel.glowShare(mid,1)>0.01) lo=mid; else hi=mid;
+        }
+        double hot=(lo+hi)/2;
+        FarView view=view(Vec3.ZERO,new Vector3f(0,0,1));
+        double[] clear=new double[3];
+        for(int pass=0;pass<3;pass++) {
+            int mask=pass+1;
+            SmokeGrid.Source source=new SmokeGrid.Source() {
+                public boolean drawsGlow() { return true; }
+                public boolean emit(double seconds,SmokeGrid.Sink sink) {
+                    if((mask&1)!=0) sink.blob(0,0,200,5,5,0.01*2*Math.PI*25/SmokeGrid.SOOT_K,0,0,
+                            0.6f,0.55f,0.45f,SmokeGrid.AIR_K,0);
+                    if((mask&2)!=0) sink.blob(0,0,200,5,5,10000*2*Math.PI*25/SmokeGrid.SOOT_K,0,0,
+                            0.6f,0.55f,0.45f,hot,0);
+                    return true;
+                }
+            };
+            Screen screen=new Screen(view);
+            SmokePuffs.resetBudget();
+            source.emit(0,SmokePuffs.sink(view,screen,source,0));SmokePuffs.flush();
+            clear[pass]=screen.transmittance(0,0);
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(clear[0]*clear[1],clear[2],1e-6,
+                "coincident hot and cold Gaussians cannot be merged into one mass-scaled opacity");
         SmokePuffs.resetBudget();
     }
 
@@ -509,7 +609,7 @@ class SmokeFillTest {
      * сама двигает пропускание частей до {@link #DETAIL} ({@link #clusterDetailNoise}), остальное — форма кадра клуба
      * против гаусса.
      */
-    static final double MODEL_PART = 0.15, MODEL_MEAN = 0.03, DETAIL = 0.12;
+    static final double MODEL_PART = 0.15, MODEL_MEAN = 0.03, DETAIL = 0.05;
 
     /**
      * Подробность кучек — по зерну облака (поворот раскладки, кадр, отражение и размер клубов): смена зерна меняет

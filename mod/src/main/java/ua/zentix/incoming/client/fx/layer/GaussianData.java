@@ -1,8 +1,6 @@
 package ua.zentix.incoming.client.fx.layer;
 
 import com.mojang.blaze3d.platform.GlStateManager;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
 import java.nio.FloatBuffer;
 import java.util.Arrays;
@@ -11,7 +9,7 @@ import java.util.Arrays;
 public final class GaussianData {
     private static final int WIDTH = 256;
     private static float[] data = new float[8 * 128];
-    private static int count, texture = -1, rows;
+    private static int count;
     private static FloatBuffer transfer;
     private GaussianData() {}
 
@@ -26,16 +24,13 @@ public final class GaussianData {
         return count;
     }
 
-    static int upload() {
-        int h = Math.max(1, (2 * count + WIDTH - 1) / WIDTH);
-        if (texture < 0) texture = GlStateManager._genTexture();
+    /** Rows after the fixed source-probe table; both tables share one sampler within Minecraft's 12-unit API. */
+    static int rows() { return (2 * count + WIDTH - 1) / WIDTH; }
+
+    static void upload(int texture) {
+        int h = rows();
+        if (h == 0) return;
         GlStateManager._bindTexture(texture);
-        if (h > rows) {
-            GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
-            GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
-            GlStateManager._texImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, WIDTH, h, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
-            rows = h;
-        }
         int size = WIDTH * h * 4;
         if (transfer == null || transfer.capacity() < size) {
             if (transfer != null) MemoryUtil.memFree(transfer);
@@ -46,7 +41,6 @@ public final class GaussianData {
         transfer.put(data, 0, actual);
         for (int i = actual; i < size; i++) transfer.put(0);
         transfer.flip();
-        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, WIDTH, h, GL11.GL_RGBA, GL11.GL_FLOAT, transfer);
-        return texture;
+        PixelUnpack.upload(SourceProbes.DATA_ROW,WIDTH,h,transfer);
     }
 }

@@ -100,6 +100,16 @@ class PlumeContinuityTest {
 
     /** Квадраты кадра: клубы (центр от глаза, полуразмеры, непрозрачность) и ленты (концы, полуширины, непрозрачности). */
     private static final class Record implements SmokePuffs.Out {
+        private SmokeFillTest.Screen rayPuffs;
+
+        @Override
+        public boolean gaussian(FarView view,double x,double y,double z,double sh,double sv,double ext,double across,
+                                double card,double power,double detail,FxAtlas.Sprite sprite,float mix,float shade,
+                                float r,float g,float b,float coverage) {
+            if(rayPuffs==null) rayPuffs=new SmokeFillTest.Screen(view);
+            return rayPuffs.gaussian(view,x,y,z,sh,sv,ext,across,card,power,detail,sprite,mix,shade,r,g,b,coverage);
+        }
+
         /** Клубы лицом к камере, лежащие на горизонтали (слой пыли у земли, {@code FxQuads.flat}) и ленты. */
         final List<double[]> puffs = new ArrayList<>(), flats = new ArrayList<>(), ribbons = new ArrayList<>();
 
@@ -190,6 +200,7 @@ class PlumeContinuityTest {
      * разрывов в кадре.
      */
     private static boolean along(String name, List<double[]> axis, FarView view, Record out) throws IOException {
+        SmokePuffs.flush(); // World-source segments join the frame's merge/planning pass before drawing.
         Vec3 eye = view.camera();
         Vector3f fwd = view.forward(), left = view.left(), up = view.up();
         double edge = view.edge();
@@ -205,7 +216,7 @@ class PlumeContinuityTest {
             path += Math.max(0.05, Math.min(0.25 * PIXEL * d, sigma / 8));
             if (depth <= 0 || Math.acos(Math.min(1, depth / d)) > 0.8 * edge) continue;
             double su = (px * left.x + py * left.y + pz * left.z) / depth, sv = (px * up.x + py * up.y + pz * up.z) / depth;
-            double clear = 1;
+            double clear = out.rayPuffs==null?1:out.rayPuffs.transmittance(su,sv);
             for (double[] q : out.puffs) {
                 double qd = q[0] * fwd.x + q[1] * fwd.y + q[2] * fwd.z;
                 if (qd <= 0) continue;

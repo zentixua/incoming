@@ -329,7 +329,6 @@ public final class FxLayer {
             RenderSystem.depthMask(false);
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
-            RenderSystem.setShaderTexture(12, GaussianData.upload());
             if (QUADS.size() > 0) LinearStage.begin(scene);
             try {
                 QUADS.draw(VIEW_PROJECTION.set(RenderSystem.getProjectionMatrix()).mul(RenderSystem.getModelViewMatrix()), s, scene);

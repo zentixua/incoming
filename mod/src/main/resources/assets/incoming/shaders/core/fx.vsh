@@ -22,7 +22,6 @@ in ivec2 UV2;
 in vec3 Normal;
 
 uniform sampler2D Sampler2;
-uniform sampler2D Sampler12;
 // свет открытого неба на веществе в воздухе против карты освещения у открытого неба (FarView.sky): карта красит синим
 // уже на закате, облака Minecraft — только когда свет ушёл; по каналам, на экране
 uniform vec3 FxSkyFix;
@@ -62,6 +61,7 @@ out vec3 worldPos;
 out float sixTau;
 flat out vec4 gaussian0;
 flat out vec4 gaussian1;
+flat out float gaussianMix;
 const float SIX_TAU_STEPS = 1024.0;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
@@ -112,12 +112,13 @@ void main() {
     vec4 light = Normal.y < -0.5 ? vec4(1.0) : texelFetch(Sampler2, six ? ivec2(15) : UV2 / 16, 0);
     sixTau = six ? exp2(float(UV2.x) / SIX_TAU_STEPS) : 1.0;
     int gaussian = six ? (UV2.y & 65535) : 0;
+    gaussianMix = gaussian > 0 ? Normal.x : 0.0;
     gaussian0 = vec4(0.0);
     gaussian1 = vec4(0.0);
     if (gaussian > 0) {
-        int t = 2 * (gaussian - 1), w = textureSize(Sampler12, 0).x;
-        gaussian0 = texelFetch(Sampler12, ivec2(t % w, t / w), 0);
-        gaussian1 = texelFetch(Sampler12, ivec2((t + 1) % w, (t + 1) / w), 0);
+        int t = 2 * (gaussian - 1), w = textureSize(Sampler4, 0).x;
+        gaussian0 = texelFetch(Sampler4, ivec2(t % w, 128 + t / w), 0);
+        gaussian1 = texelFetch(Sampler4, ivec2((t + 1) % w, 128 + (t + 1) / w), 0);
     }
     if (Normal.y > -0.5 && !six && any(lessThan(UV2, ivec2(240)))) {
         // доля света неба в точке (небо 0..15): её оттенок — как у вещества под открытым небом, свет блоков — как есть
@@ -152,7 +153,7 @@ void main() {
     viewDistance = -view.z / unfold;
     worldPos = Position / unfold;
     softness = float(max(UV1.x, 0)) / 16.0;
-    fog = Normal.x;
+    fog = gaussian > 0 ? 0.0 : Normal.x;
     nearest = Normal.y;
     opacity = Normal.z;
     // блик и вуаль с пробой: пелена и грибы перед источником — уже в ней (fx_probe, до самого источника); по углам

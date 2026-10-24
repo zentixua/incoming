@@ -36,11 +36,15 @@ import java.util.Arrays;
  * квадратам слоя; грибы — до его середины), в кадре и вне его; своя шапка источник не закрывает. Блику и вуали слой пелену и грибы больше не режет: свет
  * в глазу идёт от источника, а не от углов квадрата.
  */
+// The RGBA32F attachment also holds physical Gaussian descriptors after DATA_ROW. Minecraft's texture
+// wrapper has 12 slots, so allocating a separate 13th sampler is invalid even when OpenGL supports it.
 public final class SourceProbes {
     /** Проб в строке текстуры. */
     static final int WIDTH = 256;
     /** Проб в кадре не больше: номер пробы — в 16-битном поле вершины слоя ({@link FxQuads#vertex}). */
     static final int MAX = Short.MAX_VALUE;
+    /** First row after all addressable source probes: physical Gaussian descriptors share Sampler4. */
+    static final int DATA_ROW = (MAX + WIDTH - 1) / WIDTH;
     /** Вершина пробы: середина источника от глаза, радиус и номер, угол квадрата на её пикселе. */
     static final VertexFormat FORMAT = VertexFormat.builder()
             .add("Position", VertexFormatElement.POSITION)
@@ -84,7 +88,10 @@ public final class SourceProbes {
      */
     int update(int scene, PallPass.Frame pall, boolean pallDrawn, Matrix4f view, Matrix4f projection, double pixel) {
         ShaderInstance s = shader;
-        if (n == 0 || s == null || scene < 0 || !ensure((n + WIDTH - 1) / WIDTH)) return -1;
+        int dataRows = GaussianData.rows();
+        if ((n == 0 && dataRows == 0) || s == null || scene < 0 || !ensure(DATA_ROW + dataRows)) return -1;
+        GaussianData.upload(texture);
+        if (n == 0) return texture;
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fbo);
@@ -125,7 +132,7 @@ public final class SourceProbes {
         GlStateManager._bindTexture(texture);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_NEAREST);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
-        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_R8, WIDTH, rows, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, null);
+        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, WIDTH, rows, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fbo);
         GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, texture, 0);

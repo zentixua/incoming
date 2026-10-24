@@ -14,14 +14,15 @@ import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
  * вещества от источника {@link SmokeGrid.Source}: облако взрыва, облако старта, дым пожара) — кучка запечённых клубов
  * ({@link FxAtlas#puff6}: симуляция газа в Blender, шестисторонний свет, векторы движения между кадрами).
  * <ul>
- * <li><b>Ближняя проекция.</b> У гаусса крупнее 8% глубины (оценка LOD) толща интегрируется в шейдере по настоящему лучу
- * от глаза до мира. Запечённые карты задают только свет и движение газа; рамка кадра не меняет плотность и вход глаза.</li>
- * <li><b>Дальняя проекция.</b> Квадраты складываются, как толщи: клуб рисуется толщей своего кадра × s ({@code fx.fsh}:
+ * <li><b>Проекция.</b> Кадр каждого гаусса источника мира проецируется по прицельному параметру луча
+ * в координатах гаусса. Толща учитывает направление и конечный путь до мира. Внутри видимой границы (контраст Sight)
+ * запечённая микроструктура уступает гладкой аналитической толще; прозрачная рамка кадра вход глаза не задаёт.</li>
+ * <li><b>Вещество.</b> Квадраты складываются, как толщи: клуб рисуется толщей своего кадра × s ({@code fx.fsh}:
  * 1 − (1 − α)^s), и сколько бы клубов ни перекрывалось, сквозь них видно e^(−Στ). Клуб, что несёт гаусс (σ на экране,
  * толща середины τ₀ = Σκ'm/(2πσhσv)), — полуразмером c·σ и толщей s ({@link PuffOptics}): у него то же вещество
  * (Σ τ по экрану — ослабление всей массы) и одиночным он закрывает столько же (Σ (1 − e^(−τ))), сколько гаусс модели;
  * форма, край и клубы — кадра симуляции.</li>
- * <li><b>Кучка.</b> Крупный на экране гаусс — кучка до {@value #CLUSTER} клубов (чем крупнее, тем их больше): у каждого
+ * <li><b>Следы снарядов.</b> Крупный на экране гаусс — кучка до {@value #CLUSTER} клубов (чем крупнее, тем их больше): у каждого
  * σ·q и 1/many вещества, середины разбросаны с σ·√(1 − q²) — у кучки те же масса и вторые моменты (как у слияния пуфов,
  * {@link #merge}).</li>
  * <li><b>Цвет</b> — отражение толстого слоя смеси сажи, пыли и капель (два потока, {@link #thick}) при свете неба, каким
@@ -45,9 +46,9 @@ final class SmokePuffs {
         void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                    float b, float a, double tau);
 
-        /** Near-field Gaussian: exact ray integral for density, baked frame for six-way lighting. */
+        /** Near-field Gaussian: calibrated bake in ray coordinates, exact transport inside its visible support. */
         default boolean gaussian(FarView view, double x, double y, double z, double sh, double sv, double ext,
-                                 double across, double card, FxAtlas.Sprite sprite, float mix, float shade,
+                                 double across, double card, double power, double detail, FxAtlas.Sprite sprite, float mix, float shade,
                                  float r, float g, float b, float coverage) { return false; }
 
         void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
@@ -66,8 +67,8 @@ final class SmokePuffs {
                        float alphaB, int lightB, float r, float g, float b, float[] joint);
     }
 
-    /** Чисел на ждущий клуб: место, σh, σv, сажа, пыль, капли, альбедо пыли (3), номер, источник. */
-    static final int FIELDS = 13;
+    /** Чисел на ждущий клуб: место, σh, σv, сажа, пыль, капли, альбедо пыли (3), номер, источник, видимая доля, отсчёт отрезка. */
+    static final int FIELDS = 15;
     /**
      * Клубы одного источника, чьи середины ближе этой доли меньшего σ (по горизонтали и по вертикали), — один гаусс с теми
      * же массой и моментами: их сумма от одного гаусса почти не отличается (у двух равных на расстоянии σ — на 1,3 % пика),
@@ -98,9 +99,12 @@ final class SmokePuffs {
                 for (int j = i + 1; j < n; j++) {
                     if (gone[j]) continue;
                     int b = j * FIELDS;
+                    if (held[a + 13] != held[b + 13]) continue; // Different display coverage is not a mass mixture.
                     if (held[a + 8] != held[b + 8] || held[a + 9] != held[b + 9] || held[a + 10] != held[b + 10]) continue;
                     double dx = held[b] - held[a], dy = held[b + 1] - held[a + 1], dz = held[b + 2] - held[a + 2];
-                    double h = reach * Math.min(held[a + 3], held[b + 3]), v = reach * Math.min(held[a + 4], held[b + 4]);
+                    // Numerical samples of a line need a tighter merge than independent source blobs.
+                    double localReach = held[a + 14] > 0 || held[b + 14] > 0 ? Math.min(reach, 0.5) : reach;
+                    double h = localReach * Math.min(held[a + 3], held[b + 3]), v = localReach * Math.min(held[a + 4], held[b + 4]);
                     if (dx * dx + dz * dz > h * h || Math.abs(dy) > v) continue;
                     double kd = SmokeGrid.dustK((float) held[a + 8], (float) held[a + 9], (float) held[a + 10]);
                     double wa = sootK * held[a + 5] + kd * held[a + 6] + dropK * held[a + 7], wb = sootK * held[b + 5] + kd * held[b + 6] + dropK * held[b + 7];
@@ -128,6 +132,7 @@ final class SmokePuffs {
                     held[a + 5] += held[b + 5];
                     held[a + 6] += held[b + 6];
                     held[a + 7] += held[b + 7];
+                    held[a + 14] = Math.max(held[a + 14], held[b + 14]);
                     gone[j] = true;
                     again = true;
                 }
@@ -261,6 +266,13 @@ final class SmokePuffs {
         return 1 / Math.sqrt(Math.clamp(cos, 0.3, 1));
     }
 
+    /** Fade the bake only after entering the Gaussian's visible optical support, never its transparent card padding. */
+    static double detailOutside(double x,double y,double z,double sh,double sv,double tau) {
+        double visible=Math.max(Math.sqrt(2*Math.log(2)),Math.sqrt(2*Math.log(Math.max(1,tau/-Math.log1p(-Sight.THRESHOLD)))));
+        double q=Math.sqrt((x*x+z*z)/(sh*sh)+y*y/(sv*sv));
+        return smoothstep(visible,2*visible,q);
+    }
+
     /**
      * Видны ли комья кучки у гаусса с толщей середины tau0 (0…1): ком против просвета рядом — разница непрозрачности до
      * 1 − e^(−τ₀); ниже порога контраста {@link Sight#THRESHOLD} её не видно, и кучка — один клуб (тот же вид, заливка
@@ -373,12 +385,9 @@ final class SmokePuffs {
             // светящийся газ — тело огня у источника; остывая, он проступает дымом той же долей, что тело тает
             double smoke = glow ? 1 - CloudModel.glowShare(kelvin, view.skyLuminance()) : 1;
             if (smoke <= 0 || soot + dust + water <= 0 || !(sh > 0) || !(sv > 0)) return;
-            soot *= smoke;
-            dust *= smoke;
-            water *= smoke;
             double len = 2 * Math.sqrt(ax * ax + ay * ay + az * az);
             if (len <= 0) {
-                hold(x, y, z, sh, sv, soot, dust, water, dustR, dustG, dustB, at * 16);
+                hold(x, y, z, sh, sv, soot, dust, water, dustR, dustG, dustB, at * 64, smoke, false);
                 return;
             }
             // Integrate in Gaussian coordinates. A horizontal segment in flat dust varies with sigma-h,
@@ -387,7 +396,7 @@ final class SmokePuffs {
             int n = (int) Math.min(64, Math.max(1, Math.ceil(metric / 0.5)));
             for (int k = 0; k < n; k++) {
                 double f = n == 1 ? 0 : (k + 0.5) / n * 2 - 1;
-                blob(x + ax * f, y + ay * f, z + az * f, sh, sv, soot / n, dust / n, water / n, dustR, dustG, dustB, at * 16 + k);
+                hold(x + ax * f, y + ay * f, z + az * f, sh, sv, soot / n, dust / n, water / n, dustR, dustG, dustB, at * 64 + k, smoke, true);
             }
         }
 
@@ -422,7 +431,7 @@ final class SmokePuffs {
 
         /** Клуб-точку источника — в ожидание: слияние с соседями и бюджет — в {@link #flush}. */
         private void hold(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
-                          int id) {
+                          int id, double coverage, boolean sampled) {
             if (holding * FIELDS + FIELDS > held.length) held = java.util.Arrays.copyOf(held, 2 * held.length);
             int o = holding++ * FIELDS;
             held[o] = x;
@@ -438,6 +447,8 @@ final class SmokePuffs {
             held[o + 10] = db;
             held[o + 11] = id;
             held[o + 12] = contexts - 1;
+            held[o + 13] = coverage;
+            held[o + 14] = sampled ? 1 : 0;
         }
 
         /** Клубы источника, что кончился, — слиты между собой ({@link #merge}). */
@@ -558,7 +569,7 @@ final class SmokePuffs {
             seed = ctxSeed[c];
             sprays = ctxSprays[c];
             return blob(held[o], held[o + 1], held[o + 2], held[o + 3], held[o + 4], held[o + 5], held[o + 6], held[o + 7], (float) held[o + 8],
-                    (float) held[o + 9], (float) held[o + 10], (int) held[o + 11]);
+                    (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13]);
         }
 
         /** Вуаль вещества у глаза в кадр: толща −ln(1 − a) и её цвет копятся, квадрат — один ({@link #veilFlush}). */
@@ -610,17 +621,13 @@ final class SmokePuffs {
          * квадраты и вуаль. Возвращает заливку, экранов.
          */
         private double blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
-                            int id) {
+                            int id, double coverage) {
             Vec3 eye = view.camera();
             // на экране — проекция гаусса по углу взгляда (толща по лучу и высота квадрата); в мире — его σ (разброс клубов
             // кучки, край для рельефа и для глаза внутри)
             double across = projected(sh, sv, x - eye.x, y - eye.y, z - eye.z);
             double ks = SmokeGrid.SOOT_K * soot, kd = SmokeGrid.dustK(dr, dg, db) * dust, kw = SmokeGrid.DROP_K * water;
             double tau = (ks + kd + kw) / (2 * Math.PI * sh * across);
-            double cameraDepth = (x-eye.x)*view.forward().x + (y-eye.y)*view.forward().y + (z-eye.z)*view.forward().z;
-            // Small-angle error scales with (sigma/depth)^2; 8% is a rendering LOD estimate, not a density rule.
-            boolean near = Math.max(sh, sv) > 0.08 * Math.max(cameraDepth, 0);
-            if (!near && 1 - Math.exp(-tau) < 0.004) return 0;
             // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг
             boolean spray = sprays && kw > ks + kd;
             double clubAge = Math.max(FIRST_FRAME, spray ? sprayAge : age);
@@ -636,22 +643,22 @@ final class SmokePuffs {
             double d = Math.sqrt(px * px + py * py + pz * pz);
             double air = view.air(d, py);
             if (air < Sight.THRESHOLD) return 0;
-            if (near) {
+            {
                 if (planning) return 0;
                 long hash = mix(seed * 0x9E3779B97F4A7C15L + id);
                 float light = (float) ((0.88 + 0.24 * unit(hash)) * view.skyLight());
                 int frame = (int) clubAge;
-                if (out.gaussian(view, px, py, pz, sh, sv, ks + kd + kw, across, c1,
+                if (out.gaussian(view, px, py, pz, sh, sv, ks + kd + kw, across, c1, CLUB[1], detailOutside(px,py,pz,sh,sv,tau),
                         spray ? FxAtlas.spray6(frame, false) : FxAtlas.puff6(frame, false), (float)(clubAge-frame),
                         (float)(shade(ks,kd,kw,dg)/(spray ? SPRAY_K : BAKED_K)),
-                        thick(ks,kd,kw,dr)*light, thick(ks,kd,kw,dg)*light, thick(ks,kd,kw,db)*light, (float)(vis*air))) return 0;
+                        thick(ks,kd,kw,dr)*light, thick(ks,kd,kw,dg)*light, thick(ks,kd,kw,db)*light, (float)(vis*air*coverage))) return 0;
             }
             // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
             // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс. «Внутри» — по эллипсоиду
             // края (у плоского слоя пыли в сотню метров шириной и метр толщиной глаз над ним снаружи; по наибольшему
             // радиусу он был «внутри», и вуаль слоя закрывала весь кадр)
             double outside = outside(px, py, pz, sh, sv);
-            if (outside < 1 && !planning) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air);
+            if (outside < 1 && !planning) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air * coverage);
             if (outside <= 0) return 0;
             // вне кадра — не нужен: шар всего квадрата кучки (клубы с разбросом — до ~2 краёв одиночного)
             if (!FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return 0;
@@ -666,7 +673,7 @@ final class SmokePuffs {
             float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
             // какая доля клуба видна (рельеф у источника вдали, дымка воздуха, пятно мельче пикселя, глаз внутри) — закрытая
             // доля квадрата; сколько вещества за ней — толща клубов
-            float shown = (float) (vis * point[1] * air * outside);
+            float shown = (float) (vis * point[1] * air * outside * coverage);
             // кучка: чем крупнее гаусс на экране, тем больше клубов и тем они мельче (кадр 128 пикселей не растягивается на
             // пол-экрана); дробная часть числа — доля последнего, без скачка
             double pixels = sh * grow / Math.max(d * view.pixel(), 1e-12);

@@ -47,6 +47,7 @@ in vec3 worldPos;
 in float sixTau;
 flat in vec4 gaussian0;
 flat in vec4 gaussian1;
+flat in float gaussianMix;
 
 // запечённый клуб (FxAtlas.puff6): x — шаг карт по листу (v), y — начало кадров (v), z и w — размер кадра (u, v)
 uniform vec4 FxSix;
@@ -114,16 +115,14 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
         vec3 ray = normalize(worldPos);
         vec3 invSigma = 1.0 / vec3(gaussian0.w, gaussian1.x, gaussian0.w);
         vec3 p = gaussian0.xyz * invSigma, r = ray * invSigma;
-        float t = max(dot(p, r) / dot(r, r), 0.0);
-        vec3 delta = t * ray - gaussian0.xyz;
         vec3 wx = dFdx(worldPos), wy = dFdy(worldPos);
         float orientation = dx.x * dy.y - dx.y * dy.x < 0.0 ? -1.0 : 1.0;
-        vec3 right = unitOr((wx * dy.y - wy * dx.y) * orientation, vec3(1.0, 0.0, 0.0));
-        vec3 up = unitOr((wx * dy.x - wy * dx.x) * orientation, vec3(0.0, 1.0, 0.0));
-        vec3 normal = unitOr(cross(wx, wy), vec3(0.0, 0.0, 1.0));
-        gaussianFrame(right, up, normal);
-        float verticalSigma = gaussianFlat() ? gaussian0.w : gaussian1.z;
-        local = (0.5 + 0.5 * vec2(dot(delta, right) / gaussian0.w, -dot(delta, up) / verticalSigma) / gaussian1.w) * tile;
+        vec3 right = unitOr((wx * dy.y - wy * dx.y) * orientation, vec3(1.0, 0.0, 0.0)) * invSigma;
+        vec3 up = unitOr((wx * dy.x - wy * dx.x) * orientation, vec3(0.0, 1.0, 0.0)) * invSigma;
+        vec3 direction = normalize(r);
+        right = normalize(right - direction * dot(right, direction));
+        up = normalize(up - direction * dot(up, direction) - right * dot(up, right));
+        local = (0.5 + 0.5 * vec2(-dot(p, right), dot(p, up)) / gaussian1.w) * tile;
         uv = origin + local;
         dx = dFdx(uv); dy = dFdy(uv);
         if (any(lessThan(local, vec2(0.0))) || any(greaterThan(local, tile))) {
@@ -196,14 +195,15 @@ float glowAlpha(float r) {
     return exp(-(r / 0.42) * (r / 0.42)) * smoothstep(0.0, 0.25, 1.0 - r) / 0.997147;
 }
 
-// Integral of the physical 3D Gaussian over [eye, visible surface], with anisotropic sigma.
-// This closed form avoids the invalid small-angle projection of a billboard near the eye.
+// Gaussian ray geometry supplies amplitude and finite-path coverage to the accepted calibrated bake.
+// Inside the visible support, interpolate optical depths toward the smooth analytic medium.
+// A card in a fixed camera plane would expand oblique nearby rays and create extra opacity.
 float gaussianErf(float x) {
     float a = abs(x), t = 1.0 / (1.0 + 0.3275911 * a);
     float y = 1.0 - (((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*exp(-a*a);
     return sign(x)*y;
 }
-float gaussianAlpha(float sceneDistance) {
+float gaussianAlpha(float sceneDistance, float bakedAlpha) {
     vec3 ray = normalize(worldPos);
     vec3 invSigma = 1.0 / vec3(gaussian0.w, gaussian1.x, gaussian0.w);
     vec3 p = gaussian0.xyz * invSigma, r = ray * invSigma;
@@ -211,8 +211,11 @@ float gaussianAlpha(float sceneDistance) {
     vec3 perpendicular = cross(p, r / speed);
     float b2 = dot(perpendicular, perpendicular);
     float tail = sceneDistance < 1e8 ? gaussianErf((speed * sceneDistance * length(worldPos) / viewDistance - a) * 0.7071067812) : 1.0;
-    float tau = gaussian1.y / (12.5663706144 * gaussian0.w * gaussian0.w * gaussian1.x * speed)
-            * exp(-0.5*b2) * max(tail + gaussianErf(a * 0.7071067812),0.0);
+    float cdf = 0.5 * max(tail + gaussianErf(a * 0.7071067812), 0.0);
+    float ratio = gaussian1.z / (gaussian0.w * gaussian1.x * speed);
+    float bakedTau = -log(max(1.0-bakedAlpha,1.0/255.0)) * sixTau * ratio * cdf;
+    float modelTau = gaussian1.y / (6.2831853072 * gaussian0.w * gaussian0.w * gaussian1.x * speed) * exp(-0.5*b2) * cdf;
+    float tau = mix(modelTau,bakedTau,gaussianMix);
     return 1.0-exp(-tau);
 }
 
@@ -268,7 +271,7 @@ void main() {
         sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
         // толща клуба — толща кадра (α = 1 − e^(−τ) запекания, байт 255 — пропускание 1/255) × sixTau: перекрытые клубы
         // складываются, как толщи (PuffOptics)
-        float k = analytic ? gaussianAlpha(sceneDistance) : 1.0 - pow(max(1.0 - a.a, 1.0 / 255.0), sixTau);
+        float k = analytic ? gaussianAlpha(sceneDistance, a.a) : 1.0 - pow(max(1.0 - a.a, 1.0 / 255.0), sixTau);
         tex = vec4(vec3(k), k);
     } else if (nearest > 0.55) {
         tex = fireFrames(texCoord0, dx, dy, opacity);

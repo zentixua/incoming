@@ -97,6 +97,12 @@ class ShaderSourceTest {
                 JsonObject program = JsonParser.parseString(Files.readString(json)).getAsJsonObject();
                 Set<String> samplers = names(program, "samplers"), numbers = names(program, "uniforms"), used = new HashSet<>();
                 String name = json.getFileName().toString();
+                // RenderSystem and GlStateManager both have 12 texture states in Minecraft 1.21.1.
+                // A 13th sampler either reads texture zero or crashes ShaderInstance.clear().
+                if (program.getAsJsonArray("samplers").size() > 12) bad.add(name + ": exceeds Minecraft's 12 sampler slots");
+                if (program.getAsJsonArray("samplers").size() != samplers.size()) bad.add(name + ": duplicate sampler metadata");
+                for (String sampler : samplers) if (sampler.matches("Sampler\\d+") && Integer.parseInt(sampler.substring(7)) >= 12)
+                    bad.add(name + ": RenderSystem cannot bind " + sampler);
                 for (String[] stage : new String[][]{{"vertex", ".vsh"}, {"fragment", ".fsh"}}) {
                     String file = program.get(stage[0]).getAsString().replaceFirst("^incoming:", "") + stage[1];
                     Matcher m = uniform.matcher(blankComments(withImports(core.resolveSibling("include"), Files.readString(core.resolve(file)), new HashSet<>())));
