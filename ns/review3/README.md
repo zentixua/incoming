@@ -1,0 +1,13 @@
+# PR #427: radial clipping of lifted-dust optical columns
+
+Baseline main: `cd310f2bbf9f5cc870527e56356c725b4ca31ded`. PR: `54be5fc69fa89d2e37ae0ab34fc13e176ceb3181`. The canonical record is `comparison.json`. Both versions use fresh flat dev sandboxes with identical effect, camera, site and midday. Artem's world, Prism instance and settings are untouched.
+
+Start the standard sandbox under its GPU lease with `tools/sandbox.sh start --wait` (1280×720 virtual output, 1280×692 framebuffer), or `tools/sandbox.sh start --wait --size 2560x1628` (2560×1600 framebuffer). Record `nuke 15 ground` in this order: wide (`4000 250 0 1500`), edge-on (`2500 300 0 350`), above (`1600 1100 25 150`). Record 45,46,47,48,49,50,60 s, and above also 45–55 s in half-second intervals. Low-resolution shots record 60 s of audio. Restart between versions/resolutions to reset the sites. Use `--no-swap` after compiling the exact recorded revision; archive `mod/run/sandbox/logs/latest.log` before restart.
+
+The renderer is pinned to 1/2 resolution and 28 steps. The measurements are one-second GPU averages for the whole FX layer, including prepasses, at the matched effect ages. The acceptance ratio is current PR / freshly captured main B. Main A is the preceding round's same-revision reference, retained only as a historical noise control. Raw samples and all manifests are included. The host mode is left unchanged: the live brief says quiet, while `powerprofilesctl get` reports performance. These are relative sandbox GPU measurements, not full-pack/Iris FPS.
+
+PNG pairs preserve the original pixels with a black label strip above. Main B is left, PR right. The GIF crops the same foot region on both sides, uses one shared palette, and plays the half-second frames at their recorded rate. WAV files are unmodified stereo PCM 48 kHz excerpts from seconds 45–55, without gain or resampling. `make_media.py` is the one-off packer; its local paths refer to the laptop worktrees.
+
+The column correction subtracts col(hEdge) from both col(h) and col(0), where band(hEdge) equals distance outside the local stem wall. The radial coordinate remains the existing wall-attached corner-flow approximation. Density, band geometry, clump advection, cap and upper stem retain the accepted code. Test coverage includes numerical radial integration, monotonic overburden and the near-zero surface overburden of the packed tables.
+
+Sandbox acknowledgement can precede completion of the asynchronous PNG write. Verify that the PNGs decode before stopping the client. The first high-resolution PR attempt ended with an empty final PNG and is excluded; the final high-resolution PR set uses the `v2` capture names and its matching log.
