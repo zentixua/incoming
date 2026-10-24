@@ -5,5 +5,5 @@ Sandbox (`tools/sandbox.sh`, Iris + the host's shaderpack), same commands on bot
 - grad-day: `raid 12 15 1 rocket water`, `--cam '30 14 0 6'` (12 Grad shells into the pond within 15 m, 1 s apart; camera 30 m away, 14 m up), frames at 3/6/12/20 s from the first blast.
 - water-day-50: `blast drone 1 water`, `--cam '50 18 0 8'`, frames at 0.1/1/3/10/30 s.
 
-Top row `main` 5da7f6c (mod sources of origin/main, same sandbox), bottom row the PR head d03506c. Full frames in `frames/`.
+Top row `main` 5da7f6c (mod sources of origin/main, same sandbox), bottom row the PR head 2c139a5e8. Full frames in `frames/`.
 Layer timing from the `SANDBOX shot` lines (62 fps, vsync): salvo layer CPU 1.0–1.2 ms on main, 1.3–1.7 ms on the PR; GPU 0.9–3.2 ms on main, 1.3–2.8 ms on the PR.
