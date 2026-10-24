@@ -57,9 +57,11 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   and about a block deep: craters are much smaller than in earlier versions, and that is the real size.
 - **Paving on a solid backing** cannot bend like a free wall. It is excavated with its backing, using the crater
   law for its material. In cohesive stone and concrete, a fraction of a block is saved as surface damage and shown
-  with pale fresh aggregate, small material chips and a scorched edge, plus nearby cracks.
+  with pale fresh aggregate, small material chips and an uneven scorched edge, plus nearby cracks.
+  The saved depth controls the exposed area and chip height through the display transformation.
   Up to 256 composite surface displays are shown per dimension near players; only the damage data is saved.
-  The displays return when players revisit. Loose conventional chips do not leave metre-sized blocks on intact paving.
+  The displays return when players revisit. With debris persistence enabled, ground clods remain on loose ground, and large aircraft parts and burning debris can also remain.
+  Small surface chips disperse; ground/charred fallout does not plant metre-sized blocks on intact cohesive paving.
   This approximates a fractured surface; the remaining block keeps its collision shape. A shallow crater cannot open a metre-thick slab.
 - **A slab over a void** (a bridge deck, a roof over a room, the ceiling of a cave) is breached when the charge
   touches it and the slab is thinner than the breaching radius of the US Army demolition manual (FM 5-250): everything

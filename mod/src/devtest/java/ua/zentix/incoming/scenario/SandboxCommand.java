@@ -61,12 +61,12 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: сторона и глубина пруда, блоков (пруд шире столба и кольца брызг шахеда). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
         return switch (verb) {
-            case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, RAID, SAM -> true;
+            case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, RAID, SAM, SURFACE -> true;
             default -> false;
         };
     }
@@ -145,6 +145,11 @@ record SandboxCommand(Verb verb, List<String> args) {
                 var booster = weapon().spec().airframe().article().booster();
                 if (booster == null || booster.jettison() <= 0) throw new IllegalArgumentException("у оружия нет сбрасываемого ускорителя");
                 if (args.size() > 1 && (number(1) < 0 || number(1) > 200)) throw new IllegalArgumentException("высота 0–200 м");
+            }
+            case SURFACE -> {
+                need(1, 2);
+                if (!(number(0) > 0 && number(0) <= 1)) throw new IllegalArgumentException("surface depth: 0 < depth <= 1");
+                if (args.size() > 1 && !List.of("black", "gray").contains(args.get(1))) throw new IllegalArgumentException("surface <depth> [black|gray]");
             }
             case FIRE -> {
                 need(0, 1);

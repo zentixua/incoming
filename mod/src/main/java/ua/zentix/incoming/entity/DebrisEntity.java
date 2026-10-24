@@ -34,7 +34,7 @@ import ua.zentix.incoming.registry.ModEntities;
 
 /**
  * Обломок взрыва: блок грунта, кусок корпуса или тлеющий уголь. Летит по баллистике (как falling_block),
- * калечит тех, в кого попал; крупный ложится блоком при {@code debris_stay}, мелкая крошка рассыпается.
+ * калечит тех, в кого попал; при {@code debris_stay} глыбы ложатся на рыхлый грунт, крупные детали остаются блоками, крошка рассыпается.
  * Горячие обломки оставляют огненно-дымный след и могут поджечь место падения.
  */
 public class DebrisEntity extends Entity {
@@ -45,6 +45,8 @@ public class DebrisEntity extends Entity {
 
     private int age;
     private boolean hurtsEntities = true;
+    /** Ground/charred material, as distinct from an actual large piece of the airframe. Server only. */
+    private boolean groundMaterial;
     private final IntSet hit = new IntOpenHashSet();
     /** Клиент: случайное вращение в полёте (градусов за тик вокруг двух осей). */
     public final float spinX, spinZ;
@@ -68,10 +70,17 @@ public class DebrisEntity extends Entity {
         return d;
     }
 
-    /** Presentation debris from conventional impacts is a chip, not a newly created cubic metre of terrain. */
+    /** Small fragments, not a whole block. Large ground clods, airframe pieces and burning debris use create(). */
     public static DebrisEntity chip(ServerLevel level, Vec3 pos, BlockState state, boolean hot, boolean hurts, Vec3 velocity) {
         DebrisEntity debris = create(level, pos, state, hot, hurts, velocity);
         debris.entityData.set(DATA_CHIP, true);
+        return debris;
+    }
+
+    /** Source geometry chooses the size; the landing surface also decides whether loose material can form a block. */
+    public static DebrisEntity ground(ServerLevel level, Vec3 pos, BlockState state, boolean hot, boolean hurts, Vec3 velocity, boolean small) {
+        DebrisEntity debris = small ? chip(level, pos, state, hot, hurts, velocity) : create(level, pos, state, hot, hurts, velocity);
+        debris.groundMaterial = true;
         return debris;
     }
 
@@ -139,7 +148,11 @@ public class DebrisEntity extends Entity {
             level.sendParticles(ParticleTypes.POOF, getX(), getY(), getZ(), 5, 0.3, 0.1, 0.3, 0.03);
             if (isHot()) level.sendParticles(ParticleTypes.LAVA, getX(), getY(), getZ(), 3, 0.2, 0.1, 0.2, 0);
         }
-        if (IncomingConfig.SERVER.debrisStay.get() && (!isChip() || blockState().is(Blocks.FIRE))) place(level, pos);
+        if (IncomingConfig.SERVER.debrisStay.get()) {
+            // Loose fallout can accumulate on earth, not turn an intact cohesive face into metre-sized cubes.
+            boolean looseFloor = !ua.zentix.incoming.warhead.SurfaceBlocks.cohesive(level.getBlockState(pos.below()));
+            if (groundMaterial ? !isChip() && looseFloor : !isChip() || blockState().is(Blocks.FIRE)) place(level, pos);
+        }
         discard();
     }
 
@@ -185,6 +198,7 @@ public class DebrisEntity extends Entity {
         hurtsEntities = tag.getBoolean("hurts");
         age = tag.getInt("age");
         entityData.set(DATA_CHIP, tag.getBoolean("chip"));
+        groundMaterial = tag.getBoolean("ground_material");
     }
 
     @Override
@@ -194,6 +208,7 @@ public class DebrisEntity extends Entity {
         tag.putBoolean("hurts", hurtsEntities);
         tag.putInt("age", age);
         tag.putBoolean("chip", isChip());
+        tag.putBoolean("ground_material", groundMaterial);
     }
 
     @Nullable

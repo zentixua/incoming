@@ -1,6 +1,10 @@
 package ua.zentix.incoming.warhead;
 
 import com.mojang.serialization.Codec;
+import com.mojang.math.Transformation;
+import net.minecraft.nbt.NbtOps;
+import org.joml.Vector3f;
+import org.joml.Quaternionf;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
@@ -91,6 +95,13 @@ public final class SurfaceDamage {
         if (entity == null) return;
         CompoundTag nbt = new CompoundTag();
         nbt.put("block_state", NbtUtils.writeBlockState(mark.state()));
+        // Presentation mapping of the saved fractional depth, not a new excavation law: deeper damage exposes
+        // more face area, with chip height as in #437. Native display transformation syncs both to the client.
+        float spread = (float) Math.sqrt(mark.depth());
+        float height = (float) Math.min(0.15, mark.depth() * 0.3);
+        Transformation transform = new Transformation(new Vector3f((1 - spread) / 2, 0, (1 - spread) / 2),
+                new Quaternionf(), new Vector3f(spread, height / 0.15f, spread), new Quaternionf());
+        nbt.put("transformation", Transformation.EXTENDED_CODEC.encodeStart(NbtOps.INSTANCE, transform).getOrThrow());
         nbt.putFloat("view_range", 4);
         nbt.putFloat("width", 2);
         nbt.putFloat("height", 1);

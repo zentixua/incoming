@@ -532,7 +532,7 @@ final class Sandbox {
         projectile = null;
         closest = Double.MAX_VALUE;
         // воронка и пожары настоящего взрыва остаются на его месте, остальное — снова на нетронутой точке
-        if (c.verb() != SandboxCommand.Verb.REAL && c.verb() != SandboxCommand.Verb.NUKE) site = HOME;
+        if (c.verb() != SandboxCommand.Verb.REAL && c.verb() != SandboxCommand.Verb.NUKE && c.verb() != SandboxCommand.Verb.SURFACE) site = HOME;
         // кадры до начала эффекта — только там, где начало известно заранее (приход фронта к домам)
         if (armed != null && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("кадры до начала эффекта — только у nuke … near");
         switch (c.verb()) {
@@ -571,7 +571,7 @@ final class Sandbox {
                 ClientHooks.get().intercept(new S2C.Intercept(site.add(0, AIRBURST_HEIGHT, 0), false, Optional.empty(), seed));
                 begin();
             }
-            case REAL, NUKE -> {
+            case REAL, NUKE, SURFACE -> {
                 if (c.near()) {
                     // прежний подрыв у камеры забыт: номер и время игры у этого — те же ({@link #NEAR_ID})
                     clear();
@@ -751,6 +751,15 @@ final class Sandbox {
         ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().forEach(a -> knownNukes.add(a.d.id()));
         Vec3 at = c.near() ? new Vec3(site.x, GROUND + 1, site.z - c.nearRange()) : new Vec3(site.x, GROUND + 1, site.z);
         onServer(true, server -> {
+            if (c.verb() == SandboxCommand.Verb.SURFACE) {
+                BlockPos floor = new BlockPos((int) Math.floor(site.x), GROUND, (int) Math.floor(site.z));
+                String material = c.args().size() > 1 && c.args().get(1).equals("gray") ? "gray_concrete" : "black_concrete";
+                run(server, "fill %d %d %d %d %d %d minecraft:%s".formatted(
+                        floor.getX() - 16, GROUND, floor.getZ() - 5, floor.getX() + 16, GROUND, floor.getZ() + 5, material));
+                var world = server.overworld();
+                ua.zentix.incoming.warhead.SurfaceDamage.mark(world, floor, world.getBlockState(floor), c.number(0));
+                return;
+            }
             if (c.verb() == SandboxCommand.Verb.REAL) {
                 if (c.deck() > 0) buildBridge(server, BlockPos.containing(site), c.deck(), c.concrete() ? "gray_concrete" : "stone");
                 if (c.paved()) {
