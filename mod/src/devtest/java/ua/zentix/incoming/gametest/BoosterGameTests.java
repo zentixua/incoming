@@ -54,4 +54,19 @@ public final class BoosterGameTests {
             h.assertFalse(e.landed(), "вместо общего предела сработало падение");
         });
     }
+
+    @GameTest(template = "range", timeoutTicks = 80, batch = "debris", skyAccess = true)
+    public static void boosterBelowWorldAlsoFades(GameTestHelper h) {
+        SpentBoosterEntity e = ModEntities.SPENT_BOOSTER.get().create(h.getLevel());
+        BlockPos at = h.absolutePos(new BlockPos(32, 12, 32));
+        e.moveTo(at.getX() + 0.5, h.getLevel().getMinBuildHeight() - 40, at.getZ() + 0.5, 0, 0);
+        h.getLevel().addFreshEntity(e);
+        boolean[] faded = {false};
+        h.succeedWhen(() -> {
+            if (e.visibility(0) > 0 && e.visibility(0) < 1) faded[0] = true;
+            h.assertTrue(e.isRemoved(), "ускоритель ещё летит под миром");
+            h.assertTrue(faded[0] && e.visibility(0) == 0, "удаление под миром оборвало свечение");
+            h.assertTrue(e.age() < BoosterLifetime.LIE_TICKS, "очистка под миром не назначила срок");
+        });
+    }
 }

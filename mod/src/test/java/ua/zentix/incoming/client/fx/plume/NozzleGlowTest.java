@@ -113,7 +113,7 @@ class NozzleGlowTest {
     void cleanupCannotRemoveAVisibleHotNozzle() {
         for (WeaponType w : BOOSTED) {
             NozzleGlow g = glow(w);
-            for (int end = BoosterLifetime.LIE_TICKS; end <= BoosterLifetime.MAX_AGE; end++) {
+            for (int end = BoosterLifetime.FADE_TICKS + BoosterLifetime.HIDDEN_TICKS; end <= BoosterLifetime.MAX_AGE; end++) {
                 double previous = Double.NaN;
                 for (double remaining = BoosterLifetime.HIDDEN_TICKS + BoosterLifetime.FADE_TICKS; remaining >= -1; remaining -= 0.05) {
                     NozzleGlow.Shine s = g.spent(end - remaining);

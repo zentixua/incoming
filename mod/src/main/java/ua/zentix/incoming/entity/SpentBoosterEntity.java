@@ -94,7 +94,12 @@ public class SpentBoosterEntity extends Entity {
             entityData.set(DATA_REMOVE_AT, Math.min(entityData.get(DATA_REMOVE_AT), level().getGameTime() + BoosterLifetime.LIE_TICKS));
             level().playSound(null, BlockPos.containing(position()), SoundEvents.ANVIL_LAND, SoundSource.NEUTRAL, 1.2f, 0.5f);
         }
-        if (remainingTicks() <= 0 || getY() < level().getMinBuildHeight() - 32) discard();
+        // За дном мира — та же плавная очистка: наблюдатель в режиме зрителя тоже может видеть сопло.
+        if (getY() < level().getMinBuildHeight() - 32) {
+            entityData.set(DATA_REMOVE_AT, Math.min(entityData.get(DATA_REMOVE_AT),
+                    level().getGameTime() + BoosterLifetime.FADE_TICKS + BoosterLifetime.HIDDEN_TICKS));
+        }
+        if (remainingTicks() <= 0) discard();
     }
 
     @Override
