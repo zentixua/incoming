@@ -38,4 +38,15 @@ class FrontLitterTest {
             last = v;
         }
     }
+    @Test
+    void visibleLiftDoesNotAddSpeedToThePhysicalKick() {
+        for (double speed : new double[]{0, 1, 10, 50}) {
+            for (double lift : new double[]{0.35, 0.7}) {
+                double[] kick = FrontLitter.launch(speed, lift);
+                assertEquals(speed, Math.hypot(kick[0], kick[1]), 1e-10);
+                assertTrue(kick[0] >= 0 && kick[1] >= 0);
+            }
+        }
+    }
+
 }

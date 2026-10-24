@@ -83,6 +83,12 @@ public final class FrontLitter {
         return slant <= 0 ? 1 : (ground / slant) * (ground / slant);
     }
 
+    /** Presentation redirects the kick upward; it must not add speed or kinetic energy to the drag integral. */
+    static double[] launch(double speed, double lift) {
+        double horizontal = speed / Math.sqrt(1 + lift * lift);
+        return new double[]{horizontal, lift * horizontal};
+    }
+
     /**
      * Сорвать траву и листья вокруг взрыва в {@code pos}: фронт {@code front}, огненный шар радиусом {@code ball} м,
      * высота разрыва над землёй {@code hob} м. Кусок ждёт прихода фронта на своё место ({@link Fragments#DELAY_MAX} —
@@ -122,13 +128,14 @@ public final class FrontLitter {
             if (!BlastLitter.tearsCover(kpa, share)) continue;
             double v = BlastLitter.kick(BlastModel.windSpeed(kpa) * Math.sqrt(share), BlastModel.chemicalPhaseSeconds(slant, front.tntKg, front.surface),
                     terminal) / 20;
-            // Подача: подчёркнутый отрыв клока, а не почти горизонтальный бросок.
-            // Скорость самого броска и сопротивление остаются прежними; подъём — доля броска.
+            // Подача: отрыв клока под углом 19–35° к поверхности.
+            // Поворот сохраняет модуль скорости броска из интеграла сопротивления.
             double lift = 0.35 + 0.35 * rnd.nextDouble();
+            double[] kick = launch(v, lift);
             int delay = (int) Math.ceil(20 * front.arrivalSeconds(slant));
             if (delay > Fragments.DELAY_MAX) continue;
             float size = CLUMP_MIN + (CLUMP_MAX - CLUMP_MIN) * rnd.nextFloat();
-            Fragments.torn(level, torn, m.immutable(), Fragments.Kind.LEAF, x, y, z, cos * v, lift * v, sin * v, size, CALM, delay, false);
+            Fragments.torn(level, torn, m.immutable(), Fragments.Kind.LEAF, x, y, z, cos * kick[0], kick[1], sin * kick[0], size, CALM, delay, false);
         }
     }
 }
