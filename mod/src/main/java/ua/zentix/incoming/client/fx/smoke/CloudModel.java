@@ -49,13 +49,17 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
  * <b>Вещество.</b> Сажа взрывчатки — свободный углерод продуктов детонации ({@link BlastSource.Explosive#freeCarbon}), из
  * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link BlastSource.Fuel}.
  * Пыль воронки — грунт воронки ({@link CraterModel#chargeVolume}: диаметр 0,65·W^⅓ м, глубина — четверть, параболоид —
- * тот же закон, что роет сервер); в воздух уходит доля {@link #DUST_LOFTED} (оценка). Воронка заряда меньше его шара
- * продуктов: выброс проходит сквозь шар, и его мелкая пыль поднимается с облаком. Воронки нет у подрыва выше
+ * тот же закон, что роет сервер); в воздух уходит доля {@link #DUST_LOFTED} (оценка). У удара в постройку это крошка
+ * перекрытия, раздробленного у места удара, — в том же объёме (⚠ оценка: перекрытие сервер ломает волной, а не роет
+ * воронкой). Выброс — два потока: вовлечённая в горячий газ пыль поднимается с облаком; холодная крошка выброса и
+ * обратного выпадения питает тяжёлый слой {@link #crushed}. Разделение массы — {@link #CRUSHED_HOT_SHARE}, оценка;
+ * облако больше не забирает всю пыль разрушенного материала. Воронки нет у подрыва выше
  * {@link #CRATER_HOB} радиуса шара продуктов (разрыв в воздухе): пыли воронки нет.
  * <p>
  * <b>Пыль волны</b> — {@link GroundDust}: тот же закон, что у ядерки ({@code DustModel}: вынос ветром за фронтом, слой Kuhl,
- * корзины, подсос в ножку), с высотой подрыва над землёй {@link #hob} и ядерной мощностью того же давления у земли
- * ({@link #equivalentKt}); у разрыва в воздухе пыли нет — давление у земли ниже порога срыва. Чёрч — только размер и
+ * корзины, подсос в ножку), с поверхностей вокруг — у каждой своя высота взрыва над ней и свой материал, — и ядерной
+ * мощностью того же давления у поверхности ({@link #equivalentKt}); слой тяжелее воздуха — стекает и опускается к
+ * поверхности под собой; у разрыва в воздухе пыли нет — давление у земли ниже порога срыва. Чёрч — только размер и
  * высота стабилизированного облака ({@link #HE_HEAT}).
  * <p>
  * <b>Оптика.</b> Ослабление на массу — сажа {@link #SOOT_K} м²/кг при альбедо 0,25 и асимметрии 0,5 (Bond, Bergstrom 2006:
@@ -102,6 +106,16 @@ public final class CloudModel {
      * оценка: замеров разделения пыли у стартов нет. У взрыва пыль у земли — слой волны ({@link GroundDust}).
      */
     public static final double CLOUD_SHARE = 0.5;
+    /**
+     * Split of the fragmented material between hot gas entrainment and the cold ejecta/fallback curtain.
+     * A separate low density current fed by ejecta is described by Glasstone & Dolan (1977), §2.96, and NRC (2005),
+     * Effects of Nuclear Earth-Penetrator and Other Weapons, ch. 5. Those sources do not give a fraction for a
+     * conventional contact burst: equal mass in the two unresolved streams is explicitly an estimate, not a
+     * measured TNT correlation. Total dust remains the existing crushed-volume × density × DUST_LOFTED.
+     */
+    public static final double CRUSHED_HOT_SHARE = 0.5;
+    /** Cold dust of crushed material, as distinct from pre-existing wave-lofted surface dust. */
+    public final GroundDust crushed;
     /**
      * Доля энергии ядерного взрыва в ударной волне — ~0,5 (Glasstone, Dolan, «The Effects of Nuclear Weapons», 1977, §1.24:
      * около половины — волна, треть — свет, остальное — радиация); у ВВ тротиловый эквивалент — сама волна. Давление у
@@ -315,7 +329,9 @@ public final class CloudModel {
         double fuelHeat = ballKg * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
-        dust = dustKg;
+        boolean contact = !source.underground() && source.chargeKg() > 0 && digs(source.chargeKg(), hob);
+        double cold = contact ? dustKg * (1 - CRUSHED_HOT_SHARE) : 0;
+        dust = dustKg - cold;
         soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + ballKg * source.fuel().sootYield;
         fuelBall = FuelFireball.diameter(ballKg);
         fuelBallSeconds = FuelFireball.seconds(ballKg);
@@ -344,7 +360,9 @@ public final class CloudModel {
         poolWatts = poolSeconds > 0 ? burn * source.fuel().heatJPerKg : 0;
         // пыль волны: над водой грунта нет (брызги — WaterBlast)
         ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, surface, air);
-        life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, ground.life));
+        crushed = GroundDust.crushed(onWater ? 0 : source.chargeKg(), hob, cold,
+                2 * CraterModel.chargeRadius(source.chargeKg(), CraterModel.Soil.DRY), surface, air);
+        life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, Math.max(ground.life, crushed.life)));
     }
 
     /**
@@ -742,8 +760,9 @@ public final class CloudModel {
                 pz = qz;
             }
         }
-        // слой пыли волны у земли (на hob ниже точки взрыва)
-        ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y - hob, z, gh, gv, 0, d, 0, inBall(t, x, y - hob, z, T_AIR), 0));
+        // слой пыли волны — на поверхностях, с которых его подняло, и там, куда он стёк (высоты — от точки взрыва)
+        ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y, z, gh, gv, 0, d, 0, inBall(t, x, y, z, T_AIR), 0));
+        crushed.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y, z, gh, gv, 0, d, 0, inBall(t, x, y, z, T_AIR), 0));
     }
 
     /**
