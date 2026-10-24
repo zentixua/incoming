@@ -17,7 +17,8 @@ Times are for a nearby target. The world owner can change flight times.
 Fuel burning in a crater produces a continuous roar and crackle. It fades as the fuel runs out; the recording does
 not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path to you.
 
-Fireballs rise upright, with smoothly moving orange flame, bright cores and dark soot.
+A fireball rises upright. While it burns, orange flame with bright cores churns among dark soot; as it cools, it
+darkens into smoke without a jump.
 
 ## The real weapons
 

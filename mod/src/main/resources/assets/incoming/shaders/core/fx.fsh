@@ -18,8 +18,10 @@ uniform sampler2D Sampler6;
 uniform vec4 PallAmbient;
 // место ореола far/glow на листе (u0, v0, u1, v1; FxAtlas.glow)
 uniform vec4 FxGlow;
-// Шар: размер кадра (u, v), начало (v), кадров в ряду. Карты огня смешиваются до alpha-over: без потери непрозрачности.
+// Шар: размер кадра (u, v), начало (v), число кадров. Карты огня смешиваются до alpha-over: без потери непрозрачности.
 uniform vec4 FxFireball;
+// векторы движения кадров шара: размер карты (u, v), начало (v), предел смещения — доля кадра (FxAtlas.FIREBALL_FLOW / 256)
+uniform vec4 FxFireFlow;
 
 uniform vec4 ColorModulator;
 uniform vec2 ScreenSize;
@@ -89,18 +91,29 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     b = mix(lb0, lb1, m);
 }
 
-// Обычный flipbook blend (как Unity VFX Graph): смешиваем уже умноженные RGB и альфу одним фрагментом.
-// Два квадрата с весами дали бы на полпути 0,75 непрозрачности вместо 1 и пульс яркости.
+// Кадры огня — как у запечённого клуба (sixFrames): кадр k и следующий, сдвинутые вдоль векторов движения кадра k на
+// долю смеси m (k — назад на m, k + 1 — вперёд на 1 − m), смешаны одним фрагментом с умноженной альфой (смесь кадров
+// с векторами движения — обычный приём флипбуков: Unity VFX Graph, Unreal Niagara). Огонь течёт между кадрами, а не
+// проступает двойным; два квадрата с весами дали бы на полпути 0,75 непрозрачности вместо 1 и пульс яркости
 vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
     vec2 tile = FxFireball.xy;
-    float columns = FxFireball.w;
-    vec2 cell = clamp(floor((uv - vec2(0.0, FxFireball.z)) / tile), vec2(0.0), vec2(columns - 1.0));
+    float columns = floor(1.0 / tile.x + 0.5), frames = FxFireball.w;
+    vec2 cell = clamp(floor((uv - vec2(0.0, FxFireball.z)) / tile), vec2(0.0), vec2(columns - 1.0, ceil(frames / columns) - 1.0));
+    float index = cell.y * columns + cell.x;
     vec2 origin = vec2(cell.x * tile.x, FxFireball.z + cell.y * tile.y);
-    float nextIndex = min(cell.y * columns + cell.x + 1.0, columns * columns - 1.0);
+    float nextIndex = min(index + 1.0, frames - 1.0);
     vec2 next = vec2(mod(nextIndex, columns) * tile.x, FxFireball.z + floor(nextIndex / columns) * tile.y);
+    vec2 local = uv - origin;
+    // векторы движения кадра k: своя карта 128² (FxFireFlow: размер, начало, предел смещения — доля кадра)
+    float flowColumns = floor(1.0 / FxFireFlow.x + 0.5);
+    vec2 flowAt = vec2(mod(index, flowColumns) * FxFireFlow.x, FxFireFlow.z + floor(index / flowColumns) * FxFireFlow.y);
+    vec2 toFlow = FxFireFlow.xy / tile;
+    vec4 v = textureGrad(Sampler0, flowAt + local * toFlow, dx * toFlow, dy * toFlow);
+    vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxFireFlow.w * tile;
     vec2 edge = 0.5 / vec2(textureSize(Sampler0, 0));
-    vec2 local = clamp(uv - origin, edge, tile - edge);
-    return mix(textureGrad(Sampler0, origin + local, dx, dy), textureGrad(Sampler0, next + local, dx, dy), m);
+    vec2 uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
+    vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
+    return mix(textureGrad(Sampler0, uv0, dx, dy), textureGrad(Sampler0, uv1, dx, dy), m);
 }
 
 // Частица вблизи — как из атласа Minecraft (NEAREST_MIPMAP_LINEAR): ближайший пиксель картинки и её копии вдвое

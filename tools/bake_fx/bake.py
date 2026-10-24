@@ -86,6 +86,10 @@ def reset(tile):
         sc.cycles.device = "GPU"
     sc.cycles.samples = SAMPLES
     sc.cycles.use_denoising = True
+    if WHAT == "fireball-vdb":
+        # Cycles' denoiser filters radiance, not transparent-volume alpha. Every pixel needs the
+        # full sample count before downsampling; adaptive RGB convergence leaves speckled soot.
+        sc.cycles.use_adaptive_sampling = False
     sc.cycles.volume_bounces = 6
     sc.cycles.max_bounces = 8
     sc.cycles.transparent_max_bounces = 8
@@ -383,7 +387,8 @@ def fireball_vdb(src):
         print("vdb frame", i + 1, "/", frames, flush=True)
     meta = {"source": src, "fps": FPS, "frames": frames, "burn_s": end / FPS, "burn_end_frame": end, "flames_peak_frame": peak,
             "width_voxels": width, "view_voxels": size, "t_peak": T_PEAK, "t_air": T_AIR, "temperature_max": tmax,
-            "soot_per_voxel": soot, "reference_k": 1490.0}
+            "soot_per_voxel": soot, "reference_k": 1490.0, "render_size": TILE, "samples": SAMPLES,
+            "adaptive_sampling": False}
     with open(os.path.join(OUT, "fireball", "meta.json"), "w") as fo:
         json.dump(meta, fo)
 

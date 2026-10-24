@@ -15,6 +15,77 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Облако обычного взрыва по законам: подъём MTT, Чёрч, шар топлива CCPS, вещество, цвет огня, жизнь. */
 class CloudModelTest {
+    /**
+     * Сажа огненной стадии переходит в облако без скачка (ревью #426: тёмный купол за один шаг 0,05 с — у ракеты в
+     * 2,60→2,65 с, у бомбы в 2,95→3,00 с): в конец горения сажа не перескакивает из шара в облако (ни днём, ни ночью), а
+     * днём покрытие сажей вокруг шара через всё остывание меняется за 0,05 с не больше обычного шага горения. Масса — вся.
+     * ⚠ Ночью сажа проступает за ~0,1 с, когда шар остывает ниже ~1200 K, и так же днём в горении шара взрывчатки («Град»
+     * в 0,3–0,4 с, бомба в 2,3–2,4 с): доля дыма ({@link CloudModel#glowShare}) умножает массу сажи у {@code SmokePuffs}, а
+     * сотни толщ шара непрозрачны уже при доле в процент — это рисовка дыма, не этот переход.
+     */
+    @Test
+    void sootCoverageChangesContinuouslyFromBallToCloud() {
+        for (WeaponType weapon : List.of(WeaponType.DRONE, WeaponType.MISSILE, WeaponType.BUNKER, WeaponType.ROCKET)) {
+            CloudModel m = weapon == WeaponType.BUNKER
+                    ? new CloudModel(new BlastSource(weapon, weapon.spec().warheadTnt(), 0, true, false), CloudModel.Air.STANDARD)
+                    : model(weapon, CloudModel.Air.STANDARD);
+            for (double sky : new double[]{1, 8e-4}) {
+                double[] before = sootImage(m, m.burnSeconds - 1e-6, sky), after = sootImage(m, m.burnSeconds + 1e-6, sky);
+                // остаётся шаг размера шара: остывающий шар начинает с объёма, что держит тепло при его температуре (у
+                // шахеда на 4 % больше шара CCPS) — не больше обычного шага за 0,05 с
+                assertTrue(imageDifference(before, after) < END_STEP, weapon + ", небо " + sky + ": в конец горения ступеньки нет");
+            }
+            double[] previous = sootImage(m, m.burnSeconds, 1);
+            for (double t = m.burnSeconds + 0.05; t < m.fireSeconds + 0.5; t += 0.05) {
+                double[] next = sootImage(m, t, 1);
+                double change = imageDifference(previous, next);
+                assertTrue(change < STEP_CHANGE, weapon + ": покрытие сажей днём в " + t + " с меняется на " + change);
+                previous = next;
+                double[] mass = {0};
+                m.blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> mass[0] += soot);
+                assertEquals(m.soot * m.fade(t), mass[0], 1e-9, "сажа — вся");
+            }
+        }
+    }
+
+    /**
+     * Наибольшая доля кадра вокруг шара, что меняет покрытие сажей за 0,05 с: в горении и остывании без скачка — до ~0,016;
+     * прежняя смена шара на облако разом — 0,05–0,6 (рост края и подъём середины за тик).
+     */
+    private static final double STEP_CHANGE = 0.03;
+    /** Ступенька покрытия в сам конец горения: обычный шаг за 0,05 с — до ~0,016, смена шара на облако разом — 0,05–0,6. */
+    private static final double END_STEP = 0.015;
+
+    /**
+     * Покрытие сажей и пылью облака (1 − e^(−τ)) на неподвижной плоскости 6×6 радиусов шара в конец горения вокруг его
+     * середины: доля, что видна дымом, — как у {@code SmokePuffs} (тело огня — не дым, {@link CloudModel#glowShare}); пыль
+     * волны у земли сюда не входит — у неё свой переход.
+     */
+    static double[] sootImage(CloudModel model, double t, double sky) {
+        int size = 64;
+        double radius = model.ballRadius(model.burnSeconds), middle = model.ballHeight(model.burnSeconds);
+        double[] tau = new double[size * size];
+        model.blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
+            if (soot <= 0) return;
+            double centre = (CloudModel.SOOT_K * soot + ua.zentix.incoming.nuclear.model.DustModel.K_MIX * dust)
+                    * (1 - CloudModel.glowShare(kelvin, sky)) / (2 * Math.PI * sh * sv);
+            for (int j = 0; j < size; j++) {
+                for (int i = 0; i < size; i++) {
+                    double dx = ((i + 0.5) / size - 0.5) * 6 * radius - x, dy = ((j + 0.5) / size - 0.5) * 6 * radius + middle - y;
+                    tau[j * size + i] += centre * Math.exp(-0.5 * (dx * dx / (sh * sh) + dy * dy / (sv * sv)));
+                }
+            }
+        });
+        for (int i = 0; i < tau.length; i++) tau[i] = -Math.expm1(-tau[i]);
+        return tau;
+    }
+
+    static double imageDifference(double[] a, double[] b) {
+        double sum = 0;
+        for (int i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
+        return sum / a.length;
+    }
+
     @Test
     void crushedMaterialFeedsColdDustOnPavingWithoutIncreasingItsSurfaceLoading() {
         var hard = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),

@@ -62,15 +62,22 @@ class FarSpritesTest {
     }
 
     /**
-     * Огненный шар вдали и вблизи — квадрат {@link FarSprites#FIREBALL} радиусов шара модели в этот миг: в каждом кадре
-     * горения ({@code tools/bake_fx/pack.py} кадрирует по шару) круг той же площади, что непрозрачная часть, — радиус шара.
-     * Иначе шар вблизи и вдали разного размера, а блик и свет на дым — не от того, что видно.
+     * Огненный шар вдали и вблизи — квадрат в {@code half} радиусов шара модели в этот миг ({@code fireball.json}: кадр
+     * вмещает всё вещество): в каждом кадре горения ({@code tools/bake_fx/pack.py} кадрирует по шару) круг той же площади,
+     * что непрозрачная часть, — радиус шара. Иначе шар вблизи и вдали разного размера, а блик и свет на дым — не от того,
+     * что видно.
      */
     @Test
     void fireballFramesMatchItsRadius() throws IOException {
-        for (int i = 0; i < 10; i++) {
+        com.google.gson.JsonArray half;
+        try (InputStream in = FarSpritesTest.class.getResourceAsStream("/assets/incoming/textures/fx/particle/fireball.json")) {
+            assertNotNull(in);
+            half = com.google.gson.JsonParser.parseReader(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8))
+                    .getAsJsonObject().getAsJsonArray("half");
+        }
+        for (int i = 0; i < FxAtlas.FIREBALL_BURN; i++) {
             BufferedImage img = image(String.format(Locale.ROOT, "textures/fx/particle/fireball_%02d.png", i));
-            double radius = Math.sqrt(4 * opaque(img) / Math.PI) * FarSprites.FIREBALL;
+            double radius = Math.sqrt(4 * opaque(img) / Math.PI) * half.get(i).getAsDouble();
             assertEquals(1, radius, 0.08, "кадр " + i);
         }
     }
@@ -81,10 +88,10 @@ class FarSpritesTest {
      */
     @Test
     void proceduralBallFramesMatchItsGrowth() throws IOException {
-        for (int i = 0; i < FxAtlas.FIREBALL_FRAMES / 2; i++) {
+        for (int i = 0; i < FxAtlas.BALL_FRAMES / 2; i++) {
             BufferedImage img = image(String.format(Locale.ROOT, "textures/fx/particle/ball_%02d.png", i));
             double radius = Math.sqrt(4 * opaque(img) / Math.PI) * FarSprites.FIREBALL;
-            double f = (i + 0.5) / FxAtlas.FIREBALL_FRAMES;
+            double f = (i + 0.5) / FxAtlas.BALL_FRAMES;
             assertEquals((0.3 + 0.7 * (1 - Math.exp(-f / 0.05))) * (1 + 0.06 * f), radius, 0.08, "кадр " + i);
         }
     }

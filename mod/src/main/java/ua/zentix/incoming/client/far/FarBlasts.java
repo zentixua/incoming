@@ -748,9 +748,10 @@ public final class FarBlasts {
         // кадр — по состоянию шара: в горении — доля времени горения, остывая — температура (кадры запечённой симуляции
         // с её временем и температурой, FxAtlas.fireballFrame); тело тает в дым той же долей, что дым проступает: по
         // свечению против света неба на его дыме (CloudModel.glowShare) — днём раньше, чем ночью
-        double s = age / 20, frame = FxAtlas.fireballFrame(s / Math.max(e.model.burnSeconds, 1e-6), e.model.ballKelvin(s));
+        double s = age / 20, frame = FxAtlas.fireballFrame(s / Math.max(e.model.burnSeconds, 1e-6), e.model.ballKelvin(s),
+                e.model.ballKelvin(e.model.burnSeconds));
         r = e.model.ballRadius(s);
-        half = r * FarSprites.FIREBALL;
+        half = r * FxAtlas.fireballHalf(frame);
         body = CloudModel.glowShare(e.model.ballKelvin(s), view.skyLuminance());
         sprite = FxAtlas.fireballAt(frame, (e.seed & 1) != 0);
         fire = FxAtlas.fireLightAt(frame) * body;

@@ -51,14 +51,23 @@ class FxAtlasTest {
         }
     }
 
-    /** Огненный шар: 16 кадров по 256, время горения растёт, остывая — холоднее, огонь на экране гаснет к саже. */
+    /**
+     * Огненный шар: 48 кадров по 256 (32 — горение) и их векторы движения по 128, время горения растёт, остывая — холоднее,
+     * огонь на экране гаснет к саже; кадр не уже прежнего (1,3 радиуса шара).
+     */
     @Test
     void fireballFramesMatchTheBake() throws IOException {
         JsonObject o = json("fireball.json");
         int tile = o.get("tile").getAsInt();
         assertEquals(FxAtlas.FIREBALL_FRAMES, o.get("frames").getAsInt());
+        assertEquals(FxAtlas.FIREBALL_BURN, o.get("burn_frames").getAsInt());
         assertEquals(FxAtlas.FIREBALL_SIZE, tile, "место кадра шара на листе — 256");
-        for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) image(String.format(Locale.ROOT, "fireball_%02d.png", i), tile);
+        assertEquals(FxAtlas.FIREBALL_FLOW, o.get("flow").getAsFloat(), 1e-6, "предел векторов движения — тот, что ждёт шейдер");
+        assertEquals(FxAtlas.FIREBALL_FLOW_SIZE, o.get("flow_tile").getAsInt());
+        for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) {
+            image(String.format(Locale.ROOT, "fireball_%02d.png", i), tile);
+            image(String.format(Locale.ROOT, "fireballv_%02d.png", i), FxAtlas.FIREBALL_FLOW_SIZE);
+        }
         FxAtlas.Fireball f;
         try (Reader r = open("fireball.json")) {
             f = FxAtlas.parseFire(r);
@@ -69,7 +78,8 @@ class FxAtlasTest {
         int peak = 0;
         for (int i = 1; i < FxAtlas.FIREBALL_FRAMES; i++) if (f.fire()[i] > f.fire()[peak]) peak = i;
         assertTrue(f.fire()[0] >= 0.85 * f.fire()[peak], "вспышка — почти самый яркий кадр");
-        assertTrue(f.fire()[peak] >= 0.35 && f.fire()[peak] <= 0.75, "огонь на экране — ярко, но со складками: " + f.fire()[peak]);
+        // (кадры из рендера 512 по веществу — пик 0,345, круг 2 — 0,37, 3.6 — 0,87: ровный диск)
+        assertTrue(f.fire()[peak] >= 0.33 && f.fire()[peak] <= 0.75, "огонь на экране — ярко, но со складками: " + f.fire()[peak]);
         assertTrue(peak < FxAtlas.FIREBALL_FRAMES / 4, "ярче всего — в начале горения: кадр " + peak);
         for (int i = 1; i < FxAtlas.FIREBALL_FRAMES; i++) {
             assertTrue(f.burn()[i] > f.burn()[i - 1], "время кадров растёт: " + i);
@@ -77,10 +87,25 @@ class FxAtlasTest {
             if (f.burn()[i - 1] >= 1) assertTrue(f.kelvin()[i] <= f.kelvin()[i - 1], "остывая — холоднее: кадр " + i);
         }
         assertTrue(f.fire()[FxAtlas.FIREBALL_FRAMES - 1] < 0.01, "последний кадр — сажа");
+        assertTrue(f.burn()[FxAtlas.FIREBALL_BURN - 1] >= 1 && f.burn()[FxAtlas.FIREBALL_BURN - 2] < 1, "горение — 32 кадра");
+        for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) assertTrue(f.half()[i] >= 1.3 - 1e-3, "кадр не уже 1,3 радиуса шара: " + i);
         // кадр по состоянию шара: горит — по времени, остывает — по температуре, к точке Дрейпера — последние
-        assertEquals(0, FxAtlas.fireballFrameOf(f, 0, 1484), 1e-9);
-        assertTrue(FxAtlas.fireballFrameOf(f, 0.5, 1484) > 2, "середина горения — не вспышка");
-        assertTrue(FxAtlas.fireballFrameOf(f, 2, 800) >= FxAtlas.FIREBALL_FRAMES - 3, "остывший — у сажи");
+        assertEquals(0, FxAtlas.fireballFrameOf(f, 0, 1484, 1484), 1e-9);
+        assertTrue(FxAtlas.fireballFrameOf(f, 0.5, 1484, 1484) > 2, "середина горения — не вспышка");
+        assertTrue(FxAtlas.fireballFrameOf(f, 2, 800, 1484) >= FxAtlas.FIREBALL_FRAMES - 3, "остывший — у сажи");
+        // остывание идёт с конца горения сразу, без стоп-кадра: шар топлива (1484 K) и взрывчатки (1500 K) — по доле
+        // остывания до точки Дрейпера, а не ждут, пока остынут до пламени симуляции в её конец
+        for (double endK : new double[]{1484, 1500}) {
+            double end = FxAtlas.fireballFrameOf(f, 1, endK, endK);
+            assertEquals(FxAtlas.FIREBALL_BURN - 1, end, 0.05, "конец горения — последний кадр горения");
+            double last = end;
+            for (double k = endK - 20; k > 820 && last < FxAtlas.FIREBALL_FRAMES - 1; k -= 20) {
+                double frame = FxAtlas.fireballFrameOf(f, 1.5, k, endK);
+                assertTrue(frame > last, "остывая на 20 K, кадр идёт дальше: " + k + " K, кадр " + frame);
+                assertTrue(frame - last < 2.5, "и без скачка через кадры: " + k + " K");
+                last = frame;
+            }
+        }
     }
 
     /** Средняя яркость не ловит ровный диск: складки должны различаться в непрозрачном ядре; кайму отдельно проверяет fireballRimIsWarmAndNotGhostly. */
@@ -139,6 +164,45 @@ class FxAtlasTest {
         }
     }
 
+    /**
+     * Кадр вмещает всё вещество: у края кадра шара пусто (ревью #426: остывающая сажа обрезалась кругом по радиусу кадра,
+     * и в игре висела «сфера-призрак» с ровным краем).
+     */
+    @Test
+    void fireballFramesHoldAllTheirMatter() throws IOException {
+        for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) {
+            BufferedImage img = read(String.format(Locale.ROOT, "fireball_%02d.png", i));
+            int w = img.getWidth(), h = img.getHeight(), edge = 0;
+            for (int k = 0; k < w; k++) {
+                for (int m : new int[]{0, 1, h - 2, h - 1}) edge = Math.max(edge, Math.max(img.getRGB(k, m) >>> 24, img.getRGB(m, k) >>> 24));
+            }
+            assertTrue(edge <= 4, "у края кадра " + i + " вещества нет: альфа " + edge);
+        }
+    }
+
+    /**
+     * Сажа остывания без зерна рендера (ревью #426: кадры остывания крапчатые). Причина — выборки: шумодав Cycles чистит
+     * свет, но не непрозрачность прозрачной сажи, и при 32 выборках на пиксель и адаптивной выборке шум оставался в сажe;
+     * увеличение кадра 1,3 радиуса шара из рендера 256 растягивало его в пятна. Рендер — не меньше 256 выборок без
+     * адаптивной и вдвое крупнее кадра (кадр шара в горении — без увеличения, кадр остывания шире — пиксель его — среднее
+     * нескольких пикселей рендера): так пишет {@code tools/bake_fx/pack.py} из {@code meta.json} запекания. Мера по
+     * пикселям кадра зерно круга 2 не ловила: растянутый шум — пятна в 2–3 пикселя, а не разброс соседей.
+     */
+    @Test
+    void coolingSootIsRenderedWithoutGrain() throws IOException {
+        JsonObject o = json("fireball.json");
+        assertTrue(o.has("samples") && o.get("samples").getAsInt() >= 256, "выборок на пиксель — не меньше 256");
+        assertTrue(o.has("adaptive_sampling") && !o.get("adaptive_sampling").getAsBoolean(), "без адаптивной выборки");
+        assertTrue(o.has("render") && o.get("render").getAsInt() >= 2 * o.get("tile").getAsInt(), "рендер вдвое крупнее кадра");
+    }
+
+    private static BufferedImage read(String name) throws IOException {
+        try (InputStream in = FxAtlasTest.class.getResourceAsStream(DIR + name)) {
+            assertNotNull(in, name);
+            return ImageIO.read(in);
+        }
+    }
+
     /** Отражение не переворачивает верх; клетки 256² не пересекают карты дыма и друг друга. */
     @Test
     void fireballSlotsKeepTheTopAndTheirOwnSpace() {
@@ -153,6 +217,11 @@ class FxAtlasTest {
             assertEquals(FxAtlas.FIREBALL_V, a.v1() - a.v0(), 1e-6);
             assertTrue(a.v0() >= FxAtlas.FIREBALL_TOP && a.v1() <= 1);
             assertTrue(FxAtlas.spray6(15, false).v1() + 2 * FxAtlas.PUFF6_STEP <= a.v0() + 1e-6);
+            // векторы движения кадров — под кадрами, в своих клетках
+            float fu = i % FxAtlas.FIREBALL_FLOW_COLUMNS * FxAtlas.FIREBALL_FLOW_U,
+                    fv = FxAtlas.FIREBALL_FLOW_TOP + i / FxAtlas.FIREBALL_FLOW_COLUMNS * FxAtlas.FIREBALL_FLOW_V;
+            assertTrue(fv >= FxAtlas.fireballAt(FxAtlas.FIREBALL_FRAMES - 1, false).v1() - 1e-6 && fv + FxAtlas.FIREBALL_FLOW_V <= 1 + 1e-6);
+            assertTrue(fu + FxAtlas.FIREBALL_FLOW_U <= 1 + 1e-6);
             for (int j = 0; j < i; j++) {
                 var c = FxAtlas.fireballAt(j, false);
                 assertTrue(a.u0() >= c.u1() || a.u1() <= c.u0() || a.v0() >= c.v1() || a.v1() <= c.v0());
@@ -169,7 +238,8 @@ class FxAtlasTest {
             assertEquals(FxAtlas.fireballAt(i, false), FxAtlas.fireballAt(i + 0.5, false));
         }
         assertEquals(0.5, FxAtlas.fireballMix(3.5), 1e-6);
-        assertEquals(0, FxAtlas.fireballMix(16));
+        assertEquals(0, FxAtlas.fireballMix(FxAtlas.FIREBALL_FRAMES - 1));
+        assertEquals(0, FxAtlas.fireballMix(FxAtlas.FIREBALL_FRAMES + 3));
         assertEquals(0, FxAtlas.fireballMix(-1));
     }
 
@@ -182,7 +252,7 @@ class FxAtlasTest {
         assertEquals("abv", o.get("maps").getAsString());
         assertEquals(FxAtlas.PUFF6_FLOW, o.get("flow").getAsFloat(), 1e-6);
         assertEquals((float) tile / 1024, FxAtlas.PUFF6_U, 1e-6, "место кадра на листе — размер кадра запекания");
-        assertEquals((float) tile / 3328, FxAtlas.PUFF6_V, 1e-6);
+        assertEquals((float) tile / 6144, FxAtlas.PUFF6_V, 1e-6);
         for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
             for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "puff6%c_%02d.png", m, i), tile);
         }
