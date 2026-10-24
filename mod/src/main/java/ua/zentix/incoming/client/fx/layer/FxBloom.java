@@ -14,6 +14,7 @@ import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.IncomingConfig;
 
 import java.util.Locale;
 
@@ -68,8 +69,12 @@ public final class FxBloom {
     static final double FA = 2.51, FB = 0.03, FC = 2.43, FD = 0.59, FE = 0.14;
     /** Белая точка плёночной кривой огня: свет, который она показывает белым (≈ 7,24); свечение берёт свет не ярче. */
     public static final double WHITE = filmInverse(1);
-    /** Ступеней кода пересвета в байте вершины (1…255; 0 — не светится). */
-    static final int STEPS = 254;
+    /**
+     * Байт {@code Emit} вершины: 0 — не светится; {@value #SKIP} — светится через свои пятна ({@link #spots}: в проходе
+     * свечения его нет); {@value #EMITTER} + код — светится с пересветом {@link #gain}(код); {@value #SPOT} + код — пятно
+     * мелкого светящегося (только в проходе свечения). Код — 0…{@value #STEPS}.
+     */
+    static final int SKIP = 1, EMITTER = 2, SPOT = 130, STEPS = 125;
 
     private FxBloom() {}
 
@@ -88,15 +93,15 @@ public final class FxBloom {
         return (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
     }
 
-    /** Код пересвета в байте вершины: 1 — свет как показан, 255 — {@link #WHITE} и ярче. */
+    /** Код пересвета 0…{@value #STEPS}: 0 — свет как показан, {@value #STEPS} — {@link #WHITE} и ярче. */
     public static int code(double hdr) {
         double g = Math.max(1, Math.min(WHITE, hdr));
-        return 1 + (int) Math.round(STEPS * Math.log(g) / Math.log(WHITE));
+        return (int) Math.round(STEPS * Math.log(g) / Math.log(WHITE));
     }
 
-    /** Пересвет по коду (код 0 — не светится, но здесь 1). */
+    /** Пересвет по коду ({@link #code}). */
     public static double gain(int code) {
-        return Math.pow(WHITE, (Math.max(1, code) - 1) / (double) STEPS);
+        return Math.pow(WHITE, Math.clamp(code, 0, STEPS) / (double) STEPS);
     }
 
     /** Кривая ореола: свет x (белый экран — 1) → доля до белого; смешивание «экраном» — сложение света до неё. */
@@ -112,13 +117,111 @@ public final class FxBloom {
         return FIRST + (int) Math.max(0, Math.round(Math.log(height / (double) REFERENCE) / Math.log(2)));
     }
 
+    /** Качество из настроек игрока ({@code bloom}); без настроек (проверки) — {@code FAST}. */
+    static IncomingConfig.Client.Bloom quality() {
+        try {
+            return IncomingConfig.CLIENT.bloom.get();
+        } catch (IllegalStateException | NullPointerException e) {
+            return IncomingConfig.Client.Bloom.FAST;
+        }
+    }
+
     /**
-     * Уровень прохода излучения у кадра высотой {@code height}: на октаву мельче {@link #first} — дальше он идёт в пирамиду
-     * через спуск в 13 выборок, и ореол выходит тем же, что из излучения во весь кадр; а фрагментов у прохода вчетверо
-     * меньше на каждую октаву (у 1600 — четверть кадра).
+     * Уровень прохода излучения у кадра высотой {@code height}: {@code FULL} — на октаву мельче {@link #first} (дальше он
+     * идёт в пирамиду через спуск в 13 выборок: у 1080 — половина кадра, у 1600 — четверть), {@code FAST} — сам первый
+     * уровень (фрагментов вчетверо меньше; мелкое — пятнами того же размера в его пикселях, {@link #spots}).
      */
-    static int glowLevel(int height) {
-        return first(height) - 1;
+    static int glowLevel(int height, IncomingConfig.Client.Bloom quality) {
+        return first(height) - (quality == IncomingConfig.Client.Bloom.FULL ? 1 : 0);
+    }
+
+    /** Угол пикселя прохода излучения, рад, при угле пикселя кадра {@code pixel} и высоте {@code height}; 0 — свечения нет. */
+    static double texel(double pixel, int height) {
+        IncomingConfig.Client.Bloom q = quality();
+        if (q == IncomingConfig.Client.Bloom.OFF || !ready()) return 0;
+        return pixel * (1 << glowLevel(height, q));
+    }
+
+    /** Шейдеры свечения загружены и цели не отказали. */
+    static boolean ready() {
+        return !failed && down != null && up != null && gather != null && out != null;
+    }
+
+    /**
+     * Пятно мелкого светящегося — полуразмер, пикселей прохода излучения: гауссов ореол {@code far/glow} (σ ≈ 0,3 полуразмера,
+     * ≈ 0,9 пикселя) выборкой в серединах пикселей несёт ту же энергию при любом сдвиге (у квадрата в доли пикселя выборка
+     * попадает в середину пикселя или нет — свечение пропадает и мерцает). Мельче {@value #SMALL} пикселей поперёк — пятна.
+     */
+    static final double SPOT_HALF = 3, SMALL = 3;
+    /** Пятен на квадрат вдоль — не больше (длинная тонкая полоса — бусами через полуразмер пятна). */
+    static final int SPOTS = 8;
+    /** Средняя по квадрату пятна доля его ореола ({@code glowAlpha} в {@code fx.fsh}; середины крайних пикселей — 64/63). */
+    static final double SPOT_COVER = spotCover();
+
+    private static double spotCover() {
+        int n = 1024;
+        double sum = 0, edge = 64.0 / 63;
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < n; i++) {
+                double x = ((i + 0.5) / n * 2 - 1) * edge, y = ((j + 0.5) / n * 2 - 1) * edge;
+                sum += glowAlpha(Math.sqrt(x * x + y * y));
+            }
+        }
+        return sum / ((double) n * n);
+    }
+
+    /** Ореол {@code far/glow} ({@code fx.fsh: glowAlpha}) на расстоянии r в долях полуразмера. */
+    static double glowAlpha(double r) {
+        double t = Math.max(0, Math.min(1, (1 - r) / 0.25));
+        return Math.exp(-(r / 0.42) * (r / 0.42)) * t * t * (3 - 2 * t) / 0.997147;
+    }
+
+    /**
+     * Пятна квадрата v (четыре вершины от камеры, x y z подряд) с пикселем прохода излучения в texel рад: мельче
+     * {@link #SMALL} пикселей поперёк — пятна по его длине (не больше {@link #SPOTS}), иначе 0 (квадрат рисуется сам). В out —
+     * середины пятен (x y z подряд), за ними — телесный угол квадрата (его свет делится между пятнами поровну).
+     */
+    static int spots(float[] v, double texel, double[] out) {
+        double cx = 0, cy = 0, cz = 0;
+        for (int i = 0; i < 4; i++) {
+            cx += v[3 * i] / 4;
+            cy += v[3 * i + 1] / 4;
+            cz += v[3 * i + 2] / 4;
+        }
+        double d = Math.sqrt(cx * cx + cy * cy + cz * cz);
+        if (d < 1e-4 || texel <= 0) return 0;
+        double nx = cx / d, ny = cy / d, nz = cz / d;
+        // площадь четырёхугольника — половина векторного произведения диагоналей, телесный угол — её доля поперёк луча
+        double ax = v[6] - v[0], ay = v[7] - v[1], az = v[8] - v[2], bx = v[9] - v[3], by = v[10] - v[4], bz = v[11] - v[5];
+        double sx = 0.5 * (ay * bz - az * by), sy = 0.5 * (az * bx - ax * bz), sz = 0.5 * (ax * by - ay * bx);
+        double solid = Math.abs(sx * nx + sy * ny + sz * nz) / (d * d);
+        // полудлина поперёк луча — до самой дальней вершины, ширина — площадь на длину
+        double reach = 0, ux = 0, uy = 0, uz = 0;
+        for (int i = 0; i < 4; i++) {
+            double px = v[3 * i] - cx, py = v[3 * i + 1] - cy, pz = v[3 * i + 2] - cz, along = px * nx + py * ny + pz * nz;
+            px -= along * nx;
+            py -= along * ny;
+            pz -= along * nz;
+            double len = Math.sqrt(px * px + py * py + pz * pz) / d;
+            if (len > reach) {
+                reach = len;
+                ux = px;
+                uy = py;
+                uz = pz;
+            }
+        }
+        double width = reach > 0 ? solid / (2 * reach) : 0;
+        if (width >= SMALL * texel) return 0;
+        int n = (int) Math.clamp(Math.ceil(2 * reach / (SPOT_HALF * texel)), 1, SPOTS);
+        double ul = Math.sqrt(ux * ux + uy * uy + uz * uz);
+        for (int k = 0; k < n; k++) {
+            double t = n == 1 || ul <= 0 ? 0 : ((k + 0.5) / n * 2 - 1) * reach * d / ul;
+            out[3 * k] = cx + t * ux;
+            out[3 * k + 1] = cy + t * uy;
+            out[3 * k + 2] = cz + t * uz;
+        }
+        out[3 * n] = solid;
+        return n;
     }
 
     /** Последний уровень: {@link #LEVELS} от первого, но не мельче двух пикселей по меньшей стороне. */
@@ -191,28 +294,52 @@ public final class FxBloom {
         return o;
     }
 
+    /** Кубический B-сплайн по пикселям m в точке (x, y) в его пикселях (середина пикселя i — i + ½), край — «по краю». */
+    static double bspline(Image m, double x, double y) {
+        double tx = x - 0.5, ty = y - 0.5;
+        int ix = (int) Math.floor(tx), iy = (int) Math.floor(ty);
+        double[] wx = basis(tx - ix), wy = basis(ty - iy);
+        double sum = 0;
+        for (int j = 0; j < 4; j++) {
+            for (int i = 0; i < 4; i++) sum += wx[i] * wy[j] * m.at(ix - 1 + i, iy - 1 + j);
+        }
+        return sum;
+    }
+
+    /** Веса кубического B-сплайна четырёх соседей при доле f. */
+    static double[] basis(double f) {
+        double f2 = f * f, f3 = f2 * f;
+        return new double[]{(-f3 + 3 * f2 - 3 * f + 1) / 6, (3 * f3 - 6 * f2 + 4) / 6, (-3 * f3 + 3 * f2 + 3 * f + 1) / 6, f3 / 6};
+    }
+
     /**
-     * Ореол во весь кадр w×h по излучению прохода свечения e (уровень {@link #glowLevel}) — свет до кривой (без доли
-     * {@link #SHARE}): уровни {@link #first} … {@link #last} с равными весами, как в проходах; сумма по кадру — сумма
-     * излучения в пикселях кадра (энергия сохраняется).
+     * Ореол во весь кадр w×h по излучению прохода свечения e на уровне g — свет до кривой (без доли {@link #SHARE}): спуск
+     * в 13 выборок до {@link #last}, сбор уровней {@link #first} … {@link #last} с равными весами одним проходом B-сплайном
+     * (у каждого — 4 выборки), шатром до половины кадра, на кадр — линейно; те же выборки, что у проходов. Сумма по кадру —
+     * сумма излучения в пикселях кадра (энергия сохраняется).
      */
-    static Image halo(Image e, int w, int h) {
-        int g = glowLevel(h), first = first(h), last = last(w, h);
+    static Image halo(Image e, int w, int h, int g) {
+        int first = first(h), last = last(w, h), n = last - first + 1;
         Image[] level = new Image[last + 1];
         level[g] = e;
         for (int k = g + 1; k <= last; k++) level[k] = down(level[k - 1]);
-        Image up = level[last];
-        for (int k = last - 1; k >= first; k--) {
-            Image t = tent(up, level[k].w, level[k].h);
-            for (int i = 0; i < t.v.length; i++) t.v[i] += level[k].v[i];
-            up = t;
+        Image f = level[first];
+        Image gather = Image.of(f.w, f.h);
+        for (int y = 0; y < f.h; y++) {
+            for (int x = 0; x < f.w; x++) {
+                double sum = 0;
+                for (int k = first; k <= last; k++) {
+                    double s2 = 1 << (k - first);
+                    sum += bspline(level[k], (x + 0.5) / s2, (y + 0.5) / s2);
+                }
+                gather.v[y * f.w + x] = (float) (sum / n);
+            }
         }
-        // мельче первого уровня — шатром до половины кадра: растянутый вчетверо линейно уровень у источника некруглый (~10 %)
+        Image up = gather;
         for (int k = first - 1; k >= 1; k--) up = tent(up, size(w, k), size(h, k));
         Image out = Image.of(w, h);
-        double scale = 1.0 / (last - first + 1);
         for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) out.v[y * w + x] = (float) (up.sample((x + 0.5) / 2, (y + 0.5) / 2) * scale);
+            for (int x = 0; x < w; x++) out.v[y * w + x] = up.sample((x + 0.5) / 2, (y + 0.5) / 2);
         }
         return out;
     }
@@ -220,9 +347,12 @@ public final class FxBloom {
     // ---------------------------------------------------------------- проходы
 
     @Nullable
-    static ShaderInstance down, up, out;
-    /** Рамка прохода свечения: излучение (уровень {@link #glowLevel} пирамиды) и доля светящегося того же размера. */
-    private static int fbo = -1, cover = -1, frameW, frameH;
+    static ShaderInstance down, up, gather, out;
+    /**
+     * Рамка прохода свечения: излучение (уровень {@link #glowLevel} пирамиды) и доля светящегося того же размера; сбор
+     * уровней — своя текстура размера первого уровня.
+     */
+    private static int fbo = -1, cover = -1, gathered = -1, gatheredFbo = -1, frameW, frameH, frameG = -1;
     private static boolean failed;
     private static final int MAX = 12;
     private static final int[] LEVEL = new int[MAX + 1], LEVEL_FBO = new int[MAX + 1], LEVEL_W = new int[MAX + 1], LEVEL_H = new int[MAX + 1];
@@ -245,12 +375,13 @@ public final class FxBloom {
      * пирамида и ореол на кадр. Ничего не светится, шейдеры не загрузились, рамку не завести — ничего.
      */
     static void draw(FxQuads quads, ShaderInstance fx, Matrix4f viewProjection) {
-        if (!quads.glows() || failed || down == null || up == null || out == null) return;
+        IncomingConfig.Client.Bloom q = quality();
+        if (q == IncomingConfig.Client.Bloom.OFF || !quads.glows() || !ready()) return;
         int frame = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         int w = VIEWPORT[0] + VIEWPORT[2], h = VIEWPORT[1] + VIEWPORT[3];
-        if (w <= 0 || h <= 0 || !target(w, h)) return;
-        int g = glowLevel(h);
+        int g = glowLevel(h, q);
+        if (w <= 0 || h <= 0 || !target(w, h, g)) return;
         // излучение и доля светящегося — только в рамке светящихся на экране: вне её дым ничего не гасит (там нуль)
         if (!scissor(quads.glowBox(), viewProjection, LEVEL_W[g], LEVEL_H[g], RECT)) return;
         int timed = GPU.begin(), pass = PASS.begin();
@@ -266,7 +397,7 @@ public final class FxBloom {
         RenderSystem.disableScissor();
         fx.safeGetUniform("FxGlowPass").set(0f, 1f);
         PASS.end(pass);
-        if (any) halo(frame, w, h);
+        if (any) halo(frame, w, h, g);
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
         GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
         // как у слоя после квадратов
@@ -308,13 +439,15 @@ public final class FxBloom {
     }
 
     /**
-     * Пирамида из излучения (уровень {@link #glowLevel}) и ореол на кадр frame размера w×h. Проходов шестнадцать, зависимых
-     * друг от друга, и цена у них — не пиксели, а сама цепочка: шейдер применяется раз на серию, между проходами меняются
-     * только цель, текстура и шаг, четырёхугольник — постоянный треугольник во весь кадр (у 2560×1600 с выводом — 0,36–0,41 мс
-     * против 0,40–0,51 с подготовкой на каждый проход, замер с glFinish).
+     * Пирамида из излучения (уровень g) и ореол на кадр frame размера w×h: спуск в 13 выборок до последнего уровня, сбор
+     * всех уровней ореола одним проходом (B-сплайн, 4 выборки на уровень), шатром до половины кадра, вывод. Цена здесь — не
+     * пиксели, а цепочка зависимых проходов: шейдер применяется раз на серию, между проходами меняются только цель,
+     * текстура и шаг, четырёхугольник — постоянный треугольник во весь кадр. Сбор вместо подъёма по уровням с прибавлением —
+     * на 5 проходов меньше; уменьшенные копии ({@code glGenerateMipmap}, 2×2) вместо спуска — ещё меньше, но они
+     * привязывают глубокие уровни к своей сетке: у движущегося источника дальний ореол скачет в разы (FxBloomTest).
      */
-    private static void halo(int frame, int w, int h) {
-        int g = glowLevel(h), first = first(h), last = last(w, h);
+    private static void halo(int frame, int w, int h, int g) {
+        int first = first(h), last = last(w, h), n = last - first + 1;
         lastFirst = first;
         lastLast = last;
         int timed = PYRAMID.begin();
@@ -325,15 +458,20 @@ public final class FxBloom {
         // вниз: уровень k из k − 1
         begin(down, LEVEL[g]);
         for (int k = g + 1; k <= last; k++) pass(down, k, LEVEL[k - 1], LEVEL_W[k - 1], LEVEL_H[k - 1]);
-        // вверх с прибавлением: уровень k — свой спуск плюс шатёр из k + 1
-        begin(up, LEVEL[last]);
-        RenderSystem.enableBlend();
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE);
-        for (int k = last - 1; k >= first; k--) pass(up, k, LEVEL[k + 1], LEVEL_W[k + 1], LEVEL_H[k + 1]);
-        // мельче первого уровня — только шатром, без своего спуска (у пака lod 0–1 в ореол не входят), до половины кадра:
-        // растянутый вчетверо линейно уровень у источника некруглый (~10 %)
-        RenderSystem.disableBlend();
-        for (int k = first - 1; k >= 1; k--) pass(up, k, LEVEL[k + 1], LEVEL_W[k + 1], LEVEL_H[k + 1]);
+        // сбор уровней first … last в свою текстуру размера первого
+        ShaderInstance c = gather;
+        for (int i = 0; i < GATHER; i++) c.setSampler("Sampler" + i, LEVEL[first + Math.min(i, n - 1)]);
+        c.safeGetUniform("BloomCount").set((float) n);
+        c.apply();
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, gatheredFbo);
+        GlStateManager._viewport(0, 0, LEVEL_W[first], LEVEL_H[first]);
+        GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
+        // мельче первого уровня — шатром до половины кадра: растянутый вчетверо линейно уровень у источника некруглый (~10 %)
+        begin(up, gathered);
+        for (int k = first - 1; k >= 1; k--) {
+            int src = k == first - 1 ? gathered : LEVEL[k + 1];
+            pass(up, k, src, LEVEL_W[k + 1], LEVEL_H[k + 1]);
+        }
         PYRAMID.end(timed);
         // на кадр: вокруг светящегося, кривая и «экран»
         int shown = OUT.begin();
@@ -344,7 +482,7 @@ public final class FxBloom {
                 GlStateManager.DestFactor.ONE);
         ShaderInstance s = out;
         s.setSampler("Sampler1", cover);
-        s.safeGetUniform("BloomStep").set(1f / LEVEL_W[1], 1f / LEVEL_H[1], (float) (SHARE / (last - first + 1)), 0f);
+        s.safeGetUniform("BloomStep").set(1f / LEVEL_W[1], 1f / LEVEL_H[1], (float) (SHARE / n), 0f);
         s.safeGetUniform("BloomFrom").set((float) VIEWPORT[0], (float) VIEWPORT[1]);
         s.safeGetUniform("BloomCover").set(1f / ((1 << g) * LEVEL_W[g]), 1f / ((1 << g) * LEVEL_H[g]));
         begin(s, LEVEL[1]);
@@ -355,6 +493,9 @@ public final class FxBloom {
         BufferUploader.invalidate();
         OUT.end(shown);
     }
+
+    /** Уровней в проходе сбора — не больше (по выборке на каждый, {@code fx_bloom_gather}). */
+    static final int GATHER = 7;
 
     /** Применить шейдер s с текстурой src в Sampler0 (серия проходов дальше меняет только цель, текстуру и шаг). */
     private static void begin(ShaderInstance s, int src) {
@@ -398,8 +539,8 @@ public final class FxBloom {
      * Уровни пирамиды кадра w×h (R11F_G11F_B10F, линейная выборка, край — «по краю»; уровень {@link #glowLevel} —
      * излучение прохода свечения) и доля светящегося (R8, того же размера); false — не завести.
      */
-    private static boolean target(int w, int h) {
-        if (fbo >= 0 && frameW == w && frameH == h) return true;
+    private static boolean target(int w, int h, int g) {
+        if (fbo >= 0 && frameW == w && frameH == h && frameG == g) return true;
         int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         boolean ok = true;
         for (int k = 1; k <= MAX; k++) {
@@ -411,7 +552,12 @@ public final class FxBloom {
             GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, LEVEL[k], 0);
             ok &= GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE;
         }
-        int g = glowLevel(h);
+        int first = first(h);
+        gathered = texture(gathered, LEVEL_W[first], LEVEL_H[first], GL30.GL_R11F_G11F_B10F);
+        if (gatheredFbo < 0) gatheredFbo = GlStateManager.glGenFramebuffers();
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, gatheredFbo);
+        GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, gathered, 0);
+        ok &= GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE;
         cover = texture(cover, LEVEL_W[g], LEVEL_H[g], GL30.GL_R8);
         if (fbo < 0) fbo = GlStateManager.glGenFramebuffers();
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
@@ -422,6 +568,7 @@ public final class FxBloom {
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
         frameW = w;
         frameH = h;
+        frameG = g;
         if (!ok) {
             Incoming.LOG.error("Effects bloom: targets for {}×{} not created, no bloom", w, h);
             failed = true;
@@ -453,7 +600,7 @@ public final class FxBloom {
 
     /** Для строки сценария: время проходов свечения и уровни. */
     static String describe() {
-        return String.format(Locale.ROOT, "bloom %.3f ms (longest %.3f, %d frames; glow pass %.3f, pyramid %.3f, out %.3f; %dx%d, levels %d-%d)",
-                GPU.lastMean, GPU.lastMax, GPU.lastFrames, PASS.lastMean, PYRAMID.lastMean, OUT.lastMean, frameW, frameH, lastFirst, lastLast);
+        return String.format(Locale.ROOT, "bloom %s %.3f ms (longest %.3f, %d frames; glow pass %.3f, pyramid %.3f, out %.3f; %dx%d, glow level %d, levels %d-%d)",
+                quality(), GPU.lastMean, GPU.lastMax, GPU.lastFrames, PASS.lastMean, PYRAMID.lastMean, OUT.lastMean, frameW, frameH, frameG, lastFirst, lastLast);
     }
 }

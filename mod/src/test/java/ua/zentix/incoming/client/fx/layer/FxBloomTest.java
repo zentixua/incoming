@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.fx.layer;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.IncomingConfig.Client.Bloom;
 import ua.zentix.incoming.client.nuclear.GlslFunction;
 
 import java.io.IOException;
@@ -15,7 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Свечение слоя ({@link FxBloom}): пирамида на процессоре — те же выборки и веса, что у шейдеров
- * ({@link #shadersSampleLikeTheReference}), законы шейдеров — те же числа, что в Java.
+ * ({@link #shadersSampleLikeTheReference}), законы шейдеров — те же числа, что в Java, пятна мелкого светящегося — на
+ * модели растеризации прохода излучения (выборка в серединах пикселей, ореол — функцией из самого {@code fx.fsh}).
  */
 class FxBloomTest {
     private static final Path SHADERS = Path.of("src/main/resources/assets/incoming/shaders");
@@ -25,11 +27,11 @@ class FxBloomTest {
     }
 
     /**
-     * Излучение прохода свечения (уровень {@link FxBloom#glowLevel} кадра w×h) с точкой энергии 1 в пикселях кадра (пиксель
-     * уровня g — 4^g пикселей кадра) в (x, y) пикселей кадра; между середин — долями соседей, как сдвиг на долю пикселя.
+     * Излучение прохода свечения (уровень g кадра w×h) с точкой энергии 1 в пикселях кадра (пиксель уровня g — 4^g пикселей
+     * кадра) в (x, y) пикселей кадра; между середин — долями соседей, как сдвиг на долю пикселя.
      */
-    private static FxBloom.Image point(int w, int h, double x, double y) {
-        int g = FxBloom.glowLevel(h), gw = FxBloom.size(w, g), gh = FxBloom.size(h, g);
+    private static FxBloom.Image point(int w, int h, int g, double x, double y) {
+        int gw = FxBloom.size(w, g), gh = FxBloom.size(h, g);
         double k = 1 << g, e0 = 1 / (k * k);
         FxBloom.Image e = FxBloom.Image.of(gw, gh);
         double px = x / k, py = y / k;
@@ -43,54 +45,138 @@ class FxBloomTest {
     }
 
     /**
-     * Ореол точки в кадре 2560×1600 (у хоста) — закон рассеяния в глазу CIE: равная энергия на октаву угла — яркость
-     * ∝ 1/r² (r²·B = 1/(уровней·2π·ln 2)) от 16 пикселей до краёв пирамиды; круглый (по диагонали — то же, что по осям:
-     * без квадратов уровней), спадает без ступеней и полос, энергия — та же, что у источника (без доли ореола).
+     * Ореол точки в кадре 2560×1600 (у хоста), обе настройки качества, — закон рассеяния в глазу CIE: равная энергия на
+     * октаву угла — яркость ∝ 1/r² (r²·B = 1/(уровней·2π·ln 2)) от 16 до 256 пикселей в пределах 25 % (сбор B-сплайном
+     * кладёт ближнее крыло уровня чуть уже подъёма шатрами), дальше до края пирамиды — 35 %; круглый (по диагонали — то же,
+     * что по осям: без квадратов уровней), спадает без ступеней и полос, энергия — та же, что у источника.
      */
     @Test
     void haloFollowsTheEyeScatterLaw() {
         int w = 2560, h = 1600, cx = 1280, cy = 800;
         assertEquals(3, FxBloom.first(h), "уровни как у пака: на октаву глубже 1080");
-        assertEquals(2, FxBloom.glowLevel(h), "проход излучения — на октаву мельче первого уровня ореола");
+        assertEquals(2, FxBloom.glowLevel(h, Bloom.FULL), "FULL: проход излучения на октаву мельче первого уровня");
+        assertEquals(3, FxBloom.glowLevel(h, Bloom.FAST), "FAST: проход излучения — сам первый уровень");
         int levels = FxBloom.last(w, h) - FxBloom.first(h) + 1;
         assertEquals(FxBloom.LEVELS, levels);
-        FxBloom.Image b = FxBloom.halo(point(w, h, cx, cy), w, h);
-        assertEquals(1, b.sum(), 0.03, "энергия ореола — энергия источника");
-        double law = 1 / (levels * 2 * Math.PI * Math.log(2)), previous = Double.MAX_VALUE;
-        for (int r = 1; r <= 700; r += 1) {
-            double axis = (b.at(cx + r, cy) + b.at(cx - r, cy) + b.at(cx, cy + r) + b.at(cx, cy - r)) / 4;
-            assertTrue(axis <= previous * 1.0005, "спад без ступеней, r " + r);
-            previous = axis;
-            int d = (int) Math.round(r / Math.sqrt(2));
-            double diagonal = (b.at(cx + d, cy + d) + b.at(cx - d, cy - d) + b.at(cx + d, cy - d) + b.at(cx - d, cy + d)) / 4;
-            double rd = d * Math.sqrt(2);
-            // та же яркость на том же расстоянии (диагональ — на своём rd; там, где спад ∝ 1/r², пересчёт по нему)
-            if (r >= 16) {
-                assertEquals(1, diagonal * rd * rd / (axis * r * r), 0.1, "круглый, r " + r);
-                assertEquals(1, axis * r * r / law, r <= 256 ? 0.1 : 0.2, "1/r², r " + r);
-            } else {
-                assertEquals(1, diagonal / axis, 0.1, "круглый у источника, r " + r);
+        double law = 1 / (levels * 2 * Math.PI * Math.log(2));
+        for (Bloom q : new Bloom[]{Bloom.FULL, Bloom.FAST}) {
+            int g = FxBloom.glowLevel(h, q);
+            FxBloom.Image b = FxBloom.halo(point(w, h, g, cx, cy), w, h, g);
+            assertEquals(1, b.sum(), 0.03, q + ": энергия ореола — энергия источника");
+            double previous = Double.MAX_VALUE;
+            for (int r = 1; r <= 700; r += 1) {
+                double axis = (b.at(cx + r, cy) + b.at(cx - r, cy) + b.at(cx, cy + r) + b.at(cx, cy - r)) / 4;
+                assertTrue(axis <= previous * 1.0005, q + ": спад без ступеней, r " + r);
+                previous = axis;
+                int d = (int) Math.round(r / Math.sqrt(2));
+                double diagonal = (b.at(cx + d, cy + d) + b.at(cx - d, cy - d) + b.at(cx + d, cy - d) + b.at(cx - d, cy + d)) / 4;
+                double rd = d * Math.sqrt(2);
+                if (r >= 16) {
+                    assertEquals(1, diagonal * rd * rd / (axis * r * r), 0.1, q + ": круглый, r " + r);
+                    assertEquals(1, axis * r * r / law, r <= 256 ? 0.25 : 0.35, q + ": 1/r², r " + r);
+                } else {
+                    assertEquals(1, diagonal / axis, 0.1, q + ": круглый у источника, r " + r);
+                }
             }
         }
     }
 
     /**
-     * Источник, сдвинутый на долю пикселя, ореол не дёргает: энергия та же (без мерцания у искры, идущей по кадру), пятно
-     * у самого источника — то же.
+     * Источник, идущий по кадру (сдвиги до 64 пикселей с долями), ореол не дёргает: энергия та же (без мерцания у искры),
+     * ореол в 40 и в 300 пикселях от него — тот же в пределах 6 %. Уменьшенные копии 2×2 ({@code glGenerateMipmap}) вместо
+     * спуска в 13 выборок тут проваливаются (дальний ореол скачет в разы): они привязывают глубокие уровни к своей сетке.
      */
     @Test
     void movingSourceKeepsItsHalo() {
         int w = 2560, h = 1600;
-        FxBloom.Image ref = FxBloom.halo(point(w, h, 1000, 700), w, h);
-        double near = ref.at(1000 + 40, 700);
-        for (double dx = 0.125; dx < 1; dx += 0.125) {
-            FxBloom.Image b = FxBloom.halo(point(w, h, 1000 + dx, 700 + 0.5 * dx), w, h);
-            assertEquals(ref.sum(), b.sum(), 0.002 * ref.sum(), "энергия, сдвиг " + dx);
-            assertEquals(near, b.at(1000 + 40, 700), 0.05 * near, "ореол в 40 пикселях, сдвиг " + dx);
+        for (Bloom q : new Bloom[]{Bloom.FULL, Bloom.FAST}) {
+            int g = FxBloom.glowLevel(h, q);
+            FxBloom.Image ref = FxBloom.halo(point(w, h, g, 1000, 700), w, h, g);
+            double near = ref.at(1040, 700), far = ref.at(1300, 700);
+            for (double dx = 0.5; dx < 64; dx += 3.7) {
+                double x = 1000 + dx, y = 700 + 0.37 * dx;
+                FxBloom.Image b = FxBloom.halo(point(w, h, g, x, y), w, h, g);
+                assertEquals(ref.sum(), b.sum(), 0.002 * ref.sum(), q + ": энергия, сдвиг " + dx);
+                assertEquals(near, b.at((int) Math.round(x + 40), (int) Math.round(y)), 0.06 * near, q + ": ореол в 40 пикселях, сдвиг " + dx);
+                assertEquals(far, b.at((int) Math.round(x + 300), (int) Math.round(y)), 0.06 * far, q + ": ореол в 300 пикселях, сдвиг " + dx);
+            }
         }
     }
 
-    /** Проходы — те же выборки и веса, что пирамида на процессоре ({@link FxBloom#down}, {@link FxBloom#tent}). */
+    /**
+     * Этап растеризации прохода излучения: квадрат светится там, где в него попадает середина пикселя. Квадрат мельче
+     * пикселя (искра, дальний факел) то попадает, то нет — его свет в проходе прыгает от нуля до вчетверо больше; пятно
+     * {@link FxBloom#spots} (ореол {@code glowAlpha} из {@code fx.fsh}, полуразмер {@link FxBloom#SPOT_HALF} пикселя) при
+     * любом сдвиге несёт ту же энергию — {@link FxBloom#SPOT_COVER} площади своего квадрата (в пределах 1 %: σ ореола ≈ 0,9
+     * пикселя, и край ореола срезан плавно, но не гауссом).
+     */
+    @Test
+    void spotKeepsItsEnergyWhereverItFalls() throws IOException {
+        GlslFunction glow = GlslFunction.parse(read("core/fx.fsh"), "glowAlpha");
+        for (double r = 0; r < 1.1; r += 0.01) assertEquals(FxBloom.glowAlpha(r), glow.call(Map.of("r", r)), 1e-9, "glowAlpha в Java — как в шейдере, r " + r);
+        double expected = FxBloom.SPOT_COVER * Math.pow(2 * FxBloom.SPOT_HALF, 2);
+        double tinyMin = Double.MAX_VALUE, tinyMax = 0;
+        for (double ox = 0; ox < 1; ox += 0.0625) {
+            for (double oy = 0; oy < 1; oy += 0.0625) {
+                double cx = 50 + ox, cy = 30 + oy;
+                // пятно: середины пикселей (i + ½) внутри квадрата, значение — ореол по расстоянию в долях полуразмера × 64/63
+                double sum = 0, half = FxBloom.SPOT_HALF;
+                for (int j = (int) Math.floor(cy - half); j <= cy + half; j++) {
+                    for (int i = (int) Math.floor(cx - half); i <= cx + half; i++) {
+                        double dx = i + 0.5 - cx, dy = j + 0.5 - cy;
+                        if (Math.abs(dx) > half || Math.abs(dy) > half) continue;
+                        sum += glow.call(Map.of("r", Math.sqrt(dx * dx + dy * dy) / half * 64 / 63));
+                    }
+                }
+                assertEquals(1, sum / expected, 0.01, "пятно, сдвиг " + ox + ", " + oy);
+                // квадрат в полпикселя: те же середины пикселей
+                double tiny = 0;
+                for (int j = 25; j < 35; j++) {
+                    for (int i = 45; i < 55; i++) if (Math.abs(i + 0.5 - cx) <= 0.25 && Math.abs(j + 0.5 - cy) <= 0.25) tiny += 1;
+                }
+                tinyMin = Math.min(tinyMin, tiny);
+                tinyMax = Math.max(tinyMax, tiny);
+            }
+        }
+        assertEquals(0, tinyMin, "квадрат мельче пикселя в проходе пропадает");
+        assertEquals(1, tinyMax, "… и появляется: свет прыгает от нуля до полного (а его площадь — четверть пикселя)");
+    }
+
+    /**
+     * Пятна квадрата ({@link FxBloom#spots}): мелкий — одно пятно в его середине и его телесный угол; длинный тонкий (факел
+     * вдали) — пятна по длине не реже полуразмера пятна; широкий в обе стороны — без пятен (рисуется сам).
+     */
+    @Test
+    void spotsCoverSmallAndThinEmitters() {
+        double texel = 0.004, d = 100;
+        double[] out = new double[3 * FxBloom.SPOTS + 1];
+        // квадрат лицом к камере в 0,3 пикселя: угол 0,3·texel → сторона 0,3·texel·d
+        float side = (float) (0.3 * texel * d), hs = side / 2;
+        float[] tiny = {-hs, -hs, (float) -d, -hs, hs, (float) -d, hs, hs, (float) -d, hs, -hs, (float) -d};
+        assertEquals(1, FxBloom.spots(tiny, texel, out));
+        assertEquals(0, out[0], 1e-6);
+        assertEquals(-d, out[2], 1e-4);
+        assertEquals(side * side / (d * d), out[3], 1e-9, "телесный угол квадрата");
+        // полоса 40 пикселей в длину, 0,5 в ширину
+        float len = (float) (40 * texel * d / 2), wid = (float) (0.25 * texel * d);
+        float[] strip = {-len, -wid, (float) -d, -len, wid, (float) -d, len, wid, (float) -d, len, -wid, (float) -d};
+        int n = FxBloom.spots(strip, texel, out);
+        assertEquals(FxBloom.SPOTS, n, "длинная — пятна по длине, не больше " + FxBloom.SPOTS);
+        assertEquals(4 * len * wid / (d * d), out[3 * n], 1e-9);
+        double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
+        for (int k = 0; k < n; k++) {
+            lo = Math.min(lo, out[3 * k]);
+            hi = Math.max(hi, out[3 * k]);
+            assertEquals(0, out[3 * k + 1], wid, "пятна — на оси полосы");
+        }
+        assertTrue(lo < -len * 0.8 && hi > len * 0.8, "пятна — по всей длине");
+        // 6 пикселей в обе стороны — без пятен
+        float big = (float) (3 * texel * d);
+        float[] wide = {-big, -big, (float) -d, -big, big, (float) -d, big, big, (float) -d, big, -big, (float) -d};
+        assertEquals(0, FxBloom.spots(wide, texel, out));
+    }
+
+    /** Проходы — те же выборки и веса, что пирамида на процессоре ({@link FxBloom#down}, {@link FxBloom#tent}, {@link FxBloom#bspline}). */
     @Test
     void shadersSampleLikeTheReference() throws IOException {
         String down = read("core/fx_bloom_down.fsh").replaceAll("\\s+", " "), up = read("core/fx_bloom_up.fsh").replaceAll("\\s+", " ");
@@ -100,8 +186,18 @@ class FxBloomTest {
                 "1.0, 1.0", "-1.0, -1.0", "1.0, -1.0"}) {
             assertTrue(down.contains("at(uv, d, " + tap + ")"), "вниз: выборка " + tap);
         }
-        assertTrue(up.contains("uv = gl_FragCoord.xy * 0.5 * d"), "вверх: пиксель — точка ((x + ½)/2, (y + ½)/2) мельчайшего");
-        assertTrue(up.contains("(corners + 2.0 * sides + 4.0 * at(uv, d, 0.0, 0.0)) / 16.0"), "вверх: шатёр");
+        assertTrue(up.contains("uv = gl_FragCoord.xy * 0.5 * d"), "шатёр: пиксель — точка ((x + ½)/2, (y + ½)/2) мельчайшего");
+        assertTrue(up.contains("(corners + 2.0 * sides + 4.0 * at(uv, d, 0.0, 0.0)) / 16.0"), "шатёр: веса");
+        String gather = read("core/fx_bloom_gather.fsh").replaceAll("\\s+", " ");
+        assertTrue(gather.contains("vec2 w0 = (-f3 + 3.0 * f2 - 3.0 * f + 1.0) / 6.0, w1 = (3.0 * f3 - 6.0 * f2 + 4.0) / 6.0;"), "сбор: веса B-сплайна");
+        assertTrue(gather.contains("vec2 w2 = (-3.0 * f3 + 3.0 * f2 + 3.0 * f + 1.0) / 6.0, w3 = f3 / 6.0;"), "сбор: веса B-сплайна");
+        assertTrue(gather.contains("vec2 p0 = (i - 0.5 + w1 / g0) / size, p1 = (i + 1.5 + w3 / g1) / size;"), "сбор: две линейные выборки на ось");
+        for (int i = 1; i < FxBloom.GATHER; i++) {
+            assertTrue(gather.contains("bspline(Sampler" + i + ", at * " + (1.0 / (1 << i)) + ")"), "сбор: уровень " + i + " — точка (x + ½)/2^" + i);
+        }
+        assertTrue(gather.contains("fragColor = vec4(sum / BloomCount, 1.0);"), "сбор: равные веса уровней");
+        double[] wsum = FxBloom.basis(0.37);
+        assertEquals(1, wsum[0] + wsum[1] + wsum[2] + wsum[3], 1e-12, "B-сплайн сохраняет энергию");
         String out = read("core/fx_bloom.fsh").replaceAll("\\s+", " ");
         assertTrue(out.contains("vec2 uv = at * 0.5 * BloomStep.xy;"), "на кадр: пиксель — точка ((x + ½)/2, (y + ½)/2) половины кадра");
         assertTrue(out.contains("texture(Sampler0, uv).rgb * BloomStep.z * (1.0 - own)"), "доля на число уровней, вокруг светящегося");
@@ -110,12 +206,12 @@ class FxBloomTest {
     /**
      * Проход свечения — тот же шейдер, что у цвета ({@code fx.fsh}, {@code FxGlowPass}): излучение берёт ту же видимую долю
      * (мягкий край у мира и LOD, у камеры, туман) и пелену перед ним, альфа — альфа цвета (дым перед огнём гасит его
-     * излучение и долю светящегося той же долей), а что за миром, отбрасывает по расстоянию до мира: в половине кадра
-     * аппаратной глубины нет. Проход слоя — как без свечения.
+     * излучение и долю светящегося той же долей), а что за миром, отбрасывает по расстоянию до мира: в уменьшенном проходе
+     * аппаратной глубины нет. Пятно — только в проходе свечения, светящийся пятнами квадрат — только в слое.
      */
     @Test
     void glowIsCutLikeTheColour() throws IOException {
-        String fsh = read("core/fx.fsh").replaceAll("\\s+", " ");
+        String fsh = read("core/fx.fsh").replaceAll("\\s+", " "), vsh = read("core/fx.vsh").replaceAll("\\s+", " ");
         assertTrue(fsh.contains("fragColor = color * seen * ColorModulator;"), "цвет — с видимой долей");
         assertTrue(fsh.contains("fragColor = vec4(glow * seen * ColorModulator.rgb, fragColor.a);"), "излучение — с той же долей и альфой цвета");
         assertTrue(fsh.contains("fragCover = vec4(own, 0.0, 0.0, fragColor.a);"), "доля светящегося — с альфой цвета: дым перед огнём её убавляет");
@@ -124,6 +220,12 @@ class FxBloomTest {
         assertTrue(fsh.contains("if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);"), "мягкий край у мира — в видимой доле");
         assertTrue(fsh.contains("if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;"), "что за миром, не светится");
         assertTrue(fsh.contains("float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);"), "расстояние до мира — у пикселя кадра, не прохода");
+        assertTrue(fsh.contains("glow = color.rgb * emitGain;"), "пятно: цвет — линейный свет");
+        assertTrue(vsh.contains("if (Emit > " + (FxBloom.SPOT - 0.5) + ")"), "пятно — с " + FxBloom.SPOT);
+        assertTrue(vsh.contains("emitGain = bloomGain(Emit - " + (double) FxBloom.SPOT + ");"), "пересвет пятна");
+        assertTrue(vsh.contains("emitGain = bloomGain(Emit - " + (double) FxBloom.EMITTER + ");"), "пересвет светящегося");
+        assertTrue(vsh.contains("if ((Emit > " + (FxBloom.SPOT - 0.5) + " && !glowPass) || (Emit > " + (FxBloom.SKIP - 0.5) + " && Emit < "
+                + (FxBloom.SKIP + 0.5) + " && glowPass)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);"), "пятно — только в проходе, его квадрат — только в слое");
     }
 
     /** Законы шейдеров ({@code bloom.glsl}) — те же, что в Java: код пересвета, белая точка, кривая ореола. */
@@ -133,8 +235,9 @@ class FxBloomTest {
         assertEquals(FxBloom.WHITE, constant(glsl, "BLOOM_WHITE"), 1e-5);
         assertEquals(FxBloom.STEPS, constant(glsl, "BLOOM_STEPS"), 1e-9);
         GlslFunction gain = GlslFunction.parse(glsl, "bloomGain"), curve = GlslFunction.parse(glsl, "bloomCurve");
-        for (int c = 1; c <= 255; c++) assertEquals(FxBloom.gain(c), gain.call(Map.of("code", (double) c)), 1e-5 * FxBloom.gain(c), "код " + c);
+        for (int c = 0; c <= FxBloom.STEPS; c++) assertEquals(FxBloom.gain(c), gain.call(Map.of("code", (double) c)), 1e-5 * FxBloom.gain(c), "код " + c);
         for (double x = 0; x < 20; x += 0.1) assertEquals(FxBloom.curve(x), curve.call(Map.of("x", x)), 1e-12, "x " + x);
+        assertTrue(FxBloom.EMITTER + FxBloom.STEPS < FxBloom.SPOT && FxBloom.SPOT + FxBloom.STEPS <= 255 && FxBloom.SKIP < FxBloom.EMITTER, "коды не пересекаются");
     }
 
     /**
@@ -151,17 +254,17 @@ class FxBloomTest {
         assertEquals(1, FxBloom.film(FxBloom.WHITE), 1e-9);
     }
 
-    /** Код пересвета: 1 — свет как показан, до белой точки — с шагом меньше процента, ярче — она. */
+    /** Код пересвета: 0 — свет как показан, до белой точки — с шагом меньше 1,6 %, ярче — она. */
     @Test
     void gainCodeCoversTheWhitePoint() {
-        assertEquals(1, FxBloom.code(0.3));
-        assertEquals(1, FxBloom.code(1));
-        assertEquals(255, FxBloom.code(FxBloom.WHITE));
-        assertEquals(255, FxBloom.code(1e6));
+        assertEquals(0, FxBloom.code(0.3));
+        assertEquals(0, FxBloom.code(1));
+        assertEquals(FxBloom.STEPS, FxBloom.code(FxBloom.WHITE));
+        assertEquals(FxBloom.STEPS, FxBloom.code(1e6));
         for (double g = 1; g <= FxBloom.WHITE; g *= 1.013) {
             int c = FxBloom.code(g);
-            assertTrue(c >= 1 && c <= 255);
-            assertEquals(1, FxBloom.gain(c) / g, 0.005, "пересвет " + g);
+            assertTrue(c >= 0 && c <= FxBloom.STEPS);
+            assertEquals(1, FxBloom.gain(c) / g, 0.0081, "пересвет " + g);
         }
     }
 

@@ -54,6 +54,11 @@ public final class FxQuads {
     private int glowFrom;
     /** Рамка вершин светящихся квадратов кадра (от камеры): x, y, z наименьшие, потом наибольшие. */
     private final float[] glowBox = new float[6];
+    /** Угол пикселя прохода свечения, рад ({@link FxBloom#texel}); 0 — свечения нет. */
+    private double glowTexel;
+    /** Вершин записано у текущего квадрата; идёт запись пятен ({@link #spots}). */
+    private int corner;
+    private boolean spotting;
     private final FarFirst sort = new FarFirst();
     private final ByteBufferBuilder out = new ByteBufferBuilder(QUAD * 256);
     private Vector3f left = new Vector3f(1, 0, 0), up = new Vector3f(0, 1, 0);
@@ -156,7 +161,15 @@ public final class FxQuads {
      * модели против кадра); 1 — свет как показан; 0 и меньше — не светятся (дым, ореолы в глазу, модели).
      */
     public void emission(float hdr) {
-        emit = (byte) (hdr > 0 ? FxBloom.code(hdr) : 0);
+        emit = (byte) (hdr > 0 && glowTexel > 0 ? FxBloom.EMITTER + FxBloom.code(hdr) : 0);
+    }
+
+    /**
+     * Угол пикселя прохода свечения кадра, рад ({@link FxBloom#texel}): светящийся квадрат уже {@link FxBloom#SMALL} таких
+     * пикселей идёт в свечение пятнами с той же энергией ({@link #spots}); 0 — свечения нет (настройка, шейдеры).
+     */
+    public void glowTexel(double texel) {
+        glowTexel = texel;
     }
 
     /** В кадре есть свечение: проход свечения нужен. */
@@ -180,6 +193,7 @@ public final class FxQuads {
         emits[n] = false;
         write = stage + (long) n * QUAD;
         n++;
+        corner = 0;
     }
 
     /**
@@ -218,6 +232,91 @@ public final class FxQuads {
             glowBox[5] = Math.max(glowBox[5], z);
         }
         write = p + VERTEX;
+        if (++corner == 4 && emits[n - 1] && !spotting) spots(n - 1);
+    }
+
+    private final float[] corners = new float[12];
+    private final double[] places = new double[3 * FxBloom.SPOTS + 1];
+    private final float[] means = new float[FxAtlas.MEANS];
+
+    /**
+     * Светящийся квадрат i уже {@link FxBloom#SMALL} пикселей прохода свечения поперёк ({@link FxBloom#spots}): в проходе
+     * свечения выборка в серединах его пикселей то попадает в него, то нет — свечение пропадает и мерцает. Вместо него в
+     * проход идут пятна (ореол {@code far/glow} формулой, полуразмер {@link FxBloom#SPOT_HALF} пикселя) с его энергией:
+     * средний свет его места на листе ({@link FxAtlas#means}, тем же законом, что {@code bloomLight} в {@code fx.fsh}) × цвет
+     * вершин × пересвет × его телесный угол, поровну на пятна; доля закрытого — так же. Сам он в проход не идёт
+     * ({@link FxBloom#SKIP}).
+     */
+    private void spots(int i) {
+        long q = stage + (long) i * QUAD;
+        for (int k = 0; k < 4; k++) {
+            long p = q + (long) k * VERTEX;
+            corners[3 * k] = MemoryUtil.memGetFloat(p);
+            corners[3 * k + 1] = MemoryUtil.memGetFloat(p + 4);
+            corners[3 * k + 2] = MemoryUtil.memGetFloat(p + 8);
+        }
+        int count = FxBloom.spots(corners, glowTexel, places);
+        if (count == 0) return;
+        float u0 = Float.MAX_VALUE, v0 = Float.MAX_VALUE, u1 = -Float.MAX_VALUE, v1 = -Float.MAX_VALUE, r = 0, g = 0, b = 0, a = 0, unfold = 0;
+        double gain = 0;
+        for (int k = 0; k < 4; k++) {
+            long p = q + (long) k * VERTEX;
+            float u = MemoryUtil.memGetFloat(p + 12), v = MemoryUtil.memGetFloat(p + 16);
+            u0 = Math.min(u0, u);
+            u1 = Math.max(u1, u);
+            v0 = Math.min(v0, v);
+            v1 = Math.max(v1, v);
+            r += (MemoryUtil.memGetByte(p + 20) & 255) / 1020f;
+            g += (MemoryUtil.memGetByte(p + 21) & 255) / 1020f;
+            b += (MemoryUtil.memGetByte(p + 22) & 255) / 1020f;
+            a += (MemoryUtil.memGetByte(p + 23) & 255) / 1020f;
+            unfold += (MemoryUtil.memGetShort(p + 26) & 0xFFFF) / (4f * Short.MAX_VALUE);
+            gain += FxBloom.gain((MemoryUtil.memGetByte(p + 35) & 255) - FxBloom.EMITTER) / 4;
+        }
+        if (!FxAtlas.means(u0, v0, u1, v1, means)) return;
+        // как bloomLight: у частиц и кадров огня (умноженная альфа) — свет цвета на долю, у остального — свет поверх
+        boolean cover = (MemoryUtil.memGetByte(q + 33) & 255) > 69 && a > 0.004f;
+        double[] e = new double[3];
+        double alpha;
+        if (cover) {
+            e[0] = Math.pow(Math.min(1, r / a), 2.2) * a * means[0];
+            e[1] = Math.pow(Math.min(1, g / a), 2.2) * a * means[1];
+            e[2] = Math.pow(Math.min(1, b / a), 2.2) * a * means[2];
+            alpha = a * means[6];
+        } else {
+            e[0] = Math.pow(r, 2.2) * means[3];
+            e[1] = Math.pow(g, 2.2) * means[4];
+            e[2] = Math.pow(b, 2.2) * means[5];
+            alpha = 0;
+        }
+        // на пятно: свет квадрата (средний × телесный угол) поровну, по площади ореола пятна
+        double solid = places[3 * count], spot = FxBloom.SPOT_COVER * Math.pow(2 * FxBloom.SPOT_HALF * glowTexel, 2), share = solid / count / spot;
+        double er = e[0] * gain * share, eg = e[1] * gain * share, eb = e[2] * gain * share;
+        double top = Math.max(er, Math.max(eg, eb));
+        if (top <= 0 && alpha <= 0) return;
+        int code = FxBloom.code(top);
+        double scale = FxBloom.gain(code);
+        float soft = Math.max(0, MemoryUtil.memGetShort(q + 24)) / 16f, fog = (MemoryUtil.memGetByte(q + 32) & 255) / 127f, key = keys[i];
+        // сам квадрат — только в слое
+        for (int k = 0; k < 4; k++) MemoryUtil.memPutByte(q + (long) k * VERTEX + 35, (byte) FxBloom.SKIP);
+        byte n0 = nearest, o0 = opacity, e0 = emit;
+        short p0 = probe;
+        spotting = true;
+        nearest = 64;
+        opacity = 0;
+        probe = 0;
+        emit = (byte) (FxBloom.SPOT + code);
+        FxAtlas.Sprite glow = FxAtlas.glow();
+        for (int k = 0; k < count; k++) {
+            double x = places[3 * k], y = places[3 * k + 1], z = places[3 * k + 2], half = FxBloom.SPOT_HALF * glowTexel * Math.sqrt(x * x + y * y + z * z);
+            billboard((float) x, (float) y, (float) z, key, (float) half, 0, glow, (float) Math.min(1, er / scale), (float) Math.min(1, eg / scale),
+                    (float) Math.min(1, eb / scale), (float) Math.min(1, alpha * share), soft, unfold, net.minecraft.client.renderer.LightTexture.FULL_BRIGHT, fog);
+        }
+        nearest = n0;
+        opacity = o0;
+        emit = e0;
+        probe = p0;
+        spotting = false;
     }
 
     /**

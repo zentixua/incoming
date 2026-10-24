@@ -21,8 +21,10 @@ in ivec2 UV2;
 // моделей (свет в ней уже есть), ½ — ореол far/glow (крупный — по формуле, fx.fsh), −¼ — запечённый клуб с
 // шестисторонним светом (FxAtlas.puff6), ⅝ — кадры огня; z: непрозрачность частицы без текстуры, у клуба/огня — смесь кадров
 in vec3 Normal;
-// свечение (FxBloom, FxQuads.emission): 0 — не светится; 1…255 — код пересвета (bloomGain)
+// свечение (FxBloom, FxQuads.emission): байт Emit — bloom.glsl
 in float Emit;
+// x: 1 — проход свечения (FxBloom); y — во сколько раз пиксель прохода крупнее пикселя кадра
+uniform vec2 FxGlowPass;
 
 uniform sampler2D Sampler2;
 // свет открытого неба на веществе в воздухе против карты освещения у открытого неба (FarView.sky): карта красит синим
@@ -61,6 +63,8 @@ out vec3 sixBallDir;
 out vec3 worldPos;
 // свечение: во сколько раз свет ярче показанного; 0 — не светится
 out float emitGain;
+// 1 — пятно мелкого светящегося (FxQuads, FxBloom.spots): ореол формулой, свет линейный
+out float emitSpot;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
 
@@ -144,7 +148,18 @@ void main() {
     nearest = Normal.y;
     opacity = Normal.z;
     emitGain = 0.0;
-    if (Emit > 0.5) emitGain = bloomGain(Emit);
+    emitSpot = 0.0;
+    if (Emit > 129.5) {
+        emitSpot = 1.0;
+        emitGain = bloomGain(Emit - 130.0);
+        // свет пятна — его свет, без карты освещения
+        vertexColor = Color;
+    } else if (Emit > 1.5) {
+        emitGain = bloomGain(Emit - 2.0);
+    }
+    // пятно — только в проходе свечения, квадрат, что светится пятнами, — только в слое: другой — за пределами кадра
+    bool glowPass = FxGlowPass.x > 0.5;
+    if ((Emit > 129.5 && !glowPass) || (Emit > 0.5 && Emit < 1.5 && glowPass)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     // блик и вуаль с пробой: пелена и грибы перед источником — уже в ней (fx_probe, до самого источника); по углам
     // квадрата у глаза их не считать — свет в глазу идёт от источника, а угол блика в своей же шапке гасил бы его над ней
     pallFront = 1.0;

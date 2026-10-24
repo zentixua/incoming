@@ -146,9 +146,10 @@ public final class FxLayer {
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_bloom_down"), DefaultVertexFormat.POSITION), s -> FxBloom.down = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_bloom_up"), DefaultVertexFormat.POSITION), s -> FxBloom.up = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_bloom_gather"), DefaultVertexFormat.POSITION), s -> FxBloom.gather = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_bloom"), DefaultVertexFormat.POSITION), s -> FxBloom.out = s);
         } catch (IOException ex) {
-            FxBloom.down = FxBloom.up = FxBloom.out = null;
+            FxBloom.down = FxBloom.up = FxBloom.gather = FxBloom.out = null;
             Incoming.LOG.error("Effects bloom shaders failed to load: fire, flashes and rocket flames without bloom", ex);
         }
         try {
@@ -230,6 +231,8 @@ public final class FxLayer {
         if (warmup) FarRenderer.warmup();
         FRUSTUM.set(FarDraw.viewProjection(e, view.camera(), VIEW_PROJECTION));
         QUADS.begin(view.left(), view.up());
+        // свечение: мелкое светящееся — пятнами в пикселях прохода свечения (FxBloom.spots); 0 — свечения нет
+        QUADS.glowTexel(FxBloom.texel(view.pixel(), mc.getMainRenderTarget().height));
         WaterDecal.begin(level, e.getCamera());
         NukeWater.decals(view.partial());
         LIGHTS.begin();

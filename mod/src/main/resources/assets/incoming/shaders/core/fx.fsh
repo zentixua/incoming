@@ -45,6 +45,8 @@ in vec3 sixBallDir;
 in vec3 worldPos;
 // свечение (FxBloom): во сколько раз свет ярче показанного; 0 — не светится
 in float emitGain;
+// 1 — пятно мелкого светящегося (FxBloom.spots): ореол far/glow формулой при любом размере, цвет — линейный свет
+in float emitSpot;
 
 // запечённый клуб (FxAtlas.puff6): x — шаг карт по листу (v), y — начало кадров (v), z и w — размер кадра (u, v)
 uniform vec4 FxSix;
@@ -198,7 +200,11 @@ void main() {
     vec4 tex;
     bool six = nearest < -0.1 && nearest > -0.4;
     vec3 sixLit = vec3(1.0);
-    if (nearest > 0.75) {
+    if (emitSpot > 0.5) {
+        // пятно — всегда формулой: выборка в серединах пикселей несёт ту же энергию при любом сдвиге (FxBloomTest)
+        vec2 local = ((texCoord0 - FxGlow.xy) / (FxGlow.zw - FxGlow.xy) * 2.0 - 1.0) * (64.0 / 63.0);
+        tex = vec4(glowAlpha(length(local)));
+    } else if (nearest > 0.75) {
         tex = particle(texCoord0, dx, dy, lod);
     } else if (six && FxGlowPass.x > 0.5) {
         tex = vec4(sixAlpha(texCoord0, dx, dy, opacity));
@@ -255,7 +261,11 @@ void main() {
     // частицы и кадры огня — с умноженной альфой
     float cover = 0.0;
     if (nearest > 0.55) cover = 1.0;
-    if (FxGlowPass.x > 0.5 && emitGain > 0.0) glow = bloomLight(color, cover, emitGain);
+    if (FxGlowPass.x > 0.5 && emitSpot > 0.5) {
+        glow = color.rgb * emitGain;
+    } else if (FxGlowPass.x > 0.5 && emitGain > 0.0) {
+        glow = bloomLight(color, cover, emitGain);
+    }
     if (PallAmbient.w > 0.5) {
         // пелена перед квадратом: его свет ослаблен, а закрытое им — уже её свет до него (пелена на кадре — до мира).
         // Квадрат ближе мира: перед ним пелены не больше, чем на кадре до мира, — и её свет до него — доля света пелены
@@ -290,6 +300,7 @@ void main() {
         // светящееся занимает пиксель своей непрозрачностью (у ядер и факела, что только светят, — своим светом)
         float own = 0.0;
         if (emitGain > 0.0) own = clamp(max(fragColor.a, max(fragColor.r, max(fragColor.g, fragColor.b))), 0.0, 1.0);
+        if (emitSpot > 0.5) own = fragColor.a;
         fragCover = vec4(own, 0.0, 0.0, fragColor.a);
         fragColor = vec4(glow * seen * ColorModulator.rgb, fragColor.a);
     }
