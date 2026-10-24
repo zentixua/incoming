@@ -362,8 +362,9 @@ public final class IncomingConfig {
                             "sounds. The fireball, the mushroom cloud and the water column stay, at LOW.")
                     .translation("incoming.config.nuke_dust_quality").defineEnum("nuke_dust_quality", DustQuality.MEDIUM);
             bloom = b.comment("Glow around fire, fireballs, flashes and rocket flames, the way the eye or a camera lens scatters bright light:",
-                            "OFF / FAST / FULL. FAST works out the glow from a coarser image (about a third cheaper); FULL is finer close to",
-                            "small and fine-detailed flames. It does not change the light of the fire on the world and smoke.")
+                            "OFF / FAST / FULL. FAST works out the glow from a coarser image and is cheaper (about 0.2-0.35 ms a frame against",
+                            "0.3-0.6 ms for FULL at 2560x1600 on an RTX 4060); FULL is finer close to small and fine-detailed flames.",
+                            "It does not change the light of the fire on the world and smoke.")
                     .translation("incoming.config.bloom").defineEnum("bloom", Bloom.FAST);
             nukeTinnitus = b.comment("Hearing damage from a blast wave strong enough to hurt the ears (from about 0.75 psi): muffled hearing and",
                             "ringing ears that recover over game hours; from 5 psi torn eardrums, muffled for game weeks or until you die.")
