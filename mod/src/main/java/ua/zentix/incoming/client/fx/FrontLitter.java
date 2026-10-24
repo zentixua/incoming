@@ -53,6 +53,11 @@ public final class FrontLitter {
 
     private FrontLitter() {}
 
+    /** Выход из мира (и сброс песочницы): взрывы, чья пыль была на виду, — из общего предела площадок ({@link FrontDust}). */
+    public static void reset() {
+        FrontDust.reset();
+    }
+
     /**
      * Кольцо срыва травы и листьев по земле {внутренний, внешний радиус}, м: где u* за фронтом выше порога дёрна. Ищется с
      * {@code from} (край огненного шара: ближе всё сгорает и уходит с грунтом воронки) до {@link #TEAR_MAX}; {@code hob}
@@ -101,7 +106,7 @@ public final class FrontLitter {
         if (!(outer > inner)) return;
         Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         if (Math.hypot(eye.x - pos.x, eye.z - pos.z) > outer + REACH) return;
-        int n = Math.min(MAX, (int) Math.round(PER_M2 * Math.PI * (outer * outer - inner * inner)));
+        int n = Math.min(Fragments.share(MAX), (int) Math.round(PER_M2 * Math.PI * (outer * outer - inner * inner)));
         FrontDust.spawn(level, pos, front, inner, outer, hob);
         double terminal = Fragments.terminal(Fragments.Kind.LEAF, 0, 0);
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();

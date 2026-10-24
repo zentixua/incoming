@@ -331,6 +331,7 @@ public final class IncomingClient {
         FxPool.INSTANCE.clear();
         FxLayer.reset();
         Fragments.reset();
+        ua.zentix.incoming.client.fx.FrontLitter.reset();
         Effects.clear();
         CameraShake.reset();
         Flash.reset();
