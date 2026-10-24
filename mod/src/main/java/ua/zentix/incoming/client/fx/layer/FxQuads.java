@@ -50,9 +50,12 @@ public final class FxQuads {
     private int capacity, n;
     private long write;
     private float[] keys = new float[0];
-    private boolean[] smoke = new boolean[0];
-    private boolean[] reduced = new boolean[0];
+    private boolean[] reducible = new boolean[0];
+    private int[] resolution = new int[0];
+    private boolean[] thin = new boolean[0];
+    private float[] thinBounds = new float[0];
     private float[] bounds = new float[0];
+    private float[] frameBounds;
     private final Vector4f clip = new Vector4f();
     private VertexBuffer gpu;
     private final FarFirst sort = new FarFirst();
@@ -65,6 +68,10 @@ public final class FxQuads {
     public void begin(Vector3f left, Vector3f up) {
         this.left = left;
         this.up = up;
+        // Enhanced class redefinition initializes added fields to null in an already running sandbox.
+        if (resolution == null) resolution = new int[capacity];
+        if (thin == null) thin = new boolean[capacity];
+        if (thinBounds == null) thinBounds = new float[4 * capacity];
         n = 0;
         nearest = opacity = 0;
         probe = 0;
@@ -114,7 +121,13 @@ public final class FxQuads {
      * всегда полный (под открытым небом; его свет — по картам кадра в шейдере), и карта освещения берётся без UV2.
      */
     public void sixWay(float mix, float shade, double tau) {
+        sixWay(mix, shade, tau, false);
+    }
+
+    /** Broad optically thin smoke needs density sampling; its sub-threshold self-shadow needs no six-way maps. */
+    public void sixWay(float mix, float shade, double tau, boolean broad) {
         nearest = (byte) (mix < 0 ? 0 : -13 - Math.round(Mth.clamp(shade / SHADE_MAX, 0, 1) * SHADE_STEPS));
+        if (broad && mix >= 0) nearest = -60;
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
         sixTau = mix < 0 ? 0 : tauCode(tau);
         six = mix >= 0;
@@ -172,7 +185,8 @@ public final class FxQuads {
     public void quad(float key) {
         if (n == capacity) grow();
         keys[n] = key > 0 ? key : 0;
-        smoke[n] = six;
+        thin[n] = six && nearest == -60;
+        reducible[n] = nearest > -100; // Sprite particles, ribbons and light; model tiles retain native resolution.
         write = stage + (long) n * QUAD;
         n++;
     }
@@ -262,19 +276,20 @@ public final class FxQuads {
             return;
         }
         int[] order = sort.sort(keys, n);
+        if (frameBounds == null || frameBounds.length < 4 * n) frameBounds = new float[4 * capacity];
         // Консервативные рамки настоящих квадратов в кадре: бюджет — по числу пикселей цели, включая прозрачные углы.
         for (int i = 0; i < n; i++) {
             int o = 4 * i;
             Arrays.fill(bounds, o, o + 4, 0);
-            if (!smoke[i]) continue;
+            Arrays.fill(thinBounds, o, o + 4, 0);
             float x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+            int behind = 0;
             for (int j = 0; j < 4; j++) {
                 long p = stage + (long) i * QUAD + (long) j * VERTEX;
                 projectionView.transform(clip.set(MemoryUtil.memGetFloat(p), MemoryUtil.memGetFloat(p + 4), MemoryUtil.memGetFloat(p + 8), 1));
                 if (!(clip.w > 0)) {
-                    x0 = y0 = 0;
-                    x1 = y1 = 1;
-                    break;
+                    behind++;
+                    continue;
                 }
                 float x = Math.clamp(clip.x / clip.w * 0.5f + 0.5f, 0, 1), y = Math.clamp(clip.y / clip.w * 0.5f + 0.5f, 0, 1);
                 x0 = Math.min(x0, x);
@@ -282,20 +297,24 @@ public final class FxQuads {
                 y0 = Math.min(y0, y);
                 y1 = Math.max(y1, y);
             }
-            bounds[o] = x0;
-            bounds[o + 1] = y0;
-            bounds[o + 2] = x1;
-            bounds[o + 3] = y1;
+            if (behind == 4) { x0 = y0 = x1 = y1 = 0; }
+            else if (behind > 0) { x0 = y0 = 0; x1 = y1 = 1; }
+            frameBounds[o] = x0;
+            frameBounds[o + 1] = y0;
+            frameBounds[o + 2] = x1;
+            frameBounds[o + 3] = y1;
+            if (reducible[i]) System.arraycopy(frameBounds, o, thin[i] ? thinBounds : bounds, o, 4);
         }
-        if (!PuffTarget.begin(shader, scene, bounds, n)) {
-            draw(order, 0, n);
+        int visible = visibleOrder(order, frameBounds, n);
+        if (!PuffTarget.begin(shader, scene, bounds, thinBounds, n)) {
+            if (visible > 0) draw(order, 0, visible);
             return;
         }
-        for (int i = 0; i < n; i++) reduced[i] = smoke[i] && PuffTarget.reduced(bounds, i);
+        for (int i = 0; i < n; i++) resolution[i] = reducible[i] ? PuffTarget.resolution(thin[i] ? thinBounds : bounds, i, thin[i]) : 1;
         // One upload for all ranges. Rebuilding an immediate MeshData and its uniforms per group costs CPU at a raid.
         if (gpu == null) gpu = new VertexBuffer(VertexBuffer.Usage.DYNAMIC);
         gpu.bind();
-        MeshData mesh = mesh(order, 0, n);
+        MeshData mesh = mesh(order, 0, visible);
         if (mesh == null) {
             PuffTarget.end();
             VertexBuffer.unbind();
@@ -305,20 +324,20 @@ public final class FxQuads {
         shader.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
                 Minecraft.getInstance().getWindow());
         try {
-            // Только последовательные клубы общего порядка. Искры, огонь, модели между ними остаются в полном разрешении.
-            for (int from = 0; from < n;) {
-                boolean puff = reduced[order[from]];
-                int to = groupEnd(order, reduced, from, n);
-                if (puff) {
+            // Только последовательные частицы общего порядка. Модели и субпиксельные детали остаются в полном разрешении.
+            for (int from = 0; from < visible;) {
+                int sampleStep = resolution[order[from]];
+                int to = groupEnd(order, resolution, from, visible);
+                if (sampleStep > 1) {
                     float x0 = 1, y0 = 1, x1 = 0, y1 = 0;
                     for (int i = from; i < to; i++) {
                         int o = 4 * order[i];
-                        x0 = Math.min(x0, bounds[o]);
-                        y0 = Math.min(y0, bounds[o + 1]);
-                        x1 = Math.max(x1, bounds[o + 2]);
-                        y1 = Math.max(y1, bounds[o + 3]);
+                        x0 = Math.min(x0, frameBounds[o]);
+                        y0 = Math.min(y0, frameBounds[o + 1]);
+                        x1 = Math.max(x1, frameBounds[o + 2]);
+                        y1 = Math.max(y1, frameBounds[o + 3]);
                     }
-                    if (PuffTarget.low(x0, y0, x1, y1)) {
+                    if (PuffTarget.low(x0, y0, x1, y1, sampleStep)) {
                         range(shader, from, to);
                         PuffTarget.composite(x0, y0, x1, y1);
                     }
@@ -332,10 +351,20 @@ public final class FxQuads {
         }
     }
 
+    /** Invisible quads neither draw nor split adjacent particle runs. Depth order of the survivors is unchanged. */
+    static int visibleOrder(int[] order, float[] rects, int count) {
+        int visible = 0;
+        for (int i = 0; i < count; i++) {
+            int o = 4 * order[i];
+            if (rects[o + 2] > rects[o] && rects[o + 3] > rects[o + 1]) order[visible++] = order[i];
+        }
+        return visible;
+    }
+
     /** Граница последовательной группы одного разрешения в общем порядке глубины. */
-    static int groupEnd(int[] order, boolean[] smoke, int from, int count) {
+    static int groupEnd(int[] order, int[] resolution, int from, int count) {
         int to = from + 1;
-        while (to < count && smoke[order[to]] == smoke[order[from]]) to++;
+        while (to < count && resolution[order[to]] == resolution[order[from]]) to++;
         return to;
     }
 
@@ -369,8 +398,10 @@ public final class FxQuads {
         stage = p;
         capacity = cap;
         keys = Arrays.copyOf(keys, cap);
-        smoke = Arrays.copyOf(smoke, cap);
-        reduced = Arrays.copyOf(reduced, cap);
+        reducible = Arrays.copyOf(reducible, cap);
+        resolution = Arrays.copyOf(resolution, cap);
+        thin = Arrays.copyOf(thin, cap);
+        thinBounds = Arrays.copyOf(thinBounds, 4 * cap);
         bounds = Arrays.copyOf(bounds, 4 * cap);
     }
 

@@ -328,7 +328,12 @@ public final class FxLayer {
             RenderSystem.depthMask(false);
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
-            QUADS.draw(VIEW_PROJECTION.set(e.getProjectionMatrix()).mul(VIEW), s, scene);
+            if (QUADS.size() > 0) LinearStage.begin(scene);
+            try {
+                QUADS.draw(VIEW_PROJECTION.set(RenderSystem.getProjectionMatrix()).mul(RenderSystem.getModelViewMatrix()), s, scene);
+            } finally {
+                LinearStage.end();
+            }
             GPU.end(timed);
         } finally {
             light.turnOffLightLayer();

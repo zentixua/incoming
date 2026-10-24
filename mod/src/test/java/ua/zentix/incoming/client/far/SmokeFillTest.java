@@ -84,6 +84,8 @@ class SmokeFillTest {
     static final class Screen implements SmokePuffs.Out {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
+        final java.util.Set<double[]> broad = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        final java.util.Map<double[],Double> matterScale = new java.util.IdentityHashMap<>();
         double veil;
 
         Screen(FarView view) {
@@ -96,11 +98,12 @@ class SmokeFillTest {
             if (a < 0.002f || !(tau > 0)) return;
             Vector3f f = view.forward(), l = view.left(), up = view.up();
             double depth = dx * f.x + dy * f.y + dz * f.z;
-            if (depth <= -Math.max(halfA, halfB)) return;
+            if (depth <= 0) return;
             depth = Math.max(depth, 0.05);
             double[] q = PlumeContinuityTest.club((dx * l.x + dy * l.y + dz * l.z) / depth, (dx * up.x + dy * up.y + dz * up.z) / depth, 0,
                     halfA / depth, halfB / depth, sprite, mix, a, tau);
             quads.add(q);
+            matterScale.put(q, depth * depth * depth / Math.sqrt(dx*dx+dy*dy+dz*dz));
         }
 
         @Override
@@ -109,6 +112,21 @@ class SmokeFillTest {
             // лежащий квадрат: по высоте экрана — проекция диска
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
             puff6(dx, dy, dz, halfA, halfB * Math.abs(dy) / d, sprite, mix, shade, r, g, b, a, tau);
+        }
+
+        @Override
+        public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade,
+                          float r, float g, float b, float a, double tau, boolean thin) {
+            int before = quads.size();
+            puff6(dx,dy,dz,halfA,halfB,sprite,mix,shade,r,g,b,a,tau);
+            if (thin && quads.size()>before) broad.add(quads.getLast());
+        }
+
+        @Override
+        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix,
+                              float shade, float r, float g, float b, float a, double tau, boolean thin) {
+            double d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+            puff6(dx,dy,dz,halfA,halfB*Math.abs(dy)/d,sprite,mix,shade,r,g,b,a,tau,thin);
         }
 
         @Override
@@ -147,20 +165,29 @@ class SmokeFillTest {
             return clear;
         }
 
-        /** The off-screen target accumulates optical layers before bilinear reconstruction (unoccluded background). */
-        double reconstructed(double u, double v, int width, int height) throws IOException {
-            double px = (u + W) / (2 * W) * width - 0.5, py = (v + H) / (2 * H) * height - 0.5;
-            int ix = (int) Math.floor(px), iy = (int) Math.floor(py);
-            double wx = px - ix, wy = py - iy, sum = 0;
-            for (int y = 0; y < 2; y++) {
-                for (int x = 0; x < 2; x++) {
-                    int sx = Math.clamp(ix + x, 0, width - 1), sy = Math.clamp(iy + y, 0, height - 1);
-                    double at = transmittance(-W + (sx + 0.5) * 2 * W / width, -H + (sy + 0.5) * 2 * H / height);
-                    sum += at * (x == 0 ? 1 - wx : wx) * (y == 0 ? 1 - wy : wy);
-                }
+        double tierTransmittance(double u, double v, boolean thin) throws IOException {
+            double clear = thin ? 1 : Math.exp(-veil);
+            for (double[] q : quads) {
+                if (broad.contains(q)!=thin) continue;
+                double x=(u-q[0])/q[3], y=(v-q[1])/q[4];
+                if (Math.abs(x)<1 && Math.abs(y)<1) clear*=1-PlumeContinuityTest.clubAt(q,x,y);
+            }
+            return clear;
+        }
+
+        double reconstructedTier(double u, double v, int width, int height, boolean thin) throws IOException {
+            double px=(u+W)/(2*W)*width-0.5, py=(v+H)/(2*H)*height-0.5;
+            int ix=(int)Math.floor(px),iy=(int)Math.floor(py);
+            double wx=px-ix,wy=py-iy,sum=0;
+            for(int y=0;y<2;y++) for(int x=0;x<2;x++) {
+                int sx=Math.clamp(ix+x,0,width-1),sy=Math.clamp(iy+y,0,height-1);
+                sum+=tierTransmittance(-W+(sx+0.5)*2*W/width,-H+(sy+0.5)*2*H/height,thin)
+                        *(x==0?1-wx:wx)*(y==0?1-wy:wy);
             }
             return sum;
         }
+
+
     }
 
     static FarView view(Vec3 eye, Vector3f fwd) {
@@ -220,6 +247,8 @@ class SmokeFillTest {
             SmokePuffs.resetBudget();
             for (int frame = 0; frame < 2; frame++) {
                 s.quads.clear();
+                s.broad.clear();
+                s.matterScale.clear();
                 s.veil = 0;
                 for (Blast b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
                 SmokePuffs.flush();
@@ -283,9 +312,15 @@ class SmokeFillTest {
                 bounds[4 * k + 2] = (float) Math.clamp((q[0] + q[3] + W) / (2 * W), 0, 1);
                 bounds[4 * k + 3] = (float) Math.clamp((q[1] + q[4] + H) / (2 * H), 0, 1);
             }
-            PuffTarget.Resolution resolution = PuffTarget.plan(bounds, budget.quads.size(), 1920, 1080, SmokePuffs.FILL_BUDGET);
-            int step = resolution.step();
-            double raster = PuffTarget.workPixels(bounds, budget.quads.size(), 1920, 1080, step, resolution.keepSmall()) / (1920.0 * 1080);
+            float[] denseBounds=bounds.clone(), thinBounds=new float[bounds.length];
+            for(int k=0;k<budget.quads.size();k++) if(budget.broad.contains(budget.quads.get(k))) {
+                System.arraycopy(bounds,4*k,thinBounds,4*k,4);
+                java.util.Arrays.fill(denseBounds,4*k,4*k+4,0);
+            }
+            PuffTarget.FrameResolution resolution=PuffTarget.planFrame(denseBounds,thinBounds,budget.quads.size(),1920,1080,SmokePuffs.FILL_BUDGET);
+            int step=resolution.fine().step(), thinStep=resolution.thin().step();
+            double raster=(PuffTarget.workPixels(denseBounds,budget.quads.size(),1920,1080,step,resolution.fine().keepSmall())
+                    +PuffTarget.workPixels(thinBounds,budget.quads.size(),1920,1080,thinStep,resolution.thin().keepSmall()))/(1920.0*1080);
             System.out.printf(Locale.ROOT, "RASTER step %d, %.3f native screens%n", step, raster);
             assertTrue(raster <= SmokePuffs.FILL_BUDGET, got);
             assertTrue(budget.quads.size() >= free.quads.size() / 2, "clumps survive instead of one club per Gaussian: " + got);
@@ -297,7 +332,8 @@ class SmokeFillTest {
             for (int i = 0; i < 48; i++) {
                 for (int j = 0; j < 27; j++) {
                     double u = -W + (i + 0.5) * 2 * W / 48, v = -H + (j + 0.5) * 2 * H / 27;
-                    reconstructed[i / 8 * 3 + j / 9] += budget.reconstructed(u, v, 1920 / step, 1080 / step) / 72;
+                    reconstructed[i / 8 * 3 + j / 9] += budget.reconstructedTier(u, v, 1920 / step, 1080 / step, false)
+                            *budget.reconstructedTier(u, v, 1920 / thinStep, 1080 / thinStep, true) / 72;
                 }
             }
             double lowMean = 0;
@@ -307,6 +343,81 @@ class SmokeFillTest {
             }
             assertTrue(Math.abs(lowMean - meanReal) <= MODEL_MEAN, "reconstructed target vs mean model: " + got);
         }
+    }
+
+    @Test
+    void aWorldTubeAndABlobCarryTheSameOpticalMass() throws IOException {
+        double sigma=10, distance=200, length=0.01;
+        double mass=2*Math.PI*sigma*sigma*0.1/SmokeGrid.SOOT_K;
+        SmokeGrid.Source source=(seconds,sink)->true;
+        FarView view=view(Vec3.ZERO,new Vector3f(0,0,1));
+        double[] measured=new double[2];
+        for(int mode=0;mode<2;mode++) {
+            SmokePuffs.reset();
+            Screen screen=new Screen(view);
+            SmokeGrid.Sink sink=SmokePuffs.sink(view,screen,source,1000);
+            if(mode==0) sink.blob(0,0,distance,sigma,sigma,mass,0,0,1,1,1,300,0);
+            else sink.tube(0,0,distance-length/2,sigma,sigma,mass/length,0,
+                    0,0,distance+length/2,sigma,sigma,mass/length,0,1,1,1,300,0,sigma/2);
+            SmokePuffs.flush();
+            // Integrate emitted matter on the atlas grid, independently of screen filtering and its nonlinear log.
+            for(double[] q:screen.quads) for(int x=0;x<ClubFrames.N;x++) for(int y=0;y<ClubFrames.N;y++)
+                measured[mode]+=-Math.log(1-PlumeContinuityTest.clubAt(q,-1+(x+0.5)*2/ClubFrames.N,-1+(y+0.5)*2/ClubFrames.N))
+                        *4*q[3]*q[4]*screen.matterScale.get(q)/(ClubFrames.N*ClubFrames.N);
+        }
+        assertTrue(Math.abs(measured[0]-measured[1])<=0.01*measured[0],
+                "the source adapter must use the same extinction, not the flight-trail coefficient: "+java.util.Arrays.toString(measured));
+        SmokePuffs.reset();
+    }
+
+    @Test
+    void aftermathFireMatchesTheSameRayIntegral() throws IOException {
+        CloudModel m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), CloudModel.Air.STANDARD);
+        ua.zentix.incoming.client.fx.FireSmoke.Fuel fuel = new ua.zentix.incoming.client.fx.FireSmoke.Fuel(m.poolWatts,
+                Math.PI*m.poolRadius*m.poolRadius, m.source.fuel().sootYield/m.source.fuel().heatJPerKg);
+        List<SmokeGrid.Source> sources = new ArrayList<>();
+        Random random = new Random(7);
+        for (int i=0;i<16;i++) {
+            double angle=2*Math.PI*random.nextDouble(), radius=120*Math.sqrt(random.nextDouble());
+            double x=radius*Math.cos(angle), z=radius*Math.sin(angle), age=55-i*3;
+            sources.add((seconds,sink) -> {
+                ua.zentix.incoming.client.fx.FireSmoke.lay(fuel,x,0,z,1,0,2,3,2*age,0.5,
+                        distance -> distance<=2*age?1:0, distance -> 16,sink);
+                return true;
+            });
+        }
+        Vec3 eye=new Vec3(0,25,30);
+        FarView view=view(eye,new Vector3f(0,-0.4f,-1));
+        Screen screen=new Screen(view);
+        SmokePuffs.resetBudget();
+        for (int pass=0;pass<2;pass++) {
+            screen.quads.clear(); screen.broad.clear(); screen.matterScale.clear(); screen.veil=0;
+            for (SmokeGrid.Source source:sources) source.emit(1000,SmokePuffs.sink(view,screen,source,1000));
+            SmokePuffs.flush();
+        }
+        List<double[]> gaussians=new ArrayList<>();
+        for (SmokeGrid.Source source:sources) source.emit(1000,(x,y,z,ax,ay,az,sh,sv,soot,dust,water,dr,dg,db,kelvin,rise) -> {
+            double ext=SmokeGrid.SOOT_K*soot+SmokeGrid.dustK(dr,dg,db)*dust+SmokeGrid.DROP_K*water;
+            for(int k=0;k<32;k++) {
+                double f=2*(k+0.5)/32-1;
+                gaussians.add(new double[]{x+f*ax-eye.x,y+f*ay-eye.y,z+f*az-eye.z,sh,sv,ext/32});
+            }
+        });
+        double worst=0,mean=0;
+        double[] regions=new double[18]; int[] samples=new int[18];
+        for(int i=0;i<24;i++) for(int j=0;j<14;j++) {
+            double u=-W+(i+0.5)*2*W/24,v=-H+(j+0.5)*2*H/14;
+            Vector3f ray=new Vector3f(view.forward()).fma((float)u,view.left()).fma((float)v,view.up()).normalize();
+            double tau=0;
+            for(double[] g:gaussians) tau+=SmokePuffs.sightDepth(g[0],g[1],g[2],g[3],g[4],g[5],ray.x,ray.y,ray.z);
+            double error=screen.transmittance(u,v)-Math.exp(-tau);
+            mean+=error/(24*14); worst=Math.max(worst,Math.abs(error));
+            int region=(i/4)*3+(j*3/14); regions[region]+=error; samples[region]++;
+        }
+        System.out.printf(Locale.ROOT,"FIRE optical mean %.5f worst pixel %.5f, quads %d%n",mean,worst,screen.quads.size());
+        assertTrue(Math.abs(mean)<=MODEL_MEAN,"fire optical mean: "+mean);
+        for(int k=0;k<18;k++) assertTrue(Math.abs(regions[k]/samples[k])<=MODEL_PART,"fire region "+k+": "+regions[k]/samples[k]);
+        SmokePuffs.resetBudget();
     }
 
     /**

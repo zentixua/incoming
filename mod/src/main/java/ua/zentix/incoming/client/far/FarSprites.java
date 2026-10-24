@@ -119,9 +119,15 @@ public final class FarSprites implements SmokePuffs.Out {
      */
     public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                       float b, float a, double tau) {
+        puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, tau, false);
+    }
+
+    @Override
+    public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
+                      float b, float a, double tau, boolean thin) {
         if (a < 0.002f || !(tau > 0)) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
-        out.sixWay(mix, shade, tau);
+        out.sixWay(mix, shade, tau, thin);
         out.billboard((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold),
                 (float) (halfB * unfold), 0, sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) Math.max(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
@@ -137,9 +143,15 @@ public final class FarSprites implements SmokePuffs.Out {
      */
     public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
                           float r, float g, float b, float a, double tau) {
+        puff6Flat(dx, dy, dz, halfA, halfB, soft, sprite, mix, shade, r, g, b, a, tau, false);
+    }
+
+    @Override
+    public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
+                          float r, float g, float b, float a, double tau, boolean thin) {
         if (a < 0.002f || !(tau > 0)) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
-        out.sixWay(mix, shade, tau);
+        out.sixWay(mix, shade, tau, thin);
         out.flat((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold), (float) (halfB * unfold),
                 sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) soft, (float) unfold, LightTexture.FULL_BRIGHT, 0);

@@ -84,7 +84,7 @@ float frameInset(float span) {
 
 // Кадр клуба и следующий, сдвинутые вдоль векторов движения на долю смеси m (кадр k — назад на m, k + 1 — вперёд на
 // 1 − m): клуб течёт, а не проступает двойным. Карты a и b — в линейном свете, альфа — в a.w
-void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
+void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool thin, out vec4 a, out vec3 b) {
     vec2 tile = FxSix.zw;
     vec2 cell = floor(vec2(uv.x / tile.x, (uv.y - FxSix.y) / tile.y));
     vec2 origin = vec2(cell.x * tile.x, FxSix.y + cell.y * tile.y);
@@ -100,6 +100,12 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
     // прозрачный край кадра (половина квадрата клуба) — без второй карты и света: цена слоя — заливка крупных клубов
     if (mix(a0.a, a1.a, m) < 0.002) discard;
+    if (thin) {
+        // Self-shadow contrast of this optically thin club is below the image threshold; keep exactly its density.
+        a = vec4(vec3(FxSixLight.z), mix(a0.a, a1.a, m));
+        b = vec3(FxSixLight.z);
+        return;
+    }
     vec4 b0 = textureGrad(Sampler0, uv0 + vec2(0.0, FxSix.x), dx, dy), b1 = textureGrad(Sampler0, uv1 + vec2(0.0, FxSix.x), dx, dy);
     // на листе — умноженная альфа и степень 1/2,2
     vec3 la0 = pow(a0.rgb / max(a0.a, 1e-3), vec3(2.2)), la1 = pow(a1.rgb / max(a1.a, 1e-3), vec3(2.2));
@@ -165,14 +171,15 @@ void main() {
     }
     float lod = 0.0;
     vec4 tex;
-    bool six = nearest < -0.1 && nearest > -0.4;
+    bool six = nearest < -0.1 && nearest > -0.49;
     vec3 sixLit = vec3(1.0);
     if (nearest > 0.75) {
         tex = particle(texCoord0, dx, dy, lod);
     } else if (six) {
         vec4 a;
         vec3 b;
-        sixFrames(texCoord0, dx, dy, opacity, a, b);
+        bool thin = nearest < -0.44;
+        sixFrames(texCoord0, dx, dy, opacity, thin, a, b);
         float mirror = 1.0;
         if (dx.x < 0.0) mirror = -1.0;
         // свет неба: прямой (солнце, луна) — по сторонам, рассеянный — средний по шести; оба — против среднего по шести
@@ -182,6 +189,9 @@ void main() {
         // тень карт — у вещества запекания; у этого — в степени его затухания света против запечённого (SmokePuffs.shade,
         // байт −13…−50 в Normal.y: FxQuads.sixWay)
         // степень не ниже 0,001 и основание не ноль: pow(0, 0) в GLSL не определён (NaN — чёрный пиксель в смешивании)
+        if (thin) {
+            sixLit = pow(max(FxSkyTint + sixBall, vec3(0.0)), vec3(1.0 / 2.2));
+        } else {
         float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
         float key = pow(max(sixLight(a.rgb, b, sixKeyDir, mirror) / FxSixLight.z, 1e-6), shade);
         float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
@@ -195,7 +205,9 @@ void main() {
         // оттенок неба (ночью — сиреневый свет луны) — только у света неба: цвет вершины несёт его яркость, а огонь у клуба
         // свой (оттенок на огне красил пыль у шара ночью в розовый)
         sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
-        // Calibrated optical depth for smoke; fire keeps its motion-vector frame interpolation.
+        }
+        // толща клуба — толща кадра (α = 1 − e^(−τ) запекания, байт 255 — пропускание 1/255) × sixTau: перекрытые клубы
+        // складываются, как толщи (PuffOptics)
         float k = 1.0 - pow(max(1.0 - a.a, 1.0 / 255.0), sixTau);
         tex = vec4(vec3(k), k);
     } else if (nearest > 0.55) {
@@ -241,6 +253,13 @@ void main() {
     // тумана у края прорисовки закрывало бы ленты шлейфов и дальнюю картинку взрывов, которые сменяют частицы там
     color *= 1.0 - fog * FxFogColor.a;
     fragColor = color * ColorModulator;
+    if (FxTarget.z > 0.5) {
+        // RGB arrives encoded and premultiplied. Decode the source, then premultiply in radiance.
+        float coverage = fragColor.a > 1e-6 ? fragColor.a : 1.0;
+        vec3 encoded = max(fragColor.rgb / coverage, vec3(0.0));
+        vec3 linear = mix(encoded / 12.92, pow((encoded + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), encoded));
+        fragColor.rgb = linear * coverage;
+    }
     if (six && FxTarget.z < 0.5) {
         // Nonnegative stochastic rounding leaves black soot exactly black. Float smoke groups need no 8-bit quantizer.
         float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + viewDistance * 0.61803399);

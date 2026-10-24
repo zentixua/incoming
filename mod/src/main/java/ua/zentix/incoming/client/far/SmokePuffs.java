@@ -46,6 +46,16 @@ final class SmokePuffs {
         void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
                        float r, float g, float b, float a, double tau);
 
+        default void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade,
+                           float r, float g, float b, float a, double tau, boolean thin) {
+            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, tau);
+        }
+
+        default void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix,
+                               float shade, float r, float g, float b, float a, double tau, boolean thin) {
+            puff6Flat(dx, dy, dz, halfA, halfB, soft, sprite, mix, shade, r, g, b, a, tau);
+        }
+
         void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light);
 
         void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a);
@@ -126,7 +136,7 @@ final class SmokePuffs {
     /**
      * Бюджет дорогой заливки клубов — четыре экрана настоящих пикселей. Размеры и массы остаются моделями;
      * `PuffTarget` выбирает уменьшенную цель по рамкам готовых квадратов (GPU Gems 3 ch.23). Здесь непрерывно
-     * ограничивается лишь лишняя подробность кучки, с запасом до двух площадей одиночных клубов (оценка подачи).
+     * ограничивается лишь лишняя подробность кучки, с запасом до CLUSTER·clubShare(CLUSTER)² площадей одиночных клубов (оценка подачи).
      */
     static final double FILL_BUDGET = ua.zentix.incoming.client.fx.layer.PuffTarget.BUDGET;
     /** Бюджет, по которому кадр строится ({@link #FILL_BUDGET}; проверки сравнивают с кадром без бюджета). */
@@ -260,14 +270,18 @@ final class SmokePuffs {
         return Math.clamp((a - Sight.THRESHOLD) / ((CLUMPS_FULL - 1) * Sight.THRESHOLD), 0, 1);
     }
 
-    /** Видимая граница гаусса (τ края 0,05), а не рамка текстуры: минимум 1,2σ, как у принятого слоя. */
-    static double visibleEdge(double tau0) {
-        return Math.max(1.2, Math.sqrt(2 * Math.log(Math.max(1, tau0 / 0.05))));
+    /** The half-density surface of the 3D Gaussian, exp(-q²/2)=1/2; not its projected, optically thin halo. */
+    static final double CORE_EDGE = Math.sqrt(2 * Math.log(2));
+
+    /** Veil only inside the Gaussian's concentration core; transparent bake padding never defines eye entry. */
+    static double outside(double px, double py, double pz, double sh, double sv) {
+        return smoothstep(0.5, 1, Math.sqrt((px * px + pz * pz) / (sh * sh) + py * py / (sv * sv)) / CORE_EDGE);
     }
 
-    /** Доля клубов вне вуали: глаз внутри видимого гаусса, а не внутри прозрачной рамки запекания. */
-    static double outside(double px, double py, double pz, double sh, double sv, double tau0) {
-        return smoothstep(0.5, 1, Math.sqrt((px * px + pz * pz) / (sh * sh) + py * py / (sv * sv)) / visibleEdge(tau0));
+    /** Thin self-shadow changes the image by O(alpha²), below the existing contrast threshold. Density is unchanged. */
+    static boolean thinLighting(double tau0) {
+        double alpha = -Math.expm1(-tau0);
+        return alpha * alpha < Sight.THRESHOLD;
     }
 
     static final double CLUMPS_FULL = 5;
@@ -378,11 +392,11 @@ final class SmokePuffs {
                 joint[0] = Float.NaN;
                 return;
             }
-            // ослабление на метр: сажа — полное (как толща шлейфа и порог видимости, FirePlume.tau), пыль — как у клубов
-            // облаков (SmokeGrid.dustK по её альбедо)
+            // World-source matter uses the same delta-scaled extinction as SmokeGrid and cloud Gaussians.
+            // The full coefficient of the independent flight-trail model must not increase a fire's rendered density.
             double kd = SmokeGrid.dustK(albedoR, albedoG, albedoB);
-            double ea = CloudModel.SOOT_K * sootA + kd * dustA, eb = CloudModel.SOOT_K * sootB + kd * dustB;
-            double ks = CloudModel.SOOT_K * (sootA + sootB), kdust = kd * (dustA + dustB);
+            double ea = SmokeGrid.SOOT_K * sootA + kd * dustA, eb = SmokeGrid.SOOT_K * sootB + kd * dustB;
+            double ks = SmokeGrid.SOOT_K * (sootA + sootB), kdust = kd * (dustA + dustB);
             Vec3 cam = view.camera();
             end(a, ax - cam.x, ay - cam.y, az - cam.z, Math.sqrt(sha * sva), ea);
             end(b, bx - cam.x, by - cam.y, bz - cam.z, Math.sqrt(shb * svb), eb);
@@ -501,9 +515,9 @@ final class SmokePuffs {
             // доля кучки s — у облаков и трубок одна: заливка при s по настоящей кривой каждой кучки ({@link #clusterFill}),
             // подбор делением; трубки рисуются с долей прошлого кадра, их план — к следующему
             double s = 1, whole = planned(1), floor = planned(0);
-            // Запас подробности над одиночным клубом — до двух его площадей (подача, оценка). Непрерывный target:
+            // Запас подробности над одиночным клубом — по сумме площадей полной кучки (подача, оценка). Непрерывный target:
             // ступени разрешения не должны переставлять комья. Четыре экрана пикселей удерживает PuffTarget.
-            double target = Math.max(budget, 2 * floor);
+            double target = Math.max(budget, CLUSTER * clubShare(CLUSTER) * clubShare(CLUSTER) * floor);
             if (whole > target) {
                 double lo = 0, hi = 1;
                 for (int it = 0; it < 10; it++) {
@@ -660,7 +674,7 @@ final class SmokePuffs {
             // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс. «Внутри» — по эллипсоиду
             // края (у плоского слоя пыли в сотню метров шириной и метр толщиной глаз над ним снаружи; по наибольшему
             // радиусу он был «внутри», и вуаль слоя закрывала весь кадр)
-            double outside = outside(px, py, pz, sh, sv, tau);
+            double outside = outside(px, py, pz, sh, sv);
             if (outside < 1 && !planning) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air);
             if (outside <= 0) return 0;
             // вне кадра — не нужен: шар всего квадрата кучки (клубы с разбросом — до ~2 краёв одиночного)
@@ -679,11 +693,9 @@ final class SmokePuffs {
             float shown = (float) (vis * point[1] * air * outside);
             // кучка: чем крупнее гаусс на экране, тем больше клубов и тем они мельче (кадр 128 пикселей не растягивается на
             // пол-экрана); дробная часть числа — доля последнего, без скачка
-            double pixels = point[0] / Math.max(d * view.pixel(), 1e-12);
-            // крупнее экрана — подробность за его краем не видна, а заливка дорога: клубов меньше во столько раз, во сколько
-            // гаусс по площади больше экрана (полудиагональ кадра, пикселей)
-            double screen = view.edge() / Math.max(view.pixel(), 1e-12);
-            double most = 1 + (Math.clamp(Math.min(pixels / CLUSTER_PIXELS, CLUSTER * Math.min(1, screen * screen / (pixels * pixels))), 1, CLUSTER) - 1)
+            double pixels = sh * grow / Math.max(d * view.pixel(), 1e-12);
+            // A two-dimensional footprint needs quadratically more clubs; transparent bake padding is irrelevant.
+            double most = 1 + (Math.clamp(Math.pow(pixels / CLUSTER_PIXELS, 2), 1, CLUSTER) - 1)
                     * clumpsSeen(tau);
             // плоский клуб, на который смотрят сверху (проекция диска шире его толщи), лежит на горизонтали: квадрат лицом к
             // камере у слоя пыли у земли стоял бы стеной над ней (кадры F2a: «плита» под шаром в 0,1 с)
@@ -704,8 +716,11 @@ final class SmokePuffs {
             double q = clubShare(many), spread = count == 1 ? 0 : Math.sqrt(1 - q * q);
             // оси раскладки: лежащий клуб — по горизонтали мира (на высоте середины слоя: ниже он ушёл бы под рельеф), стоящий —
             // по осям экрана (σh поперёк, проекция вверх)
-            org.joml.Vector3f l = view.left(), u = view.up(), f = view.forward();
+            org.joml.Vector3f l = view.left(), u = view.up();
             double turn = 2 * Math.PI * unit(h >>> 5);
+            // One resolution tier per physical Gaussian; size jitter cannot fragment its ordered club run.
+            boolean thinCluster = !spray && thinLighting((ks + kd + kw)
+                    / (2 * Math.PI * sh * Math.min(sh, sv) * many * q * q * (count == 1 ? 1 : SIZE_LOW * SIZE_LOW)));
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
                 double[] at = sunflower(j, many, turn, spread);
@@ -715,10 +730,11 @@ final class SmokePuffs {
                     oy = 0;
                     oz = at[1] * sh;
                 } else {
-                    double a = at[0] * sh * wide, b = at[1] * across * wide, depth = gauss(hj) * spread * sh / GAUSS_SD;
-                    ox = a * l.x + b * u.x + depth * f.x;
-                    oy = a * l.y + b * u.y + depth * f.y;
-                    oz = a * l.z + b * u.z + depth * f.z;
+                    // Projected Gaussian mixture: scattering centres in depth changes its perspective moments.
+                    double a = at[0] * sh * wide, b = at[1] * across * wide;
+                    ox = a * l.x + b * u.x;
+                    oy = a * l.y + b * u.y;
+                    oz = a * l.z + b * u.z;
                 }
                 // разброс размера — у клубов кучки (разнообразие); одиночный клуб — весь гаусс, без разброса
                 double k = count == 1 ? 1 : SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21);
@@ -728,15 +744,16 @@ final class SmokePuffs {
                 double last = j == count - 1 ? many - (count - 1) : 1;
                 optics.club(frame, tau / (many * q * q * k * k), CLUB);
                 double half = CLUB[0] * q * k, mass = CLUB[1] * last;
+                boolean thin = thinCluster;
                 FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1);
                 // лежащий клуб сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет сбоку и
                 // сзади) нет, свет солнца, неба и огня — весь (степень тени 0; свет шаров — в каждом пикселе, fx.fsh); снизу —
                 // как обычно. Мягкость у рельефа — путь луча в слое до земли (rw / sin e), не полуразмер
                 if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, sa * half, sa * half,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, sprite,
-                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, shown, mass);
+                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, shown, mass, thin);
                 else out.puff6(px + ox, py + oy, pz + oz, sa * half, sb * half, sprite, (float) (frame - f0), spray ? sprayShade : shade,
-                        cr, cg, cb, shown, mass);
+                        cr, cg, cb, shown, mass, thin);
             }
             return fill;
         }
@@ -788,7 +805,7 @@ final class SmokePuffs {
         if (air < Sight.THRESHOLD) return 0;
         // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
         // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс
-        double outside = outside(px, py, pz, sh, sv, tau0);
+        double outside = outside(px, py, pz, sh, sv);
         int veils = outside < 1 && veilAround(view, out, px, py, pz, sh, sv, ext, cr, cg, cb, (1 - outside) * vis * air) ? 1 : 0;
         if (outside <= 0) return veils;
         // вне кадра — не нужен: шар всего квадрата кучки (клубы с разбросом — до ~2 краёв одиночного)
@@ -802,11 +819,9 @@ final class SmokePuffs {
         float shown = (float) (vis * point[1] * air * outside);
         // кучка: чем крупнее гаусс на экране, тем больше клубов и тем они мельче (кадр 128 пикселей не растягивается на
         // пол-экрана); дробная часть числа — доля последнего, без скачка
-        double pixels = point[0] / Math.max(d * view.pixel(), 1e-12);
-        // крупнее экрана — подробность за его краем не видна, а заливка дорога: клубов меньше во столько раз, во сколько
-        // гаусс по площади больше экрана (полудиагональ кадра, пикселей)
-        double screen = view.edge() / Math.max(view.pixel(), 1e-12);
-        double full = 1 + (Math.clamp(Math.min(pixels / CLUSTER_PIXELS, most * Math.min(1, screen * screen / (pixels * pixels))), 1, most) - 1)
+        double pixels = sh * grow / Math.max(d * view.pixel(), 1e-12);
+        // The physical footprint, not the padded bake rectangle, sets detail.
+        double full = 1 + (Math.clamp(Math.pow(pixels / CLUSTER_PIXELS, 2), 1, most) - 1)
                 * clumpsSeen(tau0);
         // бюджет заливки кадра ({@link #FILL_BUDGET}): доля кучки — из прошлого кадра (кучки трубок рисуются, пока источник
         // их кладёт, а подробность считается в конце кадра); окончательный бюджет пикселей — у PuffTarget
@@ -816,13 +831,14 @@ final class SmokePuffs {
         DRAW.planCluster(view, px, py, pz, sa, sbv, tau0, clubAge, full, spray, true);
         double q = clubShare(many), spread = count == 1 ? 0 : Math.sqrt(1 - q * q);
         // кучка — «подсолнухом» в плоскости экрана, как у облаков ({@link #sunflower}: случайные места оставляли просветы)
-        org.joml.Vector3f l = view.left(), u = view.up(), f = view.forward();
+        org.joml.Vector3f l = view.left(), u = view.up();
         double turn = 2 * Math.PI * unit(h >>> 5);
+        boolean thinCluster = !spray && thinLighting(tau0 * sv / Math.min(sh, sv) / (many * q * q * SIZE_LOW * SIZE_LOW));
         for (int j = 0; j < count; j++) {
             long hj = mix(h + j * 0x632BE59BD9B4E019L);
             double[] at = sunflower(j, many, turn, spread);
-            double ea = at[0] * sh * wide, eb = at[1] * sv * wide, depth = gauss(hj) * spread * sh / GAUSS_SD;
-            double ox = ea * l.x + eb * u.x + depth * f.x, oy = ea * l.y + eb * u.y + depth * f.y, oz = ea * l.z + eb * u.z + depth * f.z;
+            double ea = at[0] * sh * wide, eb = at[1] * sv * wide;
+            double ox = ea * l.x + eb * u.x, oy = ea * l.y + eb * u.y, oz = ea * l.z + eb * u.z;
             double k = SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21);
             double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, clubAge + (count > 1 || vary ? 2 * unit(hj >>> 28) : 0));
             int f0 = (int) frame;
@@ -831,7 +847,8 @@ final class SmokePuffs {
             double half = c[0] * q * k;
             boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
             out.puff6(px + ox, py + oy, pz + oz, sa * half, sbv * half, spray ? FxAtlas.spray6(f0, mirror) : FxAtlas.puff6(f0, mirror),
-                    (float) (frame - f0), (float) shade, sr, sg, sb, shown, c[1] * last);
+                    (float) (frame - f0), (float) shade, sr, sg, sb, shown, c[1] * last,
+                    thinCluster);
         }
         return count + veils;
     }
@@ -906,7 +923,7 @@ final class SmokePuffs {
      */
     static final double TUBE_MEANDER = 0.3;
     /** Клубов в кучке у клуба трубки — не больше: подробность вдоль трубки дают соседние клубы. */
-    static final int TUBE_CLUSTER = 3;
+    static final int TUBE_CLUSTER = CLUSTER;
 
     /**
      * Отрезок трубки следа ({@code TrailModel}: гауссово сечение σ, ослабление на метр e — у концов a и b, от глаза) — клубами

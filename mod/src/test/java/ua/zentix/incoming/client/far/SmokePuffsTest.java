@@ -128,15 +128,16 @@ class SmokePuffsTest {
     /** Transparent padding of a baked club must not turn nearby, visibly structured smoke into a uniform veil. */
     @Test
     void eyeEntryUsesTheVisibleGaussianRatherThanTheBakedQuad() {
-        for (double tau : new double[]{0.004, 0.01, 0.05, 0.1, 1, 10, 100}) {
-            double edge = SmokePuffs.visibleEdge(tau), sh = 10, sv = 2;
-            assertEquals(1, SmokePuffs.outside(1.01 * edge * sh, 0, 0, sh, sv, tau), 1e-12);
-            assertEquals(1, SmokePuffs.outside(0, 1.01 * edge * sv, 0, sh, sv, tau), 1e-12);
-            assertEquals(0, SmokePuffs.outside(0.49 * edge * sh, 0, 0, sh, sv, tau), 1e-12);
+        {
+            double edge = SmokePuffs.CORE_EDGE, sh = 10, sv = 2;
+            assertEquals(0.5, Math.exp(-edge * edge / 2), 1e-12);
+            assertEquals(1, SmokePuffs.outside(1.01 * edge * sh, 0, 0, sh, sv), 1e-12);
+            assertEquals(1, SmokePuffs.outside(0, 1.01 * edge * sv, 0, sh, sv), 1e-12);
+            assertEquals(0, SmokePuffs.outside(0.49 * edge * sh, 0, 0, sh, sv), 1e-12);
         }
-        assertEquals(1, SmokePuffs.outside(20, 0, 0, 10, 10, 0.01), 1e-12,
+        assertEquals(1, SmokePuffs.outside(20, 0, 0, 10, 10), 1e-12,
                 "eye at 2 sigma sees clubs: large transparent quad padding is irrelevant");
-        assertEquals(1, SmokePuffs.outside(0, 5, 0, 100, 2, 0.01), 1e-12,
+        assertEquals(1, SmokePuffs.outside(0, 5, 0, 100, 2), 1e-12,
                 "eye above a thin ground layer is outside despite its large horizontal radius");
     }
 }

@@ -19,9 +19,9 @@ import java.util.Locale;
 
 /**
  * GPU Gems 3, ch.23: запечённые клубы в уменьшенной цели RGBA16F, затем цвет с умноженной альфой — на кадр.
- * Только последовательные клубы общей сортировки: между ними искры, огонь и модели рисуются в полном разрешении.
+ * Последовательные частицы одного разрешения сохраняют общую сортировку; модели и мелкие детали остаются native.
  * Бюджет — четыре настоящих экрана фрагментов, по рамкам уже построенных квадратов (прозрачные углы тоже стоят).
- * Масса и контуры не меняются; понижено только число выборок. Обратный вывод — с весом по глубине мира, без ореола
+ * Плотные клубы и широкие тонкие поля получают разные шаги в одном суммарном бюджете; масса и контуры не меняются. Обратный вывод — с весом по глубине мира, без ореола
  * на границе стены. Цель заводится под окно один раз, меньший viewport живёт в её углу: смена шага не выделяет память.
  */
 public final class PuffTarget {
@@ -35,7 +35,7 @@ public final class PuffTarget {
     private static ShaderInstance fx;
     private static final float[] ZERO = new float[4];
     private static int step = 1, runs;
-    private static boolean keepSmall;
+    private static Resolution fine = new Resolution(1, true), thin = new Resolution(1, true);
     private static double rawFill, shadedFill, compositeFill;
 
     private PuffTarget() {}
@@ -68,10 +68,22 @@ public final class PuffTarget {
         return new Resolution(s, false);
     }
 
+    /** Different sampling densities, one native-pixel budget. Broad low-contrast fields cannot blur detailed clubs. */
+    public record FrameResolution(Resolution fine, Resolution thin) {}
+
+    public static FrameResolution planFrame(float[] dense, float[] broad, int count, int w, int h, double budget) {
+        double area = (double) w * h;
+        double reserve = Math.min(budget / 4, pixels(broad, count, w, h) / area);
+        Resolution f = plan(dense, count, w, h, budget - reserve);
+        double used = workPixels(dense, count, w, h, f.step(), f.keepSmall()) / area;
+        Resolution t = plan(broad, count, w, h, Math.max(1e-9, budget - used));
+        return new FrameResolution(f, t);
+    }
+
     /** A thin or subpixel club keeps native sampling, so a nearby cloud cannot make a far trail disappear. */
     public static boolean reduced(float[] b, int index, int w, int h, int s) {
         int o = 4 * index;
-        return s > 1 && (b[o + 2] - b[o]) * w >= 2 * s && (b[o + 3] - b[o + 1]) * h >= 2 * s;
+        return s > 1 && (b[o + 2] - b[o]) * w >= s && (b[o + 3] - b[o + 1]) * h >= s;
     }
 
     /** Both paths count: reduced large clubs and native small/thin clubs. */
@@ -86,25 +98,26 @@ public final class PuffTarget {
         return sum;
     }
 
-    static boolean reduced(float[] b, int index) {
-        return !keepSmall || reduced(b, index, VIEWPORT[2], VIEWPORT[3], step);
+    static int resolution(float[] b, int index, boolean broad) {
+        Resolution r = broad ? thin : fine;
+        return !r.keepSmall() || reduced(b, index, VIEWPORT[2], VIEWPORT[3], r.step()) ? r.step() : 1;
     }
 
-    static boolean begin(ShaderInstance shader, int scene, float[] bounds, int count) {
+    static boolean begin(ShaderInstance shader, int scene, float[] dense, float[] broad, int count) {
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         int w = VIEWPORT[2], h = VIEWPORT[3];
-        Resolution resolution = plan(bounds, count, w, h, BUDGET);
-        step = resolution.step();
-        keepSmall = resolution.keepSmall();
-        rawFill = pixels(bounds, count, w, h) / ((double) w * h);
-        activeW = Math.max(1, w / step);
-        activeH = Math.max(1, h / step);
-        shadedFill = workPixels(bounds, count, w, h, step, keepSmall) / ((double) w * h);
+        FrameResolution resolution = planFrame(dense, broad, count, w, h, BUDGET);
+        fine = resolution.fine(); thin = resolution.thin();
+        step = Math.max(fine.step(), thin.step());
+        rawFill = (pixels(dense, count, w, h) + pixels(broad, count, w, h)) / ((double) w * h);
+        shadedFill = (workPixels(dense, count, w, h, fine.step(), fine.keepSmall())
+                + workPixels(broad, count, w, h, thin.step(), thin.keepSmall())) / ((double) w * h);
         runs = 0;
         compositeFill = 0;
-        shader.safeGetUniform("FxTarget").set((float) w, (float) h, 0f);
+        shader.safeGetUniform("FxTarget").set((float) w, (float) h, LinearStage.active() ? 2f : 0f);
         if (step == 1) return false;
         if (resolve == null || scene < 0 || !ensure(w, h)) {
+            fine = thin = new Resolution(1, true);
             step = 1;
             shadedFill = rawFill;
             return false;
@@ -119,7 +132,9 @@ public final class PuffTarget {
         return true;
     }
 
-    static boolean low(float x0, float y0, float x1, float y1) {
+    static boolean low(float x0, float y0, float x1, float y1, int sampleStep) {
+        activeW = Math.max(1, VIEWPORT[2] / sampleStep);
+        activeH = Math.max(1, VIEWPORT[3] / sampleStep);
         if (x1 <= x0 || y1 <= y0) return false;
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
         RenderSystem.viewport(0, 0, activeW, activeH);
@@ -178,7 +193,7 @@ public final class PuffTarget {
         RenderSystem.setShader(() -> fx);
         RenderSystem.setShaderTexture(0, atlas);
         RenderSystem.setShaderTexture(1, depth);
-        fx.safeGetUniform("FxTarget").set((float) VIEWPORT[2], (float) VIEWPORT[3], 0f);
+        fx.safeGetUniform("FxTarget").set((float) VIEWPORT[2], (float) VIEWPORT[3], LinearStage.active() ? 2f : 0f);
     }
 
     static void end() {
@@ -187,13 +202,14 @@ public final class PuffTarget {
         restore();
     }
 
-    /** Два вида заливки отдельно: дорогой шейдер клубов и дешёвый вывод групп (4 выборки цвета и глубины). */
+    /** Заливка обоих разрешений вместе; вывод групп — отдельная стоимость (до 4 выборок цвета и глубины). */
     public static String describe() {
-        return String.format(Locale.ROOT, "puff raster %.2f/%.0f screens (native %.2f, step %d, %d groups, composite %.2f)",
-                shadedFill, BUDGET, rawFill, step, runs, compositeFill);
+        return String.format(Locale.ROOT, "puff raster %.2f/%.0f screens (native %.2f, steps %d/%d, %d groups, composite %.2f)",
+                shadedFill, BUDGET, rawFill, fine.step(), thin.step(), runs, compositeFill);
     }
 
     static void reset() {
+        fine = thin = new Resolution(1, true);
         step = 1;
         runs = 0;
         rawFill = shadedFill = compositeFill = 0;

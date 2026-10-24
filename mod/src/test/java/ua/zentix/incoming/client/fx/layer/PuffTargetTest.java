@@ -57,10 +57,38 @@ class PuffTargetTest {
     }
 
     @Test
-    void fullResolutionFireAndModelsStayBetweenTheSameSmokeClubs() {
+    void denseClubsRetainDetailBesideLargeThinFieldsWithinTheSameFourScreens() {
+        for (int[] size : new int[][]{{1280,720},{2560,1600},{1279,719}}) {
+            float[] dense=new float[76*4], broad=new float[76*4];
+            for(int i=0;i<4;i++) { dense[4*i+2]=1; dense[4*i+3]=1; }
+            for(int i=4;i<76;i++) { broad[4*i+2]=1; broad[4*i+3]=1; }
+            PuffTarget.FrameResolution plan=PuffTarget.planFrame(dense,broad,76,size[0],size[1],4);
+            assertTrue(plan.fine().step()<plan.thin().step(),"a low-contrast field cannot blur the detailed club");
+            double work=PuffTarget.workPixels(dense,76,size[0],size[1],plan.fine().step(),plan.fine().keepSmall())
+                    +PuffTarget.workPixels(broad,76,size[0],size[1],plan.thin().step(),plan.thin().keepSmall());
+            assertTrue(work<=4.0*size[0]*size[1],"both resolutions and native small fragments count in one budget");
+        }
+        int[] order={0,1,2,3,4}, steps={2,2,7,1,7};
+        assertEquals(2,FxQuads.groupEnd(order,steps,0,5));
+        assertEquals(3,FxQuads.groupEnd(order,steps,2,5));
+        assertEquals(4,FxQuads.groupEnd(order,steps,3,5));
+    }
+
+    @Test
+    void offscreenObjectsDoNotSplitVisibleRuns() {
+        int[] order = {4, 3, 2, 1, 0};
+        float[] rects = new float[20];
+        for (int q : new int[]{4, 2, 0}) { rects[4*q+2] = 1; rects[4*q+3] = 1; }
+        assertEquals(3, FxQuads.visibleOrder(order, rects, 5));
+        assertArrayEquals(new int[]{4, 2, 0}, Arrays.copyOf(order, 3));
+        assertEquals(3, FxQuads.groupEnd(order, new int[]{2, 1, 2, 1, 2}, 0, 3));
+    }
+
+    @Test
+    void nativeObjectsStayBetweenTheSameParticleRuns() {
         // Input: smoke, model, smoke, spark, smoke. Depths deliberately reorder them.
         float[] depths = {10, 40, 50, 20, 30};
-        boolean[] smoke = {true, false, true, false, true};
+        int[] smoke = {2, 1, 2, 1, 2};
         int[] order = new FxQuads.FarFirst().sort(depths, 5);
         assertArrayEquals(new int[]{2, 1, 4, 3, 0}, Arrays.copyOf(order, 5));
         int groups = 0;
