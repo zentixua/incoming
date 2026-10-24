@@ -758,7 +758,7 @@ final class Sandbox {
 
     /** Новое место настоящего взрыва: подождать, пока земля у клиента и у сервера готова, — и взрыв или подрыв. */
     private void siteReady(Minecraft mc) {
-        if (tick - pendingSince < 40 || !loaded(mc, mc.player.blockPosition())) return;
+        if (tick - pendingSince < 40 || !aroundLoaded(mc)) return;
         // точка в прорисовке — и её земля у клиента; ядерку дальше прорисовки сервер грузит сам (NuclearTickets)
         BlockPos s = BlockPos.containing(site);
         if (mc.player.position().distanceTo(site) < mc.options.getEffectiveRenderDistance() * 16 - 32 && !loaded(mc, s)) return;
@@ -887,6 +887,21 @@ final class Sandbox {
 
     private static boolean loaded(Minecraft mc, BlockPos at) {
         return mc.level.getChunkSource().hasChunk(at.getX() >> 4, at.getZ() >> 4);
+    }
+
+    /**
+     * Земля в прорисовке вокруг камеры пришла клиенту (на новом месте чанки идут секунду-две): иначе первые кадры
+     * эффекта — без земли, цветом тумана (кадры ядерки на 0,5–1 с).
+     */
+    private static boolean aroundLoaded(Minecraft mc) {
+        BlockPos at = mc.player.blockPosition();
+        int r = Math.max(1, mc.options.getEffectiveRenderDistance() - 1);
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dz = -r; dz <= r; dz++) {
+                if (dx * dx + dz * dz <= r * r && !mc.level.getChunkSource().hasChunk((at.getX() >> 4) + dx, (at.getZ() >> 4) + dz)) return false;
+            }
+        }
+        return true;
     }
 
     /** Сход зенитной ракеты ЗРК ({@code sam}): с её первого движения; {@code track on} ведёт её. */

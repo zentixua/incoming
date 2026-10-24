@@ -33,8 +33,8 @@ The view is exposed the way a camera filming the burst would be. At the flash it
 second dark shapes show against it, and within about a second the picture is back to normal (your own eyes take longer,
 see «The flash blinds» below). The fireball is exposed for
 its own fire, the same way by day and by night, so its brighter and darker patches stay visible instead of a flat white
-disc. Hotter, it looks whiter and brighter; cooling, it looks more orange and darker. Nothing it lights looks brighter
-on screen than the fireball itself.
+disc. Hotter, it looks whiter and brighter; cooling, it looks more orange and darker. Once it has rolled into a ring
+and its outside has cooled, the picture is exposed for the scene again, and the hot inside glows through the gaps.
 The flash lights up the sky and the land like lightning, in clear weather up to about 100 km away, in rain up to
 about 30 km. The blast wave itself is clear air, but the air behind its front is compressed and bends light: once the
 front leaves the fireball, its edge shows against the sky and the ground as a thin ring where whatever lies behind is

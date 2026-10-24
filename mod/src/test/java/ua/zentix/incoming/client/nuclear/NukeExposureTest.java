@@ -12,14 +12,16 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Подача огненного шара ядерки и кадра во вспышку ({@link NukeExposure}): шар не превращается в ровный диск, освещённое
- * им не ярче его на экране, кадр догоняет вспышку за доли секунды, а не за весь импульс и ещё 2–4 с. Законы шейдера
+ * Подача огненного шара ядерки и кадра во вспышку ({@link NukeExposure}): шар не превращается в ровный диск, оболочка
+ * Вильсона и блик в его свете не ярче его на экране, кадр догоняет вспышку за доли секунды, а не за весь импульс и ещё
+ * 2–4 с. Законы шейдера
  * ({@code mushroom.glsl}: {@code mushBallGain}, {@code mushFilm}, {@code mushFilmWhite}) — те же, что здесь.
  */
 class NukeExposureTest {
@@ -97,7 +99,7 @@ class NukeExposureTest {
                     double core = MushroomModel.coreTemperature(t, y, surface), share = MushroomModel.edgeShare(t, y, surface);
                     double amb = FireballModel.AMBIENT_K, dT = core - amb;
                     for (double adapt : new double[]{DAY, NIGHT}) {
-                        double gain = NukeExposure.gain(BlackBody.luminance(core) * adapt, adapt);
+                        double gain = NukeExposure.gain(BlackBody.luminance(amb + dT * share) * adapt, adapt);
                         double bright = shown(amb + dT * share * hi, adapt, gain), dark = shown(amb + dT * share * lo, adapt, gain);
                         double spread = (bright - dark) / bright;
                         log.append(String.format(Locale.ROOT, "%n%2.0f кт %s %.1f с %s: экран %.3f…%.3f, перепад %.3f (было %.3f)", y,
@@ -121,19 +123,25 @@ class NukeExposureTest {
     }
 
     /**
-     * Остывая, шар на экране темнеет и уходит в оранжевое и красное, а не стоит одной яркостью: ядро у 15 кт днём на
-     * экране с 0,5 по 10 с только темнеет, на 0,5 с — почти белое (≥ 0,9 экрана), на 10 с — не ярче 0,8.
+     * Остывая, шар на экране темнеет и уходит в оранжевое и красное, а не стоит одной яркостью: поверхность у 15 кт на
+     * экране с 0,5 по 10 с только темнеет, днём и ночью, на 0,5 с — почти белая (≥ 0,9 экрана), на 7 с — не ярче 0,6.
+     * А горячее нутро в просветах свернувшейся шапки (ядро при экспозиции по поверхности) на 7–10 с — снова пересвечено,
+     * как было: кадр вернулся к экспозиции сцены.
      */
     @Test
     void coolingBallDarkensOnScreen() {
-        double last = 2;
-        for (double t : new double[]{0.5, 1, 2, 3, 5, 7, 10}) {
-            double core = MushroomModel.coreTemperature(t, 15, false);
-            double s = shown(core, DAY, NukeExposure.gain(BlackBody.luminance(core), DAY));
-            assertTrue(s < last, t + " с: " + s + " после " + last);
-            if (t == 0.5) assertTrue(s >= 0.9, "0,5 с: " + s);
-            if (t == 10) assertTrue(s <= 0.8, "10 с: " + s);
-            last = s;
+        for (double adapt : new double[]{DAY, NIGHT}) {
+            double last = 2;
+            for (double t : new double[]{0.5, 1, 2, 3, 5, 7, 10}) {
+                double edge = MushroomModel.edgeTemperature(t, 15, false), core = MushroomModel.coreTemperature(t, 15, false);
+                double gain = NukeExposure.gain(BlackBody.luminance(edge) * adapt, adapt);
+                double s = shown(edge, adapt, gain);
+                assertTrue(s < last, t + " с: " + s + " после " + last);
+                if (t == 0.5) assertTrue(s >= 0.9, "0,5 с: " + s);
+                if (t == 7) assertTrue(s <= 0.6, "7 с: " + s);
+                if (t >= 7) assertTrue(shown(core, adapt, gain) > 0.95, t + " с: нутро шапки " + shown(core, adapt, gain));
+                last = s;
+            }
         }
     }
 
@@ -160,23 +168,23 @@ class NukeExposureTest {
     }
 
     /**
-     * Освещённое шаром не ярче его на экране ({@link NukeExposure#cap}): предел — не ярче ядра на экране (по которому
-     * экспозиция) и не темнее поверхности на экране; во втором максимуме — почти белый (всё, что видит шар, белеет), через
-     * 3 с у 15 кт — тёплый.
+     * Предел света шара на оболочке Вильсона и у блика ({@link NukeExposure#cap}) — сам шар на экране: его поверхность, как
+     * её рисует {@code mushAt} (экспозиция по поверхности), и не ярче горячего нутра; во втором максимуме — почти белый.
      */
     @Test
-    void lightAroundIsNotBrighterThanTheBallOnScreen() {
+    void capIsTheBallOnScreen() {
         double[] l = new double[4], cap = new double[3], edge = new double[3], core = new double[3];
         for (double t : new double[]{0.12, 0.5, 1, 3, 5, 7}) {
             double te = MushroomModel.edgeTemperature(t, 15, false), tc = MushroomModel.coreTemperature(t, 15, false);
-            double gain = NukeExposure.gain(BlackBody.luminance(tc), DAY);
+            double gain = NukeExposure.gain(BlackBody.luminance(te), DAY);
             BlackBody.light(te, l);
             NukeExposure.cap(l[0], l[1], l[2], DAY, cap);
             NukeExposure.screen(l[0], l[1], l[2], gain, edge);
             BlackBody.light(tc, l);
             NukeExposure.screen(l[0], l[1], l[2], gain, core);
             for (int c = 0; c < 3; c++) {
-                assertTrue(cap[c] >= edge[c] - 1e-4 && cap[c] <= core[c] + 1e-4, t + " с, канал " + c + ": " + cap[c] + " против " + edge[c] + "…" + core[c]);
+                assertEquals(edge[c], cap[c], 2e-3, t + " с, канал " + c);
+                assertTrue(cap[c] <= core[c] + 1e-4, t + " с, канал " + c + ": " + cap[c] + " ярче нутра " + core[c]);
             }
         }
         BlackBody.light(FireballModel.PEAK_K, l);
@@ -186,8 +194,8 @@ class NukeExposureTest {
 
     /**
      * Кадр во вспышку: у 15 кт в 1,4 км днём — белый до второго максимума, через ~0,25 с после него тёмное уже видно
-     * (пересвет меньше 100 — рассеянный в объективе свет не белит кадр), через 0,5 с пересвет не больше 6, через секунду —
-     * не больше 1,3, а через 1,5 с кадр догнал вспышку (прежде белый экран стоял 1,24 с импульса и гас ещё 2–4 с). Свет
+     * (пересвет меньше 100 — рассеянный в объективе свет не белит кадр), через 0,5 с пересвет не больше 4, через секунду —
+     * не больше 1,15, а через 1,5 с кадр догнал вспышку (прежде белый экран стоял 1,24 с импульса и гас ещё 2–4 с). Свет
      * у камеры — физика ({@code NukeFlash.flashOnCamera}): ~2 000 полуденных белых стен в 1,4 км и ~200 в 5 км.
      */
     @Test
@@ -198,8 +206,8 @@ class NukeExposureTest {
         double tm = FireballModel.secondMaximumSeconds(15);
         assertEquals(near, NukeExposure.overexposure(near, -0.05), 1e-9, "до максимума — весь свет вспышки");
         assertTrue(NukeExposure.overexposure(near, 0.25) < 100, "0,25 с");
-        assertTrue(NukeExposure.overexposure(near, 0.5 - tm) < 6, "0,5 с");
-        assertTrue(NukeExposure.overexposure(near, 1 - tm) < 1.3, "1 с");
+        assertTrue(NukeExposure.overexposure(near, 0.5 - tm) < 4, "0,5 с");
+        assertTrue(NukeExposure.overexposure(near, 1 - tm) < 1.15, "1 с");
         assertTrue(NukeExposure.overexposure(near, 1.5 - tm) < 1.05, "1,5 с");
         assertTrue(NukeExposure.settled(near, 1.004) < 2, "кадр догнал вспышку");
         // вдали — раньше, ночью — позже
@@ -211,6 +219,34 @@ class NukeExposureTest {
             assertTrue(x <= last && x >= 1, "без скачков вверх: " + u);
             last = x;
         }
+    }
+
+    /**
+     * Оболочка облака Вильсона видит шар диском в десятки градусов ({@code hgDisc} в {@code fx_pall}): к оси — средняя по
+     * конусу диска фаза Хеньи–Гринстейна (численный интеграл фазы по конусу — тот же), а не пик точечного источника (у
+     * капель g 0,85 — 82 против ~11 у диска в 30°); у далёкого шара — сама фаза; дальше от оси — фаза.
+     */
+    @Test
+    void wilsonShellSeesTheBallAsADisc() throws IOException {
+        String fx;
+        try (InputStream in = NukeExposureTest.class.getResourceAsStream("/assets/incoming/shaders/core/fx_pall.fsh")) {
+            assertNotNull(in, "fx_pall.fsh");
+            fx = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).replaceAll("//[^\n]*", "");
+        }
+        GlslFunction disc = GlslFunction.parse(fx, "hgDisc"), hg = GlslFunction.parse(fx, "hg");
+        double g = 0.85;
+        for (double alpha : new double[]{5, 15, 30, 60}) {
+            double mu0 = Math.cos(Math.toRadians(alpha)), sum = 0;
+            int n = 20000;
+            for (int i = 0; i < n; i++) {
+                double mu = mu0 + (1 - mu0) * (i + 0.5) / n;
+                sum += hg.call(Map.of("g", g, "c", mu));
+            }
+            assertEquals(sum / n, disc.call(Map.of("g", g, "c", 1.0, "mu0", mu0)), 1e-3 * sum / n, "диск " + alpha + "°");
+            assertEquals(hg.call(Map.of("g", g, "c", -0.5)), disc.call(Map.of("g", g, "c", -0.5, "mu0", mu0)), 1e-9, "назад — фаза");
+        }
+        assertEquals(hg.call(Map.of("g", g, "c", 1.0)), disc.call(Map.of("g", g, "c", 1.0, "mu0", 1 - 1e-5)), 1e-6, "точка — пик фазы");
+        assertTrue(disc.call(Map.of("g", g, "c", 1.0, "mu0", Math.cos(Math.toRadians(30)))) < 0.2 * hg.call(Map.of("g", g, "c", 1.0)));
     }
 
     /** Свет шара у камеры во втором максимуме днём, в ясную погоду (как {@code NukeFlash.flashOnCamera}). */

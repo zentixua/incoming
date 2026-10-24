@@ -65,8 +65,6 @@ uniform mat4 PallBalls;
 uniform mat4 PallBallLight;
 uniform sampler2D Sampler9;
 uniform vec3 PallOpenSky;
-// привыкание глаза к небу кадра (Sight.adapted, как у fx_pall): предел света шаров на мире (mushBallCap)
-uniform float PallExposure;
 uniform vec4 PallFaceShade;
 
 // как в fx_pall: яркость по каналам; ярче белого (по яркости) — эта доля превышения белым во все каналы
@@ -121,9 +119,7 @@ float shade(vec3 p, vec4 over) {
 // (MushroomModel.light) светит как L·R²/max(d², R²) — прямым пучком по косинусу к грани, рассеянным воздухом с неба вокруг
 // себя и отражённым от освещённой им земли (mushBallFace); сквозь пелену над точкой (over) — прямой пучок e^(−τ/μ) и
 // рассеянный ею вниз (два потока, как солнце в shade), на грань — по доле неба, что она видит, (1 + n.y)/2. Теней рельефа и
-// построек нет: за холмом и домом шар светит так же (тёмен только склон, отвёрнутый от него). На белой стене к шару его
-// свет не ярче самого шара на экране (mushBallCap — подача, NukeExposure.cap): ярче — мир в километрах от шара светился
-// бы ярче его самого.
+// построек нет: за холмом и домом шар светит так же (тёмен только склон, отвёрнутый от него).
 vec3 ballLight(vec3 p, vec3 n, vec4 over) {
     vec3 sum = vec3(0.0);
     for (int i = 0; i < 4; i++) {
@@ -138,7 +134,7 @@ vec3 ballLight(vec3 p, vec3 n, vec4 over) {
             diffuse = max(pallDiffuse(over.y, over.z, over.x, over.x, over.w, mu, 1.0, 1.0, 0.0, 0.0, 0.0, -0.6666667), 0.0);
         }
         float face = mushBallFace(dot(n, v), v.y, n.y, PallBallLight[i].w * d, over.w, through, diffuse);
-        sum += min(PallBallLight[i].rgb * mushBallFalloff(d2, b.w * b.w), mushBallCap(PallBallLight[i].rgb, PallExposure)) * face;
+        sum += PallBallLight[i].rgb * (mushBallFalloff(d2, b.w * b.w) * face);
     }
     return sum;
 }

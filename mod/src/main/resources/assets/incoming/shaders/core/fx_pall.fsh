@@ -171,6 +171,17 @@ float hg(float g, float c) {
     return (1.0 - g * g) / (k * sqrt(k));
 }
 
+// Фаза Хеньи–Гринстейна у протяжённого источника — диска с косинусом углового радиуса mu0: к оси — не пик точечного
+// источника, а средняя по конусу диска доля рассеянного в него, 2F/(1 − mu0), F = (1 − g²)/(2g)·(1/(1 − g) − 1/√(1 + g² −
+// 2g·mu0)) (интеграл фазы по конусу); дальше от оси — сама фаза. Шар рядом с оболочкой облака Вильсона виден в десятки
+// градусов, и пик капель (g 0,85: в 82 раза выше среднего) как от точки светил оболочкой вокруг шара в разы ярче его
+float hgDisc(float g, float c, float mu0) {
+    float p = hg(g, c);
+    if (1.0 - mu0 < 1e-3) return p;
+    float f = (1.0 - g * g) / (2.0 * g) * (1.0 / (1.0 - g) - 1.0 / sqrt(1.0 + g * g - 2.0 * g * mu0));
+    return min(p, 2.0 * f / (1.0 - mu0));
+}
+
 // Сдвиг плитки шума по крупному шуму (в долях плитки): плитка повторяется через tile блоков, и с высоты повтор виден
 // полосами; сдвиг до шестой части плитки, плавный на двух плитках, его ломает (сильнее — клубы тянутся в полосы),
 // а распределение значений не меняет (тот же шум в другом месте — среднее формы клубов остаётся 1)
@@ -448,11 +459,9 @@ float pallBallShare(float radius, float d) {
     return radius * radius / max(max(d * d, radius * radius), 1e-6);
 }
 
-// Свет шара слота в d от середины шапки: G.x — её радиус, H.rgb — свет чёрного тела, × привыкание глаза; на экране
-// освещённое им не ярче самого шара (mushBallCap — подача, NukeExposure.cap; копия — NukePall.dustLight)
+// Свет шара слота в d от середины шапки: G.x — её радиус, H.rgb — свет чёрного тела, × привыкание глаза
 vec3 pallBallLight(vec4 G, vec4 H, float d) {
-    vec3 surface = H.rgb * PallExposure;
-    return min(surface * pallBallShare(G.x, d), mushBallCap(surface, PallExposure));
+    return H.rgb * (PallExposure * pallBallShare(G.x, d));
 }
 
 // Пелена слота в точке p — прибавить к s; V — стена пыли слота, ground, R — карта рельефа и воды слота и её числа, W — вода
@@ -837,7 +846,9 @@ float along(float u, float t0, float fa, float fb, float t1, float a, float b) {
 // Облако Вильсона слота (S, L — pallWilson), проход луча dir из глаза в t толщей tau: свет (rgb) и пропускание (a).
 // Туман конденсации за фронтом — те же капли, что водяная пыль (MIST): небо, солнце и шар (pallBallLight — облако
 // встаёт, пока шар ярче всего) с фазой капель; толща — с клубами по направлению от подрыва (оболочка рвётся полосами
-// и пятнами)
+// и пятнами). Шар у оболочки — протяжённый источник (hgDisc), и его поверхность для оболочки — не ярче шара на экране
+// (mushBallCap — подача, NukeExposure): оболочка обнимает шар, и в сотнях белых, как свет его, она сливалась с шаром,
+// выставленным по огню, в один белый диск
 vec4 wilsonLight(mat4 S, vec4 G, vec4 H, vec4 L, vec3 dir, vec3 sunDir, float t, float tau) {
     if (tau <= 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
     vec3 q = dir * t;
@@ -846,9 +857,13 @@ vec4 wilsonLight(mat4 S, vec4 G, vec4 H, vec4 L, vec3 dir, vec3 sunDir, float t,
     tau *= 0.5 + textureLod(PallNoise, -toBurst * 1.7 + vec3(0.21, 0.47, 0.83), 0.0).r;
     vec3 toBall = pallBall(S, G, H) - q;
     float ballLen = length(toBall);
-    vec3 cap = pallBallLight(G, H, ballLen);
+    // яркость поверхности шара для оболочки — не ярче его на экране, потом — его свет на ней (L·R²/d²): оболочка и шар
+    // на экране — в той же доле, что в жизни (рассеянное вперёд у шара — ~0,76·τ его яркости), а не оболочка в сотни раз ярче
+    vec3 surface = H.rgb * PallExposure;
+    vec3 cap = min(surface, mushBallCap(surface, PallExposure)) * pallBallShare(G.x, ballLen);
+    float sinBall = min(G.x / max(ballLen, 1e-3), 1.0);
     vec3 l = PALL_MIST_W * (0.5 * PallSkyLight + PallSunLight * (0.25 * hg(PALL_MIST_G, dot(dir, sunDir)))
-            + cap * (0.25 * hg(PALL_MIST_G, dot(dir, toBall / max(ballLen, 1e-3)))));
+            + cap * (0.25 * hgDisc(PALL_MIST_G, dot(dir, toBall / max(ballLen, 1e-3)), sqrt(1.0 - sinBall * sinBall))));
     float tr = exp(-tau);
     return vec4(l * (1.0 - tr), tr);
 }
@@ -1259,9 +1274,7 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
         vec3 c = vec3(0.0, m.capY, 0.0) - q;
         c.xz += m.drift * (mushShare(m.capY, m.endTop) - mushShare(q.y, m.endTop));
         float d2 = dot(c, c), r2 = m.capR * m.capR;
-        // на экране освещённое шаром не ярче самого шара (mushBallCap — подача)
-        vec3 surface = mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge) * PallExposure;
-        vec3 ball = min(surface * (r2 / max(d2, r2)), mushBallCap(surface, PallExposure));
+        vec3 ball = mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge) * (PallExposure * r2 / max(d2, r2));
         if (dot(ball, LUMA) > 1e-4 * dot(PallSkyLight, LUMA)) {
             float dc = sqrt(d2);
             vec3 v = c / max(dc, 1e-3);
@@ -1324,9 +1337,11 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));
     vec3 source = w * light;
     if (fromCarpet > 0.0) source = mix(source, carpetLight, fromCarpet);
-    // Экспозиция шара — по его ядру, каким его видно сквозь воздух до точки (подача, NukeExposure): ядро в сотни и тысячи
-    // белых срезалось в ровный диск, а с ней перепад температуры по поверхности (узор шара, языки клубов) виден
-    float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
+    // Экспозиция шара — по его видимой поверхности (температура края шапки), какой её видно сквозь воздух до точки (подача,
+    // NukeExposure): шар в сотни и тысячи белых срезался в ровный диск, а с ней перепад температуры по поверхности (узор
+    // шара, языки клубов) виден; свернувшись, шапка снаружи остывает, кадр возвращается к экспозиции сцены, и горячее
+    // нутро в просветах клубов горит, как прежде
+    float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
     glow = st * thermal * ((1.0 - fromCarpet) * mushBallGain(key, PallExposure));
     return vec4(st * source, st);
 }
