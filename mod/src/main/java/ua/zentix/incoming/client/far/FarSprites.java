@@ -267,10 +267,11 @@ public final class FarSprites implements SmokePuffs.Out {
         double shape = smoothstep(SHAPE_FROM, SHAPE_FULL, radius / Math.max(d * pixel, 1e-12));
         if (shape < 1) core(dx, dy, dz, out, t, r, g, b, body * (1 - shape));
         float a = (float) (t * body * shape);
-        // Подача: мягкий bloom после Iris. Он за телом, глубина и ближний дым его закрывают; не новый свет в мире.
-        if (shape > 0) glow(dx, dy, dz, radius, radius * BODY_SOFT, r, g, b, (float) (0.12 * shown * t * body * shape));
+        // огонь кадра светится (FxBloom: ореол — по форме огня, свет — обратной кривой кадра)
         this.out.fireballMix(mix);
+        this.out.emission(1);
         if (shape > 0 && billboard(dx, dy, dz, half, fireballRotation(), sprite, a, a, a, a, (float) (radius * BODY_SOFT), BALL_FRONT * radius)) counts[1]++;
+        this.out.emission(0);
         this.out.fireballMix(-1);
         glare(dx, dy, dz, radius, out, seen, r, g, b, glare, shown);
     }
@@ -303,7 +304,10 @@ public final class FarSprites implements SmokePuffs.Out {
         double s = o[2];
         float[] c = Sight.onScreen(r, g, b, s, (float) w);
         float a = (float) (o[1] * t * Math.min(1, 4 * s) * w);
+        // светится (FxBloom) со своим пересветом: экран показал его белым
+        out.emission((float) Math.max(1, s));
         if (billboard(dx, dy, dz, o[0] * DISC, 0, FxAtlas.disc(), c[0], c[1], c[2], a, (float) (o[0] * BODY_SOFT))) counts[1]++;
+        out.emission(0);
     }
 
     /**
@@ -444,10 +448,11 @@ public final class FarSprites implements SmokePuffs.Out {
      * {@code far/glow} (мягкий край, как у смешения на кромке струи), квадрат шире в {@link #STRIP_CROSS} раза: свет поперёк
      * тот же, что у ровной полосы этой ширины (с кругом {@code far/disc} край был жёстким, кадры F6). Только светит (альфа 0):
      * что за ней, остаётся видно. Сортируется по ключу key (у всех кусков одной струи — один: её ближняя точка минус клубы у оси):
-     * дым своего выхлопа ложится под огонь, а не между его кусками, дым ближе — поверх.
+     * дым своего выхлопа ложится под огонь, а не между его кусками, дым ближе — поверх. Светится (свечение {@code FxBloom}):
+     * hdr0, hdr1 — яркость концов против белого экрана до среза ({@link Sight#onScreen}).
      */
     public void glowStrip(Vector3f a, Vector3f b, Vector3f c, Vector3f d, float r0, float g0, float b0, float r1, float g1, float b1, float soft,
-                          float key) {
+                          float key, float hdr0, float hdr1) {
         if (r0 + g0 + b0 < 0.006f && r1 + g1 + b1 < 0.006f) return;
         widen(a, b);
         widen(d, c);
@@ -463,10 +468,13 @@ public final class FarSprites implements SmokePuffs.Out {
         b1 = Math.min(1, b1);
         out.glowShape(true);
         out.quad(key);
+        out.emission(Math.max(1, hdr0));
         out.vertex(a.x * ka, a.y * ka, a.z * ka, s.u0(), v, r0, g0, b0, 0, soft, ka, LightTexture.FULL_BRIGHT, 0);
         out.vertex(b.x * kb, b.y * kb, b.z * kb, s.u1(), v, r0, g0, b0, 0, soft, kb, LightTexture.FULL_BRIGHT, 0);
+        out.emission(Math.max(1, hdr1));
         out.vertex(c.x * kc, c.y * kc, c.z * kc, s.u1(), v, r1, g1, b1, 0, soft, kc, LightTexture.FULL_BRIGHT, 0);
         out.vertex(d.x * kd, d.y * kd, d.z * kd, s.u0(), v, r1, g1, b1, 0, soft, kd, LightTexture.FULL_BRIGHT, 0);
+        out.emission(0);
         out.glowShape(false);
         counts[2]++;
     }
@@ -486,29 +494,34 @@ public final class FarSprites implements SmokePuffs.Out {
 
     /**
      * Светящийся круг радиуса radius лицом к камере (сечение струи факела с торца, {@code PlumeRenderer}): свет (r, g, b)
-     * на экране, только светит.
+     * на экране, только светит; hdr — его яркость против белого экрана до среза (свечение {@code FxBloom}).
      */
-    public void glowDisc(double dx, double dy, double dz, double radius, float r, float g, float b, float soft) {
+    public void glowDisc(double dx, double dy, double dz, double radius, float r, float g, float b, float soft, float hdr) {
+        out.emission(Math.max(1, hdr));
         if (billboard(dx, dy, dz, radius * DISC, 0, FxAtlas.disc(), r, g, b, 0, soft)) counts[2]++;
+        out.emission(0);
     }
 
     /**
      * Светящийся круг в своей плоскости (срез горячего сопла, {@code PlumeRenderer}): центр c от камеры, a и b — его
      * радиусы по двум осям плоскости (круг {@code far/disc} того же потока, квадрат — в {@link #DISC} раз больше); сбоку
      * он сходит в отрезок, как настоящий срез. Свет (r, g, bl) на экране, только светит; без мягкости у рельефа: за
-     * срезом в сантиметрах — сам корпус. Сортируется по ключу key.
+     * срезом в сантиметрах — сам корпус. Сортируется по ключу key; hdr — яркость против белого экрана до среза (свечение
+     * {@code FxBloom}).
      */
-    public void glowPlate(Vector3f c, Vector3f a, Vector3f b, float r, float g, float bl, float key) {
+    public void glowPlate(Vector3f c, Vector3f a, Vector3f b, float r, float g, float bl, float key, float hdr) {
         if (r + g + bl < 0.006f) return;
         FxAtlas.Sprite s = FxAtlas.disc();
         r = Math.min(1, r);
         g = Math.min(1, g);
         bl = Math.min(1, bl);
         out.quad(key);
+        out.emission(Math.max(1, hdr));
         plateCorner(c, a, b, -1, -1, s.u0(), s.v0(), r, g, bl);
         plateCorner(c, a, b, -1, 1, s.u0(), s.v1(), r, g, bl);
         plateCorner(c, a, b, 1, 1, s.u1(), s.v1(), r, g, bl);
         plateCorner(c, a, b, 1, -1, s.u1(), s.v0(), r, g, bl);
+        out.emission(0);
         counts[2]++;
     }
 

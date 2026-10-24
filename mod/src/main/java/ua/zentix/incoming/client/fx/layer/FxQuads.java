@@ -22,9 +22,15 @@ import java.util.Arrays;
  * чем брать текстуру ({@code Normal.y}: 1 — частица ближайшим пикселем, {@link #nearestTexels}; −1 — плитка атласа
  * дальних моделей, {@link #modelTiles}; ½ — ореол по формуле, {@link #glowShape}; −¼ — запечённый клуб с шестисторонним
  * светом, {@link #sixWay}; ⅝ — кадры огня со смесью, {@link #fireballMix}; 0 — лист слоя гладко) и непрозрачность частицы без текстуры или смесь кадров клуба
- * ({@code Normal.z}, {@link #opacity}).
+ * ({@code Normal.z}, {@link #opacity}), свечение ({@code Emit}, {@link #emission}).
  */
 public final class FxQuads {
+    /**
+     * Свечение вершины ({@link #emission}): байт без нормировки (в шейдере — число 0…255). Свой элемент формата — под
+     * свободным номером ({@code findNextId}), как свои элементы заводит Iris.
+     */
+    public static final VertexFormatElement EMIT = VertexFormatElement.register(VertexFormatElement.findNextId(), 0, VertexFormatElement.Type.UBYTE,
+            VertexFormatElement.Usage.GENERIC, 1);
     public static final VertexFormat FORMAT = VertexFormat.builder()
             .add("Position", VertexFormatElement.POSITION)
             .add("UV0", VertexFormatElement.UV0)
@@ -32,7 +38,7 @@ public final class FxQuads {
             .add("UV1", VertexFormatElement.UV1)
             .add("UV2", VertexFormatElement.UV2)
             .add("Normal", VertexFormatElement.NORMAL)
-            .padding(1)
+            .add("Emit", EMIT)
             .build();
     private static final int VERTEX = 36, QUAD = 4 * VERTEX;
     /** Мягкость края клуба у земли и стен — доля его полуразмера. */
@@ -45,16 +51,19 @@ public final class FxQuads {
     private final FarFirst sort = new FarFirst();
     private final ByteBufferBuilder out = new ByteBufferBuilder(QUAD * 256);
     private Vector3f left = new Vector3f(1, 0, 0), up = new Vector3f(0, 1, 0);
-    private byte nearest, opacity;
+    private byte nearest, opacity, emit;
     private short probe;
+    /** В кадре есть квадраты со свечением ({@link #emission}). */
+    private boolean glows;
 
     /** Новый кадр: оси экрана (влево, вверх) для квадратов лицом к камере. */
     public void begin(Vector3f left, Vector3f up) {
         this.left = left;
         this.up = up;
         n = 0;
-        nearest = opacity = 0;
+        nearest = opacity = emit = 0;
         probe = 0;
+        glows = false;
     }
 
     /**
@@ -133,6 +142,20 @@ public final class FxQuads {
         this.probe = (short) Mth.clamp(probe, 0, SourceProbes.MAX);
     }
 
+    /**
+     * Следующие вершины светятся ({@link FxBloom}): огонь, огненный шар, вспышка, факел. {@code hdr} — во сколько раз их
+     * свет ярче показанного (пересвет, который экран срезал: яркость против белого экрана больше 1); 1 — свет как показан,
+     * у кадров огня — по их плёночной кривой; 0 и меньше — не светятся (дым, ореолы в глазу, модели).
+     */
+    public void emission(float hdr) {
+        emit = (byte) (hdr > 0 ? FxBloom.code(hdr) : 0);
+    }
+
+    /** В кадре есть свечение: проход свечения нужен. */
+    public boolean glows() {
+        return glows;
+    }
+
     public int size() {
         return n;
     }
@@ -169,7 +192,8 @@ public final class FxQuads {
         MemoryUtil.memPutByte(p + 32, (byte) Math.round(Mth.clamp(fog, 0, 1) * 127));
         MemoryUtil.memPutByte(p + 33, nearest);
         MemoryUtil.memPutByte(p + 34, opacity);
-        MemoryUtil.memPutByte(p + 35, (byte) 0);
+        MemoryUtil.memPutByte(p + 35, emit);
+        if (emit != 0) glows = true;
         write = p + VERTEX;
     }
 

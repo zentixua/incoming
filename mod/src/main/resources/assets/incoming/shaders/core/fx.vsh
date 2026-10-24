@@ -1,10 +1,11 @@
-#version 150
+#version 330
 
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:smoke.glsl>
 #moj_import <incoming:pall_front.glsl>
 #moj_import <incoming:fx_balls.glsl>
+#moj_import <incoming:bloom.glsl>
 
 // Слой эффектов (client/fx/layer): дым, пламя, искры, вспышки и всё дальнее одним проходом после мира.
 in vec3 Position;
@@ -20,6 +21,8 @@ in ivec2 UV2;
 // моделей (свет в ней уже есть), ½ — ореол far/glow (крупный — по формуле, fx.fsh), −¼ — запечённый клуб с
 // шестисторонним светом (FxAtlas.puff6), ⅝ — кадры огня; z: непрозрачность частицы без текстуры, у клуба/огня — смесь кадров
 in vec3 Normal;
+// свечение (FxBloom, FxQuads.emission): 0 — не светится; 1…255 — код пересвета (bloomGain)
+in float Emit;
 
 uniform sampler2D Sampler2;
 // свет открытого неба на веществе в воздухе против карты освещения у открытого неба (FarView.sky): карта красит синим
@@ -56,6 +59,8 @@ out vec3 sixKeyDir;
 out vec3 sixBallDir;
 // место вершины от камеры (настоящее, без переноса ближе): свет шаров на лежащем клубе — в каждом пикселе (fx.fsh)
 out vec3 worldPos;
+// свечение: во сколько раз свет ярче показанного; 0 — не светится
+out float emitGain;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
 
@@ -138,6 +143,8 @@ void main() {
     fog = Normal.x;
     nearest = Normal.y;
     opacity = Normal.z;
+    emitGain = 0.0;
+    if (Emit > 0.5) emitGain = bloomGain(Emit);
     // блик и вуаль с пробой: пелена и грибы перед источником — уже в ней (fx_probe, до самого источника); по углам
     // квадрата у глаза их не считать — свет в глазу идёт от источника, а угол блика в своей же шапке гасил бы его над ней
     pallFront = 1.0;

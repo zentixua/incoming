@@ -140,19 +140,22 @@ public final class PlumeRenderer {
             for (Vector3f v : new Vector3f[]{a, b, c, d}) v.add(0, p.y(), 0).rotate(rot).add(ox, oy, oz);
             switch (layer) {
                 case SHEATH -> {
-                    float[] c0 = Sight.onScreen(sheath.color()[piece], sheath.luminance()[piece] * lit, near);
-                    float[] c1 = Sight.onScreen(sheath.color()[piece + 1], sheath.luminance()[piece + 1] * lit, near);
-                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c1[0], c1[1], c1[2], (float) f.widthAt(sheath.x()[piece]), key);
+                    double l0 = sheath.luminance()[piece] * lit, l1 = sheath.luminance()[piece + 1] * lit;
+                    float[] c0 = Sight.onScreen(sheath.color()[piece], l0, near);
+                    float[] c1 = Sight.onScreen(sheath.color()[piece + 1], l1, near);
+                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c1[0], c1[1], c1[2], (float) f.widthAt(sheath.x()[piece]), key, (float) l0, (float) l1);
                 }
                 case CORE -> {
-                    float[] c0 = Sight.onScreen(f.coreColor(), f.coreLuminance() * lit, near);
-                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c0[0], c0[1], c0[2], (float) f.width(), key);
+                    double l0 = f.coreLuminance() * lit;
+                    float[] c0 = Sight.onScreen(f.coreColor(), l0, near);
+                    out.glowStrip(a, b, c, d, c0[0], c0[1], c0[2], c0[0], c0[1], c0[2], (float) f.width(), key, (float) l0, (float) l0);
                 }
                 default -> {
                     boolean core = layer == CORE_DISC;
-                    float[] c0 = core ? Sight.onScreen(f.coreColor(), f.coreLuminance() * lit, near) : Sight.onScreen(f.flameColor(), f.flameLuminance() * lit, near);
+                    double l0 = (core ? f.coreLuminance() : f.flameLuminance()) * lit;
+                    float[] c0 = Sight.onScreen(core ? f.coreColor() : f.flameColor(), l0, near);
                     double r = new Vector3f(c).sub(a).length() / 2 / Math.sqrt(2) / HALO;
-                    out.glowDisc((a.x + c.x) / 2, (a.y + c.y) / 2, (a.z + c.z) / 2, r, c0[0], c0[1], c0[2], (float) r);
+                    out.glowDisc((a.x + c.x) / 2, (a.y + c.y) / 2, (a.z + c.z) / 2, r, c0[0], c0[1], c0[2], (float) r, (float) l0);
                 }
             }
         });
@@ -195,12 +198,13 @@ public final class PlumeRenderer {
         double least = 0.5 * Sight.MIN_PIXELS * view.pixel() * dist;
         if (r * cos < least) {
             double spot = Math.max(least, r * Math.sqrt(cos));
-            float[] rgb = Sight.onScreen(color, lum * r * r * cos / (spot * spot), near);
-            out.glowDisc(c.x, c.y, c.z, spot, rgb[0], rgb[1], rgb[2], 0);
+            double seen = lum * r * r * cos / (spot * spot);
+            float[] rgb = Sight.onScreen(color, seen, near);
+            out.glowDisc(c.x, c.y, c.z, spot, rgb[0], rgb[1], rgb[2], 0, (float) seen);
             return;
         }
         float[] rgb = Sight.onScreen(color, lum, near);
-        out.glowPlate(c, new Vector3f(ax).mul((float) r), new Vector3f(ay).mul((float) r), rgb[0], rgb[1], rgb[2], c.length());
+        out.glowPlate(c, new Vector3f(ax).mul((float) r), new Vector3f(ay).mul((float) r), rgb[0], rgb[1], rgb[2], c.length(), (float) lum);
     }
 
     /**

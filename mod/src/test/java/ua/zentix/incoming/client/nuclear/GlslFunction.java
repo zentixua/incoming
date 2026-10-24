@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
  * сравнения, встроенные {@code smoothstep, clamp, mix, min, max, exp, log2, pow, abs, sqrt, sign, floor, fract, sin, cos} и
  * такие же функции того же файла.
  */
-record GlslFunction(List<String> tokens, List<String> params, String source) {
+public record GlslFunction(List<String> tokens, List<String> params, String source) {
     private static final Pattern TOKEN = Pattern.compile("\\s*(\\d+\\.?\\d*(?:[eE][-+]?\\d+)?|\\.\\d+|[A-Za-z_]\\w*(?:\\.[xyzw]+)?|<=|>=|==|[-+*/(),;{}<>=])");
 
     /** Разобранные функции: тот же текст (тот же объект строки) и имя — та же функция; вложенные вызовы разбираются раз. */
@@ -22,7 +22,7 @@ record GlslFunction(List<String> tokens, List<String> params, String source) {
     /** Постоянные файла {@code const float} так же. */
     private static final Map<List<Object>, Double> CONSTANTS = new java.util.concurrent.ConcurrentHashMap<>();
 
-    static GlslFunction parse(String source, String name) {
+    public static GlslFunction parse(String source, String name) {
         return PARSED.computeIfAbsent(List.of(source, name), k -> parseNew(source, name));
     }
 
@@ -51,7 +51,7 @@ record GlslFunction(List<String> tokens, List<String> params, String source) {
         return new GlslFunction(tokens, params, source);
     }
 
-    double call(Map<String, Double> args) {
+    public double call(Map<String, Double> args) {
         return new Run(tokens, new HashMap<>(args), source).body();
     }
 

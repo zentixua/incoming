@@ -1,7 +1,8 @@
-#version 150
+#version 330
 
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:fx_balls.glsl>
+#moj_import <incoming:bloom.glsl>
 
 // Слой эффектов (client/fx/layer). Смешивание ONE, ONE_MINUS_SRC_ALPHA: цвет — свет, уже умноженный на
 // непрозрачность, альфа — сколько закрыто того, что за частицей (у искр и ореолов 0 — свет складывается).
@@ -42,6 +43,8 @@ in vec3 sixBall;
 in vec3 sixKeyDir;
 in vec3 sixBallDir;
 in vec3 worldPos;
+// свечение (FxBloom): во сколько раз свет ярче показанного; 0 — не светится
+in float emitGain;
 
 // запечённый клуб (FxAtlas.puff6): x — шаг карт по листу (v), y — начало кадров (v), z и w — размер кадра (u, v)
 uniform vec4 FxSix;
@@ -51,7 +54,10 @@ uniform vec3 FxSixLight;
 // оттенок света неба у клубов (FarView.sky против его яркости, линейно): цвет вершины клуба несёт только яркость
 uniform vec3 FxSkyTint;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
+// Излучение, что доходит до глаза (FxBloom): rgb — линейный свет (белый экран — 1) с умноженной альфой, альфа — та же,
+// что у цвета. Смешивание то же: дым перед огнём гасит его излучение той же долей, глубина — та же (один фрагмент)
+layout(location = 1) out vec4 fragGlow;
 
 // Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
 // с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по квадратам косинусов (в сумме
@@ -151,6 +157,19 @@ float glowAlpha(float r) {
     return exp(-(r / 0.42) * (r / 0.42)) * smoothstep(0.0, 0.25, 1.0 - r) / 0.997147;
 }
 
+// Излучение фрагмента c (цвет с умноженной альфой, значения экрана) в линейном свете: у кадров огня (film) — обратная
+// плёночная кривая запекания по каналам (кадр показывает огонь через неё; у неё — своя умноженная альфа), у остального —
+// показанный свет × пересвет gain, который экран срезал; не ярче белой точки кривой (BLOOM_WHITE)
+vec3 bloomLight(vec4 c, float film, float gain) {
+    if (film > 0.5) {
+        float a = max(c.a, 1e-4);
+        vec3 shown = pow(clamp(c.rgb / a, 0.0, 1.0), vec3(2.2));
+        return vec3(bloomFilm(shown.r), bloomFilm(shown.g), bloomFilm(shown.b)) * c.a;
+    }
+    vec3 light = pow(clamp(c.rgb, 0.0, 1.0), vec3(2.2)) * gain;
+    return light * min(1.0, BLOOM_WHITE / max(max(light.r, max(light.g, light.b)), 1e-6));
+}
+
 void main() {
     // производные — до ветвления (вне его они определены у всех пикселей)
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
@@ -158,6 +177,7 @@ void main() {
     vec4 tex;
     bool six = nearest < -0.1 && nearest > -0.4;
     vec3 sixLit = vec3(1.0);
+    float film = 0.0;
     if (nearest > 0.75) {
         tex = particle(texCoord0, dx, dy, lod);
     } else if (six) {
@@ -189,6 +209,7 @@ void main() {
         tex = vec4(vec3(a.a), a.a);
     } else if (nearest > 0.55) {
         tex = fireFrames(texCoord0, dx, dy, opacity);
+        film = 1.0;
     } else if (nearest < -0.5) {
         tex = textureGrad(Sampler3, texCoord0, dx, dy);
     } else {
@@ -207,6 +228,8 @@ void main() {
     // в мутную дымку вокруг облака. Вдали (клуб мельче 16 пикселей) — без среза: дальний дым и так бледный
     if (nearest > 0.75 && tex.a * opacity < 0.1 * clamp(2.0 - lod, 0.0, 1.0)) discard;
     vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a);
+    vec3 glow = vec3(0.0);
+    if (emitGain > 0.0) glow = bloomLight(color, film, emitGain);
     if (PallAmbient.w > 0.5) {
         // пелена перед квадратом: его свет ослаблен, а закрытое им — уже её свет до него (пелена на кадре — до мира).
         // Квадрат ближе мира: перед ним пелены не больше, чем на кадре до мира, — и её свет до него — доля света пелены
@@ -218,17 +241,21 @@ void main() {
         float front = max(pallFront, frame.a);
         vec3 before = mix(PallAmbient.rgb, frame.rgb / max(1.0 - frame.a, 1e-3), smoothstep(0.02, 0.15, 1.0 - frame.a));
         color.rgb = color.rgb * front + color.a * before * (1.0 - front);
+        glow *= front;
     }
+    // видимая доля квадрата — у цвета и излучения одна
+    float seen = 1.0;
     if (FxScene > 0.5 && softness > 0.0) {
         // клуб тает, входя в землю и стены, и пропадает за рельефом (и за LOD Distant Horizons)
         // негодное расстояние (NaN, за глазом) — мира за пикселем нет, как у неба
         float scene = pallScene(texture(Sampler1, gl_FragCoord.xy / ScreenSize).r);
-        color *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
+        seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
     }
     // у самой камеры квадрат не режет экран краем ближней плоскости
-    color *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);
+    seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);
     // туман Minecraft гасит частицу, а не красит её в свой цвет: за ней и так мир в тумане, а непрозрачное пятно цвета
     // тумана у края прорисовки закрывало бы ленты шлейфов и дальнюю картинку взрывов, которые сменяют частицы там
-    color *= 1.0 - fog * FxFogColor.a;
-    fragColor = color * ColorModulator;
+    seen *= 1.0 - fog * FxFogColor.a;
+    fragColor = color * seen * ColorModulator;
+    fragGlow = vec4(glow * seen * ColorModulator.rgb, fragColor.a);
 }

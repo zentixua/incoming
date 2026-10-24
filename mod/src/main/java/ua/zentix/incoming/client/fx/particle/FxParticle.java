@@ -45,6 +45,8 @@ public final class FxParticle {
     private float fadeFrom, glow, glowTicks, drag, rise, gravity, wind, driftX, driftZ;
     private Fx.@org.jetbrains.annotations.Nullable Thermal thermal;
     private boolean paper, prelit;
+    /** Пересвет самосветящегося ({@link Fx.Spec#hdr}). */
+    private float hdr;
     private boolean collide, smooth;
     /** Цепочка клубов ({@link Fx.Spec#chain}): направление пути и шаг между клубами; шаг 0 — не цепочка. */
     private float chainX, chainY, chainZ, chainGap;
@@ -97,6 +99,7 @@ public final class FxParticle {
         thermal = s.thermal;
         paper = s.paper;
         prelit = s.prelit;
+        hdr = s.hdr;
         collide = s.collide;
         smooth = s.smooth;
         chainX = s.chainX;
@@ -296,6 +299,8 @@ public final class FxParticle {
         FxAtlas.Sprite sprite = sprite(partial);
         out.nearestTexels(!smooth);
         out.opacity(a);
+        // самосветящееся светится (FxBloom): огонь, искры, вспышка, шар; дым, пыль, кольцо и пепел — нет
+        out.emission(kind.lit ? 0 : hdr);
         switch (kind) {
             case SPARK -> streak(out, sprite, (float) px, (float) py, (float) pz, (float) d, r, g, b, light, fog);
             case FLAKE -> {
@@ -313,6 +318,7 @@ public final class FxParticle {
                         quadSize * FxQuads.SOFT, 1, light, fog);
             }
         }
+        out.emission(0);
     }
 
     private FxAtlas.Sprite sprite(float partial) {
