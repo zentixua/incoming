@@ -15,6 +15,34 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Облако обычного взрыва по законам: подъём MTT, Чёрч, шар топлива CCPS, вещество, цвет огня, жизнь. */
 class CloudModelTest {
+    @Test
+    void crushedMaterialFeedsColdDustOnPavingWithoutIncreasingItsSurfaceLoading() {
+        var hard = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
+                GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), (x, z) -> 0);
+        for (WeaponType w : List.of(WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET)) {
+            var source = BlastSource.of(w, false);
+            var m = new CloudModel(source, CloudModel.Air.STANDARD, false, 0, hard);
+            double produced = ua.zentix.incoming.nuclear.model.CraterModel.chargeVolume(source.chargeKg(),
+                    ua.zentix.incoming.nuclear.model.CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY * CloudModel.DUST_LOFTED;
+            assertEquals(produced, m.dust + m.crushed.total, 1e-9 * produced, "hot + cold conserves crushed material");
+            assertTrue(m.crushed.total > 0 && m.dust > 0);
+            assertEquals(0, m.crushed.underBall(60), "cold dust is not counted a second time in the hot cloud");
+            double[] optical = {0}, aloft = {0};
+            m.crushed.blobs(10, 1, (x, y, z, sh, sv, d) -> {
+                assertTrue(y <= 2 * sv + 1, "cold source remains by the supporting surface");
+                optical[0] = Math.max(optical[0], ua.zentix.incoming.nuclear.model.DustModel.K_MIX * d / (2 * Math.PI * sh * sv));
+                aloft[0] += d;
+            });
+            assertTrue(optical[0] > 0.1, w + ": cold crushed dust is visible at 10 s, " + optical[0]);
+            assertTrue(aloft[0] <= m.crushed.total + 1e-9);
+            assertEquals(6e-4, ua.zentix.incoming.nuclear.model.DustModel.Surface.HARD.supply(), 0);
+            var airburst = new CloudModel(source, CloudModel.Air.STANDARD, false, 100, hard);
+            var water = new CloudModel(source, CloudModel.Air.STANDARD, true, 0, hard);
+            assertEquals(0, airburst.crushed.total);
+            assertEquals(0, water.crushed.total);
+        }
+    }
+
     private static CloudModel model(WeaponType w, CloudModel.Air air) {
         return new CloudModel(BlastSource.of(w, false), air);
     }
@@ -162,7 +190,7 @@ class CloudModelTest {
             }
             assertEquals(m.soot * m.fade(t), soot, 1e-9, "t " + t);
             // пыль — ослабление в кг смеси: воронка, слой волны и сорванное под шаром, не больше поднятого
-            assertTrue(dust <= m.dust + m.ground.total + m.ground.underBall(t) + 1e-9, "t " + t);
+            assertTrue(dust <= m.dust + m.crushed.total + m.ground.total + m.ground.underBall(t) + 1e-9, "t " + t);
             assertTrue(blobs.get(0)[0] > 0, "облако над землёй");
         }
         // в огненной стадии — два горячих шара: продукты детонации (горячее) и топливо
@@ -338,8 +366,8 @@ class CloudModelTest {
 
     /**
      * Пыль волны лежит на земле под взрывом (жалоба 23.10: плоские «блины» пыли над городом на высоте ударов в крыши):
-     * у взрыва на высоте h над землёй клубы слоя пыли — у земли (середина клуба не выше 2σ над ней), а не на высоте
-     * взрыва (в облаке модели слой стоит на {@code hob} ниже точки взрыва); у удара в землю слой есть.
+     * у взрыва на высоте h над землёй клубы слоя пыли — у земли (середина клуба не выше 2σ над ней; высоты — от точки
+     * взрыва), а не на высоте взрыва; у удара в землю слой есть.
      */
     @Test
     void groundDustLiesOnTheGround() {
@@ -351,7 +379,7 @@ class CloudModelTest {
                     final double age = t;
                     m.ground.blobs(t, 1, (x, y, z, sh, sv, d) -> {
                         dust[0] += d;
-                        assertTrue(y <= 2 * sv + 0.5, w + " на " + hob + " м, " + age + " с: клуб пыли в " + y + " м над землёй, σv " + sv);
+                        assertTrue(y + hob <= 2 * sv + 0.5, w + " на " + hob + " м, " + age + " с: клуб пыли в " + (y + hob) + " м над землёй, σv " + sv);
                     });
                 }
                 if (hob == 0) assertTrue(dust[0] > 0, w + ": у удара в землю пыль волны есть");

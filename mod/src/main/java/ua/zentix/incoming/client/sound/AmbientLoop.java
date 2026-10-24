@@ -19,7 +19,7 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
     private static final int ORPHAN = 10;
 
     private float slew;
-    private float target, highs = 1;
+    private float target, highs = 1, open = 1;
     private int quiet;
     private boolean ending;
 
@@ -44,6 +44,11 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
      * за {@code distance} блоков.
      */
     public void set(Vec3 ear, Vec3 toward, float volume, double distance) {
+        set(ear, toward, volume, distance, 1);
+    }
+
+    /** As above, with the current openness of the path (walls/terrain); 1 leaves the path unobstructed. */
+    public void set(Vec3 ear, Vec3 toward, float volume, double distance, float open) {
         Vec3 dir = toward.subtract(ear);
         Vec3 at = dir.lengthSqr() < 9 ? toward : ear.add(dir.normalize().scale(3));
         x = at.x;
@@ -51,6 +56,7 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
         z = at.z;
         target = Math.max(0, Math.min(1, volume));
         highs = SoundFilters.air(distance);
+        this.open = open;
         quiet = 0;
     }
 
@@ -78,7 +84,7 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
             stop();
             return;
         }
-        SoundFilters.update(this, 1, highs);
+        SoundFilters.update(this, lowpassGain(), lowpassHighs());
     }
 
     @Override
@@ -88,11 +94,11 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
 
     @Override
     public float lowpassGain() {
-        return 1;
+        return SoundFilters.blockedGain(open);
     }
 
     @Override
     public float lowpassHighs() {
-        return highs;
+        return highs * SoundFilters.blockedHighs(open);
     }
 }

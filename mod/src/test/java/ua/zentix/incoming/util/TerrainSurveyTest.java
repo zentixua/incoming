@@ -44,6 +44,18 @@ class TerrainSurveyTest {
     }
 
     @Test
+    void belowZeroRetrogenKeepsAlreadyShiftedHeightmap() {
+        int[] y = hill();
+        CompoundTag tag = chunk("minecraft:empty", y, HEIGHT);
+        CompoundTag retrogen = new CompoundTag();
+        retrogen.putString("target_status", "minecraft:heightmaps");
+        tag.put("below_zero_retrogen", retrogen);
+        assertEquals(DiskStatus.State.FINAL, DiskStatus.of(tag));
+        // 1.18 ChunkHeightAndBiomeFix has already shifted these values to the new world bottom.
+        assertArrayEquals(y, TerrainSurvey.decode(tag, Heightmap.Types.MOTION_BLOCKING, MIN_Y, HEIGHT));
+    }
+
+    @Test
     void untrustedHeightsAreRejected() {
         int[] y = hill();
         // недогенерированный: карта высот без украшений и построек

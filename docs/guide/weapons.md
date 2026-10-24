@@ -14,6 +14,9 @@ Six weapons, in the order the designator lists them. Each launch uses [munitions
 
 Times are for a nearby target. The world owner can change flight times.
 
+Fuel burning in a crater produces a continuous roar and crackle. It fades as the fuel runs out; the recording does
+not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path to you.
+
 ## The real weapons
 
 Each weapon is a real one. Its size, mass, warhead and engines come from open data; where a number is not published
@@ -178,8 +181,8 @@ circles over the target while you pick what to hit in its
 Flies low over the terrain and dives just before the target. A heavy strike on a target that does not move. Can carry
 a nuclear warhead. It sees the terrain along its whole route, also where nobody is near and the world is not
 loaded: it reads the saved height of each place, and for land nobody has explored yet it uses the world generator, which
-knows the ground but not trees or buildings. On a map made before Minecraft 1.18, places nobody has visited since the
-update stay unknown to it until they load. It flies over a hill on its way and dives behind it. It does not look for a
+knows the ground but not trees or buildings. Chunks still saved in the pre-1.18 format stay unknown to it until they load. A heightmap already
+converted to the current format remains usable even if the chunk still needs terrain below zero. It flies over a hill on its way and dives behind it. It does not look for a
 way around through valleys: the route is yours to set. If a hill, the rim of a pit or a building hides the target, the
 missile climbs until it can see it and then dives. It cannot get past a building that hides the target at a steep angle right next to it (for
 example, 40 blocks taller than the target and 20 blocks from it), and it cannot reach a target under a roof: use
@@ -270,14 +273,21 @@ instead of drifting as one ball.
   drift downwind, over a carpet of dust from all the hits.
 - **Lancet**: a small flash and a cloud a few tens of blocks high.
 
-The blast wind tears dust off the ground, the same way as the wave of a nuclear strike does. Bare dirt, sand, gravel and
-snow give it up easily: a low ring of light dust races out with the wave, a few tens of blocks for a Shahed, then
-thickens to several blocks, hangs for minutes and drifts with the wind near the ground. Grass, stone and buildings hold
-the soil, so on a meadow the dust rises only around the crater, and water gives none: by a shore the dust lies mostly
-over the land. While the cloud rises, a thin column of dust is drawn up
-under it. An interceptor bursting in the air leaves no crater and no dust, unless it bursts low over the ground. A hit on a
-roof or a wall is a burst at that height above the street: the dust rises from the ground below, and after a high hit
-the wave is too weak at the ground to raise any. Roofs themselves give no dust.
+The blast wind tears dust off every surface it reaches, ground, roof or hillside alike, the same way as the wave of a
+nuclear strike does. Bare dirt, sand, gravel and snow give it up easily: a low ring of light dust races out with the
+wave, a few tens of blocks for a Shahed, then thickens to several blocks, hangs for minutes and drifts with the wind near
+the ground. Grass holds the soil, so on a meadow the dust rises only around the crater; stone, brick and planks
+carry only a thin film of settled dust. A leafy canopy is permeable: the surface beneath it supplies the forest
+dust. Water gives none: by a shore the dust lies mostly over the land. Dusty air is heavier
+than clean air, so the dust spreads out along the surface it came from and follows the ground up and down gentle
+slopes; where it drifts past an edge (a roof, a cliff) it sinks to the surface below: thick dust in seconds, thin dust
+slower. It climbs gentle slopes but not walls: in a street between houses it stays in the street, in wind or calm. While the cloud rises, a
+thin column of dust is drawn up under it. An interceptor bursting in the air leaves no crater and no dust, unless it
+bursts low over the ground. A hit on a roof or a wall is the same blast as a hit on the ground: some of what it crushes rises
+with the hot gas, while cold ejecta and falling material feed the low, heavy dust layer. This also leaves low dust on
+a paved street without pretending that the stone was covered in soil. The hot/cold split is an estimate: half of the
+existing crushed-material dust budget in each stream. The wave can also lift dust from the street below where it is
+still strong enough there.
 
 A blast on water throws up a white column of spray instead of dust: about 14 blocks high for the Shahed and about 20 for
 the missile. It rises in under two seconds, opens into a crown at the top and falls back, and the falling water spreads over the

@@ -855,11 +855,19 @@ def blasts():
         deb.append(norm(trim_tail(cut(x, a, b), -45, 0.4), -16, 0.9))
     variants("debris.fall", "subtitles.incoming.debris", "debris_fall", deb)
 
-    # пожар в воронке: гудящее пламя с треском, разгорается и стихает
-    fire = cut(src(483304), 0.2, 14.2)
-    tt = np.arange(len(fire)) / SR
-    fire *= np.minimum(1, tt / 1.5) * np.clip((tt[-1] - tt) / 5, 0, 1)
-    write("blast_fire", norm(fire, -15), "blast.fire", "subtitles.incoming.fire")
+    crater_fire()
+
+
+def crater_fire():
+    """Ровный гул настоящего пожара с треском. Огибающая и длительность — у топлива в клиенте, не в записи.
+    Сдвига тона нет: масштаб Сакса относится к детонации, а не к треску горящих обломков."""
+    fire = cut(src(483304, orig=True), 0.2, 14.2)
+    fire = loop(fire, 12.0, 1.0)
+    # Preserve the recorded crackle's dynamics: norm() uses tanh and flattens its peaks. The client calibrates
+    # this file by its measured LUFS, so peak normalization does not change the model's source level.
+    fire -= np.mean(fire)
+    fire *= 10 ** (-1 / 20) / max(np.max(np.abs(fire)), 1e-9)
+    write("blast_fire", fire, "blast.fire", "subtitles.incoming.fire", level=0.2)
 
 
 def bunker():

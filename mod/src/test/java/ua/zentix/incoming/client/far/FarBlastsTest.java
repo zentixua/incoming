@@ -164,16 +164,16 @@ class FarBlastsTest {
     }
 
     /**
-     * Высота взрыва над землёй — из земли под точкой удара, что шлёт сервер: удар в крышу на 16 м — разрыв на 16 м над
-     * улицей; пакет прежней сборки (земля — сама точка) — удар в землю.
+     * Контакт — по тому, что под точкой, а не по виду: удар в крышу (верх колонки — на точке) и в стену (точка на грани,
+     * колонка по ту сторону — стена выше точки) — 0; над аппаратом в 100 м над травой — 100; рельефа не знаем — 0.
      */
     @Test
-    void burstHeightAboveTheGroundFromThePacket() {
-        S2C.Blast roof = new S2C.Blast(S2C.Blast.DRONE, new Vec3(10, 80.3, 10), 0, 64, 1, java.util.Optional.empty(), 0);
-        assertEquals(16.5, FarBlasts.hob(roof), 1e-9);
-        S2C.Blast ground = new S2C.Blast(S2C.Blast.DRONE, new Vec3(10, 64.2, 10), 0, 64.2f, 1, java.util.Optional.empty(), 0);
-        assertEquals(0, FarBlasts.hob(ground), 1e-9);
-        // земля выше точки (подвал) — не под землёй
-        assertEquals(0, FarBlasts.hob(new S2C.Blast(S2C.Blast.DRONE, new Vec3(10, 60, 10), 0, 64, 1, java.util.Optional.empty(), 0)), 1e-9);
+    void contactByWhatIsUnderThePoint() {
+        // дом x 0..9 высотой до 80, улица — 64
+        Sightline.Heights town = (x, z) -> x >= 0 && x < 10 ? 80 : 64;
+        assertEquals(0, FarBlasts.overSurface(town, new Vec3(5.5, 79.8, 5.5)), 1e-9, "крыша: точка в верхнем блоке");
+        assertEquals(0, FarBlasts.overSurface(town, new Vec3(-0.001, 70, 5.5)), 1e-9, "стена: точка на грани снаружи");
+        assertEquals(100, FarBlasts.overSurface(town, new Vec3(-50.5, 164, 5.5)), 1e-9, "аппарат над улицей");
+        assertEquals(0, FarBlasts.overSurface((x, z) -> Double.NaN, new Vec3(0, 300, 0)), 1e-9, "не знаем — наземный");
     }
 }

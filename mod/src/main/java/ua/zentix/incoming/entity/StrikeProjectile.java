@@ -1298,8 +1298,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             if (ready == end) return Double.POSITIVE_INFINITY;
             start = ready;
         }
-        // за готовыми чанками и вне мира — по верху рельефа съёмки: цель за холмом, которого ещё нет в мире
-        double t = Terrain.underRelief(level, start, end, virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF);
+        // За готовыми чанками и вне мира — по верху рельефа съёмки, без потолка Незера:
+        // после разрыва могут снова встретиться готовые чанки, чья карта высот — потолок, а не препятствие.
+        double t = Terrain.underRelief(level, start, end, Terrain.Allowed.VIRTUAL_RELIEF);
         return t >= 1 ? Double.POSITIVE_INFINITY : from.distanceTo(start.lerp(end, t));
     }
 

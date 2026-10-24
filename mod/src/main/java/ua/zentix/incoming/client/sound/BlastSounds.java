@@ -14,6 +14,7 @@ import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.fx.BlastHit;
 import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.nuclear.Deafness;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.HearingModel;
@@ -68,6 +69,7 @@ public final class BlastSounds {
     private static long ticks;
     /** Смесь взрывов у уха: громкость в игре — половина децибел суммарного уровня, потолок — у суммы ({@link Mix}). */
     private static final Mix MIX = new Mix();
+    private static final List<CraterFire> FIRES = new ArrayList<>();
     /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
     private static String last = "";
     @Nullable
@@ -242,6 +244,7 @@ public final class BlastSounds {
     /** Тик клиента. */
     static void tick() {
         ticks++;
+        FIRES.removeIf(fire -> !fire.tick(Minecraft.getInstance()));
     }
 
     /** Множитель громкости всех звуков взрывов сейчас ({@link Mix}). */
@@ -269,6 +272,8 @@ public final class BlastSounds {
         ECHOES.forEach(BlastEchoes::stop);
         ECHOES.clear();
         MIX.reset();
+        FIRES.forEach(CraterFire::stop);
+        FIRES.clear();
         lastEchoes = null;
         last = "";
     }
@@ -350,10 +355,10 @@ public final class BlastSounds {
     static final double EJECTA_FALL_S = 2;
 
     /**
-     * Пожар в воронке гудит и трещит: мощность шума пламени — доля тепловыделения лужи {@code watts}, Вт
-     * ({@link Sources#flame}), докуда слышно — путь до уха.
+     * Пожар в воронке: запись петлёй в своей скорости, тепловыделение и длительность — у топлива модели.
      */
-    public static void fire(Vec3 pos, double watts, float pitch) {
-        Sources.play(ModSounds.BLAST_FIRE.get(), pos, Sources.BLAST_FIRE.power(Sources.flame(watts, Spectra.BLAST_FIRE)), pitch);
+    public static void fire(Vec3 pos, CloudModel model) {
+        ClientLevel world = Minecraft.getInstance().level;
+        if (world != null && model.poolWatts > 0) FIRES.add(new CraterFire(model, pos, world));
     }
 }

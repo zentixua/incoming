@@ -37,6 +37,23 @@ class SoundAssetsTest {
     private static final List<String> PRELOAD = List.of("blast.near", "blast.mid", "blast.far", "blast.sub");
 
     @Test
+    void craterFireHasNoBakedFadeOrSilentLoopBoundary() throws IOException {
+        float[][] pcm = new float[1][];
+        int rate = Envelope.read(open(ASSETS + "sounds/blast_fire.ogg"), pcm);
+        float[] envelope = Envelope.of(pcm[0], rate);
+        double peak = java.util.stream.IntStream.range(0, envelope.length).mapToDouble(i -> envelope[i]).max().orElseThrow();
+        assertTrue(pcm[0].length >= 10 * rate, "a varied recording, not a short repeated grain");
+        int window = rate / 5;
+        for (int start : new int[]{0, pcm[0].length - window}) {
+            double ms = 0;
+            for (int i = start; i < start + window; i++) ms += pcm[0][i] * pcm[0][i];
+            assertTrue(10 * Math.log10(ms / window) > -35, "audible at both sides of the loop seam");
+        }
+        assertTrue(Envelope.lufs(envelope[envelope.length - 1]) > Envelope.lufs(peak) - 12,
+                "the model controls extinction; no five-second fade baked into the recording");
+    }
+
+    @Test
     void everyEventHasMonoFiles() throws IOException {
         JsonObject json = JsonParser.parseReader(new InputStreamReader(open(ASSETS + "sounds.json"), StandardCharsets.UTF_8)).getAsJsonObject();
         for (var e : json.entrySet()) {

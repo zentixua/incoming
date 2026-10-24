@@ -404,7 +404,7 @@ public final class BlastEffects {
     /**
      * Звук воронки по модели облака: выброс падает обратно — через секунду (О: полёт выброса на высоту порядка диаметра
      * воронки), масса — воронка без пыли, что ушла в воздух; гул огня, пока горит лужа топлива, — по её теплу сейчас,
-     * запись заново, когда прошлая кончилась ({@link #FIRE_REPEAT}).
+     * непрерывная запись в своей скорости, огибающая — из тепловыделения модели.
      */
     static void crater(CloudModel model, Vec3 pos, int t, float pitch) {
         double charge = model.source.chargeKg();
@@ -412,12 +412,8 @@ public final class BlastEffects {
             double kg = CraterModel.chargeVolume(charge, CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY * (1 - CloudModel.DUST_LOFTED);
             BlastSounds.debris(pos, kg, 2 * CraterModel.chargeRadius(charge, CraterModel.Soil.DRY), pitch);
         }
-        double share = model.poolShare(t / 20.0);
-        if (t >= 8 && (t - 8) % FIRE_REPEAT == 0 && share > 0) BlastSounds.fire(pos, model.poolWatts * share, pitch);
+        if (t == 1) BlastSounds.fire(pos, model);
     }
-
-    /** Запись гула огня — 14 с с краями: следующая — через столько тиков. */
-    static final int FIRE_REPEAT = 260;
 
     // ================================================================ разрыв зенитной ракеты
 

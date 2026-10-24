@@ -28,7 +28,6 @@ import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.material.FluidState;
@@ -54,7 +53,6 @@ import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Timeline;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
-import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.nuclear.world.CraterJob;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.work.UnitQueue;
@@ -429,29 +427,6 @@ public final class Warheads {
     // ================================================================ шахед, ракета, «Град», «Ланцет»
 
     /**
-     * Природная земля под точкой удара, м (первый воздух над грунтом, ниже построек и деревьев, как {@link CraterJob#naturalSurface}):
-     * клиент ставит пыль волны на неё, а не на крышу или стену, куда пришёлся удар (взрыв на крыше — разрыв на её
-     * высоте над улицей). В неготовом чанке — сама точка удара: чтение высоты грузило бы его или ждало загрузки. Вниз —
-     * до дна мира (столбец одного готового чанка: башня выше сотни блоков; аппарата над рельефом в столбце мира нет).
-     * Вода — тоже земля (гладь). Земля выше точки (подвал, удар в склон) — тоже точка: взрыв не под землёй; грунта в
-     * столбце нет (пустота) — точка.
-     * ⚠ Дом из природного камня (песчаник, камень) считается грунтом — его крыша будет землёй.
-     */
-    public static double groundUnder(ServerLevel level, Vec3 pos) {
-        BlockPos at = BlockPos.containing(pos);
-        if (!Terrain.ready(level, at)) return pos.y;
-        int top = Math.max(Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX(), at.getZ()), at.getY() + 1);
-        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(at.getX(), 0, at.getZ());
-        for (int y = top - 1; y >= level.getMinBuildHeight(); y--) {
-            BlockState s = level.getBlockState(m.setY(y));
-            // вода — земля взрыва: над ней разрыв на воде, а не над дном (пыли над водой нет, брызги — у WaterBlast)
-            // (сама жидкость, а не блок с водой внутри: ступень или плита в доме — не гладь)
-            if (s.getBlock() instanceof LiquidBlock || BlockResponse.of(s).kind() == BlockResponse.Kind.GROUND) return Math.min(pos.y, y + 1);
-        }
-        return pos.y;
-    }
-
-    /**
      * Взрыв заряда {@code tntKg} кг ТНТ по физике ({@link StagedExplosion}: волна Кинни–Грэхема, кривая давление–импульс
      * блоков, газы в помещении, тела — {@code BlastBody}) единицами в очереди попаданий.
      */
@@ -566,7 +541,6 @@ public final class Warheads {
                 case ROCKET -> S2C.Blast.ROCKET;
                 case DRONE, NONE -> S2C.Blast.DRONE;
             };
-            float surface = (float) groundUnder(level, pos);
             // видно — до far_range, слышно — докуда звук взрыва его заряда тихой ночью выше фона (HearingModel), но не
             // дальше, чем сервер шлёт что-либо далёкое
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
@@ -574,7 +548,7 @@ public final class Warheads {
             this.seed = seed;
             this.axis = axis(direct);
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
-                    new S2C.Blast(kind, pos, mat.ordinal(), surface, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis));
+                    new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis));
             // заряд на аппарате: воронку и шар топлива там не ставить — это корпус, а не земля. Снаряд отдаёт точку удара о
             // аппарат уже в мире (StrikeProjectile: SubLevels.toWorld), поэтому — и аппарат, чей габарит у точки
             inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
