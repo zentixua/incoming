@@ -1,0 +1,1 @@
+{"name": "slab-wide-before", "effect": "real loiter concrete 1", "site": [960.5, 65.0, 0.5], "camera": [18.0, 5.0, 90.0, 0.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-AS2-before/mod/run/sandbox/audio.wav", "start": 21143620, "from": 0.00, "seconds": 4.00}, "frames": [{"t": 10.00, "age": 10.011, "file": "slab-wide-before_010.00s.png", "fps": 62}]}

@@ -1,0 +1,303 @@
+{
+  "before": "cd310f2b",
+  "after": "a9891ad674d830a4802522b99718bf80b2866895",
+  "renderer": "development sandbox; vanilla renderer; no Iris; no full-pack run",
+  "host_power_profile": "unchanged; no timing or FPS comparison",
+  "camera_note": "distance is horizontal; close 4 m / height 3 m, wide 18 m / height 5 m",
+  "image_edits": false,
+  "audio_mastering": false,
+  "cases": {
+    "road-close-after": {
+      "name": "road-close-after",
+      "effect": "real drone paved",
+      "site": [
+        640.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        3.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 16924740,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.002,
+          "file": "road-close-after_010.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "road-close-before": {
+      "name": "road-close-before",
+      "effect": "real drone paved",
+      "site": [
+        640.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        3.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2-before/mod/run/sandbox/audio.wav",
+        "start": 17793092,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.007,
+          "file": "road-close-before_010.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "road-wide-after": {
+      "name": "road-wide-after",
+      "effect": "real drone paved",
+      "site": [
+        320.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        5.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 3981380,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 0.1,
+          "age": 0.144,
+          "file": "road-wide-after_000.10s.png",
+          "fps": 61
+        },
+        {
+          "t": 1.0,
+          "age": 1.003,
+          "file": "road-wide-after_001.00s.png",
+          "fps": 54
+        },
+        {
+          "t": 10.0,
+          "age": 10.011,
+          "file": "road-wide-after_010.00s.png",
+          "fps": 63
+        },
+        {
+          "t": 60.0,
+          "age": 60.0,
+          "file": "road-wide-after_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "road-wide-before": {
+      "name": "road-wide-before",
+      "effect": "real drone paved",
+      "site": [
+        320.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        5.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2-before/mod/run/sandbox/audio.wav",
+        "start": 4862020,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 0.1,
+          "age": 0.128,
+          "file": "road-wide-before_000.10s.png",
+          "fps": 61
+        },
+        {
+          "t": 1.0,
+          "age": 1.0,
+          "file": "road-wide-before_001.00s.png",
+          "fps": 61
+        },
+        {
+          "t": 10.0,
+          "age": 10.002,
+          "file": "road-wide-before_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.002,
+          "file": "road-wide-before_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "slab-close-after": {
+      "name": "slab-close-after",
+      "effect": "real loiter concrete 1",
+      "site": [
+        1280.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        3.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 23642180,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.011,
+          "file": "slab-close-after_010.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "slab-close-before": {
+      "name": "slab-close-before",
+      "effect": "real loiter concrete 1",
+      "site": [
+        1280.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        3.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2-before/mod/run/sandbox/audio.wav",
+        "start": 24477764,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.003,
+          "file": "slab-close-before_010.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "slab-wide-after": {
+      "name": "slab-wide-after",
+      "effect": "real loiter concrete 1",
+      "site": [
+        960.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        5.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 20308036,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.004,
+          "file": "slab-wide-after_010.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "slab-wide-before": {
+      "name": "slab-wide-before",
+      "effect": "real loiter concrete 1",
+      "site": [
+        960.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        5.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2-before/mod/run/sandbox/audio.wav",
+        "start": 21143620,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.011,
+          "file": "slab-wide-before_010.00s.png",
+          "fps": 62
+        }
+      ]
+    }
+  },
+  "sha256": {
+    "road-close-after/road-close-after.wav": "8b96ca8c1611ebde63fb0fffeb22ad78d0d4d9c99883ec3d55421c02aa66732d",
+    "road-close-after/road-close-after_010.00s.png": "0771aec530b41e662f6726b6233b332d11de90806577b8e841a7e93772c82d19",
+    "road-close-before/road-close-before.wav": "e34d8cbb1307b195be762ffa79ce8a15f0f37e88891678b9fe87b7315ff4ce16",
+    "road-close-before/road-close-before_010.00s.png": "7d39d38d64a262e1a88a1f15be1c1599d25985bbfd45c7cda8153b1212e26be5",
+    "road-wide-after/road-wide-after.wav": "d3faad0f7e14ced971415e9c492579932e9eab0378a61c5a48d0596ddb342cf9",
+    "road-wide-after/road-wide-after_000.10s.png": "8664cc2ddd32306cff16a9559457faf96c85162992415f9007fca4f784613148",
+    "road-wide-after/road-wide-after_001.00s.png": "4637d1effda4437f8d28f4b1642d08ca016d45bc230775093b14a14369e9a5c8",
+    "road-wide-after/road-wide-after_010.00s.png": "7350ccfe67fef803eab3e90f883c48d380ff2001bccc69b9dd65983c77f8e661",
+    "road-wide-after/road-wide-after_060.00s.png": "9e0a74ac41b4c169c93e3e01b6b0da880b9f23fcb190de5a20fdff1716c7e6f5",
+    "road-wide-before/road-wide-before.wav": "0f62761b2b9c52dad686f252f8ef73acfde2e869e2f9dc55c4effaf059092bc4",
+    "road-wide-before/road-wide-before_000.10s.png": "3c0361c79fa054e32dccfab1e242d556eed81cab8df7a49bb76ac3fbe5d95b3e",
+    "road-wide-before/road-wide-before_001.00s.png": "d1ac1a453e9d798b1ac6212c189343601ba9e40b224912495d850bfc1e5426a6",
+    "road-wide-before/road-wide-before_010.00s.png": "bd83bbb767bb44d08bdf9297c4437a00e9e9daf0e671eca1729ac43aa9d119ac",
+    "road-wide-before/road-wide-before_060.00s.png": "4e6cc3da83b02471658163e421a351a312e67155f63fc9e4cd0def9566370627",
+    "slab-close-after/slab-close-after.wav": "cb0413d001d26cf57a4cc21dc44f2e5461986d51e89e77970cdb7bea6715863f",
+    "slab-close-after/slab-close-after_010.00s.png": "ed29095af08fc68c2ac90b0e93f09a367541b12b308748b44eb3954e48257bc5",
+    "slab-close-before/slab-close-before.wav": "2cc8149ae692191d28071e6bb19f613e1710238ec8ea5b6461f9ae25589aca9a",
+    "slab-close-before/slab-close-before_010.00s.png": "8df113ec38bdd3a8d80a6ae2217c148e689f65907421df8a85b3dc0edc76617a",
+    "slab-wide-after/slab-wide-after.wav": "8136a1d1b7a28d23cd339225b9798fd6c9e3072d2be6793a4dde6fc799729744",
+    "slab-wide-after/slab-wide-after_010.00s.png": "8be7b96414c181ecedca96d4e8629325b507d387c846563f36239f2cff968052",
+    "slab-wide-before/slab-wide-before.wav": "c88e319719ce8c8c9c5610ddd1ff93d868efe92061ff333c1a6908992a370ee2",
+    "slab-wide-before/slab-wide-before_010.00s.png": "634a735c8558a506e43600c0f7245ccbe6caec1521a014dd2d1e39a004b82a41"
+  }
+}

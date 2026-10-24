@@ -1,0 +1,1 @@
+{"name": "road-close-after", "effect": "real drone paved", "site": [640.5, 65.0, 0.5], "camera": [4.0, 3.0, 90.0, 0.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav", "start": 16924740, "from": 0.00, "seconds": 4.00}, "frames": [{"t": 10.00, "age": 10.002, "file": "road-close-after_010.00s.png", "fps": 62}]}
