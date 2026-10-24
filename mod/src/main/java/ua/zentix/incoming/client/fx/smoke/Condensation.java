@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.fx.smoke;
 
+import org.jetbrains.annotations.Nullable;
+
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.ChemicalFront;
 import ua.zentix.incoming.nuclear.model.HobBlast;
@@ -19,18 +21,20 @@ public final class Condensation {
     private static final double P0 = BlastModel.P0 * 1000, T0 = CloudModel.T_AIR_K;
     private static final double RV = 461.5, RD = 287.05, CP = 1005, LV = 2.45e6;
     private static final double DROP_EXTINCTION = CloudModel.DROP_K * (1 - CloudModel.DROP_G);
+    @Nullable
     private final ChemicalFront front;
     private final double humidity;
     private final double[] radius = new double[RINGS], volume = new double[RINGS], arrival = new double[RINGS], phase = new double[RINGS];
     public final double reach, life;
 
     public Condensation(double kg, boolean surface, double humidity) {
-        front = ChemicalFront.cached(kg, surface);
         this.humidity = Math.max(0, Math.min(1, humidity));
         if (kg <= 0 || this.humidity <= 0) {
+            front = null;
             reach = life = 0;
             return;
         }
+        front = ChemicalFront.cached(kg, surface);
         double low = Math.max(0.5, 0.6 * Math.cbrt(kg));
         double high = BlastModel.rangeForSurfaceOverpressure(20, kg);
         double max = 0, last = 0;
@@ -84,6 +88,7 @@ public final class Condensation {
 
     /** Rarefaction only, no water before the local positive phase is over. */
     public double density(double r, double seconds) {
+        if (front == null) return 0;
         double plus = BlastModel.chemicalPhaseSeconds(r, front.tntKg, front.surface);
         double x = (seconds - front.arrivalSeconds(r)) / plus;
         if (x <= 1 || x >= 8) return 0;
@@ -95,7 +100,7 @@ public final class Condensation {
 
     /** Shell cells follow the local pressure history; shape discretization only, no static sphere at t=0. */
     public void blobs(double seconds, CloudModel.Blobs out) {
-        if (seconds <= 0 || seconds >= life || reach <= 0) return;
+        if (front == null || seconds <= 0 || seconds >= life || reach <= 0) return;
         for (int j = 0; j < RINGS; j++) {
             double r = radius[j];
             double water = r > reach ? 0 : density(r, seconds) * volume[j] / DIRECTIONS;

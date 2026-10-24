@@ -62,4 +62,13 @@ class CondensationTest {
         assertTrue(previous > 0);
     }
 
+    @Test
+    void noChargeOrWaterVaporProducesFiniteZero() {
+        for (Condensation cloud : new Condensation[]{new Condensation(0, true, 1), new Condensation(50, true, 0)}) {
+            assertEquals(0, cloud.reach);
+            assertEquals(0, cloud.life);
+            assertEquals(0, cloud.density(20, 0.05));
+        }
+    }
+
 }

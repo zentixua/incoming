@@ -322,6 +322,22 @@ class CloudModelTest {
     }
 
     /** Воздух места взрыва классом устойчивости и ветром на 10 м. */
+    @Test
+    void wilsonWaterDoesNotExistInsideTheHotFireball() {
+        CloudModel cloud = model(WeaponType.DRONE, air(Stability.B, 1, 0, 1));
+        int[] seen = {0};
+        for (double t = 0.01; t < cloud.condensationSeconds(); t += 0.01) {
+            double ball = cloud.ballRadius(t), cx = cloud.driftX(t), cy = cloud.ballHeight(t), cz = cloud.driftZ(t);
+            cloud.condensation(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
+                if (water <= 0) return;
+                seen[0]++;
+                double dx = x-cx, dy = y-cy, dz = z-cz;
+                assertTrue(Math.sqrt(dx*dx + dy*dy + dz*dz) > ball, "hot products cannot contain a cold Wilson cloud");
+            });
+        }
+        assertTrue(seen[0] > 0, "the saturated shell still forms outside the fireball");
+    }
+
     private static CloudModel.Air air(double stability, double windX, double windZ, double humidity) {
         return new CloudModel.Air(Stability.brunt(stability), windX, windZ, Stability.alpha(stability), (int) Math.round(stability), humidity);
     }

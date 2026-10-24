@@ -814,7 +814,14 @@ public final class CloudModel {
     }
 
     public void condensation(double t, Blobs out) {
-        condensationModel().blobs(t, out);
+        double ball = ballRadius(t), cx = driftX(t), cy = ballHeight(t), cz = driftZ(t);
+        condensationModel().blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
+            double dx = x - cx, dy = y - cy, dz = z - cz, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            // The pressure history describes ambient air, not the hot products/fuel inside the fireball.
+            // Smooth mixing across one cell prevents an opacity step at its moving boundary (shape estimate).
+            double cold = Math.max(0, Math.min(1, (d - ball) / Math.max(sh, 1e-6)));
+            out.blob(x, y, z, sh, sv, soot, dust, water * cold * cold * (3 - 2 * cold), kelvin, rise);
+        });
     }
 
     private Condensation condensationModel() {
