@@ -83,6 +83,9 @@ final class SmokePuffs {
                     if (gone[j]) continue;
                     int b = j * FIELDS;
                     if (held[a + 8] != held[b + 8] || held[a + 9] != held[b + 9] || held[a + 10] != held[b + 10]) continue;
+                    // клубы одного отрезка разложены по нему нарочно: слитые, они собрались бы в один гаусс, и плоский ряд
+                    // (пыль старта: шаг — по меньшей σ, соседи ближе σh) потерял бы длину
+                    if (held[a + 14] > 0.5 && held[b + 14] > 0.5 && (long) held[a + 11] / SEGMENT_CLUBS == (long) held[b + 11] / SEGMENT_CLUBS) continue;
                     double dx = held[b] - held[a], dy = held[b + 1] - held[a + 1], dz = held[b + 2] - held[a + 2];
                     double h = reach * Math.min(held[a + 3], held[b + 3]), v = reach * Math.min(held[a + 4], held[b + 4]);
                     if (dx * dx + dz * dz > h * h || Math.abs(dy) > v) continue;

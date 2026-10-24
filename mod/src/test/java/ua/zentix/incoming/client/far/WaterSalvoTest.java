@@ -205,6 +205,40 @@ class WaterSalvoTest {
         return s;
     }
 
+    /**
+     * Клубы отрезка ждут слияния и бюджета, как клубы-точки, но друг с другом не сливаются: шаг отрезка — по меньшей σ, и у
+     * плоского ряда пыли (σh 6 м, σv 1 м, 40 м вдоль x — пыль у старта, {@code LaunchCloud}) соседи ближе σh — слитые, они
+     * собрались бы в один круглый в плане гаусс. Те же клубы точками (не отрезка) сливаются.
+     */
+    @Test
+    void segmentClubsDoNotMergeWithEachOther() {
+        for (boolean segment : new boolean[]{true, false}) {
+            int n = SmokePuffs.SEGMENT_CLUBS;
+            double[] held = new double[n * SmokePuffs.FIELDS];
+            for (int k = 0; k < n; k++) {
+                int o = k * SmokePuffs.FIELDS;
+                held[o] = -20 + 40.0 * (k + 0.5) / n;
+                held[o + 1] = 1;
+                held[o + 3] = 6;
+                held[o + 4] = 1;
+                held[o + 6] = 5.0 / n;
+                held[o + 8] = 0.6;
+                held[o + 9] = 0.55;
+                held[o + 10] = 0.45;
+                // номер: у клубов отрезка — один отрезок (номер / SEGMENT_CLUBS), у точек — каждый свой
+                held[o + 11] = segment ? 3 * n + k : (3 + k) * n;
+                held[o + 13] = 1;
+                held[o + 14] = segment ? 1 : 0;
+            }
+            boolean[] gone = new boolean[n];
+            SmokePuffs.merge(held, 0, n, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);
+            int left = 0;
+            for (boolean g : gone) if (!g) left++;
+            if (segment) assertTrue(left == n, "клубы отрезка слились: осталось " + left + " из " + n);
+            else assertTrue(left < n / 2, "точки рядом не слились: осталось " + left);
+        }
+    }
+
     @Test
     void salvoIntoWaterIsNotAWall() throws IOException {
         List<Spray> salvo = salvo();
