@@ -1154,6 +1154,13 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
     vec4 sig = mushDense(m, q, cone, kk, lobes, depth, near, carried);
     float st = dot(sig, vec4(1.0));
     if (st <= 1e-7) return vec4(0.0);
+    float fromCarpet = mushFootLightShare(q.y, m.footTop, m.footMerge, min(carried, sig.y), st);
+    // Чистый приток имеет только свет ковра: не считать свет ножки, который mix затем целиком отбросит.
+    if (fromCarpet >= 1.0) {
+        vec3 carpetLight;
+        pallSource(p, cone, vec4(m.base, carried), carpetLight);
+        return vec4(st * carpetLight, st);
+    }
     vec3 w = (sig.x * m.capMat.rgb + sig.y * m.stemMat.rgb + sig.z * m.skirtMat.rgb + sig.w * m.colMat.rgb) / st;
     float g = (sig.x * m.capMat.a + sig.y * m.stemMat.a + sig.z * m.skirtMat.a + sig.w * m.colMat.a) / st;
     vec3 kd = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
@@ -1254,7 +1261,6 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
         // вертикальной ножкой: её свет плавно берёт верх до высоты слияния. Не отдельный серый колокол поверх ковра.
         vec3 carpetLight;
         pallSource(p, cone, vec4(m.base, carried), carpetLight);
-        float fromCarpet = mushFootLightShare(q.y, m.footTop, m.footMerge, min(carried, sig.y), st);
         source = mix(source, carpetLight, fromCarpet);
     }
     return vec4(st * source, st);
