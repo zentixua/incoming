@@ -545,15 +545,18 @@ public final class NukePall {
         double muS = Math.max(sky.sy, 0.12), muB = Mth.clamp(ly / ll, 0.12, 1);
         double deepB = Math.min(toBall, above + Math.max(toBall - above / muB, 0)), slabB = deepB + below;
         double r = Math.hypot(gx, gz), fireR = Math.max(glow[3], 1e-3);
-        // свет шара — пучок от середины шапки, как у тела гриба (CloudPuffs.ball), × привыкание глаза
+        // свет шара — пучок от середины шапки, как у тела гриба (CloudPuffs.ball), × привыкание глаза; на экране не ярче
+        // самого шара (NukeExposure.cap — подача, как pallBallLight в fx_pall)
         double lit = CloudPuffs.ball(sky.exposure, glow[0], ll);
+        double[] cap = new double[3];
+        NukeExposure.cap(glow[4] * sky.exposure, glow[5] * sky.exposure, glow[6] * sky.exposure, sky.exposure, cap);
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
         double smoke = 0.77 * (1 - CloudPuffs.smooth(0.92 * fireR, 1.04 * fireR, r));
         double[] lin = new double[3];
         for (int c = 0; c < 3; c++) {
             double w = Mth.lerp(smoke, DUST_W[c], SMOKE_W[c]);
             double fire = FIRE[c];
-            double ball = glow[4 + c] * lit;
+            double ball = Math.min(glow[4 + c] * lit, cap[c]);
             double field = PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, muS, sky.sun[c], 1, 0, sky.sky[c], 0, 0)
                     + PallLight.diffuse(w, DUST_G, deepB, slabB, PallLight.LAND, muS, 0, muB, ball, 0, 0, 0);
             double beams = 0.25 * (sky.sun[c] * Math.exp(-toSun) + ball * Math.exp(-toBall));

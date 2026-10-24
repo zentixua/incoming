@@ -49,6 +49,22 @@ class MushroomGlslTest {
         return out;
     }
 
+    /** Подача огненного шара ({@code mushBallGain}, {@code mushFilm}, {@code mushFilmWhite}) — та же, что {@link NukeExposure}. */
+    @Test
+    void ballExposureMatchesJava() {
+        GlslFunction gain = GlslFunction.parse(GLSL, "mushBallGain"), film = GlslFunction.parse(GLSL, "mushFilm");
+        GlslFunction white = GlslFunction.parse(GLSL, "mushFilmWhite");
+        for (double adapt : new double[]{1, 1200}) {
+            for (double key = 0; key < 1e8; key = key * 1.3 + 0.001) {
+                assertEquals(NukeExposure.gain(key, adapt), gain.call(Map.of("key", key, "adapt", adapt)), 1e-9, "ключ " + key);
+            }
+        }
+        for (double x = -0.5; x < 30; x += 0.01) {
+            assertEquals(NukeExposure.film(x), film.call(Map.of("x", x)), 1e-12, "x " + x);
+            assertEquals(NukeExposure.white(x), white.call(Map.of("top", x)), 1e-12, "x " + x);
+        }
+    }
+
     @Test
     void stemRadiusMatchesJava() {
         GlslFunction f = GlslFunction.parse(GLSL, "mushStemR");

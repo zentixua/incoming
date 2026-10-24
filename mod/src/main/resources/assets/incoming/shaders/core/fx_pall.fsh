@@ -448,9 +448,11 @@ float pallBallShare(float radius, float d) {
     return radius * radius / max(max(d * d, radius * radius), 1e-6);
 }
 
-// Свет шара слота в d от середины шапки: G.x — её радиус, H.rgb — свет чёрного тела, × привыкание глаза
+// Свет шара слота в d от середины шапки: G.x — её радиус, H.rgb — свет чёрного тела, × привыкание глаза; на экране
+// освещённое им не ярче самого шара (mushBallCap — подача, NukeExposure.cap; копия — NukePall.dustLight)
 vec3 pallBallLight(vec4 G, vec4 H, float d) {
-    return H.rgb * (PallExposure * pallBallShare(G.x, d));
+    vec3 surface = H.rgb * PallExposure;
+    return min(surface * pallBallShare(G.x, d), mushBallCap(surface, PallExposure));
 }
 
 // Пелена слота в точке p — прибавить к s; V — стена пыли слота, ground, R — карта рельефа и воды слота и её числа, W — вода
@@ -1208,9 +1210,11 @@ vec3 mushFootLight(int k, Mush m, vec3 q) {
     return mix(texture(Sampler9, uv).rgb, texture(Sampler9, uv + vec2(0.0, float(FOOT_LIGHT_R) / rows)).rgb, h - hi);
 }
 
-// Гриб k в точке p (от глаза) с местом q: ослабление (w, 1/блок) и свет к глазу на единицу пути (rgb, Σ ослабление ×
-// функция источника). cone — меньшее, что луч здесь различает
-vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near) {
+// Гриб k в точке p (от глаза) с местом q: ослабление (w, 1/блок) и рассеянный свет к глазу на единицу пути (rgb,
+// Σ ослабление × функция источника); своё свечение — в glow (Σ ослабление × свечение × экспозиция шара mushBallGain:
+// на экран оно идёт плёночной кривой, конец main). cone — меньшее, что луч здесь различает
+vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 glow) {
+    glow = vec3(0.0);
     float lobes, depth, carried;
     float kk = float(k) * 13.0;
     vec4 sig = mushDense(m, q, cone, kk, lobes, depth, near, carried);
@@ -1255,7 +1259,9 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near) {
         vec3 c = vec3(0.0, m.capY, 0.0) - q;
         c.xz += m.drift * (mushShare(m.capY, m.endTop) - mushShare(q.y, m.endTop));
         float d2 = dot(c, c), r2 = m.capR * m.capR;
-        vec3 ball = mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge) * (PallExposure * r2 / max(d2, r2));
+        // на экране освещённое шаром не ярче самого шара (mushBallCap — подача)
+        vec3 surface = mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge) * PallExposure;
+        vec3 ball = min(surface * (r2 / max(d2, r2)), mushBallCap(surface, PallExposure));
         if (dot(ball, LUMA) > 1e-4 * dot(PallSkyLight, LUMA)) {
             float dc = sqrt(d2);
             vec3 v = c / max(dc, 1e-3);
@@ -1316,14 +1322,20 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near) {
     // функция источника свечения: в глубине — свет чёрного тела (рассеянное изнутри его и досвечивает), у края — доля ω'
     // уходит наружу без замены (двумя потоками: недосвет гаснет вглубь как e^(−kτ))
     vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));
-    vec3 source = w * light + thermal;
+    vec3 source = w * light;
     if (fromCarpet > 0.0) source = mix(source, carpetLight, fromCarpet);
+    // Экспозиция шара — по его ядру, каким его видно сквозь воздух до точки (подача, NukeExposure): ядро в сотни и тысячи
+    // белых срезалось в ровный диск, а с ней перепад температуры по поверхности (узор шара, языки клубов) виден
+    float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
+    glow = st * thermal * ((1.0 - fromCarpet) * mushBallGain(key, PallExposure));
     return vec4(st * source, st);
 }
 
-// Шаг грибов в месте t луча: ослабление (w) и свет на единицу пути (rgb); gap — сколько до вещества (0 — оно здесь)
-vec4 mushStep(float t, float cone, out float gap) {
+// Шаг грибов в месте t луча: ослабление (w) и рассеянный свет на единицу пути (rgb), свечение с экспозицией шара — в glow;
+// gap — сколько до вещества (0 — оно здесь)
+vec4 mushStep(float t, float cone, out float gap, out vec3 glow) {
     vec4 sum = vec4(0.0);
+    glow = vec3(0.0);
     gap = 1e9;
     vec3 p = gDir * t;
     for (int k = 0; k < gMushes; k++) {
@@ -1344,9 +1356,11 @@ vec4 mushStep(float t, float cone, out float gap) {
         // у края: вещества нет — шагом до края с клубами (вполовину оценки), иначе луч шёл бы полосу клубов шагом
         // в пиксель и на краю кончались бы шаги
         float near;
-        vec4 r = mushAt(k, m, p, q, cone, near);
+        vec3 hot;
+        vec4 r = mushAt(k, m, p, q, cone, near, hot);
         gap = min(gap, r.w > 1e-7 ? 0.0 : 0.5 * max(near, 0.0));
         sum += r;
+        glow += hot;
     }
     return sum;
 }
@@ -1484,6 +1498,8 @@ void main() {
     pallLighting(dir);
     vec3 whirlFlame = max(gFlame, WHIRL_FIRE_LINEAR);
     vec3 light = vec3(0.0);
+    // свечение грибов с экспозицией шара (mushAt): на экран — плёночной кривой, конец main
+    vec3 emitted = vec3(0.0);
     float transmit = 1.0;
     // доля, которую закрыл бы гриб, но съела дымка воздуха до него (pallAir): там видно то, что за всем лучом (небо, мир
     // вдали), а не глубина самого гриба — пропускание по лучу остаётся настоящим, и задние клубы за передними не видны
@@ -1669,7 +1685,8 @@ void main() {
             float cone = max(tm * gPixel, 0.35 * dsMin);
             float gap;
             gTauEye = tauEye;
-            vec4 r = mushStep(tm, cone, gap);
+            vec3 hot;
+            vec4 r = mushStep(tm, cone, gap, hot);
             // по пустому — до вещества и ещё на долю шага по сдвигу кадра: иначе шаг до рамки и до края сводил бы лучи
             // всех кадров в одни и те же места, и накопление не сглаживало бы их
             float ds = clamp(gap + jitter * dsMin, dsMin, dsMax);
@@ -1680,6 +1697,7 @@ void main() {
                 // дымка воздуха до шага (pallAir): свет и непрозрачность гриба вдали тают в небе за ним
                 float tr = exp(-r.w * ds), air = pallAir(PallAir, tm, dir.y);
                 light += transmit * air * r.rgb * (1.0 - tr) / r.w;
+                emitted += transmit * air * hot * (1.0 - tr) / r.w;
                 lost += transmit * (1.0 - air) * (1.0 - tr);
                 transmit *= tr;
                 tauEye += r.w * ds;
@@ -1712,6 +1730,13 @@ void main() {
     }
     medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));
     vec3 shown = shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover;
+    // Свечение грибов — огненный шар, накал шапки и ножки — как у обычного шара (подача, NukeExposure): свет пикселя уже с
+    // экспозицией шара (emitted), на экран — плёночной кривой по каналам (mushFilm3) поверх пелены, сумма — в линейном.
+    // Прежде оно шло с пеленой, и всё ярче белого уходило в долю пикселя одним цветом — ровный диск без складок и узора
+    if (max(max(emitted.r, emitted.g), emitted.b) > 0.0) {
+        vec3 lin = pallLinear3(shown) + mushFilm3(emitted);
+        shown = min(vec3(pallDisplay(lin.r), pallDisplay(lin.g), pallDisplay(lin.b)), vec3(1.0));
+    }
     // негодный итог (NaN, бесконечность — из глубины, матриц или поля) — пропускание −1: накопление возьмёт прошлое
     // этого места, а без него пиксель — без пелены (fx_pall_resolve)
     // сумма долей в float32 бывает на ulp больше 1 — pallValid счёл бы пиксель негодным

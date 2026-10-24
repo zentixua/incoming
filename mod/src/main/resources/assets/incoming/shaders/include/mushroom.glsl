@@ -601,6 +601,45 @@ vec3 mushBlackBody(sampler2D data, float kelvin) {
     return texture(data, vec2(x, (float(MUSH_BB_ROW) + 0.5) / size.y)).rgb;
 }
 
+// Подача огненного шара (client/nuclear/NukeExposure — копия; MushroomGlslTest сверяет): экспозиция по огню и плёночная
+// кривая, как у обычного шара (tools/bake_fx/pack.py). Яркость шара в мере белой стены — сотни и тысячи белых, и кадр
+// срезал его в ровный диск; камера выставлена по огню: ядро яркостью L (полуденных белых, без привыкания глаза) — на
+// кривой K·L^β, тусклое свечение — в мере кадра с привыканием глаза, между ними — плавно
+const float MUSH_FILM_KEY = 0.233;
+const float MUSH_FILM_FOLLOW = 0.15;
+// выше белого — эта доля связи каналов (pack.py: white)
+const float MUSH_FILM_WHITE = 0.35;
+
+// Во сколько раз экспозиция шара темнее кадра, когда его ядро светит key (линейный, белая стена — 1, с привыканием глаза
+// к небу adapt: днём 1, ночью ~1 200)
+float mushBallGain(float key, float adapt) {
+    float r = pow(max(key, 0.0), 1.0 - MUSH_FILM_FOLLOW) * pow(max(adapt, 1e-9), MUSH_FILM_FOLLOW) / MUSH_FILM_KEY;
+    return 1.0 / sqrt(1.0 + r * r);
+}
+
+// Плёночная кривая по каналу (ACES, приближение Narkowicz 2016): свет с экспозицией → линейный 0..1
+float mushFilm(float x) {
+    float v = max(x, 0.0);
+    return min(v * (2.51 * v + 0.03) / (v * (2.43 * v + 0.59) + 0.14), 1.0);
+}
+
+// Связь каналов выше белого: доля к белому у пикселя, чей ярчайший канал с экспозицией — top
+float mushFilmWhite(float top) {
+    return MUSH_FILM_WHITE * (1.0 - exp(-max(top - 1.0, 0.0)));
+}
+
+// Свет x (с экспозицией шара) на экране: кривая по каналам и связь каналов, линейный 0..1
+vec3 mushFilm3(vec3 x) {
+    vec3 d = vec3(mushFilm(x.r), mushFilm(x.g), mushFilm(x.b));
+    return d + (1.0 - d) * mushFilmWhite(max(max(x.r, x.g), x.b));
+}
+
+// Предел света шара вокруг (NukeExposure.cap): поверхность светом e (линейный, с привыканием глаза adapt) на экране при
+// экспозиции по самой этой яркости. Освещённое шаром — ножка, пыль, пелена, мир — не ярче того, как шар виден на экране
+vec3 mushBallCap(vec3 e, float adapt) {
+    return mushFilm3(e * mushBallGain(dot(e, vec3(0.2126, 0.7152, 0.0722)), adapt));
+}
+
 // Пропускание гриба k вдоль луча dir на [0, len] без шума (steps шагов) — квадраты слоя перед частицей; air — воздух
 // кадра (pallAir)
 float mushTransmit(sampler2D data, vec3 dir, float len, int steps, vec4 air) {

@@ -747,6 +747,7 @@ public final class PallPass {
         c.safeGetUniform("PallBalls").set(balls ? f.balls : NO_FIRE);
         c.safeGetUniform("PallBallLight").set(f.ballLight);
         c.safeGetUniform("PallOpenSky").set(f.openSky.x, f.openSky.y, f.openSky.z);
+        c.safeGetUniform("PallExposure").set(f.exposure);
         c.safeGetUniform("PallFaceShade").set(f.faceShade.x, f.faceShade.y, f.faceShade.z, f.faceShade.w);
         OpenAir.bind(c, open);
         SmokePass.bind(c, f.smoke);

@@ -561,6 +561,7 @@ class PallGlslTest {
      * и пожаров по законам шейдера (pallDiffuse; шар — чёрное тело, как у тела гриба, pallBallShare × привыкание глаза;
      * пожары — сила {@link CloudPuffs#glowOnSmoke}, делённая на цвет пыли {@code DUST}, на экране поверх света неба — в
      * линейном разностью, pallLift; свет неба — {@link NukePall#nightSky} в линейном; итог — на экране, pallDisplay).
+     * Свет шара на пыли — не ярче шара на экране ({@code mushBallCap}, {@link NukeExposure#cap}: подача).
      * Сверху, под шаром и шапкой в первые секунды (пучок, pallBallLight), — того же цвета, что верх
      * головы стены там же ({@link NukePall#dustLight} — свет головы, как в кадре), с точностью до трети: голова — не
      * плоский слой. И не тёмная у эпицентра. Своё зарево пожаров пелены ({@code PallFireLight}) разгорается позже, с минуту,
@@ -598,6 +599,8 @@ class PallGlslTest {
             assertTrue(puffs.pallLight(MushroomModel.shape(t, 15, 0, true, GROUND.metres(blast.wall(t).head())), wall));
             assertTrue(blast.slot(t, slot));
             double head = blast.wall(t).head();
+            double[] capped = new double[3];
+            NukeExposure.cap(wall[4] * night.exposure, wall[5] * night.exposure, wall[6] * night.exposure, night.exposure, capped);
             for (double share : new double[]{0.01, 0.03, 0.05, 0.2, 0.5, 0.8, 0.97}) {
                 double r = head * share;
                 float[] here = slot.clone();
@@ -619,7 +622,7 @@ class PallGlslTest {
                     flames &= lift.call(Map.of("base", (double) ambient, "x", fire[c] * b * k / dust[c])) > linear.call(Map.of("v", fire[c]));
                 }
                 for (int c = 0; c < 3; c++) {
-                    double capF = wall[4 + c] * a;
+                    double capF = Math.min(wall[4 + c] * a, capped[c]);
                     double burnF = Math.min(lift.call(Map.of("base", (double) ambient, "x", fire[c] * b * k / dust[c])),
                             linear.call(Map.of("v", fire[c])));
                     fires += luma[c] * burnF;
@@ -646,7 +649,9 @@ class PallGlslTest {
                     }
                 }
                 // пожары светят ярче шара (fx_pall: главный свет — снизу; оба — линейный свет на белой стене)
-                if (flames && fires > (luma[0] * wall[4] + luma[1] * wall[5] + luma[2] * wall[6]) * a) {
+                double ballLit = luma[0] * Math.min(wall[4] * a, capped[0]) + luma[1] * Math.min(wall[5] * a, capped[1])
+                        + luma[2] * Math.min(wall[6] * a, capped[2]);
+                if (flames && fires > ballLit) {
                     String at = t + " с, " + r + " блоков, у пола сбоку: ";
                     for (int c = 0; c < 3; c++) assertTrue(side[c] <= fire[c] + 0.03, at + "ярче пламени в канале " + c + ", " + side[c]);
                     assertTrue(side[0] > side[1] && side[1] > side[2], at + "не цвета огня");
@@ -701,7 +706,10 @@ class PallGlslTest {
                 "огонь на дыме шторма — одной суммой под пределом пламени");
         assertTrue(march.contains("burnLight = pallFlame(") && march.contains("s.burn += burnLight;"), "пожары под пылью — не ярче пламени");
         assertTrue(march.contains("s.tau += f.column.x + f.column.y + f.column.z;"), "толща над точкой — весь столб слоя");
-        assertEquals(3, occurrences(march, "pallDisplay("), "свет пелены в экран — один раз на канал");
+        // свет пелены в экран — один раз на канал; свечение грибов — плёночной кривой поверх: сумма с пеленой в линейном
+        // (её экран обратно — один раз) и в экран — ещё раз на канал
+        assertEquals(6, occurrences(march, "pallDisplay("), "свет пелены в экран — один раз на канал, свечение грибов поверх — ещё раз");
+        assertTrue(march.contains("vec3 lin = pallLinear3(shown) + mushFilm3(emitted);"), "свечение грибов — плёночной кривой поверх пелены");
         assertTrue(march.contains("shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover"),
                 "на выходе — экран с плечом");
         assertTrue(march.contains("shownCover = min(cover * lum, 1.0);"), "пересвет — в долю пикселя, не больше всего пикселя");
