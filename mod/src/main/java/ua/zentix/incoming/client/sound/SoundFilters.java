@@ -204,22 +204,34 @@ public final class SoundFilters {
         boolean ours = gain < 0.999f || highs < 0.999f;
         // Sound Physics Remastered поставил свой фильтр этому звуку только что (в начале Channel.play, событие — сразу
         // после него, в той же задаче звукового потока)
-        float[] spr = ours || own || sound.isLooping() ? Spr.now() : null;
+        float[] spr = !own && (ours || sound.isLooping()) ? Spr.now() : null;
         // чужие петли ведём каждый тик в оглушении (loops): их фильтр Sound Physics нужен и потом
-        if (spr != null && !own && sound.isLooping()) SPR_AT_START.put(sound, spr);
-        float[] f = direct(own, gain, highs, spr);
-        if (f != null) set(source, f[0], f[1]);
+        if (spr != null && sound.isLooping()) SPR_AT_START.put(sound, spr);
+        float[] f = direct(own, gain, highs, soundPhysics(), spr);
+        if (f == null) return;
+        set(source, f[0], f[1]);
+        if (own) ownPath(source);
+    }
+
+    /**
+     * Наш звук при Sound Physics: его поглощение воздухом по расстоянию OpenAL ({@code AL_AIR_ABSORPTION_FACTOR}, он
+     * ставит его каждому звуку, и при строке 0 в {@code sound_rates} тоже) — обратно 0, как у движка Minecraft: воздух
+     * по пути уже в нашем фильтре, а мотор стоит там, где его слышно, и верха вдали срезались бы дважды.
+     */
+    private static void ownPath(int source) {
+        if (filter > 0 && soundPhysics()) AL10.alSourcef(source, EXTEfx.AL_AIR_ABSORPTION_FACTOR, 0);
     }
 
     /**
      * Прямой фильтр звука при старте: громкость и доля верхов, или null — фильтр не ставить. Наш звук ({@code own}) —
-     * наш фильтр вместо фильтра Sound Physics ({@code spr}, null — его нет): путь наш, его фильтр видел только 3 блока
-     * до уха, и преграда у уха считалась бы дважды; стоит его фильтр — наш ставится и без глушения, чтобы снять его.
-     * Чужой — наш поверх его: оглушение и пелена, а путь — его.
+     * наш фильтр вместо фильтра Sound Physics: путь наш, его фильтр видел только 3 блока до уха, и преграда у уха
+     * считалась бы дважды; стоит Sound Physics ({@code soundPhysics}) — наш ставится и без глушения, чтобы снять его
+     * (и тогда, когда его фильтр не прочитать). Чужой — наш поверх его ({@code spr}, null — нет или не прочитать):
+     * оглушение и пелена, а путь — его.
      */
-    static float @Nullable [] direct(boolean own, float gain, float highs, float @Nullable [] spr) {
+    static float @Nullable [] direct(boolean own, float gain, float highs, boolean soundPhysics, float @Nullable [] spr) {
         boolean ours = gain < 0.999f || highs < 0.999f;
-        if (own) return ours || spr != null ? new float[]{gain, highs} : null;
+        if (own) return ours || soundPhysics ? new float[]{gain, highs} : null;
         if (!ours) return null;
         return spr != null ? new float[]{gain * spr[0], highs * spr[1]} : new float[]{gain, highs};
     }
@@ -230,8 +242,13 @@ public final class SoundFilters {
         if (handle == null) return;
         float m = NukePall.muffle(sound);
         float g = gain * Deafness.gain(sound) * (1 - 0.3f * m), h = highs * Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
-        // звук наш ({@link Muffled}): его путь — наш, фильтр Sound Physics с его старта сюда не входит ({@link #direct})
-        handle.execute(channel -> set(channel.source, g, h));
+        // звук наш ({@link Muffled}): его путь — наш, фильтр Sound Physics с его старта сюда не входит ({@link #direct}).
+        // С её update_moving_sounds (по умолчанию выключено) она раз в несколько тиков ставит свой заново после нашего —
+        // до нашего следующего тика
+        handle.execute(channel -> {
+            set(channel.source, g, h);
+            ownPath(channel.source);
+        });
     }
 
     /**
