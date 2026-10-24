@@ -1,3 +1,7 @@
+# Latest: AS3 revision 1
+
+See [as3-r1](as3-r1/README.md) for the direct main comparison (1/10/60 s), saved visible damage, detail and distance views. The as3/ folder below is the previous review round.
+
 # AS3: supported paving and a thin concrete slab
 
 Original sandbox PNG and WAV for [Incoming PR #437](https://github.com/zentixua/incoming/pull/437).

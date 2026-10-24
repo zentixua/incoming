@@ -1,0 +1,1 @@
+{"name": "road-wide-r1", "effect": "real drone paved", "site": [1280.5, 65.0, 0.5], "camera": [48.0, 18.0, 0.0, 0.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-AS3/mod/run/sandbox/audio.wav", "start": 43905092, "from": 0.00, "seconds": 0.00}, "frames": [{"t": 10.00, "age": 10.010, "file": "road-wide-r1_010.00s.png", "fps": 61}]}

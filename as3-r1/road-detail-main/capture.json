@@ -1,0 +1,1 @@
+{"name": "road-detail-main", "effect": "real drone paved", "site": [960.5, 65.0, 0.5], "camera": [4.0, 8.0, 90.0, 0.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-AS3-main/mod/run/sandbox/audio.wav", "start": 31330372, "from": 0.00, "seconds": 0.00}, "frames": [{"t": 10.00, "age": 10.015, "file": "road-detail-main_010.00s.png", "fps": 62}]}

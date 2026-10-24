@@ -1,0 +1,387 @@
+{
+  "pr": 437,
+  "revision": 1,
+  "after_head": "77334a037127cdb05c44ca7e8451ce6b0e11ec42",
+  "main_head": "cf8fa358d39b56148f95643cae9fbcb19a92b7b7",
+  "renderer": "development sandbox, vanilla renderer, no Iris; quiet host profile, no frame-performance comparison",
+  "world_seed": 20261022,
+  "captures": {
+    "road-r1": {
+      "name": "road-r1",
+      "effect": "real drone paved",
+      "site": [
+        320.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        12.0,
+        0.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3/mod/run/sandbox/audio.wav",
+        "start": 6594628,
+        "from": 0.0,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.002,
+          "file": "road-r1_001.00s.png",
+          "fps": 58
+        },
+        {
+          "t": 10.0,
+          "age": 10.011,
+          "file": "road-r1_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.005,
+          "file": "road-r1_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "slab-r1": {
+      "name": "slab-r1",
+      "effect": "real loiter concrete 1",
+      "site": [
+        640.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        12.0,
+        0.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3/mod/run/sandbox/audio.wav",
+        "start": 24850500,
+        "from": 0.0,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.001,
+          "file": "slab-r1_001.00s.png",
+          "fps": 57
+        },
+        {
+          "t": 10.0,
+          "age": 10.0,
+          "file": "slab-r1_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.01,
+          "file": "slab-r1_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "road-detail-r1": {
+      "name": "road-detail-r1",
+      "effect": "real drone paved",
+      "site": [
+        960.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        8.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3/mod/run/sandbox/audio.wav",
+        "start": 39444548,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.002,
+          "file": "road-detail-r1_010.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "road-wide-r1": {
+      "name": "road-wide-r1",
+      "effect": "real drone paved",
+      "site": [
+        1280.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        48.0,
+        18.0,
+        0.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3/mod/run/sandbox/audio.wav",
+        "start": 43905092,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.01,
+          "file": "road-wide-r1_010.00s.png",
+          "fps": 61
+        }
+      ]
+    },
+    "road-main": {
+      "name": "road-main",
+      "effect": "real drone paved",
+      "site": [
+        320.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        12.0,
+        0.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3-main/mod/run/sandbox/audio.wav",
+        "start": 5070916,
+        "from": 0.0,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.002,
+          "file": "road-main_001.00s.png",
+          "fps": 55
+        },
+        {
+          "t": 10.0,
+          "age": 10.011,
+          "file": "road-main_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.008,
+          "file": "road-main_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "slab-main": {
+      "name": "slab-main",
+      "effect": "real loiter concrete 1",
+      "site": [
+        640.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        12.0,
+        0.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3-main/mod/run/sandbox/audio.wav",
+        "start": 19288132,
+        "from": 0.0,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.012,
+          "file": "slab-main_001.00s.png",
+          "fps": 61
+        },
+        {
+          "t": 10.0,
+          "age": 10.012,
+          "file": "slab-main_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.008,
+          "file": "slab-main_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "road-detail-main": {
+      "name": "road-detail-main",
+      "effect": "real drone paved",
+      "site": [
+        960.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        8.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS3-main/mod/run/sandbox/audio.wav",
+        "start": 31330372,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.015,
+          "file": "road-detail-main_010.00s.png",
+          "fps": 62
+        }
+      ]
+    }
+  },
+  "files": {
+    "as3-r1/road-r1/road-r1_001.00s.png": {
+      "sha256": "df565ce29b2a962d04870f22b5190a8ef23b6e05bd639b36836d03672a30548b",
+      "bytes": 1036134
+    },
+    "as3-r1/road-r1/road-r1_010.00s.png": {
+      "sha256": "cd68a03d61e5cd92faf0644a04322a34dcd7825a92a72e5f619ed25baa3620ea",
+      "bytes": 605690
+    },
+    "as3-r1/road-r1/road-r1_060.00s.png": {
+      "sha256": "4fb45e92ad085bc0b37eb71e6d60077b105972d767dfaae6f4f485d00ea5c61c",
+      "bytes": 635600
+    },
+    "as3-r1/road-r1/capture.json": {
+      "sha256": "39b7ea71874e6e0a1b41dc7ed232a8135b6978510e9ec830d47cdae80d60fd62",
+      "bytes": 475
+    },
+    "as3-r1/road-r1/road-r1.wav": {
+      "sha256": "a22a2a4693716138b7db763c03a5a96f8938796cb8d2430b1f62d68bbd285226",
+      "bytes": 1152044,
+      "seconds": 6.0,
+      "rate": 48000,
+      "channels": 2,
+      "rms": 2534.5793322790905,
+      "peak": 18302
+    },
+    "as3-r1/slab-r1/slab-r1_001.00s.png": {
+      "sha256": "cde139ff389eb5a943a7921e1c66c146ae5a23e549de4d19389a4fcc26f244e4",
+      "bytes": 816201
+    },
+    "as3-r1/slab-r1/slab-r1_010.00s.png": {
+      "sha256": "911a883da4fcc54fe78b54af5e62c99d4e2fbfca80d7215baabb8c603f5a061f",
+      "bytes": 688744
+    },
+    "as3-r1/slab-r1/slab-r1_060.00s.png": {
+      "sha256": "fb841cc034be907a52b2207c8be2e98b53c79a0bfbd073863419d231c90ea2ff",
+      "bytes": 615150
+    },
+    "as3-r1/slab-r1/capture.json": {
+      "sha256": "d0d35ffddc1abfdeb440fb4217a620009511bd5ed565dc078078f125909ddfea",
+      "bytes": 482
+    },
+    "as3-r1/slab-r1/slab-r1.wav": {
+      "sha256": "15611b2cee6caccc7a60256b18d4312b2243ae885f187012dd807a3db5c9c543",
+      "bytes": 1152044,
+      "seconds": 6.0,
+      "rate": 48000,
+      "channels": 2,
+      "rms": 1358.1628795083104,
+      "peak": 20961
+    },
+    "as3-r1/road-detail-r1/road-detail-r1_010.00s.png": {
+      "sha256": "58f91adecabe6bd6147effe02677ae742180291167ee5759e2aaedf9e08de2b2",
+      "bytes": 681681
+    },
+    "as3-r1/road-detail-r1/capture.json": {
+      "sha256": "e4d1bc3c8a29b9cdbde429685c869722ce05ce5a542fdbf1240e49e187efb6f4",
+      "bytes": 349
+    },
+    "as3-r1/road-wide-r1/road-wide-r1_010.00s.png": {
+      "sha256": "cf9dc4040d604ab93358d2326fa129a5ff7ed0abc63be7e6eb9d4473e1aca6c3",
+      "bytes": 817873
+    },
+    "as3-r1/road-wide-r1/capture.json": {
+      "sha256": "4c231e29431f3ff00b093bc9be65c37fafb8efd4de7d092494b002ccf296ea36",
+      "bytes": 347
+    },
+    "as3-r1/road-main/road-main_001.00s.png": {
+      "sha256": "bb3a99bedd1a44508c97246dca81b6b506ebf06972fc81fdac177dc7f9527c2a",
+      "bytes": 981100
+    },
+    "as3-r1/road-main/road-main_010.00s.png": {
+      "sha256": "15d0a147ca93b99fa75100c3e9d1375e31bc485b9667c35696b8364d257a70e2",
+      "bytes": 615823
+    },
+    "as3-r1/road-main/road-main_060.00s.png": {
+      "sha256": "a639603a6d60769c62d7c06ad5dff30577d82326398b71d71147dd63b3ee748f",
+      "bytes": 643501
+    },
+    "as3-r1/road-main/capture.json": {
+      "sha256": "5d675cbda01af677a815662d4039d909564fb824341405da3e58cfe11a1c2030",
+      "bytes": 488
+    },
+    "as3-r1/road-main/road-main.wav": {
+      "sha256": "e0a17cba35e4f2f02d95fe880ba1642c0374ff7707d931ff8e3d86a0e946f157",
+      "bytes": 1152044,
+      "seconds": 6.0,
+      "rate": 48000,
+      "channels": 2,
+      "rms": 2138.3880908307883,
+      "peak": 19959
+    },
+    "as3-r1/slab-main/slab-main_001.00s.png": {
+      "sha256": "4ea36680ad701b11eddae2ebf394da51d7d271288b13ec603277cab787aeddf1",
+      "bytes": 866347
+    },
+    "as3-r1/slab-main/slab-main_010.00s.png": {
+      "sha256": "7a90a1d499fdf46b7018c2f7a392f5b4bed3c6b6a8a2228df4c446f4e1e22d40",
+      "bytes": 679419
+    },
+    "as3-r1/slab-main/slab-main_060.00s.png": {
+      "sha256": "c16f73de3f627271270520b2d1e8e990b09017c5dc35163955d3a8b74d8b53fa",
+      "bytes": 601640
+    },
+    "as3-r1/slab-main/capture.json": {
+      "sha256": "79fff3aa4fea735f2786b215993fd60083effd93a8e43b2631906b9e4c4368e1",
+      "bytes": 495
+    },
+    "as3-r1/slab-main/slab-main.wav": {
+      "sha256": "7ec68a5f9cb009b2074e453c5c07db1aeac9e47d0cda9428b1346904143a2684",
+      "bytes": 1152044,
+      "seconds": 6.0,
+      "rate": 48000,
+      "channels": 2,
+      "rms": 1289.0480447283785,
+      "peak": 19797
+    },
+    "as3-r1/road-detail-main/road-detail-main_010.00s.png": {
+      "sha256": "0682d0272c686a03da5710dd35164d3666d34e48f7191fb4870b50b055a4aa3a",
+      "bytes": 739389
+    },
+    "as3-r1/road-detail-main/capture.json": {
+      "sha256": "bbd1e9e5f38b64c076672793ea56224ab6d21975b84eb1731091060099a7ca08",
+      "bytes": 358
+    }
+  }
+}
