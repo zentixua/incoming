@@ -56,13 +56,19 @@ uniform vec3 FxSkyTint;
 
 out vec4 fragColor;
 
+// Finite tangent frames even when an enormous grazing card has an unresolved UV derivative.
+vec3 unitOr(vec3 v, vec3 fallback) {
+    float square = dot(v, v);
+    return square > 1e-30 ? v * inversesqrt(square) : fallback;
+}
+
 // Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
 // с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по квадратам косинусов (в сумме
-// 1 при любом направлении: по самим косинусам солнце под 45° светило бы в √2 раз сильнее, чем прямо сбоку); mirror —
-// квадрат отражён: право и лево меняются
-float sixLight(vec3 a, vec3 b, vec3 l, float mirror) {
+// 1 при любом направлении: по самим косинусам солнце под 45° светило бы в √2 раз сильнее, чем прямо сбоку).
+// Отражение UV уже учтено касательным базисом карты
+float sixLight(vec3 a, vec3 b, vec3 l) {
     vec3 q = l * l;
-    float x = l.x * mirror;
+    float x = l.x;
     float side = x > 0.0 ? a.r : b.r;
     float vertical = l.y > 0.0 ? a.g : b.g;
     float depth = l.z < 0.0 ? a.b : b.b;
@@ -157,6 +163,7 @@ float glowAlpha(float r) {
 void main() {
     // производные — до ветвления (вне его они определены у всех пикселей)
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
+    vec3 worldDx = dFdx(worldPos), worldDy = dFdy(worldPos);
     // The reduced target has no hardware depth attachment. Reject hidden clubs before fetching their light maps.
     float sceneDistance = 1e9;
     if (FxScene > 0.5 && (softness > 0.0 || FxTarget.z > 0.5)) {
@@ -173,8 +180,19 @@ void main() {
         vec4 a;
         vec3 b;
         sixFrames(texCoord0, dx, dy, opacity, a, b);
-        float mirror = 1.0;
-        if (dx.x < 0.0) mirror = -1.0;
+        // Standard derivative tangent frame: texture right/up and the visible surface normal in world space.
+        // A horizontal card must receive front light from above, not billboard-side light from the camera basis.
+        float orientation = dx.x * dy.y - dx.y * dy.x < 0.0 ? -1.0 : 1.0;
+        vec3 normal = unitOr(cross(worldDx, worldDy), vec3(0.0, 0.0, 1.0));
+        vec3 fallbackRight = abs(normal.y) > 0.9999 ? vec3(1.0, 0.0, 0.0)
+                : unitOr(cross(vec3(0.0, 1.0, 0.0), normal), vec3(1.0, 0.0, 0.0));
+        vec3 right = unitOr((worldDx * dy.y - worldDy * dx.y) * orientation, fallbackRight);
+        vec3 up = unitOr((worldDx * dy.x - worldDy * dx.x) * orientation, cross(normal, right));
+        vec3 keyDir = vec3(dot(sixKeyDir, right), dot(sixKeyDir, up), dot(sixKeyDir, normal));
+        vec3 ballPower = sixBall, ballDir = sixBallDir;
+        if (abs(normal.y) > 0.9999) ballPower = ballsToward(worldPos, ballDir);
+        ballDir = unitOr(ballDir, normal);
+        ballDir = vec3(dot(ballDir, right), dot(ballDir, up), dot(ballDir, normal));
         // свет неба: прямой (солнце, луна) — по сторонам, рассеянный — средний по шести; оба — против среднего по шести
         // сторонам по клубу (цвет вершины — толстый слой вещества в рассеянном свете неба, R∞): к солнцу просвечивающий
         // край ярче, со стороны солнца плотный клуб темнее (рассеяние вперёд). Огненные шары — по сторонам, в долях света
@@ -183,15 +201,10 @@ void main() {
         // байт −13…−50 в Normal.y: FxQuads.sixWay)
         // степень не ниже 0,001 и основание не ноль: pow(0, 0) в GLSL не определён (NaN — чёрный пиксель в смешивании)
         float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
-        float key = pow(max(sixLight(a.rgb, b, sixKeyDir, mirror) / FxSixLight.z, 1e-6), shade);
+        float key = pow(max(sixLight(a.rgb, b, keyDir) / FxSixLight.z, 1e-6), shade);
         float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
         float sky = sixKey * key + (1.0 - sixKey) * diffuse;
-        vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir, mirror) / FxSixLight.z, 1e-6), shade);
-        // клуб, лежащий на горизонтали (степень тени 0 — освещённый сверху верх слоя): свет шаров — в этом пикселе
-        if (-nearest * 127.0 - 13.0 < 0.5) {
-            vec3 bd;
-            fire = ballsToward(worldPos, bd);
-        }
+        vec3 fire = ballPower * pow(max(sixLight(a.rgb, b, ballDir) / FxSixLight.z, 1e-6), shade);
         // оттенок неба (ночью — сиреневый свет луны) — только у света неба: цвет вершины несёт его яркость, а огонь у клуба
         // свой (оттенок на огне красил пыль у шара ночью в розовый)
         sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));

@@ -130,12 +130,11 @@ void main() {
     sixBallDir = vec3(0.0, 1.0, 0.0);
     if (six) {
         // цвет вершины клуба — вещество в свете неба под открытым небом (SmokePuffs, FarView.sky); по сторонам его делят карты кадра (fx.fsh)
-        mat3 rot = mat3(ModelViewMat);
         sixKey = FxSun.w;
-        sixKeyDir = normalize(rot * FxSun.xyz);
+        sixKeyDir = normalize(FxSun.xyz);
         vec3 bd;
         sixBall = ballsToward(Position / unfold, bd);
-        sixBallDir = rot * bd;
+        sixBallDir = bd;
         if (dot(sixBallDir, sixBallDir) > 1e-8) sixBallDir = normalize(sixBallDir);
     }
     // настоящее расстояние по оси взгляда: перенесённую ближе точку — обратно

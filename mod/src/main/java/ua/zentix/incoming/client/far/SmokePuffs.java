@@ -743,12 +743,11 @@ final class SmokePuffs {
                 optics.club(frame, tau / (many * q * q * k * k), CLUB);
                 double half = CLUB[0] * q * k, mass = CLUB[1] * last;
                 FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1);
-                // лежащий клуб сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет сбоку и
-                // сзади) нет, свет солнца, неба и огня — весь (степень тени 0; свет шаров — в каждом пикселе, fx.fsh); снизу —
-                // как обычно. Мягкость у рельефа — путь луча в слое до земли (rw / sin e), не полуразмер
+                // Six-way lighting follows the card's real tangent frame, including a horizontal dust layer.
+                // Softness at terrain is the path through the layer (rw / sin e), not its large horizontal radius.
                 if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, sa * half, sa * half,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, sprite,
-                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, shown, mass);
+                        (float) (frame - f0), spray ? sprayShade : shade, cr, cg, cb, shown, mass);
                 else out.puff6(px + ox, py + oy, pz + oz, sa * half, sb * half, sprite, (float) (frame - f0), spray ? sprayShade : shade,
                         cr, cg, cb, shown, mass);
             }

@@ -88,6 +88,7 @@ class SmokeFillTest {
         double veil;
         float[] veilField;
         double veilWidth, veilHeight;
+        float lastFlatShade = -1;
 
         Screen(FarView view) {
             this.view = view;
@@ -110,6 +111,7 @@ class SmokeFillTest {
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
                               float r, float g, float b, float a, double tau) {
+            lastFlatShade = shade;
             // лежащий квадрат: по высоте экрана — проекция диска
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
             puff6(dx, dy, dz, halfA, halfB * Math.abs(dy) / d, sprite, mix, shade, r, g, b, a, tau);
@@ -394,6 +396,28 @@ class SmokeFillTest {
         System.out.printf(Locale.ROOT,"FIRE optical mean %.5f worst pixel %.5f, quads %d%n",mean,worst,screen.quads.size());
         assertTrue(Math.abs(mean)<=MODEL_MEAN,"fire optical mean: "+mean);
         for(int k=0;k<18;k++) assertTrue(Math.abs(regions[k]/samples[k])<=MODEL_PART,"fire region "+k+": "+regions[k]/samples[k]);
+        SmokePuffs.resetBudget();
+    }
+
+    @Test
+    void horizontalDustRetainsItsMaterialLightingFromAboveAndBelow() {
+        SmokeGrid.Source dust = (seconds, sink) -> {
+            sink.blob(0, 0, 0, 20, 1, 0, 1000, 0, 0.6f, 0.55f, 0.45f, SmokeGrid.AIR_K, 0);
+            return true;
+        };
+        float previous = -1;
+        for (int side : new int[]{1, -1}) {
+            Vec3 eye = new Vec3(0, side * 40, 40);
+            FarView view = view(eye, new Vector3f(0, -side, -1));
+            Screen screen = new Screen(view);
+            SmokePuffs.resetBudget();
+            dust.emit(0, SmokePuffs.sink(view, screen, dust, 0));
+            SmokePuffs.flush();
+            assertTrue(screen.lastFlatShade > 0.1, "horizontal cards must retain baked relief, including the upper side");
+            if (previous > 0) org.junit.jupiter.api.Assertions.assertEquals(previous, screen.lastFlatShade, 1e-6,
+                    "card orientation changes the light direction, not the material extinction");
+            previous = screen.lastFlatShade;
+        }
         SmokePuffs.resetBudget();
     }
 
