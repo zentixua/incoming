@@ -1,0 +1,1 @@
+{"name": "r2-slab-wide", "effect": "real loiter concrete 1", "site": [960.5, 65.0, 0.5], "camera": [18.0, 5.0, 90.0, 0.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav", "start": 19009604, "from": 0.00, "seconds": 4.00}, "frames": [{"t": 10.00, "age": 10.010, "file": "r2-slab-wide_010.00s.png", "fps": 62}]}

@@ -1,4 +1,8 @@
-# AS2: bounded surface presentation and fresh fractures
+# AS2 evidence
+
+Latest: [revision 2 — debris persistence and depth-driven fractures](r2/README.md), code `ce5aee5d`.
+
+## Initial comparison: bounded surface presentation and fresh fractures
 
 Before: `cd310f2b` (merged #437). After: `a9891ad674d830a4802522b99718bf80b2866895`.
 

@@ -1,0 +1,1 @@
+{"name": "r2-slab-close", "effect": "real loiter concrete 1", "site": [1280.5, 65.0, 0.5], "camera": [4.0, 3.0, 90.0, 0.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav", "start": 22351940, "from": 0.00, "seconds": 4.00}, "frames": [{"t": 10.00, "age": 10.015, "file": "r2-slab-close_010.00s.png", "fps": 62}]}

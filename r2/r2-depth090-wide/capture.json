@@ -1,0 +1,1 @@
+{"name": "r2-depth090-wide", "effect": "surface 0.9 black", "site": [3200.5, 65.0, 0.5], "camera": [18.0, 5.0, 90.0, 0.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav", "start": 35315780, "from": 0.00, "seconds": 0.00}, "frames": [{"t": 1.00, "age": 1.008, "file": "r2-depth090-wide_001.00s.png", "fps": 62}]}

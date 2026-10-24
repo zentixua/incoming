@@ -1,0 +1,442 @@
+{
+  "after": "ce5aee5d5f1d9989d67c3c95021dbeca679e2a93",
+  "before": "a9891ad674d830a4802522b99718bf80b2866895",
+  "renderer": "vanilla development sandbox, no Iris, no full pack",
+  "world_seed": 20261022,
+  "host_power_profile": "unchanged; no FPS comparison",
+  "processing": "original PNG and WAV, no edits or mastering",
+  "cases": {
+    "r2-depth001-close": {
+      "name": "r2-depth001-close",
+      "effect": "surface 0.01 black",
+      "site": [
+        1920.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        3.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 29012036,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.005,
+          "file": "r2-depth001-close_001.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "r2-depth001-wide": {
+      "name": "r2-depth001-wide",
+      "effect": "surface 0.01 black",
+      "site": [
+        2880.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        5.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 33738820,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.004,
+          "file": "r2-depth001-wide_001.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "r2-depth040-close": {
+      "name": "r2-depth040-close",
+      "effect": "surface 0.4 black",
+      "site": [
+        2240.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        3.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 30593092,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.011,
+          "file": "r2-depth040-close_001.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "r2-depth090-close": {
+      "name": "r2-depth090-close",
+      "effect": "surface 0.9 black",
+      "site": [
+        2560.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        3.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 32153668,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.0,
+          "file": "r2-depth090-close_001.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "r2-depth090-wide": {
+      "name": "r2-depth090-wide",
+      "effect": "surface 0.9 black",
+      "site": [
+        3200.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        5.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 35315780,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.008,
+          "file": "r2-depth090-wide_001.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "r2-earth-wide": {
+      "name": "r2-earth-wide",
+      "effect": "real drone",
+      "site": [
+        1600.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        5.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 25681988,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.003,
+          "file": "r2-earth-wide_010.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "r2-road-close": {
+      "name": "r2-road-close",
+      "effect": "real drone paved",
+      "site": [
+        640.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        3.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 15650884,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.013,
+          "file": "r2-road-close_010.00s.png",
+          "fps": 63
+        }
+      ]
+    },
+    "r2-road-wide": {
+      "name": "r2-road-wide",
+      "effect": "real drone paved",
+      "site": [
+        320.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        5.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 2736196,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 0.1,
+          "age": 0.118,
+          "file": "r2-road-wide_000.10s.png",
+          "fps": 59
+        },
+        {
+          "t": 1.0,
+          "age": 1.003,
+          "file": "r2-road-wide_001.00s.png",
+          "fps": 59
+        },
+        {
+          "t": 10.0,
+          "age": 10.013,
+          "file": "r2-road-wide_010.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.002,
+          "file": "r2-road-wide_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "r2-slab-close": {
+      "name": "r2-slab-close",
+      "effect": "real loiter concrete 1",
+      "site": [
+        1280.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        4.0,
+        3.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 22351940,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.015,
+          "file": "r2-slab-close_010.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "r2-slab-wide": {
+      "name": "r2-slab-wide",
+      "effect": "real loiter concrete 1",
+      "site": [
+        960.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        18.0,
+        5.0,
+        90.0,
+        0.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav",
+        "start": 19009604,
+        "from": 0.0,
+        "seconds": 4.0
+      },
+      "frames": [
+        {
+          "t": 10.0,
+          "age": 10.01,
+          "file": "r2-slab-wide_010.00s.png",
+          "fps": 62
+        }
+      ]
+    }
+  },
+  "files": {
+    "r2-depth001-close/r2-depth001-close_001.00s.png": {
+      "sha256": "a2f9360351c2377555ecb579f47ba48962174a53434ae17e190c4e8be43d2c68",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-depth001-wide/r2-depth001-wide_001.00s.png": {
+      "sha256": "795991df5e701102517f48c7a97be5a1d6e6a52e52540c4195a9bf1cd963b24a",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-depth040-close/r2-depth040-close_001.00s.png": {
+      "sha256": "623781c327561b3cc63f25624aba2319a54fbf165d875e245101ead23f976856",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-depth090-close/r2-depth090-close_001.00s.png": {
+      "sha256": "6ec6630c16e4252e16a49da83b7623c46b2837ee2a0f14db42b43dc28dc49653",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-depth090-wide/r2-depth090-wide_001.00s.png": {
+      "sha256": "1f0cf691c88d048e028a3244e53d6b1ea900204f6a18c6514c2a88fd135689fc",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-earth-wide/r2-earth-wide.wav": {
+      "sha256": "f2da523338d48284fca247dde9966b1d1677fbe6701e9c720d1685137c0715ee",
+      "rate": 48000,
+      "channels": 2,
+      "seconds": 4.0
+    },
+    "r2-earth-wide/r2-earth-wide_010.00s.png": {
+      "sha256": "fc29b3e2459812e1c578097d08acc046e98a2655ed3370f0cc4c77853c825cb9",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-road-close/r2-road-close.wav": {
+      "sha256": "5703cb229b96196441a3f7c896b952bc2292dbfd5901448be303b10041b01274",
+      "rate": 48000,
+      "channels": 2,
+      "seconds": 4.0
+    },
+    "r2-road-close/r2-road-close_010.00s.png": {
+      "sha256": "0a55332ed2386f4fde89d756eb224cb02a96a73ed24bdfa1c55751e774c7ef34",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-road-wide/r2-road-wide.wav": {
+      "sha256": "adfa02393f7068bbd129ec7d4c4b7b2bec9097eb10bb9e95b277e249b2716332",
+      "rate": 48000,
+      "channels": 2,
+      "seconds": 4.0
+    },
+    "r2-road-wide/r2-road-wide_000.10s.png": {
+      "sha256": "79134b07f25679338195f2b02f8a52181889c5c1192cea742b2046df8c32d856",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-road-wide/r2-road-wide_001.00s.png": {
+      "sha256": "6dee947ab027e15f6c6656d84c2570c481521853befae4a2383b1bab0c6a3b1b",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-road-wide/r2-road-wide_010.00s.png": {
+      "sha256": "d766f3dd271d485c536bff202107c5687ccf4e75b39879937757e5b23f846394",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-road-wide/r2-road-wide_060.00s.png": {
+      "sha256": "f3dc1395c9c176d65fa6abe4cbd55f8de13070cacbc05d4fa4cbc5cf62c71f8b",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-slab-close/r2-slab-close.wav": {
+      "sha256": "b4883dd1d4383e638d38e697f15aff46881ebce64375ccd548ba5a3c16d4d92c",
+      "rate": 48000,
+      "channels": 2,
+      "seconds": 4.0
+    },
+    "r2-slab-close/r2-slab-close_010.00s.png": {
+      "sha256": "0338c6da638d0b7322d902a086094267a52951f3f7c6e0f7325151e5d2b4e4af",
+      "size": [
+        1280,
+        692
+      ]
+    },
+    "r2-slab-wide/r2-slab-wide.wav": {
+      "sha256": "2b803afb239b4a1e898bebf6b5fbb1cb1adc2448920b1a2487b54f2490d8d146",
+      "rate": 48000,
+      "channels": 2,
+      "seconds": 4.0
+    },
+    "r2-slab-wide/r2-slab-wide_010.00s.png": {
+      "sha256": "1bd0bb2b496055ab1452c1bcfb4a4a4b7c3faa2d19de509b51257ccfe22ccb4b",
+      "size": [
+        1280,
+        692
+      ]
+    }
+  },
+  "max_age_error_seconds": 0.017999999999999988
+}

@@ -1,0 +1,1 @@
+{"name": "r2-depth090-close", "effect": "surface 0.9 black", "site": [2560.5, 65.0, 0.5], "camera": [4.0, 3.0, 90.0, 0.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-AS2/mod/run/sandbox/audio.wav", "start": 32153668, "from": 0.00, "seconds": 0.00}, "frames": [{"t": 1.00, "age": 1.000, "file": "r2-depth090-close_001.00s.png", "fps": 62}]}
