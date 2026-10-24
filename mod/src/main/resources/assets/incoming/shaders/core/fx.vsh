@@ -112,7 +112,8 @@ void main() {
     vec4 light = Normal.y < -0.5 ? vec4(1.0) : texelFetch(Sampler2, six ? ivec2(15) : UV2 / 16, 0);
     sixTau = six ? exp2(float(UV2.x) / SIX_TAU_STEPS) : 1.0;
     int gaussian = six ? (UV2.y & 65535) : 0;
-    gaussianMix = gaussian > 0 ? Normal.x : 0.0;
+    gaussianMix = gaussian > 0 ? (float(UV1.y) - 1.0) / 32766.0 : 0.0;
+    if (gaussian > 0) unfold = 1.0; // The near raster rectangle does not need distance folding.
     gaussian0 = vec4(0.0);
     gaussian1 = vec4(0.0);
     if (gaussian > 0) {
@@ -153,11 +154,11 @@ void main() {
     viewDistance = -view.z / unfold;
     worldPos = Position / unfold;
     softness = float(max(UV1.x, 0)) / 16.0;
-    fog = gaussian > 0 ? 0.0 : Normal.x;
+    fog = Normal.x;
     nearest = Normal.y;
     opacity = Normal.z;
     // блик и вуаль с пробой: пелена и грибы перед источником — уже в ней (fx_probe, до самого источника); по углам
     // квадрата у глаза их не считать — свет в глазу идёт от источника, а угол блика в своей же шапке гасил бы его над ней
     pallFront = 1.0;
-    if (UV1.x >= 0 || FxProbes < 0.5) pallFront = pall(Position / unfold);
+    if (UV1.x >= 0 || FxProbes < 0.5) pallFront = pall(gaussian > 0 ? gaussian0.xyz : Position / unfold);
 }

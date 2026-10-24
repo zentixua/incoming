@@ -169,7 +169,7 @@ public final class FarSprites implements SmokePuffs.Out {
                     (float)(SmokePuffs.VEIL_AT*(f.y+a*l.y+c*up.y)),
                     (float)(SmokePuffs.VEIL_AT*(f.z+a*l.z+c*up.z)),
                     j<2?sprite.u1():sprite.u0(),j==0||j==3?sprite.v1():sprite.v0(),
-                    r*coverage,g*coverage,b*coverage,coverage,0,1,LightTexture.FULL_BRIGHT,(float)detail);
+                    r*coverage,g*coverage,b*coverage,coverage,0,(float)((1+32766*detail)/32767),LightTexture.FULL_BRIGHT,0);
         }
         out.sixWay(-1);
         counts[0]++;

@@ -197,7 +197,7 @@ float glowAlpha(float r) {
 }
 
 // Gaussian ray geometry supplies amplitude and finite-path coverage to the accepted calibrated bake.
-// Inside the visible support, interpolate optical depths toward the smooth analytic medium.
+// Inside the visible support, cross-fade coverage toward the smooth analytic medium.
 // A card in a fixed camera plane would expand oblique nearby rays and create extra opacity.
 float gaussianErf(float x) {
     float a = abs(x), t = 1.0 / (1.0 + 0.3275911 * a);
@@ -216,8 +216,7 @@ float gaussianAlpha(float sceneDistance, float bakedAlpha) {
     float ratio = gaussian1.z / (gaussian0.w * gaussian1.x * speed);
     float bakedTau = -log(max(1.0-bakedAlpha,1.0/255.0)) * sixTau * ratio * cdf;
     float modelTau = gaussian1.y / (6.2831853072 * gaussian0.w * gaussian0.w * gaussian1.x * speed) * exp(-0.5*b2) * cdf;
-    float tau = mix(modelTau,bakedTau,gaussianMix);
-    return 1.0-exp(-tau);
+    return mix(1.0-exp(-modelTau),1.0-exp(-bakedTau),gaussianMix);
 }
 
 void main() {

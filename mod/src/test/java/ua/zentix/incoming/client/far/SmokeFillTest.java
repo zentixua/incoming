@@ -194,7 +194,7 @@ class SmokeFillTest {
                 double alpha=ClubFrames.at((int)q[9],q[10],false,bx,by,1,1);
                 double bakeTau=-Math.log(Math.max(1-alpha,1.0/255))*q[8]*ratio*cdf;
                 double modelTau=SmokePuffs.sightDepth(q[0],q[1],q[2],q[3],q[4],q[5],rx/n,ry/n,rz/n);
-                clear*=1-q[6]*(-Math.expm1(-((1-q[12])*modelTau+q[12]*bakeTau)));
+                clear*=1-q[6]*((1-q[12])*(-Math.expm1(-modelTau))+q[12]*(-Math.expm1(-bakeTau)));
             }
             for (double[] q : quads) {
                 if(q.length==6) continue;
@@ -513,6 +513,48 @@ class SmokeFillTest {
             }
         }
         SmokePuffs.resetBudget();
+    }
+
+    @Test
+    void opaqueCloudChangesRepresentationWithoutAnOpticalDepthCliff() throws IOException {
+        double peak=10000, sigma=1, ext=2*Math.PI*peak;
+        FarView view=view(Vec3.ZERO,new Vector3f(0,0,1));
+        double radius=Math.sqrt(2*Math.log(peak/-Math.log1p(-Sight.THRESHOLD)));
+        Screen sample=isolatedCloud(view,2*radius,sigma,ext);
+        double[] g=sample.gaussians.getFirst();
+        double impact=0,modelAlpha=0,bakedAlpha=0,difference=0;
+        for(int i=1;i<300;i++) {
+            double local=i/200.0,b=g[7]*local;
+            if(b>=radius || b/(Math.sqrt(4*radius*radius-b*b))>W*0.8) continue;
+            double model=-Math.expm1(-peak*Math.exp(-b*b/2));
+            double baked=ClubFrames.at((int)g[9],g[10],false,local,0,1,g[8]);
+            if(Math.abs(model-baked)>difference) { difference=Math.abs(model-baked);impact=b;modelAlpha=model;bakedAlpha=baked; }
+        }
+        assertTrue(difference>0.1,"fixture needs a real baked edge distinct from the smooth medium");
+        for(double weight:new double[]{0.9,0.99,0.999,0.9999,1}) {
+            double lo=radius,hi=2*radius;
+            for(int i=0;i<50;i++) {
+                double mid=(lo+hi)/2;
+                if(SmokePuffs.detailOutside(0,0,mid,sigma,sigma,peak)<weight) lo=mid;else hi=mid;
+            }
+            double distance=(lo+hi)/2,u=-impact/Math.sqrt(distance*distance-impact*impact);
+            Screen actual=isolatedCloud(view,distance,sigma,ext);
+            double blend=actual.gaussians.getFirst()[12];
+            org.junit.jupiter.api.Assertions.assertEquals((1-blend)*modelAlpha+blend*bakedAlpha,
+                    1-actual.transmittance(u,0),1e-6,
+                    "LOD blends display coverage; a trace of a thick medium must not keep an opaque edge");
+        }
+        SmokePuffs.resetBudget();
+    }
+
+    private static Screen isolatedCloud(FarView view,double distance,double sigma,double ext) {
+        SmokeGrid.Source source=(seconds,sink)->true;
+        Screen screen=new Screen(view);
+        SmokePuffs.resetBudget();
+        SmokePuffs.sink(view,screen,source,0).blob(0,0,distance,sigma,sigma,ext/SmokeGrid.SOOT_K,0,0,
+                0.6f,0.55f,0.45f,SmokeGrid.AIR_K,0);
+        SmokePuffs.flush();
+        return screen;
     }
 
     @Test
