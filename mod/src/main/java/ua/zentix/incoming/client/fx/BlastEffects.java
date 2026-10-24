@@ -50,6 +50,9 @@ public final class BlastEffects {
     public static void blast(S2C.Blast p) {
         // одно облако на взрыв: у объёма, у картинки вдали и у вспышки с частицами здесь
         CloudModel cloud = FarBlasts.add(p);
+        // топливо в воронке: от сервера — пакетом своего огня на блоках (fuelFire); в повторе, записанном до него, и у
+        // взрыва без сервера (песочница) — дым и гул у места удара, как тогда
+        if (!p.fuelApart() && cloud != null && cloud.poolWatts > 0) legacyPool(p.pos(), cloud.pool);
         if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.byId(p.material()), p.seed(), BlastSource.of(p)));
         else if (FarBlasts.near(p.pos())) {
             GroundMaterial mat = GroundMaterial.byId(p.material());
@@ -630,6 +633,14 @@ public final class BlastEffects {
         if (pool.seconds() <= 0 || p.age() / 20.0 >= pool.seconds()) return;
         Vec3 centre = FireSmoke.pool(level, p.cells(), pool, p.age() / 20.0);
         BlastSounds.fire(centre, pool, p.age());
+    }
+
+    /** Дым и гул топлива в воронке у самой точки удара (огня сервера на блоках нет: старая запись, песочница без сервера). */
+    private static void legacyPool(Vec3 pos, ua.zentix.incoming.nuclear.model.FuelPool pool) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) return;
+        Vec3 centre = FireSmoke.pool(level, java.util.List.of(BlockPos.containing(pos)), pool, 0);
+        BlastSounds.fire(centre, pool, 0);
     }
 
     /**
