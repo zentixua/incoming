@@ -329,6 +329,7 @@ public final class IncomingConfig {
         public final ModConfigSpec.BooleanValue nukeTinnitus;
         public final ModConfigSpec.BooleanValue soundMuffling;
         public final ModConfigSpec.BooleanValue mapPrefetch;
+        public final ModConfigSpec.BooleanValue blastEffects;
 
         /**
          * Гриб, стена пыли и пелена пыли и дыма после ядерной волны объёмом (client/fx/layer/PallPass): качество; OFF — без
@@ -375,6 +376,12 @@ public final class IncomingConfig {
             mapPrefetch = b.comment("Terrain of the targeting map around the player is prepared in advance (from Distant Horizons) while a designator",
                             "is in the inventory or the map was opened in this world, so the map opens instantly.")
                     .translation("incoming.config.map_prefetch").define("map_prefetch", true);
+            blastEffects = b.comment("Incoming shows and plays its own strike blasts: flash, fireball, smoke, dust, debris, the blast wave, its sound and echo,",
+                            "the jolt and hearing loss, and the bunker bomb's impact, ground tremor, gas vent and collapse. Turn off only when",
+                            "another mod shows explosions instead (for example Explosion Overhaul set to handle Incoming's projectiles). Only",
+                            "this player's picture and sound change: destruction and damage are the server's. Air defence hits and nuclear",
+                            "blasts stay Incoming's.")
+                    .translation("incoming.config.blast_effects").define("blast_effects", true);
         }
     }
 }
