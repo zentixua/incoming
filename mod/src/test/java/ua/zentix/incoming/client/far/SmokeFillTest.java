@@ -90,11 +90,11 @@ class SmokeFillTest {
                           float b, float a) {
             if (a < 0.002f) return;
             Vector3f f = view.forward(), l = view.left(), up = view.up();
-            double depth = dx * f.x + dy * f.y + dz * f.z;
-            if (depth <= -Math.max(halfA, halfB)) return;
-            depth = Math.max(depth, 0.05);
+            // квадрат лицом к камере — весь на глубине своей середины: позади глаза его нет, у самого глаза он тает (fx.fsh)
+            double depth = dx * f.x + dy * f.y + dz * f.z, near = Math.clamp((depth - SmokePuffs.NEAR_FROM) / SmokePuffs.NEAR_FADE, 0, 1);
+            if (near <= 0) return;
             quads.add(new double[]{(dx * l.x + dy * l.y + dz * l.z) / depth, (dx * up.x + dy * up.y + dz * up.z) / depth, halfA / depth, halfB / depth,
-                    Math.min(1, a), PlumeContinuityTest.frameOf(sprite)});
+                    Math.min(1, a) * near, PlumeContinuityTest.frameOf(sprite)});
         }
 
         @Override

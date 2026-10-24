@@ -659,9 +659,8 @@ final class SmokePuffs {
                 outside = gate;
                 veiled = 1 - gate;
             } else {
-                double front = front(view, px, py, pz);
-                outside = front * (gate + (1 - gate) * ahead(view, px, py, pz, sh, sv));
-                veiled = gate < 1 ? 1 - outside : 0;
+                outside = gate + (1 - gate) * ahead(view, px, py, pz, sh, sv);
+                veiled = gate < 1 ? 1 - front(view, px, py, pz) * outside : 0;
             }
             if (veiled > 0 && !planning) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, veiled * vis * air * smoke);
             if (outside <= 0) return 0;
@@ -779,8 +778,8 @@ final class SmokePuffs {
         // клуба, чья середина впереди ({@link #ahead}); вещество, что квадрат не показывает (позади глаза, сбоку, у самого
         // глаза), — вуаль ({@link Veil}: толща по лучам из глаза через гаусс); вне края у глаза его нет (у гаусса за спиной
         // толща по лучу вперёд за краем — тысячные)
-        double gate = smoothstep(0.5 * r, r, d), outside = front(view, px, py, pz) * (gate + (1 - gate) * ahead(view, px, py, pz, sh, sv));
-        double veiled = gate < 1 ? 1 - outside : 0;
+        double gate = smoothstep(0.5 * r, r, d), outside = gate + (1 - gate) * ahead(view, px, py, pz, sh, sv);
+        double veiled = gate < 1 ? 1 - front(view, px, py, pz) * outside : 0;
         // вещество места — толща трубки поперёк оси × √(2π)σ × его кусок оси
         double ext = tau * Math.sqrt(2 * Math.PI * sh * sv) * along;
         int veils = veiled > 0 && veilAround(view, out, px, py, pz, sh, sv, ext, cr, cg, cb, veiled * vis * air) ? 1 : 0;
@@ -998,14 +997,18 @@ final class SmokePuffs {
     }
 
     /**
-     * Квадрат клуба с серединой (px, py, pz) от глаза лицом к камере на глубине своей середины: позади глаза его не видно
-     * вовсе, ближе {@link #VEIL_AT} он тает (у ближней плоскости — {@code fx.fsh}). Его вещество тогда — вуаль, а не ничто:
-     * клуб сбоку и сзади, в чей край вошёл глаз, иначе терял ту долю вещества, что держал за квадратом.
+     * Сколько видно квадрата клуба с серединой (px, py, pz) от глаза: он лицом к камере, весь на глубине своей середины —
+     * позади глаза его нет вовсе, у самого глаза он тает, как в {@code fx.fsh} (с {@link #NEAR_FROM} блока на
+     * {@link #NEAR_FADE}). Чего квадрат не показывает, когда глаз в краю клуба, — вуаль, а не ничто: клуб сбоку и сзади
+     * иначе терял ту долю вещества, что держал за квадратом.
      */
     static double front(FarView view, double px, double py, double pz) {
         org.joml.Vector3f f = view.forward();
-        return smoothstep(0, VEIL_AT, px * f.x + py * f.y + pz * f.z);
+        return Math.clamp((px * f.x + py * f.y + pz * f.z - NEAR_FROM) / NEAR_FADE, 0, 1);
     }
+
+    /** Квадрат слоя у самой камеры тает с этого расстояния, блоков, на столько (как {@code fx.fsh}: ближняя плоскость). */
+    static final double NEAR_FROM = 0.3, NEAR_FADE = 1.2;
 
     /** Свет мира под открытым небом без света блоков (упакованный, для карты освещения). */
     private static final int OPEN_SKY = LightTexture.pack(0, 15);
@@ -1103,8 +1106,9 @@ final class SmokePuffs {
             forward.set(view.forward());
             left.set(view.left());
             up.set(view.up());
-            // весь кадр при любом соотношении сторон (и у вертикального окна): круг до угла экрана, с запасом
-            extent = Math.min(Math.tan(Math.min(view.edge(), 1.45)) * 1.05, 8);
+            // весь кадр при любом соотношении сторон (и у вертикального окна): круг до угла экрана, с запасом на кадр вывода
+            // другого размера, чем окно (Flashback)
+            extent = Math.min(Math.tan(Math.min(view.edge(), 1.45)) * 1.2, 8);
             java.util.Arrays.fill(tau, 0);
             java.util.Arrays.fill(r, 0);
             java.util.Arrays.fill(g, 0);
@@ -1170,6 +1174,8 @@ final class SmokePuffs {
         // середина от глаза в σ: луч из глаза — t·u, ближайшая к середине точка — t = a'
         double cx = px / sh, cy = py / sv, cz = pz / sh;
         double a = cx * ux + cy * uy + cz * uz, b2 = Math.max(0, cx * cx + cy * cy + cz * cz - a * a);
+        // луч дальше 10σ от середины — e^(−50): у самого густого клуба толща миллиардные, erf не нужен
+        if (b2 > 100) return 0;
         return ext * SIGHT / (sh * sh * sv * len) * Math.exp(-0.5 * b2) * (1 + SmokeGrid.erf(a * SQRT_HALF));
     }
 
