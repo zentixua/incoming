@@ -80,6 +80,22 @@ class PlumeContinuityTest {
     }
 
     /**
+     * Клубы кучки и трубки берут разные кадры и у старого облака: кадр источника растёт до последнего, и с разбросом только
+     * вперёд все клубы были бы одним кадром (отражённым) — «штамп». Разброс — {@link SmokePuffs#FRAME_SPREAD} в обе
+     * стороны, у краёв листа — внутрь него; без разброса — кадр источника.
+     */
+    @Test
+    void oldCloudsKeepVariedPuffs() {
+        double last = FxAtlas.PUFF6_FRAMES - 1.001;
+        for (double age : new double[]{0, 0.5, 3, 7.5, 14, last, 40}) {
+            double lo = SmokePuffs.clubFrame(age, 0, true), hi = SmokePuffs.clubFrame(age, 1, true);
+            assertEquals(2 * SmokePuffs.FRAME_SPREAD, hi - lo, 1e-9, "разброс кадров у кадра источника " + age);
+            assertTrue(lo >= SmokePuffs.FIRST_FRAME && hi <= last, "кадры — на листе: " + age);
+            assertEquals(Math.clamp(age, SmokePuffs.FIRST_FRAME, last), SmokePuffs.clubFrame(age, 0.3, false), 1e-9);
+        }
+    }
+
+    /**
      * Запечённый клуб на экране — почти ровный диск: радиус, где непрозрачность падает до половины середины, у кадров,
      * что рисуют трубки, — {@link SmokePuffs#PUFF_DISCS} у каждого кадра, самый узкий — {@link SmokePuffs#PUFF_DISC_MIN}.
      * По ним — шаг мест трубки и доля непрозрачности клуба: новые кадры симуляции — новые числа.

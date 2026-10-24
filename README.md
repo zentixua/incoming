@@ -93,4 +93,5 @@ its source code. Sounds are made from Freesound recordings under CC0 and CC BY 4
 [SOUND-CREDITS.md](SOUND-CREDITS.md). The jar bundles the sable-companion library (MIT) and
 a copy of FastNoiseLite by Jordan Peck (MIT).
 
-Fireball textures are rendered from JangaFX’s CC0 Gasoline Explosion simulation; [source and bake recipe](tools/bake_fx/SOURCES.md).
+Fireball and smoke textures are rendered from JangaFX’s CC0 Gasoline Explosion and Ground Explosion simulations;
+[sources and bake recipe](tools/bake_fx/SOURCES.md).

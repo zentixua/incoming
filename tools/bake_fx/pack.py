@@ -380,12 +380,14 @@ def puff(src, out, prefix="puff6", like=None):
     if like is not None:
         norm *= like["diffuse"] / diffuse
         front, diffuse = front * like["diffuse"] / diffuse, like["diffuse"]
+    # рендер готовой симуляции (bake.py puff-vdb) — своей камерой на кадр: рост — в мере сцены (вокселей на пиксель)
+    scale = meta.get("scale", [1.0] * len(meta["picks"]))[-FRAMES:]
     tiles, growth, r0 = [], [], None
-    for alpha, light in maps:
+    for (alpha, light), k in zip(maps, scale):
         cx, cy, _, extent = centre(alpha, 0.05)
         half = max(extent * 1.04, 8)
-        r0 = r0 or half
-        growth.append(round(float(half / r0), 4))
+        r0 = r0 or half * k
+        growth.append(round(float(half * k / r0), 4))
         a = crop(alpha, cx, cy, half)
         rgb = {name: crop(np.stack([np.clip(light[s] * norm, 0, 1) for s in sides], -1), cx, cy, half) for name, sides in (("a", SIDES_A), ("b", SIDES_B))}
         # край кадра — к нулю (последние 8 % радиуса): кадр по краю вещества 0,05, и на густом клубе срез у края квадрата
@@ -411,6 +413,24 @@ def puff(src, out, prefix="puff6", like=None):
         json.dump({"tile": TILE, "frames": FRAMES, "maps": "abv", "flow": FLOW, "front": round(front, 4), "diffuse": round(diffuse, 4),
                    "own": round(own, 4), "growth": [float(g) for g in growth], "detail": detail(tiles)}, f)
     print("puff frames", picks, "norm", round(norm, 3), "front", round(front, 3), "diffuse", round(diffuse, 3), "growth", growth)
+
+
+def remeasure(dest, prefix, like):
+    """Карты клуба prefix на листе — в меру нового дыма (like — его puff6.json): у слоя одна мера карт на все клубы
+    (FxSixLight), а клуб дыма запечён заново без брызг. Свет — линейный (на листе — степень 1/2,2), альфа та же."""
+    meta = json.load(open(os.path.join(dest, f"{prefix}.json")))
+    k = like["diffuse"] / meta["diffuse"]
+    if abs(k - 1) < 1e-6:
+        return
+    for i in range(meta["frames"]):
+        for name in ("a", "b"):
+            path = os.path.join(dest, f"{prefix}{name}_{i:02d}.png")
+            img = np.asarray(Image.open(path).convert("RGBA"), np.float64) / 255
+            save_rgba(np.clip(img[..., :3] ** 2.2 * k, 0, 1) ** (1 / 2.2), img[..., 3], path)
+    meta["front"], meta["diffuse"] = round(meta["front"] * k, 4), like["diffuse"]
+    with open(os.path.join(dest, f"{prefix}.json"), "w", encoding="utf-8") as f:
+        json.dump(meta, f)
+    print(prefix, "maps remeasured ×", round(k, 4))
 
 
 BALL_N = 128
@@ -539,3 +559,5 @@ if __name__ == "__main__":
         nukeball(os.path.join(bake, "nukeball"), os.path.join(dest, ".."), os.environ.get("NUKEBALL_PREVIEW"))
     if os.path.isdir(os.path.join(bake, "spray")):
         puff(os.path.join(bake, "spray"), dest, "spray6", json.load(open(os.path.join(dest, "puff6.json"))))
+    elif os.path.isdir(os.path.join(bake, "puff")) and os.path.exists(os.path.join(dest, "spray6.json")):
+        remeasure(dest, "spray6", json.load(open(os.path.join(dest, "puff6.json"))))

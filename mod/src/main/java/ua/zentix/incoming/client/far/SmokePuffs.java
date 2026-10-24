@@ -159,8 +159,24 @@ final class SmokePuffs {
     static final double MAX_SHARE = 0.8;
     /** Клубы отрезка — через столько σ (меньшей из двух). */
     static final double SEGMENT_STEP = 1.2;
-    /** Первые кадры симуляции — плотный круглый выброс: на квадрате вышел бы шар. Кадры — с этого. */
-    static final int FIRST_FRAME = 3;
+    /**
+     * Кадры — с этого. Прежний клуб (своя Mantaflow) начинался плотным круглым выбросом и шёл с третьего кадра; кадры
+     * шапки облака взрыва EmberGen ({@code tools/bake_fx}, puff-vdb) клубятся с первого.
+     */
+    static final int FIRST_FRAME = 0;
+    /**
+     * Разброс кадра клубов кучки и трубки около кадра источника, кадров в обе стороны: соседние кадры — та же шапка в
+     * другой миг, клубы другие. У конца листа разброс уходит назад: у старого облака кадр источника — последний, и все клубы
+     * были бы одной картинкой (только отражённой) — «штамп».
+     */
+    static final double FRAME_SPREAD = 1;
+
+    /** Кадр клуба (с дробью) у источника с кадром age; u — зерно клуба 0..1; vary — с разбросом. */
+    static double clubFrame(double age, double u, boolean vary) {
+        double last = FxAtlas.PUFF6_FRAMES - 1.001;
+        if (!vary) return Math.clamp(age, FIRST_FRAME, last);
+        return Math.clamp(age, FIRST_FRAME + FRAME_SPREAD, last - FRAME_SPREAD) + FRAME_SPREAD * (2 * u - 1);
+    }
 
     private static final Draw DRAW = new Draw();
 
@@ -624,7 +640,7 @@ final class SmokePuffs {
                 // разброс размера — у клубов кучки (разнообразие); одиночный клуб — весь гаусс, без разброса: иначе его
                 // площадь, а с ней и вещество на экране, гуляла бы на ±44 %
                 double k = count == 1 ? 1 : size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
-                double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, clubAge) + (count > 1 ? 2 * unit(hj >>> 28) : 0));
+                double frame = clubFrame(clubAge, unit(hj >>> 28), count > 1);
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1);
@@ -714,7 +730,7 @@ final class SmokePuffs {
         DRAW.planCluster(view, px, py, pz, rh * grow, rv * grow, full, true);
         // в середине кучки перекрывается столько клубов, у оси — ещё соседние места трубки (диск клуба на экране — с полом в
         // пиксель, как он нарисован): каждый берёт свою долю, вместе — то же пропускание
-        double disc = puffDisc(Math.max(FIRST_FRAME, age) + (count > 1 || vary ? 1 : 0));
+        double disc = puffDisc(clubFrame(age, 0.5, count > 1 || vary));
         double overlap = Math.max(1, many * size * size) * Math.max(1, 2 * disc * point[0] / along);
         float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
         double spread = count == 1 ? 0 : 1 - size;
@@ -722,7 +738,7 @@ final class SmokePuffs {
             long hj = mix(h + j * 0x632BE59BD9B4E019L);
             double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rv * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
             double k = size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
-            double frame = Math.min(FxAtlas.PUFF6_FRAMES - 1.001, Math.max(FIRST_FRAME, age) + (count > 1 || vary ? 2 * unit(hj >>> 28) : 0));
+            double frame = clubFrame(age, unit(hj >>> 28), count > 1 || vary);
             int f0 = (int) frame;
             float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
             boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
@@ -760,13 +776,12 @@ final class SmokePuffs {
     static final int TUBE_LEVELS = 7;
     /**
      * Запечённый клуб на экране — почти ровный диск: непрозрачность падает до половины середины на этой доле полуразмера
-     * квадрата, по кадрам ({@code PlumeContinuityTest} мерит по картинкам; кадры до {@link #FIRST_FRAME} не рисуются — как
-     * первый): молодой клуб — 0,76, раскрытый — 0,48. Не гаусс: гауссы через 1,2σ складываются в ровную трубку, а диски
-     * радиусом 0,5–0,9σ (край клуба тонкой трубки — 1,2σ) — в бусы.
+     * квадрата, по кадрам ({@code PlumeContinuityTest} мерит по картинкам): шапка облака — 0,66–0,76. Не гаусс: гауссы
+     * через 1,2σ складываются в ровную трубку, а диски радиусом 0,5–0,9σ (край клуба тонкой трубки — 1,2σ) — в бусы.
      */
-    static final double[] PUFF_DISCS = {0.76, 0.76, 0.76, 0.76, 0.72, 0.66, 0.64, 0.60, 0.58, 0.54, 0.52, 0.54, 0.52, 0.50, 0.48, 0.48};
+    static final double[] PUFF_DISCS = {0.66, 0.68, 0.70, 0.70, 0.72, 0.72, 0.72, 0.72, 0.74, 0.76, 0.74, 0.74, 0.74, 0.72, 0.72, 0.74};
     /** Диск самого узкого кадра. */
-    static final double PUFF_DISC_MIN = 0.48;
+    static final double PUFF_DISC_MIN = 0.66;
 
     /** Диск клуба (доля полуразмера) у кадра frame с дробью. */
     static double puffDisc(double frame) {

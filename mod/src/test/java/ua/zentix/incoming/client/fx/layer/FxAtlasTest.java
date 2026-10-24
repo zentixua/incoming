@@ -291,8 +291,53 @@ class FxAtlasTest {
         try (Reader r = open("puff6.json")) {
             smoke = FxAtlas.parseDetail(r);
         }
-        assertTrue(FxAtlas.turbulentLast(smoke) <= 8, "у дыма рассеянные кадры конца не берутся");
+        // клуб дыма — шапка облака взрыва EmberGen (tools/bake_fx, puff-vdb): её кадры клубятся до конца, и облако берёт все
+        assertEquals(FxAtlas.PUFF6_FRAMES - 1, FxAtlas.turbulentLast(smoke), "у шапки облака клубятся все кадры");
         assertEquals(FxAtlas.PUFF6_FRAMES - 1, FxAtlas.turbulentLast(null), "нет данных — все кадры");
+    }
+
+    /**
+     * Клуб дыма — клубы, а не «вата»: в непрозрачном ядре каждого кадра (непрозрачность больше 0,6) свет сверху (карта A,
+     * зелёный) отходит от своего сглаживания по 9×9 пикселей в среднем на 12 % и больше. Прежний клуб своей Mantaflow —
+     * пушистый шар с ровными картами (0,01–0,08 в кадрах, что брали облака): облака в игре были ровными тёмными шарами
+     * без светлых верхов клубов; шапка облака EmberGen — 0,16–0,21.
+     */
+    @Test
+    void puffFramesHaveBillowsInTheirLight() throws IOException {
+        for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
+            String name = String.format(Locale.ROOT, "puff6a_%02d.png", f);
+            try (InputStream in = FxAtlasTest.class.getResourceAsStream(DIR + name)) {
+                assertNotNull(in, name);
+                BufferedImage img = ImageIO.read(in);
+                int n = img.getWidth();
+                double[] top = new double[n * n];
+                boolean[] core = new boolean[n * n];
+                for (int y = 0; y < n; y++) {
+                    for (int x = 0; x < n; x++) {
+                        int argb = img.getRGB(x, y);
+                        top[y * n + x] = Math.pow((argb >> 8 & 255) / 255.0, 2.2);
+                        core[y * n + x] = (argb >>> 24) > 0.6 * 255;
+                    }
+                }
+                double dev = 0, sum = 0;
+                int count = 0;
+                for (int y = 0; y < n; y++) {
+                    for (int x = 0; x < n; x++) {
+                        if (!core[y * n + x]) continue;
+                        double blur = 0;
+                        for (int dy = -4; dy <= 4; dy++) {
+                            for (int dx = -4; dx <= 4; dx++) blur += top[Math.clamp(y + dy, 0, n - 1) * n + Math.clamp(x + dx, 0, n - 1)];
+                        }
+                        dev += Math.abs(top[y * n + x] - blur / 81);
+                        sum += top[y * n + x];
+                        count++;
+                    }
+                }
+                assertTrue(count > 0.1 * n * n, name + ": у клуба есть непрозрачное ядро");
+                double fine = dev / sum;
+                assertTrue(fine >= 0.12, name + ": клубы в свете сверху " + fine);
+            }
+        }
     }
 
     /** Клуб брызг: те же 16 кадров по три карты, что у дыма, в мере дыма (одна нормировка карт на все клубы слоя). */

@@ -39,6 +39,28 @@ the visual check of that presentation. A small additive source bloom is drawn be
 with scene-depth and smoke occlusion; this is not a new world light or an Iris HDR integration.
 The soot texture is self-emissive; the separate smoke six-way maps are unchanged.
 
+# Smoke puff source and reproduction
+
+`puff6a_00.png` through `puff6a_15.png`, `puff6b_*` and `puff6v_*` (six-way light maps and motion vectors of the smoke
+puff) are rendered from JangaFX's **Ground Explosion** OpenVDB sequence (200 frames, EmberGen), CC0 as stated on the
+same download page and in the archive's `LICENSE.txt` and `README.txt`. Our own Mantaflow puff was a fuzzy ball with
+almost flat light maps; the EmberGen cloud has real billows.
+
+```sh
+blender --background --factory-startup --python tools/bake_fx/bake.py -- \
+  /path/to/bake puff-vdb --vdb /path/to/ground_explosion_VDB --cap --tile 384 --samples 96 \
+  --frames 60,66,72,78,84,90,96,102,108,114,120,126,132,138,144,150
+uv run tools/bake_fx/pack.py /path/to/bake
+```
+
+A puff of the mod is a lump of cloud, not the whole cloud with its stem: the bake keeps the cap above the cloud's neck
+(the narrowest silhouette between the ground dust and the cap) with a soft edge, because the mod draws the stem and the
+ground dust with puffs of their own. Every frame is rendered at the same optical depth (median 12 across the
+silhouette): the simulation thins out by its own dissipation, while the mod's cloud takes its opacity and colour from
+`CloudModel`. The six suns, albedo 0.55 and asymmetry 0.55 are those of the old bake; the frames give the shape of the
+billows and how light passes them, not the density. The camera frames each cap, and `pack.py` measures growth in voxels.
+`pack.py` also moves the water-spray maps into the new measure of the smoke maps (one normalisation for all puffs).
+
 ## Источник и воспроизведение
 
 Кадры шара — рендер бесплатной симуляции JangaFX «Gasoline Explosion» (EmberGen, 131 кадр). Лицензия CC0 проверена
@@ -56,3 +78,12 @@ The soot texture is self-emissive; the separate smoke six-way maps are unchanged
 Подача: верх закреплён, соседние кадры смешиваются в шейдере вдоль векторов движения. Тонкий край краснеет и темнеет;
 альфа не ниже экранной яркости, ядра выше белого теряют насыщенность. Свет окружения ограничен таблицей огня на экране,
 не прежним пересвеченным листом. Мягкий ореол — подача после Iris, не изменение физической мощности.
+
+## Клуб дыма
+
+`puff6a_*`, `puff6b_*`, `puff6v_*` — рендер CC0-симуляции JangaFX «Ground Explosion» (EmberGen, 200 кадров), команды выше.
+Своя Mantaflow давала пушистый шар с почти ровными картами света, у EmberGen — клубы настоящего облака взрыва. Клуб мода —
+комок облака, а не всё облако с ножкой: берётся шапка выше шейки облака с мягким краем (ножку и пыль у земли мод рисует
+своими клубами). Толща кадров одна (медиана 12 поперёк силуэта): симуляция тает своим рассеиванием, а непрозрачность и
+цвет облака мода — из `CloudModel`. Шесть солнц, альбедо 0,55 и асимметрия 0,55 — прежние: кадры дают форму клубов и
+как свет их проходит, а не плотность. Карты брызг `pack.py` переводит в новую меру карт дыма (одна на все клубы).

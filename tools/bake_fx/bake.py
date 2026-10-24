@@ -2,6 +2,7 @@
 
   blender --background --factory-startup --python tools/bake_fx/bake.py -- <папка> [fireball|puff|spray|all|nukeball] [--res N] [--draft] [--cpu]
   blender … bake.py -- <папка> fireball-vdb --vdb <папка кадров .vdb> [--frames 1,2,…] [--tile N] [--samples N] [--draft] [--cpu]
+  blender … bake.py -- <папка> puff-vdb --vdb <папка кадров .vdb> --frames 60,66,… [--cap] [--tau T] [--tile N] [--samples N]
 
 Дальше — tools/bake_fx/pack.py: кадры на лист слоя (fx/particle/*.png и fx/particle/flipbooks.json).
 
@@ -19,7 +20,10 @@
   (EmberGen, CC0: https://jangafx.com/software/embergen/download/free-vdb-animations/ — скачать и распаковать, в репозиторий
   не кладутся). Своя Mantaflow даёт гладкий шар без клубов (несжимаемый газ, ~70 пикселей на шар); у EmberGen — клубы,
   языки и сажа настоящего горения. Свет — тот же закон излучения, время — в долях горения.
-- puff — клуб дыма: выброс газа во все стороны, без всплытия (подъём и снос даёт модель мода), клубится и расползается.
+- puff-vdb — клуб дыма на листе мода: шапка облака из готовой симуляции (кадры OpenVDB «Ground Explosion» JangaFX, CC0),
+  шесть солнц, как у puff (puff_vdb ниже, источник — SOURCES.md).
+- puff — прежний клуб дыма своей Mantaflow (пушистый шар; на листе теперь puff-vdb): выброс газа во все стороны, без
+  всплытия (подъём и снос даёт модель мода), клубится и расползается.
   На кадр — шесть рендеров с одним солнцем справа, слева, сверху, снизу, спереди и сзади (шестисторонний свет), мир
   чёрный; альбедо {PUFF_ALBEDO}, асимметрия {PUFF_G} — середина между сажей (0,25; 0,5) и пылью (0,8; 0,6): цвет вещества
   даёт мод, карты — только как свет проходит клуб (⚠ приближение).
@@ -86,7 +90,7 @@ def reset(tile):
         sc.cycles.device = "GPU"
     sc.cycles.samples = SAMPLES
     sc.cycles.use_denoising = True
-    if WHAT == "fireball-vdb":
+    if WHAT in ("fireball-vdb", "puff-vdb"):
         # Cycles' denoiser filters radiance, not transparent-volume alpha. Every pixel needs the
         # full sample count before downsampling; adaptive RGB convergence leaves speckled soot.
         sc.cycles.use_adaptive_sampling = False
@@ -474,6 +478,124 @@ def puff(kind="puff"):
         json.dump({"frames": frames, "picks": picks, "view_m": size, "albedo": c["albedo"], "g": c["g"]}, f)
 
 
+# Клуб дыма из готовой симуляции (puff-vdb): кадры OpenVDB с полем density (бесплатные CC0 симуляции JangaFX EmberGen,
+# «Ground Explosion»: https://jangafx.com/software/embergen/download/free-vdb-animations/ — скачать и распаковать, в
+# репозиторий не кладутся) — те же шесть солнц, альбедо и асимметрия, что у своей (puff), без излучения: в кадре —
+# только как свет проходит клубы. Своя Mantaflow давала пушистый шар (~96 клеток на поперечник, шум вейвлетов по
+# краю — «вата», ровный свет внутри), у EmberGen — клубы настоящего облака взрыва.
+# Клуб мода — комок облака, а не всё облако с ножкой: у облака взрыва берётся шапка — вещество выше шейки (самое узкое
+# место между пылью у земли и шапкой, {CAP_FROM}–{CAP_TO} высоты облака), с мягким краем {CAP_SOFT} высоты; ножку и пыль
+# у земли мод рисует своими клубами. Толща — {VDB_PUFF_TAU} поперёк середины кадра (медиана толщи по силуэту): у мода
+# непрозрачность и цвет — свои (CloudModel), карты дают форму клубов и тень по ним; у симуляции дым к концу тает (её
+# рассеивание), а у мода — по его закону, поэтому толща кадров одна. Камера — ортографическая сбоку по каждому кадру
+# (рамка — шапка), её мера — в meta.json («scale», вокселей на пиксель рендера): pack.py считает рост в одной мере.
+VDB_PUFF_TAU = float(argv[argv.index("--tau") + 1]) if "--tau" in argv else 12.0
+CAP_FROM, CAP_TO, CAP_SOFT = 0.12, 0.6, 0.06
+
+
+def cap_neck(arr):
+    """Высота шейки облака (индекс по z массива x·y·z): самое узкое место силуэта сбоку между пылью у земли и шапкой."""
+    proj = arr.sum(axis=1)
+    width = (proj > 0.05 * proj.max()).sum(axis=0)
+    nz = arr.shape[2]
+    lo, hi = int(CAP_FROM * nz), int(CAP_TO * nz)
+    return lo + int(np.argmin(width[lo:hi]))
+
+
+def puff_vdb(src, kind="puff"):
+    import glob
+    import re
+
+    import openvdb
+    files = sorted(glob.glob(os.path.join(src, "*.vdb")), key=lambda f: int(re.findall(r"(\d+)\.vdb$", f)[0]))
+    picks = [int(x) for x in argv[argv.index("--frames") + 1].split(",")]
+    cap = "--cap" in argv
+    frames = {}
+    for i in picks:
+        d = openvdb.read(files[i - 1], "density")
+        a, b = d.evalActiveVoxelBoundingBox()
+        arr = np.zeros((b[0] - a[0] + 1, b[1] - a[1] + 1, b[2] - a[2] + 1), np.float32)
+        d.copyToArray(arr, ijk=a)
+        cut, soft = -1e9, 1.0
+        if cap:
+            soft = max(CAP_SOFT * arr.shape[2], 2.0)
+            k = cap_neck(arr)
+            cut = a[2] + k
+            z = np.arange(arr.shape[2]) + a[2]
+            arr = arr * np.clip((z - cut) / soft, 0, 1)[None, None, :]
+        # рамка — где плотность заметна (1 % наибольшей), а не все активные воксели
+        idx = np.argwhere(arr > 0.01 * arr.max())
+        lo, hi = idx.min(0) + np.array(a), idx.max(0) + np.array(a)
+        proj = arr.sum(axis=1)
+        sil = proj > 0.05 * proj.max()
+        frames[i] = (lo, hi, VDB_PUFF_TAU / float(np.median(proj[sil])), cut, soft)
+    c = CLUBS[kind]
+    sc = reset(TILE)
+    vol = bpy.data.volumes.new(kind)
+    vol.filepath = files[picks[0] - 1]
+    obj = bpy.data.objects.new(kind, vol)
+    sc.collection.objects.link(obj)
+    mat = bpy.data.materials.new(kind)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    pv = nt.nodes.new("ShaderNodeVolumePrincipled")
+    nt.links.new(pv.outputs[0], out.inputs["Volume"])
+    # ослабление на воксель (кадр), срез шапки: плотность × clamp((z − cut)/soft) — z мира = индекс вокселя по z
+    sigma = nt.nodes.new("ShaderNodeValue")
+    cut = nt.nodes.new("ShaderNodeValue")
+    soft = nt.nodes.new("ShaderNodeValue")
+    pos = nt.nodes.new("ShaderNodeNewGeometry")
+    xyz = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(pos.outputs["Position"], xyz.inputs[0])
+    ramp = math_node(nt, "DIVIDE", math_node(nt, "SUBTRACT", xyz.outputs["Z"], cut.outputs[0]), soft.outputs[0])
+    ramp = math_node(nt, "MINIMUM", math_node(nt, "MAXIMUM", ramp, 0.0), 1.0)
+    # Principled Volume сам умножает «Density» на поле density (Density Attribute): сюда — только ослабление и срез
+    nt.links.new(math_node(nt, "MULTIPLY", sigma.outputs[0], ramp), pv.inputs["Density"])
+    pv.inputs["Color"].default_value = (c["albedo"], c["albedo"], c["albedo"], 1)
+    pv.inputs["Anisotropy"].default_value = c["g"]
+    sc.cycles.volume_bounces = c["bounces"]
+    sc.cycles.max_bounces = max(sc.cycles.max_bounces, c["bounces"])
+    vol.materials.append(mat)
+    vol.grids.load()
+    obj.matrix_world = vol.grids[0].matrix_object.inverted() if len(vol.grids) else obj.matrix_world
+    bpy.ops.object.camera_add(rotation=(math.pi / 2, 0, 0))
+    cam = bpy.context.active_object
+    cam.data.type = "ORTHO"
+    sc.camera = cam
+    lamps = {k: sun(v, math.pi) for k, v in LIGHTS.items()}
+    os.makedirs(os.path.join(OUT, kind), exist_ok=True)
+    scale = []
+    for i in picks:
+        lo, hi, k, z0, w = frames[i]
+        size = 1.08 * max(hi[0] - lo[0], hi[2] - lo[2]) + 2
+        cam.data.ortho_scale = size
+        cam.data.clip_end = 10 * size + (hi[1] - lo[1])
+        cam.location = ((lo[0] + hi[0]) / 2 + 0.5, lo[1] - 3 * size, (lo[2] + hi[2]) / 2 + 0.5)
+        sigma.outputs[0].default_value = k
+        cut.outputs[0].default_value = z0
+        soft.outputs[0].default_value = w
+        scale.append(size / TILE)
+        vol.filepath = files[i - 1]
+        vol.grids.load()
+        for name, lamp in lamps.items():
+            npy = os.path.join(OUT, kind, f"{name}_{i:03d}.npy")
+            if os.path.exists(npy):
+                continue
+            for other in lamps.values():
+                other.hide_render = other is not lamp
+            exr = npy[:-4] + ".exr"
+            sc.render.filepath = exr
+            bpy.ops.render.render(write_still=True)
+            save_npy(exr, npy)
+        print("vdb puff frame", i, "size", round(size, 1), "sigma", round(k, 4), "cut", z0, flush=True)
+    with open(os.path.join(OUT, kind, "meta.json"), "w") as f:
+        json.dump({"source": src, "picks": picks, "scale": scale, "tau": VDB_PUFF_TAU, "cap": cap,
+                   "albedo": c["albedo"], "g": c["g"], "render_size": TILE, "samples": SAMPLES}, f)
+
+
 # Огненный шар ядерки (поверхность для прохода пелены: MushroomField, mushroom.glsl): не горение, а пузырь горячего воздуха
 # после второго максимума — у мода шар 15 кт (R = 70·15^0,4 м, Glasstone и Dolan 2.12) уже не растёт ударной волной и
 # всплывает. Mantaflow — несжимаемый газ (Буссинеск), поэтому считается только то, что он может: всплытие и
@@ -612,6 +734,8 @@ if WHAT == "fireball-vdb":
     fireball_vdb(os.path.abspath(argv[argv.index("--vdb") + 1]))
 if WHAT in ("puff", "all"):
     puff()
+if WHAT == "puff-vdb":
+    puff_vdb(os.path.abspath(argv[argv.index("--vdb") + 1]))
 if WHAT in ("spray", "all"):
     puff("spray")
 if WHAT == "nukeball":
