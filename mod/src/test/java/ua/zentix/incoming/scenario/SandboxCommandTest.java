@@ -119,4 +119,12 @@ class SandboxCommandTest {
             assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse(bad), bad);
         }
     }
+
+    @Test
+    void spentNeedsADroppableBooster() {
+        assertEquals(SandboxCommand.Verb.SPENT, SandboxCommand.parse("spent missile 30").verb());
+        assertEquals(SandboxCommand.Verb.SPENT, SandboxCommand.parse("spent drone").verb());
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("spent rocket"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("spent missile 500"));
+    }
 }

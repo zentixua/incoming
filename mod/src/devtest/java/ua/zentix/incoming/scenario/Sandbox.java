@@ -608,6 +608,22 @@ final class Sandbox {
                 server(String.format(Locale.ROOT, "incoming salvo drone 1 0 at %d %d from %d %d", x, z + SAM_PAST, x, z - SAM_FROM));
                 pending = Pending.SAM;
             }
+            case SPENT -> {
+                placeCamera();
+                WeaponType w = c.weapon();
+                Vec3 at = new Vec3(site.x, GROUND + 1 + c.number(1, 20), site.z);
+                // /summon у ускорителя закрыт (сущность не призывается): своими руками, как его отделяет снаряд
+                onServer(true, server -> {
+                    net.minecraft.server.level.ServerLevel l = server.overworld();
+                    var e = new ua.zentix.incoming.entity.SpentBoosterEntity(ua.zentix.incoming.registry.ModEntities.SPENT_BOOSTER.get(), l);
+                    net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
+                    tag.putByte("weapon", (byte) w.id());
+                    e.load(tag);
+                    e.moveTo(at.x, at.y, at.z, 0, 0);
+                    l.addFreshEntity(e);
+                });
+                pending = Pending.SERVER;
+            }
             case FIRE -> {
                 placeCamera();
                 int half = (int) c.number(0, 6) / 2;

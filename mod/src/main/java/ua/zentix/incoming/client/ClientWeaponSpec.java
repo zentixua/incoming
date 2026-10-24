@@ -5,6 +5,7 @@ import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.plume.Motor;
+import ua.zentix.incoming.client.fx.plume.NozzleGlow;
 import ua.zentix.incoming.client.fx.plume.Smoke;
 import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.client.render.WeaponModels;
@@ -380,6 +381,35 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
             case ROCKET -> ROCKET;
             case LOITER -> LOITER;
         };
+    }
+
+    /**
+     * Горячие сопла ускорителей по оружию: таблица остывания (десятки миллисекунд) считается один раз, в фоне, при первом
+     * ускорителе — до готовности сопла нет (первые доли секунды поджига, стенки ещё холодные).
+     */
+    private static final java.util.Map<WeaponType, java.util.concurrent.CompletableFuture<java.util.Optional<NozzleGlow>>> NOZZLES =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Горячее сопло ускорителя оружия weapon ({@link #buildNozzleGlow}), если уже посчитано; иначе null. */
+    @Nullable
+    public static NozzleGlow nozzleGlow(WeaponType weapon) {
+        var f = NOZZLES.computeIfAbsent(weapon, w -> java.util.concurrent.CompletableFuture.supplyAsync(() -> buildNozzleGlow(w),
+                net.minecraft.Util.backgroundExecutor()).whenComplete((g, ex) -> {
+                    if (ex != null) ua.zentix.incoming.Incoming.LOG.error("Booster nozzle glow of {} failed: no hot nozzle", w, ex);
+                }));
+        return f.isDone() && !f.isCompletedExceptionally() ? f.join().orElse(null) : null;
+    }
+
+    /**
+     * Горячее сопло сбрасываемого стартового ускорителя оружия weapon ({@link NozzleGlow}: двигатель ускорителя, кривая
+     * тяги в игре и настоящее время работы); пусто — такого ускорителя нет.
+     */
+    public static java.util.Optional<NozzleGlow> buildNozzleGlow(WeaponType weapon) {
+        Stage boost = of(weapon).airframe(false).far().boost();
+        ThrustCurve curve = weapon.spec().airframe().thrust();
+        Article.SolidMotor real = weapon.spec().airframe().article().booster();
+        if (of(weapon).spent() == null || boost.motor() == null || !boost.booster() || curve == null || real == null) return java.util.Optional.empty();
+        return java.util.Optional.of(new NozzleGlow(boost.motor(), curve, real.burn()));
     }
 
     /** Сущность полёта: носитель или вторая (бомба). */
