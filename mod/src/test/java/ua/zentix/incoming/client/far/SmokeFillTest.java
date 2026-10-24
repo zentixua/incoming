@@ -86,6 +86,8 @@ class SmokeFillTest {
         final List<double[]> quads = new ArrayList<>();
         final java.util.Map<double[],Double> matterScale = new java.util.IdentityHashMap<>();
         double veil;
+        float[] veilField;
+        double veilWidth, veilHeight;
 
         Screen(FarView view) {
             this.view = view;
@@ -129,6 +131,12 @@ class SmokeFillTest {
             return false;
         }
 
+        @Override
+        public boolean veilField(FarView view, double width, double height, float[] rgba) {
+            veilField=rgba.clone(); veilWidth=width; veilHeight=height;
+            return true;
+        }
+
         /** Сколько экранов закрывают квадраты (с перекрытием). */
         double fill() {
             double sum = 0;
@@ -141,7 +149,7 @@ class SmokeFillTest {
 
         /** Пропускание в точке экрана (u, v): квадраты — по пикселям кадра клуба, как в шейдере ({@link ClubFrames}), вуали. */
         double transmittance(double u, double v) throws IOException {
-            double clear = Math.exp(-veil);
+            double clear = veilField == null ? Math.exp(-veil) : 1-VeilField.alpha(veilField,u,v,veilWidth,veilHeight);
             for (double[] q : quads) {
                 double x = (u - q[0]) / q[3], y = (v - q[1]) / q[4];
                 if (Math.abs(x) < 1 && Math.abs(y) < 1) clear *= 1 - PlumeContinuityTest.clubAt(q, x, y);
@@ -226,6 +234,7 @@ class SmokeFillTest {
                 s.quads.clear();
                 s.matterScale.clear();
                 s.veil = 0;
+                s.veilField = null;
                 for (Blast b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
                 SmokePuffs.flush();
             }
@@ -359,7 +368,7 @@ class SmokeFillTest {
         Screen screen=new Screen(view);
         SmokePuffs.resetBudget();
         for (int pass=0;pass<2;pass++) {
-            screen.quads.clear(); screen.matterScale.clear(); screen.veil=0;
+            screen.quads.clear(); screen.matterScale.clear(); screen.veil=0; screen.veilField=null;
             for (SmokeGrid.Source source:sources) source.emit(1000,SmokePuffs.sink(view,screen,source,1000));
             SmokePuffs.flush();
         }

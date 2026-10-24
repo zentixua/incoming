@@ -50,6 +50,11 @@ final class SmokePuffs {
 
         void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a);
 
+        default double veilAspect() { return 16.0 / 9; }
+
+        /** Optional screen transport mesh; receivers without it keep the legacy central-ray diagnostic. */
+        default boolean veilField(FarView view, double width, double height, float[] rgba) { return false; }
+
         boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                        float alphaB, int lightB, float r, float g, float b, float[] joint);
     }
@@ -438,6 +443,7 @@ final class SmokePuffs {
         private int contexts;
         /** Вуаль кадра: толща и цвет, взвешенный толщей (все вуали — одним квадратом, {@link #veilAdd}). */
         private double veilTau, veilR, veilG, veilB;
+        private VeilField veilField;
         @Nullable
         private Out veilOut;
         private FarView veilView;
@@ -605,18 +611,28 @@ final class SmokePuffs {
             veilView = view;
         }
 
+        void veilSource(Out out, FarView view, double px, double py, double pz, double sh, double sv, double ext,
+                        double share, float r, float g, float b) {
+            if (veilField == null) veilField = new VeilField();
+            veilField.begin(view, out.veilAspect());
+            veilField.add(px, py, pz, sh, sv, ext, share, r, g, b);
+            veilOut = out;
+            veilView = view;
+        }
+
         /**
-         * Вуаль кадра одним квадратом: пропускание — e^(−Στ) (то же, что у стопки вуалей), цвет — средний по толще
-         * (рассеяние смеси веществ у глаза — доли по толще, как у {@link #thick}).
+         * Angular transport uses all the nearby Gaussians, not just the central ray. The scalar sums remain
+         * a compatibility diagnostic for receivers that do not implement the mesh.
          */
         void veilClear() {
+            if (veilField != null) veilField.clear();
             veilTau = veilR = veilG = veilB = 0;
             veilOut = null;
             veilView = null;
         }
 
         private void veilFlush() {
-            if (veilOut != null && veilTau > 0) {
+            if (veilOut != null && !veilOut.veilField(veilView, veilField.width, veilField.height, veilField.finish()) && veilTau > 0) {
                 double fx = veilView.forward().x(), fy = veilView.forward().y(), fz = veilView.forward().z();
                 veilOut.veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, VEIL_AT * 4, (float) (veilR / veilTau), (float) (veilG / veilTau),
                         (float) (veilB / veilTau), (float) (1 - Math.exp(-veilTau)), OPEN_SKY);
@@ -624,6 +640,7 @@ final class SmokePuffs {
             veilTau = veilR = veilG = veilB = 0;
             veilOut = null;
             veilView = null;
+            if (veilField != null) veilField.clear();
         }
 
         /**
@@ -977,9 +994,10 @@ final class SmokePuffs {
     private static boolean veilAround(FarView view, Out out, double px, double py, double pz, double sh, double sv, double ext, float cr,
                                       float cg, float cb, double share) {
         double fx = view.forward().x(), fy = view.forward().y(), fz = view.forward().z();
-        float k = (float) ((1 - Math.exp(-sightDepth(px, py, pz, sh, sv, ext, fx, fy, fz))) * share);
-        if (k < 0.004f) return false;
+        float k = (float) (-Math.expm1(-sightDepth(px, py, pz, sh, sv, ext, fx, fy, fz)) * share);
+        if (!(share > 0 && ext > 0)) return false;
         DRAW.veilAdd(out, view, cr, cg, cb, k);
+        DRAW.veilSource(out, view, px, py, pz, sh, sv, ext, share, cr, cg, cb);
         return true;
     }
 
@@ -1000,12 +1018,13 @@ final class SmokePuffs {
         FarView view = DRAW.view;
         double fx = view.forward().x(), fy = view.forward().y(), fz = view.forward().z();
         double along = sightDepth(px, py, pz, sh, sv, ext, fx, fy, fz);
-        float k = (float) ((1 - Math.exp(-along)) * share);
-        if (k < 0.004f) return;
+        float k = (float) (-Math.expm1(-along) * share);
+        if (!(share > 0 && ext > 0)) return;
         float cr = thick(ks, kd, kw, dr), cg = thick(ks, kd, kw, dg), cb = thick(ks, kd, kw, db);
         // во весь экран: полуразмер — с запасом на угол поля зрения до ~120°; свет — как у вещества под открытым небом
         // (карта освещения: небо 15) и огонь кадра у глаза (FxLights), как у клубов этого же вещества снаружи
         DRAW.veilAdd(DRAW.out, view, cr, cg, cb, k);
+        DRAW.veilSource(DRAW.out, view, px, py, pz, sh, sv, ext, share, cr, cg, cb);
     }
 
     /**

@@ -147,6 +147,50 @@ public final class FarSprites implements SmokePuffs.Out {
         counts[0]++;
     }
 
+    @Override
+    public double veilAspect() {
+        var window = net.minecraft.client.Minecraft.getInstance().getWindow();
+        return (double) window.getWidth() / window.getHeight();
+    }
+
+    @Override
+    public boolean veilField(FarView view, double width, double height, float[] rgba) {
+        out.sixWay(-1);
+        var f = view.forward();
+        var l = view.left();
+        var up = view.up();
+        FxAtlas.Sprite white = FxAtlas.white();
+        for (int y = 0; y < VeilField.ROWS; y++) for (int x = 0; x < VeilField.COLS; x++) {
+            int ll = y * (VeilField.COLS + 1) + x;
+            float maximum = 0;
+            for (int j = 0; j < 4; j++) maximum = Math.max(maximum, rgba[4 * veilCorner(ll, j) + 3]);
+            if (maximum < 0.002f) continue;
+            out.quad((float) SmokePuffs.VEIL_AT);
+            for (int j = 0; j < 4; j++) {
+                int at = veilCorner(ll, j);
+                double u = width * (2.0 * (at % (VeilField.COLS + 1)) / VeilField.COLS - 1);
+                double v = height * (2.0 * (at / (VeilField.COLS + 1)) / VeilField.ROWS - 1);
+                float alpha = rgba[4 * at + 3];
+                out.vertex((float) (SmokePuffs.VEIL_AT * (f.x + u * l.x + v * up.x)),
+                        (float) (SmokePuffs.VEIL_AT * (f.y + u * l.y + v * up.y)),
+                        (float) (SmokePuffs.VEIL_AT * (f.z + u * l.z + v * up.z)), white.u0(), white.v0(),
+                        rgba[4 * at] * alpha, rgba[4 * at + 1] * alpha, rgba[4 * at + 2] * alpha, alpha,
+                        0, 1, LightTexture.FULL_BRIGHT, 0);
+            }
+            counts[5]++;
+        }
+        return true;
+    }
+
+    private static int veilCorner(int ll, int j) {
+        return switch (j) {
+            case 0 -> ll;
+            case 1 -> ll + VeilField.COLS + 1;
+            case 2 -> ll + VeilField.COLS + 2;
+            default -> ll + 1;
+        };
+    }
+
     /**
      * Вуаль вещества вокруг глаза (облако, в которое вошла камера, {@link SmokePuffs}): ровный квадрат полуразмера half лицом
      * к камере в (dx, dy, dz) от неё — свой цвет (r, g, b) с непрозрачностью a, без мягкого края у мира (что ближе —
