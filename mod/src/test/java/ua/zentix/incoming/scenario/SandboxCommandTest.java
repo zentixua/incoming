@@ -17,6 +17,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Команды песочницы эффектов: из чата ({@code /fx …}) и из файла — одна строка, ошибка — до того, как что-то сыграло. */
 class SandboxCommandTest {
     @Test
+    void aRepeatedDayShotWaitsForTheWindClockAsWellAsTheSun() {
+        assertFalse(Sandbox.clockReady(1642, 6000, 6000));
+        assertFalse(Sandbox.clockReady(13000, 6000, 6000));
+        assertFalse(Sandbox.clockReady(6000, 18000, 6000));
+        assertTrue(Sandbox.clockReady(6000, 6000, 6000));
+        assertTrue(Sandbox.clockReady(6001, 18000, 18000));
+    }
+
+    @Test
     void parsesEffectsFromChatAndFile() {
         SandboxCommand c = SandboxCommand.parse("/fx blast missile 7");
         assertEquals(SandboxCommand.Verb.BLAST, c.verb());
