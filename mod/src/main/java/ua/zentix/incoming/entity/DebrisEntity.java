@@ -151,7 +151,7 @@ public class DebrisEntity extends Entity {
         if (IncomingConfig.SERVER.debrisStay.get()) {
             // Loose fallout can accumulate on earth, not turn an intact cohesive face into metre-sized cubes.
             boolean looseFloor = !ua.zentix.incoming.warhead.SurfaceBlocks.cohesive(level.getBlockState(pos.below()));
-            if (groundMaterial ? !isChip() && looseFloor : !isChip() || blockState().is(Blocks.FIRE)) place(level, pos);
+            if (!isChip() && (!groundMaterial || looseFloor)) place(level, pos);
         }
         discard();
     }

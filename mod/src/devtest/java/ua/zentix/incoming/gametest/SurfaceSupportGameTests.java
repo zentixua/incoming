@@ -380,9 +380,9 @@ public final class SurfaceSupportGameTests {
         var clods = level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class, new AABB(earth).inflate(3));
         var chips = level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class, new AABB(paving).inflate(3));
         var aircraft = level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class, new AABB(wreck).inflate(3));
-        h.assertTrue(!clods.isEmpty() && clods.stream().noneMatch(ua.zentix.incoming.entity.DebrisEntity::isChip), "earth spawns no large clods");
-        h.assertTrue(chips.stream().anyMatch(ua.zentix.incoming.entity.DebrisEntity::isChip), "intact paving emits only metre blocks");
-        h.assertTrue(!aircraft.isEmpty() && aircraft.stream().noneMatch(ua.zentix.incoming.entity.DebrisEntity::isChip), "B-2 wreckage is all tiny chips");
+        h.assertTrue(!clods.isEmpty() && clods.stream().noneMatch(ua.zentix.incoming.entity.DebrisEntity::isChip), "expected nonempty earth debris containing only large clods");
+        h.assertTrue(chips.stream().anyMatch(ua.zentix.incoming.entity.DebrisEntity::isChip), "expected small chips from intact paving");
+        h.assertTrue(!aircraft.isEmpty() && aircraft.stream().noneMatch(ua.zentix.incoming.entity.DebrisEntity::isChip), "expected nonempty B-2 wreckage containing only large pieces");
         StrikeGameTests.afterTest(h, () -> level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class,
                 h.getBounds().inflate(4)).forEach(net.minecraft.world.entity.Entity::discard));
         h.succeed();

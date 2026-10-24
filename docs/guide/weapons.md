@@ -58,7 +58,7 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **Paving on a solid backing** cannot bend like a free wall. It is excavated with its backing, using the crater
   law for its material. In cohesive stone and concrete, a fraction of a block is saved as surface damage and shown
   with pale fresh aggregate, small material chips and an uneven scorched edge, plus nearby cracks.
-  The saved depth controls the exposed area and chip height through the display transformation.
+  Deeper damage exposes a wider fracture and leaves taller chips.
   Up to 256 composite surface displays are shown per dimension near players; only the damage data is saved.
   The displays return when players revisit. With debris persistence enabled, ground clods remain on loose ground, and large aircraft parts and burning debris can also remain.
   Small surface chips disperse; ground/charred fallout does not plant metre-sized blocks on intact cohesive paving.
