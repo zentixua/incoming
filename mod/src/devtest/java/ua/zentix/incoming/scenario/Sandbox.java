@@ -110,8 +110,6 @@ final class Sandbox {
     private final Path dir = FMLPaths.GAMEDIR.get().resolve("fx");
     private final Path inbox = dir.resolve("inbox");
     private boolean started, ready;
-    private org.joml.Matrix4f probeInverse;
-    private Vec3 probeEye;
     private int tick = -1;
     /** Точка эффектов, что землю не трогают (на земле), и точка эффекта сейчас. */
     private static final Vec3 HOME = new Vec3(0.5, GROUND + 1, 0.5);
@@ -197,7 +195,6 @@ final class Sandbox {
         NeoForge.EVENT_BUS.addListener(this::onScreen);
         NeoForge.EVENT_BUS.addListener(this::onTick);
         NeoForge.EVENT_BUS.addListener(this::onFrame);
-        NeoForge.EVENT_BUS.addListener(this::onProbeMatrix);
         NeoForge.EVENT_BUS.addListener(this::onCommands);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, this::onFov);
         NeoForge.EVENT_BUS.addListener(this::onFrameStart);
@@ -990,14 +987,6 @@ final class Sandbox {
         mc.player.xRotO = pitch;
     }
 
-    /** Keep the actual world projection; GUI projection and angular guesses are not screenshot rays. */
-    private void onProbeMatrix(net.neoforged.neoforge.client.event.RenderLevelStageEvent e) {
-        if (e.getStage() != net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_LEVEL) return;
-        if (probeInverse == null) probeInverse = new org.joml.Matrix4f();
-        probeEye = e.getCamera().getPosition();
-        ua.zentix.incoming.client.render.FarDraw.viewProjection(e, probeEye, probeInverse).invert();
-    }
-
     private void onFrame(RenderFrameEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || !ready) return;
@@ -1022,8 +1011,6 @@ final class Sandbox {
         Incoming.LOG.info("SANDBOX shot {} age {} s fps {}; layer: {}; smoke: {}; flight: {}; air: {}", file, String.format(Locale.ROOT, "%.3f", age), mc.getFps(),
                 ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
                 ua.zentix.incoming.client.far.FarFlightView.describe(), ua.zentix.incoming.client.fx.ClientAir.now());
-        if (probeEye != null && probeInverse != null) Incoming.LOG.info("SANDBOX {}",
-                ua.zentix.incoming.client.far.SmokeRayProbe.sample(probeEye, probeInverse, partial));
         cap.next++;
     }
 
