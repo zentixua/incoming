@@ -40,4 +40,28 @@ class BlastLitterTest {
         }
         assertTrue(BlastLitter.kick(50, 0.03, vt) > BlastLitter.kick(50, 0.01, vt));
     }
+
+    /**
+     * Бросок за {@link BlastLitter#STEPS} шагов — тот же, что у мелкого интеграла (Рунге–Кутта, 20 000 шагов), от слабого
+     * ветра у края срыва до сотен м/с у шара: короткий интеграл (900 кусков на взрыв в одном тике) не теряет точности.
+     */
+    @Test
+    void shortKickIntegralMatchesAFineOne() {
+        double vt = 1.7, k = BlastLitter.G / (vt * vt);
+        for (double[] c : new double[][]{{5, 0.016}, {20, 0.016}, {76, 0.010}, {250, 0.006}, {600, 0.004}, {300, 0.03}, {150, 0.05}}) {
+            double u0 = c[0], tPlus = c[1], v = 0, n = 20_000, dt = tPlus / n;
+            for (int i = 0; i < n; i++) {
+                double t = i * dt;
+                double a1 = rate(k, u0, tPlus, t, v), a2 = rate(k, u0, tPlus, t + dt / 2, v + a1 * dt / 2);
+                double a3 = rate(k, u0, tPlus, t + dt / 2, v + a2 * dt / 2), a4 = rate(k, u0, tPlus, t + dt, v + a3 * dt);
+                v += (a1 + 2 * a2 + 2 * a3 + a4) * dt / 6;
+            }
+            assertEquals(v, BlastLitter.kick(u0, tPlus, vt), 0.005 * v, u0 + " м/с, " + 1000 * tPlus + " мс");
+        }
+    }
+
+    private static double rate(double k, double u0, double tPlus, double t, double v) {
+        double x = t / tPlus, rel = u0 * (1 - x) * Math.exp(-x) - v;
+        return k * Math.abs(rel) * rel;
+    }
 }

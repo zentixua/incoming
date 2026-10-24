@@ -26,8 +26,11 @@ public final class BlastLitter {
     public static final double COVER_DUST_SETTLE = DustModel.SETTLE[3];
     /** Ближе к фронту закон пластины не годен, м ({@link DustModel#plate}). */
     static final double NEAREST_M = 0.06;
-    /** Шагов интеграла броска на положительную фазу. */
-    private static final int STEPS = 400;
+    /**
+     * Шагов интеграла броска на положительную фазу: шаг точный при ветре середины шага, ошибка второго порядка — у 32
+     * шагов меньше 0,2 % (у прежних 400 полунеявных — до 0,6 %, и 900 кусков на взрыв стоили 4–8 мс в одном тике).
+     */
+    static final int STEPS = 32;
     static final double G = 9.81;
 
     private BlastLitter() {}
@@ -56,8 +59,8 @@ public final class BlastLitter {
         double k = G / (terminal * terminal), dt = tPlus / STEPS, v = 0;
         for (int i = 0; i < STEPS; i++) {
             double x = (i + 0.5) / STEPS, u = windMs * (1 - x) * Math.exp(-x), rel = u - v;
-            // полунеявный шаг: у тяжёлого ветра сопротивление за шаг сравнимо со скоростью
-            v += k * Math.abs(rel) * rel * dt / (1 + 2 * k * Math.abs(rel) * dt);
+            // при ветре u шага отставание гаснет точно: d(u − v)/dt = −k|u − v|(u − v) → rel / (1 + k|rel|·dt)
+            v = u - rel / (1 + k * Math.abs(rel) * dt);
         }
         return v;
     }
