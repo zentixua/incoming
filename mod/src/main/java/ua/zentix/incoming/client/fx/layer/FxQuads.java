@@ -48,6 +48,12 @@ public final class FxQuads {
     private int capacity, n;
     private long write;
     private float[] keys = new float[0];
+    /** Квадрат светится (хоть одна вершина с {@link #emission}). */
+    private boolean[] emits = new boolean[0];
+    /** После {@link #draw}: место самого дальнего светящегося в отсортированном порядке (n — нет светящихся). */
+    private int glowFrom;
+    /** Рамка вершин светящихся квадратов кадра (от камеры): x, y, z наименьшие, потом наибольшие. */
+    private final float[] glowBox = new float[6];
     private final FarFirst sort = new FarFirst();
     private final ByteBufferBuilder out = new ByteBufferBuilder(QUAD * 256);
     private Vector3f left = new Vector3f(1, 0, 0), up = new Vector3f(0, 1, 0);
@@ -64,6 +70,8 @@ public final class FxQuads {
         nearest = opacity = emit = 0;
         probe = 0;
         glows = false;
+        Arrays.fill(glowBox, 0, 3, Float.MAX_VALUE);
+        Arrays.fill(glowBox, 3, 6, -Float.MAX_VALUE);
     }
 
     /**
@@ -156,6 +164,11 @@ public final class FxQuads {
         return glows;
     }
 
+    /** Рамка вершин светящихся квадратов кадра (от камеры): x, y, z наименьшие, потом наибольшие; без них — пустая. */
+    float[] glowBox() {
+        return glowBox;
+    }
+
     public int size() {
         return n;
     }
@@ -164,6 +177,7 @@ public final class FxQuads {
     public void quad(float key) {
         if (n == capacity) grow();
         keys[n] = key > 0 ? key : 0;
+        emits[n] = false;
         write = stage + (long) n * QUAD;
         n++;
     }
@@ -193,7 +207,16 @@ public final class FxQuads {
         MemoryUtil.memPutByte(p + 33, nearest);
         MemoryUtil.memPutByte(p + 34, opacity);
         MemoryUtil.memPutByte(p + 35, emit);
-        if (emit != 0) glows = true;
+        if (emit != 0) {
+            glows = true;
+            emits[n - 1] = true;
+            glowBox[0] = Math.min(glowBox[0], x);
+            glowBox[1] = Math.min(glowBox[1], y);
+            glowBox[2] = Math.min(glowBox[2], z);
+            glowBox[3] = Math.max(glowBox[3], x);
+            glowBox[4] = Math.max(glowBox[4], y);
+            glowBox[5] = Math.max(glowBox[5], z);
+        }
         write = p + VERTEX;
     }
 
@@ -249,14 +272,42 @@ public final class FxQuads {
 
     /** Отсортировать и нарисовать текущим шейдером; память кадра остаётся для следующего. */
     void draw() {
+        glowFrom = n;
         if (n == 0) return;
         int[] order = sort.sort(keys, n);
+        for (int i = 0; i < n; i++) {
+            if (emits[order[i]]) {
+                glowFrom = i;
+                break;
+            }
+        }
         long dst = out.reserve(n * QUAD);
         for (int i = 0; i < n; i++) MemoryUtil.memCopy(stage + (long) order[i] * QUAD, dst + (long) i * QUAD, QUAD);
         ByteBufferBuilder.Result result = out.build();
-        if (result == null) return;
+        if (result == null) {
+            glowFrom = n;
+            return;
+        }
         BufferUploader.drawWithShader(new MeshData(result, new MeshData.DrawState(FORMAT, n * 4, n * 6, VertexFormat.Mode.QUADS,
                 VertexFormat.IndexType.least(n * 4))));
+    }
+
+    /**
+     * После {@link #draw}: ещё раз шейдером s — квадраты от самого дальнего светящегося до ближнего (проход свечения,
+     * {@link FxBloom}): что дальше всех светящихся, их излучения не закрывает. Из того же буфера, что выгрузил
+     * {@link #draw} (его отсортированные квадраты — с места {@code glowFrom}), без второй выгрузки. false — светящихся нет.
+     */
+    boolean drawGlow(net.minecraft.client.renderer.ShaderInstance s) {
+        if (glowFrom >= n) return false;
+        com.mojang.blaze3d.vertex.VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
+        vb.bind();
+        s.setDefaultUniforms(VertexFormat.Mode.QUADS, com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix(),
+                com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix(), net.minecraft.client.Minecraft.getInstance().getWindow());
+        s.apply();
+        VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+        org.lwjgl.opengl.GL11.glDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, (n - glowFrom) * 6, type.asGLType, (long) glowFrom * 6 * type.bytes);
+        s.clear();
+        return true;
     }
 
     private void grow() {
@@ -266,6 +317,7 @@ public final class FxQuads {
         stage = p;
         capacity = cap;
         keys = Arrays.copyOf(keys, cap);
+        emits = Arrays.copyOf(emits, cap);
     }
 
     private static byte unorm(float f) {

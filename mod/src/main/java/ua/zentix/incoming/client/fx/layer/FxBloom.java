@@ -3,16 +3,14 @@ package ua.zentix.incoming.client.fx.layer;
 import com.mojang.blaze3d.platform.GlConst;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.MeshData;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4f;
+import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import ua.zentix.incoming.Incoming;
@@ -26,21 +24,31 @@ import java.util.Locale;
  * HDR кадра → пирамида размытий {@code lod} 2–8 → {@code mix(цвет, пирамида, 0,12)} без порога → кривая), только
  * HDR — не весь кадр, а излучение нашего слоя.
  * <ul>
- * <li>Излучение. Слой пишет вторую цель ({@code fx.fsh}, {@code fragGlow}, R11F_G11F_B10F во весь кадр) тем же
- * смешиванием, что и цвет ({@code ONE, ONE_MINUS_SRC_ALPHA}): дым перед огнём гасит его излучение той же долей, а что
- * за стеной и рельефом, отсекает та же глубина (один фрагмент — два выхода) и тот же мягкий край у мира. Свет —
- * линейный, белый экран — 1: показанный свет, умноженный на пересвет, который экран срезал ({@link FxQuads#emission}:
- * у ядер, вспышек и факела — яркость против белого до {@code Sight.onScreen}, у кадра огня — яркость шара модели против
- * его кадра на экране), не ярче белой точки {@link #WHITE} плёночной кривой огня: ярче неё кадр различий не показывает.</li>
+ * <li>Излучение. После квадратов слоя — ещё один проход тем же шейдером ({@code fx.fsh}, {@code FxGlowPass}) на октаву
+ * мельче первого уровня ореола ({@link #glowLevel}: у 1080 — половина кадра, у 1600 — четверть; дальше — спуск в 13
+ * выборок, и ореол тот же, что из излучения во весь кадр) и только в рамке светящихся на экране (вне её излучения нет, и
+ * дым там ничего не гасит): квадраты от самого дальнего светящегося до ближнего (что дальше всех огней, их излучения не
+ * закрывает) — из того же буфера вершин — пишут излучение (R11F_G11F_B10F) и долю пикселя, которую занимает само
+ * светящееся (R8), тем же смешиванием, что и цвет ({@code ONE, ONE_MINUS_SRC_ALPHA}): дым перед огнём гасит его излучение
+ * той же долей, мягкий край у мира тот же, а что за стеной и рельефом, отсекает расстояние до мира ({@link SceneDepth};
+ * аппаратной глубины в проходе нет). Дым там — одна непрозрачность, без света. Вторая цель в самом слое (MRT) вышла
+ * дороже: каждый фрагмент дыма во весь кадр смешивал ещё две цели (слой +0,6–0,85 мс у ракеты ночью на 2560×1600, так —
+ * +0,4–0,6 мс вместе с пирамидой).
+ * Свет — линейный, белый экран — 1: показанный свет, умноженный на пересвет, который экран срезал
+ * ({@link FxQuads#emission}: у ядер, вспышек и факела — яркость против белого до {@code Sight.onScreen}, у кадра огня —
+ * яркость шара модели против его кадра на экране), не ярче белой точки {@link #WHITE} плёночной кривой огня: ярче неё
+ * кадр различий не показывает.</li>
  * <li>Пирамида — двойной фильтр Jimenez 2014 (Call of Duty: Advanced Warfare; так же — Unity URP, Blender EEVEE):
  * вниз — 13 выборок, вверх — шатёр 3×3 с прибавлением уровня. Обе свёртки сохраняют энергию, и каждый уровень несёт
  * всю энергию излучения: равные веса уровней — равная энергия на октаву угла, то есть спад 1/θ², как у функции
  * рассеяния глаза CIE (Vos 1984, CIE 135/1999: L/E = 10/θ², θ в градусах). Уровни — как у пака: 2–8 при высоте
  * кадра 1080 (2^k пикселей — ~0,2°…17° при поле зрения 70°), выше — на октаву глубже ({@link #first}).</li>
  * <li>Доля {@link #SHARE} без порога — как у пака по умолчанию; у глаза по CIE на углах 0,1°–50° выходит 0,12
- * (0,0191·ln(θ₂/θ₁)). Источник свою долю не теряет (кадр огня уже показан своей кривой; у пака она уходит в ореол —
- * у середины огня это тени на проценты), ореол прибавляется: кривая 1 − e^(−x) и смешивание «экраном»
- * ({@code ONE, ONE_MINUS_SRC_COLOR}) — ровно сложение света до этой кривой.</li>
+ * (0,0191·ln(θ₂/θ₁)). Ореол прибавляется вокруг светящегося: кривая 1 − e^(−x) и смешивание «экраном»
+ * ({@code ONE, ONE_MINUS_SRC_COLOR}) — ровно сложение света до этой кривой. На самом светящемся его нет (по доле
+ * светящегося): кадр огня показан своей экспозицией, в десятки раз ниже пересвета модели, и ореол, посчитанный с
+ * пересветом, высветлил бы его складки и сажу в «мыло». У пака источник отдаёт ореолу свою долю; здесь он её не
+ * теряет — его кадр уже показан своей кривой.</li>
  * </ul>
  * Подача, не физика: яркость и энергия огня в модели не меняются, свет на мир и дым — свой ({@code FxLights},
  * {@code HeatPass}). Блик и вуаль Стайлза–Холладея у глаза ({@code FarSprites.glare}) остаются: они видят источник
@@ -102,6 +110,15 @@ public final class FxBloom {
      */
     static int first(int height) {
         return FIRST + (int) Math.max(0, Math.round(Math.log(height / (double) REFERENCE) / Math.log(2)));
+    }
+
+    /**
+     * Уровень прохода излучения у кадра высотой {@code height}: на октаву мельче {@link #first} — дальше он идёт в пирамиду
+     * через спуск в 13 выборок, и ореол выходит тем же, что из излучения во весь кадр; а фрагментов у прохода вчетверо
+     * меньше на каждую октаву (у 1600 — четверть кадра).
+     */
+    static int glowLevel(int height) {
+        return first(height) - 1;
     }
 
     /** Последний уровень: {@link #LEVELS} от первого, но не мельче двух пикселей по меньшей стороне. */
@@ -175,25 +192,27 @@ public final class FxBloom {
     }
 
     /**
-     * Ореол излучения e во весь кадр — свет до кривой (без доли {@link #SHARE}): уровни {@link #first} … {@link #last}
-     * с равными весами, как в проходах; сумма по кадру — сумма излучения (энергия сохраняется).
+     * Ореол во весь кадр w×h по излучению прохода свечения e (уровень {@link #glowLevel}) — свет до кривой (без доли
+     * {@link #SHARE}): уровни {@link #first} … {@link #last} с равными весами, как в проходах; сумма по кадру — сумма
+     * излучения в пикселях кадра (энергия сохраняется).
      */
-    static Image halo(Image e) {
-        int first = first(e.h), last = last(e.w, e.h);
+    static Image halo(Image e, int w, int h) {
+        int g = glowLevel(h), first = first(h), last = last(w, h);
         Image[] level = new Image[last + 1];
-        level[0] = e;
-        for (int k = 1; k <= last; k++) level[k] = down(level[k - 1]);
+        level[g] = e;
+        for (int k = g + 1; k <= last; k++) level[k] = down(level[k - 1]);
         Image up = level[last];
         for (int k = last - 1; k >= first; k--) {
             Image t = tent(up, level[k].w, level[k].h);
             for (int i = 0; i < t.v.length; i++) t.v[i] += level[k].v[i];
             up = t;
         }
-        for (int k = first - 1; k >= 1; k--) up = tent(up, level[k].w, level[k].h);
-        Image out = Image.of(e.w, e.h);
+        // мельче первого уровня — шатром до половины кадра: растянутый вчетверо линейно уровень у источника некруглый (~10 %)
+        for (int k = first - 1; k >= 1; k--) up = tent(up, size(w, k), size(h, k));
+        Image out = Image.of(w, h);
         double scale = 1.0 / (last - first + 1);
-        for (int y = 0; y < e.h; y++) {
-            for (int x = 0; x < e.w; x++) out.v[y * e.w + x] = (float) (up.sample((x + 0.5) / 2, (y + 0.5) / 2) * scale);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) out.v[y * w + x] = (float) (up.sample((x + 0.5) / 2, (y + 0.5) / 2) * scale);
         }
         return out;
     }
@@ -202,20 +221,17 @@ public final class FxBloom {
 
     @Nullable
     static ShaderInstance down, up, out;
-    /** Своя рамка кадра: цвет и глубина — привязанного кадра, вторая цель — излучение. */
-    private static int fbo = -1, glow = -1, glowW, glowH;
-    /** Чем рамка собрана: тип и номер цвета и глубины привязанного кадра (рамку пересобирать, если сменились). */
-    private static final int[] BUILT = new int[5];
-    private static boolean complete, failed;
+    /** Рамка прохода свечения: излучение (уровень {@link #glowLevel} пирамиды) и доля светящегося того же размера. */
+    private static int fbo = -1, cover = -1, frameW, frameH;
+    private static boolean failed;
     private static final int MAX = 12;
     private static final int[] LEVEL = new int[MAX + 1], LEVEL_FBO = new int[MAX + 1], LEVEL_W = new int[MAX + 1], LEVEL_H = new int[MAX + 1];
     private static final int[] VIEWPORT = new int[4];
     private static final float[] ZERO = new float[4];
-    /** Кадр, в который рисует слой (до своей рамки), и рисует ли слой сейчас в свою. */
-    private static int frame;
-    private static boolean on;
-    /** Время проходов свечения на видеокарте (без самого слоя) и размер кадра — для строки сценария. */
+    /** Время проходов свечения на видеокарте (с проходом излучения) и уровни — для строки сценария. */
     private static final GpuTimer GPU = new GpuTimer();
+    /** Части: проход излучения, пирамида, вывод на кадр. */
+    private static final GpuTimer PASS = new GpuTimer(), PYRAMID = new GpuTimer(), OUT = new GpuTimer();
     private static int lastFirst, lastLast;
 
     static {
@@ -224,160 +240,196 @@ public final class FxBloom {
     }
 
     /**
-     * Перед квадратами слоя: кадр со свечением рисуется в свою рамку — цвет и глубина привязанного кадра и цель
-     * излучения (очищенная). false — свечения нет (в кадре ничего не светится, шейдеры не загрузились, рамку не собрать,
-     * привязан кадр окна): слой рисует как раньше.
+     * После квадратов слоя (шейдер слоя {@code fx} — текущий, состояние смешивания — его): квадраты от самого дальнего
+     * светящегося — ещё раз, в половину кадра, проходом свечения ({@code FxGlowPass}: излучение и доля светящегося), потом
+     * пирамида и ореол на кадр. Ничего не светится, шейдеры не загрузились, рамку не завести — ничего.
      */
-    static boolean begin(boolean glows) {
-        on = false;
-        if (!glows || failed || down == null || up == null || out == null) return false;
-        frame = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
-        if (frame == 0) return false;
+    static void draw(FxQuads quads, ShaderInstance fx, Matrix4f viewProjection) {
+        if (!quads.glows() || failed || down == null || up == null || out == null) return;
+        int frame = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         int w = VIEWPORT[0] + VIEWPORT[2], h = VIEWPORT[1] + VIEWPORT[3];
-        if (w <= 0 || h <= 0) return false;
-        // цвет, в который рисует кадр (его первый буфер вывода), и его глубина
-        int colour = GL11.glGetInteger(GL20.GL_DRAW_BUFFER0);
-        if (colour < GL30.GL_COLOR_ATTACHMENT0 || colour > GL30.GL_COLOR_ATTACHMENT0 + 15) return false;
-        int colourType = attachment(colour, GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE), colourName = attachment(colour, GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME);
-        int depthType = attachment(GL30.GL_DEPTH_ATTACHMENT, GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE);
-        int depthName = depthType == GL11.GL_NONE ? 0 : attachment(GL30.GL_DEPTH_ATTACHMENT, GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME);
-        if (colourType != GL11.GL_TEXTURE && colourType != GL30.GL_RENDERBUFFER) return false;
-        if (!target(w, h)) return false;
-        if (fbo < 0 || BUILT[0] != colourType || BUILT[1] != colourName || BUILT[2] != depthType || BUILT[3] != depthName || BUILT[4] != glow) {
-            if (fbo < 0) fbo = GlStateManager.glGenFramebuffers();
-            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
-            attach(GL30.GL_COLOR_ATTACHMENT0, colourType, colourName);
-            GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT1, GlConst.GL_TEXTURE_2D, glow, 0);
-            attach(GL30.GL_DEPTH_ATTACHMENT, depthType, depthName);
-            GL20.glDrawBuffers(new int[]{GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1});
-            complete = GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE;
-            BUILT[0] = colourType;
-            BUILT[1] = colourName;
-            BUILT[2] = depthType;
-            BUILT[3] = depthName;
-            BUILT[4] = glow;
-            if (!complete) Incoming.LOG.warn("Effects bloom: frame {}×{} with the glow target is not complete, no bloom in this frame", w, h);
-        } else {
-            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
-        }
-        if (!complete) {
-            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
-            return false;
-        }
+        if (w <= 0 || h <= 0 || !target(w, h)) return;
+        int g = glowLevel(h);
+        // излучение и доля светящегося — только в рамке светящихся на экране: вне её дым ничего не гасит (там нуль)
+        if (!scissor(quads.glowBox(), viewProjection, LEVEL_W[g], LEVEL_H[g], RECT)) return;
+        int timed = GPU.begin(), pass = PASS.begin();
+        // излучение и доля светящегося — тем же шейдером и смешиванием, на уровне g, без аппаратной глубины (что за
+        // миром — по расстоянию до мира в шейдере)
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
+        GlStateManager._viewport(0, 0, LEVEL_W[g], LEVEL_H[g]);
+        GL30.glClearBufferfv(GL11.GL_COLOR, 0, ZERO);
         GL30.glClearBufferfv(GL11.GL_COLOR, 1, ZERO);
-        on = true;
-        return true;
-    }
-
-    /**
-     * После квадратов слоя: кадр — снова прежний, пирамида излучения и ореол на кадр. Состояние смешивания и глубины —
-     * как у слоя после квадратов.
-     */
-    static void end() {
-        if (!on) return;
-        on = false;
-        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
-        int timed = GPU.begin();
-        int w = glowW, h = glowH, first = first(h), last = last(w, h);
-        lastFirst = first;
-        lastLast = last;
-        RenderSystem.disableDepthTest();
-        RenderSystem.depthMask(false);
-        RenderSystem.disableBlend();
-        // вниз: уровень k из k − 1 (0 — само излучение)
-        for (int k = 1; k <= last; k++) pass(down, k, k == 1 ? glow : LEVEL[k - 1], k == 1 ? w : LEVEL_W[k - 1], k == 1 ? h : LEVEL_H[k - 1]);
-        // вверх с прибавлением: уровень k — свой спуск плюс шатёр из k + 1
-        RenderSystem.enableBlend();
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE);
-        for (int k = last - 1; k >= first; k--) pass(up, k, LEVEL[k + 1], LEVEL_W[k + 1], LEVEL_H[k + 1]);
-        // мельче первого уровня — только шатром, без своего спуска (у пака lod 0–1 в ореол не входят)
-        RenderSystem.disableBlend();
-        for (int k = first - 1; k >= 1; k--) pass(up, k, LEVEL[k + 1], LEVEL_W[k + 1], LEVEL_H[k + 1]);
-        // на кадр: кривая и «экран»
+        fx.safeGetUniform("FxGlowPass").set(1f, (float) w / LEVEL_W[g]);
+        RenderSystem.enableScissor(RECT[0], RECT[1], RECT[2], RECT[3]);
+        boolean any = quads.drawGlow(fx);
+        RenderSystem.disableScissor();
+        fx.safeGetUniform("FxGlowPass").set(0f, 1f);
+        PASS.end(pass);
+        if (any) halo(frame, w, h);
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
         GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
-        RenderSystem.enableBlend();
-        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_COLOR, GlStateManager.SourceFactor.ZERO,
-                GlStateManager.DestFactor.ONE);
-        ShaderInstance s = out;
-        s.safeGetUniform("BloomStep").set(1f / LEVEL_W[1], 1f / LEVEL_H[1], (float) (SHARE / (last - first + 1)), 0f);
-        s.safeGetUniform("BloomFrom").set((float) VIEWPORT[0], (float) VIEWPORT[1]);
-        RenderSystem.setShaderTexture(0, LEVEL[1]);
-        quad(s);
         // как у слоя после квадратов
+        RenderSystem.enableBlend();
         RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE,
                 GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
         RenderSystem.enableDepthTest();
         GPU.end(timed);
     }
 
-    /** Проход в уровень k шейдером s из текстуры src размера sw×sh. */
+    private static final int[] RECT = new int[4];
+    private static final Vector4f CORNER = new Vector4f();
+
+    /**
+     * Прямоугольник в пикселях цели w×h, куда ложится рамка box (от камеры) в матрице viewProjection, с запасом в два
+     * пикселя: x, y, ширина, высота — в rect. Угол рамки у глаза или за ним — весь кадр. false — рамка вне кадра.
+     */
+    static boolean scissor(float[] box, Matrix4f viewProjection, int w, int h, int[] rect) {
+        double x0 = 1, y0 = 1, x1 = -1, y1 = -1;
+        for (int i = 0; i < 8; i++) {
+            viewProjection.transform(CORNER.set(box[(i & 1) == 0 ? 0 : 3], box[(i & 2) == 0 ? 1 : 4], box[(i & 4) == 0 ? 2 : 5], 1));
+            if (CORNER.w < 1e-3f) {
+                x0 = y0 = -1;
+                x1 = y1 = 1;
+                break;
+            }
+            x0 = Math.min(x0, CORNER.x / CORNER.w);
+            y0 = Math.min(y0, CORNER.y / CORNER.w);
+            x1 = Math.max(x1, CORNER.x / CORNER.w);
+            y1 = Math.max(y1, CORNER.y / CORNER.w);
+        }
+        int px0 = (int) Math.max(0, Math.floor((x0 * 0.5 + 0.5) * w) - 2), py0 = (int) Math.max(0, Math.floor((y0 * 0.5 + 0.5) * h) - 2);
+        int px1 = (int) Math.min(w, Math.ceil((x1 * 0.5 + 0.5) * w) + 2), py1 = (int) Math.min(h, Math.ceil((y1 * 0.5 + 0.5) * h) + 2);
+        rect[0] = px0;
+        rect[1] = py0;
+        rect[2] = px1 - px0;
+        rect[3] = py1 - py0;
+        return rect[2] > 0 && rect[3] > 0;
+    }
+
+    /**
+     * Пирамида из излучения (уровень {@link #glowLevel}) и ореол на кадр frame размера w×h. Проходов шестнадцать, зависимых
+     * друг от друга, и цена у них — не пиксели, а сама цепочка: шейдер применяется раз на серию, между проходами меняются
+     * только цель, текстура и шаг, четырёхугольник — постоянный треугольник во весь кадр (у 2560×1600 с выводом — 0,36–0,41 мс
+     * против 0,40–0,51 с подготовкой на каждый проход, замер с glFinish).
+     */
+    private static void halo(int frame, int w, int h) {
+        int g = glowLevel(h), first = first(h), last = last(w, h);
+        lastFirst = first;
+        lastLast = last;
+        int timed = PYRAMID.begin();
+        RenderSystem.disableDepthTest();
+        RenderSystem.depthMask(false);
+        RenderSystem.disableBlend();
+        triangle();
+        // вниз: уровень k из k − 1
+        begin(down, LEVEL[g]);
+        for (int k = g + 1; k <= last; k++) pass(down, k, LEVEL[k - 1], LEVEL_W[k - 1], LEVEL_H[k - 1]);
+        // вверх с прибавлением: уровень k — свой спуск плюс шатёр из k + 1
+        begin(up, LEVEL[last]);
+        RenderSystem.enableBlend();
+        RenderSystem.blendFunc(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE);
+        for (int k = last - 1; k >= first; k--) pass(up, k, LEVEL[k + 1], LEVEL_W[k + 1], LEVEL_H[k + 1]);
+        // мельче первого уровня — только шатром, без своего спуска (у пака lod 0–1 в ореол не входят), до половины кадра:
+        // растянутый вчетверо линейно уровень у источника некруглый (~10 %)
+        RenderSystem.disableBlend();
+        for (int k = first - 1; k >= 1; k--) pass(up, k, LEVEL[k + 1], LEVEL_W[k + 1], LEVEL_H[k + 1]);
+        PYRAMID.end(timed);
+        // на кадр: вокруг светящегося, кривая и «экран»
+        int shown = OUT.begin();
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
+        GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+        RenderSystem.enableBlend();
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_COLOR, GlStateManager.SourceFactor.ZERO,
+                GlStateManager.DestFactor.ONE);
+        ShaderInstance s = out;
+        s.setSampler("Sampler1", cover);
+        s.safeGetUniform("BloomStep").set(1f / LEVEL_W[1], 1f / LEVEL_H[1], (float) (SHARE / (last - first + 1)), 0f);
+        s.safeGetUniform("BloomFrom").set((float) VIEWPORT[0], (float) VIEWPORT[1]);
+        s.safeGetUniform("BloomCover").set(1f / ((1 << g) * LEVEL_W[g]), 1f / ((1 << g) * LEVEL_H[g]));
+        begin(s, LEVEL[1]);
+        GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
+        s.clear();
+        // свой массив вершин был привязан мимо BufferUploader: его привязку он помнит и не повторил бы
+        GlStateManager._glBindVertexArray(0);
+        BufferUploader.invalidate();
+        OUT.end(shown);
+    }
+
+    /** Применить шейдер s с текстурой src в Sampler0 (серия проходов дальше меняет только цель, текстуру и шаг). */
+    private static void begin(ShaderInstance s, int src) {
+        s.setSampler("Sampler0", src);
+        s.apply();
+    }
+
+    /** Проход в уровень k применённым шейдером s из текстуры src размера sw×sh. */
     private static void pass(ShaderInstance s, int k, int src, int sw, int sh) {
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, LEVEL_FBO[k]);
         GlStateManager._viewport(0, 0, LEVEL_W[k], LEVEL_H[k]);
-        s.safeGetUniform("BloomStep").set(1f / sw, 1f / sh, 0f, 0f);
-        RenderSystem.setShaderTexture(0, src);
-        quad(s);
-    }
-
-    /** Четырёхугольник во весь привязанный кадр шейдером s. */
-    private static void quad(ShaderInstance s) {
-        BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
-        b.addVertex(-1, -1, 0);
-        b.addVertex(1, -1, 0);
-        b.addVertex(1, 1, 0);
-        b.addVertex(-1, 1, 0);
-        MeshData mesh = b.build();
-        if (mesh == null) return;
-        s.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
-                Minecraft.getInstance().getWindow());
-        s.apply();
-        BufferUploader.draw(mesh);
-        s.clear();
-    }
-
-    /** Свойство pname вложения att привязанного кадра. */
-    private static int attachment(int att, int pname) {
-        return GL30.glGetFramebufferAttachmentParameteri(GL30.GL_DRAW_FRAMEBUFFER, att, pname);
-    }
-
-    private static void attach(int att, int type, int name) {
-        if (type == GL11.GL_TEXTURE) {
-            GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, att, GlConst.GL_TEXTURE_2D, name, 0);
-        } else if (type == GL30.GL_RENDERBUFFER) {
-            GL30.glFramebufferRenderbuffer(GL30.GL_DRAW_FRAMEBUFFER, att, GL30.GL_RENDERBUFFER, name);
-        } else {
-            GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, att, GlConst.GL_TEXTURE_2D, 0, 0);
+        com.mojang.blaze3d.shaders.Uniform step = s.getUniform("BloomStep");
+        if (step != null) {
+            step.set(1f / sw, 1f / sh, 0f, 0f);
+            step.upload();
         }
+        GlStateManager._activeTexture(GL13.GL_TEXTURE0);
+        GlStateManager._bindTexture(src);
+        GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
     }
 
-    /** Цель излучения w×h и уровни пирамиды (R11F_G11F_B10F, линейная выборка, край — «по краю»); false — не завести. */
+    /** Свой массив вершин: треугольник во весь кадр (−1, −1), (3, −1), (−1, 3) — без шва по диагонали. */
+    private static int triangle = -1;
+
+    private static void triangle() {
+        if (triangle >= 0) {
+            GlStateManager._glBindVertexArray(triangle);
+            return;
+        }
+        triangle = GlStateManager._glGenVertexArrays();
+        GlStateManager._glBindVertexArray(triangle);
+        int buffer = GlStateManager._glGenBuffers();
+        GlStateManager._glBindBuffer(GL15.GL_ARRAY_BUFFER, buffer);
+        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, new float[]{-1, -1, 0, 3, -1, 0, -1, 3, 0}, GL15.GL_STATIC_DRAW);
+        // место Position — первое: шейдеры проходов собраны с форматом POSITION
+        GlStateManager._enableVertexAttribArray(0);
+        GlStateManager._vertexAttribPointer(0, 3, GL11.GL_FLOAT, false, 12, 0);
+    }
+
+    /**
+     * Уровни пирамиды кадра w×h (R11F_G11F_B10F, линейная выборка, край — «по краю»; уровень {@link #glowLevel} —
+     * излучение прохода свечения) и доля светящегося (R8, того же размера); false — не завести.
+     */
     private static boolean target(int w, int h) {
-        if (glow >= 0 && glowW == w && glowH == h) return true;
+        if (fbo >= 0 && frameW == w && frameH == h) return true;
         int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
-        glow = texture(glow, w, h);
-        glowW = w;
-        glowH = h;
         boolean ok = true;
         for (int k = 1; k <= MAX; k++) {
             LEVEL_W[k] = size(w, k);
             LEVEL_H[k] = size(h, k);
-            LEVEL[k] = texture(LEVEL[k], LEVEL_W[k], LEVEL_H[k]);
+            LEVEL[k] = texture(LEVEL[k], LEVEL_W[k], LEVEL_H[k], GL30.GL_R11F_G11F_B10F);
             if (LEVEL_FBO[k] < 0) LEVEL_FBO[k] = GlStateManager.glGenFramebuffers();
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, LEVEL_FBO[k]);
             GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, LEVEL[k], 0);
             ok &= GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE;
         }
+        int g = glowLevel(h);
+        cover = texture(cover, LEVEL_W[g], LEVEL_H[g], GL30.GL_R8);
+        if (fbo < 0) fbo = GlStateManager.glGenFramebuffers();
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
+        GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, LEVEL[g], 0);
+        GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT1, GlConst.GL_TEXTURE_2D, cover, 0);
+        GL20.glDrawBuffers(new int[]{GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1});
+        ok &= GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE;
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+        frameW = w;
+        frameH = h;
         if (!ok) {
-            Incoming.LOG.error("Effects bloom: pyramid for {}×{} not created, no bloom", w, h);
+            Incoming.LOG.error("Effects bloom: targets for {}×{} not created, no bloom", w, h);
             failed = true;
         }
         return ok;
     }
 
-    private static int texture(int id, int w, int h) {
+    private static int texture(int id, int w, int h, int format) {
         if (id < 0) {
             id = GlStateManager._genTexture();
             GlStateManager._bindTexture(id);
@@ -387,18 +439,21 @@ public final class FxBloom {
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
         }
         GlStateManager._bindTexture(id);
-        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_R11F_G11F_B10F, w, h, 0, GL11.GL_RGB, GL11.GL_FLOAT, null);
+        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, format, w, h, 0, GL11.GL_RGB, GL11.GL_FLOAT, null);
         return id;
     }
 
     /** Раз в секунду (тик слоя). */
     static void second() {
         GPU.second();
+        PASS.second();
+        PYRAMID.second();
+        OUT.second();
     }
 
     /** Для строки сценария: время проходов свечения и уровни. */
     static String describe() {
-        return String.format(Locale.ROOT, "bloom %.3f ms (longest %.3f, %d frames; %dx%d, levels %d-%d)", GPU.lastMean, GPU.lastMax, GPU.lastFrames,
-                glowW, glowH, lastFirst, lastLast);
+        return String.format(Locale.ROOT, "bloom %.3f ms (longest %.3f, %d frames; glow pass %.3f, pyramid %.3f, out %.3f; %dx%d, levels %d-%d)",
+                GPU.lastMean, GPU.lastMax, GPU.lastFrames, PASS.lastMean, PYRAMID.lastMean, OUT.lastMean, frameW, frameH, lastFirst, lastLast);
     }
 }

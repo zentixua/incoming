@@ -24,15 +24,21 @@ class FxBloomTest {
         return Files.readString(SHADERS.resolve(path)).replaceAll("//[^\n]*", "");
     }
 
-    /** Точка энергии 1 в (x, y) пикселей кадра (между середин — долями соседей, как сдвиг на долю пикселя). */
+    /**
+     * Излучение прохода свечения (уровень {@link FxBloom#glowLevel} кадра w×h) с точкой энергии 1 в пикселях кадра (пиксель
+     * уровня g — 4^g пикселей кадра) в (x, y) пикселей кадра; между середин — долями соседей, как сдвиг на долю пикселя.
+     */
     private static FxBloom.Image point(int w, int h, double x, double y) {
-        FxBloom.Image e = FxBloom.Image.of(w, h);
-        int i = (int) Math.floor(x - 0.5), j = (int) Math.floor(y - 0.5);
-        double fx = x - 0.5 - i, fy = y - 0.5 - j;
-        e.v()[j * w + i] += (float) ((1 - fx) * (1 - fy));
-        e.v()[j * w + i + 1] += (float) (fx * (1 - fy));
-        e.v()[(j + 1) * w + i] += (float) ((1 - fx) * fy);
-        e.v()[(j + 1) * w + i + 1] += (float) (fx * fy);
+        int g = FxBloom.glowLevel(h), gw = FxBloom.size(w, g), gh = FxBloom.size(h, g);
+        double k = 1 << g, e0 = 1 / (k * k);
+        FxBloom.Image e = FxBloom.Image.of(gw, gh);
+        double px = x / k, py = y / k;
+        int i = (int) Math.floor(px - 0.5), j = (int) Math.floor(py - 0.5);
+        double fx = px - 0.5 - i, fy = py - 0.5 - j;
+        e.v()[j * gw + i] += (float) (e0 * (1 - fx) * (1 - fy));
+        e.v()[j * gw + i + 1] += (float) (e0 * fx * (1 - fy));
+        e.v()[(j + 1) * gw + i] += (float) (e0 * (1 - fx) * fy);
+        e.v()[(j + 1) * gw + i + 1] += (float) (e0 * fx * fy);
         return e;
     }
 
@@ -45,9 +51,10 @@ class FxBloomTest {
     void haloFollowsTheEyeScatterLaw() {
         int w = 2560, h = 1600, cx = 1280, cy = 800;
         assertEquals(3, FxBloom.first(h), "уровни как у пака: на октаву глубже 1080");
+        assertEquals(2, FxBloom.glowLevel(h), "проход излучения — на октаву мельче первого уровня ореола");
         int levels = FxBloom.last(w, h) - FxBloom.first(h) + 1;
         assertEquals(FxBloom.LEVELS, levels);
-        FxBloom.Image b = FxBloom.halo(point(w, h, cx, cy));
+        FxBloom.Image b = FxBloom.halo(point(w, h, cx, cy), w, h);
         assertEquals(1, b.sum(), 0.03, "энергия ореола — энергия источника");
         double law = 1 / (levels * 2 * Math.PI * Math.log(2)), previous = Double.MAX_VALUE;
         for (int r = 1; r <= 700; r += 1) {
@@ -74,10 +81,10 @@ class FxBloomTest {
     @Test
     void movingSourceKeepsItsHalo() {
         int w = 2560, h = 1600;
-        FxBloom.Image ref = FxBloom.halo(point(w, h, 1000, 700));
+        FxBloom.Image ref = FxBloom.halo(point(w, h, 1000, 700), w, h);
         double near = ref.at(1000 + 40, 700);
         for (double dx = 0.125; dx < 1; dx += 0.125) {
-            FxBloom.Image b = FxBloom.halo(point(w, h, 1000 + dx, 700 + 0.5 * dx));
+            FxBloom.Image b = FxBloom.halo(point(w, h, 1000 + dx, 700 + 0.5 * dx), w, h);
             assertEquals(ref.sum(), b.sum(), 0.002 * ref.sum(), "энергия, сдвиг " + dx);
             assertEquals(near, b.at(1000 + 40, 700), 0.05 * near, "ореол в 40 пикселях, сдвиг " + dx);
         }
@@ -96,22 +103,27 @@ class FxBloomTest {
         assertTrue(up.contains("uv = gl_FragCoord.xy * 0.5 * d"), "вверх: пиксель — точка ((x + ½)/2, (y + ½)/2) мельчайшего");
         assertTrue(up.contains("(corners + 2.0 * sides + 4.0 * at(uv, d, 0.0, 0.0)) / 16.0"), "вверх: шатёр");
         String out = read("core/fx_bloom.fsh").replaceAll("\\s+", " ");
-        assertTrue(out.contains("texture(Sampler0, at * 0.5 * BloomStep.xy).rgb * BloomStep.z"), "на кадр: первый уровень, доля на число уровней");
+        assertTrue(out.contains("vec2 uv = at * 0.5 * BloomStep.xy;"), "на кадр: пиксель — точка ((x + ½)/2, (y + ½)/2) половины кадра");
+        assertTrue(out.contains("texture(Sampler0, uv).rgb * BloomStep.z * (1.0 - own)"), "доля на число уровней, вокруг светящегося");
     }
 
     /**
-     * Излучение пишет тот же фрагмент, что и цвет ({@code fx.fsh}), — значит, его режет та же глубина (стены, рельеф): что
-     * за ними, не светится и не даёт ореола; и та же видимая доля (мягкий край у мира и LOD, у камеры, туман) и пелена
-     * перед ним. Альфа излучения — альфа цвета: дым перед огнём гасит его излучение той же долей.
+     * Проход свечения — тот же шейдер, что у цвета ({@code fx.fsh}, {@code FxGlowPass}): излучение берёт ту же видимую долю
+     * (мягкий край у мира и LOD, у камеры, туман) и пелену перед ним, альфа — альфа цвета (дым перед огнём гасит его
+     * излучение и долю светящегося той же долей), а что за миром, отбрасывает по расстоянию до мира: в половине кадра
+     * аппаратной глубины нет. Проход слоя — как без свечения.
      */
     @Test
     void glowIsCutLikeTheColour() throws IOException {
         String fsh = read("core/fx.fsh").replaceAll("\\s+", " ");
         assertTrue(fsh.contains("fragColor = color * seen * ColorModulator;"), "цвет — с видимой долей");
-        assertTrue(fsh.contains("fragGlow = vec4(glow * seen * ColorModulator.rgb, fragColor.a);"), "излучение — с той же долей и альфой цвета");
+        assertTrue(fsh.contains("fragColor = vec4(glow * seen * ColorModulator.rgb, fragColor.a);"), "излучение — с той же долей и альфой цвета");
+        assertTrue(fsh.contains("fragCover = vec4(own, 0.0, 0.0, fragColor.a);"), "доля светящегося — с альфой цвета: дым перед огнём её убавляет");
         assertTrue(fsh.contains("glow *= front;"), "пелена перед огнём гасит и излучение");
         assertTrue(!fsh.contains("color *="), "цвет не гасится мимо видимой доли");
-        assertTrue(fsh.contains("seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);"), "мягкий край у мира — в видимой доле");
+        assertTrue(fsh.contains("if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);"), "мягкий край у мира — в видимой доле");
+        assertTrue(fsh.contains("if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;"), "что за миром, не светится");
+        assertTrue(fsh.contains("float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);"), "расстояние до мира — у пикселя кадра, не прохода");
     }
 
     /** Законы шейдеров ({@code bloom.glsl}) — те же, что в Java: код пересвета, белая точка, кривая ореола. */

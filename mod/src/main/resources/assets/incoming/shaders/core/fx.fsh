@@ -54,10 +54,16 @@ uniform vec3 FxSixLight;
 // оттенок света неба у клубов (FarView.sky против его яркости, линейно): цвет вершины клуба несёт только яркость
 uniform vec3 FxSkyTint;
 
+// Проход слоя — цвет; проход свечения (FxBloom, FxGlowPass.x = 1) — излучение, что доходит до глаза: rgb — линейный свет
+// (белый экран — 1) с умноженной альфой, альфа — та же, что у цвета. Смешивание то же: дым перед огнём гасит излучение
+// той же долей
 layout(location = 0) out vec4 fragColor;
-// Излучение, что доходит до глаза (FxBloom): rgb — линейный свет (белый экран — 1) с умноженной альфой, альфа — та же,
-// что у цвета. Смешивание то же: дым перед огнём гасит его излучение той же долей, глубина — та же (один фрагмент)
-layout(location = 1) out vec4 fragGlow;
+// Проход свечения: доля пикселя, которую занимает само светящееся. Огонь показан своей экспозицией, и его ореол,
+// посчитанный с пересветом модели, на нём самом высветлил бы складки и сажу — ореол ложится вокруг
+layout(location = 1) out vec4 fragCover;
+// x: 1 — проход свечения (на уровне пирамиды FxBloom.glowLevel: излучение и доля светящегося, без света на дыме; что за
+// миром — по расстоянию до мира, аппаратной глубины у него нет); y — во сколько раз пиксель прохода крупнее пикселя кадра
+uniform vec2 FxGlowPass;
 
 // Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
 // с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по квадратам косинусов (в сумме
@@ -109,6 +115,22 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     vec3 lb0 = pow(b0.rgb / max(b0.a, 1e-3), vec3(2.2)), lb1 = pow(b1.rgb / max(b1.a, 1e-3), vec3(2.2));
     a = vec4(mix(la0, la1, m), mix(a0.a, a1.a, m));
     b = mix(lb0, lb1, m);
+}
+
+// Непрозрачность кадра клуба со смесью — те же места, что у sixFrames, без карт света: проходу свечения дым только гасит
+float sixAlpha(vec2 uv, vec2 dx, vec2 dy, float m) {
+    vec2 tile = FxSix.zw;
+    vec2 cell = floor(vec2(uv.x / tile.x, (uv.y - FxSix.y) / tile.y));
+    vec2 origin = vec2(cell.x * tile.x, FxSix.y + cell.y * tile.y);
+    vec2 next = origin + vec2(tile.x, 0.0);
+    if (cell.x > 6.5) next = vec2(0.0, origin.y + tile.y);
+    vec2 local = uv - origin;
+    vec4 v = textureGrad(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), dx, dy);
+    vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
+    vec2 edge = 0.5 / vec2(textureSize(Sampler0, 0));
+    vec2 uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
+    vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
+    return mix(textureGrad(Sampler0, uv0, dx, dy).a, textureGrad(Sampler0, uv1, dx, dy).a, m);
 }
 
 // Кадры огня — как у запечённого клуба (sixFrames): кадр k и следующий, сдвинутые вдоль векторов движения кадра k на
@@ -180,6 +202,8 @@ void main() {
     vec3 sixLit = vec3(1.0);
     if (nearest > 0.75) {
         tex = particle(texCoord0, dx, dy, lod);
+    } else if (six && FxGlowPass.x > 0.5) {
+        tex = vec4(sixAlpha(texCoord0, dx, dy, opacity));
     } else if (six) {
         vec4 a;
         vec3 b;
@@ -227,17 +251,19 @@ void main() {
     // в мутную дымку вокруг облака. Вдали (клуб мельче 16 пикселей) — без среза: дальний дым и так бледный
     if (nearest > 0.75 && tex.a * opacity < 0.1 * clamp(2.0 - lod, 0.0, 1.0)) discard;
     vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a);
+    // пиксель кадра (у прохода свечения — крупнее)
+    vec2 frag = gl_FragCoord.xy * FxGlowPass.y;
     vec3 glow = vec3(0.0);
     // частицы и кадры огня — с умноженной альфой
     float cover = 0.0;
     if (nearest > 0.55) cover = 1.0;
-    if (emitGain > 0.0) glow = bloomLight(color, cover, emitGain);
+    if (FxGlowPass.x > 0.5 && emitGain > 0.0) glow = bloomLight(color, cover, emitGain);
     if (PallAmbient.w > 0.5) {
         // пелена перед квадратом: его свет ослаблен, а закрытое им — уже её свет до него (пелена на кадре — до мира).
         // Квадрат ближе мира: перед ним пелены не больше, чем на кадре до мира, — и её свет до него — доля света пелены
         // на кадре по доле ослабления. Средний свет годится только там, где пелены на кадре почти нет: иначе клуб за
         // густой пеленой выходил бы пятном другого цвета (вдали — светлыми точками на тёмной пелене)
-        vec4 frame = texture(Sampler6, gl_FragCoord.xy / ScreenSize);
+        vec4 frame = texture(Sampler6, frag / ScreenSize);
         // негодный пиксель пелены (NaN, бесконечность) — пелены перед квадратом нет: NaN дал бы чёрный квадрат
         if (!pallValid(frame)) frame = vec4(0.0, 0.0, 0.0, 1.0);
         float front = max(pallFront, frame.a);
@@ -247,11 +273,13 @@ void main() {
     }
     // видимая доля квадрата — у цвета и излучения одна
     float seen = 1.0;
-    if (FxScene > 0.5 && softness > 0.0) {
+    if (FxScene > 0.5 && (softness > 0.0 || FxGlowPass.x > 0.5)) {
         // клуб тает, входя в землю и стены, и пропадает за рельефом (и за LOD Distant Horizons)
         // негодное расстояние (NaN, за глазом) — мира за пикселем нет, как у неба
-        float scene = pallScene(texture(Sampler1, gl_FragCoord.xy / ScreenSize).r);
-        seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
+        float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);
+        if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
+        // проход свечения без аппаратной глубины: что за миром, не светится и не гасит (у слоя это режет глубина кадра)
+        if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;
     }
     // у самой камеры квадрат не режет экран краем ближней плоскости
     seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);
@@ -259,5 +287,12 @@ void main() {
     // тумана у края прорисовки закрывало бы ленты шлейфов и дальнюю картинку взрывов, которые сменяют частицы там
     seen *= 1.0 - fog * FxFogColor.a;
     fragColor = color * seen * ColorModulator;
-    fragGlow = vec4(glow * seen * ColorModulator.rgb, fragColor.a);
+    fragCover = vec4(0.0);
+    if (FxGlowPass.x > 0.5) {
+        // светящееся занимает пиксель своей непрозрачностью (у ядер и факела, что только светят, — своим светом)
+        float own = 0.0;
+        if (emitGain > 0.0) own = clamp(max(fragColor.a, max(fragColor.r, max(fragColor.g, fragColor.b))), 0.0, 1.0);
+        fragCover = vec4(own, 0.0, 0.0, fragColor.a);
+        fragColor = vec4(glow * seen * ColorModulator.rgb, fragColor.a);
+    }
 }

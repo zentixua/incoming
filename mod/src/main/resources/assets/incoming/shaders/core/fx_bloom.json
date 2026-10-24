@@ -2,10 +2,12 @@
     "vertex": "incoming:fx_depth",
     "fragment": "incoming:fx_bloom",
     "samplers": [
-        { "name": "Sampler0" }
+        { "name": "Sampler0" },
+        { "name": "Sampler1" }
     ],
     "uniforms": [
         { "name": "BloomStep", "type": "float", "count": 4, "values": [ 1.0, 1.0, 0.0, 0.0 ] },
-        { "name": "BloomFrom", "type": "float", "count": 2, "values": [ 0.0, 0.0 ] }
+        { "name": "BloomFrom", "type": "float", "count": 2, "values": [ 0.0, 0.0 ] },
+        { "name": "BloomCover", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] }
     ]
 }

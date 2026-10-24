@@ -331,13 +331,10 @@ public final class FxLayer {
             RenderSystem.depthMask(false);
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
-            // свечение огня, шара, вспышки и факела: квадраты пишут ещё и излучение, после них — ореол на кадр (FxBloom)
-            boolean bloom = FxBloom.begin(QUADS.glows());
-            try {
-                QUADS.draw();
-            } finally {
-                if (bloom) FxBloom.end();
-            }
+            s.safeGetUniform("FxGlowPass").set(0f, 1f);
+            QUADS.draw();
+            // свечение огня, шара, вспышки и факела: излучение — ещё одним проходом части квадратов, ореол — на кадр (FxBloom)
+            FxBloom.draw(QUADS, s, VIEW_PROJECTION);
             GPU.end(timed);
         } finally {
             light.turnOffLightLayer();
