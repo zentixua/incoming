@@ -1,0 +1,466 @@
+{
+  "main": {
+    "sam-upwind-day": {
+      "name": "r2-sam-upwind-day",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        90.0,
+        20.0,
+        48.0,
+        40.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 6152260,
+        "from": 0.0,
+        "seconds": 12.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.004,
+          "file": "r2-sam-upwind-day_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.002,
+          "file": "r2-sam-upwind-day_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.003,
+          "file": "r2-sam-upwind-day_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.01,
+          "file": "r2-sam-upwind-day_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.008,
+          "file": "r2-sam-upwind-day_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "sam-upwind-night": {
+      "name": "r2-sam-upwind-night",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        90.0,
+        20.0,
+        48.0,
+        40.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 31211588,
+        "from": 0.0,
+        "seconds": 12.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.012,
+          "file": "r2-sam-upwind-night_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.007,
+          "file": "r2-sam-upwind-night_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.011,
+          "file": "r2-sam-upwind-night_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.013,
+          "file": "r2-sam-upwind-night_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.013,
+          "file": "r2-sam-upwind-night_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "sam-day-side": {
+      "name": "r2-sam-day-side",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        45.0,
+        4.0,
+        270.0,
+        22.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 43737156,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 0.25,
+          "age": 0.257,
+          "file": "r2-sam-day-side_000.25s.png",
+          "fps": 62
+        },
+        {
+          "t": 1.0,
+          "age": 1.014,
+          "file": "r2-sam-day-side_001.00s.png",
+          "fps": 63
+        },
+        {
+          "t": 3.0,
+          "age": 3.01,
+          "file": "r2-sam-day-side_003.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.006,
+          "file": "r2-sam-day-side_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.011,
+          "file": "r2-sam-day-side_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.005,
+          "file": "r2-sam-day-side_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.002,
+          "file": "r2-sam-day-side_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "sam-night-side": {
+      "name": "r2-sam-night-side",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        45.0,
+        4.0,
+        270.0,
+        22.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 18677828,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.015,
+          "file": "r2-sam-night-side_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 3.0,
+          "age": 3.011,
+          "file": "r2-sam-night-side_003.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.008,
+          "file": "r2-sam-night-side_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.01,
+          "file": "r2-sam-night-side_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.015,
+          "file": "r2-sam-night-side_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.013,
+          "file": "r2-sam-night-side_060.00s.png",
+          "fps": 63
+        }
+      ]
+    }
+  },
+  "TL": {
+    "sam-upwind-day": {
+      "name": "r2-sam-upwind-day",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        90.0,
+        20.0,
+        48.0,
+        40.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 3297348,
+        "from": 0.0,
+        "seconds": 12.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.006,
+          "file": "r2-sam-upwind-day_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.001,
+          "file": "r2-sam-upwind-day_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.0,
+          "file": "r2-sam-upwind-day_015.00s.png",
+          "fps": 63
+        },
+        {
+          "t": 30.0,
+          "age": 30.001,
+          "file": "r2-sam-upwind-day_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.005,
+          "file": "r2-sam-upwind-day_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "sam-upwind-night": {
+      "name": "r2-sam-upwind-night",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        90.0,
+        20.0,
+        48.0,
+        40.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 30081092,
+        "from": 0.0,
+        "seconds": 12.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.002,
+          "file": "r2-sam-upwind-night_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.01,
+          "file": "r2-sam-upwind-night_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.014,
+          "file": "r2-sam-upwind-night_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.002,
+          "file": "r2-sam-upwind-night_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.012,
+          "file": "r2-sam-upwind-night_060.00s.png",
+          "fps": 62
+        }
+      ]
+    },
+    "sam-day-side": {
+      "name": "r2-sam-day-side",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        45.0,
+        4.0,
+        270.0,
+        22.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 42618948,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 0.25,
+          "age": 0.253,
+          "file": "r2-sam-day-side_000.25s.png",
+          "fps": 62
+        },
+        {
+          "t": 1.0,
+          "age": 1.009,
+          "file": "r2-sam-day-side_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 3.0,
+          "age": 3.006,
+          "file": "r2-sam-day-side_003.00s.png",
+          "fps": 63
+        },
+        {
+          "t": 5.0,
+          "age": 5.003,
+          "file": "r2-sam-day-side_005.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 15.0,
+          "age": 15.0,
+          "file": "r2-sam-day-side_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.005,
+          "file": "r2-sam-day-side_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.006,
+          "file": "r2-sam-day-side_060.00s.png",
+          "fps": 63
+        }
+      ]
+    },
+    "sam-night-side": {
+      "name": "r2-sam-night-side",
+      "effect": "sam",
+      "site": [
+        0.5,
+        65.0,
+        0.5
+      ],
+      "camera": [
+        45.0,
+        4.0,
+        270.0,
+        22.0
+      ],
+      "audio": {
+        "file": "sandbox/audio.wav",
+        "start": 17563716,
+        "from": 0.0,
+        "seconds": 0.0
+      },
+      "frames": [
+        {
+          "t": 1.0,
+          "age": 1.011,
+          "file": "r2-sam-night-side_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 3.0,
+          "age": 3.009,
+          "file": "r2-sam-night-side_003.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 5.0,
+          "age": 5.005,
+          "file": "r2-sam-night-side_005.00s.png",
+          "fps": 63
+        },
+        {
+          "t": 15.0,
+          "age": 15.002,
+          "file": "r2-sam-night-side_015.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 30.0,
+          "age": 30.006,
+          "file": "r2-sam-night-side_030.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 60.0,
+          "age": 60.0,
+          "file": "r2-sam-night-side_060.00s.png",
+          "fps": 62
+        }
+      ]
+    }
+  }
+}
