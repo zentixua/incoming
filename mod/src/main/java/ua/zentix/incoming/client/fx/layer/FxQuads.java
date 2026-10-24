@@ -300,11 +300,11 @@ public final class FxQuads {
         }
         PuffTarget.mergeMeshBounds(bounds,meshGroups,n,firstMesh);
         int visible = visibleOrder(order, frameBounds, n);
-        if (!PuffTarget.begin(shader, scene, bounds, n,order,visible,resolution)) {
+        if (!PuffTarget.begin(shader, scene, bounds, n)) {
             if (visible > 0) draw(order, 0, visible);
             return;
         }
-        for (int i = 0; i < n; i++) resolution[i] = !reducible[i] || resolution[i]==1 ? 1 : PuffTarget.resolution();
+        for (int i = 0; i < n; i++) resolution[i] = reducible[i] ? PuffTarget.resolution() : 1;
         // One upload for all ranges. Rebuilding an immediate MeshData and its uniforms per group costs CPU at a raid.
         if (gpu == null) gpu = new VertexBuffer(VertexBuffer.Usage.DYNAMIC);
         gpu.bind();

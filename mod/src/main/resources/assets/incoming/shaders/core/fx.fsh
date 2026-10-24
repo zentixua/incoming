@@ -161,6 +161,25 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
     vec3 lb0 = pow(b0.rgb / max(b0.a, 1e-3), vec3(2.2)), lb1 = pow(b1.rgb / max(b1.a, 1e-3), vec3(2.2));
     a = vec4(mix(la0, la1, m), mix(a0.a, a1.a, m));
     b = mix(lb0, lb1, m);
+    // Presentation detail: the calibrated opacity keeps its full physical support, but its transparent
+    // padding must not magnify every light-map billow. Reuse the same gas at a finer light-only scale.
+    if (analytic) {
+        vec2 fine = tile * 0.5 + 2.0 * (local - tile * 0.5);
+        if (all(greaterThan(fine, vec2(0.0))) && all(lessThan(fine, tile))) {
+            vec2 fineEdge = frameInset(2.0*sqrt(max(dot(gx,gx),dot(gy,gy))))/size;
+            vec2 f0 = clamp(origin + fine - flow * m, origin + fineEdge, origin + tile - fineEdge);
+            vec2 f1 = clamp(next + fine + flow * (1.0 - m), next + fineEdge, next + tile - fineEdge);
+            vec4 fa0 = textureGrad(Sampler0, f0, 2.0*dx, 2.0*dy), fa1 = textureGrad(Sampler0, f1, 2.0*dx, 2.0*dy);
+            vec4 fb0 = textureGrad(Sampler0, f0 + vec2(0.0,FxSix.x), 2.0*dx, 2.0*dy), fb1 = textureGrad(Sampler0, f1 + vec2(0.0,FxSix.x), 2.0*dx, 2.0*dy);
+            float fineAlpha = mix(fa0.a, fa1.a, m);
+            float weight = 0.65*smoothstep(0.002,0.02,fineAlpha);
+            vec3 lightA = mix(pow(fa0.rgb/max(fa0.a,1e-3),vec3(2.2)),pow(fa1.rgb/max(fa1.a,1e-3),vec3(2.2)),m);
+            vec3 lightB = mix(pow(fb0.rgb/max(fb0.a,1e-3),vec3(2.2)),pow(fb1.rgb/max(fb1.a,1e-3),vec3(2.2)),m);
+            a.rgb *= mix(vec3(1.0),lightA/FxSixLight.z,weight);
+            b *= mix(vec3(1.0),lightB/FxSixLight.z,weight);
+        }
+    }
+
 }
 
 // Кадры огня — как у запечённого клуба (sixFrames): кадр k и следующий, сдвинутые вдоль векторов движения кадра k на

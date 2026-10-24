@@ -639,6 +639,8 @@ final class SmokePuffs {
          */
         private double blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
                             int id, double coverage) {
+            // World Gaussians are raster-budgeted after projection; the legacy cluster planning pass emits nothing.
+            if (planning) return 0;
             Vec3 eye = view.camera();
             // на экране — проекция гаусса по углу взгляда (толща по лучу и высота квадрата); в мире — его σ (разброс клубов
             // кучки, край для рельефа и для глаза внутри)
@@ -661,7 +663,6 @@ final class SmokePuffs {
             double air = view.air(d, py);
             if (air < Sight.THRESHOLD) return 0;
             {
-                if (planning) return 0;
                 long hash = mix(seed * 0x9E3779B97F4A7C15L + id);
                 float light = (float) ((0.88 + 0.24 * unit(hash)) * view.skyLight());
                 int frame = (int) clubAge;
