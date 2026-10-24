@@ -69,7 +69,9 @@ All of these are optional:
 - **Explosion Overhaul** and other mods that react to explosions: every explosion of a conventional strike carries its
   projectile as the source (`incoming:drone`, `incoming:loiter`, `incoming:cruise_missile`, `incoming:rocket`,
   `incoming:bunker_buster`), so they can treat Incoming's strikes on their own. To keep Incoming's own blasts with
-  Explosion Overhaul, set these ids to `VANILLA` in its `config/explosionoverhaul/ExplosionSourceBlacklist.json`.
+  Explosion Overhaul, set these ids to `VANILLA` in its `config/explosionoverhaul/ExplosionSourceBlacklist.json`. To let
+  Explosion Overhaul handle them instead, keep its mode for these ids and turn off "Incoming's blast effects" in
+  Incoming's client settings, so the two mods do not draw and play the same blast twice.
 - **Iris**: the nuclear effects render with shaders.
 - **Flashback**: replays show strikes, and seeking through a replay does not set off explosions again.
 

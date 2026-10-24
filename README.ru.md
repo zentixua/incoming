@@ -66,7 +66,9 @@
 - **Explosion Overhaul** и другие моды, которые отзываются на взрывы: у каждого взрыва обычного удара источник — его снаряд
   (`incoming:drone`, `incoming:loiter`, `incoming:cruise_missile`, `incoming:rocket`, `incoming:bunker_buster`), и они
   могут настроить удары Incoming отдельно. Чтобы с Explosion Overhaul взрывы оставались взрывами Incoming, поставьте
-  этим id `VANILLA` в его `config/explosionoverhaul/ExplosionSourceBlacklist.json`.
+  этим id `VANILLA` в его `config/explosionoverhaul/ExplosionSourceBlacklist.json`. Чтобы взрывы вёл Explosion
+  Overhaul, оставьте этим id его режим и выключите «Свои эффекты взрыва» в настройках клиента Incoming: тогда два мода
+  не покажут и не озвучат один взрыв дважды.
 - **Iris**: ядерная картинка рисуется и под шейдерами.
 - **Flashback**: удары видны в повторах, а перемотка повтора не взрывает их заново.
 
