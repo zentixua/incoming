@@ -1,0 +1,11 @@
+{
+  "head": "cd310f2bbf9f5cc870527e56356c725b4ca31ded",
+  "base": "cd310f2bbf9f5cc870527e56356c725b4ca31ded",
+  "main_at_capture": "cd310f2bbf9f5cc870527e56356c725b4ca31ded",
+  "dirty": "M mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java\n M mod/src/devtest/java/ua/zentix/incoming/scenario/SandboxCommand.java",
+  "profile": "quiet",
+  "renderer": "dev sandbox, native GPU, no Iris",
+  "fixture": "dev-only stance/weather + VSync off / 60 FPS patch",
+  "vsync": false,
+  "fps_limit": 60
+}

@@ -1,0 +1,91 @@
+{
+  "name": "r2-wet50",
+  "effect": "blast drone 7",
+  "site": [
+    0.5,
+    65.0,
+    0.5
+  ],
+  "camera": [
+    50.0,
+    1.6,
+    0.0,
+    3.0
+  ],
+  "audio": {
+    "file": "wet50.wav",
+    "start": 8126532,
+    "from": 0.0,
+    "seconds": 4.0
+  },
+  "frames": [
+    {
+      "t": 0.0,
+      "age": 0.013,
+      "file": "r2-wet50_000.00s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.02,
+      "age": 0.039,
+      "file": "r2-wet50_000.02s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.03,
+      "age": 0.056,
+      "file": "r2-wet50_000.03s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.05,
+      "age": 0.073,
+      "file": "r2-wet50_000.05s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.07,
+      "age": 0.089,
+      "file": "r2-wet50_000.07s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.08,
+      "age": 0.106,
+      "file": "r2-wet50_000.08s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.13,
+      "age": 0.156,
+      "file": "r2-wet50_000.13s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.22,
+      "age": 0.248,
+      "file": "r2-wet50_000.22s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.47,
+      "age": 0.504,
+      "file": "r2-wet50_000.47s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.95,
+      "age": 0.992,
+      "file": "r2-wet50_000.95s.png",
+      "fps": 59
+    },
+    {
+      "t": 3.0,
+      "age": 3.003,
+      "file": "r2-wet50_003.00s.png",
+      "fps": 59
+    }
+  ],
+  "continuous_frames_total": 122,
+  "note": "Selected original PNGs. Continuous first-two-second frames are in the movie; full local capture retained."
+}

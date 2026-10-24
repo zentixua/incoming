@@ -1,3 +1,7 @@
+Revision 2 (Claude round-1 fixes): [new captures, movies, WAVs and limits](r2/README.md).
+
+The material below is the round-1 archive.
+
 # WV — conventional shock front and camera evidence (PR #425)
 
 Ground-hit Shahed, 50 kg TNT in the current passport, seed 7. Captured in the dev sandbox, without Iris, on the laptop in its quiet power profile. Requested window: 1280×720; actual framebuffer: **1280×692**. Camera shake: 1.0, music: 0.0, tinnitus enabled. No original Prism instance, game settings or user world was changed.

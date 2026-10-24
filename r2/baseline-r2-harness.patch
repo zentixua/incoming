@@ -1,0 +1,66 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+index 66035ca1..bf36318e 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+@@ -371,6 +371,24 @@ final class Sandbox {
+                 placeCamera();
+                 finish("ok");
+             }
++            case STANCE -> {
++                boolean stand = c.args().getFirst().equals("stand");
++                // Только игрок своей dev-песочницы: в spectator он летает, и качания тела на ногах не видно.
++                var id = mc.player.getUUID();
++                onServer(false, s -> {
++                    var p = s.getPlayerList().getPlayer(id);
++                    if (p == null) return;
++                    p.setGameMode(stand ? GameType.CREATIVE : GameType.SPECTATOR);
++                    p.getAbilities().flying = !stand;
++                    p.onUpdateAbilities();
++                });
++                finish("ok");
++            }
++            case WEATHER -> {
++                boolean rain = c.args().getFirst().equals("rain");
++                onServer(false, s -> s.overworld().setWeatherParameters(rain ? 0 : 6000, rain ? 6000 : 0, rain, false));
++                finish("ok");
++            }
+             case TIME -> {
+                 String t = c.args().getFirst();
+                 long day = t.equals("day") ? 6000 : t.equals("night") ? 18000 : (long) c.number(0);
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/scenario/SandboxCommand.java b/mod/src/devtest/java/ua/zentix/incoming/scenario/SandboxCommand.java
+index 199be996..22e83738 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/scenario/SandboxCommand.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/scenario/SandboxCommand.java
+@@ -38,6 +38,8 @@ import java.util.Locale;
+  *   <li>{@code fire [сторона]} — пожар: квадрат незерака с огнём в точке;</li>
+  *   <li>{@code cam <дальность> [высота] [азимут°] [взгляд]} — где камера: дальность от точки, высота над землёй, азимут
+  *       от точки (0 — юг, 90 — запад, как поворот игрока), высота точки взгляда над землёй;</li>
++ *   <li>{@code stance stand|fly} — стоящий игрок (качание тела) или летающий наблюдатель (по умолчанию);</li>
++ *   <li>{@code weather clear|rain} — погода для проверки конденсации во влажном воздухе;</li>
+  *   <li>{@code time day|night|<тик>}, {@code hud on|off}, {@code overlay on|off} — свет, интерфейс, числа модели;</li>
+  *   <li>{@code track on|off} — взгляд держит снаряд эффекта {@code launch}/{@code flight} в середине кадра (как игрок,
+  *       который ведёт его с зумом);</li>
+@@ -59,7 +61,7 @@ record SandboxCommand(Verb verb, List<String> args) {
+     /** {@code blast … water}: сторона и глубина пруда, блоков (пруд шире столба и кольца брызг шахеда). */
+     static final int POND = 64, POND_DEPTH = 4;
+ 
+-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY }
++    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY }
+ 
+     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
+     boolean effect() {
+@@ -152,6 +154,14 @@ record SandboxCommand(Verb verb, List<String> args) {
+                 if (!List.of("day", "night").contains(args.getFirst()) && (number(0) < 0 || number(0) > Integer.MAX_VALUE
+                         || number(0) != Math.rint(number(0)))) throw new IllegalArgumentException("время — day, night или тик (целое от 0)");
+             }
++            case STANCE -> {
++                need(1, 1);
++                if (!List.of("stand", "fly").contains(args.getFirst())) throw new IllegalArgumentException("stand или fly");
++            }
++            case WEATHER -> {
++                need(1, 1);
++                if (!List.of("clear", "rain").contains(args.getFirst())) throw new IllegalArgumentException("clear или rain");
++            }
+             case HUD, OVERLAY, TRACK -> {
+                 need(1, 1);
+                 if (!List.of("on", "off").contains(args.getFirst())) throw new IllegalArgumentException("on или off");

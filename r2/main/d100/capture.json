@@ -1,0 +1,91 @@
+{
+  "name": "r2-main-d100",
+  "effect": "blast drone 7",
+  "site": [
+    0.5,
+    65.0,
+    0.5
+  ],
+  "camera": [
+    100.0,
+    1.6,
+    0.0,
+    3.0
+  ],
+  "audio": {
+    "file": "d100.wav",
+    "start": 6004804,
+    "from": 0.0,
+    "seconds": 4.0
+  },
+  "frames": [
+    {
+      "t": 0.0,
+      "age": 0.012,
+      "file": "r2-main-d100_000.00s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.02,
+      "age": 0.038,
+      "file": "r2-main-d100_000.02s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.03,
+      "age": 0.055,
+      "file": "r2-main-d100_000.03s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.05,
+      "age": 0.071,
+      "file": "r2-main-d100_000.05s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.07,
+      "age": 0.088,
+      "file": "r2-main-d100_000.07s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.08,
+      "age": 0.105,
+      "file": "r2-main-d100_000.08s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.13,
+      "age": 0.155,
+      "file": "r2-main-d100_000.13s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.23,
+      "age": 0.255,
+      "file": "r2-main-d100_000.23s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.48,
+      "age": 0.506,
+      "file": "r2-main-d100_000.48s.png",
+      "fps": 59
+    },
+    {
+      "t": 0.98,
+      "age": 1.008,
+      "file": "r2-main-d100_000.98s.png",
+      "fps": 59
+    },
+    {
+      "t": 3.0,
+      "age": 3.015,
+      "file": "r2-main-d100_003.00s.png",
+      "fps": 59
+    }
+  ],
+  "continuous_frames_total": 122,
+  "note": "Selected original PNGs. Continuous first-two-second frames are in the movie; full local capture retained."
+}

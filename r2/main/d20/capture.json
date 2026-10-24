@@ -1,0 +1,73 @@
+{
+  "name": "r2-main-d20",
+  "effect": "blast drone 7",
+  "site": [
+    0.5,
+    65.0,
+    0.5
+  ],
+  "camera": [
+    20.0,
+    1.6,
+    0.0,
+    3.0
+  ],
+  "audio": {
+    "file": "d20.wav",
+    "start": 4010052,
+    "from": 0.0,
+    "seconds": 4.0
+  },
+  "frames": [
+    {
+      "t": 0.0,
+      "age": 0.006,
+      "file": "r2-main-d20_000.00s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.02,
+      "age": 0.061,
+      "file": "r2-main-d20_000.02s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.03,
+      "age": 0.093,
+      "file": "r2-main-d20_000.03s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.08,
+      "age": 0.151,
+      "file": "r2-main-d20_000.08s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.13,
+      "age": 0.243,
+      "file": "r2-main-d20_000.13s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.33,
+      "age": 0.513,
+      "file": "r2-main-d20_000.33s.png",
+      "fps": 60
+    },
+    {
+      "t": 0.68,
+      "age": 1.007,
+      "file": "r2-main-d20_000.68s.png",
+      "fps": 49
+    },
+    {
+      "t": 3.0,
+      "age": 3.005,
+      "file": "r2-main-d20_003.00s.png",
+      "fps": 56
+    }
+  ],
+  "continuous_frames_total": 122,
+  "note": "Selected original PNGs. Continuous first-two-second frames are in the movie; full local capture retained."
+}

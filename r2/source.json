@@ -1,0 +1,11 @@
+{
+  "head": "956b5db560d04a0f28958e93b7d96315d940ed3e",
+  "base": "cd310f2bbf9f5cc870527e56356c725b4ca31ded",
+  "main_at_capture": "cd310f2bbf9f5cc870527e56356c725b4ca31ded",
+  "dirty": "M mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java",
+  "profile": "quiet",
+  "renderer": "dev sandbox, native GPU, no Iris",
+  "fixture": "tracked WV fixture + temporary VSync off / 60 FPS patch",
+  "vsync": false,
+  "fps_limit": 60
+}
