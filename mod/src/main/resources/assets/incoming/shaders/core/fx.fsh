@@ -295,6 +295,12 @@ void main() {
     // тумана у края прорисовки закрывало бы ленты шлейфов и дальнюю картинку взрывов, которые сменяют частицы там
     seen *= 1.0 - fog * FxFogColor.a;
     fragColor = color * seen * ColorModulator;
+    // 8 бит кадра: плавная вуаль вещества у глаза (сетка лучей, SmokePuffs.Veil) и бледные края клубов без подмешанного
+    // шума идут ступенями — шум в полступени (Jimenez 2014, как у ореола), долей того, что квадрат кладёт
+    if (FxGlowPass.x < 0.5) {
+        float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+        fragColor.rgb = max(fragColor.rgb + (noise - 0.5) / 255.0 * fragColor.a, vec3(0.0));
+    }
     fragCover = vec4(0.0);
     if (FxGlowPass.x > 0.5) {
         // что закрывает ореол в пикселе (bloomCovers): светящееся и дым перед ним; пятно — своей непрозрачностью

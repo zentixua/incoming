@@ -78,7 +78,8 @@ class SmokeFillTest {
     static final class Screen implements SmokePuffs.Out {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
-        double veil;
+        /** Вуаль кадра (сетка по экрану); null — её нет. */
+        SmokePuffs.Veil veil;
 
         Screen(FarView view) {
             this.view = view;
@@ -105,13 +106,8 @@ class SmokeFillTest {
         }
 
         @Override
-        public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light) {
-            veil += -Math.log(1 - Math.min(a, 0.999));
-        }
-
-        @Override
-        public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a) {
-            veil(dx, dy, dz, half, r, g, b, a, 0);
+        public void veil(SmokePuffs.Veil veil, int light) {
+            this.veil = veil.copy();
         }
 
         @Override
@@ -132,7 +128,7 @@ class SmokeFillTest {
 
         /** Пропускание в точке экрана (u, v): квадраты — радиальный профиль непрозрачности кадра клуба, вуали. */
         double transmittance(double u, double v, double[][] prof) {
-            double clear = Math.exp(-veil);
+            double clear = veil == null ? 1 : veil.through(u, v);
             for (double[] q : quads) {
                 double r = Math.hypot((u - q[0]) / q[2], (v - q[1]) / q[3]);
                 int k = (int) (r / PlumeContinuityTest.BIN);
@@ -202,7 +198,7 @@ class SmokeFillTest {
             SmokePuffs.resetBudget();
             for (int frame = 0; frame < 2; frame++) {
                 s.quads.clear();
-                s.veil = 0;
+                s.veil = null;
                 for (Blast b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
                 SmokePuffs.flush();
             }

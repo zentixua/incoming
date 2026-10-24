@@ -39,9 +39,8 @@ final class SmokePuffs {
         void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
                        float r, float g, float b, float a);
 
-        void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light);
-
-        void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a);
+        /** Вуаль вещества у глаза по экрану ({@link Veil}) со светом мира light (упакованный). */
+        void veil(Veil veil, int light);
 
         boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                        float alphaB, int lightB, float r, float g, float b, float[] joint);
@@ -437,11 +436,13 @@ final class SmokePuffs {
         private long[] ctxSeed = new long[8];
         private boolean[] ctxSprays = new boolean[8];
         private int contexts;
-        /** Вуаль кадра: толща и цвет, взвешенный толщей (все вуали — одним квадратом, {@link #veilAdd}). */
-        private double veilTau, veilR, veilG, veilB;
+        /** Вуаль кадра: гауссы вещества у глаза ({@link #VEIL_FIELDS} чисел на гаусс); толщу по лучам считает {@link #veilFlush}. */
+        private double[] veils = new double[8 * VEIL_FIELDS];
+        private int veilCount;
         @Nullable
         private Out veilOut;
         private FarView veilView;
+        private final Veil veil = new Veil();
         /**
          * Заливка прошлого кадра, экранов, её пол (по одному клубу на гаусс: меньше бюджет не берёт — это уже толща облаков,
          * а не подробность) и доля кучек, что ему досталась (для замера).
@@ -580,37 +581,46 @@ final class SmokePuffs {
                     (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13]);
         }
 
-        /** Вуаль вещества у глаза в кадр: толща −ln(1 − a) и её цвет копятся, квадрат — один ({@link #veilFlush}). */
-        void veilAdd(Out out, FarView view, float r, float g, float b, float a) {
-            if (a < 0.002f) return;
-            double t = -Math.log(1 - Math.min(a, 0.999));
-            veilTau += t;
-            veilR += t * r;
-            veilG += t * g;
-            veilB += t * b;
+        /**
+         * Гаусс вещества у глаза — в вуаль кадра: середина (px, py, pz) от глаза, σ по горизонтали и вертикали, ослабление
+         * всей массы ext (м²), цвет толстого слоя (r, g, b), доля share (сколько его клубов растаяло). Гаусс, который ни по
+         * одному лучу не закроет и {@link #VEIL_MIN}, не идёт: толща по лучу из глаза — не больше толщи через середину вдоль
+         * самой тонкой оси, ext/(2π·σh·min(σh, σv)).
+         */
+        boolean veilAdd(Out out, FarView view, double px, double py, double pz, double sh, double sv, double ext, float r, float g, float b,
+                        double share) {
+            if (!(share > 0) || !(ext > 0) || !(sh > 0) || !(sv > 0)) return false;
+            if ((1 - Math.exp(-ext / (2 * Math.PI * sh * Math.min(sh, sv)))) * share < VEIL_MIN) return false;
+            if ((veilCount + 1) * VEIL_FIELDS > veils.length) veils = java.util.Arrays.copyOf(veils, 2 * veils.length);
+            int o = veilCount++ * VEIL_FIELDS;
+            veils[o] = px;
+            veils[o + 1] = py;
+            veils[o + 2] = pz;
+            veils[o + 3] = sh;
+            veils[o + 4] = sv;
+            veils[o + 5] = ext;
+            veils[o + 6] = r;
+            veils[o + 7] = g;
+            veils[o + 8] = b;
+            veils[o + 9] = Math.min(share, 1);
             veilOut = out;
             veilView = view;
+            return true;
         }
 
-        /**
-         * Вуаль кадра одним квадратом: пропускание — e^(−Στ) (то же, что у стопки вуалей), цвет — средний по толще
-         * (рассеяние смеси веществ у глаза — доли по толще, как у {@link #thick}).
-         */
         void veilClear() {
-            veilTau = veilR = veilG = veilB = 0;
+            veilCount = 0;
             veilOut = null;
             veilView = null;
         }
 
+        /** Вуаль кадра — одна сетка по экрану ({@link Veil}): у каждой вершины толща по её лучу через все гауссы у глаза. */
         private void veilFlush() {
-            if (veilOut != null && veilTau > 0) {
-                double fx = veilView.forward().x(), fy = veilView.forward().y(), fz = veilView.forward().z();
-                veilOut.veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, VEIL_AT * 4, (float) (veilR / veilTau), (float) (veilG / veilTau),
-                        (float) (veilB / veilTau), (float) (1 - Math.exp(-veilTau)), OPEN_SKY);
+            if (veilOut != null && veilCount > 0) {
+                veil.fill(veilView, veils, veilCount);
+                if (veil.any()) veilOut.veil(veil, OPEN_SKY);
             }
-            veilTau = veilR = veilG = veilB = 0;
-            veilOut = null;
-            veilView = null;
+            veilClear();
         }
 
         /**
@@ -638,12 +648,22 @@ final class SmokePuffs {
             double air = view.air(d, py);
             if (air < Sight.THRESHOLD) return 0;
             // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
-            // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс. «Внутри» — по эллипсоиду
+            // вещество вокруг глаза — вуалью по экрану: толща по лучам из глаза через гаусс ({@link Veil}). «Внутри» — по эллипсоиду
             // края (у плоского слоя пыли в сотню метров шириной и метр толщиной глаз над ним снаружи; по наибольшему
             // радиусу он был «внутри», и вуаль слоя закрывала весь кадр)
             double q = Math.sqrt((px * px + pz * pz) / (rh * rh) + py * py / (rw * rw));
-            double outside = smoothstep(0.5, 1, q);
-            if (outside < 1 && !planning) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air * smoke);
+            // гаусс, чья середина впереди по взгляду, — ещё клубы ({@link #ahead}); лежащий клуб — не проекция по взгляду: его
+            // квадрат лежит на горизонтали и впереди глаза, даже когда середина за спиной
+            double gate = smoothstep(0.5, 1, q), outside, veiled;
+            if (lies(sh, sv, py, d)) {
+                outside = gate;
+                veiled = 1 - gate;
+            } else {
+                double front = front(view, px, py, pz);
+                outside = front * (gate + (1 - gate) * ahead(view, px, py, pz, sh, sv));
+                veiled = gate < 1 ? 1 - outside : 0;
+            }
+            if (veiled > 0 && !planning) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, veiled * vis * air * smoke);
             if (outside <= 0) return 0;
             // вне кадра — не нужен: шар всего квадрата кучки (клуб — до 1,2 радиуса, его место — до ~0,9 от середины)
             if (!FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return 0;
@@ -755,12 +775,15 @@ final class SmokePuffs {
         double d = Math.sqrt(px * px + py * py + pz * pz);
         double air = view.air(d, py);
         if (air < Sight.THRESHOLD) return 0;
-        // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
-        // вещество вокруг глаза — вуалью по экрану: толща по лучу взгляда из глаза через гаусс
-        double outside = smoothstep(0.5 * r, r, d);
+        // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), кроме
+        // клуба, чья середина впереди ({@link #ahead}); вещество, что квадрат не показывает (позади глаза, сбоку, у самого
+        // глаза), — вуаль ({@link Veil}: толща по лучам из глаза через гаусс); вне края у глаза его нет (у гаусса за спиной
+        // толща по лучу вперёд за краем — тысячные)
+        double gate = smoothstep(0.5 * r, r, d), outside = front(view, px, py, pz) * (gate + (1 - gate) * ahead(view, px, py, pz, sh, sv));
+        double veiled = gate < 1 ? 1 - outside : 0;
         // вещество места — толща трубки поперёк оси × √(2π)σ × его кусок оси
         double ext = tau * Math.sqrt(2 * Math.PI * sh * sv) * along;
-        int veils = outside < 1 && veilAround(view, out, px, py, pz, sh, sv, ext, cr, cg, cb, (1 - outside) * vis * air) ? 1 : 0;
+        int veils = veiled > 0 && veilAround(view, out, px, py, pz, sh, sv, ext, cr, cg, cb, veiled * vis * air) ? 1 : 0;
         if (outside <= 0) return veils;
         // вне кадра — не нужен: шар всего квадрата кучки (клуб — до 1,2 радиуса, его место — до ~0,9 от середины)
         if (!FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return veils;
@@ -955,11 +978,33 @@ final class SmokePuffs {
      */
     private static boolean veilAround(FarView view, Out out, double px, double py, double pz, double sh, double sv, double ext, float cr,
                                       float cg, float cb, double share) {
-        double fx = view.forward().x(), fy = view.forward().y(), fz = view.forward().z();
-        float k = (float) ((1 - Math.exp(-sightDepth(px, py, pz, sh, sv, ext, fx, fy, fz))) * share);
-        if (k < 0.004f) return false;
-        DRAW.veilAdd(out, view, cr, cg, cb, k);
-        return true;
+        return DRAW.veilAdd(out, view, px, py, pz, sh, sv, ext, cr, cg, cb, share);
+    }
+
+    /** Середина гаусса впереди по взгляду, в σ вдоль взгляда: с этого клубы начинают сменять вуаль, с того — сменили. */
+    static final double AHEAD_FROM = 1, AHEAD_FULL = 2.5;
+
+    /**
+     * Сколько клубы гаусса с серединой (px, py, pz) от глаза и σ (σh, σh, σv) ещё рисуют его, когда глаз внутри его края:
+     * квадрат клуба — вещество, спроецированное по лучам из глаза, и он верен, пока вещество перед глазом. Середина впереди
+     * на {@link #AHEAD_FULL} σ вдоль взгляда — перед глазом 99 % вещества: клубы; ближе {@link #AHEAD_FROM} σ (сбоку или
+     * позади) — вуаль ({@link Veil}). Без этого клубы таяли, как только глаз входил в край гаусса (~3,7σ у густого) — у следа
+     * ЗРК в 18 м: клубящаяся трубка, к которой несёт камеру, задолго до неё становилась вуалью.
+     */
+    static double ahead(FarView view, double px, double py, double pz, double sh, double sv) {
+        org.joml.Vector3f f = view.forward();
+        double z = px * f.x + py * f.y + pz * f.z, sf = Math.sqrt(sh * sh * (1 - f.y * f.y) + sv * sv * f.y * f.y);
+        return smoothstep(AHEAD_FROM * sf, AHEAD_FULL * sf, z);
+    }
+
+    /**
+     * Квадрат клуба с серединой (px, py, pz) от глаза лицом к камере на глубине своей середины: позади глаза его не видно
+     * вовсе, ближе {@link #VEIL_AT} он тает (у ближней плоскости — {@code fx.fsh}). Его вещество тогда — вуаль, а не ничто:
+     * клуб сбоку и сзади, в чей край вошёл глаз, иначе терял ту долю вещества, что держал за квадратом.
+     */
+    static double front(FarView view, double px, double py, double pz) {
+        org.joml.Vector3f f = view.forward();
+        return smoothstep(0, VEIL_AT, px * f.x + py * f.y + pz * f.z);
     }
 
     /** Свет мира под открытым небом без света блоков (упакованный, для карты освещения). */
@@ -967,24 +1012,146 @@ final class SmokePuffs {
 
     /** Вуаль облака вокруг глаза — на столько блоков перед ним (ближе квадраты слоя тают у ближней плоскости). */
     static final double VEIL_AT = 2;
+    /** Гаусс, что ни по одному лучу вуали не закрывает больше этой доли, в вуаль не идёт. */
+    static final double VEIL_MIN = 0.004;
+    /** Чисел на гаусс вуали: середина от глаза (3), σh, σv, ослабление массы, цвет (3), доля. */
+    static final int VEIL_FIELDS = 10;
+    /**
+     * Клеток вуали по каждой оси экрана. Край вещества у глаза на экране — ~σ/расстояние, у следа ЗРК, проходящего сквозь
+     * камеру (σ ~5 м), — десятки градусов: клетка в ~13° (поле зрения 70°) его держит, а линейная смесь по клетке гладкая.
+     */
+    static final int VEIL_CELLS = 12;
 
     /**
-     * Вещество гаусса вокруг глаза (центр (px, py, pz) от глаза, σ, толща поперёк середины tau): толща по лучу взгляда
-     * из глаза — τ₀·e^(−b²/2σ²)·½·(1 + erf(a/(√2σ))) (a — середина гаусса вдоль взгляда, b — поперёк; σ — среднее
-     * геометрическое), непрозрачность — 1 − e^(−τ), квадратом во весь экран на {@link #VEIL_AT} блока перед глазом. Тот
-     * же цвет вещества, что у клубов. Доля share — сколько клубов растаяло.
+     * Вещество вокруг глаза — вуалью по экрану (клубы его гауссов растаяли: квадрат вплотную к глазу закрыл бы экран краем).
+     * Толща — по лучу каждой вершины сетки во весь экран ({@link #VEIL_CELLS}², квадрат в тангенсах ±tg угла до угла экрана,
+     * на {@link #VEIL_AT} блока перед глазом) через каждый гаусс ({@link #sightDepth}), непрозрачность вершины —
+     * 1 − e^(−Στ), цвет — средний по толще (рассеяние смеси веществ у глаза — доли по толще, как у {@link #thick}); между
+     * вершинами — линейно. Прежде вуаль была одним квадратом с толщей по одному лучу — середине экрана: след, проходящий
+     * сквозь камеру, ложился ровной белой пеленой на весь кадр (СКО яркости кадра 1,5–3 из 255), хотя вещество у глаза —
+     * полоса трубки, гуще вдоль неё и чистая над и под ней (жалоба 24.10, финальный проход 3.7.0, сцена sam-burst).
+     */
+    static final class Veil {
+        /** Вершин по оси. */
+        static final int N = VEIL_CELLS + 1;
+        /** Полуразмер сетки в тангенсах от середины экрана. */
+        double extent;
+        final double[] tau = new double[N * N];
+        final float[] r = new float[N * N], g = new float[N * N], b = new float[N * N];
+        final org.joml.Vector3f forward = new org.joml.Vector3f(), left = new org.joml.Vector3f(), up = new org.joml.Vector3f();
+
+        /** Тангенс вершины i по оси (влево экрана — по {@code left}, вверх — по {@code up}). */
+        double at(int i) {
+            return extent * (2.0 * i / (N - 1) - 1);
+        }
+
+        /** Номер вершины (i — по {@code left}, j — по {@code up}). */
+        static int index(int i, int j) {
+            return j * N + i;
+        }
+
+        /** Непрозрачность вершины k. */
+        float alpha(int k) {
+            return (float) (1 - Math.exp(-tau[k]));
+        }
+
+        /** Копия (проверки: сетка у приёмника переживает следующий кадр). */
+        Veil copy() {
+            Veil c = new Veil();
+            c.extent = extent;
+            System.arraycopy(tau, 0, c.tau, 0, tau.length);
+            System.arraycopy(r, 0, c.r, 0, r.length);
+            System.arraycopy(g, 0, c.g, 0, g.length);
+            System.arraycopy(b, 0, c.b, 0, b.length);
+            c.forward.set(forward);
+            c.left.set(left);
+            c.up.set(up);
+            return c;
+        }
+
+        /** Есть ли что рисовать. */
+        boolean any() {
+            for (double t : tau) if (-Math.expm1(-t) >= 0.002) return true;
+            return false;
+        }
+
+        /** Место вершины (i, j) от глаза, ось {@code axis} (0 — x, 1 — y, 2 — z): на {@link #VEIL_AT} блока по взгляду. */
+        double place(int i, int j, int axis) {
+            double u = at(i), v = at(j);
+            return switch (axis) {
+                case 0 -> VEIL_AT * (forward.x + u * left.x + v * up.x);
+                case 1 -> VEIL_AT * (forward.y + u * left.y + v * up.y);
+                default -> VEIL_AT * (forward.z + u * left.z + v * up.z);
+            };
+        }
+
+        /**
+         * Пропускание вуали в точке экрана (u, v) в тангенсах — как её рисует видеокарта: непрозрачность линейно между
+         * вершинами клетки (проверки).
+         */
+        double through(double u, double v) {
+            double fu = Math.clamp((u + extent) / (2 * extent) * (N - 1), 0, N - 1 - 1e-9), fv = Math.clamp((v + extent) / (2 * extent) * (N - 1), 0, N - 1 - 1e-9);
+            int i = (int) fu, j = (int) fv;
+            double du = fu - i, dv = fv - j;
+            double a = (1 - du) * (1 - dv) * alpha(index(i, j)) + du * (1 - dv) * alpha(index(i + 1, j)) + (1 - du) * dv * alpha(index(i, j + 1))
+                    + du * dv * alpha(index(i + 1, j + 1));
+            return 1 - a;
+        }
+
+        /** Сетка кадра view по гауссам вуали (count штук по {@link #VEIL_FIELDS} чисел в g). */
+        void fill(FarView view, double[] gs, int count) {
+            forward.set(view.forward());
+            left.set(view.left());
+            up.set(view.up());
+            // весь кадр при любом соотношении сторон (и у вертикального окна): круг до угла экрана, с запасом
+            extent = Math.min(Math.tan(Math.min(view.edge(), 1.45)) * 1.05, 8);
+            java.util.Arrays.fill(tau, 0);
+            java.util.Arrays.fill(r, 0);
+            java.util.Arrays.fill(g, 0);
+            java.util.Arrays.fill(b, 0);
+            for (int j = 0; j < N; j++) {
+                for (int i = 0; i < N; i++) {
+                    double u = at(i), v = at(j);
+                    double rx = forward.x + u * left.x + v * up.x, ry = forward.y + u * left.y + v * up.y, rz = forward.z + u * left.z + v * up.z;
+                    double n = Math.sqrt(rx * rx + ry * ry + rz * rz);
+                    rx /= n;
+                    ry /= n;
+                    rz /= n;
+                    int k = index(i, j);
+                    double sr = 0, sg = 0, sb = 0, sum = 0;
+                    for (int c = 0; c < count; c++) {
+                        int o = c * VEIL_FIELDS;
+                        double along = sightDepth(gs[o], gs[o + 1], gs[o + 2], gs[o + 3], gs[o + 4], gs[o + 5], rx, ry, rz);
+                        // доля гаусса — у непрозрачности его вещества по лучу, как у растаявших клубов
+                        double a = -Math.expm1(-along) * gs[o + 9];
+                        if (!(a > 1e-6)) continue;
+                        double t = -Math.log1p(-Math.min(a, 0.999));
+                        sum += t;
+                        sr += t * gs[o + 6];
+                        sg += t * gs[o + 7];
+                        sb += t * gs[o + 8];
+                    }
+                    tau[k] = sum;
+                    if (sum > 0) {
+                        r[k] = (float) (sr / sum);
+                        g[k] = (float) (sg / sum);
+                        b[k] = (float) (sb / sum);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Вещество гаусса вокруг глаза (центр (px, py, pz) от глаза, σ по горизонтали и вертикали, ослабление всей массы ext,
+     * м²): клубы его растаяли — оно в вуаль кадра ({@link Veil}: толща по лучу каждой её вершины, {@link #sightDepth}). Тот же
+     * цвет вещества, что у клубов; свет — как у вещества под открытым небом (карта освещения: небо 15) и огонь кадра у глаза
+     * (FxLights), как у клубов этого же вещества снаружи. Доля share — сколько клубов растаяло.
      */
     private static void veil(double px, double py, double pz, double sh, double sv, double ext, double ks, double kd, double kw, float dr,
                              float dg, float db, double share) {
-        FarView view = DRAW.view;
-        double fx = view.forward().x(), fy = view.forward().y(), fz = view.forward().z();
-        double along = sightDepth(px, py, pz, sh, sv, ext, fx, fy, fz);
-        float k = (float) ((1 - Math.exp(-along)) * share);
-        if (k < 0.004f) return;
         float cr = thick(ks, kd, kw, dr), cg = thick(ks, kd, kw, dg), cb = thick(ks, kd, kw, db);
-        // во весь экран: полуразмер — с запасом на угол поля зрения до ~120°; свет — как у вещества под открытым небом
-        // (карта освещения: небо 15) и огонь кадра у глаза (FxLights), как у клубов этого же вещества снаружи
-        DRAW.veilAdd(DRAW.out, view, cr, cg, cb, k);
+        DRAW.veilAdd(DRAW.out, DRAW.view, px, py, pz, sh, sv, ext, cr, cg, cb, share);
     }
 
     /**
@@ -994,6 +1161,7 @@ final class SmokePuffs {
      * ближайшей к середине точки луча, b' — её расстояние до середины (обе — в σ). У шара — прежняя формула вуали.
      */
     static double sightDepth(double px, double py, double pz, double sh, double sv, double ext, double fx, double fy, double fz) {
+        // вуаль зовёт это на каждую вершину сетки и гаусс у глаза: постоянные — по разу
         double ux = fx / sh, uy = fy / sv, uz = fz / sh, len = Math.sqrt(ux * ux + uy * uy + uz * uz);
         if (!(len > 0)) return 0;
         ux /= len;
@@ -1002,9 +1170,11 @@ final class SmokePuffs {
         // середина от глаза в σ: луч из глаза — t·u, ближайшая к середине точка — t = a'
         double cx = px / sh, cy = py / sv, cz = pz / sh;
         double a = cx * ux + cy * uy + cz * uz, b2 = Math.max(0, cx * cx + cy * cy + cz * cz - a * a);
-        return ext / (Math.pow(2 * Math.PI, 1.5) * sh * sh * sv) * Math.sqrt(Math.PI / 2) / len * Math.exp(-0.5 * b2)
-                * (1 + SmokeGrid.erf(a / Math.sqrt(2)));
+        return ext * SIGHT / (sh * sh * sv * len) * Math.exp(-0.5 * b2) * (1 + SmokeGrid.erf(a * SQRT_HALF));
     }
+
+    /** Постоянная толщи по лучу: √(π/2)/(2π)^{3/2}; √½. */
+    private static final double SIGHT = Math.sqrt(Math.PI / 2) / Math.pow(2 * Math.PI, 1.5), SQRT_HALF = Math.sqrt(0.5);
 
     /** Видимый край гаусса толщи τ₀ поперёк середины, в σ: где толща падает до {@link #EDGE_TAU}. */
     static double edge(double tau) {
