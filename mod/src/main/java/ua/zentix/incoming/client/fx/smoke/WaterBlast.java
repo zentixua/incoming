@@ -21,9 +21,10 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * густой струи край — там, где толща поперёк падает до порога видимости ({@link CloudModel#SEEN}), за
  * {@link #halo} σ от оси. Струя одного направления — отрезок: вода, выброшенная в один миг с разной скоростью, лежит на
  * прямой (место линейно по скорости), сечение — круглое, σ {@link #jet}. Середина самой быстрой отвесной струи
- * поднимается на H − ореол (скорость √(2g(H − ореол)), верх у шахеда ~3,7 с); веер струй — конус с полууглом θ:
- * середина крайней в вершине — в стороне H'·sin2θ = R − ореол. Скорости — поровну от {@link #SPEED_MIN} до полной: столб
- * заполнен от воды до верха. Падают струи завесой: медленные раньше и ближе.</li>
+ * поднимается на H − ореол (скорость √(2g(H − ореол)), верх у шахеда ~3,7 с); веер струй — конус с полууглом θ.
+ * R таблицы — наибольший видимый радиус за весь полёт, а дальше всего брызги уходят, падая: крайние быстрые струи
+ * ложатся в 2H'·sin2θ от середины, и с ореолом это R (у вершины столб уже, ~¾R). Скорости — поровну от
+ * {@link #SPEED_MIN} до полной: столб заполнен от воды до верха. Падают струи завесой: медленные раньше и ближе.</li>
  * <li><b>Вода</b> — та же доля энергии заряда поднимает воду столба, что у «Бейкера» (Glasstone и Dolan, §2.52: ~1 млн т
  * на 1,8 км при 23 кт): m·g·H/2 ∝ W, m = m_Б·(W/W_Б)·(H_Б/H) (⚠ допущение: доля одна у ядерного и обычного подрыва) —
  * у шахеда ~50 т;
@@ -120,25 +121,33 @@ public final class WaterBlast {
         height = table(SCALED_H, scaled) * cube / MARGIN_H;
         radius = table(SCALED_R, scaled) * cube / MARGIN_R;
         water = height > 0 ? BAKER_WATER_KG * tntKg / BAKER_KG * BAKER_TOP / height : 0;
-        // ореол струи: её сечение такое, что видимый край (толща поперёк до порога видимости) — доля радиуса столба;
-        // толща — у отвесной струи в вершине столба (в воздухе — скорости от ½ до полной, отрезок от глади до верха)
-        double sigma = 0, edge = 1, centre = height;
+        // ореол струи: её сечение такое, что видимый край (толща поперёк до порога видимости) у вершины — доля радиуса
+        // столба; толща — у отвесной струи в вершине (в воздухе — скорости от ½ до полной, отрезок от глади до верха)
+        double sigma = 0, edge = 1, centre = height, tilt = 0, landing = 1;
         if (height > 0) {
             double ext = water * 3 / (2 * 1000 * DROP_R) / directions();
             sigma = JET_HALO * radius / 3;
             for (int i = 0; i < 30; i++) {
                 centre = Math.max(0.5 * height, height - edge * sigma);
-                double perMetre = ext * (1 - 0.5) / (1 - SPEED_MIN) / centre;
-                edge = visible(perMetre / (Math.sqrt(2 * Math.PI) * sigma));
+                edge = visible(ext / ((1 - SPEED_MIN) * 2 * centre) / (Math.sqrt(2 * Math.PI) * sigma));
                 sigma = JET_HALO * radius / edge;
             }
             centre = Math.max(0.5 * height, height - edge * sigma);
+            // конус — по огибающей всего полёта: R таблицы — наибольший видимый радиус султана, а дальше всего брызги
+            // уходят, когда крайние быстрые струи падают в воду — середина на 2H'·sin2θ, ореол поперёк струи (по
+            // горизонтали — ÷cos θ); вода струи на метр отрезка — ext/((1 − s₀)·v·t), к падению (t = 2·подъём·cos θ) толща
+            // поперёк — вдвое/cos θ меньше, чем в вершине
+            for (int i = 0; i < 30; i++) {
+                double cos = Math.cos(tilt);
+                landing = visible(ext / ((1 - SPEED_MIN) * 2 * centre * 2 * cos) / (Math.sqrt(2 * Math.PI) * sigma));
+                tilt = 0.5 * Math.asin(Math.clamp((radius - landing * sigma / cos) / (2 * centre), 0, 1));
+            }
         }
         jet = sigma;
         halo = edge;
         speed = Math.sqrt(2 * G * centre);
         rise = speed / G;
-        cone = height > 0 ? 0.5 * Math.asin(Math.clamp((radius - edge * sigma) / centre, 0, 1)) : 0;
+        cone = tilt;
     }
 
     /** Видимый край гаусса толщи tau поперёк середины, в σ: где толща падает до порога видимости {@link CloudModel#SEEN}. */

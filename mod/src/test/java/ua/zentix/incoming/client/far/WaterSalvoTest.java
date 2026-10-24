@@ -79,7 +79,8 @@ class WaterSalvoTest {
     static final class Screen implements SmokePuffs.Out {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
-        double veil;
+        /** Вуаль у глаза кадра (копия сетки), null — её нет. */
+        SmokePuffs.Veil veil;
 
         Screen(FarView view) {
             this.view = view;
@@ -124,13 +125,25 @@ class WaterSalvoTest {
         }
 
         @Override
-        public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light) {
-            veil = 1 - (1 - veil) * (1 - a);
+        public void veil(SmokePuffs.Veil veil, int light) {
+            this.veil = veil.copy();
         }
 
-        @Override
-        public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a) {
-            veil(dx, dy, dz, half, r, g, b, a, 0);
+        /** Пропускание вуали в точке экрана (u — вправо, v — вверх, тангенсы); вуали нет — 1. */
+        double through(double u, double v) {
+            return veil == null ? 1 : veil.through(-u, v);
+        }
+
+        /** Наибольшая непрозрачность вуали по кадру. */
+        double veiled() {
+            double most = 0;
+            for (int j = 0; j < 27; j++) {
+                for (int i = 0; i < 48; i++) {
+                    double u = -SmokeFillTest.W + (i + 0.5) * 2 * SmokeFillTest.W / 48, v = -SmokeFillTest.H + (j + 0.5) * 2 * SmokeFillTest.H / 27;
+                    most = Math.max(most, 1 - through(u, v));
+                }
+            }
+            return most;
         }
 
         @Override
@@ -153,7 +166,7 @@ class WaterSalvoTest {
                         int tx = (int) Math.min(127, (s + 1) / 2 * 128), ty = (int) Math.min(127, (1 - t) / 2 * 128);
                         clear *= 1 - q[4] * alpha[(int) q[6]][(int) q[5]][ty * 128 + tx];
                     }
-                    if ((1 - veil) * clear < 0.5) n++;
+                    if (through(u, v) * clear < 0.5) n++;
                 }
             }
             return (double) n / (w * h);
@@ -197,7 +210,7 @@ class WaterSalvoTest {
         SmokePuffs.resetBudget();
         for (int k = 0; k < 2; k++) {
             s.quads.clear();
-            s.veil = 0;
+            s.veil = null;
             for (Spray b : salvo) b.emit(now, SmokePuffs.sink(v, s, b, now));
             SmokePuffs.flush();
         }
@@ -251,11 +264,12 @@ class WaterSalvoTest {
                 worst = Math.max(worst, Math.max(q[9] / q[10], q[10] / q[9]));
             }
             double cover = s.covered(alpha);
-            String got = String.format(Locale.ROOT, "%.0f с: квадратов %d, самый вытянутый клуб брызг %.2f, вуаль %.3f, закрыто больше половины %.2f кадра", now,
-                    s.quads.size(), worst, s.veil, cover);
+            double veil = s.veiled();
+            String got = String.format(Locale.ROOT, "%.0f с: квадратов %d, самый вытянутый клуб брызг %.2f, вуаль до %.3f, закрыто больше половины %.2f кадра",
+                    now, s.quads.size(), worst, veil, cover);
             System.out.println("SALVO " + got);
             assertTrue(worst <= ROUND, got);
-            assertTrue(s.veil < 0.02, got);
+            assertTrue(veil < 0.02, got);
             if (now >= 20) assertTrue(cover <= FOG_COVER, got);
         }
     }

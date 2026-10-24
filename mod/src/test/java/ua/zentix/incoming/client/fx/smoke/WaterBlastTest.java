@@ -25,11 +25,14 @@ class WaterBlastTest {
     }
 
     /**
-     * Клубы брызг в возрасте t — точками: отрезок струи — 64 гаусса его сечения вдоль оси; место, σh, σv, ослабление (м²).
+     * Клубы струй в возрасте t (без плоского кольца водяной пыли) — точками: отрезок струи — 64 гаусса его сечения вдоль
+     * оси; место, σh, σv, ослабление (м²).
      */
     private static List<double[]> spray(WaterBlast w, double t) {
         List<double[]> p = new ArrayList<>();
         w.blobs(t, (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> {
+            // струи — круглые отрезки; плоское кольцо водяной пыли — свой закон (радиус базисной волны)
+            if (sh != sv) return;
             int n = 64;
             for (int i = 0; i < n; i++) {
                 double f = (i + 0.5) / n * 2 - 1;
@@ -54,8 +57,9 @@ class WaterBlastTest {
      * залп «Града» по воде у берега закрывал кадр ровной серой заливкой): H и R таблицы Swisdak — видимый султан, и на них
      * лежит его видимый край — где толща по лучу взгляда падает до порога видимости ({@link CloudModel#SEEN}), а не середины
      * струй. Прежде середины стояли на H и R, а густая струя видна ещё на 3–4 σ дальше: столб «Града» выходил втрое шире
-     * закона, и камера в 30 м от залпа оказывалась внутри. У каждого оружия: видимый верх за подъём — H (−3…0 %), видимый
-     * радиус выше десятой доли H — R (−6…0 %).
+     * закона, и камера в 30 м от залпа оказывалась внутри. R — наибольший радиус за всё событие, а дальше всего брызги
+     * уходят, падая (ревью #445: с радиусом по вершине завеса на спаде уходила до 1,41 R). У каждого оружия: видимый
+     * верх — H (−3…0 %), видимый радиус струй за весь полёт до 2·подъёма на любой высоте — R (−8…0 %).
      */
     @Test
     void everyWeaponThrowsAColumnOfTheLawSize() {
@@ -67,18 +71,18 @@ class WaterBlastTest {
             assertEquals(law, w.height, 1e-9 * law, wt.name());
             assertEquals(wide, w.radius, 1e-9 * wide, wt.name());
             double top = 0, side = 0;
-            for (double t = w.rise / 20; t <= w.rise * 1.0001; t += w.rise / 20) {
+            for (double t = w.rise / 40; t <= 2 * w.rise; t += w.rise / 40) {
                 List<double[]> p = spray(w, t);
                 for (double y = 0; y < 1.5 * law; y += law / 300) {
                     for (double x = 0; x < 2 * wide; x += wide / 150) {
                         if (sight(p, x, y) < CloudModel.SEEN) continue;
                         top = Math.max(top, y);
-                        if (y > 0.1 * law) side = Math.max(side, x);
+                        side = Math.max(side, x);
                     }
                 }
             }
             assertTrue(top <= law && top >= 0.97 * law, wt.name() + ": видимый верх " + top + " против " + law);
-            assertTrue(side <= wide && side >= 0.94 * wide, wt.name() + ": видимый радиус " + side + " против " + wide);
+            assertTrue(side <= wide && side >= 0.92 * wide, wt.name() + ": видимый радиус за полёт " + side + " против " + wide);
         }
         // порядок величины у шахеда: десятки метров (у 500 кг на 30 м пример отчёта — 56 м по таблице)
         WaterBlast shahed = new WaterBlast(50, 0, DEEP, CloudModel.Air.STANDARD);
@@ -136,8 +140,8 @@ class WaterBlastTest {
     }
 
     /**
-     * Струи — баллистика: середина крайней струи в вершине — на R − ореол (H'·sin2θ), падают завесой — к 2·подъёма вода в
-     * воде, брызг в воздухе нет; медленные струи падают раньше.
+     * Струи — баллистика: быстрый конец крайней струи в вершине — в H'·sin2θ от оси, падает в 2H'·sin2θ — внутри R (с
+     * ореолом — R); к 2·подъёма вода в воде, брызг в воздухе нет; медленные струи падают раньше.
      */
     @Test
     void jetsFlyAndFall() {
@@ -147,13 +151,15 @@ class WaterBlastTest {
         w.blobs(w.rise * Math.cos(w.cone), (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> {
             if (sh == sv) wide[0] = Math.max(wide[0], Math.hypot(x + ax, z + az));
         }, 0, 0, 0);
-        assertEquals(w.radius - w.halo * w.jet, wide[0], 0.02 * w.radius, "быстрый конец крайней струи в вершине — на R − ореол");
+        double apex = w.speed * w.speed * Math.sin(2 * w.cone) / (2 * 9.80665);
+        assertEquals(apex, wide[0], 0.02 * w.radius, "быстрый конец крайней струи в вершине — в H'·sin2θ");
         assertEquals(1, w.aloft(0.5 * w.rise), 0);
         assertTrue(w.aloft(1.2 * w.rise) < 1 && w.aloft(1.2 * w.rise) > 0, "завеса падает по частям");
         assertEquals(0, w.aloft(2 * w.rise + 1e-6), 0);
         assertTrue(topBlob(w, 2 * w.rise + 1e-6) < 0.1 * w.height, "столба нет — вода упала, у воды только водяная пыль");
-        // упала вода — до 2(R − ореол) от середины
-        assertEquals(2 * (w.radius - w.halo * w.jet), w.fallen(2 * w.rise), 0.02 * w.radius);
+        // упала вода — до 2H'·sin2θ от середины: внутри R, с ореолом падающей струи — на R
+        assertEquals(2 * apex, w.fallen(2 * w.rise), 0.02 * w.radius);
+        assertTrue(w.fallen(2 * w.rise) < w.radius && w.fallen(2 * w.rise) > 0.4 * w.radius, "середины падают в " + w.fallen(2 * w.rise));
     }
 
     /** Водяная пыль: кольцо базисной волны после падения, видно секунды–десятки секунд, потом брызг нет. */
@@ -206,11 +212,12 @@ class WaterBlastTest {
     void foamAndWaveOnTheWater() {
         WaterBlast w = new WaterBlast(50, 0, DEEP, CloudModel.Air.STANDARD);
         assertEquals(1, w.foam(0, 0.01), 0.01);
-        // завеса ложится до 2(R − ореол) — дальности середин крайних струй, за ней — по сечению струи
-        double reach = 2 * (w.radius - w.halo * w.jet);
-        assertEquals(0, w.foam(0.9 * reach, w.rise), 0, "завеса ещё не упала");
-        assertTrue(w.foam(0.9 * reach, 2 * w.rise) > 0.5, "упала — пена");
-        assertTrue(w.foam(0.9 * reach, 2 * w.rise + 60) < 0.05, "через минуту — почти нет");
+        // завеса ложится до 2H'·sin2θ — дальности середин крайних струй, за ней — по сечению струи
+        double reach = w.fallen(2 * w.rise), fall = reach + 0.5 * w.jet;
+        assertTrue(fall > w.radius / 2, "завеса ложится за полостью");
+        assertEquals(0, w.foam(fall, w.rise), 0, "завеса ещё не упала");
+        assertTrue(w.foam(fall, 2 * w.rise) > 0.5, "упала — пена");
+        assertTrue(w.foam(fall, 2 * w.rise + 60) < 0.05, "через минуту — почти нет");
         assertTrue(w.foam(reach + w.jet, 2 * w.rise) > 0.3 && w.foam(reach + w.jet, 2 * w.rise) < 0.7, "за дальностью середин — по сечению струи");
         assertEquals(0, w.foam(reach + 1.01 * w.halo * w.jet, 2 * w.rise), 0, "за видимым краем завесы пены нет");
         WaterBlast pond = new WaterBlast(50, 0, 1, CloudModel.Air.STANDARD);
