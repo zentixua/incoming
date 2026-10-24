@@ -632,7 +632,8 @@ public final class BlastEffects {
         ua.zentix.incoming.nuclear.model.FuelPool pool = law.spread(p.cells().size(), law.cells());
         if (pool.seconds() <= 0 || p.age() / 20.0 >= pool.seconds()) return;
         Vec3 centre = FireSmoke.pool(level, p.cells(), pool, p.age() / 20.0);
-        BlastSounds.fire(centre, pool, p.age());
+        // гул — у пожара ближе {@link FarBlasts#NEAR}, как и прежде (звук воронки дальше не заводится)
+        if (FarBlasts.near(centre)) BlastSounds.fire(centre, pool, p.age());
     }
 
     /** Дым и гул топлива в воронке у самой точки удара (огня сервера на блоках нет: старая запись, песочница без сервера). */
@@ -640,7 +641,7 @@ public final class BlastEffects {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         Vec3 centre = FireSmoke.pool(level, java.util.List.of(BlockPos.containing(pos)), pool, 0);
-        BlastSounds.fire(centre, pool, 0);
+        if (FarBlasts.near(centre)) BlastSounds.fire(centre, pool, 0);
     }
 
     /**
