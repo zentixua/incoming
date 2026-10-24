@@ -21,3 +21,19 @@ Scenes: `drone` (Shahed, 80 m, 3/10/30 s), `near` (40 m), `missile` (120 m), `fi
 `timings.txt` — every shot: fps, quads, GPU time of the effects layer (mean over the preceding second, longest),
 smoke fill in screens. `scripts/` — shot lists and sheet tools. `sheets/old-mantaflow-puff-maps.png` and
 `sheets/new-puff-frames-lit-from-top.png` — the puff flipbook before and after, lit as the layer shader lights it.
+
+## Round 2 (review of 7bbc7a46: flat dust slab with a vertical edge in the raid at 55 s)
+
+`round2/` — the same shots with the fixed puff sheet (PR head a7826cf9): rows **main** / **r** (the reviewed head,
+`v2`/`v2i`; `v1`/`v1i` where the reviewed head was not re-shot, those rows predate only the glow-share commit) / **new**
+(`v4`, `v4i`), each without a pack and under Iris (Complementary Unbound). `round2/sheets/raid-020s-main-r-new.jpg`,
+`raid-055s-main-r-new.jpg` (and `raidi-…` under Iris): full raid frames main | r | new.
+
+Cause of the slab: every frame of the reviewed sheet had a straight bottom (the cap of the EmberGen cloud was cut from
+its stem by a horizontal plane), and dust puffs lie flat on the ground, so the straight edge stood up as a wall. The
+first fix (cap seen from above) left an elongated footprint (axes 1.4–1.7 : 1) whose long even sides read as a
+straight slanted edge on a big near puff (`v3`, not used). Final: cap from above, footprint squeezed to round in the
+density data, frames 72–117 (no frame touches the simulation domain wall).
+
+New night shots: `waterN`, `launchN`, `samN` for main and new, with and without Iris. `timings.txt` has every shot;
+`round2/ab-cost.txt` — main and new raid alternating in one sitting (layer GPU time, Iris).
