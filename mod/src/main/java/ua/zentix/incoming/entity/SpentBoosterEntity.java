@@ -83,7 +83,9 @@ public class SpentBoosterEntity extends Entity {
             // тяжёлый корпус: гравитация сильнее, чем у предметов, сопротивление слабое
             v = v.scale(0.985).add(0, -0.06, 0);
         } else {
-            v = v.multiply(0.5, 0, 0.5);
+            // Вес прижимает корпус к земле и в покое: move(0 по Y) сбрасывает onGround,
+            // и рендерер через тик снова кувыркал уже упавший ускоритель, мигая соплом.
+            v = v.multiply(0.5, 0, 0.5).add(0, -0.06, 0);
         }
         setDeltaMovement(v);
         move(MoverType.SELF, v);
