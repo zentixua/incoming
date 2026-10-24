@@ -154,7 +154,8 @@ public final class StrikeWorld {
         return !any.isEmpty();
     }
 
-    private boolean idle() {
+    /** No pending timeline or impact unit, including delayed collapse/after-effects. An empty impact queue alone is not completion. */
+    public boolean idle() {
         return timelines.isEmpty() && pending.isEmpty() && impacts.isEmpty();
     }
 

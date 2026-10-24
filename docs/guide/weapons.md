@@ -55,6 +55,10 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   a little smaller in rock, a little larger in waterlogged ground under water; dry sand and the gravel of a rail bed dig
   like soil. A crater is only dug where the blast is at the ground. A missile crater is a pit two to three blocks across
   and about a block deep: craters are much smaller than in earlier versions, and that is the real size.
+- **Paving on a solid backing** cannot bend like a free wall. It is excavated with its backing, using the crater
+  law for its material. In cohesive stone and concrete, a fraction of a block is saved as surface damage and shown
+  with exposed aggregate and material chips, plus nearby cracks. This approximates a
+  fractured surface; the remaining block keeps its collision shape. A shallow crater cannot open a metre-thick slab.
 - **A slab over a void** (a bridge deck, a roof over a room, the ceiling of a cave) is breached when the charge
   touches it and the slab is thinner than the breaching radius of the US Army demolition manual (FM 5-250): everything
   between the charge and the void within that radius is blown out, and the blast carries on into the void. This works
@@ -75,7 +79,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **People and mobs** are hurt by the same wave as in a nuclear strike: pressure on the lungs, being thrown into a
   wall, glass from a window. Close to a Shahed the wave kills; at 30 m in the open it does nothing, but fragments still
   do (below). Someone behind a wall that holds is safe from the wave; inside the room where the charge went off, the
-  gases hit everyone.
+  gases hit everyone. The front resolves blocks and bodies from the charge outwards: a wall or slab broken before
+  the front reaches someone behind it no longer shields that person. An intact wall still does.
 - **Fragments.** The steel casing of the warhead breaks into thousands of pieces. Their masses follow Mott's law for
   the casing's thickness and diameter, their starting speed Gurney's law for the charge and casing mass, and the air
   slows each one by its size. They fly out in a belt across the warhead's axis. The detonation running from the nose to

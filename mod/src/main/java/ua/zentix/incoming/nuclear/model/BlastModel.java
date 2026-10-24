@@ -95,6 +95,17 @@ public final class BlastModel {
     }
 
     /**
+     * Travel time of a chemical blast: integrate dr/U(P(r)) using the same pressure and Rankine–Hugoniot front speed.
+     * Midpoint quadrature, 64 intervals; spherical propagation with the existing surface reflection approximation.
+     */
+    public static double chemicalArrivalSeconds(double rangeM, double tntKg, boolean surface) {
+        if (!(rangeM > 0)) return 0;
+        double dr = rangeM / 64, seconds = 0;
+        for (int i = 0; i < 64; i++) seconds += dr / frontSpeed(overpressureKpa((i + 0.5) * dr, tntKg, surface));
+        return seconds;
+    }
+
+    /**
      * Скорость воздуха сразу за фронтом по Ренкину–Гюгонио, м/с: u = 5P/(7·P0) · 343 / √(1 + 6P/(7·P0)) — 5 psi ≈ 72 м/с,
      * 1 psi ≈ 17 м/с.
      */

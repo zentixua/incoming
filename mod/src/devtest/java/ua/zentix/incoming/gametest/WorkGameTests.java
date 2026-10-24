@@ -464,8 +464,8 @@ public final class WorkGameTests {
     }
 
     /**
-     * Взрыв у собранного аппарата Sable: блоки аппарата (в сетке плотов), которые выбрали лучи, сняты сразу после урона,
-     * а не порциями с блоками мира, — под считающими часами это тик взрыва.
+     * Взрыв у собранного аппарата Sable: корпус снят фронтом до урона телу за ним, а не после конца фронта мира.
+     * Проверка под считающими часами: в самом callback урона все выбранные блоки корпуса уже сняты.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_craft", skyAccess = true)
     public static void craftBlocksGoRightAfterDamage(GameTestHelper h) {
@@ -482,18 +482,33 @@ public final class WorkGameTests {
                 a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ()));
         Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         List<BlockPos> plot = new ArrayList<>();
-        long[] at = {-1};
+        long[] at = {-1}, damaged = {-1};
+        boolean[] hullGoneAtDamage = {false};
+        var body = new net.minecraft.world.entity.animal.Pig(net.minecraft.world.entity.EntityType.PIG, level) {
+            @Override public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
+                if (source.is(ua.zentix.incoming.registry.ModDamageTypes.STRIKE)) {
+                    damaged[0] = level.getGameTime();
+                    hullGoneAtDamage[0] = !plot.isEmpty() && plot.stream().allMatch(p -> level.getBlockState(p).isAir());
+                }
+                return super.hurt(source, amount);
+            }
+        };
+        body.setPos(c.add(7, 1, 0));
+        body.setNoAi(true);
+        body.setNoGravity(true);
+        level.addFreshEntity(body);
         Consumer<ExplosionEvent.Detonate> onBlast = e -> {
-            if (e.getLevel() != level || e.getExplosion().center().distanceTo(c) > 0.01) return;
-            at[0] = level.getGameTime();
+            if (e.getLevel() != level || e.getExplosion().center().distanceTo(c) > 1.001) return;
             for (BlockPos p : e.getAffectedBlocks()) {
                 if (SubLevels.inPlotGrid(level, new ChunkPos(p)) && !level.getBlockState(p).isAir()) plot.add(p.immutable());
             }
+            // Keep the first (world) event as the reference, never reset it to the craft's own event.
+            if (at[0] < 0) at[0] = level.getGameTime();
         };
         List<String> left = new ArrayList<>();
         boolean[] checked = {false};
         Consumer<ServerTickEvent.Post> afterScheduler = e -> {
-            if (at[0] < 0 || checked[0]) return;
+            if (damaged[0] < 0 || checked[0]) return;
             checked[0] = true;
             for (BlockPos p : plot) if (!level.getBlockState(p).isAir()) left.add(p + " " + level.getBlockState(p));
         };
@@ -509,11 +524,14 @@ public final class WorkGameTests {
             if (at[0] >= 0 || waited[0]++ != 5) return;
             h.assertTrue(level.getBlockState(a).isAir(), "аппарат не собран: " + level.getBlockState(a));
             WorkScheduler.useImpactClock(level.getServer(), WorkClock.counting(MS));
+            h.assertTrue(net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1 + 1e-5, 0), body) == 0,
+                    "craft does not initially shield the body");
             Warheads.detonate(level, WeaponType.MISSILE, c, null, null);
         });
         StrikeGameTests.afterTest(h, () -> WorkScheduler.useImpactClock(level.getServer(), WorkScheduler.newImpactClock()));
         h.succeedWhen(() -> {
-            h.assertTrue(checked[0], "взрыва нет");
+            h.assertTrue(checked[0] && damaged[0] >= at[0], "тело за корпусом не получило эту волну");
+            h.assertTrue(hullGoneAtDamage[0], "корпус ещё цел во время урона телу за ним");
             h.assertFalse(plot.isEmpty(), "лучи не выбрали ни одного блока аппарата");
             // блоки аппарата в выбранном — значит, лучи шли ванильным explode() с миксином Sable
             h.assertTrue(left.isEmpty(), "блоки аппарата не сняты в тике взрыва: " + left);

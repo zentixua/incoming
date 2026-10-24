@@ -99,9 +99,9 @@ record SandboxCommand(Verb verb, List<String> args) {
                 WeaponType w = weapon();
                 if (w == WeaponType.NUKE) throw new IllegalArgumentException("ядерка — nuke <кт>");
                 if (verb == Verb.REAL) {
-                    if (houses() ? args.size() != 2
-                            : args.size() > 1 && (args.size() != 3 || !args.get(1).equals("deck") || number(2) < 1 || number(2) > 6)) {
-                        throw new IllegalArgumentException("real <оружие> [deck <1–6 м> | houses]");
+                    if (houses() || paved() ? args.size() != 2
+                            : args.size() > 1 && (args.size() != 3 || !List.of("deck", "concrete").contains(args.get(1)) || number(2) < 1 || number(2) > 6)) {
+                        throw new IllegalArgumentException("real <оружие> [deck|concrete <1–6 м> | houses | paved]");
                     }
                     break;
                 }
@@ -230,6 +230,15 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code real … deck <м>}: толщина настила моста, м; 0 — удар в землю. */
     int deck() {
         return verb == Verb.REAL && args.size() == 3 ? (int) number(2) : 0;
+    }
+
+    /** A metre of concrete resting on the existing earth, for supported-surface comparisons. */
+    boolean paved() {
+        return args.size() == 2 && args.get(1).equals("paved");
+    }
+
+    boolean concrete() {
+        return args.size() == 3 && args.get(1).equals("concrete");
     }
 
     /** {@code real <оружие> houses}: удар у дощатого дома сцены {@code debris}. */
