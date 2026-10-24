@@ -1,0 +1,41 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+index 82b493b8e..45721263a 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+@@ -396,6 +396,8 @@ final class Sandbox {
+                 onServer(false, s -> {
+                     run(s, "time set " + day);
+                     var level = s.overworld();
++                    // The clock also controls wind: each paired smoke shot must begin in the same air.
++                    ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(NEAR_GAME_TIME);
+                     s.getPlayerList().broadcastAll(new net.minecraft.network.protocol.game.ClientboundSetTimePacket(level.getGameTime(),
+                             level.getDayTime(), level.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
+                 });
+@@ -542,6 +544,17 @@ final class Sandbox {
+     private void startEffect(SandboxCommand c) {
+         Minecraft mc = Minecraft.getInstance();
+         ClientLevel level = mc.level;
++        // Crater-fire seeds use SmokeGrid's presentation clock, independent of the world's wind clock.
++        // Pin it only for an armed capture with no live sources; ordinary /fx layering keeps its clock.
++        if (armed != null && ua.zentix.incoming.client.fx.smoke.SmokeGrid.sources() == 0) {
++            try {
++                var field = ua.zentix.incoming.client.fx.smoke.SmokeGrid.class.getDeclaredField("ticks");
++                field.setAccessible(true);
++                field.setLong(null, 0);
++            } catch (ReflectiveOperationException e) {
++                throw new IllegalStateException("smoke capture clock was not reset", e);
++            }
++        }
+         pendingCmd = c;
+         pendingSince = tick;
+         serverDone = false;
+@@ -707,7 +720,8 @@ final class Sandbox {
+             finish("ok");
+         }
+         // время пришло (пакет без смены суток пишет 0 как 1 — допуск в тик)
+-        if (timeWait >= 0 && Math.floorMod(mc.level.getDayTime() - timeWait, 24000L) <= 1) {
++        if (timeWait >= 0 && Math.floorMod(mc.level.getDayTime() - timeWait, 24000L) <= 1
++                && Math.abs(mc.level.getGameTime() - NEAR_GAME_TIME) <= 2) {
+             timeWait = -1;
+             finish("ok");
+         } else if (timeWait >= 0 && tick - timeSince > 40) {

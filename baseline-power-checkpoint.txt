@@ -1,0 +1,4 @@
+2026-10-24T07:59:03.527315+00:00 candidate 260a811c
+powerprofilesctl=performance
+platform_profile=balanced
+SM did not change either setting.

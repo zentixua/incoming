@@ -1,0 +1,7 @@
+Code: c2b5df760a948304e505751a461b1dfe32df7cde
+Functional source built at 6be6e321; c2b5df76 only updates its documentation.
+JUnit: 1375 tests; failures 0.
+Local command: ./gradlew build runGameTestServer -PgametestOnly="blast_fire_.*"
+[14:19:32] [Server thread/INFO] [minecraft/GameTestServer]: All 3 required tests passed :)
+BUILD SUCCESSFUL in 1m 5s
+PuffOptics SHA256: b8e54f6bec6baf486d2349cf010a46434909169e9ea5f2ce3b6a743ed8f32e37 (unchanged from review 1).

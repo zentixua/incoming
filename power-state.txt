@@ -1,0 +1,5 @@
+2026-10-24T11:21:41Z
+c2b5df760a948304e505751a461b1dfe32df7cde
+performance
+balanced
+SM did not change either power setting.
