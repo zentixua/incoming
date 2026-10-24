@@ -156,6 +156,7 @@ const vec4 MUSH_PART = vec4(0.05, 0.1, 0.25, 0.6);
 Mush gMush[MUSHROOMS];
 vec2 gMushSpan[MUSHROOMS];
 int gMushes;
+vec3 gDir;
 int gFoot0, gFoot1;
 vec2 gFootSpan0, gFootSpan1;
 int gFootLit;
@@ -215,7 +216,8 @@ vec4 carpetFlow(Mush m, mat4 S, vec3 p) {
 
 // Цилиндр проверен один раз на пиксель; вне его — исходные координаты, без обхода массива грибов.
 vec4 carpetFlowAt(mat4 S, vec3 p) {
-    float t = length(p);
+    if (gFoot0 < 0 && gFoot1 < 0) return vec4(0.0);
+    float t = dot(p, gDir);
     if (S[0].x == PallSlot0[0].x && S[0].y == PallSlot0[0].y) {
         if (gFoot0 >= 0 && t >= gFootSpan0.x && t <= gFootSpan0.y) return carpetFlow(gMush[gFoot0], S, p);
     } else {
@@ -225,17 +227,21 @@ vec4 carpetFlowAt(mat4 S, vec3 p) {
 }
 
 void carpetUv(mat4 S, vec3 p, vec3 warp, vec4 flow, out vec3 a, out vec3 b, out float blend) {
-    a = clumpUv(S, p + flow.xyz * fract(flow.w), warp);
-    b = clumpUv(S, p + flow.xyz * fract(flow.w + 0.5), warp);
+    a = clumpUv(S, p, warp);
+    b = a;
+    blend = 1.0;
+    if (dot(flow.xyz, flow.xyz) < 1e-6) return;
+    // clumpUv — аффинная карта. Обе фазы и все теневые выборки используют одну её оценку.
+    vec3 shift = flow.xyz * vec3(1.0, 1.3, 1.0) / S[3].y;
+    b += shift * fract(flow.w + 0.5);
+    a += shift * fract(flow.w);
     blend = mushLayerWeight(fract(flow.w));
 }
 
-float carpetCoarse(mat4 S, vec3 p, vec3 warp, float fill, vec4 flow) {
-    if (dot(flow.xyz, flow.xyz) < 1e-6) return coarseAt(S, clumpUv(S, p, warp), fill);
-    vec3 a, b;
-    float blend;
-    carpetUv(S, p, warp, flow, a, b, blend);
-    return mix(coarseAt(S, b, fill), coarseAt(S, a, fill), blend);
+float carpetCoarse(mat4 S, vec3 a, vec3 b, float blend, float fill) {
+    float raw = coarseAt(S, a, fill);
+    if (blend >= 1.0) return raw;
+    return mix(coarseAt(S, b, fill), raw, blend);
 }
 
 // Бугры верха слоя пыли в точке p (PallField.BUMPS): термики над нагретой землёй — шагом втрое крупнее клубов (у
@@ -254,12 +260,10 @@ float fineAt(vec3 q) {
     return pallDetail(textureLod(PallNoise, q * 4.0 + vec3(0.53, 0.29, 0.17), 0.0).r);
 }
 
-float carpetFine(mat4 S, vec3 p, vec3 warp, vec4 flow) {
-    if (dot(flow.xyz, flow.xyz) < 1e-6) return fineAt(clumpUv(S, p, warp));
-    vec3 a, b;
-    float blend;
-    carpetUv(S, p, warp, flow, a, b, blend);
-    return mix(fineAt(b), fineAt(a), blend);
+float carpetFine(vec3 a, vec3 b, float blend) {
+    float raw = fineAt(a);
+    if (blend >= 1.0) return raw;
+    return mix(fineAt(b), raw, blend);
 }
 
 // Отклонение толщи от средней на пути к свету по клубам одного масштаба (их величина — scale/8): выборки у точки (a) и на
@@ -517,11 +521,15 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     float fill = clamp(f.dense * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, f.height.x));
     vec3 warp = warpAt(S, p);
     vec4 flow = carpetFlowAt(S, p);
+    vec3 uvA, uvB;
+    float phaseBlend;
+    carpetUv(S, p, warp, flow, uvA, uvB, phaseBlend);
+    vec3 lightUv = keyDir * vec3(1.0, 1.3, 1.0);
     // мелкие клубы — около 1/32 плитки: видны во всю силу, пока луч различает вдвое мельче (fine — их доля; 0 — мельче
     // пикселя и шага: их среднее, 1, без выборки)
     float tile = S[3].y, fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
     // клочья молодого слоя расходятся, пока он перемешивается (pallMixed): старая пелена сверху — ровное одеяло
-    float raw = carpetCoarse(S, p, warp, fill, flow), detail = fine > 0.0 ? carpetFine(S, p, warp, flow) : 1.0;
+    float raw = carpetCoarse(S, uvA, uvB, phaseBlend, fill), detail = fine > 0.0 ? carpetFine(uvA, uvB, phaseBlend) : 1.0;
     float coarse = pallMixed(raw, f.mixed), shape = pallMixed(raw * mix(1.0, detail, fine), f.mixed);
     s.clumps = shape;
     float d = f.sigma.x * shape, h = f.sigma.y * mix(1.0, shape, 0.5), m = f.sigma.z * shape;
@@ -533,11 +541,11 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // стороной клуба и тёмной. Выборок шума на тень: крупных — по две (по два канала), мелких — по одной и только пока
     // луч их различает
     float sigmaShade = f.sigma.x + f.sigma.z;
-    float clump = clumpShade(coarse, pallMixed(carpetCoarse(S, p + keyDir * (0.06 * tile), warp, fill, flow), f.mixed),
-            pallMixed(carpetCoarse(S, p + keyDir * (0.22 * tile), warp, fill, flow), f.mixed)) * sigmaShade * tile;
+    float clump = clumpShade(coarse, pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
+            pallMixed(carpetCoarse(S, uvA + lightUv * 0.22, uvB + lightUv * 0.22, phaseBlend, fill), f.mixed)) * sigmaShade * tile;
     if (fine > 0.0) {
-        clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(S, p + keyDir * (0.015 * tile), warp, flow), f.mixed),
-                pallMixed(carpetFine(S, p + keyDir * (0.055 * tile), warp, flow), f.mixed)) * sigmaShade * coarse * (0.25 * tile);
+        clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(uvA + lightUv * 0.015, uvB + lightUv * 0.015, phaseBlend), f.mixed),
+                pallMixed(carpetFine(uvA + lightUv * 0.055, uvB + lightUv * 0.055, phaseBlend), f.mixed)) * sigmaShade * coarse * (0.25 * tile);
     }
     // тень — каждому свету, насколько он со стороны главного
     s.shadeSun += clump * max(dot(keyDir, sunDir), 0.0);
@@ -839,8 +847,7 @@ vec4 wilsonLight(mat4 S, vec4 G, vec4 H, vec4 L, vec3 dir, vec3 sunDir, float t,
     return vec4(l * (1.0 - tr), tr);
 }
 
-// Луч этого пикселя и общее для его шагов (main): направление, солнце, косинусы, сажа, самое яркое пламя, ширина пикселя
-vec3 gDir;
+// Луч этого пикселя (gDir выше) и общее для его шагов: солнце, косинусы, сажа, самое яркое пламя, ширина пикселя
 vec3 gSun;
 float gMuS;
 float gC;
