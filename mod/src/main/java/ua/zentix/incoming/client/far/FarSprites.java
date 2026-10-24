@@ -166,6 +166,36 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
+     * Вуаль вещества облаков у глаза ({@link SmokePuffs.Veil}): сетка клеток во весь экран на одной глубине, у каждой вершины —
+     * своя непрозрачность и цвет (толща по её лучу), между ними — линейно; клетки, где вуали нет, не рисуются.
+     */
+    @Override
+    public void veil(SmokePuffs.Veil veil, int light) {
+        FxAtlas.Sprite w = FxAtlas.white();
+        float u = (w.u0() + w.u1()) / 2, v = (w.v0() + w.v1()) / 2, key = (float) SmokePuffs.VEIL_AT;
+        int n = SmokePuffs.Veil.N;
+        for (int j = 0; j + 1 < n; j++) {
+            for (int i = 0; i + 1 < n; i++) {
+                int a = SmokePuffs.Veil.index(i, j), b = SmokePuffs.Veil.index(i + 1, j), c = SmokePuffs.Veil.index(i + 1, j + 1),
+                        d = SmokePuffs.Veil.index(i, j + 1);
+                if (Math.max(Math.max(veil.alpha(a), veil.alpha(b)), Math.max(veil.alpha(c), veil.alpha(d))) < 0.002f) continue;
+                out.quad(key);
+                veilCorner(veil, i, j, a, u, v, light);
+                veilCorner(veil, i, j + 1, d, u, v, light);
+                veilCorner(veil, i + 1, j + 1, c, u, v, light);
+                veilCorner(veil, i + 1, j, b, u, v, light);
+            }
+        }
+        counts[5]++;
+    }
+
+    private void veilCorner(SmokePuffs.Veil veil, int i, int j, int k, float u, float v, int light) {
+        float a = Math.min(1, veil.alpha(k));
+        out.vertex((float) veil.place(i, j, 0), (float) veil.place(i, j, 1), (float) veil.place(i, j, 2), u, v, Math.min(1, veil.r[k] * a),
+                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, 0, 1, light, 0);
+    }
+
+    /**
      * Модель снаряда в позе pose с центром (dx, dy, dz) от камеры: плитка атласа {@link FarModels} квадратом поперёк луча
      * на неё, закрывает и светит долю a (дымка воздуха, видимость над рельефом, переход от точки).
      *

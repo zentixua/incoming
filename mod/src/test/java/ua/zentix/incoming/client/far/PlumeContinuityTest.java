@@ -150,10 +150,7 @@ class PlumeContinuityTest {
         }
 
         @Override
-        public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light) {}
-
-        @Override
-        public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a) {}
+        public void veil(SmokePuffs.Veil veil, int light) {}
 
         @Override
         public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
