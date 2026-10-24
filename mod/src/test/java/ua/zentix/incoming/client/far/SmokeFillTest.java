@@ -428,8 +428,9 @@ class SmokeFillTest {
 
     @Test
     void nearFieldObliqueAndFlatCloudsKeepTheirRayDensity() throws IOException {
-        for (double sv : new double[]{1, 10, 30}) for (double side : new double[]{0, 18}) {
-            double sh=20, ext=2*Math.PI*sh*sv;
+        for (double sv : new double[]{1, 10, 30}) for (double side : new double[]{0, 18})
+                for (double peak : new double[]{0.001, 0.01, 0.1, 1, 10}) {
+            double sh=20, ext=peak*2*Math.PI*sh*sv;
             SmokeGrid.Source source=(seconds,sink) -> {
                 sink.blob(side,0,0,sh,sv,ext/SmokeGrid.SOOT_K,0,0,0.6f,0.55f,0.45f,SmokeGrid.AIR_K,0);
                 return true;
@@ -446,6 +447,36 @@ class SmokeFillTest {
                 double truth=Math.exp(-SmokePuffs.sightDepth(side, -8, -30,sh,sv,ext,ray.x,ray.y,ray.z));
                 org.junit.jupiter.api.Assertions.assertEquals(truth,screen.transmittance(u,v),0.002,
                         "near-field transport must not inherit a small-angle billboard approximation");
+            }
+        }
+        SmokePuffs.resetBudget();
+    }
+
+    @Test
+    void anisotropicSegmentsKeepTheLineIntegral() throws IOException {
+        for (boolean vertical : new boolean[]{false,true}) {
+            double ax=vertical?0:20, ay=vertical?10:0, sh=20, sv=1, ext=2*Math.PI*sh*sv;
+            SmokeGrid.Source source=(seconds,sink) -> {
+                sink.segment(0,0,0,ax,ay,0,sh,sv,ext/SmokeGrid.SOOT_K,0,0,
+                        0.6f,0.55f,0.45f,SmokeGrid.AIR_K,0);
+                return true;
+            };
+            Vec3 eye=new Vec3(0,4,50);
+            FarView view=view(eye,new Vector3f(0,0,-1));
+            Screen screen=new Screen(view);
+            SmokePuffs.resetBudget();
+            source.emit(0,SmokePuffs.sink(view,screen,source,0));
+            SmokePuffs.flush();
+            for(int x=-4;x<=4;x++) for(int y=-3;y<=3;y++) {
+                double u=x*10.0/50, v=(y-4.0)/50;
+                Vector3f ray=new Vector3f(view.forward()).fma((float)u,view.left()).fma((float)v,view.up()).normalize();
+                double tau=0;
+                for(int j=0;j<256;j++) {
+                    double t=2*(j+0.5)/256-1;
+                    tau+=SmokePuffs.sightDepth(ax*t,ay*t-eye.y,-eye.z,sh,sv,ext/256,ray.x,ray.y,ray.z);
+                }
+                org.junit.jupiter.api.Assertions.assertEquals(Math.exp(-tau),screen.transmittance(u,v),0.01,
+                        "segment quadrature must follow the anisotropic Gaussian metric");
             }
         }
         SmokePuffs.resetBudget();

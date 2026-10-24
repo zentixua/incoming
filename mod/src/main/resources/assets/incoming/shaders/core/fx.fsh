@@ -64,6 +64,17 @@ vec3 unitOr(vec3 v, vec3 fallback) {
     return square > 1e-30 ? v * inversesqrt(square) : fallback;
 }
 
+// The analytic rectangle is only a raster bound. Flat ground dust keeps its physical light-map plane.
+bool gaussianFlat() {
+    return gaussian0.w > 3.0 * gaussian1.x && gaussian0.w * abs(gaussian0.y) > gaussian1.x * length(gaussian0.xyz);
+}
+void gaussianFrame(inout vec3 right, inout vec3 up, inout vec3 normal) {
+    if (!gaussianFlat()) return;
+    right = unitOr(vec3(right.x, 0.0, right.z), vec3(1.0, 0.0, 0.0));
+    normal = vec3(0.0, gaussian0.y < 0.0 ? 1.0 : -1.0, 0.0);
+    up = cross(normal, right);
+}
+
 // Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
 // с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по квадратам косинусов (в сумме
 // 1 при любом направлении: по самим косинусам солнце под 45° светило бы в √2 раз сильнее, чем прямо сбоку).
@@ -108,8 +119,11 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
         vec3 wx = dFdx(worldPos), wy = dFdy(worldPos);
         float orientation = dx.x * dy.y - dx.y * dy.x < 0.0 ? -1.0 : 1.0;
         vec3 right = unitOr((wx * dy.y - wy * dx.y) * orientation, vec3(1.0, 0.0, 0.0));
-        vec3 down = unitOr((wy * dx.x - wx * dy.x) * orientation, vec3(0.0, -1.0, 0.0));
-        local = (0.5 + 0.5 * vec2(dot(delta, right) / gaussian0.w, dot(delta, down) / gaussian1.z) / gaussian1.w) * tile;
+        vec3 up = unitOr((wx * dy.x - wy * dx.x) * orientation, vec3(0.0, 1.0, 0.0));
+        vec3 normal = unitOr(cross(wx, wy), vec3(0.0, 0.0, 1.0));
+        gaussianFrame(right, up, normal);
+        float verticalSigma = gaussianFlat() ? gaussian0.w : gaussian1.z;
+        local = (0.5 + 0.5 * vec2(dot(delta, right) / gaussian0.w, -dot(delta, up) / verticalSigma) / gaussian1.w) * tile;
         uv = origin + local;
         dx = dFdx(uv); dy = dFdy(uv);
         if (any(lessThan(local, vec2(0.0))) || any(greaterThan(local, tile))) {
@@ -194,7 +208,8 @@ float gaussianAlpha(float sceneDistance) {
     vec3 invSigma = 1.0 / vec3(gaussian0.w, gaussian1.x, gaussian0.w);
     vec3 p = gaussian0.xyz * invSigma, r = ray * invSigma;
     float speed = length(r), a = dot(p, r) / speed;
-    float b2 = max(dot(p,p)-a*a,0.0);
+    vec3 perpendicular = cross(p, r / speed);
+    float b2 = dot(perpendicular, perpendicular);
     float tail = sceneDistance < 1e8 ? gaussianErf((speed * sceneDistance * length(worldPos) / viewDistance - a) * 0.7071067812) : 1.0;
     float tau = gaussian1.y / (12.5663706144 * gaussian0.w * gaussian0.w * gaussian1.x * speed)
             * exp(-0.5*b2) * max(tail + gaussianErf(a * 0.7071067812),0.0);
@@ -230,9 +245,10 @@ void main() {
                 : unitOr(cross(vec3(0.0, 1.0, 0.0), normal), vec3(1.0, 0.0, 0.0));
         vec3 right = unitOr((worldDx * dy.y - worldDy * dx.y) * orientation, fallbackRight);
         vec3 up = unitOr((worldDx * dy.x - worldDy * dx.x) * orientation, cross(normal, right));
+        if (analytic) gaussianFrame(right, up, normal);
         vec3 keyDir = vec3(dot(sixKeyDir, right), dot(sixKeyDir, up), dot(sixKeyDir, normal));
         vec3 ballPower = sixBall, ballDir = sixBallDir;
-        if (abs(normal.y) > 0.9999) ballPower = ballsToward(worldPos, ballDir);
+        if (!analytic && abs(normal.y) > 0.9999) ballPower = ballsToward(worldPos, ballDir);
         ballDir = unitOr(ballDir, normal);
         ballDir = vec3(dot(ballDir, right), dot(ballDir, up), dot(ballDir, normal));
         // свет неба: прямой (солнце, луна) — по сторонам, рассеянный — средний по шести; оба — против среднего по шести

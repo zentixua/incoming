@@ -14,7 +14,9 @@ import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
  * вещества от источника {@link SmokeGrid.Source}: облако взрыва, облако старта, дым пожара) — кучка запечённых клубов
  * ({@link FxAtlas#puff6}: симуляция газа в Blender, шестисторонний свет, векторы движения между кадрами).
  * <ul>
- * <li><b>Вещество.</b> Квадраты складываются, как толщи: клуб рисуется толщей своего кадра × s ({@code fx.fsh}:
+ * <li><b>Ближняя проекция.</b> У гаусса крупнее 8% глубины (оценка LOD) толща интегрируется в шейдере по настоящему лучу
+ * от глаза до мира. Запечённые карты задают только свет и движение газа; рамка кадра не меняет плотность и вход глаза.</li>
+ * <li><b>Дальняя проекция.</b> Квадраты складываются, как толщи: клуб рисуется толщей своего кадра × s ({@code fx.fsh}:
  * 1 − (1 − α)^s), и сколько бы клубов ни перекрывалось, сквозь них видно e^(−Στ). Клуб, что несёт гаусс (σ на экране,
  * толща середины τ₀ = Σκ'm/(2πσhσv)), — полуразмером c·σ и толщей s ({@link PuffOptics}): у него то же вещество
  * (Σ τ по экрану — ослабление всей массы) и одиночным он закрывает столько же (Σ (1 − e^(−τ))), сколько гаусс модели;
@@ -31,7 +33,7 @@ import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
  * Светящийся газ (горячее точки Дрейпера) у источника, что рисует тело огня ({@link SmokeGrid.Source#drawsGlow}: облако
  * взрыва — огненным шаром), здесь не рисуется: дым проступает той же долей, что тело тает. Отрезок облака
  * ({@link SmokeGrid.Sink#segment}) — клубы вдоль него через ~σ; кусок трубки ({@link SmokeGrid.Sink#tube}: шлейф пожара) —
- * как след снаряда ({@link FarFlightView#line}, {@link #tube}).
+ * теми же отрезками модели с анизотропным сечением. Независимые следы снарядов сохраняют свою трубку ({@link #tube}).
  */
 final class SmokePuffs {
     /** Куда клубы, вуали и ленты идут квадратами (кадр слоя — {@link FarSprites}; проверки — свой приёмник). */
@@ -351,19 +353,9 @@ final class SmokePuffs {
             ctxSprays[contexts] = sprays;
             contexts++;
             from = holding;
-            joint[0] = Float.NaN;
         }
 
-        /** Концы куска трубки и поперёк ленты у конца прошлого куска этого источника (NaN — ленты не было). */
-        private final FarFlightView.Tube a = new FarFlightView.Tube(), b = new FarFlightView.Tube();
-        private final float[] joint = new float[3];
-
-        /**
-         * Шлейф — трубка, как след снаряда ({@link FarFlightView#line}): гауссово сечение σ = √(σh·σv) (среднее
-         * геометрическое, как у толщи шлейфа {@code FirePlume.tau}; ⚠ сечение шлейфа в σh/σv до 2 раз шире, чем выше),
-         * ослабление сажи на метр у каждого конца; узкая на экране — лентой, крупная — клубами через ≤ 1,2σ. Куски одного
-         * источника идут подряд — лента без щели на стыке.
-         */
+        /** World-source tubes retain the source model's segment mass and anisotropic cross-section. */
         @Override
         public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double dustA, double bx, double by, double bz,
                      double shb, double svb, double sootB, double dustB, float albedoR, float albedoG, float albedoB, double kelvin, double rise,
@@ -372,15 +364,6 @@ final class SmokePuffs {
             // The separate projectile trail renderer retains its own longitudinal interpolation.
             SmokeGrid.Sink.super.tube(ax, ay, az, sha, sva, sootA, dustA, bx, by, bz, shb, svb, sootB, dustB,
                     albedoR, albedoG, albedoB, kelvin, rise, sigma0);
-        }
-
-        /** Конец трубки (от камеры): ширина на половине непрозрачности середины и лента — как у следа ({@code TrailModel.width}). */
-        private void end(FarFlightView.Tube t, double dx, double dy, double dz, double sigma, double e) {
-            double tau = e / (Math.sqrt(2 * Math.PI) * sigma), d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            double width = ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma);
-            FarFlightView.ribbon(width, d, view.pixel(), point);
-            float alpha = width > 0 ? (float) ((1 - Math.exp(-tau)) * point[1] * view.air(d, dy)) : 0;
-            t.set(dx, dy, dz, sigma, e, width, point[0], alpha, OPEN_SKY);
         }
 
         @Override
@@ -398,7 +381,10 @@ final class SmokePuffs {
                 hold(x, y, z, sh, sv, soot, dust, water, dustR, dustG, dustB, at * 16);
                 return;
             }
-            int n = (int) Math.min(64, Math.max(1, Math.ceil(len / (0.25 * Math.min(sh, sv)))));
+            // Integrate in Gaussian coordinates. A horizontal segment in flat dust varies with sigma-h,
+            // not its much smaller vertical sigma. Midpoint steps of 0.5 sigma have a ~1% curvature error.
+            double metric = 2*Math.sqrt(ax*ax/(sh*sh) + ay*ay/(sv*sv) + az*az/(sh*sh));
+            int n = (int) Math.min(64, Math.max(1, Math.ceil(metric / 0.5)));
             for (int k = 0; k < n; k++) {
                 double f = n == 1 ? 0 : (k + 0.5) / n * 2 - 1;
                 blob(x + ax * f, y + ay * f, z + az * f, sh, sv, soot / n, dust / n, water / n, dustR, dustG, dustB, at * 16 + k);
@@ -631,7 +617,10 @@ final class SmokePuffs {
             double across = projected(sh, sv, x - eye.x, y - eye.y, z - eye.z);
             double ks = SmokeGrid.SOOT_K * soot, kd = SmokeGrid.dustK(dr, dg, db) * dust, kw = SmokeGrid.DROP_K * water;
             double tau = (ks + kd + kw) / (2 * Math.PI * sh * across);
-            if (1 - Math.exp(-tau) < 0.004) return 0;
+            double cameraDepth = (x-eye.x)*view.forward().x + (y-eye.y)*view.forward().y + (z-eye.z)*view.forward().z;
+            // Small-angle error scales with (sigma/depth)^2; 8% is a rendering LOD estimate, not a density rule.
+            boolean near = Math.max(sh, sv) > 0.08 * Math.max(cameraDepth, 0);
+            if (!near && 1 - Math.exp(-tau) < 0.004) return 0;
             // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг
             boolean spray = sprays && kw > ks + kd;
             double clubAge = Math.max(FIRST_FRAME, spray ? sprayAge : age);
@@ -647,8 +636,7 @@ final class SmokePuffs {
             double d = Math.sqrt(px * px + py * py + pz * pz);
             double air = view.air(d, py);
             if (air < Sight.THRESHOLD) return 0;
-            double depth = px * view.forward().x + py * view.forward().y + pz * view.forward().z;
-            if (Math.max(sh, sv) > 0.08 * Math.max(depth, 0)) {
+            if (near) {
                 if (planning) return 0;
                 long hash = mix(seed * 0x9E3779B97F4A7C15L + id);
                 float light = (float) ((0.88 + 0.24 * unit(hash)) * view.skyLight());
