@@ -44,11 +44,12 @@ final class FrontDust implements SmokeGrid.Source {
     /** К этому остатку выпавшей крупной пыли источник уже невидим; не срок, связанный с фазой давления. */
     private static final double GONE = 1e-5;
     /**
-     * Цвет толстого слоя крошки на экране (сухая светлая земля дёрна; подача) и альбедо вещества по нему: клуб берёт
-     * альбедо ({@link SmokeGrid#dustAlbedo}), а не цвет экрана — иначе толстый слой выходил серым (0,6/0,55/0,45), и середина
-     * клуба темнела против светлой каймы («бублики»).
+     * Цвет толстого слоя крошки на экране — сухая светлая пыль почвы: ω' ≈ 0,9 в красном (у минеральной пыли в видимом
+     * 0,85–0,95, ⚠ оценка для крошки дёрна) — и альбедо по нему ({@link SmokeGrid#dustAlbedo}). Клуб берёт альбедо, а не
+     * цвет экрана: цвет экрана вместо альбедо давал серый толстый слой, а у тёмной пыли (ω' ≈ 0,8) клуб в 0,8 толщи
+     * при солнце сверху темнел серединой против светлой просвечивающей каймы («бублики»).
      */
-    static final float SHOWN_R = 0.82f, SHOWN_G = 0.76f, SHOWN_B = 0.62f;
+    static final float SHOWN_R = 0.72f, SHOWN_G = 0.65f, SHOWN_B = 0.54f;
     static final float ALBEDO_R = SmokeGrid.dustAlbedo(SHOWN_R), ALBEDO_G = SmokeGrid.dustAlbedo(SHOWN_G),
             ALBEDO_B = SmokeGrid.dustAlbedo(SHOWN_B);
     static final double SETTLE_SECONDS = -Math.log(GONE) * HEIGHT / BlastLitter.COVER_DUST_SETTLE;
