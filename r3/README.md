@@ -50,4 +50,6 @@ Not changed: the condensation cloud still reads as round puffs. Its cells are al
 rule, so they are small next to the 0.36 r spacing of 48 cells on the hemisphere; a smooth shell needs a different
 primitive than Gaussian puffs. Its physics (shock heating, isentropic expansion, Magnus, latent heat) is unchanged.
 
+Salvo frame cost against main: [salvo/README.md](salvo/README.md).
+
 Scripts: `capture-r3.py` (sandbox commands), `assemble-r3.py` (sheets, movies, intervals), `sheet.py`, `probe.sh`.
