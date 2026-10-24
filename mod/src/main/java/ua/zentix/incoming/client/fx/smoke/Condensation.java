@@ -17,7 +17,7 @@ import ua.zentix.incoming.nuclear.model.HobBlast;
  * finite droplet growth. Neither this estimate nor the presentation is used by the nuclear cloud.
  */
 public final class Condensation {
-    private static final int RINGS = 72, DIRECTIONS = 96;
+    private static final int RINGS = 24, DIRECTIONS = 48;
     private static final double P0 = BlastModel.P0 * 1000, T0 = CloudModel.T_AIR_K;
     private static final double RV = 461.5, RD = 287.05, CP = 1005, LV = 2.45e6;
     private static final double DROP_EXTINCTION = CloudModel.DROP_K * (1 - CloudModel.DROP_G);
@@ -109,7 +109,7 @@ public final class Condensation {
                 for (int i = 0; i < DIRECTIONS; i++) out.blob(0, 0, 0, 0, 0, 0, 0, 0, T0, 0);
                 continue;
             }
-            double sigma = Math.min(0.10 * r, Math.max(0, front.radiusAt(seconds) - r) / 4);
+            double sigma = Math.min(0.14 * r, Math.max(0, front.radiusAt(seconds) - r) / 4);
             if (sigma <= 0) continue;
             for (int i = 0; i < DIRECTIONS; i++) {
                 double vertical = (i + 0.5) / DIRECTIONS;

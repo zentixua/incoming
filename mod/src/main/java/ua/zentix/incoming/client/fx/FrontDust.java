@@ -31,7 +31,8 @@ final class FrontDust implements SmokeGrid.Source {
     private static final int RINGS = 24, SPOKES = 64;
     private static final double LIFE = 0.32;
     private final ClientLevel level;
-    private final double born, end;
+    private final long born;
+    private final double end;
     private final ChemicalFront front;
     private final List<Patch> patches;
 
@@ -39,10 +40,10 @@ final class FrontDust implements SmokeGrid.Source {
         this.front = front;
         this.level = level;
         this.patches = patches;
-        born = SmokeGrid.seconds(0);
+        born = BlastTime.ticks();
         double last = 0;
         for (Patch p : patches) last = Math.max(last, p.arrival);
-        end = born + last + LIFE;
+        end = last + LIFE;
     }
 
     static void spawn(ClientLevel level, Vec3 pos, ChemicalFront front, double inner, double outer, double hob) {
@@ -83,15 +84,16 @@ final class FrontDust implements SmokeGrid.Source {
 
     @Override
     public boolean emit(double seconds, SmokeGrid.Sink out) {
-        if (ended() || seconds >= end) return false;
+        double elapsed = BlastTime.seconds(BlastTime.ticks(), born, 20 * (seconds - SmokeGrid.seconds(0)));
+        if (ended() || elapsed >= end) return false;
         for (Patch p : patches) {
-            double age = seconds - born - p.arrival, fade = envelope(age);
+            double age = elapsed - p.arrival, fade = envelope(age);
             if (fade <= 0) {
                 // Empty calls retain the baked-puff seed while neighbouring patches start or expire.
                 out.blob(p.x, p.y, p.z, 0, 0, 0, 0, 0, 0.82f, 0.76f, 0.62f, CloudModel.T_AIR_K, 0);
                 continue;
             }
-            double s = Math.min(p.size * (0.7 + 2 * age), Math.max(0, front.radiusAt(seconds - born) - p.slant) / 4);
+            double s = Math.min(p.size * (0.7 + 2 * age), Math.max(0, front.radiusAt(elapsed) - p.slant) / 4);
             if (s <= 0) continue;
             double v = 0.3 + age;
             // Подача: оптическая толща детали 0,8 при полном срыве; это не масса, добавленная к расчёту разрушений.
@@ -103,6 +105,6 @@ final class FrontDust implements SmokeGrid.Source {
 
     @Override
     public boolean ended() {
-        return level != Minecraft.getInstance().level || SmokeGrid.seconds(0) >= end;
+        return level != Minecraft.getInstance().level || BlastTime.seconds(BlastTime.ticks(), born, 0) >= end;
     }
 }

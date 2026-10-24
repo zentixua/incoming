@@ -6,6 +6,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.client.fx.BlastTime;
 import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLights;
@@ -90,7 +91,7 @@ public final class FarBlasts {
     /** Самое яркое тело последнего кадра (для лога): ядро, блик и вуаль в пикселях, пересвет, доля над рельефом. */
     private static final double[] BRIGHTEST = new double[5];
     private static final float[] TINT = new float[3];
-    /** Тики клиента (не на паузе). */
+    /** Последний клиентский pre-tick: возраст обычного эффекта не зависит от порядка post-tick слушателей. */
     private static long clock;
     /** Последний дальний звук — для лога сценария. */
     private static Outdoor.Heard lastHeard;
@@ -115,8 +116,6 @@ public final class FarBlasts {
         /** Зерно взрыва: клубы и вариант записи звука. */
         final long seed;
         final long born;
-        /** Часы сетки дыма в миг взрыва, с. */
-        final double bornSeconds;
         /** Пакет пришёл ближе {@link #NEAR}: ближняя картинка и звук есть. */
         final boolean near;
         /** Альбедо пыли грунта по каналам; поворот кадра шара (по зерну). */
@@ -152,8 +151,7 @@ public final class FarBlasts {
             this.ground = ground;
             this.water = ground.isWater() && source.chargeKg() > 0 ? water(level, new Vec3(x, y, z), source.chargeKg(), model.air) : null;
             this.seed = seed;
-            this.born = clock;
-            this.bornSeconds = SmokeGrid.seconds(0);
+            this.born = BlastTime.ticks();
             this.near = near;
             this.soundPending = !near;
             // топливо в воронке горит пожаром среди пожаров клиента: шлейф, его свет и жар — там, и он сливается с огнём,
@@ -230,7 +228,7 @@ public final class FarBlasts {
         /** Во сколько раз облако выросло с начала (σ по горизонтали) — кадр запечённого клуба. */
         @Override
         public double puffGrowth(double seconds) {
-            double t = Math.max(0, seconds - bornSeconds);
+            double t = sourceAge(seconds);
             return model.sigmaH(t) / Math.max(model.sigmaH(0), 1e-6);
         }
 
@@ -252,11 +250,16 @@ public final class FarBlasts {
             return FarBlasts.visible(wy - y, r, hidden > 0 ? LIFT + hidden : 0);
         }
 
+        private double sourceAge(double seconds) {
+            // Only the fractional tick comes from SmokeGrid; its post-tick counter may already have advanced at birth.
+            return BlastTime.seconds(BlastTime.ticks(), born, 20 * (seconds - SmokeGrid.seconds(0)));
+        }
+
         /** Источник облака: клубы модели в мире, облако конденсации и брызги взрыва на воде. */
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
             if (!alive || level != Minecraft.getInstance().level) return false;
-            double t = seconds - bornSeconds;
+            double t = sourceAge(seconds);
             if (t >= Math.max(model.life, water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
                 double growth = puffGrowth(seconds);
@@ -531,7 +534,7 @@ public final class FarBlasts {
             reset();
             return;
         }
-        clock++;
+        clock = BlastTime.ticks();
         if (EVENTS.isEmpty()) return;
         Vec3 ear = camera();
         Sightline.Heights heights = FarTerrain.of(level);
@@ -642,7 +645,7 @@ public final class FarBlasts {
     static void collect(FarView view, FarSprites out, FxLights lights) {
         ClientLevel level = Minecraft.getInstance().level;
         Vec3 cam = view.camera();
-        double now = clock + view.partial();
+        double now = BlastTime.ticks() + view.partial();
         Arrays.fill(BRIGHTEST, 0);
         for (Event e : EVENTS) {
             if (e.level != level) continue;
@@ -671,7 +674,7 @@ public final class FarBlasts {
      * воздуха, 1/блок). true — хоть один шар добавлен.
      */
     public static boolean fireballs(Vec3 eye, float partial, double exposure, double air, Matrix4f centres, Matrix4f light) {
-        double now = clock + partial;
+        double now = BlastTime.ticks() + partial;
         double[] weight = WEIGHT;
         boolean any = false;
         org.joml.Vector4f column = COLUMN;
@@ -705,10 +708,10 @@ public final class FarBlasts {
      */
     public static void heat(Vec3 eye, float partial, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         ClientLevel level = Minecraft.getInstance().level;
-        double now = clock + partial;
+        double now = BlastTime.ticks() + partial;
         for (Event e : EVENTS) {
             if (e.level != level || !e.alive) continue;
-            double t = Math.max(0, now - e.born) / 20;
+            double t = BlastTime.seconds(BlastTime.ticks(), e.born, partial);
             double bx = e.x - eye.x, by = e.y - eye.y, bz = e.z - eye.z;
             double r = e.model.ballRadius(t);
             if (r > 0) {

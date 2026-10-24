@@ -139,6 +139,7 @@ public final class BlastEffects {
         @Nullable
         private final ChemicalFront front;
         private boolean arrived, hit, over;
+        private long bornTick = Long.MIN_VALUE, lastTick = Long.MIN_VALUE;
         /** Часы взрыва, по которым эхо и удар у уха ждут начала прямого звука ({@link BlastSounds#clock}). */
         private final OwnSources.Clock clock = BlastSounds.clock();
 
@@ -169,7 +170,13 @@ public final class BlastEffects {
         }
 
         @Override
-        public final boolean tick(ClientLevel level, int t) {
+        public final boolean tick(ClientLevel level, int scheduledTick) {
+            long now = BlastTime.ticks();
+            if (bornTick == Long.MIN_VALUE) bornTick = now;
+            if (now == lastTick) return true; // Effects.add already ran t=0 in this same post tick.
+            if (now < bornTick) return false;
+            lastTick = now;
+            int t = (int) Math.min(Integer.MAX_VALUE, now - bornTick);
             Minecraft mc = Minecraft.getInstance();
             if (!arrived) {
                 Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
