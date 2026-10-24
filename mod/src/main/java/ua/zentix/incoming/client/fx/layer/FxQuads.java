@@ -144,6 +144,7 @@ public final class FxQuads {
 
     /** Кадры огня — смесь в шейдере с умноженной альфой, а не два квадрата с провалом яркости между кадрами. */
     public void fireballMix(float mix) {
+        six = false;
         nearest = (byte) (mix < 0 ? 0 : 80);
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
     }
