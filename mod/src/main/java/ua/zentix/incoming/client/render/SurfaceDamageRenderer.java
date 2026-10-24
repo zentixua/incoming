@@ -26,7 +26,7 @@ public final class SurfaceDamageRenderer extends EntityRenderer<Display.BlockDis
         BlockState material = entity.blockRenderState().blockState();
         pose.pushPose();
         pose.translate(0.5, 0, 0.5);
-        int hash = Long.hashCode(entity.blockPosition().asLong());
+        int hash = entity.blockPosition().hashCode();
         pose.mulPose(new Quaternionf().rotateY((hash & 3) * (float) (Math.PI / 2)));
         pose.translate(-0.5, 0, -0.5);
         piece(pose, buffers, light, Blocks.BLACKSTONE.defaultBlockState(), .04f, .004f, .09f, .91f, .012f, .82f, -.08f);

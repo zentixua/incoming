@@ -29,6 +29,7 @@ public class DebrisRenderer extends EntityRenderer<DebrisEntity> {
         pose.pushPose();
         // Presentation only: conventional loose material is centimetre-sized, not a one-metre block.
         float size = e.isChip() ? 0.16f + (e.getId() & 3) * 0.035f : 1;
+        shadowRadius = 0.4f * size;
         pose.translate(0, size * 0.5, 0);
         if (airborne) pose.mulPose(new Quaternionf().rotationXYZ(t * e.spinX * 0.0175f, 0, t * e.spinZ * 0.0175f));
         pose.scale(size, size, size);
