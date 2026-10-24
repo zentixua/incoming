@@ -68,7 +68,7 @@ final class FrontDust implements SmokeGrid.Source {
                         ? 1 : FrontLitter.along(r, Math.hypot(r, hob));
                 double friction = BlastLitter.friction(front.kpa(slant), along);
                 if (!BlastLitter.tearsCover(front.kpa(slant), along)) continue;
-                double size = Math.max(0.45, Math.min(1.2, Math.PI * r / spokes));
+                double size = Math.max(0.45, Math.min(2.4, 2 * Math.PI * r / spokes));
                 double contrast = Math.min(1, friction / DustModel.Surface.COVERED.threshold() - 1);
                 patches.add(new Patch(x, y, z, slant, front.arrivalSeconds(slant), BlastModel.chemicalPhaseSeconds(slant, front.tntKg, front.surface), size, contrast));
             }
@@ -96,12 +96,12 @@ final class FrontDust implements SmokeGrid.Source {
                 out.blob(p.x, p.y, p.z, 0, 0, 0, 0, 0, 0.82f, 0.76f, 0.62f, CloudModel.T_AIR_K, 0);
                 continue;
             }
-            double s = Math.min(p.size * (0.7 + 2 * age), Math.max(0, front.radiusAt(elapsed) - p.slant) / 4);
+            double s = Math.min(p.size * (1.2 + 2 * age), Math.max(0, front.radiusAt(elapsed) - p.slant) / 4);
             if (s <= 0) continue;
-            double v = 2.0 + age; // Подача: поднятый клуб, чтобы фронт читался с уровня глаз.
+            double v = Math.min(1.3 + age, 1.1 * s); // Подача: поднятый клуб, чтобы фронт читался с уровня глаз.
             // Подача: оптическая толща детали 2,8 при полном срыве; это не масса, добавленная к расчёту разрушений.
             double dust = 2.8 * p.contrast * fade * 2 * Math.PI * s * v / SmokeGrid.dustK(0.82f, 0.76f, 0.62f);
-            out.blob(p.x, p.y + 1 + 12 * age, p.z, s, v, 0, dust, 0, 0.82f, 0.76f, 0.62f, CloudModel.T_AIR_K, 0);
+            out.blob(p.x, p.y + 0.5 + 12 * age, p.z, s, v, 0, dust, 0, 0.82f, 0.76f, 0.62f, CloudModel.T_AIR_K, 0);
         }
         return true;
     }
