@@ -391,7 +391,7 @@ public final class PallPass {
 
     @Nullable
     static ShaderInstance march, resolve, composite, shadow, footLighting;
-    static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 32;
+    static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 16;
     private static final Frame EMPTY = new Frame();
     private static final Detail DETAIL = new Detail();
     /** Шум не вышел (ошибка в фоне): пелены нет до перезапуска. */

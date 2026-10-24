@@ -164,7 +164,7 @@ int gFoot0, gFoot1;
 vec2 gFootSpan0, gFootSpan1;
 const int FOOT_LIGHT_AZ = 64;
 const int FOOT_LIGHT_R = 16;
-const int FOOT_LIGHT_H = 32;
+const int FOOT_LIGHT_H = 16;
 
 
 float hg(float g, float c) {
@@ -1200,7 +1200,7 @@ vec3 mushFootLight(int k, Mush m, vec3 q) {
     float r = mushStemAt(m, q.y), band = mushFootBandAt(m, q.y);
     float radius = clamp((length(q.xz) - 0.6 * r) / max((0.4 + MUSH_STEM_REACH) * r + band, 1.0), 0.0, 1.0);
     float az = fract(atan(q.z, q.x) / 6.28318530718 + 1.0);
-    float h = clamp(q.y / max(m.footMerge, 1.0), 0.0, 1.0) * float(FOOT_LIGHT_H - 1);
+    float h = clamp(q.y / max(m.footMerge, 1e-6), 0.0, 1.0) * float(FOOT_LIGHT_H - 1);
     float hi = min(floor(h), float(FOOT_LIGHT_H - 2));
     float rows = float(FOOT_LIGHT_H * FOOT_LIGHT_R * MUSHROOMS);
     vec2 uv = vec2((az * float(FOOT_LIGHT_AZ) + 0.5) / float(FOOT_LIGHT_AZ + 1),
