@@ -31,10 +31,14 @@ Full final frames and JSON: [day](polish_day_final), [surface](polish_near), [ni
 
 Author's frame check: the 10-second surface reads as translucent foam with water visible through lace; the early hard dark ring is gone; late mist is diffuse without the directional falling-spray lines. The physical low layer is still visible above the shore. The 4-second column has the same substance and scale. Final acceptance belongs to Claude's requested follow-up review.
 
+## Rebase provenance
+
+After capture, main advanced through #431, #434, #439 and #436 to 4a6a489e. WT was rebased to bde327ea. The only manual conflict resolution kept both Pending.SAM/watchSam and Pending.POND/water handling in the sandbox. FarBlasts, SmokePuffs, WaterBlast, WaterDecal and fx_water.fsh are byte-for-byte identical to captured 9ebb5e75. Thus the image labels retain the actual captured source hash. The inherited SD crater-fire sound change belongs to #436; this WT diff still has no audio changes.
+
 ## Validation
 
-- Local `./gradlew --daemon build`: 1221 JUnit tests, zero failures/errors/skips.
+- Before rebase: local `build` passed 1221 JUnit tests. After rebase: `./gradlew --daemon build compileDevtestJava` passed 1245 JUnit tests, zero failures/errors/skips; sandbox compiled with both commands preserved.
 - Local `./gradlew runGameTestServer -PgametestOnly=blast_ground_under`: 1/1 passed.
-- Current head 9ebb5e75: full CI, including Итог and Записка, green on its first attempt. Previous heads' diagnostics remain in the core report and were not erased or reclassified.
-- Local log: `/mnt/data/projects/incoming/mod/run/wt-WT-dl/polish-check.log`.
+- Captured 9ebb5e75: full CI, including Итог and Записка, green on its first attempt. [Rebased bde327ea full CI](https://github.com/zentixua/incoming/actions/runs/40047640990) is also green on its first attempt, including all six GameTest shards and Итог; Записка is green. Previous heads' diagnostics remain in the core report and were not erased or reclassified.
+- Local log: `/mnt/data/projects/incoming/mod/run/wt-WT-dl/polish-check.log` and `polish-rebase-check.log`.
 - Own sandbox stopped and GPU lease released after captures. No personal game, instance, world, settings, server, modpack or release changes.
