@@ -47,6 +47,13 @@ public final class FireSmoke implements SmokeGrid.Source {
     private static final Long2ObjectOpenHashMap<FireSmoke> OIL_FIRES = new Long2ObjectOpenHashMap<>();
     /** Топливо в воронках взрывов ({@link #pool}). */
     private static final java.util.List<FireSmoke> POOLS = new java.util.ArrayList<>();
+    /**
+     * Клетки топлива горящих воронок — колонка (x, z) → верх клетки в ней, и сколько таких колонок в чанке: огонь на них —
+     * топливо, а не дерево ({@link #fuelCell}). Топливо, потерявшее опору, капает вниз в своей колонке, поэтому огонь
+     * в колонке не выше клетки — тоже его.
+     */
+    private static final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap FUEL_COLUMNS = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
+    private static final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap FUEL_CHUNKS = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
 
     /**
      * Что горит: тепловыделение и площадь очага на единицу силы очага (у огня Minecraft единица — блок огня), сажи на
@@ -95,6 +102,8 @@ public final class FireSmoke implements SmokeGrid.Source {
     /** Доля топлива в воронке, что горит, по возрасту очага (null — не воронка). */
     @org.jetbrains.annotations.Nullable
     java.util.function.DoubleUnaryOperator burning;
+    /** Клетки огня топлива воронки (колонки и верх, {@link #FUEL_COLUMNS}); у прочих очагов — пусто. */
+    private java.util.List<BlockPos> cells = java.util.List.of();
     /**
      * Место очага, сила (блоков огня или очагов топлива), сила всего пожара, куда он входит (в единицах его топлива,
      * {@link #merge}), начало и конец горения (часы сетки, с; конец — NaN, пока горит); пересмотр.
@@ -260,6 +269,7 @@ public final class FireSmoke implements SmokeGrid.Source {
             if (share <= 0 && now > f.start) {
                 f.end = now;
                 it.remove();
+                columns();
             }
         }
         // очаги рядом — один пожар; потом — запись и шлейф по нему
@@ -293,24 +303,69 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Топливо в воронке взрыва {@code model} у точки (x, y, z) ({@code CloudModel#poolSeconds}): горит лужей с теплом
-     * {@code poolWatts} и сажей топлива, долей {@code poolShare} по возрасту, — очаг среди пожаров клиента: его шлейф
-     * сливается с огнём, что поджёг шар топлива рядом ({@link #merge}), его пламя светит на дым и мир.
+     * Топливо в воронке горит на клетках {@code cells} огнём Minecraft (сервер, {@code warhead/FuelFires}) по закону
+     * {@code pool} с теплом {@code watts} и сажей топлива, долей {@code share} по возрасту ({@code age} с уже прошло с
+     * удара), — очаг среди пожаров клиента над серединой клеток: его шлейф сливается с огнём, что поджёг шар топлива рядом
+     * ({@link #merge}), пламя светит на дым. Огонь клеток — сами блоки (их свет — свет блоков); дерево он не считает
+     * ({@link #fuelCell}). Середина очага — место его звука.
      */
-    public static void pool(ClientLevel level, double x, double y, double z, CloudModel model) {
+    public static Vec3 pool(ClientLevel level, java.util.List<BlockPos> cells, ua.zentix.incoming.nuclear.model.FuelPool pool, double age) {
         if (level != world) {
             reset();
             world = level;
         }
+        double x = 0, y = 0, z = 0;
+        for (BlockPos p : cells) {
+            x += p.getX() + 0.5;
+            y += p.getY();
+            z += p.getZ() + 0.5;
+        }
+        x /= cells.size();
+        y /= cells.size();
+        z /= cells.size();
         double now = SmokeGrid.seconds(0);
-        Fuel fuel = new Fuel(model.poolWatts, Math.PI * model.poolRadius * model.poolRadius,
-                model.source.fuel().sootYield / model.source.fuel().heatJPerKg);
-        FireSmoke f = new FireSmoke(fuel, x, y, z, 1, now);
-        f.burning = model::poolShare;
+        Fuel fuel = new Fuel(pool.watts(), pool.area(), pool.fuel().sootYield / pool.fuel().heatJPerKg);
+        FireSmoke f = new FireSmoke(fuel, x, y, z, 1, now - age);
+        f.burning = pool::share;
+        f.cells = java.util.List.copyOf(cells);
         f.record(now, 1, 1);
         f.air();
         POOLS.add(f);
+        columns();
         SmokeGrid.add(f);
+        return new Vec3(x, y, z);
+    }
+
+    /** Индекс клеток топлива ({@link #FUEL_COLUMNS}) — заново по горящим воронкам (их немного). */
+    private static void columns() {
+        FUEL_COLUMNS.clear();
+        FUEL_CHUNKS.clear();
+        for (FireSmoke f : POOLS) {
+            for (BlockPos p : f.cells) {
+                long column = BlockPos.asLong(p.getX(), 0, p.getZ());
+                if (FUEL_COLUMNS.containsKey(column)) {
+                    FUEL_COLUMNS.put(column, Math.max(FUEL_COLUMNS.get(column), p.getY()));
+                } else {
+                    FUEL_COLUMNS.put(column, p.getY());
+                    FUEL_CHUNKS.addTo(net.minecraft.world.level.ChunkPos.asLong(p.getX() >> 4, p.getZ() >> 4), 1);
+                }
+            }
+        }
+    }
+
+    /** В чанке есть клетки горящего топлива ({@link #fuelCell} стоит спрашивать). */
+    static boolean fuelChunk(long chunk) {
+        return !FUEL_CHUNKS.isEmpty() && FUEL_CHUNKS.containsKey(chunk);
+    }
+
+    /**
+     * Огонь в (x, y, z) — горящее топливо воронки, а не дерево: в колонке клетки и не выше её. Его тепло и сажу несёт очаг
+     * воронки ({@link #pool}); посчитанный ещё и огнём дерева ({@link FireWatch}), он дымил бы дважды — 175 кВт на блок
+     * сверх топлива.
+     */
+    static boolean fuelCell(int x, int y, int z) {
+        long column = BlockPos.asLong(x, 0, z);
+        return FUEL_COLUMNS.containsKey(column) && y <= FUEL_COLUMNS.get(column);
     }
 
     /** Смена мира, перемотка повтора: очагов нет (источники сетки снимает её сброс). */
@@ -321,6 +376,8 @@ public final class FireSmoke implements SmokeGrid.Source {
         FIRES.clear();
         OIL_FIRES.clear();
         POOLS.clear();
+        FUEL_COLUMNS.clear();
+        FUEL_CHUNKS.clear();
         world = null;
     }
 
@@ -482,24 +539,21 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Пламя очагов топлива (лужа в воронке, масло подстанции) там, где его языков-частиц уже нет: с 0,8 прорисовки они
-     * тают ({@code FxFrame.near}), и в 300 м ночью от пожара оставался только свет на земле — серая точка. Тело — круг
-     * площади пламени сбоку (высота по Хескестаду × диаметр очага), свет и цвет — те же, что у языков и у света пламени
-     * на дыме ({@link FirePlume#FLAME_LUMINANCE}, {@link FirePlume#FLAME_COLOR}, с привыканием глаза кадра), блик и вуаль —
-     * как у огненного шара и факела ({@link FarSprites#light}). Огонь Minecraft вдали рисует сам мир.
+     * Пламя масла выбитых подстанций (своего огня на блоках у него нет): тело — круг площади пламени сбоку (высота по
+     * Хескестаду × диаметр очага), свет и цвет — как у света пламени на дыме ({@link FirePlume#FLAME_LUMINANCE},
+     * {@link FirePlume#FLAME_COLOR}, с привыканием глаза кадра), блик и вуаль — как у огненного шара и факела
+     * ({@link FarSprites#light}). Огонь Minecraft (и топливо в воронках — огонь на блоках) рисует сам мир.
      */
     public static void far(FarView view, FarSprites out) {
-        if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
+        if (OIL_FIRES.isEmpty()) return;
         Vec3 cam = view.camera();
         int c = FirePlume.FLAME_COLOR;
         float r = (c >> 16 & 255) / 255f, g = (c >> 8 & 255) / 255f, b = (c & 255) / 255f;
-        for (FireSmoke f : (Iterable<FireSmoke>) () -> java.util.stream.Stream.concat(OIL_FIRES.values().stream(), POOLS.stream()).iterator()) {
+        for (FireSmoke f : OIL_FIRES.values()) {
             if (!Double.isNaN(f.end) || f.gone) continue;
             if (f.blocks <= 0 || f.flame <= 0) continue;
-            // пламя сбоку: высота по Хескестаду (по нынешней силе очага: у лужи — доля, что ещё горит) × диаметр очага (у
-            // масла — всех его очагов), круг той же площади — на половине высоты
-            double area = f.burning == null ? f.blocks * f.fuel.area : f.fuel.area;
-            double across = 2 * Math.sqrt(area / Math.PI), radius = Math.sqrt(f.flame * across / Math.PI);
+            // пламя сбоку: высота по Хескестаду × диаметр всех очагов масла, круг той же площади — на половине высоты
+            double across = 2 * Math.sqrt(f.blocks * f.fuel.area / Math.PI), radius = Math.sqrt(f.flame * across / Math.PI);
             double dx = f.x - cam.x, dy = f.y + 0.5 * f.flame - cam.y, dz = f.z - cam.z;
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz), w = view.farShare(d), t = view.air(d, dy);
             // ядро сменяет языки-частицы с 0,8 прорисовки; блик и вуаль — на любой дальности, как у факела и шара
@@ -511,7 +565,8 @@ public final class FireSmoke implements SmokeGrid.Source {
 
     /**
      * Свет и горячий газ очагов на мир кадра ({@code HeatPass}): горячий газ над каждым горящим очагом (столб по
-     * Хескестаду), свет — у масла подстанций и топлива в воронках: огонь Minecraft светит на мир сам, светом блоков.
+     * Хескестаду), свет — у масла подстанций: огонь Minecraft (и топливо в воронках — огонь на блоках) светит на мир сам,
+     * светом блоков.
      */
     public static void heat(Vec3 eye, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         if (FIRES.isEmpty() && OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
@@ -520,7 +575,7 @@ public final class FireSmoke implements SmokeGrid.Source {
             if (!Double.isNaN(fire.end) || fire.gone) continue;
             double dx = fire.x - eye.x, dy = fire.y - eye.y, dz = fire.z - eye.z;
             f.plume(dx, dy, dz, fire.own, 1);
-            if (fire.fuel != WOOD) {
+            if (fire.fuel == OIL) {
                 double r = 0.5 * fire.flame;
                 f.light(dx, dy + r, dz, r, BB[0], BB[1], BB[2], air, r);
             }

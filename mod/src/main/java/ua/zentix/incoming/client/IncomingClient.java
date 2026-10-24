@@ -389,6 +389,13 @@ public final class IncomingClient {
         }
 
         @Override
+        public void fuelFire(S2C.FuelFire p) {
+            Replay.event("fuel", live -> {
+                if (live) BlastEffects.fuelFire(p);
+            });
+        }
+
+        @Override
         public void collapse(S2C.Collapse p) {
             Replay.event("collapse", live -> {
                 if (live && ownBlasts()) BlastEffects.collapse(p);

@@ -4,7 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
-import ua.zentix.incoming.client.fx.smoke.CloudModel;
+import ua.zentix.incoming.nuclear.model.FuelPool;
 import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.sound.Noise;
 import ua.zentix.incoming.sound.Propagation;
@@ -14,21 +14,24 @@ import ua.zentix.incoming.strike.Hearing;
 /** A recording supplies the fire's timbre; the burning fuel supplies its envelope, at emission time. */
 final class CraterFire {
     private static final int RETRY = 10;
-    private final CloudModel model;
+    private final FuelPool pool;
     private final Vec3 pos;
     private final ClientLevel world;
     private AmbientLoop sound;
     private int age, retry;
 
-    CraterFire(CloudModel model, Vec3 pos, ClientLevel world) {
-        this.model = model;
+    /** Fuel burning by the law {@code pool} at {@code pos}, {@code age} ticks after the strike. */
+    CraterFire(FuelPool pool, Vec3 pos, ClientLevel world, int age) {
+        this.pool = pool;
         this.pos = pos;
         this.world = world;
+        this.age = age;
+        this.retry = age;
     }
 
     /** Source heat release at the emission time heard now; delay never changes the recording's playback rate. */
-    static double heat(CloudModel model, double ageSeconds, double distance) {
-        return model.poolWatts * model.poolShare(ageSeconds - distance / Noise.SOUND);
+    static double heat(FuelPool pool, double ageSeconds, double distance) {
+        return pool.watts() * pool.share(ageSeconds - distance / Noise.SOUND);
     }
 
     boolean tick(Minecraft mc) {
@@ -38,8 +41,8 @@ final class CraterFire {
         }
         Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
         double distance = pos.distanceTo(ear), seconds = age++ / 20.0;
-        double watts = heat(model, seconds, distance);
-        if (seconds - distance / Noise.SOUND >= model.poolSeconds || seconds > model.poolSeconds + Hearing.MAX_DELAY / 20.0) {
+        double watts = heat(pool, seconds, distance);
+        if (seconds - distance / Noise.SOUND >= pool.seconds() || seconds > pool.seconds() + Hearing.MAX_DELAY / 20.0) {
             stop();
             return false;
         }

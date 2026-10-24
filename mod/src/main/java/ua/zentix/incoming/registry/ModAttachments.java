@@ -108,6 +108,10 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<CraterFalls>> CRATER_FALLS = REGISTER.register("crater_falls",
             () -> AttachmentType.builder(CraterFalls::new).build());
 
+    /** Мир: горящее топливо ударов на блоках ({@link ua.zentix.incoming.warhead.FuelFires}); не сохраняется. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.warhead.FuelFires>> FUEL_FIRES = REGISTER.register("fuel_fires",
+            () -> AttachmentType.builder(ua.zentix.incoming.warhead.FuelFires::new).build());
+
     /** Мир: ядерные очереди — фронт, свет, воронки, чанки, осадки у мобов ({@link NuclearWorld}); не сохраняется. */
     public static final Supplier<AttachmentType<NuclearWorld>> NUCLEAR_WORLD = REGISTER.register("nuclear_world",
             () -> AttachmentType.builder(NuclearWorld::new).build());

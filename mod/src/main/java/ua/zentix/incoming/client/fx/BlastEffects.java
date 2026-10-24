@@ -420,18 +420,17 @@ public final class BlastEffects {
                 return true;
             }
             if (t == 1) ejecta(level, model.source.chargeKg());
-            // лужа топлива, что не сгорела шаром, горит в воронке
-            Explosions.pool(level, pos, model.poolRadius, model.poolFlame(), model.poolShare(t / 20.0), random);
+            // топливо, что не сгорело шаром, горит в воронке огнём Minecraft на блоках (сервер, `FuelFires`): его дым и звук
+            // приходят пакетом с этими блоками (`fuelFire`)
             crater(model, pos, t, rocket ? 1.25f : 1.1f);
-            return t < Math.max(240, 20 * model.poolSeconds);
+            return t < 240;
         }
 
     }
 
     /**
      * Звук воронки по модели облака: выброс падает обратно — через секунду (О: полёт выброса на высоту порядка диаметра
-     * воронки), масса — воронка без пыли, что ушла в воздух; гул огня, пока горит лужа топлива, — по её теплу сейчас,
-     * непрерывная запись в своей скорости, огибающая — из тепловыделения модели.
+     * воронки), масса — воронка без пыли, что ушла в воздух. Гул горящего топлива — от его огня на блоках ({@link #fuelFire}).
      */
     static void crater(CloudModel model, Vec3 pos, int t, float pitch) {
         double charge = model.source.chargeKg();
@@ -439,7 +438,6 @@ public final class BlastEffects {
             double kg = CraterModel.chargeVolume(charge, CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY * (1 - CloudModel.DUST_LOFTED);
             BlastSounds.debris(pos, kg, 2 * CraterModel.chargeRadius(charge, CraterModel.Soil.DRY), pitch);
         }
-        if (t == 1) BlastSounds.fire(pos, model);
     }
 
     // ================================================================ разрыв зенитной ракеты
@@ -503,10 +501,9 @@ public final class BlastEffects {
                 return true;
             }
             if (t == 1) ejecta(level, model.source.chargeKg());
-            // вторичных подрывов нет: вторичное — топливо (лужа в воронке) и горящие обломки сервера
-            Explosions.pool(level, pos, model.poolRadius, model.poolFlame(), model.poolShare(t / 20.0), random);
+            // вторичных подрывов нет: вторичное — топливо в воронке (огонь на блоках сервера) и горящие обломки сервера
             crater(model, pos, t, 0.9f);
-            return t < Math.max(340, 20 * model.poolSeconds);
+            return t < 340;
         }
 
     }
@@ -618,6 +615,21 @@ public final class BlastEffects {
                 BlastSounds.bunkerImpact(pos, BunkerImpact.equivalentTnt(WeaponType.BUNKER.spec().striker().article().dryMass(), p.speed()));
             }
         });
+    }
+
+    /**
+     * Топливо удара горит на блоках (сервер, {@code warhead/FuelFires}): огонь рисует сам мир, светит — светом блоков; дым
+     * пожара ({@link FireSmoke#pool}) и его гул — у клиента, по закону топлива оружия ({@code WeaponSpec.pool}) на клетках
+     * пакета: легло на меньшую площадь — горит дольше и слабее ({@code FuelPool.spread}), как у сервера.
+     */
+    public static void fuelFire(S2C.FuelFire p) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null || p.cells().isEmpty()) return;
+        ua.zentix.incoming.nuclear.model.FuelPool law = WeaponType.byId(p.weapon()).spec().pool();
+        ua.zentix.incoming.nuclear.model.FuelPool pool = law.spread(p.cells().size(), law.cells());
+        if (pool.seconds() <= 0 || p.age() / 20.0 >= pool.seconds()) return;
+        Vec3 centre = FireSmoke.pool(level, p.cells(), pool, p.age() / 20.0);
+        BlastSounds.fire(centre, pool, p.age());
     }
 
     /**

@@ -147,6 +147,29 @@ public final class S2C {
     }
 
     /**
+     * Топливо удара горит на блоках ({@code warhead/FuelFires}): клетки, где оно легло и горит огнём Minecraft, — дым и
+     * звук этого пожара клиент ведёт сам по закону топлива оружия ({@code WeaponSpec.pool}), огонь — блоки мира.
+     *
+     * @param cells  клетки огня (первая горит дольше всех: туда топливо стекло); топливо, потерявшее опору, капает вниз в
+     *               той же колонке — ниже клетки
+     * @param weapon оружие ({@code WeaponType.id})
+     * @param age    сколько тиков прошло с удара, когда огонь встал (закон горения считает время от удара)
+     */
+    public record FuelFire(List<BlockPos> cells, int weapon, int age) implements CustomPacketPayload {
+        public static final Type<FuelFire> TYPE = new Type<>(Incoming.id("fuel_fire"));
+        /** Клеток в пакете не больше (у ракеты — 9). */
+        public static final int MAX_CELLS = 64;
+        public static final StreamCodec<ByteBuf, FuelFire> CODEC = StreamCodec.composite(
+                BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX_CELLS)), FuelFire::cells, ByteBufCodecs.VAR_INT, FuelFire::weapon,
+                ByteBufCodecs.VAR_INT, FuelFire::age, FuelFire::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
      * Свод над полостью обрушился: провал на поверхности.
      *
      * @param volume сколько грунта ушло в провал, м³ (объём полости; в повторе до этого поля — {@link #OLD_VOLUME})
