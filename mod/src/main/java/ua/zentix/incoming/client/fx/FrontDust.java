@@ -5,6 +5,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
@@ -58,10 +59,11 @@ final class FrontDust implements SmokeGrid.Source {
                 if (chunk == null) continue;
                 int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15);
                 var cover = chunk.getBlockState(m.set(bx, top, bz));
-                // Дёрн и кроны; вода, камень и песок уже представлены своим GroundDust.
-                if (!cover.is(BlockTags.DIRT) && !cover.is(BlockTags.LEAVES)) continue;
+                // Только сорванный покров; голый грунт, вода, камень и песок остаются у GroundDust.
+                if (!cover.is(Blocks.GRASS_BLOCK) && !cover.is(BlockTags.LEAVES)) continue;
                 double y = top + 1.05, slant = Math.sqrt(r * r + (y - pos.y) * (y - pos.y));
-                double along = FrontLitter.along(r, Math.hypot(r, hob));
+                double along = cover.is(BlockTags.LEAVES) || y > pos.y - Math.max(0, hob) + 2
+                        ? 1 : FrontLitter.along(r, Math.hypot(r, hob));
                 double friction = BlastLitter.friction(front.kpa(slant), along);
                 if (!BlastLitter.tearsCover(front.kpa(slant), along)) continue;
                 double size = Math.max(0.45, Math.min(1.2, Math.PI * r / spokes));
@@ -93,7 +95,7 @@ final class FrontDust implements SmokeGrid.Source {
             if (s <= 0) continue;
             double v = 0.3 + age;
             // Подача: оптическая толща детали 0,8 при полном срыве; это не масса, добавленная к расчёту разрушений.
-            double dust = 0.8 * p.contrast * fade * 2 * Math.PI * s * v / DustModel.K_MIX;
+            double dust = 0.8 * p.contrast * fade * 2 * Math.PI * s * v / SmokeGrid.dustK(0.82f, 0.76f, 0.62f);
             out.blob(p.x, p.y + 3 * age, p.z, s, v, 0, dust, 0, 0.82f, 0.76f, 0.62f, CloudModel.T_AIR_K, 0);
         }
         return true;
