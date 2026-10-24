@@ -119,7 +119,10 @@ public final class NukeRenderer {
      * пеленой и стеной пыли, чужими шапками и ножками грибов). Яркость — чёрное тело
      * видимой температуры шапки снаружи ({@link MushroomModel#edgeTemperature}): шар, пока шар, — днём ярче неба
      * секунды, ночью — дольше (глаз привык к темноте, {@link Sight#adapted}); свернувшаяся шапка снаружи смешана
-     * с воздухом и гаснет. Дымка воздуха — по настоящей дальности (в метрах модели).
+     * с воздухом и гаснет. Дымка воздуха — по настоящей дальности (в метрах модели). Шар на экране — с экспозицией по
+     * огню ({@link NukeExposure}): блик и вуаль не ярче его там ({@link NukeExposure#capShown}), а размер блика и
+     * вуали — по яркости, какой её видит кадр: с экспозицией шара и пересветом кадра во вспышку
+     * ({@link NukeFlash#overexposure}) — во вспышку блик в полкадра, когда кадр догнал её, — ореол у края шара.
      */
     public static void fireballs(FarView view, FarSprites out, FxLights lights) {
         List<ClientNuclear.Active> all = ClientNuclear.detonations();
@@ -130,7 +133,7 @@ public final class NukeRenderer {
             if (s == null) continue;
             Detonation d = a.d;
             BlackBody.light(MushroomModel.edgeTemperature(s.t(), d.yieldKt(), d.surface()), BALL);
-            double surface = Sight.adapted(BALL[3], view.ambient());
+            double adapt = Sight.adapted(1, view.ambient()), surface = BALL[3] * adapt;
             if (surface < 1e-3) continue;
             MushroomField.centre(a, s, CENTRE);
             double dx = CENTRE[0] - cam.x, dy = CENTRE[1] - cam.y, dz = CENTRE[2] - cam.z, r = d.blocks(s.capR());
@@ -140,10 +143,15 @@ public final class NukeRenderer {
             double top = Math.max(BALL[0], Math.max(BALL[1], BALL[2]));
             float cr = (float) Math.pow(BALL[0] / top, 1 / 2.2), cg = (float) Math.pow(BALL[1] / top, 1 / 2.2), cb = (float) Math.pow(BALL[2] / top, 1 / 2.2);
             double air = MushroomField.air(d, cam, view.range()).transmittance(d.metres(dist), d.metres(dy)), seen = surface * air;
-            // огонь шара на экране (доля белого): свет вокруг и блик не ярче его
-            double shown = Math.min(1, Math.pow(seen, 1 / 2.2));
+            // огонь шара на экране (доля белого) с экспозицией по огню, пока шар — шар (свернувшаяся шапка — как прежде,
+            // NukeExposure.filmShare): блик и вуаль не ярче его
+            double film = NukeExposure.filmShare(MushroomModel.rollUp(s.t(), d.yieldKt(), d.surface()));
+            double shown = film * NukeExposure.capShown(BALL[0] * adapt * air, BALL[1] * adapt * air, BALL[2] * adapt * air, adapt)
+                    + (1 - film) * Math.min(1, Math.pow(seen, 1 / 2.2));
             lights.add(dx, dy, dz, r, surface, Math.min(1, Math.pow(surface, 1 / 2.2)), lr, lg, lb);
-            if (seen > Sight.THRESHOLD) out.eyeLight(dx, dy, dz, r, seen, view.pixel(), cr, cg, cb, shown, GLARE);
+            // блик — по тому, как кадр видит поверхность: с экспозицией шара по ней сквозь воздух (mushAt в fx_pall) и пересветом
+            double exposed = seen * (film * NukeExposure.gain(seen, adapt) + 1 - film) * NukeFlash.overexposure(a, view.partial());
+            if (seen > Sight.THRESHOLD) out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, GLARE);
         }
     }
 

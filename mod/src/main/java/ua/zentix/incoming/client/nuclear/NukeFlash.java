@@ -18,9 +18,12 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.client.far.FarView;
+import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.render.ScreenProjection;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
+import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.EyeInjury;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
@@ -30,8 +33,11 @@ import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 import java.util.List;
 
 /**
- * Вспышка ядерного взрыва на экране (DESIGN-nuke §6): белый экран, пока идёт световой импульс (~10·t_max: 15 кт —
- * 1.2 с, 1 кт — 0.3 с), и глаз, который отпускает за 2–4 с (чем сильнее импульс, тем дольше), затем — тёмно-оранжевое
+ * Вспышка ядерного взрыва на экране (DESIGN-nuke §6): кадр, выставленный на то, что камера видела до вспышки, пересвечен
+ * её светом и догоняет его ({@link NukeExposure#overexposure}, подача): до второго максимума и в нём — белый, потом
+ * ярче и ярче проступают тёмные силуэты, у 15 кт в 1,4 км через полсекунды кадр пересвечен в ~3 раза, через секунду —
+ * как был ({@link #overexposed}: усиление кадра и рассеянный в объективе свет). Свет и время импульса — физика;
+ * прежде белый экран стоял весь импульс (~10·t_max: у 15 кт 1,2 с) и гас ещё 2–4 с. Затем — тёмно-оранжевое
  * «пятно» послеобраза там, где шар был на сетчатке, если игрок на него смотрел (ходит со взглядом). Весь мир в это время освещён, как молнией: ночь
  * на миг становится днём. Сила — по световому импульсу у игрока: прямая видимость и шар в поле зрения — полная, иначе
  * треть (засветка неба).
@@ -49,8 +55,11 @@ public final class NukeFlash {
     private static ClientNuclear.Active current;
     /** Сила вспышки 0..1 для этого игрока. */
     private static float strength;
-    /** Сколько секунд глаз отпускает после импульса. */
-    private static double recovery;
+    /**
+     * Во сколько раз свет вспышки у камеры во втором максимуме ярче того, на что выставлен кадр (≥ 1): по нему кадр
+     * догоняет вспышку ({@link NukeExposure#overexposure}).
+     */
+    private static double peak = 1;
     /** Послеобраз: сколько тиков ещё и сколько было всего. */
     private static int afterLeft, afterTotal;
     /**
@@ -61,6 +70,14 @@ public final class NukeFlash {
     private static long ticks, endTick;
     /** Предел силы вспышки на экране при «без вспышек молний». */
     private static final float CALM_FLASH = 0.4f;
+    /**
+     * Пересвет кадра, при котором рассеянный в объективе свет белит весь кадр (белое — доля пересвета / VEIL_X: в
+     * объективе рассеивается порядка процента света кадра, ⚠ оценка), и наибольшее усиление кадра на экране (больше — кадр
+     * и так белый). Подача.
+     */
+    private static final double VEIL_X = 100, GAIN_MAX = 16;
+    /** Пересвет, ниже которого кадра не трогаем: усиление меньше шага экрана. */
+    private static final double SETTLED = 1.004;
     /**
      * Засветка неба при полном пропускании воздуха, доля белого экрана, и засветка, с которой мир освещён вспышкой
      * ({@link #lightUpWorld}). <b>Оценки</b>, не выведены: обе — доли экрана, а не свет; засветка — без мощности и без
@@ -110,8 +127,8 @@ public final class NukeFlash {
         if (s <= strength && current != null) return;
         current = a;
         strength = (float) s;
-        recovery = Mth.clamp(2 + 0.6 * Math.log1p(q), 2, 4);
-        endTick = ticks + (long) Math.ceil(pulseSeconds(d.yieldKt()) * 20 * d.scale() + recovery * 20);
+        peak = 1 + flashOnCamera(mc.level, d, distM) * (inView ? 1 : sees ? 0.45 : 0.3);
+        endTick = ticks + (long) Math.ceil((FireballModel.secondMaximumSeconds(d.yieldKt()) * d.scale() + NukeExposure.settled(peak, SETTLED)) * 20);
         // пятно больше видимого шара: глаз «размазывает» засветку
         float[] spot = inView && q >= 0.05 ? retina(mc, p, d.burst(), Math.max(d.fireballRadius(), 30) * 2.2) : null;
         if (spot != null) {
@@ -123,6 +140,18 @@ public final class NukeFlash {
         }
     }
 
+    /**
+     * Свет шара у камеры во втором максимуме — против того, на что выставлен кадр (свет неба: {@link Sight#adapted}):
+     * ламбертов шар наибольшего радиуса, чёрное тело {@link FireballModel#PEAK_K}, L·R²/max(d², R²) сквозь воздух
+     * (прямой и рассеянный вместе, {@link ThermalModel#transmittance}, как у засветки неба). У 15 кт в 1,4 км днём ~2 000,
+     * в 5 км ~200; ночью — в ~1 200 раз больше.
+     */
+    static double flashOnCamera(ClientLevel level, Detonation d, double distM) {
+        double r = FireballModel.maxRadius(d.yieldKt(), d.surface());
+        double light = BlackBody.luminance(FireballModel.PEAK_K) * r * r / Math.max(distM * distM, r * r) * ThermalModel.transmittance(distM, d.visibility());
+        return Sight.adapted(light, FarView.ambient(level, 0));
+    }
+
     /** Засветка поля импульсом {@code q} кал/см² у глаза; уже идущая, которая кончится позже, остаётся. */
     private static void dazzle(ClientLevel level, Detonation d, Vec3 eye, double q) {
         double dark = FlashEyes.darkness(level, eye);
@@ -130,7 +159,9 @@ public final class NukeFlash {
         float k = IncomingConfig.CLIENT.flash.get().floatValue();
         if (calmFlash()) k = Math.min(k, CALM_FLASH);
         if (seconds <= 0 || k <= 0) return;
-        double start = ticks + pulseSeconds(d.yieldKt()) * 20 * d.scale();
+        // с максимума импульса: прежде — с его конца, когда кончался белый экран; кадр теперь догоняет вспышку раньше
+        // (overexposed), и глаз между ними видел бы ясно
+        double start = ticks + FireballModel.secondMaximumSeconds(d.yieldKt()) * 20 * d.scale();
         if (start + seconds * 20 <= veilStart + veilSeconds * 20) return;
         veilStart = start;
         veilSeconds = seconds;
@@ -180,11 +211,6 @@ public final class NukeFlash {
         return Minecraft.getInstance().options.hideLightningFlash().get();
     }
 
-    /** Световой импульс, с модели ({@link FireballModel#pulseSeconds}). */
-    static double pulseSeconds(double yieldKt) {
-        return FireballModel.pulseSeconds(yieldKt);
-    }
-
     static void tick() {
         ticks++;
         if (afterLeft > 0) afterLeft--;
@@ -217,32 +243,78 @@ public final class NukeFlash {
         scars = s.scars();
     }
 
-    /** Насколько экран сейчас белый (0..1): для неба и тумана тоже. */
+    /**
+     * Насколько экран сейчас белый (0..1): для неба и тумана тоже — доля, на которую пересвет {@link #overexposure}
+     * поднимает середину тонов к белому, 1 − 1/X.
+     */
     public static float whiteness(float partialTick) {
         ClientNuclear.Active a = current;
         if (a == null || strength <= 0) return 0;
-        // пока идёт импульс — белый экран, потом глаз отпускает (к концу recovery — 5%)
-        double after = a.seconds(partialTick) - pulseSeconds(a.d.yieldKt());
-        if (after <= 0) return strength;
-        return (float) (strength * Math.exp(-3 * after * a.d.scale() / recovery));
+        return (float) (strength * (1 - 1 / overexposure(a, partialTick)));
+    }
+
+    /**
+     * Пересвет кадра вспышкой подрыва {@code a} (≥ 1; 1 — кадр догнал её или вспышка не та, что на экране): по нему и блик
+     * шара ({@code NukeRenderer.fireballs}).
+     */
+    static double overexposure(ClientNuclear.Active a, float partialTick) {
+        if (a != current || strength <= 0) return 1;
+        double after = (a.seconds(partialTick) - FireballModel.secondMaximumSeconds(a.d.yieldKt())) * a.d.scale();
+        return NukeExposure.overexposure(peak, after);
     }
 
     public static void render(GuiGraphics g, DeltaTracker delta) {
         float partial = delta.getGameTimeDeltaPartialTick(false);
         int w = g.guiWidth(), h = g.guiHeight();
         NukeDust.render(g);
+        overexposed(g, partial, w, h);
         if (eyes(Minecraft.getInstance().player)) {
             if (!scars.isEmpty()) scars(g, w, h);
             veil(g, partial, w, h);
         }
         if (afterLeft > 0 && current != null) afterimage(g, partial, w, h);
-        float white = whiteness(partial);
+    }
+
+    /**
+     * Кадр, пересвеченный вспышкой ({@link #overexposure}, подача): усиление кадра — пересвет X в значениях экрана
+     * (X^(1/2,2), не больше {@link #GAIN_MAX}: светлое уходит в белое, тёмное остаётся тёмным — силуэты против вспышки, как
+     * на плёнке), поверх — рассеянный в объективе свет, белый в доле X / {@link #VEIL_X} (сначала бело-голубой, потом
+     * тёплый). Белая заливка во весь экран одним цветом прятала кадр целиком, усиление — только то, что в нём светлое.
+     * Усиление — смешиванием «цвет кадра × (1 + c)» за проходы по ×2.
+     */
+    private static void overexposed(GuiGraphics g, float partial, int w, int h) {
+        ClientNuclear.Active a = current;
+        if (a == null || strength <= 0) return;
+        double x = overexposure(a, partial);
+        if (x < SETTLED) return;
+        double gain = 1 + strength * (Math.min(Math.pow(x, 1 / 2.2), GAIN_MAX) - 1);
+        if (calmFlash()) gain = Math.min(gain, 1 + CALM_FLASH);
+        g.flush();
+        if (gain > 1.002) {
+            int passes = Math.max(1, (int) Math.ceil(Math.log(gain) / Math.log(2) - 1e-9));
+            float c = (float) (Math.pow(gain, 1.0 / passes) - 1);
+            Matrix4f m = g.pose().last().pose();
+            RenderSystem.enableBlend();
+            RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.DST_COLOR, GlStateManager.DestFactor.ONE,
+                    GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
+            RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionColorShader);
+            for (int i = 0; i < passes; i++) {
+                BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+                b.addVertex(m, 0, 0, 0).setColor(c, c, c, 1f);
+                b.addVertex(m, 0, h, 0).setColor(c, c, c, 1f);
+                b.addVertex(m, w, h, 0).setColor(c, c, c, 1f);
+                b.addVertex(m, w, 0, 0).setColor(c, c, c, 1f);
+                BufferUploader.drawWithShader(b.buildOrThrow());
+            }
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.disableBlend();
+        }
+        float white = (float) (strength * Math.min(1, x / VEIL_X));
         if (white > 0.004f) {
-            int a = Math.min(255, (int) (white * 255));
+            int alpha = Math.min(255, (int) (white * 255));
             // сначала бело-голубой, потом тёплый
-            double t = current.seconds(partial);
-            int rgb = t < FireballModel.firstMinimumSeconds(current.d.yieldKt()) * 4 ? 0xEEF4FF : 0xFFF8E8;
-            g.fill(0, 0, w, h, (a << 24) | rgb);
+            int rgb = a.seconds(partial) < FireballModel.firstMinimumSeconds(a.d.yieldKt()) * 4 ? 0xEEF4FF : 0xFFF8E8;
+            g.fill(0, 0, w, h, (alpha << 24) | rgb);
         }
     }
 
@@ -275,7 +347,7 @@ public final class NukeFlash {
     }
 
     /**
-     * Вуаль засветки: с конца импульса (сам импульс — белый экран {@link #whiteness}) гаснет к концу срока как
+     * Вуаль засветки: с максимума импульса (до него — белый кадр {@link #overexposed}) гаснет к концу срока как
      * (1 − t/T)²; цвет — светлый послеобраз, который за секунды темнеет (днём к серому, ночью к чёрному: привыкший к
      * темноте глаз не видит тусклого).
      */

@@ -171,6 +171,17 @@ float hg(float g, float c) {
     return (1.0 - g * g) / (k * sqrt(k));
 }
 
+// Фаза Хеньи–Гринстейна у протяжённого источника — диска с косинусом углового радиуса mu0: к оси — не пик точечного
+// источника, а средняя по конусу диска доля рассеянного в него, 2F/(1 − mu0), F = (1 − g²)/(2g)·(1/(1 − g) − 1/√(1 + g² −
+// 2g·mu0)) (интеграл фазы по конусу); дальше от оси — сама фаза. Шар рядом с оболочкой облака Вильсона виден в десятки
+// градусов, и пик капель (g 0,85: в 82 раза выше среднего) как от точки светил оболочкой вокруг шара в разы ярче его
+float hgDisc(float g, float c, float mu0) {
+    float p = hg(g, c);
+    if (1.0 - mu0 < 1e-3) return p;
+    float f = (1.0 - g * g) / (2.0 * g) * (1.0 / (1.0 - g) - 1.0 / sqrt(1.0 + g * g - 2.0 * g * mu0));
+    return min(p, 2.0 * f / (1.0 - mu0));
+}
+
 // Сдвиг плитки шума по крупному шуму (в долях плитки): плитка повторяется через tile блоков, и с высоты повтор виден
 // полосами; сдвиг до шестой части плитки, плавный на двух плитках, его ломает (сильнее — клубы тянутся в полосы),
 // а распределение значений не меняет (тот же шум в другом месте — среднее формы клубов остаётся 1)
@@ -318,6 +329,25 @@ vec3 shoulder(vec3 c) {
     float m = max(max(c.r, c.g), c.b);
     if (m <= 0.6) return c;
     return c * ((0.6 + 0.4 * (1.0 - exp(-(m - 0.6) / 0.4))) / m);
+}
+
+// На экран: цвет пелены как вещества — свет light, делённый на непрозрачность cover (в однородной — её функция источника),
+// в значения экрана, умноженный на непрозрачность; с миром смешивается, как всё полупрозрачное в кадре. Ярче белого
+// (огненный шар, накал, зарево ночью): свет вещества прибавляется к тому, что за ним, — на экране вещество не ярче
+// белого, и пересвет идёт в долю пикселя (cover·L, не больше всего пикселя), с цветом своего света, к белому — CROSS.
+// Пропускание остаётся настоящим: за веществом видно то же, а его свет поверх насыщается к белому (кадр — RGBA16F,
+// квадраты слоя за ним берут этот свет из кадра, fx.fsh: before). Иначе шар вдали, где дымка оставила ему долю cover
+// (10 км в ясную погоду — 0,14), был бы бледным пятном на небе, сколько бы ни светил. Копия — NukeExposure.pixel
+vec3 pallShown(vec3 light, float cover) {
+    float shownCover = cover;
+    vec3 medium = light / max(cover, 1e-4);
+    float lum = dot(medium, LUMA);
+    if (lum > 1.0 && cover > 1e-4) {
+        shownCover = min(cover * lum, 1.0);
+        medium *= cover / shownCover;
+    }
+    medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));
+    return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover;
 }
 
 // ---------------------------------------------------------------- голова слоя пыли (pall.glsl: pallWall*)
@@ -835,7 +865,9 @@ float along(float u, float t0, float fa, float fb, float t1, float a, float b) {
 // Облако Вильсона слота (S, L — pallWilson), проход луча dir из глаза в t толщей tau: свет (rgb) и пропускание (a).
 // Туман конденсации за фронтом — те же капли, что водяная пыль (MIST): небо, солнце и шар (pallBallLight — облако
 // встаёт, пока шар ярче всего) с фазой капель; толща — с клубами по направлению от подрыва (оболочка рвётся полосами
-// и пятнами)
+// и пятнами). Шар у оболочки — протяжённый источник (hgDisc), и его поверхность для оболочки — не ярче шара на экране
+// (mushBallCap — подача, NukeExposure): оболочка обнимает шар, и в сотнях белых, как свет его, она сливалась с шаром,
+// выставленным по огню, в один белый диск
 vec4 wilsonLight(mat4 S, vec4 G, vec4 H, vec4 L, vec3 dir, vec3 sunDir, float t, float tau) {
     if (tau <= 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
     vec3 q = dir * t;
@@ -844,9 +876,13 @@ vec4 wilsonLight(mat4 S, vec4 G, vec4 H, vec4 L, vec3 dir, vec3 sunDir, float t,
     tau *= 0.5 + textureLod(PallNoise, -toBurst * 1.7 + vec3(0.21, 0.47, 0.83), 0.0).r;
     vec3 toBall = pallBall(S, G, H) - q;
     float ballLen = length(toBall);
-    vec3 cap = pallBallLight(G, H, ballLen);
+    // яркость поверхности шара для оболочки — не ярче его на экране, потом — его свет на ней (L·R²/d²): оболочка и шар
+    // на экране — в той же доле, что в жизни (рассеянное вперёд у шара — ~0,76·τ его яркости), а не оболочка в сотни раз ярче
+    vec3 surface = H.rgb * PallExposure;
+    vec3 cap = min(surface, mushBallCap(surface, PallExposure)) * pallBallShare(G.x, ballLen);
+    float sinBall = min(G.x / max(ballLen, 1e-3), 1.0);
     vec3 l = PALL_MIST_W * (0.5 * PallSkyLight + PallSunLight * (0.25 * hg(PALL_MIST_G, dot(dir, sunDir)))
-            + cap * (0.25 * hg(PALL_MIST_G, dot(dir, toBall / max(ballLen, 1e-3)))));
+            + cap * (0.25 * hgDisc(PALL_MIST_G, dot(dir, toBall / max(ballLen, 1e-3)), sqrt(1.0 - sinBall * sinBall))));
     float tr = exp(-tau);
     return vec4(l * (1.0 - tr), tr);
 }
@@ -1208,9 +1244,14 @@ vec3 mushFootLight(int k, Mush m, vec3 q) {
     return mix(texture(Sampler9, uv).rgb, texture(Sampler9, uv + vec2(0.0, float(FOOT_LIGHT_R) / rows)).rgb, h - hi);
 }
 
-// Гриб k в точке p (от глаза) с местом q: ослабление (w, 1/блок) и свет к глазу на единицу пути (rgb, Σ ослабление ×
-// функция источника). cone — меньшее, что луч здесь различает
-vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near) {
+// Гриб k в точке p (от глаза) с местом q: ослабление (w, 1/блок) и рассеянный свет к глазу на единицу пути (rgb,
+// Σ ослабление × функция источника); своё свечение — отдельно (конец main): hot — как есть (прежний путь), glow — с
+// экспозицией шара (плёночная кривая), film — его яркость × доля кривой (mushFilmShare). cone — меньшее, что луч здесь
+// различает
+vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 hot, out vec3 glow, out float film) {
+    hot = vec3(0.0);
+    glow = vec3(0.0);
+    film = 0.0;
     float lobes, depth, carried;
     float kk = float(k) * 13.0;
     vec4 sig = mushDense(m, q, cone, kk, lobes, depth, near, carried);
@@ -1316,14 +1357,27 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near) {
     // функция источника свечения: в глубине — свет чёрного тела (рассеянное изнутри его и досвечивает), у края — доля ω'
     // уходит наружу без замены (двумя потоками: недосвет гаснет вглубь как e^(−kτ))
     vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));
-    vec3 source = w * light + thermal;
+    vec3 source = w * light;
     if (fromCarpet > 0.0) source = mix(source, carpetLight, fromCarpet);
+    hot = st * thermal * (1.0 - fromCarpet);
+    // Экспозиция шара — по его видимой поверхности (температура края шапки), какой её видно сквозь воздух до точки:
+    // шар в сотни и тысячи белых срезался в ровный диск, а с ней перепад температуры по поверхности (узор шара) виден
+    float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
+    glow = hot * mushBallGain(key, PallExposure);
+    // Плёночной кривой — пока шар — шар (доля кольца, mushFilmShare); свернувшаяся шапка — прежним путём, с пеленой:
+    // кривая по каналам белила её оранжевое нутро ночью и меняла его сквозь мглу (ревью #441)
+    float roll = clamp(m.ringR / max(MUSH_RING * m.capR, 1.0), 0.0, 1.0);
+    film = dot(hot, LUMA) * mushFilmShare(roll);
     return vec4(st * source, st);
 }
 
-// Шаг грибов в месте t луча: ослабление (w) и свет на единицу пути (rgb); gap — сколько до вещества (0 — оно здесь)
-vec4 mushStep(float t, float cone, out float gap) {
+// Шаг грибов в месте t луча: ослабление (w) и рассеянный свет на единицу пути (rgb), свечение — в heat (как есть), glow
+// (с экспозицией шара) и film (яркость × доля кривой); gap — сколько до вещества (0 — оно здесь)
+vec4 mushStep(float t, float cone, out float gap, out vec3 heat, out vec3 glow, out float film) {
     vec4 sum = vec4(0.0);
+    heat = vec3(0.0);
+    glow = vec3(0.0);
+    film = 0.0;
     gap = 1e9;
     vec3 p = gDir * t;
     for (int k = 0; k < gMushes; k++) {
@@ -1343,10 +1397,14 @@ vec4 mushStep(float t, float cone, out float gap) {
         }
         // у края: вещества нет — шагом до края с клубами (вполовину оценки), иначе луч шёл бы полосу клубов шагом
         // в пиксель и на краю кончались бы шаги
-        float near;
-        vec4 r = mushAt(k, m, p, q, cone, near);
+        float near, partFilm;
+        vec3 partHeat, partGlow;
+        vec4 r = mushAt(k, m, p, q, cone, near, partHeat, partGlow, partFilm);
         gap = min(gap, r.w > 1e-7 ? 0.0 : 0.5 * max(near, 0.0));
         sum += r;
+        heat += partHeat;
+        glow += partGlow;
+        film += partFilm;
     }
     return sum;
 }
@@ -1484,6 +1542,9 @@ void main() {
     pallLighting(dir);
     vec3 whirlFlame = max(gFlame, WHIRL_FIRE_LINEAR);
     vec3 light = vec3(0.0);
+    // свечение грибов (mushAt): как есть (прежний путь), с экспозицией шара (плёночная кривая) и его яркость × доля кривой
+    vec3 heat = vec3(0.0), emitted = vec3(0.0);
+    float filmed = 0.0;
     float transmit = 1.0;
     // доля, которую закрыл бы гриб, но съела дымка воздуха до него (pallAir): там видно то, что за всем лучом (небо, мир
     // вдали), а не глубина самого гриба — пропускание по лучу остаётся настоящим, и задние клубы за передними не видны
@@ -1669,7 +1730,9 @@ void main() {
             float cone = max(tm * gPixel, 0.35 * dsMin);
             float gap;
             gTauEye = tauEye;
-            vec4 r = mushStep(tm, cone, gap);
+            vec3 hot, glowing;
+            float film;
+            vec4 r = mushStep(tm, cone, gap, hot, glowing, film);
             // по пустому — до вещества и ещё на долю шага по сдвигу кадра: иначе шаг до рамки и до края сводил бы лучи
             // всех кадров в одни и те же места, и накопление не сглаживало бы их
             float ds = clamp(gap + jitter * dsMin, dsMin, dsMax);
@@ -1680,6 +1743,10 @@ void main() {
                 // дымка воздуха до шага (pallAir): свет и непрозрачность гриба вдали тают в небе за ним
                 float tr = exp(-r.w * ds), air = pallAir(PallAir, tm, dir.y);
                 light += transmit * air * r.rgb * (1.0 - tr) / r.w;
+                float part = transmit * air * (1.0 - tr) / r.w;
+                heat += part * hot;
+                emitted += part * glowing;
+                filmed += part * film;
                 lost += transmit * (1.0 - air) * (1.0 - tr);
                 transmit *= tr;
                 tauEye += r.w * ds;
@@ -1695,23 +1762,19 @@ void main() {
     }
     // смерчи и облако Вильсона за последним шагом (до мира)
     passesBefore(1e8, light, transmit, lost);
-    // на экран: цвет пелены как вещества — свет, делённый на непрозрачность (в однородной — её функция источника), в
-    // значения экрана, умноженный на непрозрачность; с миром смешивается, как всё полупрозрачное в кадре. Ярче белого —
-    // к белому (CROSS)
-    float cover = 1.0 - transmit - lost, shownCover = cover;
-    vec3 medium = light / max(cover, 1e-4);
-    // Ярче белого (огненный шар, накал, зарево ночью): свет вещества прибавляется к тому, что за ним, — на экране
-    // вещество не ярче белого, и пересвет идёт в долю пикселя (cover·L, не больше всего пикселя), с цветом своего света.
-    // Пропускание остаётся настоящим: за веществом видно то же, а его свет поверх насыщается к белому (кадр — RGBA16F,
-    // квадраты слоя за ним берут этот свет из кадра, fx.fsh: before). Иначе шар вдали, где дымка оставила ему долю cover
-    // (10 км в ясную погоду — 0,14), был бы бледным пятном на небе, сколько бы ни светил
-    float lum = dot(medium, LUMA);
-    if (lum > 1.0 && cover > 1e-4) {
-        shownCover = min(cover * lum, 1.0);
-        medium *= cover / shownCover;
+    float cover = 1.0 - transmit - lost;
+    // прежний путь: свечение грибов — со светом пелены (pallShown)
+    vec3 shown = pallShown(light + heat, cover);
+    // Огненный шар — как обычный (подача, NukeExposure): свечение с экспозицией шара (emitted) — плёночной кривой по
+    // каналам (mushFilm3) поверх пелены, сумма — в линейном; прежним путём всё ярче белого уходило в долю пикселя одним
+    // цветом — ровный диск без складок и узора. Доля кривой — по доле кольца (mushFilmShare): свернувшаяся шапка —
+    // прежним путём, а между ними — смесь готовых картинок (смесь свечения скакала бы: малая его доля прежним путём уже
+    // пересвечивает пиксель)
+    float film = clamp(filmed / max(dot(heat, LUMA), 1e-30), 0.0, 1.0);
+    if (film > 0.0) {
+        vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);
+        shown = mix(shown, min(vec3(pallDisplay(lin.r), pallDisplay(lin.g), pallDisplay(lin.b)), vec3(1.0)), film);
     }
-    medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));
-    vec3 shown = shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover;
     // негодный итог (NaN, бесконечность — из глубины, матриц или поля) — пропускание −1: накопление возьмёт прошлое
     // этого места, а без него пиксель — без пелены (fx_pall_resolve)
     // сумма долей в float32 бывает на ulp больше 1 — pallValid счёл бы пиксель негодным
