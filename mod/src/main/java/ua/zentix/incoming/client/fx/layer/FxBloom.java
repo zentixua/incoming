@@ -43,7 +43,9 @@ import java.util.Locale;
  * то попадает в середину, то нет — свечение пропадало бы и мерцало. Уже {@link #SMALL} пикселей прохода поперёк
  * светящийся квадрат идёт в проход пятнами ({@link #spots}: ореол {@code far/glow} формулой, полуразмер
  * {@link #SPOT_HALF} пикселя — выборка в серединах несёт ту же энергию при любом сдвиге, в пределах 1 %) с его энергией:
- * средний свет его места на листе ({@link FxAtlas#means}) × цвет × пересвет × телесный угол; сам он в проход не идёт.</li>
+ * средний свет его места на листе ({@link FxAtlas#means}) × цвет × пересвет × телесный угол; сам он в проход не идёт.
+ * Свет пятна — в 16 битах {@code UV2} логарифмом ({@link #magnitude}, шаг 0,07 %), оттенок — в цвете: в байте цвета
+ * (1/255) слабое пятно обнулялось, а чуть сильнее — получало почти вдвое больше.</li>
  * <li>Пирамида — спуск двойного фильтра Jimenez 2014 (Call of Duty: Advanced Warfare; так же — Unity URP, Blender EEVEE):
  * 13 выборок, свёртка сохраняет энергию, и каждый уровень несёт всю энергию излучения; сбор уровней одним проходом —
  * B-сплайн, 4 выборки на уровень, равные веса: равная энергия на октаву угла, то есть спад 1/θ², как у функции рассеяния
@@ -51,7 +53,8 @@ import java.util.Locale;
  * (2^k пикселей — ~0,2°…17° при поле зрения 70°), выше — на октаву глубже ({@link #first}). Уменьшенные копии 2×2
  * ({@code glGenerateMipmap}) вместо спуска проверены и отвергнуты: у движущегося источника дальний ореол скачет в разы.</li>
  * <li>Доля {@link #SHARE} без порога — как у пака по умолчанию; у глаза по CIE на углах 0,1°–50° выходит 0,12
- * (0,0191·ln(θ₂/θ₁)). Ореол прибавляется вокруг светящегося: кривая 1 − e^(−x) и смешивание «экраном»
+ * (0,0191·ln(θ₂/θ₁)). Нормировка одна: сбор делит сумму уровней на их число, вывод множит на долю
+ * ({@link #gatherUniforms}, {@link #outputUniforms}; второе деление на число уровней делало долю 0,017). Ореол прибавляется вокруг светящегося: кривая 1 − e^(−x) и смешивание «экраном»
  * ({@code ONE, ONE_MINUS_SRC_COLOR}) — ровно сложение света до этой кривой. На самом светящемся его нет (по доле
  * светящегося): кадр огня показан своей экспозицией, в десятки раз ниже пересвета модели, и ореол, посчитанный с
  * пересветом, высветлил бы его складки и сажу в «мыло». У пака источник отдаёт ореолу свою долю; здесь он её не
@@ -77,10 +80,28 @@ public final class FxBloom {
     public static final double WHITE = filmInverse(1);
     /**
      * Байт {@code Emit} вершины: 0 — не светится; {@value #SKIP} — светится через свои пятна ({@link #spots}: в проходе
-     * свечения его нет); {@value #EMITTER} + код — светится с пересветом {@link #gain}(код); {@value #SPOT} + код — пятно
-     * мелкого светящегося (только в проходе свечения). Код — 0…{@value #STEPS}.
+     * свечения его нет); {@value #EMITTER} + код — светится с пересветом {@link #gain}(код), код — 0…{@value #STEPS};
+     * {@value #SPOT} — пятно мелкого светящегося (только в проходе свечения; свет — {@link #magnitude}).
      */
     static final int SKIP = 1, EMITTER = 2, SPOT = 130, STEPS = 125;
+    /**
+     * Свет пятна — в 16 битах {@code UV2} вершины (у пятна карта освещения не нужна): величина 2^((код − {@value #MAG_ZERO})
+     * / {@value #MAG_STEP}), шаг 0,07 %, от 2⁻¹⁶ до 2¹⁶; код 0 — нуль. В байте цвета (1/255) свет слабого пятна обнулялся или
+     * рос вдвое — энергия мелкого источника скакала с его размером.
+     */
+    static final int MAG_ZERO = 16384, MAG_STEP = 1024;
+
+    /** Код величины v ≥ 0 ({@link #MAG_ZERO}): 0 — нуль, 1…32767. */
+    static int magnitude(double v) {
+        if (!(v > 0)) return 0;
+        double c = MAG_ZERO + MAG_STEP * Math.log(v) / Math.log(2);
+        return c < 0.5 ? 0 : (int) Math.min(Short.MAX_VALUE, Math.round(c));
+    }
+
+    /** Величина по коду ({@link #magnitude}). */
+    static double magnitudeOf(int code) {
+        return code <= 0 ? 0 : Math.pow(2, (code - MAG_ZERO) / (double) MAG_STEP);
+    }
 
     private FxBloom() {}
 
@@ -300,6 +321,20 @@ public final class FxBloom {
         return o;
     }
 
+    /**
+     * Свет ореола на кадре до кривой ({@code fx_bloom.fsh}: {@code light}) по ореолу halo ({@link #halo}) — с числами вывода,
+     * которые ставит проход ({@link #outputUniforms}); доли светящегося нет.
+     */
+    static Image light(Image halo, int w, int h, int g) {
+        float[] share = new float[1];
+        outputUniforms((name, v) -> {
+            if (name.equals("BloomStep")) share[0] = v[2];
+        }, size(w, 1), size(h, 1), g, size(w, g), size(h, g), 0, 0);
+        Image out = Image.of(w, h);
+        for (int i = 0; i < out.v.length; i++) out.v[i] = halo.v[i] * share[0];
+        return out;
+    }
+
     /** Кубический B-сплайн по пикселям m в точке (x, y) в его пикселях (середина пикселя i — i + ½), край — «по краю». */
     static double bspline(Image m, double x, double y) {
         double tx = x - 0.5, ty = y - 0.5;
@@ -326,6 +361,8 @@ public final class FxBloom {
      */
     static Image halo(Image e, int w, int h, int g) {
         int first = first(h), last = last(w, h), n = last - first + 1;
+        float[] count = new float[1];
+        gatherUniforms((name, v) -> count[0] = v[0], n);
         Image[] level = new Image[last + 1];
         level[g] = e;
         for (int k = g + 1; k <= last; k++) level[k] = down(level[k - 1]);
@@ -338,7 +375,7 @@ public final class FxBloom {
                     double s2 = 1 << (k - first);
                     sum += bspline(level[k], (x + 0.5) / s2, (y + 0.5) / s2);
                 }
-                gather.v[y * f.w + x] = (float) (sum / n);
+                gather.v[y * f.w + x] = (float) (sum / count[0]);
             }
         }
         Image up = gather;
@@ -348,6 +385,40 @@ public final class FxBloom {
             for (int x = 0; x < w; x++) out.v[y * w + x] = up.sample((x + 0.5) / 2, (y + 0.5) / 2);
         }
         return out;
+    }
+
+    /** Куда ставятся числа шейдеров проходов: у видеокарты — uniform программы, у проверки — таблица. */
+    interface Uniforms {
+        void set(String name, float... v);
+    }
+
+    /** Числа прохода сбора ({@code fx_bloom_gather}): уровней в сборе — на столько он делит сумму (равные веса). */
+    static void gatherUniforms(Uniforms u, int levels) {
+        u.set("BloomCount", levels);
+    }
+
+    /**
+     * Числа вывода на кадр ({@code fx_bloom}): шаг половины кадра w1×h1, доля ореола {@link #SHARE} — сбор уже поделил сумму
+     * уровней на их число (второе деление делало долю 0,12/7), начало окна вывода, шаг доли светящегося уровня g размера
+     * wg×hg.
+     */
+    static void outputUniforms(Uniforms u, int w1, int h1, int g, int wg, int hg, int fromX, int fromY) {
+        u.set("BloomStep", 1f / w1, 1f / h1, (float) SHARE, 0f);
+        u.set("BloomFrom", fromX, fromY);
+        u.set("BloomCover", 1f / ((1 << g) * wg), 1f / ((1 << g) * hg));
+    }
+
+    /** Числа шейдера s по таблице {@link Uniforms}. */
+    private static Uniforms of(ShaderInstance s) {
+        return (name, v) -> {
+            com.mojang.blaze3d.shaders.AbstractUniform at = s.safeGetUniform(name);
+            switch (v.length) {
+                case 1 -> at.set(v[0]);
+                case 2 -> at.set(v[0], v[1]);
+                case 3 -> at.set(v[0], v[1], v[2]);
+                default -> at.set(v[0], v[1], v[2], v[3]);
+            }
+        };
     }
 
     // ---------------------------------------------------------------- проходы
@@ -467,7 +538,7 @@ public final class FxBloom {
         // сбор уровней first … last в свою текстуру размера первого
         ShaderInstance c = gather;
         for (int i = 0; i < GATHER; i++) c.setSampler("Sampler" + i, LEVEL[first + Math.min(i, n - 1)]);
-        c.safeGetUniform("BloomCount").set((float) n);
+        gatherUniforms(of(c), n);
         c.apply();
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, gatheredFbo);
         GlStateManager._viewport(0, 0, LEVEL_W[first], LEVEL_H[first]);
@@ -488,9 +559,7 @@ public final class FxBloom {
                 GlStateManager.DestFactor.ONE);
         ShaderInstance s = out;
         s.setSampler("Sampler1", cover);
-        s.safeGetUniform("BloomStep").set(1f / LEVEL_W[1], 1f / LEVEL_H[1], (float) (SHARE / n), 0f);
-        s.safeGetUniform("BloomFrom").set((float) VIEWPORT[0], (float) VIEWPORT[1]);
-        s.safeGetUniform("BloomCover").set(1f / ((1 << g) * LEVEL_W[g]), 1f / ((1 << g) * LEVEL_H[g]));
+        outputUniforms(of(s), LEVEL_W[1], LEVEL_H[1], g, LEVEL_W[g], LEVEL_H[g], VIEWPORT[0], VIEWPORT[1]);
         begin(s, LEVEL[1]);
         GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
         s.clear();

@@ -82,6 +82,37 @@ class FxBloomTest {
     }
 
     /**
+     * Вся цепочка до кривой с теми числами, что ставят проходы ({@link FxBloom#gatherUniforms}, {@link FxBloom#outputUniforms}):
+     * свет ореола на кадре до кривой — доля {@link FxBloom#SHARE} энергии источника (сбор делит на число уровней, вывод
+     * больше не делит: двойная нормировка давала 0,12/7), в 64 пикселях — та же доля закона 1/r²; на экран — кривая шейдера.
+     */
+    @Test
+    void chainGivesTheShareOfTheEnergy() throws IOException {
+        int w = 2560, h = 1600, cx = 1280, cy = 800;
+        GlslFunction curve = GlslFunction.parse(read("include/bloom.glsl"), "bloomCurve");
+        int levels = FxBloom.last(w, h) - FxBloom.first(h) + 1;
+        double law = 1 / (levels * 2 * Math.PI * Math.log(2));
+        for (Bloom q : new Bloom[]{Bloom.FULL, Bloom.FAST}) {
+            int g = FxBloom.glowLevel(h, q);
+            // огненный шар радиусом 30 пикселей в белой точке
+            double energy = Math.PI * 30 * 30 * FxBloom.WHITE;
+            FxBloom.Image e = point(w, h, g, cx, cy);
+            for (int i = 0; i < e.v().length; i++) e.v()[i] *= (float) energy;
+            FxBloom.Image light = FxBloom.light(FxBloom.halo(e, w, h, g), w, h, g);
+            assertEquals(FxBloom.SHARE * energy, light.sum(), 0.03 * FxBloom.SHARE * energy, q + ": свет ореола — доля энергии");
+            int r = 64;
+            double axis = (light.at(cx + r, cy) + light.at(cx - r, cy) + light.at(cx, cy + r) + light.at(cx, cy - r)) / 4;
+            assertEquals(1, axis * r * r / (FxBloom.SHARE * energy * law), 0.25, q + ": в 64 пикселях — доля закона");
+            double shown = Math.pow(curve.call(Map.of("x", axis)), 1 / 2.2);
+            assertEquals(Math.pow(FxBloom.curve(axis), 1 / 2.2), shown, 1e-9, q + ": на экран — кривая шейдера");
+            assertTrue(shown > 0.05 && shown < 0.9, q + ": ореол в 64 пикселях от шара в 30 пикселей виден и не белый: " + shown);
+        }
+        String out = read("core/fx_bloom.fsh").replaceAll("\\s+", " ");
+        assertTrue(out.contains("vec3 light = texture(Sampler0, uv).rgb * BloomStep.z * (1.0 - own);"), "вывод: доля — одним числом прохода");
+        assertTrue(out.contains("pow(vec3(bloomCurve(light.r), bloomCurve(light.g), bloomCurve(light.b)), vec3(1.0 / 2.2))"), "вывод: кривая и экран");
+    }
+
+    /**
      * Источник, идущий по кадру (сдвиги до 64 пикселей с долями), ореол не дёргает: энергия та же (без мерцания у искры),
      * ореол в 40 и в 300 пикселях от него — тот же в пределах 6 %. Уменьшенные копии 2×2 ({@code glGenerateMipmap}) вместо
      * спуска в 13 выборок тут проваливаются (дальний ореол скачет в разы): они привязывают глубокие уровни к своей сетке.
@@ -200,7 +231,7 @@ class FxBloomTest {
         assertEquals(1, wsum[0] + wsum[1] + wsum[2] + wsum[3], 1e-12, "B-сплайн сохраняет энергию");
         String out = read("core/fx_bloom.fsh").replaceAll("\\s+", " ");
         assertTrue(out.contains("vec2 uv = at * 0.5 * BloomStep.xy;"), "на кадр: пиксель — точка ((x + ½)/2, (y + ½)/2) половины кадра");
-        assertTrue(out.contains("texture(Sampler0, uv).rgb * BloomStep.z * (1.0 - own)"), "доля на число уровней, вокруг светящегося");
+        assertTrue(out.contains("texture(Sampler0, uv).rgb * BloomStep.z * (1.0 - own)"), "доля ореола, вокруг светящегося");
     }
 
     /**
@@ -222,7 +253,8 @@ class FxBloomTest {
         assertTrue(fsh.contains("float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);"), "расстояние до мира — у пикселя кадра, не прохода");
         assertTrue(fsh.contains("glow = color.rgb * emitGain;"), "пятно: цвет — линейный свет");
         assertTrue(vsh.contains("if (Emit > " + (FxBloom.SPOT - 0.5) + ")"), "пятно — с " + FxBloom.SPOT);
-        assertTrue(vsh.contains("emitGain = bloomGain(Emit - " + (double) FxBloom.SPOT + ");"), "пересвет пятна");
+        assertTrue(vsh.contains("vertexColor = vec4(Color.rgb * bloomMag(float(UV2.x)), bloomMag(float(UV2.y)));"), "пятно: свет и доля закрытого — в UV2");
+        assertTrue(vsh.contains("Normal.y < -0.5 || Emit > " + (FxBloom.SPOT - 0.5) + " ? vec4(1.0)"), "пятно: UV2 — не карта освещения");
         assertTrue(vsh.contains("emitGain = bloomGain(Emit - " + (double) FxBloom.EMITTER + ");"), "пересвет светящегося");
         assertTrue(vsh.contains("if ((Emit > " + (FxBloom.SPOT - 0.5) + " && !glowPass) || (Emit > " + (FxBloom.SKIP - 0.5) + " && Emit < "
                 + (FxBloom.SKIP + 0.5) + " && glowPass)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);"), "пятно — только в проходе, его квадрат — только в слое");
@@ -237,6 +269,8 @@ class FxBloomTest {
         GlslFunction gain = GlslFunction.parse(glsl, "bloomGain"), curve = GlslFunction.parse(glsl, "bloomCurve");
         for (int c = 0; c <= FxBloom.STEPS; c++) assertEquals(FxBloom.gain(c), gain.call(Map.of("code", (double) c)), 1e-5 * FxBloom.gain(c), "код " + c);
         for (double x = 0; x < 20; x += 0.1) assertEquals(FxBloom.curve(x), curve.call(Map.of("x", x)), 1e-12, "x " + x);
+        assertEquals(FxBloom.MAG_ZERO, constant(glsl, "BLOOM_MAG_ZERO"), 0);
+        assertEquals(FxBloom.MAG_STEP, constant(glsl, "BLOOM_MAG_STEP"), 0);
         assertTrue(FxBloom.EMITTER + FxBloom.STEPS < FxBloom.SPOT && FxBloom.SPOT + FxBloom.STEPS <= 255 && FxBloom.SKIP < FxBloom.EMITTER, "коды не пересекаются");
     }
 

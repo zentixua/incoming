@@ -39,7 +39,9 @@ import java.util.Optional;
 public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]> {
     public static final FxAtlas INSTANCE = new FxAtlas();
 
-    private static final int CELL = 64, COLS = 16, ROWS = 96, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
+    private static final int CELL = 64, COLS = 16, ROWS = 96;
+    /** Размер листа, пикселей. */
+    static final int WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
     /**
      * Кадров огненного шара ({@code fx/particle/fireball_00…47}, 256×256): {@value #FIREBALL_BURN} — горение, остальные —
      * остывание в сажу. Между кадрами — смесь вдоль векторов движения ({@code fireballv_00…47}): огонь течёт, а не
@@ -500,6 +502,11 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
             }
         }
         return row;
+    }
+
+    /** Средние для свечения по готовому листу base ({@link #emissionTable}) — без загрузки ресурсов (проверки). */
+    static void emissionFrom(int[] base) {
+        emission = emissionTable(base);
     }
 
     /**

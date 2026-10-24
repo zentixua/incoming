@@ -109,8 +109,9 @@ void main() {
     gl_Position = ProjMat * view;
     texCoord0 = UV0;
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
-    vec4 light = Normal.y < -0.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
-    if (Normal.y > -0.5 && any(lessThan(UV2, ivec2(240)))) {
+    // у пятна свечения UV2 несёт его свет (FxBloom.magnitude), не место на карте освещения
+    vec4 light = Normal.y < -0.5 || Emit > 129.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
+    if (Normal.y > -0.5 && Emit < 129.5 && any(lessThan(UV2, ivec2(240)))) {
         // доля света неба в точке (небо 0..15): её оттенок — как у вещества под открытым небом, свет блоков — как есть
         light.rgb *= mix(vec3(1.0), FxSkyFix, float(UV2.y) / 240.0);
         // свет шаров — к карте освещения: в долях света неба на экране (карта при открытом небе без блоков) и вместе не
@@ -151,9 +152,9 @@ void main() {
     emitSpot = 0.0;
     if (Emit > 129.5) {
         emitSpot = 1.0;
-        emitGain = bloomGain(Emit - 130.0);
-        // свет пятна — его свет, без карты освещения
-        vertexColor = Color;
+        emitGain = 1.0;
+        // свет пятна линейный: оттенок — в цвете вершины, величина — в UV2.x, доля закрытого — в UV2.y (FxBloom.magnitude)
+        vertexColor = vec4(Color.rgb * bloomMag(float(UV2.x)), bloomMag(float(UV2.y)));
     } else if (Emit > 1.5) {
         emitGain = bloomGain(Emit - 2.0);
     }

@@ -186,6 +186,11 @@ public final class FxQuads {
         return n;
     }
 
+    /** Место вершин квадрата i в памяти кадра (проверки: что записано — то и уйдёт в шейдер). */
+    long address(int i) {
+        return stage + (long) i * QUAD;
+    }
+
     /** Начать квадрат на расстоянии {@code key} от камеры; дальше — ровно четыре {@link #vertex}. */
     public void quad(float key) {
         if (n == capacity) grow();
@@ -244,7 +249,8 @@ public final class FxQuads {
      * свечения выборка в серединах его пикселей то попадает в него, то нет — свечение пропадает и мерцает. Вместо него в
      * проход идут пятна (ореол {@code far/glow} формулой, полуразмер {@link FxBloom#SPOT_HALF} пикселя) с его энергией:
      * средний свет его места на листе ({@link FxAtlas#means}, тем же законом, что {@code bloomLight} в {@code fx.fsh}) × цвет
-     * вершин × пересвет × его телесный угол, поровну на пятна; доля закрытого — так же. Сам он в проход не идёт
+     * вершин × пересвет × его телесный угол, поровну на пятна; доля закрытого — так же. Свет и доля закрытого — в
+     * {@code UV2} ({@link FxBloom#magnitude}), оттенок — в цвете (наибольший канал — 1). Сам он в проход не идёт
      * ({@link FxBloom#SKIP}).
      */
     private void spots(int i) {
@@ -291,11 +297,12 @@ public final class FxQuads {
         }
         // на пятно: свет квадрата (средний × телесный угол) поровну, по площади ореола пятна
         double solid = places[3 * count], spot = FxBloom.SPOT_COVER * Math.pow(2 * FxBloom.SPOT_HALF * glowTexel, 2), share = solid / count / spot;
-        double er = e[0] * gain * share, eg = e[1] * gain * share, eb = e[2] * gain * share;
+        double er = e[0] * gain * share, eg = e[1] * gain * share, eb = e[2] * gain * share, cover2 = Math.min(1, alpha * share);
         double top = Math.max(er, Math.max(eg, eb));
-        if (top <= 0 && alpha <= 0) return;
-        int code = FxBloom.code(top);
-        double scale = FxBloom.gain(code);
+        if (top <= 0 && cover2 <= 0) return;
+        // свет пятна — в 16 битах UV2 (FxBloom.magnitude), в цвете — только оттенок: в байте цвета слабое пятно обнулялось
+        int light = FxBloom.magnitude(top) & 0xFFFF | FxBloom.magnitude(cover2) << 16;
+        float hr = top > 0 ? (float) (er / top) : 0, hg = top > 0 ? (float) (eg / top) : 0, hb = top > 0 ? (float) (eb / top) : 0;
         float soft = Math.max(0, MemoryUtil.memGetShort(q + 24)) / 16f, fog = (MemoryUtil.memGetByte(q + 32) & 255) / 127f, key = keys[i];
         // сам квадрат — только в слое
         for (int k = 0; k < 4; k++) MemoryUtil.memPutByte(q + (long) k * VERTEX + 35, (byte) FxBloom.SKIP);
@@ -305,12 +312,11 @@ public final class FxQuads {
         nearest = 64;
         opacity = 0;
         probe = 0;
-        emit = (byte) (FxBloom.SPOT + code);
+        emit = (byte) FxBloom.SPOT;
         FxAtlas.Sprite glow = FxAtlas.glow();
         for (int k = 0; k < count; k++) {
             double x = places[3 * k], y = places[3 * k + 1], z = places[3 * k + 2], half = FxBloom.SPOT_HALF * glowTexel * Math.sqrt(x * x + y * y + z * z);
-            billboard((float) x, (float) y, (float) z, key, (float) half, 0, glow, (float) Math.min(1, er / scale), (float) Math.min(1, eg / scale),
-                    (float) Math.min(1, eb / scale), (float) Math.min(1, alpha * share), soft, unfold, net.minecraft.client.renderer.LightTexture.FULL_BRIGHT, fog);
+            billboard((float) x, (float) y, (float) z, key, (float) half, 0, glow, hr, hg, hb, 1, soft, unfold, light, fog);
         }
         nearest = n0;
         opacity = o0;
