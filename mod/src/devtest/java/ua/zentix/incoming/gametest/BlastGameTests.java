@@ -269,7 +269,9 @@ public final class BlastGameTests {
             int dug = 0;
             double far = 0;
             for (BlockPos p : soilBlocks) {
-                if (!level.getBlockState(p).isAir()) continue;
+                // снятое — пустое место; в нём может гореть топливо воронки (FuelFires), огонь — тоже пустота
+                BlockState now = level.getBlockState(p);
+                if (!now.isAir() && !(now.getBlock() instanceof BaseFireBlock)) continue;
                 dug++;
                 double near = Double.MAX_VALUE;
                 for (Vec3 at : hits) near = Math.min(near, Math.hypot(p.getX() + 0.5 - at.x, p.getZ() + 0.5 - at.z));
