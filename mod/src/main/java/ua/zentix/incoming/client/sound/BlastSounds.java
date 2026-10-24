@@ -355,11 +355,11 @@ public final class BlastSounds {
     static final double EJECTA_FALL_S = 2;
 
     /**
-     * Пожар топлива в воронке у {@code pos} (огонь на блоках сервера, с удара прошло {@code age} тиков): запись петлёй в
-     * своей скорости, тепловыделение и длительность — у закона топлива {@code pool}.
+     * Пожар топлива в воронке (огонь на блоках сервера, с удара прошло {@code age} тиков): запись петлёй в своей скорости,
+     * тепловыделение, длительность и место — у топлива {@code burn} (стекло, засыпало — гул идёт за ним).
      */
-    public static void fire(Vec3 pos, ua.zentix.incoming.nuclear.model.FuelPool pool, int age) {
+    public static void fire(ua.zentix.incoming.client.fx.FuelBurn burn, int age) {
         ClientLevel world = Minecraft.getInstance().level;
-        if (world != null && pool.watts() > 0) FIRES.add(new CraterFire(pool, pos, world, age));
+        if (world != null && burn.law().watts() > 0) FIRES.add(new CraterFire(burn, world, age));
     }
 }

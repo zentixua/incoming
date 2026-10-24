@@ -622,27 +622,28 @@ public final class BlastEffects {
 
     /**
      * Топливо удара горит на блоках (сервер, {@code warhead/FuelFires}): пламя рисует сам мир; очаг пожара
-     * ({@link FireSmoke#pool}: дым, свет пламени на мир и дым, пламя вдали) и его гул — у клиента, по закону топлива оружия
-     * ({@code WeaponSpec.pool}) на клетках пакета: легло на меньшую площадь — горит дольше и слабее
-     * ({@code FuelPool.spread}), как у сервера.
+     * ({@link FireSmoke#fuel}: дым, свет пламени на мир и дым, пламя вдали) и его гул — у клиента, по закону топлива
+     * оружия на клетках пакета ({@code WeaponSpec.pool(lit)}: легло на меньшую площадь — горит дольше и слабее, как у
+     * сервера). Пакет приходит и с переменой (стекло, засыпало, залило) — очаг и гул идут за ней.
      */
     public static void fuelFire(S2C.FuelFire p) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null || p.cells().isEmpty()) return;
-        ua.zentix.incoming.nuclear.model.FuelPool law = WeaponType.byId(p.weapon()).spec().pool();
-        ua.zentix.incoming.nuclear.model.FuelPool pool = law.spread(p.cells().size(), law.cells());
-        if (pool.seconds() <= 0 || p.age() / 20.0 >= pool.seconds()) return;
-        Vec3 centre = FireSmoke.pool(level, p.cells(), pool, p.age() / 20.0);
+        ua.zentix.incoming.nuclear.model.FuelPool pool = WeaponType.byId(p.weapon()).spec().pool(p.cells().size());
+        long age = Math.max(0, level.getGameTime() - p.blastTick());
+        if (pool.seconds() <= 0 || age / 20.0 >= pool.seconds()) return;
+        FuelBurn burn = FireSmoke.fuel(level, p.id(), pool, p.cells(), p.smothered(), age / 20.0);
         // гул — у пожара ближе {@link FarBlasts#NEAR}, как и прежде (звук воронки дальше не заводится)
-        if (FarBlasts.near(centre)) BlastSounds.fire(centre, pool, p.age());
+        if (burn != null && FarBlasts.near(burn.centre())) BlastSounds.fire(burn, (int) age);
     }
 
     /** Дым и гул топлива в воронке у самой точки удара (огня сервера на блоках нет: старая запись, песочница без сервера). */
     private static void legacyPool(Vec3 pos, ua.zentix.incoming.nuclear.model.FuelPool pool) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
-        Vec3 centre = FireSmoke.pool(level, java.util.List.of(BlockPos.containing(pos)), pool, 0);
-        if (FarBlasts.near(centre)) BlastSounds.fire(centre, pool, 0);
+        FuelBurn burn = FuelBurn.at(pool, BlockPos.containing(pos));
+        FireSmoke.pool(level, burn, 0);
+        if (FarBlasts.near(burn.centre())) BlastSounds.fire(burn, 0);
     }
 
     /**

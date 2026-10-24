@@ -681,6 +681,15 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
         return ua.zentix.incoming.nuclear.model.FuelPool.of(fuel(), fuelAtImpact(), charge());
     }
 
+    /**
+     * То же топливо, легшее на {@code lit} клеток (меньше, чем по площади закона, — слой толще: горит дольше и слабее,
+     * {@link ua.zentix.incoming.nuclear.model.FuelPool#spread}): у сервера и клиента одно.
+     */
+    public ua.zentix.incoming.nuclear.model.FuelPool pool(int lit) {
+        var law = pool();
+        return law.spread(lit, law.cells());
+    }
+
     /** Полосы залпа на шкале полёта мира ({@link Lanes}): длины растут с маршевой, как расстояние между снарядами. */
     public Lanes lanes() {
         return salvo.lanes().scaled(airframe.stretch(FlightScale.x()));

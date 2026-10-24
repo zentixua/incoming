@@ -45,8 +45,9 @@ public final class FireSmoke implements SmokeGrid.Source {
     private static final Long2ObjectOpenHashMap<FireSmoke> FIRES = new Long2ObjectOpenHashMap<>();
     /** Горящее масло выбитых подстанций по месту блока ({@link #substation}). */
     private static final Long2ObjectOpenHashMap<FireSmoke> OIL_FIRES = new Long2ObjectOpenHashMap<>();
-    /** Топливо в воронках взрывов ({@link #pool}). */
+    /** Топливо в воронках взрывов ({@link #pool}); с сервера — ещё по номеру воронки (перемены состояния, {@link #fuel}). */
     private static final java.util.List<FireSmoke> POOLS = new java.util.ArrayList<>();
+    private static final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<FireSmoke> POOL_IDS = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
     /** Клетки огня топлива горящих воронок: их огонь — не дерево ({@link FireWatch} его не считает). */
     static final FuelCells FUEL = new FuelCells();
 
@@ -97,8 +98,9 @@ public final class FireSmoke implements SmokeGrid.Source {
     /** Доля топлива в воронке, что горит, по возрасту очага (null — не воронка). */
     @org.jetbrains.annotations.Nullable
     java.util.function.DoubleUnaryOperator burning;
-    /** Клетки огня топлива воронки ({@link #FUEL}); у прочих очагов — пусто. */
-    private java.util.List<BlockPos> cells = java.util.List.of();
+    /** Топливо воронки (клетки, закон, место); у прочих очагов — null. */
+    @org.jetbrains.annotations.Nullable
+    private FuelBurn burn;
     /**
      * Место очага, сила (блоков огня или очагов топлива), сила всего пожара, куда он входит (в единицах его топлива,
      * {@link #merge}), начало и конец горения (часы сетки, с; конец — NaN, пока горит); пересмотр.
@@ -264,6 +266,7 @@ public final class FireSmoke implements SmokeGrid.Source {
             if (share <= 0 && now > f.start) {
                 f.end = now;
                 it.remove();
+                if (f.burn != null) POOL_IDS.remove(f.burn.id, f);
                 columns();
             }
         }
@@ -298,42 +301,61 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Топливо в воронке горит на клетках {@code cells} огнём Minecraft (сервер, {@code warhead/FuelFires}) по закону
-     * {@code pool} с теплом {@code watts} и сажей топлива, долей {@code share} по возрасту ({@code age} с уже прошло с
-     * удара), — очаг среди пожаров клиента над серединой клеток: его шлейф сливается с огнём, что поджёг шар топлива рядом
-     * ({@link #merge}), пламя светит на дым. Огонь клеток — сами блоки (их свет — свет блоков); дерево он не считает
-     * ({@link FuelCells}). Середина очага — место его звука.
+     * Состояние воронки с сервера ({@code S2C.FuelFire}): новая — очаг дыма ({@link #pool}); известная — очаг переходит туда,
+     * где топливо теперь горит, и горит долей клеток, что не погасли раньше срока ({@link FuelBurn#share}). Новое топливо
+     * (для звука) или null, если воронка уже была.
      */
-    public static Vec3 pool(ClientLevel level, java.util.List<BlockPos> cells, ua.zentix.incoming.nuclear.model.FuelPool pool, double age) {
+    @org.jetbrains.annotations.Nullable
+    public static FuelBurn fuel(ClientLevel level, int id, ua.zentix.incoming.nuclear.model.FuelPool law, java.util.List<BlockPos> cells,
+                                long smothered, double age) {
         if (level != world) {
             reset();
             world = level;
         }
-        double x = 0, y = 0, z = 0;
-        for (BlockPos p : cells) {
-            x += p.getX() + 0.5;
-            y += p.getY();
-            z += p.getZ() + 0.5;
+        FireSmoke known = POOL_IDS.get(id);
+        if (known != null && known.burn != null) {
+            known.burn.update(cells, smothered);
+            Vec3 c = known.burn.centre();
+            known.x = c.x;
+            known.y = c.y;
+            known.z = c.z;
+            columns();
+            return null;
         }
-        x /= cells.size();
-        y /= cells.size();
-        z /= cells.size();
+        FuelBurn burn = new FuelBurn(id, law, cells.size(), cells, smothered);
+        POOL_IDS.put(id, pool(level, burn, age));
+        return burn;
+    }
+
+    /**
+     * Топливо в воронке горит огнём Minecraft на клетках (сервер, {@code warhead/FuelFires}) по закону {@code burn} с теплом
+     * закона и сажей топлива, долей {@link FuelBurn#share} по возрасту ({@code age} с уже прошло с удара), — очаг среди
+     * пожаров клиента над серединой горящих клеток: его шлейф сливается с огнём, что поджёг шар топлива рядом
+     * ({@link #merge}), пламя светит на дым и мир. Огонь клеток — сами блоки; дерево он не считает ({@link FuelCells}).
+     */
+    static FireSmoke pool(ClientLevel level, FuelBurn burn, double age) {
+        if (level != world) {
+            reset();
+            world = level;
+        }
+        Vec3 c = burn.centre();
         double now = SmokeGrid.seconds(0);
-        Fuel fuel = new Fuel(pool.watts(), pool.area(), pool.fuel().sootYield / pool.fuel().heatJPerKg);
-        FireSmoke f = new FireSmoke(fuel, x, y, z, 1, now - age);
-        f.burning = pool::share;
-        f.cells = java.util.List.copyOf(cells);
+        var law = burn.law;
+        Fuel fuel = new Fuel(law.watts(), law.area(), law.fuel().sootYield / law.fuel().heatJPerKg);
+        FireSmoke f = new FireSmoke(fuel, c.x, c.y, c.z, 1, now - age);
+        f.burning = burn::share;
+        f.burn = burn;
         f.record(now, 1, 1);
         f.air();
         POOLS.add(f);
         columns();
         SmokeGrid.add(f);
-        return new Vec3(x, y, z);
+        return f;
     }
 
     /** Индекс клеток топлива ({@link #FUEL}) — заново по горящим воронкам. */
     private static void columns() {
-        FUEL.index(POOLS.stream().map(f -> f.cells).toList());
+        FUEL.index(POOLS.stream().filter(f -> f.burn != null).map(f -> f.burn.live()).toList());
     }
 
     /** Смена мира, перемотка повтора: очагов нет (источники сетки снимает её сброс). */
@@ -344,6 +366,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         FIRES.clear();
         OIL_FIRES.clear();
         POOLS.clear();
+        POOL_IDS.clear();
         FUEL.clear();
         world = null;
     }

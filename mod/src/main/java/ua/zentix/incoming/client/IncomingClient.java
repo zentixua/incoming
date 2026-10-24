@@ -359,7 +359,8 @@ public final class IncomingClient {
         /**
          * Удары показывает и озвучивает сам мод ({@code blast_effects}); выключено — их показывает другой мод взрывов (по
          * взрыву на сервере, его источник — снаряд), и своих картинки, звука, волны и толчка у ударов нет: ни у взрыва,
-         * ни у бетонобойной бомбы (удар о землю, толчок, выброс газа, обрушение). Разрывы ПВО и ядерка — свои всегда.
+         * ни у топлива в воронке (дым, свет, гул; огонь на блоках — мира), ни у бетонобойной бомбы (удар о землю, толчок,
+         * выброс газа, обрушение). Разрывы ПВО и ядерка — свои всегда.
          */
         private static boolean ownBlasts() {
             return IncomingConfig.CLIENT.blastEffects.get();
@@ -391,7 +392,7 @@ public final class IncomingClient {
         @Override
         public void fuelFire(S2C.FuelFire p) {
             Replay.event("fuel", live -> {
-                if (live) BlastEffects.fuelFire(p);
+                if (live && ownBlasts()) BlastEffects.fuelFire(p);
             });
         }
 

@@ -160,21 +160,24 @@ public final class S2C {
     }
 
     /**
-     * Топливо удара горит на блоках ({@code warhead/FuelFires}): клетки, где оно легло и горит огнём Minecraft, — дым и
-     * звук этого пожара клиент ведёт сам по закону топлива оружия ({@code WeaponSpec.pool}), огонь — блоки мира.
+     * Топливо удара горит на блоках ({@code warhead/FuelFires}): состояние воронки — при появлении, при каждой перемене и
+     * тому, кому уходит её чанк. Дым, свет и гул этого пожара клиент ведёт сам по закону топлива оружия на этих клетках
+     * ({@code WeaponSpec.pool(lit)}), огонь — блоки мира.
      *
-     * @param cells  клетки огня (первая горит дольше всех: туда топливо стекло); топливо, потерявшее опору, капает вниз в
-     *               той же колонке — ниже клетки
-     * @param weapon оружие ({@code WeaponType.id})
-     * @param age    сколько тиков прошло с удара, когда огонь встал (закон горения считает время от удара)
+     * @param id        воронка (в своём мире)
+     * @param cells     клетки огня в порядке выгорания (первая горит дольше всех: туда топливо стекло) — нынешние места
+     * @param smothered клетки (биты по номеру), чьё топливо кончилось раньше срока: засыпало, залило, упало в воду
+     * @param weapon    оружие ({@code WeaponType.id})
+     * @param blastTick игровое время удара: закон горения считает время от него
      */
-    public record FuelFire(List<BlockPos> cells, int weapon, int age) implements CustomPacketPayload {
+    public record FuelFire(int id, List<BlockPos> cells, long smothered, int weapon, long blastTick) implements CustomPacketPayload {
         public static final Type<FuelFire> TYPE = new Type<>(Incoming.id("fuel_fire"));
-        /** Клеток в пакете не больше (у ракеты — 9). */
+        /** Клеток в пакете не больше: биты {@link #smothered} — одно long (у ракеты — 9). */
         public static final int MAX_CELLS = 64;
         public static final StreamCodec<ByteBuf, FuelFire> CODEC = StreamCodec.composite(
-                BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX_CELLS)), FuelFire::cells, ByteBufCodecs.VAR_INT, FuelFire::weapon,
-                ByteBufCodecs.VAR_INT, FuelFire::age, FuelFire::new);
+                ByteBufCodecs.VAR_INT, FuelFire::id, BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX_CELLS)), FuelFire::cells,
+                ByteBufCodecs.VAR_LONG, FuelFire::smothered, ByteBufCodecs.VAR_INT, FuelFire::weapon, ByteBufCodecs.VAR_LONG,
+                FuelFire::blastTick, FuelFire::new);
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
