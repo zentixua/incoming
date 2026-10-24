@@ -318,7 +318,7 @@ Fire, the fireball, flashes and rocket flames glow on the screen the way the eye
 a soft halo that follows the shape of the flame and fades with distance from it. It is the same whether you use a
 shader pack or not. It shows best at night against the dark; by day it is faint. Smoke in front of the fire dims
 its glow, and fire hidden behind a wall or a hill gives none. This changes how the light is shown, not how bright the
-fire is or how much it lights around it.
+fire is or how much it lights around it. The glow can be made cheaper or turned off in the settings (Glow around fire).
 
 The shock front itself is seen the way it is on film. The compressed air behind it bends light, so a thin ring of
 shimmer runs out from the fireball over the sky and the ground: a few pixels for a fraction of a second, fading as the
