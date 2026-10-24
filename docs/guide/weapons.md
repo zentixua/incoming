@@ -17,6 +17,9 @@ Times are for a nearby target. The world owner can change flight times.
 Fuel burning in a crater produces a continuous roar and crackle. It fades as the fuel runs out; the recording does
 not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path to you.
 
+A fireball rises upright. While it burns, orange flame with bright cores churns among dark soot; as it cools, it
+darkens into smoke without a jump.
+
 ## The real weapons
 
 Each weapon is a real one. Its size, mass, warhead and engines come from open data; where a number is not published
@@ -254,7 +257,9 @@ Everything about it is in [Nuclear strike](nuke.md).
 ## What a blast looks like
 
 The size, rise, colour and light of every blast come from the charge and the fuel left in the tanks; the smoke and the
-fireball are drawn from simulations of real gas, baked in Blender, the same way up close and far away. The sun lights
+fireball are drawn from simulations of real gas, baked in Blender, the same way up close and far away. A film curve
+keeps the bright fireball's folds and dark soot visible as it billows and cools. This changes how its light is shown,
+not its physical size, lifetime or heat. The sun lights
 the smoke from its side and shines through its thin edges, and a fireball lights the smoke around it. When the fuel has
 burnt, the fireball does not switch off: it cools as it mixes with air, from yellow through orange and dark red into
 smoke. You see it as fire while its glow outshines the light on its smoke, so by day it turns into smoke sooner than at

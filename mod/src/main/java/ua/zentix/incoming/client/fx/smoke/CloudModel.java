@@ -240,6 +240,8 @@ public final class CloudModel {
      */
     static final int LAYERS = 3;
     static final double SLICE = 0.85;
+    /** Порядок слоёв в выводе: середина (самый тяжёлый, он же клуб шара в огненной стадии) — первым. */
+    private static final int[] LAYER_ORDER = {1, 0, 2};
     /**
      * Высоты слоёв (в σv облака) и их доли массы: квадратура Гаусса–Эрмита на три точки для середин с дисперсией
      * 1 − {@link #SLICE}² — 0 и ±√(3·(1 − SLICE²)), доли 2/3 и 1/6: вместе с шириной слоёв — тот же второй и четвёртый
@@ -439,6 +441,19 @@ public final class CloudModel {
         for (int i = 0; i < GLOW_LOG.length; i++) GLOW_LOG[i] = Math.log(BlackBody.luminance(DRAPER_K + 10.0 * i));
     }
 
+    /**
+     * Доля сажи облака в возрасте t, что уже в облаке термика, а не в остывающем шаре: 0 в конец горения, 1 — когда шар
+     * остыл до точки Дрейпера ({@link #fireSeconds}), между — гладко (у шахеда ~0,8 с, у ракеты ~1,2 с, у бомбы ~1,4 с).
+     * ⚠ Сшивка двух приближений: термик MTT облака ведётся с мига взрыва, остывающий шар — с конца горения, и середины их
+     * к этому мигу расходятся (у бомбы — на ~17 м); где сажа на самом деле, пока шар светится, — в нём.
+     */
+    double handoff(double t) {
+        if (t <= burnSeconds) return 0;
+        if (t >= fireSeconds || fireSeconds <= burnSeconds) return 1;
+        double u = (t - burnSeconds) / (fireSeconds - burnSeconds);
+        return u * u * (3 - 2 * u);
+    }
+
     /** Температура остывающего шара в возрасте t ≥ {@link #burnSeconds}, K. */
     double coolKelvin(double t) {
         return cooling.kelvin(t - burnSeconds);
@@ -527,7 +542,9 @@ public final class CloudModel {
      * подсосом); 0 — остыл до точки Дрейпера.
      */
     public double ballRadius(double t) {
-        if (t >= burnSeconds) return t < fireSeconds ? cooling.radius(t - burnSeconds) : 0;
+        // остывающий шар — термик с объёма, что держит тепло при температуре шара (у шахеда с теплом боевой части он на
+        // 4 % больше шара CCPS): от радиуса шара в конец горения к нему — за остывание, без скачка размера ({@link #handoff})
+        if (t >= burnSeconds) return t < fireSeconds ? cooling.radius(t - burnSeconds) + (burnRadius - cooling.radius(0)) * (1 - handoff(t)) : 0;
         return Math.max(fuelBallRadius(t), heBallRadius(t));
     }
 
@@ -734,9 +751,17 @@ public final class CloudModel {
             // слои по высоте: каждый — с ветром своей высоты (сдвиг относительно середины — вдоль ветра)
             double lean = shear(t), wx = air.windX(), wz = air.windZ(), w = Math.hypot(wx, wz);
             double ux = w > 0 ? wx / w : 0, uz = w > 0 ? wz / w : 0;
-            for (int j = 0; j < LAYERS; j++) {
+            // Сажа остывающего шара — ещё в шаре (его середина и размер), облако термика принимает её за время остывания:
+            // одно вещество в двух приближениях (CloudModel.cooling пока шар светится, thermal — дальше). Смена разом в
+            // конец горения ставила тёмный купол за тик (ревью #426: у ракеты край +32 %, у бомбы середина на 17 м выше).
+            // Середина слоёв — первой: номер клуба держит зерно его клубов у SmokePuffs, слияние — тот же клуб шара.
+            double hand = handoff(t), ball = ballRadius(t) / Math.sqrt(5), by = ballHeight(t);
+            for (int i = 0; i < LAYERS; i++) {
+                int j = LAYER_ORDER[i];
                 double q = LAYER_Q[j], m = LAYER_W[j] * fade;
-                out.blob(cx + ux * q * lean, cy + q * sv, cz + uz * q * lean, sh, SLICE * sv, soot * m, cloudDust * m, 0, k, up);
+                double sx = hand * ux * q * lean, sz = hand * uz * q * lean, y = by + hand * (cy + q * sv - by);
+                out.blob(cx + sx, y, cz + sz, ball + hand * (sh - ball), ball + hand * (SLICE * sv - ball), soot * m, cloudDust * m, 0,
+                        k, up);
             }
         }
         if (stemShown) {

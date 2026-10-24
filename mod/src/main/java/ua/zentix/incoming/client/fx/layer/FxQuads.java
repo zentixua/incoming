@@ -21,7 +21,7 @@ import java.util.Arrays;
  * туман Minecraft ({@code Normal.x}),
  * чем брать текстуру ({@code Normal.y}: 1 — частица ближайшим пикселем, {@link #nearestTexels}; −1 — плитка атласа
  * дальних моделей, {@link #modelTiles}; ½ — ореол по формуле, {@link #glowShape}; −¼ — запечённый клуб с шестисторонним
- * светом, {@link #sixWay}; 0 — лист слоя гладко) и непрозрачность частицы без текстуры или смесь кадров клуба
+ * светом, {@link #sixWay}; ⅝ — кадры огня со смесью, {@link #fireballMix}; 0 — лист слоя гладко) и непрозрачность частицы без текстуры или смесь кадров клуба
  * ({@code Normal.z}, {@link #opacity}).
  */
 public final class FxQuads {
@@ -103,6 +103,12 @@ public final class FxQuads {
     /** Наибольшая степень тени карт клуба (сажа — ~1,3) и ступеней в полосе байта −13…−50 ({@code fx.fsh}). */
     public static final float SHADE_MAX = 1.5f;
     public static final int SHADE_STEPS = 37;
+
+    /** Кадры огня — смесь в шейдере с умноженной альфой, а не два квадрата с провалом яркости между кадрами. */
+    public void fireballMix(float mix) {
+        nearest = (byte) (mix < 0 ? 0 : 80);
+        opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
+    }
 
     public void glowShape(boolean on) {
         nearest = (byte) (on ? 64 : 0);

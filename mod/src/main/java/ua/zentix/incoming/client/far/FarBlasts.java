@@ -118,7 +118,7 @@ public final class FarBlasts {
         /** Пакет пришёл ближе {@link #NEAR}: ближняя картинка и звук есть. */
         final boolean near;
         /** Альбедо пыли грунта по каналам; поворот кадра шара (по зерну). */
-        final float dustR, dustG, dustB, phase;
+        final float dustR, dustG, dustB;
         boolean soundPending;
         /**
          * Дольше не ждём звука, до уха которого фронт так и не дошёл (слушатель уходит быстрее звука), тиков: путь звука
@@ -161,7 +161,6 @@ public final class FarBlasts {
             dustR = SmokeGrid.dustAlbedo(dust[0]);
             dustG = SmokeGrid.dustAlbedo(dust[1]);
             dustB = SmokeGrid.dustAlbedo(dust[2]);
-            phase = (float) (new java.util.SplittableRandom(seed).nextDouble() * Math.PI * 2);
         }
 
         double distanceTo(Vec3 p) {
@@ -749,11 +748,12 @@ public final class FarBlasts {
         // кадр — по состоянию шара: в горении — доля времени горения, остывая — температура (кадры запечённой симуляции
         // с её временем и температурой, FxAtlas.fireballFrame); тело тает в дым той же долей, что дым проступает: по
         // свечению против света неба на его дыме (CloudModel.glowShare) — днём раньше, чем ночью
-        double s = age / 20, frame = FxAtlas.fireballFrame(s / Math.max(e.model.burnSeconds, 1e-6), e.model.ballKelvin(s));
+        double s = age / 20, frame = FxAtlas.fireballFrame(s / Math.max(e.model.burnSeconds, 1e-6), e.model.ballKelvin(s),
+                e.model.ballKelvin(e.model.burnSeconds));
         r = e.model.ballRadius(s);
-        half = r * FarSprites.FIREBALL;
+        half = r * FxAtlas.fireballHalf(frame);
         body = CloudModel.glowShare(e.model.ballKelvin(s), view.skyLuminance());
-        sprite = FxAtlas.fireballAt(frame);
+        sprite = FxAtlas.fireballAt(frame, (e.seed & 1) != 0);
         fire = FxAtlas.fireLightAt(frame) * body;
         if (r <= 0 || body <= 0) return;
         double h = e.ballHeight(age), b = e.brightness(age);
@@ -764,7 +764,7 @@ public final class FarBlasts {
         // шар светит и на дым, пыль и шлейфы вокруг — закрыт он от глаза или нет; тающий — своей светящейся долей
         lights.add(bx, by + h, bz, r, b * view.exposure() * body, fire, c[0], c[1], c[2]);
         if (vis > 0) {
-            out.shaped(bx, by + h, bz, r, sprite, half, e.phase, b * view.exposure() * t, t, view.pixel(), c[0], c[1], c[2],
+            out.shaped(bx, by + h, bz, r, sprite, half, FxAtlas.fireballMix(frame), b * view.exposure() * t, t, view.pixel(), c[0], c[1], c[2],
                     vis * body, vis * e.open, fire, LIGHT);
             brightest(view, bx, by + h, bz, vis);
         }

@@ -255,19 +255,29 @@ public final class FarSprites implements SmokePuffs.Out {
      *
      * @param radius радиус светящегося тела сейчас (свет, блик, вуаль, точка), блоков
      * @param half   полуразмер картинки, блоков (растёт ли тело — в её кадрах)
+     * @param mix    смесь кадра огня со следующим (один фрагмент, с умноженной альфой)
      * @param body   доля тела (видимое над рельефом, переход к частицам, таяние)
      * @param glare  доля блика и вуали
      * @param shown  тело на экране в картинке (доля белого): блик и вуаль не ярче — остывший в сажу шар не слепит
      */
-    public void shaped(double dx, double dy, double dz, double radius, FxAtlas.Sprite sprite, double half, float rot, double seen, double t, double pixel,
+    public void shaped(double dx, double dy, double dz, double radius, FxAtlas.Sprite sprite, double half, float mix, double seen, double t, double pixel,
                        float r, float g, float b, double body, double glare, double shown, double[] out) {
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         Sight.light(radius, seen, d, pixel, out);
         double shape = smoothstep(SHAPE_FROM, SHAPE_FULL, radius / Math.max(d * pixel, 1e-12));
         if (shape < 1) core(dx, dy, dz, out, t, r, g, b, body * (1 - shape));
         float a = (float) (t * body * shape);
-        if (shape > 0 && billboard(dx, dy, dz, half, rot, sprite, a, a, a, a, (float) (radius * BODY_SOFT), BALL_FRONT * radius)) counts[1]++;
+        // Подача: мягкий bloom после Iris. Он за телом, глубина и ближний дым его закрывают; не новый свет в мире.
+        if (shape > 0) glow(dx, dy, dz, radius, radius * BODY_SOFT, r, g, b, (float) (0.12 * shown * t * body * shape));
+        this.out.fireballMix(mix);
+        if (shape > 0 && billboard(dx, dy, dz, half, fireballRotation(), sprite, a, a, a, a, (float) (radius * BODY_SOFT), BALL_FRONT * radius)) counts[1]++;
+        this.out.fireballMix(-1);
         glare(dx, dy, dz, radius, out, seen, r, g, b, glare, shown);
+    }
+
+    /** У запечённого термика есть верх: случайный поворот шара направлял бы пламя вбок и вниз. */
+    static float fireballRotation() {
+        return 0;
     }
 
     /**

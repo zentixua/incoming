@@ -16,15 +16,15 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Все текстуры слоя эффектов на одном листе 1024×1536 с уменьшенными копиями (mip-уровнями): клубы дыма и пламени,
- * искра, вспышка, кольцо, кадры огненного шара (128×128), запечённый клуб дыма ({@link #puff6}: 16 кадров по три карты),
+ * Все текстуры слоя эффектов на одном листе 1024×6144 с уменьшенными копиями (mip-уровнями): клубы дыма и пламени,
+ * искра, вспышка, кольцо, кадры огненного шара (256×256) и их векторы движения (128×128), запечённый клуб дыма
+ * ({@link #puff6}: 16 кадров по три карты),
  * дальние круг, ореол и клубы. Один лист — одна текстура на весь отсортированный проход слоя
  * (частицы и дальнее вперемешку); уменьшенные копии — чтобы клуб в десяток пикселей вдали не рябил. Цвет на листе
  * умножен на непрозрачность, как и смешивание слоя.
@@ -39,10 +39,28 @@ import java.util.Optional;
 public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]> {
     public static final FxAtlas INSTANCE = new FxAtlas();
 
-    private static final int CELL = 64, COLS = 16, ROWS = 36, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
-    /** Кадров огненного шара ({@code fx/particle/fireball_00…15}, 128×128): от вспышки до чёрного дыма. */
-    public static final int FIREBALL_FRAMES = 16;
-    private static final int FIREBALL_SIZE = 2 * CELL;
+    private static final int CELL = 64, COLS = 16, ROWS = 96, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
+    /**
+     * Кадров огненного шара ({@code fx/particle/fireball_00…47}, 256×256): {@value #FIREBALL_BURN} — горение, остальные —
+     * остывание в сажу. Между кадрами — смесь вдоль векторов движения ({@code fireballv_00…47}): огонь течёт, а не
+     * проступает двойным; 10 кадров на 2–3 с горения стояли силуэтом (ревью #426).
+     */
+    public static final int FIREBALL_FRAMES = 48, FIREBALL_BURN = 32;
+    /** Прежний процедурный шар ({@link #ball}) и его таблица света — 16 кадров. */
+    public static final int BALL_FRAMES = 16;
+    public static final int FIREBALL_SIZE = 4 * CELL;
+    private static final int PUFF_SIZE = 2 * CELL, FIREBALL_ROW = 36, FIREBALL_FLOW_ROW = FIREBALL_ROW + 12 * 4;
+    public static final int FIREBALL_COLUMNS = 4;
+    public static final float FIREBALL_U = (float) FIREBALL_SIZE / WIDTH, FIREBALL_V = (float) FIREBALL_SIZE / HEIGHT,
+            FIREBALL_TOP = (float) (FIREBALL_ROW * CELL) / HEIGHT;
+    /**
+     * Векторы движения кадра шара к следующему: карта 128×128 ({@value #FIREBALL_FLOW_COLUMNS} в ряду с
+     * {@link #FIREBALL_FLOW_TOP}), r и g — смещение ±{@link #FIREBALL_FLOW} пикселей кадра 256 (так пишет
+     * {@code tools/bake_fx/pack.py}).
+     */
+    public static final int FIREBALL_FLOW_COLUMNS = 8, FIREBALL_FLOW_SIZE = 2 * CELL;
+    public static final float FIREBALL_FLOW = 16, FIREBALL_FLOW_U = (float) FIREBALL_FLOW_SIZE / WIDTH,
+            FIREBALL_FLOW_V = (float) FIREBALL_FLOW_SIZE / HEIGHT, FIREBALL_FLOW_TOP = (float) (FIREBALL_FLOW_ROW * CELL) / HEIGHT;
     /** Уменьшенных копий: клуб 64 → 4 пикселя (все места кратны 16 — копии соседних мест не смешивают). */
     private static final int MIPS = 4;
 
@@ -57,7 +75,8 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     private record Slot(ResourceLocation texture, int x, int y, int w, int h) {}
 
     private static final List<Slot> SLOTS = new ArrayList<>();
-    private static final Sprite[] SMOKE = new Sprite[16], FIRE = new Sprite[8], PUFFS = new Sprite[8], FIREBALL = new Sprite[FIREBALL_FRAMES];
+    private static final Sprite[] SMOKE = new Sprite[16], FIRE = new Sprite[8], PUFFS = new Sprite[8], FIREBALL = new Sprite[FIREBALL_FRAMES],
+            FIREBALL_MIRRORED = new Sprite[FIREBALL_FRAMES];
     private static final Sprite RING, FLASH, GLOW, DISC, SPARK, FLAKE, PAPER;
     /**
      * Запечённый клуб дыма ({@code tools/bake_fx}: газ Mantaflow в Blender), {@value #PUFF6_FRAMES} кадров раскрытия, у кадра
@@ -77,9 +96,9 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
      * Прежний процедурный огненный шар ({@code fx/particle/ball_00…15}, {@code tools/gen_particles.py}: растёт и остывает в
      * своих кадрах по доле жизни) — у частиц шара ({@code Fx.fireball}: разрыв зенитной ракеты).
      */
-    private static final Sprite[] BALL = new Sprite[FIREBALL_FRAMES];
+    private static final Sprite[] BALL = new Sprite[BALL_FRAMES];
     private static final ResourceLocation BALL_LIGHT = Incoming.id("textures/fx/particle/ball.json");
-    private static volatile float[] ballShown = full();
+    private static volatile float[] ballShown = linear(1, 1);
     private static final ResourceLocation FIREBALL_LIGHT = Incoming.id("textures/fx/particle/fireball.json"),
             PUFF6_DATA = Incoming.id("textures/fx/particle/puff6.json");
     /** Кадры шара: огонь на экране ({@link #fireLightAt}), время в долях горения и температура; пока не прочитаны — запасные. */
@@ -94,10 +113,12 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
 
     /**
      * Кадры огненного шара ({@code tools/bake_fx/pack.py} → {@code fireball.json}): огонь кадра на экране (доля белого),
-     * время кадра в долях горения симуляции и цветовая температура его пламени, K (у потухшего — 0).
+     * время кадра в долях горения симуляции, цветовая температура его пламени, K (у потухшего — 0), и полуразмер кадра в
+     * радиусах шара (кадр вмещает всё вещество: остывающая сажа не обрезается кругом).
      */
-    record Fireball(float[] fire, float[] burn, float[] kelvin) {
-        static final Fireball FALLBACK = new Fireball(full(), linear(0, 2), descending());
+    record Fireball(float[] fire, float[] burn, float[] kelvin, float[] half) {
+        static final Fireball FALLBACK = new Fireball(linear(1, 1, FIREBALL_FRAMES), linear(0, 2, FIREBALL_FRAMES),
+                linear(1500, 600, FIREBALL_FRAMES), linear(1.3f, 1.3f, FIREBALL_FRAMES));
     }
 
     static {
@@ -119,20 +140,25 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
             PUFFS[i] = new Sprite(u, v, u + du, v + dv);
         }
         RING = slot("fx/particle/ring", 4 * CELL, 2 * CELL, 2 * CELL, 2 * CELL);
-        // огненный шар: два ряда по 8 кадров под всем остальным
+        // Огненный шар: 12 рядов по четыре кадра 256² (по 4 клетки в высоту) ниже остальных карт, под ними — их векторы
+        // движения 128², по 8 в ряду
         for (int i = 0; i < FIREBALL_FRAMES; i++) {
-            FIREBALL[i] = slot(String.format(Locale.ROOT, "fx/particle/fireball_%02d", i), i % 8 * FIREBALL_SIZE, 4 * CELL + i / 8 * FIREBALL_SIZE,
-                    FIREBALL_SIZE, FIREBALL_SIZE);
+            FIREBALL[i] = slot(String.format(Locale.ROOT, "fx/particle/fireball_%02d", i), i % FIREBALL_COLUMNS * FIREBALL_SIZE,
+                    FIREBALL_ROW * CELL + i / FIREBALL_COLUMNS * FIREBALL_SIZE, FIREBALL_SIZE, FIREBALL_SIZE);
+            slot(String.format(Locale.ROOT, "fx/particle/fireballv_%02d", i), i % FIREBALL_FLOW_COLUMNS * FIREBALL_FLOW_SIZE,
+                    FIREBALL_FLOW_ROW * CELL + i / FIREBALL_FLOW_COLUMNS * FIREBALL_FLOW_SIZE, FIREBALL_FLOW_SIZE, FIREBALL_FLOW_SIZE);
+            Sprite s = FIREBALL[i];
+            FIREBALL_MIRRORED[i] = new Sprite(s.u1, s.v0, s.u0, s.v1);
         }
     }
 
     static {
         for (int i = 0; i < PUFF6_FRAMES; i++) {
-            int x = i % PUFF6_COLUMNS * FIREBALL_SIZE, y = 8 * CELL + i / PUFF6_COLUMNS * FIREBALL_SIZE;
-            PUFF6[i] = slot(String.format(Locale.ROOT, "fx/particle/puff6a_%02d", i), x, y, FIREBALL_SIZE, FIREBALL_SIZE);
+            int x = i % PUFF6_COLUMNS * PUFF_SIZE, y = 8 * CELL + i / PUFF6_COLUMNS * PUFF_SIZE;
+            PUFF6[i] = slot(String.format(Locale.ROOT, "fx/particle/puff6a_%02d", i), x, y, PUFF_SIZE, PUFF_SIZE);
             PUFF6_MIRRORED[i] = new Sprite(PUFF6[i].u1, PUFF6[i].v0, PUFF6[i].u0, PUFF6[i].v1);
-            slot(String.format(Locale.ROOT, "fx/particle/puff6b_%02d", i), x, y + 4 * CELL, FIREBALL_SIZE, FIREBALL_SIZE);
-            slot(String.format(Locale.ROOT, "fx/particle/puff6v_%02d", i), x, y + 8 * CELL, FIREBALL_SIZE, FIREBALL_SIZE);
+            slot(String.format(Locale.ROOT, "fx/particle/puff6b_%02d", i), x, y + 4 * CELL, PUFF_SIZE, PUFF_SIZE);
+            slot(String.format(Locale.ROOT, "fx/particle/puff6v_%02d", i), x, y + 8 * CELL, PUFF_SIZE, PUFF_SIZE);
         }
     }
 
@@ -157,11 +183,11 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
 
     static {
         for (int i = 0; i < PUFF6_FRAMES; i++) {
-            int x = i % PUFF6_COLUMNS * FIREBALL_SIZE, y = SPRAY6_ROW * CELL + i / PUFF6_COLUMNS * FIREBALL_SIZE;
-            SPRAY6[i] = slot(String.format(Locale.ROOT, "fx/particle/spray6a_%02d", i), x, y, FIREBALL_SIZE, FIREBALL_SIZE);
+            int x = i % PUFF6_COLUMNS * PUFF_SIZE, y = SPRAY6_ROW * CELL + i / PUFF6_COLUMNS * PUFF_SIZE;
+            SPRAY6[i] = slot(String.format(Locale.ROOT, "fx/particle/spray6a_%02d", i), x, y, PUFF_SIZE, PUFF_SIZE);
             SPRAY6_MIRRORED[i] = new Sprite(SPRAY6[i].u1, SPRAY6[i].v0, SPRAY6[i].u0, SPRAY6[i].v1);
-            slot(String.format(Locale.ROOT, "fx/particle/spray6b_%02d", i), x, y + 4 * CELL, FIREBALL_SIZE, FIREBALL_SIZE);
-            slot(String.format(Locale.ROOT, "fx/particle/spray6v_%02d", i), x, y + 8 * CELL, FIREBALL_SIZE, FIREBALL_SIZE);
+            slot(String.format(Locale.ROOT, "fx/particle/spray6b_%02d", i), x, y + 4 * CELL, PUFF_SIZE, PUFF_SIZE);
+            slot(String.format(Locale.ROOT, "fx/particle/spray6v_%02d", i), x, y + 8 * CELL, PUFF_SIZE, PUFF_SIZE);
         }
     }
 
@@ -179,20 +205,20 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     private static volatile int sprayLast = PUFF6_FRAMES - 1;
 
     static {
-        for (int i = 0; i < FIREBALL_FRAMES; i++) {
-            BALL[i] = slot(String.format(Locale.ROOT, "fx/particle/ball_%02d", i), i % 8 * FIREBALL_SIZE, 20 * CELL + i / 8 * FIREBALL_SIZE,
-                    FIREBALL_SIZE, FIREBALL_SIZE);
+        for (int i = 0; i < BALL_FRAMES; i++) {
+            BALL[i] = slot(String.format(Locale.ROOT, "fx/particle/ball_%02d", i), i % 8 * PUFF_SIZE, 20 * CELL + i / 8 * PUFF_SIZE,
+                    PUFF_SIZE, PUFF_SIZE);
         }
     }
 
     /** Кадр прежнего шара ({@link #BALL}) на доле жизни f (0..1): шар растёт в кадре от 0,3 до 0,7 полуразмера. */
     public static Sprite ball(float f) {
-        return BALL[Math.clamp((int) (f * FIREBALL_FRAMES), 0, FIREBALL_FRAMES - 1)];
+        return BALL[Math.clamp((int) (f * BALL_FRAMES), 0, BALL_FRAMES - 1)];
     }
 
     /** Огонь прежнего шара на экране в кадре доли жизни f ({@code ball.json}). */
     public static float ballLight(float f) {
-        return ballShown[Math.clamp((int) (f * FIREBALL_FRAMES), 0, FIREBALL_FRAMES - 1)];
+        return ballShown[Math.clamp((int) (f * BALL_FRAMES), 0, BALL_FRAMES - 1)];
     }
 
     private int id = -1;
@@ -237,37 +263,52 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
 
     /**
      * Кадр огненного шара (с дробью) по состоянию шара модели: пока горит (burn — доля времени горения меньше 1) — кадр
-     * того же времени горения симуляции; остывая — кадр той же цветовой температуры пламени (по убыванию после горения).
+     * того же времени горения симуляции; остывая — кадр той же доли остывания: температура шара модели от его конца
+     * горения ({@code endKelvin}) к точке Дрейпера — как пламя кадров от конца горения симуляции к ней. По самой
+     * температуре кадр стоял бы на конце горения, пока шар модели (1484–1500 K) не остынет до пламени симуляции в её конец
+     * (~1360 K): у ракеты и бомбы — ~0,35 с стоп-кадра.
      */
-    public static double fireballFrame(double burn, double kelvin) {
-        return fireballFrameOf(fireball, burn, kelvin);
+    public static double fireballFrame(double burn, double kelvin, double endKelvin) {
+        return fireballFrameOf(fireball, burn, kelvin, endKelvin);
     }
 
     /** То же для своих кадров (юнит-тест). */
-    static double fireballFrameOf(Fireball f, double burn, double kelvin) {
+    static double fireballFrameOf(Fireball f, double burn, double kelvin, double endKelvin) {
         int n = FIREBALL_FRAMES;
         // конец горения — кадр (с дробью), где время симуляции — её конец горения, и температура пламени там: остывая, кадр
-        // идёт от него к первому кадру остывания той же температуры, без скачка
+        // идёт от него к кадрам остывания той же доли остывания, без скачка
         double end = at(f.burn, 1, 0, n - 1);
         if (burn < 1) return Math.min(at(f.burn, burn, 0, n - 1), end);
         int from = (int) Math.floor(end);
-        double k0 = at(f.kelvin, end);
+        double k0 = at(f.kelvin, end), draper = ua.zentix.incoming.client.fx.smoke.CloudModel.DRAPER_K;
+        if (endKelvin > draper && k0 > draper) kelvin = draper + (kelvin - draper) * (k0 - draper) / (endKelvin - draper);
         if (kelvin >= k0) return end;
         int next = from + 1;
         if (next > n - 1) return n - 1;
         while (next < n - 1 && f.kelvin[next] > kelvin) next++;
         if (next == from + 1) return end + (next - end) * (k0 - kelvin) / Math.max(k0 - f.kelvin[next], 1e-6);
-        return next - 1 + (f.kelvin[next - 1] - kelvin) / Math.max(f.kelvin[next - 1] - f.kelvin[next], 1e-6);
+        return Math.min(n - 1, next - 1 + (f.kelvin[next - 1] - kelvin) / Math.max(f.kelvin[next - 1] - f.kelvin[next], 1e-6));
     }
 
-    /** Кадр огненного шара номер {@code frame} (с дробью — ближайший снизу). */
-    public static Sprite fireballAt(double frame) {
-        return FIREBALL[Math.clamp((int) frame, 0, FIREBALL_FRAMES - 1)];
+    /** Нижний кадр смеси: верх всегда вверх; разнообразие — только отражением по горизонтали. */
+    public static Sprite fireballAt(double frame, boolean mirror) {
+        return (mirror ? FIREBALL_MIRRORED : FIREBALL)[Math.clamp((int) frame, 0, FIREBALL_FRAMES - 1)];
+    }
+
+    /** Вес следующего кадра; последний кадр не смешивается с началом или соседним слотом листа. */
+    public static float fireballMix(double frame) {
+        double f = Math.clamp(frame, 0, FIREBALL_FRAMES - 1);
+        return (float) (f - Math.floor(f));
     }
 
     /** Огонь шара на экране в кадре {@code frame} ({@link #fireLightAt}), между кадрами — плавно. */
     public static float fireLightAt(double frame) {
         return (float) at(fireball.fire, frame);
+    }
+
+    /** Полуразмер кадра {@code frame} (с дробью) в радиусах шара: кадр вмещает всё вещество, без круга по краю. */
+    public static double fireballHalf(double frame) {
+        return at(fireball.half, frame);
     }
 
     /**
@@ -318,11 +359,15 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return hi;
     }
 
-    /** Кадры шара из {@code fireball.json}: {@code {"fire": […], "burn": […], "kelvin": […]}} по 16 чисел. */
+    /**
+     * Кадры шара из {@code fireball.json}: {@code "fire"}, {@code "burn"}, {@code "kelvin"}, {@code "half"} по
+     * {@value #FIREBALL_FRAMES} чисел; предел векторов движения {@code "flow"} — тот, что ждёт шейдер.
+     */
     static Fireball parseFire(Reader in) {
         var o = JsonParser.parseReader(in).getAsJsonObject();
+        if (!o.has("flow") || o.get("flow").getAsFloat() != FIREBALL_FLOW) throw new IllegalArgumentException("fireball flow " + o.get("flow"));
         return new Fireball(numbers(o.getAsJsonArray("fire"), FIREBALL_FRAMES), numbers(o.getAsJsonArray("burn"), FIREBALL_FRAMES),
-                numbers(o.getAsJsonArray("kelvin"), FIREBALL_FRAMES));
+                numbers(o.getAsJsonArray("kelvin"), FIREBALL_FRAMES), numbers(o.getAsJsonArray("half"), FIREBALL_FRAMES));
     }
 
     /** Мелкая структура кадров из {@code puff6.json}: {@code "detail"}; нет — null. */
@@ -354,22 +399,14 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return out;
     }
 
-    private static float[] full() {
-        float[] out = new float[FIREBALL_FRAMES];
-        Arrays.fill(out, 1);
-        return out;
-    }
-
     /** 16 чисел от a до b. */
     private static float[] linear(float a, float b) {
-        float[] out = new float[FIREBALL_FRAMES];
-        for (int i = 0; i < out.length; i++) out[i] = a + (b - a) * i / (out.length - 1);
-        return out;
+        return linear(a, b, BALL_FRAMES);
     }
 
-    /** Запасные температуры кадров: от шара топлива к точке Дрейпера. */
-    private static float[] descending() {
-        float[] out = linear(1500, 600);
+    private static float[] linear(float a, float b, int n) {
+        float[] out = new float[n];
+        for (int i = 0; i < out.length; i++) out[i] = a + (b - a) * i / (out.length - 1);
         return out;
     }
 
@@ -412,8 +449,8 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         puffLast = turbulentLast(read(resources, PUFF6_DATA, FxAtlas::parseDetail, null));
         sprayGrowth = read(resources, SPRAY6_DATA, FxAtlas::parseGrowth, linear(1, 3));
         sprayLast = turbulentLast(read(resources, SPRAY6_DATA, FxAtlas::parseDetail, null));
-        ballShown = read(resources, BALL_LIGHT, r -> numbers(JsonParser.parseReader(r).getAsJsonObject().getAsJsonArray("fire"), FIREBALL_FRAMES),
-                full());
+        ballShown = read(resources, BALL_LIGHT, r -> numbers(JsonParser.parseReader(r).getAsJsonObject().getAsJsonArray("fire"), BALL_FRAMES),
+                linear(1, 1));
         puffLight = read(resources, PUFF6_DATA, FxAtlas::parseLight, new float[]{PUFF6_FLOW / 128f, 0.79f, 0.5f});
         NativeImage[] levels = new NativeImage[MIPS + 1];
         for (int l = 0; l <= MIPS; l++) levels[l] = image(sheets[l], WIDTH >> l, HEIGHT >> l);

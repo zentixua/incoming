@@ -13,7 +13,9 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
+import ua.zentix.incoming.scenario.SandboxStrikes;
 import ua.zentix.incoming.strike.StrikeWorld;
+import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.BuriedBlast;
 import ua.zentix.incoming.warhead.Penetration;
 import ua.zentix.incoming.warhead.Warheads;
@@ -160,6 +162,19 @@ public final class BombGameTests {
     private static void generateNow(ServerLevel level, Vec3 at, int radius) {
         ChunkPos c = new ChunkPos(BlockPos.containing(at));
         for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) level.getChunk(c.x + dx, c.z + dz);
+    }
+
+    /** /fx real bunker не должен молча пропускать заряд бомбы через обычную боевую часть с нулевым зарядом. */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "sandbox_bunker", skyAccess = true)
+    public static void sandboxBombActuallyDetonates(GameTestHelper h) {
+        BlockPos point = new BlockPos(32, 2, 32);
+        Vec3 at = Vec3.atCenterOf(h.absolutePos(point));
+        generateNow(h.getLevel(), at, 4);
+        SandboxStrikes.detonate(h.getLevel(), WeaponType.BUNKER, at);
+        h.succeedWhen(() -> {
+            h.assertTrue(BlastLog.near(h, point, 3), "нет настоящего подрыва бомбы");
+            h.assertTrue(StrikeWorld.get(h.getLevel()).impacts().isEmpty(), "работа подрыва идёт");
+        });
     }
 
     /**
