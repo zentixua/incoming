@@ -49,7 +49,31 @@ class FrontDustTest {
         // Integrated extinction changes only by deposition, not by the expanding drawn area or a display fade.
         assertEquals(Math.exp(-BlastLitter.COVER_DUST_SETTLE / FrontDust.HEIGHT), b.dust / a.dust, 1e-12);
         assertEquals(FrontDust.COLUMN_TAU * p.area() * p.contrast() * FrontDust.envelope(0.2, p.phase()),
-                a.dust * SmokeGrid.dustK(0.82f, 0.76f, 0.62f), 1e-12);
+                a.dust * SmokeGrid.dustK(FrontDust.ALBEDO_R, FrontDust.ALBEDO_G, FrontDust.ALBEDO_B), 1e-12);
+    }
+
+    /**
+     * Клуб у бегущего края, ещё сжатый фронтом, — не непрозрачная точка: толща одного клуба не больше EDGE_TAU, запас
+     * площадки он отдаёт по мере роста и весь — когда вырос; середина клуба — не ниже земли и не выше своего σ над ней.
+     */
+    @Test
+    void edgePuffsAreBoundedAndGrowFromTheGround() {
+        ChemicalFront front = ChemicalFront.cached(50, true);
+        double k = SmokeGrid.dustK(FrontDust.ALBEDO_R, FrontDust.ALBEDO_G, FrontDust.ALBEDO_B);
+        for (double r : new double[]{20, 35, 50}) {
+            double arrival = front.arrivalSeconds(r), phase = BlastModel.chemicalPhaseSeconds(r, 50, true);
+            FrontDust.Patch p = new FrontDust.Patch(r, 64, 0, r, arrival, phase, 2.4, 8, 1, 0, 0, 3);
+            double full = 0;
+            for (double age = 1e-5; age < 0.5; age *= 1.1) {
+                Blob b = emit(p, age, front.radiusAt(arrival + age));
+                if (b.dust <= 0) continue;
+                double tau = k * b.dust / (2 * Math.PI * b.h * b.v);
+                assertTrue(tau <= FrontDust.EDGE_TAU + 1e-9, r + " м, " + age + " с: толща клуба " + tau);
+                assertTrue(b.y - 64 >= 0 && b.y - 64 <= b.v + 1e-12, "клуб стоит на земле");
+                full = Math.max(full, k * b.dust / (FrontDust.COLUMN_TAU * p.area() * p.contrast() * FrontDust.envelope(age, phase)));
+            }
+            assertEquals(1, full, 1e-9, r + " м: выросший клуб несёт весь запас площадки");
+        }
     }
 
     @Test

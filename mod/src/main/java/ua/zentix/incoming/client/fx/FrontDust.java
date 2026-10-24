@@ -33,10 +33,24 @@ final class FrontDust implements SmokeGrid.Source {
 
     /** Подача: дискретизация кольца, не число частиц грунта; не более 24 × 64 клубов на взрыв. */
     private static final int RINGS = 24, SPOKES = 64;
-    /** Подача: высота перемешанного слоя и толща срыва по вертикали, не новая масса в GroundDust. */
-    static final double HEIGHT = 1.3, COLUMN_TAU = 0.08;
+    /**
+     * Подача: высота перемешанного слоя, толща поднятого по вертикали (запас на площадь источника) и наибольшая толща
+     * одного клуба. Не новая масса в GroundDust. Толща 0,5 — кольцо видно с 20–100 м и не стоит стеной у камеры
+     * (0,08 — кольца не было видно вовсе, 2,8 на клуб в R2 — бурая стена во весь кадр). У бегущего края клуб ещё
+     * сжат фронтом (его 4σ — за фронтом): весь запас площадки в нём был бы непрозрачной точкой, поэтому толща клуба
+     * не больше {@code EDGE_TAU}; остальное площадка отдаёт, когда клуб вырос.
+     */
+    static final double HEIGHT = 1.3, COLUMN_TAU = 0.5, EDGE_TAU = 0.8;
     /** К этому остатку выпавшей крупной пыли источник уже невидим; не срок, связанный с фазой давления. */
     private static final double GONE = 1e-5;
+    /**
+     * Цвет толстого слоя крошки на экране (сухая светлая земля дёрна; подача) и альбедо вещества по нему: клуб берёт
+     * альбедо ({@link SmokeGrid#dustAlbedo}), а не цвет экрана — иначе толстый слой выходил серым (0,6/0,55/0,45), и середина
+     * клуба темнела против светлой каймы («бублики»).
+     */
+    static final float SHOWN_R = 0.82f, SHOWN_G = 0.76f, SHOWN_B = 0.62f;
+    static final float ALBEDO_R = SmokeGrid.dustAlbedo(SHOWN_R), ALBEDO_G = SmokeGrid.dustAlbedo(SHOWN_G),
+            ALBEDO_B = SmokeGrid.dustAlbedo(SHOWN_B);
     static final double SETTLE_SECONDS = -Math.log(GONE) * HEIGHT / BlastLitter.COVER_DUST_SETTLE;
     private final ClientLevel level;
     private final long born;
@@ -97,24 +111,25 @@ final class FrontDust implements SmokeGrid.Source {
         return DustModel.lifted(age / phase) * Math.exp(-BlastLitter.COVER_DUST_SETTLE * Math.max(0, age - phase) / HEIGHT);
     }
 
-    /** Один конечный запас на площадь источника: расширение клуба не создаёт новую оптическую массу. */
+    /**
+     * Один конечный запас на площадь источника: расширение клуба не создаёт новую оптическую массу, у края — не больше
+     * {@link #EDGE_TAU} на клуб.
+     */
     static void emitPatch(Patch p, double elapsed, double radius, SmokeGrid.Sink out) {
         double age = elapsed - p.arrival, left = envelope(age, p.phase);
         double path = Math.max(1, Math.hypot(p.windX, p.windZ)) * Math.max(0, age);
         double spread = Stability.sigmaY(p.stability, path);
         double dx = p.windX * Math.max(0, age), dz = p.windZ * Math.max(0, age);
-        double lift = HEIGHT / 2 * DustModel.lifted(Math.max(0, age) / p.phase);
-        double room = Math.max(0, radius - p.slant - Math.hypot(dx, dz) - lift);
-        double s = Math.min(Math.hypot(1.2 * p.size, spread), room / 4);
-        double v = Math.min(HEIGHT / 2, s);
-        // Пока фронт пересекает площадку, разрешён только достигнутый след клуба. Иначе весь запас площадки
-        // сосредоточился бы в точке нулевого размера в первый кадр (оптическая толща стремилась бы к бесконечности).
-        double footprint = Math.min(1, s / (1.2 * p.size));
-        // Не создаём пыли, пока её разрешённый фронтом клуб ещё нулевой. Пустой вызов сохраняет зерно места.
-        double dust = s > 0 && v > 0 ? COLUMN_TAU * p.area * p.contrast * footprint * footprint * left
-                / SmokeGrid.dustK(0.82f, 0.76f, 0.62f) : 0;
+        // Клуб стоит на земле и растёт вверх вместе с собой: середина на высоте своего σ по вертикали (сорванное
+        // начинает у земли), а не висит на полслоя, пока сам ещё в сантиметры. Весь клуб (середина, подъём и 4σ) — за
+        // фронтом.
+        double room = Math.max(0, radius - p.slant - Math.hypot(dx, dz));
+        double s = Math.min(Math.hypot(1.2 * p.size, spread), room / 5);
+        double v = Math.min(HEIGHT / 2, s), lift = v;
+        double k = SmokeGrid.dustK(ALBEDO_R, ALBEDO_G, ALBEDO_B);
+        double dust = s > 0 && v > 0 ? Math.min(COLUMN_TAU * p.area * p.contrast * left, EDGE_TAU * 2 * Math.PI * s * v) / k : 0;
         out.blob(p.x + dx, p.y + lift, p.z + dz,
-                s, v, 0, dust, 0, 0.82f, 0.76f, 0.62f, CloudModel.T_AIR_K, 0);
+                s, v, 0, dust, 0, ALBEDO_R, ALBEDO_G, ALBEDO_B, CloudModel.T_AIR_K, 0);
     }
 
     @Override
