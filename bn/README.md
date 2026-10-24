@@ -1,5 +1,7 @@
 # BN: hot booster nozzle evidence
 
+Latest: [review round 1 cleanup correction](review1/README.md), with final code `d968b39a`, three-way day/night comparisons and audio. The `final/` set below predates that cleanup/contact correction and remains the thermal/flight evidence.
+
 Captured code: `141f9a6ea07d5e6c5cfed97acb04f9e88efdfc37`. Main reference: `3a8b6eb171a38bd9f03a3374e76e041c969f1974`.
 The branch was subsequently rebased onto `cd310f2b`; the nozzle law, exhaust, client tick entry point, three renderers, glow quad and spent-booster entity have identical Git blobs after rebase.
 

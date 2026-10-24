@@ -1,0 +1,9 @@
+# Review round 1: cleanup without a flash cut
+
+The physical cooling law, material constants and black-body colour are unchanged. Ground contact now remains true at rest: applying gravity on the ground prevents the alternating rest/tumbling pose found in the first daytime capture. The review fix fades mesh and glow together before the entity is deleted. It is marked non-physical. The fade is 2 seconds long and ends 1 second before deletion (5 seconds after landing or 20 seconds after separation).
+
+Each sheet has three rows: main, PR before review fix, PR after review fix. All frames are unaltered 1:1 crops (x=560..720, y=340..520) from the full PNGs kept in each variant folder. Labels give actual capture ages. No exposure, colour or gamma changes. The sandbox uses its stock renderer without a shader pack. Random tumbling/smoke is unseeded, but after landing the booster rests at the same pose.
+
+Both scenes use `/fx spent missile 20`, camera `7 4 0 0`, zoom 1, no tracking; day and night. Requested times: 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7 seconds. Capture JSON and unprocessed 7-second WAV accompany each variant. Main restores the entity, its renderer, IncomingClient and StrikeProjectileRenderer; before-review restores the entity and its renderer from the previous ready PR. A full sandbox restart separates variants because entity metadata changed. The new lifecycle GameTest class is replaced by an empty class only while compiling the visual baselines, whose entity predates that test API; tests do not run in these visual clients. Both baseline builds were preflighted without GPU. `sources.json` pins commits.
+
+The old `bn/final` images show the same thermal law before this cleanup correction. They remain useful for the flying, tail-off and Shahed views; the cleanup sheets supersede their late spent-missile frames.
