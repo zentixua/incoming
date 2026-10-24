@@ -18,6 +18,26 @@ public final class GaussianBounds {
         // This peak bounds every ray orientation; outside the ellipsoid, omitted alpha is at most 1e-7.
         double peak = ext / (2 * Math.PI * sh * Math.min(sh, sv));
         double cut = Math.min(support,Math.sqrt(Math.max(0, 2 * Math.log(Math.max(peak / 1e-7, 1)))));
+        double rh2=cut*cut*sh*sh, rv2=cut*cut*sv*sv;
+        double d=x*forward.x()+y*forward.y()+z*forward.z();
+        double ff=rh2*(forward.x()*forward.x()+forward.z()*forward.z())+rv2*forward.y()*forward.y();
+        if (d>Math.sqrt(ff)) {
+            // Exact tangent extrema of the projected ellipsoid. A box reserves empty corners,
+            // often crossing the eye plane even while the entire visible ellipsoid is in front.
+            double denominator=d*d-ff;
+            for(int axis=0;axis<2;axis++) {
+                Vector3fc transverse=axis==0?left:up;
+                double c=x*transverse.x()+y*transverse.y()+z*transverse.z();
+                double tt=rh2*(transverse.x()*transverse.x()+transverse.z()*transverse.z())+rv2*transverse.y()*transverse.y();
+                double ft=rh2*(forward.x()*transverse.x()+forward.z()*transverse.z())+rv2*forward.y()*transverse.y();
+                double middle=d*c-ft;
+                double delta=Math.sqrt(Math.max(0,middle*middle-denominator*(c*c-tt)));
+                double edge=axis==0?width:height;
+                result[axis]=Math.max(-edge,(middle-delta)/denominator);
+                result[axis+2]=Math.min(edge,(middle+delta)/denominator);
+            }
+            return result[2]>result[0] && result[3]>result[1];
+        }
         centre[0] = x; centre[1] = y; centre[2] = z;
         radius[0] = radius[2] = cut * sh; radius[1] = cut * sv;
         double x0 = 1, y0 = 1, x1 = 0, y1 = 0;

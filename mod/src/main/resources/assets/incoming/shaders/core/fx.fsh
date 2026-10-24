@@ -58,6 +58,8 @@ uniform vec3 FxSixLight;
 uniform vec3 FxSkyTint;
 
 out vec4 fragColor;
+float gaussianReferenceTau;
+bool gaussianPhotoSupport;
 
 // Finite tangent frames even when an enormous grazing card has an unresolved UV derivative.
 vec3 unitOr(vec3 v, vec3 fallback) {
@@ -119,15 +121,24 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
         float orientation = dx.x * dy.y - dx.y * dy.x < 0.0 ? -1.0 : 1.0;
         vec3 right = unitOr((wx * dy.y - wy * dx.y) * orientation, vec3(1.0, 0.0, 0.0)) * invSigma;
         vec3 up = unitOr((wx * dy.x - wy * dx.x) * orientation, vec3(0.0, 1.0, 0.0)) * invSigma;
-        vec3 direction = normalize(r);
-        right = normalize(right - direction * dot(right, direction));
-        up = normalize(up - direction * dot(up, direction) - right * dot(up, right));
-        local = (0.5 + 0.5 * vec2(-dot(p, right), dot(p, up)) / gaussian1.w) * tile;
+        // A regular camera-plane projection keeps the baked club resolved near/inside the cloud.
+        // Its Gaussian envelope is transferred to the exact finite ray below; transparent frame padding is not eye entry.
+        vec3 wr=normalize(right/invSigma),wu=normalize(up/invSigma),forward=normalize(cross(wr,wu));
+        if(dot(forward,ray)<0.0)forward=-forward;
+        vec3 sigma=1.0/invSigma;
+        float depth=dot(gaussian0.xyz,forward),plane=sqrt(max(depth,0.0)*max(depth,0.0)+dot(forward*sigma,forward*sigma));
+        vec3 at=ray*(plane/max(dot(ray,forward),1e-4))-gaussian0.xyz;
+        vec2 photo=vec2(dot(at,wr)/gaussian0.w,dot(at,wu)/gaussian1.z);
+        local=(0.5+0.5*vec2(photo.x,-photo.y)/gaussian1.w)*tile;
+        float peak=gaussian1.y/(6.2831853072*gaussian0.w*gaussian1.z);
+        gaussianReferenceTau=peak*exp(-0.5*dot(photo,photo));
+        gaussianPhotoSupport=true;
         uv = origin + local;
         dx = dFdx(uv); dy = dFdy(uv);
-        if (any(lessThan(local, vec2(0.0))) || any(greaterThan(local, tile))) {
-            if (gaussianMix >= 1.0) discard;
-            a = vec4(vec3(FxSixLight.z), 0.0); b = vec3(FxSixLight.z); return;
+        if (any(lessThan(local,vec2(0.0))) || any(greaterThan(local,tile))) {
+            // The finite bake window cannot discard the real Gaussian material outside it.
+            gaussianPhotoSupport=false;
+            a=vec4(vec3(FxSixLight.z),0.0);b=vec3(FxSixLight.z);return;
         }
     }
     vec4 v = textureGrad(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), dx, dy);
@@ -214,9 +225,12 @@ float gaussianAlpha(float sceneDistance, float bakedAlpha) {
     float tail = sceneDistance < 1e8 ? gaussianErf((speed * sceneDistance * length(worldPos) / viewDistance - a) * 0.7071067812) : 1.0;
     float cdf = 0.5 * max(tail + gaussianErf(a * 0.7071067812), 0.0);
     float ratio = gaussian1.z / (gaussian0.w * gaussian1.x * speed);
-    float bakedTau = -log(max(1.0-bakedAlpha,1.0/255.0)) * sixTau * ratio * cdf;
-    float modelTau = gaussian1.y / (6.2831853072 * gaussian0.w * gaussian0.w * gaussian1.x * speed) * exp(-0.5*b2) * cdf;
-    return mix(1.0-exp(-modelTau),1.0-exp(-bakedTau),gaussianMix);
+    float modelTau=gaussian1.y/(6.2831853072*gaussian0.w*gaussian0.w*gaussian1.x*speed)*exp(-0.5*b2)*cdf;
+    float modelAlpha=1.0-exp(-modelTau);
+    if(!gaussianPhotoSupport)return modelAlpha;
+    float photoTau=-log(max(1.0-bakedAlpha,1.0/255.0))*sixTau;
+    float transferred=1.0-exp(-modelTau*photoTau/max(gaussianReferenceTau,1e-8));
+    return mix(modelAlpha,transferred,gaussianMix);
 }
 
 void main() {

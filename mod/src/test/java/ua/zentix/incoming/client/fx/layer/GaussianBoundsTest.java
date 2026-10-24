@@ -18,6 +18,15 @@ class GaussianBoundsTest {
     }
 
     @Test
+    void aFrontalEllipsoidUsesItsTangentExtremaRatherThanBoxCorners() {
+        double[] r=new double[4];
+        assertTrue(new GaussianBounds().project(0,0,-10,1,1,2*Math.PI,2,F,L,U,W,H,r));
+        assertEquals(2/Math.sqrt(96),r[2],1e-8);
+        assertEquals(-r[2],r[0],1e-8);
+        assertTrue(r[2]<2.0/8, "empty box corners enlarge the footprint");
+    }
+
+    @Test
     void everyForwardRayThroughTheSupportEllipsoidRemainsInsideTheRectangle() {
         Random random = new Random(7);
         GaussianBounds bounds = new GaussianBounds();

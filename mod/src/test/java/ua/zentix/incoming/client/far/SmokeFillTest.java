@@ -113,7 +113,7 @@ class SmokeFillTest {
         public boolean gaussian(FarView view, double x,double y,double z,double sh,double sv,double ext,
                                 double across,double card,double power,double detail,FxAtlas.Sprite sprite,float mix,float shade,
                                 float r,float g,float b,float coverage) {
-            gaussians.add(new double[]{x,y,z,sh,sv,ext,coverage,card,power,ClubFrames.frame(sprite),mix,across,detail});
+            gaussians.add(new double[]{x,y,z,sh,sv,ext,coverage,card,power,ClubFrames.frame(sprite),mix,across,detail,ClubFrames.mirrored(sprite)?1:0});
             if(SmokePuffs.lies(sh,sv,y,Math.sqrt(x*x+y*y+z*z))) lastFlatShade=shade;
             // Conservative raster rectangle, used only by the CPU fill planner.
             double radius=Math.max(sh,sv)*Math.sqrt(Math.max(0,2*Math.log(Math.max(ext/(2*Math.PI*sh*Math.min(sh,sv))/1e-7,1))));
@@ -178,23 +178,21 @@ class SmokeFillTest {
             double rx=f.x+u*l.x+v*up.x,ry=f.y+u*l.y+v*up.y,rz=f.z+u*l.z+v*up.z;
             double n=Math.sqrt(rx*rx+ry*ry+rz*rz);
             for(double[] q:gaussians) {
-                double sx=rx/n/q[3],sy=ry/n/q[4],sz=rz/n/q[3], speed=Math.sqrt(sx*sx+sy*sy+sz*sz);
-                sx/=speed; sy/=speed; sz/=speed;
-                double tx=-l.x/q[3],ty=-l.y/q[4],tz=-l.z/q[3], dot=tx*sx+ty*sy+tz*sz;
-                tx-=dot*sx;ty-=dot*sy;tz-=dot*sz;
-                double norm=Math.sqrt(tx*tx+ty*ty+tz*tz);tx/=norm;ty/=norm;tz/=norm;
-                double ux=up.x/q[3],uy=up.y/q[4],uz=up.z/q[3];
-                double a=ux*sx+uy*sy+uz*sz,b=ux*tx+uy*ty+uz*tz;
-                ux-=a*sx+b*tx;uy-=a*sy+b*ty;uz-=a*sz+b*tz;
-                norm=Math.sqrt(ux*ux+uy*uy+uz*uz);ux/=norm;uy/=norm;uz/=norm;
-                double px=q[0]/q[3],py=q[1]/q[4],pz=q[2]/q[3];
-                double bx=-(px*tx+py*ty+pz*tz)/q[7],by=(px*ux+py*uy+pz*uz)/q[7];
-                double cdf=0.5*(1+SmokeGrid.erf((px*sx+py*sy+pz*sz)/Math.sqrt(2)));
-                double ratio=q[11]/(q[3]*q[4]*speed);
-                double alpha=ClubFrames.at((int)q[9],q[10],false,bx,by,1,1);
-                double bakeTau=-Math.log(Math.max(1-alpha,1.0/255))*q[8]*ratio*cdf;
-                double modelTau=SmokePuffs.sightDepth(q[0],q[1],q[2],q[3],q[4],q[5],rx/n,ry/n,rz/n);
-                clear*=1-q[6]*((1-q[12])*(-Math.expm1(-modelTau))+q[12]*(-Math.expm1(-bakeTau)));
+                double[] c=q;
+                double depth=c[0]*f.x+c[1]*f.y+c[2]*f.z;
+                double sigmaDepth=Math.sqrt(c[3]*c[3]*(f.x*f.x+f.z*f.z)+c[4]*c[4]*f.y*f.y);
+                double plane=Math.hypot(Math.max(depth,0),sigmaDepth),forward=(rx*f.x+ry*f.y+rz*f.z)/n;
+                double px=rx/n*plane/forward-c[0],py=ry/n*plane/forward-c[1],pz=rz/n*plane/forward-c[2];
+                double x=-(px*l.x+py*l.y+pz*l.z)/c[3],y=(px*up.x+py*up.y+pz*up.z)/c[11];
+                double photo=ClubFrames.at((int)c[9],c[10],c[13]>0,x/c[7],y/c[7],1,c[8]);
+                double reference=-Math.expm1(-c[5]/(2*Math.PI*c[3]*c[11])*Math.exp(-0.5*(x*x+y*y)));
+                double model=-Math.expm1(-SmokePuffs.sightDepth(c[0],c[1],c[2],c[3],c[4],c[5],rx/n,ry/n,rz/n));
+                double modelTau=SmokePuffs.sightDepth(c[0],c[1],c[2],c[3],c[4],c[5],rx/n,ry/n,rz/n);
+                double photoTau=ClubFrames.depth((int)c[9],c[10],c[13]>0,x/c[7],y/c[7],c[8]);
+                double referenceTau=c[5]/(2*Math.PI*c[3]*c[11])*Math.exp(-0.5*(x*x+y*y));
+                double optical=-Math.expm1(-modelTau*photoTau/Math.max(referenceTau,1e-8));
+                boolean outside=Math.abs(x)>=c[7] || Math.abs(y)>=c[7];
+                clear*=1-c[6]*(outside?model:(1-c[12])*model+c[12]*optical);
             }
             for (double[] q : quads) {
                 if(q.length==6) continue;
@@ -543,32 +541,33 @@ class SmokeFillTest {
 
     @Test
     void opaqueCloudChangesRepresentationWithoutAnOpticalDepthCliff() throws IOException {
-        double peak=10000, sigma=1, ext=2*Math.PI*peak;
+        double peak=10000,sigma=1,ext=2*Math.PI*peak;
         FarView view=view(Vec3.ZERO,new Vector3f(0,0,1));
         double radius=Math.sqrt(2*Math.log(peak/-Math.log1p(-Sight.THRESHOLD)));
-        Screen sample=isolatedCloud(view,2*radius,sigma,ext);
-        double[] g=sample.gaussians.getFirst();
-        double impact=0,modelAlpha=0,bakedAlpha=0,difference=0;
-        for(int i=1;i<300;i++) {
-            double local=i/200.0,b=g[7]*local;
-            if(b>=radius || b/(Math.sqrt(4*radius*radius-b*b))>W*0.8) continue;
-            double model=-Math.expm1(-peak*Math.exp(-b*b/2));
-            double baked=ClubFrames.at((int)g[9],g[10],false,local,0,1,g[8]);
-            if(Math.abs(model-baked)>difference) { difference=Math.abs(model-baked);impact=b;modelAlpha=model;bakedAlpha=baked; }
+        double sampleU=0,difference=0;
+        Screen probe=isolatedCloud(view,1.5*radius,sigma,ext);
+        double[] descriptor=probe.gaussians.getFirst();
+        for(int i=0;i<600;i++) {
+            double u=-W+(i+0.5)*2*W/600;
+            descriptor[12]=0;double model=1-probe.transmittance(u,0);
+            descriptor[12]=1;double photo=1-probe.transmittance(u,0);
+            if(Math.abs(model-photo)>difference){difference=Math.abs(model-photo);sampleU=u;}
         }
-        assertTrue(difference>0.1,"fixture needs a real baked edge distinct from the smooth medium");
+        assertTrue(difference>0.1,"real baked structure must differ from the smooth medium");
         for(double weight:new double[]{0.9,0.99,0.999,0.9999,1}) {
             double lo=radius,hi=2*radius;
             for(int i=0;i<50;i++) {
                 double mid=(lo+hi)/2;
-                if(SmokePuffs.detailOutside(0,0,mid,sigma,sigma,peak)<weight) lo=mid;else hi=mid;
+                if(SmokePuffs.detailOutside(0,0,mid,sigma,sigma,peak)<weight)lo=mid;else hi=mid;
             }
-            double distance=(lo+hi)/2,u=-impact/Math.sqrt(distance*distance-impact*impact);
-            Screen actual=isolatedCloud(view,distance,sigma,ext);
-            double blend=actual.gaussians.getFirst()[12];
-            org.junit.jupiter.api.Assertions.assertEquals((1-blend)*modelAlpha+blend*bakedAlpha,
-                    1-actual.transmittance(u,0),1e-6,
-                    "LOD blends display coverage; a trace of a thick medium must not keep an opaque edge");
+            Screen actual=isolatedCloud(view,(lo+hi)/2,sigma,ext);
+            double[] g=actual.gaussians.getFirst();double blend=g[12];
+            g[12]=0;double model=1-actual.transmittance(sampleU,0);
+            g[12]=1;double photo=1-actual.transmittance(sampleU,0);
+            g[12]=blend;
+            org.junit.jupiter.api.Assertions.assertEquals((1-blend)*model+blend*photo,
+                    1-actual.transmittance(sampleU,0),1e-6,
+                    "an opaque medium must blend coverage, not keep an opaque optical-depth trace");
         }
         SmokePuffs.resetBudget();
     }

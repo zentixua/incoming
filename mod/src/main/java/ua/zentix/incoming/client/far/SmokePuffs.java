@@ -14,9 +14,10 @@ import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
  * вещества от источника {@link SmokeGrid.Source}: облако взрыва, облако старта, дым пожара) — кучка запечённых клубов
  * ({@link FxAtlas#puff6}: симуляция газа в Blender, шестисторонний свет, векторы движения между кадрами).
  * <ul>
- * <li><b>Проекция.</b> Кадр каждого гаусса источника мира проецируется по прицельному параметру луча
- * в координатах гаусса. Толща учитывает направление и конечный путь до мира. Внутри видимой границы (контраст Sight)
- * запечённая микроструктура уступает гладкой аналитической толще; прозрачная рамка кадра вход глаза не задаёт.</li>
+ * <li><b>Проекция.</b> Кадр каждого гаусса источника мира остаётся на устойчивой плоскости фотографии клуба.
+ * Его толща переносится с гауссова профиля этой фотографии на настоящий конечный луч через вещество. Внутри видимой
+ * границы (контраст Sight) непрозрачность переходит к аналитической; свет сохраняет фактуру кадра. Прозрачная рамка
+ * вход глаза не задаёт, а вещество за её краем не исчезает.</li>
  * <li><b>Вещество.</b> Квадраты складываются, как толщи: клуб рисуется толщей своего кадра × s ({@code fx.fsh}:
  * 1 − (1 − α)^s), и сколько бы клубов ни перекрывалось, сквозь них видно e^(−Στ). Клуб, что несёт гаусс (σ на экране,
  * толща середины τ₀ = Σκ'm/(2πσhσv)), — полуразмером c·σ и толщей s ({@link PuffOptics}): у него то же вещество
@@ -46,7 +47,7 @@ final class SmokePuffs {
         void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                    float b, float a, double tau);
 
-        /** Near-field Gaussian: calibrated bake in ray coordinates, exact transport inside its visible support. */
+        /** Gaussian impostor: calibrated photo texture with exact finite-ray transport. */
         default boolean gaussian(FarView view, double x, double y, double z, double sh, double sv, double ext,
                                  double across, double card, double power, double detail, FxAtlas.Sprite sprite, float mix, float shade,
                                  float r, float g, float b, float coverage) { return false; }
@@ -275,7 +276,7 @@ final class SmokePuffs {
         // changes appreciably across the ray fan; retain exact angular transport for that part.
         // The variance/range² ratio vanishes in the far field and for a spherical cloud (approximation).
         double distance2=x*x+y*y+z*z;
-        double parallel=smoothstep(0,1,2*distance2/Math.max(visible*visible*Math.abs(sh*sh-sv*sv),1e-12));
+        double parallel=smoothstep(0,1,distance2/Math.max(visible*visible*Math.abs(sh*sh-sv*sv),1e-12));
         return smoothstep(visible,2*visible,q)*parallel;
     }
 
@@ -663,7 +664,7 @@ final class SmokePuffs {
                 float light = (float) ((0.88 + 0.24 * unit(hash)) * view.skyLight());
                 int frame = (int) clubAge;
                 if (out.gaussian(view, px, py, pz, sh, sv, ks + kd + kw, across, c1, CLUB[1], detailOutside(px,py,pz,sh,sv,tau),
-                        spray ? FxAtlas.spray6(frame, false) : FxAtlas.puff6(frame, false), (float)(clubAge-frame),
+                        spray ? FxAtlas.spray6(frame, (hash&1)!=0) : FxAtlas.puff6(frame, (hash&1)!=0), (float)(clubAge-frame),
                         (float)(shade(ks,kd,kw,dg)/(spray ? SPRAY_K : BAKED_K)),
                         thick(ks,kd,kw,dr)*light, thick(ks,kd,kw,dg)*light, thick(ks,kd,kw,db)*light, (float)(vis*air*coverage))) return 0;
             }
