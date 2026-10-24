@@ -3,6 +3,8 @@ package ua.zentix.incoming.gametest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ChunkLevel;
+import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
@@ -154,6 +156,12 @@ public final class TerrainSurveyGameTests {
         h.assertTrue(nether != null, "нет Незера");
         ChunkPos near = new ChunkPos(Site.GENERATOR.at(h));
         ChunkPos far = new ChunkPos(near.x + 32, near.z);
+        int full = ChunkLevel.byStatus(FullChunkStatus.FULL);
+        var tickets = nether.getChunkSource().chunkMap.getDistanceManager();
+        for (ChunkPos c : List.of(near, far)) tickets.addTicket(AIM_AREA, c, full, c);
+        StrikeGameTests.afterTest(h, () -> {
+            for (ChunkPos c : List.of(near, far)) tickets.removeTicket(AIM_AREA, c, full, c);
+        });
         nether.getChunk(near.x, near.z);
         nether.getChunk(far.x, far.z);
         // Only the sensor is exercised: no launch, flight tickets or entity ticks.
