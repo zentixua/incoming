@@ -51,13 +51,13 @@ class FxAtlasTest {
         }
     }
 
-    /** Огненный шар: 16 кадров по 128, время горения растёт, остывая — холоднее, огонь на экране гаснет к саже. */
+    /** Огненный шар: 16 кадров по 256, время горения растёт, остывая — холоднее, огонь на экране гаснет к саже. */
     @Test
     void fireballFramesMatchTheBake() throws IOException {
         JsonObject o = json("fireball.json");
         int tile = o.get("tile").getAsInt();
         assertEquals(FxAtlas.FIREBALL_FRAMES, o.get("frames").getAsInt());
-        assertEquals(2 * 64, tile, "место кадра шара на листе — 128");
+        assertEquals(FxAtlas.FIREBALL_SIZE, tile, "место кадра шара на листе — 256");
         for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) image(String.format(Locale.ROOT, "fireball_%02d.png", i), tile);
         FxAtlas.Fireball f;
         try (Reader r = open("fireball.json")) {
@@ -83,7 +83,7 @@ class FxAtlasTest {
         assertTrue(FxAtlas.fireballFrameOf(f, 2, 800) >= FxAtlas.FIREBALL_FRAMES - 3, "остывший — у сажи");
     }
 
-    /** Средняя яркость не ловит ровный диск: складки должны различаться внутри, без прозрачной каймы. */
+    /** Средняя яркость не ловит ровный диск: складки должны различаться в непрозрачном ядре; кайму отдельно проверяет fireballRimIsWarmAndNotGhostly. */
     @Test
     void burningFireballKeepsItsInteriorContrast() throws IOException {
         for (int i = 0; i < 10; i++) {
@@ -109,6 +109,70 @@ class FxAtlasTest {
         }
     }
 
+    /** Даже тонкое пламя остаётся тёплым: не жёлтая прозрачная плёнка, смешивающаяся с фоном в хаки. */
+    @Test
+    void fireballRimIsWarmAndNotGhostly() throws IOException {
+        for (int i = 0; i < 10; i++) {
+            try (InputStream in = FxAtlasTest.class.getResourceAsStream(DIR + String.format(Locale.ROOT, "fireball_%02d.png", i))) {
+                assertNotNull(in);
+                BufferedImage img = ImageIO.read(in);
+                int orange = 0, hot = 0, white = 0;
+                for (int y = 0; y < img.getHeight(); y++) {
+                    for (int x = 0; x < img.getWidth(); x++) {
+                        int rgba = img.getRGB(x, y);
+                        double a = (rgba >>> 24) / 255.0, r = (rgba >> 16 & 255) / 255.0,
+                                g = (rgba >> 8 & 255) / 255.0, b = (rgba & 255) / 255.0;
+                        if (a < 0.05) continue;
+                        double light = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                        assertTrue(a + 2.0 / 255 >= light, "яркий огонь не прозрачная плёнка: кадр " + i);
+                        if (a < 0.6 && r > 0.3) assertTrue(g < 0.7 * r, "тонкое пламя краснеет: кадр " + i);
+                        if (a > 0.6 && r > 0.5) {
+                            hot++;
+                            if (g < 0.75 * r) orange++;
+                            if (b > 0.1 && r > 0.8) white++;
+                        }
+                    }
+                }
+                assertTrue(orange > hot / 2, "тело оранжевое, а не лимонное: кадр " + i);
+                if (i < 4) assertTrue(white > 0, "в горячих кадрах есть светлое ядро: кадр " + i);
+            }
+        }
+    }
+
+    /** Отражение не переворачивает верх; клетки 256² не пересекают карты дыма и друг друга. */
+    @Test
+    void fireballSlotsKeepTheTopAndTheirOwnSpace() {
+        for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) {
+            var a = FxAtlas.fireballAt(i, false);
+            var b = FxAtlas.fireballAt(i, true);
+            assertEquals(a.u0(), b.u1());
+            assertEquals(a.u1(), b.u0());
+            assertEquals(a.v0(), b.v0());
+            assertEquals(a.v1(), b.v1());
+            assertEquals(FxAtlas.FIREBALL_U, a.u1() - a.u0(), 1e-6);
+            assertEquals(FxAtlas.FIREBALL_V, a.v1() - a.v0(), 1e-6);
+            assertTrue(a.v0() >= FxAtlas.FIREBALL_TOP && a.v1() <= 1);
+            assertTrue(FxAtlas.spray6(15, false).v1() + 2 * FxAtlas.PUFF6_STEP <= a.v0() + 1e-6);
+            for (int j = 0; j < i; j++) {
+                var c = FxAtlas.fireballAt(j, false);
+                assertTrue(a.u0() >= c.u1() || a.u1() <= c.u0() || a.v0() >= c.v1() || a.v1() <= c.v0());
+            }
+        }
+    }
+
+    /** На границе кадров вес смеси доходит до следующего, без сброса яркости или непрозрачности. */
+    @Test
+    void fireballFrameBlendIsContinuous() {
+        for (int i = 1; i < FxAtlas.FIREBALL_FRAMES; i++) {
+            assertEquals(1, FxAtlas.fireballMix(i - 1e-5), 2e-5);
+            assertEquals(0, FxAtlas.fireballMix(i), 0);
+            assertEquals(FxAtlas.fireballAt(i, false), FxAtlas.fireballAt(i + 0.5, false));
+        }
+        assertEquals(0.5, FxAtlas.fireballMix(3.5), 1e-6);
+        assertEquals(0, FxAtlas.fireballMix(16));
+        assertEquals(0, FxAtlas.fireballMix(-1));
+    }
+
     /** Клуб: 16 кадров по три карты 128, рост края — с 1 и растёт, предел векторов движения — тот, что ждёт шейдер. */
     @Test
     void puffFramesMatchTheBake() throws IOException {
@@ -118,7 +182,7 @@ class FxAtlasTest {
         assertEquals("abv", o.get("maps").getAsString());
         assertEquals(FxAtlas.PUFF6_FLOW, o.get("flow").getAsFloat(), 1e-6);
         assertEquals((float) tile / 1024, FxAtlas.PUFF6_U, 1e-6, "место кадра на листе — размер кадра запекания");
-        assertEquals((float) tile / 2304, FxAtlas.PUFF6_V, 1e-6);
+        assertEquals((float) tile / 3328, FxAtlas.PUFF6_V, 1e-6);
         for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
             for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "puff6%c_%02d.png", m, i), tile);
         }

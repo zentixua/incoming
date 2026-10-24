@@ -5,7 +5,7 @@
 
   uv run tools/bake_fx/pack.py <папка запекания> [<папка текстур>]
 
-Огненный шар — fireball_00…15 (128×128, прямая альфа: лист слоя умножает сам) и fireball.json:
+Огненный шар — fireball_00…15 (256×256, прямая альфа: лист слоя умножает сам) и fireball.json:
 - кадры: {BURN_FRAMES} — равно по времени горения симуляции (0…t), остальные — остывание, равно по цветовой
   температуре пламени до точки Дрейпера; у кадра — время в долях горения («burn») и цветовая температура («kelvin»):
   мод берёт кадр по состоянию шара своей модели (горит — по времени, остывает — по температуре, FxAtlas.fireballFrame);
@@ -52,6 +52,7 @@ import numpy as np
 from PIL import Image
 
 TILE = 128
+FIREBALL_TILE = 256
 FRAMES = 16
 BURN_FRAMES = 10
 FIREBALL = 1.3
@@ -60,7 +61,7 @@ DRAPER = 798.0
 C2, LAMBDA, T_REF = 1.4388e-2, 555e-9, 1490.0
 SIGMA = 5.670374e-8
 # экспозиция кадров шара (film_exposure): доля яркости горящего шара и где она встаёт на кривой
-FILM_KEY, FILM_TOP = 95, 0.85
+FILM_KEY, FILM_TOP = 95, 0.60
 DARK_START = 0.02
 
 
@@ -68,8 +69,8 @@ def load(path):
     return np.load(path).astype(np.float64)
 
 
-def crop(img, cx, cy, half):
-    """Квадрат с центром (cx, cy) и полуразмером half пикселей → TILE×TILE (за краем — пусто), площадью."""
+def crop(img, cx, cy, half, tile=TILE):
+    """Квадрат с центром (cx, cy) и полуразмером half пикселей → tile×tile (за краем — пусто), площадью."""
     h, w = img.shape[:2]
     size = int(round(2 * half))
     x0, y0 = int(round(cx - half)), int(round(cy - half))
@@ -77,7 +78,7 @@ def crop(img, cx, cy, half):
     sx0, sy0, sx1, sy1 = max(0, x0), max(0, y0), min(w, x0 + size), min(h, y0 + size)
     if sx1 > sx0 and sy1 > sy0:
         out[sy0 - y0:sy1 - y0, sx0 - x0:sx1 - x0] = img[sy0:sy1, sx0:sx1]
-    return cv2.resize(out, (TILE, TILE), interpolation=cv2.INTER_AREA if size > TILE else cv2.INTER_CUBIC)
+    return cv2.resize(out, (tile, tile), interpolation=cv2.INTER_AREA if size > tile else cv2.INTER_CUBIC)
 
 
 def centre(alpha, level):
@@ -98,7 +99,7 @@ def save_rgba(rgb, alpha, path):
 
 
 def film(x):
-    """Плёночная кривая по каналам (ACES, приближение Narkowicz 2016, CC0): носок держит сажу тёмной, плечо — ядро без среза
+    """Плёночная кривая по каналам (ACES, приближение Narkowicz 2016, CC0, выбран из CC0/MIT у автора): носок держит сажу тёмной, плечо — ядро без среза
     в плоский белый; горячее по каналам уходит в жёлтое и белое, как у плёнки и глаза."""
     x = np.maximum(x, 0)
     return np.clip(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14), 0, 1)
@@ -110,8 +111,9 @@ def film_exposure(burning):
     шар в ровный жёлтый диск — складок, языков и сажи не видно. Здесь {FILM_KEY}-я доля яркости горящего шара (по
     непрозрачному, во всех кадрах горения) встаёт в плечо кривой, на {FILM_TOP} белого: ярче — белеет, тусклее в
     10–100 раз (остывшие складки, сажа) — тёмно-красное и чёрное. Одна экспозиция на все кадры: остывание темнеет,
-    как в жизни. Свет шара в модели — по-прежнему чёрное тело, но свет вокруг (блик, вуаль, зарево, свет на дым) не
-    ярче огня кадра на экране («fire», FxAtlas.fireLightAt) — и он идёт за этой экспозицией: ~0,5 белого, а не ~0,87."""
+    как в жизни. Только сверх белого — плавное обесцвечивание ядра (связь каналов), чтобы нулевой синий
+    чёрного тела не оставлял пересвет лимонно-жёлтым. Свет шара в модели — по-прежнему чёрное тело, но свет вокруг (блик, вуаль, зарево, свет на дым) не
+    ярче огня кадра на экране («fire», FxAtlas.fireLightAt) — и он идёт за этой экспозицией: ~0,37 белого, а не ~0,87."""
     lit = np.concatenate([d[2][d[1] > 0.5] for d in burning]) if burning else np.ones(1)
     key = float(np.percentile(lit, FILM_KEY)) if lit.size else 1.0
     # film(x) = FILM_TOP — решение квадратного уравнения кривой
@@ -183,13 +185,21 @@ def fireball(src, out):
         # квадрат — не меньше кадра конца горения (после его подгонки ниже), без скачка размера на стыке
         if k >= BURN_FRAMES:
             half = max(half, last_half)
-        disp = film(rgb * exposure)
+        # Подача: ниже плеча огонь оранжевый, а не весь жёлтый. Только сверх белого — связь каналов:
+        # камера/глаз теряет насыщенность пересвета, горячие ядра белеют даже при нулевом синем у рендера.
+        exposed = rgb * exposure
+        disp = film(exposed)
+        white = 0.35 * (1 - np.exp(-np.maximum(exposed.max(axis=-1) - 1, 0)))
+        disp += (1 - disp) * white[..., None]
+        # Под ONE, ONE_MINUS_SRC_ALPHA цвет листа умножается на альфу. Яркое тонкое пламя не должно быть
+        # полупрозрачной жёлтой плёнкой поверх неба/сажи: его альфа не ниже экранной яркости.
+        display_alpha = np.maximum(alpha, disp ** (1 / 2.2) @ np.array([0.2126, 0.7152, 0.0722]))
         # край кадра: клубы, что выходят за квадрат, тают к краю, а не обрезаются прямой (у готовой симуляции шар не круглый)
-        rr = np.hypot(*(np.mgrid[0:TILE, 0:TILE] - TILE / 2 + 0.5)) / (TILE / 2)
-        edge = np.clip((1 - rr) / 0.08, 0, 1)
-        target = math.pi * (TILE / 2 / FIREBALL) ** 2
+        rr = np.hypot(*(np.mgrid[0:FIREBALL_TILE, 0:FIREBALL_TILE] - FIREBALL_TILE / 2 + 0.5)) / (FIREBALL_TILE / 2)
+        edge = np.clip((1 - rr) / 0.20, 0, 1)
+        target = math.pi * (FIREBALL_TILE / 2 / FIREBALL) ** 2
         for _ in range(4 if k < BURN_FRAMES else 1):
-            tile = crop(np.concatenate([disp, alpha[..., None]], -1), cx, cy, half)
+            tile = crop(np.concatenate([disp, display_alpha[..., None]], -1), cx, cy, half, FIREBALL_TILE)
             tile[..., 3] *= edge
             # шар — то, что видно в кадре: часть клубов за краем квадрата срезана, и круг той же площади, что непрозрачное
             # в кадре, должен быть радиусом шара (FarSpritesTest) — кадр чуть шире, пока так не выйдет
@@ -200,18 +210,26 @@ def fireball(src, out):
         last_half = half
         # Кубическая выборка при увеличении даёт малые отрицательные выбросы у резкого края: до гаммы, не после NaN.
         tile[..., :3] = np.clip(tile[..., :3], 0, 1)
-        save_rgba(tile[..., :3] ** (1 / 2.2), tile[..., 3], os.path.join(out, f"fireball_{k:02d}.png"))
-        yy, xx = np.mgrid[0:TILE, 0:TILE]
-        disc = (xx - TILE / 2 + 0.5) ** 2 + (yy - TILE / 2 + 0.5) ** 2 < (TILE / 2 / FIREBALL) ** 2
+        screen = tile[..., :3] ** (1 / 2.2)
+        a = np.clip(tile[..., 3], 0, 1)
+        # Кайма тоже часть огня: редея, она краснеет и темнеет, а не желтеет на чёрном/голубом фоне.
+        thin = np.clip(a / 0.85, 0, 1)
+        screen[..., 1] *= thin
+        screen[..., 2] *= thin * thin
+        luminance = screen @ np.array([0.2126, 0.7152, 0.0722])
+        screen *= np.minimum(1, a / np.maximum(luminance, 1e-9))[..., None]
+        save_rgba(screen, a, os.path.join(out, f"fireball_{k:02d}.png"))
+        yy, xx = np.mgrid[0:FIREBALL_TILE, 0:FIREBALL_TILE]
+        disc = (xx - FIREBALL_TILE / 2 + 0.5) ** 2 + (yy - FIREBALL_TILE / 2 + 0.5) ** 2 < (FIREBALL_TILE / 2 / FIREBALL) ** 2
         # огонь на экране — в мере экрана (степень 1/2,2), как у прежнего шара (gen_particles: ball.json)
-        shown = np.clip(tile[..., :3], 0, None) ** (1 / 2.2) * np.clip(tile[..., 3:4], 0, 1)
+        shown = screen * a[..., None]
         fire.append(round(float((shown @ np.array([0.2126, 0.7152, 0.0722]))[disc].mean()), 4))
         burn.append(round(times[i] / burn_s, 4))
         kelv.append(round(kel[i], 1))
     # излучение поверхности в горении по цветовой температуре кадров горения — против CCPS 200–350 кВт/м²
     sep = np.mean([data[i][4] for i in burn_idx]) / 1e3
     with open(os.path.join(out, "fireball.json"), "w", encoding="utf-8") as f:
-        json.dump({"tile": TILE, "frames": FRAMES, "fire": fire, "burn": burn, "kelvin": kelv}, f)
+        json.dump({"tile": FIREBALL_TILE, "frames": FRAMES, "fire": fire, "burn": burn, "kelvin": kelv}, f)
     print("fireball frames", picks, "\n  burn", burn, "\n  kelvin", kelv, "\n  fire", fire, f"\n  surface power in burning ~{sep:.0f} kW/m² (CCPS 200–350)")
 
 

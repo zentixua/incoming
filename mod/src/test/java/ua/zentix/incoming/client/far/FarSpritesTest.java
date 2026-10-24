@@ -89,6 +89,13 @@ class FarSpritesTest {
         }
     }
 
+    /** Кадр термика имеет верх: случайный полный оборот направлял бы пламя в землю. */
+    @Test
+    void bakedFireballCannotTurnItsFlameDown() {
+        assertTrue(Math.abs(FarSprites.fireballRotation()) <= Math.toRadians(10));
+        assertEquals(0, FarSprites.fireballRotation(), "разнообразие — отражением u, не наклоном термика");
+    }
+
     @Test
     void flameFactorMatchesTextures() throws IOException {
         double sum = 0;

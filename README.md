@@ -92,3 +92,5 @@ Made by ZentixUA. Incoming is free software under the GNU General Public License
 its source code. Sounds are made from Freesound recordings under CC0 and CC BY 4.0; the authors are listed in
 [SOUND-CREDITS.md](SOUND-CREDITS.md). The jar bundles the sable-companion library (MIT) and
 a copy of FastNoiseLite by Jordan Peck (MIT).
+
+Fireball textures are rendered from JangaFX’s CC0 Gasoline Explosion simulation; [source and bake recipe](tools/bake_fx/SOURCES.md).

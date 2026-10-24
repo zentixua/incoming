@@ -89,3 +89,5 @@ cd mod
 использовать, менять и распространять, в том числе в сборках, под той же лицензией и вместе с исходным кодом. Звуки
 сделаны из записей Freesound под CC0 и CC BY 4.0, авторы — в [SOUND-CREDITS.md](SOUND-CREDITS.md). В jar вшита
 библиотека sable-companion (MIT) и копия FastNoiseLite Джордана Пека (MIT).
+
+Кадры огненного шара — рендер CC0-симуляции JangaFX Gasoline Explosion; [источник и запекание](tools/bake_fx/SOURCES.md).

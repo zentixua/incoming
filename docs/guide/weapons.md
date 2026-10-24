@@ -17,6 +17,8 @@ Times are for a nearby target. The world owner can change flight times.
 Fuel burning in a crater produces a continuous roar and crackle. It fades as the fuel runs out; the recording does
 not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path to you.
 
+Fireballs rise upright, with smoothly moving orange flame, bright cores and dark soot.
+
 ## The real weapons
 
 Each weapon is a real one. Its size, mass, warhead and engines come from open data; where a number is not published

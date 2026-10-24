@@ -18,6 +18,8 @@ uniform sampler2D Sampler6;
 uniform vec4 PallAmbient;
 // место ореола far/glow на листе (u0, v0, u1, v1; FxAtlas.glow)
 uniform vec4 FxGlow;
+// Шар: размер кадра (u, v), начало (v), кадров в ряду. Карты огня смешиваются до alpha-over: без потери непрозрачности.
+uniform vec4 FxFireball;
 
 uniform vec4 ColorModulator;
 uniform vec2 ScreenSize;
@@ -87,6 +89,20 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     b = mix(lb0, lb1, m);
 }
 
+// Обычный flipbook blend (как Unity VFX Graph): смешиваем уже умноженные RGB и альфу одним фрагментом.
+// Два квадрата с весами дали бы на полпути 0,75 непрозрачности вместо 1 и пульс яркости.
+vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
+    vec2 tile = FxFireball.xy;
+    float columns = FxFireball.w;
+    vec2 cell = clamp(floor((uv - vec2(0.0, FxFireball.z)) / tile), vec2(0.0), vec2(columns - 1.0));
+    vec2 origin = vec2(cell.x * tile.x, FxFireball.z + cell.y * tile.y);
+    float nextIndex = min(cell.y * columns + cell.x + 1.0, columns * columns - 1.0);
+    vec2 next = vec2(mod(nextIndex, columns) * tile.x, FxFireball.z + floor(nextIndex / columns) * tile.y);
+    vec2 edge = 0.5 / vec2(textureSize(Sampler0, 0));
+    vec2 local = clamp(uv - origin, edge, tile - edge);
+    return mix(textureGrad(Sampler0, origin + local, dx, dy), textureGrad(Sampler0, next + local, dx, dy), m);
+}
+
 // Частица вблизи — как из атласа Minecraft (NEAREST_MIPMAP_LINEAR): ближайший пиксель картинки и её копии вдвое
 // меньше, между ними — смесь; сглаженная, она выходила бы мыльной. Мельче копии вдвое (клуб в 32 пикселя и меньше) —
 // гладко, как всё дальнее: ступеньки там только рябят. Уровень копии — как у OpenGL, по производным.
@@ -143,6 +159,8 @@ void main() {
         // свой (оттенок на огне красил пыль у шара ночью в розовый)
         sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
         tex = vec4(vec3(a.a), a.a);
+    } else if (nearest > 0.55) {
+        tex = fireFrames(texCoord0, dx, dy, opacity);
     } else if (nearest < -0.5) {
         tex = textureGrad(Sampler3, texCoord0, dx, dy);
     } else {

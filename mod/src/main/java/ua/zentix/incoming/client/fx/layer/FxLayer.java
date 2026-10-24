@@ -304,6 +304,7 @@ public final class FxLayer {
             float[] six = FxAtlas.puff6Light();
             s.safeGetUniform("FxSix").set(FxAtlas.PUFF6_STEP, FxAtlas.PUFF6_TOP, FxAtlas.PUFF6_U, FxAtlas.PUFF6_V);
             s.safeGetUniform("FxSixLight").set(six[0], six[1], six[2]);
+            s.safeGetUniform("FxFireball").set(FxAtlas.FIREBALL_U, FxAtlas.FIREBALL_V, FxAtlas.FIREBALL_TOP, (float) FxAtlas.FIREBALL_COLUMNS);
             s.safeGetUniform("FxBallLight").set(LIGHTS.light);
             s.safeGetUniform("PallFire0").set(fire0 >= 0 ? front.fire0.params : PallPass.empty().fire0.params);
             s.safeGetUniform("PallFire1").set(fire1 >= 0 ? front.fire1.params : PallPass.empty().fire1.params);
