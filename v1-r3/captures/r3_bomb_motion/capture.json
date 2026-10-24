@@ -1,0 +1,575 @@
+{
+ "name": "r3_bomb_motion",
+ "effect": "real bunker",
+ "site": [
+  960.5,
+  65.0,
+  0.5
+ ],
+ "camera": [
+  50.0,
+  4.0,
+  90.0,
+  8.0
+ ],
+ "audio": {
+  "file": "/mnt/data/projects/incoming/mod/run/wt-V1/mod/run/sandbox/audio.wav",
+  "start": 10940484,
+  "from": 0.0,
+  "seconds": 5.0
+ },
+ "frames": [
+  {
+   "t": 0.05,
+   "age": 0.057,
+   "file": "r3_bomb_motion_000.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.1,
+   "age": 0.105,
+   "file": "r3_bomb_motion_000.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.15,
+   "age": 0.154,
+   "file": "r3_bomb_motion_000.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.2,
+   "age": 0.202,
+   "file": "r3_bomb_motion_000.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.25,
+   "age": 0.251,
+   "file": "r3_bomb_motion_000.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.3,
+   "age": 0.315,
+   "file": "r3_bomb_motion_000.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.35,
+   "age": 0.363,
+   "file": "r3_bomb_motion_000.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.4,
+   "age": 0.412,
+   "file": "r3_bomb_motion_000.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.45,
+   "age": 0.46,
+   "file": "r3_bomb_motion_000.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.5,
+   "age": 0.508,
+   "file": "r3_bomb_motion_000.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.55,
+   "age": 0.557,
+   "file": "r3_bomb_motion_000.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.6,
+   "age": 0.605,
+   "file": "r3_bomb_motion_000.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.65,
+   "age": 0.654,
+   "file": "r3_bomb_motion_000.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.7,
+   "age": 0.702,
+   "file": "r3_bomb_motion_000.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.75,
+   "age": 0.75,
+   "file": "r3_bomb_motion_000.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.8,
+   "age": 0.815,
+   "file": "r3_bomb_motion_000.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.85,
+   "age": 0.863,
+   "file": "r3_bomb_motion_000.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.9,
+   "age": 0.912,
+   "file": "r3_bomb_motion_000.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.95,
+   "age": 0.96,
+   "file": "r3_bomb_motion_000.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.0,
+   "age": 1.008,
+   "file": "r3_bomb_motion_001.00s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.05,
+   "age": 1.057,
+   "file": "r3_bomb_motion_001.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.1,
+   "age": 1.105,
+   "file": "r3_bomb_motion_001.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.15,
+   "age": 1.153,
+   "file": "r3_bomb_motion_001.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.2,
+   "age": 1.202,
+   "file": "r3_bomb_motion_001.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.25,
+   "age": 1.25,
+   "file": "r3_bomb_motion_001.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.3,
+   "age": 1.315,
+   "file": "r3_bomb_motion_001.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.35,
+   "age": 1.363,
+   "file": "r3_bomb_motion_001.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.4,
+   "age": 1.411,
+   "file": "r3_bomb_motion_001.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.45,
+   "age": 1.46,
+   "file": "r3_bomb_motion_001.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.5,
+   "age": 1.508,
+   "file": "r3_bomb_motion_001.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.55,
+   "age": 1.556,
+   "file": "r3_bomb_motion_001.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.6,
+   "age": 1.605,
+   "file": "r3_bomb_motion_001.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.65,
+   "age": 1.653,
+   "file": "r3_bomb_motion_001.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.7,
+   "age": 1.701,
+   "file": "r3_bomb_motion_001.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.75,
+   "age": 1.75,
+   "file": "r3_bomb_motion_001.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.8,
+   "age": 1.814,
+   "file": "r3_bomb_motion_001.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.85,
+   "age": 1.862,
+   "file": "r3_bomb_motion_001.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.9,
+   "age": 1.911,
+   "file": "r3_bomb_motion_001.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.95,
+   "age": 1.959,
+   "file": "r3_bomb_motion_001.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.0,
+   "age": 2.007,
+   "file": "r3_bomb_motion_002.00s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.05,
+   "age": 2.056,
+   "file": "r3_bomb_motion_002.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.1,
+   "age": 2.104,
+   "file": "r3_bomb_motion_002.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.15,
+   "age": 2.152,
+   "file": "r3_bomb_motion_002.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.2,
+   "age": 2.201,
+   "file": "r3_bomb_motion_002.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.25,
+   "age": 2.265,
+   "file": "r3_bomb_motion_002.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.3,
+   "age": 2.314,
+   "file": "r3_bomb_motion_002.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.35,
+   "age": 2.362,
+   "file": "r3_bomb_motion_002.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.4,
+   "age": 2.41,
+   "file": "r3_bomb_motion_002.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.45,
+   "age": 2.459,
+   "file": "r3_bomb_motion_002.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.5,
+   "age": 2.507,
+   "file": "r3_bomb_motion_002.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.55,
+   "age": 2.555,
+   "file": "r3_bomb_motion_002.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.6,
+   "age": 2.604,
+   "file": "r3_bomb_motion_002.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.65,
+   "age": 2.652,
+   "file": "r3_bomb_motion_002.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.7,
+   "age": 2.7,
+   "file": "r3_bomb_motion_002.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.75,
+   "age": 2.765,
+   "file": "r3_bomb_motion_002.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.8,
+   "age": 2.813,
+   "file": "r3_bomb_motion_002.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.85,
+   "age": 2.861,
+   "file": "r3_bomb_motion_002.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.9,
+   "age": 2.91,
+   "file": "r3_bomb_motion_002.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.95,
+   "age": 2.958,
+   "file": "r3_bomb_motion_002.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.0,
+   "age": 3.006,
+   "file": "r3_bomb_motion_003.00s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.05,
+   "age": 3.055,
+   "file": "r3_bomb_motion_003.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.1,
+   "age": 3.103,
+   "file": "r3_bomb_motion_003.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.15,
+   "age": 3.151,
+   "file": "r3_bomb_motion_003.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.2,
+   "age": 3.2,
+   "file": "r3_bomb_motion_003.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.25,
+   "age": 3.264,
+   "file": "r3_bomb_motion_003.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.3,
+   "age": 3.312,
+   "file": "r3_bomb_motion_003.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.35,
+   "age": 3.361,
+   "file": "r3_bomb_motion_003.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.4,
+   "age": 3.409,
+   "file": "r3_bomb_motion_003.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.45,
+   "age": 3.457,
+   "file": "r3_bomb_motion_003.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.5,
+   "age": 3.506,
+   "file": "r3_bomb_motion_003.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.55,
+   "age": 3.554,
+   "file": "r3_bomb_motion_003.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.6,
+   "age": 3.602,
+   "file": "r3_bomb_motion_003.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.65,
+   "age": 3.65,
+   "file": "r3_bomb_motion_003.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.7,
+   "age": 3.715,
+   "file": "r3_bomb_motion_003.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.75,
+   "age": 3.763,
+   "file": "r3_bomb_motion_003.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.8,
+   "age": 3.811,
+   "file": "r3_bomb_motion_003.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.85,
+   "age": 3.86,
+   "file": "r3_bomb_motion_003.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.9,
+   "age": 3.908,
+   "file": "r3_bomb_motion_003.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.95,
+   "age": 3.956,
+   "file": "r3_bomb_motion_003.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.0,
+   "age": 4.005,
+   "file": "r3_bomb_motion_004.00s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.05,
+   "age": 4.053,
+   "file": "r3_bomb_motion_004.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.1,
+   "age": 4.101,
+   "file": "r3_bomb_motion_004.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.15,
+   "age": 4.15,
+   "file": "r3_bomb_motion_004.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.2,
+   "age": 4.214,
+   "file": "r3_bomb_motion_004.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.25,
+   "age": 4.263,
+   "file": "r3_bomb_motion_004.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.3,
+   "age": 4.311,
+   "file": "r3_bomb_motion_004.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.35,
+   "age": 4.359,
+   "file": "r3_bomb_motion_004.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.4,
+   "age": 4.408,
+   "file": "r3_bomb_motion_004.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.45,
+   "age": 4.456,
+   "file": "r3_bomb_motion_004.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.5,
+   "age": 4.504,
+   "file": "r3_bomb_motion_004.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.55,
+   "age": 4.553,
+   "file": "r3_bomb_motion_004.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.6,
+   "age": 4.601,
+   "file": "r3_bomb_motion_004.60s.jpg",
+   "fps": 62
+  }
+ ]
+}

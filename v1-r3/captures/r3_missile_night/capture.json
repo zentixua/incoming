@@ -1,0 +1,245 @@
+{
+ "name": "r3_missile_night",
+ "effect": "blast missile 1",
+ "site": [
+  0.5,
+  65.0,
+  0.5
+ ],
+ "camera": [
+  50.0,
+  4.0,
+  90.0,
+  8.0
+ ],
+ "audio": {
+  "file": "/mnt/data/projects/incoming/mod/run/wt-V1/mod/run/sandbox/audio.wav",
+  "start": 6799428,
+  "from": 0.0,
+  "seconds": 4.0
+ },
+ "frames": [
+  {
+   "t": 2.4,
+   "age": 2.402,
+   "file": "r3_missile_night_002.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.45,
+   "age": 2.451,
+   "file": "r3_missile_night_002.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.5,
+   "age": 2.515,
+   "file": "r3_missile_night_002.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.55,
+   "age": 2.563,
+   "file": "r3_missile_night_002.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.6,
+   "age": 2.612,
+   "file": "r3_missile_night_002.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.65,
+   "age": 2.66,
+   "file": "r3_missile_night_002.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.7,
+   "age": 2.708,
+   "file": "r3_missile_night_002.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.75,
+   "age": 2.757,
+   "file": "r3_missile_night_002.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.8,
+   "age": 2.805,
+   "file": "r3_missile_night_002.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.85,
+   "age": 2.853,
+   "file": "r3_missile_night_002.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.9,
+   "age": 2.902,
+   "file": "r3_missile_night_002.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.95,
+   "age": 2.95,
+   "file": "r3_missile_night_002.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.0,
+   "age": 3.014,
+   "file": "r3_missile_night_003.00s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.05,
+   "age": 3.063,
+   "file": "r3_missile_night_003.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.1,
+   "age": 3.111,
+   "file": "r3_missile_night_003.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.15,
+   "age": 3.159,
+   "file": "r3_missile_night_003.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.2,
+   "age": 3.208,
+   "file": "r3_missile_night_003.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.25,
+   "age": 3.256,
+   "file": "r3_missile_night_003.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.3,
+   "age": 3.304,
+   "file": "r3_missile_night_003.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.35,
+   "age": 3.353,
+   "file": "r3_missile_night_003.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.4,
+   "age": 3.401,
+   "file": "r3_missile_night_003.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.45,
+   "age": 3.465,
+   "file": "r3_missile_night_003.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.5,
+   "age": 3.514,
+   "file": "r3_missile_night_003.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.55,
+   "age": 3.562,
+   "file": "r3_missile_night_003.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.6,
+   "age": 3.61,
+   "file": "r3_missile_night_003.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.65,
+   "age": 3.659,
+   "file": "r3_missile_night_003.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.7,
+   "age": 3.707,
+   "file": "r3_missile_night_003.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.75,
+   "age": 3.755,
+   "file": "r3_missile_night_003.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.8,
+   "age": 3.804,
+   "file": "r3_missile_night_003.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.85,
+   "age": 3.852,
+   "file": "r3_missile_night_003.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.9,
+   "age": 3.9,
+   "file": "r3_missile_night_003.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.95,
+   "age": 3.965,
+   "file": "r3_missile_night_003.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.0,
+   "age": 4.013,
+   "file": "r3_missile_night_004.00s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.05,
+   "age": 4.061,
+   "file": "r3_missile_night_004.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.1,
+   "age": 4.11,
+   "file": "r3_missile_night_004.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.15,
+   "age": 4.158,
+   "file": "r3_missile_night_004.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.2,
+   "age": 4.206,
+   "file": "r3_missile_night_004.20s.jpg",
+   "fps": 62
+  }
+ ]
+}

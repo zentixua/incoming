@@ -1,0 +1,503 @@
+{
+ "name": "r3_missile_motion",
+ "effect": "blast missile 1",
+ "site": [
+  0.5,
+  65.0,
+  0.5
+ ],
+ "camera": [
+  50.0,
+  4.0,
+  90.0,
+  8.0
+ ],
+ "audio": {
+  "file": "/mnt/data/projects/incoming/mod/run/wt-V1/mod/run/sandbox/audio.wav",
+  "start": 5627972,
+  "from": 0.0,
+  "seconds": 5.0
+ },
+ "frames": [
+  {
+   "t": 0.05,
+   "age": 0.06,
+   "file": "r3_missile_motion_000.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.1,
+   "age": 0.108,
+   "file": "r3_missile_motion_000.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.15,
+   "age": 0.156,
+   "file": "r3_missile_motion_000.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.2,
+   "age": 0.205,
+   "file": "r3_missile_motion_000.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.25,
+   "age": 0.253,
+   "file": "r3_missile_motion_000.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.3,
+   "age": 0.301,
+   "file": "r3_missile_motion_000.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.35,
+   "age": 0.35,
+   "file": "r3_missile_motion_000.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.4,
+   "age": 0.414,
+   "file": "r3_missile_motion_000.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.45,
+   "age": 0.462,
+   "file": "r3_missile_motion_000.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.5,
+   "age": 0.511,
+   "file": "r3_missile_motion_000.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.55,
+   "age": 0.559,
+   "file": "r3_missile_motion_000.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.6,
+   "age": 0.608,
+   "file": "r3_missile_motion_000.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.65,
+   "age": 0.656,
+   "file": "r3_missile_motion_000.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.7,
+   "age": 0.704,
+   "file": "r3_missile_motion_000.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.75,
+   "age": 0.753,
+   "file": "r3_missile_motion_000.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.8,
+   "age": 0.801,
+   "file": "r3_missile_motion_000.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.85,
+   "age": 0.866,
+   "file": "r3_missile_motion_000.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.9,
+   "age": 0.914,
+   "file": "r3_missile_motion_000.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 0.95,
+   "age": 0.962,
+   "file": "r3_missile_motion_000.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.0,
+   "age": 1.011,
+   "file": "r3_missile_motion_001.00s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.05,
+   "age": 1.059,
+   "file": "r3_missile_motion_001.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.1,
+   "age": 1.107,
+   "file": "r3_missile_motion_001.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.15,
+   "age": 1.156,
+   "file": "r3_missile_motion_001.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.2,
+   "age": 1.204,
+   "file": "r3_missile_motion_001.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.25,
+   "age": 1.252,
+   "file": "r3_missile_motion_001.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.3,
+   "age": 1.301,
+   "file": "r3_missile_motion_001.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.35,
+   "age": 1.365,
+   "file": "r3_missile_motion_001.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.4,
+   "age": 1.414,
+   "file": "r3_missile_motion_001.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.45,
+   "age": 1.462,
+   "file": "r3_missile_motion_001.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.5,
+   "age": 1.51,
+   "file": "r3_missile_motion_001.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.55,
+   "age": 1.559,
+   "file": "r3_missile_motion_001.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.6,
+   "age": 1.607,
+   "file": "r3_missile_motion_001.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.65,
+   "age": 1.655,
+   "file": "r3_missile_motion_001.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.7,
+   "age": 1.704,
+   "file": "r3_missile_motion_001.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.75,
+   "age": 1.752,
+   "file": "r3_missile_motion_001.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.8,
+   "age": 1.801,
+   "file": "r3_missile_motion_001.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.85,
+   "age": 1.865,
+   "file": "r3_missile_motion_001.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.9,
+   "age": 1.913,
+   "file": "r3_missile_motion_001.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 1.95,
+   "age": 1.962,
+   "file": "r3_missile_motion_001.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.0,
+   "age": 2.01,
+   "file": "r3_missile_motion_002.00s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.05,
+   "age": 2.059,
+   "file": "r3_missile_motion_002.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.1,
+   "age": 2.107,
+   "file": "r3_missile_motion_002.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.15,
+   "age": 2.155,
+   "file": "r3_missile_motion_002.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.2,
+   "age": 2.204,
+   "file": "r3_missile_motion_002.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.25,
+   "age": 2.252,
+   "file": "r3_missile_motion_002.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.3,
+   "age": 2.3,
+   "file": "r3_missile_motion_002.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.35,
+   "age": 2.365,
+   "file": "r3_missile_motion_002.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.4,
+   "age": 2.413,
+   "file": "r3_missile_motion_002.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.45,
+   "age": 2.462,
+   "file": "r3_missile_motion_002.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.5,
+   "age": 2.51,
+   "file": "r3_missile_motion_002.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.55,
+   "age": 2.558,
+   "file": "r3_missile_motion_002.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.6,
+   "age": 2.607,
+   "file": "r3_missile_motion_002.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.65,
+   "age": 2.655,
+   "file": "r3_missile_motion_002.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.7,
+   "age": 2.704,
+   "file": "r3_missile_motion_002.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.75,
+   "age": 2.752,
+   "file": "r3_missile_motion_002.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.8,
+   "age": 2.8,
+   "file": "r3_missile_motion_002.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.85,
+   "age": 2.865,
+   "file": "r3_missile_motion_002.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.9,
+   "age": 2.913,
+   "file": "r3_missile_motion_002.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 2.95,
+   "age": 2.962,
+   "file": "r3_missile_motion_002.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.0,
+   "age": 3.01,
+   "file": "r3_missile_motion_003.00s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.05,
+   "age": 3.058,
+   "file": "r3_missile_motion_003.05s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.1,
+   "age": 3.107,
+   "file": "r3_missile_motion_003.10s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.15,
+   "age": 3.155,
+   "file": "r3_missile_motion_003.15s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.2,
+   "age": 3.203,
+   "file": "r3_missile_motion_003.20s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.25,
+   "age": 3.252,
+   "file": "r3_missile_motion_003.25s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.3,
+   "age": 3.3,
+   "file": "r3_missile_motion_003.30s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.35,
+   "age": 3.364,
+   "file": "r3_missile_motion_003.35s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.4,
+   "age": 3.413,
+   "file": "r3_missile_motion_003.40s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.45,
+   "age": 3.461,
+   "file": "r3_missile_motion_003.45s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.5,
+   "age": 3.509,
+   "file": "r3_missile_motion_003.50s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.55,
+   "age": 3.558,
+   "file": "r3_missile_motion_003.55s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.6,
+   "age": 3.606,
+   "file": "r3_missile_motion_003.60s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.65,
+   "age": 3.655,
+   "file": "r3_missile_motion_003.65s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.7,
+   "age": 3.703,
+   "file": "r3_missile_motion_003.70s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.75,
+   "age": 3.751,
+   "file": "r3_missile_motion_003.75s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.8,
+   "age": 3.8,
+   "file": "r3_missile_motion_003.80s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.85,
+   "age": 3.864,
+   "file": "r3_missile_motion_003.85s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.9,
+   "age": 3.912,
+   "file": "r3_missile_motion_003.90s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 3.95,
+   "age": 3.961,
+   "file": "r3_missile_motion_003.95s.jpg",
+   "fps": 62
+  },
+  {
+   "t": 4.0,
+   "age": 4.009,
+   "file": "r3_missile_motion_004.00s.jpg",
+   "fps": 62
+  }
+ ]
+}
