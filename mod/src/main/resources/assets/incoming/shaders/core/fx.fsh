@@ -66,6 +66,18 @@ float sixLight(vec3 a, vec3 b, vec3 l, float mirror) {
     return side * q.x + vertical * q.y + depth * q.z;
 }
 
+// Уменьшенных копий у листа (FxAtlas.MIPS)
+const float SIX_LEVELS = 4.0;
+
+// Отступ выборки от края кадра клуба, текселей листа: полтекселя самой грубой копии, которую читает выборка (уровень —
+// вверх от log2 шага выборки span, текселей листа на пиксель; так выбирает OpenGL). Полтекселя листа берёт соседний
+// кадр уже со второй копии: клуб вдали и плоский клуб с ребра (уровень 3–4) ложились краем чужого кадра тонкими чертами
+// поперёк кадра (пыль сорванного дёрна, WV)
+float sixInset(float span) {
+    float level = clamp(-floor(-0.5 * log2(max(span * span, 1.0))), 0.0, SIX_LEVELS);
+    return 0.5 * pow(2.0, level);
+}
+
 // Кадр клуба и следующий, сдвинутые вдоль векторов движения на долю смеси m (кадр k — назад на m, k + 1 — вперёд на
 // 1 − m): клуб течёт, а не проступает двойным. Карты a и b — в линейном свете, альфа — в a.w
 void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
@@ -77,7 +89,8 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     vec2 local = uv - origin;
     vec4 v = textureGrad(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), dx, dy);
     vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
-    vec2 edge = 0.5 / vec2(textureSize(Sampler0, 0));
+    vec2 size = vec2(textureSize(Sampler0, 0)), gx = dx * size, gy = dy * size;
+    vec2 edge = sixInset(sqrt(max(dot(gx, gx), dot(gy, gy)))) / size;
     vec2 uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
     vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
     vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);

@@ -61,8 +61,11 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     public static final int FIREBALL_FLOW_COLUMNS = 8, FIREBALL_FLOW_SIZE = 2 * CELL;
     public static final float FIREBALL_FLOW = 16, FIREBALL_FLOW_U = (float) FIREBALL_FLOW_SIZE / WIDTH,
             FIREBALL_FLOW_V = (float) FIREBALL_FLOW_SIZE / HEIGHT, FIREBALL_FLOW_TOP = (float) (FIREBALL_FLOW_ROW * CELL) / HEIGHT;
-    /** Уменьшенных копий: клуб 64 → 4 пикселя (все места кратны 16 — копии соседних мест не смешивают). */
-    private static final int MIPS = 4;
+    /**
+     * Уменьшенных копий: клуб 64 → 4 пикселя (все места кратны 16 — копии соседних мест не смешивают). Выборка у края места
+     * отступает на полтекселя той копии, что читает (`sixInset` в {@code fx.fsh}, там же {@code SIX_LEVELS}).
+     */
+    public static final int MIPS = 4;
 
     /** Место текстуры на листе (доли листа). */
     public record Sprite(float u0, float v0, float u1, float v1) {
