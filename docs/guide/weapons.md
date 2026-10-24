@@ -316,7 +316,7 @@ is the true angle.
 
 Fire, the fireball, flashes and rocket flames glow on the screen the way the eye or a camera lens scatters bright light:
 a soft halo that follows the shape of the flame and fades with distance from it. It is the same whether you use a
-shader pack or not. It shows best at night against the dark; by day it is barely there. Smoke in front of the fire dims
+shader pack or not. It shows best at night against the dark; by day it is faint. Smoke in front of the fire dims
 its glow, and fire hidden behind a wall or a hill gives none. This changes how the light is shown, not how bright the
 fire is or how much it lights around it.
 
