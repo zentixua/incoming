@@ -317,7 +317,8 @@ final class StagedExplosion implements UnitQueue.Job {
     @Override
     public boolean ready(ServerLevel level) {
         // район удара целиком (он накрывает и этот взрыв): у работ одного удара одно условие — порядок не ломается
-        return (phase != Phase.FRONT || level.getGameTime() >= frontDueTick) && area.ready(level);
+        return (phase != Phase.FRONT || level.getGameTime() >= frontDueTick) && area.ready(level)
+                && (frontArea == null || frontArea.ready(level));
     }
 
     /** Шёл ванильным {@code explode()}. */
@@ -835,6 +836,8 @@ final class StagedExplosion implements UnitQueue.Job {
     private java.util.Iterator<BlockPos> craftCells;
     private double nearestCraft = Double.POSITIVE_INFINITY;
     private float frontCraftPower;
+    /** Scan-time bounds may exceed those held at impact start. Released also on cancellation and timeout. */
+    private BlastArea frontArea;
 
     /** Scan loaded plot cells under the work budget; empty space inside bounds is not the nearest hull block. */
     private boolean scanCrafts(ServerLevel level) {
@@ -862,6 +865,12 @@ final class StagedExplosion implements UnitQueue.Job {
         return true;
     }
 
+    /** The queue's ready/deadline checks own this wait, never the front's work loop. */
+    void holdFrontArea(ServerLevel level, float power) {
+        if (frontArea != null) frontArea.release(level);
+        frontArea = BlastArea.hold(level, centre, craftReach(power));
+    }
+
     private boolean front(ServerLevel level) {
         long t = System.nanoTime();
         LongSupplier watch = clock != null ? clock : WorkScheduler.impactClock(level.getServer()).sampler();
@@ -876,7 +885,6 @@ final class StagedExplosion implements UnitQueue.Job {
             if (level.getGameTime() < frontDueTick) break;
             if (craft <= Math.min(block, body)) {
                 CraftFront hit = craftFront.get(nextCraft);
-                if (!Terrain.readyAround(level, centre, craftReach(hit.power()))) return true;
                 crafts(level, hit);
                 nextCraft++;
             } else if (block <= body && next < toBlow.size()) {
@@ -939,7 +947,10 @@ final class StagedExplosion implements UnitQueue.Job {
         }
         if (nextEntity == entities.size() && scanCrafts(level)) {
             nextEntity = 0;
+            if (!craftFront.isEmpty()) holdFrontArea(level, frontCraftPower);
             phase = Phase.FRONT;
+            // ready() runs once per queue slice. Yield before the next unit, then use its finite loading deadline.
+            if (frontArea != null && !frontArea.ready(level)) frontDueTick = level.getGameTime() + 1;
         }
         return true;
     }
@@ -1351,6 +1362,7 @@ final class StagedExplosion implements UnitQueue.Job {
         popDrops(level);
         done = true;
         area.recordCounts(counts);
+        if (frontArea != null) frontArea.release(level);
         area.release(level);
     }
 

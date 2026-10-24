@@ -40,6 +40,7 @@ import ua.zentix.incoming.registry.ModEntities;
 public class DebrisEntity extends Entity {
     private static final EntityDataAccessor<BlockState> DATA_BLOCK = SynchedEntityData.defineId(DebrisEntity.class, EntityDataSerializers.BLOCK_STATE);
     private static final EntityDataAccessor<Boolean> DATA_HOT = SynchedEntityData.defineId(DebrisEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_CHIP = SynchedEntityData.defineId(DebrisEntity.class, EntityDataSerializers.BOOLEAN);
     private static final int MAX_AGE = 600;
 
     private int age;
@@ -66,6 +67,15 @@ public class DebrisEntity extends Entity {
         d.setDeltaMovement(velocity);
         return d;
     }
+
+    /** Presentation debris from conventional impacts is a chip, not a newly created cubic metre of terrain. */
+    public static DebrisEntity chip(ServerLevel level, Vec3 pos, BlockState state, boolean hot, boolean hurts, Vec3 velocity) {
+        DebrisEntity debris = create(level, pos, state, hot, hurts, velocity);
+        debris.entityData.set(DATA_CHIP, true);
+        return debris;
+    }
+
+    public boolean isChip() { return entityData.get(DATA_CHIP); }
 
     public BlockState blockState() {
         return entityData.get(DATA_BLOCK);
@@ -129,7 +139,7 @@ public class DebrisEntity extends Entity {
             level.sendParticles(ParticleTypes.POOF, getX(), getY(), getZ(), 5, 0.3, 0.1, 0.3, 0.03);
             if (isHot()) level.sendParticles(ParticleTypes.LAVA, getX(), getY(), getZ(), 3, 0.2, 0.1, 0.2, 0);
         }
-        if (IncomingConfig.SERVER.debrisStay.get()) place(level, pos);
+        if (IncomingConfig.SERVER.debrisStay.get() && (!isChip() || blockState().is(Blocks.FIRE))) place(level, pos);
         discard();
     }
 
@@ -165,6 +175,7 @@ public class DebrisEntity extends Entity {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         builder.define(DATA_BLOCK, Blocks.GRAVEL.defaultBlockState());
         builder.define(DATA_HOT, false);
+        builder.define(DATA_CHIP, false);
     }
 
     @Override
@@ -173,6 +184,7 @@ public class DebrisEntity extends Entity {
         entityData.set(DATA_HOT, tag.getBoolean("hot"));
         hurtsEntities = tag.getBoolean("hurts");
         age = tag.getInt("age");
+        entityData.set(DATA_CHIP, tag.getBoolean("chip"));
     }
 
     @Override
@@ -181,6 +193,7 @@ public class DebrisEntity extends Entity {
         tag.putBoolean("hot", isHot());
         tag.putBoolean("hurts", hurtsEntities);
         tag.putInt("age", age);
+        tag.putBoolean("chip", isChip());
     }
 
     @Nullable

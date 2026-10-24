@@ -97,13 +97,13 @@ public final class DebrisSpawner {
 
     private static int wreckPiece(ServerLevel level, Vec3 at, BlockState s, boolean hot, boolean hurts, Vec3 drift, double spread, RandomSource r) {
         Vec3 p = at.add((r.nextDouble() - 0.5) * spread * 2, (r.nextDouble() - 0.5) * spread, (r.nextDouble() - 0.5) * spread * 2);
-        level.addFreshEntity(DebrisEntity.create(level, p, s, hot, hurts, drift.add(velocity(r, 0.45, -0.15, 0.35))));
+        level.addFreshEntity(DebrisEntity.chip(level, p, s, hot, hurts, drift.add(velocity(r, 0.45, -0.15, 0.35))));
         return 1;
     }
 
     private static int spawn(ServerLevel level, Vec3 at, List<BlockState> states, boolean hot, double horizontal, double upMin, double upMax) {
         for (BlockState s : states) {
-            level.addFreshEntity(DebrisEntity.create(level, start(level.random, at), s, hot, true, velocity(level.random, horizontal, upMin, upMax)));
+            level.addFreshEntity(DebrisEntity.chip(level, start(level.random, at), s, hot, true, velocity(level.random, horizontal, upMin, upMax)));
         }
         return states.size();
     }
@@ -114,7 +114,7 @@ public final class DebrisSpawner {
 
     private static int spawnBurning(ServerLevel level, Vec3 at, double horizontal, double upMin, double upMax) {
         for (BlockState s : burning()) {
-            level.addFreshEntity(DebrisEntity.create(level, start(level.random, at), s, true, false, velocity(level.random, horizontal, upMin, upMax)));
+            level.addFreshEntity(DebrisEntity.chip(level, start(level.random, at), s, true, false, velocity(level.random, horizontal, upMin, upMax)));
         }
         return burning().size();
     }

@@ -27,8 +27,11 @@ public class DebrisRenderer extends EntityRenderer<DebrisEntity> {
         float t = e.age() + partialTick;
         boolean airborne = !e.onGround();
         pose.pushPose();
-        pose.translate(0, 0.5, 0);
+        // Presentation only: conventional loose material is centimetre-sized, not a one-metre block.
+        float size = e.isChip() ? 0.16f + (e.getId() & 3) * 0.035f : 1;
+        pose.translate(0, size * 0.5, 0);
         if (airborne) pose.mulPose(new Quaternionf().rotationXYZ(t * e.spinX * 0.0175f, 0, t * e.spinZ * 0.0175f));
+        pose.scale(size, size, size);
         pose.translate(-0.5, -0.5, -0.5);
         net.minecraft.client.Minecraft.getInstance().getBlockRenderer().renderSingleBlock(state, pose, buffers, packedLight, OverlayTexture.NO_OVERLAY, ModelData.EMPTY, null);
         pose.popPose();

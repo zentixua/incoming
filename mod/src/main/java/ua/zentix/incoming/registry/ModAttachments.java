@@ -45,6 +45,10 @@ public final class ModAttachments {
             REGISTER.register("surface_damage", () -> AttachmentType.builder(() -> java.util.List.<ua.zentix.incoming.warhead.SurfaceDamage.Mark>of())
                     .serialize(ua.zentix.incoming.warhead.SurfaceDamage.CODEC, m -> !m.isEmpty()).build());
 
+    /** World: bounded, transient surface displays; the chunk attachment above is the only saved damage. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.warhead.SurfaceDamage.Displays>> SURFACE_DISPLAYS =
+            REGISTER.register("surface_displays", () -> AttachmentType.builder(ua.zentix.incoming.warhead.SurfaceDamage.Displays::new).build());
+
     /**
      * Чанк: номер подрыва, чей слой вспышки зажёг в нём огонь, а руины ещё не встали ({@code FlashScorch}): огонь слоя
      * без тиков, руины, построенные без плана слоя (после перезапуска), гасят или ведут его. Сохраняется с чанком.
