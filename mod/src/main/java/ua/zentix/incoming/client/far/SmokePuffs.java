@@ -271,7 +271,12 @@ final class SmokePuffs {
     static double detailOutside(double x,double y,double z,double sh,double sv,double tau) {
         double visible=Math.max(Math.sqrt(2*Math.log(2)),Math.sqrt(2*Math.log(Math.max(1,tau/-Math.log1p(-Sight.THRESHOLD)))));
         double q=Math.sqrt((x*x+z*z)/(sh*sh)+y*y/(sv*sv));
-        return smoothstep(visible,2*visible,q);
+        // A flat bake is a parallel-ray projection. Near an anisotropic cloud its transverse variance
+        // changes appreciably across the ray fan; retain exact angular transport for that part.
+        // The variance/range² ratio vanishes in the far field and for a spherical cloud (approximation).
+        double distance2=x*x+y*y+z*z;
+        double parallel=smoothstep(0,1,2*distance2/Math.max(visible*visible*Math.abs(sh*sh-sv*sv),1e-12));
+        return smoothstep(visible,2*visible,q)*parallel;
     }
 
     /**

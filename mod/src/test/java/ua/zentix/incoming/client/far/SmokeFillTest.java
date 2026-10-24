@@ -451,6 +451,12 @@ class SmokeFillTest {
     }
 
     @Test
+    void anisotropicBakeReturnsToFullDetailBeyondItsVisibleAngularFootprint() {
+        org.junit.jupiter.api.Assertions.assertEquals(1, SmokePuffs.detailOutside(0,8,300,20,1,10), 0);
+        org.junit.jupiter.api.Assertions.assertEquals(0, SmokePuffs.detailOutside(0,0,1,20,1,10), 0);
+    }
+
+    @Test
     void nearFieldObliqueAndFlatCloudsKeepTheirBulkRayDensity() throws IOException {
         for (double sv : new double[]{1, 10, 30}) for (double side : new double[]{0, 18})
                 for (double peak : new double[]{0.001, 0.01, 0.1, 1, 10}) {
