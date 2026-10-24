@@ -1,10 +1,12 @@
 package ua.zentix.incoming.client.fx;
 
+import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.nuclear.model.BlastLitter;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.ChemicalFront;
+import ua.zentix.incoming.util.Air;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FrontDustTest {
@@ -85,21 +87,13 @@ class FrontDustTest {
         for (double kg : new double[]{3, 18, 50, 150, 450}) {
             ChemicalFront front = ChemicalFront.cached(kg, true);
             double[] ring = FrontLitter.tearRing(front, 1, 0);
-            double inner = ring[0], outer = ring[1];
-            for (int budget : new int[]{FrontDust.PATCHES, FrontDust.PATCHES / 4}) {
-                double arc = FrontDust.arc(inner, outer, budget);
-                int rings = FrontDust.rings(inner, outer, budget), count = 0;
-                double dr = (outer - inner) / rings;
-                for (int j = 0; j < rings; j++) count += FrontDust.spokes(inner + dr * (j + 0.5), arc);
-                assertTrue(count <= budget + 6 * rings, kg + " кг: " + count + " площадок при " + budget);
-                if (budget == FrontDust.PATCHES) assertTrue(count <= budget, kg + " кг: " + count + " площадок");
-                assertTrue(dr <= arc + 1e-9 && arc >= FrontDust.STEP, kg + " кг: шаг поперёк " + dr + ", вдоль " + arc);
-            }
+            double inner = ring[0], outer = ring[1], arc = FrontDust.arc(inner, outer);
+            int rings = FrontDust.rings(inner, outer), count = 0;
+            double dr = (outer - inner) / rings;
+            for (int j = 0; j < rings; j++) count += FrontDust.spokes(inner + dr * (j + 0.5), arc);
+            assertTrue(count <= FrontDust.PATCHES, kg + " кг: " + count + " площадок");
+            assertTrue(dr <= arc + 1e-9 && arc >= FrontDust.STEP, kg + " кг: шаг поперёк " + dr + ", вдоль " + arc);
         }
-        // залп: свободное из общего предела, но не меньше четверти своих
-        assertEquals(FrontDust.PATCHES, FrontDust.budget(0));
-        assertEquals(FrontDust.ALL_PATCHES - 700, FrontDust.budget(700));
-        assertEquals(FrontDust.PATCHES / 4, FrontDust.budget(5 * FrontDust.PATCHES));
         ChemicalFront front = ChemicalFront.cached(50, true);
         double r = 30, arrival = front.arrivalSeconds(r), phase = BlastModel.chemicalPhaseSeconds(r, 50, true);
         FrontDust.Patch p = new FrontDust.Patch(r, 64, 0, r, arrival, phase, 3.4, 31, 1, 0, 0, 3);
@@ -109,6 +103,62 @@ class FrontDustTest {
         assertTrue(tau > 0.5 * FrontDust.FAINTEST && tau <= FrontDust.FAINTEST * 1.01, "у конца клуб уже не рисуется: " + tau);
         assertEquals(0, after.dust, "после — пустой клуб");
         assertTrue(p.until() < arrival + 10, "площадка видна " + (p.until() - arrival) + " с");
+    }
+
+    /**
+     * Общий предел: после каждого взрыва залпа или серии видимых площадок у всех не больше {@code ALL_PATCHES}; прореживание
+     * не теряет и не создаёт массы (Σ площадь × контраст у каждого взрыва та же) и не открывает кольцо: каждая точка
+     * кольца срыва — в пределах 2σ от середины рисуемого клуба. Пока есть кого прореживать, пыль есть у каждого.
+     */
+    @Test
+    void sharedLimitHoldsWithoutLosingTheRings() {
+        FrontDust.Ground grass = (bx, bz) -> new FrontDust.Cover(63, false);
+        Vec3 eye = new Vec3(0, 65, 0);
+        java.util.Random rnd = new java.util.Random(425);
+        double[][] salvos = {{18, 40, 0}, {50, 30, 0}, {150, 12, 0}, {50, 16, 40}, {450, 6, 100}};
+        for (double[] salvo : salvos) {
+            double kg = salvo[0];
+            int n = (int) salvo[1];
+            long every = (long) salvo[2];
+            ChemicalFront front = ChemicalFront.cached(kg, true);
+            double[] ring = FrontLitter.tearRing(front, 1, 0);
+            java.util.List<FrontDust> live = new java.util.ArrayList<>();
+            java.util.Map<FrontDust, Double> mass = new java.util.HashMap<>();
+            java.util.Map<FrontDust, Vec3> at = new java.util.HashMap<>();
+            for (int k = 0; k < n; k++) {
+                long now = k * every;
+                Vec3 pos = new Vec3(150 * (rnd.nextDouble() - 0.5), 64, 150 * (rnd.nextDouble() - 0.5));
+                FrontDust d = FrontDust.layout(null, pos, front, ring[0], ring[1], 0, Air.CALM, grass, now);
+                assertNotNull(d);
+                mass.put(d, mass(d.shown()));
+                at.put(d, pos);
+                FrontDust.share(live, d, now, eye);
+                int total = 0;
+                for (FrontDust x : live) total += x.visible(now);
+                assertTrue(total <= FrontDust.ALL_PATCHES, kg + " кг × " + (k + 1) + ": видимых площадок " + total);
+                for (FrontDust x : live) {
+                    if (every == 0) assertTrue(x.visible(now) > 0, kg + " кг × " + (k + 1) + ": у взрыва нет пыли");
+                    assertEquals(mass.get(x), mass(x.shown()), 1e-9 * mass.get(x), "прореживание сохраняет массу");
+                }
+            }
+            for (FrontDust x : live) {
+                FrontDust.Patch[] shown = x.shown();
+                Vec3 c = at.get(x);
+                for (double r = ring[0]; r <= ring[1]; r += (ring[1] - ring[0]) / 7) {
+                    for (double a = 0; a < 2 * Math.PI; a += Math.PI / 36) {
+                        double px = c.x + r * Math.cos(a), pz = c.z + r * Math.sin(a), best = Double.MAX_VALUE;
+                        for (FrontDust.Patch p : shown) if (p != null) best = Math.min(best, Math.hypot(p.x() - px, p.z() - pz) / p.sigma());
+                        assertTrue(best <= 2, kg + " кг: место кольца в " + best + " σ от ближайшего клуба");
+                    }
+                }
+            }
+        }
+    }
+
+    private static double mass(FrontDust.Patch[] shown) {
+        double m = 0;
+        for (FrontDust.Patch p : shown) if (p != null) m += p.area() * p.contrast();
+        return m;
     }
 
     @Test
