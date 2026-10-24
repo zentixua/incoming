@@ -67,8 +67,8 @@ final class SmokePuffs {
                        float alphaB, int lightB, float r, float g, float b, float[] joint);
     }
 
-    /** Чисел на ждущий клуб: место, σh, σv, сажа, пыль, капли, альбедо пыли (3), номер, источник, видимая доля, отсчёт отрезка. */
-    static final int FIELDS = 15;
+    /** Чисел на ждущий клуб: место, σh, σv, сажа, пыль, капли, альбедо пыли (3), номер, источник, видимая доля, отсчёт отрезка, σ при рождении. */
+    static final int FIELDS = 16;
     /**
      * Клубы одного источника, чьи середины ближе этой доли меньшего σ (по горизонтали и по вертикали), — один гаусс с теми
      * же массой и моментами: их сумма от одного гаусса почти не отличается (у двух равных на расстоянии σ — на 1,3 % пика),
@@ -118,6 +118,7 @@ final class SmokePuffs {
                     if (wb > wa) {
                         held[a + 11] = held[b + 11];
                         held[a + 12] = held[b + 12];
+                        held[a + 15] = held[b + 15];
                     }
                     double mx = held[a] + fb * dx, my = held[a + 1] + fb * dy, mz = held[a + 2] + fb * dz;
                     // второй момент около новой середины
@@ -327,7 +328,7 @@ final class SmokePuffs {
         Out out;
         private SmokeGrid.Source source;
         /** Кадр клуба по росту вещества (с дробью): дыма и брызг. */
-        private double age, sprayAge;
+        private double age, sprayAge, birthSigma;
         private long seed;
         private boolean glow, sprays;
         private int index;
@@ -338,6 +339,7 @@ final class SmokePuffs {
             this.view = view;
             this.out = out;
             this.source = source;
+            birthSigma = 0;
             double growth = source.puffGrowth(seconds);
             this.age = FxAtlas.puffFrame(growth);
             this.sprayAge = FxAtlas.sprayFrame(growth);
@@ -374,8 +376,14 @@ final class SmokePuffs {
                      double sigma0) {
             // World sources and their analytical transport use the same segment representation.
             // The separate projectile trail renderer retains its own longitudinal interpolation.
-            SmokeGrid.Sink.super.tube(ax, ay, az, sha, sva, sootA, dustA, bx, by, bz, shb, svb, sootB, dustB,
-                    albedoR, albedoG, albedoB, kelvin, rise, sigma0);
+            double previous = birthSigma;
+            birthSigma = sigma0;
+            try {
+                SmokeGrid.Sink.super.tube(ax, ay, az, sha, sva, sootA, dustA, bx, by, bz, shb, svb, sootB, dustB,
+                        albedoR, albedoG, albedoB, kelvin, rise, sigma0);
+            } finally {
+                birthSigma = previous;
+            }
         }
 
         @Override
@@ -449,6 +457,7 @@ final class SmokePuffs {
             held[o + 12] = contexts - 1;
             held[o + 13] = coverage;
             held[o + 14] = sampled ? 1 : 0;
+            held[o + 15] = birthSigma;
         }
 
         /** Клубы источника, что кончился, — слиты между собой ({@link #merge}). */
@@ -564,7 +573,7 @@ final class SmokePuffs {
             source = ctxSource[c];
             out = ctxOut[c];
             view = ctxView[c];
-            age = ctxAge[c];
+            age = held[o + 15] > 0 ? FxAtlas.puffFrame(Math.sqrt(held[o + 3] * held[o + 4]) / held[o + 15]) : ctxAge[c];
             sprayAge = ctxSprayAge[c];
             seed = ctxSeed[c];
             sprays = ctxSprays[c];

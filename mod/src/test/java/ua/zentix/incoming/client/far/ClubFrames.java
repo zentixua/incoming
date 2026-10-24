@@ -48,6 +48,30 @@ final class ClubFrames {
     /** Оптика листа — как у {@code FxAtlas} в игре. */
     static void install() throws IOException {
         PuffOptics.set(PuffOptics.of(alpha(false), N), PuffOptics.of(alpha(true), N));
+        metadata("puff", "puff6");
+        metadata("spray", "spray6");
+    }
+
+    /** Install the same resource-derived frame tables as the GPU atlas, without constructing an OpenGL texture. */
+    private static void metadata(String prefix, String file) throws IOException {
+        String text;
+        try(InputStream in=ClubFrames.class.getResourceAsStream("/assets/incoming/textures/fx/particle/"+file+".json")) {
+            assertNotNull(in,file);text=new String(in.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+        }
+        try {
+            var growth=FxAtlas.class.getDeclaredMethod("parseGrowth",java.io.Reader.class);growth.setAccessible(true);
+            var detail=FxAtlas.class.getDeclaredMethod("parseDetail",java.io.Reader.class);detail.setAccessible(true);
+            var last=FxAtlas.class.getDeclaredMethod("turbulentLast",float[].class);last.setAccessible(true);
+            var gf=FxAtlas.class.getDeclaredField(prefix+"Growth");gf.setAccessible(true);
+            gf.set(null,growth.invoke(null,new java.io.StringReader(text)));
+            var lf=FxAtlas.class.getDeclaredField(prefix+"Last");lf.setAccessible(true);
+            lf.setInt(null,(int)last.invoke(null,detail.invoke(null,new java.io.StringReader(text))));
+            if(prefix.equals("puff")) {
+                var light=FxAtlas.class.getDeclaredMethod("parseLight",java.io.Reader.class);light.setAccessible(true);
+                var field=FxAtlas.class.getDeclaredField("puffLight");field.setAccessible(true);
+                field.set(null,light.invoke(null,new java.io.StringReader(text)));
+            }
+        } catch(ReflectiveOperationException e) { throw new IOException("atlas metadata fixture "+file,e); }
     }
 
     /** Кадр (0…15) и отражён ли — по месту на листе. */

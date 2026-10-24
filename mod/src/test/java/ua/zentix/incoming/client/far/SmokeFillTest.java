@@ -516,6 +516,26 @@ class SmokeFillTest {
     }
 
     @Test
+    void worldTubeUsesItsBirthSigmaToChooseTheBakedGrowthStage() {
+        FarView view=view(Vec3.ZERO,new Vector3f(0,0,1));
+        SmokeGrid.Source source=(seconds,sink)->true;
+        double[] frames=new double[2];
+        for(int i=0;i<2;i++) {
+            double birth=i==0?10:1;
+            Screen screen=new Screen(view);
+            SmokePuffs.resetBudget();
+            SmokePuffs.sink(view,screen,source,0).tube(0,0,99.99,10,10,1,0,
+                    0,0,100.01,10,10,1,0,0.6f,0.55f,0.45f,SmokeGrid.AIR_K,0,birth);
+            SmokePuffs.flush();
+            double[] g=screen.gaussians.getFirst();
+            frames[i]=g[9]+g[10];
+            org.junit.jupiter.api.Assertions.assertEquals(Math.max(SmokePuffs.FIRST_FRAME,FxAtlas.puffFrame(Math.sqrt(g[3]*g[4])/birth)),frames[i],1e-6);
+        }
+        assertTrue(frames[1]>frames[0]+1,"a grown parcel must not reuse a source-wide fixed frame");
+        SmokePuffs.resetBudget();
+    }
+
+    @Test
     void opaqueCloudChangesRepresentationWithoutAnOpticalDepthCliff() throws IOException {
         double peak=10000, sigma=1, ext=2*Math.PI*peak;
         FarView view=view(Vec3.ZERO,new Vector3f(0,0,1));
