@@ -1,0 +1,126 @@
+BLAST d 51.473 p 8358.431 Pa Lpeak 172.422 dBZ phase 0.0162 s output -13.500 LUFS layers Layers[near=0.83961046, mid=0.0046797236, far=0.15570979, sub=0.83961046, pulse=0.16038951]
+BOOST age 0.0 Lw 171.955 LwA 164.325 LrA 122.896 output -20.573 LUFS v 0.4430
+BOOST age 6.0 Lw 171.955 LwA 164.325 LrA 122.896 output -20.573 LUFS v 0.4430
+BOOST age 20.0 Lw 171.955 LwA 164.325 LrA 122.896 output -20.573 LUFS v 0.4430
+BOOST age 28.0 Lw 171.955 LwA 164.325 LrA 122.896 output -20.573 LUFS v 0.4430
+BOOST age 34.0 Lw 167.324 LwA 159.693 LrA 118.264 output -22.888 LUFS v 0.3393
+BOOST age 39.0 Lw 155.352 LwA 147.722 LrA 106.293 output -28.874 LUFS v 0.1703
+BOOST age 40.0 Lw -Infinity LwA -Infinity LrA -300.000 output -Infinity LUFS v 0.0000
+TRANSFER REF 126.0412 ceiling -13.500 ceilingLevel 137.0412
+LAUNCH shape shot LwA 170.050 LrA 128.599 gain 1.1587 v 0.6151 output -17.721 LUFS stereoCalibration -21.721 LUFS
+LAUNCH shape loop LwA 164.325 LrA 122.896 gain 0.8344 v 0.4430 output -20.573 LUFS stereoCalibration -24.573 LUFS
+TERRAIN radius 192 known 10648 unknown 7419 taps 160 sum -5.646dB
+TAP t 0.327s xyz -434.1 82.0 20.4 r2 104.0 extra 112.0 E -15.370dB spread 0.052s
+TAP t 0.111s xyz -381.4 64.0 -62.0 r2 43.9 extra 38.2 E -16.673dB spread 0.035s
+TAP t 0.195s xyz -368.0 73.0 -82.0 r2 48.8 extra 67.0 E -16.788dB spread 0.039s
+TAP t 0.133s xyz -376.7 64.0 -54.5 r2 51.3 extra 45.5 E -17.096dB spread 0.041s
+TAP t 0.337s xyz -339.8 77.0 -38.0 r2 88.1 extra 115.6 E -19.226dB spread 0.052s
+TAP t 0.347s xyz -346.5 76.0 -100.6 r2 72.2 extra 119.1 E -19.338dB spread 0.048s
+TAP t 0.247s xyz -354.2 69.0 -65.4 r2 65.3 extra 84.8 E -20.025dB spread 0.046s
+TAP t 0.142s xyz -385.1 68.0 -90.3 r2 34.9 extra 48.7 E -20.044dB spread 0.034s
+TAP t 0.132s xyz -389.0 64.0 -24.0 r2 66.5 extra 45.2 E -20.683dB spread 0.049s
+TAP t 0.264s xyz -440.0 71.0 -123.6 r2 49.2 extra 90.6 E -20.754dB spread 0.041s
+TAP t 0.175s xyz -369.6 63.0 -69.6 r2 51.6 extra 59.9 E -21.480dB spread 0.045s
+TAP t 0.262s xyz -443.5 68.0 -121.3 r2 50.0 extra 89.9 E -21.649dB spread 0.043s
+BIN 0 n160 E-5.646dB
+TERRAIN radius 4096 known 21096 unknown 6063 taps 194 sum -5.562dB
+TAP t 0.327s xyz -434.1 82.0 20.4 r2 104.0 extra 112.0 E -15.370dB spread 0.052s
+TAP t 0.111s xyz -381.4 64.0 -62.0 r2 43.9 extra 38.2 E -16.673dB spread 0.035s
+TAP t 0.195s xyz -368.0 73.0 -82.0 r2 48.8 extra 67.0 E -16.788dB spread 0.039s
+TAP t 0.133s xyz -376.7 64.0 -54.5 r2 51.3 extra 45.5 E -17.096dB spread 0.041s
+TAP t 0.337s xyz -339.8 77.0 -38.0 r2 88.1 extra 115.6 E -19.226dB spread 0.052s
+TAP t 0.347s xyz -346.5 76.0 -100.6 r2 72.2 extra 119.1 E -19.338dB spread 0.048s
+TAP t 0.247s xyz -354.2 69.0 -65.4 r2 65.3 extra 84.8 E -20.025dB spread 0.046s
+TAP t 0.142s xyz -385.1 68.0 -90.3 r2 34.9 extra 48.7 E -20.044dB spread 0.034s
+TAP t 0.132s xyz -389.0 64.0 -24.0 r2 66.5 extra 45.2 E -20.683dB spread 0.049s
+TAP t 0.264s xyz -440.0 71.0 -123.6 r2 49.2 extra 90.6 E -20.754dB spread 0.041s
+TAP t 0.175s xyz -369.6 63.0 -69.6 r2 51.6 extra 59.9 E -21.480dB spread 0.045s
+TAP t 0.262s xyz -443.5 68.0 -121.3 r2 50.0 extra 89.9 E -21.649dB spread 0.043s
+BIN 0 n163 E-5.612dB
+BIN 1 n18 E-27.807dB
+BIN 2 n13 E-28.286dB
+RENDER variant 1 tracks 8 t60 1.7074 maxEnd 5.3920
+RENDER_BIN v1 sec0 powerSum -20.983 dBFS
+RENDER_BIN v1 sec1 powerSum -24.528 dBFS
+RENDER_BIN v1 sec2 powerSum -32.849 dBFS
+RENDER_BIN v1 sec3 powerSum -46.667 dBFS
+RENDER_BIN v1 sec4 powerSum -55.863 dBFS
+RENDER_BIN v1 sec5 powerSum -85.646 dBFS
+RENDER_BIN v1 sec6 powerSum -300.000 dBFS
+RENDER_BIN v1 sec7 powerSum -300.000 dBFS
+RENDER_BIN v1 sec8 powerSum -300.000 dBFS
+RENDER_BIN v1 sec9 powerSum -300.000 dBFS
+RENDER_BIN v1 sec10 powerSum -300.000 dBFS
+RENDER_BIN v1 sec11 powerSum -300.000 dBFS
+RENDER variant 2 tracks 8 t60 1.7074 maxEnd 5.0216
+RENDER_BIN v2 sec0 powerSum -20.372 dBFS
+RENDER_BIN v2 sec1 powerSum -23.639 dBFS
+RENDER_BIN v2 sec2 powerSum -37.085 dBFS
+RENDER_BIN v2 sec3 powerSum -46.210 dBFS
+RENDER_BIN v2 sec4 powerSum -59.872 dBFS
+RENDER_BIN v2 sec5 powerSum -300.000 dBFS
+RENDER_BIN v2 sec6 powerSum -300.000 dBFS
+RENDER_BIN v2 sec7 powerSum -300.000 dBFS
+RENDER_BIN v2 sec8 powerSum -300.000 dBFS
+RENDER_BIN v2 sec9 powerSum -300.000 dBFS
+RENDER_BIN v2 sec10 powerSum -300.000 dBFS
+RENDER_BIN v2 sec11 powerSum -300.000 dBFS
+RENDER variant 3 tracks 8 t60 1.7074 maxEnd 5.3920
+RENDER_BIN v3 sec0 powerSum -19.928 dBFS
+RENDER_BIN v3 sec1 powerSum -24.969 dBFS
+RENDER_BIN v3 sec2 powerSum -31.813 dBFS
+RENDER_BIN v3 sec3 powerSum -46.010 dBFS
+RENDER_BIN v3 sec4 powerSum -55.946 dBFS
+RENDER_BIN v3 sec5 powerSum -87.254 dBFS
+RENDER_BIN v3 sec6 powerSum -300.000 dBFS
+RENDER_BIN v3 sec7 powerSum -300.000 dBFS
+RENDER_BIN v3 sec8 powerSum -300.000 dBFS
+RENDER_BIN v3 sec9 powerSum -300.000 dBFS
+RENDER_BIN v3 sec10 powerSum -300.000 dBFS
+RENDER_BIN v3 sec11 powerSum -300.000 dBFS
+RENDER variant 4 tracks 8 t60 1.7074 maxEnd 5.3920
+RENDER_BIN v4 sec0 powerSum -21.007 dBFS
+RENDER_BIN v4 sec1 powerSum -26.881 dBFS
+RENDER_BIN v4 sec2 powerSum -36.937 dBFS
+RENDER_BIN v4 sec3 powerSum -48.839 dBFS
+RENDER_BIN v4 sec4 powerSum -61.367 dBFS
+RENDER_BIN v4 sec5 powerSum -95.589 dBFS
+RENDER_BIN v4 sec6 powerSum -300.000 dBFS
+RENDER_BIN v4 sec7 powerSum -300.000 dBFS
+RENDER_BIN v4 sec8 powerSum -300.000 dBFS
+RENDER_BIN v4 sec9 powerSum -300.000 dBFS
+RENDER_BIN v4 sec10 powerSum -300.000 dBFS
+RENDER_BIN v4 sec11 powerSum -300.000 dBFS
+RENDER variant 5 tracks 8 t60 1.7074 maxEnd 5.3920
+RENDER_BIN v5 sec0 powerSum -21.506 dBFS
+RENDER_BIN v5 sec1 powerSum -25.647 dBFS
+RENDER_BIN v5 sec2 powerSum -35.297 dBFS
+RENDER_BIN v5 sec3 powerSum -48.078 dBFS
+RENDER_BIN v5 sec4 powerSum -59.992 dBFS
+RENDER_BIN v5 sec5 powerSum -88.410 dBFS
+RENDER_BIN v5 sec6 powerSum -300.000 dBFS
+RENDER_BIN v5 sec7 powerSum -300.000 dBFS
+RENDER_BIN v5 sec8 powerSum -300.000 dBFS
+RENDER_BIN v5 sec9 powerSum -300.000 dBFS
+RENDER_BIN v5 sec10 powerSum -300.000 dBFS
+RENDER_BIN v5 sec11 powerSum -300.000 dBFS
+RENDER variant 6 tracks 8 t60 1.7074 maxEnd 5.3920
+RENDER_BIN v6 sec0 powerSum -19.884 dBFS
+RENDER_BIN v6 sec1 powerSum -19.539 dBFS
+RENDER_BIN v6 sec2 powerSum -20.537 dBFS
+RENDER_BIN v6 sec3 powerSum -36.225 dBFS
+RENDER_BIN v6 sec4 powerSum -43.027 dBFS
+RENDER_BIN v6 sec5 powerSum -69.028 dBFS
+RENDER_BIN v6 sec6 powerSum -300.000 dBFS
+RENDER_BIN v6 sec7 powerSum -300.000 dBFS
+RENDER_BIN v6 sec8 powerSum -300.000 dBFS
+RENDER_BIN v6 sec9 powerSum -300.000 dBFS
+RENDER_BIN v6 sec10 powerSum -300.000 dBFS
+RENDER_BIN v6 sec11 powerSum -300.000 dBFS
+LATE r 500.0 extra 948.5 delay 2.765 p1 752.566 pRatio -20.912dB divergenceViaImage -25.768dB air63 0.085 air125 0.318 air1k 4.722 air2k 8.574
+PLANE r 500.0 reflectedPeak 336.167 Pa (before air absorption), speaker -26.620 LUFS
+LATE r 1100.0 extra 2148.5 delay 6.264 p1 341.655 pRatio -27.771dB divergenceViaImage -32.617dB air63 0.192 air125 0.720 air1k 10.695 air2k 19.421
+PLANE r 1100.0 reflectedPeak 152.756 Pa (before air absorption), speaker -30.045 LUFS
+LATE r 2000.0 extra 3948.5 delay 11.512 p1 187.869 pRatio -32.965dB divergenceViaImage -37.810dB air63 0.353 air125 1.323 air1k 19.655 air2k 35.692
+PLANE r 2000.0 reflectedPeak 84.011 Pa (before air absorption), speaker -32.642 LUFS
+laptop_job sd-echo-final: exit 0

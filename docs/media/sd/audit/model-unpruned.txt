@@ -1,0 +1,45 @@
+BLAST d 51.473 p 8358.431 Pa Lpeak 172.422 dBZ phase 0.0162 s output -13.500 LUFS layers Layers[near=0.83961046, mid=0.0046797236, far=0.15570979, sub=0.83961046, pulse=0.16038951]
+BOOST age 0.0 Lw 171.955 LwA 164.325 LrA 122.896 output -20.573 LUFS v 0.4430
+BOOST age 6.0 Lw 171.955 LwA 164.325 LrA 122.896 output -20.573 LUFS v 0.4430
+BOOST age 20.0 Lw 171.955 LwA 164.325 LrA 122.896 output -20.573 LUFS v 0.4430
+BOOST age 28.0 Lw 171.955 LwA 164.325 LrA 122.896 output -20.573 LUFS v 0.4430
+BOOST age 34.0 Lw 167.324 LwA 159.693 LrA 118.264 output -22.888 LUFS v 0.3393
+BOOST age 39.0 Lw 155.352 LwA 147.722 LrA 106.293 output -28.874 LUFS v 0.1703
+BOOST age 40.0 Lw -Infinity LwA -Infinity LrA -300.000 output -Infinity LUFS v 0.0000
+TRANSFER REF 126.0412 ceiling -13.500 ceilingLevel 137.0412
+TERRAIN radius 192 known 10648 unknown 7419 taps 803 sum -5.604dB
+TAP t 0.327s xyz -434.1 82.0 20.4 r2 104.0 extra 112.0 E -15.370dB spread 0.052s
+TAP t 0.111s xyz -381.4 64.0 -62.0 r2 43.9 extra 38.2 E -16.673dB spread 0.035s
+TAP t 0.195s xyz -368.0 73.0 -82.0 r2 48.8 extra 67.0 E -16.788dB spread 0.039s
+TAP t 0.133s xyz -376.7 64.0 -54.5 r2 51.3 extra 45.5 E -17.096dB spread 0.041s
+TAP t 0.337s xyz -339.8 77.0 -38.0 r2 88.1 extra 115.6 E -19.226dB spread 0.052s
+TAP t 0.347s xyz -346.5 76.0 -100.6 r2 72.2 extra 119.1 E -19.338dB spread 0.048s
+TAP t 0.247s xyz -354.2 69.0 -65.4 r2 65.3 extra 84.8 E -20.025dB spread 0.046s
+TAP t 0.142s xyz -385.1 68.0 -90.3 r2 34.9 extra 48.7 E -20.044dB spread 0.034s
+TAP t 0.132s xyz -389.0 64.0 -24.0 r2 66.5 extra 45.2 E -20.683dB spread 0.049s
+TAP t 0.264s xyz -440.0 71.0 -123.6 r2 49.2 extra 90.6 E -20.754dB spread 0.041s
+TAP t 0.175s xyz -369.6 63.0 -69.6 r2 51.6 extra 59.9 E -21.480dB spread 0.045s
+TAP t 0.262s xyz -443.5 68.0 -121.3 r2 50.0 extra 89.9 E -21.649dB spread 0.043s
+BIN 0 n794 E-5.604dB
+BIN 1 n9 E-49.934dB
+TERRAIN radius 4096 known 21096 unknown 6063 taps 1242 sum -5.509dB
+TAP t 0.327s xyz -434.1 82.0 20.4 r2 104.0 extra 112.0 E -15.370dB spread 0.052s
+TAP t 0.111s xyz -381.4 64.0 -62.0 r2 43.9 extra 38.2 E -16.673dB spread 0.035s
+TAP t 0.195s xyz -368.0 73.0 -82.0 r2 48.8 extra 67.0 E -16.788dB spread 0.039s
+TAP t 0.133s xyz -376.7 64.0 -54.5 r2 51.3 extra 45.5 E -17.096dB spread 0.041s
+TAP t 0.337s xyz -339.8 77.0 -38.0 r2 88.1 extra 115.6 E -19.226dB spread 0.052s
+TAP t 0.347s xyz -346.5 76.0 -100.6 r2 72.2 extra 119.1 E -19.338dB spread 0.048s
+TAP t 0.247s xyz -354.2 69.0 -65.4 r2 65.3 extra 84.8 E -20.025dB spread 0.046s
+TAP t 0.142s xyz -385.1 68.0 -90.3 r2 34.9 extra 48.7 E -20.044dB spread 0.034s
+TAP t 0.132s xyz -389.0 64.0 -24.0 r2 66.5 extra 45.2 E -20.683dB spread 0.049s
+TAP t 0.264s xyz -440.0 71.0 -123.6 r2 49.2 extra 90.6 E -20.754dB spread 0.041s
+TAP t 0.175s xyz -369.6 63.0 -69.6 r2 51.6 extra 59.9 E -21.480dB spread 0.045s
+TAP t 0.262s xyz -443.5 68.0 -121.3 r2 50.0 extra 89.9 E -21.649dB spread 0.043s
+BIN 0 n851 E-5.569dB
+BIN 1 n328 E-26.663dB
+BIN 2 n62 E-27.709dB
+BIN 7 n1 E-92.321dB
+LATE_TAP t 7.741s xyz 800.3 71.0 -649.2 r2 1342.1 extra 2655.2 E -92.321dB spread 5.210s
+LATE r 500.0 extra 948.5 delay 2.765 p1 752.566 pRatio -20.912dB divergenceViaImage -25.768dB air63 0.085 air125 0.318 air1k 4.722 air2k 8.574
+LATE r 1100.0 extra 2148.5 delay 6.264 p1 341.655 pRatio -27.771dB divergenceViaImage -32.617dB air63 0.192 air125 0.720 air1k 10.695 air2k 19.421
+LATE r 2000.0 extra 3948.5 delay 11.512 p1 187.869 pRatio -32.965dB divergenceViaImage -37.810dB air63 0.353 air125 1.323 air1k 19.655 air2k 35.692

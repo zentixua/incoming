@@ -1,0 +1,44 @@
+[
+  {
+    "file": "blast_fire.ogg",
+    "pitch": 1.1,
+    "correlation": 0.5391903200379278,
+    "start_in_clip_s": 1.451,
+    "gain": 0.23641012295569985
+  },
+  {
+    "file": "blast_tail_1.ogg",
+    "pitch": 0.996,
+    "correlation": 0.0428483981086284,
+    "start_in_clip_s": 3.0216250000000002,
+    "gain": 0.22231992490695993
+  },
+  {
+    "file": "blast_tail_2.ogg",
+    "pitch": 0.972,
+    "correlation": 0.04805460927513862,
+    "start_in_clip_s": 1.3823750000000001,
+    "gain": 0.37744759801132916
+  },
+  {
+    "file": "blast_tail_3.ogg",
+    "pitch": 1.002,
+    "correlation": -0.038127211759368465,
+    "start_in_clip_s": 3.880125,
+    "gain": -0.11131192572145651
+  },
+  {
+    "file": "blast_tail_4.ogg",
+    "pitch": 0.97,
+    "correlation": 0.037957877040081314,
+    "start_in_clip_s": 2.190625,
+    "gain": 0.8256548667451825
+  },
+  {
+    "file": "blast_tail_5.ogg",
+    "pitch": 1.024,
+    "correlation": 0.036999699178578926,
+    "start_in_clip_s": 4.466125,
+    "gain": 0.08859608529394697
+  }
+]
