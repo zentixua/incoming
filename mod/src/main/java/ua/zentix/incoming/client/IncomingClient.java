@@ -164,6 +164,7 @@ public final class IncomingClient {
         e.registerEntityRenderer(ModEntities.BUNKER_BUSTER.get(), ctx -> new StrikeProjectileRenderer<>(ctx, ClientWeaponSpec.BUNKER.airframe(true).model()));
         e.registerEntityRenderer(ModEntities.ICBM.get(), ctx -> new StrikeProjectileRenderer<>(ctx, ClientWeaponSpec.NUKE.airframe().model()));
         e.registerEntityRenderer(ModEntities.DEBRIS.get(), DebrisRenderer::new);
+        e.registerEntityRenderer(ModEntities.SURFACE_DAMAGE.get(), ua.zentix.incoming.client.render.SurfaceDamageRenderer::new);
         e.registerEntityRenderer(ModEntities.LAUNCHER.get(), LauncherRenderer::new);
         e.registerEntityRenderer(ModEntities.SPENT_BOOSTER.get(), SpentBoosterRenderer::new);
         e.registerEntityRenderer(ModEntities.INTERCEPTOR.get(), InterceptorRenderer::new);

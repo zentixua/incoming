@@ -1,6 +1,8 @@
 package ua.zentix.incoming.warhead;
 
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
+import ua.zentix.incoming.util.Terrain;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -55,8 +57,8 @@ public final class DebrisSpawner {
 
     /** Обломки шахеда; возвращает, сколько их. */
     public static int drone(ServerLevel level, Vec3 at, GroundMaterial mat) {
-        return spawn(level, at, mat.debris(), false, 1.5, 0.5, 1.6)
-                + spawn(level, at, mat.debris(), false, 1.5, 0.5, 1.6)
+        return spawnGround(level, at, mat.debris(), false, 1.5, 0.5, 1.6)
+                + spawnGround(level, at, mat.debris(), false, 1.5, 0.5, 1.6)
                 + spawnCharred(level, at, 1.5, 0.5, 1.6)
                 + spawn(level, at, wreckDrone(), false, 1.5, 0.5, 1.6)
                 + spawnBurning(level, at, 1.5, 0.5, 1.6);
@@ -65,7 +67,7 @@ public final class DebrisSpawner {
     /** Обломки ракеты; возвращает, сколько их. */
     public static int missile(ServerLevel level, Vec3 at, GroundMaterial mat) {
         int n = 0;
-        for (int i = 0; i < 4; i++) n += spawn(level, at, mat.debris(), false, 2.1, 0.6, 2.2);
+        for (int i = 0; i < 4; i++) n += spawnGround(level, at, mat.debris(), false, 2.1, 0.6, 2.2);
         return n + spawnCharred(level, at, 2.1, 0.6, 2.2)
                 + spawnCharred(level, at, 2.1, 0.6, 2.2)
                 + spawn(level, at, wreckMissile(), false, 2.1, 0.6, 2.2)
@@ -108,8 +110,20 @@ public final class DebrisSpawner {
         return states.size();
     }
 
+    /** Material from a cohesive face that remains intact is chips; ejected loose ground retains its blocks. */
+    private static int spawnGround(ServerLevel level, Vec3 at, List<BlockState> states, boolean hot, double horizontal, double upMin, double upMax) {
+        BlockPos face = BlockPos.containing(at.add(0, -1e-5, 0));
+        boolean small = Terrain.ready(level, face) && SurfaceBlocks.solid(level, face, level.getBlockState(face))
+                && SurfaceBlocks.cohesive(level.getBlockState(face));
+        for (BlockState state : states) {
+            level.addFreshEntity(DebrisEntity.ground(level, start(level.random, at), state, hot, true,
+                    velocity(level.random, horizontal, upMin, upMax), small));
+        }
+        return states.size();
+    }
+
     private static int spawnCharred(ServerLevel level, Vec3 at, double horizontal, double upMin, double upMax) {
-        return spawn(level, at, embers(), true, horizontal, upMin, upMax) + spawn(level, at, ash(), false, horizontal, upMin, upMax);
+        return spawnGround(level, at, embers(), true, horizontal, upMin, upMax) + spawnGround(level, at, ash(), false, horizontal, upMin, upMax);
     }
 
     private static int spawnBurning(ServerLevel level, Vec3 at, double horizontal, double upMin, double upMax) {

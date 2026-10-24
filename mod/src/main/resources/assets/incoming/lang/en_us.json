@@ -144,7 +144,7 @@
   "incoming.config.fire": "Blasts start fires",
   "incoming.config.fire.tooltip": "Off: conventional blasts and burning debris start no fires.",
   "incoming.config.debris_stay": "Debris stays as blocks",
-  "incoming.config.debris_stay.tooltip": "Off: debris disappears when it lands.",
+  "incoming.config.debris_stay.tooltip": "Ground clods stay on loose ground; large airframe parts and burning debris can also remain. Small chips disperse. Off: all debris disappears on landing.",
   "incoming.config.collapse": "Cave roof collapse",
   "incoming.config.collapse.tooltip": "An underground blast brings down the roof of the cavity above it.",
   "incoming.config.siren": "Air raid siren",
