@@ -126,6 +126,7 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
         uv = origin + local;
         dx = dFdx(uv); dy = dFdy(uv);
         if (any(lessThan(local, vec2(0.0))) || any(greaterThan(local, tile))) {
+            if (gaussianMix >= 1.0) discard;
             a = vec4(vec3(FxSixLight.z), 0.0); b = vec3(FxSixLight.z); return;
         }
     }
@@ -138,7 +139,7 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
     vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
     // прозрачный край кадра (половина квадрата клуба) — без второй карты и света: цена слоя — заливка крупных клубов
     if (mix(a0.a, a1.a, m) < 0.002) {
-        if (!analytic) discard;
+        if (!analytic || gaussianMix >= 1.0) discard;
         a = vec4(vec3(FxSixLight.z), 0.0); b = vec3(FxSixLight.z); return;
     }
     vec4 b0 = textureGrad(Sampler0, uv0 + vec2(0.0, FxSix.x), dx, dy), b1 = textureGrad(Sampler0, uv1 + vec2(0.0, FxSix.x), dx, dy);
