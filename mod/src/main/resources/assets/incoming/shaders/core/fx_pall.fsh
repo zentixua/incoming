@@ -156,7 +156,6 @@ const vec4 MUSH_AT = vec4(0.025, 0.1, 0.275, 0.7);
 const vec4 MUSH_PART = vec4(0.05, 0.1, 0.25, 0.6);
 
 // грибы кадра и отрезок луча в каждом
-Mush gMush[MUSHROOMS];
 vec2 gMushSpan[MUSHROOMS];
 int gMushes;
 vec3 gDir;
@@ -164,7 +163,7 @@ int gFoot0, gFoot1;
 vec2 gFootSpan0, gFootSpan1;
 const int FOOT_LIGHT_AZ = 64;
 const int FOOT_LIGHT_R = 16;
-const int FOOT_LIGHT_H = 16;
+const int FOOT_LIGHT_H = 32;
 
 
 float hg(float g, float c) {
@@ -223,9 +222,9 @@ vec4 carpetFlowAt(mat4 S, vec3 p) {
     if (gFoot0 < 0 && gFoot1 < 0) return vec4(0.0);
     float t = dot(p, gDir);
     if (S[0].x == PallSlot0[0].x && S[0].y == PallSlot0[0].y) {
-        if (gFoot0 >= 0 && t >= gFootSpan0.x && t <= gFootSpan0.y) return carpetFlow(gMush[gFoot0], S, p);
+        if (gFoot0 >= 0 && t >= gFootSpan0.x && t <= gFootSpan0.y) return carpetFlow(mushLoad(Sampler7, gFoot0), S, p);
     } else {
-        if (gFoot1 >= 0 && t >= gFootSpan1.x && t <= gFootSpan1.y) return carpetFlow(gMush[gFoot1], S, p);
+        if (gFoot1 >= 0 && t >= gFootSpan1.x && t <= gFootSpan1.y) return carpetFlow(mushLoad(Sampler7, gFoot1), S, p);
     }
     return vec4(0.0);
 }
@@ -471,7 +470,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
         f.sigma.z += inflow.w * f.wet;
         int k = length(inflow.xz - PallSlot0[0].xy) < 1.0 ? gFoot0 : gFoot1;
         if (k >= 0) {
-            Mush m = gMush[k];
+            Mush m = mushLoad(Sampler7, k);
             vec3 q = mushLocal(m, p);
             float wall = mushFootWall(length(q.xz), mushStemAt(m, q.y));
             float up = mushFootColumn(Sampler7, k, m, q.y) * wall;
@@ -1210,8 +1209,7 @@ vec3 mushFootLight(int k, Mush m, vec3 q) {
 
 // Гриб k в точке p (от глаза) с местом q: ослабление (w, 1/блок) и свет к глазу на единицу пути (rgb, Σ ослабление ×
 // функция источника). cone — меньшее, что луч здесь различает
-vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
-    Mush m = gMush[k];
+vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near) {
     float lobes, depth, carried;
     float kk = float(k) * 13.0;
     vec4 sig = mushDense(m, q, cone, kk, lobes, depth, near, carried);
@@ -1335,7 +1333,7 @@ vec4 mushStep(float t, float cone, out float gap) {
             gap = min(gap, span.x - t);
             continue;
         }
-        Mush m = gMush[k];
+        Mush m = mushLoad(Sampler7, k);
         vec3 q = mushLocal(m, p);
         float g = mushGap(m, q);
         if (g > 0.0) {
@@ -1345,7 +1343,7 @@ vec4 mushStep(float t, float cone, out float gap) {
         // у края: вещества нет — шагом до края с клубами (вполовину оценки), иначе луч шёл бы полосу клубов шагом
         // в пиксель и на краю кончались бы шаги
         float near;
-        vec4 r = mushAt(k, p, q, cone, near);
+        vec4 r = mushAt(k, m, p, q, cone, near);
         gap = min(gap, r.w > 1e-7 ? 0.0 : 0.5 * max(near, 0.0));
         sum += r;
     }
@@ -1529,13 +1527,13 @@ void main() {
     gMushes = 0;
     for (int k = 0; k < MUSHROOMS; k++) {
         if (!mushOn(Sampler7, k)) break;
-        gMush[k] = mushLoad(Sampler7, k);
-        vec2 sp = mushSpan(gMush[k], dir);
+        Mush body = mushLoad(Sampler7, k);
+        vec2 sp = mushSpan(body, dir);
         sp.y = min(sp.y, scene);
         gMushSpan[k] = sp;
         gMushes += 1;
-        if (gMush[k].footShare > 0.0 && gMush[k].footMerge > 0.0) {
-            Mush foot = gMush[k];
+        if (body.footShare > 0.0 && body.footMerge > 0.0) {
+            Mush foot = body;
             foot.boundR = foot.stemR + foot.stemFlare + 2.0 * foot.footTop + length(foot.drift);
             foot.boundTop = foot.footMerge;
             vec2 fs = mushSpan(foot, dir);
@@ -1734,10 +1732,10 @@ void main() {
     gFootSpan0 = gFootSpan1 = vec2(0.0, 1e9);
     for (int j = 0; j < MUSHROOMS; j++) {
         if (!mushOn(Sampler7, j)) break;
-        gMush[j] = mushLoad(Sampler7, j);
+        Mush other = mushLoad(Sampler7, j);
         gMushes += 1;
-        if (length(gMush[j].base.xz - PallSlot0[0].xy) < 1.0) gFoot0 = j;
-        if (length(gMush[j].base.xz - PallSlot1[0].xy) < 1.0) gFoot1 = j;
+        if (length(other.base.xz - PallSlot0[0].xy) < 1.0) gFoot0 = j;
+        if (length(other.base.xz - PallSlot1[0].xy) < 1.0) gFoot1 = j;
     }
     if (k != gFoot0 && k != gFoot1) { fragColor = vec4(0.0); return; }
     int layer = (at.y / FOOT_LIGHT_R) % FOOT_LIGHT_H;

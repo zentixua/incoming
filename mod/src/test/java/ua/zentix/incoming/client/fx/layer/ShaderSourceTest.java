@@ -169,6 +169,7 @@ class ShaderSourceTest {
         assertTrue(slot.contains("f.column.x += up") && slot.contains("f.slab.x += total"), "поднятая пыль затеняет сама себя");
         String flow = blankComments(body(pall, "vec4 carpetFlow("));
         assertFalse(flow.contains("for ("), "на шаге нет обхода массива грибов");
+        assertFalse(pall.contains("Mush gMush["), "неизменные параметры не копируются в частную память каждого пикселя");
         String mush = Files.readString(core.resolve("../include/mushroom.glsl"));
         String gap = blankComments(body(mush, "float mushGap("));
         assertTrue(gap.contains("mushFootBandAt(m, q.y)") && gap.contains("q.y < m.footMerge"));
