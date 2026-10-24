@@ -156,12 +156,23 @@ class ShaderSourceTest {
         String pall = Files.readString(core.resolve("fx_pall.fsh"));
         String layer = blankComments(body(pall, "void pallStep(")), stem = blankComments(body(pall, "vec4 mushAt("));
         assertTrue(layer.contains("pallSource(p, cone, vec4(0.0), dustLight)"));
-        assertTrue(stem.contains("pallSource(p, cone, vec4(m.base, carried), carpetLight)"));
+        assertTrue(stem.contains("pallSource(p, cone, vec4(m.base, carried), gFootLight)"));
         assertTrue(stem.contains("mushFootLightShare("));
-        assertTrue(stem.contains("mix(source, carpetLight, fromCarpet)"));
+        assertTrue(stem.contains("mix(source, gFootLight, fromCarpet)"));
         String dense = blankComments(body(pall, "vec4 mushDense("));
         assertTrue(dense.contains("mushInflowLobes("), "подсос — клубами ковра, не растянутыми струями всей ножки");
         assertFalse(dense.contains("mushStemLobes("), "исходный узор ножки не переотображается");
+        assertEquals(1, stem.split("pallSource\\(", -1).length - 1, "дорогой свет — одно место вызова под кешем");
+        assertTrue(stem.contains("gFootLit != k"));
+        String slot = blankComments(body(pall, "void slot("));
+        assertEquals(1, slot.split("carpetFlowAt\\(", -1).length - 1, "карта потока общая у всех смещённых выборок слота");
+        assertTrue(slot.contains("f.column.x += up") && slot.contains("f.slab.x += total"), "поднятая пыль затеняет сама себя");
+        String flow = blankComments(body(pall, "vec4 carpetFlow("));
+        assertFalse(flow.contains("for ("), "на шаге нет обхода массива грибов");
+        String mush = Files.readString(core.resolve("../include/mushroom.glsl"));
+        String gap = blankComments(body(mush, "float mushGap("));
+        assertTrue(gap.contains("mushFootBandAt(m, q.y)") && gap.contains("q.y < m.footMerge"));
+
     }
 
     /**

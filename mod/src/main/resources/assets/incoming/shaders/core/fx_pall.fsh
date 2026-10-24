@@ -156,6 +156,11 @@ const vec4 MUSH_PART = vec4(0.05, 0.1, 0.25, 0.6);
 Mush gMush[MUSHROOMS];
 vec2 gMushSpan[MUSHROOMS];
 int gMushes;
+int gFoot0, gFoot1;
+vec2 gFootSpan0, gFootSpan1;
+int gFootLit;
+vec3 gFootLight;
+
 
 float hg(float g, float c) {
     float k = 1.0 + g * g - 2.0 * g * c;
@@ -191,41 +196,45 @@ float coarseAt(mat4 S, vec3 q, float fill) {
 // Обратное течение узора у ножки: у земли воздух идёт к ней, выше — вверх. Длина пути — stemRise;
 // направление поворота и слабая закрутка — подача (замеров вихря нет). Два перекрывающихся отрезка пути (Vlachos 2010) не дают
 // карте растянуться в гладкие дуги. За зоной подсоса смещение нулевое — прежний ковёр и прежняя мгла.
-vec4 carpetFlow(mat4 S, vec3 p) {
-    for (int k = 0; k < gMushes; k++) {
-        Mush m = gMush[k];
-        if (length(m.base.xz - S[0].xy) > 1.0 || m.footShare <= 0.0) continue;
-        float h = p.y - m.base.y;
-        if (h < 0.0 || h >= m.footMerge) return vec4(0.0);
-        vec3 q = mushLocal(m, p);
-        float outer = 2.0 * m.stemR + 2.0 * m.stemFlare + 2.0 * m.footTop;
-        if (any(greaterThan(abs(q.xz), vec2(outer)))) return vec4(0.0);
-        float rho = length(q.xz), r = mushStemAt(m, q.y);
-        float share = mushFootInfluence(q.y, rho, r, m.footTop, m.footShare, m.footMerge);
-        if (share <= 0.0) return vec4(0.0);
-        vec2 radial = q.xz / max(rho, 1.0);
-        // Сдвиг не больше трети плитки (Valve, Water Flow 2010): иначе карта теряет фактуру, растягиваясь в дуги.
-        float up = mushFootUp(q.y, m.footTop), cycle = max(S[3].y / 3.0, 1.0);
-        float phase = m.stemRise / cycle + 0.5 * texture(PallNoise, vec3(q.x, 0.0, q.z) / (8.0 * cycle) + vec3(0.31, 0.23, 0.67)).r;
-        vec2 inward = radial + 0.5 * MUSH_FOOT_TURN * vec2(-radial.y, radial.x);
-        return vec4(vec3(inward.x * (1.0 - up), -up, inward.y * (1.0 - up)) * (cycle * share), phase);
+vec4 carpetFlow(Mush m, mat4 S, vec3 p) {
+    float h = p.y - m.base.y;
+    if (h < 0.0 || h >= m.footMerge) return vec4(0.0);
+    vec3 q = mushLocal(m, p);
+    float outer = 2.0 * m.stemR + 2.0 * m.stemFlare + 2.0 * m.footTop;
+    if (any(greaterThan(abs(q.xz), vec2(outer)))) return vec4(0.0);
+    float rho = length(q.xz), r = mushStemAt(m, q.y);
+    float share = mushFootInfluence(q.y, rho, r, m.footTop, m.footShare, m.footMerge);
+    if (share <= 0.0) return vec4(0.0);
+    vec2 radial = q.xz / max(rho, 1.0);
+    // Сдвиг не больше трети плитки (Valve, Water Flow 2010): иначе карта теряет фактуру, растягиваясь в дуги.
+    float up = mushFootUp(q.y, m.footTop), cycle = max(S[3].y / 3.0, 1.0);
+    float phase = m.stemRise / cycle + 0.5 * texture(PallNoise, vec3(q.x, 0.0, q.z) / (8.0 * cycle) + vec3(0.31, 0.23, 0.67)).r;
+    vec2 inward = radial + 0.5 * MUSH_FOOT_TURN * vec2(-radial.y, radial.x);
+    return vec4(vec3(inward.x * (1.0 - up), -up, inward.y * (1.0 - up)) * (cycle * share), phase);
+}
+
+// Цилиндр проверен один раз на пиксель; вне его — исходные координаты, без обхода массива грибов.
+vec4 carpetFlowAt(mat4 S, vec3 p) {
+    float t = length(p);
+    if (S[0].x == PallSlot0[0].x && S[0].y == PallSlot0[0].y) {
+        if (gFoot0 >= 0 && t >= gFootSpan0.x && t <= gFootSpan0.y) return carpetFlow(gMush[gFoot0], S, p);
+    } else {
+        if (gFoot1 >= 0 && t >= gFootSpan1.x && t <= gFootSpan1.y) return carpetFlow(gMush[gFoot1], S, p);
     }
     return vec4(0.0);
 }
 
-void carpetUv(mat4 S, vec3 p, vec3 warp, out vec3 a, out vec3 b, out float blend) {
-    vec4 flow = carpetFlow(S, p);
+void carpetUv(mat4 S, vec3 p, vec3 warp, vec4 flow, out vec3 a, out vec3 b, out float blend) {
     a = clumpUv(S, p + flow.xyz * fract(flow.w), warp);
     b = clumpUv(S, p + flow.xyz * fract(flow.w + 0.5), warp);
     blend = mushLayerWeight(fract(flow.w));
 }
 
-float carpetCoarse(mat4 S, vec3 p, vec3 warp, float fill) {
-    vec4 flow = carpetFlow(S, p);
+float carpetCoarse(mat4 S, vec3 p, vec3 warp, float fill, vec4 flow) {
     if (dot(flow.xyz, flow.xyz) < 1e-6) return coarseAt(S, clumpUv(S, p, warp), fill);
     vec3 a, b;
     float blend;
-    carpetUv(S, p, warp, a, b, blend);
+    carpetUv(S, p, warp, flow, a, b, blend);
     return mix(coarseAt(S, b, fill), coarseAt(S, a, fill), blend);
 }
 
@@ -245,12 +254,11 @@ float fineAt(vec3 q) {
     return pallDetail(textureLod(PallNoise, q * 4.0 + vec3(0.53, 0.29, 0.17), 0.0).r);
 }
 
-float carpetFine(mat4 S, vec3 p, vec3 warp) {
-    vec4 flow = carpetFlow(S, p);
+float carpetFine(mat4 S, vec3 p, vec3 warp, vec4 flow) {
     if (dot(flow.xyz, flow.xyz) < 1e-6) return fineAt(clumpUv(S, p, warp));
     vec3 a, b;
     float blend;
-    carpetUv(S, p, warp, a, b, blend);
+    carpetUv(S, p, warp, flow, a, b, blend);
     return mix(fineAt(b), fineAt(a), blend);
 }
 
@@ -453,6 +461,18 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
         f.mixed *= oldDust / max(oldDust + inflow.w, 1e-7);
         f.sigma.x += inflow.w * (1.0 - f.wet);
         f.sigma.z += inflow.w * f.wet;
+        int k = length(inflow.xz - PallSlot0[0].xy) < 1.0 ? gFoot0 : gFoot1;
+        if (k >= 0) {
+            Mush m = gMush[k];
+            vec3 q = mushLocal(m, p);
+            float wall = mushFootWall(length(q.xz), mushStemAt(m, q.y));
+            float up = mushFootColumn(Sampler7, k, m, q.y) * wall;
+            float total = mushFootColumn(Sampler7, k, m, 0.0) * wall;
+            f.column.x += up * (1.0 - f.wet);
+            f.column.z += up * f.wet;
+            f.slab.x += total * (1.0 - f.wet);
+            f.slab.z += total * f.wet;
+        }
     }
     WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp);
     vec3 dustW = mix(PALL_DUST_W, PALL_SMOKE_W, f.smoke);
@@ -496,11 +516,12 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     if (!pall) return;
     float fill = clamp(f.dense * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, f.height.x));
     vec3 warp = warpAt(S, p);
+    vec4 flow = carpetFlowAt(S, p);
     // мелкие клубы — около 1/32 плитки: видны во всю силу, пока луч различает вдвое мельче (fine — их доля; 0 — мельче
     // пикселя и шага: их среднее, 1, без выборки)
     float tile = S[3].y, fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
     // клочья молодого слоя расходятся, пока он перемешивается (pallMixed): старая пелена сверху — ровное одеяло
-    float raw = carpetCoarse(S, p, warp, fill), detail = fine > 0.0 ? carpetFine(S, p, warp) : 1.0;
+    float raw = carpetCoarse(S, p, warp, fill, flow), detail = fine > 0.0 ? carpetFine(S, p, warp, flow) : 1.0;
     float coarse = pallMixed(raw, f.mixed), shape = pallMixed(raw * mix(1.0, detail, fine), f.mixed);
     s.clumps = shape;
     float d = f.sigma.x * shape, h = f.sigma.y * mix(1.0, shape, 0.5), m = f.sigma.z * shape;
@@ -512,11 +533,11 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // стороной клуба и тёмной. Выборок шума на тень: крупных — по две (по два канала), мелких — по одной и только пока
     // луч их различает
     float sigmaShade = f.sigma.x + f.sigma.z;
-    float clump = clumpShade(coarse, pallMixed(carpetCoarse(S, p + keyDir * (0.06 * tile), warp, fill), f.mixed),
-            pallMixed(carpetCoarse(S, p + keyDir * (0.22 * tile), warp, fill), f.mixed)) * sigmaShade * tile;
+    float clump = clumpShade(coarse, pallMixed(carpetCoarse(S, p + keyDir * (0.06 * tile), warp, fill, flow), f.mixed),
+            pallMixed(carpetCoarse(S, p + keyDir * (0.22 * tile), warp, fill, flow), f.mixed)) * sigmaShade * tile;
     if (fine > 0.0) {
-        clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(S, p + keyDir * (0.015 * tile), warp), f.mixed),
-                pallMixed(carpetFine(S, p + keyDir * (0.055 * tile), warp), f.mixed)) * sigmaShade * coarse * (0.25 * tile);
+        clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(S, p + keyDir * (0.015 * tile), warp, flow), f.mixed),
+                pallMixed(carpetFine(S, p + keyDir * (0.055 * tile), warp, flow), f.mixed)) * sigmaShade * coarse * (0.25 * tile);
     }
     // тень — каждому свету, насколько он со стороны главного
     s.shadeSun += clump * max(dot(keyDir, sunDir), 0.0);
@@ -1010,7 +1031,7 @@ float mushInflowLobes(Mush m, vec3 q, float cone) {
     p.xz += m.drift * mushShare(q.y, m.endTop);
     vec3 a, b;
     float blend;
-    carpetUv(S, p, warpAt(S, p), a, b, blend);
+    carpetUv(S, p, warpAt(S, p), carpetFlow(m, S, p), a, b, blend);
     float n = mix(texture(PallNoise, b).r, texture(PallNoise, a).r, blend);
     float fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / max(S[3].y, 1.0));
     float detail = 0.5;
@@ -1155,12 +1176,13 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
     float st = dot(sig, vec4(1.0));
     if (st <= 1e-7) return vec4(0.0);
     float fromCarpet = mushFootLightShare(q.y, m.footTop, m.footMerge, min(carried, sig.y), st);
-    // Чистый приток имеет только свет ковра: не считать свет ножки, который mix затем целиком отбросит.
-    if (fromCarpet >= 1.0) {
-        vec3 carpetLight;
-        pallSource(p, cone, vec4(m.base, carried), carpetLight);
-        return vec4(st * carpetLight, st);
+    if (fromCarpet > 0.0 && gFootLit != k) {
+        // Свет поля медленно меняется вдоль видимой оболочки: одна выборка при входе луча в пыль основания.
+        // Клубы и их движение остаются в густоте, а не пересчитывают весь свет пелены на каждом шаге.
+        pallSource(p, cone, vec4(m.base, carried), gFootLight);
+        gFootLit = k;
     }
+    if (fromCarpet >= 1.0) return vec4(st * gFootLight, st);
     vec3 w = (sig.x * m.capMat.rgb + sig.y * m.stemMat.rgb + sig.z * m.skirtMat.rgb + sig.w * m.colMat.rgb) / st;
     float g = (sig.x * m.capMat.a + sig.y * m.stemMat.a + sig.z * m.skirtMat.a + sig.w * m.colMat.a) / st;
     vec3 kd = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
@@ -1256,13 +1278,7 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
     // уходит наружу без замены (двумя потоками: недосвет гаснет вглубь как e^(−kτ))
     vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));
     vec3 source = w * light + thermal;
-    if (carried > 1e-7) {
-        // У входа — тот же материал и ТОТ ЖЕ свет, что у ковра рядом (pallStep). Только выше пыль становится
-        // вертикальной ножкой: её свет плавно берёт верх до высоты слияния. Не отдельный серый колокол поверх ковра.
-        vec3 carpetLight;
-        pallSource(p, cone, vec4(m.base, carried), carpetLight);
-        source = mix(source, carpetLight, fromCarpet);
-    }
+    if (fromCarpet > 0.0) source = mix(source, gFootLight, fromCarpet);
     return vec4(st * source, st);
 }
 
@@ -1446,6 +1462,11 @@ void main() {
     float lost = 0.0;
     // смерчи: отрезок луча и свет каждого — заранее, в луч пелены — когда шаг дойдёт до входа (до мира за пикселем)
     gMushes = 0;
+    gFoot0 = -1;
+    gFoot1 = -1;
+    gFootLit = -1;
+    gFootLight = vec3(0.0);
+    gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gWhirlLight = mat4(0.0);
     gWhirlIn = vec4(1e9);
     for (int i = 0; i < 4; i++) {
@@ -1486,6 +1507,17 @@ void main() {
         sp.y = min(sp.y, scene);
         gMushSpan[k] = sp;
         gMushes += 1;
+        if (gMush[k].footShare > 0.0 && gMush[k].footMerge > 0.0) {
+            Mush foot = gMush[k];
+            foot.boundR = foot.stemR + foot.stemFlare + 2.0 * foot.footTop + length(foot.drift);
+            foot.boundTop = foot.footMerge;
+            vec2 fs = mushSpan(foot, dir);
+            fs.y = min(fs.y, scene);
+            if (fs.y > fs.x) {
+                if (length(foot.base.xz - PallSlot0[0].xy) < 1.0) { gFoot0 = k; gFootSpan0 = fs; }
+                if (length(foot.base.xz - PallSlot1[0].xy) < 1.0) { gFoot1 = k; gFootSpan1 = fs; }
+            }
+        }
         if (sp.y <= sp.x) continue;
         m0 = min(m0, sp.x);
         m1 = max(m1, sp.y);

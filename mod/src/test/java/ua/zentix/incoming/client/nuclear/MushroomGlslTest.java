@@ -332,7 +332,10 @@ class MushroomGlslTest {
             String at = m.group(1);
             max = Math.max(max, at.matches("\\d+") ? Integer.parseInt(at) : c.get(at).intValue());
         }
-        assertEquals(MushroomField.TEXELS - 1, max);
+        assertEquals(MushroomField.FOOT, max);
+        assertEquals(MushroomField.FOOT_COLUMNS, c.get("MUSH_FOOT_COLUMNS").intValue());
+        assertEquals(FootColumn.NODES, c.get("MUSH_FOOT_NODES").intValue());
+        assertEquals(MushroomField.TEXELS, MushroomField.FOOT_COLUMNS + FootColumn.NODES / 4);
     }
 
     /**

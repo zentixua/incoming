@@ -33,7 +33,8 @@ public final class MushroomField {
     /** Грибов в кадре, не больше. */
     public static final int MUSHROOMS = 4;
     /** Текселей RGBA на гриб ({@code mushroom.glsl}: таблица грибов). */
-    public static final int TEXELS = 20;
+    public static final int FOOT_COLUMNS = 20;
+    public static final int TEXELS = FOOT_COLUMNS + FootColumn.NODES / 4;
     /** Узлов света чёрного тела (строка {@link #BB_ROW}): температуры от {@link #BB_FROM} до {@link #BB_TO} K по логарифму. */
     public static final int BB_NODES = 256;
     static final double BB_FROM = 500, BB_TO = 30_000;
@@ -614,6 +615,8 @@ public final class MushroomField {
         groundUnder(a, d.blocks(s.stemR()), partial, GROUND);
         put(into, o, SHADOW_TOP, Math.max(worldTop - d.groundY(), 16), GROUND[0], GROUND[1], GROUND[2]);
         put(into, o, FOOT, FOOT_LAYER[0], FOOT_LAYER[1], FOOT_LAYER[2], FOOT_LAYER[3]);
+        new FootColumn(FOOT_LAYER[0], FOOT_LAYER[1], FOOT_LAYER[2], Math.min(FOOT_LAYER[3], d.blocks(s.stemTop())), FOOT_LAYER[4])
+                .pack(FOOT_LAYER[4], into, o + 4 * FOOT_COLUMNS);
     }
 
     private static final double[] FOOT_LAYER = new double[5], LAYER_AT = new double[2];

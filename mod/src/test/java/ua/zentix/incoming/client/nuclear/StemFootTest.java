@@ -121,6 +121,19 @@ class StemFootTest {
     private static final Case[] CASES = {Case.of(15, 0, 45), Case.of(15, 0, 60), Case.of(15, 0, 120), Case.of(15, 0, 240),
             Case.of(15, 592, 60), Case.of(15, 592, 120), Case.of(1, 0, 30), Case.of(1, 0, 90)};
 
+    /** Свет притока должен теряться в его собственной пыли над верхом прежнего ковра. */
+    @Test
+    void denseFootIncludesItsOwnOverburden() {
+        for (Case c : CASES) {
+            FootColumn column = new FootColumn(c.top(), c.foot[1], c.foot[2], Math.min(c.foot[3], c.s.stemTop()), c.foot[4]);
+            double tau = column.above(c.top());
+            assertTrue(tau >= 0);
+            if (c.foot[4] > 1.5 * c.top() && c.foot[3] > 2 * c.top()) {
+                assertTrue(tau > 0.3, c.name + ": поднятая пыль над верхом ковра обязана затенять сама себя: " + tau);
+            }
+        }
+    }
+
     /** Подсос есть у каждого мига: иначе проверки ниже ничего не проверяют. */
     @Test
     void everyCaseHasInflow() {
@@ -197,27 +210,20 @@ class StemFootTest {
 
     /**
      * Ножка вдали от основания — как без подсоса: выше высоты слияния (с запасом в десятую: на ней подсос и ножка равны) и внутри ножки (ближе 0,6 её радиуса к оси) подсос
-     * ничего не прибавляет, а узор её пятен там тот же (путь — высота, поворота нет: {@code mushFootPath},
-     * {@code mushFootTurn}). Иначе подсос во всю ножку стоял внутри густотой ковра до фронта своей пыли — кольцо поперёк
+     * ничего не прибавляет; исходный узор ножки держит ShaderSourceTest. Иначе подсос во всю ножку стоял внутри густотой ковра до фронта своей пыли — кольцо поперёк
      * ножки, — а поворот, меняющийся с высотой, клонил её струи «ёлочкой» (ревью кадров первого варианта).
      */
     @Test
     void stemAwayFromTheFootIsAsBefore() {
-        GlslFunction path = GlslFunction.parse(GLSL, "mushFootPath"), turn = GlslFunction.parse(GLSL, "mushFootTurn");
         for (Case c : CASES) {
             double top = c.top(), merge = c.foot[4];
             for (double h = 0; h <= 6 * top; h += 0.05 * top) {
-                double r = c.wall(h), band = c.band(h);
+                double r = c.wall(h);
                 for (double rho = 0; rho <= r + 2 * top; rho += 0.05 * r) {
                     boolean away = h >= 1.1 * merge || rho <= 0.6 * r;
                     if (away) {
                         assertTrue(Math.abs(c.dust(rho, h, true) - c.dust(rho, h, false)) <= 1e-12,
                                 c.name + String.format(Locale.ROOT, ": подсос на %.0f м, %.0f от оси", h, rho));
-                    }
-                    if (rho <= r || band <= 0) {
-                        Map<String, Double> at = Map.of("h", h, "rho", rho, "r", r, "band", band, "top", top);
-                        assertTrue(Math.abs(path.call(at) - h) <= 1e-9 && Math.abs(turn.call(at)) <= 1e-9,
-                                c.name + String.format(Locale.ROOT, ": узор ножки сдвинут на %.0f м, %.0f от оси", h, rho));
                     }
                 }
             }
