@@ -124,15 +124,15 @@ class SmokeFillTest {
 
         @Override
         public boolean gaussian(FarView view, double x,double y,double z,double sh,double sv,double ext,
-                                double across,double card,double power,double detail,FxAtlas.Sprite sprite,float mix,float shade,
+                                double across,double card,FxAtlas.Sprite sprite,float mix,float shade,
                                 float r,float g,float b,float coverage) {
             double[] rect=new double[4];
-            boolean visible=clip.project(x,y,z,sh,sv,ext,detail>=1?Math.sqrt(2)*card:Double.POSITIVE_INFINITY,
+            boolean visible=clip.project(x,y,z,sh,sv,ext,Double.POSITIVE_INFINITY,
                     view.forward(),view.left(),view.up(),W,H,rect);
             double peak=ext/(2*Math.PI*sh*Math.min(sh,sv));
             boolean field=context>0 && visible && coverage*(-Math.expm1(-peak))<=ua.zentix.incoming.client.fx.layer.GaussianFields.MAX_ALPHA &&
                     (rect[2]-rect[0])*(rect[3]-rect[1])/(4*W*H)>=0.05;
-            gaussians.add(new double[]{x,y,z,sh,sv,ext,coverage,card,power,ClubFrames.frame(sprite),mix,across,detail,
+            gaussians.add(new double[]{x,y,z,sh,sv,ext,coverage,card,0,ClubFrames.frame(sprite),mix,across,0,
                     ClubFrames.mirrored(sprite)?1:0,context,field?1:0,rect[0],rect[1],rect[2],rect[3]});
             meshes=null;
             if(SmokePuffs.lies(sh,sv,y,Math.sqrt(x*x+y*y+z*z))) lastFlatShade=shade;
@@ -207,23 +207,14 @@ class SmokeFillTest {
         }
 
         private double gaussianClear(double[] c,double u,double v) throws IOException {
+            // Individual GPU rectangles cannot contribute beyond their actual raster bounds.
+            if(c[15]==0 && (c[18]<=c[16] || c[19]<=c[17] || u<c[16] || u>c[18] || v<c[17] || v>c[19]))return 1;
+
             Vector3f f=view.forward(),l=view.left(),up=view.up();
             double rx=f.x+u*l.x+v*up.x,ry=f.y+u*l.y+v*up.y,rz=f.z+u*l.z+v*up.z;
             double n=Math.sqrt(rx*rx+ry*ry+rz*rz);
-            double depth=c[0]*f.x+c[1]*f.y+c[2]*f.z;
-            double sigmaDepth=Math.sqrt(c[3]*c[3]*(f.x*f.x+f.z*f.z)+c[4]*c[4]*f.y*f.y);
-            double plane=Math.hypot(Math.max(depth,0),sigmaDepth),forward=(rx*f.x+ry*f.y+rz*f.z)/n;
-            double px=rx/n*plane/forward-c[0],py=ry/n*plane/forward-c[1],pz=rz/n*plane/forward-c[2];
-            double x=-(px*l.x+py*l.y+pz*l.z)/c[3],y=(px*up.x+py*up.y+pz*up.z)/c[11];
             double modelTau=SmokePuffs.sightDepth(c[0],c[1],c[2],c[3],c[4],c[5],rx/n,ry/n,rz/n);
-            double model=-Math.expm1(-modelTau);
-            if(Math.abs(x)>=c[7] || Math.abs(y)>=c[7])return 1-c[6]*model;
-            double photoTau=ClubFrames.depth((int)c[9],c[10],c[13]>0,x/c[7],y/c[7],c[8]);
-            double referenceTau=c[5]/(2*Math.PI*c[3]*c[11])*Math.exp(-0.5*(x*x+y*y));
-            double optical=-Math.expm1(-modelTau*photoTau/Math.max(referenceTau,1e-8));
-            double window=Math.clamp(c[7]-Math.max(Math.abs(x),Math.abs(y)),0,1);window=window*window*(3-2*window);
-            double detail=c[12]*window;
-            return 1-c[6]*((1-detail)*model+detail*optical);
+            return 1-c[6]*(-Math.expm1(-modelTau));
         }
 
         private void ensureMeshes() throws IOException {
@@ -501,12 +492,6 @@ class SmokeFillTest {
     }
 
     @Test
-    void anisotropicBakeReturnsToFullDetailBeyondItsVisibleAngularFootprint() {
-        org.junit.jupiter.api.Assertions.assertEquals(1, SmokePuffs.detailOutside(0,8,300,20,1,10), 0);
-        org.junit.jupiter.api.Assertions.assertEquals(0, SmokePuffs.detailOutside(0,0,1,20,1,10), 0);
-    }
-
-    @Test
     void nearFieldObliqueAndFlatCloudsKeepTheirBulkRayDensity() throws IOException {
         for (double sv : new double[]{1, 10, 30}) for (double side : new double[]{0, 18})
                 for (double peak : new double[]{0.001, 0.01, 0.1, 1, 10}) {
@@ -592,6 +577,27 @@ class SmokeFillTest {
     }
 
     @Test
+    void raysOutsideThePhotoRetainTheMediumWithinItsActualRasterBounds() throws IOException {
+        FarView view=view(Vec3.ZERO,new Vector3f(0,0,1));
+        for(double peak:new double[]{0.1,10,10000}) {
+            Screen screen=isolatedCloud(view,10,1,2*Math.PI*peak);
+            double[] g=screen.gaussians.getFirst();
+            g[15]=0; // Test an individual raster primitive; source-mesh interpolation is covered separately.
+            int tested=0;
+            for(int i=0;i<200;i++) {
+                double u=-W+(i+0.5)*2*W/200;
+                if(Math.abs(u)*Math.sqrt(101)<=g[7])continue;
+                double n=Math.sqrt(1+u*u);
+                double expected=Math.exp(-SmokePuffs.sightDepth(0,0,10,1,1,2*Math.PI*peak,u/n,0,1/n));
+                org.junit.jupiter.api.Assertions.assertEquals(expected,screen.transmittance(u,0),1e-5,"the photograph is not a material boundary");
+                tested++;
+            }
+            assertTrue(tested>0,"sample real rays beyond the finite photograph");
+        }
+        SmokePuffs.resetBudget();
+    }
+
+    @Test
     void aFiniteBakeWindowCannotCutAVisibleLineThroughTheMedium() throws IOException {
         FarView view=view(Vec3.ZERO,new Vector3f(0,0,1));
         for(double peak:new double[]{10,10000}) {
@@ -609,30 +615,18 @@ class SmokeFillTest {
         double peak=10000,sigma=1,ext=2*Math.PI*peak;
         FarView view=view(Vec3.ZERO,new Vector3f(0,0,1));
         double radius=Math.sqrt(2*Math.log(peak/-Math.log1p(-Sight.THRESHOLD)));
-        double sampleU=0,sampleV=0,difference=0;
-        Screen probe=isolatedCloud(view,1.5*radius,sigma,ext);
-        double[] descriptor=probe.gaussians.getFirst();
-        for(int y=0;y<60;y++) for(int x=0;x<120;x++) {
-            double u=-W+(x+0.5)*2*W/120,v=-H+(y+0.5)*2*H/60;
-            descriptor[12]=0;double model=1-probe.transmittance(u,v);
-            descriptor[12]=1;double photo=1-probe.transmittance(u,v);
-            if(Math.abs(model-photo)>difference){difference=Math.abs(model-photo);sampleU=u;sampleV=v;}
-        }
-        assertTrue(difference>0.1,"real baked structure must differ from the smooth medium");
-        for(double weight:new double[]{0.9,0.99,0.999,0.9999,1}) {
-            double lo=radius,hi=2*radius;
-            for(int i=0;i<50;i++) {
-                double mid=(lo+hi)/2;
-                if(SmokePuffs.detailOutside(0,0,mid,sigma,sigma,peak)<weight)lo=mid;else hi=mid;
+        for(double distance:new double[]{0.5*radius,radius,1.5*radius,2*radius,4*radius}) {
+            Screen actual=isolatedCloud(view,distance,sigma,ext);
+            double[] g=actual.gaussians.getFirst();g[15]=0;double originalCard=g[7];
+            for(double photoScale:new double[]{0.1,0.5,1,2,10}) {
+                g[7]=originalCard*photoScale;
+                for(int y=0;y<8;y++)for(int x=0;x<12;x++) {
+                    double u=-W+(x+0.5)*2*W/12,v=-H+(y+0.5)*2*H/8,n=Math.sqrt(1+u*u+v*v);
+                    double expected=Math.exp(-SmokePuffs.sightDepth(0,0,distance,sigma,sigma,ext,u/n,v/n,1/n));
+                    org.junit.jupiter.api.Assertions.assertEquals(expected,actual.transmittance(u,v),1e-6,
+                            "a lighting LOD cannot change the column of matter, even at 10,000 optical depths");
+                }
             }
-            Screen actual=isolatedCloud(view,(lo+hi)/2,sigma,ext);
-            double[] g=actual.gaussians.getFirst();double blend=g[12];
-            g[12]=0;double model=1-actual.transmittance(sampleU,sampleV);
-            g[12]=1;double photo=1-actual.transmittance(sampleU,sampleV);
-            g[12]=blend;
-            org.junit.jupiter.api.Assertions.assertEquals((1-blend)*model+blend*photo,
-                    1-actual.transmittance(sampleU,sampleV),1e-6,
-                    "an opaque medium must blend coverage, not keep an opaque optical-depth trace");
         }
         SmokePuffs.resetBudget();
     }

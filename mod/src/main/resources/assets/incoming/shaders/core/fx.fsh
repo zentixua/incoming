@@ -49,7 +49,6 @@ in vec3 worldPos;
 in float sixTau;
 flat in vec4 gaussian0;
 flat in vec4 gaussian1;
-flat in float gaussianMix;
 
 // запечённый клуб (FxAtlas.puff6): x — шаг карт по листу (v), y — начало кадров (v), z и w — размер кадра (u, v)
 uniform vec4 FxSix;
@@ -61,9 +60,7 @@ uniform float FxFieldAlpha;
 uniform vec3 FxSkyTint;
 
 out vec4 fragColor;
-float gaussianReferenceTau;
-float gaussianPhotoWindow;
-bool gaussianPhotoSupport;
+float gaussianLightWindow;
 
 // Finite tangent frames even when an enormous grazing card has an unresolved UV derivative.
 vec3 unitOr(vec3 v, vec3 fallback) {
@@ -134,15 +131,11 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
         vec3 at=ray*(plane/max(dot(ray,forward),1e-4))-gaussian0.xyz;
         vec2 photo=vec2(dot(at,wr)/gaussian0.w,dot(at,wu)/gaussian1.z);
         local=(0.5+0.5*vec2(photo.x,-photo.y)/gaussian1.w)*tile;
-        float peak=gaussian1.y/(6.2831853072*gaussian0.w*gaussian1.z);
-        gaussianReferenceTau=peak*exp(-0.5*dot(photo,photo));
-        gaussianPhotoSupport=true;
-        gaussianPhotoWindow=smoothstep(0.0,1.0,gaussian1.w-max(abs(photo.x),abs(photo.y)));
+        gaussianLightWindow=smoothstep(0.0,1.0,gaussian1.w-length(photo));
         uv = origin + local;
         dx = dFdx(uv); dy = dFdy(uv);
         if (any(lessThan(local,vec2(0.0))) || any(greaterThan(local,tile))) {
             // The finite bake window cannot discard the real Gaussian material outside it.
-            gaussianPhotoSupport=false;
             a=vec4(vec3(FxSixLight.z),0.0);b=vec3(FxSixLight.z);return;
         }
     }
@@ -187,8 +180,8 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
         }
     }
     if (analytic) {
-        a.rgb = gaussianPhotoLight(a.rgb, FxSixLight.z, gaussianPhotoWindow, a.a);
-        b = gaussianPhotoLight(b, FxSixLight.z, gaussianPhotoWindow, a.a);
+        a.rgb = gaussianPhotoLight(a.rgb, FxSixLight.z, gaussianLightWindow, a.a);
+        b = gaussianPhotoLight(b, FxSixLight.z, gaussianLightWindow, a.a);
     }
 
 }
@@ -240,14 +233,13 @@ float glowAlpha(float r) {
 }
 
 // Gaussian ray geometry supplies amplitude and finite-path coverage to the accepted calibrated bake.
-// Inside the visible support, cross-fade coverage toward the smooth analytic medium.
-// A card in a fixed camera plane would expand oblique nearby rays and create extra opacity.
+// The same law covers every view, including an eye inside the medium; lighting LOD never changes opacity.
 float gaussianErf(float x) {
     float a = abs(x), t = 1.0 / (1.0 + 0.3275911 * a);
     float y = 1.0 - (((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*exp(-a*a);
     return sign(x)*y;
 }
-float gaussianAlpha(float sceneDistance, float bakedAlpha) {
+float gaussianAlpha(float sceneDistance) {
     vec3 ray = normalize(worldPos);
     vec3 invSigma = 1.0 / vec3(gaussian0.w, gaussian1.x, gaussian0.w);
     vec3 p = gaussian0.xyz * invSigma, r = ray * invSigma;
@@ -256,13 +248,11 @@ float gaussianAlpha(float sceneDistance, float bakedAlpha) {
     float b2 = dot(perpendicular, perpendicular);
     float tail = sceneDistance < 1e8 ? gaussianErf((speed * sceneDistance * length(worldPos) / viewDistance - a) * 0.7071067812) : 1.0;
     float cdf = 0.5 * max(tail + gaussianErf(a * 0.7071067812), 0.0);
-    float ratio = gaussian1.z / (gaussian0.w * gaussian1.x * speed);
     float modelTau=gaussian1.y/(6.2831853072*gaussian0.w*gaussian0.w*gaussian1.x*speed)*exp(-0.5*b2)*cdf;
     float modelAlpha=1.0-exp(-modelTau);
-    if(!gaussianPhotoSupport)return modelAlpha;
-    float photoTau=-log(max(1.0-bakedAlpha,1.0/255.0))*sixTau;
-    float transferred=1.0-exp(-modelTau*photoTau/max(gaussianReferenceTau,1e-8));
-    return mix(modelAlpha,transferred,gaussianMix*gaussianPhotoWindow);
+    // The photograph supplies light detail, never a different column of matter.
+    // A 2D alpha cannot represent the finite, oblique ray through a 3D Gaussian.
+    return modelAlpha;
 }
 
 void main() {
@@ -320,7 +310,7 @@ void main() {
         sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(contrast / 2.2));
         // толща клуба — толща кадра (α = 1 − e^(−τ) запекания, байт 255 — пропускание 1/255) × sixTau: перекрытые клубы
         // складываются, как толщи (PuffOptics)
-        float k = analytic ? gaussianAlpha(sceneDistance, a.a) : 1.0 - pow(max(1.0 - a.a, 1.0 / 255.0), sixTau);
+        float k = analytic ? gaussianAlpha(sceneDistance) : 1.0 - pow(max(1.0 - a.a, 1.0 / 255.0), sixTau);
         tex = vec4(vec3(k), k);
     } else if (nearest > 0.55) {
         tex = fireFrames(texCoord0, dx, dy, opacity);

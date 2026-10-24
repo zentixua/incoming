@@ -104,10 +104,10 @@ class PlumeContinuityTest {
 
         @Override
         public boolean gaussian(FarView view,double x,double y,double z,double sh,double sv,double ext,double across,
-                                double card,double power,double detail,FxAtlas.Sprite sprite,float mix,float shade,
+                                double card,FxAtlas.Sprite sprite,float mix,float shade,
                                 float r,float g,float b,float coverage) {
             if(rayPuffs==null) rayPuffs=new SmokeFillTest.Screen(view);
-            return rayPuffs.gaussian(view,x,y,z,sh,sv,ext,across,card,power,detail,sprite,mix,shade,r,g,b,coverage);
+            return rayPuffs.gaussian(view,x,y,z,sh,sv,ext,across,card,sprite,mix,shade,r,g,b,coverage);
         }
 
         /** Клубы лицом к камере, лежащие на горизонтали (слой пыли у земли, {@code FxQuads.flat}) и ленты. */

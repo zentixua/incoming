@@ -69,7 +69,6 @@ out vec3 worldPos;
 out float sixTau;
 flat out vec4 gaussian0;
 flat out vec4 gaussian1;
-flat out float gaussianMix;
 const float SIX_TAU_STEPS = 1024.0;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
@@ -154,16 +153,13 @@ vec4 fieldColor(int first,int count,vec3 ray,float end) {
             vec2 uv1=clamp(next+local*tile+motion*(1.0-photo.z),next+edge,next+tile-edge);
             vec4 a0=textureLod(Sampler0,uv0,0.0),a1=textureLod(Sampler0,uv1,0.0);
             vec4 b0=textureLod(Sampler0,uv0+vec2(0,FxSix.x),0.0),b1=textureLod(Sampler0,uv1+vec2(0,FxSix.x),0.0);
-            float reference=g.y/(6.2831853072*c.w*g.z)*exp(-0.5*dot(position,position));
             float baked=mix(a0.a,a1.a,photo.z);
-            float photoTau=-log(max(1.0-baked,1.0/255.0))*photo.w;
-            float transferred=1.0-exp(-tau*photoTau/max(reference,1e-8));
-            float window=smoothstep(0.0,1.0,g.w-max(abs(position.x),abs(position.y)));
-            alpha=mix(alpha,transferred,style.x*window);
+            // Optical coverage is the finite Gaussian ray integral; the photo supplies illumination.
             vec3 la=mix(pow(a0.rgb/max(a0.a,1e-3),vec3(2.2)),pow(a1.rgb/max(a1.a,1e-3),vec3(2.2)),photo.z);
             vec3 lb=mix(pow(b0.rgb/max(b0.a,1e-3),vec3(2.2)),pow(b1.rgb/max(b1.a,1e-3),vec3(2.2)),photo.z);
-            la=gaussianPhotoLight(la,FxSixLight.z,window,baked);
-            lb=gaussianPhotoLight(lb,FxSixLight.z,window,baked);
+            float lightWindow=smoothstep(0.0,1.0,g.w-length(position));
+            la=gaussianPhotoLight(la,FxSixLight.z,lightWindow,baked);
+            lb=gaussianPhotoLight(lb,FxSixLight.z,lightWindow,baked);
             if(c.w>3.0*g.x && c.w*abs(c.y)>g.x*length(c.xyz)) {
                 wr=normalize(vec3(wr.x,0,wr.z));wn=vec3(0,c.y<0.0?1.0:-1.0,0);wu=cross(wn,wr);
             }
@@ -195,7 +191,6 @@ void main() {
     vec4 light = (field || Normal.y < -0.5) ? vec4(1.0) : texelFetch(Sampler2, six ? ivec2(15) : UV2 / 16, 0);
     sixTau = six ? exp2(float(UV2.x) / SIX_TAU_STEPS) : 1.0;
     int gaussian = six ? (UV2.y & 65535) : 0;
-    gaussianMix = gaussian > 0 ? (float(UV1.y) - 1.0) / 32766.0 : 0.0;
     if (gaussian > 0) unfold = 1.0; // The near raster rectangle does not need distance folding.
     gaussian0 = vec4(0.0);
     gaussian1 = vec4(0.0);

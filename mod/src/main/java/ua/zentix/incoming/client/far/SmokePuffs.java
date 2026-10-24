@@ -48,9 +48,9 @@ final class SmokePuffs {
         void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                    float b, float a, double tau);
 
-        /** Gaussian impostor: calibrated photo texture with exact finite-ray transport. */
+        /** Exact finite-ray Gaussian opacity; the calibrated photograph supplies six-way light. */
         default boolean gaussian(FarView view, double x, double y, double z, double sh, double sv, double ext,
-                                 double across, double card, double power, double detail, FxAtlas.Sprite sprite, float mix, float shade,
+                                 double across, double card, FxAtlas.Sprite sprite, float mix, float shade,
                                  float r, float g, float b, float coverage) { return false; }
 
         void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
@@ -267,18 +267,6 @@ final class SmokePuffs {
     static double offAxis(FarView view, double px, double py, double pz, double d) {
         double cos = (px * view.forward().x + py * view.forward().y + pz * view.forward().z) / Math.max(d, 1e-9);
         return 1 / Math.sqrt(Math.clamp(cos, 0.3, 1));
-    }
-
-    /** Fade the bake only after entering the Gaussian's visible optical support, never its transparent card padding. */
-    static double detailOutside(double x,double y,double z,double sh,double sv,double tau) {
-        double visible=Math.max(Math.sqrt(2*Math.log(2)),Math.sqrt(2*Math.log(Math.max(1,tau/-Math.log1p(-Sight.THRESHOLD)))));
-        double q=Math.sqrt((x*x+z*z)/(sh*sh)+y*y/(sv*sv));
-        // A flat bake is a parallel-ray projection. Near an anisotropic cloud its transverse variance
-        // changes appreciably across the ray fan; retain exact angular transport for that part.
-        // The variance/range² ratio vanishes in the far field and for a spherical cloud (approximation).
-        double distance2=x*x+y*y+z*z;
-        double parallel=smoothstep(0,1,distance2/Math.max(visible*visible*Math.abs(sh*sh-sv*sv),1e-12));
-        return smoothstep(visible,2*visible,q)*parallel;
     }
 
     /**
@@ -666,7 +654,7 @@ final class SmokePuffs {
                 long hash = mix(seed * 0x9E3779B97F4A7C15L + id);
                 float light = (float) ((0.88 + 0.24 * unit(hash)) * view.skyLight());
                 int frame = (int) clubAge;
-                if (out.gaussian(view, px, py, pz, sh, sv, ks + kd + kw, across, c1, CLUB[1], detailOutside(px,py,pz,sh,sv,tau),
+                if (out.gaussian(view, px, py, pz, sh, sv, ks + kd + kw, across, c1,
                         spray ? FxAtlas.spray6(frame, (hash&1)!=0) : FxAtlas.puff6(frame, (hash&1)!=0), (float)(clubAge-frame),
                         (float)(shade(ks,kd,kw,dg)/(spray ? SPRAY_K : BAKED_K)),
                         thick(ks,kd,kw,dr)*light, thick(ks,kd,kw,dg)*light, thick(ks,kd,kw,db)*light, (float)(vis*air*coverage))) return 0;

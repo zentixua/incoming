@@ -191,18 +191,18 @@ public final class FarSprites implements SmokePuffs.Out {
 
     @Override
     public boolean gaussian(FarView view, double x, double y, double z, double sh, double sv, double ext,
-                            double across, double card, double power, double detail, FxAtlas.Sprite sprite, float mix, float shade,
+                            double across, double card, FxAtlas.Sprite sprite, float mix, float shade,
                             float r, float g, float b, float coverage) {
         var f=view.forward(); var l=view.left(); var up=view.up();
         double aspect=veilAspect(), height=Math.tan(view.edge())/Math.sqrt(1+aspect*aspect), width=height*aspect;
-        if (!gaussianBounds.project(x,y,z,sh,sv,ext,detail>=1?Math.sqrt(2)*card:Double.POSITIVE_INFINITY,f,l,up,width,height,gaussianRect)) return true;
+        if (!gaussianBounds.project(x,y,z,sh,sv,ext,Double.POSITIVE_INFINITY,f,l,up,width,height,gaussianRect)) return true;
         double x0=gaussianRect[0], y0=gaussianRect[1], x1=gaussianRect[2], y1=gaussianRect[3];
         double peak=ext/(2*Math.PI*sh*Math.min(sh,sv));
         if(context!=null && coverage*(-Math.expm1(-peak))<=ua.zentix.incoming.client.fx.layer.GaussianFields.MAX_ALPHA &&
                 (x1-x0)*(y1-y0)/(4*width*height)>=0.05) {
             Field field=fields.computeIfAbsent(context,ignored->new Field());
             field.gaussians.add(new float[]{(float)x,(float)y,(float)z,(float)sh,(float)sv,(float)ext,(float)across,(float)card,
-                    r,g,b,coverage,Math.min(sprite.u0(),sprite.u1()),sprite.v0(),mix,(float)power,(float)detail,shade,
+                    r,g,b,coverage,Math.min(sprite.u0(),sprite.u1()),sprite.v0(),mix,0,0,shade,
                     sprite.u0()>sprite.u1()?1:0,0});
             field.x0=Math.min(field.x0,x0);field.y0=Math.min(field.y0,y0);field.x1=Math.max(field.x1,x1);field.y1=Math.max(field.y1,y1);
             double weight=ext*coverage;field.weightedDepth+=weight*Math.sqrt(x*x+y*y+z*z);field.weight+=weight;
@@ -210,7 +210,7 @@ public final class FarSprites implements SmokePuffs.Out {
         }
         int index=ua.zentix.incoming.client.fx.layer.GaussianData.add(x,y,z,sh,sv,ext,across,card);
         if (index==0) return false;
-        out.sixWay(mix,shade,power);
+        out.sixWay(mix,shade,1);
         out.gaussian(index);
         out.quad((float)Math.sqrt(x*x+y*y+z*z));
         for(int j=0;j<4;j++) {
@@ -219,7 +219,7 @@ public final class FarSprites implements SmokePuffs.Out {
                     (float)(SmokePuffs.VEIL_AT*(f.y+a*l.y+c*up.y)),
                     (float)(SmokePuffs.VEIL_AT*(f.z+a*l.z+c*up.z)),
                     j<2?sprite.u1():sprite.u0(),j==0||j==3?sprite.v1():sprite.v0(),
-                    r*coverage,g*coverage,b*coverage,coverage,0,(float)((1+32766*detail)/32767),LightTexture.FULL_BRIGHT,0);
+                    r*coverage,g*coverage,b*coverage,coverage,0,1,LightTexture.FULL_BRIGHT,0);
         }
         out.sixWay(-1);
         counts[0]++;

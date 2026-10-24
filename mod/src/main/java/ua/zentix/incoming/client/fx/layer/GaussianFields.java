@@ -8,7 +8,7 @@ import org.lwjgl.system.MemoryUtil;
 /**
  * Individually faint, broad Gaussians of one source, integrated on a sorted angular mesh.
  * Each five-texel record carries centre/sigmaH; sigmaV/extinction/projectedSigma/card;
- * material RGB/coverage; atlas origin/frame mix/optical power; detail/shade/mirror/reserved.
+ * material RGB/coverage; atlas origin/frame mix/reserved; reserved/shade/mirror/reserved.
  * The vertex shader applies the same finite-ray transport, photo and six-way lighting as individual clubs.
  * The mesh is a sampling approximation: SmokeFillTest includes its triangle interpolation in the density check.
  */
