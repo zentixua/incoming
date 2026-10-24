@@ -31,7 +31,8 @@ import java.util.PriorityQueue;
  * <li><b>Где.</b> От точки удара вниз до первого блока с формой (дно воронки, пол под пробитой крышей, земля под мостом);
  * на воду или в пустоту — огня нет (плёнка на воде не держит горение, как у клиента). Дальше — растекание: из клеток, где
  * топливо уже лежит, к соседним по горизонтали, сперва ниже (с края стекает вниз до опоры), потом ближе к месту, куда
- * упало; вверх и сквозь стену — нет. Клеток — по площади закона ({@link FuelPool#cells}: шахед 5, ракета 9).</li>
+ * упало; по поверхности — и на ступень в блок вверх (брызги ложатся на всю чашу воронки, не только на дно), на стену в
+ * два блока и сквозь неё — нет. Клеток — по площади закона ({@link FuelPool#cells}: шахед 5, ракета 9).</li>
  * <li><b>Огонь.</b> Ванильный: {@link BaseFireBlock#getState} на клетке — на негорючем грунте стоит на верхней грани, как
  * огонь на незерраке, на горючем — жжёт его по правилам игры; распространение — правила игры и модов на огонь.</li>
  * <li><b>Пока горит.</b> Ванильный огонь на камне или земле гаснет сам за секунды (возраст выше 3 без горючего рядом),
@@ -117,9 +118,9 @@ public final class FuelFires {
 
     /**
      * Куда ложится {@code n} клеток топлива удара в {@code pos}: вниз до опоры ({@link #land}), потом растекание — сперва
-     * ниже, потом ближе к месту падения, по клеткам, где огонь держится ({@link #holds}); по клеткам без него (ступень
-     * плиты, тропинка) топливо проходит, но не горит. Первой — самая низкая (горит дольше всех). Пусто — некуда: вода,
-     * пустота, неготовые чанки.
+     * ниже, потом ближе к месту падения, на ступень вверх по поверхности ({@link #step}), по клеткам, где огонь держится
+     * ({@link #holds}); по клеткам без него (плита, тропинка) топливо проходит, но не горит. Первой — самая низкая (горит
+     * дольше всех). Пусто — некуда: вода, пустота, неготовые чанки.
      */
     static List<BlockPos> cells(ServerLevel level, Vec3 pos, int n) {
         BlockPos start = BlockPos.containing(pos);
@@ -141,14 +142,22 @@ public final class FuelFires {
             if (holds(level, p)) out.add(p);
             for (Direction d : Direction.Plane.HORIZONTAL) {
                 BlockPos q = p.relative(d);
-                // вверх и сквозь стену топливо не течёт; с края — вниз до опоры
-                if (!Terrain.ready(level, q) || !open(level, q)) continue;
-                BlockPos to = land(level, q);
+                if (!Terrain.ready(level, q)) continue;
+                // с края — вниз до опоры; ступень в блок — по поверхности (брызги ложатся на всю чашу воронки, не только на
+                // дно); выше и сквозь стену — нет
+                BlockPos to = open(level, q) ? land(level, q) : step(level, q);
                 if (to != null && seen.add(to.asLong())) front.add(to);
             }
         }
         out.sort(Comparator.comparingInt(BlockPos::getY));
         return out;
+    }
+
+    /** Клетка над блоком {@code q} с формой (ступень в блок по поверхности), если она свободна; иначе null. */
+    private static BlockPos step(ServerLevel level, BlockPos q) {
+        BlockPos up = q.above();
+        if (level.getBlockState(q).getCollisionShape(level, q).isEmpty() || !level.isInWorldBounds(up) || !open(level, up)) return null;
+        return up;
     }
 
     /** Квадрат расстояния по горизонтали. */
@@ -216,6 +225,7 @@ public final class FuelFires {
                 pool.live[k] = false;
                 return;
             }
+
             pool.cells[k] = cell = to;
             pool.relight[k] = now;
         }
