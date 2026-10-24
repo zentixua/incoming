@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
+import ua.zentix.incoming.client.fx.smoke.WaterBlast;
+import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.strike.WeaponType;
@@ -16,6 +18,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Взрывы вдали: облако по модели (и у бомбы под землёй), клубы за гребнем. */
 class FarBlastsTest {
+    /** Видимый фронт следует закону с первого кадра, а не прыгает на радиус столба; на самом краю нет тёмного обода. */
+    @Test
+    void waterWaveStartsAtItsOwnFrontWithASoftEdge() {
+        WaterBlast w = new WaterBlast(50, 0, 4, CloudModel.Air.STANDARD);
+        float[] dark = new float[WaterDecal.SAMPLES], foam = new float[WaterDecal.SAMPLES];
+        for (double t : new double[]{0.1, 1, 4, 10}) {
+            double front = FarBlasts.waterProfile(w, t, dark, foam);
+            assertEquals(w.waveRadius(t), front, 1e-9);
+            if (t == 0.1) assertTrue(front < w.radius, "первый кадр не растянут до радиуса столба");
+            assertEquals(0, dark[0], 0, "у самого фронта — прозрачный край");
+            for (float d : dark) assertTrue(d >= 0 && d <= 0.35, "нет плотного тёмного диска");
+        }
+    }
+
     /** Облака наземных взрывов — по модели, в стандартной атмосфере. */
     private static final List<CloudModel> MODELS = List.of(model(WeaponType.ROCKET), model(WeaponType.LOITER), model(WeaponType.DRONE),
             model(WeaponType.MISSILE));

@@ -285,19 +285,19 @@ public final class BlastEffects {
         /**
          * Взрыв на воде: столб брызг и водяная пыль — облако модели ({@link ua.zentix.incoming.client.fx.smoke.WaterBlast}
          * у события {@code FarBlasts}); здесь — струи и комья воды частицами: бросок со скоростью до √(2gH) (H — верх столба
-         * того же закона) из круга радиуса столба, почти отвесно (±15°, О), с настоящей тяжестью. Комьев — по одному на
-         * {@link #SPLASH_PER_KG} кг воды столба (О: видимые на экране струи, не капли), не больше {@link #MAX_CLODS}.
+         * того же закона) из полости в половину радиуса столба, в конусе струй закона, с настоящей тяжестью. Комьев — по
+         * одному на {@link #SPLASH_PER_KG} кг воды столба (О: видимые на экране струи, не капли), не больше {@link #MAX_CLODS}.
          */
         void splash(ClientLevel level, double tntKg) {
-            ua.zentix.incoming.client.fx.smoke.WaterBlast w = new ua.zentix.incoming.client.fx.smoke.WaterBlast(tntKg, CloudModel.Air.STANDARD);
+            ua.zentix.incoming.client.fx.smoke.WaterBlast w = FarBlasts.water(level, pos, tntKg, FarBlasts.air(level, pos));
             if (w.height <= 0) return;
             int n = (int) Math.min(MAX_CLODS, Math.round(w.water / SPLASH_PER_KG * Fx.density(pos)));
-            double v0 = Math.sqrt(2 * G * w.height) / 20;
+            double v0 = w.speed / 20;
             for (int i = 0; i < n; i++) {
-                double u = random.nextDouble(), v = v0 * Math.sqrt(u), az = random.nextDouble() * Math.PI * 2;
-                double tilt = Math.toRadians(15 * random.nextGaussian()), r = w.radius * Math.sqrt(random.nextDouble());
-                Vec3 at = pos.add(Math.cos(az) * r, 0.3, Math.sin(az) * r);
-                Fx.smoke().vel(Math.cos(az) * Math.sin(tilt) * v, Math.cos(tilt) * v, Math.sin(az) * Math.sin(tilt) * v).size(0.15f, 0.35f)
+                double u = random.nextDouble(), v = v0 * Math.sqrt(0.1 + 0.9 * u), az = random.nextDouble() * Math.PI * 2;
+                double tilt = w.cone * Math.sqrt(random.nextDouble()), r = 0.5 * w.radius * Math.sqrt(random.nextDouble());
+                Vec3 at = pos.add(Math.cos(az) * r, w.depth + 0.3, Math.sin(az) * r);
+                Fx.smoke().vel(Math.cos(az) * Math.sin(tilt) * v, Math.cos(tilt) * v, Math.sin(az) * Math.sin(tilt) * v).size(0.3f, 0.7f)
                         .life((int) Math.ceil(2 * v / GRAVITY) + 10).color(0xDCE6EC, 0xF2F5F7).alpha(0.9f).drag(0.995f).gravity((float) GRAVITY)
                         .collide().wind(0).fadeIn(0).fadeFrom(0.8f).budget(FxBudget.SPRAY).spawn(level, at);
             }
