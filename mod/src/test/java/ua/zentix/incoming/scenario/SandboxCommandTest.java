@@ -36,6 +36,17 @@ class SandboxCommandTest {
         assertFalse(SandboxCommand.parse("flight drone 600").own());
         assertTrue(SandboxCommand.parse("surface 0.01 black").effect());
         assertEquals(0.9, SandboxCommand.parse("surface 0.9 gray").number(0));
+        // налёт: оружие и пруд — по желанию; в пруд — не шире полупруда
+        SandboxCommand salvo = SandboxCommand.parse("raid 12 15 1 rocket water");
+        assertTrue(salvo.effect());
+        assertTrue(salvo.water());
+        assertEquals(WeaponType.ROCKET, salvo.raidWeapon());
+        assertEquals(WeaponType.DRONE, SandboxCommand.parse("raid 4 60 2").raidWeapon());
+        assertFalse(SandboxCommand.parse("raid 4 60 2").water());
+        assertTrue(SandboxCommand.parse("raid 4 30 2 water").water());
+        assertEquals(WeaponType.DRONE, SandboxCommand.parse("raid 4 30 2 water").raidWeapon());
+        assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("raid 4 60 2 rocket water"));
+        assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("raid 4 60 2 tank"));
     }
 
     /**

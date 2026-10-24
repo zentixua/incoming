@@ -48,9 +48,10 @@ final class SmokePuffs {
 
     /**
      * Чисел на ждущий клуб: место, σh, σv, сажа, пыль, капли, альбедо пыли (3), номер, источник, доля дыма (непрозрачность
-     * клуба, что не тело огня, {@link #smokeShare}).
+     * клуба, что не тело огня, {@link #smokeShare}), клуб ли это отрезка (1 — свой кадр, отражение и блуждание, как у
+     * клубов трубки).
      */
-    static final int FIELDS = 14;
+    static final int FIELDS = 15;
     /**
      * Клубы одного источника, чьи середины ближе этой доли меньшего σ (по горизонтали и по вертикали), — один гаусс с теми
      * же массой и моментами: их сумма от одного гаусса почти не отличается (у двух равных на расстоянии σ — на 1,3 % пика),
@@ -82,6 +83,9 @@ final class SmokePuffs {
                     if (gone[j]) continue;
                     int b = j * FIELDS;
                     if (held[a + 8] != held[b + 8] || held[a + 9] != held[b + 9] || held[a + 10] != held[b + 10]) continue;
+                    // клубы одного отрезка разложены по нему нарочно: слитые, они собрались бы в один гаусс, и плоский ряд
+                    // (пыль старта: шаг — по меньшей σ, соседи ближе σh) потерял бы длину
+                    if (held[a + 14] > 0.5 && held[b + 14] > 0.5 && (long) held[a + 11] / SEGMENT_CLUBS == (long) held[b + 11] / SEGMENT_CLUBS) continue;
                     double dx = held[b] - held[a], dy = held[b + 1] - held[a + 1], dz = held[b + 2] - held[a + 2];
                     double h = reach * Math.min(held[a + 3], held[b + 3]), v = reach * Math.min(held[a + 4], held[b + 4]);
                     if (dx * dx + dz * dz > h * h || Math.abs(dy) > v) continue;
@@ -99,6 +103,7 @@ final class SmokePuffs {
                     if (wb > wa) {
                         held[a + 11] = held[b + 11];
                         held[a + 12] = held[b + 12];
+                        held[a + 14] = held[b + 14];
                     }
                     double mx = held[a] + fb * dx, my = held[a + 1] + fb * dy, mz = held[a + 2] + fb * dz;
                     // второй момент около новой середины
@@ -163,6 +168,8 @@ final class SmokePuffs {
     static final double MAX_SHARE = 0.8;
     /** Клубы отрезка — через столько σ (меньшей из двух). */
     static final double SEGMENT_STEP = 1.2;
+    /** Клубов на отрезок — не больше (струя столба брызг — до ~17 σ своего сечения). */
+    static final int SEGMENT_CLUBS = 16;
     /**
      * Кадры — с этого. Прежний клуб (своя Mantaflow) начинался плотным круглым выбросом и шёл с третьего кадра; кадры
      * шапки облака взрыва EmberGen сверху ({@code tools/bake_fx}, puff-vdb) клубятся с первого.
@@ -413,14 +420,13 @@ final class SmokePuffs {
             double smoke = smokeShare(glow, kelvin, view.skyLuminance());
             if (smoke <= 0 || soot + dust + water <= 0 || !(sh > 0) || !(sv > 0)) return;
             double len = 2 * Math.sqrt(ax * ax + ay * ay + az * az);
-            if (len <= 0) {
-                hold(x, y, z, sh, sv, soot, dust, water, dustR, dustG, dustB, at * 16, smoke);
-                return;
-            }
-            int n = (int) Math.min(12, Math.max(1, Math.ceil(len / (SEGMENT_STEP * Math.min(sh, sv)))));
+            // клубы отрезка ждут, как клубы-точки: слияние и бюджет заливки кадра — у всех ({@link #flush}); идут рядом друг с
+            // другом, поэтому каждый — со своим кадром, отражением и блужданием, как клубы трубки (одинаковые — стопка монет)
+            int n = (int) Math.min(SEGMENT_CLUBS, Math.max(1, Math.ceil(len / (SEGMENT_STEP * Math.min(sh, sv)))));
             for (int k = 0; k < n; k++) {
                 double f = n == 1 ? 0 : (k + 0.5) / n * 2 - 1;
-                blob(x + ax * f, y + ay * f, z + az * f, sh, sv, soot / n, dust / n, water / n, dustR, dustG, dustB, at * 16 + k, smoke);
+                hold(x + ax * f, y + ay * f, z + az * f, sh, sv, soot / n, dust / n, water / n, dustR, dustG, dustB, at * SEGMENT_CLUBS + k, smoke,
+                        n > 1);
             }
         }
 
@@ -456,7 +462,7 @@ final class SmokePuffs {
 
         /** Клуб-точку источника — в ожидание: слияние с соседями и бюджет — в {@link #flush}. */
         private void hold(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
-                          int id, double smoke) {
+                          int id, double smoke, boolean vary) {
             if (holding * FIELDS + FIELDS > held.length) held = java.util.Arrays.copyOf(held, 2 * held.length);
             int o = holding++ * FIELDS;
             held[o] = x;
@@ -473,6 +479,7 @@ final class SmokePuffs {
             held[o + 11] = id;
             held[o + 12] = contexts - 1;
             held[o + 13] = smoke;
+            held[o + 14] = vary ? 1 : 0;
         }
 
         /** Клубы источника, что кончился, — слиты между собой ({@link #merge}). */
@@ -578,7 +585,7 @@ final class SmokePuffs {
             seed = ctxSeed[c];
             sprays = ctxSprays[c];
             return blob(held[o], held[o + 1], held[o + 2], held[o + 3], held[o + 4], held[o + 5], held[o + 6], held[o + 7], (float) held[o + 8],
-                    (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13]);
+                    (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13], held[o + 14] > 0.5);
         }
 
         /**
@@ -625,10 +632,11 @@ final class SmokePuffs {
 
         /**
          * Клуб: в проходе плана ({@link #planning}) — только сколько экранов закроет кучка при доле {@link #share}; иначе —
-         * квадраты и вуаль. Возвращает заливку, экранов.
+         * квадраты и вуаль. vary — клуб отрезка: свой кадр, отражение и блуждание середины, как у клубов трубки ({@link #club}).
+         * Возвращает заливку, экранов.
          */
         private double blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
-                            int id, double smoke) {
+                            int id, double smoke, boolean vary) {
             Vec3 eye = view.camera();
             // на экране — проекция гаусса по углу взгляда (толща по лучу и высота квадрата); в мире — его σ (разброс клубов
             // кучки, край для рельефа и для глаза внутри)
@@ -643,7 +651,15 @@ final class SmokePuffs {
             double vis = source.visible(y, r);
             if (vis <= 0) return 0;
             Vec3 cam = view.camera();
+            long h = mix(seed * 0x9E3779B97F4A7C15L + id);
             double px = x - cam.x, py = y - cam.y, pz = z - cam.z;
+            if (vary) {
+                // клубы отрезка идут рядом: середина гуляет ({@link #meander}, ⚠ оценка), иначе — ровный ряд
+                double m = meander(Math.min(sh, sv), tau);
+                px += m * gauss(h >>> 3);
+                py += m * gauss(h >>> 11);
+                pz += m * gauss(h >>> 19);
+            }
             double d = Math.sqrt(px * px + py * py + pz * pz);
             double air = view.air(d, py);
             if (air < Sight.THRESHOLD) return 0;
@@ -668,7 +684,6 @@ final class SmokePuffs {
             if (!FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return 0;
             Sight.point(rh, 1, 1, d, view.pixel(), point);
             double grow = point[0] / rh;
-            long h = mix(seed * 0x9E3779B97F4A7C15L + id);
             // свет неба — яркость того, каким карта освещения светит блоки и частицы под открытым небом (FarView.sky), с
             // разбросом клуба; его оттенок (ночью — сиреневый) — в шейдере только у света неба, не у огня (FxSkyTint)
             float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
@@ -715,10 +730,11 @@ final class SmokePuffs {
                 // разброс размера — у клубов кучки (разнообразие); одиночный клуб — весь гаусс, без разброса: иначе его
                 // площадь, а с ней и вещество на экране, гуляла бы на ±44 %
                 double k = count == 1 ? 1 : size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
-                double frame = clubFrame(clubAge, unit(hj >>> 28), count > 1);
+                double frame = clubFrame(clubAge, unit(hj >>> 28), count > 1 || vary);
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
-                FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, (j & 1) == 1) : FxAtlas.puff6(f0, (j & 1) == 1);
+                boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
+                FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, mirror) : FxAtlas.puff6(f0, mirror);
                 // лежащий клуб сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет сбоку и
                 // сзади) нет, свет солнца, неба и огня — весь (степень тени 0; свет шаров — в каждом пикселе, fx.fsh); снизу —
                 // как обычно. Мягкость у рельефа — путь луча в слое до земли (rw / sin e), не полуразмер
