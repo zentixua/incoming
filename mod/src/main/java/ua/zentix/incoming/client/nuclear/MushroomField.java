@@ -32,8 +32,9 @@ import java.util.WeakHashMap;
 public final class MushroomField {
     /** Грибов в кадре, не больше. */
     public static final int MUSHROOMS = 4;
-    /** Текселей RGBA на гриб ({@code mushroom.glsl}: таблица грибов). */
+    /** Первый тексель столбов поднятой пыли: 64 высоты, по четыре на тексель ({@link FootColumn}). */
     public static final int FOOT_COLUMNS = 20;
+    /** Текселей RGBA на гриб ({@code mushroom.glsl}: таблица грибов). */
     public static final int TEXELS = FOOT_COLUMNS + FootColumn.NODES / 4;
     /** Узлов света чёрного тела (строка {@link #BB_ROW}): температуры от {@link #BB_FROM} до {@link #BB_TO} K по логарифму. */
     public static final int BB_NODES = 256;
