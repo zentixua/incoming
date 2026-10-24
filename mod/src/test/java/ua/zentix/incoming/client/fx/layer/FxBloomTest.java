@@ -314,6 +314,8 @@ class FxBloomTest {
         assertTrue(fsh.contains("fragColor = color * seen * ColorModulator;"), "цвет — с видимой долей");
         assertTrue(fsh.contains("fragColor = vec4(glow * seen * ColorModulator.rgb, fragColor.a);"), "излучение — с той же долей и альфой цвета");
         assertTrue(fsh.contains("fragCover = vec4(covers, 0.0, 0.0, fragColor.a);"), "закрытое перед ореолом — с альфой цвета");
+        String bloom = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/fx/layer/FxBloom.java"));
+        assertTrue(!bloom.contains("enableScissor"), "проход свечения — во весь кадр: в ножницах рамки светящихся дым за ней ореол не гасил (прямоугольный край)");
         assertTrue(fsh.contains("glow *= front;"), "пелена перед огнём гасит и излучение");
         assertTrue(!fsh.contains("color *="), "цвет не гасится мимо видимой доли");
         assertTrue(fsh.contains("if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);"), "мягкий край у мира — в видимой доле");

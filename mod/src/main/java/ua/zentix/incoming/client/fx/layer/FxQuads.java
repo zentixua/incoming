@@ -50,8 +50,13 @@ public final class FxQuads {
     private float[] keys = new float[0];
     /** Квадрат светится (хоть одна вершина с {@link #emission}). */
     private boolean[] emits = new boolean[0];
-    /** После {@link #draw}: место самого дальнего светящегося в отсортированном порядке (n — нет светящихся). */
+    /** После {@link #draw}: начало прохода свечения в отсортированном порядке ({@link #glowStart}; n — нет светящихся). */
     private int glowFrom;
+    /**
+     * Глубина, ближе которой квадраты закрывают ореол светящихся ({@link #glowStart}): наибольшее у светящихся кадра
+     * расстояние с полуразмером квадрата.
+     */
+    private float glowReach;
     /** Рамка вершин светящихся квадратов кадра (от камеры): x, y, z наименьшие, потом наибольшие. */
     private final float[] glowBox = new float[6];
     /** Угол пикселя прохода свечения, рад ({@link FxBloom#texel}); 0 — свечения нет. */
@@ -75,6 +80,7 @@ public final class FxQuads {
         nearest = opacity = emit = 0;
         probe = 0;
         glows = false;
+        glowReach = -Float.MAX_VALUE;
         Arrays.fill(glowBox, 0, 3, Float.MAX_VALUE);
         Arrays.fill(glowBox, 3, 6, -Float.MAX_VALUE);
     }
@@ -237,7 +243,34 @@ public final class FxQuads {
             glowBox[5] = Math.max(glowBox[5], z);
         }
         write = p + VERTEX;
-        if (++corner == 4 && emits[n - 1] && !spotting) spots(n - 1);
+        if (++corner == 4 && emits[n - 1]) {
+            reach(n - 1);
+            if (!spotting) spots(n - 1);
+        }
+    }
+
+    /**
+     * Светящийся квадрат i достаёт по глубине до своего расстояния с полуразмером (настоящим: вершины вдали перенесены
+     * ближе): кадр шара стоит у передней половины шара, а ореол — свет воздуха вокруг всего огня, и рукава дыма сбоку на
+     * глубине его середины стоят перед частью этого воздуха.
+     */
+    private void reach(int i) {
+        long q = stage + (long) i * QUAD;
+        float cx = 0, cy = 0, cz = 0;
+        for (int k = 0; k < 4; k++) {
+            long p = q + (long) k * VERTEX;
+            cx += MemoryUtil.memGetFloat(p) / 4;
+            cy += MemoryUtil.memGetFloat(p + 4) / 4;
+            cz += MemoryUtil.memGetFloat(p + 8) / 4;
+        }
+        float half = 0;
+        for (int k = 0; k < 4; k++) {
+            long p = q + (long) k * VERTEX;
+            float dx = MemoryUtil.memGetFloat(p) - cx, dy = MemoryUtil.memGetFloat(p + 4) - cy, dz = MemoryUtil.memGetFloat(p + 8) - cz;
+            half = Math.max(half, (float) Math.sqrt(dx * dx + dy * dy + dz * dz));
+        }
+        float unfold = Math.max((MemoryUtil.memGetShort(q + 26) & 0xFFFF) / (float) Short.MAX_VALUE, 1e-4f);
+        glowReach = Math.max(glowReach, keys[i] + half / unfold);
     }
 
     private final float[] corners = new float[12];
@@ -380,12 +413,7 @@ public final class FxQuads {
         glowFrom = n;
         if (n == 0) return;
         int[] order = sort.sort(keys, n);
-        for (int i = 0; i < n; i++) {
-            if (emits[order[i]]) {
-                glowFrom = i;
-                break;
-            }
-        }
+        glowFrom = glowStart(order);
         long dst = out.reserve(n * QUAD);
         for (int i = 0; i < n; i++) MemoryUtil.memCopy(stage + (long) order[i] * QUAD, dst + (long) i * QUAD, QUAD);
         ByteBufferBuilder.Result result = out.build();
@@ -398,8 +426,25 @@ public final class FxQuads {
     }
 
     /**
-     * После {@link #draw}: ещё раз шейдером s — квадраты от самого дальнего светящегося до ближнего (проход свечения,
-     * {@link FxBloom}): что дальше всех светящихся, их излучения не закрывает. Из того же буфера, что выгрузил
+     * Начало прохода свечения в порядке order (от дальних): первый квадрат не дальше {@link #glowReach}. В проход идёт
+     * то, что закрывает излучение и ореол светящихся: само светящееся и всё ближе глубины, до которой оно достаёт; что
+     * дальше, их не закрывает (ореол над ним остаётся). n — светящихся нет.
+     */
+    private int glowStart(int[] order) {
+        for (int i = 0; i < n; i++) {
+            if (keys[order[i]] <= glowReach) return i;
+        }
+        return n;
+    }
+
+    /** {@link #glowStart} у квадратов кадра (проверки). */
+    int glowStart() {
+        return glowStart(sort.sort(keys, n));
+    }
+
+    /**
+     * После {@link #draw}: ещё раз шейдером s — квадраты с начала прохода свечения ({@link #glowStart}) до ближнего
+     * (проход свечения, {@link FxBloom}): что дальше, излучения и ореола светящихся не закрывает. Из того же буфера, что выгрузил
      * {@link #draw} (его отсортированные квадраты — с места {@code glowFrom}), без второй выгрузки. false — светящихся нет.
      */
     boolean drawGlow(net.minecraft.client.renderer.ShaderInstance s) {

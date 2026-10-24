@@ -115,6 +115,26 @@ class FxQuadsGlowTest {
         return sum;
     }
 
+    /**
+     * Проход свечения берёт то, что закрывает огонь и его ореол: светящийся круг в 50 блоках полуразмером 5, дым за ним в
+     * пределах его полуразмера (53) и перед ним (45) — в проходе, дым дальше (60) — нет. С началом у самого светящегося
+     * дым в 53 блоках (рукав сбоку на глубине середины шара) в проход не шёл и ореол над ним оставался.
+     */
+    @Test
+    void glowPassTakesWhatStandsWithinTheFire() {
+        FxQuads quads = new FxQuads();
+        quads.begin(new Vector3f(1, 0, 0), new Vector3f(0, 1, 0));
+        quads.glowTexel(0.002);
+        quads.billboard(-8, 0, -60, 60, 2, 0, FxAtlas.disc(), 0.2f, 0.2f, 0.2f, 0.8f, 0, 1, LightTexture.FULL_BRIGHT, 0);
+        quads.billboard(8, 0, -53, 53, 2, 0, FxAtlas.disc(), 0.2f, 0.2f, 0.2f, 0.8f, 0, 1, LightTexture.FULL_BRIGHT, 0);
+        quads.emission(1);
+        quads.billboard(0, 0, -50, 50, 5, 0, FxAtlas.disc(), 1, 1, 1, 1, 0, 1, LightTexture.FULL_BRIGHT, 0);
+        quads.emission(0);
+        quads.billboard(0, 4, -45, 45, 2, 0, FxAtlas.disc(), 0.2f, 0.2f, 0.2f, 0.8f, 0, 1, LightTexture.FULL_BRIGHT, 0);
+        assertEquals(4, quads.size());
+        assertEquals(1, quads.glowStart(), "с дыма в 53 блоках: дальше — 60, его нет");
+    }
+
     /** Пятно и его квадрат: квадрат — только в слое, пятно — только в проходе, с оттенком в цвете и светом в {@code UV2}. */
     @Test
     void spotCarriesItsLightInUv2() {
