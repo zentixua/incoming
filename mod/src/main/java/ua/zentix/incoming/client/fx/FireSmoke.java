@@ -506,24 +506,28 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Пламя масла выбитых подстанций (своего огня на блоках у него нет): тело — круг площади пламени сбоку (высота по
-     * Хескестаду × диаметр очага), свет и цвет — как у света пламени на дыме ({@link FirePlume#FLAME_LUMINANCE},
-     * {@link FirePlume#FLAME_COLOR}, с привыканием глаза кадра), блик и вуаль — как у огненного шара и факела
-     * ({@link FarSprites#light}). Огонь Minecraft (и топливо в воронках — огонь на блоках) рисует сам мир.
+     * Пламя очагов топлива там, где мир его уже не рисует: у масла подстанций своего огня на блоках нет, а огонь Minecraft
+     * на клетках топлива воронки с 0,8 прорисовки тает в тумане и мельче пикселя — ночью в 300 м от пожара в 2–3 МВт
+     * оставалась бы серая точка. Тело — круг площади пламени сбоку (высота по Хескестаду × диаметр очага), с 0,8
+     * прорисовки (ближе пламя — сами блоки огня); свет и цвет — как у света пламени на дыме
+     * ({@link FirePlume#FLAME_LUMINANCE}, {@link FirePlume#FLAME_COLOR}, с привыканием глаза кадра), блик и вуаль — на
+     * любой дальности, как у огненного шара и факела ({@link FarSprites#light}). Огонь дерева вдали рисует сам мир.
      */
     public static void far(FarView view, FarSprites out) {
-        if (OIL_FIRES.isEmpty()) return;
+        if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
         Vec3 cam = view.camera();
         int c = FirePlume.FLAME_COLOR;
         float r = (c >> 16 & 255) / 255f, g = (c >> 8 & 255) / 255f, b = (c & 255) / 255f;
-        for (FireSmoke f : OIL_FIRES.values()) {
+        for (FireSmoke f : (Iterable<FireSmoke>) () -> java.util.stream.Stream.concat(OIL_FIRES.values().stream(), POOLS.stream()).iterator()) {
             if (!Double.isNaN(f.end) || f.gone) continue;
             if (f.blocks <= 0 || f.flame <= 0) continue;
-            // пламя сбоку: высота по Хескестаду × диаметр всех очагов масла, круг той же площади — на половине высоты
-            double across = 2 * Math.sqrt(f.blocks * f.fuel.area / Math.PI), radius = Math.sqrt(f.flame * across / Math.PI);
+            // пламя сбоку: высота по Хескестаду (по нынешней силе очага: у топлива — доля, что ещё горит) × диаметр очага (у
+            // масла — всех его очагов), круг той же площади — на половине высоты
+            double area = f.burning == null ? f.blocks * f.fuel.area : f.fuel.area;
+            double across = 2 * Math.sqrt(area / Math.PI), radius = Math.sqrt(f.flame * across / Math.PI);
             double dx = f.x - cam.x, dy = f.y + 0.5 * f.flame - cam.y, dz = f.z - cam.z;
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz), w = view.farShare(d), t = view.air(d, dy);
-            // ядро сменяет языки-частицы с 0,8 прорисовки; блик и вуаль — на любой дальности, как у факела и шара
+            // ядро — с 0,8 прорисовки; блик и вуаль — на любой дальности, как у факела и шара
             out.light(dx, dy, dz, radius, FirePlume.FLAME_LUMINANCE * view.exposure() * t, t, view.pixel(), r, g, b, w, 1, FAR_LIGHT);
         }
     }

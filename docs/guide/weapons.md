@@ -282,7 +282,8 @@ instead of drifting as one ball.
 - **Shahed**: a short flash, then a ball of burning petrol about 16 blocks across that burns for about 1.3 seconds and
   glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
   burns for about 2.5 minutes as ordinary fire on about five blocks of the crater floor; at night it lights the ground
-  around with an orange glow. Its black smoke rises from the fire the whole time and leans downwind: in a stiff breeze it
+  around with an orange glow. Far away, where the fire blocks fade out, the fire is a glowing spot of the same colour
+  and brightness, with a glare at night. Its black smoke rises from the fire the whole time and leans downwind: in a stiff breeze it
   trails low, in calm air it stands taller. The smoke of the ball, with the dust
   torn up under it, rises a few hundred blocks as a dark cloud.
 - **Cruise missile**: a bigger flash and a fuel ball about 34 blocks across that burns for about 2.7 seconds; the fuel left
