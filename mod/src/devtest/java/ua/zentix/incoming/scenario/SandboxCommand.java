@@ -40,6 +40,8 @@ import java.util.Locale;
  *   <li>{@code fire [сторона]} — пожар: квадрат незерака с огнём в точке;</li>
  *   <li>{@code cam <дальность> [высота] [азимут°] [взгляд]} — где камера: дальность от точки, высота над землёй, азимут
  *       от точки (0 — юг, 90 — запад, как поворот игрока), высота точки взгляда над землёй;</li>
+ *   <li>{@code stance stand|fly} — стоящий игрок (качание тела) или летающий наблюдатель (по умолчанию);</li>
+ *   <li>{@code weather clear|rain} — погода для проверки конденсации во влажном воздухе;</li>
  *   <li>{@code time day|night|<тик>}, {@code hud on|off}, {@code overlay on|off} — свет, интерфейс, числа модели;</li>
  *   <li>{@code track on|off} — взгляд держит снаряд эффекта {@code launch}/{@code flight} в середине кадра (как игрок,
  *       который ведёт его с зумом);</li>
@@ -61,7 +63,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: сторона и глубина пруда, блоков (пруд шире столба и кольца брызг шахеда). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
@@ -164,6 +166,14 @@ record SandboxCommand(Verb verb, List<String> args) {
                 // тик, как у ванильного time set: целое от 0
                 if (!List.of("day", "night").contains(args.getFirst()) && (number(0) < 0 || number(0) > Integer.MAX_VALUE
                         || number(0) != Math.rint(number(0)))) throw new IllegalArgumentException("время — day, night или тик (целое от 0)");
+            }
+            case STANCE -> {
+                need(1, 1);
+                if (!List.of("stand", "fly").contains(args.getFirst())) throw new IllegalArgumentException("stand или fly");
+            }
+            case WEATHER -> {
+                need(1, 1);
+                if (!List.of("clear", "rain").contains(args.getFirst())) throw new IllegalArgumentException("clear или rain");
             }
             case HUD, OVERLAY, TRACK -> {
                 need(1, 1);

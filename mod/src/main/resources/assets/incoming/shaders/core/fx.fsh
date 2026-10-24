@@ -66,6 +66,19 @@ float sixLight(vec3 a, vec3 b, vec3 l, float mirror) {
     return side * q.x + vertical * q.y + depth * q.z;
 }
 
+// Уменьшенных копий у листа (FxAtlas.MIPS)
+const float FRAME_LEVELS = 4.0;
+
+// Отступ выборки от края кадра клуба и огня (sixFrames, fireFrames), текселей листа: полтекселя самой грубой копии, которую читает выборка (уровень —
+// вверх от log2 шага выборки span, текселей листа на пиксель; так выбирает OpenGL; ceil — через floor: так его считает
+// и PuffAtlasEdgeGlslTest). С отступом в полтекселя листа выборка заходит в соседний кадр уже на первой копии, а на
+// копиях 3–4 его край заметен: клубы вдали и плоский клуб с ребра ложились тонкими чертами поперёк кадра (пыль
+// сорванного дёрна, WV)
+float frameInset(float span) {
+    float level = clamp(-floor(-0.5 * log2(max(span * span, 1.0))), 0.0, FRAME_LEVELS);
+    return 0.5 * pow(2.0, level);
+}
+
 // Кадр клуба и следующий, сдвинутые вдоль векторов движения на долю смеси m (кадр k — назад на m, k + 1 — вперёд на
 // 1 − m): клуб течёт, а не проступает двойным. Карты a и b — в линейном свете, альфа — в a.w
 void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
@@ -77,7 +90,8 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     vec2 local = uv - origin;
     vec4 v = textureGrad(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), dx, dy);
     vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
-    vec2 edge = 0.5 / vec2(textureSize(Sampler0, 0));
+    vec2 size = vec2(textureSize(Sampler0, 0)), gx = dx * size, gy = dy * size;
+    vec2 edge = frameInset(sqrt(max(dot(gx, gx), dot(gy, gy)))) / size;
     vec2 uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
     vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
     vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
@@ -110,7 +124,8 @@ vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
     vec2 toFlow = FxFireFlow.xy / tile;
     vec4 v = textureGrad(Sampler0, flowAt + local * toFlow, dx * toFlow, dy * toFlow);
     vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxFireFlow.w * tile;
-    vec2 edge = 0.5 / vec2(textureSize(Sampler0, 0));
+    vec2 size = vec2(textureSize(Sampler0, 0)), gx = dx * size, gy = dy * size;
+    vec2 edge = frameInset(sqrt(max(dot(gx, gx), dot(gy, gy)))) / size;
     vec2 uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
     vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
     return mix(textureGrad(Sampler0, uv0, dx, dy), textureGrad(Sampler0, uv1, dx, dy), m);

@@ -3,17 +3,21 @@ package ua.zentix.incoming.client.far;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.client.fx.layer.HeatPass;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.client.fx.smoke.WaterBlast;
 import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.ChemicalFront;
+import ua.zentix.incoming.nuclear.model.ShockOptics;
 import ua.zentix.incoming.strike.WeaponType;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Взрывы вдали: облако по модели (и у бомбы под землёй), клубы за гребнем. */
@@ -191,5 +195,42 @@ class FarBlastsTest {
         assertEquals(0, FarBlasts.overSurface(town, new Vec3(-0.001, 70, 5.5)), 1e-9, "стена: точка на грани снаружи");
         assertEquals(100, FarBlasts.overSurface(town, new Vec3(-50.5, 164, 5.5)), 1e-9, "аппарат над улицей");
         assertEquals(0, FarBlasts.overSurface((x, z) -> Double.NaN, new Vec3(0, 300, 0)), 1e-9, "не знаем — наземный");
+    }
+
+    /**
+     * Видимый фронт обычного взрыва (жалоба 23.10: «кольца никакого»): пока фронт в огненном шаре — его нет; вышел —
+     * сфера радиуса закона ({@code ChemicalFront}) со скачком показателя по давлению Кинни–Грэхема на ней. Виден, пока
+     * скачок давления выше порога видимости: сдвиг у края растёт с давлением при той же геометрии, и у шахеда кольцо
+     * даёт зрителю в 50–300 м сдвиг от пикселя, а фронт в 2 км от взрыва (0,03 psi) из километра от него — слабее порога прохода.
+     */
+    @Test
+    void shockFrontIsSeenWhileItsJumpIs() {
+        ChemicalFront f = ChemicalFront.of(50, true, 2500);
+        double[] out = new double[3], dn = new double[4];
+        double pixel = Math.toRadians(70) / 1080, ball = 6;
+        assertFalse(FarBlasts.front(f, f.arrivalSeconds(5), ball, 0, out, dn), "в шаре");
+        assertTrue(FarBlasts.front(f, f.arrivalSeconds(10), ball, 0, out, dn));
+        assertEquals(10, out[0], 1e-6);
+        assertEquals(0, out[2], 1e-12, "наземный: полусфера над землёй");
+        double jump = ShockOptics.indexJump(f.kpa(10), HeatPass.N0);
+        for (double v : dn) assertEquals(jump, v, 1e-15);
+        assertTrue(FarBlasts.front(f, f.arrivalSeconds(30), ball, 20, out, dn));
+        assertEquals(-20.0 / 30, out[2], 1e-9, "разрыв в 20 м над землёй");
+        // сдвиг растёт с давлением при той же геометрии
+        double last = Double.MAX_VALUE;
+        for (double r = 10; r < 2000; r *= 1.2) {
+            double w = ShockOptics.most(r, ShockOptics.indexJump(f.kpa(r),
+                    HeatPass.N0), 100, pixel) / pixel;
+            assertTrue(w <= last, r + " м");
+            last = w;
+        }
+        for (double view : new double[]{50, 100, 300}) {
+            double r = 0.5 * view;
+            assertTrue(FarBlasts.front(f, f.arrivalSeconds(r), ball, 0, out, dn));
+            double w = ShockOptics.most(out[0], dn[0], view - r, pixel) / pixel;
+            assertTrue(w > 0.3, "зритель в " + view + " м: " + w + " px");
+        }
+        assertTrue(FarBlasts.front(f, f.arrivalSeconds(2000), ball, 0, out, dn));
+        assertTrue(ShockOptics.most(out[0], dn[0], 1000, pixel) / pixel < HeatPass.SHIFT_MIN, "2 км из 1 км");
     }
 }

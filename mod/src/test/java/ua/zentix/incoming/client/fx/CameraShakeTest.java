@@ -255,4 +255,80 @@ class CameraShakeTest {
     private static double angle(Vector3d a, Vector3d b) {
         return Math.toDegrees(Math.atan2(new Vector3d(a).cross(b).length(), a.dot(b)));
     }
+
+    /**
+     * Обычный взрыв (жалоба 23.10: «камера не качается, её разве что немного ударяет и сбивает»): шахед в 100 м за
+     * спиной — камера дрожит, качается головой на шее (несколько размахов вперёд-назад), возвращается к нулю с затуханием и между
+     * кадрами (по 1/6 тика) не прыгает больше, чем позволяет скорость удара. Ядерная волна шеи не берёт (её картинку этот
+     * шаг не менял).
+     */
+    @Test
+    void conventionalBlastRocksTheCameraAndItSettles() {
+        CameraShake.reset();
+        double kg = 50, m = 100, pa = 1000 * BlastModel.surfaceOverpressureKpa(m, kg), tp = BlastModel.chemicalPhaseSeconds(m, kg, true);
+        BodySway.Motion motion = CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), 1, tp, tp, 0, new Vec3(0, 0, 1), 0, true);
+        double strength = CameraShake.tremor(pa, BlastModel.chemicalImpulse(m, kg, true), 0, 3);
+        assertTrue(motion.neck().length == motion.body().length && motion.body().length > 20 && strength > 0);
+        // за 1/120 с камера сдвигается не больше, чем дают удар по шее и самая быстрая дрожь
+        double kick = Math.toDegrees(Math.abs(motion.body()[1] + motion.neck()[1])) * BodySway.RATE / 120
+                + 2 * Math.PI * 1.73 * CameraShake.TREMOR_HZ_WEAK * 1.1 * CameraShake.TREMOR_PITCH * strength / 120, last = 0, most = 0;
+        int turns = 0, sign = 0;
+        for (int tick = 0; tick < 20 * 6; tick++) {
+            for (int k = 0; k < 6; k++) {
+                double pitch = CameraShake.offsets(k / 6.0, 0, 0, 0, 0, 1)[1];
+                assertTrue(Math.abs(pitch - last) <= 1.05 * kick + 1e-9, "скачок в тике " + tick + ": " + last + " → " + pitch);
+                int s2 = (int) Math.signum(pitch);
+                if (s2 != 0 && s2 != sign) {
+                    if (sign != 0) turns++;
+                    sign = s2;
+                }
+                most = Math.max(most, Math.abs(pitch));
+                last = pitch;
+            }
+            CameraShake.tick(true);
+        }
+        assertTrue(turns >= 2, "качается: смен знака " + turns);
+        assertTrue(most > 1, "размах " + most);
+        assertEquals(0, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "вернулась");
+        CameraShake.reset();
+        double[] w = wave(1, 2);
+        assertEquals(null, CameraShake.sway(w[2], w[0], 1, w[1], w[1], 0, new Vec3(0, 0, 1), 0, false).neck(), "ядерка — без шеи");
+    }
+
+    /**
+     * Дрожь удара (подача, жалоба 23.10: «камера только толкается»): нет ниже 140 дБ, полная с 5 psi; шахед в 20/50/100 м
+     * дрожит сильнее ближе, длиннее у сильного импульса — и не слабее 3.4.1 (в 50 и 100 м там было 1,5° курса); начинается
+     * с нуля, гаснет к нулю, без рывка между кадрами.
+     */
+    @Test
+    void blastTremorFollowsThePressure() {
+        assertEquals(0, CameraShake.tremorStrength(CameraShake.TREMOR_LOW_PA * 0.9), 1e-12);
+        assertEquals(1, CameraShake.tremorStrength(CameraShake.TREMOR_HIGH_PA * 1.1), 1e-12);
+        double kg = 30, last = 2;
+        double[] peaks = new double[3];
+        int k = 0;
+        for (double m : new double[]{20, 50, 100}) {
+            CameraShake.reset();
+            double pa = 1000 * BlastModel.surfaceOverpressureKpa(m, kg), impulse = BlastModel.chemicalImpulse(m, kg, true);
+            double s = CameraShake.tremor(pa, impulse, 0, 7);
+            assertTrue(s < last, m + " м: " + s);
+            last = s;
+            double seconds = CameraShake.tremorSeconds(impulse), prev = 0, most = 0, step = 1.0 / 120;
+            assertTrue(seconds >= CameraShake.TREMOR_SHORT && seconds <= CameraShake.TREMOR_LONG);
+            for (double t = 0; t <= seconds + 0.1; t += step) {
+                double yaw = CameraShake.tremorAt(20 * t)[0];
+                assertTrue(Math.abs(yaw - prev) <= 2 * Math.PI * 1.73 * CameraShake.TREMOR_HZ_WEAK * 1.1 * CameraShake.TREMOR_YAW * s * step + 1e-9,
+                        m + " м, " + t + " с: рывок");
+                most = Math.max(most, Math.abs(yaw));
+                prev = yaw;
+            }
+            assertEquals(0, CameraShake.tremorAt(0)[0], 1e-12, "с нуля");
+            assertEquals(0, CameraShake.tremorAt(20 * (seconds + 0.01))[0], 1e-12, "погасла");
+            peaks[k++] = most;
+        }
+        assertTrue(peaks[0] > peaks[1] && peaks[1] > peaks[2], java.util.Arrays.toString(peaks));
+        assertTrue(peaks[1] >= 1.5 && peaks[2] >= 1.2, "50 м: " + peaks[1] + "°, 100 м: " + peaks[2] + "° (3.4.1 — 1,5°)");
+        assertTrue(CameraShake.tremorSeconds(BlastModel.chemicalImpulse(100, 450, true)) > CameraShake.tremorSeconds(BlastModel.chemicalImpulse(100, 30, true)));
+        CameraShake.reset();
+    }
 }

@@ -203,4 +203,20 @@ class HeatPassTest {
         buried.jet(0, 0, 0, 0, -1, 0, f, 0, 2, 0);
         assertFalse(buried.lit(), "сопло в земле — света нет");
     }
+    @Test
+    void conventionalFrontKeepsPhysicalOpticsAndNukePriority() {
+        HeatPass.Frame frame = new HeatPass.Frame();
+        double[] jump = {1e-4, 1e-4, 1e-4, 1e-4};
+        frame.front(0, 0, 50, 20, 1, 0, jump);
+        frame.chemicalFront(0, 0, 50, 25, 2, 0, jump);
+        org.joml.Vector4f c = new org.joml.Vector4f();
+        assertEquals(20, frame.front.getColumn(0, c).w, 1e-6);
+        assertEquals(25, frame.front.getColumn(1, c).w, 1e-6);
+        assertEquals(1e-4, frame.front.getColumn(2, c).x, 1e-10, "nuke uses physical index jump");
+        assertEquals(1e-4, frame.front.getColumn(3, c).x, 1e-10, "gain belongs to bounded screen displacement");
+        assertEquals(1e-4, jump[0], 1e-15, "does not mutate shared input");
+        frame.chemicalFront(0, 0, 26, 25, 2, 0, jump);
+        assertEquals(20, frame.front.getColumn(0, c).w, 1e-6, "cannot replace the nuke slot");
+    }
+
 }

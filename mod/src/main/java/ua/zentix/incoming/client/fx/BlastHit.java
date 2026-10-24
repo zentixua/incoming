@@ -23,7 +23,7 @@ import java.util.Locale;
  * Фронт обычного взрыва у тела игрока — тем же законам, что у ядерной волны ({@code NukeSounds.Schedule.hit}): слух по
  * энергии самой волны у уха ({@link HearingModel#exposure(double, double)}: у обычного взрыва фаза — миллисекунды,
  * слышна вся волна) и толчок тела ({@link CameraShake#sway}: удар обтекания и ветер за фронтом по положительной фазе,
- * {@code BodySway}). Давление и фаза — Кинни–Грэхем ({@link BlastModel}) у тела, а не у камеры: камера снаряда облетает
+ * {@code BodySway}) — с головой на шее: камера качается головой, а не только наклоном тела. Давление и фаза — Кинни–Грэхем ({@link BlastModel}) у тела, а не у камеры: камера снаряда облетает
  * взрыв, игрок стоит в стороне.
  */
 public final class BlastHit {
@@ -44,16 +44,20 @@ public final class BlastHit {
         double d = Math.max(0.5, body.distanceTo(pos)), pa = BlastMix.pressure(s, d), tPlus = BlastMix.phase(s, d);
         double exposure = HearingModel.exposure(pa, tPlus);
         if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(pos, ground, body, d, pa, tPlus, seed);
-        double lean = 0;
+        // дрожь камеры в миг удара — подача, по давлению и импульсу волны у тела (и верхом, и вплавь: удар чувствуется)
+        double tremor = CameraShake.tremor(pa, BlastModel.chemicalImpulse(d, s.chargeKg(), s.surface()), late, seed);
+        double lean = 0, neck = 0;
         float open = 0;
         if (!CameraShake.carried(player)) {
             // за стеной, домом или холмом в сторону взрыва — в его ветровой тени (лучи у тела)
             open = SoundFilters.openRays(body, Math.atan2(pos.z - body.z, pos.x - body.x));
-            lean = Math.toDegrees(BodySway.peak(CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), open, tPlus, late,
-                    body.subtract(pos), player.getYRot()), 0));
+            BodySway.Motion m = CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), open, tPlus, tPlus, late,
+                    body.subtract(pos), player.getYRot(), true);
+            lean = Math.toDegrees(BodySway.peak(m.body(), 0));
+            neck = Math.toDegrees(BodySway.peak(m.neck(), 0));
         }
-        last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg",
-                d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean);
+        last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg neck %.2f deg tremor %.2f",
+                d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean, neck, tremor);
     }
 
     /**

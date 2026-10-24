@@ -54,6 +54,8 @@ uniform vec4 HeatClock;
 uniform mat4 HeatFront;
 // e-кратная толща сжатия за фронтом и синус угла над серединой у земли: фронта 0 (x, y) и 1 (z, w)
 uniform vec4 HeatFrontShape;
+// 1 — обычный фронт: подача с ограничением сдвига; 0 — прежняя оптика ядерки
+uniform vec2 HeatFrontChemical;
 // есть ли фронт (x > 0); угол пикселя, рад; есть ли свет (z > 0) и газ (w > 0)
 uniform vec4 HeatFrame;
 // есть ли видимость из прохода тени (x > 0; нет — без теней)
@@ -72,6 +74,14 @@ const float HAZE_CYCLE = 2.0;
 const float HAZE_CONE_FLAT = 1e-6;
 // сдвиг фронта меньше этой доли пикселя не виден: его нет (HeatPass.SHIFT_MIN)
 const float FRONT_SHIFT_MIN = 0.05;
+// Подача обычного фронта: слабая рябь усилена, но суммарный сдвиг не больше трёх пикселей, и при зуме тоже.
+const float CHEMICAL_FRONT_GAIN = 24.0;
+const float CHEMICAL_FRONT_MAX_PX = 3.0;
+
+float chemicalFrontScale(float pixels) {
+    float shown = CHEMICAL_FRONT_GAIN * pixels / CHEMICAL_FRONT_MAX_PX;
+    return CHEMICAL_FRONT_GAIN / sqrt(1.0 + shown * shown);
+}
 
 out vec4 fragColor;
 
@@ -273,8 +283,9 @@ float frontJump(vec4 dn, float low, float sine) {
 
 // Отклонение луча dir до мира (dist) фронтами, рад, вектором поперёк луча: каждое пересечение сферы перед миром — к её
 // середине, × (1 − s/D) — сдвиг того, что за ним, как его видит глаз
-vec3 frontShift(vec3 dir, float dist) {
+vec3 frontShift(vec3 dir, float dist, out vec3 chemical) {
     vec3 bend = vec3(0.0);
+    chemical = vec3(0.0);
     for (int i = 0; i < 2; i++) {
         vec4 f = HeatFront[i];
         if (f.w <= 0.0) continue;
@@ -294,7 +305,8 @@ vec3 frontShift(vec3 dir, float dist) {
             float jump = frontJump(dn, low, (dir.y * s - f.y) / f.w);
             angle += frontBend(b, f.w, l, jump, HeatFrame.y * s) * (1.0 - s / dist);
         }
-        bend += across / b * angle;
+        if (HeatFrontChemical[i] > 0.0) chemical += across / b * angle;
+        else bend += across / b * angle;
     }
     return bend;
 }
@@ -335,8 +347,9 @@ void main() {
     vec2 shift = HeatFrame.w > 0.0 ? heatShift(dir0, dist0) : vec2(0.0);
     vec2 front = vec2(0.0);
     if (HeatFrame.x > 0.0) {
-        vec3 bend = frontShift(dir0, dist0);
-        if (dot(bend, bend) > 0.0) {
+        vec3 chemical;
+        vec3 bend = frontShift(dir0, dist0, chemical);
+        if (dot(bend, bend) > 0.0 || dot(chemical, chemical) > 0.0) {
             // поворот луча в пиксели: шаг луча на пиксель экрана по x и y (у пикселя — линейно)
             vec2 ndc1 = (here + vec2(1.0, 0.0)) / vec2(size) * 2.0 - 1.0, ndc2 = (here + vec2(0.0, 1.0)) / vec2(size) * 2.0 - 1.0;
             vec4 f1 = InvViewProj * vec4(ndc1, 1.0, 1.0), f2 = InvViewProj * vec4(ndc2, 1.0, 1.0);
@@ -344,6 +357,13 @@ void main() {
             float xx = dot(dx, dx), xy = dot(dx, dy), yy = dot(dy, dy), det = xx * yy - xy * xy;
             float bx = dot(bend, dx), by = dot(bend, dy);
             if (det > 0.0) front = vec2(yy * bx - xy * by, xx * by - xy * bx) / det;
+            // Ограничение после проекции: угол пикселя меняется по кадру, разрешению и полю зрения.
+            // Обычные фронты суммируются ДО ограничения; ядерный вклад не ограничивается.
+            float cx = dot(chemical, dx), cy = dot(chemical, dy);
+            if (det > 0.0) {
+                vec2 ordinary = vec2(yy * cx - xy * cy, xx * cy - xy * cx) / det;
+                front += ordinary * chemicalFrontScale(length(ordinary));
+            }
         }
     }
     // фронт идёт с каждым кадром ядерки по всему кадру: его сдвиг меньше порога — как не было

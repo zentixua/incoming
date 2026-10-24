@@ -22,8 +22,6 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
 
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Куски блоков, которые сорвала и несёт ударная волна: кувыркающиеся тела с текстурой своего блока (как частица
@@ -87,7 +85,7 @@ public final class Fragments {
      * Живые куски — свой список, а не по смерти куска: движок выбрасывает частицы и без неё (переполнение очереди, смена
      * мира), поэтому кусок, который не тикал дольше {@link #LOST} тиков, считается ушедшим.
      */
-    private static final List<Fragment> LIVE = new ArrayList<>();
+    private static final FarthestPool<Fragment> LIVE = new FarthestPool<>(Particle::isAlive, Particle::remove);
     private static final int LOST = 2;
     private static long tick;
     private static final RandomSource RANDOM = RandomSource.create();
@@ -178,42 +176,32 @@ public final class Fragments {
     public static boolean torn(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
                                float size, Wind wind, int delay, boolean edge) {
         if (state.isAir() || state.getRenderShape() != RenderShape.MODEL || !state.shouldSpawnTerrainParticles()) return false;
-        if (LIVE.size() >= cap() && !evictFartherThan(x, y, z)) return false;
+        // мест нет — самый дальний от камеры уходит, если он дальше нового ({@link FarthestPool}): волна идёт к камере, и
+        // ближние места снесённого приходят последними — иначе все места занимали бы куски дальних чанков, а у камеры,
+        // где их и видно, не было бы ни одного
+        Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        double d = eye.distanceToSqr(x, y, z);
+        if (!LIVE.admit(d, cap(), tick, f -> eye.distanceToSqr(f.x(), f.y(), f.z()))) return false;
         int wait = Mth.clamp(delay, 0, DELAY_MAX);
         int life = kind == Kind.LEAF ? LIFE_MAX : LIFE_SHORT - 40 + RANDOM.nextInt(41);
         Fragment f = new Fragment(level, state, from, kind, x, y, z, vx, vy, vz, size, wind, wait, life, edge);
-        LIVE.add(f);
+        LIVE.add(f, d, tick);
         Minecraft.getInstance().particleEngine.add(f);
-        return true;
-    }
-
-    /**
-     * Мест нет: самый дальний от камеры живой кусок уходит, если он дальше места (x, y, z) нового. Волна идёт к камере, и
-     * ближние места снесённого приходят последними — иначе все места занимали бы куски дальних чанков, а у камеры, где
-     * их и видно, не было бы ни одного.
-     */
-    private static boolean evictFartherThan(double x, double y, double z) {
-        Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        int far = -1;
-        double farD = eye.distanceToSqr(x, y, z);
-        for (int i = 0; i < LIVE.size(); i++) {
-            Fragment f = LIVE.get(i);
-            double d = eye.distanceToSqr(f.x(), f.y(), f.z());
-            if (d > farD) {
-                farD = d;
-                far = i;
-            }
-        }
-        if (far < 0) return false;
-        LIVE.get(far).remove();
-        LIVE.set(far, LIVE.getLast());
-        LIVE.removeLast();
         return true;
     }
 
     private static int cap() {
         ParticleStatus s = Minecraft.getInstance().options.particles().get();
         return s == ParticleStatus.ALL ? CAP : s == ParticleStatus.DECREASED ? CAP / 2 : CAP / 4;
+    }
+
+    /**
+     * Сколько кусков дать новому источнику, что хочет {@code wanted}: не больше свободных мест, но не меньше четверти
+     * предела — их место освободят самые дальние ({@link #torn}). Залп из восьми взрывов в одном тике иначе рождал
+     * 8 × 900 клочков ради 1200 мест, и почти все тут же вытеснялись (десятки мс в тике рождения).
+     */
+    public static int share(int wanted) {
+        return Math.min(wanted, Math.max(cap() / 4, cap() - alive()));
     }
 
     /** Сколько кусков живёт. */
@@ -224,7 +212,7 @@ public final class Fragments {
     /** Тик клиента (не на паузе): ушедшие куски — из счёта. */
     public static void tick() {
         tick++;
-        LIVE.removeIf(f -> !f.isAlive() || tick - f.ticked > LOST);
+        LIVE.purge(f -> f.isAlive() && tick - f.ticked <= LOST);
     }
 
     /** Выход из мира: движок сам убирает частицы. */
@@ -265,7 +253,8 @@ public final class Fragments {
                 case CHUNK -> size;
                 case BOARD -> Math.min(1, 1.6f * size);
                 case PANE -> 0.6f * size;
-                case LEAF -> SPRIG_MIN + (SPRIG_MAX - SPRIG_MIN) * random.nextFloat();
+                // клок своего размера (0 — клок кроны); скорость падения у пластины от размера не зависит
+                case LEAF -> size > 0 ? size : SPRIG_MIN + (SPRIG_MAX - SPRIG_MIN) * random.nextFloat();
             };
             half[0] = 0.5f * len;
             half[1] = 0.5f * switch (kind) {

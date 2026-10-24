@@ -6,6 +6,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.client.fx.BlastTime;
 import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLights;
@@ -17,6 +18,8 @@ import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.ChemicalFront;
+import ua.zentix.incoming.nuclear.model.ShockOptics;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 import java.util.ArrayDeque;
@@ -88,7 +91,7 @@ public final class FarBlasts {
     /** Самое яркое тело последнего кадра (для лога): ядро, блик и вуаль в пикселях, пересвет, доля над рельефом. */
     private static final double[] BRIGHTEST = new double[5];
     private static final float[] TINT = new float[3];
-    /** Тики клиента (не на паузе). */
+    /** Последний клиентский pre-tick: возраст обычного эффекта не зависит от порядка post-tick слушателей. */
     private static long clock;
     /** Последний дальний звук — для лога сценария. */
     private static Outdoor.Heard lastHeard;
@@ -113,8 +116,6 @@ public final class FarBlasts {
         /** Зерно взрыва: клубы и вариант записи звука. */
         final long seed;
         final long born;
-        /** Часы сетки дыма в миг взрыва, с. */
-        final double bornSeconds;
         /** Пакет пришёл ближе {@link #NEAR}: ближняя картинка и звук есть. */
         final boolean near;
         /** Альбедо пыли грунта по каналам; поворот кадра шара (по зерну). */
@@ -134,6 +135,9 @@ public final class FarBlasts {
         float open = 1;
         /** Источник облака ещё нужен (событие живо). */
         boolean alive = true;
+        /** Фронт ударной волны во времени ({@link #front}); null — ещё не считался. */
+        @Nullable
+        ChemicalFront front;
 
         Event(ClientLevel level, BlastSource source, CloudModel model, double x, double y, double z, GroundMaterial ground, long seed,
               boolean near) {
@@ -147,8 +151,7 @@ public final class FarBlasts {
             this.ground = ground;
             this.water = ground.isWater() && source.chargeKg() > 0 ? water(level, new Vec3(x, y, z), source.chargeKg(), model.air) : null;
             this.seed = seed;
-            this.born = clock;
-            this.bornSeconds = SmokeGrid.seconds(0);
+            this.born = BlastTime.ticks();
             this.near = near;
             this.soundPending = !near;
             // топливо в воронке горит пожаром среди пожаров клиента: шлейф, его свет и жар — там, и он сливается с огнём,
@@ -225,7 +228,7 @@ public final class FarBlasts {
         /** Во сколько раз облако выросло с начала (σ по горизонтали) — кадр запечённого клуба. */
         @Override
         public double puffGrowth(double seconds) {
-            double t = Math.max(0, seconds - bornSeconds);
+            double t = sourceAge(seconds);
             return model.sigmaH(t) / Math.max(model.sigmaH(0), 1e-6);
         }
 
@@ -238,7 +241,7 @@ public final class FarBlasts {
         @Override
         public boolean sprayClubs(double seconds) {
             // После возвращения последней струи — взвесь мелких капель, не падающие полосы брызг.
-            return water != null && water.aloft(seconds - bornSeconds) > 0;
+            return water != null && water.aloft(sourceAge(seconds)) > 0;
         }
 
         /** Над рельефом, что закрывает место взрыва вдали (последний луч, {@link #trace}). */
@@ -247,11 +250,16 @@ public final class FarBlasts {
             return FarBlasts.visible(wy - y, r, hidden > 0 ? LIFT + hidden : 0);
         }
 
+        private double sourceAge(double seconds) {
+            // Only the fractional tick comes from SmokeGrid; its post-tick counter may already have advanced at birth.
+            return BlastTime.seconds(BlastTime.ticks(), born, 20 * (seconds - SmokeGrid.seconds(0)));
+        }
+
         /** Источник облака: клубы модели в мире, облако конденсации и брызги взрыва на воде. */
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
             if (!alive || level != Minecraft.getInstance().level) return false;
-            double t = seconds - bornSeconds;
+            double t = sourceAge(seconds);
             if (t >= Math.max(model.life, water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
                 double growth = puffGrowth(seconds);
@@ -277,29 +285,12 @@ public final class FarBlasts {
             return true;
         }
 
-        /**
-         * σ клуба оболочки конденсации, радиусов: клубы на полусфере стоят через 0,5–0,9 радиуса (кольцо на 30° — реже всего),
-         * клуб шире половины шага — оболочка сплошная, а не бусы (оценка формы).
-         */
-        static final double SHELL = 0.45;
-
-        /**
-         * Облако конденсации ({@link CloudModel#condensation}): оболочка капель на полусфере радиуса r за фронтом волны —
-         * кольцо клубов по полусфере ({@link #SHELL}), слой капель — пятая радиуса (оценка формы); капли — водность 0,5 г/м³
-         * (оценка), тают к концу жизни.
-         */
+        /** Water follows the pressure history, rather than appearing at the final radius in the first frame. */
         private void condensation(double t, SmokeGrid.Sink out) {
-            double r = model.condensation(), life = model.condensationSeconds();
-            double shell = 2 * Math.PI * r * r * 0.2 * r;
-            double water = 0.5e-3 * shell * (1 - t / life) / 13;
-            for (int i = 0; i < 13; i++) {
-                // 1 на вершине и 12 по кругам на 30° и 60° над землёй
-                double el = i == 0 ? Math.PI / 2 : (i <= 6 ? Math.PI / 6 : Math.PI / 3), az = i * Math.PI / 3 + (i > 6 ? Math.PI / 6 : 0);
-                double cx = r * Math.cos(el) * Math.cos(az), cy = r * Math.sin(el), cz = r * Math.cos(el) * Math.sin(az);
-                // клуб оболочки — шире половины шага между клубами ({@link #SHELL}): у́же — оболочка распадалась на бусы
-                out.blob(x + cx, y + cy, z + cz, SHELL * r, SHELL * r, 0, 0, water, 0.9f, 0.9f, 0.9f, CloudModel.T_AIR_K, 0);
-            }
+            model.condensation(t, (bx, by, bz, sh, sv, soot, dust, water, kelvin, rise) ->
+                    out.blob(x + bx, y + by, z + bz, sh, sv, 0, 0, water, 0.95f, 0.95f, 0.95f, kelvin, rise));
         }
+
     }
 
     /**
@@ -543,7 +534,7 @@ public final class FarBlasts {
             reset();
             return;
         }
-        clock++;
+        clock = BlastTime.ticks();
         if (EVENTS.isEmpty()) return;
         Vec3 ear = camera();
         Sightline.Heights heights = FarTerrain.of(level);
@@ -654,7 +645,7 @@ public final class FarBlasts {
     static void collect(FarView view, FarSprites out, FxLights lights) {
         ClientLevel level = Minecraft.getInstance().level;
         Vec3 cam = view.camera();
-        double now = clock + view.partial();
+        double now = BlastTime.ticks() + view.partial();
         Arrays.fill(BRIGHTEST, 0);
         for (Event e : EVENTS) {
             if (e.level != level) continue;
@@ -683,7 +674,7 @@ public final class FarBlasts {
      * воздуха, 1/блок). true — хоть один шар добавлен.
      */
     public static boolean fireballs(Vec3 eye, float partial, double exposure, double air, Matrix4f centres, Matrix4f light) {
-        double now = clock + partial;
+        double now = BlastTime.ticks() + partial;
         double[] weight = WEIGHT;
         boolean any = false;
         org.joml.Vector4f column = COLUMN;
@@ -711,15 +702,16 @@ public final class FarBlasts {
 
     /**
      * Свет и горячий газ облаков модели на мир кадра ({@code HeatPass}): огненный шар — ламбертов шар чёрного тела своей
-     * температуры (как у {@link #fireballs}); газ — термик облака (середина, радиус, температура и подъём модели). Пламя и
+     * температуры (как у {@link #fireballs}); газ — термик облака (середина, радиус, температура и подъём модели); фронт
+     * ударной волны ({@link #front(ChemicalFront, double, double, double, double[], double[])}). Пламя и
      * столб над топливом в воронке — у пожаров ({@code FireSmoke.heat}).
      */
     public static void heat(Vec3 eye, float partial, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         ClientLevel level = Minecraft.getInstance().level;
-        double now = clock + partial;
+        double now = BlastTime.ticks() + partial;
         for (Event e : EVENTS) {
             if (e.level != level || !e.alive) continue;
-            double t = Math.max(0, now - e.born) / 20;
+            double t = BlastTime.seconds(BlastTime.ticks(), e.born, partial);
             double bx = e.x - eye.x, by = e.y - eye.y, bz = e.z - eye.z;
             double r = e.model.ballRadius(t);
             if (r > 0) {
@@ -729,7 +721,44 @@ public final class FarBlasts {
             }
             double cr = e.model.radius(t), ch = e.model.height(t);
             if (t < e.model.life) f.hot(bx, by + Math.max(0, ch - cr), bz, 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
+            if (e.source.underground() || e.source.chargeKg() <= 0 || t > FRONT_SECONDS) continue;
+            if (e.front == null) e.front = ChemicalFront.cached(e.source.chargeKg(), e.source.surface());
+            if (front(e.front, t, r, e.model.hob, FRONT)) f.chemicalFront(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
         }
+    }
+
+    /** Фронт дальше этого возраста не ищется, с: в 2 км он уже звук (скачок у 450 кг там — сотые доли процента плотности). */
+    static final double FRONT_SECONDS = 6;
+    private static final double[] FRONT = new double[3], FRONT_DN = new double[4];
+
+    /**
+     * Видимый фронт ударной волны обычного взрыва — тот же закон и тот же проход, что у ядерки ({@code NukeHeat},
+     * {@code HeatPass.Frame#front}, {@link ShockOptics}): сфера фронта радиуса {@link ChemicalFront#radiusAt} у места
+     * взрыва (у воздушного разрыва — в воздухе, ниже земли её нет), скачок показателя преломления — по сжатию за фронтом
+     * (Ренкин–Гюгонио) при давлении Кинни–Грэхема на ней, толща сжатия — {@link ShockOptics#DECAY_SHARE} длины
+     * положительной фазы за фронтом. Пока фронт внутри огненного шара ({@code ball}), его не видно — видно шар. Порога
+     * давления, кроме видимости, нет: скачок слабеет с давлением сам, и проход отбрасывает фронт, что ни одному
+     * пикселю не даст сдвига в {@code HeatPass.SHIFT_MIN} (у шахеда в 1080p — примерно до 150–250 м от зрителя у
+     * фронта; в бинокль — дальше). У обычного взрыва давление на сфере одно на всех высотах: на земле — отражённая
+     * полусфера (W × 1,8), в воздухе — свободная сфера (⚠ отражённой от земли волны и стебля Маха у воздушного разрыва
+     * модель не считает). В {@code out} — радиус, толща (м) и синус угла над серединой у земли; в {@code dn} — скачок
+     * на четырёх высотах. false — фронта не видно.
+     */
+    static boolean front(ChemicalFront front, double t, double ball, double hob, double[] out, double[] dn) {
+        double r = front.radiusAt(t);
+        if (!(r > ball) || r <= 0) return false;
+        double l = ShockOptics.DECAY_SHARE * front.phaseLength(r);
+        double jump = ShockOptics.indexJump(front.kpa(r), ua.zentix.incoming.client.fx.layer.HeatPass.N0);
+        if (!(l > 0) || !(jump > 0)) return false;
+        out[0] = r;
+        out[1] = l;
+        out[2] = Math.max(-1, Math.min(1, -Math.max(0, hob) / r));
+        Arrays.fill(dn, jump);
+        return true;
+    }
+
+    private static boolean front(ChemicalFront front, double t, double ball, double hob, double[] out) {
+        return front(front, t, ball, hob, out, FRONT_DN);
     }
 
     /**

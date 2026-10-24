@@ -115,6 +115,7 @@ public final class IncomingClient {
             if (VoxyIngest.available() && net.neoforged.fml.ModList.get().isLoaded("lss")) LssVoxyWatch.subscribe();
         });
 
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, IncomingClient::preTick);
         NeoForge.EVENT_BUS.addListener(IncomingClient::tick);
         NeoForge.EVENT_BUS.addListener(IncomingClient::entityTick);
         NeoForge.EVENT_BUS.addListener(CameraShake::apply);
@@ -220,6 +221,11 @@ public final class IncomingClient {
         }
     }
 
+    private static void preTick(ClientTickEvent.Pre e) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level != null && !mc.isPaused()) ua.zentix.incoming.client.fx.BlastTime.advance();
+    }
+
     private static void tick(ClientTickEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
@@ -316,6 +322,7 @@ public final class IncomingClient {
 
     /** Всё, что клиент держит о мире: звуки, пути, эффекты, ядерка, карта; выход из мира (и песочница эффектов devtest). */
     public static void resetSession() {
+        ua.zentix.incoming.client.fx.BlastTime.reset();
         ClientSounds.reset();
         FlightTracks.logout();
         FarRenderer.reset();
@@ -324,6 +331,7 @@ public final class IncomingClient {
         FxPool.INSTANCE.clear();
         FxLayer.reset();
         Fragments.reset();
+        ua.zentix.incoming.client.fx.FrontLitter.reset();
         Effects.clear();
         CameraShake.reset();
         Flash.reset();
