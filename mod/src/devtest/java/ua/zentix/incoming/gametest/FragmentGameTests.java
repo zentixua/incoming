@@ -1,23 +1,32 @@
 package ua.zentix.incoming.gametest;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.TagKey;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.nuclear.world.BlockResponse;
+import ua.zentix.incoming.registry.ModDataMaps;
+import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.FragmentStrike;
+import ua.zentix.incoming.warhead.GroundMaterial;
 import ua.zentix.incoming.warhead.Warheads;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Осколки (S4): «Град» рвётся в метре над площадкой осью вниз — пояс осколков идёт над землёй во все стороны.
@@ -81,6 +90,32 @@ public final class FragmentGameTests {
             h.assertTrue(broken > 0, got);
             h.assertTrue(cracked > 0, got);
         });
+    }
+
+    /**
+     * Выбоина меняет вид, а не материал: у каждого треснувшего блока {@link FragmentStrike#CRACKED} — своя запись
+     * пробития (без неё блок шёл бы прочим твёрдым, {@code OTHER}, и бомба проходила бы его на другую глубину) и та же,
+     * что у целого; тот же ответ волне, тот же грунт воронки и те же теги мода.
+     */
+    @GameTest(template = "pad", batch = "fragments")
+    public static void crackedKeepsMaterial(GameTestHelper h) {
+        List<TagKey<Block>> modTags = BuiltInRegistries.BLOCK.getTagNames().filter(t -> t.location().getNamespace().equals(Incoming.MOD_ID)).toList();
+        h.assertTrue(modTags.contains(ModTags.NUKE_MASONRY), "теги мода не найдены: " + modTags);
+        List<String> wrong = new ArrayList<>();
+        for (Map.Entry<Block, Block> e : FragmentStrike.CRACKED.entrySet()) {
+            BlockState whole = e.getKey().defaultBlockState(), cracked = e.getValue().defaultBlockState();
+            String name = BuiltInRegistries.BLOCK.getKey(e.getValue()).toString();
+            ModDataMaps.Penetrability pw = ModDataMaps.Penetrability.find(whole), pc = ModDataMaps.Penetrability.find(cracked);
+            if (pw == null || pc == null || !pw.equals(pc)) wrong.add(name + ": пробитие " + pc + " у целого " + pw);
+            if (!BlockResponse.of(whole).equals(BlockResponse.of(cracked)))
+                wrong.add(name + ": волна " + BlockResponse.of(cracked) + " у целого " + BlockResponse.of(whole));
+            if (GroundMaterial.of(whole) != GroundMaterial.of(cracked))
+                wrong.add(name + ": грунт " + GroundMaterial.of(cracked) + " у целого " + GroundMaterial.of(whole));
+            modTags.stream().filter(t -> whole.is(t) != cracked.is(t))
+                    .forEach(t -> wrong.add(name + ": тег " + t.location() + (cracked.is(t) ? " есть" : " нет") + ", у целого — наоборот"));
+        }
+        h.assertTrue(wrong.isEmpty(), String.join("; ", wrong));
+        h.succeed();
     }
 
     private static ArmorStand stand(GameTestHelper h, double dx, double dz) {
