@@ -28,7 +28,7 @@ public final class FarTerrain {
     }
 
     /**
-     * Surface carrying dense dust: a leaf canopy is permeable, so follow the column to matter below it.
+     * Surface carrying dense dust: leaves and plants that do not block motion are permeable; follow the column to support below.
      * Solid wood, stone, roofs and water all stop the scan alike. Chunk reads only; no world generation.
      * The frame-local cache also bounds repeated column scans while rebuilding a puff's path after a rewind.
      */
@@ -50,7 +50,7 @@ public final class FarTerrain {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, top, z);
         return belowCanopy(top, chunk.getMinBuildHeight(), chunk.getBlockState(p).is(net.minecraft.tags.BlockTags.LEAVES), y -> {
             var s = chunk.getBlockState(p.setY(y));
-            return s.isAir() || s.is(net.minecraft.tags.BlockTags.LEAVES);
+            return !Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque().test(s);
         });
     }
 
