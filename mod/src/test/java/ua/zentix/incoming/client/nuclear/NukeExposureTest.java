@@ -189,26 +189,103 @@ class NukeExposureTest {
     }
 
     /**
-     * Конец {@code main} в {@code fx_pall} — тот, что копирует {@link NukeExposure#pixel}, а свечение гриба делится между
-     * кривой и прежним путём по доле кольца.
+     * Блоки {@code fx_pall}, которые моделирует Java: прежний путь ({@code pallShown} ↔ {@link NukeExposure#shown}), сборка
+     * пикселя в конце {@code main} ({@link NukeExposure#pixel}), свечение гриба в шаге ({@code mushAt}: как есть, с
+     * экспозицией шара, доля кривой по доле кольца), сумма грибов в шаге ({@code mushStep}) и накопление по лучу с тем же
+     * ослаблением, что у света ({@code heat}, {@code emitted}, {@code filmed}) — так их раскладывает {@link #cap}. Каждый блок
+     * сверяется целиком (без комментариев, пробелы — по одному): правка шейдера в нём — правка этого теста и Java-копии
+     * вместе (прежняя сверка отдельных строк пропускала накопление, ревью #441). Вырезка — между якорями блока.
      */
-    @Test
-    void shaderComposesAsTheJavaCopy() throws IOException {
-        String fx;
+    private record Block(String name, String from, String to, String text) {}
+
+    private static final List<Block> BLOCKS = List.of(
+            new Block("pallShown", "vec3 pallShown(vec3 light, float cover)", "// ----", """
+                    vec3 pallShown(vec3 light, float cover) { float shownCover = cover; vec3 medium = light / max(cover, 1e-4);
+                    float lum = dot(medium, LUMA); if (lum > 1.0 && cover > 1e-4) { shownCover = min(cover * lum, 1.0);
+                    medium *= cover / shownCover; } medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));
+                    return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover; }
+                    """),
+            new Block("mushAt (свечение)", "vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));", "// Шаг грибов в месте t луча", """
+                    vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape)); vec3 source = w * light;
+                    if (fromCarpet > 0.0) source = mix(source, carpetLight, fromCarpet); hot = st * thermal * (1.0 - fromCarpet);
+                    float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
+                    glow = hot * mushBallGain(key, PallExposure); float roll = clamp(m.ringR / max(MUSH_RING * m.capR, 1.0), 0.0, 1.0);
+                    film = dot(hot, LUMA) * mushFilmShare(roll); return vec4(st * source, st); }
+                    """),
+            new Block("mushStep", "vec4 mushStep(", "// ----", """
+                    vec4 mushStep(float t, float cone, out float gap, out vec3 heat, out vec3 glow, out float film) { vec4 sum = vec4(0.0);
+                    heat = vec3(0.0); glow = vec3(0.0); film = 0.0; gap = 1e9; vec3 p = gDir * t; for (int k = 0; k < gMushes; k++) {
+                    vec2 span = gMushSpan[k]; if (span.y <= span.x || t > span.y) continue; if (t < span.x) { gap = min(gap, span.x - t);
+                    continue; } Mush m = mushLoad(Sampler7, k); vec3 q = mushLocal(m, p); float g = mushGap(m, q); if (g > 0.0) {
+                    gap = min(gap, g); continue; } float near, partFilm; vec3 partHeat, partGlow;
+                    vec4 r = mushAt(k, m, p, q, cone, near, partHeat, partGlow, partFilm); gap = min(gap, r.w > 1e-7 ? 0.0 : 0.5 * max(near, 0.0));
+                    sum += r; heat += partHeat; glow += partGlow; film += partFilm; } return sum; }
+                    """),
+            new Block("main (начальные суммы)", "vec3 heat = vec3(0.0), emitted = vec3(0.0);", "float transmit = 1.0;", """
+                    vec3 heat = vec3(0.0), emitted = vec3(0.0); float filmed = 0.0;
+                    """),
+            new Block("main (накопление по лучу)", "vec4 r = mushStep(tm, cone, gap, hot, glowing, film);", "tm += ds;", """
+                    vec4 r = mushStep(tm, cone, gap, hot, glowing, film); float ds = clamp(gap + jitter * dsMin, dsMin, dsMax);
+                    if (r.w > 1e-7) { ds = clamp(0.5 / r.w, dsMin, dsMax); ds = min(ds, m1 - tm); passesBefore(tm, light, transmit, lost);
+                    float tr = exp(-r.w * ds), air = pallAir(PallAir, tm, dir.y); light += transmit * air * r.rgb * (1.0 - tr) / r.w;
+                    float part = transmit * air * (1.0 - tr) / r.w; heat += part * hot; emitted += part * glowing; filmed += part * film;
+                    lost += transmit * (1.0 - air) * (1.0 - tr); transmit *= tr; tauEye += r.w * ds; }
+                    """),
+            new Block("main (сборка пикселя)", "float cover = 1.0 - transmit - lost;", "vec4 res = vec4(shown, min(transmit + lost, 1.0));", """
+                    float cover = 1.0 - transmit - lost; vec3 shown = pallShown(light + heat, cover);
+                    float film = clamp(filmed / max(dot(heat, LUMA), 1e-30), 0.0, 1.0); if (film > 0.0) {
+                    vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);
+                    shown = mix(shown, min(vec3(pallDisplay(lin.r), pallDisplay(lin.g), pallDisplay(lin.b)), vec3(1.0)), film); }
+                    """));
+
+    /** Текст без комментариев {@code //}, пробелы — по одному. */
+    private static String normalized(String glsl) {
+        return glsl.replaceAll("//[^\\n]*", "").replaceAll("\\s+", " ").trim();
+    }
+
+    /** Блоки, что разошлись с {@link #BLOCKS} в тексте шейдера {@code fx} (нет якоря — тоже разошёлся). */
+    private static List<String> mismatches(String fx) {
+        List<String> bad = new ArrayList<>();
+        for (Block b : BLOCKS) {
+            int from = fx.indexOf(b.from()), to = from < 0 ? -1 : fx.indexOf(b.to(), from + b.from().length());
+            if (from < 0 || to < 0 || fx.indexOf(b.from(), from + 1) >= 0 || !normalized(fx.substring(from, to)).equals(normalized(b.text()))) {
+                bad.add(b.name());
+            }
+        }
+        return bad;
+    }
+
+    private static String fxPall() throws IOException {
         try (InputStream in = NukeExposureTest.class.getResourceAsStream("/assets/incoming/shaders/core/fx_pall.fsh")) {
             assertNotNull(in, "fx_pall.fsh");
-            fx = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
-        for (String line : new String[]{"vec3 medium = light / max(cover, 1e-4);", "shownCover = min(cover * lum, 1.0);",
-                "medium *= cover / shownCover;", "medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));",
-                "return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover;",
-                "vec3 shown = pallShown(light + heat, cover);",
-                "vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);",
-                "shown = mix(shown, min(vec3(pallDisplay(lin.r), pallDisplay(lin.g), pallDisplay(lin.b)), vec3(1.0)), film);",
-                "float film = clamp(filmed / max(dot(heat, LUMA), 1e-30), 0.0, 1.0);",
-                "hot = st * thermal * (1.0 - fromCarpet);", "glow = hot * mushBallGain(key, PallExposure);",
-                "film = dot(hot, LUMA) * mushFilmShare(roll);"}) {
-            assertTrue(fx.contains(line), "в fx_pall нет: " + line);
+    }
+
+    /** Блоки {@code fx_pall}, которые моделирует Java ({@link #BLOCKS}), — те же, целиком. */
+    @Test
+    void shaderBlocksAreWhatTheJavaCopyModels() throws IOException {
+        assertEquals(List.of(), mismatches(fxPall()), "fx_pall разошёлся с Java-копией (NukeExposure.pixel, cap)");
+    }
+
+    /**
+     * Сверка ловит тихие правки, что меняют подачу и не ломают сборку: доля кривой выключена в накоплении (мутация из ревью
+     * #441), свечение не прибавлено к прежнему пути, кривая на свернувшейся шапке, смесь картинок наоборот, без связи к белому
+     * у прежнего пути.
+     */
+    @Test
+    void silentShaderEditsFailTheCheck() throws IOException {
+        String fx = fxPall();
+        String[][] mutations = {
+                {"filmed += part * film;", "filmed += part * 0.0;", "main (накопление по лучу)"},
+                {"vec3 shown = pallShown(light + heat, cover);", "vec3 shown = pallShown(light, cover);", "main (сборка пикселя)"},
+                {"film = dot(hot, LUMA) * mushFilmShare(roll);", "film = dot(hot, LUMA);", "mushAt (свечение)"},
+                {"vec3(1.0)), film);", "vec3(1.0)), 1.0 - film);", "main (сборка пикселя)"},
+                {"heat += partHeat;", "heat += partGlow;", "mushStep"},
+                {"medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));", "", "pallShown"}};
+        for (String[] m : mutations) {
+            assertEquals(1, fx.split(java.util.regex.Pattern.quote(m[0]), -1).length - 1, "в fx_pall одна такая строка: " + m[0]);
+            assertTrue(mismatches(fx.replace(m[0], m[1])).contains(m[2]), "мутация «" + m[0] + "» → «" + m[1] + "» прошла сверку");
         }
     }
 
