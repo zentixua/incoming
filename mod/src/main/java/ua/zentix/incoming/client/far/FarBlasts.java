@@ -241,7 +241,7 @@ public final class FarBlasts {
         @Override
         public boolean sprayClubs(double seconds) {
             // После возвращения последней струи — взвесь мелких капель, не падающие полосы брызг.
-            return water != null && water.aloft(seconds - bornSeconds) > 0;
+            return water != null && water.aloft(sourceAge(seconds)) > 0;
         }
 
         /** Над рельефом, что закрывает место взрыва вдали (последний луч, {@link #trace}). */
