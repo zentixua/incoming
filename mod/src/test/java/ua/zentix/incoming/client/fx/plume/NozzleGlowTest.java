@@ -3,6 +3,8 @@ package ua.zentix.incoming.client.fx.plume;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.entity.FlightPhase;
+import ua.zentix.incoming.entity.BoosterLifetime;
+import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 
@@ -102,6 +104,31 @@ class NozzleGlowTest {
                     double t = i * NozzleGlow.SAMPLE;
                     assertEquals(fine[i], coarse[i], 15, w + " " + wall.material() + " на " + t + " с");
                 }
+            }
+        }
+    }
+
+    /** Последний кадр и удаление: ночная адаптация и та же подача, что у PlumeRenderer, при любом времени падения. */
+    @Test
+    void cleanupCannotRemoveAVisibleHotNozzle() {
+        for (WeaponType w : BOOSTED) {
+            NozzleGlow g = glow(w);
+            for (int end = BoosterLifetime.LIE_TICKS; end <= BoosterLifetime.MAX_AGE; end++) {
+                double previous = Double.NaN;
+                for (double remaining = BoosterLifetime.HIDDEN_TICKS + BoosterLifetime.FADE_TICKS; remaining >= -1; remaining -= 0.05) {
+                    NozzleGlow.Shine s = g.spent(end - remaining);
+                    float visibility = BoosterLifetime.visibility(remaining);
+                    float[] cone = Sight.onScreen(NozzleGlow.color(s.coneKelvin()), 1200 * s.coneLuminance(), visibility);
+                    float[] throat = Sight.onScreen(NozzleGlow.color(s.throatKelvin()), 1200 * s.throatLuminance(), visibility);
+                    double screen = Math.max(cone[0], throat[0]);
+                    if (!Double.isNaN(previous)) assertTrue(Math.abs(screen - previous) < 0.02, w + " последний свет: " + remaining);
+                    if (remaining <= 1) {
+                        assertTrue(screen < 0.02, w + " виден в последнем кадре");
+                        assertTrue((s.coneLuminance() + s.throatLuminance()) * visibility < VISIBLE, w + " свет при удалении");
+                    }
+                    previous = screen;
+                }
+                assertEquals(0, BoosterLifetime.visibility(0), w + " удаление");
             }
         }
     }

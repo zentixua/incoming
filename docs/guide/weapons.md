@@ -342,10 +342,12 @@ same up close and far away.
   from it. A booster does not switch off: in its last moments the remaining propellant burns out and the pressure in the
   motor falls, so the flame shortens and dims and the roar fades over about half a second on the cruise missile (about a
   tenth of a second on the Shahed's small booster) before the empty booster drops away. The nozzle stays hot after
-  that: seen from behind, the cruise missile's spent booster glows yellow-white in the nozzle as it separates and cools
-  through orange to dark red over about half a minute, while the thick throat deeper inside keeps a dull red glow for
-  minutes. The Shahed's booster burns for only 2.5 seconds and its nozzle is small, so it fades within a few seconds.
-  By day only the first seconds of the glow are bright enough to see; at night it is visible much longer.
+  that: seen from behind, the cruise missile's spent booster glows yellow-white in the nozzle as it separates, then
+  reddens as it cools. The Shahed's booster burns for only 2.5 seconds and its nozzle is small, so it fades within a few
+  seconds. By day the glow is visible only in the first seconds; at night it stays visible longer. Empty boosters are
+  cleaned up after 5 seconds on the ground or 20 seconds after separation, whichever comes first. Before cleanup,
+  both the body and its glow fade together over 2 seconds, becoming invisible one second before removal. This cleanup
+  is **not physical**; the physical cooling model continues beneath the fade, but its longer cooling times are not shown.
 - **Engines without a flame**: the Shahed's piston engine, the cruise missile's jet engine and the Lancet's electric
   motor show no flame and leave no visible smoke.
 - **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a

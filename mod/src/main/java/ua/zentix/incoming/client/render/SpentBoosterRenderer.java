@@ -24,7 +24,8 @@ public class SpentBoosterRenderer extends EntityRenderer<SpentBoosterEntity> {
     @Override
     public void render(SpentBoosterEntity e, float entityYaw, float partialTick, PoseStack pose, MultiBufferSource buffers, int packedLight) {
         ClientWeaponSpec.SpentBooster spent = ClientWeaponSpec.of(e.weapon()).spent();
-        if (spent != null) {
+        float visibility = e.visibility(partialTick);
+        if (spent != null && visibility > 0) {
             float t = e.age() + partialTick;
             pose.pushPose();
             pose.translate(0, spent.lift(), 0);
@@ -32,17 +33,19 @@ public class SpentBoosterRenderer extends EntityRenderer<SpentBoosterEntity> {
             pose.mulPose(new Quaternionf().rotationYXZ(-e.getYRot() * Mth.DEG_TO_RAD, tumble * Mth.DEG_TO_RAD, 0));
             // сетка ускорителя — в системе снаряда: сдвинуть её середину в начало
             pose.translate(0, spent.dy(), spent.dz());
-            spent.mesh().get().draw(pose, buffers, packedLight);
+            spent.mesh().get().draw(pose, buffers.getBuffer(visibility < 1 ? WeaponModels.TRANSLUCENT : WeaponModels.SOLID),
+                    packedLight, visibility, false);
             pose.popPose();
-            glow(e, spent, tumble, t);
+            glow(e, spent, tumble, t, visibility);
         }
+        this.shadowRadius = 0.3f * visibility;
         super.render(e, entityYaw, partialTick, pose, buffers, packedLight);
     }
 
     /**
      * Горячее сопло: стенки остывают с конца работы ({@link NozzleGlow#spent}); срез — там же, где у сетки (та же поза).
      */
-    private static void glow(SpentBoosterEntity e, ClientWeaponSpec.SpentBooster spent, float tumble, float age) {
+    private static void glow(SpentBoosterEntity e, ClientWeaponSpec.SpentBooster spent, float tumble, float age, float visibility) {
         NozzleGlow g = ClientWeaponSpec.nozzleGlow(e.weapon());
         ClientWeaponSpec.At at = ClientWeaponSpec.of(e.weapon()).airframe(false).boosterNozzle();
         if (g == null || at == null) return;
@@ -50,7 +53,7 @@ public class SpentBoosterRenderer extends EntityRenderer<SpentBoosterEntity> {
         Vector3f n = new Vector3f((float) at.x(), (float) at.y() + spent.dy(), (float) at.z() + spent.dz()).rotate(rot).add(0, spent.lift(), 0);
         float partial = age - e.age();
         Vec3 nozzle = e.getPosition(partial).add(n.x, n.y, n.z);
-        PlumeRenderer.glow(g.spent(age), e, rot, nozzle, 1);
+        PlumeRenderer.glow(g.spent(age), e, rot, nozzle, visibility);
     }
 
     @Override
