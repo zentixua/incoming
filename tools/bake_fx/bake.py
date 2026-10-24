@@ -516,6 +516,35 @@ def cap_mask(arr):
     return np.clip((z - (neck - soft)) / soft, 0, 1).astype(np.float32), neck
 
 
+def round_footprint(arr):
+    """Шапка сверху — вытянутое пятно (оси инерции 1,4–1,7 : 1): клуб мода — гаусс с осями квадрата σh × σv, и вытянутый по
+    диагонали кадр клал бы его косой полосой с длинными ровными боками (у крупного клуба пыли у глаза — стенкой, ревью
+    #443). Пятно сжимается вдоль большой оси до круглого (клубы те же, чуть сплюснуты): плотность пересчитывается в
+    тех же вокселях, по горизонтали — билинейно, толща по вертикали в каждой точке — та же. Сжатие — данными, а не
+    преобразованием объекта: матрица объекта Blender — место, поворот и масштаб по своим осям, сдвиг в ней не держится.
+    Возвращает поле и прежнее отношение осей."""
+    proj = arr.sum(axis=2)
+    nx, ny = proj.shape
+    ii, jj = np.nonzero(proj > 0)
+    wgt = proj[ii, jj]
+    xy = np.stack([ii, jj], 1).astype(np.float64)
+    centre = np.average(xy, axis=0, weights=wgt)
+    ev, vec = np.linalg.eigh(np.cov((xy - centre).T, aweights=wgt))
+    ratio = float(np.sqrt(ev[1] / ev[0]))
+    # откуда брать точку (x, y): обратное сжатие — растяжение вдоль большой оси
+    back = vec @ np.diag([1.0, ratio]) @ vec.T
+    gx, gy = np.meshgrid(np.arange(nx, dtype=np.float64), np.arange(ny, dtype=np.float64), indexing="ij")
+    sx = centre[0] + back[0, 0] * (gx - centre[0]) + back[0, 1] * (gy - centre[1])
+    sy = centre[1] + back[1, 0] * (gx - centre[0]) + back[1, 1] * (gy - centre[1])
+    inside = (sx >= 0) & (sx <= nx - 1) & (sy >= 0) & (sy <= ny - 1)
+    sx, sy = np.clip(sx, 0, nx - 1.001), np.clip(sy, 0, ny - 1.001)
+    x0, y0 = sx.astype(int), sy.astype(int)
+    fx, fy = (sx - x0)[..., None], (sy - y0)[..., None]
+    out = (arr[x0, y0] * (1 - fx) * (1 - fy) + arr[x0 + 1, y0] * fx * (1 - fy) + arr[x0, y0 + 1] * (1 - fx) * fy
+           + arr[x0 + 1, y0 + 1] * fx * fy)
+    return (out * inside[..., None]).astype(np.float32), ratio
+
+
 def puff_vdb(src, kind="puff"):
     import glob
     import re
@@ -539,10 +568,18 @@ def puff_vdb(src, kind="puff"):
         a, b = d.evalActiveVoxelBoundingBox()
         arr = np.zeros((b[0] - a[0] + 1, b[1] - a[1] + 1, b[2] - a[2] + 1), np.float32)
         d.copyToArray(arr, ijk=a)
-        neck = None
+        neck, ratio = None, 1.0
         if cap:
             m, neck = cap_mask(arr)
             arr = arr * m
+        # вещество у стенки области симуляции — до сжатия пятна (оно уводит край внутрь)
+        idx = np.argwhere(arr > 0.01 * arr.max())
+        lo, hi = idx.min(0) + np.array(a), idx.max(0) + np.array(a)
+        near = [k for k in range(3) if hi[k] > wall_hi[k] - WALL] + [k for k in range(2) if lo[k] < wall_lo[k] + WALL]
+        if near:
+            raise SystemExit(f"puff-vdb: кадр {i} упирается в край области симуляции (оси {near}): срезан прямо, взять раньше")
+        if cap:
+            arr, ratio = round_footprint(arr)
         path = os.path.join(OUT, kind + "-vdb", f"cap_{i:03d}.vdb")
         g = openvdb.FloatGrid()
         g.copyFromArray(arr, ijk=a, tolerance=1e-4)
@@ -552,13 +589,10 @@ def puff_vdb(src, kind="puff"):
         # рамка — где плотность заметна (1 % наибольшей), а не все активные воксели
         idx = np.argwhere(arr > 0.01 * arr.max())
         lo, hi = idx.min(0) + np.array(a), idx.max(0) + np.array(a)
-        near = [k for k in range(3) if hi[k] > wall_hi[k] - WALL] + [k for k in range(2) if lo[k] < wall_lo[k] + WALL]
-        if near:
-            raise SystemExit(f"puff-vdb: кадр {i} упирается в край области симуляции (оси {near}): срезан прямо, взять раньше")
         # толща — вдоль взгляда камеры: у шапки — сверху (z), иначе — сбоку (y)
         proj = arr.sum(axis=2 if cap else 1)
         sil = proj > 0.05 * proj.max()
-        frames[i] = (lo, hi, VDB_PUFF_TAU / float(np.median(proj[sil])), path, neck)
+        frames[i] = (lo, hi, VDB_PUFF_TAU / float(np.median(proj[sil])), path, neck, ratio)
     c = CLUBS[kind]
     sc = reset(TILE)
     vol = bpy.data.volumes.new(kind)
@@ -593,8 +627,10 @@ def puff_vdb(src, kind="puff"):
     lamps = {k: sun(v, math.pi) for k, v in LIGHTS.items()}
     os.makedirs(os.path.join(OUT, kind), exist_ok=True)
     scale = []
+    ratios = []
     for i in picks:
-        lo, hi, k, path, neck = frames[i]
+        lo, hi, k, path, neck, ratio = frames[i]
+        ratios.append(round(ratio, 3))
         # рамка в осях кадра: вправо — x, вверх — z сцены (у шапки — y симуляции), к камере — −y (у шапки — верх z)
         up0, up1, near, deep = (lo[1], hi[1], -hi[2], hi[2] - lo[2]) if cap else (lo[2], hi[2], lo[1], hi[1] - lo[1])
         size = 1.08 * max(hi[0] - lo[0], up1 - up0) + 2
@@ -615,10 +651,10 @@ def puff_vdb(src, kind="puff"):
             sc.render.filepath = exr
             bpy.ops.render.render(write_still=True)
             save_npy(exr, npy)
-        print("vdb puff frame", i, "size", round(size, 1), "sigma", round(k, 4), "neck", neck, flush=True)
+        print("vdb puff frame", i, "size", round(size, 1), "sigma", round(k, 4), "neck", neck, "axes", round(ratio, 2), flush=True)
     with open(os.path.join(OUT, kind, "meta.json"), "w") as f:
         json.dump({"source": src, "picks": picks, "scale": scale, "tau": VDB_PUFF_TAU, "cap": cap,
-                   "cap_soft": CAP_SOFT, "view": "top" if cap else "side",
+                   "cap_soft": CAP_SOFT, "view": "top" if cap else "side", "axes_before": ratios,
                    "albedo": c["albedo"], "g": c["g"], "render_size": TILE, "samples": SAMPLES}, f)
 
 

@@ -13,9 +13,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
 
@@ -302,7 +300,7 @@ class FxAtlasTest {
      * Клуб дыма — клубы, а не «вата»: в непрозрачном ядре каждого кадра (непрозрачность больше 0,6) свет сверху (карта A,
      * зелёный) отходит от своего сглаживания по 9×9 пикселей в среднем на 12 % и больше. Прежний клуб своей Mantaflow —
      * пушистый шар с ровными картами (0,01–0,08 в кадрах, что брали облака): облака в игре были ровными тёмными шарами
-     * без светлых верхов клубов; шапка облака EmberGen — от 0,13.
+     * без светлых верхов клубов; шапка облака EmberGen сверху — 0,13–0,19.
      */
     @Test
     void puffFramesHaveBillowsInTheirLight() throws IOException {
@@ -346,11 +344,12 @@ class FxAtlasTest {
      * У кадров клубов облаков (дым и брызги) нет прямого края альфы: клуб кладётся в любом повороте — стоя, отражённым и
      * лёжа на земле (пыль у земли), и прямой край любого кадра где-нибудь встаёт стенкой (ревью #443: срез шапки облака
      * плоскостью при запекании дал прямой низ у кадров, и пыль налёта на 55 с легла отвесной стенкой). Мера — по настоящей
-     * двумерной альфе: крутые тексели края (|∇α| не меньше {@link #STEEP} на тексель кадра 128) голосуют за прямую через себя
-     * поперёк своего градиента, и самая длинная прямая — не больше {@link #STRAIGHT} стороны кадра (у клубящегося края
-     * голоса расходятся по многим прямым: до 0,32; срезанный низ прежних кадров — до 0,68, обрезанная сторона — от 0,55). Среднее по кольцам (как у профилей непрозрачности) направленную
-     * границу теряет. Мутация — кадр с обрезанной стороной — тест роняет. Огненный шар сюда не входит: низ его кадра срезан
-     * у земли нарочно ({@code pack.py}: DOWN), шар стоит на ней и не ложится.
+     * двумерной альфе ({@link #straightEdge}): силуэт по лучам из середины, и самый длинный его кусок, что лежит на прямой
+     * (в пределах {@link #STRAIGHT_TOL} поперечника), — не больше {@link #STRAIGHT} поперечника. У клубящегося края — 0,11–0,29
+     * (прежний клуб, брызги, шапка сверху), у срезанного плоскостью низа прежних кадров — до 0,46, у кадра с обрезанной
+     * стороной — от 0,66.
+     * Среднее по кольцам (как у профилей непрозрачности) направленную границу теряет. Огненный шар сюда не входит: низ
+     * его кадра срезан у земли нарочно ({@code pack.py}: DOWN), шар стоит на ней и не ложится.
      */
     @Test
     void cloudFramesHaveNoStraightEdge() throws IOException {
@@ -358,20 +357,65 @@ class FxAtlasTest {
             for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
                 String name = String.format(Locale.ROOT, "%s_%02d.png", prefix, f);
                 double edge = straightEdge(alpha(name));
-                assertTrue(edge <= STRAIGHT, name + ": прямой край альфы на " + edge + " стороны кадра");
+                assertTrue(edge <= STRAIGHT, name + ": прямой кусок силуэта на " + edge + " поперечника");
             }
         }
-        // кадр с обрезанной стороной (треть кадра справа — пусто) тест ловит
-        double[][] cut = alpha("puff6a_05.png");
-        int n = cut.length;
-        for (double[] row : cut) Arrays.fill(row, n - n * 35 / 100, n, 0);
-        assertTrue(straightEdge(cut) > STRAIGHT, "срезанный кадр: " + straightEdge(cut));
+        // кадр с обрезанной стороной (треть справа — пусто) и со срезанным углом тест ловит
+        double[][] side = alpha("puff6a_05.png"), corner = alpha("puff6a_09.png");
+        int n = side.length;
+        for (double[] row : side) Arrays.fill(row, n - n * 35 / 100, n, 0);
+        for (int y = 0; y < n; y++) {
+            for (int x = 0; x < n; x++) if (x + y > 5 * n / 4) corner[y][x] = 0;
+        }
+        assertTrue(straightEdge(side) > STRAIGHT, "срезанная сторона: " + straightEdge(side));
+        assertTrue(straightEdge(corner) > STRAIGHT, "срезанный угол: " + straightEdge(corner));
     }
 
-    /** Крутой край альфы: не меньше этого перепада на тексель кадра 128 ({@link #straightEdge}). */
-    static final double STEEP = 0.15;
-    /** Самая длинная прямая крутого края — не больше этой доли стороны кадра. */
-    static final double STRAIGHT = 0.45;
+    /**
+     * Кадр клуба дыма — округлый: клуб — гаусс модели с осями квадрата (σh поперёк, σv вверх), и форму облака задаёт квадрат,
+     * а не картинка. Шапка облака взрыва сверху вытянута (оси инерции альфы 1,4–1,7 : 1), и кадр, отражённый и лёжа на
+     * земле, клал гаусс косой полосой с длинными ровными боками — у крупного клуба пыли у глаза налёт вставал стенкой
+     * (ревью #443). Отношение осей инерции альфы каждого кадра — не больше {@link #PUFF_AXES} (прежний клуб — 1,0–1,2,
+     * шапка сверху, сжатая при запекании вдоль большой оси, — 1,05–1,15).
+     */
+    @Test
+    void puffFramesAreRound() throws IOException {
+        for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
+            String name = String.format(Locale.ROOT, "puff6a_%02d.png", f);
+            double[][] a = alpha(name);
+            double w = 0, cx = 0, cy = 0;
+            for (int y = 0; y < a.length; y++) {
+                for (int x = 0; x < a.length; x++) {
+                    w += a[y][x];
+                    cx += x * a[y][x];
+                    cy += y * a[y][x];
+                }
+            }
+            cx /= w;
+            cy /= w;
+            double xx = 0, yy = 0, xy = 0;
+            for (int y = 0; y < a.length; y++) {
+                for (int x = 0; x < a.length; x++) {
+                    xx += (x - cx) * (x - cx) * a[y][x] / w;
+                    yy += (y - cy) * (y - cy) * a[y][x] / w;
+                    xy += (x - cx) * (y - cy) * a[y][x] / w;
+                }
+            }
+            double mid = (xx + yy) / 2, diff = Math.sqrt((xx - yy) * (xx - yy) / 4 + xy * xy);
+            double axes = Math.sqrt((mid + diff) / (mid - diff));
+            assertTrue(axes <= PUFF_AXES, name + ": оси альфы " + axes);
+        }
+    }
+
+    /** Отношение осей инерции альфы кадра клуба — не больше ({@link #puffFramesAreRound}). */
+    static final double PUFF_AXES = 1.25;
+
+    /** Самый длинный прямой кусок силуэта — не больше этой доли поперечника ({@link #straightEdge}). */
+    static final double STRAIGHT = 0.32;
+    /** Прямой — в пределах этой доли поперечника от хорды. */
+    static final double STRAIGHT_TOL = 0.012;
+    /** Силуэт — тексели с непрозрачностью не меньше (у густого дыма видно и бледное). */
+    static final double SILHOUETTE = 0.2;
 
     private static double[][] alpha(String name) throws IOException {
         try (InputStream in = FxAtlasTest.class.getResourceAsStream(DIR + name)) {
@@ -386,36 +430,51 @@ class FxAtlasTest {
     }
 
     /**
-     * Доля стороны кадра под одной прямой крутого края альфы: тексели с |∇α| ≥ {@link #STEEP} (центральные разности, в мере
-     * кадра 128) голосуют за прямую x·cos θ + y·sin θ = ρ, θ — направление их градиента (72 сектора, с соседними), ρ — с шагом в
-     * тексель (с соседними); лучшая прямая — её голоса / сторона кадра.
+     * Самый длинный прямой кусок силуэта альфы, в долях его поперечника: 360 лучей из середины (центр масс альфы), на каждом —
+     * дальний тексель не прозрачнее {@link #SILHOUETTE} (шаг — полтекселя); кусок — подряд идущие точки лучей, что все в
+     * пределах {@link #STRAIGHT_TOL} поперечника от хорды между его концами; поперечник — два средних радиуса силуэта.
      */
     static double straightEdge(double[][] a) {
-        int n = a.length, bins = 72;
-        List<int[]> votes = new ArrayList<>();
-        for (int y = 1; y < n - 1; y++) {
-            for (int x = 1; x < n - 1; x++) {
-                double gx = (a[y][x + 1] - a[y][x - 1]) / 2, gy = (a[y + 1][x] - a[y - 1][x]) / 2;
-                if (Math.hypot(gx, gy) * n / 128 < STEEP) continue;
-                int k = Math.floorMod((int) Math.round((Math.atan2(gy, gx) + Math.PI) / (2 * Math.PI) * bins), bins);
-                votes.add(new int[]{x, y, k});
+        int n = a.length, rays = 360;
+        double w = 0, cx = 0, cy = 0;
+        for (int y = 0; y < n; y++) {
+            for (int x = 0; x < n; x++) {
+                w += a[y][x];
+                cx += x * a[y][x];
+                cy += y * a[y][x];
             }
         }
-        int best = 0;
-        for (int b = 0; b < bins; b++) {
-            double t = 2 * Math.PI * b / bins - Math.PI, c = Math.cos(t), sn = Math.sin(t);
-            int[] count = new int[4 * n + 3];
-            int voters = 0;
-            for (int[] v : votes) {
-                int d = Math.floorMod(v[2] - b, bins);
-                if (d > 1 && d < bins - 1) continue;
-                count[(int) Math.round(v[0] * c + v[1] * sn) + 2 * n + 1]++;
-                voters++;
+        cx /= w;
+        cy /= w;
+        double[] px = new double[rays], py = new double[rays];
+        double mean = 0;
+        for (int i = 0; i < rays; i++) {
+            double t = 2 * Math.PI * i / rays, dx = Math.cos(t), dy = Math.sin(t), r = 0;
+            for (double s = 0; s < n; s += 0.5) {
+                double x = cx + s * dx, y = cy + s * dy;
+                if (x < 0 || y < 0 || x > n - 1 || y > n - 1) break;
+                if (a[(int) Math.round(y)][(int) Math.round(x)] >= SILHOUETTE) r = s;
             }
-            if (voters < 0.1 * n) continue;
-            for (int r = 1; r < count.length - 1; r++) best = Math.max(best, count[r - 1] + count[r] + count[r + 1]);
+            px[i] = cx + r * dx;
+            py[i] = cy + r * dy;
+            mean += r / rays;
         }
-        return (double) best / n;
+        double diameter = 2 * mean, best = 0;
+        for (int i = 0; i < rays; i++) {
+            for (int len = 3; len < rays / 2; len++) {
+                int j = (i + len) % rays;
+                double ax = px[i], ay = py[i], bx = px[j] - ax, by = py[j] - ay, chord = Math.hypot(bx, by);
+                if (chord < 1e-6) continue;
+                boolean straight = true;
+                for (int k = 1; k < len && straight; k++) {
+                    int m = (i + k) % rays;
+                    straight = Math.abs((px[m] - ax) * by - (py[m] - ay) * bx) / chord <= STRAIGHT_TOL * diameter;
+                }
+                if (!straight) break;
+                best = Math.max(best, chord / diameter);
+            }
+        }
+        return best;
     }
 
     /** Клуб брызг: те же 16 кадров по три карты, что у дыма, в мере дыма (одна нормировка карт на все клубы слоя). */
