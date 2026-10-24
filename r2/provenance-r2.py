@@ -3,14 +3,13 @@
 import hashlib
 import json
 import struct
-import subprocess
 import wave
 from pathlib import Path
 
 root = Path(__file__).resolve().parent
-out = root / 'r2'
+out = root if (root / 'r2-road-wide' / 'capture.json').exists() else root / 'r2'
 cases = {p.parent.name: json.loads(p.read_text()) for p in sorted(out.glob('*/capture.json'))}
-previous = json.loads((root / 'provenance.json').read_text())
+previous = json.loads((out.parent / 'provenance.json').read_text())
 for scene in ['road-wide', 'road-close', 'slab-wide', 'slab-close']:
     old = previous['cases'][scene + '-after']
     new = cases['r2-' + scene]
@@ -28,7 +27,7 @@ for path in sorted(out.rglob('*')):
             entry.update(rate=sound.getframerate(), channels=sound.getnchannels(), seconds=sound.getnframes()/sound.getframerate())
     files[str(path.relative_to(out))] = entry
 meta = {
-    'after': subprocess.check_output(['git', '-C', '/mnt/data/projects/incoming/mod/run/wt-AS2', 'rev-parse', 'HEAD'], text=True).strip(),
+    'after': 'ce5aee5d5f1d9989d67c3c95021dbeca679e2a93',
     'before': 'a9891ad674d830a4802522b99718bf80b2866895',
     'renderer': 'vanilla development sandbox, no Iris, no full pack',
     'world_seed': 20261022,
