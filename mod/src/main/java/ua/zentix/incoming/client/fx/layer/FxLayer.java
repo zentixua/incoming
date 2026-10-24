@@ -47,7 +47,7 @@ import java.util.Locale;
  * Блик и вуаль у глаза — по видимой в кадре доле своего источника ({@link SourceProbes}, по тому же расстоянию до мира).
  * Смешивание одно — с умноженной альфой ({@code ONE, ONE_MINUS_SRC_ALPHA}): дым закрывает и светит, искры и ореолы
  * только светят. Свет мира — картой освещения и светом огненных шаров ({@link FxLights}), туман Minecraft — снятый
- * до конца кадра (к нему ваниль туман гасит).
+ * до конца кадра (к нему ваниль туман гасит). Свечение огня, шара, вспышки и факела — {@link FxBloom}.
  */
 public final class FxLayer {
     /** Карта освещения у открытого неба и поправка оттенка её доли неба ({@code FxSkyFix}) — на кадр. */
@@ -144,6 +144,15 @@ public final class FxLayer {
             Incoming.LOG.error("Heat pass shadow shader failed to load: fire light on the world without shadows", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_bloom_down"), DefaultVertexFormat.POSITION), s -> FxBloom.down = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_bloom_up"), DefaultVertexFormat.POSITION), s -> FxBloom.up = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_bloom_gather"), DefaultVertexFormat.POSITION), s -> FxBloom.gather = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_bloom"), DefaultVertexFormat.POSITION), s -> FxBloom.out = s);
+        } catch (IOException ex) {
+            FxBloom.down = FxBloom.up = FxBloom.gather = FxBloom.out = null;
+            Incoming.LOG.error("Effects bloom shaders failed to load: fire, flashes and rocket flames without bloom", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_smoke_fill"), DefaultVertexFormat.POSITION), s -> SmokePass.fill = s);
         } catch (IOException ex) {
             SmokePass.fill = null;
@@ -167,6 +176,7 @@ public final class FxLayer {
             PallPass.second();
             GPU.second();
             HEAT.second();
+            FxBloom.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;
             frames = ticks = collected = 0;
         }
@@ -221,6 +231,8 @@ public final class FxLayer {
         if (warmup) FarRenderer.warmup();
         FRUSTUM.set(FarDraw.viewProjection(e, view.camera(), VIEW_PROJECTION));
         QUADS.begin(view.left(), view.up());
+        // свечение: мелкое светящееся — пятнами в пикселях прохода свечения (FxBloom.spots); 0 — свечения нет
+        QUADS.glowTexel(FxBloom.texel(view.pixel(), mc.getMainRenderTarget().height));
         WaterDecal.begin(level, e.getCamera());
         NukeWater.decals(view.partial());
         LIGHTS.begin();
@@ -322,7 +334,10 @@ public final class FxLayer {
             RenderSystem.depthMask(false);
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
+            s.safeGetUniform("FxGlowPass").set(0f, 1f);
             QUADS.draw();
+            // свечение огня, шара, вспышки и факела: излучение — ещё одним проходом части квадратов, ореол — на кадр (FxBloom)
+            FxBloom.draw(QUADS, s, VIEW_PROJECTION);
             GPU.end(timed);
         } finally {
             light.turnOffLightLayer();
@@ -366,9 +381,9 @@ public final class FxLayer {
     /** Время кадра слоя за прошлую секунду — для строки сценария. */
     public static String describeTiming() {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
-                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s), depth: %s", lastQuads, lastMean, lastMax,
+                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s", lastQuads, lastMean, lastMax,
                 lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
-                HEAT.lastFrames, HeatPass.describe(), SceneDepth.describe());
+                HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe());
     }
 
     /** Выход из мира или смена измерения. */

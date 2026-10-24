@@ -314,6 +314,12 @@ shimmers. The shimmer is shown as large as your eye would see it: about a pixel 
 screen, so it shows on edges behind them, and less in a rocket's exhaust, whose fast gas blurs; through binoculars it
 is the true angle.
 
+Fire, the fireball, flashes and rocket flames glow on the screen: a soft halo of light scattered by the air around the
+flame, which follows its shape and fades with distance from it. It is the same whether you use a shader pack or not. It
+shows best at night against the dark; by day it is faint. Smoke in front of the fire dims both the fire and its halo,
+and fire hidden behind a wall or a hill gives none. This changes how the light is shown, not how bright the
+fire is or how much it lights around it. The glow can be made cheaper or turned off in the settings (Glow around fire).
+
 The shock front itself is seen the way it is on film. The compressed air behind it bends light, so a thin ring of
 shimmer runs out from the fireball over the sky and the ground: a few pixels for a fraction of a second, fading as the
 pressure drops. On grass and under trees the front tears off grass, turf and leaves as it arrives and flicks them up,

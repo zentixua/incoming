@@ -102,8 +102,8 @@ final class Explosions {
     static void pool(ClientLevel level, Vec3 c, double radius, double flame, double share, RandomSource rnd) {
         if (share <= 0 || flame <= 0) return;
         float k = Fx.density(c);
-        float[] fire = ua.zentix.incoming.client.far.Sight.onScreen(FirePlume.FLAME_COLOR,
-                FirePlume.FLAME_LUMINANCE * ua.zentix.incoming.client.far.FarView.exposure(level, 0), 1);
+        double lum = FirePlume.FLAME_LUMINANCE * ua.zentix.incoming.client.far.FarView.exposure(level, 0);
+        float[] fire = ua.zentix.incoming.client.far.Sight.onScreen(FirePlume.FLAME_COLOR, lum, 1);
         double up = Math.sqrt(9.80665 * flame) / 20, size = Math.max(0.35 * radius, 0.2 * flame);
         int life = (int) Math.max(6, Math.round(flame / up));
         // языков в пламени: объём пламени на объём языка, не больше предела
@@ -112,7 +112,7 @@ final class Explosions {
         for (int n = (int) born + (rnd.nextDouble() < born - (int) born ? 1 : 0); n > 0; n--) {
             double a = rnd.nextDouble() * Mth.TWO_PI, r = radius * Math.sqrt(rnd.nextDouble());
             float s = (float) (size * (0.8 + 0.4 * rnd.nextDouble()));
-            Fx.fire().color(fire, fire).vel(0, up * (0.7 + 0.3 * rnd.nextDouble()), 0).size(0.6f * s, s).life(life + rnd.nextInt(Math.max(1, life / 3))).rise(0.004f)
+            Fx.fire().color(fire, fire).hdr(lum).vel(0, up * (0.7 + 0.3 * rnd.nextDouble()), 0).size(0.6f * s, s).life(life + rnd.nextInt(Math.max(1, life / 3))).rise(0.004f)
                     .budget(FxBudget.GROUND).spawn(level, c.add(Math.cos(a) * r, 0.3 + 0.5 * s, Math.sin(a) * r));
         }
         if (rnd.nextFloat() < 0.3f * share) {

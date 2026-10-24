@@ -1,0 +1,16 @@
+{
+    "vertex": "incoming:fx_depth",
+    "fragment": "incoming:fx_bloom_gather",
+    "samplers": [
+        { "name": "Sampler0" },
+        { "name": "Sampler1" },
+        { "name": "Sampler2" },
+        { "name": "Sampler3" },
+        { "name": "Sampler4" },
+        { "name": "Sampler5" },
+        { "name": "Sampler6" }
+    ],
+    "uniforms": [
+        { "name": "BloomCount", "type": "float", "count": 1, "values": [ 1.0 ] }
+    ]
+}

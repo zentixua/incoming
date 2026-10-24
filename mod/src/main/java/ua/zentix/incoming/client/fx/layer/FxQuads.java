@@ -22,9 +22,15 @@ import java.util.Arrays;
  * чем брать текстуру ({@code Normal.y}: 1 — частица ближайшим пикселем, {@link #nearestTexels}; −1 — плитка атласа
  * дальних моделей, {@link #modelTiles}; ½ — ореол по формуле, {@link #glowShape}; −¼ — запечённый клуб с шестисторонним
  * светом, {@link #sixWay}; ⅝ — кадры огня со смесью, {@link #fireballMix}; 0 — лист слоя гладко) и непрозрачность частицы без текстуры или смесь кадров клуба
- * ({@code Normal.z}, {@link #opacity}).
+ * ({@code Normal.z}, {@link #opacity}), свечение ({@code Emit}, {@link #emission}).
  */
 public final class FxQuads {
+    /**
+     * Свечение вершины ({@link #emission}): байт без нормировки (в шейдере — число 0…255). Свой элемент формата — под
+     * свободным номером ({@code findNextId}), как свои элементы заводит Iris.
+     */
+    public static final VertexFormatElement EMIT = VertexFormatElement.register(VertexFormatElement.findNextId(), 0, VertexFormatElement.Type.UBYTE,
+            VertexFormatElement.Usage.GENERIC, 1);
     public static final VertexFormat FORMAT = VertexFormat.builder()
             .add("Position", VertexFormatElement.POSITION)
             .add("UV0", VertexFormatElement.UV0)
@@ -32,7 +38,7 @@ public final class FxQuads {
             .add("UV1", VertexFormatElement.UV1)
             .add("UV2", VertexFormatElement.UV2)
             .add("Normal", VertexFormatElement.NORMAL)
-            .padding(1)
+            .add("Emit", EMIT)
             .build();
     private static final int VERTEX = 36, QUAD = 4 * VERTEX;
     /** Мягкость края клуба у земли и стен — доля его полуразмера. */
@@ -42,19 +48,41 @@ public final class FxQuads {
     private int capacity, n;
     private long write;
     private float[] keys = new float[0];
+    /** Квадрат светится (хоть одна вершина с {@link #emission}). */
+    private boolean[] emits = new boolean[0];
+    /** После {@link #draw}: начало прохода свечения в отсортированном порядке ({@link #glowStart}; n — нет светящихся). */
+    private int glowFrom;
+    /**
+     * Глубина, ближе которой квадраты закрывают ореол светящихся ({@link #glowStart}): наибольшее у светящихся кадра
+     * расстояние с полуразмером квадрата.
+     */
+    private float glowReach;
+    /** Рамка вершин светящихся квадратов кадра (от камеры): x, y, z наименьшие, потом наибольшие. */
+    private final float[] glowBox = new float[6];
+    /** Угол пикселя прохода свечения, рад ({@link FxBloom#texel}); 0 — свечения нет. */
+    private double glowTexel;
+    /** Вершин записано у текущего квадрата; идёт запись пятен ({@link #spots}). */
+    private int corner;
+    private boolean spotting;
     private final FarFirst sort = new FarFirst();
     private final ByteBufferBuilder out = new ByteBufferBuilder(QUAD * 256);
     private Vector3f left = new Vector3f(1, 0, 0), up = new Vector3f(0, 1, 0);
-    private byte nearest, opacity;
+    private byte nearest, opacity, emit;
     private short probe;
+    /** В кадре есть квадраты со свечением ({@link #emission}). */
+    private boolean glows;
 
     /** Новый кадр: оси экрана (влево, вверх) для квадратов лицом к камере. */
     public void begin(Vector3f left, Vector3f up) {
         this.left = left;
         this.up = up;
         n = 0;
-        nearest = opacity = 0;
+        nearest = opacity = emit = 0;
         probe = 0;
+        glows = false;
+        glowReach = -Float.MAX_VALUE;
+        Arrays.fill(glowBox, 0, 3, Float.MAX_VALUE);
+        Arrays.fill(glowBox, 3, 6, -Float.MAX_VALUE);
     }
 
     /**
@@ -133,16 +161,50 @@ public final class FxQuads {
         this.probe = (short) Mth.clamp(probe, 0, SourceProbes.MAX);
     }
 
+    /**
+     * Следующие вершины светятся ({@link FxBloom}): огонь, огненный шар, вспышка, факел. {@code hdr} — во сколько раз их
+     * свет ярче показанного (пересвет, который экран срезал: яркость против белого экрана больше 1, у кадра огня — шар
+     * модели против кадра); 1 — свет как показан; 0 и меньше — не светятся (дым, ореолы в глазу, модели).
+     */
+    public void emission(float hdr) {
+        emit = (byte) (hdr > 0 && glowTexel > 0 ? FxBloom.EMITTER + FxBloom.code(hdr) : 0);
+    }
+
+    /**
+     * Угол пикселя прохода свечения кадра, рад ({@link FxBloom#texel}): светящийся квадрат уже {@link FxBloom#SMALL} таких
+     * пикселей идёт в свечение пятнами с той же энергией ({@link #spots}); 0 — свечения нет (настройка, шейдеры).
+     */
+    public void glowTexel(double texel) {
+        glowTexel = texel;
+    }
+
+    /** В кадре есть свечение: проход свечения нужен. */
+    public boolean glows() {
+        return glows;
+    }
+
+    /** Рамка вершин светящихся квадратов кадра (от камеры): x, y, z наименьшие, потом наибольшие; без них — пустая. */
+    float[] glowBox() {
+        return glowBox;
+    }
+
     public int size() {
         return n;
+    }
+
+    /** Место вершин квадрата i в памяти кадра (проверки: что записано — то и уйдёт в шейдер). */
+    long address(int i) {
+        return stage + (long) i * QUAD;
     }
 
     /** Начать квадрат на расстоянии {@code key} от камеры; дальше — ровно четыре {@link #vertex}. */
     public void quad(float key) {
         if (n == capacity) grow();
         keys[n] = key > 0 ? key : 0;
+        emits[n] = false;
         write = stage + (long) n * QUAD;
         n++;
+        corner = 0;
     }
 
     /**
@@ -169,8 +231,131 @@ public final class FxQuads {
         MemoryUtil.memPutByte(p + 32, (byte) Math.round(Mth.clamp(fog, 0, 1) * 127));
         MemoryUtil.memPutByte(p + 33, nearest);
         MemoryUtil.memPutByte(p + 34, opacity);
-        MemoryUtil.memPutByte(p + 35, (byte) 0);
+        MemoryUtil.memPutByte(p + 35, emit);
+        if (emit != 0) {
+            glows = true;
+            emits[n - 1] = true;
+            glowBox[0] = Math.min(glowBox[0], x);
+            glowBox[1] = Math.min(glowBox[1], y);
+            glowBox[2] = Math.min(glowBox[2], z);
+            glowBox[3] = Math.max(glowBox[3], x);
+            glowBox[4] = Math.max(glowBox[4], y);
+            glowBox[5] = Math.max(glowBox[5], z);
+        }
         write = p + VERTEX;
+        if (++corner == 4 && emits[n - 1]) {
+            reach(n - 1);
+            if (!spotting) spots(n - 1);
+        }
+    }
+
+    /**
+     * Светящийся квадрат i достаёт по глубине до своего расстояния с полуразмером (настоящим: вершины вдали перенесены
+     * ближе): кадр шара стоит у передней половины шара, а ореол — свет воздуха вокруг всего огня, и рукава дыма сбоку на
+     * глубине его середины стоят перед частью этого воздуха.
+     */
+    private void reach(int i) {
+        long q = stage + (long) i * QUAD;
+        float cx = 0, cy = 0, cz = 0;
+        for (int k = 0; k < 4; k++) {
+            long p = q + (long) k * VERTEX;
+            cx += MemoryUtil.memGetFloat(p) / 4;
+            cy += MemoryUtil.memGetFloat(p + 4) / 4;
+            cz += MemoryUtil.memGetFloat(p + 8) / 4;
+        }
+        float half = 0;
+        for (int k = 0; k < 4; k++) {
+            long p = q + (long) k * VERTEX;
+            float dx = MemoryUtil.memGetFloat(p) - cx, dy = MemoryUtil.memGetFloat(p + 4) - cy, dz = MemoryUtil.memGetFloat(p + 8) - cz;
+            half = Math.max(half, (float) Math.sqrt(dx * dx + dy * dy + dz * dz));
+        }
+        float unfold = Math.max((MemoryUtil.memGetShort(q + 26) & 0xFFFF) / (float) Short.MAX_VALUE, 1e-4f);
+        glowReach = Math.max(glowReach, keys[i] + half / unfold);
+    }
+
+    private final float[] corners = new float[12];
+    private final double[] places = new double[3 * FxBloom.SPOTS + 1];
+    private final float[] means = new float[FxAtlas.MEANS];
+
+    /**
+     * Светящийся квадрат i уже {@link FxBloom#SMALL} пикселей прохода свечения поперёк ({@link FxBloom#spots}): в проходе
+     * свечения выборка в серединах его пикселей то попадает в него, то нет — свечение пропадает и мерцает. Вместо него в
+     * проход идут пятна (ореол {@code far/glow} формулой, полуразмер {@link FxBloom#SPOT_HALF} пикселя) с его энергией:
+     * средний свет его места на листе ({@link FxAtlas#means}, тем же законом, что {@code bloomLight} в {@code fx.fsh}) × цвет
+     * вершин × пересвет × его телесный угол, поровну на пятна; доля закрытого — так же. Свет и доля закрытого — в
+     * {@code UV2} ({@link FxBloom#magnitude}), оттенок — в цвете (наибольший канал — 1). Сам он в проход не идёт
+     * ({@link FxBloom#SKIP}).
+     */
+    private void spots(int i) {
+        long q = stage + (long) i * QUAD;
+        for (int k = 0; k < 4; k++) {
+            long p = q + (long) k * VERTEX;
+            corners[3 * k] = MemoryUtil.memGetFloat(p);
+            corners[3 * k + 1] = MemoryUtil.memGetFloat(p + 4);
+            corners[3 * k + 2] = MemoryUtil.memGetFloat(p + 8);
+        }
+        int count = FxBloom.spots(corners, glowTexel, places);
+        if (count == 0) return;
+        float u0 = Float.MAX_VALUE, v0 = Float.MAX_VALUE, u1 = -Float.MAX_VALUE, v1 = -Float.MAX_VALUE, r = 0, g = 0, b = 0, a = 0, unfold = 0;
+        double gain = 0;
+        for (int k = 0; k < 4; k++) {
+            long p = q + (long) k * VERTEX;
+            float u = MemoryUtil.memGetFloat(p + 12), v = MemoryUtil.memGetFloat(p + 16);
+            u0 = Math.min(u0, u);
+            u1 = Math.max(u1, u);
+            v0 = Math.min(v0, v);
+            v1 = Math.max(v1, v);
+            r += (MemoryUtil.memGetByte(p + 20) & 255) / 1020f;
+            g += (MemoryUtil.memGetByte(p + 21) & 255) / 1020f;
+            b += (MemoryUtil.memGetByte(p + 22) & 255) / 1020f;
+            a += (MemoryUtil.memGetByte(p + 23) & 255) / 1020f;
+            unfold += (MemoryUtil.memGetShort(p + 26) & 0xFFFF) / (4f * Short.MAX_VALUE);
+            gain += FxBloom.gain((MemoryUtil.memGetByte(p + 35) & 255) - FxBloom.EMITTER) / 4;
+        }
+        if (!FxAtlas.means(u0, v0, u1, v1, means)) return;
+        // как bloomLight: у частиц и кадров огня (умноженная альфа) — свет цвета на долю, у остального — свет поверх
+        boolean cover = (MemoryUtil.memGetByte(q + 33) & 255) > 69 && a > 0.004f;
+        double[] e = new double[3];
+        double alpha;
+        if (cover) {
+            e[0] = Math.pow(Math.min(1, r / a), 2.2) * a * means[0];
+            e[1] = Math.pow(Math.min(1, g / a), 2.2) * a * means[1];
+            e[2] = Math.pow(Math.min(1, b / a), 2.2) * a * means[2];
+            alpha = a * means[6];
+        } else {
+            e[0] = Math.pow(r, 2.2) * means[3];
+            e[1] = Math.pow(g, 2.2) * means[4];
+            e[2] = Math.pow(b, 2.2) * means[5];
+            alpha = 0;
+        }
+        // на пятно: свет квадрата (средний × телесный угол) поровну, по площади ореола пятна
+        double solid = places[3 * count], spot = FxBloom.SPOT_COVER * Math.pow(2 * FxBloom.SPOT_HALF * glowTexel, 2), share = solid / count / spot;
+        double er = e[0] * gain * share, eg = e[1] * gain * share, eb = e[2] * gain * share, cover2 = Math.min(1, alpha * share);
+        double top = Math.max(er, Math.max(eg, eb));
+        if (top <= 0 && cover2 <= 0) return;
+        // свет пятна — в 16 битах UV2 (FxBloom.magnitude), в цвете — только оттенок: в байте цвета слабое пятно обнулялось
+        int light = FxBloom.magnitude(top) & 0xFFFF | FxBloom.magnitude(cover2) << 16;
+        float hr = top > 0 ? (float) (er / top) : 0, hg = top > 0 ? (float) (eg / top) : 0, hb = top > 0 ? (float) (eb / top) : 0;
+        float soft = Math.max(0, MemoryUtil.memGetShort(q + 24)) / 16f, fog = (MemoryUtil.memGetByte(q + 32) & 255) / 127f, key = keys[i];
+        // сам квадрат — только в слое
+        for (int k = 0; k < 4; k++) MemoryUtil.memPutByte(q + (long) k * VERTEX + 35, (byte) FxBloom.SKIP);
+        byte n0 = nearest, o0 = opacity, e0 = emit;
+        short p0 = probe;
+        spotting = true;
+        nearest = 64;
+        opacity = 0;
+        probe = 0;
+        emit = (byte) FxBloom.SPOT;
+        FxAtlas.Sprite glow = FxAtlas.glow();
+        for (int k = 0; k < count; k++) {
+            double x = places[3 * k], y = places[3 * k + 1], z = places[3 * k + 2], half = FxBloom.SPOT_HALF * glowTexel * Math.sqrt(x * x + y * y + z * z);
+            billboard((float) x, (float) y, (float) z, key, (float) half, 0, glow, hr, hg, hb, 1, soft, unfold, light, fog);
+        }
+        nearest = n0;
+        opacity = o0;
+        emit = e0;
+        probe = p0;
+        spotting = false;
     }
 
     /**
@@ -225,14 +410,54 @@ public final class FxQuads {
 
     /** Отсортировать и нарисовать текущим шейдером; память кадра остаётся для следующего. */
     void draw() {
+        glowFrom = n;
         if (n == 0) return;
         int[] order = sort.sort(keys, n);
+        glowFrom = glowStart(order);
         long dst = out.reserve(n * QUAD);
         for (int i = 0; i < n; i++) MemoryUtil.memCopy(stage + (long) order[i] * QUAD, dst + (long) i * QUAD, QUAD);
         ByteBufferBuilder.Result result = out.build();
-        if (result == null) return;
+        if (result == null) {
+            glowFrom = n;
+            return;
+        }
         BufferUploader.drawWithShader(new MeshData(result, new MeshData.DrawState(FORMAT, n * 4, n * 6, VertexFormat.Mode.QUADS,
                 VertexFormat.IndexType.least(n * 4))));
+    }
+
+    /**
+     * Начало прохода свечения в порядке order (от дальних): первый квадрат не дальше {@link #glowReach}. В проход идёт
+     * то, что закрывает излучение и ореол светящихся: само светящееся и всё ближе глубины, до которой оно достаёт; что
+     * дальше, их не закрывает (ореол над ним остаётся). n — светящихся нет.
+     */
+    private int glowStart(int[] order) {
+        for (int i = 0; i < n; i++) {
+            if (keys[order[i]] <= glowReach) return i;
+        }
+        return n;
+    }
+
+    /** {@link #glowStart} у квадратов кадра (проверки). */
+    int glowStart() {
+        return glowStart(sort.sort(keys, n));
+    }
+
+    /**
+     * После {@link #draw}: ещё раз шейдером s — квадраты с начала прохода свечения ({@link #glowStart}) до ближнего
+     * (проход свечения, {@link FxBloom}): что дальше, излучения и ореола светящихся не закрывает. Из того же буфера, что выгрузил
+     * {@link #draw} (его отсортированные квадраты — с места {@code glowFrom}), без второй выгрузки. false — светящихся нет.
+     */
+    boolean drawGlow(net.minecraft.client.renderer.ShaderInstance s) {
+        if (glowFrom >= n) return false;
+        com.mojang.blaze3d.vertex.VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
+        vb.bind();
+        s.setDefaultUniforms(VertexFormat.Mode.QUADS, com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix(),
+                com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix(), net.minecraft.client.Minecraft.getInstance().getWindow());
+        s.apply();
+        VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+        org.lwjgl.opengl.GL11.glDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, (n - glowFrom) * 6, type.asGLType, (long) glowFrom * 6 * type.bytes);
+        s.clear();
+        return true;
     }
 
     private void grow() {
@@ -242,6 +467,7 @@ public final class FxQuads {
         stage = p;
         capacity = cap;
         keys = Arrays.copyOf(keys, cap);
+        emits = Arrays.copyOf(emits, cap);
     }
 
     private static byte unorm(float f) {

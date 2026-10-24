@@ -30,7 +30,7 @@ public final class Fx {
         /** Хлопья пепла и клочки бумаги: плоские, кувыркаются (сжатая ось), освещаются миром. */
         FLAKE(true, false, FxBudget.ASH);
 
-        /** Освещается миром (дым, пыль) или светится сам (огонь, искры). */
+        /** Освещается миром (дым, пыль) или светится сам (огонь, искры, вспышка, шар — им и свечение {@code FxBloom}). */
         final boolean lit;
         /** Свет складывается (искры, вспышка). */
         final boolean additive;
@@ -149,6 +149,8 @@ public final class Fx {
         boolean paper;
         /** Цвет уже освещён ({@link #prelit}): карта освещения его не темнит. */
         boolean prelit;
+        /** Пересвет самосветящегося ({@link #hdr}): во сколько раз его свет ярче показанного цветом. */
+        float hdr = 1;
         boolean collide, smooth;
         float chainX, chainY, chainZ, chainGap;
         float streak;
@@ -233,6 +235,15 @@ public final class Fx {
          */
         public Spec prelit() {
             prelit = true;
+            return this;
+        }
+
+        /**
+         * Самосветящееся (огонь, искры) ярче белого экрана в {@code k} раз, а цвет показан со срезом ({@code Sight.onScreen}):
+         * свечение ({@code FxBloom}) берёт срезанное. 1 — свет как показан.
+         */
+        public Spec hdr(double k) {
+            hdr = (float) Math.max(1, k);
             return this;
         }
 

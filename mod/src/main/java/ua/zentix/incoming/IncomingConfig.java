@@ -325,6 +325,7 @@ public final class IncomingConfig {
         public final ModConfigSpec.BooleanValue autoCamera;
         public final ModConfigSpec.DoubleValue zoom;
         public final ModConfigSpec.EnumValue<DustQuality> nukeDustQuality;
+        public final ModConfigSpec.EnumValue<Bloom> bloom;
         public final ModConfigSpec.BooleanValue nukeTinnitus;
         public final ModConfigSpec.BooleanValue soundMuffling;
         public final ModConfigSpec.BooleanValue mapPrefetch;
@@ -335,6 +336,11 @@ public final class IncomingConfig {
          */
         public enum DustQuality {
             OFF, LOW, MEDIUM, HIGH
+        }
+
+        /** Свечение огня, шара, вспышки и факела ({@code client/fx/layer/FxBloom}): нет, дешевле, полное. */
+        public enum Bloom {
+            OFF, FAST, FULL
         }
 
         Client(ModConfigSpec.Builder b) {
@@ -355,6 +361,11 @@ public final class IncomingConfig {
                             "OFF leaves only the dust close around you and falling ash: no dust wall, no pall or base surge, and it does not muffle",
                             "sounds. The fireball, the mushroom cloud and the water column stay, at LOW.")
                     .translation("incoming.config.nuke_dust_quality").defineEnum("nuke_dust_quality", DustQuality.MEDIUM);
+            bloom = b.comment("Glow around fire, fireballs, flashes and rocket flames: light scattered by the air around them; smoke in front",
+                            "of the fire dims it. OFF / FAST / FULL. FAST works out the glow from a coarser image and is cheaper (about 0.25-0.4 ms a",
+                            "frame against 0.3-0.7 ms for FULL at 2560x1600 on an RTX 4060); FULL is finer close to small and fine-detailed flames.",
+                            "It does not change the light of the fire on the world and smoke.")
+                    .translation("incoming.config.bloom").defineEnum("bloom", Bloom.FAST);
             nukeTinnitus = b.comment("Hearing damage from a blast wave strong enough to hurt the ears (from about 0.75 psi): muffled hearing and",
                             "ringing ears that recover over game hours; from 5 psi torn eardrums, muffled for game weeks or until you die.")
                     .translation("incoming.config.nuke_tinnitus").define("nuke_tinnitus", true);

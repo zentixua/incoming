@@ -39,7 +39,9 @@ import java.util.Optional;
 public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]> {
     public static final FxAtlas INSTANCE = new FxAtlas();
 
-    private static final int CELL = 64, COLS = 16, ROWS = 96, WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
+    private static final int CELL = 64, COLS = 16, ROWS = 96;
+    /** Размер листа, пикселей. */
+    static final int WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
     /**
      * Кадров огненного шара ({@code fx/particle/fireball_00…47}, 256×256): {@value #FIREBALL_BURN} — горение, остальные —
      * остывание в сажу. Между кадрами — смесь вдоль векторов движения ({@code fireballv_00…47}): огонь течёт, а не
@@ -455,9 +457,74 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         ballShown = read(resources, BALL_LIGHT, r -> numbers(JsonParser.parseReader(r).getAsJsonObject().getAsJsonArray("fire"), BALL_FRAMES),
                 linear(1, 1));
         puffLight = read(resources, PUFF6_DATA, FxAtlas::parseLight, new float[]{PUFF6_FLOW / 128f, 0.79f, 0.5f});
+        emission = emissionTable(sheets[0]);
         NativeImage[] levels = new NativeImage[MIPS + 1];
         for (int l = 0; l <= MIPS; l++) levels[l] = image(sheets[l], WIDTH >> l, HEIGHT >> l);
         return levels;
+    }
+
+    /**
+     * Средние по месту листа для свечения мелкого светящегося ({@code FxQuads}: пятно вместо квадрата мельче пикселя прохода
+     * свечения несёт его энергию): суммы по клеткам {@value #CELL4}×{@value #CELL4} пикселей с накоплением вдоль строки, на клетку
+     * {@value #MEANS} чисел — у частиц и кадров огня (цвет с умноженной альфой) a·lin(rgb/a), у остального lin(rgb), и a;
+     * lin — степень 2,2, как в {@code fx.fsh}.
+     */
+    private static volatile float[] emission;
+    static final int CELL4 = 4, MEANS = 7;
+    private static final int TW = WIDTH / CELL4, TH = HEIGHT / CELL4;
+
+    private static float[] emissionTable(int[] base) {
+        float[] lin = new float[256];
+        for (int i = 0; i < 256; i++) lin[i] = (float) Math.pow(i / 255.0, 2.2);
+        float[] cells = new float[TW * TH * MEANS];
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                int p = base[y * WIDTH + x], a = p >>> 24 & 255;
+                if (a == 0) continue;
+                int r = p & 255, g = p >> 8 & 255, b = p >> 16 & 255, c = ((y / CELL4) * TW + x / CELL4) * MEANS;
+                float af = a / 255f;
+                cells[c] += af * lin[Math.min(255, Math.round(255f * r / a))];
+                cells[c + 1] += af * lin[Math.min(255, Math.round(255f * g / a))];
+                cells[c + 2] += af * lin[Math.min(255, Math.round(255f * b / a))];
+                cells[c + 3] += lin[r];
+                cells[c + 4] += lin[g];
+                cells[c + 5] += lin[b];
+                cells[c + 6] += af;
+            }
+        }
+        // накопление вдоль строки клеток: row[(y·(TW + 1) + x)·MEANS + k] — сумма клеток строки y левее x (по всему листу
+        // float потерял бы точность: суммы до миллионов против клетки в единицы)
+        float[] row = new float[TH * (TW + 1) * MEANS];
+        for (int y = 0; y < TH; y++) {
+            for (int x = 0; x < TW; x++) {
+                int at = (y * (TW + 1) + x + 1) * MEANS;
+                for (int k = 0; k < MEANS; k++) row[at + k] = row[at - MEANS + k] + cells[(y * TW + x) * MEANS + k];
+            }
+        }
+        return row;
+    }
+
+    /** Средние для свечения по готовому листу base ({@link #emissionTable}) — без загрузки ресурсов (проверки). */
+    static void emissionFrom(int[] base) {
+        emission = emissionTable(base);
+    }
+
+    /**
+     * Средние по месту (u0, v0)–(u1, v1) листа ({@link #emissionTable}): клетками по 4 пикселя, не меньше одной (строка ленты —
+     * клеткой вокруг неё); в out — {@value #MEANS} чисел на пиксель места. Лист ещё не прочитан — false.
+     */
+    public static boolean means(float u0, float v0, float u1, float v1, float[] out) {
+        float[] sat = emission;
+        if (sat == null) return false;
+        int x0 = Math.clamp((int) Math.floor(Math.min(u0, u1) * TW + 1e-3), 0, TW - 1), y0 = Math.clamp((int) Math.floor(Math.min(v0, v1) * TH + 1e-3), 0, TH - 1);
+        int x1 = Math.clamp((int) Math.ceil(Math.max(u0, u1) * TW - 1e-3), x0 + 1, TW), y1 = Math.clamp((int) Math.ceil(Math.max(v0, v1) * TH - 1e-3), y0 + 1, TH);
+        float area = (x1 - x0) * (y1 - y0) * (float) (CELL4 * CELL4);
+        for (int k = 0; k < MEANS; k++) out[k] = 0;
+        for (int y = y0; y < y1; y++) {
+            for (int k = 0; k < MEANS; k++) out[k] += sat[(y * (TW + 1) + x1) * MEANS + k] - sat[(y * (TW + 1) + x0) * MEANS + k];
+        }
+        for (int k = 0; k < MEANS; k++) out[k] /= area;
+        return true;
     }
 
     /** Поток отрисовки: в видеопамять (та же текстура при перезагрузке ресурсов). */

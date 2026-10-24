@@ -1,10 +1,11 @@
-#version 150
+#version 330
 
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:smoke.glsl>
 #moj_import <incoming:pall_front.glsl>
 #moj_import <incoming:fx_balls.glsl>
+#moj_import <incoming:bloom.glsl>
 
 // Слой эффектов (client/fx/layer): дым, пламя, искры, вспышки и всё дальнее одним проходом после мира.
 in vec3 Position;
@@ -20,6 +21,10 @@ in ivec2 UV2;
 // моделей (свет в ней уже есть), ½ — ореол far/glow (крупный — по формуле, fx.fsh), −¼ — запечённый клуб с
 // шестисторонним светом (FxAtlas.puff6), ⅝ — кадры огня; z: непрозрачность частицы без текстуры, у клуба/огня — смесь кадров
 in vec3 Normal;
+// свечение (FxBloom, FxQuads.emission): байт Emit — bloom.glsl
+in float Emit;
+// x: 1 — проход свечения (FxBloom); y — во сколько раз пиксель прохода крупнее пикселя кадра
+uniform vec2 FxGlowPass;
 
 uniform sampler2D Sampler2;
 // свет открытого неба на веществе в воздухе против карты освещения у открытого неба (FarView.sky): карта красит синим
@@ -56,6 +61,10 @@ out vec3 sixKeyDir;
 out vec3 sixBallDir;
 // место вершины от камеры (настоящее, без переноса ближе): свет шаров на лежащем клубе — в каждом пикселе (fx.fsh)
 out vec3 worldPos;
+// свечение: во сколько раз свет ярче показанного; 0 — не светится
+out float emitGain;
+// 1 — пятно мелкого светящегося (FxQuads, FxBloom.spots): ореол формулой, свет линейный
+out float emitSpot;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
 
@@ -100,8 +109,9 @@ void main() {
     gl_Position = ProjMat * view;
     texCoord0 = UV0;
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
-    vec4 light = Normal.y < -0.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
-    if (Normal.y > -0.5 && any(lessThan(UV2, ivec2(240)))) {
+    // у пятна свечения UV2 несёт его свет (FxBloom.magnitude), не место на карте освещения
+    vec4 light = Normal.y < -0.5 || Emit > 129.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
+    if (Normal.y > -0.5 && Emit < 129.5 && any(lessThan(UV2, ivec2(240)))) {
         // доля света неба в точке (небо 0..15): её оттенок — как у вещества под открытым небом, свет блоков — как есть
         light.rgb *= mix(vec3(1.0), FxSkyFix, float(UV2.y) / 240.0);
         // свет шаров — к карте освещения: в долях света неба на экране (карта при открытом небе без блоков) и вместе не
@@ -138,6 +148,19 @@ void main() {
     fog = Normal.x;
     nearest = Normal.y;
     opacity = Normal.z;
+    emitGain = 0.0;
+    emitSpot = 0.0;
+    if (Emit > 129.5) {
+        emitSpot = 1.0;
+        emitGain = 1.0;
+        // свет пятна линейный: оттенок — в цвете вершины, величина — в UV2.x, доля закрытого — в UV2.y (FxBloom.magnitude)
+        vertexColor = vec4(Color.rgb * bloomMag(float(UV2.x)), bloomMag(float(UV2.y)));
+    } else if (Emit > 1.5) {
+        emitGain = bloomGain(Emit - 2.0);
+    }
+    // пятно — только в проходе свечения, квадрат, что светится пятнами, — только в слое: другой — за пределами кадра
+    bool glowPass = FxGlowPass.x > 0.5;
+    if ((Emit > 129.5 && !glowPass) || (Emit > 0.5 && Emit < 1.5 && glowPass)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     // блик и вуаль с пробой: пелена и грибы перед источником — уже в ней (fx_probe, до самого источника); по углам
     // квадрата у глаза их не считать — свет в глазу идёт от источника, а угол блика в своей же шапке гасил бы его над ней
     pallFront = 1.0;
