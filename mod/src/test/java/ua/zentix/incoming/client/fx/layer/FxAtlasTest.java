@@ -13,7 +13,9 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
 
@@ -300,7 +302,7 @@ class FxAtlasTest {
      * Клуб дыма — клубы, а не «вата»: в непрозрачном ядре каждого кадра (непрозрачность больше 0,6) свет сверху (карта A,
      * зелёный) отходит от своего сглаживания по 9×9 пикселей в среднем на 12 % и больше. Прежний клуб своей Mantaflow —
      * пушистый шар с ровными картами (0,01–0,08 в кадрах, что брали облака): облака в игре были ровными тёмными шарами
-     * без светлых верхов клубов; шапка облака EmberGen — 0,16–0,21.
+     * без светлых верхов клубов; шапка облака EmberGen — от 0,13.
      */
     @Test
     void puffFramesHaveBillowsInTheirLight() throws IOException {
@@ -338,6 +340,82 @@ class FxAtlasTest {
                 assertTrue(fine >= 0.12, name + ": клубы в свете сверху " + fine);
             }
         }
+    }
+
+    /**
+     * У кадров клубов облаков (дым и брызги) нет прямого края альфы: клуб кладётся в любом повороте — стоя, отражённым и
+     * лёжа на земле (пыль у земли), и прямой край любого кадра где-нибудь встаёт стенкой (ревью #443: срез шапки облака
+     * плоскостью при запекании дал прямой низ у кадров, и пыль налёта на 55 с легла отвесной стенкой). Мера — по настоящей
+     * двумерной альфе: крутые тексели края (|∇α| не меньше {@link #STEEP} на тексель кадра 128) голосуют за прямую через себя
+     * поперёк своего градиента, и самая длинная прямая — не больше {@link #STRAIGHT} стороны кадра (у клубящегося края
+     * голоса расходятся по многим прямым: до 0,32; срезанный низ прежних кадров — до 0,68, обрезанная сторона — от 0,55). Среднее по кольцам (как у профилей непрозрачности) направленную
+     * границу теряет. Мутация — кадр с обрезанной стороной — тест роняет. Огненный шар сюда не входит: низ его кадра срезан
+     * у земли нарочно ({@code pack.py}: DOWN), шар стоит на ней и не ложится.
+     */
+    @Test
+    void cloudFramesHaveNoStraightEdge() throws IOException {
+        for (String prefix : new String[]{"puff6a", "spray6a"}) {
+            for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
+                String name = String.format(Locale.ROOT, "%s_%02d.png", prefix, f);
+                double edge = straightEdge(alpha(name));
+                assertTrue(edge <= STRAIGHT, name + ": прямой край альфы на " + edge + " стороны кадра");
+            }
+        }
+        // кадр с обрезанной стороной (треть кадра справа — пусто) тест ловит
+        double[][] cut = alpha("puff6a_05.png");
+        int n = cut.length;
+        for (double[] row : cut) Arrays.fill(row, n - n * 35 / 100, n, 0);
+        assertTrue(straightEdge(cut) > STRAIGHT, "срезанный кадр: " + straightEdge(cut));
+    }
+
+    /** Крутой край альфы: не меньше этого перепада на тексель кадра 128 ({@link #straightEdge}). */
+    static final double STEEP = 0.15;
+    /** Самая длинная прямая крутого края — не больше этой доли стороны кадра. */
+    static final double STRAIGHT = 0.45;
+
+    private static double[][] alpha(String name) throws IOException {
+        try (InputStream in = FxAtlasTest.class.getResourceAsStream(DIR + name)) {
+            assertNotNull(in, name);
+            BufferedImage img = ImageIO.read(in);
+            double[][] a = new double[img.getHeight()][img.getWidth()];
+            for (int y = 0; y < img.getHeight(); y++) {
+                for (int x = 0; x < img.getWidth(); x++) a[y][x] = (img.getRGB(x, y) >>> 24) / 255.0;
+            }
+            return a;
+        }
+    }
+
+    /**
+     * Доля стороны кадра под одной прямой крутого края альфы: тексели с |∇α| ≥ {@link #STEEP} (центральные разности, в мере
+     * кадра 128) голосуют за прямую x·cos θ + y·sin θ = ρ, θ — направление их градиента (72 сектора, с соседними), ρ — с шагом в
+     * тексель (с соседними); лучшая прямая — её голоса / сторона кадра.
+     */
+    static double straightEdge(double[][] a) {
+        int n = a.length, bins = 72;
+        List<int[]> votes = new ArrayList<>();
+        for (int y = 1; y < n - 1; y++) {
+            for (int x = 1; x < n - 1; x++) {
+                double gx = (a[y][x + 1] - a[y][x - 1]) / 2, gy = (a[y + 1][x] - a[y - 1][x]) / 2;
+                if (Math.hypot(gx, gy) * n / 128 < STEEP) continue;
+                int k = Math.floorMod((int) Math.round((Math.atan2(gy, gx) + Math.PI) / (2 * Math.PI) * bins), bins);
+                votes.add(new int[]{x, y, k});
+            }
+        }
+        int best = 0;
+        for (int b = 0; b < bins; b++) {
+            double t = 2 * Math.PI * b / bins - Math.PI, c = Math.cos(t), sn = Math.sin(t);
+            int[] count = new int[4 * n + 3];
+            int voters = 0;
+            for (int[] v : votes) {
+                int d = Math.floorMod(v[2] - b, bins);
+                if (d > 1 && d < bins - 1) continue;
+                count[(int) Math.round(v[0] * c + v[1] * sn) + 2 * n + 1]++;
+                voters++;
+            }
+            if (voters < 0.1 * n) continue;
+            for (int r = 1; r < count.length - 1; r++) best = Math.max(best, count[r - 1] + count[r] + count[r + 1]);
+        }
+        return (double) best / n;
     }
 
     /** Клуб брызг: те же 16 кадров по три карты, что у дыма, в мере дыма (одна нормировка карт на все клубы слоя). */

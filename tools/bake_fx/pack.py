@@ -396,6 +396,9 @@ def puff(src, out, prefix="puff6", like=None):
         rr = np.hypot(xx - TILE / 2 + 0.5, yy - TILE / 2 + 0.5) / (TILE / 2)
         a = a * np.clip((1 - rr) / 0.08, 0, 1)
         tiles.append((a, rgb))
+    # рост — не убывает: мод берёт кадр по росту своего облака (FxAtlas.puffFrame — обратный поиск по возрастающей таблице),
+    # а край неровной шапки за кадр-другой может отступить на процент
+    growth = [round(float(g), 4) for g in np.maximum.accumulate(growth)]
     for k, (a, rgb) in enumerate(tiles):
         for name in ("a", "b"):
             save_rgba(np.clip(rgb[name], 0, 1) ** (1 / 2.2), a, os.path.join(out, f"{prefix}{name}_{k:02d}.png"))

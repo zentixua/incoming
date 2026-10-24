@@ -166,7 +166,7 @@ final class SmokePuffs {
     static final double SEGMENT_STEP = 1.2;
     /**
      * Кадры — с этого. Прежний клуб (своя Mantaflow) начинался плотным круглым выбросом и шёл с третьего кадра; кадры
-     * шапки облака взрыва EmberGen ({@code tools/bake_fx}, puff-vdb) клубятся с первого.
+     * шапки облака взрыва EmberGen сверху ({@code tools/bake_fx}, puff-vdb) клубятся с первого.
      */
     static final int FIRST_FRAME = 0;
     /**
@@ -184,6 +184,43 @@ final class SmokePuffs {
      */
     static double smokeShare(boolean glow, double kelvin, double sky) {
         return glow ? 1 - CloudModel.glowShare(kelvin, sky) : 1;
+    }
+
+    /**
+     * Сколько клубов кучки трубки ({@link #club}) накрывают её середину — ось трубки (с долей последнего, не меньше 1): клуб
+     * j — со сдвигом и размером из того же зерна, что у его квадрата, диск — {@link #puffDisc} его кадра; середина под ним,
+     * если сдвиг поперёк взгляда (у лежащего — по горизонтали) меньше диска (плавно на ±20 %). У трубки закон — у оси (толща
+     * поперёк оси, {@code PlumeContinuityTest}); прежде доля клуба шла от слоёв в среднем по площади кучки (много × размер²),
+     * а ось накрывают почти все клубы кучки (их сдвиг ~0,1 края): тонкий след вблизи выходил у оси до 1,4 закона (ревью
+     * #443). Кучка облака ({@code blob}) держит среднее по площади (SmokeFillTest: бюджет не меняет пропускание в среднем).
+     */
+    static double centreCover(double px, double py, double pz, double d, long h, int count, double many, double size, double spread, double rh,
+                              double rv, double rw, double grow, boolean lying, double age, boolean vary) {
+        if (count <= 1) return 1;
+        double vx = px / d, vy = py / d, vz = pz / d;
+        // оси квадрата лицом к камере: поперёк — горизонталь, перпендикулярная взгляду, вверх — поперёк обеих
+        double hx = -vz, hz = vx, hn = Math.hypot(hx, hz);
+        if (hn < 1e-6) {
+            hx = 1;
+            hz = 0;
+            hn = 1;
+        }
+        hx /= hn;
+        hz /= hn;
+        double ux = -vy * hz, uy = vz * hx - vx * hz, uz = vy * hx;
+        double sum = 0;
+        for (int j = 0; j < count; j++) {
+            long hj = mix(h + j * 0x632BE59BD9B4E019L);
+            double ox = gauss(hj) * spread * rh * 0.5, oy = lying ? 0 : gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
+            double k = size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21)) * grow;
+            double disc = puffDisc(clubFrame(age, unit(hj >>> 28), vary));
+            double rho;
+            if (lying) rho = Math.hypot(ox, oz) / (disc * rh * k);
+            else rho = Math.hypot((ox * hx + oz * hz) / (disc * rh * k), (ox * ux + oy * uy + oz * uz) / (disc * rv * k));
+            double t = Math.clamp((1.2 - rho) / 0.4, 0, 1);
+            sum += t * t * (3 - 2 * t) * (j == count - 1 ? many - (count - 1) : 1);
+        }
+        return Math.max(1, sum);
     }
 
     /** Кадр клуба (с дробью) у источника с кадром age; u — зерно клуба 0..1; vary — с разбросом. */
@@ -631,7 +668,7 @@ final class SmokePuffs {
             double many = 1 + (most - 1) * share;
             int count = (int) Math.ceil(many - 1e-9);
             double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many));
-            // в середине перекрывается столько клубов: каждый берёт свою долю, вместе — то же пропускание
+            // слоёв кучки в среднем по её площади (цена: заливка)
             double overlap = Math.max(1, many * size * size);
             // заливка: доля экрана под кругом края кучки (обрезан кадром) × перекрытие
             // плоский клуб сверху лежит: его высота на экране — проекция диска
@@ -643,11 +680,13 @@ final class SmokePuffs {
                 return 0;
             }
             double fill = overlap * cover(view, px, py, pz, ra * reach, rb * reach);
-            float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
             double spread = count == 1 ? 0 : 1 - size;
             // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг
             boolean spray = sprays && kw > ks + kd;
             double clubAge = spray ? sprayAge : age;
+            // каждый клуб берёт свою долю: по площади кучки в среднем перекрывается столько слоёв — вместе то же пропускание
+            // в среднем (SmokeFillTest; середину облака кучка закрывает гуще — прежнее приближение, ревью #443)
+            float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
             // плоский клуб, на который смотрят сверху (проекция диска шире его толщи), лежит на горизонтали ({@code lying}):
             // квадрат лицом к камере у слоя пыли у земли стоял бы стеной над ней (кадры F2a: «плита» под шаром в 0,1 с)
             for (int j = 0; j < count; j++) {
@@ -748,9 +787,10 @@ final class SmokePuffs {
         // в середине кучки перекрывается столько клубов, у оси — ещё соседние места трубки (диск клуба на экране — с полом в
         // пиксель, как он нарисован): каждый берёт свою долю, вместе — то же пропускание
         double disc = puffDisc(clubFrame(age, 0.5, count > 1 || vary));
-        double overlap = Math.max(1, many * size * size) * Math.max(1, 2 * disc * point[0] / along);
-        float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
         double spread = count == 1 ? 0 : 1 - size;
+        double overlap = centreCover(px, py, pz, d, h, count, many, size, spread, rh, rv, rv, grow, false, age, count > 1 || vary)
+                * Math.max(1, 2 * disc * point[0] / along);
+        float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
         for (int j = 0; j < count; j++) {
             long hj = mix(h + j * 0x632BE59BD9B4E019L);
             double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rv * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
@@ -792,13 +832,16 @@ final class SmokePuffs {
     /** Клубов трубки на отрезок — не больше 2 в этой степени. */
     static final int TUBE_LEVELS = 7;
     /**
-     * Запечённый клуб на экране — почти ровный диск: непрозрачность падает до половины середины на этой доле полуразмера
-     * квадрата, по кадрам ({@code PlumeContinuityTest} мерит по картинкам): шапка облака — 0,66–0,76. Не гаусс: гауссы
-     * через 1,2σ складываются в ровную трубку, а диски радиусом 0,5–0,9σ (край клуба тонкой трубки — 1,2σ) — в бусы.
+     * Запечённый клуб на экране — почти ровный диск: радиус ровного диска с тем же покрытием по хорде через середину
+     * (∫ непрозрачности по радиусу / непрозрачность середины, в долях полуразмера квадрата), по кадрам
+     * ({@code PlumeContinuityTest} мерит по картинкам): шапка облака сверху — 0,65–0,71. Перекрытие клубов у оси трубки — это
+     * покрытие по хорде, а не радиус половины непрозрачности: у кадров с мягким хвостом края тот на 5–8 % меньше, и у оси
+     * тонкого следа вблизи выходило 1,4 закона. Не гаусс: гауссы через 1,2σ складываются в ровную трубку, а диски радиусом
+     * 0,5–0,9σ (край клуба тонкой трубки — 1,2σ) — в бусы.
      */
-    static final double[] PUFF_DISCS = {0.66, 0.68, 0.70, 0.70, 0.72, 0.72, 0.72, 0.72, 0.74, 0.76, 0.74, 0.74, 0.74, 0.72, 0.72, 0.74};
+    static final double[] PUFF_DISCS = {0.70, 0.69, 0.69, 0.69, 0.70, 0.71, 0.71, 0.71, 0.70, 0.70, 0.68, 0.67, 0.67, 0.66, 0.65, 0.65};
     /** Диск самого узкого кадра. */
-    static final double PUFF_DISC_MIN = 0.66;
+    static final double PUFF_DISC_MIN = 0.65;
 
     /** Диск клуба (доля полуразмера) у кадра frame с дробью. */
     static double puffDisc(double frame) {

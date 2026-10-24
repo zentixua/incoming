@@ -484,13 +484,19 @@ def puff(kind="puff"):
 # только как свет проходит клубы. Своя Mantaflow давала пушистый шар (~96 клеток на поперечник, шум вейвлетов по
 # краю — «вата», ровный свет внутри), у EmberGen — клубы настоящего облака взрыва.
 # Клуб мода — комок облака, а не всё облако с ножкой: у облака взрыва берётся шапка — вещество выше шейки (самое узкое
-# место между пылью у земли и шапкой, {CAP_FROM}–{CAP_TO} высоты облака), с мягким краем {CAP_SOFT} высоты; ножку и пыль
-# у земли мод рисует своими клубами. Толща — {VDB_PUFF_TAU} поперёк середины кадра (медиана толщи по силуэту): у мода
-# непрозрачность и цвет — свои (CloudModel), карты дают форму клубов и тень по ним; у симуляции дым к концу тает (её
-# рассеивание), а у мода — по его закону, поэтому толща кадров одна. Камера — ортографическая сбоку по каждому кадру
-# (рамка — шапка), её мера — в meta.json («scale», вокселей на пиксель рендера): pack.py считает рост в одной мере.
+# место между пылью у земли и шапкой, {CAP_FROM}–{CAP_TO} высоты облака, с мягким краем {CAP_SOFT} высоты); ножку и пыль у
+# земли мод рисует своими клубами. Шапка снимается сверху, вдоль оси облака: сбоку срез ложился прямым низом каждого кадра
+# (по ширине ножки и низа шапки — 27–49 % кадра), и у лежащей пыли налёта он вставал стенкой с отвесным краем (ревью
+# #443); сверху срез — за густой шапкой, а край кадра — её клубы со всех сторон (верх кадра — +y симуляции). Толща —
+# {VDB_PUFF_TAU} поперёк середины кадра (медиана толщи по силуэту): у мода непрозрачность и цвет — свои (CloudModel),
+# карты дают форму клубов и тень по ним; у симуляции дым к концу тает (её рассеивание), а у мода — по его закону, поэтому
+# толща кадров одна. Шапка пишется своим кадром OpenVDB (поле density, преобразование исходника). Камера —
+# ортографическая по каждому кадру (рамка — шапка), её мера — в meta.json («scale», вокселей на пиксель рендера): pack.py
+# считает рост в одной мере.
 VDB_PUFF_TAU = float(argv[argv.index("--tau") + 1]) if "--tau" in argv else 12.0
 CAP_FROM, CAP_TO, CAP_SOFT = 0.12, 0.6, 0.06
+# вещество ближе стольких вокселей к краю области симуляции (кроме пола) — срезано её стенкой
+WALL = 3
 
 
 def cap_neck(arr):
@@ -502,6 +508,14 @@ def cap_neck(arr):
     return lo + int(np.argmin(width[lo:hi]))
 
 
+def cap_mask(arr):
+    """Доля вещества шапки в каждом вокселе: 1 выше шейки, ниже — гаснет на CAP_SOFT высоты облака."""
+    neck = cap_neck(arr)
+    soft = max(CAP_SOFT * arr.shape[2], 2.0)
+    z = np.arange(arr.shape[2], dtype=np.float32)[None, None, :]
+    return np.clip((z - (neck - soft)) / soft, 0, 1).astype(np.float32), neck
+
+
 def puff_vdb(src, kind="puff"):
     import glob
     import re
@@ -510,29 +524,45 @@ def puff_vdb(src, kind="puff"):
     files = sorted(glob.glob(os.path.join(src, "*.vdb")), key=lambda f: int(re.findall(r"(\d+)\.vdb$", f)[0]))
     picks = [int(x) for x in argv[argv.index("--frames") + 1].split(",")]
     cap = "--cap" in argv
+    os.makedirs(os.path.join(OUT, kind + "-vdb"), exist_ok=True)
+    # область симуляции — объединение рамок поля density всех кадров (метаданные файлов): вещество, что упёрлось в её
+    # стенку, срезано прямо (у Ground Explosion шапка с 126-го кадра упирается в y = 285) — такой кадр не берём
+    wall_lo, wall_hi = [1 << 30] * 3, [-(1 << 30)] * 3
+    for f in files:
+        for m in openvdb.readAllGridMetadata(f):
+            if m.name == "density" and "file_bbox_min" in m.metadata:
+                wall_lo = [min(wall_lo[k], m.metadata["file_bbox_min"][k]) for k in range(3)]
+                wall_hi = [max(wall_hi[k], m.metadata["file_bbox_max"][k]) for k in range(3)]
     frames = {}
     for i in picks:
         d = openvdb.read(files[i - 1], "density")
         a, b = d.evalActiveVoxelBoundingBox()
         arr = np.zeros((b[0] - a[0] + 1, b[1] - a[1] + 1, b[2] - a[2] + 1), np.float32)
         d.copyToArray(arr, ijk=a)
-        cut, soft = -1e9, 1.0
+        neck = None
         if cap:
-            soft = max(CAP_SOFT * arr.shape[2], 2.0)
-            k = cap_neck(arr)
-            cut = a[2] + k
-            z = np.arange(arr.shape[2]) + a[2]
-            arr = arr * np.clip((z - cut) / soft, 0, 1)[None, None, :]
+            m, neck = cap_mask(arr)
+            arr = arr * m
+        path = os.path.join(OUT, kind + "-vdb", f"cap_{i:03d}.vdb")
+        g = openvdb.FloatGrid()
+        g.copyFromArray(arr, ijk=a, tolerance=1e-4)
+        g.name = "density"
+        g.transform = d.transform
+        openvdb.write(path, grids=[g])
         # рамка — где плотность заметна (1 % наибольшей), а не все активные воксели
         idx = np.argwhere(arr > 0.01 * arr.max())
         lo, hi = idx.min(0) + np.array(a), idx.max(0) + np.array(a)
-        proj = arr.sum(axis=1)
+        near = [k for k in range(3) if hi[k] > wall_hi[k] - WALL] + [k for k in range(2) if lo[k] < wall_lo[k] + WALL]
+        if near:
+            raise SystemExit(f"puff-vdb: кадр {i} упирается в край области симуляции (оси {near}): срезан прямо, взять раньше")
+        # толща — вдоль взгляда камеры: у шапки — сверху (z), иначе — сбоку (y)
+        proj = arr.sum(axis=2 if cap else 1)
         sil = proj > 0.05 * proj.max()
-        frames[i] = (lo, hi, VDB_PUFF_TAU / float(np.median(proj[sil])), cut, soft)
+        frames[i] = (lo, hi, VDB_PUFF_TAU / float(np.median(proj[sil])), path, neck)
     c = CLUBS[kind]
     sc = reset(TILE)
     vol = bpy.data.volumes.new(kind)
-    vol.filepath = files[picks[0] - 1]
+    vol.filepath = frames[picks[0]][3]
     obj = bpy.data.objects.new(kind, vol)
     sc.collection.objects.link(obj)
     mat = bpy.data.materials.new(kind)
@@ -543,24 +573,19 @@ def puff_vdb(src, kind="puff"):
     out = nt.nodes.new("ShaderNodeOutputMaterial")
     pv = nt.nodes.new("ShaderNodeVolumePrincipled")
     nt.links.new(pv.outputs[0], out.inputs["Volume"])
-    # ослабление на воксель (кадр), срез шапки: плотность × clamp((z − cut)/soft) — z мира = индекс вокселя по z
+    # Principled Volume сам умножает «Density» на поле density (Density Attribute): сюда — только ослабление на воксель
     sigma = nt.nodes.new("ShaderNodeValue")
-    cut = nt.nodes.new("ShaderNodeValue")
-    soft = nt.nodes.new("ShaderNodeValue")
-    pos = nt.nodes.new("ShaderNodeNewGeometry")
-    xyz = nt.nodes.new("ShaderNodeSeparateXYZ")
-    nt.links.new(pos.outputs["Position"], xyz.inputs[0])
-    ramp = math_node(nt, "DIVIDE", math_node(nt, "SUBTRACT", xyz.outputs["Z"], cut.outputs[0]), soft.outputs[0])
-    ramp = math_node(nt, "MINIMUM", math_node(nt, "MAXIMUM", ramp, 0.0), 1.0)
-    # Principled Volume сам умножает «Density» на поле density (Density Attribute): сюда — только ослабление и срез
-    nt.links.new(math_node(nt, "MULTIPLY", sigma.outputs[0], ramp), pv.inputs["Density"])
+    nt.links.new(sigma.outputs[0], pv.inputs["Density"])
     pv.inputs["Color"].default_value = (c["albedo"], c["albedo"], c["albedo"], 1)
     pv.inputs["Anisotropy"].default_value = c["g"]
     sc.cycles.volume_bounces = c["bounces"]
     sc.cycles.max_bounces = max(sc.cycles.max_bounces, c["bounces"])
     vol.materials.append(mat)
     vol.grids.load()
-    obj.matrix_world = vol.grids[0].matrix_object.inverted() if len(vol.grids) else obj.matrix_world
+    # шапка — верхом к камере (камера смотрит вдоль +y): поворот на 90° вокруг x, z симуляции → −y, y → z (верх кадра)
+    from mathutils import Matrix
+    turn = Matrix.Rotation(math.pi / 2, 4, "X") if cap else Matrix.Identity(4)
+    obj.matrix_world = turn @ (vol.grids[0].matrix_object.inverted() if len(vol.grids) else Matrix.Identity(4))
     bpy.ops.object.camera_add(rotation=(math.pi / 2, 0, 0))
     cam = bpy.context.active_object
     cam.data.type = "ORTHO"
@@ -569,16 +594,16 @@ def puff_vdb(src, kind="puff"):
     os.makedirs(os.path.join(OUT, kind), exist_ok=True)
     scale = []
     for i in picks:
-        lo, hi, k, z0, w = frames[i]
-        size = 1.08 * max(hi[0] - lo[0], hi[2] - lo[2]) + 2
+        lo, hi, k, path, neck = frames[i]
+        # рамка в осях кадра: вправо — x, вверх — z сцены (у шапки — y симуляции), к камере — −y (у шапки — верх z)
+        up0, up1, near, deep = (lo[1], hi[1], -hi[2], hi[2] - lo[2]) if cap else (lo[2], hi[2], lo[1], hi[1] - lo[1])
+        size = 1.08 * max(hi[0] - lo[0], up1 - up0) + 2
         cam.data.ortho_scale = size
-        cam.data.clip_end = 10 * size + (hi[1] - lo[1])
-        cam.location = ((lo[0] + hi[0]) / 2 + 0.5, lo[1] - 3 * size, (lo[2] + hi[2]) / 2 + 0.5)
+        cam.data.clip_end = 10 * size + deep
+        cam.location = ((lo[0] + hi[0]) / 2 + 0.5, near - 3 * size, (up0 + up1) / 2 + 0.5)
         sigma.outputs[0].default_value = k
-        cut.outputs[0].default_value = z0
-        soft.outputs[0].default_value = w
         scale.append(size / TILE)
-        vol.filepath = files[i - 1]
+        vol.filepath = path
         vol.grids.load()
         for name, lamp in lamps.items():
             npy = os.path.join(OUT, kind, f"{name}_{i:03d}.npy")
@@ -590,9 +615,10 @@ def puff_vdb(src, kind="puff"):
             sc.render.filepath = exr
             bpy.ops.render.render(write_still=True)
             save_npy(exr, npy)
-        print("vdb puff frame", i, "size", round(size, 1), "sigma", round(k, 4), "cut", z0, flush=True)
+        print("vdb puff frame", i, "size", round(size, 1), "sigma", round(k, 4), "neck", neck, flush=True)
     with open(os.path.join(OUT, kind, "meta.json"), "w") as f:
         json.dump({"source": src, "picks": picks, "scale": scale, "tau": VDB_PUFF_TAU, "cap": cap,
+                   "cap_soft": CAP_SOFT, "view": "top" if cap else "side",
                    "albedo": c["albedo"], "g": c["g"], "render_size": TILE, "samples": SAMPLES}, f)
 
 
