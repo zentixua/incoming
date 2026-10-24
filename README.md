@@ -1,5 +1,7 @@
 # WT — water strike review evidence
 
+**Latest: [final visual polish, 9ebb5e75](polish.md)**. The original core evidence below is retained as capture and CI history.
+
 ## Existing solutions
 
 | Available work | What it provides | Decision |
