@@ -315,11 +315,22 @@ public final class DustModel {
         double debris = surface.debris() * destroyed(BlastModel.psi(kpa));
         double first = waveTop(ground, hob, yieldKt, positive);
         double buoyant = Math.min(TOP_MAX * ys, Math.sqrt(2 * (1 + 2 * ENTRAIN) * HEAT_SHARE * heat / (RHO_CP * LAPSE)));
-        double stem = 1 - smooth(0.5 * STEM_M * ys, STEM_M * ys, ground);
-        // нисходящий поток шара у оси глушит подсос первые секунды — у подрыва, чей шар не касается земли; шар на земле
-        // (наземный и низкий) сам уносит пыль вверх с самого начала (StemDust)
-        double from = STEM_FROM_S * ys * smooth(ball, 2 * ball, hob);
-        return new Column(positive, soil, debris, first, buoyant, stem, from, ground, hob, yieldKt);
+        return new Column(positive, soil, debris, first, buoyant, stemShare(ground, yieldKt), stemFrom(hob, yieldKt, ball), ground, hob, yieldKt);
+    }
+
+    /** Доля подсоса в ножку на {@code groundM} м от эпицентра ({@link Column#stem}): до {@link #STEM_M}·∛(Y/15), за половиной — слабее. */
+    public static double stemShare(double groundM, double yieldKt) {
+        double ys = Math.cbrt(yieldKt / 15);
+        return 1 - smooth(0.5 * STEM_M * ys, STEM_M * ys, groundM);
+    }
+
+    /**
+     * С какого возраста пыли (секунды с прихода фронта) её тянет в ножку ({@link Column#stemFrom}): нисходящий поток шара у
+     * оси глушит подсос первые секунды — у подрыва, чей шар (радиус {@code ballM}) не касается земли; шар на земле
+     * (наземный и низкий) сам уносит пыль вверх с самого начала ({@link StemDust}).
+     */
+    public static double stemFrom(double hobM, double yieldKt, double ballM) {
+        return STEM_FROM_S * Math.cbrt(yieldKt / 15) * smooth(ballM, 2 * ballM, Math.max(0, hobM));
     }
 
     /**

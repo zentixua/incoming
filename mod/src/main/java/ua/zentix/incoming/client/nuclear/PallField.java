@@ -670,6 +670,27 @@ public final class PallField {
         return l[0] * between(0, inf, l[2]) + l[1] * between(0, inf, l[7]);
     }
 
+    /** Числа {@link #layers} для {@link #footLayer} (кадр — в потоке отрисовки): без нового массива на каждый гриб кадра. */
+    private final double[] footScratch = new double[LAYERS];
+
+    /**
+     * Слой пыли волны у основания ножки — в {@code r} блоках от эпицентра, среднее по четырём сторонам (снос ветром
+     * сдвигает слой): ослабление пыли и брызг у земли, 1/блок ({@code out[0]}; на высоте — × {@link #profile}), и их верх,
+     * блоки ({@code out[1]}; по долям ослабления). Слоя нет — 0 и 1. Его подсос заворачивает в ножку
+     * ({@code MushroomField.foot}).
+     */
+    public void footLayer(double r, double ticks, Water water, double[] out) {
+        double[] l = footScratch;
+        double sigma = 0, top = 0;
+        for (int k = 0; k < 4; k++) {
+            layers(k == 0 ? r : k == 1 ? -r : 0, k == 2 ? r : k == 3 ? -r : 0, ticks, water, l);
+            sigma += l[0] + l[1];
+            top += l[0] * l[2] + l[1] * l[7];
+        }
+        out[0] = sigma / 4;
+        out[1] = sigma > 0 ? top / sigma : 1;
+    }
+
     /**
      * Интеграл {@link #profile} по высоте от a до b (блоки) у слоя высотой top (блоки): по Симпсону, порознь ниже и выше
      * земли (там излом), — точнее приближения {@link #column} (у тонкого слоя под глазом его ошибка — десятки процентов).

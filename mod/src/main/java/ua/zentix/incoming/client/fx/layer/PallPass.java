@@ -390,7 +390,8 @@ public final class PallPass {
     }
 
     @Nullable
-    static ShaderInstance march, resolve, composite, shadow;
+    static ShaderInstance march, resolve, composite, shadow, footLighting;
+    static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 32;
     private static final Frame EMPTY = new Frame();
     private static final Detail DETAIL = new Detail();
     /** Шум не вышел (ошибка в фоне): пелены нет до перезапуска. */
@@ -403,6 +404,7 @@ public final class PallPass {
     private static int table = -1, noise = -1, blue = -1, mushrooms = -1;
     /** Карта тени грибов от солнца (плитка {@link MushroomField#SHADOW}² на гриб) и её кадр; −1 — не вышла, тени нет. */
     private static int shadowMap = -1, shadowFbo = -1;
+    private static int footMap = -1, footFbo = -1;
     /** Копия кадра для света шаров на мире ({@link #copyFrame}) и её размер; −1 — ещё не нужна была. */
     private static int frameCopy = -1, copyW, copyH;
     /** Карты огня слотов (текстура, её сторона, чья и какое заполнение) и карты этого кадра (−1 — нет). */
@@ -536,7 +538,7 @@ public final class PallPass {
      * {@code haze} — дымка воздуха и туман Minecraft ({@link FxFrame.Fog#haze}): тень на мире за ними тает.
      */
     static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vec3 eye, Vector4f haze) {
-        ShaderInstance m = march, r = resolve, c = composite, sh = shadow;
+        ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting;
         if (m == null || r == null || c == null || f.quality == Quality.OFF || !upload()) return false;
         Minecraft mc = Minecraft.getInstance();
         int w = mc.getMainRenderTarget().width, h = mc.getMainRenderTarget().height;
@@ -614,62 +616,81 @@ public final class PallPass {
             quad(sh, false);
         }
 
-        // 1. лучи
-        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[0]);
-        RenderSystem.viewport(0, 0, lowW, lowH);
-        RenderSystem.setShaderTexture(0, scene);
-        RenderSystem.setShaderTexture(1, table);
-        RenderSystem.setShaderTexture(2, blue);
-        RenderSystem.setShaderTexture(3, fire0);
-        RenderSystem.setShaderTexture(4, fire1);
-        RenderSystem.setShaderTexture(5, ground0);
-        RenderSystem.setShaderTexture(6, ground1);
-        RenderSystem.setShaderTexture(7, mushrooms);
-        // тень грибов на пелене от солнца — та же карта, что на мире (без неё — таблица: плиток в ней нет)
-        RenderSystem.setShaderTexture(8, shade ? shadowMap : table);
-        m.safeGetUniform("InvViewProj").set(INVERSE);
-        m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
-        m.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);
-        m.safeGetUniform("PallSlot0").set(f.slot0);
-        m.safeGetUniform("PallSlot1").set(f.slot1);
-        m.safeGetUniform("PallMin").set(f.min.x, f.min.y, f.min.z);
-        m.safeGetUniform("PallMax").set(f.max.x, f.max.y, f.max.z);
-        m.safeGetUniform("PallSun").set(f.sun.x, f.sun.y, f.sun.z, f.sun.w);
-        m.safeGetUniform("PallSunLight").set(f.sunLight.x, f.sunLight.y, f.sunLight.z);
-        m.safeGetUniform("PallSkyLight").set(f.skyLight.x, f.skyLight.y, f.skyLight.z);
-        m.safeGetUniform("PallFireLight").set(f.fireLight.x, f.fireLight.y, f.fireLight.z);
-        m.safeGetUniform("PallBase").set(f.base);
-        m.safeGetUniform("PallGlow0").set(f.glow0.x, f.glow0.y, f.glow0.z, f.glow0.w);
-        m.safeGetUniform("PallGlow1").set(f.glow1.x, f.glow1.y, f.glow1.z, f.glow1.w);
-        m.safeGetUniform("PallHot0").set(f.hot0.x, f.hot0.y, f.hot0.z, f.hot0.w);
-        m.safeGetUniform("PallHot1").set(f.hot1.x, f.hot1.y, f.hot1.z, f.hot1.w);
-        m.safeGetUniform("PallGlowOnSmoke").set(f.glowOnSmoke);
-        m.safeGetUniform("PallFrame").set((float) (frame % 4096), step.steps, factor, f.eyeDust.x);
-        m.safeGetUniform("PallEyeTau").set(f.eyeDust.y, f.eyeDust.z);
-        m.safeGetUniform("PallFire0").set(fireSlot0);
-        m.safeGetUniform("PallFire1").set(fireSlot1);
-        m.safeGetUniform("PallFireMin").set(f.fireMin.x, f.fireMin.y, f.fireMin.z);
-        m.safeGetUniform("PallFireMax").set(f.fireMax.x, f.fireMax.y, f.fireMax.z);
-        m.safeGetUniform("PallWhirlPos").set(f.whirlPos);
-        m.safeGetUniform("PallWhirlShape").set(f.whirlShape);
-        m.safeGetUniform("PallWhirlLean").set(f.whirlLean);
-        m.safeGetUniform("PallGround0").set(groundSlot0.x, groundSlot0.y, groundSlot0.z, groundSlot0.w);
-        m.safeGetUniform("PallGround1").set(groundSlot1.x, groundSlot1.y, groundSlot1.z, groundSlot1.w);
-        m.safeGetUniform("PallWater0").set(f.water0.x, f.water0.y, f.water0.z, f.water0.w);
-        m.safeGetUniform("PallWater1").set(f.water1.x, f.water1.y, f.water1.z, f.water1.w);
-        m.safeGetUniform("PallWall0").set(f.wall0);
-        m.safeGetUniform("PallWall1").set(f.wall1);
-        m.safeGetUniform("PallWilson0").set(f.wilson0.x, f.wilson0.y, f.wilson0.z, f.wilson0.w);
-        m.safeGetUniform("PallWilson1").set(f.wilson1.x, f.wilson1.y, f.wilson1.z, f.wilson1.w);
-        m.safeGetUniform("PallFloorFrom").set(f.floorFrom);
-        m.safeGetUniform("PallExposure").set(f.exposure);
-        m.safeGetUniform("SmokeNoise").set(f.smokeNoise.x, f.smokeNoise.y, f.smokeNoise.z, f.smokeNoise.w);
-        m.safeGetUniform("SmokeWind").set(f.smokeWind.x, f.smokeWind.y, f.smokeWind.z, f.smokeWind.w);
-        m.safeGetUniform("SmokeBalls").set(f.smokeBalls);
-        m.safeGetUniform("SmokeBallLight").set(f.smokeBallLight);
-        OpenAir.bind(m, open);
-        SmokePass.bind(m, f.smoke);
-        quad(m, true);
+        boolean litFoot = false;
+        if (fl != null && footMap >= 0) {
+            for (int k = 0; k < f.mushroomCount; k++) {
+                int at = k * MushroomField.WIDTH * 4;
+                if (f.mushrooms[at + MushroomField.FOOT * 4 + 2] > 0 && f.mushrooms[at + 11 * 4 + 3] > 0) litFoot = true;
+            }
+        }
+        // Свет основания — в своей малой таблице; основной проход содержит только её выборки.
+        // Текстуры и параметры источника общие: тот же pallSource, без второго встроенного вызова в лучах.
+        for (int pass = 0; pass < 2; pass++) {
+            if (pass == 0 && !litFoot) continue;
+            m = pass == 0 ? fl : march;
+            if (pass == 0) {
+                GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
+                RenderSystem.viewport(0, 0, FOOT_LIGHT_AZ + 1, FOOT_LIGHT_H * FOOT_LIGHT_R * f.mushroomCount);
+            } else {
+                GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[0]);
+                RenderSystem.viewport(0, 0, lowW, lowH);
+            }
+            RenderSystem.setShaderTexture(9, pass == 1 && litFoot ? footMap : table);
+            m.safeGetUniform("PallFootReady").set(litFoot ? 1 : 0);
+            RenderSystem.setShaderTexture(0, scene);
+            RenderSystem.setShaderTexture(1, table);
+            RenderSystem.setShaderTexture(2, blue);
+            RenderSystem.setShaderTexture(3, fire0);
+            RenderSystem.setShaderTexture(4, fire1);
+            RenderSystem.setShaderTexture(5, ground0);
+            RenderSystem.setShaderTexture(6, ground1);
+            RenderSystem.setShaderTexture(7, mushrooms);
+            // тень грибов на пелене от солнца — та же карта, что на мире (без неё — таблица: плиток в ней нет)
+            RenderSystem.setShaderTexture(8, shade ? shadowMap : table);
+            m.safeGetUniform("InvViewProj").set(INVERSE);
+            m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
+            m.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);
+            m.safeGetUniform("PallSlot0").set(f.slot0);
+            m.safeGetUniform("PallSlot1").set(f.slot1);
+            m.safeGetUniform("PallMin").set(f.min.x, f.min.y, f.min.z);
+            m.safeGetUniform("PallMax").set(f.max.x, f.max.y, f.max.z);
+            m.safeGetUniform("PallSun").set(f.sun.x, f.sun.y, f.sun.z, f.sun.w);
+            m.safeGetUniform("PallSunLight").set(f.sunLight.x, f.sunLight.y, f.sunLight.z);
+            m.safeGetUniform("PallSkyLight").set(f.skyLight.x, f.skyLight.y, f.skyLight.z);
+            m.safeGetUniform("PallFireLight").set(f.fireLight.x, f.fireLight.y, f.fireLight.z);
+            m.safeGetUniform("PallBase").set(f.base);
+            m.safeGetUniform("PallGlow0").set(f.glow0.x, f.glow0.y, f.glow0.z, f.glow0.w);
+            m.safeGetUniform("PallGlow1").set(f.glow1.x, f.glow1.y, f.glow1.z, f.glow1.w);
+            m.safeGetUniform("PallHot0").set(f.hot0.x, f.hot0.y, f.hot0.z, f.hot0.w);
+            m.safeGetUniform("PallHot1").set(f.hot1.x, f.hot1.y, f.hot1.z, f.hot1.w);
+            m.safeGetUniform("PallGlowOnSmoke").set(f.glowOnSmoke);
+            m.safeGetUniform("PallFrame").set((float) (frame % 4096), step.steps, factor, f.eyeDust.x);
+            m.safeGetUniform("PallEyeTau").set(f.eyeDust.y, f.eyeDust.z);
+            m.safeGetUniform("PallFire0").set(fireSlot0);
+            m.safeGetUniform("PallFire1").set(fireSlot1);
+            m.safeGetUniform("PallFireMin").set(f.fireMin.x, f.fireMin.y, f.fireMin.z);
+            m.safeGetUniform("PallFireMax").set(f.fireMax.x, f.fireMax.y, f.fireMax.z);
+            m.safeGetUniform("PallWhirlPos").set(f.whirlPos);
+            m.safeGetUniform("PallWhirlShape").set(f.whirlShape);
+            m.safeGetUniform("PallWhirlLean").set(f.whirlLean);
+            m.safeGetUniform("PallGround0").set(groundSlot0.x, groundSlot0.y, groundSlot0.z, groundSlot0.w);
+            m.safeGetUniform("PallGround1").set(groundSlot1.x, groundSlot1.y, groundSlot1.z, groundSlot1.w);
+            m.safeGetUniform("PallWater0").set(f.water0.x, f.water0.y, f.water0.z, f.water0.w);
+            m.safeGetUniform("PallWater1").set(f.water1.x, f.water1.y, f.water1.z, f.water1.w);
+            m.safeGetUniform("PallWall0").set(f.wall0);
+            m.safeGetUniform("PallWall1").set(f.wall1);
+            m.safeGetUniform("PallWilson0").set(f.wilson0.x, f.wilson0.y, f.wilson0.z, f.wilson0.w);
+            m.safeGetUniform("PallWilson1").set(f.wilson1.x, f.wilson1.y, f.wilson1.z, f.wilson1.w);
+            m.safeGetUniform("PallFloorFrom").set(f.floorFrom);
+            m.safeGetUniform("PallExposure").set(f.exposure);
+            m.safeGetUniform("SmokeNoise").set(f.smokeNoise.x, f.smokeNoise.y, f.smokeNoise.z, f.smokeNoise.w);
+            m.safeGetUniform("SmokeWind").set(f.smokeWind.x, f.smokeWind.y, f.smokeWind.z, f.smokeWind.w);
+            m.safeGetUniform("SmokeBalls").set(f.smokeBalls);
+            m.safeGetUniform("SmokeBallLight").set(f.smokeBallLight);
+            OpenAir.bind(m, open);
+            SmokePass.bind(m, f.smoke);
+            quad(m, true);
+        }
 
         // 2. накопление: из прошлого накопленного — в другое
         int next = 1 + (1 - latest);
@@ -926,6 +947,7 @@ public final class PallPass {
             mushroomBuffer.put(start).flip();
             GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, MushroomField.WIDTH, MushroomField.ROWS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, mushroomBuffer);
             shadowMap();
+            footMap();
         } finally {
             MemoryUtil.memFree(buf);
             GlStateManager._pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4);
@@ -957,6 +979,30 @@ public final class PallPass {
             GlStateManager._glDeleteFramebuffers(shadowFbo);
             GlStateManager._deleteTexture(shadowMap);
             shadowMap = shadowFbo = -1;
+        }
+    }
+
+    /** 3D lighting table packed as azimuth × (radius, height, mushroom); two bilinear reads interpolate height. */
+    private static void footMap() {
+        int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        footMap = GlStateManager._genTexture();
+        GlStateManager._bindTexture(footMap);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_LINEAR);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_LINEAR);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
+        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, FOOT_LIGHT_AZ + 1,
+                FOOT_LIGHT_R * FOOT_LIGHT_H * MushroomField.MUSHROOMS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+        footFbo = GlStateManager.glGenFramebuffers();
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, footMap, 0);
+        boolean ok = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
+        if (!ok) {
+            Incoming.LOG.error("Stem foot lighting table not created: using stem lighting at the foot");
+            GlStateManager._glDeleteFramebuffers(footFbo);
+            GlStateManager._deleteTexture(footMap);
+            footMap = footFbo = -1;
         }
     }
 

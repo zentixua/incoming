@@ -60,6 +60,31 @@ class MushroomGlslTest {
         }
     }
 
+    /** Подсос у основания ножки ({@code mushFoot*}, профиль слоя — {@code pallProfile}) — тот же, что в Java ({@link MushroomField#footDensity}). */
+    @Test
+    void footMatchesJava() {
+        String both = read("include/pall.glsl") + GLSL;
+        GlslFunction width = GlslFunction.parse(GLSL, "mushFootWidth"), share = GlslFunction.parse(GLSL, "mushFootShare");
+        GlslFunction density = GlslFunction.parse(both, "mushFootDensity"), band = GlslFunction.parse(GLSL, "mushFootBand");
+        GlslFunction narrow = GlslFunction.parse(GLSL, "mushFootNarrow"), wall = GlslFunction.parse(GLSL, "mushFootWall");
+        for (double rho = 0; rho <= 600; rho += 3) assertEquals(MushroomField.footWall(rho, 400), wall.call(Map.of("rho", rho, "r", 400.0)), 1e-9);
+        for (double top : new double[]{0.5, 40, 380}) {
+            for (double h = -0.2 * top; h <= 5 * top; h += 0.01 * top) {
+                Map<String, Double> at = Map.of("h", h, "top", top);
+                assertEquals(MushroomField.footWidth(h, top), width.call(at), 1e-9, "h " + h);
+                assertEquals(MushroomField.footShare(h, top), share.call(at), 1e-9, "h " + h);
+                for (double rise : new double[]{0.3 * top, 1e9}) {
+                    assertEquals(MushroomField.footDensity(h, top, 0.4, 0.7, rise),
+                            density.call(Map.of("h", h, "top", top, "sigma", 0.4, "share", 0.7, "rise", rise)), 1e-9, "h " + h);
+                }
+                for (double merge : new double[]{0, 0.4 * top, 2.3 * top}) {
+                    assertEquals(MushroomField.footBand(h, top, 0.7, merge), band.call(Map.of("h", h, "top", top, "share", 0.7, "merge", merge)), 1e-9, "h " + h);
+                    assertEquals(MushroomField.footNarrow(h, top, merge), narrow.call(Map.of("h", h, "top", top, "merge", merge)), 1e-9, "h " + h);
+                }
+            }
+        }
+    }
+
     /** Отражение стенок ложбин шапки ({@code mushWallR}) — то же, что в Java ({@link MushroomField#wallReflectance}). */
     @Test
     void wallReflectanceMatchesJava() {
@@ -307,7 +332,12 @@ class MushroomGlslTest {
             String at = m.group(1);
             max = Math.max(max, at.matches("\\d+") ? Integer.parseInt(at) : c.get(at).intValue());
         }
-        assertEquals(MushroomField.TEXELS - 1, max);
+        assertEquals(MushroomField.FOOT, max);
+        assertEquals(MushroomField.FOOT_COLUMNS, c.get("MUSH_FOOT_COLUMNS").intValue());
+        assertEquals(FootColumn.NODES, c.get("MUSH_FOOT_NODES").intValue());
+        assertEquals(MushroomField.FOOT_COLUMNS + FootColumn.NODES / 4, c.get("MUSH_FOOT_EDGES").intValue());
+        assertEquals(FootColumn.EDGE_NODES, c.get("MUSH_FOOT_EDGE_NODES").intValue());
+        assertEquals(MushroomField.TEXELS, MushroomField.FOOT_COLUMNS + (FootColumn.NODES + FootColumn.EDGE_NODES) / 4);
     }
 
     /**
