@@ -29,6 +29,12 @@ uniform vec3 FxSkyFix;
 uniform sampler2D Sampler4;
 // 1 — пробы есть
 uniform float FxProbes;
+uniform sampler2D Sampler1;
+uniform int FxFieldRow;
+uniform sampler2D Sampler0;
+uniform vec4 FxSix;
+uniform vec3 FxSixLight;
+uniform vec3 FxSkyTint;
 
 uniform mat4 ModelViewMat;
 uniform mat4 ProjMat;
@@ -102,14 +108,88 @@ float pall(vec3 p) {
     return pallThrough(dir, len) * mushTransmit(Sampler11, dir, len, 6, PallAir) * smokeThrough(dir, len);
 }
 
+float fieldErf(float x) {
+    float a=abs(x),t=1.0/(1.0+0.3275911*a);
+    return sign(x)*(1.0-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*exp(-a*a));
+}
+vec4 fieldItem(int i) {return texelFetch(Sampler4,ivec2(i%256,FxFieldRow+i/256),0);}
+vec3 fieldDecode(vec3 c) {return mix(c/12.92,pow((c+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),c));}
+vec3 fieldEncode(vec3 c) {return mix(12.92*c,1.055*pow(c,vec3(1.0/2.4))-0.055,step(vec3(0.0031308),c));}
+float fieldSide(vec3 a,vec3 b,vec3 direction) {
+    vec3 side=vec3(direction.x>0.0?a.r:b.r,direction.y>0.0?a.g:b.g,direction.z<0.0?a.b:b.b);
+    return dot(side,direction*direction);
+}
+vec4 fieldColor(int first,int count,vec3 ray,float end) {
+    vec4 result=vec4(0.0);
+    vec3 cameraRight=normalize(vec3(ModelViewMat[0][0],ModelViewMat[1][0],ModelViewMat[2][0]));
+    vec3 cameraUp=normalize(vec3(ModelViewMat[0][1],ModelViewMat[1][1],ModelViewMat[2][1]));
+    vec3 forward=-normalize(cross(cameraRight,cameraUp));
+    for(int i=0;i<count;i++) {
+        vec4 c=fieldItem(5*(first+i)),g=fieldItem(5*(first+i)+1),color=fieldItem(5*(first+i)+2);
+        vec4 photo=fieldItem(5*(first+i)+3),style=fieldItem(5*(first+i)+4);
+        vec3 inv=1.0/vec3(c.w,g.x,c.w),p=c.xyz*inv,r=ray*inv;
+        float speed=length(r),a=dot(p,r)/speed;
+        vec3 b=cross(p,r/speed);
+        float tail=end<1e8?fieldErf((speed*end-a)*0.7071067812):1.0;
+        float cdf=0.5*max(tail+fieldErf(a*0.7071067812),0.0);
+        float tau=g.y/(6.2831853072*c.w*c.w*g.x*speed)*exp(-0.5*dot(b,b))*cdf;
+        float alpha=1.0-exp(-tau);
+        vec3 wr=style.z>0.5?-cameraRight:cameraRight,wu=cameraUp,wn=-forward;
+        vec3 sigma=1.0/inv;
+        float depth=dot(c.xyz,forward),plane=sqrt(max(depth,0.0)*max(depth,0.0)+dot(forward*sigma,forward*sigma));
+        vec3 at=ray*(plane/max(dot(ray,forward),1e-4))-c.xyz;
+        vec2 position=vec2(dot(at,wr)/c.w,dot(at,wu)/g.z);
+        vec2 local=0.5+0.5*vec2(position.x,-position.y)/g.w;
+        vec3 lighting=vec3(1.0);
+        if(all(greaterThanEqual(local,vec2(0))) && all(lessThanEqual(local,vec2(1)))) {
+            vec2 origin=photo.xy,next=origin+vec2(FxSix.z,0.0),tile=FxSix.zw;
+            if(origin.x>6.5*tile.x)next=vec2(0.0,origin.y+tile.y);
+            vec2 uv=origin+local*tile;
+            vec4 flow=textureLod(Sampler0,uv+vec2(0,2.0*FxSix.x),0.0);
+            vec2 motion=(flow.rg/max(flow.a,1e-3)-0.5)*2.0*FxSixLight.x*tile;
+            vec2 edge=0.5/vec2(textureSize(Sampler0,0));
+            vec2 uv0=clamp(origin+local*tile-motion*photo.z,origin+edge,origin+tile-edge);
+            vec2 uv1=clamp(next+local*tile+motion*(1.0-photo.z),next+edge,next+tile-edge);
+            vec4 a0=textureLod(Sampler0,uv0,0.0),a1=textureLod(Sampler0,uv1,0.0);
+            vec4 b0=textureLod(Sampler0,uv0+vec2(0,FxSix.x),0.0),b1=textureLod(Sampler0,uv1+vec2(0,FxSix.x),0.0);
+            float reference=g.y/(6.2831853072*c.w*g.z)*exp(-0.5*dot(position,position));
+            float baked=mix(a0.a,a1.a,photo.z);
+            float photoTau=-log(max(1.0-baked,1.0/255.0))*photo.w;
+            float transferred=1.0-exp(-tau*photoTau/max(reference,1e-8));
+            float window=smoothstep(0.0,1.0,g.w-max(abs(position.x),abs(position.y)));
+            alpha=mix(alpha,transferred,style.x*window);
+            vec3 la=mix(pow(a0.rgb/max(a0.a,1e-3),vec3(2.2)),pow(a1.rgb/max(a1.a,1e-3),vec3(2.2)),photo.z);
+            vec3 lb=mix(pow(b0.rgb/max(b0.a,1e-3),vec3(2.2)),pow(b1.rgb/max(b1.a,1e-3),vec3(2.2)),photo.z);
+            if(baked<0.002){la=vec3(FxSixLight.z);lb=la;}
+            if(c.w>3.0*g.x && c.w*abs(c.y)>g.x*length(c.xyz)) {
+                wr=normalize(vec3(wr.x,0,wr.z));wn=vec3(0,c.y<0.0?1.0:-1.0,0);wu=cross(wn,wr);
+            }
+            vec3 sun=vec3(dot(FxSun.xyz,wr),dot(FxSun.xyz,wu),dot(FxSun.xyz,wn));
+            float shade=clamp(style.y,0.001,1.5);
+            float key=pow(max(fieldSide(la,lb,sun)/FxSixLight.z,1e-6),shade);
+            float diffuse=pow(max((la.r+la.g+la.b+lb.r+lb.g+lb.b)/(6.0*FxSixLight.z),1e-6),shade);
+            vec3 ballDirection;vec3 ball=ballsToward(c.xyz,ballDirection);
+            ballDirection=length(ballDirection)>1e-8?normalize(ballDirection):wn;
+            vec3 towards=vec3(dot(ballDirection,wr),dot(ballDirection,wu),dot(ballDirection,wn));
+            vec3 fire=ball*pow(max(fieldSide(la,lb,towards)/FxSixLight.z,1e-6),shade);
+            lighting=pow(max(FxSkyTint*mix(diffuse,key,FxSun.w)+fire,vec3(0)),vec3(1.6/2.2));
+        }
+        alpha*=color.a;
+        vec3 radiance=fieldDecode(max(color.rgb*lighting,vec3(0)));
+        result=vec4(radiance*alpha+result.rgb*(1.0-alpha),alpha+result.a*(1.0-alpha));
+    }
+    return vec4(result.a>0.0?fieldEncode(max(result.rgb/result.a,vec3(0)))*result.a:vec3(0),result.a);
+}
+
 void main() {
     vec4 view = ModelViewMat * vec4(Position, 1.0);
     gl_Position = ProjMat * view;
     texCoord0 = UV0;
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
     // запечённый клуб: свет мира — полный (под открытым небом), в UV2.x — множитель толщи его кадра (FxQuads.sixWay)
+    bool field=Normal.y < -0.44 && Normal.y > -0.5;
     bool six = Normal.y < -0.1 && Normal.y > -0.44;
-    vec4 light = Normal.y < -0.5 ? vec4(1.0) : texelFetch(Sampler2, six ? ivec2(15) : UV2 / 16, 0);
+    vec4 light = (field || Normal.y < -0.5) ? vec4(1.0) : texelFetch(Sampler2, six ? ivec2(15) : UV2 / 16, 0);
     sixTau = six ? exp2(float(UV2.x) / SIX_TAU_STEPS) : 1.0;
     int gaussian = six ? (UV2.y & 65535) : 0;
     gaussianMix = gaussian > 0 ? (float(UV1.y) - 1.0) / 32766.0 : 0.0;
@@ -121,7 +201,7 @@ void main() {
         gaussian0 = texelFetch(Sampler4, ivec2(t % w, 128 + t / w), 0);
         gaussian1 = texelFetch(Sampler4, ivec2((t + 1) % w, 128 + (t + 1) / w), 0);
     }
-    if (Normal.y > -0.5 && !six && any(lessThan(UV2, ivec2(240)))) {
+    if (!field && Normal.y > -0.5 && !six && any(lessThan(UV2, ivec2(240)))) {
         // доля света неба в точке (небо 0..15): её оттенок — как у вещества под открытым небом, свет блоков — как есть
         light.rgb *= mix(vec3(1.0), FxSkyFix, float(UV2.y) / 240.0);
         // свет шаров — к карте освещения: в долях света неба на экране (карта при открытом небе без блоков) и вместе не
@@ -161,4 +241,12 @@ void main() {
     // квадрата у глаза их не считать — свет в глазу идёт от источника, а угол блика в своей же шапке гасил бы его над ней
     pallFront = 1.0;
     if (UV1.x >= 0 || FxProbes < 0.5) pallFront = pall(gaussian > 0 ? gaussian0.xyz : Position / unfold);
+    if(field) {
+        vec3 ray=normalize(worldPos);
+        vec2 uv=gl_Position.xy/gl_Position.w*0.5+0.5;
+        float scene=pallScene(textureLod(Sampler1,uv,0.0).r);
+        float end=scene*length(worldPos)/max(viewDistance,1e-4);
+        vertexColor=fieldColor(UV2.x&65535,UV2.y&65535,ray,end);
+        fog=0.0;pallFront=pall(fieldItem(5*((UV2.x&65535)+(UV2.y&65535)/2)).xyz);
+    }
 }

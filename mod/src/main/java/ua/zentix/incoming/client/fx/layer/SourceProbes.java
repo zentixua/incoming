@@ -89,8 +89,10 @@ public final class SourceProbes {
     int update(int scene, PallPass.Frame pall, boolean pallDrawn, Matrix4f view, Matrix4f projection, double pixel) {
         ShaderInstance s = shader;
         int dataRows = GaussianData.rows();
-        if ((n == 0 && dataRows == 0) || s == null || scene < 0 || !ensure(DATA_ROW + dataRows)) return -1;
+        int fieldRows=GaussianFields.rows();
+        if ((n == 0 && dataRows == 0 && fieldRows == 0) || s == null || scene < 0 || !ensure(DATA_ROW + dataRows + fieldRows)) return -1;
         GaussianData.upload(texture);
+        GaussianFields.upload(texture,DATA_ROW+dataRows);
         if (n == 0) return texture;
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);

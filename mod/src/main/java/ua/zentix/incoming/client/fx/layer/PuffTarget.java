@@ -52,6 +52,21 @@ public final class PuffTarget {
         return sum;
     }
 
+    /** A rectangular angular mesh is one raster rectangle, not overlapping per-cell rounded rectangles. */
+    static void mergeMeshBounds(float[] bounds,int[] group,int count,int[] first) {
+        java.util.Arrays.fill(first,-1);
+        for(int i=0;i<count;i++) {
+            int id=group[i],o=4*i;
+            if(id==0 || bounds[o+2]<=bounds[o] || bounds[o+3]<=bounds[o+1])continue;
+            int previous=first[id];
+            if(previous<0){first[id]=i;continue;}
+            int at=4*previous;
+            bounds[at]=Math.min(bounds[at],bounds[o]);bounds[at+1]=Math.min(bounds[at+1],bounds[o+1]);
+            bounds[at+2]=Math.max(bounds[at+2],bounds[o+2]);bounds[at+3]=Math.max(bounds[at+3],bounds[o+3]);
+            java.util.Arrays.fill(bounds,o,o+4,0);
+        }
+    }
+
     /** One sampling grid preserves sorted blending without resolving each interleaved cloud separately. */
     public static int plan(float[] bounds, int count, int w, int h, double budget) {
         double limit = budget * w * h;
@@ -67,12 +82,28 @@ public final class PuffTarget {
 
     static int resolution() { return step; }
 
-    static boolean begin(ShaderInstance shader, int scene, float[] bounds, int count) {
+    /** Preserve a far prefix at native detail; the close, broad medium uses the remaining half of the same budget. */
+    static double nativePrefix(float[] bounds,int[] order,int visible,int w,int h,int[] resolution) {
+        java.util.Arrays.fill(resolution,0);
+        double used=0,limit=0.5*BUDGET*w*h;
+        for(int at=0;at<visible;at++) {
+            int i=order[at],o=4*i;
+            double cost=(Math.ceil(bounds[o+2]*w)-Math.floor(bounds[o]*w))*(Math.ceil(bounds[o+3]*h)-Math.floor(bounds[o+1]*h));
+            if(used+cost>limit)break;
+            used+=cost;resolution[i]=1;
+            java.util.Arrays.fill(bounds,o,o+4,0);
+        }
+        return used;
+    }
+
+    static boolean begin(ShaderInstance shader, int scene, float[] bounds, int count,int[] order,int visible,int[] resolution) {
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         int w = VIEWPORT[2], h = VIEWPORT[3];
-        step = plan(bounds, count, w, h, BUDGET);
         rawFill = pixels(bounds, count, w, h) / ((double) w * h);
-        shadedFill = workPixels(bounds, count, w, h, step) / ((double) w * h);
+        double nativePixels=rawFill>BUDGET ? nativePrefix(bounds,order,visible,w,h,resolution) : 0;
+        if(rawFill<=BUDGET) java.util.Arrays.fill(resolution,0);
+        step = plan(bounds, count, w, h, BUDGET-nativePixels/(w*(double)h));
+        shadedFill = (nativePixels+workPixels(bounds, count, w, h, step)) / ((double) w * h);
         runs = 0;
         compositeFill = 0;
         shader.safeGetUniform("FxTarget").set((float) w, (float) h, LinearStage.active() ? 2f : 0f);

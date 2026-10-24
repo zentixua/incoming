@@ -85,10 +85,49 @@ public final class FarSprites implements SmokePuffs.Out {
     /** Сколько клубов, кругов, света, лент, моделей и вуалей вещества у глаза записано в этом кадре. */
     private final int[] counts = new int[6];
 
+    private final java.util.IdentityHashMap<ua.zentix.incoming.client.fx.smoke.SmokeGrid.Source, Field> fields=new java.util.IdentityHashMap<>();
+    private ua.zentix.incoming.client.fx.smoke.SmokeGrid.Source context;
+    private static final class Field {
+        final java.util.ArrayList<float[]> gaussians=new java.util.ArrayList<>();
+        double x0=Double.POSITIVE_INFINITY,y0=Double.POSITIVE_INFINITY,x1=Double.NEGATIVE_INFINITY,y1=Double.NEGATIVE_INFINITY;
+        double weightedDepth,weight;
+    }
+    @Override public void context(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Source source) {context=source;}
+
+    /** Same sorted layer as the clubs; a source field is never composited over every foreground particle. */
+    void finishFields(FarView view) {
+        var f=view.forward();var l=view.left();var u=view.up();var white=FxAtlas.white();
+        for(Field field:fields.values()) {
+            int first=-1,n=0;
+            field.gaussians.sort((a,b)->Double.compare(b[0]*b[0]+b[1]*b[1]+b[2]*b[2],a[0]*a[0]+a[1]*a[1]+a[2]*a[2]));
+            for(float[] g:field.gaussians) {
+                int id=ua.zentix.incoming.client.fx.layer.GaussianFields.add(g);
+                if(id<0)break;if(first<0)first=id;n++;
+            }
+            if(n==0)continue;
+            int packed=first|(n<<16);
+            float key=(float)(field.weightedDepth/Math.max(field.weight,1e-20));
+            out.field(true);
+            for(int y=0;y<ua.zentix.incoming.client.fx.layer.GaussianFields.ROWS;y++)for(int x=0;x<ua.zentix.incoming.client.fx.layer.GaussianFields.COLS;x++) {
+                out.quad(key);
+                for(int j=0;j<4;j++) {
+                    double a=field.x0+(field.x1-field.x0)*(x+(j>=2?1:0))/ua.zentix.incoming.client.fx.layer.GaussianFields.COLS;
+                    double b=field.y0+(field.y1-field.y0)*(y+(j==1||j==2?1:0))/ua.zentix.incoming.client.fx.layer.GaussianFields.ROWS;
+                    out.vertex((float)(SmokePuffs.VEIL_AT*(f.x+a*l.x+b*u.x)),
+                            (float)(SmokePuffs.VEIL_AT*(f.y+a*l.y+b*u.y)),
+                            (float)(SmokePuffs.VEIL_AT*(f.z+a*l.z+b*u.z)),
+                            (white.u0()+white.u1())/2,(white.v0()+white.v1())/2,1,1,1,1,0,1,packed,0);
+                }
+            }
+            out.field(false);
+        }
+    }
+
     /** Новый кадр: писать в out, яркие источники — в пробы видимости probes. */
     void begin(FarView view, FxQuads out, SourceProbes probes) {
         this.out = out;
         this.probes = probes;
+        fields.clear();context=null;
         far = view.far();
         fx = view.forward().x();
         fy = view.forward().y();
@@ -158,6 +197,17 @@ public final class FarSprites implements SmokePuffs.Out {
         double aspect=veilAspect(), height=Math.tan(view.edge())/Math.sqrt(1+aspect*aspect), width=height*aspect;
         if (!gaussianBounds.project(x,y,z,sh,sv,ext,detail>=1?Math.sqrt(2)*card:Double.POSITIVE_INFINITY,f,l,up,width,height,gaussianRect)) return true;
         double x0=gaussianRect[0], y0=gaussianRect[1], x1=gaussianRect[2], y1=gaussianRect[3];
+        double peak=ext/(2*Math.PI*sh*Math.min(sh,sv));
+        if(context!=null && coverage*(-Math.expm1(-peak))<=SmokePuffs.CLUMPS_FULL*Sight.THRESHOLD &&
+                (x1-x0)*(y1-y0)/(4*width*height)>=0.05) {
+            Field field=fields.computeIfAbsent(context,ignored->new Field());
+            field.gaussians.add(new float[]{(float)x,(float)y,(float)z,(float)sh,(float)sv,(float)ext,(float)across,(float)card,
+                    r,g,b,coverage,Math.min(sprite.u0(),sprite.u1()),sprite.v0(),mix,(float)power,(float)detail,shade,
+                    sprite.u0()>sprite.u1()?1:0,0});
+            field.x0=Math.min(field.x0,x0);field.y0=Math.min(field.y0,y0);field.x1=Math.max(field.x1,x1);field.y1=Math.max(field.y1,y1);
+            double weight=ext*coverage;field.weightedDepth+=weight*Math.sqrt(x*x+y*y+z*z);field.weight+=weight;
+            return true;
+        }
         int index=ua.zentix.incoming.client.fx.layer.GaussianData.add(x,y,z,sh,sv,ext,across,card);
         if (index==0) return false;
         out.sixWay(mix,shade,power);

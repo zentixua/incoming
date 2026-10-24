@@ -52,6 +52,8 @@ public final class FxQuads {
     private float[] keys = new float[0];
     private boolean[] reducible = new boolean[0];
     private int[] resolution = new int[0];
+    private int[] meshGroups = new int[0];
+    private int[] firstMesh;
     private float[] bounds = new float[0];
     private float[] frameBounds;
     private float[] clipCorners;
@@ -70,6 +72,7 @@ public final class FxQuads {
         this.up = up;
         // Enhanced class redefinition initializes added fields to null in an already running sandbox.
         if (resolution == null) resolution = new int[capacity];
+        if (meshGroups == null) meshGroups = new int[capacity];
         n = 0;
         nearest = opacity = 0;
         probe = 0;
@@ -125,6 +128,8 @@ public final class FxQuads {
         sixTau = mix < 0 ? 0 : tauCode(tau);
         six = mix >= 0;
     }
+
+    public void field(boolean on) {six=false;nearest=(byte)(on?-60:0);opacity=0;}
 
     public void gaussian(int index) { gaussianIndex = (short) index; }
 
@@ -271,6 +276,7 @@ public final class FxQuads {
             return;
         }
         int[] order = sort.sort(keys, n);
+        if (meshGroups == null || meshGroups.length < n) meshGroups=new int[capacity];
         if (frameBounds == null || frameBounds.length < 4 * n) frameBounds = new float[4 * capacity];
         if (clipCorners == null) clipCorners = new float[16];
         if (projectedBounds == null) projectedBounds = new ProjectedBounds();
@@ -286,12 +292,19 @@ public final class FxQuads {
             projectedBounds.quad(clipCorners, frameBounds, o);
             if (reducible[i]) System.arraycopy(frameBounds, o, bounds, o, 4);
         }
+        // Shared mesh edges obey the rasterizer top-left rule: adjacent cells cover each pixel once.
+        if(firstMesh==null) firstMesh=new int[65537];
+        for(int i=0;i<n;i++) {
+            long p=stage+(long)i*QUAD;
+            meshGroups[i]=MemoryUtil.memGetByte(p+33)==-60 ? (MemoryUtil.memGetShort(p+28)&65535)+1 : 0;
+        }
+        PuffTarget.mergeMeshBounds(bounds,meshGroups,n,firstMesh);
         int visible = visibleOrder(order, frameBounds, n);
-        if (!PuffTarget.begin(shader, scene, bounds, n)) {
+        if (!PuffTarget.begin(shader, scene, bounds, n,order,visible,resolution)) {
             if (visible > 0) draw(order, 0, visible);
             return;
         }
-        for (int i = 0; i < n; i++) resolution[i] = reducible[i] ? PuffTarget.resolution() : 1;
+        for (int i = 0; i < n; i++) resolution[i] = !reducible[i] || resolution[i]==1 ? 1 : PuffTarget.resolution();
         // One upload for all ranges. Rebuilding an immediate MeshData and its uniforms per group costs CPU at a raid.
         if (gpu == null) gpu = new VertexBuffer(VertexBuffer.Usage.DYNAMIC);
         gpu.bind();
@@ -381,6 +394,7 @@ public final class FxQuads {
         keys = Arrays.copyOf(keys, cap);
         reducible = Arrays.copyOf(reducible, cap);
         resolution = Arrays.copyOf(resolution, cap);
+        meshGroups = Arrays.copyOf(meshGroups, cap);
         bounds = Arrays.copyOf(bounds, 4 * cap);
     }
 

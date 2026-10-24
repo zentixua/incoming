@@ -35,6 +35,35 @@ class PuffTargetTest {
         assertEquals(1, PuffTarget.plan(new float[4], 1, 1280, 720, 4));
     }
 
+    @Test
+    void sharedMeshEdgesNeverChargeTheSameRasterPixelTwice() {
+        int columns=16,rows=32,count=columns*rows+1;
+        float[] bounds=new float[4*count];int[] group=new int[count];
+        for(int y=0;y<rows;y++)for(int x=0;x<columns;x++) {
+            int i=y*columns+x;group[i]=1;
+            bounds[4*i]=(float)x/columns;bounds[4*i+1]=(float)y/rows;
+            bounds[4*i+2]=(float)(x+1)/columns;bounds[4*i+3]=(float)(y+1)/rows;
+        }
+        // An independent overlaid card still costs its own pixels.
+        bounds[4*(count-1)+2]=bounds[4*(count-1)+3]=1;
+        PuffTarget.mergeMeshBounds(bounds,group,count,new int[2]);
+        assertEquals(2*1279*719.0,PuffTarget.pixels(bounds,count,1279,719));
+        assertBudget(bounds,count,1279,719);
+    }
+
+    @Test
+    void nativeDistantDetailAndTheCloseMediumShareTheSameFourScreens() {
+        for(int[] size:new int[][]{{1279,719},{2560,1600}}) {
+            float[] bounds=new float[72*4];int[] order=new int[72],resolution=new int[72];
+            for(int i=0;i<72;i++){order[i]=i;bounds[4*i+2]=bounds[4*i+3]=1;}
+            double nativeWork=PuffTarget.nativePrefix(bounds,order,72,size[0],size[1],resolution);
+            assertEquals(2*size[0]*(double)size[1],nativeWork);
+            assertEquals(1,resolution[0]);assertEquals(1,resolution[1]);assertEquals(0,resolution[2]);
+            int step=PuffTarget.plan(bounds,72,size[0],size[1],4-nativeWork/(size[0]*(double)size[1]));
+            assertTrue(nativeWork+PuffTarget.workPixels(bounds,72,size[0],size[1],step)<=4*size[0]*(double)size[1]);
+        }
+    }
+
     private static void assertBudget(float[] rects, int n, int w, int h) {
         int step = PuffTarget.plan(rects, n, w, h, 4);
         assertTrue(PuffTarget.workPixels(rects, n, w, h, step) <= 4.0 * w * h,

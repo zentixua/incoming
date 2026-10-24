@@ -51,6 +51,7 @@ public final class FarRenderer {
         }
         // клубы облаков, кучки трубок и вуали кадра — одним бюджетом, после следов снарядов
         SmokePuffs.flush();
+        SPRITES.finishFields(view);
         // пламя очагов топлива вдали, где его языков-частиц уже нет
         ua.zentix.incoming.client.fx.FireSmoke.far(view, SPRITES);
         // струи факелов сущностей кадра: после мира, а не путём сущностей — иначе их перекрашивает шейдерпак

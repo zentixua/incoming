@@ -40,6 +40,7 @@ import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 final class SmokePuffs {
     /** Куда клубы, вуали и ленты идут квадратами (кадр слоя — {@link FarSprites}; проверки — свой приёмник). */
     interface Out {
+        default void context(SmokeGrid.Source source) {}
         /**
          * Запечённый клуб: a — видимая доля квадрата (дымка, рельеф, пятно мельче пикселя), tau — множитель толщи его кадра
          * ({@link PuffOptics}).
@@ -578,6 +579,7 @@ final class SmokePuffs {
             int o = i * FIELDS, c = (int) held[o + 12];
             source = ctxSource[c];
             out = ctxOut[c];
+            out.context(source);
             view = ctxView[c];
             age = held[o + 15] > 0 ? FxAtlas.puffFrame(Math.sqrt(held[o + 3] * held[o + 4]) / held[o + 15]) : ctxAge[c];
             sprayAge = ctxSprayAge[c];

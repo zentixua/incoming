@@ -59,6 +59,7 @@ uniform vec3 FxSkyTint;
 
 out vec4 fragColor;
 float gaussianReferenceTau;
+float gaussianPhotoWindow;
 bool gaussianPhotoSupport;
 
 // Finite tangent frames even when an enormous grazing card has an unresolved UV derivative.
@@ -133,6 +134,7 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
         float peak=gaussian1.y/(6.2831853072*gaussian0.w*gaussian1.z);
         gaussianReferenceTau=peak*exp(-0.5*dot(photo,photo));
         gaussianPhotoSupport=true;
+        gaussianPhotoWindow=smoothstep(0.0,1.0,gaussian1.w-max(abs(photo.x),abs(photo.y)));
         uv = origin + local;
         dx = dFdx(uv); dy = dFdy(uv);
         if (any(lessThan(local,vec2(0.0))) || any(greaterThan(local,tile))) {
@@ -230,7 +232,7 @@ float gaussianAlpha(float sceneDistance, float bakedAlpha) {
     if(!gaussianPhotoSupport)return modelAlpha;
     float photoTau=-log(max(1.0-bakedAlpha,1.0/255.0))*sixTau;
     float transferred=1.0-exp(-modelTau*photoTau/max(gaussianReferenceTau,1e-8));
-    return mix(modelAlpha,transferred,gaussianMix);
+    return mix(modelAlpha,transferred,gaussianMix*gaussianPhotoWindow);
 }
 
 void main() {
@@ -282,7 +284,10 @@ void main() {
         vec3 fire = ballPower * pow(max(sixLight(a.rgb, b, ballDir) / FxSixLight.z, 1e-6), shade);
         // оттенок неба (ночью — сиреневый свет луны) — только у света неба: цвет вершины несёт его яркость, а огонь у клуба
         // свой (оттенок на огне красил пыль у шара ночью в розовый)
-        sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
+        // Presentation contrast in the existing six-way bake; density and Gaussian transport are unchanged.
+        float contrast = 1.0;
+        if (analytic) contrast = 1.6;
+        sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(contrast / 2.2));
         // толща клуба — толща кадра (α = 1 − e^(−τ) запекания, байт 255 — пропускание 1/255) × sixTau: перекрытые клубы
         // складываются, как толщи (PuffOptics)
         float k = analytic ? gaussianAlpha(sceneDistance, a.a) : 1.0 - pow(max(1.0 - a.a, 1.0 / 255.0), sixTau);
