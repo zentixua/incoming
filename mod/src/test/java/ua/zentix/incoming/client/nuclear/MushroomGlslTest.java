@@ -335,7 +335,9 @@ class MushroomGlslTest {
         assertEquals(MushroomField.FOOT, max);
         assertEquals(MushroomField.FOOT_COLUMNS, c.get("MUSH_FOOT_COLUMNS").intValue());
         assertEquals(FootColumn.NODES, c.get("MUSH_FOOT_NODES").intValue());
-        assertEquals(MushroomField.TEXELS, MushroomField.FOOT_COLUMNS + FootColumn.NODES / 4);
+        assertEquals(MushroomField.FOOT_COLUMNS + FootColumn.NODES / 4, c.get("MUSH_FOOT_EDGES").intValue());
+        assertEquals(FootColumn.EDGE_NODES, c.get("MUSH_FOOT_EDGE_NODES").intValue());
+        assertEquals(MushroomField.TEXELS, MushroomField.FOOT_COLUMNS + (FootColumn.NODES + FootColumn.EDGE_NODES) / 4);
     }
 
     /**

@@ -472,9 +472,10 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
         if (k >= 0) {
             Mush m = mushLoad(Sampler7, k);
             vec3 q = mushLocal(m, p);
-            float wall = mushFootWall(length(q.xz), mushStemAt(m, q.y));
-            float up = mushFootColumn(Sampler7, k, m, q.y) * wall;
-            float total = mushFootColumn(Sampler7, k, m, 0.0) * wall;
+            float rho = length(q.xz), r = mushStemAt(m, q.y), wall = mushFootWall(rho, r);
+            float removed = mushFootRemoved(Sampler7, k, m, rho - r);
+            float up = max(mushFootColumn(Sampler7, k, m, q.y) - removed, 0.0) * wall;
+            float total = max(mushFootColumn(Sampler7, k, m, 0.0) - removed, 0.0) * wall;
             f.column.x += up * (1.0 - f.wet);
             f.column.z += up * f.wet;
             f.slab.x += total * (1.0 - f.wet);

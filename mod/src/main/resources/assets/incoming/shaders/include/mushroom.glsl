@@ -35,7 +35,7 @@
 //        у основания ножки, MushroomField.groundUnder; MUSH_SHADOW_TOP)
 //  19 = (подсос у основания ножки, MushroomField.foot: верх слоя пыли у стенки ножки, блоки; его ослабление у земли
 //        × доля гриба, 1/блок; доля подсоса; докуда поднялся воздух ножки с начала подсоса, блоки; 0 — подсоса нет)
-//  20..35 = 64 высоты оптического столба поднятой пыли, от земли до слияния (FootColumn)
+//  20..35 = 64 высоты оптического столба поднятой пыли; 36..67 = столб выше края полосы на 128 радиусах (FootColumn)
 
 const int MUSHROOMS = 4;
 const int MUSH_BB_ROW = 4;
@@ -435,14 +435,25 @@ float mushFootSigma(Mush m, float h) {
 
 const int MUSH_FOOT_COLUMNS = 20;
 const int MUSH_FOOT_NODES = 64;
+const int MUSH_FOOT_EDGES = 36;
+const int MUSH_FOOT_EDGE_NODES = 128;
 
-// 64 высоты точного интеграла mushFootDensity до footMerge (FootColumn, CPU), в текселях 20..35.
-// Непрерывная интерполяция высоты; радиальная доля mushFootWall — у потребителя.
-float mushFootColumn(sampler2D data, int k, Mush m, float h) {
-    float u = clamp(h / max(m.footMerge, 1e-6), 0.0, 1.0) * float(MUSH_FOOT_NODES - 1);
-    int i = min(int(u), MUSH_FOOT_NODES - 2), j = i + 1;
-    vec4 a = texelFetch(data, ivec2(MUSH_FOOT_COLUMNS + i / 4, k), 0), b = texelFetch(data, ivec2(MUSH_FOOT_COLUMNS + j / 4, k), 0);
+// Две таблицы FootColumn (CPU): интеграл по высоте и часть выше края сужающейся полосы на данном радиусе.
+float mushFootTable(sampler2D data, int k, int first, int nodes, float fraction) {
+    float u = clamp(fraction, 0.0, 1.0) * float(nodes - 1);
+    int i = min(int(u), nodes - 2), j = i + 1;
+    vec4 a = texelFetch(data, ivec2(first + i / 4, k), 0), b = texelFetch(data, ivec2(first + j / 4, k), 0);
     return mix(a[i % 4], b[j % 4], u - float(i));
+}
+
+float mushFootColumn(sampler2D data, int k, Mush m, float h) {
+    return mushFootTable(data, k, MUSH_FOOT_COLUMNS, MUSH_FOOT_NODES, h / max(m.footMerge, 1e-6));
+}
+
+// band(h) монотонно сужается. Над её краем на этом радиусе пыли нет: вычесть col(hEdge), а не тень всей стенки.
+float mushFootRemoved(sampler2D data, int k, Mush m, float offset) {
+    return mushFootTable(data, k, MUSH_FOOT_EDGES, MUSH_FOOT_EDGE_NODES,
+            max(offset, 0.0) / max(mushFootBandAt(m, 0.0), 1e-6));
 }
 
 // Ослабление шапки, ножки, юбки и столба воды в месте q без шума — среднее по клубам (край размыт на размах клубов): для

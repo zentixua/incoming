@@ -167,6 +167,9 @@ class ShaderSourceTest {
         String slot = blankComments(body(pall, "void slot("));
         assertEquals(1, slot.split("carpetFlowAt\\(", -1).length - 1, "карта потока общая у всех смещённых выборок слота");
         assertTrue(slot.contains("f.column.x += up") && slot.contains("f.slab.x += total"), "поднятая пыль затеняет сама себя");
+        assertTrue(slot.contains("mushFootRemoved(Sampler7, k, m, rho - r)"), "столб ограничен радиусом сужающейся полосы");
+        assertTrue(slot.contains("mushFootColumn(Sampler7, k, m, q.y) - removed"));
+        assertTrue(slot.contains("mushFootColumn(Sampler7, k, m, 0.0) - removed"), "общий слой не включает пыль вне данного радиуса");
         String flow = blankComments(body(pall, "vec4 carpetFlow("));
         assertFalse(flow.contains("for ("), "на шаге нет обхода массива грибов");
         assertFalse(pall.contains("Mush gMush["), "неизменные параметры не копируются в частную память каждого пикселя");

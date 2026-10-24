@@ -4,18 +4,22 @@ package ua.zentix.incoming.client.nuclear;
  * Vertical optical depth of the lifted carpet, without its radial wall weight. The density is exactly
  * {@link MushroomField#footDensity}: rational dilution, a linear arrival front and the original carpet subtracted.
  * Positive intervals have a closed primitive (atan/log and cubic × exponential); only their zero crossings need
- * bisection. Build once per mushroom/frame, pack 64 heights in its existing texture, never integrate in a ray step.
+ * bisection. The narrowing band ends at a different height on each radius: subtract the column above that edge,
+ * rather than shadowing every radius with the complete wall column. Both tables are built once per mushroom/frame.
  */
 final class FootColumn {
     static final int NODES = 64;
-    private final double top, sigma, rise, end;
+    static final int EDGE_NODES = 128;
+    private final double top, sigma, share, rise, merge, end;
     private final double[] intervals = new double[16];
     private int count;
 
     FootColumn(double top, double sigma, double share, double rise, double merge) {
         this.top = Math.max(top, 1);
         this.sigma = share > 0 ? Math.max(sigma, 0) : 0;
+        this.share = Math.max(share, 0);
         this.rise = Math.max(rise, 0) / this.top;
+        this.merge = Math.max(merge, 0);
         end = Math.max(0, Math.min(merge / this.top, this.rise));
         if (this.sigma <= 0 || end <= 0) return;
         if (this.rise >= 2) {
@@ -60,6 +64,24 @@ final class FootColumn {
         return sigma * top * Math.max(sum, 0);
     }
 
+    /** Column above the height where the monotone band ends at this distance outside the stem wall. */
+    double removed(double offset) {
+        if (offset <= 0) return above(merge);
+        if (offset >= MushroomField.footBand(0, top, share, merge)) return above(0);
+        double lo = 0, hi = merge;
+        for (int i = 0; i < 48; i++) {
+            double mid = (lo + hi) * 0.5;
+            if (MushroomField.footBand(mid, top, share, merge) > offset) lo = mid;
+            else hi = mid;
+        }
+        return above((lo + hi) * 0.5);
+    }
+
+    /** Remaining lifted dust above a point, with the same local stem-wall radius as the rendered band. */
+    double above(double h, double offset) {
+        return Math.max(above(h) - removed(offset), 0);
+    }
+
     private double primitive(double x) {
         double full = Math.max(rise - 1, 0), split = Math.min(x, full);
         double both = Math.atan(split);
@@ -85,5 +107,7 @@ final class FootColumn {
 
     void pack(double merge, float[] into, int offset) {
         for (int i = 0; i < NODES; i++) into[offset + i] = (float) above(merge * i / (NODES - 1));
+        double width = MushroomField.footBand(0, top, share, merge);
+        for (int i = 0; i < EDGE_NODES; i++) into[offset + NODES + i] = (float) removed(width * i / (EDGE_NODES - 1));
     }
 }
