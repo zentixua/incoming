@@ -554,6 +554,7 @@ final class Sandbox {
         if (armed != null && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("кадры до начала эффекта — только у nuke … near");
         switch (c.verb()) {
             case BLAST -> {
+                sameAir(mc);
                 placeCamera();
                 WeaponType w = c.weapon();
                 if (w == WeaponType.BUNKER) throw new IllegalArgumentException("бомба без сервера не взрывается: flight bunker");
@@ -569,6 +570,7 @@ final class Sandbox {
                 }
             }
             case RAID -> {
+                sameAir(mc);
                 placeCamera();
                 int n = (int) c.number(0, 16);
                 double radius = c.number(1, 120), every = c.number(2, 3);
@@ -642,6 +644,7 @@ final class Sandbox {
                 pending = Pending.SERVER;
             }
             case FIRE -> {
+                sameAir(mc);
                 placeCamera();
                 int half = (int) c.number(0, 6) / 2;
                 BlockPos s = BlockPos.containing(site);
@@ -655,6 +658,21 @@ final class Sandbox {
             }
             default -> throw new IllegalArgumentException("не эффект: " + c);
         }
+    }
+
+    /**
+     * Один воздух у {@code blast}, {@code raid} и {@code fire} в любом запуске и на любой ветке: ветер и устойчивость —
+     * функция времени игры ({@code Wind.at}, у клиента — {@code ClientAir}), а {@code time} меняет только время суток.
+     * Клиент берёт {@link #NEAR_GAME_TIME} сразу (пакет взрыва — в этом же тике), сервер — своей задачей и шлёт его всем.
+     */
+    private void sameAir(Minecraft mc) {
+        mc.level.setGameTime(NEAR_GAME_TIME);
+        onServer(false, s -> {
+            var world = s.overworld();
+            ((net.minecraft.world.level.storage.ServerLevelData) world.getLevelData()).setGameTime(NEAR_GAME_TIME);
+            s.getPlayerList().broadcastAll(new net.minecraft.network.protocol.game.ClientboundSetTimePacket(world.getGameTime(),
+                    world.getDayTime(), world.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
+        });
     }
 
     /** Пакет взрыва {@code blast} только у клиента, тем же входом, что от сервера; земля — то, что под точкой (трава или пруд). */
