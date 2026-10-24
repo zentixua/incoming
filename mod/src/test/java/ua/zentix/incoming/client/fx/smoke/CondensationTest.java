@@ -41,6 +41,7 @@ class CondensationTest {
         for (double t = 0.001; t <= cloud.life; t += 0.005) {
             double front = f.radiusAt(t);
             cloud.blobs(t, (x, y, z, sh, sv, soot, dust, water, temp, rise) -> {
+                if (water <= 0) return;
                 count[0]++;
                 assertTrue(Math.sqrt(x*x + y*y + z*z) + 4*sh <= front + 1e-8);
                 assertTrue(water >= 0 && sh > 0);
@@ -48,4 +49,17 @@ class CondensationTest {
         }
         assertTrue(count[0] > 100, "rain produces an actual shell");
     }
+    @Test
+    void cellsKeepTheirEmissionIndicesAsOtherShellsEvaporate() {
+        Condensation cloud = new Condensation(50, true, 1);
+        int previous = -1;
+        for (double t = 0.01; t < cloud.life; t += 0.01) {
+            int[] calls = {0};
+            cloud.blobs(t, (x, y, z, sh, sv, soot, dust, water, temp, rise) -> calls[0]++);
+            if (previous > 0) assertEquals(previous, calls[0], "stable indices prevent texture flicker");
+            previous = calls[0];
+        }
+        assertTrue(previous > 0);
+    }
+
 }

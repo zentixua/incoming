@@ -98,9 +98,12 @@ public final class Condensation {
         if (seconds <= 0 || seconds >= life || reach <= 0) return;
         for (int j = 0; j < RINGS; j++) {
             double r = radius[j];
-            if (r > reach || seconds <= arrival[j] + phase[j] || seconds >= arrival[j] + 8 * phase[j]) continue;
-            double water = density(r, seconds) * volume[j] / DIRECTIONS;
-            if (water <= 0) continue;
+            double water = r > reach ? 0 : density(r, seconds) * volume[j] / DIRECTIONS;
+            if (water <= 0) {
+                // Preserve each cell’s puff identity as other shells appear or evaporate.
+                for (int i = 0; i < DIRECTIONS; i++) out.blob(0, 0, 0, 0, 0, 0, 0, 0, T0, 0);
+                continue;
+            }
             double sigma = Math.min(0.10 * r, Math.max(0, front.radiusAt(seconds) - r) / 4);
             if (sigma <= 0) continue;
             for (int i = 0; i < DIRECTIONS; i++) {

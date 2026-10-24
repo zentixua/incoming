@@ -84,7 +84,11 @@ final class FrontDust implements SmokeGrid.Source {
         if (ended() || seconds >= end) return false;
         for (Patch p : patches) {
             double age = seconds - born - p.arrival, fade = envelope(age);
-            if (fade <= 0) continue;
+            if (fade <= 0) {
+                // Empty calls retain the baked-puff seed while neighbouring patches start or expire.
+                out.blob(p.x, p.y, p.z, 0, 0, 0, 0, 0, 0.82f, 0.76f, 0.62f, CloudModel.T_AIR_K, 0);
+                continue;
+            }
             double s = Math.min(p.size * (0.7 + 2 * age), Math.max(0, front.radiusAt(seconds - born) - p.slant) / 4);
             if (s <= 0) continue;
             double v = 0.3 + age;
