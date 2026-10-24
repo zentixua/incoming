@@ -19,6 +19,11 @@ package ua.zentix.incoming.nuclear.model;
  * </ul>
  */
 public final class BlastLitter {
+    /**
+     * Оседание крупной крошки с сорванного покрова, м/с: корзина кварцевой пыли 120 мкм из DustModel (Clift–Gauvin).
+     * Размер — оценка для видимых деталей срыва; мелкая долговечная пыль остаётся в физическом слое GroundDust.
+     */
+    public static final double COVER_DUST_SETTLE = DustModel.SETTLE[3];
     /** Ближе к фронту закон пластины не годен, м ({@link DustModel#plate}). */
     static final double NEAREST_M = 0.06;
     /** Шагов интеграла броска на положительную фазу. */

@@ -331,11 +331,9 @@ public final class HeatPass {
 
         /** Фронт обычного взрыва ({@code FarBlasts.front}): как {@link #front}, но слот ядерки не занимает. */
         public void chemicalFront(double x, double y, double z, double r, double l, double low, double[] dn) {
-            // Подача: усиление ряби обычного фронта. Радиус, время, толща и зависимость от давления — прежние.
-            // Ядерный front() использует физический скачок без усиления.
-            double[] shown = new double[4];
-            for (int i = 0; i < shown.length; i++) shown[i] = 24 * dn[i];
-            front(x, y, z, r, l, low, shown, false);
+            // Скачок остаётся физическим. Подача применяется к сдвигу в пикселях в fx_heat, с пределом 3 px:
+            // усиление dn до оптики давало линзу, затягивающую засветку вспышки во весь купол.
+            front(x, y, z, r, l, low, dn, false);
         }
 
         private double rank(int slot) {
@@ -348,6 +346,7 @@ public final class HeatPass {
             if (r <= 0 || l <= 0 || most <= 0) return;
             double near = Math.abs(Math.sqrt(x * x + y * y + z * z) - r);
             double w = ShockOptics.most(r, most, near, pixel) / pixel;
+            if (!nuke) w *= 24; // Верхняя оценка показа; шейдер ограничивает суммарный обычный сдвиг.
             if (w < SHIFT_MIN) return;
             int slot = rank(1) < rank(0) ? 1 : 0;
             if (w + (nuke ? 1e9 : 0) <= rank(slot)) return;
@@ -701,6 +700,7 @@ public final class HeatPass {
                 (float) (half - Math.floor(half)), (float) (Math.floor(half) % CYCLE_SEEDS + 0.5));
         s.safeGetUniform("HeatFront").set(f.front);
         s.safeGetUniform("HeatFrontShape").set(f.frontShape.x, f.frontShape.y, f.frontShape.z, f.frontShape.w);
+        s.safeGetUniform("HeatFrontChemical").set(f.frontNuke[0] ? 0f : 1f, f.frontNuke[1] ? 0f : 1f);
         s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
         boolean drawn = quad(s);
         RenderSystem.enableDepthTest();

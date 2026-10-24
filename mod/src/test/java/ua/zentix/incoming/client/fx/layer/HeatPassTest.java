@@ -204,7 +204,7 @@ class HeatPassTest {
         assertFalse(buried.lit(), "сопло в земле — света нет");
     }
     @Test
-    void conventionalPresentationAmplifiesOnlyItsOwnOpticsAndKeepsNukePriority() {
+    void conventionalFrontKeepsPhysicalOpticsAndNukePriority() {
         HeatPass.Frame frame = new HeatPass.Frame();
         double[] jump = {1e-4, 1e-4, 1e-4, 1e-4};
         frame.front(0, 0, 50, 20, 1, 0, jump);
@@ -213,7 +213,7 @@ class HeatPassTest {
         assertEquals(20, frame.front.getColumn(0, c).w, 1e-6);
         assertEquals(25, frame.front.getColumn(1, c).w, 1e-6);
         assertEquals(1e-4, frame.front.getColumn(2, c).x, 1e-10, "nuke uses physical index jump");
-        assertEquals(24e-4, frame.front.getColumn(3, c).x, 1e-9, "conventional presentation only");
+        assertEquals(1e-4, frame.front.getColumn(3, c).x, 1e-10, "gain belongs to bounded screen displacement");
         assertEquals(1e-4, jump[0], 1e-15, "does not mutate shared input");
         frame.chemicalFront(0, 0, 26, 25, 2, 0, jump);
         assertEquals(20, frame.front.getColumn(0, c).w, 1e-6, "cannot replace the nuke slot");
