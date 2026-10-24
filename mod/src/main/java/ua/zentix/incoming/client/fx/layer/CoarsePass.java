@@ -1,0 +1,264 @@
+package ua.zentix.incoming.client.fx.layer;
+
+import com.mojang.blaze3d.platform.GlConst;
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import net.minecraft.client.renderer.ShaderInstance;
+import org.jetbrains.annotations.Nullable;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
+import ua.zentix.incoming.Incoming;
+
+import java.util.Arrays;
+import java.util.Locale;
+
+/**
+ * Крупные клубы дыма — в кадре мельче полного. Цена слоя в налёте — заливка: клуб, что закрывает экран, стоит ~0,4 мс
+ * на экран (2560×1600, RTX 4060), а внутри дыма десятков попаданий их 30–180 экранов на кадр (замер PF2 24.10). Но такой
+ * клуб растянут: кадр запечённого клуба — 128 текселей поперёк, и на экране тексель занимает десятки пикселей. Свою
+ * картинку клуб отдаёт и в кадре мельче: от 3 пикселей экрана на тексель — в 2 раза, от 7 — в 4, от 14 — в 8
+ * ({@link #PER_TEXEL}; кадры {@code puff6} так, с билинейным увеличением назад, расходятся с полным кадром в среднем
+ * не больше чем на 1/255 — {@code CoarsePassTest}). Так же — пелена ядерки ({@link PallPass}): кадр мельче и вывод с весом по
+ * сходству расстояния до мира.
+ * <p>
+ * Порядок слоя (от дальних к ближним) неприкосновенен: смешивание с умноженной альфой ассоциативно, и подряд идущие
+ * квадраты можно сложить в своём кадре (с нуля, тем же смешиванием) и положить на кадр одним выводом — итог тот же, что
+ * у них по одному. Поэтому отсортированные квадраты делятся на отрезки ({@link #plan}): у отрезка один уровень — не
+ * мельче, чем позволяет любой его квадрат; отрезок мельче полного — свой кадр и вывод ({@code fx_coarse}), у которого
+ * своя цена ({@link #RUN}). Пока клубы дёшевы (меньше {@link #GATE} экранов), всё — в полном кадре, как прежде.
+ * <p>
+ * В мелком кадре аппаратной глубины нет: что за миром, отбрасывает шейдер слоя по расстоянию до мира (как у прохода
+ * свечения), в решётке, через которую вывод потом и берёт пиксели (пиксель t кадра в f раз мельче смотрит в пиксель
+ * floor((t + ½)·f) полного, {@code pallLattice}).
+ */
+public final class CoarsePass {
+    /** Уровни: 0 — полный кадр, k — в 2^k раз мельче. */
+    static final int LEVELS = 4;
+    /** Пикселей экрана на тексель картинки квадрата, с которых он может идти уровнем k (k ≥ 1). */
+    static final float[] PER_TEXEL = {0, 3, 7, 14};
+    /** Заливка квадратов, что могут идти мельче (экранов): меньше — всё в полном кадре. */
+    static final float GATE = 4;
+    /**
+     * Цена отрезка мелкого кадра сверх его клубов, в экранах заливки клубом: чистка его кадра и вывод на полный (~4 выборки
+     * кадра и 9 — расстояния до мира на пиксель, порядка одного клуба в рамке отрезка; оценка с запасом — во весь экран).
+     */
+    static final float RUN = 1;
+    /** Отрезков не больше: иначе — дороже цена отрезка ({@link #plan}). */
+    static final int MAX_RUNS = 12;
+
+    @Nullable
+    static ShaderInstance composite;
+    /** Всё в полном кадре (песочница: {@code coarse off} — тот же кадр без мелких отрезков, для сравнения). */
+    public static volatile boolean off;
+    private static final int[] TEXTURES = {-1, -1, -1, -1}, FBOS = {-1, -1, -1, -1}, W = new int[LEVELS], H = new int[LEVELS];
+    private static int fullW, fullH;
+    private static boolean failed;
+    /** Расстояние до мира кадра ({@link SceneDepth}); −1 — его нет, мелких кадров нет. */
+    private static int scene = -1;
+    private static final int[] VIEWPORT = new int[4];
+    private static final float[] ZERO = {0, 0, 0, 0};
+    /** Сводка за секунду: кадров с мелкими отрезками, отрезков, заливка клубов уровня k (экранов) — для строки сценария. */
+    private static int frames, runs, lastFrames, lastRuns;
+    private static final double[] FILL = new double[LEVELS], LAST_FILL = new double[LEVELS];
+
+    private CoarsePass() {}
+
+    /** Кадр слоя: расстояние до мира ({@link SceneDepth#update}; −1 — нет, всё в полном кадре). */
+    static void frame(int sceneTexture) {
+        scene = sceneTexture;
+    }
+
+    /** Мелкие кадры можно рисовать: есть шейдер вывода и расстояние до мира, кадры заводились. */
+    static boolean ready() {
+        return composite != null && scene >= 0 && !failed && !off;
+    }
+
+    /** Уровень квадрата по пикселям экрана на тексель его картинки: самый мелкий кадр, что её не теряет. */
+    static int level(double pixelsPerTexel) {
+        int k = 0;
+        while (k + 1 < LEVELS && pixelsPerTexel >= PER_TEXEL[k + 1]) k++;
+        return k;
+    }
+
+    /**
+     * Отрезки отсортированных квадратов: {@code level[i]} — самый мелкий уровень квадрата i, {@code cover[i]} — доля кадра
+     * под ним. Уровень квадрата — не мельче своего; цена — заливка квадрата ÷ 4^уровень, у отрезка мелкого кадра — ещё
+     * {@code run}; наименьшая сумма — по Витерби. Квадраты, что могут идти мельче, вместе дешевле {@link #GATE} — один
+     * отрезок полного кадра. В {@code from} — начало отрезка, в {@code at} — его уровень; вернёт число отрезков.
+     */
+    static int plan(int n, byte[] level, float[] cover, int[] from, byte[] at) {
+        double coarse = 0;
+        for (int i = 0; i < n; i++) if (level[i] > 0) coarse += cover[i];
+        if (n == 0 || coarse < GATE) {
+            from[0] = 0;
+            at[0] = 0;
+            return 1;
+        }
+        for (float run = RUN; ; run *= 2) {
+            int count = viterbi(n, level, cover, run, from, at);
+            if (count <= MAX_RUNS) return count;
+        }
+    }
+
+    private static byte[] back = new byte[0];
+
+    private static int viterbi(int n, byte[] level, float[] cover, float run, int[] from, byte[] at) {
+        if (back.length < n * LEVELS) back = new byte[Math.max(n * LEVELS, back.length * 2)];
+        double[] cost = new double[LEVELS], next = new double[LEVELS];
+        Arrays.fill(cost, Double.POSITIVE_INFINITY);
+        // до первого квадрата — «отрезок» полного кадра без цены
+        cost[0] = 0;
+        for (int i = 0; i < n; i++) {
+            for (int l = 0; l < LEVELS; l++) {
+                next[l] = Double.POSITIVE_INFINITY;
+                if (l > level[i]) continue;
+                for (int a = 0; a < LEVELS; a++) {
+                    double v = cost[a];
+                    // кончился отрезок мелкого кадра — его вывод
+                    if (a != l && a > 0) v += run;
+                    if (v < next[l]) {
+                        next[l] = v;
+                        back[i * LEVELS + l] = (byte) a;
+                    }
+                }
+                next[l] += cover[i] / (1 << 2 * l);
+            }
+            double[] t = cost;
+            cost = next;
+            next = t;
+        }
+        int l = 0;
+        double best = Double.POSITIVE_INFINITY;
+        for (int a = 0; a < LEVELS; a++) {
+            double v = cost[a] + (a > 0 ? run : 0);
+            if (v < best) {
+                best = v;
+                l = a;
+            }
+        }
+        // назад: уровни квадратов, отрезки — где уровень меняется
+        int count = 0;
+        for (int i = n - 1; i >= 0; i--) {
+            int a = back[i * LEVELS + l];
+            if (i == 0 || a != l) {
+                from[count] = i;
+                at[count] = (byte) l;
+                count++;
+            }
+            l = a;
+            if (count > MAX_RUNS) return count;
+        }
+        for (int i = 0, j = count - 1; i < j; i++, j--) {
+            int f = from[i];
+            from[i] = from[j];
+            from[j] = f;
+            byte b = at[i];
+            at[i] = at[j];
+            at[j] = b;
+        }
+        return count;
+    }
+
+    /**
+     * Квадраты {@code [a, b)} кадра {@code quads} — в кадре уровня k и выводом на текущий: рамка {@code box} (NDC: x0, y0,
+     * x1, y1) — где они на экране. Шейдер слоя s — уже со всеми текстурами и смешиванием слоя.
+     */
+    static void draw(FxQuads quads, ShaderInstance s, int a, int b, int k, float[] box) {
+        ShaderInstance c = composite;
+        int frame = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+        int w = VIEWPORT[0] + VIEWPORT[2], h = VIEWPORT[1] + VIEWPORT[3];
+        if (c == null || w <= 0 || h <= 0 || !target(w, h)) {
+            quads.range(s, a, b);
+            return;
+        }
+        int f = 1 << k;
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, FBOS[k]);
+        GlStateManager._viewport(0, 0, W[k], H[k]);
+        GL30.glClearBufferfv(GL11.GL_COLOR, 0, ZERO);
+        // y — во сколько раз пиксель крупнее; x = 0 — цвет, не свечение (fx.fsh: что за миром — отброшено)
+        s.safeGetUniform("FxGlowPass").set(0f, (float) f);
+        quads.range(s, a, b);
+        s.safeGetUniform("FxGlowPass").set(0f, 1f);
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
+        GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+        // вывод — в рамке отрезка (с запасом в пиксель мелкого кадра и соседей вывода)
+        int margin = 2 * f + 2;
+        int x0 = Math.max(0, (int) Math.floor((box[0] * 0.5 + 0.5) * w) - margin), y0 = Math.max(0, (int) Math.floor((box[1] * 0.5 + 0.5) * h) - margin);
+        int x1 = Math.min(w, (int) Math.ceil((box[2] * 0.5 + 0.5) * w) + margin), y1 = Math.min(h, (int) Math.ceil((box[3] * 0.5 + 0.5) * h) + margin);
+        if (x1 > x0 && y1 > y0) {
+            RenderSystem.disableDepthTest();
+            GlStateManager._enableScissorTest();
+            GlStateManager._scissorBox(x0, y0, x1 - x0, y1 - y0);
+            c.setSampler("Sampler0", TEXTURES[k]);
+            c.setSampler("Sampler1", scene);
+            c.safeGetUniform("CoarseFactor").set((float) f);
+            c.apply();
+            FxBloom.triangle();
+            GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
+            c.clear();
+            // свой массив вершин был привязан мимо BufferUploader: его привязку он помнит и не повторил бы
+            GlStateManager._glBindVertexArray(0);
+            BufferUploader.invalidate();
+            GlStateManager._disableScissorTest();
+            RenderSystem.enableDepthTest();
+        }
+        runs++;
+    }
+
+    /** Кадр слоя с отрезками: заливка клубов, что шли уровнем k (экранов), — в сводку. */
+    static void counted(double[] fill) {
+        frames++;
+        for (int k = 0; k < LEVELS; k++) FILL[k] += fill[k];
+    }
+
+    /** Кадры уровней 1…3 для кадра w×h (RGBA16F: свет с умноженной альфой и закрытая доля); false — не завести. */
+    private static boolean target(int w, int h) {
+        if (TEXTURES[1] >= 0 && w == fullW && h == fullH) return true;
+        int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        boolean ok = true;
+        for (int k = 1; k < LEVELS; k++) {
+            W[k] = Math.max(1, (w + (1 << k) - 1) >> k);
+            H[k] = Math.max(1, (h + (1 << k) - 1) >> k);
+            if (TEXTURES[k] < 0) {
+                TEXTURES[k] = GlStateManager._genTexture();
+                GlStateManager._bindTexture(TEXTURES[k]);
+                GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_NEAREST);
+                GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
+                GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
+                GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
+            }
+            GlStateManager._bindTexture(TEXTURES[k]);
+            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, W[k], H[k], 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+            if (FBOS[k] < 0) FBOS[k] = GlStateManager.glGenFramebuffers();
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, FBOS[k]);
+            GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, TEXTURES[k], 0);
+            ok &= GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE;
+        }
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+        fullW = w;
+        fullH = h;
+        if (!ok) {
+            Incoming.LOG.error("Effects layer: coarse smoke targets for {}×{} not created, all smoke at full resolution", w, h);
+            failed = true;
+        }
+        return ok;
+    }
+
+    /** Раз в секунду (тик слоя). */
+    static void second() {
+        lastFrames = frames;
+        lastRuns = runs;
+        System.arraycopy(FILL, 0, LAST_FILL, 0, LEVELS);
+        frames = runs = 0;
+        Arrays.fill(FILL, 0);
+    }
+
+    /** Для строки сценария: кадров с мелкими отрезками за секунду, отрезков на кадр и заливка клубов по уровням. */
+    static String describe() {
+        int n = Math.max(lastFrames, 1);
+        return String.format(Locale.ROOT, "coarse smoke: %d frames, %.1f coarse runs, puff fill per frame %.1f / %.1f / %.1f / %.1f screens at 1, 1/2, 1/4, 1/8",
+                lastFrames, (double) lastRuns / n, LAST_FILL[0] / n, LAST_FILL[1] / n, LAST_FILL[2] / n, LAST_FILL[3] / n);
+    }
+}

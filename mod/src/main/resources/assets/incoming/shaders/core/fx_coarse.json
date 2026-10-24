@@ -1,0 +1,11 @@
+{
+    "vertex": "incoming:fx_depth",
+    "fragment": "incoming:fx_coarse",
+    "samplers": [
+        { "name": "Sampler0" },
+        { "name": "Sampler1" }
+    ],
+    "uniforms": [
+        { "name": "CoarseFactor", "type": "float", "count": 1, "values": [ 2.0 ] }
+    ]
+}

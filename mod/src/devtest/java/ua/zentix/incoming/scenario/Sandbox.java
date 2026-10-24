@@ -456,6 +456,10 @@ final class Sandbox {
                 track = c.args().getFirst().equals("on");
                 finish("ok");
             }
+            case COARSE -> {
+                ua.zentix.incoming.client.fx.layer.CoarsePass.off = c.args().getFirst().equals("off");
+                finish("ok");
+            }
             case ZOOM -> {
                 zoom = c.number(0);
                 finish("ok");

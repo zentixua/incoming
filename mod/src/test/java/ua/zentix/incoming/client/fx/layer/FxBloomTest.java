@@ -319,7 +319,8 @@ class FxBloomTest {
         assertTrue(fsh.contains("glow *= front;"), "пелена перед огнём гасит и излучение");
         assertTrue(!fsh.contains("color *="), "цвет не гасится мимо видимой доли");
         assertTrue(fsh.contains("if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);"), "мягкий край у мира — в видимой доле");
-        assertTrue(fsh.contains("if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;"), "что за миром, не светится");
+        assertTrue(fsh.contains("bool noDepth = FxGlowPass.x > 0.5 || coarse;") && fsh.contains("if (noDepth && scene < viewDistance * 0.999 - 0.05) discard;"),
+                "что за миром, не светится");
         assertTrue(fsh.contains("float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);"), "расстояние до мира — у пикселя кадра, не прохода");
         assertTrue(fsh.contains("glow = color.rgb * emitGain;"), "пятно: цвет — линейный свет");
         assertTrue(vsh.contains("if (Emit > " + (FxBloom.SPOT - 0.5) + ")"), "пятно — с " + FxBloom.SPOT);

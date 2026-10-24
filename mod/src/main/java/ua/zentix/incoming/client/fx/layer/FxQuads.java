@@ -1,12 +1,19 @@
 package ua.zentix.incoming.client.fx.layer;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.util.Mth;
+import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.lwjgl.system.MemoryUtil;
 
 import java.util.Arrays;
@@ -71,6 +78,26 @@ public final class FxQuads {
     private short probe;
     /** В кадре есть квадраты со свечением ({@link #emission}). */
     private boolean glows;
+    /**
+     * Вид с проекцией (от камеры) и размер кадра в пикселях ({@link #screen}): по ним квадрату — его уровень мелкого кадра
+     * ({@link CoarsePass}); без них кадр весь в полном разрешении.
+     */
+    @Nullable
+    private Matrix4f screen;
+    private int screenW, screenH;
+    /**
+     * Самый мелкий уровень квадрата ({@link CoarsePass#level}; 0 — только полный кадр), доля кадра под ним и рамка на
+     * экране (NDC: x0, y0, x1, y1) — у запечённых клубов без свечения; у остального — 0.
+     */
+    private byte[] level = new byte[0];
+    private float[] cover = new float[0], box = new float[0];
+    /** План кадра ({@link CoarsePass#plan}) по отсортированным квадратам: их уровни и доли, начала и уровни отрезков. */
+    private byte[] sortedLevel = new byte[0], runLevel = new byte[CoarsePass.MAX_RUNS + 1];
+    private float[] sortedCover = new float[0];
+    private final float[] runBox = new float[4];
+    private int[] runFrom = new int[CoarsePass.MAX_RUNS + 1];
+    private final double[] runFill = new double[CoarsePass.LEVELS];
+    private final Vector4f clip = new Vector4f();
 
     /** Новый кадр: оси экрана (влево, вверх) для квадратов лицом к камере. */
     public void begin(Vector3f left, Vector3f up) {
@@ -80,6 +107,7 @@ public final class FxQuads {
         nearest = opacity = emit = 0;
         probe = 0;
         glows = false;
+        screen = null;
         glowReach = -Float.MAX_VALUE;
         Arrays.fill(glowBox, 0, 3, Float.MAX_VALUE);
         Arrays.fill(glowBox, 3, 6, -Float.MAX_VALUE);
@@ -178,6 +206,16 @@ public final class FxQuads {
         glowTexel = texel;
     }
 
+    /**
+     * Вид с проекцией от камеры ({@code FarDraw.viewProjection}) и размер кадра в пикселях: квадраты кадра (после этого вызова)
+     * знают, сколько пикселей на тексель их картинки, и крупные клубы могут идти мелким кадром ({@link CoarsePass}).
+     */
+    public void screen(Matrix4f viewProjection, int width, int height) {
+        screen = viewProjection;
+        screenW = width;
+        screenH = height;
+    }
+
     /** В кадре есть свечение: проход свечения нужен. */
     public boolean glows() {
         return glows;
@@ -202,6 +240,8 @@ public final class FxQuads {
         if (n == capacity) grow();
         keys[n] = key > 0 ? key : 0;
         emits[n] = false;
+        level[n] = 0;
+        cover[n] = 0;
         write = stage + (long) n * QUAD;
         n++;
         corner = 0;
@@ -247,6 +287,58 @@ public final class FxQuads {
             reach(n - 1);
             if (!spotting) spots(n - 1);
         }
+        // запечённый клуб без свечения: может идти мелким кадром (сколько пикселей на тексель)
+        if (corner == 4 && screen != null && !emits[n - 1] && nearest <= -13 && nearest >= -13 - SHADE_STEPS) measure(n - 1);
+    }
+
+    /**
+     * Уровень мелкого кадра квадрата i ({@link CoarsePass#level}): по наименьшему у его четырёх рёбер числу пикселей
+     * экрана на тексель картинки (ребро на экране против того же ребра на листе); доля кадра и рамка на экране. Угол у
+     * глаза или за ним — квадрат во весь экран и растянут без меры: самый мелкий уровень.
+     */
+    private void measure(int i) {
+        long q = stage + (long) i * QUAD;
+        float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+        boolean behind = false;
+        for (int k = 0; k < 4; k++) {
+            long p = q + (long) k * VERTEX;
+            screen.transform(clip.set(MemoryUtil.memGetFloat(p), MemoryUtil.memGetFloat(p + 4), MemoryUtil.memGetFloat(p + 8), 1));
+            if (clip.w < 1e-3f) {
+                behind = true;
+                break;
+            }
+            float sx = (clip.x / clip.w * 0.5f + 0.5f) * screenW, sy = (clip.y / clip.w * 0.5f + 0.5f) * screenH;
+            corners[3 * k] = sx;
+            corners[3 * k + 1] = sy;
+            x0 = Math.min(x0, sx);
+            y0 = Math.min(y0, sy);
+            x1 = Math.max(x1, sx);
+            y1 = Math.max(y1, sy);
+        }
+        int b = 4 * i;
+        if (behind) {
+            level[i] = (byte) (CoarsePass.LEVELS - 1);
+            cover[i] = 1;
+            box[b] = box[b + 1] = -1;
+            box[b + 2] = box[b + 3] = 1;
+            return;
+        }
+        double perTexel = Double.MAX_VALUE;
+        for (int k = 0; k < 4; k++) {
+            int j = (k + 1) & 3;
+            long p = q + (long) k * VERTEX, r = q + (long) j * VERTEX;
+            double texels = Math.hypot((MemoryUtil.memGetFloat(r + 12) - MemoryUtil.memGetFloat(p + 12)) * FxAtlas.WIDTH,
+                    (MemoryUtil.memGetFloat(r + 16) - MemoryUtil.memGetFloat(p + 16)) * FxAtlas.HEIGHT);
+            double pixels = Math.hypot(corners[3 * j] - corners[3 * k], corners[3 * j + 1] - corners[3 * k + 1]);
+            if (texels > 0.5) perTexel = Math.min(perTexel, pixels / texels);
+        }
+        level[i] = (byte) (perTexel == Double.MAX_VALUE ? 0 : CoarsePass.level(perTexel));
+        float cx0 = Math.max(0, x0), cy0 = Math.max(0, y0), cx1 = Math.min(screenW, x1), cy1 = Math.min(screenH, y1);
+        cover[i] = cx1 > cx0 && cy1 > cy0 ? (cx1 - cx0) * (cy1 - cy0) / ((float) screenW * screenH) : 0;
+        box[b] = cx0 / screenW * 2 - 1;
+        box[b + 1] = cy0 / screenH * 2 - 1;
+        box[b + 2] = cx1 / screenW * 2 - 1;
+        box[b + 3] = cy1 / screenH * 2 - 1;
     }
 
     /**
@@ -408,7 +500,10 @@ public final class FxQuads {
         vertex(x + ax - bx, y, z + az - bz, s.u0(), s.v1(), r, g, b, a, soft, unfold, light, fog);
     }
 
-    /** Отсортировать и нарисовать текущим шейдером; память кадра остаётся для следующего. */
+    /**
+     * Отсортировать и нарисовать текущим шейдером; память кадра остаётся для следующего. Крупные клубы — отрезками мелкого
+     * кадра ({@link #plan}, {@link CoarsePass}), если он есть.
+     */
     void draw() {
         glowFrom = n;
         if (n == 0) return;
@@ -421,8 +516,99 @@ public final class FxQuads {
             glowFrom = n;
             return;
         }
-        BufferUploader.drawWithShader(new MeshData(result, new MeshData.DrawState(FORMAT, n * 4, n * 6, VertexFormat.Mode.QUADS,
-                VertexFormat.IndexType.least(n * 4))));
+        MeshData mesh = new MeshData(result, new MeshData.DrawState(FORMAT, n * 4, n * 6, VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(n * 4)));
+        int runs = CoarsePass.ready() ? plan(order) : 1;
+        if (runs == 1 && runLevel[0] == 0) {
+            BufferUploader.drawWithShader(mesh);
+            return;
+        }
+        // один буфер на все отрезки (и проход свечения после них)
+        BufferUploader.reset();
+        VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
+        vb.bind();
+        vb.upload(mesh);
+        ShaderInstance s = RenderSystem.getShader();
+        if (s == null) return;
+        for (int r = 0; r < runs; r++) {
+            int a = runFrom[r], b = r + 1 < runs ? runFrom[r + 1] : n;
+            if (runLevel[r] == 0) {
+                range(s, a, b);
+                continue;
+            }
+            box(a, b, order);
+            CoarsePass.draw(this, s, a, b, runLevel[r], runBox);
+        }
+    }
+
+    /**
+     * План кадра ({@link CoarsePass#plan}) по порядку order; runLevel и runFrom — его отрезки. Вернёт их число; без плана —
+     * один отрезок полного кадра.
+     */
+    int plan(int[] order) {
+        if (sortedLevel.length < n) {
+            sortedLevel = new byte[capacity];
+            sortedCover = new float[capacity];
+        }
+        for (int i = 0; i < n; i++) {
+            sortedLevel[i] = level[order[i]];
+            sortedCover[i] = cover[order[i]];
+        }
+        int runs = CoarsePass.plan(n, sortedLevel, sortedCover, runFrom, runLevel);
+        if (runs > 1 || runLevel[0] > 0) {
+            Arrays.fill(runFill, 0);
+            for (int r = 0; r < runs; r++) {
+                int b = r + 1 < runs ? runFrom[r + 1] : n;
+                for (int i = runFrom[r]; i < b; i++) runFill[runLevel[r]] += sortedCover[i];
+            }
+            CoarsePass.counted(runFill);
+        }
+        return runs;
+    }
+
+    /** Самый мелкий уровень квадрата i в порядке записи (проверки). */
+    byte level(int i) {
+        return level[i];
+    }
+
+    /** План кадра в его порядке от дальних (проверки). */
+    int plan() {
+        return plan(sort.sort(keys, n));
+    }
+
+    /** Отрезки последнего {@link #plan}: начало и уровень отрезка r (проверки). */
+    int runFrom(int r) {
+        return runFrom[r];
+    }
+
+    byte runLevel(int r) {
+        return runLevel[r];
+    }
+
+    /** Рамка квадратов отрезка [a, b) отсортированного порядка order на экране — в runBox. */
+    private void box(int a, int b, int[] order) {
+        runBox[0] = runBox[1] = Float.MAX_VALUE;
+        runBox[2] = runBox[3] = -Float.MAX_VALUE;
+        for (int i = a; i < b; i++) {
+            int q = 4 * order[i];
+            runBox[0] = Math.min(runBox[0], box[q]);
+            runBox[1] = Math.min(runBox[1], box[q + 1]);
+            runBox[2] = Math.max(runBox[2], box[q + 2]);
+            runBox[3] = Math.max(runBox[3], box[q + 3]);
+        }
+    }
+
+    /**
+     * Квадраты [from, to) отсортированного порядка — шейдером s из буфера, что выгрузил {@link #draw}, без второй выгрузки.
+     */
+    void range(ShaderInstance s, int from, int to) {
+        if (to <= from) return;
+        VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
+        vb.bind();
+        s.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(), Minecraft.getInstance().getWindow());
+        s.apply();
+        VertexFormat.IndexType type = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+        org.lwjgl.opengl.GL11.glDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, (to - from) * 6, type.asGLType, (long) from * 6 * type.bytes);
+        s.clear();
     }
 
     /**
@@ -447,16 +633,9 @@ public final class FxQuads {
      * (проход свечения, {@link FxBloom}): что дальше, излучения и ореола светящихся не закрывает. Из того же буфера, что выгрузил
      * {@link #draw} (его отсортированные квадраты — с места {@code glowFrom}), без второй выгрузки. false — светящихся нет.
      */
-    boolean drawGlow(net.minecraft.client.renderer.ShaderInstance s) {
+    boolean drawGlow(ShaderInstance s) {
         if (glowFrom >= n) return false;
-        com.mojang.blaze3d.vertex.VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
-        vb.bind();
-        s.setDefaultUniforms(VertexFormat.Mode.QUADS, com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix(),
-                com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix(), net.minecraft.client.Minecraft.getInstance().getWindow());
-        s.apply();
-        VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
-        org.lwjgl.opengl.GL11.glDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, (n - glowFrom) * 6, type.asGLType, (long) glowFrom * 6 * type.bytes);
-        s.clear();
+        range(s, glowFrom, n);
         return true;
     }
 
@@ -468,6 +647,9 @@ public final class FxQuads {
         capacity = cap;
         keys = Arrays.copyOf(keys, cap);
         emits = Arrays.copyOf(emits, cap);
+        level = Arrays.copyOf(level, cap);
+        cover = Arrays.copyOf(cover, cap);
+        box = Arrays.copyOf(box, 4 * cap);
     }
 
     private static byte unorm(float f) {

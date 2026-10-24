@@ -588,7 +588,7 @@ public final class FxBloom {
     /** Свой массив вершин: треугольник во весь кадр (−1, −1), (3, −1), (−1, 3) — без шва по диагонали. */
     private static int triangle = -1;
 
-    private static void triangle() {
+    static void triangle() {
         if (triangle >= 0) {
             GlStateManager._glBindVertexArray(triangle);
             return;

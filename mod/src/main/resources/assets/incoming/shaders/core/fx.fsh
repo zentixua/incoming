@@ -64,7 +64,9 @@ layout(location = 0) out vec4 fragColor;
 // посчитанный с пересветом модели, на нём самом высветлил бы складки и сажу — ореол ложится вокруг
 layout(location = 1) out vec4 fragCover;
 // x: 1 — проход свечения (на уровне пирамиды FxBloom.glowLevel: излучение и доля светящегося, без света на дыме; что за
-// миром — по расстоянию до мира, аппаратной глубины у него нет); y — во сколько раз пиксель прохода крупнее пикселя кадра
+// миром — по расстоянию до мира, аппаратной глубины у него нет); y — во сколько раз пиксель прохода крупнее пикселя кадра.
+// x = 0 и y > 1 — цвет крупных клубов в мелком кадре (CoarsePass): тоже без аппаратной глубины, расстояние до мира — в
+// пикселе floor((t + ½)·y) полного кадра, через который вывод (fx_coarse) берёт этот пиксель
 uniform vec2 FxGlowPass;
 
 // Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
@@ -281,13 +283,16 @@ void main() {
     }
     // видимая доля квадрата — у цвета и излучения одна
     float seen = 1.0;
-    if (FxScene > 0.5 && (softness > 0.0 || FxGlowPass.x > 0.5)) {
+    bool coarse = FxGlowPass.x < 0.5 && FxGlowPass.y > 1.5;
+    bool noDepth = FxGlowPass.x > 0.5 || coarse;
+    if (FxScene > 0.5 && (softness > 0.0 || noDepth)) {
         // клуб тает, входя в землю и стены, и пропадает за рельефом (и за LOD Distant Horizons)
         // негодное расстояние (NaN, за глазом) — мира за пикселем нет, как у неба
         float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);
+        if (coarse) scene = pallScene(texelFetch(Sampler1, min(ivec2(frag), textureSize(Sampler1, 0) - 1), 0).r);
         if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
-        // проход свечения без аппаратной глубины: что за миром, не светится и не гасит (у слоя это режет глубина кадра)
-        if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;
+        // проходы без аппаратной глубины: что за миром, не светится и не гасит (у слоя это режет глубина кадра)
+        if (noDepth && scene < viewDistance * 0.999 - 0.05) discard;
     }
     // у самой камеры квадрат не режет экран краем ближней плоскости (те же числа — SmokePuffs.NEAR_FROM, NEAR_FADE: что
     // здесь тает, отдаёт вуали)
@@ -298,7 +303,8 @@ void main() {
     fragColor = color * seen * ColorModulator;
     // 8 бит кадра: плавная вуаль вещества у глаза (сетка лучей, SmokePuffs.Veil) и бледные края клубов без подмешанного
     // шума идут ступенями — шум в полступени (Jimenez 2014, как у ореола), долей того, что квадрат кладёт
-    if (FxGlowPass.x < 0.5) {
+    // мелкий кадр — в половинной точности, шум кладёт вывод (fx_coarse)
+    if (FxGlowPass.x < 0.5 && !coarse) {
         float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
         fragColor.rgb = max(fragColor.rgb + (noise - 0.5) / 255.0 * fragColor.a, vec3(0.0));
     }

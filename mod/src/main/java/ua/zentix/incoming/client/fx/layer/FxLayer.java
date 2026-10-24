@@ -158,12 +158,20 @@ public final class FxLayer {
             SmokePass.fill = null;
             Incoming.LOG.error("Blast smoke grid shader failed to load: blast smoke is drawn as flat puffs", ex);
         }
+        try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_coarse"), DefaultVertexFormat.POSITION), s -> CoarsePass.composite = s);
+        } catch (IOException ex) {
+            CoarsePass.composite = null;
+            Incoming.LOG.error("Coarse smoke shader failed to load: all smoke at full resolution", ex);
+        }
     }
 
     /** Время всего слоя на видеокарте: наклейка на воду, пелена, пробы, квадраты. */
     private static final GpuTimer GPU = new GpuTimer();
     /** Проход дрожания и света огня ({@link HeatPass}) на видеокарте — внутри {@link #GPU}. */
     private static final GpuTimer HEAT = new GpuTimer();
+    /** Квадраты слоя (с мелкими кадрами крупных клубов, {@link CoarsePass}) на видеокарте — внутри {@link #GPU}. */
+    private static final GpuTimer QUAD_PASS = new GpuTimer();
 
     /** Раз в тик клиента (не на паузе): секундная сводка времени кадра. */
     public static void tick() {
@@ -176,7 +184,9 @@ public final class FxLayer {
             PallPass.second();
             GPU.second();
             HEAT.second();
+            QUAD_PASS.second();
             FxBloom.second();
+            CoarsePass.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;
             frames = ticks = collected = 0;
         }
@@ -231,6 +241,8 @@ public final class FxLayer {
         if (warmup) FarRenderer.warmup();
         FRUSTUM.set(FarDraw.viewProjection(e, view.camera(), VIEW_PROJECTION));
         QUADS.begin(view.left(), view.up());
+        // крупные клубы — мелким кадром (CoarsePass): квадрату — его пиксели на тексель
+        QUADS.screen(VIEW_PROJECTION, mc.getMainRenderTarget().width, mc.getMainRenderTarget().height);
         // свечение: мелкое светящееся — пятнами в пикселях прохода свечения (FxBloom.spots); 0 — свечения нет
         QUADS.glowTexel(FxBloom.texel(view.pixel(), mc.getMainRenderTarget().height));
         WaterDecal.begin(level, e.getCamera());
@@ -267,6 +279,7 @@ public final class FxLayer {
         }
         int models = FarRenderer.renderModels();
         int scene = SceneDepth.update(e.getProjectionMatrix());
+        CoarsePass.frame(scene);
         FarDraw.view(e, view.camera(), VIEW);
         LightTexture light = mc.gameRenderer.lightTexture();
         FarDraw.begin(e, view.camera());
@@ -335,7 +348,9 @@ public final class FxLayer {
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
             s.safeGetUniform("FxGlowPass").set(0f, 1f);
+            int timedQuads = QUAD_PASS.begin();
             QUADS.draw();
+            QUAD_PASS.end(timedQuads);
             // свечение огня, шара, вспышки и факела: излучение — ещё одним проходом части квадратов, ореол — на кадр (FxBloom)
             FxBloom.draw(QUADS, s, VIEW_PROJECTION);
             GPU.end(timed);
@@ -381,9 +396,10 @@ public final class FxLayer {
     /** Время кадра слоя за прошлую секунду — для строки сценария. */
     public static String describeTiming() {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
-                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s", lastQuads, lastMean, lastMax,
-                lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
-                HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe());
+                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; quads %.3f, longest %.3f — %s; %s), depth: %s",
+                lastQuads, lastMean, lastMax, lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean,
+                HEAT.lastMax, HEAT.lastFrames, HeatPass.describe(), QUAD_PASS.lastMean, QUAD_PASS.lastMax, CoarsePass.describe(), FxBloom.describe(),
+                SceneDepth.describe());
     }
 
     /** Выход из мира или смена измерения. */
