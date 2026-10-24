@@ -39,6 +39,36 @@ the visual check of that presentation. A small additive source bloom is drawn be
 with scene-depth and smoke occlusion; this is not a new world light or an Iris HDR integration.
 The soot texture is self-emissive; the separate smoke six-way maps are unchanged.
 
+# Smoke puff source and reproduction
+
+`puff6a_00.png` through `puff6a_15.png`, `puff6b_*` and `puff6v_*` (six-way light maps and motion vectors of the smoke
+puff) are rendered from JangaFX's **Ground Explosion** OpenVDB sequence (200 frames, EmberGen), CC0 as stated on the
+same download page and in the archive's `LICENSE.txt` and `README.txt`. Our own Mantaflow puff was a fuzzy ball with
+almost flat light maps; the EmberGen cloud has real billows.
+
+```sh
+blender --background --factory-startup --python tools/bake_fx/bake.py -- \
+  /path/to/bake puff-vdb --vdb /path/to/ground_explosion_VDB --cap --tile 384 --samples 96 \
+  --frames 72,75,78,81,84,87,90,93,96,99,102,105,108,111,114,117
+uv run tools/bake_fx/pack.py /path/to/bake
+```
+
+A puff of the mod is a lump of cloud, not the whole cloud with its stem: the bake keeps the cap above the cloud's neck
+(the narrowest silhouette between the ground dust and the cap), because the mod draws the stem and the ground dust with
+puffs of its own. The cap is rendered from above, along the cloud's axis: seen from the side, the cut left a straight
+bottom on every frame (27–49 % of the frame), and the flat dust of a raid, whose puffs lie on the ground, showed it as a
+wall with a vertical edge (review of #443). From above the cut is behind the dense cap and the silhouette is billows all
+round. From above the cap is elongated (axes 1.4–1.7 : 1), and an elongated puff, mirrored or lying, laid the mod's
+Gaussian as a slanted strip with long even sides; the bake squeezes the footprint along its long axis to round (in the
+density data, by bilinear resampling: a Blender object matrix cannot hold that shear). Frames run from 72 (earlier
+caps have little fine structure) to 117: from frame 126 the cap reaches the simulation domain at y = 285 and is cut
+straight; the bake refuses such frames. Every frame is rendered at the same optical depth (median 12 across the silhouette): the
+simulation thins out by its own dissipation, while the mod's cloud takes its opacity and colour from `CloudModel`. The
+six suns, albedo 0.55 and asymmetry 0.55 are those of the old bake; the frames give the shape of the billows and how
+light passes them, not the density. The camera frames each cap, and `pack.py` measures growth in voxels (never
+decreasing). `pack.py` also moves the water-spray maps into the new measure of the smoke maps (one normalisation for all
+puffs).
+
 ## Источник и воспроизведение
 
 Кадры шара — рендер бесплатной симуляции JangaFX «Gasoline Explosion» (EmberGen, 131 кадр). Лицензия CC0 проверена
@@ -56,3 +86,18 @@ The soot texture is self-emissive; the separate smoke six-way maps are unchanged
 Подача: верх закреплён, соседние кадры смешиваются в шейдере вдоль векторов движения. Тонкий край краснеет и темнеет;
 альфа не ниже экранной яркости, ядра выше белого теряют насыщенность. Свет окружения ограничен таблицей огня на экране,
 не прежним пересвеченным листом. Мягкий ореол — подача после Iris, не изменение физической мощности.
+
+## Клуб дыма
+
+`puff6a_*`, `puff6b_*`, `puff6v_*` — рендер CC0-симуляции JangaFX «Ground Explosion» (EmberGen, 200 кадров), команды выше.
+Своя Mantaflow давала пушистый шар с почти ровными картами света, у EmberGen — клубы настоящего облака взрыва. Клуб мода —
+комок облака, а не всё облако с ножкой: берётся шапка выше шейки облака (ножку и пыль у земли мод рисует своими клубами), и
+снимается она сверху, вдоль оси облака: сбоку срез ложился прямым низом каждого кадра, и лежащая пыль налёта вставала
+стенкой с отвесным краем (ревью #443); сверху срез — за густой шапкой. Сверху шапка вытянута (1,4–1,7 : 1), и вытянутый
+клуб клал гаусс мода косой полосой с длинными ровными боками: запекание сжимает пятно вдоль большой оси до круглого (в
+данных плотности, билинейно: матрица объекта Blender такой сдвиг не держит). Кадры — с 72-го (раньше у шапки мало мелкой
+структуры) по 117-й: дальше шапка упирается в край области симуляции (y = 285) и срезана прямо, такие кадры запекание не
+берёт. Толща кадров одна (медиана 12 поперёк
+силуэта): симуляция тает своим рассеиванием, а непрозрачность и цвет облака мода — из `CloudModel`. Шесть солнц, альбедо
+0,55 и асимметрия 0,55 — прежние: кадры дают форму клубов и как свет их проходит, а не плотность. Карты брызг `pack.py`
+переводит в новую меру карт дыма (одна на все клубы).

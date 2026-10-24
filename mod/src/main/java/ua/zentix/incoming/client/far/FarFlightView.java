@@ -1005,6 +1005,8 @@ public final class FarFlightView {
         double x, y, z, sigma, e, width, half;
         float alpha;
         int light;
+        /** Доля непрозрачности, что рисуется дымом (у тела огня — {@code SmokePuffs.smokeShare}); {@link #set} — 1. */
+        double shown = 1;
 
         Tube set(double x, double y, double z, double sigma, double e, double width, double half, float alpha, int light) {
             this.x = x;
@@ -1016,6 +1018,7 @@ public final class FarFlightView {
             this.half = half;
             this.alpha = alpha;
             this.light = light;
+            this.shown = 1;
             return this;
         }
     }
@@ -1043,7 +1046,7 @@ public final class FarFlightView {
         double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
         if (puffs > 0 && (md <= reach || inFrame(view, mx, my, mz, md, reach))) {
             clubs += SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width / scale, b.x, b.y, b.z, b.sigma, b.e, b.width / scale, cr, cg,
-                    cb, shade, sigma0, seed, puffs >= 1);
+                    cb, shade, sigma0, seed, puffs >= 1, 0.5 * (a.shown + b.shown));
         }
         if (puffs >= 1) return CLUBS;
         return out.ribbon(a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half, b.alpha * (float) keepB, b.light, r, g, bl,

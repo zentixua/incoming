@@ -2,6 +2,7 @@
 
   blender --background --factory-startup --python tools/bake_fx/bake.py -- <папка> [fireball|puff|spray|all|nukeball] [--res N] [--draft] [--cpu]
   blender … bake.py -- <папка> fireball-vdb --vdb <папка кадров .vdb> [--frames 1,2,…] [--tile N] [--samples N] [--draft] [--cpu]
+  blender … bake.py -- <папка> puff-vdb --vdb <папка кадров .vdb> --frames 60,66,… [--cap] [--tau T] [--tile N] [--samples N]
 
 Дальше — tools/bake_fx/pack.py: кадры на лист слоя (fx/particle/*.png и fx/particle/flipbooks.json).
 
@@ -19,7 +20,10 @@
   (EmberGen, CC0: https://jangafx.com/software/embergen/download/free-vdb-animations/ — скачать и распаковать, в репозиторий
   не кладутся). Своя Mantaflow даёт гладкий шар без клубов (несжимаемый газ, ~70 пикселей на шар); у EmberGen — клубы,
   языки и сажа настоящего горения. Свет — тот же закон излучения, время — в долях горения.
-- puff — клуб дыма: выброс газа во все стороны, без всплытия (подъём и снос даёт модель мода), клубится и расползается.
+- puff-vdb — клуб дыма на листе мода: шапка облака из готовой симуляции (кадры OpenVDB «Ground Explosion» JangaFX, CC0),
+  шесть солнц, как у puff (puff_vdb ниже, источник — SOURCES.md).
+- puff — прежний клуб дыма своей Mantaflow (пушистый шар; на листе теперь puff-vdb): выброс газа во все стороны, без
+  всплытия (подъём и снос даёт модель мода), клубится и расползается.
   На кадр — шесть рендеров с одним солнцем справа, слева, сверху, снизу, спереди и сзади (шестисторонний свет), мир
   чёрный; альбедо {PUFF_ALBEDO}, асимметрия {PUFF_G} — середина между сажей (0,25; 0,5) и пылью (0,8; 0,6): цвет вещества
   даёт мод, карты — только как свет проходит клуб (⚠ приближение).
@@ -86,7 +90,7 @@ def reset(tile):
         sc.cycles.device = "GPU"
     sc.cycles.samples = SAMPLES
     sc.cycles.use_denoising = True
-    if WHAT == "fireball-vdb":
+    if WHAT in ("fireball-vdb", "puff-vdb"):
         # Cycles' denoiser filters radiance, not transparent-volume alpha. Every pixel needs the
         # full sample count before downsampling; adaptive RGB convergence leaves speckled soot.
         sc.cycles.use_adaptive_sampling = False
@@ -474,6 +478,186 @@ def puff(kind="puff"):
         json.dump({"frames": frames, "picks": picks, "view_m": size, "albedo": c["albedo"], "g": c["g"]}, f)
 
 
+# Клуб дыма из готовой симуляции (puff-vdb): кадры OpenVDB с полем density (бесплатные CC0 симуляции JangaFX EmberGen,
+# «Ground Explosion»: https://jangafx.com/software/embergen/download/free-vdb-animations/ — скачать и распаковать, в
+# репозиторий не кладутся) — те же шесть солнц, альбедо и асимметрия, что у своей (puff), без излучения: в кадре —
+# только как свет проходит клубы. Своя Mantaflow давала пушистый шар (~96 клеток на поперечник, шум вейвлетов по
+# краю — «вата», ровный свет внутри), у EmberGen — клубы настоящего облака взрыва.
+# Клуб мода — комок облака, а не всё облако с ножкой: у облака взрыва берётся шапка — вещество выше шейки (самое узкое
+# место между пылью у земли и шапкой, {CAP_FROM}–{CAP_TO} высоты облака, с мягким краем {CAP_SOFT} высоты); ножку и пыль у
+# земли мод рисует своими клубами. Шапка снимается сверху, вдоль оси облака: сбоку срез ложился прямым низом каждого кадра
+# (по ширине ножки и низа шапки — 27–49 % кадра), и у лежащей пыли налёта он вставал стенкой с отвесным краем (ревью
+# #443); сверху срез — за густой шапкой, а край кадра — её клубы со всех сторон (верх кадра — +y симуляции). Толща —
+# {VDB_PUFF_TAU} поперёк середины кадра (медиана толщи по силуэту): у мода непрозрачность и цвет — свои (CloudModel),
+# карты дают форму клубов и тень по ним; у симуляции дым к концу тает (её рассеивание), а у мода — по его закону, поэтому
+# толща кадров одна. Шапка пишется своим кадром OpenVDB (поле density, преобразование исходника). Камера —
+# ортографическая по каждому кадру (рамка — шапка), её мера — в meta.json («scale», вокселей на пиксель рендера): pack.py
+# считает рост в одной мере.
+VDB_PUFF_TAU = float(argv[argv.index("--tau") + 1]) if "--tau" in argv else 12.0
+CAP_FROM, CAP_TO, CAP_SOFT = 0.12, 0.6, 0.06
+# вещество ближе стольких вокселей к краю области симуляции (кроме пола) — срезано её стенкой
+WALL = 3
+
+
+def cap_neck(arr):
+    """Высота шейки облака (индекс по z массива x·y·z): самое узкое место силуэта сбоку между пылью у земли и шапкой."""
+    proj = arr.sum(axis=1)
+    width = (proj > 0.05 * proj.max()).sum(axis=0)
+    nz = arr.shape[2]
+    lo, hi = int(CAP_FROM * nz), int(CAP_TO * nz)
+    return lo + int(np.argmin(width[lo:hi]))
+
+
+def cap_mask(arr):
+    """Доля вещества шапки в каждом вокселе: 1 выше шейки, ниже — гаснет на CAP_SOFT высоты облака."""
+    neck = cap_neck(arr)
+    soft = max(CAP_SOFT * arr.shape[2], 2.0)
+    z = np.arange(arr.shape[2], dtype=np.float32)[None, None, :]
+    return np.clip((z - (neck - soft)) / soft, 0, 1).astype(np.float32), neck
+
+
+def round_footprint(arr):
+    """Шапка сверху — вытянутое пятно (оси инерции 1,4–1,7 : 1): клуб мода — гаусс с осями квадрата σh × σv, и вытянутый по
+    диагонали кадр клал бы его косой полосой с длинными ровными боками (у крупного клуба пыли у глаза — стенкой, ревью
+    #443). Пятно сжимается вдоль большой оси до круглого (клубы те же, чуть сплюснуты): плотность пересчитывается в
+    тех же вокселях, по горизонтали — билинейно, толща по вертикали в каждой точке — та же. Сжатие — данными, а не
+    преобразованием объекта: матрица объекта Blender — место, поворот и масштаб по своим осям, сдвиг в ней не держится.
+    Возвращает поле и прежнее отношение осей."""
+    proj = arr.sum(axis=2)
+    nx, ny = proj.shape
+    ii, jj = np.nonzero(proj > 0)
+    wgt = proj[ii, jj]
+    xy = np.stack([ii, jj], 1).astype(np.float64)
+    centre = np.average(xy, axis=0, weights=wgt)
+    ev, vec = np.linalg.eigh(np.cov((xy - centre).T, aweights=wgt))
+    ratio = float(np.sqrt(ev[1] / ev[0]))
+    # откуда брать точку (x, y): обратное сжатие — растяжение вдоль большой оси
+    back = vec @ np.diag([1.0, ratio]) @ vec.T
+    gx, gy = np.meshgrid(np.arange(nx, dtype=np.float64), np.arange(ny, dtype=np.float64), indexing="ij")
+    sx = centre[0] + back[0, 0] * (gx - centre[0]) + back[0, 1] * (gy - centre[1])
+    sy = centre[1] + back[1, 0] * (gx - centre[0]) + back[1, 1] * (gy - centre[1])
+    inside = (sx >= 0) & (sx <= nx - 1) & (sy >= 0) & (sy <= ny - 1)
+    sx, sy = np.clip(sx, 0, nx - 1.001), np.clip(sy, 0, ny - 1.001)
+    x0, y0 = sx.astype(int), sy.astype(int)
+    fx, fy = (sx - x0)[..., None], (sy - y0)[..., None]
+    out = (arr[x0, y0] * (1 - fx) * (1 - fy) + arr[x0 + 1, y0] * fx * (1 - fy) + arr[x0, y0 + 1] * (1 - fx) * fy
+           + arr[x0 + 1, y0 + 1] * fx * fy)
+    return (out * inside[..., None]).astype(np.float32), ratio
+
+
+def puff_vdb(src, kind="puff"):
+    import glob
+    import re
+
+    import openvdb
+    files = sorted(glob.glob(os.path.join(src, "*.vdb")), key=lambda f: int(re.findall(r"(\d+)\.vdb$", f)[0]))
+    picks = [int(x) for x in argv[argv.index("--frames") + 1].split(",")]
+    cap = "--cap" in argv
+    os.makedirs(os.path.join(OUT, kind + "-vdb"), exist_ok=True)
+    # область симуляции — объединение рамок поля density всех кадров (метаданные файлов): вещество, что упёрлось в её
+    # стенку, срезано прямо (у Ground Explosion шапка с 126-го кадра упирается в y = 285) — такой кадр не берём
+    wall_lo, wall_hi = [1 << 30] * 3, [-(1 << 30)] * 3
+    for f in files:
+        for m in openvdb.readAllGridMetadata(f):
+            if m.name == "density" and "file_bbox_min" in m.metadata:
+                wall_lo = [min(wall_lo[k], m.metadata["file_bbox_min"][k]) for k in range(3)]
+                wall_hi = [max(wall_hi[k], m.metadata["file_bbox_max"][k]) for k in range(3)]
+    frames = {}
+    for i in picks:
+        d = openvdb.read(files[i - 1], "density")
+        a, b = d.evalActiveVoxelBoundingBox()
+        arr = np.zeros((b[0] - a[0] + 1, b[1] - a[1] + 1, b[2] - a[2] + 1), np.float32)
+        d.copyToArray(arr, ijk=a)
+        neck, ratio = None, 1.0
+        if cap:
+            m, neck = cap_mask(arr)
+            arr = arr * m
+        # вещество у стенки области симуляции — до сжатия пятна (оно уводит край внутрь)
+        idx = np.argwhere(arr > 0.01 * arr.max())
+        lo, hi = idx.min(0) + np.array(a), idx.max(0) + np.array(a)
+        near = [k for k in range(3) if hi[k] > wall_hi[k] - WALL] + [k for k in range(2) if lo[k] < wall_lo[k] + WALL]
+        if near:
+            raise SystemExit(f"puff-vdb: кадр {i} упирается в край области симуляции (оси {near}): срезан прямо, взять раньше")
+        if cap:
+            arr, ratio = round_footprint(arr)
+        path = os.path.join(OUT, kind + "-vdb", f"cap_{i:03d}.vdb")
+        g = openvdb.FloatGrid()
+        g.copyFromArray(arr, ijk=a, tolerance=1e-4)
+        g.name = "density"
+        g.transform = d.transform
+        openvdb.write(path, grids=[g])
+        # рамка — где плотность заметна (1 % наибольшей), а не все активные воксели
+        idx = np.argwhere(arr > 0.01 * arr.max())
+        lo, hi = idx.min(0) + np.array(a), idx.max(0) + np.array(a)
+        # толща — вдоль взгляда камеры: у шапки — сверху (z), иначе — сбоку (y)
+        proj = arr.sum(axis=2 if cap else 1)
+        sil = proj > 0.05 * proj.max()
+        frames[i] = (lo, hi, VDB_PUFF_TAU / float(np.median(proj[sil])), path, neck, ratio)
+    c = CLUBS[kind]
+    sc = reset(TILE)
+    vol = bpy.data.volumes.new(kind)
+    vol.filepath = frames[picks[0]][3]
+    obj = bpy.data.objects.new(kind, vol)
+    sc.collection.objects.link(obj)
+    mat = bpy.data.materials.new(kind)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    pv = nt.nodes.new("ShaderNodeVolumePrincipled")
+    nt.links.new(pv.outputs[0], out.inputs["Volume"])
+    # Principled Volume сам умножает «Density» на поле density (Density Attribute): сюда — только ослабление на воксель
+    sigma = nt.nodes.new("ShaderNodeValue")
+    nt.links.new(sigma.outputs[0], pv.inputs["Density"])
+    pv.inputs["Color"].default_value = (c["albedo"], c["albedo"], c["albedo"], 1)
+    pv.inputs["Anisotropy"].default_value = c["g"]
+    sc.cycles.volume_bounces = c["bounces"]
+    sc.cycles.max_bounces = max(sc.cycles.max_bounces, c["bounces"])
+    vol.materials.append(mat)
+    vol.grids.load()
+    # шапка — верхом к камере (камера смотрит вдоль +y): поворот на 90° вокруг x, z симуляции → −y, y → z (верх кадра)
+    from mathutils import Matrix
+    turn = Matrix.Rotation(math.pi / 2, 4, "X") if cap else Matrix.Identity(4)
+    obj.matrix_world = turn @ (vol.grids[0].matrix_object.inverted() if len(vol.grids) else Matrix.Identity(4))
+    bpy.ops.object.camera_add(rotation=(math.pi / 2, 0, 0))
+    cam = bpy.context.active_object
+    cam.data.type = "ORTHO"
+    sc.camera = cam
+    lamps = {k: sun(v, math.pi) for k, v in LIGHTS.items()}
+    os.makedirs(os.path.join(OUT, kind), exist_ok=True)
+    scale = []
+    ratios = []
+    for i in picks:
+        lo, hi, k, path, neck, ratio = frames[i]
+        ratios.append(round(ratio, 3))
+        # рамка в осях кадра: вправо — x, вверх — z сцены (у шапки — y симуляции), к камере — −y (у шапки — верх z)
+        up0, up1, near, deep = (lo[1], hi[1], -hi[2], hi[2] - lo[2]) if cap else (lo[2], hi[2], lo[1], hi[1] - lo[1])
+        size = 1.08 * max(hi[0] - lo[0], up1 - up0) + 2
+        cam.data.ortho_scale = size
+        cam.data.clip_end = 10 * size + deep
+        cam.location = ((lo[0] + hi[0]) / 2 + 0.5, near - 3 * size, (up0 + up1) / 2 + 0.5)
+        sigma.outputs[0].default_value = k
+        scale.append(size / TILE)
+        vol.filepath = path
+        vol.grids.load()
+        for name, lamp in lamps.items():
+            npy = os.path.join(OUT, kind, f"{name}_{i:03d}.npy")
+            if os.path.exists(npy):
+                continue
+            for other in lamps.values():
+                other.hide_render = other is not lamp
+            exr = npy[:-4] + ".exr"
+            sc.render.filepath = exr
+            bpy.ops.render.render(write_still=True)
+            save_npy(exr, npy)
+        print("vdb puff frame", i, "size", round(size, 1), "sigma", round(k, 4), "neck", neck, "axes", round(ratio, 2), flush=True)
+    with open(os.path.join(OUT, kind, "meta.json"), "w") as f:
+        json.dump({"source": src, "picks": picks, "scale": scale, "tau": VDB_PUFF_TAU, "cap": cap,
+                   "cap_soft": CAP_SOFT, "view": "top" if cap else "side", "axes_before": ratios,
+                   "albedo": c["albedo"], "g": c["g"], "render_size": TILE, "samples": SAMPLES}, f)
+
+
 # Огненный шар ядерки (поверхность для прохода пелены: MushroomField, mushroom.glsl): не горение, а пузырь горячего воздуха
 # после второго максимума — у мода шар 15 кт (R = 70·15^0,4 м, Glasstone и Dolan 2.12) уже не растёт ударной волной и
 # всплывает. Mantaflow — несжимаемый газ (Буссинеск), поэтому считается только то, что он может: всплытие и
@@ -612,6 +796,8 @@ if WHAT == "fireball-vdb":
     fireball_vdb(os.path.abspath(argv[argv.index("--vdb") + 1]))
 if WHAT in ("puff", "all"):
     puff()
+if WHAT == "puff-vdb":
+    puff_vdb(os.path.abspath(argv[argv.index("--vdb") + 1]))
 if WHAT in ("spray", "all"):
     puff("spray")
 if WHAT == "nukeball":

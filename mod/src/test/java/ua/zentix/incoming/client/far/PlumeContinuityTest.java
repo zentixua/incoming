@@ -80,9 +80,26 @@ class PlumeContinuityTest {
     }
 
     /**
-     * Запечённый клуб на экране — почти ровный диск: радиус, где непрозрачность падает до половины середины, у кадров,
-     * что рисуют трубки, — {@link SmokePuffs#PUFF_DISCS} у каждого кадра, самый узкий — {@link SmokePuffs#PUFF_DISC_MIN}.
-     * По ним — шаг мест трубки и доля непрозрачности клуба: новые кадры симуляции — новые числа.
+     * Клубы кучки и трубки берут разные кадры и у старого облака: кадр источника растёт до последнего, и с разбросом только
+     * вперёд все клубы были бы одним кадром (отражённым) — «штамп». Разброс — {@link SmokePuffs#FRAME_SPREAD} в обе
+     * стороны, у краёв листа — внутрь него; без разброса — кадр источника.
+     */
+    @Test
+    void oldCloudsKeepVariedPuffs() {
+        double last = FxAtlas.PUFF6_FRAMES - 1.001;
+        for (double age : new double[]{0, 0.5, 3, 7.5, 14, last, 40}) {
+            double lo = SmokePuffs.clubFrame(age, 0, true), hi = SmokePuffs.clubFrame(age, 1, true);
+            assertEquals(2 * SmokePuffs.FRAME_SPREAD, hi - lo, 1e-9, "разброс кадров у кадра источника " + age);
+            assertTrue(lo >= SmokePuffs.FIRST_FRAME && hi <= last, "кадры — на листе: " + age);
+            assertEquals(Math.clamp(age, SmokePuffs.FIRST_FRAME, last), SmokePuffs.clubFrame(age, 0.3, false), 1e-9);
+        }
+    }
+
+    /**
+     * Запечённый клуб на экране — почти ровный диск: радиус ровного диска с тем же покрытием по хорде через середину
+     * (∫ средней по кольцу непрозрачности по радиусу до 1,2 полуразмера / непрозрачность середины) у кадров, что рисуют
+     * трубки, — {@link SmokePuffs#PUFF_DISCS} у каждого кадра, самый узкий — {@link SmokePuffs#PUFF_DISC_MIN}. По ним — шаг
+     * мест трубки и доля непрозрачности клуба: новые кадры симуляции — новые числа.
      */
     @Test
     void puffDiscMatchesTheBakedFrames() throws IOException {
@@ -107,13 +124,8 @@ class PlumeContinuityTest {
                 }
             }
             centre /= cn;
-            double half = 1.2;
-            for (int k = 5; k < bins; k++) {
-                if (c[k] > 0 && a[k] / c[k] < 0.5 * centre) {
-                    half = k / 50.0;
-                    break;
-                }
-            }
+            double half = 0;
+            for (int k = 0; k < bins; k++) if (c[k] > 0) half += a[k] / c[k] / centre / 50;
             min = Math.min(min, half);
             assertEquals(SmokePuffs.PUFF_DISCS[f], half, 0.021, "кадр " + f);
         }
@@ -271,7 +283,7 @@ class PlumeContinuityTest {
                 ok = false;
             }
         }
-        // непрозрачность у оси в среднем — закона (клуб берёт свою долю трубки; ⚠ диск клуба по кадрам 0,48–0,76 полуразмера —
+        // непрозрачность у оси в среднем — закона (клуб берёт свою долю трубки; ⚠ диск клуба по кадрам 0,71–0,80 полуразмера —
         // ±25 % по кадру, в среднем по оси ближе)
         double drawn = 0, law = 0;
         for (double[] s : samples) {
