@@ -159,8 +159,8 @@ int gMushes;
 vec3 gDir;
 int gFoot0, gFoot1;
 vec2 gFootSpan0, gFootSpan1;
-int gFootLit;
-vec3 gFootLight;
+int gFootLit, gFootOtherLit;
+vec3 gFootLight, gFootOtherLight;
 
 
 float hg(float g, float c) {
@@ -1182,11 +1182,24 @@ vec4 mushAt(int k, vec3 p, vec3 q, float cone, out float near) {
     vec4 sig = mushDense(m, q, cone, kk, lobes, depth, near, carried);
     float st = dot(sig, vec4(1.0));
     if (st <= 1e-7) return vec4(0.0);
-    float fromCarpet = mushFootLightShare(q.y, m.footTop, m.footMerge, min(carried, sig.y), st);
+    float fromCarpet = 0.0;
+    // Свет ковра — только от своего активного поля и в отрезке луча у основания. У остальных грибов — свет ножки.
+    if (k == gFoot0 || k == gFoot1) fromCarpet = mushFootLightShare(q.y, m.footTop, m.footMerge, min(carried, sig.y), st);
     if (fromCarpet > 0.0 && gFootLit != k) {
         // Свет поля медленно меняется вдоль видимой оболочки: одна выборка при входе луча в пыль основания.
         // Клубы и их движение остаются в густоте, а не пересчитывают весь свет пелены на каждом шаге.
-        pallSource(p, cone, vec4(m.base, carried), gFootLight);
+        // Два поля пелены могут пересекаться. Сохранить и второе: один тег пересчитывал бы свет
+        // обоих грибов на каждом шаге при их чередовании, хотя луч уже вошёл в оба основания.
+        if (gFootOtherLit == k) {
+            vec3 previous = gFootLight;
+            gFootLight = gFootOtherLight;
+            gFootOtherLight = previous;
+            gFootOtherLit = gFootLit;
+        } else {
+            gFootOtherLit = gFootLit;
+            gFootOtherLight = gFootLight;
+            pallSource(p, cone, vec4(m.base, carried), gFootLight);
+        }
         gFootLit = k;
     }
     if (fromCarpet >= 1.0) return vec4(st * gFootLight, st);
@@ -1471,8 +1484,8 @@ void main() {
     gMushes = 0;
     gFoot0 = -1;
     gFoot1 = -1;
-    gFootLit = -1;
-    gFootLight = vec3(0.0);
+    gFootLit = gFootOtherLit = -1;
+    gFootLight = gFootOtherLight = vec3(0.0);
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gWhirlLight = mat4(0.0);
     gWhirlIn = vec4(1e9);
