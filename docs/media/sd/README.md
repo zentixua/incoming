@@ -56,3 +56,45 @@ Frames and capture manifests are alongside each WAV. Compare the drone at
 [main 10 s](sandbox/main_drone50/main_drone50_010.00s.png) /
 [SD 10 s](sandbox/sd_drone50/sd_drone50_010.00s.png).
 The source image is unchanged; the continuing fuel fire supplies the corrected continuous sound.
+## Round 1 review: levels and terrain echo
+
+`audit/rv2-profiles.json` and `audit/rv2-tail-audit.png` measure the original RV2 WAVs in 0.5 s windows, 30–3000 Hz,
+stereo channels averaged by power. No normalization. WAV event time is 1 s; the direct sound arrives slightly later.
+`audit/wav-levels.txt` separately reports BS.1770 momentary maxima, not band RMS.
+
+`audit/SoundAudit.java` runs the actual `BlastMix`, `Propagation`, `TerrainEcho` and `EchoMix` code without a client or
+OpenAL. `model.txt` contains source → propagation → speaker calculations and all six far-grain variants' echo energy.
+These are CPU diagnostics, not new game recordings. `reflections-*.csv` lists the individual model paths, energies and
+ISO 9613-1 air losses on the extra path. The renderer itself still uses its existing approximate low-pass classes.
+
+The read-only `heights.py` extracted 6559 saved chunk heightmaps from the RV2 main copy, world seed 20260927,
+`look-gate/inst-RV2m/saves/incoming_scenario`. `rv2-heights.bin.gz` stores repeated big-endian records: two int32 chunk
+coordinates and 256 int16 first-air heights in z-major order. The normal world minimum is −64; packed heightmaps have
+9-bit entries, seven per long. These are **post-take saved** heights, not an archived client map cache. Unknown chunks
+stay NaN; they are never treated as evidence that a hillside does not exist. The 192 m case limits known heights to a
+render-distance-sized circle; the 4096 m case uses every saved height in range. Neither reconstructs the exact original
+client/DH cache. The archived probe did not log `BlastEchoes.describe()`, so an exact runtime tap list is unavailable.
+
+For the full saved-height case, 194 retained taps all arrive less than 3 s after the direct sound. CPU echo tracks end
+at 5.02–5.39 s; their EFX decay parameter would be 1.707 s (−60 dB in that time, send 0.25). Their sector-power sum is
+−61.4…−43.0 dBFS during 4–5 s, at most −69.0 during 5–6 s and zero afterwards, **before** OpenAL/EFX/hearing effects.
+The quoted range is across the six source variants, not six independent echoes played together.
+
+`model-unpruned.txt` is an explicit diagnostic with only TerrainEcho's −45 dB retention floor changed to −200 dB in a
+separate temporary classpath. No production threshold changed. Its sole tap after 3 s is at 7.741 s, distance 1342 m,
+extra path 2655 m and −92.321 dB relative energy. The normal threshold removes it. The method is diffuse Lambertian
+heightfield scattering with an existing estimated 12 dB lift, rather than an exact full-wave or multiple-bounce model.
+Missing terrain and these approximations limit the conclusion; a universal “every real echo ends at 5 s” is not claimed.
+
+The 3.4.1 late WAV is not a terrain impulse response: it mixes a fixed stereo `blast.tail` with fire played at volume 5
+inside 90 m. `old-fire-identification.json` finds the native old fire file at pitch 1.1, starting at WAV 1.451 s, with
+mid-channel waveform correlation 0.539 over 5–10 s. This identifies a component, not the whole late tail. The dotted
+plot uses a fitted gain and must not be presented as an absolute source-level prediction or a lossless-source upgrade.
+
+Reproduce the model diagnostic after `./gradlew build`: compile `SoundAudit.java` with `build/classes/java/main`,
+`build/moddev/artifacts/neoforge-*-merged.jar` and the newline-separated jars in
+`build/moddev/clientScenarioLegacyClasspath.txt` joined with colons. Run the package-qualified class
+`ua.zentix.incoming.client.sound.SoundAudit` with arguments `rv2-heights.bin.gz` and the absolute path to
+`src/main/resources/assets/incoming/sounds`. Run from a scratch copy: the diagnostic writes reflection CSVs beside
+the height snapshot. The unpruned experiment additionally compiles a scratch copy of `TerrainEcho.java` with
+`FLOOR_DB = -200` and puts only that class first on the diagnostic classpath. The game and its files are not changed.

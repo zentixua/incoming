@@ -1,0 +1,17 @@
+{
+  "base": "629319fd48116bca77a2b8ff044fc027b76389c0",
+  "sound_changes_this_revision": "none; approved continuous fire retained",
+  "diagnostic": "actual Java model classes, no Minecraft client or OpenAL",
+  "terrain": "post-take saved RV2m heightmaps; unknown chunks remain unknown; exact original client cache unavailable",
+  "height_snapshot_sha256": "cbf444b2a86688955991019f78e0edb6886b165d83ca1a9cac87cf21a6cfa534",
+  "source_sha256": {
+    "mod/src/main/java/ua/zentix/incoming/client/sound/BlastMix.java": "9137fdf6dde0d9e7759c816d866c6de03a7fc4b20e94361c51474229c668d086",
+    "mod/src/main/java/ua/zentix/incoming/client/sound/TerrainEcho.java": "d1fc699d1625b5cab42f1e93c58340e3f5db528cf00eb2aeb168afa85bef5565",
+    "mod/src/main/java/ua/zentix/incoming/client/sound/EchoMix.java": "dafade3b0ea88ed485f24b9268e4983ef3ddf7e05bfd39798f87d6b95e5e12a7",
+    "mod/src/main/java/ua/zentix/incoming/sound/Propagation.java": "65985b1254a8f1b6e29430c94874e1a419b7476e8f6bfcf69209a5b1ce158a2a",
+    "mod/src/main/java/ua/zentix/incoming/sound/Air.java": "2a99181b41d0019683df7b87a21228eb341225fd7c87c15746c447e42af83b5b",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/model/BlastModel.java": "5af2c4f0e40db755d82fe0acf43e0687baa4d9cb32a8ee8da82c6cdeae590c3c"
+  },
+  "model_variants": "six blast_far recordings rendered separately; power ranges are across variants",
+  "unpruned_experiment": "separate classpath copy, only FLOOR_DB -45 -> -200; never applied to game"
+}
