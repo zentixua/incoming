@@ -65,19 +65,20 @@ public final class FlightTracks {
             if (e instanceof StrikeProjectile p && p.isActive()) track(p.getUUID(), p.weapon(), p instanceof BomberEntity).record(tick, p);
             else if (e instanceof InterceptorEntity i && !i.isRemoved()) {
                 FlightTrack t = INTERCEPTORS.get(i.getUUID());
+                if (t != null && t.confirmedEnd()) continue;
                 if (t == null || t.isDead()) INTERCEPTORS.put(i.getUUID(), t = FlightTrack.interceptor(i.getUUID()));
                 t.record(tick, i);
             }
         }
-        expire(TRACKS);
-        expire(INTERCEPTORS);
+        expire(TRACKS, tick);
+        expire(INTERCEPTORS, tick);
     }
 
     /** Без данных дольше {@link #STALE} — полёт кончился; кончившийся забывается через {@link #RINGOUT}. */
-    private static void expire(Map<UUID, FlightTrack> tracks) {
+    static void expire(Map<UUID, FlightTrack> tracks, long tick) {
         tracks.values().removeIf(t -> {
-            // вид ракеты ЗРК пропал (разрыв или ушла из тикающих чанков): её полёт у клиента кончился в тот же тик
-            if (!t.isDead() && tick - t.lastTick() > (t.weapon == null ? 1 : STALE)) t.die(tick);
+            // Пропала сущность — дальний путь может прийти следующим пакетом (раз в 4 тика), это ещё не конец.
+            if (!t.isDead() && tick - t.lastTick() > STALE) t.die(tick);
             return t.isDead() && tick - t.deathTick() > RINGOUT;
         });
     }
@@ -85,7 +86,19 @@ public final class FlightTracks {
     /** Снаряды, которых у клиента нет, но которые уже слышно или видно: путь по данным сервера. */
     public static void received(S2C.FarFlights packet) {
         if (Minecraft.getInstance().level == null) return;
-        for (S2C.FarFlight f : packet.flights()) track(f.id(), WeaponType.byId(f.weapon()), f.bomber()).record(tick, f);
+        for (S2C.FarFlight f : packet.flights()) receive(f, tick);
+    }
+
+    /** Один отсчёт пути из пакета; отдельно от мира, чтобы проверять переход сущность → дальний путь. */
+    static void receive(S2C.FarFlight f, long tick) {
+        FlightTrack t;
+        if (f.interceptor()) {
+            t = INTERCEPTORS.get(f.id());
+            if (t != null && t.confirmedEnd()) return;
+            if (t == null || t.isDead()) INTERCEPTORS.put(f.id(), t = FlightTrack.interceptor(f.id()));
+        } else t = track(f.id(), WeaponType.byId(f.weapon()), f.bomber());
+        t.record(tick, f);
+        if (f.ended()) t.impact(tick);
     }
 
     /** Путь снаряда: уже идущий или новый (прошлый полёт с тем же UUID уже кончился). */

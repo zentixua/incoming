@@ -42,6 +42,7 @@ public class InterceptorEntity extends Entity implements IEntityWithComplexSpawn
     public static InterceptorEntity of(ServerLevel level, Interceptor flight) {
         InterceptorEntity e = new InterceptorEntity(ModEntities.INTERCEPTOR.get(), level);
         e.flight = flight;
+        e.setUUID(flight.id());
         e.follow(flight);
         e.xo = e.getX();
         e.yo = e.getY();

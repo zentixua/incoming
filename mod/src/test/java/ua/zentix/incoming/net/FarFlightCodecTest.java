@@ -32,6 +32,24 @@ class FarFlightCodecTest {
         }
     }
 
+    @Test
+    void interceptorAndEndFlagRoundTripWithoutChangingOrdinaryPackets() {
+        for (boolean ended : new boolean[]{false, true}) {
+            S2C.FarFlight f = new S2C.FarFlight(UUID.randomUUID(), S2C.FarFlight.INTERCEPTOR, false, false, false,
+                    new Vec3(0, 150, -1000), new Vec3(0, 0, -14), 180, 0, 0, FlightPhase.CRUISE.ordinal(), 40,
+                    new Vec3(0, 150, -2000), Float.NaN, ended);
+            ByteBuf b = Unpooled.buffer();
+            try {
+                S2C.FarFlight.CODEC.encode(b, f);
+                S2C.FarFlight back = S2C.FarFlight.CODEC.decode(b);
+                assertEquals(f, back);
+                assertTrue(back.interceptor());
+                assertEquals(ended, back.ended());
+                assertFalse(b.isReadable());
+            } finally { b.release(); }
+        }
+    }
+
     /**
      * Земля под снарядом на старте уходит только с ней (флаг): маршевому снаряду байтов не прибавляется, у стартующего
      * она возвращается та же.

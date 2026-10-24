@@ -302,8 +302,19 @@ public final class S2C {
      * всех — облако старта без земли не встанет.
      */
     public record FarFlight(UUID id, int weapon, boolean bomber, boolean drilling, boolean audible, Vec3 pos, Vec3 velocity, float yaw,
-                            float pitch, float roll, int phase, int phaseAge, Vec3 aim, float ground) {
-        private static final int BOMBER = 1, DRILLING = 2, AUDIBLE = 4, GROUND = 8;
+                            float pitch, float roll, int phase, int phaseAge, Vec3 aim, float ground, boolean ended) {
+        /** Ракета ЗРК: это вид полёта, не новый вид оружия. */
+        public static final int INTERCEPTOR = -1;
+        private static final int BOMBER = 1, DRILLING = 2, AUDIBLE = 4, GROUND = 8, ENDED = 16;
+
+        public FarFlight(UUID id, int weapon, boolean bomber, boolean drilling, boolean audible, Vec3 pos, Vec3 velocity, float yaw,
+                         float pitch, float roll, int phase, int phaseAge, Vec3 aim, float ground) {
+            this(id, weapon, bomber, drilling, audible, pos, velocity, yaw, pitch, roll, phase, phaseAge, aim, ground, false);
+        }
+
+        public boolean interceptor() {
+            return weapon == INTERCEPTOR;
+        }
 
         /** Без земли под снарядом. */
         public FarFlight(UUID id, int weapon, boolean bomber, boolean drilling, boolean audible, Vec3 pos, Vec3 velocity, float yaw,
@@ -324,7 +335,7 @@ public final class S2C {
                 Vec3 aim = StreamCodecs.VEC3.decode(b);
                 float ground = (flags & GROUND) != 0 ? b.readFloat() : Float.NaN;
                 return new FarFlight(id, weapon, (flags & BOMBER) != 0, (flags & DRILLING) != 0, (flags & AUDIBLE) != 0, pos, velocity,
-                        yaw, pitch, roll, phase, phaseAge, aim, ground);
+                        yaw, pitch, roll, phase, phaseAge, aim, ground, (flags & ENDED) != 0);
             }
 
             @Override
@@ -332,7 +343,7 @@ public final class S2C {
                 UUIDUtil.STREAM_CODEC.encode(b, f.id);
                 ByteBufCodecs.VAR_INT.encode(b, f.weapon);
                 boolean ground = Float.isFinite(f.ground);
-                b.writeByte((f.bomber ? BOMBER : 0) | (f.drilling ? DRILLING : 0) | (f.audible ? AUDIBLE : 0) | (ground ? GROUND : 0));
+                b.writeByte((f.bomber ? BOMBER : 0) | (f.drilling ? DRILLING : 0) | (f.audible ? AUDIBLE : 0) | (ground ? GROUND : 0) | (f.ended ? ENDED : 0));
                 StreamCodecs.VEC3.encode(b, f.pos);
                 b.writeFloat((float) f.velocity.x);
                 b.writeFloat((float) f.velocity.y);
