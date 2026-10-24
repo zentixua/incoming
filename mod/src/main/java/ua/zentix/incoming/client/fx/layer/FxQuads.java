@@ -56,6 +56,8 @@ public final class FxQuads {
     private float[] thinBounds = new float[0];
     private float[] bounds = new float[0];
     private float[] frameBounds;
+    private float[] clipCorners;
+    private ProjectedBounds projectedBounds;
     private final Vector4f clip = new Vector4f();
     private VertexBuffer gpu;
     private final FarFirst sort = new FarFirst();
@@ -277,32 +279,19 @@ public final class FxQuads {
         }
         int[] order = sort.sort(keys, n);
         if (frameBounds == null || frameBounds.length < 4 * n) frameBounds = new float[4 * capacity];
-        // Консервативные рамки настоящих квадратов в кадре: бюджет — по числу пикселей цели, включая прозрачные углы.
+        if (clipCorners == null) clipCorners = new float[16];
+        if (projectedBounds == null) projectedBounds = new ProjectedBounds();
+        // Match the GPU's lateral clipping before division: a flat quad crossing the eye does not cover the sky.
         for (int i = 0; i < n; i++) {
             int o = 4 * i;
             Arrays.fill(bounds, o, o + 4, 0);
             Arrays.fill(thinBounds, o, o + 4, 0);
-            float x0 = 1, y0 = 1, x1 = 0, y1 = 0;
-            int behind = 0;
             for (int j = 0; j < 4; j++) {
                 long p = stage + (long) i * QUAD + (long) j * VERTEX;
                 projectionView.transform(clip.set(MemoryUtil.memGetFloat(p), MemoryUtil.memGetFloat(p + 4), MemoryUtil.memGetFloat(p + 8), 1));
-                if (!(clip.w > 0)) {
-                    behind++;
-                    continue;
-                }
-                float x = Math.clamp(clip.x / clip.w * 0.5f + 0.5f, 0, 1), y = Math.clamp(clip.y / clip.w * 0.5f + 0.5f, 0, 1);
-                x0 = Math.min(x0, x);
-                x1 = Math.max(x1, x);
-                y0 = Math.min(y0, y);
-                y1 = Math.max(y1, y);
+                clipCorners[4*j]=clip.x; clipCorners[4*j+1]=clip.y; clipCorners[4*j+2]=clip.z; clipCorners[4*j+3]=clip.w;
             }
-            if (behind == 4) { x0 = y0 = x1 = y1 = 0; }
-            else if (behind > 0) { x0 = y0 = 0; x1 = y1 = 1; }
-            frameBounds[o] = x0;
-            frameBounds[o + 1] = y0;
-            frameBounds[o + 2] = x1;
-            frameBounds[o + 3] = y1;
+            projectedBounds.quad(clipCorners, frameBounds, o);
             if (reducible[i]) System.arraycopy(frameBounds, o, thin[i] ? thinBounds : bounds, o, 4);
         }
         int visible = visibleOrder(order, frameBounds, n);
