@@ -1,7 +1,5 @@
 Revision 3 (Claude round-2 fixes): [captures, movies, WAVs and causes](r3/README.md).
 
-Revision 3 (Claude round-2 fixes): [captures, movies, WAVs and causes](r3/README.md).
-
 Revision 2 (Claude round-1 fixes): [new captures, movies, WAVs and limits](r2/README.md).
 
 The material below is the round-1 archive.
