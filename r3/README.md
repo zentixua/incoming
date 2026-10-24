@@ -38,7 +38,8 @@ What changed and why:
   dust, single-scattering albedo about 0.9 (estimate). The remaining soft darkening of a centre is the fireball
   backlighting a puff: thin edges let more light through than the thick middle.
 - **Thin lines over the horizon.** They came from the baked-puff atlas, not from the shimmer: `sixFrames` kept the
-  sample half a sheet texel from the frame edge, so on mip levels 3–4 bilinear filtering read the neighbouring frame.
+  sample half a sheet texel from the frame edge, so from the first reduced copy bilinear filtering read into the
+  neighbouring frame, visibly on mip levels 3–4.
   Flat dust layers seen almost edge-on and distant puffs showed it as lines. The inset is now half a texel of the
   coarsest level read (`sixInset`, `PuffAtlasEdgeGlslTest`). This touches every baked puff.
 - **Birth hitch.** The torn-litter kick integral uses an exact step for the mid-step wind: 32 steps instead of 400,
