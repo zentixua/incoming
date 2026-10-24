@@ -274,8 +274,16 @@ public final class SurfaceSupportGameTests {
         }
         for (int x = 18; x <= 46; x += 7) for (int z = 18; z <= 46; z += 7)
             Warheads.testDetonate(level, WeaponType.DRONE, h.absolutePos(new BlockPos(x, C.getY(), z)).getCenter(), null, x * 100L + z);
+        int[] maximum = {0};
+        h.onEachTick(() -> {
+            int count = level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, h.getBounds().inflate(4),
+                    e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get()).size();
+            maximum[0] = Math.max(maximum[0], count);
+            h.assertTrue(count <= SurfaceDamage.DISPLAY_CAP, "salvo exceeded display budget during impact");
+        });
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).idle(), "salvo unfinished");
+            h.assertTrue(maximum[0] > 0, "salvo never displayed partial damage");
             var displays = level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, h.getBounds().inflate(4),
                     e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get());
             h.assertTrue(displays.size() <= SurfaceDamage.DISPLAY_CAP, "salvo left " + displays.size() + " entities");

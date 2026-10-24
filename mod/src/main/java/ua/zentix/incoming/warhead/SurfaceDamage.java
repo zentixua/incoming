@@ -8,7 +8,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Display;
-import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -47,8 +46,10 @@ public final class SurfaceDamage {
 
     /** Per-level non-serializable attachment. One composite display per damaged column. */
     public static final class Displays {
-        private final Map<BlockPos, UUID> live = new LinkedHashMap<>();
+        private final Map<BlockPos, Visible> live = new LinkedHashMap<>();
     }
+
+    private record Visible(BlockState state, Display.BlockDisplay entity) {}
 
     private SurfaceDamage() {}
 
@@ -79,9 +80,9 @@ public final class SurfaceDamage {
     private static void show(ServerLevel level, Mark mark) {
         BlockPos p = mark.pos();
         if (!Terrain.ready(level, p.above()) || !level.getBlockState(p.above()).getCollisionShape(level, p.above()).isEmpty()) return;
-        Map<BlockPos, UUID> live = level.getData(ModAttachments.SURFACE_DISPLAYS).live;
-        UUID old = live.get(p);
-        if (old != null && level.getEntity(old) != null) return;
+        Map<BlockPos, Visible> live = level.getData(ModAttachments.SURFACE_DISPLAYS).live;
+        Visible old = live.get(p);
+        if (old != null && !old.entity().isRemoved()) return;
         live.remove(p);
         if (live.size() >= DISPLAY_CAP) return;
         Display.BlockDisplay entity = ModEntities.SURFACE_DAMAGE.get().create(level);
@@ -93,9 +94,7 @@ public final class SurfaceDamage {
         nbt.putFloat("height", 1);
         entity.load(nbt);
         entity.setPos(p.getX(), p.getY() + 1, p.getZ());
-        entity.getPersistentData().putLong("incoming_surface_pos", p.asLong());
-        entity.getPersistentData().put("incoming_surface_state", NbtUtils.writeBlockState(mark.state()));
-        if (level.addFreshEntity(entity)) live.put(p, entity.getUUID());
+        if (level.addFreshEntity(entity)) live.put(p, new Visible(mark.state(), entity));
     }
 
     /** Migrate #437's saved vanilla displays on load, including chunks that never start entity ticking. */
@@ -105,24 +104,12 @@ public final class SurfaceDamage {
     }
 
     private static void discardRubble(ServerLevel level, Mark m) {
-        UUID current = level.getData(ModAttachments.SURFACE_DISPLAYS).live.remove(m.pos());
-        if (current != null && level.getEntity(current) != null) level.getEntity(current).discard();
+        Visible current = level.getData(ModAttachments.SURFACE_DISPLAYS).live.remove(m.pos());
+        if (current != null) current.entity().discard();
         for (UUID id : m.rubble()) {
             var entity = level.getEntity(id);
             if (entity != null) entity.discard();
         }
-    }
-
-    /** Cleanup also covers non-player edits and covering the fractured face. */
-    public static void onEntityTick(EntityTickEvent.Post event) {
-        if (!(event.getEntity() instanceof Display.BlockDisplay display) || !(display.level() instanceof ServerLevel level)
-                || display.tickCount % 20 != 0 || !display.getPersistentData().contains("incoming_surface_pos")) return;
-        BlockPos p = BlockPos.of(display.getPersistentData().getLong("incoming_surface_pos"));
-        if (!Terrain.ready(level, p)) return;
-        BlockState expected = NbtUtils.readBlockState(level.holderLookup(net.minecraft.core.registries.Registries.BLOCK),
-                display.getPersistentData().getCompound("incoming_surface_state"));
-        if (display.getType() == EntityType.BLOCK_DISPLAY || !level.getBlockState(p).equals(expected)
-                || Terrain.ready(level, p.above()) && !level.getBlockState(p.above()).getCollisionShape(level, p.above()).isEmpty()) display.discard();
     }
 
     public static double depth(ServerLevel level, BlockPos p) {
@@ -148,10 +135,17 @@ public final class SurfaceDamage {
     /** Vanilla expires its crack overlay after 400 ticks. Refresh nearby saved marks, including after reconnecting. */
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level) || level.getGameTime() % 20 != 0) return;
-        Map<BlockPos, UUID> live = level.getData(ModAttachments.SURFACE_DISPLAYS).live;
+        Map<BlockPos, Visible> live = level.getData(ModAttachments.SURFACE_DISPLAYS).live;
         live.entrySet().removeIf(e -> {
-            var entity = level.getEntity(e.getValue());
-            if (entity == null) return true;
+            Display.BlockDisplay entity = e.getValue().entity();
+            if (entity.isRemoved()) return true;
+            // Keep the object until discarded: an inaccessible entity can survive in a chunk without getEntity(id).
+            if (!Terrain.ready(level, e.getKey()) || !level.getBlockState(e.getKey()).equals(e.getValue().state())
+                    || Terrain.ready(level, e.getKey().above()) && !level.getBlockState(e.getKey().above())
+                            .getCollisionShape(level, e.getKey().above()).isEmpty()) {
+                entity.discard();
+                return true;
+            }
             if (level.getGameTime() % 100 == 0 && level.players().stream().noneMatch(p -> p.distanceToSqr(entity) <= DISPLAY_RANGE * DISPLAY_RANGE)) {
                 entity.discard();
                 return true;

@@ -171,7 +171,7 @@ public final class IncomingConfig {
                     .translation("incoming.config.shatter_glass").define("shatter_glass", true);
             fire = b.comment("Conventional blasts and burning debris start fires.")
                     .translation("incoming.config.fire").define("fire", true);
-            debrisStay = b.comment("Debris stays as blocks where it lands. Off: it disappears.")
+            debrisStay = b.comment("Large debris stays as blocks where it lands. Small conventional chips disperse; fire still needs fuel. Off: debris disappears.")
                     .translation("incoming.config.debris_stay").define("debris_stay", true);
             collapse = b.comment("An underground blast brings down the roof of the cavity above it.")
                     .translation("incoming.config.collapse").define("collapse", true);

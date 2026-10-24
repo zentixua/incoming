@@ -28,6 +28,15 @@ public final class SurfaceFrontGameTests {
         try {
             // As when a larger craft enters between impact start and scan: radius grows beyond the held metre.
             job.holdFrontArea(level, 60);
+            try {
+                // Exercise FRONT itself, including blocked() before ready(), without requiring a live craft.
+                var phase = StagedExplosion.class.getDeclaredField("phase");
+                phase.setAccessible(true);
+                for (Object value : phase.getType().getEnumConstants())
+                    if (value.toString().equals("FRONT")) phase.set(job, value);
+            } catch (ReflectiveOperationException error) {
+                throw new AssertionError(error);
+            }
             h.assertTrue(!job.ready(level), "test's expanded area was already ready");
             UnitQueue queue = new UnitQueue();
             queue.add(0, job);

@@ -87,7 +87,6 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(IncomingCommand::register);
         NeoForge.EVENT_BUS.addListener(StrikeWorld::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onLevelTick);
-        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onEntityTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onPlace);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onBreak);
