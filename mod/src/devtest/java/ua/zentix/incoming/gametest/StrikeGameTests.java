@@ -2,6 +2,7 @@ package ua.zentix.incoming.gametest;
 
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -173,10 +174,17 @@ public final class StrikeGameTests {
 
     /**
      * Снаряд взорвался у точки удара: подрыв по заряду не дальше 6 блоков ({@link BlastLog}). Воронка — по закону заряда
-     * и грунта ({@code craterMatchesChargeLaw}), у шахеда на камне её нет, поэтому полёт проверяется по подрыву.
+     * и грунта ({@code craterMatchesChargeLaw}), у шахеда на камне её нет, поэтому полёт проверяется по подрыву. Источник
+     * каждого такого подрыва — снаряд мода ({@code Explosion.getDirectSourceEntity}): по нему моды взрывов и приваты
+     * отличают удар и оружие.
      */
     private static void assertCrater(GameTestHelper h, BlockPos at, String flight) {
-        h.assertTrue(BlastLog.near(h, at, 6), "у точки удара нет подрыва" + (flight.isEmpty() ? "" : "; последнее: " + flight));
+        List<BlastLog.Blast> blasts = BlastLog.around(h, at, 6);
+        h.assertTrue(!blasts.isEmpty(), "у точки удара нет подрыва" + (flight.isEmpty() ? "" : "; последнее: " + flight));
+        for (BlastLog.Blast b : blasts) {
+            h.assertTrue(b.source() != null && BuiltInRegistries.ENTITY_TYPE.getKey(b.source()).getNamespace().equals(Incoming.MOD_ID),
+                    "источник подрыва — не снаряд мода: " + (b.source() == null ? "нет" : BuiltInRegistries.ENTITY_TYPE.getKey(b.source())));
+        }
     }
 
     @GameTest(template = "runway", timeoutTicks = 400, batch = "drone", skyAccess = true)

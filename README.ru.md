@@ -63,6 +63,10 @@
 - **Sound Physics Remastered**: звуки мира — его. У звуков Incoming глушение вдали, за холмом и стеной остаётся
   своим: Incoming знает, где на самом деле взрыв и мотор. Чтобы Sound Physics не добавлял своё эхо поверх эха Incoming,
   в `config/sound_physics_remastered/sound_rates.properties` поставьте `0` во всех строках `incoming:`.
+- **Explosion Overhaul** и другие моды, которые отзываются на взрывы: у каждого взрыва обычного удара источник — его снаряд
+  (`incoming:drone`, `incoming:loiter`, `incoming:cruise_missile`, `incoming:rocket`, `incoming:bunker_buster`), и они
+  могут настроить удары Incoming отдельно. Чтобы с Explosion Overhaul взрывы оставались взрывами Incoming, поставьте
+  этим id `VANILLA` в его `config/explosionoverhaul/ExplosionSourceBlacklist.json`.
 - **Iris**: ядерная картинка рисуется и под шейдерами.
 - **Flashback**: удары видны в повторах, а перемотка повтора не взрывает их заново.
 

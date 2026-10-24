@@ -66,6 +66,10 @@ All of these are optional:
   and wall muffling, since Incoming knows where each blast and engine really is. To keep Sound Physics from adding its
   echoes on top of Incoming's, set every `incoming:` line in `config/sound_physics_remastered/sound_rates.properties`
   to `0`.
+- **Explosion Overhaul** and other mods that react to explosions: every explosion of a conventional strike carries its
+  projectile as the source (`incoming:drone`, `incoming:loiter`, `incoming:cruise_missile`, `incoming:rocket`,
+  `incoming:bunker_buster`), so they can treat Incoming's strikes on their own. To keep Incoming's own blasts with
+  Explosion Overhaul, set these ids to `VANILLA` in its `config/explosionoverhaul/ExplosionSourceBlacklist.json`.
 - **Iris**: the nuclear effects render with shaders.
 - **Flashback**: replays show strikes, and seeking through a replay does not set off explosions again.
 
