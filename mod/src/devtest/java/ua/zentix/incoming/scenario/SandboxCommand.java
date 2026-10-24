@@ -28,8 +28,10 @@ import java.util.Locale;
  *   <li>{@code airburst [seed]} — разрыв зенитной ракеты в воздухе над точкой;</li>
  *   <li>{@code sam} — ЗРК в точке (заряжен) и шахед, который идёт через неё с севера; время — от схода зенитной ракеты
  *       (след, облако схода, звук мотора — как сцена {@code sam-side} пробы);</li>
- *   <li>{@code raid [число] [радиус] [секунд между]} — налёт: взрывы шахедов только у клиента (как {@code blast}) в круге
- *       радиуса вокруг точки один за другим (по умолчанию 16 за 45 с в 120 м) — цена дыма многих ударов в кадре;</li>
+ *   <li>{@code raid [число] [радиус] [секунд между] [оружие] [water]} — налёт: взрывы (по умолчанию шахедов) только у
+ *       клиента (как {@code blast}) в круге радиуса вокруг точки один за другим (по умолчанию 16 за 45 с в 120 м) — цена
+ *       дыма многих ударов в кадре; {@code water} — в пруд, как у {@code blast} (залп «Града» по воде у берега: радиус —
+ *       не больше полупруда);</li>
  *   <li>{@code launch <оружие>} — пуск с пусковой в точке; время — от первого движения снаряда;</li>
  *   <li>{@code flight <оружие> [от, блоков]} — снаряд проходит над точкой по прямой: пуск в стольких блоках к югу
  *       (по умолчанию {@link #FLIGHT_FROM}), цель — столько же к северу, у оружия с маршрутом оператора (шахед, ракета,
@@ -132,7 +134,9 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (args.size() > i) throw new IllegalArgumentException("nuke <кт> [air|ground] [near [метров]]");
             }
             case RAID -> {
-                need(0, 3);
+                need(0, water() ? 5 : 4);
+                if (args.size() > 3 && !(args.size() == 4 && water())) weaponAt(3);
+                if (water() && number(1, 120) > POND / 2.0) throw new IllegalArgumentException("в пруд — радиус до " + POND / 2 + " м");
                 if (number(0, 16) < 1 || number(0, 16) > 40) throw new IllegalArgumentException("взрывов 1–40");
                 if (number(1, 120) < 10 || number(1, 120) > 400) throw new IllegalArgumentException("радиус 10–400 м");
                 if (number(2, 3) < 0 || number(2, 3) > 30) throw new IllegalArgumentException("между взрывами 0–30 с");
@@ -207,9 +211,14 @@ record SandboxCommand(Verb verb, List<String> args) {
         }
     }
 
-    /** {@code blast … water}: удар в пруд. */
+    /** {@code blast … water}, {@code raid … water}: удар в пруд. */
     boolean water() {
-        return verb == Verb.BLAST && args.size() > 1 && args.getLast().equals("water");
+        return (verb == Verb.BLAST && args.size() > 1 || verb == Verb.RAID) && !args.isEmpty() && args.getLast().equals("water");
+    }
+
+    /** {@code raid}: оружие налёта (по умолчанию шахед). */
+    WeaponType raidWeapon() {
+        return args.size() > 3 && !args.get(3).equals("water") ? weaponAt(3) : WeaponType.DRONE;
     }
 
     /** {@code nuke}: воздушный подрыв. */
@@ -270,7 +279,11 @@ record SandboxCommand(Verb verb, List<String> args) {
     }
 
     WeaponType weapon() {
-        String name = args.getFirst().toLowerCase(Locale.ROOT);
+        return weaponAt(0);
+    }
+
+    WeaponType weaponAt(int i) {
+        String name = args.get(i).toLowerCase(Locale.ROOT);
         for (WeaponType t : WeaponType.values()) {
             if (t.getSerializedName().equals(name)) return t;
         }

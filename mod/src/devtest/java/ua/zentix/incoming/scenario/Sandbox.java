@@ -527,16 +527,52 @@ final class Sandbox {
 
     /** Взрывы налёта ({@code raid}), что ещё впереди: тик, x, z (биты double), зерно. */
     private final List<long[]> raid = new ArrayList<>();
+    /** Оружие налёта. */
+    private WeaponType raidWeapon = WeaponType.DRONE;
 
-    /** Взрывы налёта, чей тик пришёл: пакет взрыва шахеда только у клиента, как {@code blast}. */
+    /** Взрывы налёта, чей тик пришёл: пакет взрыва только у клиента, как {@code blast}. */
     private void raidNext(Minecraft mc) {
         while (!raid.isEmpty() && raid.getFirst()[0] <= tick) {
             long[] r = raid.removeFirst();
             Vec3 pos = new Vec3(Double.longBitsToDouble(r[1]), GROUND + 1, Double.longBitsToDouble(r[2]));
             GroundMaterial mat = GroundMaterial.sample(mc.level, BlockPos.containing(pos));
-            ClientHooks.get().blast(new S2C.Blast(S2C.Blast.DRONE, pos, mat.ordinal(), (float) pos.y, r[3], Optional.empty(), WeaponType.DRONE.id(),
+            ClientHooks.get().blast(new S2C.Blast(blastKind(raidWeapon), pos, mat.ordinal(), (float) pos.y, r[3], Optional.empty(), raidWeapon.id(),
                     S2C.Blast.DOWN));
         }
+    }
+
+    /** Вид пакета взрыва по оружию. */
+    private static int blastKind(WeaponType w) {
+        return switch (w.spec().blast()) {
+            case MISSILE -> S2C.Blast.MISSILE;
+            case ROCKET -> S2C.Blast.ROCKET;
+            case DRONE, NONE -> S2C.Blast.DRONE;
+        };
+    }
+
+    /** Налёт ({@code raid}): взрывы по кругу через интервал, первый — сейчас. */
+    private void raidStart(Minecraft mc, SandboxCommand c) {
+        int n = (int) c.number(0, 16);
+        double radius = c.number(1, 120), every = c.number(2, 3);
+        java.util.Random rnd = new java.util.Random(7);
+        raid.clear();
+        raidWeapon = c.raidWeapon();
+        for (int i = 0; i < n; i++) {
+            double a = 2 * Math.PI * rnd.nextDouble(), r = radius * Math.sqrt(rnd.nextDouble());
+            raid.add(new long[]{tick + Math.round(i * every * 20), Double.doubleToLongBits(site.x + r * Math.cos(a)),
+                    Double.doubleToLongBits(site.z + r * Math.sin(a)), i + 1});
+        }
+        raidNext(mc);
+        begin();
+    }
+
+    /** Пруд в точке ({@code blast … water}, {@code raid … water}) — у сервера; эффект — когда клиент видит воду под точкой. */
+    private void pond() {
+        BlockPos s = BlockPos.containing(site);
+        int half = SandboxCommand.POND / 2;
+        onServer(false, server -> run(server, String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:water", s.getX() - half,
+                GROUND - SandboxCommand.POND_DEPTH + 1, s.getZ() - half, s.getX() + half, GROUND, s.getZ() + half)));
+        pending = Pending.POND;
     }
 
     private void startEffect(SandboxCommand c) {
@@ -558,31 +594,15 @@ final class Sandbox {
                 placeCamera();
                 WeaponType w = c.weapon();
                 if (w == WeaponType.BUNKER) throw new IllegalArgumentException("бомба без сервера не взрывается: flight bunker");
-                if (c.water()) {
-                    // пруд — у сервера (вода у клиента приходит с чанком), взрыв — когда клиент видит воду под точкой
-                    BlockPos s = BlockPos.containing(site);
-                    int half = SandboxCommand.POND / 2;
-                    onServer(false, server -> run(server, String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:water", s.getX() - half,
-                            GROUND - SandboxCommand.POND_DEPTH + 1, s.getZ() - half, s.getX() + half, GROUND, s.getZ() + half)));
-                    pending = Pending.POND;
-                } else {
-                    blast(level, c);
-                }
+                // пруд — у сервера (вода у клиента приходит с чанком), взрыв — когда клиент видит воду под точкой
+                if (c.water()) pond();
+                else blast(level, c);
             }
             case RAID -> {
                 sameAir(mc);
                 placeCamera();
-                int n = (int) c.number(0, 16);
-                double radius = c.number(1, 120), every = c.number(2, 3);
-                java.util.Random rnd = new java.util.Random(7);
-                raid.clear();
-                for (int i = 0; i < n; i++) {
-                    double a = 2 * Math.PI * rnd.nextDouble(), r = radius * Math.sqrt(rnd.nextDouble());
-                    raid.add(new long[]{tick + Math.round(i * every * 20), Double.doubleToLongBits(site.x + r * Math.cos(a)),
-                            Double.doubleToLongBits(site.z + r * Math.sin(a)), i + 1});
-                }
-                raidNext(mc);
-                begin();
+                if (c.water()) pond();
+                else raidStart(mc, c);
             }
             case AIRBURST -> {
                 placeCamera();
@@ -678,11 +698,7 @@ final class Sandbox {
     /** Пакет взрыва {@code blast} только у клиента, тем же входом, что от сервера; земля — то, что под точкой (трава или пруд). */
     private void blast(ClientLevel level, SandboxCommand c) {
         WeaponType w = c.weapon();
-        int kind = switch (w.spec().blast()) {
-            case MISSILE -> S2C.Blast.MISSILE;
-            case ROCKET -> S2C.Blast.ROCKET;
-            case DRONE, NONE -> S2C.Blast.DRONE;
-        };
+        int kind = blastKind(w);
         int n = c.args().size() - (c.water() ? 1 : 0);
         Vec3 ground = new Vec3(site.x, GROUND + 1, site.z), pos = ground.add(0, n > 2 ? c.number(2) : 0, 0);
         GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(ground));
@@ -757,7 +773,10 @@ final class Sandbox {
                 case LAUNCH, FLIGHT -> watchFlight(mc);
                 case SAM -> watchSam();
                 case POND -> {
-                    if (mc.level.getFluidState(BlockPos.containing(site).atY(GROUND)).isSource()) blast(mc.level, pendingCmd);
+                    if (mc.level.getFluidState(BlockPos.containing(site).atY(GROUND)).isSource()) {
+                        if (pendingCmd.verb() == SandboxCommand.Verb.RAID) raidStart(mc, pendingCmd);
+                        else blast(mc.level, pendingCmd);
+                    }
                 }
             }
             if (pending != null && tick - pendingSince > FLIGHT_LIMIT) {

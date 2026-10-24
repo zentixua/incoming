@@ -300,9 +300,13 @@ still strong enough there.
 
 A blast on water throws up a white column of spray instead of dust. A surface hit gives about 78 blocks for the Shahed,
 113 for the missile and 39 for Grad, estimated from Swisdak's conventional-charge plume table with its safety margin
-reduced. Charge depth changes the height and width. The Shahed's column reaches its top in about four seconds and falls
-back by eight seconds; slower jets fall earlier, leaving foam and a low ring of drifting water mist. A wave ring spreads
-across the water at a speed that depends on water depth. Clumps of water fly as particles. Fuel that lands on water spreads too
+reduced. These are the visible top and width of the spray, as in the table; the Shahed's column is about 47 blocks
+wide. Charge depth changes the height and width. The column is a bundle of jets, each a chain of round spray puffs. The
+Shahed's column reaches its top in under four seconds and is back in the water by about seven and a half; slower jets
+fall earlier, leaving foam and a low ring of water mist. The mist droplets are about 0.1 mm across and settle at
+0.3 m/s, and an ordinary wind over water cannot hold them up: the mist stays a thin layer on the water, drifts
+downwind and thins out: half of it settles in about 5 seconds for Grad and 10 for the Shahed. Only a gale lifts it higher. A wave ring spreads across the water at a
+speed that depends on water depth. Clumps of water fly as particles. Fuel that lands on water spreads too
 thin to keep burning, so no fire is left after the ball.
 
 The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
