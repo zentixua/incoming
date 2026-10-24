@@ -93,7 +93,9 @@ float frameInset(float span) {
 
 // Кадр клуба и следующий, сдвинутые вдоль векторов движения на долю смеси m (кадр k — назад на m, k + 1 — вперёд на
 // 1 − m): клуб течёт, а не проступает двойным. Карты a и b — в линейном свете, альфа — в a.w
-void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
+// Места кадра клуба k и следующего на листе, сдвинутые вдоль векторов движения на долю смеси m (общие у sixFrames и
+// sixAlpha)
+void sixPlaces(vec2 uv, vec2 dx, vec2 dy, float m, out vec2 uv0, out vec2 uv1) {
     vec2 tile = FxSix.zw;
     vec2 cell = floor(vec2(uv.x / tile.x, (uv.y - FxSix.y) / tile.y));
     vec2 origin = vec2(cell.x * tile.x, FxSix.y + cell.y * tile.y);
@@ -104,8 +106,13 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
     vec2 size = vec2(textureSize(Sampler0, 0)), gx = dx * size, gy = dy * size;
     vec2 edge = frameInset(sqrt(max(dot(gx, gx), dot(gy, gy)))) / size;
-    vec2 uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
-    vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
+    uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
+    uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
+}
+
+void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
+    vec2 uv0, uv1;
+    sixPlaces(uv, dx, dy, m, uv0, uv1);
     vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
     // прозрачный край кадра (половина квадрата клуба) — без второй карты и света: цена слоя — заливка крупных клубов
     if (mix(a0.a, a1.a, m) < 0.002) discard;
@@ -119,17 +126,8 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
 
 // Непрозрачность кадра клуба со смесью — те же места, что у sixFrames, без карт света: проходу свечения дым только гасит
 float sixAlpha(vec2 uv, vec2 dx, vec2 dy, float m) {
-    vec2 tile = FxSix.zw;
-    vec2 cell = floor(vec2(uv.x / tile.x, (uv.y - FxSix.y) / tile.y));
-    vec2 origin = vec2(cell.x * tile.x, FxSix.y + cell.y * tile.y);
-    vec2 next = origin + vec2(tile.x, 0.0);
-    if (cell.x > 6.5) next = vec2(0.0, origin.y + tile.y);
-    vec2 local = uv - origin;
-    vec4 v = textureGrad(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), dx, dy);
-    vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
-    vec2 edge = 0.5 / vec2(textureSize(Sampler0, 0));
-    vec2 uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
-    vec2 uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
+    vec2 uv0, uv1;
+    sixPlaces(uv, dx, dy, m, uv0, uv1);
     return mix(textureGrad(Sampler0, uv0, dx, dy).a, textureGrad(Sampler0, uv1, dx, dy).a, m);
 }
 
