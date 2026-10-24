@@ -179,10 +179,13 @@ class SmokeFillTest {
             double t = now - b.born();
             if (t < 0 || t >= b.model().life) continue;
             b.model().blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
-                // светящийся газ — тело огня, не дым (как у приёмника слоя)
-                double smoke = 1 - CloudModel.glowShare(kelvin, view.skyLuminance());
-                double ext = smoke * (CloudModel.SOOT_K * soot + kd * dust);
-                if (ext > 0) tau[0] += SmokePuffs.sightDepth(b.x() + x - eye.x, b.y() + y - eye.y, b.z() + z - eye.z, sh, sv, ext, fx, fy, fz);
+                // светящийся газ — тело огня, не дым (как у приёмника слоя): доля дыма — у непрозрачности клуба, не у массы
+                double smoke = SmokePuffs.smokeShare(true, kelvin, view.skyLuminance());
+                double ext = CloudModel.SOOT_K * soot + kd * dust;
+                if (ext > 0 && smoke > 0) {
+                    double along = SmokePuffs.sightDepth(b.x() + x - eye.x, b.y() + y - eye.y, b.z() + z - eye.z, sh, sv, ext, fx, fy, fz);
+                    tau[0] -= Math.log(1 - Math.min(smoke * (1 - Math.exp(-along)), 1 - 1e-12));
+                }
             });
         }
         return Math.exp(-tau[0]);
@@ -208,6 +211,55 @@ class SmokeFillTest {
             SmokePuffs.resetBudget();
         }
         return s;
+    }
+
+    /**
+     * Доля дыма у тела огня — у непрозрачности, а не у массы (live 24.10): у клуба шара сотни оптических толщ, и масса × доля
+     * давала сплошную сажу уже при доле 1 % — скачок за ~0,1 с, тёмный ореол перед шаром ракеты днём. Густой клуб (τ ≈ 200
+     * поперёк) с долей дыма 10 % закрывает середину не меньше доли и не больше 0,35, а не целиком (прежде — ~1). Сверх
+     * доли — кучка: доли клубов считаются по перекрытию площадей (много × размер²), а середину накрывают все клубы кучки.
+     */
+    @Test
+    void glowShareScalesOpacityNotMass() throws IOException {
+        double lo = 798, hi = 3000;
+        for (int it = 0; it < 60; it++) {
+            double mid = 0.5 * (lo + hi);
+            if (CloudModel.glowShare(mid, 1) < 0.9) lo = mid;
+            else hi = mid;
+        }
+        double kelvin = 0.5 * (lo + hi), share = SmokePuffs.smokeShare(true, kelvin, 1);
+        assertTrue(Math.abs(share - 0.1) < 1e-3, "доля дыма " + share);
+        double sigma = 5, soot = 200 * 2 * Math.PI * sigma * sigma / CloudModel.SOOT_K;
+        SmokeGrid.Source ball = new SmokeGrid.Source() {
+            @Override
+            public boolean emit(double seconds, SmokeGrid.Sink out) {
+                out.blob(60, 40, 0, sigma, sigma, soot, 0, 0, 0.6f, 0.55f, 0.45f, kelvin, 0);
+                return true;
+            }
+
+            @Override
+            public double puffGrowth(double seconds) {
+                return 1;
+            }
+
+            @Override
+            public long seed() {
+                return 3;
+            }
+
+            @Override
+            public boolean drawsGlow() {
+                return true;
+            }
+        };
+        FarView v = view(new Vec3(0, 40, 0), new Vector3f(1, 0, 0));
+        Screen s = new Screen(v);
+        SmokePuffs.resetBudget();
+        ball.emit(0, SmokePuffs.sink(v, s, ball, 0));
+        SmokePuffs.flush();
+        SmokePuffs.resetBudget();
+        double covered = 1 - s.transmittance(0, 0, PlumeContinuityTest.profiles());
+        assertTrue(covered >= share - 0.01 && covered <= 0.35, "середина клуба с долей дыма " + share + " закрыта на " + covered);
     }
 
     /**
@@ -319,6 +371,7 @@ class SmokeFillTest {
             held[i * f + 8] = 0.6;
             held[i * f + 9] = 0.55;
             held[i * f + 10] = 0.45;
+            held[i * f + 13] = 1;
         }
         boolean[] gone = new boolean[3];
         SmokePuffs.merge(held, 0, 3, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);

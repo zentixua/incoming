@@ -47,8 +47,11 @@ final class SmokePuffs {
                        float alphaB, int lightB, float r, float g, float b, float[] joint);
     }
 
-    /** Чисел на ждущий клуб: место, σh, σv, сажа, пыль, капли, альбедо пыли (3), номер, источник. */
-    static final int FIELDS = 13;
+    /**
+     * Чисел на ждущий клуб: место, σh, σv, сажа, пыль, капли, альбедо пыли (3), номер, источник, доля дыма (непрозрачность
+     * клуба, что не тело огня, {@link #smokeShare}).
+     */
+    static final int FIELDS = 14;
     /**
      * Клубы одного источника, чьи середины ближе этой доли меньшего σ (по горизонтали и по вертикали), — один гаусс с теми
      * же массой и моментами: их сумма от одного гаусса почти не отличается (у двух равных на расстоянии σ — на 1,3 % пика),
@@ -91,6 +94,8 @@ final class SmokePuffs {
                         continue;
                     }
                     double fa = wa / w, fb = wb / w;
+                    // доля дыма — средняя по тому, что видно (ослаблению)
+                    held[a + 13] = fa * held[a + 13] + fb * held[b + 13];
                     // вид источника (кадр клуба, зерно, видимость) — у того, чьего вещества больше
                     if (wb > wa) {
                         held[a + 11] = held[b + 11];
@@ -170,6 +175,16 @@ final class SmokePuffs {
      * были бы одной картинкой (только отражённой) — «штамп».
      */
     static final double FRAME_SPREAD = 1;
+
+    /**
+     * Доля дыма в непрозрачности вещества источника, что рисует тело огня (glow, {@link SmokeGrid.Source#drawsGlow}): тело тает,
+     * дым проступает той же долей ({@link CloudModel#glowShare}), sky — свет неба. Доля — у непрозрачности, а не у массы: у шара
+     * сотни оптических толщ, и масса × доля давала непрозрачную сажу уже при доле 1 % — скачок за ~0,1 с ночью около 1200 K и
+     * днём при остывании шара взрывчатки, тёмный ореол до ~2 радиусов перед шаром ракеты днём (live 24.10).
+     */
+    static double smokeShare(boolean glow, double kelvin, double sky) {
+        return glow ? 1 - CloudModel.glowShare(kelvin, sky) : 1;
+    }
 
     /** Кадр клуба (с дробью) у источника с кадром age; u — зерно клуба 0..1; vary — с разбросом. */
     static double clubFrame(double age, double u, boolean vary) {
@@ -309,11 +324,11 @@ final class SmokePuffs {
                      double sigma0) {
             int at = index++;
             // светящийся газ — тело огня у источника; остывая, он проступает дымом той же долей, что тело тает
-            double smoke = glow ? 1 - CloudModel.glowShare(kelvin, view.skyLuminance()) : 1;
-            sootA *= smoke;
-            sootB *= smoke;
-            dustA *= smoke;
-            dustB *= smoke;
+            double smoke = smokeShare(glow, kelvin, view.skyLuminance());
+            if (smoke <= 0) {
+                joint[0] = Float.NaN;
+                return;
+            }
             // над рельефом, что закрывает место источника вдали (как у клуба, {@link SmokeGrid.Source#visible}): у каждого конца
             // по его высоте и размаху сечения, вдоль куска — между ними
             double visA = source.visible(ay, 3 * Math.max(sha, sva)), visB = source.visible(by, 3 * Math.max(shb, svb));
@@ -331,8 +346,8 @@ final class SmokePuffs {
             double ea = CloudModel.SOOT_K * sootA + kd * dustA, eb = CloudModel.SOOT_K * sootB + kd * dustB;
             double ks = CloudModel.SOOT_K * (sootA + sootB), kdust = kd * (dustA + dustB);
             Vec3 cam = view.camera();
-            end(a, ax - cam.x, ay - cam.y, az - cam.z, Math.sqrt(sha * sva), ea);
-            end(b, bx - cam.x, by - cam.y, bz - cam.z, Math.sqrt(shb * svb), eb);
+            end(a, ax - cam.x, ay - cam.y, az - cam.z, Math.sqrt(sha * sva), ea, smoke);
+            end(b, bx - cam.x, by - cam.y, bz - cam.z, Math.sqrt(shb * svb), eb, smoke);
             // цвет и тень — толстого слоя смеси, как у клубов облаков ({@link #thick}); лента — тем же цветом в тоне клуба
             float cr = thick(ks, kdust, 0, albedoR), cg = thick(ks, kdust, 0, albedoG), cb = thick(ks, kdust, 0, albedoB);
             float tone = FarFlightView.TONE;
@@ -342,13 +357,16 @@ final class SmokePuffs {
             if (drawn != FarFlightView.RIBBON) joint[0] = Float.NaN;
         }
 
-        /** Конец трубки (от камеры): ширина на половине непрозрачности середины и лента — как у следа ({@code TrailModel.width}). */
-        private void end(FarFlightView.Tube t, double dx, double dy, double dz, double sigma, double e) {
+        /**
+         * Конец трубки (от камеры): ширина на половине непрозрачности середины и лента — как у следа ({@code TrailModel.width});
+         * smoke — доля дыма в непрозрачности ({@link #smokeShare}).
+         */
+        private void end(FarFlightView.Tube t, double dx, double dy, double dz, double sigma, double e, double smoke) {
             double tau = e / (Math.sqrt(2 * Math.PI) * sigma), d = Math.sqrt(dx * dx + dy * dy + dz * dz);
             double width = ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma);
             FarFlightView.ribbon(width, d, view.pixel(), point);
-            float alpha = width > 0 ? (float) ((1 - Math.exp(-tau)) * point[1] * view.air(d, dy)) : 0;
-            t.set(dx, dy, dz, sigma, e, width, point[0], alpha, OPEN_SKY);
+            float alpha = width > 0 ? (float) (smoke * (1 - Math.exp(-tau)) * point[1] * view.air(d, dy)) : 0;
+            t.set(dx, dy, dz, sigma, e, width, point[0], alpha, OPEN_SKY).shown = smoke;
         }
 
         @Override
@@ -356,20 +374,17 @@ final class SmokePuffs {
                             double water, float dustR, float dustG, float dustB, double kelvin, double rise) {
             int at = index++;
             // светящийся газ — тело огня у источника; остывая, он проступает дымом той же долей, что тело тает
-            double smoke = glow ? 1 - CloudModel.glowShare(kelvin, view.skyLuminance()) : 1;
+            double smoke = smokeShare(glow, kelvin, view.skyLuminance());
             if (smoke <= 0 || soot + dust + water <= 0 || !(sh > 0) || !(sv > 0)) return;
-            soot *= smoke;
-            dust *= smoke;
-            water *= smoke;
             double len = 2 * Math.sqrt(ax * ax + ay * ay + az * az);
             if (len <= 0) {
-                hold(x, y, z, sh, sv, soot, dust, water, dustR, dustG, dustB, at * 16);
+                hold(x, y, z, sh, sv, soot, dust, water, dustR, dustG, dustB, at * 16, smoke);
                 return;
             }
             int n = (int) Math.min(12, Math.max(1, Math.ceil(len / (SEGMENT_STEP * Math.min(sh, sv)))));
             for (int k = 0; k < n; k++) {
                 double f = n == 1 ? 0 : (k + 0.5) / n * 2 - 1;
-                blob(x + ax * f, y + ay * f, z + az * f, sh, sv, soot / n, dust / n, water / n, dustR, dustG, dustB, at * 16 + k);
+                blob(x + ax * f, y + ay * f, z + az * f, sh, sv, soot / n, dust / n, water / n, dustR, dustG, dustB, at * 16 + k, smoke);
             }
         }
 
@@ -403,7 +418,7 @@ final class SmokePuffs {
 
         /** Клуб-точку источника — в ожидание: слияние с соседями и бюджет — в {@link #flush}. */
         private void hold(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
-                          int id) {
+                          int id, double smoke) {
             if (holding * FIELDS + FIELDS > held.length) held = java.util.Arrays.copyOf(held, 2 * held.length);
             int o = holding++ * FIELDS;
             held[o] = x;
@@ -419,6 +434,7 @@ final class SmokePuffs {
             held[o + 10] = db;
             held[o + 11] = id;
             held[o + 12] = contexts - 1;
+            held[o + 13] = smoke;
         }
 
         /** Клубы источника, что кончился, — слиты между собой ({@link #merge}). */
@@ -524,7 +540,7 @@ final class SmokePuffs {
             seed = ctxSeed[c];
             sprays = ctxSprays[c];
             return blob(held[o], held[o + 1], held[o + 2], held[o + 3], held[o + 4], held[o + 5], held[o + 6], held[o + 7], (float) held[o + 8],
-                    (float) held[o + 9], (float) held[o + 10], (int) held[o + 11]);
+                    (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13]);
         }
 
         /** Вуаль вещества у глаза в кадр: толща −ln(1 − a) и её цвет копятся, квадрат — один ({@link #veilFlush}). */
@@ -565,14 +581,15 @@ final class SmokePuffs {
          * квадраты и вуаль. Возвращает заливку, экранов.
          */
         private double blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
-                            int id) {
+                            int id, double smoke) {
             Vec3 eye = view.camera();
             // на экране — проекция гаусса по углу взгляда (толща по лучу и высота квадрата); в мире — его σ (разброс клубов
             // кучки, край для рельефа и для глаза внутри)
             double across = projected(sh, sv, x - eye.x, y - eye.y, z - eye.z);
             double ks = SmokeGrid.SOOT_K * soot, kd = SmokeGrid.dustK(dr, dg, db) * dust, kw = SmokeGrid.DROP_K * water;
             double tau = (ks + kd + kw) / (2 * Math.PI * sh * across);
-            double a = 1 - Math.exp(-tau);
+            // доля дыма — у непрозрачности, а не у массы: у шара сотни толщ, и сажа доли 1 % была бы уже непрозрачной
+            double a = smoke * (1 - Math.exp(-tau));
             if (a < 0.004) return 0;
             double edge = edge(tau);
             double rh = edge * sh, rv = edge * across, rw = edge * sv, r = Math.max(rh, rw);
@@ -589,7 +606,7 @@ final class SmokePuffs {
             // радиусу он был «внутри», и вуаль слоя закрывала весь кадр)
             double q = Math.sqrt((px * px + pz * pz) / (rh * rh) + py * py / (rw * rw));
             double outside = smoothstep(0.5, 1, q);
-            if (outside < 1 && !planning) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air);
+            if (outside < 1 && !planning) veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (1 - outside) * vis * air * smoke);
             if (outside <= 0) return 0;
             // вне кадра — не нужен: шар всего квадрата кучки (клуб — до 1,2 радиуса, его место — до ~0,9 от середины)
             if (!FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return 0;
@@ -839,7 +856,7 @@ final class SmokePuffs {
      * @return квадратов клубов и вуалей
      */
     static int tube(FarView view, Out out, double ax, double ay, double az, double sa, double ea, double wa, double bx, double by, double bz,
-                    double sb, double eb, double wb, float cr, float cg, float cb, double shade, double sigma0, long seed, boolean whole) {
+                    double sb, double eb, double wb, float cr, float cg, float cb, double shade, double sigma0, long seed, boolean whole, double shown) {
         if (ea + eb <= 0 || !(sa > 0) || !(sb > 0)) return 0;
         double tx = bx - ax, ty = by - ay, tz = bz - az, len = Math.sqrt(tx * tx + ty * ty + tz * tz);
         double shareA = whole ? 1 : FarFlightView.puffShare(wa, Math.sqrt(ax * ax + ay * ay + az * az), view.pixel());
@@ -867,7 +884,7 @@ final class SmokePuffs {
             // вихри следа — порядка σ: середина клуба гуляет ({@link #meander}, ⚠ оценка), иначе ровный ряд
             double m = meander(sigma, tau);
             drawn += club(view, out, cx + m * gauss(h >>> 3), cy + m * gauss(h >>> 11), cz + m * gauss(h >>> 19), sigma, sigma, tau, full, along, cr,
-                    cg, cb, shade, false, age, h, 1, TUBE_CLUSTER, true);
+                    cg, cb, shade, false, age, h, shown, TUBE_CLUSTER, true);
         }
         return drawn;
     }
