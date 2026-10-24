@@ -21,6 +21,17 @@ class NozzleGlowTest {
         return ClientWeaponSpec.buildNozzleGlow(w).orElseThrow();
     }
 
+    /** Независимые опорные точки JANAF C(ref): https://janaf.nist.gov/tables/C-002.html; Дж/(моль·K) → Дж/(кг·K). */
+    @Test
+    void graphiteHeatMatchesJanafMassUnits() {
+        double[][] reference = {{250, 6.816}, {298.15, 8.517}, {400, 11.817}, {1000, 21.610},
+                {2000, 25.094}, {3000, 26.611}, {3500, 27.225}};
+        for (double[] row : reference) {
+            assertEquals(row[1] / 0.012011, NozzleGlow.Material.GRAPHITE.heat(row[0]), 0.1,
+                    "JANAF C(ref) при " + row[0] + " K, Дж/(кг·K)");
+        }
+    }
+
     /**
      * Путь сопла: поджиг, разгон со спадом, отделившийся ускоритель 20 с (его наибольшая жизнь в мире); fromTail — только
      * с начала спада тяги (там факел гаснет и сопло видно).
