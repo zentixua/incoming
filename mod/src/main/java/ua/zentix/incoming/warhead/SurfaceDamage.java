@@ -84,6 +84,8 @@ public final class SurfaceDamage {
         Visible old = live.get(p);
         if (old != null && !old.entity().isRemoved()) return;
         live.remove(p);
+        // Removed/inaccessible displays must not reserve slots until the next maintenance tick.
+        if (live.size() >= DISPLAY_CAP) live.values().removeIf(v -> v.entity().isRemoved());
         if (live.size() >= DISPLAY_CAP) return;
         Display.BlockDisplay entity = ModEntities.SURFACE_DAMAGE.get().create(level);
         if (entity == null) return;

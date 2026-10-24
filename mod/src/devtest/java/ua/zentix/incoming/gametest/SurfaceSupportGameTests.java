@@ -243,6 +243,13 @@ public final class SurfaceSupportGameTests {
     @GameTest(template = "range", timeoutTicks = 80, batch = "blast_surface_cap", skyAccess = true)
     public static void surfaceBudgetDoesNotLimitSavedDamageOrDuplicateColumns(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // The budget is per world, while batches share that world. Retire preceding test presentation first.
+        java.util.stream.StreamSupport.stream(level.getAllEntities().spliterator(), false)
+                .filter(e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get()).toList()
+                .forEach(net.minecraft.world.entity.Entity::discard);
+        StrikeGameTests.afterTest(h, () -> level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class,
+                h.getBounds().inflate(4), e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get())
+                .forEach(net.minecraft.world.entity.Entity::discard));
         int marked = 0;
         for (int x = 16; x < 48; x++) for (int z = 16; z < 48; z++) {
             BlockPos p = h.absolutePos(new BlockPos(x, C.getY() + 3, z));
@@ -257,6 +264,13 @@ public final class SurfaceSupportGameTests {
         h.assertTrue(marked > SurfaceDamage.DISPLAY_CAP && !displays.isEmpty() && displays.size() <= SurfaceDamage.DISPLAY_CAP,
                 "unbounded surface entities: " + displays.size());
         h.assertTrue(displays.stream().noneMatch(e -> e.save(new net.minecraft.nbt.CompoundTag())), "saved surface entity");
+        // Reuse a slot in the same tick, rather than waiting for the periodic cleanup.
+        displays.getFirst().discard();
+        BlockPos fresh = h.absolutePos(new BlockPos(48, C.getY() + 3, 32));
+        level.setBlock(fresh, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
+        SurfaceDamage.mark(level, fresh, level.getBlockState(fresh), 0.4);
+        h.assertTrue(!level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, new AABB(fresh).inflate(0.1),
+                e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get()).isEmpty(), "removed display still reserves a slot");
         var legacy = EntityType.BLOCK_DISPLAY.create(level);
         legacy.setPos(h.absolutePos(C).getCenter());
         legacy.getPersistentData().putLong("incoming_surface_pos", h.absolutePos(C).asLong());
