@@ -1,0 +1,9 @@
+# PR #427: final correction evidence
+
+Main: `cd310f2bbf9f5cc870527e56356c725b4ca31ded`. PR: `178a7927cc008bf0117d117a36e759f2ab2be8cd`. The canonical record is `comparison.json`, with the exact camera, site, effect age and logged timing samples. The captures are from fresh flat dev sandboxes, one client at a time under the GPU lease, in quiet mode. They do not use Artem's world or Prism instance.
+
+For each version and resolution, use `tools/sandbox.sh start --wait` (1280×720 virtual output gives a 1280×692 framebuffer), or `tools/sandbox.sh start --wait --size 2560x1628` (2560×1600 framebuffer). Record `nuke 15 ground`, midday, in this order: wide (`4000 250 0 1500`), edge-on (`2500 300 0 350`), above (`1600 1100 25 150`). Main A and PR record 45,46,47,48,49,50,60 s; above also records half-second frames through 55 s. Main B records the integer times 45–50 s. Restart the client between versions/resolutions to reset the sandbox and effect sites. The standard `tools/sandbox.sh shot` command produces the original capture manifests. Save `mod/run/sandbox/logs/latest.log` before stopping/restarting the client.
+
+The renderer is pinned by the sandbox to half resolution and 28 steps. GPU times are the FX-layer one-second averages logged at the same effect ages; they include other FX passes and the new light prepass. The reported ratio is the median pointwise PR / mean(main A, main B), over matched ages. Main B / A is the independent reference repeat. No power profile, frame cap or game setting was changed for this comparison.
+
+PNG pairs preserve the original pixels, with a black label strip added above. The GIF crops the same foot region on both sides, uses one shared palette, and plays the half-second frames at their recorded rate. WAV files are unmodified stereo PCM 48 kHz excerpts from seconds 45–55, with no gain or resampling. `make_media.py` is the one-off packer; its local input paths refer to the worktrees and captures on the laptop.
