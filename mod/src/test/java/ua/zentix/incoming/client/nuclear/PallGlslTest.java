@@ -704,7 +704,8 @@ class PallGlslTest {
         // свет пелены в экран — один раз на канал; свечение грибов — плёночной кривой поверх: сумма с пеленой в линейном
         // (её экран обратно — один раз) и в экран — ещё раз на канал
         assertEquals(6, occurrences(march, "pallDisplay("), "свет пелены в экран — один раз на канал, свечение грибов поверх — ещё раз");
-        assertTrue(march.contains("vec3 lin = pallLinear3(shown) + mushFilm3(emitted);"), "свечение грибов — плёночной кривой поверх пелены");
+        assertTrue(march.contains("vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);"), "свечение шара — плёночной кривой поверх пелены");
+        assertTrue(march.contains("vec3 shown = pallShown(light + heat, cover);"), "свечение свернувшейся шапки — прежним путём, с пеленой");
         assertTrue(march.contains("shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover"),
                 "на выходе — экран с плечом");
         assertTrue(march.contains("shownCover = min(cover * lum, 1.0);"), "пересвет — в долю пикселя, не больше всего пикселя");

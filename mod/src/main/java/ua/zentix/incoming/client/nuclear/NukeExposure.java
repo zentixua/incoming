@@ -43,6 +43,11 @@ public final class NukeExposure {
     public static final double WHITE = 0.35;
     /** Постоянная, с которой экспозиция кадра догоняет вспышку, с (подача: автоэкспозиция камеры). */
     public static final double ADAPT_S = 0.2;
+    /**
+     * Доли кольца ({@code MushroomModel.rollUp}), на которых свечение уходит с плёночной кривой на прежний путь ({@link #filmShare};
+     * у 15 кт — с ~5 до ~7 с, у 1 кт — с ~2,5 до ~3,7 с).
+     */
+    public static final double ROLL_FROM = 0.15, ROLL_TO = 0.45;
 
     private NukeExposure() {}
 
@@ -53,6 +58,16 @@ public final class NukeExposure {
     public static double gain(double key, double adapt) {
         double r = Math.pow(Math.max(key, 0), 1 - FOLLOW) * Math.pow(Math.max(adapt, 1e-9), FOLLOW) / KEY;
         return 1 / Math.sqrt(1 + r * r);
+    }
+
+    /**
+     * Доля свечения гриба на плёночной кривой при доле кольца {@code roll} ({@code mushFilmShare}): пока шар — шар, вся;
+     * свернувшаяся шапка — прежним путём, с пеленой (пересвет — в долю пикселя одним оттенком, {@link #pixel}): кривая по
+     * каналам белила её оранжевое нутро ночью и меняла его сквозь мглу (ревью #441), а гриб на 7–10 с — прежний.
+     */
+    public static double filmShare(double roll) {
+        double u = Math.max(0, Math.min(1, (roll - ROLL_FROM) / (ROLL_TO - ROLL_FROM)));
+        return 1 - u * u * (3 - 2 * u);
     }
 
     /** Плёночная кривая по каналу (ACES, приближение Narkowicz 2016): вход — свет с экспозицией, выход — линейный 0..1. */
@@ -91,6 +106,48 @@ public final class NukeExposure {
         double[] c = new double[3];
         cap(r, g, b, adapt, c);
         return Math.pow(Math.min(1, 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]), 1 / 2.2);
+    }
+
+    /**
+     * Пиксель пелены на экране — копия конца {@code main} в {@code fx_pall}: {@code light} — рассеянный свет (линейный, сумма
+     * по лучу с ослаблением), {@code heat} — свечение грибов как есть, {@code emitted} — оно же с экспозицией шара (с тем же
+     * ослаблением), {@code film} — доля плёночной кривой ({@link #filmShare}), {@code cover} — доля пикселя, закрытая
+     * веществом (не дымкой); в {@code out} — цвет на экране с умноженной долей (rgb). Прежний путь — свечение со светом
+     * ({@link #shown}); кривая — свечение с экспозицией плёночной кривой поверх света, в линейном; между ними — смесь
+     * готовых картинок.
+     */
+    static void pixel(double[] light, double[] heat, double[] emitted, double film, double cover, double[] out) {
+        double[] sum = new double[3];
+        for (int c = 0; c < 3; c++) sum[c] = light[c] + heat[c];
+        shown(sum, cover, out);
+        if (film <= 0) return;
+        double[] base = new double[3], f = new double[3];
+        shown(light, cover, base);
+        screen(emitted[0], emitted[1], emitted[2], 1, f);
+        for (int c = 0; c < 3; c++) {
+            double curve = Math.min(PallLight.display(PallLight.linear(base[c]) + f[c]), 1);
+            out[c] += (curve - out[c]) * film;
+        }
+    }
+
+    /**
+     * Прежний путь ({@code pallShown} в {@code fx_pall}): свет как вещество (свет / cover), ярче белого — в долю пикселя тем
+     * же оттенком, к белому долей {@code CROSS}, экран, плечо выше 0,6 по ярчайшему каналу; × доля пикселя.
+     */
+    static void shown(double[] light, double cover, double[] out) {
+        double shownCover = cover;
+        double[] medium = new double[3];
+        for (int c = 0; c < 3; c++) medium[c] = light[c] / Math.max(cover, 1e-4);
+        double lum = 0.2126 * medium[0] + 0.7152 * medium[1] + 0.0722 * medium[2];
+        if (lum > 1 && cover > 1e-4) {
+            shownCover = Math.min(cover * lum, 1);
+            for (int c = 0; c < 3; c++) medium[c] *= cover / shownCover;
+        }
+        double white = PallLight.CROSS * Math.max(0.2126 * medium[0] + 0.7152 * medium[1] + 0.0722 * medium[2] - 1, 0);
+        double[] d = new double[3];
+        for (int c = 0; c < 3; c++) d[c] = PallLight.display(medium[c] + white);
+        double m = Math.max(d[0], Math.max(d[1], d[2])), k = m <= 0.6 ? 1 : (0.6 + 0.4 * (1 - Math.exp(-(m - 0.6) / 0.4))) / m;
+        for (int c = 0; c < 3; c++) out[c] = d[c] * k * shownCover;
     }
 
     /**

@@ -80,8 +80,9 @@ class NukeExposureTest {
     /**
      * Шар не превращается в ровный диск (жалоба FX 23.10: 15 кт на 3–5 с — плоский солнечный диск): на 1–5 с перепад
      * температуры по поверхности — узор шара (10-я и 90-я доли по сфере), как его рисует {@code mushAt}: T = T_окр +
-     * ΔT_ядра·доля края·p, — на экране не меньше 10 % яркости светлого, днём и ночью (камера выставлена по огню). В мере
-     * белой стены (как было) перепад — ноль.
+     * ΔT_ядра·доля края·p, — на экране не меньше 10 % яркости светлого, днём и ночью (камера выставлена по огню), пока
+     * шар — шар (доля кольца до {@link NukeExposure#ROLL_FROM}: свечение целиком на плёночной кривой); у 15 кт это все
+     * 1–5 с. В мере белой стены (как было) перепад — ноль.
      */
     @Test
     void fireballKeepsItsPatternFromOneToFiveSeconds() {
@@ -91,6 +92,9 @@ class NukeExposureTest {
             for (boolean surface : new boolean[]{false, true}) {
                 double hob = surface ? 0 : 240 * Math.cbrt(y);
                 for (double t = 1; t <= 5 + 1e-9; t += 0.5) {
+                    double roll = MushroomModel.rollUp(t, y, surface);
+                    if (y == 15) assertTrue(NukeExposure.filmShare(roll) > 0.99, "15 кт на " + t + " с — ещё шар");
+                    if (NukeExposure.filmShare(roll) < 0.99) continue;
                     double[] ball = new double[2];
                     MushroomField.ballSurface(t, hob, y, surface, d.rises(), ball);
                     double contrast = MushroomFieldContrast.of(ball[0]);
@@ -113,6 +117,99 @@ class NukeExposureTest {
         // как было: в мере белой стены у 15 кт на 3 с днём перепада нет вовсе
         double core = MushroomModel.coreTemperature(3, 15, false), dT = core - FireballModel.AMBIENT_K;
         assertEquals(0, clipped(FireballModel.AMBIENT_K + 0.9 * dT, DAY) - clipped(FireballModel.AMBIENT_K + 1.1 * dT, DAY), 1e-9);
+    }
+
+    /**
+     * Свернувшаяся шапка — прежним путём, и сквозь мглу и пыль тоже (ревью #441: кривая по каналам у шапки на 7–10 с белила
+     * её оранжевое нутро ночью и гасила его сквозь мглу; проверка одной экспозиции этого не видит — кривая меняет свечение
+     * и при экспозиции 1). 15 кт в воздухе на 7 и 10 с, днём и ночью: горячее нутро в просвете клубов (ядро) и край шапки,
+     * вещество закрывает 30 % и весь пиксель, мгла и пыль перед ним пропускают 100, 30 и 5 % — пиксель пелены
+     * ({@link NukeExposure#pixel}, копия конца {@code main} в {@code fx_pall}) тот же, что у прежнего пути (свечение — со
+     * светом). С кривой на всё (доля 1, как в первом варианте PR) он другой. Переход с кривой на прежний путь — без скачков.
+     */
+    @Test
+    void rolledCapIsComposedAsBeforeThroughHaze() {
+        double worst = 0;
+        for (double t : new double[]{7, 10}) {
+            double roll = MushroomModel.rollUp(t, 15, false), film = NukeExposure.filmShare(roll);
+            assertEquals(0, film, 1e-12, t + " с: шапка свернулась (доля кольца " + roll + ")");
+            double edge = MushroomModel.edgeTemperature(t, 15, false), core = MushroomModel.coreTemperature(t, 15, false);
+            for (double adapt : new double[]{DAY, NIGHT}) {
+                for (double kelvin : new double[]{core, edge}) {
+                    for (double haze : new double[]{1, 0.3, 0.05}) {
+                        for (double matter : new double[]{1, 0.3}) {
+                            double gain = NukeExposure.gain(BlackBody.luminance(edge) * adapt * haze, adapt), k = haze * matter;
+                            double[] light = new double[3], heat = new double[3], emitted = new double[3], before = new double[3];
+                            cap(kelvin, adapt, k, gain, light, heat, emitted, before);
+                            double[] now = new double[3], curve = new double[3];
+                            NukeExposure.pixel(light, heat, emitted, film, k, now);
+                            NukeExposure.pixel(light, heat, emitted, 1, k, curve);
+                            String at = String.format(Locale.ROOT, "%.0f с %s, %.0f K, мгла %.2f, вещество %.1f", t, adapt == DAY ? "день" : "ночь",
+                                    kelvin, haze, matter);
+                            for (int c = 0; c < 3; c++) {
+                                assertEquals(before[c], now[c], 1e-12, at + ", канал " + c);
+                                worst = Math.max(worst, Math.abs(curve[c] - before[c]));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(worst > 0.1, "кривая на всё меняла бы шапку заметно: " + worst);
+        // переход с кривой на прежний путь (15 кт, 4–8 с, ночь, сквозь мглу 0,3): кадр 0,05 с меняет пиксель не больше
+        // чем на 0,03 экрана по каналу
+        double[] last = null;
+        for (double t = 4; t <= 8; t += 0.05) {
+            double film = NukeExposure.filmShare(MushroomModel.rollUp(t, 15, false));
+            double edge = MushroomModel.edgeTemperature(t, 15, false), gain = NukeExposure.gain(BlackBody.luminance(edge) * NIGHT * 0.3, NIGHT);
+            double[] light = new double[3], heat = new double[3], emitted = new double[3], before = new double[3], px = new double[3];
+            cap(MushroomModel.coreTemperature(t, 15, false), NIGHT, 0.3, gain, light, heat, emitted, before);
+            NukeExposure.pixel(light, heat, emitted, film, 0.3, px);
+            if (last != null) for (int c = 0; c < 3; c++) assertTrue(Math.abs(px[c] - last[c]) < 0.03, "скачок на " + t + " с, канал " + c);
+            last = px;
+        }
+    }
+
+    /**
+     * Пиксель свернувшейся шапки: свечение чёрного тела {@code kelvin} (с привыканием глаза {@code adapt}) и свет неба на ней,
+     * пропущенные долей {@code k} (мгла × вещество): разложение по путям — в {@code light}, {@code heat}, {@code emitted}, а
+     * прежний путь целиком (свечение со светом, как в main) — в {@code before}.
+     */
+    private static void cap(double kelvin, double adapt, double k, double gain, double[] light, double[] heat, double[] emitted, double[] before) {
+        double[] l = new double[4], all = new double[3];
+        BlackBody.light(kelvin, l);
+        for (int c = 0; c < 3; c++) {
+            double sky = adapt > 1 ? 0.02 : 0.2;
+            light[c] = k * sky;
+            heat[c] = k * l[c] * adapt;
+            emitted[c] = heat[c] * gain;
+            all[c] = light[c] + heat[c];
+        }
+        NukeExposure.shown(all, k, before);
+    }
+
+    /**
+     * Конец {@code main} в {@code fx_pall} — тот, что копирует {@link NukeExposure#pixel}, а свечение гриба делится между
+     * кривой и прежним путём по доле кольца.
+     */
+    @Test
+    void shaderComposesAsTheJavaCopy() throws IOException {
+        String fx;
+        try (InputStream in = NukeExposureTest.class.getResourceAsStream("/assets/incoming/shaders/core/fx_pall.fsh")) {
+            assertNotNull(in, "fx_pall.fsh");
+            fx = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        for (String line : new String[]{"vec3 medium = light / max(cover, 1e-4);", "shownCover = min(cover * lum, 1.0);",
+                "medium *= cover / shownCover;", "medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));",
+                "return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover;",
+                "vec3 shown = pallShown(light + heat, cover);",
+                "vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);",
+                "shown = mix(shown, min(vec3(pallDisplay(lin.r), pallDisplay(lin.g), pallDisplay(lin.b)), vec3(1.0)), film);",
+                "float film = clamp(filmed / max(dot(heat, LUMA), 1e-30), 0.0, 1.0);",
+                "hot = st * thermal * (1.0 - fromCarpet);", "glow = hot * mushBallGain(key, PallExposure);",
+                "film = dot(hot, LUMA) * mushFilmShare(roll);"}) {
+            assertTrue(fx.contains(line), "в fx_pall нет: " + line);
+        }
     }
 
     /** Помощник: видимость узора по месту кадра ({@code mushBallContrast}): до отрыва фронта он проступает. */

@@ -609,12 +609,22 @@ const float MUSH_FILM_KEY = 0.233;
 const float MUSH_FILM_FOLLOW = 0.15;
 // выше белого — эта доля связи каналов (pack.py: white)
 const float MUSH_FILM_WHITE = 0.35;
+// Плёночной кривой идёт свечение, пока шар — шар: со сворачиванием в кольцо (доля кольца, MushroomModel.rollUp) — плавно
+// к прежнему пути (свет с пеленой, пересвет в долю пикселя одним оттенком): на этих долях кольца — от кривой к нему
+const float MUSH_FILM_ROLL_FROM = 0.15;
+const float MUSH_FILM_ROLL_TO = 0.45;
 
 // Во сколько раз экспозиция шара темнее кадра, когда его ядро светит key (линейный, белая стена — 1, с привыканием глаза
 // к небу adapt: днём 1, ночью ~1 200)
 float mushBallGain(float key, float adapt) {
     float r = pow(max(key, 0.0), 1.0 - MUSH_FILM_FOLLOW) * pow(max(adapt, 1e-9), MUSH_FILM_FOLLOW) / MUSH_FILM_KEY;
     return 1.0 / sqrt(1.0 + r * r);
+}
+
+// Доля свечения гриба на плёночной кривой при доле кольца roll (NukeExposure.filmShare): шар — вся, свернувшаяся шапка —
+// ни капли: у неё прежний путь, где горячее нутро в просветах клубов горит оранжевым сквозь мглу
+float mushFilmShare(float roll) {
+    return 1.0 - smoothstep(MUSH_FILM_ROLL_FROM, MUSH_FILM_ROLL_TO, roll);
 }
 
 // Плёночная кривая по каналу (ACES, приближение Narkowicz 2016): свет с экспозицией → линейный 0..1
