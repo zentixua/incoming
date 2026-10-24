@@ -492,6 +492,33 @@ public final class FarSprites implements SmokePuffs.Out {
         if (billboard(dx, dy, dz, radius * DISC, 0, FxAtlas.disc(), r, g, b, 0, soft)) counts[2]++;
     }
 
+    /**
+     * Светящийся круг в своей плоскости (срез горячего сопла, {@code PlumeRenderer}): центр c от камеры, a и b — его
+     * радиусы по двум осям плоскости (круг {@code far/disc} того же потока, квадрат — в {@link #DISC} раз больше); сбоку
+     * он сходит в отрезок, как настоящий срез. Свет (r, g, bl) на экране, только светит; без мягкости у рельефа: за
+     * срезом в сантиметрах — сам корпус. Сортируется по ключу key.
+     */
+    public void glowPlate(Vector3f c, Vector3f a, Vector3f b, float r, float g, float bl, float key) {
+        if (r + g + bl < 0.006f) return;
+        FxAtlas.Sprite s = FxAtlas.disc();
+        r = Math.min(1, r);
+        g = Math.min(1, g);
+        bl = Math.min(1, bl);
+        out.quad(key);
+        plateCorner(c, a, b, -1, -1, s.u0(), s.v0(), r, g, bl);
+        plateCorner(c, a, b, -1, 1, s.u0(), s.v1(), r, g, bl);
+        plateCorner(c, a, b, 1, 1, s.u1(), s.v1(), r, g, bl);
+        plateCorner(c, a, b, 1, -1, s.u1(), s.v0(), r, g, bl);
+        counts[2]++;
+    }
+
+    private void plateCorner(Vector3f c, Vector3f a, Vector3f b, float sa, float sb, float u, float v, float r, float g, float bl) {
+        float k = (float) DISC;
+        float x = c.x + (a.x * sa + b.x * sb) * k, y = c.y + (a.y * sa + b.y * sb) * k, z = c.z + (a.z * sa + b.z * sb) * k;
+        float f = (float) FarDraw.fold(Math.sqrt(x * x + y * y + z * z), far);
+        out.vertex(x * f, y * f, z * f, u, v, r, g, bl, 0, 0, f, LightTexture.FULL_BRIGHT, 0);
+    }
+
     /** Вуаль трубки следа вокруг глаза — на столько блоков перед ним (как у облаков, {@link SmokePuffs#VEIL_AT}). */
     static final double VEIL_AT = SmokePuffs.VEIL_AT;
 

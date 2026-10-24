@@ -19,7 +19,7 @@
 //   9 = (ω' юбки rgb; g')
 //  10 = (воздух вокруг, K; перепад температуры ядра, K; низ шапки; плитка клубов ножки)
 //  11 = (подъём струй ножки, блоки — MushroomModel.stemRise; верх дыма шторма — тот же, что у его столбов в пелене;
-//        радиус зоны пожаров; 0)
+//        радиус зоны пожаров; высота слияния подсоса с ножкой, блоки — MushroomField.foot)
 //  12 = (свет пожаров под грибом rgb, как у пелены: карта огня шторма и свет кадра; часы кипения шапки, рад)
 //  13 = (середина стенки столба воды по радиусу; её полутолщина; верх стенки — середина короны; ослабление, 1/блок;
 //        0 — столба нет)
@@ -33,6 +33,9 @@
 //        MUSH_SHADOW_RECT)
 //  18 = (верх мира над землёй под эпицентром — верхний слой карты тени; отражение земли под грибом rgb — верх слоя пыли
 //        у основания ножки, MushroomField.groundUnder; MUSH_SHADOW_TOP)
+//  19 = (подсос у основания ножки, MushroomField.foot: верх слоя пыли у стенки ножки, блоки; его ослабление у земли
+//        × доля гриба, 1/блок; доля подсоса; докуда поднялся воздух ножки с начала подсоса, блоки; 0 — подсоса нет)
+//  20..35 = 64 высоты оптического столба поднятой пыли; 36..67 = столб выше края полосы на 128 радиусах (FootColumn)
 
 const int MUSHROOMS = 4;
 const int MUSH_BB_ROW = 4;
@@ -131,6 +134,11 @@ struct Mush {
     float billows;
     float ballFrame;
     float ballShare;
+    float footTop;
+    float footSigma;
+    float footShare;
+    float footRise;
+    float footMerge;
 };
 
 Mush mushLoad(sampler2D data, int k) {
@@ -138,12 +146,13 @@ Mush mushLoad(sampler2D data, int k) {
     vec4 t3 = texelFetch(data, ivec2(3, k), 0), t4 = texelFetch(data, ivec2(4, k), 0), t6 = texelFetch(data, ivec2(6, k), 0);
     vec4 t8 = texelFetch(data, ivec2(8, k), 0), t10 = texelFetch(data, ivec2(10, k), 0), t11 = texelFetch(data, ivec2(11, k), 0);
     vec4 t12 = texelFetch(data, ivec2(12, k), 0), t13 = texelFetch(data, ivec2(13, k), 0), t15 = texelFetch(data, ivec2(15, k), 0);
-    vec4 t16 = texelFetch(data, ivec2(16, k), 0);
+    vec4 t16 = texelFetch(data, ivec2(16, k), 0), t19 = texelFetch(data, ivec2(19, k), 0);
     // эпицентр в таблице — x, z и земля по y (как у слота пелены): в место — x, y, z
     return Mush(t0.xzy, t1.xy, t1.z, t1.w, t2.x, t2.y, t2.z, t2.w, t3.x, t3.y, t3.z, t3.w, t4.x, t4.y, t4.z, t4.w,
             texelFetch(data, ivec2(5, k), 0), t6.x, t6.y, t6.z, t6.w, texelFetch(data, ivec2(7, k), 0), t8.x, t8.y, t8.z, t8.w,
             texelFetch(data, ivec2(9, k), 0), t10.x, t10.y, t10.z, t10.w, t11.x, t11.y, t11.z, t12.rgb, t12.w,
-            t13.x, t13.y, t13.z, t13.w, texelFetch(data, ivec2(14, k), 0), t15.x, t15.y, t15.z, t15.w, t16.x, t16.y, t16.z, t16.w);
+            t13.x, t13.y, t13.z, t13.w, texelFetch(data, ivec2(14, k), 0), t15.x, t15.y, t15.z, t15.w, t16.x, t16.y, t16.z, t16.w,
+            t19.x, t19.y, t19.z, t19.w, t11.w);
 }
 
 // есть ли гриб k в кадре
@@ -162,6 +171,83 @@ float mushStemR(float w, float stemR, float flare) {
     float x = clamp(w, 0.0, 1.0);
     float base = pow(1.0 - x, 6.0);
     return stemR * (0.85 + 0.45 * x * x) + flare * base;
+}
+
+// Подсос у основания ножки (MushroomField.footWidth, footShare, footDensity, footBand): ветер к ножке у земли
+// (afterwinds) несёт слой пыли волны в неё и поворачивает вверх по её стенке — течение в углу «земля — стенка» (ψ = x·z:
+// линия тока, что вдали идёт по верху слоя top, у стенки уходит вверх, x·z → top²). Полоса воздуха слоя за стенкой ножки
+// на высоте h — top/√(1 + (h/top)²) (то же, сглаженное у земли; ⚠ угол плоский, у ножки радиус того же порядка, что
+// слой). Пыль в ней — пыль слоя: ослабление у земли sigma, вверх — доля footShare (полоса тоньше, её разбавляет ножка,
+// ⚠ оценка), за вычетом той, что сам слой ещё держит на этой высоте (pallProfile): у стенки слой и подсос вместе —
+// sigma·footShare, без ступени на верху слоя. Где слой с подсосом уже не гуще самой ножки, его пыль в ней перемешана (её
+// несёт ножка, StemDust): полоса от верха слоя сужается к стенке до высоты merge, где слой с подсосом сравнивается с
+// ножкой (её считает Java, MushroomField.foot); выше фронта пыли подсоса (rise) пыли слоя ещё нет
+float mushFootWidth(float h, float top) {
+    float t = max(top, 1.0), u = h / t;
+    return t / sqrt(1.0 + u * u);
+}
+
+float mushFootShare(float h, float top) {
+    float u = h / max(top, 1.0);
+    return 1.0 / (1.0 + u * u);
+}
+
+// слой и подсос вместе у стенки на высоте h: до фронта пыли подсоса rise — пыль слоя, выше — ещё нет
+float mushFootBoth(float h, float top, float sigma, float rise) {
+    float t = max(top, 1.0);
+    return sigma * mushFootShare(h, t) * clamp((rise - h) / t, 0.0, 1.0);
+}
+
+// ослабление подсоса на высоте h без доли края: share — его доля (у края подсоса полоса уже; густота пыли в ней — слоя:
+// воздух несёт её, не разбавляя)
+float mushFootDensity(float h, float top, float sigma, float share, float rise) {
+    if (h < 0.0) return 0.0;
+    if (share <= 0.0) return 0.0;
+    return max(mushFootBoth(h, top, sigma, rise) - sigma * pallProfile(h / max(top, 1.0)), 0.0);
+}
+
+// доля полосы подсоса на высоте h: от верха слоя (или половины высоты слияния, если она ниже) сходит на нет к высоте
+// слияния merge (густота — нет: у слияния она и так — ножки) (+ 1e-6: у слияния на земле края нет — smoothstep с равными краями не определён)
+float mushFootNarrow(float h, float top, float merge) {
+    return 1.0 - smoothstep(min(top, 0.5 * merge), merge + 1e-6, h);
+}
+
+// полоса подсоса за стенкой ножки на высоте h: сужается к стенке до высоты слияния
+float mushFootBand(float h, float top, float share, float merge) {
+    if (share <= 0.0) return 0.0;
+    return share * mushFootWidth(max(h, 0.0), top) * mushFootNarrow(h, top, merge);
+}
+
+// Слабая азимутальная доля притока — подача: данных о закрутке у основания нет.
+const float MUSH_FOOT_TURN = 0.6;
+
+// доля подсоса на rho от оси у ножки радиуса r: он — у стенки и наружу; внутри ножки пыль — её своя (StemDust), с
+// подсосом во всю ножку внутри она стояла бы густотой ковра до фронта пыли подсоса — кольцом поперёк ножки
+float mushFootWall(float rho, float r) {
+    return smoothstep(0.6 * r, r, rho);
+}
+
+// Доля света ковра в точке: в чистом притоке у входа — ровно 1, внутри прежней ножки без притока — 0;
+// к высоте слияния — прежний свет ножки. Смешивается функция источника, а не готовый цвет пикселя поверх дыма.
+float mushFootLightShare(float h, float top, float merge, float carried, float total) {
+    return clamp(carried / max(total, 1e-7), 0.0, 1.0) * mushFootNarrow(h, top, merge);
+}
+
+// Доля движущегося воздуха ковра у основания: только внешний край ножки и ближайший ковёр, до высоты слияния.
+// К шапке, внутрь ножки и на дальнюю мглу эта карта течения не доходит.
+float mushFootInfluence(float h, float rho, float r, float top, float share, float merge) {
+    if (h < 0.0) return 0.0;
+    if (share <= 0.0) return 0.0;
+    if (merge <= 0.0) return 0.0;
+    if (h >= merge) return 0.0;
+    float t = max(top, 1.0);
+    return share * mushFootWall(rho, r) * (1.0 - smoothstep(r + t, r + 2.0 * t, rho)) * mushFootNarrow(h, t, merge);
+}
+
+// Поворот потока от горизонтального притока к подъёму. Геометрия поворота — оценка; путь — stemRise модели.
+float mushFootUp(float h, float top) {
+    float t = max(top, 1.0);
+    return smoothstep(0.25 * t, 1.25 * t, h);
 }
 
 // мера места в сечении кольца: 1 — на его краю (rho — от оси по горизонтали, y — от середины кольца)
@@ -334,12 +420,54 @@ float mushStemSigma(Mush m, float h) {
     return m.stemTau / (2.0 * mushStemAt(m, h)) * topFade;
 }
 
+// полоса подсоса за стенкой ножки на высоте h места тела, блоки, и радиус подсоса: ножка и эта полоса
+float mushFootBandAt(Mush m, float h) {
+    return mushFootBand(h, m.footTop, m.footShare, m.footMerge);
+}
+
+float mushFootAt(Mush m, float h) {
+    return mushStemAt(m, h) + mushFootBandAt(m, h);
+}
+
+float mushFootSigma(Mush m, float h) {
+    return mushFootDensity(h, m.footTop, m.footSigma, m.footShare, min(m.footRise, m.stemTop));
+}
+
+const int MUSH_FOOT_COLUMNS = 20;
+const int MUSH_FOOT_NODES = 64;
+const int MUSH_FOOT_EDGES = 36;
+const int MUSH_FOOT_EDGE_NODES = 128;
+
+// Две таблицы FootColumn (CPU): интеграл по высоте и часть выше края сужающейся полосы на данном радиусе.
+float mushFootTable(sampler2D data, int k, int first, int nodes, float fraction) {
+    float u = clamp(fraction, 0.0, 1.0) * float(nodes - 1);
+    int i = min(int(u), nodes - 2), j = i + 1;
+    vec4 a = texelFetch(data, ivec2(first + i / 4, k), 0), b = texelFetch(data, ivec2(first + j / 4, k), 0);
+    return mix(a[i % 4], b[j % 4], u - float(i));
+}
+
+float mushFootColumn(sampler2D data, int k, Mush m, float h) {
+    return mushFootTable(data, k, MUSH_FOOT_COLUMNS, MUSH_FOOT_NODES, h / max(m.footMerge, 1e-6));
+}
+
+// band(h) монотонно сужается. Над её краем на этом радиусе пыли нет: вычесть col(hEdge), а не тень всей стенки.
+float mushFootRemoved(sampler2D data, int k, Mush m, float offset) {
+    return mushFootTable(data, k, MUSH_FOOT_EDGES, MUSH_FOOT_EDGE_NODES,
+            max(offset, 0.0) / max(mushFootBandAt(m, 0.0), 1e-6));
+}
+
 // Ослабление шапки, ножки, юбки и столба воды в месте q без шума — среднее по клубам (край размыт на размах клубов): для
 // толщи к свету и квадратов слоя; без столба его край не считается (стенка нулевой толщины — край нулевой ширины)
 vec4 mushMean(Mush m, vec3 q) {
     vec4 d = mushDist(m, q);
-    vec4 s = vec4(m.capSigma * mushEdge(d.x, 0.5 * MUSH_CAP_LOBES * m.billows * mushCapUnit(m)),
-            mushStemSigma(m, q.y) * mushEdge(d.y, 0.5 * MUSH_STEM_LOBES * mushStemAt(m, q.y)),
+    float r = mushStemAt(m, q.y), rho = length(q.xz), soft = 0.5 * MUSH_STEM_LOBES * r;
+    float stem = mushStemSigma(m, q.y) * mushEdge(d.y, soft);
+    // Выше слияния нет добавки: не считать профиль ковра на каждом отсчёте толщи всей шапки и ножки.
+    if (m.footShare > 0.0 && q.y >= 0.0 && q.y < m.footMerge) {
+        float band = mushFootBandAt(m, q.y);
+        if (rho < r + band + soft) stem = max(stem, mushFootSigma(m, q.y) * mushFootWall(rho, r) * mushEdge(rho - r - band, soft));
+    }
+    vec4 s = vec4(m.capSigma * mushEdge(d.x, 0.5 * MUSH_CAP_LOBES * m.billows * mushCapUnit(m)), stem,
             m.skirtSigma * mushEdge(d.z, 0.5 * MUSH_SKIRT_LOBES * mushSkirtUnit(m)), 0.0);
     if (m.colSigma > 0.0) s.w = m.colSigma * mushEdge(d.w, 0.5 * MUSH_COLUMN_LOBES * mushColumnUnit(m));
     return s;
@@ -358,9 +486,15 @@ float mushGap(Mush m, vec3 q) {
         gap = min(ring, dome) - MUSH_CAP_REACH * mushCapUnit(m);
     }
     if (m.stemTau > 0.0) {
-        // наклон радиуса ножки с клубами: раструб у земли (−6·раструб) и у шапки (+0,9·радиус) на высоту шапки
+        // Выше слияния — исходный зазор ножки. Ниже — только настоящая полоса; производная её сужения
+        // ограничена 1.5/(merge-start), а производная ширины — 2/(3√3).
         float slope = (1.0 + MUSH_STEM_REACH) * max(0.9 * m.stemR, 6.0 * m.stemFlare) / max(m.capBot, 1.0);
-        float radial = (rho - (1.0 + MUSH_STEM_REACH) * mushStemAt(m, q.y)) / sqrt(1.0 + slope * slope);
+        float foot = mushFootBandAt(m, q.y);
+        if (m.footShare > 0.0 && q.y < m.footMerge) {
+            float span = m.footMerge - min(m.footTop, 0.5 * m.footMerge) + 1e-6;
+            slope += m.footShare * (0.385 + 1.5 * max(m.footTop, 1.0) / span);
+        }
+        float radial = (rho - (1.0 + MUSH_STEM_REACH) * mushStemAt(m, q.y) - foot) / sqrt(1.0 + slope * slope);
         gap = min(gap, max(radial, max(q.y - m.stemTop, -0.02 * m.capBot - q.y)));
     }
     if (m.skirtSigma > 0.0) {

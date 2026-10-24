@@ -2,6 +2,7 @@ package ua.zentix.incoming.registry;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -94,6 +95,12 @@ public final class ModEntities {
                     .build(Incoming.MOD_ID + ":interceptor"));
 
     private ModEntities() {}
+
+    /** Rebuilt from chunk surface marks; never save a second copy of the damage as entities. */
+    public static final DeferredHolder<EntityType<?>, EntityType<Display.BlockDisplay>> SURFACE_DAMAGE = REGISTER.register("surface_damage",
+            () -> EntityType.Builder.<Display.BlockDisplay>of(Display.BlockDisplay::new, MobCategory.MISC)
+                    .sized(1, 0.2f).clientTrackingRange(8).updateInterval(20)
+                    .fireImmune().noSummon().noSave().build(Incoming.MOD_ID + ":surface_damage"));
 
     /** Сущность, которой летит оружие (у B-2 — сам бомбардировщик до сброса): из паспорта оружия. */
     public static EntityType<? extends StrikeProjectile> of(WeaponType weapon) {

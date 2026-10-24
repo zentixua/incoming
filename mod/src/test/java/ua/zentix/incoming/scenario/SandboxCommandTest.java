@@ -30,6 +30,8 @@ class SandboxCommandTest {
         assertTrue(SandboxCommand.parse("flight drone 600 own").own());
         assertTrue(SandboxCommand.parse("launch missile own").own());
         assertFalse(SandboxCommand.parse("flight drone 600").own());
+        assertTrue(SandboxCommand.parse("surface 0.01 black").effect());
+        assertEquals(0.9, SandboxCommand.parse("surface 0.9 gray").number(0));
     }
 
     /**
@@ -115,8 +117,16 @@ class SandboxCommandTest {
     void badCommandsFailBeforeRunning() {
         for (String bad : new String[]{"", "boom", "blast", "blast tank", "blast nuke", "nuke 40", "nuke 5 high", "cam far",
                 "fire 99", "hud maybe", "again now", "time noon", "time -100", "time 3e9", "time 13000.5", "zoom 0.5", "zoom",
-                "zoom 1000", "flight drone own 600", "flight drone 600 mine", "flight drone 0", "flight drone 9000", "flight drone NaN", "track maybe"}) {
+                "zoom 1000", "surface 0", "surface 1.1", "surface NaN", "surface 0.5 red", "flight drone own 600", "flight drone 600 mine", "flight drone 0", "flight drone 9000", "flight drone NaN", "track maybe"}) {
             assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse(bad), bad);
         }
+    }
+
+    @Test
+    void spentNeedsADroppableBooster() {
+        assertEquals(SandboxCommand.Verb.SPENT, SandboxCommand.parse("spent missile 30").verb());
+        assertEquals(SandboxCommand.Verb.SPENT, SandboxCommand.parse("spent drone").verb());
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("spent rocket"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("spent missile 500"));
     }
 }

@@ -76,6 +76,7 @@ import ua.zentix.incoming.client.sound.InterceptorSound;
 import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.entity.DebrisEntity;
+import ua.zentix.incoming.entity.SpentBoosterEntity;
 import ua.zentix.incoming.entity.InterceptorEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.net.C2S;
@@ -163,6 +164,7 @@ public final class IncomingClient {
         e.registerEntityRenderer(ModEntities.BUNKER_BUSTER.get(), ctx -> new StrikeProjectileRenderer<>(ctx, ClientWeaponSpec.BUNKER.airframe(true).model()));
         e.registerEntityRenderer(ModEntities.ICBM.get(), ctx -> new StrikeProjectileRenderer<>(ctx, ClientWeaponSpec.NUKE.airframe().model()));
         e.registerEntityRenderer(ModEntities.DEBRIS.get(), DebrisRenderer::new);
+        e.registerEntityRenderer(ModEntities.SURFACE_DAMAGE.get(), ua.zentix.incoming.client.render.SurfaceDamageRenderer::new);
         e.registerEntityRenderer(ModEntities.LAUNCHER.get(), LauncherRenderer::new);
         e.registerEntityRenderer(ModEntities.SPENT_BOOSTER.get(), SpentBoosterRenderer::new);
         e.registerEntityRenderer(ModEntities.INTERCEPTOR.get(), InterceptorRenderer::new);
@@ -205,12 +207,13 @@ public final class IncomingClient {
         e.registerAbove(VanillaGuiLayers.SCOREBOARD_SIDEBAR, Incoming.id("radar_scope"), RadarScope::render);
     }
 
-    /** Двигатели снарядов (факел, шлейф, облако пуска) и горящие обломки — после тика сущности в мире клиента. */
+    /** Двигатели снарядов (факел, шлейф, облако пуска), горящие обломки и дым ускорителя — после тика сущности в мире клиента. */
     private static void entityTick(EntityTickEvent.Post e) {
         Entity entity = e.getEntity();
         if (!entity.level().isClientSide) return;
         if (entity instanceof StrikeProjectile p) Exhaust.tick(p);
         else if (entity instanceof DebrisEntity d) Exhaust.debris(d);
+        else if (entity instanceof SpentBoosterEntity b) Exhaust.spent(b);
         else if (entity instanceof InterceptorEntity i) {
             Exhaust.interceptor(i);
             InterceptorSound.tick(i);

@@ -13,6 +13,7 @@ import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
+import ua.zentix.incoming.client.fx.plume.NozzleGlow;
 import ua.zentix.incoming.client.fx.plume.TrailModel;
 import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.client.fx.particle.Fx;
@@ -33,6 +34,7 @@ import ua.zentix.incoming.entity.IcbmEntity;
 import ua.zentix.incoming.entity.InterceptorEntity;
 import ua.zentix.incoming.entity.LauncherEntity;
 import ua.zentix.incoming.entity.RocketEntity;
+import ua.zentix.incoming.entity.SpentBoosterEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.util.Local;
 
@@ -99,6 +101,22 @@ public final class Exhaust {
         if (f == null) return null;
         ClientWeaponSpec.At n = a.nozzle(stage);
         return new Plume((float) n.y(), (float) n.z(), f, 1);
+    }
+
+    /** Горячее сопло ускорителя на снаряде: вид в этот миг и срез в системе снаряда (нос по +Z). */
+    public record Hot(NozzleGlow.Shine shine, ClientWeaponSpec.At at) {}
+
+    /**
+     * Горячее сопло стартового ускорителя, пока он на снаряде ({@link NozzleGlow}: время — настоящее, полка игрового
+     * разгона сжата в настоящую); null — ускорителя нет, он отделился или сопло ещё не посчитано.
+     */
+    @Nullable
+    public static Hot hot(StrikeProjectile e, float partial) {
+        if (!e.isActive() || !e.flightPhase().boosterLit()) return null;
+        ClientWeaponSpec.At at = nozzles(e).boosterNozzle();
+        NozzleGlow g = at == null ? null : ClientWeaponSpec.nozzleGlow(e.weapon());
+        if (g == null) return null;
+        return new Hot(g.at(g.seconds(e.flightPhase(), e.phaseAge() + partial)), at);
     }
 
     /** Сопла сущности из клиентского паспорта (у B-2 и его бомбы — свои). */
@@ -341,6 +359,25 @@ public final class Exhaust {
         } else if (moving) {
             segment(level, from, p, Fx.smoke().size(0.2f, 0.8f).life(40).color(0x8A8278, 0xA8A098).alpha(0.35f).fadeFrom(0.3f).budget(FxBudget.DEBRIS), 1.2, r);
         }
+    }
+
+    /** Прошлое место отработавшего ускорителя: дым — по отрезку пути. */
+    private static final Map<SpentBoosterEntity, Vec3> SPENT = new WeakHashMap<>();
+    /** Ускоритель дымит столько тиков падения (как прежде). */
+    static final int SPENT_SMOKE_TICKS = 70;
+
+    /**
+     * Отработавший ускоритель в падении: жидкий дымок — тлеет горячая теплозащита у сопла (⚠ сколько — не считается: прежний
+     * вид, первые 3,5 с падения), слоем эффектов, а не ванильными частицами: ванильные пишут глубину, и горячее сопло
+     * ({@code NozzleGlow}) за дымком пропадало целиком. Огня нет: тяга кончилась спадом до отделения ({@code ThrustCurve}).
+     */
+    public static void spent(SpentBoosterEntity e) {
+        if (!(e.level() instanceof ClientLevel level)) return;
+        Vec3 p = e.position();
+        Vec3 from = SPENT.put(e, p);
+        if (e.age() >= SPENT_SMOKE_TICKS || e.landed()) return;
+        segment(level, from, p, Fx.smoke().size(0.3f, 1.2f).life(50).color(0x9A948C, 0xB4AEA6).alpha(0.55f).fadeFrom(0.3f).budget(FxBudget.DEBRIS), 1.0,
+                level.random);
     }
 
     // ---------------------------------------------------------------- общее

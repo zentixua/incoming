@@ -59,8 +59,12 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   and about a block deep: craters are much smaller than in earlier versions, and that is the real size.
 - **Paving on a solid backing** cannot bend like a free wall. It is excavated with its backing, using the crater
   law for its material. In cohesive stone and concrete, a fraction of a block is saved as surface damage and shown
-  with exposed aggregate and material chips, plus nearby cracks. This approximates a
-  fractured surface; the remaining block keeps its collision shape. A shallow crater cannot open a metre-thick slab.
+  with pale fresh aggregate, small material chips and an uneven scorched edge, plus nearby cracks.
+  Deeper damage exposes a wider fracture and leaves taller chips.
+  Up to 256 composite surface displays are shown per dimension near players; only the damage data is saved.
+  The displays return when players revisit. With debris persistence enabled, ground clods remain on loose ground, and large aircraft parts and burning debris can also remain.
+  Small surface chips disperse; ground/charred fallout does not plant metre-sized blocks on intact cohesive paving.
+  This approximates a fractured surface; the remaining block keeps its collision shape. A shallow crater cannot open a metre-thick slab.
 - **A slab over a void** (a bridge deck, a roof over a room, the ceiling of a cave) is breached when the charge
   touches it and the slab is thinner than the breaching radius of the US Army demolition manual (FM 5-250): everything
   between the charge and the void within that radius is blown out, and the blast carries on into the void. This works
@@ -345,7 +349,13 @@ same up close and far away.
   nearby along its whole length above the ground, from the nozzle to the end of the glowing tail, and blocks cast shadows
   from it. A booster does not switch off: in its last moments the remaining propellant burns out and the pressure in the
   motor falls, so the flame shortens and dims and the roar fades over about half a second on the cruise missile (about a
-  tenth of a second on the Shahed's small booster) before the empty booster drops away.
+  tenth of a second on the Shahed's small booster) before the empty booster drops away. The nozzle stays hot after
+  that: seen from behind, the cruise missile's spent booster glows yellow-white in the nozzle as it separates, then
+  reddens as it cools. The Shahed's booster burns for only 2.5 seconds and its nozzle is small, so it fades within a few
+  seconds. By day the glow is visible only in the first seconds; at night it stays visible longer. Empty boosters are
+  cleaned up after 5 seconds on the ground or 20 seconds after separation, whichever comes first. Before cleanup,
+  both the body and its glow fade together over 2 seconds, becoming invisible one second before removal. This cleanup
+  is **not physical**; the physical cooling model continues beneath the fade, but its longer cooling times are not shown.
 - **Engines without a flame**: the Shahed's piston engine, the cruise missile's jet engine and the Lancet's electric
   motor show no flame and leave no visible smoke.
 - **Smoke trails**: boosters with aluminium in their fuel and the ICBM leave thick white smoke, and the Grad leaves a

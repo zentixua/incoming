@@ -120,6 +120,12 @@ public final class FxLayer {
             Incoming.LOG.error("Nuclear dust pall shaders failed to load: no dust pall", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_foot"), DefaultVertexFormat.POSITION), s -> PallPass.footLighting = s);
+        } catch (IOException ex) {
+            PallPass.footLighting = null;
+            Incoming.LOG.error("Stem foot lighting shader failed to load: using stem lighting at the foot", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_mush_shadow"), DefaultVertexFormat.POSITION), s -> PallPass.shadow = s);
         } catch (IOException ex) {
             PallPass.shadow = null;

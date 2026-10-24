@@ -10,6 +10,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
@@ -209,28 +210,213 @@ public final class SurfaceSupportGameTests {
     }
 
     @GameTest(template = "range", timeoutTicks = 80, batch = "blast_surface_rubble", skyAccess = true)
-    public static void surfaceRubbleIsSavedVisibleBeyondCrackRangeAndClearedWithTheBlock(GameTestHelper h) {
+    public static void surfaceRubbleIsTransientRebuiltAndClearedWithTheBlock(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos top = h.absolutePos(C.above(3));
         level.setBlock(top, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
         SurfaceDamage.mark(level, top, level.getBlockState(top), 0.4);
-        var mark = level.getChunkAt(top).getData(ModAttachments.SURFACE_DAMAGE).stream()
-                .filter(m -> m.pos().equals(top)).findFirst().orElseThrow();
-        h.assertTrue(!mark.rubble().isEmpty(), "surface damage is only an invisible number");
-        for (UUID id : mark.rubble()) {
-            var entity = level.getEntity(id);
-            h.assertTrue(entity instanceof net.minecraft.world.entity.Display.BlockDisplay, "missing saved rubble display");
-            h.assertTrue(entity.shouldRenderAtSqrDistance(64 * 64), "rubble inherits the 32 m crack limit");
-            var saved = entity.saveWithoutId(new net.minecraft.nbt.CompoundTag());
-            var loaded = EntityType.BLOCK_DISPLAY.create(level);
-            loaded.load(saved);
-            h.assertTrue(loaded.getPersistentData().getLong("incoming_surface_pos") == top.asLong(), "rubble lost its anchor on save");
-        }
+        var displays = level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class,
+                new AABB(top).inflate(2), e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get());
+        h.assertTrue(displays.size() == 1, "expected one composite surface display: " + displays.size());
+        var display = displays.getFirst();
+        h.assertTrue(display.shouldRenderAtSqrDistance(64 * 64), "rubble inherits the 32 m crack limit");
+        h.assertTrue(!display.save(new net.minecraft.nbt.CompoundTag()), "surface entity is saved with the world");
+        var encoded = SurfaceDamage.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE,
+                level.getChunkAt(top).getData(ModAttachments.SURFACE_DAMAGE)).getOrThrow();
+        var restored = SurfaceDamage.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, encoded).getOrThrow();
+        h.assertTrue(restored.stream().anyMatch(m -> m.pos().equals(top) && m.depth() == 0.4 && m.rubble().isEmpty()),
+                "damage did not save independently of entity UUIDs");
+        display.discard();
+        level.getChunkAt(top).setData(ModAttachments.SURFACE_DAMAGE, restored);
+        SurfaceDamage.mark(level, top, level.getBlockState(top), 0.4);
+        displays = level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, new AABB(top).inflate(2),
+                e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get());
+        h.assertTrue(displays.size() == 1 && !displays.getFirst().getUUID().equals(display.getUUID()), "saved damage did not rebuild its display");
+        UUID replacement = displays.getFirst().getUUID();
         level.setBlock(top, Blocks.AIR.defaultBlockState(), 2);
         h.runAtTickTime(30, () -> {
-            for (UUID id : mark.rubble()) h.assertTrue(level.getEntity(id) == null, "rubble survived removal of its substrate");
+            h.assertTrue(level.getEntity(replacement) == null, "rubble survived removal of its substrate");
             h.succeed();
         });
+    }
+
+    @GameTest(template = "range", timeoutTicks = 80, batch = "blast_surface_cap", skyAccess = true)
+    public static void surfaceBudgetDoesNotLimitSavedDamageOrDuplicateColumns(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        // The budget is per world, while batches share that world. Retire preceding test presentation first.
+        java.util.stream.StreamSupport.stream(level.getAllEntities().spliterator(), false)
+                .filter(e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get()).toList()
+                .forEach(net.minecraft.world.entity.Entity::discard);
+        StrikeGameTests.afterTest(h, () -> level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class,
+                h.getBounds().inflate(4), e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get())
+                .forEach(net.minecraft.world.entity.Entity::discard));
+        int marked = 0;
+        for (int x = 16; x < 48; x++) for (int z = 16; z < 48; z++) {
+            BlockPos p = h.absolutePos(new BlockPos(x, C.getY() + 3, z));
+            level.setBlock(p, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
+            SurfaceDamage.mark(level, p, level.getBlockState(p), 0.4);
+            SurfaceDamage.mark(level, p, level.getBlockState(p), 0.4);
+            h.assertTrue(SurfaceDamage.depth(level, p) == 0.4, "display cap lost damage");
+            marked++;
+        }
+        var displays = level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class,
+                h.getBounds().inflate(4), e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get());
+        h.assertTrue(marked > SurfaceDamage.DISPLAY_CAP && !displays.isEmpty() && displays.size() <= SurfaceDamage.DISPLAY_CAP,
+                "unbounded surface entities: " + displays.size());
+        h.assertTrue(displays.stream().noneMatch(e -> e.save(new net.minecraft.nbt.CompoundTag())), "saved surface entity");
+        // Reuse a slot in the same tick, rather than waiting for the periodic cleanup.
+        displays.getFirst().discard();
+        BlockPos fresh = h.absolutePos(new BlockPos(48, C.getY() + 3, 32));
+        level.setBlock(fresh, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
+        SurfaceDamage.mark(level, fresh, level.getBlockState(fresh), 0.4);
+        h.assertTrue(!level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, new AABB(fresh).inflate(0.1),
+                e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get()).isEmpty(), "removed display still reserves a slot");
+        var legacy = EntityType.BLOCK_DISPLAY.create(level);
+        legacy.setPos(h.absolutePos(C).getCenter());
+        legacy.getPersistentData().putLong("incoming_surface_pos", h.absolutePos(C).asLong());
+        h.assertTrue(!level.addFreshEntity(legacy), "legacy saved rubble survived migration");
+        h.succeed();
+    }
+
+    @GameTest(template = "range", timeoutTicks = 700, batch = "blast_surface_salvo", skyAccess = true)
+    public static void concreteSalvoLeavesAtMostTheDisplayBudget(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        for (int x = 12; x <= 52; x++) for (int z = 12; z <= 52; z++) {
+            BlockPos p = h.absolutePos(new BlockPos(x, C.getY(), z));
+            level.setBlock(p.below(), Blocks.DIRT.defaultBlockState(), 2);
+            level.setBlock(p, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
+        }
+        for (int x = 18; x <= 46; x += 7) for (int z = 18; z <= 46; z += 7)
+            Warheads.testDetonate(level, WeaponType.DRONE, h.absolutePos(new BlockPos(x, C.getY(), z)).getCenter(), null, x * 100L + z);
+        int[] maximum = {0};
+        h.onEachTick(() -> {
+            int count = level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, h.getBounds().inflate(4),
+                    e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get()).size();
+            maximum[0] = Math.max(maximum[0], count);
+            h.assertTrue(count <= SurfaceDamage.DISPLAY_CAP, "salvo exceeded display budget during impact");
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(StrikeWorld.get(level).idle(), "salvo unfinished");
+            h.assertTrue(maximum[0] > 0, "salvo never displayed partial damage");
+            var displays = level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, h.getBounds().inflate(4),
+                    e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get());
+            h.assertTrue(displays.size() <= SurfaceDamage.DISPLAY_CAP, "salvo left " + displays.size() + " entities");
+            h.assertTrue(displays.stream().noneMatch(e -> e.save(new net.minecraft.nbt.CompoundTag())), "salvo left saved rubble");
+            h.assertTrue(SurfaceDamage.depth(level, h.absolutePos(new BlockPos(18, C.getY(), 18))) > 0, "salvo never damaged concrete");
+        });
+    }
+
+    @GameTest(template = "range", timeoutTicks = 90, batch = "blast_surface_chip", skyAccess = true)
+    public static void conventionalChipDoesNotPlantAMetreBlockOnIntactPaving(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos top = h.absolutePos(C.above(3));
+        level.setBlock(top, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
+        boolean stay = IncomingConfig.SERVER.debrisStay.get();
+        IncomingConfig.SERVER.debrisStay.set(true);
+        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(stay));
+        var chip = ua.zentix.incoming.entity.DebrisEntity.chip(level, top.above(2).getCenter(),
+                Blocks.BLACK_CONCRETE.defaultBlockState(), false, true, new Vec3(0, -0.2, 0));
+        level.addFreshEntity(chip);
+        h.runAtTickTime(40, () -> {
+            h.assertTrue(!chip.isAlive(), "chip did not land");
+            h.assertTrue(level.getBlockState(top).is(Blocks.BLACK_CONCRETE), "chip damaged its intact paving");
+            h.assertTrue(level.getBlockState(top.above()).isAir(), "chip planted a full metre block");
+            h.succeed();
+        });
+    }
+
+    @GameTest(template = "range", timeoutTicks = 90, batch = "blast_surface_debris_stay", skyAccess = true)
+    public static void debrisStayRetainsClodsAirframePartsAndBurningDebris(GameTestHelper h) {
+        debrisLanding(h, true);
+    }
+
+    @GameTest(template = "range", timeoutTicks = 90, batch = "blast_surface_debris_off", skyAccess = true)
+    public static void debrisStayOffDispersesAllLandingKinds(GameTestHelper h) {
+        debrisLanding(h, false);
+    }
+
+    private static void debrisLanding(GameTestHelper h, boolean stay) {
+        ServerLevel level = h.getLevel();
+        boolean old = IncomingConfig.SERVER.debrisStay.get();
+        IncomingConfig.SERVER.debrisStay.set(stay);
+        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(old));
+        List<BlockPos> floors = new java.util.ArrayList<>();
+        List<ua.zentix.incoming.entity.DebrisEntity> pieces = new java.util.ArrayList<>();
+        List<BlockState> states = List.of(Blocks.COARSE_DIRT.defaultBlockState(), Blocks.COARSE_DIRT.defaultBlockState(),
+                Blocks.GRAVEL.defaultBlockState(), Blocks.IRON_BLOCK.defaultBlockState(), Blocks.CAMPFIRE.defaultBlockState());
+        for (int i = 0; i < states.size(); i++) {
+            BlockPos floor = h.absolutePos(new BlockPos(20 + i * 4, C.getY() + 3, 32));
+            floors.add(floor);
+            level.setBlock(floor, (i == 1 || i == 3 ? Blocks.BLACK_CONCRETE : Blocks.DIRT).defaultBlockState(), 2);
+            Vec3 start = floor.above(2).getCenter(), velocity = new Vec3(0, -0.2, 0);
+            var piece = i < 3 ? ua.zentix.incoming.entity.DebrisEntity.ground(level, start, states.get(i), false, true, velocity, i == 2)
+                    : ua.zentix.incoming.entity.DebrisEntity.create(level, start, states.get(i), i == 4, false, velocity);
+            pieces.add(piece);
+            level.addFreshEntity(piece);
+        }
+        StrikeGameTests.afterTest(h, () -> pieces.forEach(net.minecraft.world.entity.Entity::discard));
+        h.runAtTickTime(40, () -> {
+            h.assertTrue(pieces.stream().noneMatch(net.minecraft.world.entity.Entity::isAlive), "debris did not land");
+            for (int i = 0; i < states.size(); i++) {
+                boolean placed = stay && (i == 0 || i >= 3);
+                BlockState landed = level.getBlockState(floors.get(i).above());
+                h.assertTrue(placed ? landed.getBlock() == states.get(i).getBlock() : landed.isAir(),
+                        "debris_stay=" + stay + " case " + i + " left " + landed);
+            }
+            h.succeed();
+        });
+    }
+
+    @GameTest(template = "range", timeoutTicks = 90, batch = "blast_surface_debris_source", skyAccess = true)
+    public static void spawnersKeepLargeGroundClodsAndAircraftWreckage(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos earth = h.absolutePos(new BlockPos(20, C.getY() + 3, 32));
+        BlockPos paving = earth.east(10), wreck = earth.west(8);
+        level.setBlock(earth, Blocks.DIRT.defaultBlockState(), 2);
+        level.setBlock(paving, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
+        ua.zentix.incoming.warhead.DebrisSpawner.drone(level, earth.getCenter(), ua.zentix.incoming.warhead.GroundMaterial.DIRT);
+        ua.zentix.incoming.warhead.DebrisSpawner.drone(level, paving.getCenter(), ua.zentix.incoming.warhead.GroundMaterial.STONE);
+        ua.zentix.incoming.warhead.DebrisSpawner.wreck(level, wreck.getCenter(), Vec3.ZERO, 12);
+        var clods = level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class, new AABB(earth).inflate(3));
+        var chips = level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class, new AABB(paving).inflate(3));
+        var aircraft = level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class, new AABB(wreck).inflate(3));
+        h.assertTrue(!clods.isEmpty() && clods.stream().noneMatch(ua.zentix.incoming.entity.DebrisEntity::isChip), "expected nonempty earth debris containing only large clods");
+        h.assertTrue(chips.stream().anyMatch(ua.zentix.incoming.entity.DebrisEntity::isChip), "expected small chips from intact paving");
+        h.assertTrue(!aircraft.isEmpty() && aircraft.stream().noneMatch(ua.zentix.incoming.entity.DebrisEntity::isChip), "expected nonempty B-2 wreckage containing only large pieces");
+        StrikeGameTests.afterTest(h, () -> level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class,
+                h.getBounds().inflate(4)).forEach(net.minecraft.world.entity.Entity::discard));
+        h.succeed();
+    }
+
+    @GameTest(template = "range", timeoutTicks = 90, batch = "blast_surface_depth", skyAccess = true)
+    public static void savedDepthChangesTheNativeSyncedDisplayTransformation(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos top = h.absolutePos(C.above(3));
+        level.setBlock(top, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
+        SurfaceDamage.mark(level, top, level.getBlockState(top), 0.01);
+        var small = level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, new AABB(top).inflate(2),
+                e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get()).getFirst();
+        var smallTransform = displayTransform(small);
+        var scale = smallTransform.getScale();
+        h.assertTrue(small.getEntityData().getNonDefaultValues().stream().anyMatch(v -> v.value() instanceof org.joml.Vector3f vec
+                && vec.distance(scale) < 1e-6), "depth scale is not in vanilla synced entity data");
+        SurfaceDamage.mark(level, top, level.getBlockState(top), 0.9);
+        var large = level.getEntitiesOfClass(net.minecraft.world.entity.Display.BlockDisplay.class, new AABB(top).inflate(2),
+                e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get()).getFirst();
+        var largeTransform = displayTransform(large);
+        h.assertTrue(scale.x() < largeTransform.getScale().x() / 5 && scale.z() < largeTransform.getScale().z() / 5,
+                "0.01 and 0.9 depth have the same footprint");
+        h.assertTrue(scale.y() < largeTransform.getScale().y() / 10, "chip height ignores saved depth");
+        h.assertTrue(Math.abs(smallTransform.getTranslation().x() + scale.x() / 2 - 0.5) < 1e-6,
+                "shallow fracture moved out of its damaged cell");
+        h.assertTrue(small.isRemoved() && !large.save(new net.minecraft.nbt.CompoundTag()), "depth update lost cleanup/noSave");
+        StrikeGameTests.afterTest(h, large::discard);
+        h.succeed();
+    }
+
+    private static com.mojang.math.Transformation displayTransform(net.minecraft.world.entity.Display.BlockDisplay display) {
+        var tag = display.saveWithoutId(new net.minecraft.nbt.CompoundTag());
+        return com.mojang.math.Transformation.EXTENDED_CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, tag.get("transformation")).getOrThrow();
     }
 
     /** Pure layout check over translated threshold hashes, including a reproduced failing origin. */
