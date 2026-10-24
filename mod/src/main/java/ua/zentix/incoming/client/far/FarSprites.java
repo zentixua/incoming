@@ -198,7 +198,7 @@ public final class FarSprites implements SmokePuffs.Out {
         if (!gaussianBounds.project(x,y,z,sh,sv,ext,detail>=1?Math.sqrt(2)*card:Double.POSITIVE_INFINITY,f,l,up,width,height,gaussianRect)) return true;
         double x0=gaussianRect[0], y0=gaussianRect[1], x1=gaussianRect[2], y1=gaussianRect[3];
         double peak=ext/(2*Math.PI*sh*Math.min(sh,sv));
-        if(context!=null && coverage*(-Math.expm1(-peak))<=SmokePuffs.CLUMPS_FULL*Sight.THRESHOLD &&
+        if(context!=null && coverage*(-Math.expm1(-peak))<=ua.zentix.incoming.client.fx.layer.GaussianFields.MAX_ALPHA &&
                 (x1-x0)*(y1-y0)/(4*width*height)>=0.05) {
             Field field=fields.computeIfAbsent(context,ignored->new Field());
             field.gaussians.add(new float[]{(float)x,(float)y,(float)z,(float)sh,(float)sv,(float)ext,(float)across,(float)card,

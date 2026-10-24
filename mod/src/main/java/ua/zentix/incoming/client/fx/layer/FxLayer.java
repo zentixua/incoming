@@ -319,6 +319,7 @@ public final class FxLayer {
             s.safeGetUniform("FxSix").set(FxAtlas.PUFF6_STEP, FxAtlas.PUFF6_TOP, FxAtlas.PUFF6_U, FxAtlas.PUFF6_V);
             s.safeGetUniform("FxSixLight").set(six[0], six[1], six[2]);
             s.safeGetUniform("FxFieldRow").set(SourceProbes.DATA_ROW+GaussianData.rows());
+            s.safeGetUniform("FxFieldAlpha").set((float)GaussianFields.MAX_ALPHA);
             s.safeGetUniform("FxFireball").set(FxAtlas.FIREBALL_U, FxAtlas.FIREBALL_V, FxAtlas.FIREBALL_TOP, (float) FxAtlas.FIREBALL_FRAMES);
             s.safeGetUniform("FxFireFlow").set(FxAtlas.FIREBALL_FLOW_U, FxAtlas.FIREBALL_FLOW_V, FxAtlas.FIREBALL_FLOW_TOP,
                     FxAtlas.FIREBALL_FLOW / FxAtlas.FIREBALL_SIZE);

@@ -14,6 +14,8 @@ import org.lwjgl.system.MemoryUtil;
  */
 public final class GaussianFields {
     public static final int COLS = 16, ROWS = 32;
+    /** Five perceptual contrast thresholds: a broad individual Gaussian is still low frequency. */
+    public static final double MAX_ALPHA = 5 * ua.zentix.incoming.client.far.Sight.THRESHOLD;
     private static float[] data = new float[20 * 128];
     private static int count;
     private static FloatBuffer transfer;

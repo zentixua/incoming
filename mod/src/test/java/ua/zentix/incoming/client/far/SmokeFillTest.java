@@ -130,7 +130,7 @@ class SmokeFillTest {
             boolean visible=clip.project(x,y,z,sh,sv,ext,detail>=1?Math.sqrt(2)*card:Double.POSITIVE_INFINITY,
                     view.forward(),view.left(),view.up(),W,H,rect);
             double peak=ext/(2*Math.PI*sh*Math.min(sh,sv));
-            boolean field=context>0 && visible && coverage*(-Math.expm1(-peak))<=SmokePuffs.CLUMPS_FULL*Sight.THRESHOLD &&
+            boolean field=context>0 && visible && coverage*(-Math.expm1(-peak))<=ua.zentix.incoming.client.fx.layer.GaussianFields.MAX_ALPHA &&
                     (rect[2]-rect[0])*(rect[3]-rect[1])/(4*W*H)>=0.05;
             gaussians.add(new double[]{x,y,z,sh,sv,ext,coverage,card,power,ClubFrames.frame(sprite),mix,across,detail,
                     ClubFrames.mirrored(sprite)?1:0,context,field?1:0,rect[0],rect[1],rect[2],rect[3]});

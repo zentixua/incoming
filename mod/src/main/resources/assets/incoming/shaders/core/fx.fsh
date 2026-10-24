@@ -54,6 +54,7 @@ uniform vec4 FxSix;
 // x — наибольшее смещение векторов движения, доля кадра; y и z — средний по клубу свет спереди и средний по шести
 // сторонам в линейном (puff6.json); к среднему по шести карты приводятся
 uniform vec3 FxSixLight;
+uniform float FxFieldAlpha;
 // оттенок света неба у клубов (FarView.sky против его яркости, линейно): цвет вершины клуба несёт только яркость
 uniform vec3 FxSkyTint;
 
@@ -164,6 +165,9 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
     // Presentation detail: the calibrated opacity keeps its full physical support, but its transparent
     // padding must not magnify every light-map billow. Reuse the same gas at a finer light-only scale.
     if (analytic) {
+        float peak = gaussian1.y/(6.2831853072*gaussian0.w*min(gaussian0.w,gaussian1.x));
+        float visiblePeak = vertexColor.a*(1.0-exp(-peak));
+        float detailWeight = smoothstep(FxFieldAlpha,2.0*FxFieldAlpha,visiblePeak);
         vec2 fine = tile * 0.5 + 2.0 * (local - tile * 0.5);
         if (all(greaterThan(fine, vec2(0.0))) && all(lessThan(fine, tile))) {
             vec2 fineEdge = frameInset(2.0*sqrt(max(dot(gx,gx),dot(gy,gy))))/size;
@@ -172,7 +176,8 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, bool analytic, out vec4 a, ou
             vec4 fa0 = textureGrad(Sampler0, f0, 2.0*dx, 2.0*dy), fa1 = textureGrad(Sampler0, f1, 2.0*dx, 2.0*dy);
             vec4 fb0 = textureGrad(Sampler0, f0 + vec2(0.0,FxSix.x), 2.0*dx, 2.0*dy), fb1 = textureGrad(Sampler0, f1 + vec2(0.0,FxSix.x), 2.0*dx, 2.0*dy);
             float fineAlpha = mix(fa0.a, fa1.a, m);
-            float weight = 0.65*smoothstep(0.002,0.02,fineAlpha);
+            // Fade before the faint-source mesh handoff; switching representation cannot switch fine lighting.
+            float weight = 0.65*detailWeight*smoothstep(0.002,0.02,fineAlpha);
             vec3 lightA = mix(pow(fa0.rgb/max(fa0.a,1e-3),vec3(2.2)),pow(fa1.rgb/max(fa1.a,1e-3),vec3(2.2)),m);
             vec3 lightB = mix(pow(fb0.rgb/max(fb0.a,1e-3),vec3(2.2)),pow(fb1.rgb/max(fb1.a,1e-3),vec3(2.2)),m);
             a.rgb *= mix(vec3(1.0),lightA/FxSixLight.z,weight);
