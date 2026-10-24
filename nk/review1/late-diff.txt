@@ -1,0 +1,8 @@
+day 7 s: cap region mean |diff| vs main — before fix 0.010, fixed 0.004; whole frame — before 0.005, fixed 0.004; cap mean RGB main [0.72 0.68 0.66], before [0.72 0.67 0.67], fixed [0.72 0.67 0.66]
+day 10 s: cap region mean |diff| vs main — before fix 0.040, fixed 0.009; whole frame — before 0.012, fixed 0.002; cap mean RGB main [0.65 0.57 0.55], before [0.67 0.6  0.57], fixed [0.65 0.57 0.54]
+night 7 s: cap region mean |diff| vs main — before fix 0.091, fixed 0.002; whole frame — before 0.040, fixed 0.006; cap mean RGB main [1.   0.72 0.25], before [1.   0.46 0.23], fixed [1.   0.72 0.24]
+night 10 s: cap region mean |diff| vs main — before fix 0.186, fixed 0.008; whole frame — before 0.010, fixed 0.001; cap mean RGB main [0.71 0.34 0.17], before [0.73 0.63 0.41], fixed [0.71 0.34 0.17]
+nkR_1380_day_1s.png: t 1 s, display luminance p10 0.949 p50 0.986 p90 0.994, spread 0.045 (ball centre y 238, r 81 px)
+nkR_1380_day_3s.png: t 3 s, display luminance p10 0.641 p50 0.957 p90 0.988, spread 0.351 (ball centre y 191, r 83 px)
+nkR_1380_night_1s.png: t 1 s, display luminance p10 0.906 p50 0.956 p90 0.987, spread 0.081 (ball centre y 238, r 81 px)
+nkR_1380_night_3s.png: t 3 s, display luminance p10 0.849 p50 0.974 p90 0.986, spread 0.139 (ball centre y 191, r 83 px)
