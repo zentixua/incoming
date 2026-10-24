@@ -94,6 +94,8 @@ final class Sandbox {
     static final double AIRBURST_HEIGHT = 30;
     /** Пуск и пролёт: ждать снаряд не дольше, тиков. */
     static final int FLIGHT_LIMIT = 1800;
+    /** {@code sam}: шахед идёт со стольких блоков к северу от ЗРК и целит на столько к югу (как сцена {@code sam-side} пробы). */
+    static final int SAM_FROM = 1400, SAM_PAST = 250;
     /**
      * Ядерка у камеры: место k-го запуска — (X0 + k·DX, Z0 + k·DZ). Хеш места {@code Long.hashCode(BlockPos.asLong())} —
      * старшие 32 бита (x << 6 и выше) XOR младшие (z << 12 | y): сдвиг x на k·2¹⁶ и z на k·2¹⁰ кладёт k в оба слова на
@@ -140,7 +142,7 @@ final class Sandbox {
     @Nullable
     private Capture armed, capture;
 
-    private enum Pending { SERVER, LAUNCH, FLIGHT, SITE, NUKE }
+    private enum Pending { SERVER, LAUNCH, FLIGHT, SITE, NUKE, SAM }
 
     private int pendingSince;
     private SandboxCommand pendingCmd;
@@ -443,6 +445,9 @@ final class Sandbox {
         BlockPos s = BlockPos.containing(site);
         server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air replace minecraft:fire", s.getX() - 20, GROUND, s.getZ() - 20,
                 s.getX() + 20, GROUND + 6, s.getZ() + 20));
+        // ЗРК ({@code sam}) — прочь: заряженный, он бил бы снаряды следующих эффектов
+        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air replace incoming:sam", s.getX() - 20, GROUND + 1, s.getZ() - 20,
+                s.getX() + 20, GROUND + 1, s.getZ() + 20));
         // пожар ({@code fire}) — на незераке: земля снова трава
         server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:grass_block replace minecraft:netherrack", s.getX() - 20, GROUND,
                 s.getZ() - 20, s.getX() + 20, GROUND, s.getZ() + 20));
@@ -535,6 +540,23 @@ final class Sandbox {
                 server(as + c.order((int) Math.floor(site.x), (int) Math.floor(site.z)));
                 pending = c.verb() == SandboxCommand.Verb.LAUNCH ? Pending.LAUNCH : Pending.FLIGHT;
             }
+            case SAM -> {
+                // Один воздух для сравнения разных веток: Wind зависит от gameTime, а /time меняет только dayTime.
+                onServer(false, s -> {
+                    var world = s.overworld();
+                    ((net.minecraft.world.level.storage.ServerLevelData) world.getLevelData()).setGameTime(NEAR_GAME_TIME);
+                    s.getPlayerList().broadcastAll(new net.minecraft.network.protocol.game.ClientboundSetTimePacket(world.getGameTime(),
+                            world.getDayTime(), world.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
+                });
+                placeCamera();
+                int x = (int) Math.floor(site.x), z = (int) Math.floor(site.z);
+                // ЗРК заряжен (4 ракеты), шахед идёт с севера через точку к югу: радар берёт его, ракета сходит у точки
+                // заново (again без clear): на месте прежнего ЗРК setblock не сменил бы блок, и ракеты не пополнились бы
+                server(String.format(Locale.ROOT, "setblock %d %d %d minecraft:air", x, GROUND + 1, z));
+                server(String.format(Locale.ROOT, "setblock %d %d %d incoming:sam{ready:4}", x, GROUND + 1, z));
+                server(String.format(Locale.ROOT, "incoming salvo drone 1 0 at %d %d from %d %d", x, z + SAM_PAST, x, z - SAM_FROM));
+                pending = Pending.SAM;
+            }
             case FIRE -> {
                 placeCamera();
                 int half = (int) c.number(0, 6) / 2;
@@ -614,6 +636,7 @@ final class Sandbox {
                     }
                 }
                 case LAUNCH, FLIGHT -> watchFlight(mc);
+                case SAM -> watchSam();
             }
             if (pending != null && tick - pendingSince > FLIGHT_LIMIT) {
                 pending = null;
@@ -748,6 +771,22 @@ final class Sandbox {
         return mc.level.getChunkSource().hasChunk(at.getX() >> 4, at.getZ() >> 4);
     }
 
+    /** Сход зенитной ракеты ЗРК ({@code sam}): с её первого движения; {@code track on} ведёт её. */
+    private void watchSam() {
+        double[] at = new double[3];
+        if (projectile == null) {
+            for (FlightTrack t : FlightTracks.interceptors()) {
+                if (t.isDead() || !t.predict(FlightTracks.now() - 1, at)) continue;
+                projectile = t;
+                firstSeen = new Vec3(at[0], at[1], at[2]);
+                Incoming.LOG.info("SANDBOX interceptor seen at {}", xyz(firstSeen));
+                break;
+            }
+            return;
+        }
+        if (projectile.predict(FlightTracks.now() - 1, at) && firstSeen.distanceTo(new Vec3(at[0], at[1], at[2])) > 0.3) begin();
+    }
+
     /** Пуск — с первого движения снаряда у точки; пролёт — в миг, когда он ближе всего к ней. */
     private void watchFlight(Minecraft mc) {
         double[] at = new double[3];
@@ -818,8 +857,9 @@ final class Sandbox {
             }
         });
         cap.frames.add(String.format(Locale.ROOT, "{\"t\": %.2f, \"age\": %.3f, \"file\": \"%s\", \"fps\": %d}", t, age, file, mc.getFps()));
-        Incoming.LOG.info("SANDBOX shot {} age {} s fps {}; layer: {}; smoke: {}", file, String.format(Locale.ROOT, "%.3f", age), mc.getFps(),
-                ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke());
+        Incoming.LOG.info("SANDBOX shot {} age {} s fps {}; layer: {}; smoke: {}; flight: {}; air: {}", file, String.format(Locale.ROOT, "%.3f", age), mc.getFps(),
+                ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
+                ua.zentix.incoming.client.far.FarFlightView.describe(), ua.zentix.incoming.client.fx.ClientAir.now());
         cap.next++;
     }
 
