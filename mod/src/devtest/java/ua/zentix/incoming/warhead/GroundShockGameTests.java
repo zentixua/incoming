@@ -67,14 +67,13 @@ public final class GroundShockGameTests {
     }
 
     @GameTest(template = "range", timeoutTicks = 40, batch = "ground_shock_entry", skyAccess = true)
-    public static void entrySendsKineticGroundEnergyAndContactMaterial(GameTestHelper h) {
+    public static void entrySendsFullKineticEnergyAndContactMaterial(GameTestHelper h) {
         BlockPos block = new BlockPos(32, 4, 32);
         h.setBlock(block, Blocks.STONE);
         Vec3 at = h.absolutePos(block).getCenter();
         Listener near = listener(h, at.add(10, 0, 0));
         double hit = BunkerImpact.equivalentTnt(WeaponSpec.BUNKER.payload().article().dryMass(), 100);
-        double groundKg = hit - BunkerImpact.airTnt(hit);
-        double range = GroundShock.feltRangeM(new GroundShock.Source(groundKg, 0, GroundMaterial.STONE.shockMedium()));
+        double range = GroundShock.feltRangeM(new GroundShock.Source(hit, 0, GroundMaterial.STONE.shockMedium()));
         Listener far = listener(h, at.add(range * 1.01, 0, 0));
         long now = h.getLevel().getGameTime();
         Warheads.bunkerEntry(h.getLevel(), at, 100, null, null);
@@ -83,7 +82,7 @@ public final class GroundShockGameTests {
         S2C.Quake.Ground source = event.source().orElseThrow();
         h.assertTrue(event.ticks() == 0 && !event.rumble(), "new source still requests immediate legacy shake/sound");
         h.assertTrue(source.pos().equals(at) && source.gameTime() == now, "source position/time changed in transmission");
-        h.assertTrue(source.tntKg() == groundKg && source.depthM() == 0, "kinetic entry did not partition air/ground energy");
+        h.assertTrue(source.tntKg() == hit && source.depthM() == 0, "kinetic entry subtracted the airborne share before TM coupling");
         h.assertTrue(source.material() == GroundMaterial.STONE.ordinal(), "source material was not sampled from world");
         h.assertTrue(source.model().medium() == GroundShock.Medium.ROCK, "wire material maps to wrong propagation law");
         h.succeed();
@@ -91,16 +90,23 @@ public final class GroundShockGameTests {
 
     @GameTest(template = "range", timeoutTicks = 400, batch = "ground_shock_buried", skyAccess = true)
     public static void buriedSourceRetainsOriginalMaterialDepthAndTime(GameTestHelper h) {
+        buriedSource(h, 28);
+    }
+
+    @GameTest(template = "range", timeoutTicks = 400, batch = "ground_shock_shallow", skyAccess = true)
+    public static void shallowSourceDoesNotSubtractVentingBeforeTmCoupling(GameTestHelper h) {
+        // The range template's turf is at y=11; put the shallow cover above it so it defines the heightmap.
+        buriedSource(h, 12);
+    }
+
+    private static void buriedSource(GameTestHelper h, int roofY) {
         BlockPos block = new BlockPos(32, 8, 32);
         h.setBlock(block, Blocks.STONE);
-        for (int[] offset : BunkerCover.RING) h.setBlock(new BlockPos(32 + offset[0], 28, 32 + offset[1]), Blocks.STONE);
+        for (int[] offset : BunkerCover.RING) h.setBlock(new BlockPos(32 + offset[0], roofY, 32 + offset[1]), Blocks.STONE);
         Vec3 at = h.absolutePos(block).getCenter();
         Listener near = listener(h, at.add(300, 0, 0));
         long now = h.getLevel().getGameTime();
-        double depth = BunkerCover.depth(h.absolutePos(new BlockPos(32, 29, 32)).getY(), at.y);
-        BuriedBlast law = new BuriedBlast(WeaponSpec.BUNKER.warheadTnt(), depth);
-        double diameter = WeaponSpec.BUNKER.payload().article().diameter();
-        double groundKg = law.tnt() - law.airCharge(Math.PI * diameter * diameter / 4);
+        double depth = BunkerCover.depth(h.absolutePos(new BlockPos(32, roofY + 1, 32)).getY(), at.y);
         Warheads.bunker(h.getLevel(), at, at.add(0, depth, 0), null, null);
         // The front/ground work is queued: its source must not be resampled when it eventually runs.
         h.setBlock(block, Blocks.AIR);
@@ -110,7 +116,9 @@ public final class GroundShockGameTests {
             S2C.Quake.Ground source = near.quakes.getFirst().source().orElseThrow();
             h.assertTrue(source.pos().equals(at) && source.gameTime() == now, "queue delay replaced source event time");
             h.assertTrue(source.material() == GroundMaterial.STONE.ordinal(), "excavation resampled source material");
-            h.assertTrue(source.depthM() == depth && source.tntKg() == groundKg, "buried depth/energy lost on server");
+            h.assertTrue(source.depthM() == depth, "buried depth changed: " + source.depthM() + " instead of " + depth);
+            h.assertTrue(source.tntKg() == WeaponSpec.BUNKER.warheadTnt(),
+                    "ground wave needs the full charge: got " + source.tntKg() + "; depth coupling already accounts for venting");
             h.assertTrue(GroundShock.sample(source.model(), 300).arrivalSeconds() == 0.1, "rock travel time is not 300/3000 s");
         });
     }

@@ -25,13 +25,32 @@ class LocalLitterTest {
         var end = LocalLitter.at(shock, surface, 1, terminal, shock.arrivalSeconds() + shock.positiveSeconds());
         assertEquals(full.massKgPerM2(), end.massKgPerM2(), 1e-12);
         assertEquals(full.airDisplacementM(), end.airDisplacementM(), 1e-12);
-        assertEquals(LocalLitter.at(shock, surface, 1, terminal, 1), LocalLitter.at(shock, surface, 1, terminal, 60));
+        assertEquals(full.airDisplacementM(), LocalLitter.at(shock, surface, 1, terminal, 60).airDisplacementM(), 1e-12);
         double previous = 0;
         for (int i = 0; i <= 100; i++) {
             var part = LocalLitter.at(shock, surface, 1, terminal, shock.arrivalSeconds() + shock.positiveSeconds() * i / 100);
             assertTrue(part.massKgPerM2() >= previous);
             assertTrue(part.airDisplacementM() <= shock.maxAirDisplacementM());
             previous = part.massKgPerM2();
+        }
+    }
+
+    @Test
+    void noAdditionalDustMassIsReleasedAfterThePositivePhase() {
+        for (double[] c : new double[][]{{50, 30}, {150, 50}, {3, 10}}) {
+            var shock = ShockAtBody.chemical(c[0], true, c[1]);
+            double terminal = BlastLitter.COVER_DUST_SETTLE;
+            double fullMass = LocalLitter.lift(shock, DustModel.Surface.FIELD, 1, terminal).massKgPerM2();
+            assertTrue(fullMass > 1e-6, "fixture must release measurable dust mass");
+            double previousMass = LocalLitter.at(shock, DustModel.Surface.FIELD, 1, terminal,
+                    shock.arrivalSeconds() + shock.positiveSeconds()).massKgPerM2();
+            for (double phases : new double[]{1.01, 1.25, 2, 4, 10, 60}) {
+                double mass = LocalLitter.at(shock, DustModel.Surface.FIELD, 1, terminal,
+                        shock.arrivalSeconds() + phases * shock.positiveSeconds()).massKgPerM2();
+                assertEquals(fullMass, mass, fullMass * 1e-10, "dust mass still grows after t+ at " + phases + " phases");
+                assertEquals(0, mass - previousMass, fullMass * 1e-10, "a later frame must not emit more dust mass");
+                previousMass = mass;
+            }
         }
     }
 

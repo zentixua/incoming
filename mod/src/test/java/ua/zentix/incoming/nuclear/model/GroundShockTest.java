@@ -12,6 +12,10 @@ class GroundShockTest {
         var source = new GroundShock.Source(453.59237, 0, GroundShock.Medium.SOIL);
         var s = GroundShock.sample(source, 30.48);
         assertEquals(0.0121412382376491, s.peakVelocityMps(), 1e-12);
+        // Independent TM (1.2): a0=50*.14*1000*10^-3.75 / 10 = 0.1244795587 g, not ft/s².
+        assertEquals(0.124479558702725 * 9.80665, s.peakAccelerationMps2(), 1e-10);
+        assertEquals(16.002058959483, s.frequencyHz(), 1e-10);
+        assertEquals(0.062491958224375, s.durationSeconds(), 1e-12);
         assertEquals(0.1, s.arrivalSeconds(), 1e-12);
         assertEquals(0.14, GroundShock.coupling(source));
         assertEquals(1, GroundShock.coupling(new GroundShock.Source(453.59237, 4.2672, source.medium())), 1e-12);
@@ -25,13 +29,16 @@ class GroundShockTest {
             for (double r = 1.1; r < 100_000; r *= 1.2) {
                 var s = GroundShock.sample(source, r);
                 assertTrue(s.peakVelocityMps() <= previous.peakVelocityMps());
-                assertTrue(s.perceptibility() <= previous.perceptibility());
+                assertTrue(s.peakAccelerationMps2() <= previous.peakAccelerationMps2());
+                // Raw loads decrease everywhere. The assessment is not defined above 80 Hz; entering its band
+                // from above can increase its weight. Once past the upper taper, it also decreases with range.
+                if (previous.frequencyHz() <= 40) assertTrue(s.perceptibility() <= previous.perceptibility());
                 assertTrue(s.frequencyHz() <= previous.frequencyHz());
                 assertEquals(r / GroundShock.waveSpeed(medium), s.arrivalSeconds());
                 previous = s;
             }
             double reach = GroundShock.feltRangeM(source);
-            assertEquals(GroundShock.PERCEPTION_START_MPS, GroundShock.sample(source, reach).peakVelocityMps(), 1e-15);
+            assertEquals(0, GroundShock.sample(source, reach).perceptibility(), 1e-12);
             assertEquals(0, GroundShock.sample(source, reach * (1 + 1e-6)).perceptibility());
             assertTrue(GroundShock.sample(source, reach * (1 - 1e-6)).perceptibility() < 1e-9);
         }
@@ -41,6 +48,42 @@ class GroundShockTest {
             double b = GroundShock.coupling(new GroundShock.Source(50, depth + 1e-6, GroundShock.Medium.ROCK));
             assertEquals(a, b, 1e-9);
         }
+    }
+
+    @Test
+    void timeDomainPulseMatchesTmPeakAccelerationAsWellAsVelocity() {
+        var s = GroundShock.sample(new GroundShock.Source(453.59237, 0, GroundShock.Medium.SOIL), 30.48);
+        double expectedAcceleration = 0.124479558702725 * 9.80665;
+        double dt = s.durationSeconds() * 1e-6, maxAcceleration = 0;
+        for (int i = 0; i <= 6000; i++) {
+            double t = s.arrivalSeconds() + s.durationSeconds() * i / 6000;
+            double a = (GroundShock.velocityMps(s, t + dt) - GroundShock.velocityMps(s, t - dt)) / (2 * dt);
+            maxAcceleration = Math.max(maxAcceleration, Math.abs(a));
+        }
+        assertEquals(expectedAcceleration, maxAcceleration, expectedAcceleration * 1e-7,
+                "a frequency label alone must not hide a different acceleration in the windowed pulse");
+        for (var medium : GroundShock.Medium.values()) for (double r : new double[]{30, 100, 300, 1000}) {
+            var pulse = GroundShock.sample(new GroundShock.Source(2400, 10, medium), r);
+            assertTrue(pulse.durationSeconds() > 0 && pulse.durationSeconds() <= pulse.arrivalSeconds(),
+                    medium + " at " + r + " m: ground shock became prolonged rocking");
+            assertEquals(0, GroundShock.velocityMps(pulse, pulse.arrivalSeconds() + pulse.durationSeconds()), 1e-12);
+        }
+    }
+
+    @Test
+    void perceptionCriterionIsSmoothAndLimitedToItsFrequencyDomain() {
+        // Keep PPV above the complete-perception threshold to isolate frequency support, not the amplitude gate.
+        var source = new GroundShock.Source(2400, 20, GroundShock.Medium.ROCK);
+        double frequencyAtOneMetre = 1.6002058959483 * 3000;
+        for (double hz : new double[]{0.05, 0.5, 1, 80, 160}) {
+            var s = GroundShock.sample(source, frequencyAtOneMetre / hz);
+            assertEquals(0, s.perceptibility(), 1e-12, hz + " Hz is outside the supported perception band");
+        }
+        assertEquals(1, GroundShock.sample(source, frequencyAtOneMetre / 16).perceptibility());
+        for (double hz : new double[]{1 + 1e-6, 80 - 1e-6})
+            assertEquals(0, GroundShock.sample(source, frequencyAtOneMetre / hz).perceptibility(), 1e-9);
+        assertEquals(frequencyAtOneMetre, GroundShock.feltRangeM(source), 1e-9,
+                "packet recipients must stop at the supported lower frequency, not at the far-away PPV contour");
     }
 
     @Test
@@ -66,7 +109,7 @@ class GroundShockTest {
         assertEquals(0, GroundShock.velocityMps(s, -1));
         assertEquals(0, GroundShock.velocityMps(s, Math.nextDown(s.arrivalSeconds())));
         assertEquals(0, GroundShock.velocityMps(s, s.arrivalSeconds()));
-        assertEquals(0, GroundShock.velocityMps(s, s.arrivalSeconds() + 1 / s.frequencyHz()), 1e-14);
+        assertEquals(0, GroundShock.velocityMps(s, s.arrivalSeconds() + s.durationSeconds()), 1e-14);
         assertEquals(0, GroundShock.velocityMps(s, 60));
         double max = 0, integral = 0;
         for (int i = 0; i < 6000; i++) {
@@ -76,10 +119,11 @@ class GroundShockTest {
         }
         assertEquals(s.peakVelocityMps(), max, 1e-10);
         assertEquals(0, integral, 1e-10);
-        assertEquals(0, GroundShock.velocityMps(s, s.arrivalSeconds() + 1e-6), 1e-10);
+        assertEquals(0, GroundShock.velocityMps(s, s.arrivalSeconds() + 1e-8 / s.frequencyHz()), s.peakVelocityMps() * 1e-12);
         var empty = new GroundShock.Source(0, 0, GroundShock.Medium.SOIL);
         assertEquals(0, GroundShock.feltRangeM(empty));
         assertEquals(0, GroundShock.velocityMps(GroundShock.sample(empty, 0), 0));
+        assertEquals(0, GroundShock.sample(empty, 0).durationSeconds());
         assertTrue(Double.isFinite(GroundShock.sample(new GroundShock.Source(50, 1, GroundShock.Medium.SOIL), 0).peakVelocityMps()));
     }
 }

@@ -206,7 +206,7 @@ public final class S2C {
 
     /**
      * Conventional ground source: the client evaluates R/c and PPV at its body, with fractional ticks.
-     * The old ticks/rumble prefix remains for existing replays and the unchanged nuclear ground path.
+     * The old ticks/rumble prefix remains for existing replays. The nuclear ground path is separate.
      * A source event has ticks=0, rumble=false: the legacy handler must not shake/play sound immediately.
      */
     public record Quake(int ticks, boolean rumble, Optional<Ground> source) implements CustomPacketPayload {
@@ -225,7 +225,7 @@ public final class S2C {
 
         /**
          * @param pos source position, blocks = metres
-         * @param tntKg TNT-equivalent kg assigned to ground before depth coupling, not air charge
+         * @param tntKg full TNT-equivalent charge/source energy, kg; GroundShock applies depth coupling once
          * @param depthM burial below the local surface, metres; 0 = contact
          * @param material existing GroundMaterial wire id (not GroundShock.Medium.ordinal)
          * @param gameTime server game tick at source event, not packet delivery or end of excavation work

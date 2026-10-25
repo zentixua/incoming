@@ -108,7 +108,8 @@ public final class Warheads {
                 HearingModel.audibleRangeM(BunkerImpact.airTnt(hit))));
         PacketDistributor.sendToPlayersNear(level, null, point.x, point.y, point.z, reach, new S2C.BunkerImpact(point, mat.ordinal(), (float) speed));
         // Estimate: use equal TNT energy for the kinetic contact pulse; this is not a measured impact spectrum.
-        quake(level, new S2C.Quake(point, hit - BunkerImpact.airTnt(hit), 0, mat.ordinal(), level.getGameTime()));
+        // TM coupling is applied once to the full source energy, not again after subtracting its airborne share.
+        quake(level, new S2C.Quake(point, hit, 0, mat.ordinal(), level.getGameTime()));
         StrikeWorld.get(level).impactCost().step(System.nanoTime() - t0);
     }
 
@@ -670,7 +671,8 @@ public final class Warheads {
             this.law = new BuriedBlast(WeaponSpec.BUNKER.warheadTnt(), BunkerCover.depth(cover, pos.y));
             this.hole = Math.PI * bomb.article().diameter() * bomb.article().diameter() / 4;
             double air = law.airCharge(hole);
-            this.groundShock = new S2C.Quake(pos, law.tnt() - air, law.depth(), mat.ordinal(), level.getGameTime());
+            // The TM depth-coupling factor already includes venting: W and scaled depth both use the full charge.
+            this.groundShock = new S2C.Quake(pos, law.tnt(), law.depth(), mat.ordinal(), level.getGameTime());
             Vec3 top = new Vec3(pos.x, cover, pos.z);
             // район — то, что взрыв делает с грунтом (трещины, труба, воронка); волна над землёй при прорыве ломает дальше
             // там, где мир загружен (луч кончается в неготовом чанке): охват волны 2,4 т — ~650 блоков, тысячи чанков, и
