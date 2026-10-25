@@ -197,54 +197,11 @@ final class SmokePuffs {
      */
     static final int BLOBS = 2000;
     /**
-     * Мест трубок в кадре — не больше (план, слияние и квадраты — процессор на каждое): сверх — отрезок лентой целиком
-     * ({@link #tube}); в среднем их держит {@code FarFlightView.CLUB_BUDGET} порогом ширины по прошлым кадрам, а это — в
-     * каждом кадре, и в первом кадре налёта тоже.
+     * Мест трубок в кадре — не больше (план, слияние и квадраты — процессор на каждое): сверх — у отрезка мест нет, его узкую
+     * часть рисует лента, широкую — вуаль ({@link #tube}, {@code FarFlightView.line}); в среднем их держит
+     * {@code FarFlightView.CLUB_BUDGET} порогом ширины по прошлым кадрам, а это — в каждом кадре, и в первом кадре налёта тоже.
      */
-    static int PLACES = FarFlightView.CLUB_BUDGET;
-    /** SMV: опыты. */
-    static boolean ADAPT = true, FIT_DENSITY, NO_MERGE, RIBBON_FIX = true, VEIL_DEPTH;
-    private static long flagsAt;
-
-    /** SMV: флаги опыта из mod/run/smv/flags.txt (раз в секунду; только опыты). */
-    static void flags() {
-        long now = System.currentTimeMillis();
-        if (now - flagsAt < 1000) return;
-        flagsAt = now;
-        java.nio.file.Path p = java.nio.file.Path.of("/mnt/data/projects/incoming/mod/run/smv/game-flags.txt");
-        if (!java.nio.file.Files.exists(p)) return;
-        try {
-            String t = java.nio.file.Files.readString(p);
-            ADAPT = t.contains("adapt=true");
-            FIT_DENSITY = t.contains("density=true");
-            NO_MERGE = t.contains("nomerge=true");
-            RIBBON_FIX = t.contains("ribbon=true");
-            VEIL_DEPTH = t.contains("veildepth=true");
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("places=(\\d+)").matcher(t);
-            int places = m.find() ? Integer.parseInt(m.group(1)) : FarFlightView.CLUB_DEFAULT;
-            PLACES = places;
-            FarFlightView.CLUB_BUDGET = places;
-        } catch (java.io.IOException ignored) {
-        }
-    }
-
-    /**
-     * SMV: отрезок трубки a–b без мест и шире ленты — в вуаль долями fa, fb его вещества у концов: один гаусс (середина, σ —
-     * сечение и разнос вдоль оси).
-     */
-    static void veilTube(FarView view, Out out, FarFlightView.Tube a, FarFlightView.Tube b, double fa, double fb, float cr, float cg, float cb) {
-        double f = 0.5 * (Math.max(0, fa) + Math.max(0, fb));
-        if (!(f > 0)) return;
-        double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z, len2 = tx * tx + ty * ty + tz * tz, len = Math.sqrt(len2);
-        if (!(len > 0)) return;
-        double s2 = 0.25 * (a.sigma + b.sigma) * (a.sigma + b.sigma), ty2 = ty * ty / len2;
-        double sh = Math.sqrt(s2 + len2 / 24 * (1 - ty2)), sv = Math.sqrt(s2 + len2 / 12 * ty2);
-        double ext = 0.5 * (a.e + b.e) * len;
-        double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, d = Math.sqrt(mx * mx + my * my + mz * mz);
-        double air = view.air(d, my);
-        if (air < Sight.THRESHOLD) return;
-        DRAW.veilAdd(out, view, mx, my, mz, sh, sv, ext, cr, cg, cb, f * 0.5 * (a.shown + b.shown) * air);
-    }
+    static final int PLACES = FarFlightView.CLUB_BUDGET;
     /** Номера трубок облаков кадра — с этого (у следов — номер снаряда). */
     static final long TUBES = 1L << 40;
 
@@ -422,20 +379,6 @@ final class SmokePuffs {
     }
 
     private static final Draw DRAW = new Draw();
-    /** SMV: временная проба плана (только тесты). */
-    static java.util.function.ObjIntConsumer<Object> PROBE;
-
-    /** SMV: записи плана — [x, y, z, ra, rb, most, cover0, opacity, shown, seen, veil, dead, near, owner]. */
-    static double[][] probePlan(Object d) {
-        Draw w = (Draw) d;
-        double[][] out = new double[w.plans][];
-        for (int e = 0; e < w.plans; e++) {
-            int o = 6 * e;
-            out[e] = new double[]{w.plan[o], w.plan[o + 1], w.plan[o + 2], w.plan[o + 3], w.plan[o + 4], w.plan[o + 5], w.planCover0[e],
-                    w.planOpacity[e], w.planShown[e], w.planSeen[e], w.planVeil[e], w.planDead[e] ? 1 : 0, w.planNear[e] ? 1 : 0, w.planOwner[e]};
-        }
-        return out;
-    }
     private static final SmokeGrid.Look[] LOOKS = SmokeGrid.Look.values();
 
     private SmokePuffs() {}
@@ -520,6 +463,28 @@ final class SmokePuffs {
         int count = (int) Math.ceil(many - 1e-9);
         double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many)), reach = 1 + (count == 1 ? 0 : 1 - size) * 0.5;
         return Math.max(1, count * size * size) * cover(view, px, py, pz, ra * reach, rb * reach);
+    }
+
+    /**
+     * Широкая часть отрезка трубки a–b (концы от глаза), которой не досталось мест кадра ({@code FarFlightView.line}: порог
+     * ширины с бюджетом мест вырос, мест кадра нет), — в вуаль, как всё, что не легло в план кадра ({@link Draw#fit}): доли
+     * fa, fb вещества у концов, один гаусс — середина отрезка, σ — сечение и разнос вдоль оси (L²/12, по горизонтали —
+     * половина: σh у вуали — по обеим горизонтальным осям). Лентой её рисовать нельзя: шире {@code FarFlightView.PUFFS_FULL}
+     * лента — полоса с прямыми краями, одним цветом поперёк и без тени. В налёте стенда из 100 ударов (25.10) шлейфы 70
+     * пожаров просили ~8000 мест при 3000, порог рос в 28–41 раз, и шлейфы в 90–180 px и шире шли лентами до 8000 px —
+     * светлые прямые полосы через кадр (RenderDoc, {@code SmokeRaidTest.ribbonsAreOnlyNarrowTubes}).
+     */
+    static void veilTube(FarView view, Out out, FarFlightView.Tube a, FarFlightView.Tube b, double fa, double fb, float cr, float cg, float cb) {
+        double f = 0.5 * (Math.max(0, fa) + Math.max(0, fb));
+        if (!(f > 0)) return;
+        double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z, len2 = tx * tx + ty * ty + tz * tz;
+        if (!(len2 > 0)) return;
+        double s2 = 0.25 * (a.sigma + b.sigma) * (a.sigma + b.sigma), up2 = ty * ty / len2;
+        double sh = Math.sqrt(s2 + len2 / 24 * (1 - up2)), sv = Math.sqrt(s2 + len2 / 12 * up2);
+        double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, air = view.air(Math.sqrt(mx * mx + my * my + mz * mz), my);
+        if (air < Sight.THRESHOLD) return;
+        // ослабление всей массы куска — ослабление на метр по оси × её длина
+        DRAW.veilAdd(out, view, mx, my, mz, sh, sv, 0.5 * (a.e + b.e) * Math.sqrt(len2), cr, cg, cb, f * 0.5 * (a.shown + b.shown) * air);
     }
 
     /**
@@ -789,7 +754,6 @@ final class SmokePuffs {
          * квадратами; вуаль — одной сеткой.
          */
         void flush() {
-            flags();
             close();
             thin();
             double budget = SmokePuffs.budget;
@@ -807,7 +771,6 @@ final class SmokePuffs {
             for (int p = 0; p < placeCount; p++) place(p);
             planRibbons();
             lastRaw = floor;
-            if (PROBE != null) PROBE.accept(this, 0);
             lastBlobs = holding;
             lastPlaces = placeCount;
             int was = level;
@@ -816,11 +779,9 @@ final class SmokePuffs {
             // границы бюджета кадр за кадром слияние то шло, то нет, и кучки мигали
             if (floor > budget || was > 0 && floor > HYSTERESIS * budget) {
                 hide();
-                if (PROBE != null) PROBE.accept(this, 2);
                 // уровень прошлого кадра держится, пока ниже него пол не ляжет заметно под бюджет: иначе на границе бюджета
                 // слитые клубы расходились бы и сходились кадр за кадром
-                while (!NO_MERGE && level < LEVELS && (floor > budget || level < was && floor > HYSTERESIS * budget)) mergeLevel(level++);
-                if (PROBE != null) PROBE.accept(this, 3);
+                while (level < LEVELS && (floor > budget || level < was && floor > HYSTERESIS * budget)) mergeLevel(level++);
                 if (floor > budget) fit(budget);
             }
             // доля кучки s — одна у всех: заливка при s по настоящей кривой каждой кучки ({@link #clusterFill}), подбор делением
@@ -846,7 +807,6 @@ final class SmokePuffs {
             lastShare = s;
             lastItems = 0;
             for (int e = 0; e < plans; e++) if (!planDead[e] && planVeil[e] < 1) lastItems++;
-            if (PROBE != null) PROBE.accept(this, 1);
             share = 1;
             forget();
             veilFlush();
@@ -1167,9 +1127,7 @@ final class SmokePuffs {
                 if (planDead[e] || planVeil[e] >= 1) continue;
                 if (n == order.length) order = java.util.Arrays.copyOf(order, 2 * n);
                 // по видной непрозрачности от большей к меньшей: ключ — 2 − видная (положительные float сортируются как целые)
-                double value = planShown[e] * planSeen[e];
-                if (FIT_DENSITY) value = value / Math.max(planCover0[e], 1e-6) * 1e-4;
-                order[n++] = (long) Float.floatToIntBits((float) (2 - Math.min(1.9, value))) << 32 | e;
+                order[n++] = (long) Float.floatToIntBits((float) (2 - planShown[e] * planSeen[e])) << 32 | e;
             }
             java.util.Arrays.sort(order, 0, n);
             double sum = 0;
@@ -1961,7 +1919,7 @@ final class SmokePuffs {
      * @param tube   трубка (след снаряда, шлейф источника): её места ждут плана кадра ({@link Draw#holdPlace}) и между собой
      *               не сливаются
      * @return мест клубов и вуалей (бюджет клубов трубок); мест кадра уже нет ({@link #PLACES}) — −(мест отрезка + 1): мест не
-     *         взято, отрезок рисует лента целиком
+     *         взято, вещество отрезка — лентой (узкое) и вуалью (широкое, {@link #veilTube})
      */
     static int tube(FarView view, Out out, double ax, double ay, double az, double sa, double ea, double wa, double bx, double by, double bz,
                     double sb, double eb, double wb, float cr, float cg, float cb, double shade, double sigma0, long seed, boolean whole, double shown,
@@ -1975,29 +1933,21 @@ final class SmokePuffs {
         // (лента и клубы рисуют одно вещество, видимая ширина — его), доля клубов — только в непрозрачности
         double step = Math.min(tubeStep(sa, ea / (Math.sqrt(2 * Math.PI) * sa)), tubeStep(sb, eb / (Math.sqrt(2 * Math.PI) * sb)));
         double level = tubeLevel(len, step / SEGMENT_STEP);
-        // SMV: места по своей σ — шаг ∝ σ(x), их число ∫dx/шаг
-        boolean adapt = ADAPT && Math.abs(sb - sa) > 1e-6 * Math.max(sa, sb);
-        double ratio = Math.min(tubeStep(sa, ea / (Math.sqrt(2 * Math.PI) * sa)) / sa, tubeStep(sb, eb / (Math.sqrt(2 * Math.PI) * sb)) / sb);
-        if (adapt) level = Math.clamp(Math.log(Math.max(1, len * Math.log(sb / sa) / (ratio * (sb - sa)))) / Math.log(2), 0, TUBE_LEVELS);
         int k = tubeDepth(level), n = 1 << k;
-        // мест кадра больше не взять ({@link #PLACES}): отрезок — лентой целиком (вещество то же), а его места идут в бюджет
-        // клубов трубок, и на следующих кадрах порог ширины растёт
+        // мест кадра больше не взять ({@link #PLACES}): мест у отрезка нет (его вещество — лентой и вуалью), а его места идут в
+        // бюджет клубов трубок, и на следующих кадрах порог ширины растёт
         if (DRAW.placeCount + n > PLACES) return -(n + 1);
         double total = tubeTotal(level);
-        double norm = 0;
-        if (adapt) for (int j = 0; j < n; j++) norm += tubeWeight(j, level) * (sa * Math.pow(sb / sa, (double) j / n));
         int drawn = 0;
         for (int j = 0; j < n; j++) {
             double weight = tubeWeight(j, level);
             if (weight <= 0) continue;
-            double u = (double) j / n;
-            if (adapt) u = sa * (Math.pow(sb / sa, u) - 1) / (sb - sa);
-            double sigma = sa + (sb - sa) * u, e = ea + (eb - ea) * u;
+            double u = (double) j / n, sigma = sa + (sb - sa) * u, e = ea + (eb - ea) * u;
             double cx = ax + tx * u, cy = ay + ty * u, cz = az + tz * u;
             double share = whole ? 1 : FarFlightView.puffShare(wa + (wb - wa) * u, Math.sqrt(cx * cx + cy * cy + cz * cz), view.pixel());
             if (share <= 0) continue;
             // толща трубки поперёк оси — e/(√(2π)σ) (доля клубов — share); место стоит за свой кусок оси len/total (с долей места)
-            double full = e / (Math.sqrt(2 * Math.PI) * sigma), tau = share * full, along = adapt ? len * weight * sigma / norm : len * weight / total;
+            double full = e / (Math.sqrt(2 * Math.PI) * sigma), tau = share * full, along = len * weight / total;
             if (!(tau > 0) || !(along > 0)) continue;
             double age = FxAtlas.puffFrame(sigma / Math.max(sigma0, 1e-6));
             // зерно — по месту на самом мелком уровне: клуб остаётся тем же, когда уровень меняется
@@ -2095,8 +2045,6 @@ final class SmokePuffs {
          * глаза стена в нескольких метрах уже почти скрыта. ⚠ Линейный спуск вместо доли толщи перед миром — приближение.
          */
         final float[] soft = new float[N * N];
-        /** SMV: где по лучу вершины набирается половина непрозрачности её вещества, м ({@link #half}). */
-        final float[] depth = new float[N * N];
 
         /**
          * Где по лучу набирается половина непрозрачности вещества толщей tau, м: вещество — ровно по отрезку со средним по
@@ -2122,17 +2070,6 @@ final class SmokePuffs {
             return j * N + i;
         }
 
-        /** SMV: глубина вещества вуали для сортировки — средняя по толще вершин глубина половины непрозрачности, м. */
-        float key() {
-            double w = 0, sum = 0;
-            for (int k = 0; k < tau.length; k++) {
-                if (!(tau[k] > 0)) continue;
-                w += tau[k];
-                sum += tau[k] * depth[k];
-            }
-            return w > 0 ? (float) (sum / w) : (float) VEIL_AT;
-        }
-
         /** Непрозрачность вершины k. */
         float alpha(int k) {
             return (float) (1 - Math.exp(-tau[k]));
@@ -2147,7 +2084,6 @@ final class SmokePuffs {
             System.arraycopy(g, 0, c.g, 0, g.length);
             System.arraycopy(b, 0, c.b, 0, b.length);
             System.arraycopy(soft, 0, c.soft, 0, soft.length);
-            System.arraycopy(depth, 0, c.depth, 0, depth.length);
             c.forward.set(forward);
             c.left.set(left);
             c.up.set(up);
@@ -2196,7 +2132,6 @@ final class SmokePuffs {
             java.util.Arrays.fill(g, 0);
             java.util.Arrays.fill(b, 0);
             java.util.Arrays.fill(soft, 0);
-            java.util.Arrays.fill(depth, 0);
             for (int j = 0; j < N; j++) {
                 for (int i = 0; i < N; i++) {
                     double u = at(i), v = at(j);
@@ -2228,9 +2163,7 @@ final class SmokePuffs {
                         g[k] = (float) (sg / sum);
                         b[k] = (float) (sb / sum);
                         double mean = far / sum, spread = Math.sqrt(Math.max(0, far2 / sum - mean * mean));
-                        double h = half(sum, mean, spread);
-                        soft[k] = (float) Math.max(VEIL_SOFT_MIN, 2 * (h - VEIL_AT * n));
-                        depth[k] = (float) h;
+                        soft[k] = (float) Math.max(VEIL_SOFT_MIN, 2 * (half(sum, mean, spread) - VEIL_AT * n));
                     }
                 }
             }
