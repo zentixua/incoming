@@ -473,12 +473,17 @@ STATE_WORD = {gate.PASS: "ПРОХОДИТ", gate.FAIL: "ПРОВАЛ", gate.NOI
 
 
 def main_base():
-    """База PR — `main` (CLAUDE.md, «Картинка и звук»): голова main с успешным build (push) — её jar, ci:<SHA>."""
-    runs = gh("run", "list", "-R", REPO, "-w", "build", "-b", "main", "-e", "push", "--status", "success", "-L", "1",
-              "--json", "headSha", json_out=True)
-    if not runs:
-        raise SystemExit("нет успешного build на main — базы для PR нет")
-    return f"ci:{runs[0]['headSha']}", f"main@{runs[0]['headSha'][:8]}"
+    """База PR — `main` (CLAUDE.md, «Картинка и звук»): последняя голова main с успешным build (push), у которого есть
+    jar (артефакт incoming-jar), — ci:<SHA>. Правка только tools/, docs/ и *.md проходит build без сборки мода и без jar:
+    такая голова базой не годится, берётся прежняя."""
+    runs = gh("run", "list", "-R", REPO, "-w", "build", "-b", "main", "-e", "push", "--status", "success", "-L", "30",
+              "--json", "databaseId,headSha", json_out=True)
+    for r in runs:
+        names = gh("api", f"repos/{REPO}/actions/runs/{r['databaseId']}/artifacts", "--jq",
+                   ".artifacts[] | select(.expired | not) | .name").split()
+        if "incoming-jar" in names:
+            return f"ci:{r['headSha']}", f"main@{r['headSha'][:8]}"
+    raise SystemExit("нет успешного build на main с jar (incoming-jar) — базы для PR нет")
 
 
 # ---------------------------------------------------------------- PR

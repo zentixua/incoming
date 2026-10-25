@@ -42,9 +42,16 @@ if [ -n "$against" ]; then
   pair=(--against "$BJAR" --against-label "$BLABEL" --against-spec "$against")
 fi
 # аренда отпускается при любом выходе, и по сигналу тоже: без ловушки SIGTERM убил бы скрипт до строки release, и
-# видеокарта стояла бы занятой до конца срока аренды. Сигнал bash обработает после выхода задачи (клиент к тому времени
-# закрыт), поэтому аренда не уходит, пока клиент идёт.
-trap '"$ROOT/tools/gpu_lease.sh" release >/dev/null 2>&1 || true' EXIT
+# видеокарта стояла бы занятой до конца срока аренды. Сигнал одному run.sh bash обработает после выхода задачи (клиент
+# к тому времени закрыт). Сигнал всей группе (Ctrl+C) гасит и laptop_job.sh, а сама задача — своя служба systemd — идёт
+# дальше: release, пока её клиент держит замок, отказывает (75). Тогда отпускает фоновый повтор, когда клиент кончится.
+release_lease() {
+  "$ROOT/tools/gpu_lease.sh" release >/dev/null 2>&1
+  [ $? -eq 75 ] || return 0
+  setsid nohup bash -c 'for _ in $(seq 720); do sleep 5; "$1" release >/dev/null 2>&1; [ $? -eq 75 ] || exit 0; done' \
+    _ "$ROOT/tools/gpu_lease.sh" >/dev/null 2>&1 &
+}
+trap release_lease EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 "$ROOT/tools/laptop_job.sh" --gpu --wait "stand-$NAME" -- python3 "$HERE/stand.py" play "$NAME" "$JAR" --spec "$SPEC" --label "$LABEL" \

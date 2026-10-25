@@ -885,6 +885,15 @@ class Pr(unittest.TestCase):
             post.assert_not_called()
             judge.assert_not_called()
 
+    def test_main_base_needs_a_jar(self):
+        # голова main после правки только docs/: build успешен, но мод не собирался и jar нет — база прежняя
+        def gh(*args, json_out=False):
+            if json_out:
+                return [{"databaseId": 2, "headSha": "b" * 40}, {"databaseId": 1, "headSha": "a" * 40}]
+            return {"repos/zentixua/incoming/actions/runs/2/artifacts": "", "repos/zentixua/incoming/actions/runs/1/artifacts": "incoming-jar\n"}[args[1]]
+        with mock.patch.object(stand, "gh", gh), mock.patch.object(stand, "REPO", "zentixua/incoming"):
+            self.assertEqual(stand.main_base(), ("ci:" + "a" * 40, "main@aaaaaaaa"))
+
     def test_player_facing_paths(self):
         self.assertEqual(facing.player_facing(["mod/src/main/java/ua/zentix/incoming/client/fx/A.java", "mod/src/main/resources/assets/incoming/x.png",
                                                "tools/bake_fx/a/b.py", "tools/stand/stand.py", "docs/guide/README.md",
