@@ -1,8 +1,10 @@
 """План прогона стенда: сцены scenes.json → шаги обвязки (stand-plan.json, их исполняет мод tools/stand).
 
 Вся геометрия здесь: где цель, откуда пуск, где камера и куда она смотрит, сколько ударов досыпать до числа и как
-делить их на команды (у залпа не больше `salvo_max` снарядов: `max_salvo` Incoming по умолчанию 30). Обвязка только
-исполняет числа — поэтому план можно проверить тестом без игры (test_plan.py).
+делить их на команды. Залп — командами не больше чем по `salvo_split` шахедов (`max_salvo` Incoming — 30), у каждой —
+своя точка пуска: одна пусковая выпускает шахеды по одному раз в 1–2 с, и залп в 100 с четырёх пусковых шёл бы почти
+минуту. Шахед летит через саму цель (`via`): без точки маршрута он делает петлю и заходит из-за спины стреляющего.
+Обвязка только исполняет числа — поэтому план можно проверить тестом без игры (test_gate.py).
 
 Оси Minecraft: +X — восток, +Z — юг. Направление камеры `toward` — единичный вектор (dx, dz) от места; пуск — по
 пеленгу от юга к востоку (0 — с юга, 90 — с востока).
@@ -48,14 +50,14 @@ def launch_point(scenes, site, k):
 
 
 def salvo_commands(scenes, site, count, spread, first_point):
-    """Команды залпа: по `salvo_max` снарядов, у каждой команды — своя точка пуска (своя пусковая)."""
+    """Команды залпа: поровну, не больше `salvo_split` в команде, у каждой — своя точка пуска (своя пусковая)."""
+    split = min(scenes["salvo_split"], scenes["salvo_max"])
+    n_cmd = -(-count // split)
+    sizes = [count // n_cmd + (1 if i < count % n_cmd else 0) for i in range(n_cmd)]
     cmds, k = [], first_point
-    left = count
-    while left > 0:
-        n = min(left, scenes["salvo_max"])
+    for n in sizes:
         fx, fz = launch_point(scenes, site, k)
-        cmds.append(f"incoming salvo {scenes['weapon']} {n} {spread} at {site[0]:g} {site[1]:g} from {fx:g} {fz:g}")
-        left -= n
+        cmds.append(f"incoming salvo {scenes['weapon']} {n} {spread} at {site[0]:g} {site[1]:g} from {fx:g} {fz:g} via {site[0]:g} {site[1]:g}")
         k += 1
     return cmds, k
 

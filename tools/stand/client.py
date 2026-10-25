@@ -19,6 +19,8 @@ import plan
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 SOCKET = "wayland-incoming-stand"
+# запас высоты экрана вложенного KWin на рамку окна
+DECOR = 40
 
 # настройки игры — одни у всех версий: без vsync и предела к/с, прорисовка 12, частицы «все», красивая графика
 OPTIONS = """onboardAccessibility:false
@@ -40,8 +42,18 @@ narrator:0
 """
 
 
+def server_toml(cfg):
+    """Правила мира стенда ({раздел: {ключ: значение}}) в TOML настроек сервера Incoming: недостающие ключи NeoForge
+    допишет значениями по умолчанию."""
+    lines = []
+    for section, values in cfg.items():
+        lines.append(f"[{section}]")
+        lines += [f"\t{k} = {json.dumps(v)}" for k, v in values.items()]
+    return "\n".join(lines) + "\n"
+
+
 def prepare_game(game, jar, pack_file, mods, scenes_sel):
-    """Каталог игры с нуля: моды, шейдерпак (None — Iris без пака), настройки, план; план — назад."""
+    """Каталог игры с нуля: моды, шейдерпак (None — Iris без пака), настройки игры и правила мира, план; план — назад."""
     if game.exists():
         for sub in ("saves", "stand-out", "mods", "shaderpacks", "config", "logs", "crash-reports", "screenshots"):
             shutil.rmtree(game / sub, ignore_errors=True)
@@ -59,10 +71,13 @@ def prepare_game(game, jar, pack_file, mods, scenes_sel):
     else:
         iris = "enableShaders=false\ndisableUpdateMessage=true\n"
     (game / "config" / "iris.properties").write_text(iris)
+    scenes = plan.load()
+    # настройки сервера NeoForge 21.1 — в config/ каталога игры (serverconfig мира их только переопределяет)
+    (game / "config" / "incoming-server.toml").write_text(server_toml(scenes.get("server_config", {})))
     (game / "options.txt").write_text(OPTIONS)
     (game / "alsoft.conf").write_text(f"[general]\ndrivers = wave\nfrequency = 48000\nchannels = stereo\nsample-type = int16\n"
                                       f"[wave]\nfile = {game / 'audio.wav'}\n")
-    p = plan.build(plan.load(), scenes_sel)
+    p = plan.build(scenes, scenes_sel)
     (game / "stand-plan.json").write_text(json.dumps(p, indent=1, ensure_ascii=False))
     return p
 
@@ -117,8 +132,10 @@ def run(game, script, size, limit_s, logf, log):
                # игры, а не с тем, что оставил прошлый прогон
                __GL_SHADER_DISK_CACHE="0")
     old = signal.signal(signal.SIGTERM, _term)
-    proc = subprocess.Popen([str(ROOT / "tools" / "nested_kwin.sh"), SOCKET, w, h, f"bash {script}"], stdout=logf, stderr=subprocess.STDOUT,
-                            env=env, start_new_session=True)
+    # экран вложенного KWin выше окна на рамку: окно 2560×1600 с заголовком (28 px у Breeze) помещается целиком, и кадр
+    # игры — ровно заданный (на экране той же высоты KWin ужимал окно до 2560×1572)
+    proc = subprocess.Popen([str(ROOT / "tools" / "nested_kwin.sh"), SOCKET, w, str(int(h) + DECOR), f"bash {script}"], stdout=logf,
+                            stderr=subprocess.STDOUT, env=env, start_new_session=True)
     deadline = time.time() + limit_s + 600
     try:
         while True:

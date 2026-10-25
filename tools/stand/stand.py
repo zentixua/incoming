@@ -283,7 +283,8 @@ def analyze(out, write=True):
         w, h = meta["context"]["size"].split("x")
         gl = r["meta"].get("gl") or {}
         if gl and (gl.get("width") != int(w) or gl.get("height") != int(h)):
-            r["meta"]["size_note"] = f"кадр {gl.get('width')}×{gl.get('height')} вместо {w}×{h}"
+            # заливка растёт с площадью кадра: снятое не тем размером с принятым не сравнить
+            r["checks"].append(f"кадр {gl.get('width')}×{gl.get('height')} вместо {w}×{h}")
         res["packs"][pack] = r
     if write:
         (out / "results.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))

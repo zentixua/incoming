@@ -210,12 +210,21 @@ class Plan(unittest.TestCase):
         self.assertEqual([s["expect"] for s in at_c], [1, 15, 24, 60])
         self.assertEqual(sum(s["expect"] for s in at_c), 100)
 
-    def test_commands_respect_salvo_max_and_match_expect(self):
+    def test_commands_split_evenly_and_match_expect(self):
         for s in self.salvos():
             counts = [int(c.split()[3]) for c in s["cmds"]]
-            self.assertTrue(all(n <= self.scenes["salvo_max"] for n in counts), s["cmds"])
+            self.assertTrue(all(n <= min(self.scenes["salvo_max"], self.scenes["salvo_split"]) for n in counts), s["cmds"])
+            self.assertLessEqual(max(counts) - min(counts), 1 if "waves" not in s["id"] else 0)
             self.assertEqual(sum(counts), s["expect"])
             self.assertEqual(len(s["delays"]), len(s["cmds"]))
+
+    def test_each_command_from_its_own_point_via_the_target(self):
+        for s in self.salvos():
+            froms = [c.split(" from ")[1].split(" via ")[0] for c in s["cmds"]]
+            if s["id"] != "acc":
+                self.assertEqual(len(set(froms)), len(froms), s["cmds"])
+            for c in s["cmds"]:
+                self.assertTrue(c.endswith(f" via {s['x']:g} {s['z']:g}"), c)
 
     def test_launch_points_are_400_m_from_the_target(self):
         for s in self.salvos():
