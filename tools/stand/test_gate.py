@@ -2,7 +2,9 @@
 import copy
 import json
 import math
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -238,9 +240,16 @@ QUIET = {"samples": 4, "covered": 1.0, "gpu_covered": 1.0, "cpu_foreign_max": 0.
 
 
 def host_sample(epoch, cpu_foreign=0.2, gpu_foreign=0, dt=5.0, profile="performance", units=None):
-    return {"epoch": epoch, "dt": dt, "phase": "run", "load1": 1.0, "cpu_total": cpu_foreign + 4, "cpu_own": 4.0,
+    """Выборка процессора (client.Host); gpu — только сводка для ожидания тишины, разбор её не читает."""
+    return {"kind": "cpu", "epoch": epoch, "dt": dt, "phase": "run", "load1": 1.0, "cpu_total": cpu_foreign + 4, "cpu_own": 4.0,
             "cpu_foreign": cpu_foreign, "units": units or {}, "gpu": {"foreign_sm": gpu_foreign, "who": [], "temp": 70, "clock": 2500},
             "profile": profile}
+
+
+def gpu_cycles(t0, t1, foreign_sm=0, own_sm=30):
+    """Циклы видеокарты по 1 с подряд с концами t0 + 1 … t1 (client.PmonCycles): own_sm None — у своего клиента числа нет."""
+    return [{"kind": "gpu", "epoch": float(t), "dt": 1.0, "foreign_sm": foreign_sm, "who": [], "own_sm": own_sm}
+            for t in range(int(t0) + 1, int(t1) + 1)]
 
 
 class Results(unittest.TestCase):
@@ -280,7 +289,7 @@ class Results(unittest.TestCase):
             return results.analyze(d, plan.load(), ["first", "100"])
 
     def test_analyze_cuts_windows_and_drops_shot_frames(self):
-        r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, dt=2.0)])
+        r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, dt=2.0)] + gpu_cycles(1_000_000, 1_000_004))
         w = r["windows"]["100/edge"]
         self.assertEqual(w["frames"], 98)            # кадры 0–99 без снимка и следующего
         # длительность кадра 99 (начат в окне) — из строки кадра 100, за концом окна; снимок (500 мс) не в счёт
@@ -293,6 +302,7 @@ class Results(unittest.TestCase):
         self.assertEqual(w["mspt"]["mean"], 12.0)
         self.assertEqual(w["probes"]["FxLayer.describeTiming"], "layer 3 ms")
         self.assertEqual(w["host"]["samples"], 1)    # выборка 1 000 000–1 000 002 с = 0–2000 мс стенда
+        self.assertEqual(w["host"]["gpu_covered"], 1.0)
         # первый удар: кадр 99 начат до попадания (1990 мс) и шёл в его миг (до 2020 мс) — его 30 мс и есть худший
         self.assertEqual(r["first"]["worst_ms"], 30.0)
         # окна плана обязательны: 100/outside и 100/inside не сняты
@@ -300,16 +310,19 @@ class Results(unittest.TestCase):
 
     def test_foreign_load_in_a_gated_window_makes_the_run_invalid(self):
         r = self.analyze([host_sample(1_000_002.0, cpu_foreign=3.1, dt=2.0, units={"incoming-job-gametest": 2.9}),
-                          host_sample(1_000_004.0, dt=2.0)])
+                          host_sample(1_000_004.0, dt=2.0)] + gpu_cycles(1_000_000, 1_000_004))
         load = [c for c in r["checks"] if c.startswith(results.LOAD_TAG) and "100/edge" in c]
         self.assertEqual(len(load), 1, r["checks"])
         self.assertIn("3.1 ядра", load[0])
         self.assertIn("incoming-job-gametest", load[0])
-        r = self.analyze([host_sample(1_000_002.0, gpu_foreign=37, dt=2.0), host_sample(1_000_004.0, dt=2.0)])
-        self.assertTrue(any("видеокарта у чужих процессов — 37" in c for c in r["checks"]))
+        # чужая задача на видеокарте — один цикл в окне (между выборками процессора): цикл её и показывает
+        cycles = gpu_cycles(1_000_000, 1_000_004)
+        cycles[1]["foreign_sm"] = 37
+        r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, dt=2.0)] + cycles)
+        self.assertTrue(any("100/edge" in c and "видеокарта у чужих процессов — 37" in c for c in r["checks"]), r["checks"])
 
     def test_load_is_checked_in_the_first_strike_window_too(self):
-        r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, cpu_foreign=7.0, dt=2.0)])
+        r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, cpu_foreign=7.0, dt=2.0)] + gpu_cycles(1_000_000, 1_000_004))
         self.assertTrue(any(c.startswith(results.LOAD_TAG) and "окно first" in c for c in r["checks"]), r["checks"])
 
     def test_first_strike_frame_longer_than_its_window_still_checks_the_load(self):
@@ -322,10 +335,12 @@ class Results(unittest.TestCase):
             ev = [{"type": "window", "t_ms": 1000, "name": "first", "edge": "begin"}, {"type": "window", "t_ms": 6000, "name": "first", "edge": "end"},
                   {"type": "srv", "t_ms": 0, "mspt": 6.0, "game_time": 1, "projectiles": 0, "entities": 1, "epoch_ms": 0}]
             (d / "events.jsonl").write_text("\n".join(json.dumps(e) for e in ev) + "\n")
-            (d / "host.jsonl").write_text(json.dumps(host_sample(7.0, cpu_foreign=7.0, gpu_foreign=37, dt=7.0)) + "\n")
+            host = [host_sample(7.0, cpu_foreign=7.0, dt=7.0)] + gpu_cycles(0, 7, foreign_sm=37)
+            (d / "host.jsonl").write_text("\n".join(json.dumps(x) for x in host) + "\n")
             r = results.analyze(d, plan.load(), ["first"])
             self.assertEqual(r["first"]["worst_ms"], 6000.0)
-            self.assertTrue(any(c.startswith(results.LOAD_TAG) and "окно first" in c for c in r["checks"]), r["checks"])
+            self.assertTrue(any(c.startswith(results.LOAD_TAG) and "окно first" in c and "ядра" in c for c in r["checks"]), r["checks"])
+            self.assertTrue(any(c.startswith(results.LOAD_TAG) and "окно first" in c and "37 % SM" in c for c in r["checks"]), r["checks"])
 
     def test_window_tail_without_samples_is_invalid(self):
         # последняя выборка кончилась на 1,1 с окна 1–2 с: хвост без записи
@@ -333,10 +348,23 @@ class Results(unittest.TestCase):
         self.assertTrue(any("100/edge: нагрузка машины записана на 10%" in c for c in r["checks"]), r["checks"])
 
     def test_missing_gpu_telemetry_is_not_zero(self):
-        s = host_sample(1_000_004.0, dt=4.0)
-        s["gpu"] = None
-        r = self.analyze([s])
+        # циклов нет вовсе (nvidia-smi нет или упал) — сводка в выборке процессора замером не считается
+        r = self.analyze([host_sample(1_000_004.0, dt=4.0)])
         self.assertTrue(any("100/edge: видеокарта чужими процессами записана на 0%" in c for c in r["checks"]), r["checks"])
+        # циклы есть, но у своего рисующего клиента числа нет — драйвер не считал по процессам: «-» у чужих не ноль
+        r = self.analyze([host_sample(1_000_004.0, dt=4.0)] + gpu_cycles(1_000_000, 1_000_004, own_sm=None))
+        self.assertTrue(any("100/edge: видеокарта чужими процессами записана на 0%" in c for c in r["checks"]), r["checks"])
+
+    def test_cycles_after_the_client_exits_do_not_cover_its_window(self):
+        # окно 1–2 с; клиент и чужая задача вышли на 1,5 с, заключительная выборка процессора — на 4 с: её отрезок
+        # накрывает хвост окна (процессор — по накопленным счётчикам, верно), а циклы видеокарты после выхода — без числа
+        # клиента и замером хвоста не становятся
+        cycles = [{"kind": "gpu", "epoch": 1_000_001.5, "dt": 0.5, "foreign_sm": 40, "who": ["blender:40"], "own_sm": 30}]
+        cycles += gpu_cycles(1_000_001.5, 1_000_004, own_sm=None)
+        r = self.analyze([host_sample(1_000_001.0, dt=1.0), host_sample(1_000_004.0, dt=3.0)] + cycles)
+        bad = [c for c in r["checks"] if "100/edge" in c]
+        self.assertTrue(any("видеокарта чужими процессами записана на 50%" in c for c in bad), bad)
+        self.assertTrue(any("видеокарта у чужих процессов — 40" in c for c in bad), bad)
 
     def test_no_load_record_is_invalid_but_not_retried(self):
         r = self.analyze(None)
@@ -384,27 +412,86 @@ class Host(unittest.TestCase):
         self.assertAlmostEqual(h["cpu_foreign"], 0.9)
         self.assertTrue(results.foreign(h))
 
-    def test_pmon(self):
-        text = """# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command
-# Idx           #    C/G      %      %      %      %      %      %    name
-    0       2778   C+G      -      -      -      -      -      -    kwin_wayland
-    0    1503885     G     37     11      -      -      -      -    java
-    0    1600000     G     52     20      -      -      -      -    java
+    PMON = """#Date        Time         gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command
+#YYYYMMDD    HH:MM:SS     Idx           #    C/G      %      %      %      %      %      %    name
+ 20261025    09:09:20       0       2778   C+G      4      1      -      -      -      -    kwin_wayland
+ 20261025    09:09:20       0       2789   C+G      -      -      -      -      -      -    plasmashell
+ 20261025    09:09:20       0    1593256   C+G      -      -      0      0      -      -    kwin_wayland
+ 20261025    09:09:20       0    1593313   C+G     16      6      -      -      -      -    java
+ 20261025    09:09:21       0       2778   C+G      -      -      -      -      -      -    kwin_wayland
+ 20261025    09:09:21       0       2789   C+G      -      -      -      -      -      -    plasmashell
+ 20261025    09:09:21       0    1503885     G     37     11      -      -      -      -    java
+ 20261025    09:09:21       0    1593313   C+G      -      -      -      -      -      -    java
+#Date        Time         gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command
+ 20261025    09:09:23       0       2778   C+G      -      -      -      -      -      -    kwin_wayland
+ 20261025    09:09:23       0    1593313   C+G     30      7      -      -      -      -    java
+ 20261025    09:09:23       0       2778   C+G      2      1      -      -      -      -    kwin_wayland
+ 20261025    09:09:23       0    1593313   C+G     31      7      -      -      -      -    java
+ 20261025    09:09:25       0       2778   C+G      -      -      -      -      -      -    kwin_wayland
 """
-        mine = lambda pid: pid == "1600000"     # noqa: E731
-        self.assertEqual(client.parse_pmon(text, mine, True), (37, ["java:37"]))
-        # «-» у простаивающего чужого процесса (композитор) — 0, а не «замера нет»
-        self.assertEqual(client.parse_pmon(text, lambda pid: pid == "1503885", False), (52, ["java:52"]))
-        # свой клиент идёт, а числа SM нет ни у кого (и у него) — драйвер по процессам не считает: замера нет
-        no_sm = text.replace("37     11", " -      -").replace("52     20", " -      -")
-        self.assertIsNone(client.parse_pmon(no_sm, mine, True))
-        self.assertIsNone(client.parse_pmon(text.splitlines()[0] + "\n", mine, True))      # один заголовок
-        self.assertEqual(client.parse_pmon(text.splitlines()[0] + "\n", mine, False), (0, []))   # до клиента — тихо
-        self.assertIsNone(client.parse_pmon("", mine, False))
-        self.assertIsNone(client.parse_pmon("NVIDIA-SMI has failed\n", mine, False))
+    MINE = staticmethod(lambda pid: pid in ("1593313", "1593256"))
+
+    def cycles(self, text):
+        p = client.PmonCycles(self.MINE)
+        return [c for c in (p.feed(line) for line in text.splitlines()) if c is not None]
+
+    def test_pmon_cycles(self):
+        cs = self.cycles(self.PMON)
+        # 4 законченных цикла; последний (09:09:25) — недописанный, не цикл
+        self.assertEqual(len(cs), 4)
+        t20 = time.mktime(time.strptime("20261025 09:09:20", "%Y%m%d %H:%M:%S")) + 0.5
+        self.assertEqual([c["epoch"] - t20 for c in cs], [0, 1, 3, 3])
+        # первый — своей длины цикла; дальше — до конца прошлого (циклы подряд); пропуск секунды (22) — тоже подряд;
+        # два цикла в одной секунде (процесс повторился) — второй своей длины
+        self.assertEqual([c["dt"] for c in cs], [client.PMON_S, 1.0, 2.0, client.PMON_S])
+        # «-» у простаивающих чужих (композитор, plasmashell) — 0; свои (клиент и его KWin) — не чужие
+        self.assertEqual((cs[0]["foreign_sm"], cs[0]["own_sm"]), (4, 16))
+        self.assertEqual(cs[0]["who"], ["kwin_wayland:4"])
+        # чужой клиент 37 %, а у своего числа нет — цикл без замера (решает разбор), чужие 37 — видны
+        self.assertEqual((cs[1]["foreign_sm"], cs[1]["own_sm"]), (37, None))
+        self.assertEqual((cs[3]["foreign_sm"], cs[3]["own_sm"]), (2, 31))
+
+    def test_pmon_garbage_gives_no_cycles(self):
+        self.assertEqual(self.cycles("NVIDIA-SMI has failed\n\n" + self.PMON.splitlines()[0]), [])
+
+    def test_gpu_watch_end_to_end(self):
+        # сборщик с поддельным nvidia-smi (CI без видеокарты): циклы → host_in окна; чужая задача 40 % в одном цикле
+        lines = self.PMON.splitlines()
+        with tempfile.TemporaryDirectory() as d:
+            fake = Path(d) / "nvidia-smi"
+            fake.write_text("#!/bin/sh\ncat <<'EOF'\n" + "\n".join(lines[:10]) + "\n" + lines[2].replace("09:09:20", "09:09:22") + "\nEOF\n")
+            fake.chmod(0o755)
+            old = os.environ["PATH"]
+            os.environ["PATH"] = d + os.pathsep + old
+            try:
+                w = client.GpuWatch(self.MINE).start()
+                w.thread.join(timeout=10)
+                cs = w.stop()
+            finally:
+                os.environ["PATH"] = old
+        self.assertEqual(len(cs), 2)
+        t20 = cs[0]["epoch"]
+        ev = [{"type": "srv", "t_ms": 0.0, "epoch_ms": (t20 - 1.0) * 1000}]       # 0 мс стенда — начало первого цикла
+        h = results.host_in([host_sample(t20 + 1.0, dt=2.0)] + cs, ev, 0, 2000)
+        self.assertEqual(h["gpu_covered"], 0.5)        # второй цикл — без числа своего клиента
+        self.assertEqual(h["gpu_foreign"], 37)
+        self.assertIsNone(client.GpuWatch(self.MINE).stop() or None)
 
 
 class Checks(unittest.TestCase):
+    def test_power_profile_is_checked_in_every_verdict_window(self):
+        # профиль сменился только в первом ударе и в последней минуте накопления, в «100» — нет
+        scene, ev = self.acc_events()
+        low = dict(QUIET, profiles=["low-power"])
+        ok = dict(QUIET, profiles=["performance"])
+        res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {"100/edge": {"frames": 500, "gpu": {"p50": 1}, "thread": {"p95": 1}, "host": ok}},
+               "first": {"worst_ms": 30.0, "host": low},
+               "acc": {"growth": {"ratio": 1.2}, "load": results.acc_load(ev, scene, 0, 240_000), "host": {"first": ok, "last": low}}}
+        bad = [b for b in results.checks(ev + [{"type": "gl"}], res, (), scene, "performance") if "профиль" in b]
+        self.assertEqual(bad, ["окно first: профиль питания low-power, а снимали в performance",
+                               "накопление acc, последняя минута: профиль питания low-power, а снимали в performance"])
+        self.assertEqual([b for b in results.checks(ev + [{"type": "gl"}], res, (), scene) if "профиль" in b], [])
+
     def test_load_is_checked_in_the_accumulation_minutes(self):
         scene, ev = self.acc_events()
         quiet = QUIET
@@ -504,7 +591,8 @@ def raw_run(d, name="r", gpu=8.0, renderer="RTX 4060", done=True, label="v3.7.0"
     if done:
         ev.append({"type": "done", "t_ms": 8100, "frames": 700})
     (d / "none" / "events.jsonl").write_text("\n".join(json.dumps(e) for e in ev) + "\n")
-    (d / "none" / "host.jsonl").write_text("\n".join(json.dumps(host_sample(1_000_000.0 + t, dt=1.0, profile=power)) for t in range(1, 9)) + "\n")
+    host = [host_sample(1_000_000.0 + t, dt=1.0, profile=power) for t in range(1, 9)] + gpu_cycles(1_000_000, 1_000_008)
+    (d / "none" / "host.jsonl").write_text("\n".join(json.dumps(x) for x in host) + "\n")
     ctx = {"stand": "s", "mods": {}, "packs": {"none": "none"}, "scenes": ["100"], "gpu": "g", "driver": "d", "size": "2560x1600", "java": "21",
            "kwin": "6.8", "power": "performance", "gl_yield": "USLEEP"}
     (d / "meta.json").write_text(json.dumps({"name": name, "label": label, "jar": {"file": "j", "sha256": "x", "spec": label},

@@ -3,8 +3,9 @@
 Каталог игры собирается с нуля на каждый пак: Incoming, Sodium, Iris, шейдерпак, настройки, план. Клиент идёт во
 вложенном KWin (tools/nested_kwin.sh: без окна на рабочем столе, без звука хоста, аренда видеокарты) своей сессией
 процессов с меткой в окружении: остановка гасит всё с меткой (TERM, через 20 с KILL) — и обёртки, и JVM, — не только
-группу обёртки (JVM — внук dbus-run-session и kwin). Рядом с клиентом каждые 5 с пишется нагрузка машины (`Host`,
-host.jsonl): чужая — всё, что не своя cgroup задачи; перед клиентом — ждать тишины. Только стандартная библиотека.
+группу обёртки (JVM — внук dbus-run-session и kwin). Рядом с клиентом пишется нагрузка машины (host.jsonl): процессор
+каждые 5 с (`Host`: чужое — всё, что не своя cgroup задачи) и видеокарта циклами по ~1 с подряд (`GpuWatch`); перед
+клиентом — ждать тишины. Только стандартная библиотека.
 """
 import json
 import os
@@ -12,6 +13,7 @@ import shlex
 import shutil
 import signal
 import subprocess
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -153,16 +155,125 @@ SAMPLE_S = 5
 # перед клиентом ждать тишины: столько выборок подряд без тяжёлой чужой нагрузки (10 с: долгая задача видна сразу, до окон
 # шлагбаума у клиента ещё ~5 мин), не дольше QUIET_WAIT_S
 QUIET_SAMPLES, QUIET_WAIT_S = 2, 600
+# цикл nvidia-smi pmon (-d 1): SM каждого процесса — среднее за цикл, циклы идут подряд; между концами соседних циклов
+# больше PMON_GAP_S — пропуск (pmon вставал), а не один длинный цикл
+PMON_S, PMON_GAP_S = 1.0, 2.5
+
+
+def power_profile():
+    """Профиль питания ноутбука (platform_profile: тихий ночью — другие частоты и время кадра); нет — unknown."""
+    try:
+        return Path("/sys/firmware/acpi/platform_profile").read_text().strip()
+    except OSError:
+        return "unknown"
+
+
+class PmonCycles:
+    """Строки `nvidia-smi pmon -d 1 -s u -o DT` → циклы видеокарты: {"kind": "gpu", "epoch" (конец цикла, настенные с),
+    "dt" (его длина), "foreign_sm" (% SM чужих процессов, сумма), "who", "own_sm" (% SM своего клиента; None — числа нет)}.
+    Цикл — строки с одним временем; кончается, когда пришла строка следующего (другое время или процесс, что в цикле уже
+    был: два цикла в одной секунде); последний, недописанный, — не цикл.
+    Время в pmon — до секунды: конец цикла — середина его секунды; длина — до конца прошлого цикла (циклы подряд), после
+    пропуска и у первого — PMON_S. «-» у процесса — за цикл у него нет отсчёта SM: так у всех простаивающих (композитор
+    рабочего стола, plasmashell, Xwayland), это 0. Есть ли у цикла замер, решает разбор по own_sm (results.host_in)."""
+
+    def __init__(self, own):
+        self.own = own
+        self.key = None
+        self.lines = []
+        self.prev_end = None
+
+    def feed(self, line):
+        """Строка pmon → законченный цикл (её строка начала следующий) или None."""
+        f = line.split()
+        if len(f) < 7 or f[0].startswith("#") or not (f[0].isdigit() and f[3].isdigit()):
+            return None
+        key = (f[0], f[1])
+        done = None
+        if self.key is not None and (key != self.key or any(x[3] == f[3] for x in self.lines)):
+            done = self._cycle()
+            self.key = None
+        if self.key is None:
+            self.key, self.lines = key, []
+        self.lines.append(f)
+        return done
+
+    def _cycle(self):
+        try:
+            end = time.mktime(time.strptime(" ".join(self.key), "%Y%m%d %H:%M:%S")) + 0.5
+        except ValueError:
+            return None
+        gap = end - self.prev_end if self.prev_end is not None else None
+        dt = gap if gap is not None and 0 < gap <= PMON_GAP_S else PMON_S
+        self.prev_end = end
+        foreign, who, own = 0, [], None
+        for f in self.lines:
+            pid, sm = f[3], f[5]
+            if not sm.isdigit():
+                continue
+            if self.own(pid):
+                own = max(own or 0, int(sm))
+            else:
+                foreign += int(sm)
+                who.append(f"{f[-1]}:{sm}")
+        return {"kind": "gpu", "epoch": round(end, 3), "dt": round(dt, 3), "foreign_sm": foreign, "who": who, "own_sm": own}
+
+
+class GpuWatch:
+    """Видеокарта непрерывно: `nvidia-smi pmon -d 1` своим процессом, циклы (PmonCycles) копятся до `drain`. Нет
+    nvidia-smi или он упал — циклов нет: окна без них разбор не примет (замера нет — не ноль)."""
+
+    def __init__(self, own):
+        self.cycles, self.lock, self.proc, self.thread = [], threading.Lock(), None, None
+        self.parser = PmonCycles(own)
+
+    def start(self):
+        try:
+            self.proc = subprocess.Popen(["nvidia-smi", "pmon", "-d", "1", "-s", "u", "-o", "DT"], stdout=subprocess.PIPE,
+                                         stderr=subprocess.DEVNULL, text=True, start_new_session=True)
+        except OSError:
+            return self
+        self.thread = threading.Thread(target=self._read, name="stand-pmon", daemon=True)
+        self.thread.start()
+        return self
+
+    def _read(self):
+        for line in self.proc.stdout:
+            c = self.parser.feed(line)
+            if c is not None:
+                with self.lock:
+                    self.cycles.append(c)
+
+    def drain(self):
+        with self.lock:
+            out, self.cycles = self.cycles, []
+        return out
+
+    def stop(self):
+        if self.proc is not None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait()
+        if self.thread is not None:
+            self.thread.join(timeout=5)
+        if self.proc is not None:
+            self.proc.stdout.close()
+        return self.drain()
 
 
 class Host:
     """Нагрузка машины за время между выборками: ядра процессора всего и своей cgroup (задача ноутбука: в ней клиент,
-    его KWin и JVM), чужие = всё − свои, по службам рядом (кто), видеокарта чужими процессами (% SM по nvidia-smi pmon,
-    свои — из своей cgroup), её температура и частота, профиль питания, load average. Без nvidia-smi — без видеокарты."""
+    его KWin и JVM), чужие = всё − свои, по службам рядом (кто), профиль питания, load average; видеокарта — циклы
+    GpuWatch за то же время (чужие процессы — вне своей cgroup) и её температура и частота. В выборке процессора
+    видеокарта — только сводка для ожидания тишины и лога; разбор берёт сами циклы."""
 
-    def __init__(self):
+    def __init__(self, gpu=None):
         self.cg = self._own_cgroup()
         self.prev = None
+        self.gpu = gpu
 
     @staticmethod
     def _own_cgroup():
@@ -202,7 +313,7 @@ class Host:
                     out[d.name] = u
         return out
 
-    def _own_pid(self, pid):
+    def own_pid(self, pid):
         """Процесс — в своей cgroup (путь его cgroup v2 совпадает со своим)."""
         try:
             path = Path(f"/proc/{pid}/cgroup").read_text().split("::", 1)[1].strip().lstrip("/")
@@ -210,68 +321,36 @@ class Host:
             return False
         return self.cg is not None and bool(path) and self.cg == Path("/sys/fs/cgroup") / path
 
-    def _gpu(self, phase):
-        """Чужие процессы на видеокарте (% SM, сумма) и её температура и частота; замера нет (nvidia-smi нет, упал,
-        завис или вывел не то — и после повтора) — None, а не ноль: разбор такое окно не примет."""
-        for _ in range(2):
-            try:
-                pm = subprocess.run(["nvidia-smi", "pmon", "-c", "1", "-s", "u"], capture_output=True, text=True, timeout=15)
-                q = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu,clocks.sm", "--format=csv,noheader,nounits"],
-                                   capture_output=True, text=True, timeout=15)
-            except (OSError, subprocess.SubprocessError):
-                continue
-            got = parse_pmon(pm.stdout, self._own_pid, phase == "run") if pm.returncode == 0 else None
-            if got is None:
-                continue
-            temp = clock = None
-            if q.returncode == 0 and q.stdout.strip():
-                f = q.stdout.strip().splitlines()[0].split(",")
-                temp, clock = _num(f[0]), _num(f[1]) if len(f) > 1 else None
-            return {"foreign_sm": got[0], "who": got[1], "temp": temp, "clock": clock}
-        return None
+    @staticmethod
+    def _temp_clock():
+        try:
+            q = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu,clocks.sm", "--format=csv,noheader,nounits"],
+                               capture_output=True, text=True, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            return None, None
+        if q.returncode != 0 or not q.stdout.strip():
+            return None, None
+        f = q.stdout.strip().splitlines()[0].split(",")
+        return _num(f[0]), _num(f[1]) if len(f) > 1 else None
 
     def sample(self, phase):
-        """Выборка за время с прошлой (первая — только точка отсчёта: None)."""
+        """Выборка за время с прошлой (первая — только точка отсчёта: None) и циклы видеокарты за это время:
+        (выборка, [циклы])."""
         now = (time.time(), self._busy_s(), self._usage_s(self.cg) if self.cg else None, self._units())
+        cycles = self.gpu.drain() if self.gpu else []
         prev, self.prev = self.prev, now
         if prev is None:
-            return None
+            return None, cycles
         dt = now[0] - prev[0]
         own = (now[2] - prev[2]) / dt if now[2] is not None and prev[2] is not None else 0.0
         total = (now[1] - prev[1]) / dt
         units = {n: round((u - prev[3][n]) / dt, 2) for n, u in now[3].items() if n in prev[3] and (u - prev[3][n]) / dt >= 0.1}
-        try:
-            profile = Path("/sys/firmware/acpi/platform_profile").read_text().strip()
-        except OSError:
-            profile = None
-        return {"epoch": now[0], "dt": round(dt, 3), "phase": phase, "load1": float(Path("/proc/loadavg").read_text().split()[0]),
+        worst = max(cycles, key=lambda c: c["foreign_sm"], default=None)
+        temp, clock = self._temp_clock()
+        gpu = {"foreign_sm": worst["foreign_sm"], "who": worst["who"], "cycles": len(cycles), "temp": temp, "clock": clock} if worst else None
+        return {"kind": "cpu", "epoch": now[0], "dt": round(dt, 3), "phase": phase, "load1": float(Path("/proc/loadavg").read_text().split()[0]),
                 "cpu_total": round(total, 2), "cpu_own": round(own, 2), "cpu_foreign": round(max(0.0, total - own), 2),
-                "units": units, "gpu": self._gpu(phase), "profile": profile}
-
-
-def parse_pmon(text, own, client_running):
-    """`nvidia-smi pmon -c 1 -s u` → (% SM чужих процессов сумма, [«имя:%»]); own(pid) — процесс свой. Нет заголовка
-    («# gpu pid type sm …») — вывод не тот: None. «-» у процесса — за выборку у него нет отсчёта SM: так у всех
-    простаивающих (композитор рабочего стола, plasmashell, Xwayland), поэтому это 0, а не «замера нет». Но «-» дал бы
-    и драйвер, который SM по процессам не считает вовсе: пока идёт свой клиент (client_running), он рисует каждый кадр,
-    и если числа нет и у него — замера нет, None."""
-    lines = text.splitlines()
-    if not any(line.lstrip().startswith("#") and "sm" in line.split() for line in lines):
-        return None
-    foreign, who, own_counted = 0, [], False
-    for line in lines:
-        f = line.split()
-        if len(f) < 4 or f[0].startswith("#") or not f[1].isdigit():
-            continue
-        if own(f[1]):
-            own_counted = own_counted or f[3].isdigit()
-            continue
-        if f[3].isdigit():
-            foreign += int(f[3])
-            who.append(f"{f[-1]}:{f[3]}")
-    if client_running and not own_counted:
-        return None
-    return foreign, who
+                "units": units, "gpu": gpu, "profile": power_profile()}, cycles
 
 
 def _num(s):
@@ -304,17 +383,22 @@ def run(game, script, size, limit_s, logf, log):
     if GL_YIELD:
         env["__GL_YIELD"] = GL_YIELD
     old = signal.signal(signal.SIGTERM, _term)
-    hostf = proc = None
+    hostf = proc = watch = None
+
+    def write(records):
+        for r in records:
+            hostf.write(json.dumps(r, ensure_ascii=False) + "\n")
+        hostf.flush()
+
     try:
         (game / "stand-out").mkdir(parents=True, exist_ok=True)
         hostf = open(game / "stand-out" / "host.jsonl", "a", encoding="utf-8")
         host = Host()
+        watch = host.gpu = GpuWatch(host.own_pid).start()
 
         def sample(phase):
-            s = host.sample(phase)
-            if s is not None:
-                hostf.write(json.dumps(s, ensure_ascii=False) + "\n")
-                hostf.flush()
+            s, cycles = host.sample(phase)
+            write(cycles + ([s] if s is not None else []))
             return s
 
         # перед клиентом — тишина: чужие тяжёлые задачи (сборка, GameTest, клиент другой сессии) мешали бы замеру; ждём не
@@ -362,6 +446,11 @@ def run(game, script, size, limit_s, logf, log):
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
+        if watch is not None:
+            # циклы после выхода клиента замером не станут (у них нет его числа), но и не теряются
+            rest = watch.stop()
+            if hostf is not None:
+                write(rest)
         if hostf is not None:
             hostf.close()
         signal.signal(signal.SIGTERM, old)

@@ -220,14 +220,6 @@ def kwin_version():
         return "unknown"
 
 
-def power_profile():
-    """Профиль питания ноутбука (platform_profile: тихий ночью — другие частоты и время кадра); нет — unknown."""
-    try:
-        return Path("/sys/firmware/acpi/platform_profile").read_text().strip()
-    except OSError:
-        return "unknown"
-
-
 def context(packs, scenes_sel, size, files):
     """Всё, кроме jar, от чего зависят числа: стенд, паки и моды (sha512), сцены, видеокарта и драйвер, окно, java
     клиента (скрипт запуска — уже подготовлен), KWin, профиль питания, как драйвер ждёт видеокарту (__GL_YIELD)."""
@@ -235,7 +227,7 @@ def context(packs, scenes_sel, size, files):
     return {"stand": stand_hash(), "mods": {m: files[m][1] for m in MODS},
             "packs": {p: files[p][1] if PACKS[p] else "none" for p in packs}, "scenes": scenes_sel or "all",
             "gpu": name, "driver": driver, "size": size, "java": client.java_of(SCRIPT), "kwin": kwin_version(),
-            "power": power_profile(), "gl_yield": client.GL_YIELD or "driver"}
+            "power": client.power_profile(), "gl_yield": client.GL_YIELD or "driver"}
 
 
 def key(jar_sha, ctx):
@@ -298,7 +290,7 @@ def cmd_play(a):
             log(f"{a.name}: пак {pack} — выход {code}, {(time.time() - t0) / 60:.1f} мин")
             if code != 0 or not (dst / "frames.csv").exists():
                 break
-            bad = results.analyze(dst, scenes, a.scenes)["checks"]
+            bad = results.analyze(dst, scenes, a.scenes, ctx["power"])["checks"]
             if not bad or not all(b.startswith(results.LOAD_TAG) for b in bad) or attempts == 2:
                 break
             log(f"{a.name}: пак {pack} — чужая нагрузка в окнах шлагбаума, снимаю ещё раз: " + "; ".join(bad))
@@ -327,7 +319,7 @@ def analyze(out, write=True):
         if not (d / "frames.csv").exists() or not (d / "events.jsonl").exists():
             res["packs"][pack] = {"windows": {}, "checks": [f"нет данных клиента (выход {info['exit']})"], "meta": {}}
             continue
-        r = results.analyze(d, scenes, only)
+        r = results.analyze(d, scenes, only, meta["context"].get("power"))
         r["meta"]["exit"] = info["exit"]
         r["meta"]["gpu_minutes"] = info["gpu_minutes"]
         # шейдерпак, который Iris включил на самом деле (иначе кадры «под паком» были бы без него)
@@ -337,11 +329,6 @@ def analyze(out, write=True):
             r["checks"].append(f"шейдерпак в игре — {got}, а не {want}")
         if not want and ".zip" in got:
             r["checks"].append(f"пак none, а Iris включил {got}")
-        # профиль питания — в ключе; сменился посреди окон шлагбаума (тихий режим ночью) — числа не того профиля
-        for name, win in r["windows"].items():
-            seen = sorted(set((win.get("host") or {}).get("profiles") or []) - {meta["context"].get("power")})
-            if name.startswith(gate.GATED) and seen:
-                r["checks"].append(f"окно {name}: профиль питания {', '.join(map(str, seen))}, а снимали в {meta['context'].get('power')}")
         w, h = meta["context"]["size"].split("x")
         gl = r["meta"].get("gl") or {}
         if gl and (gl.get("width") != int(w) or gl.get("height") != int(h)):

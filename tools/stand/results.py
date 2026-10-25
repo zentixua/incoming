@@ -76,36 +76,43 @@ def read_host(path):
 
 
 def host_in(host, events, t0, t1):
-    """Нагрузка машины в окне [t0, t1) (мс стенда): выборки, чей отрезок [epoch − dt, epoch] задевает окно; часы стенда и
-    настенные сводит отметка epoch_ms событий srv. Назад — {"samples", "covered" и "gpu_covered" (доля окна под выборками
-    и под выборками с замером видеокарты), "cpu_foreign_max" (худшая выборка, ядра), "cpu_foreign" (среднее по
-    перекрытию — в отчёт), "gpu_foreign" (худшая, % SM; None — замера нет), "units" (худшие по службам), "load1",
-    "profiles"} или None, если свести не с чем."""
+    """Нагрузка машины в окне [t0, t1) (мс стенда) по записям host.jsonl, чей отрезок [epoch − dt, epoch] задевает окно:
+    выборки процессора (`kind` cpu, client.Host) и циклы видеокарты (`kind` gpu, client.PmonCycles); часы стенда и
+    настенные сводит отметка epoch_ms событий srv. Замер видеокарты — только цикл, в котором есть число SM своего клиента:
+    он рисует каждый кадр, и без его числа «-» у чужих не значит «простаивал» (драйвер не считал по процессам). Назад —
+    {"samples", "covered" (доля окна под выборками процессора), "gpu_covered" (доля под циклами с замером),
+    "cpu_foreign_max" (худшая выборка, ядра), "cpu_foreign" (среднее по перекрытию — в отчёт), "gpu_foreign" (худший цикл,
+    % SM; None — циклов нет), "units" (худшие по службам), "load1", "profiles"} или None, если свести не с чем."""
     offs = sorted(e["epoch_ms"] - e["t_ms"] for e in events if e["type"] == "srv" and e.get("epoch_ms") is not None)
     if not host or not offs:
         return None
     off = offs[len(offs) // 2]
+
+    def overlap(s):
+        b = s["epoch"] * 1000 - off
+        return min(b, t1) - max(b - s["dt"] * 1000, t0)
     got, weight, gpu_weight, cpu, cpu_max, gpu, units, load, profiles = 0, 0.0, 0.0, 0.0, 0.0, None, {}, 0.0, set()
     for s in host:
-        b = s["epoch"] * 1000 - off
-        a = b - s["dt"] * 1000
-        o = min(b, t1) - max(a, t0)
+        o = overlap(s)
         if o <= 0:
+            continue
+        if s.get("kind") == "gpu":
+            if s.get("own_sm") is not None:
+                gpu_weight += o
+            if s.get("foreign_sm") is not None:
+                gpu = max(gpu or 0, s["foreign_sm"])
             continue
         got += 1
         weight += o
         cpu += s["cpu_foreign"] * o
         cpu_max = max(cpu_max, s["cpu_foreign"])
-        g = (s.get("gpu") or {}).get("foreign_sm")
-        if g is not None:
-            gpu_weight += o
-            gpu = max(gpu or 0, g)
         load = max(load, s.get("load1") or 0)
         profiles.add(s.get("profile"))
         for n, c in (s.get("units") or {}).items():
             units[n] = max(units.get(n, 0), c)
     span = max(t1 - t0, 1e-9)
-    return {"samples": got, "covered": round(weight / span, 3), "gpu_covered": round(gpu_weight / span, 3),
+    # циклы pmon идут подряд, но их концы — до секунды: соседние могут заходить друг на друга, доля — не больше 1
+    return {"samples": got, "covered": round(weight / span, 3), "gpu_covered": round(min(1.0, gpu_weight / span), 3),
             "cpu_foreign_max": cpu_max, "cpu_foreign": round(cpu / weight, 2) if weight else None, "gpu_foreign": gpu,
             "load1": load, "units": dict(sorted(units.items(), key=lambda kv: -kv[1])[:5]), "profiles": sorted(map(str, profiles))}
 
@@ -203,8 +210,9 @@ def acc_load(events, scene, t0, t1):
             "commands": len(cmds), "late_max_ms": max(late) if late else None}
 
 
-def analyze(run_dir, scenes, only=None):
-    """Один клиент (версия × пак): окна, первый удар, накопление, проверки годности (only — сцены выборки, None — все)."""
+def analyze(run_dir, scenes, only=None, power=None):
+    """Один клиент (версия × пак): окна, первый удар, накопление, проверки годности (only — сцены выборки, None — все;
+    power — профиль питания, в котором прогон снят по ключу)."""
     run_dir = Path(run_dir)
     frames = read_frames(run_dir / "frames.csv")
     events = read_events(run_dir / "events.jsonl")
@@ -244,13 +252,27 @@ def analyze(run_dir, scenes, only=None):
     res["meta"]["frames"] = len(frames)
     res["meta"]["duration_s"] = (frames[-1]["t"] - frames[0]["t"]) / 1000 if frames else 0
     res["meta"]["shots"] = sorted(e["name"] for e in events if e["type"] == "shot")
-    res["checks"] = checks(events, res, plan.windows(scenes, only), acc_scene if acc_scene and (only is None or acc_scene["id"] in only) else None)
+    res["checks"] = checks(events, res, plan.windows(scenes, only), acc_scene if acc_scene and (only is None or acc_scene["id"] in only) else None,
+                           power)
     return res
 
 
-def checks(events, res, expected=(), acc_scene=None):
+def verdict_hosts(res, acc_scene=None):
+    """Нагрузка машины во всех окнах, что решают вердикт: «100», первый удар (по границам окна), первая и последняя минута
+    накопления (acc_scene — сцена накопления плана) → [(где, host_in)]. Одна на все проверки окна по машине (нагрузка,
+    профиль питания): новое окно вердикта не обойдёт ни одну."""
+    out = [(f"окно {name}", w.get("host")) for name, w in res.get("windows", {}).items() if name.startswith(GATED)]
+    if res.get("first"):
+        out.append((f"окно {FIRST}", res["first"].get("host")))
+    if acc_scene and (res.get("acc") or {}).get("host"):
+        out += [(f"накопление {acc_scene['id']}, {what} минута", res["acc"]["host"][part]) for part, what in (("first", "первая"), ("last", "последняя"))]
+    return out
+
+
+def checks(events, res, expected=(), acc_scene=None, power=None):
     """Годен ли прогон для сравнения: строки «что не так» (пусто — годен). expected — окна плана (все обязательны),
-    acc_scene — сцена накопления плана (её нагрузка должна прийтись на окно)."""
+    acc_scene — сцена накопления плана (её нагрузка должна прийтись на окно), power — профиль питания ключа (None — не
+    проверять)."""
     bad = []
     if not res["meta"]["done"]:
         bad.append("прогон не дошёл до конца (нет события done)")
@@ -285,15 +307,13 @@ def checks(events, res, expected=(), acc_scene=None):
         if w["frames"] < MIN_FRAMES:
             bad.append(f"окно {name}: {w['frames']} кадров (меньше {MIN_FRAMES})")
 
-    # нагрузка машины — во всех окнах, что решают вердикт: «100», первый удар, первая и последняя минута накопления
-    for name, w in res.get("windows", {}).items():
-        if name.startswith(GATED):
-            bad += load_checks(f"окно {name}", w.get("host"))
-    if res.get("first"):
-        bad += load_checks(f"окно {FIRST}", res["first"].get("host"))
-    if acc_scene and (res.get("acc") or {}).get("host"):
-        for part, what in (("first", "первая"), ("last", "последняя")):
-            bad += load_checks(f"накопление {acc_scene['id']}, {what} минута", res["acc"]["host"][part])
+    # нагрузка машины и профиль питания — во всех окнах, что решают вердикт
+    for where, h in verdict_hosts(res, acc_scene):
+        bad += load_checks(where, h)
+        # профиль — в ключе; сменился посреди окна (тихий режим ночью) — числа не того профиля
+        seen = sorted(set((h or {}).get("profiles") or []) - {power}) if power is not None else []
+        if seen:
+            bad.append(f"{where}: профиль питания {', '.join(seen)}, а снимали в {power}")
     # первый удар: замер — худший кадр, шедший в окне; клиент, вставший на всё окно, — тоже число, а не пустота
     if FIRST in expected and (res.get("first") or {}).get("worst_ms") is None:
         bad.append("первый удар: нет числа (окна нет или ни один кадр не шёл в нём)")
