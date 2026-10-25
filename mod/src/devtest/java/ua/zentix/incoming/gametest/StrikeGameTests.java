@@ -4259,6 +4259,41 @@ public final class StrikeGameTests {
         h.succeed();
     }
 
+    /**
+     * Звон стёкол — из выбитых окон, а не из места взрыва (BLASTSEQ D13): два окна по разные стороны в 10 блоках звучат
+     * каждое у себя, громкость — √ числа стёкол порции, звука у самого взрыва нет.
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "glass_sound", skyAccess = true)
+    public static void glassSoundsFromItsWindow(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos c = h.absolutePos(RANGE_CENTER.above(8));
+        Vec3 centre = Vec3.atCenterOf(c);
+        // окно 1×3 к востоку и одно стекло к западу — в разных секциях
+        List<BlockPos> east = List.of(c.offset(10, -1, 0), c.offset(10, 0, 0), c.offset(10, 1, 0)), west = List.of(c.offset(-10, 0, 0));
+        for (BlockPos p : east) level.setBlock(p, Blocks.GLASS.defaultBlockState(), 3);
+        for (BlockPos p : west) level.setBlock(p, Blocks.GLASS_PANE.defaultBlockState(), 3);
+        List<net.neoforged.neoforge.event.PlayLevelSoundEvent.AtPosition> heard = new ArrayList<>();
+        java.util.function.Consumer<net.neoforged.neoforge.event.PlayLevelSoundEvent.AtPosition> ear = e -> {
+            if (e.getLevel() == level && e.getPosition().distanceTo(centre) < 30) heard.add(e);
+        };
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(ear);
+        try {
+            int glass = Warheads.shatterGlass(level, centre, 0.3);
+            h.assertTrue(glass == 4, "выбито стёкол " + glass + " из 4");
+        } finally {
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(ear);
+        }
+        h.assertTrue(heard.size() == 2, "звуков стекла " + heard.size() + " вместо двух окон");
+        for (var e : heard) {
+            h.assertTrue(e.getPosition().distanceTo(centre) > 9, "стекло звучит у места взрыва: " + e.getPosition());
+            boolean three = e.getPosition().x > centre.x;
+            Vec3 window = three ? Vec3.atCenterOf(c.offset(10, 0, 0)) : Vec3.atCenterOf(c.offset(-10, 0, 0));
+            h.assertTrue(e.getPosition().distanceTo(window) < 0.01, "звук не из середины выбитого окна: " + e.getPosition() + " вместо " + window);
+            h.assertTrue(Math.abs(e.getNewVolume() - Math.sqrt(three ? 3 : 1)) < 1e-4, "громкость " + e.getNewVolume() + " у окна из " + (three ? 3 : 1));
+        }
+        h.succeed();
+    }
+
     @GameTest(template = "range", timeoutTicks = 20)
     public static void pickerSeesBlockAndEntity(GameTestHelper h) {
         ServerLevel level = h.getLevel();
