@@ -718,6 +718,18 @@ class Checks(unittest.TestCase):
         self.assertTrue(any("позже срока" in b for b in results.checks([{"type": "gl"}, late], res)))
         self.assertFalse(any("позже срока" in b for b in results.checks([{"type": "gl"}], res)))
 
+    def test_camera_frame_is_checked_against_every_hit_of_the_run(self):
+        res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {}}
+        hits = [{"type": "impact", "salvo": "100", "t_ms": t} for t in (1000, 5000)]
+        since = {"type": "since", "salvo": "100", "s": 15, "t_ms": 20_000}
+        bad = lambda ev: [b for b in results.checks([{"type": "gl"}] + ev, res) if "не в срок" in b]
+        self.assertEqual(bad(hits + [since]), [])
+        self.assertEqual(bad(hits + [dict(since, t_ms=22_000)]), [])          # +2 с ещё в срок
+        self.assertTrue(bad(hits + [dict(since, t_ms=22_500)]))              # опоздание, которое Director не поймал
+        # попадание позже (снаряд летел вне мира после конца залпа «тишиной»): кадр ближе к свежему взрыву
+        self.assertTrue(bad(hits + [since, {"type": "impact", "salvo": "100", "t_ms": 30_000}]))
+        self.assertTrue(bad([since]))
+
     def test_every_plan_window_is_required(self):
         ev = [{"type": "gl"}, {"type": "done"}, {"type": "window", "name": "100/edge", "edge": "begin", "t_ms": 1}]
         res = {"meta": {"done": {"x": 1}, "impacts": {}},

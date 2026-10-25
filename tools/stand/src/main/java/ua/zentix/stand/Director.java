@@ -288,14 +288,12 @@ final class Director {
     /** Срок от последнего попадания залпа: опоздание к нему — {@code late}, иначе ждём; итог — {@code since} с запаздыванием. */
     private boolean since(Plan.Since w, long now) {
         long last = watch.lastImpact(w.salvo()), due = last + (long) (w.seconds() * SECOND);
-        if (!sent) {
-            sent = true;
-            if (last < 0 || now - due > (long) (LATE_S * SECOND)) {
-                out.event("late", now, "salvo", w.salvo(), "s", w.seconds(), "late_s", last < 0 ? -1 : (now - due) / 1e9);
-                return true;
-            }
+        if (last >= 0 && now < due) return false;
+        // опоздание — и на входе, и к концу ожидания (тик клиента мог встать дольше, чем осталось до срока)
+        if (last < 0 || now - due > (long) (LATE_S * SECOND)) {
+            out.event("late", now, "salvo", w.salvo(), "s", w.seconds(), "late_s", last < 0 ? -1 : (now - due) / 1e9);
+            return true;
         }
-        if (now < due) return false;
         out.event("since", now, "salvo", w.salvo(), "s", w.seconds(), "after_s", (now - last) / 1e9);
         return true;
     }

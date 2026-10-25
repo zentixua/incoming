@@ -65,7 +65,8 @@ record Plan(long seed, long dayTime, double settleS, double limitS, Set<String> 
 
     /**
      * Ждать, пока от последнего попадания залпа {@code salvo} пройдёт {@code seconds} (попадание позже сдвигает срок);
-     * если шаг начался позже срока больше чем на {@link Director#LATE_S} — событие {@code late}, прогон не годен.
+     * если шаг кончился позже срока больше чем на {@link Director#LATE_S} — событие {@code late}, прогон не годен (годность
+     * results.py ещё сверяет срок со всеми попаданиями прогона).
      */
     record Since(String salvo, double seconds) implements Step {}
 
