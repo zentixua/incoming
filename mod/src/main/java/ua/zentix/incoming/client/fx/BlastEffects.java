@@ -16,7 +16,9 @@ import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxBudget;
+import ua.zentix.incoming.client.fx.smoke.BlastTarget;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
+import ua.zentix.incoming.client.fx.smoke.Ejecta;
 import ua.zentix.incoming.client.sound.BlastEchoes;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.OwnSources;
@@ -277,36 +279,65 @@ public final class BlastEffects {
         }
 
         /**
-         * Выброс воронки заряда {@code tntKg} кг ТНТ: комья цвета местности, сколько и как быстро — по закону выброса
-         * (Housen, Schmidt, Holsapple, «Crater ejecta scaling laws», J. Geophys. Res. 88(B3), 1983): скорость кома, вылетевшего
-         * с расстояния x от центра, v = C₂·√(g·R)·(x/R)^(−1/μ), доля массы быстрее v — (v/v_R)^(−3μ); сухой грунт μ ≈ 0,41,
-         * C₂ ≈ 0,55 (оценка по их графикам для песка), из середины не ближе 0,2 R. Под 45° к горизонту (±10°, оценка).
-         * Число комьев — объём чаши ({@link CraterModel#chargeVolume}) на ком {@link #CLOD_M3}; пыль — облако модели.
+         * Выброс по цели модели облака ({@link BlastTarget}): у грунта — комья воронки, у твёрдого — сколы её (связной) чаши, у
+         * плиты над пустотой — обломки пролома вверх и вниз, у воды — струи, у разрыва в воздухе — ничего (грунта под ним нет;
+         * прежде комья летели и у разрыва над крышей, physics.md фронта F). Пыль — облако модели, завеса зёрен — его событие.
          */
-        void ejecta(ClientLevel level, double tntKg) {
-            if (mat.isWater()) {
-                splash(level, tntKg);
-                return;
+        void ejecta(ClientLevel level, CloudModel model) {
+            BlastTarget t = model.target;
+            double tnt = model.source.chargeKg();
+            switch (t.family()) {
+                case WATER -> splash(level, tnt);
+                case SOIL, HARD -> ejecta(level, CraterModel.chargeRadius(tnt, mat.soil()), t.volume(tnt));
+                case SLAB -> slab(level, t, tnt);
+                case AIR -> {
+                }
             }
-            CraterModel.Soil soil = mat.soil();
-            ejecta(level, CraterModel.chargeRadius(tntKg, soil), CraterModel.chargeVolume(tntKg, soil));
         }
 
-        /** Выброс воронки радиусом {@code rc} и объёмом {@code volume} м³ с основанием в {@link #pos} — тем же законом. */
+        /**
+         * Выброс воронки радиусом {@code rc} и объёмом {@code volume} м³ с основанием в {@link #pos} — законом выброса
+         * {@link Ejecta} (Housen и др. 1983: место вылета, скорость, угол — те же, что у завесы слоя эффектов). Частица — кусок
+         * или горсть зёрен: число — объём чаши на ком {@link #CLOD_M3} (счёт представления массы, а не дробления).
+         */
         void ejecta(ClientLevel level, double rc, double volume) {
             if (rc <= 0) return;
             int n = (int) Math.min(MAX_CLODS, Math.round(volume / CLOD_M3 * Fx.density(pos)));
-            double vRim = EJECTA_C2 * Math.sqrt(G * rc), uMin = Math.pow(0.2, 3);
+            Ejecta law = new Ejecta(rc, 0, 0);
+            double uMin = Math.pow(Ejecta.FROM, 3);
             BlockState clod = mat.particleBlock();
             for (int i = 0; i < n; i++) {
                 double u = uMin + (1 - uMin) * random.nextDouble();
-                double v = vRim * Math.pow(u, -1 / (3 * EJECTA_MU)) / 20;
-                double el = Math.toRadians(45 + (random.nextDouble() * 2 - 1) * 10), az = random.nextDouble() * Math.PI * 2;
-                double from = Math.cbrt(u) * rc;
+                double v = law.speed(u) / 20;
+                double el = Math.toRadians(Ejecta.ANGLE_DEG + (random.nextDouble() * 2 - 1) * Ejecta.SPREAD_DEG), az = random.nextDouble() * Math.PI * 2;
+                double from = law.from(u);
                 Vec3 at = pos.add(Math.cos(az) * from, 0.5, Math.sin(az) * from);
                 int life = (int) Math.ceil(2 * v * Math.sin(el) / GRAVITY) + 20;
                 Clod p = new Clod(level, at, clod, life);
                 p.setParticleSpeed(Math.cos(az) * Math.cos(el) * v, Math.sin(el) * v, Math.sin(az) * Math.cos(el) * v);
+                Minecraft.getInstance().particleEngine.add(p);
+            }
+        }
+
+        /**
+         * Обломки пролома плиты над пустотой: лицевая крошка — вверх тем же законом выброса, что у воронки радиуса пролома (⚠
+         * своего закона крошки лицевой грани в моде нет), тыльный откол — вниз, в пустоту, со скоростью пробки по Гёрни
+         * ({@link BlastTarget#plugSpeed}) в конусе ±{@value #SPALL_CONE_DEG}° (⚠ оценка) около оси удара. Поровну по
+         * объёму пролома (⚠ доли нет в источниках: physics.md фронта F — дробление спереди и откол сзади, без чисел).
+         */
+        void slab(ClientLevel level, BlastTarget t, double tnt) {
+            double volume = t.volume(tnt);
+            int n = (int) Math.min(MAX_CLODS, Math.round(volume / CLOD_M3 * Fx.density(pos)));
+            if (n <= 0) return;
+            ejecta(level, t.hole(), volume / 2);
+            double v = t.plugSpeed(tnt) / 20, cone = Math.toRadians(SPALL_CONE_DEG);
+            BlockState piece = mat.particleBlock();
+            for (int i = 0; i < n / 2; i++) {
+                double a = random.nextDouble() * Math.PI * 2, tilt = cone * Math.sqrt(random.nextDouble()), r = t.hole() * Math.sqrt(random.nextDouble());
+                Vec3 at = pos.add(Math.cos(a) * r, -t.slab() - 0.3, Math.sin(a) * r);
+                double speed = v * (0.7 + 0.6 * random.nextDouble());
+                Clod p = new Clod(level, at, piece, 100);
+                p.setParticleSpeed(Math.cos(a) * Math.sin(tilt) * speed, -Math.cos(tilt) * speed, Math.sin(a) * Math.sin(tilt) * speed);
                 Minecraft.getInstance().particleEngine.add(p);
             }
         }
@@ -349,8 +380,8 @@ public final class BlastEffects {
     /** Ком грунта выброса — объём, м³ (ком ~25 см; оценка), и больше комьев на взрыв не бывает (бюджет частиц). */
     static final double CLOD_M3 = 0.25 * 0.25 * 0.25;
     static final int MAX_CLODS = 1200;
-    /** Закон выброса Housen и др. 1983 для сухого грунта: μ и C₂ (оценка). */
-    static final double EJECTA_MU = 0.41, EJECTA_C2 = 0.55;
+    /** Конус тыльного откола плиты около оси удара, градусы (⚠ оценка). */
+    static final double SPALL_CONE_DEG = 30;
     /** Тяжесть, м/с², и она же в блоках за тик². */
     static final double G = 9.80665, GRAVITY = G / 400;
 
@@ -422,7 +453,7 @@ public final class BlastEffects {
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 2, 1, 2, 0, 30);
                 return true;
             }
-            if (t == 1) ejecta(level, model.source.chargeKg());
+            if (t == 1) ejecta(level, model);
             // топливо, что не сгорело шаром, горит в воронке огнём Minecraft на блоках (сервер, `FuelFires`): его дым и звук
             // приходят пакетом с этими блоками (`fuelFire`)
             crater(model, pos, t, rocket ? 1.25f : 1.1f);
@@ -438,8 +469,9 @@ public final class BlastEffects {
     static void crater(CloudModel model, Vec3 pos, int t, float pitch) {
         double charge = model.source.chargeKg();
         if (t == 20 && charge > 0) {
-            double kg = CraterModel.chargeVolume(charge, CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY * (1 - CloudModel.DUST_LOFTED);
-            BlastSounds.debris(pos, kg, 2 * CraterModel.chargeRadius(charge, CraterModel.Soil.DRY), pitch);
+            // масса — разрушенного у цели (тот же бюджет, что у пыли облака и выброса); у разрыва в воздухе и на воде — 0
+            double kg = model.target.mass(charge) * (1 - CloudModel.DUST_LOFTED);
+            if (kg > 0) BlastSounds.debris(pos, kg, 2 * CraterModel.chargeRadius(charge, model.target.material().soil()), pitch);
         }
     }
 
@@ -503,7 +535,7 @@ public final class BlastEffects {
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 4, 2, 4, 0, 80);
                 return true;
             }
-            if (t == 1) ejecta(level, model.source.chargeKg());
+            if (t == 1) ejecta(level, model);
             // вторичных подрывов нет: вторичное — топливо в воронке (огонь на блоках сервера) и горящие обломки сервера
             crater(model, pos, t, 0.9f);
             return t < 340;

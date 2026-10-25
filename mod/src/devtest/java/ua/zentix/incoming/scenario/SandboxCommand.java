@@ -16,7 +16,9 @@ import java.util.Locale;
  *       над землёй, м (удар в крышу — на высоте дома {@code house}, иначе — точка в воздухе над травой); последнее слово
  *       {@code water} — удар в пруд {@link #POND}×{@link #POND} блоков глубиной {@link #POND_DEPTH} (вода у сервера и
  *       клиента, земля в пакете — вода; {@code clear} возвращает траву);</li>
- *   <li>{@code scenery grass|paved|forest} — поверхность и одинаковый лес для сравнения пыли (сначала убрать дом);</li>
+ *   <li>{@code scenery grass|paved|forest|roof} — поверхность и одинаковый лес для сравнения пыли (сначала убрать дом); roof —
+ *   дощатая крыша в метр над пустым помещением 21×21 (стены из каменного кирпича): удар {@code blast <оружие> 1 5} — в крышу,
+ *   плита над пустотой;</li>
  *   <li>{@code house <высота> [полуширина] [верх]} — дом из каменного кирпича под точкой (высота 0 — убрать), по
  *       умолчанию 21×21 блок; верх — блок крыши ({@code coarse_dirt} — крыша-сад с рыхлой землёй);</li>
  *   <li>{@code real <оружие> [deck <м> | houses | roof]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки)
@@ -206,7 +208,7 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case SCENERY -> {
                 need(1, 1);
-                if (!List.of("grass", "paved", "forest").contains(args.getFirst())) throw new IllegalArgumentException("scenery grass|paved|forest");
+                if (!List.of("grass", "paved", "forest", "roof").contains(args.getFirst())) throw new IllegalArgumentException("scenery grass|paved|forest|roof");
             }
             case AGAIN, CLEAR, RELOAD -> need(0, 0);
         }

@@ -22,9 +22,9 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Все текстуры слоя эффектов на одном листе 1024×6144 с уменьшенными копиями (mip-уровнями): клубы дыма и пламени,
- * искра, вспышка, кольцо, кадры огненного шара (256×256) и их векторы движения (128×128), запечённый клуб дыма
- * ({@link #puff6}: 16 кадров по три карты),
+ * Все текстуры слоя эффектов на одном листе 1024×8448 с уменьшенными копиями (mip-уровнями): клубы дыма и пламени,
+ * искра, вспышка, кольцо, кадры огненного шара (256×256) и их векторы движения (128×128), запечённые клубы дыма, брызг,
+ * выброса грунта, пыли дробления и разрыва в воздухе ({@link #puff6}, {@link #club}: по 16 кадров в три карты),
  * дальние круг, ореол и клубы. Один лист — одна текстура на весь отсортированный проход слоя
  * (частицы и дальнее вперемешку); уменьшенные копии — чтобы клуб в десяток пикселей вдали не рябил. Цвет на листе
  * умножен на непрозрачность, как и смешивание слоя.
@@ -39,7 +39,7 @@ import java.util.Optional;
 public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]> {
     public static final FxAtlas INSTANCE = new FxAtlas();
 
-    private static final int CELL = 64, COLS = 16, ROWS = 96;
+    private static final int CELL = 64, COLS = 16, ROWS = 132;
     /** Размер листа, пикселей. */
     static final int WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
     /**
@@ -199,6 +199,81 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     /** Кадр i запечённого клуба брызг ({@link #puff6}). */
     public static Sprite spray6(int i, boolean mirror) {
         return (mirror ? SPRAY6_MIRRORED : SPRAY6)[Math.clamp(i, 0, PUFF6_FRAMES - 1)];
+    }
+
+    /**
+     * Клубы других готовых симуляций ({@code tools/bake_fx/bake.py clubs-vdb}, {@code SOURCES.md}) — те же 16 кадров по три
+     * карты и те же шаги листа, что у дыма, каждый набор — 12 рядов клеток с {@link Clubs#row}: шейдер шестистороннего
+     * света берёт их без своих чисел (места кадров — от {@link #PUFF6_TOP} шагом кадра), карты — в мере дыма
+     * ({@code pack.py}: «diffuse» дыма). Кадр — доля жизни своего явления ({@code <имя>6.json} «life»: доля жизни симуляции у
+     * кадра), не дальше последнего клубящегося («detail»).
+     */
+    static final class Clubs {
+        final String prefix;
+        final int row;
+        final Sprite[] frames = new Sprite[PUFF6_FRAMES], mirrored = new Sprite[PUFF6_FRAMES];
+        final ResourceLocation data;
+        volatile float[] life = linear(0, 1, PUFF6_FRAMES), growth = linear(1, 3, PUFF6_FRAMES);
+        volatile int last = PUFF6_FRAMES - 1;
+
+        Clubs(String prefix, int row) {
+            this.prefix = prefix;
+            this.row = row;
+            this.data = Incoming.id("textures/fx/particle/" + prefix + "6.json");
+            for (int i = 0; i < PUFF6_FRAMES; i++) {
+                int x = i % PUFF6_COLUMNS * PUFF_SIZE, y = row * CELL + i / PUFF6_COLUMNS * PUFF_SIZE;
+                frames[i] = slot(String.format(Locale.ROOT, "fx/particle/%s6a_%02d", prefix, i), x, y, PUFF_SIZE, PUFF_SIZE);
+                mirrored[i] = new Sprite(frames[i].u1, frames[i].v0, frames[i].u0, frames[i].v1);
+                slot(String.format(Locale.ROOT, "fx/particle/%s6b_%02d", prefix, i), x, y + 4 * CELL, PUFF_SIZE, PUFF_SIZE);
+                slot(String.format(Locale.ROOT, "fx/particle/%s6v_%02d", prefix, i), x, y + 8 * CELL, PUFF_SIZE, PUFF_SIZE);
+            }
+        }
+    }
+
+    /** Выброс грунта (Grenade Dust Impact сверху), пыль дробления (Building Implosion сверху), разрыв в воздухе (Mid-Air сбоку). */
+    static final Clubs EJECT = new Clubs("eject", 96), CRUSH = new Clubs("crush", 108), AIR = new Clubs("air", 120);
+
+    private static Clubs clubs(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look) {
+        return switch (look) {
+            case EJECTA -> EJECT;
+            case CRUSH -> CRUSH;
+            case AIRBURST -> AIR;
+            case SMOKE -> null;
+        };
+    }
+
+    /** Кадр i запечённого клуба вида {@code look} ({@link #puff6} у дыма). */
+    public static Sprite club(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look, int i, boolean mirror) {
+        Clubs c = clubs(look);
+        if (c == null) return puff6(i, mirror);
+        return (mirror ? c.mirrored : c.frames)[Math.clamp(i, 0, PUFF6_FRAMES - 1)];
+    }
+
+    /**
+     * Кадр (с дробью) клуба вида {@code look} на доле жизни {@code life} (0..1) своего явления — по доле жизни симуляции у
+     * кадров ({@code <имя>6.json} «life»). Все кадры: у явления со своей жизнью (завеса выброса: комья вокруг клуба пыли,
+     * потом пыль) смена мелкой структуры — само явление, а не рассеивание конечного клуба симуляции, как у облака, что
+     * растёт ({@link #growthFrame}).
+     */
+    public static double lifeFrame(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look, double life) {
+        Clubs c = clubs(look);
+        if (c == null) return 0;
+        return at(c.life, Math.clamp(life, 0, 1), 0, PUFF6_FRAMES - 1);
+    }
+
+    /**
+     * Кадр (с дробью) клуба вида {@code look}, где край вещества вырос во столько раз с первого кадра ({@code <имя>6.json}
+     * «growth»), — облако, что растёт, как облако дыма ({@link #puffFrame}); не дальше последнего клубящегося.
+     */
+    public static double growthFrame(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look, double growth) {
+        Clubs c = clubs(look);
+        if (c == null) return puffFrame(growth);
+        return Math.min(at(c.growth, growth, 0, PUFF6_FRAMES - 1), c.last);
+    }
+
+    /** Доля жизни симуляции у кадров набора из {@code <имя>6.json}: {@code "life"} (16 чисел, не убывают). */
+    static float[] parseLife(Reader in) {
+        return numbers(JsonParser.parseReader(in).getAsJsonObject().getAsJsonArray("life"), PUFF6_FRAMES);
     }
 
     /** Кадр клуба брызг (с дробью), где край вещества вырос во столько раз с первого кадра, — до последнего клубящегося. */
@@ -454,6 +529,11 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         puffLast = turbulentLast(read(resources, PUFF6_DATA, FxAtlas::parseDetail, null));
         sprayGrowth = read(resources, SPRAY6_DATA, FxAtlas::parseGrowth, linear(1, 3));
         sprayLast = turbulentLast(read(resources, SPRAY6_DATA, FxAtlas::parseDetail, null));
+        for (Clubs c : new Clubs[]{EJECT, CRUSH, AIR}) {
+            c.life = read(resources, c.data, FxAtlas::parseLife, linear(0, 1, PUFF6_FRAMES));
+            c.growth = read(resources, c.data, FxAtlas::parseGrowth, linear(1, 3, PUFF6_FRAMES));
+            c.last = turbulentLast(read(resources, c.data, FxAtlas::parseDetail, null));
+        }
         ballShown = read(resources, BALL_LIGHT, r -> numbers(JsonParser.parseReader(r).getAsJsonObject().getAsJsonArray("fire"), BALL_FRAMES),
                 linear(1, 1));
         puffLight = read(resources, PUFF6_DATA, FxAtlas::parseLight, new float[]{PUFF6_FLOW / 128f, 0.79f, 0.5f});

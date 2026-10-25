@@ -153,8 +153,26 @@ public final class SmokeGrid {
         }
     }
 
+    /**
+     * Чем рисуется клуб у слоя эффектов (кадры запечённой симуляции, {@code FxAtlas}): форма клуба — подача, вещество и
+     * размер — модели. {@link #SMOKE} — облако взрыва, пожара, старта (кадры шапки облака; у источника с брызгами клубы
+     * капель — брызгами, {@link Source#sprayClubs}); {@link #EJECTA} — завеса выброса грунта ({@link Ejecta}: кадры
+     * удара в пыль, JangaFX «Grenade Dust Impact»); {@link #CRUSH} — пыль дробления связного (бетон, камень, кладка, плита:
+     * кадры пыли обрушения постройки, «Building Implosion»); {@link #AIRBURST} — облако разрыва в воздухе (кадры разрыва
+     * в воздухе, «Mid-Air Explosion»).
+     */
+    public enum Look { SMOKE, EJECTA, CRUSH, AIRBURST }
+
     /** Куда источник кладёт клубы. */
     public interface Sink {
+        /**
+         * Следующие клубы этого источника — вида {@code look} с кадром {@code frame} (с дробью; у {@link Look#SMOKE} кадр —
+         * по росту источника, {@link Source#puffGrowth}, и {@code frame} не берётся). Сетка вид не различает. До первого
+         * вызова у каждого источника — {@link Look#SMOKE}.
+         */
+        default void look(Look look, double frame) {}
+
+
         /**
          * Гауссов клуб, размазанный по отрезку от центра − (ax, ay, az) до центра + (ax, ay, az) (см. {@link SmokeGrid}):
          * центр в мире (x, y, z), полуотрезок, м; σ по горизонтали и вертикали, м; массы сажи, пыли и капель на весь отрезок, кг;

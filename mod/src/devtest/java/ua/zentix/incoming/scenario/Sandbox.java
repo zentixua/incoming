@@ -412,6 +412,13 @@ final class Sandbox {
                 String kind = c.args().getFirst();
                 server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:%s", s.getX() - 48, GROUND, s.getZ() - 48,
                         s.getX() + 48, GROUND, s.getZ() + 48, kind.equals("paved") ? "stone" : "grass_block"));
+                if (kind.equals("roof")) {
+                    // помещение 21×21 высотой 4 м: стены из каменного кирпича, крыша — метр досок на высоте 5 м (верх — 6 м над
+                    // травой): удар blast <оружие> 1 5 — в крышу, под ней пустота
+                    int x0 = s.getX() - 10, z0 = s.getZ() - 10, x1 = s.getX() + 10, z1 = s.getZ() + 10;
+                    server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks hollow", x0, GROUND + 1, z0, x1, GROUND + 4, z1));
+                    server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_planks", x0, GROUND + 5, z0, x1, GROUND + 5, z1));
+                }
                 if (kind.equals("forest")) {
                     for (int x = -40; x <= 40; x += 8) for (int z = -40; z <= 40; z += 8) {
                         if (x * x + z * z < 64) continue;
@@ -701,11 +708,27 @@ final class Sandbox {
         int kind = blastKind(w);
         int n = c.args().size() - (c.water() ? 1 : 0);
         Vec3 ground = new Vec3(site.x, GROUND + 1, site.z), pos = ground.add(0, n > 2 ? c.number(2) : 0, 0);
-        GroundMaterial mat = GroundMaterial.sample(level, BlockPos.containing(ground));
+        // материал — как у сервера: в точке удара (крыша, мостовая), по миру сервера (у клиента вдали чанка нет — у
+        // сервера он есть, и пакет несёт его материал)
+        GroundMaterial mat = sampleOnServer(level, BlockPos.containing(pos));
         long seed = n > 1 ? c.seedAt(1) : 1;
         // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
         ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
         begin();
+    }
+
+    /**
+     * Материал под точкой, как его берёт сервер ({@code GroundMaterial.sample} в потоке сервера): у встроенного сервера —
+     * его задачей (клиент ждёт тик), без него — по миру клиента.
+     */
+    private static GroundMaterial sampleOnServer(ClientLevel level, BlockPos at) {
+        net.minecraft.client.server.IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
+        if (server == null) return GroundMaterial.sample(level, at);
+        try {
+            return server.submit(() -> GroundMaterial.sample(server.overworld(), at)).get(2, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return GroundMaterial.sample(level, at);
+        }
     }
 
     /** Эффект начался в этом тике: часы кадров и звука. */

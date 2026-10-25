@@ -18,8 +18,18 @@ public final class SurfaceBlocks {
     }
 
     public static boolean solid(ServerLevel level, BlockPos p, BlockState s) {
+        return solid((net.minecraft.world.level.BlockGetter) level, p, s);
+    }
+
+    /** То же у любого мира (клиент ищет плиту над пустотой тем же правилом: картинка взрыва по цели, {@code FarBlasts}). */
+    public static boolean solid(net.minecraft.world.level.BlockGetter level, BlockPos p, BlockState s) {
         return s.getFluidState().isEmpty() && s.isFaceSturdy(level, p, Direction.UP)
                 && s.isFaceSturdy(level, p, Direction.DOWN);
+    }
+
+    /** Группа материала блока для пробоя зарядом (FM 5-250 табл. B-3) — та же, что у пробоя сервера ({@code SlabBreach}). */
+    public static BreachModel.Material breaching(BlockState s) {
+        return SlabBreach.material(s);
     }
 
     /** First air above a continuous solid backing rooted in natural ground; a gap stops the search. */

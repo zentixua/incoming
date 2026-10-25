@@ -10,7 +10,9 @@ import ua.zentix.incoming.client.fx.BlastTime;
 import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLights;
+import ua.zentix.incoming.client.fx.smoke.BlastTarget;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
+import ua.zentix.incoming.client.fx.smoke.Ejecta;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.client.fx.smoke.WaterBlast;
 import ua.zentix.incoming.client.sound.Acoustics;
@@ -118,8 +120,17 @@ public final class FarBlasts {
         final long born;
         /** Пакет пришёл ближе {@link #NEAR}: ближняя картинка и звук есть. */
         final boolean near;
-        /** Альбедо пыли грунта по каналам; поворот кадра шара (по зерну). */
-        final float dustR, dustG, dustB;
+        /**
+         * Альбедо ω' пыли по каналам: поверхностей вокруг (пыль волны у земли, ножка), вещества цели (пыль дробления, пыль
+         * облака — смесью с первой долей {@link CloudModel#capMatterShare}) и комьев выброса (завеса — цвет самого материала:
+         * влажные комья с гумусом темнее сухой пыли, physics.md фронта F).
+         */
+        final float dustR, dustG, dustB, matterR, matterG, matterB, clodR, clodG, clodB;
+        /** Завеса выброса рыхлого грунта ({@link Ejecta}); null — у цели её нет. */
+        @Nullable
+        final Ejecta curtain;
+        /** Ослабление зёрен завесы в кг пыли смеси ({@link SmokeGrid#dustK} по цвету комьев) на кг зёрен. */
+        final double curtainK;
         boolean soundPending;
         /**
          * Дольше не ждём звука, до уха которого фронт так и не дошёл (слушатель уходит быстрее звука), тиков: путь звука
@@ -162,6 +173,16 @@ public final class FarBlasts {
             dustR = SmokeGrid.dustAlbedo(dust[0]);
             dustG = SmokeGrid.dustAlbedo(dust[1]);
             dustB = SmokeGrid.dustAlbedo(dust[2]);
+            BlastTarget.Matter m = model.target.matter();
+            matterR = SmokeGrid.dustAlbedo(m.r);
+            matterG = SmokeGrid.dustAlbedo(m.g);
+            matterB = SmokeGrid.dustAlbedo(m.b);
+            GroundMaterial gm = model.target.material();
+            clodR = SmokeGrid.dustAlbedo(gm.r);
+            clodG = SmokeGrid.dustAlbedo(gm.g);
+            clodB = SmokeGrid.dustAlbedo(gm.b);
+            curtain = curtain(model, source);
+            curtainK = curtain == null ? 0 : m.extinction() / SmokeGrid.dustK(clodR, clodG, clodB);
         }
 
         double distanceTo(Vec3 p) {
@@ -261,11 +282,32 @@ public final class FarBlasts {
             if (t >= Math.max(model.life, water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
                 double growth = puffGrowth(seconds);
+                // облако разрыва в воздухе — своими кадрами (по росту облака, как облако дыма); пыль раздробленной цели — кадрами
+                // своего вещества: рыхлого — выброса, связного — дробления (по доле её жизни)
+                boolean air = model.target.family() == BlastTarget.Family.AIR, loose = model.target.matter().loose;
+                SmokeGrid.Look cap = air ? SmokeGrid.Look.AIRBURST : SmokeGrid.Look.SMOKE, crush = loose ? SmokeGrid.Look.EJECTA : SmokeGrid.Look.CRUSH;
+                double capFrame = air ? FxAtlas.growthFrame(cap, growth) : 0;
+                double crushFrame = FxAtlas.lifeFrame(crush, model.crushed.life > 0 ? t / model.crushed.life : 0);
+                double share = model.capMatterShare(t);
+                float cr = mix(matterR, dustR, share), cg = mix(matterG, dustG, share), cb = mix(matterB, dustB, share);
                 model.blobs(t, new CloudModel.Blobs() {
                     @Override
                     public void blob(double bx, double by, double bz, double sh, double sv, double soot, double dustKg, double water, double kelvin,
                                      double rise) {
-                        out.blob(x + bx, y + by, z + bz, sh, sv, soot, dustKg, water, dustR, dustG, dustB, kelvin, rise);
+                        out.look(cap, capFrame);
+                        out.blob(x + bx, y + by, z + bz, sh, sv, soot, dustKg, water, cr, cg, cb, kelvin, rise);
+                    }
+
+                    @Override
+                    public void ground(double bx, double by, double bz, double sh, double sv, double dustKg, double kelvin) {
+                        out.look(SmokeGrid.Look.SMOKE, 0);
+                        out.blob(x + bx, y + by, z + bz, sh, sv, 0, dustKg, 0, dustR, dustG, dustB, kelvin, 0);
+                    }
+
+                    @Override
+                    public void crushed(double bx, double by, double bz, double sh, double sv, double dustKg, double kelvin) {
+                        out.look(crush, crushFrame);
+                        out.blob(x + bx, y + by, z + bz, sh, sv, 0, dustKg, 0, matterR, matterG, matterB, kelvin, 0);
                     }
 
                     // ножка — трубкой, как шлейф пожара (вблизи и вдали без бус); кадр её клубов — по росту облака, как у шапки
@@ -277,6 +319,8 @@ public final class FarBlasts {
                     }
                 });
             }
+            out.look(SmokeGrid.Look.SMOKE, 0);
+            if (curtain != null && t < curtain.life) curtainClubs(curtain, t, seed, x, y, z, curtainK, clodR, clodG, clodB, out);
             if (t < model.condensationSeconds()) condensation(t, out);
             // Струи выходят из глади, даже когда сам заряд под ней.
             if (water != null) water.blobs(t, out, x, y + water.depth, z);
@@ -303,6 +347,103 @@ public final class FarBlasts {
         if (ground == GroundMaterial.SAND || ground == GroundMaterial.SNOW) return new float[]{ground.r, ground.g, ground.b};
         double[] d = ua.zentix.incoming.client.nuclear.NukePall.DUST;
         return new float[]{(float) d[0], (float) d[1], (float) d[2]};
+    }
+
+    /**
+     * Завеса выброса воронки у цели из рыхлого ({@link BlastTarget.Family#SOIL}): воронка закона по грунту материала, выброс —
+     * её масса без пыли, что ушла в воздух ({@link CloudModel#DUST_LOFTED}), комьями — доля вещества ({@link Ejecta}). Нет
+     * завесы — null.
+     */
+    @Nullable
+    static Ejecta curtain(CloudModel model, BlastSource source) {
+        BlastTarget t = model.target;
+        if (t.family() != BlastTarget.Family.SOIL || source.underground() || source.chargeKg() <= 0) return null;
+        double r = ua.zentix.incoming.nuclear.model.CraterModel.chargeRadius(source.chargeKg(), t.material().soil());
+        Ejecta e = new Ejecta(r, t.mass(source.chargeKg()) * (1 - CloudModel.DUST_LOFTED), t.matter().clods);
+        return e.grains > 0 ? e : null;
+    }
+
+    /**
+     * Клубы завесы выброса {@code c} в возрасте t с основанием (x, y, z): струи — отрезками, зёрна — пылью с тем же
+     * ослаблением ({@code k} — кг пыли смеси на кг зёрен, альбедо ω' комьев), кадры удара в пыль по доле жизни завесы (до
+     * девяти десятых на земле); потом у приёмника снова облако дыма.
+     */
+    static void curtainClubs(Ejecta c, double t, long seed, double x, double y, double z, double k, float r, float g, float b, SmokeGrid.Sink out) {
+        out.look(SmokeGrid.Look.EJECTA, FxAtlas.lifeFrame(SmokeGrid.Look.EJECTA, t / Math.max(c.settled, 1e-3)));
+        c.jets(t, seed, (jx, jy, jz, ax, ay, az, sigma, kg) -> out.segment(x + jx, y + jy, z + jz, ax, ay, az, sigma, sigma, 0, kg * k, 0, r, g, b,
+                CloudModel.T_AIR_K, 0));
+        out.look(SmokeGrid.Look.SMOKE, 0);
+    }
+
+    /** Альбедо смеси двух пылей: доля {@code share} первой (по ослаблению). */
+    static float mix(float a, float b, double share) {
+        return (float) (b + (a - b) * Math.clamp(share, 0, 1));
+    }
+
+    /** Самый большой радиус пробоя у заряда {@code tnt} среди групп материала, м: дальше плиту не ищем. */
+    private static double breachReach(double tnt) {
+        double r = 0;
+        for (ua.zentix.incoming.warhead.BreachModel.Material m : ua.zentix.incoming.warhead.BreachModel.Material.values()) {
+            r = Math.max(r, m.radius(tnt, ua.zentix.incoming.warhead.BreachModel.UNTAMPED));
+        }
+        return r;
+    }
+
+    /** Шаг луча опоры вдоль оси удара, блоков (как у пробоя сервера, {@code SlabBreach.STEP}). */
+    static final double PROBE_STEP = 0.1;
+    /** Воздуха до грани, в которую ударила боевая часть, вдоль оси — не больше, блоков (точка удара — у грани). */
+    static final double PROBE_AIR = 1;
+
+    /**
+     * Во что попал заряд ({@link BlastTarget}): материал пакета; связность и опора — по блокам чанка клиента вдоль оси удара
+     * ({@code S2C.Blast.axis}) тем же правилом, что у пробоя сервера (твёрдое — {@code SurfaceBlocks.solid}, группа пробоя
+     * блока — {@code SurfaceBlocks.breaching}, радиус — {@link ua.zentix.incoming.warhead.BreachModel}): путь в твёрдом до
+     * пустоты под перекрытием (над ней в колонке есть что-то), делённый на радиус пробоя каждого блока, не больше 1 — плита
+     * над пустотой, которую заряд пробивает (крыша, настил моста, перекрытие); не дошёл или вышел под открытое небо (уступ,
+     * склон) — опора. Связность — у первого твёрдого блока: группа «земля» — рыхлое. Чанка нет (дальше прорисовки) или грани у
+     * точки нет — по веществу материала, опора сплошная (⚠ вдали крышу от земли клиент не отличит: блоков там у него нет).
+     */
+    static BlastTarget target(ClientLevel level, Vec3 pos, Vec3 axis, GroundMaterial material, double tnt, double hob) {
+        BlastTarget plain = BlastTarget.of(material, tnt, hob);
+        if (plain.family() == BlastTarget.Family.WATER || plain.family() == BlastTarget.Family.AIR) return plain;
+        Vec3 d = axis.lengthSqr() > 1e-9 ? axis.normalize() : S2C.Blast.DOWN;
+        double reach = breachReach(tnt) + PROBE_AIR;
+        net.minecraft.core.BlockPos.MutableBlockPos c = new net.minecraft.core.BlockPos.MutableBlockPos();
+        long last = Long.MIN_VALUE;
+        boolean solid = false, entered = false, loose = false;
+        double radius = 0, sum = 0, path = 0;
+        for (double s = 0; s <= reach; s += PROBE_STEP) {
+            c.set(Math.floor(pos.x + d.x * s), Math.floor(pos.y + d.y * s), Math.floor(pos.z + d.z * s));
+            if (c.asLong() != last) {
+                last = c.asLong();
+                if (level.getChunkSource().getChunk(c.getX() >> 4, c.getZ() >> 4, false) == null) return plain;
+                net.minecraft.world.level.block.state.BlockState st = level.getBlockState(c);
+                solid = ua.zentix.incoming.warhead.SurfaceBlocks.solid(level, c, st);
+                // заряд не смещает (неразрушимое, сопротивление ≥ 1200): опора
+                if (solid && st.getBlock().getExplosionResistance() >= 1200) return BlastTarget.of(material, false, 0, 0, tnt, hob);
+                ua.zentix.incoming.warhead.BreachModel.Material m = solid ? ua.zentix.incoming.warhead.SurfaceBlocks.breaching(st) : null;
+                radius = m == null ? 0 : m.radius(tnt, ua.zentix.incoming.warhead.BreachModel.UNTAMPED);
+                if (solid && !entered) {
+                    entered = true;
+                    loose = m == ua.zentix.incoming.warhead.BreachModel.Material.EARTH;
+                }
+            }
+            if (!entered) {
+                if (s > PROBE_AIR) return plain;
+                continue;
+            }
+            if (solid) {
+                if (radius <= 0) return BlastTarget.of(material, loose, 0, 0, tnt, hob);
+                sum += PROBE_STEP / radius;
+                path += PROBE_STEP;
+                if (sum > 1) return BlastTarget.of(material, loose, 0, 0, tnt, hob);
+                continue;
+            }
+            // вышли из твёрдого: под перекрытием — пустота за плитой; под открытым небом — грань воронки
+            boolean covered = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, c.getX(), c.getZ()) > c.getY() + 1;
+            return covered ? BlastTarget.of(material, loose, path, path / sum, tnt, hob) : BlastTarget.of(material, loose, 0, 0, tnt, hob);
+        }
+        return BlastTarget.of(material, loose, 0, 0, tnt, hob);
     }
 
     /** Пакет взрыва ближе {@link #NEAR} к камере: его рисуют частицы и озвучивает ближняя модель. */
@@ -332,9 +473,10 @@ public final class FarBlasts {
             return cloud(level, source, model, top, ground, p.seed());
         }
         // удар — в то, что под точкой (земля, крыша, стена — всё равно; над аппаратом в воздухе — рельеф далеко внизу): что
-        // вокруг и на какой высоте, видно по верхним блокам (ground)
-        return cloud(level, source, new CloudModel(source, air(level, pos), ground.isWater(), overSurface(level, pos), ground(level, pos)), pos, ground,
-                p.seed());
+        // вокруг и на какой высоте, видно по верхним блокам (ground); во что попал и есть ли за ним пустота — по оси удара (target)
+        double hob = overSurface(level, pos);
+        BlastTarget target = target(level, pos, p.axis(), ground, source.chargeKg(), hob);
+        return cloud(level, source, new CloudModel(source, air(level, pos), target, hob, ground(level, pos)), pos, ground, p.seed());
     }
 
     /**
@@ -361,8 +503,9 @@ public final class FarBlasts {
     public static CloudModel airburst(Vec3 pos, BlastSource source, long seed) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return null;
-        return cloud(level, source, new CloudModel(source, air(level, pos), false, heightAbove(level, pos), ground(level, pos)), pos,
-                GroundMaterial.STONE, seed);
+        double hob = heightAbove(level, pos);
+        return cloud(level, source, new CloudModel(source, air(level, pos), BlastTarget.of(GroundMaterial.STONE, source.chargeKg(), hob), hob,
+                ground(level, pos)), pos, GroundMaterial.STONE, seed);
     }
 
     /**
@@ -459,8 +602,12 @@ public final class FarBlasts {
      */
     public static CloudModel model(S2C.Blast p) {
         ClientLevel level = Minecraft.getInstance().level;
-        return new CloudModel(BlastSource.of(p), level == null ? CloudModel.Air.STANDARD : air(level, p.pos()), GroundMaterial.byId(p.material()).isWater(),
-                level == null ? 0 : overSurface(level, p.pos()), level == null ? ua.zentix.incoming.client.fx.smoke.GroundDust.Ground.BARE : ground(level, p.pos()));
+        BlastSource source = BlastSource.of(p);
+        GroundMaterial mat = GroundMaterial.byId(p.material());
+        if (level == null) return new CloudModel(source, CloudModel.Air.STANDARD, BlastTarget.of(mat, source.chargeKg(), 0), 0,
+                ua.zentix.incoming.client.fx.smoke.GroundDust.Ground.BARE);
+        double hob = overSurface(level, p.pos());
+        return new CloudModel(source, air(level, p.pos()), target(level, p.pos(), p.axis(), mat, source.chargeKg(), hob), hob, ground(level, p.pos()));
     }
 
     /** Воздух в месте взрыва: воздух мира ({@link ClientAir}); влажность — его, у воды 1 (облако конденсации). */
@@ -892,8 +1039,10 @@ public final class FarBlasts {
     public static String describeLast() {
         Event e = EVENTS.peekLast();
         if (e == null) return "none";
-        return String.format(Locale.ROOT, "at %.1f %.1f %.1f, %s, charge %.1f kg, water column %.1f m", e.x, e.y, e.z, e.ground, e.source.chargeKg(),
-                e.water == null ? 0 : e.water.height);
+        BlastTarget t = e.model.target;
+        return String.format(Locale.ROOT, "at %.1f %.1f %.1f, %s, %s%s, charge %.1f kg, water column %.1f m", e.x, e.y, e.z, e.ground,
+                t.family().name().toLowerCase(Locale.ROOT), t.slab() > 0 ? String.format(Locale.ROOT, " %.1f m, hole %.1f m", t.slab(), t.hole()) : "",
+                e.source.chargeKg(), e.water == null ? 0 : e.water.height);
     }
 
     /**
