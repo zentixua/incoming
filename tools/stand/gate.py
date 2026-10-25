@@ -1,43 +1,41 @@
-"""Шлагбаум стенда: кандидат против принятого выпуска по числам results.json (README.md, «Условие влития»).
+"""Шлагбаум стенда: кандидат против принятого выпуска, снятых парой в одном сеансе (README.md, «Условие влития»).
 
-Провал:
-- окна «100 ударов» (`100/*`, любая камера, любой пак): видеокарта p50 или процессор p95 (время процессора потока
-  отрисовки за кадр Pre → Post) хуже принятого больше допуска; нет окна или числа у кандидата или у принятого — тоже
-  провал. Настенное Pre → Post и кадр p95 (интервал — что видит игрок) — в отчёте, без провала: в них ожидания
-  драйвера и вытеснение чужими задачами;
-- первый удар: худший кадр от взрыва до +5 с больше чем вдвое против принятого и больше 100 мс; числа нет — провал;
-- накопление: последняя минута против первой выросла больше, чем у принятого, сверх допуска. Против самого роста
-  кандидата (дословно «последняя минута дороже первой больше допуска») — нельзя: у принятого он есть и так (дым копится),
-  и тогда два прогона одной версии проваливали бы друг друга — а приёмка стенда требует, чтобы они проходили;
-- кандидат снят на другой видеокарте или с другим кадром (строка OpenGL, размер кадра), чем принятый.
-Допуск — из шума: принятый снят N = 3 раза, база — медиана прогонов, допуск = max(5 %, 1,5 × (max − min) / медиана) по
-каждой величине и окну (`tolerance`; размах трёх прогонов ≈ 1,7 σ, полтора размаха ≈ 2,5 σ шума; решение координатора
-25.10 вместо прежних двух прогонов и 3 × разброса, где одна пара с чужой нагрузкой давала допуск до 120 %); без
-калибровки — 5 % с пометкой. Калибровка (`calibrate`) годна, только если все прогоны годны, сняты одинаково (стенд,
-паки, видеокарта, кадр), тик сервера в окнах шлагбаума у них сходится (MSPT_TOL: одна версия — разница только шум) и
-каждый проходит шлагбаум против медианы остальных; иначе принятого нет. Остальные окна — в отчёте, без провала. Вид числом не судится: сцены, где
-доля «дымных» пикселей или яркость кадра заметно другие (`look_flags`), помечаются ревьюеру.
+Пара: на каждый пак — принятый, кандидат, снова принятый (A1, B, A2) подряд под одной арендой видеокарты. Видеокарта
+ноутбука в окнах греется до 85–88 °C, её частота от прогона к прогону ходит 1700–2550 МГц, и два «тихих» прогона одной
+версии в разных сеансах расходились на 6–29 % (замер 25.10, NOTES-noise.md); ровная чужая нагрузка поднимает процессор
+потока на 30–45 %. Внутри пары это бьёт по обоим одинаково: база — среднее A1 и A2 (линейный дрейф между ними гасится),
+а шум сеанса виден по их расхождению.
 
-Только стандартная библиотека (CI: test_gate.py).
+Провал пака (`compare_pack`):
+- окна «100 ударов» (`100/*`, любая камера): видеокарта p50 или процессор p95 (время процессора потока отрисовки за кадр
+  Pre → Post) у кандидата хуже базы больше допуска; нет окна или числа — тоже провал. Допуск по каждой величине и окну —
+  max(MIN_TOL, SPREAD_K × |A1 − A2| / база). Настенное Pre → Post и кадр p95 — в отчёте, без провала;
+- первый удар и накопление, если сцены сняты: худший кадр больше чем вдвое против базы и больше 100 мс; рост последней
+  минуты к первой больше, чем у базы, сверх допуска;
+- прогон пары не годен (results.checks) или снят иначе (строка OpenGL, кадр).
+Шумно (`noisy`) — A1 и A2 в окне шлагбаума разошлись больше MAX_SPREAD: сеанс не годится для вердикта.
+Решение (`decide`): пак, который не прошёл с первой пары (провал, шум, негодный прогон), снимается второй парой, и решает
+она: провал подтверждён, только если повторился; шумно и во второй — вердикта нет (статус error, а не failure).
+Вид числом не судится: сцены, где доля «дымных» пикселей или яркость кадра заметно другие (`look_flags`), помечаются
+ревьюеру. Только стандартная библиотека (CI: test_gate.py).
 """
 GATED = "100/"
 # величины шлагбаума (спека: видеокарта p50 и процессор p95 — процессор потока отрисовки) и те, что только в отчёте
 METRICS = (("gpu", "p50"), ("thread", "p95"))
 REPORTED = METRICS + (("cpu", "p95"), ("interval", "p95"))
 GL_KEYS = ("renderer", "version", "width", "height")
-MIN_TOL = 0.05
-# прогонов калибровки — не меньше (решение координатора 25.10): по двум медиана — среднее, а размах — одна разность
-MIN_RUNS = 3
-# допуск — столько размахов прогонов калибровки (max − min) / медиана
-RANGE_K = 1.5
-# тик сервера в окне шлагбаума у прогонов калибровки (одна версия) — не дальше этой доли от их медианы: внутри окна
-# секундные значения ходят на 5–7 % (σ), среднее за 20 с — на ~1,5 %, а пара 25.10 с чужими задачами рядом разошлась
-# на 12–15 % по всем пакам и окнам; 8 % — между ними. У кандидата тик — его собственная работа (PR может законно её
-# менять), поэтому годность кандидата решает прямо измеренная чужая нагрузка (results.foreign), а не тик
-MSPT_TOL = 0.08
+# допуск — не меньше: регрессии, ради которых стенд (3.5.0 и 3.7.0 против 3.4.1), — в разы, улучшения PR — вдвое; 10 %
+# не пропустят их и не дадут ложного провала от шума внутри пары
+MIN_TOL = 0.10
+# допуск — столько расхождений A1 и A2: разность B − (A1 + A2)/2 шумит на √1,5 σ, |A1 − A2| в среднем ≈ 1,13 σ — два
+# расхождения ≈ 1,8 σ разности; ложный провал на одной величине — несколько процентов, и его снимает повторная пара
+SPREAD_K = 2.0
+# A1 и A2 в окне шлагбаума разошлись больше — сеанс шумный (чужая задача в одном из прогонов, троттлинг посреди пары)
+MAX_SPREAD = 0.20
 FIRST_RATIO, FIRST_MIN_MS = 2.0, 100.0
 # вид: доля дымных пикселей (абсолютная разница) и средняя яркость (0–1)
 LOOK_SMOKE, LOOK_LUMA = 0.10, 0.08
+PASS, FAIL, NOISY = "pass", "fail", "noisy"
 
 
 def metric(window, m):
@@ -45,128 +43,23 @@ def metric(window, m):
     return ((window or {}).get(part) or {}).get(q)
 
 
-def _median(xs):
-    v = sorted(xs)
-    n = len(v)
-    return v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2
+def _num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
-def rel_range(values):
-    """Размах прогонов: (max − min) / медиана; нет числа у кого-то или медиана 0 — None."""
-    if not values or any(v is None for v in values):
-        return None
-    m = _median(values)
-    return (max(values) - min(values)) / m if m else None
+def base_of(values):
+    """База и расхождение пары принятого по одной величине: (среднее, |A1 − A2| / среднее); у одного прогона —
+    (значение, None); нет числа у кого-то или среднее 0 — (None, None)."""
+    if not values or any(not _num(v) for v in values):
+        return None, None
+    mean = sum(values) / len(values)
+    if not mean:
+        return None, None
+    return mean, (max(values) - min(values)) / mean if len(values) > 1 else None
 
 
-def tolerance(runs):
-    """Допуск по прогонам калибровки: пак → окно → величина → доля; и для накопления."""
-    tol = {}
-    for pack in runs[0]["packs"]:
-        rs = [r["packs"].get(pack) for r in runs]
-        if any(x is None for x in rs):
-            continue
-        t = tol.setdefault(pack, {"windows": {}})
-        for name in rs[0]["windows"]:
-            ws = [x["windows"].get(name) for x in rs]
-            for m in METRICS:
-                s = rel_range([metric(w, m) for w in ws])
-                if s is not None:
-                    t["windows"].setdefault(name, {})[".".join(m)] = max(MIN_TOL, RANGE_K * s)
-        s = rel_range([((x.get("acc") or {}).get("growth") or {}).get("ratio") for x in rs])
-        if s is not None:
-            t["acc"] = max(MIN_TOL, RANGE_K * s)
-    return tol
-
-
-def median_runs(runs):
-    """Принятый для сравнения — медиана прогонов калибровки по каждому числу окон, первого удара и накопления (то, чего
-    нет у всех, — как у первого)."""
-    def med(xs):
-        a = xs[0]
-        if isinstance(a, dict) and all(isinstance(x, dict) for x in xs):
-            return {k: med([a[k]] + [x.get(k) for x in xs[1:]]) for k in a}
-        if all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in xs):
-            return _median(xs)
-        return a
-    out = {k: v for k, v in runs[0].items() if k != "packs"}
-    out["packs"] = {}
-    for pack, r1 in runs[0]["packs"].items():
-        rs = [r["packs"].get(pack) for r in runs]
-        if any(x is None for x in rs):
-            out["packs"][pack] = r1
-            continue
-        p = dict(r1)
-        p["windows"] = {n: med([x["windows"][n] for x in rs]) if all(n in x["windows"] for x in rs) else w for n, w in r1["windows"].items()}
-        if all(x.get("first") for x in rs):
-            p["first"] = med([x["first"] for x in rs])
-        if all((x.get("acc") or {}).get("growth") for x in rs):
-            p["acc"] = dict(r1["acc"])
-            p["acc"]["growth"] = med([x["acc"]["growth"] for x in rs])
-        out["packs"][pack] = p
-    return out
-
-
-def compare(cand, base, tol=None):
-    """Вердикт: {"pass", "fails": [строки], "rows": [сравнение по окнам], "notes": [...]}. Пак кандидата без
-    принятого не судится (сказано в notes); окно «100», которое есть у принятого и нет у кандидата, — провал."""
-    fails, rows, notes = [], [], []
-    if tol is None:
-        notes.append(f"допуск без калибровки: {MIN_TOL:.0%} на всё")
-    for pack, c in cand["packs"].items():
-        b = base["packs"].get(pack)
-        if not b:
-            notes.append(f"пак {pack}: у принятого не снят — не судится")
-            continue
-        if c.get("checks"):
-            fails.append(f"{pack}: прогон кандидата не годен: " + "; ".join(c["checks"]))
-        if b.get("checks"):
-            fails.append(f"{pack}: прогон принятого не годен: " + "; ".join(b["checks"]))
-        fails += [f"{pack}: снято иначе, чем принятый: {x}" for x in gl_diff(c, b)]
-        t = (tol or {}).get(pack, {})
-        for name in sorted(set(b["windows"]) | set(c["windows"])):
-            bw, cw = b["windows"].get(name), c["windows"].get(name)
-            gated = name.startswith(GATED)
-            if cw is None or bw is None:
-                if gated:
-                    fails.append(f"{pack} {name}: нет окна у {'кандидата' if cw is None else 'принятого'}")
-                continue
-            for m in REPORTED:
-                cv, bv = metric(cw, m), metric(bw, m)
-                judged = gated and m in METRICS
-                if cv is None or bv is None or bv == 0:
-                    if judged:
-                        fails.append(f"{pack} {name} {'.'.join(m)}: нет числа у {'кандидата' if cv is None else 'принятого'}")
-                    continue
-                lim = (t.get("windows", {}).get(name) or {}).get(".".join(m), MIN_TOL) if m in METRICS else None
-                ratio = cv / bv - 1
-                bad = judged and ratio > lim
-                rows.append({"pack": pack, "window": name, "metric": ".".join(m), "cand": cv, "base": bv, "change": ratio,
-                             "tol": lim, "gated": judged, "fail": bad})
-                if bad:
-                    fails.append(f"{pack} {name} {'.'.join(m)}: {cv:.2f} мс против {bv:.2f} (+{ratio:.0%}, допуск {lim:.0%})")
-        cf, bf = (c.get("first") or {}).get("worst_ms"), (b.get("first") or {}).get("worst_ms")
-        # сцены нет в выборке — нет ни у кого; есть у одного — у другого провалена
-        if (c.get("first") or b.get("first")) and (cf is None or bf is None):
-            fails.append(f"{pack} первый удар: нет числа у {'кандидата' if cf is None else 'принятого'}")
-        elif cf is not None and bf is not None:
-            bad = cf > FIRST_RATIO * bf and cf > FIRST_MIN_MS
-            rows.append({"pack": pack, "window": "first", "metric": "worst", "cand": cf, "base": bf, "change": cf / bf - 1 if bf else None,
-                         "tol": None, "gated": True, "fail": bad})
-            if bad:
-                fails.append(f"{pack} первый удар: худший кадр {cf:.0f} мс против {bf:.0f} (больше {FIRST_RATIO:g}× и {FIRST_MIN_MS:g} мс)")
-        cg, bg = ((c.get("acc") or {}).get("growth") or {}).get("ratio"), ((b.get("acc") or {}).get("growth") or {}).get("ratio")
-        if (c.get("acc") or b.get("acc")) and (cg is None or bg is None):
-            fails.append(f"{pack} накопление: нет числа роста у {'кандидата' if cg is None else 'принятого'}")
-        elif cg is not None and bg is not None:
-            lim = t.get("acc", MIN_TOL)
-            change = cg / bg - 1
-            bad = change > lim
-            rows.append({"pack": pack, "window": "acc", "metric": "growth", "cand": cg, "base": bg, "change": change,
-                         "tol": lim, "gated": True, "fail": bad})
-            if bad:
-                fails.append(f"{pack} накопление: последняя минута ×{cg:.2f} к первой против ×{bg:.2f} у принятого (допуск {lim:.0%})")
-    return {"pass": not fails, "fails": fails, "rows": rows, "notes": notes}
+def tol_of(spread):
+    return MIN_TOL if spread is None else max(MIN_TOL, SPREAD_K * spread)
 
 
 def gl_diff(a, b):
@@ -175,48 +68,109 @@ def gl_diff(a, b):
     return [f"{k} {ga.get(k)} против {gb.get(k)}" for k in GL_KEYS if ga.get(k) != gb.get(k)]
 
 
-def calibrate(runs):
-    """Принятый по прогонам калибровки (не меньше MIN_RUNS): {"base" (медиана), "tol", "self_check" (каждый против медианы
-    остальных: список вердиктов), "problems"}. Годен, только если problems пуст: все прогоны годны, сняты одинаково
-    (контекст — стенд, моды, паки, сцены, видеокарта, окно, java, KWin, профиль питания; строка OpenGL и кадр у каждого
-    пака), тик сервера в окнах шлагбаума сходится (MSPT_TOL) и каждый проходит шлагбаум против медианы остальных — иначе
-    медиана и допуск подмешали бы негодный прогон, шум другой машины или чужую нагрузку."""
-    problems = []
-    if len(runs) < MIN_RUNS:
-        return {"base": None, "tol": None, "self_check": [], "problems": [f"прогонов калибровки {len(runs)} — нужно не меньше {MIN_RUNS}"]}
-    for r in runs:
-        for pack, x in r["packs"].items():
-            if x.get("checks"):
-                problems.append(f"{r.get('name')} {pack}: не годен: " + "; ".join(x["checks"]))
-    c0 = runs[0].get("context") or {}
-    for r in runs[1:]:
-        c = r.get("context") or {}
-        diff = sorted(k for k in set(c0) | set(c) if c0.get(k) != c.get(k))
-        if diff:
-            problems.append(f"{r.get('name')} снят иначе, чем {runs[0].get('name')}: " + ", ".join(diff))
-        if set(r["packs"]) != set(runs[0]["packs"]):
-            problems.append(f"паки прогонов разные: {sorted(runs[0]['packs'])} и {sorted(r['packs'])}")
-    for pack in sorted(set.intersection(*(set(r["packs"]) for r in runs))):
-        for r in runs[1:]:
-            problems += [f"{pack}: {r.get('name')} снят иначе: {x}" for x in gl_diff(r["packs"][pack], runs[0]["packs"][pack])]
-        for name in sorted(n for n in runs[0]["packs"][pack]["windows"] if n.startswith(GATED)):
-            ms = [((r["packs"][pack]["windows"].get(name) or {}).get("mspt") or {}).get("mean") for r in runs]
-            if any(m is None for m in ms):
-                problems.append(f"{pack} {name}: нет тика сервера у прогона калибровки")
+def compare_pack(pack, c, bases):
+    """Кандидат c против принятого bases (пак результатов: [A1, A2] пары или [A] одного прогона) →
+    {"state": pass|fail|noisy, "fails", "noisy", "rows", "notes"}. Негодный прогон и снятое иначе — провал."""
+    fails, noisy, rows, notes = [], [], [], []
+    if len(bases) < 2:
+        notes.append(f"{pack}: принятый снят один раз — допуск {MIN_TOL:.0%} без оценки шума")
+    if c.get("checks"):
+        fails.append(f"{pack}: прогон кандидата не годен: " + "; ".join(c["checks"]))
+    for i, b in enumerate(bases, 1):
+        if b.get("checks"):
+            fails.append(f"{pack}: прогон принятого A{i} не годен: " + "; ".join(b["checks"]))
+        fails += [f"{pack}: A{i} снят иначе, чем кандидат: {x}" for x in gl_diff(c, b)]
+    names = set(c.get("windows", {}))
+    for b in bases:
+        names |= set(b.get("windows", {}))
+    for name in sorted(names):
+        cw, bws = c.get("windows", {}).get(name), [b.get("windows", {}).get(name) for b in bases]
+        gated = name.startswith(GATED)
+        if cw is None or any(w is None for w in bws):
+            if gated:
+                fails.append(f"{pack} {name}: нет окна у {'кандидата' if cw is None else 'принятого'}")
+            continue
+        for m in REPORTED:
+            judged = gated and m in METRICS
+            cv = metric(cw, m)
+            bv, spread = base_of([metric(w, m) for w in bws])
+            if not _num(cv) or bv is None:
+                if judged:
+                    fails.append(f"{pack} {name} {'.'.join(m)}: нет числа у {'кандидата' if not _num(cv) else 'принятого'}")
                 continue
-            med = _median(ms)
-            if med and max(abs(m - med) for m in ms) / med > MSPT_TOL:
-                problems.append(f"{pack} {name}: тик сервера прогонов разошёлся — {', '.join(f'{m:.1f}' for m in ms)} мс "
-                                f"(можно ±{MSPT_TOL:.0%} от медианы): машина была занята")
-    tol = tolerance(runs)
-    checks = []
-    for i, r in enumerate(runs):
-        v = compare(r, median_runs(runs[:i] + runs[i + 1:]), tol)
-        v["run"] = r.get("name")
-        checks.append(v)
-        if not v["pass"]:
-            problems.append(f"{r.get('name')} против медианы остальных не проходит: " + "; ".join(v["fails"]))
-    return {"base": median_runs(runs), "tol": tol, "self_check": checks, "problems": problems}
+            lim = tol_of(spread) if m in METRICS else None
+            change = cv / bv - 1
+            bad = judged and change > lim
+            loud = judged and spread is not None and spread > MAX_SPREAD
+            rows.append({"pack": pack, "window": name, "metric": ".".join(m), "cand": cv, "base": bv,
+                         "bases": [metric(w, m) for w in bws], "spread": spread, "change": change, "tol": lim,
+                         "gated": judged, "fail": bad, "noisy": loud})
+            if loud:
+                noisy.append(f"{pack} {name} {'.'.join(m)}: принятый A1/A2 — "
+                             + " / ".join(f"{metric(w, m):.2f}" for w in bws) + f" мс (расхождение {spread:.0%}, можно {MAX_SPREAD:.0%})")
+            if bad:
+                fails.append(f"{pack} {name} {'.'.join(m)}: {cv:.2f} мс против {bv:.2f} (+{change:.0%}, допуск {lim:.0%})")
+    cf = (c.get("first") or {}).get("worst_ms")
+    bf, _ = base_of([(b.get("first") or {}).get("worst_ms") for b in bases])
+    # сцены нет в выборке — нет ни у кого; есть у одного — у другого провалена
+    if c.get("first") or any(b.get("first") for b in bases):
+        if not _num(cf) or bf is None:
+            fails.append(f"{pack} первый удар: нет числа у {'кандидата' if not _num(cf) else 'принятого'}")
+        else:
+            bad = cf > FIRST_RATIO * bf and cf > FIRST_MIN_MS
+            rows.append({"pack": pack, "window": "first", "metric": "worst", "cand": cf, "base": bf, "change": cf / bf - 1,
+                         "tol": None, "gated": True, "fail": bad, "noisy": False})
+            if bad:
+                fails.append(f"{pack} первый удар: худший кадр {cf:.0f} мс против {bf:.0f} (больше {FIRST_RATIO:g}× и {FIRST_MIN_MS:g} мс)")
+    cg = ((c.get("acc") or {}).get("growth") or {}).get("ratio")
+    bg, gspread = base_of([((b.get("acc") or {}).get("growth") or {}).get("ratio") for b in bases])
+    if c.get("acc") or any(b.get("acc") for b in bases):
+        if not _num(cg) or bg is None:
+            fails.append(f"{pack} накопление: нет числа роста у {'кандидата' if not _num(cg) else 'принятого'}")
+        else:
+            lim = tol_of(gspread)
+            change = cg / bg - 1
+            bad = change > lim
+            rows.append({"pack": pack, "window": "acc", "metric": "growth", "cand": cg, "base": bg, "spread": gspread,
+                         "change": change, "tol": lim, "gated": True, "fail": bad, "noisy": False})
+            if bad:
+                fails.append(f"{pack} накопление: последняя минута ×{cg:.2f} к первой против ×{bg:.2f} у принятого (допуск {lim:.0%})")
+    # шумный сеанс вердикта не даёт — даже если в нём же «провал»: его снимает повторная пара
+    state = NOISY if noisy else FAIL if fails else PASS
+    return {"state": state, "fails": fails, "noisy": noisy, "rows": rows, "notes": notes}
+
+
+def compare(cand, bases):
+    """Кандидат (results) против принятого (список results: пара A1, A2 или один прогон) по всем пакам кандидата →
+    {"pass", "state", "fails", "noisy", "rows", "notes", "packs": {пак: compare_pack}}. Пак без принятого не судится."""
+    packs, notes = {}, []
+    for pack, c in cand["packs"].items():
+        bs = [b["packs"].get(pack) for b in bases]
+        if any(b is None for b in bs):
+            notes.append(f"пак {pack}: у принятого не снят — не судится")
+            continue
+        packs[pack] = compare_pack(pack, c, bs)
+    return summary(packs, notes)
+
+
+def summary(packs, notes=()):
+    """Вердикт по пакам ({пак: compare_pack или decide}): провал — хоть один провален, иначе шумно — хоть один шумный."""
+    states = {v["state"] for v in packs.values()}
+    state = FAIL if FAIL in states else NOISY if NOISY in states else PASS
+    out = {"state": state, "pass": state == PASS, "packs": packs, "notes": list(notes)}
+    for k in ("fails", "noisy", "rows"):
+        out[k] = [x for v in packs.values() for x in v[k]]
+    out["notes"] += [x for v in packs.values() for x in v["notes"]]
+    return out
+
+
+def decide(tries):
+    """Пак по парам (compare_pack по порядку; вторая — только если первая не прошла) → итог пака: решает последняя пара;
+    провалы и шум первой — в отчёт (`earlier`)."""
+    last = dict(tries[-1])
+    last["tries"] = len(tries)
+    last["earlier"] = [{"state": t["state"], "fails": t["fails"], "noisy": t["noisy"]} for t in tries[:-1]]
+    return last
 
 
 def look_flags(cand_look, base_look):

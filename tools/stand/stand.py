@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
-"""Стенд сцен: одна версия Incoming × шейдерпаки, время кадра и кадры, кэш принятого, шлагбаум (README.md).
+"""Стенд сцен: версия Incoming × шейдерпаки, время кадра и кадры; шлагбаум — пара с принятым в одном сеансе (README.md).
 
   stand.py prepare <jar> [--size WxH]                 jar, Sodium, Iris, паки, скрипт клиента (без видеокарты)
   stand.py play <имя> <jar> [--packs …] [--scenes …]  клиенты по пакам подряд (внутри tools/laptop_job.sh --gpu)
-  stand.py analyze <имя>                              out/<имя>/results.json из сырых данных
-  stand.py baseline <выпуск> [--runs 3] [--packs …]   принятый: три прогона → кэш (медиана, допуск по размаху)
-  stand.py gate <имя> [--against <выпуск>]            вердикт против принятого из кэша → verdict.json
-               [--base-run <имя> --tol-from <кэш>]    … или против одного прогона с допуском кэша (приёмка)
-  (числа сравнения — всегда заново из сырых данных; кэш принятого — только годный: оба прогона годны, сняты одинаково,
-  каждый прогон проходит против медианы остальных)
-  stand.py pr <номер> [--post]                        PR: jar CI головы, прогон, вердикт; --post — статус и комментарий
-  stand.py key <jar> [--packs …] [--scenes …]         ключ кэша (что снимали и на чём)
+           [--against <jar принятого>]                … парой: на каждый пак принятый, кандидат, принятый (A1, B, A2);
+                                                      пак без прохода — второй парой; вердикт → verdict.json
+  stand.py analyze <имя>                              results.json прогона (у пары — каждого из A1, B, A2) из сырых данных
+  stand.py gate <имя>                                 вердикт пары заново из сырых данных → verdict.json
+  stand.py pr <номер> [--post]                        PR: jar CI головы парой с принятым выпуском, сцена «100», вердикт;
+                                                      --post — статус «Стенд сцен» и комментарий
 
 <jar> — выпуск (v3.7.0), `ci:<ветка или SHA>` (артефакт incoming-jar прогона build), путь к jar.
 Паки: none (Iris без шейдерпака), complementary, photon — по умолчанию все три. Сцены — id из scenes.json (по умолчанию
-все). Каталоги — mod/run/stand/{dl,game,out,cache} основной копии репозитория, общие для всех её деревьев git: кэш
-принятого снимается один раз, а не в каждом дереве (INCOMING_STAND_ROOT переопределяет; имя с INCOMING_ — его видит и
-задача ноутбука). Только стандартная библиотека.
+все; у pr — «100», окна шлагбаума). Каталоги — mod/run/stand/{dl,game,out} основной копии репозитория, общие для всех её
+деревьев git (INCOMING_STAND_ROOT переопределяет; имя с INCOMING_ — его видит и задача ноутбука). Только стандартная
+библиотека.
 """
 import argparse
 import hashlib
@@ -54,14 +52,16 @@ def _main_checkout():
 
 
 STAND = Path(os.environ.get("INCOMING_STAND_ROOT") or _main_checkout() / "mod" / "run" / "stand")
-DL, GAME, OUT, CACHE = STAND / "dl", STAND / "game", STAND / "out", STAND / "cache"
+DL, GAME, OUT = STAND / "dl", STAND / "game", STAND / "out"
 REPO, PACK_REPO = "zentixua/incoming", "zentixua/open-skies"
 # пак стенда → файл pw.toml в pack/shaderpacks сборки (None — Iris без шейдерпака)
 PACKS = {"none": None, "complementary": "complementary-unbound", "photon": "photon-shader"}
 MODS = ("sodium", "iris")
 STATUS = "Стенд сцен"
-# прогонов калибровки принятого (gate.calibrate: медиана, допуск по размаху)
-BASE_RUNS = 3
+# сцены шлагбаума PR: окна «100» (условие влития — время кадра при 100 ударах)
+GATE_SCENES = ["100"]
+# пары на пак: вторая — если первая не прошла (gate.decide)
+PAIR_TRIES = 2
 DEFAULT_SIZE = "2560x1600"
 UA = {"User-Agent": "zentixua/incoming stand (github.com/zentixua/incoming)"}
 
@@ -177,15 +177,15 @@ def resolve_jar(spec):
     raise SystemExit(f"не понял jar: {spec} (vX.Y.Z, ci:<ветка|SHA> или путь)")
 
 
-# ---------------------------------------------------------------- ключ кэша
+# ---------------------------------------------------------------- версия стенда и контекст
 
 def stand_hash():
     """Версия стенда: исходники обвязки, её сборка (build.gradle с подготовкой запуска standLaunch, settings.gradle,
     Gradle мода, которым она собирается, с wrapper), сцены, план, каталог игры и запуск клиента (client.py: настройки
     игры, окружение, скрипт standLaunch; nested_kwin.sh и его шина — окружение и экран клиента) — то, от чего зависит,
     что снимается. Java клиента и KWin — отдельно в контексте. gpu_lease.sh, который nested_kwin.sh зовёт до запуска
-    KWin (аренда), — нет: клиент он не трогает. Разбор (results.py, gate.py) в неё не входит: числа принятого считаются
-    из сырых данных кэша заново при каждом сравнении."""
+    KWin (аренда), — нет: клиент он не трогает. Разбор (results.py, gate.py) в неё не входит: вердикт считается из сырых
+    данных заново (stand.py gate)."""
     h = hashlib.sha256()
     for f in stand_files():
         h.update(str(f.relative_to(ROOT)).encode())
@@ -230,10 +230,6 @@ def context(packs, scenes_sel, size, files):
             "power": client.power_profile()}
 
 
-def key(jar_sha, ctx):
-    return hashlib.sha256(json.dumps({"jar": jar_sha, **ctx}, sort_keys=True).encode()).hexdigest()[:16]
-
-
 # ---------------------------------------------------------------- клиент
 
 SCRIPT = HERE / "build" / "launch" / "client.sh"
@@ -248,55 +244,65 @@ def cmd_prepare(a):
     print(f"JAR\t{jar}\t{a.label or label}")
 
 
+def jar_info(jar, label, spec):
+    return {"label": label, "file": jar.name, "sha256": sha(jar), "spec": spec}
+
+
+def shoot(out, pack, jar, files, scenes_sel, size, log_name):
+    """Один клиент: версия jar × пак → сырые данные в out/<пак>; назад — (код выхода, минуты видеокарты)."""
+    p = client.prepare_game(GAME, jar, files[pack][0] if PACKS[pack] else None, [files[m][0] for m in MODS], scenes_sel)
+    t0 = time.time()
+    log(f"{log_name}: пак {pack}, {len(p['steps'])} шагов")
+    out.mkdir(parents=True, exist_ok=True)
+    with open(out / f"client-{pack}.out", "w") as logf:
+        code = client.run(GAME, SCRIPT, size, p["limit_s"], logf, log)
+    dst = out / pack
+    if dst.exists():
+        shutil.rmtree(dst)
+    if (GAME / "stand-out").exists():
+        shutil.copytree(GAME / "stand-out", dst)
+    dst.mkdir(exist_ok=True)
+    for f in ("logs/latest.log", "stand-plan.json"):
+        if (GAME / f).exists():
+            shutil.copy2(GAME / f, dst / Path(f).name)
+    if (GAME / "crash-reports").exists():
+        shutil.copytree(GAME / "crash-reports", dst / "crash-reports")
+    (GAME / "audio.wav").unlink(missing_ok=True)
+    took = (time.time() - t0) / 60
+    log(f"{log_name}: пак {pack} — выход {code}, {took:.1f} мин")
+    return code, took
+
+
+def add_pack(out, meta, pack, code, took, files):
+    """Пак в meta.json прогона (пишется после каждого пака: прерванный прогон разбирается тем, что снято)."""
+    meta["packs"][pack] = {"exit": code, "gpu_minutes": round(took, 2), "file": files[pack][0].name if PACKS[pack] else None}
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False))
+
+
+def run_meta(name, info, ctx):
+    return {"name": name, "label": info["label"], "jar": info, "context": ctx,
+            "started": datetime.now(timezone.utc).isoformat(timespec="seconds"), "packs": {}}
+
+
 def cmd_play(a):
     jar = Path(a.jar).resolve()
-    label = a.label or jar.stem.removeprefix("incoming-")
     files = fetch_pack(a.packs, offline=True)
-    script = SCRIPT
-    if not script.exists():
+    if not SCRIPT.exists():
         raise SystemExit("нет build/launch/client.sh — сначала stand.py prepare")
     out = OUT / a.name
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     ctx = context(a.packs, a.scenes, a.size, files)
-    meta = {"name": a.name, "label": label, "jar": {"file": jar.name, "sha256": sha(jar), "spec": a.spec or a.jar},
-            "context": ctx, "key": key(sha(jar), ctx), "started": datetime.now(timezone.utc).isoformat(timespec="seconds"), "packs": {}}
+    cand = jar_info(jar, a.label or jar.stem.removeprefix("incoming-"), a.spec or a.jar)
+    if a.against:
+        return play_pair(a, out, jar, cand, files, ctx)
+    meta = run_meta(a.name, cand, ctx)
     worst = 0
-    scenes = plan.load()
     for pack in a.packs:
-        took, attempts = 0.0, 0
-        # пак, негодный только из-за чужой нагрузки в окнах шлагбаума (results.LOAD_TAG), — снять ещё раз: это не версия
-        for attempts in (1, 2):
-            p = client.prepare_game(GAME, jar, files[pack][0] if PACKS[pack] else None, [files[m][0] for m in MODS], a.scenes)
-            t0 = time.time()
-            log(f"{a.name}: пак {pack}, {len(p['steps'])} шагов" + (f", попытка {attempts}" if attempts > 1 else ""))
-            with open(out / f"client-{pack}.out", "w") as logf:
-                code = client.run(GAME, script, a.size, p["limit_s"], logf, log)
-            took += time.time() - t0
-            dst = out / pack
-            if dst.exists():
-                shutil.rmtree(dst.with_name(f"{pack}.try{attempts - 1}"), ignore_errors=True)
-                dst.rename(dst.with_name(f"{pack}.try{attempts - 1}"))
-            if (GAME / "stand-out").exists():
-                shutil.copytree(GAME / "stand-out", dst)
-            dst.mkdir(exist_ok=True)
-            for f in ("logs/latest.log", "stand-plan.json"):
-                if (GAME / f).exists():
-                    shutil.copy2(GAME / f, dst / Path(f).name)
-            if (GAME / "crash-reports").exists():
-                shutil.copytree(GAME / "crash-reports", dst / "crash-reports")
-            (GAME / "audio.wav").unlink(missing_ok=True)
-            log(f"{a.name}: пак {pack} — выход {code}, {(time.time() - t0) / 60:.1f} мин")
-            if code != 0 or not (dst / "frames.csv").exists():
-                break
-            bad = results.analyze(dst, scenes, a.scenes, ctx["power"])["checks"]
-            if not bad or not all(b.startswith(results.LOAD_TAG) for b in bad) or attempts == 2:
-                break
-            log(f"{a.name}: пак {pack} — чужая нагрузка в окнах шлагбаума, снимаю ещё раз: " + "; ".join(bad))
-        meta["packs"][pack] = {"exit": code, "gpu_minutes": round(took / 60, 2), "attempts": attempts,
-                               "file": files[pack][0].name if PACKS[pack] else None}
-        (out / "meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False))
+        code, took = shoot(out, pack, jar, files, a.scenes, a.size, a.name)
+        add_pack(out, meta, pack, code, took, files)
         if code == 75:
             return 75
         worst = worst or code
@@ -305,19 +311,65 @@ def cmd_play(a):
     return 1 if worst else 0
 
 
+# роли прогонов пары: принятый, кандидат, принятый; у второй пары — с суффиксом
+ROLES = ("A1", "B", "A2")
+
+
+def role_dir(out, role, attempt):
+    return out / (role if attempt == 1 else f"{role}-{attempt}")
+
+
+def play_pair(a, out, jar, cand, files, ctx):
+    """Пара: прогрев видеокарты принятым на первом паке, затем на каждый пак A1, B, A2 подряд; пак, который не прошёл
+    (gate.compare_pack: провал, шум, негодный прогон), — второй парой сразу же. Итог — verdict.json (judge_pair)."""
+    base_jar = Path(a.against).resolve()
+    base = jar_info(base_jar, a.against_label or base_jar.stem.removeprefix("incoming-"), a.against_spec or a.against)
+    jars = {"A1": (base_jar, base), "B": (jar, cand), "A2": (base_jar, base)}
+    pair = {"name": a.name, "cand": cand, "base": base, "context": ctx, "packs": a.packs,
+            "started": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    (out / "pair.json").write_text(json.dumps(pair, indent=1, ensure_ascii=False))
+    metas = {}
+    # прогрев: холодная видеокарта первого прогона шла бы на большей частоте, чем горячая в A2 (85–88 °C в окнах), —
+    # расхождение пары от нагрева, а не от шума; прогон прогрева в вердикт не идёт
+    if not a.no_warmup and a.packs:
+        code, _ = shoot(out / "warmup", a.packs[0], base_jar, files, a.scenes, a.size, f"{a.name} прогрев")
+        if code == 75:
+            return 75
+    for pack in a.packs:
+        for attempt in range(1, PAIR_TRIES + 1):
+            for role in ROLES:
+                d = role_dir(out, role, attempt)
+                j, info = jars[role]
+                meta = metas.setdefault(d.name, run_meta(f"{a.name}/{d.name}", info, ctx))
+                code, took = shoot(d, pack, j, files, a.scenes, a.size, f"{a.name} {d.name}")
+                add_pack(d, meta, pack, code, took, files)
+                if code == 75:
+                    return 75
+            rs = [analyze(role_dir(out, r, attempt), write=False)["packs"][pack] for r in ROLES]
+            v = gate.compare_pack(pack, rs[1], [rs[0], rs[2]])
+            log(f"{a.name}: пак {pack}, пара {attempt} — {v['state']}" + "".join(f"\n  {x}" for x in v["noisy"] + v["fails"]))
+            if v["state"] == gate.PASS:
+                break
+    for d in sorted(metas):
+        analyze(out / d)
+    v = judge_pair(out)
+    log(f"{a.name}: {v['state']}; итог в {out}")
+    return 0 if v["pass"] else 1
+
+
 def analyze(out, write=True):
-    """results.json прогона из сырых данных: числа по пакам + meta. Сравнение (gate, pr, report.py) всегда разбирает
-    сырые данные заново (write=False у принятого): числа — по нынешнему разбору, а не по тому, что был при съёмке."""
+    """results.json прогона из сырых данных: числа по пакам + meta. Вердикт (gate, pr, report.py) всегда разбирает сырые
+    данные заново (write=False): числа — по нынешнему разбору, а не по тому, что был при съёмке."""
     out = Path(out)
     meta = json.loads((out / "meta.json").read_text())
     scenes = plan.load()
     only = None if meta["context"]["scenes"] == "all" else meta["context"]["scenes"]
-    res = {k: meta[k] for k in ("name", "label", "jar", "context", "key", "started")}
+    res = {k: meta[k] for k in ("name", "label", "jar", "context", "started")}
     res["packs"] = {}
     for pack, info in meta["packs"].items():
         d = out / pack
         if not (d / "frames.csv").exists() or not (d / "events.jsonl").exists():
-            res["packs"][pack] = {"windows": {}, "checks": [f"нет данных клиента (выход {info['exit']})"], "meta": {}}
+            res["packs"][pack] = {"windows": {}, "checks": [f"нет данных клиента (выход {info['exit']})"], "meta": {}, "load": []}
             continue
         r = results.analyze(d, scenes, only, meta["context"].get("power"))
         r["meta"]["exit"] = info["exit"]
@@ -343,138 +395,71 @@ def analyze(out, write=True):
     return res
 
 
-def cmd_analyze(a):
-    analyze(OUT / a.name)
+def is_pair(out):
+    return (Path(out) / "pair.json").exists()
 
 
-# ---------------------------------------------------------------- принятый: кэш и допуск
-
-def cache_dir(version, k):
-    return CACHE / f"{version}-{k}"
-
-
-def cache_runs(d):
-    """Каталоги прогонов калибровки в кэше: run1/, run2/, … по порядку."""
-    return sorted((x for x in d.glob("run*") if x.is_dir() and x.name[3:].isdigit()), key=lambda x: int(x.name[3:]))
+def pair_runs(out):
+    """Прогоны пары из сырых данных: {каталог роли: results} (A1, B, A2 и вторая пара, где снималась)."""
+    out = Path(out)
+    return {d.name: analyze(d, write=False) for d in sorted(out.iterdir()) if d.is_dir() and (d / "meta.json").exists() and d.name != "warmup"}
 
 
-def cached(d):
-    """Принятый из кэша d (run1/ … runN/): медиана, допуск и самопроверка — заново из сырых данных всех прогонов и только
-    годные (gate.calibrate: все годны, сняты одинаково, тик сервера сходится, каждый проходит против медианы остальных;
-    ключ, под которым кэш лежит, — тот, что прогоны записали при съёмке); иначе SystemExit."""
-    runs = [analyze(r, write=False) for r in cache_runs(d)]
-    cal = gate.calibrate(runs)
-    keys = {r.get("key") for r in runs}
-    if len(keys) != 1 or not d.name.endswith("-" + str(next(iter(keys)))):
-        cal["problems"].append(f"кэш лежит не под ключом своих прогонов ({sorted(map(str, keys))})")
-    if cal["problems"]:
-        raise SystemExit(f"принятый в кэше {d} негоден: " + "; ".join(cal["problems"]))
-    return cal
-
-
-def cmd_baseline(a):
-    """Принятый выпуск: --runs прогонов подряд (каждый — своя задача видеокарты; уже снятые с тем же ключом — не
-    переснимаются), медиана и допуск по ним, кэш по ключу. Кэш создаётся, только если калибровка годна (gate.calibrate) —
-    иначе код 1 и прогоны остаются в out/ для разбора."""
-    if a.runs < gate.MIN_RUNS:
-        raise SystemExit(f"--runs {a.runs}: прогонов калибровки нужно не меньше {gate.MIN_RUNS}")
-    jar, label = resolve_jar(a.version)
-    files = fetch_pack(a.packs)
-    client.launch_script(GAME, a.size)
-    ctx = context(a.packs, a.scenes, a.size, files)
-    k = key(sha(jar), ctx)
-    d = cache_dir(a.version, k)
-    if cache_runs(d) and not a.force:
-        cached(d)
-        log(f"принятый {a.version} уже в кэше: {d}")
-        return 0
-    names = [f"base-{a.version}-{k}-{i}" for i in range(1, a.runs + 1)]
-    for name in names:
-        if not (OUT / name / "results.json").exists() or a.force:
-            code = subprocess.run([str(HERE / "run.sh"), name, a.version, "--packs", ",".join(a.packs), "--size", a.size]
-                                  + (["--scenes", ",".join(a.scenes)] if a.scenes else [])).returncode
-            if code != 0:
-                log(f"прогон {name}: код {code}")
-                return code
-    runs = [analyze(OUT / name, write=False) for name in names]
-    cal = gate.calibrate(runs)
-    (OUT / names[-1] / "self-check.json").write_text(json.dumps(cal["self_check"], indent=1, ensure_ascii=False))
-    # ключ кэша — тот, что прогоны записали при съёмке (контекст мог смениться между подготовкой и съёмкой: драйвер, KWin)
-    if any(r.get("key") != k for r in runs):
-        cal["problems"].append(f"ключ съёмки {[r.get('key') for r in runs]} не тот, что при подготовке ({k}): контекст сменился — снять заново")
-    if cal["problems"]:
-        log(f"принятый {a.version} НЕ в кэше — калибровка негодна:")
-        for x in cal["problems"]:
-            log("  " + x)
-        return 1
-    # кэш — целиком или никак: собирается рядом и встаёт на место одним переименованием
-    tmp = d.with_name(d.name + ".tmp")
-    if tmp.exists():
-        shutil.rmtree(tmp)
-    tmp.mkdir(parents=True)
-    for i, name in enumerate(names, 1):
-        shutil.copytree(OUT / name, tmp / f"run{i}")
-    # для людей; сравнение их не читает — считает заново из run*/ (cached)
-    for f, v in (("tolerance.json", cal["tol"]), ("results.json", cal["base"]), ("self-check.json", cal["self_check"])):
-        (tmp / f).write_text(json.dumps(v, indent=1, ensure_ascii=False))
-    if d.exists():
-        shutil.rmtree(d)
-    tmp.rename(d)
-    log(f"принятый {a.version} в кэше {d}: {len(names)} прогона, каждый проходит против медианы остальных")
-    return 0
-
-
-def accepted_release():
-    return gh("release", "view", "-R", REPO, "--json", "tagName", "--jq", ".tagName").strip()
-
-
-def against(cand, version=None, base_run=None, tol_from=None):
-    """Принятый для сравнения с прогоном cand (results): из кэша выпуска version (по ключу cand), или base_run — каталог
-    кэша или прогон out/<имя> (допуск — из кэша tol_from). Назад — {"res", "tol", "label", "dir", "tol_from"}; всё — из
-    сырых данных (кэш — только годный, cached). Один путь у gate, pr и report.py: вердикт везде один."""
-    if base_run:
-        d = Path(base_run) if Path(base_run).is_dir() else OUT / base_run
-        if (d / "run1").is_dir():
-            cal = cached(d)
-            res, tol, tol_src = cal["base"], cal["tol"], d
-        else:
-            res = analyze(d, write=False)
-            tol, tol_src = (cached(Path(tol_from))["tol"], Path(tol_from)) if tol_from else (None, None)
-        if res["context"] != cand["context"]:
-            diff = sorted(k for k in set(cand["context"]) | set(res["context"]) if cand["context"].get(k) != res["context"].get(k))
-            raise SystemExit(f"{d.name} снят иначе: {', '.join(diff)}")
-        return {"res": res, "tol": tol, "label": res["label"], "dir": d, "tol_from": str(tol_src) if tol_src else None}
-    version = version or accepted_release()
-    jar, _ = resolve_jar(version)
-    d = cache_dir(version, key(sha(jar), cand["context"]))
-    if not ((d / "run1").is_dir() and (d / "run2").is_dir()):
-        return {"res": None, "tol": None, "label": version, "dir": d, "tol_from": str(d)}
-    cal = cached(d)
-    return {"res": cal["base"], "tol": cal["tol"], "label": version, "dir": d, "tol_from": str(d)}
-
-
-def judge(cand, base):
-    """Вердикт кандидата против принятого (against) — в verdict.json прогона кандидата."""
-    v = gate.compare(cand, base["res"], base["tol"])
-    v["against"] = {"label": base["label"], "dir": str(base["dir"]), "tolerance": base["tol_from"]}
+def judge_pair(out, write=True):
+    """Вердикт пары заново из сырых данных: на каждый пак — пары по порядку (вторая — где снималась), gate.decide;
+    → verdict.json. Пак, где пара неполна (прервано), — провал «не снято»."""
+    out = Path(out)
+    info = json.loads((out / "pair.json").read_text())
+    runs = pair_runs(out)
+    packs = {}
+    for pack in info["packs"]:
+        tries = []
+        for attempt in range(1, PAIR_TRIES + 1):
+            names = [role_dir(out, r, attempt).name for r in ROLES]
+            got = [runs.get(n, {}).get("packs", {}).get(pack) for n in names]
+            if all(g is None for g in got):
+                break
+            if any(g is None for g in got):
+                tries.append({"state": gate.FAIL, "fails": [f"{pack}: пара {attempt} не снята целиком ({', '.join(n for n, g in zip(names, got) if g is None)})"],
+                              "noisy": [], "rows": [], "notes": []})
+                break
+            tries.append(gate.compare_pack(pack, got[1], [got[0], got[2]]))
+        packs[pack] = gate.decide(tries) if tries else {"state": gate.FAIL, "fails": [f"{pack}: пара не снята"], "noisy": [], "rows": [],
+                                                        "notes": [], "tries": 0, "earlier": []}
+    v = gate.summary(packs)
+    v["cand"], v["base"] = info["cand"], info["base"]
+    if write:
+        (out / "verdict.json").write_text(json.dumps(v, indent=1, ensure_ascii=False))
     return v
+
+
+def cmd_analyze(a):
+    out = OUT / a.name
+    if is_pair(out):
+        for d in pair_runs(out):
+            analyze(out / d)
+    else:
+        analyze(out)
 
 
 def cmd_gate(a):
     out = OUT / a.name
-    cand = analyze(out)
-    base = against(cand, a.against, a.base_run, a.tol_from)
-    if base["res"] is None:
-        raise SystemExit(f"принятого {base['label']} с тем же стендом, паками, сценами, видеокартой и окном в кэше нет ({base['dir']}): "
-                         f"stand.py baseline {base['label']}")
-    v = judge(cand, base)
-    (out / "verdict.json").write_text(json.dumps(v, indent=1, ensure_ascii=False))
-    log(f"{a.name} против {base['label']}: {'ПРОХОДИТ' if v['pass'] else 'ПРОВАЛ'}")
-    for f in v["fails"]:
+    if not is_pair(out):
+        raise SystemExit(f"{out}: не пара (stand.py play … --against <принятый>)")
+    v = judge_pair(out)
+    log(f"{a.name}: {v['cand']['label']} против {v['base']['label']}: {STATE_WORD[v['state']]}")
+    for f in v["noisy"] + v["fails"]:
         log("  " + f)
     for n in v["notes"]:
         log("  (" + n + ")")
     return 0 if v["pass"] else 1
+
+
+STATE_WORD = {gate.PASS: "ПРОХОДИТ", gate.FAIL: "ПРОВАЛ", gate.NOISY: "ШУМНО — вердикта нет"}
+
+
+def accepted_release():
+    return gh("release", "view", "-R", REPO, "--json", "tagName", "--jq", ".tagName").strip()
 
 
 # ---------------------------------------------------------------- PR
@@ -491,7 +476,8 @@ def pr_paths(records):
 
 
 def cmd_pr(a):
-    """PR с картинкой: jar CI его головы против принятого выпуска; --post — статус «Стенд сцен» и комментарий."""
+    """PR с картинкой: jar CI его головы парой с принятым выпуском (сцена «100»); --post — статус «Стенд сцен» и
+    комментарий."""
     import pr_note
     pr = gh("pr", "view", str(a.number), "-R", REPO, "--json", "headRefOid,url,number", json_out=True)
     head = pr["headRefOid"]
@@ -504,37 +490,34 @@ def cmd_pr(a):
         return 0
     version = accepted_release()
     name = f"pr{a.number}-{head[:8]}"
-    if a.post and (a.packs != list(PACKS) or a.scenes is not None or a.size != DEFAULT_SIZE):
-        # статус влития — только у полного стенда: выборка паков или сцен пропустила бы регрессию в остальных
-        raise SystemExit("--post — только со всеми паками, всеми сценами и окном по умолчанию; выборка — без --post")
+    scenes = a.scenes if a.scenes is not None else GATE_SCENES
+    if a.post and (a.packs != list(PACKS) or scenes != GATE_SCENES or a.size != DEFAULT_SIZE):
+        # статус влития — только у полного шлагбаума: выборка паков пропустила бы регрессию в остальных
+        raise SystemExit("--post — только со всеми паками, сценой «100» и окном по умолчанию; выборка — без --post")
     if a.post:
-        post_status(head, "pending", f"Стенд идёт: против {version}", None)
-    code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--packs", ",".join(a.packs), "--size", a.size,
-                           "--label", f"PR {a.number}"] + (["--scenes", ",".join(a.scenes)] if a.scenes else [])).returncode
-    if code != 0:
+        post_status(head, "pending", f"Стенд идёт: парой с {version}", None)
+    code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--against", version, "--packs", ",".join(a.packs), "--size", a.size,
+                           "--label", f"PR {a.number}", "--scenes", ",".join(scenes)]).returncode
+    out = OUT / name
+    if not is_pair(out) or code not in (0, 1):
         if a.post:
-            post_status(head, "error", f"Стенд не снял прогон (код {code})", None)
-        return code
-    cand = analyze(OUT / name)
-    base = against(cand, version)
-    if base["res"] is None:
-        log(f"принятого {version} в кэше нет — снимаю его ({base['dir']})")
-        ns = argparse.Namespace(version=version, packs=a.packs, scenes=a.scenes, size=a.size, force=False, runs=BASE_RUNS)
-        if cmd_baseline(ns) != 0:
-            if a.post:
-                post_status(head, "error", f"Стенд не снял принятый {version}", None)
-            return 1
-        base = against(cand, version)
-    v = judge(cand, base)
-    (OUT / name / "verdict.json").write_text(json.dumps(v, indent=1, ensure_ascii=False))
-    # отчёт — тем же путём (against, judge): его вердикт тот же
-    subprocess.run(["uv", "run", str(HERE / "report.py"), name, "--against", version])
-    log(f"PR {a.number}: {'проходит' if v['pass'] else 'ПРОВАЛ'}; отчёт {OUT / name / 'report.md'}")
+            post_status(head, "error", f"Стенд не снял пару (код {code})", None)
+        return code or 1
+    v = judge_pair(out)
+    # отчёт — тем же путём (judge_pair): его вердикт тот же
+    subprocess.run(["uv", "run", str(HERE / "report.py"), name])
+    log(f"PR {a.number}: {STATE_WORD[v['state']]}; отчёт {out / 'report.md'}")
     if a.post:
-        body = (OUT / name / "comment.md").read_text() if (OUT / name / "comment.md").exists() else "\n".join(v["fails"])
+        body = (out / "comment.md").read_text() if (out / "comment.md").exists() else "\n".join(v["noisy"] + v["fails"])
         comment = gh("api", f"repos/{REPO}/issues/{a.number}/comments", "-f", f"body={body}", "--jq", ".html_url").strip()
-        desc = "Время кадра при 100 ударах — не хуже " + version if v["pass"] else f"Хуже {version}: " + v["fails"][0]
-        post_status(head, "success" if v["pass"] else "failure", desc[:140], comment)
+        if v["state"] == gate.PASS:
+            state, desc = "success", f"Время кадра при 100 ударах — не хуже {version}"
+        elif v["state"] == gate.FAIL:
+            state, desc = "failure", f"Хуже {version}: " + v["fails"][0]
+        else:
+            # шум пары — не вердикт о PR: снять заново на тихой машине
+            state, desc = "error", "Шумно: принятый в паре разошёлся сам с собой — снять заново"
+        post_status(head, state, desc[:140], comment)
     return 0 if v["pass"] else 1
 
 
@@ -543,14 +526,6 @@ def post_status(sha_, state, desc, url):
     if url:
         args += ["-f", f"target_url={url}"]
     gh(*args)
-
-
-def cmd_key(a):
-    jar, _ = resolve_jar(a.jar)
-    files = fetch_pack(a.packs)
-    client.launch_script(GAME, a.size)
-    ctx = context(a.packs, a.scenes, a.size, files)
-    print(json.dumps({"key": key(sha(jar), ctx), "jar": sha(jar), **ctx}, indent=1, ensure_ascii=False))
 
 
 def main():
@@ -564,17 +539,15 @@ def main():
         p.add_argument("--label", help="подпись версии в отчёте")
 
     p = sub.add_parser("prepare"); p.add_argument("jar"); common(p); p.set_defaults(fn=cmd_prepare)
-    p = sub.add_parser("play"); p.add_argument("name"); p.add_argument("jar"); p.add_argument("--spec"); common(p); p.set_defaults(fn=cmd_play)
+    p = sub.add_parser("play"); p.add_argument("name"); p.add_argument("jar"); p.add_argument("--spec")
+    p.add_argument("--against", help="jar принятого: снять парой A1, B, A2 на каждый пак")
+    p.add_argument("--against-label"); p.add_argument("--against-spec")
+    p.add_argument("--no-warmup", action="store_true", help="без прогрева видеокарты перед парой")
+    common(p); p.set_defaults(fn=cmd_play)
     p = sub.add_parser("analyze"); p.add_argument("name"); p.set_defaults(fn=cmd_analyze)
-    p = sub.add_parser("baseline"); p.add_argument("version"); p.add_argument("--force", action="store_true")
-    p.add_argument("--runs", type=int, default=BASE_RUNS, help=f"прогонов калибровки (по умолчанию {BASE_RUNS})"); common(p); p.set_defaults(fn=cmd_baseline)
-    p = sub.add_parser("gate"); p.add_argument("name"); p.add_argument("--against", help="выпуск из кэша (по умолчанию — последний)")
-    p.add_argument("--base-run", help="вместо кэша выпуска — каталог кэша или прогон out/<имя>")
-    p.add_argument("--tol-from", help="каталог кэша, чей допуск взять (к --base-run прогону)")
-    p.set_defaults(fn=cmd_gate)
+    p = sub.add_parser("gate"); p.add_argument("name"); p.set_defaults(fn=cmd_gate)
     p = sub.add_parser("pr"); p.add_argument("number", type=int); p.add_argument("--post", action="store_true")
     p.add_argument("--force", action="store_true"); common(p); p.set_defaults(fn=cmd_pr)
-    p = sub.add_parser("key"); p.add_argument("jar"); common(p); p.set_defaults(fn=cmd_key)
     a = ap.parse_args()
     for pk in getattr(a, "packs", []) or []:
         if pk not in PACKS:

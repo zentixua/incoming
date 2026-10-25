@@ -4,15 +4,12 @@
 """Отчёт стенда: таблицы по сценам и камерам, листы кадров «строки — версии, столбцы — сцены», график накопления,
 пометки вида для ревьюера, вердикт шлагбаума.
 
-  uv run tools/stand/report.py <имя> [--against <выпуск> | --base <прогон|кэш> [--tol-from <кэш>]]
-                                    [--ref <прогон|кэш>[=подпись] …]
+  uv run tools/stand/report.py <имя> [--ref <прогон>[=подпись] …]
 
-<имя> — прогон кандидата (out/<имя> стенда); принятый, с которым считается вердикт, — кэш выпуска по ключу кандидата
-(--against, как stand.py gate --against), каталог кэша stand.py baseline или прогон (--base, допуск к прогону — из
-кэша --tol-from, как stand.py gate --base-run); --ref — ещё версии в таблицы и листы (например 3.4.1). Числа и вердикт —
-тем же путём, что stand.py gate (stand.against, stand.judge: заново из сырых данных, кэш — только годный): вердикт
-отчёта и статуса один. Итог — в каталоге прогона: report.md, comment.md (таблица для комментария в PR), verdict.json,
-sheet-<пак>.png, acc-<пак>.png, look.json.
+<имя> — прогон out/<имя> стенда: пара (stand.py play … --against, stand.py pr) — кандидат B рядом с принятым A1 и A2 той
+пары, что решила пак, и вердикт тем же путём, что stand.py gate (stand.judge_pair: заново из сырых данных); или один
+прогон — без вердикта. --ref — ещё прогоны в таблицы и листы (например 3.4.1). Итог — в каталоге прогона: report.md,
+comment.md (таблица для комментария в PR), verdict.json (у пары), sheet-<пак>.png, acc-<пак>.png, look.json.
 """
 import argparse
 import json
@@ -31,24 +28,20 @@ COLORS = [(230, 90, 60), (70, 140, 230), (120, 190, 80), (220, 180, 50), (170, 1
 
 
 class Run:
-    """Прогон или кэш принятого: числа (из сырых данных), подпись, где кадры."""
+    """Прогон: числа (из сырых данных), подпись, где кадры."""
 
     def __init__(self, d, res, label=None):
         self.dir = Path(d)
         self.res = res
         self.label = label or res.get("label") or self.dir.name
-        # у кэша кадры — первого прогона калибровки
-        self.shots_root = self.dir / "run1" if (self.dir / "run1").is_dir() else self.dir
 
     @staticmethod
     def of(ref, label=None):
-        """Прогон out/<имя> или каталог кэша (среднее двух прогонов, только годный)."""
         d = Path(ref) if Path(ref).is_dir() else stand.OUT / ref
-        res = stand.cached(d)["base"] if (d / "run1").is_dir() else stand.analyze(d, write=False)
-        return Run(d, res, label)
+        return Run(d, stand.analyze(d, write=False), label)
 
     def shot(self, pack, name):
-        f = self.shots_root / pack / "shots" / f"{name}.png"
+        f = self.dir / pack / "shots" / f"{name}.png"
         return f if f.exists() else None
 
 
@@ -161,84 +154,108 @@ def cell(w):
     return f"{fmt(g)} / {fmt(t)} / {fmt(iv)} ({fmt(fps, 0)})"
 
 
+def columns(d, verdict, refs):
+    """Столбцы отчёта по пакам: {пак: [Run]} — у пары кандидат B и принятый A1, A2 той пары, что решила пак; дальше refs."""
+    if verdict is None:
+        cand = Run(d, stand.analyze(d, write=False))
+        return {p: [cand] + refs for p in cand.res["packs"]}, cand
+    runs = stand.pair_runs(d)
+    out = {}
+    for pack, pv in verdict["packs"].items():
+        attempt = max(1, pv.get("tries") or 1)
+        names = [stand.role_dir(d, r, attempt).name for r in stand.ROLES]
+        if not all(n in runs for n in names):
+            continue
+        a1, b, a2 = (runs[n] for n in names)
+        out[pack] = [Run(d / names[1], b, f"{verdict['cand']['label']} (B)"), Run(d / names[0], a1, f"{verdict['base']['label']} A1"),
+                     Run(d / names[2], a2, f"{verdict['base']['label']} A2")] + refs
+    first = next(iter(out.values()))[0] if out else None
+    return out, first
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("name")
-    ap.add_argument("--against", help="выпуск: принятый из кэша по ключу кандидата")
-    ap.add_argument("--base", help="каталог кэша или прогон out/<имя>")
-    ap.add_argument("--tol-from", help="каталог кэша, чей допуск взять к прогону --base")
     ap.add_argument("--ref", action="append", default=[])
     a = ap.parse_args()
-    cand = Run(stand.OUT / a.name, stand.analyze(stand.OUT / a.name, write=False))
-    against = None
-    if a.against or a.base:
-        against = stand.against(cand.res, a.against, a.base, a.tol_from)
-        if against["res"] is None:
-            raise SystemExit(f"принятого {against['label']} в кэше нет ({against['dir']}): stand.py baseline {against['label']}")
-    base = Run(against["dir"], against["res"], against["label"]) if against else None
+    d = stand.OUT / a.name
+    verdict = stand.judge_pair(d) if stand.is_pair(d) else None
     refs = [Run.of(*r.split("=", 1)) for r in a.ref]
-    runs = [cand] + ([base] if base else []) + refs
+    cols, cand = columns(d, verdict, refs)
+    if cand is None:
+        raise SystemExit(f"{d}: нет ни одной целой пары")
     scenes = plan.load()
     only = cand.res["context"]["scenes"]
     only = None if only == "all" else only
     wins = plan.windows(scenes, only)
     names = shot_order(scenes, only)
-    out = cand.dir
-    packs = list(cand.res["packs"])
 
-    # вид: доля дымных пикселей и яркость по кадрам
-    # по порядку строк: у кандидата и принятого подпись может совпасть (два прогона одной версии)
-    looks = [{p: {n: look_stats(r.shot(p, n)) for n in names if r.shot(p, n)} for p in packs} for r in runs]
-    (out / "look.json").write_text(json.dumps([{"label": r.label, "dir": str(r.dir), "look": lk} for r, lk in zip(runs, looks)], indent=1))
-
-    verdict = None
-    if base:
-        verdict = stand.judge(cand.res, against)
-        verdict["look"] = gate.look_flags(looks[0], looks[1])
-        (out / "verdict.json").write_text(json.dumps(verdict, indent=1, ensure_ascii=False))
+    # вид: доля дымных пикселей и яркость по кадрам, по столбцам каждого пака
+    looks = {p: [{n: look_stats(r.shot(p, n)) for n in names if r.shot(p, n)} for r in runs] for p, runs in cols.items()}
+    (d / "look.json").write_text(json.dumps({p: [{"label": r.label, "dir": str(r.dir), "look": lk} for r, lk in zip(cols[p], looks[p])]
+                                             for p in cols}, indent=1))
+    if verdict:
+        # вид кандидата против A1 той же пары
+        verdict["look"] = gate.look_flags({p: looks[p][0] for p in cols}, {p: looks[p][1] for p in cols})
+        (d / "verdict.json").write_text(json.dumps(verdict, indent=1, ensure_ascii=False))
 
     md = [f"# Scene stand: {cand.label}", ""]
     ctx = cand.res["context"]
     md.append(f"GPU {ctx['gpu']}, driver {ctx['driver']}, window {ctx['size']}, scenes {ctx['scenes']}, stand {ctx['stand'][:12]}, "
-              f"key {cand.res['key']}, jar sha256 {cand.res['jar']['sha256'][:12]} ({cand.res['jar']['file']}).")
+              f"power {ctx.get('power')}, jar sha256 {cand.res['jar']['sha256'][:12]} ({cand.res['jar']['file']}).")
     md.append("")
+    comment = [f"### {gate_title(verdict)}", ""]
     if verdict:
-        md.append(f"## Verdict against {base.label}: {'PASS' if verdict['pass'] else 'FAIL'}")
-        md += [f"- {x}" for x in verdict["fails"]] or ["- frame time at 100 strikes, first strike and accumulation within tolerance"]
+        md.append(f"## Verdict against {verdict['base']['label']}: {verdict['state'].upper()}")
+        md.append("Each pack is shot as a pair in one session: accepted A1, candidate B, accepted A2. The base is the mean of A1 "
+                  f"and A2; the tolerance per value is max({gate.MIN_TOL:.0%}, {gate.SPREAD_K:g} × |A1 − A2| / base). A pair whose "
+                  f"A1 and A2 differ by more than {gate.MAX_SPREAD:.0%} is noisy; a pack that does not pass is shot by a second pair, "
+                  "and the second pair decides.")
+        md += [f"- {x}" for x in verdict["noisy"] + verdict["fails"]] or ["- frame time at 100 strikes within tolerance"]
         md += [f"- note: {x}" for x in verdict["notes"]]
+        for pack, pv in verdict["packs"].items():
+            for i, e in enumerate(pv.get("earlier") or [], 1):
+                md.append(f"- {pack}, pair {i} (re-shot): {e['state']}: " + "; ".join(e["noisy"] + e["fails"]))
         if verdict["look"]:
-            md.append("")
-            md.append("Look differs noticeably (for the reviewer, not a failure):")
-            md += [f"- {x}" for x in verdict["look"]]
+            md += ["", "Look differs noticeably (for the reviewer, not a failure):", *[f"- {x}" for x in verdict["look"]]]
         md.append("")
+        comment += ["| pack | window | value | PR | accepted A1 / A2 | change | tolerance |", "|---|---|---|---|---|---|---|"]
+        for r in verdict["rows"]:
+            if r["gated"] and r["window"].startswith(gate.GATED):
+                bases = " / ".join(fmt(x) for x in r.get("bases") or [r["base"]])
+                comment.append(f"| {r['pack']} | {r['window']} | {r['metric']} | {fmt(r['cand'])} | {bases} | {r['change']:+.0%} | "
+                               f"{r['tol']:.0%}{' (noisy)' if r.get('noisy') else ''}{' **FAIL**' if r['fail'] else ''} |")
+        comment += ["", *([f"- {x}" for x in verdict["noisy"] + verdict["fails"]]
+                          or ["Frame time at 100 strikes within tolerance of the accepted release."])]
+        if verdict["look"]:
+            comment += ["", "Look differs noticeably (reviewer, compare the frames):", *[f"- {x}" for x in verdict["look"]]]
     md.append("Cells: GPU p50 / CPU p95 / frame p95 (frames per second), ms. GPU — the GPU clock from the first to the last command "
               "of the frame; CPU — CPU time of the render thread in the frame (RenderFrameEvent.Pre → Post, without the buffer swap, "
               "preemption and driver sleep); frame — from the frame start to the next frame start, as the player sees it. The gate "
               "judges GPU p50 and CPU p95 in the `100/*` windows.")
-    comment = [f"### {gate_title(verdict, base)}", "", "| pack | window | " + " | ".join(r.label for r in runs) + " |",
-               "|---|---|" + "---|" * len(runs)]
-    for pack in packs:
+    for pack, runs in cols.items():
         md += ["", f"## Pack: {pack}", "", "| window | " + " | ".join(r.label for r in runs) + " |", "|---|" + "---|" * len(runs)]
         for wname in wins:
             row = [cell((r.res["packs"].get(pack) or {}).get("windows", {}).get(wname)) for r in runs]
             md.append(f"| {wname} | " + " | ".join(row) + " |")
-            if wname.startswith(gate.GATED):
-                comment.append(f"| {pack} | {wname} | " + " | ".join(row) + " |")
-        firsts = [fmt(((r.res["packs"].get(pack) or {}).get("first") or {}).get("worst_ms"), 0) for r in runs]
-        md.append("| first strike, worst frame to +5 s | " + " | ".join(firsts) + " |")
+        if any((r.res["packs"].get(pack) or {}).get("first") for r in runs):
+            md.append("| first strike, worst frame to +5 s | "
+                      + " | ".join(fmt(((r.res["packs"].get(pack) or {}).get("first") or {}).get("worst_ms"), 0) for r in runs) + " |")
         growth = [((r.res["packs"].get(pack) or {}).get("acc") or {}).get("growth") for r in runs]
-        md.append("| accumulation, last minute / first | " + " | ".join("—" if not g or g["ratio"] is None else f"×{g['ratio']:.2f} ({g['first_ms']:.1f} → {g['last_ms']:.1f})" for g in growth) + " |")
-        comment.append(f"| {pack} | first strike worst | " + " | ".join(firsts) + " |")
-        # где время кадра видеокарты в окнах «100»: стадии кандидата против принятого
+        if any(growth):
+            md.append("| accumulation, last minute / first | " + " | ".join(
+                "—" if not g or g["ratio"] is None else f"×{g['ratio']:.2f} ({g['first_ms']:.1f} → {g['last_ms']:.1f})" for g in growth) + " |")
+        c, b = runs[0], runs[1] if len(runs) > 1 else None
+        # где время кадра видеокарты в окнах «100»: стадии кандидата против первого принятого
         for wname in [w for w in wins if w.startswith(gate.GATED)]:
-            cw = (cand.res["packs"][pack].get("windows") or {}).get(wname)
-            bw = ((base.res["packs"].get(pack) or {}).get("windows") or {}).get(wname) if base else None
+            cw = (c.res["packs"].get(pack) or {}).get("windows", {}).get(wname)
+            bw = ((b.res["packs"].get(pack) or {}).get("windows") or {}).get(wname) if b else None
             if not cw:
                 continue
             st = sorted(cw["stages"].items(), key=lambda kv: -(kv[1]["mean"] or 0))[:8]
             md += ["", f"GPU by stage, {wname} (mean ms; segment up to a stage = game work before it, `+` = mod handlers at it, "
                        f"`tail` = after the last stage: GUI, post):", "",
-                   "| stage | " + cand.label + (f" | {base.label}" if bw else "") + " |", "|---|---|" + ("---|" if bw else "")]
+                   "| stage | " + c.label + (f" | {b.label}" if bw else "") + " |", "|---|---|" + ("---|" if bw else "")]
             for k, v in st:
                 bv = ((bw or {}).get("stages") or {}).get(k, {}).get("mean")
                 md.append(f"| {k} | {fmt(v['mean'], 2)}" + (f" | {fmt(bv, 2)}" if bw else "") + " |")
@@ -248,33 +265,32 @@ def main():
                       f"wall-clock Pre→Post p95 {fmt((cw.get('cpu') or {}).get('p95'))} ms; other load on the machine "
                       f"{fmt(h.get('cpu_foreign'))} cores, GPU {h.get('gpu_foreign', '—')} % ({h.get('units') or 'nothing heavy'}); probes: "
                       + "; ".join(f"{k}: {v}" for k, v in (cw.get("probes") or {}).items()))
-        pr = cand.res["packs"][pack]
-        if pr.get("checks"):
-            md += ["", "Run not valid for comparison: " + "; ".join(pr["checks"])]
-        meta = pr.get("meta") or {}
-        md += ["", f"Frames {meta.get('frames')}, {fmt(meta.get('gpu_minutes'))} GPU minutes, impacts: "
-               + ", ".join(f"{k} {v['got']}/{v['expect']} ({v['why']}, {v['took_s']:.0f} s)" for k, v in (meta.get("impacts") or {}).items())
-               + (f"; {meta['size_note']}" if meta.get("size_note") else "")]
-        s = sheet(runs, pack, names, out / f"sheet-{pack}.png")
+        for r in runs:
+            pr = r.res["packs"].get(pack) or {}
+            if pr.get("checks"):
+                md += ["", f"{r.label}: run not valid for comparison: " + "; ".join(pr["checks"])]
+            if pr.get("load"):
+                md += ["", f"{r.label}: machine load in the verdict windows: " + "; ".join(pr["load"])]
+        meta = (c.res["packs"].get(pack) or {}).get("meta") or {}
+        md += ["", f"{c.label}: frames {meta.get('frames')}, {fmt(meta.get('gpu_minutes'))} GPU minutes, impacts: "
+               + ", ".join(f"{k} {v['got']}/{v['expect']} ({v['why']}, {v['took_s']:.0f} s)" for k, v in (meta.get("impacts") or {}).items())]
+        s = sheet(runs, pack, names, d / f"sheet-{pack}.png")
         if s:
             md += ["", f"Frames side by side: `{s.name}`"]
-        c = acc_chart(runs, pack, out / f"acc-{pack}.png")
-        if c:
-            md += [f"Accumulation chart: `{c.name}`"]
-    if verdict:
-        comment += ["", *([f"- {x}" for x in verdict["fails"]] or ["Frame time at 100 strikes within tolerance of the accepted release."])]
-        if verdict["look"]:
-            comment += ["", "Look differs noticeably (reviewer, compare the frames):", *[f"- {x}" for x in verdict["look"]]]
-    comment += ["", "Cells: GPU p50 / CPU p95 / frame p95 (fps), ms. Report and frames: `mod/run/stand/out/" + out.name + "/` on the laptop."]
-    (out / "report.md").write_text("\n".join(md) + "\n")
-    (out / "comment.md").write_text("\n".join(comment) + "\n")
-    print(out / "report.md")
+        ch = acc_chart(runs, pack, d / f"acc-{pack}.png")
+        if ch:
+            md += [f"Accumulation chart: `{ch.name}`"]
+    comment += ["", "Values: GPU p50 and CPU p95 (render thread), ms. Report and frames: `mod/run/stand/out/" + d.name + "/` on the laptop."]
+    (d / "report.md").write_text("\n".join(md) + "\n")
+    (d / "comment.md").write_text("\n".join(comment) + "\n")
+    print(d / "report.md")
 
 
-def gate_title(verdict, base):
+def gate_title(verdict):
     if not verdict:
         return "Scene stand"
-    return f"Scene stand against {base.label}: {'pass' if verdict['pass'] else 'FAIL'}"
+    word = {gate.PASS: "pass", gate.FAIL: "FAIL", gate.NOISY: "noisy, no verdict"}[verdict["state"]]
+    return f"Scene stand, pair with {verdict['base']['label']}: {word}"
 
 
 if __name__ == "__main__":

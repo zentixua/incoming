@@ -217,7 +217,7 @@ def acc_load(events, scene, t0, t1):
 
 def analyze(run_dir, scenes, only=None, power=None):
     """Один клиент (версия × пак): окна, первый удар, накопление, проверки годности (only — сцены выборки, None — все;
-    power — профиль питания, в котором прогон снят по ключу)."""
+    power — профиль питания в начале прогона: его смена в окнах — в отчёт)."""
     run_dir = Path(run_dir)
     frames = read_frames(run_dir / "frames.csv")
     events = read_events(run_dir / "events.jsonl")
@@ -257,8 +257,9 @@ def analyze(run_dir, scenes, only=None, power=None):
     res["meta"]["frames"] = len(frames)
     res["meta"]["duration_s"] = (frames[-1]["t"] - frames[0]["t"]) / 1000 if frames else 0
     res["meta"]["shots"] = sorted(e["name"] for e in events if e["type"] == "shot")
-    res["checks"] = checks(events, res, plan.windows(scenes, only), acc_scene if acc_scene and (only is None or acc_scene["id"] in only) else None,
-                           power)
+    acc_sel = acc_scene if acc_scene and (only is None or acc_scene["id"] in only) else None
+    res["checks"] = checks(events, res, plan.windows(scenes, only), acc_sel)
+    res["load"] = load_notes(res, acc_sel, power)
     return res
 
 
@@ -274,10 +275,10 @@ def verdict_hosts(res, acc_scene=None):
     return out
 
 
-def checks(events, res, expected=(), acc_scene=None, power=None):
+def checks(events, res, expected=(), acc_scene=None):
     """Годен ли прогон для сравнения: строки «что не так» (пусто — годен). expected — окна плана (все обязательны),
-    acc_scene — сцена накопления плана (её нагрузка должна прийтись на окно), power — профиль питания ключа (None — не
-    проверять)."""
+    acc_scene — сцена накопления плана (её нагрузка должна прийтись на окно). Нагрузка машины годность не решает
+    (load_notes): от неё шлагбаум защищает пара в одном сеансе (gate.py)."""
     bad = []
     if not res["meta"]["done"]:
         bad.append("прогон не дошёл до конца (нет события done)")
@@ -312,13 +313,6 @@ def checks(events, res, expected=(), acc_scene=None, power=None):
         if w["frames"] < MIN_FRAMES:
             bad.append(f"окно {name}: {w['frames']} кадров (меньше {MIN_FRAMES})")
 
-    # нагрузка машины и профиль питания — во всех окнах, что решают вердикт
-    for where, h in verdict_hosts(res, acc_scene):
-        bad += load_checks(where, h)
-        # профиль — в ключе; сменился посреди окна (тихий режим ночью) — числа не того профиля
-        seen = sorted(set((h or {}).get("profiles") or []) - {power}) if power is not None else []
-        if seen:
-            bad.append(f"{where}: профиль питания {', '.join(seen)}, а снимали в {power}")
     # первый удар: замер — худший кадр, шедший в окне; клиент, вставший на всё окно, — тоже число, а не пустота
     if FIRST in expected and (res.get("first") or {}).get("worst_ms") is None:
         bad.append("первый удар: нет числа (окна нет или ни один кадр не шёл в нём)")
@@ -361,23 +355,33 @@ def foreign(h):
 
 
 def load_checks(where, h):
-    """Годность окна по нагрузке машины: запись есть и покрывает окно (с замером видеокарты), чужой нагрузки нет.
-    Чужая нагрузка — с меткой LOAD_TAG (её пак снимается ещё раз), нехватка записи — без: повтор её не лечит."""
+    """Нагрузка машины в окне — для отчёта: запись есть и покрывает окно (с замером видеокарты), чужой нагрузки нет."""
     if h is None or not h["samples"]:
-        return [f"{where}: нет записи нагрузки машины (host.jsonl) — тишину не проверить"]
+        return [f"{where}: нет записи нагрузки машины (host.jsonl)"]
     bad = []
     if h["covered"] < COVER_MIN:
-        bad.append(f"{where}: нагрузка машины записана на {h['covered']:.0%} окна (нужно {COVER_MIN:.0%})")
+        bad.append(f"{where}: нагрузка машины записана на {h['covered']:.0%} окна")
     if h["gpu_covered"] < COVER_MIN:
         bad.append(f"{where}: видеокарта чужими процессами записана на {h['gpu_covered']:.0%} окна (nvidia-smi)")
-    return bad + [f"{LOAD_TAG} {where}: {x}" for x in foreign(h)]
+    return bad + [f"{where}: {x}" for x in foreign(h)]
+
+
+def load_notes(res, acc_scene=None, power=None):
+    """Чужая нагрузка и смена профиля питания в окнах, что решают вердикт (verdict_hosts) — строки для отчёта, не
+    годность: запись машины (опрос процессора раз в 5 с, циклы nvidia-smi) не доказывает тишину каждого мгновения, а
+    шлагбаум и так сравнивает пару одного сеанса; строки объясняют шумную пару или провал, который не повторился."""
+    out = []
+    for where, h in verdict_hosts(res, acc_scene):
+        out += load_checks(where, h)
+        seen = sorted(set((h or {}).get("profiles") or []) - {power}) if power is not None else []
+        if seen:
+            out.append(f"{where}: профиль питания {', '.join(seen)}, а в начале был {power}")
+    return out
 
 
 FIRST = "first"
 GATED = "100/"
-# строки годности из-за чужой нагрузки (не из-за версии): по ним stand.py play снимает пак ещё раз
-LOAD_TAG = "нагрузка:"
-# чужая нагрузка в окне шлагбаума — не больше: фон ноутбука без задач — 0,2–0,4 ядра (приложения Claude, браузер), одна
+# чужая нагрузка в окне (отчёт и ожидание тишины перед клиентом) — не больше: фон ноутбука без задач — 0,2–0,4 ядра (приложения Claude, браузер), одна
 # тяжёлая задача — от 1,5 (клиент песочницы другой сессии) до 7 ядер (сборка, ревью с тестами) (замер 25.10). Видеокарта
 # (циклы pmon по 1 с): фон — рабочий стол хоста (kwin_wayland, plasmashell, экран заблокирован) — в 15 % циклов 1–18 % SM,
 # пока рисует клиент стенда — до 12 % (прогон 25.10, 705 циклов), в среднем по окну 20 с — до ~3 %; чужой клиент игры
