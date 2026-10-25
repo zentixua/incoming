@@ -245,7 +245,7 @@ class CloudModelTest {
         }
     }
 
-    /** Клубы сохраняют вещество: сажа в облаке — вся, пыль в облаке, ножке и у земли — не больше всей. */
+    /** Клубы сохраняют вещество: сажа в облаке — вся родившаяся к этому мигу, пыль в облаке, ножке и у земли — не больше всей. */
     @Test
     void blobsCarryTheMatter() {
         CloudModel m = model(WeaponType.DRONE, CloudModel.Air.STANDARD);
@@ -259,7 +259,7 @@ class CloudModelTest {
                 assertTrue(b[1] > 0 && b[2] > 0, "σ > 0");
                 assertTrue(b[5] >= CloudModel.T_AIR_K - 1e-9, "не холоднее воздуха");
             }
-            assertEquals(m.soot * m.fade(t), soot, 1e-9, "t " + t);
+            assertEquals(m.sootBurnt(t) * m.fade(t), soot, 1e-9, "t " + t);
             // пыль — ослабление в кг смеси: воронка, слой волны и сорванное под шаром, не больше поднятого
             assertTrue(dust <= m.dust + m.crushed.total + m.ground.total + m.ground.underBall(t) + 1e-9, "t " + t);
             assertTrue(blobs.get(0)[0] > 0, "облако над землёй");
@@ -383,6 +383,140 @@ class CloudModelTest {
         // тело огня тает в дым и дым проступает одной долей по температуре
         assertEquals(1, CloudModel.glowShare(CloudModel.FUEL_BALL_K), 1e-12);
         assertEquals(0, CloudModel.glowShare(CloudModel.DRAPER_K), 1e-12);
+    }
+
+    /**
+     * Огненный шар растёт от места удара и всплывает без скачков (BLASTSEQ D01: в 0,1–0,2 с середина прыгала на 6 м у шахеда
+     * и на 14 м у ракеты — шар топлива рождался на D/2 над землёй): за 0,05 с середина сдвигается не больше чем на 0,15
+     * наибольшего радиуса после расширения продуктов детонации — и в смену большего шара, и в конец горения, и у разрыва
+     * в воздухе; пока шар топлива растёт,
+     * он лежит на земле (низ — не выше точки удара); в конец горения середина — 0,75·D (CCPS).
+     */
+    @Test
+    void fireballGrowsFromTheGroundWithoutJumps() {
+        List<CloudModel> models = new ArrayList<>();
+        for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET, WeaponType.LOITER}) {
+            models.add(model(w, air(Stability.D, 5, 0, 0.5)));
+        }
+        models.add(new CloudModel(BlastSource.air(20), air(Stability.D, 5, 0, 0.5), false, 15));
+        for (CloudModel m : models) {
+            String name = m.source.weapon() + " на " + m.hob + " м";
+            double rMax = 0;
+            for (double t = 0; t < m.fireSeconds; t += 0.01) rMax = Math.max(rMax, m.ballRadius(t));
+            // первые 0,05 с — расширение продуктов детонации (за проценты их жизни почти весь радиус): рост, а не скачок
+            double prev = m.ballHeight(0.05);
+            for (double t = 0.1; t < m.fireSeconds; t += 0.05) {
+                double h = m.ballHeight(t);
+                assertTrue(Math.abs(h - prev) <= 0.15 * rMax, name + ": середина шара " + prev + " → " + h + " м в " + t + " с");
+                prev = h;
+            }
+            if (m.fuelBall > 0) {
+                for (double t = 0.01; t < 0.2 * m.fuelBallSeconds; t += 0.01) {
+                    assertTrue(m.fuelBallHeight(t) - m.fuelBallRadius(t) <= 1e-9, name + ": растущий шар топлива оторвался от земли в " + t + " с");
+                }
+                assertEquals(0.75 * m.fuelBall, m.ballHeight(m.fuelBallSeconds - 1e-9), 1e-6, name + ": середина в конец горения — 0,75·D");
+            }
+        }
+    }
+
+    /**
+     * Картинка шара, его свет и жар — там же, где его дым (BLASTSEQ D01: шар стоял над воронкой, а дым уходил по ветру — у
+     * ракеты на 21 м к концу свечения): в горении середина большего клуба шара — {@link CloudModel#ballX}, высота шара,
+     * {@link CloudModel#ballZ}, и при ветре шар уходит с места удара.
+     */
+    @Test
+    void fireballAndItsSmokeShareOnePlace() {
+        for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET}) {
+            CloudModel m = model(w, air(Stability.D, 5, 2, 0.5));
+            for (double t = 0.05; t < m.burnSeconds; t += 0.05) {
+                double[] big = {-1, 0, 0, 0};
+                // в горении клубы — только шары; пыль у земли и ножка — свои
+                m.blobs(t, new CloudModel.Blobs() {
+                    @Override
+                    public void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, double kelvin, double rise) {
+                        if (sh > big[0]) {
+                            big[0] = sh;
+                            big[1] = x;
+                            big[2] = y;
+                            big[3] = z;
+                        }
+                    }
+
+                    @Override
+                    public void ground(double x, double y, double z, double sh, double sv, double dust, double kelvin) {}
+
+                    @Override
+                    public void crushed(double x, double y, double z, double sh, double sv, double dust, double kelvin) {}
+
+                    @Override
+                    public void tube(double ax, double ay, double az, double sa, double dustA, double bx, double by, double bz, double sb, double dustB,
+                                     double kelvin, double rise) {}
+                });
+                assertEquals(m.ballRadius(t) / Math.sqrt(5), big[0], 1e-9, w + ": клуб шара в " + t + " с — его размера");
+                assertEquals(m.ballX(t), big[1], 1e-9, w + ": шар и его дым по x в " + t + " с");
+                assertEquals(m.ballHeight(t), big[2], 1e-9, w + ": шар и его дым по высоте в " + t + " с");
+                assertEquals(m.ballZ(t), big[3], 1e-9, w + ": шар и его дым по z в " + t + " с");
+            }
+            assertTrue(Math.hypot(m.ballX(m.burnSeconds), m.ballZ(m.burnSeconds)) > 1, w + ": шар при ветре 5 м/с не уходит с места удара");
+        }
+    }
+
+    /**
+     * Сажа рождается, когда горит то, из чего она (BLASTSEQ D02): сажа взрывчатки — вся с мига детонации, сажа топлива —
+     * по доле сгоревшего шаром (у шахеда в 0,1 горения — десятая её часть), к концу горения — вся; в клубах — ровно
+     * родившаяся.
+     */
+    @Test
+    void fuelSootIsBornAsTheFuelBurns() {
+        for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
+            CloudModel m = model(w, air(Stability.D, 3, 0, 0.5));
+            double he = m.heSoot(), fuel = m.soot - he;
+            assertTrue(fuel > 0, w + ": у топлива есть сажа");
+            assertEquals(he, m.sootBurnt(0), 1e-12, w + ": в миг взрыва — только сажа взрывчатки");
+            assertEquals(he + 0.1 * fuel, m.sootBurnt(0.1 * m.fuelBallSeconds), 1e-9, w + ": в 0,1 горения — десятая сажи топлива");
+            assertEquals(m.soot, m.sootBurnt(m.fuelBallSeconds), 1e-12, w + ": в конец горения — вся");
+            for (double t = 0.02; t < m.burnSeconds; t += 0.1) {
+                double[] mass = {0};
+                m.blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> mass[0] += soot);
+                assertEquals(m.sootBurnt(t) * m.fade(t), mass[0], 1e-9, w + ": в клубах в " + t + " с — родившаяся сажа");
+            }
+        }
+    }
+
+    /**
+     * Ножка растёт снизу (BLASTSEQ D09: стояла во всю высоту до облака с первого мига подсоса): её верх — докуда дошла самая
+     * ранняя пыль подсоса, не выше низа облака; сначала ниже низа облака, позже — до него.
+     */
+    @Test
+    void stemRisesFromTheGround() {
+        CloudModel m = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), air(Stability.D, 3, 0, 0.5));
+        double from = m.ground.drawnFrom;
+        assertTrue(Double.isFinite(from), "подсос ножки начинается");
+        boolean below = false, reached = false;
+        double prevTop = 0;
+        for (double t = from + 0.5; t < 60; t += 0.5) {
+            double[] top = {Double.NaN};
+            m.blobs(t, new CloudModel.Blobs() {
+                @Override
+                public void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, double kelvin, double rise) {}
+
+                @Override
+                public void tube(double ax, double ay, double az, double sa, double dustA, double bx, double by, double bz, double sb, double dustB,
+                                 double kelvin, double rise) {
+                    top[0] = by + m.hob;
+                }
+            });
+            if (Double.isNaN(top[0])) continue;
+            double bottom = m.height(t) - 1.5 * m.sigmaV(t) + m.hob;
+            assertTrue(top[0] <= bottom + 1e-9, "ножка выше низа облака в " + t + " с");
+            assertTrue(top[0] <= Math.max(0.35 * m.sigmaH(t), 1) + m.stemTop(t) + 1e-9, "ножка выше дошедшей пыли в " + t + " с");
+            assertTrue(top[0] >= prevTop - 1e-6 || reached, "ножка опустилась в " + t + " с");
+            prevTop = top[0];
+            if (top[0] < bottom - 1) below = true;
+            if (top[0] > bottom - 1e-6) reached = true;
+        }
+        assertTrue(below, "ножка не росла снизу — стояла сразу до облака");
+        assertTrue(reached, "ножка так и не дошла до облака");
     }
 
     /**
