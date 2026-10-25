@@ -208,7 +208,8 @@ class CoarsePassTest {
     /**
      * Внутри дыма половина клубов — за глазом, и по расстоянию они сортируются вперемешку с крупными клубами перед ним
      * (PF7 на 858b6b11: такие шли полным кадром во весь экран, и слой внутри дыма выходил одним отрезком полного кадра).
-     * Клуб целиком за глазом не виден: отрезок мелкого кадра он не рвёт.
+     * Клуб целиком за глазом или за краем кадра не виден: отрезок мелкого кадра он не рвёт, и хвостом его в конце порядка
+     * отрезка полного кадра нет.
      */
     @Test
     void puffsBehindTheEyeDoNotBreakCoarseRuns() {
@@ -220,6 +221,17 @@ class CoarsePassTest {
             // тот же ключ расстояния, но за глазом
             quads.sixWay(0.5f);
             quads.billboard(0, 0, (float) (d + i * 0.5 + 0.25), (float) (d + i * 0.5 + 0.25), (float) half, 0, FxAtlas.puff6(3, false), 0.5f, 0.5f,
+                    0.5f, 0.5f, 2, 1, LightTexture.FULL_BRIGHT, 0);
+            quads.sixWay(-1);
+        }
+        // последним по порядку — ещё один за глазом, ближе всех (ревью #455: хвостом шёл лишний отрезок полного кадра)
+        quads.sixWay(0.5f);
+        quads.billboard(0, 0, 1, 1, (float) half, 0, FxAtlas.puff6(3, false), 0.5f, 0.5f, 0.5f, 0.5f, 2, 1, LightTexture.FULL_BRIGHT, 0);
+        quads.sixWay(-1);
+        // и мелкие клубы целиком за краем кадра между крупными (ревью #455)
+        for (int i = 0; i < 6; i++) {
+            quads.sixWay(0.5f);
+            quads.billboard((float) (4 * d), 0, (float) -(d + i * 0.5 + 0.1), (float) (d + i * 0.5 + 0.1), 0.5f, 0, FxAtlas.puff6(3, false), 0.5f, 0.5f,
                     0.5f, 0.5f, 2, 1, LightTexture.FULL_BRIGHT, 0);
             quads.sixWay(-1);
         }

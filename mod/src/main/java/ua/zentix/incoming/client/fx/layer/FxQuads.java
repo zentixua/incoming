@@ -296,8 +296,8 @@ public final class FxQuads {
      * пикселей на тексель в самом сжатом направлении, у каждого угла ({@link #stretch}); доля кадра и рамка на экране. Угол
      * у глаза или за ним (плоский квадрат, который глаз пересекает) — полный кадр во весь экран: растяжение у видимого края
      * такого квадрата бывает в доли пикселя на тексель (пыль под глазом, ревью #455), а меры без угла нет. Клуб лицом к
-     * глазу так не бывает: его углы — на одном расстоянии с серединой. Квадрат целиком за глазом не виден: без заливки и
-     * самым мелким уровнем, чтобы не рвать отрезки.
+     * глазу так не бывает: его углы — на одном расстоянии с серединой. Квадрат целиком за глазом или за краем кадра не
+     * виден: без заливки и самым мелким уровнем, чтобы не рвать отрезки.
      */
     private void measure(int i) {
         long q = stage + (long) i * QUAD;
@@ -335,11 +335,19 @@ public final class FxQuads {
             box[b + 2] = box[b + 3] = 1;
             return;
         }
+        float cx0 = Math.max(0, x0), cy0 = Math.max(0, y0), cx1 = Math.min(screenW, x1), cy1 = Math.min(screenH, y1);
+        if (cx1 <= cx0 || cy1 <= cy0) {
+            // весь за краем кадра — так же, как за глазом: не виден и отрезков не рвёт
+            level[i] = (byte) (CoarsePass.LEVELS - 1);
+            cover[i] = 0;
+            box[b] = box[b + 1] = 1;
+            box[b + 2] = box[b + 3] = -1;
+            return;
+        }
         double perTexel = Double.MAX_VALUE;
         for (int k = 0; k < 4; k++) perTexel = Math.min(perTexel, stretch(q, k));
         level[i] = (byte) (perTexel == Double.MAX_VALUE ? 0 : CoarsePass.level(perTexel));
-        float cx0 = Math.max(0, x0), cy0 = Math.max(0, y0), cx1 = Math.min(screenW, x1), cy1 = Math.min(screenH, y1);
-        cover[i] = cx1 > cx0 && cy1 > cy0 ? (cx1 - cx0) * (cy1 - cy0) / ((float) screenW * screenH) : 0;
+        cover[i] = (cx1 - cx0) * (cy1 - cy0) / ((float) screenW * screenH);
         box[b] = cx0 / screenW * 2 - 1;
         box[b + 1] = cy0 / screenH * 2 - 1;
         box[b + 2] = cx1 / screenW * 2 - 1;

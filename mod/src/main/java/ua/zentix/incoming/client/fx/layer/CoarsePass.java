@@ -153,7 +153,8 @@ public final class CoarsePass {
         double best = Double.POSITIVE_INFINITY;
         for (int a = 0; a < LEVELS; a++) {
             double v = cost[a] + (a > 0 ? run : 0);
-            if (v < best) {
+            // при равной цене — уровень последнего отрезка, а не новый полный в конце (квадрат без заливки последним)
+            if (v <= best) {
                 best = v;
                 l = a;
             }
