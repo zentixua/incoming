@@ -6,6 +6,7 @@
   stand.py analyze <имя>                              out/<имя>/results.json из сырых данных
   stand.py baseline <выпуск> [--packs …]              принятый: два прогона → кэш с допуском (run.sh дважды)
   stand.py gate <имя> [--against <выпуск>]            вердикт против принятого из кэша → verdict.json
+               [--base-run <имя> --tol-from <кэш>]    … или против одного прогона с допуском кэша (приёмка)
   stand.py pr <номер> [--post]                        PR: jar CI головы, прогон, вердикт; --post — статус и комментарий
   stand.py key <jar> [--packs …] [--scenes …]         ключ кэша (что снимали и на чём)
 
@@ -441,13 +442,22 @@ def accepted_release():
 def cmd_gate(a):
     out = OUT / a.name
     cand = json.loads((out / "results.json").read_text())
-    version = a.against or accepted_release()
-    base, tol, d = find_baseline(version, cand["context"])
-    if base is None:
-        raise SystemExit(f"принятого {version} с тем же стендом, паками, сценами, видеокартой и окном в кэше нет ({d}): "
-                         f"stand.py baseline {version}")
+    if a.base_run:
+        # против одного прогона (приёмка: 3.5.0 против 3.4.1), допуск — из кэша принятого (шум стенда)
+        base = json.loads((OUT / a.base_run / "results.json").read_text())
+        if base["context"] != cand["context"]:
+            diff = sorted(k for k in cand["context"] if cand["context"][k] != base["context"].get(k))
+            raise SystemExit(f"{a.base_run} снят иначе: {', '.join(diff)}")
+        tol = json.loads((Path(a.tol_from) / "tolerance.json").read_text()) if a.tol_from else None
+        version, d = base["label"], OUT / a.base_run
+    else:
+        version = a.against or accepted_release()
+        base, tol, d = find_baseline(version, cand["context"])
+        if base is None:
+            raise SystemExit(f"принятого {version} с тем же стендом, паками, сценами, видеокартой и окном в кэше нет ({d}): "
+                             f"stand.py baseline {version}")
     v = gate.compare(cand, base, tol)
-    v["against"] = {"version": version, "cache": str(d)}
+    v["against"] = {"version": version, "dir": str(d), "tolerance": a.tol_from if a.base_run else str(d)}
     (out / "verdict.json").write_text(json.dumps(v, indent=1, ensure_ascii=False))
     log(f"{a.name} против {version}: {'ПРОХОДИТ' if v['pass'] else 'ПРОВАЛ'}")
     for f in v["fails"]:
@@ -529,7 +539,9 @@ def main():
     p = sub.add_parser("play"); p.add_argument("name"); p.add_argument("jar"); p.add_argument("--spec"); common(p); p.set_defaults(fn=cmd_play)
     p = sub.add_parser("analyze"); p.add_argument("name"); p.set_defaults(fn=cmd_analyze)
     p = sub.add_parser("baseline"); p.add_argument("version"); p.add_argument("--force", action="store_true"); common(p); p.set_defaults(fn=cmd_baseline)
-    p = sub.add_parser("gate"); p.add_argument("name"); p.add_argument("--against"); p.set_defaults(fn=cmd_gate)
+    p = sub.add_parser("gate"); p.add_argument("name"); p.add_argument("--against", help="выпуск из кэша (по умолчанию — последний)")
+    p.add_argument("--base-run", help="вместо кэша — прогон out/<имя>"); p.add_argument("--tol-from", help="каталог кэша, чей допуск взять")
+    p.set_defaults(fn=cmd_gate)
     p = sub.add_parser("pr"); p.add_argument("number", type=int); p.add_argument("--post", action="store_true")
     p.add_argument("--force", action="store_true"); common(p); p.set_defaults(fn=cmd_pr)
     p = sub.add_parser("key"); p.add_argument("jar"); common(p); p.set_defaults(fn=cmd_key)
