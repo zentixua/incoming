@@ -52,11 +52,10 @@ import ua.zentix.incoming.nuclear.model.FuelPool;
  * диаметр 0,65·W^⅓ м, глубина — четверть, параболоид, тот же закон, что роет сервер, у скалы и бетона — 0,7 диаметра; у
  * плиты над пустотой — пролом; × насыпная плотность вещества цели); в воздух уходит доля мелочи вещества
  * ({@link BlastTarget.Matter#fines}): у рыхлого и досок — {@link #DUST_LOFTED} (2 %, оценка), у связного (скала, бетон,
- * кладка) — 10 % (зона дробления у заряда, Esen, Onederra, Bilgin 2003; ⚠ оценка: замеров мелочи контактного взрыва по
- * бетону нет).
- * Цвет — вещества цели ({@link BlastTarget.Matter}), а не грунта у любой цели. Выброс — два потока: вовлечённая в горячий газ пыль поднимается с облаком; холодная крошка выброса и
- * обратного выпадения питает тяжёлый слой {@link #crushed}. Разделение массы — {@link #CRUSHED_HOT_SHARE}, оценка;
- * облако больше не забирает всю пыль разрушенного материала. Воронки нет у подрыва выше
+ * кладка) — {@code BlastTarget.FINES_CRUSHED} (по PM10 контактного взрыва по бетону, Costa 2025; ⚠ оценка).
+ * Цвет — вещества цели ({@link BlastTarget.Matter}), а не грунта у любой цели. Мелочь — два потока: вовлечённая в горячий
+ * газ поднимается с облаком; остальную поток газа выносит вдоль поверхностей вокруг юбкой у земли ({@link #crushed},
+ * {@link GroundDust#skirt}). Деление — {@link #CRUSHED_HOT_SHARE}. Воронки нет у подрыва выше
  * {@link #CRATER_HOB} радиуса шара продуктов (разрыв в воздухе): пыли воронки нет.
  * <p>
  * <b>Пыль волны</b> — {@link GroundDust}: тот же закон, что у ядерки ({@code DustModel}: вынос ветром за фронтом, слой Kuhl,
@@ -110,14 +109,12 @@ public final class CloudModel {
      */
     public static final double CLOUD_SHARE = 0.5;
     /**
-     * Split of the fragmented material between hot gas entrainment and the cold ejecta/fallback curtain.
-     * A separate low density current fed by ejecta is described by Glasstone & Dolan (1977), §2.96, and NRC (2005),
-     * Effects of Nuclear Earth-Penetrator and Other Weapons, ch. 5. Those sources do not give a fraction for a
-     * conventional contact burst: equal mass in the two unresolved streams is explicitly an estimate, not a
-     * measured TNT correlation. Total dust remains the existing crushed-volume × density × DUST_LOFTED.
+     * Доля мелочи разрушенного, что уходит с горячим газом облака; остальная — юбкой у земли ({@link GroundDust#skirt}).
+     * Brown и др., «SCM», ARI-RR-1384 (2004), табл. 5: η_partition 0,2–0,8, принято 0,5 (⚠ оценка: там же
+     * помечено неопределённым по нехватке данных).
      */
     public static final double CRUSHED_HOT_SHARE = 0.5;
-    /** Cold dust of crushed material, as distinct from pre-existing wave-lofted surface dust. */
+    /** Юбка пыли разрушенного у земли ({@link GroundDust#skirt}): отдельно от пыли, что лежала на поверхностях. */
     public final GroundDust crushed;
     /**
      * Доля энергии ядерного взрыва в ударной волне — ~0,5 (Glasstone, Dolan, «The Effects of Nuclear Weapons», 1977, §1.24:
@@ -217,7 +214,7 @@ public final class CloudModel {
         }
 
         /**
-         * Клуб холодной пыли раздробленного вещества цели ({@link #crushed}): цвет и кадры — её вещества. Приёмник без различия —
+         * Клуб юбки пыли разрушенного у земли ({@link #crushed}): цвет и кадры — вещества цели. Приёмник без различия —
          * обычный клуб без сажи и подъёма.
          */
         default void crushed(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
@@ -323,7 +320,7 @@ public final class CloudModel {
 
     /**
      * Взрыв в цель {@code target} на высоте {@code hobM} над поверхностью {@code ground}: пыль раздробленного — доля мелочи
-     * вещества ({@link BlastTarget.Matter#fines}: у рыхлого — {@link #DUST_LOFTED}, у связного — больше) массы разрушенного
+     * вещества ({@link BlastTarget.Matter#fines}: у рыхлого — {@link #DUST_LOFTED}, у дроблёного камня и бетона — {@link BlastTarget#FINES_CRUSHED}, меньше) массы разрушенного
      * ({@link BlastTarget#mass}: воронка закона по грунту материала × его насыпная плотность, у плиты — пролом; тот же закон,
      * что роет сервер), а не чаша сухого грунта у любой цели (у бетона, досок и плиты прежде выходило 1600 кг/м³ сухой
      * почвы, physics.md фронта F).
@@ -332,11 +329,6 @@ public final class CloudModel {
         this(source, air, target, target.dust(source.chargeKg()), 0.5, hobM, ground);
     }
 
-    /** Радиус разрушенного у цели, м: пролом плиты или воронка закона по грунту материала. */
-    double crushedRadius() {
-        return target.family() == BlastTarget.Family.SLAB ? target.hole()
-                : CraterModel.chargeRadius(source.chargeKg(), target.material().soil());
-    }
 
     /** Роет ли заряд {@code tntKg} кг на высоте {@code hobM} над землёй воронку ({@link #CRATER_HOB}). */
     public static boolean digs(double tntKg, double hobM) {
@@ -402,9 +394,9 @@ public final class CloudModel {
         poolWatts = pool.watts();
         // пыль волны: над водой грунта нет (брызги — WaterBlast)
         ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, surface, air);
-        // начальная область холодной пыли — воронка с валом (2 радиуса воронки грунта цели) или пролом плиты с краем; у грани,
-        // которую нашёл сервер, — у точки взрыва (рельеф вокруг — только для стекания потом), а не на грубой высоте земли вдали
-        crushed = GroundDust.crushed(onWater ? 0 : source.chargeKg(), target.atFace() ? 0 : hob, cold, 2 * crushedRadius(), surface, air);
+        // юбка — по поверхностям вокруг (высоты — от точки взрыва, как у пыли волны); у грани, которую нашёл сервер, — от
+        // точки взрыва, а не от грубой высоты земли вдали (там, где высота поверхностей неизвестна, — ровно у грани)
+        crushed = GroundDust.skirt(onWater ? 0 : source.chargeKg(), target.atFace() ? 0 : hob, cold, surface, air);
         life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, Math.max(ground.life, crushed.life)));
     }
 
