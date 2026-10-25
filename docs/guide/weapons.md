@@ -307,9 +307,10 @@ bursts low over the ground. Some of what a hit crushes rises with the hot gas, w
 ejecta and falling material feed the low, heavy dust layer (the split is an estimate: half in each). The wave can also
 lift dust from the street below where it is still strong enough there.
 
-What the blast looks like depends on what it hits, not on whether it is a roof, a road or a field: the server follows
-the line of flight from the block the warhead struck with the same breach rule it uses for damage, and tells every
-player what it found, so a roof looks like a roof at any distance, and only where the charge really breaks through.
+What the blast looks like depends on what it hits, not on whether it is a roof, a road or a field: the server goes
+from the face the warhead struck straight into the block, square to that face, with the same breach rule it uses for
+damage, and tells every player what it found. So a roof the charge breaks through looks like one at any distance, and
+a slab the charge cannot break looks like a hit on solid ground.
 
 - **Soil, sand, gravel, snow or clay:** the crater throws a curtain of dark earth jets up and out at about 45°. Most of
   it is slow: for a Shahed nine tenths is back on the ground within about 1.7 seconds, and at one second the curtain
