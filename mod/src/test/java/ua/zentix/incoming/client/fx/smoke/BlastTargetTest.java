@@ -39,13 +39,13 @@ class BlastTargetTest {
     @Test
     void slabHoleFollowsTheBreachLaw() {
         double r = BreachModel.Material.POOR.radius(SHAHED, BreachModel.UNTAMPED);
-        BlastTarget t = BlastTarget.of(GroundMaterial.WOOD, false, 1, r, SHAHED, 0);
+        BlastTarget t = BlastTarget.of(GroundMaterial.WOOD, false, 1, r);
         assertEquals(BlastTarget.Family.SLAB, t.family());
         assertEquals(Math.sqrt(r * r - 1), t.hole(), 1e-9);
         assertEquals(Math.PI * t.hole() * t.hole() * 1 * BlastTarget.Matter.WOOD.density, t.mass(SHAHED), 1e-6);
         // у «Града» метр досок не пробит (R < 1): опора — твёрдое, а не плита
         assertTrue(BreachModel.Material.POOR.radius(ROCKET, BreachModel.UNTAMPED) < 1);
-        assertEquals(BlastTarget.Family.HARD, BlastTarget.of(GroundMaterial.WOOD, false, 0, 0, ROCKET, 0).family());
+        assertEquals(BlastTarget.Family.HARD, BlastTarget.of(GroundMaterial.WOOD, false, 0, 0).family());
     }
 
     /**
@@ -108,10 +108,10 @@ class BlastTargetTest {
     @Test
     void spallSpeedFollowsGurney() {
         double rw = BreachModel.Material.POOR.radius(SHAHED, BreachModel.UNTAMPED);
-        BlastTarget wood = BlastTarget.of(GroundMaterial.WOOD, false, 1, rw, SHAHED, 0);
+        BlastTarget wood = BlastTarget.of(GroundMaterial.WOOD, false, 1, rw);
         assertEquals(29, wood.plugSpeed(SHAHED), 3);
         double rs = BreachModel.Material.ROCK.radius(SHAHED, BreachModel.UNTAMPED);
-        BlastTarget stone = BlastTarget.of(GroundMaterial.STONE, false, 1, rs, SHAHED, 0);
+        BlastTarget stone = BlastTarget.of(GroundMaterial.STONE, false, 1, rs);
         assertTrue(stone.plugSpeed(SHAHED) < wood.plugSpeed(SHAHED) / 2, "тяжёлая каменная пробка медленнее");
         assertEquals(0, BlastTarget.of(GroundMaterial.DIRT, MISSILE, 0).plugSpeed(MISSILE));
     }

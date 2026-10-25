@@ -166,14 +166,18 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
      * Цель с опорой из мира: {@code loose} — связность того, во что попал; {@code slab} — толщина плиты до пустоты по оси
      * (0 — не дошли до пустоты в пределах пробоя), {@code breach} — радиус пробоя её материала у этого заряда, м.
      */
-    public static BlastTarget of(GroundMaterial material, boolean loose, double slab, double breach, double tntKg, double hobM) {
-        return of(material, loose, slab, breach, null, DOWN, tntKg, hobM);
+    public static BlastTarget of(GroundMaterial material, boolean loose, double slab, double breach) {
+        return of(material, loose, slab, breach, null, DOWN);
     }
 
-    /** То же с местом заряда на грани {@code face} и нормалью грани внутрь плиты {@code normal} (опора пакета). */
-    public static BlastTarget of(GroundMaterial material, boolean loose, double slab, double breach, @Nullable Vec3 face, Vec3 normal,
-                                 double tntKg, double hobM) {
-        Family f = family(material, loose, slab, CloudModel.digs(tntKg, hobM));
+    /**
+     * То же с местом заряда на грани {@code face} и нормалью грани внутрь плиты {@code normal} (опора пакета). Опора — это
+     * контакт, который нашёл сервер (заряд у грани, {@code SlabBreach.locate}): высота над рельефом вокруг здесь не решает
+     * — вдали клиент знает её грубо (плитка {@code FarTerrain} без дома даёт крышу в 5 м над землёй, и пролом стал бы
+     * разрывом в воздухе без массы и пыли; ревью 2 фронта F). Разрыв в воздухе — только без опоры.
+     */
+    public static BlastTarget of(GroundMaterial material, boolean loose, double slab, double breach, @Nullable Vec3 face, Vec3 normal) {
+        Family f = family(material, loose, slab, true);
         boolean plate = f == Family.SLAB;
         double hole = plate ? Math.sqrt(Math.max(0, breach * breach - slab * slab)) : 0;
         return new BlastTarget(f, material, plate ? slab : 0, hole, plate ? face : null, plate ? normal.normalize() : DOWN);

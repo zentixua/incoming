@@ -2,8 +2,12 @@ package ua.zentix.incoming.client.far;
 
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.fx.smoke.BlastTarget;
+import ua.zentix.incoming.client.fx.smoke.CloudModel;
+import ua.zentix.incoming.client.fx.smoke.GroundDust;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.BreachModel;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
@@ -51,18 +55,30 @@ class BlastTargetSupportTest {
         assertEquals(BlastTarget.Family.SOIL, FarBlasts.target(blast(GroundMaterial.DIRT, Optional.empty()), GroundMaterial.DIRT, SHAHED, 0).family());
     }
 
-    /** Разрыв выше, чем заряд роет воронку, — в воздухе, даже если сервер нашёл грань (ось упёрлась в далёкую плиту). */
+    /**
+     * Опора пакета — контакт, найденный сервером: семейство, масса и пыль цели не зависят от высоты над рельефом, которую
+     * клиент знает вдали грубо (ревью 2 фронта F: шахед по метру досок, плитка {@code FarTerrain} без дома — земля на 5 м
+     * ниже, и пролом становился разрывом в воздухе: 0 кг вместо 3,6 т и 72 кг пыли). Настоящий разрыв без опоры — в воздухе.
+     */
     @Test
-    void airburstWinsOverSupport() {
-        assertEquals(BlastTarget.Family.AIR, FarBlasts.target(blast(GroundMaterial.WOOD, Optional.of(new S2C.Blast.Support(false, 1, 2))),
-                GroundMaterial.WOOD, SHAHED, 30).family());
+    void serverContactOutranksCoarseHeight() {
+        double r = BreachModel.Material.POOR.radius(SHAHED, BreachModel.UNTAMPED);
+        S2C.Blast roof = blast(GroundMaterial.WOOD, Optional.of(new S2C.Blast.Support(false, 1, (float) r, S2C.Blast.DOWN, 0)));
+        BlastTarget exact = FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, 0);
+        assertEquals(BlastTarget.Family.SLAB, exact.family());
+        assertTrue(exact.mass(SHAHED) > 3000, "пролом метра досок у шахеда — тонны: " + exact.mass(SHAHED));
+        BlastSource src = BlastSource.of(WeaponType.DRONE, false);
+        double hot = new CloudModel(src, CloudModel.Air.STANDARD, exact, 0, GroundDust.Ground.BARE).dust;
+        for (double hob : new double[]{5, 30, Double.NaN}) {
+            BlastTarget far = FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, hob);
+            assertEquals(exact, far, "высота " + hob + " м: та же цель");
+            if (!Double.isNaN(hob)) assertEquals(hot, new CloudModel(src, CloudModel.Air.STANDARD, far, hob, GroundDust.Ground.BARE).dust,
+                    1e-9, "высота " + hob + " м: горячая пыль пролома та же (холодную снял бы контакт по высоте)");
+        }
+        assertEquals(BlastTarget.Family.AIR, FarBlasts.target(blast(GroundMaterial.WOOD, Optional.empty()), GroundMaterial.WOOD, SHAHED, 30).family(),
+                "без опоры высоко — разрыв в воздухе");
     }
 
-    /**
-     * Тыльный откол — из дыры за плитой по её оси (нормаль пробитой грани из опоры пакета), а не вниз мира и не по курсу
-     * (ревью 1 фронта F): у стены, в которую ударили сбоку, — вбок за стену; у косого удара по крыше — вниз, где сервер
-     * пробил; заряд — на грани, а не в точке прицела полблока в блоке. Лицевая крошка — наружу с этой грани.
-     */
     @Test
     void spallLeavesThroughTheServerHole() {
         double r = BreachModel.Material.POOR.radius(SHAHED, BreachModel.UNTAMPED);

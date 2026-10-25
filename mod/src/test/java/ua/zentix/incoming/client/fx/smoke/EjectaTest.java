@@ -99,7 +99,7 @@ class EjectaTest {
             }
             // плита над пустотой: весь пролом без пыли — кусками (завесы нет)
             double r = ua.zentix.incoming.warhead.BreachModel.Material.POOR.radius(tnt, ua.zentix.incoming.warhead.BreachModel.UNTAMPED);
-            BlastTarget slab = BlastTarget.of(GroundMaterial.WOOD, false, 0.5, r, tnt, 0);
+            BlastTarget slab = BlastTarget.of(GroundMaterial.WOOD, false, 0.5, r);
             assertEquals(BlastTarget.Family.SLAB, slab.family());
             assertEquals(slab.mass(tnt), slab.clods(tnt) + slab.dust(tnt), 1e-9 * slab.mass(tnt));
         }

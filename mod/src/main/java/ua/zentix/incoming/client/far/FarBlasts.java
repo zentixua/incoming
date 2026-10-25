@@ -391,7 +391,7 @@ public final class FarBlasts {
     static BlastTarget target(S2C.Blast p, GroundMaterial material, double tnt, double hob) {
         // заряд лежит на грани: точка взрыва — за ней по нормали на lift (точка прицела — полблока в блок)
         return p.support().map(s -> BlastTarget.of(material, s.loose(), s.slab(), s.breach(), p.pos().subtract(s.normal().scale(s.lift())),
-                        s.normal(), tnt, hob))
+                        s.normal()))
                 .orElseGet(() -> BlastTarget.of(material, tnt, hob));
     }
 
