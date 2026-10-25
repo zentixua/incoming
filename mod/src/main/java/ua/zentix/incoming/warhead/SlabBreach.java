@@ -12,9 +12,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.registry.ModDataMaps;
 import ua.zentix.incoming.util.Terrain;
+
+import java.util.Optional;
 
 /**
  * Пробой преграды зарядом, приложенным к ней ({@link BreachModel}), на блоках мира. Из точки, где заряд лежит на грани
@@ -234,8 +237,18 @@ final class SlabBreach {
      */
     static double march(ServerLevel level, Origin o, double dx, double dy, double dz, Explosion e, ExplosionDamageCalculator damage,
                         LongArrayList path, boolean[] liquid) {
+        return march(level, o, dx, dy, dz, e, damage, path, liquid, null);
+    }
+
+    /**
+     * То же; {@code used} (если не null) — сумма путей в блоках преграды, делённых на радиус пробоя каждого
+     * ({@code used[0]}), и путь в них ({@code used[1]}, м) до выхода или обрыва.
+     */
+    static double march(ServerLevel level, Origin o, double dx, double dy, double dz, Explosion e, ExplosionDamageCalculator damage,
+                        LongArrayList path, boolean[] liquid, @Nullable double[] used) {
         path.clear();
-        double used = 0, r = 0;
+        if (used != null) used[0] = used[1] = 0;
+        double sum = 0, r = 0;
         long last = Long.MIN_VALUE;
         double reach = o.reach();
         // точка луча — середина своего шага: шаг от d − STEP/2 до d + STEP/2 — в блоке этой точки
@@ -271,9 +284,39 @@ final class SlabBreach {
                 continue;
             }
             if (r <= 0) return -1;
-            used += STEP / r;
-            if (used > 1) return -1;
+            sum += STEP / r;
+            if (used != null) {
+                used[0] = sum;
+                used[1] += STEP;
+            }
+            if (sum > 1) return -1;
         }
         return -1;
+    }
+
+    /**
+     * Опора у грани удара для картинки клиента ({@link S2C.Blast.Support}): заряд {@code tnt} кг ТНТ с центром {@code centre},
+     * приложенный к грани ({@link Placement#SURFACE}), — тот же {@link #locate} и тот же {@link #march}, что у лучей пробоя,
+     * по одному лучу — нормали грани внутрь преграды (заряд открыт с обеих сторон — курс {@code axis}, нет — вниз). Не по
+     * курсу: путь сквозь плиту короче всего по нормали, и пробивают её первыми лучи у нормали — у косого удара луч по курсу
+     * проходит t/cos θ и «не пробивал» плиту, которую лучи сносят (ракета под 45° по настилу в 2 м камня: 2,8 м по курсу при
+     * R 2,7 м — дыра ~1,8 м). Нормаль — ось дыры (у ровной плиты дыра лучей — круг √(R² − t²) около неё). Пусто — заряд не
+     * приложен к преграде (картинка — по материалу). Читает мир сейчас: пакет взрыва уходит раньше лучей (⚠ если преграду до
+     * них снесёт соседний взрыв того же тика, картинка покажет плиту, которой лучи уже не нашли). ⚠ Один луч: у неровной
+     * преграды (заряд над стеной под перекрытием) нормаль может упереться в толщу, а косые лучи — пробить рядом.
+     */
+    static Optional<S2C.Blast.Support> support(ServerLevel level, Vec3 centre, double tnt, @Nullable Vec3 axis, Explosion e,
+                                               ExplosionDamageCalculator damage) {
+        Origin o = locate(level, centre, tnt, Placement.SURFACE, axis, e, damage);
+        if (o == null) return Optional.empty();
+        Vec3 n = o.open() != null ? o.open().scale(-1) : axis != null && axis.lengthSqr() > 1e-9 ? axis.normalize() : S2C.Blast.DOWN;
+        LongArrayList path = new LongArrayList();
+        double[] used = new double[2];
+        double out = march(level, o, n.x, n.y, n.z, e, damage, path, new boolean[1], used);
+        // то, во что попал, — первый блок преграды на нормали; её там нет (непробиваемое сразу у грани) — связное
+        boolean loose = !path.isEmpty() && material(level.getBlockState(BlockPos.of(path.getLong(0)))) == BreachModel.Material.EARTH;
+        float lift = (float) centre.subtract(o.at()).dot(n);
+        if (out < 0 || used[0] <= 0) return Optional.of(new S2C.Blast.Support(loose, 0, 0, n, lift));
+        return Optional.of(new S2C.Blast.Support(loose, (float) used[1], (float) (used[1] / used[0]), n, lift));
     }
 }

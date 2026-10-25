@@ -252,7 +252,7 @@ class FxAtlasTest {
         assertEquals("abv", o.get("maps").getAsString());
         assertEquals(FxAtlas.PUFF6_FLOW, o.get("flow").getAsFloat(), 1e-6);
         assertEquals((float) tile / 1024, FxAtlas.PUFF6_U, 1e-6, "место кадра на листе — размер кадра запекания");
-        assertEquals((float) tile / 6144, FxAtlas.PUFF6_V, 1e-6);
+        assertEquals((float) tile / FxAtlas.HEIGHT, FxAtlas.PUFF6_V, 1e-6);
         for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
             for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "puff6%c_%02d.png", m, i), tile);
         }
@@ -353,7 +353,7 @@ class FxAtlasTest {
      */
     @Test
     void cloudFramesHaveNoStraightEdge() throws IOException {
-        for (String prefix : new String[]{"puff6a", "spray6a"}) {
+        for (String prefix : new String[]{"puff6a", "spray6a", "eject6a", "crush6a", "air6a"}) {
             for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
                 String name = String.format(Locale.ROOT, "%s_%02d.png", prefix, f);
                 double edge = straightEdge(alpha(name));
@@ -380,8 +380,8 @@ class FxAtlasTest {
      */
     @Test
     void puffFramesAreRound() throws IOException {
-        for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
-            String name = String.format(Locale.ROOT, "puff6a_%02d.png", f);
+        for (int k = 0; k < 4 * FxAtlas.PUFF6_FRAMES; k++) {
+            String name = String.format(Locale.ROOT, "%s6a_%02d.png", CLUB_SETS[k / FxAtlas.PUFF6_FRAMES], k % FxAtlas.PUFF6_FRAMES);
             double[][] a = alpha(name);
             double w = 0, cx = 0, cy = 0;
             for (int y = 0; y < a.length; y++) {
@@ -404,6 +404,93 @@ class FxAtlasTest {
             double mid = (xx + yy) / 2, diff = Math.sqrt((xx - yy) * (xx - yy) / 4 + xy * xy);
             double axes = Math.sqrt((mid + diff) / (mid - diff));
             assertTrue(axes <= PUFF_AXES, name + ": оси альфы " + axes);
+        }
+    }
+
+    /** Наборы клубов, что кладутся гауссом модели: дым и клубы других готовых симуляций (выброс, дробление, воздух). */
+    static final String[] CLUB_SETS = {"puff", "eject", "crush", "air"};
+
+    /**
+     * Кадр клуба любого вида на листе — пиксель в пиксель: место кадра (и отражённого) по u и v — ровно размер картинки
+     * запекания ({@code <имя>6.json} «tile») в пикселях листа {@link FxAtlas#WIDTH}×{@link FxAtlas#HEIGHT}, начало — на целом
+     * пикселе. По этому масштабу берут уровень копий клуба по пикселям на тексель (FxQuads, тред FPS, #455): кадр другого
+     * масштаба взял бы не тот уровень.
+     */
+    @Test
+    void clubFramesMapOneTexelToOneSheetPixel() throws IOException {
+        for (ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look : ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look.values()) {
+            String name = switch (look) {
+                case SMOKE -> "puff6.json";
+                case EJECTA -> "eject6.json";
+                case CRUSH -> "crush6.json";
+                case AIRBURST -> "air6.json";
+            };
+            int tile = json(name).get("tile").getAsInt();
+            for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
+                for (boolean mirror : new boolean[]{false, true}) {
+                    FxAtlas.Sprite f = FxAtlas.club(look, i, mirror);
+                    String what = look + " " + i + (mirror ? " отражён" : "");
+                    assertEquals(tile, Math.abs(f.u1() - f.u0()) * FxAtlas.WIDTH, 1e-3, what + ": по u");
+                    assertEquals(tile, Math.abs(f.v1() - f.v0()) * FxAtlas.HEIGHT, 1e-3, what + ": по v");
+                    double x = Math.min(f.u0(), f.u1()) * FxAtlas.WIDTH, y = Math.min(f.v0(), f.v1()) * FxAtlas.HEIGHT;
+                    assertEquals(Math.rint(x), x, 1e-3, what + ": начало по u — не на пикселе");
+                    assertEquals(Math.rint(y), y, 1e-3, what + ": начало по v — не на пикселе");
+                    assertEquals(mirror, f.u1() < f.u0(), what + ": отражение — обратным u");
+                }
+            }
+        }
+    }
+
+    /**
+     * Клубы других готовых симуляций ({@code bake.py clubs-vdb}): те же 16 кадров по три карты 128, что у дыма, в мере дыма
+     * (одна нормировка карт на все клубы слоя); рост с 1 не убывает; доля жизни — от 0 до 1 не убывает (кадр явления —
+     * {@link FxAtlas#lifeFrame}); мелкая структура есть; места на листе — в шаге кадров шейдера от начала кадров дыма и не
+     * налезают на соседей.
+     */
+    @Test
+    void clubSetsMatchTheBake() throws IOException {
+        JsonObject smoke = json("puff6.json");
+        for (FxAtlas.Clubs c : new FxAtlas.Clubs[]{FxAtlas.EJECT, FxAtlas.CRUSH, FxAtlas.AIR}) {
+            JsonObject o = json(c.prefix + "6.json");
+            int tile = o.get("tile").getAsInt();
+            assertEquals(FxAtlas.PUFF6_FRAMES, o.get("frames").getAsInt(), c.prefix);
+            assertEquals("abv", o.get("maps").getAsString());
+            assertEquals(FxAtlas.PUFF6_FLOW, o.get("flow").getAsFloat(), 1e-6, c.prefix + ": предел векторов движения — тот, что ждёт шейдер");
+            assertEquals(smoke.get("diffuse").getAsFloat(), o.get("diffuse").getAsFloat(), 1e-6, c.prefix + ": карты — в мере дыма");
+            for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
+                for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "%s6%c_%02d.png", c.prefix, m, i), tile);
+            }
+            float[] growth, life, detail;
+            try (Reader r = open(c.prefix + "6.json")) {
+                growth = FxAtlas.parseGrowth(r);
+            }
+            try (Reader r = open(c.prefix + "6.json")) {
+                life = FxAtlas.parseLife(r);
+            }
+            try (Reader r = open(c.prefix + "6.json")) {
+                detail = FxAtlas.parseDetail(r);
+            }
+            assertEquals(1, growth[0], 1e-6);
+            assertEquals(0, life[0], 1e-6);
+            assertEquals(1, life[FxAtlas.PUFF6_FRAMES - 1], 1e-6);
+            for (int i = 1; i < FxAtlas.PUFF6_FRAMES; i++) {
+                assertTrue(growth[i] >= growth[i - 1], c.prefix + ": рост, кадр " + i);
+                assertTrue(life[i] > life[i - 1], c.prefix + ": доля жизни, кадр " + i);
+            }
+            assertNotNull(detail, c.prefix);
+            // место кадров: в шаге кадров шейдера (FxSix: начало кадров дыма + целое число кадров) и после прежних наборов
+            float rows = (c.frames[0].v0() - FxAtlas.PUFF6_TOP) / FxAtlas.PUFF6_V;
+            assertEquals(Math.round(rows), rows, 1e-3, c.prefix + ": кадр — в шаге кадров шейдера");
+            assertTrue(c.row >= 96 && c.row + 12 <= FxAtlas.HEIGHT / 64, c.prefix + ": ниже прежних мест, внутри листа");
+        }
+        assertEquals(12, FxAtlas.CRUSH.row - FxAtlas.EJECT.row);
+        assertEquals(12, FxAtlas.AIR.row - FxAtlas.CRUSH.row);
+        // кадр явления по доле жизни — от первого кадра до последнего, без возврата
+        double prev = -1;
+        for (double f = 0; f <= 1.0001; f += 0.05) {
+            double k = FxAtlas.lifeFrame(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look.EJECTA, f);
+            assertTrue(k >= prev, "кадр по доле жизни не идёт назад");
+            prev = k;
         }
     }
 
