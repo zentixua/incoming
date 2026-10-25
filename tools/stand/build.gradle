@@ -1,0 +1,91 @@
+// Стенд сцен (README.md): клиентский мод без зависимости от Incoming — один и тот же стенд снимает любой jar Incoming
+// 3.4.1+ (выпуск или ветку). Сборка и юнит-тесты: mod/gradlew -p tools/stand build
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.147'
+}
+
+group = 'ua.zentix.stand'
+base { archivesName = 'stand' }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+repositories {
+    mavenCentral()
+}
+
+neoForge {
+    version = project.neo_version
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+    runs {
+        // клиент стенда: каталог игры — -PrunDir (там mods/, shaderpacks/, config/, options.txt и stand-plan.json готовит
+        // stand.py), окно — -Pwidth × -Pheight (по умолчанию 2560×1600, как у ноутбука Артёма)
+        client {
+            client()
+            gameDirectory = project.file(project.findProperty('runDir') ?: 'run')
+            programArguments.addAll '--width', (project.findProperty('width') ?: '2560').toString(),
+                    '--height', (project.findProperty('height') ?: '1600').toString()
+            jvmArgument "-Xmx${project.findProperty('xmx') ?: '6g'}"
+        }
+        configureEach {
+            logLevel = org.slf4j.event.Level.INFO
+        }
+    }
+    mods {
+        stand {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+neoForge.addModdingDependenciesTo(sourceSets.test)
+
+// Клиент — без живого Gradle (как rigLaunch мода, mod/build.gradle): mod/gradlew -p tools/stand standLaunch -PrunDir=…
+// пишет build/launch/client.sh (тот же java, аргументы, classpath, каталог и окружение, что у runClient). Gradle выходит
+// до замера: его демон не ест процессор и память рядом с клиентом, а UDP-сокет блокировок (0.0.0.0) не живёт рядом с игрой.
+tasks.register('standLaunch') {
+    dependsOn { tasks.named('runClient').get().taskDependencies }
+    doLast {
+        def run = tasks.named('runClient').get()
+        File dir = layout.buildDirectory.dir('launch').get().asFile
+        dir.mkdirs()
+        // @файл MDG — копия: следующая подготовка его перепишет
+        def own = { String arg ->
+            if (!arg.startsWith('@')) return arg
+            File src = file(arg.substring(1))
+            File copy = new File(dir, "client-${src.name}")
+            copy.bytes = src.bytes
+            return '@' + copy.absolutePath
+        }
+        List<String> cmd = [run.javaLauncher.get().executablePath.asFile.absolutePath]
+        // allJvmArgs у JavaExec не несёт явных jvmArgs задачи, а в них @файл MDG (модули, --add-opens, -D запуска)
+        cmd += ((run.jvmArgs ?: []) + run.allJvmArgs.findAll { !(it in (run.jvmArgs ?: [])) }).collect(own)
+        cmd += ['-cp', run.classpathProvider.asPath, run.mainClass.get()]
+        cmd += (run.args + run.argumentProviders.collectMany { it.asArguments() as List }).collect(own)
+        def quote = { String v -> "'" + v.replace("'", "'\\''") + "'" }
+        File gameDir = run.gameDirectory.get().asFile
+        File script = new File(dir, 'client.sh')
+        script.text = "#!/usr/bin/env bash\n# runClient стенда без Gradle: пишет mod/gradlew -p tools/stand standLaunch (build.gradle)\n" +
+                "mkdir -p ${quote(gameDir.absolutePath)}/logs && cd ${quote(gameDir.absolutePath)} || exit 1\n" +
+                "exec env ${run.environmentProperty.get().collect { k, v -> quote("${k}=${v}") }.join(' ')} ${cmd.collect(quote).join(' ')}\n"
+        script.setExecutable(true)
+        println "standLaunch: ${script} (каталог игры ${gameDir})"
+    }
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all,-processing,-serial,-classfile,-this-escape', '-Xmaxerrs', '1000']
+}

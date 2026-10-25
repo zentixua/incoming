@@ -1,0 +1,39 @@
+{
+  "stand": 1,
+  "about": "Scenes of the scene stand (README.md). Positions in blocks: +X east, +Z south; ground = top of the grass of the flat world. Launch bearings: degrees from south toward east.",
+  "world": {"seed": 20261025, "day_time": 6000, "settle_s": 10, "limit_s": 1500},
+  "ground": 65,
+  "weapon": "drone",
+  "projectiles": ["incoming:drone"],
+  "salvo_max": 30,
+  "impact_margin": 40,
+  "launch": {"dist": 400, "bearings": [-30, -10, 10, 30]},
+  "settle_s": 1.5,
+  "settle_far_s": 8,
+  "far_m": 300,
+  "after_shot_s": 0.5,
+  "await_timeout_s": 300,
+  "quiet_s": 30,
+  "probes": [
+    "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+    "ua.zentix.incoming.client.far.FarRenderer#describeSmoke"
+  ],
+  "once": ["net.irisshaders.iris.Iris#getCurrentPackName"],
+  "sites": {"F": [0, 0], "C": [1000, 0], "D": [4000, 0]},
+  "cameras": {
+    "outside": {"toward": [-1, 0], "dist": 200, "height": 30, "look_height": 15},
+    "edge": {"toward": [0, -1], "dist": "spread", "height": 10, "look_height": 10},
+    "inside": {"toward": [0, 0], "dist": 0, "height": 4, "look_toward": [1, 0], "look_dist": 100, "look_height": 20}
+  },
+  "scenes": [
+    {"id": "first", "site": "F", "strikes": 1, "spread": 0, "impact_window": true, "window_s": 5,
+     "camera": {"toward": [-1, 0], "dist": 60, "height": 10, "look_height": 5}},
+    {"id": "one", "site": "C", "strikes": 1, "spread": 0, "impact_window": true, "window_s": 15, "shots": [0.5, 3, 15],
+     "camera": "outside", "launch_with": "first", "launch_delay_s": 20},
+    {"id": "16", "site": "C", "total": 16, "spread": 40, "cameras": ["outside", "edge", "inside"], "window_s": 10},
+    {"id": "40", "site": "C", "total": 40, "spread": 80, "cameras": ["outside", "edge", "inside"], "window_s": 10},
+    {"id": "100", "site": "C", "total": 100, "spread": 120, "cameras": ["outside", "edge", "inside"], "window_s": 10},
+    {"id": "acc", "site": "D", "spread": 80, "impact_window": true, "window_s": 240, "shots": [60, 120, 180, 240],
+     "camera": "edge", "waves": {"strikes": 10, "every_s": 20, "count": 12}, "bucket_s": 10}
+  ]
+}

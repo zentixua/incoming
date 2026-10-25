@@ -1,6 +1,7 @@
 # Сборка, юнит-тесты и GameTest (сервер с Create, Sable, Aeronautics с Modrinth); jar — в артефактах запуска.
 # Проверяется то, что изменилось: правка только инструментов (tools/, кроме модов для GameTest) и текстов (docs/, *.md)
-# мод не собирает и GameTest не гоняет (разбор повторов tools/replayscan — своя сборка и юнит-тесты); правка мода,
+# мод не собирает и GameTest не гоняет (разбор повторов tools/replayscan и стенд сцен tools/stand — своя сборка и
+# юнит-тесты); правка мода,
 # модов GameTest или самого CI — проверка целиком. GameTest идёт
 # частями на шести машинах сразу (devtest GameTestShards), сборка и юнит-тесты — рядом. Итог всех проверок — «Итог».
 # Сборка «Open Skies» и мост ведущего Almighty — в своих репозиториях (zentixua/open-skies, zentixua/almighty).
@@ -50,6 +51,7 @@ jobs:
       rig: ${{ steps.diff.outputs.rig }}
       replayscan: ${{ steps.diff.outputs.replayscan }}
       lookgate: ${{ steps.diff.outputs.lookgate }}
+      stand: ${{ steps.diff.outputs.stand }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -65,33 +67,35 @@ jobs:
             *) base= ;;
           esac
           if [ -z "$base" ]; then
-            mod=true; rig=true; replayscan=true; lookgate=true
+            mod=true; rig=true; replayscan=true; lookgate=true; stand=true
             echo "Проверка целиком ($GITHUB_EVENT_NAME)" >> "$GITHUB_STEP_SUMMARY"
           else
-            mod=false; rig=false; replayscan=false; lookgate=false
+            mod=false; rig=false; replayscan=false; lookgate=false; stand=false
             # --no-renames: перенос из mod/ — это и удаление в mod/
             files=$(git diff --name-only --no-renames "$base" HEAD)
             while IFS= read -r f; do
               case "$f" in
                 '') ;;
-                mod/gradlew|mod/gradle/*) mod=true; replayscan=true ;;
+                mod/gradlew|mod/gradle/*) mod=true; replayscan=true; stand=true ;;
                 # строки лога пробы читает tools/look_gate/check.py
                 mod/src/devtest/java/ua/zentix/incoming/scenario/ProbeScenario.java) mod=true; lookgate=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py) mod=true ;;
                 tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/stress.sh|tools/mp_scenario.sh) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
                 tools/look_gate/*) lookgate=true ;;
-                .github/*) mod=true; rig=true; replayscan=true; lookgate=true ;;
+                tools/stand/*) stand=true ;;
+                .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true ;;
                 tools/*|docs/*|*.md|.claude/*|.gitignore) ;;
                 *) mod=true ;;
               esac
             done <<< "$files"
-            { echo "Мод (сборка, юнит-тесты, GameTest): $mod; остановка проверок: $rig; разбор повторов: $replayscan; шлагбаум: $lookgate"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "Мод (сборка, юнит-тесты, GameTest): $mod; остановка проверок: $rig; разбор повторов: $replayscan; шлагбаум: $lookgate; стенд: $stand"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "mod=$mod" >> "$GITHUB_OUTPUT"
           echo "rig=$rig" >> "$GITHUB_OUTPUT"
           echo "replayscan=$replayscan" >> "$GITHUB_OUTPUT"
           echo "lookgate=$lookgate" >> "$GITHUB_OUTPUT"
+          echo "stand=$stand" >> "$GITHUB_OUTPUT"
 
   build:
     name: Сборка и юнит-тесты
@@ -253,10 +257,33 @@ jobs:
       - name: Годность прогона шлагбаума
         run: python3 -m unittest discover -s tools/look_gate -p 'test_*.py' -v
 
+  # стенд сцен (tools/stand): сборка мода-обвязки и её юнит-тесты, разбор, план и шлагбаум (test_gate.py) — без игры;
+  # сам стенд снимается на ноутбуке (stand.py pr), его вердикт — статус коммита «Стенд сцен», не эта задача
+  stand:
+    name: "Стенд: сборка и шлагбаум"
+    needs: changes
+    if: needs.changes.outputs.stand == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      # кэш Gradle пишет только сборка мода (те же NeoForge и Minecraft)
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+      - name: Сборка обвязки и её юнит-тесты
+        run: mod/gradlew -p tools/stand build --console=plain
+      - name: Разбор, план и шлагбаум
+        run: python3 -m unittest discover -s tools/stand -p 'test_*.py' -v
+
   # одна отметка на коммит: всё, что изменение требовало, прошло; ненужное пропущено
   ci:
     name: Итог
-    needs: [changes, build, gametest, rig, replayscan, lookgate]
+    needs: [changes, build, gametest, rig, replayscan, lookgate, stand]
     # и после упавших, пропущенных и отменённых: пропущенная задача засчитывается успехом, и «Итог», пропущенный
     # в отменённом прогоне, был бы зелёным без сборки и GameTest — поэтому в отменённом прогоне он идёт и падает
     if: always()
@@ -265,7 +292,7 @@ jobs:
     steps:
       - name: Нужные проверки прошли
         run: |
-          echo 'что изменилось: ${{ needs.changes.result }}; сборка: ${{ needs.build.result }}; GameTest: ${{ needs.gametest.result }}; остановка проверок: ${{ needs.rig.result }}; разбор повторов: ${{ needs.replayscan.result }}; шлагбаум: ${{ needs.lookgate.result }}'
+          echo 'что изменилось: ${{ needs.changes.result }}; сборка: ${{ needs.build.result }}; GameTest: ${{ needs.gametest.result }}; остановка проверок: ${{ needs.rig.result }}; разбор повторов: ${{ needs.replayscan.result }}; шлагбаум: ${{ needs.lookgate.result }}; стенд: ${{ needs.stand.result }}'
           [ '${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}' = false ]
 
   release:
