@@ -3,9 +3,9 @@ package ua.zentix.stand;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
@@ -67,7 +67,7 @@ final class Director {
     private int index = -1;
     private Plan.Step step;
     /** Состояние шага: начало, послана ли его команда, когда дошёл (tp), время попадания и номер кадра (окно от попадания). */
-    private long stepStart, reached, impact;
+    private long stepStart, reached, reachedFrame, impact;
     private boolean sent;
     private int nextShot;
     private volatile boolean shotDone;
@@ -80,6 +80,7 @@ final class Director {
         this.probes = new Probes(out, plan.probes(), plan.once());
         NeoForge.EVENT_BUS.addListener(this::onScreen);
         NeoForge.EVENT_BUS.addListener(this::onTick);
+        NeoForge.EVENT_BUS.addListener(Terrain::onStage);
         out.event("plan", System.nanoTime(), "steps", plan.steps().size(), "seed", plan.seed());
         Stand.LOG.info("STAND: plan of {} steps", plan.steps().size());
     }
@@ -245,15 +246,21 @@ final class Director {
             return false;
         }
         Vec3 at = mc.player.position();
-        BlockPos p = BlockPos.containing(eye[0], eye[1], eye[2]);
-        boolean here = at.distanceTo(new Vec3(eye[0], eye[1] - EYE, eye[2])) < 1.5 && mc.level.getChunkSource().hasChunk(p.getX() >> 4, p.getZ() >> 4);
-        if (here && reached < 0) reached = now;
-        if (reached >= 0 && now - reached >= (long) (tp.settleS() * SECOND)) {
+        String wait = at.distanceTo(new Vec3(eye[0], eye[1] - EYE, eye[2])) < 1.5
+                ? Terrain.waiting(mc, Mth.floor(eye[0]), Mth.floor(eye[2])) : "camera";
+        // готово держится всю паузу подряд и хотя бы два кадра: обход видимости Sodium видит секции за новой землёй
+        // кадром позже (пауза одна без кадров — например, кадр дольше паузы — этого не удостоверяла бы)
+        if (wait != null) reached = -1;
+        else if (reached < 0) {
+            reached = now;
+            reachedFrame = clock.frame();
+        }
+        if (reached >= 0 && now - reached >= (long) (tp.settleS() * SECOND) && clock.frame() - reachedFrame >= 2) {
             out.event("tp", now, "eye", eye, "took_s", (reached - stepStart) / 1e9);
             return true;
         }
         if (now - stepStart > TP_LIMIT) {
-            out.event("tp-timeout", now, "eye", eye, "at", new double[]{at.x, at.y + EYE, at.z});
+            out.event("tp-timeout", now, "eye", eye, "at", new double[]{at.x, at.y + EYE, at.z}, "waiting", wait);
             return true;
         }
         return false;
