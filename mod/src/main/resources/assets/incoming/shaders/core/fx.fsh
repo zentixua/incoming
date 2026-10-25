@@ -70,6 +70,10 @@ layout(location = 1) out vec4 fragCover;
 uniform vec2 FxGlowPass;
 // мелкий кадр CoarsePass: полных пикселей на его пиксель по x и y (кадр с округлением вверх — не ровно FxGlowPass.y)
 uniform vec2 FxCoarseScale;
+// 1 — досчёт CoarsePass: квадраты отрезка в полном кадре только в пикселях маски FxCoarseMask (их мелкий кадр не
+// разрешил: прут, решётка тоньше его пикселя), остальные отброшены до света
+uniform float FxCoarseFill;
+uniform sampler2D FxCoarseMask;
 
 // Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
 // с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по квадратам косинусов (в сумме
@@ -200,6 +204,7 @@ vec3 bloomLight(vec4 c, float cover, float gain) {
 void main() {
     // производные — до ветвления (вне его они определены у всех пикселей)
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
+    if (FxCoarseFill > 0.5 && texelFetch(FxCoarseMask, ivec2(gl_FragCoord.xy), 0).r < 0.5) discard;
     float lod = 0.0;
     vec4 tex;
     bool six = nearest < -0.1 && nearest > -0.4;

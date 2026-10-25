@@ -82,9 +82,13 @@ class ShaderSourceTest {
      * сэмплер — в {@code samplers}, остальное — в {@code uniforms}, и в JSON нет лишнего. Необъявленную ваниль не задаёт
      * и не привязывает: сэмплер читал бы чужую текстуру из своего блока, число — ноль (новая карта или число слоя,
      * добавленные в один проход и забытые в другом). Кроме {@code sampler3D}: их ваниль не привязывает, слой ставит их сам
-     * ({@code PallPass}). Переменные файлов {@code include}, которые шейдер берёт {@code #moj_import}, — тоже его
+     * ({@code PallPass}), — и сэмплеров {@link #OWN_UNITS}: у шейдера слоя все двенадцать блоков ванили заняты, и маску
+     * досчёта {@code CoarsePass} ставит сам на свой блок. Переменные файлов {@code include}, которые шейдер берёт {@code #moj_import}, — тоже его
      * ({@code pall_front.glsl}: пелена перед точкой квадратам слоя и пробам).
      */
+    /** Двумерные сэмплеры, которые слой привязывает сам на свои блоки (за 0–11 ванили). */
+    private static final Set<String> OWN_UNITS = Set.of("FxCoarseMask");
+
     @Test
     void everyUniformIsBoundInItsProgram() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
@@ -106,7 +110,7 @@ class ShaderSourceTest {
                         // объявленный и в include, и в самом шейдере — переопределение, шейдер не собирается
                         if (!declared.add(u)) bad.add(name + ": " + file + " объявлен дважды " + u);
                         used.add(u);
-                        if (type.equals("sampler3D")) continue;
+                        if (type.equals("sampler3D") || OWN_UNITS.contains(u)) continue;
                         if (!(type.startsWith("sampler") ? samplers : numbers).contains(u)) bad.add(name + ": " + file + " " + type + " " + u);
                     }
                 }

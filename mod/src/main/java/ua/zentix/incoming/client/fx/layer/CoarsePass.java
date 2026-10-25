@@ -2,11 +2,15 @@ package ua.zentix.incoming.client.fx.layer;
 
 import com.mojang.blaze3d.platform.GlConst;
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.shaders.ProgramManager;
+import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import net.minecraft.client.renderer.ShaderInstance;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import ua.zentix.incoming.Incoming;
 
@@ -30,7 +34,11 @@ import java.util.Locale;
  * <p>
  * В мелком кадре аппаратной глубины нет: что за миром, отбрасывает шейдер слоя по расстоянию до мира (как у прохода
  * свечения), в решётке, через которую вывод потом и берёт пиксели (пиксель t кадра в f раз мельче смотрит в пиксель
- * floor((t + ½)·f) полного, {@code pallLattice}).
+ * floor((t + ½)·f) полного, {@code pallLattice}). Пиксель полного кадра, у которого ни один из четырёх соседей мелкого
+ * кадра не то же место (прут, решётка, провод тоньше пикселя мелкого кадра), мелкий кадр не разрешает: вывод его не
+ * трогает, маска ({@code fx_coarse}, {@code CoarseMask}) его отмечает, и квадраты отрезка досчитывают его в полном кадре
+ * с аппаратной глубиной ({@code FxCoarseFill}: остальное шейдер слоя отбрасывает до света) — дым перед прутом ложится
+ * на прут, за ним — нет, как без мелкого кадра.
  */
 public final class CoarsePass {
     /** Уровни: 0 — полный кадр, k — в 2^k раз мельче. */
@@ -52,6 +60,13 @@ public final class CoarsePass {
     /** Всё в полном кадре (песочница: {@code coarse off} — тот же кадр без мелких отрезков, для сравнения). */
     public static volatile boolean off;
     private static final int[] TEXTURES = {-1, -1, -1, -1}, FBOS = {-1, -1, -1, -1}, W = new int[LEVELS], H = new int[LEVELS];
+    /** Маска полного кадра (R8): пиксели, которые мелкий кадр не разрешает, — их досчитывает полный кадр. */
+    private static int mask = -1, maskFbo = -1;
+    /**
+     * Блок текстуры маски у шейдера слоя: за блоками 12–15 (шум пелены, окно воздуха, сетка дыма, шар; OpenGL 3.2 даёт
+     * не меньше 48). Сам шейдер слоя её не держит: досчёт ставит её на время своего прохода.
+     */
+    static final int MASK_UNIT = 16;
     private static int fullW, fullH;
     private static boolean failed;
     /** Расстояние до мира кадра ({@link SceneDepth}); −1 — его нет, мелких кадров нет. */
@@ -199,6 +214,17 @@ public final class CoarsePass {
             c.setSampler("Sampler0", TEXTURES[k]);
             c.setSampler("Sampler1", scene);
             c.safeGetUniform("CoarseScale").set(sx, sy);
+            // маска: пиксели, которых мелкий кадр не разрешает (их расстояние до мира — ни у одного из четырёх соседей)
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, maskFbo);
+            GL30.glClearBufferfv(GL11.GL_COLOR, 0, ZERO);
+            c.safeGetUniform("CoarseMask").set(1f);
+            c.apply();
+            FxBloom.triangle();
+            GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
+            c.clear();
+            // вывод — в остальные
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
+            c.safeGetUniform("CoarseMask").set(0f);
             c.apply();
             FxBloom.triangle();
             GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
@@ -206,8 +232,24 @@ public final class CoarsePass {
             // свой массив вершин был привязан мимо BufferUploader: его привязку он помнит и не повторил бы
             GlStateManager._glBindVertexArray(0);
             BufferUploader.invalidate();
-            GlStateManager._disableScissorTest();
             RenderSystem.enableDepthTest();
+            // досчёт: квадраты отрезка в полном кадре с аппаратной глубиной — только в пикселях маски (в рамке)
+            // маска — на своём блоке, мимо ShaderInstance: ваниль ведёт блоки 0–11, а у шейдера слоя заняты все двенадцать
+            int unit = GlStateManager._getActiveTexture();
+            GlStateManager._activeTexture(GL13.GL_TEXTURE0 + MASK_UNIT);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, mask);
+            GlStateManager._activeTexture(unit);
+            int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+            ProgramManager.glUseProgram(s.getId());
+            Uniform.uploadInteger(Uniform.glGetUniformLocation(s.getId(), "FxCoarseMask"), MASK_UNIT);
+            ProgramManager.glUseProgram(program);
+            s.safeGetUniform("FxCoarseFill").set(1f);
+            quads.range(s, a, b);
+            s.safeGetUniform("FxCoarseFill").set(0f);
+            GlStateManager._activeTexture(GL13.GL_TEXTURE0 + MASK_UNIT);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+            GlStateManager._activeTexture(unit);
+            GlStateManager._disableScissorTest();
         }
         runs++;
     }
@@ -246,6 +288,18 @@ public final class CoarsePass {
             GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, TEXTURES[k], 0);
             ok &= GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE;
         }
+        if (mask < 0) {
+            mask = GlStateManager._genTexture();
+            GlStateManager._bindTexture(mask);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_NEAREST);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
+        }
+        GlStateManager._bindTexture(mask);
+        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_R8, w, h, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, null);
+        if (maskFbo < 0) maskFbo = GlStateManager.glGenFramebuffers();
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, maskFbo);
+        GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, mask, 0);
+        ok &= GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE;
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
         fullW = w;
         fullH = h;

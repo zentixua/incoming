@@ -224,8 +224,27 @@ class CoarsePassTest {
         String fsh = shader("core/fx.fsh"), out = shader("core/fx_coarse.fsh");
         assertTrue(fsh.contains("vec2 frag = gl_FragCoord.xy * mix(vec2(FxGlowPass.y), FxCoarseScale, float(coarse));"), "шейдер слоя — долей кадра");
         assertTrue(out.contains("ivec2((vec2(t) + 0.5) * CoarseScale)") && out.contains("(vec2(full) + 0.5) / CoarseScale - 0.5"), "вывод — той же долей");
-        // прут перед дымом уже пикселя мелкого кадра: ближе всех соседей — дыма на нём нет (за ним дым отброшен)
-        assertTrue(out.contains("if (depth < nearest * 0.999 - 0.05) v = vec4(0.0);"), "прут перед дымом");
+    }
+
+    /**
+     * Прут или решётка тоньше пикселя мелкого кадра (ревью #455): ни один из четырёх соседей мелкого кадра не то же место —
+     * вывод пиксель не трогает, маска его отмечает, и квадраты отрезка досчитывают его в полном кадре с аппаратной
+     * глубиной: дым перед прутом ложится на прут, дым за ним — нет, как без мелкого кадра. Картинку держат кадры решётки
+     * за дымом и перед ним (PR); здесь — что вывод, маска и досчёт делят пиксели без щелей и без двойного вклада.
+     */
+    @Test
+    void unresolvedPixelsAreDrawnAtFullResolution() throws IOException {
+        String fsh = shader("core/fx.fsh"), out = shader("core/fx_coarse.fsh").replaceAll("\\s+", " ");
+        // одно условие «не разрешён» у маски и у вывода: маска — только там, вывод — только вне
+        assertTrue(out.contains("bool unresolved = same <= 0.5;"), "условие");
+        assertTrue(out.contains("if (CoarseMask > 0.5) { if (!unresolved) discard; fragColor = vec4(1.0); return; } if (unresolved) discard;"),
+                "маска и вывод делят пиксели");
+        // досчёт: шейдер слоя отбрасывает всё вне маски до света, в маске — как обычный квадрат (с глубиной кадра)
+        assertTrue(fsh.contains("if (FxCoarseFill > 0.5 && texelFetch(FxCoarseMask, ivec2(gl_FragCoord.xy), 0).r < 0.5) discard;"), "досчёт по маске");
+        String code = java.nio.file.Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/fx/layer/CoarsePass.java"));
+        int maskPass = code.indexOf("c.safeGetUniform(\"CoarseMask\").set(1f);"), composite = code.indexOf("c.safeGetUniform(\"CoarseMask\").set(0f);"),
+                fill = code.indexOf("s.safeGetUniform(\"FxCoarseFill\").set(1f);"), redraw = code.indexOf("quads.range(s, a, b);", fill);
+        assertTrue(maskPass > 0 && composite > maskPass && fill > composite && redraw > fill, "маска, вывод, досчёт — по порядку, в том же отрезке");
     }
 
     private static String shader(String path) throws IOException {

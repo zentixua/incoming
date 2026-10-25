@@ -7,9 +7,9 @@
 // кадра (свет посчитан в середине пикселя t мелкого кадра, расстояние до мира — в пикселе floor((t + ½)·factor) полного,
 // как у луча пелены) с весом по сходству их расстояния до мира с расстоянием пикселя (pallAlike, pallSlope, pallAhead —
 // как fx_pall_composite): у края дома клуб неба не ложится на стену, а клуб перед стеной — на небо. Ни один из четырёх
-// не то же место (прут, забор, край блока вдали уже пикселя мелкого кадра) — из 4×4 вокруг: пиксель ближе их всех (прут
-// перед дымом) — дыма на нём нет (за прутом дым отброшен, а перед ним мелкий кадр его не знает); иначе (просвет дальше
-// их) — самый похожий по расстоянию.
+// не то же место (прут, решётка, край блока вдали уже пикселя мелкого кадра) — мелкий кадр этот пиксель не разрешает:
+// вывод его не трогает, а проход маски (CoarseMask = 1) отмечает его, и CoarsePass досчитывает отмеченные пиксели
+// квадратами отрезка в полном кадре, с аппаратной глубиной (дым перед прутом — на пруте, за ним — нет).
 
 // мелкий кадр: свет с умноженной альфой (rgb) и закрытая доля (a)
 uniform sampler2D Sampler0;
@@ -17,6 +17,8 @@ uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 // полных пикселей на пиксель мелкого кадра по x и y (CoarsePass: кадр с округлением вверх, не ровно 2^k)
 uniform vec2 CoarseScale;
+// 1 — проход маски: 1 в пикселях, которые мелкий кадр не разрешает, остальные отброшены; 0 — вывод (их отбрасывает)
+uniform float CoarseMask;
 
 out vec4 fragColor;
 
@@ -50,25 +52,14 @@ void main() {
             total += w;
         }
     }
-    vec4 v = sum / max(total, 1e-12);
-    if (same <= 0.5) {
-        ivec2 best = clamp(base, ivec2(0), lowSize - 1);
-        float bestAlike = -1.0, nearest = 1e30;
-        for (int j = -1; j <= 2; j++) {
-            for (int i = -1; i <= 2; i++) {
-                ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
-                float d = sampleDepth(t, fullSize);
-                nearest = min(nearest, d);
-                float a = pallAlike(d, pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
-                if (a > bestAlike) {
-                    bestAlike = a;
-                    best = t;
-                }
-            }
-        }
-        v = texelFetch(Sampler0, best, 0);
-        if (depth < nearest * 0.999 - 0.05) v = vec4(0.0);
+    bool unresolved = same <= 0.5;
+    if (CoarseMask > 0.5) {
+        if (!unresolved) discard;
+        fragColor = vec4(1.0);
+        return;
     }
+    if (unresolved) discard;
+    vec4 v = sum / max(total, 1e-12);
     // негодный пиксель (NaN, бесконечность в половинной точности) — ничего не кладёт
     if (!pallValid(vec4(v.rgb, 1.0 - v.a))) v = vec4(0.0);
     // 8 бит кадра: шум в полступени (как у квадратов слоя, fx.fsh), долей того, что кладёт кадр
