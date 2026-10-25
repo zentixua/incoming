@@ -43,10 +43,10 @@ public final class CameraShake {
     private static final List<Ground> GROUNDS = new ArrayList<>();
     /**
      * Толчок грунта у полной силы, ° — кивок (тангаж), качание вбок (курс), крен — доля курса; частоты — тело стоящего
-     * человека (ISO 2631-1: 4–6 Гц по вертикали), Гц; нарастание, с. Подача: размах и частоту глаз видит, а настоящий
-     * сдвиг земли — доли миллиметра.
+     * человека (ISO 2631-1: 4–6 Гц по вертикали), Гц; нарастание — четверть периода тела, с. Подача: размах и частоту
+     * глаз видит, а настоящий сдвиг земли — доли миллиметра.
      */
-    static final double GROUND_PITCH = 1.6, GROUND_YAW = 0.7, GROUND_ROLL = 0.4, GROUND_HZ = 5.1, GROUND_RISE_S = 0.12;
+    static final double GROUND_PITCH = 1.6, GROUND_YAW = 0.7, GROUND_ROLL = 0.4, GROUND_HZ = 5.1, GROUND_RISE_S = 0.05;
 
     /** Толчок грунта: с мига {@code from} (тики, с долей), сила 0..1, длина, с, сдвиг узора. */
     private record Ground(double from, double strength, double seconds, double phase) {}

@@ -355,6 +355,10 @@ pressure and impulse, the hearing loss it causes and how hard it moves your head
 presentation. You can weaken or turn it off in the settings (Concussion on screen), and the vanilla Distortion Effects
 option scales it and the camera shake too.
 
+The bunker bomb also sends a wave through the ground. It reaches you at the speed of the ground under the bomb: through
+rock and wet clay before the bang in the air, through loose sand after it. The ground jolts you up and down, harder the
+faster it moves, and you hear it rumble.
+
 In sufficiently humid air a white condensation shell appears briefly behind the pressure front, after the air expands
 and cools below its dew point. It evaporates as pressure recovers. Rain makes it much easier to see; dry air may give
 no shell. Its negative-phase history and outer extent are estimates. By day the cloud rises higher than at
