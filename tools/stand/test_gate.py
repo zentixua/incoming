@@ -643,6 +643,23 @@ class Checks(unittest.TestCase):
         self.assertEqual(self.acc_checks(first=35, last=25), [])
         self.assertTrue(self.acc_checks(first=41, last=19))
 
+    def test_expected_windows_come_from_the_plan_the_run_was_shot_with(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = raw_run(Path(t) / "r") / "none"
+            ev = [json.loads(x) for x in (d / "events.jsonl").read_text().splitlines()]
+            (d / "events.jsonl").write_text("\n".join(json.dumps(e) for e in ev if e.get("name") != "100-hit") + "\n")
+            # снят до окна 100-hit: по нынешним сценам оно обязательно, по своему плану — нет
+            self.assertIn("окно 100-hit: не снято", results.analyze(d, plan.load(), ["100"])["checks"])
+            old = plan.build(plan.load(), ["100"])
+            old["steps"] = [x for x in old["steps"] if x["do"] != "impact_window"]
+            (d / "stand-plan.json").write_text(json.dumps(old))
+            self.assertEqual(results.analyze(d, plan.load(), ["100"])["checks"], [])
+            # залп пуска вблизи (без ожидания конца) — тоже по плану прогона
+            self.assertEqual(results.shot_plan(d, plan.load())[1], set())
+            launch = plan.build(plan.load(), ["grad"])
+            (d / "stand-plan.json").write_text(json.dumps(launch))
+            self.assertEqual(results.shot_plan(d, plan.load()), (["grad/start", "grad/hang"], {"grad"}))
+
     def test_a_few_strikes_lost_in_the_air_are_fine(self):
         def bad(got, why="quiet", expect=100):
             res = {"meta": {"done": {"x": 1}, "impacts": {"100": {"got": got, "expect": expect, "why": why, "took_s": 30}}}, "windows": {}}

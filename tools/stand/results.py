@@ -258,9 +258,22 @@ def analyze(run_dir, scenes, only=None, power=None):
     res["meta"]["duration_s"] = (frames[-1]["t"] - frames[0]["t"]) / 1000 if frames else 0
     res["meta"]["shots"] = sorted(e["name"] for e in events if e["type"] == "shot")
     acc_sel = acc_scene if acc_scene and (only is None or acc_scene["id"] in only) else None
-    res["checks"] = checks(events, res, plan.windows(scenes, only), acc_sel, plan.launch_ids(scenes))
+    expected, unawaited = shot_plan(run_dir, scenes, only)
+    res["checks"] = checks(events, res, expected, acc_sel, unawaited)
     res["load"] = load_notes(res, acc_sel, power)
     return res
+
+
+def shot_plan(run_dir, scenes, only=None):
+    """Окна и залпы без ожидания конца — из плана, с которым снят прогон (stand-plan.json рядом), а не из нынешнего
+    scenes.json: новая сцена или окно иначе делали бы негодными все старые прогоны. Нет файла — по scenes.json."""
+    f = Path(run_dir) / "stand-plan.json"
+    if not f.exists():
+        return plan.windows(scenes, only), plan.launch_ids(scenes)
+    steps = json.loads(f.read_text(encoding="utf-8"))["steps"]
+    expected = [s["name"] for s in steps if s["do"] in ("window", "impact_window")]
+    awaited = {s["salvo"] for s in steps if s["do"] == "await"}
+    return expected, {s["id"] for s in steps if s["do"] == "salvo"} - awaited
 
 
 def verdict_hosts(res, acc_scene=None):
