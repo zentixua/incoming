@@ -259,20 +259,23 @@ class SmokeFillTest {
     }
 
     /**
-     * Глаз на крыше в дыму налёта и рядом с облаками, взгляд вдоль дыма: без бюджета кадр закрывает больше двух бюджетов, с ним —
-     * не больше бюджета или его пола (по одному клубу на гаусс; с запасом на оценку площади кучки, 15 %) и меньше вдвое;
-     * пропускание по экрану с бюджетом в среднем то же (±0,04), и в каждой из 18 частей кадра от пропускания самого вещества
-     * модели ({@link #truth}) — не дальше, чем у полного кадра, больше чем на 0,05 (мельче части — подробность клубов: её
-     * бюджет и отдаёт).
+     * Глаз на крыше в дыму налёта и рядом с облаками, взгляд вдоль дыма. При настоящем бюджете налёт из 16 ударов в него
+     * ложится как есть — без слияния и вуали крупного (вид прежний). Сам предел — на вдвое меньшем бюджете: без него кадр
+     * закрывает больше двух таких бюджетов, с ним — не больше бюджета (с запасом на оценку площади кучки, 15 %; пол — по
+     * одному клубу на гаусс — не выше бюджета) и меньше вдвое; пропускание по экрану в среднем и в каждой из 18 частей кадра
+     * от пропускания самого вещества модели ({@link #truth}) — не дальше, чем у полного кадра, больше чем на 0,04 и 0,05
+     * (мельче части — подробность клубов: её бюджет и отдаёт). Налёт из 100 — {@code SmokeRaidTest}.
      */
     @Test
     void raidSmokeStaysInTheFillBudgetAtTheSameDensity() throws IOException {
-        double now = 1000;
+        double now = 1000, half = SmokePuffs.FILL_BUDGET / 2;
         List<Blast> raid = raid(now);
         double[][] prof = PlumeContinuityTest.profiles();
         Vector3f along = new Vector3f(1, 0, 0);
         for (Vec3 eye : new Vec3[]{new Vec3(0, 40, 0), new Vec3(raid.get(3).x(), 25, raid.get(3).z() + 20), new Vec3(raid.get(5).x() + 5, 60, raid.get(5).z())}) {
-            Screen free = frame(raid, now, eye, along, Double.POSITIVE_INFINITY), budget = frame(raid, now, eye, along, SmokePuffs.FILL_BUDGET);
+            frame(raid, now, eye, along, SmokePuffs.FILL_BUDGET);
+            double raw = SmokePuffs.lastRaw(), whole = SmokePuffs.lastFloor();
+            Screen free = frame(raid, now, eye, along, Double.POSITIVE_INFINITY), budget = frame(raid, now, eye, along, half);
             double meanFree = 0, meanBudget = 0;
             int n = 0;
             for (int i = 0; i < 48; i++) {
@@ -296,14 +299,17 @@ class SmokeFillTest {
                     real[i / 8 * 3 + j / 9] += truth(raid, now, v0, u, v) / 72;
                 }
             }
-            double worstFree = worstBlock(free, real, prof), worst = worstBlock(budget, real, prof);
-            String got = String.format(Locale.ROOT, "глаз %s: без бюджета %d квадратов, %.1f экранов, пропускание %.3f; с бюджетом %d, %.1f (пол %.1f), %.3f; худшая часть против вещества: полный %.3f, в бюджете %.3f",
-                    eye, free.quads.size(), free.fill(), meanFree, budget.quads.size(), budget.fill(), floor, meanBudget, worstFree, worst);
+            double worstFree = worstBlock(free, real, prof), worst = worstBlock(budget, real, prof), meanReal = 0;
+            for (double r : real) meanReal += r / real.length;
+            String got = String.format(Locale.ROOT, "глаз %s: при бюджете %.0f пол %.1f (до слияния %.1f); без бюджета %d квадратов, %.1f экранов, пропускание %.3f; с бюджетом %.0f — %d, %.1f (пол %.1f), %.3f; худшая часть против вещества: полный %.3f, в бюджете %.3f",
+                    eye, SmokePuffs.FILL_BUDGET, whole, raw, free.quads.size(), free.fill(), meanFree, half, budget.quads.size(), budget.fill(), floor, meanBudget,
+                    worstFree, worst);
             System.out.println("FILL " + got);
-            assertTrue(free.fill() > 2 * SmokePuffs.FILL_BUDGET, got);
-            assertTrue(budget.fill() <= 1.15 * Math.max(SmokePuffs.FILL_BUDGET, floor), got);
+            assertTrue(raw <= SmokePuffs.FILL_BUDGET && whole == raw, got);
+            assertTrue(free.fill() > 2 * half, got);
+            assertTrue(budget.fill() <= 1.15 * half && floor <= half + 1e-9, got);
             assertTrue(budget.fill() < free.fill() / 2, got);
-            assertTrue(Math.abs(meanFree - meanBudget) <= 0.04, got);
+            assertTrue(Math.abs(meanBudget - meanReal) <= Math.abs(meanFree - meanReal) + 0.04, got + "; вещество в среднем " + meanReal);
             assertTrue(worst <= worstFree + 0.05, got);
         }
     }

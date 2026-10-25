@@ -122,9 +122,14 @@ public final class FarRenderer {
         Arrays.fill(LAST_FRAME, 0);
     }
 
-    /** Заливка кадра кучками облаков (экранов, с перекрытием) и доля кучки, что ей дал бюджет ({@link SmokePuffs#FILL_BUDGET}). */
+    /**
+     * Заливка кадра квадратами облаков и трубок (экранов, с перекрытием), её пол до и после слияния и вуали, доля кучки, уровень
+     * слияния разных источников, гауссов вуали и кучек ({@link SmokePuffs#FILL_BUDGET}).
+     */
     public static String describeSmoke() {
-        return String.format(java.util.Locale.ROOT, "fill %.2f screens (budget %.0f, one club per gaussian %.2f), cluster share %.2f",
-                SmokePuffs.lastFill(), SmokePuffs.FILL_BUDGET, SmokePuffs.lastFloor(), SmokePuffs.lastShare());
+        return String.format(java.util.Locale.ROOT,
+                "fill %.2f screens (budget %.0f, one club per gaussian %.2f, before merging %.2f), cluster share %.2f, merge level %d, veil gaussians %d, clusters %d",
+                SmokePuffs.lastFill(), SmokePuffs.FILL_BUDGET, SmokePuffs.lastFloor(), SmokePuffs.lastRaw(), SmokePuffs.lastShare(),
+                SmokePuffs.lastLevel(), SmokePuffs.lastVeils(), SmokePuffs.lastItems());
     }
 }

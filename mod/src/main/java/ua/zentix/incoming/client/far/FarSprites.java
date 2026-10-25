@@ -167,7 +167,8 @@ public final class FarSprites implements SmokePuffs.Out {
 
     /**
      * Вуаль вещества облаков у глаза ({@link SmokePuffs.Veil}): сетка клеток во весь экран на одной глубине, у каждой вершины —
-     * своя непрозрачность и цвет (толща по её лучу), между ними — линейно; клетки, где вуали нет, не рисуются.
+     * своя непрозрачность, цвет (толща по её лучу) и мягкость к миру (где вещество по лучу), между ними — линейно; клетки, где
+     * вуали нет, не рисуются.
      */
     @Override
     public void veil(SmokePuffs.Veil veil, int light) {
@@ -192,7 +193,7 @@ public final class FarSprites implements SmokePuffs.Out {
     private void veilCorner(SmokePuffs.Veil veil, int i, int j, int k, float u, float v, int light) {
         float a = Math.min(1, veil.alpha(k));
         out.vertex((float) veil.place(i, j, 0), (float) veil.place(i, j, 1), (float) veil.place(i, j, 2), u, v, Math.min(1, veil.r[k] * a),
-                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, 0, 1, light, 0);
+                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, veil.soft[k], 1, light, 0);
     }
 
     /**
