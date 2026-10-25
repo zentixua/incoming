@@ -68,7 +68,9 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         /** Барражирующий боеприпас: электромотор с винтом вблизи и вдали, рассекаемый воздух (громче мотора — в пике). */
         LOITER_NEAR(() -> ModSounds.LOITER_ENGINE.get(), Noise.Part.ENGINE, 0),
         LOITER_FAR(() -> ModSounds.LOITER_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
-        LOITER_DIVE(() -> ModSounds.LOITER_DIVE.get(), Noise.Part.BODY, 0);
+        LOITER_DIVE(() -> ModSounds.LOITER_DIVE.get(), Noise.Part.BODY, 0),
+        /** Мотор зенитной ракеты ЗРК: оружия у неё нет, закон — по паспорту ЗРК ({@link InterceptorSound}). */
+        SAM(() -> ModSounds.BOOSTER_ENGINE.get(), Noise.Part.MOTOR, 0);
 
         /** Звук из реестра берётся, только когда слой запускают: громкость и тон считаются и без реестров (юнит-тесты). */
         final Supplier<SoundEvent> event;
@@ -85,6 +87,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
 
         /** Громкость и тон слоя для того, что слушатель слышит сейчас (до сглаживания). */
         Tone tone(FlightTrack track, Emission e) {
+            if (this == SAM) return InterceptorSound.tone(e);
             Noise noise = noise(track);
             boolean drilling = e.phase() == FlightPhase.DRILL.ordinal();
             Emission.Heard heard = e.heard(noise, part, drilling);

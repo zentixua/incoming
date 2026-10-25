@@ -88,6 +88,11 @@ public final class FarBlasts {
     static final double CLOUD_ALBEDO = 0.7, SKY_SPREAD = 1, SKY_PEAK = 0.45, SKY_CLEAR = 0.45, SKY_LOW = 40;
 
     private static final ArrayDeque<Event> EVENTS = new ArrayDeque<>();
+    /**
+     * Ушедшие из вида сверх {@link #CAP}, чей звук ещё идёт к уху: раскат живёт по времени пути звука
+     * ({@link Event#soundWait}), а не по месту в списке картинки — в налёте больше 256 ударов ранний далёкий не молчит.
+     */
+    private static final ArrayDeque<Event> SOUNDS = new ArrayDeque<>();
     /** Числа на кадр без выделения: точка {@link Sight#point}, свет {@link Sight#light} и цвет шара. */
     private static final double[] POINT = new double[2], LIGHT = new double[5], BB = new double[4];
     /** Самое яркое тело последнего кадра (для лога): ядро, блик и вуаль в пикселях, пересвет, доля над рельефом. */
@@ -188,6 +193,19 @@ public final class FarBlasts {
         double distanceTo(Vec3 p) {
             double dx = x - p.x, dy = y + LIFT - p.y, dz = z - p.z;
             return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        /** До точки взрыва, блоков: от неё идёт фронт, как у ближнего звука ({@code BlastEffects.Timeline}). */
+        double blastDistanceTo(Vec3 p) {
+            double dx = x - p.x, dy = y - p.y, dz = z - p.z;
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        /** Фронт этого взрыва ({@link #arrivalTicks(ChemicalFront, double)}); у бомбы под землёй и без заряда — null. */
+        @Nullable
+        ChemicalFront front() {
+            if (front == null && !source.underground() && source.chargeKg() > 0) front = ChemicalFront.cached(source.chargeKg(), source.surface());
+            return front;
         }
 
         /** Сколько тиков событие живёт (облако видно). */
@@ -437,10 +455,27 @@ public final class FarBlasts {
         Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at));
         trace(e, FarTerrain.of(level), camera());
         clear(e, camera());
-        if (EVENTS.size() >= CAP) EVENTS.pollFirst().alive = false;
-        EVENTS.addLast(e);
+        admit(EVENTS, e, CAP, old -> {
+            old.alive = false;
+            if (old.soundPending) SOUNDS.addLast(old);
+        });
         SmokeGrid.add(e);
         return model;
+    }
+
+    /** {@code e} — в конец {@code events}; сверх {@code cap} первое уходит в {@code gone} (картинка — да, звук — свой срок). */
+    static <E> void admit(ArrayDeque<E> events, E e, int cap, java.util.function.Consumer<E> gone) {
+        if (events.size() >= cap) gone.accept(events.pollFirst());
+        events.addLast(e);
+    }
+
+    /**
+     * Тики с взрыва до прихода фронта на {@code d} блоков от точки взрыва — один закон у ближнего звука, дальнего и
+     * видимого кольца: {@link ChemicalFront} (Кинни–Грэхем и Ренкин–Гюгонио, вблизи быстрее звука); без своей волны
+     * ({@code front} null) — со скоростью звука.
+     */
+    public static double arrivalTicks(@Nullable ChemicalFront front, double d) {
+        return front == null ? d / Acoustics.SPEED : 20 * front.arrivalSeconds(d);
     }
 
     /**
@@ -630,6 +665,15 @@ public final class FarBlasts {
             return;
         }
         clock = BlastTime.ticks();
+        if (!SOUNDS.isEmpty()) {
+            Vec3 ear = camera();
+            Sightline.Heights heights = FarTerrain.of(level);
+            SOUNDS.removeIf(e -> {
+                if (e.level != level) return true;
+                listen(e, heights, ear, clock - e.born);
+                return !e.soundPending;
+            });
+        }
         if (EVENTS.isEmpty()) return;
         Vec3 ear = camera();
         Sightline.Heights heights = FarTerrain.of(level);
@@ -643,16 +687,7 @@ public final class FarBlasts {
                 it.remove();
                 continue;
             }
-            if (e.soundPending) {
-                double d = e.distanceTo(ear);
-                if (d <= Acoustics.SPEED * age) {
-                    e.soundPending = false;
-                    trace(e, heights, ear);
-                    hear(e, d, age);
-                } else if (age > e.soundWait) {
-                    e.soundPending = false;
-                }
-            }
+            if (e.soundPending) listen(e, heights, ear, age);
             if (clock - e.traced >= RETRACE && traces < TRACES_PER_TICK) {
                 trace(e, heights, ear);
                 if (e.glows) clear(e, ear);
@@ -661,6 +696,18 @@ public final class FarBlasts {
                 clear(e, ear);
                 clears++;
             }
+        }
+    }
+
+    /** Фронт дошёл до уха — раскат ({@link #hear}); не дошёл за весь путь звука на дальность слышимости — уже не дойдёт. */
+    private static void listen(Event e, Sightline.Heights heights, Vec3 ear, long age) {
+        double d = e.blastDistanceTo(ear);
+        if (arrivalTicks(e.front(), d) <= age) {
+            e.soundPending = false;
+            trace(e, heights, ear);
+            hear(e, d, age);
+        } else if (age > e.soundWait) {
+            e.soundPending = false;
         }
     }
 
@@ -817,8 +864,7 @@ public final class FarBlasts {
             double cr = e.model.radius(t), ch = e.model.height(t);
             if (t < e.model.life) f.hot(bx, by + Math.max(0, ch - cr), bz, 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
             if (e.source.underground() || e.source.chargeKg() <= 0 || t > FRONT_SECONDS) continue;
-            if (e.front == null) e.front = ChemicalFront.cached(e.source.chargeKg(), e.source.surface());
-            if (front(e.front, t, r, e.model.hob, FRONT)) f.chemicalFront(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
+            if (front(e.front(), t, r, e.model.hob, FRONT)) f.chemicalFront(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
         }
     }
 
@@ -982,6 +1028,7 @@ public final class FarBlasts {
     static void reset() {
         for (Event e : EVENTS) e.alive = false;
         EVENTS.clear();
+        SOUNDS.clear();
         lastHeard = null;
     }
 

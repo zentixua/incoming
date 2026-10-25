@@ -18,6 +18,10 @@ class AirTest {
         assertTrue(rain.stability() > day.stability(), "облачность тянет к нейтральному D");
         assertEquals(0.5, day.humidity(), 1e-12);
         assertEquals(1, rain.humidity(), 1e-12);
+        // у земли (звук): ясно — опорные 70 %, в дождь насыщен, как и наверху
+        assertEquals(Air.SURFACE_CLEAR, day.surfaceHumidity(), 1e-12);
+        assertEquals(1, rain.surfaceHumidity(), 1e-12);
+        assertEquals(Air.SURFACE_CLEAR + (1 - Air.SURFACE_CLEAR) / 2, Air.of(NOON, 1, 0.5, 0).surfaceHumidity(), 1e-12);
         assertTrue(night.brunt() >= day.brunt(), "ночь не менее устойчива (в сильный ветер — нейтрально)");
     }
 

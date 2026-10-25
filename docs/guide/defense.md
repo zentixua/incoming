@@ -16,7 +16,8 @@ is announced to everyone within 20 km.
 Projectiles can be seen from up to 8 km away. How far you hear one depends on its engine and on the weather. On a quiet
 night a Shahed is heard about 12 km away (its two-stroke has no muffler), a Lancet only a few hundred blocks away, and a cruise missile's turbine or a
 burning rocket motor many kilometres away. By day the warm ground bends sound upwards, and in rain the noise hides it,
-so you hear everything from closer. Sound travels at the speed of sound: a distant flash shows up before you hear the
+so you hear everything from closer. Damp air takes less of the high notes: in rain a distant engine sounds brighter,
+even though you lose it sooner. An air defence missile's motor is heard by the same law, far away too. Sound travels at the speed of sound: a distant flash shows up before you hear the
 explosion, and you hear a fast projectile only shortly before it arrives. A projectile faster than sound is not heard
 until its shock wave reaches you: first comes the crack, then its own sound. None of today's weapons fly that fast.
 

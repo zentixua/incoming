@@ -28,6 +28,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.nuclear.Deafness;
 import ua.zentix.incoming.client.nuclear.NukePall;
+import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.sound.Air;
 
 import java.lang.reflect.Field;
@@ -53,11 +54,8 @@ import java.util.WeakHashMap;
  * звука его преграды.
  */
 public final class SoundFilters {
-    /**
-     * Затухание верхов в воздухе, дБ на блок: ISO 9613-1 на 5 кГц — там, где фильтр EFX меряет верха (≈ 33 дБ/км при
-     * 20 °C и 70%, {@link Air}).
-     */
-    private static final double AIR_DB_PER_BLOCK = Air.alpha(5000);
+    /** Где фильтр EFX меряет верха, Гц: затухание верхов в воздухе — ISO 9613-1 на этой частоте ({@link Air}). */
+    private static final double HIGHS_HZ = 5000;
 
     /** Номер фильтра OpenAL (создаётся в звуковом потоке при первой нужде), −1 — EFX нет. */
     private static volatile int filter;
@@ -111,9 +109,13 @@ public final class SoundFilters {
         return soundPhysics;
     }
 
-    /** Доля верхов, дошедшая по воздуху за d блоков. */
+    /**
+     * Доля верхов, дошедшая по воздуху за d блоков: затухание на 5 кГц при влажности воздуха мира у земли
+     * ({@link ClientAir}: ясно — 33 дБ/км, дождь — 27).
+     */
     static float air(double d) {
-        return pathEffects() ? (float) Math.pow(10, -AIR_DB_PER_BLOCK * d / 20) : 1;
+        if (!pathEffects()) return 1;
+        return (float) Math.pow(10, -Air.alphaAt(HIGHS_HZ, ClientAir.now().surfaceHumidity()) * d / 20);
     }
 
     /**

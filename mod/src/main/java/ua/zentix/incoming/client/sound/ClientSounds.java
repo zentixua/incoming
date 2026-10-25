@@ -108,9 +108,12 @@ public final class ClientSounds {
             return tone == null ? 0 : (float) tone.gain();
         }
 
-        /** Слой звучит: звук не смолк сам и его ещё ведёт движок (перезапускаясь, движок бросает все звуки). */
+        /**
+         * Слой звучит: звук не смолк сам и у него есть канал движка ({@link #playing}). F3+T и смена устройства бросают все
+         * звуки, ползунок категории в нуле снимает канал — слой заводится снова, а не молчит до конца полёта.
+         */
         boolean live() {
-            if (sound != null && (sound.isStopped() || !Minecraft.getInstance().getSoundManager().isActive(sound))) kill();
+            if (sound != null && (sound.isStopped() || !playing(sound))) kill();
             return sound != null;
         }
 
@@ -122,7 +125,7 @@ public final class ClientSounds {
             // громкость, тон, место и фильтр — до запуска: так ваниль тикает отложенный звук перед play
             s.tick();
             manager.play(s);
-            if (manager.isActive(s)) sound = s;
+            if (playing(s)) sound = s;
             else retryAt = FlightTracks.now() + RETRY;
         }
 
@@ -150,16 +153,28 @@ public final class ClientSounds {
         Iterator<Tracked> it = TRACKS.values().iterator();
         while (it.hasNext()) {
             Tracked t = it.next();
-            if (FlightTracks.get(t.track.id) != t.track) {
+            if (current(t.track) != t.track) {
                 t.kill();
                 it.remove();
             }
         }
+        // звук мотора заводит путь, а не сущность: и снаряды, и зенитные ракеты, которых у клиента нет (пакеты сервера)
         for (FlightTrack track : FlightTracks.all()) {
+            if (!TRACKS.containsKey(track.id)) TRACKS.put(track.id, new Tracked(track, layers(track)));
+        }
+        for (FlightTrack track : FlightTracks.interceptors()) {
             if (!TRACKS.containsKey(track.id)) TRACKS.put(track.id, new Tracked(track, layers(track)));
         }
         DUCK.tick();
         budget(hear(mc));
+    }
+
+    /**
+     * Звук держит канал движка ({@code SoundEngine.instanceToChannel}), а не только запись о запуске: {@code isActive}
+     * отвечает «звучит» и после того, как ползунок категории в нуле снял канал.
+     */
+    static boolean playing(SoundInstance s) {
+        return Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.containsKey(s);
     }
 
     /** Громкость моторов под взрывами ({@link Ducking}). */
@@ -197,6 +212,10 @@ public final class ClientSounds {
             if (e != null && t.launchEvents && e.phase() != t.heardPhase) {
                 EngineSound.launchEvents(track, e, t.heardPhase);
                 t.heardPhase = e.phase();
+            } else if (e != null && track.weapon == null && t.heardPhase < 0) {
+                // зенитная ракета: поджиг слышен, если мотор зазвучал у уха с самого схода
+                InterceptorSound.heard(e);
+                t.heardPhase = e.phase();
             }
             for (Voice v : t.voices) {
                 v.hear(e);
@@ -230,9 +249,14 @@ public final class ClientSounds {
         }
     }
 
-    /** Слои звука снаряда — из клиентского паспорта его сущности (у B-2 свои, у его бомбы свои). */
-    private static List<EngineSound.Layer> layers(FlightTrack track) {
-        return ClientWeaponSpec.of(track.weapon).airframe(!track.bomber).layers();
+    /** Слои звука снаряда — из клиентского паспорта его сущности (у B-2 свои, у его бомбы свои); у зенитной ракеты — её мотор. */
+    static List<EngineSound.Layer> layers(FlightTrack track) {
+        return track.weapon == null ? List.of(EngineSound.Layer.SAM) : ClientWeaponSpec.of(track.weapon).airframe(!track.bomber).layers();
+    }
+
+    /** Нынешний путь того же UUID ({@code null} — забыт): снаряда или зенитной ракеты. */
+    private static FlightTrack current(FlightTrack track) {
+        return track.weapon == null ? FlightTracks.interceptor(track.id) : FlightTracks.get(track.id);
     }
 
     /**
@@ -256,7 +280,7 @@ public final class ClientSounds {
             }
             if (layers.isEmpty()) continue;
             t.track.at(t.track.lastTick(), p);
-            sb.append(String.format(Locale.ROOT, " %s(%s %.0f)", t.track.weapon.getSerializedName(), t.track.fromServer() ? "s" : "e",
+            sb.append(String.format(Locale.ROOT, " %s(%s %.0f)", t.track.weapon == null ? "sam" : t.track.weapon.getSerializedName(), t.track.fromServer() ? "s" : "e",
                     Math.sqrt((p[0] - ear.x) * (p[0] - ear.x) + (p[1] - ear.y) * (p[1] - ear.y) + (p[2] - ear.z) * (p[2] - ear.z)))).append(layers);
         }
         return sb.append(" live=").append(live).toString();

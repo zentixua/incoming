@@ -67,4 +67,28 @@ class PropagationTest {
         for (int b = 0; b < Propagation.BANDS; b++) sum += Math.pow(10, Propagation.background(b, Propagation.Weather.NIGHT) / 10);
         assertEquals(Propagation.NIGHT, 10 * Math.log10(sum), 1e-9);
     }
+
+    /**
+     * Воздух пути — влажность воздуха мира у земли ({@link Propagation.Weather#humidity}): в дождь верха 4 кГц на
+     * километре теряют меньше (ISO 9613-1 при 20 °C: 23,1 дБ/км при 70 %, 19,6 при 100 %); ясная погода — условия записей.
+     */
+    @Test
+    void airFollowsWorldHumidity() {
+        assertEquals(Air.HUMIDITY / 100, Propagation.Weather.NIGHT.humidity(), 1e-12, "без мира — условия записей");
+        assertEquals(Air.alpha(4000), Propagation.alpha(6, Propagation.Weather.NIGHT.humidity()), 1e-12);
+        assertEquals(23.1, 1000 * Propagation.alpha(6, 0.7), 0.1);
+        assertEquals(19.6, 1000 * Propagation.alpha(6, 1.0), 0.1);
+        Propagation.Path clear = Propagation.Path.over(1000, 2, Propagation.Weather.NIGHT);
+        Propagation.Path wet = Propagation.Path.over(1000, 2, new Propagation.Weather(0, 0, 0, 0, 1));
+        assertEquals(1000 * (Propagation.alpha(6, 0.7) - Propagation.alpha(6, 1.0)),
+                Propagation.attenuation(6, clear) - Propagation.attenuation(6, wet), 1e-9);
+        // таблица по 1 %: в пределах влажности мира у земли (70–100 %) — как формула
+        for (double h = 0.7; h <= 1.0; h += 0.0137) {
+            for (int b = 0; b < Propagation.BANDS; b++) {
+                double exact = Air.alphaAt(Propagation.OCTAVES[b], h);
+                assertEquals(exact, Propagation.alpha(b, h), 0.01 * exact, h + ", " + Propagation.OCTAVES[b] + " Гц");
+            }
+        }
+        assertEquals(Air.alpha(5000) * 1000, Air.alphaAt(5000, Air.HUMIDITY / 100) * 1000, 1e-9);
+    }
 }
