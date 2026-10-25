@@ -319,13 +319,14 @@ public final class CloudModel {
     }
 
     /**
-     * Взрыв в цель {@code target} на высоте {@code hobM} над поверхностью {@code ground}: пыль раздробленного — доля
-     * {@link #DUST_LOFTED} массы разрушенного вещества цели ({@link BlastTarget#mass}: воронка закона по грунту материала ×
-     * его насыпная плотность, у плиты — пролом; тот же закон, что роет сервер), а не чаша сухого грунта у любой цели (у
-     * бетона, досок и плиты прежде выходило 1600 кг/м³ сухой почвы, physics.md фронта F).
+     * Взрыв в цель {@code target} на высоте {@code hobM} над поверхностью {@code ground}: пыль раздробленного — доля мелочи
+     * вещества ({@link BlastTarget.Matter#fines}: у рыхлого — {@link #DUST_LOFTED}, у связного — больше) массы разрушенного
+     * ({@link BlastTarget#mass}: воронка закона по грунту материала × его насыпная плотность, у плиты — пролом; тот же закон,
+     * что роет сервер), а не чаша сухого грунта у любой цели (у бетона, досок и плиты прежде выходило 1600 кг/м³ сухой
+     * почвы, physics.md фронта F).
      */
     public CloudModel(BlastSource source, Air air, BlastTarget target, double hobM, GroundDust.Ground ground) {
-        this(source, air, target, target.mass(source.chargeKg()) * DUST_LOFTED, 0.5, hobM, ground);
+        this(source, air, target, target.dust(source.chargeKg()), 0.5, hobM, ground);
     }
 
     /** Радиус разрушенного у цели, м: пролом плиты или воронка закона по грунту материала. */

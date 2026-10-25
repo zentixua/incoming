@@ -470,7 +470,7 @@ public final class BlastEffects {
         double charge = model.source.chargeKg();
         if (t == 20 && charge > 0) {
             // масса — разрушенного у цели (тот же бюджет, что у пыли облака и выброса); у разрыва в воздухе и на воде — 0
-            double kg = model.target.mass(charge) * (1 - CloudModel.DUST_LOFTED);
+            double kg = model.target.ballistic(charge);
             if (kg > 0) BlastSounds.debris(pos, kg, 2 * CraterModel.chargeRadius(charge, model.target.material().soil()), pitch);
         }
     }

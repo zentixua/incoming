@@ -73,8 +73,21 @@ class BlastTargetTest {
         assertEquals(plain.dust, soil.dust, 1e-9);
         assertEquals(plain.crushed.total, soil.crushed.total, 1e-9);
         assertEquals(plain.life, soil.life, 1e-9);
-        CloudModel concrete = new CloudModel(s, CloudModel.Air.STANDARD, BlastTarget.of(GroundMaterial.STONE, s.chargeKg(), 0), 0, GroundDust.Ground.BARE);
-        assertTrue(concrete.dust < plain.dust, "пыль дробления бетона — по его чаше и плотности");
+        BlastTarget stone = BlastTarget.of(GroundMaterial.STONE, s.chargeKg(), 0);
+        CloudModel concrete = new CloudModel(s, CloudModel.Air.STANDARD, stone, 0, GroundDust.Ground.BARE);
+        assertEquals(stone.dust(s.chargeKg()) * (1 - CloudModel.CRUSHED_HOT_SHARE), concrete.dust, 1e-9, "пыль дробления бетона — по его чаше, плотности и мелочи");
+        assertEquals(stone.mass(s.chargeKg()), stone.dust(s.chargeKg()) + stone.ballistic(s.chargeKg()), 1e-9, "пыль + выброс — разрушенное");
+    }
+
+    /** Мелочи у связного больше, чем у рыхлого (размолото в зоне дробления), у воды — нет; у рыхлого — прежняя доля. */
+    @Test
+    void crushedMatterGivesMoreFines() {
+        assertEquals(CloudModel.DUST_LOFTED, BlastTarget.Matter.DIRT.fines, 1e-12);
+        for (BlastTarget.Matter m : BlastTarget.Matter.values()) {
+            if (m == BlastTarget.Matter.WATER) assertEquals(0, m.fines);
+            else if (!m.loose && m != BlastTarget.Matter.WOOD) assertTrue(m.fines > BlastTarget.Matter.DIRT.fines, m.name());
+            assertTrue(m.fines < 0.5, m.name() + ": пыль — меньшая часть разрушенного");
+        }
     }
 
     /** Цвет пыли: бетон и камень светлее почвы, сланец темнее, древесина — охристая (красный больше синего). */

@@ -53,16 +53,16 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
      * </ul>
      */
     public enum Matter {
-        DIRT(1600, 1e-3, 2650, 0.5, true, 0.60f, 0.53f, 0.45f),
-        SAND(1600, 3.5e-4, 2650, 0, true, 0.85f, 0.78f, 0.58f),
-        SNOW(400, 1e-3, 917, 0, true, 0.95f, 0.95f, 0.97f),
-        GRAVEL(1700, 1e-2, 2650, 0.8, true, 0.58f, 0.55f, 0.50f),
-        CLAY(1900, 5e-3, 2600, 0.5, true, 0.70f, 0.52f, 0.42f),
-        STONE(2500, 0, 2650, 1, false, 0.72f, 0.71f, 0.68f),
-        DEEPSLATE(2800, 0, 2800, 1, false, 0.42f, 0.42f, 0.44f),
-        BRICK(1900, 0, 2600, 1, false, 0.66f, 0.60f, 0.55f),
-        WOOD(500, 0, 500, 1, false, 0.70f, 0.58f, 0.40f),
-        WATER(1000, 0, 1000, 0, false, 0.80f, 0.85f, 0.90f);
+        DIRT(1600, 1e-3, 2650, 0.5, FINES_LOOSE, true, 0.60f, 0.53f, 0.45f),
+        SAND(1600, 3.5e-4, 2650, 0, FINES_LOOSE, true, 0.85f, 0.78f, 0.58f),
+        SNOW(400, 1e-3, 917, 0, FINES_LOOSE, true, 0.95f, 0.95f, 0.97f),
+        GRAVEL(1700, 1e-2, 2650, 0.8, FINES_LOOSE, true, 0.58f, 0.55f, 0.50f),
+        CLAY(1900, 5e-3, 2600, 0.5, FINES_LOOSE, true, 0.70f, 0.52f, 0.42f),
+        STONE(2500, 0, 2650, 1, FINES_CRUSHED, false, 0.72f, 0.71f, 0.68f),
+        DEEPSLATE(2800, 0, 2800, 1, FINES_CRUSHED, false, 0.42f, 0.42f, 0.44f),
+        BRICK(1900, 0, 2600, 1, FINES_CRUSHED, false, 0.66f, 0.60f, 0.55f),
+        WOOD(500, 0, 500, 1, FINES_LOOSE, false, 0.70f, 0.58f, 0.40f),
+        WATER(1000, 0, 1000, 0, 0, false, 0.80f, 0.85f, 0.90f);
 
         /** Насыпная плотность, кг/м³. */
         public final double density;
@@ -72,12 +72,15 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         public final double grainDensity;
         /** Доля баллистического выброса, что летит комьями (частицы вблизи), а не зёрнами завесы. */
         public final double clods;
+        /** Доля разрушенного, что уходит в воздух пылью мельче ~50 мкм ({@link #FINES_LOOSE}, {@link #FINES_CRUSHED}). */
+        public final double fines;
         /** Рыхлое: воронка выбрасывает его завесой. */
         public final boolean loose;
         /** Цвет сухой мелкой пыли на экране. */
         public final float r, g, b;
 
-        Matter(double density, double grain, double grainDensity, double clods, boolean loose, float r, float g, float b) {
+        Matter(double density, double grain, double grainDensity, double clods, double fines, boolean loose, float r, float g, float b) {
+            this.fines = fines;
             this.density = density;
             this.grain = grain;
             this.grainDensity = grainDensity;
@@ -109,6 +112,20 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
             };
         }
     }
+
+    /**
+     * Доля разрушенного рыхлого (и досок), что уходит в воздух пылью мельче ~50 мкм — прежняя оценка
+     * {@link CloudModel#DUST_LOFTED}: у грунта мелочь большей частью остаётся в комьях и падает с ними.
+     */
+    static final double FINES_LOOSE = CloudModel.DUST_LOFTED;
+    /**
+     * То же у связного (скала, бетон, кладка): чаша контактного заряда там — зона дробления и откола (переднее дробление
+     * плиты, physics.md [S13]; зона дробления у заряда в породе — 2–4 его радиуса, Esen, Onederra, Bilgin, «Modelling the
+     * size of the crushed zone around a blasthole», Int. J. Rock Mech. Min. Sci. 40, 2003: у 50 кг ТНТ — 0,4–0,8 м, порядка
+     * всей чаши бетона), и раздробленное там размолото, а не выброшено зёрнами. ⚠ Доля — оценка: замеров мелочи контактного
+     * взрыва по бетону в источниках нет; впятеро больше грунта, а не «как грунт» и не «никакой пыли» (physics.md).
+     */
+    static final double FINES_CRUSHED = 0.1;
 
     /** Удар в голый рыхлый грунт — как у взрыва без сведений о цели (проверки, прежние вызовы). */
     public static final BlastTarget SOIL = new BlastTarget(Family.SOIL, GroundMaterial.DIRT, 0, 0);
@@ -178,6 +195,16 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         if (family != Family.SLAB || m <= 0 || tntKg <= 0) return 0;
         double k = m / tntKg, a = 1 + 2 * k;
         return GURNEY_TNT / Math.sqrt((a * a * a + 1) / (6 * (1 + k)) + k);
+    }
+
+    /** Пыль разрушенного, что уходит в воздух, кг: {@link #mass} × доля мелочи вещества ({@link Matter#fines}). */
+    public double dust(double tntKg) {
+        return mass(tntKg) * matter().fines;
+    }
+
+    /** Баллистический выброс разрушенного, кг: {@link #mass} без пыли, что ушла в воздух. */
+    public double ballistic(double tntKg) {
+        return mass(tntKg) * (1 - matter().fines);
     }
 
     /** Масса разрушенного вещества цели, кг: {@link #volume} × насыпная плотность. */
