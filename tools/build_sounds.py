@@ -870,6 +870,33 @@ def crater_fire():
     write("blast_fire", fire, "blast.fire", "subtitles.incoming.fire", level=0.2)
 
 
+# Петли гула взрывов (client/sound/Rumble) — на потолке, как петли моторов: громкость гула задаёт смесь у клиента
+# (BlastSounds.RUMBLE_LUFS), файл — только тембр; по варианту на четверть вокруг уха — шум четвертей не согласован.
+RUMBLE_LUFS = MOTOR_LUFS
+RUMBLE_VARIANTS = 4
+RUMBLE_SECONDS = 8.0
+
+
+def rumble():
+    """Гул взрывов без голоса движка (client/sound/Rumble): налёт в сотню ударов звучит не сотней разовых звуков, а суммой
+    в четырёх петлях вокруг уха. Тембр — хвосты дальнего ракурса (раскат через километр воздуха) без атак: шум с их средним
+    спектром (Уэлч) и случайными фазами — ровная петля без шва, как noise_loop моторов; огибающую гулу задают его члены в
+    клиенте (каждый тик), а не файл. Записей не берёт — собирается из собранных файлов blast_far (--alone rumble)."""
+    tails = []
+    with open(os.path.join(ASSETS, "sounds.json"), encoding="utf-8") as fh:
+        far = [f["name"].split(":")[1] for f in json.load(fh)["blast.far"]["sounds"]]
+    for name in far:
+        x, sr = sf.read(os.path.join(OUT, name + ".ogg"), dtype="float64")
+        if sr != SR or x.ndim != 1:
+            sys.exit(f"{name}: {sr} Гц, {x.ndim} кан., а сборка — {SR} Гц моно")
+        # хвост — после атаки: с конца окна 400 мс от самого громкого места (атака и её окно мгновенной громкости)
+        a = int((np.argmax(env_db(x)) * 0.01 + 0.4) * SR)
+        tails.append(x[a:])
+    for i in range(1, RUMBLE_VARIANTS + 1):
+        y = engine(noise_loop(tails, RUMBLE_SECONDS), RUMBLE_LUFS, f"blast_rumble_{i}")
+        write(f"blast_rumble_{i}", y, "blast.rumble", "subtitles.incoming.blast", level=0.2)
+
+
 def bunker():
     """Бетонобойная бомба: удар о грунт, подземный взрыв, выброс газов, обвал полостей, толчок."""
     # хлопка у удара нет: N-волну сверхзвуковой бомбы играет её полёт (Booms), на дозвуке её нет
@@ -1098,7 +1125,7 @@ def sonic():
 ORDER = ["drone.engine", "drone.engine.far", "launch.booster", "booster.engine", "booster.separate", "missile.engine",
          "missile.engine.rear", "missile.dive", "missile.engine.far", "missile.whistle", "bomber.engine",
          "bomber.engine.far", "bomb.fall", "bomb.fall.far", "bomb.drill", "siren", "blast.near", "blast.sub",
-         "blast.far", "blast.mid", "debris.fall", "blast.fire", "bomb.impact", "bomb.quake", "bomb.deep", "bomb.vent", "bomb.cave",
+         "blast.far", "blast.mid", "debris.fall", "blast.fire", "blast.rumble", "bomb.impact", "bomb.quake", "bomb.deep", "bomb.vent", "bomb.cave",
          "designator.lock", "silent", "nuke.alarm", "nuke.launch", "nuke.crack", "nuke.boom_far",
          "nuke.wind", "nuke.glass", "nuke.tinnitus", "nuke.rain", "nuke.crack_far", "nuke.fire",
          "nuke.fire_wind", "nuke.collapse", "geiger.click", "rocket.launch",
@@ -1184,7 +1211,7 @@ def relevel():
 
 
 if __name__ == "__main__":
-    PARTS = (drone, missile, launch, bomber, blasts, bunker, sirens, nuke, after, misc, rocket, loiter, grid, sonic)
+    PARTS = (drone, missile, launch, bomber, blasts, rumble, bunker, sirens, nuke, after, misc, rocket, loiter, grid, sonic)
     args = sys.argv[1:]
     if args == ["--measure"]:
         measure()

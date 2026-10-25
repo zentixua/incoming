@@ -264,6 +264,23 @@
       }
     ]
   },
+  "blast.rumble": {
+    "subtitle": "subtitles.incoming.blast",
+    "sounds": [
+      {
+        "name": "incoming:blast_rumble_1"
+      },
+      {
+        "name": "incoming:blast_rumble_2"
+      },
+      {
+        "name": "incoming:blast_rumble_3"
+      },
+      {
+        "name": "incoming:blast_rumble_4"
+      }
+    ]
+  },
   "bomb.impact": {
     "subtitle": "subtitles.incoming.bomb.impact",
     "sounds": [

@@ -3,14 +3,18 @@ package ua.zentix.incoming.client.sound;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.sound.Propagation;
 import ua.zentix.incoming.client.fx.ClientAir;
+import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.fx.BlastHit;
 import ua.zentix.incoming.client.fx.BlastSource;
@@ -41,7 +45,9 @@ import java.util.Locale;
  * </ul>
  * Вариант записи выбирает зерно взрыва (пакет {@code S2C.Blast}): каждый взрыв звучит по-своему, а его ракурсы — одна
  * запись. Моторы снарядов под громкий взрыв уходят вниз ({@link Ducking}). Все звуки взрывов (ракурсы, удар в грудь, удар у
- * уха, эхо, звуки бомбы) — в одной смеси ({@link Mix}): потолок громкости — у суммы, а не у каждого.
+ * уха, эхо, звуки бомбы) — в одной смеси ({@link Mix}): потолок громкости — у суммы, а не у каждого, доля каждого взрыва —
+ * его доля в жизни. Разовые звуки взрывов держат каналы движка не больше своего потолка ({@link BlastVoices}): места нет —
+ * тихие звучат гулом в четырёх петлях вокруг уха ({@link Rumble}) с той же мощностью.
  */
 public final class BlastSounds {
     /**
@@ -69,6 +75,27 @@ public final class BlastSounds {
     private static long ticks;
     /** Смесь взрывов у уха: громкость в игре — половина децибел суммарного уровня, потолок — у суммы ({@link Mix}). */
     private static final Mix MIX = new Mix();
+    /** Гул взрывов без голоса ({@link Rumble}) и кто держит голоса ({@link BlastVoices}). */
+    private static final Rumble RUMBLE = new Rumble();
+    private static final BlastVoices VOICES = new BlastVoices(RUMBLE);
+    /**
+     * Громкость петли гула, LUFS (наибольшая мгновенная) — {@code RUMBLE_LUFS} в {@code build_sounds.py}: на потолке, чтобы
+     * громкость петли не упёрлась в 1 раньше, чем гул дойдёт до потолка суммы.
+     */
+    static final double RUMBLE_LUFS = Loudness.CEILING_LUFS;
+    /** Петли гула по четвертям; null — молчит. */
+    private static final AmbientLoop[] LOOPS = new AmbientLoop[Rumble.QUADRANTS];
+    private static final int[] LOOP_RETRY = new int[Rumble.QUADRANTS], LOOP_QUIET = new int[Rumble.QUADRANTS];
+    /** Петля гула тише слышимого столько тиков — отпустить канал. */
+    private static final int LOOP_HOLD = 20;
+    /** Статических каналов движка, которые даст OpenAL рядом со своими источниками ({@link BlastVoices#reach}). */
+    private static int reach = BlastVoices.reach(BlastVoices.MONO, BlastVoices.STEREO);
+    /** Взрывы, чей звук ещё не начался на деле: смесь сдвинется к настоящему началу ({@link OwnSources.Anchor}). */
+    private static final List<Late> LATE = new ArrayList<>();
+    /** Зерно звуков без своего зерна (бомба). */
+    private static final RandomSource SEEDS = RandomSource.create();
+
+    private record Late(Mix.Blast blast, OwnSources.Anchor anchor) {}
     private static final List<CraterFire> FIRES = new ArrayList<>();
     /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
     private static String last = "";
@@ -107,7 +134,8 @@ public final class BlastSounds {
         float highs = highs(path);
         SoundEvent event = s.underground() ? ModSounds.BOMB_DEEP.get() : ModSounds.BLAST_FAR.get();
         float pitch = s.underground() ? 1 : BlastMix.pitch(s.chargeKg());
-        ClientSounds.blastAtEar(event, pos, v, pitch, seed, 1, highs, BlastSounds::factor, mixed(event, v, pitch));
+        Mix.Blast blast = mixed(event, v, pitch, seed);
+        voice(blast, List.of(ClientSounds.blastAtEar(event, pos, v, pitch, seed, 1, highs, blast::factor, life(blast))), pos, pitch, false);
         return heard;
     }
 
@@ -160,7 +188,6 @@ public final class BlastSounds {
                 return BlastModel.overpressureKpa(blocks, kg, s.surface());
             }
         }, ModSounds.BLAST_FAR.get(), seed);
-        e.bus(BlastSounds::factor);
         ECHOES.add(e);
         return e;
     }
@@ -178,7 +205,7 @@ public final class BlastSounds {
         BlastMix.Layers l = BlastMix.at(s, d);
         float pitch = BlastMix.pitch(s.chargeKg());
         ClientSounds.ducked(loudness);
-        List<SoundInstance> shots = new ArrayList<>(4);
+        List<ClientSounds.MixedShot> shots = new ArrayList<>(4);
         SoundInstance loudest = null;
         float most = 0;
         float[] volumes = {l.near(), l.mid(), l.far()};
@@ -187,9 +214,9 @@ public final class BlastSounds {
         Mix.Blast blast = MIX.blast(ticks);
         for (int i = 0; i < 3; i++) {
             if (volumes[i] < AUDIBLE) continue;
-            Mix.Layer layer = new Mix.Layer(Envelopes.of(events[i].getLocation()), pitch, volumes[i]);
+            Mix.Layer layer = new Mix.Layer(Envelopes.of(events[i].getLocation()), Envelopes.energy(events[i], seed), pitch, volumes[i], Mix.Kind.VIEW, 0);
             blast.add(layer);
-            SoundInstance shot = ClientSounds.blastShot(events[i], pos, volumes[i], pitch, seed, BlastSounds::factor, life(layer));
+            ClientSounds.MixedShot shot = ClientSounds.blastShot(events[i], pos, volumes[i], pitch, seed, blast::factor, life(layer));
             shots.add(shot);
             if (volumes[i] > most) {
                 most = volumes[i];
@@ -198,41 +225,82 @@ public final class BlastSounds {
         }
         if (l.sub() >= AUDIBLE) {
             // удар в грудь — своя запись (низ других подрывов и синтез): с ракурсами — по мощности
-            Mix.Layer layer = new Mix.Layer(Envelopes.of(ModSounds.BLAST_SUB.get().getLocation()), pitch, l.sub(), true);
+            SoundEvent sub = ModSounds.BLAST_SUB.get();
+            Mix.Layer layer = new Mix.Layer(Envelopes.of(sub.getLocation()), Envelopes.energy(sub, seed ^ SUB_SALT), pitch, l.sub(), Mix.Kind.APART, 0);
             blast.add(layer);
-            shots.add(ClientSounds.blastShot(ModSounds.BLAST_SUB.get(), pos, l.sub(), pitch, seed ^ SUB_SALT, BlastSounds::factor, life(layer)));
+            shots.add(ClientSounds.blastShot(sub, pos, l.sub(), pitch, seed ^ SUB_SALT, blast::factor, life(layer)));
         }
-        // эхо и удар у уха ждут настоящего начала прямого звука: ожидание — до play
-        if (echoes != null) echoes.expect(tick, loudest);
+        // эхо и удар у уха ждут настоящего начала прямого звука: ожидание — до play; смесь — тоже от него
+        if (echoes != null) {
+            echoes.bus(blast);
+            echoes.expect(tick, loudest);
+        }
+        Object owner = new Object();
+        OwnSources.Anchor start = OwnSources.anchor(owner, loudest, clock, tick);
+        if (loudest != null) LATE.add(new Late(blast, start));
         boolean pulse = false;
         if (l.pulse() >= AUDIBLE) {
-            Object owner = new Object();
-            OwnSources.Anchor start = OwnSources.anchor(owner, loudest, clock, tick);
             short[] track = BlastPulse.render(pa, BlastMix.phase(s, d), 1);
-            // удар у уха — дорожка из модели: в смеси своей огибающей, по мощности
+            // удар у уха — дорожка из модели своим источником: в смеси своей огибающей, по мощности
             float[] x = new float[track.length];
             for (int i = 0; i < x.length; i++) x[i] = track[i] / 32768f;
             pulse = OwnSources.play(owner, start, 0, Math.atan2(pos.z - ear.z, pos.x - ear.x), l.pulse(), track, BlastPulse.RATE, true, true,
-                    BlastSounds::factor);
+                    blast::factor);
             // своих источников не нашлось — удара нет и в смеси
-            if (pulse) blast.add(new Mix.Layer(Envelope.of(x, BlastPulse.RATE), 1, l.pulse(), true));
+            if (pulse) blast.add(Mix.Layer.own(Envelope.of(x, BlastPulse.RATE), Envelope.energy(x, BlastPulse.RATE), l.pulse(), 0));
         }
         last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
                 s.weapon() == null ? "air" : s.weapon().name(), s.chargeKg(), d, pa, 20 * Math.log10(Math.max(pa, 1e-9) / 2e-5), 1000 * BlastMix.phase(s, d),
                 loudness, pitch, l.near(), l.mid(), l.far(), l.sub(), l.pulse(), pulse ? "played" : "-", echoes == null ? "-" : "on");
         if (echoes != null) lastEchoes = echoes;
-        for (SoundInstance shot : shots) {
-            Deafness.before(shot);
-            ClientSounds.start(shot);
-        }
+        voice(blast, shots, pos, pitch, true);
         if (echoes != null) echoes.arrive(ear, BlastMix.uncapped(loudness - BlastMix.FAR_LUFS), pitch);
+    }
+
+    /**
+     * Разовые звуки взрыва {@code blast} (его слои уже в смеси) — голосами движка, если на них есть место ({@link BlastVoices}),
+     * иначе взрыв звучит в гуле ({@link Rumble}); движок не взял звук — тоже в гул. {@code before} — звуки самой волны: их
+     * слышит ухо, каким оно было до неё ({@link Deafness#before}).
+     */
+    private static void voice(Mix.Blast blast, List<ClientSounds.MixedShot> shots, Vec3 pos, float pitch, boolean before) {
+        if (shots.isEmpty()) return;
+        Vec3 ear = ear();
+        ClientSounds.MixedShot loud = shots.get(0);
+        for (ClientSounds.MixedShot s : shots) if (s.level() > loud.level()) loud = s;
+        // за преградой гул так же глух, как голос: громкость фильтра — в мощности, верха — в фильтре петли
+        float open = loud.lowpassGain();
+        BlastVoices.Voice v = VOICES.admit(blast, shots, ticks, Math.atan2(pos.z - ear.z, pos.x - ear.x), pitch, open * open, loud.lowpassHighs(), free());
+        if (v == null) return;
+        int taken = 0;
+        for (ClientSounds.MixedShot shot : shots) {
+            if (before) Deafness.before(shot);
+            ClientSounds.start(shot);
+            if (shot.playing()) taken++;
+        }
+        VOICES.started(v, taken, ticks);
+    }
+
+    /** Свободных статических каналов у движка сейчас (из тех, что даст OpenAL; потоковые звучащие — тоже в счёте). */
+    private static int free() {
+        return reach - Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.size();
     }
 
     /** Строка {@code SCENARIO blast-sound}: последний обычный взрыв у уха и его эхо; пусто — взрывов не было. */
     public static String describe() {
         if (last.isEmpty()) return "";
         BlastEchoes e = lastEchoes;
-        return last + (e == null ? "" : "; " + e.describe()) + "; " + BlastHit.describe();
+        return last + (e == null ? "" : "; " + e.describe()) + "; " + voices() + "; " + BlastHit.describe();
+    }
+
+    /**
+     * Голоса взрывов и гул: сколько каналов держат (звучащие/все, потолок), сколько голосов просили у движка, сколько он
+     * взял и отказал, сколько взрывов ушло в гул сразу и уступило место; громкость петель гула по четвертям.
+     */
+    static String voices() {
+        StringBuilder sb = new StringBuilder(String.format(Locale.ROOT, "voices %d/%d cap %d requested %d started %d refused %d rumble %d yielded %d loops",
+                VOICES.steady(), VOICES.channels(), VOICES.cap(), VOICES.requested, VOICES.started, VOICES.refused, VOICES.toRumble, VOICES.yielded));
+        for (int q = 0; q < Rumble.QUADRANTS; q++) sb.append(String.format(Locale.ROOT, " %.2f", Rumble.volume(RUMBLE.power(q), RUMBLE_LUFS)));
+        return sb.toString();
     }
 
     /** Часы взрыва, родившегося сейчас: тики с этого мига, с долей. */
@@ -245,18 +313,73 @@ public final class BlastSounds {
     static void tick() {
         ticks++;
         FIRES.removeIf(fire -> !fire.tick(Minecraft.getInstance()));
+        MIX.at(ticks);
+        // звук начался на деле позже своего тика — смесь взрыва от настоящего начала, как его эхо и удар у уха
+        LATE.removeIf(l -> {
+            if (Double.isNaN(l.anchor().zero())) return false;
+            l.blast().late(20 * l.anchor().lateSeconds());
+            return true;
+        });
+        VOICES.prune(ticks);
+        RUMBLE.tick(ticks);
+        rumble();
     }
 
-    /** Множитель громкости всех звуков взрывов сейчас ({@link Mix}). */
-    static double factor() {
-        return MIX.factor(ticks);
+    /**
+     * Петли гула по четвертям ({@link Rumble}): ведутся каждый тик — громкость, верха и тон по их членам; петлю, которой
+     * движок не держит, — запустить заново; тише слышимого {@link #LOOP_HOLD} тиков — отпустить; ползунок «Окружение» в
+     * нуле — не запускать. Вариант записи у каждой четверти свой — шум разных четвертей не согласован.
+     */
+    private static void rumble() {
+        Minecraft mc = Minecraft.getInstance();
+        boolean ambient = mc.options.getSoundSourceVolume(SoundSource.AMBIENT) > 0;
+        Vec3 ear = ear();
+        for (int q = 0; q < Rumble.QUADRANTS; q++) {
+            if (LOOP_RETRY[q] > 0) LOOP_RETRY[q]--;
+            float v = Rumble.volume(RUMBLE.power(q), RUMBLE_LUFS);
+            LOOP_QUIET[q] = v < AUDIBLE ? LOOP_QUIET[q] + 1 : 0;
+            double az = Rumble.azimuth(q);
+            Vec3 toward = ear.add(Math.cos(az) * 10, 0, Math.sin(az) * 10);
+            AmbientLoop l = LOOPS[q];
+            if (l != null && l.playing() && LOOP_QUIET[q] <= LOOP_HOLD) {
+                l.set(ear, toward, v, RUMBLE.highs(q), RUMBLE.pitch(q));
+                continue;
+            }
+            if (l != null) l.end();
+            LOOPS[q] = null;
+            if (v < AUDIBLE || !ambient || LOOP_RETRY[q] > 0) continue;
+            AmbientLoop fresh = new AmbientLoop(ModSounds.BLAST_RUMBLE.get(), SoundSource.AMBIENT, RUMBLE.pitch(q), variant(q), 1);
+            fresh.set(ear, toward, v, RUMBLE.highs(q), RUMBLE.pitch(q));
+            mc.getSoundManager().play(fresh);
+            LOOP_RETRY[q] = 20;
+            LOOPS[q] = fresh;
+        }
     }
 
-    /** Разовый звук взрыва целиком (одна запись — один взрыв) — в смесь, до того как зазвучит; срок звука, тиков. */
-    private static int mixed(SoundEvent event, float volume, float pitch) {
-        Mix.Layer layer = new Mix.Layer(Envelopes.of(event.getLocation()), pitch, volume);
-        MIX.blast(ticks).add(layer);
-        return life(layer);
+    /** Зерно, которым петля четверти {@code q} берёт свой вариант записи гула (ваниль — первым {@code nextInt} по весам). */
+    private static long variant(int q) {
+        WeighedSoundEvents w = Minecraft.getInstance().getSoundManager().getSoundEvent(ModSounds.BLAST_RUMBLE.get().getLocation());
+        int n = w == null ? 1 : Math.max(1, w.getWeight());
+        for (long seed = 0; seed < 4096; seed++) if (RandomSource.create(seed).nextInt(n) == q % n) return seed;
+        return q;
+    }
+
+    /** Движок звука загружен заново: потолок голосов — по источникам устройства; прежние каналы ушли с ним. */
+    static void engineLoaded() {
+        java.util.Arrays.fill(LOOPS, null);
+        int[] ms = OwnSources.deviceSources();
+        if (ms == null) return;
+        VOICES.device(ms[0], ms[1]);
+        reach = BlastVoices.reach(ms[0], ms[1]);
+        Incoming.LOG.info("Blast voices: device {} mono + {} stereo sources, {} engine channels reachable, {} for blast sounds", ms[0], ms[1], reach,
+                VOICES.cap());
+    }
+
+    /** Разовый звук взрыва целиком (одна запись — один взрыв, вариант по зерну {@code seed}) — в смесь, до того как зазвучит. */
+    private static Mix.Blast mixed(SoundEvent event, float volume, float pitch, long seed) {
+        Mix.Blast b = MIX.blast(ticks);
+        b.add(new Mix.Layer(Envelopes.of(event.getLocation()), Envelopes.energy(event, seed), pitch, volume, Mix.Kind.APART, 0));
+        return b;
     }
 
     /**
@@ -267,11 +390,23 @@ public final class BlastSounds {
         return (int) Math.ceil(layer.ticks()) + 20;
     }
 
+    /** Срок звука взрыва из одной записи ({@link #mixed}), тиков. */
+    private static int life(Mix.Blast blast) {
+        return life(blast.layers.get(0));
+    }
+
     /** Отбой, перемотка повтора, выход из мира: эхо, что ещё готовилось, забыть (его голоса снимает {@link OwnSources#reset}). */
     static void reset() {
         ECHOES.forEach(BlastEchoes::stop);
         ECHOES.clear();
         MIX.reset();
+        LATE.clear();
+        VOICES.reset();
+        RUMBLE.clear();
+        for (int q = 0; q < LOOPS.length; q++) {
+            if (LOOPS[q] != null) LOOPS[q].end();
+            LOOPS[q] = null;
+        }
         FIRES.forEach(CraterFire::stop);
         FIRES.clear();
         lastEchoes = null;
@@ -291,7 +426,7 @@ public final class BlastSounds {
         if (v < AUDIBLE) return;
         ClientSounds.ducked(BlastMix.loudness(pa));
         SoundEvent event = underground ? ModSounds.BOMB_CAVE.get() : ModSounds.BOMB_DEEP.get();
-        ClientSounds.blastAtEar(event, pos, v, 1, BlastSounds::factor, mixed(event, v, 1));
+        bomb(event, pos, v, 1);
     }
 
     /**
@@ -338,9 +473,11 @@ public final class BlastSounds {
         bomb(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), 1, 1);
     }
 
-    /** Звук бомбы — в смеси взрывов. */
+    /** Звук бомбы — в смеси взрывов, своим взрывом в ней (каждый приход — свой). */
     private static void bomb(SoundEvent event, Vec3 pos, float volume, float pitch) {
-        ClientSounds.blastAtEar(event, pos, volume, pitch, BlastSounds::factor, mixed(event, volume, pitch));
+        long seed = SEEDS.nextLong();
+        Mix.Blast blast = mixed(event, volume, pitch, seed);
+        voice(blast, List.of(ClientSounds.blastShot(event, pos, volume, pitch, seed, blast::factor, life(blast))), pos, pitch, false);
     }
 
     /**

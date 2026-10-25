@@ -152,6 +152,21 @@ class SoundAssetsTest {
     }
 
     /**
+     * Петли гула взрывов ({@link Rumble}): по варианту на четверть вокруг уха, каждая — на громкости, по которой клиент
+     * ведёт гул ({@link BlastSounds#RUMBLE_LUFS}); ровность (СКО мгновенной громкости ≤ 1 дБ) проверяет сборка.
+     */
+    @Test
+    void rumbleLoopsAtTheirLoudness() throws IOException {
+        JsonObject json = JsonParser.parseReader(new InputStreamReader(open(ASSETS + "sounds.json"), StandardCharsets.UTF_8)).getAsJsonObject();
+        assertEquals(Rumble.QUADRANTS, variants(json, "blast.rumble"));
+        for (JsonElement s : json.getAsJsonObject("blast.rumble").getAsJsonArray("sounds")) {
+            String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
+            String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
+            assertEquals(BlastSounds.RUMBLE_LUFS, momentaryMax(file, true), 0.5, file + ": громкость, LUFS");
+        }
+    }
+
+    /**
      * Звук мода в мире — только по закону источника и пути ({@code Loudness}, {@code BlastMix}, {@code Sources}): ни одного
      * ванильного проигрывания с громкостью на глаз (громкость больше 1 у Minecraft — дальность 16 блоков на единицу). Так
      * 3.4.1 играл гул огня в воронке громкостью 5 до 90 блоков: хвост взрыва в 50 м — 135 дБА-эквивалента, громче

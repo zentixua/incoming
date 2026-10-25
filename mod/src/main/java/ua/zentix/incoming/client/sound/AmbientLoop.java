@@ -60,6 +60,16 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
         quiet = 0;
     }
 
+    /**
+     * Как {@link #set(Vec3, Vec3, float, double)}, но верха пути уже посчитал хозяин ({@code highs}: доля верхов, 1 —
+     * все) и тон задаёт он же (гул взрывов: средние по его членам, {@link Rumble}).
+     */
+    public void set(Vec3 ear, Vec3 toward, float volume, float highs, float pitch) {
+        set(ear, toward, volume, 0);
+        this.highs = highs;
+        this.pitch = pitch;
+    }
+
     /** Стихнуть и уйти: не быстрее обычного, даже у петли с быстрым подходом (без щелчка). */
     public void end() {
         ending = true;
