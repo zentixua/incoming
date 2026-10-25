@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * через 1,5 с, окна — через 35 с после последнего; топливо в воронке горит 150 с — 70 шлейфов пожаров; ветер 4 м/с,
  * класс D. Облака — модель ({@link CloudModel}: шапка, ножка трубкой, пыль у земли), шлейфы — {@link FireSmoke#lay}; кадр
  * раскладывает тот же приёмник слоя, что в игре ({@link SmokePuffs}), три камеры стенда. Пол кадра (по одному клубу на
- * гаусс и место трубки) — 18/70/153 экрана, в 2–19 раз выше бюджета (прежде бюджет здесь не действовал вовсе).
+ * гаусс и место трубки) — 18/70/153 экрана, до 10 раз выше бюджета (прежде бюджет здесь не действовал вовсе).
  */
 class SmokeRaidTest {
     /** Пожар топлива в воронке шахеда (как {@code PlumeContinuityTest.POOL}): горит 150 с с удара. */
@@ -161,9 +161,10 @@ class SmokeRaidTest {
     }
 
     /**
-     * Налёт из 100 ударов с трёх камер стенда. Без бюджета кадр закрывает десятки экранов; с бюджетом — не больше бюджета
+     * Налёт из 100 ударов с трёх камер стенда. Без бюджета пол кадра выше бюджета (снаружи — чуть, с края и изнутри —
+     * в 4–10 раз); с бюджетом заливка — не больше бюджета
      * (с запасом на оценку площади кучки, 15 %), пол — не выше бюджета, гауссов вуали — не больше {@link SmokePuffs#VEIL_MAX},
-     * кучек — не больше 2000. Пропускание по 18 частям кадра против самого вещества модели ({@link #truth}) — не дальше, чем у
+     * кучек — не больше {@link SmokePuffs#BLOBS} и {@code FarFlightView.CLUB_BUDGET} вместе. Пропускание по 18 частям кадра против самого вещества модели ({@link #truth}) — не дальше, чем у
      * полного кадра, больше чем на шум подробности клубов (0,08, {@code SmokeFillTest.clusterDetailNoise}).
      */
     @Test
@@ -188,9 +189,9 @@ class SmokeRaidTest {
                     worst, row(real), row(SmokeFillTest.blocks(free, prof)), row(SmokeFillTest.blocks(budget, prof)));
             System.out.println("RAID " + got);
             all.append(got).append('\n');
-            ok &= free.fill() > 2 * SmokePuffs.FILL_BUDGET;
+            ok &= raw > SmokePuffs.FILL_BUDGET;
             ok &= budget.fill() <= 1.15 * SmokePuffs.FILL_BUDGET && floor <= SmokePuffs.FILL_BUDGET + 1e-9;
-            ok &= veils <= SmokePuffs.VEIL_MAX && clusters <= 2000;
+            ok &= veils <= SmokePuffs.VEIL_MAX && clusters <= SmokePuffs.BLOBS + FarFlightView.CLUB_BUDGET;
             ok &= worst <= worstFree + 0.08;
         }
         SmokePuffs.resetBudget();

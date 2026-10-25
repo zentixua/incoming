@@ -146,10 +146,11 @@ final class SmokePuffs {
      * меньше клубов (крупнее) с той же непрозрачностью середины; не хватает и по одному клубу на гаусс (пол) — крупное на
      * экране тает в вуаль, а лежащие друг на друге клубы и места разных источников сливаются ({@link Draw#flush}). Жалоба
      * 23.10: в дыму налёта 8 к/с; стенд 25.10, налёт из 100 шахедов: пол 41/104/175 экранов снаружи/с края/внутри (бюджет не
-     * действовал), ~0,3 мс видеокарты за экран (RTX 4060, 2560×1600). ⚠ Число — оценка: 8 экранов ≈ 2,4 мс; налёт из 16
-     * ударов ложится в них без слияния ({@code SmokeFillTest}), из 100 — с ним ({@code SmokeRaidTest}).
+     * действовал), ~0,3 мс видеокарты за экран (RTX 4060, 2560×1600). ⚠ Число — оценка: 16 экранов ≈ 4,8 мс; налёт из 16
+     * ударов ложится в них без слияния ({@code SmokeFillTest}), из 100 — с ним ({@code SmokeRaidTest}). При 8 налёт из 40
+     * в песочнице с края и изнутри уже терял тёмную растекающуюся массу и шлейфы в ровную мглу вуали (кадры PR #460).
      */
-    static final double FILL_BUDGET = 8;
+    static final double FILL_BUDGET = 16;
     /** Бюджет, по которому кадр строится ({@link #FILL_BUDGET}; проверки сравнивают с кадром без бюджета). */
     static double budget = FILL_BUDGET;
     /**
@@ -157,6 +158,13 @@ final class SmokePuffs {
      * последнем — 64 края: облака налёта сходятся в несколько).
      */
     static final int LEVELS = 3;
+    /**
+     * Толща вещества перед сердцевиной клуба, за которой его не видно (пропускание e^(−3) — 5 %): такой не рисуется
+     * ({@code Draw.hide}).
+     */
+    static final double HIDDEN = 3;
+    /** Сердцевина клуба на экране, доля полуразмера квадрата: там диск запечённого клуба почти ровный ({@link #PUFF_DISCS}). */
+    static final double CORE = 0.6;
     static final double LOD_CELL = 0.5;
     /** Уровень слияния прошлого кадра держится, пока пол уровнем ниже не меньше этой доли бюджета. */
     static final double HYSTERESIS = 0.8;
@@ -544,11 +552,6 @@ final class SmokePuffs {
         /** Режим прохода {@link #blob} и {@link #club}: план (только цена) или квадраты с долей кучки {@link #share}. */
         private boolean planning;
         private double share = 1;
-        /**
-         * Квадрат крупнее этой доли экрана — в вуаль (с неё — долей, с вдвое крупнее — весь); бесконечность — пока пол кадра
-         * в бюджете.
-         */
-        private double big = Double.POSITIVE_INFINITY;
         /** Чей план пишется ({@link #planCluster}): клуб облака i — i, место p — ~p. */
         private int current;
         /** Пол кадра — сумма записей плана, что остались квадратами (по клубу на гаусс и место), экранов. */
@@ -609,7 +612,6 @@ final class SmokePuffs {
             java.util.Arrays.fill(placeEntry, 0, placeCount, -1);
             // план: у каждого клуба и места — его квадраты на экране и полное число клубов в кучке
             planning = true;
-            big = Double.POSITIVE_INFINITY;
             floor = 0;
             plans = 0;
             for (int i = 0; i < holding; i++) if (!merged[i]) held(i);
@@ -620,6 +622,7 @@ final class SmokePuffs {
             int was = level;
             level = 0;
             if (floor > budget) {
+                hide();
                 // уровень прошлого кадра держится, пока ниже него пол не ляжет заметно под бюджет: иначе на границе бюджета
                 // слитые клубы расходились бы и сходились кадр за кадром
                 while (level < LEVELS && (floor > budget || level < was && floor > HYSTERESIS * budget)) mergeLevel(level++);
@@ -644,7 +647,7 @@ final class SmokePuffs {
             lastFloor = floor;
             lastShare = s;
             lastItems = 0;
-            for (int e = 0; e < plans; e++) if (!planDead[e] && planCover0[e] < 2 * big) lastItems++;
+            for (int e = 0; e < plans; e++) if (!planDead[e] && planVeil[e] < 1) lastItems++;
             share = 1;
             forget();
             veilFlush();
@@ -682,7 +685,6 @@ final class SmokePuffs {
         /** Ждущие клубы, места, источники и план — заново (конец кадра, выход из мира). */
         void forget() {
             holding = from = contexts = placeCount = placeContexts = materialCount = plans = 0;
-            big = Double.POSITIVE_INFINITY;
             java.util.Arrays.fill(ctxSource, null);
             java.util.Arrays.fill(ctxOut, null);
             java.util.Arrays.fill(ctxView, null);
@@ -691,24 +693,38 @@ final class SmokePuffs {
             java.util.Arrays.fill(placeOut, null);
         }
 
-        /** Записи плана: вид, место от глаза, полуоси края на экране (м), полное число клубов; пол записи, у глаза ли, слита ли. */
+        /**
+         * Записи плана: вид, место от глаза, полуоси края на экране (м), полное число клубов; пол записи, непрозрачность
+         * середины (у места — его доля у оси трубки: толща для {@link #hide}) и то, что видно глазу (у места — непрозрачность
+         * трубки у оси: для {@link #fit}), видная доля (что пропускает вещество перед ней), доля в вуали, у глаза ли, слита
+         * ли, чья (клуб облака i — i, место p — ~p).
+         */
         private FarView[] planView = new FarView[64];
-        private double[] plan = new double[64 * 6], planCover0 = new double[64];
+        private double[] plan = new double[64 * 6], planCover0 = new double[64], planOpacity = new double[64], planShown = new double[64],
+                planSeen = new double[64], planVeil = new double[64];
         private boolean[] planNear = new boolean[64], planDead = new boolean[64];
+        private int[] planOwner = new int[64];
         private int plans;
 
         /**
          * Кучка клуба или места {@link #current} в план кадра: место от глаза, полуоси края (м), полное число клубов; near —
-         * глаз в его краю (часть вещества — в вуали; такие не сливаются).
+         * глаз в его краю (часть вещества — в вуали; такие не сливаются и не прячутся); opacity — непрозрачность середины на
+         * экране (у места — его доля непрозрачности трубки у оси), shown — сколько его видно (у места — вся трубка у оси).
          */
-        private void planCluster(FarView view, double px, double py, double pz, double ra, double rb, double most, boolean near) {
+        private void planCluster(FarView view, double px, double py, double pz, double ra, double rb, double most, boolean near, double opacity,
+                                 double shown) {
             if (plans == planView.length) {
                 int n = 2 * plans;
                 planView = java.util.Arrays.copyOf(planView, n);
                 plan = java.util.Arrays.copyOf(plan, 6 * n);
                 planCover0 = java.util.Arrays.copyOf(planCover0, n);
+                planOpacity = java.util.Arrays.copyOf(planOpacity, n);
+                planShown = java.util.Arrays.copyOf(planShown, n);
+                planSeen = java.util.Arrays.copyOf(planSeen, n);
+                planVeil = java.util.Arrays.copyOf(planVeil, n);
                 planNear = java.util.Arrays.copyOf(planNear, n);
                 planDead = java.util.Arrays.copyOf(planDead, n);
+                planOwner = java.util.Arrays.copyOf(planOwner, n);
             }
             planView[plans] = view;
             int o = 6 * plans;
@@ -720,11 +736,16 @@ final class SmokePuffs {
             plan[o + 5] = most;
             double c = cover(view, px, py, pz, ra, rb);
             planCover0[plans] = c;
+            planOpacity[plans] = opacity;
+            planShown[plans] = shown;
+            planSeen[plans] = 1;
+            planVeil[plans] = 0;
             planNear[plans] = near;
             planDead[plans] = false;
+            planOwner[plans] = current;
             if (current >= 0) blobEntry[current] = plans;
             else placeEntry[~current] = plans;
-            if (c < 2 * big) floor += c;
+            floor += c;
             plans++;
         }
 
@@ -732,56 +753,132 @@ final class SmokePuffs {
         private void drop(int e) {
             if (e < 0 || planDead[e]) return;
             planDead[e] = true;
-            if (planCover0[e] < 2 * big) floor -= planCover0[e];
+            if (planVeil[e] < 1) floor -= planCover0[e];
         }
 
         /** Заливка всех записей плана, что остались квадратами, при доле кучки s, экранов. */
         private double planned(double s) {
-            double f = 0, limit = 2 * big;
+            double f = 0;
             for (int e = 0; e < plans; e++) {
-                if (planDead[e] || planCover0[e] >= limit) continue;
+                if (planDead[e] || planVeil[e] >= 1) continue;
                 int o = 6 * e;
                 f += plan[o + 5] <= 1 ? planCover0[e] : clusterFill(planView[e], plan[o], plan[o + 1], plan[o + 2], plan[o + 3], plan[o + 4], plan[o + 5], s);
             }
             return f;
         }
 
-        /** Квадраты крупнее threshold экрана — в вуаль (долей), вдвое крупнее — целиком; пол — заново. */
-        private void veilBig(double threshold) {
-            big = threshold;
-            floor = 0;
-            for (int e = 0; e < plans; e++) if (!planDead[e] && planCover0[e] < 2 * big) floor += planCover0[e];
-        }
+        /** Клеток сетки скрытого по экрану (16:9). */
+        private static final int HIDE_COLS = 32, HIDE_ROWS = 18;
+        private final double[] hideTau = new double[HIDE_COLS * HIDE_ROWS];
+        private long[] order = new long[64];
 
         /**
-         * Пол выше бюджета и после всех уровней слияния: квадратами остаются мельчайшие записи, что вместе ложатся в бюджет,
-         * крупнейшие — в вуаль (порог {@link #big} — по ним). Так предел заливки держится по построению.
+         * Скрытое не рисуется: записи — от ближних к дальним по сетке экрана {@link #HIDE_COLS}×{@link #HIDE_ROWS}, у клетки — толща
+         * вещества, уже пройденного перед ней. Клуб или место, у которого вся сердцевина ({@link #CORE} полуразмера: там
+         * запечённый клуб почти ровный диск) — в клетках толще {@link #HIDDEN} (пропускание меньше 5 %), за густым дымом не
+         * виден, и он не рисуется вовсе; у остальных — видная доля середины ({@link #planSeen}, для {@link #fit}). Толща в
+         * клетку — только из сердцевины и непрозрачностью середины: клетке не прибавляется больше, чем есть, и видное не
+         * пропадает. Глаз в краю — такой (его вещество и в вуали перед всем) не прячется.
          */
-        private void fit(double budget) {
-            double[] c = fitCovers;
+        private void hide() {
             int n = 0;
             for (int e = 0; e < plans; e++) {
-                if (planDead[e] || planCover0[e] >= 2 * big) continue;
-                if (n == c.length) c = fitCovers = java.util.Arrays.copyOf(c, 2 * n);
-                c[n++] = planCover0[e];
+                if (planDead[e]) continue;
+                org.joml.Vector3f f = planView[e].forward();
+                int o = 6 * e;
+                double z = plan[o] * f.x + plan[o + 1] * f.y + plan[o + 2] * f.z;
+                if (!(z > 0)) continue;
+                if (n == order.length) order = java.util.Arrays.copyOf(order, 2 * n);
+                order[n++] = (long) Float.floatToIntBits((float) z) << 32 | e;
             }
-            java.util.Arrays.sort(c, 0, n);
-            double sum = 0;
-            int k = 0;
-            while (k < n && sum + c[k] <= budget) sum += c[k++];
-            if (k < n) veilBig(0.5 * c[k]);
+            java.util.Arrays.sort(order, 0, n);
+            java.util.Arrays.fill(hideTau, 0);
+            for (int k = 0; k < n; k++) {
+                int e = (int) order[k], o = 6 * e;
+                FarView v = planView[e];
+                org.joml.Vector3f f = v.forward(), l = v.left(), u = v.up();
+                double px = plan[o], py = plan[o + 1], pz = plan[o + 2], z = px * f.x + py * f.y + pz * f.z;
+                double diag = Math.tan(Math.min(v.edge(), 1.5)), w = diag * 16 / Math.sqrt(337), h = diag * 9 / Math.sqrt(337);
+                double cu = (px * l.x + py * l.y + pz * l.z) / z, cv = (px * u.x + py * u.y + pz * u.z) / z;
+                double hu = CORE * plan[o + 3] / z, hv = CORE * plan[o + 4] / z;
+                int i0 = Math.max(0, (int) Math.floor((cu - hu + w) / (2 * w) * HIDE_COLS)), i1 = Math.min(HIDE_COLS - 1, (int) Math.floor((cu + hu + w) / (2 * w) * HIDE_COLS));
+                int j0 = Math.max(0, (int) Math.floor((cv - hv + h) / (2 * h) * HIDE_ROWS)), j1 = Math.min(HIDE_ROWS - 1, (int) Math.floor((cv + hv + h) / (2 * h) * HIDE_ROWS));
+                // клетка середины (у мелкого сердцевина не накрывает ни одной середины клетки)
+                int ic = (int) Math.floor((cu + w) / (2 * w) * HIDE_COLS), jc = (int) Math.floor((cv + h) / (2 * h) * HIDE_ROWS);
+                boolean centre = ic >= 0 && ic < HIDE_COLS && jc >= 0 && jc < HIDE_ROWS;
+                double front = centre ? hideTau[jc * HIDE_COLS + ic] : 0, least = Double.POSITIVE_INFINITY;
+                int cells = 0;
+                for (int j = j0; j <= j1; j++) {
+                    double dv = ((j + 0.5) / HIDE_ROWS * 2 * h - h - cv) / hv;
+                    for (int i = i0; i <= i1; i++) {
+                        double du = ((i + 0.5) / HIDE_COLS * 2 * w - w - cu) / hu;
+                        if (du * du + dv * dv > 1) continue;
+                        least = Math.min(least, hideTau[j * HIDE_COLS + i]);
+                        cells++;
+                    }
+                }
+                if (cells == 0) least = centre ? front : 0;
+                if (!planNear[e] && least >= HIDDEN) {
+                    drop(e);
+                    int owner = planOwner[e];
+                    if (owner >= 0) merged[owner] = true;
+                    else placeGone[~owner] = true;
+                    continue;
+                }
+                planSeen[e] = Math.exp(-front);
+                double t = -Math.log1p(-Math.min(planOpacity[e], 0.999));
+                if (!(t > 0)) continue;
+                if (cells == 0 && centre) hideTau[jc * HIDE_COLS + ic] += t;
+                for (int j = j0; j <= j1 && cells > 0; j++) {
+                    double dv = ((j + 0.5) / HIDE_ROWS * 2 * h - h - cv) / hv;
+                    for (int i = i0; i <= i1; i++) {
+                        double du = ((i + 0.5) / HIDE_COLS * 2 * w - w - cu) / hu;
+                        if (du * du + dv * dv <= 1) hideTau[j * HIDE_COLS + i] += t;
+                    }
+                }
+            }
         }
 
-        private double[] fitCovers = new double[256];
-
         /**
-         * Доля вещества клуба или места {@link #current}, что идёт в вуаль, а не квадратами: квадрат крупнее {@link #big}
-         * экрана — плавно до вдвое крупнее (без скачка, когда он растёт на экране).
+         * Пол выше бюджета и после слияния: квадратами остаются самые видные — по непрозрачности, что дошла до глаза
+         * ({@link #planShown} × {@link #planSeen}; у места трубки — вся трубка у оси: тонкий тёмный шлейф заметен, хотя доля
+         * каждого его места мала), пока их пол ложится в бюджет; остальные (бледное, заслонённое) — в вуаль у глаза, той же толщей
+         * по лучам. У отобранных с видной долей меньше вдвое от порога — доля в вуали плавно растёт (без скачка, когда клуб
+         * пересекает порог). Передние густые клубы — вид облака — остаются клубами; прежде в вуаль уходили крупнейшие, и
+         * стена дыма с края становилась ровной мглой. Так предел заливки держится по построению.
          */
+        private void fit(double budget) {
+            int n = 0;
+            for (int e = 0; e < plans; e++) {
+                if (planDead[e] || planVeil[e] >= 1) continue;
+                if (n == order.length) order = java.util.Arrays.copyOf(order, 2 * n);
+                // по видной непрозрачности от большей к меньшей: ключ — 2 − видная (положительные float сортируются как целые)
+                order[n++] = (long) Float.floatToIntBits((float) (2 - planShown[e] * planSeen[e])) << 32 | e;
+            }
+            java.util.Arrays.sort(order, 0, n);
+            double sum = 0;
+            int cut = 0;
+            while (cut < n && sum + planCover0[(int) order[cut]] <= budget) sum += planCover0[(int) order[cut++]];
+            if (cut == n) return;
+            int at = (int) order[cut];
+            double edge = planShown[at] * planSeen[at];
+            for (int k = 0; k < n; k++) {
+                int e = (int) order[k];
+                if (k >= cut) planVeil[e] = 1;
+                else if (edge > 0) planVeil[e] = 1 - smoothstep(edge, 2 * edge, planShown[e] * planSeen[e]);
+            }
+            floor = sum;
+        }
+
+        /** Доля вещества клуба или места {@link #current}, что идёт в вуаль, а не квадратами ({@link #fit}). */
         private double veilShare() {
             int e = current >= 0 ? blobEntry[current] : placeEntry[~current];
-            if (e < 0 || big == Double.POSITIVE_INFINITY) return 0;
-            return smoothstep(big, 2 * big, planCover0[e]);
+            return e < 0 ? 0 : planVeil[e];
+        }
+
+        /** Сливать ли клуб или место с записью e: квадрат есть, не слит, глаз не в его краю. */
+        private boolean mergeable(int e) {
+            return e >= 0 && !planDead[e] && !planNear[e] && planVeil[e] == 0;
         }
 
         /** Брызги ли клуб с o: у источника с брызгами капель больше дыма и пыли — свои кадры, с дымом не сливаются. */
@@ -798,11 +895,6 @@ final class SmokePuffs {
             double r = Math.sqrt((2 * held[o + 3] * held[o + 3] + held[o + 4] * held[o + 4]) / 3);
             held[o + 3] = r;
             held[o + 4] = r;
-        }
-
-        /** Сливать ли клуб или место с записью e: квадрат есть, не слит, глаз не в его краю, не в вуали. */
-        private boolean mergeable(int e) {
-            return e >= 0 && !planDead[e] && !planNear[e] && planCover0[e] < 2 * big;
         }
 
         /** Выживший слияния i — в список на план заново (n — сколько в нём уже). */
@@ -1069,7 +1161,7 @@ final class SmokePuffs {
             // толща по лучу вперёд за краем — тысячные)
             double gate = smoothstep(0.5 * r, r, d), outside = gate + (1 - gate) * ahead(view, px, py, pz, sh, sv);
             double veiled = gate < 1 ? 1 - front(view, px, py, pz) * outside : 0;
-            // крупный на экране квадрат (пол кадра выше бюджета) — в вуаль той долей, что он тает ({@link #veilShare})
+            // пол кадра выше бюджета — малозаметное в вуаль той долей, что ему отвёл план ({@link #fit})
             double whole = planning ? 0 : veilShare();
             if (!planning && (veiled > 0 || whole > 0)) {
                 // вещество места — толща трубки поперёк оси × √(2π)σ × его кусок оси
@@ -1089,7 +1181,9 @@ final class SmokePuffs {
             double screen = view.edge() / Math.max(view.pixel(), 1e-12);
             double full = Math.clamp(Math.min(pixels / CLUSTER_PIXELS, most * Math.min(1, screen * screen / (pixels * pixels))), 1, most);
             if (planning) {
-                planCluster(view, px, py, pz, rh * grow, rv * grow, full, veiled > 0);
+                // доля места в непрозрачности трубки у оси: ось накрывают 2·диск/кусок оси соседних мест
+                double shown = a * vis * point[1] * air * outside, along3 = Math.max(1, 2 * puffDisc(clubFrame(age, 0.5, vary)) * point[0] / along);
+                planCluster(view, px, py, pz, rh * grow, rv * grow, full, veiled > 0, 1 - Math.pow(1 - Math.min(shown, 0.999), 1 / along3), shown);
                 return;
             }
             // свет неба — яркость FarView.sky с разбросом клуба; оттенок — в шейдере у света неба (FxSkyTint)
@@ -1294,7 +1388,7 @@ final class SmokePuffs {
                 outside = gate + (1 - gate) * ahead(view, px, py, pz, sh, sv);
                 veiled = gate < 1 ? 1 - front(view, px, py, pz) * outside : 0;
             }
-            // крупный на экране квадрат (пол кадра выше бюджета) — в вуаль той долей, что он тает ({@link #veilShare})
+            // пол кадра выше бюджета — малозаметное в вуаль той долей, что ему отвёл план ({@link #fit})
             double whole = planning ? 0 : veilShare();
             if (!planning && (veiled > 0 || whole > 0))
                 veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (veiled + (1 - veiled) * whole) * vis * air * smoke);
@@ -1329,7 +1423,7 @@ final class SmokePuffs {
             double reach = 1 + (count == 1 ? 0 : 1 - size) * 0.5;
             double ra = rh * grow, rb = (lying ? rh * Math.abs(py) / d : rv) * grow;
             if (planning) {
-                planCluster(view, px, py, pz, ra, rb, most, veiled > 0);
+                planCluster(view, px, py, pz, ra, rb, most, veiled > 0, shown, shown);
                 return 0;
             }
             double fill = overlap * cover(view, px, py, pz, ra * reach, rb * reach);
