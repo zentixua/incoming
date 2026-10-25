@@ -389,6 +389,8 @@ def cmd_baseline(a):
     """Принятый выпуск: --runs прогонов подряд (каждый — своя задача видеокарты; уже снятые с тем же ключом — не
     переснимаются), медиана и допуск по ним, кэш по ключу. Кэш создаётся, только если калибровка годна (gate.calibrate) —
     иначе код 1 и прогоны остаются в out/ для разбора."""
+    if a.runs < gate.MIN_RUNS:
+        raise SystemExit(f"--runs {a.runs}: прогонов калибровки нужно не меньше {gate.MIN_RUNS}")
     jar, label = resolve_jar(a.version)
     files = fetch_pack(a.packs)
     client.launch_script(GAME, a.size)

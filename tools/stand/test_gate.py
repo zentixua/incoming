@@ -188,8 +188,15 @@ class Calibration(unittest.TestCase):
         self.assertTrue(all(v["pass"] for v in cal["self_check"]))
         self.assertAlmostEqual(cal["base"]["packs"]["none"]["windows"]["100/edge"]["gpu"]["p50"], 12.0)   # медиана
 
-    def test_fewer_than_two_runs(self):
+    def test_fewer_than_three_runs(self):
         self.assertTrue(gate.calibrate([run()])["problems"])
+        self.assertTrue(gate.calibrate([run(name="a"), run(name="b")])["problems"])
+
+    def test_baseline_refuses_fewer_than_three_runs(self):
+        import argparse
+        with self.assertRaises(SystemExit) as e:
+            stand.cmd_baseline(argparse.Namespace(version="v0", runs=2, packs=["none"], scenes=None, size="2560x1600", force=False))
+        self.assertIn("не меньше 3", str(e.exception))
 
     def test_invalid_run_is_rejected(self):
         rs = self.runs()
@@ -224,6 +231,10 @@ class Look(unittest.TestCase):
         self.assertEqual(len(f), 2)
         self.assertIn("100_edge", f[0])
         self.assertIn("яркость", f[1])
+
+
+# нагрузка окна без чужих задач (results.host_in)
+QUIET = {"samples": 4, "covered": 1.0, "gpu_covered": 1.0, "cpu_foreign_max": 0.3, "cpu_foreign": 0.2, "gpu_foreign": 0, "units": {}}
 
 
 def host_sample(epoch, cpu_foreign=0.2, gpu_foreign=0, dt=5.0, profile="performance", units=None):
@@ -288,18 +299,35 @@ class Results(unittest.TestCase):
         self.assertEqual(r["checks"], ["окно 100/outside: не снято", "окно 100/inside: не снято"])
 
     def test_foreign_load_in_a_gated_window_makes_the_run_invalid(self):
-        r = self.analyze([host_sample(1_000_002.0, cpu_foreign=3.1, dt=2.0, units={"incoming-job-gametest": 2.9})])
-        load = [c for c in r["checks"] if c.startswith(results.LOAD_TAG)]
+        r = self.analyze([host_sample(1_000_002.0, cpu_foreign=3.1, dt=2.0, units={"incoming-job-gametest": 2.9}),
+                          host_sample(1_000_004.0, dt=2.0)])
+        load = [c for c in r["checks"] if c.startswith(results.LOAD_TAG) and "100/edge" in c]
         self.assertEqual(len(load), 1, r["checks"])
         self.assertIn("3.1 ядра", load[0])
         self.assertIn("incoming-job-gametest", load[0])
-        r = self.analyze([host_sample(1_000_002.0, gpu_foreign=37, dt=2.0)])
+        r = self.analyze([host_sample(1_000_002.0, gpu_foreign=37, dt=2.0), host_sample(1_000_004.0, dt=2.0)])
         self.assertTrue(any("видеокарта у чужих процессов — 37" in c for c in r["checks"]))
+
+    def test_load_is_checked_in_the_first_strike_window_too(self):
+        r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, cpu_foreign=7.0, dt=2.0)])
+        self.assertTrue(any(c.startswith(results.LOAD_TAG) and "окно first" in c for c in r["checks"]), r["checks"])
+
+    def test_window_tail_without_samples_is_invalid(self):
+        # последняя выборка кончилась на 1,1 с окна 1–2 с: хвост без записи
+        r = self.analyze([host_sample(1_000_001.1, dt=1.1)])
+        self.assertTrue(any("100/edge: нагрузка машины записана на 10%" in c for c in r["checks"]), r["checks"])
+
+    def test_missing_gpu_telemetry_is_not_zero(self):
+        s = host_sample(1_000_004.0, dt=4.0)
+        s["gpu"] = None
+        r = self.analyze([s])
+        self.assertTrue(any("100/edge: видеокарта чужими процессами записана на 0%" in c for c in r["checks"]), r["checks"])
 
     def test_no_load_record_is_invalid_but_not_retried(self):
         r = self.analyze(None)
         bad = [c for c in r["checks"] if "100/edge" in c]
         self.assertEqual(bad, ["окно 100/edge: нет записи нагрузки машины (host.jsonl) — тишину не проверить"])
+        self.assertFalse(any(c.startswith(results.LOAD_TAG) for c in r["checks"]))
 
     def test_checks_catch_a_bad_run(self):
         ev = [{"type": "cmd", "t_ms": 1, "cmd": "incoming salvo drone 1 0 at 1000 0 from 800 346 via 1000 0", "tag": "100", "ok": False, "result": 0},
@@ -307,7 +335,7 @@ class Results(unittest.TestCase):
               {"type": "salvo", "t_ms": 3, "id": "100", "expect": 100, "commands": 4},
               {"type": "salvo", "t_ms": 4, "id": "acc", "expect": 120, "commands": 12}]
         res = {"meta": {"done": None, "impacts": {"100": {"got": 40, "expect": 100, "why": "timeout", "took_s": 300}}},
-               "windows": {"100/edge": {"frames": 5, "gpu": None, "thread": None, "host": {"samples": 2, "cpu_foreign": 0.1, "gpu_foreign": 0, "units": {}}}}}
+               "windows": {"100/edge": {"frames": 5, "gpu": None, "thread": None, "host": QUIET}}}
         bad = results.checks(ev, res)
         # нет done, предел, команда, залп 100 не долетел, у acc нет конца, нет строки видеокарты, окно без меток, без
         # процессора потока и без кадров
@@ -326,13 +354,45 @@ class Host(unittest.TestCase):
         h = results.host_in([host_sample(5015.0, cpu_foreign=2.0), host_sample(5025.0, cpu_foreign=0.0)], ev, 10_000, 20_000)
         self.assertEqual(h["samples"], 1)
         self.assertEqual(h["cpu_foreign"], 2.0)
+        self.assertEqual(h["covered"], 0.5)                                 # 10–15 с окна — до первой выборки
         h = results.host_in([host_sample(5015.0, cpu_foreign=2.0), host_sample(5020.0, cpu_foreign=0.0)], ev, 12_500, 17_500)
         self.assertEqual(h["samples"], 2)
-        self.assertAlmostEqual(h["cpu_foreign"], 1.0)                       # по перекрытию: 2,5 с × 2 и 2,5 с × 0
+        self.assertAlmostEqual(h["cpu_foreign"], 1.0)                       # среднее по перекрытию — в отчёт
+        self.assertEqual(h["cpu_foreign_max"], 2.0)                         # судит худшая выборка
+        self.assertEqual(h["covered"], 1.0)
         self.assertIsNone(results.host_in([], ev, 0, 1))
+
+    def test_a_short_heavy_burst_is_not_averaged_away(self):
+        # 5 с чужой нагрузки в 3 ядра и 15 с по 0,2: среднее 0,9 — меньше порога, но задача шла внутри окна
+        ev = [{"type": "srv", "t_ms": 0.0, "epoch_ms": 0.0}]
+        h = results.host_in([host_sample(5.0, cpu_foreign=3.0)] + [host_sample(5.0 * k, cpu_foreign=0.2) for k in (2, 3, 4)], ev, 0, 20_000)
+        self.assertAlmostEqual(h["cpu_foreign"], 0.9)
+        self.assertTrue(results.foreign(h))
+
+    def test_pmon(self):
+        text = """# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command
+# Idx           #    C/G      %      %      %      %      %      %    name
+    0       2778   C+G      -      -      -      -      -      -    kwin_wayland
+    0    1503885     G     37     11      -      -      -      -    java
+    0    1600000     G     52     20      -      -      -      -    java
+"""
+        self.assertEqual(client.parse_pmon(text, lambda pid: pid == "1600000"), (37, ["java:37"]))
+        self.assertEqual(client.parse_pmon(text.splitlines()[0] + "\n", lambda pid: False), (0, []))
+        self.assertIsNone(client.parse_pmon("", lambda pid: False))
+        self.assertIsNone(client.parse_pmon("NVIDIA-SMI has failed\n", lambda pid: False))
 
 
 class Checks(unittest.TestCase):
+    def test_load_is_checked_in_the_accumulation_minutes(self):
+        scene, ev = self.acc_events()
+        quiet = QUIET
+        busy = dict(quiet, cpu_foreign_max=7.0, units={"incoming-job-build": 6.8})
+        res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {},
+               "acc": {"growth": {"ratio": 1.2}, "load": results.acc_load(ev, scene, 0, 240_000), "host": {"first": quiet, "last": busy}}}
+        bad = [b for b in results.checks(ev + [{"type": "gl"}], res, (), scene) if b.startswith(results.LOAD_TAG)]
+        self.assertEqual(len(bad), 1, bad)
+        self.assertIn("последняя минута", bad[0])
+
     def acc_events(self, late_ms=100, after=0, first=30, last=30, cmds=120, ran_late_ms=0):
         """Накопление: окно 0–240 с, попаданий first в первую минуту, last в последнюю, after — после окна; волна — 10
         команд, пять пусковых по две очереди через 1,5 с."""
@@ -389,8 +449,7 @@ class Checks(unittest.TestCase):
     def test_every_plan_window_is_required(self):
         ev = [{"type": "gl"}, {"type": "done"}, {"type": "window", "name": "100/edge", "edge": "begin", "t_ms": 1}]
         res = {"meta": {"done": {"x": 1}, "impacts": {}},
-               "windows": {"100/outside": {"frames": 500, "gpu": {"p50": 1}, "thread": {"p95": 1}, "host": {"samples": 2, "cpu_foreign": 0.1,
-                                                                                                         "gpu_foreign": 0, "units": {}}}}}
+               "windows": {"100/outside": {"frames": 500, "gpu": {"p50": 1}, "thread": {"p95": 1}, "host": QUIET}}}
         bad = results.checks(ev, res, plan.windows(plan.load(), ["first", "100"]))
         self.assertIn("окно 100/edge: нет кадров", bad)
         self.assertIn("окно 100/inside: не снято", bad)

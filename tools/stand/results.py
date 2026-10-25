@@ -77,13 +77,15 @@ def read_host(path):
 
 def host_in(host, events, t0, t1):
     """Нагрузка машины в окне [t0, t1) (мс стенда): выборки, чей отрезок [epoch − dt, epoch] задевает окно; часы стенда и
-    настенные сводит отметка epoch_ms событий srv. Назад — {"samples", "cpu_foreign" (среднее по перекрытию, ядра),
-    "gpu_foreign" (худшая, % SM), "units" (худшие по службам), "load1"} или None, если свести не с чем."""
+    настенные сводит отметка epoch_ms событий srv. Назад — {"samples", "covered" и "gpu_covered" (доля окна под выборками
+    и под выборками с замером видеокарты), "cpu_foreign_max" (худшая выборка, ядра), "cpu_foreign" (среднее по
+    перекрытию — в отчёт), "gpu_foreign" (худшая, % SM; None — замера нет), "units" (худшие по службам), "load1",
+    "profiles"} или None, если свести не с чем."""
     offs = sorted(e["epoch_ms"] - e["t_ms"] for e in events if e["type"] == "srv" and e.get("epoch_ms") is not None)
     if not host or not offs:
         return None
     off = offs[len(offs) // 2]
-    got, weight, cpu, gpu, units, load, profiles = 0, 0.0, 0.0, 0, {}, 0.0, set()
+    got, weight, gpu_weight, cpu, cpu_max, gpu, units, load, profiles = 0, 0.0, 0.0, 0.0, 0.0, None, {}, 0.0, set()
     for s in host:
         b = s["epoch"] * 1000 - off
         a = b - s["dt"] * 1000
@@ -93,15 +95,19 @@ def host_in(host, events, t0, t1):
         got += 1
         weight += o
         cpu += s["cpu_foreign"] * o
-        gpu = max(gpu, (s.get("gpu") or {}).get("foreign_sm") or 0)
+        cpu_max = max(cpu_max, s["cpu_foreign"])
+        g = (s.get("gpu") or {}).get("foreign_sm")
+        if g is not None:
+            gpu_weight += o
+            gpu = max(gpu or 0, g)
         load = max(load, s.get("load1") or 0)
         profiles.add(s.get("profile"))
         for n, c in (s.get("units") or {}).items():
             units[n] = max(units.get(n, 0), c)
-    if not got:
-        return {"samples": 0}
-    return {"samples": got, "cpu_foreign": round(cpu / weight, 2), "gpu_foreign": gpu, "load1": load,
-            "units": dict(sorted(units.items(), key=lambda kv: -kv[1])[:5]), "profiles": sorted(map(str, profiles))}
+    span = max(t1 - t0, 1e-9)
+    return {"samples": got, "covered": round(weight / span, 3), "gpu_covered": round(gpu_weight / span, 3),
+            "cpu_foreign_max": cpu_max, "cpu_foreign": round(cpu / weight, 2) if weight else None, "gpu_foreign": gpu,
+            "load1": load, "units": dict(sorted(units.items(), key=lambda kv: -kv[1])[:5]), "profiles": sorted(map(str, profiles))}
 
 
 def windows(events):
@@ -220,7 +226,9 @@ def analyze(run_dir, scenes, only=None):
     if acc_scene and acc_scene["id"] in wins:
         t0, t1 = wins[acc_scene["id"]]
         bks = buckets(frames, t0, t1, acc_scene.get("bucket_s", 10))
-        res["acc"] = {"buckets": bks, "growth": growth(bks), "load": acc_load(events, acc_scene, t0, t1)}
+        # нагрузка машины — в минутах, по которым считается рост
+        res["acc"] = {"buckets": bks, "growth": growth(bks), "load": acc_load(events, acc_scene, t0, t1),
+                      "host": {"first": host_in(host, events, t0, t0 + 60_000), "last": host_in(host, events, t1 - 60_000, t1)}}
     gl = [e for e in events if e["type"] == "gl"]
     if gl:
         res["meta"]["gl"] = {k: gl[0][k] for k in ("renderer", "version", "vendor", "width", "height")}
@@ -274,12 +282,14 @@ def checks(events, res, expected=(), acc_scene=None):
             bad.append(f"окно {name}: нет времени процессора потока")
         if w["frames"] < MIN_FRAMES:
             bad.append(f"окно {name}: {w['frames']} кадров (меньше {MIN_FRAMES})")
-        if name.startswith(GATED):
-            h = w.get("host")
-            if h is None or not h["samples"]:
-                bad.append(f"окно {name}: нет записи нагрузки машины (host.jsonl) — тишину не проверить")
-            else:
-                bad += [f"{LOAD_TAG} окно {name}: {x}" for x in foreign(h)]
+
+    # нагрузка машины — во всех окнах, что решают вердикт: «100», первый удар, первая и последняя минута накопления
+    for name, w in res.get("windows", {}).items():
+        if name.startswith(GATED) or name == FIRST:
+            bad += load_checks(f"окно {name}", w.get("host"))
+    if acc_scene and (res.get("acc") or {}).get("host"):
+        for part, what in (("first", "первая"), ("last", "последняя")):
+            bad += load_checks(f"накопление {acc_scene['id']}, {what} минута", res["acc"]["host"][part])
     # первый удар: замер — худший кадр, шедший в окне; клиент, вставший на всё окно, — тоже число, а не пустота
     if FIRST in expected and (res.get("first") or {}).get("worst_ms") is None:
         bad.append("первый удар: нет числа (окна нет или ни один кадр не шёл в нём)")
@@ -308,13 +318,27 @@ def checks(events, res, expected=(), acc_scene=None):
 
 
 def foreign(h):
-    """Чужая нагрузка в окне шлагбаума (host_in, есть выборки; пусто — тихо): она меняет время кадра без правки кода."""
+    """Чужая нагрузка в окне (host_in; пусто — тихо): она меняет время кадра без правки кода. Судит худшая выборка, а
+    не среднее: задача в 3 ядра на 5 с из 20 в среднем дала бы меньше порога, а работала внутри окна."""
     bad = []
-    if h["cpu_foreign"] > FOREIGN_CPU:
-        bad.append(f"чужие задачи — {h['cpu_foreign']} ядра (можно {FOREIGN_CPU}): {h['units']}")
-    if h["gpu_foreign"] > FOREIGN_GPU:
+    if h["cpu_foreign_max"] > FOREIGN_CPU:
+        bad.append(f"чужие задачи — до {h['cpu_foreign_max']} ядра (можно {FOREIGN_CPU}): {h['units']}")
+    if (h["gpu_foreign"] or 0) > FOREIGN_GPU:
         bad.append(f"видеокарта у чужих процессов — {h['gpu_foreign']} % SM (можно {FOREIGN_GPU})")
     return bad
+
+
+def load_checks(where, h):
+    """Годность окна по нагрузке машины: запись есть и покрывает окно (с замером видеокарты), чужой нагрузки нет.
+    Чужая нагрузка — с меткой LOAD_TAG (её пак снимается ещё раз), нехватка записи — без: повтор её не лечит."""
+    if h is None or not h["samples"]:
+        return [f"{where}: нет записи нагрузки машины (host.jsonl) — тишину не проверить"]
+    bad = []
+    if h["covered"] < COVER_MIN:
+        bad.append(f"{where}: нагрузка машины записана на {h['covered']:.0%} окна (нужно {COVER_MIN:.0%})")
+    if h["gpu_covered"] < COVER_MIN:
+        bad.append(f"{where}: видеокарта чужими процессами записана на {h['gpu_covered']:.0%} окна (nvidia-smi)")
+    return bad + [f"{LOAD_TAG} {where}: {x}" for x in foreign(h)]
 
 
 FIRST = "first"
@@ -325,6 +349,9 @@ LOAD_TAG = "нагрузка:"
 # тяжёлая задача — от 1,5 (клиент песочницы другой сессии) до 7 ядер (сборка, ревью с тестами) (замер 25.10); видеокарта —
 # чужие процессы, кроме композитора рабочего стола (у него 0 % SM): клиент песочницы — 37 %
 FOREIGN_CPU, FOREIGN_GPU = 1.0, 5
+# окно должно быть под выборками нагрузки (они идут подряд, каждая — от прошлой): пробел — сбой записи или хвост без
+# заключительной выборки
+COVER_MIN = 0.95
 # окно с меньшим числом кадров — не замер (клиент стоял)
 MIN_FRAMES = 20
 # команда волны позже расписания больше чем на столько — волны пошли пачкой (тик клиента 50 мс, снимок кадра ~0,5 с)

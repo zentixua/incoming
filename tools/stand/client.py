@@ -211,21 +211,24 @@ class Host:
         return self.cg is not None and bool(path) and self.cg == Path("/sys/fs/cgroup") / path
 
     def _gpu(self):
-        """Чужие процессы на видеокарте (% SM, сумма) и её температура и частота; nvidia-smi нет — None."""
-        try:
-            pm = subprocess.run(["nvidia-smi", "pmon", "-c", "1", "-s", "u"], capture_output=True, text=True, timeout=15).stdout
-            q = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu,clocks.sm", "--format=csv,noheader,nounits"],
-                               capture_output=True, text=True, timeout=15).stdout.strip().splitlines()[0].split(",")
-        except (OSError, subprocess.SubprocessError, IndexError):
-            return None
-        foreign, who = 0, []
-        for line in pm.splitlines():
-            f = line.split()
-            if len(f) < 4 or f[0].startswith("#") or not f[3].isdigit() or self._own_pid(f[1]):
+        """Чужие процессы на видеокарте (% SM, сумма) и её температура и частота; замера нет (nvidia-smi нет, упал,
+        завис или вывел не то — и после повтора) — None, а не ноль: разбор такое окно не примет."""
+        for _ in range(2):
+            try:
+                pm = subprocess.run(["nvidia-smi", "pmon", "-c", "1", "-s", "u"], capture_output=True, text=True, timeout=15)
+                q = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu,clocks.sm", "--format=csv,noheader,nounits"],
+                                   capture_output=True, text=True, timeout=15)
+            except (OSError, subprocess.SubprocessError):
                 continue
-            foreign += int(f[3])
-            who.append(f"{f[-1]}:{f[3]}")
-        return {"foreign_sm": foreign, "who": who, "temp": _num(q[0]), "clock": _num(q[1])}
+            got = parse_pmon(pm.stdout, self._own_pid) if pm.returncode == 0 else None
+            if got is None:
+                continue
+            temp = clock = None
+            if q.returncode == 0 and q.stdout.strip():
+                f = q.stdout.strip().splitlines()[0].split(",")
+                temp, clock = _num(f[0]), _num(f[1]) if len(f) > 1 else None
+            return {"foreign_sm": got[0], "who": got[1], "temp": temp, "clock": clock}
+        return None
 
     def sample(self, phase):
         """Выборка за время с прошлой (первая — только точка отсчёта: None)."""
@@ -244,6 +247,22 @@ class Host:
         return {"epoch": now[0], "dt": round(dt, 3), "phase": phase, "load1": float(Path("/proc/loadavg").read_text().split()[0]),
                 "cpu_total": round(total, 2), "cpu_own": round(own, 2), "cpu_foreign": round(max(0.0, total - own), 2),
                 "units": units, "gpu": self._gpu(), "profile": profile}
+
+
+def parse_pmon(text, own):
+    """`nvidia-smi pmon -c 1 -s u` → (% SM чужих процессов сумма, [«имя:%»]); own(pid) — процесс свой. Нет заголовка
+    («# gpu pid type sm …») — вывод не тот: None. «-» у процесса — он не считал (0)."""
+    lines = text.splitlines()
+    if not any(line.lstrip().startswith("#") and "sm" in line.split() for line in lines):
+        return None
+    foreign, who = 0, []
+    for line in lines:
+        f = line.split()
+        if len(f) < 4 or f[0].startswith("#") or not f[1].isdigit() or not f[3].isdigit() or own(f[1]):
+            continue
+        foreign += int(f[3])
+        who.append(f"{f[-1]}:{f[3]}")
+    return foreign, who
 
 
 def _num(s):
@@ -276,44 +295,46 @@ def run(game, script, size, limit_s, logf, log):
     if GL_YIELD:
         env["__GL_YIELD"] = GL_YIELD
     old = signal.signal(signal.SIGTERM, _term)
-    (game / "stand-out").mkdir(parents=True, exist_ok=True)
-    hostf = open(game / "stand-out" / "host.jsonl", "a", encoding="utf-8")
-    host = Host()
-
-    def sample(phase):
-        s = host.sample(phase)
-        if s is not None:
-            hostf.write(json.dumps(s, ensure_ascii=False) + "\n")
-            hostf.flush()
-        return s
-
-    # перед клиентом — тишина: чужие тяжёлые задачи (сборка, GameTest, клиент другой сессии) мешали бы замеру; ждём не
-    # дольше QUIET_WAIT_S — дальше идём, а окна шлагбаума с чужой нагрузкой разбор признает негодными
-    sample("wait")
-    quiet, until, told = 0, time.time() + QUIET_WAIT_S, 0.0
-    while quiet < QUIET_SAMPLES:
-        time.sleep(SAMPLE_S)
-        s = sample("wait")
-        if artem_playing():
-            hostf.close()
-            signal.signal(signal.SIGTERM, old)
-            return 75
-        quiet = 0 if heavy(s) else quiet + 1
-        if quiet == 0 and time.time() - told >= 60:
-            told = time.time()
-            log(f"жду тишины: чужие {s['cpu_foreign']} ядра, видеокарта {(s.get('gpu') or {}).get('who')}, службы {s['units']}")
-        if time.time() > until:
-            log(f"тишины нет {QUIET_WAIT_S // 60} мин — иду так (окна с чужой нагрузкой будут негодны)")
-            break
-    # экран вложенного KWin выше окна на рамку: окно 2560×1600 с заголовком (28 px у Breeze) помещается целиком, и кадр
-    # игры — ровно заданный (на экране той же высоты KWin ужимал окно до 2560×1572)
-    proc = subprocess.Popen([str(ROOT / "tools" / "nested_kwin.sh"), SOCKET, w, str(int(h) + DECOR), f"bash {script}"], stdout=logf,
-                            stderr=subprocess.STDOUT, env=env, start_new_session=True)
-    deadline = time.time() + limit_s + 600
+    hostf = proc = None
     try:
+        (game / "stand-out").mkdir(parents=True, exist_ok=True)
+        hostf = open(game / "stand-out" / "host.jsonl", "a", encoding="utf-8")
+        host = Host()
+
+        def sample(phase):
+            s = host.sample(phase)
+            if s is not None:
+                hostf.write(json.dumps(s, ensure_ascii=False) + "\n")
+                hostf.flush()
+            return s
+
+        # перед клиентом — тишина: чужие тяжёлые задачи (сборка, GameTest, клиент другой сессии) мешали бы замеру; ждём не
+        # дольше QUIET_WAIT_S — дальше идём, а окна вердикта с чужой нагрузкой разбор признает негодными
+        sample("wait")
+        quiet, until, told = 0, time.time() + QUIET_WAIT_S, 0.0
+        while quiet < QUIET_SAMPLES:
+            time.sleep(SAMPLE_S)
+            s = sample("wait")
+            if artem_playing():
+                return 75
+            quiet = 0 if heavy(s) else quiet + 1
+            if quiet == 0 and time.time() - told >= 60:
+                told = time.time()
+                log(f"жду тишины: чужие {s['cpu_foreign']} ядра, видеокарта {(s.get('gpu') or {}).get('who')}, службы {s['units']}")
+            if time.time() > until:
+                log(f"тишины нет {QUIET_WAIT_S // 60} мин — иду так (окна с чужой нагрузкой будут негодны)")
+                break
+        # экран вложенного KWin выше окна на рамку: окно 2560×1600 с заголовком (28 px у Breeze) помещается целиком, и
+        # кадр игры — ровно заданный (на экране той же высоты KWin ужимал окно до 2560×1572)
+        proc = subprocess.Popen([str(ROOT / "tools" / "nested_kwin.sh"), SOCKET, w, str(int(h) + DECOR), f"bash {script}"], stdout=logf,
+                                stderr=subprocess.STDOUT, env=env, start_new_session=True)
+        deadline = time.time() + limit_s + 600
         while True:
             try:
-                return proc.wait(timeout=SAMPLE_S)
+                code = proc.wait(timeout=SAMPLE_S)
+                # заключительная выборка: без неё хвост последнего окна остался бы без записи
+                sample("end")
+                return code
             except subprocess.TimeoutExpired:
                 pass
             sample("run")
@@ -324,12 +345,14 @@ def run(game, script, size, limit_s, logf, log):
                 log("клиент не уложился в срок — гашу")
                 return 124
     finally:
-        left = kill_tagged(tag)
-        if left:
-            log(f"после клиента осталось процессов с меткой: {left}")
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            pass
-        hostf.close()
+        if proc is not None:
+            left = kill_tagged(tag)
+            if left:
+                log(f"после клиента осталось процессов с меткой: {left}")
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+        if hostf is not None:
+            hostf.close()
         signal.signal(signal.SIGTERM, old)
