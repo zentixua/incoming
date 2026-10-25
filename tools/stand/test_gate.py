@@ -318,8 +318,8 @@ class Results(unittest.TestCase):
         self.assertEqual(w["host"]["gpu_covered"], 1.0)
         # первый удар: кадр 99 начат до попадания (1990 мс) и шёл в его миг (до 2020 мс) — его 30 мс и есть худший
         self.assertEqual(r["first"]["worst_ms"], 30.0)
-        # окна плана обязательны: 100/outside и 100/inside не сняты
-        self.assertEqual(r["checks"], ["окно 100/outside: не снято", "окно 100/inside: не снято"])
+        # окна плана обязательны: 100-hit, 100/outside и 100/inside не сняты
+        self.assertEqual(r["checks"], ["окно 100-hit: не снято", "окно 100/outside: не снято", "окно 100/inside: не снято"])
 
     def test_foreign_load_in_a_gated_window_is_reported_not_invalid(self):
         r = self.analyze([host_sample(1_000_002.0, cpu_foreign=3.1, dt=2.0, units={"incoming-job-gametest": 2.9}),
@@ -666,6 +666,7 @@ def raw_run(d, name="r", gpu=8.0, renderer="RTX 4060", done=True, label="v3.7.0"
     ev = [{"type": "gl", "t_ms": 900, "renderer": renderer, "version": "4.6", "vendor": "n", "width": 2560, "height": 1600},
           {"type": "salvo", "t_ms": 950, "id": "100", "expect": 100, "commands": 100},
           {"type": "await", "t_ms": 990, "salvo": "100", "why": "all", "impacts": 100, "expect": 100, "took_s": 30}]
+    ev += [{"type": "window", "t_ms": 1000, "name": "100-hit", "edge": "begin"}, {"type": "window", "t_ms": 3000, "name": "100-hit", "edge": "end"}]
     for k, cam in enumerate(("outside", "edge", "inside")):
         ev += [{"type": "window", "t_ms": 1000 + 2000 * k, "name": f"100/{cam}", "edge": "begin"},
                {"type": "window", "t_ms": 3000 + 2000 * k, "name": f"100/{cam}", "edge": "end"}]
@@ -798,8 +799,9 @@ class Plan(unittest.TestCase):
         self.scenes = plan.load()
         self.p = plan.build(self.scenes)
 
-    def salvos(self, p=None):
-        return [s for s in (p or self.p)["steps"] if s["do"] == "salvo"]
+    def salvos(self, p=None, launch=False):
+        ids = plan.launch_ids(self.scenes)
+        return [s for s in (p or self.p)["steps"] if s["do"] == "salvo" and (s["id"] in ids) == launch]
 
     def test_strikes_add_up_to_the_scene_totals(self):
         at_c = [s for s in self.salvos() if s["x"] == 1000.0]
@@ -845,7 +847,58 @@ class Plan(unittest.TestCase):
     def test_100_alone_still_lands_100(self):
         p = plan.build(self.scenes, ["100"])
         self.assertEqual(sum(s["expect"] for s in self.salvos(p)), 100)
-        self.assertEqual(plan.windows(self.scenes, ["100"]), ["100/outside", "100/edge", "100/inside"])
+        self.assertEqual(plan.windows(self.scenes, ["100"]), ["100-hit", "100/outside", "100/edge", "100/inside"])
+
+    def test_100_impact_moment_window_from_the_first_hit_outside(self):
+        steps = plan.build(self.scenes, ["100"])["steps"]
+        i = next(i for i, s in enumerate(steps) if s["do"] == "impact_window")
+        w = steps[i]
+        self.assertEqual((w["name"], w["salvo"], w["n"], w["s"]), ("100-hit", "100", 1, 10))
+        self.assertEqual(steps[i - 1]["eye"], plan.camera(self.scenes, "outside", (1000.0, 0.0), 120)[0])
+        self.assertEqual(steps[i + 1]["do"], "await")                     # пока залп ещё ложится: окна «100/*» — после конца
+        self.assertFalse(w["name"].startswith(gate.GATED))                # в шлагбаум не входит
+
+    def test_launch_close_ups(self):
+        launches = self.salvos(launch=True)
+        self.assertEqual([s["id"] for s in launches], ["grad", "missile", "shahed"])
+        steps = self.p["steps"]
+        for s in launches:
+            i = steps.index(s)
+            site = plan._site(self.scenes, next(x["site"] for x in self.scenes["scenes"] if x["id"] == s["id"]))
+            eye, look = steps[i - 1]["eye"], steps[i - 1]["look"]
+            # камера в 30 м сбоку от пусковой, на высоте глаз, смотрит на неё
+            self.assertAlmostEqual(math.dist((eye[0], eye[2]), site), 30)
+            self.assertAlmostEqual(eye[1] - self.scenes["ground"], 1.6)
+            self.assertEqual((look[0], look[2]), site)
+            # цель далеко и почти поперёк взгляда: прилёты вне кадра
+            target = (s["x"], s["z"])
+            self.assertGreaterEqual(math.dist(target, site), 2000)
+            view = (look[0] - eye[0], look[2] - eye[2])
+            to_t = (target[0] - eye[0], target[1] - eye[2])
+            cos = (view[0] * to_t[0] + view[1] * to_t[1]) / math.hypot(*view) / math.hypot(*to_t)
+            self.assertLess(cos, math.cos(math.radians(80)))
+            for c in s["cmds"]:
+                self.assertIn(f"from {site[0]:g} {site[1]:g}", c)
+            # окна от команды: 0–15 с и 30–40 с
+            self.assertEqual([x["do"] for x in steps[i + 1:i + 4]], ["window", "wait", "window"])
+            self.assertEqual((steps[i + 1]["name"], steps[i + 1]["s"]), (f"{s['id']}/start", 15))
+            self.assertEqual(steps[i + 2]["s"], 15)
+            self.assertEqual((steps[i + 3]["name"], steps[i + 3]["s"]), (f"{s['id']}/hang", 10))
+            self.assertFalse(any(x["do"] == "await" and x["salvo"] == s["id"] for x in steps))
+        grad, missile, shahed = launches
+        self.assertEqual(grad["cmds"], ["incoming salvo rocket 12 0 at 2500 3000 from 0 3000"])
+        self.assertEqual(missile["cmds"], ["incoming salvo missile 1 0 at 2500 6000 from 0 6000 via 2500 6000"])
+        self.assertEqual(shahed["cmds"], ["incoming salvo drone 1 0 at 2500 9000 from 0 9000 via 2500 9000"] * 5)
+        self.assertEqual(shahed["delays"], [0, 1.5, 3, 4.5, 6])
+        # последние в плане: их прилёты не попадают в окна других сцен
+        others = [i for i, x in enumerate(steps) if x["do"] == "salvo" and x["id"] not in plan.launch_ids(self.scenes)]
+        self.assertLess(max(others), steps.index(grad))
+        # конца не ждут — и годность этого не требует
+        ev = [{"type": "gl"}, {"type": "salvo", "id": "grad"}]
+        res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {}}
+        self.assertFalse(any("grad" in b for b in results.checks(ev, res, (), None, plan.launch_ids(self.scenes))))
+        self.assertTrue(any("grad" in b for b in results.checks(ev, res)))
+        self.assertEqual(plan.windows(self.scenes, ["grad"]), ["grad/start", "grad/hang"])
 
     def test_gated_windows_are_20_s(self):
         ws = [s for s in self.p["steps"] if s["do"] == "window" and s["name"].startswith("100/")]

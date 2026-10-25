@@ -258,7 +258,7 @@ def analyze(run_dir, scenes, only=None, power=None):
     res["meta"]["duration_s"] = (frames[-1]["t"] - frames[0]["t"]) / 1000 if frames else 0
     res["meta"]["shots"] = sorted(e["name"] for e in events if e["type"] == "shot")
     acc_sel = acc_scene if acc_scene and (only is None or acc_scene["id"] in only) else None
-    res["checks"] = checks(events, res, plan.windows(scenes, only), acc_sel)
+    res["checks"] = checks(events, res, plan.windows(scenes, only), acc_sel, plan.launch_ids(scenes))
     res["load"] = load_notes(res, acc_sel, power)
     return res
 
@@ -275,9 +275,10 @@ def verdict_hosts(res, acc_scene=None):
     return out
 
 
-def checks(events, res, expected=(), acc_scene=None):
+def checks(events, res, expected=(), acc_scene=None, unawaited=()):
     """Годен ли прогон для сравнения: строки «что не так» (пусто — годен). expected — окна плана (все обязательны),
-    acc_scene — сцена накопления плана (её нагрузка должна прийтись на окно). Нагрузка машины годность не решает
+    acc_scene — сцена накопления плана (её нагрузка должна прийтись на окно), unawaited — залпы пуска вблизи (конца не
+    ждут, plan.launch_ids). Нагрузка машины годность не решает
     (load_notes): от неё шлагбаум защищает пара в одном сеансе (gate.py)."""
     bad = []
     if not res["meta"]["done"]:
@@ -295,7 +296,7 @@ def checks(events, res, expected=(), acc_scene=None):
         if i["why"] != "all":
             bad.append(f"залп {salvo}: {i['got']} попаданий из {i['expect']} ({i['why']})")
     salvos = {e["id"] for e in events if e["type"] == "salvo"}
-    for salvo in sorted(salvos - set(res["meta"]["impacts"])):
+    for salvo in sorted(salvos - set(res["meta"]["impacts"]) - set(unawaited)):
         bad.append(f"залп {salvo}: конца нет (нет события await)")
     if not any(e["type"] == "gl" for e in events):
         bad.append("нет строки видеокарты")

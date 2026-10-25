@@ -8,7 +8,9 @@
 Фогеля в круге разброса (равномерно по площади, свой поворот у каждого залпа и волны), одни у всех версий. Остаётся
 промах самого шахеда (σ 3 м по паспорту, `Route.error`). Пуск — по кругу точек на `launch.dist`: удар i — с точки
 i mod пусковых, раз в `launch.gap_s` с одной точки (одна пусковая выпускает шахед раз в 1–2 с). Шахед летит через саму
-цель (`via`): без точки маршрута он делает петлю и заходит из-за спины стреляющего. Обвязка только исполняет числа —
+цель (`via`): без точки маршрута он делает петлю и заходит из-за спины стреляющего. Пуск вблизи (сцена с `launch`):
+камера в 30 м сбоку от места пуска на высоте глаз, цель далеко в сторону (прилёты вне кадра), окна — от команды, конца
+залпа сцена не ждёт (такие сцены — последние в плане: их прилёты не попадают в чужие окна). Обвязка только исполняет числа —
 поэтому план можно проверить тестом без игры (test_gate.py).
 
 Оси Minecraft: +X — восток, +Z — юг. Направление камеры `toward` — единичный вектор (dx, dz) от места; пуск — по
@@ -81,6 +83,37 @@ def strike_commands(scenes, site, points, first_point, launchers, start_s=0.0):
     return cmds, delays, first_point + launchers
 
 
+def launch_steps(scenes, s, tp):
+    """Пуск вблизи: камера у места пуска, команды пуска, окна от команды (`launch_view.windows`: начало `at_s`, длина `s`).
+    Залп без ожидания конца: прилёты далеко и после окон."""
+    lv, ln = scenes["launch_view"], s["launch"]
+    site = _site(scenes, s["site"])
+    tx, tz = site[0] + lv["target"][0], site[1] + lv["target"][1]
+    eye, look = camera(scenes, lv["camera"], site, 0)
+    at = f"at {tx:g} {tz:g} from {site[0]:g} {site[1]:g}" + (f" via {tx:g} {tz:g}" if ln.get("via") else "")
+    if ln.get("one_command"):
+        cmds, delays = [f"incoming salvo {ln['weapon']} {ln['count']} 0 {at}"], [0.0]
+    else:
+        # одна пусковая: подряд, раз в gap_s
+        gap = scenes["launch"]["gap_s"]
+        cmds = [f"incoming salvo {ln['weapon']} 1 0 {at}"] * ln["count"]
+        delays = [round(i * gap, 3) for i in range(ln["count"])]
+    out = [tp(eye, look), {"do": "salvo", "id": s["id"], "x": tx, "z": tz, "radius": scenes["impact_margin"], "expect": ln["count"],
+                           "cmds": cmds, "delays": delays}]
+    t = 0.0
+    for w in lv["windows"]:
+        if w["at_s"] > t:
+            out.append({"do": "wait", "s": w["at_s"] - t})
+        out.append({"do": "window", "name": f"{s['id']}/{w['name']}", "s": w["s"]})
+        t = w["at_s"] + w["s"]
+    return out
+
+
+def launch_ids(scenes):
+    """Сцены пуска вблизи: их залпы конца не ждут."""
+    return {s["id"] for s in scenes["scenes"] if "launch" in s}
+
+
 def build(scenes, only=None):
     """План из сцен (only — ид сцен выборки, порядок — как в scenes.json)."""
     chosen = [s for s in scenes["scenes"] if only is None or s["id"] in only]
@@ -134,6 +167,9 @@ def build(scenes, only=None):
     for s in chosen:
         site = _site(scenes, s["site"])
         spread = s.get("spread", 0)
+        if "launch" in s:
+            steps += launch_steps(scenes, s, tp)
+            continue
         if s.get("impact_window"):
             eye, look = camera(scenes, s["camera"], site, spread)
             steps.append(tp(eye, look))
@@ -149,9 +185,14 @@ def build(scenes, only=None):
             steps.append({"do": "await", "salvo": s["id"], "timeout_s": scenes["tail_timeout_s"], "quiet_s": scenes["quiet_s"]})
             continue
         cams = s["cameras"]
-        eye, look = camera(scenes, cams[0], site, spread)
+        hit = s.get("hit")
+        eye, look = camera(scenes, hit["camera"] if hit else cams[0], site, spread)
         steps.append(salvo_step(s))
         steps.append(tp(eye, look))
+        if hit:
+            # миг прилёта: окно от первого попадания (шар, вспышка, волна, обломки в полёте), пока залп ещё ложится
+            steps.append({"do": "impact_window", "name": f"{s['id']}-hit", "salvo": s["id"], "n": 1, "s": hit["window_s"],
+                          "shots": hit.get("shots", []), "prefix": f"{s['id']}-hit", "timeout_s": scenes["await_timeout_s"]})
         steps.append({"do": "await", "salvo": s["id"], "timeout_s": scenes["await_timeout_s"], "quiet_s": scenes["quiet_s"]})
         for cam in cams:
             eye, look = camera(scenes, cam, site, spread)
@@ -175,10 +216,12 @@ def windows(scenes, only=None):
     for s in scenes["scenes"]:
         if only is not None and s["id"] not in only:
             continue
-        if s.get("impact_window"):
+        if "launch" in s:
+            out += [f"{s['id']}/{w['name']}" for w in scenes["launch_view"]["windows"]]
+        elif s.get("impact_window"):
             out.append(s["id"])
         else:
-            out += [f"{s['id']}/{c}" for c in s["cameras"]]
+            out += ([f"{s['id']}-hit"] if s.get("hit") else []) + [f"{s['id']}/{c}" for c in s["cameras"]]
     return out
 
 
