@@ -151,7 +151,7 @@ def acc_load(events, scene, t0, t1):
     cmds = [e for e in events if e["type"] == "cmd" and e.get("tag") == scene["id"]]
     late = [e["ran_ms"] - e["due_ms"] for e in cmds if e.get("due_ms") is not None and e.get("ran_ms") is not None]
     minute = 60_000
-    return {"planned": w["strikes"] * minute / 1000 / w["every_s"],
+    return {"planned": w["strikes"] * minute / 1000 / w["every_s"], "wave": w["strikes"],
             "first": sum(1 for t in hits if t0 <= t < t0 + minute), "last": sum(1 for t in hits if t1 - minute <= t <= t1),
             "inside": sum(1 for t in hits if t0 <= t <= t1), "after": sum(1 for t in hits if t > t1),
             "commands": len(cmds), "late_max_ms": max(late) if late else None}
@@ -248,11 +248,10 @@ def checks(events, res, expected=(), acc_scene=None):
                 bad.append(f"накопление {name}: у команд волн нет срока или времени выполнения (due_ms, ran_ms) — расписание не проверить")
             elif load["late_max_ms"] > LATE_MS:
                 bad.append(f"накопление {name}: команды волн не по расписанию (опоздание до {load['late_max_ms']:.0f} мс, можно {LATE_MS})")
-            lo, hi = load["planned"] * (1 - LOAD_TOL), load["planned"] * (1 + LOAD_TOL)
             for part in ("first", "last"):
-                if not lo <= load[part] <= hi:
+                if abs(load[part] - load["planned"]) > load["wave"]:
                     bad.append(f"накопление {name}: в {'первую' if part == 'first' else 'последнюю'} минуту окна {load[part]} попаданий, "
-                               f"по плану {load['planned']:g} (±{LOAD_TOL:.0%})")
+                               f"по плану {load['planned']:g} ± волна ({load['wave']})")
         if not (res.get("acc") or {}).get("growth"):
             bad.append(f"накопление {name}: нет числа роста")
     return bad
@@ -263,6 +262,7 @@ FIRST = "first"
 MIN_FRAMES = 20
 # команда волны позже расписания больше чем на столько — волны пошли пачкой (тик клиента 50 мс, снимок кадра ~0,5 с)
 LATE_MS = 2000
-# попаданий в первую и последнюю минуту окна накопления — по плану (strikes × 60 / every_s) с таким допуском: одна
-# минута против другой сравнима, только если в обе пришлась одна нагрузка
-LOAD_TOL = 0.2
+# попаданий в первую и последнюю минуту окна накопления — по плану (strikes × 60 / every_s) ± одна волна: одна минута
+# против другой сравнима, только если в обе пришлась одна нагрузка. Допуск — волна, а не доля: окно начинается с первого
+# попадания (одного шахеда волны 0), полёт шахедов гуляет на ±3 с, и через каждую границу минуты переходит часть волны
+# (v3.7.0: 35/25, 31/28, 32/28 при плане 30). Пачку волн ловит расписание (LATE_MS), волны за окном — `after`

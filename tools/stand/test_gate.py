@@ -307,6 +307,11 @@ class Checks(unittest.TestCase):
         bad = self.acc_checks(last=15)
         self.assertTrue(any("последнюю минуту окна 15" in b for b in bad), bad)
 
+    def test_part_of_a_wave_across_the_minute_edge_passes(self):
+        # окно начато поздним шахедом волны 0: быстрые шахеды следующих волн ложатся до границы слота (v3.7.0: 35/25)
+        self.assertEqual(self.acc_checks(first=35, last=25), [])
+        self.assertTrue(self.acc_checks(first=41, last=19))
+
     def test_every_plan_window_is_required(self):
         ev = [{"type": "gl"}, {"type": "done"}, {"type": "window", "name": "100/edge", "edge": "begin", "t_ms": 1}]
         res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {"100/outside": {"frames": 500, "gpu": {"p50": 1}}}}
