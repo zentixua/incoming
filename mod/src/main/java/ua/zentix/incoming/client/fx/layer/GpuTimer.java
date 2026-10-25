@@ -11,6 +11,7 @@ import java.util.Arrays;
  * Время прохода на видеокарте: метки времени (glQueryCounter) до и после, по кольцу из {@link #RING} пар — читаются через
  * кадры, когда готовы, без ожидания (как у пелены, {@code PallPass}: запрос GL_TIME_ELAPSED у OpenGL один на всех, а
  * Minecraft держит его на весь кадр, пока на экране F3 с загрузкой видеокарты). Сводка — за секунду ({@link #second}).
+ * Меряет, только пока идёт проба слоя ({@link LayerTimes#on}): без неё меток нет.
  */
 final class GpuTimer {
     private static final int RING = 4;
@@ -36,9 +37,9 @@ final class GpuTimer {
         return timer > 0;
     }
 
-    /** Метка до прохода; −1 — кадр не меряется (меток нет или все пары ещё в полёте). */
+    /** Метка до прохода; −1 — кадр не меряется (проба не идёт, {@link LayerTimes}; меток нет или все пары ещё в полёте). */
     int begin() {
-        if (!available()) return -1;
+        if (!LayerTimes.on() || !available()) return -1;
         poll();
         if (issued[ring]) return -1;
         GL33.glQueryCounter(queries[2 * ring], GL33.GL_TIMESTAMP);

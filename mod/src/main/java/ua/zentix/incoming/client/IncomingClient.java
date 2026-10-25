@@ -140,6 +140,7 @@ public final class IncomingClient {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.client.nuclear.FlashMarksClient::onChunkUnload);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.client.nuclear.FlashMarksClient::onLevelUnload);
         NeoForge.EVENT_BUS.addListener(FxLayer::render);
+        NeoForge.EVENT_BUS.addListener(FxLayer::debugText);
         NeoForge.EVENT_BUS.addListener(NukeRenderer::renderRain);
         NeoForge.EVENT_BUS.addListener(NukeSky::fogColor);
         NeoForge.EVENT_BUS.addListener(NukeSky::fog);

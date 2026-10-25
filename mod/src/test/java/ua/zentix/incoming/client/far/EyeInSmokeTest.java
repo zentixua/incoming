@@ -110,7 +110,7 @@ class EyeInSmokeTest {
         long seed = 91;
         for (double z = -LEN; z < LEN; z += STEP) {
             FarFlightView.Tube a = end(view, d, 0, z), b = end(view, d, 0, z + STEP);
-            int drawn = FarFlightView.line(view, screen, a, b, 0.9f, 0.9f, 0.9f, 0.9f, 0.9f, 0.9f, 1, 0.6, seed++, joint);
+            int drawn = FarFlightView.line(view, screen, a, b, 0.9f, 0.9f, 0.9f, 0.9f, 0.9f, 0.9f, 1, 0.6, seed++, 1, joint);
             if (drawn != FarFlightView.RIBBON) joint[0] = Float.NaN;
         }
         SmokePuffs.flush();

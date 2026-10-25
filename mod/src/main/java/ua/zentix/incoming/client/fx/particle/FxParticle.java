@@ -297,6 +297,9 @@ public final class FxParticle {
         // свет — уже умноженный на непрозрачность; искры и вспышки только светят (свет складывается)
         float r = rCol * a, g = gCol * a, b = bCol * a, cover = kind.additive ? 0 : a;
         FxAtlas.Sprite sprite = sprite(partial);
+        // часть слоя (время на видеокарте по частям): дымные хвосты обломков, огонь и шар, прочие частицы
+        FxQuads.Part was = out.part(budget == FxBudget.DEBRIS ? FxQuads.Part.DEBRIS
+                : kind == Fx.Kind.FIRE || kind == Fx.Kind.FIREBALL ? FxQuads.Part.FIRE : FxQuads.Part.PARTICLES);
         out.nearestTexels(!smooth);
         out.opacity(a);
         // самосветящееся светится (FxBloom): огонь, искры, вспышка, шар; дым, пыль, кольцо и пепел — нет
@@ -319,6 +322,7 @@ public final class FxParticle {
             }
         }
         out.emission(0);
+        out.part(was);
     }
 
     private FxAtlas.Sprite sprite(float partial) {
