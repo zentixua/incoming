@@ -3,7 +3,7 @@ package ua.zentix.incoming.warhead;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
-import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
+import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -38,8 +38,10 @@ import java.util.function.BooleanSupplier;
 final class Craters {
     /**
      * Больше клеток шар топлива не обходит: у «Томагавка» на ровной земле клеток с импульсом выше
-     * {@link PulseIgnition#FLOOR} под потолком обхода ({@link Ignition#ceiling}) — ~7 тыс. (круг в 47 м), в лесу и в городе —
-     * в разы больше; клетки идут от большего импульса к меньшему, и за пределом остаются те, где он меньше всего.
+     * {@link PulseIgnition#FLOOR} под потолком обхода ({@link Ignition#ceiling}) — ~7 тыс. (круг в 47 м), в лесу и под
+     * крышей — больше. Клетки идут от ближних по воздуху к дальним: за пределом остаются дальние, где и импульс меньше. По
+     * импульсу (от большего) — нельзя: у всплывшего шара он больше всего в воздухе над ним, и предел кончал обход там, не
+     * дойдя до земли у края шара (ревью #467: под навесом 65×65 — на 8 кал/см², листва у земли в 22 м — 52 %).
      */
     static final int FIREBALL_CELLS = 40_000;
     /** Клеток обхода шара топлива за единицу работы: клетка с соседями — 3–5 мкс (GameTest), единица — около 1 мс. */
@@ -139,8 +141,10 @@ final class Craters {
         /** Решение по блоку горючего: загорится ли (раз на блок), и стоит ли уже его огонь. */
         private final Long2BooleanOpenHashMap burns = new Long2BooleanOpenHashMap();
         private final LongOpenHashSet lit = new LongOpenHashSet();
-        /** Сначала клетки с большим импульсом: за пределом {@link #FIREBALL_CELLS} остаются те, где он меньше всего. */
-        private final LongHeapPriorityQueue queue = new LongHeapPriorityQueue((a, b) -> Double.compare(pulse.get(b), pulse.get(a)));
+        /** От ближних по воздуху к дальним ({@link #FIREBALL_CELLS}). */
+        private final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+        /** Высота клетки начала: ниже неё обход идёт и выше потолка столбцов ({@link #ceiling}). */
+        private int startY;
         /** Потолок обхода по столбцам ({@link #ceiling}). */
         private final Long2IntOpenHashMap tops = new Long2IntOpenHashMap();
         private int cells;
@@ -184,6 +188,7 @@ final class Craters {
             BlockPos start = BlockPos.containing(pos);
             if (!happened.getAsBoolean() || !Terrain.ready(level, start)) return 0;
             if (!passes(level, start, level.getBlockState(start))) start = start.above();
+            startY = start.getY();
             seen.add(start.asLong());
             pulse.put(start.asLong(), exposure(ball, pos, start));
             queue.enqueue(start.asLong());
@@ -216,7 +221,7 @@ final class Craters {
                         if (burns.get(key) && !lit.contains(key) && light(level, p, here, n.immutable(), s, dir)) lit.add(key);
                     }
                     if (seen.add(n.asLong())) {
-                        if (n.getY() > ceiling(level, n.getX(), n.getZ())) continue;
+                        if (n.getY() > startY && n.getY() > ceiling(level, n.getX(), n.getZ())) continue;
                         double qn = exposure(ball, pos, n);
                         if (qn < PulseIgnition.FLOOR) continue;
                         pulse.put(n.asLong(), qn);
@@ -231,7 +236,8 @@ final class Craters {
          * Выше всего в столбце и у его соседей ({@link Heightmap.Types#MOTION_BLOCKING}, с листвой) клетка воздуха не
          * касается ни одной грани — обход туда не идёт: шар ракеты всплывает на 26 м, и небо над ним — сотни тысяч клеток с
          * импульсом выше {@link PulseIgnition#FLOOR}, а горючего там нет. Связь по воздуху остаётся: через стену — полосой у
-         * её верха, в двор и в окно — вниз вдоль стены.
+         * её верха, в двор и в окно — вниз вдоль стены. Не выше точки подрыва — всё ({@link #startY}): подрыв в воздухе, над
+         * проломом крыши иначе был бы отрезан от земли под ним (ревью #467).
          */
         private int ceiling(ServerLevel level, int x, int z) {
             long key = (long) x << 32 | (z & 0xFFFFFFFFL);
