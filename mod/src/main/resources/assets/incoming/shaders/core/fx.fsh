@@ -68,6 +68,8 @@ layout(location = 1) out vec4 fragCover;
 // x = 0 и y > 1 — цвет крупных клубов в мелком кадре (CoarsePass): тоже без аппаратной глубины, расстояние до мира — в
 // пикселе floor((t + ½)·y) полного кадра, через который вывод (fx_coarse) берёт этот пиксель
 uniform vec2 FxGlowPass;
+// мелкий кадр CoarsePass: полных пикселей на его пиксель по x и y (кадр с округлением вверх — не ровно FxGlowPass.y)
+uniform vec2 FxCoarseScale;
 
 // Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
 // с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по квадратам косинусов (в сумме
@@ -257,8 +259,9 @@ void main() {
     // в мутную дымку вокруг облака. Вдали (клуб мельче 16 пикселей) — без среза: дальний дым и так бледный
     if (nearest > 0.75 && tex.a * opacity < 0.1 * clamp(2.0 - lod, 0.0, 1.0)) discard;
     vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a);
-    // пиксель кадра (у прохода свечения — крупнее)
-    vec2 frag = gl_FragCoord.xy * FxGlowPass.y;
+    // пиксель кадра (у прохода свечения и мелкого кадра — крупнее)
+    bool coarse = FxGlowPass.x < 0.5 && FxGlowPass.y > 1.5;
+    vec2 frag = gl_FragCoord.xy * mix(vec2(FxGlowPass.y), FxCoarseScale, float(coarse));
     vec3 glow = vec3(0.0);
     // частицы и кадры огня — с умноженной альфой
     float cover = 0.0;
@@ -283,7 +286,6 @@ void main() {
     }
     // видимая доля квадрата — у цвета и излучения одна
     float seen = 1.0;
-    bool coarse = FxGlowPass.x < 0.5 && FxGlowPass.y > 1.5;
     bool noDepth = FxGlowPass.x > 0.5 || coarse;
     if (FxScene > 0.5 && (softness > 0.0 || noDepth)) {
         // клуб тает, входя в землю и стены, и пропадает за рельефом (и за LOD Distant Horizons)

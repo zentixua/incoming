@@ -185,6 +185,53 @@ class CoarsePassTest {
         assertEquals(0, quads.runLevel(1));
     }
 
+    /**
+     * Без мелких кадров ({@code coarse off}, нет расстояния до мира) — один отрезок полного кадра, даже если прошлый кадр
+     * шёл мелким отрезком (ревью #455: план прошлого кадра рисовал весь слой мелким).
+     */
+    @Test
+    void withoutCoarseTargetsTheLayerIsFullResolution() {
+        double focal = H / 2.0 / Math.tan(Math.toRadians(35));
+        FxQuads quads = frame();
+        double d = 20, half = 25.0 * 128 / focal * d / 2;
+        for (int i = 0; i < 6; i++) puff(quads, 0, 0, d + i * 0.5, half);
+        assertEquals(1, quads.runs(true));
+        assertEquals(3, quads.runLevel(0));
+        assertEquals(1, quads.runs(false));
+        assertEquals(0, quads.runLevel(0));
+        assertEquals(0, quads.runFrom(0));
+    }
+
+    /**
+     * Кадр, не кратный 2^k (1921×1081): пиксель t мелкого кадра растр кладёт на (t + ½)·w / W полных, а не на (t + ½)·2^k
+     * (ревью #455: до 7 пикселей мимо у 1/8) — та же доля у шейдера слоя ({@code FxCoarseScale}) и у вывода
+     * ({@code CoarseScale}).
+     */
+    @Test
+    void coarsePixelMapsToTheFullPixelTheRasterGivesIt() throws IOException {
+        for (int w : new int[]{1921, 1081, 1572, 2560, 1}) {
+            for (int k = 1; k < CoarsePass.LEVELS; k++) {
+                int small = CoarsePass.size(w, k);
+                assertTrue(small * (1 << k) >= w && (small - 1) * (1 << k) < w, w + " у " + k);
+                double scale = (double) w / small;
+                for (int t = 0; t < small; t++) {
+                    // NDC середины пикселя t мелкого кадра — и где та же NDC в полном
+                    double ndc = (t + 0.5) / small * 2 - 1, full = (ndc + 1) / 2 * w;
+                    assertEquals(full, (t + 0.5) * scale, 1e-9);
+                }
+            }
+        }
+        String fsh = shader("core/fx.fsh"), out = shader("core/fx_coarse.fsh");
+        assertTrue(fsh.contains("vec2 frag = gl_FragCoord.xy * mix(vec2(FxGlowPass.y), FxCoarseScale, float(coarse));"), "шейдер слоя — долей кадра");
+        assertTrue(out.contains("ivec2((vec2(t) + 0.5) * CoarseScale)") && out.contains("(vec2(full) + 0.5) / CoarseScale - 0.5"), "вывод — той же долей");
+        // прут перед дымом уже пикселя мелкого кадра: ближе всех соседей — дыма на нём нет (за ним дым отброшен)
+        assertTrue(out.contains("if (depth < nearest * 0.999 - 0.05) v = vec4(0.0);"), "прут перед дымом");
+    }
+
+    private static String shader(String path) throws IOException {
+        return java.nio.file.Files.readString(Path.of("src/main/resources/assets/incoming/shaders").resolve(path)).replaceAll("//[^\n]*", "");
+    }
+
     private static FxQuads frame() {
         FxQuads quads = new FxQuads();
         quads.begin(new Vector3f(-1, 0, 0), new Vector3f(0, 1, 0));

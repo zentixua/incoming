@@ -6,6 +6,6 @@
         { "name": "Sampler1" }
     ],
     "uniforms": [
-        { "name": "CoarseFactor", "type": "float", "count": 1, "values": [ 2.0 ] }
+        { "name": "CoarseScale", "type": "float", "count": 2, "values": [ 2.0, 2.0 ] }
     ]
 }

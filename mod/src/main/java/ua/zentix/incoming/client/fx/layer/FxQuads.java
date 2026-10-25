@@ -517,7 +517,7 @@ public final class FxQuads {
             return;
         }
         MeshData mesh = new MeshData(result, new MeshData.DrawState(FORMAT, n * 4, n * 6, VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(n * 4)));
-        int runs = CoarsePass.ready() ? plan(order) : 1;
+        int runs = runs(order, CoarsePass.ready());
         if (runs == 1 && runLevel[0] == 0) {
             BufferUploader.drawWithShader(mesh);
             return;
@@ -563,6 +563,22 @@ public final class FxQuads {
             CoarsePass.counted(runFill);
         }
         return runs;
+    }
+
+    /**
+     * Отрезки кадра в порядке order: мелких кадров нет ({@code coarse} — нет) — один отрезок полного кадра, без плана
+     * (план прошлого кадра здесь не годен: {@code coarse off} или потеря расстояния до мира рисовали бы его уровнем).
+     */
+    int runs(int[] order, boolean coarse) {
+        if (coarse) return plan(order);
+        runFrom[0] = 0;
+        runLevel[0] = 0;
+        return 1;
+    }
+
+    /** То же в порядке от дальних (проверки). */
+    int runs(boolean coarse) {
+        return runs(sort.sort(keys, n), coarse);
     }
 
     /** Самый мелкий уровень квадрата i в порядке записи (проверки). */

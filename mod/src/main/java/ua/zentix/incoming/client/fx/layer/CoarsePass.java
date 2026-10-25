@@ -177,10 +177,15 @@ public final class CoarsePass {
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, FBOS[k]);
         GlStateManager._viewport(0, 0, W[k], H[k]);
         GL30.glClearBufferfv(GL11.GL_COLOR, 0, ZERO);
-        // y — во сколько раз пиксель крупнее; x = 0 — цвет, не свечение (fx.fsh: что за миром — отброшено)
+        // y — во сколько раз пиксель крупнее; x = 0 — цвет, не свечение (fx.fsh: что за миром — отброшено). Кадр — с
+        // округлением вверх, поэтому пиксель мелкого кадра — w / W полных по x и h / H по y (не ровно f, если кадр не
+        // кратен f): той же долей шейдер слоя ищет расстояние до мира, а вывод — пиксели мелкого кадра
+        float sx = (float) w / W[k], sy = (float) h / H[k];
         s.safeGetUniform("FxGlowPass").set(0f, (float) f);
+        s.safeGetUniform("FxCoarseScale").set(sx, sy);
         quads.range(s, a, b);
         s.safeGetUniform("FxGlowPass").set(0f, 1f);
+        s.safeGetUniform("FxCoarseScale").set(1f, 1f);
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
         GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
         // вывод — в рамке отрезка (с запасом в пиксель мелкого кадра и соседей вывода)
@@ -193,7 +198,7 @@ public final class CoarsePass {
             GlStateManager._scissorBox(x0, y0, x1 - x0, y1 - y0);
             c.setSampler("Sampler0", TEXTURES[k]);
             c.setSampler("Sampler1", scene);
-            c.safeGetUniform("CoarseFactor").set((float) f);
+            c.safeGetUniform("CoarseScale").set(sx, sy);
             c.apply();
             FxBloom.triangle();
             GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
@@ -213,14 +218,19 @@ public final class CoarsePass {
         for (int k = 0; k < LEVELS; k++) FILL[k] += fill[k];
     }
 
+    /** Сторона кадра уровня k у стороны полного w: с округлением вверх (пиксель мелкого — w / size полных, не 2^k). */
+    static int size(int w, int k) {
+        return Math.max(1, (w + (1 << k) - 1) >> k);
+    }
+
     /** Кадры уровней 1…3 для кадра w×h (RGBA16F: свет с умноженной альфой и закрытая доля); false — не завести. */
     private static boolean target(int w, int h) {
         if (TEXTURES[1] >= 0 && w == fullW && h == fullH) return true;
         int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         boolean ok = true;
         for (int k = 1; k < LEVELS; k++) {
-            W[k] = Math.max(1, (w + (1 << k) - 1) >> k);
-            H[k] = Math.max(1, (h + (1 << k) - 1) >> k);
+            W[k] = size(w, k);
+            H[k] = size(h, k);
             if (TEXTURES[k] < 0) {
                 TEXTURES[k] = GlStateManager._genTexture();
                 GlStateManager._bindTexture(TEXTURES[k]);

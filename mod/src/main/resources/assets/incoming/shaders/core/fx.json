@@ -23,6 +23,7 @@
         { "name": "FxFogColor", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
         { "name": "FxScene", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "FxGlowPass", "type": "float", "count": 2, "values": [ 0.0, 1.0 ] },
+        { "name": "FxCoarseScale", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
         { "name": "FxProbes", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "FxGlow", "type": "float", "count": 4, "values": [ 0.0, 0.0, 1.0, 1.0 ] },
         { "name": "FxSun", "type": "float", "count": 4, "values": [ 0.0, 1.0, 0.0, 0.0 ] },

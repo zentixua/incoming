@@ -7,19 +7,21 @@
 // кадра (свет посчитан в середине пикселя t мелкого кадра, расстояние до мира — в пикселе floor((t + ½)·factor) полного,
 // как у луча пелены) с весом по сходству их расстояния до мира с расстоянием пикселя (pallAlike, pallSlope, pallAhead —
 // как fx_pall_composite): у края дома клуб неба не ложится на стену, а клуб перед стеной — на небо. Ни один из четырёх
-// не то же место (прут, забор, край блока вдали уже пикселя мелкого кадра) — ближайший по расстоянию из 4×4 вокруг.
+// не то же место (прут, забор, край блока вдали уже пикселя мелкого кадра) — из 4×4 вокруг: пиксель ближе их всех (прут
+// перед дымом) — дыма на нём нет (за прутом дым отброшен, а перед ним мелкий кадр его не знает); иначе (просвет дальше
+// их) — самый похожий по расстоянию.
 
 // мелкий кадр: свет с умноженной альфой (rgb) и закрытая доля (a)
 uniform sampler2D Sampler0;
 // расстояние до мира за пикселем (полное разрешение)
 uniform sampler2D Sampler1;
-// во сколько раз мелкий кадр мельче полного
-uniform float CoarseFactor;
+// полных пикселей на пиксель мелкого кадра по x и y (CoarsePass: кадр с округлением вверх, не ровно 2^k)
+uniform vec2 CoarseScale;
 
 out vec4 fragColor;
 
 ivec2 rayPixel(ivec2 t, ivec2 fullSize) {
-    return clamp(ivec2((vec2(t) + 0.5) * CoarseFactor), ivec2(0), fullSize - 1);
+    return clamp(ivec2((vec2(t) + 0.5) * CoarseScale), ivec2(0), fullSize - 1);
 }
 
 float sampleDepth(ivec2 t, ivec2 fullSize) {
@@ -31,7 +33,7 @@ void main() {
     ivec2 full = ivec2(gl_FragCoord.xy);
     float depth = pallScene(texelFetch(Sampler1, clamp(full, ivec2(0), fullSize - 1), 0).r);
     // середина пикселя t мелкого кадра — (t + ½)·factor полного: там квадраты и посчитаны
-    vec2 at = (vec2(full) + 0.5) / CoarseFactor - 0.5;
+    vec2 at = (vec2(full) + 0.5) / CoarseScale - 0.5;
     ivec2 base = ivec2(floor(at));
     vec2 f = at - vec2(base), slope = pallSlope(Sampler1, full, fullSize, depth);
     vec4 sum = vec4(0.0);
@@ -51,11 +53,13 @@ void main() {
     vec4 v = sum / max(total, 1e-12);
     if (same <= 0.5) {
         ivec2 best = clamp(base, ivec2(0), lowSize - 1);
-        float bestAlike = -1.0;
+        float bestAlike = -1.0, nearest = 1e30;
         for (int j = -1; j <= 2; j++) {
             for (int i = -1; i <= 2; i++) {
                 ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
-                float a = pallAlike(sampleDepth(t, fullSize), pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
+                float d = sampleDepth(t, fullSize);
+                nearest = min(nearest, d);
+                float a = pallAlike(d, pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
                 if (a > bestAlike) {
                     bestAlike = a;
                     best = t;
@@ -63,6 +67,7 @@ void main() {
             }
         }
         v = texelFetch(Sampler0, best, 0);
+        if (depth < nearest * 0.999 - 0.05) v = vec4(0.0);
     }
     // негодный пиксель (NaN, бесконечность в половинной точности) — ничего не кладёт
     if (!pallValid(vec4(v.rgb, 1.0 - v.a))) v = vec4(0.0);
