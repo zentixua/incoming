@@ -576,9 +576,15 @@ public final class GroundDust {
      */
     private double axis(double x, double z, double toward) {
         long cx = Math.floorDiv((long) Math.floor(x), AXIS_CELL), cz = Math.floorDiv((long) Math.floor(z), AXIS_CELL);
-        long key = ((cx & 0xFFFFF) << 24) | ((cz & 0xFFFFF) << 4) | Math.floorMod(Math.round(toward * 8 / Math.PI), 8);
+        int bucket = Math.floorMod(Math.round(toward * 8 / Math.PI), 8);
+        long key = ((cx & 0xFFFFF) << 24) | ((cz & 0xFFFFF) << 4) | bucket;
         Double known = axes.get(key);
         if (known != null) return known;
+        // ось клетки — по её середине и середине корзины направлений, а не по месту первого вопроса: иначе ответ зависел бы
+        // от того, какой кадр спросил первым (частота кадров, порядок клубов)
+        x = (cx + 0.5) * AXIS_CELL;
+        z = (cz + 0.5) * AXIS_CELL;
+        toward = Math.PI * bucket / 8;
         // полосой из трёх линий через ±1,5 м: диагональ через угол перекрёстка одна линия проходит, полоса — нет
         double[] run = new double[8];
         for (int m = 0; m < 8; m++) {
@@ -875,13 +881,9 @@ public final class GroundDust {
                 double own = Math.max(Math.sqrt(var) * reach[k], Math.PI * source / SECTORS / 1.25 * openArc[k][a]);
                 source *= reach[k];
                 double mean = source * stretch;
-                double sh = Math.max(Math.hypot(own * stretch, spread), v), front = front(k, t);
-                if (mean + EDGE_SIGMAS * sh > front) {
-                    sh = Math.max((front - mean) / EDGE_SIGMAS, Math.min(sh, Math.max(own, v)));
-                    mean = Math.max(0, Math.min(mean, front - EDGE_SIGMAS * sh));
-                    // фронт ещё у самой воронки: клубы — у середины, не шире него
-                    if (mean + EDGE_SIGMAS * sh > front) sh = Math.max(front / EDGE_SIGMAS, v);
-                }
+                double[] e = edge(mean, Math.max(Math.hypot(own * stretch, spread), v), own, v, front(k, t));
+                mean = e[0];
+                double sh = e[1];
                 double ang = heading[k][a], path = source;
                 if (walled && mean > 0) {
                     double[] o = open(k, a, mean);
@@ -902,6 +904,20 @@ public final class GroundDust {
                 out.blob(x, at[0] + zc, z, sh, v, mass * fade, aloft[a][k], surface[k][a]);
             }
         }
+    }
+
+    /**
+     * Середина клуба по радиусу и его σh, когда видимый край (4σ) дошёл бы дальше фронта: не дальше фронта ({@link #emit};
+     * путь клуба в улице — {@link #place} — от того же места).
+     */
+    private static double[] edge(double mean, double sh, double own, double v, double front) {
+        if (mean + EDGE_SIGMAS * sh > front) {
+            sh = Math.max((front - mean) / EDGE_SIGMAS, Math.min(sh, Math.max(own, v)));
+            mean = Math.max(0, Math.min(mean, front - EDGE_SIGMAS * sh));
+            // фронт ещё у самой воронки: клубы — у середины, не шире него
+            if (mean + EDGE_SIGMAS * sh > front) sh = Math.max(front / EDGE_SIGMAS, v);
+        }
+        return new double[]{mean, sh};
     }
 
     /** Масса пыли в воздухе у клуба кольца показа {@code show} сектора k в возрасте t, кг. */
@@ -989,7 +1005,7 @@ public final class GroundDust {
         // лежит, где его подняло
         if (t < PATH[PATH_FROM]) {
             paths[show][sector] = null;
-            double[] at = place(sector, show, t, source, ux, uz);
+            double[] at = place(sector, show, t, source, ux, uz, own);
             double start = under(at[0], at[1], 0.5 * width(show, t, own)), level = begin(sector, show, start, ux, uz, at);
             double[] held = young(show, t, at, level);
             return new double[]{level, held[0], held[1]};
@@ -1000,7 +1016,7 @@ public final class GroundDust {
             p = new Path();
             p.node = PATH_FROM;
             p.now = new Track();
-            double[] at = place(sector, show, PATH[PATH_FROM], source, ux, uz);
+            double[] at = place(sector, show, PATH[PATH_FROM], source, ux, uz, own);
             double start = under(at[0], at[1], 0.5 * width(show, PATH[PATH_FROM], own));
             p.now.level = begin(sector, show, start, ux, uz, at);
             p.now.seen = start;
@@ -1054,11 +1070,14 @@ public final class GroundDust {
     }
 
     /** Место пути клуба в возрасте t (x, z от точки взрыва). */
-    private double[] place(int sector, int show, double t, double source, double ux, double uz) {
-        double[] d = drift(t, 0.8 * at(sv[show], t));
+    private double[] place(int sector, int show, double t, double source, double ux, double uz, double own) {
+        double v = at(sv[show], t);
+        double[] d = drift(t, 0.8 * v);
         double mean = source * stretch(t);
+        // в улице — с того же места, что клуб: не дальше фронта ({@link #edge}; σ — без доли фазы волны, она — доли
+        // секунды у самого удара) и по открытому ({@link #open})
+        if (walled) mean = edge(mean, width(show, t, own), own, v, front(sector, t))[0];
         if (walled && mean > 0) {
-            // в улице — по открытому, как клуб ({@link #open})
             double[] o = open(sector, show, mean);
             return new double[]{d[0] + o[1] * Math.cos(o[0]), d[1] + o[1] * Math.sin(o[0])};
         }
@@ -1098,7 +1117,7 @@ public final class GroundDust {
 
     /** Шаг пути клуба от t0 до t1 ({@link #level}). */
     private void step(Track tr, int sector, int show, double t0, double t1, double source, double ux, double uz, double own) {
-        double[] p0 = place(sector, show, t0, source, ux, uz), p1 = place(sector, show, t1, source, ux, uz);
+        double[] p0 = place(sector, show, t0, source, ux, uz, own), p1 = place(sector, show, t1, source, ux, uz, own);
         double dx = p1[0] - p0[0], dz = p1[1] - p0[1], len = Math.hypot(dx, dz), w = 0.5 * width(show, t1, own);
         int n = (int) Math.max(1, Math.min(PROBES, Math.ceil(len / Math.max(1, w))));
         // в улице — не реже метра пути: поперечный снос и стену держит каждая выборка ({@link #canyon})

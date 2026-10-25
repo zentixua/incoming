@@ -403,20 +403,17 @@ class GroundDustTest {
      * Ветер в городе: ниже крыш снос юбки — вдоль улицы и не дальше стены (ревью R468.r1: 4 из 24 середин над домами на
      * 20 с при 3 м/с поперёк улиц; ревью R472: дома 8 м — снос сквозь стену долей сверх проекции, 8 клубов в домах на
      * 21 с; удар в 6,5 м от перекрёстка в ветер по диагонали — клуб скачет назад на 55 м в дом, запруда пути не
-     * согласована с остановкой). Кадр каждые 0,05 с до 30 с: середина каждого заметного клуба — на мостовой (у края — до
+     * согласована с остановкой; ревью R472b: ветер 6 м/с, дома 8 м — путь клуба шёл от места дальше фронта, клуб на 0,6 с
+     * в доме на 1,7 м). Кадр каждые 0,05 с до 30 с: середина каждого заметного клуба — на мостовой (у края — до
      * метра) или над крышей, и клуб за кадр не прыгает.
      */
     @Test
     void skirtInTheWindStaysInTheStreets() {
         for (double roof : new double[]{12, 8}) {
             for (double[] at : new double[][]{{0, 0}, {0.5, 6.5}}) {
-                for (double[] wind : new double[][]{{3, 0}, {3 / Math.sqrt(2), 3 / Math.sqrt(2)}}) {
-                    GroundDust.Relief town = (x, z) -> Math.floorMod((int) Math.floor(x + at[0] + 13), 16) < 10
-                            && Math.floorMod((int) Math.floor(z + at[1] + 13), 16) < 10 ? roof : 0;
-                    GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
-                            GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), town);
-                    CloudModel.Air breeze = new CloudModel.Air(CloudModel.N_STANDARD, wind[0], wind[1], 0.1, (int) Stability.C, 0.5);
-                    GroundDust d = new CloudModel(BlastSource.of(WeaponType.DRONE, false), breeze, false, 0, g).crushed;
+                for (double[] wind : new double[][]{{3, 0}, {3 / Math.sqrt(2), 3 / Math.sqrt(2)}, {6, 0}}) {
+                    GroundDust.Relief town = town(roof, at);
+                    GroundDust d = townSkirt(town, wind);
                     String where = "дома " + roof + " м, удар " + at[0] + ", " + at[1] + ", ветер " + wind[0] + ", " + wind[1];
                     int seen = 0;
                     List<double[]> was = List.of();
@@ -441,6 +438,51 @@ class GroundDustTest {
                 }
             }
         }
+    }
+
+    /**
+     * Юбка в городе при ветре не зависит от частоты кадров: кадры через 1/20 и 1/60 с дают в одни и те же секунды один и
+     * тот же слой (ревью R472b: ось улицы в кэше по клетке считалась по месту первого вопроса — к 30 с один и тот же клуб
+     * в 80 м от себя при другой частоте).
+     */
+    @Test
+    void skirtInTheTownDoesNotDependOnTheFrameRate() {
+        for (double roof : new double[]{12, 8}) {
+            for (double[] at : new double[][]{{0, 0}, {0.5, 6.5}}) {
+                for (double[] wind : new double[][]{{3, 0}, {3 / Math.sqrt(2), 3 / Math.sqrt(2)}}) {
+                    GroundDust.Relief town = town(roof, at);
+                    GroundDust slow = townSkirt(town, wind), fast = townSkirt(town, wind);
+                    String where = "дома " + roof + " м, удар " + at[0] + ", " + at[1] + ", ветер " + wind[0] + ", " + wind[1];
+                    for (int f = 1; f <= 600; f++) {
+                        List<double[]> a = layer(slow, f / 20.0);
+                        for (int i = 1; i <= 3; i++) {
+                            List<double[]> b = layer(fast, (3 * f - 3 + i) / 60.0);
+                            if (i < 3) continue;
+                            assertEquals(a.size(), b.size(), where + ", " + f / 20.0 + " с");
+                            for (int c = 0; c < a.size(); c++) {
+                                for (int j = 0; j < 3; j++) {
+                                    assertEquals(a.get(c)[j], b.get(c)[j], 1e-6, where + ", " + f / 20.0 + " с, клуб " + c);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Квартал: дома 10×10 м высотой roof, улицы по 6 м, удар в {@code at} от перекрёстка. */
+    private static GroundDust.Relief town(double roof, double[] at) {
+        return (x, z) -> Math.floorMod((int) Math.floor(x + at[0] + 13), 16) < 10
+                && Math.floorMod((int) Math.floor(z + at[1] + 13), 16) < 10 ? roof : 0;
+    }
+
+    /** Юбка шахеда в квартале при ветре (x, z), м/с. */
+    private static GroundDust townSkirt(GroundDust.Relief town, double[] wind) {
+        GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
+                GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), town);
+        CloudModel.Air breeze = new CloudModel.Air(CloudModel.N_STANDARD, wind[0], wind[1], 0.1, (int) Stability.C, 0.5);
+        return new CloudModel(BlastSource.of(WeaponType.DRONE, false), breeze, false, 0, g).crushed;
     }
 
     private static List<double[]> layer(GroundDust g, double t) {
