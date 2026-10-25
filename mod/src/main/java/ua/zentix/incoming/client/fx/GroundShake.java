@@ -29,12 +29,13 @@ public final class GroundShake {
      */
     static final double BODY_RING_S = 0.4;
     /**
-     * Во сколько раз выше порога ощутимости ({@link GroundShock#PERCEPTION_START_MPS}, 0,1 мм/с) толчок уже полный: ×1000,
-     * 100 мм/с — «очень сильно, пугает» (шкала восприятия DIN 4150-2: 0,1 — не ощутимо, 0,3 — едва, 1 — ощутимо, 3 —
-     * ясно, 10 — сильно). Сила толчка — доля по логарифму, как у дрожи удара по давлению ({@link CameraShake#tremor}):
-     * ощутимость модели насыщается уже на 0,3 мм/с и силы не различает. Подача.
+     * Скорость грунта, с которой толчок начинает расти, и во сколько раз больше неё он уже полный, м/с: 0,1 мм/с — «не
+     * ощутимо» и ×1000, 100 мм/с — «очень сильно, пугает» (шкала восприятия по пиковой скорости из DIN 4150-2: 0,1 — не
+     * ощутимо, 0,3 — едва, 1 — ощутимо, 3 — ясно, 10 — сильно). Сила толчка — доля по логарифму, как у дрожи удара по
+     * давлению ({@link CameraShake#tremor}): ощутимость модели (KB с весом по частоте) насыщается уже у порога и силы не
+     * различает. Подача.
      */
-    static final double FULL_OVER_THRESHOLD = 1000;
+    static final double QUIET_MPS = 1e-4, FULL_OVER_THRESHOLD = 1000;
     /** Последняя волна грунта у игрока (строка сценария клиента). */
     private static String last = "-";
 
@@ -71,11 +72,11 @@ public final class GroundShake {
     }
 
     /**
-     * Сила толчка 0..1 у волны грунта {@code s}: ощутимость модели × доля по логарифму пиковой скорости грунта от порога
-     * ощутимости до {@link #FULL_OVER_THRESHOLD} порогов.
+     * Сила толчка 0..1 у волны грунта {@code s}: ощутимость модели × доля по логарифму пиковой скорости грунта от
+     * {@link #QUIET_MPS} до {@link #FULL_OVER_THRESHOLD} раз больше.
      */
     static double strength(GroundShock.Sample s) {
-        double over = Math.log10(Math.max(s.peakVelocityMps(), 1e-12) / GroundShock.PERCEPTION_START_MPS) / Math.log10(FULL_OVER_THRESHOLD);
+        double over = Math.log10(Math.max(s.peakVelocityMps(), 1e-12) / QUIET_MPS) / Math.log10(FULL_OVER_THRESHOLD);
         return s.perceptibility() * Math.clamp(over, 0, 1);
     }
 
