@@ -97,6 +97,8 @@ public final class BlastSounds {
     private static final List<CraterFire> FIRES = new ArrayList<>();
     /** Гул пожаров в воронках — суммой по четвертям вокруг уха ({@link Quarters}), по петле на четверть, а не на пожар. */
     private static final Quarters FIRE = new Quarters();
+    /** Лучи преграды к пожарам — по бюджету тика, не к каждому в каждом тике ({@link FireRays}). */
+    private static final FireRays FIRE_RAYS = new FireRays();
     private static final AmbientLoop[] FIRE_LOOPS = new AmbientLoop[Quarters.N];
     private static final int[] FIRE_RETRY = new int[Quarters.N], FIRE_QUIET = new int[Quarters.N];
     /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
@@ -334,7 +336,8 @@ public final class BlastSounds {
     static void tick() {
         ticks++;
         FIRE.clear();
-        FIRES.removeIf(fire -> !fire.tick(Minecraft.getInstance(), FIRE));
+        FIRES.removeIf(fire -> !fire.tick(Minecraft.getInstance()));
+        FIRE_RAYS.tick(FIRES, ear(), SoundFilters.WORLD, FIRE);
         fireLoops();
         MIX.at(ticks);
         // звук начался на деле позже своего тика — смесь взрыва от настоящего начала, как его эхо и удар у уха
