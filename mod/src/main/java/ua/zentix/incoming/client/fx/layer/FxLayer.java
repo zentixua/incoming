@@ -396,10 +396,10 @@ public final class FxLayer {
     /** Время кадра слоя за прошлую секунду — для строки сценария. */
     public static String describeTiming() {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
-                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; quads %.3f, longest %.3f — %s; %s), depth: %s",
+                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; quads %.3f, longest %.3f — %s; pall and smoke volume: %s; %s), depth: %s",
                 lastQuads, lastMean, lastMax, lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean,
-                HEAT.lastMax, HEAT.lastFrames, HeatPass.describe(), QUAD_PASS.lastMean, QUAD_PASS.lastMax, CoarsePass.describe(), FxBloom.describe(),
-                SceneDepth.describe());
+                HEAT.lastMax, HEAT.lastFrames, HeatPass.describe(), QUAD_PASS.lastMean, QUAD_PASS.lastMax, CoarsePass.describe(), PallPass.describe(),
+                FxBloom.describe(), SceneDepth.describe());
     }
 
     /** Выход из мира или смена измерения. */

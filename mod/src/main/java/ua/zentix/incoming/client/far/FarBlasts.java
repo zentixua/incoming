@@ -255,6 +255,12 @@ public final class FarBlasts {
             return BlastTime.seconds(BlastTime.ticks(), born, 20 * (seconds - SmokeGrid.seconds(0)));
         }
 
+        /** Устоявшийся дым облака — объёмом ({@link SmokeGrid#share}), молодое облако — квадратами слоя. */
+        @Override
+        public boolean volume() {
+            return true;
+        }
+
         /** Источник облака: клубы модели в мире, облако конденсации и брызги взрыва на воде. */
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
