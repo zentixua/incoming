@@ -272,9 +272,8 @@ class CoarsePassTest {
     @Test
     void unresolvedPixelsAreDrawnAtFullResolution() throws IOException {
         String fsh = shader("core/fx.fsh"), out = shader("core/fx_coarse.fsh").replaceAll("\\s+", " ");
-        // одно условие «не разрешён» у маски и у вывода: маска — только там, вывод — только вне
-        assertTrue(out.contains("bool unresolved = total <= 0.0 || bright > 0.0;"), "условие");
-        assertTrue(out.contains("if (CoarseMask > 0.5) { if (!unresolved) discard; fragColor = vec4(1.0); return; } if (unresolved) discard;"),
+        // решает маска: она — только там, вывод — только вне её
+        assertTrue(out.contains("if (CoarseMask > 0.5) { bool unresolved = total <= 0.0 || clip > COARSE_CLIP * total; if (!unresolved) discard; fragColor = vec4(1.0); return; } if (texelFetch(Sampler3, full, 0).r > 0.5) discard;"),
                 "маска и вывод делят пиксели");
         // досчёт: шейдер слоя отбрасывает всё вне маски до света, в маске — как обычный квадрат (с глубиной кадра)
         assertTrue(fsh.contains("if (FxCoarseFill > 0.5 && texelFetch(FxCoarseMask, ivec2(gl_FragCoord.xy), 0).r < 0.5) discard;"), "досчёт по маске");
@@ -414,8 +413,11 @@ class CoarsePassTest {
      * Пересвет (ревью #455): восьмибитный кадр обрезает свет после каждого смешивания, мелкий кадр (RGBA32F) — нет. Пока у
      * каждого квадрата свет не выше непрозрачности (rgb ≤ a с умноженной альфой), обрезки нет ни в одном смешивании, и
      * отрезок, сложенный отдельно и выведенный разом, равен квадратам по одному поверх кадра — на любых случайных стопках.
-     * Квадрат светлее (дым в свете огня) перед тёмным клубом даёт другое: такой квадрат шейдер слоя отмечает во втором
-     * выходе мелкого кадра, и вывод отдаёт пиксель досчёту полным кадром.
+     * Квадрат светлее (дым в свете огня) — пересвет e = rgb − a; сложенный смешиванием слоя (E) и с кадром под отрезком он
+     * даёт ошибку пикселя ({@code coarseClipError} самого шейдера): разница двух итогов не больше её на любых стопках, в
+     * том числе у смеси соседей с весами вывода, а без неё (E не выше (1 − A)(1 − кадр)) итоги равны. Досчёт — где ошибка
+     * больше 1/255: сотня слабых пересветов складывается в неё, а пересвет над тёмным кадром, который обрезки не даёт, — нет
+     * (отметка «есть пересвет» отдавала досчёту 30–50 % экрана на отрезок, замер PF7).
      */
     @Test
     void overbrightPuffsAreDrawnAtFullResolution() throws IOException {
@@ -430,22 +432,64 @@ class CoarsePassTest {
             double frame = rnd.nextDouble();
             assertEquals(sequential(puffs, frame), together(puffs, frame), 1e-12);
         }
+        String glsl = shader("core/fx_coarse.fsh");
+        GlslFunction error = GlslFunction.parse(glsl, "coarseClipError");
+        assertEquals(1 / 255.0, GlslFunction.parse("float k() { return COARSE_CLIP; }" + glsl, "k").call(Map.of()), 1e-10);
+        for (int k = 0; k < 20000; k++) {
+            int n = 1 + rnd.nextInt(k % 2 == 0 ? 30 : 300);
+            double[][][] stacks = new double[1 + rnd.nextInt(4)][][];
+            double frame = rnd.nextBoolean() ? 1 : rnd.nextDouble();
+            double mixed = 0, mixedSeq = 0, bound = 0, total = 0;
+            for (int t = 0; t < stacks.length; t++) {
+                double[][] puffs = stacks[t] = new double[n][];
+                for (int i = 0; i < n; i++) {
+                    double a = n > 30 ? 0.05 * rnd.nextDouble() : rnd.nextDouble();
+                    puffs[i] = new double[]{Math.min(1, a * 2 * rnd.nextDouble()), a};
+                }
+                double err = error.call(Map.of("e", excess(puffs), "a", covered(puffs), "frame", frame));
+                double seq = sequential(puffs, frame), law = together(puffs, frame);
+                assertTrue(law - seq <= err + 1e-9, "обрезка не больше ошибки");
+                if (err == 0) assertEquals(seq, law, 1e-9);
+                // смесь соседей с весами вывода: свет и закрытая доля — смесью, поверх кадра, обрезка — раз
+                double w = rnd.nextDouble();
+                mixed += w * (light(puffs) + (1 - covered(puffs)) * frame);
+                mixedSeq += w * seq;
+                bound += w * err;
+                total += w;
+            }
+            double out = Math.min(1, mixed / total);
+            assertTrue(out - mixedSeq / total >= -1e-9 && out - mixedSeq / total <= bound / total + 1e-9, "у смеси — смесь ошибок");
+        }
         // освещённые клубы, потом тёмный перед ними: по одному — обрезка до белого, разом — пересвет гаснет иначе
-        double[][] lit = {{0.9, 0.4}, {0.9, 0.4}, {0.9, 0.4}, {0.0, 0.5}};
-        assertTrue(together(lit, 0.5) - sequential(lit, 0.5) > 0.1);
-        String fsh = shader("core/fx.fsh"), out = shader("core/fx_coarse.fsh").replaceAll("\\s+", " ");
-        // малый пересвет каждого из сотни (ревью #455: 0,0119 при 0,01) — тоже отметка: без допуска
+        double[][] lit4 = {{0.9, 0.4}, {0.9, 0.4}, {0.9, 0.4}, {0.0, 0.5}};
+        double litError = error.call(Map.of("e", excess(lit4), "a", covered(lit4), "frame", 0.5));
+        assertTrue(together(lit4, 0.5) - sequential(lit4, 0.5) > 0.1 && litError >= together(lit4, 0.5) - sequential(lit4, 0.5) - 1e-9);
+        // малый пересвет каждого из сотни (ревью #455: 0,0119 при 0,01) складывается выше 1/255; над белым кадром обрезка
+        // снимает весь пересвет каждого смешивания — граница E точна
         double[][] faint = new double[101][];
         for (int i = 0; i < 100; i++) faint[i] = new double[]{0.0119, 0.01};
         faint[100] = new double[]{0, 0.5};
-        assertTrue(together(faint, 1) - sequential(faint, 1) > 0.05);
-        assertTrue(fsh.contains("if (coarse) fragCover = vec4(float(any(greaterThan(fragColor.rgb, vec3(fragColor.a)))), 0.0, 0.0, 0.0);"),
-                "отметка пересвета — в мелком кадре");
-        assertTrue(out.contains("bright = max(bright, texelFetch(Sampler2, t, 0).r);") && out.contains("bool unresolved = total <= 0.0 || bright > 0.0;"),
-                "у отметки — досчёт");
+        double faintError = error.call(Map.of("e", excess(faint), "a", covered(faint), "frame", 1.0));
+        assertTrue(together(faint, 1) - sequential(faint, 1) > 0.05 && faintError >= together(faint, 1) - sequential(faint, 1) - 1e-9);
+        // слабый пересвет над тёмным кадром: обрезки нет, досчёта нет
+        double[][] mild = new double[5][];
+        for (int i = 0; i < 5; i++) mild[i] = new double[]{0.12, 0.1};
+        assertEquals(0, error.call(Map.of("e", excess(mild), "a", covered(mild), "frame", 0.4)));
+        assertEquals(sequential(mild, 0.4), together(mild, 0.4), 1e-12);
+        String fsh = shader("core/fx.fsh"), out = glsl.replaceAll("\\s+", " ");
+        assertTrue(fsh.contains("if (coarse) fragCover = vec4(max(max(fragColor.r, max(fragColor.g, fragColor.b)) - fragColor.a, 0.0), 0.0, 0.0, fragColor.a);"),
+                "пересвет с альфой квадрата — во втором выходе мелкого кадра");
+        assertTrue(out.contains("clip += coarseClipError(texelFetch(Sampler2, t, 0).r, low.a, frame) * w;")
+                && out.contains("bool unresolved = total <= 0.0 || clip > COARSE_CLIP * total;"), "у ошибки больше 1/255 — досчёт");
+        assertTrue(out.contains("if (CoarseMask > 0.5 && CoarseFrame > 0.5 && textureSize(Sampler3, 0) == fullSize) { vec3 under = texelFetch(Sampler3, full, 0).rgb; frame = max(under.r, max(under.g, under.b)); }"),
+                "кадр под отрезком — у маски, самый светлый цвет; нет его — белый");
         String code = java.nio.file.Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/fx/layer/CoarsePass.java"));
         assertTrue(code.contains("GL30.GL_COLOR_ATTACHMENT1, GlConst.GL_TEXTURE_2D, BRIGHT[k], 0);") && code.contains("GL30.glClearBufferfv(GL11.GL_COLOR, 1, ZERO);")
-                && code.contains("c.setSampler(\"Sampler2\", BRIGHT[k]);"), "отметки — второй выход мелкого кадра, чистятся с ним, вывод их читает");
+                && code.contains("c.setSampler(\"Sampler2\", BRIGHT[k]);") && code.contains("GL30.GL_R32F, W[k], H[k], 0, GL11.GL_RED, GL11.GL_FLOAT, null);"),
+                "пересвет — второй выход мелкого кадра в полной точности, чистится с ним, вывод его читает");
+        int maskFrame = code.indexOf("c.setSampler(\"Sampler3\", under >= 0 ? under : scene);"), maskPass = code.indexOf("c.safeGetUniform(\"CoarseMask\").set(1f);"),
+                byMask = code.indexOf("c.setSampler(\"Sampler3\", mask);"), composite = code.indexOf("c.safeGetUniform(\"CoarseMask\").set(0f);");
+        assertTrue(maskFrame > 0 && maskPass > maskFrame && byMask > maskPass && composite > byMask, "маска — по кадру под отрезком, вывод — по маске");
     }
 
     /**
@@ -538,6 +582,27 @@ class CoarsePassTest {
         double d = Math.round(frame * 255) / 255.0;
         for (double[] p : puffs) d = Math.round(Math.min(1, p[0] + (1 - p[1]) * d) * 255) / 255.0;
         return d;
+    }
+
+    /** Пересвет отрезка, сложенный смешиванием слоя: E = e + (1 − a)·E, e = max(rgb − a, 0) (fx.fsh, fragCover). */
+    private static double excess(double[][] puffs) {
+        double e = 0;
+        for (double[] p : puffs) e = Math.max(p[0] - p[1], 0) + (1 - p[1]) * e;
+        return e;
+    }
+
+    /** Свет отрезка, сложенный отдельно без обрезки (мелкий кадр, rgb). */
+    private static double light(double[][] puffs) {
+        double rgb = 0;
+        for (double[] p : puffs) rgb = p[0] + (1 - p[1]) * rgb;
+        return rgb;
+    }
+
+    /** Закрытая доля отрезка (мелкий кадр, a). */
+    private static double covered(double[][] puffs) {
+        double t = 1;
+        for (double[] p : puffs) t *= 1 - p[1];
+        return 1 - t;
     }
 
     /** Квадраты {rgb, a} с умноженной альфой по одному поверх кадра frame, обрезка до 1 после каждого (восьмибитный кадр). */

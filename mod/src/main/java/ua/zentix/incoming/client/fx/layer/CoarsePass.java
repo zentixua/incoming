@@ -61,8 +61,9 @@ public final class CoarsePass {
     public static volatile boolean off;
     private static final int[] TEXTURES = {-1, -1, -1, -1}, FBOS = {-1, -1, -1, -1}, W = new int[LEVELS], H = new int[LEVELS];
     /**
-     * Отметки пересвета мелкого кадра уровня k (R8, второй выход шейдера слоя): квадрат светлее своей непрозрачности.
-     * Восьмибитный кадр обрезает свет после каждого смешивания, RGBA32F — нет; у отметки вывод пиксель не берёт (досчёт).
+     * Пересвет мелкого кадра уровня k (R32F, второй выход шейдера слоя): свет квадратов выше их непрозрачности, сложенный
+     * смешиванием слоя. Восьмибитный кадр обрезает свет после каждого смешивания, RGBA32F — нет; где обрезка изменила бы
+     * пиксель больше чем на 1/255 (по пересвету и кадру под отрезком, {@code fx_coarse}), пиксель — досчёту.
      */
     private static final int[] BRIGHT = {-1, -1, -1, -1};
     /** Маска полного кадра (R8): пиксели, которые мелкий кадр не разрешает, — их досчитывает полный кадр. */
@@ -188,7 +189,7 @@ public final class CoarsePass {
      */
     static void draw(FxQuads quads, ShaderInstance s, int a, int b, int k, float[] box) {
         ShaderInstance c = composite;
-        int frame = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int frame = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING), under = color(frame);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         int w = VIEWPORT[0] + VIEWPORT[2], h = VIEWPORT[1] + VIEWPORT[3];
         if (c == null || w <= 0 || h <= 0 || !target(w, h)) {
@@ -223,7 +224,11 @@ public final class CoarsePass {
             c.setSampler("Sampler1", scene);
             c.setSampler("Sampler2", BRIGHT[k]);
             c.safeGetUniform("CoarseScale").set(sx, sy);
-            // маска: пиксели, которых мелкий кадр не разрешает (их расстояние до мира — ни у одного из четырёх соседей)
+            // маска: пиксели, которых мелкий кадр не разрешает (их расстояние до мира — ни у одного из четырёх соседей, или
+            // обрезка пересвета по кадру под отрезком): кадр ещё без отрезка, читать его можно — пишется маска. Кадра нет
+            // текстурой — он считается белым (без него в Sampler3 — расстояние до мира, не маска: её пишет этот проход)
+            c.setSampler("Sampler3", under >= 0 ? under : scene);
+            c.safeGetUniform("CoarseFrame").set(under >= 0 ? 1f : 0f);
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, maskFbo);
             GL30.glClearBufferfv(GL11.GL_COLOR, 0, ZERO);
             c.safeGetUniform("CoarseMask").set(1f);
@@ -231,8 +236,9 @@ public final class CoarsePass {
             FxBloom.triangle();
             GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
             c.clear();
-            // вывод — в остальные
+            // вывод — в остальные, по маске
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
+            c.setSampler("Sampler3", mask);
             c.safeGetUniform("CoarseMask").set(0f);
             c.apply();
             FxBloom.triangle();
@@ -261,6 +267,16 @@ public final class CoarsePass {
             GlStateManager._disableScissorTest();
         }
         runs++;
+    }
+
+    /** Текстура цвета кадра {@code frame} (куда он рисует), −1 — не текстура (кадр окна, рендербуфер). */
+    private static int color(int frame) {
+        if (frame == 0) return -1;
+        int buffer = GL11.glGetInteger(GL20.GL_DRAW_BUFFER0);
+        if (buffer < GL30.GL_COLOR_ATTACHMENT0 || buffer > GL30.GL_COLOR_ATTACHMENT15) return -1;
+        if (GL30.glGetFramebufferAttachmentParameteri(GL30.GL_DRAW_FRAMEBUFFER, buffer, GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE) != GL11.GL_TEXTURE)
+            return -1;
+        return GL30.glGetFramebufferAttachmentParameteri(GL30.GL_DRAW_FRAMEBUFFER, buffer, GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME);
     }
 
     /** Кадр слоя с отрезками: заливка клубов, что шли уровнем k (экранов), — в сводку. */
@@ -305,7 +321,7 @@ public final class CoarsePass {
                 GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
             }
             GlStateManager._bindTexture(BRIGHT[k]);
-            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_R8, W[k], H[k], 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, null);
+            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_R32F, W[k], H[k], 0, GL11.GL_RED, GL11.GL_FLOAT, null);
             if (FBOS[k] < 0) FBOS[k] = GlStateManager.glGenFramebuffers();
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, FBOS[k]);
             GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, TEXTURES[k], 0);

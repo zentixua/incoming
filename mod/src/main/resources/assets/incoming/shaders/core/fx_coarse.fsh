@@ -11,16 +11,20 @@
 // место (сходство ½ и меньше) — в цвет не идёт вовсе (coarseWeight): малый, но ненулевой вес фона на краю при весе
 // билинейки 15/16 дал бы ореол дыма фона на переднем предмете. Ни один из четырёх
 // не то же место (прут, решётка, край блока вдали уже пикселя мелкого кадра) — мелкий кадр этот пиксель не разрешает:
-// вывод его не трогает, а проход маски (CoarseMask = 1) отмечает его, и CoarsePass досчитывает отмеченные пиксели
-// квадратами отрезка в полном кадре, с аппаратной глубиной (дым перед прутом — на пруте, за ним — нет).
+// проход маски (CoarseMask = 1) отмечает его, вывод по маске его не трогает, и CoarsePass досчитывает отмеченные пиксели
+// квадратами отрезка в полном кадре, с аппаратной глубиной (дым перед прутом — на пруте, за ним — нет). Так же — пиксель,
+// где восьмибитный кадр обрезал бы пересвет по ходу смешивания заметнее 1/255 (coarseClipError). Решает только маска:
+// кадр под отрезком она читает до вывода, а вывод в этот кадр пишет и читать его не может.
 
 // мелкий кадр: свет с умноженной альфой (rgb) и закрытая доля (a)
 uniform sampler2D Sampler0;
 // расстояние до мира за пикселем (полное разрешение)
 uniform sampler2D Sampler1;
-// отметки мелкого кадра (fx.fsh, fragCover): больше нуля — в пиксель лёг квадрат светлее своей непрозрачности; восьмибитный
-// кадр обрезал бы его свет по ходу смешивания, мелкий — нет, поэтому рядом с такой отметкой пиксель досчитывается
+// пересвет мелкого кадра (fx.fsh, fragCover): E — пересвет квадратов, сложенный смешиванием слоя
 uniform sampler2D Sampler2;
+// проход маски — кадр под отрезком (полное разрешение, CoarseFrame = 1; нет его — 0, кадр считается белым), вывод — маска
+uniform sampler2D Sampler3;
+uniform float CoarseFrame;
 // полных пикселей на пиксель мелкого кадра по x и y (CoarsePass: кадр с округлением вверх, не ровно 2^k)
 uniform vec2 CoarseScale;
 // 1 — проход маски: 1 в пикселях, которые мелкий кадр не разрешает, остальные отброшены; 0 — вывод (их отбрасывает)
@@ -49,6 +53,20 @@ float coarseAlike(float d, float e) {
     return 1.0 / (1.0 + rel * rel);
 }
 
+// Пересвет: восьмибитный кадр обрезает свет после каждого смешивания, мелкий — нет. Обрезка одного смешивания снимает не
+// больше пересвета квадрата, квадраты над ним гасят разницу: итог отрезка расходится не больше чем на E, сложенный пересвет
+// (fx.fsh). А пока E не выше (1 − A)·(1 − кадр под отрезком), A — закрытая доля отрезка, обрезки нет ни в одном
+// смешивании: свет после квадрата i выше 1 на D_i − (1 − A_i)(1 − кадр), D_i (свет минус закрытая доля) не выше E_i, а
+// E_i не выше E·(1 − A_i)/(1 − A) — квадраты над i гасят E_i до доли (1 − A)/(1 − A_i) (CoarsePassTest). Ошибка
+// пикселя — E, если обрезка была возможна, иначе ноль
+// 1/255
+const float COARSE_CLIP = 0.0039215686;
+
+float coarseClipError(float e, float a, float frame) {
+    if (e <= (1.0 - a) * (1.0 - frame)) return 0.0;
+    return e;
+}
+
 // Вес соседа мелкого кадра: билинейный вес b, сходство a (coarseAlike); не то же место — ноль, в цвет и в нормировку
 // не идёт
 float coarseWeight(float b, float a) {
@@ -72,28 +90,37 @@ void main() {
     vec2 at = (vec2(full) + 0.5) / CoarseScale - 0.5;
     ivec2 base = ivec2(floor(at));
     vec2 f = at - vec2(base), slope = pallSlopeWithin(Sampler1, full, fullSize, depth, coarseTolerance(depth) / depth);
+    // кадр под отрезком — у маски: самый светлый цвет, обрезка по любому
+    float frame = 1.0;
+    if (CoarseMask > 0.5 && CoarseFrame > 0.5 && textureSize(Sampler3, 0) == fullSize) {
+        vec3 under = texelFetch(Sampler3, full, 0).rgb;
+        frame = max(under.r, max(under.g, under.b));
+    }
     vec4 sum = vec4(0.0);
-    float total = 0.0, bright = 0.0;
+    float total = 0.0, clip = 0.0;
     for (int j = 0; j <= 1; j++) {
         for (int i = 0; i <= 1; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
             float a = coarseAlike(sampleDepth(t, fullSize), pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
             // билинейный вес без «?:» внутри выражения: Veil теряет скобки вокруг него (ShaderSourceTest)
             float w = coarseWeight(mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j)), a);
-            bright = max(bright, texelFetch(Sampler2, t, 0).r);
-            sum += texelFetch(Sampler0, t, 0) * w;
+            vec4 low = texelFetch(Sampler0, t, 0);
+            // вывод кладёт смесь соседей с этими весами и обрезает раз: ошибка обрезки — не больше смеси их ошибок
+            clip += coarseClipError(texelFetch(Sampler2, t, 0).r, low.a, frame) * w;
+            sum += low * w;
             total += w;
         }
     }
-    // не разрешён: ни одного соседа того же места с весом (у края билинейки вес соседа бывает и нулём) или у соседа —
-    // пересвет
-    bool unresolved = total <= 0.0 || bright > 0.0;
+    // не разрешён: ни одного соседа того же места с весом (у края билинейки вес соседа бывает и нулём) или обрезка
+    // пересвета заметнее 1/255
     if (CoarseMask > 0.5) {
+        bool unresolved = total <= 0.0 || clip > COARSE_CLIP * total;
         if (!unresolved) discard;
         fragColor = vec4(1.0);
         return;
     }
-    if (unresolved) discard;
+    // вывод — вне маски
+    if (texelFetch(Sampler3, full, 0).r > 0.5) discard;
     vec4 v = sum / max(total, 1e-12);
     // негодный пиксель (NaN, бесконечность) — ничего не кладёт
     if (!pallValid(vec4(v.rgb, 1.0 - v.a))) v = vec4(0.0);

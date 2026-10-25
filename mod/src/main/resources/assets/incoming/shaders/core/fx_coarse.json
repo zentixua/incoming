@@ -4,10 +4,12 @@
     "samplers": [
         { "name": "Sampler0" },
         { "name": "Sampler1" },
-        { "name": "Sampler2" }
+        { "name": "Sampler2" },
+        { "name": "Sampler3" }
     ],
     "uniforms": [
         { "name": "CoarseScale", "type": "float", "count": 2, "values": [ 2.0, 2.0 ] },
-        { "name": "CoarseMask", "type": "float", "count": 1, "values": [ 0.0 ] }
+        { "name": "CoarseMask", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "CoarseFrame", "type": "float", "count": 1, "values": [ 0.0 ] }
     ]
 }
