@@ -880,10 +880,12 @@ class Plan(unittest.TestCase):
             for c in s["cmds"]:
                 self.assertIn(f"from {site[0]:g} {site[1]:g}", c)
             # окна от команды: 0–15 с и 30–40 с
-            self.assertEqual([x["do"] for x in steps[i + 1:i + 4]], ["window", "wait", "window"])
+            self.assertEqual([x["do"] for x in steps[i + 1:i + 8]], ["window", "shot", "wait", "wait", "window", "shot", "wait"])
             self.assertEqual((steps[i + 1]["name"], steps[i + 1]["s"]), (f"{s['id']}/start", 15))
-            self.assertEqual(steps[i + 2]["s"], 15)
-            self.assertEqual((steps[i + 3]["name"], steps[i + 3]["s"]), (f"{s['id']}/hang", 10))
+            self.assertEqual(steps[i + 2]["name"], f"{s['id']}_15s")
+            self.assertEqual(steps[i + 3]["s"] + steps[i + 4]["s"], 15)    # второе окно — с 30 с от команды
+            self.assertEqual((steps[i + 5]["name"], steps[i + 5]["s"]), (f"{s['id']}/hang", 10))
+            self.assertEqual(steps[i + 6]["name"], f"{s['id']}_40s")
             self.assertFalse(any(x["do"] == "await" and x["salvo"] == s["id"] for x in steps))
         grad, missile, shahed = launches
         self.assertEqual(grad["cmds"], ["incoming salvo rocket 12 0 at 2500 3000 from 0 3000"])

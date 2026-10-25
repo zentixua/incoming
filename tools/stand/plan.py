@@ -105,7 +105,10 @@ def launch_steps(scenes, s, tp):
         if w["at_s"] > t:
             out.append({"do": "wait", "s": w["at_s"] - t})
         out.append({"do": "window", "name": f"{s['id']}/{w['name']}", "s": w["s"]})
-        t = w["at_s"] + w["s"]
+        # кадр в конце окна (после него: снимок стоит кадра и в окно не идёт)
+        out.append({"do": "shot", "name": f"{s['id']}_{w['at_s'] + w['s']:g}s"})
+        out.append({"do": "wait", "s": scenes["after_shot_s"]})
+        t = w["at_s"] + w["s"] + scenes["after_shot_s"]
     return out
 
 
