@@ -19,6 +19,7 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.far.FarView;
+import ua.zentix.incoming.client.fx.Flash;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.render.ScreenProjection;
 import ua.zentix.incoming.nuclear.Detonation;
@@ -68,8 +69,6 @@ public final class NukeFlash {
      */
     private static float afterX, afterY, afterSize;
     private static long ticks, endTick;
-    /** Предел силы вспышки на экране при «без вспышек молний». */
-    private static final float CALM_FLASH = 0.4f;
     /**
      * Пересвет кадра, при котором рассеянный в объективе свет белит весь кадр (белое — доля пересвета / VEIL_X: в
      * объективе рассеивается порядка процента света кадра, ⚠ оценка), и наибольшее усиление кадра на экране (больше — кадр
@@ -123,7 +122,7 @@ public final class NukeFlash {
         s *= IncomingConfig.CLIENT.flash.get();
         if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, sees ? q : Detonation.underOpenSky(mc.level, eye) ? q * SCATTERED : 0);
         // «без вспышек молний»: без засветки мира, белый экран — неполный
-        if (calmFlash()) s = Math.min(s, CALM_FLASH);
+        if (Flash.calm()) s = Math.min(s, Flash.CALM);
         if (s <= strength && current != null) return;
         current = a;
         strength = (float) s;
@@ -157,7 +156,7 @@ public final class NukeFlash {
         double dark = FlashEyes.darkness(level, eye);
         double seconds = EyeInjury.dazzleSeconds(q, d.yieldKt(), dark);
         float k = IncomingConfig.CLIENT.flash.get().floatValue();
-        if (calmFlash()) k = Math.min(k, CALM_FLASH);
+        if (Flash.calm()) k = Math.min(k, Flash.CALM);
         if (seconds <= 0 || k <= 0) return;
         // с максимума импульса: прежде — с его конца, когда кончался белый экран; кадр теперь догоняет вспышку раньше
         // (overexposed), и глаз между ними видел бы ясно
@@ -198,17 +197,12 @@ public final class NukeFlash {
      * Мир освещён вспышкой, как молнией: ванильная вспышка неба (свет неба у всех блоков — полный, как днём) на
      * 1.5–3 с × ∛(Y/15), у всех, кому видно засвеченное небо (засветка не меньше {@link #WORLD_FLASH}: у воздушного
      * подрыва на 240·∛Y м в ясную погоду 1 и 15 кт — до ~107 км, 1 Мт — до ~119 км; в дождь — 27, 28 и 44 км; в грозу — 6,
-     * 7 и 17 км). Выключенная вспышка в настройках или ванильное «без вспышек молний» ({@link #calmFlash}) — без неё.
+     * 7 и 17 км). Выключенная вспышка в настройках или ванильное «без вспышек молний» ({@link Flash#calm}) — без неё.
      */
     private static void lightUpWorld(ClientLevel level, Detonation d, double sky) {
-        if (sky < WORLD_FLASH || IncomingConfig.CLIENT.flash.get() <= 0 || calmFlash()) return;
+        if (sky < WORLD_FLASH || IncomingConfig.CLIENT.flash.get() <= 0 || Flash.calm()) return;
         int flash = (int) (20 * (1.5 + 1.5 * sky) * Math.cbrt(d.yieldKt() / 15));
         level.setSkyFlashTime(Math.max(level.getSkyFlashTime(), flash));
-    }
-
-    /** Включено ванильное «без вспышек молний» (доступность): вспышка не слепит. */
-    private static boolean calmFlash() {
-        return Minecraft.getInstance().options.hideLightningFlash().get();
     }
 
     static void tick() {
@@ -288,7 +282,7 @@ public final class NukeFlash {
         double x = overexposure(a, partial);
         if (x < SETTLED) return;
         double gain = 1 + strength * (Math.min(Math.pow(x, 1 / 2.2), GAIN_MAX) - 1);
-        if (calmFlash()) gain = Math.min(gain, 1 + CALM_FLASH);
+        if (Flash.calm()) gain = Math.min(gain, 1 + Flash.CALM);
         g.flush();
         if (gain > 1.002) {
             int passes = Math.max(1, (int) Math.ceil(Math.log(gain) / Math.log(2) - 1e-9));
