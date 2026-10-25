@@ -59,13 +59,13 @@ class ConcussionTest {
         assertTrue(early > Concussion.level(0), "полтика назад — уже сильнее: " + early);
     }
 
-    /** Картинка: у нуля — ничего; размытие по квадрату уровня уходит раньше серости и краёв; растёт с высотой кадра. */
+    /** Картинка: у нуля — ничего; размытие по кубу уровня уходит раньше серости и краёв; растёт с высотой кадра. */
     @Test
     void lookFollowsTheLevel() {
         double[] zero = Concussion.look(0, 1080), half = Concussion.look(0.5, 1080), full = Concussion.look(1, 1080);
         for (double v : zero) assertEquals(0, v);
         assertEquals(Concussion.BLUR_PX, full[0], 1e-9);
-        assertEquals(0.25 * full[0], half[0], 1e-9, "размытие — по квадрату");
+        assertEquals(0.125 * full[0], half[0], 1e-9, "размытие — по кубу: уходит раньше серости");
         assertEquals(0.5 * full[1], half[1], 1e-9);
         assertEquals(0.5 * full[2], half[2], 1e-9);
         assertEquals(2 * full[0], Concussion.look(1, 2160)[0], 1e-9, "в кадре вдвое выше — вдвое больше пикселей");

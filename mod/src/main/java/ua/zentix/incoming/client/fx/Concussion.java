@@ -29,7 +29,8 @@ import java.util.Locale;
  * ({@link ConcussionDose}: доза по фронту у головы, сдвигу порога слуха и движению головы, ниже порога — 0; отклик во
  * времени с прихода фронта и его длина), а как это выглядит — размытие, серость, края — подача здесь.
  * <p>
- * Размытие — по квадрату отклика, поэтому уходит раньше, чем серость и тёмные края. Удары залпа складываются как доли:
+ * Размытие — по кубу отклика, поэтому уходит раньше (к секунде), чем серость и тёмные края; серость не трогает яркий
+ * цвет (огонь, небо): тускнеет то, что вокруг, а не сам взрыв. Удары залпа складываются как доли:
  * 1 − Π(1 − отклик), не больше полного. Сила — настройка {@code screen_effects} × ванильное «Искажения экрана»
  * (Distortion Effects).
  * <p>
@@ -43,7 +44,7 @@ public final class Concussion {
     private static final net.minecraft.resources.ResourceLocation CHAIN = Incoming.id("shaders/post/concussion.json");
     /** Размытие у полного уровня — σ Гаусса, пикселей при высоте кадра 1080 (растёт с высотой кадра). Подача. */
     static final double BLUR_PX = 5;
-    /** Потеря цвета у полного уровня: доля пути к серому той же яркости. Подача. */
+    /** Потеря цвета у полного уровня: доля пути к серому той же яркости (у ярких — меньше, шейдер). Подача. */
     static final double GREY = 0.7;
     /** Тёмные края у полного уровня: доля света, которую теряют углы кадра. Подача. */
     static final double EDGE = 0.55;
@@ -114,7 +115,7 @@ public final class Concussion {
      */
     static double[] look(double level, int frameHeight) {
         double l = Mth.clamp(level, 0, 1);
-        return new double[]{BLUR_PX * l * l * frameHeight / 1080.0, GREY * l, EDGE * l};
+        return new double[]{BLUR_PX * l * l * l * frameHeight / 1080.0, GREY * l, EDGE * l};
     }
 
     /** Множитель настроек: {@code screen_effects} × ванильное «Искажения экрана». */

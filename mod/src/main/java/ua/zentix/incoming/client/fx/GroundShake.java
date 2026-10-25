@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
+import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.nuclear.model.GroundShock;
 
@@ -48,8 +49,10 @@ public final class GroundShake {
         double seconds = seconds(s);
         // ждать прихода: тики с источника уже прошли, пока шёл пакет (и работа подрыва на сервере)
         double wait = 20 * s.arrivalSeconds() - (level.getGameTime() - sourceTick);
-        last = String.format(Locale.ROOT, "ground r %.0f m arrival %.2f s ppv %.2f mm/s %.0f Hz felt %.2f for %.2f s",
-                range, s.arrivalSeconds(), 1000 * s.peakVelocityMps(), s.frequencyHz(), s.perceptibility(), seconds);
+        last = String.format(Locale.ROOT, "ground r %.0f m arrival %.2f s ppv %.2f mm/s %.2f Hz felt %.2f for %.2f s, in %.1f ticks",
+                range, s.arrivalSeconds(), 1000 * s.peakVelocityMps(), s.frequencyHz(), s.perceptibility(), seconds, wait);
+        // редкое событие (удар бомбы о землю, взрыв в грунте): строка — для разбора лога после игры
+        Incoming.LOG.info("Ground wave at the player: {}", last);
         Effects.add((l, t) -> {
             if (t < wait) return true;
             arrive(s, seconds, Math.min(1, t - wait), seed);

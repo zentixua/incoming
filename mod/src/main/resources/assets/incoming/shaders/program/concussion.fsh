@@ -40,9 +40,11 @@ vec3 blurred() {
 
 void main() {
     vec3 c = blurred();
-    // яркость по Rec. 709; серость — к ней, не к среднему каналов (зелень темнела бы)
+    // яркость по Rec. 709; серость — к ней, не к среднему каналов (зелень темнела бы); яркий цвет (огонь, небо) серость
+    // почти не трогает: тускнеет то, что вокруг, а не сам взрыв
     float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    vec3 grey = mix(c, vec3(luma), Grey);
+    float bright = smoothstep(0.6, 1.0, max(c.r, max(c.g, c.b)));
+    vec3 grey = mix(c, vec3(luma), Grey * (1.0 - bright));
     // края: от середины к углу кадра (с поправкой на его стороны), темнеют плавно с трети пути
     vec2 p = (texCoord - 0.5) * vec2(OutSize.x / OutSize.y, 1.0);
     float r = length(p) / length(vec2(0.5 * OutSize.x / OutSize.y, 0.5));

@@ -142,7 +142,8 @@ public final class NearLitter {
                 int bx = Mth.floor(x), bz = Mth.floor(z);
                 LevelChunk chunk = level.getChunkSource().getChunk(bx >> 4, bz >> 4, false);
                 if (chunk == null) continue;
-                int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15) - 1;
+                // верхний блок (getHeight чанка — уже он, а не первый воздух над ним)
+                int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15);
                 if (top < level.getMinBuildHeight()) continue;
                 BlockState coverState = chunk.getBlockState(m.set(bx, top, bz)), plant = chunk.getBlockState(m.set(bx, top + 1, bz));
                 Cover c = cover(coverState, plant);
