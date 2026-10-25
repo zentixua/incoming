@@ -303,11 +303,32 @@ than clean air, so the dust spreads out along the surface it came from and follo
 slopes; where it drifts past an edge (a roof, a cliff) it sinks to the surface below: thick dust in seconds, thin dust
 slower. It climbs gentle slopes but not walls: in a street between houses it stays in the street, in wind or calm. While the cloud rises, a
 thin column of dust is drawn up under it. An interceptor bursting in the air leaves no crater and no dust, unless it
-bursts low over the ground. A hit on a roof or a wall is the same blast as a hit on the ground: some of what it crushes rises
-with the hot gas, while cold ejecta and falling material feed the low, heavy dust layer. This also leaves low dust on
-a paved street without pretending that the stone was covered in soil. The hot/cold split is an estimate: half of the
-existing crushed-material dust budget in each stream. The wave can also lift dust from the street below where it is
-still strong enough there.
+bursts low over the ground. Some of what a hit crushes rises with the hot gas, while cold
+ejecta and falling material feed the low, heavy dust layer (the split is an estimate: half in each). The wave can also
+lift dust from the street below where it is still strong enough there.
+
+What the blast looks like depends on what it hits, not on whether it is a roof, a road or a field: the game reads the
+block the warhead struck and follows the line of flight through it with the same breach rule the server uses for
+damage.
+
+- **Soil, sand, gravel, snow or clay:** the crater throws a curtain of dark earth jets up and out at about 45°. Most of
+  it is slow: for a Shahed nine tenths is back on the ground within about 1.7 seconds, and at one second the curtain
+  stands about as high as the crater is wide. Sand gives a light, dense curtain, gravel a sparse one of lumps. The
+  curtain is drawn at any distance, not only as particles up close.
+- **Stone, concrete, brick or planks on solid ground:** no cone of earth. The crater in rock is smaller, and what the
+  charge crushes rises as dust of its own colour: light grey from stone and concrete, darker from deepslate, the colour
+  of mortar from masonry, ochre sawdust from planks. Chips fly on short arcs; fragments strike sparks on stone.
+- **A slab over empty space** (a roof, a bridge deck, a floor) that the charge breaks through: pieces fly up from the
+  top and down into the space below, and dust of the slab's material comes out of the hole. A Shahed through a metre of
+  planks drives the pieces underneath down at about 30 m/s. Where the hot gas goes inside a room is not modelled.
+- **Water:** the column of spray below.
+- **In the air** (an interceptor, a hit high above the ground): a ball of hot gas centred where it burst, with no
+  crater, no earth and no column of dust under it.
+
+Beyond the blocks your game has loaded (about your render distance) it cannot tell a roof from the ground under it, so
+a hit there looks like a hit on solid ground of the same material. The masses of crushed material, the grain size that
+makes the curtain visible, the share thrown as clods and the split of slab pieces up and down are estimates; the
+sources give no measurements for these targets and charges.
 
 A blast on water throws up a white column of spray instead of dust. A surface hit gives about 78 blocks for the Shahed,
 113 for the missile and 39 for Grad, estimated from Swisdak's conventional-charge plume table with its safety margin

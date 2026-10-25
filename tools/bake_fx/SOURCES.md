@@ -101,3 +101,50 @@ puffs).
 силуэта): симуляция тает своим рассеиванием, а непрозрачность и цвет облака мода — из `CloudModel`. Шесть солнц, альбедо
 0,55 и асимметрия 0,55 — прежние: кадры дают форму клубов и как свет их проходит, а не плотность. Карты брызг `pack.py`
 переводит в новую меру карт дыма (одна на все клубы).
+
+# Ejecta, crushed-dust and air-burst puffs
+
+`eject6a/b/v_*`, `crush6a/b/v_*` and `air6a/b/v_*` (six-way light maps and motion vectors, the same layout and light
+measure as the smoke puff) are rendered from three more CC0 JangaFX EmberGen OpenVDB sequences from the same
+[download page](https://jangafx.com/software/embergen/download/free-vdb-animations/); the licence is CC0 on the page
+and in each archive's `LICENSE.txt` and `README.txt`:
+
+- **Grenade Dust Impact** (199 frames, density only) — the earth curtain of a hit in soil and the cold crushed dust of
+  loose ground: a dome of dust with clods thrown round it;
+- **Building Implosion** (116 frames, density only) — the crushed dust of stone, concrete, masonry and slabs: the dust
+  of a collapsing building, lumpy from its geometry;
+- **Mid-Air Explosion** (126 frames, density, flames, temperature) — the cloud of a burst in the air.
+
+```sh
+blender --background --factory-startup --python tools/bake_fx/bake.py -- /path/to/bake clubs-vdb --kind eject \
+  --vdb /path/to/DustImpact/DustImpactVDB --view top --round --tile 160 --samples 96 --frames 9,15,…,99
+blender … clubs-vdb --kind crush --vdb /path/to/Building_Implosion_01 --view top --round --frames 9,11,…,39
+blender … clubs-vdb --kind air --vdb /path/to/Midair_Explosion_01 --view side --frames 6,9,…,48,49
+uv run tools/bake_fx/pack.py /path/to/bake
+```
+
+A puff is a lump laid by the mod's Gaussian, so every frame must be roughly round and free of a straight cut
+(`FxAtlasTest`). The two ground-hugging simulations are rendered from above, like the smoke cap: seen from the side,
+their floor cut the silhouette straight, and mirroring them in the floor (a cloud at a free-slip wall is half of a free
+cloud) put a dark shadowed band across the middle of every frame, because the upper half shades the lower one. Their
+footprint is squeezed to round, as for the cap. The Dust Shockwave torus has no lump-like view and is not used.
+Mid-Air is seen from the side, across its direction of flight: its jets run along the view and do not cut the
+silhouette. Frames touching a domain wall across the view are refused. Every frame has the same optical depth and is
+lit by the same six suns with the smoke's albedo and asymmetry: the frames give the shape of the billows, the mod gives
+the matter, colour and opacity. `pack.py` writes each frame's share of the simulation's life (`"life"`): the curtain
+and the crushed dust take their frame by the share of their own life, the air-burst cloud by its growth, like smoke.
+The renders were made on the CPU (the GPU was busy), 160×160 at 96 samples without adaptive sampling.
+
+## Выброс, пыль дробления и облако разрыва в воздухе
+
+`eject6*`, `crush6*`, `air6*` — рендер ещё трёх CC0-симуляций JangaFX (EmberGen) с той же страницы, лицензия — там же
+и в `LICENSE.txt`/`README.txt` архивов: «Grenade Dust Impact» — завеса выброса грунта и холодная пыль рыхлого (купол
+пыли с комьями вокруг), «Building Implosion» — пыль дробления камня, бетона, кладки и плиты (пыль обрушения постройки),
+«Mid-Air Explosion» — облако разрыва в воздухе. Команды — выше. Клуб — комок, который кладёт гаусс мода: кадр круглый и
+без прямого среза (`FxAtlasTest`). Две симуляции у земли сняты сверху, как шапка: сбоку их пол срезал силуэт прямо, а
+отражение в полу (облако у стенки без трения — половина свободного) клало тёмную полосу посередине каждого кадра — верх
+затеняет низ. Тор Dust Shockwave комком не снимается — не взят. Mid-Air — сбоку, поперёк полёта: струи идут вдоль
+взгляда. Кадр, упёршийся в стенку области поперёк взгляда, не берётся. Толща и свет — как у дыма; кадры дают форму
+клубов, вещество, цвет и непрозрачность — у мода. «life» в json — доля жизни симуляции у кадра: завеса и пыль
+дробления берут кадр по доле своей жизни, облако разрыва — по росту. Рендер на процессоре (видеокарта была занята),
+160×160, 96 выборок без адаптивной выборки.
