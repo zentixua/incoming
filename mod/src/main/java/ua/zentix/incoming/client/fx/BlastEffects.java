@@ -126,6 +126,14 @@ public final class BlastEffects {
     }
 
     /**
+     * Раскат вдали удара о грунт с энергией {@code tntKg} (вход бомбы, обвал свода): та доля энергии, что ушла в воздух
+     * ({@link BunkerImpact#airTnt}), — глухим ударом из-под земли, по дальней модели, как газы бомбы под землёй.
+     */
+    static BlastSource thud(double tntKg) {
+        return new BlastSource(WeaponType.BUNKER, BunkerImpact.airTnt(tntKg), 0, true, true);
+    }
+
+    /**
      * Фронт звука и ударной волны: срабатывает у слушателя (камера) один раз, когда до него дошёл, — звук; у тела
      * игрока — слух и наклон тела ({@link BlastHit}). Обычный взрыв ({@code source} не null) звучит по заряду
      * ({@link BlastSounds#arrive}), его эхо ищет склоны, пока фронт идёт ({@link BlastEchoes}).
@@ -223,9 +231,9 @@ public final class BlastEffects {
         abstract boolean run(ClientLevel level, int t);
 
         /**
-         * Дольше этого фронт до уха не ждём, тиков. Обычный взрыв дальше {@link FarBlasts#NEAR} озвучивает
-         * {@link FarBlasts}, ближней модели хватает 60 тиков (1 км); событие бомбы без дальнего звука (вход в грунт,
-         * обвал) ждёт путь звука на всю свою слышимость ({@link #hearTicks}).
+         * Дольше этого фронт до уха не ждём, тиков: событие дальше {@link FarBlasts#NEAR} озвучивает {@link FarBlasts},
+         * ближней модели хватает 60 тиков (1 км); событию без своей волны — путь звука до края ближней модели
+         * ({@link #hearTicks}), сколько бы ни жила его картинка.
          */
         int soundWait() {
             return 60;
@@ -636,20 +644,22 @@ public final class BlastEffects {
 
     /**
      * Бомба вошла в грунт: облако пыли выброса из воронки входа ({@link BunkerImpact#entryVolume}, без жара — у земли, по
-     * ветру; рисует слой) и комья; тупой удар приходит со скоростью звука.
+     * ветру; рисует слой) и комья; тупой удар приходит со скоростью звука — ближе {@link FarBlasts#NEAR} здесь, дальше —
+     * раскатом облака той доли энергии удара, что ушла в воздух ({@link #thud}), как у взрывов.
      */
     public static void bunkerImpact(S2C.BunkerImpact p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
         Vec3 pos = p.pos();
         ClientLevel world = Minecraft.getInstance().level;
+        double tnt = BunkerImpact.equivalentTnt(WeaponType.BUNKER.spec().striker().article().dryMass(), p.speed());
         if (world != null && !mat.isWater()) {
             // в воду — без пыли грунта (брызги — частицами ниже)
             double d = WeaponType.BUNKER.spec().striker().article().diameter();
             BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, false);
             FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), BunkerImpact.entryVolume(d), 2 * d), pos, mat,
-                    Double.doubleToLongBits(pos.x * 31 + pos.z));
+                    Double.doubleToLongBits(pos.x * 31 + pos.z), thud(tnt));
         }
-        double tnt = BunkerImpact.equivalentTnt(WeaponType.BUNKER.spec().striker().article().dryMass(), p.speed());
+        if (!FarBlasts.near(pos)) return;
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
@@ -662,7 +672,7 @@ public final class BlastEffects {
 
             @Override
             int soundWait() {
-                return hearTicks(BlastSounds.bunkerImpactRange(tnt));
+                return hearTicks(FarBlasts.NEAR);
             }
 
             @Override
@@ -739,13 +749,14 @@ public final class BlastEffects {
         Vec3 pos = p.pos();
         GroundMaterial mat = GroundMaterial.byId(p.material());
         ClientLevel world = Minecraft.getInstance().level;
+        double tnt = BuriedBlast.collapseTnt(p.volume());
         if (world != null) {
             BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, true);
             double r = Math.cbrt(3 * p.volume() / (4 * Math.PI));
             FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), p.volume(), r), pos, mat,
-                    Double.doubleToLongBits(pos.x * 13 + pos.z));
+                    Double.doubleToLongBits(pos.x * 13 + pos.z), thud(tnt));
         }
-        double tnt = BuriedBlast.collapseTnt(p.volume());
+        if (!FarBlasts.near(pos)) return;
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
@@ -754,7 +765,7 @@ public final class BlastEffects {
 
             @Override
             int soundWait() {
-                return hearTicks(BlastSounds.collapseRange(tnt));
+                return hearTicks(FarBlasts.NEAR);
             }
 
             @Override

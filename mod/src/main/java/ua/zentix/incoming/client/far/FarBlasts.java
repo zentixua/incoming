@@ -126,6 +126,11 @@ public final class FarBlasts {
         /** Пакет пришёл ближе {@link #NEAR}: ближняя картинка и звук есть. */
         final boolean near;
         /**
+         * Чей раскат слышно вдали: обычно — сам взрыв ({@link #source}); у облака без своего заряда (вход бомбы в грунт,
+         * обвал свода) — доля энергии удара, что ушла в воздух, глухим ударом из-под земли.
+         */
+        final BlastSource voice;
+        /**
          * Альбедо ω' пыли по каналам: поверхностей вокруг (пыль волны у земли, ножка), вещества цели (пыль дробления, пыль
          * облака — смесью с первой долей {@link CloudModel#capMatterShare}) и комьев выброса (завеса — цвет самого материала:
          * влажные комья с гумусом темнее сухой пыли, physics.md фронта F).
@@ -156,10 +161,11 @@ public final class FarBlasts {
         ChemicalFront front;
 
         Event(ClientLevel level, BlastSource source, CloudModel model, double x, double y, double z, GroundMaterial ground, long seed,
-              boolean near) {
+              boolean near, BlastSource voice) {
             this.level = level;
             this.source = source;
-            this.soundWait = (long) Math.ceil(BlastSounds.range(source) / Acoustics.SPEED);
+            this.voice = voice;
+            this.soundWait = (long) Math.ceil(BlastSounds.range(voice) / Acoustics.SPEED);
             this.model = model;
             this.x = x;
             this.y = y;
@@ -206,6 +212,12 @@ public final class FarBlasts {
         ChemicalFront front() {
             if (front == null && !source.underground() && source.chargeKg() > 0) front = ChemicalFront.cached(source.chargeKg(), source.surface());
             return front;
+        }
+
+        /** Фронт раската ({@link #voice}): у самого взрыва — его фронт, у доли из-под земли — со скоростью звука. */
+        @Nullable
+        ChemicalFront soundFront() {
+            return voice == source ? front() : null;
         }
 
         /** Сколько тиков событие живёт (облако видно). */
@@ -452,7 +464,16 @@ public final class FarBlasts {
      * рисуют запечённые клубы слоя, {@link SmokePuffs}), его шар и свет, раскат вдали. Возвращает модель.
      */
     public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed) {
-        Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at));
+        return cloud(level, source, model, at, ground, seed, source);
+    }
+
+    /**
+     * Как {@link #cloud(ClientLevel, BlastSource, CloudModel, Vec3, GroundMaterial, long)}, но раскат вдали — у
+     * {@code voice} ({@link Event#voice}): у облака без своего заряда звук события — свой.
+     */
+    public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed,
+                                   BlastSource voice) {
+        Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at), voice);
         trace(e, FarTerrain.of(level), camera());
         clear(e, camera());
         admit(EVENTS, e, CAP, old -> {
@@ -702,7 +723,7 @@ public final class FarBlasts {
     /** Фронт дошёл до уха — раскат ({@link #hear}); не дошёл за весь путь звука на дальность слышимости — уже не дойдёт. */
     private static void listen(Event e, Sightline.Heights heights, Vec3 ear, long age) {
         double d = e.blastDistanceTo(ear);
-        if (arrivalTicks(e.front(), d) <= age) {
+        if (arrivalTicks(e.soundFront(), d) <= age) {
             e.soundPending = false;
             trace(e, heights, ear);
             hear(e, d, age);
@@ -712,7 +733,7 @@ public final class FarBlasts {
     }
 
     private static void hear(Event e, double d, long age) {
-        Outdoor.Heard heard = BlastSounds.far(e.source, new Vec3(e.x, e.y + LIFT, e.z), Math.max(1, 0.4 * e.ballRadius()),
+        Outdoor.Heard heard = BlastSounds.far(e.voice, new Vec3(e.x, e.y + LIFT, e.z), Math.max(1, 0.4 * e.ballRadius()),
                 e.ground, d, e.path, e.seed);
         if (heard == null) return;
         lastHeard = heard;

@@ -68,7 +68,7 @@ public final class BlastSounds {
     /** Эхо, которое ещё ищет склоны или сводит дорожки. */
     private static final List<BlastEchoes> ECHOES = new ArrayList<>();
     /** Тише — слой не запускать. */
-    static final float AUDIBLE = 0.005f;
+    private static final float AUDIBLE = 0.005f;
     /**
      * Тики клиента: часы взрывов, по которым эхо и удар у уха ждут начала прямого звука. Свои, а не возраст эффекта
      * взрыва: эффект кончается, а голоса эха, что встают позже, ждут этих часов — с остановленными они не зазвучали
@@ -558,31 +558,6 @@ public final class BlastSounds {
     public static void bunkerImpact(Vec3 pos, double tntKg) {
         float v = byPressure(BlastMix.pressure(BlastSource.air(BunkerImpact.airTnt(tntKg)), ear().distanceTo(pos)), IMPACT_LUFS);
         if (v >= AUDIBLE) bomb(ModSounds.BOMB_IMPACT.get(), pos, v, 1);
-    }
-
-    /** Докуда слышно удар бомбы о грунт с энергией {@code tntKg} ({@link #bunkerImpact}), блоков. */
-    public static double bunkerImpactRange(double tntKg) {
-        return audibleTo(BlastSource.air(BunkerImpact.airTnt(tntKg)), IMPACT_LUFS);
-    }
-
-    /** Докуда слышно обвал свода с энергией падения {@code tntKg} ({@link #collapse}), блоков. */
-    public static double collapseRange(double tntKg) {
-        return audibleTo(BlastSource.air(BunkerImpact.airTnt(tntKg)), QUAKE_LUFS);
-    }
-
-    /**
-     * Докуда запись громкостью {@code fileLufs} взрыва {@code s} громче {@link #AUDIBLE} по давлению у уха
-     * ({@link #byPressure}), блоков: давление с расстоянием только падает — граница делением пополам.
-     */
-    static double audibleTo(BlastSource s, double fileLufs) {
-        double lo = 0, hi = IncomingConfig.FAR_RANGE_MAX;
-        if (byPressure(BlastMix.pressure(s, hi), fileLufs) >= AUDIBLE) return hi;
-        for (int i = 0; i < 40; i++) {
-            double mid = (lo + hi) / 2;
-            if (byPressure(BlastMix.pressure(s, mid), fileLufs) >= AUDIBLE) lo = mid;
-            else hi = mid;
-        }
-        return lo;
     }
 
     /** Газы взрыва вырвались по скважине: рёв выброса, громкость — по давлению доли заряда {@code airKg}, что вышла в воздух. */

@@ -8,38 +8,36 @@ import ua.zentix.incoming.warhead.BunkerImpact;
 import ua.zentix.incoming.warhead.BuriedBlast;
 import ua.zentix.incoming.warhead.Warheads;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Звук событий бомбы ждёт фронт столько, сколько его слышно, а не сколько живёт их картинка ({@code BlastEffects.Timeline}):
- * вход в грунт видно 30 тиков, обвал — 20, а слышно их дальше 515 и 343 м.
+ * Звук событий бомбы — как у взрывов: ближе {@link FarBlasts#NEAR} его ждёт ближняя модель ({@code BlastEffects.Timeline})
+ * до прихода к уху, сколько бы ни жила картинка (вход в грунт — 30 тиков, обвал — 20: звук обрывался за 515 и 343 м),
+ * дальше — раскат облака события по дальней модели.
  */
 class BombSoundWaitTest {
-    /** Удар бомбы о грунт: от медленного входа до скорости сброса с высоты. */
     @Test
-    void bunkerImpactIsWaitedForAsFarAsItIsHeard() {
+    void nearModelWaitsForTheSoundUpToItsEdge() {
+        int wait = BlastEffects.hearTicks(FarBlasts.NEAR);
+        assertTrue(wait * Warheads.FRONT_SPEED >= FarBlasts.NEAR, "звук ждут до края ближней модели");
+        assertTrue((wait - 1) * Warheads.FRONT_SPEED < FarBlasts.NEAR, "и не дольше");
+        assertTrue(wait > 30, "дольше картинки входа бомбы (30 тиков) и обвала (20)");
+    }
+
+    /** Вдали у входа бомбы и обвала есть свой раскат: доля энергии удара в воздухе, глухим ударом из-под земли. */
+    @Test
+    void farVoiceCarriesBeyondTheNearEdge() {
         double mass = WeaponType.BUNKER.spec().striker().article().dryMass();
         for (double speed : new double[]{150, 250, 350}) {
-            double range = BlastSounds.bunkerImpactRange(BunkerImpact.equivalentTnt(mass, speed));
-            assertTrue(range > 30 * Warheads.FRONT_SPEED, speed + " м/с: удар слышно дальше картинки входа (" + range + " м)");
-            assertTrue(BlastEffects.hearTicks(range) * Warheads.FRONT_SPEED >= range, speed + " м/с: фронт ждут на всю слышимость");
+            double tnt = BunkerImpact.equivalentTnt(mass, speed);
+            var voice = BlastEffects.thud(tnt);
+            assertTrue(voice.underground(), "из-под земли — глухая запись");
+            assertEquals(BunkerImpact.airTnt(tnt), voice.chargeKg(), 1e-12);
+            assertTrue(BlastSounds.range(voice) > FarBlasts.NEAR, speed + " м/с: удар слышно дальше ближней модели");
         }
-    }
-
-    /** Обвал свода над полостью: от малой полости до полости бомбы в скальном грунте. */
-    @Test
-    void collapseIsWaitedForAsFarAsItIsHeard() {
         for (double volume : new double[]{50, 500, 5000}) {
-            double range = BlastSounds.collapseRange(BuriedBlast.collapseTnt(volume));
-            assertTrue(BlastEffects.hearTicks(range) * Warheads.FRONT_SPEED >= range, volume + " м³: фронт ждут на всю слышимость (" + range + " м)");
+            assertTrue(BlastSounds.range(BlastEffects.thud(BuriedBlast.collapseTnt(volume))) > FarBlasts.NEAR, volume + " м³: обвал слышно дальше ближней модели");
         }
-        assertTrue(BlastSounds.collapseRange(BuriedBlast.collapseTnt(500)) > 20 * Warheads.FRONT_SPEED, "обвал слышно дальше 20 тиков его картинки");
-    }
-
-    /** Рёв выброса газов — только ближняя модель: дальше {@link FarBlasts#NEAR} у выброса голос облака, и ждать его не дольше. */
-    @Test
-    void ventWaitsForTheNearModelOnly() {
-        assertTrue(BlastEffects.hearTicks(FarBlasts.NEAR) * Warheads.FRONT_SPEED >= FarBlasts.NEAR);
-        assertTrue((BlastEffects.hearTicks(FarBlasts.NEAR) - 1) * Warheads.FRONT_SPEED < FarBlasts.NEAR);
     }
 }
