@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 import client
+import facing
 import gate
 import plan
 import results
@@ -797,14 +798,19 @@ class PairRuns(unittest.TestCase):
 
 class Pr(unittest.TestCase):
     def test_renamed_file_counts_by_both_names(self):
-        import pr_note
         rec = [{"filename": "mod/src/main/java/ua/zentix/incoming/util/Look.java",
                 "previous_filename": "mod/src/main/java/ua/zentix/incoming/client/fx/Look.java"},
                {"filename": "docs/x.md", "previous_filename": None}]
-        self.assertFalse(pr_note.player_facing([rec[0]["filename"]]))     # по новому имени одному — «не нужен»
+        self.assertFalse(facing.player_facing([rec[0]["filename"]]))     # по новому имени одному — «не нужен»
         paths = stand.pr_paths(rec)
         self.assertEqual(len(paths), 3)
-        self.assertTrue(pr_note.player_facing(paths))
+        self.assertTrue(facing.player_facing(paths))
+
+    def test_player_facing_paths(self):
+        self.assertEqual(facing.player_facing(["mod/src/main/java/ua/zentix/incoming/client/fx/A.java", "mod/src/main/resources/assets/incoming/x.png",
+                                               "tools/bake_fx/a/b.py", "tools/stand/stand.py", "docs/guide/README.md",
+                                               "mod/src/main/java/ua/zentix/incoming/strike/S.java"]),
+                         ["mod/src/main/java/ua/zentix/incoming/client/fx/A.java", "mod/src/main/resources/assets/incoming/x.png", "tools/bake_fx/a/b.py"])
 
     def test_launch_is_in_the_stand_version(self):
         names = {str(f.relative_to(stand.ROOT)) for f in stand.stand_files()}

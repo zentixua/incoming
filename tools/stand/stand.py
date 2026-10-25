@@ -35,6 +35,7 @@ ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(HERE))
 import client  # noqa: E402
+import facing  # noqa: E402
 import gate  # noqa: E402
 import plan  # noqa: E402
 import results  # noqa: E402
@@ -484,11 +485,10 @@ def pr_paths(records):
 def cmd_pr(a):
     """PR с картинкой: jar CI его головы парой с принятым выпуском (сцена «100»); --post — статус «Стенд сцен» и
     комментарий."""
-    import pr_note
     pr = gh("pr", "view", str(a.number), "-R", REPO, "--json", "headRefOid,url,number", json_out=True)
     head = pr["headRefOid"]
     files = gh("api", "--paginate", f"repos/{REPO}/pulls/{a.number}/files", "--jq", ".[] | {filename, previous_filename}")
-    hit = pr_note.player_facing(pr_paths(json.loads(line) for line in files.splitlines() if line.strip()))
+    hit = facing.player_facing(pr_paths(json.loads(line) for line in files.splitlines() if line.strip()))
     if not hit and not a.force:
         log(f"PR {a.number} не меняет того, что видит игрок: стенд не нужен")
         if a.post:
