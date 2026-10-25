@@ -400,8 +400,9 @@ public final class CloudModel {
         poolWatts = pool.watts();
         // пыль волны: над водой грунта нет (брызги — WaterBlast)
         ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, surface, air);
-        // начальная область холодной пыли — воронка с валом (2 радиуса воронки грунта цели) или пролом плиты с краем
-        crushed = GroundDust.crushed(onWater ? 0 : source.chargeKg(), hob, cold, 2 * crushedRadius(), surface, air);
+        // начальная область холодной пыли — воронка с валом (2 радиуса воронки грунта цели) или пролом плиты с краем; у грани,
+        // которую нашёл сервер, — у точки взрыва (рельеф вокруг — только для стекания потом), а не на грубой высоте земли вдали
+        crushed = GroundDust.crushed(onWater ? 0 : source.chargeKg(), target.atFace() ? 0 : hob, cold, 2 * crushedRadius(), surface, air);
         life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, Math.max(ground.life, crushed.life)));
     }
 

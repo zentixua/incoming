@@ -31,8 +31,11 @@ import ua.zentix.incoming.warhead.GroundMaterial;
  * @param hole     радиус пролома плиты, м: √(R² − t²) у радиуса пробоя R (BreachGameTests: дыра √(R² − t²)); 0 — не плита
  * @param face     где заряд лежит на грани плиты (null — не плита или место не известно)
  * @param normal   нормаль пробитой грани внутрь плиты — ось дыры (у не плиты — вниз)
+ * @param atFace   заряд у грани, которую нашёл сервер (опора пакета): разрушенное — у точки взрыва, а не на высоте рельефа
+ *                 под ней, которую клиент вдали знает грубо (ревью 3 фронта F)
  */
-public record BlastTarget(Family family, GroundMaterial material, double slab, double hole, @Nullable Vec3 face, Vec3 normal) {
+public record BlastTarget(Family family, GroundMaterial material, double slab, double hole, @Nullable Vec3 face, Vec3 normal,
+                          boolean atFace) {
     /** Вниз мира: ось у цели без плиты. */
     static final Vec3 DOWN = new Vec3(0, -1, 0);
 
@@ -135,7 +138,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
     static final double FINES_CRUSHED = 0.1;
 
     /** Удар в голый рыхлый грунт — как у взрыва без сведений о цели (проверки, прежние вызовы). */
-    public static final BlastTarget SOIL = new BlastTarget(Family.SOIL, GroundMaterial.DIRT, 0, 0, null, DOWN);
+    public static final BlastTarget SOIL = new BlastTarget(Family.SOIL, GroundMaterial.DIRT, 0, 0, null, DOWN, false);
 
     /** Вещество цели. */
     public Matter matter() {
@@ -159,7 +162,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
 
     /** Цель по материалу, без мира (чанка у клиента нет): опора — сплошная, связность — по веществу материала. */
     public static BlastTarget of(GroundMaterial material, double tntKg, double hobM) {
-        return new BlastTarget(family(material, Matter.of(material).loose, 0, CloudModel.digs(tntKg, hobM)), material, 0, 0, null, DOWN);
+        return new BlastTarget(family(material, Matter.of(material).loose, 0, CloudModel.digs(tntKg, hobM)), material, 0, 0, null, DOWN, false);
     }
 
     /**
@@ -180,7 +183,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         Family f = family(material, loose, slab, true);
         boolean plate = f == Family.SLAB;
         double hole = plate ? Math.sqrt(Math.max(0, breach * breach - slab * slab)) : 0;
-        return new BlastTarget(f, material, plate ? slab : 0, hole, plate ? face : null, plate ? normal.normalize() : DOWN);
+        return new BlastTarget(f, material, plate ? slab : 0, hole, plate ? face : null, plate ? normal.normalize() : DOWN, true);
     }
 
     /** Середина дыры на тыльной грани плиты (null — не плита или место заряда не известно). */

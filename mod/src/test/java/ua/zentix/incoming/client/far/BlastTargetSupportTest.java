@@ -79,6 +79,45 @@ class BlastTargetSupportTest {
                 "без опоры высоко — разрыв в воздухе");
     }
 
+    /** Средняя высота клубов слоя в возрасте t (по массе пыли), м от точки взрыва; масса — во втором элементе. */
+    private static double[] meanHeight(GroundDust d, double t) {
+        double[] sum = new double[2];
+        d.blobs(t, 1, (x, y, z, sh, sv, dust) -> {
+            sum[0] += y * dust;
+            sum[1] += dust;
+        });
+        return new double[]{sum[1] > 0 ? sum[0] / sum[1] : Double.NaN, sum[1]};
+    }
+
+    /**
+     * Холодная пыль пролома рождается у грани, которую нашёл сервер, — у точки взрыва, а не на грубой высоте земли вдали
+     * (ревью 3 фронта F: при высоте 30 м её клубы через секунду были на 30 м ниже крыши); пыль волны держит рельеф как есть.
+     */
+    @Test
+    void crushedDustStartsAtTheFace() {
+        double r = BreachModel.Material.POOR.radius(SHAHED, BreachModel.UNTAMPED);
+        S2C.Blast roof = blast(GroundMaterial.WOOD, Optional.of(new S2C.Blast.Support(false, 1, (float) r, S2C.Blast.DOWN, 0)));
+        BlastSource src = BlastSource.of(WeaponType.DRONE, false);
+        CloudModel exact = new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, 0), 0,
+                GroundDust.Ground.BARE);
+        for (double t : new double[]{0.3, 1}) {
+            double[] at0 = meanHeight(exact.crushed, t);
+            assertTrue(at0[1] > 0, t + " с: холодной пыли пролома нет");
+            for (double hob : new double[]{5, 30}) {
+                CloudModel far = new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, hob), hob,
+                        GroundDust.Ground.BARE);
+                double[] at = meanHeight(far.crushed, t);
+                assertEquals(at0[0], at[0], 0.5, "высота " + hob + " м, " + t + " с: пыль пролома — у крыши");
+            }
+        }
+        // пыль волны — с поверхности вокруг: при земле на 5 м ниже она там, а не у крыши
+        double[] wave0 = meanHeight(exact.ground, 1);
+        double[] wave5 = meanHeight(new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, 5), 5,
+                GroundDust.Ground.BARE).ground, 1);
+        assertTrue(wave0[1] > 0 && wave5[1] > 0, "пыль волны есть");
+        assertTrue(wave5[0] < wave0[0] - 3, "пыль волны держит рельеф: " + wave0[0] + " и " + wave5[0] + " м");
+    }
+
     @Test
     void spallLeavesThroughTheServerHole() {
         double r = BreachModel.Material.POOR.radius(SHAHED, BreachModel.UNTAMPED);
