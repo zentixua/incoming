@@ -246,7 +246,7 @@ final class Director {
         }
         Vec3 at = mc.player.position();
         BlockPos p = BlockPos.containing(eye[0], eye[1], eye[2]);
-        boolean here = at.distanceTo(new Vec3(eye[0], eye[1] - EYE, eye[2])) < 1.5 && mc.level.getChunkSource().hasChunk(p.getX() >> 4, p.getZ() >> 4);
+        boolean here = at.distanceTo(new Vec3(eye[0], eye[1] - EYE, eye[2])) < 1.5 && terrainReady(mc, p);
         if (here && reached < 0) reached = now;
         if (reached >= 0 && now - reached >= (long) (tp.settleS() * SECOND)) {
             out.event("tp", now, "eye", eye, "took_s", (reached - stepStart) / 1e9);
@@ -257,6 +257,22 @@ final class Director {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Земля у камеры готова: все чанки в дальности прорисовки пришли клиенту и сетки секций собраны
+     * ({@code hasRenderedAllSections}; у Sodium — его очередь сборки). Без этого кадр под нагрузкой залпа снимался до
+     * того, как клиент дорисовал дальнюю землю: сквозь неё небо, кадр дешевле и светлее (#468, 25.10: B ярче A1 и A2 на
+     * 0,17, а на другой голове — наоборот).
+     */
+    private static boolean terrainReady(Minecraft mc, BlockPos eye) {
+        int r = mc.options.getEffectiveRenderDistance() - 1, cx = eye.getX() >> 4, cz = eye.getZ() >> 4;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dz = -r; dz <= r; dz++) {
+                if (dx * dx + dz * dz <= r * r && !mc.level.getChunkSource().hasChunk(cx + dx, cz + dz)) return false;
+            }
+        }
+        return mc.levelRenderer.hasRenderedAllSections();
     }
 
     /**
