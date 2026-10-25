@@ -2,14 +2,9 @@ package ua.zentix.incoming.warhead;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
-import net.minecraft.core.particles.BlockParticleOption;
-import net.minecraft.core.particles.ParticleOptions;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
@@ -348,15 +343,6 @@ public final class Warheads {
         }
     }
 
-    /** Частицы, которые видно издалека (как «force» в команде particle). */
-    static void forced(ServerLevel level, ParticleOptions options, Vec3 p, int count, double dx, double dy, double dz, double speed, double range) {
-        for (ServerPlayer pl : level.players()) {
-            if (pl.distanceToSqr(p) <= range * range) {
-                level.sendParticles(pl, options, true, p.x, p.y, p.z, count, dx, dy, dz, speed);
-            }
-        }
-    }
-
     /**
      * Выбить всё из тега {@code tag} в коробке вокруг {@code center} сразу, без очереди ({@link Shatter}: только готовые
      * чанки, у края загрузки — без обновлений соседей). Проверки.
@@ -611,7 +597,7 @@ public final class Warheads {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact()) : 0);
+                Craters.ignite(level, area, main, this::happened, pos, weapon.spec().fuelAtImpact());
                 // топливо в воронке — после воронки: ложится на её дно и горит огнём на блоках, пока его хватает
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, pos, weapon, born, reach) : 0);
             }
@@ -621,7 +607,7 @@ public final class Warheads {
             // в сетке плотов Sable лучи шли бы по блокам аппарата: осколки аппараты не ломают
             if (fragments != null && !inPlots) FragmentStrike.queue(level, area, main, this::happened, fragments, pos, axis, seed, direct, owner,
                     IncomingConfig.SERVER.shatterGlass.get(), IncomingConfig.SERVER.blockDamage.get());
-            if (IncomingConfig.SERVER.shatterGlass.get()) shatterGlass(level, missile);
+            if (IncomingConfig.SERVER.shatterGlass.get()) Shatter.queue(level, area, main, pos, Shatter.Wave.of(pos, weapon.spec().charge()));
             return false;
         }
 
@@ -630,20 +616,6 @@ public final class Warheads {
             area.release(level);
         }
 
-        /**
-         * Стёкла — по давлению волны заряда боевой части — единицами по секциям; звук и частицы — с первой секцией, где
-         * что-то выбито. Листву ломают лучи волны по её кривой, как и всё остальное.
-         */
-        private void shatterGlass(ServerLevel level, boolean missile) {
-            Shatter.queue(level, area, main, pos, Shatter.Wave.of(pos, weapon.spec().charge()), (l, n) -> {
-                float vol = missile ? 6 : 4;
-                l.playSound(null, pos.x, pos.y, pos.z, SoundEvents.GLASS_BREAK, SoundSource.BLOCKS, vol, missile ? 0.7f : 0.8f);
-                l.playSound(null, pos.x, pos.y, pos.z, SoundEvents.GLASS_BREAK, SoundSource.BLOCKS, vol, missile ? 1.0f : 1.2f);
-                if (missile) l.playSound(null, pos.x, pos.y, pos.z, SoundEvents.GLASS_BREAK, SoundSource.BLOCKS, vol, 1.3f);
-                forced(l, new BlockParticleOption(ParticleTypes.BLOCK, Blocks.GLASS.defaultBlockState()), pos.add(0, missile ? 4 : 3, 0),
-                        missile ? 500 : 250, missile ? 16 : 10, missile ? 6 : 5, missile ? 16 : 10, 0, 256);
-            });
-        }
     }
 
     // ================================================================ бетонобойная бомба
@@ -740,7 +712,7 @@ public final class Warheads {
                 if (law.breaches()) {
                     if (IncomingConfig.SERVER.shatterGlass.get()) {
                         Vec3 top = new Vec3(pos.x, cover, pos.z);
-                        Shatter.queue(level, area, main, top, Shatter.Wave.of(top, law.airCharge(hole)), (l, n) -> {});
+                        Shatter.queue(level, area, main, top, Shatter.Wave.of(top, law.airCharge(hole)));
                     }
                 } else {
                     // газы полости выходят по ходу бомбы

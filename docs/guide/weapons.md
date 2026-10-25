@@ -18,8 +18,9 @@ Fuel burning in a crater produces a continuous roar and crackle from where it bu
 recording does not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path
 to you.
 
-A fireball rises upright. While it burns, orange flame with bright cores churns among dark soot; as it cools, it
-darkens into smoke without a jump.
+A fireball grows from the ground and rises smoothly, drifting with the wind together with its smoke. While it burns,
+orange flame with bright cores churns among dark soot, and the fuel's soot appears as the fuel burns; as it cools, it
+darkens into smoke without a jump. Windows break with their own sound and shards where they stand.
 
 ## The real weapons
 
@@ -78,7 +79,9 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   there is no collapse of a weakened span.
 - **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; three quarters of it
   burns as a fireball (≈16 m across for the Shahed, ≈34 m for the missile) for one to three seconds. That flash ignites
-  thin, dry fuel it touches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. Planks, logs
+  thin, dry fuel it reaches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. The flash
+  comes from the fireball you see, which rises and drifts with the wind: tree crowns above the impact catch fire, grass on
+  the ground catches more often downwind, and with the missile leaves catch a little past the ball's edge too. Planks, logs
   and other thick wood only char in a flash that short. The flash leaves its fire only on what burns: sand, stone,
   earth, metal and rails never burn, and no flames from it are left standing on them. So a Shahed in a town leaves a
   few fires on dry plants near the impact, not a burning circle.
@@ -279,6 +282,12 @@ clumps the whole time, near and far. The air mixes the cloud from the first seco
 The wind is stronger higher up: the top of the cloud runs ahead of its base, and the cloud leans and stretches downwind
 instead of drifting as one ball.
 
+Near the ground the wind also depends on what stands around. Between houses and under trees it is several times weaker
+than over an open field; on a hilltop it is stronger, and in a hollow weaker. So the dust, the haze and the smoke of a
+fire linger in a street for a minute or two, and blow off a hill sooner. The game reads this from the blocks around the
+hit, from the height and spacing of houses and trees, by rules fitted to wind measurements in towns (Macdonald 1998) and
+over hills (Taylor and Lee 1984); the numbers are estimates. A projectile in flight still feels only the wind of the world.
+
 - **Shahed**: a short flash, then a ball of burning petrol about 16 blocks across that burns for about 1.3 seconds and
   glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
   burns for about 2.5 minutes as ordinary fire on about five blocks of the crater floor; at night it lights the ground
@@ -303,9 +312,14 @@ than clean air, so the dust spreads out along the surface it came from and follo
 slopes; where it drifts past an edge (a roof, a cliff) it sinks to the surface below: thick dust in seconds, thin dust
 slower. It climbs gentle slopes but not walls: in a street between houses it stays in the street, in wind or calm. While the cloud rises, a
 thin column of dust is drawn up under it. An interceptor bursting in the air leaves no crater and no dust, unless it
-bursts low over the ground. Some of what a hit crushes rises with the hot gas, while cold
-ejecta and falling material feed the low, heavy dust layer (the split is an estimate: half in each). The wave can also
-lift dust from the street below where it is still strong enough there.
+bursts low over the ground. Some of the fine dust of what a hit crushes rises with the hot gas. The gas carries the
+rest out of the crater or the hole along the surfaces around as a low surge: within half a second it is tens of blocks
+across (about 30 for a Shahed), born at the level of the hit, and from there it settles, drifts and spills over edges
+like the layer above (the split is an estimate: half in each). Walls taller than a person turn the surge into the open
+ground, so at a crossroads it runs down the streets, and farther than in a field: the same gas has less room (an estimate). Only a small share of crushed stone and concrete is fine
+enough to hang in the air, so a Shahed in a street leaves a grey haze you can see through: thick at a few seconds,
+faint by 10–20 s in a breeze, longer in calm air. The wave can also lift dust from the street below where it is still
+strong enough there.
 
 What the blast looks like depends on what it hits, not on whether it is a roof, a road or a field: the server goes
 from the face the warhead struck straight into the block, square to that face, with the same breach rule it uses for
@@ -323,7 +337,9 @@ a slab the charge cannot break looks like a hit on solid ground.
   that was hit, and the back of the slab is punched straight out of its far side into the space behind, at any angle
   of the hit (down under a roof, sideways through a wall): the blast pushes the plate square to its face. Dust of the
   slab's material comes out of the hole. A Shahed through a metre of planks drives the pieces behind it at about
-  30 m/s (an estimate, the upper bound of the Gurney formula). Where the hot gas goes inside a room is not modelled.
+  30 m/s (an estimate, the upper bound of the Gurney formula). Only the crater on the face that was hit sends its dust
+  out of the hole (about a third, an estimate from tests on concrete slabs); the dust of the back goes into the room
+  behind. Where the hot gas and that dust go inside a room is not modelled.
 - **Water:** the column of spray below.
 - **In the air** (an interceptor, a hit high above the ground): a ball of hot gas centred where it burst, with no
   crater, no earth and no column of dust under it.

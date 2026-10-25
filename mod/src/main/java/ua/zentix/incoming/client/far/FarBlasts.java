@@ -88,6 +88,11 @@ public final class FarBlasts {
     static final double CLOUD_ALBEDO = 0.7, SKY_SPREAD = 1, SKY_PEAK = 0.45, SKY_CLEAR = 0.45, SKY_LOW = 40;
 
     private static final ArrayDeque<Event> EVENTS = new ArrayDeque<>();
+    /**
+     * Ушедшие из вида сверх {@link #CAP}, чей звук ещё идёт к уху: раскат живёт по времени пути звука
+     * ({@link Event#soundWait}), а не по месту в списке картинки — в налёте больше 256 ударов ранний далёкий не молчит.
+     */
+    private static final ArrayDeque<Event> SOUNDS = new ArrayDeque<>();
     /** Числа на кадр без выделения: точка {@link Sight#point}, свет {@link Sight#light} и цвет шара. */
     private static final double[] POINT = new double[2], LIGHT = new double[5], BB = new double[4];
     /** Самое яркое тело последнего кадра (для лога): ядро, блик и вуаль в пикселях, пересвет, доля над рельефом. */
@@ -121,6 +126,11 @@ public final class FarBlasts {
         /** Пакет пришёл ближе {@link #NEAR}: ближняя картинка и звук есть. */
         final boolean near;
         /**
+         * Чей раскат слышно вдали: обычно — сам взрыв ({@link #source}); у облака без своего заряда (вход бомбы в грунт,
+         * обвал свода) — доля энергии удара, что ушла в воздух, глухим ударом из-под земли.
+         */
+        final BlastSource voice;
+        /**
          * Альбедо ω' пыли по каналам: поверхностей вокруг (пыль волны у земли, ножка), вещества цели (пыль дробления, пыль
          * облака — смесью с первой долей {@link CloudModel#capMatterShare}) и комьев выброса (завеса — цвет самого материала:
          * влажные комья с гумусом темнее сухой пыли, physics.md фронта F).
@@ -151,10 +161,11 @@ public final class FarBlasts {
         ChemicalFront front;
 
         Event(ClientLevel level, BlastSource source, CloudModel model, double x, double y, double z, GroundMaterial ground, long seed,
-              boolean near) {
+              boolean near, BlastSource voice) {
             this.level = level;
             this.source = source;
-            this.soundWait = (long) Math.ceil(BlastSounds.range(source) / Acoustics.SPEED);
+            this.voice = voice;
+            this.soundWait = (long) Math.ceil(BlastSounds.range(voice) / Acoustics.SPEED);
             this.model = model;
             this.x = x;
             this.y = y;
@@ -190,6 +201,25 @@ public final class FarBlasts {
             return Math.sqrt(dx * dx + dy * dy + dz * dz);
         }
 
+        /** До точки взрыва, блоков: от неё идёт фронт, как у ближнего звука ({@code BlastEffects.Timeline}). */
+        double blastDistanceTo(Vec3 p) {
+            double dx = x - p.x, dy = y - p.y, dz = z - p.z;
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        /** Фронт этого взрыва ({@link #arrivalTicks(ChemicalFront, double)}); у бомбы под землёй и без заряда — null. */
+        @Nullable
+        ChemicalFront front() {
+            if (front == null && !source.underground() && source.chargeKg() > 0) front = ChemicalFront.cached(source.chargeKg(), source.surface());
+            return front;
+        }
+
+        /** Фронт раската ({@link #voice}): у самого взрыва — его фронт, у доли из-под земли — со скоростью звука. */
+        @Nullable
+        ChemicalFront soundFront() {
+            return voice == source ? front() : null;
+        }
+
         /** Сколько тиков событие живёт (облако видно). */
         double life() {
             // водяная пыль, пена и волна взрыва на воде живут дольше облака без пыли воронки
@@ -217,6 +247,15 @@ public final class FarBlasts {
          */
         double brightness(double age) {
             model.ballLight(age / 20, BB);
+            return BB[3];
+        }
+
+        /**
+         * Яркость света, что шар на age-м тике отдаёт наружу при свете неба sky ({@link CloudModel#shownLight}): огонь без
+         * той доли, что уже дым, — тот же выход, что у тела на экране ({@link #light}).
+         */
+        double shown(double age, double sky) {
+            model.shownLight(age / 20, sky, BB);
             return BB[3];
         }
 
@@ -434,13 +473,39 @@ public final class FarBlasts {
      * рисуют запечённые клубы слоя, {@link SmokePuffs}), его шар и свет, раскат вдали. Возвращает модель.
      */
     public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed) {
-        Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at));
+        return cloud(level, source, model, at, ground, seed, source);
+    }
+
+    /**
+     * Как {@link #cloud(ClientLevel, BlastSource, CloudModel, Vec3, GroundMaterial, long)}, но раскат вдали — у
+     * {@code voice} ({@link Event#voice}): у облака без своего заряда звук события — свой.
+     */
+    public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed,
+                                   BlastSource voice) {
+        Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at), voice);
         trace(e, FarTerrain.of(level), camera());
-        clear(e, camera());
-        if (EVENTS.size() >= CAP) EVENTS.pollFirst().alive = false;
-        EVENTS.addLast(e);
+        clear(e, camera(), 0);
+        admit(EVENTS, e, CAP, old -> {
+            old.alive = false;
+            if (old.soundPending) SOUNDS.addLast(old);
+        });
         SmokeGrid.add(e);
         return model;
+    }
+
+    /** {@code e} — в конец {@code events}; сверх {@code cap} первое уходит в {@code gone} (картинка — да, звук — свой срок). */
+    static <E> void admit(ArrayDeque<E> events, E e, int cap, java.util.function.Consumer<E> gone) {
+        if (events.size() >= cap) gone.accept(events.pollFirst());
+        events.addLast(e);
+    }
+
+    /**
+     * Тики с взрыва до прихода фронта на {@code d} блоков от точки взрыва — один закон у ближнего звука, дальнего и
+     * видимого кольца: {@link ChemicalFront} (Кинни–Грэхем и Ренкин–Гюгонио, вблизи быстрее звука); без своей волны
+     * ({@code front} null) — со скоростью звука.
+     */
+    public static double arrivalTicks(@Nullable ChemicalFront front, double d) {
+        return front == null ? d / Acoustics.SPEED : 20 * front.arrivalSeconds(d);
     }
 
     /**
@@ -560,12 +625,17 @@ public final class FarBlasts {
         return new CloudModel(source, air(level, p.pos()), target(p, mat, source.chargeKg(), hob), hob, ground(level, p.pos()));
     }
 
-    /** Воздух в месте взрыва: воздух мира ({@link ClientAir}); влажность — его, у воды 1 (облако конденсации). */
+    /**
+     * Воздух в месте взрыва: воздух мира ({@link ClientAir}) с ветром у земли места ({@link ClientAir#site}: улица, кроны,
+     * холм); влажность — его, у воды 1 (облако конденсации), над водой — поле.
+     */
     public static CloudModel.Air air(ClientLevel level, Vec3 pos) {
         net.minecraft.core.BlockPos at = net.minecraft.core.BlockPos.containing(pos);
         boolean water = !level.getFluidState(at).isEmpty() || !level.getFluidState(at.below()).isEmpty();
         ua.zentix.incoming.util.Air air = ClientAir.now();
-        return CloudModel.Air.of(air, water ? 1 : air.humidity());
+        // поправку места меряют от поверхности под взрывом (под кроной — от земли под ней): от неё же высоты облака
+        return CloudModel.Air.of(air, water ? 1 : air.humidity(),
+                water ? ua.zentix.incoming.util.LocalWind.OPEN : ClientAir.site(pos.x, pos.y - overSurface(level, pos), pos.z));
     }
 
     /**
@@ -630,6 +700,15 @@ public final class FarBlasts {
             return;
         }
         clock = BlastTime.ticks();
+        if (!SOUNDS.isEmpty()) {
+            Vec3 ear = camera();
+            Sightline.Heights heights = FarTerrain.of(level);
+            SOUNDS.removeIf(e -> {
+                if (e.level != level) return true;
+                listen(e, heights, ear, clock - e.born);
+                return !e.soundPending;
+            });
+        }
         if (EVENTS.isEmpty()) return;
         Vec3 ear = camera();
         Sightline.Heights heights = FarTerrain.of(level);
@@ -643,29 +722,32 @@ public final class FarBlasts {
                 it.remove();
                 continue;
             }
-            if (e.soundPending) {
-                double d = e.distanceTo(ear);
-                if (d <= Acoustics.SPEED * age) {
-                    e.soundPending = false;
-                    trace(e, heights, ear);
-                    hear(e, d, age);
-                } else if (age > e.soundWait) {
-                    e.soundPending = false;
-                }
-            }
+            if (e.soundPending) listen(e, heights, ear, age);
             if (clock - e.traced >= RETRACE && traces < TRACES_PER_TICK) {
                 trace(e, heights, ear);
-                if (e.glows) clear(e, ear);
+                if (e.glows) clear(e, ear, age);
                 traces++;
             } else if (age < e.ballTicks() && clears < CLEARS_PER_TICK) {
-                clear(e, ear);
+                clear(e, ear, age);
                 clears++;
             }
         }
     }
 
+    /** Фронт дошёл до уха — раскат ({@link #hear}); не дошёл за весь путь звука на дальность слышимости — уже не дойдёт. */
+    private static void listen(Event e, Sightline.Heights heights, Vec3 ear, long age) {
+        double d = e.blastDistanceTo(ear);
+        if (arrivalTicks(e.soundFront(), d) <= age) {
+            e.soundPending = false;
+            trace(e, heights, ear);
+            hear(e, d, age);
+        } else if (age > e.soundWait) {
+            e.soundPending = false;
+        }
+    }
+
     private static void hear(Event e, double d, long age) {
-        Outdoor.Heard heard = BlastSounds.far(e.source, new Vec3(e.x, e.y + LIFT, e.z), Math.max(1, 0.4 * e.ballRadius()),
+        Outdoor.Heard heard = BlastSounds.far(e.voice, new Vec3(e.x, e.y + LIFT, e.z), Math.max(1, 0.4 * e.ballRadius()),
                 e.ground, d, e.path, e.seed);
         if (heard == null) return;
         lastHeard = heard;
@@ -679,18 +761,21 @@ public final class FarBlasts {
      * Два луча к оси шара у угла высотки оба упирались бы в угол, и видимая половина шара светила бы без блика. Часть
      * диска в земле закрыта всем и в счёт не идёт. Дальше прорисовки шар закрывает рельеф ({@link #trace}). Шар в кадре
      * блик берёт ещё и по тому, что на экране ({@code SourceProbes}: и LOD Distant Horizons, которых лучи не видят).
+     * Шар — там, где он на {@code age}-м тике, как его клубы, спрайт и свет: место на середине жизни шара под ветром
+     * уходило от нынешнего на метры (ракета, 5 м/с, первые тики — ~10 м), и шар у края стены считался закрытым.
      */
-    private static void clear(Event e, Vec3 eye) {
+    private static void clear(Event e, Vec3 eye, double age) {
         double r = e.ballRadius();
         if (r <= 0) return;
         if (e.distanceTo(eye) > Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0) {
             e.open = 1;
             return;
         }
-        double mid = e.y + e.ballHeight(0.5 * e.ballTicks());
+        double t = Math.min(age, e.ballTicks()) / 20, mid = e.y + e.model.ballHeight(t);
+        double mx = e.x + e.model.ballX(t), mz = e.z + e.model.ballZ(t);
         int seen = 0, counted = 0;
         for (int i = 0; i <= RING_RAYS; i++) {
-            disc(eye, e.x, mid, e.z, RING * r, i, DISC);
+            disc(eye, mx, mid, mz, RING * r, i, DISC);
             if (i > 0 && DISC[1] < e.y + 0.5) continue;
             counted++;
             if (!FarFlightView.blocked(eye, DISC[0], DISC[1], DISC[2])) seen++;
@@ -765,11 +850,11 @@ public final class FarBlasts {
      * Огненные шары, что светят на дым сетки и на мир ({@code fx_pall}: {@code SmokeBalls}, вывод на кадр:
      * {@code PallBalls}): до четырёх самых заметных шаров облаков модели (свет у глаза — яркость × R²/d²) в свободные
      * столбцы {@code centres} (занятые — шары ядерки — не трогаются) — центр от глаза и радиус; в {@code light} — свет
-     * чёрного тела у поверхности (линейный, белая стена в полдень — 1) × {@code exposure}, в w — {@code air} (ослабление
+     * огня у поверхности ({@link CloudModel#shownLight}: чёрное тело без доли шара, что уже дым) (линейный, белая стена в полдень — 1) × {@code exposure}, в w — {@code air} (ослабление
      * воздуха, 1/блок). true — хоть один шар добавлен.
      */
     public static boolean fireballs(Vec3 eye, float partial, double exposure, double air, Matrix4f centres, Matrix4f light) {
-        double now = BlastTime.ticks() + partial;
+        double now = BlastTime.ticks() + partial, sky = FarView.skyLuminance(Minecraft.getInstance().level, partial);
         double[] weight = WEIGHT;
         boolean any = false;
         org.joml.Vector4f column = COLUMN;
@@ -781,8 +866,8 @@ public final class FarBlasts {
             double age = Math.max(0, now - e.born), t = age / 20;
             double r = e.model.ballRadius(t);
             if (r <= 0) continue;
-            double dx = e.x - eye.x, dy = e.y + e.model.ballHeight(t) - eye.y, dz = e.z - eye.z;
-            e.model.ballLight(t, BB);
+            double dx = e.x + e.model.ballX(t) - eye.x, dy = e.y + e.model.ballHeight(t) - eye.y, dz = e.z + e.model.ballZ(t) - eye.z;
+            e.model.shownLight(t, sky, BB);
             double w = BB[3] * r * r / Math.max(dx * dx + dy * dy + dz * dz, r * r);
             int slot = 0;
             for (int i = 1; i < 4; i++) if (weight[i] < weight[slot]) slot = i;
@@ -797,28 +882,31 @@ public final class FarBlasts {
 
     /**
      * Свет и горячий газ облаков модели на мир кадра ({@code HeatPass}): огненный шар — ламбертов шар чёрного тела своей
-     * температуры (как у {@link #fireballs}); газ — термик облака (середина, радиус, температура и подъём модели); фронт
+     * температуры, только та его доля, что ещё огонь, а не дым ({@link CloudModel#shownLight}, как у {@link #fireballs} и
+     * тела на экране); газ — термик облака (середина, радиус, температура и подъём модели); фронт
      * ударной волны ({@link #front(ChemicalFront, double, double, double, double[], double[])}). Пламя и
      * столб над топливом в воронке — у пожаров ({@code FireSmoke.heat}).
      */
     public static void heat(Vec3 eye, float partial, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         ClientLevel level = Minecraft.getInstance().level;
-        double now = BlastTime.ticks() + partial;
+        double sky = FarView.skyLuminance(level, partial);
         for (Event e : EVENTS) {
             if (e.level != level || !e.alive) continue;
             double t = BlastTime.seconds(BlastTime.ticks(), e.born, partial);
             double bx = e.x - eye.x, by = e.y - eye.y, bz = e.z - eye.z;
             double r = e.model.ballRadius(t);
             if (r > 0) {
-                e.model.ballLight(t, BB);
+                e.model.shownLight(t, sky, BB);
                 double h = e.model.ballHeight(t);
-                f.light(bx, by + h, bz, r, BB[0], BB[1], BB[2], air, h);
+                if (BB[3] > 0) f.light(bx + e.model.ballX(t), by + h, bz + e.model.ballZ(t), r, BB[0], BB[1], BB[2], air, h);
             }
+            // горячий газ термика — там же, где его дым (снос ветром)
             double cr = e.model.radius(t), ch = e.model.height(t);
-            if (t < e.model.life) f.hot(bx, by + Math.max(0, ch - cr), bz, 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
+            if (t < e.model.life) {
+                f.hot(bx + e.model.driftX(t), by + Math.max(0, ch - cr), bz + e.model.driftZ(t), 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
+            }
             if (e.source.underground() || e.source.chargeKg() <= 0 || t > FRONT_SECONDS) continue;
-            if (e.front == null) e.front = ChemicalFront.cached(e.source.chargeKg(), e.source.surface());
-            if (front(e.front, t, r, e.model.hob, FRONT)) f.chemicalFront(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
+            if (front(e.front(), t, r, e.model.hob, FRONT)) f.chemicalFront(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
         }
     }
 
@@ -880,6 +968,9 @@ public final class FarBlasts {
         sprite = FxAtlas.fireballAt(frame, (e.seed & 1) != 0);
         fire = FxAtlas.fireLightAt(frame) * body;
         if (r <= 0 || body <= 0) return;
+        // шар сносит ветром вместе с его дымом (CloudModel.ballX): картинка, свет и зарево — с того же места
+        bx += e.model.ballX(s);
+        bz += e.model.ballZ(s);
         double h = e.ballHeight(age), b = e.brightness(age);
         double vis = visible(h, r, line), hidden = 1 - vis * e.open;
         float[] c = e.colour(age);
@@ -896,7 +987,7 @@ public final class FarBlasts {
         }
         // шар закрыт гребнем или постройкой: его свет рассеивает воздух над краем — зарево там, откуда место было бы
         // видно, пока шар светит; на любой дальности, как блик (вблизи за домом одной вспышки на экране не хватает)
-        if (hidden > 0) halo(view, out, bx, by + Math.max(line, h), bz, HALO_SIZE * r, b * hidden, fire, t, c);
+        if (hidden > 0) halo(view, out, bx, by + Math.max(line, h), bz, HALO_SIZE * r, b * body * hidden, fire, t, c);
     }
 
     /** Самое яркое тело кадра — для лога: числа {@link Sight#light} последнего нарисованного (в {@link #LIGHT}). */
@@ -950,7 +1041,7 @@ public final class FarBlasts {
         if (vis <= 0) return;
         double peak = SKY_PEAK * (SKY_CLEAR + (1 - SKY_CLEAR) * view.rain()) * t * vis * share;
         float[] c = e.colour(age);
-        out.glow(bx, gy, bz, rs, rs, c[0], c[1], c[2], (float) (peak * cloudGlow(e.brightness(age), r, h, view.exposure())));
+        out.glow(bx, gy, bz, rs, rs, c[0], c[1], c[2], (float) (peak * cloudGlow(e.shown(age, view.skyLuminance()), r, h, view.exposure())));
     }
 
     /**
@@ -982,6 +1073,7 @@ public final class FarBlasts {
     static void reset() {
         for (Event e : EVENTS) e.alive = false;
         EVENTS.clear();
+        SOUNDS.clear();
         lastHeard = null;
     }
 

@@ -26,6 +26,8 @@ import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.sound.Spectra;
 import ua.zentix.incoming.warhead.BunkerImpact;
 import ua.zentix.incoming.warhead.GroundMaterial;
+import ua.zentix.incoming.nuclear.model.ChemicalFront;
+import ua.zentix.incoming.client.far.FarBlasts;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -181,10 +183,12 @@ public final class BlastSounds {
         ECHOES.removeIf(BlastEchoes::settled);
         if (OwnSources.free() - EchoMix.SECTORS * ECHOES.size() < EchoMix.SECTORS + PULSE_RESERVE) return null;
         double kg = s.chargeKg();
+        // путь отражения — тот же фронт, что у прямого звука ({@link FarBlasts#arrivalTicks}): вблизи быстрее звука
+        ChemicalFront front = kg > 0 ? ChemicalFront.cached(kg, s.surface()) : null;
         BlastEchoes e = new BlastEchoes(clock, pos, new TerrainEcho.Blast() {
             @Override
             public double arrivalTicks(double blocks) {
-                return blocks / Acoustics.SPEED;
+                return FarBlasts.arrivalTicks(front, blocks);
             }
 
             @Override

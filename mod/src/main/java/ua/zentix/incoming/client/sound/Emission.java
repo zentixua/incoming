@@ -69,12 +69,13 @@ record Emission(double time, double x, double y, double z, double distance, doub
     }
 
     /**
-     * Доля верхов части {@code part}, как если бы до уха было {@code distance} блоков (та же высота источника и погода):
-     * сколько их съел бы путь, уже вошедший в дальнюю запись.
+     * Доля верхов части {@code part}, как если бы до уха было {@code distance} блоков (та же высота источника и погода,
+     * воздух — в условиях записей, {@link Propagation.Weather#recorded}): сколько их съел бы путь, уже вошедший в дальнюю
+     * запись.
      */
     double heardAt(Noise noise, Noise.Part part, boolean drilling, double distance) {
         double lw = noise.power(part, FlightPhase.byId(phase), phaseAge, velocity.length(), drilling);
-        return lw == Noise.SILENT ? 1 : highs(lw, noise.spectrum(part), path(distance));
+        return lw == Noise.SILENT ? 1 : highs(lw, noise.spectrum(part), Propagation.Path.over(distance, height, weather.recorded()));
     }
 
     /**

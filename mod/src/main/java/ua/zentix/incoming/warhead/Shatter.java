@@ -5,7 +5,10 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
@@ -29,7 +32,6 @@ import ua.zentix.incoming.work.UnitQueue;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
 /**
@@ -40,6 +42,9 @@ import java.util.function.Predicate;
  * Волна идёт по воздуху: стекло она достаёт, только если к нему подходит воздух с улицы — над верхом столбцов и не
  * глубже {@link #SKY_DEPTH} блоков внутрь через проёмы, как у ядерного подрыва ({@code Blast.SKY_DEPTH}); стекло за
  * стеклом — тоже, пробитое с лица выбивается на всю толщину. Подземная база, подвал без окон, стекло под водой целы.
+ * <p>
+ * Звук и осколки — у выбитых окон, а не у места удара: каждая единица, где что-то выбито, звучит звуком поломки блока
+ * из середины выбитого в ней и бросает его частицы ({@link #burst}).
  * <p>
  * Блоки читаются только из готовых чанков; секцию без таких блоков отсекает палитра ({@link Palettes#contains}), и
  * даже шар ракеты в сотни секций обходится дёшево. У чанка с неготовым соседом обновления соседей расходятся цепочкой
@@ -170,7 +175,6 @@ final class Shatter implements UnitQueue.Job {
     private final Vec3 centre;
     private final Zone zone;
     private final BlockPos min, max;
-    private final BiConsumer<ServerLevel, Integer> first;
     /**
      * Секции мира в границах, до которых волна достаёт ({@link SectionPos#asLong}), — от ближних к центру к дальним;
      * null — ещё не собраны (собираются первой единицей, а не в тике удара: у ракеты их тысячи).
@@ -188,35 +192,39 @@ final class Shatter implements UnitQueue.Job {
     /** Секция, которую выбивают сейчас, и место в ней (y·256 + z·16 + x), с которого продолжать; −1 — взять следующую. */
     private long current;
     private int cursor = -1;
-    private boolean broke;
+    /** Выбитое последней порцией: первый блок (его звук и частицы) и рамка мест. */
+    @Nullable
+    private BlockState pane;
+    private int x0, y0, z0, x1, y1, z1;
 
     /**
      * @param area  район удара (держится, пока работа не кончится); null — без района и очереди ({@link #now})
      * @param after выбивать после этих взрывов (главный взрыв удара)
-     * @param first звук и частицы — с первой секцией, где что-то выбито (сколько выбито в ней)
      */
-    Shatter(@Nullable BlastArea area, List<StagedExplosion> after, Vec3 centre, Zone zone, BiConsumer<ServerLevel, Integer> first) {
+    Shatter(@Nullable BlastArea area, List<StagedExplosion> after, Vec3 centre, Zone zone) {
         this.area = area;
         this.after = after;
         this.centre = centre;
         this.zone = zone;
-        this.first = first;
         min = zone.min();
         max = zone.max();
     }
 
-    /** Выбить сразу, без очереди и без района, теми же порциями (проверки). @return сколько блоков выбито */
+    /** Выбить сразу, без очереди и без района, теми же порциями, звуком и частицами (проверки). @return сколько блоков выбито */
     static int now(ServerLevel level, Vec3 centre, Zone zone) {
-        Shatter job = new Shatter(null, List.of(), centre, zone, (l, n) -> {});
+        Shatter job = new Shatter(null, List.of(), centre, zone);
         int broken = 0;
-        while (job.hasNext(level)) broken += Math.max(0, job.nextPortion(level, PORTION));
+        while (job.hasNext(level)) {
+            int n = job.nextPortion(level, PORTION);
+            if (n > 0 && job.pane != null) job.burst(level, n);
+            broken += Math.max(0, n);
+        }
         return broken;
     }
 
     /** Поставить в очередь попаданий удара: после взрывов {@code after}, пока держится район {@code area}. */
-    static void queue(ServerLevel level, BlastArea area, List<StagedExplosion> after, Vec3 centre, Zone zone,
-                      BiConsumer<ServerLevel, Integer> first) {
-        StrikeWorld.get(level).impacts().add(level, new Shatter(area.retain(), after, centre, zone, first));
+    static void queue(ServerLevel level, BlastArea area, List<StagedExplosion> after, Vec3 centre, Zone zone) {
+        StrikeWorld.get(level).impacts().add(level, new Shatter(area.retain(), after, centre, zone));
     }
 
     /** Секции мира, до которых волна достаёт, от ближних к центру: ключ сортировки — квадрат расстояния до середины. */
@@ -260,6 +268,7 @@ final class Shatter implements UnitQueue.Job {
      */
     int nextPortion(ServerLevel level, int limit) {
         TagKey<Block> tag = zone.tag();
+        pane = null;
         if (cursor < 0) {
             current = sections(level)[index++];
             LevelChunkSection section = section(level);
@@ -293,6 +302,19 @@ final class Shatter implements UnitQueue.Job {
                 level.setBlock(m, Blocks.AIR.defaultBlockState(), edgesReady ? Block.UPDATE_ALL : Warheads.EDGE_FLAGS);
                 touched.add(ChunkPos.asLong(sx, sz));
                 broken++;
+                if (pane == null) {
+                    pane = st;
+                    x0 = x1 = x;
+                    y0 = y1 = y;
+                    z0 = z1 = z;
+                } else {
+                    x0 = Math.min(x0, x);
+                    y0 = Math.min(y0, y);
+                    z0 = Math.min(z0, z);
+                    x1 = Math.max(x1, x);
+                    y1 = Math.max(y1, y);
+                    z1 = Math.max(z1, z);
+                }
             }
             if (++seen == limit) {
                 cursor = i + 1;
@@ -339,6 +361,28 @@ final class Shatter implements UnitQueue.Job {
         return false;
     }
 
+    /**
+     * Звук и осколки {@code n} блоков, выбитых последней порцией: звук поломки первого (у стекла — звон, у листвы — её
+     * шелест) из середины рамки выбитых, громкость √n — n одинаковых источников вместе слышно так же громко в √n раз
+     * дальше (интенсивности складываются, спад — 1/r²; громкость v Minecraft слышна до 16·v блоков); частицы этого блока
+     * по рамке — по {@link #PANE_PARTICLES} на блок, не больше {@link #BURST_PARTICLES} (столько у ванили даёт поломка
+     * целого блока): частицы — знак осколков, а не их число. Видны вблизи (частицы сервера — до 32 блоков от игрока), как у
+     * обычной поломки блока.
+     */
+    private void burst(ServerLevel level, int n) {
+        BlockState st = pane;
+        double x = 0.5 * (x0 + x1) + 0.5, y = 0.5 * (y0 + y1) + 0.5, z = 0.5 * (z0 + z1) + 0.5;
+        var sound = st.getSoundType(level, BlockPos.containing(x, y, z), null);
+        level.playSound(null, x, y, z, sound.getBreakSound(), SoundSource.BLOCKS, (float) Math.sqrt(n), sound.getPitch() * (0.9f + 0.2f * level.random.nextFloat()));
+        level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, st), x, y, z, Math.min(BURST_PARTICLES, PANE_PARTICLES * n),
+                0.25 * (x1 - x0 + 1), 0.25 * (y1 - y0 + 1), 0.25 * (z1 - z0 + 1), 0.15);
+    }
+
+    /** Частиц на выбитый блок: столько у ванили даёт поломка стеклянной панели (её форма — 4×4 клеток по ¼ блока). */
+    static final int PANE_PARTICLES = 16;
+    /** Частиц на порцию, не больше: столько у ванили даёт поломка целого блока (4×4×4). */
+    static final int BURST_PARTICLES = 64;
+
     /** Секция {@link #current} из готового чанка, или null. */
     @Nullable
     private LevelChunkSection section(ServerLevel level) {
@@ -370,10 +414,7 @@ final class Shatter implements UnitQueue.Job {
         // секции, которые отсекла палитра, — в той же единице: работа — порция секции, чьи блоки пришлось смотреть
         for (int skipped = 0; hasNext(level) && broken == SKIPPED && skipped < SKIPS; skipped++) broken = nextPortion(level, PORTION);
         broken = Math.max(0, broken);
-        if (broken > 0 && !broke) {
-            broke = true;
-            first.accept(level, broken);
-        }
+        if (broken > 0 && pane != null) burst(level, broken);
         long took = System.nanoTime() - t0;
         if (area != null) area.record(level, ImpactCost.Kind.GLASS, took, broken);
         else StrikeWorld.get(level).impactCost().add(ImpactCost.Kind.GLASS, took, broken);

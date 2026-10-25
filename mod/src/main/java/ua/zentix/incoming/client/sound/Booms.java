@@ -41,7 +41,8 @@ final class Booms {
     static Crack crack(FlightTrack track, double te, Vec3 ear, Propagation.Weather weather) {
         // и не на продолжении пути после последней записи: там он лишь дотянут по последней скорости
         if (te < track.start() + 2 || te > track.lastTick() || !track.covers(te)) return null;
-        Noise.Body body = EngineSound.noise(track).body();
+        // у пути ЗРК оружия нет: корпус — по её паспорту
+        Noise.Body body = track.weapon == null ? InterceptorSound.BODY : EngineSound.noise(track).body();
         Vec3 v = track.velocity(te);
         double mach = v.length() / Acoustics.SPEED;
         if (body == null || mach <= 1) return null;

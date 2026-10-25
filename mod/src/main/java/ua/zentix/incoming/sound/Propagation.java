@@ -9,7 +9,8 @@ import net.minecraft.world.level.Level;
  * клиента (громкость слоёв), поэтому дальности у них одни и те же.
  * <ul>
  * <li>Уровень у уха в полосе: L = L<sub>W</sub> − A<sub>div</sub> − A<sub>atm</sub> − A<sub>gr</sub> − тень (ф. 3, 4):
- * разлёт 20·lg d + 11 (ф. 7), воздух α·d ({@link Air}), земля (табл. 3), днём — зона тени (рефракция вверх).</li>
+ * разлёт 20·lg d + 11 (ф. 7), воздух α·d ({@link Air}, по влажности воздуха мира у земли), земля (табл. 3), днём —
+ * зона тени (рефракция вверх).</li>
  * <li>Земля — луг ({@link #MEADOW}, G = 1: трава, лес, пашня — почти весь мир Minecraft); у источника, у слушателя
  * и посередине — формулы a′–d′ табл. 3 по высотам.</li>
  * <li>Зона тени днём — тот же закон, что у далёких взрывов ({@code client.sound.Outdoor}): лучи касаются земли на
@@ -31,8 +32,12 @@ public final class Propagation {
     public static final int BANDS = OCTAVES.length;
     /** Поправка A по октавам, дБ (IEC 61672-1, табл. 3). */
     static final double[] A_WEIGHT = {-26.2, -16.1, -8.6, -3.2, 0, 1.2, 1.0, -1.1};
-    /** Поглощение воздухом по октавам при условиях мода, дБ/м. */
-    static final double[] ALPHA = new double[BANDS];
+    /**
+     * Поглощение воздухом по октавам, дБ/м, по влажности с шагом {@link #HUMIDITY_STEPS} (1 %): строка — влажность
+     * 0..1, у пути — ближайшая ({@link #alpha}); во влажности мира у земли (70–100 %) — в пределах 1 % формулы.
+     */
+    private static final int HUMIDITY_STEPS = 100;
+    private static final double[][] ALPHA = new double[HUMIDITY_STEPS + 1][BANDS];
     /** Фон по октавам против всего фона, дБ (A): 125 Гц – 4 кГц поровну, края на 10 дБ тише. */
     static final double[] BACKGROUND = new double[BANDS];
     /** Земля по ISO 9613-2: G = 1 — пористая (трава, лес, пашня). */
@@ -52,8 +57,11 @@ public final class Propagation {
 
     static {
         double sum = 0;
+        for (int h = 0; h <= HUMIDITY_STEPS; h++) {
+            // влажность 0 у ISO 9613-1 вне области формулы (частоты релаксации кислорода — к нулю): от 1 %
+            for (int b = 0; b < BANDS; b++) ALPHA[h][b] = Air.alphaAt(OCTAVES[b], Math.max(1, h) / (double) HUMIDITY_STEPS);
+        }
         for (int b = 0; b < BANDS; b++) {
-            ALPHA[b] = Air.alpha(OCTAVES[b]);
             BACKGROUND[b] = b == 0 || b == BANDS - 1 ? -10 : 0;
             sum += Math.pow(10, BACKGROUND[b] / 10);
         }
@@ -63,26 +71,43 @@ public final class Propagation {
     private Propagation() {}
 
     /**
-     * Погода для рефракции и фона.
+     * Погода для рефракции, фона и поглощения воздухом.
      *
-     * @param day     0 — ночь, 1 — солнце высоко ({@link #day}): фон днём громче
-     * @param rain    дождь 0..1
-     * @param thunder гроза 0..1
-     * @param shadow  0..1 — насколько воздух преломляет звук вверх, в зону тени ({@link #refraction})
+     * @param day      0 — ночь, 1 — солнце высоко ({@link #day}): фон днём громче
+     * @param rain     дождь 0..1
+     * @param thunder  гроза 0..1
+     * @param shadow   0..1 — насколько воздух преломляет звук вверх, в зону тени ({@link #refraction})
+     * @param humidity относительная влажность у земли 0..1 ({@code util.Air#surfaceHumidity}): воздух ест верха
      */
-    public record Weather(double day, double rain, double thunder, double shadow) {
+    public record Weather(double day, double rain, double thunder, double shadow, double humidity) {
         public static final Weather NIGHT = new Weather(0, 0, 0, 0), NOON = new Weather(1, 0, 0, 1);
+
+        /** Погода с влажностью ясного дня у земли ({@code util.Air#SURFACE_CLEAR}). */
+        public Weather(double day, double rain, double thunder, double shadow) {
+            this(day, rain, thunder, shadow, ua.zentix.incoming.util.Air.SURFACE_CLEAR);
+        }
 
         /**
          * Погода мира сейчас: день — по высоте солнца (без неба или с застывшим временем — ночь), тень — по классу
-         * устойчивости воздуха мира ({@link Air#of(Level)}, тот же у дыма и полёта).
+         * устойчивости, влажность — у земли, всё — из воздуха мира ({@link ua.zentix.incoming.util.Air#of(Level)}, тот
+         * же у дыма и полёта).
          */
         public static Weather of(Level level) {
             ua.zentix.incoming.util.Air air = ua.zentix.incoming.util.Air.of(level);
             // без неба (Незер, Энд) воздух не греется солнцем и не остывает ночью: тени нет, как прежде
             return new Weather(Propagation.day(ua.zentix.incoming.util.Air.sun(level)), level.getRainLevel(1), level.getThunderLevel(1),
-                    level.dimensionType().hasSkyLight() ? refraction(air.stability()) : 0);
+                    level.dimensionType().hasSkyLight() ? refraction(air.stability()) : 0, air.surfaceHumidity());
         }
+
+        /** Та же погода в условиях записей ({@link Air#HUMIDITY}): сколько воздуха уже в дальней записи. */
+        public Weather recorded() {
+            return new Weather(day, rain, thunder, shadow, Air.HUMIDITY / 100);
+        }
+    }
+
+    /** Поглощение воздухом в октаве b при влажности {@code humidity} (0..1), дБ/м. */
+    public static double alpha(int b, double humidity) {
+        return ALPHA[(int) Math.round(Math.max(0, Math.min(1, humidity)) * HUMIDITY_STEPS)][b];
     }
 
     /**
@@ -180,7 +205,7 @@ public final class Propagation {
     public static double attenuation(int b, Path p) {
         double d = Math.max(1, p.d);
         double dp = Math.sqrt(Math.max(1, d * d - sq(p.hs - p.hr)));
-        return divergence(d) + ALPHA[b] * d + ground(b, dp, p.hs, p.hr, p.g)
+        return divergence(d) + alpha(b, p.weather.humidity) * d + ground(b, dp, p.hs, p.hr, p.g)
                 + shadow(OCTAVES[b], d, p.hs, p.hr, p.weather.shadow);
     }
 

@@ -30,6 +30,22 @@ class GroundDustTest {
         return out;
     }
 
+    /** То же без юбки пыли разрушенного ({@link CloudModel#crushed}: у неё свой закон, не Kuhl). */
+    private static List<double[]> waveBlobs(CloudModel m, double t) {
+        List<double[]> out = new ArrayList<>();
+        m.blobs(t, new CloudModel.Blobs() {
+            @Override
+            public void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, double k, double rise) {
+                out.add(new double[]{x, y, z, sh, sv, soot, dust});
+            }
+
+            @Override
+            public void crushed(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
+            }
+        });
+        return out;
+    }
+
     /**
      * Мощность того же давления у земли: ядерный наземный W/0,5 кг (доля энергии в волне — половина, Glasstone и Dolan
      * §1.24) против заряда W кг ТНТ на земле по Кинни–Грэхему — давление в пределах трети от 1 до 50 psi у зарядов
@@ -91,7 +107,7 @@ class GroundDustTest {
         double before = -1;
         for (double t : new double[]{0, 0.002, 0.005, 0.01, 0.03, 0.06, 0.1, 0.2, 0.3, 1}) {
             double front = m.ground.front(t), mass = 0;
-            for (double[] b : blobs(m, t)) {
+            for (double[] b : waveBlobs(m, t)) {
                 if (b[6] <= 0 || b[5] > 0 || b[1] > 2 * b[4] + 0.5) continue; // пыль у земли (облако и ножка — выше)
                 mass += b[6];
                 double r = Math.hypot(b[0] - m.ground.drift(t, b[1])[0], b[2] - m.ground.drift(t, b[1])[1]);
@@ -240,6 +256,146 @@ class GroundDustTest {
     }
 
     /**
+     * Юбка растёт от точки удара (ревью R462B: приход за краем юбки был её концом, и в {@value GroundDust#SKIRT_S} с фронт
+     * прыгал с 22 м к концу колец, а клуб у края стоял в середине всего кольца, за юбкой): шахед и крылатая ракета на
+     * ровной улице в штиль — до {@value GroundDust#SKIRT_S} с фронт не дальше R·t/{@value GroundDust#SKIRT_S}, середина
+     * каждого клуба — внутри фронта, после — фронт без скачка между соседними кадрами.
+     */
+    @Test
+    void skirtGrowsFromTheImpact() {
+        CloudModel.Air calm = new CloudModel.Air(CloudModel.N_STANDARD, 0, 0, 0.1, (int) Stability.C, 0.5);
+        GroundDust.Ground flat = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1),
+                GroundDust.Ground.filled(0), (x, z) -> 0);
+        for (WeaponType w : List.of(WeaponType.DRONE, WeaponType.MISSILE)) {
+            BlastSource src = BlastSource.of(w, false);
+            GroundDust dust = new CloudModel(src, calm, false, 0, flat).crushed;
+            double reach = GroundDust.SKIRT_R0 * 2 * Math.cbrt(src.chargeKg());
+            double last = 0;
+            for (double t = 0.05; t <= 2 + 1e-9; t += 0.05) {
+                double front = dust.front(t);
+                if (t <= GroundDust.SKIRT_S + 1e-9) {
+                    assertTrue(front <= reach * t / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " с: фронт " + front + " дальше юбки");
+                    for (double[] b : layer(dust, t)) {
+                        double r = Math.hypot(b[0], b[2]);
+                        assertTrue(r <= Math.max(front, 1) + 1e-6, w + ", " + t + " с: клуб в " + r + " м за фронтом " + front);
+                    }
+                }
+                assertTrue(front - last <= reach * 0.05 / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " с: фронт прыгнул " + last + " → " + front);
+                last = front;
+            }
+        }
+    }
+
+    /**
+     * На перекрёстке квартала (дома 10×10×12 м, улицы по 6 м) газ несёт юбку по улицам, а не в дома: где вся дуга сектора
+     * в кольце выше удара на {@link GroundDust#WALL}, юбки нет, клубы остальных идут по улицам, масса та же, что у юбки в
+     * поле.
+     */
+    @Test
+    void skirtGoesDownTheStreets() {
+        GroundDust.Relief town = (x, z) -> Math.floorMod((int) Math.floor(x + 13), 16) < 10 && Math.floorMod((int) Math.floor(z + 13), 16) < 10 ? 12 : 0;
+        double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+        for (int k = 0; k < GroundDust.SECTORS; k++) {
+            double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
+            for (int b = 0; b < GroundDust.BANDS.length; b++) h[k][b] = town.at(GroundDust.BANDS[b] * Math.cos(ang), GroundDust.BANDS[b] * Math.sin(ang));
+        }
+        CloudModel.Air calm = new CloudModel.Air(CloudModel.N_STANDARD, 0, 0, 0.1, (int) Stability.C, 0.5);
+        GroundDust.Ground streets = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1), h, town);
+        GroundDust.Ground field = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1),
+                GroundDust.Ground.filled(0), (x, z) -> 0);
+        GroundDust inTown = new CloudModel(BlastSource.of(WeaponType.DRONE, false), calm, false, 0, streets).crushed;
+        GroundDust inField = new CloudModel(BlastSource.of(WeaponType.DRONE, false), calm, false, 0, field).crushed;
+        assertEquals(inField.total, inTown.total, 1e-9 * inField.total);
+        // клубы, которые видит игрок (ревью R468: направление выбиралось на исходных радиусах, а клуб растянут дальностью
+        // и стоком — у удара в 6,5 м от перекрёстка 8 из 22 середин были в домах): до 2 с в штиль середины всех заметных
+        // клубов юбки — на мостовой (у края — до метра), и у перекрёстка, и в улицах рядом с ним
+        for (double[] at : new double[][]{{0, 0}, {0.5, 6.5}, {-2, 9}}) {
+            GroundDust.Relief shifted = (x, z) -> town.at(x + at[0], z + at[1]);
+            GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1),
+                    GroundDust.Ground.filled(0), shifted);
+            GroundDust d = new CloudModel(BlastSource.of(WeaponType.DRONE, false), calm, false, 0, g).crushed;
+            int seen = 0;
+            for (double t = 0.25; t <= 2 + 1e-9; t += 0.25) {
+                for (double[] c : layer(d, t)) {
+                    if (c[6] < 0.005 * d.total) continue;
+                    seen++;
+                    // у края улицы — до метра (запруда сдвигает середину на доли метра)
+                    double low = shifted.at(c[0], c[2]);
+                    for (double[] e : new double[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) low = Math.min(low, shifted.at(c[0] + e[0], c[2] + e[1]));
+                    assertTrue(low <= GroundDust.WALL, "удар " + at[0] + ", " + at[1] + "; " + t + " с: клуб в доме, " + c[0] + ", " + c[2]);
+                }
+            }
+            assertTrue(seen > 20, "клубов " + seen);
+        }
+        int housed = 0, inStreet = 0;
+        for (int k = 0; k < GroundDust.SECTORS; k++) {
+            for (int i = 0; i < GroundDust.RINGS; i++) {
+                double r = inTown.ring(i);
+                boolean open = false;
+                for (int j = 0; j < GroundDust.ARC; j++) {
+                    double phi = 2 * Math.PI * (k + (j + 0.5) / GroundDust.ARC) / GroundDust.SECTORS;
+                    open |= town.at(r * Math.cos(phi), r * Math.sin(phi)) <= GroundDust.WALL;
+                }
+                if (!open) {
+                    assertEquals(0, inTown.mass(k, i), 0, "сектор " + k + ", кольцо " + i + " — в доме");
+                    housed++;
+                } else if (inTown.mass(k, i) > 0 && r > 4) {
+                    // клуб сектора — в улице, а не в доме
+                    double phi = inTown.heading(k, GroundDust.band(r));
+                    assertTrue(town.at(r * Math.cos(phi), r * Math.sin(phi)) <= GroundDust.WALL, "сектор " + k + ", кольцо " + i + ": клуб в доме");
+                    inStreet++;
+                }
+            }
+        }
+        // середина дуги сектора у этого перекрёстка дальше 8 м — в доме: без поворота к улицам клубы стояли бы там
+        assertTrue(inStreet > 20, "клубов в улицах " + inStreet + ", колец целиком в домах " + housed);
+        // по улицам юбка уходит дальше, чем в поле: та же площадь πR²/8 на сектор — по открытой мостовой (счёт по сетке
+        // 0,1 м, независимо от выборок дуги), не дальше REACH_MAX·R
+        double skirtR = inField.front(GroundDust.SKIRT_S);
+        for (int k = 0; k < GroundDust.SECTORS; k++) {
+            assertEquals(1, inField.reach(k), 0, "поле");
+            double need = Math.PI * skirtR * skirtR / GroundDust.SECTORS, lo = 2 * Math.PI * k / GroundDust.SECTORS, hi = lo + 2 * Math.PI / GroundDust.SECTORS;
+            java.util.List<Double> open = new java.util.ArrayList<>();
+            for (double x = -3 * skirtR; x <= 3 * skirtR; x += 0.1) {
+                for (double z = -3 * skirtR; z <= 3 * skirtR; z += 0.1) {
+                    double phi = Math.atan2(z, x);
+                    if (phi < 0) phi += 2 * Math.PI;
+                    if (phi >= lo && phi < hi && town.at(x, z) <= GroundDust.WALL) open.add(Math.hypot(x, z));
+                }
+            }
+            java.util.Collections.sort(open);
+            int cells = (int) Math.ceil(need / 0.01);
+            double streetR = Math.min(cells < open.size() ? open.get(cells) : Double.MAX_VALUE, GroundDust.REACH_MAX * skirtR);
+            assertTrue(streetR > 1.2 * skirtR, "сектор " + k + ": по улицам дальше поля");
+            assertEquals(streetR / skirtR, inTown.reach(k), 0.12 * streetR / skirtR, "сектор " + k);
+        }
+    }
+
+    /**
+     * Юбка не взбирается на дом у точки удара (ревью R462B: путь клуба начинался с точки полосы, а она уже на крыше, — пыль
+     * рождалась на крыше в 20 м над ударом): шахед на улице, в 2 м от него стена дома в 20 м по всей полуплоскости x > 2,
+     * ветер на дом. Клубы юбки до 30 с лежат низом не выше 2 м над улицей.
+     */
+    @Test
+    void skirtStaysBelowAWallBesideTheImpact() {
+        CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
+        GroundDust.Relief house = (x, z) -> x > 2 ? 20 : 0;
+        double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+        for (int k = 0; k < GroundDust.SECTORS; k++) {
+            double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
+            for (int b = 0; b < GroundDust.BANDS.length; b++) h[k][b] = house.at(GroundDust.BANDS[b] * Math.cos(ang), GroundDust.BANDS[b] * Math.sin(ang));
+        }
+        GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1), h, house);
+        GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).crushed;
+        for (double t = 0.25; t <= 30; t += 0.25) {
+            for (double[] b : layer(dust, t)) {
+                double base = b[1] - 0.8 * b[4];
+                assertTrue(base <= 2, t + " с: юбка на высоте " + base + " у клуба в (" + b[0] + ", " + b[2] + ")");
+            }
+        }
+    }
+
+    /**
      * Клубы слоя пыли в возрасте t: {x, y, z, σh, σv, пыль (ослабление в кг смеси), масса пыли в воздухе, поверхность, с
      * которой её подняло}.
      */
@@ -335,6 +491,12 @@ class GroundDustTest {
                         String at = "дом " + roof + " м, ветер " + wind + ", " + t + " с, клуб " + i;
                         assertTrue(base >= below - 1e-6 || base >= last[i] - 1e-6, at + ": уходит под поверхность " + below);
                         last[i] = base;
+                        // клуб у наветренного края (юбка доходит до края крыши) ветер сносит обратно на крышу: лёг на неё —
+                        // выход за край считается заново
+                        if (crossed[i] >= 0 && below >= lifted[i] - GroundDust.DROP) {
+                            crossed[i] = -1;
+                            lifted[i] = base;
+                        }
                         if (crossed[i] < 0 && below < lifted[i] - GroundDust.DROP) {
                             crossed[i] = t;
                             edge[i] = dust.drift(t, 0.8 * b[4]);

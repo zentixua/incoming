@@ -1,0 +1,48 @@
+{
+  "stand": 1,
+  "about": "Scenes of the scene stand (README.md). Positions in blocks: +X east, +Z south; ground = top of the grass of the flat world. Launch bearings: degrees from south toward east. Every strike is its own command with spread 0 at a fixed aim point (a Vogel sunflower over the spread disc, turned per salvo and wave: the same for every version, unlike the salvo spread of Incoming, which takes the shared world random), from launch point i mod launchers, gap_s apart from one point, straight via the aim point; server_config is the world rule written to config/incoming-server.toml (drone_flight_time at its minimum: the flight is never shorter than the direct path). An impact is a projectile leaving the world near the target and its own explosion with a warhead damage type (warheads): a crash before arming is a vanilla explosion and does not count. Launch close-ups (launch): the camera stands 30 m beside the launch point at eye height and looks at it; the target is far downrange to the side, so impacts stay out of the frame; windows are timed from the command, the scene does not wait for impacts (they come last in the plan).",
+  "world": {"seed": 20261025, "day_time": 6000, "settle_s": 4, "limit_s": 1800},
+  "ground": 65,
+  "weapon": "drone",
+  "projectiles": ["incoming:drone"],
+  "warheads": ["incoming:strike"],
+  "server_config": {"launch": {"drone_flight_time": 5, "missile_flight_time": 5}},
+  "impact_margin": 40,
+  "launch": {"dist": 400, "bearings": [-45, -35, -25, -15, -5, 5, 15, 25, 35, 45], "gap_s": 1.5},
+  "settle_s": 1.5,
+  "end_tail_s": 3,
+  "settle_far_s": 8,
+  "far_m": 300,
+  "after_shot_s": 0.5,
+  "await_timeout_s": 300,
+  "tail_timeout_s": 90,
+  "quiet_s": 30,
+  "probes": [
+    "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+    "ua.zentix.incoming.client.far.FarRenderer#describeSmoke"
+  ],
+  "once": ["net.irisshaders.iris.Iris#getCurrentPackName", "net.irisshaders.iris.Iris#isPackInUseQuick"],
+  "sites": {"F": [0, 0], "C": [1000, 0], "D": [4000, 0], "L1": [0, 3000], "L2": [0, 6000], "L3": [0, 9000]},
+  "launch_view": {"camera": {"toward": [0, -1], "dist": 30, "height": 1.6, "look_height": 1.5}, "target": [2500, 0],
+                  "windows": [{"name": "start", "at_s": 0, "s": 15}, {"name": "hang", "at_s": 30, "s": 10}]},
+  "cameras": {
+    "outside": {"toward": [-1, 0], "dist": 200, "height": 30, "look_height": 15},
+    "edge": {"toward": [0, -1], "dist": "spread", "height": 10, "look_height": 10},
+    "inside": {"toward": [0, 0], "dist": 0, "height": 4, "look_toward": [1, 0], "look_dist": 100, "look_height": 20}
+  },
+  "scenes": [
+    {"id": "first", "site": "F", "strikes": 1, "spread": 0, "impact_window": true, "window_s": 5,
+     "camera": {"toward": [-1, 0], "dist": 60, "height": 10, "look_height": 5}},
+    {"id": "one", "site": "C", "strikes": 1, "spread": 0, "impact_window": true, "window_s": 15, "shots": [0.5, 3, 15],
+     "camera": "outside", "launch_with": "first", "launch_delay_s": 20},
+    {"id": "16", "site": "C", "total": 16, "spread": 40, "cameras": ["outside", "edge", "inside"], "window_s": 10},
+    {"id": "40", "site": "C", "total": 40, "spread": 80, "cameras": ["outside", "edge", "inside"], "window_s": 10},
+    {"id": "100", "site": "C", "total": 100, "spread": 120, "cameras": ["outside", "edge", "inside"], "window_s": 20,
+     "hit": {"camera": "outside", "nth": 10, "window_s": 10, "shots": [0.2, 1, 3, 10]}},
+    {"id": "acc", "site": "D", "spread": 80, "impact_window": true, "window_s": 180, "shots": [60, 120, 180],
+     "camera": "edge", "waves": {"strikes": 10, "every_s": 20, "count": 9, "launchers": 5}, "bucket_s": 10},
+    {"id": "grad", "site": "L1", "launch": {"weapon": "rocket", "count": 12, "one_command": true}},
+    {"id": "missile", "site": "L2", "launch": {"weapon": "missile", "count": 1, "via": true}},
+    {"id": "shahed", "site": "L3", "launch": {"weapon": "drone", "count": 5, "via": true}}
+  ]
+}

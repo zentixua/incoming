@@ -38,6 +38,11 @@ public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up,
         return Math.pow(ambient, Sight.ADAPT);
     }
 
+    /** {@link #skyLuminance()} мира {@code level} без вида кадра (мира нет — день). */
+    public static double skyLuminance(@org.jetbrains.annotations.Nullable ClientLevel level, float partial) {
+        return level == null ? 1 : Math.pow(ambient(level, partial), Sight.ADAPT);
+    }
+
     /** Тот же вид с привыканием глаза кадра exposure ({@link Sight#exposure}: с огнём у глаза этого кадра). */
     public FarView exposed(double exposure) {
         return new FarView(camera, forward, left, up, partial, far, pixel, edge, ambient, exposure, sky, range, world, clouds, rain, air);
