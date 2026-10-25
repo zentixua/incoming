@@ -100,14 +100,48 @@ class RumbleTest {
         assertEquals(b.heard(), direct.total(), 1e-12, "без голоса — весь в гуле с этого тика");
     }
 
-    /** Петля без слышимых членов держит канал {@link Rumble#HOLD} тиков и отпускает его; член снова слышен — счёт заново. */
+    /**
+     * Петля без слышимых членов держит канал секунду — 20 тиков — и отпускает его; член снова слышен — счёт заново (у каждой
+     * четверти свой).
+     */
     @Test
-    void silentLoopIsReleased() {
+    void silentLoopIsReleasedAfterASecond() {
         Rumble r = new Rumble();
-        for (int t = 0; t < Rumble.HOLD; t++) assertTrue(r.keep(2, 0), "тик " + t);
-        assertTrue(!r.keep(2, 0), "тишина дольше HOLD — отпустить");
+        for (int t = 0; t < 20; t++) assertTrue(r.keep(2, 0), "тик " + t);
+        assertTrue(!r.keep(2, 0), "тишина дольше секунды — отпустить");
         assertTrue(r.keep(2, 0.5f), "снова слышно — держать");
         assertTrue(r.keep(1, 0) && r.keep(3, 0.2f), "у каждой четверти свой счёт");
+    }
+
+    /**
+     * Тон и верха звучащего гула — по тому, что в нём звучит: голос, который только уступил и ещё полный (его доля в гуле —
+     * ноль), тембр не трогает; по мере того как он стихает, тембр идёт к его доле. Гула ещё нет — тембр тех, кто в него
+     * придёт (ревью R5: тон звучащей петли прыгал 0,5 → 1,985, верха 0,1 → 0,991).
+     */
+    @Test
+    void timbreFollowsWhatSoundsInTheRumble() {
+        Mix mix = new Mix();
+        Rumble r = new Rumble();
+        Mix.Blast present = blast(mix, 0.1, 300), yielding = blast(mix, 1, 300);
+        mix.at(10);
+        r.add(present, 0, 0.5f, 1, 0.1f, 0, 0);
+        Rumble.Member m = r.add(yielding, 0, 2, 1, 1, new boolean[]{true}, 10, BlastVoices.FADE);
+        for (int t = 10; t <= 11; t++) {
+            r.tick(t);
+            assertEquals(0, m.power(t), 1e-12, "уступивший ещё полный");
+            assertEquals(0.5, r.pitch(0), 1e-6, "тон — звучащего");
+            assertEquals(0.1, r.highs(0), 1e-6, "верха — звучащего");
+        }
+        r.tick(12);
+        double a = present.heard(), b = yielding.heard() * (1 - 4 / 9.0);
+        assertEquals((0.5 * a + 2 * b) / (a + b), r.pitch(0), 1e-5, "тон — по долям в гуле");
+        assertEquals((0.1 * a + 1 * b) / (a + b), r.highs(0), 1e-5);
+        Rumble soon = new Rumble();
+        soon.add(yielding, 0, 2, 1, 0.3f, new boolean[]{true}, 10, BlastVoices.FADE);
+        soon.tick(10);
+        assertEquals(0, soon.power(0), 1e-12);
+        assertEquals(2, soon.pitch(0), 1e-6, "гула ещё нет — тембр того, кто придёт");
+        assertEquals(0.3, soon.highs(0), 1e-6);
     }
 
     /**

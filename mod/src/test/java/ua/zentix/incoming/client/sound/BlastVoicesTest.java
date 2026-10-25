@@ -251,6 +251,23 @@ class BlastVoicesTest {
     }
 
     /**
+     * Запас уступивших — не «все 12 заняты»: остатка не хватает на группу нового — он в гуле, хоть два места ещё свободны.
+     */
+    @Test
+    void headroomResidueTooSmallForTheGroupSendsItToTheRumble() {
+        double[] clock = {0};
+        Mix mix = new Mix();
+        BlastVoices voices = new BlastVoices(new Rumble(), 8);
+        for (int i = 0; i < 9; i++) {
+            assertNotNull(voices.admit(flat(mix, 0, 0.01 * Math.pow(1.5, i), 200), fakes(clock, 2, 200), 0, 0, 1, 1, 1, Integer.MAX_VALUE), "голос " + i);
+        }
+        assertEquals(8, voices.steady());
+        assertEquals(18, voices.channels(), "звучат 8, уступившие держат 10 из 12 запаса");
+        assertNull(voices.admit(flat(mix, 0, 100, 200), fakes(clock, 4, 200), 0, 0, 1, 1, 1, Integer.MAX_VALUE), "группе из 4 не хватает остатка 2");
+        assertNotNull(voices.admit(flat(mix, 0, 100, 200), fakes(clock, 2, 200), 0, 0, 1, 1, 1, Integer.MAX_VALUE), "группе из 2 — хватает");
+    }
+
+    /**
      * Остановленный звук держит канал, пока движок его не вернул: голос уходит из счёта только тогда, и серия громких в
      * одном тике не держит каналов больше потолка с запасом — лишние в гуле с той же мощностью (ревью R2: счёт видел 20,
      * у движка было 48). Через тики, когда уступившие отдали каналы, места снова есть.

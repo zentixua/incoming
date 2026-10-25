@@ -20,8 +20,9 @@ import java.util.List;
  * <li>голоса, что ещё звучат и стихают, свою долю несут сами: член — всё, что взрыв дал бы голосами, минус f² × то, что
  * играют они (f — их громкость, {@link #voice}); слой, которого движок не взял, — в гуле сразу и весь;</li>
  * <li>направление — cos²/sin² между двумя соседними петлями (сумма весов 1), петли — на востоке, юге, западе и севере;</li>
- * <li>тон петли — средний по мощности тон её членов (Сакс: у «Града» запись быстрее, у ракеты медленнее), верха — средние
- * по мощности верха их пути.</li>
+ * <li>тон петли — средний по мощности в ней тон её членов (Сакс: у «Града» запись быстрее, у ракеты медленнее), верха —
+ * средние так же верха их пути: голос, который ещё звучит, тембр гула не трогает; гула ещё нет (петля встаёт заранее) —
+ * тембр тех, кто в него придёт.</li>
  * </ul>
  * Часы стихания — тики звукового движка: в них же движок берёт громкость голоса ({@code SoundEngine.tickNonPaused}), и
  * петля считает свою громкость в своём тике, а не в тике клиента после него (тогда гул отставал бы от голоса на тик и
@@ -90,7 +91,7 @@ final class Rumble {
 
     private final List<Member> members = new ArrayList<>();
     private final double[] power = new double[QUADRANTS], potential = new double[QUADRANTS], pitch = new double[QUADRANTS],
-            highs = new double[QUADRANTS];
+            highs = new double[QUADRANTS], soonPitch = new double[QUADRANTS], soonHighs = new double[QUADRANTS];
     private final int[] quiet = new int[QUADRANTS];
 
     /** Взрыв {@code blast} (в смеси) — в гул целиком: с азимута {@code azimuth} от уха (atan2(dz, dx)). */
@@ -114,6 +115,8 @@ final class Rumble {
         Arrays.fill(potential, 0);
         Arrays.fill(pitch, 0);
         Arrays.fill(highs, 0);
+        Arrays.fill(soonPitch, 0);
+        Arrays.fill(soonHighs, 0);
         double sector = 2 * Math.PI / QUADRANTS;
         for (Member m : members) {
             double e = m.power(sound), full = m.potential();
@@ -124,10 +127,15 @@ final class Rumble {
             put(q0, e * c * c, full * c * c, m);
             put(q1, e * s * s, full * s * s, m);
         }
+        // тембр звучащего гула — по тому, что в нём звучит; голос, который только уступил и ещё полный, его не трогает.
+        // Гула ещё нет, а члены есть (петля встаёт заранее) — тембр тех, кто в него придёт
         for (int q = 0; q < QUADRANTS; q++) {
-            if (potential[q] > 0) {
-                pitch[q] /= potential[q];
-                highs[q] /= potential[q];
+            if (power[q] > 0) {
+                pitch[q] /= power[q];
+                highs[q] /= power[q];
+            } else if (potential[q] > 0) {
+                pitch[q] = soonPitch[q] / potential[q];
+                highs[q] = soonHighs[q] / potential[q];
             } else {
                 pitch[q] = 1;
                 highs[q] = 1;
@@ -138,8 +146,10 @@ final class Rumble {
     private void put(int q, double e, double full, Member m) {
         power[q] += e;
         potential[q] += full;
-        pitch[q] += full * m.pitch;
-        highs[q] += full * m.highs;
+        pitch[q] += e * m.pitch;
+        highs[q] += e * m.highs;
+        soonPitch[q] += full * m.pitch;
+        soonHighs[q] += full * m.highs;
     }
 
     /** Мощность петли {@code q} в игре после {@link #tick}, против потолка (как {@link Mix.Blast#heard}). */
