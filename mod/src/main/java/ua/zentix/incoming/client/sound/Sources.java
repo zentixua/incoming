@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.sound.Noise;
 import ua.zentix.incoming.sound.Propagation;
 import ua.zentix.incoming.sound.Spectra;
@@ -103,8 +104,14 @@ public final class Sources {
      */
     public static final Source NUKE_FIRE = new Source(Double.NaN, Spectra.NUKE_FIRE, Spectra.NUKE_FIRE_LUFS, Loudness.ENGINE_LUFS);
 
-    /** Звук, который ещё идёт к уху: событие, место, тон, источник, сколько тиков в пути. */
-    private record Pending(SoundEvent event, Vec3 at, float pitch, Source source, ClientLevel level, long born) {}
+    /** Звук, который ещё идёт к уху: событие, место, тон, источник, сколько тиков в пути, кто его сыграет. */
+    private record Pending(SoundEvent event, Vec3 at, float pitch, Source source, ClientLevel level, long born, @Nullable Player player) {}
+
+    /** Кто играет звук, когда его фронт дошёл до уха, с громкостью этого мига (по умолчанию — разовый звук мира). */
+    @FunctionalInterface
+    interface Player {
+        void play(SoundEvent event, Vec3 at, float volume, float pitch);
+    }
 
     private static final List<Pending> PENDING = new ArrayList<>();
     private static long ticks;
@@ -154,9 +161,14 @@ public final class Sources {
      * {@link Noise#SOUND}), громкостью по пути в тот миг; тише порога слышимости — не играется.
      */
     public static void play(SoundEvent event, Vec3 at, Source s, float pitch) {
+        play(event, at, s, pitch, null);
+    }
+
+    /** Как {@link #play(SoundEvent, Vec3, Source, float)}, но звук, дошедший до уха, играет {@code player}. */
+    static void play(SoundEvent event, Vec3 at, Source s, float pitch, @Nullable Player player) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
-        PENDING.add(new Pending(event, at, pitch, s, mc.level, ticks));
+        PENDING.add(new Pending(event, at, pitch, s, mc.level, ticks, player));
         tick(mc);
     }
 
@@ -185,7 +197,9 @@ public final class Sources {
             if (path < d) continue;
             it.remove();
             float v = volume(p.source, p.at, ear, weather);
-            if (v >= VoiceBudget.AUDIBLE) ClientSounds.atEar(p.event, p.at, v, p.pitch);
+            if (v < VoiceBudget.AUDIBLE) continue;
+            if (p.player == null) ClientSounds.atEar(p.event, p.at, v, p.pitch);
+            else p.player.play(p.event, p.at, v, p.pitch);
         }
     }
 

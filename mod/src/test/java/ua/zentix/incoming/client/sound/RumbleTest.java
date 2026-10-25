@@ -145,6 +145,35 @@ class RumbleTest {
     }
 
     /**
+     * Пожары в воронках — суммой мощностей по четвертям ({@link Quarters}): громкость петли — корень суммы, на оси петли —
+     * вся мощность в ней, между двумя — поровну, верха — средние по мощности, сумма по четвертям — сумма пожаров.
+     */
+    @Test
+    void firesAddUpByPowerIntoQuarters() {
+        Quarters f = new Quarters();
+        f.add(0, 0.3, 1, 1);
+        f.add(0, 0.4, 1, 0.5);
+        assertEquals(0.5, f.volume(0), 1e-6, "√(0,3² + 0,4²)");
+        assertEquals((0.09 + 0.16 * 0.5) / 0.25, f.highs(0), 1e-6);
+        Quarters g = new Quarters();
+        g.add(Math.PI / 4, 0.2, 0.5, 1);
+        assertEquals(0.1 * Math.sqrt(0.5), g.volume(0), 1e-6, "за преградой — × её доля, между петлями — поровну");
+        assertEquals(g.volume(0), g.volume(1), 1e-6);
+        assertEquals(0, g.volume(2) + g.volume(3), 1e-9);
+        Quarters many = new Quarters();
+        Random rnd = new Random(3);
+        double sum = 0;
+        for (int i = 0; i < 300; i++) {
+            double v = 0.02 * rnd.nextDouble();
+            many.add(2 * Math.PI * rnd.nextDouble() - Math.PI, v, 1, 1);
+            sum += v * v;
+        }
+        double got = 0;
+        for (int q = 0; q < Quarters.N; q++) got += many.volume(q) * many.volume(q);
+        assertEquals(sum, got, 1e-6 * sum, "триста пожаров — четыре петли той же мощности");
+    }
+
+    /**
      * Гул берёт энергию того варианта записи, что играет, а не огибающую события (наибольшую по вариантам — для потолка):
      * у дальнего ракурса варианты — от 2,4 до 9,4 с, и короткий звучал бы в гуле хвостом длинного.
      */

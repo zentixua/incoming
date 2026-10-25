@@ -1,7 +1,10 @@
 package ua.zentix.incoming.client.sound;
 
 import org.junit.jupiter.api.Test;
+import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.client.fx.smoke.CloudModel;
+import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.strike.WeaponType;
 
@@ -80,16 +83,166 @@ class BlastVoicesTest {
 
     /**
      * Потолок — из подсчёта каналов: у OpenAL Soft 255 моно и 1 стерео, у движка 247 статических и 8 потоковых, рядом 12
-     * своих — статических на деле 236; минус моторы 48, гул 4, ядерка 8, мир 64 и запас на стихающие 12 — 100. Без сведений
-     * от устройства движок берёт 30 моно — 25 статических, и взрывам остаётся наименьшее.
+     * своих — статических на деле 236; минус моторы 48, гул взрывов 4, гул пожаров 4, ядерка 8, мир 64 и запас на
+     * стихающие 12 — 96. Без сведений от устройства движок берёт 30 моно — 25 статических, и взрывам остаётся наименьшее.
      */
     @Test
     void ceilingFromTheChannelCount() {
         assertEquals(236, BlastVoices.reach(255, 1));
-        assertEquals(100, BlastVoices.CAP);
+        assertEquals(96, BlastVoices.CAP);
         assertEquals(BlastVoices.CAP, BlastVoices.cap(BlastVoices.MONO, BlastVoices.STEREO));
         assertEquals(4, BlastVoices.cap(30, 0));
-        assertEquals(236 - VoiceBudget.CAP - Rumble.QUADRANTS - BlastVoices.NUKE - BlastVoices.WORLD - BlastVoices.HEADROOM, BlastVoices.CAP);
+        assertEquals(236 - VoiceBudget.CAP - Rumble.QUADRANTS - Quarters.N - BlastVoices.NUKE - BlastVoices.WORLD - BlastVoices.HEADROOM,
+                BlastVoices.CAP);
+    }
+
+    /**
+     * Мир съел запас свободных каналов: самые тихие свои уступают заранее, пока свободных (с теми, что вот-вот вернутся) не
+     * станет запас на ближний; запас есть — никто не уступает.
+     */
+    @Test
+    void reserveIsKeptByTheQuietestAhead() {
+        double[] clock = {0};
+        Mix mix = new Mix();
+        BlastVoices voices = new BlastVoices(new Rumble(), 100);
+        List<List<Fake>> all = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            List<Fake> f = fakes(clock, 4, 300);
+            all.add(f);
+            assertNotNull(voices.admit(flat(mix, 0, 0.01 * (i + 1), 300), f, 0, 0, 1, 1, 1, 1000));
+        }
+        clock[0] = 20;
+        mix.at(20);
+        assertEquals(0, voices.reserve(20, BlastVoices.SPARE + BlastVoices.GROUP));
+        assertEquals(2, voices.reserve(20, 5), "свободно 5, нужно 12: уступают двое тише всех");
+        assertTrue(all.get(0).get(0).fadeFrom == 20 && all.get(1).get(0).fadeFrom == 20 && Double.isNaN(all.get(2).get(0).fadeFrom));
+        assertEquals(0, voices.reserve(20, 5), "уступившие вот-вот вернут — больше не нужно");
+    }
+
+    /** Пул движка без движка: столько статических каналов, сколько даст OpenAL; канал занят, пока звук его держит. */
+    static final class Pool {
+        final int reach;
+        int fixed, foreign;
+        final List<Fake> held = new ArrayList<>();
+        int refused;
+
+        Pool(int reach, int fixed) {
+            this.reach = reach;
+            this.fixed = fixed;
+        }
+
+        int used() {
+            held.removeIf(f -> !f.held());
+            return fixed + foreign + held.size();
+        }
+
+        int free() {
+            return reach - used();
+        }
+
+        /** Звук просит канал у движка: нет места — движок молча не играет. */
+        boolean take(Fake f) {
+            if (used() >= reach) {
+                f.taken = false;
+                refused++;
+                return false;
+            }
+            held.add(f);
+            return true;
+        }
+    }
+
+    /**
+     * Сцена перегрузки WAV-прогона (Sol, 25.10): 299 шахедов разом на 9-й секунде в 30–200 блоках, через секунду — осыпь
+     * выброса каждой воронки (разовый звук взрыва, в бюджете), ближний — в 40 блоках на 10-й секунде; пул движка — 236
+     * каналов, гул взрывов и пожаров держат 8. Ближний получает голос, движок берёт все его звуки, и ни одному нашему звуку
+     * движок не отказывает; так же, когда к приходу ближнего чужие звуки забили весь пул: запас на ближний самые тихие свои
+     * отдали заранее. В 33a23c16 ближний уходил в гул: пул держали ~300 петель гула пожаров и осыпь, мимо бюджета.
+     */
+    @Test
+    void stressSceneOf300KeepsTheNearVoice() throws IOException {
+        int rate = 44100;
+        float[][] near = MixTest.load("blast_near", 6, rate), mid = MixTest.load("blast_mid", 6, rate), far = MixTest.load("blast_far", 6, rate),
+                sub = MixTest.load("blast_sub", 2, rate), debris = MixTest.load("debris_fall", 4, rate);
+        float[][][] energy = {envelopes(near, rate), envelopes(mid, rate), envelopes(far, rate), envelopes(sub, rate), envelopes(debris, rate)};
+        float[][] max = {MixTest.envelope(near, rate), MixTest.envelope(mid, rate), MixTest.envelope(far, rate), MixTest.envelope(sub, rate),
+                MixTest.envelope(debris, rate)};
+        for (boolean crowded : new boolean[]{false, true}) stress(energy, max, crowded);
+    }
+
+    private static void stress(float[][][] energy, float[][] max, boolean crowded) {
+        BlastSource drone = BlastSource.of(WeaponType.DRONE, false);
+        double pitch = BlastMix.pitch(drone.chargeKg());
+        double kg = CraterModel.chargeVolume(drone.chargeKg(), CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY * (1 - CloudModel.DUST_LOFTED);
+        Sources.Source ejecta = Sources.EJECTA.power(Sources.fall(kg, 2 * CraterModel.chargeRadius(drone.chargeKg(), CraterModel.Soil.DRY), 2,
+                ua.zentix.incoming.sound.Spectra.DEBRIS_FALL));
+        Vec3 ear = new Vec3(0.5, 66.62, 0.5);
+        Random r = new Random(20261025L);
+        int n = 300, nearId = 299;
+        double[] dist = new double[n], az = new double[n];
+        for (int i = 0; i < n; i++) {
+            dist[i] = i == nearId ? 40 : 30 * Math.pow(200 / 30.0, i / 298.0);
+            az[i] = i == nearId ? 0 : 2 * Math.PI * r.nextDouble();
+        }
+        double[] clock = {0};
+        Mix mix = new Mix();
+        Rumble rumble = new Rumble();
+        BlastVoices voices = new BlastVoices(rumble);
+        Pool pool = new Pool(BlastVoices.reach(BlastVoices.MONO, BlastVoices.STEREO), Rumble.QUADRANTS + Quarters.N);
+        BlastVoices.Voice nearVoice = null;
+        List<Fake> nearSounds = null;
+        int maxUsed = 0;
+        for (int tick = 0; tick < 40 * 20; tick++) {
+            clock[0] = tick;
+            mix.at(tick);
+            voices.prune(tick);
+            if (crowded && tick == 195) pool.foreign = pool.free();
+            voices.reserve(tick, pool.free());
+            for (int i = 0; i < n; i++) {
+                double born = i == nearId ? 200 : 180, blast = born + dist[i] / 17.15, fall = born + 20 + dist[i] / 17.15;
+                List<Fake> sounds = new ArrayList<>();
+                Mix.Blast b = null;
+                if ((int) blast == tick) {
+                    b = mix.blast(tick);
+                    BlastMix.Layers l = BlastMix.at(drone, dist[i]);
+                    double[] v = {l.near(), l.mid(), l.far(), l.sub()};
+                    for (int k = 0; k < 4; k++) {
+                        if (v[k] < 0.005) continue;
+                        Mix.Layer layer = new Mix.Layer(max[k], energy[k][k == 3 ? i % 2 : i % 6], pitch, v[k], k == 3 ? Mix.Kind.APART : Mix.Kind.VIEW, 0);
+                        b.add(layer);
+                        sounds.add(new Fake(clock, tick + layer.ticks() + 20));
+                    }
+                } else if ((int) fall == tick) {
+                    float v = Sources.volume(ejecta, new Vec3(ear.x + dist[i] * Math.cos(az[i]), 65, ear.z + dist[i] * Math.sin(az[i])), ear,
+                            ua.zentix.incoming.sound.Propagation.Weather.NOON);
+                    if (v < 0.005f) continue;
+                    b = mix.blast(tick);
+                    Mix.Layer layer = new Mix.Layer(max[4], energy[4][i % 4], 1, v, Mix.Kind.APART, 0);
+                    b.add(layer);
+                    sounds.add(new Fake(clock, tick + layer.ticks() + 20));
+                }
+                if (b == null || sounds.isEmpty()) continue;
+                BlastVoices.Voice voice = voices.admit(b, sounds, tick, az[i], (float) pitch, 1, 1, pool.free());
+                if (voice != null) {
+                    boolean[] took = new boolean[sounds.size()];
+                    for (int k = 0; k < took.length; k++) took[k] = pool.take(sounds.get(k));
+                    voices.started(voice, took, tick);
+                }
+                if (i == nearId && (int) blast == tick) {
+                    nearVoice = voice;
+                    nearSounds = sounds;
+                }
+            }
+            maxUsed = Math.max(maxUsed, pool.used());
+            assertTrue(pool.used() <= pool.reach, "тик " + tick + ": каналов " + pool.used());
+            assertEquals(voices.channels(), pool.used() - pool.fixed - pool.foreign, "тик " + tick + ": счёт бюджета — как у движка");
+        }
+        System.out.printf("stress 300%s: most channels %d of %d, blast voices requested %d started %d refused by the engine %d, to rumble %d, yielded %d, near %s%n",
+                crowded ? " (pool crowded at 9.75 s)" : "", maxUsed, pool.reach, voices.requested, voices.started, pool.refused, voices.toRumble,
+                voices.yielded, nearVoice == null ? "RUMBLE" : "voice");
+        assertNotNull(nearVoice, "ближний — с голосом" + (crowded ? " и когда пул забит чужими" : ""));
+        assertTrue(nearSounds.stream().allMatch(f -> f.taken), "движок взял все звуки ближнего");
+        assertEquals(0, pool.refused, "ни одному нашему звуку движок не отказал");
     }
 
     @Test

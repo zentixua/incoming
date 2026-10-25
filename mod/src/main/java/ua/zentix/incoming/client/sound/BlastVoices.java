@@ -16,13 +16,15 @@ import java.util.List;
  * {@link OwnSources#MAX} (эхо, удар у уха), поэтому статических на деле — не больше 256 − 8 − 12 = 236. Из них:
  * <ul>
  * <li>моторы снарядов — {@link VoiceBudget#CAP};</li>
- * <li>гул взрывов — {@link Rumble#QUADRANTS} петли;</li>
+ * <li>гул взрывов — {@link Rumble#QUADRANTS} петли, гул пожаров в воронках — {@link Quarters#N} (сумма всех пожаров,
+ * {@link CraterFire});</li>
  * <li>ядерка ({@link #NUKE}): четыре петли гула пожаров и ветер в огонь ({@code NukeAfter}), звон в ушах, две сирены;</li>
  * <li>остальной мир ({@link #WORLD}, О): ваниль (дождь, мобы, шаги, блоки), другие моды (машины Create), наши звуки мира
- * ({@link Sources}: осыпь выброса, руины, подстанции), пожары воронок ({@link CraterFire}) — их числа никто не
- * ограничивает, поэтому сверх оценки — свободные каналы движка в миг удара ({@link #admit}, {@code free});</li>
+ * без бюджета ({@link Sources}: руины, подстанции, сирены) — их числа никто не ограничивает, поэтому сверх оценки —
+ * свободные каналы движка в миг удара ({@link #admit}, {@code free}) и запас на ближний ({@link #reserve}). Осыпь
+ * выброса воронки — разовый звук взрыва, она в этом бюджете;</li>
  * <li>уступившие голоса держат каналы, пока стихают, и ещё тик, пока движок их не вернёт, — {@link #HEADROOM};</li>
- * <li>остальное — разовым звукам взрывов: {@link #CAP}, ~100 (25 ближних взрывов по 4 голоса разом).</li>
+ * <li>остальное — разовым звукам взрывов: {@link #CAP}, ~96 (24 ближних взрыва по 4 голоса разом).</li>
  * </ul>
  * Канал голоса занят, пока его держит движок ({@link Sound#held}): {@code stop()} у звука — только флаг, канал движок
  * останавливает в своём следующем тике и возвращает пулу задачей звукового потока после него
@@ -64,6 +66,8 @@ final class BlastVoices {
     static final int HEADROOM = 12;
     /** Сколько свободных каналов движка оставить миру (его звуки этого тика). */
     static final int SPARE = 8;
+    /** Голосов у взрыва больше всего: ракурсы вблизи, средний, вдали и удар в грудь. */
+    static final int GROUP = 4;
     /** Тиков стихает уступивший голос (без щелчка), после тика полной громкости ({@link Rumble#voice}). */
     static final int FADE = 3;
     /** Тиков у взрыва атака — окно мгновенной громкости (BS.1770, 400 мс). */
@@ -148,7 +152,7 @@ final class BlastVoices {
      * ядерка, мир и запас на стихающие.
      */
     static int cap(int mono, int stereo) {
-        return Math.max(4, reach(mono, stereo) - VoiceBudget.CAP - Rumble.QUADRANTS - NUKE - WORLD - HEADROOM);
+        return Math.max(4, reach(mono, stereo) - VoiceBudget.CAP - Rumble.QUADRANTS - Quarters.N - NUKE - WORLD - HEADROOM);
     }
 
     /**
@@ -256,6 +260,31 @@ final class BlastVoices {
         v.sounds.forEach(Sound::fade);
         v.member = rumble.add(v.blast, v.azimuth, v.pitch, v.gain, v.highs, v.took, now, FADE);
         yielded++;
+    }
+
+    /**
+     * Запас на самый громкий, раз в тик: свободных у движка (вместе с теми, что уступившие вот-вот вернут) меньше
+     * {@link #SPARE} + {@link #GROUP} — мир съел запас; самые тихие свои уступают заранее, пока он не вернётся: ближний,
+     * пришедший потом, звучит в этих каналах, а не в гуле. Освободить каналы в тот же тик нельзя (движок возвращает их в
+     * своём следующем тике), поэтому — заранее, а не при ударе. Сколько уступило.
+     */
+    int reserve(double now, int free) {
+        prune(now);
+        long releasing = 0;
+        for (Voice v : voices) if (v.fading()) releasing += v.held();
+        if ((long) free + releasing >= SPARE + GROUP) return 0;
+        List<Voice> quiet = new ArrayList<>();
+        for (Voice v : voices) if (!v.fading()) quiet.add(v);
+        quiet.sort(Comparator.comparingDouble(v -> priority(v, now)));
+        int n = 0;
+        long freed = 0;
+        for (Voice v : quiet) {
+            if ((long) free + releasing + freed >= SPARE + GROUP) break;
+            freed += v.held();
+            give(v, now);
+            n++;
+        }
+        return n;
     }
 
     /** Голоса, чьи каналы движок уже вернул, — прочь. */

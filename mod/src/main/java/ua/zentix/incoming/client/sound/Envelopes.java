@@ -33,9 +33,9 @@ import java.util.Optional;
  */
 public final class Envelopes extends SimplePreparableReloadListener<Envelopes.Prepared> {
     public static final Envelopes INSTANCE = new Envelopes();
-    /** События, которые сводит {@link Mix}: ракурсы обычного взрыва и звуки бомбы. */
+    /** События, которые сводит {@link Mix}: ракурсы обычного взрыва, звуки бомбы, осыпь выброса воронки. */
     static final List<String> EVENTS = List.of("blast.near", "blast.mid", "blast.far", "blast.sub", "bomb.impact", "bomb.deep", "bomb.vent",
-            "bomb.cave", "bomb.quake");
+            "bomb.cave", "bomb.quake", "debris.fall");
     /** Огибающей нет (запись не прочиталась): громкость потолка весь срок {@link #FALLBACK_TICKS} — длиннее любой записи взрыва. */
     static final int FALLBACK_TICKS = 600;
 

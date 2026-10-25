@@ -95,6 +95,10 @@ public final class BlastSounds {
 
     private record Late(Mix.Blast blast, OwnSources.Anchor anchor) {}
     private static final List<CraterFire> FIRES = new ArrayList<>();
+    /** Гул пожаров в воронках — суммой по четвертям вокруг уха ({@link Quarters}), по петле на четверть, а не на пожар. */
+    private static final Quarters FIRE = new Quarters();
+    private static final AmbientLoop[] FIRE_LOOPS = new AmbientLoop[Quarters.N];
+    private static final int[] FIRE_RETRY = new int[Quarters.N], FIRE_QUIET = new int[Quarters.N];
     /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
     private static String last = "";
     @Nullable
@@ -329,7 +333,9 @@ public final class BlastSounds {
     /** Тик клиента. */
     static void tick() {
         ticks++;
-        FIRES.removeIf(fire -> !fire.tick(Minecraft.getInstance()));
+        FIRE.clear();
+        FIRES.removeIf(fire -> !fire.tick(Minecraft.getInstance(), FIRE));
+        fireLoops();
         MIX.at(ticks);
         // звук начался на деле позже своего тика — смесь взрыва от настоящего начала, как его эхо и удар у уха
         LATE.removeIf(l -> {
@@ -338,7 +344,40 @@ public final class BlastSounds {
             return true;
         });
         VOICES.prune(soundTick());
+        // запас свободных каналов на ближний: мир его съел — заранее уступают самые тихие свои (их каналы вернутся за тики)
+        if (VOICES.reserve(soundTick(), free()) > 0) rumble(true);
         rumble(false);
+    }
+
+    /**
+     * Петли гула пожаров по четвертям, раз в тик: громкость — корень суммы мощностей пожаров четверти, верха — средние по
+     * мощности; петлю, которой движок не держит, — заново (раз в {@code 20} тиков); тихо секунду — отпустить; ползунок
+     * «Окружение» в нуле — не запускать. Запись одна (`blast.fire`), у петель разное начало.
+     */
+    private static void fireLoops() {
+        Minecraft mc = Minecraft.getInstance();
+        boolean ambient = mc.options.getSoundSourceVolume(SoundSource.AMBIENT) > 0;
+        Vec3 ear = ear();
+        for (int q = 0; q < Quarters.N; q++) {
+            if (FIRE_RETRY[q] > 0) FIRE_RETRY[q]--;
+            float v = FIRE.volume(q);
+            FIRE_QUIET[q] = v < AUDIBLE ? FIRE_QUIET[q] + 1 : 0;
+            double az = Quarters.azimuth(q);
+            Vec3 toward = ear.add(Math.cos(az) * 10, 0, Math.sin(az) * 10);
+            AmbientLoop l = FIRE_LOOPS[q];
+            if (l != null && l.playing() && FIRE_QUIET[q] <= Rumble.HOLD) {
+                l.set(ear, toward, v, FIRE.highs(q), 1);
+                continue;
+            }
+            if (l != null) l.end();
+            FIRE_LOOPS[q] = null;
+            if (v < AUDIBLE || !ambient || FIRE_RETRY[q] > 0) continue;
+            AmbientLoop fresh = new AmbientLoop(ModSounds.BLAST_FIRE.get(), SoundSource.AMBIENT, 1, 0x5F1BE + q);
+            fresh.set(ear, toward, v, FIRE.highs(q), 1);
+            mc.getSoundManager().play(fresh);
+            FIRE_RETRY[q] = 20;
+            FIRE_LOOPS[q] = fresh;
+        }
     }
 
     /**
@@ -435,6 +474,7 @@ public final class BlastSounds {
     /** Движок звука загружен заново: потолок голосов — по источникам устройства; прежние каналы ушли с ним. */
     static void engineLoaded() {
         java.util.Arrays.fill(LOOPS, null);
+        java.util.Arrays.fill(FIRE_LOOPS, null);
         RUMBLE.clear();
         int[] ms = OwnSources.deviceSources();
         if (ms == null) return;
@@ -476,8 +516,12 @@ public final class BlastSounds {
             if (LOOPS[q] != null) LOOPS[q].end();
             LOOPS[q] = null;
         }
-        FIRES.forEach(CraterFire::stop);
         FIRES.clear();
+        FIRE.clear();
+        for (int q = 0; q < FIRE_LOOPS.length; q++) {
+            if (FIRE_LOOPS[q] != null) FIRE_LOOPS[q].end();
+            FIRE_LOOPS[q] = null;
+        }
         lastEchoes = null;
         last = "";
     }
@@ -554,7 +598,19 @@ public final class BlastSounds {
      * падения ({@link Sources#fall}), докуда слышно — путь до уха ({@link Sources}).
      */
     public static void debris(Vec3 pos, double kg, double height, float pitch) {
-        Sources.play(ModSounds.DEBRIS_FALL.get(), pos, Sources.EJECTA.power(Sources.fall(kg, height, EJECTA_FALL_S, Spectra.DEBRIS_FALL)), pitch);
+        Sources.play(ModSounds.DEBRIS_FALL.get(), pos, Sources.EJECTA.power(Sources.fall(kg, height, EJECTA_FALL_S, Spectra.DEBRIS_FALL)), pitch,
+                BlastSounds::oneShot);
+    }
+
+    /**
+     * Разовый звук взрыва, дошедший до уха с громкостью {@code volume} (осыпь выброса: громкость — по закону источника,
+     * {@link Sources}), — в смесь взрывов своим взрывом и голосом через бюджет ({@link BlastVoices}): в налёте осыпь каждой
+     * воронки — свой звук на 2–9 с, и мимо бюджета 300 шахедов держали ею ~150 каналов, пока ближний не находил ни одного.
+     */
+    private static void oneShot(SoundEvent event, Vec3 at, float volume, float pitch) {
+        long seed = SEEDS.nextLong();
+        Mix.Blast blast = mixed(event, volume, pitch, seed);
+        voice(blast, List.of(ClientSounds.blastShot(event, at, volume, pitch, seed, blast::factor, life(blast))), at, pitch, false);
     }
 
     /** Осыпь выброса длится столько, с — длина записи осыпи без хвоста (О: выброс падает за 1–3 с). */
