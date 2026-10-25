@@ -16,6 +16,8 @@ import java.util.Locale;
 final class Out {
     final Path dir, shots;
     private final Writer events, frames;
+    /** После конца прогона (выход из мира, выгрузка сущностей) писать нечего. */
+    private volatile boolean closed;
 
     Out(Path dir) throws IOException {
         this.dir = dir;
@@ -36,6 +38,7 @@ final class Out {
         }
         b.append("}\n");
         synchronized (events) {
+            if (closed) return;
             try {
                 events.write(b.toString());
             } catch (IOException e) {
@@ -81,6 +84,7 @@ final class Out {
 
     /** Строка кадра (поток отрисовки). */
     void frame(String line) {
+        if (closed) return;
         try {
             frames.write(line);
         } catch (IOException e) {
@@ -90,6 +94,7 @@ final class Out {
 
     /** Раз в секунду и в конце: что накопилось — на диск (упавший клиент оставит всё, кроме последней секунды). */
     void flush() {
+        if (closed) return;
         try {
             synchronized (events) {
                 events.flush();
@@ -104,6 +109,7 @@ final class Out {
         flush();
         try {
             synchronized (events) {
+                closed = true;
                 events.close();
             }
             frames.close();
