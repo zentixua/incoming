@@ -412,8 +412,8 @@ public final class IncomingClient {
 
         /**
          * Толчок земли: у источника волны грунта (удар бомбы о землю, взрыв в грунте) приход и сила — у ног этого игрока
-         * ({@link ua.zentix.incoming.client.fx.GroundShake}); прежний пакет без источника (ядерный наземный путь, старые
-         * записи повтора) — тряска и гул сразу.
+         * ({@link ua.zentix.incoming.client.fx.GroundShake}); прежний пакет без источника (старые записи повтора
+         * Flashback) — тряска и гул сразу.
          */
         @Override
         public void quake(S2C.Quake p) {

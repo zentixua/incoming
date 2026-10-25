@@ -332,7 +332,7 @@ public final class BlastSounds {
         return Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
     }
 
-    /** Толчок земли у слушателя по прежнему пакету (ядерный наземный путь и старые записи повтора): в полную силу. */
+    /** Толчок земли у слушателя по прежнему пакету без источника (старые записи повтора Flashback): в полную силу. */
     public static void quake() {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         bomb(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), 1, 1);
