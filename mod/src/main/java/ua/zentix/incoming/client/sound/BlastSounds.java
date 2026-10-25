@@ -84,10 +84,8 @@ public final class BlastSounds {
      */
     static final double RUMBLE_LUFS = Loudness.CEILING_LUFS;
     /** Петли гула по четвертям; null — молчит. */
-    private static final AmbientLoop[] LOOPS = new AmbientLoop[Rumble.QUADRANTS];
-    private static final int[] LOOP_RETRY = new int[Rumble.QUADRANTS], LOOP_QUIET = new int[Rumble.QUADRANTS];
-    /** Петля гула тише слышимого столько тиков — отпустить канал. */
-    private static final int LOOP_HOLD = 20;
+    private static final RumbleLoop[] LOOPS = new RumbleLoop[Rumble.QUADRANTS];
+    private static final int[] LOOP_RETRY = new int[Rumble.QUADRANTS];
     /** Статических каналов движка, которые даст OpenAL рядом со своими источниками ({@link BlastVoices#reach}). */
     private static int reach = BlastVoices.reach(BlastVoices.MONO, BlastVoices.STEREO);
     /** Взрывы, чей звук ещё не начался на деле: смесь сдвинется к настоящему началу ({@link OwnSources.Anchor}). */
@@ -259,30 +257,49 @@ public final class BlastSounds {
 
     /**
      * Разовые звуки взрыва {@code blast} (его слои уже в смеси) — голосами движка, если на них есть место ({@link BlastVoices}),
-     * иначе взрыв звучит в гуле ({@link Rumble}); движок не взял звук — тоже в гул. {@code before} — звуки самой волны: их
-     * слышит ухо, каким оно было до неё ({@link Deafness#before}).
+     * иначе взрыв звучит в гуле ({@link Rumble}); звуки, которых движок не взял, — тоже в гул, сразу. {@code before} — звуки
+     * самой волны: их слышит ухо, каким оно было до неё ({@link Deafness#before}).
      */
     private static void voice(Mix.Blast blast, List<ClientSounds.MixedShot> shots, Vec3 pos, float pitch, boolean before) {
         if (shots.isEmpty()) return;
         Vec3 ear = ear();
         ClientSounds.MixedShot loud = shots.get(0);
-        for (ClientSounds.MixedShot s : shots) if (s.level() > loud.level()) loud = s;
+        for (ClientSounds.MixedShot s : shots) if (s.volume0() > loud.volume0()) loud = s;
         // за преградой гул так же глух, как голос: громкость фильтра — в мощности, верха — в фильтре петли
         float open = loud.lowpassGain();
-        BlastVoices.Voice v = VOICES.admit(blast, shots, ticks, Math.atan2(pos.z - ear.z, pos.x - ear.x), pitch, open * open, loud.lowpassHighs(), free());
-        if (v == null) return;
-        int taken = 0;
-        for (ClientSounds.MixedShot shot : shots) {
-            if (before) Deafness.before(shot);
-            ClientSounds.start(shot);
-            if (shot.playing()) taken++;
+        int now = soundTick(), yielded = VOICES.yielded;
+        BlastVoices.Voice v = VOICES.admit(blast, shots, now, Math.atan2(pos.z - ear.z, pos.x - ear.x), pitch, open * open, loud.lowpassHighs(), free());
+        if (v != null) {
+            boolean[] took = new boolean[shots.size()];
+            for (int i = 0; i < took.length; i++) {
+                ClientSounds.MixedShot shot = shots.get(i);
+                if (before) Deafness.before(shot);
+                ClientSounds.start(shot);
+                took[i] = shot.playing();
+            }
+            VOICES.started(v, took, now);
         }
-        VOICES.started(v, taken, ticks);
+        // гул изменился: петли встают сейчас, а взрыв без голоса (весь или невзятые звуки) слышен в них сразу, не с тика движка
+        if (v == null || v.fading() || VOICES.yielded != yielded) rumble(true);
     }
 
-    /** Свободных статических каналов у движка сейчас (из тех, что даст OpenAL; потоковые звучащие — тоже в счёте). */
+    /**
+     * Свободных статических каналов у движка сейчас: из тех, что даст OpenAL ({@link #reach}), минус каналы, которые он
+     * держит (остановленный звук — пока звуковой поток не вернул его пулу, {@code ChannelHandle.isStopped}).
+     */
     private static int free() {
-        return reach - Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.size();
+        int held = 0;
+        for (var e : Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.entrySet()) {
+            if (e.getValue().isStopped()) continue;
+            var sound = e.getKey().getSound();
+            if (sound == null || !sound.shouldStream()) held++;
+        }
+        return reach - held;
+    }
+
+    /** Тик звукового движка: часы, по которым голос взрыва стихает и гул растёт ({@link BlastVoices}, {@link Rumble}). */
+    private static int soundTick() {
+        return Minecraft.getInstance().getSoundManager().soundEngine.tickCount;
     }
 
     /** Строка {@code SCENARIO blast-sound}: последний обычный взрыв у уха и его эхо; пусто — взрывов не было. */
@@ -299,7 +316,7 @@ public final class BlastSounds {
     static String voices() {
         StringBuilder sb = new StringBuilder(String.format(Locale.ROOT, "voices %d/%d cap %d requested %d started %d refused %d rumble %d yielded %d loops",
                 VOICES.steady(), VOICES.channels(), VOICES.cap(), VOICES.requested, VOICES.started, VOICES.refused, VOICES.toRumble, VOICES.yielded));
-        for (int q = 0; q < Rumble.QUADRANTS; q++) sb.append(String.format(Locale.ROOT, " %.2f", Rumble.volume(RUMBLE.power(q), RUMBLE_LUFS)));
+        for (int q = 0; q < Rumble.QUADRANTS; q++) sb.append(String.format(Locale.ROOT, " %.2f", Rumble.volume(RUMBLE.potential(q), RUMBLE_LUFS)));
         return sb.toString();
     }
 
@@ -320,39 +337,90 @@ public final class BlastSounds {
             l.blast().late(20 * l.anchor().lateSeconds());
             return true;
         });
-        VOICES.prune(ticks);
-        RUMBLE.tick(ticks);
-        rumble();
+        VOICES.prune(soundTick());
+        rumble(false);
     }
 
     /**
-     * Петли гула по четвертям ({@link Rumble}): ведутся каждый тик — громкость, верха и тон по их членам; петлю, которой
-     * движок не держит, — запустить заново; тише слышимого {@link #LOOP_HOLD} тиков — отпустить; ползунок «Окружение» в
-     * нуле — не запускать. Вариант записи у каждой четверти свой — шум разных четвертей не согласован.
+     * Петли гула по четвертям ({@link Rumble}), раз в тик клиента ({@code now} — сразу, когда гул изменился): встают, когда
+     * их члены слышны (по мощности, когда голоса стихнут: петля должна звучать раньше, чем стихающий голос отдаст ей
+     * долю), с громкостью этого мига; петлю, которой движок не держит, — заново; тише слышимого {@link Rumble#HOLD} тиков —
+     * отпустить; ползунок «Окружение» в нуле — не запускать. Громкость, тон и верха петля дальше берёт сама, в своём тике
+     * движка ({@link RumbleLoop}). Вариант записи у каждой четверти свой — шум разных четвертей не согласован.
      */
-    private static void rumble() {
+    private static void rumble(boolean now) {
         Minecraft mc = Minecraft.getInstance();
         boolean ambient = mc.options.getSoundSourceVolume(SoundSource.AMBIENT) > 0;
-        Vec3 ear = ear();
+        RUMBLE.tick(soundTick());
         for (int q = 0; q < Rumble.QUADRANTS; q++) {
-            if (LOOP_RETRY[q] > 0) LOOP_RETRY[q]--;
-            float v = Rumble.volume(RUMBLE.power(q), RUMBLE_LUFS);
-            LOOP_QUIET[q] = v < AUDIBLE ? LOOP_QUIET[q] + 1 : 0;
-            double az = Rumble.azimuth(q);
-            Vec3 toward = ear.add(Math.cos(az) * 10, 0, Math.sin(az) * 10);
-            AmbientLoop l = LOOPS[q];
-            if (l != null && l.playing() && LOOP_QUIET[q] <= LOOP_HOLD) {
-                l.set(ear, toward, v, RUMBLE.highs(q), RUMBLE.pitch(q));
+            if (!now && LOOP_RETRY[q] > 0) LOOP_RETRY[q]--;
+            float full = Rumble.volume(RUMBLE.potential(q), RUMBLE_LUFS);
+            boolean keep = now || RUMBLE.keep(q, full);
+            RumbleLoop l = LOOPS[q];
+            if (l != null && l.playing() && keep) {
+                if (now) l.now();
                 continue;
             }
             if (l != null) l.end();
             LOOPS[q] = null;
-            if (v < AUDIBLE || !ambient || LOOP_RETRY[q] > 0) continue;
-            AmbientLoop fresh = new AmbientLoop(ModSounds.BLAST_RUMBLE.get(), SoundSource.AMBIENT, RUMBLE.pitch(q), variant(q), 1);
-            fresh.set(ear, toward, v, RUMBLE.highs(q), RUMBLE.pitch(q));
+            if (full < AUDIBLE || !ambient || LOOP_RETRY[q] > 0) continue;
+            RumbleLoop fresh = new RumbleLoop(q);
+            fresh.aim();
+            fresh.prime();
             mc.getSoundManager().play(fresh);
             LOOP_RETRY[q] = 20;
             LOOPS[q] = fresh;
+        }
+    }
+
+    /**
+     * Петля гула четверти: громкость, тон и верха берёт в своём тике звукового движка — в том же, где голоса взрывов
+     * стихают (голос — {@code MixedShot.tick}, гул — здесь, одни часы): посчитанная в тике клиента после него, она
+     * отставала бы на тик, и переход голос → гул терял бы до 3,5 дБ.
+     */
+    private static final class RumbleLoop extends AmbientLoop {
+        private final int q;
+        /** Хозяин отпустил её: стихает и уходит, громкость гула больше не берёт. */
+        private boolean released;
+
+        RumbleLoop(int q) {
+            super(ModSounds.BLAST_RUMBLE.get(), SoundSource.AMBIENT, RUMBLE.pitch(q), variant(q), 1);
+            this.q = q;
+        }
+
+        /** Громкость, тон и верха — по гулу сейчас. */
+        void aim() {
+            Vec3 ear = ear();
+            double az = Rumble.azimuth(q);
+            set(ear, ear.add(Math.cos(az) * 10, 0, Math.sin(az) * 10), Rumble.volume(RUMBLE.power(q), RUMBLE_LUFS), RUMBLE.highs(q), RUMBLE.pitch(q));
+        }
+
+        @Override
+        public void tick() {
+            if (!released) {
+                RUMBLE.tick(soundTick());
+                aim();
+            }
+            super.tick();
+        }
+
+        @Override
+        public void end() {
+            released = true;
+            super.end();
+        }
+
+        /**
+         * Громкость — в канал сейчас, не дожидаясь тика движка: взрыв, у которого голоса нет вовсе, звучит в гуле с того же
+         * мига, с какого звучал бы голос (так же, как движок ставит громкость в тике: × ползунок категории).
+         */
+        void now() {
+            aim();
+            prime();
+            var h = Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.get(this);
+            if (h == null || getSound() == null) return;
+            float v = Math.max(0, Math.min(1, getVolume() * Minecraft.getInstance().options.getSoundSourceVolume(SoundSource.AMBIENT)));
+            h.execute(ch -> ch.setVolume(v));
         }
     }
 
@@ -367,6 +435,7 @@ public final class BlastSounds {
     /** Движок звука загружен заново: потолок голосов — по источникам устройства; прежние каналы ушли с ним. */
     static void engineLoaded() {
         java.util.Arrays.fill(LOOPS, null);
+        RUMBLE.clear();
         int[] ms = OwnSources.deviceSources();
         if (ms == null) return;
         VOICES.device(ms[0], ms[1]);

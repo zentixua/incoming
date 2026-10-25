@@ -62,12 +62,14 @@ public final class Envelopes extends SimplePreparableReloadListener<Envelopes.Pr
      */
     static float[] energy(SoundEvent event, long seed) {
         WeighedSoundEvents w = Minecraft.getInstance().getSoundManager().getSoundEvent(event.getLocation());
-        float[] e = null;
-        if (w != null) {
-            Sound s = w.getSound(RandomSource.create(seed));
-            if (s != null) e = INSTANCE.prepared.energy().get(s.getLocation());
-        }
-        return e != null ? e : of(event.getLocation());
+        Sound s = w == null ? null : w.getSound(RandomSource.create(seed));
+        return energy(s == null ? null : s.getLocation(), event.getLocation());
+    }
+
+    /** Энергия записи {@code variant} (имя, как у {@link Sound#getLocation}); её нет — огибающая события {@code event}. */
+    static float[] energy(@Nullable ResourceLocation variant, ResourceLocation event) {
+        float[] e = variant == null ? null : INSTANCE.prepared.energy().get(variant);
+        return e != null ? e : of(event);
     }
 
     @Override
@@ -95,6 +97,15 @@ public final class Envelopes extends SimplePreparableReloadListener<Envelopes.Pr
 
     @Override
     protected void apply(Prepared prepared, ResourceManager resources, ProfilerFiller profiler) {
+        prepared(prepared);
+    }
+
+    Prepared prepared() {
+        return prepared;
+    }
+
+    /** Огибающие и энергии — эти (перезагрузка ресурсов; проверки). */
+    void prepared(Prepared prepared) {
         this.prepared = new Prepared(Map.copyOf(prepared.events()), Map.copyOf(prepared.energy()));
     }
 

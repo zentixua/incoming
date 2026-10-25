@@ -2,6 +2,7 @@ package ua.zentix.incoming.client.sound;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -74,22 +75,69 @@ class RumbleTest {
         assertEquals(exact, r.total(), 1e-9 * exact);
     }
 
-    /** Голос стихает за {@link BlastVoices#FADE} тика, член растёт так же: мощность голоса f² + гула 1 − f² — та же. */
+    /**
+     * Голос, уступивший в тик движка 10: тик ещё полный, потом стихает за {@link BlastVoices#FADE} тика, а член гула в те
+     * же тики берёт остаток: мощность голоса f² + гула (1 − f²) — та же; голосов нет вовсе — весь взрыв в гуле сразу.
+     */
     @Test
     void handoverKeepsThePower() {
         Mix mix = new Mix();
         Rumble r = new Rumble();
         Mix.Blast b = blast(mix, 0.2, 100);
-        Rumble.Member m = r.add(b, 0, 1, 1, 1, 10, BlastVoices.FADE);
-        for (double t = 10; t <= 10 + BlastVoices.FADE + 1; t += 0.5) {
+        r.add(b, 0, 1, 1, 1, new boolean[]{true}, 10, BlastVoices.FADE);
+        assertEquals(1, Rumble.voice(11, 10, BlastVoices.FADE), 1e-12, "первый тик после уступки — голос ещё полный");
+        assertEquals(0, Rumble.voice(11 + BlastVoices.FADE, 10, BlastVoices.FADE), 1e-12);
+        for (double t = 10; t <= 10 + BlastVoices.FADE + 2; t += 0.5) {
             mix.at(t);
             r.tick(t);
             double f = Rumble.voice(t, 10, BlastVoices.FADE), voice = f * f * b.heard();
             assertEquals(b.heard(), voice + r.total(), 1e-12, "тик " + t);
         }
-        assertEquals(1, m.weight(10 + BlastVoices.FADE), 1e-12);
-        m.settle(20);
-        assertEquals(1, m.weight(20), 1e-12, "замолк сразу — весь в гуле");
+        Rumble direct = new Rumble();
+        direct.add(b, 0, 1, 1, 1, 20, 0);
+        mix.at(20);
+        direct.tick(20);
+        assertEquals(b.heard(), direct.total(), 1e-12, "без голоса — весь в гуле с этого тика");
+    }
+
+    /** Петля без слышимых членов держит канал {@link Rumble#HOLD} тиков и отпускает его; член снова слышен — счёт заново. */
+    @Test
+    void silentLoopIsReleased() {
+        Rumble r = new Rumble();
+        for (int t = 0; t < Rumble.HOLD; t++) assertTrue(r.keep(2, 0), "тик " + t);
+        assertTrue(!r.keep(2, 0), "тишина дольше HOLD — отпустить");
+        assertTrue(r.keep(2, 0.5f), "снова слышно — держать");
+        assertTrue(r.keep(1, 0) && r.keep(3, 0.2f), "у каждой четверти свой счёт");
+    }
+
+    /**
+     * Гул берёт энергию того варианта записи, что играет, а не огибающую события (наибольшую по вариантам — для потолка):
+     * у дальнего ракурса варианты — от 2,4 до 9,4 с, и короткий звучал бы в гуле хвостом длинного.
+     */
+    @Test
+    void rumbleTakesTheEnergyOfThePlayingVariant() throws IOException {
+        int rate = 44100;
+        float[][] far = MixTest.load("blast_far", 6, rate);
+        java.util.Map<net.minecraft.resources.ResourceLocation, float[]> energy = new java.util.HashMap<>();
+        float[] max = new float[0];
+        int shortest = 0;
+        for (int i = 0; i < far.length; i++) {
+            energy.put(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("incoming", "blast_far_" + (i + 1)), Envelope.energy(far[i], rate));
+            max = Envelopes.max(max, Envelope.of(far[i], rate));
+            if (far[i].length < far[shortest].length) shortest = i;
+        }
+        net.minecraft.resources.ResourceLocation event = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("incoming", "blast.far");
+        Envelopes.Prepared before = Envelopes.INSTANCE.prepared();
+        try {
+            Envelopes.INSTANCE.prepared(new Envelopes.Prepared(java.util.Map.of("blast.far", max), energy));
+            net.minecraft.resources.ResourceLocation variant = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("incoming", "blast_far_" + (shortest + 1));
+            float[] got = Envelopes.energy(variant, event);
+            assertTrue(java.util.Arrays.equals(Envelope.energy(far[shortest], rate), got), "энергия звучащего варианта");
+            assertTrue(got.length + 20 < max.length, "огибающая события — длиннее на хвост самого долгого варианта: " + got.length + " против " + max.length);
+            assertTrue(java.util.Arrays.equals(max, Envelopes.energy(null, event)), "варианта не знаем — верхняя оценка");
+        } finally {
+            Envelopes.INSTANCE.prepared(before);
+        }
     }
 
     /** Громкость петли — корень мощности против потолка у файла на потолке; тон и верха — средние по мощности. */

@@ -20,16 +20,27 @@ import java.util.List;
  * <li>ядерка ({@link #NUKE}): четыре петли гула пожаров и ветер в огонь ({@code NukeAfter}), звон в ушах, две сирены;</li>
  * <li>остальной мир ({@link #WORLD}, О): ваниль (дождь, мобы, шаги, блоки), другие моды (машины Create), наши звуки мира
  * ({@link Sources}: осыпь выброса, руины, подстанции), пожары воронок ({@link CraterFire}) — их числа никто не
- * ограничивает, поэтому сверх оценки — проверка свободных каналов движка в миг удара ({@link #admit}, {@code free});</li>
- * <li>уступившие голоса стихают {@link #FADE} тика и всё это время держат каналы — {@link #HEADROOM};</li>
+ * ограничивает, поэтому сверх оценки — свободные каналы движка в миг удара ({@link #admit}, {@code free});</li>
+ * <li>уступившие голоса держат каналы, пока стихают, и ещё тик, пока движок их не вернёт, — {@link #HEADROOM};</li>
  * <li>остальное — разовым звукам взрывов: {@link #CAP}, ~100 (25 ближних взрывов по 4 голоса разом).</li>
  * </ul>
- * Места нет — голос у того, чья громкость в смеси выше (Q_b, {@link Mix.Blast#heard}): уступает самый тихий, и обычно
- * это хвост (атака громче своего хвоста), а хвост вдали и есть гул. Атаку — первые {@link #ATTACK} тиков, окно мгновенной
+ * Канал голоса занят, пока его держит движок ({@link Sound#held}): {@code stop()} у звука — только флаг, канал движок
+ * останавливает в своём следующем тике и возвращает пулу задачей звукового потока после него
+ * ({@code SoundEngine.tickNonPaused}, {@code ChannelAccess.scheduleTick}). Поэтому вытеснение места сейчас не даёт: новый
+ * звучит в тех каналах, что свободны у движка уже сейчас, а уступившие вернут свои позже — и вернут миру его запас
+ * {@link #SPARE}.
+ * <p>
+ * Места нет — голос у того, чья громкость в смеси выше (Q_b, {@link Mix.Blast#heard}): уступает самый тихий, и обычно это
+ * хвост (атака громче своего хвоста), а хвост вдали и есть гул. Атаку — первые {@link #ATTACK} тиков, окно мгновенной
  * громкости BS.1770, — новый вытесняет, только если он громче её в {@link #KEEP} раза: слышимая атака, оборванная в гул,
- * слышна как сбой, хвост — нет. Тише всех звучащих — новый сразу в гул. Ближний (громче всех) голос получает всегда.
- * Это виртуализация каналов, а не закон слуха: порог «удар или гул» по слышимости атаки над фоном (временная маскировка)
- * не считается — пока каналов хватает, удар остаётся ударом, даже самый тихий.
+ * слышна как сбой, хвост — нет. Тише всех, кто мог бы уступить, — новый сразу в гул. Самый громкий новый голос получает,
+ * кроме трёх случаев: звучащая атака тише него меньше чем в {@link #KEEP} раза — атака остаётся; у движка сейчас меньше
+ * свободных каналов, чем ему нужно (вытеснение их сейчас не освободит); уступившие за последние тики ещё держат весь запас
+ * {@link #HEADROOM}. Тогда он звучит в гуле с той же мощностью. Это
+ * виртуализация каналов, а не закон слуха: порог «удар или гул» по слышимости атаки над фоном (временная маскировка) не
+ * считается — пока каналов хватает, удар остаётся ударом, даже самый тихий.
+ * <p>
+ * Часы {@code now} здесь — тики звукового движка ({@code SoundEngine.tickCount}): по ним голос стихает и гул растёт.
  */
 final class BlastVoices {
     /** Источников OpenAL у OpenAL Soft по умолчанию (alsoft {@code sources}): 255 моно и 1 стерео. */
@@ -41,11 +52,14 @@ final class BlastVoices {
      * наши звуки мира и пожары воронок. Оценка, не замер: сверх неё держит проверка свободных каналов.
      */
     static final int WORLD = 64;
-    /** Уступившие голоса стихают {@link #FADE} тиков, держа каналы: три ближних взрыва по 4 голоса. */
+    /**
+     * Каналы уступивших голосов, пока они стихают ({@link #FADE} и тик полной громкости) и пока движок их не вернул (тик):
+     * три ближних взрыва по 4 голоса за эти ~5 тиков.
+     */
     static final int HEADROOM = 12;
-    /** Сколько свободных каналов движка оставить миру в миг удара (его звуки этого тика). */
+    /** Сколько свободных каналов движка оставить миру (его звуки этого тика). */
     static final int SPARE = 8;
-    /** Тиков стихает уступивший голос (без щелчка). */
+    /** Тиков стихает уступивший голос (без щелчка), после тика полной громкости ({@link Rumble#voice}). */
     static final int FADE = 3;
     /** Тиков у взрыва атака — окно мгновенной громкости (BS.1770, 400 мс). */
     static final int ATTACK = 8;
@@ -54,25 +68,31 @@ final class BlastVoices {
     /** Каналов разовым звукам взрывов при OpenAL Soft по умолчанию. */
     static final int CAP = cap(MONO, STEREO);
 
-    /** Разовые звуки одного взрыва в каналах движка. */
+    /** Разовый звук взрыва в канале движка. */
     interface Sound {
-        /** Стихнуть за {@link #FADE} тиков и уйти. */
+        /** Стихнуть за {@link #FADE} тиков (после тика полной громкости) и уйти. */
         void fade();
 
-        /** Замолчать сейчас. */
+        /** Замолчать (сброс). */
         void cut();
 
         /** Отзвучал или движок его снял. */
         boolean over();
+
+        /** Движок ещё держит его канал (остановленный звук держит его до возврата пулу). */
+        default boolean held() {
+            return !over();
+        }
     }
 
-    /** Взрыв с голосами: его звуки и что о нём знать гулу, если уступит. */
+    /** Взрыв с голосами: его звуки (i-й — i-й слой взрыва голосом движка) и что о нём знать гулу, если уступит. */
     static final class Voice {
         final Mix.Blast blast;
         final List<? extends Sound> sounds;
-        final int channels;
         final double born, azimuth;
         final float pitch, gain, highs;
+        /** Какие звуки движок взял; до {@link #started} — все. */
+        boolean[] took;
         /** С этого тика стихает (уступил); NaN — звучит. */
         double fadeFrom = Double.NaN;
         Rumble.Member member;
@@ -80,16 +100,24 @@ final class BlastVoices {
         Voice(Mix.Blast blast, List<? extends Sound> sounds, double born, double azimuth, float pitch, float gain, float highs) {
             this.blast = blast;
             this.sounds = sounds;
-            this.channels = sounds.size();
             this.born = born;
             this.azimuth = azimuth;
             this.pitch = pitch;
             this.gain = gain;
             this.highs = highs;
+            this.took = new boolean[sounds.size()];
+            java.util.Arrays.fill(took, true);
         }
 
         boolean fading() {
             return !Double.isNaN(fadeFrom);
+        }
+
+        /** Каналов держит у движка сейчас. */
+        int held() {
+            int n = 0;
+            for (Sound s : sounds) if (s.held()) n++;
+            return n;
         }
     }
 
@@ -138,64 +166,48 @@ final class BlastVoices {
 
     /**
      * Новый взрыв {@code blast} (слои уже в смеси), которому нужно столько голосов, сколько звуков {@code sounds}: голос —
-     * или гул. Места нет — уступают самые тихие (стихают {@link #FADE} тиков, их мощность переходит в гул); не уступает
-     * никто — новый сразу в гул.
+     * или гул. Новый звучит в каналах, свободных у движка сейчас; места в своём потолке ({@link #cap}) и запаса миру
+     * ({@link #SPARE}, когда уступившие вернут каналы) нет — уступают самые тихие (стихают, их мощность переходит в гул);
+     * не уступает никто — новый сразу в гул.
      *
+     * @param now     тик звукового движка
      * @param azimuth откуда взрыв от уха, atan2(dz, dx)
      * @param pitch   тон его записей
      * @param gain    доля мощности, что проходит преграду у уха (у голоса — фильтр EFX)
      * @param highs   доля верхов на пути
-     * @param free    свободных каналов у движка сейчас (вместе со звуками мира); {@link Integer#MAX_VALUE} — не знаем
+     * @param free    свободных статических каналов у движка сейчас; {@link Integer#MAX_VALUE} — не знаем
      * @return голос — играть его звуки; null — взрыв звучит в гуле
      */
     Voice admit(Mix.Blast blast, List<? extends Sound> sounds, double now, double azimuth, float pitch, float gain, float highs, int free) {
         prune(now);
-        int need = sounds.size(), steady = 0, held = 0;
+        int need = sounds.size();
+        long steady = 0, releasing = 0;
         for (Voice v : voices) {
-            if (v.fading()) held += v.channels;
-            else steady += v.channels;
+            if (v.fading()) releasing += v.held();
+            else steady += v.held();
         }
-        long ours = steady + held;
+        // каналы нужны сейчас, а вытеснение вернёт их движку только через тики: сейчас их нет — гул
+        if (need > free) return rumble(blast, now, azimuth, pitch, gain, highs);
+        // уступившие держат каналы, пока стихают и пока движок их не вернул: запас на них кончился — гул
+        if (steady + releasing + need > (long) cap + HEADROOM) return rumble(blast, now, azimuth, pitch, gain, highs);
         double fresh = blast.heard();
-        // кто уступит: самые тихие, атака — с запасом KEEP
+        List<Voice> quieter = new ArrayList<>();
+        for (Voice v : voices) if (!v.fading() && priority(v, now) < fresh) quieter.add(v);
+        quieter.sort(Comparator.comparingDouble(v -> priority(v, now)));
+        // свой потолок и запас миру, когда уступившие вернут каналы: уступают самые тихие
         List<Voice> evict = new ArrayList<>();
-        if (steady + need > cap) {
-            List<Voice> quieter = new ArrayList<>();
-            for (Voice v : voices) if (!v.fading() && priority(v, now) < fresh) quieter.add(v);
-            quieter.sort(Comparator.comparingDouble(v -> priority(v, now)));
-            for (Voice v : quieter) {
-                if (steady + need <= cap) break;
-                evict.add(v);
-                steady -= v.channels;
-            }
+        long freed = 0;
+        for (Voice v : quieter) {
+            if (steady - freed + need <= cap && (long) free - need + releasing + freed >= SPARE) break;
+            evict.add(v);
+            freed += v.held();
         }
-        if (steady + need > cap) return rumble(blast, now, azimuth, pitch, gain, highs);
-        // каналы на деле, пока уступившие стихают: сверх запаса или свободных у движка — стихающие замолкают сразу
-        long hard = Math.min((long) cap + HEADROOM, ours + free - SPARE);
-        long total = (long) steady + need + held + sum(evict);
-        List<Voice> cut = new ArrayList<>();
-        List<Voice> order = new ArrayList<>();
-        for (Voice v : voices) if (v.fading()) order.add(v);
-        order.sort(Comparator.comparingDouble(v -> v.fadeFrom));
-        order.addAll(evict);
-        for (Voice v : order) {
-            if (total <= hard) break;
-            cut.add(v);
-            total -= v.channels;
-        }
-        if (total > hard) return rumble(blast, now, azimuth, pitch, gain, highs);
+        if (steady - freed + need > cap || (long) free - need + releasing + freed < SPARE) return rumble(blast, now, azimuth, pitch, gain, highs);
         for (Voice v : evict) give(v, now);
-        for (Voice v : cut) cut(v, now);
         Voice v = new Voice(blast, sounds, now, azimuth, pitch, gain, highs);
         voices.add(v);
         requested += need;
         return v;
-    }
-
-    private static long sum(List<Voice> vs) {
-        long s = 0;
-        for (Voice v : vs) s += v.channels;
-        return s;
     }
 
     /**
@@ -203,7 +215,7 @@ final class BlastVoices {
      * смесь его больше не считает, и доля в ней — прежняя.
      */
     private static double priority(Voice v, double now) {
-        return v.blast.ended(now) ? 0 : v.blast.heard() * (now - v.born < ATTACK ? KEEP : 1);
+        return v.blast.ended(v.blast.now()) ? 0 : v.blast.heard() * (now - v.born < ATTACK ? KEEP : 1);
     }
 
     private Voice rumble(Mix.Blast blast, double now, double azimuth, float pitch, float gain, float highs) {
@@ -212,46 +224,51 @@ final class BlastVoices {
         return null;
     }
 
-    /** Движок взял {@code taken} звуков голоса {@code v}; не все — голос уступает, взрыв — в гул. */
+    /** Движок взял первые {@code taken} звуков голоса {@code v} (проверки). */
     void started(Voice v, int taken, double now) {
-        started += taken;
-        refused += v.channels - taken;
-        if (taken < v.channels) give(v, now);
+        boolean[] took = new boolean[v.sounds.size()];
+        for (int i = 0; i < took.length; i++) took[i] = i < taken;
+        started(v, took, now);
     }
 
-    /** Голос уступает: звуки стихают, мощность взрыва переходит в гул за то же время. */
+    /**
+     * Движок взял звуки {@code took} голоса {@code v}; не все — голос уступает: взятые стихают, а мощность невзятых — в гуле
+     * сразу (они не звучат вовсе).
+     */
+    void started(Voice v, boolean[] took, double now) {
+        v.took = took.clone();
+        int taken = 0;
+        for (boolean t : took) if (t) taken++;
+        started += taken;
+        refused += took.length - taken;
+        if (taken < took.length) give(v, now);
+    }
+
+    /** Голос уступает: его звучащие звуки стихают, а мощность взрыва переходит в гул за то же время (что не звучит — сразу). */
     void give(Voice v, double now) {
         if (v.fading()) return;
         v.fadeFrom = now;
         v.sounds.forEach(Sound::fade);
-        v.member = rumble.add(v.blast, v.azimuth, v.pitch, v.gain, v.highs, now, FADE);
+        v.member = rumble.add(v.blast, v.azimuth, v.pitch, v.gain, v.highs, v.took, now, FADE);
         yielded++;
     }
 
-    /** Стихающий голос замолкает сразу (каналы нужны сейчас): вся его мощность — в гуле с этого тика. */
-    private void cut(Voice v, double now) {
-        if (!v.fading()) give(v, now);
-        v.sounds.forEach(Sound::cut);
-        v.member.settle(now);
-        voices.remove(v);
-    }
-
-    /** Тик: отзвучавшие и стихшие — прочь. */
+    /** Голоса, чьи каналы движок уже вернул, — прочь. */
     void prune(double now) {
-        voices.removeIf(v -> v.fading() && now - v.fadeFrom >= FADE || v.sounds.stream().allMatch(Sound::over));
+        voices.removeIf(v -> v.held() == 0);
     }
 
-    /** Каналов держат голоса взрывов сейчас: звучащие и стихающие. */
+    /** Каналов держат голоса взрывов сейчас: звучащие, стихающие и остановленные, пока движок их не вернул. */
     int channels() {
         int n = 0;
-        for (Voice v : voices) n += v.channels;
+        for (Voice v : voices) n += v.held();
         return n;
     }
 
-    /** Каналов у звучащих (не стихающих). */
+    /** Каналов у звучащих (не уступивших). */
     int steady() {
         int n = 0;
-        for (Voice v : voices) if (!v.fading()) n += v.channels;
+        for (Voice v : voices) if (!v.fading()) n += v.held();
         return n;
     }
 

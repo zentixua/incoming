@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.sound;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -9,94 +11,123 @@ import java.util.List;
  * получило его, звучит не своим разовым звуком, а суммой в {@link #QUADRANTS} петлях вокруг уха — как гул пожаров
  * ({@link FireRoar}) и разрушения ядерки ({@link Clatter}). Взрывы разных мест некогерентны, поэтому мощности
  * складываются; петля — шум со спектром хвостов дальнего ракурса ({@code blast.rumble}, {@code build_sounds.py rumble}),
- * громкость — каждый тик корень суммы членов:
+ * громкость — корень суммы членов в каждом тике звукового движка:
  * <ul>
  * <li>член — взрыв в смеси ({@link Mix}): его доля в слышимом k_b² × энергия его голосов по профилю звучащих записей
  * ({@link Mix.Blast#voiced}, {@link Envelope#energy}: мгновенная громкость той записи, что выбрало зерно, с её настоящим
  * сроком, без заглядывания вперёд и без максимума по вариантам — огибающая потолка подняла бы гул до удара члена и дала
  * бы ему хвост самого долгого варианта); в смесь гул не идёт снова — мощность взрыва там уже есть;</li>
+ * <li>голоса, что ещё звучат и стихают, свою долю несут сами: член — всё, что взрыв дал бы голосами, минус f² × то, что
+ * играют они (f — их громкость, {@link #voice}); слой, которого движок не взял, — в гуле сразу и весь;</li>
  * <li>направление — cos²/sin² между двумя соседними петлями (сумма весов 1), петли — на востоке, юге, западе и севере;</li>
- * <li>голос, который уступил, стихает за {@link BlastVoices#FADE} тика, а его член растёт так же: мощность голоса f²,
- * гула — 1 − f², сумма — та же;</li>
  * <li>тон петли — средний по мощности тон её членов (Сакс: у «Града» запись быстрее, у ракеты медленнее), верха — средние
  * по мощности верха их пути.</li>
  * </ul>
+ * Часы стихания — тики звукового движка: в них же движок берёт громкость голоса ({@code SoundEngine.tickNonPaused}), и
+ * петля считает свою громкость в своём тике, а не в тике клиента после него (тогда гул отставал бы от голоса на тик и
+ * переход терял бы до 3,5 дБ).
+ * <p>
  * Приближение: тембр всех членов — один спектр хвостов раската; атаки в гуле не слышны (огибающая — окна 400 мс), редкие
  * члены гул оставляют неровным — ровна только петля.
  */
 final class Rumble {
     static final int QUADRANTS = 4;
+    /** Петля без членов столько тиков — отпустить канал. */
+    static final int HOLD = 20;
 
     /**
-     * Взрыв в гуле: откуда, тон, доля мощности за преградой у уха и верха его голосов, и с какого тика он в гуле (за
-     * {@code fade} тиков — весь).
+     * Взрыв в гуле: откуда, тон, доля мощности за преградой у уха и верха его голосов; {@code voiced} — какие из его
+     * голосов движка (по порядку слоёв, {@link Mix.Blast#voiced}) ещё звучат и стихают с тика {@code from} за
+     * {@code fade} тиков (null — голосов нет: весь взрыв в гуле).
      */
     static final class Member {
         final Mix.Blast blast;
         final double azimuth;
         final float pitch, gain, highs;
-        double from;
-        int fade;
+        final boolean @Nullable [] voiced;
+        final double from;
+        final int fade;
 
-        Member(Mix.Blast blast, double azimuth, float pitch, float gain, float highs, double from, int fade) {
+        Member(Mix.Blast blast, double azimuth, float pitch, float gain, float highs, boolean @Nullable [] voiced, double from, int fade) {
             this.blast = blast;
             this.azimuth = azimuth;
             this.pitch = pitch;
             this.gain = gain;
             this.highs = highs;
+            this.voiced = voiced;
             this.from = from;
             this.fade = fade;
         }
 
-        /** Доля мощности взрыва в гуле в тик {@code now}: 1 − f², f — громкость стихающего голоса. */
-        double weight(double now) {
-            double f = voice(now, from, fade);
-            return 1 - f * f;
+        /**
+         * Мощность члена в гуле в тик движка {@code sound} при смеси на её тике, против потолка: всё, что взрыв дал бы
+         * голосами, минус f² × что ещё играют его стихающие голоса.
+         */
+        double power(double sound) {
+            double k = blast.factor(), all = blast.voiced(blast.now(), null);
+            if (voiced != null) {
+                double f = voice(sound, from, fade);
+                all -= f * f * blast.voiced(blast.now(), voiced);
+            }
+            return gain * k * k * Math.max(0, all);
         }
 
-        /** Голос замолчал сейчас: вся мощность — в гуле. */
-        void settle(double now) {
-            from = now;
-            fade = 0;
+        /** Мощность, когда голоса стихнут совсем: по ней петля встаёт заранее и уходит. */
+        double potential() {
+            double k = blast.factor();
+            return gain * k * k * blast.voiced(blast.now(), null);
         }
     }
 
-    /** Громкость (амплитуда) голоса, стихающего с тика {@code from} за {@code fade} тиков, в тик {@code now}. */
+    /**
+     * Громкость (амплитуда) голоса, уступившего в тик движка {@code from}, в тик {@code now}: первый тик после уступки — ещё
+     * полная (петля, которой ещё нет, встаёт в следующем тике клиента), потом к нулю за {@code fade} тиков.
+     */
     static double voice(double now, double from, int fade) {
         if (fade <= 0) return 0;
-        return Math.max(0, Math.min(1, 1 - (now - from) / fade));
+        return Math.max(0, Math.min(1, 1 - (now - from - 1) / fade));
     }
 
     private final List<Member> members = new ArrayList<>();
-    private final double[] power = new double[QUADRANTS], pitch = new double[QUADRANTS], highs = new double[QUADRANTS];
+    private final double[] power = new double[QUADRANTS], potential = new double[QUADRANTS], pitch = new double[QUADRANTS],
+            highs = new double[QUADRANTS];
+    private final int[] quiet = new int[QUADRANTS];
 
-    /** Взрыв {@code blast} (в смеси) — в гул: с азимута {@code azimuth} от уха (atan2(dz, dx)), с тика {@code now}. */
+    /** Взрыв {@code blast} (в смеси) — в гул целиком: с азимута {@code azimuth} от уха (atan2(dz, dx)). */
     Member add(Mix.Blast blast, double azimuth, float pitch, float gain, float highs, double now, int fade) {
-        Member m = new Member(blast, azimuth, pitch, gain, highs, now, fade);
+        return add(blast, azimuth, pitch, gain, highs, null, now, fade);
+    }
+
+    /** Взрыв — в гул, его голоса {@code voiced} стихают с тика движка {@code now} за {@code fade} тиков. */
+    Member add(Mix.Blast blast, double azimuth, float pitch, float gain, float highs, boolean @Nullable [] voiced, double now, int fade) {
+        Member m = new Member(blast, azimuth, pitch, gain, highs, voiced, now, fade);
         members.add(m);
         return m;
     }
 
-    /** Тик {@code now} (после тика смеси, {@link Mix#at}): кончившиеся — прочь, мощность, тон и верха петель. */
-    void tick(double now) {
-        members.removeIf(m -> m.blast.ended(now));
+    /**
+     * Тик движка {@code sound} (смесь — на своём тике, {@link Mix#at}): кончившиеся — прочь, мощность, тон и верха петель.
+     */
+    void tick(double sound) {
+        members.removeIf(m -> m.blast.ended(m.blast.now()));
         Arrays.fill(power, 0);
+        Arrays.fill(potential, 0);
         Arrays.fill(pitch, 0);
         Arrays.fill(highs, 0);
         double sector = 2 * Math.PI / QUADRANTS;
         for (Member m : members) {
-            double k = m.blast.factor(), e = m.weight(now) * m.gain * k * k * m.blast.voiced(now);
-            if (!(e > 0)) continue;
+            double e = m.power(sound), full = m.potential();
+            if (!(full > 0)) continue;
             double u = (m.azimuth < 0 ? m.azimuth + 2 * Math.PI : m.azimuth) / sector;
             int q0 = (int) Math.floor(u) % QUADRANTS, q1 = (q0 + 1) % QUADRANTS;
             double frac = u - Math.floor(u), c = Math.cos(frac * Math.PI / 2), s = Math.sin(frac * Math.PI / 2);
-            put(q0, e * c * c, m);
-            put(q1, e * s * s, m);
+            put(q0, e * c * c, full * c * c, m);
+            put(q1, e * s * s, full * s * s, m);
         }
         for (int q = 0; q < QUADRANTS; q++) {
-            if (power[q] > 0) {
-                pitch[q] /= power[q];
-                highs[q] /= power[q];
+            if (potential[q] > 0) {
+                pitch[q] /= potential[q];
+                highs[q] /= potential[q];
             } else {
                 pitch[q] = 1;
                 highs[q] = 1;
@@ -104,15 +135,30 @@ final class Rumble {
         }
     }
 
-    private void put(int q, double e, Member m) {
+    private void put(int q, double e, double full, Member m) {
         power[q] += e;
-        pitch[q] += e * m.pitch;
-        highs[q] += e * m.highs;
+        potential[q] += full;
+        pitch[q] += full * m.pitch;
+        highs[q] += full * m.highs;
     }
 
     /** Мощность петли {@code q} в игре после {@link #tick}, против потолка (как {@link Mix.Blast#heard}). */
     double power(int q) {
         return power[q];
+    }
+
+    /** Мощность петли {@code q}, когда стихнут голоса её членов. */
+    double potential(int q) {
+        return potential[q];
+    }
+
+    /**
+     * Держать ли петлю {@code q} (раз в тик клиента): её члены слышны, когда стихнут голоса, — или тишина ещё не дольше
+     * {@link #HOLD} тиков; громкость петли {@code volume} — по {@link #potential}.
+     */
+    boolean keep(int q, float volume) {
+        quiet[q] = volume < VoiceBudget.AUDIBLE ? quiet[q] + 1 : 0;
+        return quiet[q] <= HOLD;
     }
 
     /** Направление петли {@code q} от уха: азимут atan2(dz, dx). */
@@ -147,5 +193,7 @@ final class Rumble {
     void clear() {
         members.clear();
         Arrays.fill(power, 0);
+        Arrays.fill(potential, 0);
+        Arrays.fill(quiet, 0);
     }
 }

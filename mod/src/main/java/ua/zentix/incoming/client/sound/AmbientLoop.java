@@ -12,7 +12,7 @@ import net.minecraft.world.phys.Vec3;
  * слышна, громкость и расстояние до источника (воздух съедает верха, {@link SoundFilters}); громкость меняется
  * плавно. Хозяин перестал её вести (подрыв убран, повтор перемотан) — петля сама стихает и уходит.
  */
-public final class AmbientLoop extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
+public class AmbientLoop extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
     /** На столько громкость подходит к цели за тик (за секунду — из тишины в полную). */
     private static final float SLEW = 0.05f;
     /** Хозяин молчит столько тиков — петля уходит. */
@@ -68,6 +68,11 @@ public final class AmbientLoop extends AbstractTickableSoundInstance implements 
         set(ear, toward, volume, 0);
         this.highs = highs;
         this.pitch = pitch;
+    }
+
+    /** Громкость — сразу цель, без подхода (петля, что встаёт посреди звучащего: её громкость уже посчитана). */
+    public void prime() {
+        volume = target;
     }
 
     /** Стихнуть и уйти: не быстрее обычного, даже у петли с быстрым подходом (без щелчка). */

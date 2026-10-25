@@ -16,20 +16,32 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Голоса взрывов ({@link BlastVoices}): разовых звуков взрывов в каналах не больше потолка из подсчёта каналов, ближний
- * голос получает всегда, уступивший — в гул ({@link Rumble}) с той же мощностью.
+ * Голоса взрывов ({@link BlastVoices}): разовых звуков взрывов в каналах движка не больше потолка из подсчёта каналов —
+ * считая и те, что уже остановлены, пока движок их не вернул; самый громкий голос получает (с границами защиты атаки и
+ * свободных каналов); уступивший и невзятый — в гул ({@link Rumble}) с той же мощностью.
  */
 class BlastVoicesTest {
-    /** Разовый звук без движка: звучит до {@code end}, уступил — стихает {@link BlastVoices#FADE} тика. */
+    /**
+     * Разовый звук без движка, с жизнью канала как у движка: звучит до {@code end}; уступил — тик ещё полный, потом стихает
+     * {@link BlastVoices#FADE} тика и останавливается; остановленный держит канал ещё тик — движок вернёт его пулу в своём
+     * следующем тике ({@code SoundEngine.tickNonPaused}, {@code ChannelAccess.scheduleTick}); движок не взял — канала нет.
+     */
     static final class Fake implements BlastVoices.Sound {
         final double[] clock;
         final double end;
-        double fadeFrom = Double.NaN;
-        boolean cut;
+        double fadeFrom = Double.NaN, cutAt = Double.NaN;
+        boolean taken = true;
 
         Fake(double[] clock, double end) {
             this.clock = clock;
             this.end = end;
+        }
+
+        double stopAt() {
+            double at = end;
+            if (!Double.isNaN(fadeFrom)) at = Math.min(at, fadeFrom + BlastVoices.FADE + 1);
+            if (!Double.isNaN(cutAt)) at = Math.min(at, cutAt);
+            return at;
         }
 
         @Override
@@ -39,12 +51,17 @@ class BlastVoicesTest {
 
         @Override
         public void cut() {
-            cut = true;
+            if (Double.isNaN(cutAt)) cutAt = clock[0];
         }
 
         @Override
         public boolean over() {
-            return cut || clock[0] >= end || !Double.isNaN(fadeFrom) && clock[0] - fadeFrom >= BlastVoices.FADE;
+            return !taken || clock[0] >= stopAt();
+        }
+
+        @Override
+        public boolean held() {
+            return taken && clock[0] < stopAt() + 1;
         }
     }
 
@@ -158,43 +175,115 @@ class BlastVoicesTest {
         assertTrue(old.stream().allMatch(f -> !Double.isNaN(f.fadeFrom)));
     }
 
-    /** Движок взял не все звуки голоса — голос уступает, взрыв в гуле. */
+    /**
+     * Движок не взял звуки голоса — их мощность в гуле сразу и вся (они не звучат вовсе), взятые стихают и отдают свою в
+     * тех же тиках: сумма голосов и гула — доля взрыва в смеси с первого тика (ревью R3: было 0 и −3 дБ).
+     */
     @Test
-    void refusedVoiceGoesToTheRumble() {
+    void refusedSoundsReachTheRumbleAtOnce() {
         double[] clock = {0};
         Mix mix = new Mix();
         Rumble rumble = new Rumble();
         BlastVoices voices = new BlastVoices(rumble);
-        BlastVoices.Voice v = voices.admit(flat(mix, 0, 0.2, 100), fakes(clock, 3, 100), 0, 0, 1, 1, 1, Integer.MAX_VALUE);
+        // весь голос не взят
+        Mix.Blast all = flat(mix, 0, 0.2, 100);
+        BlastVoices.Voice v = voices.admit(all, fakes(clock, 3, 100), 0, 0, 1, 1, 1, Integer.MAX_VALUE);
         assertNotNull(v);
-        voices.started(v, 2, 0);
-        assertTrue(v.fading());
-        assertEquals(1, rumble.size());
-        assertEquals(2, voices.started);
-        assertEquals(1, voices.refused);
+        voices.started(v, new boolean[3], 0);
+        rumble.tick(0);
+        assertEquals(all.heard(), rumble.total(), 1e-9, "не взят ни один — весь в гуле с этого тика");
+        assertEquals(3, voices.refused);
+        // взят один из двух равных: невзятый — в гуле сразу, взятый стихает, сумма та же каждый тик
+        Mix mix2 = new Mix();
+        Rumble rumble2 = new Rumble();
+        BlastVoices voices2 = new BlastVoices(rumble2);
+        Mix.Blast two = mix2.blast(0);
+        two.add(new Mix.Layer(MixTest.flat(0.1, 100), 1, 1, true));
+        two.add(new Mix.Layer(MixTest.flat(0.1, 100), 1, 1, true));
+        List<Fake> sounds = fakes(clock, 2, 100);
+        sounds.get(1).taken = false;
+        BlastVoices.Voice w = voices2.admit(two, sounds, 0, 0, 1, 1, 1, Integer.MAX_VALUE);
+        assertNotNull(w);
+        voices2.started(w, new boolean[]{true, false}, 0);
+        assertTrue(w.fading());
+        for (int t = 0; t <= BlastVoices.FADE + 2; t++) {
+            clock[0] = t;
+            mix2.at(t);
+            rumble2.tick(t);
+            double k = two.factor(), f = Rumble.voice(t, 0, BlastVoices.FADE), voice = f * f * k * k * two.voiced(t, w.took);
+            assertEquals(k * k * two.voiced(t), voice + rumble2.total(), 1e-9, "тик " + t);
+        }
     }
 
-    /** Стихающие сверх запаса или сверх свободных каналов движка замолкают сразу; места нет и так — новый в гул. */
+    /**
+     * Мир съел запас каналов, а свой потолок не занят: громкий новый звучит в свободных сейчас каналах, а тихий хвост
+     * уступает, чтобы миру вернулся его запас, когда движок отдаст его каналы (ревью R1: новый уходил в гул). Свободных
+     * меньше, чем нужно новому, — вытеснение сейчас их не даст: новый в гуле, хвост звучит.
+     */
     @Test
-    void hardLimitCutsTheFadingFirst() {
+    void loudestTakesAQuietTailWhenTheWorldUsedTheReserve() {
+        double[] clock = {0};
+        Mix mix = new Mix();
+        BlastVoices voices = new BlastVoices(new Rumble(), 100);
+        List<Fake> tail = fakes(clock, 4, 300);
+        assertNotNull(voices.admit(flat(mix, 0, 0.01, 300), tail, 0, 0, 1, 1, 1, 1000));
+        clock[0] = 20;
+        mix.at(20);
+        assertNotNull(voices.admit(flat(mix, 20, 1, 300), fakes(clock, 4, 320), 20, 0, 1, 1, 1, BlastVoices.SPARE + 2));
+        assertTrue(tail.stream().allMatch(f -> !Double.isNaN(f.fadeFrom)), "тихий хвост уступил");
+        BlastVoices tight = new BlastVoices(new Rumble(), 100);
+        List<Fake> quiet = fakes(clock, 4, 300);
+        assertNotNull(tight.admit(flat(mix, 20, 0.01, 300), quiet, 20, 0, 1, 1, 1, 1000));
+        clock[0] = 40;
+        mix.at(40);
+        assertNull(tight.admit(flat(mix, 40, 1, 300), fakes(clock, 4, 340), 40, 0, 1, 1, 1, 3));
+        assertTrue(quiet.stream().allMatch(f -> Double.isNaN(f.fadeFrom)));
+    }
+
+    /** Свободных у движка мало, уступить некому: новому не хватает запаса миру — в гул, и ближний не теряется: он в гуле. */
+    @Test
+    void worldReserveSendsTheNewToTheRumbleWhenNoOneCanYield() {
+        double[] clock = {0};
+        Mix mix = new Mix();
+        BlastVoices tight = new BlastVoices(new Rumble(), 100);
+        assertNull(tight.admit(flat(mix, 0, 1, 50), fakes(clock, 4, 50), 0, 0, 1, 1, 1, BlastVoices.SPARE + 2));
+        assertEquals(1, tight.toRumble);
+    }
+
+    /**
+     * Остановленный звук держит канал, пока движок его не вернул: голос уходит из счёта только тогда, и серия громких в
+     * одном тике не держит каналов больше потолка с запасом — лишние в гуле с той же мощностью (ревью R2: счёт видел 20,
+     * у движка было 48). Через тики, когда уступившие отдали каналы, места снова есть.
+     */
+    @Test
+    void stoppedSoundsHoldTheirChannelsUntilTheEngineReleasesThem() {
         double[] clock = {0};
         Mix mix = new Mix();
         Rumble rumble = new Rumble();
         BlastVoices voices = new BlastVoices(rumble, 8);
         List<Fake> all = new ArrayList<>();
-        // в одном тике — ещё и ещё громче: уступившие копятся стихающими
+        int admitted = 0;
         for (int i = 0; i < 12; i++) {
             List<Fake> f = fakes(clock, 4, 200);
-            all.addAll(f);
-            assertNotNull(voices.admit(flat(mix, 0, 0.01 * Math.pow(1.5, i), 200), f, 0, 0, 1, 1, 1, Integer.MAX_VALUE));
-            assertTrue(voices.steady() <= 8);
-            assertTrue(voices.channels() <= 8 + BlastVoices.HEADROOM, "каналов " + voices.channels());
+            if (voices.admit(flat(mix, 0, 0.01 * Math.pow(1.5, i), 200), f, 0, 0, 1, 1, 1, Integer.MAX_VALUE) != null) {
+                all.addAll(f);
+                admitted++;
+            }
+            long held = all.stream().filter(Fake::held).count();
+            assertEquals(held, voices.channels(), "счёт — как у движка");
+            assertTrue(held <= 8 + BlastVoices.HEADROOM, "каналов у движка " + held);
         }
-        assertTrue(all.stream().anyMatch(f -> f.cut), "сверх запаса — замолкли");
-        // свободных у движка мало: новому не хватает — в гул, и ближний не теряется — он в гуле
-        BlastVoices tight = new BlastVoices(new Rumble(), 100);
-        assertNull(tight.admit(flat(mix, 0, 1, 50), fakes(clock, 4, 50), 0, 0, 1, 1, 1, BlastVoices.SPARE + 2));
-        assertEquals(1, tight.toRumble);
+        assertEquals(5, admitted, "потолок 8 и запас 12: два звучат, три стихают, остальные — в гуле");
+        assertEquals(7, voices.toRumble);
+        // уступившие стихли (тик полной громкости, FADE тиков) и движок вернул их каналы ещё тиком позже
+        for (int t = 1; t <= BlastVoices.FADE + 2; t++) {
+            clock[0] = t;
+            mix.at(t);
+            voices.prune(t);
+            assertEquals(all.stream().filter(Fake::held).count(), voices.channels(), "тик " + t);
+        }
+        assertEquals(8, voices.channels(), "уступившие вернули каналы — держат только звучащие");
+        assertNotNull(voices.admit(flat(mix, clock[0], 100, 200), fakes(clock, 4, 300), clock[0], 0, 1, 1, 1, Integer.MAX_VALUE));
     }
 
     /**
@@ -279,6 +368,9 @@ class BlastVoicesTest {
             rumble.tick(tick);
             assertTrue(voices.steady() <= cap, "голосов " + voices.steady() + " при потолке " + cap);
             assertTrue(voices.channels() <= cap + BlastVoices.HEADROOM);
+            long physical = 0;
+            for (BlastVoices.Voice v : voices.voices()) for (BlastVoices.Sound s : v.sounds) if (s.held()) physical++;
+            assertEquals(physical, voices.channels());
             most = Math.max(most, voices.steady());
             // мощность голосов и гула — доли взрывов в смеси: ничего не потеряно и не удвоено
             double exact = 0, heard = rumble.total();
@@ -288,7 +380,7 @@ class BlastVoicesTest {
             }
             for (BlastVoices.Voice v : voices.voices()) {
                 double f = v.fading() ? Rumble.voice(tick, v.fadeFrom, BlastVoices.FADE) : 1, k = v.blast.factor();
-                if (v.sounds.stream().noneMatch(s -> ((Fake) s).cut)) heard += f * f * k * k * v.blast.voiced(tick);
+                heard += f * f * k * k * v.blast.voiced(tick, v.took);
             }
             assertEquals(exact, heard, 1e-9 + 1e-9 * exact, "тик " + tick + ": голоса + гул против долей в смеси");
             if (tick == nearAt + 2) nearHeard = nearBlast.heard();

@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.sound;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -158,14 +160,31 @@ final class Mix {
          * когда голосов нет.
          */
         double voiced(double tick) {
+            return voiced(tick, null);
+        }
+
+        /**
+         * Как {@link #voiced(double)}, но только голоса {@code voices}: i-й — i-й слой взрыва, что звучит голосом движка
+         * (не {@link Kind#OWN}), в порядке слоёв; null — все.
+         */
+        double voiced(double tick, boolean @Nullable [] voices) {
             double a = 0, apart = 0;
+            int i = 0;
             for (Layer l : layers) {
                 if (l.kind() == Kind.OWN) continue;
+                boolean on = voices == null || i < voices.length && voices[i];
+                i++;
+                if (!on) continue;
                 double e = l.energy(tick - start);
                 if (l.kind() == Kind.APART) apart += e;
                 else a += Math.sqrt(e);
             }
             return a * a + apart;
+        }
+
+        /** Тик смеси, на который посчитаны множители. */
+        double now() {
+            return now;
         }
 
         /** Множитель громкости звуков этого взрыва сейчас (0..1): k_b = (G·p_b / Σ p²)^½. */

@@ -182,15 +182,33 @@ public class BlastEchoes {
         if (done.tracks().isEmpty()) return;
         OwnSources.reverb(done.t60(), SEND);
         Mix.Blast blast = bus;
+        OwnSources.Anchor start = anchor;
         float[][][] env = blast == null || profiles == null ? null : profiles.getNow(null);
+        queued += queue(done, env, volume, blast, (t, gain) -> OwnSources.play(this, start, t.start(), t.azimuth(), gain, t.pcm(), EchoMix.RATE, false,
+                false, blast == null ? null : blast::factor));
+    }
+
+    /** Дорожка эха — своему источнику: false — места нет. */
+    @FunctionalInterface
+    interface Player {
+        boolean play(EchoMix.Track track, float gain);
+    }
+
+    /**
+     * Дорожки {@code done} — своим источникам ({@code player}) с громкостью прямого удара {@code volume} × своей, принятые —
+     * слоями взрыва {@code blast} в смеси (огибающие {@code env}; null — без смеси): от начала прямого удара со своей
+     * задержкой, как их голоса. Сколько принято.
+     */
+    static int queue(EchoMix.Mix done, float @Nullable [][][] env, float volume, @Nullable Mix.Blast blast, Player player) {
+        int queued = 0;
         for (int i = 0; i < done.tracks().size(); i++) {
             EchoMix.Track t = done.tracks().get(i);
             float gain = Math.min(16, volume * t.gain());
-            if (!OwnSources.play(this, anchor, t.start(), t.azimuth(), gain, t.pcm(), EchoMix.RATE, false, false, blast == null ? null : blast::factor)) continue;
+            if (!player.play(t, gain)) continue;
             queued++;
-            // дорожка от начала прямого удара — как её голос ({@link OwnSources.Anchor}: смесь сдвигает взрыв к его настоящему началу)
-            if (env != null && i < env.length) blast.add(Mix.Layer.own(env[i][0], env[i][1], gain, t.start()));
+            if (blast != null && env != null && i < env.length) blast.add(Mix.Layer.own(env[i][0], env[i][1], gain, t.start()));
         }
+        return queued;
     }
 
     /** Дорожки уже в очереди своих источников (или их нет и не будет): больше эхо ничего не готовит. */

@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.sounds.ChannelAccess;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
@@ -415,15 +416,15 @@ public final class ClientSounds {
     /**
      * Разовый звук взрыва в смеси ({@link Mix}): тикает, и движок каждый тик берёт громкость заново — своя × множитель
      * его взрыва в смеси (хвост этого взрыва уступает место следующему, а не держит громкость, с которой начался). Голос
-     * уступил место ({@link BlastVoices}) — стихает за {@link BlastVoices#FADE} тика (его мощность в это время переходит в
-     * гул, {@link Rumble}) и уходит.
+     * уступил место ({@link BlastVoices}) — тик ещё полный, потом стихает за {@link BlastVoices#FADE} тика
+     * ({@link Rumble#voice}: в те же тики движка его мощность переходит в гул) и уходит.
      */
     static final class MixedShot extends AbstractTickableSoundInstance implements SoundFilters.Muffled, BlastVoices.Sound {
         private final float gain, highs;
         private final DoubleSupplier mix;
         /** Тиков до конца записи с запасом: дальше звук снимается сам. */
         private int life;
-        /** Тиков, как стихает; −1 — звучит. */
+        /** Тиков движка с тех пор, как голос уступил; −1 — звучит. */
         private int fading = -1;
 
         MixedShot(SoundEvent event, SoundSource category, float volume, float pitch, RandomSource random, Vec3 at, float gain, float highs,
@@ -446,14 +447,18 @@ public final class ClientSounds {
 
         @Override
         public float getVolume() {
-            float f = fading < 0 ? 1 : (float) Rumble.voice(fading, 0, BlastVoices.FADE);
-            return (float) (super.getVolume() * mix.getAsDouble() * f);
+            return super.getVolume() * level();
+        }
+
+        /** Множитель громкости сейчас: смесь × стихание уступившего голоса. */
+        float level() {
+            return (float) (mix.getAsDouble() * (fading < 0 ? 1 : Rumble.voice(fading, 0, BlastVoices.FADE)));
         }
 
         @Override
         public void tick() {
-            // громкость — getVolume, место — неизменно; запись кончилась или голос стих — снять
-            if (fading >= 0 && ++fading >= BlastVoices.FADE || --life <= 0) stop();
+            // тик движка: громкость — getVolume, место — неизменно; запись кончилась или голос стих — снять
+            if (fading >= 0 && Rumble.voice(++fading, 0, BlastVoices.FADE) <= 0 || --life <= 0) stop();
         }
 
         @Override
@@ -476,8 +481,18 @@ public final class ClientSounds {
             return !playing();
         }
 
-        /** Громкость (амплитуда) записи, с которой он задан, до смеси. */
-        float level() {
+        /**
+         * Канал ещё у движка: остановленный звук держит его, пока движок не остановит канал в своём тике и звуковой поток не
+         * вернёт его пулу ({@code ChannelAccess.ChannelHandle.isStopped}); звук, которого движок не взял, канала не держит.
+         */
+        @Override
+        public boolean held() {
+            ChannelAccess.ChannelHandle h = Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.get(this);
+            return h != null && !h.isStopped();
+        }
+
+        /** Громкость записи, с которой он задан, до смеси. */
+        float volume0() {
             return volume;
         }
 

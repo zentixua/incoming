@@ -162,6 +162,31 @@ class MixTest {
         assertEquals(51, a.end - a.start, 1e-9);
     }
 
+    /**
+     * Дорожки эха, которые взяли свои источники, — слои своего взрыва со своей задержкой и громкостью; не взятые — нет; без
+     * смеси (ядерка) — ничего.
+     */
+    @Test
+    void echoTracksJoinTheirBlastWhenTheirSourcesTakeThem() {
+        Mix mix = new Mix();
+        Mix.Blast b = mix.blast(0);
+        b.add(new Mix.Layer(flat(0.5, 20), 1, 1));
+        EchoMix.Track t0 = new EchoMix.Track(0, 30, new short[2205], 0.5f), t1 = new EchoMix.Track(1, 40, new short[2205], 0.5f),
+                t2 = new EchoMix.Track(2, 55, new short[2205], 20f);
+        EchoMix.Mix done = new EchoMix.Mix(List.of(t0, t1, t2), 2, 3);
+        float[][][] env = {{flat(0.1, 20), flat(0.1, 20)}, {flat(0.1, 20), flat(0.1, 20)}, {flat(0.1, 20), flat(0.1, 20)}};
+        assertEquals(2, BlastEchoes.queue(done, env, 2, b, (t, gain) -> t != t1));
+        List<Mix.Layer> own = b.layers.stream().filter(l -> l.kind() == Mix.Kind.OWN).toList();
+        assertEquals(2, own.size());
+        assertEquals(30, own.get(0).delay(), 1e-12);
+        assertEquals(1, own.get(0).volume(), 1e-6, "громкость прямого удара × своя");
+        assertEquals(55, own.get(1).delay(), 1e-12);
+        assertEquals(16, own.get(1).volume(), 1e-6, "не громче AL_MAX_GAIN своего источника");
+        mix.at(31);
+        assertEquals(0.1 * 1 * 1, b.power(31) - 0, 1e-6, "через 31 тик звучит эхо");
+        assertEquals(3, BlastEchoes.queue(done, env, 2, null, (t, gain) -> true), "без смеси — только голоса");
+    }
+
     /** Слой с задержкой — от неё; за тик до начала — уже первый (голос, что ведёт кадр, начинается с долей тика раньше). */
     @Test
     void delayedLayerStartsOnTimeAndBlastFollowsTheRealStart() {
