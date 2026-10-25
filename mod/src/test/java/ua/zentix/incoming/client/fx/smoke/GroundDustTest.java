@@ -309,20 +309,6 @@ class GroundDustTest {
         // клубы, которые видит игрок (ревью R468: направление выбиралось на исходных радиусах, а клуб растянут дальностью
         // и стоком — у удара в 6,5 м от перекрёстка 8 из 22 середин были в домах): до 2 с в штиль середины всех заметных
         // клубов юбки — на мостовой (у края — до метра), и у перекрёстка, и в улицах рядом с ним
-        // и в ветер поперёк улиц (ревью R468.r1: 4 из 24 середин над домами на 20 с при 3 м/с) — ниже крыш ветер вдоль улицы
-        CloudModel.Air breeze = new CloudModel.Air(CloudModel.N_STANDARD, 3, 0, 0.1, (int) Stability.C, 0.5);
-        GroundDust windy = new CloudModel(BlastSource.of(WeaponType.DRONE, false), breeze, false, 0, streets).crushed;
-        int blown = 0;
-        for (double t = 1; t <= 30 + 1e-9; t += 1) {
-            for (double[] c : layer(windy, t)) {
-                if (c[6] < 0.005 * windy.total) continue;
-                blown++;
-                double low = town.at(c[0], c[2]);
-                for (double[] e : new double[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) low = Math.min(low, town.at(c[0] + e[0], c[2] + e[1]));
-                assertTrue(low <= GroundDust.WALL, "ветер 3 м/с, " + t + " с: клуб в доме, " + c[0] + ", " + c[2]);
-            }
-        }
-        assertTrue(blown > 50, "клубов " + blown);
         for (double[] at : new double[][]{{0, 0}, {0.5, 6.5}, {-2, 9}}) {
             GroundDust.Relief shifted = (x, z) -> town.at(x + at[0], z + at[1]);
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1),
@@ -413,6 +399,50 @@ class GroundDustTest {
      * Клубы слоя пыли в возрасте t: {x, y, z, σh, σv, пыль (ослабление в кг смеси), масса пыли в воздухе, поверхность, с
      * которой её подняло}.
      */
+    /**
+     * Ветер в городе: ниже крыш снос юбки — вдоль улицы и не дальше стены (ревью R468.r1: 4 из 24 середин над домами на
+     * 20 с при 3 м/с поперёк улиц; ревью R472: дома 8 м — снос сквозь стену долей сверх проекции, 8 клубов в домах на
+     * 21 с; удар в 6,5 м от перекрёстка в ветер по диагонали — клуб скачет назад на 55 м в дом, запруда пути не
+     * согласована с остановкой). Кадр каждые 0,05 с до 30 с: середина каждого заметного клуба — на мостовой (у края — до
+     * метра) или над крышей, и клуб за кадр не прыгает.
+     */
+    @Test
+    void skirtInTheWindStaysInTheStreets() {
+        for (double roof : new double[]{12, 8}) {
+            for (double[] at : new double[][]{{0, 0}, {0.5, 6.5}}) {
+                for (double[] wind : new double[][]{{3, 0}, {3 / Math.sqrt(2), 3 / Math.sqrt(2)}}) {
+                    GroundDust.Relief town = (x, z) -> Math.floorMod((int) Math.floor(x + at[0] + 13), 16) < 10
+                            && Math.floorMod((int) Math.floor(z + at[1] + 13), 16) < 10 ? roof : 0;
+                    GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
+                            GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), town);
+                    CloudModel.Air breeze = new CloudModel.Air(CloudModel.N_STANDARD, wind[0], wind[1], 0.1, (int) Stability.C, 0.5);
+                    GroundDust d = new CloudModel(BlastSource.of(WeaponType.DRONE, false), breeze, false, 0, g).crushed;
+                    String where = "дома " + roof + " м, удар " + at[0] + ", " + at[1] + ", ветер " + wind[0] + ", " + wind[1];
+                    int seen = 0;
+                    List<double[]> was = List.of();
+                    for (int f = 1; f <= 600; f++) {
+                        double t = 0.05 * f;
+                        List<double[]> now = layer(d, t);
+                        for (double[] c : now) {
+                            if (c[6] < 0.005 * d.total) continue;
+                            seen++;
+                            double low = town.at(c[0], c[2]);
+                            for (double[] e : new double[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) low = Math.min(low, town.at(c[0] + e[0], c[2] + e[1]));
+                            assertTrue(low <= GroundDust.WALL || c[1] > low, where + ", " + t + " с: клуб в доме, " + c[0] + ", " + c[1] + ", " + c[2]);
+                            if (t > 1 && !was.isEmpty()) {
+                                double near = Double.MAX_VALUE;
+                                for (double[] b : was) near = Math.min(near, Math.hypot(c[0] - b[0], c[2] - b[2]));
+                                assertTrue(near < 2, where + ", " + t + " с: клуб прыгнул на " + near + " м, " + c[0] + ", " + c[2]);
+                            }
+                        }
+                        was = now;
+                    }
+                    assertTrue(seen > 1000, where + ": клубов " + seen);
+                }
+            }
+        }
+    }
+
     private static List<double[]> layer(GroundDust g, double t) {
         List<double[]> out = new ArrayList<>();
         g.probe(t, (x, y, z, sh, sv, d, m, src) -> out.add(new double[]{x, y, z, sh, sv, d, m, src}));
