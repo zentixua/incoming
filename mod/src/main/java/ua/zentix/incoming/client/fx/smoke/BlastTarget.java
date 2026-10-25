@@ -82,7 +82,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         public final double grainDensity;
         /** Доля баллистического выброса, что летит комьями (частицы вблизи), а не зёрнами завесы. */
         public final double clods;
-        /** Доля разрушенного, что уходит в воздух пылью мельче ~50 мкм ({@link #FINES_LOOSE}, {@link #FINES_CRUSHED}). */
+        /** Доля разрушенного для смеси корзин DustModel (размерный состав — оценка) ({@link #FINES_LOOSE}, {@link #FINES_CRUSHED}). */
         public final double fines;
         /** Рыхлое: воронка выбрасывает его завесой. */
         public final boolean loose;
@@ -129,13 +129,18 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
      */
     static final double FINES_LOOSE = CloudModel.DUST_LOFTED;
     /**
-     * То же у связного (скала, бетон, кладка): чаша контактного заряда там — зона дробления и откола (переднее дробление
-     * плиты, physics.md [S13]; зона дробления у заряда в породе — 2–4 его радиуса, Esen, Onederra, Bilgin, «Modelling the
-     * size of the crushed zone around a blasthole», Int. J. Rock Mech. Min. Sci. 40, 2003: у 50 кг ТНТ — 0,4–0,8 м, порядка
-     * всей чаши бетона), и раздробленное там размолото, а не выброшено зёрнами. ⚠ Доля — оценка: замеров мелочи контактного
-     * взрыва по бетону в источниках нет; впятеро больше грунта, а не «как грунт» и не «никакой пыли» (physics.md).
+     * Мелочь PM10 контактного взрыва по бетону на массу образца: Costa, Bodiot, Lecysyn и др., «Analyse des particules
+     * produites par explosion au contact d'éprouvettes en béton», 38e Congrès Français sur les Aérosols (2025), с. 116–119,
+     * рис. 5–6, DOI 10.25576/ASFERA-CFA2025-43915: на фильтре 0–2 г/кг (верх погрешности ~2,4), порядок — 1 г/кг. ⚠ Оценка:
+     * знаменатель опыта — весь образец, а не разрушенное; собранное — и осевшее; в воздух принято всё.
      */
-    static final double FINES_CRUSHED = 0.1;
+    static final double PM10_CONTACT = 0.001;
+    /**
+     * То же у связного (скала, бетон, кладка): вся смесь корзин {@link ua.zentix.incoming.nuclear.model.DustModel}, у которой
+     * PM10 — {@link #PM10_CONTACT}, — PM10 / его доля в смеси ({@code DustModel.PM10_SHARE}). ⚠ Оценка: опыты — по бетону,
+     * камень и кладка — по аналогии; прежние 0,1 замерами не подтверждались (в 20 раз больше, у глаза на улице — стена).
+     */
+    static final double FINES_CRUSHED = PM10_CONTACT / ua.zentix.incoming.nuclear.model.DustModel.PM10_SHARE;
 
     /** Удар в голый рыхлый грунт — как у взрыва без сведений о цели (проверки, прежние вызовы). */
     public static final BlastTarget SOIL = new BlastTarget(Family.SOIL, GroundMaterial.DIRT, 0, 0, null, DOWN, false);
@@ -249,9 +254,22 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         return GURNEY_TNT / Math.sqrt((a * a * a + 1) / (6 * (1 + k)) + k);
     }
 
-    /** Пыль разрушенного, что уходит в воздух, кг: {@link #mass} × доля мелочи вещества ({@link Matter#fines}). */
+    /**
+     * Доля разрушенного пробитой плиты, что лежала в воронке со стороны заряда; остальное — тыльный откол, он уходит в
+     * пустоту за плитой. Опыты контактных взрывов по плите 0,3 м обычного железобетона, пробитой насквозь (Zhang W. и др.,
+     * «The impacts of contact explosions on ultra-high performance reinforced concrete slabs», Sci. Rep. 14:25700 (2024),
+     * табл. 3, NRCS-3…5: 2,2–5 кг ТНТ): объём воронки к сумме с отколом (диаметр² × глубина, форма одна) — 0,17, 0,21,
+     * 0,46 — тем больше, чем сильнее заряд пробивает. ⚠ Оценка 0,3: опыты меньше наших зарядов и плит, форма принята одна.
+     */
+    public static final double SLAB_FRONT = 0.3;
+
+    /**
+     * Пыль разрушенного, что уходит в воздух со стороны заряда, кг: {@link #mass} × доля мелочи вещества
+     * ({@link Matter#fines}); у пробитой плиты — только из воронки на грани удара ({@link #SLAB_FRONT}): мелочь откола
+     * уходит с ним в пустоту за плитой (под крышей — в помещение, его воздух здесь не считается).
+     */
     public double dust(double tntKg) {
-        return mass(tntKg) * matter().fines;
+        return mass(tntKg) * matter().fines * (family == Family.SLAB ? SLAB_FRONT : 1);
     }
 
     /** Баллистический выброс разрушенного, кг: {@link #mass} без пыли, что ушла в воздух. */
@@ -261,7 +279,8 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
 
     /**
      * Баллистический выброс кусками — частицами вблизи, кг: у грунта — доля комьев вещества ({@link Matter#clods}), остальное —
-     * зёрна завесы ({@link Ejecta#grains}); у твёрдого и плиты завесы нет — весь. Куски + зёрна завесы + пыль = {@link #mass}.
+     * зёрна завесы ({@link Ejecta#grains}); у твёрдого и плиты завесы нет — весь. Куски + зёрна завесы + пыль = {@link #mass},
+     * у пробитой плиты — ещё мелочь тыла, что уходит в комнату за ней ({@link #SLAB_FRONT}).
      */
     public double clods(double tntKg) {
         return family == Family.SOIL ? ballistic(tntKg) * matter().clods : ballistic(tntKg);

@@ -436,7 +436,7 @@ public final class FarBlasts {
     public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed) {
         Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at));
         trace(e, FarTerrain.of(level), camera());
-        clear(e, camera());
+        clear(e, camera(), 0);
         if (EVENTS.size() >= CAP) EVENTS.pollFirst().alive = false;
         EVENTS.addLast(e);
         SmokeGrid.add(e);
@@ -655,10 +655,10 @@ public final class FarBlasts {
             }
             if (clock - e.traced >= RETRACE && traces < TRACES_PER_TICK) {
                 trace(e, heights, ear);
-                if (e.glows) clear(e, ear);
+                if (e.glows) clear(e, ear, age);
                 traces++;
             } else if (age < e.ballTicks() && clears < CLEARS_PER_TICK) {
-                clear(e, ear);
+                clear(e, ear, age);
                 clears++;
             }
         }
@@ -679,18 +679,21 @@ public final class FarBlasts {
      * Два луча к оси шара у угла высотки оба упирались бы в угол, и видимая половина шара светила бы без блика. Часть
      * диска в земле закрыта всем и в счёт не идёт. Дальше прорисовки шар закрывает рельеф ({@link #trace}). Шар в кадре
      * блик берёт ещё и по тому, что на экране ({@code SourceProbes}: и LOD Distant Horizons, которых лучи не видят).
+     * Шар — там, где он на {@code age}-м тике, как его клубы, спрайт и свет: место на середине жизни шара под ветром
+     * уходило от нынешнего на метры (ракета, 5 м/с, первые тики — ~10 м), и шар у края стены считался закрытым.
      */
-    private static void clear(Event e, Vec3 eye) {
+    private static void clear(Event e, Vec3 eye, double age) {
         double r = e.ballRadius();
         if (r <= 0) return;
         if (e.distanceTo(eye) > Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0) {
             e.open = 1;
             return;
         }
-        double mid = e.y + e.ballHeight(0.5 * e.ballTicks());
+        double t = Math.min(age, e.ballTicks()) / 20, mid = e.y + e.model.ballHeight(t);
+        double mx = e.x + e.model.ballX(t), mz = e.z + e.model.ballZ(t);
         int seen = 0, counted = 0;
         for (int i = 0; i <= RING_RAYS; i++) {
-            disc(eye, e.x, mid, e.z, RING * r, i, DISC);
+            disc(eye, mx, mid, mz, RING * r, i, DISC);
             if (i > 0 && DISC[1] < e.y + 0.5) continue;
             counted++;
             if (!FarFlightView.blocked(eye, DISC[0], DISC[1], DISC[2])) seen++;
@@ -781,7 +784,7 @@ public final class FarBlasts {
             double age = Math.max(0, now - e.born), t = age / 20;
             double r = e.model.ballRadius(t);
             if (r <= 0) continue;
-            double dx = e.x - eye.x, dy = e.y + e.model.ballHeight(t) - eye.y, dz = e.z - eye.z;
+            double dx = e.x + e.model.ballX(t) - eye.x, dy = e.y + e.model.ballHeight(t) - eye.y, dz = e.z + e.model.ballZ(t) - eye.z;
             e.model.ballLight(t, BB);
             double w = BB[3] * r * r / Math.max(dx * dx + dy * dy + dz * dz, r * r);
             int slot = 0;
@@ -812,10 +815,13 @@ public final class FarBlasts {
             if (r > 0) {
                 e.model.ballLight(t, BB);
                 double h = e.model.ballHeight(t);
-                f.light(bx, by + h, bz, r, BB[0], BB[1], BB[2], air, h);
+                f.light(bx + e.model.ballX(t), by + h, bz + e.model.ballZ(t), r, BB[0], BB[1], BB[2], air, h);
             }
+            // горячий газ термика — там же, где его дым (снос ветром)
             double cr = e.model.radius(t), ch = e.model.height(t);
-            if (t < e.model.life) f.hot(bx, by + Math.max(0, ch - cr), bz, 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
+            if (t < e.model.life) {
+                f.hot(bx + e.model.driftX(t), by + Math.max(0, ch - cr), bz + e.model.driftZ(t), 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
+            }
             if (e.source.underground() || e.source.chargeKg() <= 0 || t > FRONT_SECONDS) continue;
             if (e.front == null) e.front = ChemicalFront.cached(e.source.chargeKg(), e.source.surface());
             if (front(e.front, t, r, e.model.hob, FRONT)) f.chemicalFront(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
@@ -880,6 +886,9 @@ public final class FarBlasts {
         sprite = FxAtlas.fireballAt(frame, (e.seed & 1) != 0);
         fire = FxAtlas.fireLightAt(frame) * body;
         if (r <= 0 || body <= 0) return;
+        // шар сносит ветром вместе с его дымом (CloudModel.ballX): картинка, свет и зарево — с того же места
+        bx += e.model.ballX(s);
+        bz += e.model.ballZ(s);
         double h = e.ballHeight(age), b = e.brightness(age);
         double vis = visible(h, r, line), hidden = 1 - vis * e.open;
         float[] c = e.colour(age);

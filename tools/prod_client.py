@@ -84,9 +84,33 @@ def copy_instance(dest, world):
         lines = [ln.rstrip("\n") for ln in f if ln.split(":", 1)[0] not in override]
     with open(os.path.join(dest, "options.txt"), "w") as f:
         f.write("\n".join(lines + [f"{k}:{v}" for k, v in override.items()]) + "\n")
+    no_idle(dest)
     if world:
         src = world if os.sep in world else os.path.join(mc, "saves", world)
         shutil.copytree(src, os.path.join(dest, "saves", world_name(world)))
+
+
+def no_idle(dest):
+    """Без простоя Dynamic FPS (он в сборке): по умолчанию через 300 с без ввода он держит 10–15 к/с «на батарее», а
+    ноутбук с пределом заряда («Not charging») для него на батарее — 25.10 сцены look_gate после 300 с шли ровно 15 к/с.
+    Сценарий ввода не даёт: простой в копии выключен (idle.timeout = 0), прочие настройки игрока — как есть. Старый ключ
+    idle_time Dynamic FPS при загрузке переносит в idle.timeout поверх нового (Serialization.upgradeIdleConfig, 3.11.4) —
+    его в копии нет."""
+    path = os.path.join(dest, "config", "dynamic_fps.json")
+    try:
+        with open(path) as f:
+            conf = json.load(f)
+    except (OSError, ValueError):
+        conf = {}
+    if not isinstance(conf, dict):
+        conf = {}
+    idle = conf.get("idle") if isinstance(conf.get("idle"), dict) else {}
+    idle["timeout"] = 0
+    conf["idle"] = idle
+    conf.pop("idle_time", None)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(conf, f, indent=2)
 
 
 def world_name(world):

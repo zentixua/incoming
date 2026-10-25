@@ -532,6 +532,8 @@ final class Sandbox {
 
     /** Дом под точкой ({@code house}): высота и полуширина, блоков; 0 — дома нет. */
     private final int[] house = new int[2];
+    /** Тик, когда мостовая под {@code real … masonry} уже поставлена; −1 — ещё нет. */
+    private int paved = -1;
 
     /** Взрывы налёта ({@code raid}), что ещё впереди: тик, x, z (биты double), зерно. */
     private final List<long[]> raid = new ArrayList<>();
@@ -840,6 +842,14 @@ final class Sandbox {
         BlockPos s = BlockPos.containing(site);
         if (mc.player.position().distanceTo(site) < mc.options.getEffectiveRenderDistance() * 16 - 32 && !loaded(mc, s)) return;
         SandboxCommand c = pendingCmd;
+        if (c.masonry() && paved < 0) {
+            // город: вокруг — мостовая, а не газон; клиент должен получить её раньше пакета взрыва (земля пыли — у клиента)
+            paved = tick;
+            server("fill %d %d %d %d %d %d minecraft:gray_concrete".formatted(s.getX() - 48, GROUND, s.getZ() - 48, s.getX() + 48, GROUND, s.getZ() + 48));
+            return;
+        }
+        if (c.masonry() && tick - paved < 20) return;
+        paved = -1;
         pending = Pending.SERVER;
         knownNukes.clear();
         ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().forEach(a -> knownNukes.add(a.d.id()));
@@ -863,8 +873,18 @@ final class Sandbox {
                 }
                 // у дощатого дома: удар в землю у его стены к камере (дом — от x + 4 до x + 12, z ± 3, крыша — доски на
                 // высоте 5 над землёй) или в середину его крыши (верх досок — 6 над землёй)
-                if (c.houses() || c.roof()) buildHouses(server, BlockPos.containing(site));
-                SandboxStrikes.detonate(server.overworld(), c.weapon(), c.houses() ? at.add(8, 0, 5) : c.roof() ? at.add(8, 6, 0) : at);
+                // или в середину крыши дома из каменного кирпича (x − 12 … x − 4, z ± 4), крыша там — плита бетона в метр над
+                // пустотой комнаты (каменный потолок дома убран: с ним крыша — 2 м, шахед её не пробивает), верх — 8 над землёй
+                if (c.houses() || c.roof() || c.masonry()) buildHouses(server, BlockPos.containing(site));
+                if (c.masonry()) {
+                    BlockPos o = BlockPos.containing(site);
+                    run(server, "fill %d %d %d %d %d %d minecraft:air".formatted(o.getX() - 11, o.getY() + 6, o.getZ() - 3,
+                            o.getX() - 5, o.getY() + 6, o.getZ() + 3));
+                    run(server, "fill %d %d %d %d %d %d minecraft:gray_concrete".formatted(o.getX() - 12, o.getY() + 7, o.getZ() - 4,
+                            o.getX() - 4, o.getY() + 7, o.getZ() + 4));
+                }
+                SandboxStrikes.detonate(server.overworld(), c.weapon(),
+                        c.houses() ? at.add(8, 0, 5) : c.roof() ? at.add(8, 6, 0) : c.masonry() ? at.add(-8, 8, 0) : at);
                 return;
             }
             if (c.near()) {

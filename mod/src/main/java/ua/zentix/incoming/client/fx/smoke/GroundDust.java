@@ -147,8 +147,10 @@ public final class GroundDust {
     /** Высота поверхности над точкой взрыва по секторам и радиусам, м (неизвестна — ровная на {@link #hob} ниже). */
     private final double[][] surface;
     private final Relief relief;
-    /** Crushed material starts at the impact, even when the footprint already extends past an edge. */
-    private final boolean fragmented;
+    /** Юбка разрушенного: рождается на высоте точки удара и за краем стекает, а не появляется внизу готовой. */
+    private final boolean skirt;
+    /** Радиус юбки к {@link #SKIRT_S}, м (0 — не юбка). */
+    private final double skirtR;
     private final int[] annulus;
     /** Таблицы по сетке времени: σ по вертикали и ∫dt/(1,25σ) у каждого кольца показа; подсос — доля его времени. */
     private final double[][] sv = new double[ANNULI][STEPS], settled = new double[ANNULI][STEPS];
@@ -161,6 +163,8 @@ public final class GroundDust {
     /** Поднятая масса у поверхности (без той, что под шаром), кг; радиус подсоса, м; сколько слой виден, с. */
     public final double total, stemReach;
     public final double life;
+    /** С какого возраста подсос забирает пыль в ножку, с (бесконечность — не забирает). */
+    public final double drawnFrom;
 
     /**
      * Слой пыли заряда {@code tntKg} кг ТНТ на высоте {@code hobM} над голым грунтом в воздухе {@code air};
@@ -176,27 +180,33 @@ public final class GroundDust {
      * взрыва над ней (там, где высота неизвестна, — {@code hobM}).
      */
     GroundDust(double tntKg, double hobM, double ballM, Ground ground, CloudModel.Air air) {
-        this(tntKg, hobM, ballM, ground, air, 0, 0);
+        this(tntKg, hobM, ballM, ground, air, 0);
     }
 
     /**
-     * Cold crushed material, separate from dust already lying on the surface. The mass is supplied by the crater /
-     * crushed-volume law, not by HARD's surface loading. Ejecta occupy the crater and its berm (2 crater radii,
-     * the same extent used for crater throwout); distribution over that disc is an approximation. Its subsequent
-     * spreading, settling and descent use exactly the same dense-current law as wave dust.
+     * Юбка пыли у земли (base surge): мелочь разрушенного {@code kg} кг, что поток газа взрыва выносит из пролома или
+     * воронки вдоль поверхностей вокруг, — не готовым слоем у точки удара. Ebersole, Vaglio-Laurin, Dvore, ASL-CR-80-32
+     * (1980): через {@value #SKIRT_S} с юбка — десятки метров (3×6,8 кг — 44×17 м, 3×55 кг — 54×30 м); радиус —
+     * {@value #SKIRT_R0}·R₀, R₀ = 2·W^⅓ м (приближения DIRTRAN там же). Кольцо получает массу по площади и встаёт, когда до
+     * него дошла юбка; дальше — тот же закон, что у пыли волны (ветер, оседание, стекание с краёв). ⚠ Оценка: верх юбки —
+     * R₀ (у замеров — облако целиком, с поднимающейся частью), раздача по площади ровная.
      */
-    static GroundDust crushed(double tntKg, double hobM, double kg, double radius, Ground ground, CloudModel.Air air) {
+    static GroundDust skirt(double tntKg, double hobM, double kg, Ground ground, CloudModel.Air air) {
+        // юбка идёт от точки удара: каждое кольцо рождается на её высоте, а с края (крыша, обрыв) стекает законом слоя
         Ground source = new Ground(ground.loose(), ground.covered(), ground.hard(), Ground.filled(-Math.max(0, hobM)), ground.relief());
-        return new GroundDust(kg > 0 ? tntKg : 0, hobM, 0, source, air, kg, radius);
+        return new GroundDust(kg > 0 ? tntKg : 0, hobM, 0, source, air, kg);
     }
 
-    private GroundDust(double tntKg, double hobM, double ballM, Ground ground, CloudModel.Air air, double crushedKg, double crushedRadius) {
+    /** Когда юбка доходит до своего радиуса, с, и радиус в R₀ (Ebersole и др. 1980, DIRTRAN). */
+    static final double SKIRT_S = 0.5, SKIRT_R0 = 2;
+
+    private GroundDust(double tntKg, double hobM, double ballM, Ground ground, CloudModel.Air air, double skirtKg) {
         this.air = air;
         this.groundWind = Math.sqrt(air.windX() * air.windX() + air.windZ() * air.windZ()) * air.wind(2);
         this.yieldKt = CloudModel.equivalentKt(tntKg);
         this.hob = Math.max(0, hobM);
         this.relief = ground.relief();
-        this.fragmented = crushedKg > 0;
+        this.skirt = skirtKg > 0;
         // высота взрыва над каждой поверхностью: снизу (крыша, улица) или сверху (стена, склон выше точки) — по наклонной
         // дальности то же давление (⚠ отражение от поверхности над точкой — как от поверхности под ней)
         surface = new double[SECTORS][BANDS.length];
@@ -211,11 +221,17 @@ public final class GroundDust {
             }
         }
         double[] rr = new double[RINGS], aa = new double[RINGS];
+        double r0 = 2 * Math.cbrt(Math.max(tntKg, 0)), skirtR = skirtKg > 0 ? SKIRT_R0 * r0 : 0;
+        this.skirtR = skirtR;
         if (outer > INNER) {
             for (int i = 0; i < RINGS; i++) {
-                double r0 = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
-                rr[i] = i == 0 ? 0.5 * r1 : Math.sqrt(r0 * r1);
-                aa[i] = Math.PI * (r1 * r1 - r0 * r0);
+                double lo = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
+                rr[i] = i == 0 ? 0.5 * r1 : Math.sqrt(lo * r1);
+                // кольцо юбки — в середине по площади той его части, что внутри юбки: масса там ровная по площади, а кольцо
+                // на краю юбки иначе стояло бы в середине всего кольца, за её краем
+                double hi = Math.min(r1, skirtR);
+                if (lo < skirtR) rr[i] = 2.0 / 3 * (hi * hi * hi - lo * lo * lo) / (hi * hi - lo * lo);
+                aa[i] = Math.PI * (r1 * r1 - lo * lo);
             }
         }
         r = rr;
@@ -228,35 +244,33 @@ public final class GroundDust {
         stemFrom = new double[SECTORS][RINGS];
         ball = new boolean[SECTORS][RINGS];
         double hardSupply = DustModel.Surface.HARD.supply();
-        double crushedArea = Math.PI * crushedRadius * crushedRadius;
-        double usedArea = 0;
-        // The radial cells are logarithmic. Integrate the source disc over their boundaries, including its last cell.
-        double[] crushedWeights = new double[RINGS];
-        if (crushedKg > 0 && crushedArea > 0) {
-            double edge = 0;
-            for (int i = 0; i < RINGS; i++) {
-                double next = Math.sqrt(edge * edge + area[i] / Math.PI);
-                crushedWeights[i] = Math.PI * (Math.pow(Math.min(next, crushedRadius), 2) - Math.pow(Math.min(edge, crushedRadius), 2));
-                usedArea += crushedWeights[i];
-                edge = next;
-            }
-        }
         for (int k = 0; k < SECTORS && outer > INNER; k++) {
             for (int i = 0; i < RINGS; i++) {
                 int b = band(r[i]);
                 Rings f = rings(tntKg, over[k][b], ballM, DustModel.Surface.FIELD, outer), c = rings(tntKg, over[k][b], ballM, DustModel.Surface.COVERED, outer);
-                // на твёрдом рыхлого — только осевшая пыль: вынос того же закона, не больше её запаса (порог — как у грунта)
-                double hard = Math.min(hardSupply * area[i], f.mass[i]);
-                mass[k][i] = (ground.loose()[k][b] * f.mass[i] + ground.covered()[k][b] * c.mass[i] + ground.hard()[k][b] * hard) / SECTORS;
+                // на твёрдом рыхлого — только осевшая пыль: вынос того же закона, не больше её запаса (порог — как у грунта);
+                // на дёрне — тоже только то, что лежит на траве: грунт под ним держат корни; мелочь грунта даёт воронка (её
+                // юбка), крошку сорванной травы — FrontDust (крупная, выпадает за секунды). ⚠ Оценка: пыль на траве — как на
+                // тихой дороге (запас HARD); прежде дёрн отдавал сантиметр грунта, как голая земля, и у удара у газона в
+                // 40 м на 6 с стояла бурая стена
+                double hard = Math.min(hardSupply * area[i], f.mass[i]), turf = Math.min(hardSupply * area[i], c.mass[i]);
+                mass[k][i] = (ground.loose()[k][b] * f.mass[i] + ground.covered()[k][b] * turf + ground.hard()[k][b] * hard) / SECTORS;
                 arrival[k][i] = f.arrival[i];
                 positive[k][i] = f.positive[i];
                 first[k][i] = f.first[i];
                 stem[k][i] = f.stem[i];
                 stemFrom[k][i] = f.stemFrom[i];
                 ball[k][i] = f.ball[i];
-                if (crushedKg > 0) {
-                    mass[k][i] = usedArea > 0 ? crushedKg * crushedWeights[i] / usedArea / SECTORS : 0;
-                    // This source has already been partitioned from the hot cloud. Do not entrain/count it twice.
+                if (skirtKg > 0) {
+                    // края кольца (кольца счёта — логарифмические): доля площади диска юбки в кольце
+                    double lo = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), hi = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
+                    double in = Math.max(0, Math.min(hi, skirtR) * Math.min(hi, skirtR) - Math.min(lo, skirtR) * Math.min(lo, skirtR));
+                    mass[k][i] = skirtR > 0 ? skirtKg * in / (skirtR * skirtR) / SECTORS : 0;
+                    // юбка доходит до кольца с той же скоростью и за своим краем: фронт за краем не прыгает к концу колец
+                    arrival[k][i] = SKIRT_S * lo / Math.max(skirtR, 1e-9);
+                    positive[k][i] = Math.max(SKIRT_S * (Math.min(hi, skirtR) - Math.min(lo, skirtR)) / Math.max(skirtR, 1e-9), 0.05);
+                    first[k][i] = r0;
+                    // мелочь пролома — не вовлечённая в шар и не втянутая ножкой: её не считать второй раз
                     stem[k][i] = 0;
                     ball[k][i] = false;
                 }
@@ -306,6 +320,9 @@ public final class GroundDust {
             drawn[s] = drawn[s - 1] + flux * dt;
             slump[s] = slump[s - 1] + 2 * FR * Math.sqrt(CloudModel.G * aloft / (Math.PI * CloudModel.RHO)) * dt;
         }
+        int s0 = 1;
+        while (s0 < STEPS && drawn[s0] <= 0) s0++;
+        drawnFrom = s0 < STEPS ? time(s0 - 1) : Double.POSITIVE_INFINITY;
         life = lifeSeconds();
     }
 
@@ -455,6 +472,9 @@ public final class GroundDust {
      * последним — со скоростью звука.
      */
     double front(int k, double t) {
+        // юбка: край идёт от точки удара ровно, R = 2R₀ к SKIRT_S (Ebersole и др. 1980), за ним — с той же скоростью (пласт
+        // дальше растягивает сток, {@link #stretch}); кольца с их серединами по площади фронта не дают
+        if (skirt) return skirtR * Math.max(0, t) / SKIRT_S;
         if (RINGS == 0 || r[RINGS - 1] <= 0 || t <= arrival[k][0]) return 0;
         for (int i = 1; i < RINGS; i++) {
             if (arrival[k][i] > t) return r[i - 1] + (r[i] - r[i - 1]) * (t - arrival[k][i - 1]) / Math.max(arrival[k][i] - arrival[k][i - 1], 1e-9);
@@ -701,10 +721,12 @@ public final class GroundDust {
     private double begin(int sector, int show, double under, double ux, double uz, double[] at) {
         double source = surface[sector][show];
         if (Double.isNaN(under)) return source;
-        if (under <= source) return fragmented && under < source - DROP ? source : under;
-        double x0 = BANDS[show] * ux, z0 = BANDS[show] * uz, len = Math.hypot(at[0] - x0, at[1] - z0);
+        if (under <= source) return skirt && under < source - DROP ? source : under;
+        // юбка идёт от самой точки удара на её высоте: стена между ней и клубом (дом у улицы) держит её внизу, даже если
+        // точка полосы уже на крыше
+        double x0 = skirt ? 0 : BANDS[show] * ux, z0 = skirt ? 0 : BANDS[show] * uz, len = Math.hypot(at[0] - x0, at[1] - z0);
         int n = (int) Math.max(1, Math.min(32, Math.ceil(len)));
-        double step = Math.max(1, len / n), last = relief.at(x0, z0);
+        double step = Math.max(1, len / n), last = skirt ? source : relief.at(x0, z0);
         for (int i = 1; i <= n; i++) {
             double h = relief.at(x0 + (at[0] - x0) * i / n, z0 + (at[1] - z0) * i / n);
             if (Double.isNaN(h)) continue;

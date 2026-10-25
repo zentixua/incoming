@@ -2,6 +2,7 @@ package ua.zentix.incoming.client.fx;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
@@ -330,7 +331,9 @@ public final class Exhaust {
 
     /**
      * Горящий обломок: языки огня частицами (светящееся тело) и дым — выбросами модели облака ({@link Burning}), свет пламени —
-     * на дым и частицы вокруг ({@link #lights}); остывший — пыльный след, пока летит.
+     * на дым и частицы вокруг ({@link #lights}); холодный ком рыхлого грунта (что копают лопатой: земля, песок, гравий) —
+     * пыльный след, пока летит: его осыпает встречный поток. Холодный кусок корпуса, бетона или камня следа не оставляет:
+     * отделяемой пыли у него нет, а дым — только от горения (BLASTSEQ D12).
      */
     public static void debris(DebrisEntity e) {
         if (!(e.level() instanceof ClientLevel level)) return;
@@ -356,7 +359,7 @@ public final class Exhaust {
                         FirePlume.SOOT_PER_JOULE * watts, 0, 0, Double.NaN);
                 b.fed = now;
             }
-        } else if (moving) {
+        } else if (moving && e.blockState().is(BlockTags.MINEABLE_WITH_SHOVEL)) {
             segment(level, from, p, Fx.smoke().size(0.2f, 0.8f).life(40).color(0x8A8278, 0xA8A098).alpha(0.35f).fadeFrom(0.3f).budget(FxBudget.DEBRIS), 1.2, r);
         }
     }
