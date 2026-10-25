@@ -59,7 +59,7 @@ def look_stats(png):
     """Доля «дымных» пикселей (почти без цвета, не чёрные и не белые) и средняя яркость кадра (0–1)."""
     im = Image.open(png).convert("RGB").resize((256, 160), Image.BILINEAR)
     smoke = luma = 0
-    px = list(im.getdata())
+    px = list(im.get_flattened_data() if hasattr(im, "get_flattened_data") else im.getdata())
     for r, g, b in px:
         mx, mn = max(r, g, b), min(r, g, b)
         lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
