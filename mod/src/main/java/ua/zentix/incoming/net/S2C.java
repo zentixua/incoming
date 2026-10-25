@@ -204,11 +204,44 @@ public final class S2C {
         }
     }
 
-    /** Сейсмическая волна (в породе быстрее звука): толчки прямо сейчас, сила — длительность в тиках. */
-    public record Quake(int ticks, boolean rumble) implements CustomPacketPayload {
+    /**
+     * Conventional ground source: the client evaluates R/c and PPV at its body, with fractional ticks.
+     * The old ticks/rumble prefix remains for existing replays and the unchanged nuclear ground path.
+     * A source event has ticks=0, rumble=false: the legacy handler must not shake/play sound immediately.
+     */
+    public record Quake(int ticks, boolean rumble, Optional<Ground> source) implements CustomPacketPayload {
         public static final Type<Quake> TYPE = new Type<>(Incoming.id("quake"));
         public static final StreamCodec<ByteBuf, Quake> CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT, Quake::ticks, ByteBufCodecs.BOOL, Quake::rumble, Quake::new);
+                ByteBufCodecs.VAR_INT, Quake::ticks, ByteBufCodecs.BOOL, Quake::rumble,
+                StreamCodecs.trailing(ByteBufCodecs.optional(Ground.CODEC), Optional.empty()), Quake::source, Quake::new);
+
+        public Quake(int ticks, boolean rumble) {
+            this(ticks, rumble, Optional.empty());
+        }
+
+        public Quake(Vec3 pos, double tntKg, double depthM, int material, long gameTime) {
+            this(0, false, Optional.of(new Ground(pos, tntKg, depthM, material, gameTime)));
+        }
+
+        /**
+         * @param pos source position, blocks = metres
+         * @param tntKg TNT-equivalent kg assigned to ground before depth coupling, not air charge
+         * @param depthM burial below the local surface, metres; 0 = contact
+         * @param material existing GroundMaterial wire id (not GroundShock.Medium.ordinal)
+         * @param gameTime server game tick at source event, not packet delivery or end of excavation work
+         */
+        public record Ground(Vec3 pos, double tntKg, double depthM, int material, long gameTime) {
+            public static final StreamCodec<ByteBuf, Ground> CODEC = StreamCodec.composite(
+                    StreamCodecs.VEC3, Ground::pos, ByteBufCodecs.DOUBLE, Ground::tntKg,
+                    ByteBufCodecs.DOUBLE, Ground::depthM, ByteBufCodecs.VAR_INT, Ground::material,
+                    ByteBufCodecs.VAR_LONG, Ground::gameTime, Ground::new);
+
+            /** The same pure law for recipient selection and local sampling. */
+            public ua.zentix.incoming.nuclear.model.GroundShock.Source model() {
+                return new ua.zentix.incoming.nuclear.model.GroundShock.Source(tntKg, depthM,
+                        ua.zentix.incoming.warhead.GroundMaterial.byId(material).shockMedium());
+            }
+        }
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
