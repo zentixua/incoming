@@ -125,6 +125,18 @@ class SoundAssetsTest {
         }
     }
 
+    /** Средняя громкость вариантов события {@code event} (средняя по мощности их средних громкостей), LUFS. */
+    static double loopMean(String event) throws IOException {
+        double sum = 0;
+        List<String> files = files(event);
+        for (String file : files) {
+            float[][] pcm = new float[1][];
+            int rate = Envelope.read(open(file), pcm);
+            sum += Math.pow(10, loopLoudness(pcm[0], rate) / 10);
+        }
+        return 10 * Math.log10(sum / files.size());
+    }
+
     /** Средняя громкость петли целиком (BS.1770: К-фильтр, разогнанный хвостом петли), LUFS. */
     private static double loopLoudness(float[] x, int rate) {
         double[] y = new double[x.length + rate];
