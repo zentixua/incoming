@@ -14,6 +14,7 @@ import ua.zentix.incoming.nuclear.model.ShockAtBody;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -97,5 +98,51 @@ class NearLitterTest {
         assertTrue(NearLitter.visible(3, true, 10 - NearLitter.REACH < 0.5 ? 0.5 : 10 - NearLitter.REACH));
         assertFalse(NearLitter.visible(6.4, true, 200 - NearLitter.REACH));
         assertFalse(NearLitter.visible(150, true, 300 - NearLitter.REACH));
+    }
+
+    /** Колонка: блоки по высоте, остальное — воздух. */
+    private static java.util.function.IntFunction<BlockState> column(java.util.Map<Integer, BlockState> blocks) {
+        return y -> blocks.getOrDefault(y, AIR);
+    }
+
+    /**
+     * Под кроной (листва 68–70) трава у ног (64) — тоже открытое место, а не только верх колонки; крыша в 25 блоках над
+     * глазом — вне шара выборки: снизу колонки не берётся, что выше глаза на {@link NearLitter#REACH}.
+     */
+    @Test
+    void grassUnderTheCrownAndNotTheRoof() {
+        java.util.Map<Integer, BlockState> b = new java.util.HashMap<>();
+        b.put(63, Blocks.DIRT.defaultBlockState());
+        b.put(64, Blocks.GRASS_BLOCK.defaultBlockState());
+        b.put(65, Blocks.SHORT_GRASS.defaultBlockState());
+        for (int y = 68; y <= 70; y++) b.put(y, Blocks.OAK_LEAVES.defaultBlockState());
+        b.put(90, Blocks.STONE.defaultBlockState());
+        double eyeY = 65.62;
+        int high = (int) Math.floor(eyeY + NearLitter.REACH), low = (int) Math.floor(eyeY - NearLitter.REACH);
+        int[] open = NearLitter.exposed(column(b), Math.min(high, 90), low);
+        assertArrayEquals(new int[]{70, 64}, open, "крона и трава под ней, без крыши: " + java.util.Arrays.toString(open));
+        // крыша над головой в шаре: её верх открыт, пол под ней — тоже
+        b.put(75, Blocks.STONE.defaultBlockState());
+        assertArrayEquals(new int[]{75, 70, 64}, NearLitter.exposed(column(b), 75, low));
+    }
+
+    /**
+     * Кусок летит тем телом, которым его бросил закон: скорость падения, что дала {@link LocalLitter#lift} (комочек почвы
+     * 2 мм, а не нарисованные 6–12 см), — та, к которой {@link Fragments#step} с его сопротивлением сходится.
+     */
+    @Test
+    void piecesFlyAsTheBodyTheLawThrew() {
+        ShockAtBody shahed = ShockAtBody.chemical(50, true, 30);
+        for (Fragments.Kind kind : new Fragments.Kind[]{Fragments.Kind.CHUNK, Fragments.Kind.LEAF}) {
+            LocalLitter.Lift lift = LocalLitter.lift(shahed, kind == Fragments.Kind.LEAF ? DustModel.Surface.COVERED : DustModel.Surface.FIELD, 1,
+                    NearLitter.terminal(kind));
+            assertEquals(NearLitter.terminal(kind), lift.settlingMps(), 1e-12);
+            double[] v = {0, 0, 0};
+            for (int t = 0; t < 400; t++) Fragments.step(v, 0, 0, 0, Fragments.drag(lift.settlingMps()));
+            // шаг Fragments у листа (установление за 3 тика) держит скорость падения с точностью ~1 %
+            assertEquals(-lift.settlingMps() / 20, v[1], 0.02 * lift.settlingMps() / 20, kind + ": падает не со своей скоростью");
+        }
+        double drawn = Fragments.terminal(Fragments.Kind.CHUNK, NearLitter.GRAIN_DENSITY, NearLitter.GRAIN_MIN);
+        assertTrue(drawn > 4 * NearLitter.terminal(Fragments.Kind.CHUNK), "нарисованный ком падал бы в разы быстрее: " + drawn);
     }
 }

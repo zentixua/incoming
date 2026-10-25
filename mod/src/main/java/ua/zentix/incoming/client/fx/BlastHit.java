@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
@@ -60,10 +61,21 @@ public final class BlastHit {
             neck = Math.toDegrees(BodySway.peak(m.neck(), 0));
         }
         // контузия на экране и сор у камеры — тем же фронтом у тела (подача по модели: ConcussionDose, LocalLitter)
-        double dose = Concussion.front(shock, HearingModel.shift(exposure), m, late);
-        NearLitter.front(s, pos, body, shock.arrivalSeconds(), seed);
+        double dose = feel(IncomingConfig.CLIENT.blastEffects.get(), shock, HearingModel.shift(exposure), m, late,
+                () -> NearLitter.front(s, pos, body, shock.arrivalSeconds(), seed));
         last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg neck %.2f deg tremor %.2f dose %.3f",
                 d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean, neck, tremor, dose);
+    }
+
+    /**
+     * Контузия на экране и сор у камеры от фронта у тела — картинка ударов: только со своими эффектами взрыва
+     * ({@code own} — {@code blast_effects}). Разрыв ПВО идёт сюда и при выключенных (его картинка и звук — всегда свои), а
+     * эти два — часть того, что настройка отдаёт другому моду взрывов. Возвращает дозу контузии (0 — не было).
+     */
+    static double feel(boolean own, ShockAtBody shock, double shiftDb, @Nullable BodySway.Motion head, double late, Runnable litter) {
+        if (!own) return 0;
+        litter.run();
+        return Concussion.front(shock, shiftDb, head, late);
     }
 
     /**

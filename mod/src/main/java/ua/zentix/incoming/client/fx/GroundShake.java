@@ -58,17 +58,36 @@ public final class GroundShake {
         GroundShock.Sample s = GroundShock.sample(source, range);
         if (!(s.perceptibility() > 0) && !(s.peakVelocityMps() > 0)) return;
         double seconds = s.durationSeconds() + BODY_RING_S;
-        // ждать прихода: тики с источника уже прошли, пока шёл пакет (и работа подрыва на сервере)
-        double wait = 20 * s.arrivalSeconds() - (level.getGameTime() - sourceTick);
-        last = String.format(Locale.ROOT, "ground r %.0f m arrival %.2f s ppv %.2f mm/s %.2f Hz felt %.2f jolt %.2f for %.2f s, in %.1f ticks",
-                range, s.arrivalSeconds(), 1000 * s.peakVelocityMps(), s.frequencyHz(), s.perceptibility(), strength(s), seconds, wait);
+        // сколько тиков с источника уже прошло у сервера, пока шёл пакет (и работа подрыва на сервере)
+        double age = Math.max(0, level.getGameTime() - sourceTick);
+        last = String.format(Locale.ROOT, "ground r %.0f m arrival %.2f s ppv %.2f mm/s %.2f Hz felt %.2f jolt %.2f for %.2f s, %.0f ticks after the source",
+                range, s.arrivalSeconds(), 1000 * s.peakVelocityMps(), s.frequencyHz(), s.perceptibility(), strength(s), seconds, age);
         // редкое событие (удар бомбы о землю, взрыв в грунте): строка — для разбора лога после игры
         Incoming.LOG.info("Ground wave at the player: {}", last);
-        Effects.add((l, t) -> {
-            if (t < wait) return true;
-            arrive(s, seconds, Math.min(1, t - wait), seed);
+        Effects.add(new Arrival(20 * s.arrivalSeconds(), 20 * seconds, age, BlastTime.ticks(), late -> arrive(s, seconds, late, seed)));
+    }
+
+    /**
+     * Ожидание волны грунта у ног. Возраст — тики с источника по монотонным часам клиента ({@link BlastTime}), а не по
+     * счётчику вызовов {@link Effects}: тот в тик рождения зовёт эффект дважды (сразу и в тике очереди), и толчок пришёл бы
+     * на тик раньше волны. Начало отсчёта — сколько у сервера уже прошло с источника ({@code ageAtBirth}). Волна дошла —
+     * {@code arrive} с тем, на сколько тиков позже прихода (с долей тика: приход R/c дробный); пакет опоздал на весь толчок
+     * (вошёл позже, сеть встала) — ничего: прошедший толчок не играется заново с начала.
+     *
+     * @param arrivalTicks приход волны, тики с источника
+     * @param lengthTicks  сколько после прихода земля и тело ходят, тики
+     * @param born         {@link BlastTime#ticks()} в миг, когда пакет пришёл
+     */
+    record Arrival(double arrivalTicks, double lengthTicks, double ageAtBirth, long born, java.util.function.DoubleConsumer arrive)
+            implements Effects.Effect {
+        @Override
+        public boolean tick(ClientLevel level, int t) {
+            double age = ageAtBirth + (BlastTime.ticks() - born);
+            if (age < arrivalTicks) return true;
+            double late = age - arrivalTicks;
+            if (late < lengthTicks) arrive.accept(late);
             return false;
-        });
+        }
     }
 
     /**
@@ -80,7 +99,7 @@ public final class GroundShake {
         return s.perceptibility() * Math.clamp(over, 0, 1);
     }
 
-    /** Волна грунта дошла до ног {@code late} тиков назад (0..1). */
+    /** Волна грунта дошла до ног {@code late} тиков назад: толчок идёт с того места, где он уже был бы, гул — сейчас. */
     private static void arrive(GroundShock.Sample s, double seconds, double late, long seed) {
         CameraShake.ground(strength(s), seconds, late, seed);
         BlastSounds.quake(s.peakVelocityMps());

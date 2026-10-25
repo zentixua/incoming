@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -29,6 +30,10 @@ import java.util.Locale;
  * смотреть — настоящие блоки рядом (их текстура и цвет: {@link Fragments}); сколько кусков на экране — выборка
  * (<b>подача</b>: {@link #PER_M2}, не больше {@link #MAX} на взрыв). Кольцо срыва дёрна по всей округе — {@link FrontLitter},
  * пыль с голой земли по всей округе — {@code GroundDust}; здесь — только ближний план у камеры, там, где их выборки редки.
+ * <p>
+ * Места — открытые сверху поверхности в шаре {@link #REACH} вокруг глаза ({@link #exposed}) со светом неба (фронт идёт по
+ * наружному воздуху: пол пещеры под ногами он не трогает): трава у ног под кроной и сама крона, не крыша в двадцати
+ * метрах над головой; ближние — первыми.
  * <p>
  * Поверхность места: рыхлый грунт ({@link DustModel.Surface#FIELD}: песок, гравий, земля, снег), дёрн, трава и крона
  * ({@link DustModel.Surface#COVERED}: держит до 3 м/с), твёрдое ({@link DustModel.Surface#HARD}: только осевшая пыль —
@@ -125,8 +130,57 @@ public final class NearLitter {
     static final double CAMERA_AT_BODY = 6;
 
     /**
+     * Места выборки: клетки шага {@link #STEP} в круге {@link #REACH} вокруг камеры, от ближних к дальним — бюджет кусков
+     * достаётся сперва тому, что у ног.
+     */
+    private static final int[][] COLUMNS = columns();
+
+    private static int[][] columns() {
+        int r = (int) Math.ceil(REACH / STEP);
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        for (int i = -r; i <= r; i++) for (int j = -r; j <= r; j++) if ((i * i + j * j) * STEP * STEP <= REACH * REACH) out.add(new int[]{i, j});
+        out.sort(java.util.Comparator.comparingInt(c -> c[0] * c[0] + c[1] * c[1]));
+        return out.toArray(new int[0][]);
+    }
+
+    /** Над блоком открыто: воздух или растение без формы (трава, цветы) — фронт проходит, сорванное взлетает. */
+    static boolean open(BlockState s) {
+        return s.isAir() || s.canBeReplaced() && s.getFluidState().isEmpty();
+    }
+
+    /**
+     * Открытые сверху поверхности колонки {@code at}(y), сверху вниз от {@code from} до {@code to}: блок, на котором может
+     * лежать сорванное (не воздух и не растение), с воздухом или растением над ним. Под кроной — и сама крона, и трава под
+     * ней; под крышей — крыша и пол открытого места под ней.
+     */
+    static int[] exposed(java.util.function.IntFunction<BlockState> at, int from, int to) {
+        int[] out = new int[8];
+        int n = 0;
+        BlockState above = at.apply(from + 1);
+        for (int y = from; y >= to; y--) {
+            BlockState s = at.apply(y);
+            if (!open(s) && open(above)) {
+                if (n == out.length) out = java.util.Arrays.copyOf(out, 2 * n);
+                out[n++] = y;
+            }
+            above = s;
+        }
+        return java.util.Arrays.copyOf(out, n);
+    }
+
+    /**
+     * Скорость падения настоящего тела куска в тихом воздухе, м/с: клок травы и листвы — от массы на площадь (размер не
+     * важен), крошка — комочек почвы {@link #CRUMB_M}. По ней закон бросает кусок, и с ней же он летит и оседает
+     * ({@link Fragments#torn} со скоростью падения): рисуется он крупнее, а летит как настоящий.
+     */
+    static double terminal(Fragments.Kind kind) {
+        return kind == Fragments.Kind.LEAF ? Fragments.terminal(kind, 0, CLUMP_MIN) : Fragments.terminal(kind, GRAIN_DENSITY, CRUMB_M);
+    }
+
+    /**
      * Фронт взрыва {@code charge} кг ТНТ ({@code surface} — на земле) из {@code blast} прошёл тело в {@code eye}
-     * ({@code bodyArrival} с после взрыва): сор вокруг. Каждое место ждёт прихода фронта на себя.
+     * ({@code bodyArrival} с после взрыва): сор вокруг — на открытых поверхностях в шаре {@link #REACH} вокруг глаза (чанки,
+     * что у клиента уже есть). Каждое место ждёт прихода фронта на себя.
      */
     static void spawn(ClientLevel level, double charge, boolean surface, Vec3 blast, Vec3 eye, double bodyArrival, RandomSource rnd) {
         if (!(charge > 0) || !visible(charge, surface, Math.max(0.5, eye.distanceTo(blast) - REACH))) return;
@@ -135,34 +189,35 @@ public final class NearLitter {
         java.util.Map<Long, LocalLitter.Lift> lifts = new java.util.HashMap<>();
         double groundY = blast.y;
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
-        int reach = (int) Math.ceil(REACH / STEP);
-        for (int i = -reach; i <= reach && born < budget; i++) {
-            for (int j = -reach; j <= reach && born < budget; j++) {
-                double dx = i * STEP + (rnd.nextDouble() - 0.5) * STEP, dz = j * STEP + (rnd.nextDouble() - 0.5) * STEP;
-                if (dx * dx + dz * dz > REACH * REACH) continue;
-                double x = eye.x + dx, z = eye.z + dz;
-                int bx = Mth.floor(x), bz = Mth.floor(z);
-                LevelChunk chunk = level.getChunkSource().getChunk(bx >> 4, bz >> 4, false);
-                if (chunk == null) continue;
-                // верхний блок (getHeight чанка — уже он, а не первый воздух над ним)
-                int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15);
-                if (top < level.getMinBuildHeight()) continue;
+        int low = Math.max(level.getMinBuildHeight(), Mth.floor(eye.y - REACH)), high = Mth.floor(eye.y + REACH);
+        for (int[] col : COLUMNS) {
+            if (born >= budget) break;
+            double dx = col[0] * STEP + (rnd.nextDouble() - 0.5) * STEP, dz = col[1] * STEP + (rnd.nextDouble() - 0.5) * STEP;
+            double x = eye.x + dx, z = eye.z + dz;
+            int bx = Mth.floor(x), bz = Mth.floor(z);
+            LevelChunk chunk = level.getChunkSource().getChunkNow(bx >> 4, bz >> 4);
+            if (chunk == null) continue;
+            // выше верхнего блока колонки (getHeight чанка — уже он) открытых мест нет
+            int from = Math.min(high, chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15));
+            for (int top : exposed(y -> chunk.getBlockState(m.set(bx, y, bz)), from, low)) {
+                double y = top + 1.05;
+                if (dx * dx + dz * dz + (y - eye.y) * (y - eye.y) > REACH * REACH) continue;
+                // фронт идёт по наружному воздуху: место без света неба (пещера под ногами, закрытая комната) он не трогает —
+                // тот же признак, что у пелены ядерки (свет неба Minecraft — связь места с небом, OpenAir)
+                if (level.getBrightness(LightLayer.SKY, m.set(bx, top + 1, bz)) <= 0) continue;
                 BlockState coverState = chunk.getBlockState(m.set(bx, top, bz)), plant = chunk.getBlockState(m.set(bx, top + 1, bz));
                 Cover c = cover(coverState, plant);
                 if (c == null) continue;
-                boolean high = c.torn == coverState && coverState.is(BlockTags.LEAVES);
-                double y = top + 1.05, ground = Math.hypot(x - blast.x, z - blast.z), slant = Math.hypot(ground, y - blast.y);
+                boolean crown = c.torn == coverState && coverState.is(BlockTags.LEAVES);
+                double ground = Math.hypot(x - blast.x, z - blast.z), slant = Math.hypot(ground, y - blast.y);
                 // крона и то, что выше места взрыва, видят волну в воздухе
-                double along = high || y > groundY + 2 ? 1 : FrontLitter.along(ground, slant);
-                float size = c.kind == Fragments.Kind.LEAF ? CLUMP_MIN + (CLUMP_MAX - CLUMP_MIN) * rnd.nextFloat()
-                        : GRAIN_MIN + (GRAIN_MAX - GRAIN_MIN) * rnd.nextFloat();
+                double along = crown || y > groundY + 2 ? 1 : FrontLitter.along(ground, slant);
                 // закон — на шаг расстояния и доли напора (у рыхлого грунта интеграл выноса — ~6 мкс на место, а мест — до
                 // тысячи на взрыв): ShockAtBody зависит только от расстояния, клок и крошка — от вещества, не от размера
                 int ri = (int) Math.round(slant / SLANT_STEP), ai = (int) Math.round(along / ALONG_STEP);
                 long key = ((long) ri << 16) | ((long) ai << 8) | ((long) surfaceIndex(c.surface) << 1) | (c.kind == Fragments.Kind.LEAF ? 1 : 0);
                 ShockAtBody shock = shocks.computeIfAbsent(ri, k -> ShockAtBody.chemical(charge, surface, k * SLANT_STEP));
-                LocalLitter.Lift lift = lifts.computeIfAbsent(key, k -> LocalLitter.lift(shock, c.surface, ai * ALONG_STEP,
-                        c.kind == Fragments.Kind.LEAF ? Fragments.terminal(c.kind, 0, CLUMP_MIN) : Fragments.terminal(c.kind, GRAIN_DENSITY, CRUMB_M)));
+                LocalLitter.Lift lift = lifts.computeIfAbsent(key, k -> LocalLitter.lift(shock, c.surface, ai * ALONG_STEP, terminal(c.kind)));
                 int delay = Math.max(0, (int) Math.ceil(20 * (shock.arrivalSeconds() - bodyArrival)));
                 if (delay > Fragments.DELAY_MAX) continue;
                 double ox = ground > 1e-6 ? (x - blast.x) / ground : 0, oz = ground > 1e-6 ? (z - blast.z) / ground : 0;
@@ -173,10 +228,14 @@ public final class NearLitter {
                     // бросок модели (её доля вверх — турбулентность у земли, 0,1) повёрнут вверх на 19–35° к земле, модуль
                     // скорости — её же: подача (как у FrontLitter), «подпрыгивают» — так вблизи и видно, что сорвало
                     double speed = Math.hypot(lift.horizontalMps(), lift.verticalMps()) / 20;
+                    BlockPos from0 = new BlockPos(bx, c.torn == plant ? top + 1 : top, bz);
                     for (int k = 0; k < n && born < budget; k++) {
                         double[] kick = FrontLitter.launch(speed, LIFT_MIN + (LIFT_MAX - LIFT_MIN) * rnd.nextDouble());
-                        if (Fragments.torn(level, c.torn, m.set(bx, c.torn == plant ? top + 1 : top, bz).immutable(), c.kind,
-                                x + (rnd.nextDouble() - 0.5) * STEP, y, z + (rnd.nextDouble() - 0.5) * STEP, ox * kick[0], kick[1], oz * kick[0], size, AIR, delay, high)) born++;
+                        float size = c.kind == Fragments.Kind.LEAF ? CLUMP_MIN + (CLUMP_MAX - CLUMP_MIN) * rnd.nextFloat()
+                                : GRAIN_MIN + (GRAIN_MAX - GRAIN_MIN) * rnd.nextFloat();
+                        // рисуется крупнее, летит и оседает настоящим телом закона
+                        if (Fragments.torn(level, c.torn, from0, c.kind, x + (rnd.nextDouble() - 0.5) * STEP, y, z + (rnd.nextDouble() - 0.5) * STEP,
+                                ox * kick[0], kick[1], oz * kick[0], size, lift.settlingMps(), AIR, delay, crown)) born++;
                     }
                 }
                 if (dust(level, lift, coverState, x, y, z, ox, oz, delay, rnd)) puffs++;
@@ -204,8 +263,8 @@ public final class NearLitter {
      */
     static boolean visible(double charge, boolean surface, double slant) {
         ShockAtBody shock = ShockAtBody.chemical(charge, surface, slant);
-        LocalLitter.Lift loose = LocalLitter.lift(shock, DustModel.Surface.FIELD, 1, Fragments.terminal(Fragments.Kind.CHUNK, GRAIN_DENSITY, CRUMB_M));
-        LocalLitter.Lift grass = LocalLitter.lift(shock, DustModel.Surface.COVERED, 1, Fragments.terminal(Fragments.Kind.LEAF, 0, CLUMP_MIN));
+        LocalLitter.Lift loose = LocalLitter.lift(shock, DustModel.Surface.FIELD, 1, terminal(Fragments.Kind.CHUNK));
+        LocalLitter.Lift grass = LocalLitter.lift(shock, DustModel.Surface.COVERED, 1, terminal(Fragments.Kind.LEAF));
         return pieces(loose) || pieces(grass) || dustAlpha(loose.massKgPerM2(), PUFF_MIN) >= PUFF_SEEN;
     }
 

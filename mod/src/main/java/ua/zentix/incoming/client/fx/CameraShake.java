@@ -99,13 +99,13 @@ public final class CameraShake {
 
     /**
      * Волна грунта дошла до игрока: толчок силы {@code strength} 0..1 (насколько он ощутим — модель грунта), длиной
-     * {@code seconds}, с; {@code late} — сколько тиков назад (0..1) она пришла; {@code seed} — узор. Толчки складываются
-     * и вместе не больше полного размаха.
+     * {@code seconds}, с; {@code late} — сколько тиков назад она пришла (пакет мог опоздать и больше чем на тик — толчок
+     * идёт с того места, где он уже был бы); {@code seed} — узор. Толчки складываются и вместе не больше полного размаха.
      */
     public static void ground(double strength, double seconds, double late, long seed) {
         double s = Mth.clamp(strength, 0, 1);
         if (!(s > 1e-4) || !(seconds > 0)) return;
-        GROUNDS.add(new Ground(ticks - Mth.clamp(late, 0, 1), s, seconds, (seed & 0xFFFF) / 65536.0));
+        GROUNDS.add(new Ground(ticks - Math.max(0, late), s, seconds, (seed & 0xFFFF) / 65536.0));
     }
 
     /**
