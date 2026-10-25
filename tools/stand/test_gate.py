@@ -11,7 +11,8 @@ import results
 
 
 def window(gpu50, iv95, fps=60.0):
-    return {"fps": fps, "gpu": {"p50": gpu50, "p95": gpu50 * 1.2}, "interval": {"p50": iv95 * 0.8, "p95": iv95}, "stages": {}}
+    return {"fps": fps, "frames": 600, "gpu": {"p50": gpu50, "p95": gpu50 * 1.2}, "cpu": {"p50": iv95 * 0.3, "p95": iv95 * 0.5},
+            "interval": {"p50": iv95 * 0.8, "p95": iv95}, "stages": {}}
 
 
 def run(scale=1.0, first=40.0, growth=1.10, packs=("none", "complementary")):
@@ -23,7 +24,7 @@ def run(scale=1.0, first=40.0, growth=1.10, packs=("none", "complementary")):
             for cam in ("outside", "edge", "inside"):
                 ws[f"{n}/{cam}"] = window(base * scale, base * 1.5 * scale)
         p[pack] = {"windows": ws, "first": {"worst_ms": first}, "acc": {"growth": {"ratio": growth, "first_ms": 10, "last_ms": 10 * growth}},
-                   "checks": [], "meta": {}}
+                   "checks": [], "meta": {"gl": {"renderer": "RTX 4060", "version": "4.6 NVIDIA 615.78.08", "width": 2560, "height": 1600}}}
     return {"name": "x", "label": "x", "packs": p}
 
 
@@ -73,6 +74,27 @@ class Compare(unittest.TestCase):
         c = run()
         c["packs"]["none"]["windows"]["100/edge"]["gpu"]["p50"] *= 1.12
         self.assertTrue(gate.compare(c, gate.mean_runs(a, b), gate.tolerance(a, b))["pass"])
+
+    def test_cpu_regression_hidden_by_gpu_bound_frame_fails(self):
+        c = run()
+        c["packs"]["none"]["windows"]["100/edge"]["cpu"]["p95"] *= 1.5     # кадр упирается в видеокарту, интервал прежний
+        v = gate.compare(c, run(), None)
+        self.assertEqual(v["fails"], [f for f in v["fails"] if "cpu.p95" in f])
+        self.assertEqual(len(v["fails"]), 1)
+
+    def test_candidate_without_gpu_numbers_fails(self):
+        c = run()
+        c["packs"]["none"]["windows"]["100/inside"]["gpu"] = None
+        v = gate.compare(c, run(), None)
+        self.assertFalse(v["pass"])
+        self.assertIn("нет числа у кандидата", v["fails"][0])
+
+    def test_other_gpu_or_frame_size_fails(self):
+        c = run()
+        c["packs"]["none"]["meta"]["gl"]["height"] = 1572
+        v = gate.compare(c, run(), None)
+        self.assertFalse(v["pass"])
+        self.assertIn("height 1572 против 1600", v["fails"][0])
 
     def test_faster_passes(self):
         self.assertTrue(gate.compare(run(scale=0.5), run(), None)["pass"])
@@ -133,11 +155,11 @@ class Results(unittest.TestCase):
     def test_analyze_cuts_windows_and_drops_shot_frames(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
-            rows = ["frame,t_ms,interval_ms,cpu_ms,gpu_ms,gpu_period_ms,shot,stages"]
-            for i in range(200):          # 10 мс кадр, 2 с; кадр 50 — со снимком, 51 — после него
+            rows = ["frame,t_ms,prev_interval_ms,cpu_ms,gpu_ms,prev_gpu_period_ms,shot,stages"]
+            for i in range(200):          # 10 мс кадр, 2 с; кадр 50 — со снимком (он сам длится 500 мс), 51 — после него
                 shot = 1 if i == 50 else 2 if i == 51 else 0
-                iv = 500.0 if i in (50, 51) else 10.0
-                rows.append(f"{i},{1000 + 10 * i},{iv},{4.0},{8.0},{10.0},{shot},after_level=1.5;after_level+=3.0;tail=0.5")
+                prev = 500.0 if i == 51 else 30.0 if i == 100 else 10.0    # кадр 99 длится 30 мс: худший в окне 100/edge
+                rows.append(f"{i},{1000 + 10 * i},{prev},{4.0},{8.0},{10.0},{shot},after_level=1.5;after_level+=3.0;tail=0.5")
             (d / "frames.csv").write_text("\n".join(rows) + "\n")
             ev = [{"type": "gl", "t_ms": 900, "renderer": "x", "version": "4.6", "vendor": "n", "width": 2560, "height": 1600},
                   {"type": "window", "t_ms": 1000, "name": "100/edge", "edge": "begin"},
@@ -152,7 +174,8 @@ class Results(unittest.TestCase):
             r = results.analyze(d, plan.load())
             w = r["windows"]["100/edge"]
             self.assertEqual(w["frames"], 98)            # кадры 0–99 без снимка и следующего
-            self.assertEqual(w["interval"]["max"], 10.0)
+            # длительность кадра 99 (начат в окне) — из строки кадра 100, за концом окна; снимок (500 мс) не в счёт
+            self.assertEqual(w["interval"]["max"], 30.0)
             self.assertEqual(w["gpu"]["p50"], 8.0)
             self.assertEqual(w["bound"], "cpu")          # видеокарта 8 мс из 10 мс кадра — меньше 85 %
             self.assertEqual(w["stages"]["after_level+"]["mean"], 3.0)
@@ -163,10 +186,15 @@ class Results(unittest.TestCase):
 
     def test_checks_catch_a_bad_run(self):
         ev = [{"type": "cmd", "t_ms": 1, "cmd": "incoming salvo drone 30 120 at 1000 0 from 800 346", "tag": "100", "ok": False, "result": 0},
-              {"type": "limit", "t_ms": 2, "step": 3}]
-        res = {"meta": {"done": None, "impacts": {"100": {"got": 40, "expect": 100, "why": "timeout", "took_s": 300}}}}
+              {"type": "limit", "t_ms": 2, "step": 3},
+              {"type": "salvo", "t_ms": 3, "id": "100", "expect": 100, "commands": 4},
+              {"type": "salvo", "t_ms": 4, "id": "acc", "expect": 120, "commands": 12}]
+        res = {"meta": {"done": None, "impacts": {"100": {"got": 40, "expect": 100, "why": "timeout", "took_s": 300}}},
+               "windows": {"100/edge": {"frames": 5, "gpu": None}}}
         bad = results.checks(ev, res)
-        self.assertEqual(len(bad), 5)
+        # нет done, предел, команда, залп 100 не долетел, у acc нет конца, нет строки видеокарты, окно без меток и без кадров
+        self.assertEqual(len(bad), 8, bad)
+        self.assertTrue(any("acc" in b for b in bad))
 
 
 class Plan(unittest.TestCase):

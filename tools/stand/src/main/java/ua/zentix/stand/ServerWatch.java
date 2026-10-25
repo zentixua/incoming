@@ -22,14 +22,27 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Поток встроенного сервера: попадания залпов, взрывы, тик. Попадание — снаряд (тип из плана) ушёл из мира убитым или
- * убранным ({@code KILLED}, {@code DISCARDED}) в радиусе цели залпа по горизонтали: так кончается каждый удар, и это видно
- * по реестру сущностей без кода Incoming. Взрыв ({@code ExplosionEvent.Detonate}) попаданием не считается: у удара бывают
- * вторичные подрывы (топливо), каждый — свой взрыв. Снаряд вне загруженного мира ({@code VirtualFlights} Incoming)
- * сущностью не бывает, поэтому «нет снарядов в мире» конец залпа не значит — конец по числу попаданий
- * ({@link Director}). Каждый снаряд (UUID) засчитывается один раз: уходя вне мира и возвращаясь, он остаётся тем же.
+ * убранным ({@code KILLED}, {@code DISCARDED}) в радиусе цели залпа по горизонтали и рядом с ним (≤ {@link #NEAR} м)
+ * начался взрыв ({@code ExplosionEvent.Start}) — за {@link #BEFORE} тиков до ухода или до {@link #AFTER} после: работа
+ * попаданий Incoming идёт под бюджетом тика и под нагрузкой отстаёт. Одного ухода мало: снаряд, уходящий в полёт вне
+ * загруженного мира ({@code VirtualFlights.park}), тоже убирается {@code discard} и летит дальше тем же UUID; такой уход
+ * без взрыва рядом истекает (событие {@code leave-unconfirmed}). Время попадания — миг ухода. Взрыв сам по себе
+ * попаданием не считается: у удара бывают вторичные подрывы, каждый — свой взрыв. Снаряд вне мира сущностью не бывает,
+ * поэтому «нет снарядов в мире» конец залпа не значит — конец по числу попаданий ({@link Director}). Каждый снаряд
+ * засчитывается один раз.
  */
 final class ServerWatch {
     private record Target(String salvo, double x, double z, double r) {}
+
+    /** Уход у цели, ждущий взрыва рядом. */
+    private record Leave(UUID uuid, String salvo, Vec3 at, long nanos, int tick) {}
+
+    private record Blast(Vec3 at, int tick) {}
+
+    /** Взрыв — не дальше стольких метров от места ухода снаряда. */
+    static final double NEAR = 16;
+    /** Взрыв раньше ухода — не больше стольких тиков; позже — не больше. */
+    static final int BEFORE = 20, AFTER = 600;
 
     private final Out out;
     private final Set<String> projectiles;
@@ -38,6 +51,11 @@ final class ServerWatch {
     private final Map<String, List<Long>> impacts = new ConcurrentHashMap<>();
     private final Set<UUID> counted = ConcurrentHashMap.newKeySet();
     private final Set<UUID> alive = ConcurrentHashMap.newKeySet();
+    /** Только поток сервера. */
+    private final List<Leave> pending = new ArrayList<>();
+    private final List<Blast> recent = new ArrayList<>();
+    /** Уходов, ждущих взрыва, — для потока клиента. */
+    private volatile int waiting;
     private int ticks;
 
     ServerWatch(Out out, Set<String> projectiles) {
@@ -45,6 +63,7 @@ final class ServerWatch {
         this.projectiles = projectiles;
         NeoForge.EVENT_BUS.addListener(this::onJoin);
         NeoForge.EVENT_BUS.addListener(this::onLeave);
+        NeoForge.EVENT_BUS.addListener(this::onStart);
         NeoForge.EVENT_BUS.addListener(this::onDetonate);
         NeoForge.EVENT_BUS.addListener(this::onTick);
     }
@@ -85,6 +104,11 @@ final class ServerWatch {
         }
     }
 
+    /** Уходов у целей, ждущих взрыва рядом. */
+    int waiting() {
+        return waiting;
+    }
+
     /** Снарядов в мире сейчас (вне загруженного мира — не в счёт). */
     int alive() {
         return alive.size();
@@ -106,21 +130,56 @@ final class ServerWatch {
         Entity.RemovalReason why = p.getRemovalReason();
         Vec3 at = p.position();
         long now = System.nanoTime();
-        if (why == Entity.RemovalReason.KILLED || why == Entity.RemovalReason.DISCARDED) {
+        if ((why == Entity.RemovalReason.KILLED || why == Entity.RemovalReason.DISCARDED) && !counted.contains(p.getUUID())) {
             for (Target t : targets) {
                 if (Math.hypot(at.x - t.x, at.z - t.z) > t.r) continue;
-                if (!counted.add(p.getUUID())) return;
-                List<Long> l = impacts.get(t.salvo);
-                int n;
-                synchronized (l) {
-                    l.add(now);
-                    n = l.size();
-                }
-                out.event("impact", now, "salvo", t.salvo, "n", n, "at", new double[]{at.x, at.y, at.z}, "uuid", p.getUUID().toString());
+                Leave l = new Leave(p.getUUID(), t.salvo, at, now, ticks);
+                Blast b = nearest(recent, at, ticks - BEFORE);
+                if (b != null) confirm(l, "blast-before");
+                else pending.add(l);
+                waiting = pending.size();
                 return;
             }
         }
         out.event("leave", now, "at", new double[]{at.x, at.y, at.z}, "reason", String.valueOf(why), "uuid", p.getUUID().toString());
+    }
+
+    private static Blast nearest(List<Blast> blasts, Vec3 at, int since) {
+        Blast best = null;
+        for (Blast b : blasts) {
+            if (b.tick >= since && b.at.distanceTo(at) <= NEAR && (best == null || b.at.distanceTo(at) < best.at.distanceTo(at))) best = b;
+        }
+        return best;
+    }
+
+    /** Взрыв начался: ближайший ждущий уход рядом — попадание. */
+    private void onStart(ExplosionEvent.Start e) {
+        if (e.getLevel().isClientSide()) return;
+        Vec3 c = e.getExplosion().center();
+        recent.add(new Blast(c, ticks));
+        Leave best = null;
+        for (Leave l : pending) {
+            if (l.at.distanceTo(c) <= NEAR && ticks - l.tick <= AFTER && (best == null || l.at.distanceTo(c) < best.at.distanceTo(c))) best = l;
+        }
+        if (best != null) confirm(best, "blast-after");
+    }
+
+    private void confirm(Leave l, String how) {
+        UUID id = l.uuid;
+        pending.removeIf(x -> x.uuid.equals(id));
+        waiting = pending.size();
+        if (!counted.add(id)) return;
+        List<Long> list = impacts.get(l.salvo);
+        int n;
+        synchronized (list) {
+            // подтверждения приходят не по порядку уходов: список — по времени попадания
+            int i = list.size();
+            while (i > 0 && list.get(i - 1) > l.nanos) i--;
+            list.add(i, l.nanos);
+            n = list.size();
+        }
+        out.event("impact", l.nanos, "salvo", l.salvo, "n", n, "at", new double[]{l.at.x, l.at.y, l.at.z}, "uuid", id.toString(),
+                "by", how, "confirm_ms", Stand.ms(System.nanoTime()));
     }
 
     private void onDetonate(ExplosionEvent.Detonate e) {
@@ -134,7 +193,16 @@ final class ServerWatch {
 
     /** Раз в секунду: средний тик сервера (последние 100 тиков, как F3), время игры, снаряды и все сущности мира. */
     private void onTick(ServerTickEvent.Post e) {
-        if (++ticks % 20 != 0) return;
+        ticks++;
+        recent.removeIf(b -> ticks - b.tick > BEFORE);
+        for (var it = pending.iterator(); it.hasNext(); ) {
+            Leave l = it.next();
+            if (ticks - l.tick <= AFTER) continue;
+            it.remove();
+            out.event("leave-unconfirmed", l.nanos, "salvo", l.salvo, "at", new double[]{l.at.x, l.at.y, l.at.z}, "uuid", l.uuid.toString());
+        }
+        waiting = pending.size();
+        if (ticks % 20 != 0) return;
         MinecraftServer s = e.getServer();
         ServerLevel level = s.overworld();
         int entities = 0;

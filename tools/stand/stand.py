@@ -19,7 +19,6 @@ import hashlib
 import json
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -31,8 +30,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(HERE))
+import client  # noqa: E402
 import gate  # noqa: E402
 import plan  # noqa: E402
 import results  # noqa: E402
@@ -43,8 +43,8 @@ REPO, PACK_REPO = "zentixua/incoming", "zentixua/open-skies"
 # пак стенда → файл pw.toml в pack/shaderpacks сборки (None — Iris без шейдерпака)
 PACKS = {"none": None, "complementary": "complementary-unbound", "photon": "photon-shader"}
 MODS = ("sodium", "iris")
-SOCKET = "wayland-incoming-stand"
 STATUS = "Стенд сцен"
+DEFAULT_SIZE = "2560x1600"
 UA = {"User-Agent": "zentixua/incoming stand (github.com/zentixua/incoming)"}
 
 
@@ -139,11 +139,14 @@ def resolve_jar(spec):
         return jars[0], spec
     if spec.startswith("ci:"):
         ref = spec[3:]
-        runs = gh("run", "list", "-R", REPO, "-w", "build", "--status", "success", "-L", "50", "--json",
-                  "databaseId,headSha,headBranch,event", json_out=True)
-        run = next((r for r in runs if r["headSha"].startswith(ref) or (r["headBranch"] == ref and r["event"] == "push")), None)
+        # ветка → её голова сейчас; прогон build — по SHA (у веток PR он pull_request, у main — push)
+        head = ref if len(ref) >= 7 and all(c in "0123456789abcdef" for c in ref.lower()) \
+            else gh("api", f"repos/{REPO}/commits/{ref}", "--jq", ".sha").strip()
+        runs = gh("run", "list", "-R", REPO, "-w", "build", "--status", "success", "-L", "100", "--json",
+                  "databaseId,headSha", json_out=True)
+        run = next((r for r in runs if r["headSha"].startswith(head)), None)
         if not run:
-            raise SystemExit(f"{spec}: нет успешного прогона build с jar")
+            raise SystemExit(f"{spec}: нет успешного прогона build у {head[:12]} (jar — артефакт incoming-jar)")
         d = DL / "jars" / f"ci-{run['headSha'][:12]}"
         jars = sorted(d.glob("incoming-*.jar")) if d.is_dir() else []
         if not jars:
@@ -159,10 +162,12 @@ def resolve_jar(spec):
 # ---------------------------------------------------------------- ключ кэша
 
 def stand_hash():
-    """Версия стенда: исходники обвязки, сборка, сцены и план — то, от чего зависит, что снимается."""
+    """Версия стенда: исходники обвязки, сборка, сцены, план и запуск клиента (настройки игры, окружение) — то, от чего
+    зависит, что снимается. Разбор (results.py, gate.py) в неё не входит: числа принятого считаются из сырых данных кэша
+    заново при каждом сравнении (find_baseline)."""
     h = hashlib.sha256()
     files = sorted([*(HERE / "src" / "main").rglob("*"), HERE / "build.gradle", HERE / "gradle.properties",
-                    HERE / "scenes.json", HERE / "plan.py"])
+                    HERE / "scenes.json", HERE / "plan.py", HERE / "client.py"])
     for f in files:
         if f.is_file():
             h.update(str(f.relative_to(HERE)).encode())
@@ -193,25 +198,6 @@ def key(jar_sha, ctx):
 
 # ---------------------------------------------------------------- клиент
 
-OPTIONS = """onboardAccessibility:false
-pauseOnLostFocus:false
-renderDistance:12
-simulationDistance:8
-enableVsync:false
-maxFps:260
-particles:0
-graphicsMode:1
-fullscreen:false
-guiScale:2
-soundCategory_master:1.0
-soundCategory_music:0.0
-tutorialStep:none
-joinedFirstServer:true
-skipMultiplayerWarning:true
-narrator:0
-"""
-
-
 def launch_script(size):
     """Скрипт клиента без Gradle (standLaunch): каталог игры — GAME, окно — size."""
     w, h = size.split("x")
@@ -220,75 +206,6 @@ def launch_script(size):
     subprocess.run([str(ROOT / "mod" / "gradlew"), "-p", str(HERE), "standLaunch", f"-PrunDir={GAME}", f"-Pwidth={w}", f"-Pheight={h}",
                     "--console=plain", "-q"], check=True, env=env)
     return HERE / "build" / "launch" / "client.sh"
-
-
-def prepare_game(jar, pack, files, scenes_sel):
-    """Каталог игры с нуля: моды (Incoming, Sodium, Iris), шейдерпак, настройки, план."""
-    if GAME.exists():
-        for sub in ("saves", "stand-out", "mods", "shaderpacks", "config", "logs", "crash-reports", "screenshots"):
-            shutil.rmtree(GAME / sub, ignore_errors=True)
-        for f in ("options.txt", "audio.wav", "stand-plan.json"):
-            (GAME / f).unlink(missing_ok=True)
-    (GAME / "mods").mkdir(parents=True)
-    (GAME / "config").mkdir()
-    shutil.copy2(jar, GAME / "mods" / jar.name)
-    for m in MODS:
-        shutil.copy2(files[m][0], GAME / "mods" / files[m][0].name)
-    if PACKS[pack]:
-        (GAME / "shaderpacks").mkdir()
-        shutil.copy2(files[pack][0], GAME / "shaderpacks" / files[pack][0].name)
-        iris = f"enableShaders=true\nshaderPack={files[pack][0].name}\ndisableUpdateMessage=true\n"
-    else:
-        iris = "enableShaders=false\ndisableUpdateMessage=true\n"
-    (GAME / "config" / "iris.properties").write_text(iris)
-    (GAME / "options.txt").write_text(OPTIONS)
-    (GAME / "alsoft.conf").write_text(f"[general]\ndrivers = wave\nfrequency = 48000\nchannels = stereo\nsample-type = int16\n"
-                                      f"[wave]\nfile = {GAME / 'audio.wav'}\n")
-    p = plan.build(plan.load(), scenes_sel)
-    (GAME / "stand-plan.json").write_text(json.dumps(p, indent=1, ensure_ascii=False))
-    return p
-
-
-def artem_playing():
-    return subprocess.run(["bash", "-c", f"source '{ROOT}/tools/gpu_lease.sh' && artem_playing"]).returncode == 0
-
-
-def run_client(script, size, limit_s, logf):
-    """Клиент во вложенном KWin (без окна и звука хоста); игра Артёма запустилась — гасим, 75."""
-    w, h = size.split("x")
-    env = dict(os.environ, ALSOFT_CONF=str(GAME / "alsoft.conf"),
-               # кэш шейдеров драйвера выключен: первый удар у каждого прогона — с той же сборкой шейдеров, как у
-               # свежей игры, а не с тем, что оставил прошлый прогон
-               __GL_SHADER_DISK_CACHE="0")
-    proc = subprocess.Popen([str(ROOT / "tools" / "nested_kwin.sh"), SOCKET, w, h, f"bash {script}"], stdout=logf, stderr=subprocess.STDOUT,
-                            env=env, start_new_session=True)
-    deadline = time.time() + limit_s + 600
-    code = None
-    while code is None:
-        try:
-            code = proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            if artem_playing():
-                log("игра Артёма запустилась — гашу клиент")
-                stop(proc)
-                return 75
-            if time.time() > deadline:
-                log("клиент не уложился в срок — гашу")
-                stop(proc)
-                return 124
-    return code
-
-
-def stop(proc):
-    """Вся сессия клиента (nested_kwin → dbus-run-session → kwin → java): TERM, через 20 с KILL."""
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-        proc.wait(timeout=20)
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.wait()
-    except ProcessLookupError:
-        pass
 
 
 def cmd_prepare(a):
@@ -316,11 +233,11 @@ def cmd_play(a):
             "context": ctx, "key": key(sha(jar), ctx), "started": datetime.now(timezone.utc).isoformat(timespec="seconds"), "packs": {}}
     worst = 0
     for pack in a.packs:
-        p = prepare_game(jar, pack, files, a.scenes)
+        p = client.prepare_game(GAME, jar, files[pack][0] if PACKS[pack] else None, [files[m][0] for m in MODS], a.scenes)
         t0 = time.time()
         log(f"{a.name}: пак {pack}, {len(p['steps'])} шагов")
         with open(out / f"client-{pack}.out", "w") as logf:
-            code = run_client(script, a.size, p["limit_s"], logf)
+            code = client.run(GAME, script, a.size, p["limit_s"], logf, log)
         took = time.time() - t0
         dst = out / pack
         if (GAME / "stand-out").exists():
@@ -342,8 +259,8 @@ def cmd_play(a):
     return 1 if worst else 0
 
 
-def analyze(out):
-    """results.json прогона: числа по пакам + meta."""
+def analyze(out, write=True):
+    """results.json прогона из сырых данных: числа по пакам + meta."""
     meta = json.loads((out / "meta.json").read_text())
     scenes = plan.load()
     res = {k: meta[k] for k in ("name", "label", "jar", "context", "key", "started")}
@@ -368,10 +285,11 @@ def analyze(out):
         if gl and (gl.get("width") != int(w) or gl.get("height") != int(h)):
             r["meta"]["size_note"] = f"кадр {gl.get('width')}×{gl.get('height')} вместо {w}×{h}"
         res["packs"][pack] = r
-    (out / "results.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
-    for pack, r in res["packs"].items():
-        bad = r["checks"]
-        log(f"{out.name} {pack}: {'годен' if not bad else 'НЕ ГОДЕН: ' + '; '.join(bad)}")
+    if write:
+        (out / "results.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
+        for pack, r in res["packs"].items():
+            bad = r["checks"]
+            log(f"{out.name} {pack}: {'годен' if not bad else 'НЕ ГОДЕН: ' + '; '.join(bad)}")
     return res
 
 
@@ -427,12 +345,13 @@ def cmd_baseline(a):
 
 
 def find_baseline(version, ctx):
+    """Принятый из кэша: числа и допуск — заново из сырых данных двух прогонов (разбор мог измениться после съёмки)."""
     jar, _ = resolve_jar(version)
     d = cache_dir(version, key(sha(jar), ctx))
-    if not (d / "results.json").exists():
+    if not ((d / "run1" / "meta.json").exists() and (d / "run2" / "meta.json").exists()):
         return None, None, d
-    tol = json.loads((d / "tolerance.json").read_text()) if (d / "tolerance.json").exists() else None
-    return json.loads((d / "results.json").read_text()), tol, d
+    r1, r2 = analyze(d / "run1", write=False), analyze(d / "run2", write=False)
+    return gate.mean_runs(r1, r2), gate.tolerance(r1, r2), d
 
 
 def accepted_release():
@@ -482,6 +401,9 @@ def cmd_pr(a):
         return 0
     version = accepted_release()
     name = f"pr{a.number}-{head[:8]}"
+    if a.post and (a.packs != list(PACKS) or a.scenes is not None or a.size != DEFAULT_SIZE):
+        # статус влития — только у полного стенда: выборка паков или сцен пропустила бы регрессию в остальных
+        raise SystemExit("--post — только со всеми паками, всеми сценами и окном по умолчанию; выборка — без --post")
     if a.post:
         post_status(head, "pending", f"Стенд идёт: против {version}", None)
     code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--packs", ",".join(a.packs), "--size", a.size,
@@ -532,7 +454,7 @@ def main():
     def common(p):
         p.add_argument("--packs", default=",".join(PACKS), type=lambda s: [x for x in s.split(",") if x])
         p.add_argument("--scenes", default=None, type=lambda s: None if s == "all" else s.split(","))
-        p.add_argument("--size", default="2560x1600")
+        p.add_argument("--size", default=DEFAULT_SIZE)
         p.add_argument("--label", help="подпись версии в отчёте")
 
     p = sub.add_parser("prepare"); p.add_argument("jar"); common(p); p.set_defaults(fn=cmd_prepare)

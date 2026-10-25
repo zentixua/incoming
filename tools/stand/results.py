@@ -5,7 +5,8 @@
 шлагбаум идут в CI без пакетов (test_gate.py).
 
 Величины кадра (мс):
-- `interval` — от начала кадра до начала следующего, как видит игрок (1000 / к/с);
+- `interval` — от начала кадра до начала следующего, как видит игрок (1000 / к/с): в строке обвязки — время от начала
+  прошлого кадра (`prev_interval_ms`), поэтому кадру достаётся число из строки следующего;
 - `cpu` — работа кадра на процессоре: RenderFrameEvent.Pre → Post (мир, слои модов, интерфейс; без обмена буферов);
 - `gpu` — видеокарта от первой до последней метки кадра (glQueryCounter); стадии — отрезки между метками.
 """
@@ -46,8 +47,12 @@ def read_frames(path):
                 if "=" in part:
                     k, v = part.split("=", 1)
                     stages[k] = float(v)
-            out.append({"frame": int(row["frame"]), "t": float(row["t_ms"]), "interval": _num(row["interval_ms"]),
+            out.append({"frame": int(row["frame"]), "t": float(row["t_ms"]), "prev": _num(row["prev_interval_ms"]),
                         "cpu": _num(row["cpu_ms"]), "gpu": _num(row["gpu_ms"]), "shot": int(row["shot"] or 0), "stages": stages})
+    out.sort(key=lambda f: f["frame"])
+    # длительность кадра — время до начала следующего: оно в строке следующего кадра (последний кадр — без неё)
+    for a, b in zip(out, out[1:] + [None]):
+        a["interval"] = b["prev"] if b is not None and b["frame"] == a["frame"] + 1 else None
     return out
 
 
@@ -184,6 +189,18 @@ def checks(events, res):
     for salvo, i in res["meta"]["impacts"].items():
         if i["why"] != "all":
             bad.append(f"залп {salvo}: {i['got']} попаданий из {i['expect']} ({i['why']})")
+    salvos = {e["id"] for e in events if e["type"] == "salvo"}
+    for salvo in sorted(salvos - set(res["meta"]["impacts"])):
+        bad.append(f"залп {salvo}: конца нет (нет события await)")
     if not any(e["type"] == "gl" for e in events):
         bad.append("нет строки видеокарты")
+    for name, w in res.get("windows", {}).items():
+        if not w.get("gpu"):
+            bad.append(f"окно {name}: нет меток видеокарты")
+        if w["frames"] < MIN_FRAMES:
+            bad.append(f"окно {name}: {w['frames']} кадров (меньше {MIN_FRAMES})")
     return bad
+
+
+# окно с меньшим числом кадров — не замер (клиент стоял)
+MIN_FRAMES = 20

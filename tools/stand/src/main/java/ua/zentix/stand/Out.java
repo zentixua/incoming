@@ -25,7 +25,7 @@ final class Out {
         Files.createDirectories(shots);
         events = Files.newBufferedWriter(dir.resolve("events.jsonl"), StandardCharsets.UTF_8);
         frames = new BufferedWriter(Files.newBufferedWriter(dir.resolve("frames.csv"), StandardCharsets.UTF_8), 1 << 16);
-        frames.write("frame,t_ms,interval_ms,cpu_ms,gpu_ms,gpu_period_ms,shot,stages\n");
+        frames.write("frame,t_ms,prev_interval_ms,cpu_ms,gpu_ms,prev_gpu_period_ms,shot,stages\n");
     }
 
     /** Событие: тип, время и пары ключ — значение (строки — в кавычках, числа и true/false — как есть). */

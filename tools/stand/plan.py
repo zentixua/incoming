@@ -117,6 +117,8 @@ def build(scenes, only=None):
                     steps.append(salvo_step(t))
             steps.append({"do": "impact_window", "name": s["id"], "salvo": s["id"], "n": 1, "s": s["window_s"],
                           "shots": s.get("shots", []), "prefix": s["id"], "timeout_s": scenes["await_timeout_s"]})
+            # конец залпа — событием: годность прогона проверяет, что долетели все (у волн накопления — все волны)
+            steps.append({"do": "await", "salvo": s["id"], "timeout_s": scenes["tail_timeout_s"], "quiet_s": scenes["quiet_s"]})
             continue
         cams = s["cameras"]
         eye, look = camera(scenes, cams[0], site, spread)

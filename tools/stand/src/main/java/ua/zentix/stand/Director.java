@@ -259,12 +259,16 @@ final class Director {
         return false;
     }
 
-    /** Конец залпа: все попадания; или все команды поданы, попадания были, а снарядов в мире нет {@code quietS}; или срок. */
+    /**
+     * Конец залпа: все попадания; или все команды поданы, попадания были, снарядов в мире и уходов, ждущих взрыва, нет, а
+     * последнее попадание — {@code quietS} назад; или срок.
+     */
     private boolean awaitSalvo(Plan.AwaitSalvo a, long now, double elapsed) {
         int got = watch.impacts(a.id()), want = watch.expected(a.id());
         String why = null;
         if (got >= want) why = "all";
-        else if (got > 0 && watch.alive() == 0 && !pendingFor(a.id()) && now - watch.lastImpact(a.id()) >= (long) (a.quietS() * SECOND)) why = "quiet";
+        else if (got > 0 && watch.alive() == 0 && watch.waiting() == 0 && !pendingFor(a.id())
+                && now - watch.lastImpact(a.id()) >= (long) (a.quietS() * SECOND)) why = "quiet";
         else if (elapsed >= a.timeoutS()) why = "timeout";
         if (why == null) return false;
         out.event("await", now, "salvo", a.id(), "why", why, "impacts", got, "expect", want, "took_s", elapsed);

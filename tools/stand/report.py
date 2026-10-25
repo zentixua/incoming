@@ -151,8 +151,8 @@ def fmt(v, digits=1):
 def cell(w):
     if not w:
         return "—"
-    g, iv, fps = (w.get("gpu") or {}).get("p50"), (w.get("interval") or {}).get("p95"), w.get("fps")
-    return f"{fmt(g)} / {fmt(iv)} ({fmt(fps, 0)})"
+    g, c, iv, fps = (w.get("gpu") or {}).get("p50"), (w.get("cpu") or {}).get("p95"), (w.get("interval") or {}).get("p95"), w.get("fps")
+    return f"{fmt(g)} / {fmt(c)} / {fmt(iv)} ({fmt(fps, 0)})"
 
 
 def main():
@@ -200,8 +200,9 @@ def main():
             md.append("Look differs noticeably (for the reviewer, not a failure):")
             md += [f"- {x}" for x in verdict["look"]]
         md.append("")
-    md.append("Cells: GPU frame p50 / frame time p95 (frames per second), ms. Frame time is from frame start to the next frame start, "
-              "as the player sees it; GPU is the GPU clock from the first to the last command of the frame.")
+    md.append("Cells: GPU p50 / CPU p95 / frame p95 (frames per second), ms. GPU — the GPU clock from the first to the last command "
+              "of the frame; CPU — the frame's own work on the render thread (RenderFrameEvent.Pre → Post, without the buffer swap); "
+              "frame — from the frame start to the next frame start, as the player sees it.")
     comment = [f"### {gate_title(verdict, base)}", "", "| pack | window | " + " | ".join(r.label for r in runs) + " |",
                "|---|---|" + "---|" * len(runs)]
     for pack in packs:
@@ -250,7 +251,7 @@ def main():
         comment += ["", *([f"- {x}" for x in verdict["fails"]] or ["Frame time at 100 strikes within tolerance of the accepted release."])]
         if verdict["look"]:
             comment += ["", "Look differs noticeably (reviewer, compare the frames):", *[f"- {x}" for x in verdict["look"]]]
-    comment += ["", "Cells: GPU p50 / frame p95 (fps), ms. Report and frames: `mod/run/stand/out/" + out.name + "/` on the laptop."]
+    comment += ["", "Cells: GPU p50 / CPU p95 / frame p95 (fps), ms. Report and frames: `mod/run/stand/out/" + out.name + "/` on the laptop."]
     (out / "report.md").write_text("\n".join(md) + "\n")
     (out / "comment.md").write_text("\n".join(comment) + "\n")
     print(out / "report.md")

@@ -14,10 +14,13 @@ set -uo pipefail
 pr=${1:?использование: tools/pr_ci.sh <номер PR> [--repo владелец/репо]}; shift
 repo=(); [ "${1:-}" = --repo ] && { repo=(--repo "$2"); export GH_REPO=$2; }
 started=$(date +%s); head=; quiet=0
-# нужные проверки головы: PR с картинкой ждёт и стенд
+# нужные проверки головы: PR с картинкой ждёт и стенд. Список файлов не получен — не решаем (код 1): иначе сбой API
+# снял бы условие стенда
 needs() {
+  local files
+  files=$(gh pr view "$pr" "${repo[@]}" --json files -q '.files[].path' 2>/dev/null) || return 1
   need='^(Итог|Записка)$'; count=2
-  if gh pr view "$pr" "${repo[@]}" --json files -q '.files[].path' 2>/dev/null \
+  if printf '%s\n' "$files" \
       | python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import pr_note; sys.exit(0 if pr_note.player_facing([l.strip() for l in sys.stdin if l.strip()]) else 1)' "$(dirname "$0")"; then
     need='^(Итог|Записка|Стенд сцен)$'; count=3
   fi
@@ -25,7 +28,11 @@ needs() {
 while true; do
   read -r state mergeable sha < <(gh pr view "$pr" "${repo[@]}" --json state,mergeable,headRefOid -q '"\(.state) \(.mergeable) \(.headRefOid)"') || { sleep 30; continue; }
   case $state in MERGED) echo "PR $pr уже влит"; exit 0 ;; CLOSED) echo "PR $pr закрыт без влития"; exit 4 ;; esac
-  [ "$sha" != "$head" ] && { [ -n "$head" ] && echo "$(date +%T) новая голова ${sha:0:8} — жду её проверок"; head=$sha; needs; }
+  if [ "$sha" != "$head" ]; then
+    needs || { sleep 30; continue; }
+    [ -n "$head" ] && echo "$(date +%T) новая голова ${sha:0:8} — жду её проверок"
+    head=$sha
+  fi
   if [ "$mergeable" = CONFLICTING ]; then
     echo "PR $pr: конфликт с базой — CI не запустится. Слить main в ветку, разрешить конфликт, запушить."
     exit 3
