@@ -32,6 +32,7 @@ import ua.zentix.incoming.client.far.FarRenderer;
 import ua.zentix.incoming.client.flight.FlightTracks;
 import ua.zentix.incoming.client.fx.BlastEffects;
 import ua.zentix.incoming.client.fx.CameraShake;
+import ua.zentix.incoming.client.fx.Concussion;
 import ua.zentix.incoming.client.fx.Effects;
 import ua.zentix.incoming.client.fx.Exhaust;
 import ua.zentix.incoming.client.fx.Flash;
@@ -187,6 +188,7 @@ public final class IncomingClient {
         e.registerReloadListener(FxAtlas.INSTANCE);
         e.registerReloadListener(ua.zentix.incoming.client.nuclear.NukeBallSurface.INSTANCE);
         e.registerReloadListener(ua.zentix.incoming.client.sound.Envelopes.INSTANCE);
+        e.registerReloadListener(Concussion.RELOAD);
     }
 
     private static void keys(RegisterKeyMappingsEvent e) {
@@ -198,6 +200,8 @@ public final class IncomingClient {
     }
 
     private static void layers(RegisterGuiLayersEvent e) {
+        // контузия — под вспышкой: размывает кадр и накладки камеры, а не белый экран вспышки поверх
+        e.registerBelow(VanillaGuiLayers.CROSSHAIR, Incoming.id("concussion"), Concussion::render);
         e.registerBelow(VanillaGuiLayers.CROSSHAIR, Incoming.id("flash"), Flash::render);
         e.registerBelow(VanillaGuiLayers.CROSSHAIR, Incoming.id("nuke_flash"), NukeFlash::render);
         e.registerAbove(VanillaGuiLayers.CROSSHAIR, Incoming.id("scope"), Designator::renderHud);
@@ -262,6 +266,7 @@ public final class IncomingClient {
         Effects.tick();
         CameraShake.tick(CameraShake.standing(mc.player));
         Flash.tick();
+        Concussion.tick();
         Alerts.tick();
         RadarScope.tick();
         NukeArming.tick();
@@ -282,6 +287,7 @@ public final class IncomingClient {
         Effects.clear();
         CameraShake.reset();
         Flash.reset();
+        Concussion.reset();
         Alerts.reset();
         ClientNuclear.rewound();
     }
@@ -336,6 +342,7 @@ public final class IncomingClient {
         Effects.clear();
         CameraShake.reset();
         Flash.reset();
+        Concussion.reset();
         Alerts.reset();
         ProjectileCamera.reset();
         ClientFlights.reset();

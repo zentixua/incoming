@@ -50,16 +50,20 @@ public final class BlastHit {
         double tremor = CameraShake.tremor(pa, shock.impulsePaSeconds(), late, seed);
         double lean = 0, neck = 0;
         float open = 0;
+        BodySway.Motion m = null;
         if (!CameraShake.carried(player)) {
             // за стеной, домом или холмом в сторону взрыва — в его ветровой тени (лучи у тела)
             open = SoundFilters.openRays(body, Math.atan2(pos.z - body.z, pos.x - body.x));
-            BodySway.Motion m = CameraShake.sway(pa, shock.dynamicPressurePa(), open, tPlus, tPlus, late,
+            m = CameraShake.sway(pa, shock.dynamicPressurePa(), open, tPlus, tPlus, late,
                     body.subtract(pos), player.getYRot(), true);
             lean = Math.toDegrees(BodySway.peak(m.body(), 0));
             neck = Math.toDegrees(BodySway.peak(m.neck(), 0));
         }
-        last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg neck %.2f deg tremor %.2f",
-                d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean, neck, tremor);
+        // контузия на экране и сор у камеры — тем же фронтом у тела (подача по модели: ConcussionDose, LocalLitter)
+        double dose = Concussion.front(shock, HearingModel.shift(exposure), m, late);
+        NearLitter.front(s, pos, body, shock.arrivalSeconds(), seed);
+        last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg neck %.2f deg tremor %.2f dose %.3f",
+                d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean, neck, tremor, dose);
     }
 
     /**

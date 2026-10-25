@@ -10,8 +10,9 @@ Each player has their own, stored in `config/incoming-client.toml`.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Camera shake | 1 | how hard blast waves jolt and lean the view; 0: no shake |
-| Flash brightness | 1 | 0: no on-screen flash from explosions |
+| Camera shake | 1 | how hard blast waves jolt and lean the view; 0: no shake; also scaled by the vanilla Distortion Effects |
+| Flash brightness | 1 | 0: no on-screen flash from explosions; with the vanilla Hide Lightning Flashes on, the flash stays dim |
+| Concussion on screen | 1 | how strongly a blast wave that stuns you blurs, greys and darkens the picture for one to three seconds; 0: off; also scaled by the vanilla Distortion Effects; hidden with F1, like the game's own screen overlays |
 | Show strikes in flight | on | list of your projectiles and marks in the world |
 | Projectile camera on launch | off | the camera shows every launch by itself |
 | Binocular zoom | 4 | from 1.5 to 10 |

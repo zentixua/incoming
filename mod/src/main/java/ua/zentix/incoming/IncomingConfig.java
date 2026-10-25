@@ -321,6 +321,7 @@ public final class IncomingConfig {
     public static final class Client {
         public final ModConfigSpec.DoubleValue cameraShake;
         public final ModConfigSpec.DoubleValue flash;
+        public final ModConfigSpec.DoubleValue screenEffects;
         public final ModConfigSpec.BooleanValue hud;
         public final ModConfigSpec.BooleanValue autoCamera;
         public final ModConfigSpec.DoubleValue zoom;
@@ -349,6 +350,9 @@ public final class IncomingConfig {
                     .translation("incoming.config.camera_shake").defineInRange("camera_shake", 1.0, 0.0, 2.0);
             flash = b.comment("Brightness of the on-screen explosion flash (0: off).")
                     .translation("incoming.config.flash").defineInRange("flash", 1.0, 0.0, 1.0);
+            screenEffects = b.comment("Strength of the blast concussion on screen (0: off): after a blast wave strong enough to stun, the picture blurs,",
+                            "loses colour and darkens at the edges for one to three seconds. Also scaled by the vanilla Distortion Effects option.")
+                    .translation("incoming.config.screen_effects").defineInRange("screen_effects", 1.0, 0.0, 1.0);
             hud = b.comment("Show your projectiles in flight and their time to impact.")
                     .translation("incoming.config.hud").define("hud", true);
             autoCamera = b.comment("The projectile camera turns on by itself at every launch: launch from the side, flight from on board, impact (Shift exits).")
