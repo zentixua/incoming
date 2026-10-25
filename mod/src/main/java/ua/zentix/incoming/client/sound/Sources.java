@@ -142,11 +142,21 @@ public final class Sources {
      * здесь (их ставит звук сам).
      */
     public static float volume(Source s, Vec3 at, Vec3 ear, Propagation.Weather weather) {
+        return Loudness.volume(gain(s, at, ear, weather), s.fileLufs);
+    }
+
+    /**
+     * Громкость источника {@code s} у уха в общей калиброванной мере — против мерки {@link Loudness#ENGINE_LUFS}, без
+     * файла ({@link Loudness#gain}): 0 — в каждой октаве ниже фона, не слышно. По ней решают, слышно ли; громкость файла
+     * ({@link #volume}) — только для воспроизведения: она меняется с пересведением файла, а слышимость — свойство звука у
+     * уха.
+     */
+    static double gain(Source s, Vec3 at, Vec3 ear, Propagation.Weather weather) {
         if (Double.isNaN(s.lwA) || s.lwA == Noise.SILENT) return 0;
         double[] bands = new double[Propagation.BANDS];
         Propagation.Path path = Propagation.Path.over(at.distanceTo(ear), Hearing.height(at, ear), weather);
         double level = Propagation.level(s.lwA - s.spectrum.aWeighting(), s.spectrum, path, bands);
-        return Loudness.volume(Loudness.gain(level, Propagation.margin(bands, weather), s.ceilingLufs), s.fileLufs);
+        return Loudness.gain(level, Propagation.margin(bands, weather), s.ceilingLufs);
     }
 
     /** Громкость у уха камеры сейчас (0 — мира нет). */

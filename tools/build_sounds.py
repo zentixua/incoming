@@ -950,7 +950,7 @@ def fire():
         z = loop(cut(rec, a, a + FIRE_LOOP_S + FIRE_XF_S), FIRE_LOOP_S, FIRE_XF_S)
         f = np.fft.rfftfreq(len(z), 1 / SR)
         thr = 10 ** (-1 / 20) * 0.995
-        for r in range(2):  # щелчки, что срезал ограничитель, несут верха — второй круг поправки возвращает спектр
+        for r in range(4):  # щелчки, что срезал ограничитель, несут верха — следующие круги поправки возвращают спектр
             y = z
             for _ in range(4):
                 y = np.fft.irfft(np.fft.rfft(y) * np.interp(f, fw, eq(welch(y, SR, nperseg=8192)[1])), len(y))

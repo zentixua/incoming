@@ -139,8 +139,9 @@ class RumbleTest {
         mid.add(Math.PI / 4, v, 1, 1);
         assertTrue(mid.volume(0) < VoiceBudget.AUDIBLE && mid.volume(1) < VoiceBudget.AUDIBLE, "каждая половина тише порога");
         assertTrue(mid.plays(0) && mid.plays(1) && !mid.plays(2) && !mid.plays(3), "посередине — обе петли");
+        assertTrue(!quiet.heard() && !quiet.plays(0), "пожаров нет — не играет ни одна");
         quiet.add(Math.PI / 4, 0.8 * VoiceBudget.AUDIBLE, 1, 1);
-        assertTrue(!quiet.heard() && !quiet.plays(0) && !quiet.plays(1), "сумма тише порога — не играет ни одна");
+        assertTrue(quiet.heard() && quiet.plays(0) && quiet.plays(1), "слышимый пожар (слышно ли — решено у уха) играет и тише прежнего порога файла");
 
         Mix mix = new Mix();
         Rumble r = new Rumble();
@@ -153,6 +154,14 @@ class RumbleTest {
         assertTrue(Rumble.volume(r.potential(0), BlastSounds.RUMBLE_LUFS) < VoiceBudget.AUDIBLE, "половина в петле тише порога");
         assertTrue(r.plays(0, total) && r.plays(1, total) && !r.plays(2, total) && !r.plays(3, total), "гул между двумя петлями — в обеих");
         for (int t = 0; t < 40; t++) assertTrue(r.keep(0, total) && r.keep(1, total), "тик " + t + ": петли с долей слышного гула держатся");
+        // слышно ли гул — не от громкости файла петли (ревью R11): тот же гул у файла на 8,1 дБ тише — то же решение
+        Rumble faint = new Rumble();
+        faint.add(blast(new Mix(), p * 0.1, 300), Math.PI / 4, 1, 1, 1, 0, 0);
+        faint.tick(1);
+        for (double file : new double[]{BlastSounds.RUMBLE_LUFS, BlastSounds.RUMBLE_LUFS - 8.1}) {
+            float t = Rumble.volume(faint.potentialTotal(), file);
+            assertTrue(faint.plays(0, t) && faint.plays(1, t), "файл " + file + " LUFS: громкость петли " + t + " — гул тот же, играет");
+        }
     }
 
     /**

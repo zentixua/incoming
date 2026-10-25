@@ -96,6 +96,42 @@ class CraterFireTest {
         }
     }
 
+    /**
+     * Слышно ли пожар — решает звук у уха, а не громкость файла (ревью R11): настоящее решение о запуске
+     * ({@link CraterFire#volume}, потом {@link Quarters#plays}) у 0,2, 2 и 20 МВт на 5 м – 12 км ночью одно и то же у файла
+     * на потолке и у того же файла, собранного на 8,1 дБ тише; нигде пожар, который звучал в 6763a1c8 (громкость файла
+     * −21,6 LUFS не тише {@code AUDIBLE}), теперь не молчит; граница — где пожар тонет в фоне во всех октавах.
+     */
+    @Test
+    void audibilityIsAtTheEarNotInTheFile() {
+        Sources.Source quiet = new Sources.Source(Double.NaN, Spectra.BLAST_FIRE, Spectra.BLAST_FIRE_LUFS - 8.1);
+        Sources.Source then = new Sources.Source(Double.NaN, Spectrum.of(-24.1, -6.5, -6.2, -7.6, -6.3, 0.0, -3.8, -18.7), -21.6);
+        Vec3 ear = new Vec3(0, 65.62, 0);
+        for (double watts : new double[]{2e5, 2e6, 2e7}) {
+            double last = 0, lastThen = 0;
+            for (int d = 5; d <= 12000; d += 5) {
+                Vec3 at = new Vec3(d, 64, 0);
+                boolean now = plays(CraterFire.volume(Sources.BLAST_FIRE, watts, at, ear, Propagation.Weather.NIGHT));
+                assertEquals(now, plays(CraterFire.volume(quiet, watts, at, ear, Propagation.Weather.NIGHT)), watts + " Вт в " + d + " м: файл тише — решение то же");
+                boolean wasPlaying = volume(watts, d, then) >= VoiceBudget.AUDIBLE;
+                assertTrue(!wasPlaying || now, watts + " Вт в " + d + " м: в 6763a1c8 звучал — звучит и теперь");
+                double gain = Sources.gain(Sources.BLAST_FIRE.power(Sources.flame(watts, Spectra.BLAST_FIRE)), at, ear, Propagation.Weather.NIGHT);
+                assertEquals(gain > 0, now, watts + " Вт в " + d + " м: звучит, пока не тонет в фоне");
+                if (now) last = d;
+                if (wasPlaying) lastThen = d;
+            }
+            System.out.printf(java.util.Locale.ROOT, "fire %.0f W heard to %.0f m (6763a1c8: %.0f m)%n", watts, last, lastThen);
+            assertTrue(last > 300 && last >= lastThen, watts + " Вт: слышно дальше 300 м и не ближе, чем в 6763a1c8");
+        }
+    }
+
+    /** Решение о запуске петли одного пожара громкостью {@code volume}: как в {@link BlastSounds#fireLoops}. */
+    private static boolean plays(float volume) {
+        Quarters q = new Quarters();
+        q.add(0, volume, 1, 1);
+        return q.plays(0);
+    }
+
     @Test
     void noFuelOrWaterMeansNoFireSound() {
         CloudModel dry = model(WeaponType.ROCKET);
