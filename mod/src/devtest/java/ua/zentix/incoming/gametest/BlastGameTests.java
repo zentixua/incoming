@@ -420,6 +420,9 @@ public final class BlastGameTests {
                 // шара (шар всплывает), в среднем 2–3 — для проверки мало
                 if (weapon == WeaponType.MISSILE) h.assertTrue(plant >= 6, got);
                 h.assertTrue(far <= r + 1.5, got);
+                // обход доходит до края шара у земли: прежде предел клеток кончал его в небе над всплывшим шаром ракеты
+                // (на импульсе 10 кал/см², ревью #467), и листва у края не загоралась
+                h.assertTrue(far >= 0.8 * r, got);
                 // крону над поднявшимся шаром он жжёт (BLASTSEQ D18: прежде шар сервера стоял полусферой D/2 у удара)
                 h.assertTrue(canopy >= 5, got);
             } else h.assertTrue(fires == 0, got);

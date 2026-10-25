@@ -2,6 +2,7 @@ package ua.zentix.incoming.warhead;
 
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
@@ -36,11 +37,11 @@ import java.util.function.BooleanSupplier;
  */
 final class Craters {
     /**
-     * Больше клеток шар топлива не обходит: у шахеда клеток с импульсом выше {@link PulseIgnition#FLOOR} — ~11 тыс., у
-     * «Томагавка» — больше 100 тыс. (шар радиусом 17 м всплывает на 26 м); клетки идут от большего импульса к меньшему, и
-     * за пределом остаются те, где он меньше всего (листва там загорается реже раза из десяти).
+     * Больше клеток шар топлива не обходит: у «Томагавка» на ровной земле клеток с импульсом выше
+     * {@link PulseIgnition#FLOOR} под потолком обхода ({@link Ignition#ceiling}) — ~7 тыс. (круг в 47 м), в лесу и в городе —
+     * в разы больше; клетки идут от большего импульса к меньшему, и за пределом остаются те, где он меньше всего.
      */
-    private static final int FIREBALL_CELLS = 40_000;
+    static final int FIREBALL_CELLS = 40_000;
     /** Клеток обхода шара топлива за единицу работы: клетка с соседями — 3–5 мкс (GameTest), единица — около 1 мс. */
     static final int PORTION = 256;
 
@@ -140,6 +141,8 @@ final class Craters {
         private final LongOpenHashSet lit = new LongOpenHashSet();
         /** Сначала клетки с большим импульсом: за пределом {@link #FIREBALL_CELLS} остаются те, где он меньше всего. */
         private final LongHeapPriorityQueue queue = new LongHeapPriorityQueue((a, b) -> Double.compare(pulse.get(b), pulse.get(a)));
+        /** Потолок обхода по столбцам ({@link #ceiling}). */
+        private final Long2IntOpenHashMap tops = new Long2IntOpenHashMap();
         private int cells;
 
         Ignition(BlastArea area, List<StagedExplosion> after, BooleanSupplier happened, Vec3 pos, double ballKg) {
@@ -213,6 +216,7 @@ final class Craters {
                         if (burns.get(key) && !lit.contains(key) && light(level, p, here, n.immutable(), s, dir)) lit.add(key);
                     }
                     if (seen.add(n.asLong())) {
+                        if (n.getY() > ceiling(level, n.getX(), n.getZ())) continue;
                         double qn = exposure(ball, pos, n);
                         if (qn < PulseIgnition.FLOOR) continue;
                         pulse.put(n.asLong(), qn);
@@ -221,6 +225,22 @@ final class Craters {
                 }
             }
             return done;
+        }
+
+        /**
+         * Выше всего в столбце и у его соседей ({@link Heightmap.Types#MOTION_BLOCKING}, с листвой) клетка воздуха не
+         * касается ни одной грани — обход туда не идёт: шар ракеты всплывает на 26 м, и небо над ним — сотни тысяч клеток с
+         * импульсом выше {@link PulseIgnition#FLOOR}, а горючего там нет. Связь по воздуху остаётся: через стену — полосой у
+         * её верха, в двор и в окно — вниз вдоль стены.
+         */
+        private int ceiling(ServerLevel level, int x, int z) {
+            long key = (long) x << 32 | (z & 0xFFFFFFFFL);
+            int known = tops.getOrDefault(key, Integer.MIN_VALUE);
+            if (known != Integer.MIN_VALUE) return known;
+            int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x, z);
+            for (Direction d : Direction.Plane.HORIZONTAL) top = Math.max(top, Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x + d.getStepX(), z + d.getStepZ()));
+            tops.put(key, top);
+            return top;
         }
 
         @Override
