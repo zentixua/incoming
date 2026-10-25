@@ -279,7 +279,8 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
 
     /**
      * Баллистический выброс кусками — частицами вблизи, кг: у грунта — доля комьев вещества ({@link Matter#clods}), остальное —
-     * зёрна завесы ({@link Ejecta#grains}); у твёрдого и плиты завесы нет — весь. Куски + зёрна завесы + пыль = {@link #mass}.
+     * зёрна завесы ({@link Ejecta#grains}); у твёрдого и плиты завесы нет — весь. Куски + зёрна завесы + пыль = {@link #mass},
+     * у пробитой плиты — ещё мелочь тыла, что уходит в комнату за ней ({@link #SLAB_FRONT}).
      */
     public double clods(double tntKg) {
         return family == Family.SOIL ? ballistic(tntKg) * matter().clods : ballistic(tntKg);

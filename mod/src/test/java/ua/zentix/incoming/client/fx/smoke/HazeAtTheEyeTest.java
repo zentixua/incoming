@@ -42,12 +42,31 @@ class HazeAtTheEyeTest {
         assertTrue(r > tau(street, 0, 10, 40) && r < 6, "τ в 40 м на 10 с " + r);
     }
 
+    /**
+     * Шахед в мостовую у газона (жалоба: у удара рядом с травой в 40 м на 6 с стояла бурая стена — дёрн отдавал сантиметр
+     * грунта, как голая земля): вокруг воронки трава. На 6 и 10 с в 40 м — та же дымка, что в улице, к минуте — чисто.
+     */
+    @Test
+    void streetHitByALawnIsNotABrownWall() {
+        CloudModel m = scene(WeaponType.DRONE, false, CALM, GroundDust.Ground.filled(1), GroundDust.Ground.filled(0));
+        for (double t : new double[]{6, 10}) {
+            double tau = tau(m, 0, t, 40);
+            assertTrue(tau < 3, t + " с: τ в 40 м " + tau + " " + java.util.Arrays.toString(parts(m, 0, t, 40)));
+        }
+        assertTrue(tau(m, 0, 60, 40) < 0.2, "минута: τ в 40 м " + tau(m, 0, 60, 40));
+    }
+
     private static double tau(CloudModel m, double h, double t, double d) {
         double[] c = parts(m, h, t, d);
         return c[0] + c[1] + c[2];
     }
 
     static CloudModel scene(WeaponType weapon, boolean roof, CloudModel.Air air) {
+        return scene(weapon, roof, air, GroundDust.Ground.filled(0), GroundDust.Ground.filled(1));
+    }
+
+    /** Сцена с поверхностями вокруг: доля дёрна {@code covered} и твёрдого {@code hard} по секторам и полосам. */
+    static CloudModel scene(WeaponType weapon, boolean roof, CloudModel.Air air, double[][] covered, double[][] hard) {
         BlastSource source = BlastSource.of(weapon, false);
         double w = source.chargeKg(), h = roof ? 8 : 0;
         BlastTarget target = BlastTarget.of(GroundMaterial.STONE, false, roof ? 1 : 0,
@@ -58,7 +77,7 @@ class HazeAtTheEyeTest {
             double angle = 2 * Math.PI * (s + 0.5) / GroundDust.SECTORS, r = GroundDust.BANDS[b];
             heights[s][b] = relief.at(r * Math.cos(angle), r * Math.sin(angle));
         }
-        var ground = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1), heights, relief);
+        var ground = new GroundDust.Ground(GroundDust.Ground.filled(0), covered, hard, heights, relief);
         return new CloudModel(source, air, target, 0, ground);
     }
 
