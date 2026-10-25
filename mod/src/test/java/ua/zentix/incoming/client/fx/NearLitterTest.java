@@ -86,4 +86,16 @@ class NearLitterTest {
         double eps = 1e-3, slope = (1 - DustModel.extinctionAloft(eps)) / eps;
         assertEquals(slope, NearLitter.DUST_SETTLE_MPS, 0.002, "наклон ослабления " + slope);
     }
+
+    /**
+     * Сор у камеры перебирает колонки, только если фронт в круге поднимет что-то видимое: шахед в 30 м — да, «Град» в
+     * 200 м и ракета в 300 м — нет (цена: закон на рыхлом грунте — микросекунды на место, мест — до тысячи).
+     */
+    @Test
+    void nothingVisibleNothingSampled() {
+        assertTrue(NearLitter.visible(50, true, 30 - NearLitter.REACH));
+        assertTrue(NearLitter.visible(3, true, 10 - NearLitter.REACH < 0.5 ? 0.5 : 10 - NearLitter.REACH));
+        assertFalse(NearLitter.visible(6.4, true, 200 - NearLitter.REACH));
+        assertFalse(NearLitter.visible(150, true, 300 - NearLitter.REACH));
+    }
 }

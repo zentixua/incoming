@@ -129,8 +129,10 @@ public final class NearLitter {
      * ({@code bodyArrival} с после взрыва): сор вокруг. Каждое место ждёт прихода фронта на себя.
      */
     static void spawn(ClientLevel level, double charge, boolean surface, Vec3 blast, Vec3 eye, double bodyArrival, RandomSource rnd) {
-        if (!(charge > 0)) return;
+        if (!(charge > 0) || !visible(charge, surface, Math.max(0.5, eye.distanceTo(blast) - REACH))) return;
         int budget = Fragments.share(MAX), born = 0, puffs = 0;
+        java.util.Map<Integer, ShockAtBody> shocks = new java.util.HashMap<>();
+        java.util.Map<Long, LocalLitter.Lift> lifts = new java.util.HashMap<>();
         double groundY = blast.y;
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         int reach = (int) Math.ceil(REACH / STEP);
@@ -152,11 +154,15 @@ public final class NearLitter {
                 double y = top + 1.05, ground = Math.hypot(x - blast.x, z - blast.z), slant = Math.hypot(ground, y - blast.y);
                 // крона и то, что выше места взрыва, видят волну в воздухе
                 double along = high || y > groundY + 2 ? 1 : FrontLitter.along(ground, slant);
-                ShockAtBody shock = ShockAtBody.chemical(charge, surface, slant);
                 float size = c.kind == Fragments.Kind.LEAF ? CLUMP_MIN + (CLUMP_MAX - CLUMP_MIN) * rnd.nextFloat()
                         : GRAIN_MIN + (GRAIN_MAX - GRAIN_MIN) * rnd.nextFloat();
-                double terminal = c.kind == Fragments.Kind.LEAF ? Fragments.terminal(c.kind, 0, size) : Fragments.terminal(c.kind, GRAIN_DENSITY, CRUMB_M);
-                LocalLitter.Lift lift = LocalLitter.lift(shock, c.surface, along, terminal);
+                // закон — на шаг расстояния и доли напора (у рыхлого грунта интеграл выноса — ~6 мкс на место, а мест — до
+                // тысячи на взрыв): ShockAtBody зависит только от расстояния, клок и крошка — от вещества, не от размера
+                int ri = (int) Math.round(slant / SLANT_STEP), ai = (int) Math.round(along / ALONG_STEP);
+                long key = ((long) ri << 16) | ((long) ai << 8) | ((long) surfaceIndex(c.surface) << 1) | (c.kind == Fragments.Kind.LEAF ? 1 : 0);
+                ShockAtBody shock = shocks.computeIfAbsent(ri, k -> ShockAtBody.chemical(charge, surface, k * SLANT_STEP));
+                LocalLitter.Lift lift = lifts.computeIfAbsent(key, k -> LocalLitter.lift(shock, c.surface, ai * ALONG_STEP,
+                        c.kind == Fragments.Kind.LEAF ? Fragments.terminal(c.kind, 0, CLUMP_MIN) : Fragments.terminal(c.kind, GRAIN_DENSITY, CRUMB_M)));
                 int delay = Math.max(0, (int) Math.ceil(20 * (shock.arrivalSeconds() - bodyArrival)));
                 if (delay > Fragments.DELAY_MAX) continue;
                 double ox = ground > 1e-6 ? (x - blast.x) / ground : 0, oz = ground > 1e-6 ? (z - blast.z) / ground : 0;
@@ -179,6 +185,42 @@ public final class NearLitter {
         last = String.format(Locale.ROOT, "near litter pieces %d puffs %d", born, puffs);
     }
 
+    /**
+     * Шаг расстояния до взрыва, м, и доли напора вдоль земли, на которых закон считается один раз: на 0,25 м давление
+     * фронта меняется на ~5 % в 10 м и на десятые доли процента в сотнях метров, а места кусков и так разбросаны по метровой
+     * клетке. Залп из 8 шахедов над песком считал бы закон у каждой колонки — ~7 мс на взрыв в тике удара.
+     */
+    static final double SLANT_STEP = 0.25, ALONG_STEP = 0.05;
+
+    /** Номер поверхности для ключа закона. */
+    private static int surfaceIndex(DustModel.Surface s) {
+        return s == DustModel.Surface.FIELD ? 0 : s == DustModel.Surface.COVERED ? 1 : 2;
+    }
+
+    /**
+     * Поднимет ли фронт хоть что-то видимое там, где он сильнее всего в круге, — в {@code slant} м от взрыва (на рыхлом
+     * грунте и на траве): нет — не поднимет нигде дальше, и колонки не перебираются (у «Града» в 200 м — доля срыва
+     * без броска и без пыли).
+     */
+    static boolean visible(double charge, boolean surface, double slant) {
+        ShockAtBody shock = ShockAtBody.chemical(charge, surface, slant);
+        LocalLitter.Lift loose = LocalLitter.lift(shock, DustModel.Surface.FIELD, 1, Fragments.terminal(Fragments.Kind.CHUNK, GRAIN_DENSITY, CRUMB_M));
+        LocalLitter.Lift grass = LocalLitter.lift(shock, DustModel.Surface.COVERED, 1, Fragments.terminal(Fragments.Kind.LEAF, 0, CLUMP_MIN));
+        return pieces(loose) || pieces(grass) || dustAlpha(loose.massKgPerM2(), PUFF_MIN) >= PUFF_SEEN;
+    }
+
+    /** Облачко тонкой пыли прозрачнее этого не рисуется. */
+    static final float PUFF_SEEN = 0.02f;
+
+    /**
+     * Непрозрачность облачка тонкой пыли размера {@code size} м с поднятой массой {@code kgPerM2} с клетки места:
+     * 1 − e^(−τ), τ = {@link DustModel#K_MIX}·m / площадь облачка, не больше {@link #PUFF_ALPHA}.
+     */
+    static float dustAlpha(double kgPerM2, float size) {
+        double tau = DustModel.K_MIX * Math.max(0, kgPerM2) * STEP * STEP / (Math.PI * size * size);
+        return (float) Math.min(PUFF_ALPHA, 1 - Math.exp(-tau));
+    }
+
     /** Куски видно, только если их бросило ({@link #MIN_KICK_MPS}) и сорвало. */
     static boolean pieces(LocalLitter.Lift lift) {
         return lift.releaseShare() > 0 && Math.hypot(lift.horizontalMps(), lift.verticalMps()) >= MIN_KICK_MPS;
@@ -193,9 +235,8 @@ public final class NearLitter {
                                 int delay, RandomSource rnd) {
         if (!(lift.massKgPerM2() > 0)) return false;
         float size = PUFF_MIN + (PUFF_MAX - PUFF_MIN) * rnd.nextFloat();
-        double tau = DustModel.K_MIX * lift.massKgPerM2() * STEP * STEP / (Math.PI * size * size);
-        float alpha = (float) Math.min(PUFF_ALPHA, 1 - Math.exp(-tau));
-        if (alpha < 0.02f) return false;
+        float alpha = dustAlpha(lift.massKgPerM2(), size);
+        if (alpha < PUFF_SEEN) return false;
         float[] c = FarBlasts.dustColour(GroundMaterial.of(cover));
         // сопротивление вдвое за тик: сдвиг за фазу (миллисекунды) ложится за первые тики суммой v·(1 + ½ + ¼ …) = 2v, а
         // скорость падения выходит g·d/(1 − d) = g — оседание со своей скоростью
