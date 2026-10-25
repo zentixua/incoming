@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.fx;
 
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.nuclear.model.FuelPool;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
@@ -20,37 +21,6 @@ import ua.zentix.incoming.warhead.BuriedBlast;
  * @param underground бомба взорвалась под землёй ({@link S2C.Blast#BUNKER})
  */
 public record BlastSource(@Nullable WeaponType weapon, double chargeKg, double fuelKg, boolean surface, boolean underground) {
-    /**
-     * Топливо: теплота сгорания (низшая, справочная) и выход сажи при горении в огненном шаре — оценка: у жидких
-     * углеводородов в пламени 0,01–0,06 г/г (SFPE Handbook, гл. 36, Khan, Tewarson, Chaos; таблица не сверена), взята
-     * середина. Огненный шар топлива горит быстрее и с большим подсосом воздуха, чем пожар разлития, — вероятно, сажи меньше.
-     *
-     * @param heatJPerKg теплота сгорания, Дж/кг
-     * @param sootYield  сажи на кг сгоревшего, кг
-     */
-    public enum Fuel {
-        NONE(0, 0, 0),
-        /** Бензин двухтактного двигателя шахеда (MD-550): 43,4 МДж/кг; выгорание лужи — 0,055 кг/(м²·с). */
-        PETROL(43.4e6, 0.04, 0.055),
-        /**
-         * JP-10 крылатой ракеты (экзо-тетрагидродициклопентадиен): 42,1 МДж/кг; выгорание лужи — как у керосина,
-         * 0,039 кг/(м²·с) (⚠ замеров JP-10 нет — близкий по составу и летучести).
-         */
-        JP10(42.1e6, 0.04, 0.039);
-
-        /**
-         * Теплота сгорания, Дж/кг; выход сажи, кг/кг; выгорание большой лужи с единицы площади, кг/(м²·с) (Babrauskas,
-         * SFPE Handbook, гл. «Heat Release Rates», табл. для бассейнов диаметром больше 1 м).
-         */
-        public final double heatJPerKg, sootYield, poolBurn;
-
-        Fuel(double heatJPerKg, double sootYield, double poolBurn) {
-            this.heatJPerKg = heatJPerKg;
-            this.sootYield = sootYield;
-            this.poolBurn = poolBurn;
-        }
-    }
-
     /**
      * Взрывчатка — брутто-формула CHNO. Свободный углерод продуктов детонации — по правилам Кистяковского–Вильсона
      * (Akhavan, «The Chemistry of Explosives», гл. 4): при кислородном балансе ниже −40 % (модифицированные, Springall
@@ -97,11 +67,9 @@ public record BlastSource(@Nullable WeaponType weapon, double chargeKg, double f
     }
 
 
-    /**
-     * Топливо по двигателю: шахед — бензин, ракета — JP-10; у остальных к удару его нет.
-     */
-    public Fuel fuel() {
-        return fuelKg <= 0 ? Fuel.NONE : weapon == WeaponType.MISSILE ? Fuel.JP10 : Fuel.PETROL;
+    /** Топливо в баке — по паспорту ({@link WeaponSpec#fuel}): шахед — бензин, ракета — JP-10; у остальных к удару его нет. */
+    public FuelPool.Fuel fuel() {
+        return fuelKg <= 0 || weapon == null ? FuelPool.Fuel.NONE : weapon.spec().fuel();
     }
 
     /**

@@ -38,8 +38,8 @@ public final class S2C {
      * Формат только растёт с конца (replay.md): оружие и ось дописаны в конец; в повторе, записанном до него, его нет
      * ({@link #NO_WEAPON}) — оно выводится из вида, как вид тогда и выбирали ({@link #weaponType}).
      */
-    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis)
-            implements CustomPacketPayload {
+    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis,
+                        boolean fuelApart) implements CustomPacketPayload {
         public static final int DRONE = 0, MISSILE = 1, BUNKER = 2, ROCKET = 3;
         /** Оружия в пакете нет (повтор, записанный до этого поля). */
         public static final int NO_WEAPON = -1;
@@ -49,6 +49,12 @@ public final class S2C {
         /** Ось боевой части — вниз, если её нет в пакете (повтор, записанный до этого поля). */
         public static final Vec3 DOWN = new Vec3(0, -1, 0);
         private static final StreamCodec<ByteBuf, Vec3> AXIS = StreamCodecs.trailing(StreamCodecs.VEC3, DOWN);
+        /**
+         * Топливо в воронке горит отдельно — огнём на блоках сервера и пакетом {@link FuelFire} ({@code warhead/FuelFires}):
+         * его дым и гул клиент ведёт только по нему. В повторе, записанном до этого поля, — нет: дым и гул топлива — у
+         * места удара, как тогда (огня на блоках в такой записи нет).
+         */
+        private static final StreamCodec<ByteBuf, Boolean> FUEL_APART = StreamCodecs.trailing(ByteBufCodecs.BOOL, false);
         public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.of((b, p) -> {
             ByteBufCodecs.VAR_INT.encode(b, p.kind);
             StreamCodecs.VEC3.encode(b, p.pos);
@@ -58,12 +64,19 @@ public final class S2C {
             PROJECTILE.encode(b, p.projectile);
             WEAPON.encode(b, p.weapon);
             AXIS.encode(b, p.axis);
+            FUEL_APART.encode(b, p.fuelApart);
         }, b -> new Blast(ByteBufCodecs.VAR_INT.decode(b), StreamCodecs.VEC3.decode(b), ByteBufCodecs.VAR_INT.decode(b),
-                ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b), AXIS.decode(b)));
+                ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b), AXIS.decode(b),
+                FUEL_APART.decode(b)));
 
         /** Взрыв без оси боевой части (бомба, картинка после ядерки): ось вниз. */
         public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) {
             this(kind, pos, material, surfaceY, seed, projectile, weapon, DOWN);
+        }
+
+        /** Взрыв, чьё топливо (если есть) горит у клиента у места удара: без огня сервера на блоках (картинка без сервера). */
+        public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis) {
+            this(kind, pos, material, surfaceY, seed, projectile, weapon, axis, false);
         }
 
         /**
@@ -139,6 +152,32 @@ public final class S2C {
         public static final StreamCodec<ByteBuf, Vent> CODEC = StreamCodec.composite(
                 StreamCodecs.VEC3, Vent::pos, ByteBufCodecs.VAR_INT, Vent::material,
                 StreamCodecs.trailing(ByteBufCodecs.FLOAT, OLD_AIR_KG), Vent::airKg, Vent::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Топливо удара горит на блоках ({@code warhead/FuelFires}): состояние воронки — при появлении, при каждой перемене и
+     * тому, кому уходит её чанк. Дым, свет и гул этого пожара клиент ведёт сам по закону топлива оружия на этих клетках
+     * ({@code WeaponSpec.pool(lit)}), огонь — блоки мира.
+     *
+     * @param id        воронка (в своём мире)
+     * @param cells     клетки огня в порядке выгорания (первая горит дольше всех: туда топливо стекло) — нынешние места
+     * @param smothered клетки (биты по номеру), чьё топливо кончилось раньше срока: засыпало, залило, упало в воду
+     * @param weapon    оружие ({@code WeaponType.id})
+     * @param blastTick игровое время удара: закон горения считает время от него
+     */
+    public record FuelFire(int id, List<BlockPos> cells, long smothered, int weapon, long blastTick) implements CustomPacketPayload {
+        public static final Type<FuelFire> TYPE = new Type<>(Incoming.id("fuel_fire"));
+        /** Клеток в пакете не больше: биты {@link #smothered} — одно long (у ракеты — 9). */
+        public static final int MAX_CELLS = 64;
+        public static final StreamCodec<ByteBuf, FuelFire> CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, FuelFire::id, BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX_CELLS)), FuelFire::cells,
+                ByteBufCodecs.VAR_LONG, FuelFire::smothered, ByteBufCodecs.VAR_INT, FuelFire::weapon, ByteBufCodecs.VAR_LONG,
+                FuelFire::blastTick, FuelFire::new);
 
         @Override
         public Type<? extends CustomPacketPayload> type() {

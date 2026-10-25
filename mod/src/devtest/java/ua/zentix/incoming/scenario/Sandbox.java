@@ -821,9 +821,10 @@ final class Sandbox {
                     run(server, "fill %d %d %d %d %d %d minecraft:black_concrete".formatted(
                             o.getX() - 16, GROUND, o.getZ() - 5, o.getX() + 16, GROUND, o.getZ() + 5));
                 }
-                // у дощатого дома: удар в землю у его стены к камере (дом — от x + 4 до x + 12, z ± 3)
-                if (c.houses()) buildHouses(server, BlockPos.containing(site));
-                SandboxStrikes.detonate(server.overworld(), c.weapon(), c.houses() ? at.add(8, 0, 5) : at);
+                // у дощатого дома: удар в землю у его стены к камере (дом — от x + 4 до x + 12, z ± 3, крыша — доски на
+                // высоте 5 над землёй) или в середину его крыши (верх досок — 6 над землёй)
+                if (c.houses() || c.roof()) buildHouses(server, BlockPos.containing(site));
+                SandboxStrikes.detonate(server.overworld(), c.weapon(), c.houses() ? at.add(8, 0, 5) : c.roof() ? at.add(8, 6, 0) : at);
                 return;
             }
             if (c.near()) {

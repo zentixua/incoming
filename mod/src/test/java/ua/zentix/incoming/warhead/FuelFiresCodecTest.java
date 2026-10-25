@@ -1,0 +1,43 @@
+package ua.zentix.incoming.warhead;
+
+import com.mojang.serialization.JsonOps;
+import net.minecraft.core.BlockPos;
+import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.strike.WeaponType;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Горящее топливо сохраняется с миром (ревью FV): после перезапуска сервера клетки догорают в свой срок закона и
+ * гаснут — с doFireTick = false ванильный огонь без учёта стоял бы вечно.
+ */
+class FuelFiresCodecTest {
+    @Test
+    void poolsSurviveASaveWithTheirScheduleAndState() {
+        FuelFires fires = new FuelFires();
+        List<Long> cells = List.of(new BlockPos(10, 63, -4).asLong(), new BlockPos(11, 63, -4).asLong(), new BlockPos(10, 64, -3).asLong(),
+                new BlockPos(9, 63, -4).asLong(), new BlockPos(10, 63, -5).asLong());
+        fires.pools.add(new FuelFires.Pool(3, WeaponType.DRONE.id(), 123_456L, 9000, cells, 0b00100L, 0b00110L));
+        var json = FuelFires.CODEC.encodeStart(JsonOps.INSTANCE, fires).getOrThrow();
+        FuelFires back = FuelFires.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+        assertEquals(1, back.pools.size());
+        FuelFires.Pool a = fires.pools.getFirst(), b = back.pools.getFirst();
+        assertEquals(a.id, b.id);
+        assertEquals(a.weapon, b.weapon);
+        assertEquals(a.blastTick, b.blastTick);
+        assertEquals(a.reach, b.reach);
+        assertArrayEquals(a.cells, b.cells);
+        assertEquals(a.smothered, b.smothered);
+        assertEquals(a.done, b.done);
+        // срок каждой клетки — из оружия и тика удара: тот же, и последняя гаснет в срок закона
+        assertArrayEquals(a.out, b.out);
+        assertEquals(123_456L + Math.round(20 * WeaponType.DRONE.spec().pool().seconds()), b.out[0]);
+        assertTrue(fires.state().getFirst().equals(back.state().getFirst()));
+        // пустое не пишется
+        assertTrue(new FuelFires().isEmpty());
+    }
+}

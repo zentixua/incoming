@@ -22,7 +22,8 @@ import ua.zentix.incoming.util.Terrain;
 
 /**
  * Что взрыв заряда делает с землёй после волны: воронка по закону обычного заряда ({@link CraterModel#chargeRadius}) и
- * пожар от шара топлива из бака ({@link FuelFireball}). Обе — одной единицей в очереди попаданий, после главного взрыва.
+ * поджиг шаром топлива из бака ({@link FuelFireball}). Каждое — своей единицей в очереди попаданий, после главного взрыва;
+ * топливо, что осталось в воронке, — {@link FuelFires}.
  */
 final class Craters {
     /** Больше клеток шар топлива не обходит (у «Томагавка» шар радиусом 17 м — ~10 тыс. клеток полусферы). */
@@ -79,27 +80,24 @@ final class Craters {
     }
 
     /**
-     * Огонь после шара топлива: {@code fuelKg} кг к удару, из них шаром ({@link FuelFireball#ballKg}) горит диаметром
+     * Огонь от шара топлива: {@code fuelKg} кг к удару, из них шаром ({@link FuelFireball#ballKg}) горит диаметром
      * 5,8·M^⅓ м. Обход по воздуху от точки удара в шаре (за уцелевшей стеной шара нет); у каждой горючей грани, к которой
-     * подходит воздух шара, — решение раз на блок:
-     * <ul>
-     * <li>импульс шара ({@link FuelFireball#exposure}) поджигает тонкое горючее с долей его порога
-     * ({@link PulseIgnition#share}: листва, бумага, трава, ткань — тегами {@code pulse_*}; блок другого мода без тега, что
-     * огонь ванили берёт быстро (поджиг ≥ {@link #THIN_SPREAD}), — как трава, ⚠ приближение); толстое дерево — нет;</li>
-     * <li>горящее топливо, что легло в круге воронки ({@link FuelFireball#POOL_SHARE}, радиус —
-     * {@link CraterModel#chargeRadius} сухого грунта, как у лужи клиента), поджигает всё горючее, к чьей грани подходит:
-     * оно горит минутами (⚠ оценка круга).</li>
-     * </ul>
+     * подходит воздух шара, — решение раз на блок: импульс шара ({@link FuelFireball#exposure}) поджигает тонкое горючее с
+     * долей его порога ({@link PulseIgnition#share}: листва, бумага, трава, ткань — тегами {@code pulse_*}; блок другого
+     * мода без тега, что огонь ванили берёт быстро (поджиг ≥ {@link #THIN_SPREAD}), — как трава, ⚠ приближение); толстое
+     * дерево — нет: за секунды шара прогревается слой меньше миллиметра. Топливо, что осталось в воронке
+     * ({@link FuelFireball#POOL_SHARE}), горит своим огнём на блоках, куда легло ({@link FuelFires}): дерево, к которому оно
+     * стекло, загорается от него по правилам игры.
+     * <p>
      * Огонь — на самом горючем ({@link #light}): растение без формы (трава, цветы) горит на своём месте, твёрдое — пламенем в
      * воздухе у его грани, если ванильный огонь там держится за него (над его верхом или без твёрдого пола), а не стоит на
      * камне или песке рядом. У шахеда в шаре загорается около половины сухой травы и почти вся листва, у ракеты — почти
-     * вся трава и листва, ткань — редко; доски и брёвна — только у самой воронки. Возвращает, сколько клеток обошёл.
+     * вся трава и листва, ткань — редко. Возвращает, сколько клеток обошёл.
      */
-    static int ignite(ServerLevel level, Vec3 pos, double fuelKg, double tntKg) {
+    static int ignite(ServerLevel level, Vec3 pos, double fuelKg) {
         if (!IncomingConfig.SERVER.fire.get()) return 0;
         double ballKg = FuelFireball.ballKg(fuelKg);
         double r = FuelFireball.diameter(ballKg) / 2, q = FuelFireball.exposure(ballKg);
-        double wet = CraterModel.chargeRadius(tntKg, CraterModel.Soil.DRY);
         if (r <= 0) return 0;
         LongOpenHashSet seen = new LongOpenHashSet();
         // решение по блоку горючего: загорится ли (раз на блок), и стоит ли уже его огонь
@@ -127,10 +125,7 @@ final class Craters {
                 if (s.isFlammable(level, n, dir.getOpposite())) {
                     long key = n.asLong();
                     if (!burns.containsKey(key)) {
-                        // грань горючего, к которой подходит воздух шара: середина между клетками
-                        double fx = p.getX() + 0.5 + 0.5 * dir.getStepX() - pos.x, fy = p.getY() + 0.5 + 0.5 * dir.getStepY() - pos.y,
-                                fz = p.getZ() + 0.5 + 0.5 * dir.getStepZ() - pos.z;
-                        double share = fx * fx + fy * fy + fz * fz <= wet * wet ? 1 : PulseIgnition.share(q, fuel(level, n, s, dir.getOpposite()));
+                        double share = PulseIgnition.share(q, fuel(level, n, s, dir.getOpposite()));
                         burns.put(key, share > 0 && level.random.nextDouble() < share);
                     }
                     if (burns.get(key) && !lit.contains(key) && light(level, p, here, n.immutable(), s, dir)) lit.add(key);

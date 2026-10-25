@@ -8,12 +8,11 @@ import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarSprites;
 import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxBudget;
-import ua.zentix.incoming.client.fx.smoke.FirePlume;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
- * Твёрдое обычного взрыва — частицами {@link Fx}: горящие куски с дымными хвостами (если было топливо), искры, лужа топлива
- * в воронке (языки пламени и угли). Дым, пыль и огненный шар — облако по модели взрыва ({@code client/fx/smoke}) у события
+ * Твёрдое обычного взрыва — частицами {@link Fx}: горящие куски с дымными хвостами (если было топливо), искры. Топливо в
+ * воронке горит огнём Minecraft на блоках (сервер, {@code warhead/FuelFires}). Дым, пыль и огненный шар — облако по модели взрыва ({@code client/fx/smoke}) у события
  * {@code FarBlasts}: запечённые клубы и кадры шара слоя эффектов; здесь их нет. Удары осколков корпуса — {@link FragmentHits}.
  * Куски и искры — по размеру огненного шара модели
  * ({@code r}, блоки). Прорыв бомбы из-под земли ({@link #burst}) — прежняя картинка из частиц.
@@ -83,42 +82,6 @@ final class Explosions {
             Fx.smoke().vel(Math.cos(a) * v * r / 4, 0.03 + rnd.nextDouble() * 0.08, Math.sin(a) * v * r / 4).size(r * 0.35f, r * (0.9f + 0.5f * rnd.nextFloat()))
                     .growFast().life(200 + rnd.nextInt(160)).color(rgb(mat), light).alpha(0.8f).drag(0.88f).collide().rise(0.002f)
                     .fadeIn(2).fadeFrom(0.4f).budget(FxBudget.GROUND).spawn(level, c.x + Math.cos(a) * r * 0.5, c.y + 0.6, c.z + Math.sin(a) * r * 0.5);
-        }
-    }
-
-    /** Языков пламени лужи одновременно — не больше (при «Частицы: все»). */
-    static final int POOL_TONGUES = 24;
-
-    /**
-     * Лужа топлива в воронке ({@code CloudModel}: доля топлива к удару, площадь воронки, выгорание с единицы площади):
-     * языки пламени по Хескестаду — очаг радиуса {@code radius}, пламя высотой {@code flame}; газ в пламени поднимается
-     * со скоростью порядка √(g·L) (число Фруда пламени ~1), язык живёт, пока проходит высоту пламени; языков столько,
-     * чтобы пламя над очагом было сплошным (не больше {@link #POOL_TONGUES}), × доля, что ещё горит ({@code share}).
-     * Изредка стреляют угли. Дым над лужей — шлейф облака взрыва ({@code FarBlasts}), свет пламени — {@code FxLights}.
-     * Цвет и яркость языка — видимого пламени ({@link FirePlume#flameLight}: светящаяся сажа, с привыканием глаза), те же, что у
-     * его света и у пламени вдали ({@code FireSmoke.far}): нарисованный рукой бледно-жёлтый язык ночью в 300 м выходил
-     * серой точкой.
-     */
-    static void pool(ClientLevel level, Vec3 c, double radius, double flame, double share, RandomSource rnd) {
-        if (share <= 0 || flame <= 0) return;
-        float k = Fx.density(c);
-        double lum = FirePlume.FLAME_LUMINANCE * ua.zentix.incoming.client.far.FarView.exposure(level, 0);
-        float[] fire = ua.zentix.incoming.client.far.Sight.onScreen(FirePlume.FLAME_COLOR, lum, 1);
-        double up = Math.sqrt(9.80665 * flame) / 20, size = Math.max(0.35 * radius, 0.2 * flame);
-        int life = (int) Math.max(6, Math.round(flame / up));
-        // языков в пламени: объём пламени на объём языка, не больше предела
-        double alive = Math.min(POOL_TONGUES, Math.max(2, radius * radius * flame / (size * size * size))) * share * k;
-        double born = alive / life;
-        for (int n = (int) born + (rnd.nextDouble() < born - (int) born ? 1 : 0); n > 0; n--) {
-            double a = rnd.nextDouble() * Mth.TWO_PI, r = radius * Math.sqrt(rnd.nextDouble());
-            float s = (float) (size * (0.8 + 0.4 * rnd.nextDouble()));
-            Fx.fire().color(fire, fire).hdr(lum).vel(0, up * (0.7 + 0.3 * rnd.nextDouble()), 0).size(0.6f * s, s).life(life + rnd.nextInt(Math.max(1, life / 3))).rise(0.004f)
-                    .budget(FxBudget.GROUND).spawn(level, c.add(Math.cos(a) * r, 0.3 + 0.5 * s, Math.sin(a) * r));
-        }
-        if (rnd.nextFloat() < 0.3f * share) {
-            Fx.spark().vel(rnd.nextGaussian() * 0.05, 0.08 + 0.1 * rnd.nextDouble(), rnd.nextGaussian() * 0.05).size(0.06f, 0.03f)
-                    .life(30 + rnd.nextInt(40)).gravity(-0.001f).drag(0.98f).streak(0).color(0xFFC060, 0xA02000)
-                    .spawn(level, c.add(rnd.nextGaussian() * radius * 0.5, 0.5, rnd.nextGaussian() * radius * 0.5));
         }
     }
 

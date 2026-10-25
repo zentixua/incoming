@@ -15,9 +15,10 @@ public final class ClientAir {
 
     private ClientAir() {}
 
-    /** Воздух сейчас; мира нет — штиль. */
+    /** Воздух сейчас; мира нет (и клиента — в юнит-тестах очагов) — штиль. */
     public static Air now() {
-        ClientLevel level = Minecraft.getInstance().level;
+        Minecraft mc = Minecraft.getInstance();
+        ClientLevel level = mc == null ? null : mc.level;
         if (level == null) return Air.CALM;
         long t = level.getGameTime();
         if (t != tick) {
