@@ -292,9 +292,9 @@ public final class FxQuads {
     }
 
     /**
-     * Уровень мелкого кадра квадрата i ({@link CoarsePass#level}): по наименьшему у его четырёх рёбер числу пикселей
-     * экрана на тексель картинки (ребро на экране против того же ребра на листе); доля кадра и рамка на экране. Угол у
-     * глаза или за ним — квадрат во весь экран и растянут без меры: самый мелкий уровень.
+     * Уровень мелкого кадра квадрата i ({@link CoarsePass#level}): по наименьшему растяжению картинки на экране —
+     * пикселей на тексель в самом сжатом направлении, у каждого угла ({@link #stretch}); доля кадра и рамка на экране. Угол
+     * у глаза или за ним — квадрат во весь экран и растянут без меры: самый мелкий уровень.
      */
     private void measure(int i) {
         long q = stage + (long) i * QUAD;
@@ -324,14 +324,7 @@ public final class FxQuads {
             return;
         }
         double perTexel = Double.MAX_VALUE;
-        for (int k = 0; k < 4; k++) {
-            int j = (k + 1) & 3;
-            long p = q + (long) k * VERTEX, r = q + (long) j * VERTEX;
-            double texels = Math.hypot((MemoryUtil.memGetFloat(r + 12) - MemoryUtil.memGetFloat(p + 12)) * FxAtlas.WIDTH,
-                    (MemoryUtil.memGetFloat(r + 16) - MemoryUtil.memGetFloat(p + 16)) * FxAtlas.HEIGHT);
-            double pixels = Math.hypot(corners[3 * j] - corners[3 * k], corners[3 * j + 1] - corners[3 * k + 1]);
-            if (texels > 0.5) perTexel = Math.min(perTexel, pixels / texels);
-        }
+        for (int k = 0; k < 4; k++) perTexel = Math.min(perTexel, stretch(q, k));
         level[i] = (byte) (perTexel == Double.MAX_VALUE ? 0 : CoarsePass.level(perTexel));
         float cx0 = Math.max(0, x0), cy0 = Math.max(0, y0), cx1 = Math.min(screenW, x1), cy1 = Math.min(screenH, y1);
         cover[i] = cx1 > cx0 && cy1 > cy0 ? (cx1 - cx0) * (cy1 - cy0) / ((float) screenW * screenH) : 0;
@@ -339,6 +332,44 @@ public final class FxQuads {
         box[b + 1] = cy0 / screenH * 2 - 1;
         box[b + 2] = cx1 / screenW * 2 - 1;
         box[b + 3] = cy1 / screenH * 2 - 1;
+    }
+
+    /** Доля ребра, на которую сдвигается точка у угла: производная проекции разностью, без заметной кривизны. */
+    private static final double STEP = 0.01;
+
+    /**
+     * Наименьшее растяжение картинки у угла k квадрата q: пикселей экрана на тексель в самом сжатом направлении — меньшее
+     * сингулярное число якобиана проекции по двум рёбрам угла (рёбра листа — по осям картинки), разностью на {@link #STEP}
+     * ребра. Длина ребра на экране целиком тут не годится: у плоского квадрата вскользь (пыль у земли) ближний край
+     * растянут, дальний сжат в доли пикселя на тексель (ревью #455). Перспектива сжимает сильнее всего у самого дальнего
+     * места квадрата, а оно — в углу (1/w по плоскости линейна): наименьшее по углам — наименьшее по квадрату. Без
+     * рёбер на листе — без меры.
+     */
+    private double stretch(long q, int k) {
+        double ax = 0, ay = 0, bx = 0, by = 0;
+        for (int e = 0; e < 2; e++) {
+            int j = e == 0 ? (k + 1) & 3 : (k + 3) & 3;
+            long p = q + (long) k * VERTEX, r = q + (long) j * VERTEX;
+            double texels = Math.hypot((MemoryUtil.memGetFloat(r + 12) - MemoryUtil.memGetFloat(p + 12)) * FxAtlas.WIDTH,
+                    (MemoryUtil.memGetFloat(r + 16) - MemoryUtil.memGetFloat(p + 16)) * FxAtlas.HEIGHT);
+            if (texels <= 0.5) return Double.MAX_VALUE;
+            float x = MemoryUtil.memGetFloat(p), y = MemoryUtil.memGetFloat(p + 4), z = MemoryUtil.memGetFloat(p + 8);
+            float t = (float) STEP;
+            // шаг внутрь квадрата: w между углами, у которых он больше нуля
+            screen.transform(clip.set(x + (MemoryUtil.memGetFloat(r) - x) * t, y + (MemoryUtil.memGetFloat(r + 4) - y) * t,
+                    z + (MemoryUtil.memGetFloat(r + 8) - z) * t, 1));
+            double sx = (clip.x / clip.w * 0.5 + 0.5) * screenW, sy = (clip.y / clip.w * 0.5 + 0.5) * screenH;
+            double per = STEP * texels, dx = (sx - corners[3 * k]) / per, dy = (sy - corners[3 * k + 1]) / per;
+            if (e == 0) {
+                ax = dx;
+                ay = dy;
+            } else {
+                bx = dx;
+                by = dy;
+            }
+        }
+        double sum = ax * ax + ay * ay + bx * bx + by * by, det = ax * by - ay * bx;
+        return Math.sqrt(Math.max(0, (sum - Math.sqrt(Math.max(0, sum * sum - 4 * det * det))) / 2));
     }
 
     /**

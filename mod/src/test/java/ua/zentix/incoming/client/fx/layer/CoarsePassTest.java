@@ -247,6 +247,42 @@ class CoarsePassTest {
         assertTrue(maskPass > 0 && composite > maskPass && fill > composite && redraw > fill, "маска, вывод, досчёт — по порядку, в том же отрезке");
     }
 
+    /**
+     * Разрыв глубины в 4 % — прут на 100 блоках перед стеной на 104 (ревью #455): соседи мелкого кадра у прута — не то же
+     * место, пиксель уходит в досчёт; та же поверхность (104 против 104,3: наклон в пределах пикселя мелкого кадра) —
+     * то же. Шейдер вывода — с тем же допуском, что здесь.
+     */
+    @Test
+    void depthStepOfAFewPercentIsNotTheSamePlace() throws IOException {
+        assertTrue(CoarsePass.alike(100, 104) < 0.5, "прут и стена");
+        assertTrue(CoarsePass.alike(100, 102) < 0.5, "прут и дым за ним");
+        assertTrue(CoarsePass.alike(104, 104.3) > 0.5, "одна стена");
+        assertTrue(CoarsePass.alike(0.5, 0.501) > 0.5, "вплотную");
+        String out = shader("core/fx_coarse.fsh").replaceAll("\\s+", " ");
+        assertTrue(out.contains("const float COARSE_SAME = " + (float) CoarsePass.SAME + ";"), "допуск шейдера");
+        assertTrue(out.contains("float rel = abs(d - e) / max(min(d, e), 0.1) / COARSE_SAME; return 1.0 / (1.0 + rel * rel);"), "та же формула");
+        assertTrue(out.contains("coarseAlike(") && !out.contains("pallAlike("), "вывод — строгим сходством");
+    }
+
+    /**
+     * Плоский квадрат пыли вскользь (ревью #455): 180 блоков поперёк, середина в 100 блоках впереди, на блок ниже глаза.
+     * Ближний край растянут во много пикселей на тексель, дальний — в доли пикселя: квадрат — полным кадром.
+     */
+    @Test
+    void flatQuadSeenEdgeOnStaysFullResolution() {
+        FxQuads quads = frame();
+        quads.sixWay(0.5f);
+        quads.flat(0, -1, -100, 100, 90, 90, FxAtlas.puff6(3, false), 0.5f, 0.5f, 0.5f, 0.5f, 2, 1, LightTexture.FULL_BRIGHT, 0);
+        quads.sixWay(-1);
+        assertEquals(0, quads.level(0));
+        // тот же квадрат лицом к глазу на тех же 100 блоках — крупный клуб, мелким кадром
+        double focal = H / 2.0 / Math.tan(Math.toRadians(35));
+        FxQuads facing = frame();
+        puff(facing, 0, 0, 100, 90);
+        assertTrue(90 * 2 / 100.0 * focal / 128 > CoarsePass.PER_TEXEL[CoarsePass.LEVELS - 1]);
+        assertEquals(CoarsePass.LEVELS - 1, facing.level(0));
+    }
+
     private static String shader(String path) throws IOException {
         return java.nio.file.Files.readString(Path.of("src/main/resources/assets/incoming/shaders").resolve(path)).replaceAll("//[^\n]*", "");
     }

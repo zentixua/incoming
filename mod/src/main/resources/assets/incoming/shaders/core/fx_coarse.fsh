@@ -5,8 +5,8 @@
 // Крупные клубы из мелкого кадра — на кадр (client/fx/layer/CoarsePass): смешивание ONE, ONE_MINUS_SRC_ALPHA, как у
 // самих квадратов слоя, — кадр отрезка и есть они, сложенные по порядку. Пиксель — из четырёх ближних пикселей мелкого
 // кадра (свет посчитан в середине пикселя t мелкого кадра, расстояние до мира — в пикселе floor((t + ½)·factor) полного,
-// как у луча пелены) с весом по сходству их расстояния до мира с расстоянием пикселя (pallAlike, pallSlope, pallAhead —
-// как fx_pall_composite): у края дома клуб неба не ложится на стену, а клуб перед стеной — на небо. Ни один из четырёх
+// как у луча пелены) с весом по сходству их расстояния до мира с расстоянием пикселя (pallSlope, pallAhead — как
+// fx_pall_composite; сходство — строже, чем у пелены: coarseAlike): у края дома клуб неба не ложится на стену, а клуб перед стеной — на небо. Ни один из четырёх
 // не то же место (прут, решётка, край блока вдали уже пикселя мелкого кадра) — мелкий кадр этот пиксель не разрешает:
 // вывод его не трогает, а проход маски (CoarseMask = 1) отмечает его, и CoarsePass досчитывает отмеченные пиксели
 // квадратами отрезка в полном кадре, с аппаратной глубиной (дым перед прутом — на пруте, за ним — нет).
@@ -21,6 +21,16 @@ uniform vec2 CoarseScale;
 uniform float CoarseMask;
 
 out vec4 fragColor;
+
+// Допуск «то же место» у мелкого кадра (CoarsePass.SAME): у пелены 5 % (pallAlike), но квадрат дыма между прутом в 100 м и
+// стеной в 104 м за ним в полном кадре закрыт прутом, а образец у стены его держит. Сходство 1/(1 + (rel/SAME)²): у
+// допуска — ½, вчетверо дальше — 1/17
+const float COARSE_SAME = 0.01;
+
+float coarseAlike(float d, float e) {
+    float rel = abs(d - e) / max(min(d, e), 0.1) / COARSE_SAME;
+    return 1.0 / (1.0 + rel * rel);
+}
 
 ivec2 rayPixel(ivec2 t, ivec2 fullSize) {
     return clamp(ivec2((vec2(t) + 0.5) * CoarseScale), ivec2(0), fullSize - 1);
@@ -43,7 +53,7 @@ void main() {
     for (int j = 0; j <= 1; j++) {
         for (int i = 0; i <= 1; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
-            float a = pallAlike(sampleDepth(t, fullSize), pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
+            float a = coarseAlike(sampleDepth(t, fullSize), pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
             // билинейный вес без «?:» внутри выражения: Veil теряет скобки вокруг него (ShaderSourceTest)
             float w = mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j));
             same = max(same, a);
