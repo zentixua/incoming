@@ -597,7 +597,7 @@ public final class Warheads {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact()) : 0);
+                Craters.ignite(level, area, main, this::happened, pos, weapon.spec().fuelAtImpact());
                 // топливо в воронке — после воронки: ложится на её дно и горит огнём на блоках, пока его хватает
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, pos, weapon, born, reach) : 0);
             }

@@ -1,0 +1,27 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "GPL-3.0-only"
+
+[[accessTransformers]]
+file = "META-INF/accesstransformer.cfg"
+
+[[mods]]
+modId = "stand"
+version = "1.0.0"
+displayName = "Scene Stand"
+authors = "ZentixUA"
+description = '''Plays a list of scene steps in a fresh flat single-player world without a window and writes the time of every frame on the CPU and the GPU (by render stage), the server tick, screenshots and impacts. A tool of the Incoming repository; does nothing unless stand-plan.json is in the game directory.'''
+
+[[dependencies.stand]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.stand]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1]"
+ordering = "NONE"
+side = "CLIENT"

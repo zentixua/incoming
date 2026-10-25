@@ -1,6 +1,8 @@
 package ua.zentix.incoming.warhead;
 
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
@@ -17,8 +19,16 @@ import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
 import ua.zentix.incoming.nuclear.model.PulseIgnition;
 import ua.zentix.incoming.registry.ModTags;
+import ua.zentix.incoming.strike.ImpactCost;
+import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.nuclear.world.CraterJob;
+import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.util.Stability;
 import ua.zentix.incoming.util.Terrain;
+import ua.zentix.incoming.work.UnitQueue;
+
+import java.util.List;
+import java.util.function.BooleanSupplier;
 
 /**
  * Что взрыв заряда делает с землёй после волны: воронка по закону обычного заряда ({@link CraterModel#chargeRadius}) и
@@ -26,8 +36,16 @@ import ua.zentix.incoming.util.Terrain;
  * топливо, что осталось в воронке, — {@link FuelFires}.
  */
 final class Craters {
-    /** Больше клеток шар топлива не обходит (у «Томагавка» шар радиусом 17 м — ~10 тыс. клеток полусферы). */
-    private static final int FIREBALL_CELLS = 40_000;
+    /**
+     * Больше клеток шар топлива не обходит: у «Томагавка» на ровной земле клеток с импульсом выше
+     * {@link PulseIgnition#FLOOR} под потолком обхода ({@link Ignition#ceiling}) — ~7 тыс. (круг в 47 м), в лесу и под
+     * крышей — больше. Клетки идут от ближних по воздуху к дальним: за пределом остаются дальние, где и импульс меньше. По
+     * импульсу (от большего) — нельзя: у всплывшего шара он больше всего в воздухе над ним, и предел кончал обход там, не
+     * дойдя до земли у края шара (ревью #467: под навесом 65×65 — на 8 кал/см², листва у земли в 22 м — 52 %).
+     */
+    static final int FIREBALL_CELLS = 40_000;
+    /** Клеток обхода шара топлива за единицу работы: клетка с соседями — 3–5 мкс (GameTest), единица — около 1 мс. */
+    static final int PORTION = 256;
 
     private Craters() {}
 
@@ -81,8 +99,12 @@ final class Craters {
 
     /**
      * Огонь от шара топлива: {@code fuelKg} кг к удару, из них шаром ({@link FuelFireball#ballKg}) горит диаметром
-     * 5,8·M^⅓ м. Обход по воздуху от точки удара в шаре (за уцелевшей стеной шара нет); у каждой горючей грани, к которой
-     * подходит воздух шара, — решение раз на блок: импульс шара ({@link FuelFireball#exposure}) поджигает тонкое горючее с
+     * 5,8·M^⅓ м — тот же шар, что видит игрок ({@link FuelFireball.Sweep}: растёт от земли, всплывает к 0,75·D, уходит с
+     * ветром мира). Импульс у места — от этого шара за всё горение ({@link FuelFireball.Sweep#exposure}): пока место в шаре —
+     * полный поток поверхности, вне — меньше. Прежде шар сервера стоял полусферой D/2 у точки удара с полным импульсом в
+     * ней: крону над поднявшимся шаром он не трогал, а траву, которую шар покинул в начале горения, жёг всю (BLASTSEQ D18).
+     * Обход по воздуху от точки удара, пока импульс не ниже {@link PulseIgnition#FLOOR} (за уцелевшей стеной шара нет); у
+     * каждой горючей грани, к которой подходит этот воздух, — решение раз на блок: импульс поджигает тонкое горючее с
      * долей его порога ({@link PulseIgnition#share}: листва, бумага, трава, ткань — тегами {@code pulse_*}; блок другого
      * мода без тега, что огонь ванили берёт быстро (поджиг ≥ {@link #THIN_SPREAD}), — как трава, ⚠ приближение); толстое
      * дерево — нет: за секунды шара прогревается слой меньше миллиметра. Топливо, что осталось в воронке
@@ -91,49 +113,156 @@ final class Craters {
      * <p>
      * Огонь — на самом горючем ({@link #light}): растение без формы (трава, цветы) горит на своём месте, твёрдое — пламенем в
      * воздухе у его грани, если ванильный огонь там держится за него (над его верхом или без твёрдого пола), а не стоит на
-     * камне или песке рядом. У шахеда в шаре загорается около половины сухой травы и почти вся листва, у ракеты — почти
-     * вся трава и листва, ткань — редко. Возвращает, сколько клеток обошёл.
+     * камне или песке рядом. У шахеда у точки удара загорается пятая часть сухой травы и три четверти листвы, к краю шара —
+     * меньше; у ракеты — почти вся трава и листва в шаре, листва — и в полутора радиусах (четверть), и в кроне над шаром;
+     * ткань — редко ({@code FuelFireballTest}). Ставит обход в очередь попаданий ({@link Ignition}): после взрывов {@code after}, если взрыв был ({@code happened}).
      */
-    static int ignite(ServerLevel level, Vec3 pos, double fuelKg) {
-        if (!IncomingConfig.SERVER.fire.get()) return 0;
-        double ballKg = FuelFireball.ballKg(fuelKg);
-        double r = FuelFireball.diameter(ballKg) / 2, q = FuelFireball.exposure(ballKg);
-        if (r <= 0) return 0;
-        LongOpenHashSet seen = new LongOpenHashSet();
-        // решение по блоку горючего: загорится ли (раз на блок), и стоит ли уже его огонь
-        Long2BooleanOpenHashMap burns = new Long2BooleanOpenHashMap();
-        LongOpenHashSet lit = new LongOpenHashSet();
-        LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
-        BlockPos start = BlockPos.containing(pos);
-        if (!Terrain.ready(level, start)) return 0;
-        if (!passes(level, start, level.getBlockState(start))) start = start.above();
-        seen.add(start.asLong());
-        queue.enqueue(start.asLong());
-        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-        BlockPos.MutableBlockPos n = new BlockPos.MutableBlockPos();
-        int cells = 0;
-        while (!queue.isEmpty() && cells < FIREBALL_CELLS) {
-            p.set(queue.dequeueLong());
-            if (!level.isInWorldBounds(p) || !Terrain.ready(level, p)) continue;
-            BlockState here = level.getBlockState(p);
-            if (!passes(level, p, here)) continue;
-            cells++;
-            for (Direction dir : Direction.values()) {
-                n.setWithOffset(p, dir);
-                if (!Terrain.ready(level, n)) continue;
-                BlockState s = level.getBlockState(n);
-                if (s.isFlammable(level, n, dir.getOpposite())) {
-                    long key = n.asLong();
-                    if (!burns.containsKey(key)) {
-                        double share = PulseIgnition.share(q, fuel(level, n, s, dir.getOpposite()));
-                        burns.put(key, share > 0 && level.random.nextDouble() < share);
-                    }
-                    if (burns.get(key) && !lit.contains(key) && light(level, p, here, n.immutable(), s, dir)) lit.add(key);
-                }
-                if (Vec3.atCenterOf(n).distanceToSqr(pos) <= r * r && seen.add(n.asLong())) queue.enqueue(n.asLong());
-            }
+    static void ignite(ServerLevel level, BlastArea area, List<StagedExplosion> after, BooleanSupplier happened, Vec3 pos, double fuelKg) {
+        if (!IncomingConfig.SERVER.fire.get() || FuelFireball.ballKg(fuelKg) <= 0) return;
+        StrikeWorld.get(level).impacts().add(level, new Ignition(area.retain(), after, happened, pos, FuelFireball.ballKg(fuelKg)));
+    }
+
+    /**
+     * Обход шара топлива ({@link #ignite}) порциями по {@link #PORTION} клеток за единицу работы: у ракеты он берёт до
+     * {@link #FIREBALL_CELLS} клеток — около 0,2 с потока сервера разом. Порции идут по тикам под бюджетом работы:
+     * огонь у ракеты встаёт за десятки тиков, а не в один.
+     */
+    static final class Ignition implements UnitQueue.Job {
+        private final BlastArea area;
+        private final List<StagedExplosion> after;
+        private final BooleanSupplier happened;
+        private final Vec3 pos;
+        private final double ballKg;
+        /** Путь шара: считается в первой единице, когда ветер мира — тот, что у шара на картинке. */
+        private FuelFireball.Sweep ball;
+        /** Импульс в клетке воздуха: считается раз, когда клетка встала в обход. */
+        private final Long2DoubleOpenHashMap pulse = new Long2DoubleOpenHashMap();
+        private final LongOpenHashSet seen = new LongOpenHashSet();
+        /** Решение по блоку горючего: загорится ли (раз на блок), и стоит ли уже его огонь. */
+        private final Long2BooleanOpenHashMap burns = new Long2BooleanOpenHashMap();
+        private final LongOpenHashSet lit = new LongOpenHashSet();
+        /** От ближних по воздуху к дальним ({@link #FIREBALL_CELLS}). */
+        private final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+        /** Высота клетки начала: ниже неё обход идёт и выше потолка столбцов ({@link #ceiling}). */
+        private int startY;
+        /** Потолок обхода по столбцам ({@link #ceiling}). */
+        private final Long2IntOpenHashMap tops = new Long2IntOpenHashMap();
+        private int cells;
+
+        Ignition(BlastArea area, List<StagedExplosion> after, BooleanSupplier happened, Vec3 pos, double ballKg) {
+            this.area = area;
+            this.after = after;
+            this.happened = happened;
+            this.pos = pos;
+            this.ballKg = ballKg;
         }
-        return cells;
+
+        @Override
+        public boolean ready(ServerLevel level) {
+            return area.ready(level);
+        }
+
+        @Override
+        public boolean blocked() {
+            return Warheads.pending(after);
+        }
+
+        @Override
+        public int unitKind() {
+            return ImpactCost.Kind.GROUND.ordinal();
+        }
+
+        @Override
+        public boolean step(ServerLevel level) {
+            long t0 = System.nanoTime();
+            int done = ball == null ? start(level) : portion(level);
+            area.record(level, ImpactCost.Kind.GROUND, System.nanoTime() - t0, done);
+            return !queue.isEmpty() && cells < FIREBALL_CELLS;
+        }
+
+        /** Путь шара и первая клетка обхода; взрыв, отменённый приватом, не жжёт. */
+        private int start(ServerLevel level) {
+            Air air = Air.of(level);
+            double alpha = Stability.alpha(air.stability()), u = air.wind().at(10, alpha);
+            ball = FuelFireball.Sweep.of(ballKg, 0, u * air.wind().x(), u * air.wind().z(), alpha);
+            BlockPos start = BlockPos.containing(pos);
+            if (!happened.getAsBoolean() || !Terrain.ready(level, start)) return 0;
+            if (!passes(level, start, level.getBlockState(start))) start = start.above();
+            startY = start.getY();
+            seen.add(start.asLong());
+            pulse.put(start.asLong(), exposure(ball, pos, start));
+            queue.enqueue(start.asLong());
+            return portion(level);
+        }
+
+        /** До {@link #PORTION} клеток обхода; сколько обошла. */
+        private int portion(ServerLevel level) {
+            BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+            BlockPos.MutableBlockPos n = new BlockPos.MutableBlockPos();
+            int done = 0;
+            while (!queue.isEmpty() && cells < FIREBALL_CELLS && done < PORTION) {
+                p.set(queue.dequeueLong());
+                if (!level.isInWorldBounds(p) || !Terrain.ready(level, p)) continue;
+                BlockState here = level.getBlockState(p);
+                if (!passes(level, p, here)) continue;
+                cells++;
+                done++;
+                double q = pulse.get(p.asLong());
+                for (Direction dir : Direction.values()) {
+                    n.setWithOffset(p, dir);
+                    if (!Terrain.ready(level, n)) continue;
+                    BlockState s = level.getBlockState(n);
+                    if (s.isFlammable(level, n, dir.getOpposite())) {
+                        long key = n.asLong();
+                        if (!burns.containsKey(key)) {
+                            double share = PulseIgnition.share(q, fuel(level, n, s, dir.getOpposite()));
+                            burns.put(key, share > 0 && level.random.nextDouble() < share);
+                        }
+                        if (burns.get(key) && !lit.contains(key) && light(level, p, here, n.immutable(), s, dir)) lit.add(key);
+                    }
+                    if (seen.add(n.asLong())) {
+                        if (n.getY() > startY && n.getY() > ceiling(level, n.getX(), n.getZ())) continue;
+                        double qn = exposure(ball, pos, n);
+                        if (qn < PulseIgnition.FLOOR) continue;
+                        pulse.put(n.asLong(), qn);
+                        queue.enqueue(n.asLong());
+                    }
+                }
+            }
+            return done;
+        }
+
+        /**
+         * Выше всего в столбце и у его соседей ({@link Heightmap.Types#MOTION_BLOCKING}, с листвой) клетка воздуха не
+         * касается ни одной грани — обход туда не идёт: шар ракеты всплывает на 26 м, и небо над ним — сотни тысяч клеток с
+         * импульсом выше {@link PulseIgnition#FLOOR}, а горючего там нет. Связь по воздуху остаётся: через стену — полосой у
+         * её верха, в двор и в окно — вниз вдоль стены. Не выше точки подрыва — всё ({@link #startY}): подрыв в воздухе, над
+         * проломом крыши иначе был бы отрезан от земли под ним (ревью #467).
+         */
+        private int ceiling(ServerLevel level, int x, int z) {
+            long key = (long) x << 32 | (z & 0xFFFFFFFFL);
+            int known = tops.getOrDefault(key, Integer.MIN_VALUE);
+            if (known != Integer.MIN_VALUE) return known;
+            int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x, z);
+            for (Direction d : Direction.Plane.HORIZONTAL) top = Math.max(top, Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x + d.getStepX(), z + d.getStepZ()));
+            tops.put(key, top);
+            return top;
+        }
+
+        @Override
+        public void end(ServerLevel level) {
+            area.release(level);
+        }
+
+        @Override
+        public String describe() {
+            return "Fuel fireball at " + Mth.floor(pos.x) + " " + Mth.floor(pos.y) + " " + Mth.floor(pos.z);
+        }
+    }
+
+    /** Импульс шара {@code ball} от точки взрыва {@code pos} в середине клетки {@code at}, кал/см². */
+    private static double exposure(FuelFireball.Sweep ball, Vec3 pos, BlockPos at) {
+        return ball.exposure(at.getX() + 0.5 - pos.x, at.getY() + 0.5 - pos.y, at.getZ() + 0.5 - pos.z);
     }
 
     /** Поджиг ванили (скорость, с какой огонь берёт блок), с которой горючее без тега считается тонким, как трава. */

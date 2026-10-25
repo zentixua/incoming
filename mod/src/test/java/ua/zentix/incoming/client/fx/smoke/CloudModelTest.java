@@ -4,6 +4,7 @@ import ua.zentix.incoming.util.Stability;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.FuelFireball;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 
@@ -685,6 +686,30 @@ class CloudModelTest {
                 double tau = m.tau(t);
                 assertTrue(tau < prev, w + " " + t + " с: толща " + tau + " после " + prev);
                 prev = tau;
+            }
+        }
+    }
+
+    /**
+     * Шар, что жжёт сервер ({@link FuelFireball.Sweep}, {@code Craters.ignite}), — тот же, что видит игрок (BLASTSEQ D18):
+     * радиус и высота середины на каждом шаге горения — ровно шара топлива картинки, снос ветром — в пределах метра или
+     * 15 % от сноса шара картинки (там снос — термик облака, у сервера — ветер на высоте середины шара).
+     */
+    @Test
+    void serverFireballIsTheBallThePlayerSees() {
+        for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
+            for (double wind : new double[]{0, 2, 5, 10}) {
+                CloudModel.Air air = air(Stability.D, wind * 0.8, wind * 0.6, 0.5);
+                CloudModel m = model(w, air);
+                FuelFireball.Sweep ball = FuelFireball.Sweep.of(FuelFireball.ballKg(m.source.fuelKg()), m.hob, air.windX(), air.windZ(), air.shear());
+                for (int i = 0; i < ball.r().length; i++) {
+                    double t = (i + 0.5) * ball.dt();
+                    String at = w + ", ветер " + wind + " м/с, " + t + " с";
+                    assertEquals(m.fuelBallRadius(t), ball.r()[i], 1e-9, at + ": радиус");
+                    assertEquals(m.fuelBallHeight(t), ball.y()[i], 1e-9, at + ": высота середины");
+                    double far = Math.hypot(m.ballX(t), m.ballZ(t));
+                    assertEquals(0, Math.hypot(ball.x()[i] - m.ballX(t), ball.z()[i] - m.ballZ(t)), Math.max(1, 0.15 * far), at + ": снос");
+                }
             }
         }
     }
