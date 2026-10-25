@@ -69,14 +69,13 @@ def look_stats(png):
 
 
 def shot_order(scenes, only):
+    """Кадры плана по порядку: шаги «кадр» и кадры окон от попадания (имена — как пишет обвязка)."""
     names = []
-    for s in scenes["scenes"]:
-        if only is not None and s["id"] not in only:
-            continue
-        if s.get("impact_window"):
-            names += [f"{s['id']}_{plan_trim(t)}s" for t in s.get("shots", [])]
-        else:
-            names += [f"{s['id']}_{c}" for c in s["cameras"]]
+    for st in plan.build(scenes, only)["steps"]:
+        if st["do"] == "shot":
+            names.append(st["name"])
+        elif st["do"] == "impact_window":
+            names += [f"{st['prefix']}_{plan_trim(t)}s" for t in st["shots"]]
     return names
 
 

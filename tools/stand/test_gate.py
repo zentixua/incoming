@@ -789,6 +789,17 @@ class PairRuns(unittest.TestCase):
             self.assertTrue(any("профиль питания low-power" in c for c in r["load"]), r["load"])
             self.assertEqual(r["checks"], [])
 
+    def test_report_shot_order_follows_the_plan(self):
+        try:
+            import report
+        except ImportError:
+            self.skipTest("нет Pillow (report.py — через uv)")
+        # сцены без камер (пуск вблизи) — тоже: их кадры — шаги «кадр» плана
+        names = report.shot_order(plan.load(), None)
+        self.assertIn("100-hit_0.2s", names)
+        self.assertIn("grad_40s", names)
+        self.assertIn("100_edge", names)
+
     def test_report_and_gate_share_one_verdict_path(self):
         # report.py берёт вердикт у stand (judge_pair — из сырых данных), а не из сохранённых results.json
         src = (Path(__file__).parent / "report.py").read_text()
