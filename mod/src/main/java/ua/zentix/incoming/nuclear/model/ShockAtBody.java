@@ -10,7 +10,7 @@ package ua.zentix.incoming.nuclear.model;
  * @param impulsePaSeconds incident positive impulse, Pa s (Kinney-Graham, not a rectangular p*t estimate)
  * @param dynamicPressurePa peak dynamic pressure, Pa
  * @param windMetresPerSecond peak air particle velocity, m/s
- * @param reflectedPressurePa peak normal reflected overpressure at a backing wall, Pa; zero if there is no wall
+ * @param reflectedPressurePa peak normal reflected overpressure at a backing wall, Pa; zero if none is established
  */
 public record ShockAtBody(double arrivalSeconds, double pressurePa, double positiveSeconds, double impulsePaSeconds,
                           double dynamicPressurePa, double windMetresPerSecond, double reflectedPressurePa) {

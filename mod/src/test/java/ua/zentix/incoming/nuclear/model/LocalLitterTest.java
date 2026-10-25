@@ -44,6 +44,7 @@ class LocalLitterTest {
                 if (BlastLitter.friction(p, 1) > surface.threshold()) hi = p;
                 else lo = p;
             }
+            double previousTravel = -1;
             for (double p : new double[]{lo * (1 - 1e-8), hi * (1 + 1e-8)}) {
                 var shock = new ShockAtBody(0, 1000 * p, 0.02, 100, 1000 * BlastModel.dynamicPressureKpa(p), BlastModel.windSpeed(p), 0);
                 var lift = LocalLitter.lift(shock, surface, 1, 1.7);
@@ -51,6 +52,9 @@ class LocalLitterTest {
                 assertTrue(lift.massKgPerM2() < 1e-6);
                 assertTrue(lift.horizontalMps() < 1e-6);
                 assertTrue(lift.verticalMps() < 1e-6);
+                assertEquals(shock.maxAirDisplacementM() / Math.E, lift.airDisplacementM(), 1e-12);
+                if (previousTravel >= 0) assertEquals(previousTravel, lift.airDisplacementM(), 1e-7);
+                previousTravel = lift.airDisplacementM();
             }
         }
     }
