@@ -3,8 +3,8 @@
 #
 #   tools/pr_ci.sh <номер PR> [--repo владелец/репо]
 #
-# Ждёт «Итог» и «Записку» у текущей головы PR (условия влития) и выходит с кодом:
-#   0 — обе зелёные; 1 — что-то упало: имена упавших задач и хвост лога каждого упавшего запуска (gh run view --log-failed);
+# Ждёт «Итог» у текущей головы PR (условие влития) и выходит с кодом:
+#   0 — зелёная; 1 — что-то упало: имена упавших задач и хвост лога каждого упавшего запуска (gh run view --log-failed);
 #   3 — конфликт с базой: GitHub проверки PR с конфликтом не запускает вовсе, и `gh pr checks --watch` ждал бы вечно
 #       (21–22.10 так 10–20 мин молча стояли V и S5) — слить main и запушить;
 #   4 — PR закрыт без влития. Влит — 0.
@@ -12,7 +12,7 @@
 set -uo pipefail
 pr=${1:?использование: tools/pr_ci.sh <номер PR> [--repo владелец/репо]}; shift
 repo=(); [ "${1:-}" = --repo ] && { repo=(--repo "$2"); export GH_REPO=$2; }
-need='^(Итог|Записка)$'
+need='^Итог$'
 started=$(date +%s); head=; quiet=0
 while true; do
   read -r state mergeable sha < <(gh pr view "$pr" "${repo[@]}" --json state,mergeable,headRefOid -q '"\(.state) \(.mergeable) \(.headRefOid)"') || { sleep 30; continue; }
@@ -35,9 +35,9 @@ while true; do
     printf '%s\t%s\t%s\n' "$b" "$name" "$link"
   done)
   mine=$(printf '%s\n' "$checks" | awk -F'\t' -v re="$need" '$2 ~ re')
-  if [ "$(printf '%s\n' "$mine" | grep -c .)" -ge 2 ] && ! printf '%s\n' "$mine" | grep -q '^pending'; then
+  if [ "$(printf '%s\n' "$mine" | grep -c .)" -ge 1 ] && ! printf '%s\n' "$mine" | grep -q '^pending'; then
     if ! printf '%s\n' "$mine" | grep -qv '^pass'; then
-      echo "PR $pr (${sha:0:8}): Итог и Записка зелёные, $(( ($(date +%s) - started) / 60 )) мин ожидания"; exit 0
+      echo "PR $pr (${sha:0:8}): Итог зелёный, $(( ($(date +%s) - started) / 60 )) мин ожидания"; exit 0
     fi
     # после правки описания или перезапуска gh pr checks ещё миг показывает прежний итог: падение — со второго взгляда
     if [ "${seen:-}" != "$sha" ]; then seen=$sha; sleep 30; continue; fi

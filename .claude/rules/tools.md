@@ -53,8 +53,7 @@ paths:
     sessions/go.sh <S> [id сообщение]    ← фоновая сессия claude2 своей службой systemd (incoming-claude-<S>): задание
                                            <S>.txt и бриф context.md из mod/run/incoming-sessions; итог хода — строкой в
                                            sessions.log; закончила ход, пока её задачи ноутбука (из дерева wt-<S>, wt-<S>-*)
-                                           идут, — продолжается сама по их концу; live.md — новые решения для идущих
-                                           сессий; --wait <S>, --status
+                                           идут, — продолжается сама по их концу; --wait <S>, --status
     laptop-jobs/<имя>.md                 ← задания ноутбуку: координатор отправляет файл по SHA коммита, ноутбук сверяет sha256;
                                            отработанные удаляются (история — в git)
     logtime.py                           ← время строк лога Minecraft для выжимок заданий ноутбука
@@ -64,14 +63,9 @@ paths:
     look_gate/run.sh <имя> <дерево> [сцены] ← шлагбаум картинки и звука: сцены ProbeScenario под Iris со всей сборкой (README.md
                                            там) — только разовое сравнение с 3.4.1, потом убрать (docs/dev-pipeline.md); слух всегда без оглушения, выборка — в порядке эталона и в воздухе его времени игры;
                                            годность прогона — check.py по логу (код 1), тест — test_check.py (CI «Шлагбаум»)
-    pr_ci.sh <PR>                        ← (план: `gh pr checks --watch --fail-fast --required` — после удаления note.yml, когда
-                                           обязательная проверка одна; docs/dev-pipeline.md) ждать «Итог» и «Записку» PR
-                                           одной командой (в фоне), итог задачи, зависшей «идущей», — по её completedAt:
-                                           0 — зелёные, 1 — упало (задачи и хвост лога), 3 — конфликт с базой (GitHub
-                                           тогда проверки не запускает вовсе)
-    pr_note.py < файлы PR                ← проверка «Записка» (CI, .github/workflows/note.yml): PR, который меняет то, что
-                                           игрок видит или слышит (пути — PLAYER_FACING там же), несёт в описании раздел
-                                           `## Записка`; описание — PR_BODY; тест — test_pr_note.py
+    pr_ci.sh <PR>                        ← ждать «Итог» PR одной командой (в фоне), итог задачи, зависшей «идущей», — по её
+                                           completedAt: 0 — зелёная, 1 — упало (задачи и хвост лога), 3 — конфликт с базой
+                                           (GitHub тогда проверки не запускает вовсе; `gh pr checks --watch` ждал бы вечно)
     gametest_durations.py <лог>...       ← время партий GameTest по логам (latest.log или лог задачи CI) → таблица, по которой
                                            CI делит GameTest на части (src/devtest/resources/gametest-durations.json)
     mp_scenario.sh                       ← мультиплеер без окон: сервер и два клиента (Alpha бьёт, Bravo — цель), выходы и входы посреди удара
@@ -120,8 +114,7 @@ paths:
   docs/media/                            ← иконка (она же логотип мода incoming.png), петля hero.webp для README и страниц,
                                            кадры для галереи
   .github/workflows/build.yml            ← CI: что изменилось → сборка и юнит-тесты, GameTest частями, итог; jar в артефактах; релиз
-  .github/workflows/note.yml             ← CI: проверка «Записка» описания PR (tools/pr_note.py); шаблон описания —
-                                           .github/PULL_REQUEST_TEMPLATE.md
+  .github/PULL_REQUEST_TEMPLATE.md       ← шаблон описания PR: что меняется для игрока, как проверено
   .github/workflows/publish.yml          ← страницы Modrinth и CurseForge, только ручным запуском: draft (скрытый черновик
                                            Modrinth), submit, release; поля — docs/store/modrinth.json
   docs/releases/<версия>.md              ← заметки к релизу

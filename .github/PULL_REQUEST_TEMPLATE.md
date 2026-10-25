@@ -1,26 +1,8 @@
-## Goal
-<!-- What changes for the player, in one or two sentences. Which visible thing as a whole owns the result (a blast from
-flash to dispersal, a launch, a flight), and whose note to check against if this PR changes only part of it. -->
+## What changes
+<!-- For the player, in one or two sentences. A large change: a few lines written before the code — what the player
+sees and hears and which law it rests on (one that already exists in the mod; a new one with its source). -->
 
-## Записка
-<!-- Required when the PR changes what the player sees or hears (check «Записка», paths in tools/pr_note.py).
-Written before the code. A change that fits in one sentence gets one line here.
-- Law: which law is used. First one that already exists in the mod (nuclear/model, client/fx/smoke, guidance, sound …);
-  a new one only when there is none, with the reason and the source.
-- Where it holds: time (first fractions of a second, seconds, minutes), scale (charge, distance), conditions (ground,
-  air, water, night, rain). An empirical formula for the end state does not describe the early moments.
-- What is seen and heard at the key moments (a blast: 0.1 s, 1 s, 10 s, 60 s; a launch: lift-off, 1 s, departure)
-  and under the conditions above: shape, colour, size, brightness, loudness. These lines are what the frames are
-  checked against. -->
-
-## What changed
-<!-- Point by point, from the cause. -->
-
-## Invariants and tests
-<!-- What in the note is a number is a unit test (the law is not called outside its range, nothing at the ground
-without ground, nothing ahead of the front, no jumps in brightness …). A promise in a comment or the guide is held by
-a test. -->
-
-## Check
-<!-- CI and an independent review of the code against the note. Seen or heard by the player: frames and WAV of the dev
-client (tools/sandbox.sh shot) at the note's moments, in this PR; the reviewer looks at them once, not the author. -->
+## How it was checked
+<!-- Build, unit tests, GameTest of the touched areas. A promise in a comment or the guide is held by a test.
+Seen or heard by the player: sandbox frames and WAV (tools/sandbox.sh shot) before and after, in this PR.
+An effect change: frame cost at 100 strikes against main. -->
