@@ -276,10 +276,23 @@ class Look(unittest.TestCase):
     def test_flags(self):
         c = {"none": {"100_edge": {"smoke": 0.40, "luma": 0.50}, "16_edge": {"smoke": 0.20, "luma": 0.50}}}
         b = {"none": {"100_edge": {"smoke": 0.20, "luma": 0.50}, "16_edge": {"smoke": 0.22, "luma": 0.40}}}
-        f = gate.look_flags(c, b)
+        f = gate.look_flags(c, [b])
         self.assertEqual(len(f), 2)
         self.assertIn("100_edge", f[0])
         self.assertIn("яркость", f[1])
+
+    def test_flag_needs_both_base_runs(self):
+        # #468, Photon 100-hit 0.2 с: A1 0,53, A2 0,83 дымных пикселей, PR 0,82 — шум принятого, не PR
+        c = {"photon": {"100-hit_0.2s": {"smoke": 0.821, "luma": 0.683}}}
+        a1 = {"photon": {"100-hit_0.2s": {"smoke": 0.531, "luma": 0.639}}}
+        a2 = {"photon": {"100-hit_0.2s": {"smoke": 0.826, "luma": 0.677}}}
+        self.assertEqual(gate.look_flags(c, [a1, a2]), [])
+        # none: PR ярче обоих (0,78 против 0,61 / 0,61) — правка PR
+        c = {"none": {"100-hit_0.2s": {"smoke": 0.033, "luma": 0.780}}}
+        a1 = {"none": {"100-hit_0.2s": {"smoke": 0.020, "luma": 0.608}}}
+        a2 = {"none": {"100-hit_0.2s": {"smoke": 0.022, "luma": 0.607}}}
+        f = gate.look_flags(c, [a1, a2])
+        self.assertEqual(f, ["none 100-hit_0.2s: яркость 0.78 против 0.61 / 0.61"])
 
 
 # нагрузка окна без чужих задач (results.host_in)
