@@ -68,6 +68,19 @@ class LocalWindTest {
     }
 
     /**
+     * Высоту меряют от источника, а не от верха колонки первой точки ячейки кэша (ревью R468: крыша и улица рядом делили
+     * ячейку 4 м, и улица брала ветер крыши): то же место от улицы — ветер улицы, от крыши — ветер крыши.
+     */
+    @Test
+    void baseIsTheSourceNotTheCell() {
+        LocalWind street = LocalWind.of(LocalWindTest::town, 13, 13, 1, 0), roof = LocalWind.of(LocalWindTest::town, 9, 5, 1, 0);
+        assertEquals(street.factor(2), roof.from(64).factor(2), 0.05);
+        assertEquals(roof.factor(2), street.from(76).factor(2), 0.1);
+        assertTrue(roof.from(64).factor(2) < 0.3 * roof.factor(2), "улица " + roof.from(64).factor(2) + ", крыша " + roof.factor(2));
+        assertEquals(LocalWind.OPEN, LocalWind.OPEN.from(100));
+    }
+
+    /**
      * Холм высотой 30 м с полушириной 40 м: на вершине у земли ветер сильнее, к высоте разгон убывает; в такой же
      * впадине — слабее.
      */

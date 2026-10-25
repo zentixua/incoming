@@ -223,6 +223,15 @@ public record LocalWind(double ground, double base, double canopy, double displa
         return f;
     }
 
+    /**
+     * То же место, мерить от высоты y мира ({@link #base} — её высота над землёй места): поверхность под взрывом, а не верх
+     * колонки (крона над ним, крыша соседа по ячейке кэша).
+     */
+    public LocalWind from(double y) {
+        return new LocalWind(ground, Double.isNaN(ground) ? 0 : Math.max(0, y - ground), canopy, displacement, roughness, attenuation,
+                hill, hillLength);
+    }
+
     /** Высота точки y мира над землёй места, м (земля неизвестна — над уровнем моря, как у ветра мира). */
     public double above(double y) {
         return y - (Double.isNaN(ground) ? Air.SEA : ground);

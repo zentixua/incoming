@@ -568,7 +568,9 @@ public final class FarBlasts {
         net.minecraft.core.BlockPos at = net.minecraft.core.BlockPos.containing(pos);
         boolean water = !level.getFluidState(at).isEmpty() || !level.getFluidState(at.below()).isEmpty();
         ua.zentix.incoming.util.Air air = ClientAir.now();
-        return CloudModel.Air.of(air, water ? 1 : air.humidity(), water ? ua.zentix.incoming.util.LocalWind.OPEN : ClientAir.site(pos.x, pos.z));
+        // поправку места меряют от поверхности под взрывом (под кроной — от земли под ней): от неё же высоты облака
+        return CloudModel.Air.of(air, water ? 1 : air.humidity(),
+                water ? ua.zentix.incoming.util.LocalWind.OPEN : ClientAir.site(pos.x, pos.y - overSurface(level, pos), pos.z));
     }
 
     /**

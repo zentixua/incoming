@@ -156,6 +156,12 @@ public final class GroundDust {
     private final double[][] heading = new double[SECTORS][ANNULI], openArc = new double[SECTORS][ANNULI];
     /** Во сколько раз дальше поля юбка сектора уходит по открытому (улица), 1 — поле. */
     private final double[] reach = new double[SECTORS];
+    /** Стены повернули юбку ({@link #channel}); от какой высоты (м от точки взрыва) — стена. */
+    private boolean walled;
+    private double wallFrom;
+    /** Место клуба сектора на нынешнем радиусе ({@link #open}) и для какого радиуса, полуметров. */
+    private final double[][][] snap = new double[SECTORS][ANNULI][];
+    private final long[][] snapAt = new long[SECTORS][ANNULI];
     /** Таблицы по сетке времени: σ по вертикали и ∫dt/(1,25σ) у каждого кольца показа; подсос — доля его времени. */
     private final double[][] sv = new double[ANNULI][STEPS], settled = new double[ANNULI][STEPS];
     private final double[] stemTime = new double[STEPS];
@@ -362,7 +368,6 @@ public final class GroundDust {
      */
     private void channel(double source) {
         double[][] open = new double[SECTORS][RINGS], angle = new double[SECTORS][RINGS];
-        boolean walled = false;
         for (int i = 0; i < RINGS; i++) {
             double ring = 0, all = 0;
             for (int k = 0; k < SECTORS; k++) {
@@ -390,6 +395,8 @@ public final class GroundDust {
             walled = true;
         }
         if (!walled) return;
+        wallFrom = source + WALL;
+        for (long[] row : snapAt) java.util.Arrays.fill(row, Long.MIN_VALUE);
         // клуб сектора в кольце показа — середина открытой дуги его колец по массе
         for (int k = 0; k < SECTORS; k++) {
             double[] m = new double[ANNULI], a = new double[ANNULI], o = new double[ANNULI];
@@ -434,6 +441,35 @@ public final class GroundDust {
             }
             reach[k] = Math.max(1, Math.min(REACH_MAX, rho / skirtR));
         }
+    }
+
+    /**
+     * Место клуба юбки сектора k в кольце показа q, растянутого до радиуса rad (м от точки взрыва): угол — ближайший к
+     * середине открытой дуги открытый на этом радиусе, а нет его на дуге — радиус меньше, до ближайшего, где дуга открыта:
+     * дальше стены юбка в этой стороне не идёт. Клуб, растянутый дальностью и стоком, так остаётся в улице, а не в доме, и
+     * у удара не в середине перекрёстка. Открытого нет до самой точки взрыва — середина дуги на rad. Считается раз на
+     * полметра радиуса; {угол, радиус}.
+     */
+    private double[] open(int k, int q, double rad) {
+        long at = Math.round(2 * rad);
+        if (snapAt[k][q] == at) return snap[k][q];
+        double[] best = {heading[k][q], rad};
+        double from = 2 * Math.PI * k / SECTORS;
+        for (double r1 = rad; r1 > 0; r1 -= 0.5) {
+            double gap = Double.MAX_VALUE;
+            for (int j = 0; j < 2 * ARC; j++) {
+                double phi = from + 2 * Math.PI / SECTORS * (j + 0.5) / (2 * ARC);
+                if (relief.at(r1 * Math.cos(phi), r1 * Math.sin(phi)) > wallFrom) continue;
+                if (Math.abs(phi - heading[k][q]) < gap) {
+                    gap = Math.abs(phi - heading[k][q]);
+                    best = new double[]{phi, r1};
+                }
+            }
+            if (gap < Double.MAX_VALUE) break;
+        }
+        snapAt[k][q] = at;
+        snap[k][q] = best;
+        return best;
     }
 
     /** Дальше скольких радиусов поля юбка по улице не уходит (⚠ оценка: длина квартала и запас газа). */
@@ -714,7 +750,14 @@ public final class GroundDust {
                     // фронт ещё у самой воронки: клубы — у середины, не шире него
                     if (mean + EDGE_SIGMAS * sh > front) sh = Math.max(front / EDGE_SIGMAS, v);
                 }
-                double ang = heading[k][a], ux = Math.cos(ang), uz = Math.sin(ang);
+                double ang = heading[k][a];
+                if (walled && mean > 0) {
+                    double[] o = open(k, a, mean);
+                    ang = o[0];
+                    source *= o[1] / mean;
+                    mean = o[1];
+                }
+                double ux = Math.cos(ang), uz = Math.sin(ang);
                 double[] d = drift(t, zc);
                 double[] at = levels ? level(k, a, t, source, ux, uz, own) : new double[]{surface[k][a], 0, 0};
                 out.blob(d[0] + mean * ux - at[1], at[0] + zc, d[1] + mean * uz - at[2], sh, v, mass * fade, aloft[a][k],

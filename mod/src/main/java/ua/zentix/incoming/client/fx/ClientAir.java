@@ -40,19 +40,21 @@ public final class ClientAir {
             return size() > SITES;
         }
     };
-    private static ClientLevel cached;
+    /** Мир, чьи места в кэше: слабая ссылка — после выхода в меню кэш мир не держит. */
+    private static java.lang.ref.WeakReference<ClientLevel> cached = new java.lang.ref.WeakReference<>(null);
 
     /**
      * Ветер у земли в (x, z) ({@link LocalWind}) по чанкам клиента и плиткам рельефа карты при нынешнем ветре мира; одно на
      * ячейку {@value #CELL} блоков и направление с шагом π/16 (залп «Града» не считает место заново). Мира нет — поле.
+     * {@link LocalWind#base} — ячейки, не точки: источнику — {@link #site(double, double, double)}.
      */
     public static LocalWind site(double x, double z) {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc == null ? null : mc.level;
         if (level == null) return LocalWind.OPEN;
-        if (level != cached) {
+        if (level != cached.get()) {
             CACHE.clear();
-            cached = level;
+            cached = new java.lang.ref.WeakReference<>(level);
         }
         Air a = now();
         long turn = Math.floorMod(Math.round(a.wind().direction() / TURN), Math.round(2 * Math.PI / TURN));
@@ -65,6 +67,11 @@ public final class ClientAir {
             CACHE.put(key, site);
         }
         return site;
+    }
+
+    /** Ветер у земли места (x, z), мерить от поверхности на высоте y мира (под взрывом). */
+    public static LocalWind site(double x, double y, double z) {
+        return site(x, z).from(y);
     }
 
     /** Скорость ветра у земли места (x, z) на высоте y мира, м/с: ветер мира на высоте над землёй места и его поправка. */

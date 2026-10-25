@@ -167,10 +167,23 @@ public final class CloudModel {
      * @param humidity влажность 0..1 (облако конденсации)
      * @param site    ветер у земли места: застройка, кроны, холм ({@link LocalWind}; поле — {@link LocalWind#OPEN})
      */
-    public record Air(double n, double windX, double windZ, double shear, int spread, double humidity, LocalWind site) {
+    public record Air(double n, double windX, double windZ, double shear, int spread, double humidity, LocalWind site, double lift) {
         /** В поле. */
         public Air(double n, double windX, double windZ, double shear, int spread, double humidity) {
             this(n, windX, windZ, shear, spread, humidity, LocalWind.OPEN);
+        }
+
+        /** С ветром у земли места {@code site}; высоты — над поверхностью взрыва. */
+        public Air(double n, double windX, double windZ, double shear, int spread, double humidity, LocalWind site) {
+            this(n, windX, windZ, shear, spread, humidity, site, 0);
+        }
+
+        /**
+         * Для того, кто меряет высоту от точки на {@code dz} м выше поверхности взрыва (термик разрыва в воздухе — от точки
+         * разрыва): поправка места — на его настоящей высоте над поверхностью, профиль — прежний.
+         */
+        public Air lifted(double dz) {
+            return new Air(n, windX, windZ, shear, spread, humidity, site, lift + dz);
         }
 
         /** Стандартная атмосфера без ветра — для проверок. */
@@ -195,7 +208,7 @@ public final class CloudModel {
 
         /** Ветер на высоте z (м) над поверхностью взрыва: доля ветра на 10 м над полем (с поправкой места). */
         public double wind(double z) {
-            return Math.pow(Math.max(z, 1) / 10, shear) * site.factor(z);
+            return Math.pow(Math.max(z, 1) / 10, shear) * site.factor(z + lift);
         }
     }
 
@@ -384,7 +397,8 @@ public final class CloudModel {
         burnSeconds = Math.max(fuelBallSeconds, heBallSeconds);
         // начальный объём: в нём тепло держит температуру шара (у ideal gas при том же давлении g' = g·(1 − T_a/T))
         double ballK = source.fuelKg() > 0 ? FUEL_BALL_K : HE_BALL_END;
-        thermal = new Thermal(buoyancy, G * (1 - T_AIR / ballK), size, air);
+        // высоты термика — от точки взрыва: разрыв в 100 м над улицей — не затишье улицы
+        thermal = new Thermal(buoyancy, G * (1 - T_AIR / ballK), size, air.lifted(hob));
         maxRise = thermal.maxRise;
         topZ = thermal.topZ;
         topR = thermal.topR;
@@ -395,7 +409,7 @@ public final class CloudModel {
         // та же середина, что у горящего шара в последний миг горения ({@link #ballHeight}): у разрыва в воздухе прежде
         // 0,45 радиуса над точкой взрыва против середины в ней же — скачок в конец горения
         burnHeight = onGround(burnRadius) + lift(burnSeconds);
-        cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), Math.max(burnRadius, size), air);
+        cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), Math.max(burnRadius, size), air.lifted(hob));
         fireSeconds = glowEnd();
         // на воде воронки в грунте нет: топливо растекается плёнкой, а плёнка тоньше ~1 мм не держит горение — вода
         // уносит тепло (Buist и др., «In situ burning», обзор для разливов нефти: гаснет у 1–2 мм; ⚠ по памяти)
