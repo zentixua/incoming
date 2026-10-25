@@ -321,6 +321,19 @@ class Results(unittest.TestCase):
         r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, dt=2.0)] + cycles)
         self.assertTrue(any("100/edge" in c and "видеокарта у чужих процессов — 37" in c for c in r["checks"]), r["checks"])
 
+    def test_desktop_background_on_the_gpu_passes_but_a_foreign_job_does_not(self):
+        # окно 1–2 с, циклы по 0,2 с: рабочий стол хоста — 11 % в каждом пятом цикле (прогон 25.10: до 12 %, пока рисует
+        # клиент) — годен; чужая задача 15 % всё окно — нет (среднее), один цикл 37 % — нет (худший)
+        def cycles(values):
+            return [{"kind": "gpu", "epoch": 1_000_001.0 + 0.2 * (k + 1), "dt": 0.2, "foreign_sm": v, "who": [], "own_sm": 80}
+                    for k, v in enumerate(values)]
+        cpu = [host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, dt=2.0)] + gpu_cycles(1_000_000, 1_000_001) + gpu_cycles(1_000_002, 1_000_004)
+        for values, bad in (([11, 0, 0, 0, 0], False), ([15] * 5, True), ([37, 0, 0, 0, 0], True)):
+            r = self.analyze(cpu + cycles(values))
+            load = [c for c in r["checks"] if c.startswith(results.LOAD_TAG) and "100/edge" in c]
+            self.assertEqual(bool(load), bad, (values, r["checks"]))
+            self.assertEqual(r["windows"]["100/edge"]["host"]["gpu_covered"], 1.0)
+
     def test_load_is_checked_in_the_first_strike_window_too(self):
         r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, cpu_foreign=7.0, dt=2.0)] + gpu_cycles(1_000_000, 1_000_004))
         self.assertTrue(any(c.startswith(results.LOAD_TAG) and "окно first" in c for c in r["checks"]), r["checks"])
@@ -827,6 +840,13 @@ class Plan(unittest.TestCase):
         self.assertEqual(steps[i + 1]["id"], "one")
         self.assertEqual(steps[i + 1]["delays"], [20])
         self.assertEqual(steps[i + 2]["do"], "impact_window")
+
+    def test_client_keeps_drawing_after_the_last_window(self):
+        # хвост: цикл видеокарты, в котором кончилось последнее окно, закрывается и доходит до стенда, пока клиент рисует
+        for sel in (None, ["100"]):
+            last = plan.build(self.scenes, sel)["steps"][-1]
+            self.assertEqual(last, {"do": "wait", "s": self.scenes["end_tail_s"]})
+        self.assertGreaterEqual(self.scenes["end_tail_s"], client.PMON_GAP_S)
 
     def test_far_teleport_waits_longer(self):
         tps = [s for s in self.p["steps"] if s["do"] == "tp"]

@@ -82,7 +82,8 @@ def host_in(host, events, t0, t1):
     он рисует каждый кадр, и без его числа «-» у чужих не значит «простаивал» (драйвер не считал по процессам). Назад —
     {"samples", "covered" (доля окна под выборками процессора), "gpu_covered" (доля под циклами с замером),
     "cpu_foreign_max" (худшая выборка, ядра), "cpu_foreign" (среднее по перекрытию — в отчёт), "gpu_foreign" (худший цикл,
-    % SM; None — циклов нет), "units" (худшие по службам), "load1", "profiles"} или None, если свести не с чем."""
+    % SM; None — циклов нет), "gpu_foreign_mean" (среднее по циклам окна), "units" (худшие по службам), "load1",
+    "profiles"} или None, если свести не с чем."""
     offs = sorted(e["epoch_ms"] - e["t_ms"] for e in events if e["type"] == "srv" and e.get("epoch_ms") is not None)
     if not host or not offs:
         return None
@@ -92,6 +93,7 @@ def host_in(host, events, t0, t1):
         b = s["epoch"] * 1000 - off
         return min(b, t1) - max(b - s["dt"] * 1000, t0)
     got, weight, gpu_weight, cpu, cpu_max, gpu, units, load, profiles = 0, 0.0, 0.0, 0.0, 0.0, None, {}, 0.0, set()
+    gpu_sum = gpu_seen = 0.0
     for s in host:
         o = overlap(s)
         if o <= 0:
@@ -101,6 +103,8 @@ def host_in(host, events, t0, t1):
                 gpu_weight += o
             if s.get("foreign_sm") is not None:
                 gpu = max(gpu or 0, s["foreign_sm"])
+                gpu_sum += s["foreign_sm"] * o
+                gpu_seen += o
             continue
         got += 1
         weight += o
@@ -114,6 +118,7 @@ def host_in(host, events, t0, t1):
     # циклы pmon идут подряд, но их концы — до секунды: соседние могут заходить друг на друга, доля — не больше 1
     return {"samples": got, "covered": round(weight / span, 3), "gpu_covered": round(min(1.0, gpu_weight / span), 3),
             "cpu_foreign_max": cpu_max, "cpu_foreign": round(cpu / weight, 2) if weight else None, "gpu_foreign": gpu,
+            "gpu_foreign_mean": round(gpu_sum / gpu_seen, 2) if gpu_seen else None,
             "load1": load, "units": dict(sorted(units.items(), key=lambda kv: -kv[1])[:5]), "profiles": sorted(map(str, profiles))}
 
 
@@ -342,13 +347,16 @@ def checks(events, res, expected=(), acc_scene=None, power=None):
 
 
 def foreign(h):
-    """Чужая нагрузка в окне (host_in; пусто — тихо): она меняет время кадра без правки кода. Судит худшая выборка, а
-    не среднее: задача в 3 ядра на 5 с из 20 в среднем дала бы меньше порога, а работала внутри окна."""
+    """Чужая нагрузка в окне (host_in; пусто — тихо): она меняет время кадра без правки кода. Процессор судит худшая
+    выборка, а не среднее: задача в 3 ядра на 5 с из 20 в среднем дала бы меньше порога, а работала внутри окна.
+    Видеокарту — среднее по окну и худший цикл, оба выше фона рабочего стола (FOREIGN_GPU)."""
     bad = []
     if h["cpu_foreign_max"] > FOREIGN_CPU:
         bad.append(f"чужие задачи — до {h['cpu_foreign_max']} ядра (можно {FOREIGN_CPU}): {h['units']}")
-    if (h["gpu_foreign"] or 0) > FOREIGN_GPU:
-        bad.append(f"видеокарта у чужих процессов — {h['gpu_foreign']} % SM (можно {FOREIGN_GPU})")
+    peak, mean = h["gpu_foreign"] or 0, h.get("gpu_foreign_mean") or 0
+    if peak > FOREIGN_GPU_PEAK or mean > FOREIGN_GPU:
+        bad.append(f"видеокарта у чужих процессов — {peak} % SM в худшем цикле (можно {FOREIGN_GPU_PEAK}), {mean:g} % в среднем "
+                   f"(можно {FOREIGN_GPU})")
     return bad
 
 
@@ -370,9 +378,12 @@ GATED = "100/"
 # строки годности из-за чужой нагрузки (не из-за версии): по ним stand.py play снимает пак ещё раз
 LOAD_TAG = "нагрузка:"
 # чужая нагрузка в окне шлагбаума — не больше: фон ноутбука без задач — 0,2–0,4 ядра (приложения Claude, браузер), одна
-# тяжёлая задача — от 1,5 (клиент песочницы другой сессии) до 7 ядер (сборка, ревью с тестами) (замер 25.10); видеокарта —
-# чужие процессы, кроме композитора рабочего стола (у него 0 % SM): клиент песочницы — 37 %
-FOREIGN_CPU, FOREIGN_GPU = 1.0, 5
+# тяжёлая задача — от 1,5 (клиент песочницы другой сессии) до 7 ядер (сборка, ревью с тестами) (замер 25.10). Видеокарта
+# (циклы pmon по 1 с): фон — рабочий стол хоста (kwin_wayland, plasmashell, экран заблокирован) — в 15 % циклов 1–18 % SM,
+# пока рисует клиент стенда — до 12 % (прогон 25.10, 705 циклов), в среднем по окну 20 с — до ~3 %; чужой клиент игры
+# держит 37–39 % всё время. Поэтому среднее по окну — не больше 5 %, худший цикл — не больше 25 %: выше фона, ниже
+# чужого клиента; короткий всплеск меньше 25 % на p50 видеокарты за 20 с почти не влияет
+FOREIGN_CPU, FOREIGN_GPU, FOREIGN_GPU_PEAK = 1.0, 5, 25
 # окно должно быть под выборками нагрузки (они идут подряд, каждая — от прошлой): пробел — сбой записи или хвост без
 # заключительной выборки
 COVER_MIN = 0.95

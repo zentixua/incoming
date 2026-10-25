@@ -10,6 +10,7 @@
   "impact_margin": 40,
   "launch": {"dist": 400, "bearings": [-45, -35, -25, -15, -5, 5, 15, 25, 35, 45], "gap_s": 1.5},
   "settle_s": 1.5,
+  "end_tail_s": 3,
   "settle_far_s": 8,
   "far_m": 300,
   "after_shot_s": 0.5,

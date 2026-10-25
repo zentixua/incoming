@@ -159,6 +159,10 @@ def build(scenes, only=None):
             steps.append({"do": "shot", "name": f"{s['id']}_{cam}"})
             steps.append({"do": "wait", "s": scenes["after_shot_s"]})
             steps.append({"do": "window", "name": f"{s['id']}/{cam}", "s": s["window_s"]})
+    # после последнего окна клиент ещё рисует: цикл видеокарты (client.PmonCycles), в котором кончилось окно, закрывается
+    # строкой следующего (~1 с) и доходит из nvidia-smi кусками (~1 с) — выйди клиент сразу, хвост окна остался бы без
+    # замера видеокарты
+    steps.append({"do": "wait", "s": scenes["end_tail_s"]})
     w = scenes["world"]
     return {"seed": w["seed"], "day_time": w["day_time"], "settle_s": w["settle_s"], "limit_s": w["limit_s"],
             "projectiles": scenes["projectiles"], "warheads": scenes["warheads"], "probes": scenes["probes"], "once": scenes["once"],

@@ -365,7 +365,8 @@ class Host:
         units = {n: round((u - prev[3][n]) / dt, 2) for n, u in now[3].items() if n in prev[3] and (u - prev[3][n]) / dt >= 0.1}
         worst = max(cycles, key=lambda c: c["foreign_sm"], default=None)
         temp, clock = self._temp_clock()
-        gpu = {"foreign_sm": worst["foreign_sm"], "who": worst["who"], "cycles": len(cycles), "temp": temp, "clock": clock} if worst else None
+        gpu = {"foreign_sm": worst["foreign_sm"], "foreign_mean": round(sum(c["foreign_sm"] for c in cycles) / len(cycles), 2),
+               "who": worst["who"], "cycles": len(cycles), "temp": temp, "clock": clock} if worst else None
         return {"kind": "cpu", "epoch": now[0], "dt": round(dt, 3), "phase": phase, "load1": float(Path("/proc/loadavg").read_text().split()[0]),
                 "cpu_total": round(total, 2), "cpu_own": round(own, 2), "cpu_foreign": round(max(0.0, total - own), 2),
                 "units": units, "gpu": gpu, "profile": power_profile()}, cycles
@@ -379,8 +380,10 @@ def _num(s):
 
 
 def heavy(s):
-    """Выборка с тяжёлой чужой нагрузкой (пороги — results.FOREIGN_CPU, FOREIGN_GPU)."""
-    return s["cpu_foreign"] > results.FOREIGN_CPU or ((s.get("gpu") or {}).get("foreign_sm") or 0) > results.FOREIGN_GPU
+    """Выборка с тяжёлой чужой нагрузкой (пороги — results.FOREIGN_CPU, FOREIGN_GPU, FOREIGN_GPU_PEAK)."""
+    g = s.get("gpu") or {}
+    return (s["cpu_foreign"] > results.FOREIGN_CPU or (g.get("foreign_mean") or 0) > results.FOREIGN_GPU
+            or (g.get("foreign_sm") or 0) > results.FOREIGN_GPU_PEAK)
 
 
 def _term(*_):
