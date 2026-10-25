@@ -276,7 +276,7 @@ class SmokeRaidTest {
 
     /**
      * Налёт из 100 ударов по грунту (с завесой выброса и дроблёной пылью камня) с трёх камер стенда. Без бюджета пол кадра
-     * выше бюджета; с бюджетом квадраты заливают не больше плана, план — не больше бюджета (в каждом кадре с первого), пол —
+     * с края и изнутри выше бюджета (снаружи с шагом мест по бюджету — 14,9 экрана: ложится и так); с бюджетом квадраты заливают не больше плана, план — не больше бюджета (в каждом кадре с первого), пол —
      * не выше бюджета, гауссов вуали — не больше {@link SmokePuffs#VEIL_MAX}, мест трубок и клубов облаков в плане — не
      * больше {@link SmokePuffs#PLACES} и {@link SmokePuffs#BLOBS} в каждом кадре с первого. Пропускание по 18 частям кадра против самого вещества модели ({@link #truth}) — не дальше, чем у
      * полного кадра, больше чем на шум подробности клубов (0,08, {@code SmokeFillTest.clusterDetailNoise}).
@@ -309,7 +309,7 @@ class SmokeRaidTest {
                     SmokePuffs.lastFill(), places, blobs);
             System.out.println("RAID " + bounds);
             all.append(bounds).append('\n');
-            ok &= raw > SmokePuffs.FILL_BUDGET;
+            ok &= c == 0 || raw > SmokePuffs.FILL_BUDGET;
             ok &= over <= 1e-9 && SmokePuffs.lastFill() <= SmokePuffs.FILL_BUDGET + 1e-9 && floor <= SmokePuffs.FILL_BUDGET + 1e-9;
             ok &= veils <= SmokePuffs.VEIL_MAX && places <= SmokePuffs.PLACES && blobs <= SmokePuffs.BLOBS;
             ok &= worst <= worstFree + 0.08;
@@ -490,6 +490,266 @@ class SmokeRaidTest {
             assertTrue(worstOverPlan <= 1e-9 && s.fill() <= SmokePuffs.FILL_BUDGET + 1e-9 && maxPlaces <= SmokePuffs.PLACES, got);
         }
         SmokePuffs.resetBudget();
+    }
+
+    /**
+     * Лента — вид трубки уже {@link FarFlightView#PUFFS_FULL} px: полоса с прямыми краями и одним цветом поперёк. В налёте
+     * стенда шлейфы 70 пожаров просили ~8000 мест при 3000, порог ширины (прежний множитель {@code puffScale}) рос к 40-му
+     * кадру в 28–41 раз, и шлейфы шириной до 90–180 px шли лентами: полосы до 212/491/701 px снаружи/с края/внутри — светлые
+     * прямые полосы в кадрах стенда 25.10 (с края — косые). Ни при каком бюджете мест полоса не шире ленты узкой трубки:
+     * бюджет растит шаг клубов, а не порог ширины.
+     */
+    @Test
+    void ribbonsAreOnlyNarrowTubes() {
+        double now = 1000;
+        List<SmokeGrid.Source> raid = raid(now);
+        double limit = FarSprites.RIBBON * FarFlightView.PUFFS_FULL * 1.1;
+        StringBuilder all = new StringBuilder();
+        boolean ok = true;
+        for (int c = 0; c < 3; c++) {
+            FarView v = view(c);
+            SmokeFillTest.Screen s = frame(raid, now, v, SmokePuffs.FILL_BUDGET);
+            double widest = 0;
+            int strips = 0;
+            for (double[] p : s.polygons) {
+                if (SmokeFillTest.isFlat(p) || p[12] < 0.002) continue;
+                strips++;
+                widest = Math.max(widest, Math.max(pixels(v, p, 0), pixels(v, p, 1)));
+            }
+            String got = String.format(Locale.ROOT, "%s: полос %d, самая широкая %.1f px (предел %.1f)", NAMES[c], strips, widest, limit);
+            System.out.println("RIBBON WIDTH " + got);
+            all.append(got).append('\n');
+            ok &= widest <= limit;
+        }
+        SmokePuffs.resetBudget();
+        assertTrue(ok, all.toString());
+    }
+
+    /** Трубка одного куска от a до b (σ у концов) с толщей поперёк оси tau — источником (сажа на метр — по толще). */
+    private static SmokeGrid.Source piece(Vec3 a, double sa, Vec3 b, double sb, double tau, long seed) {
+        double soot = tau * Math.sqrt(2 * Math.PI) / CloudModel.SOOT_K;
+        return new SmokeGrid.Source() {
+            @Override
+            public boolean emit(double seconds, SmokeGrid.Sink out) {
+                out.tube(a.x, a.y, a.z, sa, sa, soot * sa, 0, b.x, b.y, b.z, sb, sb, soot * sb, 0, 0.6f, 0.55f, 0.45f, 300, 0, Math.min(sa, sb));
+                return true;
+            }
+
+            @Override
+            public long seed() {
+                return seed;
+            }
+        };
+    }
+
+    /** Кадр трубок с шагом мест, выросшим в stride раз (мест кадра мало — как в налёте стенда). */
+    private static SmokeFillTest.Screen strided(List<SmokeGrid.Source> sources, FarView v, double stride) throws ReflectiveOperationException {
+        java.lang.reflect.Field field = FarFlightView.class.getDeclaredField("stride");
+        field.setAccessible(true);
+        SmokeFillTest.Screen s = new SmokeFillTest.Screen(v);
+        SmokePuffs.resetBudget();
+        FarFlightView.reset();
+        try {
+            for (int f = 0; f < 3; f++) {
+                field.setDouble(null, stride);
+                step(sources, 0, v, s);
+            }
+        } finally {
+            FarFlightView.reset();
+            SmokePuffs.resetBudget();
+        }
+        return s;
+    }
+
+    /** Ширина трубки толщей tau и σ на экране в d блоках от глаза, пикселей кадра проверок. */
+    private static double tubePixels(double tau, double sigma, double d) {
+        return ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma) / (d * SmokeFillTest.PIXEL);
+    }
+
+    /**
+     * Ревью #466: у отрезка с узким и широким концом (и у узких концов с широкой серединой у глаза) лента шла всей своей
+     * геометрией, и через широкую часть ложилась полоса в 163 px — альфа там лишь сходила на нет. Лента — только узкие куски
+     * от концов, до места, где трубка на экране шире {@link FarFlightView#PUFFS_FULL}, и с любым шагом мест: через широкую
+     * середину полосы нет.
+     */
+    @Test
+    void mixedRibbonEndsAreCut() throws ReflectiveOperationException {
+        double limit = FarSprites.RIBBON * FarFlightView.PUFFS_FULL * 1.1, tau = 1;
+        Vec3 eye = new Vec3(0, 10, 0);
+        FarView v = SmokeFillTest.view(eye, new Vector3f(1, 0, 0));
+        Object[][] cases = {
+                // узкий дальний конец — широкий ближний
+                {new Vec3(200, 10, 250), 0.2, new Vec3(60, 10, -10), 1.5, false},
+                // узкие концы под 45°, широкая середина ближе к глазу
+                {new Vec3(100, 10, -100), 0.28, new Vec3(100, 10, 100), 0.28, true}};
+        StringBuilder all = new StringBuilder();
+        boolean ok = true;
+        for (Object[] c : cases) {
+            Vec3 a = (Vec3) c[0], b = (Vec3) c[2];
+            SmokeFillTest.Screen s = strided(List.of(piece(a, (double) c[1], b, (double) c[3], tau, 91)), v, 50);
+            double widest = 0;
+            int strips = 0;
+            for (double[] p : s.polygons) {
+                if (SmokeFillTest.isFlat(p) || p[12] < 0.002) continue;
+                strips++;
+                widest = Math.max(widest, Math.max(pixels(v, p, 0), pixels(v, p, 1)));
+            }
+            double middle = ribbonAt(s, a, b, 0.5);
+            String got = String.format(Locale.ROOT, "%s–%s: полос %d, самая широкая %.1f px (предел %.1f), в середине %.4f", a, b, strips, widest, limit,
+                    middle);
+            System.out.println("MIXED " + got);
+            all.append(got).append('\n');
+            ok &= strips > 0 && widest <= limit && (middle == 0 || !(boolean) c[4]);
+        }
+        assertTrue(ok, all.toString());
+    }
+
+    /**
+     * Ревью #466, круг 2: у узких концов с широкой серединой одна полоса по концам держала середину до порога ленты и роняла
+     * её за порогом: при ширине середины 4,79999952 → 4,80000048 px её непрозрачность — 0,392 → 0,010, в четверти отрезка —
+     * 0,389 → 0,197; движение у порога мерцало. Ближняя к глазу точка внутри отрезка — вершина ленты со своей долей (по ширине
+     * там): доля ленты в середине — 1 − доля клубов там ({@link FarFlightView#puffShare}, ±0,001), и на всём проходе середины
+     * от 2 до 10 px шагом 0,005 px доли ленты в середине и в четверти и доля вещества у клубов меняются не больше чем на 0,01
+     * за шаг (лента тает по ширине не круче 0,63 на пиксель), у порога ±1e-6 px — меньше 0,001.
+     */
+    @Test
+    void ribbonShareIsContinuous() throws ReflectiveOperationException {
+        FarView v = SmokeFillTest.view(new Vec3(0, 10, 0), new Vector3f(1, 0, 0));
+        double tau = 1, d = 100;
+        // узкие концы под 45°, середина — ближняя к глазу точка отрезка
+        Vec3 a = new Vec3(d, 10, -d), b = new Vec3(d, 10, d);
+        double length = a.distanceTo(b), end = Math.sqrt(2) * d;
+        double[] half = new double[2];
+        java.util.List<Double> widths = new ArrayList<>();
+        for (double w = 2; w <= 10 + 1e-9; w += 0.005) widths.add(w);
+        widths.add(FarFlightView.PUFFS_FULL - 1e-6);
+        widths.add(FarFlightView.PUFFS_FULL + 1e-6);
+        double[] prev = null, below = null;
+        double worst = 0, atLimit = 0, sum = 0;
+        StringBuilder all = new StringBuilder();
+        for (int i = 0; i < widths.size(); i++) {
+            double w = widths.get(i), sigma = w / tubePixels(tau, 1, d);
+            SmokeFillTest.Screen s = strided(List.of(piece(a, sigma, b, sigma, tau, 5)), v, 1);
+            // доли: лента в середине и в четверти — её непрозрачность против трубки (у вершин ленты непрозрачность трубки — по
+            // прямой между концами, как у {@code FarFlightView.cut}), клубы — вещество мест против вещества отрезка
+            double width = ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma);
+            FarFlightView.ribbon(width, end, v.pixel(), half);
+            double alpha = -Math.expm1(-tau) * half[1] * v.air(end, 0);
+            double[] seen = {ribbonAt(s, a, b, 0.5) / alpha, ribbonAt(s, a, b, 0.25) / alpha,
+                    SmokePuffs.lastPlaceMatter() / (tau * Math.sqrt(2 * Math.PI) * sigma * length)};
+            if (i < widths.size() - 2) {
+                if (prev != null)
+                    for (int k = 0; k < 3; k++) worst = Math.max(worst, Math.abs(seen[k] - prev[k]));
+                prev = seen;
+                sum = Math.max(sum, Math.abs(seen[0] + FarFlightView.puffShare(width, d, v.pixel()) - 1));
+                if (Math.abs(w - 2) < 1e-9 || Math.abs(w - 4.8) < 0.003 || Math.abs(w - 10) < 1e-9)
+                    all.append(String.format(Locale.ROOT, " %.2f px: %.3f / %.3f / %.3f;", w, seen[0], seen[1], seen[2]));
+            } else if (below == null) below = seen;
+            else for (int k = 0; k < 3; k++) atLimit = Math.max(atLimit, Math.abs(seen[k] - below[k]));
+        }
+        String got = String.format(Locale.ROOT, "лента в середине / в четверти / клубы:%s наибольший шаг %.4f, у порога ±1e-6 px — %.6f, лента + клубы в середине — 1 ± %.5f",
+                all, worst, atLimit, sum);
+        System.out.println("CONTINUOUS " + got);
+        assertTrue(worst <= 0.01 && atLimit <= 0.001 && sum <= 0.001, got);
+    }
+
+    /**
+     * Непрозрачность лент кадра s в точке u отрезка a–b (мир; глаз — в (0, 10, 0)): полосы, через ось которых она проходит
+     * (у общей вершины двух полос — одна, та, что от неё начинается).
+     */
+    private static double ribbonAt(SmokeFillTest.Screen s, Vec3 a, Vec3 b, double u) {
+        double px = a.x + (b.x - a.x) * u, py = a.y + (b.y - a.y) * u - 10, pz = a.z + (b.z - a.z) * u, ribbon = 0;
+        for (double[] p : s.polygons) {
+            if (SmokeFillTest.isFlat(p) || p.length < 15) continue;
+            double ax = 0.5 * (p[0] + p[3]), ay = 0.5 * (p[1] + p[4]), az = 0.5 * (p[2] + p[5]);
+            double bx = 0.5 * (p[6] + p[9]), by = 0.5 * (p[7] + p[10]), bz = 0.5 * (p[8] + p[11]);
+            double tx = bx - ax, ty = by - ay, tz = bz - az, len2 = tx * tx + ty * ty + tz * tz;
+            double t = ((px - ax) * tx + (py - ay) * ty + (pz - az) * tz) / len2;
+            if (t < -1e-6 || t > 1 - 1e-6) continue;
+            double ex = ax + tx * t - px, ey = ay + ty * t - py, ez = az + tz * t - pz;
+            if (ex * ex + ey * ey + ez * ez > 1e-6 * len2) continue;
+            ribbon = 1 - (1 - ribbon) * (1 - (p[13] + (p[14] - p[13]) * Math.clamp(t, 0, 1)));
+        }
+        return ribbon;
+    }
+
+    /**
+     * Бюджет мест растит шаг клубов трубки, и мест на отрезок меньше, а вещество отрезка у них то же: каждое стоит за свой,
+     * более длинный кусок оси. Трубка σ 1 м, τ 1, 40 м в 30 м от глаза (клубы целиком): с шагом ×1–128 вещество мест — то же
+     * (±0,1 %) и равно веществу отрезка, мест — всё меньше, до одного.
+     */
+    @Test
+    void strideKeepsTheMatter() throws ReflectiveOperationException {
+        FarView v = SmokeFillTest.view(new Vec3(0, 10, 0), new Vector3f(1, 0, 0));
+        double tau = 1, sigma = 1, length = 40, truth = tau * Math.sqrt(2 * Math.PI) * sigma * length;
+        SmokeGrid.Source tube = piece(new Vec3(30, 10, -length / 2), sigma, new Vec3(30, 10, length / 2), sigma, tau, 3);
+        StringBuilder all = new StringBuilder(String.format(Locale.ROOT, "вещество отрезка %.3f:", truth));
+        boolean ok = true;
+        int was = Integer.MAX_VALUE;
+        for (double stride : new double[]{1, 1.5, 2, 3, 5, 8, 128}) {
+            strided(List.of(tube), v, stride);
+            double matter = SmokePuffs.lastPlaceMatter();
+            int places = SmokePuffs.lastPlaces();
+            all.append(String.format(Locale.ROOT, " ×%.1f — %d мест, %.3f;", stride, places, matter));
+            ok &= Math.abs(matter / truth - 1) <= 0.001 && places <= was && places >= 1;
+            was = places;
+        }
+        ok &= was == 1;
+        System.out.println("STRIDE " + all);
+        assertTrue(ok, all.toString());
+    }
+
+    /**
+     * Мест трубок — не больше {@link SmokePuffs#PLACES} в каждом кадре налёта стенда, и в первом (шаг ещё по закону), а со
+     * второго-третьего кадра мест хватает всем отрезкам в кадре: шаг растёт сразу во столько раз, во сколько мест просили
+     * больше (×1,1 за кадр — двенадцать кадров части отрезков без клубов). Доли клубов и ленты при этом те же — лент шире
+     * узкой трубки нет ({@link #ribbonsAreOnlyNarrowTubes}).
+     */
+    @Test
+    void placesHoldFromTheFirstFrame() {
+        double now = 1000;
+        List<SmokeGrid.Source> raid = raid(now);
+        StringBuilder all = new StringBuilder();
+        boolean ok = true;
+        for (int c = 0; c < 3; c++) {
+            FarView v = view(c);
+            SmokeFillTest.Screen s = new SmokeFillTest.Screen(v);
+            SmokePuffs.resetBudget();
+            FarFlightView.reset();
+            StringBuilder row = new StringBuilder(NAMES[c] + ": мест / отказано —");
+            int settled = -1;
+            for (int frame = 0; frame < 12; frame++) {
+                s.clear();
+                FarFlightView.budget();
+                for (SmokeGrid.Source b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
+                SmokePuffs.flush();
+                int places = SmokePuffs.lastPlaces(), refused = SmokePuffs.lastRefused();
+                row.append(String.format(Locale.ROOT, " %d/%d", places, refused));
+                ok &= places <= SmokePuffs.PLACES;
+                if (refused == 0 && settled < 0) settled = frame;
+                if (frame >= 3) ok &= refused == 0;
+            }
+            row.append("; без отказов с кадра ").append(settled);
+            System.out.println("FIRST " + row);
+            all.append(row).append('\n');
+        }
+        SmokePuffs.resetBudget();
+        FarFlightView.reset();
+        assertTrue(ok, all.toString());
+    }
+
+    /**
+     * Угловая ширина полосы ленты p (вершины от глаза: 0, 1 — у a, 2, 3 — у b) у её конца end (0 — a, 1 — b), пикселей кадра
+     * проверок: поперечник конца поперёк луча к нему на его дальность — та же мера, что у порога ленты
+     * ({@link FarFlightView#puffShare}: ширина / расстояние). Пиксели плоскости экрана у края кадра крупнее угла (у реза в
+     * 243 м на глубине 163 м — в 1,5 раза), и узкая лента там шире в пикселях — это перспектива кадра, а не лента.
+     */
+    private static double pixels(FarView v, double[] p, int end) {
+        int i = end == 0 ? 0 : 3, j = end == 0 ? 1 : 2;
+        double mx = 0.5 * (p[3 * i] + p[3 * j]), my = 0.5 * (p[3 * i + 1] + p[3 * j + 1]), mz = 0.5 * (p[3 * i + 2] + p[3 * j + 2]);
+        double d = Math.sqrt(mx * mx + my * my + mz * mz), rx = mx / d, ry = my / d, rz = mz / d;
+        double ox = p[3 * j] - p[3 * i], oy = p[3 * j + 1] - p[3 * i + 1], oz = p[3 * j + 2] - p[3 * i + 2], along = ox * rx + oy * ry + oz * rz;
+        return Math.sqrt(Math.max(0, ox * ox + oy * oy + oz * oz - along * along)) / (d * v.pixel());
     }
 
     /**
