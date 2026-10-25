@@ -436,7 +436,7 @@ public final class FarBlasts {
     public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed) {
         Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at));
         trace(e, FarTerrain.of(level), camera());
-        clear(e, camera());
+        clear(e, camera(), 0);
         if (EVENTS.size() >= CAP) EVENTS.pollFirst().alive = false;
         EVENTS.addLast(e);
         SmokeGrid.add(e);
@@ -655,10 +655,10 @@ public final class FarBlasts {
             }
             if (clock - e.traced >= RETRACE && traces < TRACES_PER_TICK) {
                 trace(e, heights, ear);
-                if (e.glows) clear(e, ear);
+                if (e.glows) clear(e, ear, age);
                 traces++;
             } else if (age < e.ballTicks() && clears < CLEARS_PER_TICK) {
-                clear(e, ear);
+                clear(e, ear, age);
                 clears++;
             }
         }
@@ -679,16 +679,18 @@ public final class FarBlasts {
      * Два луча к оси шара у угла высотки оба упирались бы в угол, и видимая половина шара светила бы без блика. Часть
      * диска в земле закрыта всем и в счёт не идёт. Дальше прорисовки шар закрывает рельеф ({@link #trace}). Шар в кадре
      * блик берёт ещё и по тому, что на экране ({@code SourceProbes}: и LOD Distant Horizons, которых лучи не видят).
+     * Шар — там, где он на {@code age}-м тике, как его клубы, спрайт и свет: место на середине жизни шара под ветром
+     * уходило от нынешнего на метры (ракета, 5 м/с, первые тики — ~10 м), и шар у края стены считался закрытым.
      */
-    private static void clear(Event e, Vec3 eye) {
+    private static void clear(Event e, Vec3 eye, double age) {
         double r = e.ballRadius();
         if (r <= 0) return;
         if (e.distanceTo(eye) > Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0) {
             e.open = 1;
             return;
         }
-        double half = 0.5 * e.ballTicks() / 20, mid = e.y + e.ballHeight(0.5 * e.ballTicks());
-        double mx = e.x + e.model.ballX(half), mz = e.z + e.model.ballZ(half);
+        double t = Math.min(age, e.ballTicks()) / 20, mid = e.y + e.model.ballHeight(t);
+        double mx = e.x + e.model.ballX(t), mz = e.z + e.model.ballZ(t);
         int seen = 0, counted = 0;
         for (int i = 0; i <= RING_RAYS; i++) {
             disc(eye, mx, mid, mz, RING * r, i, DISC);

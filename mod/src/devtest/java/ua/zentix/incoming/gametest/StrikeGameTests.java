@@ -3553,7 +3553,9 @@ public final class StrikeGameTests {
 
     /**
      * «Рельеф» на высоте {@code roof} над местом пуска и {@code length} блоками пути вперёд (+z): готовые чанки, где
-     * сущности не тикают, — снаряд над ними летит вне мира. Тикеты снимаются после теста при любом исходе.
+     * сущности не тикают, — снаряд над ними летит вне мира. Тикеты и сам «рельеф» снимаются после теста при любом
+     * исходе: оставленная полоса камня висела над площадками следующих партий в той же колонне сетки (бомба B-2 входила
+     * в неё в 61 блоке над грунтом, гребень закрывал шахед от ЗРК).
      */
     private static void roofOverStart(GameTestHelper h, Vec3 start, int roof, int length) {
         roofOverStart(h, start, roof, length, 1);
@@ -3563,6 +3565,7 @@ public final class StrikeGameTests {
     private static void roofOverStart(GameTestHelper h, Vec3 start, int roof, int length, int direction) {
         ServerLevel level = h.getLevel();
         List<ChunkPos> held = new ArrayList<>();
+        List<BlockPos> laid = new ArrayList<>();
         for (int dz = 0; dz <= length; dz++) {
             BlockPos b = BlockPos.containing(start.x, roof, start.z + direction * dz);
             ChunkPos c = new ChunkPos(b);
@@ -3573,8 +3576,13 @@ public final class StrikeGameTests {
                 held.add(c);
             }
             level.setBlock(b, Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+            laid.add(b);
         }
-        afterTest(h, () -> held.forEach(c -> level.getChunkSource().removeRegionTicket(READY_ONLY, c, 0, c)));
+        afterTest(h, () -> {
+            // камень — пока чанки ещё держит свой тикет
+            for (BlockPos b : laid) if (level.getBlockState(b).is(Blocks.STONE)) level.setBlock(b, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            held.forEach(c -> level.getChunkSource().removeRegionTicket(READY_ONLY, c, 0, c));
+        });
     }
 
     /**
