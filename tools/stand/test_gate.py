@@ -665,8 +665,9 @@ class Checks(unittest.TestCase):
         def bad(got, why="quiet", expect=100):
             res = {"meta": {"done": {"x": 1}, "impacts": {"100": {"got": got, "expect": expect, "why": why, "took_s": 30}}}, "windows": {}}
             return [b for b in results.checks([{"type": "gl"}], res) if "попаданий" in b]
-        self.assertEqual(bad(97), [])
-        self.assertTrue(bad(96))
+        self.assertEqual(bad(95), [])
+        self.assertEqual(bad(90), [])
+        self.assertTrue(bad(89))
         self.assertTrue(bad(99, why="timeout"))
         self.assertTrue(bad(0, expect=1))
 

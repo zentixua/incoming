@@ -500,11 +500,17 @@ def cmd_pr(a):
     if a.post and (a.packs != list(PACKS) or scenes != GATE_SCENES or a.size != DEFAULT_SIZE):
         # статус влития — только у полного шлагбаума: выборка паков пропустила бы регрессию в остальных
         raise SystemExit("--post — только со всеми паками, сценой «100» и окном по умолчанию; выборка — без --post")
-    if a.post:
-        post_status(head, "pending", f"Стенд идёт: парой с {version}", None)
-    code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--against", version, "--packs", ",".join(a.packs), "--size", a.size,
-                           "--label", f"PR {a.number}", "--scenes", ",".join(scenes)]).returncode
     out = OUT / name
+    if a.rejudge:
+        # пара этой головы уже снята: вердикт заново из сырых данных (правка разбора не требует пересъёмки)
+        if not is_pair(out):
+            raise SystemExit(f"{out}: пары этой головы нет — снять без --rejudge")
+        code = 0
+    else:
+        if a.post:
+            post_status(head, "pending", f"Стенд идёт: парой с {version}", None)
+        code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--against", version, "--packs", ",".join(a.packs), "--size", a.size,
+                               "--label", f"PR {a.number}", "--scenes", ",".join(scenes)]).returncode
     if not is_pair(out) or code not in (0, 1):
         if a.post:
             post_status(head, "error", f"Стенд не снял пару (код {code})", None)
@@ -553,7 +559,9 @@ def main():
     p = sub.add_parser("analyze"); p.add_argument("name"); p.set_defaults(fn=cmd_analyze)
     p = sub.add_parser("gate"); p.add_argument("name"); p.set_defaults(fn=cmd_gate)
     p = sub.add_parser("pr"); p.add_argument("number", type=int); p.add_argument("--post", action="store_true")
-    p.add_argument("--force", action="store_true"); common(p); p.set_defaults(fn=cmd_pr)
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--rejudge", action="store_true", help="не снимать: вердикт по уже снятой паре этой головы")
+    common(p); p.set_defaults(fn=cmd_pr)
     a = ap.parse_args()
     for pk in getattr(a, "packs", []) or []:
         if pk not in PACKS:
