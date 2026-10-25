@@ -400,13 +400,59 @@ class CoarsePassTest {
         double[][] lit = {{0.9, 0.4}, {0.9, 0.4}, {0.9, 0.4}, {0.0, 0.5}};
         assertTrue(together(lit, 0.5) - sequential(lit, 0.5) > 0.1);
         String fsh = shader("core/fx.fsh"), out = shader("core/fx_coarse.fsh").replaceAll("\\s+", " ");
-        assertTrue(fsh.contains("if (coarse) fragCover = vec4(float(any(greaterThan(fragColor.rgb, vec3(fragColor.a + 0.5 / 255.0)))), 0.0, 0.0, 0.0);"),
+        // малый пересвет каждого из сотни (ревью #455: 0,0119 при 0,01) — тоже отметка: без допуска
+        double[][] faint = new double[101][];
+        for (int i = 0; i < 100; i++) faint[i] = new double[]{0.0119, 0.01};
+        faint[100] = new double[]{0, 0.5};
+        assertTrue(together(faint, 1) - sequential(faint, 1) > 0.05);
+        assertTrue(fsh.contains("if (coarse) fragCover = vec4(float(any(greaterThan(fragColor.rgb, vec3(fragColor.a)))), 0.0, 0.0, 0.0);"),
                 "отметка пересвета — в мелком кадре");
         assertTrue(out.contains("bright = max(bright, texelFetch(Sampler2, t, 0).r);") && out.contains("bool unresolved = total <= 0.0 || bright > 0.0;"),
                 "у отметки — досчёт");
         String code = java.nio.file.Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/fx/layer/CoarsePass.java"));
         assertTrue(code.contains("GL30.GL_COLOR_ATTACHMENT1, GlConst.GL_TEXTURE_2D, BRIGHT[k], 0);") && code.contains("GL30.glClearBufferfv(GL11.GL_COLOR, 1, ZERO);")
                 && code.contains("c.setSampler(\"Sampler2\", BRIGHT[k]);"), "отметки — второй выход мелкого кадра, чистятся с ним, вывод их читает");
+    }
+
+    /**
+     * Мелкий кадр складывает отрезок в половинной точности (RGBA16F) — это закон смешивания с умноженной альфой с
+     * точностью до 1/255 на стопках до 200 клубов любой бледности. Восьмибитный кадр 3.7.0 округляет после каждого
+     * смешивания, и бледные слои в нём по одному идут мимо закона (ревью #455: 100 клубов (0,005; 0,01) поверх 0,8 — 0,498
+     * в программном OpenGL против закона 0,610): тут мелкий кадр — не «как 3.7.0», а как закон, и пиксель досчётом не уходит.
+     */
+    @Test
+    void coarseTargetKeepsTheBlendLaw() {
+        Random rnd = new Random(5);
+        for (int k = 0; k < 5000; k++) {
+            int n = 1 + rnd.nextInt(200);
+            double rgb = 0, t = 1, exact = 0, et = 1, pale = rnd.nextDouble() < 0.5 ? 0.02 : 1;
+            for (int i = 0; i < n; i++) {
+                double a = rnd.nextDouble() * pale, c = a * rnd.nextDouble();
+                rgb = half(half(c) + half(half(1 - half(a)) * rgb));
+                t = half(half(1 - half(a)) * t);
+                exact = c + (1 - a) * exact;
+                et *= 1 - a;
+            }
+            double frame = rnd.nextDouble();
+            assertEquals(exact + et * frame, rgb + t * frame, 1 / 255.0, "стопка " + k + " из " + n);
+        }
+        double[][] pale = new double[100][];
+        for (int i = 0; i < 100; i++) pale[i] = new double[]{0.005, 0.01};
+        assertEquals(0.610, together(pale, 0.8), 0.001, "закон");
+        // сколько именно — дело округления у видеокарты (программный OpenGL дал 0,498, округление к ближнему — 0,694)
+        assertTrue(Math.abs(eightBit(pale, 0.8) - 0.610) > 0.05, "восьмибитный кадр по одному — не закон");
+    }
+
+    /** Число в половинной точности (RGBA16F). */
+    private static double half(double v) {
+        return Float.float16ToFloat(Float.floatToFloat16((float) v));
+    }
+
+    /** Квадраты по одному в восьмибитном кадре: обрезка и округление до 1/255 после каждого смешивания. */
+    private static double eightBit(double[][] puffs, double frame) {
+        double d = Math.round(frame * 255) / 255.0;
+        for (double[] p : puffs) d = Math.round(Math.min(1, p[0] + (1 - p[1]) * d) * 255) / 255.0;
+        return d;
     }
 
     /** Квадраты {rgb, a} с умноженной альфой по одному поверх кадра frame, обрезка до 1 после каждого (восьмибитный кадр). */
