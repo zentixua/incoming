@@ -597,9 +597,9 @@ public final class CloudModel {
         return t < heBallSeconds ? heBall * (0.3 + 0.7 * (1 - Math.exp(-t / (0.05 * heBallSeconds)))) : 0;
     }
 
-    /** Радиус шара топлива в возрасте t, м (0 — погас): растёт к D/2 за первую пятую горения (оценка формы). */
+    /** Радиус шара топлива в возрасте t, м (0 — погас): {@link FuelFireball#radius} — тот же шар жжёт сервер. */
     public double fuelBallRadius(double t) {
-        return t < fuelBallSeconds ? 0.5 * fuelBall * Math.min(1, Math.sqrt(t / (0.2 * fuelBallSeconds))) : 0;
+        return FuelFireball.radius(fuelBall, fuelBallSeconds, t);
     }
 
     /** Свет одного тела для {@link #ballLight} (зовут с потока отрисовки каждый кадр — без новых массивов). */
@@ -648,23 +648,19 @@ public final class CloudModel {
     }
 
     /**
-     * Середина шара радиуса r, растущего от точки взрыва, над ней, м: у наземного — полусфера (центр видимой части — на 0,45
-     * радиуса над землёй), у разрыва в воздухе шар свободный — центр в точке взрыва; между — по доле радиуса, что уходит в
-     * землю (⚠ оценка формы: шар, срезанный землёй, к полусфере — линейно по высоте подрыва; physics.md фронта F: посадка
-     * полусферой у разрыва в воздухе не обоснована).
+     * Середина шара радиуса r, растущего от точки взрыва, над ней, м: {@link FuelFireball#onGround} (physics.md фронта F:
+     * посадка полусферой у разрыва в воздухе не обоснована).
      */
     double onGround(double r) {
-        return r <= 0 ? 0 : 0.45 * r * Math.clamp(1 - hob / r, 0, 1);
+        return FuelFireball.onGround(r, hob);
     }
 
     /**
-     * Всплытие горящего шара топлива к возрасту t, м: от земли к середине 0,75·D в конец горения (CCPS) — ровно за горение
-     * (⚠ оценка формы: CCPS даёт только конечную высоту). Шар продуктов детонации внутри шара топлива всплывает с ним; без
-     * топлива — 0: подъём продуктов — остывающий шар ({@link #cooling}).
+     * Всплытие горящего шара топлива к возрасту t, м: {@link FuelFireball#lift} (к 0,75·D в конец горения). Шар продуктов
+     * детонации внутри шара топлива всплывает с ним; без топлива — 0: подъём продуктов — остывающий шар ({@link #cooling}).
      */
     double lift(double t) {
-        if (fuelBall <= 0) return 0;
-        return (0.75 * fuelBall - onGround(0.5 * fuelBall)) * Math.min(1, t / Math.max(fuelBallSeconds, 1e-6));
+        return FuelFireball.lift(fuelBall, fuelBallSeconds, t, hob);
     }
 
     /**

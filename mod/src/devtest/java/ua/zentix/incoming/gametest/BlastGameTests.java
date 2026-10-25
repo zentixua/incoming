@@ -307,23 +307,13 @@ public final class BlastGameTests {
      * горючего: у листвы и сена — с долей их порога ({@link PulseIgnition}), у брёвен — нет; ни один огонь шара не стоит на
      * полу, что сам не горит (пол — трава-дёрн; так «горели» песок и рельсы), и все — в шаре. Топливо, что осталось в
      * воронке, горит на полу у удара своими клетками ({@link FuelFires}: столько, сколько площадь закона), — это огонь
-     * топлива, не огонь шара; у бревна огонь — только такой. У «Града» топлива нет — огня нет. Огонь ванили на время
+     * топлива, не огонь шара; у бревна огонь — только такой. Шар всплывает к 0,75·D: крона из листвы над ударом на высоте D
+     * (вне прежней полусферы D/2) загорается (BLASTSEQ D18). У «Града» топлива нет — огня нет. Огонь ванили на время
      * проверки не растёт ({@code doFireTick}), волна блоков не ломает: считается только поджиг.
      */
     private static void fireTest(GameTestHelper h, WeaponType weapon) {
         ServerLevel level = h.getLevel();
-        boolean debris = IncomingConfig.SERVER.debrisStay.get(), damage = IncomingConfig.SERVER.blockDamage.get();
-        IncomingConfig.SERVER.debrisStay.set(false);
-        // волна не ломает: листву и сено взрыв снёс бы раньше шара, а проверяется поджиг
-        IncomingConfig.SERVER.blockDamage.set(false);
-        GameRules.BooleanValue tick = level.getGameRules().getRule(GameRules.RULE_DOFIRETICK);
-        boolean ticked = tick.get();
-        tick.set(false, level.getServer());
-        StrikeGameTests.afterTest(h, () -> {
-            IncomingConfig.SERVER.debrisStay.set(debris);
-            IncomingConfig.SERVER.blockDamage.set(damage);
-            tick.set(ticked, level.getServer());
-        });
+        onlyIgnition(h);
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         WeaponSpec spec = weapon.spec();
         double ballKg = FuelFireball.ballKg(spec.fuelAtImpact());
@@ -347,9 +337,33 @@ public final class BlastGameTests {
             level.setBlock(p, (i % 2 == 0 ? Blocks.SHORT_GRASS : Blocks.POPPY).defaultBlockState(), 2);
             plants.add(p.immutable());
         }
+        // крона над шаром: на высоте D (не выше площадки), вне прежней полусферы D/2 у точки удара — шар всплывает к ней
+        int crownY = (int) Math.min(Math.round(2 * r), 26), crownR = 6;
+        java.util.List<BlockPos> crown = new java.util.ArrayList<>();
+        if (r > 0) {
+            for (int dx = -crownR; dx <= crownR; dx++) {
+                for (int dz = -crownR; dz <= crownR; dz++) {
+                    BlockPos p = BlockPos.containing(at.x + dx, at.y + crownY, at.z + dz);
+                    level.setBlock(p, leaves, 2);
+                    crown.add(p);
+                }
+            }
+        }
+        StrikeGameTests.afterTest(h, () -> {
+            for (BlockPos p : crown) {
+                level.setBlock(p, Blocks.AIR.defaultBlockState(), 2);
+                level.setBlock(p.above(), Blocks.AIR.defaultBlockState(), 2);
+                level.setBlock(p.below(), Blocks.AIR.defaultBlockState(), 2);
+            }
+        });
         Warheads.detonate(level, weapon, at, null, null);
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
+            int canopy = 0;
+            for (BlockPos p : crown) {
+                if (level.getBlockState(p.above()).getBlock() instanceof BaseFireBlock) canopy++;
+                if (level.getBlockState(p.below()).getBlock() instanceof BaseFireBlock) canopy++;
+            }
             Set<BlockPos> fuelCells = new HashSet<>();
             for (BlockPos p : FuelFires.get(level).cells()) if (Vec3.atCenterOf(p).distanceTo(at) < 24) fuelCells.add(p);
             int fires = 0, thin = 0, solid = 0, floor = 0, plant = 0, fuel = 0;
@@ -382,8 +396,8 @@ public final class BlastGameTests {
                 else floor++;
 
             }
-            String got = String.format(Locale.ROOT, "%s: огня шара %d (у тонкого %d, растений %d, у брёвен %d, на пустом полу %d) до %.1f м (шар %.1f м), топлива %d клеток (закон %d)",
-                    weapon, fires, thin, plant, solid, floor, far, r, fuel, spec.pool().cells());
+            String got = String.format(Locale.ROOT, "%s: огня шара %d (у тонкого %d, растений %d, у брёвен %d, на пустом полу %d) до %.1f м (шар %.1f м), в кроне на %d м — %d, топлива %d клеток (закон %d)",
+                    weapon, fires, thin, plant, solid, floor, far, r, crownY, canopy, fuel, spec.pool().cells());
             Incoming.LOG.info("BLASTBENCH {}", got);
             h.assertTrue(floor == 0, got);
             // толстое дерево импульс шара не поджигает: у бревна — только огонь топлива
@@ -391,10 +405,117 @@ public final class BlastGameTests {
             h.assertTrue(fuel == spec.pool().cells(), got);
             if (r > 0) {
                 h.assertTrue(thin >= 4, got);
-                // растений в шаре — 24 (половина — трава, у шахеда загорается треть-половина, у ракеты — почти все)
-                h.assertTrue(plant >= 3, got);
+                // растений в шаре — 24: у ракеты загораются больше половины (14–15); у шахеда у земли — пятая часть травы и меньше к краю
+                // шара (шар всплывает), в среднем 2–3 — для проверки мало
+                if (weapon == WeaponType.MISSILE) h.assertTrue(plant >= 6, got);
                 h.assertTrue(far <= r + 1.5, got);
+                // обход доходит до края шара у земли: прежде предел клеток кончал его в небе над всплывшим шаром ракеты
+                // (на импульсе 10 кал/см², ревью #467), и листва у края не загоралась
+                h.assertTrue(far >= r - 2.5, got);
+                // крону над поднявшимся шаром он жжёт (BLASTSEQ D18: прежде шар сервера стоял полусферой D/2 у удара)
+                h.assertTrue(canopy >= 5, got);
             } else h.assertTrue(fires == 0, got);
+        });
+    }
+
+    /**
+     * На время проверки считается только поджиг: волна блоков не ломает (листву и сено взрыв снёс бы раньше шара), обломки
+     * не остаются, огонь ванили не растёт ({@code doFireTick}).
+     */
+    private static void onlyIgnition(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        boolean debris = IncomingConfig.SERVER.debrisStay.get(), damage = IncomingConfig.SERVER.blockDamage.get();
+        IncomingConfig.SERVER.debrisStay.set(false);
+        IncomingConfig.SERVER.blockDamage.set(false);
+        GameRules.BooleanValue tick = level.getGameRules().getRule(GameRules.RULE_DOFIRETICK);
+        boolean ticked = tick.get();
+        tick.set(false, level.getServer());
+        StrikeGameTests.afterTest(h, () -> {
+            IncomingConfig.SERVER.debrisStay.set(debris);
+            IncomingConfig.SERVER.blockDamage.set(damage);
+            tick.set(ticked, level.getServer());
+        });
+    }
+
+    /**
+     * Столбы листвы в три блока по кругу в {@code d} м от {@code at} ({@code n} штук); возвращает их блоки. Огня у них —
+     * {@link #firesAt}.
+     */
+    private static List<BlockPos> leafRing(ServerLevel level, Vec3 at, double d, int n) {
+        BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true);
+        List<BlockPos> placed = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            double a = i * 2 * Math.PI / n;
+            BlockPos p = BlockPos.containing(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d);
+            for (int y = 0; y < 3; y++) {
+                level.setBlock(p.above(y), leaves, 2);
+                placed.add(p.above(y).immutable());
+            }
+        }
+        return placed;
+    }
+
+    /** Сколько клеток огня у блоков {@code fuel} (по грани). */
+    private static int firesAt(ServerLevel level, List<BlockPos> fuel) {
+        Set<BlockPos> fires = new HashSet<>();
+        for (BlockPos p : fuel) {
+            for (Direction d : Direction.values()) {
+                BlockPos q = p.relative(d);
+                if (level.getBlockState(q).getBlock() instanceof BaseFireBlock) fires.add(q);
+            }
+        }
+        return fires.size();
+    }
+
+    /**
+     * Ракета под широким навесом (камень 63×63 на высоте 30 м — над всплывшим шаром): под ним — 120 тыс. клеток воздуха с
+     * импульсом выше {@code PulseIgnition.FLOOR}, втрое больше предела обхода. Обход идёт от ближних клеток к дальним и
+     * доходит до листвы у земли в 23 м, где импульс — 6 кал/см² (половина листвы). Прежде он шёл от большего импульса и
+     * кончался пределом в воздухе под навесом на 9 кал/см², до земли за краем шара не доходя (ревью #467).
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "blast_fire_roof", skyAccess = true)
+    public static void missileFireReachesTheGroundUnderAWideRoof(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        onlyIgnition(h);
+        Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+        List<BlockPos> roof = new ArrayList<>();
+        for (int dx = -31; dx <= 31; dx++) {
+            for (int dz = -31; dz <= 31; dz++) {
+                BlockPos p = h.absolutePos(CENTER.offset(dx, 30, dz));
+                level.setBlock(p, Blocks.STONE.defaultBlockState(), 2);
+                roof.add(p);
+            }
+        }
+        List<BlockPos> leaves = leafRing(level, at, 23, 12);
+        StrikeGameTests.afterTest(h, () -> {
+            for (BlockPos p : roof) level.setBlock(p, Blocks.AIR.defaultBlockState(), 2);
+        });
+        Warheads.detonate(level, WeaponType.MISSILE, at, null, null);
+        h.succeedWhen(() -> {
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
+            int fires = firesAt(level, leaves);
+            Incoming.LOG.info("BLASTBENCH MISSILE под навесом: огня у листвы в 23 м — {}", fires);
+            h.assertTrue(fires >= 6, "под навесом у листвы в 23 м огня " + fires);
+        });
+    }
+
+    /**
+     * Ракета рвётся в воздухе, в 6 м над землёй (неконтактный подрыв, пролом крыши): точка подрыва выше всего в столбцах
+     * рядом, а обход не выше неё идёт и выше потолка столбцов — до листвы у земли в 6 м. Прежде потолок отрезал точку
+     * подрыва от земли: обход кончался на одной клетке (ревью #467).
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "blast_fire_air", skyAccess = true)
+    public static void missileAirburstLightsTheGroundBelow(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        onlyIgnition(h);
+        Vec3 ground = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+        List<BlockPos> leaves = leafRing(level, ground, 6, 8);
+        Warheads.detonate(level, WeaponType.MISSILE, ground.add(0, 6, 0), null, null);
+        h.succeedWhen(() -> {
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
+            int fires = firesAt(level, leaves);
+            Incoming.LOG.info("BLASTBENCH MISSILE в воздухе: огня у листвы на земле в 6 м — {}", fires);
+            h.assertTrue(fires >= 4, "подрыв в 6 м над землёй: огня у листвы " + fires);
         });
     }
 
