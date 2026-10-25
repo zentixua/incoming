@@ -38,11 +38,11 @@ class FireRaysTest {
     }
 
     /**
-     * Лучей за тик — не больше {@link FireRays#PER_TICK} и не больше от числа пожаров: у 30, 300 и 3000 слышимых пожаров
-     * одно и то же; каждый пожар получает луч не позже {@link FireRays#lag} тиков и дальше обновляется не реже; когда
-     * лучи есть у всех, в сумме — все пожары (ни один не выпал). Шагов в мире за тик: лучи кончаются на последнем
-     * загруженном чанке — не больше, чем у {@code PER_TICK} лучей через загруженный квадрат, против луча до каждого
-     * пожара прежде.
+     * Лучей в мир за тик (всех: из тика пожара и из бюджета) — не больше {@link FireRays#PER_TICK} и не растёт с числом
+     * пожаров: у 30, 300 и 3000 слышимых пожаров одно и то же; каждый пожар получает луч не позже {@link FireRays#lag}
+     * тиков и дальше обновляется не реже; когда лучи есть у всех, в сумме — все пожары (ни один не выпал). Шагов в мире за
+     * тик: лучи кончаются на последнем загруженном чанке — не больше, чем у {@code PER_TICK} лучей через загруженный
+     * квадрат, против луча до каждого пожара прежде.
      */
     @Test
     void raysPerTickStayBoundedAsFiresGrow() {
@@ -50,12 +50,13 @@ class FireRaysTest {
             List<CraterFire> fires = ring(n);
             FireRays rays = new FireRays();
             Map<Vec3, List<Integer>> rayed = new HashMap<>();
-            int[] tick = {0};
+            int[] tick = {0}, opened = {0};
             double[] steps = {0};
             SoundFilters.Path path = new SoundFilters.Path() {
                 @Override
                 public float open(Vec3 from, Vec3 to) {
                     rayed.computeIfAbsent(to, k -> new ArrayList<>()).add(tick[0]);
+                    opened[0]++;
                     steps[0] += SoundFilters.reach(from, to, LOADED) * from.distanceTo(to);
                     return 1;
                 }
@@ -72,6 +73,7 @@ class FireRaysTest {
                 double expected = 0;
                 int heard = 0;
                 steps[0] = 0;
+                opened[0] = 0;
                 for (CraterFire f : fires) {
                     assertTrue(f.hear(EAR, Propagation.Weather.NIGHT, path, q));
                     if (f.heard) heard++;
@@ -79,6 +81,8 @@ class FireRaysTest {
                 assertEquals(n, heard, n + " пожаров: все слышны (ночь, 2 МВт, ≤ 1,9 км)");
                 int cast = rays.cast(fires, EAR, path);
                 assertEquals(Math.min(n, FireRays.PER_TICK), cast, n + " пожаров, тик " + tick[0] + ": лучей");
+                // все обращения к миру за тик — и из тика каждого пожара, и из бюджета
+                assertEquals(cast, opened[0], n + " пожаров, тик " + tick[0] + ": лучей в мир");
                 worst = Math.max(worst, steps[0]);
                 if (tick[0] == 0) for (CraterFire f : fires) before += f.burnCentre().add(0, 1.5, 0).distanceTo(EAR);
                 if (tick[0] > lag) {
