@@ -408,7 +408,8 @@ def pair_runs(out):
 
 
 def judge_pair(out, write=True):
-    """Вердикт пары заново из сырых данных: на каждый пак — пары по порядку (вторая — где снималась), gate.decide;
+    """Вердикт пары заново из сырых данных: на каждый пак — пары по порядку до первой прошедшей (вторая — где снималась),
+    gate.decide;
     → verdict.json. Пак, где пара неполна (прервано), — провал «не снято»."""
     out = Path(out)
     info = json.loads((out / "pair.json").read_text())
@@ -426,6 +427,9 @@ def judge_pair(out, write=True):
                               "noisy": [], "rows": [], "notes": []})
                 break
             tries.append(gate.compare_pack(pack, got[1], [got[0], got[2]]))
+            # как play_pair: пак, прошедший пару, больше не снимается — пара, снятая под старым правилом, не в счёт
+            if tries[-1]["state"] == gate.PASS:
+                break
         packs[pack] = gate.decide(tries) if tries else {"state": gate.FAIL, "fails": [f"{pack}: пара не снята"], "noisy": [], "rows": [],
                                                         "notes": [], "tries": 0, "earlier": []}
     v = gate.summary(packs)

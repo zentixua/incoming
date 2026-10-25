@@ -748,6 +748,13 @@ class PairRuns(unittest.TestCase):
             self.assertEqual(v["packs"]["none"]["tries"], 2)
             self.assertEqual(v["packs"]["none"]["earlier"][0]["state"], gate.FAIL)
 
+    def test_a_passing_first_pair_decides_like_play(self):
+        # вторая пара, снятая под старым правилом (первая прошла бы под нынешним), — не в счёт
+        with tempfile.TemporaryDirectory() as root:
+            v = stand.judge_pair(self.out(root, {"A1": 8.0, "B": 8.1, "A2": 8.0, "A1-2": 8.0, "B-2": 12.0, "A2-2": 8.1}))
+            self.assertEqual(v["state"], gate.PASS, v["fails"])
+            self.assertEqual(v["packs"]["none"]["tries"], 1)
+
     def test_incomplete_pair_fails(self):
         with tempfile.TemporaryDirectory() as root:
             v = stand.judge_pair(self.out(root, {"A1": 8.0, "B": 8.0}))
