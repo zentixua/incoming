@@ -33,6 +33,17 @@ class NoIdleTest(unittest.TestCase):
             self.assertEqual({"timeout": 0, "condition": "on_battery"}, conf["idle"])
             self.assertEqual({"hidden": {"frame_rate_target": 0}}, conf["states"])
 
+    def test_old_idle_time_removed(self):
+        # ревью #463: Dynamic FPS 3.11.4 при загрузке переносит старый idle_time в idle.timeout поверх нашего 0
+        with tempfile.TemporaryDirectory() as dest:
+            os.makedirs(os.path.join(dest, "config"))
+            with open(os.path.join(dest, "config", "dynamic_fps.json"), "w") as f:
+                json.dump({"idle_time": 300, "idle": {"timeout": 300}}, f)
+            prod_client.no_idle(dest)
+            conf = self.conf(dest)
+            self.assertNotIn("idle_time", conf)
+            self.assertEqual(0, conf["idle"]["timeout"])
+
     def test_missing_or_broken_config(self):
         for text in (None, "not json", "[]"):
             with tempfile.TemporaryDirectory() as dest:
