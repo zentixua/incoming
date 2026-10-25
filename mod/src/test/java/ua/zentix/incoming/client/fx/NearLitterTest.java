@@ -8,6 +8,8 @@ import net.neoforged.fml.loading.LoadingModList;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.nuclear.model.LocalLitter;
+import ua.zentix.incoming.nuclear.model.ShockAtBody;
 
 import java.util.List;
 import java.util.Map;
@@ -59,5 +61,29 @@ class NearLitterTest {
         }
         assertNull(NearLitter.cover(Blocks.WATER.defaultBlockState(), AIR));
         assertNull(NearLitter.cover(AIR, AIR));
+    }
+
+    /**
+     * Куски — только где фронт их бросил: шахед в 30 м рвёт траву и бросает крошку, «Град» в 200 м срывает долю рыхлого
+     * без броска — кусков нет (на экране они бы просто появились), томагавк в 100 м траву не рвёт.
+     */
+    @Test
+    void piecesOnlyWhereTheFrontThrowsThem() {
+        ShockAtBody shahed = ShockAtBody.chemical(50, true, 30), grad = ShockAtBody.chemical(6.4, true, 200), missile = ShockAtBody.chemical(150, true, 100);
+        double leaf = Fragments.terminal(Fragments.Kind.LEAF, 0, 0), grain = Fragments.terminal(Fragments.Kind.CHUNK, NearLitter.GRAIN_DENSITY, NearLitter.CRUMB_M);
+        assertTrue(NearLitter.pieces(LocalLitter.lift(shahed, DustModel.Surface.COVERED, 1, leaf)));
+        assertTrue(NearLitter.pieces(LocalLitter.lift(shahed, DustModel.Surface.FIELD, 1, grain)));
+        assertFalse(NearLitter.pieces(LocalLitter.lift(grad, DustModel.Surface.FIELD, 1, grain)));
+        assertFalse(NearLitter.pieces(LocalLitter.lift(missile, DustModel.Surface.COVERED, 1, leaf)));
+    }
+
+    /**
+     * Оседание тонкой пыли — то, с которым тает её ослабление ({@link DustModel#extinctionAloft}: наклон в начале —
+     * Σ k·доля·v / Σ k·доля), а не скорость падения брошенной крошки.
+     */
+    @Test
+    void fineDustSettlesAsItsExtinction() {
+        double eps = 1e-3, slope = (1 - DustModel.extinctionAloft(eps)) / eps;
+        assertEquals(slope, NearLitter.DUST_SETTLE_MPS, 0.002, "наклон ослабления " + slope);
     }
 }

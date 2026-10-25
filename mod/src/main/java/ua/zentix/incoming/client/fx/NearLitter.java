@@ -48,12 +48,31 @@ public final class NearLitter {
     static final float CLUMP_MIN = 0.25f, CLUMP_MAX = 0.5f;
     /** Крошка грунта, м: зерно гравия, комок земли (подача — песчинку не видно). */
     static final float GRAIN_MIN = 0.06f, GRAIN_MAX = 0.12f;
+    /**
+     * Медленнее этого бросок кусок за тик не сдвигает и на сантиметр — на экране он просто появился бы на месте (у «Града»
+     * в 200 м доля срыва рыхлого есть, а броска нет): кусков нет, пыль — по своей массе. Подача.
+     */
+    static final double MIN_KICK_MPS = 0.2;
     /** Подъём броска к земле, тангенс (19–35°): подача, модуль скорости — модели ({@link FrontLitter#launch}). */
     static final double LIFT_MIN = 0.35, LIFT_MAX = 0.7;
     /** Плотность крошки, кг/м³ (комок сухого грунта). */
     static final double GRAIN_DENSITY = 1600;
+    /**
+     * Настоящий комочек рыхлой почвы, м (оценка: крошка 1–5 мм — то, что лежит сверху и что бросает фронт): бросок и
+     * оседание закона — у него; рисуется он крупнее ({@link #GRAIN_MIN}…{@link #GRAIN_MAX}, подача): ком в 10 см падает
+     * со скоростью ~50 м/с, и фронт за миллисекунды его почти не трогает.
+     */
+    static final double CRUMB_M = 0.002;
     /** Тонкая пыль: облачко на место, м, и непрозрачность не больше (подача: толстая — бурая стена у глаз). */
     static final float PUFF_MIN = 0.6f, PUFF_MAX = 1.2f, PUFF_ALPHA = 0.5f;
+    /**
+     * Оседание тонкой пыли, м/с: по ослаблению, Σ k·доля·v / Σ k·доля по корзинам {@link DustModel} (3–400 мкм, k ∝ 1/D) —
+     * 0,027: видно её мелкие зёрна, а они почти не оседают; облачко не падает, а расходится и уходит по ветру.
+     */
+    static final double DUST_SETTLE_MPS = 0.027;
+    /** Облачко растёт за жизнь вчетверо по площади и тает с середины жизни, за 4–6 с — расходится (подача, оценка). */
+    static final float PUFF_GROWTH = 2f;
+    static final int PUFF_LIFE = 80, PUFF_LIFE_SPREAD = 40;
     /** Последний выброс у камеры (строка сценария клиента). */
     private static String last = "-";
 
@@ -135,7 +154,7 @@ public final class NearLitter {
                 ShockAtBody shock = ShockAtBody.chemical(charge, surface, slant);
                 float size = c.kind == Fragments.Kind.LEAF ? CLUMP_MIN + (CLUMP_MAX - CLUMP_MIN) * rnd.nextFloat()
                         : GRAIN_MIN + (GRAIN_MAX - GRAIN_MIN) * rnd.nextFloat();
-                double terminal = Fragments.terminal(c.kind, GRAIN_DENSITY, size);
+                double terminal = c.kind == Fragments.Kind.LEAF ? Fragments.terminal(c.kind, 0, size) : Fragments.terminal(c.kind, GRAIN_DENSITY, CRUMB_M);
                 LocalLitter.Lift lift = LocalLitter.lift(shock, c.surface, along, terminal);
                 int delay = Math.max(0, (int) Math.ceil(20 * (shock.arrivalSeconds() - bodyArrival)));
                 if (delay > Fragments.DELAY_MAX) continue;
@@ -143,7 +162,7 @@ public final class NearLitter {
                 // куски: доля срыва × выборка на площадь места (дробная часть — жребием)
                 double want = lift.releaseShare() * PER_M2 * STEP * STEP;
                 int n = (int) want + (rnd.nextDouble() < want - (int) want ? 1 : 0);
-                if (c.pieces) {
+                if (c.pieces && pieces(lift)) {
                     // бросок модели (её доля вверх — турбулентность у земли, 0,1) повёрнут вверх на 19–35° к земле, модуль
                     // скорости — её же: подача (как у FrontLitter), «подпрыгивают» — так вблизи и видно, что сорвало
                     double speed = Math.hypot(lift.horizontalMps(), lift.verticalMps()) / 20;
@@ -159,9 +178,14 @@ public final class NearLitter {
         last = String.format(Locale.ROOT, "near litter pieces %d puffs %d", born, puffs);
     }
 
+    /** Куски видно, только если их бросило ({@link #MIN_KICK_MPS}) и сорвало. */
+    static boolean pieces(LocalLitter.Lift lift) {
+        return lift.releaseShare() > 0 && Math.hypot(lift.horizontalMps(), lift.verticalMps()) >= MIN_KICK_MPS;
+    }
+
     /**
      * Тонкая пыль места: облачко, которое воздух фазы сдвигает на {@link LocalLitter.Lift#airDisplacementM} от взрыва
-     * (быстро — за фазу), потом оно оседает со своей скоростью и уходит по ветру. Непрозрачность — толща поднятой массы
+     * (быстро — за фазу), потом оно почти не оседает ({@link #DUST_SETTLE_MPS}), расходится и уходит по ветру. Непрозрачность — толща поднятой массы
      * на площади облачка ({@link DustModel#K_MIX}), не больше {@link #PUFF_ALPHA} (подача).
      */
     private static boolean dust(ClientLevel level, LocalLitter.Lift lift, BlockState cover, double x, double y, double z, double ox, double oz,
@@ -175,8 +199,8 @@ public final class NearLitter {
         // сопротивление вдвое за тик: сдвиг за фазу (миллисекунды) ложится за первые тики суммой v·(1 + ½ + ¼ …) = 2v, а
         // скорость падения выходит g·d/(1 − d) = g — оседание со своей скоростью
         double shift = lift.airDisplacementM() / 2;
-        Fx.smoke().vel(ox * shift, lift.verticalMps() / 40, oz * shift).size(size, size * 1.6f).life(60 + rnd.nextInt(40))
-                .color(c, c).alpha(alpha).drag(0.5f).gravity((float) (lift.settlingMps() / 20)).wind(1).fadeIn(1, delay).fadeFrom(0.4f)
+        Fx.smoke().vel(ox * shift, lift.verticalMps() / 40, oz * shift).size(size, size * PUFF_GROWTH).life(PUFF_LIFE + rnd.nextInt(PUFF_LIFE_SPREAD))
+                .color(c, c).alpha(alpha).drag(0.5f).gravity((float) (DUST_SETTLE_MPS / 20)).wind(1).fadeIn(1, delay).fadeFrom(0.5f)
                 .budget(FxBudget.GROUND).spawn(level, new Vec3(x, y - 0.6, z));
         return true;
     }
