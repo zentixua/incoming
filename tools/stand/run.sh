@@ -7,7 +7,8 @@
 # jar, Sodium, Iris и шейдерпаки сборки по sha512, скрипт клиента (stand.py prepare). Потом клиенты — задачей ноутбука
 # с видеокартой (tools/laptop_job.sh --gpu --wait: аренда в очереди, ждёт закрытой игры Артёма; игра запустилась —
 # клиент гасится, код 75), каждый во вложенном KWin без окна и без звука хоста. В конце аренда отпускается: следующий
-# в очереди берёт видеокарту сразу. Итог — mod/run/stand/out/<имя>/results.json (сырые данные — там же, по пакам).
+# в очереди берёт видеокарту сразу. Итог — out/<имя>/results.json стенда (mod/run/stand основной копии; сырые данные —
+# там же, по пакам).
 set -uo pipefail
 [ $# -ge 2 ] || { sed -n '2,12p' "$0"; exit 2; }
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)
@@ -26,5 +27,6 @@ IFS=$'\t' read -r _ JAR LABEL <<< "$line"
 "$ROOT/tools/laptop_job.sh" --gpu --wait "stand-$NAME" -- python3 "$HERE/stand.py" play "$NAME" "$JAR" --spec "$SPEC" --label "$LABEL" "${args[@]}"
 code=$?
 "$ROOT/tools/gpu_lease.sh" release >/dev/null 2>&1 || true
-echo "stand $NAME: exit $code ($ROOT/mod/run/stand/out/$NAME)"
+# где итог — пишет play («итог в …»): каталоги стенда общие у деревьев репозитория (stand.py, STAND)
+echo "stand $NAME: exit $code"
 exit $code

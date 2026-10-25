@@ -7,12 +7,16 @@
   stand.py baseline <выпуск> [--packs …]              принятый: два прогона → кэш с допуском (run.sh дважды)
   stand.py gate <имя> [--against <выпуск>]            вердикт против принятого из кэша → verdict.json
                [--base-run <имя> --tol-from <кэш>]    … или против одного прогона с допуском кэша (приёмка)
+  (числа сравнения — всегда заново из сырых данных; кэш принятого — только годный: оба прогона годны, сняты одинаково,
+  второй против первого проходит)
   stand.py pr <номер> [--post]                        PR: jar CI головы, прогон, вердикт; --post — статус и комментарий
   stand.py key <jar> [--packs …] [--scenes …]         ключ кэша (что снимали и на чём)
 
 <jar> — выпуск (v3.7.0), `ci:<ветка или SHA>` (артефакт incoming-jar прогона build), путь к jar.
 Паки: none (Iris без шейдерпака), complementary, photon — по умолчанию все три. Сцены — id из scenes.json (по умолчанию
-все). Каталоги — mod/run/stand/{dl,game,out,cache} (STAND_ROOT переопределяет). Только стандартная библиотека.
+все). Каталоги — mod/run/stand/{dl,game,out,cache} основной копии репозитория, общие для всех её деревьев git: кэш
+принятого снимается один раз, а не в каждом дереве (INCOMING_STAND_ROOT переопределяет; имя с INCOMING_ — его видит и
+задача ноутбука). Только стандартная библиотека.
 """
 import argparse
 import hashlib
@@ -37,7 +41,19 @@ import gate  # noqa: E402
 import plan  # noqa: E402
 import results  # noqa: E402
 
-STAND = Path(os.environ.get("STAND_ROOT", ROOT / "mod" / "run" / "stand"))
+
+
+def _main_checkout():
+    """Основная копия репозитория (у дерева git — та, чей .git общий); не git — это дерево."""
+    try:
+        common = subprocess.run(["git", "-C", str(HERE), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                                capture_output=True, text=True, check=True).stdout.strip()
+        return Path(common).parent
+    except (OSError, subprocess.CalledProcessError):
+        return ROOT
+
+
+STAND = Path(os.environ.get("INCOMING_STAND_ROOT") or _main_checkout() / "mod" / "run" / "stand")
 DL, GAME, OUT, CACHE = STAND / "dl", STAND / "game", STAND / "out", STAND / "cache"
 REPO, PACK_REPO = "zentixua/incoming", "zentixua/open-skies"
 # пак стенда → файл pw.toml в pack/shaderpacks сборки (None — Iris без шейдерпака)
@@ -162,17 +178,23 @@ def resolve_jar(spec):
 # ---------------------------------------------------------------- ключ кэша
 
 def stand_hash():
-    """Версия стенда: исходники обвязки, сборка, сцены, план и запуск клиента (настройки игры, окружение) — то, от чего
-    зависит, что снимается. Разбор (results.py, gate.py) в неё не входит: числа принятого считаются из сырых данных кэша
-    заново при каждом сравнении (find_baseline)."""
+    """Версия стенда: исходники обвязки, её сборка (build.gradle с подготовкой запуска standLaunch, settings.gradle,
+    Gradle мода, которым она собирается), сцены, план, каталог игры и запуск клиента (client.py: настройки игры,
+    окружение, скрипт standLaunch) — то, от чего зависит, что снимается. Java клиента — отдельно в контексте. Разбор
+    (results.py, gate.py) в неё не входит: числа принятого считаются из сырых данных кэша заново при каждом сравнении."""
     h = hashlib.sha256()
-    files = sorted([*(HERE / "src" / "main").rglob("*"), HERE / "build.gradle", HERE / "gradle.properties",
-                    HERE / "scenes.json", HERE / "plan.py", HERE / "client.py"])
-    for f in files:
-        if f.is_file():
-            h.update(str(f.relative_to(HERE)).encode())
-            h.update(f.read_bytes())
+    for f in stand_files():
+        h.update(str(f.relative_to(ROOT)).encode())
+        h.update(f.read_bytes())
     return h.hexdigest()
+
+
+def stand_files():
+    """Файлы версии стенда (stand_hash), по порядку."""
+    files = [*(HERE / "src" / "main").rglob("*"), HERE / "build.gradle", HERE / "gradle.properties", HERE / "settings.gradle",
+             HERE / "scenes.json", HERE / "plan.py", HERE / "client.py",
+             ROOT / "mod" / "gradlew", ROOT / "mod" / "gradle" / "wrapper" / "gradle-wrapper.properties"]
+    return sorted(f for f in files if f.is_file())
 
 
 def gpu_info():
@@ -185,11 +207,12 @@ def gpu_info():
 
 
 def context(packs, scenes_sel, size, files):
-    """Всё, кроме jar, от чего зависят числа: стенд, паки и моды (sha512), сцены, видеокарта и драйвер, окно."""
+    """Всё, кроме jar, от чего зависят числа: стенд, паки и моды (sha512), сцены, видеокарта и драйвер, окно, java
+    клиента (скрипт запуска — уже подготовлен)."""
     name, driver = gpu_info()
     return {"stand": stand_hash(), "mods": {m: files[m][1] for m in MODS},
             "packs": {p: files[p][1] if PACKS[p] else "none" for p in packs}, "scenes": scenes_sel or "all",
-            "gpu": name, "driver": driver, "size": size}
+            "gpu": name, "driver": driver, "size": size, "java": client.java_of(SCRIPT)}
 
 
 def key(jar_sha, ctx):
@@ -198,20 +221,13 @@ def key(jar_sha, ctx):
 
 # ---------------------------------------------------------------- клиент
 
-def launch_script(size):
-    """Скрипт клиента без Gradle (standLaunch): каталог игры — GAME, окно — size."""
-    w, h = size.split("x")
-    env = dict(os.environ)
-    env.setdefault("JAVA_HOME", str(Path.home() / ".var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta"))
-    subprocess.run([str(ROOT / "mod" / "gradlew"), "-p", str(HERE), "standLaunch", f"-PrunDir={GAME}", f"-Pwidth={w}", f"-Pheight={h}",
-                    "--console=plain", "-q"], check=True, env=env)
-    return HERE / "build" / "launch" / "client.sh"
+SCRIPT = HERE / "build" / "launch" / "client.sh"
 
 
 def cmd_prepare(a):
     jar, label = resolve_jar(a.jar)
     fetch_pack(a.packs)
-    script = launch_script(a.size)
+    script = client.launch_script(GAME, a.size)
     log(f"скрипт клиента {script}")
     # последняя строка — для run.sh: что отдать play
     print(f"JAR\t{jar}\t{a.label or label}")
@@ -221,7 +237,7 @@ def cmd_play(a):
     jar = Path(a.jar).resolve()
     label = a.label or jar.stem.removeprefix("incoming-")
     files = fetch_pack(a.packs, offline=True)
-    script = HERE / "build" / "launch" / "client.sh"
+    script = SCRIPT
     if not script.exists():
         raise SystemExit("нет build/launch/client.sh — сначала stand.py prepare")
     out = OUT / a.name
@@ -256,13 +272,17 @@ def cmd_play(a):
             return 75
         worst = worst or code
     analyze(out)
+    log(f"{a.name}: итог в {out}")
     return 1 if worst else 0
 
 
 def analyze(out, write=True):
-    """results.json прогона из сырых данных: числа по пакам + meta."""
+    """results.json прогона из сырых данных: числа по пакам + meta. Сравнение (gate, pr, report.py) всегда разбирает
+    сырые данные заново (write=False у принятого): числа — по нынешнему разбору, а не по тому, что был при съёмке."""
+    out = Path(out)
     meta = json.loads((out / "meta.json").read_text())
     scenes = plan.load()
+    only = None if meta["context"]["scenes"] == "all" else meta["context"]["scenes"]
     res = {k: meta[k] for k in ("name", "label", "jar", "context", "key", "started")}
     res["packs"] = {}
     for pack, info in meta["packs"].items():
@@ -270,7 +290,7 @@ def analyze(out, write=True):
         if not (d / "frames.csv").exists() or not (d / "events.jsonl").exists():
             res["packs"][pack] = {"windows": {}, "checks": [f"нет данных клиента (выход {info['exit']})"], "meta": {}}
             continue
-        r = results.analyze(d, scenes)
+        r = results.analyze(d, scenes, only)
         r["meta"]["exit"] = info["exit"]
         r["meta"]["gpu_minutes"] = info["gpu_minutes"]
         # шейдерпак, который Iris включил на самом деле (иначе кадры «под паком» были бы без него)
@@ -304,82 +324,107 @@ def cache_dir(version, k):
     return CACHE / f"{version}-{k}"
 
 
+def cached(d):
+    """Принятый из кэша d (run1/, run2/): числа, допуск и самопроверка — заново из сырых данных обоих прогонов и только
+    годные (gate.calibrate: оба прогона годны, сняты одинаково, второй против первого проходит); иначе SystemExit."""
+    cal = gate.calibrate(analyze(d / "run1", write=False), analyze(d / "run2", write=False))
+    if cal["problems"]:
+        raise SystemExit(f"принятый в кэше {d} негоден: " + "; ".join(cal["problems"]))
+    return cal
+
+
 def cmd_baseline(a):
-    """Принятый выпуск: два прогона подряд (каждый — своя задача видеокарты), допуск по ним, кэш по ключу."""
+    """Принятый выпуск: два прогона подряд (каждый — своя задача видеокарты), допуск по ним, кэш по ключу. Кэш создаётся,
+    только если калибровка годна (gate.calibrate) — иначе код 1 и прогоны остаются в out/ для разбора."""
     jar, label = resolve_jar(a.version)
     files = fetch_pack(a.packs)
+    client.launch_script(GAME, a.size)
     ctx = context(a.packs, a.scenes, a.size, files)
     k = key(sha(jar), ctx)
     d = cache_dir(a.version, k)
-    if (d / "results.json").exists() and not a.force:
+    if (d / "run1").is_dir() and (d / "run2").is_dir() and not a.force:
+        cached(d)
         log(f"принятый {a.version} уже в кэше: {d}")
         return 0
-    runs = []
-    for i in (1, 2):
-        name = f"base-{a.version}-{k}-{i}"
+    names = [f"base-{a.version}-{k}-{i}" for i in (1, 2)]
+    for name in names:
         if not (OUT / name / "results.json").exists() or a.force:
             code = subprocess.run([str(HERE / "run.sh"), name, a.version, "--packs", ",".join(a.packs), "--size", a.size]
                                   + (["--scenes", ",".join(a.scenes)] if a.scenes else [])).returncode
             if code != 0:
                 log(f"прогон {name}: код {code}")
                 return code
-        runs.append(json.loads((OUT / name / "results.json").read_text()))
-    for r in runs:
-        bad = {p: x["checks"] for p, x in r["packs"].items() if x["checks"]}
-        if bad:
-            raise SystemExit(f"прогон {r['name']} не годен: {bad}")
-    d.mkdir(parents=True, exist_ok=True)
-    for i, r in enumerate(runs, 1):
-        dst = d / f"run{i}"
-        if dst.exists():
-            shutil.rmtree(dst)
-        shutil.copytree(OUT / r["name"], dst)
-    tol = gate.tolerance(runs[0], runs[1])
-    base = gate.mean_runs(runs[0], runs[1])
-    (d / "tolerance.json").write_text(json.dumps(tol, indent=1, ensure_ascii=False))
-    (d / "results.json").write_text(json.dumps(base, indent=1, ensure_ascii=False))
-    # два прогона одной версии проходят шлагбаум друг против друга (ложного провала нет) — проверка калибровки
-    v = gate.compare(runs[1], runs[0], tol)
-    (d / "self-check.json").write_text(json.dumps(v, indent=1, ensure_ascii=False))
-    log(f"принятый {a.version} в кэше {d}; второй прогон против первого: {'проходит' if v['pass'] else 'ПРОВАЛ: ' + '; '.join(v['fails'])}")
+    runs = [analyze(OUT / name, write=False) for name in names]
+    cal = gate.calibrate(*runs)
+    (OUT / names[1] / "self-check.json").write_text(json.dumps(cal["self_check"], indent=1, ensure_ascii=False))
+    if cal["problems"]:
+        log(f"принятый {a.version} НЕ в кэше — калибровка негодна:")
+        for x in cal["problems"]:
+            log("  " + x)
+        return 1
+    # кэш — целиком или никак: собирается рядом и встаёт на место одним переименованием
+    tmp = d.with_name(d.name + ".tmp")
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir(parents=True)
+    for i, name in enumerate(names, 1):
+        shutil.copytree(OUT / name, tmp / f"run{i}")
+    # для людей; сравнение их не читает — считает заново из run1/, run2/ (cached)
+    for f, v in (("tolerance.json", cal["tol"]), ("results.json", cal["base"]), ("self-check.json", cal["self_check"])):
+        (tmp / f).write_text(json.dumps(v, indent=1, ensure_ascii=False))
+    if d.exists():
+        shutil.rmtree(d)
+    tmp.rename(d)
+    log(f"принятый {a.version} в кэше {d}; второй прогон против первого проходит")
     return 0
-
-
-def find_baseline(version, ctx):
-    """Принятый из кэша: числа и допуск — заново из сырых данных двух прогонов (разбор мог измениться после съёмки)."""
-    jar, _ = resolve_jar(version)
-    d = cache_dir(version, key(sha(jar), ctx))
-    if not ((d / "run1" / "meta.json").exists() and (d / "run2" / "meta.json").exists()):
-        return None, None, d
-    r1, r2 = analyze(d / "run1", write=False), analyze(d / "run2", write=False)
-    return gate.mean_runs(r1, r2), gate.tolerance(r1, r2), d
 
 
 def accepted_release():
     return gh("release", "view", "-R", REPO, "--json", "tagName", "--jq", ".tagName").strip()
 
 
+def against(cand, version=None, base_run=None, tol_from=None):
+    """Принятый для сравнения с прогоном cand (results): из кэша выпуска version (по ключу cand), или base_run — каталог
+    кэша или прогон out/<имя> (допуск — из кэша tol_from). Назад — {"res", "tol", "label", "dir", "tol_from"}; всё — из
+    сырых данных (кэш — только годный, cached). Один путь у gate, pr и report.py: вердикт везде один."""
+    if base_run:
+        d = Path(base_run) if Path(base_run).is_dir() else OUT / base_run
+        if (d / "run1").is_dir():
+            cal = cached(d)
+            res, tol, tol_src = cal["base"], cal["tol"], d
+        else:
+            res = analyze(d, write=False)
+            tol, tol_src = (cached(Path(tol_from))["tol"], Path(tol_from)) if tol_from else (None, None)
+        if res["context"] != cand["context"]:
+            diff = sorted(k for k in set(cand["context"]) | set(res["context"]) if cand["context"].get(k) != res["context"].get(k))
+            raise SystemExit(f"{d.name} снят иначе: {', '.join(diff)}")
+        return {"res": res, "tol": tol, "label": res["label"], "dir": d, "tol_from": str(tol_src) if tol_src else None}
+    version = version or accepted_release()
+    jar, _ = resolve_jar(version)
+    d = cache_dir(version, key(sha(jar), cand["context"]))
+    if not ((d / "run1").is_dir() and (d / "run2").is_dir()):
+        return {"res": None, "tol": None, "label": version, "dir": d, "tol_from": str(d)}
+    cal = cached(d)
+    return {"res": cal["base"], "tol": cal["tol"], "label": version, "dir": d, "tol_from": str(d)}
+
+
+def judge(cand, base):
+    """Вердикт кандидата против принятого (against) — в verdict.json прогона кандидата."""
+    v = gate.compare(cand, base["res"], base["tol"])
+    v["against"] = {"label": base["label"], "dir": str(base["dir"]), "tolerance": base["tol_from"]}
+    return v
+
+
 def cmd_gate(a):
     out = OUT / a.name
-    cand = json.loads((out / "results.json").read_text())
-    if a.base_run:
-        # против одного прогона (приёмка: 3.5.0 против 3.4.1), допуск — из кэша принятого (шум стенда)
-        base = json.loads((OUT / a.base_run / "results.json").read_text())
-        if base["context"] != cand["context"]:
-            diff = sorted(k for k in cand["context"] if cand["context"][k] != base["context"].get(k))
-            raise SystemExit(f"{a.base_run} снят иначе: {', '.join(diff)}")
-        tol = json.loads((Path(a.tol_from) / "tolerance.json").read_text()) if a.tol_from else None
-        version, d = base["label"], OUT / a.base_run
-    else:
-        version = a.against or accepted_release()
-        base, tol, d = find_baseline(version, cand["context"])
-        if base is None:
-            raise SystemExit(f"принятого {version} с тем же стендом, паками, сценами, видеокартой и окном в кэше нет ({d}): "
-                             f"stand.py baseline {version}")
-    v = gate.compare(cand, base, tol)
-    v["against"] = {"version": version, "dir": str(d), "tolerance": a.tol_from if a.base_run else str(d)}
+    cand = analyze(out)
+    base = against(cand, a.against, a.base_run, a.tol_from)
+    if base["res"] is None:
+        raise SystemExit(f"принятого {base['label']} с тем же стендом, паками, сценами, видеокартой и окном в кэше нет ({base['dir']}): "
+                         f"stand.py baseline {base['label']}")
+    v = judge(cand, base)
     (out / "verdict.json").write_text(json.dumps(v, indent=1, ensure_ascii=False))
-    log(f"{a.name} против {version}: {'ПРОХОДИТ' if v['pass'] else 'ПРОВАЛ'}")
+    log(f"{a.name} против {base['label']}: {'ПРОХОДИТ' if v['pass'] else 'ПРОВАЛ'}")
     for f in v["fails"]:
         log("  " + f)
     for n in v["notes"]:
@@ -389,12 +434,24 @@ def cmd_gate(a):
 
 # ---------------------------------------------------------------- PR
 
+def pr_paths(records):
+    """Пути файлов PR из API (pulls/<n>/files): новое имя и прежнее у переноса — как note.yml: перенос из того, что видит
+    игрок, — тоже правка видимого."""
+    out = []
+    for r in records:
+        out.append(r["filename"])
+        if r.get("previous_filename"):
+            out.append(r["previous_filename"])
+    return out
+
+
 def cmd_pr(a):
     """PR с картинкой: jar CI его головы против принятого выпуска; --post — статус «Стенд сцен» и комментарий."""
     import pr_note
-    pr = gh("pr", "view", str(a.number), "-R", REPO, "--json", "headRefOid,files,url,number", json_out=True)
+    pr = gh("pr", "view", str(a.number), "-R", REPO, "--json", "headRefOid,url,number", json_out=True)
     head = pr["headRefOid"]
-    hit = pr_note.player_facing([f["path"] for f in pr["files"]])
+    files = gh("api", "--paginate", f"repos/{REPO}/pulls/{a.number}/files", "--jq", ".[] | {filename, previous_filename}")
+    hit = pr_note.player_facing(pr_paths(json.loads(line) for line in files.splitlines() if line.strip()))
     if not hit and not a.force:
         log(f"PR {a.number} не меняет того, что видит игрок: стенд не нужен")
         if a.post:
@@ -408,23 +465,25 @@ def cmd_pr(a):
     if a.post:
         post_status(head, "pending", f"Стенд идёт: против {version}", None)
     code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--packs", ",".join(a.packs), "--size", a.size,
-                           "--label", f"PR {a.number}"]).returncode
+                           "--label", f"PR {a.number}"] + (["--scenes", ",".join(a.scenes)] if a.scenes else [])).returncode
     if code != 0:
         if a.post:
             post_status(head, "error", f"Стенд не снял прогон (код {code})", None)
         return code
-    cand = json.loads((OUT / name / "results.json").read_text())
-    base, tol, d = find_baseline(version, cand["context"])
-    if base is None:
-        log(f"принятого {version} в кэше нет — снимаю его ({d})")
-        ns = argparse.Namespace(version=version, packs=a.packs, scenes=None, size=a.size, force=False)
+    cand = analyze(OUT / name)
+    base = against(cand, version)
+    if base["res"] is None:
+        log(f"принятого {version} в кэше нет — снимаю его ({base['dir']})")
+        ns = argparse.Namespace(version=version, packs=a.packs, scenes=a.scenes, size=a.size, force=False)
         if cmd_baseline(ns) != 0:
+            if a.post:
+                post_status(head, "error", f"Стенд не снял принятый {version}", None)
             return 1
-        base, tol, d = find_baseline(version, cand["context"])
-    v = gate.compare(cand, base, tol)
-    v["against"] = {"version": version, "cache": str(d)}
+        base = against(cand, version)
+    v = judge(cand, base)
     (OUT / name / "verdict.json").write_text(json.dumps(v, indent=1, ensure_ascii=False))
-    subprocess.run(["uv", "run", str(HERE / "report.py"), name, "--base", str(d)])
+    # отчёт — тем же путём (against, judge): его вердикт тот же
+    subprocess.run(["uv", "run", str(HERE / "report.py"), name, "--against", version])
     log(f"PR {a.number}: {'проходит' if v['pass'] else 'ПРОВАЛ'}; отчёт {OUT / name / 'report.md'}")
     if a.post:
         body = (OUT / name / "comment.md").read_text() if (OUT / name / "comment.md").exists() else "\n".join(v["fails"])
@@ -444,6 +503,7 @@ def post_status(sha_, state, desc, url):
 def cmd_key(a):
     jar, _ = resolve_jar(a.jar)
     files = fetch_pack(a.packs)
+    client.launch_script(GAME, a.size)
     ctx = context(a.packs, a.scenes, a.size, files)
     print(json.dumps({"key": key(sha(jar), ctx), "jar": sha(jar), **ctx}, indent=1, ensure_ascii=False))
 
@@ -463,7 +523,8 @@ def main():
     p = sub.add_parser("analyze"); p.add_argument("name"); p.set_defaults(fn=cmd_analyze)
     p = sub.add_parser("baseline"); p.add_argument("version"); p.add_argument("--force", action="store_true"); common(p); p.set_defaults(fn=cmd_baseline)
     p = sub.add_parser("gate"); p.add_argument("name"); p.add_argument("--against", help="выпуск из кэша (по умолчанию — последний)")
-    p.add_argument("--base-run", help="вместо кэша — прогон out/<имя>"); p.add_argument("--tol-from", help="каталог кэша, чей допуск взять")
+    p.add_argument("--base-run", help="вместо кэша выпуска — каталог кэша или прогон out/<имя>")
+    p.add_argument("--tol-from", help="каталог кэша, чей допуск взять (к --base-run прогону)")
     p.set_defaults(fn=cmd_gate)
     p = sub.add_parser("pr"); p.add_argument("number", type=int); p.add_argument("--post", action="store_true")
     p.add_argument("--force", action="store_true"); common(p); p.set_defaults(fn=cmd_pr)

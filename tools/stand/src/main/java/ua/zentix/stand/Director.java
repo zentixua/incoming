@@ -260,14 +260,14 @@ final class Director {
     }
 
     /**
-     * Конец залпа: все попадания; или все команды поданы, попадания были, снарядов в мире и уходов, ждущих взрыва, нет, а
-     * последнее попадание — {@code quietS} назад; или срок.
+     * Конец залпа: все попадания; или все команды поданы, попадания были, снарядов в мире и уходов залпа, ждущих взрыва
+     * или возврата в мир, нет, а последнее попадание — {@code quietS} назад; или срок. Годен прогон только с «all».
      */
     private boolean awaitSalvo(Plan.AwaitSalvo a, long now, double elapsed) {
         int got = watch.impacts(a.id()), want = watch.expected(a.id());
         String why = null;
         if (got >= want) why = "all";
-        else if (got > 0 && watch.alive() == 0 && watch.waiting() == 0 && !pendingFor(a.id())
+        else if (got > 0 && watch.alive() == 0 && watch.waiting(a.id()) == 0 && !pendingFor(a.id())
                 && now - watch.lastImpact(a.id()) >= (long) (a.quietS() * SECOND)) why = "quiet";
         else if (elapsed >= a.timeoutS()) why = "timeout";
         if (why == null) return false;
@@ -308,7 +308,7 @@ final class Director {
             Scheduled s = it.next();
             if (s.at() > now) continue;
             it.remove();
-            server(s.command(), s.salvo());
+            server(s.command(), s.salvo(), s.at());
         }
     }
 
@@ -316,14 +316,23 @@ final class Director {
         return scheduled.stream().anyMatch(s -> s.salvo().equals(salvo));
     }
 
-    /** Команда — в потоке сервера, от консоли (оператор); успех и число — событием {@code cmd}. */
     private void server(String command, String tag) {
+        server(command, tag, -1);
+    }
+
+    /**
+     * Команда — в потоке сервера, от консоли (оператор); успех, число, когда послана и когда должна была (у команд залпа
+     * по своим часам, {@code due} — nanoTime; −1 — сразу) — событием {@code cmd}: по ним разбор проверяет расписание волн.
+     */
+    private void server(String command, String tag, long due) {
         MinecraftServer s = Minecraft.getInstance().getSingleplayerServer();
         if (s == null) return;
         long sentAt = System.nanoTime();
+        Double dueMs = due < 0 ? null : Stand.ms(due);
         s.execute(() -> {
             CommandSourceStack source = s.createCommandSourceStack().withCallback((ok, result) ->
-                    out.event("cmd", System.nanoTime(), "cmd", command, "tag", tag, "ok", ok, "result", result, "sent_ms", Stand.ms(sentAt)));
+                    out.event("cmd", System.nanoTime(), "cmd", command, "tag", tag, "ok", ok, "result", result, "sent_ms", Stand.ms(sentAt),
+                            "due_ms", dueMs));
             s.getCommands().performPrefixedCommand(source, command);
         });
     }

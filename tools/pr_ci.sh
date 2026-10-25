@@ -14,11 +14,11 @@ set -uo pipefail
 pr=${1:?использование: tools/pr_ci.sh <номер PR> [--repo владелец/репо]}; shift
 repo=(); [ "${1:-}" = --repo ] && { repo=(--repo "$2"); export GH_REPO=$2; }
 started=$(date +%s); head=; quiet=0
-# нужные проверки головы: PR с картинкой ждёт и стенд. Список файлов не получен — не решаем (код 1): иначе сбой API
-# снял бы условие стенда
+# нужные проверки головы: PR с картинкой ждёт и стенд. Файлы — из API, у переноса и прежний путь (как note.yml): перенос
+# из того, что видит игрок, — тоже его правка. Список не получен — не решаем (код 1): иначе сбой API снял бы условие стенда
 needs() {
   local files
-  files=$(gh pr view "$pr" "${repo[@]}" --json files -q '.files[].path' 2>/dev/null) || return 1
+  files=$(gh api --paginate "repos/{owner}/{repo}/pulls/$pr/files" --jq '.[] | .filename, (.previous_filename // empty)' 2>/dev/null) || return 1
   need='^(Итог|Записка)$'; count=2
   if printf '%s\n' "$files" \
       | python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import pr_note; sys.exit(0 if pr_note.player_facing([l.strip() for l in sys.stdin if l.strip()]) else 1)' "$(dirname "$0")"; then

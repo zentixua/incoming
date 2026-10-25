@@ -7,6 +7,7 @@
 """
 import json
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -40,6 +41,30 @@ joinedFirstServer:true
 skipMultiplayerWarning:true
 narrator:0
 """
+
+
+def launch_script(game, size):
+    """Скрипт клиента без Gradle (`standLaunch` в build.gradle): каталог игры — game, окно — size (Ш×В); назад — путь.
+    Тот же java, аргументы, classpath и окружение, что у runClient; Gradle выходит до замера."""
+    w, h = size.split("x")
+    env = dict(os.environ)
+    env.setdefault("JAVA_HOME", str(Path.home() / ".var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta"))
+    subprocess.run([str(ROOT / "mod" / "gradlew"), "-p", str(HERE), "standLaunch", f"-PrunDir={game}", f"-Pwidth={w}", f"-Pheight={h}",
+                    "--console=plain", "-q"], check=True, env=env)
+    return HERE / "build" / "launch" / "client.sh"
+
+
+def java_of(script):
+    """Java, на которой идёт клиент (из скрипта standLaunch): версия из файла release рядом с ней — в ключ кэша (JDK
+    лаунчера обновляется сам, а с ним и время кадра)."""
+    try:
+        words = shlex.split(Path(script).read_text().splitlines()[-1])
+        java = next(Path(x) for x in words if x.endswith("/bin/java"))
+        rel = dict(line.split("=", 1) for line in (java.parent.parent / "release").read_text().splitlines() if "=" in line)
+        version = (rel.get("JAVA_RUNTIME_VERSION") or rel["JAVA_VERSION"]).strip('"')
+        return " ".join([version, rel.get("IMPLEMENTOR", "").strip('"')]).strip()
+    except (OSError, IndexError, KeyError, StopIteration, ValueError):
+        return "unknown"
 
 
 def server_toml(cfg):

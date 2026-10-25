@@ -49,9 +49,10 @@ def launch_point(scenes, site, k):
     return round(site[0] + d * math.sin(b), 1), round(site[1] + d * math.cos(b), 1)
 
 
-def salvo_commands(scenes, site, count, spread, first_point):
-    """Команды залпа: поровну, не больше `salvo_split` в команде, у каждой — своя точка пуска (своя пусковая)."""
-    split = min(scenes["salvo_split"], scenes["salvo_max"])
+def salvo_commands(scenes, site, count, spread, first_point, split=None):
+    """Команды залпа: поровну, не больше `split` (по умолчанию `salvo_split`) в команде, у каждой — своя точка пуска
+    (своя пусковая)."""
+    split = min(split or scenes["salvo_split"], scenes["salvo_max"])
     n_cmd = -(-count // split)
     sizes = [count // n_cmd + (1 if i < count % n_cmd else 0) for i in range(n_cmd)]
     cmds, k = [], first_point
@@ -89,7 +90,8 @@ def build(scenes, only=None):
             w = s["waves"]
             cmds, delays = [], []
             for i in range(w["count"]):
-                c, point[site_name] = salvo_commands(scenes, site, w["strikes"], spread, point.get(site_name, 0))
+                # волна — с нескольких пусковых (split): её удары ложатся за ~8 с, и последняя волна целиком в окне
+                c, point[site_name] = salvo_commands(scenes, site, w["strikes"], spread, point.get(site_name, 0), w.get("split"))
                 cmds += c
                 delays += [i * w["every_s"]] * len(c)
             count = w["strikes"] * w["count"]

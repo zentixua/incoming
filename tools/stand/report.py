@@ -4,12 +4,15 @@
 """Отчёт стенда: таблицы по сценам и камерам, листы кадров «строки — версии, столбцы — сцены», график накопления,
 пометки вида для ревьюера, вердикт шлагбаума.
 
-  uv run tools/stand/report.py <имя> [--base <прогон|кэш>] [--ref <прогон|кэш>[=подпись] …]
+  uv run tools/stand/report.py <имя> [--against <выпуск> | --base <прогон|кэш> [--tol-from <кэш>]]
+                                    [--ref <прогон|кэш>[=подпись] …]
 
-<имя> — прогон кандидата (mod/run/stand/out/<имя>); --base — принятый (каталог кэша stand.py baseline или имя прогона):
-с ним считается вердикт (допуск — tolerance.json кэша), --ref — ещё версии в таблицы и листы (например 3.4.1). Итог —
-в каталоге прогона: report.md, comment.md (таблица для комментария в PR), verdict.json, sheet-<пак>.png, acc-<пак>.png,
-look.json.
+<имя> — прогон кандидата (out/<имя> стенда); принятый, с которым считается вердикт, — кэш выпуска по ключу кандидата
+(--against, как stand.py gate --against), каталог кэша stand.py baseline или прогон (--base, допуск к прогону — из
+кэша --tol-from, как stand.py gate --base-run); --ref — ещё версии в таблицы и листы (например 3.4.1). Числа и вердикт —
+тем же путём, что stand.py gate (stand.against, stand.judge: заново из сырых данных, кэш — только годный): вердикт
+отчёта и статуса один. Итог — в каталоге прогона: report.md, comment.md (таблица для комментария в PR), verdict.json,
+sheet-<пак>.png, acc-<пак>.png, look.json.
 """
 import argparse
 import json
@@ -22,24 +25,27 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import gate  # noqa: E402
 import plan  # noqa: E402
-from stand import OUT  # noqa: E402
+import stand  # noqa: E402
 
 COLORS = [(230, 90, 60), (70, 140, 230), (120, 190, 80), (220, 180, 50), (170, 100, 210)]
 
 
 class Run:
-    """Прогон или кэш принятого: числа, подпись, где кадры."""
+    """Прогон или кэш принятого: числа (из сырых данных), подпись, где кадры."""
 
-    def __init__(self, ref, label=None):
-        p = Path(ref)
-        d = p if p.is_dir() else OUT / ref
-        self.dir = d
-        self.res = json.loads((d / "results.json").read_text())
-        self.label = label or self.res.get("label") or d.name
+    def __init__(self, d, res, label=None):
+        self.dir = Path(d)
+        self.res = res
+        self.label = label or res.get("label") or self.dir.name
         # у кэша кадры — первого прогона калибровки
-        self.shots_root = d / "run1" if (d / "run1").is_dir() else d
-        tol = d / "tolerance.json"
-        self.tol = json.loads(tol.read_text()) if tol.exists() else None
+        self.shots_root = self.dir / "run1" if (self.dir / "run1").is_dir() else self.dir
+
+    @staticmethod
+    def of(ref, label=None):
+        """Прогон out/<имя> или каталог кэша (среднее двух прогонов, только годный)."""
+        d = Path(ref) if Path(ref).is_dir() else stand.OUT / ref
+        res = stand.cached(d)["base"] if (d / "run1").is_dir() else stand.analyze(d, write=False)
+        return Run(d, res, label)
 
     def shot(self, pack, name):
         f = self.shots_root / pack / "shots" / f"{name}.png"
@@ -158,12 +164,19 @@ def cell(w):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("name")
-    ap.add_argument("--base")
+    ap.add_argument("--against", help="выпуск: принятый из кэша по ключу кандидата")
+    ap.add_argument("--base", help="каталог кэша или прогон out/<имя>")
+    ap.add_argument("--tol-from", help="каталог кэша, чей допуск взять к прогону --base")
     ap.add_argument("--ref", action="append", default=[])
     a = ap.parse_args()
-    cand = Run(a.name)
-    base = Run(a.base) if a.base else None
-    refs = [Run(*r.split("=", 1)) for r in a.ref]
+    cand = Run(stand.OUT / a.name, stand.analyze(stand.OUT / a.name, write=False))
+    against = None
+    if a.against or a.base:
+        against = stand.against(cand.res, a.against, a.base, a.tol_from)
+        if against["res"] is None:
+            raise SystemExit(f"принятого {against['label']} в кэше нет ({against['dir']}): stand.py baseline {against['label']}")
+    base = Run(against["dir"], against["res"], against["label"]) if against else None
+    refs = [Run.of(*r.split("=", 1)) for r in a.ref]
     runs = [cand] + ([base] if base else []) + refs
     scenes = plan.load()
     only = cand.res["context"]["scenes"]
@@ -174,16 +187,14 @@ def main():
     packs = list(cand.res["packs"])
 
     # вид: доля дымных пикселей и яркость по кадрам
-    looks = {}
-    for r in runs:
-        looks[r.label] = {p: {n: look_stats(r.shot(p, n)) for n in names if r.shot(p, n)} for p in packs}
-    (out / "look.json").write_text(json.dumps(looks, indent=1))
+    # по порядку строк: у кандидата и принятого подпись может совпасть (два прогона одной версии)
+    looks = [{p: {n: look_stats(r.shot(p, n)) for n in names if r.shot(p, n)} for p in packs} for r in runs]
+    (out / "look.json").write_text(json.dumps([{"label": r.label, "dir": str(r.dir), "look": lk} for r, lk in zip(runs, looks)], indent=1))
 
     verdict = None
     if base:
-        verdict = gate.compare(cand.res, base.res, base.tol)
-        verdict["against"] = {"label": base.label, "dir": str(base.dir)}
-        verdict["look"] = gate.look_flags(looks[cand.label], looks[base.label])
+        verdict = stand.judge(cand.res, against)
+        verdict["look"] = gate.look_flags(looks[0], looks[1])
         (out / "verdict.json").write_text(json.dumps(verdict, indent=1, ensure_ascii=False))
 
     md = [f"# Scene stand: {cand.label}", ""]

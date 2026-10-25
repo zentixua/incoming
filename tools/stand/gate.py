@@ -1,21 +1,26 @@
 """Шлагбаум стенда: кандидат против принятого выпуска по числам results.json (README.md, «Условие влития»).
 
 Провал:
-- окна «100 ударов» (`100/*`, любая камера, любой пак): видеокарта p50, процессор p95 (работа кадра Pre → Post) или
-  кадр p95 (интервал — что видит игрок) хуже принятого больше допуска; нет числа у кандидата — тоже провал;
-- первый удар: худший кадр от взрыва до +5 с больше чем вдвое против принятого и больше 100 мс;
+- окна «100 ударов» (`100/*`, любая камера, любой пак): видеокарта p50 или процессор p95 (работа кадра Pre → Post) хуже
+  принятого больше допуска; нет окна или числа у кандидата или у принятого — тоже провал. Кадр p95 (интервал — что
+  видит игрок) — в отчёте, без провала;
+- первый удар: худший кадр от взрыва до +5 с больше чем вдвое против принятого и больше 100 мс; числа нет — провал;
 - накопление: последняя минута против первой выросла больше, чем у принятого, сверх допуска. Против самого роста
   кандидата (дословно «последняя минута дороже первой больше допуска») — нельзя: у принятого он есть и так (дым копится),
   и тогда два прогона одной версии проваливали бы друг друга — а приёмка стенда требует, чтобы они проходили;
 - кандидат снят на другой видеокарте или с другим кадром (строка OpenGL, размер кадра), чем принятый.
 Допуск — из шума: принятый снят дважды, допуск = max(5 %, 3 × разброс двух прогонов) по каждой величине и окну
-(`tolerance`); без калибровки — 5 % с пометкой. Остальные окна — в отчёте, без провала. Вид числом не судится: сцены, где
+(`tolerance`); без калибровки — 5 % с пометкой. Калибровка (`calibrate`) годна, только если оба прогона годны, сняты
+одинаково (стенд, паки, видеокарта, кадр) и второй против первого проходит шлагбаум; иначе принятого нет. Остальные окна — в отчёте, без провала. Вид числом не судится: сцены, где
 доля «дымных» пикселей или яркость кадра заметно другие (`look_flags`), помечаются ревьюеру.
 
 Только стандартная библиотека (CI: test_gate.py).
 """
 GATED = "100/"
-METRICS = (("gpu", "p50"), ("cpu", "p95"), ("interval", "p95"))
+# величины шлагбаума (спека: видеокарта p50 и процессор p95) и те, что только в отчёте
+METRICS = (("gpu", "p50"), ("cpu", "p95"))
+REPORTED = METRICS + (("interval", "p95"),)
+GL_KEYS = ("renderer", "version", "width", "height")
 MIN_TOL = 0.05
 NOISE_K = 3.0
 FIRST_RATIO, FIRST_MIN_MS = 2.0, 100.0
@@ -97,43 +102,43 @@ def compare(cand, base, tol=None):
             fails.append(f"{pack}: прогон кандидата не годен: " + "; ".join(c["checks"]))
         if b.get("checks"):
             fails.append(f"{pack}: прогон принятого не годен: " + "; ".join(b["checks"]))
-        cg_, bg_ = (c.get("meta") or {}).get("gl") or {}, (b.get("meta") or {}).get("gl") or {}
-        for k in ("renderer", "version", "width", "height"):
-            if cg_.get(k) != bg_.get(k):
-                fails.append(f"{pack}: снято иначе, чем принятый: {k} {cg_.get(k)} против {bg_.get(k)}")
+        fails += [f"{pack}: снято иначе, чем принятый: {x}" for x in gl_diff(c, b)]
         t = (tol or {}).get(pack, {})
-        for name, bw in b["windows"].items():
-            cw = c["windows"].get(name)
+        for name in sorted(set(b["windows"]) | set(c["windows"])):
+            bw, cw = b["windows"].get(name), c["windows"].get(name)
             gated = name.startswith(GATED)
-            if cw is None:
+            if cw is None or bw is None:
                 if gated:
-                    fails.append(f"{pack} {name}: нет окна у кандидата")
+                    fails.append(f"{pack} {name}: нет окна у {'кандидата' if cw is None else 'принятого'}")
                 continue
-            for m in METRICS:
+            for m in REPORTED:
                 cv, bv = metric(cw, m), metric(bw, m)
-                if gated and cv is None:
-                    fails.append(f"{pack} {name} {'.'.join(m)}: нет числа у кандидата")
-                    continue
+                judged = gated and m in METRICS
                 if cv is None or bv is None or bv == 0:
-                    if gated:
-                        notes.append(f"{pack} {name} {'.'.join(m)}: нет числа у принятого — не судится")
+                    if judged:
+                        fails.append(f"{pack} {name} {'.'.join(m)}: нет числа у {'кандидата' if cv is None else 'принятого'}")
                     continue
-                lim = (t.get("windows", {}).get(name) or {}).get(".".join(m), MIN_TOL)
+                lim = (t.get("windows", {}).get(name) or {}).get(".".join(m), MIN_TOL) if m in METRICS else None
                 ratio = cv / bv - 1
-                bad = gated and ratio > lim
+                bad = judged and ratio > lim
                 rows.append({"pack": pack, "window": name, "metric": ".".join(m), "cand": cv, "base": bv, "change": ratio,
-                             "tol": lim, "gated": gated, "fail": bad})
+                             "tol": lim, "gated": judged, "fail": bad})
                 if bad:
                     fails.append(f"{pack} {name} {'.'.join(m)}: {cv:.2f} мс против {bv:.2f} (+{ratio:.0%}, допуск {lim:.0%})")
         cf, bf = (c.get("first") or {}).get("worst_ms"), (b.get("first") or {}).get("worst_ms")
-        if cf is not None and bf is not None:
+        # сцены нет в выборке — нет ни у кого; есть у одного — у другого провалена
+        if (c.get("first") or b.get("first")) and (cf is None or bf is None):
+            fails.append(f"{pack} первый удар: нет числа у {'кандидата' if cf is None else 'принятого'}")
+        elif cf is not None and bf is not None:
             bad = cf > FIRST_RATIO * bf and cf > FIRST_MIN_MS
             rows.append({"pack": pack, "window": "first", "metric": "worst", "cand": cf, "base": bf, "change": cf / bf - 1 if bf else None,
                          "tol": None, "gated": True, "fail": bad})
             if bad:
                 fails.append(f"{pack} первый удар: худший кадр {cf:.0f} мс против {bf:.0f} (больше {FIRST_RATIO:g}× и {FIRST_MIN_MS:g} мс)")
         cg, bg = ((c.get("acc") or {}).get("growth") or {}).get("ratio"), ((b.get("acc") or {}).get("growth") or {}).get("ratio")
-        if cg is not None and bg is not None:
+        if (c.get("acc") or b.get("acc")) and (cg is None or bg is None):
+            fails.append(f"{pack} накопление: нет числа роста у {'кандидата' if cg is None else 'принятого'}")
+        elif cg is not None and bg is not None:
             lim = t.get("acc", MIN_TOL)
             change = cg / bg - 1
             bad = change > lim
@@ -142,6 +147,37 @@ def compare(cand, base, tol=None):
             if bad:
                 fails.append(f"{pack} накопление: последняя минута ×{cg:.2f} к первой против ×{bg:.2f} у принятого (допуск {lim:.0%})")
     return {"pass": not fails, "fails": fails, "rows": rows, "notes": notes}
+
+
+def gl_diff(a, b):
+    """Чем различается съёмка двух прогонов одного пака: строка OpenGL (видеокарта, драйвер) и размер кадра."""
+    ga, gb = (a.get("meta") or {}).get("gl") or {}, (b.get("meta") or {}).get("gl") or {}
+    return [f"{k} {ga.get(k)} против {gb.get(k)}" for k in GL_KEYS if ga.get(k) != gb.get(k)]
+
+
+def calibrate(run1, run2):
+    """Принятый по двум прогонам калибровки: {"base" (среднее), "tol", "self_check" (второй против первого), "problems"}.
+    Годен, только если problems пуст: оба прогона годны, сняты одинаково (контекст — стенд, моды, паки, сцены,
+    видеокарта, окно; строка OpenGL и кадр у каждого пака) и второй против первого проходит шлагбаум — иначе среднее
+    и допуск подмешали бы негодный прогон или шум другой видеокарты."""
+    problems = []
+    for r in (run1, run2):
+        for pack, x in r["packs"].items():
+            if x.get("checks"):
+                problems.append(f"{r.get('name')} {pack}: не годен: " + "; ".join(x["checks"]))
+    c1, c2 = run1.get("context") or {}, run2.get("context") or {}
+    diff = sorted(k for k in set(c1) | set(c2) if c1.get(k) != c2.get(k))
+    if diff:
+        problems.append("прогоны сняты иначе: " + ", ".join(diff))
+    if set(run1["packs"]) != set(run2["packs"]):
+        problems.append(f"паки прогонов разные: {sorted(run1['packs'])} и {sorted(run2['packs'])}")
+    for pack in sorted(set(run1["packs"]) & set(run2["packs"])):
+        problems += [f"{pack}: прогоны сняты иначе: {x}" for x in gl_diff(run2["packs"][pack], run1["packs"][pack])]
+    tol = tolerance(run1, run2)
+    v = compare(run2, run1, tol)
+    if not v["pass"]:
+        problems.append("второй прогон против первого не проходит: " + "; ".join(v["fails"]))
+    return {"base": mean_runs(run1, run2), "tol": tol, "self_check": v, "problems": problems}
 
 
 def look_flags(cand_look, base_look):

@@ -1,8 +1,9 @@
 """Разбор прогона стенда: frames.csv и events.jsonl одного клиента (версия × пак) → числа по окнам замера.
 
-Окно — отрезок времени из событий `window` (начало и конец); кадр входит в окно, если начался в нём. Кадр со снимком
-и следующий за ним (его интервал включает чтение кадра) в замер не идут. Только стандартная библиотека: разбор и
-шлагбаум идут в CI без пакетов (test_gate.py).
+Окно — отрезок времени из событий `window` (начало и конец); кадр входит в окно, если начался в нём (у первого удара —
+и кадр, который шёл в миг попадания: его худший кадр и есть замер). Кадр со снимком и следующий за ним (его интервал
+включает чтение кадра) в замер не идут. Все окна плана обязательны: нет окна или в нём мало кадров — прогон не годен.
+Только стандартная библиотека: разбор и шлагбаум идут в CI без пакетов (test_gate.py).
 
 Величины кадра (мс):
 - `interval` — от начала кадра до начала следующего, как видит игрок (1000 / к/с): в строке обвязки — время от начала
@@ -14,6 +15,8 @@ import csv
 import json
 import math
 from pathlib import Path
+
+import plan
 
 
 def percentile(values, q):
@@ -78,6 +81,12 @@ def in_range(frames, t0, t1):
     return [f for f in frames if t0 <= f["t"] < t1 and f["shot"] == 0]
 
 
+def overlapping(frames, t0, t1):
+    """Кадры, которые шли в окне хоть миг: начатые в нём и тот, что начался раньше и шёл в его начало."""
+    return [f for f in frames if f["shot"] == 0 and f["t"] < t1
+            and (f["t"] >= t0 or (f["interval"] is not None and f["t"] + f["interval"] > t0))]
+
+
 def summarize(frames, events, t0, t1):
     """Числа окна: кадры, процессор, видеокарта, стадии (p50 и среднее), тик сервера, упор, строки проб."""
     fr = in_range(frames, t0, t1)
@@ -133,8 +142,22 @@ def growth(bks, minute_s=60):
     return {"first_ms": first, "last_ms": last, "ratio": last / first if first and last else None}
 
 
-def analyze(run_dir, scenes):
-    """Один клиент (версия × пак): окна, первый удар, накопление, проверки годности."""
+def acc_load(events, scene, t0, t1):
+    """Нагрузка накопления в окне: попадания волн в первую и последнюю минуту окна и после него (план — `planned` в
+    минуту), опоздание команд волн от их расписания (событие cmd: послана `sent_ms`, должна — `due_ms`)."""
+    w = scene["waves"]
+    hits = sorted(e["t_ms"] for e in events if e["type"] == "impact" and e["salvo"] == scene["id"])
+    cmds = [e for e in events if e["type"] == "cmd" and e.get("tag") == scene["id"]]
+    late = [e["sent_ms"] - e["due_ms"] for e in cmds if e.get("due_ms") is not None]
+    minute = 60_000
+    return {"planned": w["strikes"] * minute / 1000 / w["every_s"],
+            "first": sum(1 for t in hits if t0 <= t < t0 + minute), "last": sum(1 for t in hits if t1 - minute <= t <= t1),
+            "inside": sum(1 for t in hits if t0 <= t <= t1), "after": sum(1 for t in hits if t > t1),
+            "commands": len(cmds), "late_max_ms": max(late) if late else None}
+
+
+def analyze(run_dir, scenes, only=None):
+    """Один клиент (версия × пак): окна, первый удар, накопление, проверки годности (only — сцены выборки, None — все)."""
     run_dir = Path(run_dir)
     frames = read_frames(run_dir / "frames.csv")
     events = read_events(run_dir / "events.jsonl")
@@ -146,7 +169,7 @@ def analyze(run_dir, scenes):
             res["windows"][name] = s
     first = wins.get("first")
     if first:
-        fr = in_range(frames, first[0], first[1])
+        fr = overlapping(frames, first[0], first[1])
         iv = [f["interval"] for f in fr if f["interval"] is not None]
         gp = [f["gpu"] for f in fr if f["gpu"] is not None]
         res["first"] = {"worst_ms": max(iv) if iv else None, "worst_gpu_ms": max(gp) if gp else None}
@@ -154,7 +177,7 @@ def analyze(run_dir, scenes):
     if acc_scene and acc_scene["id"] in wins:
         t0, t1 = wins[acc_scene["id"]]
         bks = buckets(frames, t0, t1, acc_scene.get("bucket_s", 10))
-        res["acc"] = {"buckets": bks, "growth": growth(bks)}
+        res["acc"] = {"buckets": bks, "growth": growth(bks), "load": acc_load(events, acc_scene, t0, t1)}
     gl = [e for e in events if e["type"] == "gl"]
     if gl:
         res["meta"]["gl"] = {k: gl[0][k] for k in ("renderer", "version", "vendor", "width", "height")}
@@ -168,12 +191,13 @@ def analyze(run_dir, scenes):
     res["meta"]["frames"] = len(frames)
     res["meta"]["duration_s"] = (frames[-1]["t"] - frames[0]["t"]) / 1000 if frames else 0
     res["meta"]["shots"] = sorted(e["name"] for e in events if e["type"] == "shot")
-    res["checks"] = checks(events, res)
+    res["checks"] = checks(events, res, plan.windows(scenes, only), acc_scene if acc_scene and (only is None or acc_scene["id"] in only) else None)
     return res
 
 
-def checks(events, res):
-    """Годен ли прогон для сравнения: строки «что не так» (пусто — годен)."""
+def checks(events, res, expected=(), acc_scene=None):
+    """Годен ли прогон для сравнения: строки «что не так» (пусто — годен). expected — окна плана (все обязательны),
+    acc_scene — сцена накопления плана (её нагрузка должна прийтись на окно)."""
     bad = []
     if not res["meta"]["done"]:
         bad.append("прогон не дошёл до конца (нет события done)")
@@ -194,13 +218,50 @@ def checks(events, res):
         bad.append(f"залп {salvo}: конца нет (нет события await)")
     if not any(e["type"] == "gl" for e in events):
         bad.append("нет строки видеокарты")
+    begun = {e["name"] for e in events if e["type"] == "window" and e["edge"] == "begin"}
+    for name in expected:
+        if name not in res.get("windows", {}) and name != FIRST:
+            bad.append(f"окно {name}: " + ("нет кадров" if name in begun else "не снято"))
     for name, w in res.get("windows", {}).items():
+        if name == FIRST:
+            continue
         if not w.get("gpu"):
             bad.append(f"окно {name}: нет меток видеокарты")
         if w["frames"] < MIN_FRAMES:
             bad.append(f"окно {name}: {w['frames']} кадров (меньше {MIN_FRAMES})")
+    # первый удар: замер — худший кадр, шедший в окне; клиент, вставший на всё окно, — тоже число, а не пустота
+    if FIRST in expected and (res.get("first") or {}).get("worst_ms") is None:
+        bad.append("первый удар: нет числа (окна нет или ни один кадр не шёл в нём)")
+    if acc_scene:
+        load = (res.get("acc") or {}).get("load")
+        name = acc_scene["id"]
+        if not load:
+            bad.append(f"накопление {name}: окна нет — нагрузку не проверить")
+        else:
+            if load["after"]:
+                bad.append(f"накопление {name}: {load['after']} попаданий после окна — последняя минута мерила не весь план")
+            want = next((e["commands"] for e in events if e["type"] == "salvo" and e["id"] == name), None)
+            if load["commands"] != want:
+                bad.append(f"накопление {name}: прошло команд волн {load['commands']} из {want}")
+            if load["late_max_ms"] is None:
+                bad.append(f"накопление {name}: у команд волн нет срока по расписанию (due_ms) — расписание не проверить")
+            elif load["late_max_ms"] > LATE_MS:
+                bad.append(f"накопление {name}: команды волн не по расписанию (опоздание до {load['late_max_ms']:.0f} мс, можно {LATE_MS})")
+            lo, hi = load["planned"] * (1 - LOAD_TOL), load["planned"] * (1 + LOAD_TOL)
+            for part in ("first", "last"):
+                if not lo <= load[part] <= hi:
+                    bad.append(f"накопление {name}: в {'первую' if part == 'first' else 'последнюю'} минуту окна {load[part]} попаданий, "
+                               f"по плану {load['planned']:g} (±{LOAD_TOL:.0%})")
+        if not (res.get("acc") or {}).get("growth"):
+            bad.append(f"накопление {name}: нет числа роста")
     return bad
 
 
+FIRST = "first"
 # окно с меньшим числом кадров — не замер (клиент стоял)
 MIN_FRAMES = 20
+# команда волны позже расписания больше чем на столько — волны пошли пачкой (тик клиента 50 мс, снимок кадра ~0,5 с)
+LATE_MS = 2000
+# попаданий в первую и последнюю минуту окна накопления — по плану (strikes × 60 / every_s) с таким допуском: одна
+# минута против другой сравнима, только если в обе пришлась одна нагрузка
+LOAD_TOL = 0.2
