@@ -1038,40 +1038,116 @@ public final class FarFlightView {
      * ({@link #puffShare}, ширина — у ближней к глазу точки отрезка); клубы — в общий бюджет кадра ({@link #CLUB_BUDGET}), их
      * места ждут плана кадра ({@code SmokePuffs.flush}); tube — трубка (след снаряда, шлейф источника). joint — поперёк ленты
      * у a (NaN — нет, начало ленты), на выходе — у b. Лента рисует только узкую на экране часть трубки ({@link #puffShare} по
-     * настоящей ширине): шире она — полоса с прямыми краями, одним цветом поперёк и без тени. Широкую часть, которой не
-     * досталось мест (порог ширины с бюджетом мест вырос, мест кадра нет), — вуаль ({@code SmokePuffs.veilTube}), как всё, что
-     * не легло в план кадра.
+     * настоящей ширине) и только там, где трубка уже {@link #PUFFS_FULL} ({@link #ribbonPart}): шире она — полоса с прямыми
+     * краями, одним цветом поперёк и без тени. Широкую часть, которой не досталось мест (порог ширины с бюджетом мест вырос,
+     * мест кадра нет), — вуаль ({@code SmokePuffs.veilTube}), как всё, что не легло в план кадра; доли — вдоль отрезка
+     * ({@link #ALONG} точек), а не у концов: у отрезка, что идёт мимо глаза, середина шире концов.
      */
     static int line(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float cr, float cg, float cb, double shade,
                     double sigma0, long seed, long tube, float[] joint) {
         double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z, pixel = view.pixel();
         double gap = FarSprites.distance(a.x, a.y, a.z, tx, ty, tz), scale = puffScale;
-        double da = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), db = Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z);
         double puffs = puffShare(Math.max(a.width, b.width) / scale, gap, pixel);
-        // у каждого конца: доля, что рисуют клубы (порог с бюджетом мест), и доля, что шире ленты (по настоящей ширине); у стыка
-        // с соседним отрезком они те же, а отрезок у самого глаза — без ленты
-        double clubA = puffShare(a.width / scale, da, pixel), clubB = puffShare(b.width / scale, db, pixel);
-        double wideA = puffShare(a.width, da, pixel), wideB = puffShare(b.width, db, pixel);
         // клубы — только у отрезка в кадре (шар отрезка с квадратами его клубов: до ~9σ от оси) или у глаза (глаз в этом шаре:
         // его вещество — вуаль, а середина отрезка бывает за спиной)
         double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 9 * Math.max(a.sigma, b.sigma);
         double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
-        boolean seen = md <= reach || inFrame(view, mx, my, mz, md, reach);
+        boolean seen = md <= reach || inFrame(view, mx, my, mz, md, reach), clubbed = false;
         if (puffs > 0 && seen) {
             int held = SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width / scale, b.x, b.y, b.z, b.sigma, b.e, b.width / scale, cr,
                     cg, cb, shade, sigma0, seed, puffs >= 1, 0.5 * (a.shown + b.shown), tube);
             if (held < 0) {
                 // мест кадра нет ({@code SmokePuffs.PLACES}): клубов у отрезка нет, его места — в бюджет клубов
                 clubs += -held - 1;
-                puffs = clubA = clubB = 0;
-            } else clubs += held;
+                puffs = 0;
+            } else {
+                clubs += held;
+                clubbed = true;
+            }
         }
-        // широкая часть, что клубы не рисуют, — в вуаль: лента её не покажет
-        if (seen && (wideA > clubA || wideB > clubB)) SmokePuffs.veilTube(view, out, a, b, wideA - clubA, wideB - clubB, cr, cg, cb);
-        if (puffs >= 1 || wideA >= 1 && wideB >= 1) return puffs >= 1 ? CLUBS : NONE;
+        // клубы взяли весь отрезок — ни ленты, ни вуали
+        if (clubbed && puffs >= 1) return CLUBS;
+        // вдоль отрезка: доля шире ленты (по настоящей ширине) без доли клубов (порог с бюджетом мест; мест нет — ноль) — в вуаль:
+        // лента её не покажет
+        double veil = 0;
+        for (int k = 0; k <= ALONG; k++) {
+            double u = (double) k / ALONG, w = a.width + (b.width - a.width) * u, d = distanceAt(a, b, u);
+            veil += Math.max(0, puffShare(w, d, pixel) - (clubbed ? puffShare(w / scale, d, pixel) : 0)) / (ALONG + 1);
+        }
+        if (seen && veil > 0) SmokePuffs.veilTube(view, out, a, b, veil, cr, cg, cb);
+        return ribbonPart(view, out, a, b, r, g, bl, joint);
+    }
+
+    /** Точек вдоль отрезка трубки, по которым {@link #line} делит её вещество между клубами, лентой и вуалью. */
+    static final int ALONG = 8;
+
+    /** Расстояние от глаза до точки u (0 — a, 1 — b) отрезка a–b. */
+    private static double distanceAt(Tube a, Tube b, double u) {
+        double x = a.x + (b.x - a.x) * u, y = a.y + (b.y - a.y) * u, z = a.z + (b.z - a.z) * u;
+        return Math.sqrt(x * x + y * y + z * z);
+    }
+
+    /** Ширина трубки на экране в точке u отрезка a–b, пикселей (ширина — линейно между концами). */
+    private static double pixelsAt(Tube a, Tube b, double u, double pixel) {
+        return (a.width + (b.width - a.width) * u) / Math.max(distanceAt(a, b, u) * pixel, 1e-9);
+    }
+
+    /**
+     * Лента отрезка a–b — только узкие куски от концов, где трубка на экране уже {@link #PUFFS_FULL} (по настоящей ширине): у
+     * отрезка с узким и широким концом (или с широкой серединой у глаза) широкая часть — клубы и вуаль, а полоса через неё была
+     * бы шириной в сотни пикселей ({@code SmokeRaidTest.mixedRibbonEndsAreCut}). Кусок кончается там, где его доля ленты
+     * сходит на нет. Возвращает {@link #RIBBON}, если лента дошла до b (joint — поперёк у b), иначе {@link #NONE}.
+     */
+    private static int ribbonPart(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float[] joint) {
+        double pixel = view.pixel(), pa = pixelsAt(a, b, 0, pixel), pb = pixelsAt(a, b, 1, pixel);
+        // ближняя к глазу точка отрезка: там трубка на экране шире всего
+        double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z, len2 = tx * tx + ty * ty + tz * tz;
+        double near = len2 > 0 ? Math.clamp(-(a.x * tx + a.y * ty + a.z * tz) / len2, 0, 1) : 0, pn = pixelsAt(a, b, near, pixel);
+        boolean narrowA = pa < PUFFS_FULL, narrowB = pb < PUFFS_FULL;
+        if (narrowA && narrowB && pn < PUFFS_FULL) return strip(view, out, a, b, r, g, bl, joint);
+        // широкое место между концами: ближняя точка, если широка она, иначе широкий конец
+        double wide = pn >= PUFFS_FULL ? near : narrowA ? 1 : 0;
+        if (narrowA) {
+            strip(view, out, a, cut(a, b, crossing(a, b, 0, wide, pixel), pixel, CUT), r, g, bl, joint);
+            joint[0] = Float.NaN;
+        }
+        if (!narrowB) return NONE;
+        joint[0] = Float.NaN;
+        return strip(view, out, cut(a, b, crossing(a, b, 1, wide, pixel), pixel, CUT), b, r, g, bl, joint);
+    }
+
+    private static final Tube CUT = new Tube();
+    private static final double[] CUT_HALF = new double[2];
+
+    /** Место между узкой точкой from и широкой wide отрезка a–b, где трубка на экране — {@link #PUFFS_FULL} (деление пополам). */
+    private static double crossing(Tube a, Tube b, double from, double wide, double pixel) {
+        double lo = from, hi = wide;
+        for (int i = 0; i < 20; i++) {
+            double mid = 0.5 * (lo + hi);
+            if (pixelsAt(a, b, mid, pixel) < PUFFS_FULL) lo = mid;
+            else hi = mid;
+        }
+        return lo;
+    }
+
+    /** Точка u отрезка a–b концом ленты — в out: место, σ, ослабление, ширина и непрозрачность — по прямой между концами. */
+    private static Tube cut(Tube a, Tube b, double u, double pixel, Tube out) {
+        double x = a.x + (b.x - a.x) * u, y = a.y + (b.y - a.y) * u, z = a.z + (b.z - a.z) * u, w = a.width + (b.width - a.width) * u;
+        ribbon(w, Math.sqrt(x * x + y * y + z * z), pixel, CUT_HALF);
+        out.set(x, y, z, a.sigma + (b.sigma - a.sigma) * u, a.e + (b.e - a.e) * u, w, CUT_HALF[0], a.alpha + (b.alpha - a.alpha) * (float) u,
+                u < 0.5 ? a.light : b.light).shown = a.shown + (b.shown - a.shown) * u;
+        return out;
+    }
+
+    /** Лента от конца a до конца b с долей ленты у каждого по настоящей ширине ({@link #puffShare}). */
+    private static int strip(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float[] joint) {
+        double pixel = view.pixel();
+        double keepA = 1 - puffShare(a.width, Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), pixel);
+        double keepB = 1 - puffShare(b.width, Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z), pixel);
+        if (keepA <= 0 && keepB <= 0) return NONE;
         // лента — в план кадра, как клубы: её заливка — в бюджете ({@code SmokePuffs.ribbon})
-        return SmokePuffs.ribbon(view, out, a.x, a.y, a.z, a.half, a.alpha * (float) (1 - wideA), a.light, b.x, b.y, b.z, b.half,
-                b.alpha * (float) (1 - wideB), b.light, r, g, bl, joint) ? RIBBON : NONE;
+        return SmokePuffs.ribbon(view, out, a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half,
+                b.alpha * (float) keepB, b.light, r, g, bl, joint) ? RIBBON : NONE;
     }
 
     /** Бюджет клубов трубок по прошлому кадру — в начале кадра, до всех, кто рисует трубки ({@code FarRenderer}). */

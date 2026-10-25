@@ -180,6 +180,17 @@ final class SmokePuffs {
      * близкие сливаются.
      */
     static final int VEIL_MAX = 48;
+    /**
+     * Вещество трубки в вуали ({@link #veilTube}) — гауссом не уже стольких шагов её сетки на своей дальности (σ² + (k·шаг)²):
+     * толщу вуаль берёт только по лучам вершин, и гаусс в долю шага пропадал между ними (сдвиг трубки на 31 px — середина 0,6 →
+     * 0). Половина шага — наименьшая, при которой сумма по вершинам от сдвига не зависит (Пуассон: рябь 2e^(−2π²k²) — 1,4 %);
+     * шире — вещество лишь размазано по соседним клеткам: с 0,7 шага лежащие шлейфы налёта из 100 сползали к земле, и кадр с
+     * края выходил плотнее вещества ({@code SmokeRaidTest.raidOfAHundredStaysInTheBudgetAtTheSameDensity}). Середина узкой
+     * трубки при сдвиге на клетку гуляет на треть — так сетка 12×12 рисует то, что уже её клетки
+     * ({@code SmokeRaidTest.veilKeepsNarrowMatterAcrossItsCells}). ⚠ Вуаль клубов, что не легли в план ({@code Draw.fit}), — без
+     * фильтра, как в #460.
+     */
+    static final double VEIL_FILTER = 0.5;
     /** Мягкость вуали к миру — не меньше, блоков ({@link Veil#soft}). */
     static final double VEIL_SOFT_MIN = 1;
     /**
@@ -467,24 +478,32 @@ final class SmokePuffs {
 
     /**
      * Широкая часть отрезка трубки a–b (концы от глаза), которой не досталось мест кадра ({@code FarFlightView.line}: порог
-     * ширины с бюджетом мест вырос, мест кадра нет), — в вуаль, как всё, что не легло в план кадра ({@link Draw#fit}): доли
-     * fa, fb вещества у концов, один гаусс — середина отрезка, σ — сечение и разнос вдоль оси (L²/12, по горизонтали —
-     * половина: σh у вуали — по обеим горизонтальным осям). Лентой её рисовать нельзя: шире {@code FarFlightView.PUFFS_FULL}
-     * лента — полоса с прямыми краями, одним цветом поперёк и без тени. В налёте стенда из 100 ударов (25.10) шлейфы 70
-     * пожаров просили ~8000 мест при 3000, порог рос в 28–41 раз, и шлейфы в 90–180 px и шире шли лентами до 8000 px —
-     * светлые прямые полосы через кадр (RenderDoc, {@code SmokeRaidTest.ribbonsAreOnlyNarrowTubes}).
+     * ширины с бюджетом мест вырос, мест кадра нет), — в вуаль, как всё, что не легло в план кадра ({@link Draw#fit}): доля f
+     * вещества отрезка, один гаусс — середина отрезка, σ — сечение и разнос вдоль оси (L²/12, по горизонтали — половина: σh у
+     * вуали — по обеим горизонтальным осям). Лентой её рисовать нельзя: шире {@code FarFlightView.PUFFS_FULL} лента — полоса
+     * с прямыми краями, одним цветом поперёк и без тени. В налёте стенда из 100 ударов (25.10) шлейфы 70 пожаров просили
+     * ~8000 мест при 3000, порог рос в 28–41 раз, и шлейфы в 90–180 px и шире шли лентами до 8000 px — светлые прямые полосы
+     * через кадр (RenderDoc, {@code SmokeRaidTest.ribbonsAreOnlyNarrowTubes}).
      */
-    static void veilTube(FarView view, Out out, FarFlightView.Tube a, FarFlightView.Tube b, double fa, double fb, float cr, float cg, float cb) {
-        double f = 0.5 * (Math.max(0, fa) + Math.max(0, fb));
+    static void veilTube(FarView view, Out out, FarFlightView.Tube a, FarFlightView.Tube b, double f, float cr, float cg, float cb) {
         if (!(f > 0)) return;
         double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z, len2 = tx * tx + ty * ty + tz * tz;
         if (!(len2 > 0)) return;
         double s2 = 0.25 * (a.sigma + b.sigma) * (a.sigma + b.sigma), up2 = ty * ty / len2;
         double sh = Math.sqrt(s2 + len2 / 24 * (1 - up2)), sv = Math.sqrt(s2 + len2 / 12 * up2);
-        double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, air = view.air(Math.sqrt(mx * mx + my * my + mz * mz), my);
+        double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, d = Math.sqrt(mx * mx + my * my + mz * mz), air = view.air(d, my);
         if (air < Sight.THRESHOLD) return;
         // ослабление всей массы куска — ослабление на метр по оси × её длина
-        DRAW.veilAdd(out, view, mx, my, mz, sh, sv, 0.5 * (a.e + b.e) * Math.sqrt(len2), cr, cg, cb, f * 0.5 * (a.shown + b.shown) * air);
+        double ext = 0.5 * (a.e + b.e) * Math.sqrt(len2);
+        // толща вуали — только по лучам её вершин: трубка уже шага сетки на своей дальности проскакивала бы между ними и мерцала,
+        // сдвигаясь по экрану (трубка в 20 px: середина 0,6 → 0 при сдвиге на 31 px, ревью #466). Гаусс — не уже шага
+        // ({@link #VEIL_FILTER}) и закрывает ту же долю экрана, что и сам (непрозрачность середины × площадь): с той же массой
+        // густая узкая трубка на шаг сетки закрывала бы больше (1 − e^(−τ) вогнута)
+        double grid = VEIL_FILTER * 2 * Veil.extent(view) / VEIL_CELLS * d;
+        double wide = Math.sqrt(sh * sh + grid * grid), tall = Math.sqrt(sv * sv + grid * grid), area = wide * tall / (sh * sv);
+        double peak = ext / (2 * Math.PI * sh * sv);
+        if (area > 1 && peak > 0) ext *= -Math.log1p(Math.expm1(-peak) / area) * area / peak;
+        DRAW.veilAdd(out, view, mx, my, mz, wide, tall, ext, cr, cg, cb, Math.min(f, 1) * 0.5 * (a.shown + b.shown) * air);
     }
 
     /**
@@ -2060,6 +2079,14 @@ final class SmokePuffs {
         final org.joml.Vector3f forward = new org.joml.Vector3f(), left = new org.joml.Vector3f(), up = new org.joml.Vector3f();
         private final double[] moments = new double[2];
 
+        /**
+         * Полуразмер сетки кадра view в тангенсах: весь кадр при любом соотношении сторон (и у вертикального окна) — круг до угла
+         * экрана, с запасом на кадр вывода другого размера, чем окно (Flashback).
+         */
+        static double extent(FarView view) {
+            return Math.min(Math.tan(Math.min(view.edge(), 1.45)) * 1.2, 8);
+        }
+
         /** Тангенс вершины i по оси (влево экрана — по {@code left}, вверх — по {@code up}). */
         double at(int i) {
             return extent * (2.0 * i / (N - 1) - 1);
@@ -2124,9 +2151,7 @@ final class SmokePuffs {
             forward.set(view.forward());
             left.set(view.left());
             up.set(view.up());
-            // весь кадр при любом соотношении сторон (и у вертикального окна): круг до угла экрана, с запасом на кадр вывода
-            // другого размера, чем окно (Flashback)
-            extent = Math.min(Math.tan(Math.min(view.edge(), 1.45)) * 1.2, 8);
+            extent = extent(view);
             java.util.Arrays.fill(tau, 0);
             java.util.Arrays.fill(r, 0);
             java.util.Arrays.fill(g, 0);
