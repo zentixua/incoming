@@ -62,6 +62,8 @@ tools/client_scenario.sh nuke             # клиент без окна: mod/ru
 tools/sandbox.sh shot <имя> '<эффект>'    # картинка и звук: кадры и WAV одного эффекта за ~10 с после правки, без нового
                                           # клиента (start — один раз): кадр смотрят во время работы, кадры — в PR
                                           # (client-scenario.md)
+tools/stand/run.sh <имя> ci:<ветка> --packs none --scenes 100   # стенд сцен выборкой (~3 мин видеокарты; с
+                                          # --against ci:main — парой); PR против main — stand.py pr <номер> (README.md там)
 tools/deploy.sh                           # jar → dist/ (для друзей) и mods/ инстанса без автообновления сборки
 python3 tools/logscan.py [--since 18:30]  # после игры: ошибки мода, удары, подрывы, Sable
 ```
