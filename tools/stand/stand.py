@@ -539,7 +539,7 @@ def cmd_pr(a):
         if a.post:
             post_status(head, "pending", f"Стенд идёт: парой с {version}", None)
         code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--against", base, "--packs", ",".join(a.packs), "--size", a.size,
-                               "--label", f"PR {a.number}", "--scenes", ",".join(scenes)]).returncode
+                               "--label", f"PR {a.number}", "--against-label", version, "--scenes", ",".join(scenes)]).returncode
     if not is_pair(out) or code not in (0, 1):
         if a.post:
             post_status(head, "error", f"Стенд не снял пару (код {code})", None)
