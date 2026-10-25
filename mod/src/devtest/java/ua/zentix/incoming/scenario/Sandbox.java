@@ -873,10 +873,13 @@ final class Sandbox {
                 }
                 // у дощатого дома: удар в землю у его стены к камере (дом — от x + 4 до x + 12, z ± 3, крыша — доски на
                 // высоте 5 над землёй) или в середину его крыши (верх досок — 6 над землёй)
-                // или в середину крыши дома из каменного кирпича (x − 12 … x − 4, z ± 4), крыша там — бетон, верх — 8 над землёй
+                // или в середину крыши дома из каменного кирпича (x − 12 … x − 4, z ± 4), крыша там — плита бетона в метр над
+                // пустотой комнаты (каменный потолок дома убран: с ним крыша — 2 м, шахед её не пробивает), верх — 8 над землёй
                 if (c.houses() || c.roof() || c.masonry()) buildHouses(server, BlockPos.containing(site));
                 if (c.masonry()) {
                     BlockPos o = BlockPos.containing(site);
+                    run(server, "fill %d %d %d %d %d %d minecraft:air".formatted(o.getX() - 11, o.getY() + 6, o.getZ() - 3,
+                            o.getX() - 5, o.getY() + 6, o.getZ() + 3));
                     run(server, "fill %d %d %d %d %d %d minecraft:gray_concrete".formatted(o.getX() - 12, o.getY() + 7, o.getZ() - 4,
                             o.getX() - 4, o.getY() + 7, o.getZ() + 4));
                 }
