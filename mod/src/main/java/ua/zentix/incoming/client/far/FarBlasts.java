@@ -625,12 +625,17 @@ public final class FarBlasts {
         return new CloudModel(source, air(level, p.pos()), target(p, mat, source.chargeKg(), hob), hob, ground(level, p.pos()));
     }
 
-    /** Воздух в месте взрыва: воздух мира ({@link ClientAir}); влажность — его, у воды 1 (облако конденсации). */
+    /**
+     * Воздух в месте взрыва: воздух мира ({@link ClientAir}) с ветром у земли места ({@link ClientAir#site}: улица, кроны,
+     * холм); влажность — его, у воды 1 (облако конденсации), над водой — поле.
+     */
     public static CloudModel.Air air(ClientLevel level, Vec3 pos) {
         net.minecraft.core.BlockPos at = net.minecraft.core.BlockPos.containing(pos);
         boolean water = !level.getFluidState(at).isEmpty() || !level.getFluidState(at.below()).isEmpty();
         ua.zentix.incoming.util.Air air = ClientAir.now();
-        return CloudModel.Air.of(air, water ? 1 : air.humidity());
+        // поправку места меряют от поверхности под взрывом (под кроной — от земли под ней): от неё же высоты облака
+        return CloudModel.Air.of(air, water ? 1 : air.humidity(),
+                water ? ua.zentix.incoming.util.LocalWind.OPEN : ClientAir.site(pos.x, pos.y - overSurface(level, pos), pos.z));
     }
 
     /**

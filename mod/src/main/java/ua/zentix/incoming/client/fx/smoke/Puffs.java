@@ -64,7 +64,7 @@ public final class Puffs implements SmokeGrid.Source {
         long kb = Math.round(Math.log(Math.max(heat, 1)) / Math.log(BIN)), kr = Math.round(Math.log(Math.max(r0, 0.05)) / Math.log(BIN));
         long kt = Math.round(kelvin / 50);
         String key = kb + "/" + kr + "/" + kt + "/" + Math.round(air.n() * 1000) + "/" + Math.round(air.windX() * 2) + "/" + Math.round(air.windZ() * 2)
-                + "/" + Math.round(air.shear() * 100) + "/" + air.spread();
+                + "/" + Math.round(air.shear() * 100) + "/" + air.spread() + "/" + air.site().key();
         return CACHE.computeIfAbsent(key, k -> new Thermal(Thermal.buoyancy(Math.pow(BIN, kb)), CloudModel.G * (1 - CloudModel.T_AIR / Math.max(kt * 50.0, CloudModel.T_AIR + 1)),
                 Math.pow(BIN, kr), air));
     }

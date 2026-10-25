@@ -842,13 +842,13 @@ final class Sandbox {
         BlockPos s = BlockPos.containing(site);
         if (mc.player.position().distanceTo(site) < mc.options.getEffectiveRenderDistance() * 16 - 32 && !loaded(mc, s)) return;
         SandboxCommand c = pendingCmd;
-        if (c.masonry() && paved < 0) {
+        if ((c.masonry() || c.town()) && paved < 0) {
             // город: вокруг — мостовая, а не газон; клиент должен получить её раньше пакета взрыва (земля пыли — у клиента)
             paved = tick;
             server("fill %d %d %d %d %d %d minecraft:gray_concrete".formatted(s.getX() - 48, GROUND, s.getZ() - 48, s.getX() + 48, GROUND, s.getZ() + 48));
             return;
         }
-        if (c.masonry() && tick - paved < 20) return;
+        if ((c.masonry() || c.town()) && tick - paved < 20) return;
         paved = -1;
         pending = Pending.SERVER;
         knownNukes.clear();
@@ -876,6 +876,7 @@ final class Sandbox {
                 // или в середину крыши дома из каменного кирпича (x − 12 … x − 4, z ± 4), крыша там — плита бетона в метр над
                 // пустотой комнаты (каменный потолок дома убран: с ним крыша — 2 м, шахед её не пробивает), верх — 8 над землёй
                 if (c.houses() || c.roof() || c.masonry()) buildHouses(server, BlockPos.containing(site));
+                if (c.town()) buildTown(server, BlockPos.containing(site));
                 if (c.masonry()) {
                     BlockPos o = BlockPos.containing(site);
                     run(server, "fill %d %d %d %d %d %d minecraft:air".formatted(o.getX() - 11, o.getY() + 6, o.getZ() - 3,
@@ -933,6 +934,20 @@ final class Sandbox {
                 "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z - 3, x + 10, y + 3, z - 3)));
         for (int[] t : new int[][]{{x - 8, z + 12}, {x + 8, z + 12}, {x, z - 14}}) build.addAll(oak(t[0], y, t[1]));
         for (String c : build) run(server, c);
+    }
+
+    /**
+     * Квартал {@code real … town}: дома из каменного кирпича 10×10 м высотой 12 м, улицы по 6 м вдоль X и Z, точка — в
+     * перекрёстке (улицы — в ±3 м от неё), ±48 м.
+     */
+    private static void buildTown(MinecraftServer server, BlockPos o) {
+        int y = GROUND + 1;
+        for (int i = -3; i <= 2; i++) {
+            for (int j = -3; j <= 2; j++) {
+                int x0 = o.getX() + 3 + 16 * i, z0 = o.getZ() + 3 + 16 * j;
+                run(server, "fill %d %d %d %d %d %d minecraft:stone_bricks".formatted(x0, y, z0, x0 + 9, y + 11, z0 + 9));
+            }
+        }
     }
 
     /** Дуб в 5 брёвен: два слоя кроны 5×5 без углов на 3-м и 4-м бревне, сверху 3×3 и крест — как у ванильного дуба. */

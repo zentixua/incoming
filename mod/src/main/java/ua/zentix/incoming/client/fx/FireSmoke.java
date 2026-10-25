@@ -152,16 +152,22 @@ public final class FireSmoke implements SmokeGrid.Source {
         return fires.at(seconds);
     }
 
-    /** Ветер у очага, м/с. */
+    /**
+     * Ветер у очага, м/с: ветер мира на высоте над землёй места с поправкой застройки и холма ({@link ClientAir#speed}); в
+     * застройке — не ниже крыш: шлейф пожара за секунды поднимается над ними, и гнёт его ветер над крышами, а не в улице
+     * (⚠ подъём Бриггса берёт один ветер на весь путь).
+     */
     private double wind() {
-        return 20 * Math.hypot(ClientAir.windX(y), ClientAir.windZ(y));
+        var site = ClientAir.site(x, z);
+        return ClientAir.speed(x, Math.max(y, y - site.above(y) + site.canopy()), z);
     }
 
     /** Шлейф по нынешнему ветру на высоте очага и устойчивости. */
     private void air() {
-        double ux = 20 * ClientAir.windX(y), uz = 20 * ClientAir.windZ(y), u = Math.hypot(ux, uz);
-        wx = u > 1e-6 ? ux / u : 1;
-        wz = u > 1e-6 ? uz / u : 0;
+        var world = ClientAir.now().wind();
+        double u = wind();
+        wx = world.speed() > 1e-6 ? world.x() : 1;
+        wz = world.speed() > 1e-6 ? world.z() : 0;
         plume = fuel.plume(blocks, fire, u, ClientAir.now().stability());
         // пламя и горячий газ над очагом — у каждого очага свои (свет и дрожание от пожара — сумма очагов, а не очаги ×
         // пламя всего пожара)

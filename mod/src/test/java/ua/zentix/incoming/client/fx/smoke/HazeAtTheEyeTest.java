@@ -5,10 +5,12 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.util.LocalWind;
 import ua.zentix.incoming.util.Stability;
 import ua.zentix.incoming.warhead.BreachModel;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -56,6 +58,43 @@ class HazeAtTheEyeTest {
         assertTrue(tau(m, 0, 60, 40) < 0.2, "минута: τ в 40 м " + tau(m, 0, 60, 40));
     }
 
+    /**
+     * Шахед на перекрёстке квартала (дома 10×10×12 м, улицы по 6 м; ветер у земли места — {@link LocalWind}): в улице ветер
+     * в разы слабее поля, и мгла держится дольше — на 30 с в 40 м по улице ещё видна (в поле к этому времени чисто), к
+     * 5 минутам уходит. ⚠ Эталон — оценка: в улице-каньоне воздух сменяется через верх за минуты (Oke 1988), камеры
+     * Харькова — мгла на 11–13 с.
+     */
+    @Test
+    void streetCanyonHoldsTheHazeLonger() {
+        GroundDust.Relief town = (x, z) -> Math.floorMod((int) Math.floor(x + 13), 16) < 10 && Math.floorMod((int) Math.floor(z + 13), 16) < 10 ? 12 : 0;
+        LocalWind site = LocalWind.of((x, z) -> 64 + town.at(x - 13, z - 13), 13, 13, 1, 0);
+        CloudModel.Air air = new CloudModel.Air(CALM.n(), CALM.windX(), CALM.windZ(), CALM.shear(), CALM.spread(), CALM.humidity(), site);
+        CloudModel street = scene(WeaponType.DRONE, town, air), field = scene(WeaponType.DRONE, town, CALM);
+        double held = tau(street, 0, 30, 40);
+        assertTrue(held > 0.4 && held > 3 * tau(field, 0, 30, 40), "30 с: τ в 40 м " + held + ", в поле " + tau(field, 0, 30, 40));
+        assertTrue(tau(street, 0, 300, 40) < 0.2, "5 минут: τ в 40 м " + tau(street, 0, 300, 40));
+    }
+
+    /**
+     * Разрыв в 100 м над перекрёстком (ревью R468): термик меряет высоту от точки разрыва, и его ветер — ветер его высоты,
+     * как над полем, а не затишье улицы; у удара в мостовую тот же термик в начале — в затишье, его сносит меньше.
+     */
+    @Test
+    void airBurstOverTheStreetIsNotInTheStreetCalm() {
+        GroundDust.Relief town = (x, z) -> Math.floorMod((int) Math.floor(x + 13), 16) < 10 && Math.floorMod((int) Math.floor(z + 13), 16) < 10 ? 12 : 0;
+        LocalWind site = LocalWind.of((x, z) -> 64 + town.at(x - 13, z - 13), 13, 13, 1, 0);
+        CloudModel.Air air = new CloudModel.Air(CALM.n(), CALM.windX(), CALM.windZ(), CALM.shear(), CALM.spread(), CALM.humidity(), site);
+        BlastSource drone = BlastSource.of(WeaponType.DRONE, false);
+        GroundDust.Ground flat = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1),
+                GroundDust.Ground.filled(0), (x, z) -> 0);
+        CloudModel high = new CloudModel(drone, air, false, 100, flat), highField = new CloudModel(drone, CALM, false, 100, flat);
+        CloudModel low = new CloudModel(drone, air, false, 0, flat), lowField = new CloudModel(drone, CALM, false, 0, flat);
+        for (double t : new double[]{1, 3}) {
+            assertEquals(highField.thermal.driftX(t), high.thermal.driftX(t), 0.05 * highField.thermal.driftX(t), t + " с: в 100 м");
+            assertTrue(low.thermal.driftX(t) < 0.8 * lowField.thermal.driftX(t), t + " с: у земли " + low.thermal.driftX(t) + " против " + lowField.thermal.driftX(t));
+        }
+    }
+
     private static double tau(CloudModel m, double h, double t, double d) {
         double[] c = parts(m, h, t, d);
         return c[0] + c[1] + c[2];
@@ -63,6 +102,20 @@ class HazeAtTheEyeTest {
 
     static CloudModel scene(WeaponType weapon, boolean roof, CloudModel.Air air) {
         return scene(weapon, roof, air, GroundDust.Ground.filled(0), GroundDust.Ground.filled(1));
+    }
+
+    /** Шахед в мостовую среди рельефа {@code relief} (м от точки удара). */
+    static CloudModel scene(WeaponType weapon, GroundDust.Relief relief, CloudModel.Air air) {
+        BlastSource source = BlastSource.of(weapon, false);
+        BlastTarget target = BlastTarget.of(GroundMaterial.STONE, false, 0,
+                BreachModel.Material.ROCK.radius(source.chargeKg(), BreachModel.UNTAMPED), Vec3.ZERO, new Vec3(0, -1, 0));
+        double[][] heights = GroundDust.Ground.filled(0);
+        for (int s = 0; s < GroundDust.SECTORS; s++) for (int b = 0; b < GroundDust.BANDS.length; b++) {
+            double angle = 2 * Math.PI * (s + 0.5) / GroundDust.SECTORS, r = GroundDust.BANDS[b];
+            heights[s][b] = relief.at(r * Math.cos(angle), r * Math.sin(angle));
+        }
+        var ground = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1), heights, relief);
+        return new CloudModel(source, air, target, 0, ground);
     }
 
     /** Сцена с поверхностями вокруг: доля дёрна {@code covered} и твёрдого {@code hard} по секторам и полосам. */
