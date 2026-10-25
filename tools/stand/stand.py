@@ -248,14 +248,15 @@ def jar_info(jar, label, spec):
     return {"label": label, "file": jar.name, "sha256": sha(jar), "spec": spec}
 
 
-def shoot(out, pack, jar, files, scenes_sel, size, log_name):
-    """Один клиент: версия jar × пак → сырые данные в out/<пак>; назад — (код выхода, минуты видеокарты)."""
+def shoot(out, pack, jar, files, scenes_sel, size, log_name, quiet=True):
+    """Один клиент: версия jar × пак → сырые данные в out/<пак>; назад — (код выхода, минуты видеокарты). quiet — ждать
+    тишины перед клиентом (client.run)."""
     p = client.prepare_game(GAME, jar, files[pack][0] if PACKS[pack] else None, [files[m][0] for m in MODS], scenes_sel)
     t0 = time.time()
     log(f"{log_name}: пак {pack}, {len(p['steps'])} шагов")
     out.mkdir(parents=True, exist_ok=True)
     with open(out / f"client-{pack}.out", "w") as logf:
-        code = client.run(GAME, SCRIPT, size, p["limit_s"], logf, log)
+        code = client.run(GAME, SCRIPT, size, p["limit_s"], logf, log, quiet)
     dst = out / pack
     if dst.exists():
         shutil.rmtree(dst)
@@ -341,7 +342,8 @@ def play_pair(a, out, jar, cand, files, ctx):
                 d = role_dir(out, role, attempt)
                 j, info = jars[role]
                 meta = metas.setdefault(d.name, run_meta(f"{a.name}/{d.name}", info, ctx))
-                code, took = shoot(d, pack, j, files, a.scenes, a.size, f"{a.name} {d.name}")
+                # тишины ждать только перед A1: B и A2 идут сразу за ним, в тех же условиях, а аренда не стоит впустую
+                code, took = shoot(d, pack, j, files, a.scenes, a.size, f"{a.name} {d.name}", quiet=role == "A1")
                 add_pack(d, meta, pack, code, took, files)
                 if code == 75:
                     return 75

@@ -148,8 +148,8 @@ def kill_tagged(tag, grace=20):
 
 SAMPLE_S = 5
 # перед клиентом ждать тишины: столько выборок подряд без тяжёлой чужой нагрузки (10 с: долгая задача видна сразу), не
-# дольше QUIET_WAIT_S — аренда видеокарты держится, а клиентов в паре девять; от ровной чужой нагрузки шлагбаум защищает
-# сама пара (gate.py)
+# дольше QUIET_WAIT_S — аренда видеокарты держится; в паре ждёт только A1 пака, B и A2 идут сразу за ним (stand.py), от
+# ровной чужой нагрузки шлагбаум защищает сама пара (gate.py)
 QUIET_SAMPLES, QUIET_WAIT_S = 2, 120
 # цикл nvidia-smi pmon (-d 1): SM каждого процесса — среднее за цикл, циклы идут подряд; между концами соседних циклов
 # больше PMON_GAP_S — пропуск (pmon вставал), а не один длинный цикл
@@ -387,8 +387,8 @@ def _term(*_):
     raise KeyboardInterrupt
 
 
-def run(game, script, size, limit_s, logf, log):
-    """Клиент во вложенном KWin; игра Артёма запустилась — гасим, 75; не уложился в срок — гасим, 124. В конце (и при
+def run(game, script, size, limit_s, logf, log, quiet=True):
+    """Клиент во вложенном KWin (quiet — сперва ждать тишины); игра Артёма запустилась — гасим, 75; не уложился в срок — гасим, 124. В конце (и при
     исключении, Ctrl+C, TERM задачи) — ни одного процесса с меткой."""
     w, h = size.split("x")
     tag = uuid.uuid4().hex
@@ -423,14 +423,14 @@ def run(game, script, size, limit_s, logf, log):
         # перед клиентом — тишина: чужие тяжёлые задачи (сборка, GameTest, клиент другой сессии) мешали бы замеру; ждём не
         # дольше QUIET_WAIT_S — дальше идём (нагрузка в окнах — в отчёте)
         sample("wait")
-        quiet, until, told = 0, time.time() + QUIET_WAIT_S, 0.0
-        while quiet < QUIET_SAMPLES:
+        calm, until, told = 0, time.time() + QUIET_WAIT_S, 0.0
+        while quiet and calm < QUIET_SAMPLES:
             time.sleep(SAMPLE_S)
             s = sample("wait")
             if artem_playing():
                 return 75
-            quiet = 0 if heavy(s) else quiet + 1
-            if quiet == 0 and time.time() - told >= 60:
+            calm = 0 if heavy(s) else calm + 1
+            if calm == 0 and time.time() - told >= 60:
                 told = time.time()
                 log(f"жду тишины: чужие {s['cpu_foreign']} ядра, видеокарта {(s.get('gpu') or {}).get('who')}, службы {s['units']}")
             if time.time() > until:

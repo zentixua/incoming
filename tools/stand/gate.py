@@ -13,9 +13,11 @@
 - первый удар и накопление, если сцены сняты: худший кадр больше чем вдвое против базы и больше 100 мс; рост последней
   минуты к первой больше, чем у базы, сверх допуска;
 - прогон пары не годен (results.checks) или снят иначе (строка OpenGL, кадр).
-Шумно (`noisy`) — A1 и A2 в окне шлагбаума разошлись больше MAX_SPREAD: сеанс не годится для вердикта.
+Шумно (`noisy`) — A1 и A2 в окне шлагбаума разошлись больше MAX_SPREAD: сеанс не годится для вердикта по числам. Провал
+самого кандидата (прогон не годен, снят иначе, нет окна или числа) — провал и в шумной паре: шум его не объясняет.
 Решение (`decide`): пак, который не прошёл с первой пары (провал, шум, негодный прогон), снимается второй парой, и решает
-она: провал подтверждён, только если повторился; шумно и во второй — вердикта нет (статус error, а не failure).
+она: провал по числам, который во второй паре не повторился, — проход; шумно и во второй — вердикта нет (статус error,
+а не failure).
 Вид числом не судится: сцены, где доля «дымных» пикселей или яркость кадра заметно другие (`look_flags`), помечаются
 ревьюеру. Только стандартная библиотека (CI: test_gate.py).
 """
@@ -30,8 +32,9 @@ MIN_TOL = 0.10
 # допуск — столько расхождений A1 и A2: разность B − (A1 + A2)/2 шумит на √1,5 σ, |A1 − A2| в среднем ≈ 1,13 σ — два
 # расхождения ≈ 1,8 σ разности; ложный провал на одной величине — несколько процентов, и его снимает повторная пара
 SPREAD_K = 2.0
-# A1 и A2 в окне шлагбаума разошлись больше — сеанс шумный (чужая задача в одном из прогонов, троттлинг посреди пары)
-MAX_SPREAD = 0.20
+# A1 и A2 в окне шлагбаума разошлись больше — сеанс шумный (чужая задача в одном из прогонов, троттлинг посреди пары):
+# допуск так не выше 20 %
+MAX_SPREAD = 0.10
 FIRST_RATIO, FIRST_MIN_MS = 2.0, 100.0
 # вид: доля дымных пикселей (абсолютная разница) и средняя яркость (0–1)
 LOOK_SMOKE, LOOK_LUMA = 0.10, 0.08
@@ -72,14 +75,16 @@ def compare_pack(pack, c, bases):
     """Кандидат c против принятого bases (пак результатов: [A1, A2] пары или [A] одного прогона) →
     {"state": pass|fail|noisy, "fails", "noisy", "rows", "notes"}. Негодный прогон и снятое иначе — провал."""
     fails, noisy, rows, notes = [], [], [], []
+    # провалы самого кандидата: их шум принятого не объясняет
+    own = []
     if len(bases) < 2:
         notes.append(f"{pack}: принятый снят один раз — допуск {MIN_TOL:.0%} без оценки шума")
     if c.get("checks"):
-        fails.append(f"{pack}: прогон кандидата не годен: " + "; ".join(c["checks"]))
+        own.append(f"{pack}: прогон кандидата не годен: " + "; ".join(c["checks"]))
     for i, b in enumerate(bases, 1):
         if b.get("checks"):
             fails.append(f"{pack}: прогон принятого A{i} не годен: " + "; ".join(b["checks"]))
-        fails += [f"{pack}: A{i} снят иначе, чем кандидат: {x}" for x in gl_diff(c, b)]
+        own += [f"{pack}: A{i} снят иначе, чем кандидат: {x}" for x in gl_diff(c, b)]
     names = set(c.get("windows", {}))
     for b in bases:
         names |= set(b.get("windows", {}))
@@ -88,7 +93,7 @@ def compare_pack(pack, c, bases):
         gated = name.startswith(GATED)
         if cw is None or any(w is None for w in bws):
             if gated:
-                fails.append(f"{pack} {name}: нет окна у {'кандидата' if cw is None else 'принятого'}")
+                (own if cw is None else fails).append(f"{pack} {name}: нет окна у {'кандидата' if cw is None else 'принятого'}")
             continue
         for m in REPORTED:
             judged = gated and m in METRICS
@@ -96,7 +101,7 @@ def compare_pack(pack, c, bases):
             bv, spread = base_of([metric(w, m) for w in bws])
             if not _num(cv) or bv is None:
                 if judged:
-                    fails.append(f"{pack} {name} {'.'.join(m)}: нет числа у {'кандидата' if not _num(cv) else 'принятого'}")
+                    (own if not _num(cv) else fails).append(f"{pack} {name} {'.'.join(m)}: нет числа у {'кандидата' if not _num(cv) else 'принятого'}")
                 continue
             lim = tol_of(spread) if m in METRICS else None
             change = cv / bv - 1
@@ -135,8 +140,10 @@ def compare_pack(pack, c, bases):
                          "change": change, "tol": lim, "gated": True, "fail": bad, "noisy": False})
             if bad:
                 fails.append(f"{pack} накопление: последняя минута ×{cg:.2f} к первой против ×{bg:.2f} у принятого (допуск {lim:.0%})")
-    # шумный сеанс вердикта не даёт — даже если в нём же «провал»: его снимает повторная пара
-    state = NOISY if noisy else FAIL if fails else PASS
+    # шумный сеанс вердикта по числам не даёт — даже если в нём же «провал»: его снимает повторная пара; провал самого
+    # кандидата — провал и тогда
+    fails = own + fails
+    state = FAIL if own else NOISY if noisy else FAIL if fails else PASS
     return {"state": state, "fails": fails, "noisy": noisy, "rows": rows, "notes": notes}
 
 

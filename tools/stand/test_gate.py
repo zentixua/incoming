@@ -68,7 +68,7 @@ class Pair(unittest.TestCase):
 
     def test_drift_between_a1_and_a2_cancels(self):
         # видеокарта грелась весь сеанс: A1 быстрее, A2 медленнее, кандидат между ними — проходит
-        v = gate.compare(run(scale=1.08), pair(1.0, 1.15))
+        v = gate.compare(run(scale=1.08), pair(1.0, 1.09))
         self.assertTrue(v["pass"], v["fails"])
 
     def test_slower_at_100_fails(self):
@@ -82,15 +82,22 @@ class Pair(unittest.TestCase):
 
     def test_regressions_like_3_7_0_fail(self):
         # 3.7.0 против 3.4.1: видеокарта p50 в 2,6–9,3 раза (стенд, 25.10)
-        self.assertFalse(gate.compare(run(scale=2.6), pair(1.0, 1.1))["pass"])
+        self.assertFalse(gate.compare(run(scale=2.6), pair(1.0, 1.08))["pass"])
 
     def test_noisy_pair_has_no_verdict(self):
-        v = gate.compare(run(scale=1.0), pair(1.0, 1.3))
+        v = gate.compare(run(scale=1.0), pair(1.0, 1.12))
         self.assertEqual(v["state"], gate.NOISY)
         self.assertFalse(v["pass"])
         self.assertTrue(any("расхождение" in n for n in v["noisy"]))
-        # шумно и с «провалом» — всё равно шумно: решает повторная пара
-        self.assertEqual(gate.compare(run(scale=2.0), pair(1.0, 1.3))["state"], gate.NOISY)
+        # шумно и с «провалом» по числам — всё равно шумно: решает повторная пара
+        self.assertEqual(gate.compare(run(scale=2.0), pair(1.0, 1.12))["state"], gate.NOISY)
+        # провал самого кандидата шум не объясняет
+        c = run()
+        c["packs"]["none"]["checks"] = ["нет события done"]
+        self.assertEqual(gate.compare(c, pair(1.0, 1.12))["state"], gate.FAIL)
+        c = run()
+        del c["packs"]["none"]["windows"]["100/edge"]
+        self.assertEqual(gate.compare(c, pair(1.0, 1.12))["state"], gate.FAIL)
 
     def test_wall_cpu_and_frame_interval_alone_do_not_fail(self):
         c = run()
