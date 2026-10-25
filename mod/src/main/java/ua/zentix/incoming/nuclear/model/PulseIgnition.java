@@ -22,6 +22,11 @@ public final class PulseIgnition {
     private static final double CAL_CM2_PER_MJ_M2 = 1e6 / 4.1868e4;
     /** Разброс порога: σ натурального логарифма. */
     public static final double SPREAD = 0.3;
+    /**
+     * Импульс, ниже которого не загорается и тысячная доля самого лёгкого горючего (листвы), кал/см²: −3,1 σ от его
+     * порога. Дальше шар топлива ничего не поджигает — его обход по воздуху ({@code Craters.ignite}) там кончается.
+     */
+    public static final double FLOOR = 0.25 * 1e6 / 4.1868e4 * Math.exp(-3.1 * SPREAD);
 
     private PulseIgnition() {}
 

@@ -79,7 +79,9 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   there is no collapse of a weakened span.
 - **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; three quarters of it
   burns as a fireball (≈16 m across for the Shahed, ≈34 m for the missile) for one to three seconds. That flash ignites
-  thin, dry fuel it touches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. Planks, logs
+  thin, dry fuel it reaches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. The flash
+  comes from the fireball you see, which rises and drifts with the wind: tree crowns above the impact catch fire, grass on
+  the ground catches more often downwind, and with the missile leaves catch a little past the ball's edge too. Planks, logs
   and other thick wood only char in a flash that short. The flash leaves its fire only on what burns: sand, stone,
   earth, metal and rails never burn, and no flames from it are left standing on them. So a Shahed in a town leaves a
   few fires on dry plants near the impact, not a burning circle.
