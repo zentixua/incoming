@@ -900,6 +900,29 @@ class Pr(unittest.TestCase):
             post.assert_not_called()
             judge.assert_not_called()
 
+    def test_extra_scenes_may_post(self):
+        # «100» и одиночный удар: вердикт тот же (окна «100»), статус можно; без «100» — нельзя
+        head = "cd" * 20
+        files = json.dumps({"filename": "mod/src/main/java/ua/zentix/incoming/client/fx/A.java", "previous_filename": None})
+        gh = lambda *args, json_out=False: {"headRefOid": head, "url": "u", "number": 1} if json_out else files
+        with tempfile.TemporaryDirectory() as root:
+            for sel, ok in ((["100", "one"], True), (["one"], False)):
+                out = Path(root) / f"pr1-{head[:8]}"
+                out.mkdir(exist_ok=True)
+                (out / "pair.json").write_text(json.dumps({"name": out.name, "packs": list(stand.PACKS), "cand": {}, "base": {},
+                                                           "context": {"scenes": sel, "size": stand.DEFAULT_SIZE}}))
+                a = Namespace(number=1, post=True, rejudge=True, force=False, against="v3.7.0", packs=list(stand.PACKS), scenes=sel,
+                              size=stand.DEFAULT_SIZE)
+                with mock.patch.object(stand, "OUT", Path(root)), mock.patch.object(stand, "gh", gh), \
+                        mock.patch.object(stand, "post_status"), \
+                        mock.patch.object(stand, "judge_pair", side_effect=RuntimeError("judged")):
+                    if ok:
+                        with self.assertRaisesRegex(RuntimeError, "judged"):
+                            stand.cmd_pr(a)
+                    else:
+                        with self.assertRaises(SystemExit):
+                            stand.cmd_pr(a)
+
     def test_main_base_needs_a_jar(self):
         # голова main после правки только docs/: build успешен, но мод не собирался и jar нет — база прежняя
         def gh(*args, json_out=False):

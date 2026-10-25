@@ -514,8 +514,14 @@ def cmd_pr(a):
     base, version = (a.against, a.against) if a.against else main_base()
     name = f"pr{a.number}-{head[:8]}"
     scenes = a.scenes if a.scenes is not None else GATE_SCENES
-    full = "--post — только со всеми паками, сценой «100» и окном по умолчанию; выборка — без --post"
-    if a.post and (a.packs != list(PACKS) or scenes != GATE_SCENES or a.size != DEFAULT_SIZE):
+    full = "--post — только со всеми паками, со сценой «100» и окном по умолчанию; выборка — без --post"
+
+    def partial(packs, sel, size):
+        # лишние сцены (одиночный удар и т. п.) вердикт не трогают: он судит только окна «100»
+        has = sel == "all" or set(GATE_SCENES) <= set(sel)
+        return packs != list(PACKS) or not has or size != DEFAULT_SIZE
+
+    if a.post and partial(a.packs, scenes, a.size):
         # статус влития — только у полного шлагбаума: выборка паков пропустила бы регрессию в остальных
         raise SystemExit(full)
     out = OUT / name
@@ -526,7 +532,7 @@ def cmd_pr(a):
         info = json.loads((out / "pair.json").read_text())
         ctx = info["context"]
         # полнота — у снятой пары, а не у этой команды
-        if a.post and (info["packs"] != list(PACKS) or ctx["scenes"] != GATE_SCENES or ctx["size"] != DEFAULT_SIZE):
+        if a.post and partial(info["packs"], ctx["scenes"], ctx["size"]):
             raise SystemExit(f"{full} (снятая пара: {','.join(info['packs'])}, сцены {ctx['scenes']}, {ctx['size']})")
         code = 0
     else:
