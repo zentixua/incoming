@@ -1,28 +1,38 @@
 """Шлагбаум стенда: кандидат против принятого выпуска по числам results.json (README.md, «Условие влития»).
 
 Провал:
-- окна «100 ударов» (`100/*`, любая камера, любой пак): видеокарта p50 или процессор p95 (работа кадра Pre → Post) хуже
-  принятого больше допуска; нет окна или числа у кандидата или у принятого — тоже провал. Кадр p95 (интервал — что
-  видит игрок) — в отчёте, без провала;
+- окна «100 ударов» (`100/*`, любая камера, любой пак): видеокарта p50 или процессор p95 (время процессора потока
+  отрисовки за кадр Pre → Post) хуже принятого больше допуска; нет окна или числа у кандидата или у принятого — тоже
+  провал. Настенное Pre → Post и кадр p95 (интервал — что видит игрок) — в отчёте, без провала: в них ожидания
+  драйвера и вытеснение чужими задачами;
 - первый удар: худший кадр от взрыва до +5 с больше чем вдвое против принятого и больше 100 мс; числа нет — провал;
 - накопление: последняя минута против первой выросла больше, чем у принятого, сверх допуска. Против самого роста
   кандидата (дословно «последняя минута дороже первой больше допуска») — нельзя: у принятого он есть и так (дым копится),
   и тогда два прогона одной версии проваливали бы друг друга — а приёмка стенда требует, чтобы они проходили;
 - кандидат снят на другой видеокарте или с другим кадром (строка OpenGL, размер кадра), чем принятый.
-Допуск — из шума: принятый снят дважды, допуск = max(5 %, 3 × разброс двух прогонов) по каждой величине и окну
-(`tolerance`); без калибровки — 5 % с пометкой. Калибровка (`calibrate`) годна, только если оба прогона годны, сняты
-одинаково (стенд, паки, видеокарта, кадр) и второй против первого проходит шлагбаум; иначе принятого нет. Остальные окна — в отчёте, без провала. Вид числом не судится: сцены, где
+Допуск — из шума: принятый снят N = 3 раза, база — медиана прогонов, допуск = max(5 %, 1,5 × (max − min) / медиана) по
+каждой величине и окну (`tolerance`; размах трёх прогонов ≈ 1,7 σ, полтора размаха ≈ 2,5 σ шума; решение координатора
+25.10 вместо прежних двух прогонов и 3 × разброса, где одна пара с чужой нагрузкой давала допуск до 120 %); без
+калибровки — 5 % с пометкой. Калибровка (`calibrate`) годна, только если все прогоны годны, сняты одинаково (стенд,
+паки, видеокарта, кадр), тик сервера в окнах шлагбаума у них сходится (MSPT_TOL: одна версия — разница только шум) и
+каждый проходит шлагбаум против медианы остальных; иначе принятого нет. Остальные окна — в отчёте, без провала. Вид числом не судится: сцены, где
 доля «дымных» пикселей или яркость кадра заметно другие (`look_flags`), помечаются ревьюеру.
 
 Только стандартная библиотека (CI: test_gate.py).
 """
 GATED = "100/"
-# величины шлагбаума (спека: видеокарта p50 и процессор p95) и те, что только в отчёте
-METRICS = (("gpu", "p50"), ("cpu", "p95"))
-REPORTED = METRICS + (("interval", "p95"),)
+# величины шлагбаума (спека: видеокарта p50 и процессор p95 — процессор потока отрисовки) и те, что только в отчёте
+METRICS = (("gpu", "p50"), ("thread", "p95"))
+REPORTED = METRICS + (("cpu", "p95"), ("interval", "p95"))
 GL_KEYS = ("renderer", "version", "width", "height")
 MIN_TOL = 0.05
-NOISE_K = 3.0
+# допуск — столько размахов прогонов калибровки (max − min) / медиана
+RANGE_K = 1.5
+# тик сервера в окне шлагбаума у прогонов калибровки (одна версия) — не дальше этой доли от их медианы: внутри окна
+# секундные значения ходят на 5–7 % (σ), среднее за 20 с — на ~1,5 %, а пара 25.10 с чужими задачами рядом разошлась
+# на 12–15 % по всем пакам и окнам; 8 % — между ними. У кандидата тик — его собственная работа (PR может законно её
+# менять), поэтому годность кандидата решает прямо измеренная чужая нагрузка (results.foreign), а не тик
+MSPT_TOL = 0.08
 FIRST_RATIO, FIRST_MIN_MS = 2.0, 100.0
 # вид: доля дымных пикселей (абсолютная разница) и средняя яркость (0–1)
 LOOK_SMOKE, LOOK_LUMA = 0.10, 0.08
@@ -33,56 +43,64 @@ def metric(window, m):
     return ((window or {}).get(part) or {}).get(q)
 
 
-def spread(a, b):
-    """Разброс двух прогонов: |a − b| / среднее."""
-    if a is None or b is None or a + b == 0:
+def _median(xs):
+    v = sorted(xs)
+    n = len(v)
+    return v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2
+
+
+def rel_range(values):
+    """Размах прогонов: (max − min) / медиана; нет числа у кого-то или медиана 0 — None."""
+    if not values or any(v is None for v in values):
         return None
-    return abs(a - b) / ((a + b) / 2)
+    m = _median(values)
+    return (max(values) - min(values)) / m if m else None
 
 
-def tolerance(run1, run2):
-    """Допуск по двум прогонам принятого: пак → окно → величина → доля; и для накопления."""
+def tolerance(runs):
+    """Допуск по прогонам калибровки: пак → окно → величина → доля; и для накопления."""
     tol = {}
-    for pack, r1 in run1["packs"].items():
-        r2 = run2["packs"].get(pack)
-        if not r2:
+    for pack in runs[0]["packs"]:
+        rs = [r["packs"].get(pack) for r in runs]
+        if any(x is None for x in rs):
             continue
         t = tol.setdefault(pack, {"windows": {}})
-        for name, w1 in r1["windows"].items():
-            w2 = r2["windows"].get(name)
+        for name in rs[0]["windows"]:
+            ws = [x["windows"].get(name) for x in rs]
             for m in METRICS:
-                s = spread(metric(w1, m), metric(w2, m))
+                s = rel_range([metric(w, m) for w in ws])
                 if s is not None:
-                    t["windows"].setdefault(name, {})[".".join(m)] = max(MIN_TOL, NOISE_K * s)
-        g1, g2 = ((r1.get("acc") or {}).get("growth") or {}).get("ratio"), ((r2.get("acc") or {}).get("growth") or {}).get("ratio")
-        s = spread(g1, g2)
+                    t["windows"].setdefault(name, {})[".".join(m)] = max(MIN_TOL, RANGE_K * s)
+        s = rel_range([((x.get("acc") or {}).get("growth") or {}).get("ratio") for x in rs])
         if s is not None:
-            t["acc"] = max(MIN_TOL, NOISE_K * s)
+            t["acc"] = max(MIN_TOL, RANGE_K * s)
     return tol
 
 
-def mean_runs(run1, run2):
-    """Принятый для сравнения — среднее двух прогонов калибровки (по числам окон, первого удара и накопления)."""
-    def avg(a, b):
-        if isinstance(a, dict) and isinstance(b, dict):
-            return {k: avg(a[k], b.get(k)) for k in a}
-        if isinstance(a, (int, float)) and not isinstance(a, bool) and isinstance(b, (int, float)) and not isinstance(b, bool):
-            return (a + b) / 2
+def median_runs(runs):
+    """Принятый для сравнения — медиана прогонов калибровки по каждому числу окон, первого удара и накопления (то, чего
+    нет у всех, — как у первого)."""
+    def med(xs):
+        a = xs[0]
+        if isinstance(a, dict) and all(isinstance(x, dict) for x in xs):
+            return {k: med([a[k]] + [x.get(k) for x in xs[1:]]) for k in a}
+        if all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in xs):
+            return _median(xs)
         return a
-    out = {k: v for k, v in run1.items() if k != "packs"}
+    out = {k: v for k, v in runs[0].items() if k != "packs"}
     out["packs"] = {}
-    for pack, r1 in run1["packs"].items():
-        r2 = run2["packs"].get(pack)
-        if not r2:
+    for pack, r1 in runs[0]["packs"].items():
+        rs = [r["packs"].get(pack) for r in runs]
+        if any(x is None for x in rs):
             out["packs"][pack] = r1
             continue
         p = dict(r1)
-        p["windows"] = {n: avg(w, r2["windows"][n]) if n in r2["windows"] else w for n, w in r1["windows"].items()}
-        if r1.get("first") and r2.get("first"):
-            p["first"] = avg(r1["first"], r2["first"])
-        if (r1.get("acc") or {}).get("growth") and (r2.get("acc") or {}).get("growth"):
+        p["windows"] = {n: med([x["windows"][n] for x in rs]) if all(n in x["windows"] for x in rs) else w for n, w in r1["windows"].items()}
+        if all(x.get("first") for x in rs):
+            p["first"] = med([x["first"] for x in rs])
+        if all((x.get("acc") or {}).get("growth") for x in rs):
             p["acc"] = dict(r1["acc"])
-            p["acc"]["growth"] = avg(r1["acc"]["growth"], r2["acc"]["growth"])
+            p["acc"]["growth"] = med([x["acc"]["growth"] for x in rs])
         out["packs"][pack] = p
     return out
 
@@ -155,29 +173,48 @@ def gl_diff(a, b):
     return [f"{k} {ga.get(k)} против {gb.get(k)}" for k in GL_KEYS if ga.get(k) != gb.get(k)]
 
 
-def calibrate(run1, run2):
-    """Принятый по двум прогонам калибровки: {"base" (среднее), "tol", "self_check" (второй против первого), "problems"}.
-    Годен, только если problems пуст: оба прогона годны, сняты одинаково (контекст — стенд, моды, паки, сцены,
-    видеокарта, окно; строка OpenGL и кадр у каждого пака) и второй против первого проходит шлагбаум — иначе среднее
-    и допуск подмешали бы негодный прогон или шум другой видеокарты."""
+def calibrate(runs):
+    """Принятый по прогонам калибровки (≥ 2; решение — 3): {"base" (медиана), "tol", "self_check" (каждый против медианы
+    остальных: список вердиктов), "problems"}. Годен, только если problems пуст: все прогоны годны, сняты одинаково
+    (контекст — стенд, моды, паки, сцены, видеокарта, окно, java, KWin, профиль питания; строка OpenGL и кадр у каждого
+    пака), тик сервера в окнах шлагбаума сходится (MSPT_TOL) и каждый проходит шлагбаум против медианы остальных — иначе
+    медиана и допуск подмешали бы негодный прогон, шум другой машины или чужую нагрузку."""
     problems = []
-    for r in (run1, run2):
+    if len(runs) < 2:
+        return {"base": None, "tol": None, "self_check": [], "problems": [f"прогонов калибровки {len(runs)} — нужно не меньше двух"]}
+    for r in runs:
         for pack, x in r["packs"].items():
             if x.get("checks"):
                 problems.append(f"{r.get('name')} {pack}: не годен: " + "; ".join(x["checks"]))
-    c1, c2 = run1.get("context") or {}, run2.get("context") or {}
-    diff = sorted(k for k in set(c1) | set(c2) if c1.get(k) != c2.get(k))
-    if diff:
-        problems.append("прогоны сняты иначе: " + ", ".join(diff))
-    if set(run1["packs"]) != set(run2["packs"]):
-        problems.append(f"паки прогонов разные: {sorted(run1['packs'])} и {sorted(run2['packs'])}")
-    for pack in sorted(set(run1["packs"]) & set(run2["packs"])):
-        problems += [f"{pack}: прогоны сняты иначе: {x}" for x in gl_diff(run2["packs"][pack], run1["packs"][pack])]
-    tol = tolerance(run1, run2)
-    v = compare(run2, run1, tol)
-    if not v["pass"]:
-        problems.append("второй прогон против первого не проходит: " + "; ".join(v["fails"]))
-    return {"base": mean_runs(run1, run2), "tol": tol, "self_check": v, "problems": problems}
+    c0 = runs[0].get("context") or {}
+    for r in runs[1:]:
+        c = r.get("context") or {}
+        diff = sorted(k for k in set(c0) | set(c) if c0.get(k) != c.get(k))
+        if diff:
+            problems.append(f"{r.get('name')} снят иначе, чем {runs[0].get('name')}: " + ", ".join(diff))
+        if set(r["packs"]) != set(runs[0]["packs"]):
+            problems.append(f"паки прогонов разные: {sorted(runs[0]['packs'])} и {sorted(r['packs'])}")
+    for pack in sorted(set.intersection(*(set(r["packs"]) for r in runs))):
+        for r in runs[1:]:
+            problems += [f"{pack}: {r.get('name')} снят иначе: {x}" for x in gl_diff(r["packs"][pack], runs[0]["packs"][pack])]
+        for name in sorted(n for n in runs[0]["packs"][pack]["windows"] if n.startswith(GATED)):
+            ms = [((r["packs"][pack]["windows"].get(name) or {}).get("mspt") or {}).get("mean") for r in runs]
+            if any(m is None for m in ms):
+                problems.append(f"{pack} {name}: нет тика сервера у прогона калибровки")
+                continue
+            med = _median(ms)
+            if med and max(abs(m - med) for m in ms) / med > MSPT_TOL:
+                problems.append(f"{pack} {name}: тик сервера прогонов разошёлся — {', '.join(f'{m:.1f}' for m in ms)} мс "
+                                f"(можно ±{MSPT_TOL:.0%} от медианы): машина была занята")
+    tol = tolerance(runs)
+    checks = []
+    for i, r in enumerate(runs):
+        v = compare(r, median_runs(runs[:i] + runs[i + 1:]), tol)
+        v["run"] = r.get("name")
+        checks.append(v)
+        if not v["pass"]:
+            problems.append(f"{r.get('name')} против медианы остальных не проходит: " + "; ".join(v["fails"]))
+    return {"base": median_runs(runs), "tol": tol, "self_check": checks, "problems": problems}
 
 
 def look_flags(cand_look, base_look):

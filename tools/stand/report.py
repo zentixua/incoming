@@ -157,8 +157,8 @@ def fmt(v, digits=1):
 def cell(w):
     if not w:
         return "—"
-    g, c, iv, fps = (w.get("gpu") or {}).get("p50"), (w.get("cpu") or {}).get("p95"), (w.get("interval") or {}).get("p95"), w.get("fps")
-    return f"{fmt(g)} / {fmt(c)} / {fmt(iv)} ({fmt(fps, 0)})"
+    g, t, iv, fps = (w.get("gpu") or {}).get("p50"), (w.get("thread") or {}).get("p95"), (w.get("interval") or {}).get("p95"), w.get("fps")
+    return f"{fmt(g)} / {fmt(t)} / {fmt(iv)} ({fmt(fps, 0)})"
 
 
 def main():
@@ -212,8 +212,9 @@ def main():
             md += [f"- {x}" for x in verdict["look"]]
         md.append("")
     md.append("Cells: GPU p50 / CPU p95 / frame p95 (frames per second), ms. GPU — the GPU clock from the first to the last command "
-              "of the frame; CPU — the frame's own work on the render thread (RenderFrameEvent.Pre → Post, without the buffer swap); "
-              "frame — from the frame start to the next frame start, as the player sees it.")
+              "of the frame; CPU — CPU time of the render thread in the frame (RenderFrameEvent.Pre → Post, without the buffer swap, "
+              "preemption and driver sleep); frame — from the frame start to the next frame start, as the player sees it. The gate "
+              "judges GPU p50 and CPU p95 in the `100/*` windows.")
     comment = [f"### {gate_title(verdict, base)}", "", "| pack | window | " + " | ".join(r.label for r in runs) + " |",
                "|---|---|" + "---|" * len(runs)]
     for pack in packs:
@@ -242,8 +243,10 @@ def main():
                 bv = ((bw or {}).get("stages") or {}).get(k, {}).get("mean")
                 md.append(f"| {k} | {fmt(v['mean'], 2)}" + (f" | {fmt(bv, 2)}" if bw else "") + " |")
             md.append("")
+            h = cw.get("host") or {}
             md.append(f"Bound: {cw['bound']}; server tick mean {fmt((cw.get('mspt') or {}).get('mean'))} ms; "
-                      f"CPU (frame work Pre→Post) p95 {fmt((cw.get('cpu') or {}).get('p95'))} ms; probes: "
+                      f"wall-clock Pre→Post p95 {fmt((cw.get('cpu') or {}).get('p95'))} ms; other load on the machine "
+                      f"{fmt(h.get('cpu_foreign'))} cores, GPU {h.get('gpu_foreign', '—')} % ({h.get('units') or 'nothing heavy'}); probes: "
                       + "; ".join(f"{k}: {v}" for k, v in (cw.get("probes") or {}).items()))
         pr = cand.res["packs"][pack]
         if pr.get("checks"):

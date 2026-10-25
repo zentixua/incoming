@@ -15,6 +15,8 @@ import org.lwjgl.opengl.GL33;
 import org.lwjgl.opengl.GLCapabilities;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Locale;
@@ -22,8 +24,11 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Время каждого кадра без ожидания видеокарты. Процессор — {@code RenderFrameEvent.Pre} → {@code Post} (своя работа
- * кадра: мир, слои модов, интерфейс; без обмена буферов) и интервал Pre → Pre (что видит игрок): в строке кадра — время
+ * Время каждого кадра без ожидания видеокарты. Процессор — время процессора потока отрисовки от {@code RenderFrameEvent.Pre}
+ * до {@code Post} ({@code cpu_thread_ms}, {@link ThreadMXBean#getCurrentThreadCpuTime}, как {@code FxLayer.cpuNanos} мода:
+ * своя работа кадра — мир, слои модов, интерфейс; без обмена буферов, без ожидания процессора, пока поток вытеснен
+ * чужими задачами, и без ожидания драйвера, если он спит, а не крутится, — {@code __GL_YIELD} клиента, client.py), то
+ * же настенными часами ({@code cpu_ms}: в нём и ожидания) и интервал Pre → Pre (что видит игрок): в строке кадра — время
  * от начала прошлого кадра ({@code prev_interval_ms}, оно известно в начале этого), длительность самого кадра — в строке
  * следующего (сдвиг делает разбор, results.py). Видеокарта — метки
  * {@code glQueryCounter(GL_TIMESTAMP)}: в начале и в конце кадра и на каждой стадии {@code RenderLevelStageEvent} дважды —
@@ -41,7 +46,10 @@ final class FrameClock {
     private final String[][] labels = new String[RING][MAX_STAMPS];
     private final int[] used = new int[RING];
     private final long[] frameNo = new long[RING];
-    private final double[] tMs = new double[RING], interval = new double[RING], cpu = new double[RING];
+    private final double[] tMs = new double[RING], interval = new double[RING], cpu = new double[RING], cpuThread = new double[RING];
+    private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
+    /** Время процессора потока в начале кадра, нс (−1 — JVM его не даёт: колонка пуста). */
+    private long preThread = -1;
     private final int[] shot = new int[RING];
     private final boolean[] pending = new boolean[RING];
     private int head, tail;
@@ -115,6 +123,7 @@ final class FrameClock {
         afterShot = false;
         lastPre = now;
         pre = now;
+        preThread = threadCpu();
         inFrame = true;
         stagesThisFrame.clear();
         open = null;
@@ -142,6 +151,8 @@ final class FrameClock {
         int s = head;
         if (timer > 0) stamp(s, "tail");
         cpu[s] = (now - pre) / 1e6;
+        long thread = threadCpu();
+        cpuThread[s] = preThread >= 0 && thread >= 0 ? (thread - preThread) / 1e6 : Double.NaN;
         inFrame = false;
         // кадр — после метки конца: ожидание чтения кадра у видеокарты не входит во время кадра, но этот кадр и
         // следующий (его интервал) в замер не идут
@@ -184,7 +195,8 @@ final class FrameClock {
 
     private void write(int s, @Nullable long[] ts) {
         StringBuilder b = new StringBuilder(160);
-        b.append(frameNo[s]).append(',').append(fmt(tMs[s])).append(',').append(fmt(interval[s])).append(',').append(fmt(cpu[s])).append(',');
+        b.append(frameNo[s]).append(',').append(fmt(tMs[s])).append(',').append(fmt(interval[s])).append(',').append(fmt(cpu[s])).append(',')
+                .append(fmt(cpuThread[s])).append(',');
         if (ts != null && ts.length >= 2) {
             b.append(fmt((ts[ts.length - 1] - ts[0]) / 1e6)).append(',');
             b.append(lastGpuStart >= 0 ? fmt((ts[0] - lastGpuStart) / 1e6) : "").append(',');
@@ -203,6 +215,10 @@ final class FrameClock {
 
     private static String fmt(double v) {
         return Double.isFinite(v) ? String.format(Locale.ROOT, "%.3f", v) : "";
+    }
+
+    private static long threadCpu() {
+        return THREADS.isCurrentThreadCpuTimeSupported() ? THREADS.getCurrentThreadCpuTime() : -1;
     }
 
     /** Имя стадии: «neoforge:after_level» → «after_level». */

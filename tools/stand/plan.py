@@ -1,10 +1,15 @@
 """План прогона стенда: сцены scenes.json → шаги обвязки (stand-plan.json, их исполняет мод tools/stand).
 
-Вся геометрия здесь: где цель, откуда пуск, где камера и куда она смотрит, сколько ударов досыпать до числа и как
-делить их на команды. Залп — командами не больше чем по `salvo_split` шахедов (`max_salvo` Incoming — 30), у каждой —
-своя точка пуска: одна пусковая выпускает шахеды по одному раз в 1–2 с, и залп в 100 с четырёх пусковых шёл бы почти
-минуту. Шахед летит через саму цель (`via`): без точки маршрута он делает петлю и заходит из-за спины стреляющего.
-Обвязка только исполняет числа — поэтому план можно проверить тестом без игры (test_gate.py).
+Вся геометрия здесь: где цель, откуда пуск, где камера и куда она смотрит, сколько ударов досыпать до числа, куда
+падает каждый удар и когда он пущен. Точки ударов — не разброс залпа Incoming: тот берёт общий генератор мира
+(`SalvoData.fire`: `level.random`, зерна у команды и правил мира нет в 3.4.1 и после), и удары каждого прогона ложились
+бы иначе — камера «на краю» то в стене пыли, то у её края, время кадра двух прогонов одной версии расходилось на
+30 %. Поэтому каждая точка — своя команда с разбросом 0 (`salvo drone 1 0 at P from L via P`), точки — подсолнух
+Фогеля в круге разброса (равномерно по площади, свой поворот у каждого залпа и волны), одни у всех версий. Остаётся
+промах самого шахеда (σ 3 м по паспорту, `Route.error`). Пуск — по кругу точек на `launch.dist`: удар i — с точки
+i mod пусковых, раз в `launch.gap_s` с одной точки (одна пусковая выпускает шахед раз в 1–2 с). Шахед летит через саму
+цель (`via`): без точки маршрута он делает петлю и заходит из-за спины стреляющего. Обвязка только исполняет числа —
+поэтому план можно проверить тестом без игры (test_gate.py).
 
 Оси Minecraft: +X — восток, +Z — юг. Направление камеры `toward` — единичный вектор (dx, dz) от места; пуск — по
 пеленгу от юга к востоку (0 — с юга, 90 — с востока).
@@ -49,18 +54,31 @@ def launch_point(scenes, site, k):
     return round(site[0] + d * math.sin(b), 1), round(site[1] + d * math.cos(b), 1)
 
 
-def salvo_commands(scenes, site, count, spread, first_point, split=None):
-    """Команды залпа: поровну, не больше `split` (по умолчанию `salvo_split`) в команде, у каждой — своя точка пуска
-    (своя пусковая)."""
-    split = min(split or scenes["salvo_split"], scenes["salvo_max"])
-    n_cmd = -(-count // split)
-    sizes = [count // n_cmd + (1 if i < count % n_cmd else 0) for i in range(n_cmd)]
-    cmds, k = [], first_point
-    for n in sizes:
-        fx, fz = launch_point(scenes, site, k)
-        cmds.append(f"incoming salvo {scenes['weapon']} {n} {spread} at {site[0]:g} {site[1]:g} from {fx:g} {fz:g} via {site[0]:g} {site[1]:g}")
-        k += 1
-    return cmds, k
+GOLDEN = math.pi * (3 - math.sqrt(5))
+
+
+def aim_points(site, radius, n, turn):
+    """n точек ударов в круге radius у места: подсолнух Фогеля (точка j — на радиусе radius·√((j + ½)/n), угол j·золотой
+    угол + turn) — равномерно по площади, без случайности."""
+    if radius <= 0:
+        return [site] * n
+    out = []
+    for j in range(n):
+        r, a = radius * math.sqrt((j + 0.5) / n), j * GOLDEN + turn
+        out.append((round(site[0] + r * math.cos(a), 1), round(site[1] + r * math.sin(a), 1)))
+    return out
+
+
+def strike_commands(scenes, site, points, first_point, launchers, start_s=0.0):
+    """Команда на удар: «salvo <оружие> 1 0 at P from L via P»; удар i — с точки пуска first_point + i mod launchers,
+    через start_s + (i // launchers) · gap_s. Назад — команды, сдвиги и следующая точка пуска."""
+    gap = scenes["launch"]["gap_s"]
+    cmds, delays = [], []
+    for i, (px, pz) in enumerate(points):
+        fx, fz = launch_point(scenes, site, first_point + i % launchers)
+        cmds.append(f"incoming salvo {scenes['weapon']} 1 0 at {px:g} {pz:g} from {fx:g} {fz:g} via {px:g} {pz:g}")
+        delays.append(round(start_s + (i // launchers) * gap, 3))
+    return cmds, delays, first_point + launchers
 
 
 def build(scenes, only=None):
@@ -82,26 +100,32 @@ def build(scenes, only=None):
         where[0] = eye
         return {"do": "tp", "eye": eye, "look": look, "settle_s": scenes["settle_far_s"] if far else scenes["settle_s"]}
 
+    order = {s["id"]: i for i, s in enumerate(scenes["scenes"])}
+    n_bearings = len(scenes["launch"]["bearings"])
+
     def salvo_step(s):
         site_name = s["site"]
         site = _site(scenes, site_name)
         spread = s.get("spread", 0)
+        # поворот узора — по месту сцены в scenes.json (и номеру волны), а не по выборке: у выборки те же точки
+        turn = order[s["id"]] * 16 * GOLDEN
         if "waves" in s:
             w = s["waves"]
             cmds, delays = [], []
             for i in range(w["count"]):
-                # волна — с нескольких пусковых (split): её удары ложатся за ~8 с, и последняя волна целиком в окне
-                c, point[site_name] = salvo_commands(scenes, site, w["strikes"], spread, point.get(site_name, 0), w.get("split"))
+                # волна — с нескольких пусковых сразу: её удары ложатся за несколько секунд, последняя — целиком в окне
+                c, d, point[site_name] = strike_commands(scenes, site, aim_points(site, spread, w["strikes"], turn + i * GOLDEN),
+                                                         point.get(site_name, 0), w.get("launchers", n_bearings), i * w["every_s"])
                 cmds += c
-                delays += [i * w["every_s"]] * len(c)
+                delays += d
             count = w["strikes"] * w["count"]
         else:
             count = s["strikes"] if "strikes" in s else s["total"] - struck.get(site_name, 0)
             if count <= 0:
                 raise ValueError(f"сцена {s['id']}: у места {site_name} уже {struck.get(site_name, 0)} ударов")
-            cmds, point[site_name] = salvo_commands(scenes, site, count, spread, point.get(site_name, 0))
             delay = s.get("launch_delay_s", 0) if s.get("launch_with") in ids else 0
-            delays = [delay] * len(cmds)
+            cmds, delays, point[site_name] = strike_commands(scenes, site, aim_points(site, spread, count, turn), point.get(site_name, 0),
+                                                             min(count, s.get("launchers", n_bearings)), delay)
         struck[site_name] = struck.get(site_name, 0) + count
         launched.add(s["id"])
         return {"do": "salvo", "id": s["id"], "x": site[0], "z": site[1], "radius": spread + margin, "expect": count,

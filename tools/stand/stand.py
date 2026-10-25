@@ -4,11 +4,11 @@
   stand.py prepare <jar> [--size WxH]                 jar, Sodium, Iris, паки, скрипт клиента (без видеокарты)
   stand.py play <имя> <jar> [--packs …] [--scenes …]  клиенты по пакам подряд (внутри tools/laptop_job.sh --gpu)
   stand.py analyze <имя>                              out/<имя>/results.json из сырых данных
-  stand.py baseline <выпуск> [--packs …]              принятый: два прогона → кэш с допуском (run.sh дважды)
+  stand.py baseline <выпуск> [--runs 3] [--packs …]   принятый: три прогона → кэш (медиана, допуск по размаху)
   stand.py gate <имя> [--against <выпуск>]            вердикт против принятого из кэша → verdict.json
                [--base-run <имя> --tol-from <кэш>]    … или против одного прогона с допуском кэша (приёмка)
   (числа сравнения — всегда заново из сырых данных; кэш принятого — только годный: оба прогона годны, сняты одинаково,
-  второй против первого проходит)
+  каждый прогон проходит против медианы остальных)
   stand.py pr <номер> [--post]                        PR: jar CI головы, прогон, вердикт; --post — статус и комментарий
   stand.py key <jar> [--packs …] [--scenes …]         ключ кэша (что снимали и на чём)
 
@@ -60,6 +60,8 @@ REPO, PACK_REPO = "zentixua/incoming", "zentixua/open-skies"
 PACKS = {"none": None, "complementary": "complementary-unbound", "photon": "photon-shader"}
 MODS = ("sodium", "iris")
 STATUS = "Стенд сцен"
+# прогонов калибровки принятого (gate.calibrate: медиана, допуск по размаху)
+BASE_RUNS = 3
 DEFAULT_SIZE = "2560x1600"
 UA = {"User-Agent": "zentixua/incoming stand (github.com/zentixua/incoming)"}
 
@@ -218,13 +220,22 @@ def kwin_version():
         return "unknown"
 
 
+def power_profile():
+    """Профиль питания ноутбука (platform_profile: тихий ночью — другие частоты и время кадра); нет — unknown."""
+    try:
+        return Path("/sys/firmware/acpi/platform_profile").read_text().strip()
+    except OSError:
+        return "unknown"
+
+
 def context(packs, scenes_sel, size, files):
     """Всё, кроме jar, от чего зависят числа: стенд, паки и моды (sha512), сцены, видеокарта и драйвер, окно, java
-    клиента (скрипт запуска — уже подготовлен), KWin."""
+    клиента (скрипт запуска — уже подготовлен), KWin, профиль питания, как драйвер ждёт видеокарту (__GL_YIELD)."""
     name, driver = gpu_info()
     return {"stand": stand_hash(), "mods": {m: files[m][1] for m in MODS},
             "packs": {p: files[p][1] if PACKS[p] else "none" for p in packs}, "scenes": scenes_sel or "all",
-            "gpu": name, "driver": driver, "size": size, "java": client.java_of(SCRIPT), "kwin": kwin_version()}
+            "gpu": name, "driver": driver, "size": size, "java": client.java_of(SCRIPT), "kwin": kwin_version(),
+            "power": power_profile(), "gl_yield": client.GL_YIELD or "driver"}
 
 
 def key(jar_sha, ctx):
@@ -260,25 +271,39 @@ def cmd_play(a):
     meta = {"name": a.name, "label": label, "jar": {"file": jar.name, "sha256": sha(jar), "spec": a.spec or a.jar},
             "context": ctx, "key": key(sha(jar), ctx), "started": datetime.now(timezone.utc).isoformat(timespec="seconds"), "packs": {}}
     worst = 0
+    scenes = plan.load()
     for pack in a.packs:
-        p = client.prepare_game(GAME, jar, files[pack][0] if PACKS[pack] else None, [files[m][0] for m in MODS], a.scenes)
-        t0 = time.time()
-        log(f"{a.name}: пак {pack}, {len(p['steps'])} шагов")
-        with open(out / f"client-{pack}.out", "w") as logf:
-            code = client.run(GAME, script, a.size, p["limit_s"], logf, log)
-        took = time.time() - t0
-        dst = out / pack
-        if (GAME / "stand-out").exists():
-            shutil.copytree(GAME / "stand-out", dst)
-        dst.mkdir(exist_ok=True)
-        for f in ("logs/latest.log", "stand-plan.json"):
-            if (GAME / f).exists():
-                shutil.copy2(GAME / f, dst / Path(f).name)
-        if (GAME / "crash-reports").exists():
-            shutil.copytree(GAME / "crash-reports", dst / "crash-reports")
-        (GAME / "audio.wav").unlink(missing_ok=True)
-        meta["packs"][pack] = {"exit": code, "gpu_minutes": round(took / 60, 2), "file": files[pack][0].name if PACKS[pack] else None}
-        log(f"{a.name}: пак {pack} — выход {code}, {took / 60:.1f} мин")
+        took, attempts = 0.0, 0
+        # пак, негодный только из-за чужой нагрузки в окнах шлагбаума (results.LOAD_TAG), — снять ещё раз: это не версия
+        for attempts in (1, 2):
+            p = client.prepare_game(GAME, jar, files[pack][0] if PACKS[pack] else None, [files[m][0] for m in MODS], a.scenes)
+            t0 = time.time()
+            log(f"{a.name}: пак {pack}, {len(p['steps'])} шагов" + (f", попытка {attempts}" if attempts > 1 else ""))
+            with open(out / f"client-{pack}.out", "w") as logf:
+                code = client.run(GAME, script, a.size, p["limit_s"], logf, log)
+            took += time.time() - t0
+            dst = out / pack
+            if dst.exists():
+                shutil.rmtree(dst.with_name(f"{pack}.try{attempts - 1}"), ignore_errors=True)
+                dst.rename(dst.with_name(f"{pack}.try{attempts - 1}"))
+            if (GAME / "stand-out").exists():
+                shutil.copytree(GAME / "stand-out", dst)
+            dst.mkdir(exist_ok=True)
+            for f in ("logs/latest.log", "stand-plan.json"):
+                if (GAME / f).exists():
+                    shutil.copy2(GAME / f, dst / Path(f).name)
+            if (GAME / "crash-reports").exists():
+                shutil.copytree(GAME / "crash-reports", dst / "crash-reports")
+            (GAME / "audio.wav").unlink(missing_ok=True)
+            log(f"{a.name}: пак {pack} — выход {code}, {(time.time() - t0) / 60:.1f} мин")
+            if code != 0 or not (dst / "frames.csv").exists():
+                break
+            bad = results.analyze(dst, scenes, a.scenes)["checks"]
+            if not bad or not all(b.startswith(results.LOAD_TAG) for b in bad) or attempts == 2:
+                break
+            log(f"{a.name}: пак {pack} — чужая нагрузка в окнах шлагбаума, снимаю ещё раз: " + "; ".join(bad))
+        meta["packs"][pack] = {"exit": code, "gpu_minutes": round(took / 60, 2), "attempts": attempts,
+                               "file": files[pack][0].name if PACKS[pack] else None}
         (out / "meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False))
         if code == 75:
             return 75
@@ -312,6 +337,11 @@ def analyze(out, write=True):
             r["checks"].append(f"шейдерпак в игре — {got}, а не {want}")
         if not want and ".zip" in got:
             r["checks"].append(f"пак none, а Iris включил {got}")
+        # профиль питания — в ключе; сменился посреди окон шлагбаума (тихий режим ночью) — числа не того профиля
+        for name, win in r["windows"].items():
+            seen = sorted(set((win.get("host") or {}).get("profiles") or []) - {meta["context"].get("power")})
+            if name.startswith(gate.GATED) and seen:
+                r["checks"].append(f"окно {name}: профиль питания {', '.join(map(str, seen))}, а снимали в {meta['context'].get('power')}")
         w, h = meta["context"]["size"].split("x")
         gl = r["meta"].get("gl") or {}
         if gl and (gl.get("width") != int(w) or gl.get("height") != int(h)):
@@ -336,33 +366,40 @@ def cache_dir(version, k):
     return CACHE / f"{version}-{k}"
 
 
+def cache_runs(d):
+    """Каталоги прогонов калибровки в кэше: run1/, run2/, … по порядку."""
+    return sorted((x for x in d.glob("run*") if x.is_dir() and x.name[3:].isdigit()), key=lambda x: int(x.name[3:]))
+
+
 def cached(d):
-    """Принятый из кэша d (run1/, run2/): числа, допуск и самопроверка — заново из сырых данных обоих прогонов и только
-    годные (gate.calibrate: оба прогона годны, сняты одинаково, второй против первого проходит; ключ, под которым кэш
-    лежит, — тот, что прогоны записали при съёмке); иначе SystemExit."""
-    r1, r2 = analyze(d / "run1", write=False), analyze(d / "run2", write=False)
-    cal = gate.calibrate(r1, r2)
-    if not d.name.endswith("-" + str(r1.get("key"))):
-        cal["problems"].append(f"кэш лежит не под ключом своих прогонов ({r1.get('key')})")
+    """Принятый из кэша d (run1/ … runN/): медиана, допуск и самопроверка — заново из сырых данных всех прогонов и только
+    годные (gate.calibrate: все годны, сняты одинаково, тик сервера сходится, каждый проходит против медианы остальных;
+    ключ, под которым кэш лежит, — тот, что прогоны записали при съёмке); иначе SystemExit."""
+    runs = [analyze(r, write=False) for r in cache_runs(d)]
+    cal = gate.calibrate(runs)
+    keys = {r.get("key") for r in runs}
+    if len(keys) != 1 or not d.name.endswith("-" + str(next(iter(keys)))):
+        cal["problems"].append(f"кэш лежит не под ключом своих прогонов ({sorted(map(str, keys))})")
     if cal["problems"]:
         raise SystemExit(f"принятый в кэше {d} негоден: " + "; ".join(cal["problems"]))
     return cal
 
 
 def cmd_baseline(a):
-    """Принятый выпуск: два прогона подряд (каждый — своя задача видеокарты), допуск по ним, кэш по ключу. Кэш создаётся,
-    только если калибровка годна (gate.calibrate) — иначе код 1 и прогоны остаются в out/ для разбора."""
+    """Принятый выпуск: --runs прогонов подряд (каждый — своя задача видеокарты; уже снятые с тем же ключом — не
+    переснимаются), медиана и допуск по ним, кэш по ключу. Кэш создаётся, только если калибровка годна (gate.calibrate) —
+    иначе код 1 и прогоны остаются в out/ для разбора."""
     jar, label = resolve_jar(a.version)
     files = fetch_pack(a.packs)
     client.launch_script(GAME, a.size)
     ctx = context(a.packs, a.scenes, a.size, files)
     k = key(sha(jar), ctx)
     d = cache_dir(a.version, k)
-    if (d / "run1").is_dir() and (d / "run2").is_dir() and not a.force:
+    if cache_runs(d) and not a.force:
         cached(d)
         log(f"принятый {a.version} уже в кэше: {d}")
         return 0
-    names = [f"base-{a.version}-{k}-{i}" for i in (1, 2)]
+    names = [f"base-{a.version}-{k}-{i}" for i in range(1, a.runs + 1)]
     for name in names:
         if not (OUT / name / "results.json").exists() or a.force:
             code = subprocess.run([str(HERE / "run.sh"), name, a.version, "--packs", ",".join(a.packs), "--size", a.size]
@@ -371,8 +408,8 @@ def cmd_baseline(a):
                 log(f"прогон {name}: код {code}")
                 return code
     runs = [analyze(OUT / name, write=False) for name in names]
-    cal = gate.calibrate(*runs)
-    (OUT / names[1] / "self-check.json").write_text(json.dumps(cal["self_check"], indent=1, ensure_ascii=False))
+    cal = gate.calibrate(runs)
+    (OUT / names[-1] / "self-check.json").write_text(json.dumps(cal["self_check"], indent=1, ensure_ascii=False))
     # ключ кэша — тот, что прогоны записали при съёмке (контекст мог смениться между подготовкой и съёмкой: драйвер, KWin)
     if any(r.get("key") != k for r in runs):
         cal["problems"].append(f"ключ съёмки {[r.get('key') for r in runs]} не тот, что при подготовке ({k}): контекст сменился — снять заново")
@@ -388,13 +425,13 @@ def cmd_baseline(a):
     tmp.mkdir(parents=True)
     for i, name in enumerate(names, 1):
         shutil.copytree(OUT / name, tmp / f"run{i}")
-    # для людей; сравнение их не читает — считает заново из run1/, run2/ (cached)
+    # для людей; сравнение их не читает — считает заново из run*/ (cached)
     for f, v in (("tolerance.json", cal["tol"]), ("results.json", cal["base"]), ("self-check.json", cal["self_check"])):
         (tmp / f).write_text(json.dumps(v, indent=1, ensure_ascii=False))
     if d.exists():
         shutil.rmtree(d)
     tmp.rename(d)
-    log(f"принятый {a.version} в кэше {d}; второй прогон против первого проходит")
+    log(f"принятый {a.version} в кэше {d}: {len(names)} прогона, каждый проходит против медианы остальных")
     return 0
 
 
@@ -493,7 +530,7 @@ def cmd_pr(a):
     base = against(cand, version)
     if base["res"] is None:
         log(f"принятого {version} в кэше нет — снимаю его ({base['dir']})")
-        ns = argparse.Namespace(version=version, packs=a.packs, scenes=a.scenes, size=a.size, force=False)
+        ns = argparse.Namespace(version=version, packs=a.packs, scenes=a.scenes, size=a.size, force=False, runs=BASE_RUNS)
         if cmd_baseline(ns) != 0:
             if a.post:
                 post_status(head, "error", f"Стенд не снял принятый {version}", None)
@@ -540,7 +577,8 @@ def main():
     p = sub.add_parser("prepare"); p.add_argument("jar"); common(p); p.set_defaults(fn=cmd_prepare)
     p = sub.add_parser("play"); p.add_argument("name"); p.add_argument("jar"); p.add_argument("--spec"); common(p); p.set_defaults(fn=cmd_play)
     p = sub.add_parser("analyze"); p.add_argument("name"); p.set_defaults(fn=cmd_analyze)
-    p = sub.add_parser("baseline"); p.add_argument("version"); p.add_argument("--force", action="store_true"); common(p); p.set_defaults(fn=cmd_baseline)
+    p = sub.add_parser("baseline"); p.add_argument("version"); p.add_argument("--force", action="store_true")
+    p.add_argument("--runs", type=int, default=BASE_RUNS, help=f"прогонов калибровки (по умолчанию {BASE_RUNS})"); common(p); p.set_defaults(fn=cmd_baseline)
     p = sub.add_parser("gate"); p.add_argument("name"); p.add_argument("--against", help="выпуск из кэша (по умолчанию — последний)")
     p.add_argument("--base-run", help="вместо кэша выпуска — каталог кэша или прогон out/<имя>")
     p.add_argument("--tol-from", help="каталог кэша, чей допуск взять (к --base-run прогону)")

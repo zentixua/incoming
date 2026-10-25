@@ -181,7 +181,10 @@ final class ServerWatch {
                 "uuid", src == null ? null : src.getUUID().toString(), "damage", damageType(x));
     }
 
-    /** Раз в секунду: средний тик сервера (последние 100 тиков, как F3), время игры, снаряды и все сущности мира. */
+    /**
+     * Раз в секунду: средний тик сервера (последние 100 тиков, как F3), время игры, снаряды и все сущности мира, настенное
+     * время (по нему разбор сводит события с записью нагрузки машины, client.py — её часы настенные).
+     */
     private void onTick(ServerTickEvent.Post e) {
         if (++ticks % 20 != 0) return;
         MinecraftServer s = e.getServer();
@@ -189,6 +192,6 @@ final class ServerWatch {
         int entities = 0;
         for (Entity ignored : level.getAllEntities()) entities++;
         out.event("srv", System.nanoTime(), "mspt", s.getAverageTickTimeNanos() / 1e6, "game_time", level.getGameTime(),
-                "projectiles", alive.size(), "entities", entities);
+                "projectiles", alive.size(), "entities", entities, "epoch_ms", System.currentTimeMillis());
     }
 }

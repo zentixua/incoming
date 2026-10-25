@@ -8,7 +8,9 @@
 Величины кадра (мс):
 - `interval` — от начала кадра до начала следующего, как видит игрок (1000 / к/с): в строке обвязки — время от начала
   прошлого кадра (`prev_interval_ms`), поэтому кадру достаётся число из строки следующего;
-- `cpu` — работа кадра на процессоре: RenderFrameEvent.Pre → Post (мир, слои модов, интерфейс; без обмена буферов);
+- `thread` — время процессора потока отрисовки за кадр (RenderFrameEvent.Pre → Post: мир, слои модов, интерфейс; без
+  обмена буферов, вытеснения чужими задачами и сна драйвера) — величина шлагбаума;
+- `cpu` — то же настенными часами (в нём и ожидания: драйвер, вытеснение) — в отчёт;
 - `gpu` — видеокарта от первой до последней метки кадра (glQueryCounter); стадии — отрезки между метками.
 """
 import csv
@@ -51,7 +53,8 @@ def read_frames(path):
                     k, v = part.split("=", 1)
                     stages[k] = float(v)
             out.append({"frame": int(row["frame"]), "t": float(row["t_ms"]), "prev": _num(row["prev_interval_ms"]),
-                        "cpu": _num(row["cpu_ms"]), "gpu": _num(row["gpu_ms"]), "shot": int(row["shot"] or 0), "stages": stages})
+                        "cpu": _num(row["cpu_ms"]), "thread": _num(row.get("cpu_thread_ms")), "gpu": _num(row["gpu_ms"]),
+                        "shot": int(row["shot"] or 0), "stages": stages})
     out.sort(key=lambda f: f["frame"])
     # длительность кадра — время до начала следующего: оно в строке следующего кадра (последний кадр — без неё)
     for a, b in zip(out, out[1:] + [None]):
@@ -62,6 +65,43 @@ def read_frames(path):
 def read_events(path):
     with open(path, encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]
+
+
+def read_host(path):
+    """Нагрузка машины (client.Host, host.jsonl); нет файла — None."""
+    try:
+        return read_events(path)
+    except FileNotFoundError:
+        return None
+
+
+def host_in(host, events, t0, t1):
+    """Нагрузка машины в окне [t0, t1) (мс стенда): выборки, чей отрезок [epoch − dt, epoch] задевает окно; часы стенда и
+    настенные сводит отметка epoch_ms событий srv. Назад — {"samples", "cpu_foreign" (среднее по перекрытию, ядра),
+    "gpu_foreign" (худшая, % SM), "units" (худшие по службам), "load1"} или None, если свести не с чем."""
+    offs = sorted(e["epoch_ms"] - e["t_ms"] for e in events if e["type"] == "srv" and e.get("epoch_ms") is not None)
+    if not host or not offs:
+        return None
+    off = offs[len(offs) // 2]
+    got, weight, cpu, gpu, units, load, profiles = 0, 0.0, 0.0, 0, {}, 0.0, set()
+    for s in host:
+        b = s["epoch"] * 1000 - off
+        a = b - s["dt"] * 1000
+        o = min(b, t1) - max(a, t0)
+        if o <= 0:
+            continue
+        got += 1
+        weight += o
+        cpu += s["cpu_foreign"] * o
+        gpu = max(gpu, (s.get("gpu") or {}).get("foreign_sm") or 0)
+        load = max(load, s.get("load1") or 0)
+        profiles.add(s.get("profile"))
+        for n, c in (s.get("units") or {}).items():
+            units[n] = max(units.get(n, 0), c)
+    if not got:
+        return {"samples": 0}
+    return {"samples": got, "cpu_foreign": round(cpu / weight, 2), "gpu_foreign": gpu, "load1": load,
+            "units": dict(sorted(units.items(), key=lambda kv: -kv[1])[:5]), "profiles": sorted(map(str, profiles))}
 
 
 def windows(events):
@@ -94,7 +134,7 @@ def summarize(frames, events, t0, t1):
         return None
     w = {"duration_s": (t1 - t0) / 1000, "frames": len(fr), "fps": len(fr) / ((t1 - t0) / 1000),
          "interval": stats([f["interval"] for f in fr]), "cpu": stats([f["cpu"] for f in fr]),
-         "gpu": stats([f["gpu"] for f in fr])}
+         "thread": stats([f.get("thread") for f in fr]), "gpu": stats([f["gpu"] for f in fr])}
     labels = sorted({k for f in fr for k in f["stages"]})
     w["stages"] = {k: {"p50": percentile([f["stages"][k] for f in fr if k in f["stages"]], 50),
                        "mean": sum(f["stages"].get(k, 0) for f in fr) / len(fr)} for k in labels}
@@ -162,11 +202,13 @@ def analyze(run_dir, scenes, only=None):
     run_dir = Path(run_dir)
     frames = read_frames(run_dir / "frames.csv")
     events = read_events(run_dir / "events.jsonl")
+    host = read_host(run_dir / "host.jsonl")
     wins = windows(events)
     res = {"windows": {}, "checks": [], "meta": {}}
     for name, (t0, t1) in wins.items():
         s = summarize(frames, events, t0, t1)
         if s:
+            s["host"] = host_in(host, events, t0, t1)
             res["windows"][name] = s
     first = wins.get("first")
     if first:
@@ -228,8 +270,16 @@ def checks(events, res, expected=(), acc_scene=None):
             continue
         if not w.get("gpu"):
             bad.append(f"окно {name}: нет меток видеокарты")
+        if not w.get("thread"):
+            bad.append(f"окно {name}: нет времени процессора потока")
         if w["frames"] < MIN_FRAMES:
             bad.append(f"окно {name}: {w['frames']} кадров (меньше {MIN_FRAMES})")
+        if name.startswith(GATED):
+            h = w.get("host")
+            if h is None or not h["samples"]:
+                bad.append(f"окно {name}: нет записи нагрузки машины (host.jsonl) — тишину не проверить")
+            else:
+                bad += [f"{LOAD_TAG} окно {name}: {x}" for x in foreign(h)]
     # первый удар: замер — худший кадр, шедший в окне; клиент, вставший на всё окно, — тоже число, а не пустота
     if FIRST in expected and (res.get("first") or {}).get("worst_ms") is None:
         bad.append("первый удар: нет числа (окна нет или ни один кадр не шёл в нём)")
@@ -257,7 +307,24 @@ def checks(events, res, expected=(), acc_scene=None):
     return bad
 
 
+def foreign(h):
+    """Чужая нагрузка в окне шлагбаума (host_in, есть выборки; пусто — тихо): она меняет время кадра без правки кода."""
+    bad = []
+    if h["cpu_foreign"] > FOREIGN_CPU:
+        bad.append(f"чужие задачи — {h['cpu_foreign']} ядра (можно {FOREIGN_CPU}): {h['units']}")
+    if h["gpu_foreign"] > FOREIGN_GPU:
+        bad.append(f"видеокарта у чужих процессов — {h['gpu_foreign']} % SM (можно {FOREIGN_GPU})")
+    return bad
+
+
 FIRST = "first"
+GATED = "100/"
+# строки годности из-за чужой нагрузки (не из-за версии): по ним stand.py play снимает пак ещё раз
+LOAD_TAG = "нагрузка:"
+# чужая нагрузка в окне шлагбаума — не больше: фон ноутбука без задач — 0,2–0,4 ядра (приложения Claude, браузер), одна
+# тяжёлая задача — от 1,5 (клиент песочницы другой сессии) до 7 ядер (сборка, ревью с тестами) (замер 25.10); видеокарта —
+# чужие процессы, кроме композитора рабочего стола (у него 0 % SM): клиент песочницы — 37 %
+FOREIGN_CPU, FOREIGN_GPU = 1.0, 5
 # окно с меньшим числом кадров — не замер (клиент стоял)
 MIN_FRAMES = 20
 # команда волны позже расписания больше чем на столько — волны пошли пачкой (тик клиента 50 мс, снимок кадра ~0,5 с)

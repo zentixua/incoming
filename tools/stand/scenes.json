@@ -1,16 +1,14 @@
 {
   "stand": 1,
-  "about": "Scenes of the scene stand (README.md). Positions in blocks: +X east, +Z south; ground = top of the grass of the flat world. Launch bearings: degrees from south toward east. A salvo goes out in commands of at most salvo_split shaheds, each from its own launch point, straight via the target; server_config is the world rule written to config/incoming-server.toml (drone_flight_time at its minimum: the flight is never shorter than the direct path). An impact is a projectile leaving the world near the target and its own explosion with a warhead damage type (warheads): a crash before arming is a vanilla explosion and does not count.",
-  "world": {"seed": 20261025, "day_time": 6000, "settle_s": 10, "limit_s": 1500},
+  "about": "Scenes of the scene stand (README.md). Positions in blocks: +X east, +Z south; ground = top of the grass of the flat world. Launch bearings: degrees from south toward east. Every strike is its own command with spread 0 at a fixed aim point (a Vogel sunflower over the spread disc, turned per salvo and wave: the same for every version, unlike the salvo spread of Incoming, which takes the shared world random), from launch point i mod launchers, gap_s apart from one point, straight via the aim point; server_config is the world rule written to config/incoming-server.toml (drone_flight_time at its minimum: the flight is never shorter than the direct path). An impact is a projectile leaving the world near the target and its own explosion with a warhead damage type (warheads): a crash before arming is a vanilla explosion and does not count.",
+  "world": {"seed": 20261025, "day_time": 6000, "settle_s": 4, "limit_s": 1500},
   "ground": 65,
   "weapon": "drone",
   "projectiles": ["incoming:drone"],
   "warheads": ["incoming:strike"],
-  "salvo_max": 30,
-  "salvo_split": 10,
   "server_config": {"launch": {"drone_flight_time": 5}},
   "impact_margin": 40,
-  "launch": {"dist": 400, "bearings": [-45, -35, -25, -15, -5, 5, 15, 25, 35, 45]},
+  "launch": {"dist": 400, "bearings": [-45, -35, -25, -15, -5, 5, 15, 25, 35, 45], "gap_s": 1.5},
   "settle_s": 1.5,
   "settle_far_s": 8,
   "far_m": 300,
@@ -36,8 +34,8 @@
      "camera": "outside", "launch_with": "first", "launch_delay_s": 20},
     {"id": "16", "site": "C", "total": 16, "spread": 40, "cameras": ["outside", "edge", "inside"], "window_s": 10},
     {"id": "40", "site": "C", "total": 40, "spread": 80, "cameras": ["outside", "edge", "inside"], "window_s": 10},
-    {"id": "100", "site": "C", "total": 100, "spread": 120, "cameras": ["outside", "edge", "inside"], "window_s": 10},
+    {"id": "100", "site": "C", "total": 100, "spread": 120, "cameras": ["outside", "edge", "inside"], "window_s": 20},
     {"id": "acc", "site": "D", "spread": 80, "impact_window": true, "window_s": 240, "shots": [60, 120, 180, 240],
-     "camera": "edge", "waves": {"strikes": 10, "every_s": 20, "count": 12, "split": 5}, "bucket_s": 10}
+     "camera": "edge", "waves": {"strikes": 10, "every_s": 20, "count": 12, "launchers": 5}, "bucket_s": 10}
   ]
 }
