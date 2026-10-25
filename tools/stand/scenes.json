@@ -35,7 +35,7 @@
     {"id": "16", "site": "C", "total": 16, "spread": 40, "cameras": ["outside", "edge", "inside"], "window_s": 10},
     {"id": "40", "site": "C", "total": 40, "spread": 80, "cameras": ["outside", "edge", "inside"], "window_s": 10},
     {"id": "100", "site": "C", "total": 100, "spread": 120, "cameras": ["outside", "edge", "inside"], "window_s": 20},
-    {"id": "acc", "site": "D", "spread": 80, "impact_window": true, "window_s": 240, "shots": [60, 120, 180, 240],
-     "camera": "edge", "waves": {"strikes": 10, "every_s": 20, "count": 12, "launchers": 5}, "bucket_s": 10}
+    {"id": "acc", "site": "D", "spread": 80, "impact_window": true, "window_s": 180, "shots": [60, 120, 180],
+     "camera": "edge", "waves": {"strikes": 10, "every_s": 20, "count": 9, "launchers": 5}, "bucket_s": 10}
   ]
 }

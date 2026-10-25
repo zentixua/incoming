@@ -815,11 +815,11 @@ class Plan(unittest.TestCase):
 
     def test_waves(self):
         acc = next(s for s in self.salvos() if s["id"] == "acc")
-        self.assertEqual(acc["expect"], 120)
-        # волна — 10 ударов с пяти пусковых в две очереди, каждые 20 с; у каждой волны — свой поворот узора
-        self.assertEqual(acc["delays"], [20 * (i // 10) + 1.5 * (i % 10 // 5) for i in range(120)])
-        waves = [tuple(words(c)["at"] for c in acc["cmds"][10 * k:10 * k + 10]) for k in range(12)]
-        self.assertEqual(len(set(waves)), 12)
+        self.assertEqual(acc["expect"], 90)
+        # волна — 10 ударов с пяти пусковых в две очереди, каждые 20 с, 3 минуты; у каждой волны — свой поворот узора
+        self.assertEqual(acc["delays"], [20 * (i // 10) + 1.5 * (i % 10 // 5) for i in range(90)])
+        waves = [tuple(words(c)["at"] for c in acc["cmds"][10 * k:10 * k + 10]) for k in range(9)]
+        self.assertEqual(len(set(waves)), 9)
 
     def test_one_is_fired_with_first_but_later(self):
         steps = self.p["steps"]
