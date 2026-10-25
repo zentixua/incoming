@@ -130,7 +130,12 @@ public final class ClientSounds {
         }
 
         void kill() {
-            if (sound != null) sound.kill();
+            if (sound != null) {
+                sound.kill();
+                // канал снял ползунок категории в нуле: ваниль убирает канал, но не тикаемый звук (SoundEngine.tickNonPaused),
+                // и он жил бы до сброса движка — каждый вывод ползунка в ноль копил бы по звуку на слой
+                if (!playing(sound)) Minecraft.getInstance().getSoundManager().soundEngine.tickingSounds.remove(sound);
+            }
             sound = null;
         }
     }

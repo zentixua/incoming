@@ -248,6 +248,9 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
 
     @Override
     public void tick() {
+        // остановленный звук без канала ваниль тикает и дальше: ползунок категории в нуле снимает канал, не убирая звук
+        // из tickingSounds (SoundEngine.tickNonPaused) — ни громкости, ни преград ему уже не считать
+        if (isStopped()) return;
         if (heard == null) {
             // данных о снаряде на этот момент нет (взорвался или ушёл из слуха): стихнуть, не дёргая источник
             smoothVolume *= 0.5f;

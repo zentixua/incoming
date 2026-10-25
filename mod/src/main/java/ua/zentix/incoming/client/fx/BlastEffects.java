@@ -34,7 +34,6 @@ import ua.zentix.incoming.warhead.BunkerCover;
 import ua.zentix.incoming.warhead.BunkerImpact;
 import ua.zentix.incoming.warhead.BuriedBlast;
 import ua.zentix.incoming.warhead.GroundMaterial;
-import ua.zentix.incoming.warhead.Warheads;
 
 /**
  * Что видят и слышат игроки при взрывах вблизи: вспышка по модели облака ({@link CloudModel}), твёрдое частицами —
@@ -120,11 +119,6 @@ public final class BlastEffects {
         return flashNear(m) * FlashFalloff.PEAK / Flash.FLOOR;
     }
 
-    /** Тики, за которые звук события без своей волны (со скоростью звука) проходит {@code range} блоков. */
-    static int hearTicks(double range) {
-        return (int) Math.ceil(range / Warheads.FRONT_SPEED);
-    }
-
     /**
      * Раскат вдали удара о грунт с энергией {@code tntKg} (вход бомбы, обвал свода): та доля энергии, что ушла в воздух
      * ({@link BunkerImpact#airTnt}), — глухим ударом из-под земли, по дальней модели, как газы бомбы под землёй.
@@ -156,6 +150,12 @@ public final class BlastEffects {
          */
         @Nullable
         private final ChemicalFront front;
+        /**
+         * Дольше этого звук до уха не ждём, тиков, сколько бы ни жила картинка события: событие дальше
+         * {@link FarBlasts#NEAR} озвучивает {@link FarBlasts}, а до уха, что было ближе края при рождении, звук идёт и
+         * тогда, когда слушатель уходит, — до 1 км (уходя от края со скоростью до ~130 м/с, быстрее элитр и аппаратов).
+         */
+        static final int SOUND_WAIT = 60;
         private boolean arrived, hit, over;
         private long bornTick = Long.MIN_VALUE, lastTick = Long.MIN_VALUE;
         /** Часы взрыва, по которым эхо и удар у уха ждут начала прямого звука ({@link BlastSounds#clock}). */
@@ -199,10 +199,9 @@ public final class BlastEffects {
             if (!arrived) {
                 Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
                 double d = ear.distanceTo(pos);
-                int wait = soundWait();
-                if (arrivalTicks(d) <= t || t > wait) {
+                if (arrivalTicks(d) <= t || t > SOUND_WAIT) {
                     arrived = true;
-                    if (t <= wait) arrive(level, (int) Math.ceil(arrivalTicks(d)));
+                    if (t <= SOUND_WAIT) arrive(level, (int) Math.ceil(arrivalTicks(d)));
                 } else if (echoes != null) {
                     echoes.approach(ear);
                 }
@@ -230,14 +229,6 @@ public final class BlastEffects {
 
         abstract boolean run(ClientLevel level, int t);
 
-        /**
-         * Дольше этого фронт до уха не ждём, тиков: событие дальше {@link FarBlasts#NEAR} озвучивает {@link FarBlasts},
-         * ближней модели хватает 60 тиков (1 км); событию без своей волны — путь звука до края ближней модели
-         * ({@link #hearTicks}), сколько бы ни жила его картинка.
-         */
-        int soundWait() {
-            return 60;
-        }
 
         /**
          * Фронт у слушателя: у обычного взрыва — его звук по заряду ({@link BlastSounds#arrive}).
@@ -671,11 +662,6 @@ public final class BlastEffects {
             }
 
             @Override
-            int soundWait() {
-                return hearTicks(FarBlasts.NEAR);
-            }
-
-            @Override
             void arrive(ClientLevel level, int band) {
                 BlastSounds.bunkerImpact(pos, tnt);
             }
@@ -730,11 +716,6 @@ public final class BlastEffects {
             }
 
             @Override
-            int soundWait() {
-                return hearTicks(FarBlasts.NEAR);
-            }
-
-            @Override
             void arrive(ClientLevel level, int band) {
                 BlastSounds.vent(pos, p.airKg());
             }
@@ -761,11 +742,6 @@ public final class BlastEffects {
             @Override
             boolean run(ClientLevel level, int t) {
                 return t < 20;
-            }
-
-            @Override
-            int soundWait() {
-                return hearTicks(FarBlasts.NEAR);
             }
 
             @Override

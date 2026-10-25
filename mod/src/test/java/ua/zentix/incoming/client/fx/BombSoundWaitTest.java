@@ -6,7 +6,6 @@ import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.BunkerImpact;
 import ua.zentix.incoming.warhead.BuriedBlast;
-import ua.zentix.incoming.warhead.Warheads;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -17,12 +16,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * дальше — раскат облака события по дальней модели.
  */
 class BombSoundWaitTest {
+    /**
+     * Слушатель у края ближней модели, что уходит от события (бегом, на элитрах, на аппарате), всё равно его слышит: ждать
+     * звук до края по прямой (38 тиков) мало — уходящий в 640 м со скоростью 8 м/с не слышал удара вовсе (ревью #465).
+     * Тот же расчёт, что в {@code Timeline.tick}: фронт у уха, где оно сейчас, не позже {@link BlastEffects.Timeline#SOUND_WAIT}.
+     */
     @Test
-    void nearModelWaitsForTheSoundUpToItsEdge() {
-        int wait = BlastEffects.hearTicks(FarBlasts.NEAR);
-        assertTrue(wait * Warheads.FRONT_SPEED >= FarBlasts.NEAR, "звук ждут до края ближней модели");
-        assertTrue((wait - 1) * Warheads.FRONT_SPEED < FarBlasts.NEAR, "и не дольше");
-        assertTrue(wait > 30, "дольше картинки входа бомбы (30 тиков) и обвала (20)");
+    void recedingListenerAtTheNearEdgeStillHearsIt() {
+        for (double speed : new double[]{0, 8, 30, 100}) {
+            int heard = -1;
+            for (int t = 0; t <= BlastEffects.Timeline.SOUND_WAIT && heard < 0; t++) {
+                double d = FarBlasts.NEAR + speed * t / 20;
+                if (FarBlasts.arrivalTicks(null, d) <= t) heard = t;
+            }
+            assertTrue(heard >= 0, speed + " м/с: звук дошёл до уходящего слушателя");
+        }
+        assertTrue(BlastEffects.Timeline.SOUND_WAIT > 30, "дольше картинки входа бомбы (30 тиков) и обвала (20)");
     }
 
     /** Вдали у входа бомбы и обвала есть свой раскат: доля энергии удара в воздухе, глухим ударом из-под земли. */
