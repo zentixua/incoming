@@ -256,6 +256,61 @@ class GroundDustTest {
     }
 
     /**
+     * Юбка растёт от точки удара (ревью R462B: приход за краем юбки был её концом, и в {@value GroundDust#SKIRT_S} с фронт
+     * прыгал с 22 м к концу колец, а клуб у края стоял в середине всего кольца, за юбкой): шахед и крылатая ракета на
+     * ровной улице в штиль — до {@value GroundDust#SKIRT_S} с фронт не дальше R·t/{@value GroundDust#SKIRT_S}, середина
+     * каждого клуба — внутри фронта, после — фронт без скачка между соседними кадрами.
+     */
+    @Test
+    void skirtGrowsFromTheImpact() {
+        CloudModel.Air calm = new CloudModel.Air(CloudModel.N_STANDARD, 0, 0, 0.1, (int) Stability.C, 0.5);
+        GroundDust.Ground flat = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1),
+                GroundDust.Ground.filled(0), (x, z) -> 0);
+        for (WeaponType w : List.of(WeaponType.DRONE, WeaponType.MISSILE)) {
+            BlastSource src = BlastSource.of(w, false);
+            GroundDust dust = new CloudModel(src, calm, false, 0, flat).crushed;
+            double reach = GroundDust.SKIRT_R0 * 2 * Math.cbrt(src.chargeKg());
+            double last = 0;
+            for (double t = 0.05; t <= 2 + 1e-9; t += 0.05) {
+                double front = dust.front(t);
+                if (t <= GroundDust.SKIRT_S + 1e-9) {
+                    assertTrue(front <= reach * t / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " с: фронт " + front + " дальше юбки");
+                    for (double[] b : layer(dust, t)) {
+                        double r = Math.hypot(b[0], b[2]);
+                        assertTrue(r <= Math.max(front, 1) + 1e-6, w + ", " + t + " с: клуб в " + r + " м за фронтом " + front);
+                    }
+                }
+                assertTrue(front - last <= reach * 0.05 / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " с: фронт прыгнул " + last + " → " + front);
+                last = front;
+            }
+        }
+    }
+
+    /**
+     * Юбка не взбирается на дом у точки удара (ревью R462B: путь клуба начинался с точки полосы, а она уже на крыше, — пыль
+     * рождалась на крыше в 20 м над ударом): шахед на улице, в 2 м от него стена дома в 20 м по всей полуплоскости x > 2,
+     * ветер на дом. Клубы юбки до 30 с лежат низом не выше 2 м над улицей.
+     */
+    @Test
+    void skirtStaysBelowAWallBesideTheImpact() {
+        CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
+        GroundDust.Relief house = (x, z) -> x > 2 ? 20 : 0;
+        double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
+        for (int k = 0; k < GroundDust.SECTORS; k++) {
+            double ang = 2 * Math.PI * (k + 0.5) / GroundDust.SECTORS;
+            for (int b = 0; b < GroundDust.BANDS.length; b++) h[k][b] = house.at(GroundDust.BANDS[b] * Math.cos(ang), GroundDust.BANDS[b] * Math.sin(ang));
+        }
+        GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1), h, house);
+        GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).crushed;
+        for (double t = 0.25; t <= 30; t += 0.25) {
+            for (double[] b : layer(dust, t)) {
+                double base = b[1] - 0.8 * b[4];
+                assertTrue(base <= 2, t + " с: юбка на высоте " + base + " у клуба в (" + b[0] + ", " + b[2] + ")");
+            }
+        }
+    }
+
+    /**
      * Клубы слоя пыли в возрасте t: {x, y, z, σh, σv, пыль (ослабление в кг смеси), масса пыли в воздухе, поверхность, с
      * которой её подняло}.
      */

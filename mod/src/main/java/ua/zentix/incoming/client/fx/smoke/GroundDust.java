@@ -149,6 +149,8 @@ public final class GroundDust {
     private final Relief relief;
     /** Юбка разрушенного: рождается на высоте точки удара и за краем стекает, а не появляется внизу готовой. */
     private final boolean skirt;
+    /** Радиус юбки к {@link #SKIRT_S}, м (0 — не юбка). */
+    private final double skirtR;
     private final int[] annulus;
     /** Таблицы по сетке времени: σ по вертикали и ∫dt/(1,25σ) у каждого кольца показа; подсос — доля его времени. */
     private final double[][] sv = new double[ANNULI][STEPS], settled = new double[ANNULI][STEPS];
@@ -217,11 +219,17 @@ public final class GroundDust {
             }
         }
         double[] rr = new double[RINGS], aa = new double[RINGS];
+        double r0 = 2 * Math.cbrt(Math.max(tntKg, 0)), skirtR = skirtKg > 0 ? SKIRT_R0 * r0 : 0;
+        this.skirtR = skirtR;
         if (outer > INNER) {
             for (int i = 0; i < RINGS; i++) {
-                double r0 = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
-                rr[i] = i == 0 ? 0.5 * r1 : Math.sqrt(r0 * r1);
-                aa[i] = Math.PI * (r1 * r1 - r0 * r0);
+                double lo = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
+                rr[i] = i == 0 ? 0.5 * r1 : Math.sqrt(lo * r1);
+                // кольцо юбки — в середине по площади той его части, что внутри юбки: масса там ровная по площади, а кольцо
+                // на краю юбки иначе стояло бы в середине всего кольца, за её краем
+                double hi = Math.min(r1, skirtR);
+                if (lo < skirtR) rr[i] = 2.0 / 3 * (hi * hi * hi - lo * lo * lo) / (hi * hi - lo * lo);
+                aa[i] = Math.PI * (r1 * r1 - lo * lo);
             }
         }
         r = rr;
@@ -234,7 +242,6 @@ public final class GroundDust {
         stemFrom = new double[SECTORS][RINGS];
         ball = new boolean[SECTORS][RINGS];
         double hardSupply = DustModel.Surface.HARD.supply();
-        double r0 = 2 * Math.cbrt(Math.max(tntKg, 0)), skirtR = SKIRT_R0 * r0;
         for (int k = 0; k < SECTORS && outer > INNER; k++) {
             for (int i = 0; i < RINGS; i++) {
                 int b = band(r[i]);
@@ -257,7 +264,8 @@ public final class GroundDust {
                     double lo = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), hi = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
                     double in = Math.max(0, Math.min(hi, skirtR) * Math.min(hi, skirtR) - Math.min(lo, skirtR) * Math.min(lo, skirtR));
                     mass[k][i] = skirtR > 0 ? skirtKg * in / (skirtR * skirtR) / SECTORS : 0;
-                    arrival[k][i] = SKIRT_S * Math.min(lo, skirtR) / Math.max(skirtR, 1e-9);
+                    // юбка доходит до кольца с той же скоростью и за своим краем: фронт за краем не прыгает к концу колец
+                    arrival[k][i] = SKIRT_S * lo / Math.max(skirtR, 1e-9);
                     positive[k][i] = Math.max(SKIRT_S * (Math.min(hi, skirtR) - Math.min(lo, skirtR)) / Math.max(skirtR, 1e-9), 0.05);
                     first[k][i] = r0;
                     // мелочь пролома — не вовлечённая в шар и не втянутая ножкой: её не считать второй раз
@@ -459,6 +467,9 @@ public final class GroundDust {
      * последним — со скоростью звука.
      */
     double front(int k, double t) {
+        // юбка: край идёт от точки удара ровно, R = 2R₀ к SKIRT_S (Ebersole и др. 1980), за ним — с той же скоростью (пласт
+        // дальше растягивает сток, {@link #stretch}); кольца с их серединами по площади фронта не дают
+        if (skirt) return skirtR * Math.max(0, t) / SKIRT_S;
         if (RINGS == 0 || r[RINGS - 1] <= 0 || t <= arrival[k][0]) return 0;
         for (int i = 1; i < RINGS; i++) {
             if (arrival[k][i] > t) return r[i - 1] + (r[i] - r[i - 1]) * (t - arrival[k][i - 1]) / Math.max(arrival[k][i] - arrival[k][i - 1], 1e-9);
@@ -706,9 +717,11 @@ public final class GroundDust {
         double source = surface[sector][show];
         if (Double.isNaN(under)) return source;
         if (under <= source) return skirt && under < source - DROP ? source : under;
-        double x0 = BANDS[show] * ux, z0 = BANDS[show] * uz, len = Math.hypot(at[0] - x0, at[1] - z0);
+        // юбка идёт от самой точки удара на её высоте: стена между ней и клубом (дом у улицы) держит её внизу, даже если
+        // точка полосы уже на крыше
+        double x0 = skirt ? 0 : BANDS[show] * ux, z0 = skirt ? 0 : BANDS[show] * uz, len = Math.hypot(at[0] - x0, at[1] - z0);
         int n = (int) Math.max(1, Math.min(32, Math.ceil(len)));
-        double step = Math.max(1, len / n), last = relief.at(x0, z0);
+        double step = Math.max(1, len / n), last = skirt ? source : relief.at(x0, z0);
         for (int i = 1; i <= n; i++) {
             double h = relief.at(x0 + (at[0] - x0) * i / n, z0 + (at[1] - z0) * i / n);
             if (Double.isNaN(h)) continue;
