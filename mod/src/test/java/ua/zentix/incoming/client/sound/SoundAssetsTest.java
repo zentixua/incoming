@@ -56,12 +56,14 @@ class SoundAssetsTest {
     }
 
     /**
-     * Петли гула пожаров ({@link Quarters}) складываются в ухе по мощности, только если их звуки некогерентны: у каждой
-     * четверти свой вариант {@code blast.fire}, и звуки вариантов не согласованы ни при одновременном старте, ни при любом
-     * сдвиге старта. Одна запись в двух петлях, начатых в один тик, складывалась по амплитуде: пожар между ними был на 2 дБ
-     * громче суммы мощностей (ревью R8, OpenAL loopback; у вариантов там же — 0,0 дБ). Проверка — на звуке самих файлов:
-     * пожар посередине между двумя четвертями — мощность суммы двух петель с громкостями {@link Quarters} против той же
-     * мощности в одной петле. Каждый вариант — на громкости, по которой клиент ведёт пожар ({@code Spectra.BLAST_FIRE_LUFS}).
+     * Петли гула пожаров ({@link Quarters}) складываются в ухе по мощности, только если их звуки некогерентны при любой
+     * разнице стартов: у каждой четверти свой вариант {@code blast.fire} — свой кусок записи 483323, а не сдвиг одной записи
+     * (сдвиги когерентны, когда разница стартов петель совпадёт со сдвигом). Одна запись в двух петлях, начатых в один тик,
+     * складывалась по амплитуде: пожар между ними был на 2 дБ громче суммы мощностей (ревью R8, OpenAL loopback). Проверка
+     * — на звуке самих файлов, на всех сдвигах по кругу в полной частоте: наибольший |ρ| ≤ 0,05 (у двух независимых шумов с
+     * этим спектром на 12 с — около 0,02), при одновременном старте ≤ 0,02; пожар посередине между двумя четвертями — пара
+     * петель с громкостями {@link Quarters} против той же мощности в одной петле. Средняя громкость у петель одна и равна
+     * той, по которой клиент приводит их к закону ({@code Spectra.BLAST_FIRE_LUFS}): мощности четвертей равны.
      */
     @Test
     void craterFireLoopsAreIncoherent() throws IOException {
@@ -80,70 +82,58 @@ class SoundAssetsTest {
         float[][] loops = new float[files.size()][];
         for (int i = 0; i < loops.length; i++) {
             float[][] pcm = new float[1][];
-            Envelope.read(open(files.get(i)), pcm);
+            int rate = Envelope.read(open(files.get(i)), pcm);
             loops[i] = pcm[0];
-            assertEquals(ua.zentix.incoming.sound.Spectra.BLAST_FIRE_LUFS, momentaryMax(files.get(i), true), 0.5, files.get(i) + ": громкость, LUFS");
+            assertEquals(ua.zentix.incoming.sound.Spectra.BLAST_FIRE_LUFS, loopLoudness(loops[i], rate), 0.3, files.get(i) + ": средняя громкость петли, LUFS");
+        }
+        int n = loops[0].length, size = Integer.highestOneBit(2 * n - 1) << 1;
+        double[][] re = new double[loops.length][], im = new double[loops.length][];
+        double[] energy = new double[loops.length];
+        for (int i = 0; i < loops.length; i++) {
+            assertEquals(n, loops[i].length, "петли одной длины");
+            re[i] = new double[size];
+            im[i] = new double[size];
+            for (int t = 0; t < n; t++) {
+                re[i][t] = loops[i][t];
+                energy[i] += (double) loops[i][t] * loops[i][t];
+            }
+            EchoMix.fft(re[i], im[i], false);
         }
         Quarters mid = new Quarters();
         mid.add(Math.PI / 4, 1, 1, 1);
         double ga = mid.volume(0), gb = mid.volume(1);
         for (int i = 0; i < loops.length; i++) {
             for (int j = i + 1; j < loops.length; j++) {
-                float[] a = loops[i], b = loops[j];
-                assertEquals(a.length, b.length, "петли одной длины");
-                double pa = 0, pb = 0, c = 0;
-                for (int t = 0; t < a.length; t++) {
-                    pa += a[t] * a[t];
-                    pb += b[t] * b[t];
-                    c += a[t] * b[t];
+                double[] cr = new double[size], ci = new double[size];
+                for (int k = 0; k < size; k++) {
+                    cr[k] = re[i][k] * re[j][k] + im[i][k] * im[j][k];
+                    ci[k] = im[i][k] * re[j][k] - re[i][k] * im[j][k];
                 }
+                EchoMix.fft(cr, ci, true);
+                double norm = Math.sqrt(energy[i] * energy[j]), start = cr[0] / norm, worst = 0;
+                // сдвиг τ по кругу: линейные сдвиги τ и τ − n
+                for (int tau = 0; tau < n; tau++) worst = Math.max(worst, Math.abs(cr[tau] + (tau == 0 ? 0 : cr[size + tau - n])) / norm);
                 // пожар между четвертями: петли i и j с громкостями ga и gb против той же мощности в одной петле
-                double one = (ga * ga + gb * gb) * (pa + pb) / 2, together = ga * ga * pa + gb * gb * pb;
-                double start = 10 * Math.log10((together + 2 * ga * gb * c) / one), any = 10 * Math.log10((together + 2 * ga * gb * maxCorrelation(a, b)) / one);
-                System.out.printf(java.util.Locale.ROOT, "blast.fire %d+%d: pair vs one loop %+.3f dB at one start, up to %+.3f dB at any start offset%n",
-                        i + 1, j + 1, start, any);
-                assertEquals(0, start, 0.15, files.get(i) + " + " + files.get(j) + ": одновременный старт — сумма мощностей, дБ");
-                assertEquals(0, any, 0.3, files.get(i) + " + " + files.get(j) + ": любой сдвиг старта — сумма мощностей, дБ");
+                double one = (ga * ga + gb * gb) * (energy[i] + energy[j]) / 2, together = ga * ga * energy[i] + gb * gb * energy[j];
+                double pair = 10 * Math.log10((together + 2 * ga * gb * worst * norm) / one);
+                System.out.printf(java.util.Locale.ROOT, "blast.fire %d+%d: rho %+.4f at one start, max %.4f over all start offsets; pair vs one loop up to %+.3f dB%n",
+                        i + 1, j + 1, start, worst, pair);
+                assertTrue(Math.abs(start) <= 0.02, files.get(i) + " + " + files.get(j) + ": при одновременном старте |ρ| " + start);
+                assertTrue(worst <= 0.05, files.get(i) + " + " + files.get(j) + ": на худшем сдвиге старта |ρ| " + worst);
+                assertEquals(0, pair, 0.25, files.get(i) + " + " + files.get(j) + ": пара против одной петли, дБ");
             }
         }
     }
 
-    /**
-     * Наибольшая по всем сдвигам по кругу взаимная корреляция двух петель одной длины (Σ a·b при сдвиге), по петлям,
-     * усреднённым по 4 отсчёта (11 кГц: у пожара выше почти нет звука), — через БПФ.
-     */
-    private static double maxCorrelation(float[] a, float[] b) {
-        int m = a.length / 4, n = Integer.highestOneBit(2 * m - 1) << 1;
-        double[] ar = new double[n], ai = new double[n], br = new double[n], bi = new double[n];
-        for (int t = 0; t < m; t++) {
-            for (int k = 0; k < 4; k++) {
-                ar[t] += a[4 * t + k] / 4.0;
-                br[t] += b[4 * t + k] / 4.0;
-            }
-        }
-        double ea = 0, eb = 0;
-        for (int t = 0; t < m; t++) {
-            ea += ar[t] * ar[t];
-            eb += br[t] * br[t];
-        }
-        EchoMix.fft(ar, ai, false);
-        EchoMix.fft(br, bi, false);
-        for (int k = 0; k < n; k++) {
-            double re = ar[k] * br[k] + ai[k] * bi[k], im = ai[k] * br[k] - ar[k] * bi[k];
-            ar[k] = re;
-            ai[k] = im;
-        }
-        EchoMix.fft(ar, ai, true);
-        double worst = 0;
-        // по кругу: сдвиг τ — линейные τ и τ − m
-        for (int tau = 0; tau < m; tau++) worst = Math.max(worst, Math.abs(ar[tau] + (tau == 0 ? 0 : ar[n + tau - m])));
-        // доля корреляции по усреднённым — та же доля у полных петель
-        double pa = 0, pb = 0;
-        for (int t = 0; t < a.length; t++) {
-            pa += a[t] * a[t];
-            pb += b[t] * b[t];
-        }
-        return worst / Math.sqrt(ea * eb) * Math.sqrt(pa * pb);
+    /** Средняя громкость петли целиком (BS.1770: К-фильтр, разогнанный хвостом петли), LUFS. */
+    private static double loopLoudness(float[] x, int rate) {
+        double[] y = new double[x.length + rate];
+        for (int i = 0; i < rate; i++) y[i] = x[x.length - rate + i];
+        for (int i = 0; i < x.length; i++) y[rate + i] = x[i];
+        Envelope.kWeight(y, rate);
+        double ms = 0;
+        for (int i = rate; i < y.length; i++) ms += y[i] * y[i];
+        return -0.691 + 10 * Math.log10(ms / x.length);
     }
 
     /** Файлы вариантов события {@code event} в sounds.json. */

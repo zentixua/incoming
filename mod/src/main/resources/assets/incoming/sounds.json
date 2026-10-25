@@ -260,7 +260,7 @@
     "subtitle": "subtitles.incoming.fire",
     "sounds": [
       {
-        "name": "incoming:blast_fire"
+        "name": "incoming:blast_fire_1"
       },
       {
         "name": "incoming:blast_fire_2"

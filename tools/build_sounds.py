@@ -49,7 +49,7 @@ from fractions import Fraction
 import numpy as np
 import soundfile as sf
 from scipy.ndimage import minimum_filter1d, uniform_filter1d
-from scipy.signal import lfilter, resample_poly, welch
+from scipy.signal import butter, lfilter, resample_poly, sosfiltfilt, welch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import freesound  # noqa: E402
@@ -112,6 +112,9 @@ SOURCES = {
     438693: ("craigsmith", "G43-14-25 Distant Explosions.wav", CC0, "438/438693_2524442"),
     438538: ("craigsmith", "G33-32-Distant Bomb Explosion.wav", CC0, "438/438538_2524442"),
     550342: ("Nox_Sound", "Foley_Stones_Falls_Debris_Stereo_DR05.wav", CC0, "550/550342_9250976"),
+    # гул пожаров в воронках (раздел fire) — превью: оригиналы Freesound отдаёт только по входу; 483323 — звук петель,
+    # 483304 — их спектр (принятый гул прежней петли)
+    483323: ("craigsmith", "R30-09-Fires Burns Wood and Metal Crackling.wav", CC0, "483/483323_2524442"),
     483304: ("craigsmith", "R09-58-Large Fire with Debris.wav", CC0, "483/483304_2524442"),
     675967: ("craigsmith", "S10-19 Falling wooden beam; big interior crash; house collapses; long.wav", CC0, "675/675967_2524442"),
     # сирены: Киев (CC BY) и сирена военного времени KVV (CC0)
@@ -502,7 +505,7 @@ def write(name, x, event=None, subtitle=None, level=0.35):
     if event in SPECTRA or event in SOURCES_AT:
         SPECTRA_GOT.setdefault(event, []).append(octaves(x))
     if event in SOURCES_AT:
-        LUFS_GOT.setdefault(event, []).append(loudness(x))
+        LUFS_GOT.setdefault(event, []).append(source_lufs(event, x))
     os.makedirs(OUT, exist_ok=True)
     channels = 1 if x.ndim == 1 else x.shape[1]
     # кусками: libsndfile падает, если отдать Vorbis длинный файл одним блоком
@@ -526,6 +529,21 @@ SPECTRA_GOT = {}
 SOURCES_AT = {"siren", "nuke.alarm", "nuke.launch", "grid.fail", "grid.spark", "grid.hum", "grid.power_down",
               "grid.power_up", "nuke.collapse", "debris.fall", "blast.fire", "nuke.glass", "nuke.fire"}
 LUFS_GOT = {}
+# Петли, у которых закон источника задаёт среднюю мощность (гул пожара: Sources.flame — доля тепловыделения пламени), —
+# по средней громкости петли, а не по наибольшей мгновенной: у трескучей записи самые громкие 400 мс выше средней на 3–7 дБ,
+# и петля, приведённая к закону по ним, звучала бы настолько тише закона (прежняя ровная 483304 — на 1,7 дБ). Остальные
+# звуки источника — по наибольшей мгновенной (разовые; петли сирен и гула подстанции — у них разница около 1 дБ — отдельно)
+LOOPS_BY_MEAN = {"blast.fire"}
+
+
+def loop_loudness(x):
+    """Громкость петли целиком, по кругу (фильтр разогнан хвостом петли): средняя мощность после К-фильтра, LUFS."""
+    return -0.691 + 10 * np.log10(np.mean(k_weight(np.concatenate([x[-SR:], x]))[SR:] ** 2))
+
+
+def source_lufs(event, x):
+    """Громкость файла звука источника, по которой клиент приводит его к закону (Spectra.*_LUFS)."""
+    return loop_loudness(x) if event in LOOPS_BY_MEAN else loudness(x)
 SPECTRA_JAVA = os.path.join(ROOT, "mod", "src", "main", "java", "ua", "zentix", "incoming", "sound", "Spectra.java")
 OCTAVES = [63, 125, 250, 500, 1000, 2000, 4000, 8000]
 
@@ -855,132 +873,96 @@ def blasts():
         deb.append(norm(trim_tail(cut(x, a, b), -45, 0.4), -16, 0.9))
     variants("debris.fall", "subtitles.incoming.debris", "debris_fall", deb)
 
-    crater_fire()
-
-
-def crater_fire():
-    """Ровный гул настоящего пожара с треском. Огибающая и длительность — у топлива в клиенте, не в записи.
-    Сдвига тона нет: масштаб Сакса относится к детонации, а не к треску горящих обломков."""
-    fire = cut(src(483304, orig=True), 0.2, 14.2)
-    fire = loop(fire, 12.0, 1.0)
-    # Preserve the recorded crackle's dynamics: norm() uses tanh and flattens its peaks. The client calibrates
-    # this file by its measured LUFS, so peak normalization does not change the model's source level.
-    fire -= np.mean(fire)
-    fire *= 10 ** (-1 / 20) / max(np.max(np.abs(fire)), 1e-9)
-    write("blast_fire", fire, "blast.fire", "subtitles.incoming.fire", level=0.2)
-
-
-def kept(name, x, event, subtitle):
-    """Файл name собран раньше из записи, которой этот запуск не берёт (--alone): он остаётся в своём событии, его спектр
-    и громкость — в Spectra.java по самому файлу; сам файл не переписывается (ещё одно сжатие Vorbis)."""
-    EVENTS.setdefault(event, (subtitle, []))[1].append(name)
-    if event in SPECTRA or event in SOURCES_AT:
-        SPECTRA_GOT.setdefault(event, []).append(octaves(x))
-    if event in SOURCES_AT:
-        LUFS_GOT.setdefault(event, []).append(loudness(x))
-
 
 # Гул пожаров в воронках у клиента — сумма мощностей пожаров в четырёх петлях вокруг уха (client/sound/Quarters), а
 # мощности складываются только у некогерентных звуков. Одна запись в двух петлях, запущенных в один тик, складывается по
-# амплитуде: пожар между ними на 2 дБ громче суммы мощностей (ревью R8, OpenAL loopback). Запись пожара одна и короткая
-# (14 с): независимых кусков из неё не нарезать, а сдвиг одной записи когерентен там, где сдвиги петель совпадут.
-FIRE_VARIANTS = 4
-# Полосы огибающей (границы, Гц) и докуда в каждой огибающая — мерцание и треск пламени (Гц): выше — уже дрожь самого шума
-# полосы (у полосы шириной B она до ~B), а треск верхов — миллисекунды
-FIRE_EDGES = [300, 1000, 3000]
-FIRE_MOD = [20, 50, 150, 300]
-# Звуки петель некогерентны: |ρ| между вариантами — при одновременном старте и наибольший по всем сдвигам старта по кругу
-# (у двух независимых шумов с этим спектром на 12 с — ~0,02; у одной записи со сдвигом — 1)
-FIRE_RHO_START, FIRE_RHO_ANY = 0.02, 0.04
+# амплитуде: пожар между ними на 2 дБ громче суммы мощностей (ревью R8, OpenAL loopback). Сдвиги одной записи не выход:
+# старты петель в игре любые, и когда их разница совпадёт со сдвигом вариантов, звук снова один. Поэтому четыре петли —
+# непересекающиеся куски одной длинной записи большого пожара (craigsmith 483323, 73 с): у каждой четверти свой кусок
+# настоящего пожара, звуки независимы при любой разнице стартов, треск записанный, тембр у всех четвертей один. Прежняя
+# запись 483304 — 14 с, и её низкий слой повторяется через 11,03 с: независимых кусков из неё не нарезать (синтез под её
+# огибающей мягчил треск — ревью круга 4); 483313 («Building on Fire», 42,7 с) — тоже повтор низов через 13,62 с, куски
+# коррелировали до 0,21; у 483323 повтора нет (≤ 0,03 на всех сдвигах).
+FIRE_LOOP_S, FIRE_XF_S = 12.0, 1.0
+# Куски 483323 (начала, с): по 13 с (петля и склейка), не пересекаются. Мимо металлического звона (узкий тон на 5–7 дБ над
+# спектром: 1,5 кГц в первые 3 с, 4,1 кГц на 31–35 с) и наплыва громкости на 0–4 и 35–42 с: в кусках мгновенная громкость
+# ходит на 0,9–1,5 дБ (СКО), у 483304 — 1,0
+FIRE_CUTS = (5.0, 18.0, 46.0, 59.5)
+# Спектр петель — спектр принятого гула 483304 (тот же кусок, что был петлёй, 0,2–14,2 с): по нему клиент считает А-уровень
+# пожара (Sources.flame, Spectra.BLAST_FIRE), и в своём спектре — темнее, А-поправка −5,6 дБ против −0,2 — 483323 играл бы
+# на 3,5–5 дБ тише той же мощности. Поправка — между этими частотами (октавы 63 Гц – 8 кГц паспорта), за ними — ровная:
+# выше превью почти пусты, поднимать там нечего
+FIRE_EQ_LO, FIRE_EQ_HI = 30, 14000
+# Треск не мягче прежней петли 483304 — её числа по мерам ревьюера круга 4 (crackle): пик огибающей 10 мс над RMS
+# полосы, дБ, и эксцесс — в 2–4 и 4–8 кГц
+FIRE_CRACKLE = ((6.3, 3.8), (8.5, 5.6))
+# Звуки петель некогерентны: |ρ| между петлями при одновременном старте и наибольший по всем сдвигам старта по кругу. Предел
+# задаёт сам спектр: у двух независимых шумов со спектром 483323 на 12 с наибольший |ρ| по всем сдвигам — 0,042 (медиана
+# 40 пар), до 0,048 (энергия — в 80–400 Гц, независимых отсчётов мало); у одной записи со сдвигом — 1
+FIRE_RHO_START, FIRE_RHO_ANY = 0.02, 0.05
 
 
-def fire_bands(f):
-    """Полосы огибающей пожара по частотам f: сумма полос — 1 (шум делится без провалов), переход — по пол-октавы."""
-    lf = np.log2(np.maximum(f, 1))
-    bands, rest = [], np.ones_like(f)
-    for e in FIRE_EDGES:
-        up = 0.5 - 0.5 * np.cos(np.pi * np.clip((lf - np.log2(e)) / 0.5 + 0.5, 0, 1))
-        bands.append(rest * (1 - up))
-        rest = rest * up
-    return bands + [rest]
-
-
-def fire_log_envelopes(x, f, bands):
-    """Логарифм огибающей мощности записи x в каждой полосе: квадрат аналитического сигнала, сглаженный до FIRE_MOD
-    (гауссов срез по кругу — петля периодична)."""
-    n, spec, out = len(x), np.fft.rfft(x), []
-    for m, fc in zip(bands, FIRE_MOD):
-        h = np.zeros(n, complex)
-        h[:len(f)] = spec * m
-        h[1:(n + 1) // 2] *= 2
-        h[(n + 1) // 2:] = 0
-        p = np.fft.irfft(np.fft.rfft(np.abs(np.fft.ifft(h)) ** 2) * np.exp(-0.5 * (f / fc) ** 2), n)
-        out.append(0.5 * np.log(np.maximum(p, 1e-30)))
+def crackle(x):
+    """Треск пожара, как его мерил ревьюер круга 4: в полосах 2–4 и 4–8 кГц (Баттерворт 6-го порядка, без сдвига фазы, по
+    кругу) — пик огибающей 10 мс над RMS полосы, дБ, и эксцесс (у гауссова шума 3)."""
+    out = []
+    for lo, hi in ((2000, 4000), (4000, 8000)):
+        sos = butter(6, [lo, hi], btype="bandpass", fs=SR, output="sos")
+        y = sosfiltfilt(sos, np.concatenate([x[-SR:], x, x[:SR]]))[SR:-SR]
+        p, n = np.mean(y * y), SR // 100
+        e = np.sqrt(np.mean(y[:len(y) // n * n].reshape(-1, n) ** 2, axis=1))
+        out.append((10 * np.log10(np.max(e) ** 2 / p), np.mean(y ** 4) / p ** 2))
     return out
 
 
 def fire():
-    """Петли гула пожаров в воронках (client/sound/Quarters): по варианту на четверть вокруг уха, звуки вариантов
-    некогерентны при любом сдвиге их старта. Вариант 1 — сама запись (blast_fire, раздел blasts); 2–4 — тот же пожар
-    заново: под огибающей каждой полосы записи (мерцание пламени, треск) — свой шум с её спектром (как noise_loop у петель
-    гула взрывов). Огибающая записи несёт и дрожь самого шума полосы: её доля по спектру модуляции убрана (среднее по шести
-    шумам с тем же спектром), иначе новый шум дрожал бы дважды. Огибающая сдвинута по кругу на четверть петли на вариант —
-    четверти мерцают не в такт. Спектр — записи (поправка по отношению спектров), громкость петли — записи. Записей не
-    берёт — собирается из собранного blast_fire (--alone fire)."""
-    x, sr = sf.read(os.path.join(OUT, "blast_fire.ogg"), dtype="float64")
-    if sr != SR or x.ndim != 1:
-        sys.exit(f"blast_fire: {sr} Гц, {x.ndim} кан., а сборка — {SR} Гц моно")
-    if "blast.fire" not in EVENTS:  # --alone: запись собрана раньше, в этот запуск её не взять
-        kept("blast_fire", x, "blast.fire", "subtitles.incoming.fire")
-    n = len(x)
-    f = np.fft.rfftfreq(n, 1 / SR)
-    fw, psd = welch(x, SR, nperseg=4096)
-    shape = np.sqrt(np.interp(f, fw, psd))
-    shape[0] = 0
+    """Гул пожара в воронке — четыре петли, по одной на четверть вокруг уха (client/sound/Quarters): непересекающиеся куски
+    записи 483323 в своей скорости, каждый петлёй (хвост вклеен в начало). Спектр — 483304 (FIRE_EQ_LO…HI): поправка
+    сглажена по 1/12 октавы, линейная и по кругу — треск и шов петли она не трогает; четыре прохода — разница спектров до
+    14 дБ по октавам, за один края октав не сходятся. Громкость у четырёх петель одна (мощности в Quarters равны), без
+    ограничителя — щелчки треска выше RMS на 20 с лишним дБ, и сжать их значит смягчить треск: петли на том уровне, где
+    наибольший пик из четырёх — −1 дБFS; к закону источника клиент приводит их по измеренной средней громкости петли
+    (Spectra.BLAST_FIRE_LUFS, LOOPS_BY_MEAN). Огибающая и длительность пожара — у топлива в клиенте, не в записи; сдвига тона нет (Сакс —
+    про детонацию, не про треск обломков). Оригиналы Freesound отдаёт только по входу — собрано по превью (ogg ~98 и
+    ~88 кбит/с, 48 кГц): треск превью и оригинала 483304 по этим мерам совпадает в пределах 0,2 дБ, октавы — 0,4 дБ."""
+    rec, ref = src(483323), cut(src(483304), 0.2, 14.2)
+    fw, target = welch(ref, SR, nperseg=8192)
+    lf = np.log2(np.maximum(fw, 1))
+    smooth = np.exp(-0.5 * ((lf[:, None] - lf[None, :]) / (1 / 24)) ** 2)
+    inside = (fw >= FIRE_EQ_LO) & (fw <= FIRE_EQ_HI)
 
-    def carrier():  # шум со спектром записи и случайными фазами: периодичен на длине петли, шва нет
-        return np.fft.irfft(shape * np.exp(2j * np.pi * rng.random(len(f))), n)
+    def eq(p):  # поправка к спектру 483304 по сглаженным спектрам, за краями — ровная
+        g = np.sqrt((smooth @ target) / np.maximum(smooth @ p, 1e-30))
+        return np.interp(fw, fw[inside], g[inside])
 
-    bands = fire_bands(f)
-    logs = fire_log_envelopes(x, f, bands)
-    own = [np.zeros(len(f)) for _ in bands]
-    for _ in range(6):
-        for b, l in enumerate(fire_log_envelopes(carrier(), f, bands)):
-            own[b] = own[b] + np.abs(np.fft.rfft(l - l.mean())) ** 2 / 6
-    smooth = np.ones(64) / 64  # периодограмма одной записи шумит — отношение по сглаженным
-    env = []
-    for l, o in zip(logs, own):
-        s = np.fft.rfft(l - l.mean())
-        keep = np.sqrt(np.clip(1 - np.convolve(o, smooth, "same") / np.maximum(np.convolve(np.abs(s) ** 2, smooth, "same"), 1e-30), 0, 1))
-        g = np.exp(np.fft.irfft(s * keep, n))
-        env.append(g / np.sqrt(np.mean(g ** 2)))
-
-    def loop_lufs(y):  # громкость петли целиком, по кругу (фильтр разогнан хвостом петли)
-        return -0.691 + 10 * np.log10(np.mean(k_weight(np.concatenate([y[-SR:], y]))[SR:] ** 2))
-
-    _, p0 = welch(x, SR, nperseg=8192)
-    out = [x]
-    for k in range(1, FIRE_VARIANTS):
-        c = np.fft.rfft(carrier())
-        y = sum(np.roll(g, k * n // FIRE_VARIANTS) * np.fft.irfft(c * m, n) for g, m in zip(env, bands))
-        fy, p = welch(y, SR, nperseg=8192)
-        y = np.fft.irfft(np.fft.rfft(y) * np.sqrt(np.interp(f, fy, p0 / np.maximum(p, 1e-30))), n)
-        out.append(master(y, loop_lufs(x), meter=loop_lufs))
-    o0, m0 = octaves(x), np.max(momentary(x))
-    for k, y in enumerate(out[1:], 2):
-        d = 10 * np.log10(octaves(y) / o0)
+    loop_lufs = loop_loudness
+    out = []
+    for a in FIRE_CUTS:
+        y = loop(cut(rec, a, a + FIRE_LOOP_S + FIRE_XF_S), FIRE_LOOP_S, FIRE_XF_S)
+        f = np.fft.rfftfreq(len(y), 1 / SR)
+        for _ in range(4):
+            y = np.fft.irfft(np.fft.rfft(y) * np.interp(f, fw, eq(welch(y, SR, nperseg=8192)[1])), len(y))
+        out.append(y * 10 ** (-loop_lufs(y) / 20))
+    top = max(np.max(np.abs(y)) for y in out)
+    out = [y * 10 ** (-1 / 20) / top for y in out]
+    o0, m0 = octaves(ref), np.max(momentary(ref))
+    print(f"  петли: {loop_lufs(out[0]):.1f} LUFS (у 483304 — {loop_lufs(ref):.1f}); мгновенная выше петли на "
+          f"{', '.join(f'{np.max(momentary(y)) - loop_lufs(y):.1f}' for y in out)} дБ (у 483304 — {m0 - loop_lufs(ref):.1f})")
+    for k, y in enumerate(out, 1):
+        d = 10 * np.log10(octaves(y) / np.sum(octaves(y)) / (o0 / np.sum(o0)))
         if np.max(np.abs(d)) > 0.5:
-            fail(f"blast_fire_{k}: спектр отходит от записи на {np.max(np.abs(d)):.1f} дБ")
-        if abs(np.max(momentary(y)) - m0) > 0.5:
-            fail(f"blast_fire_{k}: мгновенная громкость {np.max(momentary(y)):.1f}, у записи {m0:.1f} LUFS")
-    for i in range(FIRE_VARIANTS):
-        for j in range(i + 1, FIRE_VARIANTS):
+            fail(f"blast_fire_{k}: спектр отходит от 483304 на {np.max(np.abs(d)):.1f} дБ")
+        for (e, kurt), (e0, k0), band in zip(crackle(y), FIRE_CRACKLE, ("2–4", "4–8")):
+            if e < e0 or kurt < k0:
+                fail(f"blast_fire_{k}: треск {band} кГц мягче 483304 — пик огибающей {e:.1f} против {e0} дБ, эксцесс {kurt:.1f} против {k0}")
+    n = len(out[0])
+    for i in range(len(out)):
+        for j in range(i + 1, len(out)):
             a, b = out[i], out[j]
             r = np.fft.irfft(np.fft.rfft(a) * np.conj(np.fft.rfft(b)), n) / np.sqrt(np.sum(a ** 2) * np.sum(b ** 2))
             if abs(r[0]) > FIRE_RHO_START or np.max(np.abs(r)) > FIRE_RHO_ANY:
-                fail(f"blast.fire {i + 1} и {j + 1} когерентны: ρ {r[0]:+.3f} при одном старте, до {np.max(np.abs(r)):.3f}")
-    for k, y in enumerate(out[1:], 2):
-        write(f"blast_fire_{k}", y, "blast.fire", "subtitles.incoming.fire", level=0.2)
+                fail(f"blast_fire_{i + 1} и {j + 1} когерентны: ρ {r[0]:+.3f} при одном старте, до {np.max(np.abs(r)):.3f}")
+    variants("blast.fire", "subtitles.incoming.fire", "blast_fire", out, level=0.2)
 
 
 # Петли гула взрывов (client/sound/Rumble) — на потолке, как петли моторов: громкость гула задаёт смесь у клиента
@@ -1301,7 +1283,7 @@ def measure():
                 sys.exit(f"{f['name']}: {sr} Гц, а сборка — {SR}")
             x = x if x.ndim == 1 else x.mean(axis=1)
             SPECTRA_GOT.setdefault(ev, []).append(octaves(x))
-            LUFS_GOT.setdefault(ev, []).append(loudness(x))
+            LUFS_GOT.setdefault(ev, []).append(source_lufs(ev, x))
     write_spectra()
 
 
