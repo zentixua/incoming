@@ -3,7 +3,8 @@
 #
 #   tools/pr_ci.sh <номер PR> [--repo владелец/репо]
 #
-# Ждёт «Итог» и «Записку» у текущей головы PR (условия влития) и выходит с кодом:
+# Ждёт «Итог» и «Записку» у текущей головы PR (условия влития), у PR с картинкой (PLAYER_FACING в tools/pr_note.py) —
+# ещё статус «Стенд сцен» (tools/stand: stand.py pr <номер> --post на ноутбуке), и выходит с кодом:
 #   0 — обе зелёные; 1 — что-то упало: имена упавших задач и хвост лога каждого упавшего запуска (gh run view --log-failed);
 #   3 — конфликт с базой: GitHub проверки PR с конфликтом не запускает вовсе, и `gh pr checks --watch` ждал бы вечно
 #       (21–22.10 так 10–20 мин молча стояли V и S5) — слить main и запушить;
@@ -12,12 +13,19 @@
 set -uo pipefail
 pr=${1:?использование: tools/pr_ci.sh <номер PR> [--repo владелец/репо]}; shift
 repo=(); [ "${1:-}" = --repo ] && { repo=(--repo "$2"); export GH_REPO=$2; }
-need='^(Итог|Записка)$'
 started=$(date +%s); head=; quiet=0
+# нужные проверки головы: PR с картинкой ждёт и стенд
+needs() {
+  need='^(Итог|Записка)$'; count=2
+  if gh pr view "$pr" "${repo[@]}" --json files -q '.files[].path' 2>/dev/null \
+      | python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import pr_note; sys.exit(0 if pr_note.player_facing([l.strip() for l in sys.stdin if l.strip()]) else 1)' "$(dirname "$0")"; then
+    need='^(Итог|Записка|Стенд сцен)$'; count=3
+  fi
+}
 while true; do
   read -r state mergeable sha < <(gh pr view "$pr" "${repo[@]}" --json state,mergeable,headRefOid -q '"\(.state) \(.mergeable) \(.headRefOid)"') || { sleep 30; continue; }
   case $state in MERGED) echo "PR $pr уже влит"; exit 0 ;; CLOSED) echo "PR $pr закрыт без влития"; exit 4 ;; esac
-  [ "$sha" != "$head" ] && { [ -n "$head" ] && echo "$(date +%T) новая голова ${sha:0:8} — жду её проверок"; head=$sha; }
+  [ "$sha" != "$head" ] && { [ -n "$head" ] && echo "$(date +%T) новая голова ${sha:0:8} — жду её проверок"; head=$sha; needs; }
   if [ "$mergeable" = CONFLICTING ]; then
     echo "PR $pr: конфликт с базой — CI не запустится. Слить main в ветку, разрешить конфликт, запушить."
     exit 3
@@ -35,9 +43,9 @@ while true; do
     printf '%s\t%s\t%s\n' "$b" "$name" "$link"
   done)
   mine=$(printf '%s\n' "$checks" | awk -F'\t' -v re="$need" '$2 ~ re')
-  if [ "$(printf '%s\n' "$mine" | grep -c .)" -ge 2 ] && ! printf '%s\n' "$mine" | grep -q '^pending'; then
+  if [ "$(printf '%s\n' "$mine" | grep -c .)" -ge "$count" ] && ! printf '%s\n' "$mine" | grep -q '^pending'; then
     if ! printf '%s\n' "$mine" | grep -qv '^pass'; then
-      echo "PR $pr (${sha:0:8}): Итог и Записка зелёные, $(( ($(date +%s) - started) / 60 )) мин ожидания"; exit 0
+      echo "PR $pr (${sha:0:8}): $(printf '%s\n' "$mine" | cut -f2 | paste -sd, | sed 's/,/, /g') зелёные, $(( ($(date +%s) - started) / 60 )) мин ожидания"; exit 0
     fi
     # после правки описания или перезапуска gh pr checks ещё миг показывает прежний итог: падение — со второго взгляда
     if [ "${seen:-}" != "$sha" ]; then seen=$sha; sleep 30; continue; fi
@@ -49,8 +57,13 @@ while true; do
     exit 1
   fi
   # проверки ещё не пришли: через 5 мин сказать, чего ждём (одна строка, не каждый круг)
-  if [ -z "$mine" ] && [ $quiet = 0 ] && [ $(( $(date +%s) - started )) -gt 300 ]; then
-    echo "$(date +%T) у ${sha:0:8} 5 мин нет проверок (mergeable=$mergeable) — жду дальше"; quiet=1
+  if [ "$(printf '%s\n' "$mine" | grep -c .)" -lt "$count" ] && [ $quiet = 0 ] && [ $(( $(date +%s) - started )) -gt 300 ]; then
+    if [ "$count" = 3 ] && ! printf '%s\n' "$mine" | grep -q $'\tСтенд сцен'; then
+      echo "$(date +%T) у ${sha:0:8} нет статуса «Стенд сцен»: PR с картинкой — на ноутбуке tools/stand/stand.py pr $pr --post; жду дальше"
+    else
+      echo "$(date +%T) у ${sha:0:8} 5 мин нет проверок (mergeable=$mergeable) — жду дальше"
+    fi
+    quiet=1
   fi
   sleep 30
 done

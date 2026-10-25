@@ -24,3 +24,6 @@ a test. -->
 ## Check
 <!-- CI and an independent review of the code against the note. Seen or heard by the player: frames and WAV of the dev
 client (tools/sandbox.sh shot) at the note's moments, in this PR; the reviewer looks at them once, not the author. -->
+
+Scene stand: <!-- PR that changes what the player sees (status «Стенд сцен», tools/stand: stand.py pr <number> --post):
+frame time at 100 strikes against the accepted release, and the stand's frames next to it for the reviewer. Otherwise «not needed». -->
