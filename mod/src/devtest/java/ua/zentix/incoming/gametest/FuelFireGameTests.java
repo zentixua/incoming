@@ -1,12 +1,26 @@
 package ua.zentix.incoming.gametest;
 
+import com.mojang.authlib.GameProfile;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.Connection;
+import net.minecraft.network.PacketSendListener;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.fml.util.ObfuscationReflectionHelper;
+import net.neoforged.neoforge.common.util.FakePlayer;
+import net.neoforged.neoforge.event.level.ChunkWatchEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
@@ -16,13 +30,17 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.FuelPool;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.warhead.FuelFires;
 import ua.zentix.incoming.warhead.Warheads;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Топливо в воронке горит огнём Minecraft на блоках ({@link FuelFires}). Класс жалобы (снимок Артёма 24.10: клубы пламени
@@ -165,7 +183,10 @@ public final class FuelFireGameTests {
 
     /**
      * Топливо на дощатом настиле над землёй; настил пропал (сгорел, сломан) — топливо капает вниз в своей колонке до
-     * земли и горит там; на высоте настила огня не остаётся (горючего рядом нет).
+     * земли и горит там; на высоте настила огня не остаётся (горючего рядом нет). Игрок рядом получает это по сети (ревью
+     * FV, круг 2: проверка состояния сервера отправку не ловила): первым пакетом — воронку на настиле, потом — на земле,
+     * то же, что у сервера; чанк воронки уходит ему (вошёл, вернулся) — с ним нынешнее состояние. Как клиент применяет
+     * пакет, держит {@code FuelBurnTest.serverUpdateMovesTheClientSource}.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "fuel_fire_drip", skyAccess = true)
     public static void fuelDripsDownWhenItsSupportGoes(GameTestHelper h) {
@@ -175,7 +196,8 @@ public final class FuelFireGameTests {
         int deck = c.getY() + 3;
         for (BlockPos p : BlockPos.betweenClosed(c.offset(-2, 3, -2), c.offset(2, 3, 2))) level.setBlock(p, Blocks.OAK_PLANKS.defaultBlockState(), 2);
         Vec3 at = new Vec3(c.getX() + 0.5, deck + 1, c.getZ() + 0.5);
-        FuelFires.testPour(level, at, WeaponType.DRONE);
+        Watcher watcher = Watcher.near(h, Vec3.atCenterOf(c.offset(8, 0, 0)));
+        FuelFires.testPour(level, at, WeaponType.DRONE, 0, 64);
         int n = WeaponType.DRONE.spec().pool().cells();
         h.assertTrue(cells(level, at).size() == n, "на настиле не " + n + " клеток: " + cells(level, at));
         for (BlockPos p : cells(level, at)) h.assertTrue(p.getY() == deck + 1, "клетка не на настиле: " + p.toShortString());
@@ -200,7 +222,48 @@ public final class FuelFireGameTests {
             S2C.FuelFire state = state(level, at);
             h.assertTrue(state != null && state.cells().stream().allMatch(p -> p.getY() == c.getY()) && state.smothered() == 0,
                     "состояние для клиента не сдвинулось: " + state);
+            // и он его получил: сперва воронку на настиле, последним — нынешнее состояние
+            List<S2C.FuelFire> got = watcher.got;
+            h.assertTrue(got.size() >= 2, "игрок рядом получил пакетов воронки: " + got.size());
+            h.assertTrue(got.getFirst().cells().stream().allMatch(p -> p.getY() == deck + 1), "первый пакет — не воронка на настиле: " + got.getFirst());
+            h.assertTrue(got.getLast().equals(state), "последнее, что получил игрок, — не состояние сервера: " + got.getLast() + " против " + state);
+            int before = got.size();
+            FuelFires.onChunkSent(new ChunkWatchEvent.Sent(watcher.player, level.getChunkAt(state.cells().getFirst()), level));
+            h.assertTrue(got.size() == before + 1 && got.getLast().equals(state), "с чанком воронки игрок не получил её состояние: " + got.subList(before, got.size()));
         });
+    }
+
+    /**
+     * Игрок рядом с воронкой для проверки доставки: пакеты воронок ({@link S2C.FuelFire}), что сервер шлёт ему, — в список,
+     * прочие — мимо. Пока идёт проверка, он в списке игроков сервера (там его ищет {@code PacketDistributor.sendToPlayersNear}),
+     * но не в мире: чанков и сущностей ему не шлют. Не {@code makeMockServerPlayerInLevel}: вход по-настоящему ломается о
+     * пакеты Create ({@code gametest.md}).
+     */
+    private static final class Watcher extends ServerGamePacketListenerImpl {
+        final List<S2C.FuelFire> got = new ArrayList<>();
+
+        private Watcher(ServerPlayer player, Connection connection) {
+            super(player.server, connection, player, CommonListenerCookie.createInitial(player.getGameProfile(), false));
+        }
+
+        static Watcher near(GameTestHelper h, Vec3 pos) {
+            ServerLevel level = h.getLevel();
+            FakePlayer player = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "fuel-fire-watcher"));
+            player.setPos(pos);
+            Connection connection = new Connection(PacketFlow.SERVERBOUND);
+            new EmbeddedChannel(connection);
+            Watcher watcher = new Watcher(player, connection);
+            // список игроков NeoForge отдаёт только для чтения: сам список — полем
+            List<ServerPlayer> players = ObfuscationReflectionHelper.getPrivateValue(PlayerList.class, level.getServer().getPlayerList(), "players");
+            players.add(player);
+            StrikeGameTests.afterTest(h, () -> players.remove(player));
+            return watcher;
+        }
+
+        @Override
+        public void send(Packet<?> packet, @Nullable PacketSendListener listener) {
+            if (packet instanceof ClientboundCustomPayloadPacket custom && custom.payload() instanceof S2C.FuelFire fire) got.add(fire);
+        }
     }
 
     /**
@@ -277,9 +340,56 @@ public final class FuelFireGameTests {
     }
 
     /**
-     * Клетка — только там, где готовы и соседние чанки: ваниль, решая, держится ли огонь, смотрит соседей клетки, и у края
-     * чанка рядом с неготовым соседом это грузило бы его прямо в тике. Чанк далеко от площадки держится один (тикет без
-     * соседей); топливо у его края не ложится, и сосед так и не грузится.
+     * Мир гасит огонь клетки следующим тиком после поджига (Burnt под дождём гасит свой огонь каждый тик, проба FV): воронка
+     * с ним не борется — каждая следующая попытка вдвое позже, до раза в 10 с ({@code FuelFires.RELIGHT_MAX}). За 30 с это
+     * 8 поджигов клетки; допуск — 10, а без отступа их ~120 (раз в {@code RELIGHT}, 5 тиков, — ревью FV, круг 2: прежняя
+     * проверка под ванильным дождём, который гасит огонь не раньше чем через 30 тиков, отступа не видела). Не меньше 3:
+     * топливо пробует гореть до конца и для клиента горит по закону — ни одна клетка не кончилась раньше срока. Партия —
+     * та же, что у дождя: поджиги проверка считает сама по своим клеткам, а не общим счётчиком мира.
+     */
+    @GameTest(template = "range", timeoutTicks = 800, batch = "fuel_fire_rain", skyAccess = true)
+    public static void aWorldThatPutsTheFireOutAtOnceIsNotFought(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+        FuelFires.testPour(level, at, WeaponType.MISSILE);
+        int n = WeaponType.MISSILE.spec().pool().cells();
+        h.assertTrue(cells(level, at).size() == n, "топливо не легло: " + cells(level, at));
+        long start = level.getGameTime();
+        Set<BlockPos> burning = new HashSet<>();
+        int[] fires = {0};
+        h.onEachTick(() -> {
+            for (BlockPos p : cells(level, at)) {
+                if (!(level.getBlockState(p).getBlock() instanceof BaseFireBlock)) {
+                    burning.remove(p);
+                } else if (burning.add(p)) {
+                    // зажёгся — погаснет следующим тиком
+                    fires[0]++;
+                } else {
+                    level.removeBlock(p, false);
+                    burning.remove(p);
+                }
+            }
+        });
+        h.succeedWhen(() -> {
+            long t = level.getGameTime() - start;
+            h.assertTrue(t >= 600, "идёт проверка");
+            S2C.FuelFire state = state(level, at);
+            String got = String.format(Locale.ROOT, "kill: %d клеток, поджигов %d за %.0f с (%.1f на клетку); %s", n, fires[0], t / 20.0,
+                    fires[0] / (double) n, state);
+            Incoming.LOG.info("FUELFIRE {}", got);
+            h.assertTrue(fires[0] <= 10 * n, "мир гасит огонь, а клетки зажигаются снова и снова: " + got);
+            h.assertTrue(fires[0] >= 3 * n, "топливо бросило гореть: " + got);
+            h.assertTrue(cells(level, at).size() == n && state != null && state.smothered() == 0, "топливо кончилось раньше срока: " + got);
+        });
+    }
+
+    /**
+     * Клетка — только там, где готовы и соседние чанки. На частичной опоре (нижняя плита: верх не сплошной) ваниль, решая,
+     * держится ли огонь, смотрит всех соседей клетки — горит ли что-то рядом, — и у края чанка рядом с неготовым соседом
+     * это подняло бы его прямо в тике (ревью FV, круг 2: на сплошном грунте прежней проверки ваниль соседа не читает, и
+     * она защиты не видела). Каменная плита у восточного края дальнего чанка, к западу от клетки — доска (огню есть за что
+     * держаться): пока соседи чанка ниже полной загрузки, топливо там не ложится и сосед не поднимается; готовы — ваниль
+     * держит там огонь (проверка не пуста).
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "fuel_fire_edge", skyAccess = true)
     public static void fuelAtAChunkEdgeDoesNotLoadTheNeighbour(GameTestHelper h) {
@@ -287,19 +397,31 @@ public final class FuelFireGameTests {
         StrikeGameTests.gameSpeed(h);
         var chunks = level.getChunkSource();
         ChunkPos f = new ChunkPos(h.absolutePos(CENTER).east(1600));
-        chunks.addRegionTicket(HOLD, f, 0, f);
+        BlockPos slab = new BlockPos(f.getMaxBlockX(), 250, f.getMiddleBlockZ()), cell = slab.above();
+        Vec3 at = Vec3.atBottomCenterOf(cell);
+        chunks.addRegionTicket(HOLD, f, 1, f);
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(chunks.getChunkNow(f.x, f.z) != null, "чанк не загрузился"))
+                .thenWaitUntil(() -> h.assertTrue(Terrain.neighbourhoodReady(level, f.x, f.z), "чанк с соседями не готов"))
                 .thenExecute(() -> {
-                    h.assertTrue(chunks.getChunkNow(f.x + 1, f.z) == null, "сосед уже загружен — проверка пуста");
-                    // у восточного края чанка, на его рельефе
-                    int x = f.getMaxBlockX(), z = f.getMiddleBlockZ();
-                    int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
-                    int lit = FuelFires.testPour(level, new Vec3(x + 0.5, y, z + 0.5), WeaponType.MISSILE);
-                    h.assertTrue(chunks.getChunkNow(f.x + 1, f.z) == null, "топливо у края загрузило соседний чанк");
+                    // строится, пока соседи готовы (ваниль и Sable читают их, ставя блок)
+                    level.setBlock(slab, Blocks.STONE_SLAB.defaultBlockState(), 3);
+                    level.setBlock(cell.west(), Blocks.OAK_PLANKS.defaultBlockState(), 3);
+                    // и соседи — ниже полной загрузки
+                    chunks.addRegionTicket(HOLD, f, 0, f);
+                    chunks.removeRegionTicket(HOLD, f, 1, f);
+                    chunks.runDistanceManagerUpdates();
+                    h.assertTrue(chunks.getChunkNow(f.x + 1, f.z) == null, "сосед всё ещё готов — проверка пуста");
+                    int lit = FuelFires.testPour(level, at, WeaponType.DRONE);
+                    h.assertTrue(chunks.getChunkNow(f.x + 1, f.z) == null, "топливо у края подняло соседний чанк в тике");
                     h.assertTrue(lit == 0, "клетки у края без готовых соседей: " + lit);
+                    chunks.addRegionTicket(HOLD, f, 1, f);
+                    chunks.removeRegionTicket(HOLD, f, 0, f);
                 })
-                .thenExecute(() -> chunks.removeRegionTicket(HOLD, f, 0, f))
+                .thenWaitUntil(() -> h.assertTrue(Terrain.neighbourhoodReady(level, f.x, f.z), "чанк с соседями не готов"))
+                .thenExecute(() -> {
+                    h.assertTrue(BaseFireBlock.getState(level, cell).canSurvive(level, cell), "ваниль не держит огонь на плите у доски — проверка пуста");
+                    chunks.removeRegionTicket(HOLD, f, 1, f);
+                })
                 .thenSucceed();
     }
 
@@ -320,7 +442,7 @@ public final class FuelFireGameTests {
         long[] pouredAt = {0};
         chunks.addRegionTicket(HOLD, f, 1, f);
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(ua.zentix.incoming.util.Terrain.neighbourhoodReady(level, f.x, f.z), "чанк с соседями не готов"))
+                .thenWaitUntil(() -> h.assertTrue(Terrain.neighbourhoodReady(level, f.x, f.z), "чанк с соседями не готов"))
                 .thenExecute(() -> {
                     for (BlockPos p : BlockPos.betweenClosed(mid.offset(-3, 0, -3), mid.offset(3, 0, 3))) level.setBlock(p, Blocks.STONE.defaultBlockState(), 3);
                     // топливо уже почти выгорело: клетки гаснут по закону в ближайшие 10 тиков
@@ -331,7 +453,7 @@ public final class FuelFireGameTests {
                     chunks.addRegionTicket(HOLD, f, 0, f);
                     chunks.removeRegionTicket(HOLD, f, 1, f);
                     chunks.runDistanceManagerUpdates();
-                    h.assertTrue(!ua.zentix.incoming.util.Terrain.neighbourhoodReady(level, f.x, f.z), "чанк всё ещё готов");
+                    h.assertTrue(!Terrain.neighbourhoodReady(level, f.x, f.z), "чанк всё ещё готов");
                 })
                 .thenWaitUntil(() -> h.assertTrue(level.getGameTime() > pouredAt[0] + 60, "ждём срока"))
                 .thenExecute(() -> {

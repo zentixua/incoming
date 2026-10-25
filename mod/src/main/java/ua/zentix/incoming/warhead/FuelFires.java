@@ -205,7 +205,12 @@ public final class FuelFires {
 
     /** Для проверок: то же, но удар был {@code burned} тиков назад — топливо уже горело столько. */
     public static int testPour(ServerLevel level, Vec3 pos, WeaponType weapon, long burned) {
-        return pour(level, pos, weapon, level.getGameTime() - burned, 0);
+        return testPour(level, pos, weapon, burned, 0);
+    }
+
+    /** Для проверок доставки: то же, с пакетом игрокам до {@code reach} блоков, как у удара. */
+    public static int testPour(ServerLevel level, Vec3 pos, WeaponType weapon, long burned, double reach) {
+        return pour(level, pos, weapon, level.getGameTime() - burned, reach);
     }
 
     /** Состояние воронки — игрокам, до кого дотягивается её пакет взрыва (место — первая клетка). */
