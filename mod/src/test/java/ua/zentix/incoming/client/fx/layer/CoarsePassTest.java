@@ -281,6 +281,12 @@ class CoarsePassTest {
         int maskPass = code.indexOf("c.safeGetUniform(\"CoarseMask\").set(1f);"), composite = code.indexOf("c.safeGetUniform(\"CoarseMask\").set(0f);"),
                 fill = code.indexOf("s.safeGetUniform(\"FxCoarseFill\").set(1f);"), redraw = code.indexOf("quads.range(s, a, b);", fill);
         assertTrue(maskPass > 0 && composite > maskPass && fill > composite && redraw > fill, "маска, вывод, досчёт — по порядку, в том же отрезке");
+        // пустая маска — досчёта нет: счётчик пикселей маски вокруг её прохода, условный вывод вокруг досчёта
+        int begin = code.indexOf("GL15.glBeginQuery(GL15.GL_SAMPLES_PASSED, query);", maskPass), end = code.indexOf("GL15.glEndQuery(GL15.GL_SAMPLES_PASSED);", begin),
+                draw = code.indexOf("GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);", begin),
+                when = code.indexOf("GL30.glBeginConditionalRender(query, GL30.GL_QUERY_WAIT);", fill), done = code.indexOf("GL30.glEndConditionalRender();", when);
+        assertTrue(begin > maskPass && draw > begin && end > draw && end < composite, "счётчик — у прохода маски");
+        assertTrue(when > fill && redraw > when && done > redraw, "досчёт — по счётчику маски");
     }
 
     /**

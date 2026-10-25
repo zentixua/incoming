@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.ShaderInstance;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import ua.zentix.incoming.Incoming;
@@ -68,6 +69,8 @@ public final class CoarsePass {
     private static final int[] BRIGHT = {-1, -1, -1, -1};
     /** Маска полного кадра (R8): пиксели, которые мелкий кадр не разрешает, — их досчитывает полный кадр. */
     private static int mask = -1, maskFbo = -1;
+    /** Счётчик пикселей маски отрезка ({@code GL_SAMPLES_PASSED}): по нему досчёт рисуется или нет. */
+    private static int query = -1;
     /**
      * Блок текстуры маски у шейдера слоя: за блоками 12–15 (шум пелены, окно воздуха, сетка дыма, шар; OpenGL 3.2 даёт
      * не меньше 48). Сам шейдер слоя её не держит: досчёт ставит её на время своего прохода.
@@ -234,7 +237,11 @@ public final class CoarsePass {
             c.safeGetUniform("CoarseMask").set(1f);
             c.apply();
             FxBloom.triangle();
+            // сколько пикселей в маске — счётчик видеокарты: пустая маска — досчёта нет вовсе (ниже), без ожидания на CPU
+            if (query < 0) query = GL15.glGenQueries();
+            GL15.glBeginQuery(GL15.GL_SAMPLES_PASSED, query);
             GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
+            GL15.glEndQuery(GL15.GL_SAMPLES_PASSED);
             c.clear();
             // вывод — в остальные, по маске
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, frame);
@@ -259,7 +266,11 @@ public final class CoarsePass {
             Uniform.uploadInteger(Uniform.glGetUniformLocation(s.getId(), "FxCoarseMask"), MASK_UNIT);
             ProgramManager.glUseProgram(program);
             s.safeGetUniform("FxCoarseFill").set(1f);
+            // квадраты отрезка в полном кадре отбрасываются вне маски, но их пиксели всё равно идут в шейдер — заливка
+            // полного кадра; маска пуста — видеокарта их не рисует (условный вывод по счётчику маски, OpenGL 3.0)
+            GL30.glBeginConditionalRender(query, GL30.GL_QUERY_WAIT);
             quads.range(s, a, b);
+            GL30.glEndConditionalRender();
             s.safeGetUniform("FxCoarseFill").set(0f);
             GlStateManager._activeTexture(GL13.GL_TEXTURE0 + MASK_UNIT);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
