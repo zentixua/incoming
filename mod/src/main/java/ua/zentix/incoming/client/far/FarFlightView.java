@@ -1051,8 +1051,14 @@ public final class FarFlightView {
         double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 9 * Math.max(a.sigma, b.sigma);
         double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
         if (puffs > 0 && (md <= reach || inFrame(view, mx, my, mz, md, reach))) {
-            clubs += SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width / scale, b.x, b.y, b.z, b.sigma, b.e, b.width / scale, cr, cg,
-                    cb, shade, sigma0, seed, puffs >= 1, 0.5 * (a.shown + b.shown), tube);
+            int held = SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width / scale, b.x, b.y, b.z, b.sigma, b.e, b.width / scale, cr,
+                    cg, cb, shade, sigma0, seed, puffs >= 1, 0.5 * (a.shown + b.shown), tube);
+            if (held < 0) {
+                // мест кадра нет ({@code SmokePuffs.PLACES}): весь отрезок — лентой, его места — в бюджет клубов
+                clubs += -held - 1;
+                puffs = 0;
+                keepA = keepB = 1;
+            } else clubs += held;
         }
         if (puffs >= 1) return CLUBS;
         return out.ribbon(a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half, b.alpha * (float) keepB, b.light, r, g, bl,

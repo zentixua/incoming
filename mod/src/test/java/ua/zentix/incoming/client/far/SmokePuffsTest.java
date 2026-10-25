@@ -196,4 +196,28 @@ class SmokePuffsTest {
             if (gs == far) assertTrue(house < 0.2, got);
         }
     }
+
+    /**
+     * Ревью #460: места одной трубки не сливаются ни на каком уровне. Группа хранит одну трубку держателя, и группы A1+B1
+     * (держит A) и A2+B2 (держит B) на следующем уровне сливались — в одном клубе по два места каждой трубки. Состав групп
+     * живёт между уровнями ({@link SmokePuffs.TubeGroups}).
+     */
+    @Test
+    void tubeGroupsKeepEveryTubeAcrossLevels() {
+        SmokePuffs.TubeGroups g = new SmokePuffs.TubeGroups();
+        g.reset();
+        long a = 1, b = 2, c = 3;
+        g.add(0, a);
+        g.add(1, b);
+        g.add(2, a);
+        g.add(3, b);
+        g.add(4, c);
+        assertTrue(g.disjoint(0, 1) && !g.disjoint(0, 2), "уровень 0: A1 с B1 — да, A1 с A2 — нет");
+        g.join(0, 1);
+        g.join(3, 2);
+        assertTrue(!g.disjoint(0, 3) && !g.disjoint(3, 0), "уровень 1: A1+B1 и B2+A2 — одни и те же трубки");
+        assertTrue(g.disjoint(0, 4), "уровень 1: A1+B1 и C — разные трубки");
+        g.join(0, 4);
+        assertTrue(!g.disjoint(3, 0), "уровень 2: группа A1+B1+C и B2+A2");
+    }
 }
