@@ -176,6 +176,11 @@ final class SmokePuffs {
     static final int PLACE_FIELDS = 21, P_CONTEXT = 18, P_MATERIAL = 19, P_AIR = 20;
     /** Веществ мест в кадре — не больше (больше — места не сливаются). */
     static final int MATERIALS = 32;
+    /**
+     * Клубов облаков в кадре — не больше (план, слияние и квадраты — процессор на каждый): налёт из 100 ударов — ~800 после
+     * слияния внутри источников, сверх — сливаются до плана ({@code Draw.thin}).
+     */
+    static final int BLOBS = 2000;
     /** Номера трубок облаков кадра — с этого (у следов — номер снаряда). */
     static final long TUBES = 1L << 40;
 
@@ -327,6 +332,11 @@ final class SmokePuffs {
 
     static int lastItems() {
         return DRAW.lastItems;
+    }
+
+    /** Клубов облаков в плане последнего кадра (после слияния внутри источников и {@link #BLOBS}). */
+    static int lastBlobs() {
+        return DRAW.lastBlobs;
     }
 
     /** Бюджет заново: план и уровень слияния (проверки, что строят кадры с разным бюджетом подряд). */
@@ -530,7 +540,7 @@ final class SmokePuffs {
          * бюджета), и пол до слияния и вуали; доля кучек; уровень слияния; гауссов вуали; кучек-квадратов.
          */
         double lastFill, lastFloor, lastRaw, lastShare = 1;
-        int level, lastVeils, lastItems;
+        int level, lastVeils, lastItems, lastBlobs;
         /** Режим прохода {@link #blob} и {@link #club}: план (только цена) или квадраты с долей кучки {@link #share}. */
         private boolean planning;
         private double share = 1;
@@ -591,6 +601,7 @@ final class SmokePuffs {
          */
         void flush() {
             close();
+            thin();
             double budget = SmokePuffs.budget;
             if (blobEntry.length < holding) blobEntry = new int[2 * holding];
             if (placeEntry.length < placeCount) placeEntry = new int[2 * placeCount];
@@ -604,6 +615,8 @@ final class SmokePuffs {
             for (int i = 0; i < holding; i++) if (!merged[i]) held(i);
             for (int p = 0; p < placeCount; p++) place(p);
             lastRaw = floor;
+            lastBlobs = 0;
+            for (int i = 0; i < holding; i++) if (!merged[i]) lastBlobs++;
             int was = level;
             level = 0;
             if (floor > budget) {
@@ -635,6 +648,35 @@ final class SmokePuffs {
             share = 1;
             forget();
             veilFlush();
+        }
+
+        /**
+         * Клубов облаков больше {@link #BLOBS} (их ~8 на удар: налёт в сотни ударов) — до плана: план, слияние и квадраты
+         * стоят процессора на каждый клуб, и работа кадра росла бы с налётом. Сливаются тем же законом ({@link #absorb}) в
+         * ячейках мира в 0,5·2^уровень их края (≈ 3σ), пока не уложатся; брызги — с брызгами.
+         */
+        private void thin() {
+            int alive = 0;
+            for (int i = 0; i < holding; i++) if (!merged[i]) alive++;
+            for (int level = 0; alive > BLOBS && level < 16; level++) {
+                double cell = LOD_CELL * (1 << level);
+                cells.clear();
+                for (int i = 0; i < holding; i++) {
+                    if (merged[i]) continue;
+                    int o = i * FIELDS;
+                    boolean wet = wet(o);
+                    long key = cell(held[o], held[o + 1], held[o + 2], 3 * Math.max(held[o + 3], held[o + 4]), cell, wet ? 1 : 0);
+                    int first = cells.get(key);
+                    if (first < 0) {
+                        cells.put(key, i);
+                        continue;
+                    }
+                    absorb(held, first * FIELDS, o, CloudModel.SOOT_K, SmokeGrid.DROP_K);
+                    if (wet) round(first * FIELDS);
+                    merged[i] = true;
+                    alive--;
+                }
+            }
         }
 
         /** Ждущие клубы, места, источники и план — заново (конец кадра, выход из мира). */
@@ -742,6 +784,22 @@ final class SmokePuffs {
             return smoothstep(big, 2 * big, planCover0[e]);
         }
 
+        /** Брызги ли клуб с o: у источника с брызгами капель больше дыма и пыли — свои кадры, с дымом не сливаются. */
+        private boolean wet(int o) {
+            return ctxSprays[(int) held[o + 12]] && SmokeGrid.DROP_K * held[o + 7] > CloudModel.SOOT_K * held[o + 5]
+                    + SmokeGrid.dustK((float) held[o + 8], (float) held[o + 9], (float) held[o + 10]) * held[o + 6];
+        }
+
+        /**
+         * Слитый клуб брызг с o — круглый (струя одного направления — круглого сечения): вытянутый гаусс слой рисует
+         * растянутым кадром — полосой с прямыми боками, «простынёй» ({@code WaterSalvoTest}); σ — средняя по осям.
+         */
+        private void round(int o) {
+            double r = Math.sqrt((2 * held[o + 3] * held[o + 3] + held[o + 4] * held[o + 4]) / 3);
+            held[o + 3] = r;
+            held[o + 4] = r;
+        }
+
         /** Сливать ли клуб или место с записью e: квадрат есть, не слит, глаз не в его краю, не в вуали. */
         private boolean mergeable(int e) {
             return e >= 0 && !planDead[e] && !planNear[e] && planCover0[e] < 2 * big;
@@ -772,9 +830,7 @@ final class SmokePuffs {
                 int e = blobEntry[i];
                 if (!mergeable(e)) continue;
                 int o = i * FIELDS;
-                // брызги (у источника с брызгами, где капель больше дыма и пыли) — своими кадрами: с дымом не сливаются
-                boolean wet = ctxSprays[(int) held[o + 12]] && SmokeGrid.DROP_K * held[o + 7] > CloudModel.SOOT_K * held[o + 5]
-                        + SmokeGrid.dustK((float) held[o + 8], (float) held[o + 9], (float) held[o + 10]) * held[o + 6];
+                boolean wet = wet(o);
                 long key = cell(held[o], held[o + 1], held[o + 2], Math.max(plan[6 * e + 3], plan[6 * e + 4]), cell, wet ? 1 : 0);
                 int first = cells.get(key);
                 if (first < 0) {
@@ -782,14 +838,7 @@ final class SmokePuffs {
                     continue;
                 }
                 absorb(held, first * FIELDS, o, CloudModel.SOOT_K, SmokeGrid.DROP_K);
-                if (wet) {
-                    // клубы брызг — круглые (струя одного направления — круглого сечения): вытянутый гаусс слой рисует растянутым
-                    // кадром — полосой с прямыми боками, «простынёй» ({@code WaterSalvoTest}); σ — той же средней по осям
-                    int f = first * FIELDS;
-                    double round = Math.sqrt((2 * held[f + 3] * held[f + 3] + held[f + 4] * held[f + 4]) / 3);
-                    held[f + 3] = round;
-                    held[f + 4] = round;
-                }
+                if (wet) round(first * FIELDS);
                 merged[i] = true;
                 drop(e);
                 dirt = dirty(first, dirt);
@@ -1549,12 +1598,25 @@ final class SmokePuffs {
         final float[] r = new float[N * N], g = new float[N * N], b = new float[N * N];
         /**
          * Мягкость вершины к миру, блоков: вещество по её лучу — не всё перед миром. Вершина тает, как квадрат слоя у мира
-         * ({@code fx.fsh}: × (мир − место вершины) / мягкость), и мир на середине вещества по лучу (среднем по толще
-         * расстоянии) берёт половину вуали: дом перед далёким облаком в вуали в него не тонет. ⚠ Линейный спуск вместо доли
-         * толщи перед миром — приближение.
+         * ({@code fx.fsh}: × (мир − место вершины) / мягкость), и мир там, где по лучу набирается половина её непрозрачности
+         * ({@link #half}), берёт половину вуали: дом перед далёким облаком в вуали в него не тонет, а в густом дыме вокруг
+         * глаза стена в нескольких метрах уже почти скрыта. ⚠ Линейный спуск вместо доли толщи перед миром — приближение.
          */
         final float[] soft = new float[N * N];
+
+        /**
+         * Где по лучу набирается половина непрозрачности вещества толщей tau, м: вещество — ровно по отрезку со средним по
+         * толще расстоянием mean и разбросом spread (СКО, м; отрезок — ±√3·СКО, не ближе глаза), непрозрачность на отрезке
+         * — 1 − e^(−tau·x): половина конечной — при x = −ln(1 − (1 − e^(−tau))/2)/tau (у тонкого — середина, у густого —
+         * ближе к началу).
+         */
+        static double half(double tau, double mean, double spread) {
+            double from = Math.max(0, mean - Math.sqrt(3) * spread), to = Math.max(from, mean + Math.sqrt(3) * spread);
+            double x = tau > 1e-6 ? -Math.log(1 - 0.5 * -Math.expm1(-tau)) / tau : 0.5;
+            return from + x * (to - from);
+        }
         final org.joml.Vector3f forward = new org.joml.Vector3f(), left = new org.joml.Vector3f(), up = new org.joml.Vector3f();
+        private final double[] moments = new double[2];
 
         /** Тангенс вершины i по оси (влево экрана — по {@code left}, вверх — по {@code up}). */
         double at(int i) {
@@ -1637,7 +1699,7 @@ final class SmokePuffs {
                     ry /= n;
                     rz /= n;
                     int k = index(i, j);
-                    double sr = 0, sg = 0, sb = 0, sum = 0, far = 0;
+                    double sr = 0, sg = 0, sb = 0, sum = 0, far = 0, far2 = 0;
                     for (int c = 0; c < count; c++) {
                         int o = c * VEIL_FIELDS;
                         double along = sightDepth(gs[o], gs[o + 1], gs[o + 2], gs[o + 3], gs[o + 4], gs[o + 5], rx, ry, rz);
@@ -1649,14 +1711,17 @@ final class SmokePuffs {
                         sr += t * gs[o + 6];
                         sg += t * gs[o + 7];
                         sb += t * gs[o + 8];
-                        far += t * sightMean(gs[o], gs[o + 1], gs[o + 2], gs[o + 3], gs[o + 4], rx, ry, rz);
+                        sightMoments(gs[o], gs[o + 1], gs[o + 2], gs[o + 3], gs[o + 4], rx, ry, rz, moments);
+                        far += t * moments[0];
+                        far2 += t * (moments[1] + moments[0] * moments[0]);
                     }
                     tau[k] = sum;
                     if (sum > 0) {
                         r[k] = (float) (sr / sum);
                         g[k] = (float) (sg / sum);
                         b[k] = (float) (sb / sum);
-                        soft[k] = (float) Math.max(VEIL_SOFT_MIN, 2 * (far / sum - VEIL_AT * n));
+                        double mean = far / sum, spread = Math.sqrt(Math.max(0, far2 / sum - mean * mean));
+                        soft[k] = (float) Math.max(VEIL_SOFT_MIN, 2 * (half(sum, mean, spread) - VEIL_AT * n));
                     }
                 }
             }
@@ -1697,18 +1762,20 @@ final class SmokePuffs {
     }
 
     /**
-     * Среднее по толще расстояние вещества гаусса (как у {@link #sightDepth}) на луче из глаза f, м: вдоль луча вещество — гаусс
-     * с серединой в ближайшей к середине гаусса точке луча a' (в σ) и единичной σ, от глаза — усечённый: среднее —
-     * a' + φ(a')/Φ(a') (в σ луча; в метрах — делённое на |f'|).
+     * Где на луче из глаза f вещество гаусса (как у {@link #sightDepth}), м: вдоль луча оно — гаусс с серединой в ближайшей к
+     * середине гаусса точке луча a' (в σ луча) и единичной σ, от глаза — усечённый: среднее — a' + λ, дисперсия — 1 − λ(λ + a'),
+     * λ = φ(a')/Φ(a') (в метрах — делённые на |f'| и |f'|²). В out — среднее и дисперсия.
      */
-    static double sightMean(double px, double py, double pz, double sh, double sv, double fx, double fy, double fz) {
+    static void sightMoments(double px, double py, double pz, double sh, double sv, double fx, double fy, double fz, double[] out) {
         double ux = fx / sh, uy = fy / sv, uz = fz / sh, len = Math.sqrt(ux * ux + uy * uy + uz * uz);
-        if (!(len > 0)) return 0;
+        out[0] = out[1] = 0;
+        if (!(len > 0)) return;
         double a = (px / sh * ux + py / sv * uy + pz / sh * uz) / len;
         double below = 0.5 * (1 + SmokeGrid.erf(a * SQRT_HALF));
-        // далеко за спиной: φ/Φ → −a − 1/a
-        double mean = below > 1e-12 ? a + Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / below : -1 / a;
-        return Math.max(0, mean) / len;
+        // далеко за спиной: λ → −a − 1/a, вещество — у самого глаза
+        double lambda = below > 1e-12 ? Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / below : -a - 1 / a;
+        out[0] = Math.max(0, a + lambda) / len;
+        out[1] = Math.max(0, 1 - lambda * (lambda + a)) / (len * len);
     }
 
     /** Постоянная толщи по лучу: √(π/2)/(2π)^{3/2}; √½. */

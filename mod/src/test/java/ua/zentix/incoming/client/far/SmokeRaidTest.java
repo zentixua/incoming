@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * через 1,5 с, окна — через 35 с после последнего; топливо в воронке горит 150 с — 70 шлейфов пожаров; ветер 4 м/с,
  * класс D. Облака — модель ({@link CloudModel}: шапка, ножка трубкой, пыль у земли), шлейфы — {@link FireSmoke#lay}; кадр
  * раскладывает тот же приёмник слоя, что в игре ({@link SmokePuffs}), три камеры стенда. Пол кадра (по одному клубу на
- * гаусс и место трубки) — 21/71/158 экранов, в 3–20 раз выше бюджета (прежде бюджет здесь не действовал вовсе).
+ * гаусс и место трубки) — 18/70/153 экрана, в 2–19 раз выше бюджета (прежде бюджет здесь не действовал вовсе).
  */
 class SmokeRaidTest {
     /** Пожар топлива в воронке шахеда (как {@code PlumeContinuityTest.POOL}): горит 150 с с удара. */
@@ -195,6 +195,29 @@ class SmokeRaidTest {
         }
         SmokePuffs.resetBudget();
         assertTrue(ok, all.toString());
+    }
+
+    /**
+     * Работа плана кадра не растёт с налётом: 400 ударов (облака без пожаров) — клубов облаков в плане не больше
+     * {@link SmokePuffs#BLOBS} (сверх — сливаются до плана), заливка — в бюджете.
+     */
+    @Test
+    void planWorkStaysBoundedAtFourHundredStrikes() {
+        double now = 1000;
+        CloudModel.Air air = new CloudModel.Air(Stability.STANDARD_N, Fire.WIND, 0, 0.15, (int) Stability.D, 0.5);
+        List<SmokeGrid.Source> raid = new ArrayList<>();
+        double golden = Math.PI * (3 - Math.sqrt(5));
+        for (int i = 0; i < 400; i++) {
+            double r = 240 * Math.sqrt((i + 0.5) / 400), a = i * golden;
+            CloudModel m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, GroundDust.Ground.uniform(0, 1));
+            raid.add(new SmokeFillTest.Blast(m, r * Math.cos(a), 0, r * Math.sin(a), now - 35 - 0.5 * (399 - i), 7000L + i));
+        }
+        SmokeFillTest.Screen s = frame(raid, now, view(0), SmokePuffs.FILL_BUDGET);
+        String got = String.format(Locale.ROOT, "клубов облаков в плане %d, кучек %d, заливка %.1f (пол %.1f, до слияния %.1f)", SmokePuffs.lastBlobs(),
+                SmokePuffs.lastItems(), s.fill(), SmokePuffs.lastFloor(), SmokePuffs.lastRaw());
+        System.out.println("RAID 400: " + got);
+        SmokePuffs.resetBudget();
+        assertTrue(SmokePuffs.lastBlobs() <= SmokePuffs.BLOBS && s.fill() <= 1.15 * SmokePuffs.FILL_BUDGET, got);
     }
 
     /** Части кадра строками сверху вниз. */

@@ -135,4 +135,65 @@ class SmokePuffsTest {
         }
         assertEquals(e / (Math.sqrt(2 * Math.PI) * sigma), tau, 0.05 * tau, "толща трубки поперёк");
     }
+
+    /**
+     * Мягкость вуали к миру ({@link SmokePuffs.Veil#soft}): вершина тает к миру линейно ({@code fx.fsh}: (мир − 2 блока) /
+     * мягкость), а доля её непрозрачности перед миром в S — (1 − e^(−τ(S)))/(1 − e^(−τ)), τ(S) — толща по лучу до S (здесь —
+     * численно по плотности гауссов). На 3…120 м спуск не дальше 0,4 от доли и ближе к ней, чем прежняя вуаль без мягкости
+     * (закрывала всё дальше 2 блоков целиком): глаз смотрит вдоль густого следа ЗРК (σ 5 м, толща поперёк 2,7: половина
+     * непрозрачности — уже в 3 м), далёкий густой клуб в 60 м (дом перед ним в 20 м берёт меньше 0,2 вуали) и тонкая
+     * дымка. ⚠ Спуск от 2 блоков прямой: у вещества от самого глаза и у узкого далёкого клуба точнее ~0,35 он не бывает.
+     */
+    @Test
+    void veilFadesToTheWorldWhereItsMatterIs() {
+        net.minecraft.world.phys.Vec3 eye = new net.minecraft.world.phys.Vec3(0, 100, 0);
+        FarView view = SmokeFillTest.view(eye, new org.joml.Vector3f(0, 0, 1));
+        double sigma = 5, tube = 2.7 * Math.sqrt(2 * Math.PI) * sigma;
+        java.util.List<double[]> cases = new java.util.ArrayList<>();
+        // трубка вдоль z через глаз — гауссами через 2 м
+        java.util.List<double[]> trail = new java.util.ArrayList<>();
+        for (double z = -150; z <= 150; z += 2) trail.add(new double[]{0, 0, z, sigma, sigma, tube * 2});
+        // далёкий густой клуб: толща через середину ~3
+        java.util.List<double[]> far = java.util.List.of(new double[]{0, 0, 60, 8, 8, 3 * 2 * Math.PI * 64});
+        // тонкая дымка: широкий гаусс вокруг глаза, толща через середину ~0,2
+        java.util.List<double[]> thin = java.util.List.of(new double[]{0, 0, 30, 40, 20, 0.2 * 2 * Math.PI * 40 * 20});
+        for (java.util.List<double[]> gs : java.util.List.of(trail, far, thin)) {
+            double[] packed = new double[gs.size() * SmokePuffs.VEIL_FIELDS];
+            for (int c = 0; c < gs.size(); c++) {
+                double[] g = gs.get(c);
+                int o = c * SmokePuffs.VEIL_FIELDS;
+                System.arraycopy(g, 0, packed, o, 6);
+                packed[o + 6] = packed[o + 7] = packed[o + 8] = 0.8;
+                packed[o + 9] = 1;
+            }
+            SmokePuffs.Veil veil = new SmokePuffs.Veil();
+            veil.fill(view, packed, gs.size());
+            int k = SmokePuffs.Veil.index(SmokePuffs.Veil.N / 2, SmokePuffs.Veil.N / 2);
+            double soft = veil.soft[k], total = veil.tau[k], worst = 0, at = 0, old = 0, house = 0;
+            // толща по лучу вперёд (z) — по плотности гауссов шагом 0,05 м; сверка — на каждом метре с 3 до 120
+            double tau = 0;
+            for (int step = 0; step < 2400; step++) {
+                double z = (step + 0.5) * 0.05;
+                for (double[] g : gs) {
+                    double dx = -g[0], dy = -g[1], dz = z - g[2];
+                    tau += 0.05 * g[5] / (Math.pow(2 * Math.PI, 1.5) * g[3] * g[3] * g[4])
+                            * Math.exp(-0.5 * ((dx * dx + dz * dz) / (g[3] * g[3]) + dy * dy / (g[4] * g[4])));
+                }
+                double s = (step + 1) * 0.05;
+                if (s < 3 || (step + 1) % 20 != 0) continue;
+                double share = -Math.expm1(-tau) / -Math.expm1(-total), ramp = Math.clamp((s - SmokePuffs.VEIL_AT) / soft, 0, 1);
+                old = Math.max(old, 1 - share);
+                if (Math.abs(s - 20) < 1e-6) house = ramp;
+                if (Math.abs(share - ramp) > worst) {
+                    worst = Math.abs(share - ramp);
+                    at = s;
+                }
+            }
+            String got = String.format(java.util.Locale.ROOT, "толща %.2f, мягкость %.1f: спуск дальше доли перед миром на %.2f в %.0f м (без мягкости — %.2f), в 20 м — %.2f",
+                    total, soft, worst, at, old, house);
+            System.out.println("VEIL " + got);
+            assertTrue(worst <= 0.4 && worst < old, got);
+            if (gs == far) assertTrue(house < 0.2, got);
+        }
+    }
 }
