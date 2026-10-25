@@ -18,10 +18,15 @@ final class CraterFire {
     private final ClientLevel world;
     private int age;
     /** Open share of the path from the ear by the last obstruction ray ({@link FireRays}); NaN — no ray yet. */
-    private float open = Float.NaN;
-    /** Tick of the last ray ({@link FireRays}); heard this tick — only heard fires get rays. */
+    float open = Float.NaN;
+    /** Tick of the last ray and the fire's turn among the not yet rayed of its sector this tick ({@link FireRays}). */
     long rayAt = Long.MIN_VALUE;
+    int turn;
+    /** What {@link #hear} found this tick: heard at all, loop volume, azimuth from the ear (atan2(dz, dx)), distance. */
     boolean heard;
+    private float volume;
+    double azimuth;
+    private double distance;
 
     /** Fuel {@code burn} (its law and where it burns now), {@code age} ticks after the strike. */
     CraterFire(FuelBurn burn, ClientLevel world, int age) {
@@ -47,28 +52,37 @@ final class CraterFire {
         return gain > 0 ? Loudness.volume(gain, s.fileLufs()) : 0;
     }
 
-    /** One tick: what is heard now goes into {@code loops}; false — the fire is over (or the world changed). */
-    boolean tick(Minecraft mc, Quarters loops) {
+    /** One tick: is it heard now ({@link #hear}); false — the fire is over (or the world changed). */
+    boolean tick(Minecraft mc) {
         if (mc.level != world) return false;
-        return hear(mc.gameRenderer.getMainCamera().getPosition(), Propagation.Weather.of(world), SoundFilters.WORLD, loops);
+        return hear(mc.gameRenderer.getMainCamera().getPosition(), Propagation.Weather.of(world));
     }
 
     /**
-     * One tick at the ear {@code ear} (no Minecraft; world and settings through {@code path}): what is heard now goes into {@code loops}, through the obstruction by
-     * the fire's last ray; a fire heard but not yet rayed joins with its first ray (a tick later for one fire, at most
-     * {@link FireRays#lag} for a raid). False — the fire is over.
+     * One tick at the ear {@code ear} (no Minecraft): heard now or not and how loud. Into the loops it goes after this
+     * tick's rays ({@link FireRays#tick}, {@link #mix}). False — the fire is over.
      */
-    boolean hear(Vec3 ear, Propagation.Weather weather, SoundFilters.Path path, Quarters loops) {
+    boolean hear(Vec3 ear, Propagation.Weather weather) {
         Vec3 pos = burn.centre();
-        double distance = pos.distanceTo(ear), seconds = age++ / 20.0, emitted = seconds - distance / Noise.SOUND;
+        distance = pos.distanceTo(ear);
+        double seconds = age++ / 20.0, emitted = seconds - distance / Noise.SOUND;
         double watts = heat(burn, seconds, distance);
         // fuel gone by the law or put out (covered, washed) before it: once heard silent, it stays silent
         if (emitted >= burn.law().seconds() || emitted > 0 && watts <= 0 || seconds > burn.law().seconds() + Hearing.MAX_DELAY / 20.0) return false;
-        float volume = watts <= 0 || distance > Hearing.RANGE ? 0 : volume(Sources.BLAST_FIRE, watts, pos, ear, weather);
+        volume = watts <= 0 || distance > Hearing.RANGE ? 0 : volume(Sources.BLAST_FIRE, watts, pos, ear, weather);
         heard = volume > 0;
-        if (!heard || Float.isNaN(open)) return true;
-        loops.add(Math.atan2(pos.z - ear.z, pos.x - ear.x), volume, SoundFilters.blockedGain(open), path.air(distance) * SoundFilters.blockedHighs(open));
+        azimuth = Math.atan2(pos.z - ear.z, pos.x - ear.x);
         return true;
+    }
+
+    /** Into {@code loops}, if heard, through the open share {@code open} of the path (air and settings through {@code path}). */
+    void mix(Quarters loops, SoundFilters.Path path, float open) {
+        if (heard) loops.add(azimuth, volume, SoundFilters.blockedGain(open), path.air(distance) * SoundFilters.blockedHighs(open));
+    }
+
+    /** Has the fire had an obstruction ray yet. */
+    boolean rayed() {
+        return !Float.isNaN(open);
     }
 
     /** Where the fire burns now (checks). */

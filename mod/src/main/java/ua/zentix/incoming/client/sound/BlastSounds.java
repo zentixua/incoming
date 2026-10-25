@@ -336,8 +336,8 @@ public final class BlastSounds {
     static void tick() {
         ticks++;
         FIRE.clear();
-        FIRES.removeIf(fire -> !fire.tick(Minecraft.getInstance(), FIRE));
-        FIRE_RAYS.cast(FIRES, ear(), SoundFilters.WORLD);
+        FIRES.removeIf(fire -> !fire.tick(Minecraft.getInstance()));
+        FIRE_RAYS.tick(FIRES, ear(), SoundFilters.WORLD, FIRE);
         fireLoops();
         MIX.at(ticks);
         // звук начался на деле позже своего тика — смесь взрыва от настоящего начала, как его эхо и удар у уха
