@@ -206,6 +206,28 @@ class CoarsePassTest {
     }
 
     /**
+     * Внутри дыма половина клубов — за глазом, и по расстоянию они сортируются вперемешку с крупными клубами перед ним
+     * (PF7 на 858b6b11: такие шли полным кадром во весь экран, и слой внутри дыма выходил одним отрезком полного кадра).
+     * Клуб целиком за глазом не виден: отрезок мелкого кадра он не рвёт.
+     */
+    @Test
+    void puffsBehindTheEyeDoNotBreakCoarseRuns() {
+        double focal = H / 2.0 / Math.tan(Math.toRadians(35));
+        FxQuads quads = frame();
+        double d = 20, half = 25.0 * 128 / focal * d / 2;
+        for (int i = 0; i < 6; i++) {
+            puff(quads, 0, 0, d + i * 0.5, half);
+            // тот же ключ расстояния, но за глазом
+            quads.sixWay(0.5f);
+            quads.billboard(0, 0, (float) (d + i * 0.5 + 0.25), (float) (d + i * 0.5 + 0.25), (float) half, 0, FxAtlas.puff6(3, false), 0.5f, 0.5f,
+                    0.5f, 0.5f, 2, 1, LightTexture.FULL_BRIGHT, 0);
+            quads.sixWay(-1);
+        }
+        assertEquals(1, quads.runs(true));
+        assertEquals(3, quads.runLevel(0));
+    }
+
+    /**
      * Кадр, не кратный 2^k (1921×1081): пиксель t мелкого кадра растр кладёт на (t + ½)·w / W полных, а не на (t + ½)·2^k
      * (ревью #455: до 7 пикселей мимо у 1/8) — та же доля у шейдера слоя ({@code FxCoarseScale}) и у вывода
      * ({@code CoarseScale}).
@@ -377,7 +399,7 @@ class CoarsePassTest {
     }
 
     /**
-     * Пересвет (ревью #455): восьмибитный кадр обрезает свет после каждого смешивания, мелкий кадр (RGBA16F) — нет. Пока у
+     * Пересвет (ревью #455): восьмибитный кадр обрезает свет после каждого смешивания, мелкий кадр (RGBA32F) — нет. Пока у
      * каждого квадрата свет не выше непрозрачности (rgb ≤ a с умноженной альфой), обрезки нет ни в одном смешивании, и
      * отрезок, сложенный отдельно и выведенный разом, равен квадратам по одному поверх кадра — на любых случайных стопках.
      * Квадрат светлее (дым в свете огня) перед тёмным клубом даёт другое: такой квадрат шейдер слоя отмечает во втором
@@ -415,19 +437,18 @@ class CoarsePassTest {
     }
 
     /**
-     * Мелкий кадр складывает отрезок в половинной точности (RGBA16F: свет и закрытая доля A, после каждого смешивания —
-     * в половинное число), и это закон смешивания с умноженной альфой с точностью до 2/255 при округлении к ближнему и до
-     * 4/255 при отбрасывании (как у программного OpenGL) на стопках до 200 клубов любой бледности, поверх любого кадра.
-     * Восьмибитный кадр 3.7.0 округляет после каждого смешивания до 1/255, и бледные слои в нём по одному идут мимо закона
-     * много дальше (ревью #455: 100 клубов (0,005; 0,01) поверх 0,8 — 0,498 против закона 0,610; 200 клубов
-     * (0,00333; 0,0333) поверх белого — у мелкого кадра 3/255 от закона, у 3.7.0 — около 15/255): тут мелкий кадр — не «как
-     * 3.7.0», а ближе к закону, и пиксель досчётом не уходит.
+     * Мелкий кадр складывает отрезок в полной точности (RGBA32F: свет и закрытая доля A, после каждого смешивания — в
+     * число float, округление и к ближнему, и отбрасыванием) — это закон смешивания с умноженной альфой с точностью до
+     * 1/255: на случайных стопках до 200 клубов и на однородных бледных стопках до 4000 слоёв с альфой от 0,0005 до 0,05
+     * (ревью #455: у RGBA16F 200 слоёв (0,008; 0,008) отбрасыванием — 5,6/255 от закона). Восьмибитный кадр 3.7.0
+     * округляет после каждого смешивания до 1/255, и бледные слои в нём по одному идут мимо закона (100 клубов (0,005; 0,01)
+     * поверх 0,8 — 0,498 против закона 0,610): тут мелкий кадр — не «как 3.7.0», а как закон, и пиксель досчётом не уходит.
      */
     @Test
     void coarseTargetKeepsTheBlendLaw() {
         Random rnd = new Random(5);
-        double worstNear = 0, worstDown = 0;
-        for (int k = 0; k < 5000; k++) {
+        double worst = 0;
+        for (int k = 0; k < 3000; k++) {
             int n = 1 + rnd.nextInt(200);
             double[][] puffs = new double[n][];
             double pale = rnd.nextDouble() < 0.5 ? 0.04 : 1;
@@ -436,17 +457,24 @@ class CoarsePassTest {
                 puffs[i] = new double[]{a * rnd.nextDouble(), a};
             }
             double frame = rnd.nextDouble(), law = together(puffs, frame);
-            worstNear = Math.max(worstNear, Math.abs(halfTarget(puffs, frame, false) - law));
-            worstDown = Math.max(worstDown, Math.abs(halfTarget(puffs, frame, true) - law));
+            for (boolean down : new boolean[]{false, true}) worst = Math.max(worst, Math.abs(floatTarget(puffs, frame, down) - law));
         }
-        double[][] dense = new double[200][];
-        for (int i = 0; i < 200; i++) dense[i] = new double[]{0.00333, 0.0333};
-        double law = together(dense, 1);
-        worstNear = Math.max(worstNear, Math.abs(halfTarget(dense, 1, false) - law));
-        worstDown = Math.max(worstDown, Math.abs(halfTarget(dense, 1, true) - law));
-        assertTrue(worstNear <= 2 / 255.0, "к ближнему: " + worstNear * 255);
-        assertTrue(worstDown <= 4 / 255.0, "отбрасыванием: " + worstDown * 255);
-        assertTrue(Math.abs(eightBit(dense, 1) - law) > 3 * Math.abs(halfTarget(dense, 1, true) - law), "3.7.0 — дальше от закона");
+        for (double a : new double[]{0.0005, 0.001, 0.002, 0.004, 0.008, 0.0333, 0.05}) {
+            for (double light : new double[]{0, 0.1, 0.5, 1}) {
+                for (int n : new int[]{200, 1000, 4000}) {
+                    double[][] puffs = new double[n][];
+                    for (int i = 0; i < n; i++) puffs[i] = new double[]{a * light, a};
+                    for (double frame : new double[]{0, 0.8, 1}) {
+                        double law = together(puffs, frame);
+                        for (boolean down : new boolean[]{false, true}) worst = Math.max(worst, Math.abs(floatTarget(puffs, frame, down) - law));
+                    }
+                }
+            }
+        }
+        assertTrue(worst <= 1 / 255.0, "от закона: " + worst * 255 + "/255");
+        double[][] uniform = new double[200][];
+        for (int i = 0; i < 200; i++) uniform[i] = new double[]{0.008, 0.008};
+        assertTrue(Math.abs(halfTarget(uniform, 0) - together(uniform, 0)) > 5 / 255.0, "RGBA16F отбрасыванием — мимо закона");
         double[][] pale = new double[100][];
         for (int i = 0; i < 100; i++) pale[i] = new double[]{0.005, 0.01};
         assertEquals(0.610, together(pale, 0.8), 0.001, "закон");
@@ -455,23 +483,41 @@ class CoarsePassTest {
     }
 
     /**
-     * Отрезок в RGBA16F, как его хранит кадр: свет и закрытая доля A — половинными числами после каждого смешивания
-     * (входы — тоже половинные), вывод разом поверх кадра frame; down — округление отбрасыванием, иначе к ближнему.
+     * Отрезок в RGBA32F, как его хранит кадр: свет и закрытая доля A — числами float после каждого смешивания (входы —
+     * тоже), вывод разом поверх кадра frame; down — округление отбрасыванием, иначе к ближнему.
      */
-    private static double halfTarget(double[][] puffs, double frame, boolean down) {
+    private static double floatTarget(double[][] puffs, double frame, boolean down) {
         double rgb = 0, covered = 0;
         for (double[] p : puffs) {
-            double c = half(p[0], down), a = half(p[1], down);
-            rgb = half(c + (1 - a) * rgb, down);
-            covered = half(a + (1 - a) * covered, down);
+            double c = single(p[0], down), a = single(p[1], down);
+            rgb = single(c + (1 - a) * rgb, down);
+            covered = single(a + (1 - a) * covered, down);
         }
         return Math.min(1, rgb + (1 - covered) * frame);
     }
 
-    /** Неотрицательное число в половинной точности (RGBA16F): к ближнему или отбрасыванием. */
-    private static double half(double v, boolean down) {
+    /** То же в RGBA16F с отбрасыванием (для сравнения: так было бы с половинной точностью). */
+    private static double halfTarget(double[][] puffs, double frame) {
+        double rgb = 0, covered = 0;
+        for (double[] p : puffs) {
+            double c = half(p[0]), a = half(p[1]);
+            rgb = half(c + (1 - a) * rgb);
+            covered = half(a + (1 - a) * covered);
+        }
+        return Math.min(1, rgb + (1 - covered) * frame);
+    }
+
+    /** Неотрицательное число float: к ближнему или отбрасыванием. */
+    private static double single(double v, boolean down) {
+        float f = (float) v;
+        if (down && f > v) f = Math.nextDown(f);
+        return f;
+    }
+
+    /** Неотрицательное число в половинной точности отбрасыванием. */
+    private static double half(double v) {
         short h = Float.floatToFloat16((float) v);
-        if (down && Float.float16ToFloat(h) > v) h--;
+        if (Float.float16ToFloat(h) > v) h--;
         return Float.float16ToFloat(h);
     }
 

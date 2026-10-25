@@ -62,7 +62,7 @@ public final class CoarsePass {
     private static final int[] TEXTURES = {-1, -1, -1, -1}, FBOS = {-1, -1, -1, -1}, W = new int[LEVELS], H = new int[LEVELS];
     /**
      * Отметки пересвета мелкого кадра уровня k (R8, второй выход шейдера слоя): квадрат светлее своей непрозрачности.
-     * Восьмибитный кадр обрезает свет после каждого смешивания, RGBA16F — нет; у отметки вывод пиксель не берёт (досчёт).
+     * Восьмибитный кадр обрезает свет после каждого смешивания, RGBA32F — нет; у отметки вывод пиксель не берёт (досчёт).
      */
     private static final int[] BRIGHT = {-1, -1, -1, -1};
     /** Маска полного кадра (R8): пиксели, которые мелкий кадр не разрешает, — их досчитывает полный кадр. */
@@ -137,7 +137,8 @@ public final class CoarsePass {
                     double v = cost[a];
                     // кончился отрезок мелкого кадра — его вывод
                     if (a != l && a > 0) v += run;
-                    if (v < next[l]) {
+                    // при равной цене — тот же уровень: квадрат без заливки (за глазом) не начинает отрезок
+                    if (v < next[l] || v == next[l] && a == l) {
                         next[l] = v;
                         back[i * LEVELS + l] = (byte) a;
                     }
@@ -272,7 +273,11 @@ public final class CoarsePass {
         return Math.max(1, (w + (1 << k) - 1) >> k);
     }
 
-    /** Кадры уровней 1…3 для кадра w×h (RGBA16F: свет с умноженной альфой и закрытая доля); false — не завести. */
+    /**
+     * Кадры уровней 1…3 для кадра w×h (RGBA32F: свет с умноженной альфой и закрытая доля); false — не завести. Полная
+     * точность, не половинная: у RGBA16F бледные слои (сотни клубов с альфой меньше сотой) расходятся с законом
+     * смешивания на единицы 1/255, как и в восьмибитном кадре (ревью #455), а цена слоя — свет клуба, не запись кадра.
+     */
     private static boolean target(int w, int h) {
         if (TEXTURES[1] >= 0 && w == fullW && h == fullH) return true;
         int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
@@ -289,7 +294,7 @@ public final class CoarsePass {
                 GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
             }
             GlStateManager._bindTexture(TEXTURES[k]);
-            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, W[k], H[k], 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, W[k], H[k], 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
             if (BRIGHT[k] < 0) {
                 BRIGHT[k] = GlStateManager._genTexture();
                 GlStateManager._bindTexture(BRIGHT[k]);

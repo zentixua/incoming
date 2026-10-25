@@ -296,18 +296,19 @@ public final class FxQuads {
      * пикселей на тексель в самом сжатом направлении, у каждого угла ({@link #stretch}); доля кадра и рамка на экране. Угол
      * у глаза или за ним (плоский квадрат, который глаз пересекает) — полный кадр во весь экран: растяжение у видимого края
      * такого квадрата бывает в доли пикселя на тексель (пыль под глазом, ревью #455), а меры без угла нет. Клуб лицом к
-     * глазу так не бывает: его углы — на одном расстоянии с серединой.
+     * глазу так не бывает: его углы — на одном расстоянии с серединой. Квадрат целиком за глазом не виден: без заливки и
+     * самым мелким уровнем, чтобы не рвать отрезки.
      */
     private void measure(int i) {
         long q = stage + (long) i * QUAD;
         float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
-        boolean behind = false;
+        int behind = 0;
         for (int k = 0; k < 4; k++) {
             long p = q + (long) k * VERTEX;
             screen.transform(clip.set(MemoryUtil.memGetFloat(p), MemoryUtil.memGetFloat(p + 4), MemoryUtil.memGetFloat(p + 8), 1));
             if (clip.w < 1e-3f) {
-                behind = true;
-                break;
+                behind++;
+                continue;
             }
             float sx = (clip.x / clip.w * 0.5f + 0.5f) * screenW, sy = (clip.y / clip.w * 0.5f + 0.5f) * screenH;
             corners[3 * k] = sx;
@@ -318,7 +319,16 @@ public final class FxQuads {
             y1 = Math.max(y1, sy);
         }
         int b = 4 * i;
-        if (behind) {
+        if (behind == 4) {
+            // весь за глазом — не виден: ни заливки, ни рамки, уровнем отрезок не держит (клубы вокруг глаза внутри дыма —
+            // половина слоя; с полным кадром они рвали бы отрезки мелкого кадра, ревью #455, PF7)
+            level[i] = (byte) (CoarsePass.LEVELS - 1);
+            cover[i] = 0;
+            box[b] = box[b + 1] = 1;
+            box[b + 2] = box[b + 3] = -1;
+            return;
+        }
+        if (behind > 0) {
             level[i] = 0;
             cover[i] = 1;
             box[b] = box[b + 1] = -1;
