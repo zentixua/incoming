@@ -239,7 +239,7 @@ class CoarsePassTest {
     void unresolvedPixelsAreDrawnAtFullResolution() throws IOException {
         String fsh = shader("core/fx.fsh"), out = shader("core/fx_coarse.fsh").replaceAll("\\s+", " ");
         // одно условие «не разрешён» у маски и у вывода: маска — только там, вывод — только вне
-        assertTrue(out.contains("bool unresolved = total <= 0.0;"), "условие");
+        assertTrue(out.contains("bool unresolved = total <= 0.0 || bright > 0.0;"), "условие");
         assertTrue(out.contains("if (CoarseMask > 0.5) { if (!unresolved) discard; fragColor = vec4(1.0); return; } if (unresolved) discard;"),
                 "маска и вывод делят пиксели");
         // досчёт: шейдер слоя отбрасывает всё вне маски до света, в маске — как обычный квадрат (с глубиной кадра)
@@ -374,6 +374,56 @@ class CoarsePassTest {
         puff(facing, 0, 0, 100, 90);
         assertTrue(90 * 2 / 100.0 * focal / 128 > CoarsePass.PER_TEXEL[CoarsePass.LEVELS - 1]);
         assertEquals(CoarsePass.LEVELS - 1, facing.level(0));
+    }
+
+    /**
+     * Пересвет (ревью #455): восьмибитный кадр обрезает свет после каждого смешивания, мелкий кадр (RGBA16F) — нет. Пока у
+     * каждого квадрата свет не выше непрозрачности (rgb ≤ a с умноженной альфой), обрезки нет ни в одном смешивании, и
+     * отрезок, сложенный отдельно и выведенный разом, равен квадратам по одному поверх кадра — на любых случайных стопках.
+     * Квадрат светлее (дым в свете огня) перед тёмным клубом даёт другое: такой квадрат шейдер слоя отмечает во втором
+     * выходе мелкого кадра, и вывод отдаёт пиксель досчёту полным кадром.
+     */
+    @Test
+    void overbrightPuffsAreDrawnAtFullResolution() throws IOException {
+        Random rnd = new Random(11);
+        for (int k = 0; k < 20000; k++) {
+            int n = 1 + rnd.nextInt(30);
+            double[][] puffs = new double[n][];
+            for (int i = 0; i < n; i++) {
+                double a = rnd.nextDouble();
+                puffs[i] = new double[]{a * rnd.nextDouble(), a};
+            }
+            double frame = rnd.nextDouble();
+            assertEquals(sequential(puffs, frame), together(puffs, frame), 1e-12);
+        }
+        // освещённые клубы, потом тёмный перед ними: по одному — обрезка до белого, разом — пересвет гаснет иначе
+        double[][] lit = {{0.9, 0.4}, {0.9, 0.4}, {0.9, 0.4}, {0.0, 0.5}};
+        assertTrue(together(lit, 0.5) - sequential(lit, 0.5) > 0.1);
+        String fsh = shader("core/fx.fsh"), out = shader("core/fx_coarse.fsh").replaceAll("\\s+", " ");
+        assertTrue(fsh.contains("if (coarse) fragCover = vec4(float(any(greaterThan(fragColor.rgb, vec3(fragColor.a + 0.5 / 255.0)))), 0.0, 0.0, 0.0);"),
+                "отметка пересвета — в мелком кадре");
+        assertTrue(out.contains("bright = max(bright, texelFetch(Sampler2, t, 0).r);") && out.contains("bool unresolved = total <= 0.0 || bright > 0.0;"),
+                "у отметки — досчёт");
+        String code = java.nio.file.Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/fx/layer/CoarsePass.java"));
+        assertTrue(code.contains("GL30.GL_COLOR_ATTACHMENT1, GlConst.GL_TEXTURE_2D, BRIGHT[k], 0);") && code.contains("GL30.glClearBufferfv(GL11.GL_COLOR, 1, ZERO);")
+                && code.contains("c.setSampler(\"Sampler2\", BRIGHT[k]);"), "отметки — второй выход мелкого кадра, чистятся с ним, вывод их читает");
+    }
+
+    /** Квадраты {rgb, a} с умноженной альфой по одному поверх кадра frame, обрезка до 1 после каждого (восьмибитный кадр). */
+    private static double sequential(double[][] puffs, double frame) {
+        double d = frame;
+        for (double[] p : puffs) d = Math.min(1, p[0] + (1 - p[1]) * d);
+        return d;
+    }
+
+    /** Те же квадраты, сложенные отдельно без обрезки (мелкий кадр), и разом поверх кадра. */
+    private static double together(double[][] puffs, double frame) {
+        double rgb = 0, t = 1;
+        for (double[] p : puffs) {
+            rgb = p[0] + (1 - p[1]) * rgb;
+            t *= 1 - p[1];
+        }
+        return Math.min(1, rgb + t * frame);
     }
 
     private static String shader(String path) throws IOException {

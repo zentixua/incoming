@@ -18,6 +18,9 @@
 uniform sampler2D Sampler0;
 // расстояние до мира за пикселем (полное разрешение)
 uniform sampler2D Sampler1;
+// отметки мелкого кадра (fx.fsh, fragCover): больше нуля — в пиксель лёг квадрат светлее своей непрозрачности; восьмибитный
+// кадр обрезал бы его свет по ходу смешивания, мелкий — нет, поэтому рядом с такой отметкой пиксель досчитывается
+uniform sampler2D Sampler2;
 // полных пикселей на пиксель мелкого кадра по x и y (CoarsePass: кадр с округлением вверх, не ровно 2^k)
 uniform vec2 CoarseScale;
 // 1 — проход маски: 1 в пикселях, которые мелкий кадр не разрешает, остальные отброшены; 0 — вывод (их отбрасывает)
@@ -70,19 +73,21 @@ void main() {
     ivec2 base = ivec2(floor(at));
     vec2 f = at - vec2(base), slope = pallSlopeWithin(Sampler1, full, fullSize, depth, coarseTolerance(depth) / depth);
     vec4 sum = vec4(0.0);
-    float total = 0.0;
+    float total = 0.0, bright = 0.0;
     for (int j = 0; j <= 1; j++) {
         for (int i = 0; i <= 1; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
             float a = coarseAlike(sampleDepth(t, fullSize), pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
             // билинейный вес без «?:» внутри выражения: Veil теряет скобки вокруг него (ShaderSourceTest)
             float w = coarseWeight(mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j)), a);
+            bright = max(bright, texelFetch(Sampler2, t, 0).r);
             sum += texelFetch(Sampler0, t, 0) * w;
             total += w;
         }
     }
-    // не разрешён: ни одного соседа того же места с весом (у края билинейки вес соседа бывает и нулём)
-    bool unresolved = total <= 0.0;
+    // не разрешён: ни одного соседа того же места с весом (у края билинейки вес соседа бывает и нулём) или у соседа —
+    // пересвет
+    bool unresolved = total <= 0.0 || bright > 0.0;
     if (CoarseMask > 0.5) {
         if (!unresolved) discard;
         fragColor = vec4(1.0);

@@ -3,7 +3,8 @@
     "fragment": "incoming:fx_coarse",
     "samplers": [
         { "name": "Sampler0" },
-        { "name": "Sampler1" }
+        { "name": "Sampler1" },
+        { "name": "Sampler2" }
     ],
     "uniforms": [
         { "name": "CoarseScale", "type": "float", "count": 2, "values": [ 2.0, 2.0 ] },
