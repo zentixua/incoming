@@ -302,7 +302,8 @@ def checks(events, res, expected=(), acc_scene=None, unawaited=()):
         if e["type"] == "cmd" and not e["ok"] and e["tag"] != "setup":
             bad.append(f"команда не прошла: {e['cmd']}")
         if e["type"] == "tp-timeout":
-            bad.append(f"камера не дошла до {e['eye']}")
+            why = f" (ждала: {e['waiting']})" if e.get("waiting") else ""
+            bad.append(f"камера не дошла до {e['eye']}{why}")
         if e["type"] == "impact-timeout":
             bad.append(f"окно {e['name']}: нет попадания залпа {e['salvo']}")
     for salvo, i in res["meta"]["impacts"].items():
