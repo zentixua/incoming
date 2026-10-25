@@ -52,22 +52,46 @@ class Pair(unittest.TestCase):
         self.assertTrue(v["pass"], v["fails"])
         self.assertEqual(v["state"], gate.PASS)
 
-    def test_base_is_the_mean_and_tolerance_follows_the_spread(self):
+    def test_base_is_the_worse_accepted_run(self):
         a1, a2 = pair()
-        set_gpu(a1, 10.0), set_gpu(a2, 11.0)                 # база 10,5, расхождение 9,5 % → допуск 19 %
-        row = next(r for r in gate.compare(set_gpu(run(), 12.3), [a1, a2])["rows"]
+        set_gpu(a1, 10.0), set_gpu(a2, 11.0)                 # база — худший, 11; допуск 25 % → до 13,75
+        row = next(r for r in gate.compare(set_gpu(run(), 13.7), [a1, a2])["rows"]
                    if r["window"] == "100/edge" and r["metric"] == "gpu.p50")
-        self.assertAlmostEqual(row["base"], 10.5)
-        self.assertAlmostEqual(row["spread"], 1 / 10.5)
-        self.assertAlmostEqual(row["tol"], 2 / 10.5)
-        self.assertFalse(row["fail"])                         # +17 % при допуске 19 %
-        self.assertTrue(gate.compare(set_gpu(run(), 12.6), [a1, a2])["fails"])   # +20 %
+        self.assertAlmostEqual(row["base"], 11.0)
+        self.assertEqual(row["tol"], gate.TOL)
+        self.assertFalse(row["fail"])
+        self.assertTrue(gate.compare(set_gpu(run(), 13.8), [a1, a2])["fails"])
 
-    def test_tolerance_floor(self):
-        self.assertEqual(gate.tol_of(0.0), gate.MIN_TOL)
-        self.assertEqual(gate.tol_of(None), gate.MIN_TOL)
-        self.assertTrue(gate.compare(run(scale=1.09), pair())["pass"])
-        self.assertFalse(gate.compare(run(scale=1.12), pair())["pass"])
+    def test_tolerance(self):
+        self.assertTrue(gate.compare(run(scale=1.24), pair())["pass"])
+        self.assertFalse(gate.compare(run(scale=1.27), pair())["pass"])
+
+    def test_same_jar_in_one_session_passes(self):
+        # приёмка 25.10, v3.7.0 против себя на ноутбуке: A1 / B / A2, видеокарта p50 и процессор потока p95, мс
+        acc = {"none": {"100/outside": ((29.98, 31.89, 18.66), (20.91, 25.51, 23.12)),
+                        "100/edge": ((26.73, 28.97, 33.25), (16.29, 18.40, 21.01)),
+                        "100/inside": ((65.62, 63.59, 74.03), (18.76, 18.63, 19.08))},
+               "none-2": {"100/outside": ((31.45, 19.09, 30.65), (23.13, 21.11, 21.58)),
+                          "100/edge": ((28.16, 32.54, 25.06), (16.77, 18.49, 16.04)),
+                          "100/inside": ((64.59, 65.99, 62.28), (19.76, 19.23, 21.08))},
+               "complementary": {"100/outside": ((24.95, 25.33, 38.85), (20.86, 25.66, 24.70)),
+                                 "100/edge": ((38.04, 37.91, 34.56), (19.10, 18.60, 22.44)),
+                                 "100/inside": ((78.14, 82.47, 75.27), (18.72, 22.70, 20.59))},
+               "photon": {"100/outside": ((45.95, 45.82, 29.42), (23.75, 24.65, 24.39)),
+                          "100/edge": ((41.94, 38.13, 44.00), (20.94, 21.02, 23.32)),
+                          "100/inside": ((83.48, 82.46, 88.21), (19.76, 23.08, 22.01))}}
+        for pack, wins in acc.items():
+            runs = [run(packs=("none",)) for _ in range(3)]
+            for win, (gpu, thread) in wins.items():
+                for r, g, t in zip(runs, gpu, thread):
+                    r["packs"]["none"]["windows"][win]["gpu"]["p50"] = g
+                    r["packs"]["none"]["windows"][win]["thread"]["p95"] = t
+            v = gate.compare(runs[1], [runs[0], runs[2]])
+            self.assertTrue(v["pass"], (pack, v["fails"]))
+            # регрессия в разы (3.5.0, 3.7.0 против 3.4.1 — от 2,6 раза) на тех же данных — провал
+            for win in wins:
+                runs[1]["packs"]["none"]["windows"][win]["gpu"]["p50"] *= 2.6
+            self.assertFalse(gate.compare(runs[1], [runs[0], runs[2]])["pass"], pack)
 
     def test_drift_between_a1_and_a2_cancels(self):
         # видеокарта грелась весь сеанс: A1 быстрее, A2 медленнее, кандидат между ними — проходит
@@ -88,35 +112,27 @@ class Pair(unittest.TestCase):
         self.assertFalse(gate.compare(run(scale=2.6), pair(1.0, 1.08))["pass"])
 
     def test_exactly_at_tolerance_passes(self):
-        # A1 = A2 = 10 мс, кандидат 11: ровно +10 % — проход (11 / 10 − 1 в двоичных дробях чуть больше 0,1)
+        # A1 = 8, A2 = 10 мс, кандидат 12,5: ровно +25 % к худшему — проход (в двоичных дробях частное может выйти больше)
         (a1, a2), b = pair(), run()
         for win in ("100/outside", "100/edge", "100/inside"):
-            for r, val in ((a1, 10.0), (a2, 10.0), (b, 11.0)):
+            for r, val in ((a1, 8.0), (a2, 10.0), (b, 12.5)):
                 set_gpu(r, val, win=win)
         v = gate.compare(b, [a1, a2])
         self.assertEqual(v["state"], gate.PASS, v["fails"])
-        set_gpu(b, 11.01, win="100/edge")
+        set_gpu(b, 12.51, win="100/edge")
         self.assertEqual(gate.compare(b, [a1, a2])["state"], gate.FAIL)
 
-    def test_noisy_pair_has_no_verdict(self):
-        # A1 1,0 и A2 1,12: база 1,06, расхождение 11 %, допуск 23 % → провал выше 1,30; не хуже A2 + 10 % (1,232) — проход
-        v = gate.compare(run(scale=1.25), pair(1.0, 1.12))
-        self.assertEqual(v["state"], gate.NOISY)
-        self.assertFalse(v["pass"])
-        self.assertTrue(any("расхождение" in n for n in v["noisy"]))
-        # в пределах худшего прогона принятого — проход и в шумной паре
-        self.assertEqual(gate.compare(run(scale=1.0), pair(1.0, 1.12))["state"], gate.PASS)
-        self.assertEqual(gate.compare(run(scale=1.2), pair(1.0, 1.12))["state"], gate.PASS)
-        # сверх допуска, выросшего с шумом, — провал и в шумной паре
-        self.assertEqual(gate.compare(run(scale=2.0), pair(1.0, 1.12))["state"], gate.FAIL)
-        self.assertEqual(gate.compare(run(scale=1.35), pair(1.0, 1.12))["state"], gate.FAIL)
-        # провал самого кандидата шум не объясняет
+    def test_wide_pair_judges_by_the_worse_run(self):
+        # A1 1,0 и A2 1,4 (дым снаружи то в кадре, то нет): до 1,75 — проход, выше — провал
+        self.assertTrue(gate.compare(run(scale=1.7), pair(1.0, 1.4))["pass"])
+        self.assertFalse(gate.compare(run(scale=1.8), pair(1.0, 1.4))["pass"])
+        # провал самого кандидата широкая пара не объясняет
         c = run()
         c["packs"]["none"]["checks"] = ["нет события done"]
-        self.assertEqual(gate.compare(c, pair(1.0, 1.12))["state"], gate.FAIL)
+        self.assertEqual(gate.compare(c, pair(1.0, 1.4))["state"], gate.FAIL)
         c = run()
         del c["packs"]["none"]["windows"]["100/edge"]
-        self.assertEqual(gate.compare(c, pair(1.0, 1.12))["state"], gate.FAIL)
+        self.assertEqual(gate.compare(c, pair(1.0, 1.4))["state"], gate.FAIL)
 
     def test_wall_cpu_and_frame_interval_alone_do_not_fail(self):
         c = run()
@@ -141,7 +157,7 @@ class Pair(unittest.TestCase):
 
     def test_one_camera_one_pack_is_enough(self):
         c = run()
-        c["packs"]["complementary"]["windows"]["100/inside"]["gpu"]["p50"] *= 1.2
+        c["packs"]["complementary"]["windows"]["100/inside"]["gpu"]["p50"] *= 1.3
         v = gate.compare(c, pair())
         self.assertEqual(len(v["fails"]), 1)
         self.assertIn("complementary 100/inside gpu.p50", v["fails"][0])
@@ -249,11 +265,10 @@ class Decide(unittest.TestCase):
         self.assertEqual(gate.decide([bad, bad])["state"], gate.FAIL)
 
     def test_summary(self):
-        p, f, n = {"state": gate.PASS}, {"state": gate.FAIL}, {"state": gate.NOISY}
-        for x in (p, f, n):
-            x.update(fails=[], noisy=[], rows=[], notes=[])
-        self.assertEqual(gate.summary({"a": p, "b": n})["state"], gate.NOISY)
-        self.assertEqual(gate.summary({"a": f, "b": n})["state"], gate.FAIL)
+        p, f = {"state": gate.PASS}, {"state": gate.FAIL}
+        for x in (p, f):
+            x.update(fails=[], rows=[], notes=[])
+        self.assertEqual(gate.summary({"a": p, "b": f})["state"], gate.FAIL)
         self.assertTrue(gate.summary({"a": p})["pass"])
 
 

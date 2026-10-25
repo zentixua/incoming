@@ -206,26 +206,24 @@ def main():
     comment = [f"### {gate_title(verdict)}", ""]
     if verdict:
         md.append(f"## Verdict against {verdict['base']['label']}: {verdict['state'].upper()}")
-        md.append("Each pack is shot as a pair in one session: base A1, candidate B, base A2. The base is the mean of A1 "
-                  f"and A2; the tolerance per value is max({gate.MIN_TOL:.0%}, {gate.SPREAD_K:g} × |A1 − A2| / base). A pair whose "
-                  f"A1 and A2 differ by more than {gate.MAX_SPREAD:.0%} is noisy; a pack that does not pass is shot by a second pair, "
-                  "and the second pair decides.")
-        md += [f"- {x}" for x in verdict["noisy"] + verdict["fails"]] or ["- frame time at 100 strikes within tolerance"]
+        md.append("Each pack is shot as a pair in one session: base A1, candidate B, base A2. The candidate fails a value when it is "
+                  f"more than {gate.TOL:.0%} above the worse of A1 and A2; a pack that does not pass is shot by another pair, "
+                  "and the last pair decides.")
+        md += [f"- {x}" for x in verdict["fails"]] or ["- frame time at 100 strikes within tolerance"]
         md += [f"- note: {x}" for x in verdict["notes"]]
         for pack, pv in verdict["packs"].items():
             for i, e in enumerate(pv.get("earlier") or [], 1):
-                md.append(f"- {pack}, pair {i} (re-shot): {e['state']}: " + "; ".join(e["noisy"] + e["fails"]))
+                md.append(f"- {pack}, pair {i} (re-shot): {e['state']}: " + "; ".join(e["fails"]))
         if verdict["look"]:
             md += ["", "Look differs noticeably (for the reviewer, not a failure):", *[f"- {x}" for x in verdict["look"]]]
         md.append("")
-        comment += ["| pack | window | value | PR | base A1 / A2 | change | tolerance |", "|---|---|---|---|---|---|---|"]
+        comment += ["| pack | window | value | PR | base A1 / A2 | vs worse base | tolerance |", "|---|---|---|---|---|---|---|"]
         for r in verdict["rows"]:
             if r["gated"] and r["window"].startswith(gate.GATED):
                 bases = " / ".join(fmt(x) for x in r.get("bases") or [r["base"]])
                 comment.append(f"| {r['pack']} | {r['window']} | {r['metric']} | {fmt(r['cand'])} | {bases} | {r['change']:+.0%} | "
-                               f"{r['tol']:.0%}{' (noisy)' if r.get('noisy') else ''}{' **FAIL**' if r['fail'] else ''} |")
-        comment += ["", *([f"- {x}" for x in verdict["noisy"] + verdict["fails"]]
-                          or ["Frame time at 100 strikes within tolerance of the base."])]
+                               f"{r['tol']:.0%}{' **FAIL**' if r['fail'] else ''} |")
+        comment += ["", *([f"- {x}" for x in verdict["fails"]] or ["Frame time at 100 strikes within tolerance of the base."])]
         if verdict["look"]:
             comment += ["", "Look differs noticeably (reviewer, compare the frames):", *[f"- {x}" for x in verdict["look"]]]
     md.append("Cells: GPU p50 / CPU p95 / frame p95 (frames per second), ms. GPU — the GPU clock from the first to the last command "
@@ -288,7 +286,7 @@ def main():
 def gate_title(verdict):
     if not verdict:
         return "Scene stand"
-    word = {gate.PASS: "pass", gate.FAIL: "FAIL", gate.NOISY: "noisy, no verdict"}[verdict["state"]]
+    word = {gate.PASS: "pass", gate.FAIL: "FAIL"}[verdict["state"]]
     return f"Scene stand, pair with {verdict['base']['label']}: {word}"
 
 

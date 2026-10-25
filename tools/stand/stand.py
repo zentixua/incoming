@@ -324,7 +324,7 @@ def role_dir(out, role, attempt):
 
 def play_pair(a, out, jar, cand, files, ctx):
     """Пара: прогрев видеокарты принятым на первом паке, затем на каждый пак A1, B, A2 подряд; пак, который не прошёл
-    (gate.compare_pack: провал, шум, негодный прогон), — второй парой сразу же. Итог — verdict.json (judge_pair)."""
+    (gate.compare_pack: провал по числам или негодный прогон), — следующей парой сразу же (--tries). Итог — verdict.json (judge_pair)."""
     base_jar = Path(a.against).resolve()
     base = jar_info(base_jar, a.against_label or base_jar.stem.removeprefix("incoming-"), a.against_spec or a.against)
     jars = {"A1": (base_jar, base), "B": (jar, cand), "A2": (base_jar, base)}
@@ -351,7 +351,7 @@ def play_pair(a, out, jar, cand, files, ctx):
                     return 75
             rs = [analyze(role_dir(out, r, attempt), write=False)["packs"][pack] for r in ROLES]
             v = gate.compare_pack(pack, rs[1], [rs[0], rs[2]])
-            log(f"{a.name}: пак {pack}, пара {attempt} — {v['state']}" + "".join(f"\n  {x}" for x in v["noisy"] + v["fails"]))
+            log(f"{a.name}: пак {pack}, пара {attempt} — {v['state']}" + "".join(f"\n  {x}" for x in v["fails"]))
             if v["state"] == gate.PASS:
                 break
     for d in sorted(metas):
@@ -432,13 +432,13 @@ def judge_pair(out, write=True):
                 break
             if any(g is None for g in got):
                 tries.append({"state": gate.FAIL, "fails": [f"{pack}: пара {attempt} не снята целиком ({', '.join(n for n, g in zip(names, got) if g is None)})"],
-                              "noisy": [], "rows": [], "notes": []})
+                              "rows": [], "notes": []})
                 break
             tries.append(gate.compare_pack(pack, got[1], [got[0], got[2]]))
             # как play_pair: пак, прошедший пару, больше не снимается — пара, снятая под старым правилом, не в счёт
             if tries[-1]["state"] == gate.PASS:
                 break
-        packs[pack] = gate.decide(tries) if tries else {"state": gate.FAIL, "fails": [f"{pack}: пара не снята"], "noisy": [], "rows": [],
+        packs[pack] = gate.decide(tries) if tries else {"state": gate.FAIL, "fails": [f"{pack}: пара не снята"], "rows": [],
                                                         "notes": [], "tries": 0, "earlier": []}
     v = gate.summary(packs)
     v["cand"], v["base"] = info["cand"], info["base"]
@@ -462,14 +462,14 @@ def cmd_gate(a):
         raise SystemExit(f"{out}: не пара (stand.py play … --against <принятый>)")
     v = judge_pair(out)
     log(f"{a.name}: {v['cand']['label']} против {v['base']['label']}: {STATE_WORD[v['state']]}")
-    for f in v["noisy"] + v["fails"]:
+    for f in v["fails"]:
         log("  " + f)
     for n in v["notes"]:
         log("  (" + n + ")")
     return 0 if v["pass"] else 1
 
 
-STATE_WORD = {gate.PASS: "ПРОХОДИТ", gate.FAIL: "ПРОВАЛ", gate.NOISY: "ШУМНО — вердикта нет"}
+STATE_WORD = {gate.PASS: "ПРОХОДИТ", gate.FAIL: "ПРОВАЛ"}
 
 
 def main_base():
@@ -544,15 +544,12 @@ def cmd_pr(a):
     subprocess.run(["uv", "run", str(HERE / "report.py"), name])
     log(f"PR {a.number}: {STATE_WORD[v['state']]}; отчёт {out / 'report.md'}")
     if a.post:
-        body = (out / "comment.md").read_text() if (out / "comment.md").exists() else "\n".join(v["noisy"] + v["fails"])
+        body = (out / "comment.md").read_text() if (out / "comment.md").exists() else "\n".join(v["fails"])
         comment = gh("api", f"repos/{REPO}/issues/{a.number}/comments", "-f", f"body={body}", "--jq", ".html_url").strip()
         if v["state"] == gate.PASS:
             state, desc = "success", f"Время кадра при 100 ударах — не хуже {version}"
-        elif v["state"] == gate.FAIL:
-            state, desc = "failure", f"Хуже {version}: " + v["fails"][0]
         else:
-            # шум пары — не вердикт о PR: снять заново на тихой машине
-            state, desc = "error", "Шумно: принятый в паре разошёлся сам с собой — снять заново"
+            state, desc = "failure", f"Хуже {version}: " + v["fails"][0]
         post_status(head, state, desc[:140], comment)
     return 0 if v["pass"] else 1
 
