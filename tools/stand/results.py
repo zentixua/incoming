@@ -304,6 +304,16 @@ def checks(events, res, expected=(), acc_scene=None, unawaited=()):
         if e["type"] == "tp-timeout":
             why = f" (ждала: {e['waiting']})" if e.get("waiting") else ""
             bad.append(f"камера не дошла до {e['eye']}{why}")
+        if e["type"] == "late":
+            bad.append(f"кадр после залпа {e['salvo']} позже срока: {e['late_s']:.1f} с сверх {e['s']:g} с от последнего взрыва")
+        if e["type"] == "since":
+            # по всем попаданиям прогона, а не по тем, что Director знал в миг шага: попадание после срока (залп кончился
+            # «тишиной», а снаряд ещё летел вне мира) сдвинуло бы кадр к свежему взрыву
+            last = max((i["t_ms"] for i in events if i["type"] == "impact" and i["salvo"] == e["salvo"]), default=None)
+            after = None if last is None else (e["t_ms"] - last) / 1000
+            if after is None or not e["s"] - SINCE_EARLY_S <= after <= e["s"] + SINCE_LATE_S:
+                got = "попаданий нет" if after is None else f"{after:.1f} с"
+                bad.append(f"кадр после залпа {e['salvo']} не в срок: {got} от последнего взрыва вместо {e['s']:g} с")
         if e["type"] == "impact-timeout":
             bad.append(f"окно {e['name']}: нет попадания залпа {e['salvo']}")
     for salvo, i in res["meta"]["impacts"].items():
@@ -410,6 +420,9 @@ COVER_MIN = 0.95
 MIN_FRAMES = 20
 # команда волны позже расписания больше чем на столько — волны пошли пачкой (тик клиента 50 мс, снимок кадра ~0,5 с)
 LATE_MS = 2000
+# кадр камеры после залпа (шаг since): от последнего попадания не раньше срока (минус шаг часов клиента) и не позже срока
+# + 2 с (Director.LATE_S)
+SINCE_EARLY_S, SINCE_LATE_S = 0.1, 2.0
 # доля ударов залпа, что может не дойти (конец «quiet»: снарядов в мире нет, тишина): шахед над чужим взрывом гибнет в
 # воздухе — так в моде и есть, от прогона к прогону по-разному (ворота #457: 98 и 99 из 100; #460: 95–96 и у принятого
 # v3.7.0, и у кандидата); 10 из 100 — нагрузка того же порядка, а пропавший залп (сломанный пуск) всё равно виден
