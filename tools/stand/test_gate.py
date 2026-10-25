@@ -908,7 +908,7 @@ class Plan(unittest.TestCase):
         steps = plan.build(self.scenes, ["100"])["steps"]
         i = next(i for i, s in enumerate(steps) if s["do"] == "impact_window")
         w = steps[i]
-        self.assertEqual((w["name"], w["salvo"], w["n"], w["s"]), ("100-hit", "100", 1, 10))
+        self.assertEqual((w["name"], w["salvo"], w["n"], w["s"]), ("100-hit", "100", 10, 10))
         self.assertEqual(steps[i - 1]["eye"], plan.camera(self.scenes, "outside", (1000.0, 0.0), 120)[0])
         self.assertEqual(steps[i + 1]["do"], "await")                     # пока залп ещё ложится: окна «100/*» — после конца
         self.assertFalse(w["name"].startswith(gate.GATED))                # в шлагбаум не входит

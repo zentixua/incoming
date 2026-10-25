@@ -193,8 +193,9 @@ def build(scenes, only=None):
         steps.append(salvo_step(s))
         steps.append(tp(eye, look))
         if hit:
-            # миг прилёта: окно от первого попадания (шар, вспышка, волна, обломки в полёте), пока залп ещё ложится
-            steps.append({"do": "impact_window", "name": f"{s['id']}-hit", "salvo": s["id"], "n": 1, "s": hit["window_s"],
+            # миг прилёта: окно от n-го попадания (шар, вспышка, волна, обломки в полёте), пока залп ещё ложится; не от
+            # первого: шахед, пришедший раньше залпа на 6 с, сдвигал окно, и в него падала половина ударов (smb, 25.10)
+            steps.append({"do": "impact_window", "name": f"{s['id']}-hit", "salvo": s["id"], "n": hit["nth"], "s": hit["window_s"],
                           "shots": hit.get("shots", []), "prefix": f"{s['id']}-hit", "timeout_s": scenes["await_timeout_s"]})
         steps.append({"do": "await", "salvo": s["id"], "timeout_s": scenes["await_timeout_s"], "quiet_s": scenes["quiet_s"]})
         for cam in cams:
