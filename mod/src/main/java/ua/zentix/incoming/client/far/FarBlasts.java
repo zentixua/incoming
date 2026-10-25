@@ -250,6 +250,15 @@ public final class FarBlasts {
             return BB[3];
         }
 
+        /**
+         * Яркость света, что шар на age-м тике отдаёт наружу при свете неба sky ({@link CloudModel#shownLight}): огонь без
+         * той доли, что уже дым, — тот же выход, что у тела на экране ({@link #light}).
+         */
+        double shown(double age, double sky) {
+            model.shownLight(age / 20, sky, BB);
+            return BB[3];
+        }
+
         /** Цвет света шара на age-м тике (наибольший канал — 1). */
         float[] colour(double age) {
             model.ballLight(age / 20, BB);
@@ -836,11 +845,11 @@ public final class FarBlasts {
      * Огненные шары, что светят на дым сетки и на мир ({@code fx_pall}: {@code SmokeBalls}, вывод на кадр:
      * {@code PallBalls}): до четырёх самых заметных шаров облаков модели (свет у глаза — яркость × R²/d²) в свободные
      * столбцы {@code centres} (занятые — шары ядерки — не трогаются) — центр от глаза и радиус; в {@code light} — свет
-     * чёрного тела у поверхности (линейный, белая стена в полдень — 1) × {@code exposure}, в w — {@code air} (ослабление
+     * огня у поверхности ({@link CloudModel#shownLight}: чёрное тело без доли шара, что уже дым) (линейный, белая стена в полдень — 1) × {@code exposure}, в w — {@code air} (ослабление
      * воздуха, 1/блок). true — хоть один шар добавлен.
      */
     public static boolean fireballs(Vec3 eye, float partial, double exposure, double air, Matrix4f centres, Matrix4f light) {
-        double now = BlastTime.ticks() + partial;
+        double now = BlastTime.ticks() + partial, sky = FarView.skyLuminance(Minecraft.getInstance().level, partial);
         double[] weight = WEIGHT;
         boolean any = false;
         org.joml.Vector4f column = COLUMN;
@@ -853,7 +862,7 @@ public final class FarBlasts {
             double r = e.model.ballRadius(t);
             if (r <= 0) continue;
             double dx = e.x + e.model.ballX(t) - eye.x, dy = e.y + e.model.ballHeight(t) - eye.y, dz = e.z + e.model.ballZ(t) - eye.z;
-            e.model.ballLight(t, BB);
+            e.model.shownLight(t, sky, BB);
             double w = BB[3] * r * r / Math.max(dx * dx + dy * dy + dz * dz, r * r);
             int slot = 0;
             for (int i = 1; i < 4; i++) if (weight[i] < weight[slot]) slot = i;
@@ -868,22 +877,23 @@ public final class FarBlasts {
 
     /**
      * Свет и горячий газ облаков модели на мир кадра ({@code HeatPass}): огненный шар — ламбертов шар чёрного тела своей
-     * температуры (как у {@link #fireballs}); газ — термик облака (середина, радиус, температура и подъём модели); фронт
+     * температуры, только та его доля, что ещё огонь, а не дым ({@link CloudModel#shownLight}, как у {@link #fireballs} и
+     * тела на экране); газ — термик облака (середина, радиус, температура и подъём модели); фронт
      * ударной волны ({@link #front(ChemicalFront, double, double, double, double[], double[])}). Пламя и
      * столб над топливом в воронке — у пожаров ({@code FireSmoke.heat}).
      */
     public static void heat(Vec3 eye, float partial, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         ClientLevel level = Minecraft.getInstance().level;
-        double now = BlastTime.ticks() + partial;
+        double sky = FarView.skyLuminance(level, partial);
         for (Event e : EVENTS) {
             if (e.level != level || !e.alive) continue;
             double t = BlastTime.seconds(BlastTime.ticks(), e.born, partial);
             double bx = e.x - eye.x, by = e.y - eye.y, bz = e.z - eye.z;
             double r = e.model.ballRadius(t);
             if (r > 0) {
-                e.model.ballLight(t, BB);
+                e.model.shownLight(t, sky, BB);
                 double h = e.model.ballHeight(t);
-                f.light(bx + e.model.ballX(t), by + h, bz + e.model.ballZ(t), r, BB[0], BB[1], BB[2], air, h);
+                if (BB[3] > 0) f.light(bx + e.model.ballX(t), by + h, bz + e.model.ballZ(t), r, BB[0], BB[1], BB[2], air, h);
             }
             // горячий газ термика — там же, где его дым (снос ветром)
             double cr = e.model.radius(t), ch = e.model.height(t);
@@ -972,7 +982,7 @@ public final class FarBlasts {
         }
         // шар закрыт гребнем или постройкой: его свет рассеивает воздух над краем — зарево там, откуда место было бы
         // видно, пока шар светит; на любой дальности, как блик (вблизи за домом одной вспышки на экране не хватает)
-        if (hidden > 0) halo(view, out, bx, by + Math.max(line, h), bz, HALO_SIZE * r, b * hidden, fire, t, c);
+        if (hidden > 0) halo(view, out, bx, by + Math.max(line, h), bz, HALO_SIZE * r, b * body * hidden, fire, t, c);
     }
 
     /** Самое яркое тело кадра — для лога: числа {@link Sight#light} последнего нарисованного (в {@link #LIGHT}). */
@@ -1026,7 +1036,7 @@ public final class FarBlasts {
         if (vis <= 0) return;
         double peak = SKY_PEAK * (SKY_CLEAR + (1 - SKY_CLEAR) * view.rain()) * t * vis * share;
         float[] c = e.colour(age);
-        out.glow(bx, gy, bz, rs, rs, c[0], c[1], c[2], (float) (peak * cloudGlow(e.brightness(age), r, h, view.exposure())));
+        out.glow(bx, gy, bz, rs, rs, c[0], c[1], c[2], (float) (peak * cloudGlow(e.shown(age, view.skyLuminance()), r, h, view.exposure())));
     }
 
     /**
