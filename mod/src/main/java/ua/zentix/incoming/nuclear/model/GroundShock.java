@@ -20,13 +20,16 @@ public final class GroundShock {
     /** Contact coupling ~0.14; full containment at scaled burial 1.4 ft/lb^(1/3), TM ch. 5 coupling chart. */
     private static final double CONTACT = 0.14, CONTAINED_DEPTH = 1.4;
     /**
-     * Estimated transition for perception, m/s PPV: 0.1--0.3 mm/s, not a damage threshold. DIN 4150-2 perception
-     * table reproduced in Melbourne Metro EES ch. 13, table 13-4 (2016): 0.1 imperceptible, 0.15 threshold,
-     * 0.35 barely noticeable. Applying these vibration ranges to a single impulse is an estimate, frequency dependent.
+     * Human perception, DIN 4150-2:1999-06 (https://www.dinmedia.de/de/norm/din-4150-2/390807042), checked against the
+     * standard's text: eq. (1) frequency weighting |H_KB(f)| = 1/sqrt(1 + (f0/f)^2), f0 = 5.6 Hz, a first-order
+     * high-pass; section 7, eqs. (6) and (7), estimate from the unweighted record KB*_Fmax = c_F * v_max/sqrt(2) * |H_KB|,
+     * v_max in mm/s, KB dimensionless; table 3 row 4b, single event of short duration without resonance: c_F = 0.6
+     * (+-15 %; a resonating floor, row 4a, would give 0.8 and is not modelled). Annex D on section 6 b): most people
+     * feel KB 0.1--0.2, KB ~0.3 is well felt. The gate below rises smoothly from 0.1 to 0.3.
+     * Estimates: DIN rates floors in buildings, here it is free-field ground under the player and one TM pulse.
      */
-    public static final double PERCEPTION_START_MPS = 0.0001, PERCEPTION_FULL_MPS = 0.0003;
-    /** DIN 4150-2 assessment domain, Hz: https://www.dinmedia.de/de/norm/din-4150-2/390807042 . */
-    private static final double PERCEPTION_MIN_HZ = 1, PERCEPTION_MAX_HZ = 80;
+    public static final double PERCEPTION_START_KB = 0.1, PERCEPTION_FULL_KB = 0.3;
+    private static final double KB_CORNER_HZ = 5.6, SHORT_EVENT_CF = 0.6, MM_PER_M = 1000;
     /** Near-field validity cutoff, estimate: do not extrapolate the singular empirical law inside Z = 1 ft/lb^(1/3). */
     private static final double MIN_SCALED_RANGE = 1;
     private GroundShock() {}
@@ -45,8 +48,8 @@ public final class GroundShock {
      * @param arrivalSeconds time since the source event, s, R/c (not rounded to ticks)
      * @param peakVelocityMps peak ground particle velocity, m/s, before perceptibility filtering
      * @param frequencyHz characteristic frequency a0/(2*pi*V0), Hz; one pulse lasts 1/frequencyHz
-     * @param perceptibility smooth 0..1 presentation weight within 1--80 Hz; zero outside the supported assessment
-     *                       domain, not a claim of physical imperceptibility there or a full DIN KB/F assessment
+     * @param perceptibility smooth 0..1 presentation weight of the DIN 4150-2 estimate KB*_Fmax between the perception
+     *                       threshold KB 0.1 and KB 0.3; falls monotonically with range, no zero inside the felt range
      */
     public record Sample(double arrivalSeconds, double peakVelocityMps, double frequencyHz, double perceptibility) {
         /** Pulse length after arrival, s; zero for a zero-energy source. */
@@ -71,8 +74,7 @@ public final class GroundShock {
         // Frequency/spectrum and resulting displacement remain estimates; the pulse preserves TM V0 AND a0,
         // not the separately fitted TM residual/peak displacement d0. Same near-field cutoff as PPV.
         double frequency = ACCELERATION_VELOCITY_RATIO * c / (2 * Math.PI * z * length);
-        double felt = smooth((peak - PERCEPTION_START_MPS) / (PERCEPTION_FULL_MPS - PERCEPTION_START_MPS)) * perceptionBand(frequency);
-        return new Sample(r / c, peak, frequency, felt);
+        return new Sample(r / c, peak, frequency, perceptibility(kbFmax(peak, frequency)));
     }
 
     /** Depth coupling f, dimensionless; source mass is kg and depth is m. */
@@ -106,20 +108,37 @@ public final class GroundShock {
         return sample.peakVelocityMps() * (cycles < 0.25 ? s * s : cycles > 0.75 ? -s * s : s);
     }
 
-    /** Outer recipient bound, m: both PPV and frequency must remain in the supported perception domain. */
+    /**
+     * Recipient range, m: where KB*_Fmax falls to the perception threshold; perceptibility is zero from here on.
+     * KB <= c_F/sqrt(2) * PPV since |H_KB| <= 1, so the PPV contour bounds the search; PPV and |H_KB(f)| both fall with
+     * range, so KB is monotone and bisection finds the contour.
+     */
     public static double feltRangeM(Source source) {
         if (!(source.tntKg() > 0)) return 0;
-        double velocityBound = scaledLengthM(source) * Math.pow(160 * METRES_PER_FOOT * coupling(source) / PERCEPTION_START_MPS,
-                1 / attenuation(source.medium()));
-        double frequencyBound = ACCELERATION_VELOCITY_RATIO * waveSpeed(source.medium()) / (2 * Math.PI * PERCEPTION_MIN_HZ);
-        return Math.min(velocityBound, frequencyBound);
+        double lo = 0, hi = scaledLengthM(source) * Math.pow(160 * METRES_PER_FOOT * coupling(source)
+                / (PERCEPTION_START_KB * Math.sqrt(2) / (SHORT_EVENT_CF * MM_PER_M)), 1 / attenuation(source.medium()));
+        for (int i = 0; i < 64; i++) {
+            double mid = (lo + hi) / 2;
+            if (sample(source, mid).perceptibility() > 0) lo = mid;
+            else hi = mid;
+        }
+        return hi;
     }
 
-    private static double perceptionBand(double frequency) {
-        // Presentation estimate: one-octave tapers INSIDE the DIN domain (1--2 and 40--80 Hz), zero outside.
-        // They prevent a new step at the limits without extending the PPV criterion to unsupported frequencies.
-        return smooth((frequency - PERCEPTION_MIN_HZ) / PERCEPTION_MIN_HZ)
-                * smooth((PERCEPTION_MAX_HZ - frequency) / (PERCEPTION_MAX_HZ / 2));
+    /**
+     * DIN 4150-2 eqs. (1), (6), (7): estimated maximum weighted vibration KB*_Fmax (dimensionless) of a single short
+     * pulse with peak ground velocity in m/s and characteristic frequency in Hz.
+     * The standard evaluates a 1--80 Hz signal (section 3.3); outside it the same weighting continues, an estimate:
+     * above 80 Hz it tends to 1, below 1 Hz it falls in proportion to f. No zero and no step at the band edges.
+     */
+    static double kbFmax(double peakVelocityMps, double frequencyHz) {
+        if (!(frequencyHz > 0)) return 0;
+        double weighting = frequencyHz / Math.hypot(frequencyHz, KB_CORNER_HZ);
+        return SHORT_EVENT_CF * MM_PER_M * peakVelocityMps / Math.sqrt(2) * weighting;
+    }
+
+    private static double perceptibility(double kb) {
+        return smooth((kb - PERCEPTION_START_KB) / (PERCEPTION_FULL_KB - PERCEPTION_START_KB));
     }
 
     /** TM soil attenuation classes; choices within published ranges are estimates, not fitted game distances. */

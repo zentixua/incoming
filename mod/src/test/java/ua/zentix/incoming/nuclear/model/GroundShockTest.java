@@ -30,17 +30,11 @@ class GroundShockTest {
                 var s = GroundShock.sample(source, r);
                 assertTrue(s.peakVelocityMps() <= previous.peakVelocityMps());
                 assertTrue(s.peakAccelerationMps2() <= previous.peakAccelerationMps2());
-                // Raw loads decrease everywhere. The assessment is not defined above 80 Hz; entering its band
-                // from above can increase its weight. Once past the upper taper, it also decreases with range.
-                if (previous.frequencyHz() <= 40) assertTrue(s.perceptibility() <= previous.perceptibility());
+                assertTrue(s.perceptibility() <= previous.perceptibility());
                 assertTrue(s.frequencyHz() <= previous.frequencyHz());
                 assertEquals(r / GroundShock.waveSpeed(medium), s.arrivalSeconds());
                 previous = s;
             }
-            double reach = GroundShock.feltRangeM(source);
-            assertEquals(0, GroundShock.sample(source, reach).perceptibility(), 1e-12);
-            assertEquals(0, GroundShock.sample(source, reach * (1 + 1e-6)).perceptibility());
-            assertTrue(GroundShock.sample(source, reach * (1 - 1e-6)).perceptibility() < 1e-9);
         }
         double fullDepth = 1.4 * 0.3048 * Math.cbrt(50 / 0.45359237);
         for (double depth : new double[]{0, fullDepth}) {
@@ -71,19 +65,61 @@ class GroundShockTest {
     }
 
     @Test
-    void perceptionCriterionIsSmoothAndLimitedToItsFrequencyDomain() {
-        // Keep PPV above the complete-perception threshold to isolate frequency support, not the amplitude gate.
-        var source = new GroundShock.Source(2400, 20, GroundShock.Medium.ROCK);
-        double frequencyAtOneMetre = 1.6002058959483 * 3000;
-        for (double hz : new double[]{0.05, 0.5, 1, 80, 160}) {
-            var s = GroundShock.sample(source, frequencyAtOneMetre / hz);
-            assertEquals(0, s.perceptibility(), 1e-12, hz + " Hz is outside the supported perception band");
+    void perceptibilityNeverGrowsWithRangeAndRecipientsEndAtItsContour() {
+        // Spec: every value falls with distance. Frequency is highest at the crater (1.6 c/R): a band that zeroed
+        // high frequencies left the strongest motion "imperceptible" in rock and saturated ground (review round 2).
+        for (var medium : GroundShock.Medium.values())
+            for (double[] charge : new double[][]{{6.4, 0}, {16, 0}, {50, 1}, {150, 0}, {2400, 0}, {2400, 14}}) {
+                var source = new GroundShock.Source(charge[0], charge[1], medium);
+                String what = medium + " " + charge[0] + " kg at " + charge[1] + " m depth";
+                var previous = GroundShock.sample(source, 0);
+                assertEquals(1, previous.perceptibility(), what + " at the source");
+                double reach = GroundShock.feltRangeM(source);
+                for (double r = 0.5; r < 2 * reach; r *= 1.02) {
+                    var s = GroundShock.sample(source, r);
+                    assertTrue(s.perceptibility() <= previous.perceptibility(), what + ": felt more at " + r + " m");
+                    // The perception estimate never exceeds the flat-weighted PPV: the PPV contour stays an outer bound.
+                    assertTrue(GroundShock.kbFmax(s.peakVelocityMps(), s.frequencyHz())
+                            <= 0.6 * 1000 * s.peakVelocityMps() / Math.sqrt(2) * (1 + 1e-12), what);
+                    if (r >= reach) assertEquals(0, s.perceptibility(), what + ": felt beyond the recipient range");
+                    previous = s;
+                }
+                assertEquals(0, GroundShock.sample(source, reach).perceptibility(), what);
+                double inside = GroundShock.sample(source, reach * (1 - 1e-6)).perceptibility();
+                assertTrue(inside > 0 && inside < 1e-9, what + ": recipient range is not the perception contour, " + inside);
+            }
+    }
+
+    @Test
+    void bunkerBombInRockIsFullyFeltNextToTheCrater() {
+        // Review round 2: 2.4 t in rock at 30 m -- PPV ~3.6 m/s at 160 Hz -- was perceptibility 0.
+        for (double depth : new double[]{0, 14}) {
+            var s = GroundShock.sample(new GroundShock.Source(2400, depth, GroundShock.Medium.ROCK), 30);
+            assertTrue(s.frequencyHz() > 80, "the case must stay above the DIN 4150-2 1--80 Hz band");
+            assertEquals(1, s.perceptibility(), "2.4 t in rock at 30 m, depth " + depth);
         }
-        assertEquals(1, GroundShock.sample(source, frequencyAtOneMetre / 16).perceptibility());
-        for (double hz : new double[]{1 + 1e-6, 80 - 1e-6})
-            assertEquals(0, GroundShock.sample(source, frequencyAtOneMetre / hz).perceptibility(), 1e-9);
-        assertEquals(frequencyAtOneMetre, GroundShock.feltRangeM(source), 1e-9,
-                "packet recipients must stop at the supported lower frequency, not at the far-away PPV contour");
+    }
+
+    @Test
+    void perceptionIsTheDinKbEstimateWithoutBandEdges() {
+        // DIN 4150-2:1999-06 annex C.7.3, blasting, single event: v_max 4 mm/s at 14 Hz, c_F 0.8 (table 3 row 4a)
+        // gives KB*_Fmax 2.1 by eqs. (6), (7). The model uses row 4b (no floor resonance): c_F 0.6, same formula.
+        assertEquals(2.1 * 0.6 / 0.8, GroundShock.kbFmax(0.004, 14), 0.005);
+        double v = 0.001, flat = 0.6 * 1000 * v / Math.sqrt(2);
+        // Eq. (1) at the high-pass corner f0 = 5.6 Hz.
+        assertEquals(flat / Math.sqrt(2), GroundShock.kbFmax(v, 5.6), 1e-12);
+        double previous = 0;
+        for (double hz = 0.01; hz < 5000; hz *= 1.01) {
+            double kb = GroundShock.kbFmax(v, hz);
+            assertTrue(kb > previous && kb < flat, hz + " Hz");
+            previous = kb;
+        }
+        // Outside the DIN 1--80 Hz signal band the same weighting continues (estimate): no zero and no step.
+        for (double edge : new double[]{1, 80})
+            assertEquals(GroundShock.kbFmax(v, edge * (1 - 1e-9)), GroundShock.kbFmax(v, edge * (1 + 1e-9)), flat * 1e-8);
+        assertTrue(GroundShock.kbFmax(v, 160) > 0.99 * flat);
+        assertTrue(GroundShock.kbFmax(v, 0.5) > 0);
+        assertEquals(0, GroundShock.kbFmax(v, 0));
     }
 
     @Test
