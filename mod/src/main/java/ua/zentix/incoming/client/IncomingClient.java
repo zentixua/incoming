@@ -410,10 +410,20 @@ public final class IncomingClient {
             });
         }
 
+        /**
+         * Толчок земли: у источника волны грунта (удар бомбы о землю, взрыв в грунте) приход и сила — у ног этого игрока
+         * ({@link ua.zentix.incoming.client.fx.GroundShake}); прежний пакет без источника (ядерный наземный путь, старые
+         * записи повтора) — тряска и гул сразу.
+         */
         @Override
         public void quake(S2C.Quake p) {
             Replay.event("quake", live -> {
                 if (!live || !ownBlasts()) return;
+                if (p.source().isPresent()) {
+                    S2C.Quake.Ground g = p.source().get();
+                    ua.zentix.incoming.client.fx.GroundShake.schedule(g.pos(), g.model(), g.gameTime(), g.gameTime() ^ Double.doubleToLongBits(g.pos().x + g.pos().z));
+                    return;
+                }
                 CameraShake.quake(p.ticks());
                 if (p.rumble()) BlastSounds.quake();
             });

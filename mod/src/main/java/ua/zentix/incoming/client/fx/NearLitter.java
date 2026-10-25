@@ -48,6 +48,8 @@ public final class NearLitter {
     static final float CLUMP_MIN = 0.25f, CLUMP_MAX = 0.5f;
     /** Крошка грунта, м: зерно гравия, комок земли (подача — песчинку не видно). */
     static final float GRAIN_MIN = 0.06f, GRAIN_MAX = 0.12f;
+    /** Подъём броска к земле, тангенс (19–35°): подача, модуль скорости — модели ({@link FrontLitter#launch}). */
+    static final double LIFT_MIN = 0.35, LIFT_MAX = 0.7;
     /** Плотность крошки, кг/м³ (комок сухого грунта). */
     static final double GRAIN_DENSITY = 1600;
     /** Тонкая пыль: облачко на место, м, и непрозрачность не больше (подача: толстая — бурая стена у глаз). */
@@ -142,10 +144,13 @@ public final class NearLitter {
                 double want = lift.releaseShare() * PER_M2 * STEP * STEP;
                 int n = (int) want + (rnd.nextDouble() < want - (int) want ? 1 : 0);
                 if (c.pieces) {
+                    // бросок модели (её доля вверх — турбулентность у земли, 0,1) повёрнут вверх на 19–35° к земле, модуль
+                    // скорости — её же: подача (как у FrontLitter), «подпрыгивают» — так вблизи и видно, что сорвало
+                    double speed = Math.hypot(lift.horizontalMps(), lift.verticalMps()) / 20;
                     for (int k = 0; k < n && born < budget; k++) {
-                        double h = lift.horizontalMps() / 20, v = lift.verticalMps() / 20;
+                        double[] kick = FrontLitter.launch(speed, LIFT_MIN + (LIFT_MAX - LIFT_MIN) * rnd.nextDouble());
                         if (Fragments.torn(level, c.torn, m.set(bx, c.torn == plant ? top + 1 : top, bz).immutable(), c.kind,
-                                x + (rnd.nextDouble() - 0.5) * STEP, y, z + (rnd.nextDouble() - 0.5) * STEP, ox * h, v, oz * h, size, AIR, delay, high)) born++;
+                                x + (rnd.nextDouble() - 0.5) * STEP, y, z + (rnd.nextDouble() - 0.5) * STEP, ox * kick[0], kick[1], oz * kick[0], size, AIR, delay, high)) born++;
                     }
                 }
                 if (dust(level, lift, coverState, x, y, z, ox, oz, delay, rnd)) puffs++;
