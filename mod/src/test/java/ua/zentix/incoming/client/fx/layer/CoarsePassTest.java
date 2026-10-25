@@ -10,6 +10,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 
@@ -250,53 +251,84 @@ class CoarsePassTest {
     }
 
     /**
-     * Разрыв глубины в 4 % — прут на 100 блоках перед стеной на 104 (ревью #455): соседи мелкого кадра у прута — не то же
-     * место, пиксель уходит в досчёт; та же поверхность (104 против 104,3: наклон в пределах пикселя мелкого кадра) —
-     * то же. Шейдер вывода — с тем же допуском, что здесь.
+     * Допуск «то же место» у вывода ({@code coarseTolerance}) — абсолютный, в блоках: десятая блока плюс 16 шагов
+     * 24-битной глубины на этом расстоянии. Шагов наклон ровной земли (глубина кадра с ближней плоскостью 0,05, вскользь
+     * и под углом, отступ образца до 12 пикселей) ошибается не больше 16 — ни один пиксель земли в досчёт не уходит.
      */
     @Test
-    void depthStepOfAFewPercentIsNotTheSamePlace() throws IOException {
-        assertTrue(CoarsePass.alike(100, 104) < 0.5, "прут и стена");
-        assertTrue(CoarsePass.alike(100, 102) < 0.5, "прут и дым за ним");
-        assertTrue(CoarsePass.alike(104, 104.3) > 0.5, "одна стена");
-        assertTrue(CoarsePass.alike(0.5, 0.501) > 0.5, "вплотную");
-        String out = shader("core/fx_coarse.fsh").replaceAll("\\s+", " ");
-        assertTrue(out.contains("const float COARSE_SAME = " + (float) CoarsePass.SAME + ";"), "допуск шейдера");
-        assertTrue(out.contains("float rel = abs(d - e) / max(min(d, e), 0.1) / COARSE_SAME; return 1.0 / (1.0 + rel * rel);"), "та же формула");
-        assertTrue(out.contains("coarseAlike(") && !out.contains("pallAlike("), "вывод — строгим сходством");
+    void sameSurfaceIsTheSamePlaceAtTheDepthBuffersOwnStep() throws IOException {
+        String glsl = shader("include/pall.glsl") + shader("core/fx_coarse.fsh");
+        GlslFunction tolerance = GlslFunction.parse(glsl, "coarseTolerance"), slope = GlslFunction.parse(glsl, "pallSlopeAxis"),
+                alike = GlslFunction.parse(glsl, "coarseAlike");
+        assertEquals(16 / (0.05 * (1 << 24)), GlslFunction.parse("float k() { return COARSE_STEP; }" + glsl, "k").call(Map.of()), 1e-11);
+        assertEquals(0.29, tolerance.call(Map.of("d", 100.0)), 0.01);
+        assertEquals(0.86, tolerance.call(Map.of("d", 200.0)), 0.01);
+        double n = 0.05, f = 1024, h = 1.6, focal = H / 2.0 / Math.tan(Math.toRadians(35));
+        int checked = 0;
+        for (double pitch : new double[]{0, 5, 20, 60}) {
+            double[] z = new double[H];
+            for (int row = 0; row < H; row++) {
+                // ряд экрана сверху вниз, ось взгляда опущена на pitch: расстояние до ровной земли на h ниже глаза по оси
+                // взгляда — через 24-битную глубину, как у кадра Minecraft
+                double a = Math.atan((row - H / 2 + 0.5) / focal), down = a + Math.toRadians(pitch);
+                double along = down > 1e-6 ? h / Math.sin(down) * Math.cos(a) : 1e9;
+                if (along > f) {
+                    z[row] = 1e9;
+                    continue;
+                }
+                double ndc = (f + n) / (f - n) - 2 * f * n / ((f - n) * along), d01 = Math.round((ndc + 1) / 2 * ((1 << 24) - 1)) / (double) ((1 << 24) - 1);
+                z[row] = 2 * f * n / ((f + n) - (d01 * 2 - 1) * (f - n));
+            }
+            for (int row = 1; row < H - 1; row++) {
+                if (z[row - 1] >= 1e8 || z[row] >= 1e8 || z[row + 1] >= 1e8) continue;
+                double w = 1 / z[row], tol = tolerance.call(Map.of("d", z[row])) / z[row];
+                double s = slope.call(Map.of("l", w - 1 / z[row - 1], "r", 1 / z[row + 1] - w, "w", w, "tol", tol));
+                for (int o = -12; o <= 12; o++) {
+                    if (row + o < 0 || row + o >= H || z[row + o] >= 1e8) continue;
+                    double ahead = 1 / Math.max(w + s * o, 1e-9), a = alike.call(Map.of("d", z[row + o], "e", ahead));
+                    assertTrue(a > 0.5, String.format(Locale.ROOT, "земля %.0f° ряд %d (%.1f блока) в %d: %.3f", pitch, row, z[row], o, a));
+                    checked++;
+                }
+            }
+        }
+        assertTrue(checked > 10000, "проверено " + checked);
     }
 
     /**
      * Цепочка вывода на краях, по самому шейдеру ({@link GlslFunction}: наклон {@code pallSlopeAxis}, сходство
      * {@code coarseAlike}, вес {@code coarseWeight}; место на той же поверхности {@code pallAhead} — здесь по одной оси).
-     * Прут в пиксель на 100 блоках перед стеной на 104 (ревью #455): наклона у прута нет, ни один сосед мелкого кадра у
-     * стены — не то же место, пиксель уходит в досчёт; с допуском наклона пелены (5 %) наклон вёл бы к стене. Край
-     * переднего предмета с билинейкой 1/16 у него и 15/16 у фона: фон в цвет не идёт вовсе. Ровная земля вскользь
-     * (1/расстояние по экрану линейно, у соседа на 5 % дальше): наклон держится, соседи — то же место.
+     * Прут в пиксель перед стеной, дым между ними (ревью #455: 100 и 104 блока, 200 и 201, 100 и 100,5): наклона у прута
+     * нет, ни один сосед мелкого кадра у стены — не то же место, пиксель уходит в досчёт; с допуском наклона пелены (5 %)
+     * наклон вёл бы к стене. Край переднего предмета с билинейкой 1/16 у него и 15/16 у фона: фон в цвет не идёт вовсе.
+     * Ровная земля вскользь (1/расстояние по экрану линейно, у соседа на 5 % дальше): наклон держится, соседи — то же место.
      */
     @Test
     void edgesOfTheWorldKeepCoarseSmokeOnItsOwnSurface() throws IOException {
         String glsl = shader("include/pall.glsl") + shader("core/fx_coarse.fsh");
         GlslFunction slope = GlslFunction.parse(glsl, "pallSlopeAxis"), alike = GlslFunction.parse(glsl, "coarseAlike"),
-                weight = GlslFunction.parse(glsl, "coarseWeight");
+                weight = GlslFunction.parse(glsl, "coarseWeight"), tolerance = GlslFunction.parse(glsl, "coarseTolerance");
         String flat = glsl.replaceAll("\\s+", " ");
         assertTrue(flat.contains("return 1.0 / max(1.0 / depth + dot(slope, offset), 1e-9);"), "pallAhead — как здесь");
-        assertTrue(flat.contains("slope = pallSlopeWithin(Sampler1, full, fullSize, depth, COARSE_SAME);"), "наклон — с допуском мелкого кадра");
+        assertTrue(flat.contains("slope = pallSlopeWithin(Sampler1, full, fullSize, depth, coarseTolerance(depth) / depth);"), "наклон — с допуском мелкого кадра");
+        assertTrue(flat.contains("float a = coarseAlike(sampleDepth(t, fullSize), pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));"), "сходство");
         assertTrue(flat.contains("float w = coarseWeight(mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j)), a);"), "вес — coarseWeight");
         assertTrue(flat.contains("return vec2(pallSlopeAxis(l, r, w, tol), pallSlopeAxis(d, u, w, tol));"), "наклон по осям");
         assertTrue(flat.contains("return pallSlopeWithin(scene, at, size, depth, 0.05);"), "пелена — со своими 5 %");
+        assertTrue(!flat.contains("pallAlike(sampleDepth"), "вывод — не сходством пелены");
 
-        // прут: 100 у пикселя, 104 у соседей и у образцов мелкого кадра в −3 и +5 пикселях (1/8)
-        double w = 1 / 100.0, l = w - 1 / 104.0, r = 1 / 104.0 - w;
-        double s = slope.call(Map.of("l", l, "r", r, "w", w, "tol", CoarsePass.SAME));
-        assertEquals(0, s, "у прута наклона нет");
-        double total = 0;
-        for (int off : new int[]{-3, 5}) {
-            double ahead = 1 / Math.max(w + s * off, 1e-9), a = alike.call(Map.of("d", 104.0, "e", ahead));
-            total += weight.call(Map.of("b", 0.5, "a", a));
+        // прут в пиксель у rod, стена wall у соседей и у образцов мелкого кадра в −3 и +5 пикселях (1/8)
+        for (double[] pair : new double[][]{{100, 104}, {200, 201}, {100, 100.5}, {30, 30.2}}) {
+            double rod = pair[0], wall = pair[1], w = 1 / rod, l = w - 1 / wall, r = 1 / wall - w;
+            double s = slope.call(Map.of("l", l, "r", r, "w", w, "tol", tolerance.call(Map.of("d", rod)) / rod));
+            assertEquals(0, s, "у прута наклона нет: " + rod + "/" + wall);
+            double total = 0;
+            for (int off : new int[]{-3, 5}) {
+                double ahead = 1 / Math.max(w + s * off, 1e-9), a = alike.call(Map.of("d", wall, "e", ahead));
+                total += weight.call(Map.of("b", 0.5, "a", a));
+            }
+            assertEquals(0, total, "прут — в досчёт: " + rod + "/" + wall);
         }
-        assertEquals(0, total, "прут — в досчёт");
-        double loose = slope.call(Map.of("l", l, "r", r, "w", w, "tol", 0.05));
+        double w = 1 / 100.0, l = w - 1 / 104.0, r = 1 / 104.0 - w, loose = slope.call(Map.of("l", l, "r", r, "w", w, "tol", 0.05));
         assertTrue(alike.call(Map.of("d", 104.0, "e", 1 / (w + loose))) > 0.5, "допуск пелены вёл бы наклон к стене");
 
         // край: передний образец 1/16, фон 15/16
@@ -306,7 +338,7 @@ class CoarsePassTest {
         assertEquals(0, back, "фон в цвет не идёт");
 
         // ровная земля вскользь: 1/расстояние меняется на 5 % за пиксель
-        double g = 1 / 40.0, step = -0.05 * g, gs = slope.call(Map.of("l", step, "r", step, "w", g, "tol", CoarsePass.SAME));
+        double g = 1 / 40.0, step = -0.05 * g, gs = slope.call(Map.of("l", step, "r", step, "w", g, "tol", tolerance.call(Map.of("d", 40.0)) * g));
         assertEquals(step, gs, 1e-15);
         for (int off : new int[]{-3, 5}) {
             double there = 1 / (g + step * off);

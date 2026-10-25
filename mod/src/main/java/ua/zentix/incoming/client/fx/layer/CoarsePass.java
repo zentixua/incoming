@@ -52,18 +52,6 @@ public final class CoarsePass {
      * кадра и 9 — расстояния до мира на пиксель, порядка одного клуба в рамке отрезка; оценка с запасом — во весь экран).
      */
     static final float RUN = 1;
-    /**
-     * Допуск «то же место» у вывода ({@code fx_coarse}: {@code COARSE_SAME}): у образца мелкого кадра и пикселя полного
-     * расстояние до мира (по наклону поверхности) — не дальше этой доли, иначе пиксель досчитывается полным кадром.
-     */
-    static final double SAME = 0.01;
-
-    /** Сходство расстояний d и e, как {@code coarseAlike} у вывода: у допуска — ½. */
-    static double alike(double d, double e) {
-        double rel = Math.abs(d - e) / Math.max(Math.min(d, e), 0.1) / SAME;
-        return 1 / (1 + rel * rel);
-    }
-
     /** Отрезков не больше: иначе — дороже цена отрезка ({@link #plan}). */
     static final int MAX_RUNS = 12;
 
