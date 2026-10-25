@@ -338,7 +338,7 @@ def play_pair(a, out, jar, cand, files, ctx):
         if code == 75:
             return 75
     for pack in a.packs:
-        for attempt in range(1, PAIR_TRIES + 1):
+        for attempt in range(1, a.tries + 1):
             for role in ROLES:
                 d = role_dir(out, role, attempt)
                 j, info = jars[role]
@@ -555,6 +555,7 @@ def main():
     p.add_argument("--against", help="jar принятого: снять парой A1, B, A2 на каждый пак")
     p.add_argument("--against-label"); p.add_argument("--against-spec")
     p.add_argument("--no-warmup", action="store_true", help="без прогрева видеокарты перед парой")
+    p.add_argument("--tries", type=int, default=PAIR_TRIES, help="пар на пак, пока не прошёл (1 — без повторной: приёмка)")
     common(p); p.set_defaults(fn=cmd_play)
     p = sub.add_parser("analyze"); p.add_argument("name"); p.set_defaults(fn=cmd_analyze)
     p = sub.add_parser("gate"); p.add_argument("name"); p.set_defaults(fn=cmd_gate)

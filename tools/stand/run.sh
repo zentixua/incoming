@@ -2,7 +2,7 @@
 # Стенд сцен: прогон одной версии Incoming по пакам или пара с принятым (README.md).
 #
 #   tools/stand/run.sh <имя> <jar> [--against <jar принятого>] [--packs none,complementary,photon] [--scenes 100,…]
-#                      [--size 2560x1600] [--label …]
+#                      [--size 2560x1600] [--label …] [--tries 1] [--no-warmup]
 #
 # <jar> — выпуск (v3.7.0), ci:<ветка|SHA> (артефакт incoming-jar прогона build) или путь к jar. Сначала без видеокарты:
 # jar (и jar принятого), Sodium, Iris и шейдерпаки сборки по sha512, скрипт клиента (stand.py prepare). Потом клиенты —
@@ -18,11 +18,13 @@ export JAVA_HOME=${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/dat
 # владелец аренды видеокарты — стенд (дерево Claude назвало бы её по своему имени)
 export INCOMING_GPU_OWNER=${INCOMING_GPU_OWNER:-stand}
 # у play нет своих --label и --spec из командной строки: подпись и путь — из prepare
-args=() label= against=
+args=() label= against= play_only=()
 while [ $# -gt 0 ]; do
   case $1 in
     --label) label=$2; shift 2 ;;
     --against) against=$2; shift 2 ;;
+    --tries) play_only+=(--tries "$2"); shift 2 ;;
+    --no-warmup) play_only+=(--no-warmup); shift ;;
     *) args+=("$1"); shift ;;
   esac
 done
@@ -40,7 +42,7 @@ if [ -n "$against" ]; then
   pair=(--against "$BJAR" --against-label "$BLABEL" --against-spec "$against")
 fi
 "$ROOT/tools/laptop_job.sh" --gpu --wait "stand-$NAME" -- python3 "$HERE/stand.py" play "$NAME" "$JAR" --spec "$SPEC" --label "$LABEL" \
-  "${pair[@]}" "${args[@]}"
+  "${pair[@]}" "${play_only[@]}" "${args[@]}"
 code=$?
 "$ROOT/tools/gpu_lease.sh" release >/dev/null 2>&1 || true
 # где итог — пишет play («итог в …»): каталоги стенда общие у деревьев репозитория (stand.py, STAND)

@@ -84,7 +84,7 @@
 
 ## Запуск
 ```sh
-tools/stand/run.sh <имя> <jar> [--against <jar принятого>] [--packs none,complementary,photon] [--scenes 100] [--size 2560x1600] [--label …]
+tools/stand/run.sh <имя> <jar> [--against <jar принятого>] [--packs none,complementary,photon] [--scenes 100] [--size 2560x1600] [--label …] [--tries 1]
 ```
 `<jar>` — выпуск (`v3.7.0`), `ci:<ветка|SHA>` (артефакт `incoming-jar` прогона build) или путь к jar. Без видеокарты —
 jar (и jar принятого), моды, паки, скрипт клиента (`stand.py prepare`); клиенты — одной задачей `tools/laptop_job.sh
@@ -93,7 +93,8 @@ jar (и jar принятого), моды, паки, скрипт клиента
 переопределяет). Итог — `mod/run/stand/out/<имя>/`: один прогон — `results.json`, по пакам `frames.csv`, `events.jsonl`,
 `host.jsonl`, `shots/`, `latest.log`; пара — `pair.json`, `verdict.json` и прогоны `A1/`, `B/`, `A2/` (вторая пара —
 `A1-2/`, `B-2/`, `A2-2/`; прогрев — `warmup/`, в вердикт не идёт).
-Во время работы — выборкой: `--packs none --scenes 100` (~2–3 мин видеокарты; с `--against` — втрое).
+Во время работы — выборкой: `--packs none --scenes 100` (~2–3 мин видеокарты; с `--against` — втрое). `--tries 1` — одна
+пара на пак без повторной (приёмка: регрессия, которую стенд должен поймать, повторную пару не заслуживает).
 
 ```sh
 python3 tools/stand/stand.py pr <номер> --post          # PR с картинкой: jar CI его головы парой с принятым выпуском,
