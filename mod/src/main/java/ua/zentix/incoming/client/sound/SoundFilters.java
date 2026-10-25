@@ -1,11 +1,13 @@
 package ua.zentix.incoming.client.sound;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.ChannelAccess;
 import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
@@ -123,8 +125,66 @@ public final class SoundFilters {
     static float open(Vec3 from, Vec3 to) {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
-        if (!pathEffects() || mc.level == null || player == null) return 1;
-        return mc.level.clip(new ThroughLeaves(from, to, player)).getType() == HitResult.Type.MISS ? 1 : 0;
+        ClientLevel level = mc.level;
+        if (!pathEffects() || level == null || player == null) return 1;
+        Vec3 end = from.add(to.subtract(from).scale(reach(from, to, level::hasChunk)));
+        return level.clip(new ThroughLeaves(from, end, player)).getType() == HitResult.Type.MISS ? 1 : 0;
+    }
+
+    /** Путь звука от уха: преграды и воздух (мир клиента и настройка; проверки подменяют). */
+    interface Path {
+        /** Доля открытого пути от {@code from} к {@code to} ({@link SoundFilters#open}). */
+        float open(Vec3 from, Vec3 to);
+
+        /** Доля верхов, что оставляет воздух на {@code distance} блоках ({@link SoundFilters#air}). */
+        float air(double distance);
+    }
+
+    /** Путь в мире клиента. */
+    static final Path WORLD = new Path() {
+        @Override
+        public float open(Vec3 from, Vec3 to) {
+            return SoundFilters.open(from, to);
+        }
+
+        @Override
+        public float air(double distance) {
+            return SoundFilters.air(distance);
+        }
+    };
+
+    /** Загружен ли у клиента столбец чанков. */
+    interface Loaded {
+        boolean at(int cx, int cz);
+    }
+
+    /**
+     * Докуда луч от {@code from} к {@code to} идёт по загруженным чанкам клиента — доля пути (0..1), конец последнего
+     * загруженного столбца по лучу (обход столбцов по лучу, Amanatides–Woo). Дальше мир клиента пуст — незагруженный чанк
+     * отдаёт воздух, — и ничего не закрывает: луч до самой цели дал бы тот же ответ, только шагов больше на порядок
+     * (пожар в 1,9 км — ~1900 шагов, загружены первые сотни).
+     */
+    static double reach(Vec3 from, Vec3 to, Loaded loaded) {
+        double dx = to.x - from.x, dz = to.z - from.z;
+        int cx = Mth.floor(from.x / 16), cz = Mth.floor(from.z / 16);
+        int sx = dx > 0 ? 1 : -1, sz = dz > 0 ? 1 : -1;
+        // доля пути до следующей границы столбца по x и по z и шаг доли на столбец
+        double stepX = dx != 0 ? 16 / Math.abs(dx) : Double.POSITIVE_INFINITY, stepZ = dz != 0 ? 16 / Math.abs(dz) : Double.POSITIVE_INFINITY;
+        double nextX = dx != 0 ? ((sx > 0 ? (cx + 1) * 16 - from.x : from.x - cx * 16) / Math.abs(dx)) : Double.POSITIVE_INFINITY;
+        double nextZ = dz != 0 ? ((sz > 0 ? (cz + 1) * 16 - from.z : from.z - cz * 16) / Math.abs(dz)) : Double.POSITIVE_INFINITY;
+        double last = 0;
+        while (true) {
+            double exit = Math.min(1, Math.min(nextX, nextZ));
+            if (loaded.at(cx, cz)) last = exit;
+            if (exit >= 1) return last;
+            if (nextX < nextZ) {
+                cx += sx;
+                nextX += stepX;
+            } else {
+                cz += sz;
+                nextZ += stepZ;
+            }
+        }
     }
 
     /**

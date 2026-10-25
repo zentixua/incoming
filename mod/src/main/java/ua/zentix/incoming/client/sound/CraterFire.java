@@ -17,6 +17,11 @@ final class CraterFire {
     private final FuelBurn burn;
     private final ClientLevel world;
     private int age;
+    /** Open share of the path from the ear by the last obstruction ray ({@link FireRays}); NaN — no ray yet. */
+    private float open = Float.NaN;
+    /** Tick of the last ray ({@link FireRays}); heard this tick — only heard fires get rays. */
+    long rayAt = Long.MIN_VALUE;
+    boolean heard;
 
     /** Fuel {@code burn} (its law and where it burns now), {@code age} ticks after the strike. */
     CraterFire(FuelBurn burn, ClientLevel world, int age) {
@@ -45,15 +50,41 @@ final class CraterFire {
     /** One tick: what is heard now goes into {@code loops}; false — the fire is over (or the world changed). */
     boolean tick(Minecraft mc, Quarters loops) {
         if (mc.level != world) return false;
-        Vec3 ear = mc.gameRenderer.getMainCamera().getPosition(), pos = burn.centre();
+        return hear(mc.gameRenderer.getMainCamera().getPosition(), Propagation.Weather.of(world), SoundFilters.WORLD, loops);
+    }
+
+    /**
+     * One tick at the ear {@code ear} (no Minecraft; world and settings through {@code path}): what is heard now goes into {@code loops}, through the obstruction by
+     * the fire's last ray; a fire heard but not yet rayed joins with its first ray (a tick later for one fire, at most
+     * {@link FireRays#lag} for a raid). False — the fire is over.
+     */
+    boolean hear(Vec3 ear, Propagation.Weather weather, SoundFilters.Path path, Quarters loops) {
+        Vec3 pos = burn.centre();
         double distance = pos.distanceTo(ear), seconds = age++ / 20.0, emitted = seconds - distance / Noise.SOUND;
         double watts = heat(burn, seconds, distance);
         // fuel gone by the law or put out (covered, washed) before it: once heard silent, it stays silent
         if (emitted >= burn.law().seconds() || emitted > 0 && watts <= 0 || seconds > burn.law().seconds() + Hearing.MAX_DELAY / 20.0) return false;
-        float volume = watts <= 0 || distance > Hearing.RANGE ? 0 : volume(Sources.BLAST_FIRE, watts, pos, ear, Propagation.Weather.of(world));
-        if (!(volume > 0)) return true;
-        float open = SoundFilters.open(ear, pos.add(0, 1.5, 0));
-        loops.add(Math.atan2(pos.z - ear.z, pos.x - ear.x), volume, SoundFilters.blockedGain(open), SoundFilters.air(distance) * SoundFilters.blockedHighs(open));
+        float volume = watts <= 0 || distance > Hearing.RANGE ? 0 : volume(Sources.BLAST_FIRE, watts, pos, ear, weather);
+        heard = volume > 0;
+        if (!heard || Float.isNaN(open)) return true;
+        loops.add(Math.atan2(pos.z - ear.z, pos.x - ear.x), volume, SoundFilters.blockedGain(open), path.air(distance) * SoundFilters.blockedHighs(open));
         return true;
+    }
+
+    /** Where the fire burns now (checks). */
+    Vec3 burnCentre() {
+        return burn.centre();
+    }
+
+    /** Heat release heard now at {@code ear}, as the last {@link #hear} took it (checks). */
+    double wattsNow(Vec3 ear) {
+        double distance = burn.centre().distanceTo(ear);
+        return heat(burn, (age - 1) / 20.0, distance);
+    }
+
+    /** Obstruction ray from the ear {@code ear} to the fire along {@code path}, in tick {@code tick}. */
+    void ray(Vec3 ear, SoundFilters.Path path, long tick) {
+        open = path.open(ear, burn.centre().add(0, 1.5, 0));
+        rayAt = tick;
     }
 }
