@@ -65,8 +65,9 @@ final class FrameClock {
         this.out = out;
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, this::onPre);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, this::onPost);
-        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (RenderLevelStageEvent e) -> onStage(e, false));
-        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (RenderLevelStageEvent e) -> onStage(e, true));
+        // у лямбды шина тип события не выводит — класс явно
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, false, RenderLevelStageEvent.class, e -> onStage(e, false));
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, RenderLevelStageEvent.class, e -> onStage(e, true));
     }
 
     /** Снять кадр в конце ближайшего кадра; {@code done} получает его номер. */
