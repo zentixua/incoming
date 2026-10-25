@@ -1061,8 +1061,9 @@ public final class FarFlightView {
             } else clubs += held;
         }
         if (puffs >= 1) return CLUBS;
-        return out.ribbon(a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half, b.alpha * (float) keepB, b.light, r, g, bl,
-                joint) ? RIBBON : NONE;
+        // лента — в план кадра, как клубы: её заливка — в бюджете ({@code SmokePuffs.ribbon})
+        return SmokePuffs.ribbon(view, out, a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half, b.alpha * (float) keepB,
+                b.light, r, g, bl, joint) ? RIBBON : NONE;
     }
 
     /** Бюджет клубов трубок по прошлому кадру — в начале кадра, до всех, кто рисует трубки ({@code FarRenderer}). */

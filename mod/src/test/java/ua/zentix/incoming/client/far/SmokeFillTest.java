@@ -74,10 +74,18 @@ class SmokeFillTest {
         }
     }
 
-    /** Квадраты кадра на экране (тангенсы): середина, полуразмеры, непрозрачность, кадр клуба; вуали. */
+    /**
+     * Квадраты кадра на экране (тангенсы): середина, полуразмеры, непрозрачность, кадр клуба, лежит ли; вершины лежащих
+     * клубов и полос лент от глаза (заливка — по ним); вуали.
+     */
     static final class Screen implements SmokePuffs.Out {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
+        /** Многоугольники кадра: 4 вершины от глаза (12 чисел) и непрозрачность — лежащие клубы и полосы лент. */
+        final List<double[]> polygons = new ArrayList<>();
+        /** Квадраты лент лицом к камере (круг торца, вуаль «глаз в трубке»): середина, полуразмеры в тангенсах, непрозрачность. */
+        final List<double[]> faces = new ArrayList<>();
+        private final FarSprites.RibbonShape shape = new FarSprites.RibbonShape();
         /** Вуаль кадра (сетка по экрану); null — её нет. */
         SmokePuffs.Veil veil;
 
@@ -94,15 +102,26 @@ class SmokeFillTest {
             double depth = dx * f.x + dy * f.y + dz * f.z, near = Math.clamp((depth - SmokePuffs.NEAR_FROM) / SmokePuffs.NEAR_FADE, 0, 1);
             if (near <= 0) return;
             quads.add(new double[]{(dx * l.x + dy * l.y + dz * l.z) / depth, (dx * up.x + dy * up.y + dz * up.z) / depth, halfA / depth, halfB / depth,
-                    Math.min(1, a) * near, PlumeContinuityTest.frameOf(sprite)});
+                    Math.min(1, a) * near, PlumeContinuityTest.frameOf(sprite), 0});
         }
 
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
                               float r, float g, float b, float a) {
-            // лежащий квадрат: по высоте экрана — проекция диска
+            if (a < 0.002f) return;
+            // пропускание — по проекции диска на глубине середины (приближение для частей кадра); заливка — по четырём
+            // вершинам квадрата на горизонтали, как его кладёт FxQuads.flat (оси — «влево» экрана на горизонтали и поперёк)
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            int at = quads.size();
             puff6(dx, dy, dz, halfA, halfB * Math.abs(dy) / d, sprite, mix, shade, r, g, b, a);
+            if (quads.size() > at) quads.get(at)[6] = 1;
+            Vector3f l = view.left();
+            double lx = l.x, lz = l.z, len = Math.hypot(lx, lz);
+            lx = len < 1e-6 ? 1 : lx / len;
+            lz = len < 1e-6 ? 0 : lz / len;
+            double ax = lx * halfA, az = lz * halfA, bx = -lz * halfB, bz = lx * halfB;
+            polygons.add(new double[]{dx - ax - bx, dy, dz - az - bz, dx - ax + bx, dy, dz - az + bz, dx + ax + bx, dy, dz + az + bz, dx + ax - bx, dy,
+                    dz + az - bz, Math.min(1, a)});
         }
 
         @Override
@@ -113,22 +132,86 @@ class SmokeFillTest {
         @Override
         public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                               float alphaB, int lightB, float r, float g, float b, float[] joint) {
-            return false;
+            // лента как у FarSprites.ribbon: вуаль «глаз в трубке», круг торца, полоса по своим четырём вершинам
+            FarSprites.RibbonShape q = shape;
+            Vector3f f = view.forward();
+            boolean strip = q.set(view.far(), f.x, f.y, f.z, ax, ay, az, halfA, alphaA, bx, by, bz, halfB, alphaB, joint);
+            if (q.veil > 0.004f) face(f.x * SmokePuffs.VEIL_AT, f.y * SmokePuffs.VEIL_AT, f.z * SmokePuffs.VEIL_AT, SmokePuffs.VEIL_AT * 4, q.veil);
+            if (q.capAlpha > 0) face(q.mx, q.my, q.mz, q.halfW * FarSprites.GLOW, q.capAlpha);
+            if (strip) {
+                polygons.add(new double[]{q.x0 - q.px * q.ha, q.y0 - q.py * q.ha, q.z0 - q.pz * q.ha, q.x0 + q.px * q.ha, q.y0 + q.py * q.ha,
+                        q.z0 + q.pz * q.ha, q.x1 + q.nx * q.hb, q.y1 + q.ny * q.hb, q.z1 + q.nz * q.hb, q.x1 - q.nx * q.hb, q.y1 - q.ny * q.hb,
+                        q.z1 - q.nz * q.hb, 0.5 * (Math.min(1, q.alphaA) + Math.min(1, q.alphaB))});
+                joint[0] = q.nx;
+                joint[1] = q.ny;
+                joint[2] = q.nz;
+            } else if (q.cap) joint[0] = Float.NaN;
+            return strip;
         }
 
-        /** Сколько экранов закрывают квадраты (с перекрытием). */
+        /** Внутри ли проекции многоугольника p (4 вершины перед глазом) точка экрана (u, v). */
+        boolean insideProjected(double[] p, double u, double v) {
+            Vector3f f = view.forward(), l = view.left(), up = view.up();
+            double[] pu = new double[4], pv = new double[4];
+            for (int i = 0; i < 4; i++) {
+                double x = p[3 * i], y = p[3 * i + 1], z = p[3 * i + 2], depth = x * f.x + y * f.y + z * f.z;
+                if (depth <= 0.05) return false;
+                pu[i] = (x * l.x + y * l.y + z * l.z) / depth;
+                pv[i] = (x * up.x + y * up.y + z * up.z) / depth;
+            }
+            int sign = 0;
+            for (int i = 0; i < 4; i++) {
+                int j = (i + 1) % 4;
+                double c = (pu[j] - pu[i]) * (v - pv[i]) - (pv[j] - pv[i]) * (u - pu[i]);
+                int sg = c > 0 ? 1 : c < 0 ? -1 : 0;
+                if (sg == 0) continue;
+                if (sign == 0) sign = sg;
+                else if (sg != sign) return false;
+            }
+            return true;
+        }
+
+        /** Новый кадр: квадраты, многоугольники и вуаль — заново. */
+        void clear() {
+            quads.clear();
+            polygons.clear();
+            faces.clear();
+            veil = null;
+        }
+
+        /** Квадрат лицом к камере с серединой (x, y, z) от глаза и полуразмером half — в кадр. */
+        private void face(double x, double y, double z, double half, double a) {
+            Vector3f f = view.forward(), l = view.left(), up = view.up();
+            double depth = x * f.x + y * f.y + z * f.z;
+            if (depth <= 0) return;
+            faces.add(new double[]{(x * l.x + y * l.y + z * l.z) / depth, (x * up.x + y * up.y + z * up.z) / depth, half / depth, half / depth, Math.min(1, a)});
+        }
+
+        /** Сколько экранов закрывают квадраты (с перекрытием): лицом к камере — прямоугольником, лежащие и полосы лент — по вершинам. */
         double fill() {
             double sum = 0;
             for (double[] q : quads) {
+                if (q[6] > 0.5) continue;
                 double x0 = Math.max(-W, q[0] - q[2]), x1 = Math.min(W, q[0] + q[2]), y0 = Math.max(-H, q[1] - q[3]), y1 = Math.min(H, q[1] + q[3]);
                 if (x1 > x0 && y1 > y0) sum += (x1 - x0) * (y1 - y0) / (4 * W * H);
             }
+            for (double[] q : faces) {
+                double x0 = Math.max(-W, q[0] - q[2]), x1 = Math.min(W, q[0] + q[2]), y0 = Math.max(-H, q[1] - q[3]), y1 = Math.min(H, q[1] + q[3]);
+                if (x1 > x0 && y1 > y0) sum += (x1 - x0) * (y1 - y0) / (4 * W * H);
+            }
+            for (double[] p : polygons) sum += SmokePuffs.polygonFill(view, java.util.Arrays.copyOf(p, 12));
             return sum;
         }
 
         /** Пропускание в точке экрана (u, v): квадраты — радиальный профиль непрозрачности кадра клуба, вуали. */
         double transmittance(double u, double v, double[][] prof) {
             double clear = veil == null ? 1 : veil.through(u, v);
+            for (double[] q : faces) if (Math.abs(u - q[0]) <= q[2] && Math.abs(v - q[1]) <= q[3]) clear *= 1 - q[4];
+            for (double[] p : polygons) {
+                // полосы лент — ровной непрозрачностью внутри; лежащие клубы — профилем (ниже, по квадратам)
+                if (p[12] <= 0 || isFlat(p)) continue;
+                if (insideProjected(p, u, v)) clear *= 1 - p[12];
+            }
             for (double[] q : quads) {
                 double r = Math.hypot((u - q[0]) / q[2], (v - q[1]) / q[3]);
                 int k = (int) (r / PlumeContinuityTest.BIN);
@@ -136,6 +219,11 @@ class SmokeFillTest {
             }
             return clear;
         }
+    }
+
+    /** Лежит ли многоугольник (все вершины на одной высоте — лежащий клуб, а не полоса ленты). */
+    static boolean isFlat(double[] p) {
+        return p[1] == p[4] && p[4] == p[7] && p[7] == p[10];
     }
 
     static FarView view(Vec3 eye, Vector3f fwd) {
@@ -197,8 +285,7 @@ class SmokeFillTest {
             // два кадра: доля кучек трубок — из прошлого кадра
             SmokePuffs.resetBudget();
             for (int frame = 0; frame < 2; frame++) {
-                s.quads.clear();
-                s.veil = null;
+                s.clear();
                 for (Blast b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
                 SmokePuffs.flush();
             }

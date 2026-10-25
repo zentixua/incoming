@@ -171,6 +171,8 @@ final class SmokePuffs {
     static final double LOD_CELL = 0.5;
     /** Уровень слияния прошлого кадра держится, пока пол уровнем ниже не меньше этой доли бюджета. */
     static final double HYSTERESIS = 0.8;
+    /** Отобранные квадратами ({@code Draw.fit}) с этой доли бюджета по накопленной заливке тают в вуаль (лента — гаснет). */
+    static final double FIT_FADE = 0.75;
     /** Групп в ячейке слияния мест трубок: места одной трубки — в разных группах. */
     static final int SLOTS = 8;
     /**
@@ -185,6 +187,8 @@ final class SmokePuffs {
      * степень тени, кадр клуба, видимая доля, клубов в кучке, свой ли кадр, ось (3), вид, вещество, дымка воздуха до него.
      */
     static final int PLACE_FIELDS = 21, P_CONTEXT = 18, P_MATERIAL = 19, P_AIR = 20;
+    /** Чисел на ждущий отрезок ленты ({@code Draw.holdRibbon}). */
+    static final int RIBBON_FIELDS = 21;
     /** Веществ мест в кадре — не больше (больше — места не сливаются). */
     static final int MATERIALS = 32;
     /**
@@ -218,6 +222,80 @@ final class SmokePuffs {
         if (x1 <= x0 || y1 <= y0) return 0;
         // видеокарта закрашивает весь квадрат клуба (прозрачные углы — тоже), а не круг в нём
         return Math.min(1, (x1 - x0) * (y1 - y0) / (4 * w * h));
+    }
+
+    /**
+     * Доля экрана под плоским многоугольником с вершинами xyz (от глаза, подряд, выпуклый): обрезан ближней плоскостью и
+     * кадром ({@link #cover}: 16:9 с полудиагональю {@link FarView#edge}), площадь проекции — по самим вершинам. Квадрат лицом
+     * к камере — тот же прямоугольник, что у {@link #cover}; лежащий клуб и полоса ленты на экране — трапеция, ближний край
+     * которой у пыли под углом в разы крупнее, чем на глубине середины.
+     */
+    static double polygonFill(FarView view, double[] xyz) {
+        org.joml.Vector3f f = view.forward(), l = view.left(), u = view.up();
+        double diag = Math.tan(Math.min(view.edge(), 1.5)), w = diag * 16 / Math.sqrt(337), h = diag * 9 / Math.sqrt(337);
+        int n = xyz.length / 3;
+        double[] a = new double[3 * (n + 1)], b;
+        // в осях глаза: (влево, вверх, глубина); обрезка ближней плоскостью
+        int m = 0;
+        for (int i = 0; i < n; i++) {
+            int j = (i + 1) % n;
+            double ax = xyz[3 * i], ay = xyz[3 * i + 1], az = xyz[3 * i + 2], bx = xyz[3 * j], by = xyz[3 * j + 1], bz = xyz[3 * j + 2];
+            double ua = ax * l.x + ay * l.y + az * l.z, va = ax * u.x + ay * u.y + az * u.z, za = ax * f.x + ay * f.y + az * f.z;
+            double ub = bx * l.x + by * l.y + bz * l.z, vb = bx * u.x + by * u.y + bz * u.z, zb = bx * f.x + by * f.y + bz * f.z;
+            if (za >= NEAR_CLIP) {
+                a[3 * m] = ua / za;
+                a[3 * m + 1] = va / za;
+                m++;
+            }
+            if (za >= NEAR_CLIP != zb >= NEAR_CLIP) {
+                double t = (NEAR_CLIP - za) / (zb - za);
+                a[3 * m] = (ua + (ub - ua) * t) / NEAR_CLIP;
+                a[3 * m + 1] = (va + (vb - va) * t) / NEAR_CLIP;
+                m++;
+            }
+            if (m + 2 > a.length / 3) a = java.util.Arrays.copyOf(a, 2 * a.length);
+        }
+        // обрезка кадром: четыре полуплоскости
+        for (int edge = 0; edge < 4 && m > 0; edge++) {
+            b = new double[3 * (2 * m + 1)];
+            int k = 0;
+            for (int i = 0; i < m; i++) {
+                int j = (i + 1) % m;
+                double pa = inside(edge, a[3 * i], a[3 * i + 1], w, h), pb = inside(edge, a[3 * j], a[3 * j + 1], w, h);
+                if (pa >= 0) {
+                    b[3 * k] = a[3 * i];
+                    b[3 * k + 1] = a[3 * i + 1];
+                    k++;
+                }
+                if (pa >= 0 != pb >= 0) {
+                    double t = pa / (pa - pb);
+                    b[3 * k] = a[3 * i] + (a[3 * j] - a[3 * i]) * t;
+                    b[3 * k + 1] = a[3 * i + 1] + (a[3 * j + 1] - a[3 * i + 1]) * t;
+                    k++;
+                }
+            }
+            a = b;
+            m = k;
+        }
+        double area = 0;
+        for (int i = 0; i < m; i++) {
+            int j = (i + 1) % m;
+            area += a[3 * i] * a[3 * j + 1] - a[3 * j] * a[3 * i + 1];
+        }
+        return Math.min(1, Math.abs(area) * 0.5 / (4 * w * h));
+    }
+
+    /** Ближняя плоскость обрезки многоугольника, блоков (у квадратов слоя — 0,05 блока, {@link #cover}). */
+    private static final double NEAR_CLIP = 0.05;
+
+    /** Со знаком: внутри ли точка (u, v) полуплоскости edge кадра ±w, ±h (0 — правая, 1 — левая, 2 — верх, 3 — низ). */
+    private static double inside(int edge, double u, double v, double w, double h) {
+        return switch (edge) {
+            case 0 -> w - u;
+            case 1 -> u + w;
+            case 2 -> h - v;
+            default -> v + h;
+        };
     }
 
     /** Толща видимого края гаусса (порог контраста — 0,02; край квадрата чуть внутри). */
@@ -387,6 +465,18 @@ final class SmokePuffs {
         return Math.max(1, count * size * size) * cover(view, px, py, pz, ra * reach, rb * reach);
     }
 
+    /**
+     * Отрезок ленты следа или шлейфа ({@code FarFlightView.line}) — в ожидание кадра, как места трубок: лента тоже заливает
+     * экран ({@link FarSprites.RibbonShape#fill}: полоса по своим вершинам, круг торца, вуаль «глаз в трубке»), и её заливка
+     * — в плане и бюджете ({@link Draw#fit}: не влезла — не рисуется, наименее видимая — первой). Прежде ленты шли мимо
+     * плана, и 300 трубок сверх мест кадра заливали 29,5 экрана при бюджете 16. Возвращает, ляжет ли полоса; joint — как у
+     * {@link Out#ribbon} (поперёк у b).
+     */
+    static boolean ribbon(FarView view, Out out, double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by,
+                          double bz, double halfB, float alphaB, int lightB, float r, float g, float b, float[] joint) {
+        return DRAW.holdRibbon(view, out, ax, ay, az, halfA, alphaA, lightA, bx, by, bz, halfB, alphaB, lightB, r, g, b, joint);
+    }
+
     /** Приёмник клубов источника source в кадре view в миг seconds: клубы — квадратами в out (один на поток кадра). */
     static SmokeGrid.Sink sink(FarView view, Out out, SmokeGrid.Source source, double seconds) {
         DRAW.begin(view, out, source, seconds);
@@ -552,6 +642,15 @@ final class SmokePuffs {
         private FarView[] placeView = new FarView[4];
         private Out[] placeOut = new Out[4];
         private int placeContexts;
+        /**
+         * Ленты кадра, что ждут плана: концы (6), полуширины (2), непрозрачности (2), свет мира (2), цвет (3), поперёк у a (3),
+         * вид, заливка, заметность.
+         */
+        private double[] ribbons = new double[16 * RIBBON_FIELDS];
+        private int ribbonCount;
+        private int[] ribbonEntry = new int[16];
+        private final FarSprites.RibbonShape shape = new FarSprites.RibbonShape();
+        private final float[] ribbonJoint = new float[3];
         /** Вещества мест кадра — цвет и степень тени ({@link #material}). */
         private final float[] materials = new float[4 * MATERIALS];
         private int materialCount;
@@ -648,6 +747,7 @@ final class SmokePuffs {
             plans = 0;
             for (int i = 0; i < holding; i++) if (!merged[i]) held(i);
             for (int p = 0; p < placeCount; p++) place(p);
+            planRibbons();
             lastRaw = floor;
             lastBlobs = holding;
             lastPlaces = placeCount;
@@ -679,6 +779,7 @@ final class SmokePuffs {
             share = s;
             for (int i = 0; i < holding; i++) if (!merged[i]) held(i);
             for (int p = 0; p < placeCount; p++) if (!placeGone[p]) place(p);
+            drawRibbons();
             lastFill = drawn(s);
             lastFloor = floor;
             lastShare = s;
@@ -751,7 +852,7 @@ final class SmokePuffs {
 
         /** Ждущие клубы, места, источники и план — заново (конец кадра, выход из мира). */
         void forget() {
-            holding = from = contexts = placeCount = placeContexts = materialCount = plans = 0;
+            holding = from = contexts = placeCount = placeContexts = materialCount = plans = ribbonCount = 0;
             java.util.Arrays.fill(ctxSource, null);
             java.util.Arrays.fill(ctxOut, null);
             java.util.Arrays.fill(ctxView, null);
@@ -829,7 +930,7 @@ final class SmokePuffs {
             planDead[plans] = false;
             planOwner[plans] = current;
             if (current >= 0) blobEntry[current] = plans;
-            else placeEntry[~current] = plans;
+            else if (current != Integer.MIN_VALUE) placeEntry[~current] = plans;
             floor += c;
             plans++;
         }
@@ -871,11 +972,43 @@ final class SmokePuffs {
                 double k = count == 1 && !planPlace[e] ? 1 : size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
                 double ox = gauss(hj) * spread * rh * 0.5, oy = planLying[e] ? 0 : gauss(hj >>> 7) * spread * planOffV[e] * 0.5,
                         oz = gauss(hj >>> 14) * spread * rh * 0.5;
-                double qx = px + ox, qy = py + oy, qz = pz + oz, qb = rb * k;
-                if (planLying[e]) qb = ra * k * Math.abs(qy) / Math.max(Math.sqrt(qx * qx + qy * qy + qz * qz), 1e-9);
-                f += cover(v, qx, qy, qz, ra * k, qb);
+                double qx = px + ox, qy = py + oy, qz = pz + oz;
+                f += planLying[e] ? flatFill(v, qx, qy, qz, ra * k, ra * k) : cover(v, qx, qy, qz, ra * k, rb * k);
             }
             return f;
+        }
+
+        /**
+         * Лежащий клуб ({@code FxQuads.flat}: квадрат на горизонтали, оси — «влево» экрана на горизонтали и поперёк, полуразмеры
+         * a, b) с серединой (x, y, z) от глаза — доля экрана по его четырём вершинам ({@link #polygonFill}).
+         */
+        private final double[] flat = new double[12];
+
+        private double flatFill(FarView v, double x, double y, double z, double a, double b) {
+            org.joml.Vector3f l = v.left();
+            double lx = l.x, lz = l.z, len = Math.sqrt(lx * lx + lz * lz);
+            if (len < 1e-6) {
+                lx = 1;
+                lz = 0;
+            } else {
+                lx /= len;
+                lz /= len;
+            }
+            double ax = lx * a, az = lz * a, bx = -lz * b, bz = lx * b;
+            double[] q = flat;
+            q[0] = x - ax - bx;
+            q[1] = y;
+            q[2] = z - az - bz;
+            q[3] = x - ax + bx;
+            q[4] = y;
+            q[5] = z - az + bz;
+            q[6] = x + ax + bx;
+            q[7] = y;
+            q[8] = z + az + bz;
+            q[9] = x + ax - bx;
+            q[10] = y;
+            q[11] = z + az - bz;
+            return polygonFill(v, q);
         }
 
         /** Что зальют квадраты всех записей плана, что остались квадратами, при доле s ({@link #drawnFill}), экранов. */
@@ -961,8 +1094,9 @@ final class SmokePuffs {
          * Пол выше бюджета и после слияния: квадратами остаются самые видные — по непрозрачности, что дошла до глаза
          * ({@link #planShown} × {@link #planSeen}; у места трубки — вся трубка у оси: тонкий тёмный шлейф заметен, хотя доля
          * каждого его места мала), пока их пол ложится в бюджет; остальные (бледное, заслонённое) — в вуаль у глаза, той же толщей
-         * по лучам. У отобранных с видной долей меньше вдвое от порога — доля в вуали плавно растёт (без скачка, когда клуб
-         * пересекает порог). Передние густые клубы — вид облака — остаются клубами; прежде в вуаль уходили крупнейшие, и
+         * по лучам (лента — не рисуется). Отобранные в последней четверти бюджета ({@link #FIT_FADE}) тают в вуаль плавно (без
+         * скачка, когда клуб пересекает порог); прежде полоса шла по видности от порога вдвое, и у ровной сцены (1000 одинаковых
+         * трубок) таяли все отобранные — бюджет уходил на невидимое. Передние густые клубы — вид облака — остаются клубами; прежде в вуаль уходили крупнейшие, и
          * стена дыма с края становилась ровной мглой. Так предел заливки держится по построению.
          */
         private void fit(double budget) {
@@ -978,12 +1112,16 @@ final class SmokePuffs {
             int cut = 0;
             while (cut < n && sum + planCover0[(int) order[cut]] <= budget) sum += planCover0[(int) order[cut++]];
             if (cut == n) return;
-            int at = (int) order[cut];
-            double edge = planShown[at] * planSeen[at];
+            double acc = 0;
             for (int k = 0; k < n; k++) {
                 int e = (int) order[k];
-                if (k >= cut) planVeil[e] = 1;
-                else if (edge > 0) planVeil[e] = 1 - smoothstep(edge, 2 * edge, planShown[e] * planSeen[e]);
+                if (k >= cut) {
+                    planVeil[e] = 1;
+                    continue;
+                }
+                // последняя четверть бюджета (наименее видные из отобранных) тает плавно: клуб у порога не выпрыгивает
+                acc += planCover0[e];
+                planVeil[e] = smoothstep(FIT_FADE * budget, budget, acc);
             }
             floor = sum;
         }
@@ -1188,15 +1326,7 @@ final class SmokePuffs {
             if (air < Sight.THRESHOLD) return 0;
             boolean near = d < r;
             if (!near && !FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return 0;
-            if (placeContexts == 0 || placeView[placeContexts - 1] != view || placeOut[placeContexts - 1] != out) {
-                if (placeContexts == placeView.length) {
-                    placeView = java.util.Arrays.copyOf(placeView, 2 * placeContexts);
-                    placeOut = java.util.Arrays.copyOf(placeOut, 2 * placeContexts);
-                }
-                placeView[placeContexts] = view;
-                placeOut[placeContexts] = out;
-                placeContexts++;
-            }
+            int ctx = context(view, out);
             if (placeCount == placeSeed.length) {
                 int n = 2 * placeCount;
                 places = java.util.Arrays.copyOf(places, n * PLACE_FIELDS);
@@ -1223,7 +1353,7 @@ final class SmokePuffs {
             places[o + 15] = ax;
             places[o + 16] = ay;
             places[o + 17] = az;
-            places[o + P_CONTEXT] = placeContexts - 1;
+            places[o + P_CONTEXT] = ctx;
             places[o + P_MATERIAL] = material(cr, cg, cb, shade);
             places[o + P_AIR] = air;
             placeSeed[placeCount] = h;
@@ -1247,6 +1377,73 @@ final class SmokePuffs {
             materials[o + 2] = cb;
             materials[o + 3] = s;
             return materialCount++;
+        }
+
+        /** Вид и приёмник мест и лент кадра (у всех в игре — одни): номер. */
+        private int context(FarView view, Out out) {
+            if (placeContexts == 0 || placeView[placeContexts - 1] != view || placeOut[placeContexts - 1] != out) {
+                if (placeContexts == placeView.length) {
+                    placeView = java.util.Arrays.copyOf(placeView, 2 * placeContexts);
+                    placeOut = java.util.Arrays.copyOf(placeOut, 2 * placeContexts);
+                }
+                placeView[placeContexts] = view;
+                placeOut[placeContexts] = out;
+                placeContexts++;
+            }
+            return placeContexts - 1;
+        }
+
+        /** Отрезок ленты — в ожидание кадра ({@link SmokePuffs#ribbon}). */
+        boolean holdRibbon(FarView view, Out out, double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by,
+                           double bz, double halfB, float alphaB, int lightB, float r, float g, float b, float[] joint) {
+            FarSprites.RibbonShape q = shape;
+            org.joml.Vector3f f = view.forward();
+            boolean strip = q.set(view.far(), f.x, f.y, f.z, ax, ay, az, halfA, alphaA, bx, by, bz, halfB, alphaB, joint);
+            double fill = q.fill(view, strip);
+            if (fill > 0) {
+                if ((ribbonCount + 1) * RIBBON_FIELDS > ribbons.length) ribbons = java.util.Arrays.copyOf(ribbons, 2 * ribbons.length);
+                int o = ribbonCount++ * RIBBON_FIELDS;
+                double[] v = {ax, ay, az, bx, by, bz, halfA, halfB, alphaA, alphaB, lightA, lightB, r, g, b, joint[0], joint[1], joint[2],
+                        context(view, out), fill, Math.max(Math.max(q.alphaA, q.alphaB), Math.max(q.capAlpha, q.veil))};
+                System.arraycopy(v, 0, ribbons, o, RIBBON_FIELDS);
+            }
+            if (strip) {
+                joint[0] = q.nx;
+                joint[1] = q.ny;
+                joint[2] = q.nz;
+            } else if (q.cap) joint[0] = Float.NaN;
+            return strip;
+        }
+
+        /** Ленты кадра — записями плана: заливка своя, не сливаются и не прячут; не влезли в бюджет — не рисуются ({@link #fit}). */
+        private void planRibbons() {
+            if (ribbonEntry.length < ribbonCount) ribbonEntry = new int[2 * ribbonCount];
+            for (int k = 0; k < ribbonCount; k++) {
+                int o = k * RIBBON_FIELDS;
+                FarView v = placeView[(int) ribbons[o + 18]];
+                current = Integer.MIN_VALUE;
+                double mx = 0.5 * (ribbons[o] + ribbons[o + 3]), my = 0.5 * (ribbons[o + 1] + ribbons[o + 4]), mz = 0.5 * (ribbons[o + 2] + ribbons[o + 5]);
+                ribbonEntry[k] = plans;
+                planCluster(v, mx, my, mz, 0, 0, 1, true, 0, ribbons[o + 20], 0, 1, 0, false, false);
+                floor -= planCover0[ribbonEntry[k]];
+                planCover0[ribbonEntry[k]] = ribbons[o + 19];
+                floor += ribbons[o + 19];
+            }
+        }
+
+        /** Ленты, что остались в бюджете, — в кадр по порядку (поперёк у a — каким его дал прошлый отрезок той же ленты). */
+        private void drawRibbons() {
+            for (int k = 0; k < ribbonCount; k++) {
+                int e = ribbonEntry[k], o = k * RIBBON_FIELDS;
+                if (planVeil[e] >= 1) continue;
+                float keep = (float) (1 - planVeil[e]);
+                ribbonJoint[0] = (float) ribbons[o + 15];
+                ribbonJoint[1] = (float) ribbons[o + 16];
+                ribbonJoint[2] = (float) ribbons[o + 17];
+                placeOut[(int) ribbons[o + 18]].ribbon(ribbons[o], ribbons[o + 1], ribbons[o + 2], ribbons[o + 6], (float) ribbons[o + 8] * keep,
+                        (int) ribbons[o + 10], ribbons[o + 3], ribbons[o + 4], ribbons[o + 5], ribbons[o + 7], (float) ribbons[o + 9] * keep,
+                        (int) ribbons[o + 11], (float) ribbons[o + 12], (float) ribbons[o + 13], (float) ribbons[o + 14], ribbonJoint);
+            }
         }
 
         /** Ждущее место p — в {@link #club}. */

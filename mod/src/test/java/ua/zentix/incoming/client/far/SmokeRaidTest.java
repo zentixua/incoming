@@ -188,8 +188,7 @@ class SmokeRaidTest {
             maxPlaces = maxBlobs = 0;
             worstOverPlan = Double.NEGATIVE_INFINITY;
             for (int frame = 0; frame < 40; frame++) {
-                s.quads.clear();
-                s.veil = null;
+                s.clear();
                 FarFlightView.budget();
                 for (SmokeGrid.Source b : raid) b.emit(now, SmokePuffs.sink(view, s, b, now));
                 SmokePuffs.flush();
@@ -452,10 +451,63 @@ class SmokeRaidTest {
     }
 
     private static void step(List<SmokeGrid.Source> raid, double now, FarView v, SmokeFillTest.Screen s) {
-        s.quads.clear();
-        s.veil = null;
+        s.clear();
         for (SmokeGrid.Source b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
         SmokePuffs.flush();
+    }
+
+    /**
+     * Ревью #460, круг 2: отрезки сверх мест кадра шли лентой мимо бюджета — 300 стоячих трубок (100 м, σ 1 м) в 30 м
+     * заливали 29,5 экрана при бюджете 16, 1000 — 75. Лента — тоже заливка: в плане и бюджете, не влезла — не рисуется.
+     * В каждом кадре с первого квадраты и ленты заливают не больше плана, план — не больше бюджета.
+     */
+    @Test
+    void ribbonsStayInTheBudget() {
+        double sigma = 1, soot = 1.0 * Math.sqrt(2 * Math.PI) * sigma / CloudModel.SOOT_K;
+        for (int n : new int[]{300, 1000}) {
+            List<SmokeGrid.Source> tubes = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                double x = 30 + 3 * (i / 30), z = -45 + 3 * (i % 30);
+                long seed = 9000L + i;
+                tubes.add(new SmokeGrid.Source() {
+                    @Override
+                    public boolean emit(double seconds, SmokeGrid.Sink out) {
+                        for (int k = 0; k < 10; k++) out.tube(x, 10 * k, z, sigma, sigma, soot, 0, x, 10 * (k + 1), z, sigma, sigma, soot, 0, 0.6f, 0.55f,
+                                0.45f, 300, 0, sigma);
+                        return true;
+                    }
+
+                    @Override
+                    public long seed() {
+                        return seed;
+                    }
+                });
+            }
+            SmokeFillTest.Screen s = frame(tubes, 0, SmokeFillTest.view(new Vec3(0, 20, 0), new Vector3f(1, 0, 0)), SmokePuffs.FILL_BUDGET);
+            String got = String.format(Locale.ROOT, "%d трубок: заливка %.2f (план %.2f), сверх плана до %.4f, мест до %d, полос лент %d", n, s.fill(),
+                    SmokePuffs.lastFill(), worstOverPlan, maxPlaces, s.polygons.size());
+            System.out.println("RIBBONS " + got);
+            assertTrue(worstOverPlan <= 1e-9 && s.fill() <= SmokePuffs.FILL_BUDGET + 1e-9 && maxPlaces <= SmokePuffs.PLACES, got);
+        }
+        SmokePuffs.resetBudget();
+    }
+
+    /**
+     * Ревью #460, круг 2: площадь лежащей пыли план брал прямоугольником на глубине середины, а у квадрата на горизонтали под
+     * углом ближний край на экране в разы шире — 300 плоских гауссов (σh 20 м, σv 0,2 м, толща 0,01) в 40 м, глаз на 5 м:
+     * план 15,4, квадраты 36,7 экрана. Теперь по четырём вершинам: нарисованное — не больше плана, план — не больше бюджета.
+     */
+    @Test
+    void lyingDustIsMeasuredByItsCorners() {
+        double sh = 20, sv = 0.2, ext = 0.01 * 2 * Math.PI * sh * sh;
+        List<SmokeGrid.Source> layer = new ArrayList<>();
+        for (int i = 0; i < 300; i++) layer.add(blob(0, 0, 40, sh, sv, ext, 400 + i));
+        SmokeFillTest.Screen s = frame(layer, 0, SmokeFillTest.view(new Vec3(0, 5, 0), new Vector3f(0, 0, 1)), SmokePuffs.FILL_BUDGET);
+        String got = String.format(Locale.ROOT, "заливка %.2f (план %.2f), сверх плана до %.4f, лежащих %d", s.fill(), SmokePuffs.lastFill(), worstOverPlan,
+                s.polygons.size());
+        System.out.println("FLAT " + got);
+        SmokePuffs.resetBudget();
+        assertTrue(worstOverPlan <= 1e-9 && s.fill() <= SmokePuffs.FILL_BUDGET + 1e-9 && !s.polygons.isEmpty(), got);
     }
 
     /** Части кадра строками сверху вниз. */
