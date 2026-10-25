@@ -80,7 +80,8 @@ jobs:
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py) mod=true ;;
                 tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/stress.sh|tools/mp_scenario.sh) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
-                tools/look_gate/*) lookgate=true ;;
+                # копию инстанса для клиентов шлагбаума готовит prod_client.py (без простоя Dynamic FPS — тест там же)
+                tools/look_gate/*|tools/prod_client.py) lookgate=true ;;
                 .github/*) mod=true; rig=true; replayscan=true; lookgate=true ;;
                 tools/*|docs/*|*.md|.claude/*|.gitignore) ;;
                 *) mod=true ;;
