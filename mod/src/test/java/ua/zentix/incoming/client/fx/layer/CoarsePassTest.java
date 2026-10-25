@@ -4,11 +4,13 @@ import net.minecraft.client.renderer.LightTexture;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.client.nuclear.GlslFunction;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -236,7 +238,7 @@ class CoarsePassTest {
     void unresolvedPixelsAreDrawnAtFullResolution() throws IOException {
         String fsh = shader("core/fx.fsh"), out = shader("core/fx_coarse.fsh").replaceAll("\\s+", " ");
         // одно условие «не разрешён» у маски и у вывода: маска — только там, вывод — только вне
-        assertTrue(out.contains("bool unresolved = same <= 0.5;"), "условие");
+        assertTrue(out.contains("bool unresolved = total <= 0.0;"), "условие");
         assertTrue(out.contains("if (CoarseMask > 0.5) { if (!unresolved) discard; fragColor = vec4(1.0); return; } if (unresolved) discard;"),
                 "маска и вывод делят пиксели");
         // досчёт: шейдер слоя отбрасывает всё вне маски до света, в маске — как обычный квадрат (с глубиной кадра)
@@ -265,16 +267,75 @@ class CoarsePassTest {
     }
 
     /**
+     * Цепочка вывода на краях, по самому шейдеру ({@link GlslFunction}: наклон {@code pallSlopeAxis}, сходство
+     * {@code coarseAlike}, вес {@code coarseWeight}; место на той же поверхности {@code pallAhead} — здесь по одной оси).
+     * Прут в пиксель на 100 блоках перед стеной на 104 (ревью #455): наклона у прута нет, ни один сосед мелкого кадра у
+     * стены — не то же место, пиксель уходит в досчёт; с допуском наклона пелены (5 %) наклон вёл бы к стене. Край
+     * переднего предмета с билинейкой 1/16 у него и 15/16 у фона: фон в цвет не идёт вовсе. Ровная земля вскользь
+     * (1/расстояние по экрану линейно, у соседа на 5 % дальше): наклон держится, соседи — то же место.
+     */
+    @Test
+    void edgesOfTheWorldKeepCoarseSmokeOnItsOwnSurface() throws IOException {
+        String glsl = shader("include/pall.glsl") + shader("core/fx_coarse.fsh");
+        GlslFunction slope = GlslFunction.parse(glsl, "pallSlopeAxis"), alike = GlslFunction.parse(glsl, "coarseAlike"),
+                weight = GlslFunction.parse(glsl, "coarseWeight");
+        String flat = glsl.replaceAll("\\s+", " ");
+        assertTrue(flat.contains("return 1.0 / max(1.0 / depth + dot(slope, offset), 1e-9);"), "pallAhead — как здесь");
+        assertTrue(flat.contains("slope = pallSlopeWithin(Sampler1, full, fullSize, depth, COARSE_SAME);"), "наклон — с допуском мелкого кадра");
+        assertTrue(flat.contains("float w = coarseWeight(mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j)), a);"), "вес — coarseWeight");
+        assertTrue(flat.contains("return vec2(pallSlopeAxis(l, r, w, tol), pallSlopeAxis(d, u, w, tol));"), "наклон по осям");
+        assertTrue(flat.contains("return pallSlopeWithin(scene, at, size, depth, 0.05);"), "пелена — со своими 5 %");
+
+        // прут: 100 у пикселя, 104 у соседей и у образцов мелкого кадра в −3 и +5 пикселях (1/8)
+        double w = 1 / 100.0, l = w - 1 / 104.0, r = 1 / 104.0 - w;
+        double s = slope.call(Map.of("l", l, "r", r, "w", w, "tol", CoarsePass.SAME));
+        assertEquals(0, s, "у прута наклона нет");
+        double total = 0;
+        for (int off : new int[]{-3, 5}) {
+            double ahead = 1 / Math.max(w + s * off, 1e-9), a = alike.call(Map.of("d", 104.0, "e", ahead));
+            total += weight.call(Map.of("b", 0.5, "a", a));
+        }
+        assertEquals(0, total, "прут — в досчёт");
+        double loose = slope.call(Map.of("l", l, "r", r, "w", w, "tol", 0.05));
+        assertTrue(alike.call(Map.of("d", 104.0, "e", 1 / (w + loose))) > 0.5, "допуск пелены вёл бы наклон к стене");
+
+        // край: передний образец 1/16, фон 15/16
+        double front = weight.call(Map.of("b", 1 / 16.0, "a", alike.call(Map.of("d", 100.0, "e", 100.0)))),
+                back = weight.call(Map.of("b", 15 / 16.0, "a", alike.call(Map.of("d", 104.0, "e", 100.0))));
+        assertTrue(front > 0);
+        assertEquals(0, back, "фон в цвет не идёт");
+
+        // ровная земля вскользь: 1/расстояние меняется на 5 % за пиксель
+        double g = 1 / 40.0, step = -0.05 * g, gs = slope.call(Map.of("l", step, "r", step, "w", g, "tol", CoarsePass.SAME));
+        assertEquals(step, gs, 1e-15);
+        for (int off : new int[]{-3, 5}) {
+            double there = 1 / (g + step * off);
+            assertTrue(alike.call(Map.of("d", there, "e", 1 / Math.max(g + gs * off, 1e-9))) > 0.99, "земля в " + off);
+        }
+
+        // наклон пелены — тот же, что был: меньшая разность, гребень дальше 5 % — без наклона
+        Random rnd = new Random(7);
+        for (int k = 0; k < 2000; k++) {
+            double ww = 0.001 + rnd.nextDouble() * 0.1, ll = (rnd.nextDouble() - 0.5) * 0.3 * ww, rr = (rnd.nextDouble() - 0.5) * 0.3 * ww;
+            double old = ll * rr < 0 && Math.min(Math.abs(ll), Math.abs(rr)) > 0.05 * ww ? 0 : Math.abs(ll) < Math.abs(rr) ? ll : rr;
+            assertEquals(old, slope.call(Map.of("l", ll, "r", rr, "w", ww, "tol", 0.05)), 1e-15, ll + " " + rr + " " + ww);
+        }
+    }
+
+    /**
      * Плоский квадрат пыли вскользь (ревью #455): 180 блоков поперёк, середина в 100 блоках впереди, на блок ниже глаза.
-     * Ближний край растянут во много пикселей на тексель, дальний — в доли пикселя: квадрат — полным кадром.
+     * Ближний край растянут во много пикселей на тексель, дальний — в доли пикселя: квадрат — полным кадром. Ближе
+     * (ближний край у глаза или за ним) — тоже полным кадром, без скачка уровня, когда край проходит глаз.
      */
     @Test
     void flatQuadSeenEdgeOnStaysFullResolution() {
-        FxQuads quads = frame();
-        quads.sixWay(0.5f);
-        quads.flat(0, -1, -100, 100, 90, 90, FxAtlas.puff6(3, false), 0.5f, 0.5f, 0.5f, 0.5f, 2, 1, LightTexture.FULL_BRIGHT, 0);
-        quads.sixWay(-1);
-        assertEquals(0, quads.level(0));
+        for (double d : new double[]{100, 91, 90, 80, 30}) {
+            FxQuads quads = frame();
+            quads.sixWay(0.5f);
+            quads.flat(0, -1, (float) -d, (float) d, 90, 90, FxAtlas.puff6(3, false), 0.5f, 0.5f, 0.5f, 0.5f, 2, 1, LightTexture.FULL_BRIGHT, 0);
+            quads.sixWay(-1);
+            assertEquals(0, quads.level(0), "в " + d);
+        }
         // тот же квадрат лицом к глазу на тех же 100 блоках — крупный клуб, мелким кадром
         double focal = H / 2.0 / Math.tan(Math.toRadians(35));
         FxQuads facing = frame();

@@ -301,23 +301,32 @@ float pallAlike(float d, float e) {
     return 1.0 / (1.0 + 400.0 * rel * rel);
 }
 
-// Наклон обратного расстояния до мира у пикселя at полного кадра (на пиксель по x и y): у плоскости 1/расстояние по экрану
-// линейно, и место соседа на той же поверхности — pallAhead. На каждой оси — разность с тем соседом, что ближе к
-// самому пикселю: на краю предмета другой сосед — фон
-vec2 pallSlope(sampler2D scene, ivec2 at, ivec2 size, float depth) {
+// Наклон обратного расстояния до мира по одной оси (на пиксель): l — от левого (нижнего) соседа к пикселю, r — от пикселя
+// к правому (верхнему), w — 1/расстояние пикселя. Берётся разность с тем соседом, что ближе к самому пикселю: на краю
+// предмета другой сосед — фон. Гребень или щель в пиксель (оба соседа — другое место, по разные стороны дальше допуска
+// tol: одна разность меньше −tol·w, другая больше tol·w): наклона поверхности тут не узнать, наклон через край вёл бы
+// «то же место» к фону — наклона нет. Допуск — тот же, что у сходства, которое потом сверяет соседей (у пелены 5 %,
+// pallAlike; у мелкого кадра слоя 1 %, fx_coarse): с допуском шире прут в пиксель перед стеной получал бы наклон к стене.
+float pallSlopeAxis(float l, float r, float w, float tol) {
+    if (max(min(l, r) + tol * w, tol * w - max(l, r)) < 0.0) return 0.0;
+    if (abs(l) < abs(r)) return l;
+    return r;
+}
+
+// Наклон обратного расстояния до мира у пикселя at полного кадра (на пиксель по x и y, pallSlopeAxis с допуском tol): у
+// плоскости 1/расстояние по экрану линейно, и место соседа на той же поверхности — pallAhead
+vec2 pallSlopeWithin(sampler2D scene, ivec2 at, ivec2 size, float depth, float tol) {
     float w = 1.0 / depth;
     float r = 1.0 / pallScene(texelFetch(scene, clamp(at + ivec2(1, 0), ivec2(0), size - 1), 0).r) - w;
     float l = w - 1.0 / pallScene(texelFetch(scene, clamp(at - ivec2(1, 0), ivec2(0), size - 1), 0).r);
     float u = 1.0 / pallScene(texelFetch(scene, clamp(at + ivec2(0, 1), ivec2(0), size - 1), 0).r) - w;
     float d = w - 1.0 / pallScene(texelFetch(scene, clamp(at - ivec2(0, 1), ivec2(0), size - 1), 0).r);
-    vec2 s = vec2(r, u);
-    if (abs(l) < abs(r)) s.x = l;
-    if (abs(d) < abs(u)) s.y = d;
-    // гребень или щель в пиксель (оба соседа — другое место, по разные стороны дальше допуска pallAlike, 5 %): наклона
-    // поверхности тут не узнать, наклон через край вёл бы «то же место» к фону
-    if (l * r < 0.0 && min(abs(l), abs(r)) > 0.05 * w) s.x = 0.0;
-    if (d * u < 0.0 && min(abs(d), abs(u)) > 0.05 * w) s.y = 0.0;
-    return s;
+    return vec2(pallSlopeAxis(l, r, w, tol), pallSlopeAxis(d, u, w, tol));
+}
+
+// Наклон у пелены — с её допуском сходства, 5 % (pallAlike)
+vec2 pallSlope(sampler2D scene, ivec2 at, ivec2 size, float depth) {
+    return pallSlopeWithin(scene, at, size, depth, 0.05);
 }
 
 // Расстояние до мира, какое было бы на той же поверхности, что у пикселя (расстояние depth, наклон slope — pallSlope), в

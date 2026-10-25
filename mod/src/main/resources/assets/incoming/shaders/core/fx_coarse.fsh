@@ -5,8 +5,11 @@
 // Крупные клубы из мелкого кадра — на кадр (client/fx/layer/CoarsePass): смешивание ONE, ONE_MINUS_SRC_ALPHA, как у
 // самих квадратов слоя, — кадр отрезка и есть они, сложенные по порядку. Пиксель — из четырёх ближних пикселей мелкого
 // кадра (свет посчитан в середине пикселя t мелкого кадра, расстояние до мира — в пикселе floor((t + ½)·factor) полного,
-// как у луча пелены) с весом по сходству их расстояния до мира с расстоянием пикселя (pallSlope, pallAhead — как
-// fx_pall_composite; сходство — строже, чем у пелены: coarseAlike): у края дома клуб неба не ложится на стену, а клуб перед стеной — на небо. Ни один из четырёх
+// как у луча пелены) с весом по сходству их расстояния до мира с расстоянием пикселя (наклон и место на той же
+// поверхности — pallSlopeWithin, pallAhead, как у fx_pall_composite; допуск строже, чем у пелены, — COARSE_SAME — и у
+// сходства, и у наклона): у края дома клуб неба не ложится на стену, а клуб перед стеной — на небо. Сосед — не то же
+// место (сходство ½ и меньше) — в цвет не идёт вовсе (coarseWeight): малый, но ненулевой вес фона на краю при весе
+// билинейки 15/16 дал бы ореол дыма фона на переднем предмете. Ни один из четырёх
 // не то же место (прут, решётка, край блока вдали уже пикселя мелкого кадра) — мелкий кадр этот пиксель не разрешает:
 // вывод его не трогает, а проход маски (CoarseMask = 1) отмечает его, и CoarsePass досчитывает отмеченные пиксели
 // квадратами отрезка в полном кадре, с аппаратной глубиной (дым перед прутом — на пруте, за ним — нет).
@@ -32,6 +35,13 @@ float coarseAlike(float d, float e) {
     return 1.0 / (1.0 + rel * rel);
 }
 
+// Вес соседа мелкого кадра: билинейный вес b, сходство a (coarseAlike); не то же место — ноль, в цвет и в нормировку
+// не идёт
+float coarseWeight(float b, float a) {
+    if (a <= 0.5) return 0.0;
+    return b * a;
+}
+
 ivec2 rayPixel(ivec2 t, ivec2 fullSize) {
     return clamp(ivec2((vec2(t) + 0.5) * CoarseScale), ivec2(0), fullSize - 1);
 }
@@ -47,22 +57,21 @@ void main() {
     // середина пикселя t мелкого кадра — (t + ½)·factor полного: там квадраты и посчитаны
     vec2 at = (vec2(full) + 0.5) / CoarseScale - 0.5;
     ivec2 base = ivec2(floor(at));
-    vec2 f = at - vec2(base), slope = pallSlope(Sampler1, full, fullSize, depth);
+    vec2 f = at - vec2(base), slope = pallSlopeWithin(Sampler1, full, fullSize, depth, COARSE_SAME);
     vec4 sum = vec4(0.0);
-    float total = 0.0, same = 0.0;
+    float total = 0.0;
     for (int j = 0; j <= 1; j++) {
         for (int i = 0; i <= 1; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
             float a = coarseAlike(sampleDepth(t, fullSize), pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
             // билинейный вес без «?:» внутри выражения: Veil теряет скобки вокруг него (ShaderSourceTest)
-            float w = mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j));
-            same = max(same, a);
-            w *= a + 1e-4;
+            float w = coarseWeight(mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j)), a);
             sum += texelFetch(Sampler0, t, 0) * w;
             total += w;
         }
     }
-    bool unresolved = same <= 0.5;
+    // не разрешён: ни одного соседа того же места с весом (у края билинейки вес соседа бывает и нулём)
+    bool unresolved = total <= 0.0;
     if (CoarseMask > 0.5) {
         if (!unresolved) discard;
         fragColor = vec4(1.0);
