@@ -5,7 +5,9 @@ import os
 import tempfile
 import time
 import unittest
+from argparse import Namespace
 from pathlib import Path
+from unittest import mock
 
 import client
 import facing
@@ -84,6 +86,17 @@ class Pair(unittest.TestCase):
     def test_regressions_like_3_7_0_fail(self):
         # 3.7.0 против 3.4.1: видеокарта p50 в 2,6–9,3 раза (стенд, 25.10)
         self.assertFalse(gate.compare(run(scale=2.6), pair(1.0, 1.08))["pass"])
+
+    def test_exactly_at_tolerance_passes(self):
+        # A1 = A2 = 10 мс, кандидат 11: ровно +10 % — проход (11 / 10 − 1 в двоичных дробях чуть больше 0,1)
+        (a1, a2), b = pair(), run()
+        for win in ("100/outside", "100/edge", "100/inside"):
+            for r, val in ((a1, 10.0), (a2, 10.0), (b, 11.0)):
+                set_gpu(r, val, win=win)
+        v = gate.compare(b, [a1, a2])
+        self.assertEqual(v["state"], gate.PASS, v["fails"])
+        set_gpu(b, 11.01, win="100/edge")
+        self.assertEqual(gate.compare(b, [a1, a2])["state"], gate.FAIL)
 
     def test_noisy_pair_has_no_verdict(self):
         # A1 1,0 и A2 1,12: база 1,06, расхождение 11 %, допуск 23 % → провал выше 1,30; не хуже A2 + 10 % (1,232) — проход
@@ -688,14 +701,16 @@ class Checks(unittest.TestCase):
         self.assertEqual([f["frame"] for f in fr], [1])
 
 
-def raw_run(d, name="r", gpu=8.0, renderer="RTX 4060", done=True, label="v3.7.0", mspt=6.5, power="performance"):
-    """Сырые данные прогона выборки «100» (пак none): meta.json, none/frames.csv, events.jsonl и host.jsonl — как пишет стенд."""
+def raw_run(d, name="r", gpu=8.0, renderer="RTX 4060", done=True, label="v3.7.0", mspt=6.5, power="performance", pack="none", file=None,
+            once=None):
+    """Сырые данные прогона выборки «100» (по умолчанию пак none): meta.json, <пак>/frames.csv, events.jsonl и host.jsonl —
+    как пишет стенд; once — строки Iris {метод: значение}."""
     d = Path(d)
-    (d / "none").mkdir(parents=True)
+    (d / pack).mkdir(parents=True)
     rows = ["frame,t_ms,prev_interval_ms,cpu_ms,cpu_thread_ms,gpu_ms,prev_gpu_period_ms,shot,stages"]
     for i in range(700):
         rows.append(f"{i},{1000 + 10 * i},10.0,4.0,3.0,{gpu},10.0,0,after_level=1.0")
-    (d / "none" / "frames.csv").write_text("\n".join(rows) + "\n")
+    (d / pack / "frames.csv").write_text("\n".join(rows) + "\n")
     ev = [{"type": "gl", "t_ms": 900, "renderer": renderer, "version": "4.6", "vendor": "n", "width": 2560, "height": 1600},
           {"type": "salvo", "t_ms": 950, "id": "100", "expect": 100, "commands": 100},
           {"type": "await", "t_ms": 990, "salvo": "100", "why": "all", "impacts": 100, "expect": 100, "took_s": 30}]
@@ -705,17 +720,41 @@ def raw_run(d, name="r", gpu=8.0, renderer="RTX 4060", done=True, label="v3.7.0"
                {"type": "window", "t_ms": 3000 + 2000 * k, "name": f"100/{cam}", "edge": "end"}]
     ev += [{"type": "srv", "t_ms": 1000.0 * t, "mspt": mspt, "game_time": t, "projectiles": 0, "entities": 5, "epoch_ms": 1_000_000.0 * 1000 + 1000.0 * t}
            for t in range(1, 8)]
+    ev += [{"type": "once", "t_ms": 900, "name": f"net.irisshaders.iris.Iris#{k}", "value": v} for k, v in (once or {}).items()]
     if done:
         ev.append({"type": "done", "t_ms": 8100, "frames": 700})
-    (d / "none" / "events.jsonl").write_text("\n".join(json.dumps(e) for e in ev) + "\n")
+    (d / pack / "events.jsonl").write_text("\n".join(json.dumps(e) for e in ev) + "\n")
     host = [host_sample(1_000_000.0 + t, dt=1.0, profile=power) for t in range(1, 9)] + gpu_cycles(1_000_000, 1_000_008)
-    (d / "none" / "host.jsonl").write_text("\n".join(json.dumps(x) for x in host) + "\n")
-    ctx = {"stand": "s", "mods": {}, "packs": {"none": "none"}, "scenes": ["100"], "gpu": "g", "driver": "d", "size": "2560x1600", "java": "21",
+    (d / pack / "host.jsonl").write_text("\n".join(json.dumps(x) for x in host) + "\n")
+    ctx = {"stand": "s", "mods": {}, "packs": {pack: file or "none"}, "scenes": ["100"], "gpu": "g", "driver": "d", "size": "2560x1600", "java": "21",
            "kwin": "6.8", "power": "performance"}
     (d / "meta.json").write_text(json.dumps({"name": name, "label": label, "jar": {"file": "j", "sha256": "x", "spec": label},
                                              "context": ctx, "key": "k", "started": "t",
-                                             "packs": {"none": {"exit": 0, "gpu_minutes": 1.0, "file": None}}}))
+                                             "packs": {pack: {"exit": 0, "gpu_minutes": 1.0, "file": file}}}))
     return d
+
+
+class Iris(unittest.TestCase):
+    """Пак работает — по конвейеру Iris: имя пака остаётся и тогда, когда шейдер не собрался и рисует ваниль."""
+
+    def checks(self, once, file="photon-shader.zip", pack="photon"):
+        with tempfile.TemporaryDirectory() as root:
+            d = raw_run(Path(root) / "r", pack=pack, file=file, once=once)
+            return stand.analyze(d, write=False)["packs"][pack]["checks"]
+
+    def test_pack_that_draws_is_fine(self):
+        self.assertEqual(self.checks({"getCurrentPackName": "photon-shader.zip", "isPackInUseQuick": "true"}), [])
+
+    def test_fallback_to_vanilla_is_not_a_run(self):
+        bad = self.checks({"getCurrentPackName": "photon-shader.zip", "isPackInUseQuick": "false"})
+        self.assertIn("шейдерпак photon-shader.zip не рисует (конвейер Iris — ваниль)", bad)
+
+    def test_unconfirmed_pack_is_not_a_run(self):
+        bad = self.checks({"getCurrentPackName": "photon-shader.zip"})
+        self.assertTrue(any("не рисует" in x for x in bad), bad)
+
+    def test_none_needs_no_pipeline(self):
+        self.assertEqual(self.checks({"getCurrentPackName": "(off)", "isPackInUseQuick": "false"}, file=None, pack="none"), [])
 
 
 class PairRuns(unittest.TestCase):
@@ -756,6 +795,14 @@ class PairRuns(unittest.TestCase):
             v = stand.judge_pair(self.out(root, {"A1": 8.0, "B": 8.1, "A2": 8.0, "A1-2": 8.0, "B-2": 12.0, "A2-2": 8.1}))
             self.assertEqual(v["state"], gate.PASS, v["fails"])
             self.assertEqual(v["packs"]["none"]["tries"], 1)
+
+    def test_every_shot_pair_counts(self):
+        # --tries 3: две пары провалились, третья прошла — решает третья
+        with tempfile.TemporaryDirectory() as root:
+            v = stand.judge_pair(self.out(root, {"A1": 8.0, "B": 12.0, "A2": 8.1, "A1-2": 8.0, "B-2": 12.0, "A2-2": 8.1,
+                                                 "A1-3": 8.0, "B-3": 8.2, "A2-3": 8.1}))
+            self.assertEqual(v["state"], gate.PASS, v["fails"])
+            self.assertEqual(v["packs"]["none"]["tries"], 3)
 
     def test_incomplete_pair_fails(self):
         with tempfile.TemporaryDirectory() as root:
@@ -817,6 +864,26 @@ class Pr(unittest.TestCase):
         paths = stand.pr_paths(rec)
         self.assertEqual(len(paths), 3)
         self.assertTrue(facing.player_facing(paths))
+
+    def test_rejudge_post_checks_the_shot_pair(self):
+        # пара снята выборкой (только none): --rejudge --post с полной командой статус не ставит
+        head = "ab" * 20
+        with tempfile.TemporaryDirectory() as root:
+            out = Path(root) / f"pr1-{head[:8]}"
+            out.mkdir()
+            ctx = {"scenes": ["100"], "size": stand.DEFAULT_SIZE}
+            (out / "pair.json").write_text(json.dumps({"name": out.name, "packs": ["none"], "context": ctx, "cand": {}, "base": {}}))
+            files = json.dumps({"filename": "mod/src/main/java/ua/zentix/incoming/client/fx/A.java", "previous_filename": None})
+            gh = lambda *args, json_out=False: {"headRefOid": head, "url": "u", "number": 1} if json_out else files
+            a = Namespace(number=1, post=True, rejudge=True, force=False, against="v3.7.0", packs=list(stand.PACKS), scenes=None,
+                          size=stand.DEFAULT_SIZE)
+            with mock.patch.object(stand, "OUT", Path(root)), mock.patch.object(stand, "gh", gh), \
+                    mock.patch.object(stand, "post_status") as post, mock.patch.object(stand, "judge_pair") as judge:
+                with self.assertRaises(SystemExit) as e:
+                    stand.cmd_pr(a)
+            self.assertIn("снятая пара: none", str(e.exception))
+            post.assert_not_called()
+            judge.assert_not_called()
 
     def test_player_facing_paths(self):
         self.assertEqual(facing.player_facing(["mod/src/main/java/ua/zentix/incoming/client/fx/A.java", "mod/src/main/resources/assets/incoming/x.png",

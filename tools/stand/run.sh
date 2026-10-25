@@ -41,10 +41,15 @@ if [ -n "$against" ]; then
   IFS=$'\t' read -r _ BJAR BLABEL <<< "$bline"
   pair=(--against "$BJAR" --against-label "$BLABEL" --against-spec "$against")
 fi
+# аренда отпускается при любом выходе, и по сигналу тоже: без ловушки SIGTERM убил бы скрипт до строки release, и
+# видеокарта стояла бы занятой до конца срока аренды. Сигнал bash обработает после выхода задачи (клиент к тому времени
+# закрыт), поэтому аренда не уходит, пока клиент идёт.
+trap '"$ROOT/tools/gpu_lease.sh" release >/dev/null 2>&1 || true' EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 "$ROOT/tools/laptop_job.sh" --gpu --wait "stand-$NAME" -- python3 "$HERE/stand.py" play "$NAME" "$JAR" --spec "$SPEC" --label "$LABEL" \
   "${pair[@]}" "${play_only[@]}" "${args[@]}"
 code=$?
-"$ROOT/tools/gpu_lease.sh" release >/dev/null 2>&1 || true
 # где итог — пишет play («итог в …»): каталоги стенда общие у деревьев репозитория (stand.py, STAND)
 echo "stand $NAME: exit $code"
 exit $code

@@ -108,7 +108,8 @@ def compare_pack(pack, c, bases):
                 continue
             lim = tol_of(spread) if m in METRICS else None
             change = cv / bv - 1
-            bad = judged and change > lim
+            # ровно на допуске — проход: 11 / 10 − 1 в двоичных дробях чуть больше 0,1
+            bad = judged and change > lim + 1e-9
             # не хуже худшего прогона принятого (с полом допуска) — проход и в шумной паре
             within = cv <= max(metric(w, m) for w in bws) * (1 + MIN_TOL)
             loud = judged and spread is not None and spread > MAX_SPREAD and not bad and not within

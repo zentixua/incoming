@@ -21,7 +21,7 @@
     "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
     "ua.zentix.incoming.client.far.FarRenderer#describeSmoke"
   ],
-  "once": ["net.irisshaders.iris.Iris#getCurrentPackName"],
+  "once": ["net.irisshaders.iris.Iris#getCurrentPackName", "net.irisshaders.iris.Iris#isPackInUseQuick"],
   "sites": {"F": [0, 0], "C": [1000, 0], "D": [4000, 0], "L1": [0, 3000], "L2": [0, 6000], "L3": [0, 9000]},
   "launch_view": {"camera": {"toward": [0, -1], "dist": 30, "height": 1.6, "look_height": 1.5}, "target": [2500, 0],
                   "windows": [{"name": "start", "at_s": 0, "s": 15}, {"name": "hang", "at_s": 30, "s": 10}]},

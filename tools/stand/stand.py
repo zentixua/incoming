@@ -18,6 +18,7 @@
 """
 import argparse
 import hashlib
+import itertools
 import json
 import os
 import shutil
@@ -384,6 +385,11 @@ def analyze(out, write=True):
             r["checks"].append(f"шейдерпак в игре — {got}, а не {want}")
         if not want and ".zip" in got:
             r["checks"].append(f"пак none, а Iris включил {got}")
+        # имя пака Iris держит и тогда, когда конвейер пака не собрался и рисует ваниль (ошибка шейдера): работает ли
+        # пак — только по конвейеру (isPackInUseQuick: IrisRenderingPipeline, проверено по Iris 1.8.14)
+        live = str(r["meta"]["once"].get("net.irisshaders.iris.Iris#isPackInUseQuick"))
+        if want and live != "true":
+            r["checks"].append(f"шейдерпак {want} не рисует (конвейер Iris — {'ваниль' if live == 'false' else live})")
         w, h = meta["context"]["size"].split("x")
         gl = r["meta"].get("gl") or {}
         if gl and (gl.get("width") != int(w) or gl.get("height") != int(h)):
@@ -418,7 +424,8 @@ def judge_pair(out, write=True):
     packs = {}
     for pack in info["packs"]:
         tries = []
-        for attempt in range(1, PAIR_TRIES + 1):
+        # пары — все снятые (--tries), до первой прошедшей
+        for attempt in itertools.count(1):
             names = [role_dir(out, r, attempt).name for r in ROLES]
             got = [runs.get(n, {}).get("packs", {}).get(pack) for n in names]
             if all(g is None for g in got):
@@ -502,14 +509,20 @@ def cmd_pr(a):
     base, version = (a.against, a.against) if a.against else main_base()
     name = f"pr{a.number}-{head[:8]}"
     scenes = a.scenes if a.scenes is not None else GATE_SCENES
+    full = "--post — только со всеми паками, сценой «100» и окном по умолчанию; выборка — без --post"
     if a.post and (a.packs != list(PACKS) or scenes != GATE_SCENES or a.size != DEFAULT_SIZE):
         # статус влития — только у полного шлагбаума: выборка паков пропустила бы регрессию в остальных
-        raise SystemExit("--post — только со всеми паками, сценой «100» и окном по умолчанию; выборка — без --post")
+        raise SystemExit(full)
     out = OUT / name
     if a.rejudge:
         # пара этой головы уже снята: вердикт заново из сырых данных (правка разбора не требует пересъёмки)
         if not is_pair(out):
             raise SystemExit(f"{out}: пары этой головы нет — снять без --rejudge")
+        info = json.loads((out / "pair.json").read_text())
+        ctx = info["context"]
+        # полнота — у снятой пары, а не у этой команды
+        if a.post and (info["packs"] != list(PACKS) or ctx["scenes"] != GATE_SCENES or ctx["size"] != DEFAULT_SIZE):
+            raise SystemExit(f"{full} (снятая пара: {','.join(info['packs'])}, сцены {ctx['scenes']}, {ctx['size']})")
         code = 0
     else:
         if a.post:
@@ -546,6 +559,13 @@ def post_status(sha_, state, desc, url):
     gh(*args)
 
 
+def positive(text):
+    n = int(text)
+    if n < 1:
+        raise argparse.ArgumentTypeError("не меньше 1")
+    return n
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -561,7 +581,7 @@ def main():
     p.add_argument("--against", help="jar принятого: снять парой A1, B, A2 на каждый пак")
     p.add_argument("--against-label"); p.add_argument("--against-spec")
     p.add_argument("--no-warmup", action="store_true", help="без прогрева видеокарты перед парой")
-    p.add_argument("--tries", type=int, default=PAIR_TRIES, help="пар на пак, пока не прошёл (1 — без повторной: приёмка)")
+    p.add_argument("--tries", type=positive, default=PAIR_TRIES, help="пар на пак, пока не прошёл (1 — без повторной: приёмка)")
     common(p); p.set_defaults(fn=cmd_play)
     p = sub.add_parser("analyze"); p.add_argument("name"); p.set_defaults(fn=cmd_analyze)
     p = sub.add_parser("gate"); p.add_argument("name"); p.set_defaults(fn=cmd_gate)
