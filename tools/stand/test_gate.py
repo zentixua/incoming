@@ -262,13 +262,15 @@ def raw_run(d, name="r", gpu=8.0, renderer="RTX 4060", done=True, label="v3.7.0"
 
 
 class Checks(unittest.TestCase):
-    def acc_events(self, late_ms=100, after=0, first=30, last=30, cmds=24):
+    def acc_events(self, late_ms=100, after=0, first=30, last=30, cmds=24, ran_late_ms=0):
         """Накопление: окно 0–240 с, попаданий first в первую минуту, last в последнюю, after — после окна."""
         scene = next(s for s in plan.load()["scenes"] if s.get("waves"))
         ev = [{"type": "window", "t_ms": 0, "name": "acc", "edge": "begin"}, {"type": "window", "t_ms": 240_000, "name": "acc", "edge": "end"},
               {"type": "salvo", "t_ms": -10_000, "id": "acc", "expect": 120, "commands": 24}]
+        # сервер выполняет команду после отправки; ran_late_ms — средние волны (4–7) он выполнил позже (встал)
         ev += [{"type": "cmd", "t_ms": 20_000 * (i // 2), "tag": "acc", "ok": True, "cmd": "c", "sent_ms": 20_000 * (i // 2) + late_ms,
-                "due_ms": 20_000 * (i // 2)} for i in range(cmds)]
+                "ran_ms": 20_000 * (i // 2) + late_ms + 20 + (ran_late_ms if 8 <= i < 16 else 0), "due_ms": 20_000 * (i // 2)}
+               for i in range(cmds)]
         times = [i * 2000 for i in range(first)] + [100_000 + i * 1000 for i in range(120 - first - last - after)] \
             + [180_000 + i * 1900 for i in range(last)] + [241_000 + i for i in range(after)]
         ev += [{"type": "impact", "t_ms": t, "salvo": "acc"} for t in times]
@@ -290,6 +292,12 @@ class Checks(unittest.TestCase):
     def test_waves_fired_in_a_burst_fail(self):
         bad = self.acc_checks(late_ms=6000)
         self.assertTrue(any("не по расписанию" in b for b in bad), bad)
+
+    def test_waves_run_late_by_a_stalled_server_fail(self):
+        # клиент слал вовремя, а вставший сервер выполнил средние волны на минуту позже: первая и последняя минуты целы
+        bad = self.acc_checks(ran_late_ms=60_000)
+        self.assertEqual(len(bad), 1, bad)
+        self.assertIn("не по расписанию", bad[0])
 
     def test_missing_wave_commands_fail(self):
         bad = self.acc_checks(cmds=20)
@@ -345,9 +353,10 @@ class Cache(unittest.TestCase):
 
     def test_valid_cache(self):
         with tempfile.TemporaryDirectory() as d:
-            raw_run(Path(d) / "run1", "a")
-            raw_run(Path(d) / "run2", "b", gpu=8.2)
-            cal = stand.cached(Path(d))
+            d = Path(d) / "v3.7.0-k"
+            raw_run(d / "run1", "a")
+            raw_run(d / "run2", "b", gpu=8.2)
+            cal = stand.cached(d)
             self.assertAlmostEqual(cal["base"]["packs"]["none"]["windows"]["100/edge"]["gpu"]["p50"], 8.1)
             self.assertEqual(cal["base"]["packs"]["none"]["checks"], [])
 
@@ -358,6 +367,15 @@ class Cache(unittest.TestCase):
             with self.assertRaises(SystemExit) as e:
                 stand.cached(Path(d))
             self.assertIn("нет события done", str(e.exception))
+
+    def test_cache_under_another_key_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d) / "v3.7.0-other"
+            raw_run(d / "run1", "a")
+            raw_run(d / "run2", "b")
+            with self.assertRaises(SystemExit) as e:
+                stand.cached(d)
+            self.assertIn("не под ключом", str(e.exception))
 
     def test_second_run_on_another_gpu_rejects_the_cache(self):
         with tempfile.TemporaryDirectory() as d:
@@ -389,7 +407,8 @@ class Pr(unittest.TestCase):
         names = {str(f.relative_to(stand.ROOT)) for f in stand.stand_files()}
         for f in ("tools/stand/client.py", "tools/stand/build.gradle", "tools/stand/settings.gradle", "tools/stand/scenes.json",
                   "tools/stand/plan.py", "mod/gradlew", "mod/gradle/wrapper/gradle-wrapper.properties",
-                  "tools/stand/src/main/resources/META-INF/accesstransformer.cfg"):
+                  "tools/stand/src/main/resources/META-INF/accesstransformer.cfg", "mod/gradle/wrapper/gradle-wrapper.jar",
+                  "tools/nested_kwin.sh", "tools/nested_kwin_bus.conf"):
             self.assertIn(f, names)
         self.assertNotIn("tools/stand/results.py", names)    # разбор — не съёмка: принятый разбирается заново
 

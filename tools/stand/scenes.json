@@ -1,10 +1,11 @@
 {
   "stand": 1,
-  "about": "Scenes of the scene stand (README.md). Positions in blocks: +X east, +Z south; ground = top of the grass of the flat world. Launch bearings: degrees from south toward east. A salvo goes out in commands of at most salvo_split shaheds, each from its own launch point, straight via the target; server_config is the world rule written to config/incoming-server.toml (drone_flight_time at its minimum: the flight is never shorter than the direct path).",
+  "about": "Scenes of the scene stand (README.md). Positions in blocks: +X east, +Z south; ground = top of the grass of the flat world. Launch bearings: degrees from south toward east. A salvo goes out in commands of at most salvo_split shaheds, each from its own launch point, straight via the target; server_config is the world rule written to config/incoming-server.toml (drone_flight_time at its minimum: the flight is never shorter than the direct path). An impact is a projectile leaving the world near the target and its own explosion with a warhead damage type (warheads): a crash before arming is a vanilla explosion and does not count.",
   "world": {"seed": 20261025, "day_time": 6000, "settle_s": 10, "limit_s": 1500},
   "ground": 65,
   "weapon": "drone",
   "projectiles": ["incoming:drone"],
+  "warheads": ["incoming:strike"],
   "salvo_max": 30,
   "salvo_split": 10,
   "server_config": {"launch": {"drone_flight_time": 5}},

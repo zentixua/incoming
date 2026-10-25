@@ -137,7 +137,8 @@ def build(scenes, only=None):
             steps.append({"do": "window", "name": f"{s['id']}/{cam}", "s": s["window_s"]})
     w = scenes["world"]
     return {"seed": w["seed"], "day_time": w["day_time"], "settle_s": w["settle_s"], "limit_s": w["limit_s"],
-            "projectiles": scenes["projectiles"], "probes": scenes["probes"], "once": scenes["once"], "steps": steps}
+            "projectiles": scenes["projectiles"], "warheads": scenes["warheads"], "probes": scenes["probes"], "once": scenes["once"],
+            "steps": steps}
 
 
 def windows(scenes, only=None):

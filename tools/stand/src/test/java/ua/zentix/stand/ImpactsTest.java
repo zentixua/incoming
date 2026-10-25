@@ -25,7 +25,7 @@ class ImpactsTest {
         Impacts i = atC();
         assertNull(i.leave(a, 1010, 65, 5, 111));
         assertEquals(1, i.waiting("100"));
-        Impacts.Hit h = i.blast(a);
+        Impacts.Hit h = i.blast(a, true);
         assertNotNull(h);
         assertEquals("100", h.leave().salvo());
         assertEquals(111, h.leave().nanos());
@@ -36,7 +36,7 @@ class ImpactsTest {
     @Test
     void blastBeforeLeaveCounts() {
         Impacts i = atC();
-        assertNull(i.blast(a));
+        assertNull(i.blast(a, true));
         Impacts.Hit h = i.leave(a, 1000, 65, 0, 5);
         assertNotNull(h);
         assertEquals("blast-before", h.how());
@@ -47,7 +47,7 @@ class ImpactsTest {
         // A ушёл в полёт вне мира у цели, рядом взорвался B: A — не попадание
         Impacts i = atC();
         assertNull(i.leave(a, 1000, 110, 0, 1));
-        assertNull(i.blast(b));
+        assertNull(i.blast(b, true));
         assertEquals(1, i.waiting("100"));
         // B уходит позже — его собственный взрыв уже был
         assertNotNull(i.leave(b, 1001, 65, 0, 2));
@@ -57,7 +57,7 @@ class ImpactsTest {
     void blastWithoutProjectileConfirmsNothing() {
         Impacts i = atC();
         i.leave(a, 1000, 65, 0, 1);
-        assertNull(i.blast(null));
+        assertNull(i.blast(null, true));
         assertEquals(1, i.waiting("100"));
     }
 
@@ -69,7 +69,7 @@ class ImpactsTest {
         assertEquals(0, i.waiting("100"));
         assertFalse(i.join(a));
         assertNull(i.leave(a, 1005, 65, 3, 9));       // настоящее попадание
-        Impacts.Hit h = i.blast(a);
+        Impacts.Hit h = i.blast(a, true);
         assertNotNull(h);
         assertEquals(9, h.leave().nanos());
     }
@@ -78,8 +78,8 @@ class ImpactsTest {
     void secondaryBlastsOfTheSameProjectileCountOnce() {
         Impacts i = atC();
         i.leave(a, 1000, 65, 0, 1);
-        assertNotNull(i.blast(a));
-        assertNull(i.blast(a));
+        assertNotNull(i.blast(a, true));
+        assertNull(i.blast(a, true));
         assertNull(i.leave(a, 1000, 65, 0, 2));
     }
 
@@ -88,8 +88,20 @@ class ImpactsTest {
         // подрыв под нагрузкой — сколько угодно позже ухода (Incoming ждёт готовности района до 6000 тиков)
         Impacts i = atC();
         i.leave(a, 1000, 65, 0, 1);
-        for (int t = 0; t < 10_000; t++) assertNull(i.blast(UUID.randomUUID()));
-        assertNotNull(i.blast(a));
+        for (int t = 0; t < 10_000; t++) assertNull(i.blast(UUID.randomUUID(), true));
+        assertNotNull(i.blast(a, true));
+    }
+
+    @Test
+    void aCrashNearTheTargetIsNotAHit() {
+        // разбился до взведения у цели: свой ванильный взрыв без боевой части — стенд мерил бы не удары
+        Impacts i = atC();
+        assertNull(i.leave(a, 1000, 65, 0, 1));
+        assertNull(i.blast(a, false));
+        assertEquals(1, i.waiting("100"));
+        assertNull(i.blast(b, false));
+        assertNull(i.leave(b, 1000, 65, 0, 2));     // авария до ухода — тоже не «взрыв был»
+        assertEquals(2, i.waiting("100"));
     }
 
     @Test
@@ -97,7 +109,7 @@ class ImpactsTest {
         Impacts i = atC();
         assertNull(i.leave(a, 1000, 65, 400, 1));     // у точки пуска
         assertEquals(0, i.waiting("100"));
-        assertNull(i.blast(a));
+        assertNull(i.blast(a, true));
     }
 
     @Test

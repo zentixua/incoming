@@ -76,7 +76,7 @@ final class Director {
         this.plan = plan;
         this.out = out;
         this.clock = new FrameClock(out);
-        this.watch = new ServerWatch(out, plan.projectiles());
+        this.watch = new ServerWatch(out, plan.projectiles(), plan.warheads());
         this.probes = new Probes(out, plan.probes(), plan.once());
         NeoForge.EVENT_BUS.addListener(this::onScreen);
         NeoForge.EVENT_BUS.addListener(this::onTick);
@@ -321,8 +321,9 @@ final class Director {
     }
 
     /**
-     * Команда — в потоке сервера, от консоли (оператор); успех, число, когда послана и когда должна была (у команд залпа
-     * по своим часам, {@code due} — nanoTime; −1 — сразу) — событием {@code cmd}: по ним разбор проверяет расписание волн.
+     * Команда — в потоке сервера, от консоли (оператор); успех, число, когда послана, когда сервер начал её выполнять и
+     * когда должна была (у команд залпа по своим часам, {@code due} — nanoTime; −1 — сразу) — событием {@code cmd}: по
+     * выполнению разбор проверяет расписание волн (вставший сервер выполнил бы их пачкой, хоть клиент и слал вовремя).
      */
     private void server(String command, String tag, long due) {
         MinecraftServer s = Minecraft.getInstance().getSingleplayerServer();
@@ -330,9 +331,10 @@ final class Director {
         long sentAt = System.nanoTime();
         Double dueMs = due < 0 ? null : Stand.ms(due);
         s.execute(() -> {
+            double ranMs = Stand.ms(System.nanoTime());
             CommandSourceStack source = s.createCommandSourceStack().withCallback((ok, result) ->
                     out.event("cmd", System.nanoTime(), "cmd", command, "tag", tag, "ok", ok, "result", result, "sent_ms", Stand.ms(sentAt),
-                            "due_ms", dueMs));
+                            "ran_ms", ranMs, "due_ms", dueMs));
             s.getCommands().performPrefixedCommand(source, command);
         });
     }

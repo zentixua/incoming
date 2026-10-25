@@ -179,9 +179,11 @@ def resolve_jar(spec):
 
 def stand_hash():
     """Версия стенда: исходники обвязки, её сборка (build.gradle с подготовкой запуска standLaunch, settings.gradle,
-    Gradle мода, которым она собирается), сцены, план, каталог игры и запуск клиента (client.py: настройки игры,
-    окружение, скрипт standLaunch) — то, от чего зависит, что снимается. Java клиента — отдельно в контексте. Разбор
-    (results.py, gate.py) в неё не входит: числа принятого считаются из сырых данных кэша заново при каждом сравнении."""
+    Gradle мода, которым она собирается, с wrapper), сцены, план, каталог игры и запуск клиента (client.py: настройки
+    игры, окружение, скрипт standLaunch; nested_kwin.sh и его шина — окружение и экран клиента) — то, от чего зависит,
+    что снимается. Java клиента и KWin — отдельно в контексте. gpu_lease.sh, который nested_kwin.sh зовёт до запуска
+    KWin (аренда), — нет: клиент он не трогает. Разбор (results.py, gate.py) в неё не входит: числа принятого считаются
+    из сырых данных кэша заново при каждом сравнении."""
     h = hashlib.sha256()
     for f in stand_files():
         h.update(str(f.relative_to(ROOT)).encode())
@@ -193,7 +195,9 @@ def stand_files():
     """Файлы версии стенда (stand_hash), по порядку."""
     files = [*(HERE / "src" / "main").rglob("*"), HERE / "build.gradle", HERE / "gradle.properties", HERE / "settings.gradle",
              HERE / "scenes.json", HERE / "plan.py", HERE / "client.py",
-             ROOT / "mod" / "gradlew", ROOT / "mod" / "gradle" / "wrapper" / "gradle-wrapper.properties"]
+             ROOT / "mod" / "gradlew", ROOT / "mod" / "gradle" / "wrapper" / "gradle-wrapper.properties",
+             ROOT / "mod" / "gradle" / "wrapper" / "gradle-wrapper.jar", ROOT / "tools" / "nested_kwin.sh",
+             ROOT / "tools" / "nested_kwin_bus.conf"]
     return sorted(f for f in files if f.is_file())
 
 
@@ -206,13 +210,21 @@ def gpu_info():
         return "unknown", "unknown"
 
 
+def kwin_version():
+    """Версия композитора, во вложенном экземпляре которого идёт клиент (пакет системы обновляется сам)."""
+    try:
+        return subprocess.run(["kwin_wayland", "--version"], capture_output=True, text=True, timeout=20).stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
 def context(packs, scenes_sel, size, files):
     """Всё, кроме jar, от чего зависят числа: стенд, паки и моды (sha512), сцены, видеокарта и драйвер, окно, java
-    клиента (скрипт запуска — уже подготовлен)."""
+    клиента (скрипт запуска — уже подготовлен), KWin."""
     name, driver = gpu_info()
     return {"stand": stand_hash(), "mods": {m: files[m][1] for m in MODS},
             "packs": {p: files[p][1] if PACKS[p] else "none" for p in packs}, "scenes": scenes_sel or "all",
-            "gpu": name, "driver": driver, "size": size, "java": client.java_of(SCRIPT)}
+            "gpu": name, "driver": driver, "size": size, "java": client.java_of(SCRIPT), "kwin": kwin_version()}
 
 
 def key(jar_sha, ctx):
@@ -326,8 +338,12 @@ def cache_dir(version, k):
 
 def cached(d):
     """Принятый из кэша d (run1/, run2/): числа, допуск и самопроверка — заново из сырых данных обоих прогонов и только
-    годные (gate.calibrate: оба прогона годны, сняты одинаково, второй против первого проходит); иначе SystemExit."""
-    cal = gate.calibrate(analyze(d / "run1", write=False), analyze(d / "run2", write=False))
+    годные (gate.calibrate: оба прогона годны, сняты одинаково, второй против первого проходит; ключ, под которым кэш
+    лежит, — тот, что прогоны записали при съёмке); иначе SystemExit."""
+    r1, r2 = analyze(d / "run1", write=False), analyze(d / "run2", write=False)
+    cal = gate.calibrate(r1, r2)
+    if not d.name.endswith("-" + str(r1.get("key"))):
+        cal["problems"].append(f"кэш лежит не под ключом своих прогонов ({r1.get('key')})")
     if cal["problems"]:
         raise SystemExit(f"принятый в кэше {d} негоден: " + "; ".join(cal["problems"]))
     return cal
@@ -357,6 +373,9 @@ def cmd_baseline(a):
     runs = [analyze(OUT / name, write=False) for name in names]
     cal = gate.calibrate(*runs)
     (OUT / names[1] / "self-check.json").write_text(json.dumps(cal["self_check"], indent=1, ensure_ascii=False))
+    # ключ кэша — тот, что прогоны записали при съёмке (контекст мог смениться между подготовкой и съёмкой: драйвер, KWin)
+    if any(r.get("key") != k for r in runs):
+        cal["problems"].append(f"ключ съёмки {[r.get('key') for r in runs]} не тот, что при подготовке ({k}): контекст сменился — снять заново")
     if cal["problems"]:
         log(f"принятый {a.version} НЕ в кэше — калибровка негодна:")
         for x in cal["problems"]:

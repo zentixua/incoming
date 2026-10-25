@@ -144,11 +144,12 @@ def growth(bks, minute_s=60):
 
 def acc_load(events, scene, t0, t1):
     """Нагрузка накопления в окне: попадания волн в первую и последнюю минуту окна и после него (план — `planned` в
-    минуту), опоздание команд волн от их расписания (событие cmd: послана `sent_ms`, должна — `due_ms`)."""
+    минуту), опоздание команд волн от их расписания по выполнению сервером (событие cmd: сервер начал `ran_ms`, должна —
+    `due_ms`): вставший сервер выполнил бы их пачкой, хоть клиент и слал вовремя."""
     w = scene["waves"]
     hits = sorted(e["t_ms"] for e in events if e["type"] == "impact" and e["salvo"] == scene["id"])
     cmds = [e for e in events if e["type"] == "cmd" and e.get("tag") == scene["id"]]
-    late = [e["sent_ms"] - e["due_ms"] for e in cmds if e.get("due_ms") is not None]
+    late = [e["ran_ms"] - e["due_ms"] for e in cmds if e.get("due_ms") is not None and e.get("ran_ms") is not None]
     minute = 60_000
     return {"planned": w["strikes"] * minute / 1000 / w["every_s"],
             "first": sum(1 for t in hits if t0 <= t < t0 + minute), "last": sum(1 for t in hits if t1 - minute <= t <= t1),
@@ -244,7 +245,7 @@ def checks(events, res, expected=(), acc_scene=None):
             if load["commands"] != want:
                 bad.append(f"накопление {name}: прошло команд волн {load['commands']} из {want}")
             if load["late_max_ms"] is None:
-                bad.append(f"накопление {name}: у команд волн нет срока по расписанию (due_ms) — расписание не проверить")
+                bad.append(f"накопление {name}: у команд волн нет срока или времени выполнения (due_ms, ran_ms) — расписание не проверить")
             elif load["late_max_ms"] > LATE_MS:
                 bad.append(f"накопление {name}: команды волн не по расписанию (опоздание до {load['late_max_ms']:.0f} мс, можно {LATE_MS})")
             lo, hi = load["planned"] * (1 - LOAD_TOL), load["planned"] * (1 + LOAD_TOL)

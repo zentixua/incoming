@@ -24,7 +24,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Поток встроенного сервера: попадания залпов, взрывы, тик. События Minecraft — в {@link Impacts} (правило попадания
  * там): уход снаряда (тип из плана) из мира убитым или убранным, возврат в мир, начало взрыва ({@code ExplosionEvent.Start},
- * первым и отменённое тоже — попадание было, даже если взрыв отменил мод защиты). Снаряд взрыва — его источник
+ * первым и отменённое тоже — попадание было, даже если взрыв отменил мод защиты). Подрыв боевой части — тип урона
+ * взрыва из плана ({@code incoming:strike} у всех версий 3.4.1+); авария снаряда до взведения — ванильный взрыв
+ * ({@code minecraft:explosion}), не попадание. Снаряд взрыва — его источник
  * ({@code getDirectSourceEntity}, так у Incoming после 3.7.0) или прямой источник его урона ({@code DamageSource.getDirectEntity}:
  * в 3.4.1–3.7.0 боевая часть даёт снаряд только ему, {@code Warheads.detonate(…, this, …)} → {@code ModDamageTypes.source}),
  * — одно правило для всех версий. Время попадания — миг ухода. Снаряд вне мира сущностью не бывает, поэтому «нет
@@ -32,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class ServerWatch {
     private final Out out;
-    private final Set<String> projectiles;
+    private final Set<String> projectiles, warheads;
     /** Только поток сервера (кроме {@link Impacts#waiting}). */
     private final Impacts hits = new Impacts();
     private final Map<String, Integer> expected = new ConcurrentHashMap<>();
@@ -42,9 +44,10 @@ final class ServerWatch {
     private final List<Impacts.Target> declared = new ArrayList<>();
     private int ticks;
 
-    ServerWatch(Out out, Set<String> projectiles) {
+    ServerWatch(Out out, Set<String> projectiles, Set<String> warheads) {
         this.out = out;
         this.projectiles = projectiles;
+        this.warheads = warheads;
         NeoForge.EVENT_BUS.addListener(this::onJoin);
         NeoForge.EVENT_BUS.addListener(this::onLeave);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, true, ExplosionEvent.Start.class, this::onStart);
@@ -141,10 +144,15 @@ final class ServerWatch {
         return direct != null ? direct : x.damageSource.getDirectEntity();
     }
 
+    /** Тип урона взрыва: «incoming:strike» и т. п. */
+    static String damageType(Explosion x) {
+        return x.damageSource.typeHolder().unwrapKey().map(k -> k.location().toString()).orElse("?");
+    }
+
     private void onStart(ExplosionEvent.Start e) {
         if (e.getLevel().isClientSide()) return;
         Entity p = projectileOf(e.getExplosion());
-        record(hits.blast(projectile(p) ? p.getUUID() : null));
+        record(hits.blast(projectile(p) ? p.getUUID() : null, warheads.contains(damageType(e.getExplosion()))));
     }
 
     private void record(@Nullable Impacts.Hit hit) {
@@ -170,7 +178,7 @@ final class ServerWatch {
         Entity src = projectileOf(x);
         out.event("blast", System.nanoTime(), "at", new double[]{c.x, c.y, c.z}, "radius", x.radius(),
                 "source", src == null ? "none" : BuiltInRegistries.ENTITY_TYPE.getKey(src.getType()).toString(),
-                "uuid", src == null ? null : src.getUUID().toString());
+                "uuid", src == null ? null : src.getUUID().toString(), "damage", damageType(x));
     }
 
     /** Раз в секунду: средний тик сервера (последние 100 тиков, как F3), время игры, снаряды и все сущности мира. */

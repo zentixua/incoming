@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PlanTest {
     private static final String PLAN = """
             {"seed": 20261025, "day_time": 6000, "settle_s": 10, "limit_s": 1500,
-             "projectiles": ["incoming:drone"], "probes": ["a.B#c"], "once": ["d.E#f"],
+             "projectiles": ["incoming:drone"], "warheads": ["incoming:strike"], "probes": ["a.B#c"], "once": ["d.E#f"],
              "steps": [
               {"do": "tp", "eye": [800.0, 95, 0.0], "look": [1000.0, 80, 0.0], "settle_s": 8},
               {"do": "salvo", "id": "100", "x": 1000.0, "z": 0.0, "radius": 160, "expect": 60,
@@ -47,6 +47,7 @@ class PlanTest {
         Plan p = read(PLAN);
         assertEquals(20261025L, p.seed());
         assertTrue(p.projectiles().contains("incoming:drone"));
+        assertTrue(p.warheads().contains("incoming:strike"));
         assertEquals(9, p.steps().size());
         Plan.Tp tp = assertInstanceOf(Plan.Tp.class, p.steps().get(0));
         assertArrayEquals(new double[]{800, 95, 0}, tp.eye());

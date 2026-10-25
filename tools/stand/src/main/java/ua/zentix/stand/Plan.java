@@ -22,11 +22,12 @@ import java.util.Set;
  * @param settleS    после входа в мир — столько секунд до первого шага (сетки чанков у точки появления)
  * @param limitS     весь прогон — не дольше (потом выход с событием {@code limit})
  * @param projectiles типы сущностей-снарядов ({@code incoming:drone}): по их уходу из мира у цели считаются попадания
+ * @param warheads   типы урона подрыва боевой части ({@code incoming:strike}): только такой взрыв снаряда — попадание
  * @param probes     «класс#метод» статических методов без аргументов, чья строка пишется раз в секунду, если есть
  * @param once       то же, один раз после входа в мир (шейдерпак Iris и т. п.)
  */
-record Plan(long seed, long dayTime, double settleS, double limitS, Set<String> projectiles, List<String> probes,
-            List<String> once, List<Step> steps) {
+record Plan(long seed, long dayTime, double settleS, double limitS, Set<String> projectiles, Set<String> warheads,
+            List<String> probes, List<String> once, List<Step> steps) {
 
     /** Шаг плана. */
     sealed interface Step {}
@@ -71,7 +72,8 @@ record Plan(long seed, long dayTime, double settleS, double limitS, Set<String> 
         for (JsonElement e : o.getAsJsonArray("steps")) steps.add(step(e.getAsJsonObject()));
         return new Plan(o.get("seed").getAsLong(), o.has("day_time") ? o.get("day_time").getAsLong() : 6000,
                 o.has("settle_s") ? o.get("settle_s").getAsDouble() : 5, o.has("limit_s") ? o.get("limit_s").getAsDouble() : 1800,
-                Set.copyOf(strings(o.getAsJsonArray("projectiles"))), strings(o.getAsJsonArray("probes")),
+                Set.copyOf(strings(o.getAsJsonArray("projectiles"))), Set.copyOf(strings(o.getAsJsonArray("warheads"))),
+                strings(o.getAsJsonArray("probes")),
                 strings(o.getAsJsonArray("once")), List.copyOf(steps));
     }
 
