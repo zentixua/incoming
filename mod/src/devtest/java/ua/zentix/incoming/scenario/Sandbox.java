@@ -413,10 +413,11 @@ final class Sandbox {
                 server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:%s", s.getX() - 48, GROUND, s.getZ() - 48,
                         s.getX() + 48, GROUND, s.getZ() + 48, kind.equals("paved") ? "stone" : "grass_block"));
                 if (kind.equals("roof")) {
-                    // помещение 21×21 высотой 4 м: стены из каменного кирпича, крыша — метр досок на высоте 5 м (верх — 6 м над
-                    // травой): удар blast <оружие> 1 5 — в крышу, под ней пустота
+                    // помещение 21×21: коробка из каменного кирпича (у hollow и пол, и потолок — каменные), потолок заменён
+                    // метром досок на высоте 5 м (верх — 6 м над травой), под ним — пустота в 3 м: удар blast <оружие> 1 5 — в
+                    // крышу над пустотой
                     int x0 = s.getX() - 10, z0 = s.getZ() - 10, x1 = s.getX() + 10, z1 = s.getZ() + 10;
-                    server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks hollow", x0, GROUND + 1, z0, x1, GROUND + 4, z1));
+                    server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks hollow", x0, GROUND + 1, z0, x1, GROUND + 5, z1));
                     server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_planks", x0, GROUND + 5, z0, x1, GROUND + 5, z1));
                 }
                 if (kind.equals("forest")) {

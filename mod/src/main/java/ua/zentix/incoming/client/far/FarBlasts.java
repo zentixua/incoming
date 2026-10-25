@@ -404,43 +404,84 @@ public final class FarBlasts {
      * точки нет — по веществу материала, опора сплошная (⚠ вдали крышу от земли клиент не отличит: блоков там у него нет).
      */
     static BlastTarget target(ClientLevel level, Vec3 pos, Vec3 axis, GroundMaterial material, double tnt, double hob) {
+        return target(new Probe() {
+            @Override
+            public boolean loaded(int x, int z) {
+                return level.getChunkSource().getChunk(x >> 4, z >> 4, false) != null;
+            }
+
+            @Override
+            public double radius(net.minecraft.core.BlockPos p, double charge) {
+                net.minecraft.world.level.block.state.BlockState st = level.getBlockState(p);
+                if (!ua.zentix.incoming.warhead.SurfaceBlocks.solid(level, p, st)) return 0;
+                // заряд не смещает (неразрушимое, сопротивление ≥ 1200): опора без пробоя
+                if (st.getBlock().getExplosionResistance() >= 1200) return Double.NaN;
+                ua.zentix.incoming.warhead.BreachModel.Material m = ua.zentix.incoming.warhead.SurfaceBlocks.breaching(st);
+                return m == null ? Double.NaN : m.radius(charge, ua.zentix.incoming.warhead.BreachModel.UNTAMPED);
+            }
+
+            @Override
+            public boolean earth(net.minecraft.core.BlockPos p) {
+                return ua.zentix.incoming.warhead.SurfaceBlocks.breaching(level.getBlockState(p)) == ua.zentix.incoming.warhead.BreachModel.Material.EARTH;
+            }
+
+            @Override
+            public int top(int x, int z) {
+                return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
+            }
+        }, pos, axis, material, tnt, hob);
+    }
+
+    /** Мир для луча опоры ({@link #target}): чанк готов, радиус пробоя блока, рыхлое ли, первый воздух над колонкой. */
+    interface Probe {
+        boolean loaded(int x, int z);
+
+        /** Радиус пробоя твёрдого блока у заряда, м; 0 — не твёрдое (пустота); NaN — заряд его не смещает. */
+        double radius(net.minecraft.core.BlockPos p, double charge);
+
+        /** Группа пробоя блока — «земля» (рыхлое). */
+        boolean earth(net.minecraft.core.BlockPos p);
+
+        /** Первый воздух над колонкой ({@code MOTION_BLOCKING}). */
+        int top(int x, int z);
+    }
+
+    /** {@link #target} по миру {@code probe} (проверки — без Minecraft). */
+    static BlastTarget target(Probe probe, Vec3 pos, Vec3 axis, GroundMaterial material, double tnt, double hob) {
         BlastTarget plain = BlastTarget.of(material, tnt, hob);
         if (plain.family() == BlastTarget.Family.WATER || plain.family() == BlastTarget.Family.AIR) return plain;
         Vec3 d = axis.lengthSqr() > 1e-9 ? axis.normalize() : S2C.Blast.DOWN;
         double reach = breachReach(tnt) + PROBE_AIR;
         net.minecraft.core.BlockPos.MutableBlockPos c = new net.minecraft.core.BlockPos.MutableBlockPos();
         long last = Long.MIN_VALUE;
-        boolean solid = false, entered = false, loose = false;
+        boolean entered = false, loose = false;
         double radius = 0, sum = 0, path = 0;
-        for (double s = 0; s <= reach; s += PROBE_STEP) {
+        // шаг — целое число шагов (без накопления ошибки дробных)
+        for (int i = 0; i * PROBE_STEP <= reach; i++) {
+            double s = i * PROBE_STEP;
             c.set(Math.floor(pos.x + d.x * s), Math.floor(pos.y + d.y * s), Math.floor(pos.z + d.z * s));
             if (c.asLong() != last) {
                 last = c.asLong();
-                if (level.getChunkSource().getChunk(c.getX() >> 4, c.getZ() >> 4, false) == null) return plain;
-                net.minecraft.world.level.block.state.BlockState st = level.getBlockState(c);
-                solid = ua.zentix.incoming.warhead.SurfaceBlocks.solid(level, c, st);
-                // заряд не смещает (неразрушимое, сопротивление ≥ 1200): опора
-                if (solid && st.getBlock().getExplosionResistance() >= 1200) return BlastTarget.of(material, false, 0, 0, tnt, hob);
-                ua.zentix.incoming.warhead.BreachModel.Material m = solid ? ua.zentix.incoming.warhead.SurfaceBlocks.breaching(st) : null;
-                radius = m == null ? 0 : m.radius(tnt, ua.zentix.incoming.warhead.BreachModel.UNTAMPED);
-                if (solid && !entered) {
+                if (!probe.loaded(c.getX(), c.getZ())) return plain;
+                radius = probe.radius(c, tnt);
+                if (radius != 0 && !entered) {
                     entered = true;
-                    loose = m == ua.zentix.incoming.warhead.BreachModel.Material.EARTH;
+                    loose = probe.earth(c);
                 }
             }
             if (!entered) {
                 if (s > PROBE_AIR) return plain;
                 continue;
             }
-            if (solid) {
-                if (radius <= 0) return BlastTarget.of(material, loose, 0, 0, tnt, hob);
+            if (Double.isNaN(radius)) return BlastTarget.of(material, loose, 0, 0, tnt, hob);
+            if (radius > 0) {
                 sum += PROBE_STEP / radius;
                 path += PROBE_STEP;
                 if (sum > 1) return BlastTarget.of(material, loose, 0, 0, tnt, hob);
                 continue;
             }
             // вышли из твёрдого: под перекрытием — пустота за плитой; под открытым небом — грань воронки
-            boolean covered = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, c.getX(), c.getZ()) > c.getY() + 1;
+            boolean covered = probe.top(c.getX(), c.getZ()) > c.getY() + 1;
             return covered ? BlastTarget.of(material, loose, path, path / sum, tnt, hob) : BlastTarget.of(material, loose, 0, 0, tnt, hob);
         }
         return BlastTarget.of(material, loose, 0, 0, tnt, hob);
