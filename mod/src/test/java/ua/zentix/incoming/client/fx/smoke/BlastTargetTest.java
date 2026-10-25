@@ -3,6 +3,8 @@ package ua.zentix.incoming.client.fx.smoke;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.CraterModel;
+import ua.zentix.incoming.nuclear.model.DustModel;
+import ua.zentix.incoming.util.Stability;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.BreachModel;
 import ua.zentix.incoming.warhead.GroundMaterial;
@@ -79,15 +81,38 @@ class BlastTargetTest {
         assertEquals(stone.mass(s.chargeKg()), stone.dust(s.chargeKg()) + stone.ballistic(s.chargeKg()), 1e-9, "пыль + выброс — разрушенное");
     }
 
-    /** Мелочи у связного больше, чем у рыхлого (размолото в зоне дробления), у воды — нет; у рыхлого — прежняя доля. */
+    /**
+     * Мелочь связного — по замеру контактного взрыва по бетону (Costa 2025: PM10 0–2,4 г/кг, порядок 1 г/кг): PM10 смеси
+     * корзин на килограмм разрушенного — {@link BlastTarget#PM10_CONTACT}; у воды пыли нет, у рыхлого — прежняя доля.
+     */
     @Test
-    void crushedMatterGivesMoreFines() {
+    void crushedMatterFinesFollowTheContactBlastMeasurement() {
         assertEquals(CloudModel.DUST_LOFTED, BlastTarget.Matter.DIRT.fines, 1e-12);
         for (BlastTarget.Matter m : BlastTarget.Matter.values()) {
             if (m == BlastTarget.Matter.WATER) assertEquals(0, m.fines);
-            else if (!m.loose && m != BlastTarget.Matter.WOOD) assertTrue(m.fines > BlastTarget.Matter.DIRT.fines, m.name());
+            else if (!m.loose && m != BlastTarget.Matter.WOOD) {
+                double pm10 = m.fines * DustModel.PM10_SHARE;
+                assertEquals(BlastTarget.PM10_CONTACT, pm10, 1e-12, m.name());
+                assertTrue(pm10 > 0 && pm10 <= 0.0024, m.name() + ": PM10 в пределах опытов, " + pm10);
+            }
             assertTrue(m.fines < 0.5, m.name() + ": пыль — меньшая часть разрушенного");
         }
+    }
+
+    /**
+     * Шахед в метровую бетонную крышу, ветер 6 м/с, класс C: холодная пыль пролома — не стена. Самый плотный клуб насквозь
+     * через середину к 10 с — меньше τ 3 (дома за ним видны, как на записях камер после прилётов: дымка, а не завеса), и
+     * на 30 с он ещё виден. С прежней долей 0,1 тот же клуб на 10 с — τ ≈ 35, с этой — ≈ 2,7.
+     */
+    @Test
+    void roofBreachDustOfAShahedIsAHazeNotAWall() {
+        var hard = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
+                GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), (x, z) -> 0);
+        var air = new CloudModel.Air(CloudModel.N_STANDARD, 6, 0, 0.1, (int) Stability.C, 0.5);
+        double breach = BreachModel.Material.ROCK.radius(SHAHED, BreachModel.UNTAMPED);
+        var m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, BlastTarget.of(GroundMaterial.STONE, false, 1, breach), 0, hard);
+        assertTrue(m.crushed.tau(10) < 3, "τ на 10 с " + m.crushed.tau(10));
+        assertTrue(m.crushed.tau(30) > CloudModel.SEEN, "τ на 30 с " + m.crushed.tau(30));
     }
 
     /** Цвет пыли: бетон и камень светлее почвы, сланец темнее, древесина — охристая (красный больше синего). */

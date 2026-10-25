@@ -129,13 +129,18 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
      */
     static final double FINES_LOOSE = CloudModel.DUST_LOFTED;
     /**
-     * То же у связного (скала, бетон, кладка): чаша контактного заряда там — зона дробления и откола (переднее дробление
-     * плиты, physics.md [S13]; зона дробления у заряда в породе — 2–4 его радиуса, Esen, Onederra, Bilgin, «Modelling the
-     * size of the crushed zone around a blasthole», Int. J. Rock Mech. Min. Sci. 40, 2003: у 50 кг ТНТ — 0,4–0,8 м, порядка
-     * всей чаши бетона), и раздробленное там размолото, а не выброшено зёрнами. ⚠ Доля — оценка: замеров мелочи контактного
-     * взрыва по бетону в источниках нет; впятеро больше грунта, а не «как грунт» и не «никакой пыли» (physics.md).
+     * Мелочь PM10 контактного взрыва по бетону на массу образца: Costa, Bodiot, Lecysyn и др., «Analyse des particules
+     * produites par explosion au contact d'éprouvettes en béton», 38e Congrès Français sur les Aérosols (2025), с. 116–119,
+     * рис. 5–6, DOI 10.25576/ASFERA-CFA2025-43915: на фильтре 0–2 г/кг (верх погрешности ~2,4), порядок — 1 г/кг. ⚠ Оценка:
+     * знаменатель опыта — весь образец, а не разрушенное; собранное — и осевшее; в воздух принято всё.
      */
-    static final double FINES_CRUSHED = 0.1;
+    static final double PM10_CONTACT = 0.001;
+    /**
+     * То же у связного (скала, бетон, кладка): вся смесь корзин {@link ua.zentix.incoming.nuclear.model.DustModel}, у которой
+     * PM10 — {@link #PM10_CONTACT}, — PM10 / его доля в смеси ({@code DustModel.PM10_SHARE}). ⚠ Оценка: опыты — по бетону,
+     * камень и кладка — по аналогии; прежние 0,1 замерами не подтверждались (в 20 раз больше, у глаза на улице — стена).
+     */
+    static final double FINES_CRUSHED = PM10_CONTACT / ua.zentix.incoming.nuclear.model.DustModel.PM10_SHARE;
 
     /** Удар в голый рыхлый грунт — как у взрыва без сведений о цели (проверки, прежние вызовы). */
     public static final BlastTarget SOIL = new BlastTarget(Family.SOIL, GroundMaterial.DIRT, 0, 0, null, DOWN, false);
