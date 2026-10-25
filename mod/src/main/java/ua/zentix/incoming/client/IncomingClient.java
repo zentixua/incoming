@@ -74,7 +74,6 @@ import ua.zentix.incoming.client.screen.MapScreen;
 import ua.zentix.incoming.client.screen.RemoteScreen;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.ClientSounds;
-import ua.zentix.incoming.client.sound.InterceptorSound;
 import ua.zentix.incoming.client.sound.OwnSources;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.entity.DebrisEntity;
@@ -221,10 +220,7 @@ public final class IncomingClient {
         if (entity instanceof StrikeProjectile p) Exhaust.tick(p);
         else if (entity instanceof DebrisEntity d) Exhaust.debris(d);
         else if (entity instanceof SpentBoosterEntity b) Exhaust.spent(b);
-        else if (entity instanceof InterceptorEntity i) {
-            Exhaust.interceptor(i);
-            InterceptorSound.tick(i);
-        }
+        else if (entity instanceof InterceptorEntity i) Exhaust.interceptor(i);
     }
 
     private static void preTick(ClientTickEvent.Pre e) {

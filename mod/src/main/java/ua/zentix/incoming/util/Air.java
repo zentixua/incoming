@@ -14,6 +14,12 @@ import net.minecraft.world.level.Level;
  * @param humidity  влажность над водой, 0..1
  */
 public record Air(Wind wind, double stability, double humidity) {
+    /**
+     * Влажность у земли в ясную погоду, 0..1: средняя относительная влажность у поверхности суши — 70–75 %
+     * (HadISDH, Willett et al. 2014, ⚠ сверить); 70 % — и опорные условия ISO 9613-1, при которых собраны дальние записи
+     * звука ({@code sound.Air}).
+     */
+    public static final double SURFACE_CLEAR = 0.7;
     /** Уровень моря мира, блоков (как {@code WaterDecal.SEA_LEVEL}): высоты воздуха — над ним. */
     public static final int SEA = 63;
     /** Высота ветра у земли в таблице Паскуилла, м. */
@@ -44,6 +50,16 @@ public record Air(Wind wind, double stability, double humidity) {
     public static double sun(Level level) {
         var type = level.dimensionType();
         return type.hasSkyLight() && !type.hasFixedTime() ? Mth.cos(level.getTimeOfDay(1) * Mth.TWO_PI) : -1;
+    }
+
+    /**
+     * Влажность у земли, 0..1 — для звука, который идёт у земли ({@code sound.Propagation}): в ясную погоду
+     * {@link #SURFACE_CLEAR}, в дождь и грозу воздух насыщен, как и наверху (дождь — та же доля, что подняла
+     * {@link #humidity}).
+     */
+    public double surfaceHumidity() {
+        double overcast = Math.max(0, Math.min(1, 2 * humidity - 1));
+        return SURFACE_CLEAR + (1 - SURFACE_CLEAR) * overcast;
     }
 
     /** Скорость ветра на высоте y мира, м/с (высота над землёй берётся над уровнем моря). */

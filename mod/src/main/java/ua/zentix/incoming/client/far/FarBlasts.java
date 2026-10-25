@@ -88,6 +88,11 @@ public final class FarBlasts {
     static final double CLOUD_ALBEDO = 0.7, SKY_SPREAD = 1, SKY_PEAK = 0.45, SKY_CLEAR = 0.45, SKY_LOW = 40;
 
     private static final ArrayDeque<Event> EVENTS = new ArrayDeque<>();
+    /**
+     * Ушедшие из вида сверх {@link #CAP}, чей звук ещё идёт к уху: раскат живёт по времени пути звука
+     * ({@link Event#soundWait}), а не по месту в списке картинки — в налёте больше 256 ударов ранний далёкий не молчит.
+     */
+    private static final ArrayDeque<Event> SOUNDS = new ArrayDeque<>();
     /** Числа на кадр без выделения: точка {@link Sight#point}, свет {@link Sight#light} и цвет шара. */
     private static final double[] POINT = new double[2], LIGHT = new double[5], BB = new double[4];
     /** Самое яркое тело последнего кадра (для лога): ядро, блик и вуаль в пикселях, пересвет, доля над рельефом. */
@@ -121,6 +126,11 @@ public final class FarBlasts {
         /** Пакет пришёл ближе {@link #NEAR}: ближняя картинка и звук есть. */
         final boolean near;
         /**
+         * Чей раскат слышно вдали: обычно — сам взрыв ({@link #source}); у облака без своего заряда (вход бомбы в грунт,
+         * обвал свода) — доля энергии удара, что ушла в воздух, глухим ударом из-под земли.
+         */
+        final BlastSource voice;
+        /**
          * Альбедо ω' пыли по каналам: поверхностей вокруг (пыль волны у земли, ножка), вещества цели (пыль дробления, пыль
          * облака — смесью с первой долей {@link CloudModel#capMatterShare}) и комьев выброса (завеса — цвет самого материала:
          * влажные комья с гумусом темнее сухой пыли, physics.md фронта F).
@@ -151,10 +161,11 @@ public final class FarBlasts {
         ChemicalFront front;
 
         Event(ClientLevel level, BlastSource source, CloudModel model, double x, double y, double z, GroundMaterial ground, long seed,
-              boolean near) {
+              boolean near, BlastSource voice) {
             this.level = level;
             this.source = source;
-            this.soundWait = (long) Math.ceil(BlastSounds.range(source) / Acoustics.SPEED);
+            this.voice = voice;
+            this.soundWait = (long) Math.ceil(BlastSounds.range(voice) / Acoustics.SPEED);
             this.model = model;
             this.x = x;
             this.y = y;
@@ -188,6 +199,25 @@ public final class FarBlasts {
         double distanceTo(Vec3 p) {
             double dx = x - p.x, dy = y + LIFT - p.y, dz = z - p.z;
             return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        /** До точки взрыва, блоков: от неё идёт фронт, как у ближнего звука ({@code BlastEffects.Timeline}). */
+        double blastDistanceTo(Vec3 p) {
+            double dx = x - p.x, dy = y - p.y, dz = z - p.z;
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        /** Фронт этого взрыва ({@link #arrivalTicks(ChemicalFront, double)}); у бомбы под землёй и без заряда — null. */
+        @Nullable
+        ChemicalFront front() {
+            if (front == null && !source.underground() && source.chargeKg() > 0) front = ChemicalFront.cached(source.chargeKg(), source.surface());
+            return front;
+        }
+
+        /** Фронт раската ({@link #voice}): у самого взрыва — его фронт, у доли из-под земли — со скоростью звука. */
+        @Nullable
+        ChemicalFront soundFront() {
+            return voice == source ? front() : null;
         }
 
         /** Сколько тиков событие живёт (облако видно). */
@@ -434,13 +464,39 @@ public final class FarBlasts {
      * рисуют запечённые клубы слоя, {@link SmokePuffs}), его шар и свет, раскат вдали. Возвращает модель.
      */
     public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed) {
-        Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at));
+        return cloud(level, source, model, at, ground, seed, source);
+    }
+
+    /**
+     * Как {@link #cloud(ClientLevel, BlastSource, CloudModel, Vec3, GroundMaterial, long)}, но раскат вдали — у
+     * {@code voice} ({@link Event#voice}): у облака без своего заряда звук события — свой.
+     */
+    public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed,
+                                   BlastSource voice) {
+        Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at), voice);
         trace(e, FarTerrain.of(level), camera());
         clear(e, camera(), 0);
-        if (EVENTS.size() >= CAP) EVENTS.pollFirst().alive = false;
-        EVENTS.addLast(e);
+        admit(EVENTS, e, CAP, old -> {
+            old.alive = false;
+            if (old.soundPending) SOUNDS.addLast(old);
+        });
         SmokeGrid.add(e);
         return model;
+    }
+
+    /** {@code e} — в конец {@code events}; сверх {@code cap} первое уходит в {@code gone} (картинка — да, звук — свой срок). */
+    static <E> void admit(ArrayDeque<E> events, E e, int cap, java.util.function.Consumer<E> gone) {
+        if (events.size() >= cap) gone.accept(events.pollFirst());
+        events.addLast(e);
+    }
+
+    /**
+     * Тики с взрыва до прихода фронта на {@code d} блоков от точки взрыва — один закон у ближнего звука, дальнего и
+     * видимого кольца: {@link ChemicalFront} (Кинни–Грэхем и Ренкин–Гюгонио, вблизи быстрее звука); без своей волны
+     * ({@code front} null) — со скоростью звука.
+     */
+    public static double arrivalTicks(@Nullable ChemicalFront front, double d) {
+        return front == null ? d / Acoustics.SPEED : 20 * front.arrivalSeconds(d);
     }
 
     /**
@@ -630,6 +686,15 @@ public final class FarBlasts {
             return;
         }
         clock = BlastTime.ticks();
+        if (!SOUNDS.isEmpty()) {
+            Vec3 ear = camera();
+            Sightline.Heights heights = FarTerrain.of(level);
+            SOUNDS.removeIf(e -> {
+                if (e.level != level) return true;
+                listen(e, heights, ear, clock - e.born);
+                return !e.soundPending;
+            });
+        }
         if (EVENTS.isEmpty()) return;
         Vec3 ear = camera();
         Sightline.Heights heights = FarTerrain.of(level);
@@ -643,16 +708,7 @@ public final class FarBlasts {
                 it.remove();
                 continue;
             }
-            if (e.soundPending) {
-                double d = e.distanceTo(ear);
-                if (d <= Acoustics.SPEED * age) {
-                    e.soundPending = false;
-                    trace(e, heights, ear);
-                    hear(e, d, age);
-                } else if (age > e.soundWait) {
-                    e.soundPending = false;
-                }
-            }
+            if (e.soundPending) listen(e, heights, ear, age);
             if (clock - e.traced >= RETRACE && traces < TRACES_PER_TICK) {
                 trace(e, heights, ear);
                 if (e.glows) clear(e, ear, age);
@@ -664,8 +720,20 @@ public final class FarBlasts {
         }
     }
 
+    /** Фронт дошёл до уха — раскат ({@link #hear}); не дошёл за весь путь звука на дальность слышимости — уже не дойдёт. */
+    private static void listen(Event e, Sightline.Heights heights, Vec3 ear, long age) {
+        double d = e.blastDistanceTo(ear);
+        if (arrivalTicks(e.soundFront(), d) <= age) {
+            e.soundPending = false;
+            trace(e, heights, ear);
+            hear(e, d, age);
+        } else if (age > e.soundWait) {
+            e.soundPending = false;
+        }
+    }
+
     private static void hear(Event e, double d, long age) {
-        Outdoor.Heard heard = BlastSounds.far(e.source, new Vec3(e.x, e.y + LIFT, e.z), Math.max(1, 0.4 * e.ballRadius()),
+        Outdoor.Heard heard = BlastSounds.far(e.voice, new Vec3(e.x, e.y + LIFT, e.z), Math.max(1, 0.4 * e.ballRadius()),
                 e.ground, d, e.path, e.seed);
         if (heard == null) return;
         lastHeard = heard;
@@ -823,8 +891,7 @@ public final class FarBlasts {
                 f.hot(bx + e.model.driftX(t), by + Math.max(0, ch - cr), bz + e.model.driftZ(t), 2 * cr, cr, e.model.kelvin(t), e.model.rise(t));
             }
             if (e.source.underground() || e.source.chargeKg() <= 0 || t > FRONT_SECONDS) continue;
-            if (e.front == null) e.front = ChemicalFront.cached(e.source.chargeKg(), e.source.surface());
-            if (front(e.front, t, r, e.model.hob, FRONT)) f.chemicalFront(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
+            if (front(e.front(), t, r, e.model.hob, FRONT)) f.chemicalFront(bx, by, bz, FRONT[0], FRONT[1], FRONT[2], FRONT_DN);
         }
     }
 
@@ -991,6 +1058,7 @@ public final class FarBlasts {
     static void reset() {
         for (Event e : EVENTS) e.alive = false;
         EVENTS.clear();
+        SOUNDS.clear();
         lastHeard = null;
     }
 

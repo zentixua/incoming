@@ -307,7 +307,7 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     private static final FarLook SAM_FAR = new FarLook(InterceptorSpec.SAM.passport().length(),
             Math.PI * InterceptorSpec.SAM.passport().diameter() * InterceptorSpec.SAM.passport().length() / 4, 0xC8C8BE, null,
             Stage.burning(SAM_BOOST, false, 1), Stage.burning(SAM_SUSTAIN, false, 2), null);
-    /** Ракета ЗРК: сопло — у хвоста модели; звук мотора — свой ({@code InterceptorSound}). */
+    /** Ракета ЗРК: сопло — у хвоста модели; звук мотора — слой {@code EngineSound.Layer.SAM} ({@code InterceptorSound}). */
     public static final ClientAirframe INTERCEPTOR = new ClientAirframe(WeaponModels::interceptor, List.of(),
             List.of(new At(0, 0, -InterceptorSpec.SAM.noseLength())), null, 0, SAM_FAR);
 

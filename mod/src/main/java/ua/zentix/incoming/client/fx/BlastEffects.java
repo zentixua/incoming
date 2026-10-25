@@ -34,7 +34,6 @@ import ua.zentix.incoming.warhead.BunkerCover;
 import ua.zentix.incoming.warhead.BunkerImpact;
 import ua.zentix.incoming.warhead.BuriedBlast;
 import ua.zentix.incoming.warhead.GroundMaterial;
-import ua.zentix.incoming.warhead.Warheads;
 
 /**
  * Что видят и слышат игроки при взрывах вблизи: вспышка по модели облака ({@link CloudModel}), твёрдое частицами —
@@ -121,6 +120,14 @@ public final class BlastEffects {
     }
 
     /**
+     * Раскат вдали удара о грунт с энергией {@code tntKg} (вход бомбы, обвал свода): та доля энергии, что ушла в воздух
+     * ({@link BunkerImpact#airTnt}), — глухим ударом из-под земли, по дальней модели, как газы бомбы под землёй.
+     */
+    static BlastSource thud(double tntKg) {
+        return new BlastSource(WeaponType.BUNKER, BunkerImpact.airTnt(tntKg), 0, true, true);
+    }
+
+    /**
      * Фронт звука и ударной волны: срабатывает у слушателя (камера) один раз, когда до него дошёл, — звук; у тела
      * игрока — слух и наклон тела ({@link BlastHit}). Обычный взрыв ({@code source} не null) звучит по заряду
      * ({@link BlastSounds#arrive}), его эхо ищет склоны, пока фронт идёт ({@link BlastEchoes}).
@@ -143,6 +150,12 @@ public final class BlastEffects {
          */
         @Nullable
         private final ChemicalFront front;
+        /**
+         * Дольше этого звук до уха не ждём, тиков, сколько бы ни жила картинка события: событие дальше
+         * {@link FarBlasts#NEAR} озвучивает {@link FarBlasts}, а до уха, что было ближе края при рождении, звук идёт и
+         * тогда, когда слушатель уходит, — до 1 км (уходя от края со скоростью до ~130 м/с, быстрее элитр и аппаратов).
+         */
+        static final int SOUND_WAIT = 60;
         private boolean arrived, hit, over;
         private long bornTick = Long.MIN_VALUE, lastTick = Long.MIN_VALUE;
         /** Часы взрыва, по которым эхо и удар у уха ждут начала прямого звука ({@link BlastSounds#clock}). */
@@ -166,7 +179,7 @@ public final class BlastEffects {
 
         /** Тики с взрыва до прихода фронта на {@code d} блоков: вблизи фронт быстрее звука (у шахеда в 100 м — на 0,7 тика). */
         double arrivalTicks(double d) {
-            return front == null ? d / Warheads.FRONT_SPEED : 20 * front.arrivalSeconds(d);
+            return FarBlasts.arrivalTicks(front, d);
         }
 
         /** Фронт срывает траву и листья вокруг ({@link FrontLitter}): огненный шар модели, высота разрыва над землёй. */
@@ -186,9 +199,9 @@ public final class BlastEffects {
             if (!arrived) {
                 Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
                 double d = ear.distanceTo(pos);
-                if (arrivalTicks(d) <= t || t > 60) {
+                if (arrivalTicks(d) <= t || t > SOUND_WAIT) {
                     arrived = true;
-                    if (t <= 60) arrive(level, (int) Math.ceil(arrivalTicks(d)));
+                    if (t <= SOUND_WAIT) arrive(level, (int) Math.ceil(arrivalTicks(d)));
                 } else if (echoes != null) {
                     echoes.approach(ear);
                 }
@@ -206,15 +219,16 @@ public final class BlastEffects {
                     hit = true;
                 }
             }
-            boolean more = run(level, t);
-            if (!more && !over) {
+            if (!over && !run(level, t)) {
                 over = true;
                 if (echoes != null) echoes.release();
             }
-            return more;
+            // картинка кончилась, а звук ещё идёт к уху: событие живёт до его прихода, а не столько, сколько видно
+            return !over || !arrived;
         }
 
         abstract boolean run(ClientLevel level, int t);
+
 
         /**
          * Фронт у слушателя: у обычного взрыва — его звук по заряду ({@link BlastSounds#arrive}).
@@ -621,19 +635,22 @@ public final class BlastEffects {
 
     /**
      * Бомба вошла в грунт: облако пыли выброса из воронки входа ({@link BunkerImpact#entryVolume}, без жара — у земли, по
-     * ветру; рисует слой) и комья; тупой удар приходит со скоростью звука.
+     * ветру; рисует слой) и комья; тупой удар приходит со скоростью звука — ближе {@link FarBlasts#NEAR} здесь, дальше —
+     * раскатом облака той доли энергии удара, что ушла в воздух ({@link #thud}), как у взрывов.
      */
     public static void bunkerImpact(S2C.BunkerImpact p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
         Vec3 pos = p.pos();
         ClientLevel world = Minecraft.getInstance().level;
+        double tnt = BunkerImpact.equivalentTnt(WeaponType.BUNKER.spec().striker().article().dryMass(), p.speed());
         if (world != null && !mat.isWater()) {
             // в воду — без пыли грунта (брызги — частицами ниже)
             double d = WeaponType.BUNKER.spec().striker().article().diameter();
             BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, false);
             FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), BunkerImpact.entryVolume(d), 2 * d), pos, mat,
-                    Double.doubleToLongBits(pos.x * 31 + pos.z));
+                    Double.doubleToLongBits(pos.x * 31 + pos.z), thud(tnt));
         }
+        if (!FarBlasts.near(pos)) return;
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
@@ -646,7 +663,7 @@ public final class BlastEffects {
 
             @Override
             void arrive(ClientLevel level, int band) {
-                BlastSounds.bunkerImpact(pos, BunkerImpact.equivalentTnt(WeaponType.BUNKER.spec().striker().article().dryMass(), p.speed()));
+                BlastSounds.bunkerImpact(pos, tnt);
             }
         });
     }
@@ -680,6 +697,8 @@ public final class BlastEffects {
     /**
      * Газы взрыва вырываются по скважине: облако той доли заряда, что вышла в воздух ({@code airKg}), из устья хода — по
      * той же модели облака (жар, сажа, пыль; рисует слой), раскат вдали — глухой, из-под земли; вблизи — рёв выброса.
+     * Голос у выброса один: дальше {@link FarBlasts#NEAR} его раскат заводит облако ({@link FarBlasts#cloud}), ближе —
+     * рёв здесь.
      */
     public static void vent(S2C.Vent p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
@@ -689,6 +708,7 @@ public final class BlastEffects {
             BlastSource gas = new BlastSource(WeaponType.BUNKER, p.airKg(), 0, true, true);
             FarBlasts.cloud(world, gas, new CloudModel(gas, FarBlasts.air(world, pos), mat.isWater()), pos, mat, Double.doubleToLongBits(pos.x * 17 + pos.z));
         }
+        if (!FarBlasts.near(pos)) return;
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
@@ -710,12 +730,14 @@ public final class BlastEffects {
         Vec3 pos = p.pos();
         GroundMaterial mat = GroundMaterial.byId(p.material());
         ClientLevel world = Minecraft.getInstance().level;
+        double tnt = BuriedBlast.collapseTnt(p.volume());
         if (world != null) {
             BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, true);
             double r = Math.cbrt(3 * p.volume() / (4 * Math.PI));
             FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), p.volume(), r), pos, mat,
-                    Double.doubleToLongBits(pos.x * 13 + pos.z));
+                    Double.doubleToLongBits(pos.x * 13 + pos.z), thud(tnt));
         }
+        if (!FarBlasts.near(pos)) return;
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
             boolean run(ClientLevel level, int t) {
@@ -724,7 +746,7 @@ public final class BlastEffects {
 
             @Override
             void arrive(ClientLevel level, int band) {
-                BlastSounds.collapse(pos, BuriedBlast.collapseTnt(p.volume()));
+                BlastSounds.collapse(pos, tnt);
             }
         });
     }

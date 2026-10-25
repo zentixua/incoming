@@ -2,6 +2,7 @@ package ua.zentix.incoming.client.sound;
 
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.nuclear.model.BlastModel;
+import ua.zentix.incoming.sound.Air;
 
 /**
  * Что звучит от обычного взрыва на расстоянии d и как громко — по заряду и давлению у уха (без Minecraft, проверяется
@@ -40,8 +41,11 @@ public final class BlastMix {
     public static final double FULL_PA = 1000 * BlastModel.kpa(1);
     /** Тон, который играет Minecraft ({@code SoundEngine.calculatePitch}). */
     static final double PITCH_MIN = 0.5, PITCH_MAX = 2;
-    /** Поглощение воздухом на 4 кГц, дБ/м (ISO 9613-1, 20 °C, 70 %): по нему дальний ракурс. */
-    static final double AIR_4K = 22.9 / 1000;
+    /**
+     * Поглощение воздухом на 4 кГц в условиях записей, дБ/м ({@link Air#alpha}: ISO 9613-1, 20 °C, 70 %): по нему дальний
+     * ракурс сменяет ближние — калибровка записей (в дальней уже есть свой воздух), а не воздух сейчас.
+     */
+    static final double AIR_4K = Air.alpha(4000);
     /** Полоса, по верхам которой ближний ракурс уступает среднему, Гц (верха {@link Outdoor}). */
     static final double CRACK_HZ = BlastPulse.HIGHS_HZ;
 

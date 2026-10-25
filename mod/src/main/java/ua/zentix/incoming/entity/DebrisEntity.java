@@ -12,7 +12,6 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -23,6 +22,7 @@ import net.minecraft.world.item.context.DirectionalPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FallingBlock;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.material.Fluids;
@@ -143,8 +143,11 @@ public class DebrisEntity extends Entity {
     private void land(ServerLevel level, Vec3 impactVelocity) {
         BlockPos pos = blockPosition();
         if (impactVelocity.y <= -0.05) {
-            level.playSound(null, pos, SoundEvents.GRAVEL_BREAK, SoundSource.BLOCKS, 2.0f, 0.6f);
-            level.playSound(null, pos, SoundEvents.STONE_PLACE, SoundSource.BLOCKS, 1.5f, 0.7f);
+            // удар звучит своим веществом (звуки блока у ванили: металл, дерево, камень, грунт), а не всегда гравием и
+            // камнем; громкость — прежняя: массы у обломка-представителя пока нет (общий учёт вещества взрыва — впереди)
+            SoundType sound = blockState().getSoundType(level, pos, this);
+            level.playSound(null, pos, sound.getBreakSound(), SoundSource.BLOCKS, 2.0f * sound.getVolume(), 0.6f * sound.getPitch());
+            level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS, 1.5f * sound.getVolume(), 0.7f * sound.getPitch());
             level.sendParticles(ParticleTypes.POOF, getX(), getY(), getZ(), 5, 0.3, 0.1, 0.3, 0.03);
             if (isHot()) level.sendParticles(ParticleTypes.LAVA, getX(), getY(), getZ(), 3, 0.2, 0.1, 0.2, 0);
         }
