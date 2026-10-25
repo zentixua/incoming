@@ -95,8 +95,6 @@ class CloudModelTest {
             var m = new CloudModel(source, CloudModel.Air.STANDARD, false, 0, hard);
             double produced = BlastTarget.SOIL.dust(source.chargeKg());
             assertEquals(produced, m.dust, 1e-9 * produced);
-            assertEquals(produced, m.thermal.airborneDust(0), 1e-9 * produced);
-            assertTrue(m.thermal.airborneDust(60) <= produced);
             assertEquals(6e-4, ua.zentix.incoming.nuclear.model.DustModel.Surface.HARD.supply(), 0);
             assertEquals(0, new CloudModel(source, CloudModel.Air.STANDARD, false, 100, hard).dust);
             assertEquals(0, new CloudModel(source, CloudModel.Air.STANDARD, true, 0, hard).dust);
@@ -107,9 +105,9 @@ class CloudModelTest {
         return new CloudModel(BlastSource.of(w, false), air);
     }
 
-    /** Калибровка тепла: заряд без топлива и пыли — подъём почти как от точечного термика. */
+    /** Источник: заряд и топливо без огненной стадии (малое тепло и шар) — подъём почти как от точечного термика. */
     private static CloudModel point(double tntKg, CloudModel.Air air) {
-        return new CloudModel(new BlastSource(WeaponType.MISSILE, tntKg, 0, true, false), air, 0, 0.5);
+        return new CloudModel(new BlastSource(WeaponType.MISSILE, tntKg, 0, true, false), air);
     }
 
     /**
@@ -224,7 +222,7 @@ class CloudModelTest {
     void lifeEndsWhenTheCloudIsThin() {
         for (WeaponType w : new WeaponType[]{WeaponType.ROCKET, WeaponType.LOITER, WeaponType.DRONE, WeaponType.MISSILE}) {
             CloudModel m = model(w, air(Stability.B, 0.9, 0.45, 0.5));
-            assertTrue(m.visibilityTau(m.life) <= CloudModel.SEEN + 1e-3, w.toString());
+            if (m.life < CloudModel.LIFE_MAX) assertEquals(CloudModel.SEEN, m.tau(m.life), 1e-3, w.toString());
             double prev = m.tau(1);
             for (double t = 2; t < m.life; t *= 1.5) {
                 assertTrue(m.tau(t) <= prev + 1e-9, w + " t " + t);

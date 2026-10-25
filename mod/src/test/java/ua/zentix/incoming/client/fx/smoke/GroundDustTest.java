@@ -91,10 +91,9 @@ class GroundDustTest {
         double before = -1;
         for (double t : new double[]{0, 0.002, 0.005, 0.01, 0.03, 0.06, 0.1, 0.2, 0.3, 1}) {
             double front = m.ground.front(t), mass = 0;
-            // This invariant belongs to wave entrainment/Kuhl, not to particles leaving the hot gas.
-            for (double[] b : layer(m.ground, t)) {
-                if (b[5] <= 0) continue;
-                mass += b[5];
+            for (double[] b : blobs(m, t)) {
+                if (b[6] <= 0 || b[5] > 0 || b[1] > 2 * b[4] + 0.5) continue; // пыль у земли (облако и ножка — выше)
+                mass += b[6];
                 double r = Math.hypot(b[0] - m.ground.drift(t, b[1])[0], b[2] - m.ground.drift(t, b[1])[1]);
                 // видимый край клуба (толща у края — 0,05: у густого ~3,7σ, не дальше 4σ) — не за фронтом
                 assertTrue(r + GroundDust.EDGE_SIGMAS * b[3] <= front + 0.5, "t " + t + ": клуб на " + r + " м, σ " + b[3] + " — за фронтом " + front);

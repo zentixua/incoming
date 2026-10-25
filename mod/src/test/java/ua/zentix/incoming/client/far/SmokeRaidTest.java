@@ -109,12 +109,6 @@ class SmokeRaidTest {
                 }
 
                 @Override
-                public void fallout(double bx, double by, double bz, double sh, double sv, double dustKg, double kelvin) {
-                    out.look(SmokeGrid.Look.SMOKE, 0);
-                    out.blob(x + bx, by, z + bz, sh, sv, 0, dustKg, 0, matterR, matterG, matterB, kelvin, 0);
-                }
-
-                @Override
                 public void tube(double ax, double ay, double az, double sa, double massA, double bx, double by, double bz, double sb, double massB,
                                  double kelvin, double rise) {
                     out.tube(x + ax, ay, z + az, sa, sa, 0, massA, x + bx, by, z + bz, sb, sb, 0, massB, dustR, dustG, dustB, kelvin, rise,

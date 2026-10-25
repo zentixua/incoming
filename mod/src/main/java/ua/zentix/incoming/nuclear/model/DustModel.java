@@ -60,12 +60,6 @@ public final class DustModel {
         K_MIX = sum;
     }
 
-    /** Корзины одной и той же смеси для переноса частиц вне газа; массивы наружу не отдаются. */
-    public static int bins() { return SHARE.length; }
-    public static double binShare(int i) { return SHARE[i]; }
-    public static double binSettle(int i) { return SETTLE[i]; }
-    public static double binExtinction(int i) { return K[i]; }
-
     /**
      * Доля пыли смеси корзин, что ещё в воздухе через {@code seconds} у слоя высотой {@code height} м: каждая корзина
      * выпадает из перемешанного слоя e-кратно за высоту / скорость оседания ({@link #SETTLE}). Облака обычных взрывов
@@ -82,13 +76,6 @@ public final class DustModel {
     public static double airborne(double settled) {
         double sum = 0;
         for (int i = 0; i < SHARE.length; i++) sum += SHARE[i] * Math.exp(-SETTLE[i] * Math.max(settled, 0));
-        return sum;
-    }
-
-    /** Поток оседания на единицу концентрации смеси: Σ доля·v·exp(−v·settled), м/с. */
-    public static double settlingFlux(double settled) {
-        double sum = 0;
-        for (int i = 0; i < SHARE.length; i++) sum += SHARE[i] * SETTLE[i] * Math.exp(-SETTLE[i] * Math.max(settled, 0));
         return sum;
     }
 

@@ -100,12 +100,12 @@ class BlastTargetSupportTest {
         CloudModel exact = new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, 0), 0,
                 GroundDust.Ground.BARE);
         for (double t : new double[]{0.3, 1}) {
-            assertTrue(exact.thermal.airborneDust(t) > 0);
+            assertTrue(exact.dust > 0);
             for (double hob : new double[]{5, 30}) {
                 CloudModel far = new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, hob), hob,
                         GroundDust.Ground.BARE);
                 assertEquals(exact.height(t), far.height(t), 1e-9, "газ — от точки удара на крыше");
-                assertEquals(exact.thermal.airborneDust(t), far.thermal.airborneDust(t), 1e-9);
+                assertEquals(exact.dust, far.dust, 1e-9);
             }
         }
         // пыль волны — с поверхности вокруг: при земле на 5 м ниже она там, а не у крыши
