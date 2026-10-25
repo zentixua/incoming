@@ -304,6 +304,8 @@ def checks(events, res, expected=(), acc_scene=None, unawaited=()):
         if e["type"] == "tp-timeout":
             why = f" (ждала: {e['waiting']})" if e.get("waiting") else ""
             bad.append(f"камера не дошла до {e['eye']}{why}")
+        if e["type"] == "late":
+            bad.append(f"кадр после залпа {e['salvo']} позже срока: {e['late_s']:.1f} с сверх {e['s']:g} с от последнего взрыва")
         if e["type"] == "impact-timeout":
             bad.append(f"окно {e['name']}: нет попадания залпа {e['salvo']}")
     for salvo, i in res["meta"]["impacts"].items():

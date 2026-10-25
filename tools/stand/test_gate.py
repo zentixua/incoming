@@ -712,6 +712,12 @@ class Checks(unittest.TestCase):
         self.assertTrue(bad(99, why="timeout"))
         self.assertTrue(bad(0, expect=1))
 
+    def test_a_late_frame_after_the_salvo_makes_the_run_invalid(self):
+        res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {}}
+        late = {"type": "late", "salvo": "100", "s": 15, "late_s": 4.2}
+        self.assertTrue(any("позже срока" in b for b in results.checks([{"type": "gl"}, late], res)))
+        self.assertFalse(any("позже срока" in b for b in results.checks([{"type": "gl"}], res)))
+
     def test_every_plan_window_is_required(self):
         ev = [{"type": "gl"}, {"type": "done"}, {"type": "window", "name": "100/edge", "edge": "begin", "t_ms": 1}]
         res = {"meta": {"done": {"x": 1}, "impacts": {}},
@@ -1086,6 +1092,21 @@ class Plan(unittest.TestCase):
         self.assertFalse(any("grad" in b for b in results.checks(ev, res, (), None, plan.launch_ids(self.scenes))))
         self.assertTrue(any("grad" in b for b in results.checks(ev, res)))
         self.assertEqual(plan.windows(self.scenes, ["grad"]), ["grad/start", "grad/hang"])
+
+    def test_camera_frames_at_fixed_times_after_the_last_hit(self):
+        # кадр и окно каждой камеры — через одно и то же время после последнего взрыва залпа у всех прогонов (#466)
+        sc = self.scenes
+        for sid in ("16", "40", "100"):
+            steps = plan.build(sc, [sid])["steps"]
+            since = [(i, x) for i, x in enumerate(steps) if x["do"] == "since"]
+            w = next(x for x in sc["scenes"] if x["id"] == sid)["window_s"]
+            self.assertEqual([x["s"] for _, x in since],
+                             [sc["since_last_s"] + k * (sc["after_shot_s"] + w + sc["tp_gap_s"]) for k in range(3)])
+            for i, x in since:
+                self.assertEqual(x["salvo"], sid)
+                self.assertEqual([y["do"] for y in steps[i - 1:i + 4]], ["tp", "since", "shot", "wait", "window"])
+        # срок первой камеры — после конца залпа «тишиной» и переноса камеры
+        self.assertGreater(sc["since_last_s"], sc["quiet_s"] + sc["settle_s"])
 
     def test_gated_windows_are_20_s(self):
         ws = [s for s in self.p["steps"] if s["do"] == "window" and s["name"].startswith("100/")]

@@ -23,6 +23,7 @@ class PlanTest {
                "cmds": ["incoming salvo drone 30 120 at 1000 0 from 1200 346.4", "incoming salvo drone 30 120 at 1000 0 from 800 346.4"],
                "delays": [0, 20]},
               {"do": "await", "salvo": "100", "timeout_s": 300, "quiet_s": 30},
+              {"do": "since", "salvo": "100", "s": 15},
               {"do": "shot", "name": "100_edge"},
               {"do": "wait", "s": 0.5},
               {"do": "window", "name": "100/edge", "s": 10},
@@ -48,7 +49,7 @@ class PlanTest {
         assertEquals(20261025L, p.seed());
         assertTrue(p.projectiles().contains("incoming:drone"));
         assertTrue(p.warheads().contains("incoming:strike"));
-        assertEquals(9, p.steps().size());
+        assertEquals(10, p.steps().size());
         Plan.Tp tp = assertInstanceOf(Plan.Tp.class, p.steps().get(0));
         assertArrayEquals(new double[]{800, 95, 0}, tp.eye());
         Plan.Salvo s = assertInstanceOf(Plan.Salvo.class, p.steps().get(1));
@@ -57,9 +58,12 @@ class PlanTest {
         assertArrayEquals(new double[]{0, 20}, s.delays());
         Plan.AwaitSalvo a = assertInstanceOf(Plan.AwaitSalvo.class, p.steps().get(2));
         assertEquals(30, a.quietS());
-        Plan.ImpactWindow w = assertInstanceOf(Plan.ImpactWindow.class, p.steps().get(6));
+        Plan.Since since = assertInstanceOf(Plan.Since.class, p.steps().get(3));
+        assertEquals("100", since.salvo());
+        assertEquals(15, since.seconds());
+        Plan.ImpactWindow w = assertInstanceOf(Plan.ImpactWindow.class, p.steps().get(7));
         assertArrayEquals(new double[]{0.5, 3, 15}, w.shots());
-        assertInstanceOf(Plan.Mark.class, p.steps().get(8));
+        assertInstanceOf(Plan.Mark.class, p.steps().get(9));
     }
 
     @Test

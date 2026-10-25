@@ -49,6 +49,8 @@ final class Director {
     /** Глаз над ногами. */
     private static final double EYE = 1.62;
     private static final long SECOND = 1_000_000_000L;
+    /** Шаг «от последнего взрыва» начался позже срока не больше чем на столько — иначе {@code late}. */
+    static final double LATE_S = 2;
     /** Камера дошла до места — не дольше, иначе шаг идёт дальше с событием {@code tp-timeout}. */
     private static final long TP_LIMIT = 30 * SECOND;
 
@@ -230,6 +232,7 @@ final class Director {
             }
             case Plan.AwaitSalvo a -> awaitSalvo(a, now, elapsed);
             case Plan.ImpactWindow w -> impactWindow(w, now, elapsed);
+            case Plan.Since w -> since(w, now);
             case Plan.Mark m -> {
                 out.event("mark", now, "name", m.name());
                 yield true;
@@ -279,6 +282,21 @@ final class Director {
         else if (elapsed >= a.timeoutS()) why = "timeout";
         if (why == null) return false;
         out.event("await", now, "salvo", a.id(), "why", why, "impacts", got, "expect", want, "took_s", elapsed);
+        return true;
+    }
+
+    /** Срок от последнего попадания залпа: опоздание к нему — {@code late}, иначе ждём; итог — {@code since} с запаздыванием. */
+    private boolean since(Plan.Since w, long now) {
+        long last = watch.lastImpact(w.salvo()), due = last + (long) (w.seconds() * SECOND);
+        if (!sent) {
+            sent = true;
+            if (last < 0 || now - due > (long) (LATE_S * SECOND)) {
+                out.event("late", now, "salvo", w.salvo(), "s", w.seconds(), "late_s", last < 0 ? -1 : (now - due) / 1e9);
+                return true;
+            }
+        }
+        if (now < due) return false;
+        out.event("since", now, "salvo", w.salvo(), "s", w.seconds(), "after_s", (now - last) / 1e9);
         return true;
     }
 
