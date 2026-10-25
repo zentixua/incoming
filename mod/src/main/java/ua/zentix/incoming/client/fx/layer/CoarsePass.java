@@ -269,9 +269,12 @@ public final class CoarsePass {
         runs++;
     }
 
-    /** Текстура цвета кадра {@code frame} (куда он рисует), −1 — не текстура (кадр окна, рендербуфер). */
+    /**
+     * Текстура цвета кадра {@code frame} (куда он рисует), −1 — не текстура (кадр окна, рендербуфер) или мультисэмпл (её
+     * не привязать как {@code sampler2D}, ревью #455).
+     */
     private static int color(int frame) {
-        if (frame == 0) return -1;
+        if (frame == 0 || GL11.glGetInteger(GL13.GL_SAMPLES) > 0) return -1;
         int buffer = GL11.glGetInteger(GL20.GL_DRAW_BUFFER0);
         if (buffer < GL30.GL_COLOR_ATTACHMENT0 || buffer > GL30.GL_COLOR_ATTACHMENT15) return -1;
         if (GL30.glGetFramebufferAttachmentParameteri(GL30.GL_DRAW_FRAMEBUFFER, buffer, GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE) != GL11.GL_TEXTURE)
