@@ -14,8 +14,9 @@ Six weapons, in the order the designator lists them. Each launch uses [munitions
 
 Times are for a nearby target. The world owner can change flight times.
 
-Fuel burning in a crater produces a continuous roar and crackle. It fades as the fuel runs out; the recording does
-not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path to you.
+Fuel burning in a crater produces a continuous roar and crackle from where it burns. It fades as the fuel runs out; the
+recording does not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path
+to you.
 
 A fireball rises upright. While it burns, orange flame with bright cores churns among dark soot; as it cools, it
 darkens into smoke without a jump.
@@ -78,11 +79,21 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; three quarters of it
   burns as a fireball (≈16 m across for the Shahed, ≈34 m for the missile) for one to three seconds. That flash ignites
   thin, dry fuel it touches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. Planks, logs
-  and other thick wood only char in a flash that short; they catch fire only right at the crater, where the burning fuel
-  lands. Fire stays on what burns: sand, stone, earth, metal and rails never burn, and no flames are left standing on
-  them. So a Shahed in a town leaves a few fires at the impact and on dry plants nearby, not a burning circle. The
-  Grad and the Lancet carry no fuel. Burning debris starts a fire only where it lands on something that burns. Fire then
-  spreads by the game's own rules. There are no scripted secondary explosions.
+  and other thick wood only char in a flash that short. The flash leaves its fire only on what burns: sand, stone,
+  earth, metal and rails never burn, and no flames from it are left standing on them. So a Shahed in a town leaves a
+  few fires on dry plants near the impact, not a burning circle.
+- **Fuel in the crater**: the last quarter of the fuel stays in the crater and burns there as ordinary Minecraft fire on
+  real blocks: about 5 blocks for the Shahed for about 2.5 minutes, about 9 blocks for the missile for about a quarter of
+  an hour. The fuel falls to the first solid surface under the impact (the bottom of the crater, the floor under a
+  broken roof), runs downhill and over edges, but not uphill or through walls; on water it does not burn. On bare earth
+  or stone the flames stand on top of the block, as on netherrack. The fuel keeps them alight for its whole life, rain
+  included; a block placed on it or water poured over it puts that part out. If the block under the fuel burns or
+  breaks away, the fuel drips down to the next surface, so fuel fire never hangs in the air. Planks, logs and anything
+  else that burns catch fire from it by the game's own rules. Near the end the flames go out from the edge inward, and
+  when the fuel is gone they die, unless something flammable beside them is still burning.
+- The Grad and the Lancet carry no fuel. Burning debris starts a fire only where it lands on something that burns. Fire
+  then spreads by the game's own rules. With "Blasts start fires" off, neither the flash nor the fuel leaves fire.
+  There are no scripted secondary explosions.
 - **People and mobs** are hurt by the same wave as in a nuclear strike: pressure on the lungs, being thrown into a
   wall, glass from a window. Close to a Shahed the wave kills; at 30 m in the open it does nothing, but fragments still
   do (below). Someone behind a wall that holds is safe from the wave; inside the room where the charge went off, the
@@ -270,13 +281,13 @@ instead of drifting as one ball.
 
 - **Shahed**: a short flash, then a ball of burning petrol about 16 blocks across that burns for about 1.3 seconds and
   glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
-  burns for about 2.5 minutes with flames about 3 blocks high. The flames are orange by day; at night they glow
-  yellow-white and light the ground around. Far away, where flame particles are no longer drawn, the fire is a glowing
-  spot of the same colour and brightness, with a glare at night. Its black smoke rises from the crater the whole time and
-  leans downwind: in a stiff breeze it trails low, in calm air it stands taller. The smoke of the ball, with the dust
+  burns for about 2.5 minutes as ordinary fire on about five blocks of the crater floor; at night it lights the ground
+  around with an orange glow. Far away, where the fire blocks fade out, the fire is a glowing spot of the same colour
+  and brightness, with a glare at night. Its black smoke rises from the fire the whole time and leans downwind: in a stiff breeze it
+  trails low, in calm air it stands taller. The smoke of the ball, with the dust
   torn up under it, rises a few hundred blocks as a dark cloud.
 - **Cruise missile**: a bigger flash and a fuel ball about 34 blocks across that burns for about 2.7 seconds; the fuel left
-  in the crater burns for about a quarter of an hour. Its own charge gives little soot, so the smoke is mostly from the burning fuel,
+  in the crater burns for about a quarter of an hour on about nine blocks. Its own charge gives little soot, so the smoke is mostly from the burning fuel,
   with a lot of dust.
 - **Grad**: a flash and a small grey-black puff with dust, no fuel ball. A salvo leaves a field of puffs that merge and
   drift downwind, over a carpet of dust from all the hits.
@@ -309,8 +320,9 @@ downwind and thins out: half of it settles in about 5 seconds for Grad and 10 fo
 speed that depends on water depth. Clumps of water fly as particles. Fuel that lands on water spreads too
 thin to keep burning, so no fire is left after the ball.
 
-The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
-an orange glow spreads over the blocks around the crater and fades as the ball cools. Blocks cast shadows from this
+The fireball lights the ground and walls around it, like the fireball of a nuclear strike: at night an orange glow
+spreads over the blocks around the crater and fades as the ball cools. The fuel burning in the crater lights its
+surroundings the same way, from where it burns, until it runs out. Blocks cast shadows from this
 light: a house or a hill between the fire and the ground leaves it dark, even when the house is outside your view.
 Shadows are worked out for about 90 blocks around you and 40 up and down; further away the light has
 none. Hot gas over the fire, over the fireball and in a rocket's exhaust bends light, so whatever is behind it
@@ -338,7 +350,7 @@ In sufficiently humid air a white condensation shell appears briefly behind the 
 and cools below its dew point. It evaporates as pressure recovers. Rain makes it much easier to see; dry air may give
 no shell. Its negative-phase history and outer extent are estimates. By day the cloud rises higher than at
 night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
-see. Sparks, clods of earth, the dust and sparks of fragment hits, flames and, where fuel was left in the tank, burning
+see. Sparks, clods of earth, the dust and sparks of fragment hits and, where fuel was left in the tank, burning
 pieces are particles. A burning piece in flight leaves puffs of grey-black wood smoke that rise with their own heat and
 drift away, and its flame lights the smoke around it. The bomb's blast is drawn the same way: a
 breach gives the cloud of the part of the charge that went into the air, a deeper blast a smaller cloud from the mouth of

@@ -505,8 +505,9 @@ public final class Warheads {
 
     /**
      * Наземный взрыв боевой части: заряд из паспорта ({@link WeaponSpec#charge}) — волна, газы, тела (главный взрыв); за
-     * ним — воронка по закону обычного заряда, поджиг шаром топлива из бака ({@link WeaponSpec#fuelAtImpact}), обломки,
-     * осколки корпуса ({@link FragmentStrike}), стёкла. Вторичных подрывов и колец огня нет: вторичное — только топливо и горящие обломки.
+     * ним — воронка по закону обычного заряда, поджиг шаром топлива из бака ({@link WeaponSpec#fuelAtImpact}), топливо в
+     * воронке — огнём на блоках, пока горит ({@link FuelFires}), обломки, осколки корпуса ({@link FragmentStrike}), стёкла.
+     * Вторичных подрывов и колец огня нет: вторичное — только топливо и горящие обломки.
      */
     static final class SurfaceBlast implements Timeline {
         private final WeaponType weapon;
@@ -545,10 +546,13 @@ public final class Warheads {
             // дальше, чем сервер шлёт что-либо далёкое
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
                     Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(spec.charge())));
+            this.reach = reach;
+            this.born = level.getGameTime();
             this.seed = seed;
             this.axis = axis(direct);
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
-                    new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis));
+                    new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis,
+                            true));
             // заряд на аппарате: воронку и шар топлива там не ставить — это корпус, а не земля. Снаряд отдаёт точку удара о
             // аппарат уже в мире (StrikeProjectile: SubLevels.toWorld), поэтому — и аппарат, чей габарит у точки
             inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
@@ -565,6 +569,9 @@ public final class Warheads {
         private final boolean inPlots;
         /** Зерно взрыва (оно же в пакете взрыва): по нему осколки у сервера и клиента одни. */
         private final long seed;
+        /** Докуда клиентам шлётся пакет взрыва (и огня топлива в воронке), блоков; тик удара. */
+        private final double reach;
+        private final long born;
         /** Ось боевой части — курс снаряда у удара. */
         private final Vec3 axis;
 
@@ -582,7 +589,9 @@ public final class Warheads {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact(), weapon.spec().charge()) : 0);
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact()) : 0);
+                // топливо в воронке — после воронки: ложится на её дно и горит огнём на блоках, пока его хватает
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, pos, weapon, born, reach) : 0);
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
                     l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));

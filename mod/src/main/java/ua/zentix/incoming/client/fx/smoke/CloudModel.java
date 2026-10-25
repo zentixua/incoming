@@ -7,6 +7,7 @@ import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
+import ua.zentix.incoming.nuclear.model.FuelPool;
 
 /**
  * Облако обычного взрыва по законам, без Minecraft: что поднялось, куда и как долго его видно — из заряда, топлива, грунта
@@ -40,14 +41,13 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
  * настоящего.
  * <p>
  * <b>Топливо в воронке.</b> Что не разлетелось брызгами в шар, остаётся в воронке, пропитав грунт, и догорает там:
- * доля {@link #POOL_SHARE}, площадь — круг воронки ({@link CraterModel#chargeRadius}), выгорание с единицы площади — у
- * большой лужи топлива ({@link BlastSource.Fuel#poolBurn}) × {@link #THIN_LAYER}: слой в миллиметры на грунте горит
- * медленнее глубокой лужи. Горит {@link #poolSeconds}, тепловыделение {@link #poolWatts}: у шахеда ~2,5 мин по ~2 МВт, у
- * ракеты ~16 мин по ~3 МВт. Над ним — шлейф Бриггса ({@link FirePlume}) с сажей топлива, пока горит; пламя — по
- * Хескестаду.
+ * доля {@link #POOL_SHARE}, закон — общий с сервером {@link FuelPool} (площадь — круг воронки, выгорание тонкого слоя): у
+ * шахеда ~2,5 мин по ~2 МВт, у ракеты ~16 мин по ~3 МВт. Где оно горит, решает сервер: огонь Minecraft на блоках, куда
+ * топливо легло и стекло ({@code warhead/FuelFires}); над ним — шлейф Бриггса ({@link FirePlume}) с сажей топлива, пока
+ * горит ({@code FireSmoke.pool}).
  * <p>
  * <b>Вещество.</b> Сажа взрывчатки — свободный углерод продуктов детонации ({@link BlastSource.Explosive#freeCarbon}), из
- * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link BlastSource.Fuel}.
+ * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link FuelPool.Fuel}.
  * Пыль воронки — грунт воронки ({@link CraterModel#chargeVolume}: диаметр 0,65·W^⅓ м, глубина — четверть, параболоид —
  * тот же закон, что роет сервер); в воздух уходит доля {@link #DUST_LOFTED} (оценка). У удара в постройку это крошка
  * перекрытия, раздробленного у места удара, — в том же объёме (⚠ оценка: перекрытие сервер ломает волной, а не роет
@@ -145,14 +145,6 @@ public final class CloudModel {
      * уходят шлейфом пожара ({@code FireSmoke.pool}).
      */
     public static final double POOL_SHARE = FuelFireball.POOL_SHARE;
-    /**
-     * Выгорание топлива тонким слоем на грунте против глубокой лужи: у разлива толщиной в миллиметры наибольшая скорость
-     * горения — порядка пятой доли глубокой (Mealy, Benfer, Gottuk, «Liquid fuel spill fire dynamics», Fire Safety Science
-     * 10, 2011: тепло уходит в подложку); у топлива в пористом слое песка она тоже ниже, чем у лужи того же размера. В
-     * воронке шахеда — ~2 мм бензина, ракеты — ~8 мм JP-10 в перемешанном грунте (⚠ одна доля на оба: зависимость от
-     * толщины и грунта по их корреляциям не взята).
-     */
-    public static final double THIN_LAYER = 0.2;
     /** Дольше этого облако не живёт, с (дальше оно — дымка над районом). */
     public static final double LIFE_MAX = 3600;
 
@@ -267,7 +259,11 @@ public final class CloudModel {
     public final Thermal cooling;
     /** Радиус шара в конец горения, м, и высота его центра тогда. */
     final double burnRadius, burnHeight;
-    /** Топливо в воронке: масса, кг; радиус, м; сколько горит, с; тепловыделение, Вт (0 — топлива нет). */
+    /**
+     * Топливо в воронке ({@link FuelPool}; где оно горит, решает сервер — огонь на блоках, {@code warhead/FuelFires}):
+     * закон, масса, кг; радиус, м; сколько горит, с; тепловыделение, Вт (0 — топлива нет).
+     */
+    public final FuelPool pool;
     public final double poolKg, poolRadius, poolSeconds, poolWatts;
     /** Подъём облака ({@link Thermal}). */
     public final Thermal thermal;
@@ -355,11 +351,11 @@ public final class CloudModel {
         fireSeconds = glowEnd();
         // на воде воронки в грунте нет: топливо растекается плёнкой, а плёнка тоньше ~1 мм не держит горение — вода
         // уносит тепло (Buist и др., «In situ burning», обзор для разливов нефти: гаснет у 1–2 мм; ⚠ по памяти)
-        poolKg = onWater ? 0 : POOL_SHARE * source.fuelKg();
-        poolRadius = CraterModel.chargeRadius(source.chargeKg(), CraterModel.Soil.DRY);
-        double burn = THIN_LAYER * source.fuel().poolBurn * Math.PI * poolRadius * poolRadius;
-        poolSeconds = poolKg > 0 && burn > 0 ? poolKg / burn : 0;
-        poolWatts = poolSeconds > 0 ? burn * source.fuel().heatJPerKg : 0;
+        pool = onWater ? FuelPool.NONE : FuelPool.of(source.fuel(), source.fuelKg(), source.chargeKg());
+        poolKg = pool.kg();
+        poolRadius = pool.radius();
+        poolSeconds = pool.seconds();
+        poolWatts = pool.watts();
         // пыль волны: над водой грунта нет (брызги — WaterBlast)
         ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, surface, air);
         crushed = GroundDust.crushed(onWater ? 0 : source.chargeKg(), hob, cold,
@@ -613,18 +609,10 @@ public final class CloudModel {
     }
 
     /**
-     * Лужа топлива в возрасте t: доля тепловыделения 0..1 — полное, пока горит, к концу (последняя пятая) гаснет, как
-     * тонкий слой топлива (⚠ форма спада — оценка); 0 — лужи нет или выгорела.
+     * Топливо в воронке в возрасте t: доля тепловыделения 0..1 ({@link FuelPool#share}); 0 — топлива нет или выгорело.
      */
     public double poolShare(double t) {
-        if (poolSeconds <= 0 || t < 0 || t >= poolSeconds) return 0;
-        double u = (poolSeconds - t) / (0.2 * poolSeconds);
-        return u >= 1 ? 1 : u * u * (3 - 2 * u);
-    }
-
-    /** Высота пламени лужи по Хескестаду, м: L = 0,235·Q^⅖ − 1,02·D (Q — кВт), не меньше полуметра. */
-    public double poolFlame() {
-        return poolWatts <= 0 ? 0 : Math.max(0.5, 0.235 * Math.pow(poolWatts / 1e3, 0.4) - 1.02 * 2 * poolRadius);
+        return pool.share(t);
     }
 
     /**

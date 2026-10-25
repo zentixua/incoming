@@ -25,6 +25,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.aim.Designator;
 import ua.zentix.incoming.client.cam.ProjectileCamera;
 import ua.zentix.incoming.client.far.FarRenderer;
@@ -355,40 +356,57 @@ public final class IncomingClient {
      * ({@link Replay#event}); состояние (свои снаряды, ядерка, радиация) принимается всегда, пути дальних снарядов — только живые.
      */
     private static final class Hooks implements ClientHooks {
+        /**
+         * Удары показывает и озвучивает сам мод ({@code blast_effects}); выключено — их показывает другой мод взрывов (по
+         * взрыву на сервере, его источник — снаряд), и своих картинки, звука, волны и толчка у ударов нет: ни у взрыва,
+         * ни у топлива в воронке (дым, свет, гул; огонь на блоках — мира), ни у бетонобойной бомбы (удар о землю, толчок,
+         * выброс газа, обрушение). Разрывы ПВО и ядерка — свои всегда.
+         */
+        private static boolean ownBlasts() {
+            return IncomingConfig.CLIENT.blastEffects.get();
+        }
+
         @Override
         public void blast(S2C.Blast p) {
             Replay.event("blast", live -> {
                 if (!live) return;
                 p.projectile().ifPresent(FlightTracks::impact);
-                BlastEffects.blast(p);
+                if (ownBlasts()) BlastEffects.blast(p);
             });
         }
 
         @Override
         public void bunkerImpact(S2C.BunkerImpact p) {
             Replay.event("bunker", live -> {
-                if (live) BlastEffects.bunkerImpact(p);
+                if (live && ownBlasts()) BlastEffects.bunkerImpact(p);
             });
         }
 
         @Override
         public void vent(S2C.Vent p) {
             Replay.event("vent", live -> {
-                if (live) BlastEffects.vent(p);
+                if (live && ownBlasts()) BlastEffects.vent(p);
+            });
+        }
+
+        @Override
+        public void fuelFire(S2C.FuelFire p) {
+            Replay.event("fuel", live -> {
+                if (live && ownBlasts()) BlastEffects.fuelFire(p);
             });
         }
 
         @Override
         public void collapse(S2C.Collapse p) {
             Replay.event("collapse", live -> {
-                if (live) BlastEffects.collapse(p);
+                if (live && ownBlasts()) BlastEffects.collapse(p);
             });
         }
 
         @Override
         public void quake(S2C.Quake p) {
             Replay.event("quake", live -> {
-                if (!live) return;
+                if (!live || !ownBlasts()) return;
                 CameraShake.quake(p.ticks());
                 if (p.rumble()) BlastSounds.quake();
             });

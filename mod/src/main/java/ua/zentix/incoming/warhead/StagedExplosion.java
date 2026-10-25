@@ -99,6 +99,10 @@ import java.util.function.LongSupplier;
  * <p>
  * Район держит {@link BlastArea} (свой или таймлайна), пока взрыв не кончится; единица ждёт, пока район готов, а блоки
  * в чанках, которые к её сроку не готовы, пропускает.
+ * <p>
+ * Источник у {@link Explosion} — снаряд ({@code getDirectSourceEntity}), как у ванильных взрывов TNT, крипера и фаербола:
+ * обработчики {@code ExplosionEvent} других модов (Explosion Overhaul — по id типа сущности, приваты) отличают удар
+ * Incoming и его оружие от прочих взрывов. Сам снаряд взрыв не бьёт, как у ванили.
  */
 final class StagedExplosion implements UnitQueue.Job {
     /** Порция блоков мира — по времени: блоки идут, пока единица короче этого. */
@@ -407,13 +411,13 @@ final class StagedExplosion implements UnitQueue.Job {
         Level.ExplosionInteraction interaction = blocks ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE;
         if (SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(at)))) {
             counts.vanilla++;
-            explosion = level.explode(null, ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner), calculator,
+            explosion = level.explode(direct, ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner), calculator,
                     at.x, at.y, at.z, power, fire, interaction, ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
             return false;
         }
         Explosion.BlockInteraction destroy = blocks ? Explosion.BlockInteraction.DESTROY_WITH_DECAY : Explosion.BlockInteraction.KEEP;
         source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner);
-        Explosion e = new Explosion(level, null, source, calculator,
+        Explosion e = new Explosion(level, direct, source, calculator,
                 at.x, at.y, at.z, power, fire, destroy, ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
         if (calculator != null) damage = calculator;
@@ -563,7 +567,7 @@ final class StagedExplosion implements UnitQueue.Job {
         if (SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(at)))) centre = SubLevels.toWorld(level, at);
         Explosion.BlockInteraction destroy = blocks ? Explosion.BlockInteraction.DESTROY_WITH_DECAY : Explosion.BlockInteraction.KEEP;
         source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner);
-        Explosion e = new Explosion(level, null, source, null, centre.x, centre.y, centre.z, power, false, destroy,
+        Explosion e = new Explosion(level, direct, source, null, centre.x, centre.y, centre.z, power, false, destroy,
                 ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
         // обработчики начала уже видят заряд ({@link #chargeOf})
@@ -976,13 +980,14 @@ final class StagedExplosion implements UnitQueue.Job {
         Vec3 c = centre;
         double tnt = charge;
         boolean destroy = blocks;
+        Entity by = direct, from = owner;
         Warheads.whenReady(level, c, craftReach(craftPower), l -> {
             // пока идёт этот взрыв, обработчики событий видят заряд ({@link #chargeOf}), а список сущностей у его
             // {@code Detonate} пуст ({@link #onDetonate}): урона и толчка от него нет, лучей видимости к телам — тоже
             double outer = craftCharge;
             craftCharge = tnt;
             try {
-                l.explode(null, ModDamageTypes.source(l, ModDamageTypes.STRIKE, null, null), new CraftCharge(l, c, tnt, hit.id()),
+                l.explode(by, ModDamageTypes.source(l, ModDamageTypes.STRIKE, by, from), new CraftCharge(l, c, tnt, hit.id()),
                         c.x, c.y, c.z, craftPower, false, destroy ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE,
                         ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
             } finally {
@@ -1223,7 +1228,8 @@ final class StagedExplosion implements UnitQueue.Job {
                 e.getHitPlayers().put(player, push);
                 if (player instanceof ServerPlayer sp && sp.distanceToSqr(at.x, at.y, at.z) < 4096.0) tell(sp, push);
             }
-            // как у ванили (источник взрыва — null): игрок помнит толчок — урон от падения после него, булава
+            // как у ванили: игрок помнит толчок — урон от падения после него, булава; причину толчка ваниль отличает только
+            // у заряда ветра, снаряд не передаём
             entity.onExplosionHit(null);
         }
         nextEntity = end;

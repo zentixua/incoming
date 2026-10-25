@@ -338,6 +338,8 @@
   "incoming.config.sound_muffling.tooltip": "Strikes far away lose their high tones, and strikes behind a hill or wall sound muffled, with or without Sound Physics Remastered. Inside the nuclear dust pall, distant sounds are muffled too.",
   "incoming.config.map_prefetch": "Prepare map terrain in advance",
   "incoming.config.map_prefetch.tooltip": "While a designator is in the inventory or the map was opened — the map opens instantly",
+  "incoming.config.blast_effects": "Incoming's blast effects",
+  "incoming.config.blast_effects.tooltip": "Flash, fireball, smoke, dust, debris, blast wave, sound, echo, jolt and hearing loss of strike blasts, and the bunker bomb's impact, ground tremor, gas vent and collapse. Turn off only when another mod shows explosions instead, such as Explosion Overhaul. Only your picture and sound change; destruction and damage are the server's. Air defence hits and nuclear blasts stay.",
   "subtitles.incoming.nuke.alarm": "Civil defense siren",
   "subtitles.incoming.nuke.launch": "Missile launch roar",
   "subtitles.incoming.nuke.blast": "Nuclear explosion",

@@ -2,6 +2,7 @@ package ua.zentix.incoming.gametest;
 
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -173,10 +174,17 @@ public final class StrikeGameTests {
 
     /**
      * Снаряд взорвался у точки удара: подрыв по заряду не дальше 6 блоков ({@link BlastLog}). Воронка — по закону заряда
-     * и грунта ({@code craterMatchesChargeLaw}), у шахеда на камне её нет, поэтому полёт проверяется по подрыву.
+     * и грунта ({@code craterMatchesChargeLaw}), у шахеда на камне её нет, поэтому полёт проверяется по подрыву. Источник
+     * каждого такого подрыва — снаряд мода ({@code Explosion.getDirectSourceEntity}): по нему моды взрывов и приваты
+     * отличают удар и оружие.
      */
     private static void assertCrater(GameTestHelper h, BlockPos at, String flight) {
-        h.assertTrue(BlastLog.near(h, at, 6), "у точки удара нет подрыва" + (flight.isEmpty() ? "" : "; последнее: " + flight));
+        List<BlastLog.Blast> blasts = BlastLog.around(h, at, 6);
+        h.assertTrue(!blasts.isEmpty(), "у точки удара нет подрыва" + (flight.isEmpty() ? "" : "; последнее: " + flight));
+        for (BlastLog.Blast b : blasts) {
+            h.assertTrue(b.source() != null && BuiltInRegistries.ENTITY_TYPE.getKey(b.source()).getNamespace().equals(Incoming.MOD_ID),
+                    "источник подрыва — не снаряд мода: " + (b.source() == null ? "нет" : BuiltInRegistries.ENTITY_TYPE.getKey(b.source())));
+        }
     }
 
     @GameTest(template = "runway", timeoutTicks = 400, batch = "drone", skyAccess = true)
@@ -634,13 +642,13 @@ public final class StrikeGameTests {
     /**
      * Подъём после взведения: башня за точкой взведения, выше, чем шахед и ракета успевают набрать по закону автопилота,
      * закрывает сектор пуска, хотя путь до взведения свободен (пусковая на улице: иначе шахед
-     * через 40 блоков после взведения — в башню). Дом ниже набора сектор не закрывает. Курс — на +Z: там площадок ещё
-     * нет (партия из одной проверки, следующие ставятся позже), и подъём читает только свою полосу и плоский мир.
+     * через 40 блоков после взведения — в башню). Дом ниже набора сектор не закрывает. Курс — на +Z, пусковая — над
+     * сеткой площадок ({@link #laneSite}): подъём читает только свою полосу.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_climb_out", skyAccess = true)
     public static void launchSectorNeedsClimbOut(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 8)));
+        Vec3 site = laneSite(h);
         Vec3 far = site.add(0, 0, 1000);
         float[] ahead = {0};
         for (WeaponType weapon : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
@@ -668,7 +676,7 @@ public final class StrikeGameTests {
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_sector_cells", skyAccess = true)
     public static void launchSectorCoversEveryCellAndBoost(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 8)));
+        Vec3 site = laneSite(h);
         Vec3 far = site.add(0, 0, 1000);
         WeaponType weapon = WeaponType.MISSILE;
         h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far), "пустая полоса закрыта");
@@ -698,7 +706,7 @@ public final class StrikeGameTests {
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_sector_budget", skyAccess = true)
     public static void launchSectorStopsAtBudget(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 8)));
+        Vec3 site = laneSite(h);
         Vec3 far = site.add(0, 0, 1000);
         WeaponType weapon = WeaponType.MISSILE;
         LaunchSite.Budget open = new LaunchSite.Budget();
@@ -3862,6 +3870,20 @@ public final class StrikeGameTests {
      * (предел {@code AREA_WAIT_LIMIT} — 1200 тиков, минута игры), а сервер GameTest тикает без пауз — на CI около
      * 2000 тиков в секунду, и минута игры проходит за полсекунды, раньше генерации свежего района.
      */
+    /**
+     * Место пусковой проверок сектора пуска — над серединой взлётной полосы, высоко над сеткой площадок: площадки части
+     * GameTest ставятся все сразу, и впереди по +Z стоят стены барьеров и постройки других проверок, а подъём ракеты
+     * после взведения смотрит рельеф на сотни блоков вперёд ({@code Airframe.reliefLookahead}): у самой полосы проверка
+     * зависела от того, какая проверка оказалась в следующем ряду (CI FV: «пустая полоса закрыта»). Над всем этим полоса
+     * пуста при любом составе части; то, что ставит сама проверка, — от направляющей, как прежде.
+     */
+    static Vec3 laneSite(GameTestHelper h) {
+        return Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4 + LANE_LIFT, 8)));
+    }
+
+    /** Насколько выше полосы стоит пусковая проверок сектора, блоков: выше стен и построек соседних площадок. */
+    static final int LANE_LIFT = 120;
+
     static void gameSpeed(GameTestHelper h) {
         long[] last = {System.nanoTime()};
         h.onEachTick(() -> {
