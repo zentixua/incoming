@@ -1,13 +1,23 @@
 package ua.zentix.incoming.client.sound;
 
+import net.minecraft.util.RandomSource;
+
 import java.util.Arrays;
 
 /**
- * Сумма некогерентных источников одной записи по {@link #N} петлям вокруг уха (без Minecraft, проверяется юнит-тестом):
+ * Сумма некогерентных источников одного звука по {@link #N} петлям вокруг уха (без Minecraft, проверяется юнит-тестом):
  * мощности складываются, направление — cos²/sin² между двумя соседними петлями (сумма весов 1, как у {@link Rumble} и
  * {@link FireRoar}), верха — средние по мощности. Так звучат пожары в воронках ({@link CraterFire}): их в налёте сотни, а
  * каналов у движка — 247 на всё; по петле на пожар их не хватало (налёт из 300 шахедов: ~150 каналов пожаров и отказы
  * движка каждые полсекунды, пока те петли пытались встать заново).
+ * <ul>
+ * <li>Мощности петель складываются в ухе, только если их звуки некогерентны: у каждой четверти свой вариант
+ * {@code blast.fire} — независимый шум под огибающей записи ({@code fire()} в {@code build_sounds.py}). Одна запись в двух
+ * петлях, начатых в один тик, складывалась по амплитуде: пожар между ними был на 2 дБ громче (ревью R8).</li>
+ * <li>Слышно ли — решает сумма ({@link #heard}), а не каждая петля: пожар, слышный сам ({@link CraterFire}), между двумя
+ * петлями делится пополам, и порог на каждой убрал бы его совсем — смотря по азимуту (ревью R9). Играют все петли с долей
+ * слышной суммы ({@link #plays}).</li>
+ * </ul>
  */
 final class Quarters {
     static final int N = 4;
@@ -46,6 +56,33 @@ final class Quarters {
     /** Доля верхов петли {@code q}: средняя по мощности. */
     float highs(int q) {
         return power[q] > 0 ? (float) (highs[q] / power[q]) : 1;
+    }
+
+    /** Слышна ли сумма: все четверти вместе (корень суммы мощностей) не тише {@link VoiceBudget#AUDIBLE}. */
+    boolean heard() {
+        double sum = 0;
+        for (double p : power) sum += p;
+        return Math.sqrt(sum) >= VoiceBudget.AUDIBLE;
+    }
+
+    /** Играть ли петлю {@code q}: сумма слышна и в этой четверти есть её доля, пусть и тише порога. */
+    boolean plays(int q) {
+        return power[q] > 0 && heard();
+    }
+
+    /**
+     * Зерно звука, с которым петля четверти {@code q} берёт вариант {@code q} записи из {@code variants} равных по весу
+     * (Minecraft выбирает вариант первым {@code nextInt} по весам у {@code RandomSource} звука): у четвертей — разные
+     * варианты, пока их хватает. Зёрна — вразброс по всему {@code long}: у {@code LegacyRandomSource} первое число малых
+     * зёрен почти одно, и среди зёрен 0–4095 {@code nextInt(4)} не даёт ни 0, ни 1 — три петли из четырёх играли один файл.
+     */
+    static long seed(int variants, int q) {
+        int n = Math.max(1, variants);
+        for (long i = 0; i < 4096; i++) {
+            long seed = i * 0x9E3779B97F4A7C15L;
+            if (RandomSource.create(seed).nextInt(n) == q % n) return seed;
+        }
+        throw new IllegalStateException("no seed picks variant " + q % n + " of " + n);
     }
 
     /** Направление петли {@code q} от уха: азимут atan2(dz, dx). */

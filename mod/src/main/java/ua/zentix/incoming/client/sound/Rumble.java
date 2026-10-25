@@ -163,11 +163,20 @@ final class Rumble {
     }
 
     /**
-     * Держать ли петлю {@code q} (раз в тик клиента): её члены слышны, когда стихнут голоса, — или тишина ещё не дольше
-     * {@link #HOLD} тиков; громкость петли {@code volume} — по {@link #potential}.
+     * Играть ли петлю {@code q}: гул слышен целиком — громкость всей суммы {@code total} (по {@link #potential} всех
+     * четвертей, {@link #potentialTotal}) не тише {@link VoiceBudget#AUDIBLE} — и в четверти есть его доля. Порог у каждой
+     * петли отдельно убрал бы член между двумя петлями, слышный целиком, — смотря по азимуту (как у пожаров, ревью R9).
      */
-    boolean keep(int q, float volume) {
-        quiet[q] = volume < VoiceBudget.AUDIBLE ? quiet[q] + 1 : 0;
+    boolean plays(int q, float total) {
+        return potential[q] > 0 && total >= VoiceBudget.AUDIBLE;
+    }
+
+    /**
+     * Держать ли петлю {@code q} (раз в тик клиента): она играет ({@link #plays}: гул слышен целиком, когда стихнут голоса,
+     * и в четверти есть его доля) — или тишина ещё не дольше {@link #HOLD} тиков.
+     */
+    boolean keep(int q, float total) {
+        quiet[q] = plays(q, total) ? 0 : quiet[q] + 1;
         return quiet[q] <= HOLD;
     }
 
@@ -187,6 +196,13 @@ final class Rumble {
     /** Громкость петли (0..1) у файла громкостью {@code fileLufs}, чтобы она звучала мощностью {@code power} против потолка. */
     static float volume(double power, double fileLufs) {
         return (float) Math.min(1, Math.sqrt(Math.max(0, power) * Mix.CEILING / Envelope.meanSquare(fileLufs)));
+    }
+
+    /** Мощность всего гула, когда стихнут голоса его членов. */
+    double potentialTotal() {
+        double s = 0;
+        for (double p : potential) s += p;
+        return s;
     }
 
     /** Мощность всего гула, против потолка. */

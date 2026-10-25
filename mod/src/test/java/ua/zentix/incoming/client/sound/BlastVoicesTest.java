@@ -119,6 +119,68 @@ class BlastVoicesTest {
         assertEquals(0, voices.reserve(20, 5), "уступившие вот-вот вернут — больше не нужно");
     }
 
+    /**
+     * Запас не отменяет приёма (ревью R7): заранее уступает только тот, кого вытеснил бы взрыв громкости самого громкого
+     * голоса — кто тише него (атака — вдвое) или чья запись кончилась, и только уже звучащий. Ближний, который занял четыре
+     * из двенадцати свободных и оставил миру восемь, следующие тики не уступает запасу ни в атаке, ни после — он и есть
+     * самый громкий; с ним рядом тихий хвост и тихая атака уступают заранее, громкая атака — нет, пока она атака; звук,
+     * начавшийся позже своего тика (запись без preload в первый раз), до начала не уступает — его атака впереди.
+     */
+    @Test
+    void reserveNeverYieldsTheLoudestNorAProtectedAttack() {
+        double[] clock = {0};
+        Mix mix = new Mix();
+        BlastVoices voices = new BlastVoices(new Rumble());
+        BlastVoices.Voice near = voices.admit(flat(mix, 0, 1, 300), fakes(clock, 4, 300), 0, 0, 1, 1, 1, 12);
+        assertNotNull(near, "запас пустил атаку ближнего");
+        voices.started(near, 4, 0);
+        for (int t = 1; t < 300; t++) {
+            clock[0] = t;
+            mix.at(t);
+            assertEquals(0, voices.reserve(t, BlastVoices.SPARE), "тик " + t + ": мир ничего не взял, ближний — самый громкий");
+            assertTrue(!near.fading(), "тик " + t + ": ближний жив после запаса");
+        }
+
+        clock[0] = 0;
+        mix = new Mix();
+        voices = new BlastVoices(new Rumble());
+        BlastVoices.Voice tail = voices.admit(flat(mix, 0, 0.9, 300), fakes(clock, 4, 300), 0, 0, 1, 1, 1, 1000);
+        clock[0] = 20;
+        mix.at(20);
+        BlastVoices.Voice loud = voices.admit(flat(mix, 20, 1, 300), fakes(clock, 4, 300), 20, 0, 1, 1, 1, 1000);
+        BlastVoices.Voice strong = voices.admit(flat(mix, 20, 0.8, 300), fakes(clock, 4, 300), 20, 0, 1, 1, 1, 1000);
+        BlastVoices.Voice weak = voices.admit(flat(mix, 20, 0.6, 300), fakes(clock, 4, 300), 20, 0, 1, 1, 1, 1000);
+        for (BlastVoices.Voice v : List.of(tail, loud, strong, weak)) assertNotNull(v);
+        // доли: громкий 1/2,81, хвост 0,81/2,81, атаки 0,64/2,81 и 0,36/2,81 — вдвое: 1,28 и 0,72 громкого
+        clock[0] = 21;
+        mix.at(21);
+        assertEquals(2, voices.reserve(21, 0), "мир съел всё: уступают тихая атака и хвост");
+        assertTrue(weak.fading() && tail.fading(), "тише громкого: атака вдвое, хвост");
+        assertTrue(!strong.fading() && !loud.fading(), "громкая атака защищена, самый громкий — не жертва");
+        for (int t = 22; t < 300; t++) {
+            clock[0] = t;
+            mix.at(t);
+            voices.reserve(t, 0);
+            assertEquals(t >= 20 + BlastVoices.ATTACK, strong.fading(), "тик " + t + ": атака кончилась — уступает, как хвост");
+            assertTrue(!loud.fading(), "тик " + t + ": самый громкий не уступает запасу");
+        }
+
+        clock[0] = 0;
+        mix = new Mix();
+        voices = new BlastVoices(new Rumble());
+        assertNotNull(voices.admit(flat(mix, 0, 1, 300), fakes(clock, 4, 300), 0, 0, 1, 1, 1, 1000));
+        Mix.Blast slow = flat(mix, 0, 0.3, 300);
+        BlastVoices.Voice late = voices.admit(slow, fakes(clock, 4, 300), 0, 0, 1, 1, 1, 1000);
+        assertNotNull(late);
+        slow.late(6);
+        for (int t = 1; t <= 6; t++) {
+            clock[0] = t;
+            mix.at(t);
+            voices.reserve(t, 0);
+            assertEquals(t >= 6, late.fading(), "тик " + t + ": до начала звука — не уступает; зазвучал — тихий, уступает");
+        }
+    }
+
     /** Пул движка без движка: столько статических каналов, сколько даст OpenAL; канал занят, пока звук его держит. */
     static final class Pool {
         final int reach;
@@ -191,6 +253,7 @@ class BlastVoicesTest {
         Pool pool = new Pool(BlastVoices.reach(BlastVoices.MONO, BlastVoices.STEREO), Rumble.QUADRANTS + Quarters.N);
         BlastVoices.Voice nearVoice = null;
         List<Fake> nearSounds = null;
+        double nearBorn = Double.NaN, nearYield = Double.NaN;
         int maxUsed = 0;
         for (int tick = 0; tick < 40 * 20; tick++) {
             clock[0] = tick;
@@ -231,15 +294,19 @@ class BlastVoicesTest {
                 if (i == nearId && (int) blast == tick) {
                     nearVoice = voice;
                     nearSounds = sounds;
+                    nearBorn = tick;
                 }
             }
+            // ближний жив и после запаса следующих тиков: не только стартовал (ревью R7)
+            if (nearVoice != null && nearVoice.fading() && Double.isNaN(nearYield)) nearYield = tick;
+            if (nearVoice != null && tick < nearBorn + BlastVoices.ATTACK) assertTrue(!nearVoice.fading(), "тик " + tick + ": атака ближнего не уступила");
             maxUsed = Math.max(maxUsed, pool.used());
             assertTrue(pool.used() <= pool.reach, "тик " + tick + ": каналов " + pool.used());
             assertEquals(voices.channels(), pool.used() - pool.fixed - pool.foreign, "тик " + tick + ": счёт бюджета — как у движка");
         }
-        System.out.printf("stress 300%s: most channels %d of %d, blast voices requested %d started %d refused by the engine %d, to rumble %d, yielded %d, near %s%n",
+        System.out.printf("stress 300%s: most channels %d of %d, blast voices requested %d started %d refused by the engine %d, to rumble %d, yielded %d, near %s%s%n",
                 crowded ? " (pool crowded at 9.75 s)" : "", maxUsed, pool.reach, voices.requested, voices.started, pool.refused, voices.toRumble,
-                voices.yielded, nearVoice == null ? "RUMBLE" : "voice");
+                voices.yielded, nearVoice == null ? "RUMBLE" : "voice", Double.isNaN(nearYield) ? ", kept to its end" : ", yielded " + (nearYield - nearBorn) + " ticks after its start");
         assertNotNull(nearVoice, "ближний — с голосом" + (crowded ? " и когда пул забит чужими" : ""));
         assertTrue(nearSounds.stream().allMatch(f -> f.taken), "движок взял все звуки ближнего");
         assertEquals(0, pool.refused, "ни одному нашему звуку движок не отказал");

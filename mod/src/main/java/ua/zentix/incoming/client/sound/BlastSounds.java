@@ -351,8 +351,10 @@ public final class BlastSounds {
 
     /**
      * Петли гула пожаров по четвертям, раз в тик: громкость — корень суммы мощностей пожаров четверти, верха — средние по
-     * мощности; петлю, которой движок не держит, — заново (раз в {@code 20} тиков); тихо секунду — отпустить; ползунок
-     * «Окружение» в нуле — не запускать. Запись одна (`blast.fire`), у петель разное начало.
+     * мощности; играют все четверти с долей слышной суммы ({@link Quarters#plays}: порог — у суммы, не у петли); петлю,
+     * которой движок не держит, — заново (раз в {@code 20} тиков); не играет секунду — отпустить; ползунок «Окружение» в
+     * нуле — не запускать. У каждой четверти свой вариант `blast.fire` — звуки петель некогерентны, и их мощности
+     * складываются, как считает {@link Quarters}.
      */
     private static void fireLoops() {
         Minecraft mc = Minecraft.getInstance();
@@ -361,7 +363,8 @@ public final class BlastSounds {
         for (int q = 0; q < Quarters.N; q++) {
             if (FIRE_RETRY[q] > 0) FIRE_RETRY[q]--;
             float v = FIRE.volume(q);
-            FIRE_QUIET[q] = v < AUDIBLE ? FIRE_QUIET[q] + 1 : 0;
+            boolean plays = FIRE.plays(q);
+            FIRE_QUIET[q] = plays ? 0 : FIRE_QUIET[q] + 1;
             double az = Quarters.azimuth(q);
             Vec3 toward = ear.add(Math.cos(az) * 10, 0, Math.sin(az) * 10);
             AmbientLoop l = FIRE_LOOPS[q];
@@ -371,8 +374,8 @@ public final class BlastSounds {
             }
             if (l != null) l.end();
             FIRE_LOOPS[q] = null;
-            if (v < AUDIBLE || !ambient || FIRE_RETRY[q] > 0) continue;
-            AmbientLoop fresh = new AmbientLoop(ModSounds.BLAST_FIRE.get(), SoundSource.AMBIENT, 1, 0x5F1BE + q);
+            if (!plays || !ambient || FIRE_RETRY[q] > 0) continue;
+            AmbientLoop fresh = new AmbientLoop(ModSounds.BLAST_FIRE.get(), SoundSource.AMBIENT, 1, variant(ModSounds.BLAST_FIRE.get(), q));
             fresh.set(ear, toward, v, FIRE.highs(q), 1);
             mc.getSoundManager().play(fresh);
             FIRE_RETRY[q] = 20;
@@ -383,18 +386,19 @@ public final class BlastSounds {
     /**
      * Петли гула по четвертям ({@link Rumble}), раз в тик клиента ({@code now} — сразу, когда гул изменился): встают, когда
      * их члены слышны (по мощности, когда голоса стихнут: петля должна звучать раньше, чем стихающий голос отдаст ей
-     * долю), с громкостью этого мига; петлю, которой движок не держит, — заново; тише слышимого {@link Rumble#HOLD} тиков —
-     * отпустить; ползунок «Окружение» в нуле — не запускать. Громкость, тон и верха петля дальше берёт сама, в своём тике
-     * движка ({@link RumbleLoop}). Вариант записи у каждой четверти свой — шум разных четвертей не согласован.
+     * долю), с громкостью этого мига; петлю, которой движок не держит, — заново; не играет {@link Rumble#HOLD} тиков —
+     * отпустить; ползунок «Окружение» в нуле — не запускать. Слышно ли — решает весь гул ({@link Rumble#plays}), а не
+     * каждая петля. Громкость, тон и верха петля дальше берёт сама, в своём тике движка ({@link RumbleLoop}). Вариант записи
+     * у каждой четверти свой — шум разных четвертей не согласован.
      */
     private static void rumble(boolean now) {
         Minecraft mc = Minecraft.getInstance();
         boolean ambient = mc.options.getSoundSourceVolume(SoundSource.AMBIENT) > 0;
         RUMBLE.tick(soundTick());
+        float total = Rumble.volume(RUMBLE.potentialTotal(), RUMBLE_LUFS);
         for (int q = 0; q < Rumble.QUADRANTS; q++) {
             if (!now && LOOP_RETRY[q] > 0) LOOP_RETRY[q]--;
-            float full = Rumble.volume(RUMBLE.potential(q), RUMBLE_LUFS);
-            boolean keep = now || RUMBLE.keep(q, full);
+            boolean keep = now || RUMBLE.keep(q, total);
             RumbleLoop l = LOOPS[q];
             if (l != null && l.playing() && keep) {
                 if (now) l.now();
@@ -402,7 +406,7 @@ public final class BlastSounds {
             }
             if (l != null) l.end();
             LOOPS[q] = null;
-            if (full < AUDIBLE || !ambient || LOOP_RETRY[q] > 0) continue;
+            if (!RUMBLE.plays(q, total) || !ambient || LOOP_RETRY[q] > 0) continue;
             RumbleLoop fresh = new RumbleLoop(q);
             fresh.aim();
             fresh.prime();
@@ -423,7 +427,7 @@ public final class BlastSounds {
         private boolean released;
 
         RumbleLoop(int q) {
-            super(ModSounds.BLAST_RUMBLE.get(), SoundSource.AMBIENT, RUMBLE.pitch(q), variant(q), 1);
+            super(ModSounds.BLAST_RUMBLE.get(), SoundSource.AMBIENT, RUMBLE.pitch(q), variant(ModSounds.BLAST_RUMBLE.get(), q), 1);
             this.q = q;
         }
 
@@ -463,12 +467,10 @@ public final class BlastSounds {
         }
     }
 
-    /** Зерно, которым петля четверти {@code q} берёт свой вариант записи гула (ваниль — первым {@code nextInt} по весам). */
-    private static long variant(int q) {
-        WeighedSoundEvents w = Minecraft.getInstance().getSoundManager().getSoundEvent(ModSounds.BLAST_RUMBLE.get().getLocation());
-        int n = w == null ? 1 : Math.max(1, w.getWeight());
-        for (long seed = 0; seed < 4096; seed++) if (RandomSource.create(seed).nextInt(n) == q % n) return seed;
-        return q;
+    /** Зерно, которым петля четверти {@code q} берёт свой вариант записи {@code event} (гул взрывов, гул пожаров). */
+    private static long variant(SoundEvent event, int q) {
+        WeighedSoundEvents w = Minecraft.getInstance().getSoundManager().getSoundEvent(event.getLocation());
+        return Quarters.seed(w == null ? 1 : w.getWeight(), q);
     }
 
     /** Движок звука загружен заново: потолок голосов — по источникам устройства; прежние каналы ушли с ним. */

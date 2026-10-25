@@ -101,16 +101,58 @@ class RumbleTest {
     }
 
     /**
-     * Петля без слышимых членов держит канал секунду — 20 тиков — и отпускает его; член снова слышен — счёт заново (у каждой
-     * четверти свой).
+     * Петля, которой нечего играть, держит канал секунду — 20 тиков — и отпускает его; член снова слышен — счёт заново (у
+     * каждой четверти свой).
      */
     @Test
     void silentLoopIsReleasedAfterASecond() {
         Rumble r = new Rumble();
         for (int t = 0; t < 20; t++) assertTrue(r.keep(2, 0), "тик " + t);
         assertTrue(!r.keep(2, 0), "тишина дольше секунды — отпустить");
+        Mix mix = new Mix();
+        r.add(blast(mix, 0.5, 300), Rumble.azimuth(2), 1, 1, 1, 0, 0);
+        mix.at(1);
+        r.tick(1);
         assertTrue(r.keep(2, 0.5f), "снова слышно — держать");
         assertTrue(r.keep(1, 0) && r.keep(3, 0.2f), "у каждой четверти свой счёт");
+    }
+
+    /**
+     * Слышно ли — решает сумма, а не каждая петля (ревью R9): пожар, слышный сам (громкость 1,2 порога), на оси петли —
+     * одна петля со всей мощностью, посередине между двумя — обе, по половине мощности, хотя каждая тише порога (порог на
+     * каждой убирал обе, и пожар пропадал смотря по азимуту); сумма тише порога — не играет ни одна. Так же гул: член,
+     * слышный целиком, между двумя петлями звучит в обеих.
+     */
+    @Test
+    void audibilityIsDecidedByTheSum() {
+        double v = 1.2 * VoiceBudget.AUDIBLE;
+        for (double az : new double[]{0, Math.PI / 8, Math.PI / 4, Math.PI / 2, -3 * Math.PI / 4}) {
+            Quarters f = new Quarters();
+            f.add(az, v, 1, 1);
+            double played = 0;
+            for (int q = 0; q < Quarters.N; q++) if (f.plays(q)) played += f.volume(q) * f.volume(q);
+            assertEquals(v * v, played, 1e-9, "азимут " + az + ": петли, что играют, несут весь пожар");
+        }
+        Quarters axis = new Quarters(), mid = new Quarters(), quiet = new Quarters();
+        axis.add(0, v, 1, 1);
+        assertTrue(axis.plays(0) && !axis.plays(1) && !axis.plays(3), "на оси — одна петля");
+        mid.add(Math.PI / 4, v, 1, 1);
+        assertTrue(mid.volume(0) < VoiceBudget.AUDIBLE && mid.volume(1) < VoiceBudget.AUDIBLE, "каждая половина тише порога");
+        assertTrue(mid.plays(0) && mid.plays(1) && !mid.plays(2) && !mid.plays(3), "посередине — обе петли");
+        quiet.add(Math.PI / 4, 0.8 * VoiceBudget.AUDIBLE, 1, 1);
+        assertTrue(!quiet.heard() && !quiet.plays(0) && !quiet.plays(1), "сумма тише порога — не играет ни одна");
+
+        Mix mix = new Mix();
+        Rumble r = new Rumble();
+        double p = v * v * Envelope.meanSquare(BlastSounds.RUMBLE_LUFS) / Mix.CEILING;
+        r.add(blast(mix, p, 300), Math.PI / 4, 1, 1, 1, 0, 0);
+        mix.at(1);
+        r.tick(1);
+        float total = Rumble.volume(r.potentialTotal(), BlastSounds.RUMBLE_LUFS);
+        assertEquals(v, total, 1e-4, "член слышен целиком");
+        assertTrue(Rumble.volume(r.potential(0), BlastSounds.RUMBLE_LUFS) < VoiceBudget.AUDIBLE, "половина в петле тише порога");
+        assertTrue(r.plays(0, total) && r.plays(1, total) && !r.plays(2, total) && !r.plays(3, total), "гул между двумя петлями — в обеих");
+        for (int t = 0; t < 40; t++) assertTrue(r.keep(0, total) && r.keep(1, total), "тик " + t + ": петли с долей слышного гула держатся");
     }
 
     /**

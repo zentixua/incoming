@@ -38,19 +38,123 @@ class SoundAssetsTest {
 
     @Test
     void craterFireHasNoBakedFadeOrSilentLoopBoundary() throws IOException {
-        float[][] pcm = new float[1][];
-        int rate = Envelope.read(open(ASSETS + "sounds/blast_fire.ogg"), pcm);
-        float[] envelope = Envelope.of(pcm[0], rate);
-        double peak = java.util.stream.IntStream.range(0, envelope.length).mapToDouble(i -> envelope[i]).max().orElseThrow();
-        assertTrue(pcm[0].length >= 10 * rate, "a varied recording, not a short repeated grain");
-        int window = rate / 5;
-        for (int start : new int[]{0, pcm[0].length - window}) {
-            double ms = 0;
-            for (int i = start; i < start + window; i++) ms += pcm[0][i] * pcm[0][i];
-            assertTrue(10 * Math.log10(ms / window) > -35, "audible at both sides of the loop seam");
+        for (String file : files("blast.fire")) {
+            float[][] pcm = new float[1][];
+            int rate = Envelope.read(open(file), pcm);
+            float[] envelope = Envelope.of(pcm[0], rate);
+            double peak = java.util.stream.IntStream.range(0, envelope.length).mapToDouble(i -> envelope[i]).max().orElseThrow();
+            assertTrue(pcm[0].length >= 10 * rate, file + ": a varied recording, not a short repeated grain");
+            int window = rate / 5;
+            for (int start : new int[]{0, pcm[0].length - window}) {
+                double ms = 0;
+                for (int i = start; i < start + window; i++) ms += pcm[0][i] * pcm[0][i];
+                assertTrue(10 * Math.log10(ms / window) > -35, file + ": audible at both sides of the loop seam");
+            }
+            assertTrue(Envelope.lufs(envelope[envelope.length - 1]) > Envelope.lufs(peak) - 12,
+                    file + ": the model controls extinction; no five-second fade baked into the recording");
         }
-        assertTrue(Envelope.lufs(envelope[envelope.length - 1]) > Envelope.lufs(peak) - 12,
-                "the model controls extinction; no five-second fade baked into the recording");
+    }
+
+    /**
+     * Петли гула пожаров ({@link Quarters}) складываются в ухе по мощности, только если их звуки некогерентны: у каждой
+     * четверти свой вариант {@code blast.fire}, и звуки вариантов не согласованы ни при одновременном старте, ни при любом
+     * сдвиге старта. Одна запись в двух петлях, начатых в один тик, складывалась по амплитуде: пожар между ними был на 2 дБ
+     * громче суммы мощностей (ревью R8, OpenAL loopback; у вариантов там же — 0,0 дБ). Проверка — на звуке самих файлов:
+     * пожар посередине между двумя четвертями — мощность суммы двух петель с громкостями {@link Quarters} против той же
+     * мощности в одной петле. Каждый вариант — на громкости, по которой клиент ведёт пожар ({@code Spectra.BLAST_FIRE_LUFS}).
+     */
+    @Test
+    void craterFireLoopsAreIncoherent() throws IOException {
+        List<String> files = files("blast.fire");
+        assertEquals(Quarters.N, files.size(), "по варианту на четверть");
+        for (String event : List.of("blast.fire", "blast.rumble")) {
+            int n = files(event).size();
+            Set<Integer> picked = new HashSet<>();
+            for (int q = 0; q < Quarters.N; q++) {
+                int got = net.minecraft.util.RandomSource.create(Quarters.seed(n, q)).nextInt(n);
+                assertEquals(q % n, got, event + ": четверть " + q + " берёт свой вариант");
+                picked.add(got);
+            }
+            assertEquals(Quarters.N, picked.size(), event + ": у четвертей разные варианты");
+        }
+        float[][] loops = new float[files.size()][];
+        for (int i = 0; i < loops.length; i++) {
+            float[][] pcm = new float[1][];
+            Envelope.read(open(files.get(i)), pcm);
+            loops[i] = pcm[0];
+            assertEquals(ua.zentix.incoming.sound.Spectra.BLAST_FIRE_LUFS, momentaryMax(files.get(i), true), 0.5, files.get(i) + ": громкость, LUFS");
+        }
+        Quarters mid = new Quarters();
+        mid.add(Math.PI / 4, 1, 1, 1);
+        double ga = mid.volume(0), gb = mid.volume(1);
+        for (int i = 0; i < loops.length; i++) {
+            for (int j = i + 1; j < loops.length; j++) {
+                float[] a = loops[i], b = loops[j];
+                assertEquals(a.length, b.length, "петли одной длины");
+                double pa = 0, pb = 0, c = 0;
+                for (int t = 0; t < a.length; t++) {
+                    pa += a[t] * a[t];
+                    pb += b[t] * b[t];
+                    c += a[t] * b[t];
+                }
+                // пожар между четвертями: петли i и j с громкостями ga и gb против той же мощности в одной петле
+                double one = (ga * ga + gb * gb) * (pa + pb) / 2, together = ga * ga * pa + gb * gb * pb;
+                double start = 10 * Math.log10((together + 2 * ga * gb * c) / one), any = 10 * Math.log10((together + 2 * ga * gb * maxCorrelation(a, b)) / one);
+                System.out.printf(java.util.Locale.ROOT, "blast.fire %d+%d: pair vs one loop %+.3f dB at one start, up to %+.3f dB at any start offset%n",
+                        i + 1, j + 1, start, any);
+                assertEquals(0, start, 0.15, files.get(i) + " + " + files.get(j) + ": одновременный старт — сумма мощностей, дБ");
+                assertEquals(0, any, 0.3, files.get(i) + " + " + files.get(j) + ": любой сдвиг старта — сумма мощностей, дБ");
+            }
+        }
+    }
+
+    /**
+     * Наибольшая по всем сдвигам по кругу взаимная корреляция двух петель одной длины (Σ a·b при сдвиге), по петлям,
+     * усреднённым по 4 отсчёта (11 кГц: у пожара выше почти нет звука), — через БПФ.
+     */
+    private static double maxCorrelation(float[] a, float[] b) {
+        int m = a.length / 4, n = Integer.highestOneBit(2 * m - 1) << 1;
+        double[] ar = new double[n], ai = new double[n], br = new double[n], bi = new double[n];
+        for (int t = 0; t < m; t++) {
+            for (int k = 0; k < 4; k++) {
+                ar[t] += a[4 * t + k] / 4.0;
+                br[t] += b[4 * t + k] / 4.0;
+            }
+        }
+        double ea = 0, eb = 0;
+        for (int t = 0; t < m; t++) {
+            ea += ar[t] * ar[t];
+            eb += br[t] * br[t];
+        }
+        EchoMix.fft(ar, ai, false);
+        EchoMix.fft(br, bi, false);
+        for (int k = 0; k < n; k++) {
+            double re = ar[k] * br[k] + ai[k] * bi[k], im = ai[k] * br[k] - ar[k] * bi[k];
+            ar[k] = re;
+            ai[k] = im;
+        }
+        EchoMix.fft(ar, ai, true);
+        double worst = 0;
+        // по кругу: сдвиг τ — линейные τ и τ − m
+        for (int tau = 0; tau < m; tau++) worst = Math.max(worst, Math.abs(ar[tau] + (tau == 0 ? 0 : ar[n + tau - m])));
+        // доля корреляции по усреднённым — та же доля у полных петель
+        double pa = 0, pb = 0;
+        for (int t = 0; t < a.length; t++) {
+            pa += a[t] * a[t];
+            pb += b[t] * b[t];
+        }
+        return worst / Math.sqrt(ea * eb) * Math.sqrt(pa * pb);
+    }
+
+    /** Файлы вариантов события {@code event} в sounds.json. */
+    private static List<String> files(String event) throws IOException {
+        JsonObject json = JsonParser.parseReader(new InputStreamReader(open(ASSETS + "sounds.json"), StandardCharsets.UTF_8)).getAsJsonObject();
+        List<String> out = new java.util.ArrayList<>();
+        for (JsonElement s : json.getAsJsonObject(event).getAsJsonArray("sounds")) {
+            String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
+            out.add(ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg");
+        }
+        return out;
     }
 
     @Test

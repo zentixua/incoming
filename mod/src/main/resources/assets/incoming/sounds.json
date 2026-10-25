@@ -261,6 +261,15 @@
     "sounds": [
       {
         "name": "incoming:blast_fire"
+      },
+      {
+        "name": "incoming:blast_fire_2"
+      },
+      {
+        "name": "incoming:blast_fire_3"
+      },
+      {
+        "name": "incoming:blast_fire_4"
       }
     ]
   },
