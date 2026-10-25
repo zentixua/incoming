@@ -53,9 +53,9 @@ import ua.zentix.incoming.nuclear.model.FuelPool;
  * плиты над пустотой — пролом; × насыпная плотность вещества цели); в воздух уходит доля мелочи вещества
  * ({@link BlastTarget.Matter#fines}): у рыхлого и досок — {@link #DUST_LOFTED} (2 %, оценка), у связного (скала, бетон,
  * кладка) — {@code BlastTarget.FINES_CRUSHED} (по PM10 контактного взрыва по бетону, Costa 2025; ⚠ оценка).
- * Цвет — вещества цели ({@link BlastTarget.Matter}), а не грунта у любой цели. Вся эта пыль уходит с горячим газом
- * облака: у глаз на улице её почти нет, мглу у земли даёт пыль волны ({@link GroundDust}), сорванная с поверхностей
- * фронтом. Отдельного холодного слоя крошки, рождённого целым у точки удара, нет. Воронки нет у подрыва выше
+ * Цвет — вещества цели ({@link BlastTarget.Matter}), а не грунта у любой цели. Мелочь — два потока: вовлечённая в горячий
+ * газ поднимается с облаком; остальную поток газа выносит вдоль поверхностей вокруг юбкой у земли ({@link #crushed},
+ * {@link GroundDust#skirt}). Деление — {@link #CRUSHED_HOT_SHARE}. Воронки нет у подрыва выше
  * {@link #CRATER_HOB} радиуса шара продуктов (разрыв в воздухе): пыли воронки нет.
  * <p>
  * <b>Пыль волны</b> — {@link GroundDust}: тот же закон, что у ядерки ({@code DustModel}: вынос ветром за фронтом, слой Kuhl,
@@ -108,6 +108,14 @@ public final class CloudModel {
      * оценка: замеров разделения пыли у стартов нет. У взрыва пыль у земли — слой волны ({@link GroundDust}).
      */
     public static final double CLOUD_SHARE = 0.5;
+    /**
+     * Доля мелочи разрушенного, что уходит с горячим газом облака; остальная — юбкой у земли ({@link GroundDust#skirt}).
+     * Brown и др., «SCM», ARI-RR-1384 (2004), табл. 5: η_partition 0,2–0,8, принято 0,5 (⚠ оценка: там же
+     * помечено неопределённым по нехватке данных).
+     */
+    public static final double CRUSHED_HOT_SHARE = 0.5;
+    /** Юбка пыли разрушенного у земли ({@link GroundDust#skirt}): отдельно от пыли, что лежала на поверхностях. */
+    public final GroundDust crushed;
     /**
      * Доля энергии ядерного взрыва в ударной волне — ~0,5 (Glasstone, Dolan, «The Effects of Nuclear Weapons», 1977, §1.24:
      * около половины — волна, треть — свет, остальное — радиация); у ВВ тротиловый эквивалент — сама волна. Давление у
@@ -202,6 +210,14 @@ public final class CloudModel {
          * Приёмник без различия — обычный клуб без сажи и подъёма.
          */
         default void ground(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
+            blob(x, y, z, sh, sv, 0, dust, 0, kelvin, 0);
+        }
+
+        /**
+         * Клуб юбки пыли разрушенного у земли ({@link #crushed}): цвет и кадры — вещества цели. Приёмник без различия —
+         * обычный клуб без сажи и подъёма.
+         */
+        default void crushed(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
             blob(x, y, z, sh, sv, 0, dust, 0, kelvin, 0);
         }
 
@@ -313,6 +329,7 @@ public final class CloudModel {
         this(source, air, target, target.dust(source.chargeKg()), 0.5, hobM, ground);
     }
 
+
     /** Роет ли заряд {@code tntKg} кг на высоте {@code hobM} над землёй воронку ({@link #CRATER_HOB}). */
     public static boolean digs(double tntKg, double hobM) {
         return tntKg > 0 && hobM <= CRATER_HOB * 1.7 * Math.cbrt(tntKg);
@@ -342,7 +359,11 @@ public final class CloudModel {
         double fuelHeat = ballKg * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
-        dust = dustKg;
+        // контакт — по цели (у опоры пакета его нашёл сервер; без неё — та же проверка digs по высоте), а не снова по высоте:
+        // грубая высота вдали иначе снимала бы холодную пыль у пролома, подтверждённого сервером (ревью 2 фронта F)
+        boolean contact = !source.underground() && source.chargeKg() > 0 && target.family() != BlastTarget.Family.AIR;
+        double cold = contact ? dustKg * (1 - CRUSHED_HOT_SHARE) : 0;
+        dust = dustKg - cold;
         soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + ballKg * source.fuel().sootYield;
         fuelBall = FuelFireball.diameter(ballKg);
         fuelBallSeconds = FuelFireball.seconds(ballKg);
@@ -371,7 +392,10 @@ public final class CloudModel {
         poolWatts = pool.watts();
         // пыль волны: над водой грунта нет (брызги — WaterBlast)
         ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, surface, air);
-        life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, ground.life));
+        // юбка — по поверхностям вокруг (высоты — от точки взрыва, как у пыли волны); у грани, которую нашёл сервер, — от
+        // точки взрыва, а не от грубой высоты земли вдали (там, где высота поверхностей неизвестна, — ровно у грани)
+        crushed = GroundDust.skirt(onWater ? 0 : source.chargeKg(), target.atFace() ? 0 : hob, cold, surface, air);
+        life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, Math.max(ground.life, crushed.life)));
     }
 
     /**
@@ -802,6 +826,7 @@ public final class CloudModel {
         }
         // слой пыли волны — на поверхностях, с которых его подняло, и там, куда он стёк (высоты — от точки взрыва)
         ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.ground(x, y, z, gh, gv, d, inBall(t, x, y, z, T_AIR)));
+        crushed.blobs(t, fade, (x, y, z, gh, gv, d) -> out.crushed(x, y, z, gh, gv, d, inBall(t, x, y, z, T_AIR)));
     }
 
     /**

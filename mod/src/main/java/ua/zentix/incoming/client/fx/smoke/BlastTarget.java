@@ -254,9 +254,22 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         return GURNEY_TNT / Math.sqrt((a * a * a + 1) / (6 * (1 + k)) + k);
     }
 
-    /** Пыль разрушенного, что уходит в воздух, кг: {@link #mass} × доля мелочи вещества ({@link Matter#fines}). */
+    /**
+     * Доля разрушенного пробитой плиты, что лежала в воронке со стороны заряда; остальное — тыльный откол, он уходит в
+     * пустоту за плитой. Опыты контактных взрывов по плите 0,3 м обычного железобетона, пробитой насквозь (Zhang W. и др.,
+     * «The impacts of contact explosions on ultra-high performance reinforced concrete slabs», Sci. Rep. 14:25700 (2024),
+     * табл. 3, NRCS-3…5: 2,2–5 кг ТНТ): объём воронки к сумме с отколом (диаметр² × глубина, форма одна) — 0,17, 0,21,
+     * 0,46 — тем больше, чем сильнее заряд пробивает. ⚠ Оценка 0,3: опыты меньше наших зарядов и плит, форма принята одна.
+     */
+    public static final double SLAB_FRONT = 0.3;
+
+    /**
+     * Пыль разрушенного, что уходит в воздух со стороны заряда, кг: {@link #mass} × доля мелочи вещества
+     * ({@link Matter#fines}); у пробитой плиты — только из воронки на грани удара ({@link #SLAB_FRONT}): мелочь откола
+     * уходит с ним в пустоту за плитой (под крышей — в помещение, его воздух здесь не считается).
+     */
     public double dust(double tntKg) {
-        return mass(tntKg) * matter().fines;
+        return mass(tntKg) * matter().fines * (family == Family.SLAB ? SLAB_FRONT : 1);
     }
 
     /** Баллистический выброс разрушенного, кг: {@link #mass} без пыли, что ушла в воздух. */

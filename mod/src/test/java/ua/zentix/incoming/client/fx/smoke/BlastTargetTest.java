@@ -66,18 +66,18 @@ class BlastTargetTest {
         assertEquals(0, BlastTarget.of(GroundMaterial.DIRT, SHAHED, 50).mass(SHAHED));
     }
 
-    /** Облако без сведений о цели — прежнее (голый рыхлый грунт): источник пыли и пыль волны те же. */
+    /** Облако без сведений о цели — прежнее (голый рыхлый грунт): пыль облака и холодной пыли те же. */
     @Test
     void plainCloudIsTheSoilCloud() {
         BlastSource s = BlastSource.of(WeaponType.DRONE, false);
         CloudModel plain = new CloudModel(s, CloudModel.Air.STANDARD, false, 0, GroundDust.Ground.BARE);
         CloudModel soil = new CloudModel(s, CloudModel.Air.STANDARD, BlastTarget.of(GroundMaterial.DIRT, s.chargeKg(), 0), 0, GroundDust.Ground.BARE);
         assertEquals(plain.dust, soil.dust, 1e-9);
-        assertEquals(plain.ground.total, soil.ground.total, 1e-9);
+        assertEquals(plain.crushed.total, soil.crushed.total, 1e-9);
         assertEquals(plain.life, soil.life, 1e-9);
         BlastTarget stone = BlastTarget.of(GroundMaterial.STONE, s.chargeKg(), 0);
         CloudModel concrete = new CloudModel(s, CloudModel.Air.STANDARD, stone, 0, GroundDust.Ground.BARE);
-        assertEquals(stone.dust(s.chargeKg()), concrete.dust, 1e-9, "пыль дробления бетона — по его чаше, плотности и мелочи");
+        assertEquals(stone.dust(s.chargeKg()) * (1 - CloudModel.CRUSHED_HOT_SHARE), concrete.dust, 1e-9, "пыль дробления бетона — по его чаше, плотности и мелочи");
         assertEquals(stone.mass(s.chargeKg()), stone.dust(s.chargeKg()) + stone.ballistic(s.chargeKg()), 1e-9, "пыль + выброс — разрушенное");
     }
 
@@ -97,6 +97,23 @@ class BlastTargetTest {
             }
             assertTrue(m.fines < 0.5, m.name() + ": пыль — меньшая часть разрушенного");
         }
+    }
+
+    /**
+     * Шахед в метровую бетонную крышу, ветер 6 м/с, класс C: холодная пыль пролома — не стена. Самый плотный клуб насквозь
+     * через середину к 10 с — меньше τ 3 (дома за ним видны, как на записях камер после прилётов: дымка, а не завеса), и
+     * на 30 с он ещё виден. С прежней долей 0,1 тот же клуб на 10 с — τ ≈ 35, с долей 0,005 — ≈ 2,7, у юбки (шире, и со
+     * стороны удара — только пыль воронки, {@link BlastTarget#SLAB_FRONT}) — ≈ 0,5.
+     */
+    @Test
+    void roofBreachDustOfAShahedIsAHazeNotAWall() {
+        var hard = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
+                GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), (x, z) -> 0);
+        var air = new CloudModel.Air(CloudModel.N_STANDARD, 6, 0, 0.1, (int) Stability.C, 0.5);
+        double breach = BreachModel.Material.ROCK.radius(SHAHED, BreachModel.UNTAMPED);
+        var m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, BlastTarget.of(GroundMaterial.STONE, false, 1, breach), 0, hard);
+        assertTrue(m.crushed.tau(10) < 3, "τ на 10 с " + m.crushed.tau(10));
+        assertTrue(m.crushed.tau(30) > CloudModel.SEEN, "τ на 30 с " + m.crushed.tau(30));
     }
 
     /** Цвет пыли: бетон и камень светлее почвы, сланец темнее, древесина — охристая (красный больше синего). */
