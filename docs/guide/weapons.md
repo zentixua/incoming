@@ -303,9 +303,13 @@ than clean air, so the dust spreads out along the surface it came from and follo
 slopes; where it drifts past an edge (a roof, a cliff) it sinks to the surface below: thick dust in seconds, thin dust
 slower. It climbs gentle slopes but not walls: in a street between houses it stays in the street, in wind or calm. While the cloud rises, a
 thin column of dust is drawn up under it. An interceptor bursting in the air leaves no crater and no dust, unless it
-bursts low over the ground. Some of what a hit crushes rises with the hot gas, while cold
-ejecta and falling material feed the low, heavy dust layer (the split is an estimate: half in each). The wave can also
-lift dust from the street below where it is still strong enough there.
+bursts low over the ground. Some of the fine dust of what a hit crushes rises with the hot gas. The gas carries the
+rest out of the crater or the hole along the surfaces around as a low surge: within half a second it is tens of blocks
+across (about 30 for a Shahed), born at the level of the hit, and from there it settles, drifts and spills over edges
+like the layer above (the split is an estimate: half in each). Only a small share of crushed stone and concrete is fine
+enough to hang in the air, so a Shahed in a street leaves a grey haze you can see through: thick at a few seconds,
+faint by 10–20 s in a breeze, longer in calm air. The wave can also lift dust from the street below where it is still
+strong enough there.
 
 What the blast looks like depends on what it hits, not on whether it is a roof, a road or a field: the server goes
 from the face the warhead struck straight into the block, square to that face, with the same breach rule it uses for
@@ -323,7 +327,9 @@ a slab the charge cannot break looks like a hit on solid ground.
   that was hit, and the back of the slab is punched straight out of its far side into the space behind, at any angle
   of the hit (down under a roof, sideways through a wall): the blast pushes the plate square to its face. Dust of the
   slab's material comes out of the hole. A Shahed through a metre of planks drives the pieces behind it at about
-  30 m/s (an estimate, the upper bound of the Gurney formula). Where the hot gas goes inside a room is not modelled.
+  30 m/s (an estimate, the upper bound of the Gurney formula). Only the crater on the face that was hit sends its dust
+  out of the hole (about a third, an estimate from tests on concrete slabs); the dust of the back goes into the room
+  behind. Where the hot gas and that dust go inside a room is not modelled.
 - **Water:** the column of spray below.
 - **In the air** (an interceptor, a hit high above the ground): a ball of hot gas centred where it burst, with no
   crater, no earth and no column of dust under it.
