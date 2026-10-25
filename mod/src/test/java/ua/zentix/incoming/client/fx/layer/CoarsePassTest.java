@@ -415,27 +415,38 @@ class CoarsePassTest {
     }
 
     /**
-     * Мелкий кадр складывает отрезок в половинной точности (RGBA16F) — это закон смешивания с умноженной альфой с
-     * точностью до 1/255 на стопках до 200 клубов любой бледности. Восьмибитный кадр 3.7.0 округляет после каждого
-     * смешивания, и бледные слои в нём по одному идут мимо закона (ревью #455: 100 клубов (0,005; 0,01) поверх 0,8 — 0,498
-     * в программном OpenGL против закона 0,610): тут мелкий кадр — не «как 3.7.0», а как закон, и пиксель досчётом не уходит.
+     * Мелкий кадр складывает отрезок в половинной точности (RGBA16F: свет и закрытая доля A, после каждого смешивания —
+     * в половинное число), и это закон смешивания с умноженной альфой с точностью до 2/255 при округлении к ближнему и до
+     * 4/255 при отбрасывании (как у программного OpenGL) на стопках до 200 клубов любой бледности, поверх любого кадра.
+     * Восьмибитный кадр 3.7.0 округляет после каждого смешивания до 1/255, и бледные слои в нём по одному идут мимо закона
+     * много дальше (ревью #455: 100 клубов (0,005; 0,01) поверх 0,8 — 0,498 против закона 0,610; 200 клубов
+     * (0,00333; 0,0333) поверх белого — у мелкого кадра 3/255 от закона, у 3.7.0 — около 15/255): тут мелкий кадр — не «как
+     * 3.7.0», а ближе к закону, и пиксель досчётом не уходит.
      */
     @Test
     void coarseTargetKeepsTheBlendLaw() {
         Random rnd = new Random(5);
+        double worstNear = 0, worstDown = 0;
         for (int k = 0; k < 5000; k++) {
             int n = 1 + rnd.nextInt(200);
-            double rgb = 0, t = 1, exact = 0, et = 1, pale = rnd.nextDouble() < 0.5 ? 0.02 : 1;
+            double[][] puffs = new double[n][];
+            double pale = rnd.nextDouble() < 0.5 ? 0.04 : 1;
             for (int i = 0; i < n; i++) {
-                double a = rnd.nextDouble() * pale, c = a * rnd.nextDouble();
-                rgb = half(half(c) + half(half(1 - half(a)) * rgb));
-                t = half(half(1 - half(a)) * t);
-                exact = c + (1 - a) * exact;
-                et *= 1 - a;
+                double a = rnd.nextDouble() * pale;
+                puffs[i] = new double[]{a * rnd.nextDouble(), a};
             }
-            double frame = rnd.nextDouble();
-            assertEquals(exact + et * frame, rgb + t * frame, 1 / 255.0, "стопка " + k + " из " + n);
+            double frame = rnd.nextDouble(), law = together(puffs, frame);
+            worstNear = Math.max(worstNear, Math.abs(halfTarget(puffs, frame, false) - law));
+            worstDown = Math.max(worstDown, Math.abs(halfTarget(puffs, frame, true) - law));
         }
+        double[][] dense = new double[200][];
+        for (int i = 0; i < 200; i++) dense[i] = new double[]{0.00333, 0.0333};
+        double law = together(dense, 1);
+        worstNear = Math.max(worstNear, Math.abs(halfTarget(dense, 1, false) - law));
+        worstDown = Math.max(worstDown, Math.abs(halfTarget(dense, 1, true) - law));
+        assertTrue(worstNear <= 2 / 255.0, "к ближнему: " + worstNear * 255);
+        assertTrue(worstDown <= 4 / 255.0, "отбрасыванием: " + worstDown * 255);
+        assertTrue(Math.abs(eightBit(dense, 1) - law) > 3 * Math.abs(halfTarget(dense, 1, true) - law), "3.7.0 — дальше от закона");
         double[][] pale = new double[100][];
         for (int i = 0; i < 100; i++) pale[i] = new double[]{0.005, 0.01};
         assertEquals(0.610, together(pale, 0.8), 0.001, "закон");
@@ -443,9 +454,25 @@ class CoarsePassTest {
         assertTrue(Math.abs(eightBit(pale, 0.8) - 0.610) > 0.05, "восьмибитный кадр по одному — не закон");
     }
 
-    /** Число в половинной точности (RGBA16F). */
-    private static double half(double v) {
-        return Float.float16ToFloat(Float.floatToFloat16((float) v));
+    /**
+     * Отрезок в RGBA16F, как его хранит кадр: свет и закрытая доля A — половинными числами после каждого смешивания
+     * (входы — тоже половинные), вывод разом поверх кадра frame; down — округление отбрасыванием, иначе к ближнему.
+     */
+    private static double halfTarget(double[][] puffs, double frame, boolean down) {
+        double rgb = 0, covered = 0;
+        for (double[] p : puffs) {
+            double c = half(p[0], down), a = half(p[1], down);
+            rgb = half(c + (1 - a) * rgb, down);
+            covered = half(a + (1 - a) * covered, down);
+        }
+        return Math.min(1, rgb + (1 - covered) * frame);
+    }
+
+    /** Неотрицательное число в половинной точности (RGBA16F): к ближнему или отбрасыванием. */
+    private static double half(double v, boolean down) {
+        short h = Float.floatToFloat16((float) v);
+        if (down && Float.float16ToFloat(h) > v) h--;
+        return Float.float16ToFloat(h);
     }
 
     /** Квадраты по одному в восьмибитном кадре: обрезка и округление до 1/255 после каждого смешивания. */
