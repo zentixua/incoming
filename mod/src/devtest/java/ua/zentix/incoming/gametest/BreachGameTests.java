@@ -13,6 +13,8 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.registry.ModDataMaps;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.BreachModel;
@@ -43,6 +45,17 @@ public final class BreachGameTests {
      * на нижней грани — круг радиусом √(R² − t²).
      */
     private static void slab(GameTestHelper h, WeaponType weapon, int thickness, boolean breaks) {
+        slab(h, weapon, Blocks.STONE.defaultBlockState(), thickness, breaks, true);
+    }
+
+    /**
+     * То же плитой из блока {@code block}. Опора, которую сервер шлёт клиенту в пакете взрыва ({@link Warheads#support}:
+     * картинка цели — плита над пустотой или опора), — тот же итог: плита там и только там, где лучи пробоя её сносят,
+     * толщиной в плиту (ревью фронта F: клиент мерил плиту своим правилом и показывал пролом там, где сервер не пробивал).
+     * Без {@code blast} — только опора: у досок волна ломает и то, что дальше пробоя (их кривая давление–импульс), и снесённое
+     * не отличить от пробитого; луч опоры — тот же {@code SlabBreach.march}, что у пробоя камня с {@code blast}.
+     */
+    private static void slab(GameTestHelper h, WeaponType weapon, BlockState block, int thickness, boolean breaks, boolean blast) {
         ServerLevel level = h.getLevel();
         boolean debris = IncomingConfig.SERVER.debrisStay.get();
         IncomingConfig.SERVER.debrisStay.set(false);
@@ -50,15 +63,30 @@ public final class BreachGameTests {
         BlockPos top = h.absolutePos(TOP);
         int bottom = top.getY() - thickness + 1;
         for (BlockPos p : BlockPos.betweenClosed(top.offset(-HALF - 1, -thickness + 1, -HALF - 1), top.offset(HALF + 1, 0, HALF + 1))) {
-            level.setBlock(p, Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+            level.setBlock(p, block, Block.UPDATE_CLIENTS);
         }
         for (BlockPos p : BlockPos.betweenClosed(top.offset(-HALF, -thickness - 2, -HALF), top.offset(HALF, -thickness, HALF))) {
             level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
         }
         double tnt = weapon.spec().charge();
-        double r = BreachModel.Material.ROCK.radius(tnt, BreachModel.UNTAMPED);
+        BreachModel.Material material = ModDataMaps.Penetrability.of(block).breaching();
+        h.assertTrue(material != null, "у блока нет группы пробоя: " + block);
+        double r = material.radius(tnt, BreachModel.UNTAMPED);
         h.assertTrue(breaks == r > thickness, String.format(Locale.ROOT, "проверка пустая: R %.2f м, плита %d м", r, thickness));
         Vec3 at = weapon == WeaponType.MISSILE ? Vec3.atBottomCenterOf(top.above()) : Vec3.atCenterOf(top);
+        // опора пакета — до взрыва: пакет уходит раньше лучей
+        S2C.Blast.Support support = Warheads.support(level, at, tnt, S2C.Blast.DOWN, null).orElse(null);
+        h.assertTrue(support != null, "заряд у грани плиты, а опоры в пакете нет");
+        h.assertTrue(!support.loose(), "плита — не рыхлое");
+        h.assertTrue(breaks == support.slab() > 0, String.format(Locale.ROOT, "опора пакета: плита %.2f м, а пробой %s", support.slab(), breaks));
+        if (breaks) {
+            h.assertTrue(Math.abs(support.slab() - thickness) < 0.15, String.format(Locale.ROOT, "толщина в пакете %.2f м, плита %d м", support.slab(), thickness));
+            h.assertTrue(Math.abs(support.breach() - r) < 0.01, String.format(Locale.ROOT, "радиус пробоя в пакете %.2f м, закон %.2f м", support.breach(), r));
+        }
+        if (!blast) {
+            h.succeed();
+            return;
+        }
         Warheads.detonate(level, weapon, at, null, null);
         double hole = breaks ? Math.sqrt(r * r - thickness * thickness) : 0;
         h.succeedWhen(() -> {
@@ -114,6 +142,21 @@ public final class BreachGameTests {
         slab(h, WeaponType.DRONE, 1, true);
     }
 
+    /** Шахед (50 кг): метр досок над пустотой пробит (R дерева ~1,8 м) — крыша: опора в пакете — плита. */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_drone_planks", skyAccess = true)
+    public static void droneBreachesMetreOfPlanks(GameTestHelper h) {
+        slab(h, WeaponType.DRONE, Blocks.OAK_PLANKS.defaultBlockState(), 1, true, false);
+    }
+
+    /**
+     * «Град» (6,4 кг): метр досок над пустотой держит (R дерева ~0,9 м) — опора в пакете не плита (ревью фронта F: клиент
+     * мерил толщину от точки взрыва, а не от грани, и показывал пролом, которого сервер не делал).
+     */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_rocket_planks", skyAccess = true)
+    public static void rocketDoesNotBreachMetreOfPlanks(GameTestHelper h) {
+        slab(h, WeaponType.ROCKET, Blocks.OAK_PLANKS.defaultBlockState(), 1, false, false);
+    }
+
     /** Шахед: два метра камня держат. */
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_drone_thick", skyAccess = true)
     public static void droneDoesNotBreachTwoMetres(GameTestHelper h) {
@@ -139,6 +182,8 @@ public final class BreachGameTests {
         double tnt = WeaponType.MISSILE.spec().charge();
         double r = BreachModel.Material.EARTH.radius(tnt, BreachModel.UNTAMPED);
         h.assertTrue(r > 3.5, String.format(Locale.ROOT, "проверка пустая: R земли %.2f м", r));
+        S2C.Blast.Support support = Warheads.support(level, Vec3.atBottomCenterOf(top.above()), tnt, S2C.Blast.DOWN, null).orElse(null);
+        h.assertTrue(support != null && support.loose() && support.slab() == 0, "опора пакета у уступа — грунт, не плита: " + support);
         Warheads.Probe blast = Warheads.testSurfaceCharge(level, Vec3.atBottomCenterOf(top.above()), tnt, 2 * r + 4);
         h.succeedWhen(() -> {
             h.assertTrue(blast.done(), "взрыв не кончился");

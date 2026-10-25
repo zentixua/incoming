@@ -6,10 +6,10 @@ import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
  * Во что попал заряд — семейство взрыва и вещество цели. Выбирается из того, что клиент знает о месте: материал под точкой
- * ({@code S2C.Blast.material}), опора по оси удара (плита над пустотой — тот же закон пробоя, что у сервера,
- * {@link BreachModel}: путь в плите / радиус пробоя её материала ≤ 1 и за ней пустота) и высота над поверхностью
- * ({@code FarBlasts.overSurface}), — а не по тому, крыша это, дорога или земля (решение Артёма 23.10). Без Minecraft: опору
- * у мира спрашивает {@code FarBlasts.target}.
+ * ({@code S2C.Blast.material}), опора по оси удара из пакета ({@code S2C.Blast.Support}: плиту над пустотой находит пробой
+ * сервера, {@link BreachModel}: путь в плите / радиус пробоя её материала ≤ 1 и за ней пустота под перекрытием) и высота над
+ * поверхностью ({@code FarBlasts.overSurface}), — а не по тому, крыша это, дорога или земля (решение Артёма 23.10). Без
+ * Minecraft: опору из пакета берёт {@code FarBlasts.target}.
  * <ul>
  * <li>{@link Family#SOIL} — рыхлое на опоре (почва, песок, гравий, снег, глина): воронка выбрасывает грунт завесой
  * ({@link Ejecta}).</li>
@@ -205,6 +205,19 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
     /** Баллистический выброс разрушенного, кг: {@link #mass} без пыли, что ушла в воздух. */
     public double ballistic(double tntKg) {
         return mass(tntKg) * (1 - matter().fines);
+    }
+
+    /**
+     * Баллистический выброс кусками — частицами вблизи, кг: у грунта — доля комьев вещества ({@link Matter#clods}), остальное —
+     * зёрна завесы ({@link Ejecta#grains}); у твёрдого и плиты завесы нет — весь. Куски + зёрна завесы + пыль = {@link #mass}.
+     */
+    public double clods(double tntKg) {
+        return family == Family.SOIL ? ballistic(tntKg) * matter().clods : ballistic(tntKg);
+    }
+
+    /** То же объёмом на месте (насыпной плотностью), м³: столько чаши или пролома летит кусками. */
+    public double clodVolume(double tntKg) {
+        return clods(tntKg) / matter().density;
     }
 
     /** Масса разрушенного вещества цели, кг: {@link #volume} × насыпная плотность. */

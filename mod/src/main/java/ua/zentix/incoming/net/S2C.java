@@ -35,11 +35,14 @@ public final class S2C {
      * в его паспорте, клиент берёт их оттуда ({@code client.fx.BlastSource}); ось боевой части (курс снаряда у удара,
      * единичный вектор): по ней и сиду клиент разлетает те же осколки, что сервер ({@code warhead.FragmentModel}).
      * <p>
+     * Опора по оси удара ({@link Support}) — то, что о преграде знает пробой сервера: во что попал заряд и плита ли это над
+     * пустотой, которую он пробивает. Клиент выбирает по ней картинку цели ({@code client.fx.smoke.BlastTarget}).
+     * <p>
      * Формат только растёт с конца (replay.md): оружие и ось дописаны в конец; в повторе, записанном до него, его нет
      * ({@link #NO_WEAPON}) — оно выводится из вида, как вид тогда и выбирали ({@link #weaponType}).
      */
     public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis,
-                        boolean fuelApart) implements CustomPacketPayload {
+                        boolean fuelApart, Optional<Support> support) implements CustomPacketPayload {
         public static final int DRONE = 0, MISSILE = 1, BUNKER = 2, ROCKET = 3;
         /** Оружия в пакете нет (повтор, записанный до этого поля). */
         public static final int NO_WEAPON = -1;
@@ -55,6 +58,8 @@ public final class S2C {
          * места удара, как тогда (огня на блоках в такой записи нет).
          */
         private static final StreamCodec<ByteBuf, Boolean> FUEL_APART = StreamCodecs.trailing(ByteBufCodecs.BOOL, false);
+        /** Опоры нет в пакете (повтор, записанный до этого поля; взрыв без сервера; заряд не приложен к преграде). */
+        private static final StreamCodec<ByteBuf, Optional<Support>> SUPPORT = StreamCodecs.trailing(ByteBufCodecs.optional(Support.CODEC), Optional.empty());
         public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.of((b, p) -> {
             ByteBufCodecs.VAR_INT.encode(b, p.kind);
             StreamCodecs.VEC3.encode(b, p.pos);
@@ -65,9 +70,10 @@ public final class S2C {
             WEAPON.encode(b, p.weapon);
             AXIS.encode(b, p.axis);
             FUEL_APART.encode(b, p.fuelApart);
+            SUPPORT.encode(b, p.support);
         }, b -> new Blast(ByteBufCodecs.VAR_INT.decode(b), StreamCodecs.VEC3.decode(b), ByteBufCodecs.VAR_INT.decode(b),
                 ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b), AXIS.decode(b),
-                FUEL_APART.decode(b)));
+                FUEL_APART.decode(b), SUPPORT.decode(b)));
 
         /** Взрыв без оси боевой части (бомба, картинка после ядерки): ось вниз. */
         public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) {
@@ -77,6 +83,25 @@ public final class S2C {
         /** Взрыв, чьё топливо (если есть) горит у клиента у места удара: без огня сервера на блоках (картинка без сервера). */
         public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis) {
             this(kind, pos, material, surfaceY, seed, projectile, weapon, axis, false);
+        }
+
+        /** Взрыв без опоры от сервера: цель — по материалу ({@link Support}). */
+        public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis,
+                     boolean fuelApart) {
+            this(kind, pos, material, surfaceY, seed, projectile, weapon, axis, fuelApart, Optional.empty());
+        }
+
+        /**
+         * Опора по оси удара — итог пробоя сервера по одному лучу, оси боевой части ({@code warhead.SlabBreach#support}): тот
+         * же закон, те же блоки и то же правило «пустота под перекрытием», что у лучей, которые сносят плиту.
+         *
+         * @param loose  то, во что попал заряд, — рыхлое (группа пробоя «земля», FM 5-250 табл. B-3)
+         * @param slab   толщина плиты до пустоты под перекрытием по оси, м; 0 — не пробита (толща, грунт, пустота под небом)
+         * @param breach радиус пробоя плиты у этого заряда по её блокам (путь / сумма путей, делённых на радиус каждого), м
+         */
+        public record Support(boolean loose, float slab, float breach) {
+            public static final StreamCodec<ByteBuf, Support> CODEC = StreamCodec.composite(
+                    ByteBufCodecs.BOOL, Support::loose, ByteBufCodecs.FLOAT, Support::slab, ByteBufCodecs.FLOAT, Support::breach, Support::new);
         }
 
         /**

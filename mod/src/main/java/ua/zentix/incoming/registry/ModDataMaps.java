@@ -22,11 +22,10 @@ public final class ModDataMaps {
     /**
      * Из чего блок для законов, которые его ломают телом и зарядом ({@code data/incoming/data_maps/block/penetration.json}):
      * вид среды и проницаемость S по Янгу (у жидкости — плотность, кг/м³) — пробитие бомбой; группа материала FM 5-250 —
-     * пробой заряда ({@link BreachModel}). Ключи — блоки и теги; поздняя запись в файле перекрывает раннюю. Карта уходит и
-     * клиенту: картинка взрыва ищет плиту над пустотой тем же законом пробоя, что сервер ({@code FarBlasts.target}).
+     * пробой заряда ({@link BreachModel}). Ключи — блоки и теги; поздняя запись в файле перекрывает раннюю.
      */
     public static final DataMapType<Block, Penetrability> PENETRATION = DataMapType.builder(Incoming.id("penetration"), Registries.BLOCK,
-            Penetrability.CODEC).synced(Penetrability.CODEC, false).build();
+            Penetrability.CODEC).build();
 
     private ModDataMaps() {}
 

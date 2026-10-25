@@ -467,6 +467,17 @@ public final class Warheads {
         return probe;
     }
 
+    /**
+     * Опора по оси удара заряда {@code tntKg} кг ТНТ, приложенного к грани в {@code at} ({@link SlabBreach#support}): взрыв
+     * для правила пробоя — тот же, что заводит {@link StagedExplosion} у заряда (без калькулятора, сила — охват слома),
+     * только событий не шлёт: он ничего не ломает.
+     */
+    public static Optional<S2C.Blast.Support> support(ServerLevel level, Vec3 at, double tntKg, @Nullable Vec3 axis, @Nullable Entity direct) {
+        Explosion e = new Explosion(level, direct, null, null, at.x, at.y, at.z, (float) StagedExplosion.breakReach(tntKg), false,
+                Explosion.BlockInteraction.KEEP, ModParticles.NONE.get(), ModParticles.NONE.get(), ua.zentix.incoming.registry.ModSounds.SILENT);
+        return SlabBreach.support(level, at, tntKg, axis, e, new ExplosionDamageCalculator());
+    }
+
     /** Проверки: докуда волна заряда ломает блок с порогом {@code psi} в открытом поле (нижний край разброса), блоков. */
     public static double breakReach(double psi, double tntKg) {
         return StagedExplosion.reachFor(psi, tntKg);
@@ -550,13 +561,15 @@ public final class Warheads {
             this.born = level.getGameTime();
             this.seed = seed;
             this.axis = axis(direct);
-            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
-                    new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis,
-                            true));
             // заряд на аппарате: воронку и шар топлива там не ставить — это корпус, а не земля. Снаряд отдаёт точку удара о
             // аппарат уже в мире (StrikeProjectile: SubLevels.toWorld), поэтому — и аппарат, чей габарит у точки
             inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
             onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
+            // во что попал заряд и плита ли это над пустотой — тем же пробоем, что снесёт плиту (картинка цели у клиента)
+            Optional<S2C.Blast.Support> support = onCraft || !(spec.charge() > 0) ? Optional.empty() : support(level, pos, spec.charge(), axis, direct);
+            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
+                    new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis,
+                            true, support));
             // боевая часть рвётся на грани, в которую ударила: плиту над пустотой она пробивает (SlabBreach); корпус
             // аппарата — не преграда мира
             main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(),

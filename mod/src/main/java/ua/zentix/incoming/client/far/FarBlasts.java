@@ -380,111 +380,16 @@ public final class FarBlasts {
         return (float) (b + (a - b) * Math.clamp(share, 0, 1));
     }
 
-    /** Самый большой радиус пробоя у заряда {@code tnt} среди групп материала, м: дальше плиту не ищем. */
-    private static double breachReach(double tnt) {
-        double r = 0;
-        for (ua.zentix.incoming.warhead.BreachModel.Material m : ua.zentix.incoming.warhead.BreachModel.Material.values()) {
-            r = Math.max(r, m.radius(tnt, ua.zentix.incoming.warhead.BreachModel.UNTAMPED));
-        }
-        return r;
-    }
-
-    /** Шаг луча опоры вдоль оси удара, блоков (как у пробоя сервера, {@code SlabBreach.STEP}). */
-    static final double PROBE_STEP = 0.1;
-    /** Воздуха до грани, в которую ударила боевая часть, вдоль оси — не больше, блоков (точка удара — у грани). */
-    static final double PROBE_AIR = 1;
-
     /**
-     * Во что попал заряд ({@link BlastTarget}): материал пакета; связность и опора — по блокам чанка клиента вдоль оси удара
-     * ({@code S2C.Blast.axis}) тем же правилом, что у пробоя сервера (твёрдое — {@code SurfaceBlocks.solid}, группа пробоя
-     * блока — {@code SurfaceBlocks.breaching}, радиус — {@link ua.zentix.incoming.warhead.BreachModel}): путь в твёрдом до
-     * пустоты под перекрытием (над ней в колонке есть что-то), делённый на радиус пробоя каждого блока, не больше 1 — плита
-     * над пустотой, которую заряд пробивает (крыша, настил моста, перекрытие); не дошёл или вышел под открытое небо (уступ,
-     * склон) — опора. Связность — у первого твёрдого блока: группа «земля» — рыхлое. Чанка нет (дальше прорисовки) или грани у
-     * точки нет — по веществу материала, опора сплошная (⚠ вдали крышу от земли клиент не отличит: блоков там у него нет).
+     * Во что попал заряд ({@link BlastTarget}): материал пакета и опора по оси удара из пакета ({@link S2C.Blast.Support}) —
+     * её считает пробой сервера тем же лучом, что сносит плиту ({@code warhead.SlabBreach#support}): плита над пустотой — та
+     * и только та, которую сервер пробивает, на любой дистанции (у клиента вдали блоков нет, у сервера — есть). Опоры в
+     * пакете нет (повтор до этого поля, взрыв без сервера, заряд не приложен к преграде) — по веществу материала, опора
+     * сплошная.
      */
-    static BlastTarget target(ClientLevel level, Vec3 pos, Vec3 axis, GroundMaterial material, double tnt, double hob) {
-        return target(new Probe() {
-            @Override
-            public boolean loaded(int x, int z) {
-                return level.getChunkSource().getChunk(x >> 4, z >> 4, false) != null;
-            }
-
-            @Override
-            public double radius(net.minecraft.core.BlockPos p, double charge) {
-                net.minecraft.world.level.block.state.BlockState st = level.getBlockState(p);
-                if (!ua.zentix.incoming.warhead.SurfaceBlocks.solid(level, p, st)) return 0;
-                // заряд не смещает (неразрушимое, сопротивление ≥ 1200): опора без пробоя
-                if (st.getBlock().getExplosionResistance() >= 1200) return Double.NaN;
-                ua.zentix.incoming.warhead.BreachModel.Material m = ua.zentix.incoming.warhead.SurfaceBlocks.breaching(st);
-                return m == null ? Double.NaN : m.radius(charge, ua.zentix.incoming.warhead.BreachModel.UNTAMPED);
-            }
-
-            @Override
-            public boolean earth(net.minecraft.core.BlockPos p) {
-                return ua.zentix.incoming.warhead.SurfaceBlocks.breaching(level.getBlockState(p)) == ua.zentix.incoming.warhead.BreachModel.Material.EARTH;
-            }
-
-            @Override
-            public int top(int x, int z) {
-                return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
-            }
-        }, pos, axis, material, tnt, hob);
-    }
-
-    /** Мир для луча опоры ({@link #target}): чанк готов, радиус пробоя блока, рыхлое ли, первый воздух над колонкой. */
-    interface Probe {
-        boolean loaded(int x, int z);
-
-        /** Радиус пробоя твёрдого блока у заряда, м; 0 — не твёрдое (пустота); NaN — заряд его не смещает. */
-        double radius(net.minecraft.core.BlockPos p, double charge);
-
-        /** Группа пробоя блока — «земля» (рыхлое). */
-        boolean earth(net.minecraft.core.BlockPos p);
-
-        /** Первый воздух над колонкой ({@code MOTION_BLOCKING}). */
-        int top(int x, int z);
-    }
-
-    /** {@link #target} по миру {@code probe} (проверки — без Minecraft). */
-    static BlastTarget target(Probe probe, Vec3 pos, Vec3 axis, GroundMaterial material, double tnt, double hob) {
-        BlastTarget plain = BlastTarget.of(material, tnt, hob);
-        if (plain.family() == BlastTarget.Family.WATER || plain.family() == BlastTarget.Family.AIR) return plain;
-        Vec3 d = axis.lengthSqr() > 1e-9 ? axis.normalize() : S2C.Blast.DOWN;
-        double reach = breachReach(tnt) + PROBE_AIR;
-        net.minecraft.core.BlockPos.MutableBlockPos c = new net.minecraft.core.BlockPos.MutableBlockPos();
-        long last = Long.MIN_VALUE;
-        boolean entered = false, loose = false;
-        double radius = 0, sum = 0, path = 0;
-        // шаг — целое число шагов (без накопления ошибки дробных)
-        for (int i = 0; i * PROBE_STEP <= reach; i++) {
-            double s = i * PROBE_STEP;
-            c.set(Math.floor(pos.x + d.x * s), Math.floor(pos.y + d.y * s), Math.floor(pos.z + d.z * s));
-            if (c.asLong() != last) {
-                last = c.asLong();
-                if (!probe.loaded(c.getX(), c.getZ())) return plain;
-                radius = probe.radius(c, tnt);
-                if (radius != 0 && !entered) {
-                    entered = true;
-                    loose = probe.earth(c);
-                }
-            }
-            if (!entered) {
-                if (s > PROBE_AIR) return plain;
-                continue;
-            }
-            if (Double.isNaN(radius)) return BlastTarget.of(material, loose, 0, 0, tnt, hob);
-            if (radius > 0) {
-                sum += PROBE_STEP / radius;
-                path += PROBE_STEP;
-                if (sum > 1) return BlastTarget.of(material, loose, 0, 0, tnt, hob);
-                continue;
-            }
-            // вышли из твёрдого: под перекрытием — пустота за плитой; под открытым небом — грань воронки
-            boolean covered = probe.top(c.getX(), c.getZ()) > c.getY() + 1;
-            return covered ? BlastTarget.of(material, loose, path, path / sum, tnt, hob) : BlastTarget.of(material, loose, 0, 0, tnt, hob);
-        }
-        return BlastTarget.of(material, loose, 0, 0, tnt, hob);
+    static BlastTarget target(S2C.Blast p, GroundMaterial material, double tnt, double hob) {
+        return p.support().map(s -> BlastTarget.of(material, s.loose(), s.slab(), s.breach(), tnt, hob))
+                .orElseGet(() -> BlastTarget.of(material, tnt, hob));
     }
 
     /** Пакет взрыва ближе {@link #NEAR} к камере: его рисуют частицы и озвучивает ближняя модель. */
@@ -514,9 +419,10 @@ public final class FarBlasts {
             return cloud(level, source, model, top, ground, p.seed());
         }
         // удар — в то, что под точкой (земля, крыша, стена — всё равно; над аппаратом в воздухе — рельеф далеко внизу): что
-        // вокруг и на какой высоте, видно по верхним блокам (ground); во что попал и есть ли за ним пустота — по оси удара (target)
+        // вокруг и на какой высоте, видно по верхним блокам (ground); во что попал и есть ли за ним пустота — пробой сервера по оси
+        // удара (опора в пакете, target)
         double hob = overSurface(level, pos);
-        BlastTarget target = target(level, pos, p.axis(), ground, source.chargeKg(), hob);
+        BlastTarget target = target(p, ground, source.chargeKg(), hob);
         return cloud(level, source, new CloudModel(source, air(level, pos), target, hob, ground(level, pos)), pos, ground, p.seed());
     }
 
@@ -648,7 +554,7 @@ public final class FarBlasts {
         if (level == null) return new CloudModel(source, CloudModel.Air.STANDARD, BlastTarget.of(mat, source.chargeKg(), 0), 0,
                 ua.zentix.incoming.client.fx.smoke.GroundDust.Ground.BARE);
         double hob = overSurface(level, p.pos());
-        return new CloudModel(source, air(level, p.pos()), target(level, p.pos(), p.axis(), mat, source.chargeKg(), hob), hob, ground(level, p.pos()));
+        return new CloudModel(source, air(level, p.pos()), target(p, mat, source.chargeKg(), hob), hob, ground(level, p.pos()));
     }
 
     /** Воздух в месте взрыва: воздух мира ({@link ClientAir}); влажность — его, у воды 1 (облако конденсации). */

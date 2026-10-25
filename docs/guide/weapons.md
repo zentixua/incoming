@@ -307,9 +307,9 @@ bursts low over the ground. Some of what a hit crushes rises with the hot gas, w
 ejecta and falling material feed the low, heavy dust layer (the split is an estimate: half in each). The wave can also
 lift dust from the street below where it is still strong enough there.
 
-What the blast looks like depends on what it hits, not on whether it is a roof, a road or a field: the game reads the
-block the warhead struck and follows the line of flight through it with the same breach rule the server uses for
-damage.
+What the blast looks like depends on what it hits, not on whether it is a roof, a road or a field: the server follows
+the line of flight from the block the warhead struck with the same breach rule it uses for damage, and tells every
+player what it found, so a roof looks like a roof at any distance, and only where the charge really breaks through.
 
 - **Soil, sand, gravel, snow or clay:** the crater throws a curtain of dark earth jets up and out at about 45°. Most of
   it is slow: for a Shahed nine tenths is back on the ground within about 1.7 seconds, and at one second the curtain
@@ -319,14 +319,14 @@ damage.
   charge crushes rises as dust of its own colour: light grey from stone and concrete, darker from deepslate, the colour
   of mortar from masonry, ochre sawdust from planks. Chips fly on short arcs; fragments strike sparks on stone.
 - **A slab over empty space** (a roof, a bridge deck, a floor) that the charge breaks through: pieces fly up from the
-  top and down into the space below, and dust of the slab's material comes out of the hole. A Shahed through a metre of
-  planks drives the pieces underneath down at about 30 m/s. Where the hot gas goes inside a room is not modelled.
+  top and onward along the line of flight into the space behind (down under a roof, sideways through a wall), and dust
+  of the slab's material comes out of the hole. A Shahed through a metre of planks drives the pieces behind it at about
+  30 m/s. Where the hot gas goes inside a room is not modelled.
 - **Water:** the column of spray below.
 - **In the air** (an interceptor, a hit high above the ground): a ball of hot gas centred where it burst, with no
   crater, no earth and no column of dust under it.
 
-Beyond the blocks your game has loaded (about your render distance) it cannot tell a roof from the ground under it, so
-a hit there looks like a hit on solid ground of the same material. The masses of crushed material, the grain size that
+The masses of crushed material, the grain size that
 makes the curtain visible, the share thrown as clods and the split of slab pieces up and down are estimates; the
 sources give no measurements for these targets and charges.
 

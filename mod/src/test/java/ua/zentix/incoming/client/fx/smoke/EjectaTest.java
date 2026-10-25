@@ -80,4 +80,28 @@ class EjectaTest {
         assertTrue(e.speed(0.01) > e.speed(0.5));
         assertEquals(e.radius, e.from(1), 1e-9);
     }
+
+    /**
+     * Весь баланс разрушенного у каждой цели: куски вблизи ({@link BlastTarget#clods}, частицы) + зёрна завесы (у грунта,
+     * {@link Ejecta#grains}) + пыль в воздух ({@link BlastTarget#dust}) = масса чаши или пролома; кусками — не весь объём, а
+     * своя доля (ревью фронта F: комья брали весь объём чаши поверх завесы и пыли).
+     */
+    @Test
+    void wholeMassIsSharedOnce() {
+        for (double tnt : CHARGES) {
+            for (GroundMaterial m : new GroundMaterial[]{GroundMaterial.DIRT, GroundMaterial.SAND, GroundMaterial.GRAVEL, GroundMaterial.STONE,
+                    GroundMaterial.BRICK, GroundMaterial.WOOD}) {
+                BlastTarget t = BlastTarget.of(m, tnt, 0);
+                double grains = t.family() == BlastTarget.Family.SOIL ? new Ejecta(1, t.ballistic(tnt), t.matter().clods).grains : 0;
+                assertEquals(t.mass(tnt), t.clods(tnt) + grains + t.dust(tnt), 1e-9 * t.mass(tnt), m + ", " + tnt + " кг");
+                assertEquals(t.clods(tnt), t.clodVolume(tnt) * t.matter().density, 1e-9 * t.mass(tnt));
+                assertTrue(t.clodVolume(tnt) < t.volume(tnt), m + ": кусками — меньше всей чаши");
+            }
+            // плита над пустотой: весь пролом без пыли — кусками (завесы нет)
+            double r = ua.zentix.incoming.warhead.BreachModel.Material.POOR.radius(tnt, ua.zentix.incoming.warhead.BreachModel.UNTAMPED);
+            BlastTarget slab = BlastTarget.of(GroundMaterial.WOOD, false, 0.5, r, tnt, 0);
+            assertEquals(BlastTarget.Family.SLAB, slab.family());
+            assertEquals(slab.mass(tnt), slab.clods(tnt) + slab.dust(tnt), 1e-9 * slab.mass(tnt));
+        }
+    }
 }

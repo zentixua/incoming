@@ -714,8 +714,24 @@ final class Sandbox {
         GroundMaterial mat = sampleOnServer(level, BlockPos.containing(pos));
         long seed = n > 1 ? c.seedAt(1) : 1;
         // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
-        ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN));
+        ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN, false,
+                supportOnServer(pos, w.spec().charge())));
         begin();
+    }
+
+    /**
+     * Опора по оси удара, как её шлёт сервер в пакете взрыва ({@code Warheads.support}: крыша над пустотой — плита): у
+     * встроенного сервера — его задачей; без него — нет (картинка по материалу).
+     */
+    private static Optional<S2C.Blast.Support> supportOnServer(Vec3 pos, double tnt) {
+        net.minecraft.client.server.IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
+        if (server == null || !(tnt > 0)) return Optional.empty();
+        try {
+            return server.submit(() -> ua.zentix.incoming.warhead.Warheads.support(server.overworld(), pos, tnt, S2C.Blast.DOWN, null))
+                    .get(2, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return Optional.empty();
+        }
     }
 
     /**

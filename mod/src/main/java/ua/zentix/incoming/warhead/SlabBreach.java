@@ -12,9 +12,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.registry.ModDataMaps;
 import ua.zentix.incoming.util.Terrain;
+
+import java.util.Optional;
 
 /**
  * Пробой преграды зарядом, приложенным к ней ({@link BreachModel}), на блоках мира. Из точки, где заряд лежит на грани
@@ -234,8 +237,18 @@ final class SlabBreach {
      */
     static double march(ServerLevel level, Origin o, double dx, double dy, double dz, Explosion e, ExplosionDamageCalculator damage,
                         LongArrayList path, boolean[] liquid) {
+        return march(level, o, dx, dy, dz, e, damage, path, liquid, null);
+    }
+
+    /**
+     * То же; {@code used} (если не null) — сумма путей в блоках преграды, делённых на радиус пробоя каждого
+     * ({@code used[0]}), и путь в них ({@code used[1]}, м) до выхода или обрыва.
+     */
+    static double march(ServerLevel level, Origin o, double dx, double dy, double dz, Explosion e, ExplosionDamageCalculator damage,
+                        LongArrayList path, boolean[] liquid, @Nullable double[] used) {
         path.clear();
-        double used = 0, r = 0;
+        if (used != null) used[0] = used[1] = 0;
+        double sum = 0, r = 0;
         long last = Long.MIN_VALUE;
         double reach = o.reach();
         // точка луча — середина своего шага: шаг от d − STEP/2 до d + STEP/2 — в блоке этой точки
@@ -271,9 +284,35 @@ final class SlabBreach {
                 continue;
             }
             if (r <= 0) return -1;
-            used += STEP / r;
-            if (used > 1) return -1;
+            sum += STEP / r;
+            if (used != null) {
+                used[0] = sum;
+                used[1] += STEP;
+            }
+            if (sum > 1) return -1;
         }
         return -1;
+    }
+
+    /**
+     * Опора по оси удара для картинки клиента ({@link S2C.Blast.Support}): заряд {@code tnt} кг ТНТ с центром {@code centre},
+     * приложенный к грани ({@link Placement#SURFACE}), — тот же {@link #locate} и тот же {@link #march}, что у лучей пробоя,
+     * по одному лучу — оси боевой части {@code axis} (нет — вниз). Пусто — заряд не приложен к преграде или ось не входит в
+     * неё (картинка — по материалу). Читает мир сейчас: пакет взрыва уходит раньше лучей (⚠ если преграду до них снесёт
+     * соседний взрыв того же тика, картинка покажет плиту, которой лучи уже не нашли).
+     */
+    static Optional<S2C.Blast.Support> support(ServerLevel level, Vec3 centre, double tnt, @Nullable Vec3 axis, Explosion e,
+                                               ExplosionDamageCalculator damage) {
+        Origin o = locate(level, centre, tnt, Placement.SURFACE, axis, e, damage);
+        if (o == null) return Optional.empty();
+        Vec3 d = axis != null && axis.lengthSqr() > 1e-9 ? axis.normalize() : S2C.Blast.DOWN;
+        if (!o.inward(d.x, d.y, d.z)) return Optional.empty();
+        LongArrayList path = new LongArrayList();
+        double[] used = new double[2];
+        double out = march(level, o, d.x, d.y, d.z, e, damage, path, new boolean[1], used);
+        // то, во что попал, — первый блок преграды на оси; на оси её нет (непробиваемое сразу у грани) — связное
+        boolean loose = !path.isEmpty() && material(level.getBlockState(BlockPos.of(path.getLong(0)))) == BreachModel.Material.EARTH;
+        if (out < 0 || used[0] <= 0) return Optional.of(new S2C.Blast.Support(loose, 0, 0));
+        return Optional.of(new S2C.Blast.Support(loose, (float) used[1], (float) (used[1] / used[0])));
     }
 }
