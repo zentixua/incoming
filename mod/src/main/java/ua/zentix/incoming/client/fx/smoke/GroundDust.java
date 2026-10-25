@@ -161,6 +161,8 @@ public final class GroundDust {
     /** Поднятая масса у поверхности (без той, что под шаром), кг; радиус подсоса, м; сколько слой виден, с. */
     public final double total, stemReach;
     public final double life;
+    /** С какого возраста подсос забирает пыль в ножку, с (бесконечность — не забирает). */
+    public final double drawnFrom;
 
     /**
      * Слой пыли заряда {@code tntKg} кг ТНТ на высоте {@code hobM} над голым грунтом в воздухе {@code air};
@@ -306,6 +308,9 @@ public final class GroundDust {
             drawn[s] = drawn[s - 1] + flux * dt;
             slump[s] = slump[s - 1] + 2 * FR * Math.sqrt(CloudModel.G * aloft / (Math.PI * CloudModel.RHO)) * dt;
         }
+        int s0 = 1;
+        while (s0 < STEPS && drawn[s0] <= 0) s0++;
+        drawnFrom = s0 < STEPS ? time(s0 - 1) : Double.POSITIVE_INFINITY;
         life = lifeSeconds();
     }
 

@@ -18,8 +18,9 @@ Fuel burning in a crater produces a continuous roar and crackle from where it bu
 recording does not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path
 to you.
 
-A fireball rises upright. While it burns, orange flame with bright cores churns among dark soot; as it cools, it
-darkens into smoke without a jump.
+A fireball grows from the ground and rises smoothly, drifting with the wind together with its smoke. While it burns,
+orange flame with bright cores churns among dark soot, and the fuel's soot appears as the fuel burns; as it cools, it
+darkens into smoke without a jump. Windows break with their own sound and shards where they stand.
 
 ## The real weapons
 
