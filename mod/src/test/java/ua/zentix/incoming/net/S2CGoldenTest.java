@@ -108,7 +108,7 @@ class S2CGoldenTest {
                 golden(S2C.Collapse.TYPE, S2C.Collapse.CODEC, new S2C.Collapse(P, 4, S2C.Collapse.OLD_VOLUME), new S2C.Collapse(P, 4, 162.5f)),
                 golden(S2C.GridFailure.TYPE, S2C.GridFailure.CODEC, new S2C.GridFailure(Q, Long.MIN_VALUE + 7)),
                 golden(S2C.GridDistrict.TYPE, S2C.GridDistrict.CODEC, new S2C.GridDistrict(P, true)),
-                golden(S2C.Quake.TYPE, S2C.Quake.CODEC, new S2C.Quake(300, true)),
+                golden(S2C.Quake.TYPE, S2C.Quake.CODEC, new S2C.Quake(300, true), new S2C.Quake(P, 2391.75, 14.5, 2, 123_456L)),
                 golden(S2C.Siren.TYPE, S2C.Siren.CODEC, new S2C.Siren(Q, S2C.Siren.MISSILE)),
                 golden(S2C.SalvoStatus.TYPE, S2C.SalvoStatus.CODEC, new S2C.SalvoStatus(6, 17, 40)),
                 golden(S2C.Cleared.TYPE, S2C.Cleared.CODEC, new S2C.Cleared(Optional.of(B), true, List.of(A, B))),

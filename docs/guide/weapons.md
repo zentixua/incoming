@@ -367,6 +367,20 @@ and settle over seconds. They stay in the air after the pressure pulse has passe
 Refraction, clump size, lift and contrast are emphasised for presentation; the ring keeps the pressure front’s radius
 and timing. The shimmer shifts the image by no more than three pixels. Bare soil, sand and snow give dust instead.
 
+When the front reaches you, you feel it. It throws your head back for a moment and the picture shakes briefly.
+Everything light within about 16 blocks of you, grass, leaves, grit and fine dust, jumps and is blown away from the
+blast in one puff. The air moves only that one short push, so the bits hang, settle and drift off with the ordinary
+wind. A wave strong enough to stun you blurs the picture, drains its colour and darkens its edges for one to three
+seconds. A weaker wave leaves the screen alone. When and how strongly this happens follows the wave at your head: its
+pressure and impulse, the hearing loss it causes and how hard it moves your head. The blur, grey and dark edges are
+presentation. You can weaken or turn it off in the settings (Concussion on screen), and the vanilla Distortion Effects
+option scales it and the camera shake too.
+
+The bunker bomb also sends a wave through the ground. It reaches you at the speed of the ground under the bomb: through
+rock and wet clay before the bang in the air; through loam and loose sand it is slower than the air wave and fades
+sooner, and a few hundred blocks away you no longer feel it. The ground jolts you up and down, harder the faster it
+moves, and you hear it rumble.
+
 In sufficiently humid air a white condensation shell appears briefly behind the pressure front, after the air expands
 and cools below its dew point. It evaporates as pressure recovers. Rain makes it much easier to see; dry air may give
 no shell. Its negative-phase history and outer extent are estimates. By day the cloud rises higher than at

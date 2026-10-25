@@ -343,7 +343,7 @@ public final class FarBlasts {
      * и пыль того же цвета, что стена пыли ядерки ({@code NukePall.DUST}); песок и снег — своего (светлее). В 3.5.0 пыль
      * красилась цветом блока земли — тёмный, почти чёрный диск у земли (F3).
      */
-    static float[] dustColour(GroundMaterial ground) {
+    public static float[] dustColour(GroundMaterial ground) {
         if (ground == GroundMaterial.SAND || ground == GroundMaterial.SNOW) return new float[]{ground.r, ground.g, ground.b};
         double[] d = ua.zentix.incoming.client.nuclear.NukePall.DUST;
         return new float[]{(float) d[0], (float) d[1], (float) d[2]};
@@ -592,13 +592,13 @@ public final class FarBlasts {
     }
 
     /** Грунт под дёрном сверху: пыль под ним есть, но держит её дёрн (срыв — от 3 м/с). */
-    static boolean sod(net.minecraft.world.level.block.state.BlockState s) {
+    public static boolean sod(net.minecraft.world.level.block.state.BlockState s) {
         return s.is(net.minecraft.tags.BlockTags.DIRT) || s.is(net.minecraft.world.level.block.Blocks.MOSS_CARPET)
                 || s.is(net.minecraft.world.level.block.Blocks.MUD) || s.is(net.minecraft.world.level.block.Blocks.CLAY);
     }
 
     /** Рыхлый ли грунт сверху: пыль с него срывает слабый ветер. */
-    static boolean loose(net.minecraft.world.level.block.state.BlockState s) {
+    public static boolean loose(net.minecraft.world.level.block.state.BlockState s) {
         return s.is(net.minecraft.world.level.block.Blocks.DIRT) || s.is(net.minecraft.world.level.block.Blocks.COARSE_DIRT)
                 || s.is(net.minecraft.world.level.block.Blocks.ROOTED_DIRT) || s.is(net.minecraft.world.level.block.Blocks.FARMLAND)
                 || s.is(net.minecraft.world.level.block.Blocks.DIRT_PATH) || s.is(net.minecraft.tags.BlockTags.SAND)

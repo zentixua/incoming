@@ -149,6 +149,12 @@ public final class Fragments {
         };
     }
 
+    /** Сопротивление g/v_t², 1/блок, у тела со скоростью падения {@code terminalMps}, м/с, в тихом воздухе. */
+    public static double drag(double terminalMps) {
+        double vt = terminalMps / 20;
+        return G / (vt * vt);
+    }
+
     /**
      * Тик полёта тела со скоростью {@code v} (блоков за тик, меняется на месте) в ветре (ux, uy, uz) с сопротивлением
      * {@code drag} = g/v_t² (1/блок): квадратичное сопротивление за тик — точно (|v − u| спадает как 1/(1 + k·|v − u|·t):
@@ -175,6 +181,17 @@ public final class Fragments {
      */
     public static boolean torn(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
                                float size, Wind wind, int delay, boolean edge) {
+        return torn(level, state, from, kind, x, y, z, vx, vy, vz, size, Double.NaN, wind, delay, edge);
+    }
+
+    /**
+     * То же, но тело летит со своей скоростью падения в тихом воздухе {@code terminalMps}, м/с, а рисуется размером
+     * {@code size}: так рисуют крупнее то, что настоящего размера на экране не видно (сор у камеры — комочек почвы в 2 мм
+     * гранью в 6–12 см, подача), а полёт, оседание и снос остаются у настоящего тела. NaN — скорость падения по размеру и
+     * веществу ({@link #terminal}).
+     */
+    public static boolean torn(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
+                               float size, double terminalMps, Wind wind, int delay, boolean edge) {
         if (state.isAir() || state.getRenderShape() != RenderShape.MODEL || !state.shouldSpawnTerrainParticles()) return false;
         // мест нет — самый дальний от камеры уходит, если он дальше нового ({@link FarthestPool}): волна идёт к камере, и
         // ближние места снесённого приходят последними — иначе все места занимали бы куски дальних чанков, а у камеры,
@@ -184,7 +201,7 @@ public final class Fragments {
         if (!LIVE.admit(d, cap(), tick, f -> eye.distanceToSqr(f.x(), f.y(), f.z()))) return false;
         int wait = Mth.clamp(delay, 0, DELAY_MAX);
         int life = kind == Kind.LEAF ? LIFE_MAX : LIFE_SHORT - 40 + RANDOM.nextInt(41);
-        Fragment f = new Fragment(level, state, from, kind, x, y, z, vx, vy, vz, size, wind, wait, life, edge);
+        Fragment f = new Fragment(level, state, from, kind, x, y, z, vx, vy, vz, size, terminalMps, wind, wait, life, edge);
         LIVE.add(f, d, tick);
         Minecraft.getInstance().particleEngine.add(f);
         return true;
@@ -245,7 +262,7 @@ public final class Fragments {
         private long ticked = Fragments.tick;
 
         Fragment(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
-                 float size, Wind wind, int delay, int life, boolean edge) {
+                 float size, double terminalMps, Wind wind, int delay, int life, boolean edge) {
             super(level, x, y, z);
             this.delay = delay;
             this.wind = wind;
@@ -282,8 +299,7 @@ public final class Fragments {
             gravity = 0;
             friction = 1;
             lifetime = life;
-            double vt = terminal(kind, Shielding.material(level, from, state), len) / 20;
-            drag = G / (vt * vt);
+            drag = drag(terminalMps > 0 ? terminalMps : terminal(kind, Shielding.material(level, from, state), len));
             lift = (float) (LIFT_MIN + ((edge ? LIFT_EDGE : LIFT_MAX) - LIFT_MIN) * random.nextDouble());
             TextureAtlasSprite sprite = Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getTexture(state, level, from);
             // на грани — кусок текстуры размером с тело (16 пикселей на блок); у стекла — от края: окно прозрачно, кроме рамки
