@@ -7,7 +7,7 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
-/** Проба времени слоя ({@link LayerTimes}): без неё меток нет; части квадратов рисуются каждая целиком и по разу. */
+/** Проба времени слоя ({@link LayerTimes}): без неё меток нет; кадр слива — по просьбе; части квадратов рисуются каждая целиком и по разу. */
 class LayerTimesTest {
     /** Проба не идёт — таймер прохода не зовёт OpenGL вовсе (в тесте его нет: вызов упал бы) и кадр не меряет. */
     @Test
@@ -19,6 +19,21 @@ class LayerTimesTest {
         timer.end(pair);
         timer.second();
         assertEquals(0, timer.lastFrames);
+    }
+
+    /**
+     * Кадр слива (glFinish у каждой метки, части по отдельности: 20–28 мс процессора) — только по просьбе: F3 или свойство
+     * запуска. Сценарии и стенд держат пробу включённой чтением строки, и 25.10 в look_gate этот кадр раз в 2 с был рывком в
+     * их собственном замере.
+     */
+    @Test
+    void drainedFrameOnlyWhenAsked() {
+        long s = 1_000_000_000L;
+        for (long now = 0; now < 60 * s; now += s / 60) assertEquals(false, LayerTimes.drains(false, false, 0, now));
+        assertEquals(true, LayerTimes.drains(true, false, 0, 5 * s));
+        assertEquals(true, LayerTimes.drains(false, true, 0, 5 * s));
+        assertEquals(false, LayerTimes.drains(true, false, 5 * s, 6 * s));
+        assertEquals(true, LayerTimes.drains(true, false, 5 * s, 5 * s + LayerTimes.DRAIN_EVERY_NS));
     }
 
     /**

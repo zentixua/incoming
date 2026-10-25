@@ -25,12 +25,14 @@ import java.util.Locale;
  * из {@link #RING} кадров: читаются через 2–3 кадра, когда готовы, без ожидания (как {@link GpuTimer}). Метка между
  * соседними проходами «протекает»: видеокарта ставит её, не дождавшись хвоста прошлой работы, и он попадает в следующий
  * проход (замер HB2, #442). Среднее таких кадров — для слежки; сумма верна, доли — примерно.</li>
- * <li>Поэтому раз в {@link #DRAIN_EVERY_NS} кадр слива: перед каждой меткой glFinish — работа до неё вся кончилась, и
+ * <li>Поэтому, пока его просят ({@link #drains}: открыт F3 или свойство {@code incoming.fx.drain}), раз в
+ * {@link #DRAIN_EVERY_NS} кадр слива: перед каждой меткой glFinish — работа до неё вся кончилась, и
  * проходы на нём точны. Квадраты — один отсортированный вызов, и части внутри него перемешаны по глубине: такой кадр
  * после общего вызова рисует каждую часть ({@link FxQuads.Part}) ещё раз отдельно, тоже со сливом до и после (число
  * пикселей — запросом GL_SAMPLES_PASSED), а кадр перед этим копируется и потом возвращается: на экране — тот же кадр.
- * Кадр слива стоит ещё одни квадраты, две копии кадра и простои видеокарты между проходами (на стенде при 17 к/с это ~3 %
- * кадров: p50 и p95 не сдвигает); в среднее проходов он не идёт.</li>
+ * Кадр слива стоит ещё одни квадраты, две копии кадра и простои видеокарты между проходами — 20–28 мс процессора (look_gate
+ * 25.10, раз в 2 с): рывок, который сам попадал в замер сцен; поэтому сценарии и стенд, что лишь читают строку, его не
+ * делают, и в среднее проходов он не идёт.</li>
  * </ul>
  * Проба идёт, только пока её читают: открыт F3, строку {@link #describe} спрашивали за последние {@link #READ_NS} (стенд,
  * сценарии) или её держат включённой ({@link #always}). Иначе меток нет вовсе (и у {@link GpuTimer} тоже), копии кадра нет.
@@ -50,6 +52,8 @@ public final class LayerTimes {
     private static final int RING = 4, MARKS = Pass.values().length + 1, PASSES = Pass.values().length, PARTS = FxQuads.Part.values().length;
     /** Кадр слива — не чаще. */
     static final long DRAIN_EVERY_NS = 2_000_000_000L;
+    /** Кадр слива попросили запуском (разбор по частям на стенде или в песочнице): {@code -Dincoming.fx.drain=true}. */
+    private static final boolean DRAIN_ASKED = Boolean.getBoolean("incoming.fx.drain");
     /** Проба идёт столько после последнего чтения строки. */
     static final long READ_NS = 5_000_000_000L;
 
@@ -92,7 +96,8 @@ public final class LayerTimes {
     static boolean begin() {
         slot = -1;
         long now = System.nanoTime();
-        on = always || lastRead != 0 && now - lastRead < READ_NS || Minecraft.getInstance().getDebugOverlay().showDebugScreen();
+        boolean f3 = Minecraft.getInstance().getDebugOverlay().showDebugScreen();
+        on = always || lastRead != 0 && now - lastRead < READ_NS || f3;
         if (!on) {
             free();
             return false;
@@ -101,7 +106,7 @@ public final class LayerTimes {
         poll(now);
         if (ISSUED[ring]) return false;
         slot = ring;
-        boolean drain = (lastDrain == 0 || now - lastDrain >= DRAIN_EVERY_NS) && CLOCK.free();
+        boolean drain = drains(f3, DRAIN_ASKED, lastDrain, now) && CLOCK.free();
         DRAINED[slot] = drain;
         PART_SLOT[slot] = -1;
         if (drain) {
@@ -111,6 +116,15 @@ public final class LayerTimes {
         }
         GL33.glQueryCounter(MARK[slot][0], GL33.GL_TIMESTAMP);
         return drain;
+    }
+
+    /**
+     * Будет ли этот кадр кадром слива: только когда его просят — открыт F3 (человек смотрит части) или свойство запуска
+     * ({@link #DRAIN_ASKED}), — и не чаще {@link #DRAIN_EVERY_NS}. Строку пробы читают и сценарии со стендом (метки проходов
+     * им нужны каждый кадр), но рывок слива на их кадрах был бы в их же замере.
+     */
+    static boolean drains(boolean f3, boolean asked, long lastDrain, long now) {
+        return (f3 || asked) && (lastDrain == 0 || now - lastDrain >= DRAIN_EVERY_NS);
     }
 
     /** Конец прохода p (на кадре слива — когда его работа вся кончилась). */
@@ -189,7 +203,7 @@ public final class LayerTimes {
         StringBuilder b = new StringBuilder(String.format(Locale.ROOT, "GPU by pass (ms, mean of %d frames; a pass's tail may spill into the next):",
                 lastFrames));
         passes(b, MEAN);
-        if (exactAt == 0) return b.append("; drained frame: none yet").toString();
+        if (exactAt == 0) return b.append("; drained frame: none (F3 or -Dincoming.fx.drain=true)").toString();
         b.append(String.format(Locale.ROOT, "; drained frame (glFinish at every mark, one in %d s, %.1f s ago):", DRAIN_EVERY_NS / 1_000_000_000L,
                 (System.nanoTime() - exactAt) / 1e9));
         passes(b, EXACT);
