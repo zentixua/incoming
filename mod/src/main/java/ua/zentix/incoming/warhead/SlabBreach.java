@@ -295,24 +295,28 @@ final class SlabBreach {
     }
 
     /**
-     * Опора по оси удара для картинки клиента ({@link S2C.Blast.Support}): заряд {@code tnt} кг ТНТ с центром {@code centre},
+     * Опора у грани удара для картинки клиента ({@link S2C.Blast.Support}): заряд {@code tnt} кг ТНТ с центром {@code centre},
      * приложенный к грани ({@link Placement#SURFACE}), — тот же {@link #locate} и тот же {@link #march}, что у лучей пробоя,
-     * по одному лучу — оси боевой части {@code axis} (нет — вниз). Пусто — заряд не приложен к преграде или ось не входит в
-     * неё (картинка — по материалу). Читает мир сейчас: пакет взрыва уходит раньше лучей (⚠ если преграду до них снесёт
-     * соседний взрыв того же тика, картинка покажет плиту, которой лучи уже не нашли).
+     * по одному лучу — нормали грани внутрь преграды (заряд открыт с обеих сторон — курс {@code axis}, нет — вниз). Не по
+     * курсу: путь сквозь плиту короче всего по нормали, и пробивают её первыми лучи у нормали — у косого удара луч по курсу
+     * проходит t/cos θ и «не пробивал» плиту, которую лучи сносят (ракета под 45° по настилу в 2 м камня: 2,8 м по курсу при
+     * R 2,7 м — дыра ~1,8 м). Нормаль — ось дыры (у ровной плиты дыра лучей — круг √(R² − t²) около неё). Пусто — заряд не
+     * приложен к преграде (картинка — по материалу). Читает мир сейчас: пакет взрыва уходит раньше лучей (⚠ если преграду до
+     * них снесёт соседний взрыв того же тика, картинка покажет плиту, которой лучи уже не нашли). ⚠ Один луч: у неровной
+     * преграды (заряд над стеной под перекрытием) нормаль может упереться в толщу, а косые лучи — пробить рядом.
      */
     static Optional<S2C.Blast.Support> support(ServerLevel level, Vec3 centre, double tnt, @Nullable Vec3 axis, Explosion e,
                                                ExplosionDamageCalculator damage) {
         Origin o = locate(level, centre, tnt, Placement.SURFACE, axis, e, damage);
         if (o == null) return Optional.empty();
-        Vec3 d = axis != null && axis.lengthSqr() > 1e-9 ? axis.normalize() : S2C.Blast.DOWN;
-        if (!o.inward(d.x, d.y, d.z)) return Optional.empty();
+        Vec3 n = o.open() != null ? o.open().scale(-1) : axis != null && axis.lengthSqr() > 1e-9 ? axis.normalize() : S2C.Blast.DOWN;
         LongArrayList path = new LongArrayList();
         double[] used = new double[2];
-        double out = march(level, o, d.x, d.y, d.z, e, damage, path, new boolean[1], used);
-        // то, во что попал, — первый блок преграды на оси; на оси её нет (непробиваемое сразу у грани) — связное
+        double out = march(level, o, n.x, n.y, n.z, e, damage, path, new boolean[1], used);
+        // то, во что попал, — первый блок преграды на нормали; её там нет (непробиваемое сразу у грани) — связное
         boolean loose = !path.isEmpty() && material(level.getBlockState(BlockPos.of(path.getLong(0)))) == BreachModel.Material.EARTH;
-        if (out < 0 || used[0] <= 0) return Optional.of(new S2C.Blast.Support(loose, 0, 0));
-        return Optional.of(new S2C.Blast.Support(loose, (float) used[1], (float) (used[1] / used[0])));
+        float lift = (float) centre.subtract(o.at()).dot(n);
+        if (out < 0 || used[0] <= 0) return Optional.of(new S2C.Blast.Support(loose, 0, 0, n, lift));
+        return Optional.of(new S2C.Blast.Support(loose, (float) used[1], (float) (used[1] / used[0]), n, lift));
     }
 }

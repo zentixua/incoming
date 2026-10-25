@@ -411,6 +411,37 @@ class FxAtlasTest {
     static final String[] CLUB_SETS = {"puff", "eject", "crush", "air"};
 
     /**
+     * Кадр клуба любого вида на листе — пиксель в пиксель: место кадра (и отражённого) по u и v — ровно размер картинки
+     * запекания ({@code <имя>6.json} «tile») в пикселях листа {@link FxAtlas#WIDTH}×{@link FxAtlas#HEIGHT}, начало — на целом
+     * пикселе. По этому масштабу берут уровень копий клуба по пикселям на тексель (FxQuads, тред FPS, #455): кадр другого
+     * масштаба взял бы не тот уровень.
+     */
+    @Test
+    void clubFramesMapOneTexelToOneSheetPixel() throws IOException {
+        for (ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look : ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look.values()) {
+            String name = switch (look) {
+                case SMOKE -> "puff6.json";
+                case EJECTA -> "eject6.json";
+                case CRUSH -> "crush6.json";
+                case AIRBURST -> "air6.json";
+            };
+            int tile = json(name).get("tile").getAsInt();
+            for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
+                for (boolean mirror : new boolean[]{false, true}) {
+                    FxAtlas.Sprite f = FxAtlas.club(look, i, mirror);
+                    String what = look + " " + i + (mirror ? " отражён" : "");
+                    assertEquals(tile, Math.abs(f.u1() - f.u0()) * FxAtlas.WIDTH, 1e-3, what + ": по u");
+                    assertEquals(tile, Math.abs(f.v1() - f.v0()) * FxAtlas.HEIGHT, 1e-3, what + ": по v");
+                    double x = Math.min(f.u0(), f.u1()) * FxAtlas.WIDTH, y = Math.min(f.v0(), f.v1()) * FxAtlas.HEIGHT;
+                    assertEquals(Math.rint(x), x, 1e-3, what + ": начало по u — не на пикселе");
+                    assertEquals(Math.rint(y), y, 1e-3, what + ": начало по v — не на пикселе");
+                    assertEquals(mirror, f.u1() < f.u0(), what + ": отражение — обратным u");
+                }
+            }
+        }
+    }
+
+    /**
      * Клубы других готовых симуляций ({@code bake.py clubs-vdb}): те же 16 кадров по три карты 128, что у дыма, в мере дыма
      * (одна нормировка карт на все клубы слоя); рост с 1 не убывает; доля жизни — от 0 до 1 не убывает (кадр явления —
      * {@link FxAtlas#lifeFrame}); мелкая структура есть; места на листе — в шаге кадров шейдера от начала кадров дыма и не

@@ -318,10 +318,11 @@ player what it found, so a roof looks like a roof at any distance, and only wher
 - **Stone, concrete, brick or planks on solid ground:** no cone of earth. The crater in rock is smaller, and what the
   charge crushes rises as dust of its own colour: light grey from stone and concrete, darker from deepslate, the colour
   of mortar from masonry, ochre sawdust from planks. Chips fly on short arcs; fragments strike sparks on stone.
-- **A slab over empty space** (a roof, a bridge deck, a floor) that the charge breaks through: pieces fly up from the
-  top and onward along the line of flight into the space behind (down under a roof, sideways through a wall), and dust
-  of the slab's material comes out of the hole. A Shahed through a metre of planks drives the pieces behind it at about
-  30 m/s. Where the hot gas goes inside a room is not modelled.
+- **A slab over empty space** (a roof, a bridge deck, a floor) that the charge breaks through: pieces fly off the face
+  that was hit, and the back of the slab is punched straight out of its far side into the space behind, at any angle
+  of the hit (down under a roof, sideways through a wall): the blast pushes the plate square to its face. Dust of the
+  slab's material comes out of the hole. A Shahed through a metre of planks drives the pieces behind it at about
+  30 m/s (an estimate, the upper bound of the Gurney formula). Where the hot gas goes inside a room is not modelled.
 - **Water:** the column of spray below.
 - **In the air** (an interceptor, a hit high above the ground): a ball of hot gas centred where it burst, with no
   crater, no earth and no column of dust under it.

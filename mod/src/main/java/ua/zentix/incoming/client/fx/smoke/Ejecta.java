@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.fx.smoke;
 
+import net.minecraft.world.phys.Vec3;
+
 /**
  * Баллистический выброс воронки рыхлого грунта — завеса струй, что поднимается из воронки и падает назад, без Minecraft.
  * Метры, секунды, килограммы. Один закон с комьями-частицами вблизи ({@code BlastEffects.ejecta}): скорость и место
@@ -57,6 +59,36 @@ public final class Ejecta {
         vMax = speed(uMin);
         settled = flight(speed(uMin + 0.1 * (1 - uMin)), Math.toRadians(ANGLE_DEG));
         life = flight(vMax, Math.toRadians(ANGLE_DEG + SPREAD_DEG));
+    }
+
+    /** Приёмник кусков: место вылета (м, мир) и скорость, м/с. */
+    public interface Pieces {
+        void piece(Vec3 at, Vec3 velocity);
+    }
+
+    /**
+     * {@code n} кусков этого выброса с грани в {@code origin}, наружу — {@code up} (у воронки — вверх, у лица пробитой плиты —
+     * против оси дыры): тот же закон, что у завесы — доля объёма u равномерно, место вылета R·u^⅓ на грани, скорость
+     * {@link #speed}, угол к грани {@value #ANGLE_DEG}° ± {@value #SPREAD_DEG}°, азимут равномерно; кусок вылетает в полуметре
+     * над гранью (не в её блоке). Тяжесть — у частицы (вниз мира).
+     */
+    public void pieces(Vec3 origin, Vec3 up, int n, java.util.function.DoubleSupplier random, Pieces out) {
+        Vec3 u0 = up.normalize();
+        Vec3[] across = across(u0);
+        for (int i = 0; i < n; i++) {
+            double u = uMin + (1 - uMin) * random.getAsDouble();
+            double v = speed(u);
+            double el = Math.toRadians(ANGLE_DEG + (random.getAsDouble() * 2 - 1) * SPREAD_DEG), az = random.getAsDouble() * Math.PI * 2;
+            Vec3 side = across[0].scale(Math.cos(az)).add(across[1].scale(Math.sin(az)));
+            out.piece(origin.add(side.scale(from(u))).add(u0.scale(0.5)), side.scale(Math.cos(el) * v).add(u0.scale(Math.sin(el) * v)));
+        }
+    }
+
+    /** Два единичных вектора поперёк единичного {@code n} и друг друга. */
+    public static Vec3[] across(Vec3 n) {
+        Vec3 ref = Math.abs(n.y) < 0.9 ? new Vec3(0, 1, 0) : new Vec3(1, 0, 0);
+        Vec3 a = n.cross(ref).normalize();
+        return new Vec3[]{a, n.cross(a).normalize()};
     }
 
     /** Скорость элемента доли объёма u (от середины воронки), м/с: v = v_края·u^(−1/(3μ)). */

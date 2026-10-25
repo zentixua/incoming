@@ -35,7 +35,7 @@ public final class S2C {
      * в его паспорте, клиент берёт их оттуда ({@code client.fx.BlastSource}); ось боевой части (курс снаряда у удара,
      * единичный вектор): по ней и сиду клиент разлетает те же осколки, что сервер ({@code warhead.FragmentModel}).
      * <p>
-     * Опора по оси удара ({@link Support}) — то, что о преграде знает пробой сервера: во что попал заряд и плита ли это над
+     * Опора у грани удара ({@link Support}) — то, что о преграде знает пробой сервера: во что попал заряд и плита ли это над
      * пустотой, которую он пробивает. Клиент выбирает по ней картинку цели ({@code client.fx.smoke.BlastTarget}).
      * <p>
      * Формат только растёт с конца (replay.md): оружие и ось дописаны в конец; в повторе, записанном до него, его нет
@@ -92,16 +92,27 @@ public final class S2C {
         }
 
         /**
-         * Опора по оси удара — итог пробоя сервера по одному лучу, оси боевой части ({@code warhead.SlabBreach#support}): тот
-         * же закон, те же блоки и то же правило «пустота под перекрытием», что у лучей, которые сносят плиту.
+         * Опора у грани удара — итог пробоя сервера по одному лучу, нормали грани внутрь преграды ({@code warhead.SlabBreach#support}):
+         * тот же закон, те же блоки и то же правило «пустота под перекрытием», что у лучей, которые сносят плиту.
          *
          * @param loose  то, во что попал заряд, — рыхлое (группа пробоя «земля», FM 5-250 табл. B-3)
-         * @param slab   толщина плиты до пустоты под перекрытием по оси, м; 0 — не пробита (толща, грунт, пустота под небом)
+         * @param slab   толщина плиты до пустоты под перекрытием по нормали, м; 0 — не пробита (толща, грунт, пустота под небом)
          * @param breach радиус пробоя плиты у этого заряда по её блокам (путь / сумма путей, делённых на радиус каждого), м
+         * @param normal нормаль грани внутрь преграды (единичная): ось дыры и тыльного откола
+         * @param lift   на сколько точка взрыва ушла за грань по нормали, м (точка прицела — полблока в блок): заряд лежит в
+         *               {@code pos − normal·lift}
          */
-        public record Support(boolean loose, float slab, float breach) {
+        public record Support(boolean loose, float slab, float breach, Vec3 normal, float lift) {
+            private static final StreamCodec<ByteBuf, Vec3> NORMAL = StreamCodec.composite(ByteBufCodecs.FLOAT, v -> (float) v.x,
+                    ByteBufCodecs.FLOAT, v -> (float) v.y, ByteBufCodecs.FLOAT, v -> (float) v.z, Vec3::new);
             public static final StreamCodec<ByteBuf, Support> CODEC = StreamCodec.composite(
-                    ByteBufCodecs.BOOL, Support::loose, ByteBufCodecs.FLOAT, Support::slab, ByteBufCodecs.FLOAT, Support::breach, Support::new);
+                    ByteBufCodecs.BOOL, Support::loose, ByteBufCodecs.FLOAT, Support::slab, ByteBufCodecs.FLOAT, Support::breach,
+                    NORMAL, Support::normal, ByteBufCodecs.FLOAT, Support::lift, Support::new);
+
+            /** Опора у грани сверху (нормаль вниз, заряд на грани). */
+            public Support(boolean loose, float slab, float breach) {
+                this(loose, slab, breach, DOWN, 0);
+            }
         }
 
         /**

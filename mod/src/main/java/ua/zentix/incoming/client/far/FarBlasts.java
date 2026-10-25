@@ -381,14 +381,17 @@ public final class FarBlasts {
     }
 
     /**
-     * Во что попал заряд ({@link BlastTarget}): материал пакета и опора по оси удара из пакета ({@link S2C.Blast.Support}) —
-     * её считает пробой сервера тем же лучом, что сносит плиту ({@code warhead.SlabBreach#support}): плита над пустотой — та
-     * и только та, которую сервер пробивает, на любой дистанции (у клиента вдали блоков нет, у сервера — есть). Опоры в
+     * Во что попал заряд ({@link BlastTarget}): материал пакета и опора у грани удара из пакета ({@link S2C.Blast.Support}) —
+     * её считает пробой сервера тем же правилом, что сносит плиту, лучом по нормали грани ({@code warhead.SlabBreach#support}):
+     * плита над пустотой — та и только та, которую сервер пробивает, на любой дистанции (у клиента вдали блоков нет, у сервера
+     * — есть); место заряда на грани и нормаль — ось дыры и откола. Опоры в
      * пакете нет (повтор до этого поля, взрыв без сервера, заряд не приложен к преграде) — по веществу материала, опора
      * сплошная.
      */
     static BlastTarget target(S2C.Blast p, GroundMaterial material, double tnt, double hob) {
-        return p.support().map(s -> BlastTarget.of(material, s.loose(), s.slab(), s.breach(), tnt, hob))
+        // заряд лежит на грани: точка взрыва — за ней по нормали на lift (точка прицела — полблока в блок)
+        return p.support().map(s -> BlastTarget.of(material, s.loose(), s.slab(), s.breach(), p.pos().subtract(s.normal().scale(s.lift())),
+                        s.normal(), tnt, hob))
                 .orElseGet(() -> BlastTarget.of(material, tnt, hob));
     }
 

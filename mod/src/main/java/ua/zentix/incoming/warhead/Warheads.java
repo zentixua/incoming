@@ -457,12 +457,21 @@ public final class Warheads {
 
     /** Проверки: заряд {@code tntKg} кг ТНТ, приложенный к грани (как боевая часть, ударившая в неё), с районом {@code reach}. */
     public static Probe testSurfaceCharge(ServerLevel level, Vec3 at, double tntKg, double reach) {
-        return testPlaced(level, at, tntKg, SlabBreach.Placement.SURFACE, reach);
+        return testSurfaceCharge(level, at, tntKg, reach, S2C.Blast.DOWN);
+    }
+
+    /** Проверки: то же с курсом боевой части {@code axis} у удара (косой удар, удар в стену сбоку). */
+    public static Probe testSurfaceCharge(ServerLevel level, Vec3 at, double tntKg, double reach, Vec3 axis) {
+        return testPlaced(level, at, tntKg, SlabBreach.Placement.SURFACE, reach, axis);
     }
 
     private static Probe testPlaced(ServerLevel level, Vec3 at, double tntKg, SlabBreach.Placement placement, double reach) {
+        return testPlaced(level, at, tntKg, placement, reach, S2C.Blast.DOWN);
+    }
+
+    private static Probe testPlaced(ServerLevel level, Vec3 at, double tntKg, SlabBreach.Placement placement, double reach, Vec3 axis) {
         BlastArea area = BlastArea.hold(level, at, reach);
-        Probe probe = new Probe(charge(level, area, at, tntKg, placement, S2C.Blast.DOWN, null, null));
+        Probe probe = new Probe(charge(level, area, at, tntKg, placement, axis, null, null));
         area.release(level);
         return probe;
     }

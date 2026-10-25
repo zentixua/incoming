@@ -117,9 +117,9 @@ and in each archive's `LICENSE.txt` and `README.txt`:
 
 ```sh
 blender --background --factory-startup --python tools/bake_fx/bake.py -- /path/to/bake clubs-vdb --kind eject \
-  --vdb /path/to/DustImpact/DustImpactVDB --view top --round --tile 160 --samples 96 --frames 9,15,…,99
-blender … clubs-vdb --kind crush --vdb /path/to/Building_Implosion_01 --view top --round --frames 9,11,…,39
-blender … clubs-vdb --kind air --vdb /path/to/Midair_Explosion_01 --view side --frames 6,9,…,48,49
+  --vdb /path/to/DustImpact/DustImpactVDB --view top --round --tile 160 --samples 96 --cpu --frames 9,15,…,99
+blender … clubs-vdb --kind crush --vdb /path/to/Building_Implosion_01 --view top --round --tile 160 --samples 96 --cpu --frames 9,11,…,39
+blender … clubs-vdb --kind air --vdb /path/to/Midair_Explosion_01 --view side --tile 160 --samples 96 --cpu --frames 6,9,…,48,49
 uv run tools/bake_fx/pack.py /path/to/bake
 ```
 

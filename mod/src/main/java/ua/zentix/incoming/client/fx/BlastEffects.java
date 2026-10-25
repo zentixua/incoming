@@ -280,75 +280,68 @@ public final class BlastEffects {
 
         /**
          * Выброс по цели модели облака ({@link BlastTarget}): у грунта — комья воронки, у твёрдого — сколы её (связной) чаши, у
-         * плиты над пустотой — обломки пролома вверх и вниз (вниз — по оси удара {@code axis}; нет — вниз), у воды — струи, у
-         * разрыва в воздухе — ничего (грунта под ним нет; прежде комья летели и у разрыва над крышей, physics.md фронта F). Пыль —
-         * облако модели, завеса зёрен — его событие; кусками летит только своя доля выброса ({@link BlastTarget#clods}).
+         * плиты над пустотой — обломки пролома с лица и с тыла, у воды — струи, у разрыва в воздухе — ничего (грунта под ним нет;
+         * прежде комья летели и у разрыва над крышей, physics.md фронта F). Пыль — облако модели, завеса зёрен — его событие;
+         * кусками летит только своя доля выброса ({@link BlastTarget#clods}).
          */
-        void ejecta(ClientLevel level, CloudModel model, @Nullable Vec3 axis) {
+        void ejecta(ClientLevel level, CloudModel model) {
             BlastTarget t = model.target;
             double tnt = model.source.chargeKg();
             switch (t.family()) {
                 case WATER -> splash(level, tnt);
-                case SOIL, HARD -> ejecta(level, CraterModel.chargeRadius(tnt, mat.soil()), t.clodVolume(tnt));
-                case SLAB -> slab(level, t, tnt, axis == null || axis.lengthSqr() < 1e-9 ? S2C.Blast.DOWN : axis.normalize());
+                case SOIL, HARD -> pieces(level, new Ejecta(CraterModel.chargeRadius(tnt, mat.soil()), 0, 0), pos, UP, t.clodVolume(tnt));
+                case SLAB -> slab(level, t, tnt);
                 case AIR -> {
                 }
             }
         }
 
         /**
-         * Выброс воронки радиусом {@code rc} и объёмом {@code volume} м³ с основанием в {@link #pos} — законом выброса
-         * {@link Ejecta} (Housen и др. 1983: место вылета, скорость, угол — те же, что у завесы слоя эффектов). Частица — кусок
-         * или горсть зёрен: число — объём чаши на ком {@link #CLOD_M3} (счёт представления массы, а не дробления).
+         * Куски выброса {@code law} объёмом {@code volume} м³ с грани в {@code origin} наружу {@code up} ({@link Ejecta#pieces}:
+         * место вылета, скорость и угол — те же, что у завесы слоя эффектов). Частица — кусок или горсть: число — объём на ком
+         * {@link #CLOD_M3} (счёт представления массы, а не дробления).
          */
-        void ejecta(ClientLevel level, double rc, double volume) {
-            if (rc <= 0) return;
-            int n = (int) Math.min(MAX_CLODS, Math.round(volume / CLOD_M3 * Fx.density(pos)));
-            Ejecta law = new Ejecta(rc, 0, 0);
-            double uMin = Math.pow(Ejecta.FROM, 3);
+        void pieces(ClientLevel level, Ejecta law, Vec3 origin, Vec3 up, double volume) {
+            if (law.radius <= 0) return;
             BlockState clod = mat.particleBlock();
-            for (int i = 0; i < n; i++) {
-                double u = uMin + (1 - uMin) * random.nextDouble();
-                double v = law.speed(u) / 20;
-                double el = Math.toRadians(Ejecta.ANGLE_DEG + (random.nextDouble() * 2 - 1) * Ejecta.SPREAD_DEG), az = random.nextDouble() * Math.PI * 2;
-                double from = law.from(u);
-                Vec3 at = pos.add(Math.cos(az) * from, 0.5, Math.sin(az) * from);
-                int life = (int) Math.ceil(2 * v * Math.sin(el) / GRAVITY) + 20;
-                Clod p = new Clod(level, at, clod, life);
-                p.setParticleSpeed(Math.cos(az) * Math.cos(el) * v, Math.sin(el) * v, Math.sin(az) * Math.cos(el) * v);
-                Minecraft.getInstance().particleEngine.add(p);
-            }
+            law.pieces(origin, up, count(volume), random::nextDouble, (at, v) -> spawn(level, clod, at, v, 0));
         }
 
         /**
-         * Обломки пролома плиты над пустотой: лицевая крошка — вверх тем же законом выброса, что у воронки радиуса пролома (⚠
-         * своего закона крошки лицевой грани в моде нет), тыльный откол — с тыльной грани в пустоту по оси удара {@code d}
-         * (единичный вектор: в крышу — вниз, в стену — вбок), со скоростью пробки по Гёрни ({@link BlastTarget#plugSpeed}) в
-         * конусе ±{@value #SPALL_CONE_DEG}° (⚠ оценка) около оси. Кусками — весь выброс пролома без пыли
-         * ({@link BlastTarget#clodVolume}), поровну спереди и сзади (⚠ доли нет в источниках: physics.md фронта F — дробление
-         * спереди и откол сзади, без чисел).
+         * Обломки пролома плиты над пустотой: лицевая крошка — с грани заряда наружу, против оси дыры, тем же законом выброса,
+         * что у воронки радиуса пролома (⚠ своего закона крошки лицевой грани в моде нет); тыльный откол — из дыры на тыльной
+         * грани по оси дыры ({@link BlastTarget#spall}: нормаль пробитой грани — у крыши вниз, у стены вбок; скорость пробки по
+         * Гёрни). Кусками — весь выброс пролома без пыли ({@link BlastTarget#clodVolume}), поровну спереди и сзади (⚠ доли нет в
+         * источниках: physics.md фронта F — дробление спереди и откол сзади, без чисел). Места заряда на грани нет (опоры в
+         * пакете нет) — крошка с точки взрыва, откола нет.
          */
-        void slab(ClientLevel level, BlastTarget t, double tnt, Vec3 d) {
-            double volume = t.clodVolume(tnt);
-            int n = (int) Math.min(MAX_CLODS, Math.round(volume / CLOD_M3 * Fx.density(pos)));
-            if (n <= 0) return;
-            ejecta(level, t.hole(), volume / 2);
-            double v = t.plugSpeed(tnt) / 20, cone = Math.toRadians(SPALL_CONE_DEG);
-            // поперёк оси — два единичных вектора (u, w): круг пролома на тыльной грани и наклон в конусе
-            Vec3 u = Math.abs(d.y) < 0.9 ? d.cross(new Vec3(0, 1, 0)).normalize() : d.cross(new Vec3(1, 0, 0)).normalize(), w = d.cross(u);
-            Vec3 back = pos.add(d.scale(t.slab() + 0.3));
+        void slab(ClientLevel level, BlastTarget t, double tnt) {
+            double half = t.clodVolume(tnt) / 2;
+            pieces(level, new Ejecta(t.hole(), 0, 0), t.face() != null ? t.face() : pos, t.normal().scale(-1), half);
             BlockState piece = mat.particleBlock();
-            for (int i = 0; i < n / 2; i++) {
-                double a = random.nextDouble() * Math.PI * 2, tilt = cone * Math.sqrt(random.nextDouble()), r = t.hole() * Math.sqrt(random.nextDouble());
-                Vec3 side = u.scale(Math.cos(a)).add(w.scale(Math.sin(a)));
-                Vec3 at = back.add(side.scale(r));
-                Vec3 dir = d.scale(Math.cos(tilt)).add(side.scale(Math.sin(tilt)));
-                double speed = v * (0.7 + 0.6 * random.nextDouble());
-                Clod p = new Clod(level, at, piece, 100);
-                p.setParticleSpeed(dir.x * speed, dir.y * speed, dir.z * speed);
-                Minecraft.getInstance().particleEngine.add(p);
-            }
+            // откол летит в пустоту под плитой — до пола; срок с запасом (5 с, как прежде)
+            t.spall(tnt, count(half), random::nextDouble, (p, v) -> spawn(level, piece, p, v, 100));
         }
+
+        /** Частиц на объём {@code m3}: ком {@link #CLOD_M3}, с плотностью частиц игрока, не больше {@link #MAX_CLODS}. */
+        private int count(double m3) {
+            return (int) Math.min(MAX_CLODS, Math.round(m3 / CLOD_M3 * Fx.density(pos)));
+        }
+
+        /**
+         * Кусок с места {@code at} со скоростью {@code v} (м/с): живёт до возврата на высоту вылета и ещё секунду, но не меньше
+         * {@code least} тиков.
+         */
+        private void spawn(ClientLevel level, BlockState block, Vec3 at, Vec3 v, int least) {
+            Vec3 tick = v.scale(1 / 20.0);
+            int life = (int) Math.ceil(2 * Math.max(tick.y, 0) / GRAVITY) + 20;
+            Clod p = new Clod(level, at, block, Math.max(life, least));
+            p.setParticleSpeed(tick.x, tick.y, tick.z);
+            Minecraft.getInstance().particleEngine.add(p);
+        }
+
+        /** Вверх мира. */
+        static final Vec3 UP = new Vec3(0, 1, 0);
 
         /**
          * Взрыв на воде: столб брызг и водяная пыль — облако модели ({@link ua.zentix.incoming.client.fx.smoke.WaterBlast}
@@ -388,8 +381,6 @@ public final class BlastEffects {
     /** Ком грунта выброса — объём, м³ (ком ~25 см; оценка), и больше комьев на взрыв не бывает (бюджет частиц). */
     static final double CLOD_M3 = 0.25 * 0.25 * 0.25;
     static final int MAX_CLODS = 1200;
-    /** Конус тыльного откола плиты около оси удара, градусы (⚠ оценка). */
-    static final double SPALL_CONE_DEG = 30;
     /** Тяжесть, м/с², и она же в блоках за тик². */
     static final double G = 9.80665, GRAVITY = G / 400;
 
@@ -438,15 +429,11 @@ public final class BlastEffects {
         /** Снаряд РСЗО: звук свой — сухой разрыв. */
         private final boolean rocket;
         private final FragmentQueue fragments;
-        /** Ось боевой части (курс у удара): по ней — тыльный откол пробитой плиты; null — вниз. */
-        @Nullable
-        private final Vec3 axis;
 
         Drone(Vec3 pos, GroundMaterial mat, long seed, @Nullable Vec3 axis, boolean rocket, CloudModel model) {
             super(pos, mat, seed, model.source);
             this.rocket = rocket;
             this.model = model;
-            this.axis = axis;
             this.fragments = new FragmentQueue(pos, axis, seed, model.source);
         }
 
@@ -465,7 +452,7 @@ public final class BlastEffects {
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 2, 1, 2, 0, 30);
                 return true;
             }
-            if (t == 1) ejecta(level, model, axis);
+            if (t == 1) ejecta(level, model);
             // топливо, что не сгорело шаром, горит в воронке огнём Minecraft на блоках (сервер, `FuelFires`): его дым и звук
             // приходят пакетом с этими блоками (`fuelFire`)
             crater(model, pos, t, rocket ? 1.25f : 1.1f);
@@ -526,14 +513,10 @@ public final class BlastEffects {
         private final CloudModel model;
 
         private final FragmentQueue fragments;
-        /** Ось боевой части: по ней — тыльный откол пробитой плиты; null — вниз. */
-        @Nullable
-        private final Vec3 axis;
 
         Missile(Vec3 pos, GroundMaterial mat, long seed, @Nullable Vec3 axis, CloudModel model) {
             super(pos, mat, seed, model.source);
             this.model = model;
-            this.axis = axis;
             this.fragments = new FragmentQueue(pos, axis, seed, model.source);
         }
 
@@ -551,7 +534,7 @@ public final class BlastEffects {
                 Particles.burst(level, ParticleTypes.LAVA, pos.add(0, 1, 0), 4, 2, 4, 0, 80);
                 return true;
             }
-            if (t == 1) ejecta(level, model, axis);
+            if (t == 1) ejecta(level, model);
             // вторичных подрывов нет: вторичное — топливо в воронке (огонь на блоках сервера) и горящие обломки сервера
             crater(model, pos, t, 0.9f);
             return t < 340;
@@ -592,7 +575,7 @@ public final class BlastEffects {
                     // вспышка — над воронкой, комья — по воронке выброса закона (её роет сервер)
                     flash(level, cloud);
                     CraterModel.Soil soil = mat.soil();
-                    ejecta(level, law.craterRadius(soil), law.craterVolume(soil));
+                    pieces(level, new Ejecta(law.craterRadius(soil), 0, 0), pos, UP, law.craterVolume(soil));
                 } else {
                     // под землёй вспышку видно только в самой полости и рядом
                     flash(level, charge, 8, 70, 0.8f);

@@ -7,7 +7,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -252,5 +255,115 @@ public final class BreachGameTests {
             h.assertTrue(near == 4, got);
             h.assertTrue(far == 0, got);
         });
+    }
+
+    /**
+     * Опора пакета ({@link Warheads#support}: вид взрыва у клиента — плита над пустотой или опора) — то же решение, что сделал
+     * пробой сервера этим зарядом ({@code Probe.breached}): взрыв с тем же курсом снимает лучами плиту там и только там, где
+     * опора — плита. {@code cell} — блок площадки, в середину которого удар (точка прицела — полблока в блок); {@code breaks} —
+     * что ждём по закону.
+     */
+    private static void oneDecision(GameTestHelper h, String what, Vec3 at, Vec3 axis, double tnt, boolean breaks) {
+        ServerLevel level = h.getLevel();
+        ChunkPos c = new ChunkPos(BlockPos.containing(at));
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) level.getChunk(c.x + dx, c.z + dz);
+        // опора пакета — до взрыва: пакет уходит раньше лучей
+        S2C.Blast.Support support = Warheads.support(level, at, tnt, axis, null).orElse(null);
+        boolean slab = support != null && support.slab() > 0;
+        Warheads.Probe blast = Warheads.testSurfaceCharge(level, at, tnt, 2 * BreachModel.Material.EARTH.radius(tnt, BreachModel.UNTAMPED) + 4, axis);
+        h.succeedWhen(() -> {
+            h.assertTrue(blast.done(), "взрыв не кончился");
+            String got = String.format(Locale.ROOT, "%s (%.1f кг): опора пакета %s, пробой снёс %d блоков", what, tnt, support, blast.breached());
+            Incoming.LOG.info("BLASTBENCH пробой опора {}", got);
+            h.assertTrue(slab == blast.breached() > 0, got);
+            h.assertTrue(slab == breaks, got);
+        });
+    }
+
+    /** Крыша в один слой {@code roof} над помещением 9×9×3, вырытым в полу площадки; верх крыши — {@link #TOP}. */
+    private static void roof(GameTestHelper h, BlockState roof) {
+        ServerLevel level = h.getLevel();
+        BlockPos top = h.absolutePos(TOP);
+        for (BlockPos p : BlockPos.betweenClosed(top.offset(-4, -3, -4), top.offset(4, -1, 4))) level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+        for (BlockPos p : BlockPos.betweenClosed(top.offset(-5, 0, -5), top.offset(5, 0, 5))) level.setBlock(p, roof, Block.UPDATE_CLIENTS);
+    }
+
+    /**
+     * Ракета (150 кг) под углом паспорта (45° к горизонту) по настилу в 2 м камня над пустотой: R камня 2,7 м — пробит (дыра
+     * ~1,8 м). По курсу путь сквозь настил — 2,8 м, длиннее R: опора по лучу вдоль курса (14f6c04) «не пробивала» то, что лучи
+     * сносят; пробой решают лучи у нормали — по ней и опора.
+     */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
+    public static void obliqueMissileOnTwoMetresOneDecision(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos top = h.absolutePos(TOP);
+        for (BlockPos p : BlockPos.betweenClosed(top.offset(-HALF - 1, -1, -HALF - 1), top.offset(HALF + 1, 0, HALF + 1))) {
+            level.setBlock(p, Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
+        for (BlockPos p : BlockPos.betweenClosed(top.offset(-HALF, -4, -HALF), top.offset(HALF, -2, HALF))) {
+            level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
+        double tnt = WeaponType.MISSILE.spec().charge(), r = BreachModel.Material.ROCK.radius(tnt, BreachModel.UNTAMPED);
+        Vec3 axis = new Vec3(0, -1, 1).normalize();
+        h.assertTrue(r > 2 && r < 2 * Math.sqrt(2), String.format(Locale.ROOT, "проверка пустая: R %.2f м", r));
+        oneDecision(h, "ракета под 45° по 2 м камня", Vec3.atBottomCenterOf(top.above()), axis, tnt, true);
+    }
+
+    /** «Град» (6,4 кг) по метру досок, точка — полблока в крышу: R досок 0,885 м — не пробит. */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
+    public static void gradOnPlanksOneDecision(GameTestHelper h) {
+        double tnt = WeaponType.ROCKET.spec().charge();
+        h.assertTrue(BreachModel.Material.POOR.radius(tnt, BreachModel.UNTAMPED) < 1, "проверка пустая: «Град» пробивает метр досок");
+        roof(h, Blocks.OAK_PLANKS.defaultBlockState());
+        oneDecision(h, "«Град» по доскам", Vec3.atCenterOf(h.absolutePos(TOP)), S2C.Blast.DOWN, tnt, false);
+    }
+
+    /**
+     * Крыша из нижних полублоков (ревью 1, B3): у прежнего зонда клиента — не твёрдое (верх не полная грань), вида крыши не было;
+     * для пробоя блок с формой столкновений — преграда. Шахед — пробит, «Град» — нет.
+     */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
+    public static void droneOnHalfSlabRoofOneDecision(GameTestHelper h) {
+        roof(h, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
+        oneDecision(h, "шахед по полублокам", Vec3.atCenterOf(h.absolutePos(TOP)), S2C.Blast.DOWN, WeaponType.DRONE.spec().charge(), true);
+    }
+
+    /** То же «Градом». */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
+    public static void gradOnHalfSlabRoofOneDecision(GameTestHelper h) {
+        roof(h, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
+        oneDecision(h, "«Град» по полублокам", Vec3.atCenterOf(h.absolutePos(TOP)), S2C.Blast.DOWN, WeaponType.ROCKET.spec().charge(), false);
+    }
+
+    /** Обсидиан (сопротивление 1200, ревью 1, B3 — STOP): заряд его не смещает — не пробит. */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
+    public static void blastProofRoofOneDecision(GameTestHelper h) {
+        roof(h, Blocks.OBSIDIAN.defaultBlockState());
+        oneDecision(h, "шахед по обсидиану", Vec3.atCenterOf(h.absolutePos(TOP)), S2C.Blast.DOWN, WeaponType.DRONE.spec().charge(), false);
+    }
+
+    /**
+     * Стена из камня в метр на полу площадки, удар шахеда сбоку (курс +x с наклоном вниз) в середину блока; за стеной —
+     * пустота. Над ней одна крона (листва, которую не обрывает распад) — открытое небо для пробоя (карта высот без листвы,
+     * ревью 1, B3): опора; под каменным навесом — перекрытие, метр камня пробит (R 1,75 м). Нормаль грани — +x, не курс.
+     */
+    private static void wall(GameTestHelper h, boolean crown) {
+        ServerLevel level = h.getLevel();
+        BlockPos top = h.absolutePos(TOP);
+        for (BlockPos p : BlockPos.betweenClosed(top.offset(0, 1, -6), top.offset(0, 4, 6))) level.setBlock(p, Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+        BlockState over = crown ? Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true) : Blocks.STONE.defaultBlockState();
+        for (BlockPos p : BlockPos.betweenClosed(top.offset(1, 6, -6), top.offset(8, crown ? 7 : 6, 6))) level.setBlock(p, over, Block.UPDATE_CLIENTS);
+        oneDecision(h, crown ? "шахед в стену под кроной" : "шахед в стену под навесом", Vec3.atCenterOf(top.offset(0, 2, 0)),
+                new Vec3(1, -0.3, 0).normalize(), WeaponType.DRONE.spec().charge(), !crown);
+    }
+
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
+    public static void crownOverTheExitOneDecision(GameTestHelper h) {
+        wall(h, true);
+    }
+
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
+    public static void roofOverTheExitOneDecision(GameTestHelper h) {
+        wall(h, false);
     }
 }

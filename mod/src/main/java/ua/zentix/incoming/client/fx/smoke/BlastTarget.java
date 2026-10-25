@@ -1,12 +1,14 @@
 package ua.zentix.incoming.client.fx.smoke;
 
+import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.warhead.BreachModel;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
  * Во что попал заряд — семейство взрыва и вещество цели. Выбирается из того, что клиент знает о месте: материал под точкой
- * ({@code S2C.Blast.material}), опора по оси удара из пакета ({@code S2C.Blast.Support}: плиту над пустотой находит пробой
+ * ({@code S2C.Blast.material}), опора у грани удара из пакета ({@code S2C.Blast.Support}: плиту над пустотой находит пробой
  * сервера, {@link BreachModel}: путь в плите / радиус пробоя её материала ≤ 1 и за ней пустота под перекрытием) и высота над
  * поверхностью ({@code FarBlasts.overSurface}), — а не по тому, крыша это, дорога или земля (решение Артёма 23.10). Без
  * Minecraft: опору из пакета берёт {@code FarBlasts.target}.
@@ -25,10 +27,15 @@ import ua.zentix.incoming.warhead.GroundMaterial;
  *
  * @param family   семейство
  * @param material материал под точкой (пакет взрыва)
- * @param slab   толщина пробитой плиты по оси удара, м (0 — не плита)
+ * @param slab     толщина пробитой плиты по нормали грани, м (0 — не плита)
  * @param hole     радиус пролома плиты, м: √(R² − t²) у радиуса пробоя R (BreachGameTests: дыра √(R² − t²)); 0 — не плита
+ * @param face     где заряд лежит на грани плиты (null — не плита или место не известно)
+ * @param normal   нормаль пробитой грани внутрь плиты — ось дыры (у не плиты — вниз)
  */
-public record BlastTarget(Family family, GroundMaterial material, double slab, double hole) {
+public record BlastTarget(Family family, GroundMaterial material, double slab, double hole, @Nullable Vec3 face, Vec3 normal) {
+    /** Вниз мира: ось у цели без плиты. */
+    static final Vec3 DOWN = new Vec3(0, -1, 0);
+
     /** Семейство взрыва по цели. */
     public enum Family { SOIL, HARD, SLAB, WATER, AIR }
 
@@ -128,7 +135,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
     static final double FINES_CRUSHED = 0.1;
 
     /** Удар в голый рыхлый грунт — как у взрыва без сведений о цели (проверки, прежние вызовы). */
-    public static final BlastTarget SOIL = new BlastTarget(Family.SOIL, GroundMaterial.DIRT, 0, 0);
+    public static final BlastTarget SOIL = new BlastTarget(Family.SOIL, GroundMaterial.DIRT, 0, 0, null, DOWN);
 
     /** Вещество цели. */
     public Matter matter() {
@@ -140,7 +147,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
      * пробивает ({@code slab} > 0), — плита; иначе — по связности того, во что попал: рыхлое — грунт, связное — твёрдое.
      *
      * @param loose рыхлое ли то, во что попал (группа пробоя «земля», FM 5-250 табл. B-3)
-     * @param slab  толщина пробитой плиты над пустотой по оси удара, м (0 — опора сплошная)
+     * @param slab  толщина пробитой плиты над пустотой по нормали грани, м (0 — опора сплошная)
      * @param digs  заряд роет воронку на своей высоте ({@link CloudModel#digs})
      */
     public static Family family(GroundMaterial material, boolean loose, double slab, boolean digs) {
@@ -152,7 +159,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
 
     /** Цель по материалу, без мира (чанка у клиента нет): опора — сплошная, связность — по веществу материала. */
     public static BlastTarget of(GroundMaterial material, double tntKg, double hobM) {
-        return new BlastTarget(family(material, Matter.of(material).loose, 0, CloudModel.digs(tntKg, hobM)), material, 0, 0);
+        return new BlastTarget(family(material, Matter.of(material).loose, 0, CloudModel.digs(tntKg, hobM)), material, 0, 0, null, DOWN);
     }
 
     /**
@@ -160,9 +167,47 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
      * (0 — не дошли до пустоты в пределах пробоя), {@code breach} — радиус пробоя её материала у этого заряда, м.
      */
     public static BlastTarget of(GroundMaterial material, boolean loose, double slab, double breach, double tntKg, double hobM) {
+        return of(material, loose, slab, breach, null, DOWN, tntKg, hobM);
+    }
+
+    /** То же с местом заряда на грани {@code face} и нормалью грани внутрь плиты {@code normal} (опора пакета). */
+    public static BlastTarget of(GroundMaterial material, boolean loose, double slab, double breach, @Nullable Vec3 face, Vec3 normal,
+                                 double tntKg, double hobM) {
         Family f = family(material, loose, slab, CloudModel.digs(tntKg, hobM));
-        double hole = f == Family.SLAB ? Math.sqrt(Math.max(0, breach * breach - slab * slab)) : 0;
-        return new BlastTarget(f, material, f == Family.SLAB ? slab : 0, hole);
+        boolean plate = f == Family.SLAB;
+        double hole = plate ? Math.sqrt(Math.max(0, breach * breach - slab * slab)) : 0;
+        return new BlastTarget(f, material, plate ? slab : 0, hole, plate ? face : null, plate ? normal.normalize() : DOWN);
+    }
+
+    /** Середина дыры на тыльной грани плиты (null — не плита или место заряда не известно). */
+    @Nullable
+    public Vec3 exit() {
+        return face == null ? null : face.add(normal.scale(slab));
+    }
+
+    /** Разлёт тыльного откола около оси дыры, градусы (⚠ оценка). */
+    public static final double SPALL_CONE_DEG = 30;
+
+    /**
+     * {@code n} кусков тыльного откола: из дыры на тыльной грани ({@link #exit}: круг радиуса {@link #hole} поперёк оси
+     * дыры, кусок — в 0,3 м за гранью) по нормали пробитой грани {@link #normal}, а не вниз мира и не курсом боевой части:
+     * плиту толкает давление продуктов, а оно по нормали (сэндвич Гёрни одномерен; импульс самой боевой части — у шахеда
+     * ~200 кг × 50 м/с против пробки ~3,5 т × 29 м/с в метре досок — на порядок меньше, ⚠ им пренебрегаем), и дыра
+     * сервера — около нормали. Скорость — пробки по Гёрни ({@link #plugSpeed}) ±30 % (⚠ разброс — подача), направление —
+     * в конусе ±{@value #SPALL_CONE_DEG}°, наружу от оси с той же стороны, где кусок в дыре. Тяжесть — у частицы. Не плита —
+     * ничего.
+     */
+    public void spall(double tntKg, int n, java.util.function.DoubleSupplier random, Ejecta.Pieces out) {
+        Vec3 exit = exit();
+        if (exit == null || n <= 0) return;
+        double v = plugSpeed(tntKg), cone = Math.toRadians(SPALL_CONE_DEG);
+        Vec3[] across = Ejecta.across(normal);
+        for (int i = 0; i < n; i++) {
+            double a = random.getAsDouble() * Math.PI * 2, tilt = cone * Math.sqrt(random.getAsDouble()), r = hole * Math.sqrt(random.getAsDouble());
+            Vec3 side = across[0].scale(Math.cos(a)).add(across[1].scale(Math.sin(a)));
+            double speed = v * (0.7 + 0.6 * random.getAsDouble());
+            out.piece(exit.add(side.scale(r)).add(normal.scale(0.3)), normal.scale(Math.cos(tilt) * speed).add(side.scale(Math.sin(tilt) * speed)));
+        }
     }
 
     /**
