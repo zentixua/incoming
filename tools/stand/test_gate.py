@@ -429,10 +429,15 @@ class Host(unittest.TestCase):
  20261025    09:09:23       0    1593313   C+G     31      7      -      -      -      -    java
  20261025    09:09:25       0       2778   C+G      -      -      -      -      -      -    kwin_wayland
 """
-    MINE = staticmethod(lambda pid: pid in ("1593313", "1593256"))
+    @staticmethod
+    def mine(pid, name):
+        """Своя cgroup — клиент 1593313 (java) и его KWin 1593256 (client.Host.classify с подставной cgroup)."""
+        h = client.Host.__new__(client.Host)
+        h.own_pid = lambda p: p in ("1593313", "1593256")
+        return h.classify(pid, name)
 
-    def cycles(self, text):
-        p = client.PmonCycles(self.MINE)
+    def cycles(self, text, classify=None):
+        p = client.PmonCycles(classify or self.mine)
         return [c for c in (p.feed(line) for line in text.splitlines()) if c is not None]
 
     def test_pmon_cycles(self):
@@ -451,6 +456,56 @@ class Host(unittest.TestCase):
         self.assertEqual((cs[1]["foreign_sm"], cs[1]["own_sm"]), (37, None))
         self.assertEqual((cs[3]["foreign_sm"], cs[3]["own_sm"]), (2, 31))
 
+    def test_own_client_that_exits_before_its_cycle_closes_stays_own(self):
+        # строка клиента пришла живой, а к строке следующего цикла (она закрывает цикл) JVM уже вышла и её /proc нет:
+        # её 30 % — не чужие, и цикл — замер (тишина на всё окно)
+        alive = {"1593313", "1593256"}
+        h = client.Host.__new__(client.Host)
+        h.own_pid = lambda pid: pid in alive
+        p = client.PmonCycles(h.classify)
+        out = []
+        for t in range(20, 41):
+            stamp = f" 20261025    09:09:{t:02d}       0"
+            out += [p.feed(f"{stamp}       2778   C+G      -      -      -      -      -      -    kwin_wayland")]
+            if t < 40:
+                out += [p.feed(f"{stamp}    1593256   C+G      -      -      0      0      -      -    kwin_wayland"),
+                        p.feed(f"{stamp}    1593313   C+G     30      7      -      -      -      -    java")]
+            if t == 39:
+                alive.clear()           # клиент и его KWin вышли сразу после своей последней строки
+        cs = [c for c in out if c is not None]
+        self.assertEqual(len(cs), 20)
+        self.assertEqual({(c["foreign_sm"], c["own_sm"]) for c in cs}, {(0, 30)})
+        t0 = cs[0]["epoch"] - 1.0
+        h_in = results.host_in([host_sample(t0 + 20, dt=20.0)] + cs, [{"type": "srv", "t_ms": 0.0, "epoch_ms": t0 * 1000}], 0, 20_000)
+        self.assertEqual((h_in["gpu_covered"], h_in["gpu_foreign"]), (1.0, 0))
+        self.assertEqual(results.foreign(h_in), [])
+
+    def test_only_the_drawing_client_confirms_a_cycle(self):
+        # у JVM «-», у своего KWin число (и ноль) — замера нет; JVM нет вовсе — тоже
+        dash = self.PMON.replace("1593313   C+G     16      6", "1593313   C+G      -      -").replace(
+            "1593256   C+G      -      -      0      0", "1593256   C+G      2      0      0      0")
+        cs = self.cycles(dash)
+        self.assertIsNone(cs[0]["own_sm"])
+        self.assertEqual(cs[0]["foreign_sm"], 4)          # свой KWin — не чужой
+        no_jvm = "\n".join(line for line in dash.splitlines() if "1593313" not in line)
+        self.assertTrue(all(c["own_sm"] is None for c in self.cycles(no_jvm)))
+
+    def test_reused_pid_is_classified_again(self):
+        # pid чужого процесса после его выхода достался своему клиенту: пара (pid, имя) другая — решается заново
+        seen = []
+
+        def classify(pid, name):
+            seen.append((pid, name))
+            return client.CLIENT if name == "java" else client.FOREIGN
+        text = """ 20261025    09:09:20       0       4242   C+G     50      1      -      -      -      -    blender
+ 20261025    09:09:21       0       4242   C+G     30      1      -      -      -      -    java
+ 20261025    09:09:22       0       4242   C+G     30      1      -      -      -      -    java
+ 20261025    09:09:23       0       4242   C+G     30      1      -      -      -      -    java
+"""
+        cs = self.cycles(text, classify)
+        self.assertEqual([(c["foreign_sm"], c["own_sm"]) for c in cs], [(50, None), (0, 30), (0, 30)])
+        self.assertEqual(seen, [("4242", "blender"), ("4242", "java")])
+
     def test_pmon_garbage_gives_no_cycles(self):
         self.assertEqual(self.cycles("NVIDIA-SMI has failed\n\n" + self.PMON.splitlines()[0]), [])
 
@@ -464,7 +519,7 @@ class Host(unittest.TestCase):
             old = os.environ["PATH"]
             os.environ["PATH"] = d + os.pathsep + old
             try:
-                w = client.GpuWatch(self.MINE).start()
+                w = client.GpuWatch(self.mine).start()
                 w.thread.join(timeout=10)
                 cs = w.stop()
             finally:
@@ -475,7 +530,7 @@ class Host(unittest.TestCase):
         h = results.host_in([host_sample(t20 + 1.0, dt=2.0)] + cs, ev, 0, 2000)
         self.assertEqual(h["gpu_covered"], 0.5)        # второй цикл — без числа своего клиента
         self.assertEqual(h["gpu_foreign"], 37)
-        self.assertIsNone(client.GpuWatch(self.MINE).stop() or None)
+        self.assertIsNone(client.GpuWatch(self.mine).stop() or None)
 
 
 class Checks(unittest.TestCase):

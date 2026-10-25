@@ -170,15 +170,20 @@ def power_profile():
 
 class PmonCycles:
     """Строки `nvidia-smi pmon -d 1 -s u -o DT` → циклы видеокарты: {"kind": "gpu", "epoch" (конец цикла, настенные с),
-    "dt" (его длина), "foreign_sm" (% SM чужих процессов, сумма), "who", "own_sm" (% SM своего клиента; None — числа нет)}.
+    "dt" (его длина), "foreign_sm" (% SM чужих процессов, сумма), "who", "own_sm" (% SM своего рисующего клиента — JVM
+    игры; None — числа нет: число его KWin или Xwayland замера не подтверждает)}. Чей процесс — classify(pid, имя) →
+    CLIENT, OWN (своя cgroup, не клиент) или FOREIGN — решается, когда строка пришла, и помнится по паре (pid, имя): цикл
+    кончается только со строкой следующего, а свой клиент к тому времени мог уже выйти (его /proc нет), и тогда он стал
+    бы чужим; тот же pid с другим именем — другой процесс, решается заново.
     Цикл — строки с одним временем; кончается, когда пришла строка следующего (другое время или процесс, что в цикле уже
     был: два цикла в одной секунде); последний, недописанный, — не цикл.
     Время в pmon — до секунды: конец цикла — середина его секунды; длина — до конца прошлого цикла (циклы подряд), после
     пропуска и у первого — PMON_S. «-» у процесса — за цикл у него нет отсчёта SM: так у всех простаивающих (композитор
     рабочего стола, plasmashell, Xwayland), это 0. Есть ли у цикла замер, решает разбор по own_sm (results.host_in)."""
 
-    def __init__(self, own):
-        self.own = own
+    def __init__(self, classify):
+        self.classify = classify
+        self.kinds = {}
         self.key = None
         self.lines = []
         self.prev_end = None
@@ -189,6 +194,9 @@ class PmonCycles:
         if len(f) < 7 or f[0].startswith("#") or not (f[0].isdigit() and f[3].isdigit()):
             return None
         key = (f[0], f[1])
+        who = (f[3], f[-1])
+        if who not in self.kinds:
+            self.kinds[who] = self.classify(*who)
         done = None
         if self.key is not None and (key != self.key or any(x[3] == f[3] for x in self.lines)):
             done = self._cycle()
@@ -208,24 +216,27 @@ class PmonCycles:
         self.prev_end = end
         foreign, who, own = 0, [], None
         for f in self.lines:
-            pid, sm = f[3], f[5]
+            kind, sm = self.kinds[(f[3], f[-1])], f[5]
             if not sm.isdigit():
                 continue
-            if self.own(pid):
+            if kind == CLIENT:
                 own = max(own or 0, int(sm))
-            else:
+            elif kind == FOREIGN:
                 foreign += int(sm)
                 who.append(f"{f[-1]}:{sm}")
         return {"kind": "gpu", "epoch": round(end, 3), "dt": round(dt, 3), "foreign_sm": foreign, "who": who, "own_sm": own}
+
+
+CLIENT, OWN, FOREIGN = "client", "own", "foreign"
 
 
 class GpuWatch:
     """Видеокарта непрерывно: `nvidia-smi pmon -d 1` своим процессом, циклы (PmonCycles) копятся до `drain`. Нет
     nvidia-smi или он упал — циклов нет: окна без них разбор не примет (замера нет — не ноль)."""
 
-    def __init__(self, own):
+    def __init__(self, classify):
         self.cycles, self.lock, self.proc, self.thread = [], threading.Lock(), None, None
-        self.parser = PmonCycles(own)
+        self.parser = PmonCycles(classify)
 
     def start(self):
         try:
@@ -321,6 +332,13 @@ class Host:
             return False
         return self.cg is not None and bool(path) and self.cg == Path("/sys/fs/cgroup") / path
 
+    def classify(self, pid, name):
+        """Процесс видеокарты: рисующий клиент (JVM игры в своей cgroup — «java» у pmon), другой свой (вложенный KWin,
+        его Xwayland) или чужой."""
+        if not self.own_pid(pid):
+            return FOREIGN
+        return CLIENT if name == "java" else OWN
+
     @staticmethod
     def _temp_clock():
         try:
@@ -394,7 +412,7 @@ def run(game, script, size, limit_s, logf, log):
         (game / "stand-out").mkdir(parents=True, exist_ok=True)
         hostf = open(game / "stand-out" / "host.jsonl", "a", encoding="utf-8")
         host = Host()
-        watch = host.gpu = GpuWatch(host.own_pid).start()
+        watch = host.gpu = GpuWatch(host.classify).start()
 
         def sample(phase):
             s, cycles = host.sample(phase)
