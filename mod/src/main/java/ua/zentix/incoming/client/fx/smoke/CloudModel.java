@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.fx.smoke;
 
 import ua.zentix.incoming.client.fx.BlastSource;
+import ua.zentix.incoming.util.LocalWind;
 import ua.zentix.incoming.util.Stability;
 import ua.zentix.incoming.warhead.BuriedBlast;
 import ua.zentix.incoming.nuclear.model.BlackBody;
@@ -159,13 +160,19 @@ public final class CloudModel {
      * Воздух в месте взрыва.
      *
      * @param n       частота Брента–Вяйсяля, 1/с
-     * @param windX   ветер на 10 м по x, м/с
+     * @param windX   ветер на 10 м над полем по x, м/с (ветер мира; у земли места — с {@link #wind})
      * @param windZ   и по z
      * @param shear   показатель степени профиля ветра u(z) = u₁₀·(z/10)^p (0,1 днём, 0,14 — нейтрально, 0,3 ночью)
      * @param spread  класс устойчивости Паскуилла (0 — A … 5 — F)
      * @param humidity влажность 0..1 (облако конденсации)
+     * @param site    ветер у земли места: застройка, кроны, холм ({@link LocalWind}; поле — {@link LocalWind#OPEN})
      */
-    public record Air(double n, double windX, double windZ, double shear, int spread, double humidity) {
+    public record Air(double n, double windX, double windZ, double shear, int spread, double humidity, LocalWind site) {
+        /** В поле. */
+        public Air(double n, double windX, double windZ, double shear, int spread, double humidity) {
+            this(n, windX, windZ, shear, spread, humidity, LocalWind.OPEN);
+        }
+
         /** Стандартная атмосфера без ветра — для проверок. */
         public static final Air STANDARD = of(ua.zentix.incoming.util.Air.CALM, 0.5);
 
@@ -177,13 +184,18 @@ public final class CloudModel {
          * @param humidity влажность в месте взрыва 0..1
          */
         public static Air of(ua.zentix.incoming.util.Air air, double humidity) {
-            double c = air.stability(), u = air.wind().at(10, Stability.alpha(c));
-            return new Air(air.brunt(), u * air.wind().x(), u * air.wind().z(), Stability.alpha(c), (int) Math.round(c), humidity);
+            return of(air, humidity, LocalWind.OPEN);
         }
 
-        /** Ветер на высоте z (м) над землёй: доля ветра на 10 м. */
+        /** То же с ветром у земли места {@code site}. */
+        public static Air of(ua.zentix.incoming.util.Air air, double humidity, LocalWind site) {
+            double c = air.stability(), u = air.wind().at(10, Stability.alpha(c));
+            return new Air(air.brunt(), u * air.wind().x(), u * air.wind().z(), Stability.alpha(c), (int) Math.round(c), humidity, site);
+        }
+
+        /** Ветер на высоте z (м) над поверхностью взрыва: доля ветра на 10 м над полем (с поправкой места). */
         public double wind(double z) {
-            return Math.pow(Math.max(z, 1) / 10, shear);
+            return Math.pow(Math.max(z, 1) / 10, shear) * site.factor(z);
         }
     }
 

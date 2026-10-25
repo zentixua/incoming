@@ -152,6 +152,10 @@ public final class GroundDust {
     /** Радиус юбки к {@link #SKIRT_S}, м (0 — не юбка). */
     private final double skirtR;
     private final int[] annulus;
+    /** Куда клуб сектора идёт в кольце показа (угол, рад) и какая доля дуги сектора там открыта: юбка — по улицам. */
+    private final double[][] heading = new double[SECTORS][ANNULI], openArc = new double[SECTORS][ANNULI];
+    /** Во сколько раз дальше поля юбка сектора уходит по открытому (улица), 1 — поле. */
+    private final double[] reach = new double[SECTORS];
     /** Таблицы по сетке времени: σ по вертикали и ∫dt/(1,25σ) у каждого кольца показа; подсос — доля его времени. */
     private final double[][] sv = new double[ANNULI][STEPS], settled = new double[ANNULI][STEPS];
     private final double[] stemTime = new double[STEPS];
@@ -276,6 +280,15 @@ public final class GroundDust {
                 }
             }
         }
+        for (int k = 0; k < SECTORS; k++) {
+            java.util.Arrays.fill(heading[k], 2 * Math.PI * (k + 0.5) / SECTORS);
+            java.util.Arrays.fill(openArc[k], 1);
+            reach[k] = 1;
+        }
+        // юбку несёт газ вдоль поверхностей: в сторону стены выше удара (дом у улицы) он не идёт, а уходит в открытые
+        // стороны того же кольца — в улицы; иначе на перекрёстке квартала большая часть пыли лежала бы внутри домов, где её
+        // не видно (⚠ оценка: раздача по открытой дуге ровная, стены выше удара на WALL — не пускают)
+        if (skirtKg > 0 && outer > INNER) channel(-hob);
         double sum = 0;
         for (int k = 0; k < SECTORS; k++) for (int i = 0; i < RINGS; i++) if (!ball[k][i]) sum += mass[k][i];
         total = sum;
@@ -324,6 +337,116 @@ public final class GroundDust {
         while (s0 < STEPS && drawn[s0] <= 0) s0++;
         drawnFrom = s0 < STEPS ? time(s0 - 1) : Double.POSITIVE_INFINITY;
         life = lifeSeconds();
+    }
+
+    /** Середина кольца счёта i, м (проверки). */
+    double ring(int i) {
+        return r[i];
+    }
+
+    /** Поднятое кольца i сектора k, кг (проверки). */
+    double mass(int k, int i) {
+        return mass[k][i];
+    }
+
+    /** Стена выше точки удара на столько, м, юбку в свою сторону не пускает (ниже — бордюр, ступень, газ идёт поверх). */
+    static final double WALL = 2;
+
+    /** Выборок рельефа на дуге сектора в кольце: улица в 6 м на 10 м от удара — дуга в 35°, 4 выборки из 45° сектора. */
+    static final int ARC = 9;
+
+    /**
+     * Юбка уходит с дуги кольца, где поверхность (рельеф на радиусе кольца, м от точки взрыва; неизвестна — открыто) выше
+     * {@code source} на {@link #WALL}, на открытую дугу того же кольца — поровну по длине; клуб сектора идёт по середине
+     * его открытой дуги и не шире её. Всё кольцо закрыто (двор, яма) — пыль остаётся, как поднята.
+     */
+    private void channel(double source) {
+        double[][] open = new double[SECTORS][RINGS], angle = new double[SECTORS][RINGS];
+        boolean walled = false;
+        for (int i = 0; i < RINGS; i++) {
+            double ring = 0, all = 0;
+            for (int k = 0; k < SECTORS; k++) {
+                ring += mass[k][i];
+                int n = 0;
+                double sum = 0;
+                for (int j = 0; j < ARC; j++) {
+                    double phi = 2 * Math.PI * (k + (j + 0.5) / ARC) / SECTORS, h = relief.at(r[i] * Math.cos(phi), r[i] * Math.sin(phi));
+                    if (h > source + WALL) continue;
+                    n++;
+                    sum += phi;
+                }
+                open[k][i] = (double) n / ARC;
+                angle[k][i] = n == ARC || n == 0 ? 2 * Math.PI * (k + 0.5) / SECTORS : sum / n;
+                all += open[k][i];
+            }
+            if (all <= 0 || all >= SECTORS || ring <= 0) {
+                for (int k = 0; k < SECTORS; k++) {
+                    open[k][i] = 1;
+                    angle[k][i] = 2 * Math.PI * (k + 0.5) / SECTORS;
+                }
+                continue;
+            }
+            for (int k = 0; k < SECTORS; k++) mass[k][i] = ring * open[k][i] / all;
+            walled = true;
+        }
+        if (!walled) return;
+        // клуб сектора в кольце показа — середина открытой дуги его колец по массе
+        for (int k = 0; k < SECTORS; k++) {
+            double[] m = new double[ANNULI], a = new double[ANNULI], o = new double[ANNULI];
+            for (int i = 0; i < RINGS; i++) {
+                int q = band(r[i]);
+                m[q] += mass[k][i];
+                a[q] += mass[k][i] * angle[k][i];
+                o[q] += mass[k][i] * open[k][i];
+            }
+            for (int q = 0; q < ANNULI; q++) {
+                if (m[q] <= 0) continue;
+                heading[k][q] = a[q] / m[q];
+                openArc[k][q] = o[q] / m[q];
+            }
+        }
+        // газ юбки занимает ту же площадь, что в поле: где расходиться некуда (улица меж домов), он уходит дальше —
+        // как плотный поток в канале. Сектор с долей массы m/M занимает по открытому площадь (m/M)·πR²: дальность —
+        // радиус, до которого открытая площадь сектора её набирает (⚠ оценка: глубина потока та же, что в поле; не дальше
+        // REACH_MAX·R)
+        double whole = 0;
+        double[] sector = new double[SECTORS];
+        for (int k = 0; k < SECTORS; k++) for (int i = 0; i < RINGS; i++) sector[k] += mass[k][i];
+        for (double v : sector) whole += v;
+        if (whole <= 0 || skirtR <= 0) return;
+        for (int k = 0; k < SECTORS; k++) {
+            double need = sector[k] / whole * Math.PI * skirtR * skirtR, got = 0, rho = 0, dr = Math.max(0.5, skirtR / 40);
+            while (got < need && rho < REACH_MAX * skirtR) {
+                double mid = rho + dr / 2;
+                int n = 0;
+                for (int j = 0; j < ARC; j++) {
+                    double phi = 2 * Math.PI * (k + (j + 0.5) / ARC) / SECTORS;
+                    if (!(relief.at(mid * Math.cos(phi), mid * Math.sin(phi)) > source + WALL)) n++;
+                }
+                double add = 2 * Math.PI / SECTORS * mid * dr * n / ARC;
+                if (got + add >= need && add > 0) {
+                    rho += dr * (need - got) / add;
+                    got = need;
+                } else {
+                    got += add;
+                    rho += dr;
+                }
+            }
+            reach[k] = Math.max(1, Math.min(REACH_MAX, rho / skirtR));
+        }
+    }
+
+    /** Дальше скольких радиусов поля юбка по улице не уходит (⚠ оценка: длина квартала и запас газа). */
+    static final double REACH_MAX = 3;
+
+    /** Во сколько раз дальше поля юбка сектора k (проверки). */
+    double reach(int k) {
+        return reach[k];
+    }
+
+    /** Угол клуба сектора k в кольце показа q, рад (проверки). */
+    double heading(int k, int q) {
+        return heading[k][q];
     }
 
     /**
@@ -474,7 +597,7 @@ public final class GroundDust {
     double front(int k, double t) {
         // юбка: край идёт от точки удара ровно, R = 2R₀ к SKIRT_S (Ebersole и др. 1980), за ним — с той же скоростью (пласт
         // дальше растягивает сток, {@link #stretch}); кольца с их серединами по площади фронта не дают
-        if (skirt) return skirtR * Math.max(0, t) / SKIRT_S;
+        if (skirt) return skirtR * reach[k] * Math.max(0, t) / SKIRT_S;
         if (RINGS == 0 || r[RINGS - 1] <= 0 || t <= arrival[k][0]) return 0;
         for (int i = 1; i < RINGS; i++) {
             if (arrival[k][i] > t) return r[i - 1] + (r[i] - r[i - 1]) * (t - arrival[k][i - 1]) / Math.max(arrival[k][i] - arrival[k][i - 1], 1e-9);
@@ -579,7 +702,11 @@ public final class GroundDust {
                 // кольцо показа в секторе — клуб на среднем по массе радиусе; σ — разброс колец по радиусу, не уже дуги сектора;
                 // пласт стекает (радиус и ширина × R/R₀); видимый край (4σ) — не дальше фронта
                 double source = mr[a][k] / mass, var = Math.max(0, mr2[a][k] / mass - source * source);
-                double own = Math.max(Math.sqrt(var), Math.PI * source / SECTORS / 1.25), mean = source * stretch;
+                // юбка по улице — дальше: место и разброс колец по радиусу растянуты на дальность сектора, поперёк — не шире
+                // открытой дуги
+                double own = Math.max(Math.sqrt(var) * reach[k], Math.PI * source / SECTORS / 1.25 * openArc[k][a]);
+                source *= reach[k];
+                double mean = source * stretch;
                 double sh = Math.max(Math.hypot(own * stretch, spread), v), front = front(k, t);
                 if (mean + EDGE_SIGMAS * sh > front) {
                     sh = Math.max((front - mean) / EDGE_SIGMAS, Math.min(sh, Math.max(own, v)));
@@ -587,7 +714,7 @@ public final class GroundDust {
                     // фронт ещё у самой воронки: клубы — у середины, не шире него
                     if (mean + EDGE_SIGMAS * sh > front) sh = Math.max(front / EDGE_SIGMAS, v);
                 }
-                double ang = 2 * Math.PI * (k + 0.5) / SECTORS, ux = Math.cos(ang), uz = Math.sin(ang);
+                double ang = heading[k][a], ux = Math.cos(ang), uz = Math.sin(ang);
                 double[] d = drift(t, zc);
                 double[] at = levels ? level(k, a, t, source, ux, uz, own) : new double[]{surface[k][a], 0, 0};
                 out.blob(d[0] + mean * ux - at[1], at[0] + zc, d[1] + mean * uz - at[2], sh, v, mass * fade, aloft[a][k],

@@ -280,6 +280,12 @@ clumps the whole time, near and far. The air mixes the cloud from the first seco
 The wind is stronger higher up: the top of the cloud runs ahead of its base, and the cloud leans and stretches downwind
 instead of drifting as one ball.
 
+Near the ground the wind also depends on what stands around. Between houses and under trees it is several times weaker
+than over an open field; on a hilltop it is stronger, and in a hollow weaker. So the dust, the haze and the smoke of a
+fire linger in a street for a minute or two, and blow off a hill sooner. The game reads this from the blocks around the
+hit, from the height and spacing of houses and trees, by rules fitted to wind measurements in towns (Macdonald 1998) and
+over hills (Taylor and Lee 1984); the numbers are estimates. A projectile in flight still feels only the wind of the world.
+
 - **Shahed**: a short flash, then a ball of burning petrol about 16 blocks across that burns for about 1.3 seconds and
   glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
   burns for about 2.5 minutes as ordinary fire on about five blocks of the crater floor; at night it lights the ground
@@ -307,7 +313,8 @@ thin column of dust is drawn up under it. An interceptor bursting in the air lea
 bursts low over the ground. Some of the fine dust of what a hit crushes rises with the hot gas. The gas carries the
 rest out of the crater or the hole along the surfaces around as a low surge: within half a second it is tens of blocks
 across (about 30 for a Shahed), born at the level of the hit, and from there it settles, drifts and spills over edges
-like the layer above (the split is an estimate: half in each). Only a small share of crushed stone and concrete is fine
+like the layer above (the split is an estimate: half in each). Walls taller than a person turn the surge into the open
+ground, so at a crossroads it runs down the streets, and farther than in a field: the same gas has less room (an estimate). Only a small share of crushed stone and concrete is fine
 enough to hang in the air, so a Shahed in a street leaves a grey haze you can see through: thick at a few seconds,
 faint by 10–20 s in a breeze, longer in calm air. The wave can also lift dust from the street below where it is still
 strong enough there.
