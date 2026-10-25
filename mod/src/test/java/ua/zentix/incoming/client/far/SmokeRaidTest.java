@@ -493,6 +493,52 @@ class SmokeRaidTest {
     }
 
     /**
+     * Лента — вид трубки уже {@link FarFlightView#PUFFS_FULL} px: полоса с прямыми краями и одним цветом поперёк. В налёте
+     * стенда шлейфы 70 пожаров просили ~8000 мест при 3000, порог ширины (прежний множитель {@code puffScale}) рос к 40-му
+     * кадру в 28–41 раз, и шлейфы шириной до 90–180 px шли лентами: полосы до 212/491/701 px снаружи/с края/внутри — светлые
+     * прямые полосы в кадрах стенда 25.10 (с края — косые). Ни при каком бюджете мест полоса не шире ленты узкой трубки:
+     * широкая часть трубки без мест — в вуали.
+     */
+    @Test
+    void ribbonsAreOnlyNarrowTubes() {
+        double now = 1000;
+        List<SmokeGrid.Source> raid = raid(now);
+        double limit = FarSprites.RIBBON * FarFlightView.PUFFS_FULL * 1.1;
+        StringBuilder all = new StringBuilder();
+        boolean ok = true;
+        for (int c = 0; c < 3; c++) {
+            FarView v = view(c);
+            SmokeFillTest.Screen s = frame(raid, now, v, SmokePuffs.FILL_BUDGET);
+            double widest = 0;
+            int strips = 0;
+            for (double[] p : s.polygons) {
+                if (SmokeFillTest.isFlat(p) || p[12] < 0.002) continue;
+                strips++;
+                widest = Math.max(widest, Math.max(pixels(v, p, 0, 1), pixels(v, p, 2, 3)));
+            }
+            String got = String.format(Locale.ROOT, "%s: полос %d, самая широкая %.1f px (предел %.1f)", NAMES[c], strips, widest, limit);
+            System.out.println("RIBBON WIDTH " + got);
+            all.append(got).append('\n');
+            ok &= widest <= limit;
+        }
+        SmokePuffs.resetBudget();
+        assertTrue(ok, all.toString());
+    }
+
+    /** Расстояние на экране между вершинами i и j многоугольника p (от глаза), пикселей кадра проверок. */
+    private static double pixels(FarView v, double[] p, int i, int j) {
+        Vector3f f = v.forward(), l = v.left(), up = v.up();
+        double[] u = new double[2], w = new double[2];
+        int[] k = {i, j};
+        for (int n = 0; n < 2; n++) {
+            double x = p[3 * k[n]], y = p[3 * k[n] + 1], z = p[3 * k[n] + 2], depth = x * f.x + y * f.y + z * f.z;
+            u[n] = (x * l.x + y * l.y + z * l.z) / depth;
+            w[n] = (x * up.x + y * up.y + z * up.z) / depth;
+        }
+        return Math.hypot(u[0] - u[1], w[0] - w[1]) / SmokeFillTest.PIXEL;
+    }
+
+    /**
      * Ревью #460, круг 2: площадь лежащей пыли план брал прямоугольником на глубине середины, а у квадрата на горизонтали под
      * углом ближний край на экране в разы шире — 300 плоских гауссов (σh 20 м, σv 0,2 м, толща 0,01) в 40 м, глаз на 5 м:
      * план 15,4, квадраты 36,7 экрана. Теперь по четырём вершинам: нарисованное — не больше плана, план — не больше бюджета.

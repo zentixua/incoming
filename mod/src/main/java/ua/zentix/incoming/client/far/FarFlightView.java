@@ -165,7 +165,8 @@ public final class FarFlightView {
      * Каждое место ждёт плана кадра ({@code SmokePuffs.flush}: ~0,5 мкс процессора), а сверх бюджета заливки показать их
      * порознь нельзя: в налёте из 100 ударов при 6000 — 8 мс процессора на дым, при 3000 — 6,5 ({@code SmokeRaidTest}).
      */
-    static final int CLUB_BUDGET = 3000;
+    static int CLUB_BUDGET = 3000;
+    static final int CLUB_DEFAULT = 3000;
     /** Множитель порога ширины трубки для клубов (≥ 1) и клубов в этом кадре. */
     private static double puffScale = 1;
     private static int clubs;
@@ -1038,10 +1039,14 @@ public final class FarFlightView {
      * места ждут плана кадра ({@code SmokePuffs.flush}); tube — трубка (след снаряда, шлейф источника). joint — поперёк ленты
      * у a (NaN — нет, начало ленты), на выходе — у b.
      */
+    /** SMV: временная проба отрезков (только тесты). */
+    static java.util.function.Consumer<double[]> SEG;
+
     static int line(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float cr, float cg, float cb, double shade,
                     double sigma0, long seed, long tube, float[] joint) {
         double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z;
         double gap = FarSprites.distance(a.x, a.y, a.z, tx, ty, tz), scale = puffScale;
+        if (SEG != null) SEG.accept(new double[]{a.x, a.y, a.z, b.x, b.y, b.z, a.sigma, b.sigma, a.width, b.width, gap, a.e, b.e, view.pixel()});
         double puffs = puffShare(Math.max(a.width, b.width) / scale, gap, view.pixel());
         // лента у конца — своей долей у этого конца (у стыка с соседним отрезком та же), а отрезок у самого глаза — без неё
         double keepA = 1 - puffShare(a.width / scale, Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), view.pixel());
@@ -1058,7 +1063,26 @@ public final class FarFlightView {
                 clubs += -held - 1;
                 puffs = 0;
                 keepA = keepB = 1;
-            } else clubs += held;
+                if (SmokePuffs.RIBBON_FIX) SmokePuffs.veilTube(view, out, a, b, puffShare(a.width, Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), view.pixel()),
+                        puffShare(b.width, Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z), view.pixel()), cr, cg, cb);
+            } else {
+                clubs += held;
+                if (SmokePuffs.RIBBON_FIX && scale > 1) {
+                    double da = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), db = Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z);
+                    SmokePuffs.veilTube(view, out, a, b, puffShare(a.width, da, view.pixel()) - puffShare(a.width / scale, da, view.pixel()),
+                            puffShare(b.width, db, view.pixel()) - puffShare(b.width / scale, db, view.pixel()), cr, cg, cb);
+                }
+            }
+        } else if (SmokePuffs.RIBBON_FIX && scale > 1) {
+            double da = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), db = Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z);
+            if (md <= reach || inFrame(view, mx, my, mz, md, reach))
+                SmokePuffs.veilTube(view, out, a, b, puffShare(a.width, da, view.pixel()), puffShare(b.width, db, view.pixel()), cr, cg, cb);
+        }
+        // SMV: лента — только у узкой части (по настоящей ширине): широкая трубка без мест — вуаль
+        if (SmokePuffs.RIBBON_FIX) {
+            keepA = 1 - puffShare(a.width, Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), view.pixel());
+            keepB = 1 - puffShare(b.width, Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z), view.pixel());
+            if (keepA <= 0 && keepB <= 0) return puffs >= 1 ? CLUBS : NONE;
         }
         if (puffs >= 1) return CLUBS;
         // лента — в план кадра, как клубы: её заливка — в бюджете ({@code SmokePuffs.ribbon})

@@ -189,7 +189,7 @@ public final class FarSprites implements SmokePuffs.Out {
                 int a = SmokePuffs.Veil.index(i, j), b = SmokePuffs.Veil.index(i + 1, j), c = SmokePuffs.Veil.index(i + 1, j + 1),
                         d = SmokePuffs.Veil.index(i, j + 1);
                 if (Math.max(Math.max(veil.alpha(a), veil.alpha(b)), Math.max(veil.alpha(c), veil.alpha(d))) < 0.002f) continue;
-                out.quad(key);
+                out.quad(SmokePuffs.VEIL_DEPTH ? Math.max(key, veil.key()) : key);
                 veilCorner(veil, i, j, a, u, v, light);
                 veilCorner(veil, i, j + 1, d, u, v, light);
                 veilCorner(veil, i + 1, j + 1, c, u, v, light);
