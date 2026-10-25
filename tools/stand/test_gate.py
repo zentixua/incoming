@@ -662,7 +662,7 @@ def raw_run(d, name="r", gpu=8.0, renderer="RTX 4060", done=True, label="v3.7.0"
     host = [host_sample(1_000_000.0 + t, dt=1.0, profile=power) for t in range(1, 9)] + gpu_cycles(1_000_000, 1_000_008)
     (d / "none" / "host.jsonl").write_text("\n".join(json.dumps(x) for x in host) + "\n")
     ctx = {"stand": "s", "mods": {}, "packs": {"none": "none"}, "scenes": ["100"], "gpu": "g", "driver": "d", "size": "2560x1600", "java": "21",
-           "kwin": "6.8", "power": "performance", "gl_yield": "USLEEP"}
+           "kwin": "6.8", "power": "performance"}
     (d / "meta.json").write_text(json.dumps({"name": name, "label": label, "jar": {"file": "j", "sha256": "x", "spec": label},
                                              "context": ctx, "key": "k", "started": "t",
                                              "packs": {"none": {"exit": 0, "gpu_minutes": 1.0, "file": None}}}))

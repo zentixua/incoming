@@ -222,12 +222,12 @@ def kwin_version():
 
 def context(packs, scenes_sel, size, files):
     """Всё, кроме jar, от чего зависят числа: стенд, паки и моды (sha512), сцены, видеокарта и драйвер, окно, java
-    клиента (скрипт запуска — уже подготовлен), KWin, профиль питания, как драйвер ждёт видеокарту (__GL_YIELD)."""
+    клиента (скрипт запуска — уже подготовлен), KWin, профиль питания."""
     name, driver = gpu_info()
     return {"stand": stand_hash(), "mods": {m: files[m][1] for m in MODS},
             "packs": {p: files[p][1] if PACKS[p] else "none" for p in packs}, "scenes": scenes_sel or "all",
             "gpu": name, "driver": driver, "size": size, "java": client.java_of(SCRIPT), "kwin": kwin_version(),
-            "power": client.power_profile(), "gl_yield": client.GL_YIELD or "driver"}
+            "power": client.power_profile()}
 
 
 def key(jar_sha, ctx):
