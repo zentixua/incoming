@@ -7,7 +7,7 @@
                                                       пак без прохода — второй парой; вердикт → verdict.json
   stand.py analyze <имя>                              results.json прогона (у пары — каждого из A1, B, A2) из сырых данных
   stand.py gate <имя>                                 вердикт пары заново из сырых данных → verdict.json
-  stand.py pr <номер> [--post]                        PR: jar CI головы парой с принятым выпуском, сцена «100», вердикт;
+  stand.py pr <номер> [--post] [--against <база>]     PR: jar CI головы парой с main, сцена «100», вердикт;
                                                       --post — статус «Стенд сцен» и комментарий
 
 <jar> — выпуск (v3.7.0), `ci:<ветка или SHA>` (артефакт incoming-jar прогона build), путь к jar.
@@ -465,15 +465,20 @@ def cmd_gate(a):
 STATE_WORD = {gate.PASS: "ПРОХОДИТ", gate.FAIL: "ПРОВАЛ", gate.NOISY: "ШУМНО — вердикта нет"}
 
 
-def accepted_release():
-    return gh("release", "view", "-R", REPO, "--json", "tagName", "--jq", ".tagName").strip()
+def main_base():
+    """База PR — `main` (CLAUDE.md, «Картинка и звук»): голова main с успешным build (push) — её jar, ci:<SHA>."""
+    runs = gh("run", "list", "-R", REPO, "-w", "build", "-b", "main", "-e", "push", "--status", "success", "-L", "1",
+              "--json", "headSha", json_out=True)
+    if not runs:
+        raise SystemExit("нет успешного build на main — базы для PR нет")
+    return f"ci:{runs[0]['headSha']}", f"main@{runs[0]['headSha'][:8]}"
 
 
 # ---------------------------------------------------------------- PR
 
 def pr_paths(records):
-    """Пути файлов PR из API (pulls/<n>/files): новое имя и прежнее у переноса — как note.yml: перенос из того, что видит
-    игрок, — тоже правка видимого."""
+    """Пути файлов PR из API (pulls/<n>/files): новое имя и у переноса прежнее — перенос из того, что видит игрок, —
+    тоже правка видимого."""
     out = []
     for r in records:
         out.append(r["filename"])
@@ -483,8 +488,8 @@ def pr_paths(records):
 
 
 def cmd_pr(a):
-    """PR с картинкой: jar CI его головы парой с принятым выпуском (сцена «100»); --post — статус «Стенд сцен» и
-    комментарий."""
+    """PR с картинкой: jar CI его головы парой с main (сцена «100»; --against — другая база); --post — статус «Стенд
+    сцен» и комментарий."""
     pr = gh("pr", "view", str(a.number), "-R", REPO, "--json", "headRefOid,url,number", json_out=True)
     head = pr["headRefOid"]
     files = gh("api", "--paginate", f"repos/{REPO}/pulls/{a.number}/files", "--jq", ".[] | {filename, previous_filename}")
@@ -494,7 +499,7 @@ def cmd_pr(a):
         if a.post:
             post_status(head, "success", "Стенд не нужен: PR не меняет того, что видит игрок", None)
         return 0
-    version = accepted_release()
+    base, version = (a.against, a.against) if a.against else main_base()
     name = f"pr{a.number}-{head[:8]}"
     scenes = a.scenes if a.scenes is not None else GATE_SCENES
     if a.post and (a.packs != list(PACKS) or scenes != GATE_SCENES or a.size != DEFAULT_SIZE):
@@ -509,13 +514,14 @@ def cmd_pr(a):
     else:
         if a.post:
             post_status(head, "pending", f"Стенд идёт: парой с {version}", None)
-        code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--against", version, "--packs", ",".join(a.packs), "--size", a.size,
+        code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--against", base, "--packs", ",".join(a.packs), "--size", a.size,
                                "--label", f"PR {a.number}", "--scenes", ",".join(scenes)]).returncode
     if not is_pair(out) or code not in (0, 1):
         if a.post:
             post_status(head, "error", f"Стенд не снял пару (код {code})", None)
         return code or 1
     v = judge_pair(out)
+    version = v["base"].get("label") or version
     # отчёт — тем же путём (judge_pair): его вердикт тот же
     subprocess.run(["uv", "run", str(HERE / "report.py"), name])
     log(f"PR {a.number}: {STATE_WORD[v['state']]}; отчёт {out / 'report.md'}")
@@ -562,6 +568,7 @@ def main():
     p = sub.add_parser("pr"); p.add_argument("number", type=int); p.add_argument("--post", action="store_true")
     p.add_argument("--force", action="store_true")
     p.add_argument("--rejudge", action="store_true", help="не снимать: вердикт по уже снятой паре этой головы")
+    p.add_argument("--against", help="база вместо main: выпуск (v3.7.0), ci:<ветка|SHA> или путь")
     common(p); p.set_defaults(fn=cmd_pr)
     a = ap.parse_args()
     for pk in getattr(a, "packs", []) or []:

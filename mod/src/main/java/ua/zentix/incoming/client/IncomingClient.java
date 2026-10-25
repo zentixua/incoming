@@ -32,6 +32,7 @@ import ua.zentix.incoming.client.far.FarRenderer;
 import ua.zentix.incoming.client.flight.FlightTracks;
 import ua.zentix.incoming.client.fx.BlastEffects;
 import ua.zentix.incoming.client.fx.CameraShake;
+import ua.zentix.incoming.client.fx.Concussion;
 import ua.zentix.incoming.client.fx.Effects;
 import ua.zentix.incoming.client.fx.Exhaust;
 import ua.zentix.incoming.client.fx.Flash;
@@ -139,6 +140,7 @@ public final class IncomingClient {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.client.nuclear.FlashMarksClient::onChunkUnload);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.client.nuclear.FlashMarksClient::onLevelUnload);
         NeoForge.EVENT_BUS.addListener(FxLayer::render);
+        NeoForge.EVENT_BUS.addListener(FxLayer::debugText);
         NeoForge.EVENT_BUS.addListener(NukeRenderer::renderRain);
         NeoForge.EVENT_BUS.addListener(NukeSky::fogColor);
         NeoForge.EVENT_BUS.addListener(NukeSky::fog);
@@ -187,6 +189,7 @@ public final class IncomingClient {
         e.registerReloadListener(FxAtlas.INSTANCE);
         e.registerReloadListener(ua.zentix.incoming.client.nuclear.NukeBallSurface.INSTANCE);
         e.registerReloadListener(ua.zentix.incoming.client.sound.Envelopes.INSTANCE);
+        e.registerReloadListener(Concussion.RELOAD);
     }
 
     private static void keys(RegisterKeyMappingsEvent e) {
@@ -198,6 +201,8 @@ public final class IncomingClient {
     }
 
     private static void layers(RegisterGuiLayersEvent e) {
+        // контузия — под вспышкой: размывает кадр и накладки камеры, а не белый экран вспышки поверх
+        e.registerBelow(VanillaGuiLayers.CROSSHAIR, Incoming.id("concussion"), Concussion::render);
         e.registerBelow(VanillaGuiLayers.CROSSHAIR, Incoming.id("flash"), Flash::render);
         e.registerBelow(VanillaGuiLayers.CROSSHAIR, Incoming.id("nuke_flash"), NukeFlash::render);
         e.registerAbove(VanillaGuiLayers.CROSSHAIR, Incoming.id("scope"), Designator::renderHud);
@@ -262,6 +267,7 @@ public final class IncomingClient {
         Effects.tick();
         CameraShake.tick(CameraShake.standing(mc.player));
         Flash.tick();
+        Concussion.tick();
         Alerts.tick();
         RadarScope.tick();
         NukeArming.tick();
@@ -282,6 +288,7 @@ public final class IncomingClient {
         Effects.clear();
         CameraShake.reset();
         Flash.reset();
+        Concussion.reset();
         Alerts.reset();
         ClientNuclear.rewound();
     }
@@ -336,6 +343,7 @@ public final class IncomingClient {
         Effects.clear();
         CameraShake.reset();
         Flash.reset();
+        Concussion.reset();
         Alerts.reset();
         ProjectileCamera.reset();
         ClientFlights.reset();
@@ -359,7 +367,8 @@ public final class IncomingClient {
         /**
          * Удары показывает и озвучивает сам мод ({@code blast_effects}); выключено — их показывает другой мод взрывов (по
          * взрыву на сервере, его источник — снаряд), и своих картинки, звука, волны и толчка у ударов нет: ни у взрыва,
-         * ни у бетонобойной бомбы (удар о землю, толчок, выброс газа, обрушение). Разрывы ПВО и ядерка — свои всегда.
+         * ни у топлива в воронке (дым, свет, гул; огонь на блоках — мира), ни у бетонобойной бомбы (удар о землю, толчок,
+         * выброс газа, обрушение). Разрывы ПВО и ядерка — свои всегда.
          */
         private static boolean ownBlasts() {
             return IncomingConfig.CLIENT.blastEffects.get();
@@ -389,16 +398,33 @@ public final class IncomingClient {
         }
 
         @Override
+        public void fuelFire(S2C.FuelFire p) {
+            Replay.event("fuel", live -> {
+                if (live && ownBlasts()) BlastEffects.fuelFire(p);
+            });
+        }
+
+        @Override
         public void collapse(S2C.Collapse p) {
             Replay.event("collapse", live -> {
                 if (live && ownBlasts()) BlastEffects.collapse(p);
             });
         }
 
+        /**
+         * Толчок земли: у источника волны грунта (удар бомбы о землю, взрыв в грунте) приход и сила — у ног этого игрока
+         * ({@link ua.zentix.incoming.client.fx.GroundShake}); прежний пакет без источника (старые записи повтора
+         * Flashback) — тряска и гул сразу.
+         */
         @Override
         public void quake(S2C.Quake p) {
             Replay.event("quake", live -> {
                 if (!live || !ownBlasts()) return;
+                if (p.source().isPresent()) {
+                    S2C.Quake.Ground g = p.source().get();
+                    ua.zentix.incoming.client.fx.GroundShake.schedule(g.pos(), g.model(), g.gameTime(), g.gameTime() ^ Double.doubleToLongBits(g.pos().x + g.pos().z));
+                    return;
+                }
                 CameraShake.quake(p.ticks());
                 if (p.rumble()) BlastSounds.quake();
             });

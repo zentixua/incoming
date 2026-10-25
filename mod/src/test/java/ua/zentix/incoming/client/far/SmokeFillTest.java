@@ -74,10 +74,18 @@ class SmokeFillTest {
         }
     }
 
-    /** Квадраты кадра на экране (тангенсы): середина, полуразмеры, непрозрачность, кадр клуба; вуали. */
+    /**
+     * Квадраты кадра на экране (тангенсы): середина, полуразмеры, непрозрачность, кадр клуба, лежит ли; вершины лежащих
+     * клубов и полос лент от глаза (заливка — по ним); вуали.
+     */
     static final class Screen implements SmokePuffs.Out {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
+        /** Многоугольники кадра: 4 вершины от глаза (12 чисел) и непрозрачность — лежащие клубы и полосы лент. */
+        final List<double[]> polygons = new ArrayList<>();
+        /** Квадраты лент лицом к камере (круг торца, вуаль «глаз в трубке»): середина, полуразмеры в тангенсах, непрозрачность. */
+        final List<double[]> faces = new ArrayList<>();
+        private final FarSprites.RibbonShape shape = new FarSprites.RibbonShape();
         /** Вуаль кадра (сетка по экрану); null — её нет. */
         SmokePuffs.Veil veil;
 
@@ -94,15 +102,26 @@ class SmokeFillTest {
             double depth = dx * f.x + dy * f.y + dz * f.z, near = Math.clamp((depth - SmokePuffs.NEAR_FROM) / SmokePuffs.NEAR_FADE, 0, 1);
             if (near <= 0) return;
             quads.add(new double[]{(dx * l.x + dy * l.y + dz * l.z) / depth, (dx * up.x + dy * up.y + dz * up.z) / depth, halfA / depth, halfB / depth,
-                    Math.min(1, a) * near, PlumeContinuityTest.frameOf(sprite)});
+                    Math.min(1, a) * near, PlumeContinuityTest.frameOf(sprite), 0});
         }
 
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
                               float r, float g, float b, float a) {
-            // лежащий квадрат: по высоте экрана — проекция диска
+            if (a < 0.002f) return;
+            // пропускание — по проекции диска на глубине середины (приближение для частей кадра); заливка — по четырём
+            // вершинам квадрата на горизонтали, как его кладёт FxQuads.flat (оси — «влево» экрана на горизонтали и поперёк)
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            int at = quads.size();
             puff6(dx, dy, dz, halfA, halfB * Math.abs(dy) / d, sprite, mix, shade, r, g, b, a);
+            if (quads.size() > at) quads.get(at)[6] = 1;
+            Vector3f l = view.left();
+            double lx = l.x, lz = l.z, len = Math.hypot(lx, lz);
+            lx = len < 1e-6 ? 1 : lx / len;
+            lz = len < 1e-6 ? 0 : lz / len;
+            double ax = lx * halfA, az = lz * halfA, bx = -lz * halfB, bz = lx * halfB;
+            polygons.add(new double[]{dx - ax - bx, dy, dz - az - bz, dx - ax + bx, dy, dz - az + bz, dx + ax + bx, dy, dz + az + bz, dx + ax - bx, dy,
+                    dz + az - bz, Math.min(1, a)});
         }
 
         @Override
@@ -113,22 +132,86 @@ class SmokeFillTest {
         @Override
         public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                               float alphaB, int lightB, float r, float g, float b, float[] joint) {
-            return false;
+            // лента как у FarSprites.ribbon: вуаль «глаз в трубке», круг торца, полоса по своим четырём вершинам
+            FarSprites.RibbonShape q = shape;
+            Vector3f f = view.forward();
+            boolean strip = q.set(view.far(), f.x, f.y, f.z, ax, ay, az, halfA, alphaA, bx, by, bz, halfB, alphaB, joint);
+            if (q.veil > 0.004f) face(f.x * SmokePuffs.VEIL_AT, f.y * SmokePuffs.VEIL_AT, f.z * SmokePuffs.VEIL_AT, SmokePuffs.VEIL_AT * 4, q.veil);
+            if (q.capAlpha > 0) face(q.mx, q.my, q.mz, q.halfW * FarSprites.GLOW, q.capAlpha);
+            if (strip) {
+                polygons.add(new double[]{q.x0 - q.px * q.ha, q.y0 - q.py * q.ha, q.z0 - q.pz * q.ha, q.x0 + q.px * q.ha, q.y0 + q.py * q.ha,
+                        q.z0 + q.pz * q.ha, q.x1 + q.nx * q.hb, q.y1 + q.ny * q.hb, q.z1 + q.nz * q.hb, q.x1 - q.nx * q.hb, q.y1 - q.ny * q.hb,
+                        q.z1 - q.nz * q.hb, 0.5 * (Math.min(1, q.alphaA) + Math.min(1, q.alphaB))});
+                joint[0] = q.nx;
+                joint[1] = q.ny;
+                joint[2] = q.nz;
+            } else if (q.cap) joint[0] = Float.NaN;
+            return strip;
         }
 
-        /** Сколько экранов закрывают квадраты (с перекрытием). */
+        /** Внутри ли проекции многоугольника p (4 вершины перед глазом) точка экрана (u, v). */
+        boolean insideProjected(double[] p, double u, double v) {
+            Vector3f f = view.forward(), l = view.left(), up = view.up();
+            double[] pu = new double[4], pv = new double[4];
+            for (int i = 0; i < 4; i++) {
+                double x = p[3 * i], y = p[3 * i + 1], z = p[3 * i + 2], depth = x * f.x + y * f.y + z * f.z;
+                if (depth <= 0.05) return false;
+                pu[i] = (x * l.x + y * l.y + z * l.z) / depth;
+                pv[i] = (x * up.x + y * up.y + z * up.z) / depth;
+            }
+            int sign = 0;
+            for (int i = 0; i < 4; i++) {
+                int j = (i + 1) % 4;
+                double c = (pu[j] - pu[i]) * (v - pv[i]) - (pv[j] - pv[i]) * (u - pu[i]);
+                int sg = c > 0 ? 1 : c < 0 ? -1 : 0;
+                if (sg == 0) continue;
+                if (sign == 0) sign = sg;
+                else if (sg != sign) return false;
+            }
+            return true;
+        }
+
+        /** Новый кадр: квадраты, многоугольники и вуаль — заново. */
+        void clear() {
+            quads.clear();
+            polygons.clear();
+            faces.clear();
+            veil = null;
+        }
+
+        /** Квадрат лицом к камере с серединой (x, y, z) от глаза и полуразмером half — в кадр. */
+        private void face(double x, double y, double z, double half, double a) {
+            Vector3f f = view.forward(), l = view.left(), up = view.up();
+            double depth = x * f.x + y * f.y + z * f.z;
+            if (depth <= 0) return;
+            faces.add(new double[]{(x * l.x + y * l.y + z * l.z) / depth, (x * up.x + y * up.y + z * up.z) / depth, half / depth, half / depth, Math.min(1, a)});
+        }
+
+        /** Сколько экранов закрывают квадраты (с перекрытием): лицом к камере — прямоугольником, лежащие и полосы лент — по вершинам. */
         double fill() {
             double sum = 0;
             for (double[] q : quads) {
+                if (q[6] > 0.5) continue;
                 double x0 = Math.max(-W, q[0] - q[2]), x1 = Math.min(W, q[0] + q[2]), y0 = Math.max(-H, q[1] - q[3]), y1 = Math.min(H, q[1] + q[3]);
                 if (x1 > x0 && y1 > y0) sum += (x1 - x0) * (y1 - y0) / (4 * W * H);
             }
+            for (double[] q : faces) {
+                double x0 = Math.max(-W, q[0] - q[2]), x1 = Math.min(W, q[0] + q[2]), y0 = Math.max(-H, q[1] - q[3]), y1 = Math.min(H, q[1] + q[3]);
+                if (x1 > x0 && y1 > y0) sum += (x1 - x0) * (y1 - y0) / (4 * W * H);
+            }
+            for (double[] p : polygons) sum += SmokePuffs.polygonFill(view, java.util.Arrays.copyOf(p, 12));
             return sum;
         }
 
         /** Пропускание в точке экрана (u, v): квадраты — радиальный профиль непрозрачности кадра клуба, вуали. */
         double transmittance(double u, double v, double[][] prof) {
             double clear = veil == null ? 1 : veil.through(u, v);
+            for (double[] q : faces) if (Math.abs(u - q[0]) <= q[2] && Math.abs(v - q[1]) <= q[3]) clear *= 1 - q[4];
+            for (double[] p : polygons) {
+                // полосы лент — ровной непрозрачностью внутри; лежащие клубы — профилем (ниже, по квадратам)
+                if (p[12] <= 0 || isFlat(p)) continue;
+                if (insideProjected(p, u, v)) clear *= 1 - p[12];
+            }
             for (double[] q : quads) {
                 double r = Math.hypot((u - q[0]) / q[2], (v - q[1]) / q[3]);
                 int k = (int) (r / PlumeContinuityTest.BIN);
@@ -136,6 +219,11 @@ class SmokeFillTest {
             }
             return clear;
         }
+    }
+
+    /** Лежит ли многоугольник (все вершины на одной высоте — лежащий клуб, а не полоса ленты). */
+    static boolean isFlat(double[] p) {
+        return p[1] == p[4] && p[4] == p[7] && p[7] == p[10];
     }
 
     static FarView view(Vec3 eye, Vector3f fwd) {
@@ -197,8 +285,7 @@ class SmokeFillTest {
             // два кадра: доля кучек трубок — из прошлого кадра
             SmokePuffs.resetBudget();
             for (int frame = 0; frame < 2; frame++) {
-                s.quads.clear();
-                s.veil = null;
+                s.clear();
                 for (Blast b : raid) b.emit(now, SmokePuffs.sink(v, s, b, now));
                 SmokePuffs.flush();
             }
@@ -259,20 +346,23 @@ class SmokeFillTest {
     }
 
     /**
-     * Глаз на крыше в дыму налёта и рядом с облаками, взгляд вдоль дыма: без бюджета кадр закрывает больше двух бюджетов, с ним —
-     * не больше бюджета или его пола (по одному клубу на гаусс; с запасом на оценку площади кучки, 15 %) и меньше вдвое;
-     * пропускание по экрану с бюджетом в среднем то же (±0,04), и в каждой из 18 частей кадра от пропускания самого вещества
-     * модели ({@link #truth}) — не дальше, чем у полного кадра, больше чем на 0,05 (мельче части — подробность клубов: её
-     * бюджет и отдаёт).
+     * Глаз на крыше в дыму налёта и рядом с облаками, взгляд вдоль дыма. При настоящем бюджете налёт из 16 ударов в него
+     * ложится как есть — без слияния и вуали (вид прежний). Сам предел — на вчетверо меньшем бюджете: без него кадр
+     * закрывает больше двух таких бюджетов, с ним — не больше бюджета (с запасом на оценку площади кучки, 15 %; пол — по
+     * одному клубу на гаусс — не выше бюджета) и меньше вдвое; пропускание по экрану в среднем и в каждой из 18 частей кадра
+     * от пропускания самого вещества модели ({@link #truth}) — не дальше, чем у полного кадра, больше чем на 0,04 и 0,05
+     * (мельче части — подробность клубов: её бюджет и отдаёт). Налёт из 100 — {@code SmokeRaidTest}.
      */
     @Test
     void raidSmokeStaysInTheFillBudgetAtTheSameDensity() throws IOException {
-        double now = 1000;
+        double now = 1000, half = SmokePuffs.FILL_BUDGET / 4;
         List<Blast> raid = raid(now);
         double[][] prof = PlumeContinuityTest.profiles();
         Vector3f along = new Vector3f(1, 0, 0);
         for (Vec3 eye : new Vec3[]{new Vec3(0, 40, 0), new Vec3(raid.get(3).x(), 25, raid.get(3).z() + 20), new Vec3(raid.get(5).x() + 5, 60, raid.get(5).z())}) {
-            Screen free = frame(raid, now, eye, along, Double.POSITIVE_INFINITY), budget = frame(raid, now, eye, along, SmokePuffs.FILL_BUDGET);
+            frame(raid, now, eye, along, SmokePuffs.FILL_BUDGET);
+            double raw = SmokePuffs.lastRaw(), whole = SmokePuffs.lastFloor();
+            Screen free = frame(raid, now, eye, along, Double.POSITIVE_INFINITY), budget = frame(raid, now, eye, along, half);
             double meanFree = 0, meanBudget = 0;
             int n = 0;
             for (int i = 0; i < 48; i++) {
@@ -296,16 +386,93 @@ class SmokeFillTest {
                     real[i / 8 * 3 + j / 9] += truth(raid, now, v0, u, v) / 72;
                 }
             }
-            double worstFree = worstBlock(free, real, prof), worst = worstBlock(budget, real, prof);
-            String got = String.format(Locale.ROOT, "глаз %s: без бюджета %d квадратов, %.1f экранов, пропускание %.3f; с бюджетом %d, %.1f (пол %.1f), %.3f; худшая часть против вещества: полный %.3f, в бюджете %.3f",
-                    eye, free.quads.size(), free.fill(), meanFree, budget.quads.size(), budget.fill(), floor, meanBudget, worstFree, worst);
+            double worstFree = worstBlock(free, real, prof), worst = worstBlock(budget, real, prof), meanReal = 0;
+            for (double r : real) meanReal += r / real.length;
+            String got = String.format(Locale.ROOT, "глаз %s: при бюджете %.0f пол %.1f (до слияния %.1f); без бюджета %d квадратов, %.1f экранов, пропускание %.3f; с бюджетом %.0f — %d, %.1f (пол %.1f), %.3f; худшая часть против вещества: полный %.3f, в бюджете %.3f",
+                    eye, SmokePuffs.FILL_BUDGET, whole, raw, free.quads.size(), free.fill(), meanFree, half, budget.quads.size(), budget.fill(), floor, meanBudget,
+                    worstFree, worst);
             System.out.println("FILL " + got);
-            assertTrue(free.fill() > 2 * SmokePuffs.FILL_BUDGET, got);
-            assertTrue(budget.fill() <= 1.15 * Math.max(SmokePuffs.FILL_BUDGET, floor), got);
+            assertTrue(raw <= SmokePuffs.FILL_BUDGET && whole == raw, got);
+            assertTrue(free.fill() > 2 * half, got);
+            assertTrue(budget.fill() <= 1.15 * half && floor <= half + 1e-9, got);
             assertTrue(budget.fill() < free.fill() / 2, got);
-            assertTrue(Math.abs(meanFree - meanBudget) <= 0.04, got);
+            assertTrue(Math.abs(meanBudget - meanReal) <= Math.abs(meanFree - meanReal) + 0.04, got + "; вещество в среднем " + meanReal);
             assertTrue(worst <= worstFree + 0.05, got);
         }
+    }
+
+    /**
+     * Залп в грунт через полсекунды (струи завесы выброса в воздухе у каждого из 16 ударов, кадры удара в пыль): кадр — в том
+     * же бюджете заливки, что облака налёта (не больше бюджета или его пола, с тем же запасом 15 %); новых квадратов сверх
+     * бюджета завеса не даёт.
+     */
+    @Test
+    void ejectaCurtainsStayInTheFillBudget() {
+        double now = 1000;
+        Random rnd = new Random(11);
+        List<SmokeGrid.Source> salvo = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            double x = (rnd.nextDouble() - 0.5) * 80, z = 40 + rnd.nextDouble() * 80;
+            long seed = rnd.nextLong();
+            ua.zentix.incoming.client.fx.smoke.BlastTarget t = ua.zentix.incoming.client.fx.smoke.BlastTarget.SOIL;
+            ua.zentix.incoming.client.fx.smoke.Ejecta c = new ua.zentix.incoming.client.fx.smoke.Ejecta(
+                    ua.zentix.incoming.nuclear.model.CraterModel.chargeRadius(50, ua.zentix.incoming.nuclear.model.CraterModel.Soil.DRY),
+                    t.mass(50) * (1 - CloudModel.DUST_LOFTED), t.matter().clods);
+            double k = ua.zentix.incoming.client.fx.smoke.BlastTarget.Matter.DIRT.extinction() / SmokeGrid.dustK(0.2f, 0.12f, 0.06f);
+            salvo.add(new SmokeGrid.Source() {
+                @Override
+                public boolean emit(double seconds, SmokeGrid.Sink out) {
+                    FarBlasts.curtainClubs(c, 0.5, seed, x, 0, z, k, 0.2f, 0.12f, 0.06f, out);
+                    return true;
+                }
+
+                @Override
+                public long seed() {
+                    return seed;
+                }
+            });
+        }
+        FarView v = view(new Vec3(0, 2, 0), new Vector3f(0, 0, 1));
+        for (double budget : new double[]{Double.POSITIVE_INFINITY, SmokePuffs.FILL_BUDGET}) {
+            Screen s = new Screen(v);
+            double was = SmokePuffs.budget;
+            SmokePuffs.budget = budget;
+            try {
+                SmokePuffs.resetBudget();
+                for (SmokeGrid.Source src : salvo) src.emit(now, SmokePuffs.sink(v, s, src, now));
+                SmokePuffs.flush();
+            } finally {
+                SmokePuffs.budget = was;
+                SmokePuffs.resetBudget();
+            }
+            assertTrue(!s.quads.isEmpty(), "завеса видна");
+            if (budget < Double.POSITIVE_INFINITY) {
+                double floor = SmokePuffs.lastFloor();
+                assertTrue(s.fill() <= 1.15 * Math.max(SmokePuffs.FILL_BUDGET, floor), "заливка " + s.fill() + ", пол " + floor);
+            }
+        }
+    }
+
+    /** Клубы разного вида (дым и завеса выброса) — разные кадры: в один гаусс не сливаются, даже лёжа друг на друге. */
+    @Test
+    void differentLooksDoNotMerge() {
+        int f = SmokePuffs.FIELDS;
+        double[] held = new double[2 * f];
+        for (int i = 0; i < 2; i++) {
+            held[i * f + 1] = 10;
+            held[i * f + 3] = held[i * f + 4] = 4;
+            held[i * f + 6] = 2;
+            held[i * f + 8] = 0.6;
+            held[i * f + 9] = 0.55;
+            held[i * f + 10] = 0.45;
+        }
+        held[f + 15] = SmokeGrid.Look.EJECTA.ordinal();
+        boolean[] gone = new boolean[2];
+        SmokePuffs.merge(held, 0, 2, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);
+        assertTrue(!gone[0] && !gone[1], "дым и завеса не слились");
+        held[f + 15] = SmokeGrid.Look.SMOKE.ordinal();
+        SmokePuffs.merge(held, 0, 2, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);
+        assertTrue(gone[1], "одного вида — слились");
     }
 
     /**

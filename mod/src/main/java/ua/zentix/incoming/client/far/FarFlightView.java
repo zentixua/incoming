@@ -142,6 +142,8 @@ public final class FarFlightView {
     /** Трубка у конца: ширина на половине непрозрачности середины и σ сечения, м; ослабление на метр, м; альбедо; зерно клубов. */
     private static final double[] EW = new double[ENDS], ES = new double[ENDS], EE = new double[ENDS], EO = new double[ENDS];
     private static final long[] ESEED = new long[ENDS];
+    /** Снаряд точки: трубка его следа (места одной трубки между собой не сливаются, {@code SmokePuffs.Draw#mergeLevel}). */
+    private static final int[] EOWNER = new int[ENDS];
     /** Вид кадра — у отрезков ({@link #segment}). */
     @Nullable
     private static FarView seen;
@@ -157,11 +159,13 @@ public final class FarFlightView {
      */
     static final double PUFFS_FROM = 2.4, PUFFS_FULL = 4.8;
     /**
-     * Клубов трубок и их вуалей у глаза в кадре — не больше этого в среднем (производительность, не физика): больше — порог
-     * ширины на следующих кадрах растёт ({@link #puffScale}, ×1,1 за кадр), и дальние трубки снова рисует лента; меньше
+     * Мест клубов трубок и их вуалей у глаза в кадре — не больше этого в среднем (производительность, не физика): больше —
+     * порог ширины на следующих кадрах растёт ({@link #puffScale}, ×1,1 за кадр), и дальние трубки снова рисует лента; меньше
      * половины — порог плавно возвращается. Залп «Града» вблизи или трубки в бинокль иначе давали бы десятки тысяч квадратов.
+     * Каждое место ждёт плана кадра ({@code SmokePuffs.flush}: ~0,5 мкс процессора), а сверх бюджета заливки показать их
+     * порознь нельзя: в налёте из 100 ударов при 6000 — 8 мс процессора на дым, при 3000 — 6,5 ({@code SmokeRaidTest}).
      */
-    static final int CLUB_BUDGET = 6000;
+    static final int CLUB_BUDGET = 3000;
     /** Множитель порога ширины трубки для клубов (≥ 1) и клубов в этом кадре. */
     private static double puffScale = 1;
     private static int clubs;
@@ -723,6 +727,7 @@ public final class FarFlightView {
                     trail.z[i] + air.wind().z() * drift + BEND[2] - cam.z, trail.light[i], view, i);
             // зерно клубов — номер записи точки: тик рождения в заморозке мира сдвигается (TrailPoints.hold), и клубы мигали бы
             ESEED[i] = s * 0x2545F4914F6CDD1DL + 0x632BE59BD9B4E019L;
+            EOWNER[i] = trail.owner[i];
             if (trail.last[i]) {
                 EA[i] = 0;
                 EE[i] = 0;
@@ -988,7 +993,7 @@ public final class FarFlightView {
         double albedo = 0.5 * (EO[a] + EO[b]);
         float c = SmokePuffs.tubeColour(albedo);
         int drawn = line(view, out, TA, TB, (ER[a] + ER[b]) * 0.5f, (EG[a] + EG[b]) * 0.5f, (EB[a] + EB[b]) * 0.5f, c, c, c,
-                SmokePuffs.tubeShade(albedo), style.sigma0(), ESEED[a], JOINT);
+                SmokePuffs.tubeShade(albedo), style.sigma0(), ESEED[a], EOWNER[a], JOINT);
         if (drawn == CLUBS) ACROSS[b] = 0;
         if (drawn != RIBBON) return;
         NX[b] = JOINT[0];
@@ -1029,11 +1034,12 @@ public final class FarFlightView {
     /**
      * Отрезок трубки дыма между концами a и b — одна для следов снарядов и шлейфов пожаров: крупная на экране — клубами
      * ({@link SmokePuffs#tube}: цвет толстого слоя (cr, cg, cb), степень тени shade), узкая — лентой цвета (r, g, b), между — плавно
-     * ({@link #puffShare}, ширина — у ближней к глазу точки отрезка); клубы — в общий бюджет кадра ({@link #CLUB_BUDGET}).
-     * joint — поперёк ленты у a (NaN — нет, начало ленты), на выходе — у b.
+     * ({@link #puffShare}, ширина — у ближней к глазу точки отрезка); клубы — в общий бюджет кадра ({@link #CLUB_BUDGET}), их
+     * места ждут плана кадра ({@code SmokePuffs.flush}); tube — трубка (след снаряда, шлейф источника). joint — поперёк ленты
+     * у a (NaN — нет, начало ленты), на выходе — у b.
      */
     static int line(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float cr, float cg, float cb, double shade,
-                    double sigma0, long seed, float[] joint) {
+                    double sigma0, long seed, long tube, float[] joint) {
         double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z;
         double gap = FarSprites.distance(a.x, a.y, a.z, tx, ty, tz), scale = puffScale;
         double puffs = puffShare(Math.max(a.width, b.width) / scale, gap, view.pixel());
@@ -1045,12 +1051,19 @@ public final class FarFlightView {
         double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 9 * Math.max(a.sigma, b.sigma);
         double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
         if (puffs > 0 && (md <= reach || inFrame(view, mx, my, mz, md, reach))) {
-            clubs += SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width / scale, b.x, b.y, b.z, b.sigma, b.e, b.width / scale, cr, cg,
-                    cb, shade, sigma0, seed, puffs >= 1, 0.5 * (a.shown + b.shown));
+            int held = SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width / scale, b.x, b.y, b.z, b.sigma, b.e, b.width / scale, cr,
+                    cg, cb, shade, sigma0, seed, puffs >= 1, 0.5 * (a.shown + b.shown), tube);
+            if (held < 0) {
+                // мест кадра нет ({@code SmokePuffs.PLACES}): весь отрезок — лентой, его места — в бюджет клубов
+                clubs += -held - 1;
+                puffs = 0;
+                keepA = keepB = 1;
+            } else clubs += held;
         }
         if (puffs >= 1) return CLUBS;
-        return out.ribbon(a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half, b.alpha * (float) keepB, b.light, r, g, bl,
-                joint) ? RIBBON : NONE;
+        // лента — в план кадра, как клубы: её заливка — в бюджете ({@code SmokePuffs.ribbon})
+        return SmokePuffs.ribbon(view, out, a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half, b.alpha * (float) keepB,
+                b.light, r, g, bl, joint) ? RIBBON : NONE;
     }
 
     /** Бюджет клубов трубок по прошлому кадру — в начале кадра, до всех, кто рисует трубки ({@code FarRenderer}). */

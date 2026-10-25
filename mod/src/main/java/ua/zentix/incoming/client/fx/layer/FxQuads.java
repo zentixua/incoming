@@ -71,6 +71,29 @@ public final class FxQuads {
     private short probe;
     /** В кадре есть квадраты со свечением ({@link #emission}). */
     private boolean glows;
+    /** Часть слоя следующих квадратов ({@link #part}) и у каждого квадрата кадра — номер его части. */
+    private Part part = Part.OTHER;
+    private byte[] parts = new byte[0];
+    /** После {@link #draw}: порядок квадратов в буфере (от дальних), до следующей сортировки. */
+    private int[] drawn = new int[0];
+
+    /**
+     * Часть слоя, к которой относится квадрат, — для времени на видеокарте по частям ({@link LayerTimes}): клубы дыма и пыли,
+     * вуаль вещества у глаза, ленты шлейфов, огонь и пламя, блик и ореолы в глазу, частицы, дымные хвосты обломков, прочее
+     * (модели вдали, круги, ядерка).
+     */
+    public enum Part {
+        CLUBS, VEIL, RIBBONS, FIRE, GLARE, PARTICLES, DEBRIS, OTHER;
+
+        final String label = name().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** Следующие квадраты — часть p ({@link Part}); прежняя — ответом, чтобы вернуть её после своих квадратов. */
+    public Part part(Part p) {
+        Part was = part;
+        part = p;
+        return was;
+    }
 
     /** Новый кадр: оси экрана (влево, вверх) для квадратов лицом к камере. */
     public void begin(Vector3f left, Vector3f up) {
@@ -79,6 +102,7 @@ public final class FxQuads {
         n = 0;
         nearest = opacity = emit = 0;
         probe = 0;
+        part = Part.OTHER;
         glows = false;
         glowReach = -Float.MAX_VALUE;
         Arrays.fill(glowBox, 0, 3, Float.MAX_VALUE);
@@ -202,6 +226,7 @@ public final class FxQuads {
         if (n == capacity) grow();
         keys[n] = key > 0 ? key : 0;
         emits[n] = false;
+        parts[n] = (byte) part.ordinal();
         write = stage + (long) n * QUAD;
         n++;
         corner = 0;
@@ -413,6 +438,7 @@ public final class FxQuads {
         glowFrom = n;
         if (n == 0) return;
         int[] order = sort.sort(keys, n);
+        drawn = order;
         glowFrom = glowStart(order);
         long dst = out.reserve(n * QUAD);
         for (int i = 0; i < n; i++) MemoryUtil.memCopy(stage + (long) order[i] * QUAD, dst + (long) i * QUAD, QUAD);
@@ -460,6 +486,69 @@ public final class FxQuads {
         return true;
     }
 
+    /**
+     * После {@link #draw}, на кадре пробы ({@link LayerTimes}): каждая часть слоя ({@link Part}) отдельно, тем же шейдером
+     * из того же буфера — её отрезки в порядке сортировки одним вызовом (glMultiDrawElements), без остальных частей.
+     * Каждый пиксель части проходит тот же шейдер, смешивание и тест глубины, что и в общем вызове, поэтому её время —
+     * её цена в кадре (порядок смешивания между частями цены не меняет). Слив и метки до и после — {@code clock}.
+     */
+    void drawParts(net.minecraft.client.renderer.ShaderInstance s, LayerTimes.PartClock clock) {
+        int[][] runs = runs(parts, drawn, n);
+        com.mojang.blaze3d.vertex.VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
+        vb.bind();
+        s.setDefaultUniforms(VertexFormat.Mode.QUADS, com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix(),
+                com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix(), net.minecraft.client.Minecraft.getInstance().getWindow());
+        s.apply();
+        VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+        clock.start();
+        for (int p = 0; p < runs.length; p++) {
+            int[] r = runs[p];
+            int count = r.length / 2, quads = 0;
+            java.nio.IntBuffer lengths = count > 0 ? MemoryUtil.memAllocInt(count) : null;
+            org.lwjgl.PointerBuffer starts = count > 0 ? MemoryUtil.memAllocPointer(count) : null;
+            try {
+                for (int i = 0; i < count; i++) {
+                    lengths.put(r[2 * i + 1] * 6);
+                    starts.put((long) r[2 * i] * 6 * type.bytes);
+                    quads += r[2 * i + 1];
+                }
+                clock.begin(p);
+                if (count > 0) org.lwjgl.opengl.GL14.glMultiDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, lengths.flip(), type.asGLType, starts.flip());
+                clock.end(p, quads, count);
+            } finally {
+                if (lengths != null) MemoryUtil.memFree(lengths);
+                if (starts != null) MemoryUtil.memFree(starts);
+            }
+        }
+        s.clear();
+    }
+
+    /**
+     * Отрезки каждой части в порядке order (первые n квадратов): у части p — пары «начало, длина» по местам в порядке,
+     * отрезки части не соприкасаются (соседние слиты), каждый квадрат — ровно в одном отрезке своей части.
+     */
+    static int[][] runs(byte[] parts, int[] order, int n) {
+        int[] counts = new int[Part.values().length];
+        for (int i = 0; i < n; i++) {
+            if (i == 0 || parts[order[i - 1]] != parts[order[i]]) counts[parts[order[i]]]++;
+        }
+        int[][] runs = new int[counts.length][];
+        for (int p = 0; p < counts.length; p++) runs[p] = new int[2 * counts[p]];
+        int[] at = new int[counts.length];
+        for (int i = 0; i < n; ) {
+            int p = parts[order[i]], from = i;
+            while (i < n && parts[order[i]] == p) i++;
+            runs[p][at[p]++] = from;
+            runs[p][at[p]++] = i - from;
+        }
+        return runs;
+    }
+
+    /** Часть квадрата i в порядке записи (проверки). */
+    public Part partOf(int i) {
+        return Part.values()[parts[i]];
+    }
+
     private void grow() {
         int cap = Math.max(1024, capacity * 2);
         long p = stage == 0 ? MemoryUtil.nmemAlloc((long) cap * QUAD) : MemoryUtil.nmemRealloc(stage, (long) cap * QUAD);
@@ -468,6 +557,7 @@ public final class FxQuads {
         capacity = cap;
         keys = Arrays.copyOf(keys, cap);
         emits = Arrays.copyOf(emits, cap);
+        parts = Arrays.copyOf(parts, cap);
     }
 
     private static byte unorm(float f) {

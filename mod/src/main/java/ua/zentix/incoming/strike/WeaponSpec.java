@@ -662,6 +662,34 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
         return striker().article().fuelAtImpact();
     }
 
+    /**
+     * Что в баке — по маршевому двигателю изделия: у ТРДД (ракета) — JP-10, у поршневого мотора с винтом (шахед) — бензин;
+     * без топлива к удару — ничего.
+     */
+    public ua.zentix.incoming.nuclear.model.FuelPool.Fuel fuel() {
+        Article a = striker().article();
+        if (a.fuelAtImpact() <= 0) return ua.zentix.incoming.nuclear.model.FuelPool.Fuel.NONE;
+        return a.sustainer() instanceof Article.Turbofan ? ua.zentix.incoming.nuclear.model.FuelPool.Fuel.JP10
+                : ua.zentix.incoming.nuclear.model.FuelPool.Fuel.PETROL;
+    }
+
+    /**
+     * Топливо, что после удара на земле остаётся в воронке и догорает там ({@link ua.zentix.incoming.nuclear.model.FuelPool}):
+     * один закон у огня на блоках сервера и у дыма и звука клиента.
+     */
+    public ua.zentix.incoming.nuclear.model.FuelPool pool() {
+        return ua.zentix.incoming.nuclear.model.FuelPool.of(fuel(), fuelAtImpact(), charge());
+    }
+
+    /**
+     * То же топливо, легшее на {@code lit} клеток (меньше, чем по площади закона, — слой толще: горит дольше и слабее,
+     * {@link ua.zentix.incoming.nuclear.model.FuelPool#spread}): у сервера и клиента одно.
+     */
+    public ua.zentix.incoming.nuclear.model.FuelPool pool(int lit) {
+        var law = pool();
+        return law.spread(lit, law.cells());
+    }
+
     /** Полосы залпа на шкале полёта мира ({@link Lanes}): длины растут с маршевой, как расстояние между снарядами. */
     public Lanes lanes() {
         return salvo.lanes().scaled(airframe.stretch(FlightScale.x()));

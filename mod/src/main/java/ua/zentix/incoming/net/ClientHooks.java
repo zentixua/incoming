@@ -11,6 +11,8 @@ public interface ClientHooks {
 
     default void vent(S2C.Vent p) {}
 
+    default void fuelFire(S2C.FuelFire p) {}
+
     default void collapse(S2C.Collapse p) {}
 
     default void quake(S2C.Quake p) {}

@@ -20,6 +20,10 @@
 Температура кадра — из яркости самого яркого пламени кадра: в рендере она — e^(c₂/λ·(1/1490 − 1/T)) (Вин на 555 нм),
 отсюда T. Цвет запекания — его же: проверка, что излучение поверхности в горении — порядка 275 кВт/м² CCPS, — в выводе.
 
+Клубы других готовых симуляций (bake.py clubs-vdb --kind <имя>) — <имя>6a/b/v_* и <имя>6.json тем же порядком, что у клуба
+дыма, карты — в его мере; в json ещё «life» — доля жизни симуляции у каждого кадра (мод берёт кадр по доле жизни своего
+явления), исходные кадры и как сняты.
+
 Клуб дыма — puff6a_00…15 (R — свет справа, G — сверху, B — сзади, A — непрозрачность), puff6b_00…15 (слева, снизу,
 спереди; A — та же), puff6v_00…15 (векторы движения к следующему кадру: R, G = 0,5 + смещение/(2·{FLOW}) пикселей
 кадра; A — 1) и puff6.json: рост края вещества против первого кадра («growth», мод берёт кадр по росту облака своей
@@ -412,9 +416,15 @@ def puff(src, out, prefix="puff6", like=None):
         flow = np.clip(flow, -FLOW, FLOW)
         enc = np.stack([0.5 + flow[..., 0] / (2 * FLOW), 0.5 + flow[..., 1] / (2 * FLOW), np.full((TILE, TILE), 0.5)], -1)
         save_rgba(enc, np.ones((TILE, TILE)), os.path.join(out, f"{prefix}v_{k:02d}.png"))
+    data = {"tile": TILE, "frames": FRAMES, "maps": "abv", "flow": FLOW, "front": round(front, 4), "diffuse": round(diffuse, 4),
+            "own": round(own, 4), "growth": [float(g) for g in growth], "detail": detail(tiles)}
+    if "view" in meta and prefix not in ("puff6", "spray6"):
+        # клуб из готовой симуляции (bake.py clubs-vdb): кадр — доля жизни симуляции от первого взятого до последнего
+        span = max(picks[-1] - picks[0], 1)
+        data.update({"life": [round((i - picks[0]) / span, 4) for i in picks], "source_frames": picks, "view": meta["view"],
+                     "mirror": meta.get("mirror", False), "round": meta.get("round", False)})
     with open(os.path.join(out, f"{prefix}.json"), "w", encoding="utf-8") as f:
-        json.dump({"tile": TILE, "frames": FRAMES, "maps": "abv", "flow": FLOW, "front": round(front, 4), "diffuse": round(diffuse, 4),
-                   "own": round(own, 4), "growth": [float(g) for g in growth], "detail": detail(tiles)}, f)
+        json.dump(data, f)
     print("puff frames", picks, "norm", round(norm, 3), "front", round(front, 3), "diffuse", round(diffuse, 3), "growth", growth)
 
 
@@ -560,6 +570,12 @@ if __name__ == "__main__":
         puff(os.path.join(bake, "puff"), dest)
     if os.path.isdir(os.path.join(bake, "nukeball")):
         nukeball(os.path.join(bake, "nukeball"), os.path.join(dest, ".."), os.environ.get("NUKEBALL_PREVIEW"))
+    # клубы из других готовых симуляций (bake.py clubs-vdb --kind <имя>): кадры <имя>6a/b/v_* и <имя>6.json, карты — в мере дыма
+    for kind in sorted(os.listdir(bake)):
+        if kind in ("fireball", "puff", "spray", "nukeball") or not os.path.exists(os.path.join(bake, kind, "meta.json")):
+            continue
+        if "view" in json.load(open(os.path.join(bake, kind, "meta.json"))):
+            puff(os.path.join(bake, kind), dest, kind + "6", json.load(open(os.path.join(dest, "puff6.json"))))
     if os.path.isdir(os.path.join(bake, "spray")):
         puff(os.path.join(bake, "spray"), dest, "spray6", json.load(open(os.path.join(dest, "puff6.json"))))
     elif os.path.isdir(os.path.join(bake, "puff")) and os.path.exists(os.path.join(dest, "spray6.json")):

@@ -260,7 +260,33 @@
     "subtitle": "subtitles.incoming.fire",
     "sounds": [
       {
-        "name": "incoming:blast_fire"
+        "name": "incoming:blast_fire_1"
+      },
+      {
+        "name": "incoming:blast_fire_2"
+      },
+      {
+        "name": "incoming:blast_fire_3"
+      },
+      {
+        "name": "incoming:blast_fire_4"
+      }
+    ]
+  },
+  "blast.rumble": {
+    "subtitle": "subtitles.incoming.blast",
+    "sounds": [
+      {
+        "name": "incoming:blast_rumble_1"
+      },
+      {
+        "name": "incoming:blast_rumble_2"
+      },
+      {
+        "name": "incoming:blast_rumble_3"
+      },
+      {
+        "name": "incoming:blast_rumble_4"
       }
     ]
   },

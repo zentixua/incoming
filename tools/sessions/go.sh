@@ -6,8 +6,8 @@
 #   tools/sessions/go.sh --wait <S>                   — ждать конца (запускать в фоне: конец разбудит)
 #   tools/sessions/go.sh --status                     — что идёт и последние строки sessions.log
 #
-# Файлы — в $SESSIONS_DIR (по умолчанию mod/run/incoming-sessions основной копии): <S>.txt задание, context.md бриф,
-# live.md новые решения Артёма; итог каждого хода — <S>.json (первый), <S>.r1.json, <S>.r2.json …, строка в
+# Файлы — в $SESSIONS_DIR (по умолчанию mod/run/incoming-sessions основной копии): <S>.txt задание, context.md бриф;
+# итог каждого хода — <S>.json (первый), <S>.r1.json, <S>.r2.json …, строка в
 # sessions.log. Сессия идёт своей службой systemd incoming-claude-<S>: обрыв того, кто её запустил, её не трогает
 # (22.10 01:16 S5 и S8 погибли с сессией-родителем — дочерние процессы Claude гаснут с его группой, setsid не спасает).
 # Сам скрипт службы — копия (supervise.sh → .supervise-<S>.sh): правка файла на ходу её не ломает (21.10 правка run.sh
@@ -30,7 +30,6 @@ esac
 S=$1; shift
 [ $# -eq 0 ] || [ $# -eq 2 ] || { echo "продолжение — двумя аргументами: <session_id> <сообщение>" >&2; exit 2; }
 [ $# -eq 0 ] && [ ! -s "$D/$S.txt" ] && { echo "нет задания $D/$S.txt" >&2; exit 2; }
-[ -f "$D/live.md" ] || printf '# Новые решения Артёма для идущих сессий (сверху — новые)\n' > "$D/live.md"
 install -m 755 "$here/supervise.sh" "$D/.supervise-$S.sh"
 git -C "$root" fetch origin -q || true
 systemd-run --user --unit="incoming-claude-$S" --collect -p WorkingDirectory="$root" \

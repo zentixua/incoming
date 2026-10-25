@@ -18,9 +18,10 @@ import java.util.List;
  * тряска самого взгляда сбивала бы прицел.
  * <p>
  * Глаз видит скорость поворота: размах A° на частоте f — до 2π·f·A °/с (на каждом кадре — её доля). Поэтому толчки
- * грунта (подземный взрыв, бурение — {@link #quake}, по пакету сервера) медленные, как у тела: голову качает само тело
- * (основной тон ниже ~6 Гц), а частую дрожь земли оно до глаз почти не доносит. Размахи меняются без скачков: скачок на
- * кадр — тот же рывок.
+ * грунта (подземный взрыв, удар бомбы о землю — {@link #ground}, с приходом волны грунта) медленные, как у тела: голову
+ * качает само тело (резонанс стоящего человека по вертикали — 4–6 Гц, ISO 2631-1), а частую дрожь земли оно до глаз
+ * почти не доносит; земля ходит вверх-вниз — голова кивает (тангаж), вбок качает меньше. Размахи меняются без скачков:
+ * скачок на кадр — тот же рывок.
  * <p>
  * Наклон от ударной волны — ядерной и обычного взрыва: фронт бьёт стоящего разом (за миллисекунды обтекания тело получает
  * скорость наклона), ветер за ним толкает дальше, и тело отклоняется по ветру и выпрямляется ({@link BodySway} — маятник
@@ -38,8 +39,17 @@ import java.util.List;
  * наклон тела и качание головы ({@link BodySway}).
  */
 public final class CameraShake {
-    /** Толчки грунта (подземный взрыв, бурение): медленнее и мягче. */
-    private static int quake;
+    /** Толчки грунта, что идут сейчас ({@link #ground}). */
+    private static final List<Ground> GROUNDS = new ArrayList<>();
+    /**
+     * Толчок грунта у полной силы, ° — кивок (тангаж), качание вбок (курс), крен — доля курса; частоты — тело стоящего
+     * человека (ISO 2631-1: 4–6 Гц по вертикали), Гц; нарастание — четверть периода тела, с. Подача: размах и частоту
+     * глаз видит, а настоящий сдвиг земли — доли миллиметра.
+     */
+    static final double GROUND_PITCH = 1.6, GROUND_YAW = 0.7, GROUND_ROLL = 0.4, GROUND_HZ = 5.1, GROUND_RISE_S = 0.05;
+
+    /** Толчок грунта: с мига {@code from} (тики, с долей), сила 0..1, длина, с, сдвиг узора. */
+    private record Ground(double from, double strength, double seconds, double phase) {}
     private static long ticks;
     /** Волны, что качают тело сейчас. */
     private static final List<Sway> SWAYS = new ArrayList<>();
@@ -78,8 +88,43 @@ public final class CameraShake {
 
     private CameraShake() {}
 
+    /**
+     * Толчок земли по прежнему пакету без источника ({@code S2C.Quake}: тики по ступеням Z = R/W^⅓ — старые записи
+     * повтора Flashback): те же ступени силы (80, 60, 40 тиков — как размахи 1,6°, 0,9° и 0,35° прежде) и длины, с
+     * прихода пакета. Источник волны грунта — {@link GroundShake}.
+     */
     public static void quake(int ticks) {
-        quake = Math.max(quake, ticks);
+        ground(ticks >= 50 ? 1 : ticks >= 24 ? 0.56 : 0.22, ticks / 20.0, 0, ticks);
+    }
+
+    /**
+     * Волна грунта дошла до игрока: толчок силы {@code strength} 0..1 (насколько он ощутим — модель грунта), длиной
+     * {@code seconds}, с; {@code late} — сколько тиков назад она пришла (пакет мог опоздать и больше чем на тик — толчок
+     * идёт с того места, где он уже был бы); {@code seed} — узор. Толчки складываются и вместе не больше полного размаха.
+     */
+    public static void ground(double strength, double seconds, double late, long seed) {
+        double s = Mth.clamp(strength, 0, 1);
+        if (!(s > 1e-4) || !(seconds > 0)) return;
+        GROUNDS.add(new Ground(ticks - Math.max(0, late), s, seconds, (seed & 0xFFFF) / 65536.0));
+    }
+
+    /**
+     * Толчок грунта в миг {@code t} тиков, ° (курс, тангаж, крен): нарастание за {@link #GROUND_RISE_S}, гаснет как
+     * (1 − s)² к концу; узор — две синусоиды тела, с нуля. Сумма — не больше полного размаха.
+     */
+    static double[] groundAt(double t) {
+        double yaw = 0, pitch = 0;
+        for (Ground g : GROUNDS) {
+            double s = (t - g.from) / 20;
+            if (s < 0 || s >= g.seconds) continue;
+            double rise = Math.min(1, s / GROUND_RISE_S), x = s / g.seconds;
+            double a = g.strength * rise * rise * (3 - 2 * rise) * (1 - x) * (1 - x);
+            pitch += GROUND_PITCH * a * shiver(s, GROUND_HZ, g.phase);
+            yaw += GROUND_YAW * a * shiver(s, 1.31 * GROUND_HZ, g.phase + 0.53);
+        }
+        pitch = Mth.clamp(pitch, -GROUND_PITCH, GROUND_PITCH);
+        yaw = Mth.clamp(yaw, -GROUND_YAW, GROUND_YAW);
+        return new double[]{yaw, pitch, GROUND_ROLL * yaw};
     }
 
     /** Сила дрожи 0..1 у давления фронта {@code pPa}, Па: (доля по логарифму давления)^{@link #TREMOR_POWER}. */
@@ -188,25 +233,33 @@ public final class CameraShake {
     /** Тик клиента; {@code onFeet} — игрок стоит на ногах ({@link #standing}). */
     public static void tick(boolean onFeet) {
         ticks++;
-        if (quake > 0) quake--;
         standingBefore = standing;
         standing = Mth.clamp(standing + (onFeet ? STANDING_STEP : -STANDING_STEP), 0, 1);
         SWAYS.removeIf(s -> (ticks - s.from) / 20.0 * BodySway.RATE >= s.tilt.length - 1);
         TREMORS.removeIf(r -> (ticks - r.from) / 20.0 >= r.seconds);
+        GROUNDS.removeIf(g -> (ticks - g.from) / 20.0 >= g.seconds);
     }
 
     public static void reset() {
-        quake = 0;
+        GROUNDS.clear();
         SWAYS.clear();
         TREMORS.clear();
         standing = standingBefore = 1;
         ticks = 0;
     }
 
+    /**
+     * Сила тряски в кадре: настройка {@code camera_shake} × ванильное «Искажения экрана» (Distortion Effects, доступность:
+     * им игрок убирает качание картинки — тошноту и портал; камера, которую качает волна, — то же качание).
+     */
+    static double strength(double cameraShake, double distortion) {
+        return cameraShake * Mth.clamp(distortion, 0, 1);
+    }
+
     public static void apply(ViewportEvent.ComputeCameraAngles e) {
-        double k = IncomingConfig.CLIENT.cameraShake.get();
         Minecraft mc = Minecraft.getInstance();
-        if (k <= 0 || quake <= 0 && SWAYS.isEmpty() && TREMORS.isEmpty() || mc.isPaused()) return;
+        double k = strength(IncomingConfig.CLIENT.cameraShake.get(), mc.options.screenEffectScale().get());
+        if (k <= 0 || GROUNDS.isEmpty() && SWAYS.isEmpty() && TREMORS.isEmpty() || mc.isPaused()) return;
         // наклон — тела игрока: камере снаряда и глазам другой сущности его не видно
         Player p = mc.player;
         double body = p != null && mc.getCameraEntity() == p ? p.getViewYRot((float) e.getPartialTick()) : Double.NaN;
@@ -225,14 +278,14 @@ public final class CameraShake {
     static double[] offsets(double partial, double cameraYaw, double cameraPitch, double cameraRoll, double bodyYaw, double k) {
         double t = ticks + partial;
         // амплитуды: курс/тангаж, °
-        double yaw = 0, pitch = 0;
-        if (quake > 0) {
-            double[] a = quake >= 50 ? new double[]{1.6, 1.1} : quake >= 24 ? new double[]{0.9, 0.6} : new double[]{0.35, 0.25};
-            double fade = Math.min(1, quake / 6.0);
-            yaw += a[0] * fade * wobble(t, 5.1, 3.1);
-            pitch += a[1] * fade * wobble(t, 6.7, 4.4);
+        double yaw = 0, pitch = 0, roll = 0;
+        if (!GROUNDS.isEmpty() && !Double.isNaN(bodyYaw)) {
+            // толчок грунта — у тела игрока, как дрожь удара: камере снаряда его не видно
+            double[] g = groundAt(t);
+            yaw += g[0];
+            pitch += g[1];
+            roll += g[2];
         }
-        double roll = yaw * 0.6;
         if (!TREMORS.isEmpty() && !Double.isNaN(bodyYaw)) {
             // дрожь удара — у головы игрока, как наклон: камере снаряда её не видно
             double[] tr = tremorAt(t);
@@ -297,11 +350,5 @@ public final class CameraShake {
             a = b < 0 ? turn - c : turn + c;
         }
         return new double[]{180 - Math.toDegrees(a), -Math.toDegrees(b), -Math.toDegrees(c)};
-    }
-
-    /** Гладкое «дрожание» из двух синусов разной частоты (Гц при 20 тиках/с), амплитуда ~1. */
-    private static double wobble(double t, double hz, double phase) {
-        double s = t / 20.0;
-        return 0.7 * Mth.sin((float) (s * hz * Mth.TWO_PI + phase)) + 0.3 * Mth.sin((float) (s * hz * 1.73 * Mth.TWO_PI + phase * 2.1));
     }
 }

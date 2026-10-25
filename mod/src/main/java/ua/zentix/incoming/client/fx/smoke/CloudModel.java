@@ -7,6 +7,7 @@ import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
+import ua.zentix.incoming.nuclear.model.FuelPool;
 
 /**
  * Облако обычного взрыва по законам, без Minecraft: что поднялось, куда и как долго его видно — из заряда, топлива, грунта
@@ -40,18 +41,20 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
  * настоящего.
  * <p>
  * <b>Топливо в воронке.</b> Что не разлетелось брызгами в шар, остаётся в воронке, пропитав грунт, и догорает там:
- * доля {@link #POOL_SHARE}, площадь — круг воронки ({@link CraterModel#chargeRadius}), выгорание с единицы площади — у
- * большой лужи топлива ({@link BlastSource.Fuel#poolBurn}) × {@link #THIN_LAYER}: слой в миллиметры на грунте горит
- * медленнее глубокой лужи. Горит {@link #poolSeconds}, тепловыделение {@link #poolWatts}: у шахеда ~2,5 мин по ~2 МВт, у
- * ракеты ~16 мин по ~3 МВт. Над ним — шлейф Бриггса ({@link FirePlume}) с сажей топлива, пока горит; пламя — по
- * Хескестаду.
+ * доля {@link #POOL_SHARE}, закон — общий с сервером {@link FuelPool} (площадь — круг воронки, выгорание тонкого слоя): у
+ * шахеда ~2,5 мин по ~2 МВт, у ракеты ~16 мин по ~3 МВт. Где оно горит, решает сервер: огонь Minecraft на блоках, куда
+ * топливо легло и стекло ({@code warhead/FuelFires}); над ним — шлейф Бриггса ({@link FirePlume}) с сажей топлива, пока
+ * горит ({@code FireSmoke.pool}).
  * <p>
  * <b>Вещество.</b> Сажа взрывчатки — свободный углерод продуктов детонации ({@link BlastSource.Explosive#freeCarbon}), из
- * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link BlastSource.Fuel}.
- * Пыль воронки — грунт воронки ({@link CraterModel#chargeVolume}: диаметр 0,65·W^⅓ м, глубина — четверть, параболоид —
- * тот же закон, что роет сервер); в воздух уходит доля {@link #DUST_LOFTED} (оценка). У удара в постройку это крошка
- * перекрытия, раздробленного у места удара, — в том же объёме (⚠ оценка: перекрытие сервер ломает волной, а не роет
- * воронкой). Выброс — два потока: вовлечённая в горячий газ пыль поднимается с облаком; холодная крошка выброса и
+ * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link FuelPool.Fuel}.
+ * Пыль воронки — разрушенное у цели ({@link BlastTarget}: чаша {@link CraterModel#chargeVolume} по грунту материала —
+ * диаметр 0,65·W^⅓ м, глубина — четверть, параболоид, тот же закон, что роет сервер, у скалы и бетона — 0,7 диаметра; у
+ * плиты над пустотой — пролом; × насыпная плотность вещества цели); в воздух уходит доля мелочи вещества
+ * ({@link BlastTarget.Matter#fines}): у рыхлого и досок — {@link #DUST_LOFTED} (2 %, оценка), у связного (скала, бетон,
+ * кладка) — 10 % (зона дробления у заряда, Esen, Onederra, Bilgin 2003; ⚠ оценка: замеров мелочи контактного взрыва по
+ * бетону нет).
+ * Цвет — вещества цели ({@link BlastTarget.Matter}), а не грунта у любой цели. Выброс — два потока: вовлечённая в горячий газ пыль поднимается с облаком; холодная крошка выброса и
  * обратного выпадения питает тяжёлый слой {@link #crushed}. Разделение массы — {@link #CRUSHED_HOT_SHARE}, оценка;
  * облако больше не забирает всю пыль разрушенного материала. Воронки нет у подрыва выше
  * {@link #CRATER_HOB} радиуса шара продуктов (разрыв в воздухе): пыли воронки нет.
@@ -99,7 +102,7 @@ public final class CloudModel {
     public static final double SOOT_SURVIVES = 0.2;
     /** Плотность грунта, кг/м³ (воронка — {@link CraterModel#chargeVolume}). */
     public static final double SOIL_DENSITY = 1600;
-    /** Доля грунта воронки, что уходит в воздух пылью мельче ~50 мкм, — оценка. */
+    /** Доля рыхлого грунта воронки, что уходит в воздух пылью мельче ~50 мкм, — оценка (у связного — {@code BlastTarget.Matter#fines}). */
     public static final double DUST_LOFTED = 0.02;
     /**
      * Облако старта ({@link LaunchCloud}): доля пыли, сорванной струёй, что встаёт с облаком (остальное — у земли), —
@@ -145,14 +148,6 @@ public final class CloudModel {
      * уходят шлейфом пожара ({@code FireSmoke.pool}).
      */
     public static final double POOL_SHARE = FuelFireball.POOL_SHARE;
-    /**
-     * Выгорание топлива тонким слоем на грунте против глубокой лужи: у разлива толщиной в миллиметры наибольшая скорость
-     * горения — порядка пятой доли глубокой (Mealy, Benfer, Gottuk, «Liquid fuel spill fire dynamics», Fire Safety Science
-     * 10, 2011: тепло уходит в подложку); у топлива в пористом слое песка она тоже ниже, чем у лужи того же размера. В
-     * воронке шахеда — ~2 мм бензина, ракеты — ~8 мм JP-10 в перемешанном грунте (⚠ одна доля на оба: зависимость от
-     * толщины и грунта по их корреляциям не взята).
-     */
-    public static final double THIN_LAYER = 0.2;
     /** Дольше этого облако не живёт, с (дальше оно — дымка над районом). */
     public static final double LIFE_MAX = 3600;
 
@@ -213,6 +208,22 @@ public final class CloudModel {
          * Кусок трубки пыли (ножка облака) между концами a и b от точки взрыва: σ сечения, пыли на метр оси у концов, кг/м.
          * Приёмник без трубок получает гауссы того же сечения через σ вдоль оси (вещество — то же).
          */
+        /**
+         * Клуб пыли у земли, что волна сорвала с поверхностей вокруг ({@link GroundDust}): вещество поверхностей, а не цели.
+         * Приёмник без различия — обычный клуб без сажи и подъёма.
+         */
+        default void ground(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
+            blob(x, y, z, sh, sv, 0, dust, 0, kelvin, 0);
+        }
+
+        /**
+         * Клуб холодной пыли раздробленного вещества цели ({@link #crushed}): цвет и кадры — её вещества. Приёмник без различия —
+         * обычный клуб без сажи и подъёма.
+         */
+        default void crushed(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
+            blob(x, y, z, sh, sv, 0, dust, 0, kelvin, 0);
+        }
+
         default void tube(double ax, double ay, double az, double sa, double dustA, double bx, double by, double bz, double sb, double dustB,
                           double kelvin, double rise) {
             double tx = bx - ax, ty = by - ay, tz = bz - az, len = Math.sqrt(tx * tx + ty * ty + tz * tz);
@@ -226,6 +237,8 @@ public final class CloudModel {
 
     public final BlastSource source;
     public final Air air;
+    /** Во что попал заряд: семейство и вещество ({@link BlastTarget}). */
+    public final BlastTarget target;
     /** Высота подрыва над землёй под точкой взрыва, м (0 — удар в поверхность). */
     public final double hob;
     /** Кусков трубки ножки (изгиб по сдвигу ветра с высотой). */
@@ -267,7 +280,11 @@ public final class CloudModel {
     public final Thermal cooling;
     /** Радиус шара в конец горения, м, и высота его центра тогда. */
     final double burnRadius, burnHeight;
-    /** Топливо в воронке: масса, кг; радиус, м; сколько горит, с; тепловыделение, Вт (0 — топлива нет). */
+    /**
+     * Топливо в воронке ({@link FuelPool}; где оно горит, решает сервер — огонь на блоках, {@code warhead/FuelFires}):
+     * закон, масса, кг; радиус, м; сколько горит, с; тепловыделение, Вт (0 — топлива нет).
+     */
+    public final FuelPool pool;
     public final double poolKg, poolRadius, poolSeconds, poolWatts;
     /** Подъём облака ({@link Thermal}). */
     public final Thermal thermal;
@@ -299,9 +316,26 @@ public final class CloudModel {
      * То же над поверхностью {@code ground} вокруг по секторам: голый рыхлый грунт, дёрн или твёрдое, вода ({@link GroundDust}).
      */
     public CloudModel(BlastSource source, Air air, boolean onWater, double hobM, GroundDust.Ground ground) {
-        // тот же закон воронки, что роет сервер (грунт — сухой: пакет несёт только «вода или нет»)
-        this(source, air, onWater || !digs(source.chargeKg(), hobM) ? 0
-                : CraterModel.chargeVolume(source.chargeKg(), CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater, hobM, ground);
+        // без сведений о цели — голый рыхлый грунт (или вода)
+        this(source, air, BlastTarget.of(onWater ? ua.zentix.incoming.warhead.GroundMaterial.WATER : ua.zentix.incoming.warhead.GroundMaterial.DIRT,
+                source.chargeKg(), hobM), hobM, ground);
+    }
+
+    /**
+     * Взрыв в цель {@code target} на высоте {@code hobM} над поверхностью {@code ground}: пыль раздробленного — доля мелочи
+     * вещества ({@link BlastTarget.Matter#fines}: у рыхлого — {@link #DUST_LOFTED}, у связного — больше) массы разрушенного
+     * ({@link BlastTarget#mass}: воронка закона по грунту материала × его насыпная плотность, у плиты — пролом; тот же закон,
+     * что роет сервер), а не чаша сухого грунта у любой цели (у бетона, досок и плиты прежде выходило 1600 кг/м³ сухой
+     * почвы, physics.md фронта F).
+     */
+    public CloudModel(BlastSource source, Air air, BlastTarget target, double hobM, GroundDust.Ground ground) {
+        this(source, air, target, target.dust(source.chargeKg()), 0.5, hobM, ground);
+    }
+
+    /** Радиус разрушенного у цели, м: пролом плиты или воронка закона по грунту материала. */
+    double crushedRadius() {
+        return target.family() == BlastTarget.Family.SLAB ? target.hole()
+                : CraterModel.chargeRadius(source.chargeKg(), target.material().soil());
     }
 
     /** Роет ли заряд {@code tntKg} кг на высоте {@code hobM} над землёй воронку ({@link #CRATER_HOB}). */
@@ -319,19 +353,23 @@ public final class CloudModel {
      * размер облака — не меньше {@code size} м (пыль, поднятая не жаром, — облако такого размера у земли).
      */
     public CloudModel(BlastSource source, Air air, double dustKg, double size) {
-        this(source, air, dustKg, size, false, 0, GroundDust.Ground.BARE);
+        this(source, air, BlastTarget.SOIL, dustKg, size, 0, GroundDust.Ground.BARE);
     }
 
-    private CloudModel(BlastSource source, Air air, double dustKg, double size, boolean onWater, double hobM, GroundDust.Ground surface) {
+    private CloudModel(BlastSource source, Air air, BlastTarget target, double dustKg, double size, double hobM, GroundDust.Ground surface) {
+        boolean onWater = target.family() == BlastTarget.Family.WATER;
         this.source = source;
         this.air = air;
+        this.target = target;
         this.hob = Math.max(0, hobM);
         // шаром горит топливо без доли воронки: её тепло и сажа — у шлейфа пожара над воронкой
         double ballKg = FuelFireball.ballKg(source.fuelKg());
         double fuelHeat = ballKg * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
-        boolean contact = !source.underground() && source.chargeKg() > 0 && digs(source.chargeKg(), hob);
+        // контакт — по цели (у опоры пакета его нашёл сервер; без неё — та же проверка digs по высоте), а не снова по высоте:
+        // грубая высота вдали иначе снимала бы холодную пыль у пролома, подтверждённого сервером (ревью 2 фронта F)
+        boolean contact = !source.underground() && source.chargeKg() > 0 && target.family() != BlastTarget.Family.AIR;
         double cold = contact ? dustKg * (1 - CRUSHED_HOT_SHARE) : 0;
         dust = dustKg - cold;
         soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + ballKg * source.fuel().sootYield;
@@ -355,15 +393,16 @@ public final class CloudModel {
         fireSeconds = glowEnd();
         // на воде воронки в грунте нет: топливо растекается плёнкой, а плёнка тоньше ~1 мм не держит горение — вода
         // уносит тепло (Buist и др., «In situ burning», обзор для разливов нефти: гаснет у 1–2 мм; ⚠ по памяти)
-        poolKg = onWater ? 0 : POOL_SHARE * source.fuelKg();
-        poolRadius = CraterModel.chargeRadius(source.chargeKg(), CraterModel.Soil.DRY);
-        double burn = THIN_LAYER * source.fuel().poolBurn * Math.PI * poolRadius * poolRadius;
-        poolSeconds = poolKg > 0 && burn > 0 ? poolKg / burn : 0;
-        poolWatts = poolSeconds > 0 ? burn * source.fuel().heatJPerKg : 0;
+        pool = onWater ? FuelPool.NONE : FuelPool.of(source.fuel(), source.fuelKg(), source.chargeKg());
+        poolKg = pool.kg();
+        poolRadius = pool.radius();
+        poolSeconds = pool.seconds();
+        poolWatts = pool.watts();
         // пыль волны: над водой грунта нет (брызги — WaterBlast)
         ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, surface, air);
-        crushed = GroundDust.crushed(onWater ? 0 : source.chargeKg(), hob, cold,
-                2 * CraterModel.chargeRadius(source.chargeKg(), CraterModel.Soil.DRY), surface, air);
+        // начальная область холодной пыли — воронка с валом (2 радиуса воронки грунта цели) или пролом плиты с краем; у грани,
+        // которую нашёл сервер, — у точки взрыва (рельеф вокруг — только для стекания потом), а не на грубой высоте земли вдали
+        crushed = GroundDust.crushed(onWater ? 0 : source.chargeKg(), target.atFace() ? 0 : hob, cold, 2 * crushedRadius(), surface, air);
         life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, Math.max(ground.life, crushed.life)));
     }
 
@@ -377,7 +416,8 @@ public final class CloudModel {
 
     /** То же над поверхностью {@code ground} вокруг ({@link GroundDust}). */
     public static CloudModel buried(BlastSource source, Air air, BuriedBlast law, boolean onWater, GroundDust.Ground ground) {
-        return new CloudModel(source, air, onWater ? 0 : law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, onWater, 0, ground);
+        return new CloudModel(source, air, onWater ? BlastTarget.of(ua.zentix.incoming.warhead.GroundMaterial.WATER, source.chargeKg(), 0) : BlastTarget.SOIL,
+                onWater ? 0 : law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, 0, ground);
     }
 
     /**
@@ -601,9 +641,15 @@ public final class CloudModel {
         return 0.5 * fuelBall + 0.25 * fuelBall * Math.min(1, t / Math.max(fuelBallSeconds, 1e-6));
     }
 
-    /** Высота центра шара продуктов детонации, м: наземный — полусфера, центр у земли. */
+    /**
+     * Высота центра шара продуктов детонации над точкой взрыва, м: у наземного — полусфера (центр видимой части — на 0,45
+     * радиуса над землёй), у разрыва в воздухе шар свободный — центр в точке взрыва; между — по доле радиуса, что уходит в
+     * землю (⚠ оценка формы: шар, срезанный землёй, к полусфере — линейно по высоте подрыва; physics.md фронта F: посадка
+     * полусферой у разрыва в воздухе не обоснована).
+     */
     public double heBallHeight(double t) {
-        return 0.45 * heBallRadius(t);
+        double r = heBallRadius(t);
+        return r <= 0 ? 0 : 0.45 * r * Math.clamp(1 - hob / r, 0, 1);
     }
 
     /** Высота центра светящегося шара (большего), м. */
@@ -613,18 +659,10 @@ public final class CloudModel {
     }
 
     /**
-     * Лужа топлива в возрасте t: доля тепловыделения 0..1 — полное, пока горит, к концу (последняя пятая) гаснет, как
-     * тонкий слой топлива (⚠ форма спада — оценка); 0 — лужи нет или выгорела.
+     * Топливо в воронке в возрасте t: доля тепловыделения 0..1 ({@link FuelPool#share}); 0 — топлива нет или выгорело.
      */
     public double poolShare(double t) {
-        if (poolSeconds <= 0 || t < 0 || t >= poolSeconds) return 0;
-        double u = (poolSeconds - t) / (0.2 * poolSeconds);
-        return u >= 1 ? 1 : u * u * (3 - 2 * u);
-    }
-
-    /** Высота пламени лужи по Хескестаду, м: L = 0,235·Q^⅖ − 1,02·D (Q — кВт), не меньше полуметра. */
-    public double poolFlame() {
-        return poolWatts <= 0 ? 0 : Math.max(0.5, 0.235 * Math.pow(poolWatts / 1e3, 0.4) - 1.02 * 2 * poolRadius);
+        return pool.share(t);
     }
 
     /**
@@ -671,6 +709,15 @@ public final class CloudModel {
      */
     double capDust(double t) {
         return (dust + ground.underBall(t)) * DustModel.extinctionAloft(t / Math.max(height(t), 1)) + ground.drawn(stemEntered(t));
+    }
+
+    /**
+     * Доля пыли облака в возрасте t, что — раздробленное вещество цели (остальное — пыль поверхностей вокруг: из-под шара и
+     * из ножки): по ослаблению, как в {@link #capDust}. Цвет пыли облака — смесь их цветов этой долей.
+     */
+    public double capMatterShare(double t) {
+        double all = capDust(t);
+        return all > 0 ? dust * DustModel.extinctionAloft(t / Math.max(height(t), 1)) / all : 1;
     }
 
     /**
@@ -786,8 +833,8 @@ public final class CloudModel {
             }
         }
         // слой пыли волны — на поверхностях, с которых его подняло, и там, куда он стёк (высоты — от точки взрыва)
-        ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y, z, gh, gv, 0, d, 0, inBall(t, x, y, z, T_AIR), 0));
-        crushed.blobs(t, fade, (x, y, z, gh, gv, d) -> out.blob(x, y, z, gh, gv, 0, d, 0, inBall(t, x, y, z, T_AIR), 0));
+        ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.ground(x, y, z, gh, gv, d, inBall(t, x, y, z, T_AIR)));
+        crushed.blobs(t, fade, (x, y, z, gh, gv, d) -> out.crushed(x, y, z, gh, gv, d, inBall(t, x, y, z, T_AIR)));
     }
 
     /**

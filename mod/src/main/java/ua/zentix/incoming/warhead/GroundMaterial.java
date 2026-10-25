@@ -67,6 +67,21 @@ public enum GroundMaterial {
         };
     }
 
+    /**
+     * Homogeneous propagation medium at the source, not a ray trace through the whole ground path.
+     * Estimates for Minecraft categories: snow/gravel are loose, timber is on soil, masonry acts as fractured rock;
+     * WATER represents the saturated bed, not a solid seismic wave propagating through water. Terracotta is fired
+     * clay, not evidence of water saturation. These approximations do not change the separate crater material law.
+     */
+    public ua.zentix.incoming.nuclear.model.GroundShock.Medium shockMedium() {
+        return switch (this) {
+            case STONE, DEEPSLATE, BRICK, TERRACOTTA -> ua.zentix.incoming.nuclear.model.GroundShock.Medium.ROCK;
+            case WATER -> ua.zentix.incoming.nuclear.model.GroundShock.Medium.SATURATED;
+            case SAND, GRAVEL, SNOW -> ua.zentix.incoming.nuclear.model.GroundShock.Medium.LOOSE;
+            case DIRT, WOOD -> ua.zentix.incoming.nuclear.model.GroundShock.Medium.SOIL;
+        };
+    }
+
     GroundMaterial(Supplier<Block> particle, float r, float g, float b, float porosity, String... debris) {
         this.particle = particle;
         this.r = r;

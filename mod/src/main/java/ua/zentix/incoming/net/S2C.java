@@ -35,11 +35,14 @@ public final class S2C {
      * в его паспорте, клиент берёт их оттуда ({@code client.fx.BlastSource}); ось боевой части (курс снаряда у удара,
      * единичный вектор): по ней и сиду клиент разлетает те же осколки, что сервер ({@code warhead.FragmentModel}).
      * <p>
+     * Опора у грани удара ({@link Support}) — то, что о преграде знает пробой сервера: во что попал заряд и плита ли это над
+     * пустотой, которую он пробивает. Клиент выбирает по ней картинку цели ({@code client.fx.smoke.BlastTarget}).
+     * <p>
      * Формат только растёт с конца (replay.md): оружие и ось дописаны в конец; в повторе, записанном до него, его нет
      * ({@link #NO_WEAPON}) — оно выводится из вида, как вид тогда и выбирали ({@link #weaponType}).
      */
-    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis)
-            implements CustomPacketPayload {
+    public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis,
+                        boolean fuelApart, Optional<Support> support) implements CustomPacketPayload {
         public static final int DRONE = 0, MISSILE = 1, BUNKER = 2, ROCKET = 3;
         /** Оружия в пакете нет (повтор, записанный до этого поля). */
         public static final int NO_WEAPON = -1;
@@ -49,6 +52,14 @@ public final class S2C {
         /** Ось боевой части — вниз, если её нет в пакете (повтор, записанный до этого поля). */
         public static final Vec3 DOWN = new Vec3(0, -1, 0);
         private static final StreamCodec<ByteBuf, Vec3> AXIS = StreamCodecs.trailing(StreamCodecs.VEC3, DOWN);
+        /**
+         * Топливо в воронке горит отдельно — огнём на блоках сервера и пакетом {@link FuelFire} ({@code warhead/FuelFires}):
+         * его дым и гул клиент ведёт только по нему. В повторе, записанном до этого поля, — нет: дым и гул топлива — у
+         * места удара, как тогда (огня на блоках в такой записи нет).
+         */
+        private static final StreamCodec<ByteBuf, Boolean> FUEL_APART = StreamCodecs.trailing(ByteBufCodecs.BOOL, false);
+        /** Опоры нет в пакете (повтор, записанный до этого поля; взрыв без сервера; заряд не приложен к преграде). */
+        private static final StreamCodec<ByteBuf, Optional<Support>> SUPPORT = StreamCodecs.trailing(ByteBufCodecs.optional(Support.CODEC), Optional.empty());
         public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.of((b, p) -> {
             ByteBufCodecs.VAR_INT.encode(b, p.kind);
             StreamCodecs.VEC3.encode(b, p.pos);
@@ -58,12 +69,50 @@ public final class S2C {
             PROJECTILE.encode(b, p.projectile);
             WEAPON.encode(b, p.weapon);
             AXIS.encode(b, p.axis);
+            FUEL_APART.encode(b, p.fuelApart);
+            SUPPORT.encode(b, p.support);
         }, b -> new Blast(ByteBufCodecs.VAR_INT.decode(b), StreamCodecs.VEC3.decode(b), ByteBufCodecs.VAR_INT.decode(b),
-                ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b), AXIS.decode(b)));
+                ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b), AXIS.decode(b),
+                FUEL_APART.decode(b), SUPPORT.decode(b)));
 
         /** Взрыв без оси боевой части (бомба, картинка после ядерки): ось вниз. */
         public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) {
             this(kind, pos, material, surfaceY, seed, projectile, weapon, DOWN);
+        }
+
+        /** Взрыв, чьё топливо (если есть) горит у клиента у места удара: без огня сервера на блоках (картинка без сервера). */
+        public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis) {
+            this(kind, pos, material, surfaceY, seed, projectile, weapon, axis, false);
+        }
+
+        /** Взрыв без опоры от сервера: цель — по материалу ({@link Support}). */
+        public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis,
+                     boolean fuelApart) {
+            this(kind, pos, material, surfaceY, seed, projectile, weapon, axis, fuelApart, Optional.empty());
+        }
+
+        /**
+         * Опора у грани удара — итог пробоя сервера по одному лучу, нормали грани внутрь преграды ({@code warhead.SlabBreach#support}):
+         * тот же закон, те же блоки и то же правило «пустота под перекрытием», что у лучей, которые сносят плиту.
+         *
+         * @param loose  то, во что попал заряд, — рыхлое (группа пробоя «земля», FM 5-250 табл. B-3)
+         * @param slab   толщина плиты до пустоты под перекрытием по нормали, м; 0 — не пробита (толща, грунт, пустота под небом)
+         * @param breach радиус пробоя плиты у этого заряда по её блокам (путь / сумма путей, делённых на радиус каждого), м
+         * @param normal нормаль грани внутрь преграды (единичная): ось дыры и тыльного откола
+         * @param lift   на сколько точка взрыва ушла за грань по нормали, м (точка прицела — полблока в блок): заряд лежит в
+         *               {@code pos − normal·lift}
+         */
+        public record Support(boolean loose, float slab, float breach, Vec3 normal, float lift) {
+            private static final StreamCodec<ByteBuf, Vec3> NORMAL = StreamCodec.composite(ByteBufCodecs.FLOAT, v -> (float) v.x,
+                    ByteBufCodecs.FLOAT, v -> (float) v.y, ByteBufCodecs.FLOAT, v -> (float) v.z, Vec3::new);
+            public static final StreamCodec<ByteBuf, Support> CODEC = StreamCodec.composite(
+                    ByteBufCodecs.BOOL, Support::loose, ByteBufCodecs.FLOAT, Support::slab, ByteBufCodecs.FLOAT, Support::breach,
+                    NORMAL, Support::normal, ByteBufCodecs.FLOAT, Support::lift, Support::new);
+
+            /** Опора у грани сверху (нормаль вниз, заряд на грани). */
+            public Support(boolean loose, float slab, float breach) {
+                this(loose, slab, breach, DOWN, 0);
+            }
         }
 
         /**
@@ -147,6 +196,32 @@ public final class S2C {
     }
 
     /**
+     * Топливо удара горит на блоках ({@code warhead/FuelFires}): состояние воронки — при появлении, при каждой перемене и
+     * тому, кому уходит её чанк. Дым, свет и гул этого пожара клиент ведёт сам по закону топлива оружия на этих клетках
+     * ({@code WeaponSpec.pool(lit)}), огонь — блоки мира.
+     *
+     * @param id        воронка (в своём мире)
+     * @param cells     клетки огня в порядке выгорания (первая горит дольше всех: туда топливо стекло) — нынешние места
+     * @param smothered клетки (биты по номеру), чьё топливо кончилось раньше срока: засыпало, залило, упало в воду
+     * @param weapon    оружие ({@code WeaponType.id})
+     * @param blastTick игровое время удара: закон горения считает время от него
+     */
+    public record FuelFire(int id, List<BlockPos> cells, long smothered, int weapon, long blastTick) implements CustomPacketPayload {
+        public static final Type<FuelFire> TYPE = new Type<>(Incoming.id("fuel_fire"));
+        /** Клеток в пакете не больше: биты {@link #smothered} — одно long (у ракеты — 9). */
+        public static final int MAX_CELLS = 64;
+        public static final StreamCodec<ByteBuf, FuelFire> CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, FuelFire::id, BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX_CELLS)), FuelFire::cells,
+                ByteBufCodecs.VAR_LONG, FuelFire::smothered, ByteBufCodecs.VAR_INT, FuelFire::weapon, ByteBufCodecs.VAR_LONG,
+                FuelFire::blastTick, FuelFire::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
      * Свод над полостью обрушился: провал на поверхности.
      *
      * @param volume сколько грунта ушло в провал, м³ (объём полости; в повторе до этого поля — {@link #OLD_VOLUME})
@@ -165,11 +240,44 @@ public final class S2C {
         }
     }
 
-    /** Сейсмическая волна (в породе быстрее звука): толчки прямо сейчас, сила — длительность в тиках. */
-    public record Quake(int ticks, boolean rumble) implements CustomPacketPayload {
+    /**
+     * Conventional ground source: the client evaluates R/c and PPV at its body, with fractional ticks.
+     * The old ticks/rumble prefix remains for existing replays. The nuclear ground path is separate.
+     * A source event has ticks=0, rumble=false: the legacy handler must not shake/play sound immediately.
+     */
+    public record Quake(int ticks, boolean rumble, Optional<Ground> source) implements CustomPacketPayload {
         public static final Type<Quake> TYPE = new Type<>(Incoming.id("quake"));
         public static final StreamCodec<ByteBuf, Quake> CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT, Quake::ticks, ByteBufCodecs.BOOL, Quake::rumble, Quake::new);
+                ByteBufCodecs.VAR_INT, Quake::ticks, ByteBufCodecs.BOOL, Quake::rumble,
+                StreamCodecs.trailing(ByteBufCodecs.optional(Ground.CODEC), Optional.empty()), Quake::source, Quake::new);
+
+        public Quake(int ticks, boolean rumble) {
+            this(ticks, rumble, Optional.empty());
+        }
+
+        public Quake(Vec3 pos, double tntKg, double depthM, int material, long gameTime) {
+            this(0, false, Optional.of(new Ground(pos, tntKg, depthM, material, gameTime)));
+        }
+
+        /**
+         * @param pos source position, blocks = metres
+         * @param tntKg full TNT-equivalent charge/source energy, kg; GroundShock applies depth coupling once
+         * @param depthM burial below the local surface, metres; 0 = contact
+         * @param material existing GroundMaterial wire id (not GroundShock.Medium.ordinal)
+         * @param gameTime server game tick at source event, not packet delivery or end of excavation work
+         */
+        public record Ground(Vec3 pos, double tntKg, double depthM, int material, long gameTime) {
+            public static final StreamCodec<ByteBuf, Ground> CODEC = StreamCodec.composite(
+                    StreamCodecs.VEC3, Ground::pos, ByteBufCodecs.DOUBLE, Ground::tntKg,
+                    ByteBufCodecs.DOUBLE, Ground::depthM, ByteBufCodecs.VAR_INT, Ground::material,
+                    ByteBufCodecs.VAR_LONG, Ground::gameTime, Ground::new);
+
+            /** The same pure law for recipient selection and local sampling. */
+            public ua.zentix.incoming.nuclear.model.GroundShock.Source model() {
+                return new ua.zentix.incoming.nuclear.model.GroundShock.Source(tntKg, depthM,
+                        ua.zentix.incoming.warhead.GroundMaterial.byId(material).shockMedium());
+            }
+        }
 
         @Override
         public Type<? extends CustomPacketPayload> type() {

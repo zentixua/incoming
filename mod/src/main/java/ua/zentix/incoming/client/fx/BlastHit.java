@@ -4,17 +4,18 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.client.nuclear.Deafness;
-import ua.zentix.incoming.client.sound.BlastMix;
 import ua.zentix.incoming.client.sound.BlastSounds;
 import ua.zentix.incoming.client.sound.Outdoor;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.BodySway;
 import ua.zentix.incoming.nuclear.model.HearingModel;
+import ua.zentix.incoming.nuclear.model.ShockAtBody;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 import java.util.Locale;
@@ -41,23 +42,40 @@ public final class BlastHit {
      * @param late сколько тиков назад (0..1) фронт прошёл тело
      */
     static void hit(BlastSource s, Vec3 pos, GroundMaterial ground, long seed, LocalPlayer player, Vec3 body, double late) {
-        double d = Math.max(0.5, body.distanceTo(pos)), pa = BlastMix.pressure(s, d), tPlus = BlastMix.phase(s, d);
+        double d = Math.max(0.5, body.distanceTo(pos));
+        ShockAtBody shock = ShockAtBody.chemical(s.chargeKg(), s.surface(), d);
+        double pa = shock.pressurePa(), tPlus = shock.positiveSeconds();
         double exposure = HearingModel.exposure(pa, tPlus);
         if (IncomingConfig.CLIENT.nukeTinnitus.get()) hurtEars(pos, ground, body, d, pa, tPlus, seed);
         // дрожь камеры в миг удара — подача, по давлению и импульсу волны у тела (и верхом, и вплавь: удар чувствуется)
-        double tremor = CameraShake.tremor(pa, BlastModel.chemicalImpulse(d, s.chargeKg(), s.surface()), late, seed);
+        double tremor = CameraShake.tremor(pa, shock.impulsePaSeconds(), late, seed);
         double lean = 0, neck = 0;
         float open = 0;
+        BodySway.Motion m = null;
         if (!CameraShake.carried(player)) {
             // за стеной, домом или холмом в сторону взрыва — в его ветровой тени (лучи у тела)
             open = SoundFilters.openRays(body, Math.atan2(pos.z - body.z, pos.x - body.x));
-            BodySway.Motion m = CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), open, tPlus, tPlus, late,
+            m = CameraShake.sway(pa, shock.dynamicPressurePa(), open, tPlus, tPlus, late,
                     body.subtract(pos), player.getYRot(), true);
             lean = Math.toDegrees(BodySway.peak(m.body(), 0));
             neck = Math.toDegrees(BodySway.peak(m.neck(), 0));
         }
-        last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg neck %.2f deg tremor %.2f",
-                d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean, neck, tremor);
+        // контузия на экране и сор у камеры — тем же фронтом у тела (подача по модели: ConcussionDose, LocalLitter)
+        double dose = feel(IncomingConfig.CLIENT.blastEffects.get(), shock, HearingModel.shift(exposure), m, late,
+                () -> NearLitter.front(s, pos, body, shock.arrivalSeconds(), seed));
+        last = String.format(Locale.ROOT, "body d %.0f p %.0f Pa phase %.1f ms LAE %.1f dB shift %.1f dB open %.2f lean %.2f deg neck %.2f deg tremor %.2f dose %.3f",
+                d, pa, 1000 * tPlus, exposure, HearingModel.shift(exposure), open, lean, neck, tremor, dose);
+    }
+
+    /**
+     * Контузия на экране и сор у камеры от фронта у тела — картинка ударов: только со своими эффектами взрыва
+     * ({@code own} — {@code blast_effects}). Разрыв ПВО идёт сюда и при выключенных (его картинка и звук — всегда свои), а
+     * эти два — часть того, что настройка отдаёт другому моду взрывов. Возвращает дозу контузии (0 — не было).
+     */
+    static double feel(boolean own, ShockAtBody shock, double shiftDb, @Nullable BodySway.Motion head, double late, Runnable litter) {
+        if (!own) return 0;
+        litter.run();
+        return Concussion.front(shock, shiftDb, head, late);
     }
 
     /**

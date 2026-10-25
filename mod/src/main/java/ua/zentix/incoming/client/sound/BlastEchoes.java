@@ -22,7 +22,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.DoubleSupplier;
 
 /**
  * Эхо взрыва от рельефа у этого слушателя — у любого взрыва, ядерного ({@code client.nuclear.NukeEchoes}) и обычного
@@ -70,9 +69,12 @@ public class BlastEchoes {
     @Nullable
     private Vec3 heard;
     private float volume, pitch;
-    /** Множитель смеси взрывов ({@link #bus}); null — без смеси. */
+    /** Взрыв в смеси взрывов ({@link #bus}); null — без смеси. */
     @Nullable
-    private DoubleSupplier bus;
+    private Mix.Blast bus;
+    /** Огибающие дорожек для смеси ({@link Envelope#of}, {@link Envelope#energy}) — в фоне, вместе со сведением. */
+    @Nullable
+    private CompletableFuture<float[][][]> profiles;
     private int queued;
     private boolean stopped;
 
@@ -113,9 +115,15 @@ public class BlastEchoes {
         this.anchor = OwnSources.anchor(this, direct, clock, tick);
     }
 
-    /** Эхо обычного взрыва — в смеси взрывов ({@link Mix}): громкость его дорожек × её множитель; у ядерки смеси нет. */
-    public void bus(@Nullable DoubleSupplier bus) {
-        this.bus = bus;
+    /**
+     * Эхо обычного взрыва — в смеси взрывов ({@link Mix}) вместе с его прямым ударом: дорожки — слои взрыва {@code blast}
+     * по мощности, со своей задержкой (без них позднее эхо, когда прямой удар уже стих, взрыв считался бы тихим, и его
+     * множитель гасил бы эхо среди других взрывов); громкость дорожек — × множитель взрыва. У ядерки смеси нет. Хвост
+     * реверберации ({@link OwnSources#reverb}: посыл 0,25, поздние отражения 1,2) в смесь не идёт: он на ~10 дБ ниже эха,
+     * а эхо — на 10–20 дБ ниже прямого удара, к сумме это меньше 0,05 дБ. Звать до {@link #arrive}.
+     */
+    void bus(@Nullable Mix.Blast blast) {
+        this.bus = blast;
     }
 
     /**
@@ -147,19 +155,60 @@ public class BlastEchoes {
                     Incoming.LOG.warn("Terrain echo: can't mix the echoes: {}", e.toString());
                     return EchoMix.Mix.NONE;
                 });
+        if (bus != null) profiles = mix.thenApplyAsync(BlastEchoes::profiles, Util.backgroundExecutor()).exceptionally(e -> {
+            Incoming.LOG.warn("Terrain echo: can't measure the echoes for the blast mix: {}", e.toString());
+            return null;
+        });
+    }
+
+    /** Огибающая и энергия каждой дорожки ({@link EchoMix#RATE}), для смеси. */
+    private static float[][][] profiles(EchoMix.Mix m) {
+        float[][][] out = new float[m.tracks().size()][][];
+        for (int i = 0; i < out.length; i++) {
+            short[] pcm = m.tracks().get(i).pcm();
+            float[] x = new float[pcm.length];
+            for (int j = 0; j < x.length; j++) x[j] = pcm[j] / 32768f;
+            out[i] = new float[][]{Envelope.of(x, EchoMix.RATE), Envelope.energy(x, EchoMix.RATE)};
+        }
+        return out;
     }
 
     /** Каждый тик после удара: лучи, которых не хватило, и готовые дорожки — в очередь своих источников. */
     public void tick() {
         if (stopped) return;
         if (mix == null) finish();
-        if (mix == null || anchor == null || done != null || !mix.isDone()) return;
+        if (mix == null || anchor == null || done != null || !mix.isDone() || profiles != null && !profiles.isDone()) return;
         done = mix.getNow(EchoMix.Mix.NONE);
         if (done.tracks().isEmpty()) return;
         OwnSources.reverb(done.t60(), SEND);
-        for (EchoMix.Track t : done.tracks()) {
-            if (OwnSources.play(this, anchor, t.start(), t.azimuth(), Math.min(16, volume * t.gain()), t.pcm(), EchoMix.RATE, false, false, bus)) queued++;
+        Mix.Blast blast = bus;
+        OwnSources.Anchor start = anchor;
+        float[][][] env = blast == null || profiles == null ? null : profiles.getNow(null);
+        queued += queue(done, env, volume, blast, (t, gain) -> OwnSources.play(this, start, t.start(), t.azimuth(), gain, t.pcm(), EchoMix.RATE, false,
+                false, blast == null ? null : blast::factor));
+    }
+
+    /** Дорожка эха — своему источнику: false — места нет. */
+    @FunctionalInterface
+    interface Player {
+        boolean play(EchoMix.Track track, float gain);
+    }
+
+    /**
+     * Дорожки {@code done} — своим источникам ({@code player}) с громкостью прямого удара {@code volume} × своей, принятые —
+     * слоями взрыва {@code blast} в смеси (огибающие {@code env}; null — без смеси): от начала прямого удара со своей
+     * задержкой, как их голоса. Сколько принято.
+     */
+    static int queue(EchoMix.Mix done, float @Nullable [][][] env, float volume, @Nullable Mix.Blast blast, Player player) {
+        int queued = 0;
+        for (int i = 0; i < done.tracks().size(); i++) {
+            EchoMix.Track t = done.tracks().get(i);
+            float gain = Math.min(16, volume * t.gain());
+            if (!player.play(t, gain)) continue;
+            queued++;
+            if (blast != null && env != null && i < env.length) blast.add(Mix.Layer.own(env[i][0], env[i][1], gain, t.start()));
         }
+        return queued;
     }
 
     /** Дорожки уже в очереди своих источников (или их нет и не будет): больше эхо ничего не готовит. */

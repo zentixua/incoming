@@ -206,7 +206,7 @@ def main():
     comment = [f"### {gate_title(verdict)}", ""]
     if verdict:
         md.append(f"## Verdict against {verdict['base']['label']}: {verdict['state'].upper()}")
-        md.append("Each pack is shot as a pair in one session: accepted A1, candidate B, accepted A2. The base is the mean of A1 "
+        md.append("Each pack is shot as a pair in one session: base A1, candidate B, base A2. The base is the mean of A1 "
                   f"and A2; the tolerance per value is max({gate.MIN_TOL:.0%}, {gate.SPREAD_K:g} × |A1 − A2| / base). A pair whose "
                   f"A1 and A2 differ by more than {gate.MAX_SPREAD:.0%} is noisy; a pack that does not pass is shot by a second pair, "
                   "and the second pair decides.")
@@ -218,14 +218,14 @@ def main():
         if verdict["look"]:
             md += ["", "Look differs noticeably (for the reviewer, not a failure):", *[f"- {x}" for x in verdict["look"]]]
         md.append("")
-        comment += ["| pack | window | value | PR | accepted A1 / A2 | change | tolerance |", "|---|---|---|---|---|---|---|"]
+        comment += ["| pack | window | value | PR | base A1 / A2 | change | tolerance |", "|---|---|---|---|---|---|---|"]
         for r in verdict["rows"]:
             if r["gated"] and r["window"].startswith(gate.GATED):
                 bases = " / ".join(fmt(x) for x in r.get("bases") or [r["base"]])
                 comment.append(f"| {r['pack']} | {r['window']} | {r['metric']} | {fmt(r['cand'])} | {bases} | {r['change']:+.0%} | "
                                f"{r['tol']:.0%}{' (noisy)' if r.get('noisy') else ''}{' **FAIL**' if r['fail'] else ''} |")
         comment += ["", *([f"- {x}" for x in verdict["noisy"] + verdict["fails"]]
-                          or ["Frame time at 100 strikes within tolerance of the accepted release."])]
+                          or ["Frame time at 100 strikes within tolerance of the base."])]
         if verdict["look"]:
             comment += ["", "Look differs noticeably (reviewer, compare the frames):", *[f"- {x}" for x in verdict["look"]]]
     md.append("Cells: GPU p50 / CPU p95 / frame p95 (frames per second), ms. GPU — the GPU clock from the first to the last command "

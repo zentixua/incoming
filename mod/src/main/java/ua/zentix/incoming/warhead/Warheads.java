@@ -42,6 +42,7 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
+import ua.zentix.incoming.nuclear.model.GroundShock;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.registry.ModDamageTypes;
@@ -106,25 +107,24 @@ public final class Warheads {
         double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX,
                 HearingModel.audibleRangeM(BunkerImpact.airTnt(hit))));
         PacketDistributor.sendToPlayersNear(level, null, point.x, point.y, point.z, reach, new S2C.BunkerImpact(point, mat.ordinal(), (float) speed));
-        quake(level, point, hit);
+        // Estimate: use equal TNT energy for the kinetic contact pulse; this is not a measured impact spectrum.
+        // TM coupling is applied once to the full source energy, not again after subtracting its airborne share.
+        quake(level, new S2C.Quake(point, hit, 0, mat.ordinal(), level.getGameTime()));
         StrikeWorld.get(level).impactCost().step(System.nanoTime() - t0);
     }
 
     /**
-     * Толчок земли от удара или взрыва в грунте ({@code tntKg} кг ТНТ, что ушло в грунт): сейсмическая волна быстрее звука
-     * — трясёт сразу. Сила и длительность — по приведённому расстоянию Z = R/W^⅓ (оценка, удобство игрока, не урон): до
-     * Z 3 — 4 с, до 7,5 — 3 с, до 24 — 2 с (как было у 2,4 т в 40, 100 и 320 блоках).
+     * Ground source, not a command to shake now. GroundShock decides the perceptible recipient range; the client
+     * computes arrival and motion for its own position. In loose ground it may arrive AFTER the air front.
      */
-    static void quake(ServerLevel level, Vec3 at, double tntKg) {
-        double cube = Math.cbrt(Math.max(tntKg, 1e-3));
+    static void quake(ServerLevel level, S2C.Quake event) {
+        S2C.Quake.Ground source = event.source().orElseThrow();
+        double reach = GroundShock.feltRangeM(source.model());
+        if (!(reach > 0)) return;
         for (ServerPlayer p : level.players()) {
-            double z = p.position().distanceTo(at) / cube;
-            if (z <= QUAKE_FELT) PacketDistributor.sendToPlayer(p, new S2C.Quake(z <= 3 ? 80 : z <= 7.5 ? 60 : 40, true));
+            if (p.position().distanceTo(source.pos()) <= reach) PacketDistributor.sendToPlayer(p, event);
         }
     }
-
-    /** Докуда толчок земли ощутим, Z = R/W^⅓ (оценка). */
-    static final double QUAKE_FELT = 24;
 
     /** Подрыв бетонобойной бомбы под землёй. */
     public static void bunker(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity bomb, @Nullable UUID owner) {
@@ -457,14 +457,34 @@ public final class Warheads {
 
     /** Проверки: заряд {@code tntKg} кг ТНТ, приложенный к грани (как боевая часть, ударившая в неё), с районом {@code reach}. */
     public static Probe testSurfaceCharge(ServerLevel level, Vec3 at, double tntKg, double reach) {
-        return testPlaced(level, at, tntKg, SlabBreach.Placement.SURFACE, reach);
+        return testSurfaceCharge(level, at, tntKg, reach, S2C.Blast.DOWN);
+    }
+
+    /** Проверки: то же с курсом боевой части {@code axis} у удара (косой удар, удар в стену сбоку). */
+    public static Probe testSurfaceCharge(ServerLevel level, Vec3 at, double tntKg, double reach, Vec3 axis) {
+        return testPlaced(level, at, tntKg, SlabBreach.Placement.SURFACE, reach, axis);
     }
 
     private static Probe testPlaced(ServerLevel level, Vec3 at, double tntKg, SlabBreach.Placement placement, double reach) {
+        return testPlaced(level, at, tntKg, placement, reach, S2C.Blast.DOWN);
+    }
+
+    private static Probe testPlaced(ServerLevel level, Vec3 at, double tntKg, SlabBreach.Placement placement, double reach, Vec3 axis) {
         BlastArea area = BlastArea.hold(level, at, reach);
-        Probe probe = new Probe(charge(level, area, at, tntKg, placement, S2C.Blast.DOWN, null, null));
+        Probe probe = new Probe(charge(level, area, at, tntKg, placement, axis, null, null));
         area.release(level);
         return probe;
+    }
+
+    /**
+     * Опора по оси удара заряда {@code tntKg} кг ТНТ, приложенного к грани в {@code at} ({@link SlabBreach#support}): взрыв
+     * для правила пробоя — тот же, что заводит {@link StagedExplosion} у заряда (без калькулятора, сила — охват слома),
+     * только событий не шлёт: он ничего не ломает.
+     */
+    public static Optional<S2C.Blast.Support> support(ServerLevel level, Vec3 at, double tntKg, @Nullable Vec3 axis, @Nullable Entity direct) {
+        Explosion e = new Explosion(level, direct, null, null, at.x, at.y, at.z, (float) StagedExplosion.breakReach(tntKg), false,
+                Explosion.BlockInteraction.KEEP, ModParticles.NONE.get(), ModParticles.NONE.get(), ua.zentix.incoming.registry.ModSounds.SILENT);
+        return SlabBreach.support(level, at, tntKg, axis, e, new ExplosionDamageCalculator());
     }
 
     /** Проверки: докуда волна заряда ломает блок с порогом {@code psi} в открытом поле (нижний край разброса), блоков. */
@@ -505,8 +525,9 @@ public final class Warheads {
 
     /**
      * Наземный взрыв боевой части: заряд из паспорта ({@link WeaponSpec#charge}) — волна, газы, тела (главный взрыв); за
-     * ним — воронка по закону обычного заряда, поджиг шаром топлива из бака ({@link WeaponSpec#fuelAtImpact}), обломки,
-     * осколки корпуса ({@link FragmentStrike}), стёкла. Вторичных подрывов и колец огня нет: вторичное — только топливо и горящие обломки.
+     * ним — воронка по закону обычного заряда, поджиг шаром топлива из бака ({@link WeaponSpec#fuelAtImpact}), топливо в
+     * воронке — огнём на блоках, пока горит ({@link FuelFires}), обломки, осколки корпуса ({@link FragmentStrike}), стёкла.
+     * Вторичных подрывов и колец огня нет: вторичное — только топливо и горящие обломки.
      */
     static final class SurfaceBlast implements Timeline {
         private final WeaponType weapon;
@@ -545,14 +566,19 @@ public final class Warheads {
             // дальше, чем сервер шлёт что-либо далёкое
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
                     Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(spec.charge())));
+            this.reach = reach;
+            this.born = level.getGameTime();
             this.seed = seed;
             this.axis = axis(direct);
-            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
-                    new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis));
             // заряд на аппарате: воронку и шар топлива там не ставить — это корпус, а не земля. Снаряд отдаёт точку удара о
             // аппарат уже в мире (StrikeProjectile: SubLevels.toWorld), поэтому — и аппарат, чей габарит у точки
             inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
             onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
+            // во что попал заряд и плита ли это над пустотой — тем же пробоем, что снесёт плиту (картинка цели у клиента)
+            Optional<S2C.Blast.Support> support = onCraft || !(spec.charge() > 0) ? Optional.empty() : support(level, pos, spec.charge(), axis, direct);
+            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
+                    new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis,
+                            true, support));
             // боевая часть рвётся на грани, в которую ударила: плиту над пустотой она пробивает (SlabBreach); корпус
             // аппарата — не преграда мира
             main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(),
@@ -565,6 +591,9 @@ public final class Warheads {
         private final boolean inPlots;
         /** Зерно взрыва (оно же в пакете взрыва): по нему осколки у сервера и клиента одни. */
         private final long seed;
+        /** Докуда клиентам шлётся пакет взрыва (и огня топлива в воронке), блоков; тик удара. */
+        private final double reach;
+        private final long born;
         /** Ось боевой части — курс снаряда у удара. */
         private final Vec3 axis;
 
@@ -582,7 +611,9 @@ public final class Warheads {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact(), weapon.spec().charge()) : 0);
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fireball", l -> happened() ? Craters.ignite(l, pos, weapon.spec().fuelAtImpact()) : 0);
+                // топливо в воронке — после воронки: ложится на её дно и горит огнём на блоках, пока его хватает
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, pos, weapon, born, reach) : 0);
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
                     l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));
@@ -636,6 +667,9 @@ public final class Warheads {
         @Nullable
         private final Entity owner;
         private final GroundMaterial ventMat;
+        /** Material/depth/time sampled before excavation changes the source column. */
+        private final S2C.Quake groundShock;
+        private boolean groundSent;
         private final BuriedBlast law;
         /** Верх над зарядом (без своей скважины). */
         private final int cover;
@@ -659,6 +693,8 @@ public final class Warheads {
             this.law = new BuriedBlast(WeaponSpec.BUNKER.warheadTnt(), BunkerCover.depth(cover, pos.y));
             this.hole = Math.PI * bomb.article().diameter() * bomb.article().diameter() / 4;
             double air = law.airCharge(hole);
+            // The TM depth-coupling factor already includes venting: W and scaled depth both use the full charge.
+            this.groundShock = new S2C.Quake(pos, law.tnt(), law.depth(), mat.ordinal(), level.getGameTime());
             Vec3 top = new Vec3(pos.x, cover, pos.z);
             // район — то, что взрыв делает с грунтом (трещины, труба, воронка); волна над землёй при прорыве ломает дальше
             // там, где мир загружен (луч кончается в неготовом чанке): охват волны 2,4 т — ~650 блоков, тысячи чанков, и
@@ -690,7 +726,6 @@ public final class Warheads {
                 // в зоне дробления давление в породе — сотни МПа: кто там (в ходе, в пустоте за стеной), не выживет
                 unit(level, area, main, ImpactCost.Kind.HITS, "Crush zone", l -> {
                     if (!happened()) return 0;
-                    quake(l, pos, law.tnt() - law.airCharge(hole));
                     return crushBodies(l);
                 });
                 if (blocks) {
@@ -735,7 +770,13 @@ public final class Warheads {
             if (t == CHIMNEY_TICK && IncomingConfig.SERVER.collapse.get() && IncomingConfig.SERVER.blockDamage.get() && !law.breaches()) {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Roof collapse", l -> happened() ? chimney(l) : 0);
             }
-            return t < CHIMNEY_TICK;
+            // Send as soon as Start accepted the explosion, not after every damage/front work unit finished.
+            // Keep polling if the queue took longer than the chimney timer to start; cancelled/timed-out jobs end it.
+            if (!groundSent && happened()) {
+                quake(level, groundShock);
+                groundSent = true;
+            }
+            return t < CHIMNEY_TICK || !groundSent && pending(main);
         }
 
         @Override

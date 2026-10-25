@@ -14,8 +14,9 @@ Six weapons, in the order the designator lists them. Each launch uses [munitions
 
 Times are for a nearby target. The world owner can change flight times.
 
-Fuel burning in a crater produces a continuous roar and crackle. It fades as the fuel runs out; the recording does
-not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path to you.
+Fuel burning in a crater produces a continuous roar and crackle from where it burns. It fades as the fuel runs out; the
+recording does not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path
+to you.
 
 A fireball rises upright. While it burns, orange flame with bright cores churns among dark soot; as it cools, it
 darkens into smoke without a jump.
@@ -78,11 +79,21 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; three quarters of it
   burns as a fireball (≈16 m across for the Shahed, ≈34 m for the missile) for one to three seconds. That flash ignites
   thin, dry fuel it touches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. Planks, logs
-  and other thick wood only char in a flash that short; they catch fire only right at the crater, where the burning fuel
-  lands. Fire stays on what burns: sand, stone, earth, metal and rails never burn, and no flames are left standing on
-  them. So a Shahed in a town leaves a few fires at the impact and on dry plants nearby, not a burning circle. The
-  Grad and the Lancet carry no fuel. Burning debris starts a fire only where it lands on something that burns. Fire then
-  spreads by the game's own rules. There are no scripted secondary explosions.
+  and other thick wood only char in a flash that short. The flash leaves its fire only on what burns: sand, stone,
+  earth, metal and rails never burn, and no flames from it are left standing on them. So a Shahed in a town leaves a
+  few fires on dry plants near the impact, not a burning circle.
+- **Fuel in the crater**: the last quarter of the fuel stays in the crater and burns there as ordinary Minecraft fire on
+  real blocks: about 5 blocks for the Shahed for about 2.5 minutes, about 9 blocks for the missile for about a quarter of
+  an hour. The fuel falls to the first solid surface under the impact (the bottom of the crater, the floor under a
+  broken roof), runs downhill and over edges, but not uphill or through walls; on water it does not burn. On bare earth
+  or stone the flames stand on top of the block, as on netherrack. The fuel keeps them alight for its whole life, rain
+  included; a block placed on it or water poured over it puts that part out. If the block under the fuel burns or
+  breaks away, the fuel drips down to the next surface, so fuel fire never hangs in the air. Planks, logs and anything
+  else that burns catch fire from it by the game's own rules. Near the end the flames go out from the edge inward, and
+  when the fuel is gone they die, unless something flammable beside them is still burning.
+- The Grad and the Lancet carry no fuel. Burning debris starts a fire only where it lands on something that burns. Fire
+  then spreads by the game's own rules. With "Blasts start fires" off, neither the flash nor the fuel leaves fire.
+  There are no scripted secondary explosions.
 - **People and mobs** are hurt by the same wave as in a nuclear strike: pressure on the lungs, being thrown into a
   wall, glass from a window. Close to a Shahed the wave kills; at 30 m in the open it does nothing, but fragments still
   do (below). Someone behind a wall that holds is safe from the wave; inside the room where the charge went off, the
@@ -270,13 +281,13 @@ instead of drifting as one ball.
 
 - **Shahed**: a short flash, then a ball of burning petrol about 16 blocks across that burns for about 1.3 seconds and
   glows for about another second as it cools. About a quarter of the petrol stays in the crater, soaked into the soil, and
-  burns for about 2.5 minutes with flames about 3 blocks high. The flames are orange by day; at night they glow
-  yellow-white and light the ground around. Far away, where flame particles are no longer drawn, the fire is a glowing
-  spot of the same colour and brightness, with a glare at night. Its black smoke rises from the crater the whole time and
-  leans downwind: in a stiff breeze it trails low, in calm air it stands taller. The smoke of the ball, with the dust
+  burns for about 2.5 minutes as ordinary fire on about five blocks of the crater floor; at night it lights the ground
+  around with an orange glow. Far away, where the fire blocks fade out, the fire is a glowing spot of the same colour
+  and brightness, with a glare at night. Its black smoke rises from the fire the whole time and leans downwind: in a stiff breeze it
+  trails low, in calm air it stands taller. The smoke of the ball, with the dust
   torn up under it, rises a few hundred blocks as a dark cloud.
 - **Cruise missile**: a bigger flash and a fuel ball about 34 blocks across that burns for about 2.7 seconds; the fuel left
-  in the crater burns for about a quarter of an hour. Its own charge gives little soot, so the smoke is mostly from the burning fuel,
+  in the crater burns for about a quarter of an hour on about nine blocks. Its own charge gives little soot, so the smoke is mostly from the burning fuel,
   with a lot of dust.
 - **Grad**: a flash and a small grey-black puff with dust, no fuel ball. A salvo leaves a field of puffs that merge and
   drift downwind, over a carpet of dust from all the hits.
@@ -292,11 +303,34 @@ than clean air, so the dust spreads out along the surface it came from and follo
 slopes; where it drifts past an edge (a roof, a cliff) it sinks to the surface below: thick dust in seconds, thin dust
 slower. It climbs gentle slopes but not walls: in a street between houses it stays in the street, in wind or calm. While the cloud rises, a
 thin column of dust is drawn up under it. An interceptor bursting in the air leaves no crater and no dust, unless it
-bursts low over the ground. A hit on a roof or a wall is the same blast as a hit on the ground: some of what it crushes rises
-with the hot gas, while cold ejecta and falling material feed the low, heavy dust layer. This also leaves low dust on
-a paved street without pretending that the stone was covered in soil. The hot/cold split is an estimate: half of the
-existing crushed-material dust budget in each stream. The wave can also lift dust from the street below where it is
-still strong enough there.
+bursts low over the ground. Some of what a hit crushes rises with the hot gas, while cold
+ejecta and falling material feed the low, heavy dust layer (the split is an estimate: half in each). The wave can also
+lift dust from the street below where it is still strong enough there.
+
+What the blast looks like depends on what it hits, not on whether it is a roof, a road or a field: the server goes
+from the face the warhead struck straight into the block, square to that face, with the same breach rule it uses for
+damage, and tells every player what it found. So a roof the charge breaks through looks like one at any distance, and
+a slab the charge cannot break looks like a hit on solid ground.
+
+- **Soil, sand, gravel, snow or clay:** the crater throws a curtain of dark earth jets up and out at about 45°. Most of
+  it is slow: for a Shahed nine tenths is back on the ground within about 1.7 seconds, and at one second the curtain
+  stands about as high as the crater is wide. Sand gives a light, dense curtain, gravel a sparse one of lumps. The
+  curtain is drawn at any distance, not only as particles up close.
+- **Stone, concrete, brick or planks on solid ground:** no cone of earth. The crater in rock is smaller, and what the
+  charge crushes rises as dust of its own colour: light grey from stone and concrete, darker from deepslate, the colour
+  of mortar from masonry, ochre sawdust from planks. Chips fly on short arcs; fragments strike sparks on stone.
+- **A slab over empty space** (a roof, a bridge deck, a floor) that the charge breaks through: pieces fly off the face
+  that was hit, and the back of the slab is punched straight out of its far side into the space behind, at any angle
+  of the hit (down under a roof, sideways through a wall): the blast pushes the plate square to its face. Dust of the
+  slab's material comes out of the hole. A Shahed through a metre of planks drives the pieces behind it at about
+  30 m/s (an estimate, the upper bound of the Gurney formula). Where the hot gas goes inside a room is not modelled.
+- **Water:** the column of spray below.
+- **In the air** (an interceptor, a hit high above the ground): a ball of hot gas centred where it burst, with no
+  crater, no earth and no column of dust under it.
+
+The masses of crushed material, the grain size that
+makes the curtain visible, the share thrown as clods and the split of slab pieces up and down are estimates; the
+sources give no measurements for these targets and charges.
 
 A blast on water throws up a white column of spray instead of dust. A surface hit gives about 78 blocks for the Shahed,
 113 for the missile and 39 for Grad, estimated from Swisdak's conventional-charge plume table with its safety margin
@@ -309,8 +343,9 @@ downwind and thins out: half of it settles in about 5 seconds for Grad and 10 fo
 speed that depends on water depth. Clumps of water fly as particles. Fuel that lands on water spreads too
 thin to keep burning, so no fire is left after the ball.
 
-The fireball and burning fuel light the ground and walls around them, like the fireball of a nuclear strike: at night
-an orange glow spreads over the blocks around the crater and fades as the ball cools. Blocks cast shadows from this
+The fireball lights the ground and walls around it, like the fireball of a nuclear strike: at night an orange glow
+spreads over the blocks around the crater and fades as the ball cools. The fuel burning in the crater lights its
+surroundings the same way, from where it burns, until it runs out. Blocks cast shadows from this
 light: a house or a hill between the fire and the ground leaves it dark, even when the house is outside your view.
 Shadows are worked out for about 90 blocks around you and 40 up and down; further away the light has
 none. Hot gas over the fire, over the fireball and in a rocket's exhaust bends light, so whatever is behind it
@@ -334,11 +369,25 @@ and settle over seconds. They stay in the air after the pressure pulse has passe
 Refraction, clump size, lift and contrast are emphasised for presentation; the ring keeps the pressure front’s radius
 and timing. The shimmer shifts the image by no more than three pixels. Bare soil, sand and snow give dust instead.
 
+When the front reaches you, you feel it. It throws your head back for a moment and the picture shakes briefly.
+Everything light within about 16 blocks of you, grass, leaves, grit and fine dust, jumps and is blown away from the
+blast in one puff. The air moves only that one short push, so the bits hang, settle and drift off with the ordinary
+wind. A wave strong enough to stun you blurs the picture, drains its colour and darkens its edges for one to three
+seconds. A weaker wave leaves the screen alone. When and how strongly this happens follows the wave at your head: its
+pressure and impulse, the hearing loss it causes and how hard it moves your head. The blur, grey and dark edges are
+presentation. You can weaken or turn it off in the settings (Concussion on screen), and the vanilla Distortion Effects
+option scales it and the camera shake too.
+
+The bunker bomb also sends a wave through the ground. It reaches you at the speed of the ground under the bomb: through
+rock and wet clay before the bang in the air; through loam and loose sand it is slower than the air wave and fades
+sooner, and a few hundred blocks away you no longer feel it. The ground jolts you up and down, harder the faster it
+moves, and you hear it rumble.
+
 In sufficiently humid air a white condensation shell appears briefly behind the pressure front, after the air expands
 and cools below its dew point. It evaporates as pressure recovers. Rain makes it much easier to see; dry air may give
 no shell. Its negative-phase history and outer extent are estimates. By day the cloud rises higher than at
 night, when cold air near the ground holds it down. A cloud stays visible for minutes, until it has spread too thin to
-see. Sparks, clods of earth, the dust and sparks of fragment hits, flames and, where fuel was left in the tank, burning
+see. Sparks, clods of earth, the dust and sparks of fragment hits and, where fuel was left in the tank, burning
 pieces are particles. A burning piece in flight leaves puffs of grey-black wood smoke that rise with their own heat and
 drift away, and its flame lights the smoke around it. The bomb's blast is drawn the same way: a
 breach gives the cloud of the part of the charge that went into the air, a deeper blast a smaller cloud from the mouth of
@@ -352,6 +401,11 @@ billowing tube, never a row of separate puffs; where it is narrower than about t
 flames light the smoke from below. The column grows from the fire at the
 speed of the wind, and when the fire goes out the last of the smoke drifts away. Where the fire comes from is up to the
 server: the smoke follows any fire your game shows, not only fires from strikes.
+
+In a big raid each blast is heard as its share of the din: the nearest one sounds about as loud as it would alone, the
+far ones lie under it about as much quieter as in life and come back up once it has faded. When more blasts sound at
+once than the game has sound channels for, the quietest stop being separate sounds and merge into a low rumble around
+you, just as loud.
 
 Past your render distance the mod draws projectiles, blasts and smoke itself, as far as the server's visibility range
 (8 km by default), launches included: the booster flame, the launch cloud and the smoke trail of a launch kilometres away. With **Distant Horizons** or **Voxy** the distant terrain hides them the way a real hill would: a
