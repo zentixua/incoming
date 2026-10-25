@@ -52,11 +52,11 @@ import ua.zentix.incoming.nuclear.model.FuelPool;
  * диаметр 0,65·W^⅓ м, глубина — четверть, параболоид, тот же закон, что роет сервер, у скалы и бетона — 0,7 диаметра; у
  * плиты над пустотой — пролом; × насыпная плотность вещества цели); в воздух уходит доля мелочи вещества
  * ({@link BlastTarget.Matter#fines}): у рыхлого и досок — {@link #DUST_LOFTED} (2 %, оценка), у связного (скала, бетон,
- * кладка) — 10 % (зона дробления у заряда, Esen, Onederra, Bilgin 2003; ⚠ оценка: замеров мелочи контактного взрыва по
- * бетону нет).
- * Цвет — вещества цели ({@link BlastTarget.Matter}), а не грунта у любой цели. Выброс — два потока: вовлечённая в горячий газ пыль поднимается с облаком; холодная крошка выброса и
- * обратного выпадения питает тяжёлый слой {@link #crushed}. Разделение массы — {@link #CRUSHED_HOT_SHARE}, оценка;
- * облако больше не забирает всю пыль разрушенного материала. Воронки нет у подрыва выше
+ * кладка) — {@code BlastTarget.FINES_CRUSHED} (условная оценка по Costa 2025, не измеренный коэффициент всех целей).
+ * Цвет — вещества цели ({@link BlastTarget.Matter}). Мелочь переносится газом; её вес входит в {@link Thermal},
+ * оседание — поток частиц на опорную поверхность. Отдельной холодной массы, положенной в диск у точки удара, нет.
+ * Доля у земли определяется пространственным распределением газа, а не разделением массы 50/50.
+ * Воронки нет у подрыва выше
  * {@link #CRATER_HOB} радиуса шара продуктов (разрыв в воздухе): пыли воронки нет.
  * <p>
  * <b>Пыль волны</b> — {@link GroundDust}: тот же закон, что у ядерки ({@code DustModel}: вынос ветром за фронтом, слой Kuhl,
@@ -110,16 +110,6 @@ public final class CloudModel {
      */
     public static final double CLOUD_SHARE = 0.5;
     /**
-     * Split of the fragmented material between hot gas entrainment and the cold ejecta/fallback curtain.
-     * A separate low density current fed by ejecta is described by Glasstone & Dolan (1977), §2.96, and NRC (2005),
-     * Effects of Nuclear Earth-Penetrator and Other Weapons, ch. 5. Those sources do not give a fraction for a
-     * conventional contact burst: equal mass in the two unresolved streams is explicitly an estimate, not a
-     * measured TNT correlation. Total dust remains the existing crushed-volume × density × DUST_LOFTED.
-     */
-    public static final double CRUSHED_HOT_SHARE = 0.5;
-    /** Cold dust of crushed material, as distinct from pre-existing wave-lofted surface dust. */
-    public final GroundDust crushed;
-    /**
      * Доля энергии ядерного взрыва в ударной волне — ~0,5 (Glasstone, Dolan, «The Effects of Nuclear Weapons», 1977, §1.24:
      * около половины — волна, треть — свет, остальное — радиация); у ВВ тротиловый эквивалент — сама волна. Давление у
      * земли заряда W кг ТНТ — как у ядерного наземного W/0,5 кг: Броуд ({@code HobBlast}) против Кинни–Грэхема
@@ -148,7 +138,7 @@ public final class CloudModel {
      * уходят шлейфом пожара ({@code FireSmoke.pool}).
      */
     public static final double POOL_SHARE = FuelFireball.POOL_SHARE;
-    /** Дольше этого облако не живёт, с (дальше оно — дымка над районом). */
+    /** Предел таблицы сдвига ветром, с; жизнь облака определяется оптической толщиной, не этим временем. */
     public static final double LIFE_MAX = 3600;
 
     static {
@@ -216,11 +206,8 @@ public final class CloudModel {
             blob(x, y, z, sh, sv, 0, dust, 0, kelvin, 0);
         }
 
-        /**
-         * Клуб холодной пыли раздробленного вещества цели ({@link #crushed}): цвет и кадры — её вещества. Приёмник без различия —
-         * обычный клуб без сажи и подъёма.
-         */
-        default void crushed(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
+        /** Target particles continuously leaving the gas, with their own settling trajectories. */
+        default void fallout(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
             blob(x, y, z, sh, sv, 0, dust, 0, kelvin, 0);
         }
 
@@ -288,6 +275,7 @@ public final class CloudModel {
     public final double poolKg, poolRadius, poolSeconds, poolWatts;
     /** Подъём облака ({@link Thermal}). */
     public final Thermal thermal;
+    final DustFallout fallout;
     /** Наибольшая скорость подъёма, м/с. */
     final double maxRise;
     /** Наибольшая высота центра и время, когда она достигнута, с; радиус там. */
@@ -323,19 +311,13 @@ public final class CloudModel {
 
     /**
      * Взрыв в цель {@code target} на высоте {@code hobM} над поверхностью {@code ground}: пыль раздробленного — доля мелочи
-     * вещества ({@link BlastTarget.Matter#fines}: у рыхлого — {@link #DUST_LOFTED}, у связного — больше) массы разрушенного
+     * вещества ({@link BlastTarget.Matter#fines}: у рыхлого — {@link #DUST_LOFTED}, у связного — оценка по собранной PM10) массы разрушенного
      * ({@link BlastTarget#mass}: воронка закона по грунту материала × его насыпная плотность, у плиты — пролом; тот же закон,
      * что роет сервер), а не чаша сухого грунта у любой цели (у бетона, досок и плиты прежде выходило 1600 кг/м³ сухой
      * почвы, physics.md фронта F).
      */
     public CloudModel(BlastSource source, Air air, BlastTarget target, double hobM, GroundDust.Ground ground) {
         this(source, air, target, target.dust(source.chargeKg()), 0.5, hobM, ground);
-    }
-
-    /** Радиус разрушенного у цели, м: пролом плиты или воронка закона по грунту материала. */
-    double crushedRadius() {
-        return target.family() == BlastTarget.Family.SLAB ? target.hole()
-                : CraterModel.chargeRadius(source.chargeKg(), target.material().soil());
     }
 
     /** Роет ли заряд {@code tntKg} кг на высоте {@code hobM} над землёй воронку ({@link #CRATER_HOB}). */
@@ -356,7 +338,7 @@ public final class CloudModel {
         this(source, air, BlastTarget.SOIL, dustKg, size, 0, GroundDust.Ground.BARE);
     }
 
-    private CloudModel(BlastSource source, Air air, BlastTarget target, double dustKg, double size, double hobM, GroundDust.Ground surface) {
+    CloudModel(BlastSource source, Air air, BlastTarget target, double dustKg, double size, double hobM, GroundDust.Ground surface) {
         boolean onWater = target.family() == BlastTarget.Family.WATER;
         this.source = source;
         this.air = air;
@@ -367,11 +349,7 @@ public final class CloudModel {
         double fuelHeat = ballKg * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
-        // контакт — по цели (у опоры пакета его нашёл сервер; без неё — та же проверка digs по высоте), а не снова по высоте:
-        // грубая высота вдали иначе снимала бы холодную пыль у пролома, подтверждённого сервером (ревью 2 фронта F)
-        boolean contact = !source.underground() && source.chargeKg() > 0 && target.family() != BlastTarget.Family.AIR;
-        double cold = contact ? dustKg * (1 - CRUSHED_HOT_SHARE) : 0;
-        dust = dustKg - cold;
+        dust = Math.max(0, dustKg);
         soot = source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES + ballKg * source.fuel().sootYield;
         fuelBall = FuelFireball.diameter(ballKg);
         fuelBallSeconds = FuelFireball.seconds(ballKg);
@@ -380,7 +358,8 @@ public final class CloudModel {
         burnSeconds = Math.max(fuelBallSeconds, heBallSeconds);
         // начальный объём: в нём тепло держит температуру шара (у ideal gas при том же давлении g' = g·(1 − T_a/T))
         double ballK = source.fuelKg() > 0 ? FUEL_BALL_K : HE_BALL_END;
-        thermal = new Thermal(buoyancy, G * (1 - T_AIR / ballK), size, air);
+        thermal = new Thermal(buoyancy, G * (1 - T_AIR / ballK), size, air, dust, soot);
+        fallout = new DustFallout(thermal, dust);
         maxRise = thermal.maxRise;
         topZ = thermal.topZ;
         topR = thermal.topR;
@@ -389,7 +368,8 @@ public final class CloudModel {
         boolean fuelLast = source.fuelKg() > 0 && fuelBallSeconds >= heBallSeconds;
         burnRadius = fuelLast ? 0.5 * fuelBall : heBall;
         burnHeight = fuelLast ? fuelBallHeight(fuelBallSeconds) : 0.45 * heBall;
-        cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), Math.max(burnRadius, size), air);
+        cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), Math.max(burnRadius, size), air,
+                thermal.airborneDust(burnSeconds), soot);
         fireSeconds = glowEnd();
         // на воде воронки в грунте нет: топливо растекается плёнкой, а плёнка тоньше ~1 мм не держит горение — вода
         // уносит тепло (Buist и др., «In situ burning», обзор для разливов нефти: гаснет у 1–2 мм; ⚠ по памяти)
@@ -400,10 +380,7 @@ public final class CloudModel {
         poolWatts = pool.watts();
         // пыль волны: над водой грунта нет (брызги — WaterBlast)
         ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, surface, air);
-        // начальная область холодной пыли — воронка с валом (2 радиуса воронки грунта цели) или пролом плиты с краем; у грани,
-        // которую нашёл сервер, — у точки взрыва (рельеф вокруг — только для стекания потом), а не на грубой высоте земли вдали
-        crushed = GroundDust.crushed(onWater ? 0 : source.chargeKg(), target.atFace() ? 0 : hob, cold, 2 * crushedRadius(), surface, air);
-        life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, Math.max(ground.life, crushed.life)));
+        life = Math.max(lifeSeconds(), ground.life);
     }
 
     /**
@@ -708,7 +685,8 @@ public final class CloudModel {
      * огненным шаром, что не осела из облака (слой — высота его середины), и пыль ножки, что дошла до его низа.
      */
     double capDust(double t) {
-        return (dust + ground.underBall(t)) * DustModel.extinctionAloft(t / Math.max(height(t), 1)) + ground.drawn(stemEntered(t));
+        return thermal.opticalDust(t) + ground.underBall(t) * DustModel.extinctionAloft(t / Math.max(height(t), 1))
+                + ground.drawn(stemEntered(t));
     }
 
     /**
@@ -717,7 +695,7 @@ public final class CloudModel {
      */
     public double capMatterShare(double t) {
         double all = capDust(t);
-        return all > 0 ? dust * DustModel.extinctionAloft(t / Math.max(height(t), 1)) / all : 1;
+        return all > 0 ? thermal.opticalDust(t) / all : 1;
     }
 
     /**
@@ -737,28 +715,28 @@ public final class CloudModel {
         return lo;
     }
 
-    /** Сколько облако видно, с: пока {@link #tau} больше {@link #SEEN}, не дольше {@link #LIFE_MAX}. */
-    private double lifeSeconds() {
-        double lo = 0, hi = LIFE_MAX;
-        if (tau(hi) >= SEEN) return hi;
-        if (tau(1) < SEEN) return Math.max(fireSeconds, 1);
-        lo = 1;
-        for (int i = 0; i < 40; i++) {
-            double mid = 0.5 * (lo + hi);
-            if (tau(mid) >= SEEN) lo = mid;
-            else hi = mid;
-        }
-        return lo;
+    /** Conservative peak-ray bound, including fallout and future release from the currently entrained dust. */
+    double visibilityTau(double t) {
+        double a = thermal.horizontalRadius(t), b = thermal.verticalRadius(t);
+        double sh = Math.sqrt(a * a / 4 + Math.max(0, sigmaH(t) * sigmaH(t) - a * a / 5));
+        double sv = Math.sqrt(b * b / 18 + Math.max(0, sigmaV(t) * sigmaV(t) - b * b / 5));
+        return tau(t) + fallout.tauUpper(t) + DustModel.K_MIX * thermal.opticalDust(t) / (2 * Math.PI * sh * sv);
     }
 
-    /**
-     * Доля вещества облака, что рисуется в возрасте t: облако, истончившееся до порога видимости, к концу жизни и так не
-     * видно — 1; облако, что дожило до {@link #LIFE_MAX} густым, уходит плавно за последнюю десятую жизни (без скачка).
-     */
+    /** Visibility, not an expiry clock: particles may persist beyond an hour. */
+    private double lifeSeconds() {
+        double lo = Math.max(1, Math.max(fireSeconds, topSeconds)), hi = Math.max(2, lo * 2);
+        while (visibilityTau(hi) >= SEEN) { lo = hi; hi *= 2; }
+        for (int i = 0; i < 40; i++) {
+            double mid = 0.5 * (lo + hi);
+            if (visibilityTau(mid) >= SEEN) lo = mid; else hi = mid;
+        }
+        return hi;
+    }
+
+    /** No scheduled mass fading. Dropping the render source happens only below the optical visibility bound. */
     double fade(double t) {
-        if (t >= life) return 0;
-        if (life < LIFE_MAX) return 1;
-        return Math.min(1, (life - t) / (0.1 * life));
+        return t < life ? 1 : 0;
     }
 
     /**
@@ -832,9 +810,9 @@ public final class CloudModel {
                 pz = qz;
             }
         }
+        fallout.blobs(t, (x, y, z, fh, fv, mass, optical) -> out.fallout(x, y, z, fh, fv, optical * fade, inBall(t, x, y, z, T_AIR)));
         // слой пыли волны — на поверхностях, с которых его подняло, и там, куда он стёк (высоты — от точки взрыва)
         ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.ground(x, y, z, gh, gv, d, inBall(t, x, y, z, T_AIR)));
-        crushed.blobs(t, fade, (x, y, z, gh, gv, d) -> out.crushed(x, y, z, gh, gv, d, inBall(t, x, y, z, T_AIR)));
     }
 
     /**

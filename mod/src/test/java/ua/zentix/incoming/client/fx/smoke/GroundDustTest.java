@@ -91,9 +91,10 @@ class GroundDustTest {
         double before = -1;
         for (double t : new double[]{0, 0.002, 0.005, 0.01, 0.03, 0.06, 0.1, 0.2, 0.3, 1}) {
             double front = m.ground.front(t), mass = 0;
-            for (double[] b : blobs(m, t)) {
-                if (b[6] <= 0 || b[5] > 0 || b[1] > 2 * b[4] + 0.5) continue; // пыль у земли (облако и ножка — выше)
-                mass += b[6];
+            // This invariant belongs to wave entrainment/Kuhl, not to particles leaving the hot gas.
+            for (double[] b : layer(m.ground, t)) {
+                if (b[5] <= 0) continue;
+                mass += b[5];
                 double r = Math.hypot(b[0] - m.ground.drift(t, b[1])[0], b[2] - m.ground.drift(t, b[1])[1]);
                 // видимый край клуба (толща у края — 0,05: у густого ~3,7σ, не дальше 4σ) — не за фронтом
                 assertTrue(r + GroundDust.EDGE_SIGMAS * b[3] <= front + 0.5, "t " + t + ": клуб на " + r + " м, σ " + b[3] + " — за фронтом " + front);
@@ -222,23 +223,6 @@ class GroundDustTest {
                 (x, z) -> Math.hypot(x, z) < roof ? 0 : -15);
     }
 
-    @Test
-    void crushedMaterialAtAnEdgeStartsAtTheImpactBeforeFalling() {
-        CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
-        // The impact is on a narrow ledge. Every 3 m band sample already sees the street 15 m below it.
-        var dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, house(1)).crushed;
-        var first = layer(dust, 0.1);
-        assertTrue(!first.isEmpty());
-        for (double[] b : first) assertTrue(b[1] - 0.8 * b[4] > -1, "not born on the street below the impact");
-        for (double t = 0.25; t <= 60; t += 0.25) {
-            for (double[] b : layer(dust, t)) {
-                double base = b[1] - 0.8 * b[4];
-                assertTrue(base >= -15 - 1e-6 && base <= 1e-6, "falls between the impact and the street");
-                if (t == 60) assertTrue(base <= -14, "reaches the street by the dense-current/lee law");
-            }
-        }
-    }
-
     /**
      * Клубы слоя пыли в возрасте t: {x, y, z, σh, σv, пыль (ослабление в кг смеси), масса пыли в воздухе, поверхность, с
      * которой её подняло}.
@@ -314,10 +298,10 @@ class GroundDustTest {
     void dustNeverHangsOverTheVoid() {
         CloudModel.Air neutral = new CloudModel.Air(1e-3, 0, 0, 0.1, (int) Stability.D, 0.5);
         for (double roof : new double[]{10, 30}) {
-            for (double wind : new double[]{4, 0}) for (boolean crushed : new boolean[]{false, true}) {
+            for (double wind : new double[]{4, 0}) {
                 CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, wind, 0, 0.1, (int) Stability.C, 0.5);
                 CloudModel model = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, house(roof));
-                GroundDust dust = crushed ? model.crushed : model.ground;
+                GroundDust dust = model.ground;
                 List<Double> ts = nodes(1, 180);
                 int n = layer(dust, ts.getFirst()).size();
                 double[] lifted = new double[n], crossed = new double[n], last = new double[n];
@@ -354,7 +338,7 @@ class GroundDustTest {
                         if (base <= below + 0.01 && lifted[i] > below + 5) fell++;
                     }
                 }
-                if (roof >= 30 && (!crushed || wind > 0)) assertTrue(fell > 0, "дом " + roof + ", ветер " + wind + ", crushed " + crushed + ": пыль с крыши дошла до улицы");
+                if (roof >= 30) assertTrue(fell > 0, "дом " + roof + ", ветер " + wind + ": пыль с крыши дошла до улицы");
             }
         }
     }

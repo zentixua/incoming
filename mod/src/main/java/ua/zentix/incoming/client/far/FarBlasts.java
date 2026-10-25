@@ -282,12 +282,10 @@ public final class FarBlasts {
             if (t >= Math.max(model.life, water == null ? 0 : water.mistLife())) return false;
             if (t < model.life) {
                 double growth = puffGrowth(seconds);
-                // облако разрыва в воздухе — своими кадрами (по росту облака, как облако дыма); пыль раздробленной цели — кадрами
-                // своего вещества: рыхлого — выброса, связного — дробления (по доле её жизни)
-                boolean air = model.target.family() == BlastTarget.Family.AIR, loose = model.target.matter().loose;
-                SmokeGrid.Look cap = air ? SmokeGrid.Look.AIRBURST : SmokeGrid.Look.SMOKE, crush = loose ? SmokeGrid.Look.EJECTA : SmokeGrid.Look.CRUSH;
+                // Мелочь цели переносится газом и рисуется теми же клубами; независимого холодного пласта нет.
+                boolean air = model.target.family() == BlastTarget.Family.AIR;
+                SmokeGrid.Look cap = air ? SmokeGrid.Look.AIRBURST : SmokeGrid.Look.SMOKE;
                 double capFrame = air ? FxAtlas.growthFrame(cap, growth) : 0;
-                double crushFrame = FxAtlas.lifeFrame(crush, model.crushed.life > 0 ? t / model.crushed.life : 0);
                 double share = model.capMatterShare(t);
                 float cr = mix(matterR, dustR, share), cg = mix(matterG, dustG, share), cb = mix(matterB, dustB, share);
                 model.blobs(t, new CloudModel.Blobs() {
@@ -305,8 +303,8 @@ public final class FarBlasts {
                     }
 
                     @Override
-                    public void crushed(double bx, double by, double bz, double sh, double sv, double dustKg, double kelvin) {
-                        out.look(crush, crushFrame);
+                    public void fallout(double bx, double by, double bz, double sh, double sv, double dustKg, double kelvin) {
+                        out.look(SmokeGrid.Look.SMOKE, 0);
                         out.blob(x + bx, y + by, z + bz, sh, sv, 0, dustKg, 0, matterR, matterG, matterB, kelvin, 0);
                     }
 

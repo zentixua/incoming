@@ -82,7 +82,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         public final double grainDensity;
         /** Доля баллистического выброса, что летит комьями (частицы вблизи), а не зёрнами завесы. */
         public final double clods;
-        /** Доля разрушенного, что уходит в воздух пылью мельче ~50 мкм ({@link #FINES_LOOSE}, {@link #FINES_CRUSHED}). */
+        /** Доля разрушенного для смеси корзин DustModel (размерный состав — оценка) ({@link #FINES_LOOSE}, {@link #FINES_CRUSHED}). */
         public final double fines;
         /** Рыхлое: воронка выбрасывает его завесой. */
         public final boolean loose;

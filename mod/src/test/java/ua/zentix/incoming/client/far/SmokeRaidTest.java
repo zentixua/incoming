@@ -93,9 +93,6 @@ class SmokeRaidTest {
             double t = seconds - born;
             if (t < 0 || t >= model.life) return false;
             double growth = puffGrowth(seconds);
-            boolean loose = model.target.matter().loose;
-            SmokeGrid.Look crush = loose ? SmokeGrid.Look.EJECTA : SmokeGrid.Look.CRUSH;
-            double crushFrame = FxAtlas.lifeFrame(crush, model.crushed.life > 0 ? t / model.crushed.life : 0);
             double share = model.capMatterShare(t);
             float cr = FarBlasts.mix(matterR, dustR, share), cg = FarBlasts.mix(matterG, dustG, share), cb = FarBlasts.mix(matterB, dustB, share);
             model.blobs(t, new CloudModel.Blobs() {
@@ -112,8 +109,8 @@ class SmokeRaidTest {
                 }
 
                 @Override
-                public void crushed(double bx, double by, double bz, double sh, double sv, double dustKg, double kelvin) {
-                    out.look(crush, crushFrame);
+                public void fallout(double bx, double by, double bz, double sh, double sv, double dustKg, double kelvin) {
+                    out.look(SmokeGrid.Look.SMOKE, 0);
                     out.blob(x + bx, by, z + bz, sh, sv, 0, dustKg, 0, matterR, matterG, matterB, kelvin, 0);
                 }
 

@@ -87,30 +87,19 @@ class CloudModelTest {
     }
 
     @Test
-    void crushedMaterialFeedsColdDustOnPavingWithoutIncreasingItsSurfaceLoading() {
+    void freshDustTravelsWithGasWithoutIncreasingSurfaceSupply() {
         var hard = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
                 GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), (x, z) -> 0);
         for (WeaponType w : List.of(WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET)) {
             var source = BlastSource.of(w, false);
             var m = new CloudModel(source, CloudModel.Air.STANDARD, false, 0, hard);
-            double produced = ua.zentix.incoming.nuclear.model.CraterModel.chargeVolume(source.chargeKg(),
-                    ua.zentix.incoming.nuclear.model.CraterModel.Soil.DRY) * CloudModel.SOIL_DENSITY * CloudModel.DUST_LOFTED;
-            assertEquals(produced, m.dust + m.crushed.total, 1e-9 * produced, "hot + cold conserves crushed material");
-            assertTrue(m.crushed.total > 0 && m.dust > 0);
-            assertEquals(0, m.crushed.underBall(60), "cold dust is not counted a second time in the hot cloud");
-            double[] optical = {0}, aloft = {0};
-            m.crushed.blobs(10, 1, (x, y, z, sh, sv, d) -> {
-                assertTrue(y <= 2 * sv + 1, "cold source remains by the supporting surface");
-                optical[0] = Math.max(optical[0], ua.zentix.incoming.nuclear.model.DustModel.K_MIX * d / (2 * Math.PI * sh * sv));
-                aloft[0] += d;
-            });
-            assertTrue(optical[0] > 0.1, w + ": cold crushed dust is visible at 10 s, " + optical[0]);
-            assertTrue(aloft[0] <= m.crushed.total + 1e-9);
+            double produced = BlastTarget.SOIL.dust(source.chargeKg());
+            assertEquals(produced, m.dust, 1e-9 * produced);
+            assertEquals(produced, m.thermal.airborneDust(0), 1e-9 * produced);
+            assertTrue(m.thermal.airborneDust(60) <= produced);
             assertEquals(6e-4, ua.zentix.incoming.nuclear.model.DustModel.Surface.HARD.supply(), 0);
-            var airburst = new CloudModel(source, CloudModel.Air.STANDARD, false, 100, hard);
-            var water = new CloudModel(source, CloudModel.Air.STANDARD, true, 0, hard);
-            assertEquals(0, airburst.crushed.total);
-            assertEquals(0, water.crushed.total);
+            assertEquals(0, new CloudModel(source, CloudModel.Air.STANDARD, false, 100, hard).dust);
+            assertEquals(0, new CloudModel(source, CloudModel.Air.STANDARD, true, 0, hard).dust);
         }
     }
 
@@ -118,9 +107,9 @@ class CloudModelTest {
         return new CloudModel(BlastSource.of(w, false), air);
     }
 
-    /** Источник: заряд и топливо без огненной стадии (малое тепло и шар) — подъём почти как от точечного термика. */
+    /** Калибровка тепла: заряд без топлива и пыли — подъём почти как от точечного термика. */
     private static CloudModel point(double tntKg, CloudModel.Air air) {
-        return new CloudModel(new BlastSource(WeaponType.MISSILE, tntKg, 0, true, false), air);
+        return new CloudModel(new BlastSource(WeaponType.MISSILE, tntKg, 0, true, false), air, 0, 0.5);
     }
 
     /**
@@ -235,7 +224,7 @@ class CloudModelTest {
     void lifeEndsWhenTheCloudIsThin() {
         for (WeaponType w : new WeaponType[]{WeaponType.ROCKET, WeaponType.LOITER, WeaponType.DRONE, WeaponType.MISSILE}) {
             CloudModel m = model(w, air(Stability.B, 0.9, 0.45, 0.5));
-            if (m.life < CloudModel.LIFE_MAX) assertEquals(CloudModel.SEEN, m.tau(m.life), 1e-3, w.toString());
+            assertTrue(m.visibilityTau(m.life) <= CloudModel.SEEN + 1e-3, w.toString());
             double prev = m.tau(1);
             for (double t = 2; t < m.life; t *= 1.5) {
                 assertTrue(m.tau(t) <= prev + 1e-9, w + " t " + t);
@@ -261,7 +250,7 @@ class CloudModelTest {
             }
             assertEquals(m.soot * m.fade(t), soot, 1e-9, "t " + t);
             // пыль — ослабление в кг смеси: воронка, слой волны и сорванное под шаром, не больше поднятого
-            assertTrue(dust <= m.dust + m.crushed.total + m.ground.total + m.ground.underBall(t) + 1e-9, "t " + t);
+            assertTrue(dust <= m.dust + m.ground.total + m.ground.underBall(t) + 1e-9, "t " + t);
             assertTrue(blobs.get(0)[0] > 0, "облако над землёй");
         }
         // в огненной стадии — два горячих шара: продукты детонации (горячее) и топливо

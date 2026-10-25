@@ -73,7 +73,7 @@ class BlastTargetSupportTest {
             BlastTarget far = FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, hob);
             assertEquals(exact, far, "высота " + hob + " м: та же цель");
             if (!Double.isNaN(hob)) assertEquals(hot, new CloudModel(src, CloudModel.Air.STANDARD, far, hob, GroundDust.Ground.BARE).dust,
-                    1e-9, "высота " + hob + " м: горячая пыль пролома та же (холодную снял бы контакт по высоте)");
+                    1e-9, "высота " + hob + " м: пыль пролома та же");
         }
         assertEquals(BlastTarget.Family.AIR, FarBlasts.target(blast(GroundMaterial.WOOD, Optional.empty()), GroundMaterial.WOOD, SHAHED, 30).family(),
                 "без опоры высоко — разрыв в воздухе");
@@ -90,24 +90,22 @@ class BlastTargetSupportTest {
     }
 
     /**
-     * Холодная пыль пролома рождается у грани, которую нашёл сервер, — у точки взрыва, а не на грубой высоте земли вдали
-     * (ревью 3 фронта F: при высоте 30 м её клубы через секунду были на 30 м ниже крыши); пыль волны держит рельеф как есть.
+     * Пыль пролома переносит газ от точки удара, а не от грубой высоты земли вдали; пыль волны держит рельеф как есть.
      */
     @Test
-    void crushedDustStartsAtTheFace() {
+    void freshDustFollowsGasFromTheFace() {
         double r = BreachModel.Material.POOR.radius(SHAHED, BreachModel.UNTAMPED);
         S2C.Blast roof = blast(GroundMaterial.WOOD, Optional.of(new S2C.Blast.Support(false, 1, (float) r, S2C.Blast.DOWN, 0)));
         BlastSource src = BlastSource.of(WeaponType.DRONE, false);
         CloudModel exact = new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, 0), 0,
                 GroundDust.Ground.BARE);
         for (double t : new double[]{0.3, 1}) {
-            double[] at0 = meanHeight(exact.crushed, t);
-            assertTrue(at0[1] > 0, t + " с: холодной пыли пролома нет");
+            assertTrue(exact.thermal.airborneDust(t) > 0);
             for (double hob : new double[]{5, 30}) {
                 CloudModel far = new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, hob), hob,
                         GroundDust.Ground.BARE);
-                double[] at = meanHeight(far.crushed, t);
-                assertEquals(at0[0], at[0], 0.5, "высота " + hob + " м, " + t + " с: пыль пролома — у крыши");
+                assertEquals(exact.height(t), far.height(t), 1e-9, "газ — от точки удара на крыше");
+                assertEquals(exact.thermal.airborneDust(t), far.thermal.airborneDust(t), 1e-9);
             }
         }
         // пыль волны — с поверхности вокруг: при земле на 5 м ниже она там, а не у крыши
