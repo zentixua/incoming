@@ -85,12 +85,17 @@ class Pair(unittest.TestCase):
         self.assertFalse(gate.compare(run(scale=2.6), pair(1.0, 1.08))["pass"])
 
     def test_noisy_pair_has_no_verdict(self):
-        v = gate.compare(run(scale=1.0), pair(1.0, 1.12))
+        # A1 1,0 и A2 1,12: база 1,06, расхождение 11 %, допуск 23 % → провал выше 1,30; не хуже A2 + 10 % (1,232) — проход
+        v = gate.compare(run(scale=1.25), pair(1.0, 1.12))
         self.assertEqual(v["state"], gate.NOISY)
         self.assertFalse(v["pass"])
         self.assertTrue(any("расхождение" in n for n in v["noisy"]))
-        # шумно и с «провалом» по числам — всё равно шумно: решает повторная пара
-        self.assertEqual(gate.compare(run(scale=2.0), pair(1.0, 1.12))["state"], gate.NOISY)
+        # в пределах худшего прогона принятого — проход и в шумной паре
+        self.assertEqual(gate.compare(run(scale=1.0), pair(1.0, 1.12))["state"], gate.PASS)
+        self.assertEqual(gate.compare(run(scale=1.2), pair(1.0, 1.12))["state"], gate.PASS)
+        # сверх допуска, выросшего с шумом, — провал и в шумной паре
+        self.assertEqual(gate.compare(run(scale=2.0), pair(1.0, 1.12))["state"], gate.FAIL)
+        self.assertEqual(gate.compare(run(scale=1.35), pair(1.0, 1.12))["state"], gate.FAIL)
         # провал самого кандидата шум не объясняет
         c = run()
         c["packs"]["none"]["checks"] = ["нет события done"]
@@ -637,6 +642,15 @@ class Checks(unittest.TestCase):
         # окно начато поздним шахедом волны 0: быстрые шахеды следующих волн ложатся до границы слота (v3.7.0: 35/25)
         self.assertEqual(self.acc_checks(first=35, last=25), [])
         self.assertTrue(self.acc_checks(first=41, last=19))
+
+    def test_a_few_strikes_lost_in_the_air_are_fine(self):
+        def bad(got, why="quiet", expect=100):
+            res = {"meta": {"done": {"x": 1}, "impacts": {"100": {"got": got, "expect": expect, "why": why, "took_s": 30}}}, "windows": {}}
+            return [b for b in results.checks([{"type": "gl"}], res) if "попаданий" in b]
+        self.assertEqual(bad(97), [])
+        self.assertTrue(bad(96))
+        self.assertTrue(bad(99, why="timeout"))
+        self.assertTrue(bad(0, expect=1))
 
     def test_every_plan_window_is_required(self):
         ev = [{"type": "gl"}, {"type": "done"}, {"type": "window", "name": "100/edge", "edge": "begin", "t_ms": 1}]

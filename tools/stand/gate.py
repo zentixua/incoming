@@ -13,8 +13,11 @@
 - первый удар и накопление, если сцены сняты: худший кадр больше чем вдвое против базы и больше 100 мс; рост последней
   минуты к первой больше, чем у базы, сверх допуска;
 - прогон пары не годен (results.checks) или снят иначе (строка OpenGL, кадр).
-Шумно (`noisy`) — A1 и A2 в окне шлагбаума разошлись больше MAX_SPREAD: сеанс не годится для вердикта по числам. Провал
-самого кандидата (прогон не годен, снят иначе, нет окна или числа) — провал и в шумной паре: шум его не объясняет.
+Шумно (`noisy`) — A1 и A2 в окне шлагбаума разошлись больше MAX_SPREAD, а кандидат ни там, ни там: не хуже худшего
+из A1 и A2 больше чем на MIN_TOL — проход (то же число принятый дал в том же сеансе), хуже базы больше допуска (он растёт с
+расхождением) — провал; между ними сеанс вердикта по числам не даёт. Ворота #457 (25.10): у всех паков A1 и A2 снаружи
+разошлись на 15–23 % по видеокарте и до 59 % по процессору потока — без этого правила шумными вышли обе пары каждого пака.
+Провал самого кандидата (прогон не годен, снят иначе, нет окна или числа) — провал и в шумной паре.
 Решение (`decide`): пак, который не прошёл с первой пары (провал, шум, негодный прогон), снимается второй парой, и решает
 она: провал по числам, который во второй паре не повторился, — проход; шумно и во второй — вердикта нет (статус error,
 а не failure).
@@ -106,7 +109,9 @@ def compare_pack(pack, c, bases):
             lim = tol_of(spread) if m in METRICS else None
             change = cv / bv - 1
             bad = judged and change > lim
-            loud = judged and spread is not None and spread > MAX_SPREAD
+            # не хуже худшего прогона принятого (с полом допуска) — проход и в шумной паре
+            within = cv <= max(metric(w, m) for w in bws) * (1 + MIN_TOL)
+            loud = judged and spread is not None and spread > MAX_SPREAD and not bad and not within
             rows.append({"pack": pack, "window": name, "metric": ".".join(m), "cand": cv, "base": bv,
                          "bases": [metric(w, m) for w in bws], "spread": spread, "change": change, "tol": lim,
                          "gated": judged, "fail": bad, "noisy": loud})
@@ -140,10 +145,9 @@ def compare_pack(pack, c, bases):
                          "change": change, "tol": lim, "gated": True, "fail": bad, "noisy": False})
             if bad:
                 fails.append(f"{pack} накопление: последняя минута ×{cg:.2f} к первой против ×{bg:.2f} у принятого (допуск {lim:.0%})")
-    # шумный сеанс вердикта по числам не даёт — даже если в нём же «провал»: его снимает повторная пара; провал самого
-    # кандидата — провал и тогда
+    # провал по числам — сверх допуска, который уже растёт с шумом пары, — провал и в шумном сеансе
     fails = own + fails
-    state = FAIL if own else NOISY if noisy else FAIL if fails else PASS
+    state = FAIL if fails else NOISY if noisy else PASS
     return {"state": state, "fails": fails, "noisy": noisy, "rows": rows, "notes": notes}
 
 
