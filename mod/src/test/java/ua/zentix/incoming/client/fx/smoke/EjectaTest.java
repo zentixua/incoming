@@ -97,11 +97,12 @@ class EjectaTest {
                 assertEquals(t.clods(tnt), t.clodVolume(tnt) * t.matter().density, 1e-9 * t.mass(tnt));
                 assertTrue(t.clodVolume(tnt) < t.volume(tnt), m + ": кусками — меньше всей чаши");
             }
-            // плита над пустотой: весь пролом без пыли — кусками (завесы нет)
+            // плита над пустотой: весь пролом без пыли — кусками (завесы нет); мелочь откола уходит в пустоту за плитой
             double r = ua.zentix.incoming.warhead.BreachModel.Material.POOR.radius(tnt, ua.zentix.incoming.warhead.BreachModel.UNTAMPED);
             BlastTarget slab = BlastTarget.of(GroundMaterial.WOOD, false, 0.5, r);
             assertEquals(BlastTarget.Family.SLAB, slab.family());
-            assertEquals(slab.mass(tnt), slab.clods(tnt) + slab.dust(tnt), 1e-9 * slab.mass(tnt));
+            double behind = slab.mass(tnt) * slab.matter().fines * (1 - BlastTarget.SLAB_FRONT);
+            assertEquals(slab.mass(tnt), slab.clods(tnt) + slab.dust(tnt) + behind, 1e-9 * slab.mass(tnt));
         }
     }
 }
