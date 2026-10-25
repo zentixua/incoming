@@ -21,8 +21,7 @@ import java.util.List;
  * <li>ядерка ({@link #NUKE}): четыре петли гула пожаров и ветер в огонь ({@code NukeAfter}), звон в ушах, две сирены;</li>
  * <li>остальной мир ({@link #WORLD}, О): ваниль (дождь, мобы, шаги, блоки), другие моды (машины Create), наши звуки мира
  * без бюджета ({@link Sources}: руины, подстанции, сирены) — их числа никто не ограничивает, поэтому сверх оценки —
- * свободные каналы движка в миг удара ({@link #admit}, {@code free}) и запас на ближний ({@link #reserve}: заранее
- * уступает только тот, кого вытеснил бы взрыв громкости самого громкого голоса). Осыпь
+ * свободные каналы движка в миг удара ({@link #admit}, {@code free}) и запас на самый громкий ({@link #reserve}). Осыпь
  * выброса воронки — разовый звук взрыва, она в этом бюджете;</li>
  * <li>уступившие голоса держат каналы, пока стихают, и ещё тик, пока движок их не вернёт, — {@link #HEADROOM};</li>
  * <li>остальное — разовым звукам взрывов: {@link #CAP}, ~96 (24 ближних взрыва по 4 голоса разом).</li>
@@ -34,16 +33,22 @@ import java.util.List;
  * {@link #SPARE}.
  * <p>
  * Места нет — голос у того, чья громкость в смеси выше (Q_b, {@link Mix.Blast#heard}): уступает самый тихий, и обычно это
- * хвост (атака громче своего хвоста), а хвост вдали и есть гул. Атаку — первые {@link #ATTACK} тиков от настоящего начала
- * звука ({@link Mix.Blast#late}), окно мгновенной громкости BS.1770, — новый вытесняет, только если он громче её в
- * {@link #KEEP} раза: слышимая атака, оборванная в гул, слышна как сбой, хвост — нет. Новый получает голос — даже самый громкий — только если сразу выполнены три условия:
+ * хвост (атака громче своего хвоста), а хвост вдали и есть гул. Атаку — первые {@link #ATTACK} тиков, окно мгновенной
+ * громкости BS.1770, — новый вытесняет, только если он громче её в {@link #KEEP} раза: слышимая атака, оборванная в гул,
+ * слышна как сбой, хвост — нет. Новый получает голос — даже самый громкий — только если сразу выполнены три условия:
  * <ol>
- * <li>у движка сейчас свободно не меньше каналов, чем ему нужно (вытеснение их в этот тик не освободит);</li>
+ * <li>у движка сейчас свободно не меньше каналов, чем ему нужно (вытеснение их в этот тик не освободит), — у нового, который
+ * тише кого-то из звучащих, сверх запаса {@link #GROUP};</li>
  * <li>с ним каналы взрывов, считая уступивших, что ещё не вернули свои, не выйдут за {@link #cap} + {@link #HEADROOM}
  * (остатка запаса хватает на его группу);</li>
  * <li>уступками тех, кто тише него (атака — тише в {@link #KEEP} раза), восстанавливаются и свой потолок, и запас миру
- * {@link #SPARE}, когда уступившие вернут каналы.</li>
+ * {@link #SPARE}, когда уступившие вернут каналы, — а у нового, который тише кого-то из звучащих, ещё и запас
+ * {@link #GROUP} на самый громкий.</li>
  * </ol>
+ * Запас {@link #GROUP} свободных каналов — самому громкому: он может его взять, а запас вернут тише его (как уступили бы
+ * они его приёму). Тише кого-то из звучащих его не берёт: иначе запас тут же отнял бы у него голос внутри атаки, хотя мир
+ * ничего не взял (ревью R7); такой новый звучит в гуле сразу. Запас тратит только мир сверх своей оценки — тогда
+ * {@link #reserve} уступает заранее тех, кого вытеснил бы самый громкий.
  * Иначе он звучит в гуле с той же мощностью. Это
  * виртуализация каналов, а не закон слуха: порог «удар или гул» по слышимости атаки над фоном (временная маскировка) не
  * считается — пока каналов хватает, удар остаётся ударом, даже самый тихий.
@@ -99,7 +104,7 @@ final class BlastVoices {
     static final class Voice {
         final Mix.Blast blast;
         final List<? extends Sound> sounds;
-        final double azimuth;
+        final double born, azimuth;
         final float pitch, gain, highs;
         /** Какие звуки движок взял; до {@link #started} — все. */
         boolean[] took;
@@ -107,9 +112,10 @@ final class BlastVoices {
         double fadeFrom = Double.NaN;
         Rumble.Member member;
 
-        Voice(Mix.Blast blast, List<? extends Sound> sounds, double azimuth, float pitch, float gain, float highs) {
+        Voice(Mix.Blast blast, List<? extends Sound> sounds, double born, double azimuth, float pitch, float gain, float highs) {
             this.blast = blast;
             this.sounds = sounds;
+            this.born = born;
             this.azimuth = azimuth;
             this.pitch = pitch;
             this.gain = gain;
@@ -177,7 +183,8 @@ final class BlastVoices {
      * Новый взрыв {@code blast} (слои уже в смеси), которому нужно столько голосов, сколько звуков {@code sounds}: голос —
      * или гул. Новый звучит в каналах, свободных у движка сейчас; места в своём потолке ({@link #cap}) и запаса миру
      * ({@link #SPARE}, когда уступившие вернут каналы) нет — уступают самые тихие (стихают, их мощность переходит в гул);
-     * не уступает никто — новый сразу в гул.
+     * не уступает никто — новый сразу в гул. Новому, который тише кого-то из звучащих, {@link #GROUP} свободных не
+     * достаются: это запас самому громкому.
      *
      * @param now     тик звукового движка
      * @param azimuth откуда взрыв от уха, atan2(dz, dx)
@@ -191,18 +198,25 @@ final class BlastVoices {
         prune(now);
         int need = sounds.size();
         long steady = 0, releasing = 0;
+        double loudest = 0;
         for (Voice v : voices) {
             if (v.fading()) releasing += v.held();
-            else steady += v.held();
+            else {
+                steady += v.held();
+                loudest = Math.max(loudest, v.blast.heard());
+            }
         }
+        // GROUP свободных — запас самому громкому ({@link #reserve}): тише кого-то из звучащих его не берёт, иначе запас
+        // тут же отнял бы у него голос (ревью R7)
+        if (blast.heard() < loudest) free -= GROUP;
         // каналы нужны сейчас, а вытеснение вернёт их движку только через тики: сейчас их нет — гул
         if (need > free) return rumble(blast, now, azimuth, pitch, gain, highs);
         // уступившие держат каналы, пока стихают и пока движок их не вернул: запас на них кончился — гул
         if (steady + releasing + need > (long) cap + HEADROOM) return rumble(blast, now, azimuth, pitch, gain, highs);
         double fresh = blast.heard();
         List<Voice> quieter = new ArrayList<>();
-        for (Voice v : voices) if (!v.fading() && priority(v) < fresh) quieter.add(v);
-        quieter.sort(Comparator.comparingDouble(BlastVoices::priority));
+        for (Voice v : voices) if (!v.fading() && priority(v, now) < fresh) quieter.add(v);
+        quieter.sort(Comparator.comparingDouble(v -> priority(v, now)));
         // свой потолок и запас миру, когда уступившие вернут каналы: уступают самые тихие
         List<Voice> evict = new ArrayList<>();
         long freed = 0;
@@ -213,7 +227,7 @@ final class BlastVoices {
         }
         if (steady - freed + need > cap || (long) free - need + releasing + freed < SPARE) return rumble(blast, now, azimuth, pitch, gain, highs);
         for (Voice v : evict) give(v, now);
-        Voice v = new Voice(blast, sounds, azimuth, pitch, gain, highs);
+        Voice v = new Voice(blast, sounds, now, azimuth, pitch, gain, highs);
         voices.add(v);
         requested += need;
         return v;
@@ -221,16 +235,10 @@ final class BlastVoices {
 
     /**
      * Громкость в смеси, с которой голос держит место; запись кончилась (звук держит канал ещё до 20 тиков запаса) — ноль:
-     * смесь его больше не считает, и доля в ней — прежняя. Атака — по часам смеси от настоящего начала звука: запись без
-     * preload в первый раз разбирается тиками, и её атака позже тика, в который её попросили.
+     * смесь его больше не считает, и доля в ней — прежняя.
      */
-    private static double priority(Voice v) {
-        return v.blast.ended(v.blast.now()) ? 0 : v.blast.heard() * (v.blast.now() - v.blast.start < ATTACK ? KEEP : 1);
-    }
-
-    /** Звук голоса уже начался ({@link Mix.Blast#late}: запись без preload в первый раз начинается тиками позже). */
-    private static boolean sounding(Voice v) {
-        return v.blast.now() >= v.blast.start;
+    private static double priority(Voice v, double now) {
+        return v.blast.ended(v.blast.now()) ? 0 : v.blast.heard() * (now - v.born < ATTACK ? KEEP : 1);
     }
 
     private Voice rumble(Mix.Blast blast, double now, double azimuth, float pitch, float gain, float highs) {
@@ -275,11 +283,12 @@ final class BlastVoices {
      * своём следующем тике), поэтому — заранее, а не при ударе. Сколько уступило.
      * <p>
      * Заранее уступает только тот, кого при приёме вытеснил бы взрыв громкости самого громкого голоса сейчас ({@link #admit}):
-     * кто тише него (атака — в {@link #KEEP} раза) или чья запись кончилась, и только звучащий — голос, чей звук ещё не
-     * начался, держит свою атаку впереди. Сам самый громкий не уступает: запас — для громкого, а он уже звучит; ближний,
-     * который потратил запас на свою атаку, им же и был бы вытеснен (ревью R7). Громче него новый при приёме вытеснит его
-     * хвост сам, если у движка есть каналы сейчас; нет и их (мир съел всё, а свои голоса — только самый громкий) — новый в
-     * гуле: отдать заранее слышимый голос ради взрыва, которого ещё нет, значит потерять слышимое наверняка.
+     * кто тише него (атака — в {@link #KEEP} раза) или чья запись кончилась. Сам самый громкий не уступает: запас — для
+     * громкого, а он уже звучит; ближний, который потратил запас на свою атаку, им же и был бы вытеснен (ревью R7). Громче
+     * него новый при приёме вытеснит его хвост сам, если у движка есть каналы сейчас; нет и их (мир съел всё, а свои голоса —
+     * только самый громкий) — новый в гуле: отдать заранее слышимый голос ради взрыва, которого ещё нет, значит потерять
+     * слышимое наверняка. Свои тихие запас не тратят ({@link #admit}), поэтому уступать заставляет только мир или самый
+     * громкий, который его взял.
      */
     int reserve(double now, int free) {
         prune(now);
@@ -291,8 +300,8 @@ final class BlastVoices {
         }
         if ((long) free + releasing >= SPARE + GROUP) return 0;
         List<Voice> quiet = new ArrayList<>();
-        for (Voice v : voices) if (!v.fading() && sounding(v) && (priority(v) < loudest || v.blast.ended(v.blast.now()))) quiet.add(v);
-        quiet.sort(Comparator.comparingDouble(BlastVoices::priority));
+        for (Voice v : voices) if (!v.fading() && (priority(v, now) < loudest || v.blast.ended(v.blast.now()))) quiet.add(v);
+        quiet.sort(Comparator.comparingDouble(v -> priority(v, now)));
         int n = 0;
         long freed = 0;
         for (Voice v : quiet) {

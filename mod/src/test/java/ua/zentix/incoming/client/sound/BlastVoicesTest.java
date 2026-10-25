@@ -121,10 +121,9 @@ class BlastVoicesTest {
 
     /**
      * Запас не отменяет приёма (ревью R7): заранее уступает только тот, кого вытеснил бы взрыв громкости самого громкого
-     * голоса — кто тише него (атака — вдвое) или чья запись кончилась, и только уже звучащий. Ближний, который занял четыре
-     * из двенадцати свободных и оставил миру восемь, следующие тики не уступает запасу ни в атаке, ни после — он и есть
-     * самый громкий; с ним рядом тихий хвост и тихая атака уступают заранее, громкая атака — нет, пока она атака; звук,
-     * начавшийся позже своего тика (запись без preload в первый раз), до начала не уступает — его атака впереди.
+     * голоса — кто тише него (атака — вдвое) или чья запись кончилась. Ближний, который занял четыре из двенадцати
+     * свободных и оставил миру восемь, следующие тики не уступает запасу ни в атаке, ни после — он и есть самый громкий;
+     * когда мир съел всё, рядом с ним тихий хвост и тихая атака уступают заранее, громкая атака — нет, пока она атака.
      */
     @Test
     void reserveNeverYieldsTheLoudestNorAProtectedAttack() {
@@ -164,21 +163,38 @@ class BlastVoicesTest {
             assertEquals(t >= 20 + BlastVoices.ATTACK, strong.fading(), "тик " + t + ": атака кончилась — уступает, как хвост");
             assertTrue(!loud.fading(), "тик " + t + ": самый громкий не уступает запасу");
         }
+    }
 
-        clock[0] = 0;
-        mix = new Mix();
-        voices = new BlastVoices(new Rumble());
-        assertNotNull(voices.admit(flat(mix, 0, 1, 300), fakes(clock, 4, 300), 0, 0, 1, 1, 1, 1000));
-        Mix.Blast slow = flat(mix, 0, 0.3, 300);
-        BlastVoices.Voice late = voices.admit(slow, fakes(clock, 4, 300), 0, 0, 1, 1, 1, 1000);
-        assertNotNull(late);
-        slow.late(6);
-        for (int t = 1; t <= 6; t++) {
+    /**
+     * Запас {@link BlastVoices#GROUP} свободных — самому громкому: новый, который тише кого-то из звучащих, его не берёт —
+     * при 14 свободных и группе в 4 звучит в гуле сразу, а не голосом, который запас отнял бы следующим тиком (ревью R7,
+     * для любого, не только самого громкого); при 18 — голос, и запас его не трогает, пока мир ничего не взял. Самый громкий
+     * запас берёт, и запас возвращают тише его — как уступили бы они его приёму.
+     */
+    @Test
+    void theReserveBelongsToTheLoudest() {
+        double[] clock = {0};
+        Mix mix = new Mix();
+        BlastVoices voices = new BlastVoices(new Rumble());
+        BlastVoices.Voice first = voices.admit(flat(mix, 0, 0.5, 300), fakes(clock, 4, 300), 0, 0, 1, 1, 1, 1000);
+        assertNotNull(first);
+        clock[0] = 10;
+        mix.at(10);
+        assertNull(voices.admit(flat(mix, 10, 0.3, 300), fakes(clock, 4, 300), 10, 0, 1, 1, 1, 14), "тише звучащего, запас не его — в гул");
+        BlastVoices.Voice second = voices.admit(flat(mix, 10, 0.3, 300), fakes(clock, 4, 300), 10, 0, 1, 1, 1, 18);
+        assertNotNull(second, "запас остаётся — голос");
+        for (int t = 11; t < 40; t++) {
             clock[0] = t;
             mix.at(t);
-            voices.reserve(t, 0);
-            assertEquals(t >= 6, late.fading(), "тик " + t + ": до начала звука — не уступает; зазвучал — тихий, уступает");
+            assertEquals(0, voices.reserve(t, 14), "тик " + t + ": мир ничего не взял — запас цел");
+            assertTrue(!second.fading() && !first.fading(), "тик " + t);
         }
+        BlastVoices.Voice loudest = voices.admit(flat(mix, 40, 1, 300), fakes(clock, 4, 300), 40, 0, 1, 1, 1, 14);
+        assertNotNull(loudest, "самый громкий берёт запас");
+        clock[0] = 41;
+        mix.at(41);
+        assertEquals(1, voices.reserve(41, 10), "запас возвращает самый тихий");
+        assertTrue(second.fading() && !first.fading() && !loudest.fading());
     }
 
     /** Пул движка без движка: столько статических каналов, сколько даст OpenAL; канал занят, пока звук его держит. */
