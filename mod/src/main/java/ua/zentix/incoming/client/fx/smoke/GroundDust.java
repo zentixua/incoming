@@ -129,6 +129,13 @@ public final class GroundDust {
 
     final CloudModel.Air air;
     final double yieldKt, hob;
+    /**
+     * Ветер у земли (на 2 м), м/с: путь ветра — каждому клубу каждый кадр, а воздух у слоя один на всё время (корень из
+     * суммы квадратов — дорогой {@code Math.hypot}: у налёта из 100 ударов он брал восьмую часть процессора дыма).
+     */
+    private final double groundWind;
+    /** Время, для которого посчитан узел сетки {@link #nodeAt} (один на кадр у всех таблиц слоя). */
+    private double nodeT = Double.NaN, nodeAt;
     /** Кольца счёта: середина и площадь (одни на все секторы). */
     private final double[] r, area;
     /**
@@ -185,6 +192,7 @@ public final class GroundDust {
 
     private GroundDust(double tntKg, double hobM, double ballM, Ground ground, CloudModel.Air air, double crushedKg, double crushedRadius) {
         this.air = air;
+        this.groundWind = Math.sqrt(air.windX() * air.windX() + air.windZ() * air.windZ()) * air.wind(2);
         this.yieldKt = CloudModel.equivalentKt(tntKg);
         this.hob = Math.max(0, hobM);
         this.relief = ground.relief();
@@ -365,15 +373,20 @@ public final class GroundDust {
         return Math.min(STEPS - 1.0, Math.log(1 + Math.max(t, 0) / T0) / Math.log(GROW));
     }
 
-    private static double at(double[] a, double t) {
-        double s = node(t);
+    /** Таблица a по узлам сетки в возрасте t — линейно между узлами; узел — один на возраст (логарифм — раз в кадр). */
+    private double at(double[] a, double t) {
+        if (t != nodeT) {
+            nodeT = t;
+            nodeAt = node(t);
+        }
+        double s = nodeAt;
         int i = (int) Math.min(a.length - 2, Math.floor(s));
         return a[i] + (a[i + 1] - a[i]) * (s - i);
     }
 
     /** Путь ветра у земли за t, м (не меньше, чем при 1 м/с: в штиль воздух тоже перемешивается). */
     double path(double t) {
-        return Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(2)) * t;
+        return Math.max(1, groundWind) * t;
     }
 
     /** σ слоя по вертикали в возрасте t: верх Kuhl к концу фазы / 2,5 и турбулентность воздуха (Бриггс), м. */
@@ -384,7 +397,7 @@ public final class GroundDust {
 
     /** Доля слоя, что ещё над зоной подсоса (ветер уносит его за полрадиуса подсоса — подсос гаснет). */
     private double under(double t) {
-        double reach = Math.max(stemReach, 1e-3), d = Math.hypot(air.windX(), air.windZ()) * air.wind(2) * t;
+        double reach = Math.max(stemReach, 1e-3), d = groundWind * t;
         double u = Math.max(0, Math.min(1, (d - 0.5 * reach) / (0.5 * reach)));
         return 1 - u * u * (3 - 2 * u);
     }
@@ -512,15 +525,18 @@ public final class GroundDust {
     /** Клубы в возрасте t; {@code levels} — где они лежат (без него — на поверхности, с которой подняло: толща слоя). */
     private void emit(double t, double fade, boolean levels, Probe out) {
         if (total <= 0 || t <= 0) return;
-        // один проход по кольцам: у каждого кольца показа в секторе — масса, её радиус и второй момент, доля ещё в фазе волны
+        // один проход по кольцам: у каждого кольца показа в секторе — масса, её радиус и второй момент, доля ещё в фазе волны,
+        // масса пыли в воздухе (тяжесть слоя, {@link #airborne}: тем же счётом — по кольцу показа она бралась бы заново у
+        // каждого клуба, а это всё кольца на каждое кольцо показа — у налёта из 100 ударов пятая часть процессора дыма)
         double[][] m = new double[ANNULI][SECTORS], mr = new double[ANNULI][SECTORS], mr2 = new double[ANNULI][SECTORS],
-                wt = new double[ANNULI][SECTORS], wtop = new double[ANNULI][SECTORS];
+                wt = new double[ANNULI][SECTORS], wtop = new double[ANNULI][SECTORS], aloft = new double[ANNULI][SECTORS];
         for (int k = 0; k < SECTORS; k++) {
             for (int i = 0; i < RINGS; i++) {
                 if (ball[k][i]) continue;
+                int a = annulus[i];
+                if (levels) aloft[a][k] += massNow(k, i, t);
                 double e = ringNow(k, i, t);
                 if (e <= 0) continue;
-                int a = annulus[i];
                 m[a][k] += e;
                 mr[a][k] += e * r[i];
                 mr2[a][k] += e * r[i] * r[i];
@@ -554,7 +570,7 @@ public final class GroundDust {
                 double ang = 2 * Math.PI * (k + 0.5) / SECTORS, ux = Math.cos(ang), uz = Math.sin(ang);
                 double[] d = drift(t, zc);
                 double[] at = levels ? level(k, a, t, source, ux, uz, own) : new double[]{surface[k][a], 0, 0};
-                out.blob(d[0] + mean * ux - at[1], at[0] + zc, d[1] + mean * uz - at[2], sh, v, mass * fade, levels ? airborne(k, a, t) : 0,
+                out.blob(d[0] + mean * ux - at[1], at[0] + zc, d[1] + mean * uz - at[2], sh, v, mass * fade, aloft[a][k],
                         surface[k][a]);
             }
         }

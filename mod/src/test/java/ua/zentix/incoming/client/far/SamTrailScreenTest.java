@@ -50,6 +50,8 @@ class SamTrailScreenTest {
             for (double seconds : new double[]{15, 30, 60}) {
                 Screen screen = new Screen(view);
                 FarFlightView.collectTrails(view, screen.sprites, 120 + 20 * seconds, points, air);
+                // клубы мест следа ждут плана кадра: кадр кончился
+                SmokePuffs.flush();
                 screen.raster();
                 double peak = 0;
                 int visible = 0;

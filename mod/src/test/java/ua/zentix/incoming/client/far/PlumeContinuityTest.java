@@ -136,6 +136,8 @@ class PlumeContinuityTest {
     private static final class Record implements SmokePuffs.Out {
         /** Клубы лицом к камере, лежащие на горизонтали (слой пыли у земли, {@code FxQuads.flat}) и ленты. */
         final List<double[]> puffs = new ArrayList<>(), flats = new ArrayList<>(), ribbons = new ArrayList<>();
+        /** Вуаль кадра: крупные на экране места трубки (кадр сверх бюджета заливки) — в ней, та же толща по лучам. */
+        SmokePuffs.Veil veil;
 
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
@@ -150,7 +152,9 @@ class PlumeContinuityTest {
         }
 
         @Override
-        public void veil(SmokePuffs.Veil veil, int light) {}
+        public void veil(SmokePuffs.Veil veil, int light) {
+            this.veil = veil.copy();
+        }
 
         @Override
         public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
@@ -221,6 +225,9 @@ class PlumeContinuityTest {
      * разрывов в кадре.
      */
     private static boolean along(String name, List<double[]> axis, FarView view, Record out) throws IOException {
+        // клубы мест трубки ждут плана кадра: кадр кончился
+        SmokePuffs.resetBudget();
+        SmokePuffs.flush();
         Vec3 eye = view.camera();
         Vector3f fwd = view.forward(), left = view.left(), up = view.up();
         double edge = view.edge();
@@ -237,7 +244,7 @@ class PlumeContinuityTest {
             path += Math.max(0.05, Math.min(0.25 * PIXEL * d, sigma / 8));
             if (depth <= 0 || Math.acos(Math.min(1, depth / d)) > 0.8 * edge) continue;
             double su = (px * left.x + py * left.y + pz * left.z) / depth, sv = (px * up.x + py * up.y + pz * up.z) / depth;
-            double clear = 1;
+            double clear = out.veil == null ? 1 : out.veil.through(su, sv);
             for (double[] q : out.puffs) {
                 double qd = q[0] * fwd.x + q[1] * fwd.y + q[2] * fwd.z;
                 if (qd <= 0) continue;
@@ -317,7 +324,7 @@ class PlumeContinuityTest {
         for (double[] a : axis) {
             FarFlightView.Tube ta = end(view, a[0] - eye.x, a[1] - eye.y, a[2] - eye.z, a[3], e);
             FarFlightView.Tube tb = end(view, a[4] - eye.x, a[5] - eye.y, a[6] - eye.z, a[7], e);
-            int drawn = FarFlightView.line(view, out, ta, tb, 0.5f, 0.5f, 0.5f, 0.6f, 0.6f, 0.6f, 1, 0.5, seed++, joint);
+            int drawn = FarFlightView.line(view, out, ta, tb, 0.5f, 0.5f, 0.5f, 0.6f, 0.6f, 0.6f, 1, 0.5, seed++, 1, joint);
             if (drawn != FarFlightView.RIBBON) joint[0] = Float.NaN;
         }
         return along(name, axis, view, out);

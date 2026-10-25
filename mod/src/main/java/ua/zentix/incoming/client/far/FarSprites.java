@@ -108,7 +108,9 @@ public final class FarSprites implements SmokePuffs.Out {
      * (r, g, b) с непрозрачностью a (уже с дымкой воздуха).
      */
     public void puff(double dx, double dy, double dz, double half, float rot, int tex, float r, float g, float b, float a) {
+        FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
         if (billboard(dx, dy, dz, half, rot, FxAtlas.puff(tex), r * a, g * a, b * a, a, (float) half * FxQuads.SOFT)) counts[0]++;
+        out.part(was);
     }
 
     /**
@@ -121,11 +123,13 @@ public final class FarSprites implements SmokePuffs.Out {
                       float b, float a) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
+        FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
         out.sixWay(mix, shade);
         out.billboard((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold),
                 (float) (halfB * unfold), 0, sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) Math.max(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
         out.sixWay(-1);
+        out.part(was);
         counts[0]++;
     }
 
@@ -139,11 +143,13 @@ public final class FarSprites implements SmokePuffs.Out {
                           float r, float g, float b, float a) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
+        FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
         out.sixWay(mix, shade);
         out.flat((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold), (float) (halfB * unfold),
                 sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) soft, (float) unfold, LightTexture.FULL_BRIGHT, 0);
         out.sixWay(-1);
+        out.part(was);
         counts[0]++;
     }
 
@@ -160,20 +166,24 @@ public final class FarSprites implements SmokePuffs.Out {
     public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        FxQuads.Part was = out.part(FxQuads.Part.VEIL);
         out.billboard((float) dx, (float) dy, (float) dz, (float) d, (float) half, 0, FxAtlas.white(), Math.min(1, r * a), Math.min(1, g * a),
                 Math.min(1, b * a), Math.min(1, a), 0, 1, light, 0);
+        out.part(was);
         counts[5]++;
     }
 
     /**
      * Вуаль вещества облаков у глаза ({@link SmokePuffs.Veil}): сетка клеток во весь экран на одной глубине, у каждой вершины —
-     * своя непрозрачность и цвет (толща по её лучу), между ними — линейно; клетки, где вуали нет, не рисуются.
+     * своя непрозрачность, цвет (толща по её лучу) и мягкость к миру (где вещество по лучу), между ними — линейно; клетки, где
+     * вуали нет, не рисуются.
      */
     @Override
     public void veil(SmokePuffs.Veil veil, int light) {
         FxAtlas.Sprite w = FxAtlas.white();
         float u = (w.u0() + w.u1()) / 2, v = (w.v0() + w.v1()) / 2, key = (float) SmokePuffs.VEIL_AT;
         int n = SmokePuffs.Veil.N;
+        FxQuads.Part was = out.part(FxQuads.Part.VEIL);
         for (int j = 0; j + 1 < n; j++) {
             for (int i = 0; i + 1 < n; i++) {
                 int a = SmokePuffs.Veil.index(i, j), b = SmokePuffs.Veil.index(i + 1, j), c = SmokePuffs.Veil.index(i + 1, j + 1),
@@ -186,13 +196,14 @@ public final class FarSprites implements SmokePuffs.Out {
                 veilCorner(veil, i + 1, j, b, u, v, light);
             }
         }
+        out.part(was);
         counts[5]++;
     }
 
     private void veilCorner(SmokePuffs.Veil veil, int i, int j, int k, float u, float v, int light) {
         float a = Math.min(1, veil.alpha(k));
         out.vertex((float) veil.place(i, j, 0), (float) veil.place(i, j, 1), (float) veil.place(i, j, 2), u, v, Math.min(1, veil.r[k] * a),
-                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, 0, 1, light, 0);
+                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, veil.soft[k], 1, light, 0);
     }
 
     /**
@@ -247,6 +258,7 @@ public final class FarSprites implements SmokePuffs.Out {
         double cos = (dx * fx + dy * fy + dz * fz) / Math.max(d, 1e-9);
         // не ближе, чем у камеры гаснет любой квадрат слоя (fx.fsh: полностью виден с 1,5 блока по оси взгляда)
         double front = Math.max(d - deep, AIR_NEAR / Math.max(cos, 0.1));
+        FxQuads.Part was = out.part(FxQuads.Part.GLARE);
         out.glowShape(true);
         if (front >= d) {
             if (billboard(dx, dy, dz, radius * GLOW, 0, FxAtlas.glow(), r * a, g * a, b * a, 0, 0)) counts[2]++;
@@ -257,6 +269,7 @@ public final class FarSprites implements SmokePuffs.Out {
             counts[2]++;
         }
         out.glowShape(false);
+        out.part(was);
     }
 
     /**
@@ -300,11 +313,13 @@ public final class FarSprites implements SmokePuffs.Out {
         if (shape < 1) core(dx, dy, dz, out, t, r, g, b, body * (1 - shape));
         float a = (float) (t * body * shape);
         // огонь кадра светится (FxBloom: ореол — по форме огня, с пересветом модели против кадра)
+        FxQuads.Part was = this.out.part(FxQuads.Part.FIRE);
         this.out.fireballMix(mix);
         this.out.emission((float) Math.max(1, hdr));
         if (shape > 0 && billboard(dx, dy, dz, half, fireballRotation(), sprite, a, a, a, a, (float) (radius * BODY_SOFT), BALL_FRONT * radius)) counts[1]++;
         this.out.emission(0);
         this.out.fireballMix(-1);
+        this.out.part(was);
         glare(dx, dy, dz, radius, out, seen, r, g, b, glare, shown);
     }
 
@@ -337,9 +352,11 @@ public final class FarSprites implements SmokePuffs.Out {
         float[] c = Sight.onScreen(r, g, b, s, (float) w);
         float a = (float) (o[1] * t * Math.min(1, 4 * s) * w);
         // светится (FxBloom) со своим пересветом: экран показал его белым
+        FxQuads.Part was = out.part(FxQuads.Part.FIRE);
         out.emission((float) Math.max(1, s));
         if (billboard(dx, dy, dz, o[0] * DISC, 0, FxAtlas.disc(), c[0], c[1], c[2], a, (float) (o[0] * BODY_SOFT))) counts[1]++;
         out.emission(0);
+        out.part(was);
     }
 
     /**
@@ -349,8 +366,10 @@ public final class FarSprites implements SmokePuffs.Out {
     private void glare(double dx, double dy, double dz, double radius, double[] o, double seen, float r, float g, float b, double w, double shown) {
         if (w <= 0) return;
         int probe = probes.add(dx, dy, dz, radius);
+        FxQuads.Part was = out.part(FxQuads.Part.GLARE);
         eye(dx, dy, dz, o[3], r, g, b, (float) (Math.min(Math.min(Sight.HALO, Sight.SCATTER * seen), shown) * w), probe);
         if (o[4] > 0) eye(dx, dy, dz, o[4], r, g, b, (float) (Math.min(Sight.VEIL_PEAK, shown) * w), probe);
+        out.part(was);
     }
 
     /**
@@ -396,82 +415,152 @@ public final class FarSprites implements SmokePuffs.Out {
      */
     public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                           float alphaB, int lightB, float r, float g, float b, float[] joint) {
-        if (alphaA < 0.002f && alphaB < 0.002f) return false;
-        double da = Math.sqrt(ax * ax + ay * ay + az * az), db = Math.sqrt(bx * bx + by * by + bz * bz);
-        double ka = FarDraw.fold(da, far), kb = FarDraw.fold(db, far);
-        float x0 = (float) (ax * ka), y0 = (float) (ay * ka), z0 = (float) (az * ka);
-        float x1 = (float) (bx * kb), y1 = (float) (by * kb), z1 = (float) (bz * kb);
-        float tx = x1 - x0, ty = y1 - y0, tz = z1 - z0;
-        float mx = (x0 + x1) * 0.5f, my = (y0 + y1) * 0.5f, mz = (z0 + z1) * 0.5f;
-        float nx = ty * mz - tz * my, ny = tz * mx - tx * mz, nz = tx * my - ty * mx;
-        float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
-        // длина отрезка на экране (поперёк луча к его середине) против его ширины: торцом — круг
-        double seg = Math.sqrt(tx * tx + ty * ty + tz * tz), across = len / Math.max(Math.sqrt(mx * mx + my * my + mz * mz), 1e-9);
-        // глаз в самой трубке (ближе полуширины к оси отрезка, с полуширины — плавно): лента — плоскость через глаз; её
-        // вещество вокруг глаза — вуалью: толща по взгляду — путь в трубке (длина отрезка или ширина на синус угла к нему)
-        // в ширинах
-        double hw = 0.5 * (halfA * ka + halfB * kb) / RIBBON, gap = distance(x0, y0, z0, tx, ty, tz);
-        double inside = 1 - smoothstep(0.5 * hw, hw, gap);
-        if (inside > 0) {
-            double sin = Math.sqrt(Math.max(0, 1 - sq((tx * fx + ty * fy + tz * fz) / Math.max(seg, 1e-9))));
-            double path = Math.min(seg, 2 * hw / Math.max(sin, 0.1));
-            double a = 0.5 * (Math.min(1, alphaA) + Math.min(1, alphaB));
-            // толща — путь этого отрезка в ширинах, без пола: у соседних отрезков пути складываются в настоящий путь взгляда
-            float k = (float) (inside * (1 - Math.pow(1 - Math.min(a, 0.999), path / (2 * Math.max(hw, 1e-6)))));
-            if (k > 0.004f) veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, VEIL_AT * 4, Math.min(1, r), Math.min(1, g), Math.min(1, b), k, lightA);
-            alphaA *= (float) (1 - inside);
-            alphaB *= (float) (1 - inside);
-            if (alphaA < 0.002f && alphaB < 0.002f) return false;
+        RibbonShape q = SHAPE;
+        FxQuads.Part was = out.part(FxQuads.Part.RIBBONS);
+        if (!q.set(far, fx, fy, fz, ax, ay, az, halfA, alphaA, bx, by, bz, halfB, alphaB, joint)) {
+            if (q.cap) joint[0] = Float.NaN;
+            emitVeilAndCap(q, r, g, b, lightA);
+            out.part(was);
+            return false;
         }
-        // торцом — только когда отрезок и луч почти параллельны (sin до 0,35, к 0,5 — плавно к ленте): сбоку короткий отрезок
-        // широкого старого следа — лента, иначе диски соседних отрезков ложились бы друг на друга и густили след
-        double tilt = Math.max(0, Math.min(1, (across / Math.max(seg, 1e-9) - 0.35) / 0.15));
-        double side = Math.max(endOn(across, 0.5 * (halfA * ka + halfB * kb) / RIBBON), tilt * tilt * (3 - 2 * tilt));
-        if (side < 1) {
-            // торец трубки: круг её ширины, толща вдоль взгляда — длина отрезка в ширинах (непрозрачность ленты — поперёк)
-            double halfW = 0.5 * (halfA * ka + halfB * kb) / RIBBON, a = 0.5 * (Math.min(1, alphaA) + Math.min(1, alphaB));
-            double along = 1 - Math.pow(1 - Math.min(a, 0.999), seg / (2 * Math.max(halfW, 1e-6)));
-            float k = (float) ((1 - side) * along);
-            out.glowShape(true);
-            // мягкость края у мира — в настоящих блоках, как у всех квадратов (halfW — в перенесённых ближе)
-            out.billboard(mx, my, mz, (float) (0.5 * (da + db)), (float) (halfW * GLOW), 0, FxAtlas.glow(), Math.min(1, r) * k, Math.min(1, g) * k,
-                    Math.min(1, b) * k, k, (float) (0.5 * (halfA + halfB) / RIBBON), (float) (0.5 * (ka + kb)), lightA, 0);
-            out.glowShape(false);
-            counts[3]++;
-            if (side <= 0 || len < 1e-6f) {
-                joint[0] = Float.NaN;
-                return false;
-            }
-            alphaA *= (float) side;
-            alphaB *= (float) side;
-        }
-        if (len < 1e-6f) return false;
-        nx /= len;
-        ny /= len;
-        nz /= len;
-        float px = nx, py = ny, pz = nz;
-        if (!Float.isNaN(joint[0]) && joint[0] * nx + joint[1] * ny + joint[2] * nz > 0) {
-            px = joint[0];
-            py = joint[1];
-            pz = joint[2];
-        }
-        float ha = (float) (halfA * ka), hb = (float) (halfB * kb);
-        float aa = Math.min(1, alphaA), ab = Math.min(1, alphaB), cr = Math.min(1, r), cg = Math.min(1, g), cb = Math.min(1, b);
-        float soft = (float) Math.max(halfA, halfB), ua = (float) ka, ub = (float) kb;
+        emitVeilAndCap(q, r, g, b, lightA);
+        float aa = Math.min(1, q.alphaA), ab = Math.min(1, q.alphaB), cr = Math.min(1, r), cg = Math.min(1, g), cb = Math.min(1, b);
+        float soft = (float) Math.max(halfA, halfB), ua = (float) q.ka, ub = (float) q.kb;
         FxAtlas.Sprite s = FxAtlas.glow();
         float v = s.vMid();
         out.glowShape(true);
-        out.quad((float) Math.max(da, db));
-        out.vertex(x0 - px * ha, y0 - py * ha, z0 - pz * ha, s.u0(), v, cr * aa, cg * aa, cb * aa, aa, soft, ua, lightA, 0);
-        out.vertex(x0 + px * ha, y0 + py * ha, z0 + pz * ha, s.u1(), v, cr * aa, cg * aa, cb * aa, aa, soft, ua, lightA, 0);
-        out.vertex(x1 + nx * hb, y1 + ny * hb, z1 + nz * hb, s.u1(), v, cr * ab, cg * ab, cb * ab, ab, soft, ub, lightB, 0);
-        out.vertex(x1 - nx * hb, y1 - ny * hb, z1 - nz * hb, s.u0(), v, cr * ab, cg * ab, cb * ab, ab, soft, ub, lightB, 0);
+        out.quad((float) Math.max(q.da, q.db));
+        out.vertex(q.x0 - q.px * q.ha, q.y0 - q.py * q.ha, q.z0 - q.pz * q.ha, s.u0(), v, cr * aa, cg * aa, cb * aa, aa, soft, ua, lightA, 0);
+        out.vertex(q.x0 + q.px * q.ha, q.y0 + q.py * q.ha, q.z0 + q.pz * q.ha, s.u1(), v, cr * aa, cg * aa, cb * aa, aa, soft, ua, lightA, 0);
+        out.vertex(q.x1 + q.nx * q.hb, q.y1 + q.ny * q.hb, q.z1 + q.nz * q.hb, s.u1(), v, cr * ab, cg * ab, cb * ab, ab, soft, ub, lightB, 0);
+        out.vertex(q.x1 - q.nx * q.hb, q.y1 - q.ny * q.hb, q.z1 - q.nz * q.hb, s.u0(), v, cr * ab, cg * ab, cb * ab, ab, soft, ub, lightB, 0);
         out.glowShape(false);
+        out.part(was);
         counts[3]++;
-        joint[0] = nx;
-        joint[1] = ny;
-        joint[2] = nz;
+        joint[0] = q.nx;
+        joint[1] = q.ny;
+        joint[2] = q.nz;
         return true;
+    }
+
+    private static final RibbonShape SHAPE = new RibbonShape();
+
+    /** Вуаль «глаз в трубке» и торец трубки кругом ({@link RibbonShape}), если они есть. */
+    private void emitVeilAndCap(RibbonShape q, float r, float g, float b, int lightA) {
+        if (q.veil > 0.004f) veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, VEIL_AT * 4, Math.min(1, r), Math.min(1, g), Math.min(1, b), q.veil, lightA);
+        if (q.capAlpha > 0) {
+            float k = q.capAlpha;
+            out.glowShape(true);
+            // мягкость края у мира — в настоящих блоках, как у всех квадратов (halfW — в перенесённых ближе)
+            out.billboard(q.mx, q.my, q.mz, (float) (0.5 * (q.da + q.db)), (float) (q.halfW * GLOW), 0, FxAtlas.glow(), Math.min(1, r) * k,
+                    Math.min(1, g) * k, Math.min(1, b) * k, k, (float) q.softCap, (float) (0.5 * (q.ka + q.kb)), lightA, 0);
+            out.glowShape(false);
+            counts[3]++;
+        }
+    }
+
+    /**
+     * Что нарисует отрезок ленты ({@link #ribbon}) — одна геометрия у рисования, плана кадра ({@code SmokePuffs}: заливка ленты
+     * входит в бюджет) и проверок: концы (перенесены ближе, {@link FarDraw#fold}), поперечники у концов, полуширины,
+     * вуаль «глаз в трубке» и круг торца с их непрозрачностью, непрозрачности полосы; {@link #set} — ляжет ли полоса.
+     */
+    static final class RibbonShape {
+        float x0, y0, z0, x1, y1, z1, mx, my, mz, px, py, pz, nx, ny, nz, ha, hb, alphaA, alphaB, veil, capAlpha;
+        double da, db, ka, kb, halfW, softCap;
+        /** Отрезок целиком торцом (круг без полосы): поперечник у b — нет. */
+        boolean cap;
+
+        /** Геометрия отрезка от (ax..) до (bx..) при взгляде (fx, fy, fz) и переносе far; joint — поперёк у a (не меняется). */
+        boolean set(double far, float fx, float fy, float fz, double ax, double ay, double az, double halfA, float alphaA, double bx, double by,
+                    double bz, double halfB, float alphaB, float[] joint) {
+            veil = capAlpha = 0;
+            cap = false;
+            this.alphaA = alphaA;
+            this.alphaB = alphaB;
+            if (alphaA < 0.002f && alphaB < 0.002f) return false;
+            da = Math.sqrt(ax * ax + ay * ay + az * az);
+            db = Math.sqrt(bx * bx + by * by + bz * bz);
+            ka = FarDraw.fold(da, far);
+            kb = FarDraw.fold(db, far);
+            x0 = (float) (ax * ka);
+            y0 = (float) (ay * ka);
+            z0 = (float) (az * ka);
+            x1 = (float) (bx * kb);
+            y1 = (float) (by * kb);
+            z1 = (float) (bz * kb);
+            float tx = x1 - x0, ty = y1 - y0, tz = z1 - z0;
+            mx = (x0 + x1) * 0.5f;
+            my = (y0 + y1) * 0.5f;
+            mz = (z0 + z1) * 0.5f;
+            nx = ty * mz - tz * my;
+            ny = tz * mx - tx * mz;
+            nz = tx * my - ty * mx;
+            float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+            // длина отрезка на экране (поперёк луча к его середине) против его ширины: торцом — круг
+            double seg = Math.sqrt(tx * tx + ty * ty + tz * tz), across = len / Math.max(Math.sqrt(mx * mx + my * my + mz * mz), 1e-9);
+            // глаз в самой трубке (ближе полуширины к оси отрезка, с полуширины — плавно): лента — плоскость через глаз; её
+            // вещество вокруг глаза — вуалью: толща по взгляду — путь в трубке (длина отрезка или ширина на синус угла к нему)
+            // в ширинах
+            double hw = 0.5 * (halfA * ka + halfB * kb) / RIBBON, gap = distance(x0, y0, z0, tx, ty, tz);
+            double inside = 1 - smoothstep(0.5 * hw, hw, gap);
+            if (inside > 0) {
+                double sin = Math.sqrt(Math.max(0, 1 - sq((tx * fx + ty * fy + tz * fz) / Math.max(seg, 1e-9))));
+                double path = Math.min(seg, 2 * hw / Math.max(sin, 0.1));
+                double a = 0.5 * (Math.min(1, this.alphaA) + Math.min(1, this.alphaB));
+                // толща — путь этого отрезка в ширинах, без пола: у соседних отрезков пути складываются в настоящий путь взгляда
+                veil = (float) (inside * (1 - Math.pow(1 - Math.min(a, 0.999), path / (2 * Math.max(hw, 1e-6)))));
+                this.alphaA *= (float) (1 - inside);
+                this.alphaB *= (float) (1 - inside);
+                if (this.alphaA < 0.002f && this.alphaB < 0.002f) return false;
+            }
+            // торцом — только когда отрезок и луч почти параллельны (sin до 0,35, к 0,5 — плавно к ленте): сбоку короткий отрезок
+            // широкого старого следа — лента, иначе диски соседних отрезков ложились бы друг на друга и густили след
+            double tilt = Math.max(0, Math.min(1, (across / Math.max(seg, 1e-9) - 0.35) / 0.15));
+            double side = Math.max(endOn(across, 0.5 * (halfA * ka + halfB * kb) / RIBBON), tilt * tilt * (3 - 2 * tilt));
+            if (side < 1) {
+                // торец трубки: круг её ширины, толща вдоль взгляда — длина отрезка в ширинах (непрозрачность ленты — поперёк)
+                halfW = 0.5 * (halfA * ka + halfB * kb) / RIBBON;
+                softCap = 0.5 * (halfA + halfB) / RIBBON;
+                double a = 0.5 * (Math.min(1, this.alphaA) + Math.min(1, this.alphaB));
+                double along = 1 - Math.pow(1 - Math.min(a, 0.999), seg / (2 * Math.max(halfW, 1e-6)));
+                capAlpha = (float) ((1 - side) * along);
+                if (side <= 0 || len < 1e-6f) {
+                    cap = true;
+                    return false;
+                }
+                this.alphaA *= (float) side;
+                this.alphaB *= (float) side;
+            }
+            if (len < 1e-6f) return false;
+            nx /= len;
+            ny /= len;
+            nz /= len;
+            px = nx;
+            py = ny;
+            pz = nz;
+            if (!Float.isNaN(joint[0]) && joint[0] * nx + joint[1] * ny + joint[2] * nz > 0) {
+                px = joint[0];
+                py = joint[1];
+                pz = joint[2];
+            }
+            ha = (float) (halfA * ka);
+            hb = (float) (halfB * kb);
+            return true;
+        }
+
+        /**
+         * Сколько экранов зальют квадраты отрезка во взгляде view: вуаль «глаз в трубке» (квадрат у глаза), круг торца,
+         * полоса ({@code drawn} — {@link #set} вернул true) — каждый по своим вершинам на экране ({@code SmokePuffs.polygonFill}).
+         */
+        double fill(FarView view, boolean drawn) {
+            double f = 0;
+            org.joml.Vector3f fw = view.forward();
+            if (veil > 0.004f) f += SmokePuffs.cover(view, fw.x * VEIL_AT, fw.y * VEIL_AT, fw.z * VEIL_AT, VEIL_AT * 4, VEIL_AT * 4);
+            if (capAlpha > 0) f += SmokePuffs.cover(view, mx, my, mz, halfW * GLOW, halfW * GLOW);
+            if (drawn) f += SmokePuffs.polygonFill(view, new double[]{x0 - px * ha, y0 - py * ha, z0 - pz * ha, x0 + px * ha, y0 + py * ha, z0 + pz * ha,
+                    x1 + nx * hb, y1 + ny * hb, z1 + nz * hb, x1 - nx * hb, y1 - ny * hb, z1 - nz * hb});
+            return f;
+        }
     }
 
     /**
@@ -529,9 +618,11 @@ public final class FarSprites implements SmokePuffs.Out {
      * на экране, только светит; hdr — его яркость против белого экрана до среза (свечение {@code FxBloom}).
      */
     public void glowDisc(double dx, double dy, double dz, double radius, float r, float g, float b, float soft, float hdr) {
+        FxQuads.Part was = out.part(FxQuads.Part.FIRE);
         out.emission(Math.max(1, hdr));
         if (billboard(dx, dy, dz, radius * DISC, 0, FxAtlas.disc(), r, g, b, 0, soft)) counts[2]++;
         out.emission(0);
+        out.part(was);
     }
 
     /**
@@ -547,6 +638,7 @@ public final class FarSprites implements SmokePuffs.Out {
         r = Math.min(1, r);
         g = Math.min(1, g);
         bl = Math.min(1, bl);
+        FxQuads.Part was = out.part(FxQuads.Part.FIRE);
         out.quad(key);
         out.emission(Math.max(1, hdr));
         plateCorner(c, a, b, -1, -1, s.u0(), s.v0(), r, g, bl);
@@ -554,6 +646,7 @@ public final class FarSprites implements SmokePuffs.Out {
         plateCorner(c, a, b, 1, 1, s.u1(), s.v1(), r, g, bl);
         plateCorner(c, a, b, 1, -1, s.u1(), s.v0(), r, g, bl);
         out.emission(0);
+        out.part(was);
         counts[2]++;
     }
 

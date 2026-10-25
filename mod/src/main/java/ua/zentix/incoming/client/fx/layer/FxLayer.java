@@ -177,6 +177,7 @@ public final class FxLayer {
             GPU.second();
             HEAT.second();
             FxBloom.second();
+            LayerTimes.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;
             frames = ticks = collected = 0;
         }
@@ -265,15 +266,21 @@ public final class FxLayer {
             PallPass.reset();
             return;
         }
+        // проба (LayerTimes): метки времени на границах проходов; кадр слива — со сливом у каждой и с частями квадратов
+        boolean drained = LayerTimes.begin();
         int models = FarRenderer.renderModels();
+        LayerTimes.mark(LayerTimes.Pass.MODELS);
         int scene = SceneDepth.update(e.getProjectionMatrix());
+        LayerTimes.mark(LayerTimes.Pass.DEPTH);
         FarDraw.view(e, view.camera(), VIEW);
         LightTexture light = mc.gameRenderer.lightTexture();
         FarDraw.begin(e, view.camera());
-        int timed = GPU.begin();
+        // кадр слива стоит ещё одни квадраты и простои: во время слоя он не идёт
+        int timed = drained ? -1 : GPU.begin();
         try {
             // наклейка на воду — под пеленой и квадратами: пыль, брызги и дым над водой ложатся на неё
             if (WaterDecal.active()) WaterDecal.draw(e, view, scene, FOG);
+            LayerTimes.mark(LayerTimes.Pass.WATER);
             // пелена — до квадратов: они ложатся на неё со своей долей пелены перед ними (fx.vsh)
             boolean pallDrawn = pall != null && scene >= 0 && PallPass.draw(pall, scene, VIEW, e.getProjectionMatrix(), view.camera(),
                     FOG.haze(view.range(), HAZE));
@@ -281,6 +288,7 @@ public final class FxLayer {
             // облака, чей объём не вышел (кадр пелены не нарисован), со следующего кадра — квадратами
             SmokeGrid.drawn(pall == null || pall.smoke == null || pallDrawn && SmokePass.filled());
             PallPass.Frame front = pallDrawn ? pall : PallPass.empty();
+            LayerTimes.mark(LayerTimes.Pass.PALL);
             // свет на мир и дрожание — по кадру с пеленой, до квадратов: дым и огонь слоя ложатся поверх
             if (hot && scene >= 0) {
                 int timedHeat = HEAT.begin();
@@ -289,8 +297,10 @@ public final class FxLayer {
                 HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
                 HEAT.end(timedHeat);
             }
+            LayerTimes.mark(LayerTimes.Pass.HEAT);
             // пробы — после пелены: её проход кладёт карты и таблицу грибов кадра, а проба берёт пропускание пелены и грибов
             int seen = PROBES.update(scene, front, pallDrawn, VIEW, e.getProjectionMatrix(), view.pixel());
+            LayerTimes.mark(LayerTimes.Pass.PROBES);
             RenderSystem.setShader(() -> s);
             RenderSystem.setShaderTexture(0, atlas);
             RenderSystem.setShaderTexture(1, scene >= 0 ? scene : atlas);
@@ -336,9 +346,14 @@ public final class FxLayer {
             RenderSystem.disableCull();
             s.safeGetUniform("FxGlowPass").set(0f, 1f);
             QUADS.draw();
+            LayerTimes.mark(LayerTimes.Pass.QUADS);
+            if (drained) LayerTimes.parts(QUADS, s);
+            LayerTimes.mark(LayerTimes.Pass.PROBE);
             // свечение огня, шара, вспышки и факела: излучение — ещё одним проходом части квадратов, ореол — на кадр (FxBloom)
             FxBloom.draw(QUADS, s, VIEW_PROJECTION);
+            LayerTimes.mark(LayerTimes.Pass.BLOOM);
             GPU.end(timed);
+            LayerTimes.end();
         } finally {
             light.turnOffLightLayer();
             SmokePass.unbind();
@@ -378,12 +393,20 @@ public final class FxLayer {
         s.safeGetUniform("FxSun").set(x, y, 0f, key);
     }
 
-    /** Время кадра слоя за прошлую секунду — для строки сценария. */
+    /**
+     * Время кадра слоя за прошлую секунду — для строки сценария и стенда; время на видеокарте по проходам и частям —
+     * {@link LayerTimes} (чтение строки держит пробу включённой).
+     */
     public static String describeTiming() {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
-                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s", lastQuads, lastMean, lastMax,
+                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s; %s", lastQuads, lastMean, lastMax,
                 lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
-                HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe());
+                HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe(), LayerTimes.describe());
+    }
+
+    /** F3: время слоя на видеокарте по проходам и частям (пока F3 открыт, проба идёт). */
+    public static void debugText(net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent.DebugText e) {
+        LayerTimes.debugLines(e.getRight());
     }
 
     /** Выход из мира или смена измерения. */
@@ -391,6 +414,7 @@ public final class FxLayer {
         frameNanos = frameMax = cleanMax = cleanCpu = 0;
         frames = ticks = collected = lastCollected = lastQuads = 0;
         lastMean = lastMax = lastClean = lastCleanCpu = 0;
+        LayerTimes.reset();
     }
 
     /** Время процессора потока отрисовки, нс (−1 — JVM не умеет: тогда в строке 0). */
