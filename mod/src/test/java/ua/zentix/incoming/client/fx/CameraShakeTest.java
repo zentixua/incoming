@@ -331,4 +331,46 @@ class CameraShakeTest {
         assertTrue(CameraShake.tremorSeconds(BlastModel.chemicalImpulse(100, 450, true)) > CameraShake.tremorSeconds(BlastModel.chemicalImpulse(100, 30, true)));
         CameraShake.reset();
     }
+
+    /** Тряска слушает ванильные «Искажения экрана» (доступность): в 0 камеру не качает при любой своей настройке. */
+    @Test
+    void distortionEffectsScaleTheShake() {
+        assertEquals(1, CameraShake.strength(1, 1));
+        assertEquals(0, CameraShake.strength(2, 0));
+        assertEquals(1, CameraShake.strength(2, 0.5), 1e-12);
+        assertEquals(1, CameraShake.strength(1, 1.5), 1e-12, "больше полного ваниль не даёт");
+    }
+
+    /**
+     * Толчок грунта: с нуля и к нулю без скачков, вверх-вниз (кивок) сильнее, чем вбок, слабее — меньше; камере снаряда
+     * его нет (как и дрожи удара).
+     */
+    @Test
+    void groundJoltNodsWithoutSteps() {
+        CameraShake.reset();
+        CameraShake.ground(1, 2, 0, 7);
+        double[] start = CameraShake.groundAt(0);
+        assertEquals(0, start[0], 1e-12);
+        assertEquals(0, start[1], 1e-12);
+        double pitch = 0, yaw = 0, before = 0, steepest = 0;
+        for (double t = 0; t <= 40; t += 0.05) {
+            double[] g = CameraShake.groundAt(t);
+            pitch = Math.max(pitch, Math.abs(g[1]));
+            yaw = Math.max(yaw, Math.abs(g[0]));
+            steepest = Math.max(steepest, Math.abs(g[1] - before));
+            before = g[1];
+        }
+        assertTrue(pitch > yaw, "кивок " + pitch + " против качания вбок " + yaw);
+        assertTrue(pitch <= CameraShake.GROUND_PITCH + 1e-9);
+        // скорость кивка — не больше 2π·f·A (за 0,05 тика — 1/400 с)
+        assertTrue(steepest <= 2 * Math.PI * 1.1 * CameraShake.GROUND_HZ * CameraShake.GROUND_PITCH / 400 * 1.05, "рывок " + steepest);
+        assertEquals(0, CameraShake.groundAt(40)[1], 1e-12, "к концу — ноль");
+        CameraShake.reset();
+        CameraShake.ground(0.3, 2, 0, 7);
+        double weak = 0;
+        for (double t = 0; t <= 40; t += 0.05) weak = Math.max(weak, Math.abs(CameraShake.groundAt(t)[1]));
+        assertTrue(weak < pitch, weak + " против " + pitch);
+        assertEquals(0, CameraShake.offsets(5, 0, 0, 0, Double.NaN, 1)[1], 1e-12, "камера снаряда не кивает");
+        CameraShake.reset();
+    }
 }

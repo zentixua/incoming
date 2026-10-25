@@ -582,10 +582,33 @@ public final class BlastSounds {
         return Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
     }
 
-    /** Толчок земли у слушателя (сервер шлёт тем, кто стоит над взрывом). */
+    /** Толчок земли у слушателя по прежнему пакету без источника (старые записи повтора Flashback): в полную силу. */
     public static void quake() {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         bomb(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), 1, 1);
+    }
+
+    /**
+     * Удельное акустическое сопротивление воздуха ρ₀c₀, Па·с/м (1,204 кг/м³ × 343 м/с при 20 °C): плоская поверхность,
+     * что ходит со скоростью v, излучает давление ρ₀c₀·v.
+     */
+    static final double AIR_IMPEDANCE = 1.204 * 343;
+
+    /**
+     * Гул земли, когда до ног дошла волна грунта с пиковой скоростью {@code ppvMps}, м/с: давление — ρ₀c₀·v у земли под
+     * ухом (вся округа ходит одной фазой — излучатель много больше длины волны; ⚠ оценка: коэффициент излучения 1, у
+     * волны в десятки метров длиной на мягком грунте он меньше), громкость — как у взрывов по давлению у уха.
+     */
+    public static void quake(double ppvMps) {
+        float v = byPressure(rumblePa(ppvMps), QUAKE_LUFS);
+        if (v < AUDIBLE) return;
+        Vec3 ear = ear();
+        bomb(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), v, 1);
+    }
+
+    /** Давление гула земли, Па, у скорости грунта {@code ppvMps}, м/с. */
+    static double rumblePa(double ppvMps) {
+        return AIR_IMPEDANCE * Math.max(0, ppvMps);
     }
 
     /** Звук бомбы — в смеси взрывов, своим взрывом в ней (каждый приход — свой). */

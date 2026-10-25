@@ -42,6 +42,7 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
+import ua.zentix.incoming.nuclear.model.GroundShock;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.registry.ModDamageTypes;
@@ -106,25 +107,24 @@ public final class Warheads {
         double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX,
                 HearingModel.audibleRangeM(BunkerImpact.airTnt(hit))));
         PacketDistributor.sendToPlayersNear(level, null, point.x, point.y, point.z, reach, new S2C.BunkerImpact(point, mat.ordinal(), (float) speed));
-        quake(level, point, hit);
+        // Estimate: use equal TNT energy for the kinetic contact pulse; this is not a measured impact spectrum.
+        // TM coupling is applied once to the full source energy, not again after subtracting its airborne share.
+        quake(level, new S2C.Quake(point, hit, 0, mat.ordinal(), level.getGameTime()));
         StrikeWorld.get(level).impactCost().step(System.nanoTime() - t0);
     }
 
     /**
-     * Толчок земли от удара или взрыва в грунте ({@code tntKg} кг ТНТ, что ушло в грунт): сейсмическая волна быстрее звука
-     * — трясёт сразу. Сила и длительность — по приведённому расстоянию Z = R/W^⅓ (оценка, удобство игрока, не урон): до
-     * Z 3 — 4 с, до 7,5 — 3 с, до 24 — 2 с (как было у 2,4 т в 40, 100 и 320 блоках).
+     * Ground source, not a command to shake now. GroundShock decides the perceptible recipient range; the client
+     * computes arrival and motion for its own position. In loose ground it may arrive AFTER the air front.
      */
-    static void quake(ServerLevel level, Vec3 at, double tntKg) {
-        double cube = Math.cbrt(Math.max(tntKg, 1e-3));
+    static void quake(ServerLevel level, S2C.Quake event) {
+        S2C.Quake.Ground source = event.source().orElseThrow();
+        double reach = GroundShock.feltRangeM(source.model());
+        if (!(reach > 0)) return;
         for (ServerPlayer p : level.players()) {
-            double z = p.position().distanceTo(at) / cube;
-            if (z <= QUAKE_FELT) PacketDistributor.sendToPlayer(p, new S2C.Quake(z <= 3 ? 80 : z <= 7.5 ? 60 : 40, true));
+            if (p.position().distanceTo(source.pos()) <= reach) PacketDistributor.sendToPlayer(p, event);
         }
     }
-
-    /** Докуда толчок земли ощутим, Z = R/W^⅓ (оценка). */
-    static final double QUAKE_FELT = 24;
 
     /** Подрыв бетонобойной бомбы под землёй. */
     public static void bunker(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity bomb, @Nullable UUID owner) {
@@ -645,6 +645,9 @@ public final class Warheads {
         @Nullable
         private final Entity owner;
         private final GroundMaterial ventMat;
+        /** Material/depth/time sampled before excavation changes the source column. */
+        private final S2C.Quake groundShock;
+        private boolean groundSent;
         private final BuriedBlast law;
         /** Верх над зарядом (без своей скважины). */
         private final int cover;
@@ -668,6 +671,8 @@ public final class Warheads {
             this.law = new BuriedBlast(WeaponSpec.BUNKER.warheadTnt(), BunkerCover.depth(cover, pos.y));
             this.hole = Math.PI * bomb.article().diameter() * bomb.article().diameter() / 4;
             double air = law.airCharge(hole);
+            // The TM depth-coupling factor already includes venting: W and scaled depth both use the full charge.
+            this.groundShock = new S2C.Quake(pos, law.tnt(), law.depth(), mat.ordinal(), level.getGameTime());
             Vec3 top = new Vec3(pos.x, cover, pos.z);
             // район — то, что взрыв делает с грунтом (трещины, труба, воронка); волна над землёй при прорыве ломает дальше
             // там, где мир загружен (луч кончается в неготовом чанке): охват волны 2,4 т — ~650 блоков, тысячи чанков, и
@@ -699,7 +704,6 @@ public final class Warheads {
                 // в зоне дробления давление в породе — сотни МПа: кто там (в ходе, в пустоте за стеной), не выживет
                 unit(level, area, main, ImpactCost.Kind.HITS, "Crush zone", l -> {
                     if (!happened()) return 0;
-                    quake(l, pos, law.tnt() - law.airCharge(hole));
                     return crushBodies(l);
                 });
                 if (blocks) {
@@ -744,7 +748,13 @@ public final class Warheads {
             if (t == CHIMNEY_TICK && IncomingConfig.SERVER.collapse.get() && IncomingConfig.SERVER.blockDamage.get() && !law.breaches()) {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Roof collapse", l -> happened() ? chimney(l) : 0);
             }
-            return t < CHIMNEY_TICK;
+            // Send as soon as Start accepted the explosion, not after every damage/front work unit finished.
+            // Keep polling if the queue took longer than the chimney timer to start; cancelled/timed-out jobs end it.
+            if (!groundSent && happened()) {
+                quake(level, groundShock);
+                groundSent = true;
+            }
+            return t < CHIMNEY_TICK || !groundSent && pending(main);
         }
 
         @Override
