@@ -47,8 +47,6 @@ import java.util.Locale;
  *   <li>{@code time day|night|<тик>}, {@code hud on|off}, {@code overlay on|off} — свет, интерфейс, числа модели;</li>
  *   <li>{@code coarse on|off} — крупные клубы мелким кадром ({@code CoarsePass}, по умолчанию on) или всё в полном —
  *       сравнение одного кадра;</li>
- *   <li>{@code volume on|off} — устоявшийся дым налёта объёмом ({@code SmokeGrid#share}, по умолчанию on) или весь
- *       квадратами, как в 3.7.0;</li>
  *   <li>{@code track on|off} — взгляд держит снаряд эффекта {@code launch}/{@code flight} в середине кадра (как игрок,
  *       который ведёт его с зумом);</li>
  *   <li>{@code zoom <k>} — зум ×k (1–256; 1 — без зума): поле зрения в k раз уже (тангенс половины угла), как у Ok Zoomer, —
@@ -69,7 +67,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: сторона и глубина пруда, блоков (пруд шире столба и кольца брызг шахеда). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, COARSE, VOLUME, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, COARSE, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
@@ -183,7 +181,7 @@ record SandboxCommand(Verb verb, List<String> args) {
                 need(1, 1);
                 if (!List.of("clear", "rain").contains(args.getFirst())) throw new IllegalArgumentException("clear или rain");
             }
-            case HUD, OVERLAY, TRACK, COARSE, VOLUME -> {
+            case HUD, OVERLAY, TRACK, COARSE -> {
                 need(1, 1);
                 if (!List.of("on", "off").contains(args.getFirst())) throw new IllegalArgumentException("on или off");
             }

@@ -460,10 +460,6 @@ final class Sandbox {
                 ua.zentix.incoming.client.fx.layer.CoarsePass.off = c.args().getFirst().equals("off");
                 finish("ok");
             }
-            case VOLUME -> {
-                ua.zentix.incoming.client.fx.smoke.SmokeGrid.off = c.args().getFirst().equals("off");
-                finish("ok");
-            }
             case ZOOM -> {
                 zoom = c.number(0);
                 finish("ok");

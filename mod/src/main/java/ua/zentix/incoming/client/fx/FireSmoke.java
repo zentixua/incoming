@@ -39,8 +39,8 @@ public final class FireSmoke implements SmokeGrid.Source {
     static final int SEGMENTS = 10;
     /** Очаги пересматриваются раз в столько тиков (окно огня меняется не быстрее обхода чанков). */
     static final int PERIOD = 20;
-    /** Шлейф — не дальше по ветру, м (~0,8 км: 0,75 полустороны последнего каскада сетки, пока его клетка была 32 м). */
-    public static final double REACH = 768;
+    /** Шлейф — не дальше по ветру, м (0,75 полустороны последнего каскада сетки: ~0,8 км). */
+    public static final double REACH = 0.75 * 0.5 * SmokeGrid.N * SmokeGrid.CELL[SmokeGrid.CASCADES - 1];
 
     private static final Long2ObjectOpenHashMap<FireSmoke> FIRES = new Long2ObjectOpenHashMap<>();
     /** Горящее масло выбитых подстанций по месту блока ({@link #substation}). */
@@ -322,12 +322,6 @@ public final class FireSmoke implements SmokeGrid.Source {
         OIL_FIRES.clear();
         POOLS.clear();
         world = null;
-    }
-
-    /** Шлейф, который клетка сетки разрешает, — объёмом ({@link SmokeGrid#share}), тонкий у очага — квадратами слоя. */
-    @Override
-    public boolean volume() {
-        return true;
     }
 
     /**
