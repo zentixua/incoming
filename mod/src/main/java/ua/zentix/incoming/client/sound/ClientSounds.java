@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.sounds.ChannelAccess;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
@@ -338,10 +339,11 @@ public final class ClientSounds {
 
     /**
      * Разовый звук взрыва в смеси взрывов ({@link Mix}), ещё не отданный движку ({@link #start}): как
-     * {@link #shot(SoundEvent, Vec3, float, float, long)}, но громкость — {@code volume} × множитель смеси {@code mix},
-     * заново каждый тик (звук тикает).
+     * {@link #shot(SoundEvent, Vec3, float, float, long)}, но громкость — {@code volume} × множитель его взрыва в смеси
+     * {@code mix}, заново каждый тик (звук тикает). Отдаёт его движку {@link BlastSounds}, если на него есть голос
+     * ({@link BlastVoices}).
      */
-    public static SoundInstance blastShot(SoundEvent event, Vec3 source, float volume, float pitch, long seed, DoubleSupplier mix, int life) {
+    static MixedShot blastShot(SoundEvent event, Vec3 source, float volume, float pitch, long seed, DoubleSupplier mix, int life) {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         float open = SoundFilters.open(ear, source.add(0, 1.5, 0));
         float highs = farAir(ear.distanceTo(source)) * SoundFilters.blockedHighs(open);
@@ -349,20 +351,10 @@ public final class ClientSounds {
                 life);
     }
 
-    /** Как {@link #atEar(SoundEvent, Vec3, float, float, long, float, float)} (фильтр пути — вызывающего), в смеси взрывов. */
-    public static void blastAtEar(SoundEvent event, Vec3 source, float volume, float pitch, long seed, float gain, float highs, DoubleSupplier mix,
-                                  int life) {
+    /** Как {@link #blastShot}, но фильтр пути — вызывающего ({@link Outdoor}: что между — холм, земля, погода, воздух). */
+    static MixedShot blastAtEar(SoundEvent event, Vec3 source, float volume, float pitch, long seed, float gain, float highs, DoubleSupplier mix, int life) {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        play(new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), toward(ear, source), gain, highs, mix, life));
-    }
-
-    /** Как {@link #atEar(SoundEvent, Vec3, float, float)} (преграды и воздух — по лучу до источника), в смеси взрывов. */
-    public static void blastAtEar(SoundEvent event, Vec3 source, float volume, float pitch, DoubleSupplier mix, int life) {
-        Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        float open = SoundFilters.open(ear, source.add(0, 1.5, 0));
-        float highs = farAir(ear.distanceTo(source)) * SoundFilters.blockedHighs(open);
-        play(new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(), toward(ear, source), SoundFilters.blockedGain(open), highs, mix,
-                life));
+        return new MixedShot(event, SoundSource.AMBIENT, volume, pitch, RandomSource.create(seed), toward(ear, source), gain, highs, mix, life);
     }
 
     /** Отдать звук движку. */
@@ -423,13 +415,17 @@ public final class ClientSounds {
 
     /**
      * Разовый звук взрыва в смеси ({@link Mix}): тикает, и движок каждый тик берёт громкость заново — своя × множитель
-     * смеси (хвост этого взрыва уступает место следующему, а не держит громкость, с которой начался).
+     * его взрыва в смеси (хвост этого взрыва уступает место следующему, а не держит громкость, с которой начался). Голос
+     * уступил место ({@link BlastVoices}) — тик ещё полный, потом стихает за {@link BlastVoices#FADE} тика
+     * ({@link Rumble#voice}: в те же тики движка его мощность переходит в гул) и уходит.
      */
-    private static final class MixedShot extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
+    static final class MixedShot extends AbstractTickableSoundInstance implements SoundFilters.Muffled, BlastVoices.Sound {
         private final float gain, highs;
         private final DoubleSupplier mix;
         /** Тиков до конца записи с запасом: дальше звук снимается сам. */
         private int life;
+        /** Тиков движка с тех пор, как голос уступил; −1 — звучит. */
+        private int fading = -1;
 
         MixedShot(SoundEvent event, SoundSource category, float volume, float pitch, RandomSource random, Vec3 at, float gain, float highs,
                   DoubleSupplier mix, int life) {
@@ -451,13 +447,53 @@ public final class ClientSounds {
 
         @Override
         public float getVolume() {
-            return (float) (super.getVolume() * mix.getAsDouble());
+            return super.getVolume() * level();
+        }
+
+        /** Множитель громкости сейчас: смесь × стихание уступившего голоса. */
+        float level() {
+            return (float) (mix.getAsDouble() * (fading < 0 ? 1 : Rumble.voice(fading, 0, BlastVoices.FADE)));
         }
 
         @Override
         public void tick() {
-            // громкость — getVolume, место — неизменно; запись кончилась — снять
-            if (--life <= 0) stop();
+            // тик движка: громкость — getVolume, место — неизменно; запись кончилась или голос стих — снять
+            if (fading >= 0 && Rumble.voice(++fading, 0, BlastVoices.FADE) <= 0 || --life <= 0) stop();
+        }
+
+        @Override
+        public void fade() {
+            if (fading < 0) fading = 0;
+        }
+
+        @Override
+        public void cut() {
+            stop();
+        }
+
+        /** Звучит: движок взял канал и не снял его (нехватка каналов, перезапуск движка, ползунок категории в нуле). */
+        boolean playing() {
+            return !isStopped() && Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.containsKey(this);
+        }
+
+        @Override
+        public boolean over() {
+            return !playing();
+        }
+
+        /**
+         * Канал ещё у движка: остановленный звук держит его, пока движок не остановит канал в своём тике и звуковой поток не
+         * вернёт его пулу ({@code ChannelAccess.ChannelHandle.isStopped}); звук, которого движок не взял, канала не держит.
+         */
+        @Override
+        public boolean held() {
+            ChannelAccess.ChannelHandle h = Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.get(this);
+            return h != null && !h.isStopped();
+        }
+
+        /** Громкость записи, с которой он задан, до смеси. */
+        float volume0() {
+            return volume;
         }
 
         @Override

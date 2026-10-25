@@ -187,6 +187,7 @@ public final class SoundFilters {
     public static void onEngineLoad(SoundEngineLoadEvent e) {
         filter = 0;
         OwnSources.engineLoaded();
+        BlastSounds.engineLoaded();
     }
 
     public static void onSound(PlaySoundSourceEvent e) {

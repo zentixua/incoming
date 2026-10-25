@@ -402,6 +402,11 @@ flames light the smoke from below. The column grows from the fire at the
 speed of the wind, and when the fire goes out the last of the smoke drifts away. Where the fire comes from is up to the
 server: the smoke follows any fire your game shows, not only fires from strikes.
 
+In a big raid each blast is heard as its share of the din: the nearest one sounds about as loud as it would alone, the
+far ones lie under it about as much quieter as in life and come back up once it has faded. When more blasts sound at
+once than the game has sound channels for, the quietest stop being separate sounds and merge into a low rumble around
+you, just as loud.
+
 Past your render distance the mod draws projectiles, blasts and smoke itself, as far as the server's visibility range
 (8 km by default), launches included: the booster flame, the launch cloud and the smoke trail of a launch kilometres away. With **Distant Horizons** or **Voxy** the distant terrain hides them the way a real hill would: a
 blast behind a far ridge is hidden by the ridge, one in front of it is seen whole. This works with and without a shader

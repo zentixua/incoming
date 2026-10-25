@@ -10,6 +10,7 @@ import org.lwjgl.BufferUtils;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.ALC10;
+import org.lwjgl.openal.ALC11;
 import org.lwjgl.openal.EXTEfx;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.nuclear.Deafness;
@@ -433,6 +434,33 @@ public final class OwnSources {
         }
         return String.format(Locale.ROOT, "own %d/%d started %d efx %s blocked %.2f/%.2f", playing, VOICES.size(), started,
                 filter > 0 ? "yes" : filter < 0 ? "no" : "-", least, VOICES.isEmpty() ? 1 : sum / VOICES.size());
+    }
+
+    /**
+     * Моно- и стерео-источников у устройства ({@code ALC_MONO_SOURCES}, {@code ALC_STEREO_SOURCES}) — по ним движок делит
+     * каналы ({@code Library.getChannelCount}); устройство их не назвало — как у движка, 30 моно; null — контекста ещё
+     * нет (событие загрузки из конструктора движка, до {@code Library.init}).
+     */
+    static int @Nullable [] deviceSources() {
+        try {
+            long context = ALC10.alcGetCurrentContext(), device = context == 0 ? 0 : ALC10.alcGetContextsDevice(context);
+            if (device == 0) return null;
+            int size = ALC10.alcGetInteger(device, ALC10.ALC_ATTRIBUTES_SIZE);
+            if (size > 0) {
+                int[] attrs = new int[size];
+                ALC10.alcGetIntegerv(device, ALC10.ALC_ALL_ATTRIBUTES, attrs);
+                int mono = -1, stereo = 0;
+                for (int i = 0; i + 1 < size && attrs[i] != 0; i += 2) {
+                    if (attrs[i] == ALC11.ALC_MONO_SOURCES) mono = attrs[i + 1];
+                    else if (attrs[i] == ALC11.ALC_STEREO_SOURCES) stereo = attrs[i + 1];
+                }
+                if (mono > 0) return new int[]{mono, stereo};
+            }
+            return new int[]{30, 0};
+        } catch (RuntimeException | LinkageError e) {
+            Incoming.LOG.warn("OpenAL device sources unreadable: {}", e.toString());
+            return null;
+        }
     }
 
     private static boolean ready() {
