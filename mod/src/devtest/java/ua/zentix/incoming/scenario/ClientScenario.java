@@ -173,6 +173,8 @@ public final class ClientScenario {
         if (scenario == null) return;
         ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
+        // строки сценариев, песочницы и пробы пишут время слоя на видеокарте по частям: проба идёт всегда
+        ua.zentix.incoming.client.fx.layer.LayerTimes.always();
         if (scenario.startsWith("mp-")) {
             new MultiplayerScenario("mp-a".equals(scenario)); // свой сервер, без мира сценария (tools/mp_scenario.sh)
             return;

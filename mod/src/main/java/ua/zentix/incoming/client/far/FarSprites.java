@@ -108,7 +108,9 @@ public final class FarSprites implements SmokePuffs.Out {
      * (r, g, b) с непрозрачностью a (уже с дымкой воздуха).
      */
     public void puff(double dx, double dy, double dz, double half, float rot, int tex, float r, float g, float b, float a) {
+        FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
         if (billboard(dx, dy, dz, half, rot, FxAtlas.puff(tex), r * a, g * a, b * a, a, (float) half * FxQuads.SOFT)) counts[0]++;
+        out.part(was);
     }
 
     /**
@@ -121,11 +123,13 @@ public final class FarSprites implements SmokePuffs.Out {
                       float b, float a) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
+        FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
         out.sixWay(mix, shade);
         out.billboard((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold),
                 (float) (halfB * unfold), 0, sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) Math.max(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
         out.sixWay(-1);
+        out.part(was);
         counts[0]++;
     }
 
@@ -139,11 +143,13 @@ public final class FarSprites implements SmokePuffs.Out {
                           float r, float g, float b, float a) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
+        FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
         out.sixWay(mix, shade);
         out.flat((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold), (float) (halfB * unfold),
                 sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) soft, (float) unfold, LightTexture.FULL_BRIGHT, 0);
         out.sixWay(-1);
+        out.part(was);
         counts[0]++;
     }
 
@@ -160,8 +166,10 @@ public final class FarSprites implements SmokePuffs.Out {
     public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        FxQuads.Part was = out.part(FxQuads.Part.VEIL);
         out.billboard((float) dx, (float) dy, (float) dz, (float) d, (float) half, 0, FxAtlas.white(), Math.min(1, r * a), Math.min(1, g * a),
                 Math.min(1, b * a), Math.min(1, a), 0, 1, light, 0);
+        out.part(was);
         counts[5]++;
     }
 
@@ -175,6 +183,7 @@ public final class FarSprites implements SmokePuffs.Out {
         FxAtlas.Sprite w = FxAtlas.white();
         float u = (w.u0() + w.u1()) / 2, v = (w.v0() + w.v1()) / 2, key = (float) SmokePuffs.VEIL_AT;
         int n = SmokePuffs.Veil.N;
+        FxQuads.Part was = out.part(FxQuads.Part.VEIL);
         for (int j = 0; j + 1 < n; j++) {
             for (int i = 0; i + 1 < n; i++) {
                 int a = SmokePuffs.Veil.index(i, j), b = SmokePuffs.Veil.index(i + 1, j), c = SmokePuffs.Veil.index(i + 1, j + 1),
@@ -187,6 +196,7 @@ public final class FarSprites implements SmokePuffs.Out {
                 veilCorner(veil, i + 1, j, b, u, v, light);
             }
         }
+        out.part(was);
         counts[5]++;
     }
 
@@ -248,6 +258,7 @@ public final class FarSprites implements SmokePuffs.Out {
         double cos = (dx * fx + dy * fy + dz * fz) / Math.max(d, 1e-9);
         // не ближе, чем у камеры гаснет любой квадрат слоя (fx.fsh: полностью виден с 1,5 блока по оси взгляда)
         double front = Math.max(d - deep, AIR_NEAR / Math.max(cos, 0.1));
+        FxQuads.Part was = out.part(FxQuads.Part.GLARE);
         out.glowShape(true);
         if (front >= d) {
             if (billboard(dx, dy, dz, radius * GLOW, 0, FxAtlas.glow(), r * a, g * a, b * a, 0, 0)) counts[2]++;
@@ -258,6 +269,7 @@ public final class FarSprites implements SmokePuffs.Out {
             counts[2]++;
         }
         out.glowShape(false);
+        out.part(was);
     }
 
     /**
@@ -301,11 +313,13 @@ public final class FarSprites implements SmokePuffs.Out {
         if (shape < 1) core(dx, dy, dz, out, t, r, g, b, body * (1 - shape));
         float a = (float) (t * body * shape);
         // огонь кадра светится (FxBloom: ореол — по форме огня, с пересветом модели против кадра)
+        FxQuads.Part was = this.out.part(FxQuads.Part.FIRE);
         this.out.fireballMix(mix);
         this.out.emission((float) Math.max(1, hdr));
         if (shape > 0 && billboard(dx, dy, dz, half, fireballRotation(), sprite, a, a, a, a, (float) (radius * BODY_SOFT), BALL_FRONT * radius)) counts[1]++;
         this.out.emission(0);
         this.out.fireballMix(-1);
+        this.out.part(was);
         glare(dx, dy, dz, radius, out, seen, r, g, b, glare, shown);
     }
 
@@ -338,9 +352,11 @@ public final class FarSprites implements SmokePuffs.Out {
         float[] c = Sight.onScreen(r, g, b, s, (float) w);
         float a = (float) (o[1] * t * Math.min(1, 4 * s) * w);
         // светится (FxBloom) со своим пересветом: экран показал его белым
+        FxQuads.Part was = out.part(FxQuads.Part.FIRE);
         out.emission((float) Math.max(1, s));
         if (billboard(dx, dy, dz, o[0] * DISC, 0, FxAtlas.disc(), c[0], c[1], c[2], a, (float) (o[0] * BODY_SOFT))) counts[1]++;
         out.emission(0);
+        out.part(was);
     }
 
     /**
@@ -350,8 +366,10 @@ public final class FarSprites implements SmokePuffs.Out {
     private void glare(double dx, double dy, double dz, double radius, double[] o, double seen, float r, float g, float b, double w, double shown) {
         if (w <= 0) return;
         int probe = probes.add(dx, dy, dz, radius);
+        FxQuads.Part was = out.part(FxQuads.Part.GLARE);
         eye(dx, dy, dz, o[3], r, g, b, (float) (Math.min(Math.min(Sight.HALO, Sight.SCATTER * seen), shown) * w), probe);
         if (o[4] > 0) eye(dx, dy, dz, o[4], r, g, b, (float) (Math.min(Sight.VEIL_PEAK, shown) * w), probe);
+        out.part(was);
     }
 
     /**
@@ -398,9 +416,11 @@ public final class FarSprites implements SmokePuffs.Out {
     public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                           float alphaB, int lightB, float r, float g, float b, float[] joint) {
         RibbonShape q = SHAPE;
+        FxQuads.Part was = out.part(FxQuads.Part.RIBBONS);
         if (!q.set(far, fx, fy, fz, ax, ay, az, halfA, alphaA, bx, by, bz, halfB, alphaB, joint)) {
             if (q.cap) joint[0] = Float.NaN;
             emitVeilAndCap(q, r, g, b, lightA);
+            out.part(was);
             return false;
         }
         emitVeilAndCap(q, r, g, b, lightA);
@@ -415,6 +435,7 @@ public final class FarSprites implements SmokePuffs.Out {
         out.vertex(q.x1 + q.nx * q.hb, q.y1 + q.ny * q.hb, q.z1 + q.nz * q.hb, s.u1(), v, cr * ab, cg * ab, cb * ab, ab, soft, ub, lightB, 0);
         out.vertex(q.x1 - q.nx * q.hb, q.y1 - q.ny * q.hb, q.z1 - q.nz * q.hb, s.u0(), v, cr * ab, cg * ab, cb * ab, ab, soft, ub, lightB, 0);
         out.glowShape(false);
+        out.part(was);
         counts[3]++;
         joint[0] = q.nx;
         joint[1] = q.ny;
@@ -597,9 +618,11 @@ public final class FarSprites implements SmokePuffs.Out {
      * на экране, только светит; hdr — его яркость против белого экрана до среза (свечение {@code FxBloom}).
      */
     public void glowDisc(double dx, double dy, double dz, double radius, float r, float g, float b, float soft, float hdr) {
+        FxQuads.Part was = out.part(FxQuads.Part.FIRE);
         out.emission(Math.max(1, hdr));
         if (billboard(dx, dy, dz, radius * DISC, 0, FxAtlas.disc(), r, g, b, 0, soft)) counts[2]++;
         out.emission(0);
+        out.part(was);
     }
 
     /**
@@ -615,6 +638,7 @@ public final class FarSprites implements SmokePuffs.Out {
         r = Math.min(1, r);
         g = Math.min(1, g);
         bl = Math.min(1, bl);
+        FxQuads.Part was = out.part(FxQuads.Part.FIRE);
         out.quad(key);
         out.emission(Math.max(1, hdr));
         plateCorner(c, a, b, -1, -1, s.u0(), s.v0(), r, g, bl);
@@ -622,6 +646,7 @@ public final class FarSprites implements SmokePuffs.Out {
         plateCorner(c, a, b, 1, 1, s.u1(), s.v1(), r, g, bl);
         plateCorner(c, a, b, 1, -1, s.u1(), s.v0(), r, g, bl);
         out.emission(0);
+        out.part(was);
         counts[2]++;
     }
 
