@@ -159,6 +159,8 @@ public final class GroundDust {
     /** Стены повернули юбку ({@link #channel}); от какой высоты (м от точки взрыва) — стена. */
     private boolean walled;
     private double wallFrom;
+    /** Высота стен над точкой удара, м: ниже — ветер вдоль улицы ({@link #along}). */
+    private double wallTop;
     /** Место клуба сектора на нынешнем радиусе ({@link #open}) и для какого радиуса, полуметров. */
     private final double[][][] snap = new double[SECTORS][ANNULI][];
     private final long[][] snapAt = new long[SECTORS][ANNULI];
@@ -396,6 +398,20 @@ public final class GroundDust {
         }
         if (!walled) return;
         wallFrom = source + WALL;
+        // высота стен — средняя по закрытым выборкам дуг
+        double top = 0;
+        int tops = 0;
+        for (int i = 0; i < RINGS; i++) {
+            for (int k = 0; k < SECTORS; k++) {
+                for (int j = 0; j < ARC; j++) {
+                    double phi = 2 * Math.PI * (k + (j + 0.5) / ARC) / SECTORS, h = relief.at(r[i] * Math.cos(phi), r[i] * Math.sin(phi));
+                    if (!(h > wallFrom)) continue;
+                    top += h - source;
+                    tops++;
+                }
+            }
+        }
+        wallTop = tops > 0 ? top / tops : 0;
         for (long[] row : snapAt) java.util.Arrays.fill(row, Long.MIN_VALUE);
         // клуб сектора в кольце показа — середина открытой дуги его колец по массе
         for (int k = 0; k < SECTORS; k++) {
@@ -448,9 +464,7 @@ public final class GroundDust {
      * середине открытой дуги открытый на этом радиусе, а нет его на дуге — радиус меньше, до ближайшего, где дуга открыта:
      * дальше стены юбка в этой стороне не идёт. Клуб, растянутый дальностью и стоком, так остаётся в улице, а не в доме, и
      * у удара не в середине перекрёстка. Открытого нет до самой точки взрыва — середина дуги на rad. Считается раз на
-     * полметра радиуса; {угол, радиус}. ⚠ Снос ветром поперёк улицы место не поворачивает: клуб шире дома запруда не держит,
-     * и через десятки секунд в поперечный ветер часть середин — над домами (ревью R468: 4 из 24 на 20 с при 3 м/с); ветер
-     * вдоль улицы в каньоне не моделируется.
+     * полметра радиуса; {угол, радиус, ось улицы там ({@link #axis})}. Снос ветром ниже крыш держит {@link #along}.
      */
     private double[] open(int k, int q, double rad) {
         long at = Math.round(2 * rad);
@@ -469,10 +483,84 @@ public final class GroundDust {
             }
             if (gap < Double.MAX_VALUE) break;
         }
+        best = new double[]{best[0], best[1], axis(best[1] * Math.cos(best[0]), best[1] * Math.sin(best[0]), best[0])};
         snapAt[k][q] = at;
         snap[k][q] = best;
         return best;
     }
+
+    /** Угол между осью m (шаг π/8) и направлением a, рад, без знака направления оси. */
+    private static double off(int m, double a) {
+        double d = Math.abs(Math.IEEEremainder(a - Math.PI * m / 8, Math.PI));
+        return d;
+    }
+
+    /** Полудлина пробы оси улицы, м. */
+    static final int AXIS_RUN = 8;
+
+    /**
+     * Ось улицы в точке (x, z) от точки взрыва, рад: из 8 направлений (шаг π/8) — то, вдоль которого в обе стороны (до
+     * {@value #AXIS_RUN} м, полосой в 3 м) открыто дальше, чем поперёк, на больше всего (диагональ у перекрёстка открыта вдоль так же
+     * далеко, как улица, но и поперёк — тоже); из равных — ближе к направлению {@code toward}. Поперёк открыто почти так же
+     * (перекрёсток, площадь) или нигде не открыто — {@link Double#NaN}: ветер там не поворачивает.
+     */
+    private double axis(double x, double z, double toward) {
+        // полосой из трёх линий через ±1,5 м: диагональ через угол перекрёстка одна линия проходит, полоса — нет
+        double[] run = new double[8];
+        for (int m = 0; m < 8; m++) {
+            double c = Math.cos(Math.PI * m / 8), sn = Math.sin(Math.PI * m / 8);
+            for (double lane = -1.5; lane <= 1.5; lane += 1.5) {
+                double x0 = x - lane * sn, z0 = z + lane * c;
+                for (int side = -1; side <= 1; side += 2) {
+                    for (int step = 1; step <= AXIS_RUN; step++) {
+                        if (relief.at(x0 + side * step * c, z0 + side * step * sn) > wallFrom) break;
+                        run[m]++;
+                    }
+                }
+            }
+        }
+        // улица — вдоль открыто далеко, поперёк — нет: больше всего разница; из равных — ближе к toward
+        int best = 0;
+        for (int m = 1; m < 8; m++) {
+            double gain = run[m] - run[(m + 4) % 8], was = run[best] - run[(best + 4) % 8];
+            if (gain > was || gain == was && off(m, toward) < off(best, toward)) best = m;
+        }
+        return run[best] - run[(best + 4) % 8] < 0.3 * run[best] ? Double.NaN : Math.PI * best / 8;
+    }
+
+    /**
+     * Снос {@code d} клуба юбки в улице вдоль (ux, uz) с серединой на высоте zc над точкой удара: ниже крыш ветер в
+     * каньоне идёт вдоль улицы — поперёк его держат стены (Dobre et al. 2005, Atmos. Environ. 39:4647: составляющая
+     * вдоль каньона — проекция ветра над крышами на его ось); к высоте стен снос — снова ветра; ниже крыш клуб с места
+     * (px, pz) сносит не дальше стены. Стен нет — как есть. ⚠ Ось — улицы у места клуба до сноса; у стены клуб стоит, а не
+     * сворачивает вдоль неё.
+     */
+    private double[] along(double[] d, double zc, double axis, double px, double pz) {
+        if (!walled || wallTop <= 0) return d;
+        // до половины высоты стен стены держат целиком (вихрь каньона), выше — всё меньше, у крыш — весь ветер
+        double w = Math.clamp(2 - 2 * zc / wallTop, 0, 1);
+        if (w <= 0) return d;
+        double[] held = d;
+        if (!Double.isNaN(axis)) {
+            double ux = Math.cos(axis), uz = Math.sin(axis), par = d[0] * ux + d[1] * uz;
+            held = new double[]{par * ux, par * uz};
+        }
+        // стена держит: клуб сносит до неё, не в дом (у перекрёстка оси нет, и ветер несёт клуб через угол)
+        if (!(relief.at(px, pz) > wallFrom)) {
+            for (int i = 1; i <= STOP_STEPS; i++) {
+                double f = (double) i / STOP_STEPS;
+                if (relief.at(px + f * held[0], pz + f * held[1]) > wallFrom) {
+                    double keep = (i - 1.0) / STOP_STEPS;
+                    held = new double[]{keep * held[0], keep * held[1]};
+                    break;
+                }
+            }
+        }
+        return new double[]{d[0] + w * (held[0] - d[0]), d[1] + w * (held[1] - d[1])};
+    }
+
+    /** Выборок на пути сноса клуба юбки к стене. */
+    static final int STOP_STEPS = 16;
 
     /** Дальше скольких радиусов поля юбка по улице не уходит (⚠ оценка: длина квартала и запас газа). */
     static final double REACH_MAX = 3;
@@ -752,15 +840,16 @@ public final class GroundDust {
                     // фронт ещё у самой воронки: клубы — у середины, не шире него
                     if (mean + EDGE_SIGMAS * sh > front) sh = Math.max(front / EDGE_SIGMAS, v);
                 }
-                double ang = heading[k][a];
+                double ang = heading[k][a], street = Double.NaN;
                 if (walled && mean > 0) {
                     double[] o = open(k, a, mean);
                     ang = o[0];
+                    street = o[2];
                     source *= o[1] / mean;
                     mean = o[1];
                 }
                 double ux = Math.cos(ang), uz = Math.sin(ang);
-                double[] d = drift(t, zc);
+                double[] d = along(drift(t, zc), zc, street, mean * ux, mean * uz);
                 double[] at = levels ? level(k, a, t, source, ux, uz, own) : new double[]{surface[k][a], 0, 0};
                 out.blob(d[0] + mean * ux - at[1], at[0] + zc, d[1] + mean * uz - at[2], sh, v, mass * fade, aloft[a][k],
                         surface[k][a]);
@@ -853,7 +942,7 @@ public final class GroundDust {
         // лежит, где его подняло
         if (t < PATH[PATH_FROM]) {
             paths[show][sector] = null;
-            double[] at = place(show, t, source, ux, uz);
+            double[] at = place(sector, show, t, source, ux, uz);
             double start = under(at[0], at[1], 0.5 * width(show, t, own));
             return new double[]{begin(sector, show, start, ux, uz, at), 0, 0};
         }
@@ -863,7 +952,7 @@ public final class GroundDust {
             p = new Path();
             p.node = PATH_FROM;
             p.now = new Track();
-            double[] at = place(show, PATH[PATH_FROM], source, ux, uz);
+            double[] at = place(sector, show, PATH[PATH_FROM], source, ux, uz);
             double start = under(at[0], at[1], 0.5 * width(show, PATH[PATH_FROM], own));
             p.now.level = begin(sector, show, start, ux, uz, at);
             p.now.seen = start;
@@ -914,9 +1003,10 @@ public final class GroundDust {
     }
 
     /** Место пути клуба в возрасте t (x, z от точки взрыва). */
-    private double[] place(int show, double t, double source, double ux, double uz) {
-        double[] d = drift(t, 0.8 * at(sv[show], t));
-        double mean = source * stretch(t);
+    private double[] place(int sector, int show, double t, double source, double ux, double uz) {
+        // ось улицы — та, что клуб взял в последнем показе ({@link #open})
+        double mean = source * stretch(t), zc = 0.8 * at(sv[show], t), street = snap[sector][show] == null ? Double.NaN : snap[sector][show][2];
+        double[] d = along(drift(t, zc), zc, street, mean * ux, mean * uz);
         return new double[]{d[0] + mean * ux, d[1] + mean * uz};
     }
 
@@ -953,7 +1043,7 @@ public final class GroundDust {
 
     /** Шаг пути клуба от t0 до t1 ({@link #level}). */
     private void step(Track tr, int sector, int show, double t0, double t1, double source, double ux, double uz, double own) {
-        double[] p0 = place(show, t0, source, ux, uz), p1 = place(show, t1, source, ux, uz);
+        double[] p0 = place(sector, show, t0, source, ux, uz), p1 = place(sector, show, t1, source, ux, uz);
         double dx = p1[0] - p0[0], dz = p1[1] - p0[1], len = Math.hypot(dx, dz), w = 0.5 * width(show, t1, own);
         int n = (int) Math.max(1, Math.min(PROBES, Math.ceil(len / Math.max(1, w))));
         double[] w0 = drift(t0, 0.8 * at(sv[show], t0)), w1 = drift(t1, 0.8 * at(sv[show], t1));

@@ -309,6 +309,20 @@ class GroundDustTest {
         // клубы, которые видит игрок (ревью R468: направление выбиралось на исходных радиусах, а клуб растянут дальностью
         // и стоком — у удара в 6,5 м от перекрёстка 8 из 22 середин были в домах): до 2 с в штиль середины всех заметных
         // клубов юбки — на мостовой (у края — до метра), и у перекрёстка, и в улицах рядом с ним
+        // и в ветер поперёк улиц (ревью R468.r1: 4 из 24 середин над домами на 20 с при 3 м/с) — ниже крыш ветер вдоль улицы
+        CloudModel.Air breeze = new CloudModel.Air(CloudModel.N_STANDARD, 3, 0, 0.1, (int) Stability.C, 0.5);
+        GroundDust windy = new CloudModel(BlastSource.of(WeaponType.DRONE, false), breeze, false, 0, streets).crushed;
+        int blown = 0;
+        for (double t = 1; t <= 30 + 1e-9; t += 1) {
+            for (double[] c : layer(windy, t)) {
+                if (c[6] < 0.005 * windy.total) continue;
+                blown++;
+                double low = town.at(c[0], c[2]);
+                for (double[] e : new double[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) low = Math.min(low, town.at(c[0] + e[0], c[2] + e[1]));
+                assertTrue(low <= GroundDust.WALL, "ветер 3 м/с, " + t + " с: клуб в доме, " + c[0] + ", " + c[2]);
+            }
+        }
+        assertTrue(blown > 50, "клубов " + blown);
         for (double[] at : new double[][]{{0, 0}, {0.5, 6.5}, {-2, 9}}) {
             GroundDust.Relief shifted = (x, z) -> town.at(x + at[0], z + at[1]);
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1),

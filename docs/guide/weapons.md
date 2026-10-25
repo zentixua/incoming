@@ -316,7 +316,8 @@ bursts low over the ground. Some of the fine dust of what a hit crushes rises wi
 rest out of the crater or the hole along the surfaces around as a low surge: within half a second it is tens of blocks
 across (about 30 for a Shahed), born at the level of the hit, and from there it settles, drifts and spills over edges
 like the layer above (the split is an estimate: half in each). Walls taller than a person turn the surge into the open
-ground, so at a crossroads it runs down the streets, and farther than in a field: the same gas has less room (an estimate). Only a small share of crushed stone and concrete is fine
+ground, so at a crossroads it runs down the streets, and farther than in a field: the same gas has less room (an estimate). Below the roofs the wind in a street blows
+along it, and the walls hold the dust, so the haze drifts down the street instead of into the houses. Only a small share of crushed stone and concrete is fine
 enough to hang in the air, so a Shahed in a street leaves a grey haze you can see through: thick at a few seconds,
 faint by 10–20 s in a breeze, longer in calm air. The wave can also lift dust from the street below where it is still
 strong enough there.
