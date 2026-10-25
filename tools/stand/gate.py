@@ -149,19 +149,22 @@ def decide(tries):
     return last
 
 
-def look_flags(cand_look, base_look):
-    """Кадры, где вид заметно другой: {пак: {кадр: {smoke, luma}}} у обоих → строки «пак кадр: что»."""
+def look_flags(cand_look, base_looks):
+    """Кадры, где вид заметно другой: {пак: {кадр: {smoke, luma}}} у кандидата и у каждого прогона принятого (A1, A2) →
+    строки «пак кадр: что». Сравнение — с ближайшим прогоном принятого: Photon в 100-hit сам расходится между A1 и A2 на
+    0,18–0,29 доли дымных пикселей (#468, 25.10), и флаг против одного A1 был бы шумом."""
     out = []
     for pack, shots in cand_look.items():
         for shot, c in shots.items():
-            b = (base_look.get(pack) or {}).get(shot)
-            if not b:
+            bs = [b for b in ((bl.get(pack) or {}).get(shot) for bl in base_looks) if b]
+            if not bs:
                 continue
             why = []
-            if abs(c["smoke"] - b["smoke"]) > LOOK_SMOKE:
-                why.append(f"дымных пикселей {c['smoke']:.0%} против {b['smoke']:.0%}")
-            if abs(c["luma"] - b["luma"]) > LOOK_LUMA:
-                why.append(f"яркость {c['luma']:.2f} против {b['luma']:.2f}")
+            for key, lim, fmt in (("smoke", LOOK_SMOKE, "{:.0%}"), ("luma", LOOK_LUMA, "{:.2f}")):
+                near = min(bs, key=lambda b: abs(c[key] - b[key]))
+                if abs(c[key] - near[key]) > lim:
+                    word = "дымных пикселей" if key == "smoke" else "яркость"
+                    why.append(f"{word} {fmt.format(c[key])} против " + " / ".join(fmt.format(b[key]) for b in bs))
             if why:
                 out.append(f"{pack} {shot}: " + ", ".join(why))
     return out

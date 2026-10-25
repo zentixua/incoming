@@ -194,8 +194,8 @@ def main():
     (d / "look.json").write_text(json.dumps({p: [{"label": r.label, "dir": str(r.dir), "look": lk} for r, lk in zip(cols[p], looks[p])]
                                              for p in cols}, indent=1))
     if verdict:
-        # вид кандидата против A1 той же пары
-        verdict["look"] = gate.look_flags({p: looks[p][0] for p in cols}, {p: looks[p][1] for p in cols})
+        # вид кандидата против ближайшего из A1 и A2 той же пары
+        verdict["look"] = gate.look_flags({p: looks[p][0] for p in cols}, [{p: looks[p][i] for p in cols if len(looks[p]) > i} for i in (1, 2)])
         (d / "verdict.json").write_text(json.dumps(verdict, indent=1, ensure_ascii=False))
 
     md = [f"# Scene stand: {cand.label}", ""]
