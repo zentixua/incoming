@@ -198,9 +198,12 @@ final class BlastVoices {
         return s;
     }
 
-    /** Громкость в смеси, с которой голос держит место. */
+    /**
+     * Громкость в смеси, с которой голос держит место; запись кончилась (звук держит канал ещё до 20 тиков запаса) — ноль:
+     * смесь его больше не считает, и доля в ней — прежняя.
+     */
     private static double priority(Voice v, double now) {
-        return v.blast.heard() * (now - v.born < ATTACK ? KEEP : 1);
+        return v.blast.ended(now) ? 0 : v.blast.heard() * (now - v.born < ATTACK ? KEEP : 1);
     }
 
     private Voice rumble(Mix.Blast blast, double now, double azimuth, float pitch, float gain, float highs) {

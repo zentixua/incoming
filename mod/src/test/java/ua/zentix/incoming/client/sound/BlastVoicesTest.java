@@ -143,6 +143,21 @@ class BlastVoicesTest {
         assertNotNull(voices.admit(c, fakes(clock, 4, 200), clock[0], 0, 1, 1, 1, Integer.MAX_VALUE));
     }
 
+    /** Голос, чья запись кончилась (звук ещё держит канал), уступает первым, даже новому тихому. */
+    @Test
+    void endedRecordingYieldsFirst() {
+        double[] clock = {0};
+        Mix mix = new Mix();
+        Rumble rumble = new Rumble();
+        BlastVoices voices = new BlastVoices(rumble, 4);
+        List<Fake> old = fakes(clock, 4, 60);
+        assertNotNull(voices.admit(flat(mix, 0, 0.8, 30), old, 0, 0, 1, 1, 1, Integer.MAX_VALUE));
+        clock[0] = 40;
+        mix.at(40);
+        assertNotNull(voices.admit(flat(mix, 40, 0.001, 100), fakes(clock, 4, 140), 40, 0, 1, 1, 1, Integer.MAX_VALUE));
+        assertTrue(old.stream().allMatch(f -> !Double.isNaN(f.fadeFrom)));
+    }
+
     /** Движок взял не все звуки голоса — голос уступает, взрыв в гуле. */
     @Test
     void refusedVoiceGoesToTheRumble() {
