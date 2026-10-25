@@ -49,9 +49,9 @@ final class SmokePuffs {
     /**
      * Чисел на ждущий клуб: место, σh, σv, сажа, пыль, капли, альбедо пыли (3), номер, источник, доля дыма (непрозрачность
      * клуба, что не тело огня, {@link #smokeShare}), клуб ли это отрезка (1 — свой кадр, отражение и блуждание, как у
-     * клубов трубки).
+     * клубов трубки), вид клуба ({@link SmokeGrid.Look}, номер) и его кадр (у вида не {@code SMOKE}).
      */
-    static final int FIELDS = 15;
+    static final int FIELDS = 17;
     /**
      * Клубы одного источника, чьи середины ближе этой доли меньшего σ (по горизонтали и по вертикали), — один гаусс с теми
      * же массой и моментами: их сумма от одного гаусса почти не отличается (у двух равных на расстоянии σ — на 1,3 % пика),
@@ -83,6 +83,8 @@ final class SmokePuffs {
                     if (gone[j]) continue;
                     int b = j * FIELDS;
                     if (held[a + 8] != held[b + 8] || held[a + 9] != held[b + 9] || held[a + 10] != held[b + 10]) continue;
+                    // клубы разного вида (дым, завеса выброса, пыль дробления) — разные кадры: в один гаусс не сливаются
+                    if (held[a + 15] != held[b + 15]) continue;
                     // клубы одного отрезка разложены по нему нарочно: слитые, они собрались бы в один гаусс, и плоский ряд
                     // (пыль старта: шаг — по меньшей σ, соседи ближе σh) потерял бы длину
                     if (held[a + 14] > 0.5 && held[b + 14] > 0.5 && (long) held[a + 11] / SEGMENT_CLUBS == (long) held[b + 11] / SEGMENT_CLUBS) continue;
@@ -113,11 +115,12 @@ final class SmokePuffs {
         double fa = wa / w, fb = wb / w;
         // доля дыма — средняя по тому, что видно (ослаблению)
         held[a + 13] = fa * held[a + 13] + fb * held[b + 13];
-        // вид источника (кадр клуба, зерно, видимость) — у того, чьего вещества больше
+        // вид источника (кадр клуба, зерно, видимость, кадр своего вида) — у того, чьего вещества больше
         if (wb > wa) {
             held[a + 11] = held[b + 11];
             held[a + 12] = held[b + 12];
             held[a + 14] = held[b + 14];
+            held[a + 16] = held[b + 16];
         }
         double dx = held[b] - held[a], dy = held[b + 1] - held[a + 1], dz = held[b + 2] - held[a + 2];
         double mx = held[a] + fb * dx, my = held[a + 1] + fb * dy, mz = held[a + 2] + fb * dz;
@@ -292,6 +295,7 @@ final class SmokePuffs {
     }
 
     private static final Draw DRAW = new Draw();
+    private static final SmokeGrid.Look[] LOOKS = SmokeGrid.Look.values();
 
     private SmokePuffs() {}
 
@@ -389,6 +393,9 @@ final class SmokePuffs {
         private long seed;
         private boolean glow, sprays;
         private int index;
+        /** Вид следующих клубов источника и его кадр ({@link SmokeGrid.Sink#look}). */
+        private SmokeGrid.Look look = SmokeGrid.Look.SMOKE;
+        private double lookFrame;
 
         void begin(FarView view, Out out, SmokeGrid.Source source, double seconds) {
             // клубы прошлого источника сливаются только между собой
@@ -403,6 +410,8 @@ final class SmokePuffs {
             this.glow = source.drawsGlow();
             this.sprays = source.sprayClubs(seconds);
             this.index = 0;
+            this.look = SmokeGrid.Look.SMOKE;
+            this.lookFrame = 0;
             // вид источника для второго прохода ({@link #flush})
             if (contexts == ctxSource.length) {
                 int n = 2 * contexts;
@@ -424,6 +433,12 @@ final class SmokePuffs {
             contexts++;
             from = holding;
             joint[0] = Float.NaN;
+        }
+
+        @Override
+        public void look(SmokeGrid.Look look, double frame) {
+            this.look = look;
+            this.lookFrame = frame;
         }
 
         /** Концы куска трубки и поперёк ленты у конца прошлого куска этого источника (NaN — ленты не было). */
@@ -577,6 +592,8 @@ final class SmokePuffs {
             held[o + 12] = contexts - 1;
             held[o + 13] = smoke;
             held[o + 14] = vary ? 1 : 0;
+            held[o + 15] = look.ordinal();
+            held[o + 16] = lookFrame;
         }
 
         /** Клубы источника, что кончился, — слиты между собой ({@link #merge}). */
@@ -668,7 +685,7 @@ final class SmokePuffs {
                     if (merged[i]) continue;
                     int o = i * FIELDS;
                     boolean wet = wet(o);
-                    long key = cell(held[o], held[o + 1], held[o + 2], 3 * Math.max(held[o + 3], held[o + 4]), cell, wet ? 1 : 0);
+                    long key = cell(held[o], held[o + 1], held[o + 2], 3 * Math.max(held[o + 3], held[o + 4]), cell, kind(o, wet));
                     int first = cells.get(key);
                     if (first < 0) {
                         cells.put(key, i);
@@ -881,6 +898,11 @@ final class SmokePuffs {
             return e >= 0 && !planDead[e] && !planNear[e] && planVeil[e] == 0;
         }
 
+        /** Род клуба с o для ячеек слияния: вид ({@link SmokeGrid.Look}: свои кадры) и брызги ли — разные не сливаются. */
+        private int kind(int o, boolean wet) {
+            return 2 * (int) held[o + 15] + (wet ? 1 : 0);
+        }
+
         /** Брызги ли клуб с o: у источника с брызгами капель больше дыма и пыли — свои кадры, с дымом не сливаются. */
         private boolean wet(int o) {
             return ctxSprays[(int) held[o + 12]] && SmokeGrid.DROP_K * held[o + 7] > CloudModel.SOOT_K * held[o + 5]
@@ -923,7 +945,7 @@ final class SmokePuffs {
                 if (!mergeable(e)) continue;
                 int o = i * FIELDS;
                 boolean wet = wet(o);
-                long key = cell(held[o], held[o + 1], held[o + 2], Math.max(plan[6 * e + 3], plan[6 * e + 4]), cell, wet ? 1 : 0);
+                long key = cell(held[o], held[o + 1], held[o + 2], Math.max(plan[6 * e + 3], plan[6 * e + 4]), cell, kind(o, wet));
                 int first = cells.get(key);
                 if (first < 0) {
                     cells.put(key, i);
@@ -1045,6 +1067,8 @@ final class SmokePuffs {
             sprayAge = ctxSprayAge[c];
             seed = ctxSeed[c];
             sprays = ctxSprays[c];
+            look = LOOKS[(int) held[o + 15]];
+            lookFrame = held[o + 16];
             current = i;
             blob(held[o], held[o + 1], held[o + 2], held[o + 3], held[o + 4], held[o + 5], held[o + 6], held[o + 7], (float) held[o + 8],
                     (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13], held[o + 14] > 0.5);
@@ -1428,9 +1452,10 @@ final class SmokePuffs {
             }
             double fill = overlap * cover(view, px, py, pz, ra * reach, rb * reach);
             double spread = count == 1 ? 0 : 1 - size;
-            // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг
-            boolean spray = sprays && kw > ks + kd;
-            double clubAge = spray ? sprayAge : age;
+            // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг; клуб своего вида
+            // (завеса выброса, пыль дробления, облако разрыва в воздухе) — своими кадрами и своим кадром источника
+            boolean own = look != SmokeGrid.Look.SMOKE, spray = !own && sprays && kw > ks + kd;
+            double clubAge = own ? lookFrame : spray ? sprayAge : age;
             // каждый клуб берёт свою долю: по площади кучки в среднем перекрывается столько слоёв — вместе то же пропускание
             // в среднем (SmokeFillTest; середину облака кучка закрывает гуще — прежнее приближение, ревью #443)
             float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
@@ -1447,7 +1472,7 @@ final class SmokePuffs {
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
-                FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, mirror) : FxAtlas.puff6(f0, mirror);
+                FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, mirror) : FxAtlas.club(look, f0, mirror);
                 // лежащий клуб сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет сбоку и
                 // сзади) нет, свет солнца, неба и огня — весь (степень тени 0; свет шаров — в каждом пикселе, fx.fsh); снизу —
                 // как обычно. Мягкость у рельефа — путь луча в слое до земли (rw / sin e), не полуразмер

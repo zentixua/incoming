@@ -315,6 +315,80 @@ class SmokeFillTest {
     }
 
     /**
+     * Залп в грунт через полсекунды (струи завесы выброса в воздухе у каждого из 16 ударов, кадры удара в пыль): кадр — в том
+     * же бюджете заливки, что облака налёта (не больше бюджета или его пола, с тем же запасом 15 %); новых квадратов сверх
+     * бюджета завеса не даёт.
+     */
+    @Test
+    void ejectaCurtainsStayInTheFillBudget() {
+        double now = 1000;
+        Random rnd = new Random(11);
+        List<SmokeGrid.Source> salvo = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            double x = (rnd.nextDouble() - 0.5) * 80, z = 40 + rnd.nextDouble() * 80;
+            long seed = rnd.nextLong();
+            ua.zentix.incoming.client.fx.smoke.BlastTarget t = ua.zentix.incoming.client.fx.smoke.BlastTarget.SOIL;
+            ua.zentix.incoming.client.fx.smoke.Ejecta c = new ua.zentix.incoming.client.fx.smoke.Ejecta(
+                    ua.zentix.incoming.nuclear.model.CraterModel.chargeRadius(50, ua.zentix.incoming.nuclear.model.CraterModel.Soil.DRY),
+                    t.mass(50) * (1 - CloudModel.DUST_LOFTED), t.matter().clods);
+            double k = ua.zentix.incoming.client.fx.smoke.BlastTarget.Matter.DIRT.extinction() / SmokeGrid.dustK(0.2f, 0.12f, 0.06f);
+            salvo.add(new SmokeGrid.Source() {
+                @Override
+                public boolean emit(double seconds, SmokeGrid.Sink out) {
+                    FarBlasts.curtainClubs(c, 0.5, seed, x, 0, z, k, 0.2f, 0.12f, 0.06f, out);
+                    return true;
+                }
+
+                @Override
+                public long seed() {
+                    return seed;
+                }
+            });
+        }
+        FarView v = view(new Vec3(0, 2, 0), new Vector3f(0, 0, 1));
+        for (double budget : new double[]{Double.POSITIVE_INFINITY, SmokePuffs.FILL_BUDGET}) {
+            Screen s = new Screen(v);
+            double was = SmokePuffs.budget;
+            SmokePuffs.budget = budget;
+            try {
+                SmokePuffs.resetBudget();
+                for (SmokeGrid.Source src : salvo) src.emit(now, SmokePuffs.sink(v, s, src, now));
+                SmokePuffs.flush();
+            } finally {
+                SmokePuffs.budget = was;
+                SmokePuffs.resetBudget();
+            }
+            assertTrue(!s.quads.isEmpty(), "завеса видна");
+            if (budget < Double.POSITIVE_INFINITY) {
+                double floor = SmokePuffs.lastFloor();
+                assertTrue(s.fill() <= 1.15 * Math.max(SmokePuffs.FILL_BUDGET, floor), "заливка " + s.fill() + ", пол " + floor);
+            }
+        }
+    }
+
+    /** Клубы разного вида (дым и завеса выброса) — разные кадры: в один гаусс не сливаются, даже лёжа друг на друге. */
+    @Test
+    void differentLooksDoNotMerge() {
+        int f = SmokePuffs.FIELDS;
+        double[] held = new double[2 * f];
+        for (int i = 0; i < 2; i++) {
+            held[i * f + 1] = 10;
+            held[i * f + 3] = held[i * f + 4] = 4;
+            held[i * f + 6] = 2;
+            held[i * f + 8] = 0.6;
+            held[i * f + 9] = 0.55;
+            held[i * f + 10] = 0.45;
+        }
+        held[f + 15] = SmokeGrid.Look.EJECTA.ordinal();
+        boolean[] gone = new boolean[2];
+        SmokePuffs.merge(held, 0, 2, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);
+        assertTrue(!gone[0] && !gone[1], "дым и завеса не слились");
+        held[f + 15] = SmokeGrid.Look.SMOKE.ordinal();
+        SmokePuffs.merge(held, 0, 2, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);
+        assertTrue(gone[1], "одного вида — слились");
+    }
+
+    /**
      * Слияние близких гауссов держит массу и моменты: два равных клуба на расстоянии σ — один с суммой масс, серединой
      * посередине и σ² = σ² + (σ/2)² по оси разноса (по горизонтали — половина: σh общий у двух осей); дальше 2σ — не
      * сливаются никогда, дальше σ — только когда кадр не укладывается в бюджет.
