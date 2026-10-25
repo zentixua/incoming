@@ -44,6 +44,29 @@ public final class Envelope {
         return out;
     }
 
+    /**
+     * Энергия записи во времени: в каждом тике — мгновенная громкость BS.1770 как она есть, средний квадрат K-взвешенного
+     * сигнала за прошедшие {@link #WINDOW} до конца тика (до начала записи — тишина, после конца — ещё окно хвоста). Каждый
+     * отсчёт попадает в окна ровно стольких тиков, сколько их в окне, поэтому сумма по тикам × шаг — энергия всей записи:
+     * без максимума окон и без заглядывания вперёд. Это профиль одной записи для гула ({@link Rumble}), а не {@link #of}:
+     * тот — верхняя оценка для потолка (наибольшее окно, где тик есть, и удар — до того, как прозвучал).
+     */
+    public static float[] energy(float[] x, int rate) {
+        double[] y = new double[x.length];
+        for (int i = 0; i < x.length; i++) y[i] = x[i];
+        kWeight(y, rate);
+        double[] c = new double[y.length + 1];
+        for (int i = 0; i < y.length; i++) c[i + 1] = c[i] + y[i] * y[i];
+        int w = (int) Math.round(WINDOW * rate), h = (int) Math.round(STEP * rate), n = Math.max(1, (y.length + h - 1) / h);
+        int tail = (w + h - 1) / h - 1;
+        float[] out = new float[n + tail];
+        for (int k = 0; k < out.length; k++) {
+            int b = Math.min(y.length, (k + 1) * h), a = Math.max(0, (k + 1) * h - w);
+            out[k] = (float) (b > a ? (c[b] - c[a]) / w : 0);
+        }
+        return out;
+    }
+
     /** Громкость окна, LUFS (BS.1770: −0,691 + 10·lg среднего квадрата). */
     public static double lufs(double meanSquare) {
         return -0.691 + 10 * Math.log10(meanSquare + 1e-15);

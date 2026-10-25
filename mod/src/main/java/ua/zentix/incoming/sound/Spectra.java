@@ -21,8 +21,8 @@ public final class Spectra {
     public static final Spectrum ROCKET_LAUNCH = Spectrum.of(-7.9, -3.0, -0.5, -1.3, 0.0, -6.3, -10.2, -23.1);
     public static final Spectrum LOITER_LAUNCH = Spectrum.of(-7.7, 0.0, -2.4, -3.5, -8.8, -7.4, -3.4, -15.7);
     public static final Spectrum BOOSTER_SEPARATE = Spectrum.of(-3.7, -2.4, -2.8, -1.9, 0.0, -8.2, -11.9, -16.2);
-    public static final Spectrum BLAST_FIRE = Spectrum.of(-23.9, -6.4, -6.2, -7.7, -6.2, 0.0, -4.0, -19.2);
-    public static final double BLAST_FIRE_LUFS = -10.9;
+    public static final Spectrum BLAST_FIRE = Spectrum.of(-24.0, -6.5, -6.2, -7.6, -6.3, 0.0, -3.8, -18.7);
+    public static final double BLAST_FIRE_LUFS = -13.5;
     public static final Spectrum DEBRIS_FALL = Spectrum.of(-6.7, -5.2, -3.1, -2.3, 0.0, -2.2, -3.4, -4.8);
     public static final double DEBRIS_FALL_LUFS = -11.9;
     public static final Spectrum GRID_FAIL = Spectrum.of(-8.5, -4.4, 0.0, -0.4, -4.0, -5.4, -11.9, -14.6);

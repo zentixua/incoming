@@ -19,6 +19,7 @@ CC BY recordings are used with attribution and modified. Thanks to the authors.
 | craigsmith | [R01-04-Catapult Launch.wav](https://freesound.org/s/479922/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [R30-12-Large Gun Shells Fly By and Explode.wav](https://freesound.org/s/483296/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [R09-58-Large Fire with Debris.wav](https://freesound.org/s/483304/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| craigsmith | [R30-09-Fires Burns Wood and Metal Crackling.wav](https://freesound.org/s/483323/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [R12-02-Large Explosions.wav](https://freesound.org/s/486018/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [S18-01 Incoming shells; explosions.wav](https://freesound.org/s/674897/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | craigsmith | [S32-27 Titan missile launch; long.wav](https://freesound.org/s/675750/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
