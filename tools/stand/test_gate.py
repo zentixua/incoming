@@ -312,6 +312,21 @@ class Results(unittest.TestCase):
         r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, cpu_foreign=7.0, dt=2.0)])
         self.assertTrue(any(c.startswith(results.LOAD_TAG) and "окно first" in c for c in r["checks"]), r["checks"])
 
+    def test_first_strike_frame_longer_than_its_window_still_checks_the_load(self):
+        # кадр 995–6995 мс накрыл всё окно первого удара 1000–6000: кадров, начатых в окне, нет, а нагрузка — 7 ядер
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            rows = ["frame,t_ms,prev_interval_ms,cpu_ms,cpu_thread_ms,gpu_ms,prev_gpu_period_ms,shot,stages",
+                    "0,985,10,4,3,8,10,0,", "1,995,10,4,3,8,10,0,", "2,6995,6000,4,3,8,10,0,"]
+            (d / "frames.csv").write_text("\n".join(rows) + "\n")
+            ev = [{"type": "window", "t_ms": 1000, "name": "first", "edge": "begin"}, {"type": "window", "t_ms": 6000, "name": "first", "edge": "end"},
+                  {"type": "srv", "t_ms": 0, "mspt": 6.0, "game_time": 1, "projectiles": 0, "entities": 1, "epoch_ms": 0}]
+            (d / "events.jsonl").write_text("\n".join(json.dumps(e) for e in ev) + "\n")
+            (d / "host.jsonl").write_text(json.dumps(host_sample(7.0, cpu_foreign=7.0, gpu_foreign=37, dt=7.0)) + "\n")
+            r = results.analyze(d, plan.load(), ["first"])
+            self.assertEqual(r["first"]["worst_ms"], 6000.0)
+            self.assertTrue(any(c.startswith(results.LOAD_TAG) and "окно first" in c for c in r["checks"]), r["checks"])
+
     def test_window_tail_without_samples_is_invalid(self):
         # последняя выборка кончилась на 1,1 с окна 1–2 с: хвост без записи
         r = self.analyze([host_sample(1_000_001.1, dt=1.1)])
@@ -376,10 +391,17 @@ class Host(unittest.TestCase):
     0    1503885     G     37     11      -      -      -      -    java
     0    1600000     G     52     20      -      -      -      -    java
 """
-        self.assertEqual(client.parse_pmon(text, lambda pid: pid == "1600000"), (37, ["java:37"]))
-        self.assertEqual(client.parse_pmon(text.splitlines()[0] + "\n", lambda pid: False), (0, []))
-        self.assertIsNone(client.parse_pmon("", lambda pid: False))
-        self.assertIsNone(client.parse_pmon("NVIDIA-SMI has failed\n", lambda pid: False))
+        mine = lambda pid: pid == "1600000"     # noqa: E731
+        self.assertEqual(client.parse_pmon(text, mine, True), (37, ["java:37"]))
+        # «-» у простаивающего чужого процесса (композитор) — 0, а не «замера нет»
+        self.assertEqual(client.parse_pmon(text, lambda pid: pid == "1503885", False), (52, ["java:52"]))
+        # свой клиент идёт, а числа SM нет ни у кого (и у него) — драйвер по процессам не считает: замера нет
+        no_sm = text.replace("37     11", " -      -").replace("52     20", " -      -")
+        self.assertIsNone(client.parse_pmon(no_sm, mine, True))
+        self.assertIsNone(client.parse_pmon(text.splitlines()[0] + "\n", mine, True))      # один заголовок
+        self.assertEqual(client.parse_pmon(text.splitlines()[0] + "\n", mine, False), (0, []))   # до клиента — тихо
+        self.assertIsNone(client.parse_pmon("", mine, False))
+        self.assertIsNone(client.parse_pmon("NVIDIA-SMI has failed\n", mine, False))
 
 
 class Checks(unittest.TestCase):

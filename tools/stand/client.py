@@ -210,7 +210,7 @@ class Host:
             return False
         return self.cg is not None and bool(path) and self.cg == Path("/sys/fs/cgroup") / path
 
-    def _gpu(self):
+    def _gpu(self, phase):
         """Чужие процессы на видеокарте (% SM, сумма) и её температура и частота; замера нет (nvidia-smi нет, упал,
         завис или вывел не то — и после повтора) — None, а не ноль: разбор такое окно не примет."""
         for _ in range(2):
@@ -220,7 +220,7 @@ class Host:
                                    capture_output=True, text=True, timeout=15)
             except (OSError, subprocess.SubprocessError):
                 continue
-            got = parse_pmon(pm.stdout, self._own_pid) if pm.returncode == 0 else None
+            got = parse_pmon(pm.stdout, self._own_pid, phase == "run") if pm.returncode == 0 else None
             if got is None:
                 continue
             temp = clock = None
@@ -246,22 +246,31 @@ class Host:
             profile = None
         return {"epoch": now[0], "dt": round(dt, 3), "phase": phase, "load1": float(Path("/proc/loadavg").read_text().split()[0]),
                 "cpu_total": round(total, 2), "cpu_own": round(own, 2), "cpu_foreign": round(max(0.0, total - own), 2),
-                "units": units, "gpu": self._gpu(), "profile": profile}
+                "units": units, "gpu": self._gpu(phase), "profile": profile}
 
 
-def parse_pmon(text, own):
+def parse_pmon(text, own, client_running):
     """`nvidia-smi pmon -c 1 -s u` → (% SM чужих процессов сумма, [«имя:%»]); own(pid) — процесс свой. Нет заголовка
-    («# gpu pid type sm …») — вывод не тот: None. «-» у процесса — он не считал (0)."""
+    («# gpu pid type sm …») — вывод не тот: None. «-» у процесса — за выборку у него нет отсчёта SM: так у всех
+    простаивающих (композитор рабочего стола, plasmashell, Xwayland), поэтому это 0, а не «замера нет». Но «-» дал бы
+    и драйвер, который SM по процессам не считает вовсе: пока идёт свой клиент (client_running), он рисует каждый кадр,
+    и если числа нет и у него — замера нет, None."""
     lines = text.splitlines()
     if not any(line.lstrip().startswith("#") and "sm" in line.split() for line in lines):
         return None
-    foreign, who = 0, []
+    foreign, who, own_counted = 0, [], False
     for line in lines:
         f = line.split()
-        if len(f) < 4 or f[0].startswith("#") or not f[1].isdigit() or not f[3].isdigit() or own(f[1]):
+        if len(f) < 4 or f[0].startswith("#") or not f[1].isdigit():
             continue
-        foreign += int(f[3])
-        who.append(f"{f[-1]}:{f[3]}")
+        if own(f[1]):
+            own_counted = own_counted or f[3].isdigit()
+            continue
+        if f[3].isdigit():
+            foreign += int(f[3])
+            who.append(f"{f[-1]}:{f[3]}")
+    if client_running and not own_counted:
+        return None
     return foreign, who
 
 

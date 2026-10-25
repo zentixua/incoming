@@ -221,7 +221,9 @@ def analyze(run_dir, scenes, only=None):
         fr = overlapping(frames, first[0], first[1])
         iv = [f["interval"] for f in fr if f["interval"] is not None]
         gp = [f["gpu"] for f in fr if f["gpu"] is not None]
-        res["first"] = {"worst_ms": max(iv) if iv else None, "worst_gpu_ms": max(gp) if gp else None}
+        # нагрузка — по границам окна, а не по кадрам в нём: кадр, вставший на всё окно, — тоже замер (worst_ms)
+        res["first"] = {"worst_ms": max(iv) if iv else None, "worst_gpu_ms": max(gp) if gp else None,
+                        "host": host_in(host, events, first[0], first[1])}
     acc_scene = next((s for s in scenes["scenes"] if s.get("waves")), None)
     if acc_scene and acc_scene["id"] in wins:
         t0, t1 = wins[acc_scene["id"]]
@@ -285,8 +287,10 @@ def checks(events, res, expected=(), acc_scene=None):
 
     # нагрузка машины — во всех окнах, что решают вердикт: «100», первый удар, первая и последняя минута накопления
     for name, w in res.get("windows", {}).items():
-        if name.startswith(GATED) or name == FIRST:
+        if name.startswith(GATED):
             bad += load_checks(f"окно {name}", w.get("host"))
+    if res.get("first"):
+        bad += load_checks(f"окно {FIRST}", res["first"].get("host"))
     if acc_scene and (res.get("acc") or {}).get("host"):
         for part, what in (("first", "первая"), ("last", "последняя")):
             bad += load_checks(f"накопление {acc_scene['id']}, {what} минута", res["acc"]["host"][part])
