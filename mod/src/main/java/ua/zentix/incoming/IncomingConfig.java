@@ -285,7 +285,7 @@ public final class IncomingConfig {
                     .translation("incoming.config.grid_restore_minutes").defineInRange("restore_minutes", 15, 0, 10_080);
             gridRestoreSpread = b.comment("Seconds over which power returns to all districts, in random order.")
                     .translation("incoming.config.grid_restore_spread").defineInRange("restore_spread_seconds", 90, 0, 3600);
-            gridNuke = b.comment("Nuclear blackout needs grid.enabled and no substation; radius is the smaller of the damage radius and grid.max_radius.")
+            gridNuke = b.comment("Nuclear blackout requires grid.enabled and works without a substation; radius is the smaller of the damage radius and grid.max_radius.")
                     .translation("incoming.config.grid_nuke").define("nuke_blackout", true);
             b.pop();
 
