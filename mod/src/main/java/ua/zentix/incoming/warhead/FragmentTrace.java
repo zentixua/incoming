@@ -10,34 +10,32 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.registry.ModTags;
 
 /**
- * Путь осколка по блокам ({@link FragmentModel}): общий у сервера (стёкла, выбоины) и клиента (пыль и искры), чтобы
- * у обоих осколок останавливался в одном и том же блоке (кроме зоны, где волна ломает стены: сервер ведёт лучи после
- * главного взрыва, клиент — в тик взрыва). Обход клеток по прямой (Amanatides–Woo), только по готовым
- * чанкам: неготовый чанк — осколок дальше не ведут (на сервере его чтение грузило бы чанк).
+ * Fragment block path ({@link FragmentModel}), shared server (glass/chips) and client (dust/sparks), stopping at
+ * same block (except wave-broken walls: server traces after main explosion, client on explosion tick). Straight
+ * grid traversal (Amanatides–Woo), ready chunks only: unready stops tracing (server read would load it).
  * <ul>
- *   <li>стекло ({@link ModTags#SHATTERS}) осколок пробивает и летит дальше (теряет мало: оценка — без потери);</li>
- *   <li>то, у чего нет формы столкновений (трава, цветы, факелы), — пролетает;</li>
- *   <li>жидкость, листва и всё твёрдое — останавливают;</li>
- *   <li>клетку, где взрыв, не смотрят: к осколкам её блок уже снёс контактный взрыв (у клиента он ещё стоит).</li>
+ * <li>glass ({@link ModTags#SHATTERS}) penetrated, continues (little loss, estimated lossless);</li>
+ * <li>no collision shape (grass, flowers, torches), passes;</li>
+ * <li>fluid, leaves, all solids stop it;</li>
+ * <li>skip explosion cell: contact blast already removed block before fragments (still present on client).</li>
  * </ul>
  */
 public final class FragmentTrace {
     private FragmentTrace() {}
 
-    /** Что встретил осколок. */
+    /** Fragment encounters. */
     public interface Visitor {
-        /** Пробил стекло в {@code pos} на пути {@code s} м. */
+        /** Penetrated glass at {@code pos} after {@code s} m. */
         default void glass(BlockPos pos, BlockState state, double s) {}
 
-        /** Остановился в блоке {@code pos} на пути {@code s} м, войдя через грань со стороны {@code entry} (нормаль наружу). */
+        /** Stopped in {@code pos} after {@code s} m, entering face from {@code entry} (outward normal). */
         void stop(BlockPos pos, BlockState state, double s, Vec3 point, net.minecraft.core.Direction entry);
     }
 
     /**
-     * Провести осколок из {@code from} по {@code dir} (единичный) не дальше {@code maxS} м.
+     * Trace from {@code from} along unit {@code dir} up to {@code maxS} m.
      *
-     * @return путь до остановки, м; {@code maxS} — долетел, не встретив твёрдого; −1 — упёрся в неготовый чанк (дальше
-     *         не известно)
+     * @return distance to stop, m; {@code maxS} if no solid hit; −1 if unready chunk (unknown beyond)
      */
     public static double trace(Level level, Vec3 from, Vec3 dir, double maxS, Visitor visitor) {
         int x = floor(from.x), y = floor(from.y), z = floor(from.z);
@@ -55,7 +53,7 @@ public final class FragmentTrace {
         net.minecraft.core.Direction entry = net.minecraft.core.Direction.UP;
         double s = 0;
         while (true) {
-            // шаг в следующую клетку
+            // Step into next cell.
             if (tx <= ty && tx <= tz) {
                 s = tx;
                 x += sx;
@@ -92,7 +90,7 @@ public final class FragmentTrace {
         }
     }
 
-    /** Готовый чанк или null (на сервере — {@code getChunkNow}: не грузит и не ждёт загрузки). */
+    /** Ready chunk or null (server {@code getChunkNow}, no load/wait). */
     static @Nullable LevelChunk chunkNow(Level level, int cx, int cz) {
         if (level instanceof ServerLevel server) return server.getChunkSource().getChunkNow(cx, cz);
         return level.getChunkSource().getChunk(cx, cz, false);

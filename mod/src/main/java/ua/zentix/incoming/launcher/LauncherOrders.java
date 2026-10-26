@@ -31,27 +31,28 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Приказы стационарным пусковым ({@link FixedLauncherBlockEntity}): задача с привязанного пульта ({@link #assign}) и
- * пуск по сигналу редстоуна ({@link #fire}). Пуск — тем же путём, что приказ игрока ({@link ServerActions#fromLauncher}):
- * один снаряд или залп ({@link SalvoData}) с огневой позиции — этой пусковой ({@link LaunchOrigin.Fixed}); снаряды —
- * от имени хозяина пусковой, поэтому свои и чужие по {@code /team}, его «Отбой» и предел снарядов в работе — как у его
- * приказов с пульта. Платит запас пусковой: на весь приказ он должен быть сразу (приказ не урезается), а снимается по
- * снаряду, когда тот встаёт на направляющую, — отменённый залп и неудачный пуск в запасе и остаются.
+ * Fixed launcher orders ({@link FixedLauncherBlockEntity}): mission from linked designator ({@link #assign}) and
+ * launch on redstone signal ({@link #fire}). Launch follows player order path ({@link
+ * ServerActions#fromLauncher}): single projectile or salvo ({@link SalvoData}) from this launcher's firing
+ * position ({@link LaunchOrigin.Fixed}); projectiles belong to launcher owner, so {@code /team} friend/foe, their
+ * “Abort”, and active-projectile limit match their designator orders. Launcher inventory pays: must cover the
+ * whole order immediately (never truncate it), but deduct one projectile as it takes the rail; canceled salvos
+ * and failed launches remain in storage.
  * <p>
- * Пусковая хозяина — по его правилам ({@code rules} у {@link ServerActions#strike}): ему можно пульт, цель не дальше
- * {@code map_range} от самой пусковой, предел {@code max_active_per_player}. Ничья (поставлена командой ведущим) —
- * без них, как консоль.
+ * Owned launcher follows owner's rules ({@code rules} in {@link ServerActions#strike}): designator permission,
+ * target within {@code map_range} of the launcher itself, {@code max_active_per_player} limit. Unowned (placed by
+ * a game-master command) bypasses them like console.
  */
 public final class LauncherOrders {
     private LauncherOrders() {}
 
-    /** Сигнал дошёл до пусковой {@code be}: приказ по задаче. Null — приказ отдан; иначе — почему нет. */
+    /** Signal reached launcher {@code be}: issue mission order. Null means ordered; otherwise failure reason. */
     @Nullable
     public static Component fire(ServerLevel level, FixedLauncherBlockEntity be) {
         Mission m = be.mission();
         if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
         BlockPos pos = be.getBlockPos();
-        // в сетке плотов Sable блок стоит не там, где его видят: пуск оттуда ушёл бы из далёкого плота
+        // In Sable plot grid, block is not at its visible position: launch would leave from the distant plot.
         if (SubLevels.inPlotGrid(level, new ChunkPos(pos))) return Component.translatable("incoming.fixed_launcher.on_craft");
         UUID owner = be.owner();
         if (owner != null) {
@@ -69,21 +70,21 @@ public final class LauncherOrders {
         Component before = be.lastReport();
         boolean ok = ServerActions.fromLauncher(level, who, owner, l, new ServerActions.Aim(m.target(), m.point(), null), m.via(), origin);
         if (ok) return null;
-        // пуск сам сказал, что не так (сектор закрыт, запас), — эта причина точнее общей
+        // Launch reported its own issue (blocked sector, inventory): this reason is more specific than the general one.
         return be.lastReport() != before ? be.lastReport() : Component.translatable("incoming.fixed_launcher.failed");
     }
 
     /**
-     * Прошлый приказ пусковой ещё идёт: залп не кончился или снаряды на направляющих. Тогда ни нового приказа, ни новой
-     * задачи: задача меняет пакет, а снаряды залпа стартуют с пакета своего оружия.
+     * Previous launcher order still running: salvo unfinished or projectiles on rails. No new order or mission:
+     * mission changes the rack, while salvo projectiles launch from their weapon's rack.
      */
     public static boolean busy(ServerLevel level, FixedLauncherBlockEntity be) {
         return SalvoData.busy(level, new LaunchOrigin.Fixed(be.getBlockPos())) || !be.queue().silent(level.getGameTime());
     }
 
     /**
-     * Правила хозяина {@code owner} для приказа с пусковой в {@code at} по точке {@code aim}; null — можно. Хозяин может
-     * быть не в сети: права — по его профилю.
+     * Rules for owner {@code owner}'s launcher order at {@code at} aimed at {@code aim}; null means allowed.
+     * Owner may be offline: permissions use their profile.
      */
     @Nullable
     private static MutableComponent rules(MinecraftServer server, UUID owner, Vec3 at, Vec3 aim) {
@@ -97,13 +98,16 @@ public final class LauncherOrders {
         return inRange(at, aim) ? null : Component.translatable("incoming.fixed_launcher.out_of_range", IncomingConfig.SERVER.mapRange.get());
     }
 
-    /** Цель не дальше {@code map_range} от пусковой по горизонтали: докуда бьёт пульт, оттуда же бьёт и она. */
+    /** Target within {@code map_range} horizontally from launcher: same reach as the designator. */
     private static boolean inRange(Vec3 at, Vec3 aim) {
         double range = IncomingConfig.SERVER.mapRange.get(), dx = aim.x - at.x, dz = aim.z - at.z;
         return dx * dx + dz * dz <= range * range;
     }
 
-    /** Уровень прав игрока {@code id}: в сети — его, иначе по профилю из кэша сервера (операторы, хост одиночной игры). */
+    /**
+     * Permission level of player {@code id}: online value, otherwise server-cached profile (operators,
+     * singleplayer host).
+     */
     private static int permission(MinecraftServer server, UUID id) {
         ServerPlayer online = server.getPlayerList().getPlayer(id);
         GameProfileCache cache = server.getProfileCache();
@@ -112,11 +116,11 @@ public final class LauncherOrders {
     }
 
     /**
-     * «Огонь» пульта с привязанными пусковыми {@code links}: цель приказа {@code aim} — по правилам игрока, как его
-     * собственный пуск ({@link ServerActions#ruled}), — становится задачей ({@link Mission}) каждой привязанной, до
-     * которой можно дотянуться: в этом мире, в готовом чанке, своей или своей команды, цель в её дальности и маршрут
-     * {@code via} — в дальности оружия от неё, и она не занята прошлым приказом. Пусковой на месте нет (чанк готов, блока
-     * нет) — она отвязывается от пульта {@code designator}. Игроку — строка, скольким передано и почему не остальным.
+     * “Fire” on a designator with launcher {@code links}: ordered {@code aim}, subject to player rules as for
+     * their own launch ({@link ServerActions#ruled}), becomes each reachable linked launcher's mission ({@link
+     * Mission}): same world, ready chunk, own or team, target within launcher range, {@code via} route within
+     * weapon reach from it, and not busy with a previous order. Missing launcher (ready chunk, no block) is
+     * unlinked from {@code designator}. Player gets counts assigned and reasons for others.
      */
     public static void assign(ServerPlayer player, ItemStack designator, Loadout loadout, ServerActions.Aim aim, Waypoints via) {
         List<GlobalPos> links = LauncherLinks.of(designator);
@@ -142,7 +146,7 @@ public final class LauncherOrders {
             else if (why == null) why = problem;
             if (missing(player.serverLevel(), at)) gone.add(at);
         }
-        // сломанная или взорванная пусковая: привязка к ней держала бы пульт в режиме задач навсегда
+        // Broken or exploded launcher: its link would keep the designator in mission mode forever.
         if (!gone.isEmpty()) LauncherLinks.forget(designator, gone);
         Incoming.LOG.info("Launcher mission: {} ×{} at {} {} {} — {} of {}, {}", l.weapon().getSerializedName(), l.count(), Math.round(ruled.point().x),
                 Math.round(ruled.point().y), Math.round(ruled.point().z), given, links.size(), player.getGameProfile().getName());
@@ -152,18 +156,18 @@ public final class LauncherOrders {
         player.displayClientMessage(line, true);
     }
 
-    /** Пусковой в {@code at} точно нет: место в этом мире, чанк готов, блока нет. */
+    /** Launcher at {@code at} is definitely absent: same world, ready chunk, no block. */
     private static boolean missing(ServerLevel level, GlobalPos at) {
         return at.dimension().equals(level.dimension()) && Terrain.ready(level, at.pos())
                 && !(level.getBlockEntity(at.pos()) instanceof FixedLauncherBlockEntity);
     }
 
-    /** Задача {@code mission} пусковой в {@code at}; null — поставлена, иначе — почему нет. */
+    /** Assign {@code mission} to launcher at {@code at}; null means assigned, otherwise failure reason. */
     @Nullable
     private static MutableComponent assign(ServerPlayer player, GlobalPos at, Mission mission) {
         ServerLevel level = player.serverLevel();
         if (!at.dimension().equals(level.dimension())) return Component.translatable("incoming.fixed_launcher.elsewhere");
-        // чанк пусковой не грузим ради задачи: далеко от игроков её нет в памяти
+        // Do not load the launcher chunk to assign a mission: far from players it is not in memory.
         if (!Terrain.ready(level, at.pos())) return Component.translatable("incoming.fixed_launcher.not_loaded");
         if (!(level.getBlockEntity(at.pos()) instanceof FixedLauncherBlockEntity be)) return Component.translatable("incoming.fixed_launcher.gone");
         if (!LauncherLinks.mayCommand(player, be)) return Component.translatable("incoming.fixed_launcher.not_yours");
@@ -171,7 +175,7 @@ public final class LauncherOrders {
         if (!inRange(be.position(), mission.point())) {
             return Component.translatable("incoming.fixed_launcher.out_of_range", IncomingConfig.SERVER.mapRange.get());
         }
-        // точки маршрута — на карте игрока, а дальность оружия — от пусковой
+        // Waypoints are on the player's map; weapon reach is measured from the launcher.
         MutableComponent route = ServerActions.routeProblem(level, player, true, mission.weapon(), new LaunchOrigin.Fixed(at.pos()), mission.via(),
                 mission.point());
         if (route != null) return route;

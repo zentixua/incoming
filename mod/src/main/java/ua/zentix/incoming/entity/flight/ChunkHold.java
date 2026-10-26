@@ -12,27 +12,27 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.UUID;
 
 /**
- * Чанки, которые снаряд держит своим тикетом ({@link ChunkTickets}): чанк, где он сейчас, и, пока есть кому его видеть,
- * чанк впереди по курсу — только уже готовые ({@link Terrain#ready}): новые чанки на лету не генерируются, а
- * {@code hasChunk} верен и для чанка, который ещё грузится. Не сохраняется: после загрузки снаряд берёт тикеты заново
- * в первом тике.
+ * Chunks held by the projectile's own ticket ({@link ChunkTickets}): its current chunk and, while someone can see
+ * it, the chunk ahead along heading. Only already ready chunks ({@link Terrain#ready}): no new chunks are
+ * generated in flight, and {@code hasChunk} is true even for a chunk still loading. Not saved: after loading,
+ * reacquire tickets on the first tick.
  * <p>
- * Чанк впереди держит полёт в мире: тикет на нём грузит квадрат вокруг, и следующий чанк впереди уже готов — держи
- * снаряд его всегда, он тянул бы за собой тикающие чанки через всю карту, и залп по всей карте держал бы их десятки
- * тысяч (37 тыс. чанков, TPS 7–10). Без него снаряд доходит до края своего чанка и уходит в полёт вне
- * мира ({@code StrikeProjectile.leavesTickingChunks}), а игрокам его путь идёт пакетами {@code FarFlights}.
+ * The ahead chunk keeps flight in the world: its ticket loads the surrounding square, so the next chunk ahead is
+ * ready. Holding it always would pull ticking chunks across the map, and map-wide salvos would hold tens of
+ * thousands (37 thousand chunks, TPS 7–10). Without it, the projectile reaches its chunk edge and enters virtual
+ * flight ({@code StrikeProjectile.leavesTickingChunks}); players receive its path via {@code FarFlights} packets.
  */
 public final class ChunkHold {
     private final LongSet held = new LongOpenHashSet();
 
-    /** Ничего не держит (снаряд только появился в мире или вернулся из выгруженного чанка). */
+    /** Holds nothing (projectile just spawned in the world or returned from an unloaded chunk). */
     public boolean isEmpty() {
         return held.isEmpty();
     }
 
     /**
-     * Держать чанк в {@code pos} и, если {@code lookAhead}, чанк на 3 шага ({@code speed}), но не меньше 16 блоков,
-     * впереди по {@code dir}.
+     * Hold the chunk at {@code pos} and, if {@code lookAhead}, the chunk 3 steps ({@code speed}), at least 16
+     * blocks, ahead along {@code dir}.
      */
     public void update(ServerLevel level, UUID owner, Vec3 pos, Vec3 dir, double speed, boolean lookAhead) {
         long here = ChunkPos.asLong(BlockPos.containing(pos));
@@ -53,7 +53,7 @@ public final class ChunkHold {
         }
     }
 
-    /** Отпустить всё. */
+    /** Release everything. */
     public void release(ServerLevel level, UUID owner) {
         for (long c : held) ChunkTickets.hold(level, owner, c, false);
         held.clear();

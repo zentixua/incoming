@@ -13,30 +13,33 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Пульт и стационарные пусковые: ПКМ пультом по пусковой привязывает её к пульту (компонент
- * {@link ModDataComponents#LAUNCHERS} — места пусковых), повторный — отвязывает. Пока у пульта есть привязанные,
- * его «Огонь» не пускает сам, а ставит им задачу — ту же цель, что выбрана прицелом или на карте, тем же оружием,
- * числом, разбросом и маршрутом ({@link Mission}). Привязать можно свою пусковую или пусковую своей команды
- * ({@link Sides}), ничью (поставленную командой) — только оператору.
+ * Designator and fixed launchers: right-click a launcher with a designator to link ({@link
+ * ModDataComponents#LAUNCHERS} component stores launcher positions); repeat to unlink. While linked launchers
+ * exist, “Fire” assigns them a mission instead of launching directly: the same crosshair/map target, weapon,
+ * count, spread, and route ({@link Mission}). Can link own or team launchers ({@link Sides}); only an operator
+ * can link an unowned one (placed by command).
  */
 public final class LauncherLinks {
-    /** Больше пусковых к одному пульту не привязать. */
+    /** Maximum launchers linked to one designator. */
     public static final int MAX = 16;
 
     private LauncherLinks() {}
 
-    /** Привязанные к пульту {@code designator} пусковые. */
+    /** Launchers linked to {@code designator}. */
     public static List<GlobalPos> of(ItemStack designator) {
         return designator.getOrDefault(ModDataComponents.LAUNCHERS.get(), List.of());
     }
 
-    /** Игрок может командовать пусковой: ему можно пульт, и пусковая его, его команды или (оператору) ничья. */
+    /**
+     * Player may command the launcher: permitted to use designator and launcher owned by them, their team, or
+     * unowned (operators).
+     */
     public static boolean mayCommand(ServerPlayer player, FixedLauncherBlockEntity be) {
         if (!ServerActions.mayUse(player)) return false;
         return be.owner() == null ? player.hasPermissions(2) : Sides.friendly(player.server, be.owner(), player.getUUID());
     }
 
-    /** Привязать пусковую {@code be} к пульту {@code designator} или отвязать; строка — что вышло. */
+    /** Link launcher {@code be} to {@code designator} or unlink it; line describes the result. */
     public static Component toggle(ServerPlayer player, ItemStack designator, FixedLauncherBlockEntity be) {
         GlobalPos at = GlobalPos.of(player.level().dimension(), be.getBlockPos());
         List<GlobalPos> links = new ArrayList<>(of(designator));
@@ -51,7 +54,7 @@ public final class LauncherLinks {
         return Component.translatable("incoming.fixed_launcher.linked", links.size()).withStyle(ChatFormatting.GOLD);
     }
 
-    /** Отвязать от пульта {@code designator} пусковые в {@code gone}. */
+    /** Unlink launchers in {@code gone} from {@code designator}. */
     public static void forget(ItemStack designator, List<GlobalPos> gone) {
         List<GlobalPos> links = new ArrayList<>(of(designator));
         if (links.removeAll(gone)) set(designator, links);

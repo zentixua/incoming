@@ -27,43 +27,44 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Ядерный удар игрока, который не оператор ({@code nuclear.ops_only = false}; приказ по правилам игрока — {@code rules}
- * у {@link ServerActions#strike}):
+ * Nuclear strike by a non-operator player ({@code nuclear.ops_only = false}; player-rule order, {@code rules} in
+ * {@link ServerActions#strike}):
  * <ul>
- * <li><b>второй ключ</b>: оплаченный приказ ждёт, пока другой игрок не дальше {@code second_key_distance} блоков от
- *   запускающего нажмёт свою клавишу «Второй ключ» ({@link C2S.NuclearKey}) за {@code second_key_window} секунд. Тем,
- *   кто рядом, — строка: кто, чем, куда и какая клавиша. Не дождались — пуска нет, оплаченное возвращается. Один в сети —
- *   ключ не нужен. Оператор, хост, консоль и командный блок — без ключа ({@link #trusted});
- * <li><b>тревога не меньше 90 с</b> ({@link #MIN_WARNING}): МБР летит не меньше 90 с (её пуск — тревога и отсчёт у цели),
- *   носитель (крылатая ракета, B-2) стартует через 90 с после тревоги у цели — сирены и строки игрокам в радиусе тревоги;
- *   перенацелить ядерный снаряд из камеры не оператор не может;
- * <li><b>пуск обнаружен</b>: всем игрокам — строка «Обнаружен пуск МБР из района X, Z» (клетка {@link #AREA_CELL} блоков)
- *   и сирена воздушной тревоги.
+ * <li><b>second key</b>: paid order waits for another player within {@code second_key_distance} blocks of
+ * launcher player to press “Second key” ({@link C2S.NuclearKey}) within {@code second_key_window} seconds. Nearby
+ * players get who, weapon, target, and key. Timeout means no launch and payment refunded. Alone online: no key
+ * needed. Operator, host, console, command block bypass key ({@link #trusted});
+ * <li><b>at least 90 s warning</b> ({@link #MIN_WARNING}): ICBM flies at least 90 s (launch starts target
+ * warning/countdown); carrier (cruise missile, B-2) launches 90 s after target warning, siren and line within
+ * warning radius; non-operator cannot retarget nuclear projectile from camera;
+ * <li><b>launch detected</b>: all players receive “ICBM launch detected from area X, Z” ({@link #AREA_CELL}-block
+ * cell) and air-raid siren.
  * </ul>
- * Приказы не сохраняются (живут секунды): их отменяют с возвратом ядерный отбой (оператор, хост), остановка сервера и
- * выход запускающего до второго ключа. Сам запускающий ядерный удар не отменяет: ядерный отбой — только у оператора и хоста.
- * Свои у каждого мира (в {@link StrikeWorld}); игроки в сети — параметром: {@code FakePlayer} GameTest в списке игроков нет.
+ * Orders unsaved (last seconds): nuclear abort (operator/host), server stop, or launching player logout before
+ * second key cancel with refund. Launching player cannot cancel their own nuclear strike: nuclear abort is only
+ * for operator/host. Separate per world (in {@link StrikeWorld}); online players passed as parameter: GameTest
+ * {@code FakePlayer} is absent from player list.
  */
 public final class NuclearKeys {
-    /** Тревога у цели не меньше стольких тиков до удара (90 с). */
+    /** Target warning at least this many ticks before impact (90 s). */
     public static final int MIN_WARNING = 90 * 20;
-    /** Клетка района пуска в строке «Обнаружен пуск», блоков. */
+    /** Launch-area cell for “Launch detected” line, blocks. */
     public static final int AREA_CELL = 256;
-    /** Клавиша «Второй ключ» (клиент, {@code client.Keys}); в строках игрокам клиент рисует её назначение. */
+    /** “Second key” key (client, {@code client.Keys}); player lines render its client binding. */
     public static final String KEY = "key.incoming.second_key";
-    /** Как часто звать второй ключ тех, кто подошёл к запускающему уже после приказа, тиков. */
+    /** Ticks between inviting second keys from players arriving near launcher player after order. */
     private static final int PROMPT_EVERY = 20;
 
     private final List<Order> orders = new ArrayList<>();
 
-    /** Для {@link StrikeWorld}: свои у каждого мира, не сохраняются. */
+    /** For {@link StrikeWorld}: per-world, unsaved. */
     NuclearKeys() {}
 
     public static NuclearKeys get(ServerLevel level) {
         return StrikeWorld.get(level).keys();
     }
 
-    /** Приказ, который ждёт второго ключа или, у носителя, конца тревоги перед пуском. */
+    /** Order awaiting second key or, for carrier, pre-launch warning end. */
     private static final class Order {
         final ServerLevel level;
         final UUID ownerId;
@@ -75,13 +76,13 @@ public final class NuclearKeys {
         final Munitions.Bill paid;
         final long created;
         final long deadline;
-        /** Кого уже звали повернуть ключ. */
+        /** Players already invited to turn the key. */
         final Set<UUID> prompted = new HashSet<>();
-        /** Последний известный объект запускающего (после возрождения — другой, ищется по UUID среди игроков в сети). */
+        /** Last known launching-player object (different after respawn, found by UUID among online players). */
         ServerPlayer owner;
         Vec3 lastPos;
         float lastYaw;
-        /** Тик пуска носителя после тревоги; -1 — ждёт второго ключа. */
+        /** Carrier launch tick after warning; -1 waits for second key. */
         long launchAt = -1;
         @Nullable
         String confirmer;
@@ -105,7 +106,7 @@ public final class NuclearKeys {
             return loadout.weapon().spec().launch() == WeaponSpec.Launch.ICBM;
         }
 
-        /** Запускающий в игре: среди игроков в сети по UUID, иначе прежний объект, если он ещё в мире (GameTest). */
+        /** Launching player in game: online UUID lookup, otherwise previous object if still in world (GameTest). */
         @Nullable
         ServerPlayer owner(Collection<? extends ServerPlayer> online) {
             ServerPlayer found = null;
@@ -122,18 +123,18 @@ public final class NuclearKeys {
         }
     }
 
-    /** Без второго ключа и тревоги заранее: оператор и хост одиночной или открытой в сеть игры. Им же — ядерный отбой. */
+    /** Bypass second key and advance warning: operator and singleplayer/LAN host. Also allowed nuclear abort. */
     public static boolean trusted(ServerPlayer player) {
         return player.hasPermissions(2) || player.server.isSingleplayerOwner(player.getGameProfile());
     }
 
     /**
-     * Ядерный приказ не оператора (права и оплата уже проверены): другие в сети — ждать второго ключа, один — сразу,
-     * но с тревогой не меньше 90 с.
+     * Non-operator nuclear order (permissions/payment checked): others online means second-key wait; alone,
+     * immediate, but at least 90 s warning.
      *
-     * @param online игроки в сети (сервер — его список; GameTest — свои)
-     * @param paid   что запускающий заплатил ({@link Munitions}); null — не платил (творческий режим)
-     * @return приказ принят: пуск состоялся, ждёт второго ключа или идёт тревога перед пуском носителя
+     * @param online online players (server list; GameTest its own)
+     * @param paid launching player's payment ({@link Munitions}); null if unpaid (creative)
+     * @return order accepted: launched, awaiting second key, or carrier pre-launch warning running
      */
     public static boolean order(ServerPlayer owner, Collection<? extends ServerPlayer> online, Loadout loadout, ServerActions.Aim aim, Waypoints via,
                                 @Nullable Munitions.Bill paid) {
@@ -154,16 +155,16 @@ public final class NuclearKeys {
         return true;
     }
 
-    /** Пакет клавиши «Второй ключ». */
+    /** “Second key” packet. */
     public static void onKey(C2S.NuclearKey p, IPayloadContext ctx) {
         if (ctx.player() instanceof ServerPlayer player) confirm(player, player.server.getPlayerList().getPlayers());
     }
 
     /**
-     * {@code by} повернул второй ключ: самый ранний приказ запускающего не дальше {@code second_key_distance} от него
-     * (свой приказ подтвердить нельзя).
+     * {@code by} turned second key: earliest order by a launching player within {@code second_key_distance}
+     * (cannot confirm own order).
      *
-     * @return приказ подтверждён
+     * @return order confirmed
      */
     public static boolean confirm(ServerPlayer by, Collection<? extends ServerPlayer> online) {
         double d = distance();
@@ -197,8 +198,8 @@ public final class NuclearKeys {
     }
 
     /**
-     * Ключи повёрнуты (или запускающий один в сети): МБР — сразу, с полётом не меньше 90 с; носитель — тревога у цели
-     * сейчас, пуск через 90 с.
+     * Keys turned (or launching player alone online): ICBM immediately, at least 90 s flight; carrier warns
+     * target now, launches in 90 s.
      */
     private boolean arm(Order o, Collection<? extends ServerPlayer> online) {
         if (o.icbm()) {
@@ -217,7 +218,10 @@ public final class NuclearKeys {
         return true;
     }
 
-    /** Тревога у цели перед пуском носителя: сирена (как у снаряда на подлёте) и строка всем в радиусе ядерной тревоги. */
+    /**
+     * Target warning before carrier launch: siren (as for approaching projectile), line to all within nuclear
+     * warning radius.
+     */
     private static void alarm(Order o, Collection<? extends ServerPlayer> online) {
         Vec3 at = o.aim.point();
         StrikeService.siren(o.level, o.loadout.weapon(), at);
@@ -229,7 +233,10 @@ public final class NuclearKeys {
         }
     }
 
-    /** Пуск приказа: строка в лог, пуск, итог запускающему; не удался — возврат, удался — всем «обнаружен пуск». */
+    /**
+     * Execute order: log, launch, report to launcher player; failure refunds, success announces “launch detected”
+     * to everyone.
+     */
     private static StrikeService.Result launch(Order o, Collection<? extends ServerPlayer> online) {
         ServerPlayer owner = o.owner(online);
         Loadout l = o.loadout;
@@ -244,7 +251,7 @@ public final class NuclearKeys {
             } else if (owner != null) {
                 r = StrikeService.launchBy(o.level, l.weapon(), aim.target(), aim.point(), owner.getYRot(), owner, true, l.nuke(), o.via, null);
             } else {
-                // носитель после тревоги, запускающий вышел: пуск, как у залпа без владельца в сети, — издалека
+                // Carrier after warning, launching player offline: launch from afar, like salvo with offline owner.
                 r = StrikeService.launch(o.level, l.weapon(), aim.target(), aim.point(), o.lastYaw, o.ownerId, true, l.nuke(), o.via, null);
             }
         } catch (RuntimeException e) {
@@ -264,14 +271,14 @@ public final class NuclearKeys {
         return r;
     }
 
-    /** МБР не оператора летит не меньше 90 с: столько длится тревога у цели. */
+    /** Non-operator ICBM flies at least 90 s: target warning duration. */
     static int flightTicks() {
         return Math.max(IncomingConfig.SERVER.nukeFlightTime.get(), MIN_WARNING);
     }
 
     /**
-     * Пуск обнаружен: всем в сети — строка с районом пуска (клетка {@link #AREA_CELL}) и сирена воздушной тревоги; у кого
-     * пуск МБР уже поднял ядерную тревогу (тот же мир, радиус тревоги от цели), — без второй сирены.
+     * Launch detected: all online get launch area ({@link #AREA_CELL} cell) and air-raid siren; those already
+     * warned by ICBM launch (same world, within target warning radius) get no second siren.
      */
     private static void detected(Order o, Collection<? extends ServerPlayer> online) {
         Vec3 from = o.lastPos;
@@ -290,12 +297,12 @@ public final class NuclearKeys {
         Incoming.LOG.info("Nuclear launch detected: {} from area {} {} — {}", o.loadout.weapon().getSerializedName(), x, z, o.name);
     }
 
-    /** Координата района: ближайшая кратная {@link #AREA_CELL}. */
+    /** Area coordinate: nearest multiple of {@link #AREA_CELL}. */
     public static int cell(double v) {
         return (int) (Math.round(v / AREA_CELL) * AREA_CELL);
     }
 
-    /** Позвать второй ключ тех, кто рядом с запускающим и ещё не звался. */
+    /** Invite nearby launching-player companions not yet asked for second key. */
     private void prompt(Order o, Collection<? extends ServerPlayer> online, ServerPlayer owner) {
         double d = distance();
         long left = Math.max(1, (o.deadline - o.level.getGameTime() + 19) / 20);
@@ -308,7 +315,7 @@ public final class NuclearKeys {
         }
     }
 
-    /** Конец тика мира: срок второго ключа, пуск носителя после тревоги, зов подошедших. */
+    /** World tick end: second-key expiry, carrier launch after warning, invite arrivals. */
     void tick(ServerLevel level, Collection<? extends ServerPlayer> online) {
         if (orders.isEmpty()) return;
         long now = level.getGameTime();
@@ -332,12 +339,15 @@ public final class NuclearKeys {
         }
     }
 
-    /** Сколько приказов ждёт второго ключа или пуска после тревоги. */
+    /** Orders awaiting second key or post-warning launch. */
     public int pending() {
         return orders.size();
     }
 
-    /** Сколько снарядов в ждущих приказах игрока: они в работе для {@code max_active_per_player} ({@link StrikeWorld#active}). */
+    /**
+     * Projectiles in player's pending orders: count as active for {@code max_active_per_player} ({@link
+     * StrikeWorld#active}).
+     */
     public int waiting(UUID owner) {
         int n = 0;
         for (Order o : orders) {
@@ -347,10 +357,10 @@ public final class NuclearKeys {
     }
 
     /**
-     * Отменить все ждущие ядерные приказы с возвратом владельцам в сети: ядерный отбой оператора или хоста, остановка сервера.
+     * Cancel all pending nuclear orders, refund online owners: operator/host nuclear abort, server stop.
      *
-     * @param notice строка владельцу, или null
-     * @return сколько отменено
+     * @param notice owner message, or null
+     * @return canceled count
      */
     public static int cancelAll(MinecraftServer server, Collection<? extends ServerPlayer> online, @Nullable Component notice, String why) {
         int n = 0;
@@ -370,8 +380,8 @@ public final class NuclearKeys {
     }
 
     /**
-     * Запускающий вышел до второго ключа: приказ отменён, оплаченное — ему (инвентарь сохраняется после события). Носитель,
-     * у цели которого уже тревога, стартует и без него.
+     * Launching player logged out before second key: cancel, refund them (inventory saved after event). Carrier
+     * already warning target launches without them.
      */
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent e) {
         if (!(e.getEntity() instanceof ServerPlayer player)) return;
@@ -387,7 +397,7 @@ public final class NuclearKeys {
         }
     }
 
-    /** Чем бьёт приказ — для строк: «МБР, 15 кт», «Крылатая ракета с ядерной БЧ, 15 кт». */
+    /** Order weapon for messages: “ICBM, 15 kt”, “Cruise missile with nuclear warhead, 15 kt”. */
     private static Component what(Loadout l) {
         return Component.translatable(l.weapon().spec().warhead().always() ? "incoming.nuke.key.what" : "incoming.nuke.key.what.carrier",
                 item(l).getDescription(), l.nuke().yieldKt());

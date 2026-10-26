@@ -5,28 +5,28 @@ import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.strike.WeaponSpec;
 
 /**
- * Закон полёта крылатой ракеты после старта: турбина разгоняет до маршевой, снижение на бреющий полёт над рельефом
- * и не ниже цели на высоте из паспорта, на последнем участке — горка (при длинном заходе) и пикирование по дуге
- * с разгоном до скорости пике. Прямая до цели закрыта рельефом (цель за холмом, на дне карьера) — ракета в пике не
- * идёт, а набирает высоту горкой, пока прямая не откроется ({@link Autopilot.Sightline}). Старт с пусковой, цель, ядерный воздушный подрыв и шаг полёта — у сущности; здесь —
- * только команды органам управления ({@link Craft}).
+ * Cruise missile post-launch flight law: turbine accelerates to cruise, descends to terrain-hugging flight above
+ * terrain and at least spec height above target; final leg has popup (long approach) and arcing dive accelerating
+ * to dive speed. If terrain blocks the target line (behind a hill, quarry floor), the missile does not dive but
+ * climbs in popup until clear ({@link Autopilot.Sightline}). Launcher start, target, nuclear airburst, and flight
+ * step belong to the entity; here only control commands ({@link Craft}).
  */
 public final class MissileAutopilot {
-    /** Горка кончается, когда цель на столько градусов под горизонтом… */
+    /** Popup ends when target is this many degrees below horizon… */
     private static final double DIVE_PITCH = 24;
-    /** …или ракета на столько блоков выше цели. */
+    /** …or missile is this many blocks above target. */
     private static final double POP_UP_HEIGHT = 32;
-    /** На наборе после ускорителя — не ниже стольких блоков над рельефом впереди. */
+    /** During climb after booster, at least this many blocks above terrain ahead. */
     private static final double CLIMB_ABOVE_RELIEF = 25;
 
     private final WeaponSpec.Airframe air;
     private final Autopilot.Turn climbTurn;
     private final Autopilot.Turn cruiseTurn;
-    /** Рельеф впереди. */
+    /** Terrain ahead. */
     private final Autopilot.ReliefSensor relief = new Autopilot.ReliefSensor();
-    /** Прямая до цели на заходе. */
+    /** Line to target on approach. */
     private final Autopilot.Sightline sight = new Autopilot.Sightline();
-    /** Горка перед пикированием — только при длинном заходе. */
+    /** Pre-dive popup only on a long approach. */
     private boolean popUp = true;
 
     public MissileAutopilot(WeaponSpec.Airframe air) {
@@ -44,20 +44,21 @@ public final class MissileAutopilot {
     }
 
     /**
-     * Уже в воздухе (заход издалека, тесты): бреющий полёт на высоте из паспорта над рельефом и не ниже цели на столько же.
+     * Already airborne (approach from afar, tests): terrain-hugging at spec height above terrain and at least as
+     * high above target.
      *
-     * @param surface высота рельефа под стартом
+     * @param surface terrain height under launch
      */
     public double airborneAltitude(Vec3 target, double surface) {
         return Math.max(target.y + air.cruiseHeight(), surface + air.cruiseHeight());
     }
 
-    /** Заход на {@code target} с {@code horizontal} блоков по горизонтали: горка — только если места на неё хватает. */
+    /** Approach {@code target} from {@code horizontal} horizontal blocks: popup only if there is room. */
     public void approach(double horizontal) {
         popUp = horizontal >= air.attack().popUpMinRange();
     }
 
-    /** Перенацелили на {@code aim}: атака заново, горка — по новому заходу. */
+    /** Retargeted to {@code aim}: restart attack; popup depends on new approach. */
     public void retarget(Craft c, Vec3 aim) {
         approach(Bearing.of(c.position(), aim).horizontal());
         sight.forget();
@@ -65,11 +66,11 @@ public final class MissileAutopilot {
     }
 
     /**
-     * Тик полёта после старта.
+     * Post-launch flight tick.
      *
-     * @param aim      точка цели
-     * @param nav      куда держать курс: точка маршрута или цель
-     * @param finalLeg маршрут пройден: последний участок — на цель
+     * @param aim target point
+     * @param nav heading destination: waypoint or target
+     * @param finalLeg route complete: final leg toward target
      */
     public void fly(Craft c, Vec3 aim, Vec3 nav, boolean finalLeg) {
         Bearing b = Bearing.of(c.position(), aim);
@@ -77,21 +78,21 @@ public final class MissileAutopilot {
         FlightPhase ph = c.phase();
         Autopilot.Turn turn = ph == FlightPhase.CLIMB ? climbTurn : cruiseTurn;
         if (ph == FlightPhase.CLIMB) {
-            // турбина набирает тягу; ракета переходит с подъёма на снижение к бреющему полёту
+            // Turbine gains thrust; missile transitions from ascent to terrain-hugging descent.
             c.throttle(air, air.cruiseSpeed());
             double terrain = relief.reliefAhead(c, nav, turn, air);
             c.holdAltitude(Math.max(terrain + CLIMB_ABOVE_RELIEF, aim.y + air.cruiseHeight()), 0.25, air.handling(), air.handling().climb());
-            // турбина вышла на маршевую: в наборе скорость чуть ниже (обмен высоты на скорость) — 5 % на это
+            // Turbine at cruise: climb speed is slightly lower (altitude/speed exchange); allow 5% for it.
             if (c.speed() >= air.cruiseSpeed() * 0.95 && c.phaseAge() > 40) c.setPhase(FlightPhase.CRUISE);
         }
-        // цель внутри круга разворота (сместилась вбок на атаке, перенацеливание, игрок телепортировался): атака
-        // отменяется, ракета уходит прямо, пока цель не выйдет из круга, и заходит снова
+        // Target inside turning circle (moved sideways during attack, retargeted, player teleported): cancel
+        // attack, continue straight until target leaves the circle, then approach again.
         boolean outOfTurn = Autopilot.outOfTurn(c, nav, n, air.attack().reattackMin(), turn.rate());
         if (outOfTurn && (c.phase() == FlightPhase.TERMINAL || c.phase() == FlightPhase.POP_UP)) c.setPhase(FlightPhase.CRUISE);
         if (c.phase() == FlightPhase.CRUISE && finalLeg && b.horizontal() <= air.attack().terminalRange() && !outOfTurn) {
             c.setPhase(popUp ? FlightPhase.POP_UP : FlightPhase.TERMINAL);
         }
-        // на заходе прямая до цели закрыта: горка, пока не откроется (и из пике — тоже в горку)
+        // Target line blocked on approach: popup until clear (including exiting a dive into popup).
         boolean attack = c.phase() == FlightPhase.POP_UP || c.phase() == FlightPhase.TERMINAL;
         boolean masked = attack && sight.masked(c, aim, b, air.reachPad(), air.handling().dive().pitchRate(), air.handling().dive().pitchAccel());
         if (!attack) sight.forget();
@@ -99,8 +100,8 @@ public final class MissileAutopilot {
             c.setPhase(FlightPhase.POP_UP);
         } else if (c.phase() == FlightPhase.POP_UP
                 && (sight.forced() || !popUp || b.pitch() >= DIVE_PITCH || c.position().y >= aim.y + POP_UP_HEIGHT)) {
-            // горка кончается: обычная — по углу или высоте; вынужденная атака или короткий заход (горка была только
-            // из-за закрытой прямой) — сразу
+            // Popup ends: normal by angle or height; forced attack or short approach (popup only due to
+            // blocked line), immediately.
             c.setPhase(FlightPhase.TERMINAL);
         }
 
@@ -111,8 +112,8 @@ public final class MissileAutopilot {
                 c.holdAltitude(Math.max(terrain + air.cruiseHeight(), aim.y + air.cruiseHeight()), 0.30, air.handling(), air.handling().cruise());
             }
             case POP_UP -> {
-                // горка: наибольший угол набора из паспорта (тангаж вверх — отрицательный), турбина на маршевой, набор
-                // отнимает скорость
+                // Popup: spec maximum climb angle (negative nose-up pitch), turbine at cruise; climbing
+                // reduces speed.
                 c.throttle(air, air.cruiseSpeed());
                 c.flight().holdPitch(-air.handling().climbAngle(), 0.30, air.handling().cruise().pitchRate(), air.handling().cruise().pitchAccel());
             }

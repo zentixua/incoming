@@ -9,12 +9,12 @@ import ua.zentix.incoming.strike.Waypoints;
 import ua.zentix.incoming.target.Target;
 
 /**
- * Задача стационарной пусковой ({@link FixedLauncherBlockEntity}): чем, сколько, с каким разбросом, по какому месту
- * и через какие точки маршрута. Цель — только место ({@link Target.Point} или место с карты {@link Target.Ground}):
- * пусковая стреляет по сигналу, когда угодно позже, и за движущейся целью не следит — сущность, аппарат и замеченная
- * цель становятся местом, где они были при постановке задачи.
+ * Fixed launcher mission ({@link FixedLauncherBlockEntity}): weapon, count, spread, target site, and waypoints.
+ * Target is only a position ({@link Target.Point} or map site {@link Target.Ground}): launcher fires on a signal
+ * at any later time and does not track a moving target; entities, craft, and sighted targets become their
+ * positions at assignment.
  *
- * @param point место удара (у {@link Target.Ground} — с высотой на момент постановки; пуск находит её заново)
+ * @param point impact position ({@link Target.Ground} stores assignment-time height; launch resolves it again)
  */
 public record Mission(WeaponType weapon, int count, int spread, Target target, Vec3 point, Waypoints via) {
     public static final Codec<Mission> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -32,14 +32,14 @@ public record Mission(WeaponType weapon, int count, int spread, Target target, V
     }
 
     /**
-     * Оружие, которое берёт стационарная пусковая: то, что стартует с пакета пусковой (паспорт, {@link WeaponSpec#rack}) —
-     * шахед, «Ланцет», крылатая ракета, «Град». B-2 заходит издалека, у МБР своя площадка.
+     * Weapons accepted by fixed launcher: those launched from a rack (spec, {@link WeaponSpec#rack}): Shahed,
+     * Lancet, cruise missile, Grad. B-2 approaches from afar; ICBM has its own pad.
      */
     public static boolean accepts(WeaponType weapon) {
         return weapon.spec().rack() != null;
     }
 
-    /** Куда смотрит пакет с этой задачей: на первую точку маршрута, без точек — на цель. */
+    /** Rack heading for this mission: first waypoint, otherwise target. */
     public Vec3 heading() {
         return via.isEmpty() ? point : via.points().getFirst();
     }

@@ -25,25 +25,27 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * ПВО мира: зенитные ракеты в полёте ({@link Interceptor}), по каким целям они идут, о каких целях уже объявлена
- * тревога ({@link AirAlert}) и снимок снарядов мира на тик для радаров. Своё у каждого мира, не сохраняется
- * ({@link ModAttachments#DEFENSE_WORLD}): полёт ракеты — секунды, после перезапуска сервера его нет.
+ * World air defense: interceptor missiles in flight ({@link Interceptor}), their targets, targets already
+ * announced in an alert ({@link AirAlert}), and a per-tick snapshot of world projectiles for radars. Separate for
+ * each world, not saved ({@link ModAttachments#DEFENSE_WORLD}): a missile flies for seconds and does not survive
+ * a server restart.
  * <p>
- * Ракеты летят здесь, в конце тика мира, — в мире и вне его одним кодом; в тикающих чанках у ракеты есть вид
- * ({@link InterceptorEntity}), который ставится на место полёта каждый тик, вне их вида нет.
+ * Missiles fly here at the end of the world tick, using the same code inside and outside the world; in ticking
+ * chunks a missile has a visual entity ({@link InterceptorEntity}) placed at its flight position every tick;
+ * elsewhere it has none.
  */
 public final class DefenseWorld {
     private final List<Interceptor> flights = new ArrayList<>();
-    /** Цель → ракета, которая за ней идёт. */
+    /** Target → missile pursuing it. */
     private final Map<UUID, Interceptor> engaged = new HashMap<>();
-    /** Сторона → цели, о которых ей объявлена тревога, и когда радар видел их последний раз. */
+    /** Side → targets announced to it and when radar last saw them. */
     private final Map<String, Map<UUID, Long>> alerted = new HashMap<>();
-    /** Сторона → когда ей последний раз звучала тревога. */
+    /** Side → when its last alert sounded. */
     private final Map<String, Long> alertSound = new HashMap<>();
     private long snapshotTick = Long.MIN_VALUE;
     private List<StrikeProjectile> snapshot = List.of();
 
-    /** Для {@link ModAttachments#DEFENSE_WORLD}. */
+    /** For {@link ModAttachments#DEFENSE_WORLD}. */
     public DefenseWorld() {}
 
     public static DefenseWorld get(ServerLevel level) {
@@ -53,23 +55,23 @@ public final class DefenseWorld {
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.DEFENSE_WORLD)) return;
         DefenseWorld world = get(level);
-        // радары этого тика уже осмотрели небо (блок-сущности тикают раньше): снимок снарядов дальше не держать
+        // This tick's radars have already swept the sky (block entities tick earlier): release the projectile snapshot.
         world.snapshot = List.of();
         world.snapshotTick = Long.MIN_VALUE;
         if (level.getGameTime() % AirAlert.FORGET == 0) world.forget(level.getGameTime());
-        // «/tick freeze» останавливает сущности — ракеты стоят вместе со снарядами
+        // “/tick freeze” stops entities: missiles stop along with projectiles.
         if (!level.tickRateManager().runsNormally()) return;
         world.tick(level);
     }
 
-    /** Тревоги о целях, которых радары стороны давно не видят (ЗРК стороны мог и пропасть), — забыть. */
+    /** Forget alerts for targets unseen by the side's radars for a long time (the side's SAM may be gone too). */
     private void forget(long now) {
         for (Map<UUID, Long> seen : alerted.values()) seen.values().removeIf(t -> now - t > AirAlert.FORGET);
         alerted.values().removeIf(Map::isEmpty);
         alertSound.values().removeIf(t -> now - t >= AirAlert.SOUND_GAP);
     }
 
-    /** Снаряды мира на этот тик (в мире и вне его): один список на все радары тика. */
+    /** World projectiles for this tick (inside and outside the world): one list for all radars in the tick. */
     List<StrikeProjectile> projectiles(ServerLevel level) {
         long now = level.getGameTime();
         if (now != snapshotTick) {
@@ -79,7 +81,10 @@ public final class DefenseWorld {
         return snapshot;
     }
 
-    /** Снаряд мода по UUID: в мире или вне его; null — нет (взорвался, убран, ушёл из этого мира). */
+    /**
+     * Mod projectile by UUID, inside or outside the world; null means absent (detonated, removed, left this
+     * world).
+     */
     @Nullable
     StrikeProjectile find(ServerLevel level, UUID id) {
         if (level.getEntity(id) instanceof StrikeProjectile p && !p.isRemoved()) return p;
@@ -89,12 +94,12 @@ public final class DefenseWorld {
         return null;
     }
 
-    /** За целью уже идёт ракета. */
+    /** A missile is already pursuing the target. */
     public boolean engaged(UUID target) {
         return engaged.containsKey(target);
     }
 
-    /** Ракеты в полёте. */
+    /** Missiles in flight. */
     public List<Interceptor> flights() {
         return Collections.unmodifiableList(flights);
     }
@@ -103,7 +108,7 @@ public final class DefenseWorld {
         return alerted.computeIfAbsent(side, k -> new HashMap<>());
     }
 
-    /** Тревога стороне звучит не чаще раза в {@code gap} тиков: true — пора, время отмечено. */
+    /** The side's alert sounds at most once per {@code gap} ticks: true means it is time and the time is recorded. */
     boolean alertSound(String side, long now, int gap) {
         Long last = alertSound.get(side);
         if (last != null && now - last < gap) return false;
@@ -111,7 +116,7 @@ public final class DefenseWorld {
         return true;
     }
 
-    /** Пуск: ракета сходит с направляющей вверх под углом паспорта в сторону цели (у ЗРК — отвесно). */
+    /** Launch: the missile leaves the rail upward at the spec's angle toward the target (vertically for the SAM). */
     Interceptor launch(ServerLevel level, Vec3 rail, Radar.Track track, @Nullable UUID owner, String launcher, InterceptorSpec spec) {
         Interceptor f = new Interceptor(spec, track.id(), owner, launcher, rail, Interceptor.railDirection(rail, track.position(), spec));
         flights.add(f);
@@ -136,8 +141,9 @@ public final class DefenseWorld {
     }
 
     /**
-     * Ракета разорвалась в {@code at}: у цели ({@code target}) или сама (самоликвидация, земля). Сбила — цель
-     * разваливается ({@link StrikeProjectile#intercepted}). Клиентам — разрыв в воздухе ({@link S2C.Intercept}).
+     * The missile burst at {@code at}: near the target ({@code target}) or by itself (self-destruct, ground). On
+     * a hit, the target breaks apart ({@link StrikeProjectile#intercepted}). Clients receive an airburst ({@link
+     * S2C.Intercept}).
      */
     void burst(ServerLevel level, Interceptor f, Vec3 at, @Nullable StrikeProjectile target, Interceptor.End end) {
         boolean kill = end == Interceptor.End.KILL && target != null;
@@ -159,8 +165,8 @@ public final class DefenseWorld {
     }
 
     /**
-     * Вид ракеты: есть, только пока она над тикающим готовым чанком (там сущность сама не грузит ничего) — ставится на
-     * место полёта; ушла из них — вид убран, полёт идёт дальше без него.
+     * Missile visual: exists only above a ready ticking chunk (the entity loads nothing there), placed at the
+     * flight position; outside those chunks the visual is removed and flight continues without it.
      */
     private static void show(ServerLevel level, Interceptor f) {
         BlockPos at = BlockPos.containing(f.position());
@@ -180,7 +186,7 @@ public final class DefenseWorld {
         if (level.addFreshEntity(v)) f.setView(v);
     }
 
-    /** Убрать все ракеты без разрыва (проверки: остатки не достаются следующим). */
+    /** Remove all missiles without a burst (tests: leftovers do not reach subsequent tests). */
     public void clear() {
         for (Interceptor f : new ArrayList<>(flights)) end(f, Interceptor.End.LOST);
         alerted.clear();

@@ -25,43 +25,43 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.UUID;
 
 /**
- * B-2 на эшелоне +170 над местом, куда упадёт бомба (на шкале полёта — до 12 км, {@link WeaponSpec.Airframe#cruiseHeight()};
- * цель перенацелили выше или ниже, у цели крыша или башня —
- * эшелон меняется полого, не круче 6°): заходит издалека (большая часть пути — вне загруженного мира), идёт по прямой
- * 12 блоков/тик (240 м/с), сбрасывает бетонобойную бомбу на эшелоне за ~145 блоков до цели по горизонтали (на любом
- * эшелоне — под тем же углом на точку, {@link #releaseLine}; бомба сходит с его скоростью,
- * рули опускают ей нос, и она входит почти отвесно) и уходит с разворотом и набором высоты. Не на эшелоне (вернулся в мир над
- * холмом, точку перенацелили выше или ниже) — сбрасывает с той высоты, где он есть, дальше или ближе: B-2 проигрывает
- * падение бомбы ({@link BombDrop#releaseNow}); промах отовсюду (точка слишком близко впереди, сзади, выше него) —
- * заходит снова.
+ * B-2 at +170 altitude above the bomb impact point (up to 12 km on the flight scale, {@link
+ * WeaponSpec.Airframe#cruiseHeight()}; retargeting higher or lower, a roof or tower at the target, changes
+ * altitude gently, no steeper than 6°). Approaches from afar (most of the path outside the loaded world), flies
+ * straight at 12 blocks/tick (240 m/s), releases a bunker-buster bomb at cruising altitude ~145 horizontal blocks
+ * before the target (at any altitude, the same angle to the point, {@link #releaseLine}; the bomb inherits its
+ * speed, controls lower the nose, and it enters almost vertically), then turns and climbs away. If off altitude
+ * (materialized above a hill, retargeted higher or lower), releases from its current height, farther or closer:
+ * the B-2 simulates the bomb fall ({@link BombDrop#releaseNow}); if every release misses (point too close ahead,
+ * behind, or above), makes another approach.
  */
 public class BomberEntity extends StrikeProjectile {
-    /** Паспорт B-2: скорость, разворот (радиус ~690 блоков), эшелон над точкой сброса. */
+    /** B-2 spec: speed, turn (radius ~690 blocks), altitude above the release target point. */
     private static final WeaponSpec.Airframe AIR = WeaponSpec.BUNKER.airframe();
     /**
-     * Дальность сброса на игровом эшелоне ({@link #GAME_ALTITUDE}): угол на точку при сбросе один на любой высоте —
-     * бомба опускает нос и идёт на точку по той же прямой ({@link #releaseLine}).
+     * Release range at game altitude ({@link #GAME_ALTITUDE}): the release angle to the point is the same at any
+     * height; the bomb lowers its nose and follows the same line to the point ({@link #releaseLine}).
      */
     private static final double GAME_RELEASE = WeaponSpec.BUNKER.route().gameFinalLeg();
-    /** Игровой эшелон над точкой сброса. */
+    /** Game altitude above the release target point. */
     private static final double GAME_ALTITUDE = AIR.gameHeight();
-    /** Дальность сброса к высоте над точкой. */
+    /** Release range divided by height above the point. */
     private static final double RELEASE_RATIO = GAME_RELEASE / GAME_ALTITUDE;
-    /** Падение бомбы с игрового эшелона до удара, тиков (оценка: ~20). */
+    /** Bomb fall from game altitude to impact, ticks (estimate: ~20). */
     private static final int FALL_TICKS = 20;
-    /** Смена эшелона: тангаж не круче этого, ° (набор и снижение B-2 — пологие). */
+    /** Altitude change: pitch no steeper than this, ° (B-2 climbs and descends gently). */
     private static final double LEVEL_CHANGE_PITCH = 6;
-    /** Тангаж на блок ошибки эшелона, °: у эшелона — плавный выход в горизонт. */
+    /** Pitch per block of altitude error, °: smooth leveling near cruising altitude. */
     private static final double PITCH_PER_BLOCK = 0.15;
-    /** После сброса улетает и исчезает через столько тиков (или раньше — на краю загруженного мира). */
+    /** After release, flies away and disappears after this many ticks (or earlier at the loaded-world edge). */
     private static final int EGRESS_TICKS = 400;
 
-    /** Бомба сброшена или удар отозван до сброса ({@link #recall}): B-2 уходит. */
+    /** Bomb released or strike recalled before release ({@link #recall}): B-2 departs. */
     private boolean released;
-    /** Точка под землёй, к которой бомба пробивается (цель в пещере); null — бурит вниз. */
+    /** Underground point the bomb penetrates toward (cave target); null means drill downward. */
     @Nullable
     private BlockPos goal;
-    /** В какую сторону уходить после сброса: +1 — влево, -1 — вправо. */
+    /** Departure turn after release: +1 left, -1 right. */
     private float breakSide = 1;
 
     public BomberEntity(EntityType<? extends BomberEntity> type, Level level) {
@@ -74,10 +74,10 @@ public class BomberEntity extends StrikeProjectile {
     }
 
     /**
-     * Чанки держит, как все, и после сброса, пока уходит: без своего тикета он входит в чанк, который тикает по тикету
-     * встречного B-2 залпа, тот уходит — и B-2 замирает в чанке без тика, а в лог дважды в одной точке идёт «в полёте
-     * выгружен вместе с чанком» (залпы B-2 ×30). Вне мира после сброса не летает: уход никто не увидит,
-     * на краю тикающих чанков он исчезает.
+     * Keeps chunks like other projectiles, including departure after release: without its own ticket it enters a
+     * chunk ticking on an oncoming salvo B-2's ticket; that aircraft leaves and this B-2 freezes in a non-ticking
+     * chunk, logging “unloaded with chunk in flight” twice at one point (B-2 ×30 salvos). No virtual flight after
+     * release: nobody would see departure, so it disappears at the ticking-chunk edge.
      */
     @Override
     protected boolean fliesVirtually() {
@@ -89,7 +89,7 @@ public class BomberEntity extends StrikeProjectile {
         return !released;
     }
 
-    /** Бомбардировщик проходит цель и уходит дальше: его путь у неё не кончается. */
+    /** The bomber passes the target and continues: its path does not end there. */
     @Override
     @Nullable
     protected Vec3 pathEnd() {
@@ -97,17 +97,20 @@ public class BomberEntity extends StrikeProjectile {
     }
 
     /**
-     * Запас над рельефом у возврата в мир — только чтобы не возникнуть в доме или склоне впереди: B-2 и так идёт
-     * на эшелоне +170 над местом падения бомбы. С запасом 120 его поднимало бы над каждым домом или холмом выше 50 блоков
-     * на курсе выше эшелона, и с возврата у цели он не успевал бы снизиться и сбрасывал бы выше эшелона — дальше
-     * от точки.
+     * Terrain clearance on materialization only prevents appearing in a building or slope ahead: the B-2 already
+     * flies +170 above the bomb impact point. A 120-block margin would lift it above altitude over every building
+     * or hill more than 50 blocks high on course; materializing near the target would leave too little time to
+     * descend, releasing above altitude and farther from the point.
      */
 
     public boolean hasReleased() {
         return released;
     }
 
-    /** До удара бомбы: дойти до точки сброса и падение ({@link #fallTicks}; без второго захода — его заранее не знает никто). */
+    /**
+     * Until bomb impact: reach the release point plus fall time ({@link #fallTicks}; no second approach, which
+     * nobody knows in advance).
+     */
     @Override
     public int etaTicks() {
         if (tracker == null) return 0;
@@ -116,32 +119,32 @@ public class BomberEntity extends StrikeProjectile {
         return (int) Math.ceil(Math.max(0, b.horizontal() - releaseLine(getY() - aim.y)) / AIR.cruiseSpeed()) + fallTicks();
     }
 
-    /** Скорость B-2 в горизонтальном полёте курсом {@code yaw}, блоков/тик: с ней же сходит бомба. */
+    /** B-2 velocity in level flight at heading {@code yaw}, blocks/tick: the bomb inherits it. */
     public static Vec3 levelVelocity(float yaw) {
         return Vec3.directionFromRotation(0, yaw).scale(AIR.cruiseSpeed());
     }
 
     /**
-     * Дальность сброса с высоты {@code height} над точкой: угол на точку тот же, что на игровом эшелоне.
-     * Сброс бывает и раньше — на краю окна, откуда бомба ещё попадает ({@link BombDrop#releaseNow}).
+     * Release range from {@code height} above the point: same angle to the point as at game altitude. Release may
+     * occur earlier, at the edge of the window where the bomb still hits ({@link BombDrop#releaseNow}).
      */
     public static double releaseLine(double height) {
         return height * GAME_RELEASE / GAME_ALTITUDE;
     }
 
-    /** Эшелон над точкой, куда упадёт бомба, на шкале полёта мира: игровой +170, настоящий — 12 км. */
+    /** Altitude above the bomb impact point on the world flight scale: game +170, real 12 km. */
     private static double altitude() {
         return AIR.cruiseHeight();
     }
 
-    /** Дальность сброса на эшелоне, по горизонтали до точки. */
+    /** Release range at cruising altitude, horizontal distance to the point. */
     private static double releaseDistance() {
         return releaseLine(altitude());
     }
 
     /**
-     * Падение бомбы с эшелона до удара, тиков (оценка): путь — в столько раз длиннее игрового, во сколько выше эшелон,
-     * скорость — во сколько быстрее B-2, с которой она сходит; при игровой шкале — {@link #FALL_TICKS}.
+     * Bomb fall from cruising altitude to impact, ticks (estimate): path grows with altitude relative to game
+     * altitude; speed grows with the B-2's release speed. At game scale, {@link #FALL_TICKS}.
      */
     private static int fallTicks() {
         double x = FlightScale.x();
@@ -149,8 +152,8 @@ public class BomberEntity extends StrikeProjectile {
     }
 
     /**
-     * @param surface точка на поверхности над целью (туда падает бомба)
-     * @param goal    цель под землёй или null
+     * @param surface surface point above the target (bomb impact point)
+     * @param goal underground target or null
      */
     public void launch(Vec3 pos, Vec3 surface, @Nullable BlockPos goal, @Nullable UUID owner) {
         Vec3 start = new Vec3(pos.x, surface.y + altitude(), pos.z);
@@ -165,15 +168,15 @@ public class BomberEntity extends StrikeProjectile {
     protected void serverTick(ServerLevel level) {
         Vec3 aim = tracker.point();
         Bearing b = bearingTo(aim);
-        // эшелон — над тем, куда упадёт бомба: у пуска он от первой оценки поверхности, а перенацеливание на точку ниже
-        // или выше, крыша или башня, которой не было в оценке генератора, меняют её
+        // Cruising altitude is above the bomb impact point: launch uses the first surface estimate; retargeting lower
+        // or higher, or a roof or tower absent from the generator estimate, changes it.
         double echelon = 0;
         if (!released) {
             Vec3 drop = surfaceUnder(level, aim);
             echelon = drop.y + altitude();
-            // сброс — когда бомба, сброшенная сейчас, придёт в точку, и лучше уже не будет (BombDrop.releaseNow): со 170
-            // за 100 блоков бомба со скоростью B-2 перелетает точку на ~75, на точку в 40 блоках впереди — на ~150; сзади
-            // (бомба падает по курсу и назад не рулит) — не сбрасывать вовсе
+            // Release when a bomb dropped now would hit the point and waiting would not improve it (BombDrop.releaseNow): from 170
+            // at 100 blocks out, a bomb at B-2 speed overshoots by ~75; a point 40 blocks ahead, by ~150; behind
+            // (the bomb falls along the heading and cannot steer backward), do not release at all.
             if (ahead(drop) && BombDrop.releaseNow(position(), flight.forward().scale(speed), drop, RELEASE_RATIO)) {
                 release(level, drop);
             }
@@ -182,14 +185,14 @@ public class BomberEntity extends StrikeProjectile {
             Incoming.LOG.warn("B-2 {} ran out of endurance without dropping its bomb, removed at {} (aim point {}, off-world {})", getUUID(),
                     blockPosition(), BlockPos.containing(aim), isVirtual());
         }
-        // вне мира после сброса лететь незачем: уход никто не увидит
+        // No reason to fly outside the world after release: nobody would see departure.
         if (exhausted() || released && (phaseAge() >= EGRESS_TICKS || isVirtual())) {
             discard();
             return;
         }
         WeaponSpec.Agility egress = AIR.handling().climb(), cruise = AIR.handling().cruise();
         if (released) {
-            // уход: вираж на 70° от курса и набор высоты
+            // Departure: turn 70° off course and climb.
             flight.holdPitch(-6, 0.05, egress.pitchRate(), egress.pitchAccel());
             if (phaseAge() < 60) flight.steerYaw(flight.yaw() + 20 * breakSide, 0.08, egress.turnRate(), egress.turnAccel());
             else flight.settleYaw(egress.turnAccel());
@@ -198,12 +201,12 @@ public class BomberEntity extends StrikeProjectile {
                     cruise.pitchRate(), cruise.pitchAccel());
         }
         if (!released && b.horizontal() > releaseDistance() + 40) {
-            // точка сброса внутри круга разворота (перенацелили сбоку, проскочил её): на пределе поворота он
-            // кружил бы вокруг неё без конца — прямо, пока она не выйдет из круга, и новый заход
+            // Release point inside the turning circle (retargeted to the side, overshot): at maximum turn rate it would
+            // circle forever; fly straight until the point is outside the circle, then approach again.
             if (insideTurn(aim, AIR.turnRate())) flight.settleYaw(cruise.turnAccel());
             else flight.steerYaw(b.yaw(), 0.1, AIR.turnRate(), cruise.turnAccel());
         }
-        // в наборе на уходе теряет скорость, на эшелоне держит маршевую
+        // Loses speed in the departure climb; holds cruise speed at altitude.
         throttle(AIR.cruiseSpeed());
         Vec3 dir = flight.forward();
         Vec3 next = position().add(dir.scale(speed));
@@ -211,7 +214,10 @@ public class BomberEntity extends StrikeProjectile {
         moveAlong(level, next, dir);
     }
 
-    /** Свой отбой до сброса: бомбы не будет — B-2 отворачивает и уходит, как после сброса. После сброса — нечего отзывать. */
+    /**
+     * Owner recall before release: no bomb; B-2 turns away and departs as after release. After release there is
+     * nothing to recall.
+     */
     @Override
     public boolean recall(ServerLevel level) {
         if (released) return false;
@@ -221,7 +227,7 @@ public class BomberEntity extends StrikeProjectile {
         return true;
     }
 
-    /** @param drop точка на поверхности, куда падает бомба */
+    /** @param drop surface point where the bomb falls */
     private void release(ServerLevel level, Vec3 drop) {
         released = true;
         setPhase(FlightPhase.EGRESS);
@@ -230,7 +236,7 @@ public class BomberEntity extends StrikeProjectile {
         bomb.drop(position().add(0, -BombDrop.DROP_BELOW, 0), flight.forward().scale(speed), drop, goal, ownerId());
         bomb.setNuclear(nuclear);
         shareAir(bomb);
-        // по UUID бомбы из предупреждений снаряда находится её B-2
+        // The bomb UUID from projectile warnings identifies its B-2.
         Incoming.LOG.info("B-2 {} dropped bomb {} at {}, {} blocks from the aim point, {} above it (off-world {})", getUUID(), bomb.getUUID(),
                 blockPosition(), Math.round(position().subtract(drop).horizontalDistance()), Math.round(getY() - drop.y), isVirtual());
         if (isVirtual()) VirtualFlights.launch(level, bomb);
@@ -238,16 +244,16 @@ public class BomberEntity extends StrikeProjectile {
     }
 
     /**
-     * Точка сброса впереди или почти под брюхом — там, куда бомба может упасть: позади она уже «пройдена»
-     * ({@link BombDrop#passed}: падает круто вниз по курсу, не рулит).
+     * Release point ahead or almost under the belly, where the bomb can fall: behind is already “passed” ({@link
+     * BombDrop#passed}: falls steeply along the heading, without steering).
      */
     private boolean ahead(Vec3 drop) {
         return !BombDrop.passed(position(), drop, flight.yaw());
     }
 
     /**
-     * Куда падать: у пуска поверхность под целью бывает оценкой генератора (чанк не был готов) — к сбросу чанк
-     * у цели обычно готов, и высота берётся из него.
+     * Where to fall: at launch, the surface under the target may be a generator estimate (chunk unready); by
+     * release, the target chunk is usually ready and supplies the height.
      */
     private static Vec3 surfaceUnder(ServerLevel level, Vec3 aim) {
         Terrain.Surface ground = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(aim.x), Mth.floor(aim.z), Terrain.Allowed.CHUNK);

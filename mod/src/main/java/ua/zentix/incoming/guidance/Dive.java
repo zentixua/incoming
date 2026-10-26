@@ -5,30 +5,30 @@ import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.strike.WeaponSpec;
 
 /**
- * Пике барражирующего на цель: курс и тангаж — на точку встречи с движущейся целью (упреждение по её скорости),
- * а не на то место, где она сейчас. Без упреждения снаряд, догоняя идущую цель, отстаёт на повороте, у самой цели
- * тангажа уже не хватает, и он проходит мимо, делает петлю и пикирует снова.
+ * Loitering munition dive at a target: heading and pitch aim at interception with the moving target (velocity
+ * lead), rather than its current position. Without lead, a projectile chasing a moving target lags through turns,
+ * runs out of pitch near it, misses, loops, and dives again.
  */
 public final class Dive {
-    /** Усиление доворота курса в пике. */
+    /** Dive heading correction gain. */
     private static final double YAW_GAIN = 0.4;
-    /** Дальше упреждать не на что: скорость цели за это время уже изменится. */
+    /** No useful lead beyond this: target velocity will have changed by then. */
     private static final double MAX_LEAD_TICKS = 60;
 
     private Dive() {}
 
     /**
-     * Повернуть в пике на цель в {@code target}, идущую со скоростью {@code targetVelocity} (блоков за тик), с пределами
-     * поворотов пике из паспорта {@code dive}.
+     * Turn in a dive toward {@code target}, moving at {@code targetVelocity} (blocks/tick), using spec {@code
+     * dive} turn limits.
      */
     public static void steer(FlightController flight, Vec3 pos, double speed, Vec3 target, Vec3 targetVelocity, WeaponSpec.Agility dive) {
         Vec3 aim = intercept(pos, speed, target, targetVelocity);
         float[] a = FlightController.anglesTo(pos, aim);
         flight.arcPitch(a[1], speed, pos.distanceTo(aim), dive.pitchRate(), dive.pitchAccel());
-        // с круга цель сбоку: резкий доворот с креном и пике (радиус разворота ~15 блоков); над целью — не крутиться.
-        // Но цель позади курса — доворот и над ней: тангаж упирается в 89°, остаточный снос идёт по курсу и уводил бы
-        // от цели (с круга в 700 м отвесное пике кончалось в 10 м от неё); на отвесе разворот курса — поворот носа
-        // на доли градуса
+        // Target beside the orbit: sharp banked turn and dive (turn radius ~15 blocks); do not spin directly above the target.
+        // But if target is behind heading, turn even above it: pitch stops at 89°, residual drift follows heading and would move
+        // away (vertical dive from a 700 m orbit ended 10 m away); vertically, changing heading turns the nose
+        // by fractions of a degree.
         double dx = aim.x - pos.x, dz = aim.z - pos.z, h2 = dx * dx + dz * dz;
         boolean behind = h2 > 0.25 && Math.abs(Mth.wrapDegrees(a[0] - flight.yaw())) > 90;
         if (h2 > 9 || behind) flight.steerYaw(a[0], YAW_GAIN, dive.turnRate(), dive.turnAccel());
@@ -36,8 +36,8 @@ public final class Dive {
     }
 
     /**
-     * Точка встречи: где цель будет через t тиков, если снаряд со скоростью {@code speed} долетит туда за те же t —
-     * меньший положительный корень |d + v·t| = s·t. Встречи нет (цель быстрее) — сама цель.
+     * Interception point: where target will be in t ticks if projectile at {@code speed} reaches it in the same
+     * t, the smaller positive root of |d + v·t| = s·t. No interception (faster target): target itself.
      */
     public static Vec3 intercept(Vec3 pos, double speed, Vec3 target, Vec3 targetVelocity) {
         Vec3 d = target.subtract(pos);

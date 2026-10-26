@@ -23,82 +23,81 @@ import java.util.Comparator;
 import java.util.UUID;
 
 /**
- * Место игрока, который вошёл в мир, перешёл в другое измерение или ждёт возрождения, грузится раньше районов мода.
+ * A player joining the world, changing dimension, or awaiting respawn has their location loaded before mod areas.
  * <p>
- * В первом своём тике игрок грузит свой чанк синхронно ({@code ServerPlayer.doTick → Entity.updateFluidOnEyes →
- * Level.getChunk}, тикет {@code UNKNOWN} уровня 33, {@code ServerChunkCache.getChunk}). Задачи загрузки и генерации идут по
- * уровню держателя чанка ({@code ChunkMap.runGenerationTask}, {@code ChunkTaskPriorityQueue}: меньший раньше, при равном —
- * по порядку), а районы мода — уровни 27–33 (центр района цели {@link FlightTickets#DISTANCE} — 29, у «Ланцета»
- * {@link FlightTickets#LOITER_DISTANCE} — 27), тикеты игроков — 31. Во время залпа загрузка места входа стоит за всеми
- * районами, и без своего тикета сервер ждёт её в тике 0,55–0,8 с.
+ * On their first tick, a player synchronously loads their chunk ({@code ServerPlayer.doTick →
+ * Entity.updateFluidOnEyes → Level.getChunk}, level-33 {@code UNKNOWN} ticket, {@code
+ * ServerChunkCache.getChunk}). Loading and generation tasks follow holder level ({@code
+ * ChunkMap.runGenerationTask}, {@code ChunkTaskPriorityQueue}: lower first, ties in order), while mod areas use
+ * levels 27–33 (target-area center {@link FlightTickets#DISTANCE} is 29, Lancet {@link
+ * FlightTickets#LOITER_DISTANCE} is 27), player tickets 31. During a salvo, entry-site loading queues behind all
+ * areas; without a dedicated ticket the server waits 0.55–0.8 s within the tick.
  * <p>
- * Поэтому при входе ({@code PlayerLoggedInEvent}: конец {@code PlayerList.placeNewPlayer}, до первого тика игрока) и после
- * перехода между измерениями ({@code PlayerChangedDimensionEvent}) на чанк игрока ставится тикет загрузки уровня
- * {@code 33 − }{@link #DISTANCE} = 26 — ниже центра любого района мода. Загрузка полного чанка с диска ждёт соседей
- * (радиус 1, {@code ChunkPyramid.LOADING_PYRAMID}: {@code LIGHT}), у них уровень 27: впереди остаются только центры районов
- * «Ланцетов», взятые раньше, а не их кольца. С тикетом уровня 28 место входа во время залпа «Ланцетов» ждало бы весь залп
- * (GameTest {@code arrivalLoadsBeforeLoiterAreas}). Тикет только загружает ({@link AreaLoader} без тика): счёта тика он не
- * добавляет, блоки и сущности там тикают, как и без него, — по тикетам игроков. Уровни до 32 он даёт квадрату радиуса 6 —
- * тем чанкам, которым их через несколько тиков дадут и тикеты игрока в дальности обзора; что будет тикать, решает ваниль
- * по своим правилам (см. {@link AreaLoader} о тикете загрузки).
- * Полностью загружен квадрат радиуса 7 — у дальности обзора меньше 7 это на время тикета больше, чем держит сам игрок;
- * чанки места входа обычно лежат на диске: загрузка, а не генерация.
+ * On login ({@code PlayerLoggedInEvent}: end of {@code PlayerList.placeNewPlayer}, before first player tick) and
+ * after dimension change ({@code PlayerChangedDimensionEvent}), place a loading ticket at level {@code 33 −
+ * }{@link #DISTANCE} = 26 on the player's chunk, below any mod area center. Full disk chunk loading waits for
+ * neighbors (radius 1, {@code ChunkPyramid.LOADING_PYRAMID}: {@code LIGHT}), at level 27: only previously
+ * acquired Lancet area centers remain ahead, not their rings. A level-28 ticket would wait for the entire Lancet
+ * salvo (GameTest {@code arrivalLoadsBeforeLoiterAreas}). Loading only ({@link AreaLoader} without ticking): adds
+ * no tick tracking; blocks and entities tick as without it, from player tickets. Gives levels up to 32 within
+ * radius 6, chunks player tickets will also cover in view distance a few ticks later; vanilla decides ticking by
+ * its own rules (see {@link AreaLoader} on loading tickets). Radius 7 is fully loaded; below view distance 7 this
+ * temporarily exceeds the player's own coverage. Entry chunks usually exist on disk: loading, not generation.
  * <p>
- * Тикет входа снимается, когда на квадрате радиуса {@code DISTANCE − 2} = 5 (не дальше обзора) стоят тикеты игроков
- * ({@code TicketType.PLAYER}, любого игрока: их ставит {@code DistanceManager} по очереди): их уровни тогда не выше
- * уровней тикета входа по статусу, и снятие ничего не опускает. И не позже {@link #LIFESPAN} тиков (игрок ушёл далеко, вышел;
- * при {@code /tick freeze} срок стоит вместе с часами мира). Районы залпа, взятые в первые секунды после входа, готовы
- * позже — снаряды ждут района сами.
+ * Remove arrival ticket once radius {@code DISTANCE − 2} = 5 (no farther than view distance) has player tickets
+ * ({@code TicketType.PLAYER}, any player; {@code DistanceManager} places them via queue): their status levels are
+ * then no higher than arrival-ticket levels, so removal demotes nothing. Remove no later than {@link #LIFESPAN}
+ * ticks (player moved far away or left; during {@code /tick freeze} expiry stops with world time). Salvo areas
+ * acquired in the first seconds after login become ready later; projectiles wait for them themselves.
  * <p>
- * Наблюдателю без генерации чанков ({@code spectatorsGenerateChunks} = false) тикет не ставится: ваниль не даёт ему своих
- * тикетов и не тикает его над незагруженными чанками.
+ * No ticket for spectators without chunk generation ({@code spectatorsGenerateChunks} = false): vanilla gives
+ * them no tickets and does not tick them over unloaded chunks.
  * <p>
- * Возрождение: {@code PlayerList.respawn} читает блок кровати или якоря синхронно
- * ({@code ServerPlayer.findRespawnAndUseSpawnBlock → Level.getBlockState}) ещё до {@code PlayerRespawnPositionEvent} и
- * {@code PlayerRespawnEvent}, — поэтому тот же тикет ставится уже при смерти ({@code LivingDeathEvent}) на место
- * возрождения: точку возрождения игрока ({@code getRespawnPosition}/{@code getRespawnDimension}). Без неё игрок появляется
- * у точки появления мира, которую держит ванильный тикет {@code START} ({@code spawnChunkRadius}); тикет мода там — только
- * при {@code spawnChunkRadius} = 0. Пока открыт экран смерти, место грузится первым. Тикет возрождения — аренда на
- * {@link #LEASE} тиков, которую продлевает тик мёртвого игрока (мёртвый игрок на экране смерти тикает): его снимает
- * возрождение (тикет входа уже на том месте, где игрок появился), выход игрока, тик живого игрока (смерть отменил другой
- * мод) — а игрока, который больше не тикает (выгружен, чужая подделка игрока), отпускает срок аренды. Слот переходит к
- * новому объекту игрока в {@code PlayerEvent.Clone}: attachment без сериализатора сам не копируется. Пока тикет стоит,
- * квадрат радиуса 5 вокруг кровати тикает сущности без игрока рядом: там идёт {@code checkDespawn}, как у точки появления
- * мира, — случайные мобы у кровати исчезают, если другой игрок в этом измерении дальше 128 блоков.
+ * Respawn: {@code PlayerList.respawn} synchronously reads bed or anchor ({@code
+ * ServerPlayer.findRespawnAndUseSpawnBlock → Level.getBlockState}) before {@code PlayerRespawnPositionEvent} and
+ * {@code PlayerRespawnEvent}; thus place the same ticket already at death ({@code LivingDeathEvent}) on the
+ * player's respawn point ({@code getRespawnPosition}/{@code getRespawnDimension}). Without one, player appears at
+ * world spawn held by vanilla {@code START} ({@code spawnChunkRadius}); mod ticket there only if {@code
+ * spawnChunkRadius} = 0. While death screen is open, the site loads first. Respawn ticket is a {@link
+ * #LEASE}-tick lease renewed by dead-player ticks (dead players tick on death screen). Respawn (arrival ticket
+ * already at actual spawn), logout, or living-player tick (another mod canceled death) removes it; expiry
+ * releases a player who no longer ticks (unloaded, another mod's fake player). Slot transfers to new player
+ * object in {@code PlayerEvent.Clone}: an attachment without serializer is not copied automatically. While held,
+ * radius 5 around bed entity-ticks without a nearby player: {@code checkDespawn} runs as at world spawn, so
+ * random mobs near bed disappear if another player in this dimension is farther than 128 blocks.
  * <p>
- * Кровать или якорь на аппарате Sable: точка возрождения — координаты в сетке плотов, а возрождает Sable по своей точке
- * в мире ({@code ServerPlayerMixin} Sable); в сетке плотов тикетов загрузки быть не должно (там держатели чанков Sable) —
- * тикета нет. В хардкоре после возрождения игрок становится наблюдателем без генерации — тикета входа нет.
+ * Bed or anchor on Sable craft: respawn point is in plot-grid coordinates; Sable respawns at its own world point
+ * (Sable {@code ServerPlayerMixin}). No loading tickets in plot grid (Sable chunk holders there), so no ticket.
+ * Hardcore respawn makes the player a spectator without generation: no arrival ticket.
  * <p>
- * Телепорт внутри измерения ({@code /tp}, жемчуг, команды и код модов): NeoForge грузит чанк назначения синхронно
- * ({@code Entity.setPosRaw → Level.getChunk}) тикетом {@code UNKNOWN} уровня 33, который через тик снимается
- * ({@code purgeStaleTickets}), а тикеты игрока на новом месте ставятся очередью по нескольку за тик. Кольцо чанков, поднятое
- * синхронной загрузкой (до 11 чанков от места), падает ниже загрузки и снова поднимается тикетами игрока, пока его
- * соседи ещё генерируются: ванильная задача выгрузки такого держателя ({@code ChunkMap.scheduleUnload}) видит
- * {@code getGenerationRefCount() > 0} и ставит себя в очередь выгрузки снова, а {@code processUnloads} разбирает её до
- * конца времени тика — тик ровно 50 мс, задачам чанков времени не остаётся, и генерация, которая держит этот держатель,
- * сама почти не идёт (стенд: 100 шахедов, камера перенесена вместе с залпом — 50 мс/тик до минуты, снаряды входят в мир на
- * 52–55 с вместо 3–5). Поэтому прыжок игрока в мире ({@link #onLevelTick}: в конце тика мира чанк игрока ушёл от прошлого
- * на {@link #JUMP} чанка и дальше, а место не держат тикеты игроков) ставит тот же тикет входа на новый чанк — до
- * второго снятия устаревших тикетов, после которого тикет {@code UNKNOWN} уходит: тикет входа держит загруженным квадрат
- * радиуса 18, кольцо синхронной загрузки не падает, а место загружается раньше районов мода. Саму синхронную загрузку
- * чанка назначения это не убирает.
+ * In-dimension teleport ({@code /tp}, pearl, mod commands/code): NeoForge synchronously loads destination chunk
+ * ({@code Entity.setPosRaw → Level.getChunk}) with a level-33 {@code UNKNOWN} ticket removed a tick later ({@code
+ * purgeStaleTickets}); new player tickets queue a few per tick. The synchronously loaded ring (up to 11 chunks
+ * from site) falls below loading then rises again with player tickets while neighbors still generate. Vanilla
+ * unload task ({@code ChunkMap.scheduleUnload}) sees {@code getGenerationRefCount() > 0}, requeues itself, and
+ * {@code processUnloads} processes it until tick time ends: exactly 50 ms/tick, no time for chunk tasks, so the
+ * generation holding it barely progresses (scene bench: 100 Shaheds, camera teleported with salvo, 50 ms/tick for
+ * up to a minute; projectiles enter the world at 52–55 s instead of 3–5). Thus a player jump ({@link
+ * #onLevelTick}: at world tick end their chunk moved at least {@link #JUMP} chunks and player tickets do not hold
+ * the site) places the same arrival ticket on the new chunk before the second stale-ticket purge removes {@code
+ * UNKNOWN}: arrival holds radius 18 loaded, preserving the synchronous ring and loading the site before mod
+ * areas. This does not remove the synchronous destination-chunk load itself.
  * <p>
- * Не закрывает поиск портала ({@code PortalForcer}) — он грузит чанки до того, как мод о нём узнаёт; при возрождении —
- * место, которое другой мод подменил в {@code PlayerRespawnPositionEvent}, место возрождения на аппарате и точку
- * появления мира, когда кровати уже нет. Игрок, который вышел с экрана смерти и вошёл снова, получает
- * только тикет входа на чанк, где умер (там его объект), а тикета места возрождения — нет: смерти при входе не бывает.
+ * Does not cover portal search ({@code PortalForcer}), which loads before the mod learns of it; respawn positions
+ * replaced by another mod in {@code PlayerRespawnPositionEvent}, craft respawn, or world spawn when the bed is
+ * gone. A player logging out from death screen and back in gets only an arrival ticket on the death chunk (their
+ * object is there), with no respawn-site ticket: login has no death event.
  */
 public final class ArrivalTickets {
-    /** Уровень тикета 33 − 7 = 26: ниже центра района «Ланцета» (27). */
+    /** Ticket level 33 − 7 = 26: below Lancet area center (27). */
     public static final int DISTANCE = FlightTickets.LOITER_DISTANCE + 1;
-    /** Тикет входа снимается сам через 10 с. */
+    /** Arrival ticket expires automatically after 10 s. */
     public static final int LIFESPAN = 200;
-    /** Аренда тикета возрождения: 5 с после последнего тика мёртвого игрока. */
+    /** Respawn ticket lease: 5 s after last dead-player tick. */
     public static final int LEASE = 100;
     /**
-     * Прыжок: чанк игрока за тик мира ушёл на столько чанков (по большей из осей) или дальше. Ни ходьба, ни полёт так
-     * не двигаются (2 чанка за тик — 640 блоков в секунду), а телепорт дальше дальности обзора — да.
+     * Jump: player chunk moved at least this many chunks in one world tick (maximum axis). Walking or flight
+     * cannot do that (2 chunks/tick is 640 blocks/s); a teleport beyond view distance can.
      */
     public static final int JUMP = 2;
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_arrival", Comparator.<UUID>naturalOrder());
@@ -106,9 +105,9 @@ public final class ArrivalTickets {
     private ArrivalTickets() {}
 
     /**
-     * Где стоит тикет игрока (несохраняемый attachment). После возрождения старый и новый объект игрока держат один и тот
-     * же слот ({@link #onClone}): снятие идемпотентно, а выход, случившийся между {@code Clone} и концом
-     * {@code PlayerList.respawn}, снимает тикет через старый объект — копия со сброшенным старым слотом его бы потеряла.
+     * Player ticket location (non-persistent attachment). After respawn old and new player objects hold the same
+     * slot ({@link #onClone}): removal is idempotent; logout between {@code Clone} and end of {@code
+     * PlayerList.respawn} removes via the old object. Copying and clearing the old slot would lose it.
      */
     public static final class Slot {
         @Nullable
@@ -116,9 +115,9 @@ public final class ArrivalTickets {
         @Nullable
         ChunkPos held;
         long until;
-        /** Тикет стоит на месте возрождения, игрок мёртв: аренда, которую продлевает его тик. */
+        /** Ticket is at respawn site, player dead: lease renewed by player ticks. */
         boolean respawn;
-        /** Где игрока видел прошлый тик мира ({@link #onLevelTick}): измерение и чанк. */
+        /** Player location at previous world tick ({@link #onLevelTick}): dimension and chunk. */
         @Nullable
         ResourceKey<Level> seenIn;
         long seenAt;
@@ -133,14 +132,15 @@ public final class ArrivalTickets {
     }
 
     /**
-     * Приоритет {@code LOWEST}: после всех слушателей, кроме других {@code LOWEST}. Отменённая раньше смерть сюда не
-     * приходит ({@code addListener} без {@code receiveCanceled}); отменённую позже снимает тик живого игрока.
+     * {@code LOWEST} priority: after all listeners except other {@code LOWEST}. Earlier canceled deaths do not
+     * arrive ({@code addListener} without {@code receiveCanceled}); later cancellation is cleaned up by a
+     * living-player tick.
      */
     public static void onDeath(LivingDeathEvent e) {
         if (e.getEntity() instanceof ServerPlayer p) awaitRespawn(p);
     }
 
-    /** Слот — новому объекту игрока (возрождение, выход из Края): без сериализатора attachment не копируется. */
+    /** Transfer slot to new player object (respawn, leaving the End): no serializer means no attachment copy. */
     public static void onClone(PlayerEvent.Clone e) {
         if (e.getOriginal().hasData(ModAttachments.ARRIVAL.get())) {
             e.getEntity().setData(ModAttachments.ARRIVAL.get(), e.getOriginal().getData(ModAttachments.ARRIVAL.get()));
@@ -149,7 +149,7 @@ public final class ArrivalTickets {
 
     public static void onRespawn(PlayerEvent.PlayerRespawnEvent e) {
         if (!(e.getEntity() instanceof ServerPlayer p)) return;
-        // хардкор: игрок станет наблюдателем без генерации уже после события
+        // Hardcore: player becomes a spectator without generation after the event.
         if (p.server.isHardcore() && !e.isEndConquered()) {
             if (p.hasData(ModAttachments.ARRIVAL.get())) release(p.server, p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()));
             return;
@@ -168,7 +168,7 @@ public final class ArrivalTickets {
         tick(p.server, p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()), p.server.getPlayerList().getViewDistance(), p.isDeadOrDying());
     }
 
-    /** Конец тика мира: прыжок игрока в этом мире — тикет входа на новое место ({@link #moved}). */
+    /** World tick end: player jump within this world places an arrival ticket at the new site ({@link #moved}). */
     public static void onLevelTick(LevelTickEvent.Post e) {
         if (!(e.getLevel() instanceof ServerLevel level)) return;
         int view = level.getServer().getPlayerList().getViewDistance();
@@ -179,26 +179,26 @@ public final class ArrivalTickets {
     }
 
     /**
-     * Игрок {@code who} в этом тике мира стоит в чанке {@code now} (и в тестах, где игрока нет). Прыжок в том же мире
-     * (не меньше {@link #JUMP} чанков от прошлого тика) на место, которое не держат тикеты игроков (квадрат радиуса
-     * {@code DISTANCE − 2}, не дальше обзора {@code viewDistance}), — тикет входа туда, вместо прежнего.
+     * Player {@code who} is in chunk {@code now} this world tick (also tests without a player). Jump in same
+     * world (at least {@link #JUMP} chunks since last tick) to a site not held by player tickets (radius {@code
+     * DISTANCE − 2}, capped by {@code viewDistance}) places arrival ticket there, replacing the old one.
      *
-     * @return тикет поставлен
+     * @return ticket placed
      */
     public static boolean moved(ServerLevel level, ChunkPos now, UUID who, Slot slot, int viewDistance) {
         boolean jumped = level.dimension().equals(slot.seenIn) && new ChunkPos(slot.seenAt).getChessboardDistance(now) >= JUMP;
         slot.seenIn = level.dimension();
         slot.seenAt = now.toLong();
-        // в сетке плотов Sable тикетов загрузки быть не должно (там держатели чанков Sable), как у места возрождения
+        // No loading tickets in Sable plot grid (Sable chunk holders there), as for respawn sites.
         if (!jumped || slot.respawn || SubLevels.inPlotGrid(level, now) || coveredByPlayers(level, now, Math.min(DISTANCE - 2, viewDistance))) return false;
         arrive(level, now, who, slot);
         return true;
     }
 
     /**
-     * Тикет на место возрождения мёртвого игрока {@code p}: его точка (кровать, якорь) или, без неё, точка появления
-     * верхнего мира, как у {@code PlayerList.respawn}. Прежний тикет снимается; нового нет у наблюдателя без генерации, для
-     * точки в сетке плотов Sable и для точки появления мира, которую держит {@code START}.
+     * Ticket for dead player {@code p}'s respawn site: personal point (bed, anchor), otherwise overworld spawn as
+     * in {@code PlayerList.respawn}. Remove previous ticket; no new one for spectator without generation, Sable
+     * plot-grid point, or world spawn held by {@code START}.
      */
     private static void awaitRespawn(ServerPlayer p) {
         Slot slot = p.getData(ModAttachments.ARRIVAL.get());
@@ -212,12 +212,12 @@ public final class ArrivalTickets {
             pos = level.getSharedSpawnPos();
         }
         ChunkPos chunk = new ChunkPos(pos);
-        // кровать на аппарате: Sable возрождает по своей точке в мире, а в сетке плотов тикетов быть не должно
+        // Bed on craft: Sable respawns at its own world point; plot grid must have no tickets.
         if (SubLevels.inPlotGrid(level, chunk)) return;
         awaitRespawn(level, chunk, p.getUUID(), slot);
     }
 
-    /** Поставить тикет на место возрождения вместо прежнего, арендой на {@link #LEASE} тиков (и в тестах, где игрока нет). */
+    /** Replace previous ticket with a {@link #LEASE}-tick respawn-site lease (also tests without a player). */
     public static void awaitRespawn(ServerLevel level, ChunkPos pos, UUID who, Slot slot) {
         release(level.getServer(), who, slot);
         slot.until = level.getGameTime() + LEASE;
@@ -232,12 +232,12 @@ public final class ArrivalTickets {
         arrive(p.serverLevel(), p.chunkPosition(), p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()));
     }
 
-    /** Ваниль не грузит чанки наблюдателю без генерации, и мод тоже. */
+    /** Vanilla loads no chunks for a spectator without generation; neither does the mod. */
     private static boolean generates(ServerPlayer p) {
         return !p.isSpectator() || p.serverLevel().getGameRules().getBoolean(GameRules.RULE_SPECTATORSGENERATECHUNKS);
     }
 
-    /** Поставить тикет входа на чанк {@code pos} вместо прежнего (и в тестах, где игрока нет). */
+    /** Replace previous ticket with an arrival ticket on chunk {@code pos} (also tests without a player). */
     public static void arrive(ServerLevel level, ChunkPos pos, UUID who, Slot slot) {
         release(level.getServer(), who, slot);
         slot.until = level.getGameTime() + LIFESPAN;
@@ -247,9 +247,9 @@ public final class ArrivalTickets {
     }
 
     /**
-     * Тик игрока {@code who} (и в тестах, где игрока нет). Тикет входа снимается, когда место держат тикеты игроков (на
-     * квадрате радиуса {@code DISTANCE − 2}, не дальше обзора {@code viewDistance}) или вышел срок. Тикет возрождения
-     * у мёртвого игрока продлевается на {@link #LEASE} тиков, у живого — снимается.
+     * Tick player {@code who} (also tests without a player). Remove arrival ticket once player tickets hold the
+     * site (radius {@code DISTANCE − 2}, capped by {@code viewDistance}) or expiry. Renew dead-player respawn
+     * lease for {@link #LEASE} ticks; remove for living player.
      */
     public static void tick(MinecraftServer server, UUID who, Slot slot, int viewDistance, boolean dead) {
         if (slot.held == null || slot.dimension == null) return;
@@ -268,7 +268,7 @@ public final class ArrivalTickets {
         }
     }
 
-    /** Снять тикет; снятый раньше по сроку ({@link AreaLoader}) — только очистить слот. */
+    /** Remove ticket; if already expired ({@link AreaLoader}), only clear the slot. */
     public static void release(MinecraftServer server, UUID who, Slot slot) {
         if (slot.held == null || slot.dimension == null) return;
         ServerLevel level = server.getLevel(slot.dimension);
@@ -278,12 +278,12 @@ public final class ArrivalTickets {
         slot.respawn = false;
     }
 
-    /** Сколько тикетов входа у игрока стоит (проверки). */
+    /** Count player's arrival tickets (tests). */
     public static int count(ServerLevel level, UUID who) {
         return StrikeWorld.get(level).areas().count(TYPE, who);
     }
 
-    /** Чанк, на котором стоит тикет слота, или null (проверки). */
+    /** Chunk holding the slot's ticket, or null (tests). */
     @Nullable
     public static ChunkPos held(Slot slot) {
         return slot.held;
@@ -293,7 +293,7 @@ public final class ArrivalTickets {
         return new AreaLoader.Area(TYPE, pos, DISTANCE, who, false);
     }
 
-    /** На каждом чанке квадрата {@code radius} вокруг {@code centre} стоит тикет игрока (любого). */
+    /** Every chunk in {@code radius} around {@code centre} has a player ticket (any player). */
     private static boolean coveredByPlayers(ServerLevel level, ChunkPos centre, int radius) {
         var tickets = level.getChunkSource().chunkMap.getDistanceManager().tickets;
         for (int dx = -radius; dx <= radius; dx++) {

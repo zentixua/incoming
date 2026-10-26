@@ -14,14 +14,14 @@ import ua.zentix.incoming.target.Target;
 import java.util.UUID;
 
 /**
- * Дрон-камикадзе в духе Shahed-136: ≈150 км/ч (2.1 блока/тик). Старт с пусковой: твердотопливный ускоритель
- * под хвостом горит ~2 с и сбрасывается, дальше тянет толкающий винт — набор высоты, доворот на маршрут.
- * Крейсер над рельефом и не ниже цели+30; на последнем участке — пикирование по дуге, когда цель уходит на 18°
- * под горизонт и прямая до неё свободна от блоков; в пике разгон до 3 блоков/тик.
- * Закон полёта после старта — {@link DroneAutopilot}.
+ * Shahed-136-style kamikaze drone: ≈150 km/h (2.1 blocks/tick). Launcher start: a solid booster under the tail
+ * burns ~2 s and is dropped; a pusher propeller then drives the climb and turn onto the route. Cruises above
+ * terrain and no lower than target+30; on the final leg dives in an arc when the target is 18° below the horizon
+ * and the line to it is clear of blocks; accelerates to 3 blocks/tick in the dive. Post-launch flight law: {@link
+ * DroneAutopilot}.
  */
 public class DroneEntity extends StrikeProjectile {
-    /** Паспорт: скорости, пределы поворота на маршруте и наборе, высота крейсера над стартом и целью, старт. */
+    /** Spec: speeds, route and climb turn limits, cruise height above launch and target, launch. */
     private static final WeaponSpec.Airframe AIR = WeaponSpec.DRONE.airframe();
 
     private final DroneAutopilot autopilot = new DroneAutopilot(AIR);
@@ -35,7 +35,7 @@ public class DroneEntity extends StrikeProjectile {
         return WeaponType.DRONE;
     }
 
-    /** Уже в воздухе (заход издалека, тесты): высота полёта = max(старт, цель+30, рельеф+20). */
+    /** Already airborne (approach from afar, tests): flight height = max(launch, target+30, terrain+20). */
     @Override
     public void launch(Vec3 pos, Target target, Vec3 targetPoint, @Nullable UUID owner) {
         double y = autopilot.airborneAltitude(pos, targetPoint, surfaceY(level(), pos.x, pos.z));

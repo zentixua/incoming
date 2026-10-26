@@ -27,27 +27,28 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Разведка: что видела каждая сторона ({@link Sides}: игрок или его команда {@code /team}) — глазами игроков, камерой
- * их снарядов, радаром. Чужой игрок или аппарат Sable — цель пульта, пока его сторона видит его или видела не дольше
- * {@code sight_memory} назад; карта показывает чужих так же — там, где их видели последний раз. Своих видно всегда.
+ * Reconnaissance: each side's ({@link Sides}: player or {@code /team}) sightings through eyes, projectile
+ * cameras, radar. Hostile player/Sable craft is a designator target while side sees it or saw within {@code
+ * sight_memory}; map likewise shows last-seen positions. Friendlies always visible.
  * <p>
- * Глаза: раз в {@link #SCAN_PERIOD} тиков каждый игрок осматривается — чужой замечен, если он в поле зрения (конус
- * {@link #FIELD_DEGREES}° вокруг взгляда — экран с запасом) и {@link Sight#sees} его видит. Камера снаряда: пока игрок
- * смотрит с борта своего снаряда ({@link CameraLink}), тот же осмотр идёт и из снаряда — в кадре камеры. Радар и другие датчики сообщают сами ({@link #spot}). Состояние мира, не сохраняется.
+ * Eyes: every {@link #SCAN_PERIOD} ticks each player scans; hostile spotted if inside FOV ({@link
+ * #FIELD_DEGREES}° cone around view, screen plus margin) and {@link Sight#sees}. Projectile camera: while aboard
+ * own projectile ({@link CameraLink}), same scan from projectile in camera frame. Radar/other sensors report
+ * themselves ({@link #spot}). World state, unsaved.
  */
 public final class Sightings {
-    /** Раз в столько тиков игроки осматриваются. */
+    /** Player scan interval, ticks. */
     public static final int SCAN_PERIOD = 5;
-    /** Видели не дольше стольких тиков назад — видят сейчас: цель пульта — сама сущность, а не место. */
+    /** Seen within this many ticks counts as currently seen: designator targets entity, not position. */
     public static final int CURRENT = 2 * SCAN_PERIOD;
-    /** Половина угла поля зрения: экран при FOV 70–90 и 16:9 — 50–60° по горизонтали от центра. */
+    /** FOV half-angle: screen at FOV 70–90 and 16:9 spans 50–60° horizontally from center. */
     public static final double FIELD_DEGREES = 60;
     private static final double FIELD_COS = Math.cos(Math.toRadians(FIELD_DEGREES));
 
-    /** Чем замечено. */
+    /** Spotting source. */
     public enum Source { EYES, CAMERA, RADAR }
 
-    /** Что замечено: игрок, аппарат Sable, снаряд или другое. */
+    /** Sighted type: player, Sable craft, projectile, other. */
     public enum Kind {
         PLAYER, AIRCRAFT, PROJECTILE, OTHER;
 
@@ -56,9 +57,9 @@ public final class Sightings {
         }
     }
 
-    /** Замеченное: кто, имя (у игрока — ник), что это, где и когда его видели последний раз и чем. */
+    /** Sighting: identity, name (player username), kind, last-seen position/time/source. */
     public record Contact(UUID id, String name, Kind kind, Vec3 pos, long time, Source source) {
-        /** Сколько тиков назад видели. */
+        /** Ticks since last seen. */
         public long age(long now) {
             return now - time;
         }
@@ -72,26 +73,26 @@ public final class Sightings {
         return level.getData(ModAttachments.SIGHTINGS.get());
     }
 
-    /** Сколько тиков помнится замеченное ({@code sight_memory}). */
+    /** Sighting memory, ticks ({@code sight_memory}). */
     public static long memory() {
         return IncomingConfig.SERVER.sightMemory.get() * 20L;
     }
 
-    // ---------------------------------------------------------------- сообщить и спросить
+    // ---------------------------------------------------------------- report and query
 
-    /** Сторона {@code side} видит сущность {@code seen} сейчас. */
+    /** Side {@code side} sees entity {@code seen} now. */
     public static void spot(ServerLevel level, String side, Entity seen, Source source) {
         String name = seen instanceof Player p ? p.getGameProfile().getName() : seen.getName().getString();
         get(level).put(side, new Contact(seen.getUUID(), name, Kind.of(seen), seen.position(), level.getGameTime(), source));
     }
 
-    /** Сторона {@code side} видит аппарат Sable {@code craft} сейчас. */
+    /** Side {@code side} sees Sable craft {@code craft} now. */
     public static void spot(ServerLevel level, String side, SubLevelAccess craft, Source source) {
         get(level).put(side, new Contact(craft.getUniqueId(), Objects.requireNonNullElse(SubLevels.name(craft), ""), Kind.AIRCRAFT, SubLevels.center(craft),
                 level.getGameTime(), source));
     }
 
-    /** Что сторона {@code side} знает о {@code id}: замеченное не дольше {@link #memory} тиков назад, иначе null. */
+    /** What {@code side} knows of {@code id}: sighting within {@link #memory} ticks, otherwise null. */
     @Nullable
     public static Contact contact(ServerLevel level, String side, UUID id) {
         Map<UUID, Contact> known = get(level).sides.get(side);
@@ -99,7 +100,7 @@ public final class Sightings {
         return c != null && c.age(level.getGameTime()) <= memory() ? c : null;
     }
 
-    /** Всё, что сторона {@code side} видела не дольше {@link #memory} тиков назад. */
+    /** Everything {@code side} saw within {@link #memory} ticks. */
     public static List<Contact> contacts(ServerLevel level, String side) {
         Map<UUID, Contact> known = get(level).sides.get(side);
         if (known == null) return List.of();
@@ -113,9 +114,9 @@ public final class Sightings {
         sides.computeIfAbsent(side, k -> new HashMap<>()).put(c.id(), c);
     }
 
-    // ---------------------------------------------------------------- камера снаряда
+    // ---------------------------------------------------------------- projectile camera
 
-    /** Камера снаряда, с борта которого игрок смотрит сейчас ({@link CameraLink}), и её вид. */
+    /** Camera of projectile currently viewed aboard ({@link CameraLink}) and its view. */
     private record View(StrikeProjectile camera, CameraLink link) {
         Vec3 eye() {
             return camera.getEyePosition();
@@ -129,7 +130,7 @@ public final class Sightings {
                 ? new View(p, link) : null;
     }
 
-    // ---------------------------------------------------------------- осмотр
+    // ---------------------------------------------------------------- scan
 
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level) || level.getGameTime() % SCAN_PERIOD != 0) return;
@@ -138,8 +139,8 @@ public final class Sightings {
     }
 
     /**
-     * Осмотр: каждый живой игрок не в режиме наблюдателя из {@code players} отмечает за свою сторону чужих игроков из
-     * того же списка и аппараты Sable, которых видит сейчас ({@link #sees}, {@link #seesCraft}); забытое убирается.
+     * Scan: each living non-spectator in {@code players} records for their side hostile players from same list
+     * and Sable craft currently visible ({@link #sees}, {@link #seesCraft}); remove forgotten sightings.
      */
     public static void scan(ServerLevel level, List<? extends ServerPlayer> players) {
         Sightings s = get(level);
@@ -165,7 +166,7 @@ public final class Sightings {
         }
     }
 
-    /** Игрок видит сущность сейчас — глазами или камерой своего снаряда (в поле зрения и без преград). */
+    /** Player currently sees entity via eyes or own projectile camera (in FOV, unobstructed). */
     public static boolean sees(ServerPlayer viewer, Entity target) {
         return seenBy(viewer, target) != null;
     }
@@ -181,8 +182,8 @@ public final class Sightings {
     }
 
     /**
-     * Игрок видит аппарат Sable сейчас: его середина в дальности прорисовки игрока и в поле зрения, а взгляд до неё
-     * упирается в сам аппарат или ни во что (глазами или камерой своего снаряда). Чанки не грузятся.
+     * Player currently sees Sable craft: center within player render distance/FOV, view to center hits craft
+     * itself or nothing (eyes or own projectile camera). Loads no chunks.
      */
     public static boolean seesCraft(ServerPlayer viewer, SubLevelAccess craft) {
         Vec3 center = SubLevels.center(craft);
@@ -194,7 +195,7 @@ public final class Sightings {
         return v != null && v.link().frames(v.eye(), center) && craftInSight(viewer.serverLevel(), v.eye(), craft, center);
     }
 
-    /** Взгляд из {@code eye} в середину аппарата упирается в сам аппарат или ни во что. */
+    /** View from {@code eye} to craft center hits craft itself or nothing. */
     private static boolean craftInSight(ServerLevel level, Vec3 eye, SubLevelAccess craft, Vec3 center) {
         if (!Terrain.readyAlong(level, eye, center)) return false;
         BlockHitResult hit = level.clip(new ClipContext(eye, center, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, CollisionContext.empty()));
@@ -203,7 +204,7 @@ public final class Sightings {
         return on != null && on.getUniqueId().equals(craft.getUniqueId());
     }
 
-    /** Точка {@code at} в поле зрения из {@code eye} по взгляду {@code look}. */
+    /** Point {@code at} within FOV from {@code eye} along {@code look}. */
     static boolean facing(Vec3 eye, Vec3 look, Vec3 at) {
         Vec3 to = at.subtract(eye);
         double length = to.length();

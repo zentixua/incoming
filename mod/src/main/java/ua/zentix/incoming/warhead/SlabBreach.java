@@ -20,72 +20,71 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.Optional;
 
 /**
- * Пробой преграды зарядом, приложенным к ней ({@link BreachModel}), на блоках мира. Из точки, где заряд лежит на грани
- * ({@link #locate}), луч взрыва идёт внутрь преграды; путь в каждом блоке делится на радиус пробоя его материала
- * (группа FM — карта данных {@code incoming:penetration}, {@link ModDataMaps.Penetrability#breaching}). Дошёл до
- * пустоты под перекрытием ({@link #covered}: помещение, пещера, русло под настилом — свободная тыльная грань FM) раньше,
- * чем сумма превысила 1, — всё пройденное снесено: плита пробита по этому лучу, и волна идёт дальше в пустоту. Не дошёл
- * или вышел к открытой поверхности — пробоя нет: там грунт роет закон воронки. Одно правило для любых блоков: держит
- * заряд толща и материал до пустоты, а не то, природный блок или постройка. Ширина дыры — из того же правила по
- * каждому косому лучу (путь по косой — как толщина); у FM R — толщина под зарядом, ширину дыры он не даёт: это наше.
+ * Contact-charge obstacle breach ({@link BreachModel}) in world blocks. From charge contact face ({@link
+ * #locate}), blast ray enters obstacle; divide each block path by material breach radius (FM group from {@code
+ * incoming:penetration}, {@link ModDataMaps.Penetrability#breaching}). Reaching covered void ({@link #covered}:
+ * room, cave, channel under deck, FM free rear face) before sum exceeds 1 removes all traversed blocks: slab
+ * breached along ray, wave continues into void. Failure or open-surface exit gives no breach: crater law
+ * excavates ground there. Same rule for all blocks: thickness/material to void holds charge, not
+ * natural/structure identity. Hole width follows each oblique ray's path as thickness; FM R gives thickness under
+ * charge, not hole width, which is ours.
  */
 final class SlabBreach {
     /**
-     * Шаг луча пробоя, блоков: мельче шага волны (0,3): путь в плите сравнивается с радиусом пробоя, и шаг 0,3 у косых
-     * лучей к краю дыры прибавлял до 0,3 м пути — край выходил на блок уже закона. Шагов в одном блоке всё равно читается
-     * один блок.
+     * Breach ray step, blocks: finer than 0.3 wave step; comparing slab path/radius with 0.3 added up to 0.3 m
+     * near oblique hole edge, making edge one block narrower than law. Repeated steps within block still read it
+     * once.
      */
     static final double STEP = 0.1;
-    /** Блок, которому ванильный взрыв не страшен (обсидиан 1200 и защищённые блоки модов): заряд его не смещает. */
+    /** Vanilla-blast-resistant block (obsidian 1200, protected mod blocks): charge does not displace it. */
     static final float BLAST_PROOF = 1200;
 
     private SlabBreach() {}
 
-    /** Как заряд приложен к преграде. */
+    /** Charge placement against obstacle. */
     enum Placement {
-        /** Не приложен (взрыв в воздухе, доля заряда, вышедшая наружу, проверки): пробоя нет — только волна. */
+        /** No contact (airburst, escaped charge share, tests): no breach, wave only. */
         NONE,
-        /** На грани, в которую ударила боевая часть, без забивки ({@link BreachModel#UNTAMPED}). */
+        /** On warhead impact face, untamped ({@link BreachModel#UNTAMPED}). */
         SURFACE,
-        /** В толще (бомба, вошедшая в грунт), забит ({@link BreachModel#TAMPED}). */
+        /** Buried (ground-penetrating bomb), tamped ({@link BreachModel#TAMPED}). */
         BURIED
     }
 
-    /** Что для пробоя блок на пути луча. */
+    /** Block role along breach ray. */
     enum Cell {
-        /** Пустота за преградой: воздух, жидкость, блок без формы столкновений (трава, факел). */
+        /** Void beyond obstacle: air, fluid, no collision shape (grass, torch). */
         VOID,
-        /** Заряд его не смещает: неразрушимое, сверхпрочное, непробиваемое по карте данных, защищённое приватом. */
+        /** Charge cannot displace: indestructible, extremely strong, data-map impenetrable, claim-protected. */
         STOP,
-        /** Преграда. */
+        /** Obstacle. */
         SOLID
     }
 
     /**
-     * Откуда идут лучи пробоя.
+     * Breach ray origin.
      *
-     * @param at        точка заряда на грани преграды (или центр заряда в толще)
-     * @param open      наружу от преграды — откуда пришла боевая часть; лучи пробоя — только внутрь (скалярное
-     *                  произведение с ним меньше нуля); null — во все стороны (заряд в толще или в плите, открытой с
-     *                  обеих сторон)
-     * @param tolerance сколько пустоты луч может пройти до преграды, оставаясь приложенным к ней, блоков
-     * @param radius    радиус пробоя каждой группы материала ({@link BreachModel.Material#ordinal}), м
+     * @param at charge point on face (or buried charge center)
+     * @param open outward from obstacle, warhead arrival side; rays only inward (negative dot product); null all
+     * directions (buried or slab open both sides)
+     * @param tolerance void distance allowed before obstacle while still in contact, blocks
+     * @param radius breach radii per material group ({@link BreachModel.Material#ordinal}), m
      */
     record Origin(Vec3 at, @Nullable Vec3 open, double tolerance, double[] radius) {
-        /** Наибольший радиус пробоя: дальше него луч пробоя не идёт. */
+        /** Maximum breach radius: ray stops beyond it. */
         double reach() {
             double r = 0;
             for (double v : radius) r = Math.max(r, v);
             return r + tolerance;
         }
 
-        /** Луч {@code (dx, dy, dz)} идёт внутрь преграды. */
+        /** Ray {@code (dx, dy, dz)} enters obstacle. */
         boolean inward(double dx, double dy, double dz) {
             return open == null || dx * open.x + dy * open.y + dz * open.z < 0;
         }
     }
 
-    /** Блок {@code s} на месте {@code p} для пробоя заряда взрыва {@code e}. */
+    /** Block {@code s} at {@code p} for explosion {@code e}'s breach. */
     static Cell cell(ServerLevel level, BlockPos p, BlockState s, Explosion e, ExplosionDamageCalculator damage) {
         if (s.isAir() || s.getBlock() instanceof LiquidBlock || s.getCollisionShape(level, p).isEmpty()) return Cell.VOID;
         if (s.getExplosionResistance(level, p, e) >= BLAST_PROOF || BlockResponse.of(s).kind() == BlockResponse.Kind.NONE
@@ -94,10 +93,9 @@ final class SlabBreach {
     }
 
     /**
-     * Группа материала твёрдого блока ({@link Cell#SOLID}): из карты данных, а у блока без записи (ступени, плиты, стены,
-     * двери, блоки модов) — по инструменту, которым его добывают: топор — дерево («good timber»), лопата и мотыга —
-     * грунт, кирка — камень и кладка, если блок не прочнее булыжника (2); прочее неопознанное — железобетон: FM велит
-     * считать неопознанное самым прочным (3-12c).
+     * Solid block material ({@link Cell#SOLID}): data map; unlisted (stairs, slabs, walls, doors, mod blocks) by
+     * mining tool: axe wood (“good timber”), shovel/hoe soil, pickaxe stone/masonry if no stronger than
+     * cobblestone (2); other unknown reinforced concrete, per FM strongest-material rule (3-12c).
      */
     static BreachModel.Material material(BlockState s) {
         ModDataMaps.Penetrability entry = ModDataMaps.Penetrability.find(s);
@@ -109,18 +107,17 @@ final class SlabBreach {
         return BreachModel.Material.REINFORCED;
     }
 
-    /** Прочность (время добычи ванили) булыжника и кирпича: прочнее — не обычная кладка. */
+    /** Cobblestone/brick strength (vanilla mining time): stronger is not ordinary masonry. */
     private static final float ROCK_HARDNESS = 2;
 
     /**
-     * Где заряд {@code tnt} кг ТНТ с центром {@code centre} приложен к преграде; null — не приложен (центр в воздухе дальше
-     * радиуса заряда от любой грани, в неготовом чанке, в непробиваемом). У заряда на грани ({@link Placement#SURFACE}):
-     * центр в твёрдом блоке (точка прицела — полблока в землю) — заряд лежит на той его открытой грани (сторона, где у
-     * блока пустота), через которую пришла боевая часть ({@code axis} — её курс у удара): у настила в один блок открыты
-     * обе грани, и толщина — весь блок от грани удара, а не полблока от центра; лучи — от грани внутрь: толщина
-     * считается от поверхности, как у FM (R наружного заряда — вся толщина). Курса нет — грань по сумме открытых сторон
-     * (у настила в блок — из центра во все стороны). Центр в пустоте у грани (удар носом о поверхность) — оттуда же,
-     * внутрь.
+     * Where {@code tnt} kg TNT centered at {@code centre} contacts obstacle; null if not (air center beyond
+     * charge radius from all faces, unready chunk, impenetrable). Surface placement ({@link Placement#SURFACE}):
+     * center in solid (aim half-block into ground) rests on open face (void neighbor) through which warhead
+     * arrived ({@code axis}, impact heading). One-block deck has both faces open, full thickness from impact face
+     * rather than half from center; rays inward from face, FM surface thickness (external charge R is full
+     * thickness). No heading: face from sum of open directions (one-block deck: center all directions). Center in
+     * void near face (nose impact): from same point inward.
      */
     @Nullable
     static Origin locate(ServerLevel level, Vec3 centre, double tnt, Placement placement, @Nullable Vec3 axis, Explosion e,
@@ -132,13 +129,13 @@ final class SlabBreach {
         double rc = BreachModel.chargeRadius(tnt);
         BlockPos cell = BlockPos.containing(centre);
         if (!Terrain.ready(level, cell)) return null;
-        // в толще: заряд и его ход (канал бомбы) — пустота в блоке заряда, дальше — порода
+        // Buried: charge/bore (bomb channel) are void inside charge block, then rock.
         if (placement == Placement.BURIED) return new Origin(centre, null, rc + 1, radius);
         Cell here = cell(level, cell, level.getBlockState(cell), e, damage);
         if (here == Cell.STOP) return null;
         double x = 0, y = 0, z = 0, gap = Double.MAX_VALUE;
-        // грань, через которую пришла боевая часть: где обратный курс выходит из блока, если она открыта; иначе из
-        // открытых — та, чья наружная сторона больше всего навстречу курсу
+        // Warhead entry face: where reverse heading exits block if open; otherwise
+        // open face whose outward normal most opposes heading.
         Direction entry = axis != null && here == Cell.SOLID ? exitFace(cell, centre, axis.scale(-1)) : null;
         Direction hit = null;
         double facing = 0;
@@ -166,7 +163,7 @@ final class SlabBreach {
         }
         Vec3 sum = new Vec3(x, y, z);
         if (here == Cell.VOID) {
-            // в пустоте: приложен, только если до грани не дальше радиуса шара заряда; наружу — от твёрдых соседей
+            // In void: contact only within charge-sphere radius of face; outward from solid neighbors.
             if (gap > rc + 1e-9) return null;
             return new Origin(centre, sum.lengthSqr() < 1e-9 ? null : sum.scale(-1).normalize(), rc + STEP, radius);
         }
@@ -175,7 +172,7 @@ final class SlabBreach {
         return new Origin(exit(cell, centre, open), open, rc + STEP, radius);
     }
 
-    /** Расстояние от {@code p} в блоке {@code cell} до его грани со стороны {@code d}. */
+    /** Distance from {@code p} in {@code cell} to face {@code d}. */
     private static double faceDistance(BlockPos cell, Vec3 p, Direction d) {
         return switch (d) {
             case DOWN -> p.y - cell.getY();
@@ -188,10 +185,9 @@ final class SlabBreach {
     }
 
     /**
-     * Пустота {@code p} — под перекрытием: выше неё в своём столбце, ниже верха земли (карта высот без листвы), есть
-     * твёрдый блок не из листвы. Пустота под открытым небом (у поверхности рядом с ударом, уступ рельефа, ход бомбы,
-     * открытая вода) — нет: это поверхность земли, к которой заряд выбрасывает грунт по закону воронки
-     * ({@code CraterModel}, у бомбы — {@link BuriedBlast}), а не тыльная грань плиты, которую он пробивает.
+     * Void {@code p} covered: above in same column below ground top (no-leaves heightmap), a solid nonleaf block
+     * exists. Open-sky void (surface near impact, terrain ledge, bomb bore, open water) is ground surface for
+     * crater-law ejecta ({@code CraterModel}, bomb {@link BuriedBlast}), not slab rear face.
      */
     static boolean covered(ServerLevel level, BlockPos p) {
         int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, p.getX(), p.getZ());
@@ -203,7 +199,7 @@ final class SlabBreach {
         return false;
     }
 
-    /** Где луч из {@code p} по {@code dir} выходит из блока {@code cell}. */
+    /** Where ray from {@code p} along {@code dir} exits {@code cell}. */
     static Vec3 exit(BlockPos cell, Vec3 p, Vec3 dir) {
         double t = Double.MAX_VALUE;
         t = Math.min(t, axisExit(p.x, dir.x, cell.getX()));
@@ -212,7 +208,7 @@ final class SlabBreach {
         return t == Double.MAX_VALUE ? p : p.add(dir.scale(t));
     }
 
-    /** Грань блока {@code cell}, через которую выходит луч из {@code p} по {@code dir}; null — луча нет. */
+    /** Exit face of {@code cell} for ray from {@code p} along {@code dir}; null if no ray. */
     @Nullable
     static Direction exitFace(BlockPos cell, Vec3 p, Vec3 dir) {
         double tx = axisExit(p.x, dir.x, cell.getX()), ty = axisExit(p.y, dir.y, cell.getY()), tz = axisExit(p.z, dir.z, cell.getZ());
@@ -230,10 +226,9 @@ final class SlabBreach {
     }
 
     /**
-     * Луч пробоя из {@code o} по {@code (dx, dy, dz)}: блоки преграды на пути — в {@code path}. Результат — расстояние от
-     * {@code o.at()}, на котором луч вышел в пустоту за преградой (пробил); −1 — не пробил (сумма путей больше 1,
-     * непробиваемое, пустота до преграды дальше допуска, неготовый чанк, край мира); {@code liquid[0]} — вышел в жидкость
-     * (волна дальше не идёт).
+     * Breach ray from {@code o} along {@code (dx, dy, dz)}: obstacle blocks in {@code path}. Result distance from
+     * {@code o.at()} to void exit beyond obstacle (breach); −1 if no breach (path sum >1, impenetrable, excess
+     * pre-contact void, unready chunk, world edge); {@code liquid[0]} marks fluid exit (wave stops).
      */
     static double march(ServerLevel level, Origin o, double dx, double dy, double dz, Explosion e, ExplosionDamageCalculator damage,
                         LongArrayList path, boolean[] liquid) {
@@ -241,8 +236,8 @@ final class SlabBreach {
     }
 
     /**
-     * То же; {@code used} (если не null) — сумма путей в блоках преграды, делённых на радиус пробоя каждого
-     * ({@code used[0]}), и путь в них ({@code used[1]}, м) до выхода или обрыва.
+     * Same; non-null {@code used} gives sum of obstacle paths divided by respective breach radius ({@code
+     * used[0]}) and total path ({@code used[1]}, m) until exit/stop.
      */
     static double march(ServerLevel level, Origin o, double dx, double dy, double dz, Explosion e, ExplosionDamageCalculator damage,
                         LongArrayList path, boolean[] liquid, @Nullable double[] used) {
@@ -251,7 +246,7 @@ final class SlabBreach {
         double sum = 0, r = 0;
         long last = Long.MIN_VALUE;
         double reach = o.reach();
-        // точка луча — середина своего шага: шаг от d − STEP/2 до d + STEP/2 — в блоке этой точки
+        // Ray point is step midpoint: d − STEP/2 to d + STEP/2 belongs to its block.
         for (double d = STEP / 2; d <= reach + STEP; d += STEP) {
             BlockPos pos = BlockPos.containing(o.at().x + dx * d, o.at().y + dy * d, o.at().z + dz * d);
             long key = pos.asLong();
@@ -268,8 +263,8 @@ final class SlabBreach {
                             if (d > o.tolerance()) return -1;
                             continue;
                         }
-                        // свободная грань пробоя — пустота под перекрытием (помещение, пещера, русло под настилом);
-                        // открытая поверхность — грань закона воронки, а не пробоя
+                        // Free breach face is covered void (room, cave, channel under deck);
+                        // open surface belongs to crater law, not breach.
                         if (!covered(level, pos)) return -1;
                         liquid[0] = s.getBlock() instanceof LiquidBlock;
                         return d - STEP / 2;
@@ -295,15 +290,15 @@ final class SlabBreach {
     }
 
     /**
-     * Опора у грани удара для картинки клиента ({@link S2C.Blast.Support}): заряд {@code tnt} кг ТНТ с центром {@code centre},
-     * приложенный к грани ({@link Placement#SURFACE}), — тот же {@link #locate} и тот же {@link #march}, что у лучей пробоя,
-     * по одному лучу — нормали грани внутрь преграды (заряд открыт с обеих сторон — курс {@code axis}, нет — вниз). Не по
-     * курсу: путь сквозь плиту короче всего по нормали, и пробивают её первыми лучи у нормали — у косого удара луч по курсу
-     * проходит t/cos θ и «не пробивал» плиту, которую лучи сносят (ракета под 45° по настилу в 2 м камня: 2,8 м по курсу при
-     * R 2,7 м — дыра ~1,8 м). Нормаль — ось дыры (у ровной плиты дыра лучей — круг √(R² − t²) около неё). Пусто — заряд не
-     * приложен к преграде (картинка — по материалу). Читает мир сейчас: пакет взрыва уходит раньше лучей (⚠ если преграду до
-     * них снесёт соседний взрыв того же тика, картинка покажет плиту, которой лучи уже не нашли). ⚠ Один луч: у неровной
-     * преграды (заряд над стеной под перекрытием) нормаль может упереться в толщу, а косые лучи — пробить рядом.
+     * Impact-face support for client visuals ({@link S2C.Blast.Support}): {@code tnt} kg TNT at {@code centre},
+     * surface contact ({@link Placement#SURFACE}), same {@link #locate}/{@link #march} as breach rays, one inward
+     * face-normal ray (both sides open uses {@code axis}, absent uses down). Not heading: shortest slab path is
+     * normal, breached first by near-normal rays; oblique heading crosses t/cos θ and “failed” a slab that rays
+     * remove (45° missile onto 2 m stone deck: 2.8 m heading path at R 2.7 m, hole ~1.8 m). Normal is hole axis
+     * (flat slab rays make circle √(R² − t²) around it). Empty means no contact (material-based visual). Reads
+     * world now: blast packet before rays (⚠ neighboring same-tick explosion removing obstacle first leaves
+     * visual slab absent from rays). ⚠ One ray: uneven obstacle (charge over wall under roof) may stop normal in
+     * solid while oblique rays breach nearby.
      */
     static Optional<S2C.Blast.Support> support(ServerLevel level, Vec3 centre, double tnt, @Nullable Vec3 axis, Explosion e,
                                                ExplosionDamageCalculator damage) {
@@ -313,7 +308,7 @@ final class SlabBreach {
         LongArrayList path = new LongArrayList();
         double[] used = new double[2];
         double out = march(level, o, n.x, n.y, n.z, e, damage, path, new boolean[1], used);
-        // то, во что попал, — первый блок преграды на нормали; её там нет (непробиваемое сразу у грани) — связное
+        // Struck material is first obstacle block along normal; absent (impenetrable at face) means cohesive.
         boolean loose = !path.isEmpty() && material(level.getBlockState(BlockPos.of(path.getLong(0)))) == BreachModel.Material.EARTH;
         float lift = (float) centre.subtract(o.at()).dot(n);
         if (out < 0 || used[0] <= 0) return Optional.of(new S2C.Blast.Support(loose, 0, 0, n, lift));

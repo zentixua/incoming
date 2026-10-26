@@ -35,65 +35,65 @@ import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * Ударная волна выбивает стёкла (у ракеты — и листву): работа в очереди попаданий, единица — до {@link #PORTION} блоков
- * в секции 16³, где такие блоки есть; секции идут от центра взрыва наружу, как волна. Где и что выбивается —
- * {@link Zone}: стёкла — по давлению волны заряда боевой части ({@link Wave}), листва — в коробке ({@link Box}).
+ * Blast shatters glass (missile also foliage): impact-queue work, unit up to {@link #PORTION} blocks in a 16³
+ * section containing them; sections outward from blast center like wave. {@link Zone} defines what/where: glass
+ * by warhead pressure ({@link Wave}), leaves in box ({@link Box}).
  * <p>
- * Волна идёт по воздуху: стекло она достаёт, только если к нему подходит воздух с улицы — над верхом столбцов и не
- * глубже {@link #SKY_DEPTH} блоков внутрь через проёмы, как у ядерного подрыва ({@code Blast.SKY_DEPTH}); стекло за
- * стеклом — тоже, пробитое с лица выбивается на всю толщину. Подземная база, подвал без окон, стекло под водой целы.
+ * Wave travels through air: glass only if outside air reaches it, above column tops and up to {@link #SKY_DEPTH}
+ * blocks inside through openings, like nuclear ({@code Blast.SKY_DEPTH}); glass behind glass too, front
+ * penetration breaks full thickness. Underground bases, windowless basements, underwater glass intact.
  * <p>
- * Звук и осколки — у выбитых окон, а не у места удара: каждая единица, где что-то выбито, звучит звуком поломки блока
- * из середины выбитого в ней и бросает его частицы ({@link #burst}).
+ * Sound/fragments at shattered windows, not impact: each productive unit plays block-break sound from center of
+ * its shattered blocks and emits their particles ({@link #burst}).
  * <p>
- * Блоки читаются только из готовых чанков; секцию без таких блоков отсекает палитра ({@link Palettes#contains}), и
- * даже шар ракеты в сотни секций обходится дёшево. У чанка с неготовым соседом обновления соседей расходятся цепочкой
- * дальше любого запаса в блоках (форма панели, потерявшей связь; дверь рядом проверяет сигнал редстоуна и читает
- * соседей проводящего блока; рельсы и провод — ещё дальше) и грузили бы неготовый чанк синхронно. Поэтому там блок
- * убирается без обновлений соседей ({@link Warheads#EDGE_FLAGS}: клиентам и без форм соседей — у соседней панели
- * остаётся связь), а в {@link Warheads#EDGE} блоках от неготового чанка не убирается совсем: Sable читает соседние
- * блоки каждого изменённого. Чанки, где что-то выбито, уходят в LOD Distant Horizons ({@link DhUpdates#mark}).
+ * Read ready chunks only; palette rejects empty sections ({@link Palettes#contains}), making even missile sphere
+ * of hundreds of sections cheap. Unready neighbor can be reached by update chains beyond any block margin
+ * (disconnected pane shape; door checks redstone and conducting block neighbors; rails/wire farther), causing
+ * synchronous load. Thus remove without neighbor updates there ({@link Warheads#EDGE_FLAGS}: client update
+ * without neighbor shapes, neighboring pane keeps connection), and never within {@link Warheads#EDGE} blocks of
+ * unready chunk: Sable reads neighbors of every changed block. Changed chunks update Distant Horizons LOD ({@link
+ * DhUpdates#mark}).
  */
 final class Shatter implements UnitQueue.Job {
-    /** Секцию отсекла палитра или её нет в мире: не единица работы. */
+    /** Palette-rejected or absent section is not a work unit. */
     private static final int SKIPPED = -1;
     /**
-     * Стёкол за единицу, не больше: у стеклянной высотки в секции бывают сотни окон, а снять блок со всеми
-     * обновлениями соседей — около 10 мкс, со сборкой хоста — и в разы дольше; ещё до {@link #SKY_DEPTH} шагов поиска
-     * воздуха с улицы.
+     * Maximum glass blocks per unit: glass tower section may have hundreds of windows; removal with all neighbor
+     * updates costs ~10 μs, many times longer in host pack; plus up to {@link #SKY_DEPTH} outside-air search
+     * steps.
      */
     static final int PORTION = 32;
-    /** Секций, отсечённых палитрой, за единицу, не больше: шар ракеты — тысячи секций, почти все без стекла. */
+    /** Maximum palette-rejected sections per unit: missile sphere has thousands, almost all glass-free. */
     private static final int SKIPS = 1024;
-    /** Насколько глубоко внутрь от воздуха с улицы волна достаёт стекло, блоки (как у ядерного подрыва). */
+    /** Glass reach inward from outside air, blocks (like nuclear burst). */
     static final int SKY_DEPTH = 4;
-    /** Что держит волну: то же, что верх столбца {@link Heightmap.Types#MOTION_BLOCKING_NO_LEAVES} (листва — нет). */
+    /** Wave blockers: same as {@link Heightmap.Types#MOTION_BLOCKING_NO_LEAVES} column top (not leaves). */
     private static final Predicate<BlockState> SOLID = Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque();
     private static final Direction[] DIRECTIONS = Direction.values();
 
-    /** Что и где выбивает волна. */
+    /** What/where wave breaks. */
     sealed interface Zone permits Box, Wave {
-        /** Блоки, которые волна может выбить. */
+        /** Blocks wave can break. */
         TagKey<Block> tag();
 
-        /** Угол границ, где волна может что-то выбить. */
+        /** Corner of bounds where wave can break something. */
         BlockPos min();
 
         BlockPos max();
 
-        /** Может ли волна выбить хоть что-то в секции {@code (sx, sy, sz)}: секции дальше блоки не читаются. */
+        /** Whether any block in section {@code (sx, sy, sz)} is reachable: no blocks beyond section read. */
         boolean reaches(int sx, int sy, int sz);
 
-        /** Выбивает ли волна блок {@code state} из тега в месте {@code (x, y, z)} внутри границ. */
+        /** Whether wave breaks tagged {@code state} at {@code (x, y, z)} within bounds. */
         boolean breaks(BlockState state, int x, int y, int z);
 
-        /** Идёт ли волна по воздуху: блок, к которому не подходит воздух с улицы ({@link #SKY_DEPTH}), цел. */
+        /** Whether wave travels through air: without outside air ({@link #SKY_DEPTH}), block stays intact. */
         boolean airborne();
     }
 
-    /** Всё из тега в коробке {@code min..max}. */
+    /** All tagged blocks in {@code min..max} box. */
     record Box(TagKey<Block> tag, BlockPos min, BlockPos max) implements Zone {
-        /** Коробка вокруг {@code centre}: {@code radius} в стороны, {@code below} вниз и {@code above} вверх. */
+        /** Box around {@code centre}: {@code radius} sideways, {@code below} down, {@code above} up. */
         static Box around(Vec3 centre, int radius, int below, int above, TagKey<Block> tag) {
             BlockPos c = BlockPos.containing(centre);
             return new Box(tag, c.offset(-radius, -below, -radius), c.offset(radius, above, radius));
@@ -116,14 +116,14 @@ final class Shatter implements UnitQueue.Job {
     }
 
     /**
-     * Стёкла ({@link ModTags#SHATTERS}) от наземного взрыва заряда {@code tntKg} кг ТНТ: давление волны на расстоянии от
-     * центра — по Кинни–Грэхему ({@link BlastModel#surfaceOverpressureKpa}), а ломается ли стекло — тем же порогом
-     * с разбросом, что и у ядерного подрыва ({@link BlockResponse#breaksAt}: стекло — 0,8 psi ± 15 %, DESIGN-nuke §3.3,
-     * у соседних окон по-разному), поэтому у края шара окна выбиты через одно, а не по линейке. Шар — до давления, ниже которого
-     * не ломается ничто ({@link BlockResponse#FRAGILE_PSI} × {@link BlockResponse#JITTER_MIN}). Тень от построек волна
-     * огибает (давление за домом ниже, но окна там тоже вылетают), её здесь нет.
+     * Glass ({@link ModTags#SHATTERS}) from surface {@code tntKg} kg TNT blast: pressure by Kinney–Graham
+     * distance ({@link BlastModel#surfaceOverpressureKpa}), break threshold/jitter as nuclear ({@link
+     * BlockResponse#breaksAt}: glass 0.8 psi ±15%, DESIGN-nuke §3.3, different neighbors), so sphere edge windows
+     * break intermittently rather than along a ruler. Sphere ends below minimum break pressure ({@link
+     * BlockResponse#FRAGILE_PSI} × {@link BlockResponse#JITTER_MIN}). Wave wraps around building shadows (lower
+     * pressure behind but windows still break); no shadow modeled here.
      *
-     * @param radius шар, блоков
+     * @param radius sphere radius, blocks
      */
     record Wave(Vec3 centre, double tntKg, double radius) implements Zone {
         static Wave of(Vec3 centre, double tntKg) {
@@ -148,7 +148,7 @@ final class Shatter implements UnitQueue.Job {
 
         @Override
         public boolean reaches(int sx, int sy, int sz) {
-            // ближняя к центру точка секции
+            // Section point nearest center.
             double dx = Mth.clamp(centre.x, sx << 4, (sx << 4) + 16) - centre.x;
             double dy = Mth.clamp(centre.y, sy << 4, (sy << 4) + 16) - centre.y;
             double dz = Mth.clamp(centre.z, sz << 4, (sz << 4) + 16) - centre.z;
@@ -176,30 +176,30 @@ final class Shatter implements UnitQueue.Job {
     private final Zone zone;
     private final BlockPos min, max;
     /**
-     * Секции мира в границах, до которых волна достаёт ({@link SectionPos#asLong}), — от ближних к центру к дальним;
-     * null — ещё не собраны (собираются первой единицей, а не в тике удара: у ракеты их тысячи).
+     * World sections within reachable bounds ({@link SectionPos#asLong}), near-to-far; null until collected
+     * (first unit, not impact tick: missile has thousands).
      */
     @Nullable
     private long[] sections;
-    /** Чанки, где что-то выбито: в LOD Distant Horizons. */
+    /** Changed chunks for Distant Horizons LOD. */
     private final LongOpenHashSet touched = new LongOpenHashSet();
-    /** Поиск воздуха с улицы ({@link #open}): пройденные места и слои обхода. */
+    /** Outside-air search ({@link #open}): visited positions/traversal layers. */
     private final LongOpenHashSet visited = new LongOpenHashSet();
     private LongArrayList layer = new LongArrayList(), nextLayer = new LongArrayList();
     private final BlockPos.MutableBlockPos probe = new BlockPos.MutableBlockPos();
-    /** Следующая секция в {@link #sections}. */
+    /** Next section in {@link #sections}. */
     private int index;
-    /** Секция, которую выбивают сейчас, и место в ней (y·256 + z·16 + x), с которого продолжать; −1 — взять следующую. */
+    /** Current section and continuation index (y·256 + z·16 + x); −1 means take next. */
     private long current;
     private int cursor = -1;
-    /** Выбитое последней порцией: первый блок (его звук и частицы) и рамка мест. */
+    /** Last portion's broken blocks: first block (sound/particles), position bounds. */
     @Nullable
     private BlockState pane;
     private int x0, y0, z0, x1, y1, z1;
 
     /**
-     * @param area  район удара (держится, пока работа не кончится); null — без района и очереди ({@link #now})
-     * @param after выбивать после этих взрывов (главный взрыв удара)
+     * @param area strike area held until work ends; null without area/queue ({@link #now})
+     * @param after wait for these explosions (main strike explosion)
      */
     Shatter(@Nullable BlastArea area, List<StagedExplosion> after, Vec3 centre, Zone zone) {
         this.area = area;
@@ -210,7 +210,7 @@ final class Shatter implements UnitQueue.Job {
         max = zone.max();
     }
 
-    /** Выбить сразу, без очереди и без района, теми же порциями, звуком и частицами (проверки). @return сколько блоков выбито */
+    /** Break immediately without queue/area, same portions/sound/particles (tests). @return broken count */
     static int now(ServerLevel level, Vec3 centre, Zone zone) {
         Shatter job = new Shatter(null, List.of(), centre, zone);
         int broken = 0;
@@ -222,12 +222,12 @@ final class Shatter implements UnitQueue.Job {
         return broken;
     }
 
-    /** Поставить в очередь попаданий удара: после взрывов {@code after}, пока держится район {@code area}. */
+    /** Queue strike impact work after {@code after}, holding {@code area}. */
     static void queue(ServerLevel level, BlastArea area, List<StagedExplosion> after, Vec3 centre, Zone zone) {
         StrikeWorld.get(level).impacts().add(level, new Shatter(area.retain(), after, centre, zone));
     }
 
-    /** Секции мира, до которых волна достаёт, от ближних к центру: ключ сортировки — квадрат расстояния до середины. */
+    /** Reachable world sections nearest center first: sort key squared center distance. */
     private long[] sections(ServerLevel level) {
         if (sections != null) return sections;
         int sx0 = SectionPos.blockToSectionCoord(min.getX()), sx1 = SectionPos.blockToSectionCoord(max.getX());
@@ -243,7 +243,7 @@ final class Shatter implements UnitQueue.Job {
                     if (!zone.reaches(sx, sy, sz)) continue;
                     double d = centre.distanceToSqr(SectionPos.sectionToBlockCoord(sx, 8), SectionPos.sectionToBlockCoord(sy, 8),
                             SectionPos.sectionToBlockCoord(sz, 8));
-                    // квадрат расстояния (до сотен тысяч) — старшие биты, номер секции в границах — младшие
+                    // Squared distance (up to hundreds of thousands) in high bits, section index within bounds in low bits.
                     keys[n++] = (long) d << 32 | ((sx - sx0) * ny + (sy - sy0)) * nz + (sz - sz0);
                 }
             }
@@ -262,9 +262,8 @@ final class Shatter implements UnitQueue.Job {
     }
 
     /**
-     * Следующая порция: до {@code limit} блоков, которые волна выбила бы давлением, в текущей секции (с места, где
-     * кончилась прошлая порция) или в следующей по порядку. @return сколько выбито, или {@link #SKIPPED} — секцию
-     * отсекла палитра, блоки не читались
+     * Next portion: up to {@code limit} pressure-breakable blocks in current section from previous end, or next
+     * in order. @return broken count, or {@link #SKIPPED} for palette rejection without block reads
      */
     int nextPortion(ServerLevel level, int limit) {
         TagKey<Block> tag = zone.tag();
@@ -273,11 +272,11 @@ final class Shatter implements UnitQueue.Job {
             current = sections(level)[index++];
             LevelChunkSection section = section(level);
             if (section == null || section.hasOnlyAir() || !section.maybeHas(st -> st.is(tag))) return SKIPPED;
-            // палитра помнит и выбитые раньше, а глобальная отвечает «может быть» всегда: точно — подсчётом
+            // Palette retains previously removed entries; global always “maybe”: count for exactness.
             if (!Palettes.contains(section.getStates(), st -> st.is(tag))) return 0;
             cursor = 0;
         }
-        // между порциями чанк мог уйти из памяти
+        // Chunk may have left memory between portions.
         LevelChunkSection section = section(level);
         if (section == null) {
             cursor = -1;
@@ -285,15 +284,15 @@ final class Shatter implements UnitQueue.Job {
         }
         int sx = SectionPos.x(current), sz = SectionPos.z(current);
         int bx = SectionPos.sectionToBlockCoord(sx), by = SectionPos.sectionToBlockCoord(SectionPos.y(current)), bz = SectionPos.sectionToBlockCoord(sz);
-        // соседи чанка готовы — любой его блок меняется как обычно; нет — без обновлений соседей и не у края
+        // Ready neighbors: normal changes anywhere; otherwise no neighbor updates and not at edge.
         boolean edgesReady = Terrain.neighbourhoodReady(level, sx, sz);
-        // seen — блоки, которые ломает давление: и выбитые, и те, к которым не подошёл воздух
+        // seen counts pressure-breakable blocks, both removed and unreachable by air.
         int broken = 0, seen = 0;
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         for (int i = cursor; i < 4096; i++) {
             int x = bx + (i & 15), y = by + (i >> 8), z = bz + (i >> 4 & 15);
             if (x < min.getX() || x > max.getX() || y < min.getY() || y > max.getY() || z < min.getZ() || z > max.getZ()) continue;
-            // из уже взятой секции: setBlock меняет её же, так что следующие чтения верны
+            // From acquired section: setBlock changes same object, subsequent reads remain valid.
             BlockState st = section.getBlockState(i & 15, i >> 8, i >> 4 & 15);
             if (!st.is(tag) || !zone.breaks(st, x, y, z)) continue;
             m.set(x, y, z);
@@ -326,9 +325,9 @@ final class Shatter implements UnitQueue.Job {
     }
 
     /**
-     * Подходит ли к блоку в {@code (x, y, z)} воздух с улицы: не дальше {@link #SKY_DEPTH} + 1 шагов по граням через то,
-     * что волну не держит, или через стекло из тега {@code tag} — место над верхом своего столбца. Читаются только
-     * готовые чанки; место в неготовом — как стена.
+     * Whether outside air reaches block {@code (x, y, z)}: within {@link #SKY_DEPTH} + 1 face steps through
+     * nonblocking cells or glass in {@code tag}, to above own column top. Ready chunks only; unready acts as
+     * wall.
      */
     private boolean open(ServerLevel level, int x, int y, int z, TagKey<Block> tag) {
         visited.clear();
@@ -362,12 +361,12 @@ final class Shatter implements UnitQueue.Job {
     }
 
     /**
-     * Звук и осколки {@code n} блоков, выбитых последней порцией: звук поломки первого (у стекла — звон, у листвы — её
-     * шелест) из середины рамки выбитых, громкость √n — n одинаковых источников вместе слышно так же громко в √n раз
-     * дальше (интенсивности складываются, спад — 1/r²; громкость v Minecraft слышна до 16·v блоков); частицы этого блока
-     * по рамке — по {@link #PANE_PARTICLES} на блок, не больше {@link #BURST_PARTICLES} (столько у ванили даёт поломка
-     * целого блока): частицы — знак осколков, а не их число. Видны вблизи (частицы сервера — до 32 блоков от игрока), как у
-     * обычной поломки блока.
+     * Sound/fragments for last portion's {@code n} blocks: first block break sound (glass ring, foliage rustle),
+     * at broken-bounds center, volume √n; n identical sources heard equally loud √n farther (intensities sum,
+     * 1/r² falloff; Minecraft volume v heard to 16·v blocks). Block particles across bounds: {@link
+     * #PANE_PARTICLES} per block, capped at {@link #BURST_PARTICLES} (vanilla full-block break count); particles
+     * signify fragments, not their count. Visible nearby (server particles within 32 blocks), like normal block
+     * breaking.
      */
     private void burst(ServerLevel level, int n) {
         BlockState st = pane;
@@ -378,12 +377,12 @@ final class Shatter implements UnitQueue.Job {
                 0.25 * (x1 - x0 + 1), 0.25 * (y1 - y0 + 1), 0.25 * (z1 - z0 + 1), 0.15);
     }
 
-    /** Частиц на выбитый блок: столько у ванили даёт поломка стеклянной панели (её форма — 4×4 клеток по ¼ блока). */
+    /** Particles per broken block: vanilla pane break count (4×4 shape cells, ¼ block each). */
     static final int PANE_PARTICLES = 16;
-    /** Частиц на порцию, не больше: столько у ванили даёт поломка целого блока (4×4×4). */
+    /** Particles per portion cap: vanilla full-block break count (4×4×4). */
     static final int BURST_PARTICLES = 64;
 
-    /** Секция {@link #current} из готового чанка, или null. */
+    /** {@link #current} section from ready chunk, or null. */
     @Nullable
     private LevelChunkSection section(ServerLevel level) {
         LevelChunk chunk = level.getChunkSource().getChunkNow(SectionPos.x(current), SectionPos.z(current));
@@ -411,7 +410,7 @@ final class Shatter implements UnitQueue.Job {
     public boolean step(ServerLevel level) {
         long t0 = System.nanoTime();
         int broken = SKIPPED;
-        // секции, которые отсекла палитра, — в той же единице: работа — порция секции, чьи блоки пришлось смотреть
+        // Palette-rejected sections in same unit: work is a portion of a section whose blocks needed inspection.
         for (int skipped = 0; hasNext(level) && broken == SKIPPED && skipped < SKIPS; skipped++) broken = nextPortion(level, PORTION);
         broken = Math.max(0, broken);
         if (broken > 0 && pane != null) burst(level, broken);

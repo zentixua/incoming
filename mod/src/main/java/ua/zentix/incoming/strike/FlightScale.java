@@ -3,32 +3,32 @@ package ua.zentix.incoming.strike;
 import ua.zentix.incoming.IncomingConfig;
 
 /**
- * Шкала полёта мира {@code scale.flight_speed} (решение Артёма 22.10): 0 — игровые скорости и высоты полёта
- * ({@link WeaponSpec.Airframe}, не по физике), 1 — настоящие ({@link Article.Envelope}), между — плавно.
+ * World flight scale {@code scale.flight_speed} (Artem, 22.10): 0 gives game flight speeds and altitudes ({@link
+ * WeaponSpec.Airframe}, not physical), 1 real ({@link Article.Envelope}), smoothly between.
  * <p>
- * Почему так: блок — метр, поэтому всё у цели настоящее при любой шкале; мала видимая часть мира — на настоящей скорости
- * быстрое оружие проходит прорисовку за доли секунды. Нужная скорость подлёта — свойство игры, а не изделия: у каждого
- * изделия два числа в паспорте и одна шкала мира. Вывести игровую скорость из прорисовки нельзя: прорисовка у каждого
- * игрока своя, а полёт — один на сервере.
+ * Reason: a block is a meter, so everything at the target is real at any scale; visible world is small, and fast
+ * real-speed weapons cross render distance in fractions of a second. Required approach speed is a game property,
+ * not an article property: each article has two spec values and one world scale. Game speed cannot derive from
+ * render distance: each player has their own distance, but flight is shared on the server.
  * <p>
- * Смешение — по логарифму: v = v<sub>игр</sub>·(v<sub>наст</sub>/v<sub>игр</sub>)<sup>x</sup>. Отношение игра/жизнь у
- * каждого изделия своё, доля пути к жизни — одна на все, поэтому порядок скоростей изделий сохраняется при любой шкале.
- * Манёвр (темп разворота, скороподъёмность) остаётся игровым: на большей скорости радиус разворота растёт сам.
+ * Logarithmic blend: v = v<sub>game</sub>·(v<sub>real</sub>/v<sub>game</sub>)<sup>x</sup>. Each article has its
+ * own game/real ratio; the fraction toward reality is shared, preserving article speed order at any scale.
+ * Maneuvering (turn rate, climb rate) remains game-based: higher speed naturally increases turn radius.
  */
 public final class FlightScale {
     private FlightScale() {}
 
     /**
-     * Шкала мира сейчас (по пресету); 0, пока настройки сервера не загружены (юнит-тесты, клиент в меню). Клиент в
-     * мире получает настройки сервера от NeoForge.
+     * Current world scale (from preset); 0 until server settings load (unit tests, client menu). In-world clients
+     * receive server settings from NeoForge.
      */
     public static double x() {
         return IncomingConfig.SERVER_SPEC.isLoaded() ? IncomingConfig.SERVER.flightSpeed() : 0;
     }
 
     /**
-     * Число на шкале {@code x}: игровое {@code game} при 0, настоящее {@code real} при 1, между — по логарифму. Без
-     * настоящего или игрового числа (≤ 0: у баллистических высота полёта не задана) — игровое. При 0 — ровно игровое.
+     * Value at {@code x}: {@code game} at 0, {@code real} at 1, logarithmic between. Missing real or game value
+     * (≤ 0: ballistic flight altitude unspecified) gives game value. At 0, exactly game value.
      */
     public static double blend(double game, double real, double x) {
         if (x == 0 || game <= 0 || real <= 0) return game;
