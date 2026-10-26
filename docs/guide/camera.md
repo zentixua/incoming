@@ -7,6 +7,9 @@ impact. Press `N` again for the next projectile; Shift exits. While you are in t
 it is. You hear what the camera hears, but a blast wave hurts your ears and pushes you only when it reaches your
 character.
 
+The camera and radar captions follow your game language: `REC` marks the camera display, `N` marks north, and
+`T-` is the countdown to impact. The camera indicator does not save a video file.
+
 ![Cruise missile camera: a map at long range, onboard video closer in, the impact](img/camera.webp)
 
 - When the projectile is beyond your render distance, you see a map with its path instead of video. The video starts

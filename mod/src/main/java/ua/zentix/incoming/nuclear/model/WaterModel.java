@@ -128,14 +128,6 @@ public final class WaterModel {
         return COLUMN_RADIUS * bakerScale(yieldKt);
     }
 
-    /**
-     * Наибольшая высота столба подрыва на поверхности, м: {@link #SURFACE_COLUMN} высоты «Бейкера» по кубическому корню
-     * мощности (тот же закон у обычного взрыва на воде, {@code client.fx.smoke.WaterBlast}).
-     */
-    public static double columnHeight(double yieldKt) {
-        return COLUMN_TOP * SURFACE_COLUMN * bakerScale(yieldKt);
-    }
-
     /** Наибольший радиус базисной волны подрыва на поверхности сверх стенки столба, м (обычный взрыв на воде — тот же закон). */
     public static double surgeReach(double yieldKt) {
         return SURFACE_SURGE * SURGE_RADIUS * bakerScale(yieldKt);

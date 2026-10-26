@@ -70,6 +70,8 @@ import java.util.function.Consumer;
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class LifecycleGameTests {
+    /** Preserve the fixture height formerly returned by Level.getSeaLevel(), even in flat worlds. */
+    private static final int REFERENCE_SEA_LEVEL = 63;
     private static final BlockPos RANGE_CENTER = new BlockPos(32, 11, 32);
 
     private LifecycleGameTests() {}
@@ -767,7 +769,7 @@ public final class LifecycleGameTests {
                 if (areas.releasing() > 0) return;
                 level.getServer().tickRateManager().requestGameToSprint(2400);
                 for (int i = 1; i <= 4; i++) {
-                    Vec3 aim = new Vec3(start.x + 300 * i, level.getSeaLevel() + 60, start.z);
+                    Vec3 aim = new Vec3(start.x + 300 * i, REFERENCE_SEA_LEVEL + 60, start.z);
                     RocketEntity m = ModEntities.ROCKET.get().create(level);
                     m.launchFrom(start.add(0, 0, 3 * i), new Target.Point(aim), aim, null);
                     level.addFreshEntity(m);

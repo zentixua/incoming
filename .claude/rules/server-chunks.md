@@ -50,9 +50,14 @@ paths:
   (`ServerChunkCache.pollTask`) unreachable until this call returns. Pre-exit generation started by mod tickets
   (areas, zone, ruin prep, approach lanes, player arrival), less often player tickets. Do not change vanilla loop
   (Artem's decision): `util/StopDrain` in `ServerStoppingEvent` (`LOWEST`, after mod releases tickets/work, all areas via
-  `StrikeWorld.releaseAreas`, otherwise wait applies them and awaits whole-salvo generation) executes each world's
-  chunk tasks until no holder (`chunkMap.getChunks()` after `runDistanceManagerUpdates`) is generating, ≤ 30 s
-  (INFO every 5 s, WARN at limit: exit likely hangs; `stopReleasesAreasBeforeDrain`). GameTest
+  `StrikeWorld.releaseAreas`, otherwise waiting applies them and awaits whole-salvo generation) waits only for
+  busy holders retained from Incoming area-ticket footprints, not every holder in the world. `AreaLoader` captures
+  those holders before immediate ticket removal and `releaseAll`, including already-canceled generation. Ready
+  areas transferred to same-level RELEASE tickets cancel no generation and skip the footprint scan
+  (`AreaLoaderReleaseTest`). State belongs to the existing `StrikeWorld` level attachment. Worlds without retained
+  Incoming generation are neither scanned nor polled (`unrelatedGenerationIsNotDrained`). While Incoming holders
+  remain busy, vanilla's shared chunk executor can incidentally advance unrelated tasks too. Limit: 30 s for the
+  whole server (INFO every 5 s, WARN at limit: exit likely hangs; `stopReleasesAreasBeforeDrain`). GameTest
   `stopDrainLetsVanillaUnloadFinish`: unload-queued holder revived by load-ticket generation has no generation after
   wait, unchanged vanilla shutdown completes; `ServerStoppingEvent` also removes all ruin work/tickets, stops
   `RuinWorkers` (`stopMidZoneLeavesNoWork`). Still hanging: capture `jstack`.

@@ -391,9 +391,11 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs += ['-Xlint:all,-processing,-serial,-classfile,-this-escape', '-Xmaxerrs', '1000']
 }
 
-// Enforce the enabled lint categories in shipped code; devtest warnings are cleaned up separately.
-tasks.named('compileJava', JavaCompile) {
-    options.compilerArgs += ['-Werror']
+// Enforce the enabled lint categories in shipped code and development checks.
+['compileJava', 'compileDevtestJava'].each { name ->
+    tasks.named(name, JavaCompile) {
+        options.compilerArgs += ['-Werror']
+    }
 }
 
 // Агент горячей замены песочницы эффектов (src/sandboxAgent, tools/sandbox.sh): -javaagent у клиента песочницы

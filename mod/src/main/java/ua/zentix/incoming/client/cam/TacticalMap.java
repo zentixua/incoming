@@ -148,7 +148,8 @@ final class TacticalMap {
 
     private static void grid(GuiGraphics g, Font font, MapProjection map, int w, int h) {
         map.drawGrid(g, font, 0, 0, w, h, GRID, GRID_TEXT);
-        g.drawString(font, "N ↑", w / 2 - font.width("N ↑") / 2, 26, GRID_TEXT);
+        Component north = Component.translatable("incoming.map.north_up");
+        g.drawString(font, north, w / 2 - font.width(north) / 2, 26, GRID_TEXT);
     }
 
     /** Top left: screen and projectile identity, phase, altitude, speed, target range, impact ETA. */
@@ -167,7 +168,7 @@ final class TacticalMap {
                 Component.translatable("incoming.map.height", String.format(Locale.ROOT, "%.0f", craft.y)),
                 Component.translatable("incoming.camera.speed", String.format(Locale.ROOT, "%.0f", kmh)),
                 Component.translatable("incoming.camera.range", String.format(Locale.ROOT, "%.0f", craft.distanceTo(f.target()))),
-                Component.literal("T-" + StrikesHud.clock(f.etaSeconds(pt)))
+                Component.translatable("incoming.hud.eta", StrikesHud.clock(f.etaSeconds(pt)))
         };
         for (int i = 0; i < lines.length; i++) {
             g.drawString(font, lines[i], x, y, i == lines.length - 1 ? 0xFFFFC040 : INK);

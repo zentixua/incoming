@@ -73,18 +73,6 @@ final class Explosions {
         return Math.round(22 * r / 4 * k) + 4;
     }
 
-    /** Dust and smoke driven along the ground in all directions by the shock wave. */
-    private static void dustSurge(ClientLevel level, Vec3 c, float r, GroundMaterial mat, RandomSource rnd, float k) {
-        int n = Math.round(44 * r / 4 * k) + 6;
-        int light = lighten(rgb(mat), 0.35f);
-        for (int i = 0; i < n; i++) {
-            double a = rnd.nextDouble() * Mth.TWO_PI, v = 0.5 + rnd.nextDouble() * 0.9;
-            Fx.smoke().vel(Math.cos(a) * v * r / 4, 0.03 + rnd.nextDouble() * 0.08, Math.sin(a) * v * r / 4).size(r * 0.35f, r * (0.9f + 0.5f * rnd.nextFloat()))
-                    .growFast().life(200 + rnd.nextInt(160)).color(rgb(mat), light).alpha(0.8f).drag(0.88f).collide().rise(0.002f)
-                    .fadeIn(2).fadeFrom(0.4f).budget(FxBudget.GROUND).spawn(level, c.x + Math.cos(a) * r * 0.5, c.y + 0.6, c.z + Math.sin(a) * r * 0.5);
-        }
-    }
-
     /**
      * Secondary crater explosion (ammunition, fuel): flame tongues and sparks; its smoke and heat belong to the blast cloud in the smoke
      * grid (fuel burning inside it is already in the cloud model).
@@ -110,8 +98,4 @@ final class Explosions {
         return (int) (m.r * 255) << 16 | (int) (m.g * 255) << 8 | (int) (m.b * 255);
     }
 
-    static int lighten(int rgb, float f) {
-        int r = rgb >> 16 & 0xFF, g = rgb >> 8 & 0xFF, b = rgb & 0xFF;
-        return (int) (r + (255 - r) * f) << 16 | (int) (g + (255 - g) * f) << 8 | (int) (b + (255 - b) * f);
-    }
 }
